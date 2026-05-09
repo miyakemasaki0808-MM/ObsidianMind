@@ -15,7 +15,7 @@ sealed class NoteState {
     object Loading : NoteState()
     data class Success(val title: String, val content: String) : NoteState()
     object Empty : NoteState()
-    data class Error(val message: String) : NoteState()
+    data class Error(val message: String, val id: Long = System.currentTimeMillis()) : NoteState()
 }
 
 data class NoteUiState(
