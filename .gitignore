@@ -22,3 +22,6 @@ captures/
 # Signing keys
 *.keystore
 *.jks
+
+# Claude Code
+.claude/
