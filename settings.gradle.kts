@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NewProject"
+rootProject.name = "Obsidian_Mind"
 include(":app")
