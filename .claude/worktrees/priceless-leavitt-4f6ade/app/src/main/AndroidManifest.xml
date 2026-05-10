@@ -3,7 +3,7 @@
         android:allowBackup="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.ObsidianMind">
+        android:theme="@style/Theme.NewProject">
         <activity
             android:name=".MainActivity"
             android:exported="true">

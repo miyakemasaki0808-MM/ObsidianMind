@@ -1,0 +1,24 @@
+# Gradle
+.gradle/
+/build/
+/app/build/
+
+# Local environment
+/local.properties
+
+# IDE
+/.idea/
+*.iml
+
+# Build outputs
+*.apk
+*.aab
+/app/release/
+captures/
+
+# macOS
+.DS_Store
+
+# Signing keys
+*.keystore
+*.jks
