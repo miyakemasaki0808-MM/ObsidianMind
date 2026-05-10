@@ -1,8 +1,8 @@
 # ソースコード解析書
 
 **プロジェクト:** Random Note  
-**日付:** 2026-04-30  
-**対象ブランチ:** main
+**日付:** 2026-05-10  
+**対象ブランチ:** feature/jetpack-compose-ui
 
 ---
 
@@ -12,26 +12,26 @@
 app/src/
 ├── main/
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt       # エントリポイント・UI 制御
+│   │   ├── MainActivity.kt       # エントリポイント・Compose UI
 │   │   ├── NoteViewModel.kt      # 状態管理・ビジネスロジックの橋渡し
 │   │   └── NoteRepository.kt     # ファイルアクセス層
 │   ├── res/
-│   │   ├── layout/
-│   │   │   └── activity_main.xml # 単一画面レイアウト
-│   │   ├── drawable/
-│   │   │   ├── app_background.xml    # グラデーション背景
-│   │   │   ├── button_primary.xml    # ピンク系ボタン（selector）
-│   │   │   ├── button_secondary.xml  # ティール系ボタン（selector）
-│   │   │   └── note_panel.xml        # ノート表示パネル
+│   │   ├── drawable/             # ※Compose 移行後は未使用（削除可）
+│   │   │   ├── app_background.xml
+│   │   │   ├── button_primary.xml
+│   │   │   ├── button_secondary.xml
+│   │   │   └── note_panel.xml
 │   │   └── values/
-│   │       ├── colors.xml
-│   │       ├── strings.xml
+│   │       ├── colors.xml        # ※色は MainActivity.kt に定数として定義済み
+│   │       ├── strings.xml       # 文字列リソース（Compose からも参照）
 │   │       └── themes.xml
 │   └── AndroidManifest.xml
 └── test/
     └── java/com/example/newproject/
         └── NoteRepositoryTest.kt # ユニットテスト
 ```
+
+> `activity_main.xml` は Jetpack Compose 移行時に削除済み。
 
 ---
 
@@ -40,9 +40,9 @@ app/src/
 ```
 ┌─────────────────────────────────────────────────┐
 │                  MainActivity                   │
-│  ・レイアウト bind                               │
-│  ・registerForActivityResult でVault 選択        │
-│  ・StateFlow を collect して UI を更新           │
+│  ・registerForActivityResult で Vault 選択       │
+│  ・setContent { } で Compose UI を起動           │
+│  ・collectAsStateWithLifecycle() で状態購読      │
 └──────────────────┬──────────────────────────────┘
                    │ by viewModels()
                    ▼
@@ -56,7 +56,7 @@ app/src/
                    ▼
 ┌─────────────────────────────────────────────────┐
 │                NoteRepository                   │
-│  ・collectNotes()   Vault を再帰走査             │
+│  ・collectNotes()    Vault を再帰走査            │
 │  ・readNoteContent() ファイル内容を読み込み      │
 │  ・すべて Dispatchers.IO で実行                  │
 └─────────────────────────────────────────────────┘
@@ -66,13 +66,12 @@ app/src/
 
 ```
 ユーザーがボタンをタップ
-  → MainActivity.randomNoteButton.onClick
+  → RandomNoteScreen の onRandomNote コールバック
   → viewModel.loadRandomNote(contentResolver)
-  → NoteState.Loading を emit
+  → NoteState.Loading を emit → Compose が自動再コンポーズ
   → (Dispatchers.IO) repository.collectNotes()
   → (Dispatchers.IO) repository.readNoteContent()
-  → NoteState.Success(title, content) を emit
-  → MainActivity.renderState() が UI を更新
+  → NoteState.Success(title, content) を emit → Compose が自動再コンポーズ
 ```
 
 ---
@@ -134,7 +133,7 @@ sealed class NoteState {
     object Loading : NoteState()
     data class Success(val title: String, val content: String) : NoteState()
     object Empty : NoteState()
-    data class Error(val message: String) : NoteState()
+    data class Error(val message: String, val id: Long = System.currentTimeMillis()) : NoteState()
 }
 
 data class NoteUiState(
@@ -145,6 +144,7 @@ data class NoteUiState(
 
 - `sealed class` で取りうる状態を網羅的に定義。`when` 式で漏れなく処理できる。
 - `NoteUiState` は Vault 選択状態とノート読み込み状態を分離して保持。
+- `Error` に `id` を持たせることで、画面回転後に同じエラーの Toast が再表示されるのを防ぐ。
 
 #### Vault の永続化
 
@@ -205,70 +205,74 @@ private val openVault = registerForActivityResult(
 - `takePersistableUriPermission` でアプリ再起動後もフォルダアクセス権を維持。
 - `uri ?: return@registerForActivityResult` でユーザーがキャンセルした場合を安全に処理。
 
-#### ライフサイクルセーフな StateFlow 購読
+#### Compose UI の起動
 
 ```kotlin
-lifecycleScope.launch {
-    repeatOnLifecycle(Lifecycle.State.STARTED) {
-        viewModel.uiState.collect { state ->
-            renderState(state)
-        }
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContent {
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+        RandomNoteScreen(
+            uiState = uiState,
+            onSelectVault = { openVault.launch(null) },
+            onRandomNote = { ... }
+        )
     }
 }
 ```
 
-- `repeatOnLifecycle(STARTED)` でアプリがバックグラウンドに回ったとき自動で購読を停止し、フォアグラウンドに戻ったとき再開する。無駄な処理を防ぐ。
+- `setContent { }` で Compose ツリーを起動。`setContentView` は不要。
+- `collectAsStateWithLifecycle()` でライフサイクルを考慮した状態購読。バックグラウンド時は自動停止。
+- UI ロジックをコールバックとして渡すことで `RandomNoteScreen` を純粋な Composable に保つ。
 
-#### 状態に応じた UI 更新
+#### エラー Toast の制御
 
 ```kotlin
-private fun renderState(state: NoteUiState) {
-    val isLoading = state.noteState is NoteState.Loading
-    loadingIndicator.visibility = if (isLoading) View.VISIBLE else View.GONE
-    randomNoteButton.isEnabled = !isLoading
-
-    when (val noteState = state.noteState) {
-        is NoteState.Success -> { noteTitleText.text = noteState.title; ... }
-        is NoteState.Error   -> { ...; Toast.makeText(this, noteState.message, ...).show() }
-        ...
+LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
+    if (uiState.noteState is NoteState.Error) {
+        Toast.makeText(context, uiState.noteState.message, Toast.LENGTH_SHORT).show()
     }
 }
 ```
 
-- `when` の `is` チェックでスマートキャストが効き、`noteState.title` などを直接参照できる。
-- ローディング中はボタンを無効化して多重タップを防止。
+- `LaunchedEffect` のキーを `error.id` にすることで、同じエラーに対して Toast は一度だけ表示される。
+- 画面回転しても `id` が変わらないため再表示されない。
 
----
-
-### 3-4. `activity_main.xml`
+#### Compose レイアウト構造
 
 ```
-LinearLayout (vertical, グラデーション背景)
-├── TextView  : タイトル "Random Note"
-├── TextView  : Vault 選択状態
-├── LinearLayout (horizontal)
-│   ├── Button : Select Vault（secondary = ティール）
-│   └── Button : Random Note（primary = ピンク）
-├── ProgressBar : ローディング中のみ visible
-└── LinearLayout (note_panel 背景 = 角丸白パネル)
-    ├── TextView : ノートタイトル
-    └── ScrollView
-        └── TextView : ノート本文（textIsSelectable=true でコピー可）
+Column (fillMaxSize, グラデーション背景)
+├── Text        : タイトル "Random Note"
+├── Text        : Vault 選択状態
+├── Row
+│   ├── Button  : Select Vault（ButtonSecondary = ティール）
+│   └── Button  : Random Note（ButtonPrimary = ピンク、Loading 中は disabled）
+├── CircularProgressIndicator : Loading 中のみ表示
+└── Surface (weight(1f), 角丸白パネル)
+    └── Column
+        ├── Text : ノートタイトル
+        └── Text : ノート本文（verticalScroll）
 ```
+
+- `weight(1f)` で Column の残り領域をすべて占有。`fillMaxSize` では上部の要素を押し出してしまうため不適切。
 
 ---
 
 ## 4. UI カラーパレット
 
-| 色名 | HEX | 用途 |
-|------|-----|------|
-| `indigo` | `#4D3DFF` | 背景グラデーション 始点、ステータスバー |
-| `aqua` | `#00C2FF` | 背景グラデーション 中間 |
-| `coral` | `#FF6B8A` | 背景グラデーション 終点 |
-| `button_primary` | `#FF3D71` | Random Note ボタン |
-| `button_secondary` | `#16B8A6` | Select Vault ボタン |
-| `surface` | `#FFF8F2` | 画面背景（グラデーション下）|
-| `panel` | `#FDFEFF` | ノートパネル背景 |
+色は `MainActivity.kt` にファイルプライベートな定数として定義。`colors.xml` は現在参照されていない。
+
+| 定数名 | HEX | 用途 |
+|---|---|---|
+| `Indigo` | `#4D3DFF` | グラデーション始点 |
+| `Aqua` | `#00C2FF` | グラデーション中間 |
+| `Coral` | `#FF6B8A` | グラデーション終点 |
+| `OnVibrant` | `#FFFFFF` | テキスト・ボタンラベル |
+| `OnVibrantMuted` | `#EAF7FF` | Vault ステータステキスト |
+| `OnSurface` | `#202124` | ノートパネル内テキスト |
+| `Panel` | `#FDFEFF` | ノートパネル背景 |
+| `ButtonPrimary` | `#FF3D71` | Random Note ボタン |
+| `ButtonSecondary` | `#16B8A6` | Select Vault ボタン |
 
 ---
 
@@ -290,9 +294,12 @@ LinearLayout (vertical, グラデーション背景)
 
 | ライブラリ | バージョン | 用途 |
 |---|---|---|
-| `androidx.activity:activity-ktx` | 1.9.3 | ComponentActivity, registerForActivityResult, viewModels() |
+| `androidx.compose:compose-bom` | 2024.09.03 | Compose 全ライブラリのバージョン管理 |
+| `androidx.compose.ui:ui` | BOM 管理 | Compose UI 基盤 |
+| `androidx.compose.material3:material3` | BOM 管理 | Material3 コンポーネント（Button, Surface 等） |
+| `androidx.activity:activity-compose` | 1.9.3 | `setContent {}`, `ComponentActivity`, `viewModels()` |
 | `androidx.lifecycle:lifecycle-viewmodel-ktx` | 2.8.7 | ViewModel, viewModelScope |
-| `androidx.lifecycle:lifecycle-runtime-ktx` | 2.8.7 | lifecycleScope, repeatOnLifecycle |
+| `androidx.lifecycle:lifecycle-runtime-compose` | 2.8.7 | `collectAsStateWithLifecycle()` |
 | `kotlinx-coroutines-android` | 1.9.0 | Dispatchers.Main, コルーチン |
 | `junit:junit` | 4.13.2 | ユニットテスト |
 | `kotlinx-coroutines-test` | 1.9.0 | コルーチンのテスト用ユーティリティ |

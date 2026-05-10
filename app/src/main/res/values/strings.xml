@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">New Project</string>
+    <string name="app_name">Obsidian Mind</string>
     <string name="random_note_title">Random Note</string>
     <string name="vault_not_selected">Vault folder is not selected.</string>
     <string name="vault_selected">Vault folder selected.</string>
