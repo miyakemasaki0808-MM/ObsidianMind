@@ -1,8 +1,8 @@
 # ソースコード解析書
 
-**プロジェクト:** Random Note  
-**日付:** 2026-05-10  
-**対象ブランチ:** feature/jetpack-compose-ui
+**プロジェクト:** Obsidian Mind  
+**日付:** 2026-05-11  
+**対象ブランチ:** main
 
 ---
 
@@ -12,19 +12,14 @@
 app/src/
 ├── main/
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt       # エントリポイント・Compose UI
+│   │   ├── MainActivity.kt       # エントリポイント・Compose UI・Markdown 表示
 │   │   ├── NoteViewModel.kt      # 状態管理・ビジネスロジックの橋渡し
 │   │   └── NoteRepository.kt     # ファイルアクセス層
 │   ├── res/
-│   │   ├── drawable/             # ※Compose 移行後は未使用（削除可）
-│   │   │   ├── app_background.xml
-│   │   │   ├── button_primary.xml
-│   │   │   ├── button_secondary.xml
-│   │   │   └── note_panel.xml
 │   │   └── values/
-│   │       ├── colors.xml        # ※色は MainActivity.kt に定数として定義済み
+│   │       ├── colors.xml        # indigo のみ（themes.xml から参照）
 │   │       ├── strings.xml       # 文字列リソース（Compose からも参照）
-│   │       └── themes.xml
+│   │       └── themes.xml        # Theme.ObsidianMind
 │   └── AndroidManifest.xml
 └── test/
     └── java/com/example/newproject/
@@ -251,16 +246,17 @@ Column (fillMaxSize, グラデーション背景)
 └── Surface (weight(1f), 角丸白パネル)
     └── Column
         ├── Text : ノートタイトル
-        └── Text : ノート本文（verticalScroll）
+        └── MarkdownNoteContent : Markdown パース済みノート本文（verticalScroll）
 ```
 
 - `weight(1f)` で Column の残り領域をすべて占有。`fillMaxSize` では上部の要素を押し出してしまうため不適切。
+- `MarkdownNoteContent` は見出し・箇条書き・コードブロック・太字・斜体・インラインコード・リンクをレンダリング。外部ライブラリ不使用。
 
 ---
 
 ## 4. UI カラーパレット
 
-色は `MainActivity.kt` にファイルプライベートな定数として定義。`colors.xml` は現在参照されていない。
+色は `MainActivity.kt` にファイルプライベートな定数として定義。`colors.xml` は `indigo` のみ残し（`themes.xml` のステータスバー・ナビゲーションバー色として参照）。
 
 | 定数名 | HEX | 用途 |
 |---|---|---|
