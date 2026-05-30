@@ -14,10 +14,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +33,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -87,12 +93,15 @@ class MainActivity : ComponentActivity() {
         viewModel.loadRandomNote(contentResolver)
     }
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+            val windowSizeClass = calculateWindowSizeClass(this)
             RandomNoteScreen(
                 uiState = uiState,
+                isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
                 onSelectVault = { openVault.launch(null) },
                 onRandomNote = {
                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
@@ -106,6 +115,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun RandomNoteScreen(
     uiState: NoteUiState,
+    isExpanded: Boolean,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit
 ) {
@@ -122,95 +132,223 @@ fun RandomNoteScreen(
         start = Offset(0f, Float.POSITIVE_INFINITY),
         end = Offset(Float.POSITIVE_INFINITY, 0f)
     )
-
     val isLoading = uiState.noteState is NoteState.Loading
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(gradient)
-            .padding(24.dp)
-    ) {
-        Text(
-            text = stringResource(R.string.random_note_title),
-            color = OnVibrant,
-            fontSize = 30.sp,
-            fontWeight = FontWeight.Bold
-        )
-
-        Text(
-            text = stringResource(
-                if (uiState.vaultSelected) R.string.vault_selected
-                else R.string.vault_not_selected
-            ),
-            color = OnVibrantMuted,
-            fontSize = 14.sp,
-            modifier = Modifier.padding(top = 10.dp)
-        )
-
+    if (isExpanded) {
+        // フォルダブル展開時: 左ペイン（操作パネル） | 右ペイン（ノート＋サジェスト）
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .fillMaxSize()
+                .background(gradient)
+                .padding(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Button(
-                onClick = onSelectVault,
-                modifier = Modifier.weight(1f).height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Text(stringResource(R.string.select_vault), color = OnVibrant)
-            }
-            Button(
-                onClick = onRandomNote,
-                enabled = !isLoading,
-                modifier = Modifier.weight(1f).height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Text(stringResource(R.string.show_random_note), color = OnVibrant)
-            }
-        }
-
-        if (isLoading) {
-            CircularProgressIndicator(
-                color = OnVibrant,
+            // 左ペイン
+            Column(
                 modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 16.dp)
-            )
-        }
-
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(top = if (isLoading) 8.dp else 24.dp),
-            color = Panel,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                val (noteTitle, noteContent) = when (val state = uiState.noteState) {
-                    is NoteState.Success -> state.title to state.content
-                    is NoteState.Empty   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.no_markdown_notes)
-                    is NoteState.Error   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.vault_read_error)
-                    else                 -> stringResource(R.string.no_note_loaded) to stringResource(R.string.random_note_empty_state)
-                }
-
+                    .width(280.dp)
+                    .fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
                 Text(
-                    text = noteTitle,
-                    color = OnSurface,
-                    fontSize = 20.sp,
+                    text = stringResource(R.string.random_note_title),
+                    color = OnVibrant,
+                    fontSize = 26.sp,
                     fontWeight = FontWeight.Bold
                 )
-
-                MarkdownNoteContent(
-                    content = noteContent,
-                    modifier = Modifier
-                        .padding(top = 12.dp)
-                        .weight(1f)
+                Text(
+                    text = stringResource(
+                        if (uiState.vaultSelected) R.string.vault_selected
+                        else R.string.vault_not_selected
+                    ),
+                    color = OnVibrantMuted,
+                    fontSize = 13.sp
                 )
+                Button(
+                    onClick = onSelectVault,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
+                    shape = RoundedCornerShape(24.dp)
+                ) { Text(stringResource(R.string.select_vault), color = OnVibrant) }
+                Button(
+                    onClick = onRandomNote,
+                    enabled = !isLoading,
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
+                    shape = RoundedCornerShape(24.dp)
+                ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = OnVibrant,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+                }
+            }
+
+            // 右ペイン
+            Column(
+                modifier = Modifier.weight(1f).fillMaxHeight(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                NoteContentPanel(uiState = uiState, modifier = Modifier.weight(1f))
+                SummaryPanel(summaryState = uiState.summaryState)
+            }
+        }
+    } else {
+        // 通常・折りたたみ時: 縦積みレイアウト
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(gradient)
+                .padding(24.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.random_note_title),
+                color = OnVibrant,
+                fontSize = 30.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = stringResource(
+                    if (uiState.vaultSelected) R.string.vault_selected
+                    else R.string.vault_not_selected
+                ),
+                color = OnVibrantMuted,
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 10.dp)
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = onSelectVault,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
+                    shape = RoundedCornerShape(24.dp)
+                ) { Text(stringResource(R.string.select_vault), color = OnVibrant) }
+                Button(
+                    onClick = onRandomNote,
+                    enabled = !isLoading,
+                    modifier = Modifier.weight(1f).height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
+                    shape = RoundedCornerShape(24.dp)
+                ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
+            }
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = OnVibrant,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
+                )
+            }
+            NoteContentPanel(
+                uiState = uiState,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(top = if (isLoading) 8.dp else 24.dp)
+            )
+            SummaryPanel(
+                summaryState = uiState.summaryState,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoteContentPanel(uiState: NoteUiState, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Panel,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            val (noteTitle, noteContent) = when (val state = uiState.noteState) {
+                is NoteState.Success -> state.title to state.content
+                is NoteState.Empty   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.no_markdown_notes)
+                is NoteState.Error   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.vault_read_error)
+                else                 -> stringResource(R.string.no_note_loaded) to stringResource(R.string.random_note_empty_state)
+            }
+            Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            MarkdownNoteContent(
+                content = noteContent,
+                modifier = Modifier.padding(top = 12.dp).weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modifier) {
+    when (summaryState) {
+        is SummaryState.Idle,
+        is SummaryState.AiUnavailable -> return
+        is SummaryState.Loading,
+        is SummaryState.Downloading,
+        is SummaryState.Success,
+        is SummaryState.Error -> Unit
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFFF0F4FF),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "📝 AI 要約",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Indigo
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            when (summaryState) {
+                is SummaryState.Loading -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Indigo)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("要約を生成中…", fontSize = 13.sp, color = Color(0xFF555555))
+                    }
+                }
+                is SummaryState.Downloading -> {
+                    val downloaded = summaryState.downloaded
+                    val total = summaryState.total
+                    val progress = if (total > 0) downloaded.toFloat() / total else -1f
+                    val label = when {
+                        downloaded < 0   -> "Gemini Nano をダウンロード中…"
+                        total <= 0       -> "Gemini Nano をダウンロード中…"
+                        else -> {
+                            val dlMb = downloaded / 1_048_576f
+                            val totalMb = total / 1_048_576f
+                            "Gemini Nano をダウンロード中… %.0f / %.0f MB".format(dlMb, totalMb)
+                        }
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(label, fontSize = 13.sp, color = Color(0xFF555555))
+                        if (progress >= 0) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Indigo
+                            )
+                        } else {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Indigo
+                            )
+                        }
+                    }
+                }
+                is SummaryState.Success -> {
+                    Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
+                }
+                is SummaryState.AiUnavailable -> {
+                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = Color(0xFF888888))
+                }
+                is SummaryState.Error -> {
+                    Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = Color(0xFFCC0000))
+                }
+                else -> {}
             }
         }
     }

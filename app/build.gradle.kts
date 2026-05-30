@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.newproject"
-        minSdk = 23
+        minSdk = 26
         targetSdk {
             version = release(36)
         }
@@ -36,10 +36,14 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("androidx.window:window:1.3.0")
+    // AICore (Gemini Nano on-device) — ML Kit GenAI Prompt API
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

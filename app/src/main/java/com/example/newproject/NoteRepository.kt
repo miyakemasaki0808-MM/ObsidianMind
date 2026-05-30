@@ -8,6 +8,12 @@ import kotlinx.coroutines.withContext
 
 data class NoteFile(val name: String, val uri: Uri)
 
+data class NoteMeta(
+    val tags: List<String> = emptyList(),
+    val aliases: List<String> = emptyList(),
+    val wikilinkTitles: Set<String> = emptySet()
+)
+
 internal fun isMarkdownFile(name: String?): Boolean =
     name?.lowercase()?.endsWith(".md") == true
 
@@ -26,6 +32,48 @@ class NoteRepository {
                 stream.bufferedReader(Charsets.UTF_8).readText()
             } ?: ""
         }
+
+    // frontmatter（tags/aliases）と [[wikilink]] を抽出
+    fun parseMeta(content: String): NoteMeta {
+        val lines = content.lines()
+        var tags = emptyList<String>()
+        var aliases = emptyList<String>()
+
+        // YAML frontmatter（--- で囲まれた先頭ブロック）
+        if (lines.firstOrNull()?.trim() == "---") {
+            val endIndex = lines.drop(1).indexOfFirst { it.trim() == "---" }
+            if (endIndex >= 0) {
+                val frontmatter = lines.drop(1).take(endIndex)
+                tags = parseFrontmatterList(frontmatter, "tags")
+                aliases = parseFrontmatterList(frontmatter, "aliases")
+            }
+        }
+
+        val wikilinkTitles = WIKILINK_REGEX.findAll(content)
+            .map { it.groupValues[1].split("|").first().trim() }
+            .toSet()
+
+        return NoteMeta(tags = tags, aliases = aliases, wikilinkTitles = wikilinkTitles)
+    }
+
+    private fun parseFrontmatterList(lines: List<String>, key: String): List<String> {
+        val keyLine = lines.indexOfFirst { it.trimStart().startsWith("$key:") }
+        if (keyLine < 0) return emptyList()
+
+        val inline = lines[keyLine].substringAfter("$key:").trim()
+        // インライン形式: tags: [a, b, c]
+        if (inline.startsWith("[")) {
+            return inline.removeSurrounding("[", "]").split(",").map { it.trim() }.filter { it.isNotBlank() }
+        }
+        // ブロック形式:
+        // tags:
+        //   - a
+        //   - b
+        return lines.drop(keyLine + 1)
+            .takeWhile { it.startsWith(" ") || it.startsWith("\t") }
+            .map { it.trim().removePrefix("-").trim() }
+            .filter { it.isNotBlank() }
+    }
 
     private fun collectRecursive(
         contentResolver: ContentResolver,
@@ -55,5 +103,9 @@ class NoteRepository {
                 }
             }
         }
+    }
+
+    companion object {
+        private val WIKILINK_REGEX = Regex("\\[\\[([^\\]]+)]]")
     }
 }
