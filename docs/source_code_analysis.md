@@ -2,7 +2,7 @@
 
 **プロジェクト:** Obsidian Mind  
 **日付:** 2026-05-30  
-**対象ブランチ:** feature/Top-5_function
+**対象ブランチ:** main
 
 ---
 
@@ -12,9 +12,16 @@
 app/src/
 ├── main/
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt           # エントリポイント・Compose UI・Markdown 表示
+│   │   ├── MainActivity.kt           # エントリポイント（48行）
 │   │   ├── NoteViewModel.kt          # 状態管理・ビジネスロジックの橋渡し
 │   │   ├── NoteRepository.kt         # ファイルアクセス層・frontmatter/wikilink 解析
+│   │   ├── ui/
+│   │   │   ├── RandomNoteScreen.kt   # 画面 Composable 一式
+│   │   │   ├── markdown/
+│   │   │   │   ├── MarkdownParser.kt  # Markdown ブロックパーサー・inlineMarkdown
+│   │   │   │   └── MarkdownRenderer.kt# Markdown レンダリング Composable
+│   │   │   └── theme/
+│   │   │       └── AppColors.kt      # UI カラーパレット定数
 │   │   ├── ai/
 │   │   │   ├── AICoreClient.kt       # Gemini Nano 4 接続ラッパー（AiClient インターフェース）
 │   │   │   └── PromptBuilder.kt      # 要約・関連ノートプロンプト構築
@@ -103,6 +110,10 @@ app/src/
 ## 3. 各ファイル詳細解析
 
 ### 3-1. `NoteRepository.kt`
+
+- `collectNotes()` は再帰ではなく `ArrayDeque` を使った BFS ループで実装。深いディレクトリ構造でもスタックオーバーフローしない。
+
+
 
 ```kotlin
 data class NoteFile(val name: String, val uri: Uri)
@@ -337,7 +348,7 @@ RandomNoteScreen(
 
 ## 5. UI カラーパレット
 
-色は `MainActivity.kt` にファイルプライベートな定数として定義。
+色は `ui/theme/AppColors.kt` に `internal` 定数として定義。
 
 | 定数名 | HEX | 用途 |
 |---|---|---|
