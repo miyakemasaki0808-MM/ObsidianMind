@@ -14,10 +14,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.example.newproject.GraphState
+import com.example.newproject.RelatedNotesState
 import com.example.newproject.NoteState
 import com.example.newproject.QuizState
-import com.example.newproject.ui.GraphViewScreen
+import com.example.newproject.ui.AnnotationResultScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RandomNoteScreen
 
@@ -63,23 +63,32 @@ class MainActivity : ComponentActivity() {
                                 navController.navigate("quiz")
                             }
                         },
-                        onGraphView = {
-                            viewModel.buildVaultGraph(contentResolver)
-                            navController.navigate("graph")
+                        onCreateAnnotation = {
+                            val noteState = uiState.noteState
+                            if (noteState is NoteState.Success) {
+                                val summary = (uiState.summaryState as? SummaryState.Success)?.summary
+                                val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
+                                viewModel.createAnnotation(
+                                    contentResolver = contentResolver,
+                                    title = noteState.title,
+                                    content = noteState.content,
+                                    summary = summary,
+                                    relatedNotes = relatedState?.relatedNotes.orEmpty(),
+                                    aiNotes = relatedState?.aiNotes.orEmpty(),
+                                    wikilinkTitles = uiState.wikilinkTitles
+                                )
+                                navController.navigate("annotation")
+                            }
                         }
                     )
                 }
 
-                composable("graph") {
-                    val noteTitle = (uiState.noteState as? NoteState.Success)?.title ?: ""
-                    GraphViewScreen(
-                        currentNoteTitle = noteTitle,
-                        graphState = uiState.graphState,
-                        onNodeTap = { title ->
-                            viewModel.openNoteByTitle(contentResolver, title)
+                composable("annotation") {
+                    AnnotationResultScreen(
+                        annotationState = uiState.annotationState,
+                        onBack = {
                             navController.popBackStack()
-                        },
-                        onBack = { navController.popBackStack() }
+                        }
                     )
                 }
 

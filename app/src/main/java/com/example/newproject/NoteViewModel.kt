@@ -7,8 +7,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
+import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
@@ -18,6 +20,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 sealed class NoteState {
     object Idle : NoteState()
@@ -41,11 +46,11 @@ sealed class RelatedNotesState {
     object Idle : RelatedNotesState()
     object Loading : RelatedNotesState()
     data class Success(
-        val notes: List<RelatedNote>,
-        val prefixNotes: List<RelatedNote> = emptyList()
+        val relatedNotes: List<RelatedNote>,
+        val aiNotes: List<RelatedNote>,
+        val aiStatus: AiRecommendationStatus = AiRecommendationStatus.Ready,
+        val aiErrorMessage: String? = null
     ) : RelatedNotesState()
-    object AiUnavailable : RelatedNotesState()
-    object AiNeedsDownload : RelatedNotesState()
     data class Error(val message: String) : RelatedNotesState()
 }
 
@@ -63,14 +68,15 @@ sealed class QuizState {
     data class Error(val message: String) : QuizState()
 }
 
-// title(normalized) → Set<linkedTitle(normalized)>
-typealias VaultGraph = Map<String, Set<String>>
-
-sealed class GraphState {
-    object Idle : GraphState()
-    object Loading : GraphState()
-    data class Success(val graph: VaultGraph, val allTitles: List<String>) : GraphState()
-    data class Error(val message: String) : GraphState()
+sealed class AnnotationState {
+    object Idle : AnnotationState()
+    object Loading : AnnotationState()
+    data class Success(
+        val savedUri: Uri,
+        val fileName: String,
+        val content: String
+    ) : AnnotationState()
+    data class Error(val message: String) : AnnotationState()
 }
 
 data class NoteUiState(
@@ -80,7 +86,7 @@ data class NoteUiState(
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,
     val wikilinkTitles: Set<String> = emptySet(),
-    val graphState: GraphState = GraphState.Idle
+    val annotationState: AnnotationState = AnnotationState.Idle
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
@@ -97,6 +103,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // DL完了後に要約を再実行するために保持
     private var pendingTitle: String = ""
     private var pendingContent: String = ""
+    private var pendingAnnotation: PendingAnnotation? = null
     private var cachedNotes: List<NoteFile> = emptyList()
 
     var vaultUri: Uri? = null
@@ -119,7 +126,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             summaryState = SummaryState.Idle,
             relatedNotesState = RelatedNotesState.Idle,
             quizState = QuizState.Idle,
-            graphState = GraphState.Idle
+            annotationState = AnnotationState.Idle
         )
     }
 
@@ -130,7 +137,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 noteState = NoteState.Loading,
                 summaryState = SummaryState.Idle,
                 relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle
+                quizState = QuizState.Idle,
+                annotationState = AnnotationState.Idle
             )
             try {
                 val notes = repository.collectNotes(contentResolver, uri)
@@ -160,7 +168,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 noteState = NoteState.Loading,
                 summaryState = SummaryState.Idle,
                 relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle
+                quizState = QuizState.Idle,
+                annotationState = AnnotationState.Idle
             )
             try {
                 val content = repository.readNoteContent(contentResolver, note.uri)
@@ -175,46 +184,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
-    }
-
-    fun buildVaultGraph(contentResolver: ContentResolver) {
-        // 同Vaultなら再利用
-        if (_uiState.value.graphState is GraphState.Success) return
-        val notes = cachedNotes
-        if (notes.isEmpty()) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(graphState = GraphState.Loading)
-            try {
-                val graph = mutableMapOf<String, Set<String>>()
-                notes.forEach { note ->
-                    val content = repository.readNoteContent(contentResolver, note.uri)
-                    val links = repository.parseMeta(content).wikilinkTitles
-                        .map { it.trim().removeSuffix(".md").lowercase() }
-                        .toSet()
-                    graph[note.name.trim().removeSuffix(".md").lowercase()] = links
-                }
-                val allTitles = notes.map { it.name.trim().removeSuffix(".md") }
-                _uiState.value = _uiState.value.copy(
-                    graphState = GraphState.Success(graph = graph, allTitles = allTitles)
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    graphState = GraphState.Error(e.message ?: "Unknown error")
-                )
-            }
-        }
-    }
-
-    fun openNoteByTitle(contentResolver: ContentResolver, title: String) {
-        val normalizedTarget = title.trim().removeSuffix(".md").lowercase()
-        val note = cachedNotes.firstOrNull {
-            it.name.trim().removeSuffix(".md").lowercase() == normalizedTarget
-        } ?: return
-        openNote(contentResolver, com.example.newproject.domain.RelatedNote(
-            title = note.name,
-            uri = note.uri,
-            isWikilinked = true
-        ))
     }
 
     fun generateQuiz(title: String, content: String) {
@@ -237,6 +206,55 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(quizState = QuizState.Idle)
     }
 
+    fun createAnnotation(
+        contentResolver: ContentResolver,
+        title: String,
+        content: String,
+        summary: String?,
+        relatedNotes: List<RelatedNote>,
+        aiNotes: List<RelatedNote>,
+        wikilinkTitles: Set<String>
+    ) {
+        val vault = vaultUri
+        if (vault == null) {
+            _uiState.value = _uiState.value.copy(
+                annotationState = AnnotationState.Error("Vault が選択されていません。")
+            )
+            return
+        }
+
+        val annotation = PendingAnnotation(
+            title = title,
+            content = content,
+            summary = summary,
+            relatedNotes = relatedNotes,
+            aiNotes = aiNotes,
+            wikilinkTitles = wikilinkTitles
+        )
+
+        _uiState.value = _uiState.value.copy(annotationState = AnnotationState.Loading)
+        viewModelScope.launch {
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Unavailable -> {
+                    _uiState.value = _uiState.value.copy(
+                        annotationState = AnnotationState.Error("補記メモはこの端末では利用できません。")
+                    )
+                }
+                AiAvailability.NeedsDownload -> {
+                    pendingAnnotation = annotation
+                    startAnnotationModelDownload()
+                }
+                AiAvailability.Available -> {
+                    createAnnotationWithAvailableModel(
+                        contentResolver = contentResolver,
+                        vault = vault,
+                        annotation = annotation
+                    )
+                }
+            }
+        }
+    }
+
     private fun parseQuizResponse(raw: String): List<QuizCard> {
         return raw.trim().split("\n\n").mapNotNull { block ->
             val lines = block.trim().lines()
@@ -253,6 +271,99 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 if (correctIndex >= 0) QuizCard(q, choices, correctIndex, explanation) else null
             } else null
         }
+    }
+
+    private suspend fun createAnnotationWithAvailableModel(
+        contentResolver: ContentResolver,
+        vault: Uri,
+        annotation: PendingAnnotation
+    ) {
+        try {
+            val displayTimestamp = DISPLAY_TIMESTAMP_FORMAT.format(Date())
+            val fileTimestamp = FILE_TIMESTAMP_FORMAT.format(Date())
+            val prompt = PromptBuilder.buildAnnotationPrompt(
+                title = annotation.title,
+                content = annotation.content,
+                summary = annotation.summary,
+                relatedTitles = annotation.relatedNotes.map { it.title.toObsidianNoteTitle() },
+                aiRecommendedTitles = annotation.aiNotes.map { it.title.toObsidianNoteTitle() },
+                wikilinkTitles = annotation.wikilinkTitles,
+                createdAt = displayTimestamp
+            )
+            val generated = aiClient.generate(prompt).trim()
+            if (!hasAnnotationBody(generated)) {
+                _uiState.value = _uiState.value.copy(
+                    annotationState = AnnotationState.Error("補記メモの生成結果が空でした。")
+                )
+                return
+            }
+
+            val sourceTitle = annotation.title.toObsidianNoteTitle()
+            val fileTitle = sanitizeAnnotationFileTitle(sourceTitle)
+            val fileName = "${fileTitle}__補記_$fileTimestamp.md"
+            val markdown = buildAnnotationMarkdown(
+                title = sourceTitle,
+                createdAt = displayTimestamp,
+                generatedBody = generated
+            )
+            val savedUri = repository.createAnnotationFile(
+                contentResolver = contentResolver,
+                vaultUri = vault,
+                sanitizedTitle = fileTitle,
+                timestamp = fileTimestamp,
+                content = markdown
+            )
+            _uiState.value = _uiState.value.copy(
+                annotationState = AnnotationState.Success(
+                    savedUri = savedUri,
+                    fileName = fileName,
+                    content = markdown
+                )
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                annotationState = AnnotationState.Error(e.message ?: "Unknown error")
+            )
+        }
+    }
+
+    private fun hasAnnotationBody(generated: String): Boolean {
+        val requiredSections = listOf("粒度評価", "補記すべき内容", "補記案", "関連リンク候補", "次の問い")
+        return requiredSections.any { section ->
+            generated.substringAfter("## $section", missingDelimiterValue = "")
+                .substringBefore("## ")
+                .trim()
+                .isNotBlank()
+        }
+    }
+
+    private fun buildAnnotationMarkdown(
+        title: String,
+        createdAt: String,
+        generatedBody: String
+    ): String = """
+        # $title 補記メモ
+
+        > Source: [[$title]]
+        > Created: $createdAt
+        > Generated by: Obsidian Mind local AI
+
+        ${generatedBody.ensureAnnotationSections()}
+    """.trimIndent()
+
+    private fun String.ensureAnnotationSections(): String {
+        val sections = listOf("粒度評価", "補記すべき内容", "補記案", "関連リンク候補", "次の問い")
+        val normalized = trim()
+        val missing = sections.filterNot { "## $it" in normalized }
+        if (missing.isEmpty()) return normalized
+        return buildString {
+            append(normalized)
+            missing.forEach { section ->
+                append("\n\n## ")
+                append(section)
+                append("\n")
+            }
+        }.trim()
     }
 
     private fun fetchSummary(title: String, content: String) {
@@ -286,7 +397,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (cachedNotes.isEmpty()) {
                 _uiState.value = _uiState.value.copy(
-                    relatedNotesState = RelatedNotesState.Success(emptyList())
+                    relatedNotesState = RelatedNotesState.Success(
+                        relatedNotes = emptyList(),
+                        aiNotes = emptyList()
+                    )
                 )
                 return@launch
             }
@@ -298,19 +412,11 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 is RelatedNotesResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         relatedNotesState = RelatedNotesState.Success(
-                            notes = result.notes,
-                            prefixNotes = result.prefixNotes
+                            relatedNotes = result.relatedNotes,
+                            aiNotes = result.aiNotes,
+                            aiStatus = result.aiStatus,
+                            aiErrorMessage = result.aiErrorMessage
                         )
-                    )
-                }
-                is RelatedNotesResult.AiUnavailable -> {
-                    _uiState.value = _uiState.value.copy(
-                        relatedNotesState = RelatedNotesState.AiUnavailable
-                    )
-                }
-                is RelatedNotesResult.AiNeedsDownload -> {
-                    _uiState.value = _uiState.value.copy(
-                        relatedNotesState = RelatedNotesState.AiNeedsDownload
                     )
                 }
                 is RelatedNotesResult.Error -> {
@@ -363,8 +469,55 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun startAnnotationModelDownload() {
+        viewModelScope.launch {
+            try {
+                aiClient.downloadModel().collect { status ->
+                    when (status) {
+                        is DownloadStatus.DownloadStarted,
+                        is DownloadStatus.DownloadProgress -> {
+                            _uiState.value = _uiState.value.copy(annotationState = AnnotationState.Loading)
+                        }
+                        is DownloadStatus.DownloadCompleted -> {
+                            val annotation = pendingAnnotation ?: return@collect
+                            val vault = vaultUri ?: return@collect
+                            pendingAnnotation = null
+                            createAnnotationWithAvailableModel(
+                                contentResolver = getApplication<Application>().contentResolver,
+                                vault = vault,
+                                annotation = annotation
+                            )
+                        }
+                        is DownloadStatus.DownloadFailed -> {
+                            _uiState.value = _uiState.value.copy(
+                                annotationState = AnnotationState.Error(
+                                    "モデルのダウンロードに失敗しました: ${status.e.message}"
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    annotationState = AnnotationState.Error("ダウンロードエラー: ${e.message}")
+                )
+            }
+        }
+    }
+
+    private data class PendingAnnotation(
+        val title: String,
+        val content: String,
+        val summary: String?,
+        val relatedNotes: List<RelatedNote>,
+        val aiNotes: List<RelatedNote>,
+        val wikilinkTitles: Set<String>
+    )
+
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
+        private val DISPLAY_TIMESTAMP_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        private val FILE_TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
     }
 }
