@@ -2,7 +2,7 @@
 
 **プロジェクト:** Obsidian Mind  
 **日付:** 2026-05-30  
-**対象ブランチ:** feature/local_ai
+**対象ブランチ:** feature/Top-5_function
 
 ---
 
@@ -17,9 +17,10 @@ app/src/
 │   │   ├── NoteRepository.kt         # ファイルアクセス層・frontmatter/wikilink 解析
 │   │   ├── ai/
 │   │   │   ├── AICoreClient.kt       # Gemini Nano 4 接続ラッパー（AiClient インターフェース）
-│   │   │   └── PromptBuilder.kt      # 要約プロンプト構築
+│   │   │   └── PromptBuilder.kt      # 要約・関連ノートプロンプト構築
 │   │   └── domain/
-│   │       └── SummarizeUseCase.kt   # 要約ユースケース
+│   │       ├── SummarizeUseCase.kt   # 要約ユースケース
+│   │       └── RelatedNotesUseCase.kt # 関連ノート Top-5 ユースケース
 │   ├── res/
 │   │   └── values/
 │   │       ├── colors.xml            # indigo のみ（themes.xml から参照）
@@ -52,16 +53,17 @@ app/src/
 │  ・vaultUri を保持（構成変更を跨いで生存）        │
 │  ・StateFlow<NoteUiState> で状態を公開           │
 │  ・ノート読込後に SummarizeUseCase を起動        │
+│  ・展開時に RelatedNotesUseCase を起動           │
 │  ・モデル未DL時に downloadModel() Flow を収集    │
 └──────────┬───────────────────┬──────────────────┘
            │ suspend fun       │ suspend fun
            ▼                   ▼
-┌──────────────────┐  ┌────────────────────────────┐
-│  NoteRepository  │  │      SummarizeUseCase       │
-│  ・collectNotes  │  │  ・AiClient.checkAvailability│
-│  ・readContent   │  │  ・AiClient.generate(prompt) │
-│  ・parseMeta     │  └────────────┬───────────────-┘
-└──────────────────┘               │
+┌──────────────────┐  ┌──────────────────────────────────────┐
+│  NoteRepository  │  │  SummarizeUseCase / RelatedNotesUseCase│
+│  ・collectNotes  │  │  ・AiClient.checkAvailability         │
+│  ・readContent   │  │  ・PromptBuilder でプロンプト生成      │
+│  ・parseMeta     │  │  ・AiClient.generate(prompt)          │
+└──────────────────┘  └────────────┬─────────────────────────┘
                                    ▼
                         ┌─────────────────────┐
                         │    AICoreClient      │
@@ -86,6 +88,14 @@ app/src/
                                → DownloadProgress emit → SummaryState.Downloading(n, total)
                                → DownloadCompleted    → fetchSummary() を再実行
               UNAVAILABLE  → SummaryState.AiUnavailable（パネル非表示）
+
+  ※展開時（isExpanded=true）のみ fetchRelatedNotes() も並行起動
+  → RelatedNotesUseCase.findRelated()
+      → AICoreClient.generate(buildRelatedNotesPrompt())
+      → レスポンスを行分割・正規化 → allNotes と照合 → Top-5 抽出
+      → RelatedNotesState.Success(notes) emit
+  → 左ペイン下部の RelatedNotesPanel に表示
+  → アイテムタップ → viewModel.openNote() → 右ペインの本文が切り替わる
 ```
 
 ---
@@ -152,19 +162,44 @@ class AICoreClient : AiClient {
 
 ---
 
-### 3-3. `ai/PromptBuilder.kt`
+### 3-3. `domain/RelatedNotesUseCase.kt`
 
 ```kotlin
-fun buildSummarizePrompt(title: String, content: String): String
+data class RelatedNote(val title: String, val uri: Uri, val isWikilinked: Boolean)
+
+sealed class RelatedNotesResult {
+    data class Success(val notes: List<RelatedNote>) : RelatedNotesResult()
+    object AiUnavailable : RelatedNotesResult()
+    object AiNeedsDownload : RelatedNotesResult()
+    data class Error(val message: String) : RelatedNotesResult()
+}
 ```
 
-- ノート本文の先頭 1200 文字をスニペットとして使用。
-- **ノートと同言語**で 2〜4 文の要約を生成するよう指示。
-- 「This note is about」などの前置き表現を禁止するプロンプト設計。
+- `findRelated()` でAIに Top-5 を選出させ、レスポンスを `allNotes` と照合して `RelatedNote` に変換。
+- タイトルの正規化（`.md` 除去・小文字化）により、AIの出力ゆれに対応。
+- `cleanAiTitle()` で番号・箇条書き記号・`[linked]` マーカーを除去してから照合。
+- `wikilinkTitles` に含まれるノートは `isWikilinked = true` としてバッジ表示に利用。
 
 ---
 
-### 3-4. `domain/SummarizeUseCase.kt`
+### 3-4. `ai/PromptBuilder.kt`
+
+```kotlin
+fun buildSummarizePrompt(title: String, content: String): String
+fun buildRelatedNotesPrompt(
+    currentTitle: String,
+    currentContent: String,
+    allTitles: List<String>,
+    wikilinkTitles: Set<String>
+): String
+```
+
+- `buildSummarizePrompt`: 先頭 1200 文字を使用。ノートと同言語で 2〜4 文。
+- `buildRelatedNotesPrompt`: 先頭 600 文字を使用。候補タイトルは最大 80 件。`wikilinkTitles` に含まれる候補に `[linked]` を付与してブースト。5件のタイトルのみを1行1件で返すよう指示。
+
+---
+
+### 3-5. `domain/SummarizeUseCase.kt`
 
 ```kotlin
 sealed class SummaryResult {
@@ -179,7 +214,7 @@ sealed class SummaryResult {
 
 ---
 
-### 3-5. `NoteViewModel.kt`
+### 3-6. `NoteViewModel.kt`
 
 #### 状態定義
 
@@ -203,9 +238,23 @@ data class NoteUiState(
 - `Downloading.downloaded = -1` はダウンロード開始前（不定量）を表す。
 - DL完了後は `pendingTitle` / `pendingContent` を使って要約を自動再実行。
 
+```kotlin
+sealed class RelatedNotesState {
+    object Idle : RelatedNotesState()
+    object Loading : RelatedNotesState()
+    data class Success(val notes: List<RelatedNote>) : RelatedNotesState()
+    object AiUnavailable : RelatedNotesState()
+    object AiNeedsDownload : RelatedNotesState()
+    data class Error(val message: String) : RelatedNotesState()
+}
+```
+
+- `fetchRelatedNotes()` は `loadRandomNote()` / `openNote()` 完了後に呼び出される。
+- `openNote()` はタップされた `RelatedNote` の URI からノート本文を読み込み、右ペインを切り替える。
+
 ---
 
-### 3-6. `MainActivity.kt`
+### 3-7. `MainActivity.kt`
 
 #### フォルダブル対応（Two-Pane）
 
@@ -229,6 +278,18 @@ RandomNoteScreen(
 | `Downloading` | LinearProgressIndicator + DL進捗（MB表示） |
 | `Success` | 要約テキスト（14sp） |
 | `Error` | エラーメッセージ（赤文字） |
+
+#### RelatedNotesPanel（展開時のみ・左ペイン下部）
+
+| RelatedNotesState | 表示内容 |
+|---|---|
+| `Idle` / `AiUnavailable` / `AiNeedsDownload` | 非表示 |
+| `Loading` | スピナー + 「関連ノートを検索中…」 |
+| `Success` | タイトルリスト最大5件。`isWikilinked=true` なら `linked` バッジ表示 |
+| `Error` | エラーメッセージ（赤文字） |
+
+- アイテムタップで `onOpenNote(RelatedNote)` → `viewModel.openNote()` → 右ペインの本文が切り替わる
+- **折りたたみ時（COMPACT/MEDIUM）は表示しない**
 
 ---
 

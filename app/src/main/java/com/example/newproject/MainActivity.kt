@@ -9,11 +9,13 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.newproject.domain.RelatedNote
 
 private val Indigo = Color(0xFF4D3DFF)
 private val Aqua = Color(0xFF00C2FF)
@@ -106,7 +109,8 @@ class MainActivity : ComponentActivity() {
                 onRandomNote = {
                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                     else openVault.launch(null)
-                }
+                },
+                onOpenNote = { note -> viewModel.openNote(contentResolver, note) }
             )
         }
     }
@@ -117,7 +121,8 @@ fun RandomNoteScreen(
     uiState: NoteUiState,
     isExpanded: Boolean,
     onSelectVault: () -> Unit,
-    onRandomNote: () -> Unit
+    onRandomNote: () -> Unit,
+    onOpenNote: (RelatedNote) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -183,6 +188,12 @@ fun RandomNoteScreen(
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
+                Spacer(modifier = Modifier.height(16.dp))
+                RelatedNotesPanel(
+                    state = uiState.relatedNotesState,
+                    onNoteClick = onOpenNote,
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             // 右ペイン
@@ -349,6 +360,101 @@ private fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modifi
                     Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = Color(0xFFCC0000))
                 }
                 else -> {}
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelatedNotesPanel(
+    state: RelatedNotesState,
+    onNoteClick: (RelatedNote) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    when (state) {
+        is RelatedNotesState.Idle,
+        is RelatedNotesState.AiUnavailable,
+        is RelatedNotesState.AiNeedsDownload -> return
+        is RelatedNotesState.Loading,
+        is RelatedNotesState.Success,
+        is RelatedNotesState.Error -> Unit
+    }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = Color(0xFFF0F4FF),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = "🔗 関連ノート",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Indigo
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            when (state) {
+                is RelatedNotesState.Loading -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = Indigo
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("関連ノートを検索中…", fontSize = 13.sp, color = Color(0xFF555555))
+                    }
+                }
+                is RelatedNotesState.Success -> {
+                    if (state.notes.isEmpty()) {
+                        Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = Color(0xFF777777))
+                    } else {
+                        state.notes.forEachIndexed { index, note ->
+                            RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                            if (index < state.notes.lastIndex) {
+                                Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                            }
+                        }
+                    }
+                }
+                is RelatedNotesState.Error -> {
+                    Text("関連ノートの取得に失敗しました: ${state.message}", fontSize = 13.sp, color = Color(0xFFCC0000))
+                }
+                else -> {}
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = note.title,
+            fontSize = 14.sp,
+            lineHeight = 18.sp,
+            color = OnSurface,
+            modifier = Modifier.weight(1f)
+        )
+        if (note.isWikilinked) {
+            Surface(
+                color = Indigo,
+                shape = RoundedCornerShape(4.dp)
+            ) {
+                Text(
+                    text = "linked",
+                    color = OnVibrant,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
             }
         }
     }
