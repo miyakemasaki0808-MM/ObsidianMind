@@ -2,7 +2,7 @@
 
 **プロジェクト:** Obsidian Mind  
 **日付:** 2026-05-30  
-**対象ブランチ:** feature/markdown_rendaring
+**対象ブランチ:** feature/local_ai
 
 ---
 
@@ -12,18 +12,23 @@
 app/src/
 ├── main/
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt       # エントリポイント・Compose UI・Markdown 表示
-│   │   ├── NoteViewModel.kt      # 状態管理・ビジネスロジックの橋渡し
-│   │   └── NoteRepository.kt     # ファイルアクセス層
+│   │   ├── MainActivity.kt           # エントリポイント・Compose UI・Markdown 表示
+│   │   ├── NoteViewModel.kt          # 状態管理・ビジネスロジックの橋渡し
+│   │   ├── NoteRepository.kt         # ファイルアクセス層・frontmatter/wikilink 解析
+│   │   ├── ai/
+│   │   │   ├── AICoreClient.kt       # Gemini Nano 4 接続ラッパー（AiClient インターフェース）
+│   │   │   └── PromptBuilder.kt      # 要約プロンプト構築
+│   │   └── domain/
+│   │       └── SummarizeUseCase.kt   # 要約ユースケース
 │   ├── res/
 │   │   └── values/
-│   │       ├── colors.xml        # indigo のみ（themes.xml から参照）
-│   │       ├── strings.xml       # 文字列リソース（Compose からも参照）
-│   │       └── themes.xml        # Theme.ObsidianMind
+│   │       ├── colors.xml            # indigo のみ（themes.xml から参照）
+│   │       ├── strings.xml           # 文字列リソース
+│   │       └── themes.xml            # Theme.ObsidianMind
 │   └── AndroidManifest.xml
 └── test/
     └── java/com/example/newproject/
-        └── NoteRepositoryTest.kt # ユニットテスト
+        └── NoteRepositoryTest.kt     # ユニットテスト
 ```
 
 > `activity_main.xml` は Jetpack Compose 移行時に削除済み。
@@ -36,6 +41,7 @@ app/src/
 ┌─────────────────────────────────────────────────┐
 │                  MainActivity                   │
 │  ・registerForActivityResult で Vault 選択       │
+│  ・calculateWindowSizeClass() でフォルダブル判定 │
 │  ・setContent { } で Compose UI を起動           │
 │  ・collectAsStateWithLifecycle() で状態購読      │
 └──────────────────┬──────────────────────────────┘
@@ -45,28 +51,41 @@ app/src/
 │                 NoteViewModel                   │
 │  ・vaultUri を保持（構成変更を跨いで生存）        │
 │  ・StateFlow<NoteUiState> で状態を公開           │
-│  ・viewModelScope でコルーチンを起動             │
-└──────────────────┬──────────────────────────────┘
-                   │ suspend fun
-                   ▼
-┌─────────────────────────────────────────────────┐
-│                NoteRepository                   │
-│  ・collectNotes()    Vault を再帰走査            │
-│  ・readNoteContent() ファイル内容を読み込み      │
-│  ・すべて Dispatchers.IO で実行                  │
-└─────────────────────────────────────────────────┘
+│  ・ノート読込後に SummarizeUseCase を起動        │
+│  ・モデル未DL時に downloadModel() Flow を収集    │
+└──────────┬───────────────────┬──────────────────┘
+           │ suspend fun       │ suspend fun
+           ▼                   ▼
+┌──────────────────┐  ┌────────────────────────────┐
+│  NoteRepository  │  │      SummarizeUseCase       │
+│  ・collectNotes  │  │  ・AiClient.checkAvailability│
+│  ・readContent   │  │  ・AiClient.generate(prompt) │
+│  ・parseMeta     │  └────────────┬───────────────-┘
+└──────────────────┘               │
+                                   ▼
+                        ┌─────────────────────┐
+                        │    AICoreClient      │
+                        │  Gemini Nano 4 Full  │
+                        │  ML Kit GenAI API    │
+                        └─────────────────────┘
 ```
 
-**データフロー（ランダムノート表示）**
+**データフロー（ノート表示 + 要約）**
 
 ```
 ユーザーがボタンをタップ
-  → RandomNoteScreen の onRandomNote コールバック
   → viewModel.loadRandomNote(contentResolver)
-  → NoteState.Loading を emit → Compose が自動再コンポーズ
-  → (Dispatchers.IO) repository.collectNotes()
-  → (Dispatchers.IO) repository.readNoteContent()
-  → NoteState.Success(title, content) を emit → Compose が自動再コンポーズ
+  → NoteState.Loading を emit
+  → repository.collectNotes() → repository.readNoteContent()
+  → NoteState.Success(title, content) を emit
+  → fetchSummary(title, content) を起動
+      → SummarizeUseCase.summarize()
+          → AICoreClient.checkAvailability()
+              AVAILABLE    → generateContent(prompt) → SummaryState.Success(summary)
+              DOWNLOADABLE → startModelDownload()
+                               → DownloadProgress emit → SummaryState.Downloading(n, total)
+                               → DownloadCompleted    → fetchSummary() を再実行
+              UNAVAILABLE  → SummaryState.AiUnavailable（パネル非表示）
 ```
 
 ---
@@ -78,179 +97,138 @@ app/src/
 ```kotlin
 data class NoteFile(val name: String, val uri: Uri)
 
-internal fun isMarkdownFile(name: String?): Boolean =
-    name?.lowercase()?.endsWith(".md") == true
-```
-
-- `NoteFile` はファイル名と SAF の URI を束ねるシンプルなデータクラス。
-- `isMarkdownFile` は `internal` 関数として切り出し、ユニットテストから直接参照できる。
-
-```kotlin
-suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
-    withContext(Dispatchers.IO) {
-        buildList {
-            collectRecursive(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri), this)
-        }
-    }
-```
-
-- `withContext(Dispatchers.IO)` で呼び出し元のスレッドに関係なく I/O スレッドで実行。
-- `buildList { }` で可変リストの露出を避けつつ効率よく構築。
-- `DocumentsContract.getTreeDocumentId(vaultUri)` でツリーのルート document ID を取得し、再帰の起点にする。
-
-```kotlin
-private fun collectRecursive(...) {
-    val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
-    contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-        while (cursor.moveToNext()) {
-            when {
-                mimeType == DocumentsContract.Document.MIME_TYPE_DIR -> 再帰
-                isMarkdownFile(name) -> result.add(NoteFile(name, childUri))
-            }
-        }
-    }
-}
-```
-
-- SAF の `buildChildDocumentsUriUsingTree` でディレクトリの子一覧 URI を生成。
-- Cursor を `use { }` で確実に閉じる（Java の try-with-resources 相当）。
-- サブフォルダは再帰で深掘り、`.md` ファイルだけ収集。
-
----
-
-### 3-2. `NoteViewModel.kt`
-
-#### 状態定義
-
-```kotlin
-sealed class NoteState {
-    object Idle : NoteState()
-    object Loading : NoteState()
-    data class Success(val title: String, val content: String) : NoteState()
-    object Empty : NoteState()
-    data class Error(val message: String, val id: Long = System.currentTimeMillis()) : NoteState()
-}
-
-data class NoteUiState(
-    val vaultSelected: Boolean = false,
-    val noteState: NoteState = NoteState.Idle
+data class NoteMeta(
+    val tags: List<String>,
+    val aliases: List<String>,
+    val wikilinkTitles: Set<String>
 )
 ```
 
-- `sealed class` で取りうる状態を網羅的に定義。`when` 式で漏れなく処理できる。
-- `NoteUiState` は Vault 選択状態とノート読み込み状態を分離して保持。
-- `Error` に `id` を持たせることで、画面回転後に同じエラーの Toast が再表示されるのを防ぐ。
-
-#### Vault の永続化
-
-```kotlin
-class NoteViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
-```
-
-- `AndroidViewModel` を継承することで `Application` コンテキストを安全に保持。
-- Activity コンテキストを ViewModel に渡すとメモリリークになるため、`Application` を使う。
-
-#### ランダムノート読み込み
-
-```kotlin
-fun loadRandomNote(contentResolver: ContentResolver) {
-    val uri = vaultUri ?: return
-    viewModelScope.launch {
-        _uiState.value = _uiState.value.copy(noteState = NoteState.Loading)
-        _uiState.value = try {
-            val notes = repository.collectNotes(contentResolver, uri)
-            if (notes.isEmpty()) {
-                _uiState.value.copy(noteState = NoteState.Empty)
-            } else {
-                val note = notes.random()
-                val content = repository.readNoteContent(contentResolver, note.uri)
-                _uiState.value.copy(noteState = NoteState.Success(note.name, content))
-            }
-        } catch (e: Exception) {
-            _uiState.value.copy(noteState = NoteState.Error(e.message ?: "Unknown error"))
-        }
-    }
-}
-```
-
-- `viewModelScope` は ViewModel が破棄されると自動キャンセルされる。画面回転中に処理が中断しない。
-- `copy()` で既存の状態を保ちつつ `noteState` だけ差し替えるイミュータブルな更新。
-- `ContentResolver` は Activity から受け取り、ViewModel 内には保持しない（Activity 参照の漏洩を防ぐ）。
+- `parseMeta(content)` で YAML frontmatter（tags/aliases）と `[[wikilink]]` を抽出。
+- frontmatter はインライン形式 `tags: [a, b]` とブロック形式（`- item` 列挙）の両方に対応。
 
 ---
 
-### 3-3. `MainActivity.kt`
+### 3-2. `ai/AICoreClient.kt`
 
-#### ActivityResult API
+#### インターフェース
 
 ```kotlin
-private val openVault = registerForActivityResult(
-    ActivityResultContracts.OpenDocumentTree()
-) { uri ->
-    uri ?: return@registerForActivityResult
-    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-    contentResolver.takePersistableUriPermission(uri, flags)
-    viewModel.saveVault(uri)
-    viewModel.loadRandomNote(contentResolver)
+interface AiClient {
+    suspend fun checkAvailability(): AiAvailability
+    suspend fun generate(prompt: String): String
+    fun downloadModel(): Flow<DownloadStatus>
 }
 ```
 
-- `registerForActivityResult` はクラス初期化時に登録し、`onCreate` 前から安全に保持できる。
-- `takePersistableUriPermission` でアプリ再起動後もフォルダアクセス権を維持。
-- `uri ?: return@registerForActivityResult` でユーザーがキャンセルした場合を安全に処理。
-
-#### Compose UI の起動
+#### AICoreClient（本番）
 
 ```kotlin
-override fun onCreate(savedInstanceState: Bundle?) {
-    super.onCreate(savedInstanceState)
-    setContent {
-        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-        RandomNoteScreen(
-            uiState = uiState,
-            onSelectVault = { openVault.launch(null) },
-            onRandomNote = { ... }
+class AICoreClient : AiClient {
+    private val model by lazy {
+        Generation.getClient(
+            GenerationConfig.Builder().apply {
+                modelConfig = ModelConfig.Builder().apply {
+                    preference = ModelPreference.FULL  // Gemini Nano 4 Full (E4B)
+                }.build()
+            }.build()
         )
     }
 }
 ```
 
-- `setContent { }` で Compose ツリーを起動。`setContentView` は不要。
-- `collectAsStateWithLifecycle()` でライフサイクルを考慮した状態購読。バックグラウンド時は自動停止。
-- UI ロジックをコールバックとして渡すことで `RandomNoteScreen` を純粋な Composable に保つ。
+- `Generation.getClient()` は Context 不要（ML Kit ContentProvider で自動初期化）。
+- `ModelPreference.FULL` = Gemma 4 E4B ベースの高精度モデルを指定。
+- `checkStatus()` の戻り値は `FeatureStatus` の Int 定数（`com.google.mlkit.genai.common`）。
 
-#### エラー Toast の制御
+#### DownloadStatus sealed class
+
+| サブクラス | プロパティ | 意味 |
+|---|---|---|
+| `DownloadStarted` | `bytesToDownload: Long` | DL開始、総サイズ通知 |
+| `DownloadProgress` | `totalBytesDownloaded: Long` | DL進捗 |
+| `DownloadCompleted` | なし（singleton） | DL完了 |
+| `DownloadFailed` | `e: GenAiException` | DL失敗 |
+
+---
+
+### 3-3. `ai/PromptBuilder.kt`
 
 ```kotlin
-LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
-    if (uiState.noteState is NoteState.Error) {
-        Toast.makeText(context, uiState.noteState.message, Toast.LENGTH_SHORT).show()
-    }
+fun buildSummarizePrompt(title: String, content: String): String
+```
+
+- ノート本文の先頭 1200 文字をスニペットとして使用。
+- **ノートと同言語**で 2〜4 文の要約を生成するよう指示。
+- 「This note is about」などの前置き表現を禁止するプロンプト設計。
+
+---
+
+### 3-4. `domain/SummarizeUseCase.kt`
+
+```kotlin
+sealed class SummaryResult {
+    data class Success(val summary: String) : SummaryResult()
+    object AiUnavailable : SummaryResult()
+    object AiNeedsDownload : SummaryResult()
+    data class Error(val message: String) : SummaryResult()
 }
 ```
 
-- `LaunchedEffect` のキーを `error.id` にすることで、同じエラーに対して Toast は一度だけ表示される。
-- 画面回転しても `id` が変わらないため再表示されない。
+- `AiNeedsDownload` を返した場合、ViewModel が `downloadModel()` を自動起動。
 
-#### Compose レイアウト構造
+---
 
+### 3-5. `NoteViewModel.kt`
+
+#### 状態定義
+
+```kotlin
+sealed class SummaryState {
+    object Idle : SummaryState()
+    object Loading : SummaryState()
+    data class Success(val summary: String) : SummaryState()
+    data class Downloading(val downloaded: Long, val total: Long) : SummaryState()
+    object AiUnavailable : SummaryState()
+    data class Error(val message: String) : SummaryState()
+}
+
+data class NoteUiState(
+    val vaultSelected: Boolean = false,
+    val noteState: NoteState = NoteState.Idle,
+    val summaryState: SummaryState = SummaryState.Idle
+)
 ```
-Column (fillMaxSize, グラデーション背景)
-├── Text        : タイトル "Random Note"
-├── Text        : Vault 選択状態
-├── Row
-│   ├── Button  : Select Vault（ButtonSecondary = ティール）
-│   └── Button  : Random Note（ButtonPrimary = ピンク、Loading 中は disabled）
-├── CircularProgressIndicator : Loading 中のみ表示
-└── Surface (weight(1f), 角丸白パネル)
-    └── Column
-        ├── Text : ノートタイトル
-        └── MarkdownNoteContent : Markdown パース済みノート本文（verticalScroll）
+
+- `Downloading.downloaded = -1` はダウンロード開始前（不定量）を表す。
+- DL完了後は `pendingTitle` / `pendingContent` を使って要約を自動再実行。
+
+---
+
+### 3-6. `MainActivity.kt`
+
+#### フォルダブル対応（Two-Pane）
+
+```kotlin
+val windowSizeClass = calculateWindowSizeClass(this)
+RandomNoteScreen(
+    isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
+    ...
+)
 ```
 
-- `weight(1f)` で Column の残り領域をすべて占有。`fillMaxSize` では上部の要素を押し出してしまうため不適切。
-- `MarkdownNoteContent` は後述する全 Markdown ブロックをレンダリング。外部ライブラリ不使用。
+- `EXPANDED`（Pixel 10 Pro Fold 展開時）: 左ペイン（操作）+ 右ペイン（ノート + SummaryPanel）
+- `COMPACT` / `MEDIUM`（折りたたみ時）: 縦積みレイアウト + SummaryPanel を下部に表示
+
+#### SummaryPanel の状態別表示
+
+| SummaryState | 表示内容 |
+|---|---|
+| `Idle` / `AiUnavailable` | 非表示 |
+| `Loading` | スピナー + 「要約を生成中…」 |
+| `Downloading` | LinearProgressIndicator + DL進捗（MB表示） |
+| `Success` | 要約テキスト（14sp） |
+| `Error` | エラーメッセージ（赤文字） |
 
 ---
 
@@ -298,11 +276,11 @@ Column (fillMaxSize, グラデーション背景)
 
 ## 5. UI カラーパレット
 
-色は `MainActivity.kt` にファイルプライベートな定数として定義。`colors.xml` は `indigo` のみ残し（`themes.xml` のステータスバー・ナビゲーションバー色として参照）。
+色は `MainActivity.kt` にファイルプライベートな定数として定義。
 
 | 定数名 | HEX | 用途 |
 |---|---|---|
-| `Indigo` | `#4D3DFF` | グラデーション始点 |
+| `Indigo` | `#4D3DFF` | グラデーション始点・AI パネルアクセント |
 | `Aqua` | `#00C2FF` | グラデーション中間 |
 | `Coral` | `#FF6B8A` | グラデーション終点 |
 | `OnVibrant` | `#FFFFFF` | テキスト・ボタンラベル |
@@ -325,9 +303,6 @@ Column (fillMaxSize, グラデーション背景)
 | `markdown files are recognized` | `.md` / `.MD` / `.Md` が true を返す |
 | `non-markdown files are rejected` | `.png` `.txt` `.zip` `null` `""` `.md.bak` が false を返す |
 
-- Android 依存なし（JVM テスト）のため高速に実行できる。
-- `isMarkdownFile` を `internal` 関数として公開しているのはテスト容易性のため。
-
 ---
 
 ## 7. 依存ライブラリ一覧
@@ -336,10 +311,13 @@ Column (fillMaxSize, グラデーション背景)
 |---|---|---|
 | `androidx.compose:compose-bom` | 2024.09.03 | Compose 全ライブラリのバージョン管理 |
 | `androidx.compose.ui:ui` | BOM 管理 | Compose UI 基盤 |
-| `androidx.compose.material3:material3` | BOM 管理 | Material3 コンポーネント（Button, Surface 等） |
-| `androidx.activity:activity-compose` | 1.9.3 | `setContent {}`, `ComponentActivity`, `viewModels()` |
+| `androidx.compose.material3:material3` | BOM 管理 | Material3 コンポーネント |
+| `androidx.compose.material3:material3-window-size-class` | BOM 管理 | WindowSizeClass（フォルダブル対応） |
+| `androidx.window:window` | 1.3.0 | WindowMetrics（フォルダブル対応） |
+| `androidx.activity:activity-compose` | 1.9.3 | `setContent {}`, `ComponentActivity` |
 | `androidx.lifecycle:lifecycle-viewmodel-ktx` | 2.8.7 | ViewModel, viewModelScope |
 | `androidx.lifecycle:lifecycle-runtime-compose` | 2.8.7 | `collectAsStateWithLifecycle()` |
+| `com.google.mlkit:genai-prompt` | 1.0.0-beta2 | Gemini Nano 4 オンデバイス推論（AICore） |
 | `kotlinx-coroutines-android` | 1.9.0 | Dispatchers.Main, コルーチン |
 | `junit:junit` | 4.13.2 | ユニットテスト |
 | `kotlinx-coroutines-test` | 1.9.0 | コルーチンのテスト用ユーティリティ |
