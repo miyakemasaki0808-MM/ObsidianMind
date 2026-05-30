@@ -7,7 +7,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
-import com.example.newproject.ai.AiAvailability
+import com.example.newproject.ai.AiClient
+import com.example.newproject.domain.RelatedNote
+import com.example.newproject.domain.RelatedNotesResult
+import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,18 +36,29 @@ sealed class SummaryState {
     data class Error(val message: String) : SummaryState()
 }
 
+sealed class RelatedNotesState {
+    object Idle : RelatedNotesState()
+    object Loading : RelatedNotesState()
+    data class Success(val notes: List<RelatedNote>) : RelatedNotesState()
+    object AiUnavailable : RelatedNotesState()
+    object AiNeedsDownload : RelatedNotesState()
+    data class Error(val message: String) : RelatedNotesState()
+}
+
 data class NoteUiState(
     val vaultSelected: Boolean = false,
     val noteState: NoteState = NoteState.Idle,
-    val summaryState: SummaryState = SummaryState.Idle
+    val summaryState: SummaryState = SummaryState.Idle,
+    val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
     private val repository = NoteRepository()
-    private val aiClient = AICoreClient()
+    private val aiClient: AiClient = AICoreClient()
     private val summarizeUseCase = SummarizeUseCase(aiClient)
+    private val relatedNotesUseCase = RelatedNotesUseCase(aiClient)
 
     private val _uiState = MutableStateFlow(NoteUiState())
     val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
@@ -52,6 +66,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // DL完了後に要約を再実行するために保持
     private var pendingTitle: String = ""
     private var pendingContent: String = ""
+    private var cachedNotes: List<NoteFile> = emptyList()
 
     var vaultUri: Uri? = null
         private set
@@ -67,7 +82,12 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun saveVault(uri: Uri) {
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
-        _uiState.value = _uiState.value.copy(vaultSelected = true)
+        cachedNotes = emptyList()
+        _uiState.value = _uiState.value.copy(
+            vaultSelected = true,
+            summaryState = SummaryState.Idle,
+            relatedNotesState = RelatedNotesState.Idle
+        )
     }
 
     fun loadRandomNote(contentResolver: ContentResolver) {
@@ -75,10 +95,12 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 noteState = NoteState.Loading,
-                summaryState = SummaryState.Idle
+                summaryState = SummaryState.Idle,
+                relatedNotesState = RelatedNotesState.Idle
             )
             try {
                 val notes = repository.collectNotes(contentResolver, uri)
+                cachedNotes = notes
                 if (notes.isEmpty()) {
                     _uiState.value = _uiState.value.copy(noteState = NoteState.Empty)
                     return@launch
@@ -89,6 +111,29 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     noteState = NoteState.Success(note.name, content)
                 )
                 fetchSummary(note.name, content)
+                fetchRelatedNotes(note.name, content)
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    noteState = NoteState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                noteState = NoteState.Loading,
+                summaryState = SummaryState.Idle,
+                relatedNotesState = RelatedNotesState.Idle
+            )
+            try {
+                val content = repository.readNoteContent(contentResolver, note.uri)
+                _uiState.value = _uiState.value.copy(
+                    noteState = NoteState.Success(note.title, content)
+                )
+                fetchSummary(note.title, content)
+                fetchRelatedNotes(note.title, content)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
@@ -124,6 +169,42 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun fetchRelatedNotes(title: String, content: String) {
+        viewModelScope.launch {
+            if (cachedNotes.isEmpty()) {
+                _uiState.value = _uiState.value.copy(
+                    relatedNotesState = RelatedNotesState.Success(emptyList())
+                )
+                return@launch
+            }
+
+            _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
+            val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
+            when (val result = relatedNotesUseCase.findRelated(title, content, cachedNotes, wikilinkTitles)) {
+                is RelatedNotesResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        relatedNotesState = RelatedNotesState.Success(result.notes)
+                    )
+                }
+                is RelatedNotesResult.AiUnavailable -> {
+                    _uiState.value = _uiState.value.copy(
+                        relatedNotesState = RelatedNotesState.AiUnavailable
+                    )
+                }
+                is RelatedNotesResult.AiNeedsDownload -> {
+                    _uiState.value = _uiState.value.copy(
+                        relatedNotesState = RelatedNotesState.AiNeedsDownload
+                    )
+                }
+                is RelatedNotesResult.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        relatedNotesState = RelatedNotesState.Error(result.message)
+                    )
+                }
+            }
+        }
+    }
+
     private fun startModelDownload() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -146,6 +227,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                         is DownloadStatus.DownloadCompleted -> {
                             // DL完了 → 要約を実行
                             fetchSummary(pendingTitle, pendingContent)
+                            fetchRelatedNotes(pendingTitle, pendingContent)
                         }
                         is DownloadStatus.DownloadFailed -> {
                             _uiState.value = _uiState.value.copy(
