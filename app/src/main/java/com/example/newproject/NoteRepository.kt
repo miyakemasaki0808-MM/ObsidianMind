@@ -21,9 +21,35 @@ class NoteRepository {
 
     suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
         withContext(Dispatchers.IO) {
-            buildList {
-                collectRecursive(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri), this)
+            val result = mutableListOf<NoteFile>()
+            val queue = ArrayDeque<String>()
+            queue.add(DocumentsContract.getTreeDocumentId(vaultUri))
+
+            while (queue.isNotEmpty()) {
+                val documentId = queue.removeFirst()
+                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
+                val projection = arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                    DocumentsContract.Document.COLUMN_MIME_TYPE
+                )
+
+                contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val childId = cursor.getString(0)
+                        val name = cursor.getString(1)
+                        val mimeType = cursor.getString(2)
+                        val childUri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)
+
+                        when {
+                            mimeType == DocumentsContract.Document.MIME_TYPE_DIR -> queue.add(childId)
+                            isMarkdownFile(name) -> result.add(NoteFile(name, childUri))
+                        }
+                    }
+                }
             }
+
+            result
         }
 
     suspend fun readNoteContent(contentResolver: ContentResolver, uri: Uri): String =
@@ -73,36 +99,6 @@ class NoteRepository {
             .takeWhile { it.startsWith(" ") || it.startsWith("\t") }
             .map { it.trim().removePrefix("-").trim() }
             .filter { it.isNotBlank() }
-    }
-
-    private fun collectRecursive(
-        contentResolver: ContentResolver,
-        treeUri: Uri,
-        documentId: String,
-        result: MutableList<NoteFile>
-    ) {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
-        )
-
-        contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            while (cursor.moveToNext()) {
-                val childId = cursor.getString(0)
-                val name = cursor.getString(1)
-                val mimeType = cursor.getString(2)
-                val childUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId)
-
-                when {
-                    mimeType == DocumentsContract.Document.MIME_TYPE_DIR ->
-                        collectRecursive(contentResolver, treeUri, childId, result)
-                    isMarkdownFile(name) ->
-                        result.add(NoteFile(name, childUri))
-                }
-            }
-        }
     }
 
     companion object {
