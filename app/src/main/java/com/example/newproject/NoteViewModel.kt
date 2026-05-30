@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
+import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
@@ -39,17 +40,47 @@ sealed class SummaryState {
 sealed class RelatedNotesState {
     object Idle : RelatedNotesState()
     object Loading : RelatedNotesState()
-    data class Success(val notes: List<RelatedNote>) : RelatedNotesState()
+    data class Success(
+        val notes: List<RelatedNote>,
+        val prefixNotes: List<RelatedNote> = emptyList()
+    ) : RelatedNotesState()
     object AiUnavailable : RelatedNotesState()
     object AiNeedsDownload : RelatedNotesState()
     data class Error(val message: String) : RelatedNotesState()
+}
+
+data class QuizCard(
+    val question: String,
+    val choices: List<String>,
+    val correctIndex: Int,
+    val explanation: String = ""
+)
+
+sealed class QuizState {
+    object Idle : QuizState()
+    object Loading : QuizState()
+    data class Success(val cards: List<QuizCard>) : QuizState()
+    data class Error(val message: String) : QuizState()
+}
+
+// title(normalized) → Set<linkedTitle(normalized)>
+typealias VaultGraph = Map<String, Set<String>>
+
+sealed class GraphState {
+    object Idle : GraphState()
+    object Loading : GraphState()
+    data class Success(val graph: VaultGraph, val allTitles: List<String>) : GraphState()
+    data class Error(val message: String) : GraphState()
 }
 
 data class NoteUiState(
     val vaultSelected: Boolean = false,
     val noteState: NoteState = NoteState.Idle,
     val summaryState: SummaryState = SummaryState.Idle,
-    val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle
+    val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
+    val quizState: QuizState = QuizState.Idle,
+    val wikilinkTitles: Set<String> = emptySet(),
+    val graphState: GraphState = GraphState.Idle
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
@@ -86,7 +117,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             vaultSelected = true,
             summaryState = SummaryState.Idle,
-            relatedNotesState = RelatedNotesState.Idle
+            relatedNotesState = RelatedNotesState.Idle,
+            quizState = QuizState.Idle,
+            graphState = GraphState.Idle
         )
     }
 
@@ -96,7 +129,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 noteState = NoteState.Loading,
                 summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle
+                relatedNotesState = RelatedNotesState.Idle,
+                quizState = QuizState.Idle
             )
             try {
                 val notes = repository.collectNotes(contentResolver, uri)
@@ -125,7 +159,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 noteState = NoteState.Loading,
                 summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle
+                relatedNotesState = RelatedNotesState.Idle,
+                quizState = QuizState.Idle
             )
             try {
                 val content = repository.readNoteContent(contentResolver, note.uri)
@@ -139,6 +174,84 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     noteState = NoteState.Error(e.message ?: "Unknown error")
                 )
             }
+        }
+    }
+
+    fun buildVaultGraph(contentResolver: ContentResolver) {
+        // 同Vaultなら再利用
+        if (_uiState.value.graphState is GraphState.Success) return
+        val notes = cachedNotes
+        if (notes.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(graphState = GraphState.Loading)
+            try {
+                val graph = mutableMapOf<String, Set<String>>()
+                notes.forEach { note ->
+                    val content = repository.readNoteContent(contentResolver, note.uri)
+                    val links = repository.parseMeta(content).wikilinkTitles
+                        .map { it.trim().removeSuffix(".md").lowercase() }
+                        .toSet()
+                    graph[note.name.trim().removeSuffix(".md").lowercase()] = links
+                }
+                val allTitles = notes.map { it.name.trim().removeSuffix(".md") }
+                _uiState.value = _uiState.value.copy(
+                    graphState = GraphState.Success(graph = graph, allTitles = allTitles)
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    graphState = GraphState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    fun openNoteByTitle(contentResolver: ContentResolver, title: String) {
+        val normalizedTarget = title.trim().removeSuffix(".md").lowercase()
+        val note = cachedNotes.firstOrNull {
+            it.name.trim().removeSuffix(".md").lowercase() == normalizedTarget
+        } ?: return
+        openNote(contentResolver, com.example.newproject.domain.RelatedNote(
+            title = note.name,
+            uri = note.uri,
+            isWikilinked = true
+        ))
+    }
+
+    fun generateQuiz(title: String, content: String) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(quizState = QuizState.Loading)
+            try {
+                val prompt = PromptBuilder.buildQuizPrompt(title, content)
+                val raw = aiClient.generate(prompt)
+                val cards = parseQuizResponse(raw)
+                _uiState.value = _uiState.value.copy(quizState = QuizState.Success(cards))
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    quizState = QuizState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    fun clearQuiz() {
+        _uiState.value = _uiState.value.copy(quizState = QuizState.Idle)
+    }
+
+    private fun parseQuizResponse(raw: String): List<QuizCard> {
+        return raw.trim().split("\n\n").mapNotNull { block ->
+            val lines = block.trim().lines()
+            val q = lines.firstOrNull { it.startsWith("Q:") }?.removePrefix("Q:")?.trim()
+            val a = lines.firstOrNull { it.startsWith("A:") }?.removePrefix("A:")?.trim()
+            val b = lines.firstOrNull { it.startsWith("B:") }?.removePrefix("B:")?.trim()
+            val c = lines.firstOrNull { it.startsWith("C:") }?.removePrefix("C:")?.trim()
+            val d = lines.firstOrNull { it.startsWith("D:") }?.removePrefix("D:")?.trim()
+            val answer = lines.firstOrNull { it.startsWith("ANSWER:") }?.removePrefix("ANSWER:")?.trim()
+            val explanation = lines.firstOrNull { it.startsWith("EXPLANATION:") }?.removePrefix("EXPLANATION:")?.trim() ?: ""
+            if (q != null && a != null && b != null && c != null && d != null && answer != null) {
+                val choices = listOf(a, b, c, d)
+                val correctIndex = listOf("A", "B", "C", "D").indexOf(answer)
+                if (correctIndex >= 0) QuizCard(q, choices, correctIndex, explanation) else null
+            } else null
         }
     }
 
@@ -180,10 +293,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
             _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
+            _uiState.value = _uiState.value.copy(wikilinkTitles = wikilinkTitles)
             when (val result = relatedNotesUseCase.findRelated(title, content, cachedNotes, wikilinkTitles)) {
                 is RelatedNotesResult.Success -> {
                     _uiState.value = _uiState.value.copy(
-                        relatedNotesState = RelatedNotesState.Success(result.notes)
+                        relatedNotesState = RelatedNotesState.Success(
+                            notes = result.notes,
+                            prefixNotes = result.prefixNotes
+                        )
                     )
                 }
                 is RelatedNotesResult.AiUnavailable -> {
