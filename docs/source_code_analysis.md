@@ -1,8 +1,8 @@
 # ソースコード解析書
 
 **プロジェクト:** Obsidian Mind  
-**日付:** 2026-05-11  
-**対象ブランチ:** main
+**日付:** 2026-05-30  
+**対象ブランチ:** feature/markdown_rendaring
 
 ---
 
@@ -250,11 +250,53 @@ Column (fillMaxSize, グラデーション背景)
 ```
 
 - `weight(1f)` で Column の残り領域をすべて占有。`fillMaxSize` では上部の要素を押し出してしまうため不適切。
-- `MarkdownNoteContent` は見出し・箇条書き・コードブロック・太字・斜体・インラインコード・リンクをレンダリング。外部ライブラリ不使用。
+- `MarkdownNoteContent` は後述する全 Markdown ブロックをレンダリング。外部ライブラリ不使用。
 
 ---
 
-## 4. UI カラーパレット
+## 4. Markdown レンダリング
+
+`MarkdownNoteContent` は `parseMarkdownBlocks()` でブロック単位に分解し、各 Composable に委譲する。外部ライブラリ不使用。
+
+### 4-1. 対応ブロック
+
+| ブロック型 | Markdown 記法 | Composable |
+|---|---|---|
+| `Heading` | `# H1` 〜 `###### H6` | `MarkdownHeading` |
+| `Paragraph` | 通常テキスト | `MarkdownParagraph` |
+| `ListBlock` | `- item` / `1. item` | `MarkdownList` |
+| `CodeBlock` | ` ```...``` ` | `MarkdownCodeBlock` |
+| `HorizontalRule` | `---` / `***` / `___` | `MarkdownHorizontalRule` |
+| `Blockquote` | `> text` | `MarkdownBlockquote` |
+| `TaskListBlock` | `- [ ] / - [x]` | `MarkdownTaskList` |
+| `Table` | `\| col \| col \|` | `MarkdownTable` |
+
+### 4-2. インライン装飾（`inlineMarkdown()`）
+
+| 記法 | 効果 |
+|---|---|
+| `***text***` | 太字イタリック（`**` より先に評価） |
+| `**text**` | 太字 |
+| `*text*` | イタリック |
+| `~~text~~` | 打ち消し線 |
+| `` `code` `` | インラインコード（CodePanel 背景） |
+| `[[ノート名]]` | Obsidian ウィキリンク（青下線、`[[label\|alias]]` 対応） |
+| `[label](url)` | 通常リンク（青下線） |
+
+### 4-3. 見出しサイズ
+
+| レベル | フォントサイズ | 備考 |
+|---|---|---|
+| H1 | 24sp | |
+| H2 | 21sp | |
+| H3 | 19sp | |
+| H4 | 17sp | |
+| H5 | 15sp | グレー文字 |
+| H6 | 14sp | グレー文字・イタリック |
+
+---
+
+## 5. UI カラーパレット
 
 色は `MainActivity.kt` にファイルプライベートな定数として定義。`colors.xml` は `indigo` のみ残し（`themes.xml` のステータスバー・ナビゲーションバー色として参照）。
 
@@ -267,12 +309,14 @@ Column (fillMaxSize, グラデーション背景)
 | `OnVibrantMuted` | `#EAF7FF` | Vault ステータステキスト |
 | `OnSurface` | `#202124` | ノートパネル内テキスト |
 | `Panel` | `#FDFEFF` | ノートパネル背景 |
+| `CodePanel` | `#F1F4F8` | コードブロック・インラインコード背景 |
+| `LinkBlue` | `#2563EB` | リンク・Obsidian ウィキリンク文字色 |
 | `ButtonPrimary` | `#FF3D71` | Random Note ボタン |
 | `ButtonSecondary` | `#16B8A6` | Select Vault ボタン |
 
 ---
 
-## 5. テスト
+## 6. テスト
 
 ### `NoteRepositoryTest.kt`
 
@@ -286,7 +330,7 @@ Column (fillMaxSize, グラデーション背景)
 
 ---
 
-## 6. 依存ライブラリ一覧
+## 7. 依存ライブラリ一覧
 
 | ライブラリ | バージョン | 用途 |
 |---|---|---|
