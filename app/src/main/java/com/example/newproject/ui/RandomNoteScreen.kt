@@ -46,11 +46,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.AnnotationState
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
 import com.example.newproject.R
 import com.example.newproject.RelatedNotesState
 import com.example.newproject.SummaryState
+import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.theme.Aqua
@@ -71,7 +73,7 @@ fun RandomNoteScreen(
     onRandomNote: () -> Unit,
     onOpenNote: (RelatedNote) -> Unit,
     onGenerateQuiz: () -> Unit,
-    onGraphView: () -> Unit
+    onCreateAnnotation: () -> Unit
 ) {
     val context = LocalContext.current
     var isNoteExpanded by remember { mutableStateOf(false) }
@@ -88,6 +90,7 @@ fun RandomNoteScreen(
         end = Offset(Float.POSITIVE_INFINITY, 0f)
     )
     val isLoading = uiState.noteState is NoteState.Loading
+    val isAnnotationLoading = uiState.annotationState is AnnotationState.Loading
 
     Box(modifier = Modifier.fillMaxSize()) {
     if (isExpanded) {
@@ -142,11 +145,15 @@ fun RandomNoteScreen(
                         Text("📝 Q&Aを作る", color = OnVibrant)
                     }
                     Button(
-                        onClick = onGraphView,
+                        onClick = onCreateAnnotation,
+                        enabled = !isAnnotationLoading,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = Indigo)
                     ) {
-                        Text("🕸 グラフビュー", color = OnVibrant)
+                        Text("補記メモ", color = OnVibrant)
+                    }
+                    if (isAnnotationLoading) {
+                        Text("補記メモを生成中…", color = OnVibrantMuted, fontSize = 12.sp)
                     }
                 }
                 if (isLoading) {
@@ -168,7 +175,13 @@ fun RandomNoteScreen(
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                NoteContentPanel(uiState = uiState, modifier = Modifier.weight(1f))
+                NoteContentPanel(
+                    uiState = uiState,
+                    modifier = Modifier.weight(1f),
+                    onDoubleTap = if (uiState.noteState is NoteState.Success) {
+                        { isNoteExpanded = true }
+                    } else null
+                )
                 SummaryPanel(summaryState = uiState.summaryState)
             }
         }
@@ -225,16 +238,25 @@ fun RandomNoteScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary)
+                    colors = ButtonDefaults.buttonColors(containerColor = Coral)
                 ) {
-                    Text("📝 Q&Aを作る", color = OnVibrantMuted)
+                    Text("📝 Q&Aを作る", color = OnVibrant)
                 }
                 Button(
-                    onClick = onGraphView,
+                    onClick = onCreateAnnotation,
+                    enabled = !isAnnotationLoading,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary)
+                    colors = ButtonDefaults.buttonColors(containerColor = Indigo)
                 ) {
-                    Text("🕸 グラフビュー", color = OnVibrantMuted)
+                    Text("補記メモ", color = OnVibrant)
+                }
+                if (isAnnotationLoading) {
+                    Text(
+                        "補記メモを生成中…",
+                        color = OnVibrantMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
                 }
             }
             NoteContentPanel(
@@ -388,9 +410,7 @@ internal fun RelatedNotesPanel(
     modifier: Modifier = Modifier
 ) {
     when (state) {
-        is RelatedNotesState.Idle,
-        is RelatedNotesState.AiUnavailable,
-        is RelatedNotesState.AiNeedsDownload -> return
+        is RelatedNotesState.Idle -> return
         is RelatedNotesState.Loading,
         is RelatedNotesState.Success,
         is RelatedNotesState.Error -> Unit
@@ -422,32 +442,33 @@ internal fun RelatedNotesPanel(
                     }
                 }
                 is RelatedNotesState.Success -> {
-                    val hasPrefix = state.prefixNotes.isNotEmpty()
-                    val hasAi = state.notes.isNotEmpty()
-                    if (!hasPrefix && !hasAi) {
+                    val hasRelated = state.relatedNotes.isNotEmpty()
+                    val hasAi = state.aiNotes.isNotEmpty()
+                    if (!hasRelated && !hasAi && state.aiStatus == AiRecommendationStatus.Ready) {
                         Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = Color(0xFF777777))
                     } else {
-                        if (hasPrefix) {
+                        if (hasRelated) {
                             Text(
-                                text = "同グループ",
+                                text = "関連ノート",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(0xFF7B6FFF)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            state.prefixNotes.forEachIndexed { index, note ->
+                            state.relatedNotes.forEachIndexed { index, note ->
                                 RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
-                                if (index < state.prefixNotes.lastIndex) {
+                                if (index < state.relatedNotes.lastIndex) {
                                     Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
                                 }
                             }
                         }
-                        if (hasPrefix && hasAi) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Divider(color = Color(0xFFB0BBEE), thickness = 1.dp)
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-                        if (hasAi) {
+                        val showAiSection = hasAi || state.aiStatus != AiRecommendationStatus.Ready
+                        if (showAiSection) {
+                            if (hasRelated) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Divider(color = Color(0xFFB0BBEE), thickness = 1.dp)
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
                             Text(
                                 text = "AI推薦",
                                 fontSize = 11.sp,
@@ -455,11 +476,18 @@ internal fun RelatedNotesPanel(
                                 color = Color(0xFF16B8A6)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            state.notes.forEachIndexed { index, note ->
-                                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
-                                if (index < state.notes.lastIndex) {
-                                    Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                            if (hasAi) {
+                                state.aiNotes.forEachIndexed { index, note ->
+                                    RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                                    if (index < state.aiNotes.lastIndex) {
+                                        Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                                    }
                                 }
+                            } else {
+                                AiRecommendationStatusText(
+                                    status = state.aiStatus,
+                                    errorMessage = state.aiErrorMessage
+                                )
                             }
                         }
                     }
@@ -471,6 +499,26 @@ internal fun RelatedNotesPanel(
             }
         }
     }
+}
+
+@Composable
+internal fun AiRecommendationStatusText(
+    status: AiRecommendationStatus,
+    errorMessage: String?,
+) {
+    val message = when (status) {
+        AiRecommendationStatus.Ready -> "AI推薦は見つかりませんでした。"
+        AiRecommendationStatus.Unavailable -> "この端末ではAI推薦を利用できません。"
+        AiRecommendationStatus.NeedsDownload -> "AI推薦に必要なモデルを準備中です。"
+        AiRecommendationStatus.Error -> "AI推薦の取得に失敗しました: ${errorMessage ?: "Unknown error"}"
+    }
+    val color = when (status) {
+        AiRecommendationStatus.Ready -> Color(0xFF777777)
+        AiRecommendationStatus.NeedsDownload -> Color(0xFF555555)
+        AiRecommendationStatus.Unavailable,
+        AiRecommendationStatus.Error -> Color(0xFFCC0000)
+    }
+    Text(message, fontSize = 13.sp, color = color)
 }
 
 @Composable

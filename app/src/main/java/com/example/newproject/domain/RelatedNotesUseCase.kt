@@ -5,6 +5,7 @@ import com.example.newproject.NoteFile
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.toNormalizedObsidianTitle
 
 data class RelatedNote(
     val title: String,
@@ -12,13 +13,20 @@ data class RelatedNote(
     val isWikilinked: Boolean
 )
 
+enum class AiRecommendationStatus {
+    Ready,
+    Unavailable,
+    NeedsDownload,
+    Error
+}
+
 sealed class RelatedNotesResult {
     data class Success(
-        val notes: List<RelatedNote>,
-        val prefixNotes: List<RelatedNote> = emptyList()
+        val relatedNotes: List<RelatedNote>,
+        val aiNotes: List<RelatedNote>,
+        val aiStatus: AiRecommendationStatus = AiRecommendationStatus.Ready,
+        val aiErrorMessage: String? = null
     ) : RelatedNotesResult()
-    object AiUnavailable : RelatedNotesResult()
-    object AiNeedsDownload : RelatedNotesResult()
     data class Error(val message: String) : RelatedNotesResult()
 }
 
@@ -30,69 +38,95 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
         allNotes: List<NoteFile>,
         wikilinkTitles: Set<String>
     ): RelatedNotesResult {
-        return when (aiClient.checkAvailability()) {
-            AiAvailability.Unavailable -> RelatedNotesResult.AiUnavailable
-            AiAvailability.NeedsDownload -> RelatedNotesResult.AiNeedsDownload
-            AiAvailability.Available -> findRelatedWithAi(
+        return try {
+            val candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) }
+            val wikilinkTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
+            val notesByTitle = candidateNotes.associateBy { it.name.toNormalizedObsidianTitle() }
+
+            val relatedNotes = buildDeterministicRelatedNotes(
                 currentTitle = currentTitle,
-                currentContent = currentContent,
-                allNotes = allNotes,
-                wikilinkTitles = wikilinkTitles
+                candidateNotes = candidateNotes,
+                wikilinkTitleSet = wikilinkTitleSet
+            )
+
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Unavailable -> RelatedNotesResult.Success(
+                    relatedNotes = relatedNotes,
+                    aiNotes = emptyList(),
+                    aiStatus = AiRecommendationStatus.Unavailable
+                )
+                AiAvailability.NeedsDownload -> RelatedNotesResult.Success(
+                    relatedNotes = relatedNotes,
+                    aiNotes = emptyList(),
+                    aiStatus = AiRecommendationStatus.NeedsDownload
+                )
+                AiAvailability.Available -> {
+                    val prefixFiltered = prefixFilter(currentTitle, candidateNotes)
+                    val prompt = PromptBuilder.buildRelatedNotesPrompt(
+                        currentTitle = currentTitle,
+                        currentContent = currentContent,
+                        allTitles = prefixFiltered.map { it.name },
+                        wikilinkTitles = wikilinkTitles
+                    )
+                    val response = aiClient.generate(prompt)
+
+                    val relatedUris = relatedNotes.map { it.uri }.toSet()
+                    val aiNotes = response.lineSequence()
+                        .map { it.cleanAiTitle() }
+                        .filter { it.isNotBlank() }
+                        .mapNotNull { title -> notesByTitle[title.toNormalizedObsidianTitle()] }
+                        .filterNot { it.uri in relatedUris }
+                        .distinctBy { it.uri }
+                        .take(AI_RECOMMENDATION_LIMIT)
+                        .map { note ->
+                            RelatedNote(
+                                title = note.name,
+                                uri = note.uri,
+                                isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet
+                            )
+                        }
+                        .toList()
+
+                    RelatedNotesResult.Success(
+                        relatedNotes = relatedNotes,
+                        aiNotes = aiNotes
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            RelatedNotesResult.Success(
+                relatedNotes = buildDeterministicRelatedNotes(
+                    currentTitle = currentTitle,
+                    candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) },
+                    wikilinkTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
+                ),
+                aiNotes = emptyList(),
+                aiStatus = AiRecommendationStatus.Error,
+                aiErrorMessage = e.message ?: "Unknown error"
             )
         }
     }
 
-    private suspend fun findRelatedWithAi(
+    private fun buildDeterministicRelatedNotes(
         currentTitle: String,
-        currentContent: String,
-        allNotes: List<NoteFile>,
-        wikilinkTitles: Set<String>
-    ): RelatedNotesResult {
-        return try {
-            val candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) }
-            val wikilinkTitleSet = wikilinkTitles.map { it.normalizedTitle() }.toSet()
-            val notesByTitle = candidateNotes.associateBy { it.name.normalizedTitle() }
-
-            // プレフィックス一致ノート（同2桁グループ）を先に確定
-            val sameGroupNotes = extractSameGroup(currentTitle, candidateNotes)
-                .take(PREFIX_DISPLAY_LIMIT)
-                .map { note ->
-                    RelatedNote(
-                        title = note.name,
-                        uri = note.uri,
-                        isWikilinked = note.name.normalizedTitle() in wikilinkTitleSet
-                    )
-                }
-
-            // AIには全プレフィックスフィルタ済み候補を渡す
-            val prefixFiltered = prefixFilter(currentTitle, candidateNotes)
-            val prompt = PromptBuilder.buildRelatedNotesPrompt(
-                currentTitle = currentTitle,
-                currentContent = currentContent,
-                allTitles = prefixFiltered.map { it.name },
-                wikilinkTitles = wikilinkTitles
-            )
-            val response = aiClient.generate(prompt)
-
-            val aiNotes = response.lineSequence()
-                .map { it.cleanAiTitle() }
-                .filter { it.isNotBlank() }
-                .mapNotNull { title -> notesByTitle[title.normalizedTitle()] }
-                .distinctBy { it.uri }
-                .take(RELATED_NOTE_LIMIT)
-                .map { note ->
-                    RelatedNote(
-                        title = note.name,
-                        uri = note.uri,
-                        isWikilinked = note.name.normalizedTitle() in wikilinkTitleSet
-                    )
-                }
-                .toList()
-
-            RelatedNotesResult.Success(notes = aiNotes, prefixNotes = sameGroupNotes)
-        } catch (e: Exception) {
-            RelatedNotesResult.Error(e.message ?: "Unknown error")
+        candidateNotes: List<NoteFile>,
+        wikilinkTitleSet: Set<String>
+    ): List<RelatedNote> {
+        val wikilinkedNotes = candidateNotes.filter {
+            it.name.toNormalizedObsidianTitle() in wikilinkTitleSet
         }
+        val sameGroupNotes = extractSameGroup(currentTitle, candidateNotes)
+
+        return (wikilinkedNotes + sameGroupNotes)
+            .distinctBy { it.uri }
+            .take(RELATED_NOTE_LIMIT)
+            .map { note ->
+                RelatedNote(
+                    title = note.name,
+                    uri = note.uri,
+                    isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet
+                )
+            }
     }
 
     // 上2桁が一致するノートのみ返す（表示用）
@@ -138,17 +172,11 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
             .trim()
 
     private fun String.isSameTitleAs(other: String): Boolean =
-        normalizedTitle() == other.normalizedTitle()
-
-    private fun String.normalizedTitle(): String =
-        trim().removeMdExtension().lowercase()
-
-    private fun String.removeMdExtension(): String =
-        if (endsWith(".md", ignoreCase = true)) dropLast(3) else this
+        toNormalizedObsidianTitle() == other.toNormalizedObsidianTitle()
 
     companion object {
         private const val RELATED_NOTE_LIMIT = 5
+        private const val AI_RECOMMENDATION_LIMIT = 5
         private const val PREFIX_CANDIDATE_LIMIT = 40
-        private const val PREFIX_DISPLAY_LIMIT = 5
     }
 }
