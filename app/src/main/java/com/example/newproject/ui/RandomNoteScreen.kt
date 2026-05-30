@@ -2,8 +2,13 @@ package com.example.newproject.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +30,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -58,9 +69,12 @@ fun RandomNoteScreen(
     isExpanded: Boolean,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
-    onOpenNote: (RelatedNote) -> Unit
+    onOpenNote: (RelatedNote) -> Unit,
+    onGenerateQuiz: () -> Unit,
+    onGraphView: () -> Unit
 ) {
     val context = LocalContext.current
+    var isNoteExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -75,6 +89,7 @@ fun RandomNoteScreen(
     )
     val isLoading = uiState.noteState is NoteState.Loading
 
+    Box(modifier = Modifier.fillMaxSize()) {
     if (isExpanded) {
         // フォルダブル展開時: 左ペイン（操作パネル） | 右ペイン（ノート＋サジェスト）
         Row(
@@ -118,6 +133,22 @@ fun RandomNoteScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
                     shape = RoundedCornerShape(24.dp)
                 ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
+                if (uiState.noteState is NoteState.Success) {
+                    Button(
+                        onClick = onGenerateQuiz,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Coral)
+                    ) {
+                        Text("📝 Q&Aを作る", color = OnVibrant)
+                    }
+                    Button(
+                        onClick = onGraphView,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Indigo)
+                    ) {
+                        Text("🕸 グラフビュー", color = OnVibrant)
+                    }
+                }
                 if (isLoading) {
                     CircularProgressIndicator(
                         color = OnVibrant,
@@ -188,11 +219,32 @@ fun RandomNoteScreen(
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
                 )
             }
+            if (uiState.noteState is NoteState.Success) {
+                Button(
+                    onClick = onGenerateQuiz,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary)
+                ) {
+                    Text("📝 Q&Aを作る", color = OnVibrantMuted)
+                }
+                Button(
+                    onClick = onGraphView,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary)
+                ) {
+                    Text("🕸 グラフビュー", color = OnVibrantMuted)
+                }
+            }
             NoteContentPanel(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 24.dp)
+                    .padding(top = if (isLoading) 8.dp else 24.dp),
+                onDoubleTap = if (uiState.noteState is NoteState.Success) {
+                    { isNoteExpanded = true }
+                } else null
             )
             SummaryPanel(
                 summaryState = uiState.summaryState,
@@ -200,12 +252,40 @@ fun RandomNoteScreen(
             )
         }
     }
+
+    // 全画面オーバーレイ（ダブルタップで展開）
+    AnimatedVisibility(
+        visible = isNoteExpanded,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.zIndex(1f)
+    ) {
+        NoteContentPanel(
+            uiState = uiState,
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(onDoubleTap = { isNoteExpanded = false })
+                }
+        )
+    }
+    } // Box end
 }
 
 @Composable
-internal fun NoteContentPanel(uiState: NoteUiState, modifier: Modifier = Modifier) {
+internal fun NoteContentPanel(
+    uiState: NoteUiState,
+    modifier: Modifier = Modifier,
+    onDoubleTap: (() -> Unit)? = null
+) {
+    val tapModifier = if (onDoubleTap != null) {
+        Modifier.pointerInput(Unit) {
+            detectTapGestures(onDoubleTap = { onDoubleTap() })
+        }
+    } else Modifier
+
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().then(tapModifier),
         color = Panel,
         shape = RoundedCornerShape(8.dp)
     ) {
@@ -321,7 +401,7 @@ internal fun RelatedNotesPanel(
         color = Color(0xFFF0F4FF),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Text(
                 text = "🔗 関連ノート",
                 fontSize = 13.sp,
@@ -342,13 +422,44 @@ internal fun RelatedNotesPanel(
                     }
                 }
                 is RelatedNotesState.Success -> {
-                    if (state.notes.isEmpty()) {
+                    val hasPrefix = state.prefixNotes.isNotEmpty()
+                    val hasAi = state.notes.isNotEmpty()
+                    if (!hasPrefix && !hasAi) {
                         Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = Color(0xFF777777))
                     } else {
-                        state.notes.forEachIndexed { index, note ->
-                            RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
-                            if (index < state.notes.lastIndex) {
-                                Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                        if (hasPrefix) {
+                            Text(
+                                text = "同グループ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF7B6FFF)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            state.prefixNotes.forEachIndexed { index, note ->
+                                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                                if (index < state.prefixNotes.lastIndex) {
+                                    Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                                }
+                            }
+                        }
+                        if (hasPrefix && hasAi) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Divider(color = Color(0xFFB0BBEE), thickness = 1.dp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        if (hasAi) {
+                            Text(
+                                text = "AI推薦",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF16B8A6)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            state.notes.forEachIndexed { index, note ->
+                                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                                if (index < state.notes.lastIndex) {
+                                    Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                                }
                             }
                         }
                     }
@@ -367,16 +478,16 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 48.dp)
+            .defaultMinSize(minHeight = 36.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = note.title,
-            fontSize = 14.sp,
-            lineHeight = 18.sp,
+            fontSize = 13.sp,
+            lineHeight = 16.sp,
             color = OnSurface,
             modifier = Modifier.weight(1f)
         )

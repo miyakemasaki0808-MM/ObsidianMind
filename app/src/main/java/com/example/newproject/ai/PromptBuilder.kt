@@ -49,6 +49,26 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    fun buildQuizPrompt(title: String, content: String): String {
+        val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+        return """
+            You are a study assistant. Read the following Obsidian note and generate exactly 5 multiple-choice questions to help the user memorize the key concepts. If the note is short, use related general knowledge to create additional questions.
+            Answer in the same language as the note content.
+            Format each question EXACTLY like this (blank line between questions):
+            Q: <question>
+            A: <correct answer>
+            B: <wrong answer>
+            C: <wrong answer>
+            D: <wrong answer>
+            ANSWER: <A or B or C or D>
+            EXPLANATION: <1-2 sentence explanation of why the correct answer is right>
+
+            Note title: $title
+            Note content:
+            $snippet
+        """.trimIndent()
+    }
+
     private fun String.normalizeTitle(): String =
         trim().removeMdExtension().lowercase()
 

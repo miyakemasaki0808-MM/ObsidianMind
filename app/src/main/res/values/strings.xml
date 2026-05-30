@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Obsidian Mind</string>
-    <string name="random_note_title">Random Note</string>
+    <string name="random_note_title">Random AI Note</string>
     <string name="vault_not_selected">Vault folder is not selected.</string>
     <string name="vault_selected">Vault folder selected.</string>
     <string name="select_vault">Select Vault</string>
-    <string name="show_random_note">Random Note</string>
+    <string name="show_random_note">Random AI Note</string>
     <string name="no_note_loaded">No note loaded</string>
     <string name="random_note_empty_state">Select your Obsidian vault folder, then tap Random Note.</string>
     <string name="no_markdown_notes">No Markdown notes were found in this vault.</string>
