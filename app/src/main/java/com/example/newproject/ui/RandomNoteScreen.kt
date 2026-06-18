@@ -5,10 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,8 +38,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.zIndex
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -99,7 +104,8 @@ fun RandomNoteScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradient)
-                .padding(24.dp),
+                .safeDrawingPadding()
+                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 左ペイン
@@ -107,7 +113,7 @@ fun RandomNoteScreen(
                 modifier = Modifier
                     .width(280.dp)
                     .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = stringResource(R.string.random_note_title),
@@ -139,16 +145,18 @@ fun RandomNoteScreen(
                 if (uiState.noteState is NoteState.Success) {
                     Button(
                         onClick = onGenerateQuiz,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Coral)
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Coral),
+                        shape = RoundedCornerShape(24.dp)
                     ) {
                         Text("📝 Q&Aを作る", color = OnVibrant)
                     }
                     Button(
                         onClick = onCreateAnnotation,
                         enabled = !isAnnotationLoading,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = Indigo)
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+                        shape = RoundedCornerShape(24.dp)
                     ) {
                         Text("補記メモ", color = OnVibrant)
                     }
@@ -162,7 +170,6 @@ fun RandomNoteScreen(
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
                 }
-                Spacer(modifier = Modifier.height(16.dp))
                 RelatedNotesPanel(
                     state = uiState.relatedNotesState,
                     onNoteClick = onOpenNote,
@@ -191,7 +198,8 @@ fun RandomNoteScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(gradient)
-                .padding(24.dp)
+                .safeDrawingPadding()
+                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp)
         ) {
             Text(
                 text = stringResource(R.string.random_note_title),
@@ -287,7 +295,16 @@ fun RandomNoteScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
-                    detectTapGestures(onDoubleTap = { isNoteExpanded = false })
+                    awaitEachGesture {
+                        awaitFirstDown(pass = PointerEventPass.Initial)
+                        waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
+                        val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                            awaitFirstDown(pass = PointerEventPass.Initial)
+                        } ?: return@awaitEachGesture
+                        secondDown.consume()
+                        waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
+                        isNoteExpanded = false
+                    }
                 }
         )
     }
@@ -301,8 +318,18 @@ internal fun NoteContentPanel(
     onDoubleTap: (() -> Unit)? = null
 ) {
     val tapModifier = if (onDoubleTap != null) {
-        Modifier.pointerInput(Unit) {
-            detectTapGestures(onDoubleTap = { onDoubleTap() })
+        Modifier.pointerInput(onDoubleTap) {
+            awaitEachGesture {
+                // Initial パスで子（SelectionContainer）より先にイベントを観測
+                awaitFirstDown(pass = PointerEventPass.Initial)
+                waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
+                val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
+                    awaitFirstDown(pass = PointerEventPass.Initial)
+                } ?: return@awaitEachGesture
+                secondDown.consume()
+                waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
+                onDoubleTap()
+            }
         }
     } else Modifier
 
