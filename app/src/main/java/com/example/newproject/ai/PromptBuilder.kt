@@ -96,8 +96,8 @@ object PromptBuilder {
             Choose values only from these fixed choices:
             種別: 概念メモ / 読書メモ / 日記・ログ / アイデア断片 / 技術メモ / タスク・計画 / 長文記事 / その他
             粒度: 断片 / 原子メモ / 中粒度 / 長文
-            状態: 十分 / 書きかけ / 具体例不足 / 背景不足 / 関連リンク不足 / 自分の解釈不足 / 次アクション不足 / 論点過多
-            補記方針: 具体例を足す / 背景を補う / 関連リンクを足す / 自分の解釈を書く / 次の問いを作る / 構成を整理する / 反論・別視点を足す
+            状態: 十分 / 書きかけ / 具体例不足 / 背景不足 / 自分の解釈不足 / 次アクション不足 / 論点過多
+            補記方針: 具体例を足す / 背景を補う / 自分の解釈を書く / 構成を整理する / 反論・別視点を足す
 
             Output Markdown only. Include exactly these sections and headings:
             ## 粒度評価
@@ -107,16 +107,9 @@ object PromptBuilder {
             - 補記方針: <one fixed choice>
 
             ## 補記すべき内容
-            - <bullet suggestions>
-
-            ## 補記案
-            <short annotation text. Use tentative phrasing.>
-
-            ## 関連リンク候補
-            - [[title]]: <why it may connect>
-
-            ## 次の問い
-            - <question>
+            3–5 bullets. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
+            For each, state what is currently shallow or missing, and what concrete information should be added.
+            - <exact term or claim from this note>: <what specific information is missing> (<why this gap matters for understanding>)
 
             Current note title: $title
             Created at: $createdAt

@@ -328,7 +328,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun hasAnnotationBody(generated: String): Boolean {
-        val requiredSections = listOf("粒度評価", "補記すべき内容", "補記案", "関連リンク候補", "次の問い")
+        val requiredSections = listOf("粒度評価", "補記すべき内容")
         return requiredSections.any { section ->
             generated.substringAfter("## $section", missingDelimiterValue = "")
                 .substringBefore("## ")
@@ -342,7 +342,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         createdAt: String,
         generatedBody: String
     ): String = """
-        # $title 補記メモ
+        # $title AI補記メモ
 
         > Source: [[$title]]
         > Created: $createdAt
@@ -352,7 +352,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     """.trimIndent()
 
     private fun String.ensureAnnotationSections(): String {
-        val sections = listOf("粒度評価", "補記すべき内容", "補記案", "関連リンク候補", "次の問い")
+        val sections = listOf("粒度評価", "補記すべき内容")
         val normalized = trim()
         val missing = sections.filterNot { "## $it" in normalized }
         if (missing.isEmpty()) return normalized

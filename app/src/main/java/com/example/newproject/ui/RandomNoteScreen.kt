@@ -158,10 +158,10 @@ fun RandomNoteScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = Indigo),
                         shape = RoundedCornerShape(24.dp)
                     ) {
-                        Text("補記メモ", color = OnVibrant)
+                        Text("AI補記メモ", color = OnVibrant)
                     }
                     if (isAnnotationLoading) {
-                        Text("補記メモを生成中…", color = OnVibrantMuted, fontSize = 12.sp)
+                        Text("AI補記メモを生成中…", color = OnVibrantMuted, fontSize = 12.sp)
                     }
                 }
                 if (isLoading) {
@@ -256,11 +256,11 @@ fun RandomNoteScreen(
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(containerColor = Indigo)
                 ) {
-                    Text("補記メモ", color = OnVibrant)
+                    Text("AI補記メモ", color = OnVibrant)
                 }
                 if (isAnnotationLoading) {
                     Text(
-                        "補記メモを生成中…",
+                        "AI補記メモを生成中…",
                         color = OnVibrantMuted,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 6.dp)
