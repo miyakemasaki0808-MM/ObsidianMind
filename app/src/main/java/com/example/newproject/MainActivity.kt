@@ -11,7 +11,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.viewModels
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -21,9 +20,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.newproject.RelatedNotesState
 import com.example.newproject.NoteState
 import com.example.newproject.QuizState
+import com.example.newproject.ui.AiTab
 import com.example.newproject.ui.AnnotationResultScreen
+import com.example.newproject.ui.AppScaffold
+import com.example.newproject.ui.NoteReaderTab
 import com.example.newproject.ui.QuizScreen
-import com.example.newproject.ui.RandomNoteScreen
+import com.example.newproject.ui.RelatedTab
 
 class MainActivity : ComponentActivity() {
 
@@ -49,64 +51,87 @@ class MainActivity : ComponentActivity() {
             val windowSizeClass = calculateWindowSizeClass(this)
             val navController = rememberNavController()
 
-            NavHost(navController = navController, startDestination = "random_note") {
-                composable("random_note") {
-                    RandomNoteScreen(
-                        uiState = uiState,
-                        isExpanded = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
-                        onSelectVault = { openVault.launch(null) },
-                        onRandomNote = {
-                            if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
-                            else openVault.launch(null)
-                        },
-                        onOpenNote = { note -> viewModel.openNote(contentResolver, note) },
-                        onGenerateQuiz = {
-                            val state = uiState.noteState
-                            if (state is NoteState.Success) {
-                                if (uiState.quizState !is QuizState.Success) {
-                                    viewModel.generateQuiz(state.title, state.content)
+            val goGenerateQuiz = {
+                val state = uiState.noteState
+                if (state is NoteState.Success) {
+                    if (uiState.quizState !is QuizState.Success) {
+                        viewModel.generateQuiz(state.title, state.content)
+                    }
+                    navController.navigate("quiz")
+                }
+            }
+            val goCreateAnnotation = {
+                val noteState = uiState.noteState
+                if (noteState is NoteState.Success) {
+                    val summary = (uiState.summaryState as? SummaryState.Success)?.summary
+                    val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
+                    viewModel.createAnnotation(
+                        contentResolver = contentResolver,
+                        title = noteState.title,
+                        content = noteState.content,
+                        summary = summary,
+                        relatedNotes = relatedState?.relatedNotes.orEmpty(),
+                        aiNotes = relatedState?.aiNotes.orEmpty(),
+                        wikilinkTitles = uiState.wikilinkTitles
+                    )
+                    navController.navigate("annotation")
+                }
+            }
+
+            AppScaffold(windowSizeClass = windowSizeClass, navController = navController) { modifier ->
+                NavHost(
+                    navController = navController,
+                    startDestination = "note",
+                    modifier = modifier
+                ) {
+                    composable("note") {
+                        NoteReaderTab(
+                            uiState = uiState,
+                            onSelectVault = { openVault.launch(null) },
+                            onRandomNote = {
+                                if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
+                                else openVault.launch(null)
+                            }
+                        )
+                    }
+
+                    composable("related") {
+                        RelatedTab(
+                            uiState = uiState,
+                            onOpenNote = { note ->
+                                viewModel.openNote(contentResolver, note)
+                                navController.navigate("note") {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                navController.navigate("quiz")
                             }
-                        },
-                        onCreateAnnotation = {
-                            val noteState = uiState.noteState
-                            if (noteState is NoteState.Success) {
-                                val summary = (uiState.summaryState as? SummaryState.Success)?.summary
-                                val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
-                                viewModel.createAnnotation(
-                                    contentResolver = contentResolver,
-                                    title = noteState.title,
-                                    content = noteState.content,
-                                    summary = summary,
-                                    relatedNotes = relatedState?.relatedNotes.orEmpty(),
-                                    aiNotes = relatedState?.aiNotes.orEmpty(),
-                                    wikilinkTitles = uiState.wikilinkTitles
-                                )
-                                navController.navigate("annotation")
-                            }
-                        }
-                    )
-                }
+                        )
+                    }
 
-                composable("annotation") {
-                    AnnotationResultScreen(
-                        annotationState = uiState.annotationState,
-                        onBack = {
-                            navController.popBackStack()
-                        }
-                    )
-                }
+                    composable("ai") {
+                        AiTab(
+                            uiState = uiState,
+                            onGenerateQuiz = goGenerateQuiz,
+                            onCreateAnnotation = goCreateAnnotation
+                        )
+                    }
 
-                composable("quiz") {
-                    val noteTitle = (uiState.noteState as? NoteState.Success)?.title ?: ""
-                    QuizScreen(
-                        noteTitle = noteTitle,
-                        quizState = uiState.quizState,
-                        onBack = {
-                            navController.popBackStack()
-                        }
-                    )
+                    composable("annotation") {
+                        AnnotationResultScreen(
+                            annotationState = uiState.annotationState,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+
+                    composable("quiz") {
+                        val noteTitle = (uiState.noteState as? NoteState.Success)?.title ?: ""
+                        QuizScreen(
+                            noteTitle = noteTitle,
+                            quizState = uiState.quizState,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
                 }
             }
         }
