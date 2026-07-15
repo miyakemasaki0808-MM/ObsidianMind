@@ -1,29 +1,28 @@
 package com.example.newproject.ui
 
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -38,10 +37,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.zIndex
-import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -70,18 +65,25 @@ import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
 
+/** 3タブで共有する背景グラデーション。 */
+private fun noteGradient(): Brush = Brush.linearGradient(
+    colors = listOf(Indigo, Aqua, Coral),
+    start = Offset(0f, Float.POSITIVE_INFINITY),
+    end = Offset(Float.POSITIVE_INFINITY, 0f)
+)
+
+// ---------------------------------------------------------------------------
+// タブ1: ノート（本文リーダー）
+// ---------------------------------------------------------------------------
+
 @Composable
-fun RandomNoteScreen(
+fun NoteReaderTab(
     uiState: NoteUiState,
-    isExpanded: Boolean,
     onSelectVault: () -> Unit,
-    onRandomNote: () -> Unit,
-    onOpenNote: (RelatedNote) -> Unit,
-    onGenerateQuiz: () -> Unit,
-    onCreateAnnotation: () -> Unit
+    onRandomNote: () -> Unit
 ) {
     val context = LocalContext.current
-    var isNoteExpanded by remember { mutableStateOf(false) }
+    var isFullscreen by remember { mutableStateOf(false) }
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -89,135 +91,45 @@ fun RandomNoteScreen(
         }
     }
 
-    val gradient = Brush.linearGradient(
-        colors = listOf(Indigo, Aqua, Coral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
     val isLoading = uiState.noteState is NoteState.Loading
-    val isAnnotationLoading = uiState.annotationState is AnnotationState.Loading
+    val hasNote = uiState.noteState is NoteState.Success
 
     Box(modifier = Modifier.fillMaxSize()) {
-    if (isExpanded) {
-        // フォルダブル展開時: 左ペイン（操作パネル） | 右ペイン（ノート＋サジェスト）
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(gradient)
-                .safeDrawingPadding()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // 左ペイン
-            Column(
-                modifier = Modifier
-                    .width(280.dp)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.random_note_title),
-                    color = OnVibrant,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = stringResource(
-                        if (uiState.vaultSelected) R.string.vault_selected
-                        else R.string.vault_not_selected
-                    ),
-                    color = OnVibrantMuted,
-                    fontSize = 13.sp
-                )
-                Button(
-                    onClick = onSelectVault,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
-                    shape = RoundedCornerShape(24.dp)
-                ) { Text(stringResource(R.string.select_vault), color = OnVibrant) }
-                Button(
-                    onClick = onRandomNote,
-                    enabled = !isLoading,
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
-                    shape = RoundedCornerShape(24.dp)
-                ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
-                if (uiState.noteState is NoteState.Success) {
-                    Button(
-                        onClick = onGenerateQuiz,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Coral),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text("📝 Q&Aを作る", color = OnVibrant)
-                    }
-                    Button(
-                        onClick = onCreateAnnotation,
-                        enabled = !isAnnotationLoading,
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Indigo),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text("AI補記メモ", color = OnVibrant)
-                    }
-                    if (isAnnotationLoading) {
-                        Text("AI補記メモを生成中…", color = OnVibrantMuted, fontSize = 12.sp)
-                    }
-                }
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        color = OnVibrant,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
-                RelatedNotesPanel(
-                    state = uiState.relatedNotesState,
-                    onNoteClick = onOpenNote,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // 右ペイン
-            Column(
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                NoteContentPanel(
-                    uiState = uiState,
-                    modifier = Modifier.weight(1f),
-                    onDoubleTap = if (uiState.noteState is NoteState.Success) {
-                        { isNoteExpanded = true }
-                    } else null
-                )
-                SummaryPanel(summaryState = uiState.summaryState)
-            }
-        }
-    } else {
-        // 通常・折りたたみ時: 縦積みレイアウト
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(gradient)
+                .background(noteGradient())
                 .safeDrawingPadding()
-                .padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 24.dp)
+                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
         ) {
-            Text(
-                text = stringResource(R.string.random_note_title),
-                color = OnVibrant,
-                fontSize = 30.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = stringResource(
-                    if (uiState.vaultSelected) R.string.vault_selected
-                    else R.string.vault_not_selected
-                ),
-                color = OnVibrantMuted,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(top = 10.dp)
-            )
             Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.random_note_title),
+                        color = OnVibrant,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = stringResource(
+                            if (uiState.vaultSelected) R.string.vault_selected
+                            else R.string.vault_not_selected
+                        ),
+                        color = OnVibrantMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+                if (hasNote) {
+                    IconPill(symbol = "⛶", contentDescription = "全画面表示") { isFullscreen = true }
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
@@ -234,107 +146,194 @@ fun RandomNoteScreen(
                     shape = RoundedCornerShape(24.dp)
                 ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
             }
+
             if (isLoading) {
                 CircularProgressIndicator(
                     color = OnVibrant,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
                 )
             }
-            if (uiState.noteState is NoteState.Success) {
-                Button(
-                    onClick = onGenerateQuiz,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Coral)
-                ) {
-                    Text("📝 Q&Aを作る", color = OnVibrant)
-                }
-                Button(
-                    onClick = onCreateAnnotation,
-                    enabled = !isAnnotationLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Indigo)
-                ) {
-                    Text("AI補記メモ", color = OnVibrant)
-                }
-                if (isAnnotationLoading) {
-                    Text(
-                        "AI補記メモを生成中…",
-                        color = OnVibrantMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                }
-            }
+
             NoteContentPanel(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 24.dp),
-                onDoubleTap = if (uiState.noteState is NoteState.Success) {
-                    { isNoteExpanded = true }
-                } else null
+                    .padding(top = if (isLoading) 8.dp else 20.dp)
             )
-            SummaryPanel(
-                summaryState = uiState.summaryState,
-                modifier = Modifier.padding(top = 12.dp)
+        }
+
+        // 全画面オーバーレイ（明示ボタンで開閉。ダブルタップは廃止）
+        AnimatedVisibility(
+            visible = isFullscreen,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(noteGradient())
+                    .safeDrawingPadding()
+                    .padding(12.dp)
+            ) {
+                NoteContentPanel(
+                    uiState = uiState,
+                    modifier = Modifier.fillMaxSize()
+                )
+                IconPill(
+                    symbol = "✕",
+                    contentDescription = "全画面表示を閉じる",
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                ) { isFullscreen = false }
+            }
+        }
+    }
+}
+
+/** タブ内の丸いアイコンボタン（material-icons 依存を避けるため絵文字/記号を使用）。 */
+@Composable
+private fun IconPill(
+    symbol: String,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = modifier.size(40.dp).clickable(onClick = onClick),
+        shape = CircleShape,
+        color = Panel.copy(alpha = 0.22f)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(symbol, color = OnVibrant, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// タブ2: 関連ノート
+// ---------------------------------------------------------------------------
+
+@Composable
+fun RelatedTab(
+    uiState: NoteUiState,
+    onOpenNote: (RelatedNote) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(noteGradient())
+            .safeDrawingPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+    ) {
+        Text(
+            text = "関連ノート",
+            color = OnVibrant,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            if (uiState.relatedNotesState is RelatedNotesState.Idle) {
+                Text(
+                    text = "ノートを表示すると、リンクとAIによる関連ノートがここに並びます。",
+                    color = OnVibrantMuted,
+                    fontSize = 14.sp
+                )
+            } else {
+                RelatedNotesPanel(
+                    state = uiState.relatedNotesState,
+                    onNoteClick = onOpenNote
+                )
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// タブ3: AI（要約・Q&A・補記メモ）
+// ---------------------------------------------------------------------------
+
+@Composable
+fun AiTab(
+    uiState: NoteUiState,
+    onGenerateQuiz: () -> Unit,
+    onCreateAnnotation: () -> Unit
+) {
+    val hasNote = uiState.noteState is NoteState.Success
+    val isAnnotationLoading = uiState.annotationState is AnnotationState.Loading
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(noteGradient())
+            .safeDrawingPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+    ) {
+        Text(
+            text = "AIアシスト",
+            color = OnVibrant,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        if (!hasNote) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Panel.copy(alpha = 0.22f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "先に「ノート」タブでノートを表示してください。",
+                    color = OnVibrant,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+            return@Column
+        }
+
+        SummaryPanel(summaryState = uiState.summaryState)
+
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = onGenerateQuiz,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Coral),
+            shape = RoundedCornerShape(24.dp)
+        ) { Text("📝 Q&Aを作る", color = OnVibrant) }
+
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(
+            onClick = onCreateAnnotation,
+            enabled = !isAnnotationLoading,
+            modifier = Modifier.fillMaxWidth().height(48.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+            shape = RoundedCornerShape(24.dp)
+        ) { Text("✨ AI補記メモ", color = OnVibrant) }
+
+        if (isAnnotationLoading) {
+            Text(
+                "AI補記メモを生成中…",
+                color = OnVibrantMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(top = 8.dp)
             )
         }
     }
-
-    // 全画面オーバーレイ（ダブルタップで展開）
-    AnimatedVisibility(
-        visible = isNoteExpanded,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.zIndex(1f)
-    ) {
-        NoteContentPanel(
-            uiState = uiState,
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) {
-                    awaitEachGesture {
-                        awaitFirstDown(pass = PointerEventPass.Initial)
-                        waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
-                        val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
-                            awaitFirstDown(pass = PointerEventPass.Initial)
-                        } ?: return@awaitEachGesture
-                        secondDown.consume()
-                        waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
-                        isNoteExpanded = false
-                    }
-                }
-        )
-    }
-    } // Box end
 }
+
+// ---------------------------------------------------------------------------
+// 共有パネル（ロジックは従来どおり）
+// ---------------------------------------------------------------------------
 
 @Composable
 internal fun NoteContentPanel(
     uiState: NoteUiState,
-    modifier: Modifier = Modifier,
-    onDoubleTap: (() -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
-    val tapModifier = if (onDoubleTap != null) {
-        Modifier.pointerInput(onDoubleTap) {
-            awaitEachGesture {
-                // Initial パスで子（SelectionContainer）より先にイベントを観測
-                awaitFirstDown(pass = PointerEventPass.Initial)
-                waitForUpOrCancellation(pass = PointerEventPass.Initial) ?: return@awaitEachGesture
-                val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) {
-                    awaitFirstDown(pass = PointerEventPass.Initial)
-                } ?: return@awaitEachGesture
-                secondDown.consume()
-                waitForUpOrCancellation(pass = PointerEventPass.Initial)?.consume()
-                onDoubleTap()
-            }
-        }
-    } else Modifier
-
     Surface(
-        modifier = modifier.fillMaxWidth().then(tapModifier),
+        modifier = modifier.fillMaxWidth(),
         color = Panel,
         shape = RoundedCornerShape(8.dp)
     ) {
@@ -553,16 +552,16 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .defaultMinSize(minHeight = 36.dp)
+            .defaultMinSize(minHeight = 44.dp)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = note.title,
-            fontSize = 13.sp,
-            lineHeight = 16.sp,
+            fontSize = 14.sp,
+            lineHeight = 18.sp,
             color = OnSurface,
             modifier = Modifier.weight(1f)
         )
