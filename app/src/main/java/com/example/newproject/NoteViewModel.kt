@@ -79,6 +79,13 @@ sealed class AnnotationState {
     data class Error(val message: String) : AnnotationState()
 }
 
+sealed class AnnotationListState {
+    object Idle : AnnotationListState()
+    object Loading : AnnotationListState()
+    data class Success(val files: List<NoteFile>) : AnnotationListState()
+    data class Error(val message: String) : AnnotationListState()
+}
+
 data class NoteUiState(
     val vaultSelected: Boolean = false,
     val noteState: NoteState = NoteState.Idle,
@@ -86,7 +93,8 @@ data class NoteUiState(
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,
     val wikilinkTitles: Set<String> = emptySet(),
-    val annotationState: AnnotationState = AnnotationState.Idle
+    val annotationState: AnnotationState = AnnotationState.Idle,
+    val annotationListState: AnnotationListState = AnnotationListState.Idle
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
@@ -204,6 +212,60 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearQuiz() {
         _uiState.value = _uiState.value.copy(quizState = QuizState.Idle)
+    }
+
+    fun loadAnnotations(contentResolver: ContentResolver) {
+        val uri = vaultUri
+        if (uri == null) {
+            _uiState.value = _uiState.value.copy(
+                annotationListState = AnnotationListState.Error("Vault が選択されていません。")
+            )
+            return
+        }
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(annotationListState = AnnotationListState.Loading)
+            try {
+                val files = repository.listAnnotationFiles(contentResolver, uri)
+                _uiState.value = _uiState.value.copy(
+                    annotationListState = AnnotationListState.Success(files)
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    annotationListState = AnnotationListState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) {
+        viewModelScope.launch {
+            repository.deleteDocument(contentResolver, uri)
+            reloadAnnotations(contentResolver)
+        }
+    }
+
+    fun deleteAllAnnotations(contentResolver: ContentResolver) {
+        val current = _uiState.value.annotationListState as? AnnotationListState.Success ?: return
+        viewModelScope.launch {
+            current.files.forEach { file ->
+                repository.deleteDocument(contentResolver, file.uri)
+            }
+            reloadAnnotations(contentResolver)
+        }
+    }
+
+    private suspend fun reloadAnnotations(contentResolver: ContentResolver) {
+        val uri = vaultUri ?: return
+        try {
+            val files = repository.listAnnotationFiles(contentResolver, uri)
+            _uiState.value = _uiState.value.copy(
+                annotationListState = AnnotationListState.Success(files)
+            )
+        } catch (e: Exception) {
+            _uiState.value = _uiState.value.copy(
+                annotationListState = AnnotationListState.Error(e.message ?: "Unknown error")
+            )
+        }
     }
 
     fun createAnnotation(

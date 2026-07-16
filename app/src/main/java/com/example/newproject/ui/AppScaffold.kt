@@ -29,7 +29,8 @@ import com.example.newproject.ui.theme.Panel
 enum class AppDestination(val route: String, val label: String, val emoji: String) {
     Note("note", "ノート", "📄"),
     Related("related", "関連", "🔗"),
-    Ai("ai", "AI", "✨")
+    Ai("ai", "AI", "✨"),
+    Options("options", "オプション", "⚙️")
 }
 
 private val NavBarColor = Indigo

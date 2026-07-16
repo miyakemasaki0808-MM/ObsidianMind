@@ -91,6 +91,41 @@ class NoteRepository {
         fileUri
     }
 
+    // _AI補記/ フォルダ内の補記メモファイルを列挙する（1階層のみ）
+    suspend fun listAnnotationFiles(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
+        withContext(Dispatchers.IO) {
+            val folderUri = findAnnotationFolder(contentResolver, vaultUri) ?: return@withContext emptyList()
+            val folderId = DocumentsContract.getDocumentId(folderUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, folderId)
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME
+            )
+
+            val result = mutableListOf<NoteFile>()
+            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val childId = cursor.getString(0)
+                    val name = cursor.getString(1)
+                    if (isMarkdownFile(name)) {
+                        val childUri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)
+                        result.add(NoteFile(name, childUri))
+                    }
+                }
+            }
+            result.sortedByDescending { it.name }
+        }
+
+    // 単一ドキュメントを削除する。成功時 true。
+    suspend fun deleteDocument(contentResolver: ContentResolver, uri: Uri): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                DocumentsContract.deleteDocument(contentResolver, uri)
+            } catch (e: Exception) {
+                false
+            }
+        }
+
     // frontmatter（tags/aliases）と [[wikilink]] を抽出
     fun parseMeta(content: String): NoteMeta {
         val lines = content.lines()
