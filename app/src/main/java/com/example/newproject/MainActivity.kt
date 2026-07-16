@@ -21,9 +21,11 @@ import com.example.newproject.RelatedNotesState
 import com.example.newproject.NoteState
 import com.example.newproject.QuizState
 import com.example.newproject.ui.AiTab
+import com.example.newproject.ui.AnnotationManagerScreen
 import com.example.newproject.ui.AnnotationResultScreen
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.NoteReaderTab
+import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RelatedTab
 
@@ -114,6 +116,22 @@ class MainActivity : ComponentActivity() {
                             uiState = uiState,
                             onGenerateQuiz = goGenerateQuiz,
                             onCreateAnnotation = goCreateAnnotation
+                        )
+                    }
+
+                    composable("options") {
+                        OptionsScreen(
+                            onManageAnnotations = { navController.navigate("annotation_manager") }
+                        )
+                    }
+
+                    composable("annotation_manager") {
+                        AnnotationManagerScreen(
+                            state = uiState.annotationListState,
+                            onLoad = { viewModel.loadAnnotations(contentResolver) },
+                            onDelete = { uri -> viewModel.deleteAnnotation(contentResolver, uri) },
+                            onDeleteAll = { viewModel.deleteAllAnnotations(contentResolver) },
+                            onBack = { navController.popBackStack() }
                         )
                     }
 
