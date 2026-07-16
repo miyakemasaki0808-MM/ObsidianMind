@@ -16,6 +16,7 @@ import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
+import com.example.newproject.ui.markdown.NoteSection
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +87,22 @@ sealed class AnnotationListState {
     data class Error(val message: String) : AnnotationListState()
 }
 
+enum class ChatRole { User, Ai }
+
+data class ChatMessage(val role: ChatRole, val text: String)
+
+// セクション単位のAIチャット。null のときシートは閉じている。
+data class SectionChatState(
+    val sectionTitle: String,
+    val sectionContext: String,     // LLM に渡す本文（表示はしない）
+    val summary: String? = null,
+    val isSummaryLoading: Boolean = false,
+    val suggestions: List<String> = emptyList(),
+    val messages: List<ChatMessage> = emptyList(),  // 質問タップによる Q&A ログ
+    val isGenerating: Boolean = false,              // 質問の回答生成中
+    val error: String? = null
+)
+
 data class NoteUiState(
     val vaultSelected: Boolean = false,
     val noteState: NoteState = NoteState.Idle,
@@ -94,7 +111,8 @@ data class NoteUiState(
     val quizState: QuizState = QuizState.Idle,
     val wikilinkTitles: Set<String> = emptySet(),
     val annotationState: AnnotationState = AnnotationState.Idle,
-    val annotationListState: AnnotationListState = AnnotationListState.Idle
+    val annotationListState: AnnotationListState = AnnotationListState.Idle,
+    val sectionChat: SectionChatState? = null
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
@@ -266,6 +284,113 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 annotationListState = AnnotationListState.Error(e.message ?: "Unknown error")
             )
         }
+    }
+
+    // ── セクション単位のAIチャット ─────────────────────────────────────────────
+
+    // 吹き出しタップで開く。要約と候補質問をまとめて用意する。
+    fun openSection(section: NoteSection) {
+        _uiState.value = _uiState.value.copy(
+            sectionChat = SectionChatState(
+                sectionTitle = section.title,
+                sectionContext = section.text,
+                isSummaryLoading = true
+            )
+        )
+        viewModelScope.launch {
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Unavailable ->
+                    updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
+                AiAvailability.NeedsDownload ->
+                    updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
+                AiAvailability.Available -> {
+                    try {
+                        val summary = aiClient
+                            .generate(PromptBuilder.buildSectionSummaryPrompt(section.title, section.text))
+                            .trim()
+                        updateChat {
+                            it.copy(
+                                summary = summary.ifBlank { "（要約を生成できませんでした）" },
+                                isSummaryLoading = false
+                            )
+                        }
+                    } catch (e: Exception) {
+                        updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
+                    }
+                    fetchSectionSuggestions(section)
+                }
+            }
+        }
+    }
+
+    fun sendSectionMessage(text: String) {
+        val chat = _uiState.value.sectionChat ?: return
+        val question = text.trim()
+        if (question.isBlank() || chat.isGenerating) return
+
+        val history = chat.messages.map {
+            (if (it.role == ChatRole.User) "User" else "AI") to it.text
+        }
+        updateChat {
+            it.copy(
+                messages = it.messages + ChatMessage(ChatRole.User, question),
+                isGenerating = true,
+                error = null
+            )
+        }
+        viewModelScope.launch {
+            if (aiClient.checkAvailability() != AiAvailability.Available) {
+                updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
+                return@launch
+            }
+            try {
+                val answer = aiClient.generate(
+                    PromptBuilder.buildSectionChatPrompt(
+                        sectionTitle = chat.sectionTitle,
+                        sectionText = chat.sectionContext,
+                        history = history,
+                        question = question
+                    )
+                ).trim()
+                updateChat {
+                    it.copy(
+                        messages = it.messages + ChatMessage(
+                            ChatRole.Ai,
+                            answer.ifBlank { "（回答を生成できませんでした）" }
+                        ),
+                        isGenerating = false
+                    )
+                }
+            } catch (e: Exception) {
+                updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
+            }
+        }
+    }
+
+    fun closeSectionChat() {
+        _uiState.value = _uiState.value.copy(sectionChat = null)
+    }
+
+    private suspend fun fetchSectionSuggestions(section: NoteSection) {
+        try {
+            val raw = aiClient.generate(
+                PromptBuilder.buildSectionSuggestionsPrompt(section.title, section.text)
+            )
+            val questions = raw.lineSequence()
+                .map { it.trim().removePrefix("-").trim().trim('"').trim() }
+                .filter { it.isNotBlank() }
+                .take(3)
+                .toList()
+            updateChat { it.copy(suggestions = questions) }
+        } catch (_: Exception) {
+            // サジェストは失敗しても本体機能に影響させない
+        }
+    }
+
+    // sectionChat が開いている場合のみ安全に更新する
+    private fun updateChat(block: (SectionChatState) -> SectionChatState) {
+        val current = _uiState.value.sectionChat ?: return
+        _uiState.value = _uiState.value.copy(sectionChat = block(current))
     }
 
     fun createAnnotation(

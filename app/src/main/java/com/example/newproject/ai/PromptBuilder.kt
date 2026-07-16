@@ -8,6 +8,7 @@ object PromptBuilder {
     private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 2000
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
     private const val RELATED_TITLE_LIMIT = 80
+    private const val SECTION_SNIPPET_LENGTH = 1500
 
     fun buildSummarizePrompt(title: String, content: String): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
@@ -128,6 +129,61 @@ object PromptBuilder {
 
             Current note content snippet:
             $snippet
+        """.trimIndent()
+    }
+
+    // ── セクション単位のAIチャット ─────────────────────────────────────────────
+
+    fun buildSectionSummaryPrompt(sectionTitle: String, sectionText: String): String {
+        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
+        return """
+            You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
+            Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
+
+            Section heading: $sectionTitle
+            Section content:
+            $snippet
+        """.trimIndent()
+    }
+
+    fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionText: String): String {
+        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
+        return """
+            You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
+            Answer in the same language as the section content.
+            Return only the questions, one per line. Do not add numbers, bullets, or extra text.
+
+            Section heading: $sectionTitle
+            Section content:
+            $snippet
+        """.trimIndent()
+    }
+
+    fun buildSectionChatPrompt(
+        sectionTitle: String,
+        sectionText: String,
+        history: List<Pair<String, String>>,
+        question: String
+    ): String {
+        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
+        val historyText = history
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n") { (role, text) -> "$role: $text" }
+            ?: "（なし / none）"
+        return """
+            You are a note-taking assistant answering questions about ONE section of an Obsidian note.
+            Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
+            Answer concisely in the same language as the section content. Do not invent facts.
+
+            Section heading: $sectionTitle
+            Section content:
+            $snippet
+
+            Conversation so far:
+            $historyText
+
+            New question:
+            $question
         """.trimIndent()
     }
 

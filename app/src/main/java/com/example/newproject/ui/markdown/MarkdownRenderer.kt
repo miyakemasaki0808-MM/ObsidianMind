@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Surface
@@ -35,16 +37,20 @@ import com.example.newproject.ui.theme.CodePanel
 import com.example.newproject.ui.theme.OnSurface
 
 @Composable
-internal fun MarkdownNoteContent(content: String, modifier: Modifier = Modifier) {
+internal fun MarkdownNoteContent(
+    content: String,
+    modifier: Modifier = Modifier,
+    listState: LazyListState = rememberLazyListState()
+) {
     val blocks = remember(content) { parseMarkdownBlocks(content) }
 
     SelectionContainer(modifier = modifier) {
-        Column(
-            modifier = Modifier.verticalScroll(rememberScrollState()),
+        LazyColumn(
+            state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            blocks.forEach { block ->
-                when (block) {
+            items(blocks.size) { i ->
+                when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
