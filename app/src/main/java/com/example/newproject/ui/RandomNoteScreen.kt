@@ -5,9 +5,13 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,10 +19,13 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,20 +39,28 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.ui.markdown.buildNoteSectionModel
+import kotlin.math.roundToInt
 import com.example.newproject.AnnotationState
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
@@ -80,7 +95,10 @@ private fun noteGradient(): Brush = Brush.linearGradient(
 fun NoteReaderTab(
     uiState: NoteUiState,
     onSelectVault: () -> Unit,
-    onRandomNote: () -> Unit
+    onRandomNote: () -> Unit,
+    onOpenSection: (NoteSection) -> Unit,
+    onSuggestionTap: (String) -> Unit,
+    onCloseSectionChat: () -> Unit
 ) {
     val context = LocalContext.current
     var isFullscreen by remember { mutableStateOf(false) }
@@ -92,7 +110,16 @@ fun NoteReaderTab(
     }
 
     val isLoading = uiState.noteState is NoteState.Loading
-    val hasNote = uiState.noteState is NoteState.Success
+    val successState = uiState.noteState as? NoteState.Success
+    val hasNote = successState != null
+
+    val listState = rememberLazyListState()
+    val sectionModel = remember(successState?.content) {
+        successState?.content?.let { buildNoteSectionModel(it) }
+    }
+    val currentSection by remember(sectionModel) {
+        derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -158,7 +185,19 @@ fun NoteReaderTab(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 20.dp)
+                    .padding(top = if (isLoading) 8.dp else 20.dp),
+                listState = if (hasNote) listState else null
+            )
+        }
+
+        // 浮遊吹き出し（今見ているセクションを対象に。タップで要約＋質問シート）
+        if (successState != null && !isFullscreen) {
+            val note = successState
+            SectionFab(
+                sectionLabel = currentSection?.title ?: "ノート全体",
+                onTap = {
+                    onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
+                }
             )
         }
 
@@ -184,6 +223,87 @@ fun NoteReaderTab(
                     contentDescription = "全画面表示を閉じる",
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                 ) { isFullscreen = false }
+            }
+        }
+    }
+
+    // セクションチャットのボトムシート
+    uiState.sectionChat?.let { chat ->
+        SectionChatSheet(
+            state = chat,
+            onSuggestionTap = onSuggestionTap,
+            onDismiss = onCloseSectionChat
+        )
+    }
+}
+
+/** 画面に浮かぶ半透明・立体的な吹き出しボタン。ドラッグで移動、タップで要約＋質問シート。 */
+@Composable
+private fun BoxScope.SectionFab(
+    sectionLabel: String,
+    onTap: () -> Unit
+) {
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+
+    Box(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
+            .safeDrawingPadding()
+            .padding(end = 20.dp, bottom = 20.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            // 対象セクションラベル（半透明・アクセント色）
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Indigo.copy(alpha = 0.55f))
+                    .padding(horizontal = 11.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "📌 $sectionLabel",
+                    color = OnVibrant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            // 吹き出し本体：半透明のアクセント色ガラス＋立体感（影・上部ハイライト・色リム）
+            Box(
+                modifier = Modifier
+                    .size(62.dp)
+                    .shadow(elevation = 18.dp, shape = CircleShape, clip = false)
+                    .clip(CircleShape)
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Indigo.copy(alpha = 0.62f),
+                                Coral.copy(alpha = 0.55f)
+                            )
+                        )
+                    )
+                    .border(1.5.dp, Indigo.copy(alpha = 0.55f), CircleShape)
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, dragAmount ->
+                            change.consume()
+                            dragOffset += dragAmount
+                        }
+                    }
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { onTap() })
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // 上部スペキュラハイライト（ガラスの艶・アクセント色）
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 8.dp)
+                        .size(width = 26.dp, height = 12.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Aqua.copy(alpha = 0.40f))
+                )
+                Text("💬", fontSize = 26.sp)
             }
         }
     }
@@ -330,7 +450,8 @@ fun AiTab(
 @Composable
 internal fun NoteContentPanel(
     uiState: NoteUiState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    listState: LazyListState? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -345,10 +466,18 @@ internal fun NoteContentPanel(
                 else                 -> stringResource(R.string.no_note_loaded) to stringResource(R.string.random_note_empty_state)
             }
             Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            MarkdownNoteContent(
-                content = noteContent,
-                modifier = Modifier.padding(top = 12.dp).weight(1f)
-            )
+            if (listState != null) {
+                MarkdownNoteContent(
+                    content = noteContent,
+                    modifier = Modifier.padding(top = 12.dp).weight(1f),
+                    listState = listState
+                )
+            } else {
+                MarkdownNoteContent(
+                    content = noteContent,
+                    modifier = Modifier.padding(top = 12.dp).weight(1f)
+                )
+            }
         }
     }
 }

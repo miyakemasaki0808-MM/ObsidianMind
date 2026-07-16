@@ -93,7 +93,10 @@ class MainActivity : ComponentActivity() {
                             onRandomNote = {
                                 if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                 else openVault.launch(null)
-                            }
+                            },
+                            onOpenSection = { section -> viewModel.openSection(section) },
+                            onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
+                            onCloseSectionChat = { viewModel.closeSectionChat() }
                         )
                     }
 
