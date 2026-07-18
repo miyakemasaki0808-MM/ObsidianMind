@@ -9,6 +9,7 @@ object PromptBuilder {
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
     private const val RELATED_TITLE_LIMIT = 80
     private const val SECTION_SNIPPET_LENGTH = 1500
+    private const val PICKER_TITLE_LIMIT = 40
 
     fun buildSummarizePrompt(title: String, content: String): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
@@ -47,6 +48,26 @@ object PromptBuilder {
             Current note title: $currentTitle
             Current note content snippet:
             $snippet
+
+            Candidate note titles:
+            $titleList
+        """.trimIndent()
+    }
+
+    // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
+    // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
+    fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
+        val titleList = candidateTitles
+            .take(PICKER_TITLE_LIMIT)
+            .joinToString("\n") { "- $it" }
+
+        return """
+            You are a note-finding assistant. From the candidate list, pick the 3 notes
+            that best match the user's request. Answer in the same language as the request.
+            Return only note titles from the candidate list, one title per line.
+            Do not add numbers, bullets, explanations, or extra text.
+
+            User request: $query
 
             Candidate note titles:
             $titleList
