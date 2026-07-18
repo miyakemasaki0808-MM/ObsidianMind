@@ -86,7 +86,11 @@ class AICoreClient : AiClient {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // StubAiClient — 開発・テスト用スタブ
+// 本番コードからの参照はないが意図的に残している。Nano非対応のエミュレータ等で
+// UIフローを確認したいとき、NoteViewModel の `aiClient = AICoreClient()` を
+// `StubAiClient()` に差し替えて使う。
 // ─────────────────────────────────────────────────────────────────────────────
+@Suppress("unused")
 class StubAiClient : AiClient {
     override suspend fun checkAvailability() = AiAvailability.Available
     override suspend fun generate(prompt: String) =
