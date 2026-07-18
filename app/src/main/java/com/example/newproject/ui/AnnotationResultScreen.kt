@@ -19,15 +19,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
-import com.example.newproject.ui.theme.Aqua
-import com.example.newproject.ui.theme.Coral
+import com.example.newproject.ui.theme.AppGradient
+import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -39,12 +37,11 @@ fun AnnotationResultScreen(
     annotationState: AnnotationState,
     onBack: () -> Unit
 ) {
-    val gradient = Brush.linearGradient(colors = listOf(Indigo, Aqua, Coral))
-
+    // 他画面と同じ共通グラデーションに統一（以前はこの画面のみ向きが異なっていた）
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradient)
+            .background(AppGradient)
             .statusBarsPadding()
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -109,7 +106,7 @@ private fun AnnotationErrorContent(message: String, modifier: Modifier = Modifie
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "AI補記メモの作成に失敗しました",
-                color = Color(0xFFCC0000),
+                color = ErrorRed,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )

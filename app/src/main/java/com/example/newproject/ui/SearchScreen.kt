@@ -18,7 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -30,8 +30,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,21 +39,17 @@ import com.example.newproject.NoteUiState
 import com.example.newproject.SearchState
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
-import com.example.newproject.ui.theme.Aqua
+import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.Coral
+import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
-
-private fun searchGradient(): Brush = Brush.linearGradient(
-    colors = listOf(Indigo, Aqua, Coral),
-    start = Offset(0f, Float.POSITIVE_INFINITY),
-    end = Offset(Float.POSITIVE_INFINITY, 0f)
-)
+import com.example.newproject.ui.theme.PanelBlue
+import com.example.newproject.ui.theme.PanelDivider
 
 /**
  * さがすタブ（AIピッカー）。
@@ -75,7 +69,7 @@ fun SearchTab(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(searchGradient())
+            .background(AppGradient)
             .safeDrawingPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
@@ -174,7 +168,7 @@ private fun FolderChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = Color(0xFFF0F4FF),
+        color = PanelBlue,
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -200,7 +194,7 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                         state.results.forEachIndexed { index, note ->
                             RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
                             if (index < state.results.lastIndex) {
-                                Divider(color = Color(0xFFD6DDF5), thickness = 0.5.dp)
+                                HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
                             }
                         }
                     }
@@ -208,7 +202,7 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                 is SearchState.Error -> Text(
                     "検索に失敗しました: ${state.message}",
                     fontSize = 13.sp,
-                    color = Color(0xFFCC0000)
+                    color = ErrorRed
                 )
             }
         }

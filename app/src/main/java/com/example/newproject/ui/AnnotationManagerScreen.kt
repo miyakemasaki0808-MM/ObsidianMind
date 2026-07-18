@@ -31,17 +31,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationListState
 import com.example.newproject.NoteFile
-import com.example.newproject.ui.theme.Aqua
-import com.example.newproject.ui.theme.Coral
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
@@ -61,18 +57,12 @@ fun AnnotationManagerScreen(
     var pendingDelete by remember { mutableStateOf<NoteFile?>(null) }
     var showDeleteAll by remember { mutableStateOf(false) }
 
-    val gradient = Brush.linearGradient(
-        colors = listOf(Indigo, Aqua, Coral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
-
     val files = (state as? AnnotationListState.Success)?.files.orEmpty()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(gradient)
+            .background(AppGradient)
             .safeDrawingPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
