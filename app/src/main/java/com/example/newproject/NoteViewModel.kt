@@ -151,6 +151,13 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingContent: String = ""
     private var pendingAnnotation: PendingAnnotation? = null
     private var cachedNotes: List<NoteFile> = emptyList()
+    private var cachedNotesLoadedAt = 0L
+
+    // スコープ（フォルダ）単位の走査結果キャッシュ。SAFの再帰走査は1フォルダごとに
+    // IPCが発生して重いため、短時間の連続操作（検索→ランダム→検索）で再走査しない。
+    // キーは selectedFolder の documentId（null はルート直下スコープ）。
+    private data class ScopeCacheEntry(val notes: List<NoteFile>, val loadedAt: Long)
+    private val scopeNotesCache = mutableMapOf<String?, ScopeCacheEntry>()
 
     // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
@@ -175,6 +182,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
+        cachedNotesLoadedAt = 0L
+        scopeNotesCache.clear()
         cancelNoteScopedJobs()
         // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
         // （selectedFolder は旧Vaultの documentId を保持しているため必須）
@@ -207,6 +216,38 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         sectionAnswerJob?.cancel()
     }
 
+    // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
+    // ランダム表示の連打や関連ノートの補填で毎回の全走査を避ける。
+    private suspend fun collectAllNotesCached(
+        contentResolver: ContentResolver,
+        vaultUri: Uri
+    ): List<NoteFile> {
+        val now = System.currentTimeMillis()
+        if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
+            return cachedNotes
+        }
+        val notes = repository.collectNotes(contentResolver, vaultUri)
+        cachedNotes = notes
+        cachedNotesLoadedAt = now
+        return notes
+    }
+
+    // さがすタブのスコープ走査をTTL付きで取得する。
+    private suspend fun collectNotesInScopeCached(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        scope: NoteFolder?
+    ): List<NoteFile> {
+        val key = scope?.documentId
+        val now = System.currentTimeMillis()
+        scopeNotesCache[key]?.let { entry ->
+            if (now - entry.loadedAt < NOTES_CACHE_TTL_MS) return entry.notes
+        }
+        val notes = repository.collectNotesInScope(contentResolver, vaultUri, scope)
+        scopeNotesCache[key] = ScopeCacheEntry(notes, now)
+        return notes
+    }
+
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultUri ?: return
         cancelNoteScopedJobs()
@@ -215,8 +256,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 noteState = NoteState.Loading
             )
             try {
-                val notes = repository.collectNotes(contentResolver, uri)
-                cachedNotes = notes
+                val notes = collectAllNotesCached(contentResolver, uri)
                 if (notes.isEmpty()) {
                     _uiState.value = _uiState.value.copy(noteState = NoteState.Empty)
                     return@launch
@@ -289,7 +329,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
             try {
                 val scope = _uiState.value.selectedFolder
-                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
                     is PickerResult.Success -> _uiState.value = _uiState.value.copy(
                         searchState = SearchState.Success(result.notes, result.aiStatus)
@@ -313,7 +353,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
             try {
                 val scope = _uiState.value.selectedFolder
-                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
                 val picked = notes.shuffled().take(3).map {
                     RelatedNote(title = it.name, uri = it.uri, isWikilinked = false)
                 }
@@ -719,9 +759,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 val uri = vaultUri
                 if (uri != null) {
                     try {
-                        cachedNotes = repository.collectNotes(
-                            getApplication<Application>().contentResolver, uri
-                        )
+                        collectAllNotesCached(getApplication<Application>().contentResolver, uri)
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (_: Exception) {
                         // 収集に失敗した場合は従来どおり候補なしとして扱う
                     }
@@ -848,6 +888,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
+        // ノート一覧キャッシュの有効期間。この間の連続操作は再走査しない。
+        // Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
+        private const val NOTES_CACHE_TTL_MS = 60_000L
         private val DISPLAY_TIMESTAMP_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         private val FILE_TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
     }
