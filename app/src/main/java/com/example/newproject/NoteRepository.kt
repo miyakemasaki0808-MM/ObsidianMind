@@ -30,116 +30,102 @@ internal fun sanitizeAnnotationFileTitle(title: String): String {
 
 class NoteRepository {
 
-    suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
-        withContext(Dispatchers.IO) {
-            val result = mutableListOf<NoteFile>()
-            val queue = ArrayDeque<String>()
-            queue.add(DocumentsContract.getTreeDocumentId(vaultUri))
+    // SAFの子要素1件。カーソル列の詰め替え先として共通ヘルパが返す。
+    private data class ChildDoc(val documentId: String, val name: String, val isDirectory: Boolean)
 
-            while (queue.isNotEmpty()) {
-                val documentId = queue.removeFirst()
-                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
-                val projection = arrayOf(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                    DocumentsContract.Document.COLUMN_MIME_TYPE
-                )
-
-                contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val childId = cursor.getString(0)
-                        val name = cursor.getString(1)
-                        val mimeType = cursor.getString(2)
-                        val childUri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)
-
-                        when {
-                            mimeType == DocumentsContract.Document.MIME_TYPE_DIR -> queue.add(childId)
-                            isMarkdownFile(name) -> result.add(NoteFile(name, childUri))
-                        }
-                    }
-                }
-            }
-
-            result
-        }
-
-    // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
-    suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
-        withContext(Dispatchers.IO) {
-            val rootId = DocumentsContract.getTreeDocumentId(vaultUri)
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, rootId)
-            val projection = arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
-            )
-
-            val result = mutableListOf<NoteFolder>()
-            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val childId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    val mimeType = cursor.getString(2)
-                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        result.add(NoteFolder(name, childId))
-                    }
-                }
-            }
-            result.sortedBy { it.name }
-        }
-
-    // 検索スコープ配下のノートを収集する。
-    //   scope=null      → Vault ルート直下の .md のみ（非再帰）
-    //   scope=NoteFolder → そのフォルダ配下を再帰的に収集（サブフォルダのノートも含む）
-    suspend fun collectNotesInScope(
+    // 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）
+    private fun queryChildren(
         contentResolver: ContentResolver,
         vaultUri: Uri,
-        scope: NoteFolder?
-    ): List<NoteFile> = withContext(Dispatchers.IO) {
+        documentId: String
+    ): List<ChildDoc> {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
             DocumentsContract.Document.COLUMN_MIME_TYPE
         )
-        val result = mutableListOf<NoteFile>()
-
-        if (scope == null) {
-            // ルート直下のみ（サブフォルダには潜らない）
-            val rootId = DocumentsContract.getTreeDocumentId(vaultUri)
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, rootId)
-            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val childId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    val mimeType = cursor.getString(2)
-                    if (mimeType != DocumentsContract.Document.MIME_TYPE_DIR && isMarkdownFile(name)) {
-                        result.add(NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)))
-                    }
-                }
+        val result = mutableListOf<ChildDoc>()
+        contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            while (cursor.moveToNext()) {
+                result.add(
+                    ChildDoc(
+                        documentId = cursor.getString(0),
+                        name = cursor.getString(1),
+                        isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
+                    )
+                )
             }
-        } else {
-            // フォルダ配下を再帰BFS（collectNotes と同じ走査）
-            val queue = ArrayDeque<String>()
-            queue.add(scope.documentId)
-            while (queue.isNotEmpty()) {
-                val documentId = queue.removeFirst()
-                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
-                contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val childId = cursor.getString(0)
-                        val name = cursor.getString(1)
-                        val mimeType = cursor.getString(2)
-                        when {
-                            mimeType == DocumentsContract.Document.MIME_TYPE_DIR -> queue.add(childId)
-                            isMarkdownFile(name) ->
-                                result.add(NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)))
-                        }
-                    }
+        }
+        return result
+    }
+
+    // startId 配下を再帰BFSで走査して .md を集める。
+    // excludeFolderNames に一致するフォルダは潜らない。
+    private fun collectNotesRecursive(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        startId: String,
+        excludeFolderNames: Set<String> = emptySet()
+    ): List<NoteFile> {
+        val result = mutableListOf<NoteFile>()
+        val queue = ArrayDeque<String>()
+        queue.add(startId)
+        while (queue.isNotEmpty()) {
+            val documentId = queue.removeFirst()
+            for (child in queryChildren(contentResolver, vaultUri, documentId)) {
+                when {
+                    child.isDirectory ->
+                        if (child.name !in excludeFolderNames) queue.add(child.documentId)
+                    isMarkdownFile(child.name) ->
+                        result.add(child.toNoteFile(vaultUri))
                 }
             }
         }
+        return result
+    }
 
-        result
+    private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
+        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId))
+
+    // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
+    // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。
+    // ※さがすタブ（collectNotesInScope）は仕様どおり除外しない。
+    suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
+        withContext(Dispatchers.IO) {
+            collectNotesRecursive(
+                contentResolver = contentResolver,
+                vaultUri = vaultUri,
+                startId = DocumentsContract.getTreeDocumentId(vaultUri),
+                excludeFolderNames = setOf(ANNOTATION_FOLDER_NAME)
+            )
+        }
+
+    // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
+    suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
+        withContext(Dispatchers.IO) {
+            queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+                .filter { it.isDirectory }
+                .map { NoteFolder(it.name, it.documentId) }
+                .sortedBy { it.name }
+        }
+
+    // 検索スコープ配下のノートを収集する。
+    //   scope=null      → Vault ルート直下の .md のみ（非再帰）
+    //   scope=NoteFolder → そのフォルダ配下を再帰的に収集（サブフォルダのノートも含む）
+    // さがすタブは _AI補記 も選択対象に含める仕様のため、ここでは除外しない。
+    suspend fun collectNotesInScope(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        scope: NoteFolder?
+    ): List<NoteFile> = withContext(Dispatchers.IO) {
+        if (scope == null) {
+            queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+                .filter { !it.isDirectory && isMarkdownFile(it.name) }
+                .map { it.toNoteFile(vaultUri) }
+        } else {
+            collectNotesRecursive(contentResolver, vaultUri, startId = scope.documentId)
+        }
     }
 
     suspend fun readNoteContent(contentResolver: ContentResolver, uri: Uri): String =
@@ -178,24 +164,10 @@ class NoteRepository {
         withContext(Dispatchers.IO) {
             val folderUri = findAnnotationFolder(contentResolver, vaultUri) ?: return@withContext emptyList()
             val folderId = DocumentsContract.getDocumentId(folderUri)
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, folderId)
-            val projection = arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME
-            )
-
-            val result = mutableListOf<NoteFile>()
-            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val childId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    if (isMarkdownFile(name)) {
-                        val childUri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)
-                        result.add(NoteFile(name, childUri))
-                    }
-                }
-            }
-            result.sortedByDescending { it.name }
+            queryChildren(contentResolver, vaultUri, folderId)
+                .filter { !it.isDirectory && isMarkdownFile(it.name) }
+                .map { it.toNoteFile(vaultUri) }
+                .sortedByDescending { it.name }
         }
 
     // 単一ドキュメントを削除する。成功時 true。
@@ -251,35 +223,12 @@ class NoteRepository {
             .filter { it.isNotBlank() }
     }
 
-    private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? {
-        val queue = ArrayDeque<String>()
-        queue.add(DocumentsContract.getTreeDocumentId(vaultUri))
-
-        while (queue.isNotEmpty()) {
-            val documentId = queue.removeFirst()
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
-            val projection = arrayOf(
-                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-                DocumentsContract.Document.COLUMN_MIME_TYPE
-            )
-
-            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-                while (cursor.moveToNext()) {
-                    val childId = cursor.getString(0)
-                    val name = cursor.getString(1)
-                    val mimeType = cursor.getString(2)
-                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
-                        if (name == ANNOTATION_FOLDER_NAME) {
-                            return DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)
-                        }
-                        queue.add(childId)
-                    }
-                }
-            }
-        }
-        return null
-    }
+    // _AI補記 フォルダはルート直下に作成する仕様（createAnnotationFolder 参照）のため、
+    // ルート直下のみ探索する。以前はVault全体をBFSしており保存・一覧のたびに重かった。
+    private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? =
+        queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+            .firstOrNull { it.isDirectory && it.name == ANNOTATION_FOLDER_NAME }
+            ?.let { DocumentsContract.buildDocumentUriUsingTree(vaultUri, it.documentId) }
 
     private fun createAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri {
         val rootDocumentId = DocumentsContract.getTreeDocumentId(vaultUri)
