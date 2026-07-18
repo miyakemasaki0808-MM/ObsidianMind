@@ -144,7 +144,7 @@ class NoteRepository {
     ): Uri = withContext(Dispatchers.IO) {
         val folderUri = findAnnotationFolder(contentResolver, vaultUri)
             ?: createAnnotationFolder(contentResolver, vaultUri)
-        val fileName = "${sanitizedTitle}__補記_$timestamp.md"
+        val fileName = "${sanitizedTitle}${ANNOTATION_FILE_MARKER}$timestamp.md"
         val fileUri = DocumentsContract.createDocument(
             contentResolver,
             folderUri,
@@ -164,10 +164,13 @@ class NoteRepository {
         withContext(Dispatchers.IO) {
             val folderUri = findAnnotationFolder(contentResolver, vaultUri) ?: return@withContext emptyList()
             val folderId = DocumentsContract.getDocumentId(folderUri)
+            // 作成日時の新しい順に並べる。ファイル名は "{タイトル}__補記_{yyyyMMdd_HHmm}.md"
+            // 形式のため、名前全体でなくタイムスタンプ部をソートキーにする
+            // （名前降順だとタイトルの辞書順が支配して日付順にならない）
             queryChildren(contentResolver, vaultUri, folderId)
                 .filter { !it.isDirectory && isMarkdownFile(it.name) }
                 .map { it.toNoteFile(vaultUri) }
-                .sortedByDescending { it.name }
+                .sortedByDescending { it.name.substringAfterLast(ANNOTATION_FILE_MARKER, "") }
         }
 
     // 単一ドキュメントを削除する。成功時 true。
@@ -243,6 +246,8 @@ class NoteRepository {
 
     companion object {
         private const val ANNOTATION_FOLDER_NAME = "_AI補記"
+        // 補記メモのファイル名区切り: "{タイトル}__補記_{yyyyMMdd_HHmm}.md"
+        private const val ANNOTATION_FILE_MARKER = "__補記_"
         private val WIKILINK_REGEX = Regex("\\[\\[([^\\]]+)]]")
     }
 }

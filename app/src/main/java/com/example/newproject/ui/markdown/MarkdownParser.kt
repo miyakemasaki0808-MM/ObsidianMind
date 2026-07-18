@@ -61,11 +61,10 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
                 tableLines.add(lines[index])
                 index++
             }
-            val headers = tableLines.firstOrNull()
-                ?.split("|")?.filter { it.isNotBlank() } ?: emptyList()
+            val headers = tableLines.firstOrNull()?.let(::splitTableRow) ?: emptyList()
             val rows = tableLines.drop(1)
                 .filter { !TableSeparatorRegex.matches(it) }
-                .map { row -> row.split("|").filter { it.isNotBlank() } }
+                .map(::splitTableRow)
             blocks.add(MarkdownBlock.Table(headers, rows))
             continue
         }
@@ -150,6 +149,14 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
 
     return blocks
 }
+
+/**
+ * テーブル行をセルに分割する。先頭・末尾の | の外側だけを捨て、
+ * 中間の空セルは列位置を保つため保持する（"| a |  | c |" → ["a", "", "c"]）。
+ * 以前は isNotBlank フィルタで中間の空セルまで捨てられ、列がズレていた。
+ */
+private fun splitTableRow(line: String): List<String> =
+    line.trimEnd().split("|").drop(1).dropLast(1).map { it.trim() }
 
 /**
  * YAML frontmatter（先頭の --- ～ --- ブロック）を描画対象から除外する。
