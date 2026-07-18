@@ -58,6 +58,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.NoteSection
 import com.example.newproject.ui.markdown.buildNoteSectionModel
 import kotlin.math.roundToInt
@@ -186,7 +187,8 @@ fun NoteReaderTab(
                 modifier = Modifier
                     .weight(1f)
                     .padding(top = if (isLoading) 8.dp else 20.dp),
-                listState = if (hasNote) listState else null
+                listState = if (hasNote) listState else null,
+                precomputedBlocks = sectionModel?.blocks
             )
         }
 
@@ -216,7 +218,8 @@ fun NoteReaderTab(
             ) {
                 NoteContentPanel(
                     uiState = uiState,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    precomputedBlocks = sectionModel?.blocks
                 )
                 IconPill(
                     symbol = "✕",
@@ -451,7 +454,8 @@ fun AiTab(
 internal fun NoteContentPanel(
     uiState: NoteUiState,
     modifier: Modifier = Modifier,
-    listState: LazyListState? = null
+    listState: LazyListState? = null,
+    precomputedBlocks: List<MarkdownBlock>? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -465,17 +469,22 @@ internal fun NoteContentPanel(
                 is NoteState.Error   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.vault_read_error)
                 else                 -> stringResource(R.string.no_note_loaded) to stringResource(R.string.random_note_empty_state)
             }
+            // precomputedBlocks はノート本文（Success時）のパース結果。
+            // プレースホルダ表示時は内容と一致しないため渡さない。
+            val blocksForContent = if (uiState.noteState is NoteState.Success) precomputedBlocks else null
             Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             if (listState != null) {
                 MarkdownNoteContent(
                     content = noteContent,
                     modifier = Modifier.padding(top = 12.dp).weight(1f),
-                    listState = listState
+                    listState = listState,
+                    precomputedBlocks = blocksForContent
                 )
             } else {
                 MarkdownNoteContent(
                     content = noteContent,
-                    modifier = Modifier.padding(top = 12.dp).weight(1f)
+                    modifier = Modifier.padding(top = 12.dp).weight(1f),
+                    precomputedBlocks = blocksForContent
                 )
             }
         }

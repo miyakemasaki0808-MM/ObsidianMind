@@ -40,9 +40,13 @@ import com.example.newproject.ui.theme.OnSurface
 internal fun MarkdownNoteContent(
     content: String,
     modifier: Modifier = Modifier,
-    listState: LazyListState = rememberLazyListState()
+    listState: LazyListState = rememberLazyListState(),
+    // セクションモデル側で既にパース済みなら渡して再パースを避ける
+    precomputedBlocks: List<MarkdownBlock>? = null
 ) {
-    val blocks = remember(content) { parseMarkdownBlocks(content) }
+    val blocks = remember(content, precomputedBlocks) {
+        precomputedBlocks ?: parseMarkdownBlocks(content)
+    }
 
     SelectionContainer(modifier = modifier) {
         LazyColumn(
@@ -65,6 +69,11 @@ internal fun MarkdownNoteContent(
     }
 }
 
+// inlineMarkdown（AnnotatedString構築）は軽くないため、再コンポジションの
+// たびに作り直さないようテキスト単位でメモ化する。
+@Composable
+private fun rememberInline(text: String) = remember(text) { inlineMarkdown(text) }
+
 @Composable
 internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
     val size = when (block.level) {
@@ -78,7 +87,7 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
     val style = if (block.level >= 6) FontStyle.Italic else FontStyle.Normal
 
     Text(
-        text = inlineMarkdown(block.text),
+        text = rememberInline(block.text),
         color = if (block.level >= 5) Color(0xFF555555) else OnSurface,
         fontSize = size,
         lineHeight = (size.value + 6).sp,
@@ -109,7 +118,7 @@ internal fun MarkdownBlockquote(lines: List<String>) {
         Column(modifier = Modifier.padding(start = 12.dp)) {
             lines.forEach { line ->
                 Text(
-                    text = inlineMarkdown(line),
+                    text = rememberInline(line),
                     color = Color(0xFF666666),
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
@@ -134,7 +143,7 @@ internal fun MarkdownTaskList(items: List<Pair<Boolean, String>>) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = inlineMarkdown(text),
+                    text = rememberInline(text),
                     color = if (checked) Color(0xFF888888) else OnSurface,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
@@ -157,7 +166,7 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
         Row(modifier = Modifier.background(Color(0xFFF1F4F8))) {
             headers.forEachIndexed { i, header ->
                 Text(
-                    text = inlineMarkdown(header.trim()),
+                    text = rememberInline(header.trim()),
                     color = OnSurface,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
@@ -174,7 +183,7 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
                 val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
                 padded.take(headers.size).forEachIndexed { i, cell ->
                     Text(
-                        text = inlineMarkdown(cell.trim()),
+                        text = rememberInline(cell.trim()),
                         color = OnSurface,
                         fontSize = 14.sp,
                         modifier = Modifier
@@ -192,7 +201,7 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
 @Composable
 internal fun MarkdownParagraph(text: String) {
     Text(
-        text = inlineMarkdown(text),
+        text = rememberInline(text),
         color = OnSurface,
         fontSize = 16.sp,
         lineHeight = 24.sp
@@ -212,7 +221,7 @@ internal fun MarkdownList(items: List<String>) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = inlineMarkdown(item),
+                    text = rememberInline(item),
                     color = OnSurface,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,

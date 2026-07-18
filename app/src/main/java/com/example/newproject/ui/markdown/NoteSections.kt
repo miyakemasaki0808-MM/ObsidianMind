@@ -17,7 +17,9 @@ data class NoteSection(
  */
 class NoteSectionModel internal constructor(
     private val headingBlockIndices: List<Int>,
-    val sections: List<NoteSection>
+    val sections: List<NoteSection>,
+    // 描画側（MarkdownNoteContent）で再パースせず使い回すためのパース済みブロック列
+    internal val blocks: List<MarkdownBlock>
 ) {
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */
     fun sectionForBlockIndex(index: Int): NoteSection? {
@@ -60,7 +62,7 @@ fun buildNoteSectionModel(content: String): NoteSectionModel {
         }
     }
 
-    return NoteSectionModel(headingIndices, sections)
+    return NoteSectionModel(headingIndices, sections, blocks)
 }
 
 /** パース済みブロック列を LLM 入力用の Markdown 文字列に再構成する。 */
