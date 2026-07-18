@@ -611,8 +611,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun parseQuizResponse(raw: String): List<QuizCard> {
-        return raw.trim().split("\n\n").mapNotNull { block ->
-            val lines = block.trim().lines()
+        // 空行区切り（\n\n）には依存せず、"Q:" 行を新しい問題の開始として分割する。
+        // モデルが空行を挟まない・\r\n を返す・行頭に空白を入れる等の揺れに耐える。
+        val blocks = mutableListOf<MutableList<String>>()
+        raw.replace("\r\n", "\n").lineSequence().forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.isEmpty()) return@forEach
+            if (line.startsWith("Q:")) blocks.add(mutableListOf())
+            blocks.lastOrNull()?.add(line)   // 最初の Q: より前の前置きは捨てる
+        }
+        return blocks.mapNotNull { lines ->
             val q = lines.firstOrNull { it.startsWith("Q:") }?.removePrefix("Q:")?.trim()
             val a = lines.firstOrNull { it.startsWith("A:") }?.removePrefix("A:")?.trim()
             val b = lines.firstOrNull { it.startsWith("B:") }?.removePrefix("B:")?.trim()
