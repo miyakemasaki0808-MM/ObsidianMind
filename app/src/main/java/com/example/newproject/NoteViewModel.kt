@@ -19,6 +19,8 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.ui.markdown.NoteSection
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -149,6 +151,21 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingContent: String = ""
     private var pendingAnnotation: PendingAnnotation? = null
     private var cachedNotes: List<NoteFile> = emptyList()
+    private var cachedNotesLoadedAt = 0L
+
+    // スコープ（フォルダ）単位の走査結果キャッシュ。SAFの再帰走査は1フォルダごとに
+    // IPCが発生して重いため、短時間の連続操作（検索→ランダム→検索）で再走査しない。
+    // キーは selectedFolder の documentId（null はルート直下スコープ）。
+    private data class ScopeCacheEntry(val notes: List<NoteFile>, val loadedAt: Long)
+    private val scopeNotesCache = mutableMapOf<String?, ScopeCacheEntry>()
+
+    // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
+    // 実行中ジョブを保持して新規要求時にキャンセルする
+    private var noteLoadJob: Job? = null
+    private var summaryJob: Job? = null
+    private var relatedNotesJob: Job? = null
+    private var sectionOpenJob: Job? = null
+    private var sectionAnswerJob: Job? = null
 
     var vaultUri: Uri? = null
         private set
@@ -165,28 +182,81 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
-        _uiState.value = _uiState.value.copy(
+        cachedNotesLoadedAt = 0L
+        scopeNotesCache.clear()
+        cancelNoteScopedJobs()
+        // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
+        // （selectedFolder は旧Vaultの documentId を保持しているため必須）
+        _uiState.value = _uiState.value.resetNoteScopedStates().copy(
             vaultSelected = true,
-            summaryState = SummaryState.Idle,
-            relatedNotesState = RelatedNotesState.Idle,
-            quizState = QuizState.Idle,
-            annotationState = AnnotationState.Idle
+            folders = emptyList(),
+            selectedFolder = null,
+            searchState = SearchState.Idle
         )
+    }
+
+    // ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
+    // リセットをここに集約することで、状態を追加したときのリセット漏れを防ぐ。
+    private fun NoteUiState.resetNoteScopedStates(): NoteUiState = copy(
+        summaryState = SummaryState.Idle,
+        relatedNotesState = RelatedNotesState.Idle,
+        quizState = QuizState.Idle,
+        annotationState = AnnotationState.Idle,
+        sectionChat = null
+    )
+
+    // ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
+    // 旧ノートの生成が残っていると、結果の上書きだけでなく generate() の
+    // 直列化ロックを握り続けて新ノートの要約開始も遅らせてしまう。
+    private fun cancelNoteScopedJobs() {
+        noteLoadJob?.cancel()
+        summaryJob?.cancel()
+        relatedNotesJob?.cancel()
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
+    }
+
+    // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
+    // ランダム表示の連打や関連ノートの補填で毎回の全走査を避ける。
+    private suspend fun collectAllNotesCached(
+        contentResolver: ContentResolver,
+        vaultUri: Uri
+    ): List<NoteFile> {
+        val now = System.currentTimeMillis()
+        if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
+            return cachedNotes
+        }
+        val notes = repository.collectNotes(contentResolver, vaultUri)
+        cachedNotes = notes
+        cachedNotesLoadedAt = now
+        return notes
+    }
+
+    // さがすタブのスコープ走査をTTL付きで取得する。
+    private suspend fun collectNotesInScopeCached(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        scope: NoteFolder?
+    ): List<NoteFile> {
+        val key = scope?.documentId
+        val now = System.currentTimeMillis()
+        scopeNotesCache[key]?.let { entry ->
+            if (now - entry.loadedAt < NOTES_CACHE_TTL_MS) return entry.notes
+        }
+        val notes = repository.collectNotesInScope(contentResolver, vaultUri, scope)
+        scopeNotesCache[key] = ScopeCacheEntry(notes, now)
+        return notes
     }
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultUri ?: return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                noteState = NoteState.Loading,
-                summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle,
-                annotationState = AnnotationState.Idle
+        cancelNoteScopedJobs()
+        noteLoadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.resetNoteScopedStates().copy(
+                noteState = NoteState.Loading
             )
             try {
-                val notes = repository.collectNotes(contentResolver, uri)
-                cachedNotes = notes
+                val notes = collectAllNotesCached(contentResolver, uri)
                 if (notes.isEmpty()) {
                     _uiState.value = _uiState.value.copy(noteState = NoteState.Empty)
                     return@launch
@@ -198,6 +268,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 fetchSummary(note.name, content)
                 fetchRelatedNotes(note.name, content)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
@@ -207,13 +279,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                noteState = NoteState.Loading,
-                summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle,
-                annotationState = AnnotationState.Idle
+        cancelNoteScopedJobs()
+        noteLoadJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.resetNoteScopedStates().copy(
+                noteState = NoteState.Loading
             )
             try {
                 val content = repository.readNoteContent(contentResolver, note.uri)
@@ -222,6 +291,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 fetchSummary(note.title, content)
                 fetchRelatedNotes(note.title, content)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
@@ -258,7 +329,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
             try {
                 val scope = _uiState.value.selectedFolder
-                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
                     is PickerResult.Success -> _uiState.value = _uiState.value.copy(
                         searchState = SearchState.Success(result.notes, result.aiStatus)
@@ -282,7 +353,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
             try {
                 val scope = _uiState.value.selectedFolder
-                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
                 val picked = notes.shuffled().take(3).map {
                     RelatedNote(title = it.name, uri = it.uri, isWikilinked = false)
                 }
@@ -375,6 +446,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // 吹き出しタップで開く。要約と候補質問をまとめて用意する。
     fun openSection(section: NoteSection) {
+        // 前のセクションの生成が後から届いて新しいシートを上書きしないようにする
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
         _uiState.value = _uiState.value.copy(
             sectionChat = SectionChatState(
                 sectionTitle = section.title,
@@ -382,7 +456,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 isSummaryLoading = true
             )
         )
-        viewModelScope.launch {
+        sectionOpenJob = viewModelScope.launch {
             when (aiClient.checkAvailability()) {
                 AiAvailability.Unavailable ->
                     updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
@@ -399,6 +473,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                                 isSummaryLoading = false
                             )
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
                     }
@@ -423,7 +499,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 error = null
             )
         }
-        viewModelScope.launch {
+        sectionAnswerJob = viewModelScope.launch {
             if (aiClient.checkAvailability() != AiAvailability.Available) {
                 updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
                 return@launch
@@ -446,6 +522,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                         isGenerating = false
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
             }
@@ -453,6 +531,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeSectionChat() {
+        // シートを閉じたら実行中の生成を止める（Nanoの無駄な稼働を防ぐ）
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
         _uiState.value = _uiState.value.copy(sectionChat = null)
     }
 
@@ -467,6 +548,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 .take(3)
                 .toList()
             updateChat { it.copy(suggestions = questions) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // サジェストは失敗しても本体機能に影響させない
         }
@@ -639,7 +722,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun fetchSummary(title: String, content: String) {
-        viewModelScope.launch {
+        summaryJob?.cancel()
+        summaryJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(summaryState = SummaryState.Loading)
             when (val result = summarizeUseCase.summarize(title, content)) {
                 is SummaryResult.Success      -> {
@@ -666,7 +750,23 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun fetchRelatedNotes(title: String, content: String) {
-        viewModelScope.launch {
+        relatedNotesJob?.cancel()
+        relatedNotesJob = viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
+
+            // さがすタブ等、loadRandomNote を経由しない導線では未収集のことがあるため補填する
+            if (cachedNotes.isEmpty()) {
+                val uri = vaultUri
+                if (uri != null) {
+                    try {
+                        collectAllNotesCached(getApplication<Application>().contentResolver, uri)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // 収集に失敗した場合は従来どおり候補なしとして扱う
+                    }
+                }
+            }
             if (cachedNotes.isEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     relatedNotesState = RelatedNotesState.Success(
@@ -677,7 +777,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
             _uiState.value = _uiState.value.copy(wikilinkTitles = wikilinkTitles)
             when (val result = relatedNotesUseCase.findRelated(title, content, cachedNotes, wikilinkTitles)) {
@@ -789,6 +888,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
+        // ノート一覧キャッシュの有効期間。この間の連続操作は再走査しない。
+        // Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
+        private const val NOTES_CACHE_TTL_MS = 60_000L
         private val DISPLAY_TIMESTAMP_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
         private val FILE_TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
     }

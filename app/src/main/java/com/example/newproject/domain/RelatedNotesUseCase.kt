@@ -6,6 +6,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.toNormalizedObsidianTitle
+import kotlinx.coroutines.CancellationException
 
 data class RelatedNote(
     val title: String,
@@ -93,6 +94,8 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                     )
                 }
             }
+        } catch (e: CancellationException) {
+            throw e   // ジョブキャンセルはエラー扱いせず伝播させる
         } catch (e: Exception) {
             RelatedNotesResult.Success(
                 relatedNotes = buildDeterministicRelatedNotes(

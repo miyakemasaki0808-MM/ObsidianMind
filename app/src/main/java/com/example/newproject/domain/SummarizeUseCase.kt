@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import kotlinx.coroutines.CancellationException
 
 sealed class SummaryResult {
     data class Success(val summary: String) : SummaryResult()
@@ -21,6 +22,8 @@ class SummarizeUseCase(private val aiClient: AiClient) {
                 val prompt = PromptBuilder.buildSummarizePrompt(title, content)
                 val summary = aiClient.generate(prompt)
                 SummaryResult.Success(summary.trim())
+            } catch (e: CancellationException) {
+                throw e   // ジョブキャンセルはエラー扱いせず伝播させる
             } catch (e: Exception) {
                 SummaryResult.Error(e.message ?: "Unknown error")
             }

@@ -32,7 +32,7 @@ internal sealed class MarkdownBlock {
 }
 
 internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
-    val lines = content.replace("\r\n", "\n").lines()
+    val lines = content.replace("\r\n", "\n").lines().stripFrontmatter()
     val blocks = mutableListOf<MarkdownBlock>()
     var index = 0
 
@@ -149,6 +149,17 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
     }
 
     return blocks
+}
+
+/**
+ * YAML frontmatter（先頭の --- ～ --- ブロック）を描画対象から除外する。
+ * 判定は NoteRepository.parseMeta と同じ（先頭行が --- で、次の --- までをメタデータとみなす）。
+ * 閉じ --- が無い場合は frontmatter とみなさず全行を返す。
+ */
+private fun List<String>.stripFrontmatter(): List<String> {
+    if (firstOrNull()?.trim() != "---") return this
+    val endIndex = drop(1).indexOfFirst { it.trim() == "---" }
+    return if (endIndex >= 0) drop(endIndex + 2) else this
 }
 
 internal fun inlineMarkdown(text: String) = buildAnnotatedString {
