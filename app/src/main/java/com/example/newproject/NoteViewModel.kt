@@ -19,6 +19,8 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.ui.markdown.NoteSection
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -150,6 +152,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private var pendingAnnotation: PendingAnnotation? = null
     private var cachedNotes: List<NoteFile> = emptyList()
 
+    // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
+    // 実行中ジョブを保持して新規要求時にキャンセルする
+    private var noteLoadJob: Job? = null
+    private var summaryJob: Job? = null
+    private var relatedNotesJob: Job? = null
+    private var sectionOpenJob: Job? = null
+    private var sectionAnswerJob: Job? = null
+
     var vaultUri: Uri? = null
         private set
 
@@ -165,6 +175,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
+        cancelNoteScopedJobs()
         // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
         // （selectedFolder は旧Vaultの documentId を保持しているため必須）
         _uiState.value = _uiState.value.resetNoteScopedStates().copy(
@@ -185,9 +196,21 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         sectionChat = null
     )
 
+    // ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
+    // 旧ノートの生成が残っていると、結果の上書きだけでなく generate() の
+    // 直列化ロックを握り続けて新ノートの要約開始も遅らせてしまう。
+    private fun cancelNoteScopedJobs() {
+        noteLoadJob?.cancel()
+        summaryJob?.cancel()
+        relatedNotesJob?.cancel()
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
+    }
+
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultUri ?: return
-        viewModelScope.launch {
+        cancelNoteScopedJobs()
+        noteLoadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.resetNoteScopedStates().copy(
                 noteState = NoteState.Loading
             )
@@ -205,6 +228,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 fetchSummary(note.name, content)
                 fetchRelatedNotes(note.name, content)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
@@ -214,7 +239,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
-        viewModelScope.launch {
+        cancelNoteScopedJobs()
+        noteLoadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.resetNoteScopedStates().copy(
                 noteState = NoteState.Loading
             )
@@ -225,6 +251,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 fetchSummary(note.title, content)
                 fetchRelatedNotes(note.title, content)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
@@ -378,6 +406,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // 吹き出しタップで開く。要約と候補質問をまとめて用意する。
     fun openSection(section: NoteSection) {
+        // 前のセクションの生成が後から届いて新しいシートを上書きしないようにする
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
         _uiState.value = _uiState.value.copy(
             sectionChat = SectionChatState(
                 sectionTitle = section.title,
@@ -385,7 +416,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 isSummaryLoading = true
             )
         )
-        viewModelScope.launch {
+        sectionOpenJob = viewModelScope.launch {
             when (aiClient.checkAvailability()) {
                 AiAvailability.Unavailable ->
                     updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
@@ -402,6 +433,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                                 isSummaryLoading = false
                             )
                         }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: Exception) {
                         updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
                     }
@@ -426,7 +459,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 error = null
             )
         }
-        viewModelScope.launch {
+        sectionAnswerJob = viewModelScope.launch {
             if (aiClient.checkAvailability() != AiAvailability.Available) {
                 updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
                 return@launch
@@ -449,6 +482,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                         isGenerating = false
                     )
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
             }
@@ -456,6 +491,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closeSectionChat() {
+        // シートを閉じたら実行中の生成を止める（Nanoの無駄な稼働を防ぐ）
+        sectionOpenJob?.cancel()
+        sectionAnswerJob?.cancel()
         _uiState.value = _uiState.value.copy(sectionChat = null)
     }
 
@@ -470,6 +508,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 .take(3)
                 .toList()
             updateChat { it.copy(suggestions = questions) }
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             // サジェストは失敗しても本体機能に影響させない
         }
@@ -642,7 +682,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun fetchSummary(title: String, content: String) {
-        viewModelScope.launch {
+        summaryJob?.cancel()
+        summaryJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(summaryState = SummaryState.Loading)
             when (val result = summarizeUseCase.summarize(title, content)) {
                 is SummaryResult.Success      -> {
@@ -669,7 +710,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun fetchRelatedNotes(title: String, content: String) {
-        viewModelScope.launch {
+        relatedNotesJob?.cancel()
+        relatedNotesJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
 
             // さがすタブ等、loadRandomNote を経由しない導線では未収集のことがあるため補填する
