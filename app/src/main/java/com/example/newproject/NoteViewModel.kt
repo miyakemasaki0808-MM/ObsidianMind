@@ -165,24 +165,31 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
-        _uiState.value = _uiState.value.copy(
+        // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
+        // （selectedFolder は旧Vaultの documentId を保持しているため必須）
+        _uiState.value = _uiState.value.resetNoteScopedStates().copy(
             vaultSelected = true,
-            summaryState = SummaryState.Idle,
-            relatedNotesState = RelatedNotesState.Idle,
-            quizState = QuizState.Idle,
-            annotationState = AnnotationState.Idle
+            folders = emptyList(),
+            selectedFolder = null,
+            searchState = SearchState.Idle
         )
     }
+
+    // ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
+    // リセットをここに集約することで、状態を追加したときのリセット漏れを防ぐ。
+    private fun NoteUiState.resetNoteScopedStates(): NoteUiState = copy(
+        summaryState = SummaryState.Idle,
+        relatedNotesState = RelatedNotesState.Idle,
+        quizState = QuizState.Idle,
+        annotationState = AnnotationState.Idle,
+        sectionChat = null
+    )
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultUri ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                noteState = NoteState.Loading,
-                summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle,
-                annotationState = AnnotationState.Idle
+            _uiState.value = _uiState.value.resetNoteScopedStates().copy(
+                noteState = NoteState.Loading
             )
             try {
                 val notes = repository.collectNotes(contentResolver, uri)
@@ -208,12 +215,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                noteState = NoteState.Loading,
-                summaryState = SummaryState.Idle,
-                relatedNotesState = RelatedNotesState.Idle,
-                quizState = QuizState.Idle,
-                annotationState = AnnotationState.Idle
+            _uiState.value = _uiState.value.resetNoteScopedStates().copy(
+                noteState = NoteState.Loading
             )
             try {
                 val content = repository.readNoteContent(contentResolver, note.uri)
