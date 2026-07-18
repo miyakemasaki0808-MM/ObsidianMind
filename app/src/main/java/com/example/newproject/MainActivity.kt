@@ -24,7 +24,9 @@ import com.example.newproject.QuizState
 import com.example.newproject.ui.AiTab
 import com.example.newproject.ui.AnnotationManagerScreen
 import com.example.newproject.ui.AnnotationResultScreen
+import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
+import com.example.newproject.ui.navigateToTab
 import com.example.newproject.ui.NoteReaderTab
 import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
@@ -113,11 +115,7 @@ class MainActivity : ComponentActivity() {
                             onRandom = { viewModel.pickRandomInScope(contentResolver) },
                             onOpenNote = { note ->
                                 viewModel.openNote(contentResolver, note)
-                                navController.navigate("note") {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navController.navigateToTab(AppDestination.Note)
                             }
                         )
                     }
@@ -127,11 +125,7 @@ class MainActivity : ComponentActivity() {
                             uiState = uiState,
                             onOpenNote = { note ->
                                 viewModel.openNote(contentResolver, note)
-                                navController.navigate("note") {
-                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                                navController.navigateToTab(AppDestination.Note)
                             }
                         )
                     }

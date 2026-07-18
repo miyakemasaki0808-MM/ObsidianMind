@@ -113,8 +113,11 @@ private fun TabLabel(text: String) {
     Text(text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
 }
 
-/** タブ切替。バックスタックを積まず状態を保存/復元する標準構成。 */
-private fun NavHostController.navigateToTab(dest: AppDestination) {
+/**
+ * タブ切替。バックスタックを積まず状態を保存/復元する標準構成。
+ * MainActivity 側（検索・関連からノートを開く導線）でも共用する。
+ */
+internal fun NavHostController.navigateToTab(dest: AppDestination) {
     navigate(dest.route) {
         popUpTo(graph.startDestinationId) { saveState = true }
         launchSingleTop = true
