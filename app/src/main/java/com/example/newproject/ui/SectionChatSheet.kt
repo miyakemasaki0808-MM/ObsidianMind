@@ -15,7 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.ChatMessage
 import com.example.newproject.ChatRole
 import com.example.newproject.SectionChatState
+import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -76,12 +77,12 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                state.error != null -> Text(state.error, fontSize = 13.sp, color = Color(0xFFCC0000))
+                state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorRed)
                 else -> Text("—", fontSize = 14.sp, color = Color(0xFF999999))
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            Divider(color = Color(0xFFE6E9F5))
+            HorizontalDivider(color = Color(0xFFE6E9F5))
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── 質問（下）─────────────────────────────

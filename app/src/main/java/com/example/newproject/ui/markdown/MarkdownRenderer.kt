@@ -18,7 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -99,7 +99,7 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
 
 @Composable
 internal fun MarkdownHorizontalRule() {
-    Divider(
+    HorizontalDivider(
         color = Color(0xFFCCCCCC),
         thickness = 1.dp,
         modifier = Modifier.padding(vertical = 8.dp)
@@ -177,7 +177,7 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
                 )
             }
         }
-        Divider(color = borderColor, thickness = 1.dp)
+        HorizontalDivider(color = borderColor, thickness = 1.dp)
         rows.forEach { row ->
             Row {
                 val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
@@ -193,7 +193,7 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
                     )
                 }
             }
-            Divider(color = borderColor, thickness = 0.5.dp)
+            HorizontalDivider(color = borderColor, thickness = 0.5.dp)
         }
     }
 }
