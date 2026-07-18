@@ -670,6 +670,21 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun fetchRelatedNotes(title: String, content: String) {
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
+
+            // さがすタブ等、loadRandomNote を経由しない導線では未収集のことがあるため補填する
+            if (cachedNotes.isEmpty()) {
+                val uri = vaultUri
+                if (uri != null) {
+                    try {
+                        cachedNotes = repository.collectNotes(
+                            getApplication<Application>().contentResolver, uri
+                        )
+                    } catch (_: Exception) {
+                        // 収集に失敗した場合は従来どおり候補なしとして扱う
+                    }
+                }
+            }
             if (cachedNotes.isEmpty()) {
                 _uiState.value = _uiState.value.copy(
                     relatedNotesState = RelatedNotesState.Success(
@@ -680,7 +695,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
 
-            _uiState.value = _uiState.value.copy(relatedNotesState = RelatedNotesState.Loading)
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
             _uiState.value = _uiState.value.copy(wikilinkTitles = wikilinkTitles)
             when (val result = relatedNotesUseCase.findRelated(title, content, cachedNotes, wikilinkTitles)) {
