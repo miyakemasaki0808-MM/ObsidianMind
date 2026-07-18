@@ -28,6 +28,7 @@ import com.example.newproject.ui.theme.Panel
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
 enum class AppDestination(val route: String, val label: String, val emoji: String) {
     Note("note", "ノート", "📄"),
+    Search("search", "さがす", "🔎"),
     Related("related", "関連", "🔗"),
     Ai("ai", "AI", "✨"),
     Options("options", "オプション", "⚙️")

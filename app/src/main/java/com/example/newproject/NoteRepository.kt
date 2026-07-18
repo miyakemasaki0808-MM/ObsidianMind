@@ -8,6 +8,9 @@ import kotlinx.coroutines.withContext
 
 data class NoteFile(val name: String, val uri: Uri)
 
+// Vault 直下のフォルダ。documentId は配下をたどる起点に使う。
+data class NoteFolder(val name: String, val documentId: String)
+
 data class NoteMeta(
     val tags: List<String> = emptyList(),
     val aliases: List<String> = emptyList(),
@@ -59,6 +62,85 @@ class NoteRepository {
 
             result
         }
+
+    // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
+    suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
+        withContext(Dispatchers.IO) {
+            val rootId = DocumentsContract.getTreeDocumentId(vaultUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, rootId)
+            val projection = arrayOf(
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+                DocumentsContract.Document.COLUMN_MIME_TYPE
+            )
+
+            val result = mutableListOf<NoteFolder>()
+            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val childId = cursor.getString(0)
+                    val name = cursor.getString(1)
+                    val mimeType = cursor.getString(2)
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        result.add(NoteFolder(name, childId))
+                    }
+                }
+            }
+            result.sortedBy { it.name }
+        }
+
+    // 検索スコープ配下のノートを収集する。
+    //   scope=null      → Vault ルート直下の .md のみ（非再帰）
+    //   scope=NoteFolder → そのフォルダ配下を再帰的に収集（サブフォルダのノートも含む）
+    suspend fun collectNotesInScope(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        scope: NoteFolder?
+    ): List<NoteFile> = withContext(Dispatchers.IO) {
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        val result = mutableListOf<NoteFile>()
+
+        if (scope == null) {
+            // ルート直下のみ（サブフォルダには潜らない）
+            val rootId = DocumentsContract.getTreeDocumentId(vaultUri)
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, rootId)
+            contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val childId = cursor.getString(0)
+                    val name = cursor.getString(1)
+                    val mimeType = cursor.getString(2)
+                    if (mimeType != DocumentsContract.Document.MIME_TYPE_DIR && isMarkdownFile(name)) {
+                        result.add(NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)))
+                    }
+                }
+            }
+        } else {
+            // フォルダ配下を再帰BFS（collectNotes と同じ走査）
+            val queue = ArrayDeque<String>()
+            queue.add(scope.documentId)
+            while (queue.isNotEmpty()) {
+                val documentId = queue.removeFirst()
+                val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
+                contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+                    while (cursor.moveToNext()) {
+                        val childId = cursor.getString(0)
+                        val name = cursor.getString(1)
+                        val mimeType = cursor.getString(2)
+                        when {
+                            mimeType == DocumentsContract.Document.MIME_TYPE_DIR -> queue.add(childId)
+                            isMarkdownFile(name) ->
+                                result.add(NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, childId)))
+                        }
+                    }
+                }
+            }
+        }
+
+        result
+    }
 
     suspend fun readNoteContent(contentResolver: ContentResolver, uri: Uri): String =
         withContext(Dispatchers.IO) {

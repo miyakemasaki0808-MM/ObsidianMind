@@ -14,6 +14,8 @@ import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
+import com.example.newproject.domain.PickerResult
+import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.ui.markdown.NoteSection
@@ -53,6 +55,17 @@ sealed class RelatedNotesState {
         val aiErrorMessage: String? = null
     ) : RelatedNotesState()
     data class Error(val message: String) : RelatedNotesState()
+}
+
+// AIピッカー（さがすタブ）の検索状態。キーワード/ランダム両モードで共有する。
+sealed class SearchState {
+    object Idle : SearchState()
+    object Loading : SearchState()
+    data class Success(
+        val results: List<RelatedNote>,
+        val aiStatus: AiRecommendationStatus = AiRecommendationStatus.Ready
+    ) : SearchState()
+    data class Error(val message: String) : SearchState()
 }
 
 data class QuizCard(
@@ -112,7 +125,11 @@ data class NoteUiState(
     val wikilinkTitles: Set<String> = emptySet(),
     val annotationState: AnnotationState = AnnotationState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
-    val sectionChat: SectionChatState? = null
+    val sectionChat: SectionChatState? = null,
+    // さがすタブ
+    val folders: List<NoteFolder> = emptyList(),
+    val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
+    val searchState: SearchState = SearchState.Idle
 )
 
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
@@ -122,6 +139,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private val aiClient: AiClient = AICoreClient()
     private val summarizeUseCase = SummarizeUseCase(aiClient)
     private val relatedNotesUseCase = RelatedNotesUseCase(aiClient)
+    private val searchPickerUseCase = SearchPickerUseCase(aiClient)
 
     private val _uiState = MutableStateFlow(NoteUiState())
     val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
@@ -207,6 +225,73 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    // ── さがすタブ（AIピッカー）─────────────────────────────────────────────
+
+    // タブ表示時にフォルダchips用の第一階層フォルダを列挙する。
+    fun loadFolders(contentResolver: ContentResolver) {
+        val uri = vaultUri ?: return
+        viewModelScope.launch {
+            try {
+                val folders = repository.listTopLevelFolders(contentResolver, uri)
+                _uiState.value = _uiState.value.copy(folders = folders)
+            } catch (_: Exception) {
+                // フォルダ列挙の失敗は致命的でない（ルート直下スコープは使える）
+            }
+        }
+    }
+
+    fun selectSearchFolder(folder: NoteFolder?) {
+        _uiState.value = _uiState.value.copy(selectedFolder = folder)
+    }
+
+    // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
+    fun searchByKeyword(contentResolver: ContentResolver, query: String) {
+        val uri = vaultUri ?: return
+        val q = query.trim()
+        if (q.isBlank()) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
+            try {
+                val scope = _uiState.value.selectedFolder
+                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                when (val result = searchPickerUseCase.pick(q, notes)) {
+                    is PickerResult.Success -> _uiState.value = _uiState.value.copy(
+                        searchState = SearchState.Success(result.notes, result.aiStatus)
+                    )
+                    is PickerResult.Error -> _uiState.value = _uiState.value.copy(
+                        searchState = SearchState.Error(result.message)
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    searchState = SearchState.Error(e.message ?: "Unknown error")
+                )
+            }
+        }
+    }
+
+    // ランダムモード: スコープ内からシャッフルして3件（AI不使用）。
+    fun pickRandomInScope(contentResolver: ContentResolver) {
+        val uri = vaultUri ?: return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
+            try {
+                val scope = _uiState.value.selectedFolder
+                val notes = repository.collectNotesInScope(contentResolver, uri, scope)
+                val picked = notes.shuffled().take(3).map {
+                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false)
+                }
+                _uiState.value = _uiState.value.copy(
+                    searchState = SearchState.Success(picked)
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    searchState = SearchState.Error(e.message ?: "Unknown error")
                 )
             }
         }

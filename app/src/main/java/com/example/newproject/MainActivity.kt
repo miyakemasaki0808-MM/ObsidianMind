@@ -12,6 +12,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.viewModels
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -28,6 +29,7 @@ import com.example.newproject.ui.NoteReaderTab
 import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RelatedTab
+import com.example.newproject.ui.SearchTab
 
 class MainActivity : ComponentActivity() {
 
@@ -97,6 +99,26 @@ class MainActivity : ComponentActivity() {
                             onOpenSection = { section -> viewModel.openSection(section) },
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                             onCloseSectionChat = { viewModel.closeSectionChat() }
+                        )
+                    }
+
+                    composable("search") {
+                        LaunchedEffect(uiState.vaultSelected) {
+                            if (uiState.vaultSelected) viewModel.loadFolders(contentResolver)
+                        }
+                        SearchTab(
+                            uiState = uiState,
+                            onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
+                            onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
+                            onRandom = { viewModel.pickRandomInScope(contentResolver) },
+                            onOpenNote = { note ->
+                                viewModel.openNote(contentResolver, note)
+                                navController.navigate("note") {
+                                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
                         )
                     }
 
