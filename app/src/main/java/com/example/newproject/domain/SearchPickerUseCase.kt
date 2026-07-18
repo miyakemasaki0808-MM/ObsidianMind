@@ -88,14 +88,6 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
     private fun NoteFile.toRelatedNote(): RelatedNote =
         RelatedNote(title = name, uri = uri, isWikilinked = false)
 
-    private fun String.cleanAiTitle(): String =
-        trim()
-            .removePrefix("-")
-            .removeSuffix("[linked]")
-            .replace(Regex("^\\d+[.)]\\s*"), "")
-            .trim('"')
-            .trim()
-
     companion object {
         private const val CANDIDATE_LIMIT = 40
         private const val PICK_LIMIT = 3

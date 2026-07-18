@@ -166,14 +166,6 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
         return (sameGroup + sameCategory + noPrefix).take(PREFIX_CANDIDATE_LIMIT)
     }
 
-    private fun String.cleanAiTitle(): String =
-        trim()
-            .removePrefix("-")
-            .removeSuffix("[linked]")
-            .replace(Regex("^\\d+[.)]\\s*"), "")
-            .trim('"')
-            .trim()
-
     private fun String.isSameTitleAs(other: String): Boolean =
         toNormalizedObsidianTitle() == other.toNormalizedObsidianTitle()
 
