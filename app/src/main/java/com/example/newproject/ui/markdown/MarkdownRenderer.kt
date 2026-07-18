@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -108,11 +109,17 @@ internal fun MarkdownHorizontalRule() {
 
 @Composable
 internal fun MarkdownBlockquote(lines: List<String>) {
-    Row(modifier = Modifier.padding(vertical = 4.dp)) {
+    // バーの高さはテキスト側に追従させる。以前は行数×固定値で計算しており、
+    // 長い行が画面幅で折り返すとバーがテキストより短くなっていた。
+    Row(
+        modifier = Modifier
+            .padding(vertical = 4.dp)
+            .height(IntrinsicSize.Min)
+    ) {
         Box(
             modifier = Modifier
                 .width(4.dp)
-                .height(with(LocalDensity.current) { (lines.size * 24).dp })
+                .fillMaxHeight()
                 .background(Color(0xFFAAAAAA), RoundedCornerShape(2.dp))
         )
         Column(modifier = Modifier.padding(start = 12.dp)) {
