@@ -13,8 +13,14 @@ internal val OnSurface = Color(0xFF202124)
 internal val Panel = Color(0xFFFDFEFF)
 internal val CodePanel = Color(0xFFF1F4F8)
 internal val LinkBlue = Color(0xFF2563EB)
+// ボタン配色の3役ルール（これ以外の色をボタンに使わない）:
+//   ButtonPrimary（ピンク）＝画面の主アクション
+//   ButtonSecondary（緑）＝補助・代替アクション
+//   ButtonAi（Indigo）＝AI生成系アクション
+//   ※ナビ（戻る等）はOutlinedButtonで控えめに
 internal val ButtonPrimary = Color(0xFFFF3D71)
 internal val ButtonSecondary = Color(0xFF16B8A6)
+internal val ButtonAi = Indigo
 internal val PanelTinted = Color(0xFFF7F3FF)
 internal val ErrorRed = Color(0xFFCC0000)
 internal val PanelBlue = Color(0xFFF0F4FF)      // AI要約・関連ノート等の薄青パネル

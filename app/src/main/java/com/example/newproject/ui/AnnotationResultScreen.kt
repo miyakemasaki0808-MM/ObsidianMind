@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,9 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -68,10 +68,11 @@ fun AnnotationResultScreen(
             )
         }
 
-        Button(
+        // ナビ操作のため塗りボタンにしない（3役ルール: AI色IndigoはAI生成系ボタン専用）
+        OutlinedButton(
             onClick = onBack,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+            border = BorderStroke(1.dp, OnVibrant.copy(alpha = 0.6f)),
             shape = RoundedCornerShape(8.dp)
         ) {
             Text("戻る", color = OnVibrant)

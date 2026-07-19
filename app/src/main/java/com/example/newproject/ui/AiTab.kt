@@ -33,7 +33,7 @@ import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
 import com.example.newproject.SummaryState
 import com.example.newproject.ui.theme.AppGradient
-import com.example.newproject.ui.theme.Coral
+import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
@@ -93,7 +93,7 @@ fun AiTab(
         Button(
             onClick = onGenerateQuiz,
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Coral),
+            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
             shape = RoundedCornerShape(24.dp)
         ) { Text("📝 Q&Aを作る", color = OnVibrant) }
 
@@ -102,7 +102,7 @@ fun AiTab(
             onClick = onCreateAnnotation,
             enabled = !isAnnotationLoading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
             shape = RoundedCornerShape(24.dp)
         ) { Text("✨ AI補記メモ", color = OnVibrant) }
 
