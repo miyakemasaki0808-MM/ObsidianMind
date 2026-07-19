@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,8 +83,10 @@ fun NoteReaderTab(
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onOpenSection: (NoteSection) -> Unit,
+    onShowSectionChat: () -> Unit,
     onSuggestionTap: (String) -> Unit,
-    onCloseSectionChat: () -> Unit
+    onDismissSectionChat: () -> Unit,
+    onEndSectionChat: () -> Unit
 ) {
     val context = LocalContext.current
     var isFullscreen by remember { mutableStateOf(false) }
@@ -112,6 +116,23 @@ fun NoteReaderTab(
         if (successState != null) {
             noteAppear.snapTo(0f)
             noteAppear.animateTo(1f, animationSpec = tween(300))
+        }
+    }
+
+    val activeChat = uiState.sectionChat
+    val fabStatus = when {
+        activeChat == null -> SectionFabStatus.Idle
+        activeChat.error != null -> SectionFabStatus.Error
+        activeChat.isSummaryLoading || activeChat.isGenerating -> SectionFabStatus.Loading
+        activeChat.summary != null -> SectionFabStatus.Ready
+        else -> SectionFabStatus.Loading
+    }
+    val fabSectionLabel = activeChat?.sectionTitle ?: currentSection?.title ?: "ノート全体"
+    val onFabTap = {
+        if (activeChat != null) {
+            onShowSectionChat()
+        } else if (successState != null) {
+            onOpenSection(currentSection ?: NoteSection(successState.title, 0, successState.content))
         }
     }
 
@@ -190,12 +211,11 @@ fun NoteReaderTab(
 
         // 浮遊吹き出し（今見ているセクションを対象に。タップで要約＋質問シート）
         if (successState != null && !isFullscreen) {
-            val note = successState
             SectionFab(
-                sectionLabel = currentSection?.title ?: "ノート全体",
-                onTap = {
-                    onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
-                }
+                sectionLabel = fabSectionLabel,
+                status = fabStatus,
+                isAnswerGenerating = activeChat?.isGenerating == true,
+                onTap = onFabTap
             )
         }
 
@@ -222,24 +242,38 @@ fun NoteReaderTab(
                     contentDescription = "全画面表示を閉じる",
                     modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                 ) { isFullscreen = false }
+                // 全画面で読み続けている間も、進行中・完了したAI要約へ戻れるようにする。
+                if (activeChat != null) {
+                    SectionFab(
+                        sectionLabel = fabSectionLabel,
+                        status = fabStatus,
+                        isAnswerGenerating = activeChat.isGenerating,
+                        onTap = onShowSectionChat
+                    )
+                }
             }
         }
     }
 
     // セクションチャットのボトムシート
-    uiState.sectionChat?.let { chat ->
+    if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
         SectionChatSheet(
             state = chat,
             onSuggestionTap = onSuggestionTap,
-            onDismiss = onCloseSectionChat
+            onDismiss = onDismissSectionChat,
+            onEndSession = onEndSectionChat
         )
     }
 }
+
+private enum class SectionFabStatus { Idle, Loading, Ready, Error }
 
 /** 画面に浮かぶ半透明・立体的な吹き出しボタン。ドラッグで移動、タップで要約＋質問シート。 */
 @Composable
 private fun BoxScope.SectionFab(
     sectionLabel: String,
+    status: SectionFabStatus,
+    isAnswerGenerating: Boolean,
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -257,13 +291,25 @@ private fun BoxScope.SectionFab(
                 modifier = Modifier
                     .clip(RoundedCornerShape(999.dp))
                     .background(Indigo.copy(alpha = 0.55f))
+                    .widthIn(max = 260.dp)
                     .padding(horizontal = 11.dp, vertical = 5.dp)
             ) {
                 Text(
-                    text = "📌 $sectionLabel",
+                    text = when (status) {
+                        SectionFabStatus.Idle -> "📌 $sectionLabel"
+                        SectionFabStatus.Loading -> if (isAnswerGenerating) {
+                            "⏳ AI回答中 · $sectionLabel"
+                        } else {
+                            "⏳ AI要約中 · $sectionLabel"
+                        }
+                        SectionFabStatus.Ready -> "✓ 要約完了 · $sectionLabel"
+                        SectionFabStatus.Error -> "! 要約を確認 · $sectionLabel"
+                    },
                     color = OnVibrant,
                     fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -302,7 +348,26 @@ private fun BoxScope.SectionFab(
                         .clip(RoundedCornerShape(999.dp))
                         .background(Aqua.copy(alpha = 0.40f))
                 )
-                Text("💬", fontSize = 26.sp)
+                when (status) {
+                    SectionFabStatus.Loading -> CircularProgressIndicator(
+                        modifier = Modifier.size(25.dp),
+                        color = OnVibrant,
+                        strokeWidth = 2.5.dp
+                    )
+                    SectionFabStatus.Ready -> Text(
+                        "✓",
+                        color = OnVibrant,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    SectionFabStatus.Error -> Text(
+                        "!",
+                        color = OnVibrant,
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    SectionFabStatus.Idle -> Text("💬", fontSize = 26.sp)
+                }
             }
         }
     }

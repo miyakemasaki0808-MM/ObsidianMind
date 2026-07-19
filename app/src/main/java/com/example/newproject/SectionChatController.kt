@@ -25,13 +25,20 @@ class SectionChatController(
 
     // 吹き出しタップで開く。要約と候補質問をまとめて用意する。
     fun open(section: NoteSection) {
+        // 生成中・完了済みのセッションがあれば、その結果を再表示する。
+        // スクロール先の別セクションで重複生成しないよう、対象は開始時のものに固定する。
+        if (uiState.value.sectionChat != null) {
+            showSheet()
+            return
+        }
         cancelJobs()
         uiState.value = uiState.value.copy(
             sectionChat = SectionChatState(
                 sectionTitle = section.title,
                 sectionContext = section.text,
                 isSummaryLoading = true
-            )
+            ),
+            isSectionChatSheetVisible = true
         )
         openJob = scope.launch {
             when (aiClient.checkAvailability()) {
@@ -107,16 +114,35 @@ class SectionChatController(
         }
     }
 
-    fun close() {
-        // シートを閉じたら実行中の生成を止める（Nanoの無駄な稼働を防ぐ）
-        cancelJobs()
-        uiState.value = uiState.value.copy(sectionChat = null)
+    /** 生成中・完了済みのセッションをシートに再表示する。 */
+    fun showSheet() {
+        if (uiState.value.sectionChat == null) return
+        uiState.value = uiState.value.copy(isSectionChatSheetVisible = true)
     }
 
-    // ノート/Vault切替時に NoteViewModel の cancelNoteScopedJobs() から呼ばれる契約。
-    fun cancelJobs() {
+    /**
+     * スワイプ・背景タップ・戻る操作では表示だけ閉じる。
+     * AI生成と結果は同じノート内に保持し、読書を妨げない。
+     */
+    fun dismissSheet() {
+        uiState.value = uiState.value.copy(isSectionChatSheetVisible = false)
+    }
+
+    /** 明示キャンセル・確認終了・ノート/Vault切替時にセッション全体を破棄する。 */
+    fun cancelAndClear() {
+        cancelJobs()
+        uiState.value = uiState.value.copy(
+            sectionChat = null,
+            isSectionChatSheetVisible = false
+        )
+    }
+
+    // 新規セッション開始・明示終了時に実行中の生成を止める内部処理。
+    private fun cancelJobs() {
         openJob?.cancel()
         answerJob?.cancel()
+        openJob = null
+        answerJob = null
     }
 
     private suspend fun fetchSuggestions(section: NoteSection) {

@@ -91,7 +91,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         relatedNotesState = RelatedNotesState.Idle,
         quizState = QuizState.Idle,
         annotationState = AnnotationState.Idle,
-        sectionChat = null
+        sectionChat = null,
+        isSectionChatSheetVisible = false
     )
 
     // ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
@@ -101,7 +102,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         noteLoadJob?.cancel()
         summaryJob?.cancel()
         relatedNotesJob?.cancel()
-        sectionChat.cancelJobs()
+        sectionChat.cancelAndClear()
     }
 
     // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
@@ -209,8 +210,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 
     fun openSection(section: NoteSection) = sectionChat.open(section)
+    fun showSectionChat() = sectionChat.showSheet()
     fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
-    fun closeSectionChat() = sectionChat.close()
+    fun dismissSectionChatSheet() = sectionChat.dismissSheet()
+    fun endSectionChat() = sectionChat.cancelAndClear()
 
     fun createAnnotation(
         contentResolver: ContentResolver,

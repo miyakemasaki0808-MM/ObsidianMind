@@ -99,8 +99,10 @@ class MainActivity : ComponentActivity() {
                                 else openVault.launch(null)
                             },
                             onOpenSection = { section -> viewModel.openSection(section) },
+                            onShowSectionChat = { viewModel.showSectionChat() },
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
-                            onCloseSectionChat = { viewModel.closeSectionChat() }
+                            onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
+                            onEndSectionChat = { viewModel.endSectionChat() }
                         )
                     }
 

@@ -107,6 +107,9 @@ data class NoteUiState(
     val annotationState: AnnotationState = AnnotationState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
     val sectionChat: SectionChatState? = null,
+    // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
+    // AI生成と結果を保持し、吹き出しから再表示できる。
+    val isSectionChatSheetVisible: Boolean = false,
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
