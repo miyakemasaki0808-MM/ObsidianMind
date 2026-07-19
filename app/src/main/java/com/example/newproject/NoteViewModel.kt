@@ -41,6 +41,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(NoteUiState())
     val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
 
+    // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
+    private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
+
     // DL完了後に要約を再実行するために保持
     private var pendingTitle: String = ""
     private var pendingContent: String = ""
@@ -56,11 +59,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
+    // （セクションチャットのジョブは SectionChatController が保持）
     private var noteLoadJob: Job? = null
     private var summaryJob: Job? = null
     private var relatedNotesJob: Job? = null
-    private var sectionOpenJob: Job? = null
-    private var sectionAnswerJob: Job? = null
 
     var vaultUri: Uri? = null
         private set
@@ -107,8 +109,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         noteLoadJob?.cancel()
         summaryJob?.cancel()
         relatedNotesJob?.cancel()
-        sectionOpenJob?.cancel()
-        sectionAnswerJob?.cancel()
+        sectionChat.cancelJobs()
     }
 
     // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
@@ -337,124 +338,11 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ── セクション単位のAIチャット ─────────────────────────────────────────────
+    // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 
-    // 吹き出しタップで開く。要約と候補質問をまとめて用意する。
-    fun openSection(section: NoteSection) {
-        // 前のセクションの生成が後から届いて新しいシートを上書きしないようにする
-        sectionOpenJob?.cancel()
-        sectionAnswerJob?.cancel()
-        _uiState.value = _uiState.value.copy(
-            sectionChat = SectionChatState(
-                sectionTitle = section.title,
-                sectionContext = section.text,
-                isSummaryLoading = true
-            )
-        )
-        sectionOpenJob = viewModelScope.launch {
-            when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
-                AiAvailability.NeedsDownload ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
-                AiAvailability.Available -> {
-                    try {
-                        val summary = aiClient
-                            .generate(PromptBuilder.buildSectionSummaryPrompt(section.title, section.text))
-                            .trim()
-                        updateChat {
-                            it.copy(
-                                summary = summary.ifBlank { "（要約を生成できませんでした）" },
-                                isSummaryLoading = false
-                            )
-                        }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
-                    }
-                    fetchSectionSuggestions(section)
-                }
-            }
-        }
-    }
-
-    fun sendSectionMessage(text: String) {
-        val chat = _uiState.value.sectionChat ?: return
-        val question = text.trim()
-        if (question.isBlank() || chat.isGenerating) return
-
-        val history = chat.messages.map {
-            (if (it.role == ChatRole.User) "User" else "AI") to it.text
-        }
-        updateChat {
-            it.copy(
-                messages = it.messages + ChatMessage(ChatRole.User, question),
-                isGenerating = true,
-                error = null
-            )
-        }
-        sectionAnswerJob = viewModelScope.launch {
-            if (aiClient.checkAvailability() != AiAvailability.Available) {
-                updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
-                return@launch
-            }
-            try {
-                val answer = aiClient.generate(
-                    PromptBuilder.buildSectionChatPrompt(
-                        sectionTitle = chat.sectionTitle,
-                        sectionText = chat.sectionContext,
-                        history = history,
-                        question = question
-                    )
-                ).trim()
-                updateChat {
-                    it.copy(
-                        messages = it.messages + ChatMessage(
-                            ChatRole.Ai,
-                            answer.ifBlank { "（回答を生成できませんでした）" }
-                        ),
-                        isGenerating = false
-                    )
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
-            }
-        }
-    }
-
-    fun closeSectionChat() {
-        // シートを閉じたら実行中の生成を止める（Nanoの無駄な稼働を防ぐ）
-        sectionOpenJob?.cancel()
-        sectionAnswerJob?.cancel()
-        _uiState.value = _uiState.value.copy(sectionChat = null)
-    }
-
-    private suspend fun fetchSectionSuggestions(section: NoteSection) {
-        try {
-            val raw = aiClient.generate(
-                PromptBuilder.buildSectionSuggestionsPrompt(section.title, section.text)
-            )
-            val questions = raw.lineSequence()
-                .map { it.trim().removePrefix("-").trim().trim('"').trim() }
-                .filter { it.isNotBlank() }
-                .take(3)
-                .toList()
-            updateChat { it.copy(suggestions = questions) }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // サジェストは失敗しても本体機能に影響させない
-        }
-    }
-
-    // sectionChat が開いている場合のみ安全に更新する
-    private fun updateChat(block: (SectionChatState) -> SectionChatState) {
-        val current = _uiState.value.sectionChat ?: return
-        _uiState.value = _uiState.value.copy(sectionChat = block(current))
-    }
+    fun openSection(section: NoteSection) = sectionChat.open(section)
+    fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
+    fun closeSectionChat() = sectionChat.close()
 
     fun createAnnotation(
         contentResolver: ContentResolver,
