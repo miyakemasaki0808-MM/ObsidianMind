@@ -6,7 +6,8 @@ import android.provider.DocumentsContract
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-data class NoteFile(val name: String, val uri: Uri)
+// lastModified はエポックミリ秒。SAFプロバイダが値を返さない場合は null。
+data class NoteFile(val name: String, val uri: Uri, val lastModified: Long? = null)
 
 // Vault 直下のフォルダ。documentId は配下をたどる起点に使う。
 data class NoteFolder(val name: String, val documentId: String)
@@ -31,7 +32,12 @@ internal fun sanitizeAnnotationFileTitle(title: String): String {
 class NoteRepository {
 
     // SAFの子要素1件。カーソル列の詰め替え先として共通ヘルパが返す。
-    private data class ChildDoc(val documentId: String, val name: String, val isDirectory: Boolean)
+    private data class ChildDoc(
+        val documentId: String,
+        val name: String,
+        val isDirectory: Boolean,
+        val lastModified: Long?
+    )
 
     // 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）
     private fun queryChildren(
@@ -43,7 +49,8 @@ class NoteRepository {
         val projection = arrayOf(
             DocumentsContract.Document.COLUMN_DOCUMENT_ID,
             DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED
         )
         val result = mutableListOf<ChildDoc>()
         contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
@@ -52,7 +59,8 @@ class NoteRepository {
                     ChildDoc(
                         documentId = cursor.getString(0),
                         name = cursor.getString(1),
-                        isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR
+                        isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
+                        lastModified = if (cursor.isNull(3)) null else cursor.getLong(3)
                     )
                 )
             }
@@ -86,7 +94,7 @@ class NoteRepository {
     }
 
     private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
-        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId))
+        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId), lastModified)
 
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
     // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。

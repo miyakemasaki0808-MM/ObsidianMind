@@ -40,6 +40,9 @@ import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.PanelBlue
 import com.example.newproject.ui.theme.PanelDivider
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 // ---------------------------------------------------------------------------
 // タブ2: 関連ノート
@@ -210,13 +213,22 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = note.title,
-            fontSize = 14.sp,
-            lineHeight = 18.sp,
-            color = OnSurface,
-            modifier = Modifier.weight(1f)
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = note.title,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+                color = OnSurface
+            )
+            note.lastModified?.let { millis ->
+                Text(
+                    text = "更新 ${formatNoteDate(millis)}",
+                    fontSize = 11.sp,
+                    color = Color(0xFF8A90A8),
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+        }
         if (note.isWikilinked) {
             Surface(
                 color = Indigo,
@@ -232,3 +244,9 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
         }
     }
 }
+
+// UIスレッドからのみ呼ぶ前提（SimpleDateFormatはスレッドセーフでないため）
+private val noteDateFormat = SimpleDateFormat("yyyy/MM/dd", Locale.JAPAN)
+
+private fun formatNoteDate(epochMillis: Long): String =
+    noteDateFormat.format(Date(epochMillis))
