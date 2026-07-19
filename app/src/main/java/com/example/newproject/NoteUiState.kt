@@ -143,5 +143,7 @@ data class NoteUiState(
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
-    val searchState: SearchState = SearchState.Idle
+    val searchState: SearchState = SearchState.Idle,
+    // 当日分のみの閲覧履歴（NoteHistoryStore が日付判定を担当）
+    val todayHistory: List<HistoryEntry> = emptyList()
 )

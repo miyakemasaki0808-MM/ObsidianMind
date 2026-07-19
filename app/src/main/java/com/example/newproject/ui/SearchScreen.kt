@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.HistoryEntry
 import com.example.newproject.NoteFolder
 import com.example.newproject.NoteUiState
 import com.example.newproject.SearchState
@@ -71,6 +73,8 @@ fun SearchTab(
             .fillMaxSize()
             .background(AppGradient)
             .safeDrawingPadding()
+            // 検索結果＋当日履歴で縦に伸びるため、タブ全体をスクロール可能にする
+            .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
         Text("さがす", color = OnVibrant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
@@ -144,6 +148,41 @@ fun SearchTab(
 
         Spacer(modifier = Modifier.height(16.dp))
         SearchResultPanel(state = uiState.searchState, onNoteClick = onOpenNote)
+
+        if (uiState.todayHistory.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            TodayHistoryPanel(entries = uiState.todayHistory, onNoteClick = onOpenNote)
+        }
+    }
+}
+
+/** 当日分の閲覧履歴。タップで検索結果と同じ導線でノートを開き直す。 */
+@Composable
+private fun TodayHistoryPanel(
+    entries: List<HistoryEntry>,
+    onNoteClick: (RelatedNote) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = PanelBlue,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                "🕐 今日読んだノート",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = OnSurface
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            entries.forEachIndexed { index, entry ->
+                val note = RelatedNote(title = entry.title, uri = entry.uri, isWikilinked = false)
+                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                if (index < entries.lastIndex) {
+                    HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
+                }
+            }
+        }
     }
 }
 
