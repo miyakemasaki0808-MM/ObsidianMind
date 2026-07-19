@@ -58,9 +58,17 @@ data class QuizCard(
 
 sealed class QuizState {
     object Idle : QuizState()
-    object Loading : QuizState()
-    data class Success(val cards: List<QuizCard>) : QuizState()
-    data class Error(val message: String) : QuizState()
+    data class Loading(val sourceTitle: String) : QuizState()
+    data class Success(
+        val sourceTitle: String,
+        val cards: List<QuizCard>,
+        val isViewed: Boolean = false
+    ) : QuizState()
+    data class Error(
+        val message: String,
+        val sourceTitle: String,
+        val isViewed: Boolean = false
+    ) : QuizState()
 }
 
 sealed class AnnotationState {

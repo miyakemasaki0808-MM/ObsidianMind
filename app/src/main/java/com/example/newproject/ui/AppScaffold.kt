@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.newproject.AnnotationState
+import com.example.newproject.QuizState
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorRed
@@ -63,6 +64,7 @@ private val NavBarColor = Indigo
 fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
+    quizState: QuizState,
     annotationState: AnnotationState,
     snackbarHostState: SnackbarHostState,
     content: @Composable (Modifier) -> Unit
@@ -85,7 +87,7 @@ fun AppScaffold(
                             NavigationRailItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, annotationState) },
+                                icon = { TabIcon(dest, quizState, annotationState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -108,7 +110,7 @@ fun AppScaffold(
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, annotationState) },
+                                icon = { TabIcon(dest, quizState, annotationState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -133,30 +135,58 @@ fun AppScaffold(
     }
 }
 
-/** AIタブの意味は常に✨のまま保ち、右上の小さなバッジだけで補記状態を知らせる。 */
+internal enum class AiTabBadgeState { None, Loading, Success, Error }
+
+/** 1つの✨で複数AI機能を表すため、未確認の重要度順に1状態だけを返す。 */
+internal fun resolveAiTabBadgeState(
+    quizState: QuizState,
+    annotationState: AnnotationState
+): AiTabBadgeState {
+    val hasUnreadError =
+        (quizState is QuizState.Error && !quizState.isViewed) ||
+            (annotationState is AnnotationState.Error && !annotationState.isViewed)
+    val hasUnreadSuccess =
+        (quizState is QuizState.Success && !quizState.isViewed) ||
+            (annotationState is AnnotationState.Success && !annotationState.isViewed)
+    val hasLoading =
+        quizState is QuizState.Loading || annotationState is AnnotationState.Loading
+
+    return when {
+        hasUnreadError -> AiTabBadgeState.Error
+        hasUnreadSuccess -> AiTabBadgeState.Success
+        hasLoading -> AiTabBadgeState.Loading
+        else -> AiTabBadgeState.None
+    }
+}
+
+/** AIタブの意味は常に✨のまま保ち、右上の小さなバッジだけでAI全体の状態を知らせる。 */
 @Composable
-private fun TabIcon(dest: AppDestination, annotationState: AnnotationState) {
+private fun TabIcon(
+    dest: AppDestination,
+    quizState: QuizState,
+    annotationState: AnnotationState
+) {
     if (dest != AppDestination.Ai) {
         Text(dest.emoji, fontSize = 20.sp)
         return
     }
 
-    val showSuccess = annotationState is AnnotationState.Success && !annotationState.isViewed
-    val showError = annotationState is AnnotationState.Error && !annotationState.isViewed
+    val badgeState = resolveAiTabBadgeState(quizState, annotationState)
     BadgedBox(
         badge = {
-            when {
-                annotationState is AnnotationState.Loading -> CircularProgressIndicator(
+            when (badgeState) {
+                AiTabBadgeState.Loading -> CircularProgressIndicator(
                     modifier = Modifier.size(10.dp),
                     color = Aqua,
                     strokeWidth = 1.5.dp
                 )
-                showSuccess -> Badge(containerColor = ButtonSecondary) {
+                AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
                     Text("✓", color = OnVibrant, fontSize = 9.sp)
                 }
-                showError -> Badge(containerColor = ErrorRed) {
+                AiTabBadgeState.Error -> Badge(containerColor = ErrorRed) {
                     Text("!", color = OnVibrant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
+                AiTabBadgeState.None -> Unit
             }
         }
     ) {
