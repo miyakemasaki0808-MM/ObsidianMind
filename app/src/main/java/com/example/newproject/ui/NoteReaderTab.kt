@@ -2,6 +2,8 @@ package com.example.newproject.ui
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -44,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -100,6 +103,16 @@ fun NoteReaderTab(
     }
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
+    }
+
+    // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
+    // AnimatedContent だと新旧リストが1つの listState を共有してしまうため graphicsLayer で行う。
+    val noteAppear = remember { Animatable(1f) }
+    LaunchedEffect(successState) {
+        if (successState != null) {
+            noteAppear.snapTo(0f)
+            noteAppear.animateTo(1f, animationSpec = tween(300))
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -163,7 +176,13 @@ fun NoteReaderTab(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 20.dp),
+                    .padding(top = if (isLoading) 8.dp else 20.dp)
+                    .graphicsLayer {
+                        alpha = noteAppear.value
+                        val scale = 0.95f + 0.05f * noteAppear.value
+                        scaleX = scale
+                        scaleY = scale
+                    },
                 listState = if (hasNote) listState else null,
                 precomputedBlocks = sectionModel?.blocks
             )
