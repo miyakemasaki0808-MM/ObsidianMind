@@ -184,8 +184,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
     fun generateQuiz(title: String, content: String) = quiz.create(title, content)
-
-    fun clearQuiz() = quiz.cancelAndClear()
     fun markQuizViewed() = quiz.markViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
