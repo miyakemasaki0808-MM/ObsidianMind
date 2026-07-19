@@ -13,7 +13,6 @@ import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
-import com.example.newproject.domain.PickerResult
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
@@ -42,18 +41,13 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
     private val annotation = AnnotationController(viewModelScope, repository, aiClient, _uiState) { vaultUri }
+    private val search = SearchController(viewModelScope, repository, searchPickerUseCase, _uiState) { vaultUri }
 
     // DL完了後に要約を再実行するために保持
     private var pendingTitle: String = ""
     private var pendingContent: String = ""
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
-
-    // スコープ（フォルダ）単位の走査結果キャッシュ。SAFの再帰走査は1フォルダごとに
-    // IPCが発生して重いため、短時間の連続操作（検索→ランダム→検索）で再走査しない。
-    // キーは selectedFolder の documentId（null はルート直下スコープ）。
-    private data class ScopeCacheEntry(val notes: List<NoteFile>, val loadedAt: Long)
-    private val scopeNotesCache = mutableMapOf<String?, ScopeCacheEntry>()
 
     // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
@@ -78,7 +72,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
         cachedNotesLoadedAt = 0L
-        scopeNotesCache.clear()
+        search.onVaultChanged()
         cancelNoteScopedJobs()
         // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
         // （selectedFolder は旧Vaultの documentId を保持しているため必須）
@@ -123,22 +117,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         val notes = repository.collectNotes(contentResolver, vaultUri)
         cachedNotes = notes
         cachedNotesLoadedAt = now
-        return notes
-    }
-
-    // さがすタブのスコープ走査をTTL付きで取得する。
-    private suspend fun collectNotesInScopeCached(
-        contentResolver: ContentResolver,
-        vaultUri: Uri,
-        scope: NoteFolder?
-    ): List<NoteFile> {
-        val key = scope?.documentId
-        val now = System.currentTimeMillis()
-        scopeNotesCache[key]?.let { entry ->
-            if (now - entry.loadedAt < NOTES_CACHE_TTL_MS) return entry.notes
-        }
-        val notes = repository.collectNotesInScope(contentResolver, vaultUri, scope)
-        scopeNotesCache[key] = ScopeCacheEntry(notes, now)
         return notes
     }
 
@@ -195,72 +173,12 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // ── さがすタブ（AIピッカー）─────────────────────────────────────────────
+    // ── さがすタブ（実装は SearchController）──────────────────────────────────
 
-    // タブ表示時にフォルダchips用の第一階層フォルダを列挙する。
-    fun loadFolders(contentResolver: ContentResolver) {
-        val uri = vaultUri ?: return
-        viewModelScope.launch {
-            try {
-                val folders = repository.listTopLevelFolders(contentResolver, uri)
-                _uiState.value = _uiState.value.copy(folders = folders)
-            } catch (_: Exception) {
-                // フォルダ列挙の失敗は致命的でない（ルート直下スコープは使える）
-            }
-        }
-    }
-
-    fun selectSearchFolder(folder: NoteFolder?) {
-        _uiState.value = _uiState.value.copy(selectedFolder = folder)
-    }
-
-    // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
-    fun searchByKeyword(contentResolver: ContentResolver, query: String) {
-        val uri = vaultUri ?: return
-        val q = query.trim()
-        if (q.isBlank()) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
-            try {
-                val scope = _uiState.value.selectedFolder
-                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
-                when (val result = searchPickerUseCase.pick(q, notes)) {
-                    is PickerResult.Success -> _uiState.value = _uiState.value.copy(
-                        searchState = SearchState.Success(result.notes, result.aiStatus)
-                    )
-                    is PickerResult.Error -> _uiState.value = _uiState.value.copy(
-                        searchState = SearchState.Error(result.message)
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    searchState = SearchState.Error(e.message ?: "Unknown error")
-                )
-            }
-        }
-    }
-
-    // ランダムモード: スコープ内からシャッフルして3件（AI不使用）。
-    fun pickRandomInScope(contentResolver: ContentResolver) {
-        val uri = vaultUri ?: return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(searchState = SearchState.Loading)
-            try {
-                val scope = _uiState.value.selectedFolder
-                val notes = collectNotesInScopeCached(contentResolver, uri, scope)
-                val picked = notes.shuffled().take(3).map {
-                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false)
-                }
-                _uiState.value = _uiState.value.copy(
-                    searchState = SearchState.Success(picked)
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    searchState = SearchState.Error(e.message ?: "Unknown error")
-                )
-            }
-        }
-    }
+    fun loadFolders(contentResolver: ContentResolver) = search.loadFolders(contentResolver)
+    fun selectSearchFolder(folder: NoteFolder?) = search.selectFolder(folder)
+    fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
+    fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
     fun generateQuiz(title: String, content: String) {
         viewModelScope.launch {
@@ -426,8 +344,5 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
-        // ノート一覧キャッシュの有効期間。この間の連続操作は再走査しない。
-        // Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
-        private const val NOTES_CACHE_TTL_MS = 60_000L
     }
 }
