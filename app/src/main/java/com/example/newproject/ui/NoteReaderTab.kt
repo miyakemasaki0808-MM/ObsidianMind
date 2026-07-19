@@ -46,14 +46,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
-import com.example.newproject.R
 import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
@@ -118,16 +116,13 @@ fun NoteReaderTab(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = stringResource(R.string.random_note_title),
+                        text = "ランダムAIノート",
                         color = OnVibrant,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = stringResource(
-                            if (uiState.vaultSelected) R.string.vault_selected
-                            else R.string.vault_not_selected
-                        ),
+                        text = if (uiState.vaultSelected) "Vaultフォルダ選択済み" else "Vaultフォルダが未選択です",
                         color = OnVibrantMuted,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 4.dp)
@@ -147,14 +142,14 @@ fun NoteReaderTab(
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
                     shape = RoundedCornerShape(24.dp)
-                ) { Text(stringResource(R.string.select_vault), color = OnVibrant) }
+                ) { Text("Vaultを選択", color = OnVibrant) }
                 Button(
                     onClick = onRandomNote,
                     enabled = !isLoading,
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
                     shape = RoundedCornerShape(24.dp)
-                ) { Text(stringResource(R.string.show_random_note), color = OnVibrant) }
+                ) { Text("ランダム表示", color = OnVibrant) }
             }
 
             if (isLoading) {
@@ -329,9 +324,9 @@ internal fun NoteContentPanel(
         Column(modifier = Modifier.padding(18.dp)) {
             val (noteTitle, noteContent) = when (val state = uiState.noteState) {
                 is NoteState.Success -> state.title to state.content
-                is NoteState.Empty   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.no_markdown_notes)
-                is NoteState.Error   -> stringResource(R.string.no_note_loaded) to stringResource(R.string.vault_read_error)
-                else                 -> stringResource(R.string.no_note_loaded) to stringResource(R.string.random_note_empty_state)
+                is NoteState.Empty   -> "ノート未表示" to "このVaultにMarkdownノートが見つかりませんでした。"
+                is NoteState.Error   -> "ノート未表示" to "Vaultを読み込めませんでした。"
+                else                 -> "ノート未表示" to "Vaultフォルダを選択して「ランダム表示」をタップしてください。"
             }
             // precomputedBlocks はノート本文（Success時）のパース結果。
             // プレースホルダ表示時は内容と一致しないため渡さない。
