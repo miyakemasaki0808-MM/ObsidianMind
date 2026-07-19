@@ -155,12 +155,15 @@ fun NoteReaderTab(
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = if (uiState.vaultSelected) "Vaultフォルダ選択済み" else "Vaultフォルダが未選択です",
-                        color = OnVibrantMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                    // 選択済みが通常状態なので、未選択時だけ案内を出す。
+                    if (!uiState.vaultSelected) {
+                        Text(
+                            text = "Vaultフォルダが未選択です",
+                            color = OnVibrantMuted,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
                 if (hasNote) {
                     IconPill(symbol = "⛶", contentDescription = "全画面表示") { isFullscreen = true }
@@ -171,12 +174,15 @@ fun NoteReaderTab(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Button(
-                    onClick = onSelectVault,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
-                    shape = RoundedCornerShape(24.dp)
-                ) { Text("Vaultを選択", color = OnVibrant) }
+                // Vault切替はオプションへ移動。初回セットアップ時だけここにも出す。
+                if (!uiState.vaultSelected) {
+                    Button(
+                        onClick = onSelectVault,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
+                        shape = RoundedCornerShape(24.dp)
+                    ) { Text("Vaultを選択", color = OnVibrant) }
+                }
                 Button(
                     onClick = onRandomNote,
                     enabled = !isLoading,

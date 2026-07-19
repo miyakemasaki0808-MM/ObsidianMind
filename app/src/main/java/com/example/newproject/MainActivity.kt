@@ -241,6 +241,8 @@ class MainActivity : ComponentActivity() {
 
                     composable("options") {
                         OptionsScreen(
+                            vaultSelected = uiState.vaultSelected,
+                            onSelectVault = { openVault.launch(null) },
                             onManageAnnotations = { navController.navigate("annotation_manager") }
                         )
                     }

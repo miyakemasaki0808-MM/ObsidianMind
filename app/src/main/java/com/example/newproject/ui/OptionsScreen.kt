@@ -33,6 +33,8 @@ import com.example.newproject.ui.theme.Panel
 
 @Composable
 fun OptionsScreen(
+    vaultSelected: Boolean,
+    onSelectVault: () -> Unit,
     onManageAnnotations: () -> Unit
 ) {
     val gradient = Brush.linearGradient(
@@ -56,6 +58,14 @@ fun OptionsScreen(
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(16.dp))
+
+        OptionRow(
+            emoji = "📁",
+            title = "Vaultを変更",
+            subtitle = if (vaultSelected) "Vaultフォルダ選択済み" else "Vaultフォルダが未選択です",
+            onClick = onSelectVault
+        )
+        Spacer(modifier = Modifier.height(10.dp))
 
         OptionRow(
             emoji = "🗂",
