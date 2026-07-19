@@ -18,6 +18,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -41,7 +42,8 @@ import com.example.newproject.ui.theme.OnVibrant
 fun SectionChatSheet(
     state: SectionChatState,
     onSuggestionTap: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onEndSession: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -112,6 +114,18 @@ fun SectionChatSheet(
                     state.messages.forEach { message -> ChatBubble(message) }
                     if (state.isGenerating) LoadingRow("回答を生成中…")
                 }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+            OutlinedButton(
+                onClick = onEndSession,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    text = if (state.isSummaryLoading || state.isGenerating) "生成を中止" else "確認を終了",
+                    color = if (state.isSummaryLoading || state.isGenerating) ErrorRed else Indigo
+                )
             }
         }
     }
