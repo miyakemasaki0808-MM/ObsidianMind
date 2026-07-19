@@ -68,12 +68,16 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
         )
 
     // 文字bigramの重なり数で並べ替えて上位を返す（日本語トークナイザ不要・再現率重視）。
+    // スコアは事前に1回だけ計算する。sortedByDescending のセレクタは比較のたびに
+    // 呼ばれるため、以前は bigram 集合の構築が O(n log n) 回走っていた（P4）。
     private fun keywordRecallCut(query: String, notes: List<NoteFile>, limit: Int): List<NoteFile> {
         val queryBigrams = query.toBigrams()
         if (queryBigrams.isEmpty()) return notes.take(limit)
         return notes
-            .sortedByDescending { note -> note.name.toBigrams().count { it in queryBigrams } }
+            .map { note -> note to note.name.toBigrams().count { it in queryBigrams } }
+            .sortedByDescending { it.second }
             .take(limit)
+            .map { it.first }
     }
 
     private fun String.toBigrams(): Set<String> {
