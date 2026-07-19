@@ -101,14 +101,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val quizEventKey = when (val state = uiState.quizState) {
-                is QuizState.Idle -> null
-                is QuizState.Loading -> "loading:${state.sourceTitle}"
-                is QuizState.Success ->
-                    "success:${state.sourceTitle}:${state.cards.hashCode()}:${state.isViewed}"
-                is QuizState.Error ->
-                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
-            }
+            val quizEventKey = uiState.quizState.toEventKey()
             LaunchedEffect(quizEventKey) {
                 when (val state = uiState.quizState) {
                     is QuizState.Loading -> snackbarHostState.showSnackbar(
@@ -135,13 +128,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val annotationEventKey = when (val state = uiState.annotationState) {
-                is AnnotationState.Idle -> null
-                is AnnotationState.Loading -> "loading:${state.sourceTitle}"
-                is AnnotationState.Success -> "success:${state.savedUri}:${state.isViewed}"
-                is AnnotationState.Error ->
-                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
-            }
+            val annotationEventKey = uiState.annotationState.toEventKey()
             LaunchedEffect(annotationEventKey) {
                 when (val state = uiState.annotationState) {
                     is AnnotationState.Loading -> snackbarHostState.showSnackbar(
