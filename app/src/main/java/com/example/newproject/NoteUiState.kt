@@ -65,13 +65,19 @@ sealed class QuizState {
 
 sealed class AnnotationState {
     object Idle : AnnotationState()
-    object Loading : AnnotationState()
+    data class Loading(val sourceTitle: String) : AnnotationState()
     data class Success(
+        val sourceTitle: String,
         val savedUri: Uri,
         val fileName: String,
-        val content: String
+        val content: String,
+        val isViewed: Boolean = false
     ) : AnnotationState()
-    data class Error(val message: String) : AnnotationState()
+    data class Error(
+        val message: String,
+        val sourceTitle: String? = null,
+        val isViewed: Boolean = false
+    ) : AnnotationState()
 }
 
 sealed class AnnotationListState {

@@ -10,10 +10,14 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.viewModels
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -56,6 +60,7 @@ class MainActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val windowSizeClass = calculateWindowSizeClass(this)
             val navController = rememberNavController()
+            val snackbarHostState = remember { SnackbarHostState() }
 
             val goGenerateQuiz = {
                 val state = uiState.noteState
@@ -66,7 +71,12 @@ class MainActivity : ComponentActivity() {
                     navController.navigate("quiz")
                 }
             }
-            val goCreateAnnotation = {
+            val openAnnotationResult = {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                viewModel.markAnnotationViewed()
+                navController.navigate("annotation") { launchSingleTop = true }
+            }
+            val startAnnotation = {
                 val noteState = uiState.noteState
                 if (noteState is NoteState.Success) {
                     val summary = (uiState.summaryState as? SummaryState.Success)?.summary
@@ -80,11 +90,49 @@ class MainActivity : ComponentActivity() {
                         aiNotes = relatedState?.aiNotes.orEmpty(),
                         wikilinkTitles = uiState.wikilinkTitles
                     )
-                    navController.navigate("annotation")
+                    // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
+                    navController.navigateToTab(AppDestination.Note)
                 }
             }
 
-            AppScaffold(windowSizeClass = windowSizeClass, navController = navController) { modifier ->
+            val annotationEventKey = when (val state = uiState.annotationState) {
+                is AnnotationState.Idle -> null
+                is AnnotationState.Loading -> "loading:${state.sourceTitle}"
+                is AnnotationState.Success -> "success:${state.savedUri}"
+                is AnnotationState.Error -> "error:${state.sourceTitle}:${state.message}"
+            }
+            LaunchedEffect(annotationEventKey) {
+                when (val state = uiState.annotationState) {
+                    is AnnotationState.Loading -> snackbarHostState.showSnackbar(
+                        message = "AI補記メモを作成中…",
+                        duration = SnackbarDuration.Short
+                    )
+                    is AnnotationState.Success -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "AI補記メモを保存しました",
+                            actionLabel = "見る",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                    }
+                    is AnnotationState.Error -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "AI補記メモを作成できませんでした",
+                            actionLabel = "詳細",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                    }
+                    is AnnotationState.Idle -> Unit
+                }
+            }
+
+            AppScaffold(
+                windowSizeClass = windowSizeClass,
+                navController = navController,
+                annotationState = uiState.annotationState,
+                snackbarHostState = snackbarHostState
+            ) { modifier ->
                 NavHost(
                     navController = navController,
                     startDestination = "note",
@@ -136,7 +184,8 @@ class MainActivity : ComponentActivity() {
                         AiTab(
                             uiState = uiState,
                             onGenerateQuiz = goGenerateQuiz,
-                            onCreateAnnotation = goCreateAnnotation
+                            onCreateAnnotation = startAnnotation,
+                            onOpenAnnotation = openAnnotationResult
                         )
                     }
 

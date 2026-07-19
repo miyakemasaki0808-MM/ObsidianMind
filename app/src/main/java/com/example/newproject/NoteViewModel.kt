@@ -102,6 +102,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         noteLoadJob?.cancel()
         summaryJob?.cancel()
         relatedNotesJob?.cancel()
+        annotation.cancelAndClear()
         sectionChat.cancelAndClear()
     }
 
@@ -206,6 +207,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun loadAnnotations(contentResolver: ContentResolver) = annotation.loadList(contentResolver)
     fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) = annotation.delete(contentResolver, uri)
     fun deleteAllAnnotations(contentResolver: ContentResolver) = annotation.deleteAll(contentResolver)
+    fun markAnnotationViewed() = annotation.markViewed()
 
     // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 
