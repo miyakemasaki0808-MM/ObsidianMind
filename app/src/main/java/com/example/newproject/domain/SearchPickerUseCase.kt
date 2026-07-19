@@ -90,7 +90,7 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
     }
 
     private fun NoteFile.toRelatedNote(): RelatedNote =
-        RelatedNote(title = name, uri = uri, isWikilinked = false)
+        RelatedNote(title = name, uri = uri, isWikilinked = false, lastModified = lastModified)
 
     companion object {
         private const val CANDIDATE_LIMIT = 40

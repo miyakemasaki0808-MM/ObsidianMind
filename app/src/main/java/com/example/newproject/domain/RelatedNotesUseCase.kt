@@ -11,7 +11,8 @@ import kotlinx.coroutines.CancellationException
 data class RelatedNote(
     val title: String,
     val uri: Uri,
-    val isWikilinked: Boolean
+    val isWikilinked: Boolean,
+    val lastModified: Long? = null
 )
 
 enum class AiRecommendationStatus {
@@ -83,7 +84,8 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                             RelatedNote(
                                 title = note.name,
                                 uri = note.uri,
-                                isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet
+                                isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet,
+                                lastModified = note.lastModified
                             )
                         }
                         .toList()
@@ -127,7 +129,8 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                 RelatedNote(
                     title = note.name,
                     uri = note.uri,
-                    isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet
+                    isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet,
+                    lastModified = note.lastModified
                 )
             }
     }

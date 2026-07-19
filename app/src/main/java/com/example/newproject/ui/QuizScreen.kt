@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.QuizCard
 import com.example.newproject.QuizState
+import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnVibrant
 
@@ -241,7 +242,7 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
             Button(
                 onClick = onNext,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Indigo)
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary)
             ) {
                 Text("次の問題 →", color = OnVibrant)
             }

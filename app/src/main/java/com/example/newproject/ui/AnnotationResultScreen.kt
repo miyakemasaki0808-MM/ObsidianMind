@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,9 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,24 +24,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
-import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelTinted
+import com.example.newproject.ui.theme.ReadingGradient
 
 @Composable
 fun AnnotationResultScreen(
     annotationState: AnnotationState,
     onBack: () -> Unit
 ) {
-    // 他画面と同じ共通グラデーションに統一（以前はこの画面のみ向きが異なっていた）
+    // AI補記は「読む」画面のため、ノート閲覧と同じ低彩度グラデーションを使う
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppGradient)
+            .background(ReadingGradient)
             .statusBarsPadding()
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -68,10 +68,11 @@ fun AnnotationResultScreen(
             )
         }
 
-        Button(
+        // ナビ操作のため塗りボタンにしない（3役ルール: AI色IndigoはAI生成系ボタン専用）
+        OutlinedButton(
             onClick = onBack,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+            border = BorderStroke(1.dp, OnVibrant.copy(alpha = 0.6f)),
             shape = RoundedCornerShape(8.dp)
         ) {
             Text("戻る", color = OnVibrant)

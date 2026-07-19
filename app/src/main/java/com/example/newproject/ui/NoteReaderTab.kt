@@ -2,6 +2,8 @@ package com.example.newproject.ui
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -44,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -56,7 +59,6 @@ import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
 import com.example.newproject.ui.markdown.buildNoteSectionModel
-import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
@@ -66,6 +68,7 @@ import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.ReadingGradient
 import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
@@ -102,11 +105,21 @@ fun NoteReaderTab(
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
 
+    // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
+    // AnimatedContent だと新旧リストが1つの listState を共有してしまうため graphicsLayer で行う。
+    val noteAppear = remember { Animatable(1f) }
+    LaunchedEffect(successState) {
+        if (successState != null) {
+            noteAppear.snapTo(0f)
+            noteAppear.animateTo(1f, animationSpec = tween(300))
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(AppGradient)
+                .background(ReadingGradient)
                 .safeDrawingPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
         ) {
@@ -163,7 +176,13 @@ fun NoteReaderTab(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 20.dp),
+                    .padding(top = if (isLoading) 8.dp else 20.dp)
+                    .graphicsLayer {
+                        alpha = noteAppear.value
+                        val scale = 0.95f + 0.05f * noteAppear.value
+                        scaleX = scale
+                        scaleY = scale
+                    },
                 listState = if (hasNote) listState else null,
                 precomputedBlocks = sectionModel?.blocks
             )
@@ -189,7 +208,7 @@ fun NoteReaderTab(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(AppGradient)
+                    .background(ReadingGradient)
                     .safeDrawingPadding()
                     .padding(12.dp)
             ) {

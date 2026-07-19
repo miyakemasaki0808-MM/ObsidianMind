@@ -85,7 +85,7 @@ class SearchController(
                 val folder = uiState.value.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 val picked = notes.shuffled().take(3).map {
-                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false)
+                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false, lastModified = it.lastModified)
                 }
                 uiState.value = uiState.value.copy(
                     searchState = SearchState.Success(picked)
