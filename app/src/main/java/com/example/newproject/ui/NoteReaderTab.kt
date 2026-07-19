@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -155,12 +156,15 @@ fun NoteReaderTab(
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = if (uiState.vaultSelected) "Vaultフォルダ選択済み" else "Vaultフォルダが未選択です",
-                        color = OnVibrantMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
+                    // 選択済みが通常状態なので、未選択時だけ案内を出す。
+                    if (!uiState.vaultSelected) {
+                        Text(
+                            text = "Vaultフォルダが未選択です",
+                            color = OnVibrantMuted,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
                 }
                 if (hasNote) {
                     IconPill(symbol = "⛶", contentDescription = "全画面表示") { isFullscreen = true }
@@ -171,12 +175,15 @@ fun NoteReaderTab(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Button(
-                    onClick = onSelectVault,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
-                    shape = RoundedCornerShape(24.dp)
-                ) { Text("Vaultを選択", color = OnVibrant) }
+                // Vault切替はオプションへ移動。初回セットアップ時だけここにも出す。
+                if (!uiState.vaultSelected) {
+                    Button(
+                        onClick = onSelectVault,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
+                        shape = RoundedCornerShape(24.dp)
+                    ) { Text("Vaultを選択", color = OnVibrant) }
+                }
                 Button(
                     onClick = onRandomNote,
                     enabled = !isLoading,
@@ -240,7 +247,10 @@ fun NoteReaderTab(
                 IconPill(
                     symbol = "✕",
                     contentDescription = "全画面表示を閉じる",
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
+                    // 白いノートパネルの真上に重なるため、既定の薄いパネル色では
+                    // 白地に白となり視認できない。暗い半透明の下地を敷く。
+                    containerColor = OnSurface.copy(alpha = 0.45f)
                 ) { isFullscreen = false }
                 // 全画面で読み続けている間も、進行中・完了したAI要約へ戻れるようにする。
                 if (activeChat != null) {
@@ -373,18 +383,23 @@ private fun BoxScope.SectionFab(
     }
 }
 
-/** タブ内の丸いアイコンボタン（material-icons 依存を避けるため絵文字/記号を使用）。 */
+/**
+ * タブ内の丸いアイコンボタン（material-icons 依存を避けるため絵文字/記号を使用）。
+ * 既定色はグラデーション背景に置く前提。明色パネルの上に置く場合は
+ * containerColor で暗めの下地を指定しないと視認できない。
+ */
 @Composable
 private fun IconPill(
     symbol: String,
     contentDescription: String,
     modifier: Modifier = Modifier,
+    containerColor: Color = Panel.copy(alpha = 0.22f),
     onClick: () -> Unit
 ) {
     Surface(
         modifier = modifier.size(40.dp).clickable(onClick = onClick),
         shape = CircleShape,
-        color = Panel.copy(alpha = 0.22f)
+        color = containerColor
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(symbol, color = OnVibrant, fontSize = 18.sp, fontWeight = FontWeight.Bold)

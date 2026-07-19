@@ -88,6 +88,22 @@ sealed class AnnotationState {
     ) : AnnotationState()
 }
 
+// Snackbar通知の発火判定キー。値が変わったときだけ通知を出し直す。
+// nullはIdle（通知対象なし）を表す。
+internal fun QuizState.toEventKey(): String? = when (this) {
+    is QuizState.Idle -> null
+    is QuizState.Loading -> "loading:$sourceTitle"
+    is QuizState.Success -> "success:$sourceTitle:${cards.hashCode()}:$isViewed"
+    is QuizState.Error -> "error:$sourceTitle:$message:$isViewed"
+}
+
+internal fun AnnotationState.toEventKey(): String? = when (this) {
+    is AnnotationState.Idle -> null
+    is AnnotationState.Loading -> "loading:$sourceTitle"
+    is AnnotationState.Success -> "success:$savedUri:$isViewed"
+    is AnnotationState.Error -> "error:$sourceTitle:$message:$isViewed"
+}
+
 sealed class AnnotationListState {
     object Idle : AnnotationListState()
     object Loading : AnnotationListState()
@@ -127,5 +143,7 @@ data class NoteUiState(
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
-    val searchState: SearchState = SearchState.Idle
+    val searchState: SearchState = SearchState.Idle,
+    // 当日分のみの閲覧履歴（NoteHistoryStore が日付判定を担当）
+    val todayHistory: List<HistoryEntry> = emptyList()
 )

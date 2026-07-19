@@ -2,15 +2,15 @@
 
 **プロジェクト:** Obsidian Mind
 
-**解析日:** 2026-07-19
+**解析日:** 2026-07-20
 
-**対象ブランチ:** `feature/New_Additional_Function`
+**対象ブランチ:** `feature/NewFunction_forUX`
 
-**対象コミット:** `4ee7dc6`（Merge pull request #21）
+**対象コミット:** `1730437`（当日閲覧履歴の追加まで。PR #22・#23マージ後）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** `testDebugUnitTest` 成功
+**検証結果:** `testDebugUnitTest` 成功（2026-07-19実行）。以降の追加分はAndroid Studio側での実行が必要
 
 ---
 
@@ -27,13 +27,15 @@ AI機能はクラウドAPIではなく、ML Kit GenAI Prompt API を通じて端
 - ノートを成長させるためのAI補記メモ生成・Vaultへの保存
 - 表示中セクションの要約、質問候補生成、セクション限定Q&A
 
+Q&AとAI補記はバックグラウンド生成方式で、生成中もノート閲覧を継続でき、完了・エラーはSnackbarとAIタブのバッジで通知される。AI以外の補助機能として、当日分のみの閲覧履歴（さがすタブ「今日読んだノート」）を持つ。
+
 アーキテクチャは「単一 Activity + Compose Navigation + 単一 ViewModel」を入口としつつ、肥大化を避けるため検索・補記・セクションチャットを機能別 Controller に分割している。ファイルI/Oは `NoteRepository`、AI判定を含む主要ロジックは UseCase、AI接続は `AiClient`、Markdown生成・応答パースは純粋ロジックへ分離されている。
 
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
 - Markdownパーサー、補記Markdown生成、クイズ応答パーサーなど、壊れやすい純粋ロジックにはユニットテストが整備されている。
-- 一方で、検索・クイズ・補記の一部ジョブは要求単位で追跡されず、連続操作時の競合余地が残る。
+- クイズ・補記はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
 
@@ -45,8 +47,8 @@ AI機能はクラウドAPIではなく、ML Kit GenAI Prompt API を通じて端
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 31ファイル | 約4,966行 |
-| ユニットテスト Kotlin | 5ファイル | 約423行、41テスト |
+| 本番 Kotlin | 32ファイル | 約5,696行 |
+| ユニットテスト Kotlin | 10ファイル | 約838行、60テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -85,13 +87,15 @@ app/src/
 ├── main/
 │   ├── AndroidManifest.xml
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt                 # Activity、Vault選択、NavHost、画面イベント接続
-│   │   ├── NoteViewModel.kt                # 状態の統合、ノート読込、要約・関連・クイズの調停
-│   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state
+│   │   ├── MainActivity.kt                 # Activity、Vault選択、NavHost、Snackbar通知、画面イベント接続
+│   │   ├── NoteViewModel.kt                # 状態の統合、ノート読込、要約・関連の調停、履歴記録
+│   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state、通知イベントキー
 │   │   ├── NoteRepository.kt               # SAF走査・読書き・メタデータ解析
+│   │   ├── NoteHistoryStore.kt             # 当日分のみの閲覧履歴（SharedPreferences）
 │   │   ├── NoteTitleNormalizer.kt          # Obsidianタイトル正規化
 │   │   ├── SearchController.kt             # フォルダ検索・スコープキャッシュ
 │   │   ├── SectionChatController.kt        # セクション要約・質問・Q&A
+│   │   ├── QuizController.kt               # 4択Q&Aのバックグラウンド生成・確認状態
 │   │   ├── AnnotationController.kt         # AI補記の生成・保存・一覧・削除
 │   │   ├── AnnotationComposer.kt           # 補記Markdown検証・整形（純粋ロジック）
 │   │   ├── QuizResponseParser.kt           # AIクイズ応答パース（純粋ロジック）
@@ -104,7 +108,7 @@ app/src/
 │   │   │   ├── SearchPickerUseCase.kt      # 自然文検索による3件選定
 │   │   │   └── AiResponseParsing.kt        # AI返却タイトルの共通正規化
 │   │   └── ui/
-│   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替
+│   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
 │   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面、セクションFAB
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
 │   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
@@ -125,7 +129,12 @@ app/src/
     ├── MarkdownParserTest.kt
     ├── InlineMarkdownTest.kt
     ├── QuizResponseParserTest.kt
-    └── AnnotationComposerTest.kt
+    ├── AnnotationComposerTest.kt
+    ├── SectionChatControllerTest.kt
+    ├── QuizControllerTest.kt
+    ├── AnnotationControllerTest.kt
+    ├── EventKeyTest.kt
+    └── ui/AiTabBadgeStateTest.kt
 ```
 
 ---
@@ -141,6 +150,7 @@ Compose UI / MainActivity
      NoteViewModel
        ├── SearchController
        ├── SectionChatController
+       ├── QuizController
        └── AnnotationController
           │
           ├──────────────► NoteRepository ──► SAF / DocumentsContract
@@ -162,9 +172,10 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 | 担当 | 更新する主な状態 |
 |---|---|
-| `NoteViewModel` | `noteState`、`summaryState`、`relatedNotesState`、`quizState`、`wikilinkTitles` |
+| `NoteViewModel` | `noteState`、`summaryState`、`relatedNotesState`、`wikilinkTitles`、`todayHistory` |
 | `SearchController` | `folders`、`selectedFolder`、`searchState` |
 | `SectionChatController` | `sectionChat` |
+| `QuizController` | `quizState` |
 | `AnnotationController` | `annotationState`、`annotationListState` |
 
 ### 4.3 状態モデル
@@ -175,14 +186,17 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - `noteState`: Idle / Loading / Success / Empty / Error
 - `summaryState`: Idle / Loading / Success / Downloading / AiUnavailable / Error
 - `relatedNotesState`: Idle / Loading / Success / Error
-- `quizState`: Idle / Loading / Success / Error
-- `annotationState`: Idle / Loading / Success / Error
+- `quizState`: Idle / Loading / Success / Error（Loading以降は `sourceTitle`、Success/Errorは `isViewed` を保持）
+- `annotationState`: Idle / Loading / Success / Error（同上）
 - `annotationListState`: Idle / Loading / Success / Error
 - `sectionChat`: シートを閉じている場合は `null`
 - `folders`、`selectedFolder`、`searchState`: 検索タブ用
 - `wikilinkTitles`: 現在ノートから抽出したリンク先タイトル
+- `todayHistory`: 当日分の閲覧履歴（最大10件）
 
-ノートまたはVaultの切替時は `resetNoteScopedStates()` により、要約・関連・クイズ・補記結果・セクションチャットを一括リセットする。検索状態はVault切替時だけ別途リセットする。
+`quizState`/`annotationState` の `sourceTitle` は「どのノートの生成結果か」を、`isViewed` は「結果をユーザーがまだ確認していない」を表し、Snackbar通知とAIタブバッジの表示判定に使う。通知の発火判定キーは `toEventKey()` 拡張関数（`NoteUiState.kt`）が組み立てる。
+
+ノートまたはVaultの切替時は `resetNoteScopedStates()` により、要約・関連・クイズ・補記結果・セクションチャットを一括リセットする。検索状態と閲覧履歴はVault切替時だけ別途リセットする。
 
 ---
 
@@ -211,7 +225,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 #### ノートタブ
 
-- Vault選択とランダム表示
+- ランダム表示（Vault選択ボタンは未選択時のみ表示。切替はオプションから）
 - Markdown本文の表示とテキスト選択
 - 本文パネルのフェード＋スケール表示
 - 明示ボタンによる全画面閲覧
@@ -226,6 +240,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - 選択スコープ内からAIを使わず3件ランダム抽出
 - 結果からノートを開き、ノートタブへ移動
 - 更新日を `yyyy/MM/dd` 形式で表示
+- 下部に当日分の閲覧履歴「今日読んだノート」を表示（タップで開き直し）
 
 #### 関連タブ
 
@@ -237,15 +252,18 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 #### AIタブ
 
 - 自動生成されたノート要約を表示
-- 4択Q&A生成画面への入口
-- AI補記メモ生成画面への入口
+- 4択Q&A・AI補記メモのバックグラウンド生成の起点。ボタンラベルは状態に応じて「作る／作成中…／開く／エラーを確認／再試行」と変化する
 - モデルダウンロード時は進捗を表示
+- タブアイコンには未確認の重要度順（エラー > 未確認完了 > 生成中）で1つだけバッジを表示（`resolveAiTabBadgeState`）
 
 #### オプション
 
-- 現在は「AI補記メモを削除」の1項目
-- 補記一覧で1件削除・全件削除が可能
-- 削除前に確認ダイアログを表示
+- 「Vaultを変更」: フォルダ選択のやり直し（現在の選択状態をサブタイトル表示）
+- 「AI補記メモを削除」: 補記一覧で1件削除・全件削除、削除前に確認ダイアログ
+
+#### 横断: Snackbar通知
+
+Q&A・補記の生成開始／完了／失敗は `MainActivity` の `LaunchedEffect` がSnackbarで通知する。完了・失敗の通知にはアクション（見る／詳細）が付き、タップで結果画面を開くと同時に `isViewed` を立てる。表示済みイベントキーを `rememberSaveable` に記録し、画面回転による再表示を抑止する。
 
 ---
 
@@ -257,9 +275,11 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 OpenDocumentTree
   → 読み書き可能な永続URI権限を取得
   → SharedPreferencesへURI文字列を保存
-  → 全体ノートキャッシュ・検索キャッシュ・旧状態を破棄
+  → 全体ノートキャッシュ・検索キャッシュ・閲覧履歴・旧状態を破棄
   → ランダムノートを1件読み込む
 ```
+
+導線はノートタブ（未選択時のみ）とオプションの「Vaultを変更」の2つ。
 
 次回起動時は SharedPreferences のURIを復元し、`vaultSelected = true` にする。起動直後にノートを自動読込する処理はなく、ユーザーがランダム表示するか検索結果を開くまで `noteState` は Idle のままである。
 
@@ -273,6 +293,7 @@ loadRandomNote()
   → _AI補記フォルダを除いた .md から random()
   → UTF-8で本文読込
   → noteState = Success
+  → 閲覧履歴に記録（openNote も同様）
   ├── fetchSummary()
   └── fetchRelatedNotes()
 ```
@@ -345,12 +366,16 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 
 ### 6.7 4択Q&A
 
-1. 現在ノートの先頭1,200文字をAIへ渡し、5問の4択問題を要求する。
-2. `Q:` 行を問題開始として、`A:`〜`D:`、`ANSWER:`、任意の `EXPLANATION:` をパースする。
-3. 必須フィールド欠落や正解記号がA〜D以外の問題は捨てる。
-4. ユーザー選択後に正誤、正解、解説を表示し、次の問題へ進む。
+`QuizController` がバックグラウンドで生成する。
 
-クイズ生成では事前の `checkAvailability()` を行わず直接 `generate()` するため、AI非対応・モデル未準備は一般的な `QuizState.Error` として扱われる。
+1. 生成開始時に `QuizState.Loading(sourceTitle)` を立て、ユーザーはノートタブへ戻される（待機画面なし）。
+2. `checkAvailability()` で分岐する。Unavailableはエラー、NeedsDownloadはモデルDL後に自動再開、Availableは即生成。
+3. 現在ノートの先頭1,200文字をAIへ渡し、5問の4択問題を要求する。
+4. `Q:` 行を問題開始として、`A:`〜`D:`、`ANSWER:`、任意の `EXPLANATION:` をパースする。必須フィールド欠落や正解記号がA〜D以外の問題は捨てる。
+5. パース結果が0件なら `QuizState.Error`、あれば `QuizState.Success(isViewed=false)` とし、Snackbarとバッジで通知する。
+6. Q&A画面ではユーザー選択後に正誤、正解、解説を表示し、次の問題へ進む。
+
+生成中の再タップはLoadingガードで無視する。requestIdによる `isCurrent()` チェックで、ノート切替後の古い結果混入を防ぐ。
 
 ### 6.8 AI補記メモ
 
@@ -364,6 +389,12 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 タイトル中の SAF上不適切な記号は `_` へ置換する。生成本文で片方の必須見出しが欠落した場合は、保存時に空見出しを補完する。
 
 補記一覧はファイル名の `__補記_` より後ろのタイムスタンプで降順に並べる。削除は `DocumentsContract.deleteDocument()` を使う。
+
+補記生成もQ&Aと同じバックグラウンド方式で、生成開始後はノートタブへ戻り、完了・失敗はSnackbarとバッジで通知される。requestIdガード・Loadingガード・モデルDL自動再開の仕組みも共通の形をとる（Controllerは意図的に共通化せず相似形のまま。3機能目が現れた時点で共通化を検討する方針）。
+
+### 6.9 当日閲覧履歴
+
+`NoteHistoryStore` が SharedPreferences に日付キー付きJSONで保存する。読み出し時に保存日≠今日なら空を返すため、日付が変わると履歴は自然消滅する（翌日への持ち越しなし）。最大10件、同一URIは先頭へ移動。`loadRandomNote`/`openNote` の成功時に記録し、さがすタブの「今日読んだノート」から `openNote` で開き直せる。
 
 ---
 
@@ -515,22 +546,21 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - `summaryJob`
 - `relatedNotesJob`
 
-`SectionChatController` は `openJob` と `answerJob` を保持する。ノート切替・Vault切替・シート閉鎖時にキャンセルし、旧ノートまたは旧セクションのAI応答による上書きを防ぐ。
+`SectionChatController` は `openJob` と `answerJob` を保持する。`QuizController` と `AnnotationController` は生成Job・モデルDL Jobに加えて requestId を採番し、suspend地点の後に `isCurrent()` を確認してから状態を更新する。Jobキャンセルだけに頼らないのは、モデルDLコールバック等でキャンセルをすり抜ける完了通知があるため。ノート切替・Vault切替時は各Controllerの `cancelAndClear()` で一括破棄する。
 
 一方、次の処理は要求単位のJobを保持していない。
 
 - 検索・スコープ内ランダム
-- クイズ生成
-- 補記作成・補記一覧・削除
+- 補記一覧・削除
 - 要約側のモデルダウンロードJob
 
 そのため、短時間に複数要求できる経路では完了順による状態上書きの余地がある。UIでLoading中のボタンを無効化している箇所もあるが、すべての経路を構造的に保護しているわけではない。
 
 ### 10.2 CancellationException
 
-要約、関連ノート、セクションAIの主要経路では `CancellationException` を再throwし、キャンセルを一般エラーに変換しない。
+要約、関連ノート、セクションAI、クイズ、補記の主要経路では `CancellationException` を再throwし、キャンセルを一般エラーに変換しない。
 
-一方、`SearchPickerUseCase`、クイズ生成、補記Controllerの一部は広い `Exception` で捕捉する。ViewModel破棄時などのキャンセルがエラー状態へ変換される可能性があり、キャンセル方針は機能間で完全には統一されていない。
+一方、`SearchPickerUseCase` など一部は広い `Exception` で捕捉しており、キャンセル方針は機能間で完全には統一されていない。
 
 ### 10.3 キャッシュ
 
@@ -557,7 +587,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 - フォルダ一覧取得失敗は握りつぶされ、ユーザーには通知されない。
 - 補記削除は `deleteDocument()` の `Boolean` を確認せず一覧を再読込する。失敗時は対象が残ることで間接的に分かるが、明示エラーは出ない。
-- クイズはパース結果が0件でも `QuizState.Success(emptyList())` となり、UI側で「生成できませんでした」と表示する。
+- 閲覧履歴のJSONパース失敗は空履歴として扱い、ユーザーには通知されない（実害は履歴消失のみ）。
 - `checkAvailability()` 自体の例外は `Unavailable` にまとめるため、非対応端末と一時的な状態取得失敗を区別できない。
 - `ContentResolver.openInputStream()` が `null` の場合は空文字を返し、読込失敗と空ノートを区別しない。
 
@@ -585,7 +615,14 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | `InlineMarkdownTest.kt` | 11 | 強調、リンク、コード、打ち消し、誤検出防止 |
 | `QuizResponseParserTest.kt` | 10 | 改行揺れ、前置き、欠落項目、不正な正解、説明省略 |
 | `AnnotationComposerTest.kt` | 8 | 必須セクション、Markdown組立、インデント混入防止 |
-| **合計** | **41** | |
+| `SectionChatControllerTest.kt` | 4 | セクションチャットの状態遷移・破棄 |
+| `QuizControllerTest.kt` | 5 | バックグラウンド生成・確認状態・破棄 |
+| `AnnotationControllerTest.kt` | 2 | 確認状態・ノート切替時の破棄 |
+| `EventKeyTest.kt` | 4 | Snackbar通知の発火判定キー |
+| `AiTabBadgeStateTest.kt` | 4 | AIタブバッジの優先順位 |
+| **合計** | **60** | |
+
+なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
 ### 13.2 実行結果
 
@@ -594,12 +631,13 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 BUILD SUCCESSFUL
 ```
 
-2026-07-19に Android Studio同梱JBRを指定して実行し、コンパイルと全ユニットテストが成功した。
+2026-07-19に Android Studio同梱JBRを指定して実行し、コンパイルと全ユニットテストが成功した。以降に追加されたテスト（EventKeyTest等）を含む再実行はAndroid Studio側で行う運用。
 
 ### 13.3 未カバー領域
 
-- `NoteViewModel` と各Controllerの状態遷移
+- `NoteViewModel` の状態遷移（Controllerは一部テスト済み、網羅はしていない）
 - `RelatedNotesUseCase` と `SearchPickerUseCase` の候補選定・フォールバック
+- `NoteHistoryStore` の日付判定・重複排除（Android依存のため素のユニットテスト不可）
 - `PromptBuilder` の出力契約
 - SAFのカーソル走査、ファイル作成、削除
 - Gemini Nanoの利用可否、ダウンロード、生成、タイムアウト
@@ -646,7 +684,7 @@ BUILD SUCCESSFUL
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
 | 高 | 検索フォールバックの意味差 | 40件以下ではキーワード順位付けされず先頭3件。UI説明と利用者期待に差が出る |
-| 中 | Job管理の不統一 | 検索・クイズ・補記等は要求IDやJobキャンセルがなく、将来UI導線が増えると古い完了結果が上書きし得る |
+| 中 | Job管理の不統一 | クイズ・補記はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
 | 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない |
 | 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
 | 中 | 同名ノートの曖昧性 | 正規化タイトルMapが同名ノートを1件に上書きし、AI推薦先が不定になり得る |
@@ -662,7 +700,7 @@ BUILD SUCCESSFUL
 本節は現状解析から導かれる候補であり、今回の解析書更新では実装変更していない。
 
 1. `SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、UI文言と一致させる。
-2. 検索・クイズ・補記生成にJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする。
+2. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記は導入済み）。
 3. `CancellationException` の再throw方針を全非同期処理で統一する。
 4. `RelatedNotesUseCase`、`SearchPickerUseCase`、`PromptBuilder`、Controller状態遷移のユニットテストを追加する。
 5. Fake `ContentResolver` またはinstrumentationテストで、Vault走査・補記保存・削除を検証する。
@@ -675,6 +713,5 @@ BUILD SUCCESSFUL
 ## 16. 解析時の確認事項
 
 - 本解析は現行ソースコードを基準にし、過去の設計書ではなく実装との突合を優先した。
-- 対象ワークツリーは解析開始時点で未コミット変更なし。
-- 更新対象は本ファイル `docs/source_code_analysis.md` のみ。
-- アプリ本体のKotlin、Gradle、Manifest、テストコードには変更を加えていない。
+- 2026-07-20の更新はdocs再構成（変更履歴表・design/の新設）と同時に実施した。変更の経緯は [change_history.md](change_history.md)、設計判断は [design/](design/) を参照。
+- アプリ本体のKotlin、Gradle、Manifest、テストコードには本更新で変更を加えていない。

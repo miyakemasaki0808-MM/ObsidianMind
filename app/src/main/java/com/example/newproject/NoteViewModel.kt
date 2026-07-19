@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     private val prefs = application.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
+    private val history = NoteHistoryStore(prefs)
     private val repository = NoteRepository()
     private val aiClient: AiClient = AICoreClient()
     private val summarizeUseCase = SummarizeUseCase(aiClient)
@@ -64,7 +65,15 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private fun restoreVault() {
         val savedUri = prefs.getString(KEY_VAULT_URI, null) ?: return
         vaultUri = Uri.parse(savedUri)
-        _uiState.value = _uiState.value.copy(vaultSelected = true)
+        _uiState.value = _uiState.value.copy(
+            vaultSelected = true,
+            todayHistory = history.load()
+        )
+    }
+
+    // ノートを開けた時点で当日履歴に積む（loadRandomNote / openNote の成功時に呼ぶ）
+    private fun recordHistory(title: String, uri: Uri) {
+        _uiState.value = _uiState.value.copy(todayHistory = history.record(title, uri))
     }
 
     fun saveVault(uri: Uri) {
@@ -74,13 +83,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         cachedNotesLoadedAt = 0L
         search.onVaultChanged()
         cancelNoteScopedJobs()
+        // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
+        history.clear()
         // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
         // （selectedFolder は旧Vaultの documentId を保持しているため必須）
         _uiState.value = _uiState.value.resetNoteScopedStates().copy(
             vaultSelected = true,
             folders = emptyList(),
             selectedFolder = null,
-            searchState = SearchState.Idle
+            searchState = SearchState.Idle,
+            todayHistory = emptyList()
         )
     }
 
@@ -141,6 +153,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Success(note.name, content)
                 )
+                recordHistory(note.name, note.uri)
                 fetchSummary(note.name, content)
                 fetchRelatedNotes(note.name, content)
             } catch (e: CancellationException) {
@@ -164,6 +177,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(
                     noteState = NoteState.Success(note.title, content)
                 )
+                recordHistory(note.title, note.uri)
                 fetchSummary(note.title, content)
                 fetchRelatedNotes(note.title, content)
             } catch (e: CancellationException) {
@@ -184,8 +198,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
     fun generateQuiz(title: String, content: String) = quiz.create(title, content)
-
-    fun clearQuiz() = quiz.cancelAndClear()
     fun markQuizViewed() = quiz.markViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────

@@ -17,7 +17,10 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -101,15 +104,18 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val quizEventKey = when (val state = uiState.quizState) {
-                is QuizState.Idle -> null
-                is QuizState.Loading -> "loading:${state.sourceTitle}"
-                is QuizState.Success ->
-                    "success:${state.sourceTitle}:${state.cards.hashCode()}:${state.isViewed}"
-                is QuizState.Error ->
-                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
-            }
+            val quizEventKey = uiState.quizState.toEventKey()
+            // 画面回転でActivityが再生成されてもSnackbarを再表示しないよう、
+            // 表示済みキーをrememberSaveableで保持する。Idleでリセットし、
+            // 同じノートの再生成では再び通知できるようにする。
+            var lastShownQuizEvent by rememberSaveable { mutableStateOf<String?>(null) }
             LaunchedEffect(quizEventKey) {
+                if (quizEventKey == null) {
+                    lastShownQuizEvent = null
+                    return@LaunchedEffect
+                }
+                if (quizEventKey == lastShownQuizEvent) return@LaunchedEffect
+                lastShownQuizEvent = quizEventKey
                 when (val state = uiState.quizState) {
                     is QuizState.Loading -> snackbarHostState.showSnackbar(
                         message = "Q&Aを作成中…",
@@ -135,14 +141,15 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val annotationEventKey = when (val state = uiState.annotationState) {
-                is AnnotationState.Idle -> null
-                is AnnotationState.Loading -> "loading:${state.sourceTitle}"
-                is AnnotationState.Success -> "success:${state.savedUri}:${state.isViewed}"
-                is AnnotationState.Error ->
-                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
-            }
+            val annotationEventKey = uiState.annotationState.toEventKey()
+            var lastShownAnnotationEvent by rememberSaveable { mutableStateOf<String?>(null) }
             LaunchedEffect(annotationEventKey) {
+                if (annotationEventKey == null) {
+                    lastShownAnnotationEvent = null
+                    return@LaunchedEffect
+                }
+                if (annotationEventKey == lastShownAnnotationEvent) return@LaunchedEffect
+                lastShownAnnotationEvent = annotationEventKey
                 when (val state = uiState.annotationState) {
                     is AnnotationState.Loading -> snackbarHostState.showSnackbar(
                         message = "AI補記メモを作成中…",
@@ -234,6 +241,8 @@ class MainActivity : ComponentActivity() {
 
                     composable("options") {
                         OptionsScreen(
+                            vaultSelected = uiState.vaultSelected,
+                            onSelectVault = { openVault.launch(null) },
                             onManageAnnotations = { navController.navigate("annotation_manager") }
                         )
                     }
