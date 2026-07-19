@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
-import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
@@ -40,6 +39,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
+    private val quiz = QuizController(viewModelScope, aiClient, _uiState)
     private val annotation = AnnotationController(viewModelScope, repository, aiClient, _uiState) { vaultUri }
     private val search = SearchController(viewModelScope, repository, searchPickerUseCase, _uiState) { vaultUri }
 
@@ -102,6 +102,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         noteLoadJob?.cancel()
         summaryJob?.cancel()
         relatedNotesJob?.cancel()
+        quiz.cancelAndClear()
+        annotation.cancelAndClear()
         sectionChat.cancelAndClear()
     }
 
@@ -181,31 +183,17 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
-    fun generateQuiz(title: String, content: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(quizState = QuizState.Loading)
-            try {
-                val prompt = PromptBuilder.buildQuizPrompt(title, content)
-                val raw = aiClient.generate(prompt)
-                val cards = parseQuizResponse(raw)
-                _uiState.value = _uiState.value.copy(quizState = QuizState.Success(cards))
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    quizState = QuizState.Error(e.message ?: "Unknown error")
-                )
-            }
-        }
-    }
+    fun generateQuiz(title: String, content: String) = quiz.create(title, content)
 
-    fun clearQuiz() {
-        _uiState.value = _uiState.value.copy(quizState = QuizState.Idle)
-    }
+    fun clearQuiz() = quiz.cancelAndClear()
+    fun markQuizViewed() = quiz.markViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
 
     fun loadAnnotations(contentResolver: ContentResolver) = annotation.loadList(contentResolver)
     fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) = annotation.delete(contentResolver, uri)
     fun deleteAllAnnotations(contentResolver: ContentResolver) = annotation.deleteAll(contentResolver)
+    fun markAnnotationViewed() = annotation.markViewed()
 
     // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 

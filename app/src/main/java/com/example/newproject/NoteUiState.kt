@@ -58,20 +58,34 @@ data class QuizCard(
 
 sealed class QuizState {
     object Idle : QuizState()
-    object Loading : QuizState()
-    data class Success(val cards: List<QuizCard>) : QuizState()
-    data class Error(val message: String) : QuizState()
+    data class Loading(val sourceTitle: String) : QuizState()
+    data class Success(
+        val sourceTitle: String,
+        val cards: List<QuizCard>,
+        val isViewed: Boolean = false
+    ) : QuizState()
+    data class Error(
+        val message: String,
+        val sourceTitle: String,
+        val isViewed: Boolean = false
+    ) : QuizState()
 }
 
 sealed class AnnotationState {
     object Idle : AnnotationState()
-    object Loading : AnnotationState()
+    data class Loading(val sourceTitle: String) : AnnotationState()
     data class Success(
+        val sourceTitle: String,
         val savedUri: Uri,
         val fileName: String,
-        val content: String
+        val content: String,
+        val isViewed: Boolean = false
     ) : AnnotationState()
-    data class Error(val message: String) : AnnotationState()
+    data class Error(
+        val message: String,
+        val sourceTitle: String? = null,
+        val isViewed: Boolean = false
+    ) : AnnotationState()
 }
 
 sealed class AnnotationListState {

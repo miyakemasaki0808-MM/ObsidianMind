@@ -10,10 +10,14 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.activity.viewModels
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -56,19 +60,31 @@ class MainActivity : ComponentActivity() {
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val windowSizeClass = calculateWindowSizeClass(this)
             val navController = rememberNavController()
+            val snackbarHostState = remember { SnackbarHostState() }
 
-            val goGenerateQuiz = {
-                val state = uiState.noteState
-                if (state is NoteState.Success) {
-                    if (uiState.quizState !is QuizState.Success) {
-                        viewModel.generateQuiz(state.title, state.content)
-                    }
-                    navController.navigate("quiz")
-                }
+            val openQuizResult = {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                viewModel.markQuizViewed()
+                navController.navigate("quiz") { launchSingleTop = true }
             }
-            val goCreateAnnotation = {
+            val startQuiz = {
                 val noteState = uiState.noteState
                 if (noteState is NoteState.Success) {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    viewModel.generateQuiz(noteState.title, noteState.content)
+                    // Q&Aも補記と同様、同じノートを読みながら生成を待てるようにする。
+                    navController.navigateToTab(AppDestination.Note)
+                }
+            }
+            val openAnnotationResult = {
+                snackbarHostState.currentSnackbarData?.dismiss()
+                viewModel.markAnnotationViewed()
+                navController.navigate("annotation") { launchSingleTop = true }
+            }
+            val startAnnotation = {
+                val noteState = uiState.noteState
+                if (noteState is NoteState.Success) {
+                    snackbarHostState.currentSnackbarData?.dismiss()
                     val summary = (uiState.summaryState as? SummaryState.Success)?.summary
                     val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
                     viewModel.createAnnotation(
@@ -80,11 +96,85 @@ class MainActivity : ComponentActivity() {
                         aiNotes = relatedState?.aiNotes.orEmpty(),
                         wikilinkTitles = uiState.wikilinkTitles
                     )
-                    navController.navigate("annotation")
+                    // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
+                    navController.navigateToTab(AppDestination.Note)
                 }
             }
 
-            AppScaffold(windowSizeClass = windowSizeClass, navController = navController) { modifier ->
+            val quizEventKey = when (val state = uiState.quizState) {
+                is QuizState.Idle -> null
+                is QuizState.Loading -> "loading:${state.sourceTitle}"
+                is QuizState.Success ->
+                    "success:${state.sourceTitle}:${state.cards.hashCode()}:${state.isViewed}"
+                is QuizState.Error ->
+                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
+            }
+            LaunchedEffect(quizEventKey) {
+                when (val state = uiState.quizState) {
+                    is QuizState.Loading -> snackbarHostState.showSnackbar(
+                        message = "Q&Aを作成中…",
+                        duration = SnackbarDuration.Short
+                    )
+                    is QuizState.Success -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Q&Aを作成しました",
+                            actionLabel = "始める",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                    }
+                    is QuizState.Error -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "Q&Aを作成できませんでした",
+                            actionLabel = "詳細",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                    }
+                    is QuizState.Idle -> Unit
+                }
+            }
+
+            val annotationEventKey = when (val state = uiState.annotationState) {
+                is AnnotationState.Idle -> null
+                is AnnotationState.Loading -> "loading:${state.sourceTitle}"
+                is AnnotationState.Success -> "success:${state.savedUri}:${state.isViewed}"
+                is AnnotationState.Error ->
+                    "error:${state.sourceTitle}:${state.message}:${state.isViewed}"
+            }
+            LaunchedEffect(annotationEventKey) {
+                when (val state = uiState.annotationState) {
+                    is AnnotationState.Loading -> snackbarHostState.showSnackbar(
+                        message = "AI補記メモを作成中…",
+                        duration = SnackbarDuration.Short
+                    )
+                    is AnnotationState.Success -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "AI補記メモを保存しました",
+                            actionLabel = "見る",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                    }
+                    is AnnotationState.Error -> if (!state.isViewed) {
+                        val result = snackbarHostState.showSnackbar(
+                            message = "AI補記メモを作成できませんでした",
+                            actionLabel = "詳細",
+                            duration = SnackbarDuration.Long
+                        )
+                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                    }
+                    is AnnotationState.Idle -> Unit
+                }
+            }
+
+            AppScaffold(
+                windowSizeClass = windowSizeClass,
+                navController = navController,
+                quizState = uiState.quizState,
+                annotationState = uiState.annotationState,
+                snackbarHostState = snackbarHostState
+            ) { modifier ->
                 NavHost(
                     navController = navController,
                     startDestination = "note",
@@ -135,8 +225,10 @@ class MainActivity : ComponentActivity() {
                     composable("ai") {
                         AiTab(
                             uiState = uiState,
-                            onGenerateQuiz = goGenerateQuiz,
-                            onCreateAnnotation = goCreateAnnotation
+                            onGenerateQuiz = startQuiz,
+                            onOpenQuiz = openQuizResult,
+                            onCreateAnnotation = startAnnotation,
+                            onOpenAnnotation = openAnnotationResult
                         )
                     }
 
@@ -164,7 +256,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("quiz") {
-                        val noteTitle = (uiState.noteState as? NoteState.Success)?.title ?: ""
+                        val noteTitle = when (val state = uiState.quizState) {
+                            is QuizState.Loading -> state.sourceTitle
+                            is QuizState.Success -> state.sourceTitle
+                            is QuizState.Error -> state.sourceTitle
+                            is QuizState.Idle ->
+                                (uiState.noteState as? NoteState.Success)?.title.orEmpty()
+                        }
                         QuizScreen(
                             noteTitle = noteTitle,
                             quizState = uiState.quizState,
