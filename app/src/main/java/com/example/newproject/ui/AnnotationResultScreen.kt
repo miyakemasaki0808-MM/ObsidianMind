@@ -24,24 +24,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
-import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelTinted
+import com.example.newproject.ui.theme.ReadingGradient
 
 @Composable
 fun AnnotationResultScreen(
     annotationState: AnnotationState,
     onBack: () -> Unit
 ) {
-    // 他画面と同じ共通グラデーションに統一（以前はこの画面のみ向きが異なっていた）
+    // AI補記は「読む」画面のため、ノート閲覧と同じ低彩度グラデーションを使う
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(AppGradient)
+            .background(ReadingGradient)
             .statusBarsPadding()
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)

@@ -56,7 +56,6 @@ import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
 import com.example.newproject.ui.markdown.buildNoteSectionModel
-import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
@@ -66,6 +65,7 @@ import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.ReadingGradient
 import kotlin.math.roundToInt
 
 // ---------------------------------------------------------------------------
@@ -106,7 +106,7 @@ fun NoteReaderTab(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(AppGradient)
+                .background(ReadingGradient)
                 .safeDrawingPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
         ) {
@@ -189,7 +189,7 @@ fun NoteReaderTab(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(AppGradient)
+                    .background(ReadingGradient)
                     .safeDrawingPadding()
                     .padding(12.dp)
             ) {
