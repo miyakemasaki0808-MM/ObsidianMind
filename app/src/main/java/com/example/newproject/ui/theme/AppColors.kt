@@ -18,6 +18,7 @@ internal val LinkBlue = Color(0xFF2563EB)
 //   ButtonSecondary（緑）＝補助・代替アクション
 //   ButtonAi（Indigo）＝AI生成系アクション
 //   ※ナビ（戻る等）はOutlinedButtonで控えめに
+//   ※同一画面にAI系ボタンが複数並ぶ場合は、主たる方をButtonPrimaryにして識別性を優先する
 internal val ButtonPrimary = Color(0xFFFF3D71)
 internal val ButtonSecondary = Color(0xFF16B8A6)
 internal val ButtonAi = Indigo

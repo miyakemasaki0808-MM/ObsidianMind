@@ -34,6 +34,7 @@ import com.example.newproject.NoteUiState
 import com.example.newproject.SummaryState
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
+import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
@@ -90,10 +91,11 @@ fun AiTab(
         SummaryPanel(summaryState = uiState.summaryState)
 
         Spacer(modifier = Modifier.height(16.dp))
+        // 隣のAI補記メモ（ButtonAi）と同色だと区別しづらいため、画面の主アクションとしてピンクにする
         Button(
             onClick = onGenerateQuiz,
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
+            colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
             shape = RoundedCornerShape(24.dp)
         ) { Text("📝 Q&Aを作る", color = OnVibrant) }
 
