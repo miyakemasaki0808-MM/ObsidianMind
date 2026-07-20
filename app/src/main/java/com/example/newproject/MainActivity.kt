@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -35,6 +36,7 @@ import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.navigateToTab
 import com.example.newproject.ui.NoteReaderTab
+import com.example.newproject.ui.OpeningScreen
 import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RelatedTab
@@ -56,10 +58,19 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         hideStatusBar()
         setContent {
+            // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
+            // savedInstanceStateが非nullになるため、OPを再生し直さない。
+            var showOpening by remember { mutableStateOf(savedInstanceState == null) }
+            if (showOpening) {
+                OpeningScreen(onFinished = { showOpening = false })
+                return@setContent
+            }
+
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val windowSizeClass = calculateWindowSizeClass(this)
             val navController = rememberNavController()
