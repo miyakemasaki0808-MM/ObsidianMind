@@ -118,6 +118,23 @@ class QuizControllerTest {
     }
 
     @Test
+    fun `追い生成では広い周辺テキストと一般知識許可の指示を使う`() = runTest {
+        val aiClient = RecordingAiClient(validResponse(), secondResponse())
+        val state = MutableStateFlow(NoteUiState())
+        val controller = QuizController(this, aiClient, state)
+
+        controller.create("セクション", "狭い素材", "広い素材")
+        advanceUntilIdle()
+        controller.generateMore()
+        advanceUntilIdle()
+
+        assertTrue(aiClient.prompts[0].contains("狭い素材"))
+        assertFalse(aiClient.prompts[0].contains("一般知識"))
+        assertTrue(aiClient.prompts[1].contains("広い素材"))
+        assertTrue(aiClient.prompts[1].contains("一般知識"))
+    }
+
+    @Test
     fun `追い生成の失敗では既存カードを保持しappendErrorだけ立てる`() = runTest {
         val aiClient = RecordingAiClient(validResponse(), "読み取れない応答")
         val state = MutableStateFlow(NoteUiState())

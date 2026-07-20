@@ -197,8 +197,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
-    // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
-    fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
+    // sourceLabel=対象セクション名、context=フォーカス周辺テキスト、
+    // extendedContext=追い生成用の広い周辺テキスト（いずれも NoteReaderTab が構築）
+    fun generateQuiz(sourceLabel: String, context: String, extendedContext: String) =
+        quiz.create(sourceLabel, context, extendedContext)
     fun generateMoreQuiz() = quiz.generateMore()
     fun markQuizViewed() = quiz.markViewed()
 

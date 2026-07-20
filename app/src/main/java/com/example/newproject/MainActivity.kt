@@ -190,9 +190,9 @@ class MainActivity : ComponentActivity() {
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                             onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                             onEndSectionChat = { viewModel.endSectionChat() },
-                            onGenerateQuiz = { sourceLabel, context ->
+                            onGenerateQuiz = { sourceLabel, context, extendedContext ->
                                 snackbarHostState.currentSnackbarData?.dismiss()
-                                viewModel.generateQuiz(sourceLabel, context)
+                                viewModel.generateQuiz(sourceLabel, context, extendedContext)
                             },
                             onOpenQuizResult = openQuizResult
                         )

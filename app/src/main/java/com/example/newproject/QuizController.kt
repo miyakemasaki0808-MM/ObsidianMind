@@ -29,7 +29,7 @@ class QuizController(
     private var downloadJob: Job? = null
     private var activeRequestId = 0L
 
-    fun create(title: String, content: String) {
+    fun create(title: String, content: String, extendedContent: String = content) {
         // 生成中の再タップは同じ要求として扱い、モデルの順番待ちを重複させない。
         val current = uiState.value.quizState
         if (current is QuizState.Loading) return
@@ -38,7 +38,8 @@ class QuizController(
         val request = PendingQuiz(
             requestId = ++activeRequestId,
             title = title,
-            content = content
+            content = content,
+            extendedContent = extendedContent
         )
         uiState.value = uiState.value.copy(
             quizState = QuizState.Loading(title.toObsidianNoteTitle())
@@ -92,10 +93,13 @@ class QuizController(
                     failAppend(requestId, "この端末ではAIを利用できません。")
                     return@launch
                 }
+                // 追い生成は広い周辺テキスト（extendedContent）を使う。同じ素材への
+                // 再出題で重複・失敗しやすいため、新素材と一般知識出題の許可で補う。
                 val prompt = PromptBuilder.buildQuizPrompt(
                     sourceLabel = source.title,
-                    content = source.content,
-                    excludeQuestions = current.cards.map { it.question }
+                    content = source.extendedContent,
+                    excludeQuestions = current.cards.map { it.question },
+                    isFollowUp = true
                 )
                 val raw = aiClient.generate(prompt)
                 if (!isCurrent(requestId)) return@launch
@@ -220,6 +224,8 @@ class QuizController(
     private data class PendingQuiz(
         val requestId: Long,
         val title: String,
-        val content: String
+        val content: String,
+        // 追い生成用の広い周辺テキスト（初回入力の外側のセクションまで含む）
+        val extendedContent: String = content
     )
 }
