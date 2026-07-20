@@ -75,11 +75,25 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    fun buildQuizPrompt(title: String, content: String): String {
+    // フォーカス周辺クイズ: 出力上限（オンデバイスは256トークン程度）に確実に収まる
+    // 2問固定で生成する。追い生成では excludeQuestions で既出問題の重複を避けさせる。
+    fun buildQuizPrompt(
+        sourceLabel: String,
+        content: String,
+        excludeQuestions: List<String> = emptyList()
+    ): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+        val exclusionText = excludeQuestions
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString(
+                separator = "\n",
+                prefix = "Do NOT repeat or closely paraphrase any of these existing questions:\n"
+            ) { "- $it" }
+            ?: ""
+
         return """
-            You are a study assistant. Read the following Obsidian note and generate exactly 5 multiple-choice questions to help the user memorize the key concepts. If the note is short, use related general knowledge to create additional questions.
-            Answer in the same language as the note content.
+            You are a study assistant. Read the following excerpt from an Obsidian note and generate exactly 2 multiple-choice questions to help the user memorize the key concepts of this excerpt. If the excerpt is short, use closely related general knowledge to complete the questions.
+            Answer in the same language as the excerpt content.
             Format each question EXACTLY like this (blank line between questions):
             Q: <question>
             A: <correct answer>
@@ -89,8 +103,10 @@ object PromptBuilder {
             ANSWER: <A or B or C or D>
             EXPLANATION: <1-2 sentence explanation of why the correct answer is right>
 
-            Note title: $title
-            Note content:
+            $exclusionText
+
+            Source: $sourceLabel
+            Excerpt:
             $snippet
         """.trimIndent()
     }
