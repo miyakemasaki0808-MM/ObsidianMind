@@ -1,7 +1,14 @@
 package com.example.newproject.ai
 
-/** 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。 */
-data class RelatedCandidateLine(val id: String, val title: String)
+/**
+ * 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。
+ * [detail] は本文冒頭スニペットやタグ等の補助情報（無ければ null）。
+ * プロンプト整形はここに集約し、文字数計算（入力バジェット）と一致させる。
+ */
+data class RelatedCandidateLine(val id: String, val title: String, val detail: String? = null) {
+    fun renderForPrompt(): String =
+        if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
+}
 
 object PromptBuilder {
 
@@ -33,11 +40,11 @@ object PromptBuilder {
         candidates: List<RelatedCandidateLine>
     ): String {
         val snippet = currentContent.take(RELATED_CONTENT_SNIPPET_LENGTH)
-        val candidateList = candidates.joinToString("\n") { "${it.id} | ${it.title}" }
+        val candidateList = candidates.joinToString("\n") { it.renderForPrompt() }
 
         return """
             You are a note-taking assistant. Find the notes most related to the current Obsidian note.
-            Each candidate is listed as "ID | title".
+            Each candidate is listed as "ID | title", optionally followed by "— context".
             Return only the IDs of up to 5 related notes, one ID per line (for example: C01).
             Do not include the title, numbers, bullets, explanations, or any other text.
 
