@@ -197,7 +197,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
-    fun generateQuiz(title: String, content: String) = quiz.create(title, content)
+    // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
+    fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
+    fun generateMoreQuiz() = quiz.generateMore()
     fun markQuizViewed() = quiz.markViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────

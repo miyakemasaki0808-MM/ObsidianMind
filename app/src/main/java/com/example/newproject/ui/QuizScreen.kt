@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +45,7 @@ import com.example.newproject.ui.theme.OnVibrant
 fun QuizScreen(
     noteTitle: String,
     quizState: QuizState,
+    onGenerateMore: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -91,6 +94,40 @@ fun QuizScreen(
             }
         }
 
+        // 追い生成（1回=2問）。積み増しすぎないよう上限で打ち止め。
+        if (quizState is QuizState.Success && quizState.cards.isNotEmpty()) {
+            quizState.appendError?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "追加生成できませんでした: $message",
+                    fontSize = 12.sp,
+                    color = Color(0xFFEF5350)
+                )
+            }
+            if (quizState.cards.size < MAX_QUIZ_CARDS) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = onGenerateMore,
+                    enabled = !quizState.isAppending,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Indigo),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    if (quizState.isAppending) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = OnVibrant
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("追加の問題を生成中…", color = OnVibrant)
+                    } else {
+                        Text("＋ もう2問", color = OnVibrant)
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
         OutlinedButton(
             onClick = onBack,
@@ -102,6 +139,8 @@ fun QuizScreen(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
+
+private const val MAX_QUIZ_CARDS = 10
 
 @Composable
 private fun MultipleChoicePager(cards: List<QuizCard>) {

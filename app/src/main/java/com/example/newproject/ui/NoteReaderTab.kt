@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
+import com.example.newproject.QuizState
+import com.example.newproject.SectionChatState
 import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
@@ -87,7 +89,9 @@ fun NoteReaderTab(
     onShowSectionChat: () -> Unit,
     onSuggestionTap: (String) -> Unit,
     onDismissSectionChat: () -> Unit,
-    onEndSectionChat: () -> Unit
+    onEndSectionChat: () -> Unit,
+    onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
+    onOpenQuizResult: () -> Unit
 ) {
     val context = LocalContext.current
     var isFullscreen by remember { mutableStateOf(false) }
@@ -267,9 +271,29 @@ fun NoteReaderTab(
 
     // セクションチャットのボトムシート
     if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
+        // クイズ生成の入力: シートが対象にしているセクションを sectionModel から
+        // 同定し、その周辺テキストを渡す。擬似セクション（ノート全体）は
+        // surroundingContext 側でノート先頭フォールバックになる。
+        val startQuizFromChat: (SectionChatState) -> Unit = { target ->
+            val matched = sectionModel?.sections?.firstOrNull {
+                it.title == target.sectionTitle && it.text == target.sectionContext
+            }
+            val quizContext = sectionModel?.surroundingContext(matched) ?: target.sectionContext
+            onGenerateQuiz(target.sectionTitle, quizContext)
+        }
         SectionChatSheet(
             state = chat,
+            quizState = uiState.quizState,
             onSuggestionTap = onSuggestionTap,
+            onQuizTap = {
+                when (val qs = uiState.quizState) {
+                    is QuizState.Loading -> Unit
+                    is QuizState.Success -> onOpenQuizResult()
+                    is QuizState.Error ->
+                        if (qs.isViewed) startQuizFromChat(chat) else onOpenQuizResult()
+                    is QuizState.Idle -> startQuizFromChat(chat)
+                }
+            },
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )

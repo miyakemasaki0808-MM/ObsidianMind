@@ -31,7 +31,6 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.newproject.AnnotationState
-import com.example.newproject.QuizState
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorRed
@@ -64,7 +63,6 @@ private val NavBarColor = Indigo
 fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
-    quizState: QuizState,
     annotationState: AnnotationState,
     snackbarHostState: SnackbarHostState,
     content: @Composable (Modifier) -> Unit
@@ -87,7 +85,7 @@ fun AppScaffold(
                             NavigationRailItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, quizState, annotationState) },
+                                icon = { TabIcon(dest, annotationState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -110,7 +108,7 @@ fun AppScaffold(
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, quizState, annotationState) },
+                                icon = { TabIcon(dest, annotationState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -137,33 +135,23 @@ fun AppScaffold(
 
 internal enum class AiTabBadgeState { None, Loading, Success, Error }
 
-/** 1つの✨で複数AI機能を表すため、未確認の重要度順に1状態だけを返す。 */
+/**
+ * AIタブのバッジ状態。対象は補記メモのみ
+ * （Q&Aは読書画面の吹き出しへ移動し、AIタブから開けなくなったため）。
+ */
 internal fun resolveAiTabBadgeState(
-    quizState: QuizState,
     annotationState: AnnotationState
-): AiTabBadgeState {
-    val hasUnreadError =
-        (quizState is QuizState.Error && !quizState.isViewed) ||
-            (annotationState is AnnotationState.Error && !annotationState.isViewed)
-    val hasUnreadSuccess =
-        (quizState is QuizState.Success && !quizState.isViewed) ||
-            (annotationState is AnnotationState.Success && !annotationState.isViewed)
-    val hasLoading =
-        quizState is QuizState.Loading || annotationState is AnnotationState.Loading
-
-    return when {
-        hasUnreadError -> AiTabBadgeState.Error
-        hasUnreadSuccess -> AiTabBadgeState.Success
-        hasLoading -> AiTabBadgeState.Loading
-        else -> AiTabBadgeState.None
-    }
+): AiTabBadgeState = when {
+    annotationState is AnnotationState.Error && !annotationState.isViewed -> AiTabBadgeState.Error
+    annotationState is AnnotationState.Success && !annotationState.isViewed -> AiTabBadgeState.Success
+    annotationState is AnnotationState.Loading -> AiTabBadgeState.Loading
+    else -> AiTabBadgeState.None
 }
 
-/** AIタブの意味は常に✨のまま保ち、右上の小さなバッジだけでAI全体の状態を知らせる。 */
+/** AIタブの意味は常に✨のまま保ち、右上の小さなバッジだけでAIの状態を知らせる。 */
 @Composable
 private fun TabIcon(
     dest: AppDestination,
-    quizState: QuizState,
     annotationState: AnnotationState
 ) {
     if (dest != AppDestination.Ai) {
@@ -171,7 +159,7 @@ private fun TabIcon(
         return
     }
 
-    val badgeState = resolveAiTabBadgeState(quizState, annotationState)
+    val badgeState = resolveAiTabBadgeState(annotationState)
     BadgedBox(
         badge = {
             when (badgeState) {
