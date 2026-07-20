@@ -1,6 +1,7 @@
 package com.example.newproject.ai
 
-import com.example.newproject.toNormalizedObsidianTitle
+/** 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。 */
+data class RelatedCandidateLine(val id: String, val title: String)
 
 object PromptBuilder {
 
@@ -8,7 +9,6 @@ object PromptBuilder {
     // 補記は入力が最大のプロンプト。入力を絞って生成時間とコンテキスト圧迫を抑える
     private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 1500
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
-    private const val RELATED_TITLE_LIMIT = 80
     private const val SECTION_SNIPPET_LENGTH = 1500
     private const val PICKER_TITLE_LIMIT = 40
 
@@ -24,34 +24,29 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる。ID→ノートの解決は
+    // UseCase側で確実に行うため、言い換え・翻訳・装飾・同名衝突に強い。
+    // 絞り込み・並べ替え・上限はUseCase側が担い、ここでは整形のみ（上限で切らない）。
     fun buildRelatedNotesPrompt(
         currentTitle: String,
         currentContent: String,
-        allTitles: List<String>,
-        wikilinkTitles: Set<String>
+        candidates: List<RelatedCandidateLine>
     ): String {
         val snippet = currentContent.take(RELATED_CONTENT_SNIPPET_LENGTH)
-        val linkedTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
-        val titleList = allTitles
-            .take(RELATED_TITLE_LIMIT)
-            .joinToString("\n") { title ->
-                val marker = if (title.toNormalizedObsidianTitle() in linkedTitleSet) " [linked]" else ""
-                "- $title$marker"
-            }
+        val candidateList = candidates.joinToString("\n") { "${it.id} | ${it.title}" }
 
         return """
-            You are a note-taking assistant. Find the 5 notes most related to the current Obsidian note.
-            Answer in the same language as the note content.
-            Return only note titles from the candidate list, one title per line.
-            Do not add numbers, bullets, explanations, or extra text.
-            Prefer candidates marked [linked] when they are relevant.
+            You are a note-taking assistant. Find the notes most related to the current Obsidian note.
+            Each candidate is listed as "ID | title".
+            Return only the IDs of up to 5 related notes, one ID per line (for example: C01).
+            Do not include the title, numbers, bullets, explanations, or any other text.
 
             Current note title: $currentTitle
             Current note content snippet:
             $snippet
 
-            Candidate note titles:
-            $titleList
+            Candidates:
+            $candidateList
         """.trimIndent()
     }
 
