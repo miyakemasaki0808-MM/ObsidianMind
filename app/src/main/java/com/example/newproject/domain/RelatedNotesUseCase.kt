@@ -82,7 +82,7 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                 AiAvailability.Available -> {
                     // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
                     // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
-                    val orderedCandidates = orderRelatedCandidates(
+                    val orderedCandidates = rankRelatedCandidates(
                         currentTitle = currentTitle,
                         candidates = candidateNotes,
                         titleOf = { it.name },
