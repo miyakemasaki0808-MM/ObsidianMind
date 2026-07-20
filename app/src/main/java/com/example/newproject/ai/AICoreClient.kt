@@ -2,10 +2,13 @@ package com.example.newproject.ai
 
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Candidate
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerationConfig
 import com.google.mlkit.genai.prompt.ModelConfig
 import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.TextPart
+import com.google.mlkit.genai.prompt.generateContentRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -32,8 +35,14 @@ interface AiClient {
 //   エラー表示ではなくジョブのキャンセルとして黙殺されてしまう）
 class AiTimeoutException(message: String) : Exception(message)
 
+// 出力トークン上限に達して応答が途中で切れたことを示す例外。
+// 途切れた文章をそのまま保存・表示するより、エラーとして再試行を促す方が安全。
+class AiTruncatedException(message: String) : Exception(message)
+
 // ─────────────────────────────────────────────────────────────────────────────
-// AICoreClient — Gemini Nano 4 Full (E4B) via ML Kit GenAI Prompt API
+// AICoreClient — Gemini Nano via ML Kit GenAI Prompt API
+// 実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める。
+// ModelPreference.FULL は世代指定ではなく「速度より精度を優先」の指定。
 // ─────────────────────────────────────────────────────────────────────────────
 class AICoreClient : AiClient {
 
@@ -66,8 +75,16 @@ class AICoreClient : AiClient {
         withContext(Dispatchers.IO) {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
-                    val response = model.generateContent(prompt)
-                    response.candidates.firstOrNull()?.text ?: ""
+                    val request = generateContentRequest(TextPart(prompt)) {
+                        maxOutputTokens = MAX_OUTPUT_TOKENS
+                    }
+                    val candidate = model.generateContent(request).candidates.firstOrNull()
+                    if (candidate?.finishReason == Candidate.FinishReason.MAX_TOKENS) {
+                        throw AiTruncatedException(
+                            "AI応答が長すぎて途中で打ち切られました。もう一度お試しください。"
+                        )
+                    }
+                    candidate?.text ?: ""
                 }
             } catch (e: TimeoutCancellationException) {
                 throw AiTimeoutException("AI応答がタイムアウトしました（${GENERATE_TIMEOUT_MS / 1000}秒）")
@@ -81,6 +98,13 @@ class AICoreClient : AiClient {
     companion object {
         private val generateMutex = Mutex()
         private const val GENERATE_TIMEOUT_MS = 60_000L
+
+        // 全機能共通の出力上限。上限自体に処理負荷はなく（負荷は実際に生成された
+        // トークン数で決まる）、未設定時のSDKデフォルトで応答が黙って切れるのを防ぐ。
+        // 最長出力のクイズ（5問×選択肢4つ＋解説、日本語）が収まる値にしている。
+        // Gemini Nano のコンテキスト約4096トークン（入力＋出力）に対し、
+        // 最大入力の補記プロンプト（約2000〜2500トークン）と併せても枠内に収まる。
+        private const val MAX_OUTPUT_TOKENS = 1024
     }
 }
 
