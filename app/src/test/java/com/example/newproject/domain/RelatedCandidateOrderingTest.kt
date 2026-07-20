@@ -1,6 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.ai.RelatedCandidateLine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -89,18 +90,35 @@ class RelatedCandidateOrderingTest {
         assertEquals(listOf("Bar"), ordered)
     }
 
-    // --- buildRelatedNotesPrompt（[linked] 撤去・上限なし） ---
+    @Test
+    fun `同名でも別要素として並び順に保持される（ID採番の前提）`() {
+        data class Cand(val id: Int, val title: String)
+        val ordered = orderRelatedCandidates(
+            currentTitle = "採番なし",
+            candidates = listOf(Cand(1, "重複名"), Cand(2, "重複名"), Cand(3, "別名")),
+            titleOf = { it.title },
+            excludedTitles = emptySet(),
+            limit = 40
+        )
+        assertEquals(listOf(1, 2, 3), ordered.map { it.id })
+    }
+
+    // --- buildRelatedNotesPrompt（ID提示・ID応答／[linked]撤去） ---
 
     @Test
-    fun `プロンプトに linked マーカーと優先指示を含めない`() {
+    fun `プロンプトはID付き候補を提示しIDだけ返させる（linked撤去）`() {
         val prompt = PromptBuilder.buildRelatedNotesPrompt(
             currentTitle = "現在ノート",
             currentContent = "本文スニペット",
-            allTitles = listOf("候補A", "候補B")
+            candidates = listOf(
+                RelatedCandidateLine("C01", "候補A"),
+                RelatedCandidateLine("C02", "候補B")
+            )
         )
         assertFalse(prompt.contains("[linked]"))
         assertFalse(prompt.contains("Prefer"))
-        assertTrue(prompt.contains("- 候補A"))
-        assertTrue(prompt.contains("- 候補B"))
+        assertTrue(prompt.contains("C01 | 候補A"))
+        assertTrue(prompt.contains("C02 | 候補B"))
+        assertTrue(prompt.contains("Return only the IDs"))
     }
 }

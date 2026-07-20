@@ -5,6 +5,7 @@ import com.example.newproject.NoteFile
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.ai.RelatedCandidateLine
 import com.example.newproject.toNormalizedObsidianTitle
 import kotlinx.coroutines.CancellationException
 
@@ -43,7 +44,6 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
         return try {
             val candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) }
             val wikilinkTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
-            val notesByTitle = candidateNotes.associateBy { it.name.toNormalizedObsidianTitle() }
 
             val relatedNotes = buildDeterministicRelatedNotes(
                 currentTitle = currentTitle,
@@ -65,26 +65,29 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                 AiAvailability.Available -> {
                     // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
                     // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
-                    val candidateTitles = orderRelatedCandidateTitles(
+                    val orderedCandidates = orderRelatedCandidates(
                         currentTitle = currentTitle,
-                        candidateTitles = candidateNotes.map { it.name },
+                        candidates = candidateNotes,
+                        titleOf = { it.name },
                         excludedTitles = relatedNotes.map { it.title }.toSet(),
                         limit = AI_CANDIDATE_LIMIT
                     )
+                    // 各候補に一時ID（C01..）を採番。同名・別Uriも別IDになり確実に解決できる。
+                    val idToNote = orderedCandidates
+                        .mapIndexed { index, note -> relatedCandidateId(index) to note }
+                        .toMap()
                     val prompt = PromptBuilder.buildRelatedNotesPrompt(
                         currentTitle = currentTitle,
                         currentContent = currentContent,
-                        allTitles = candidateTitles
+                        candidates = idToNote.map { (id, note) -> RelatedCandidateLine(id, note.name) }
                     )
                     val response = aiClient.generate(prompt)
 
-                    // 候補は既に決定的枠を除外済みだが、モデルが既出タイトルを混ぜても
-                    // 拾わないよう、Uri単位でも念のため落とす（防御）。
+                    // 応答からIDを抽出→ノートへ解決。候補は既に決定的枠を除外済みだが、
+                    // モデルが既出を混ぜても拾わないようUri単位でも念のため落とす（防御）。
                     val relatedUris = relatedNotes.map { it.uri }.toSet()
-                    val aiNotes = response.lineSequence()
-                        .map { it.cleanAiTitle() }
-                        .filter { it.isNotBlank() }
-                        .mapNotNull { title -> notesByTitle[title.toNormalizedObsidianTitle()] }
+                    val aiNotes = parseCandidateIds(response, idToNote.keys, AI_RECOMMENDATION_LIMIT)
+                        .mapNotNull { id -> idToNote[id] }
                         .filterNot { it.uri in relatedUris }
                         .distinctBy { it.uri }
                         .take(AI_RECOMMENDATION_LIMIT)
@@ -96,7 +99,6 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                                 lastModified = note.lastModified
                             )
                         }
-                        .toList()
 
                     RelatedNotesResult.Success(
                         relatedNotes = relatedNotes,

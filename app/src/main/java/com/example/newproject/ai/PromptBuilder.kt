@@ -1,5 +1,8 @@
 package com.example.newproject.ai
 
+/** 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。 */
+data class RelatedCandidateLine(val id: String, val title: String)
+
 object PromptBuilder {
 
     private const val CONTENT_SNIPPET_LENGTH = 1200
@@ -21,28 +24,29 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    // 候補の絞り込み・並べ替え・上限は RelatedNotesUseCase 側（orderRelatedCandidateTitles）が担う。
-    // ここではプロンプト整形のみを行い、上限で切らない（制限箇所の二重化を避ける）。
+    // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる。ID→ノートの解決は
+    // UseCase側で確実に行うため、言い換え・翻訳・装飾・同名衝突に強い。
+    // 絞り込み・並べ替え・上限はUseCase側が担い、ここでは整形のみ（上限で切らない）。
     fun buildRelatedNotesPrompt(
         currentTitle: String,
         currentContent: String,
-        allTitles: List<String>
+        candidates: List<RelatedCandidateLine>
     ): String {
         val snippet = currentContent.take(RELATED_CONTENT_SNIPPET_LENGTH)
-        val titleList = allTitles.joinToString("\n") { "- $it" }
+        val candidateList = candidates.joinToString("\n") { "${it.id} | ${it.title}" }
 
         return """
-            You are a note-taking assistant. Find the 5 notes most related to the current Obsidian note.
-            Answer in the same language as the note content.
-            Return only note titles from the candidate list, one title per line.
-            Do not add numbers, bullets, explanations, or extra text.
+            You are a note-taking assistant. Find the notes most related to the current Obsidian note.
+            Each candidate is listed as "ID | title".
+            Return only the IDs of up to 5 related notes, one ID per line (for example: C01).
+            Do not include the title, numbers, bullets, explanations, or any other text.
 
             Current note title: $currentTitle
             Current note content snippet:
             $snippet
 
-            Candidate note titles:
-            $titleList
+            Candidates:
+            $candidateList
         """.trimIndent()
     }
 
