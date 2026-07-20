@@ -40,6 +40,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -311,6 +312,11 @@ private fun BoxScope.SectionFab(
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    // pointerInput(Unit) は初回コンポーズ時のクロージャを固定するため、直接 onTap を
+    // 参照すると古いセッション状態を抱き込んだ処理が呼ばれ続ける（クイズ画面から
+    // 戻った後に「確認終了→吹き出しタップ」が無反応になる不具合の原因）。
+    // rememberUpdatedState 経由で常に最新の onTap を呼ぶ。
+    val currentOnTap by rememberUpdatedState(onTap)
 
     Box(
         modifier = Modifier
@@ -369,7 +375,7 @@ private fun BoxScope.SectionFab(
                         }
                     }
                     .pointerInput(Unit) {
-                        detectTapGestures(onTap = { onTap() })
+                        detectTapGestures(onTap = { currentOnTap() })
                     },
                 contentAlignment = Alignment.Center
             ) {
