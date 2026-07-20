@@ -81,6 +81,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
         cachedNotesLoadedAt = 0L
+        relatedNotesUseCase.clearCache()
         search.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
@@ -297,7 +298,17 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
             _uiState.value = _uiState.value.copy(wikilinkTitles = wikilinkTitles)
-            when (val result = relatedNotesUseCase.findRelated(title, content, cachedNotes, wikilinkTitles)) {
+            val contentResolver = getApplication<Application>().contentResolver
+            when (
+                val result = relatedNotesUseCase.findRelated(
+                    currentTitle = title,
+                    currentContent = content,
+                    allNotes = cachedNotes,
+                    wikilinkTitles = wikilinkTitles,
+                    readContent = { uri -> repository.readNoteContent(contentResolver, uri) },
+                    parseMeta = { repository.parseMeta(it) }
+                )
+            ) {
                 is RelatedNotesResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         relatedNotesState = RelatedNotesState.Success(

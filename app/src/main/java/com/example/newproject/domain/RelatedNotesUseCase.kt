@@ -2,12 +2,18 @@ package com.example.newproject.domain
 
 import android.net.Uri
 import com.example.newproject.NoteFile
+import com.example.newproject.NoteMeta
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.RelatedCandidateLine
 import com.example.newproject.toNormalizedObsidianTitle
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 data class RelatedNote(
     val title: String,
@@ -35,11 +41,22 @@ sealed class RelatedNotesResult {
 
 class RelatedNotesUseCase(private val aiClient: AiClient) {
 
+    // 候補の本文コンテキスト（スニペット・タグ・aliases）を URI+lastModified で記憶する。
+    // ノートを開き直すたびに候補集合は大きく重なるため、再読込を避けられる。
+    private val candidateCache = KeyedMemoCache<CandidateCacheKey, CandidateContextData>(CANDIDATE_CACHE_MAX_ENTRIES)
+
+    // Vault切替時に呼ぶ。旧VaultのURIは新Vaultで開けないため全破棄する。
+    fun clearCache() = candidateCache.clear()
+
+    private data class CandidateCacheKey(val uri: Uri, val lastModified: Long?)
+
     suspend fun findRelated(
         currentTitle: String,
         currentContent: String,
         allNotes: List<NoteFile>,
-        wikilinkTitles: Set<String>
+        wikilinkTitles: Set<String>,
+        readContent: suspend (Uri) -> String,
+        parseMeta: (String) -> NoteMeta
     ): RelatedNotesResult {
         return try {
             val candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) }
@@ -76,10 +93,35 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                     val idToNote = orderedCandidates
                         .mapIndexed { index, note -> relatedCandidateId(index) to note }
                         .toMap()
+                    // 候補を本文冒頭スニペット等で肉付けし、入力バジェット内へ収める。
+                    // 読み取りは上限付き並列（SAFプロバイダを詰まらせないよう Semaphore で同時数を絞る）。
+                    // awaitAll はリスト順で返るため、採番（C01..）の並びは保たれる。
+                    // キャンセルは coroutineScope が全 async を巻き取り、awaitAll から伝播する。
+                    val gate = Semaphore(MAX_PARALLEL_READS)
+                    val contexts = coroutineScope {
+                        orderedCandidates.mapIndexed { index, note ->
+                            async {
+                                val data = gate.withPermit { loadContextOrEmpty(note, readContent, parseMeta) }
+                                CandidateContext(
+                                    id = relatedCandidateId(index),
+                                    title = note.name,
+                                    snippet = data.snippet,
+                                    tags = data.tags,
+                                    aliases = data.aliases
+                                )
+                            }
+                        }.awaitAll()
+                    }
+                    val candidateLines = renderCandidatesWithinBudget(
+                        candidates = contexts,
+                        charBudget = RELATED_CANDIDATES_BUDGET,
+                        maxSnippetLen = RELATED_SNIPPET_LEN,
+                        minSnippetLen = RELATED_MIN_SNIPPET_LEN
+                    )
                     val prompt = PromptBuilder.buildRelatedNotesPrompt(
                         currentTitle = currentTitle,
                         currentContent = currentContent,
-                        candidates = idToNote.map { (id, note) -> RelatedCandidateLine(id, note.name) }
+                        candidates = candidateLines
                     )
                     val response = aiClient.generate(prompt)
 
@@ -156,10 +198,39 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
     private fun String.isSameTitleAs(other: String): Boolean =
         toNormalizedObsidianTitle() == other.toNormalizedObsidianTitle()
 
+    // 候補の本文コンテキストをキャッシュ経由で取得する。読み取り失敗（キャンセル以外）は
+    // その候補だけタイトルのみで続行し、AI推薦全体を巻き添えにしない。キャンセルは伝播。
+    private suspend fun loadContextOrEmpty(
+        note: NoteFile,
+        readContent: suspend (Uri) -> String,
+        parseMeta: (String) -> NoteMeta
+    ): CandidateContextData = try {
+        candidateCache.getOrLoad(CandidateCacheKey(note.uri, note.lastModified)) {
+            val content = readContent(note.uri)
+            val meta = parseMeta(content)
+            CandidateContextData(
+                snippet = extractRelatedSnippet(content, RELATED_SNIPPET_LEN),
+                tags = meta.tags,
+                aliases = meta.aliases
+            )
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        CandidateContextData.EMPTY
+    }
+
     companion object {
         private const val RELATED_NOTE_LIMIT = 5
         private const val AI_RECOMMENDATION_LIMIT = 5
         // AIへ渡す候補タイトルの上限。制限箇所はここ1か所に統一（旧: プロンプト側80と二重）。
         private const val AI_CANDIDATE_LIMIT = 40
+        // 以下は実機計測で調整する前提の初期値。
+        private const val RELATED_SNIPPET_LEN = 150        // 1候補あたりのスニペット最大長
+        private const val RELATED_MIN_SNIPPET_LEN = 40     // 短縮時の下限
+        private const val RELATED_CANDIDATES_BUDGET = 3500 // 候補ブロック全体の入力文字数上限
+        private const val CANDIDATE_CACHE_MAX_ENTRIES = 300
+        // 候補本文の同時読み込み数。SAFプロバイダ（別プロセス）の詰まりを避けつつ速度を稼ぐ。
+        private const val MAX_PARALLEL_READS = 8
     }
 }

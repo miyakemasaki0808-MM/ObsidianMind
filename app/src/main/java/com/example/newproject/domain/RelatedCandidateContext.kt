@@ -15,6 +15,17 @@ internal data class CandidateContext(
     val aliases: List<String> = emptyList()
 )
 
+// キャッシュに載せる候補の本文情報（ID・タイトルは呼び出し毎に決まるので含めない）。
+internal data class CandidateContextData(
+    val snippet: String,
+    val tags: List<String>,
+    val aliases: List<String>
+) {
+    companion object {
+        val EMPTY = CandidateContextData("", emptyList(), emptyList())
+    }
+}
+
 private const val SNIPPET_SHRINK_STEP = 20
 
 /**
