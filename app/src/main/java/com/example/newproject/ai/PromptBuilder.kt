@@ -5,8 +5,6 @@ import com.example.newproject.toNormalizedObsidianTitle
 object PromptBuilder {
 
     private const val CONTENT_SNIPPET_LENGTH = 1200
-    // クイズ追い生成用。初回より広い素材を渡して「新しい問題の種」を確保する
-    private const val QUIZ_FOLLOW_UP_SNIPPET_LENGTH = 2400
     // 補記は入力が最大のプロンプト。入力を絞って生成時間とコンテキスト圧迫を抑える
     private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 1500
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
@@ -78,35 +76,11 @@ object PromptBuilder {
     }
 
     // フォーカス周辺クイズ: 出力上限（オンデバイスは256トークン程度）に確実に収まる
-    // 2問固定で生成する。追い生成（isFollowUp）では excludeQuestions で既出問題の
-    // 重複を避けさせつつ、入力を広げ（2400字）、素材が尽きた場合は関連一般知識からの
-    // 出題を明示的に許可する。その際は解説に「一般知識: 」を付けさせ、
-    // ノート由来でないことを回答者が区別できるようにする。
-    fun buildQuizPrompt(
-        sourceLabel: String,
-        content: String,
-        excludeQuestions: List<String> = emptyList(),
-        isFollowUp: Boolean = false
-    ): String {
-        val snippet = content.take(
-            if (isFollowUp) QUIZ_FOLLOW_UP_SNIPPET_LENGTH else CONTENT_SNIPPET_LENGTH
-        )
-        val exclusionText = excludeQuestions
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString(
-                separator = "\n",
-                prefix = "Do NOT repeat or closely paraphrase any of these existing questions:\n"
-            ) { "- $it" }
-            ?: ""
-        val followUpText = if (isFollowUp) {
-            "If the excerpt does not contain enough new material for 2 more questions, create questions from closely related general knowledge that deepens understanding of the excerpt's topic. In that case, start the EXPLANATION with 「一般知識: 」."
-        } else {
-            ""
-        }
-
+    // 2問固定で生成する。
+    fun buildQuizPrompt(sourceLabel: String, content: String): String {
+        val snippet = content.take(CONTENT_SNIPPET_LENGTH)
         return """
             You are a study assistant. Read the following excerpt from an Obsidian note and generate exactly 2 multiple-choice questions to help the user memorize the key concepts of this excerpt. If the excerpt is short, use closely related general knowledge to complete the questions.
-            $followUpText
             Answer in the same language as the excerpt content.
             Format each question EXACTLY like this (blank line between questions):
             Q: <question>
@@ -116,8 +90,6 @@ object PromptBuilder {
             D: <wrong answer>
             ANSWER: <A or B or C or D>
             EXPLANATION: <1-2 sentence explanation of why the correct answer is right>
-
-            $exclusionText
 
             Source: $sourceLabel
             Excerpt:

@@ -126,8 +126,7 @@ fun SectionChatSheet(
             // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
             // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
             Spacer(modifier = Modifier.height(20.dp))
-            val isQuizBusy = quizState is QuizState.Loading ||
-                (quizState is QuizState.Success && quizState.isAppending)
+            val isQuizBusy = quizState is QuizState.Loading
             val quizLabel = when (quizState) {
                 is QuizState.Idle -> "📝 この部分でクイズ"
                 is QuizState.Loading -> "クイズを作成中…"

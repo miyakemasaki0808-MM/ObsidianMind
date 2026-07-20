@@ -90,7 +90,7 @@ fun NoteReaderTab(
     onSuggestionTap: (String) -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
-    onGenerateQuiz: (sourceLabel: String, context: String, extendedContext: String) -> Unit,
+    onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
     onOpenQuizResult: () -> Unit
 ) {
     val context = LocalContext.current
@@ -274,16 +274,12 @@ fun NoteReaderTab(
         // クイズ生成の入力: シートが対象にしているセクションを sectionModel から
         // 同定し、その周辺テキストを渡す。擬似セクション（ノート全体）は
         // surroundingContext 側でノート先頭フォールバックになる。
-        // extended は「もう2問」用の広い窓（初回の外側の素材で重複を避ける）。
         val startQuizFromChat: (SectionChatState) -> Unit = { target ->
             val matched = sectionModel?.sections?.firstOrNull {
                 it.title == target.sectionTitle && it.text == target.sectionContext
             }
             val quizContext = sectionModel?.surroundingContext(matched) ?: target.sectionContext
-            val extendedContext = sectionModel
-                ?.surroundingContext(matched, targetLength = EXTENDED_QUIZ_CONTEXT_LENGTH)
-                ?: target.sectionContext
-            onGenerateQuiz(target.sectionTitle, quizContext, extendedContext)
+            onGenerateQuiz(target.sectionTitle, quizContext)
         }
         SectionChatSheet(
             state = chat,
@@ -303,9 +299,6 @@ fun NoteReaderTab(
         )
     }
 }
-
-// 「もう2問」追い生成用の広い周辺テキスト長（初回1200字の2倍）
-private const val EXTENDED_QUIZ_CONTEXT_LENGTH = 2400
 
 private enum class SectionFabStatus { Idle, Loading, Ready, Error }
 

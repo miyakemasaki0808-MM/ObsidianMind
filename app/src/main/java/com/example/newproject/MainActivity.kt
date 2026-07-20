@@ -190,9 +190,9 @@ class MainActivity : ComponentActivity() {
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                             onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                             onEndSectionChat = { viewModel.endSectionChat() },
-                            onGenerateQuiz = { sourceLabel, context, extendedContext ->
+                            onGenerateQuiz = { sourceLabel, context ->
                                 snackbarHostState.currentSnackbarData?.dismiss()
-                                viewModel.generateQuiz(sourceLabel, context, extendedContext)
+                                viewModel.generateQuiz(sourceLabel, context)
                             },
                             onOpenQuizResult = openQuizResult
                         )
@@ -268,7 +268,6 @@ class MainActivity : ComponentActivity() {
                         QuizScreen(
                             noteTitle = noteTitle,
                             quizState = uiState.quizState,
-                            onGenerateMore = { viewModel.generateMoreQuiz() },
                             onBack = { navController.popBackStack() }
                         )
                     }
