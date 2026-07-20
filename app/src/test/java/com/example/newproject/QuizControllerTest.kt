@@ -98,6 +98,74 @@ class QuizControllerTest {
         assertTrue(success.isViewed)
     }
 
+    @Test
+    fun `もう2問で既存カードに追加され既出問題が除外指定される`() = runTest {
+        val aiClient = RecordingAiClient(validResponse(), secondResponse())
+        val state = MutableStateFlow(NoteUiState())
+        val controller = QuizController(this, aiClient, state)
+
+        controller.create("セクション", "周辺テキスト")
+        advanceUntilIdle()
+        controller.generateMore()
+        advanceUntilIdle()
+
+        val success = state.value.quizState as QuizState.Success
+        assertEquals(2, success.cards.size)
+        assertFalse(success.isAppending)
+        assertEquals(null, success.appendError)
+        // 2回目のプロンプトに既出問題文が除外リストとして含まれる
+        assertTrue(aiClient.prompts[1].contains("問題"))
+    }
+
+    @Test
+    fun `追い生成の失敗では既存カードを保持しappendErrorだけ立てる`() = runTest {
+        val aiClient = RecordingAiClient(validResponse(), "読み取れない応答")
+        val state = MutableStateFlow(NoteUiState())
+        val controller = QuizController(this, aiClient, state)
+
+        controller.create("セクション", "周辺テキスト")
+        advanceUntilIdle()
+        controller.generateMore()
+        advanceUntilIdle()
+
+        val success = state.value.quizState as QuizState.Success
+        assertEquals(1, success.cards.size)
+        assertFalse(success.isAppending)
+        assertTrue(success.appendError != null)
+    }
+
+    @Test
+    fun `追い生成が既出と同一問題しか返さなければ追加しない`() = runTest {
+        val aiClient = RecordingAiClient(validResponse(), validResponse())
+        val state = MutableStateFlow(NoteUiState())
+        val controller = QuizController(this, aiClient, state)
+
+        controller.create("セクション", "周辺テキスト")
+        advanceUntilIdle()
+        controller.generateMore()
+        advanceUntilIdle()
+
+        val success = state.value.quizState as QuizState.Success
+        assertEquals(1, success.cards.size)
+        assertTrue(success.appendError != null)
+    }
+
+    @Test
+    fun `破棄後のもう2問は何もしない`() = runTest {
+        val aiClient = RecordingAiClient(validResponse())
+        val state = MutableStateFlow(NoteUiState())
+        val controller = QuizController(this, aiClient, state)
+
+        controller.create("セクション", "周辺テキスト")
+        advanceUntilIdle()
+        controller.cancelAndClear()
+        controller.generateMore()
+        advanceUntilIdle()
+
+        assertTrue(state.value.quizState is QuizState.Idle)
+        assertEquals(1, aiClient.prompts.size)
+    }
+
     private class ControllableAiClient : AiClient {
         val response = CompletableDeferred<String>()
         var generateCalls = 0
@@ -119,6 +187,21 @@ class QuizControllerTest {
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
 
+    // 呼び出しごとに応答を順番に返し、渡されたプロンプトを記録するフェイク
+    private class RecordingAiClient(vararg responses: String) : AiClient {
+        val prompts = mutableListOf<String>()
+        private val queue = ArrayDeque(responses.toList())
+
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+
+        override suspend fun generate(prompt: String): String {
+            prompts += prompt
+            return queue.removeFirst()
+        }
+
+        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
+    }
+
     private fun validResponse() = """
         Q: 問題
         A: 選択肢A
@@ -127,5 +210,15 @@ class QuizControllerTest {
         D: 選択肢D
         ANSWER: A
         EXPLANATION: 解説
+    """.trimIndent()
+
+    private fun secondResponse() = """
+        Q: 問題2
+        A: 選択肢A
+        B: 選択肢B
+        C: 選択肢C
+        D: 選択肢D
+        ANSWER: B
+        EXPLANATION: 解説2
     """.trimIndent()
 }

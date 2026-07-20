@@ -62,7 +62,11 @@ sealed class QuizState {
     data class Success(
         val sourceTitle: String,
         val cards: List<QuizCard>,
-        val isViewed: Boolean = false
+        val isViewed: Boolean = false,
+        // 「もう2問」の追い生成中フラグと、追い生成だけが失敗したときのエラー。
+        // 追い生成の失敗では既存の cards を失わないよう Error 状態には遷移しない。
+        val isAppending: Boolean = false,
+        val appendError: String? = null
     ) : QuizState()
     data class Error(
         val message: String,
