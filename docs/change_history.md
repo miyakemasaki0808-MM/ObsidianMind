@@ -13,6 +13,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |------|----|----------|----------|
+| 2026-07-20 | #26 | アプリ起動時のブランドOPアニメーションを追加。システムスプラッシュ（`core-splashscreen`）＋Compose OP（`OpeningScreen.kt`）の2層構成。背景を着地画面と同色（`ReadingGradient`）で終端し継ぎ目を解消／`savedInstanceState==null` で新規起動時のみ再生／アダプティブランチャーアイコン新設／レビュー対応（TalkBack二重読み上げ回避・発光色を`AppColors`へ集約） | [opening_animation](design/opening_animation.md) |
 | 2026-07-20 | #25 | AI補記の途切れ対策（finishReason検知・出力要求の絞り込み）／クイズを「フォーカスセクション周辺から2問」へ再設計し入口を吹き出しシートへ移動（AIタブのQ&Aボタン廃止・バッジ補記のみ）／クイズのセッション従属化／吹き出しタップ無反応の修正（pointerInputのstale closure） | [section_ai_chat](design/section_ai_chat.md)・[background_ai_ux](design/background_ai_ux.md)・[architecture](design/architecture.md) |
 | 2026-07-20 | #24 | PR #23のレビュー対応3件（デッドコード削除・Snackbarイベントキーのテスト可能化・画面回転での通知再表示抑止）／Vault選択をオプションへ移動／全画面✕ボタンの視認性修正／当日分の閲覧履歴「今日読んだノート」追加 | [background_ai_ux](design/background_ai_ux.md)・[tab_navigation](design/tab_navigation.md)・[ai_picker](design/ai_picker.md) |
 | 2026-07-20 | #23 | Q&A・AI補記のバックグラウンド生成UX。待機画面への遷移を廃止し、Snackbar通知＋AIタブバッジ＋未確認（isViewed）管理に変更。`QuizController` 新設、requestIdによる古い結果の混入防止 | [background_ai_ux](design/background_ai_ux.md) |
