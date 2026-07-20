@@ -31,11 +31,9 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationState
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
-import com.example.newproject.QuizState
 import com.example.newproject.SummaryState
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
-import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
@@ -44,39 +42,17 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelBlue
 
 // ---------------------------------------------------------------------------
-// タブ3: AI（要約・Q&A・補記メモ）
+// タブ3: AI（要約・補記メモ）
+// Q&Aは読書画面の吹き出し（フォーカスセクション周辺クイズ）へ移動した。
 // ---------------------------------------------------------------------------
 
 @Composable
 fun AiTab(
     uiState: NoteUiState,
-    onGenerateQuiz: () -> Unit,
-    onOpenQuiz: () -> Unit,
     onCreateAnnotation: () -> Unit,
     onOpenAnnotation: () -> Unit
 ) {
     val hasNote = uiState.noteState is NoteState.Success
-    val quizState = uiState.quizState
-    val isQuizLoading = quizState is QuizState.Loading
-    val quizLabel = when (quizState) {
-        is QuizState.Idle -> "📝 Q&Aを作る"
-        is QuizState.Loading -> "Q&Aを作成中…"
-        is QuizState.Success -> if (quizState.isViewed) {
-            "📝 Q&Aを開く"
-        } else {
-            "✓ Q&Aを始める"
-        }
-        is QuizState.Error -> if (quizState.isViewed) {
-            "↻ Q&Aを再試行"
-        } else {
-            "! エラーを確認"
-        }
-    }
-    val quizAction = when (quizState) {
-        is QuizState.Success -> onOpenQuiz
-        is QuizState.Error -> if (quizState.isViewed) onGenerateQuiz else onOpenQuiz
-        else -> onGenerateQuiz
-    }
     val annotationState = uiState.annotationState
     val isAnnotationLoading = annotationState is AnnotationState.Loading
     val annotationLabel = when (annotationState) {
@@ -130,16 +106,6 @@ fun AiTab(
         SummaryPanel(summaryState = uiState.summaryState)
 
         Spacer(modifier = Modifier.height(16.dp))
-        // 隣のAI補記メモ（ButtonAi）と同色だと区別しづらいため、画面の主アクションとしてピンクにする
-        Button(
-            onClick = quizAction,
-            enabled = !isQuizLoading,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
-            shape = RoundedCornerShape(24.dp)
-        ) { Text(quizLabel, color = OnVibrant) }
-
-        Spacer(modifier = Modifier.height(10.dp))
         Button(
             onClick = annotationAction,
             enabled = !isAnnotationLoading,

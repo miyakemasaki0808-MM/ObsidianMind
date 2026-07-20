@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,7 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ChatMessage
 import com.example.newproject.ChatRole
+import com.example.newproject.QuizState
 import com.example.newproject.SectionChatState
+import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
@@ -41,7 +45,9 @@ import com.example.newproject.ui.theme.OnVibrant
 @Composable
 fun SectionChatSheet(
     state: SectionChatState,
+    quizState: QuizState,
     onSuggestionTap: (String) -> Unit,
+    onQuizTap: () -> Unit,
     onDismiss: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -116,7 +122,26 @@ fun SectionChatSheet(
                 }
             }
 
+            // ── この部分でクイズ ─────────────────────────
+            // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
+            // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
             Spacer(modifier = Modifier.height(20.dp))
+            val isQuizBusy = quizState is QuizState.Loading
+            val quizLabel = when (quizState) {
+                is QuizState.Idle -> "📝 この部分でクイズ"
+                is QuizState.Loading -> "クイズを作成中…"
+                is QuizState.Success -> "✓ クイズを開く"
+                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
+            }
+            Button(
+                onClick = onQuizTap,
+                enabled = !isQuizBusy,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text(quizLabel, color = OnVibrant) }
+
+            Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
                 onClick = onEndSession,
                 modifier = Modifier.fillMaxWidth(),

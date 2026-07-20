@@ -12,6 +12,8 @@ import kotlinx.coroutines.launch
 
 /**
  * 4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
+ * 入力はノート全体ではなく「フォーカスセクションの周辺テキスト」（呼び出し側が
+ * NoteSectionModel.surroundingContext で構築）。1回の生成は2問固定。
  * AI補記とは独立したジョブを持ち、実際のモデル生成は AiClient 側のMutexで順番に処理される。
  */
 class QuizController(
@@ -66,7 +68,10 @@ class QuizController(
         uiState.value = uiState.value.copy(quizState = next)
     }
 
-    /** ノート・Vault切替時に生成と順番待ちを止め、旧ノートの結果を破棄する。 */
+    /**
+     * ノート・Vault切替や、セクション文脈の切り替わり（新しいセクションチャットの
+     * 開始・終了）で生成と順番待ちを止め、古い結果を破棄する。
+     */
     fun cancelAndClear() {
         activeRequestId++
         generateJob?.cancel()
@@ -79,7 +84,10 @@ class QuizController(
 
     private suspend fun generateWithAvailableModel(request: PendingQuiz) {
         try {
-            val prompt = PromptBuilder.buildQuizPrompt(request.title, request.content)
+            val prompt = PromptBuilder.buildQuizPrompt(
+                sourceLabel = request.title,
+                content = request.content
+            )
             val raw = aiClient.generate(prompt)
             if (!isCurrent(request.requestId)) return
 

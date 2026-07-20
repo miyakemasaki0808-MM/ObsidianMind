@@ -13,6 +13,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |------|----|----------|----------|
+| 2026-07-20 | #25 | AI補記の途切れ対策（finishReason検知・出力要求の絞り込み）／クイズを「フォーカスセクション周辺から2問」へ再設計し入口を吹き出しシートへ移動（AIタブのQ&Aボタン廃止・バッジ補記のみ）／クイズのセッション従属化／吹き出しタップ無反応の修正（pointerInputのstale closure） | [section_ai_chat](design/section_ai_chat.md)・[background_ai_ux](design/background_ai_ux.md)・[architecture](design/architecture.md) |
 | 2026-07-20 | #24 | PR #23のレビュー対応3件（デッドコード削除・Snackbarイベントキーのテスト可能化・画面回転での通知再表示抑止）／Vault選択をオプションへ移動／全画面✕ボタンの視認性修正／当日分の閲覧履歴「今日読んだノート」追加 | [background_ai_ux](design/background_ai_ux.md)・[tab_navigation](design/tab_navigation.md)・[ai_picker](design/ai_picker.md) |
 | 2026-07-20 | #23 | Q&A・AI補記のバックグラウンド生成UX。待機画面への遷移を廃止し、Snackbar通知＋AIタブバッジ＋未確認（isViewed）管理に変更。`QuizController` 新設、requestIdによる古い結果の混入防止 | [background_ai_ux](design/background_ai_ux.md) |
 | 2026-07-19 | #22 | AI要約の生成中もノート閲覧を継続可能に（要約待ちのブロッキング解消） | [background_ai_ux](design/background_ai_ux.md) |

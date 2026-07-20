@@ -70,15 +70,6 @@ class MainActivity : ComponentActivity() {
                 viewModel.markQuizViewed()
                 navController.navigate("quiz") { launchSingleTop = true }
             }
-            val startQuiz = {
-                val noteState = uiState.noteState
-                if (noteState is NoteState.Success) {
-                    snackbarHostState.currentSnackbarData?.dismiss()
-                    viewModel.generateQuiz(noteState.title, noteState.content)
-                    // Q&Aも補記と同様、同じノートを読みながら生成を待てるようにする。
-                    navController.navigateToTab(AppDestination.Note)
-                }
-            }
             val openAnnotationResult = {
                 snackbarHostState.currentSnackbarData?.dismiss()
                 viewModel.markAnnotationViewed()
@@ -178,7 +169,6 @@ class MainActivity : ComponentActivity() {
             AppScaffold(
                 windowSizeClass = windowSizeClass,
                 navController = navController,
-                quizState = uiState.quizState,
                 annotationState = uiState.annotationState,
                 snackbarHostState = snackbarHostState
             ) { modifier ->
@@ -199,7 +189,12 @@ class MainActivity : ComponentActivity() {
                             onShowSectionChat = { viewModel.showSectionChat() },
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                             onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
-                            onEndSectionChat = { viewModel.endSectionChat() }
+                            onEndSectionChat = { viewModel.endSectionChat() },
+                            onGenerateQuiz = { sourceLabel, context ->
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                viewModel.generateQuiz(sourceLabel, context)
+                            },
+                            onOpenQuizResult = openQuizResult
                         )
                     }
 
@@ -232,8 +227,6 @@ class MainActivity : ComponentActivity() {
                     composable("ai") {
                         AiTab(
                             uiState = uiState,
-                            onGenerateQuiz = startQuiz,
-                            onOpenQuiz = openQuizResult,
                             onCreateAnnotation = startAnnotation,
                             onOpenAnnotation = openAnnotationResult
                         )

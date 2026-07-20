@@ -197,7 +197,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
     fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
 
-    fun generateQuiz(title: String, content: String) = quiz.create(title, content)
+    // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
+    fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
     fun markQuizViewed() = quiz.markViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
@@ -209,11 +210,24 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 
-    fun openSection(section: NoteSection) = sectionChat.open(section)
+    /**
+     * 吹き出しから新しいセクション文脈を開くとき、前のセクションで作ったクイズを
+     * 持ち越さない（別セクションの古いクイズがシートに残り続ける問題の防止）。
+     * 既存セッションの再表示（sectionChat != null）ではクイズも保持する。
+     */
+    fun openSection(section: NoteSection) {
+        if (_uiState.value.sectionChat == null) quiz.cancelAndClear()
+        sectionChat.open(section)
+    }
     fun showSectionChat() = sectionChat.showSheet()
     fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
-    fun endSectionChat() = sectionChat.cancelAndClear()
+
+    /** セッションの明示終了。文脈が閉じるので、そのセッションで作ったクイズも破棄する。 */
+    fun endSectionChat() {
+        sectionChat.cancelAndClear()
+        quiz.cancelAndClear()
+    }
 
     fun createAnnotation(
         contentResolver: ContentResolver,

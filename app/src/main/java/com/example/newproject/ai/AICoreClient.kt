@@ -2,10 +2,13 @@ package com.example.newproject.ai
 
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Candidate
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerationConfig
 import com.google.mlkit.genai.prompt.ModelConfig
 import com.google.mlkit.genai.prompt.ModelPreference
+import com.google.mlkit.genai.prompt.TextPart
+import com.google.mlkit.genai.prompt.generateContentRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -32,8 +35,14 @@ interface AiClient {
 //   エラー表示ではなくジョブのキャンセルとして黙殺されてしまう）
 class AiTimeoutException(message: String) : Exception(message)
 
+// 出力トークン上限に達して応答が途中で切れたことを示す例外。
+// 途切れた文章をそのまま保存・表示するより、エラーとして再試行を促す方が安全。
+class AiTruncatedException(message: String) : Exception(message)
+
 // ─────────────────────────────────────────────────────────────────────────────
-// AICoreClient — Gemini Nano 4 Full (E4B) via ML Kit GenAI Prompt API
+// AICoreClient — Gemini Nano via ML Kit GenAI Prompt API
+// 実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める。
+// ModelPreference.FULL は世代指定ではなく「速度より精度を優先」の指定。
 // ─────────────────────────────────────────────────────────────────────────────
 class AICoreClient : AiClient {
 
@@ -66,8 +75,19 @@ class AICoreClient : AiClient {
         withContext(Dispatchers.IO) {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
-                    val response = model.generateContent(prompt)
-                    response.candidates.firstOrNull()?.text ?: ""
+                    // maxOutputTokens は明示設定しない。genai-prompt 1.0.0-beta2 は
+                    // 「1〜256」しか受け付けず（超過は IllegalArgumentException で
+                    // 全生成が失敗する）、かといって256を明示すると未設定時の内部
+                    // デフォルトがそれより大きい場合にクイズ等の長出力を新たに切る。
+                    // 途切れは下の finishReason 検知で拾う。
+                    val request = generateContentRequest(TextPart(prompt)) {}
+                    val candidate = model.generateContent(request).candidates.firstOrNull()
+                    if (candidate?.finishReason == Candidate.FinishReason.MAX_TOKENS) {
+                        throw AiTruncatedException(
+                            "AI応答が長すぎて途中で打ち切られました。もう一度お試しください。"
+                        )
+                    }
+                    candidate?.text ?: ""
                 }
             } catch (e: TimeoutCancellationException) {
                 throw AiTimeoutException("AI応答がタイムアウトしました（${GENERATE_TIMEOUT_MS / 1000}秒）")

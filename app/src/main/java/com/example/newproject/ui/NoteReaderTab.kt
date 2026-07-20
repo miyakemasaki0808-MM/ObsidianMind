@@ -40,6 +40,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
+import com.example.newproject.QuizState
+import com.example.newproject.SectionChatState
 import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
@@ -87,7 +90,9 @@ fun NoteReaderTab(
     onShowSectionChat: () -> Unit,
     onSuggestionTap: (String) -> Unit,
     onDismissSectionChat: () -> Unit,
-    onEndSectionChat: () -> Unit
+    onEndSectionChat: () -> Unit,
+    onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
+    onOpenQuizResult: () -> Unit
 ) {
     val context = LocalContext.current
     var isFullscreen by remember { mutableStateOf(false) }
@@ -267,9 +272,29 @@ fun NoteReaderTab(
 
     // セクションチャットのボトムシート
     if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
+        // クイズ生成の入力: シートが対象にしているセクションを sectionModel から
+        // 同定し、その周辺テキストを渡す。擬似セクション（ノート全体）は
+        // surroundingContext 側でノート先頭フォールバックになる。
+        val startQuizFromChat: (SectionChatState) -> Unit = { target ->
+            val matched = sectionModel?.sections?.firstOrNull {
+                it.title == target.sectionTitle && it.text == target.sectionContext
+            }
+            val quizContext = sectionModel?.surroundingContext(matched) ?: target.sectionContext
+            onGenerateQuiz(target.sectionTitle, quizContext)
+        }
         SectionChatSheet(
             state = chat,
+            quizState = uiState.quizState,
             onSuggestionTap = onSuggestionTap,
+            onQuizTap = {
+                when (val qs = uiState.quizState) {
+                    is QuizState.Loading -> Unit
+                    is QuizState.Success -> onOpenQuizResult()
+                    is QuizState.Error ->
+                        if (qs.isViewed) startQuizFromChat(chat) else onOpenQuizResult()
+                    is QuizState.Idle -> startQuizFromChat(chat)
+                }
+            },
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )
@@ -287,6 +312,11 @@ private fun BoxScope.SectionFab(
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    // pointerInput(Unit) は初回コンポーズ時のクロージャを固定するため、直接 onTap を
+    // 参照すると古いセッション状態を抱き込んだ処理が呼ばれ続ける（クイズ画面から
+    // 戻った後に「確認終了→吹き出しタップ」が無反応になる不具合の原因）。
+    // rememberUpdatedState 経由で常に最新の onTap を呼ぶ。
+    val currentOnTap by rememberUpdatedState(onTap)
 
     Box(
         modifier = Modifier
@@ -345,7 +375,7 @@ private fun BoxScope.SectionFab(
                         }
                     }
                     .pointerInput(Unit) {
-                        detectTapGestures(onTap = { onTap() })
+                        detectTapGestures(onTap = { currentOnTap() })
                     },
                 contentAlignment = Alignment.Center
             ) {
