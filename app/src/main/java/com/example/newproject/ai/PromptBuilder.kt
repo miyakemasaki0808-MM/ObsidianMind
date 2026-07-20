@@ -5,7 +5,8 @@ import com.example.newproject.toNormalizedObsidianTitle
 object PromptBuilder {
 
     private const val CONTENT_SNIPPET_LENGTH = 1200
-    private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 2000
+    // 補記は入力が最大のプロンプト。入力を絞って生成時間とコンテキスト圧迫を抑える
+    private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 1500
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
     private const val RELATED_TITLE_LIMIT = 80
     private const val SECTION_SNIPPET_LENGTH = 1500
@@ -129,9 +130,11 @@ object PromptBuilder {
             - 補記方針: <one fixed choice>
 
             ## 補記すべき内容
-            3–5 bullets. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
-            For each, state what is currently shallow or missing, and what concrete information should be added.
-            - <exact term or claim from this note>: <what specific information is missing> (<why this gap matters for understanding>)
+            Exactly 3 bullets, one line each. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
+            Keep each bullet short: name the term, then state in one sentence what concrete information should be added.
+            - <exact term or claim from this note>: <what specific information should be added>
+
+            Keep the entire output compact. Do not add sections, preambles, or closing remarks beyond the format above.
 
             Current note title: $title
             Created at: $createdAt
