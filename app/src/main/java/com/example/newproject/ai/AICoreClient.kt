@@ -75,9 +75,12 @@ class AICoreClient : AiClient {
         withContext(Dispatchers.IO) {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
-                    val request = generateContentRequest(TextPart(prompt)) {
-                        maxOutputTokens = MAX_OUTPUT_TOKENS
-                    }
+                    // maxOutputTokens は明示設定しない。genai-prompt 1.0.0-beta2 は
+                    // 「1〜256」しか受け付けず（超過は IllegalArgumentException で
+                    // 全生成が失敗する）、かといって256を明示すると未設定時の内部
+                    // デフォルトがそれより大きい場合にクイズ等の長出力を新たに切る。
+                    // 途切れは下の finishReason 検知で拾う。
+                    val request = generateContentRequest(TextPart(prompt)) {}
                     val candidate = model.generateContent(request).candidates.firstOrNull()
                     if (candidate?.finishReason == Candidate.FinishReason.MAX_TOKENS) {
                         throw AiTruncatedException(
@@ -98,13 +101,6 @@ class AICoreClient : AiClient {
     companion object {
         private val generateMutex = Mutex()
         private const val GENERATE_TIMEOUT_MS = 60_000L
-
-        // 全機能共通の出力上限。上限自体に処理負荷はなく（負荷は実際に生成された
-        // トークン数で決まる）、未設定時のSDKデフォルトで応答が黙って切れるのを防ぐ。
-        // 最長出力のクイズ（5問×選択肢4つ＋解説、日本語）が収まる値にしている。
-        // Gemini Nano のコンテキスト約4096トークン（入力＋出力）に対し、
-        // 最大入力の補記プロンプト（約2000〜2500トークン）と併せても枠内に収まる。
-        private const val MAX_OUTPUT_TOKENS = 1024
     }
 }
 
