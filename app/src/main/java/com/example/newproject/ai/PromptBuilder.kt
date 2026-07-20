@@ -1,14 +1,11 @@
 package com.example.newproject.ai
 
-import com.example.newproject.toNormalizedObsidianTitle
-
 object PromptBuilder {
 
     private const val CONTENT_SNIPPET_LENGTH = 1200
     // 補記は入力が最大のプロンプト。入力を絞って生成時間とコンテキスト圧迫を抑える
     private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 1500
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
-    private const val RELATED_TITLE_LIMIT = 80
     private const val SECTION_SNIPPET_LENGTH = 1500
     private const val PICKER_TITLE_LIMIT = 40
 
@@ -24,27 +21,21 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    // 候補の絞り込み・並べ替え・上限は RelatedNotesUseCase 側（orderRelatedCandidateTitles）が担う。
+    // ここではプロンプト整形のみを行い、上限で切らない（制限箇所の二重化を避ける）。
     fun buildRelatedNotesPrompt(
         currentTitle: String,
         currentContent: String,
-        allTitles: List<String>,
-        wikilinkTitles: Set<String>
+        allTitles: List<String>
     ): String {
         val snippet = currentContent.take(RELATED_CONTENT_SNIPPET_LENGTH)
-        val linkedTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
-        val titleList = allTitles
-            .take(RELATED_TITLE_LIMIT)
-            .joinToString("\n") { title ->
-                val marker = if (title.toNormalizedObsidianTitle() in linkedTitleSet) " [linked]" else ""
-                "- $title$marker"
-            }
+        val titleList = allTitles.joinToString("\n") { "- $it" }
 
         return """
             You are a note-taking assistant. Find the 5 notes most related to the current Obsidian note.
             Answer in the same language as the note content.
             Return only note titles from the candidate list, one title per line.
             Do not add numbers, bullets, explanations, or extra text.
-            Prefer candidates marked [linked] when they are relevant.
 
             Current note title: $currentTitle
             Current note content snippet:

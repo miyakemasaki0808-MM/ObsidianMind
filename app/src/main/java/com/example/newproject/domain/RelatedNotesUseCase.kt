@@ -63,15 +63,23 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                     aiStatus = AiRecommendationStatus.NeedsDownload
                 )
                 AiAvailability.Available -> {
-                    val prefixFiltered = prefixFilter(currentTitle, candidateNotes)
+                    // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
+                    // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
+                    val candidateTitles = orderRelatedCandidateTitles(
+                        currentTitle = currentTitle,
+                        candidateTitles = candidateNotes.map { it.name },
+                        excludedTitles = relatedNotes.map { it.title }.toSet(),
+                        limit = AI_CANDIDATE_LIMIT
+                    )
                     val prompt = PromptBuilder.buildRelatedNotesPrompt(
                         currentTitle = currentTitle,
                         currentContent = currentContent,
-                        allTitles = prefixFiltered.map { it.name },
-                        wikilinkTitles = wikilinkTitles
+                        allTitles = candidateTitles
                     )
                     val response = aiClient.generate(prompt)
 
+                    // 候補は既に決定的枠を除外済みだが、モデルが既出タイトルを混ぜても
+                    // 拾わないよう、Uri単位でも念のため落とす（防御）。
                     val relatedUris = relatedNotes.map { it.uri }.toSet()
                     val aiNotes = response.lineSequence()
                         .map { it.cleanAiTitle() }
@@ -135,38 +143,12 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
             }
     }
 
-    // 上2桁が一致するノートのみ返す（表示用）
+    // 上2桁が一致するノートのみ返す（決定的チャンネル表示用）。
+    // プレフィックス抽出は純ロジックの extractHexPrefix を共用する。
     private fun extractSameGroup(currentTitle: String, candidates: List<NoteFile>): List<NoteFile> {
-        val prefix = extractPrefix(currentTitle) ?: return emptyList()
+        val prefix = extractHexPrefix(currentTitle) ?: return emptyList()
         val twoDigit = prefix.take(2)
-        return candidates.filter { extractPrefix(it.name)?.take(2) == twoDigit }
-    }
-
-    // 4桁16進数プレフィックス（例: 0F01）を抽出する
-    private fun extractPrefix(filename: String): String? {
-        val match = Regex("^([0-9A-Fa-f]{4})").find(filename) ?: return null
-        return match.groupValues[1].uppercase()
-    }
-
-    // プレフィックス体系で候補を絞る
-    // 上2桁一致（兄弟グループ）→ 上1桁一致（大カテゴリ）→ プレフィックスなし全件
-    private fun prefixFilter(currentTitle: String, candidates: List<NoteFile>): List<NoteFile> {
-        val currentPrefix = extractPrefix(currentTitle) ?: return candidates
-
-        val twoDigit = currentPrefix.take(2)
-        val oneDigit = currentPrefix.take(1)
-
-        val sameGroup = candidates.filter { note ->
-            extractPrefix(note.name)?.take(2) == twoDigit
-        }
-        val sameCategory = candidates.filter { note ->
-            val p = extractPrefix(note.name) ?: return@filter false
-            p.take(1) == oneDigit && p.take(2) != twoDigit
-        }
-        val noPrefix = candidates.filter { extractPrefix(it.name) == null }
-
-        // 兄弟グループ + 同カテゴリ + プレフィックスなし を合わせてAIに渡す
-        return (sameGroup + sameCategory + noPrefix).take(PREFIX_CANDIDATE_LIMIT)
+        return candidates.filter { extractHexPrefix(it.name)?.take(2) == twoDigit }
     }
 
     private fun String.isSameTitleAs(other: String): Boolean =
@@ -175,6 +157,7 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
     companion object {
         private const val RELATED_NOTE_LIMIT = 5
         private const val AI_RECOMMENDATION_LIMIT = 5
-        private const val PREFIX_CANDIDATE_LIMIT = 40
+        // AIへ渡す候補タイトルの上限。制限箇所はここ1か所に統一（旧: プロンプト側80と二重）。
+        private const val AI_CANDIDATE_LIMIT = 40
     }
 }
