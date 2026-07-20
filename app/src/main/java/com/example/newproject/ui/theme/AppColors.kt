@@ -7,6 +7,8 @@ import androidx.compose.ui.graphics.Color
 internal val Indigo = Color(0xFF4D3DFF)
 internal val Aqua = Color(0xFF00C2FF)
 internal val Coral = Color(0xFFFF6B8A)
+internal val LogoNavy = Color(0xFF050E1D)
+internal val LogoPurple = Color(0xFF9A5CE6)   // 起動OPの背面発光（Aqua/Indigoと3色で使う）
 internal val OnVibrant = Color.White
 internal val OnVibrantMuted = Color(0xFFEAF7FF)
 internal val OnSurface = Color(0xFF202124)

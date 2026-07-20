@@ -4,9 +4,9 @@
 
 **解析日:** 2026-07-20
 
-**対象ブランチ:** `feature/NewFunction_forUX`
+**対象ブランチ:** `feature/Improve_AI_Function_RelationalNote`
 
-**対象コミット:** `1730437`（当日閲覧履歴の追加まで。PR #22・#23マージ後）
+**対象コミット:** `aae2ea8`（起動OPアニメーション追加まで。PR #25マージ後・PR #26）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
@@ -47,7 +47,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 32ファイル | 約5,696行 |
+| 本番 Kotlin | 33ファイル | 約5,900行 |
 | ユニットテスト Kotlin | 10ファイル | 約838行、60テスト |
 | Androidモジュール | 1 | `:app` |
 
@@ -65,6 +65,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 | Java互換性 | Java 8 |
 | Compose BOM | 2024.09.03 |
 | Navigation Compose | 2.7.7 |
+| Core SplashScreen | 1.0.1 |
 | Lifecycle | 2.8.7 |
 | Coroutines | 1.9.0 |
 | ML Kit GenAI Prompt | 1.0.0-beta2 |
@@ -87,7 +88,7 @@ app/src/
 ├── main/
 │   ├── AndroidManifest.xml
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt                 # Activity、Vault選択、NavHost、Snackbar通知、画面イベント接続
+│   │   ├── MainActivity.kt                 # Activity、システムスプラッシュ／起動OP、Vault選択、NavHost、Snackbar通知、画面イベント接続
 │   │   ├── NoteViewModel.kt                # 状態の統合、ノート読込、要約・関連の調停、履歴記録
 │   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state、通知イベントキー
 │   │   ├── NoteRepository.kt               # SAF走査・読書き・メタデータ解析
@@ -108,6 +109,7 @@ app/src/
 │   │   │   ├── SearchPickerUseCase.kt      # 自然文検索による3件選定
 │   │   │   └── AiResponseParsing.kt        # AI返却タイトルの共通正規化
 │   │   └── ui/
+│   │       ├── OpeningScreen.kt            # 起動時ブランドOP（Compose、純ロジックfractionBetweenで進行導出）
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
 │   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面、セクションFAB
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
@@ -284,6 +286,8 @@ OpenDocumentTree
 導線はノートタブ（未選択時のみ）とオプションの「Vaultを変更」の2つ。
 
 次回起動時は SharedPreferences のURIを復元し、`vaultSelected = true` にする。起動直後にノートを自動読込する処理はなく、ユーザーがランダム表示するか検索結果を開くまで `noteState` は Idle のままである。
+
+なお `MainActivity` は `setContent` 直後に、コールド起動時のみ `OpeningScreen`（起動OP）を本体の代わりに表示する。新規起動の判定は `savedInstanceState == null`（回転・Fold開閉・プロセス復元では非nullのため再生しない）。OP終端の背景は着地（Noteタブ）と同じ `ReadingGradient` に揃え、継ぎ目なく本体へ入れ替える。詳細は [design/opening_animation](design/opening_animation.md) を参照。
 
 ### 6.2 ランダムノート表示
 

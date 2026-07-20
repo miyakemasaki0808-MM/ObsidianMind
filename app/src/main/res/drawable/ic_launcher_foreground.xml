@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Adaptive Iconの安全領域（中央66dp）に円形ロゴ全体を収める。 -->
+    <item
+        android:bottom="21dp"
+        android:left="21dp"
+        android:right="21dp"
+        android:top="21dp">
+        <bitmap
+            android:gravity="fill"
+            android:src="@drawable/mm_ai_solutions_logo" />
+    </item>
+</layer-list>
