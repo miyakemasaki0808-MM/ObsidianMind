@@ -14,6 +14,7 @@ import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.LaunchedEffect
@@ -25,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.newproject.RelatedNotesState
 import com.example.newproject.NoteState
@@ -34,6 +36,7 @@ import com.example.newproject.ui.AnnotationManagerScreen
 import com.example.newproject.ui.AnnotationResultScreen
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
+import com.example.newproject.ui.FullscreenNoteScreen
 import com.example.newproject.ui.navigateToTab
 import com.example.newproject.ui.NoteReaderTab
 import com.example.newproject.ui.OpeningScreen
@@ -75,6 +78,12 @@ class MainActivity : ComponentActivity() {
             val windowSizeClass = calculateWindowSizeClass(this)
             val navController = rememberNavController()
             val snackbarHostState = remember { SnackbarHostState() }
+            // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
+            val noteListState = rememberLazyListState()
+            // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
+            val currentRoute = navController
+                .currentBackStackEntryAsState().value?.destination?.route
+            val isFullscreenRoute = currentRoute == "note_fullscreen"
 
             val openQuizResult = {
                 snackbarHostState.currentSnackbarData?.dismiss()
@@ -118,6 +127,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (quizEventKey == lastShownQuizEvent) return@LaunchedEffect
                 lastShownQuizEvent = quizEventKey
+                if (isFullscreenRoute) return@LaunchedEffect
                 when (val state = uiState.quizState) {
                     is QuizState.Loading -> snackbarHostState.showSnackbar(
                         message = "Q&Aを作成中…",
@@ -152,6 +162,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (annotationEventKey == lastShownAnnotationEvent) return@LaunchedEffect
                 lastShownAnnotationEvent = annotationEventKey
+                if (isFullscreenRoute) return@LaunchedEffect
                 when (val state = uiState.annotationState) {
                     is AnnotationState.Loading -> snackbarHostState.showSnackbar(
                         message = "AI補記メモを作成中…",
@@ -205,7 +216,23 @@ class MainActivity : ComponentActivity() {
                                 snackbarHostState.currentSnackbarData?.dismiss()
                                 viewModel.generateQuiz(sourceLabel, context)
                             },
-                            onOpenQuizResult = openQuizResult
+                            onOpenQuizResult = openQuizResult,
+                            noteListState = noteListState,
+                            onEnterFullscreen = { navController.navigate("note_fullscreen") }
+                        )
+                    }
+
+                    composable("note_fullscreen") {
+                        FullscreenNoteScreen(
+                            uiState = uiState,
+                            tabListState = noteListState,
+                            onExit = { navController.popBackStack() },
+                            // 要約シートは通常表示（noteルート）で描画されるため、
+                            // 全画面を閉じてからシートを開く。
+                            onOpenSummary = {
+                                navController.popBackStack()
+                                viewModel.showSectionChat()
+                            }
                         )
                     }
 

@@ -1,11 +1,12 @@
 package com.example.newproject.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,11 +36,13 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -57,6 +60,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
 import com.example.newproject.QuizState
@@ -76,6 +81,8 @@ import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------------------
 // タブ1: ノート（本文リーダー）
@@ -92,10 +99,11 @@ fun NoteReaderTab(
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
     onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
-    onOpenQuizResult: () -> Unit
+    onOpenQuizResult: () -> Unit,
+    noteListState: LazyListState,
+    onEnterFullscreen: () -> Unit
 ) {
     val context = LocalContext.current
-    var isFullscreen by remember { mutableStateOf(false) }
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -107,7 +115,7 @@ fun NoteReaderTab(
     val successState = uiState.noteState as? NoteState.Success
     val hasNote = successState != null
 
-    val listState = rememberLazyListState()
+    val listState = noteListState
     val sectionModel = remember(successState?.content) {
         successState?.content?.let { buildNoteSectionModel(it) }
     }
@@ -171,7 +179,7 @@ fun NoteReaderTab(
                     )
                 }
                 if (hasNote) {
-                    IconPill(symbol = "⛶", contentDescription = "全画面表示") { isFullscreen = true }
+                    IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
                 }
             }
 
@@ -221,51 +229,14 @@ fun NoteReaderTab(
         }
 
         // 浮遊吹き出し（今見ているセクションを対象に。タップで要約＋質問シート）
-        if (successState != null && !isFullscreen) {
+        // 全画面は独立ルート（note_fullscreen）へ移したため、ここではタブ表示時のみ出す。
+        if (successState != null) {
             SectionFab(
                 sectionLabel = fabSectionLabel,
                 status = fabStatus,
                 isAnswerGenerating = activeChat?.isGenerating == true,
                 onTap = onFabTap
             )
-        }
-
-        // 全画面オーバーレイ（明示ボタンで開閉。ダブルタップは廃止）
-        AnimatedVisibility(
-            visible = isFullscreen,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(ReadingGradient)
-                    .safeDrawingPadding()
-                    .padding(12.dp)
-            ) {
-                NoteContentPanel(
-                    uiState = uiState,
-                    modifier = Modifier.fillMaxSize(),
-                    precomputedBlocks = sectionModel?.blocks
-                )
-                IconPill(
-                    symbol = "✕",
-                    contentDescription = "全画面表示を閉じる",
-                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp),
-                    // 白いノートパネルの真上に重なるため、既定の薄いパネル色では
-                    // 白地に白となり視認できない。暗い半透明の下地を敷く。
-                    containerColor = OnSurface.copy(alpha = 0.45f)
-                ) { isFullscreen = false }
-                // 全画面で読み続けている間も、進行中・完了したAI要約へ戻れるようにする。
-                if (activeChat != null) {
-                    SectionFab(
-                        sectionLabel = fabSectionLabel,
-                        status = fabStatus,
-                        isAnswerGenerating = activeChat.isGenerating,
-                        onTap = onShowSectionChat
-                    )
-                }
-            }
         }
     }
 
@@ -434,6 +405,189 @@ private fun IconPill(
             Text(symbol, color = OnVibrant, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// 全画面ノート（独立ルート note_fullscreen）
+// バー/レールの外側に出すため AppScaffold の非タブルートとして表示する。
+// ---------------------------------------------------------------------------
+
+/**
+ * 全画面のノート読書画面。
+ * - 進入中はシステムバー（ナビ＋ステータス）を隠し、離脱時はナビバーのみ復元する
+ *   （ステータスバーはアプリ全体仕様どおり隠したまま）。
+ * - 背景はノートページ色で全ブリードし、本文カラムは最大720dpで中央寄せ。
+ * - タブ側の [tabListState] から開始位置を継承し、離脱時に書き戻す。
+ */
+@Composable
+internal fun FullscreenNoteScreen(
+    uiState: NoteUiState,
+    tabListState: LazyListState,
+    onExit: () -> Unit,
+    onOpenSummary: () -> Unit
+) {
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        val controller = activity?.let {
+            WindowCompat.getInsetsController(it.window, it.window.decorView)
+        }
+        controller?.hide(WindowInsetsCompat.Type.systemBars())
+        onDispose {
+            // ステータスバーは隠したまま、ナビゲーションバーだけ戻す。
+            controller?.show(WindowInsetsCompat.Type.navigationBars())
+        }
+    }
+
+    // 遷移アニメーション中は通常タブと全画面が同時にコンポーズされ、同一 LazyListState を
+    // 2つの LazyColumn に装着すると例外になる。全画面は専用stateを持ち、開いた時点で
+    // タブ側の位置から開始し、離脱時にタブ側へ書き戻すことでスクロール位置を継承する。
+    val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState(
+        tabListState.firstVisibleItemIndex,
+        tabListState.firstVisibleItemScrollOffset
+    )
+    val leaveWith: (() -> Unit) -> Unit = { action ->
+        scope.launch {
+            tabListState.scrollToItem(
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset
+            )
+        }
+        action()
+    }
+    // システムバックでもスクロール位置を書き戻してから閉じる。
+    BackHandler { leaveWith(onExit) }
+
+    val successState = uiState.noteState as? NoteState.Success
+    val sectionModel = remember(successState?.content) {
+        successState?.content?.let { buildNoteSectionModel(it) }
+    }
+    val activeChat = uiState.sectionChat
+
+    // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
+    val summaryStatus = when {
+        activeChat == null -> SectionFabStatus.Idle
+        activeChat.error != null -> SectionFabStatus.Error
+        activeChat.isSummaryLoading || activeChat.isGenerating -> SectionFabStatus.Loading
+        activeChat.summary != null -> SectionFabStatus.Ready
+        else -> SectionFabStatus.Loading
+    }
+    val quiz = uiState.quizState
+    val combinedStatus = when {
+        summaryStatus == SectionFabStatus.Loading || quiz is QuizState.Loading -> SectionFabStatus.Loading
+        summaryStatus == SectionFabStatus.Error ||
+            (quiz is QuizState.Error && !quiz.isViewed) -> SectionFabStatus.Error
+        summaryStatus == SectionFabStatus.Ready ||
+            (quiz is QuizState.Success && !quiz.isViewed) -> SectionFabStatus.Ready
+        else -> SectionFabStatus.Idle
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(Panel)) {
+        NoteContentPanel(
+            uiState = uiState,
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = 720.dp)
+                .fillMaxSize()
+                .safeDrawingPadding(),
+            listState = listState,
+            precomputedBlocks = sectionModel?.blocks
+        )
+        IconPill(
+            symbol = "✕",
+            contentDescription = "全画面表示を閉じる",
+            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
+            // 白いノートパネルの上に重なるため、暗い半透明の下地を敷く。
+            containerColor = OnSurface.copy(alpha = 0.45f)
+        ) { leaveWith(onExit) }
+        // 読書中もAIの状態（要約・クイズ）が分かるよう最小インジケータを残す。
+        if (activeChat != null) {
+            FullscreenAiFab(status = combinedStatus, onTap = { leaveWith(onOpenSummary) })
+        }
+    }
+}
+
+/**
+ * 全画面用の最小AIインジケータ。通常FABの立体グラスは使わず小さなフラット円で、
+ * 状態が完了/エラーへ変わったときだけ短くラベルをフラッシュする。タップで要約シートへ。
+ */
+@Composable
+private fun BoxScope.FullscreenAiFab(
+    status: SectionFabStatus,
+    onTap: () -> Unit
+) {
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val currentOnTap by rememberUpdatedState(onTap)
+    var showLabel by remember { mutableStateOf(false) }
+    LaunchedEffect(status) {
+        showLabel = status == SectionFabStatus.Ready || status == SectionFabStatus.Error
+        if (showLabel) {
+            delay(3000)
+            showLabel = false
+        }
+    }
+    Column(
+        modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
+            .safeDrawingPadding()
+            .padding(end = 20.dp, bottom = 20.dp),
+        horizontalAlignment = Alignment.End
+    ) {
+        if (showLabel) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(Indigo.copy(alpha = 0.55f))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = if (status == SectionFabStatus.Error) "! 確認して" else "✓ 完了",
+                    color = OnVibrant,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Indigo.copy(alpha = 0.55f))
+                .pointerInput(Unit) {
+                    detectDragGestures { change, dragAmount ->
+                        change.consume()
+                        dragOffset += dragAmount
+                    }
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { currentOnTap() })
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            when (status) {
+                SectionFabStatus.Loading -> CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = OnVibrant,
+                    strokeWidth = 2.dp
+                )
+                SectionFabStatus.Ready -> Text("✓", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                SectionFabStatus.Error -> Text("!", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                SectionFabStatus.Idle -> Text("💬", fontSize = 18.sp)
+            }
+        }
+    }
+}
+
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 /** ノート本文パネル（通常表示・全画面で共用）。 */

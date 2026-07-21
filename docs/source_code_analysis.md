@@ -118,7 +118,7 @@ app/src/
 │   │   └── ui/
 │   │       ├── OpeningScreen.kt            # 起動時ブランドOP（Compose、純ロジックfractionBetweenで進行導出）
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
-│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面、セクションFAB
+│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート（FullscreenNoteScreen）、セクションFAB
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
 │   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
 │   │       ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
@@ -220,6 +220,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 | トップレベル | `related` | 関連ノート |
 | トップレベル | `ai` | AIアシスト |
 | トップレベル | `options` | オプション |
+| 全画面 | `note_fullscreen` | 全画面ノート閲覧（バー/レール非表示・システムバー没入） |
 | 全画面 | `quiz` | 4択Q&A |
 | 全画面 | `annotation` | AI補記生成結果 |
 | 全画面 | `annotation_manager` | AI補記の削除管理 |
@@ -228,7 +229,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 ### 5.2 画面幅対応
 
-`AppScaffold` は `WindowSizeClass` を参照し、Expanded幅では左側 `NavigationRail`、それ以外では下部 `NavigationBar` を使用する。クイズ・補記結果・補記管理の全画面ルートではタブUIを表示しない。
+`AppScaffold` は `WindowSizeClass` を参照し、Expanded幅では左側 `NavigationRail`、それ以外では下部 `NavigationBar` を使用する。選択タブのインジケータは `Aqua`（Indigo地に埋もれないアクセント）。全画面ノート・クイズ・補記結果・補記管理の全画面ルートではタブUIを表示しない。全画面ノートは進入中にシステムバー（ナビ＋ステータス）も隠し、離脱時にナビバーのみ復元する（ステータスバーはアプリ全体仕様どおり隠したまま）。
 
 ### 5.3 画面ごとの責務
 
@@ -237,7 +238,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - ランダム表示（Vault選択ボタンは未選択時のみ表示。切替はオプションから）
 - Markdown本文の表示とテキスト選択
 - 本文パネルのフェード＋スケール表示
-- 明示ボタンによる全画面閲覧
+- ⛶ボタンで全画面ルート（`note_fullscreen`）へ。バー/レール・システムバーを隠し、本文カラムは最大720dp中央寄せ。通常表示とスクロール位置を継承し、読書中も要約/クイズの合成状態を最小FABで表示（完了/エラー時のみラベルを数秒フラッシュ）
 - スクロール位置から現在セクションを判定
 - ドラッグ可能な吹き出しからセクションAIを起動
 - 吹き出しシート内の「この部分でクイズ」からフォーカス周辺クイズを起動
@@ -274,7 +275,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 #### 横断: Snackbar通知
 
-Q&A・補記の生成開始／完了／失敗は `MainActivity` の `LaunchedEffect` がSnackbarで通知する。完了・失敗の通知にはアクション（見る／詳細）が付き、タップで結果画面を開くと同時に `isViewed` を立てる。表示済みイベントキーを `rememberSaveable` に記録し、画面回転による再表示を抑止する。
+Q&A・補記の生成開始／完了／失敗は `MainActivity` の `LaunchedEffect` がSnackbarで通知する。完了・失敗の通知にはアクション（見る／詳細）が付き、タップで結果画面を開くと同時に `isViewed` を立てる。表示済みイベントキーを `rememberSaveable` に記録し、画面回転による再表示を抑止する。全画面ノート（`note_fullscreen`）表示中はSnackbarを抑制し、AIの状態は全画面の最小FABが担う。
 
 ---
 
@@ -557,7 +558,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 ノート画面では `buildNoteSectionModel()` が作成した `MarkdownBlock` をレンダラーへ渡し、セクション解析と描画による二重パースを避ける。インラインの `AnnotatedString` もテキスト単位で `remember()` する。
 
-通常表示と全画面表示は同じパース済みブロックを共有するが、それぞれ独立した `LazyListState` を使うためスクロール位置は同期しない。
+通常表示と全画面表示はどちらも同じパース済みブロックから描画する。両者は別々の `LazyListState` を持つ（NavHost遷移中の同時コンポーズで単一stateを2つの `LazyColumn` へ装着すると例外になるため）が、全画面は進入時にタブ側の位置から開始し、離脱時（✕・システムバック・FAB）にタブ側へ書き戻すことでスクロール位置を継承する。
 
 ---
 
