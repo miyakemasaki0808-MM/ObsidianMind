@@ -8,6 +8,11 @@ import org.junit.Test
 class DistillTransformerTest {
 
     @Test
+    fun `default cumulative bold limit is thirty percent`() {
+        assertEquals(0.30, DistillLimits.MAX_BOLD_RATIO, 0.0)
+    }
+
+    @Test
     fun `multiple ranges are wrapped without shifting original locations`() {
         val content = "一文目。二文目。三文目。"
         val model = buildDistillSourceModel(content)

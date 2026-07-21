@@ -59,6 +59,13 @@ class MainActivity : ComponentActivity() {
         viewModel.loadRandomNote(contentResolver)
     }
 
+    private val exportDistillOriginal = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.exportDistillOriginal(contentResolver, uri)
+    }
+
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -271,7 +278,16 @@ class MainActivity : ComponentActivity() {
                         AiTab(
                             uiState = uiState,
                             onCreateAnnotation = startAnnotation,
-                            onOpenAnnotation = openAnnotationResult
+                            onOpenAnnotation = openAnnotationResult,
+                            onStartDistill = { viewModel.startDistill() },
+                            onDownloadDistillModel = { viewModel.downloadDistillModel() },
+                            onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
+                            onSaveDistill = { viewModel.saveDistillSelection() },
+                            onRetryDistill = { viewModel.retryDistill() },
+                            onDismissDistill = { viewModel.dismissDistillResult() },
+                            onKeepCurrentRecovery = { viewModel.keepCurrentAfterDistillRecovery() },
+                            onRestoreOriginal = { viewModel.restoreDistillOriginal() },
+                            onExportOriginal = { exportDistillOriginal.launch("distill_original.md") }
                         )
                     }
 

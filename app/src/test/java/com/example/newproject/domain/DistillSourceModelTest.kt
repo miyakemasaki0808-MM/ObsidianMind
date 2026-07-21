@@ -117,6 +117,16 @@ class DistillSourceModelTest {
     }
 
     @Test
+    fun `strong text in ATX heading does not consume body bold budget`() {
+        val content = "# **重要な見出し**\n本文です。次の文です。"
+
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(0, model.existingBoldCharacterCount)
+        assertEquals(listOf("本文です。", "次の文です。"), model.sentences.map { it.text })
+    }
+
+    @Test
     fun `headingless content still creates chunks and long regions split`() {
         val content = "一つ目です。二つ目です。三つ目です。"
         val model = buildDistillSourceModel(content, chunkCharacterLimit = 8)

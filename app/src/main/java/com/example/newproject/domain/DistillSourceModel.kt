@@ -115,11 +115,7 @@ internal fun buildDistillSourceModel(
     var paragraphIndex = 0
     var paragraphOpen = false
     var eligibleCharacters = 0
-    val boldCharacters = strongSpans.sumOf { strong ->
-        val innerStart = (strong.start + 2).coerceAtMost(strong.endExclusive)
-        val innerEnd = (strong.endExclusive - 2).coerceAtLeast(innerStart)
-        (innerStart until innerEnd).count { !content[it].isWhitespace() }
-    }
+    var boldCharacters = 0
 
     for (line in lines) {
         val setextHeading = setextHeadings[line.index]
@@ -153,6 +149,15 @@ internal fun buildDistillSourceModel(
 
         val bodyStart = line.start + bodyStartInLine
         val bodyEnd = line.contentEnd
+        // 分母と同じ編集対象本文だけで既存太字を数える。見出し等の対象外領域にある
+        // **strong** が本文の蒸留枠を消費しないよう、行内の内側文字だけを加算する。
+        boldCharacters += strongSpans.sumOf { strong ->
+            val innerStart = (strong.start + 2).coerceAtLeast(bodyStart)
+            val innerEnd = (strong.endExclusive - 2).coerceAtMost(bodyEnd)
+            if (innerStart >= innerEnd) 0 else {
+                (innerStart until innerEnd).count { !content[it].isWhitespace() }
+            }
+        }
         val syntax = parseInlineSyntax(
             content = content,
             start = bodyStart,

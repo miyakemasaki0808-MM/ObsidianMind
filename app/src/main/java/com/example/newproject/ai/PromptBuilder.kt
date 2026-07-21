@@ -102,7 +102,7 @@ object PromptBuilder {
             You are a careful editor selecting the most important original sentences from an Obsidian note.
             Choose up to ${DistillLimits.FINAL_SELECTION_LIMIT} candidates that best preserve the note's central claims, conclusions, or uniquely useful details.
             Prefer specific conclusions over repeated general statements. Do not rewrite, summarize, or invent text.
-            Return only candidate IDs, one ID per line (for example: S001).
+            Return only candidate IDs in descending order of importance, one ID per line (for example: S001).
             Do not include bullets, explanations, titles, or IDs not present in the candidate list.
 
             Note title: $title

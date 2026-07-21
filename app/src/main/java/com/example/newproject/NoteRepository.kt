@@ -161,6 +161,17 @@ class NoteRepository {
         )
     }
 
+    internal suspend fun writeDocumentBytes(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        bytes: ByteArray
+    ) = withContext(Dispatchers.IO) {
+        contentResolver.openOutputStream(uri, "wt")?.use { output ->
+            output.write(bytes)
+            output.flush()
+        } ?: error("書き出し先を開けませんでした。")
+    }
+
     suspend fun createAnnotationFile(
         contentResolver: ContentResolver,
         vaultUri: Uri,

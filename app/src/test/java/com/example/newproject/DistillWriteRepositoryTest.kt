@@ -247,6 +247,51 @@ class DistillWriteRepositoryTest {
     }
 
     @Test
+    fun `explicit recovery restores original and removes record after verification`() {
+        val original = "保存前の本文".toByteArray()
+        val changed = "部分書き込み".toByteArray()
+        recoveryStore.create(
+            recoveryStore.newRecord(
+                "content://vault/note",
+                sha256Hex(original),
+                sha256Hex("期待出力".toByteArray()),
+                original
+            )
+        )
+        val gateway = FakeGateway(changed)
+        val repository = repository(gateway)
+
+        val result = repository.restoreOriginal()
+
+        assertTrue(result is DistillRecoveryResolutionResult.Restored)
+        assertArrayEquals(original, gateway.content)
+        assertEquals(DistillRecoveryReadResult.None, recoveryStore.read())
+    }
+
+    @Test
+    fun `failed explicit restore keeps recovery and exportable original`() {
+        val original = "保存前の本文".toByteArray()
+        recoveryStore.create(
+            recoveryStore.newRecord(
+                "content://vault/note",
+                sha256Hex(original),
+                sha256Hex("期待出力".toByteArray()),
+                original
+            )
+        )
+        val gateway = FakeGateway("現在".toByteArray()).apply {
+            writeOverride = { _, _ -> throw IOException("write failed") }
+        }
+        val repository = repository(gateway)
+
+        val result = repository.restoreOriginal()
+
+        assertTrue(result is DistillRecoveryResolutionResult.Failure)
+        assertTrue(recoveryStore.read() is DistillRecoveryReadResult.Valid)
+        assertArrayEquals(original, repository.pendingOriginal()!!.bytes)
+    }
+
+    @Test
     fun `startup cleanup removes only distill cache files`() {
         File(cache, "distill-output-old.tmp").writeText("old")
         val unrelated = File(cache, "keep.tmp").apply { writeText("keep") }

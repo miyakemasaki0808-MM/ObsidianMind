@@ -15,7 +15,7 @@ internal object DistillLimits {
     const val FINAL_SELECTION_LIMIT = 6
     const val MAX_SENTENCE_CHARACTERS = 160
     const val CHUNK_CHARACTER_LIMIT = 1_200
-    const val MAX_BOLD_RATIO = 0.15
+    const val MAX_BOLD_RATIO = 0.30
 }
 
 private const val TITLE_WEIGHT = 1.0

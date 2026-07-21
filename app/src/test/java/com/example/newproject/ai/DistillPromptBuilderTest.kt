@@ -55,6 +55,7 @@ class DistillPromptBuilderTest {
 
         assertTrue(result.text.contains("up to 6 candidates"))
         assertTrue(result.text.contains("Return only candidate IDs"))
+        assertTrue(result.text.contains("descending order of importance"))
         assertTrue(result.text.contains("S001 |"))
     }
 

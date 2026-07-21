@@ -80,6 +80,26 @@ internal fun interface DistillWriteFaultInjector {
     fun at(checkpoint: DistillWriteCheckpoint)
 }
 
+internal data class PendingDistillOriginal(
+    val targetUri: String,
+    val bytes: ByteArray
+)
+
+internal sealed interface DistillRecoveryResolutionResult {
+    data class Restored(val targetUri: String, val originalHash: String) : DistillRecoveryResolutionResult
+    data class Failure(val message: String) : DistillRecoveryResolutionResult
+    data object NoValidRecord : DistillRecoveryResolutionResult
+}
+
+internal interface DistillPersistence {
+    fun write(request: DistillWriteRequest): DistillWriteResult
+    fun assessPendingRecovery(): DistillRecoveryAssessment
+    fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean
+    fun discardPendingRecovery(): Boolean
+    fun pendingOriginal(): PendingDistillOriginal?
+    fun restoreOriginal(): DistillRecoveryResolutionResult
+}
+
 /**
  * SAFがrenameを保証しない前提で、復旧可能性を確保してから一気書きし、再読込ハッシュで確定する。
  */
@@ -89,9 +109,9 @@ internal class DistillWriteRepository(
     private val cacheDirectory: File,
     private val faultInjector: DistillWriteFaultInjector = DistillWriteFaultInjector { },
     private val availableSpaceProvider: (() -> Long)? = null
-) {
+) : DistillPersistence {
     @Synchronized
-    fun write(request: DistillWriteRequest): DistillWriteResult {
+    override fun write(request: DistillWriteRequest): DistillWriteResult {
         cleanupStaleCacheFiles()
         val pending = recoveryStore.read()
         if (pending !is DistillRecoveryReadResult.None) {
@@ -253,7 +273,7 @@ internal class DistillWriteRepository(
         }
     }
 
-    fun assessPendingRecovery(): DistillRecoveryAssessment = when (val state = recoveryStore.read()) {
+    override fun assessPendingRecovery(): DistillRecoveryAssessment = when (val state = recoveryStore.read()) {
         DistillRecoveryReadResult.None -> DistillRecoveryAssessment.None
         is DistillRecoveryReadResult.Corrupt -> DistillRecoveryAssessment.Corrupt(state.reason)
         is DistillRecoveryReadResult.Valid -> {
@@ -276,10 +296,47 @@ internal class DistillWriteRepository(
     }
 
     /** 元ハッシュ/期待ハッシュ一致を確認済みのレコードだけを安全に破棄する。 */
-    fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean = when (assessment) {
+    override fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean = when (assessment) {
         is DistillRecoveryAssessment.OriginalStillPresent,
         is DistillRecoveryAssessment.ExpectedOutputPresent -> recoveryStore.delete()
         else -> false
+    }
+
+    override fun discardPendingRecovery(): Boolean = recoveryStore.delete()
+
+    override fun pendingOriginal(): PendingDistillOriginal? =
+        (recoveryStore.read() as? DistillRecoveryReadResult.Valid)?.record?.let { record ->
+            PendingDistillOriginal(record.targetUri, record.originalBytes.copyOf())
+        }
+
+    @Synchronized
+    override fun restoreOriginal(): DistillRecoveryResolutionResult {
+        val record = (recoveryStore.read() as? DistillRecoveryReadResult.Valid)?.record
+            ?: return DistillRecoveryResolutionResult.NoValidRecord
+        if (!cacheDirectory.exists() && !cacheDirectory.mkdirs()) {
+            return DistillRecoveryResolutionResult.Failure("復元用キャッシュを作成できません。")
+        }
+        val stageFile = File(cacheDirectory, "$CACHE_PREFIX${UUID.randomUUID()}-restore.tmp")
+        return try {
+            writeStageFile(stageFile, record.originalBytes)
+            if (sha256Hex(stageFile.readBytes()) != record.originalHash) {
+                DistillRecoveryResolutionResult.Failure("復元データの検証に失敗しました。")
+            } else {
+                gateway.writeFromFile(record.targetUri, stageFile)
+                val restored = gateway.read(record.targetUri, DistillLimits.MAX_FILE_BYTES)
+                if (sha256Hex(restored) != record.originalHash) {
+                    DistillRecoveryResolutionResult.Failure("復元後のノートを検証できませんでした。")
+                } else if (!recoveryStore.delete()) {
+                    DistillRecoveryResolutionResult.Failure("復元は完了しましたが、復旧レコードを削除できませんでした。")
+                } else {
+                    DistillRecoveryResolutionResult.Restored(record.targetUri, record.originalHash)
+                }
+            }
+        } catch (error: Exception) {
+            DistillRecoveryResolutionResult.Failure(error.message ?: "元本文へ復元できませんでした。")
+        } finally {
+            if (stageFile.exists()) stageFile.delete()
+        }
     }
 
     fun cleanupStaleCacheFiles() {
