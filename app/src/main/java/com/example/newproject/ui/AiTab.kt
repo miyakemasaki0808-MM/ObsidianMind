@@ -38,6 +38,7 @@ import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
+import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelBlue
 
@@ -56,7 +57,7 @@ fun AiTab(
     val annotationState = uiState.annotationState
     val isAnnotationLoading = annotationState is AnnotationState.Loading
     val annotationLabel = when (annotationState) {
-        is AnnotationState.Idle -> "✨ AI補記メモ"
+        is AnnotationState.Idle -> "✨ AI補記メモをつくる"
         is AnnotationState.Loading -> "AI補記メモを作成中…"
         is AnnotationState.Success -> "✓ AI補記メモを見る"
         is AnnotationState.Error -> if (annotationState.isViewed) {
@@ -80,10 +81,16 @@ fun AiTab(
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
         Text(
-            text = "AIアシスト",
+            text = "Reflect",
             color = OnVibrant,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "AIと一緒に、ノートを深く読み直す。",
+            color = OnVibrantMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))
 

@@ -77,9 +77,9 @@ fun SearchTab(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text("さがす", color = OnVibrant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        Text("Explore", color = OnVibrant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
         Text(
-            text = "フォルダを選んで、言葉でさがすか、ランダムに引く",
+            text = "フォルダを選んで、言葉で手繰るか、偶然にまかせる。",
             color = OnVibrantMuted,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 4.dp)
@@ -136,14 +136,14 @@ fun SearchTab(
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
                 shape = RoundedCornerShape(24.dp)
-            ) { Text("🎰 ランダム", color = OnVibrant) }
+            ) { Text("🎰 ランダムに引く", color = OnVibrant) }
             Button(
                 onClick = { onSearch(query) },
                 enabled = query.isNotBlank() && !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
                 shape = RoundedCornerShape(24.dp)
-            ) { Text("🔎 さがす", color = OnVibrant) }
+            ) { Text("🔎 ことばでさがす", color = OnVibrant) }
         }
 
         Spacer(modifier = Modifier.height(16.dp))

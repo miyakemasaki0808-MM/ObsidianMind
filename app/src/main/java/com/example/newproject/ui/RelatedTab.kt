@@ -61,16 +61,22 @@ fun RelatedTab(
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
         Text(
-            text = "関連ノート",
+            text = "Connect",
             color = OnVibrant,
             fontSize = 28.sp,
             fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = "いま読んでいるノートと、つながる思考。",
+            color = OnVibrantMuted,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 4.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             if (uiState.relatedNotesState is RelatedNotesState.Idle) {
                 Text(
-                    text = "ノートを表示すると、リンクとAIによる関連ノートがここに並びます。",
+                    text = "ノートを開くと、リンクとAIの関連がここに集まります。",
                     color = OnVibrantMuted,
                     fontSize = 14.sp
                 )
