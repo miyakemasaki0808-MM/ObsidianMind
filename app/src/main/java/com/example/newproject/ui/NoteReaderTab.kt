@@ -156,20 +156,19 @@ fun NoteReaderTab(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "ランダムAIノート",
+                        text = "Rediscover",
                         color = OnVibrant,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    // 選択済みが通常状態なので、未選択時だけ案内を出す。
-                    if (!uiState.vaultSelected) {
-                        Text(
-                            text = "Vaultフォルダが未選択です",
-                            color = OnVibrantMuted,
-                            fontSize = 13.sp,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                    // 未選択時はVault案内、通常時はコンセプト文を出す。
+                    Text(
+                        text = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
+                        else "過去のノートから、思考をひとつ。",
+                        color = OnVibrantMuted,
+                        fontSize = 13.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
                 if (hasNote) {
                     IconPill(symbol = "⛶", contentDescription = "全画面表示") { isFullscreen = true }
@@ -195,7 +194,7 @@ fun NoteReaderTab(
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
                     shape = RoundedCornerShape(24.dp)
-                ) { Text("ランダム表示", color = OnVibrant) }
+                ) { Text("別のノートをひらく", color = OnVibrant) }
             }
 
             if (isLoading) {
