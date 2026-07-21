@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -32,14 +33,16 @@ class SectionChatController(
             return
         }
         cancelJobs()
-        uiState.value = uiState.value.copy(
-            sectionChat = SectionChatState(
-                sectionTitle = section.title,
-                sectionContext = section.text,
-                isSummaryLoading = true
-            ),
-            isSectionChatSheetVisible = true
-        )
+        uiState.update { current ->
+            current.copy(
+                sectionChat = SectionChatState(
+                    sectionTitle = section.title,
+                    sectionContext = section.text,
+                    isSummaryLoading = true
+                ),
+                isSectionChatSheetVisible = true
+            )
+        }
         openJob = scope.launch {
             when (aiClient.checkAvailability()) {
                 AiAvailability.Unavailable ->
@@ -117,7 +120,7 @@ class SectionChatController(
     /** 生成中・完了済みのセッションをシートに再表示する。 */
     fun showSheet() {
         if (uiState.value.sectionChat == null) return
-        uiState.value = uiState.value.copy(isSectionChatSheetVisible = true)
+        uiState.update { current -> current.copy(isSectionChatSheetVisible = true) }
     }
 
     /**
@@ -125,16 +128,18 @@ class SectionChatController(
      * AI生成と結果は同じノート内に保持し、読書を妨げない。
      */
     fun dismissSheet() {
-        uiState.value = uiState.value.copy(isSectionChatSheetVisible = false)
+        uiState.update { current -> current.copy(isSectionChatSheetVisible = false) }
     }
 
     /** 明示キャンセル・確認終了・ノート/Vault切替時にセッション全体を破棄する。 */
     fun cancelAndClear() {
         cancelJobs()
-        uiState.value = uiState.value.copy(
-            sectionChat = null,
-            isSectionChatSheetVisible = false
-        )
+        uiState.update { current ->
+            current.copy(
+                sectionChat = null,
+                isSectionChatSheetVisible = false
+            )
+        }
     }
 
     // 新規セッション開始・明示終了時に実行中の生成を止める内部処理。
@@ -165,7 +170,9 @@ class SectionChatController(
 
     // sectionChat が開いている場合のみ安全に更新する
     private fun updateChat(block: (SectionChatState) -> SectionChatState) {
-        val current = uiState.value.sectionChat ?: return
-        uiState.value = uiState.value.copy(sectionChat = block(current))
+        uiState.update { state ->
+            val current = state.sectionChat ?: return@update state
+            state.copy(sectionChat = block(current))
+        }
     }
 }

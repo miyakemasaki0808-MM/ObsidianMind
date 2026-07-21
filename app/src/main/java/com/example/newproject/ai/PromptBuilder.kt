@@ -1,5 +1,11 @@
 package com.example.newproject.ai
 
+import com.example.newproject.QuizFormat
+import com.example.newproject.domain.DistillCandidate
+import com.example.newproject.domain.DistillLimits
+
+private const val DISTILL_HEADING_LENGTH = 80
+
 /**
  * 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。
  * [detail] は本文冒頭スニペットやタグ等の補助情報（無ければ null）。
@@ -8,6 +14,15 @@ package com.example.newproject.ai
 data class RelatedCandidateLine(val id: String, val title: String, val detail: String? = null) {
     fun renderForPrompt(): String =
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
+}
+
+/** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
+internal data class DistillPrompt(
+    val text: String,
+    val candidates: List<DistillCandidate>,
+    val candidateBlock: String
+) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
 }
 
 object PromptBuilder {
@@ -57,6 +72,48 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    /**
+     * 蒸留ではAIに文章を生成させず、原文候補のIDだけを選ばせる。
+     * 候補文そのものは途中で切らず、件数と候補ブロックの双方を上限内に収める。
+     */
+    internal fun buildDistillPrompt(
+        title: String,
+        candidates: List<DistillCandidate>,
+        candidateLimit: Int = DistillLimits.MAX_AI_CANDIDATES,
+        candidateCharacterBudget: Int = DistillLimits.AI_CANDIDATE_CHAR_BUDGET
+    ): DistillPrompt {
+        require(candidateLimit >= 0)
+        require(candidateCharacterBudget >= 0)
+        val fitted = mutableListOf<DistillCandidate>()
+        val rendered = mutableListOf<String>()
+        var usedCharacters = 0
+
+        for (candidate in candidates) {
+            if (fitted.size >= candidateLimit) break
+            val line = candidate.renderForDistillPrompt()
+            val separatorLength = if (rendered.isEmpty()) 0 else 1
+            if (usedCharacters + separatorLength + line.length <= candidateCharacterBudget) {
+                fitted += candidate
+                rendered += line
+                usedCharacters += separatorLength + line.length
+            }
+        }
+        val candidateBlock = rendered.joinToString("\n")
+        val prompt = """
+            You are a careful editor selecting the most important original sentences from an Obsidian note.
+            Choose up to ${DistillLimits.FINAL_SELECTION_LIMIT} candidates that best preserve the note's central claims, conclusions, or uniquely useful details.
+            Prefer specific conclusions over repeated general statements. Do not rewrite, summarize, or invent text.
+            Return only candidate IDs in descending order of importance, one ID per line (for example: S001).
+            Do not include bullets, explanations, titles, or IDs not present in the candidate list.
+
+            Note title: $title
+
+            Candidates:
+            $candidateBlock
+        """.trimIndent()
+        return DistillPrompt(prompt, fitted, candidateBlock)
+    }
+
     // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
     // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
     fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
@@ -77,25 +134,54 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    // フォーカス周辺クイズ: 出力上限（オンデバイスは256トークン程度）に確実に収まる
-    // 2問固定で生成する。
-    fun buildQuizPrompt(sourceLabel: String, content: String): String {
+    // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
+    // オンデバイスモデルの出力上限内へ収める。
+    fun buildQuizPrompt(sourceLabel: String, content: String, format: QuizFormat): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+        val formatContract = when (format) {
+            QuizFormat.TrueFalse -> """
+                Generate exactly 2 true-or-false statements about what the excerpt says.
+                Keep each statement within 50 characters when writing Japanese, or 20 words otherwise.
+                Do not add explanations or choices. Use exactly this format:
+                Q: <statement>
+                ANSWER: <TRUE or FALSE>
+            """.trimIndent()
+            QuizFormat.ThreeChoice -> """
+                Generate exactly 2 three-choice questions.
+                Keep each question within 50 characters when writing Japanese, or 20 words otherwise.
+                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
+                Do not add explanations. Use exactly this format:
+                Q: <question>
+                A: <choice>
+                B: <choice>
+                C: <choice>
+                ANSWER: <A or B or C>
+            """.trimIndent()
+            QuizFormat.FourChoice -> """
+                Generate exactly 1 four-choice question.
+                Keep the question within 60 characters when writing Japanese, or 24 words otherwise.
+                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
+                Add only one short explanatory sentence. Use exactly this format:
+                Q: <question>
+                A: <choice>
+                B: <choice>
+                C: <choice>
+                D: <choice>
+                ANSWER: <A or B or C or D>
+                EXPLANATION: <one short sentence>
+            """.trimIndent()
+        }
         return """
-            You are a study assistant. Read the following excerpt from an Obsidian note and generate exactly 2 multiple-choice questions to help the user memorize the key concepts of this excerpt. If the excerpt is short, use closely related general knowledge to complete the questions.
+            You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
             Answer in the same language as the excerpt content.
-            Format each question EXACTLY like this (blank line between questions):
-            Q: <question>
-            A: <correct answer>
-            B: <wrong answer>
-            C: <wrong answer>
-            D: <wrong answer>
-            ANSWER: <A or B or C or D>
-            EXPLANATION: <1-2 sentence explanation of why the correct answer is right>
+            Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
+
+            $formatContract
 
             Source: $sourceLabel
-            Excerpt:
+            --- BEGIN EXCERPT ---
             $snippet
+            --- END EXCERPT ---
         """.trimIndent()
     }
 
@@ -220,4 +306,14 @@ object PromptBuilder {
             ?.joinToString("\n") { "- $it" }
             ?: emptyText
 
+}
+
+private fun DistillCandidate.renderForDistillPrompt(): String {
+    val headingPrefix = sentence.heading
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.take(DISTILL_HEADING_LENGTH)
+        ?.let { "[$it] " }
+        .orEmpty()
+    return "$id | $headingPrefix${sentence.text}"
 }

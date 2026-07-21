@@ -28,13 +28,16 @@ class QuizControllerTest {
         controller.create("対象ノート.md", "本文")
         runCurrent()
 
-        assertTrue(state.value.quizState is QuizState.Loading)
-        aiClient.response.complete(validResponse())
+        val loading = state.value.quizState as QuizState.Loading
+        assertEquals(QuizFormat.TrueFalse, loading.format)
+        aiClient.response.complete(trueFalseResponse())
         advanceUntilIdle()
 
         val success = state.value.quizState as QuizState.Success
         assertEquals("対象ノート", success.sourceTitle)
-        assertEquals(1, success.cards.size)
+        assertEquals(2, success.cards.size)
+        assertEquals(QuizFormat.TrueFalse, success.cards.first().format)
+        assertEquals(listOf("正しい", "誤り"), success.cards.first().choices)
         assertFalse(success.isViewed)
     }
 
@@ -50,7 +53,7 @@ class QuizControllerTest {
         runCurrent()
 
         assertEquals(1, aiClient.generateCalls)
-        aiClient.response.complete(validResponse())
+        aiClient.response.complete(trueFalseResponse())
         advanceUntilIdle()
     }
 
@@ -63,7 +66,7 @@ class QuizControllerTest {
         controller.create("古いノート", "本文")
         runCurrent()
         controller.cancelAndClear()
-        aiClient.response.complete(validResponse())
+        aiClient.response.complete(trueFalseResponse())
         advanceUntilIdle()
 
         assertTrue(state.value.quizState is QuizState.Idle)
@@ -119,13 +122,11 @@ class QuizControllerTest {
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
 
-    private fun validResponse() = """
-        Q: 問題
-        A: 選択肢A
-        B: 選択肢B
-        C: 選択肢C
-        D: 選択肢D
-        ANSWER: A
-        EXPLANATION: 解説
+    private fun trueFalseResponse() = """
+        Q: 本文には情報がある
+        ANSWER: TRUE
+
+        Q: 本文は空である
+        ANSWER: FALSE
     """.trimIndent()
 }

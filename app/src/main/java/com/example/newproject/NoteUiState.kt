@@ -11,9 +11,57 @@ import com.example.newproject.domain.RelatedNote
 sealed class NoteState {
     object Idle : NoteState()
     object Loading : NoteState()
-    data class Success(val title: String, val content: String) : NoteState()
+    data class Success(
+        val title: String,
+        val content: String,
+        val targetUri: String = "",
+        val originalHash: String? = null,
+        val distillUnavailableReason: String? = null
+    ) : NoteState()
     object Empty : NoteState()
     data class Error(val message: String, val id: Long = System.currentTimeMillis()) : NoteState()
+}
+
+data class DistillCandidateItem(
+    val id: String,
+    val text: String,
+    val heading: String?,
+    val positionLabel: String,
+    val context: String?,
+    val isSelected: Boolean = true
+)
+
+enum class DistillRecoveryKind { Diverged, Inaccessible, Corrupt }
+
+sealed class DistillState {
+    object Idle : DistillState()
+    data class Analyzing(val sourceTitle: String) : DistillState()
+    data class NeedsDownload(val sourceTitle: String) : DistillState()
+    data class Downloading(val sourceTitle: String, val downloaded: Long, val total: Long) : DistillState()
+    data class Unavailable(val message: String) : DistillState()
+    data class Candidates(
+        val sourceTitle: String,
+        val items: List<DistillCandidateItem>,
+        val projectedBoldRatio: Double,
+        val isWithinBoldLimit: Boolean,
+        val isSingleSentenceException: Boolean = false
+    ) : DistillState() {
+        val selectedCount: Int get() = items.count { it.isSelected }
+        val canSaveSelection: Boolean
+            get() = selectedCount > 0 && (isWithinBoldLimit || isSingleSentenceException)
+    }
+    data class Saving(val sourceTitle: String, val verifying: Boolean = false) : DistillState()
+    data class Saved(val sourceTitle: String, val sentenceCount: Int) : DistillState()
+    data class Conflict(val message: String) : DistillState()
+    data class RecoveryRequired(
+        val kind: DistillRecoveryKind,
+        val message: String,
+        val canRestore: Boolean,
+        val canExport: Boolean,
+        val canKeepCurrent: Boolean
+    ) : DistillState()
+    data class RecoveryResolved(val message: String) : DistillState()
+    data class Error(val message: String, val canRetry: Boolean = true) : DistillState()
 }
 
 sealed class SummaryState {
@@ -49,16 +97,23 @@ sealed class SearchState {
     data class Error(val message: String) : SearchState()
 }
 
+enum class QuizFormat(val displayName: String) {
+    TrueFalse("○×問題"),
+    ThreeChoice("3択問題"),
+    FourChoice("4択問題")
+}
+
 data class QuizCard(
     val question: String,
     val choices: List<String>,
     val correctIndex: Int,
-    val explanation: String = ""
+    val explanation: String = "",
+    val format: QuizFormat = QuizFormat.FourChoice
 )
 
 sealed class QuizState {
     object Idle : QuizState()
-    data class Loading(val sourceTitle: String) : QuizState()
+    data class Loading(val sourceTitle: String, val format: QuizFormat = QuizFormat.FourChoice) : QuizState()
     data class Success(
         val sourceTitle: String,
         val cards: List<QuizCard>,
@@ -92,7 +147,7 @@ sealed class AnnotationState {
 // nullはIdle（通知対象なし）を表す。
 internal fun QuizState.toEventKey(): String? = when (this) {
     is QuizState.Idle -> null
-    is QuizState.Loading -> "loading:$sourceTitle"
+    is QuizState.Loading -> "loading:$sourceTitle:$format"
     is QuizState.Success -> "success:$sourceTitle:${cards.hashCode()}:$isViewed"
     is QuizState.Error -> "error:$sourceTitle:$message:$isViewed"
 }
@@ -135,6 +190,7 @@ data class NoteUiState(
     val quizState: QuizState = QuizState.Idle,
     val wikilinkTitles: Set<String> = emptySet(),
     val annotationState: AnnotationState = AnnotationState.Idle,
+    val distillState: DistillState = DistillState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
     val sectionChat: SectionChatState? = null,
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
@@ -146,4 +202,15 @@ data class NoteUiState(
     val searchState: SearchState = SearchState.Idle,
     // 当日分のみの閲覧履歴（NoteHistoryStore が日付判定を担当）
     val todayHistory: List<HistoryEntry> = emptyList()
+)
+
+/**
+ * 蒸留は意味を変えずMarkdown装飾だけを更新するため、ノート全体から得たAI結果は維持する。
+ * 一方、生Markdownのセクション本文に結び付くチャットとクイズは照合不能になるため破棄する。
+ */
+internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
+    noteState = loaded,
+    quizState = QuizState.Idle,
+    sectionChat = null,
+    isSectionChatSheetVisible = false
 )

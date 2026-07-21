@@ -8,12 +8,13 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * 4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
+ * 入力内容に応じた○×・3択・4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
  * 入力はノート全体ではなく「フォーカスセクションの周辺テキスト」（呼び出し側が
- * NoteSectionModel.surroundingContext で構築）。1回の生成は2問固定。
+ * NoteSectionModel.surroundingContext で構築）。出題形式と問題数は入力の情報量に応じて決める。
  * AI補記とは独立したジョブを持ち、実際のモデル生成は AiClient 側のMutexで順番に処理される。
  */
 class QuizController(
@@ -30,14 +31,21 @@ class QuizController(
         // 生成中の再タップは同じ要求として扱い、モデルの順番待ちを重複させない。
         if (uiState.value.quizState is QuizState.Loading) return
 
+        val format = profileQuizInput(content).format
         val request = PendingQuiz(
             requestId = ++activeRequestId,
             title = title,
-            content = content
+            content = content,
+            format = format
         )
-        uiState.value = uiState.value.copy(
-            quizState = QuizState.Loading(title.toObsidianNoteTitle())
-        )
+        uiState.update { current ->
+            current.copy(
+                quizState = QuizState.Loading(
+                    sourceTitle = title.toObsidianNoteTitle(),
+                    format = format
+                )
+            )
+        }
         generateJob = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
@@ -60,12 +68,14 @@ class QuizController(
     }
 
     fun markViewed() {
-        val next = when (val state = uiState.value.quizState) {
-            is QuizState.Success -> state.copy(isViewed = true)
-            is QuizState.Error -> state.copy(isViewed = true)
-            else -> return
+        uiState.update { current ->
+            val next = when (val state = current.quizState) {
+                is QuizState.Success -> state.copy(isViewed = true)
+                is QuizState.Error -> state.copy(isViewed = true)
+                else -> return@update current
+            }
+            current.copy(quizState = next)
         }
-        uiState.value = uiState.value.copy(quizState = next)
     }
 
     /**
@@ -79,29 +89,32 @@ class QuizController(
         generateJob = null
         downloadJob = null
         pending = null
-        uiState.value = uiState.value.copy(quizState = QuizState.Idle)
+        uiState.update { current -> current.copy(quizState = QuizState.Idle) }
     }
 
     private suspend fun generateWithAvailableModel(request: PendingQuiz) {
         try {
             val prompt = PromptBuilder.buildQuizPrompt(
                 sourceLabel = request.title,
-                content = request.content
+                content = request.content,
+                format = request.format
             )
             val raw = aiClient.generate(prompt)
             if (!isCurrent(request.requestId)) return
 
-            val cards = parseQuizResponse(raw)
+            val cards = parseQuizResponse(raw, request.format)
             if (cards.isEmpty()) {
                 updateError(request, "Q&Aの生成結果を読み取れませんでした。")
                 return
             }
-            uiState.value = uiState.value.copy(
-                quizState = QuizState.Success(
-                    sourceTitle = request.title.toObsidianNoteTitle(),
-                    cards = cards
+            uiState.update { current ->
+                current.copy(
+                    quizState = QuizState.Success(
+                        sourceTitle = request.title.toObsidianNoteTitle(),
+                        cards = cards
+                    )
                 )
-            )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -147,17 +160,20 @@ class QuizController(
 
     private fun updateError(request: PendingQuiz, message: String) {
         if (!isCurrent(request.requestId)) return
-        uiState.value = uiState.value.copy(
-            quizState = QuizState.Error(
-                message = message,
-                sourceTitle = request.title.toObsidianNoteTitle()
+        uiState.update { current ->
+            current.copy(
+                quizState = QuizState.Error(
+                    message = message,
+                    sourceTitle = request.title.toObsidianNoteTitle()
+                )
             )
-        )
+        }
     }
 
     private data class PendingQuiz(
         val requestId: Long,
         val title: String,
-        val content: String
+        val content: String,
+        val format: QuizFormat
     )
 }

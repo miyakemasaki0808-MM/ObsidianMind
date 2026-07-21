@@ -3,6 +3,7 @@ package com.example.newproject
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import com.example.newproject.domain.DistillLimits
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -142,6 +143,34 @@ class NoteRepository {
                 stream.bufferedReader(Charsets.UTF_8).readText()
             } ?: ""
         }
+
+    /** 蒸留用。競合判定に使う生バイト列を保持し、UTF-8を置換なしで検証する。 */
+    internal suspend fun readNoteSnapshot(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        maximumBytes: Int = DistillLimits.MAX_FILE_BYTES
+    ): NoteSnapshot = withContext(Dispatchers.IO) {
+        val bytes = contentResolver.openInputStream(uri)?.use { stream ->
+            readBoundedBytes(stream, maximumBytes)
+        } ?: error("ノートを開けませんでした。")
+        NoteSnapshot(
+            uri = uri,
+            bytes = bytes,
+            content = decodeUtf8Strict(bytes),
+            hash = sha256Hex(bytes)
+        )
+    }
+
+    internal suspend fun writeDocumentBytes(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        bytes: ByteArray
+    ) = withContext(Dispatchers.IO) {
+        contentResolver.openOutputStream(uri, "wt")?.use { output ->
+            output.write(bytes)
+            output.flush()
+        } ?: error("書き出し先を開けませんでした。")
+    }
 
     suspend fun createAnnotationFile(
         contentResolver: ContentResolver,
