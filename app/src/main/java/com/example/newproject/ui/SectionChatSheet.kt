@@ -1,7 +1,15 @@
 package com.example.newproject.ui
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -25,8 +34,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,7 +65,12 @@ fun SectionChatSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+    // 背後の読書グラデーションが透けて情報密度が上がるのを抑えるため、既定より濃いスクリムにする。
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        scrimColor = BottomSheetDefaults.ScrimColor.copy(alpha = 0.5f)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -78,7 +95,7 @@ fun SectionChatSheet(
             SectionHeader("📝", "要約")
             Spacer(modifier = Modifier.height(8.dp))
             when {
-                state.isSummaryLoading -> LoadingRow("要約を生成中…")
+                state.isSummaryLoading -> SummarySkeleton()
                 state.summary != null -> Text(
                     text = state.summary,
                     fontSize = 14.sp,
@@ -189,6 +206,41 @@ private fun SuggestionRow(text: String, enabled: Boolean, onClick: () -> Unit) {
             Text("＋", color = Indigo, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+// 要約生成中は「骨組み」を見せて待たされ感を減らす。shimmerは自前（accompanistは非推奨のため不使用）。
+@Composable
+private fun SummarySkeleton() {
+    val transition = rememberInfiniteTransition(label = "summarySkeleton")
+    val shift by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1000f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerShift"
+    )
+    val brush = Brush.linearGradient(
+        colors = listOf(Color(0xFFECEEF6), Color(0xFFF6F7FB), Color(0xFFECEEF6)),
+        start = Offset(shift - 300f, 0f),
+        end = Offset(shift, 0f)
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        SkeletonLine(brush, 1f)
+        SkeletonLine(brush, 0.92f)
+        SkeletonLine(brush, 0.6f)
+    }
+}
+
+@Composable
+private fun SkeletonLine(brush: Brush, widthFraction: Float) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(widthFraction)
+            .height(14.dp)
+            .background(brush, RoundedCornerShape(6.dp))
+    )
 }
 
 @Composable
