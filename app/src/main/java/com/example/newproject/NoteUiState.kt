@@ -97,16 +97,23 @@ sealed class SearchState {
     data class Error(val message: String) : SearchState()
 }
 
+enum class QuizFormat(val displayName: String) {
+    TrueFalse("○×問題"),
+    ThreeChoice("3択問題"),
+    FourChoice("4択問題")
+}
+
 data class QuizCard(
     val question: String,
     val choices: List<String>,
     val correctIndex: Int,
-    val explanation: String = ""
+    val explanation: String = "",
+    val format: QuizFormat = QuizFormat.FourChoice
 )
 
 sealed class QuizState {
     object Idle : QuizState()
-    data class Loading(val sourceTitle: String) : QuizState()
+    data class Loading(val sourceTitle: String, val format: QuizFormat = QuizFormat.FourChoice) : QuizState()
     data class Success(
         val sourceTitle: String,
         val cards: List<QuizCard>,
@@ -140,7 +147,7 @@ sealed class AnnotationState {
 // nullはIdle（通知対象なし）を表す。
 internal fun QuizState.toEventKey(): String? = when (this) {
     is QuizState.Idle -> null
-    is QuizState.Loading -> "loading:$sourceTitle"
+    is QuizState.Loading -> "loading:$sourceTitle:$format"
     is QuizState.Success -> "success:$sourceTitle:${cards.hashCode()}:$isViewed"
     is QuizState.Error -> "error:$sourceTitle:$message:$isViewed"
 }

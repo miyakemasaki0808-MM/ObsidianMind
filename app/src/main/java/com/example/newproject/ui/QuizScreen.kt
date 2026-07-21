@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.QuizCard
+import com.example.newproject.QuizFormat
 import com.example.newproject.QuizState
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.Indigo
@@ -69,7 +70,11 @@ fun QuizScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator(color = Indigo)
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("4択問題を生成中…", fontSize = 14.sp, color = Color(0xFFAAAAAA))
+                            Text(
+                                "${quizState.format.displayName}を生成中…",
+                                fontSize = 14.sp,
+                                color = Color(0xFFAAAAAA)
+                            )
                         }
                     }
                 }
@@ -155,7 +160,12 @@ private fun QuestionCard(question: String) {
 @Composable
 private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
     var selected by remember(card) { mutableStateOf<Int?>(null) }
-    val labels = listOf("A", "B", "C", "D")
+    val labels = if (card.format == QuizFormat.TrueFalse) {
+        listOf("○", "×")
+    } else {
+        listOf("A", "B", "C", "D")
+    }
+    fun labelAt(index: Int): String = labels.getOrElse(index) { (index + 1).toString() }
 
     card.choices.forEachIndexed { index, choice ->
         val isSelected = selected == index
@@ -194,7 +204,7 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = labels[index],
+                    text = labelAt(index),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Bold,
                     color = labelColor
@@ -221,7 +231,7 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
-                    text = if (isCorrect) "✅ 正解！" else "❌ 不正解。正解は ${labels[card.correctIndex]}",
+                    text = if (isCorrect) "✅ 正解！" else "❌ 不正解。正解は ${labelAt(card.correctIndex)}",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isCorrect) Color(0xFF4CAF50) else Color(0xFFEF5350)

@@ -12,9 +12,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
- * 4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
+ * 入力内容に応じた○×・3択・4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
  * 入力はノート全体ではなく「フォーカスセクションの周辺テキスト」（呼び出し側が
- * NoteSectionModel.surroundingContext で構築）。1回の生成は2問固定。
+ * NoteSectionModel.surroundingContext で構築）。出題形式と問題数は入力の情報量に応じて決める。
  * AI補記とは独立したジョブを持ち、実際のモデル生成は AiClient 側のMutexで順番に処理される。
  */
 class QuizController(
@@ -31,13 +31,20 @@ class QuizController(
         // 生成中の再タップは同じ要求として扱い、モデルの順番待ちを重複させない。
         if (uiState.value.quizState is QuizState.Loading) return
 
+        val format = profileQuizInput(content).format
         val request = PendingQuiz(
             requestId = ++activeRequestId,
             title = title,
-            content = content
+            content = content,
+            format = format
         )
         uiState.update { current ->
-            current.copy(quizState = QuizState.Loading(title.toObsidianNoteTitle()))
+            current.copy(
+                quizState = QuizState.Loading(
+                    sourceTitle = title.toObsidianNoteTitle(),
+                    format = format
+                )
+            )
         }
         generateJob = scope.launch {
             try {
@@ -89,12 +96,13 @@ class QuizController(
         try {
             val prompt = PromptBuilder.buildQuizPrompt(
                 sourceLabel = request.title,
-                content = request.content
+                content = request.content,
+                format = request.format
             )
             val raw = aiClient.generate(prompt)
             if (!isCurrent(request.requestId)) return
 
-            val cards = parseQuizResponse(raw)
+            val cards = parseQuizResponse(raw, request.format)
             if (cards.isEmpty()) {
                 updateError(request, "Q&Aの生成結果を読み取れませんでした。")
                 return
@@ -165,6 +173,7 @@ class QuizController(
     private data class PendingQuiz(
         val requestId: Long,
         val title: String,
-        val content: String
+        val content: String,
+        val format: QuizFormat
     )
 }

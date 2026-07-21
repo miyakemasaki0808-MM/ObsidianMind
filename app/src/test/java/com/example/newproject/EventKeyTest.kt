@@ -37,4 +37,12 @@ class EventKeyTest {
             AnnotationState.Loading("ノートB").toEventKey()
         )
     }
+
+    @Test
+    fun `同じノートでも出題形式が変われば生成中キーが変わる`() {
+        assertNotEquals(
+            QuizState.Loading("ノート", QuizFormat.TrueFalse).toEventKey(),
+            QuizState.Loading("ノート", QuizFormat.ThreeChoice).toEventKey()
+        )
+    }
 }

@@ -1,5 +1,6 @@
 package com.example.newproject.ai
 
+import com.example.newproject.QuizFormat
 import com.example.newproject.domain.DistillCandidate
 import com.example.newproject.domain.DistillLimits
 
@@ -133,25 +134,54 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    // フォーカス周辺クイズ: 出力上限（オンデバイスは256トークン程度）に確実に収まる
-    // 2問固定で生成する。
-    fun buildQuizPrompt(sourceLabel: String, content: String): String {
+    // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
+    // オンデバイスモデルの出力上限内へ収める。
+    fun buildQuizPrompt(sourceLabel: String, content: String, format: QuizFormat): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+        val formatContract = when (format) {
+            QuizFormat.TrueFalse -> """
+                Generate exactly 2 true-or-false statements about what the excerpt says.
+                Keep each statement within 50 characters when writing Japanese, or 20 words otherwise.
+                Do not add explanations or choices. Use exactly this format:
+                Q: <statement>
+                ANSWER: <TRUE or FALSE>
+            """.trimIndent()
+            QuizFormat.ThreeChoice -> """
+                Generate exactly 2 three-choice questions.
+                Keep each question within 50 characters when writing Japanese, or 20 words otherwise.
+                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
+                Do not add explanations. Use exactly this format:
+                Q: <question>
+                A: <choice>
+                B: <choice>
+                C: <choice>
+                ANSWER: <A or B or C>
+            """.trimIndent()
+            QuizFormat.FourChoice -> """
+                Generate exactly 1 four-choice question.
+                Keep the question within 60 characters when writing Japanese, or 24 words otherwise.
+                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
+                Add only one short explanatory sentence. Use exactly this format:
+                Q: <question>
+                A: <choice>
+                B: <choice>
+                C: <choice>
+                D: <choice>
+                ANSWER: <A or B or C or D>
+                EXPLANATION: <one short sentence>
+            """.trimIndent()
+        }
         return """
-            You are a study assistant. Read the following excerpt from an Obsidian note and generate exactly 2 multiple-choice questions to help the user memorize the key concepts of this excerpt. If the excerpt is short, use closely related general knowledge to complete the questions.
+            You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
             Answer in the same language as the excerpt content.
-            Format each question EXACTLY like this (blank line between questions):
-            Q: <question>
-            A: <correct answer>
-            B: <wrong answer>
-            C: <wrong answer>
-            D: <wrong answer>
-            ANSWER: <A or B or C or D>
-            EXPLANATION: <1-2 sentence explanation of why the correct answer is right>
+            Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
+
+            $formatContract
 
             Source: $sourceLabel
-            Excerpt:
+            --- BEGIN EXCERPT ---
             $snippet
+            --- END EXCERPT ---
         """.trimIndent()
     }
 
