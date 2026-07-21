@@ -11,6 +11,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -46,12 +47,14 @@ class AnnotationController(
 
         val vault = vaultUri()
         if (vault == null) {
-            uiState.value = uiState.value.copy(
-                annotationState = AnnotationState.Error(
-                    message = "Vault が選択されていません。",
-                    sourceTitle = title
+            uiState.update { current ->
+                current.copy(
+                    annotationState = AnnotationState.Error(
+                        message = "Vault が選択されていません。",
+                        sourceTitle = title
+                    )
                 )
-            )
+            }
             return
         }
 
@@ -66,9 +69,9 @@ class AnnotationController(
             wikilinkTitles = wikilinkTitles
         )
 
-        uiState.value = uiState.value.copy(
-            annotationState = AnnotationState.Loading(title.toObsidianNoteTitle())
-        )
+        uiState.update { current ->
+            current.copy(annotationState = AnnotationState.Loading(title.toObsidianNoteTitle()))
+        }
         createJob = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
@@ -99,12 +102,14 @@ class AnnotationController(
 
     /** 完了・エラー通知を確認済みにする。結果自体は同じノート内で保持する。 */
     fun markViewed() {
-        val next = when (val state = uiState.value.annotationState) {
-            is AnnotationState.Success -> state.copy(isViewed = true)
-            is AnnotationState.Error -> state.copy(isViewed = true)
-            else -> return
+        uiState.update { current ->
+            val next = when (val state = current.annotationState) {
+                is AnnotationState.Success -> state.copy(isViewed = true)
+                is AnnotationState.Error -> state.copy(isViewed = true)
+                else -> return@update current
+            }
+            current.copy(annotationState = next)
         }
-        uiState.value = uiState.value.copy(annotationState = next)
     }
 
     /** ノート・Vault切替時に生成を止め、旧ノートの結果が後から混入するのを防ぐ。 */
@@ -115,28 +120,28 @@ class AnnotationController(
         createJob = null
         downloadJob = null
         pending = null
-        uiState.value = uiState.value.copy(annotationState = AnnotationState.Idle)
+        uiState.update { current -> current.copy(annotationState = AnnotationState.Idle) }
     }
 
     fun loadList(contentResolver: ContentResolver) {
         val uri = vaultUri()
         if (uri == null) {
-            uiState.value = uiState.value.copy(
-                annotationListState = AnnotationListState.Error("Vault が選択されていません。")
-            )
+            uiState.update { current ->
+                current.copy(annotationListState = AnnotationListState.Error("Vault が選択されていません。"))
+            }
             return
         }
         scope.launch {
-            uiState.value = uiState.value.copy(annotationListState = AnnotationListState.Loading)
+            uiState.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
             try {
                 val files = repository.listAnnotationFiles(contentResolver, uri)
-                uiState.value = uiState.value.copy(
-                    annotationListState = AnnotationListState.Success(files)
-                )
+                uiState.update { current ->
+                    current.copy(annotationListState = AnnotationListState.Success(files))
+                }
             } catch (e: Exception) {
-                uiState.value = uiState.value.copy(
-                    annotationListState = AnnotationListState.Error(e.message ?: "Unknown error")
-                )
+                uiState.update { current ->
+                    current.copy(annotationListState = AnnotationListState.Error(e.message ?: "Unknown error"))
+                }
             }
         }
     }
@@ -162,13 +167,13 @@ class AnnotationController(
         val uri = vaultUri() ?: return
         try {
             val files = repository.listAnnotationFiles(contentResolver, uri)
-            uiState.value = uiState.value.copy(
-                annotationListState = AnnotationListState.Success(files)
-            )
+            uiState.update { current ->
+                current.copy(annotationListState = AnnotationListState.Success(files))
+            }
         } catch (e: Exception) {
-            uiState.value = uiState.value.copy(
-                annotationListState = AnnotationListState.Error(e.message ?: "Unknown error")
-            )
+            uiState.update { current ->
+                current.copy(annotationListState = AnnotationListState.Error(e.message ?: "Unknown error"))
+            }
         }
     }
 
@@ -217,14 +222,16 @@ class AnnotationController(
                 content = markdown
             )
             if (!isCurrent(annotation.requestId)) return
-            uiState.value = uiState.value.copy(
-                annotationState = AnnotationState.Success(
-                    sourceTitle = sourceTitle,
-                    savedUri = savedUri,
-                    fileName = fileName,
-                    content = markdown
+            uiState.update { current ->
+                current.copy(
+                    annotationState = AnnotationState.Success(
+                        sourceTitle = sourceTitle,
+                        savedUri = savedUri,
+                        fileName = fileName,
+                        content = markdown
+                    )
                 )
-            )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -286,12 +293,14 @@ class AnnotationController(
 
     private fun updateError(requestId: Long, sourceTitle: String, message: String) {
         if (!isCurrent(requestId)) return
-        uiState.value = uiState.value.copy(
-            annotationState = AnnotationState.Error(
-                message = message,
-                sourceTitle = sourceTitle.toObsidianNoteTitle()
+        uiState.update { current ->
+            current.copy(
+                annotationState = AnnotationState.Error(
+                    message = message,
+                    sourceTitle = sourceTitle.toObsidianNoteTitle()
+                )
             )
-        )
+        }
     }
 
     private data class PendingAnnotation(

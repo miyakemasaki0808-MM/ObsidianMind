@@ -8,6 +8,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -35,9 +36,9 @@ class QuizController(
             title = title,
             content = content
         )
-        uiState.value = uiState.value.copy(
-            quizState = QuizState.Loading(title.toObsidianNoteTitle())
-        )
+        uiState.update { current ->
+            current.copy(quizState = QuizState.Loading(title.toObsidianNoteTitle()))
+        }
         generateJob = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
@@ -60,12 +61,14 @@ class QuizController(
     }
 
     fun markViewed() {
-        val next = when (val state = uiState.value.quizState) {
-            is QuizState.Success -> state.copy(isViewed = true)
-            is QuizState.Error -> state.copy(isViewed = true)
-            else -> return
+        uiState.update { current ->
+            val next = when (val state = current.quizState) {
+                is QuizState.Success -> state.copy(isViewed = true)
+                is QuizState.Error -> state.copy(isViewed = true)
+                else -> return@update current
+            }
+            current.copy(quizState = next)
         }
-        uiState.value = uiState.value.copy(quizState = next)
     }
 
     /**
@@ -79,7 +82,7 @@ class QuizController(
         generateJob = null
         downloadJob = null
         pending = null
-        uiState.value = uiState.value.copy(quizState = QuizState.Idle)
+        uiState.update { current -> current.copy(quizState = QuizState.Idle) }
     }
 
     private suspend fun generateWithAvailableModel(request: PendingQuiz) {
@@ -96,12 +99,14 @@ class QuizController(
                 updateError(request, "Q&Aの生成結果を読み取れませんでした。")
                 return
             }
-            uiState.value = uiState.value.copy(
-                quizState = QuizState.Success(
-                    sourceTitle = request.title.toObsidianNoteTitle(),
-                    cards = cards
+            uiState.update { current ->
+                current.copy(
+                    quizState = QuizState.Success(
+                        sourceTitle = request.title.toObsidianNoteTitle(),
+                        cards = cards
+                    )
                 )
-            )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -147,12 +152,14 @@ class QuizController(
 
     private fun updateError(request: PendingQuiz, message: String) {
         if (!isCurrent(request.requestId)) return
-        uiState.value = uiState.value.copy(
-            quizState = QuizState.Error(
-                message = message,
-                sourceTitle = request.title.toObsidianNoteTitle()
+        uiState.update { current ->
+            current.copy(
+                quizState = QuizState.Error(
+                    message = message,
+                    sourceTitle = request.title.toObsidianNoteTitle()
+                )
             )
-        )
+        }
     }
 
     private data class PendingQuiz(

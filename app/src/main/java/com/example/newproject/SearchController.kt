@@ -7,6 +7,7 @@ import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -39,7 +40,7 @@ class SearchController(
         scope.launch {
             try {
                 val folders = repository.listTopLevelFolders(contentResolver, uri)
-                uiState.value = uiState.value.copy(folders = folders)
+                uiState.update { current -> current.copy(folders = folders) }
             } catch (_: Exception) {
                 // フォルダ列挙の失敗は致命的でない（ルート直下スコープは使える）
             }
@@ -47,7 +48,7 @@ class SearchController(
     }
 
     fun selectFolder(folder: NoteFolder?) {
-        uiState.value = uiState.value.copy(selectedFolder = folder)
+        uiState.update { current -> current.copy(selectedFolder = folder) }
     }
 
     // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
@@ -56,22 +57,22 @@ class SearchController(
         val q = query.trim()
         if (q.isBlank()) return
         scope.launch {
-            uiState.value = uiState.value.copy(searchState = SearchState.Loading)
+            uiState.update { current -> current.copy(searchState = SearchState.Loading) }
             try {
                 val folder = uiState.value.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
-                    is PickerResult.Success -> uiState.value = uiState.value.copy(
-                        searchState = SearchState.Success(result.notes, result.aiStatus)
-                    )
-                    is PickerResult.Error -> uiState.value = uiState.value.copy(
-                        searchState = SearchState.Error(result.message)
-                    )
+                    is PickerResult.Success -> uiState.update { current ->
+                        current.copy(searchState = SearchState.Success(result.notes, result.aiStatus))
+                    }
+                    is PickerResult.Error -> uiState.update { current ->
+                        current.copy(searchState = SearchState.Error(result.message))
+                    }
                 }
             } catch (e: Exception) {
-                uiState.value = uiState.value.copy(
-                    searchState = SearchState.Error(e.message ?: "Unknown error")
-                )
+                uiState.update { current ->
+                    current.copy(searchState = SearchState.Error(e.message ?: "Unknown error"))
+                }
             }
         }
     }
@@ -80,20 +81,18 @@ class SearchController(
     fun pickRandomInScope(contentResolver: ContentResolver) {
         val uri = vaultUri() ?: return
         scope.launch {
-            uiState.value = uiState.value.copy(searchState = SearchState.Loading)
+            uiState.update { current -> current.copy(searchState = SearchState.Loading) }
             try {
                 val folder = uiState.value.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 val picked = notes.shuffled().take(3).map {
                     RelatedNote(title = it.name, uri = it.uri, isWikilinked = false, lastModified = it.lastModified)
                 }
-                uiState.value = uiState.value.copy(
-                    searchState = SearchState.Success(picked)
-                )
+                uiState.update { current -> current.copy(searchState = SearchState.Success(picked)) }
             } catch (e: Exception) {
-                uiState.value = uiState.value.copy(
-                    searchState = SearchState.Error(e.message ?: "Unknown error")
-                )
+                uiState.update { current ->
+                    current.copy(searchState = SearchState.Error(e.message ?: "Unknown error"))
+                }
             }
         }
     }
