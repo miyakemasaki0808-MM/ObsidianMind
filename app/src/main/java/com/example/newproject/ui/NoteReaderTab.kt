@@ -42,7 +42,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -55,6 +54,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -82,7 +87,6 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------------------
 // タブ1: ノート（本文リーダー）
@@ -396,12 +400,23 @@ private fun IconPill(
     containerColor: Color = Panel.copy(alpha = 0.22f),
     onClick: () -> Unit
 ) {
+    // contentDescription を実際にSemanticsへ設定し、絵文字記号は読み上げ対象から外す。
+    val description = contentDescription
     Surface(
-        modifier = modifier.size(40.dp).clickable(onClick = onClick),
+        modifier = modifier
+            .size(40.dp)
+            .clickable(onClick = onClick)
+            .semantics {
+                this.contentDescription = description
+                role = Role.Button
+            },
         shape = CircleShape,
         color = containerColor
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.clearAndSetSemantics {},
+            contentAlignment = Alignment.Center
+        ) {
             Text(symbol, color = OnVibrant, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -442,18 +457,21 @@ internal fun FullscreenNoteScreen(
     // 遷移アニメーション中は通常タブと全画面が同時にコンポーズされ、同一 LazyListState を
     // 2つの LazyColumn に装着すると例外になる。全画面は専用stateを持ち、開いた時点で
     // タブ側の位置から開始し、離脱時にタブ側へ書き戻すことでスクロール位置を継承する。
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState(
         tabListState.firstVisibleItemIndex,
         tabListState.firstVisibleItemScrollOffset
     )
     val leaveWith: (() -> Unit) -> Unit = { action ->
-        scope.launch {
-            tabListState.scrollToItem(
-                listState.firstVisibleItemIndex,
-                listState.firstVisibleItemScrollOffset
-            )
-        }
+        // 閉じる処理(action)は必ず即実行する。以前は suspend の scrollToItem の完了後に
+        // action を呼んでいたが（フリング中の書き戻し消失を防ぐ狙い）、Fold開閉による
+        // Activity再生成後などに tabListState 側の coroutine が完了せず、✕もバックも
+        // 無反応で全画面を解除できなくなった。非suspendの requestScrollToItem で保留位置を
+        // 積むだけにし、書き戻しをベストエフォート化して閉じる導線から切り離す
+        // （pop でルートが破棄されてもキャンセルの影響を受けない）。
+        tabListState.requestScrollToItem(
+            listState.firstVisibleItemIndex,
+            listState.firstVisibleItemScrollOffset
+        )
         action()
     }
     // システムバックでもスクロール位置を書き戻してから閉じる。
@@ -519,6 +537,12 @@ private fun BoxScope.FullscreenAiFab(
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val currentOnTap by rememberUpdatedState(onTap)
+    val fabDescription = when (status) {
+        SectionFabStatus.Loading -> "AI生成中"
+        SectionFabStatus.Ready -> "AI生成完了。タップで開く"
+        SectionFabStatus.Error -> "AIエラー。タップで確認"
+        SectionFabStatus.Idle -> "AIメニュー。タップで開く"
+    }
     var showLabel by remember { mutableStateOf(false) }
     LaunchedEffect(status) {
         showLabel = status == SectionFabStatus.Ready || status == SectionFabStatus.Error
@@ -553,7 +577,7 @@ private fun BoxScope.FullscreenAiFab(
         }
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(Indigo.copy(alpha = 0.55f))
                 .pointerInput(Unit) {
@@ -564,6 +588,12 @@ private fun BoxScope.FullscreenAiFab(
                 }
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { currentOnTap() })
+                }
+                // pointerInput はSemanticsを持たないため、スクリーンリーダー用に明示する。
+                .clearAndSetSemantics {
+                    contentDescription = fabDescription
+                    role = Role.Button
+                    onClick { currentOnTap(); true }
                 },
             contentAlignment = Alignment.Center
         ) {

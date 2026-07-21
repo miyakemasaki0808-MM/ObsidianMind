@@ -218,7 +218,12 @@ class MainActivity : ComponentActivity() {
                             },
                             onOpenQuizResult = openQuizResult,
                             noteListState = noteListState,
-                            onEnterFullscreen = { navController.navigate("note_fullscreen") }
+                            onEnterFullscreen = {
+                                // 進入前から表示中のSnackbarはHostが全画面でも描画し続けるため消す。
+                                snackbarHostState.currentSnackbarData?.dismiss()
+                                // ⛶連打での多重pushを防ぐ。
+                                navController.navigate("note_fullscreen") { launchSingleTop = true }
+                            }
                         )
                     }
 
