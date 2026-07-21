@@ -32,9 +32,11 @@
 そこで全画面は専用の `LazyListState` を持ち、
 
 1. 進入時にタブ側の `firstVisibleItemIndex`/`ScrollOffset` から**開始位置を継承**（読み取りのみなので同時装着は起きない）
-2. 離脱時（✕・システムバック・FABタップ）にタブ側へ `scrollToItem` で**書き戻す**（`BackHandler` でシステムバックも同期）
+2. 離脱時（✕・システムバック・FABタップ）にタブ側へ**書き戻す**（`BackHandler` でシステムバックも同期）
 
 とした。これで双方向にスクロール位置が保たれる。`rememberLazyListState(index, offset)` は内部で `rememberSaveable` を使うため、全画面中のFold開閉でも位置が復元される。
+
+> **書き戻しの方式変更（PR #31）**: 当初は離脱時に suspend の `scrollToItem` の完了を待ってから閉じる処理（`popBackStack`）を呼んでいた（フリング中に書き戻しがpop→scopeキャンセルで消えるのを防ぐ狙い）。しかしこれは「閉じる」を「完了保証のない suspend」に直列依存させる形で、**Fold開閉によるActivity再生成後に `scrollToItem` が完了せず、✕もシステムバックも無反応で全画面を解除できない**不具合を生んだ。現在は非suspendの `requestScrollToItem` で保留位置を積むだけにし、閉じる処理を即実行して書き戻しから切り離している（コルーチンを介さないため元の「書き戻し消失」も原理的に起きない）。教訓は [bugfix_reports.md](../bugfix_reports.md) #2 を参照。
 
 ## 判断4: ノート色で全ブリードし、本文カラムだけ720dpに絞る
 
