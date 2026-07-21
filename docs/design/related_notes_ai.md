@@ -65,7 +65,7 @@ Nano
 - **キャッシュ（2b）**: 候補本文を `URI+lastModified` キーでメモ化（`KeyedMemoCache.kt`）。**成功時のみ格納**し、失敗・キャンセルはキャッシュしない（次回リトライ）。Vault切替時に破棄。
 - **上限付き並列読込（2b）**: `Semaphore(8)` で SAF 同時アクセス数を絞りつつ `async/awaitAll`。順序は awaitAll のリスト順で保証、キャンセルは `coroutineScope` で構造化。
 
-### Phase 3a — 全Vaultタイトルスコアリング（PR #29予定）
+### Phase 3a — 全Vaultタイトルスコアリング（PR #29）
 採番順の並べ替えを、**タイトルの話題類似スコア**による全Vaultランキングへ置換（`RelatedCandidateScoring.kt`）。
 
 ```
@@ -76,7 +76,7 @@ score = W_TITLE * titleSim(現, 候補) + W_PREFIX * prefixTier(現, 候補)
 - `prefixTier` = 採番の 2桁一致=1.0 / 1桁一致=0.5 / それ以外=0.0。
 - 話題類似を主、採番近接を弱い従シグナルに。→ 採番が離れても話題が近ければ上位に来る。
 
-### Phase 3b — 本文シグナルによる二段ランク（PR #29予定）
+### Phase 3b — 本文シグナルによる二段ランク（PR #29）
 Phase 2b で読み込んだ上位40件の本文を使い、**プロンプト直前に再ランク**（`RelatedContextScoring.kt`）。件数は変えず並べ替えのみ。
 
 ```

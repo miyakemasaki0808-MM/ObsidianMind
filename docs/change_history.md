@@ -13,7 +13,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |------|----|----------|----------|
-| 2026-07-21 | #29予定 | 関連ノートAI推薦の Phase 3。**3a**: 採番順の並べ替えを全Vaultのタイトル話題スコアへ置換（文字bigram Dice係数＋採番近接の加点）。**3b**: 上位40件を現ノートの tags/snippet/title 類似で再ランクする二段ランキング（件数維持・並べ替えのみ／Nanoの位置バイアス対策）。採点戦略を注入する汎用ランキング基盤 `rankByScore` を分離し3a/3bで共有。実機で「jetpackcompose」ノートの関連が全てKotlin系で揃うことを確認 | [related_notes_ai](design/related_notes_ai.md) |
+| 2026-07-21 | #29 | 関連ノートAI推薦の Phase 3。**3a**: 採番順の並べ替えを全Vaultのタイトル話題スコアへ置換（文字bigram Dice係数＋採番近接の加点）。**3b**: 上位40件を現ノートの tags/snippet/title 類似で再ランクする二段ランキング（件数維持・並べ替えのみ／Nanoの位置バイアス対策）。採点戦略を注入する汎用ランキング基盤 `rankByScore` を分離し3a/3bで共有。実機で「jetpackcompose」ノートの関連が全てKotlin系で揃うことを確認 | [related_notes_ai](design/related_notes_ai.md) |
 | 2026-07-20 | #28 | 関連ノートAI推薦の Phase 2。候補をタイトルに加え本文スニペット・タグ・aliasesで肉付けし入力予算内へ動的短縮（2a）／候補本文を `URI+lastModified` でキャッシュ（成功時のみ格納）し `Semaphore(8)` 上限付き並列で読込（2b） | [related_notes_ai](design/related_notes_ai.md) |
 | 2026-07-20 | #27 | 関連ノートAI推薦の Phase 1。フォーカスセクション文脈での推薦（長ノートの先頭切り出し解消）／候補に一時ID(C01..)を採番しNanoにはID応答させるID応答方式（言い換え・同名衝突での解決失敗を解消） | [related_notes_ai](design/related_notes_ai.md) |
 | 2026-07-20 | #26 | アプリ起動時のブランドOPアニメーションを追加。システムスプラッシュ（`core-splashscreen`）＋Compose OP（`OpeningScreen.kt`）の2層構成。背景を着地画面と同色（`ReadingGradient`）で終端し継ぎ目を解消／`savedInstanceState==null` で新規起動時のみ再生／アダプティブランチャーアイコン新設／レビュー対応（TalkBack二重読み上げ回避・発光色を`AppColors`へ集約） | [opening_animation](design/opening_animation.md) |
