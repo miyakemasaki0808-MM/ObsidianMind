@@ -1,5 +1,10 @@
 package com.example.newproject.ai
 
+import com.example.newproject.domain.DistillCandidate
+import com.example.newproject.domain.DistillLimits
+
+private const val DISTILL_HEADING_LENGTH = 80
+
 /**
  * 関連ノートAIプロンプトに渡す候補行。ID→ノートの解決はUseCase側で確実に行う。
  * [detail] は本文冒頭スニペットやタグ等の補助情報（無ければ null）。
@@ -8,6 +13,15 @@ package com.example.newproject.ai
 data class RelatedCandidateLine(val id: String, val title: String, val detail: String? = null) {
     fun renderForPrompt(): String =
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
+}
+
+/** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
+internal data class DistillPrompt(
+    val text: String,
+    val candidates: List<DistillCandidate>,
+    val candidateBlock: String
+) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
 }
 
 object PromptBuilder {
@@ -55,6 +69,48 @@ object PromptBuilder {
             Candidates:
             $candidateList
         """.trimIndent()
+    }
+
+    /**
+     * 蒸留ではAIに文章を生成させず、原文候補のIDだけを選ばせる。
+     * 候補文そのものは途中で切らず、件数と候補ブロックの双方を上限内に収める。
+     */
+    internal fun buildDistillPrompt(
+        title: String,
+        candidates: List<DistillCandidate>,
+        candidateLimit: Int = DistillLimits.MAX_AI_CANDIDATES,
+        candidateCharacterBudget: Int = DistillLimits.AI_CANDIDATE_CHAR_BUDGET
+    ): DistillPrompt {
+        require(candidateLimit >= 0)
+        require(candidateCharacterBudget >= 0)
+        val fitted = mutableListOf<DistillCandidate>()
+        val rendered = mutableListOf<String>()
+        var usedCharacters = 0
+
+        for (candidate in candidates) {
+            if (fitted.size >= candidateLimit) break
+            val line = candidate.renderForDistillPrompt()
+            val separatorLength = if (rendered.isEmpty()) 0 else 1
+            if (usedCharacters + separatorLength + line.length <= candidateCharacterBudget) {
+                fitted += candidate
+                rendered += line
+                usedCharacters += separatorLength + line.length
+            }
+        }
+        val candidateBlock = rendered.joinToString("\n")
+        val prompt = """
+            You are a careful editor selecting the most important original sentences from an Obsidian note.
+            Choose up to ${DistillLimits.FINAL_SELECTION_LIMIT} candidates that best preserve the note's central claims, conclusions, or uniquely useful details.
+            Prefer specific conclusions over repeated general statements. Do not rewrite, summarize, or invent text.
+            Return only candidate IDs, one ID per line (for example: S001).
+            Do not include bullets, explanations, titles, or IDs not present in the candidate list.
+
+            Note title: $title
+
+            Candidates:
+            $candidateBlock
+        """.trimIndent()
+        return DistillPrompt(prompt, fitted, candidateBlock)
     }
 
     // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
@@ -220,4 +276,14 @@ object PromptBuilder {
             ?.joinToString("\n") { "- $it" }
             ?: emptyText
 
+}
+
+private fun DistillCandidate.renderForDistillPrompt(): String {
+    val headingPrefix = sentence.heading
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?.take(DISTILL_HEADING_LENGTH)
+        ?.let { "[$it] " }
+        .orEmpty()
+    return "$id | $headingPrefix${sentence.text}"
 }
