@@ -36,7 +36,6 @@ import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorRed
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnVibrant
-import com.example.newproject.ui.theme.Panel
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
 enum class AppDestination(val route: String, val label: String, val emoji: String) {
@@ -92,7 +91,7 @@ fun AppScaffold(
                                     selectedTextColor = OnVibrant,
                                     unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
                                     unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
-                                    indicatorColor = Panel.copy(alpha = 0.22f)
+                                    indicatorColor = Aqua
                                 )
                             )
                         }
@@ -115,7 +114,7 @@ fun AppScaffold(
                                     selectedTextColor = OnVibrant,
                                     unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
                                     unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
-                                    indicatorColor = Panel.copy(alpha = 0.22f)
+                                    indicatorColor = Aqua
                                 )
                             )
                         }
