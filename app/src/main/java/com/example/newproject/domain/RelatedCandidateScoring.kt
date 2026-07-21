@@ -10,13 +10,6 @@ import com.example.newproject.toNormalizedObsidianTitle
 private const val W_TITLE = 1.0
 private const val W_PREFIX = 0.3
 
-private data class ScoredCandidate<T>(
-    val value: T,
-    val inputIndex: Int,
-    val score: Double,
-    val prefixTier: Double
-)
-
 /** 採番を除いた正規化タイトルから、連続する2文字の集合を作る。 */
 internal fun titleBigrams(title: String): Set<String> {
     val normalized = normalizeTopicTitle(title)
@@ -46,9 +39,9 @@ internal fun relatedCandidateScore(
 /**
  * 全候補を話題スコアで並べ、AIへ渡す上位集合を返す。
  *
- * 決定的チャンネルのタイトルは上限適用前に除外する。現在タイトル側の正規化と
- * bigram生成は1回だけ行い、Vault件数に比例して同じ処理を繰り返さない。
- * 同点は採番近接、最後に元の入力順で解決して、常に決定的な並びを保つ。
+ * 採点（タイトル類似＋採番近接）だけを担い、除外・並べ替え・上限は共有の
+ * [rankByScore] へ委譲する。現在タイトル側の正規化とbigram生成は1回だけ行い、
+ * Vault件数に比例して同じ処理を繰り返さない。同点は採番近接、最後に入力順で解決する。
  */
 internal fun <T> rankRelatedCandidates(
     currentTitle: String,
@@ -57,26 +50,19 @@ internal fun <T> rankRelatedCandidates(
     excludedTitles: Set<String>,
     limit: Int
 ): List<T> {
-    if (limit <= 0) return emptyList()
-
     val excluded = excludedTitles.map { it.toNormalizedObsidianTitle() }.toSet()
     val currentPrefix = extractHexPrefix(currentTitle)
     val currentBigrams = titleBigrams(currentTitle)
 
-    return candidates
-        .mapIndexedNotNull { index, candidate ->
-            val title = titleOf(candidate)
-            if (title.toNormalizedObsidianTitle() in excluded) return@mapIndexedNotNull null
-            val (score, tier) = scoreCandidate(currentBigrams, title, currentPrefix)
-            ScoredCandidate(candidate, index, score, tier)
+    return rankByScore(
+        candidates = candidates,
+        isExcluded = { titleOf(it).toNormalizedObsidianTitle() in excluded },
+        limit = limit,
+        scoreOf = {
+            val (score, tier) = scoreCandidate(currentBigrams, titleOf(it), currentPrefix)
+            CandidateScore(score, tier)
         }
-        .sortedWith(
-            compareByDescending<ScoredCandidate<T>> { it.score }
-                .thenByDescending { it.prefixTier }
-                .thenBy { it.inputIndex }
-        )
-        .take(limit)
-        .map { it.value }
+    )
 }
 
 private fun scoreCandidate(
