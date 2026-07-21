@@ -11,8 +11,17 @@ private const val W_TITLE = 1.0
 private const val W_PREFIX = 0.3
 
 /** 採番を除いた正規化タイトルから、連続する2文字の集合を作る。 */
-internal fun titleBigrams(title: String): Set<String> {
-    val normalized = normalizeTopicTitle(title)
+internal fun titleBigrams(title: String): Set<String> = charBigrams(normalizeTopicTitle(title))
+
+/**
+ * 任意の本文テキストの連続する2文字の集合。採番除去はせず、小文字化と空白畳みだけ行う。
+ * 本文スニペット同士の類似（Phase 3b）で使う。タイトル用の [titleBigrams] とは正規化方針が異なる。
+ */
+internal fun textBigrams(text: String): Set<String> =
+    charBigrams(text.lowercase().replace(Regex("\\s+"), " ").trim())
+
+// 正規化済み文字列から2文字集合を作る共通処理。1文字以下は比較材料なしとして空集合。
+private fun charBigrams(normalized: String): Set<String> {
     if (normalized.length <= 1) return emptySet()
     return (0 until normalized.lastIndex)
         .mapTo(LinkedHashSet()) { index -> normalized.substring(index, index + 2) }
