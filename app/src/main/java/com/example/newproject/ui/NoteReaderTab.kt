@@ -55,6 +55,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -396,12 +402,23 @@ private fun IconPill(
     containerColor: Color = Panel.copy(alpha = 0.22f),
     onClick: () -> Unit
 ) {
+    // contentDescription を実際にSemanticsへ設定し、絵文字記号は読み上げ対象から外す。
+    val description = contentDescription
     Surface(
-        modifier = modifier.size(40.dp).clickable(onClick = onClick),
+        modifier = modifier
+            .size(40.dp)
+            .clickable(onClick = onClick)
+            .semantics {
+                this.contentDescription = description
+                role = Role.Button
+            },
         shape = CircleShape,
         color = containerColor
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.clearAndSetSemantics {},
+            contentAlignment = Alignment.Center
+        ) {
             Text(symbol, color = OnVibrant, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
@@ -448,13 +465,16 @@ internal fun FullscreenNoteScreen(
         tabListState.firstVisibleItemScrollOffset
     )
     val leaveWith: (() -> Unit) -> Unit = { action ->
+        // action() でルートが破棄されると scope もキャンセルされるため、書き戻しを
+        // 起動しっぱなしにすると（特にフリング中）完了前に消える。scrollToItem 完了後に閉じる。
+        // scrollToItem は未アタッチのstateでも即座に保留位置をセットして返るためハングしない。
         scope.launch {
             tabListState.scrollToItem(
                 listState.firstVisibleItemIndex,
                 listState.firstVisibleItemScrollOffset
             )
+            action()
         }
-        action()
     }
     // システムバックでもスクロール位置を書き戻してから閉じる。
     BackHandler { leaveWith(onExit) }
@@ -519,6 +539,12 @@ private fun BoxScope.FullscreenAiFab(
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val currentOnTap by rememberUpdatedState(onTap)
+    val fabDescription = when (status) {
+        SectionFabStatus.Loading -> "AI生成中"
+        SectionFabStatus.Ready -> "AI生成完了。タップで開く"
+        SectionFabStatus.Error -> "AIエラー。タップで確認"
+        SectionFabStatus.Idle -> "AIメニュー。タップで開く"
+    }
     var showLabel by remember { mutableStateOf(false) }
     LaunchedEffect(status) {
         showLabel = status == SectionFabStatus.Ready || status == SectionFabStatus.Error
@@ -553,7 +579,7 @@ private fun BoxScope.FullscreenAiFab(
         }
         Box(
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .clip(CircleShape)
                 .background(Indigo.copy(alpha = 0.55f))
                 .pointerInput(Unit) {
@@ -564,6 +590,12 @@ private fun BoxScope.FullscreenAiFab(
                 }
                 .pointerInput(Unit) {
                     detectTapGestures(onTap = { currentOnTap() })
+                }
+                // pointerInput はSemanticsを持たないため、スクリーンリーダー用に明示する。
+                .clearAndSetSemantics {
+                    contentDescription = fabDescription
+                    role = Role.Button
+                    onClick { currentOnTap(); true }
                 },
             contentAlignment = Alignment.Center
         ) {
