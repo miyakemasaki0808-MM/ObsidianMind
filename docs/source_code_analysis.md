@@ -104,10 +104,17 @@ app/src/
 │   │   │   ├── AICoreClient.kt             # AiClient、Gemini Nano接続、Mutex、タイムアウト
 │   │   │   └── PromptBuilder.kt            # 7種類のプロンプト構築
 │   │   ├── domain/
-│   │   │   ├── SummarizeUseCase.kt         # 要約ユースケース
-│   │   │   ├── RelatedNotesUseCase.kt      # 規則ベース＋AI関連ノート抽出
-│   │   │   ├── SearchPickerUseCase.kt      # 自然文検索による3件選定
-│   │   │   └── AiResponseParsing.kt        # AI返却タイトルの共通正規化
+│   │   │   ├── SummarizeUseCase.kt          # 要約ユースケース
+│   │   │   ├── RelatedNotesUseCase.kt       # 規則ベース＋AI関連ノート抽出（多段パイプライン）
+│   │   │   ├── RelatedCandidateOrdering.kt  # 採番プレフィックス抽出（extractHexPrefix・共用）
+│   │   │   ├── RelatedCandidateScoring.kt   # タイトル話題スコア（文字bigram Dice＋採番近接）
+│   │   │   ├── RelatedContextScoring.kt     # 本文シグナル再ランク（tags/snippet/title）
+│   │   │   ├── RelatedCandidateRanking.kt   # 採点戦略注入の汎用ランキング（rankByScore）
+│   │   │   ├── RelatedCandidateContext.kt   # 候補の本文肉付け・入力予算内への整形
+│   │   │   ├── RelatedCandidateId.kt        # 一時ID(C01..)採番と応答からのID抽出
+│   │   │   ├── KeyedMemoCache.kt            # 汎用LRUメモ化（成功時のみ格納）
+│   │   │   ├── SearchPickerUseCase.kt       # 自然文検索による3件選定
+│   │   │   └── AiResponseParsing.kt         # AI返却タイトルの共通正規化
 │   │   └── ui/
 │   │       ├── OpeningScreen.kt            # 起動時ブランドOP（Compose、純ロジックfractionBetweenで進行導出）
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
@@ -332,12 +339,15 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 
 #### AI推薦
 
-1. 4桁プレフィックスがある場合、「上2桁一致 → 上1桁一致 → プレフィックスなし」の順で最大40候補に絞る。
-2. 現在本文の先頭600文字と候補タイトルをAIへ渡す。
-3. AI返却の箇条書き・連番・引用符・`[linked]` を除去する。
-4. 正規化タイトルで実ノートへ戻し、規則ベース結果との重複を除いて最大5件返す。
+候補の選定→肉付け→再ランク→ID応答の多段パイプラインである（設計と経緯は [related_notes_ai](design/related_notes_ai.md)）。
 
-AIが利用不可またはモデル未準備でも、規則ベース結果は表示できる。AI生成で例外が起きても `RelatedNotesResult.Error` にはせず、規則ベース結果と `AiRecommendationStatus.Error` を返す設計である。
+1. **タイトル話題スコアで全Vaultをランク**し上位40候補に絞る（`rankRelatedCandidates`）。スコアはタイトルの文字bigram Dice係数（主）＋採番プレフィックス近接の加点（従）。決定的チャンネルに出したタイトルは上限適用の前に除外する。
+2. **候補本文を上限付き並列で読む**（`Semaphore(8)`）。各候補を本文冒頭スニペット・タグ・aliasesで肉付けし、`URI+lastModified` でキャッシュする（成功時のみ格納）。
+3. **現在ノートの本文シグナルで40件を再ランク**する（`relatedContextScore`）。タグ一致（主）＋スニペット類似＋タイトル類似で並べ替え、件数は変えない。
+4. 再ランク後の並びで一時ID（`C01..`）を採番し、候補を入力予算（3,500文字）内へ動的短縮して整形する。現在本文の先頭600文字とともにAIへ渡す。
+5. **AIにはIDだけ返させ**、行頭付近のIDのみ抽出して実ノートへ解決する（`parseCandidateIds`）。決定的結果とのURI重複を除いて最大5件返す。
+
+AIが利用不可またはモデル未準備でも、規則ベース結果は表示できる。AI生成で例外が起きても `RelatedNotesResult.Error` にはせず、規則ベース結果と `AiRecommendationStatus.Error` を返す設計である。個別候補の本文読込失敗（キャンセル以外）は該当候補のみタイトルで続行し、推薦全体を巻き添えにしない。
 
 ### 6.5 さがす（AIピッカー）
 
@@ -439,7 +449,7 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 - 先頭YAML frontmatterの `aliases`
 - 本文全体の `[[wikilink]]`
 
-frontmatterは `[a, b]` のインライン形式と、インデントされた `- item` のブロック形式に限定した簡易解析であり、完全なYAMLパーサーではない。現在、関連ノート処理で実際に使われるのは `wikilinkTitles` だけで、`tags` と `aliases` は抽出後の利用箇所がない。
+frontmatterは `[a, b]` のインライン形式と、インデントされた `- item` のブロック形式に限定した簡易解析であり、完全なYAMLパーサーではない。`wikilinkTitles` は決定的チャンネルと現在ノートのリンク判定に使う。`tags` と `aliases` はAI推薦の候補肉付け（プロンプトの補助情報）に使い、さらに `tags` は本文シグナル再ランクの主スコア（現在ノートと候補のタグ一致）に使う。
 
 ### 7.4 タイトル正規化
 
@@ -497,7 +507,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | 機能 | 本文上限 | 候補上限・出力 |
 |---|---:|---|
 | 要約 | 1,200文字 | 2〜4文 |
-| 関連ノート | 600文字 | タイトル最大80件（実際の呼出側は最大40件）、5件要求 |
+| 関連ノート | 600文字 | 候補最大40件（`ID｜タイトル — 本文/タグ等`を予算3,500文字内へ動的短縮）、ID応答で5件要求 |
 | AIピッカー | 本文なし | タイトル最大40件、3件要求 |
 | クイズ | フォーカス周辺1,200文字 | 4択2問（解説付き） |
 | AI補記 | 1,500文字 | 必須2セクション（補記すべき内容は3項目・各1行固定） |
@@ -651,7 +661,7 @@ BUILD SUCCESSFUL
 ### 13.3 未カバー領域
 
 - `NoteViewModel` の状態遷移（Controllerは一部テスト済み、網羅はしていない）
-- `RelatedNotesUseCase` と `SearchPickerUseCase` の候補選定・フォールバック
+- `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` の候補選定・フォールバック
 - `NoteHistoryStore` の日付判定・重複排除（Android依存のため素のユニットテスト不可）
 - `PromptBuilder` の出力契約
 - SAFのカーソル走査、ファイル作成、削除
@@ -702,8 +712,8 @@ BUILD SUCCESSFUL
 | 中 | Job管理の不統一 | クイズ・補記はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
 | 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない |
 | 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
-| 中 | 同名ノートの曖昧性 | 正規化タイトルMapが同名ノートを1件に上書きし、AI推薦先が不定になり得る |
-| 低 | YAML解析が簡易 | 複雑なYAML、引用、ネスト、複数行値には対応しない。現在は未使用のtags/aliasesへの影響が中心 |
+| 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時ID（`idToNote`）で解決するため、同名・別URIも別IDになり不定にならない（ID応答方式で解消済み）。決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |
+| 低 | YAML解析が簡易 | 複雑なYAML、引用、ネスト、複数行値には対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
 | 低 | Markdownが限定実装 | ordered list番号、クリック可能リンク、画像、埋め込み、数式などは未対応 |
 | 低 | 削除失敗の通知不足 | 補記削除失敗時に明示メッセージがない |
 | 低 | 状態取得失敗と非対応の同一視 | AI状態確認の一時エラーも「利用不可」として扱われる |
@@ -717,10 +727,10 @@ BUILD SUCCESSFUL
 1. `SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、UI文言と一致させる。
 2. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記は導入済み）。
 3. `CancellationException` の再throw方針を全非同期処理で統一する。
-4. `RelatedNotesUseCase`、`SearchPickerUseCase`、`PromptBuilder`、Controller状態遷移のユニットテストを追加する。
+4. `PromptBuilder` の出力契約、`SearchPickerUseCase`、Controller状態遷移のユニットテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
 5. Fake `ContentResolver` またはinstrumentationテストで、Vault走査・補記保存・削除を検証する。
 6. AI入力を単純な先頭切り出しから、見出し・冒頭・末尾・重要語を考慮した抽出へ発展させる。
-7. 同名ノートの解決に相対パスまたは一意な候補IDを利用する。
+7. （実装済み）AI推薦の同名ノート解決に一意な候補ID（`C01..` / `idToNote`）を導入した。決定的チャンネル・除外判定の正規化タイトル集合は同名畳み込みが残るため、必要ならそちらも一意化する。
 8. AI非対応・モデル未準備・一時エラーのUXを要約・検索・クイズ・補記で統一する。
 
 ---
@@ -729,4 +739,4 @@ BUILD SUCCESSFUL
 
 - 本解析は現行ソースコードを基準にし、過去の設計書ではなく実装との突合を優先した。
 - 2026-07-20の更新はdocs再構成（変更履歴表・design/の新設）と同時に実施した。変更の経緯は [change_history.md](change_history.md)、設計判断は [design/](design/) を参照。
-- アプリ本体のKotlin、Gradle、Manifest、テストコードには本更新で変更を加えていない。
+- 2026-07-21の更新は関連ノートAI推薦のPhase 1〜3（PR #27/#28/#29）を反映した。多段パイプライン化（タイトル話題スコア→本文肉付け→本文再ランク→ID応答）、tags/aliasesの利用開始、同名曖昧性の解消を §6.4・§7.3・§8.4・§14・§15 に反映。設計と知見は [related_notes_ai](design/related_notes_ai.md) を参照。

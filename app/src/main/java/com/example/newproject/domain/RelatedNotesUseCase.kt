@@ -50,6 +50,9 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
 
     private data class CandidateCacheKey(val uri: Uri, val lastModified: Long?)
 
+    // 本文読込後・ID採番前の候補。Phase 3b の再ランクはこの粒度で並べ替える（IDは順確定後に振る）。
+    private data class ReadCandidate(val note: NoteFile, val data: CandidateContextData)
+
     suspend fun findRelated(
         currentTitle: String,
         currentContent: String,
@@ -82,35 +85,54 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                 AiAvailability.Available -> {
                     // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
                     // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
-                    val orderedCandidates = orderRelatedCandidates(
+                    val orderedCandidates = rankRelatedCandidates(
                         currentTitle = currentTitle,
                         candidates = candidateNotes,
                         titleOf = { it.name },
                         excludedTitles = relatedNotes.map { it.title }.toSet(),
                         limit = AI_CANDIDATE_LIMIT
                     )
-                    // 各候補に一時ID（C01..）を採番。同名・別Uriも別IDになり確実に解決できる。
-                    val idToNote = orderedCandidates
-                        .mapIndexed { index, note -> relatedCandidateId(index) to note }
-                        .toMap()
-                    // 候補を本文冒頭スニペット等で肉付けし、入力バジェット内へ収める。
-                    // 読み取りは上限付き並列（SAFプロバイダを詰まらせないよう Semaphore で同時数を絞る）。
-                    // awaitAll はリスト順で返るため、採番（C01..）の並びは保たれる。
+                    // 本文を上限付き並列で読み込む（SAFプロバイダを詰まらせないよう Semaphore で同時数を絞る）。
+                    // IDはまだ振らない。この後の本文再ランクで並びが変わるため、採番は再ランク後に確定する。
                     // キャンセルは coroutineScope が全 async を巻き取り、awaitAll から伝播する。
                     val gate = Semaphore(MAX_PARALLEL_READS)
-                    val contexts = coroutineScope {
-                        orderedCandidates.mapIndexed { index, note ->
+                    val readCandidates = coroutineScope {
+                        orderedCandidates.map { note ->
                             async {
                                 val data = gate.withPermit { loadContextOrEmpty(note, readContent, parseMeta) }
-                                CandidateContext(
-                                    id = relatedCandidateId(index),
-                                    title = note.name,
-                                    snippet = data.snippet,
-                                    tags = data.tags,
-                                    aliases = data.aliases
-                                )
+                                ReadCandidate(note, data)
                             }
                         }.awaitAll()
+                    }
+                    // Phase 3b: 現ノートの本文シグナル（tags/snippet/title）で上位集合を再ランクする。
+                    // タイトルだけで選んだ順を本文的な近さで並べ替え、プロンプト先頭へ良い候補を寄せる
+                    // （件数は変えず並べ替えのみ）。除外は上限適用前に済んでいるため isExcluded は常に偽。
+                    val currentSignals = buildCurrentNoteSignals(
+                        currentTitle = currentTitle,
+                        currentContent = currentContent,
+                        currentTags = parseMeta(currentContent).tags,
+                        snippetLen = RELATED_SNIPPET_LEN
+                    )
+                    val reranked = rankByScore(
+                        candidates = readCandidates,
+                        isExcluded = { false },
+                        limit = readCandidates.size,
+                        scoreOf = { relatedContextScore(currentSignals, it.note.name, it.data.snippet, it.data.tags) }
+                    )
+                    // 再ランク後の並びで一時ID（C01..）を採番。ID＝プロンプト順＝idToNote が一致する。
+                    // 同名・別Uriも別IDになり確実に解決できる。
+                    val idToNote = reranked
+                        .mapIndexed { index, rc -> relatedCandidateId(index) to rc.note }
+                        .toMap()
+                    // 候補を本文冒頭スニペット等で肉付けし、入力バジェット内へ収める。
+                    val contexts = reranked.mapIndexed { index, rc ->
+                        CandidateContext(
+                            id = relatedCandidateId(index),
+                            title = rc.note.name,
+                            snippet = rc.data.snippet,
+                            tags = rc.data.tags,
+                            aliases = rc.data.aliases
+                        )
                     }
                     val candidateLines = renderCandidatesWithinBudget(
                         candidates = contexts,
