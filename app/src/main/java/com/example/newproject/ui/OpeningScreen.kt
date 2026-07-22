@@ -90,7 +90,7 @@ fun OpeningScreen(
                 onClickLabel = "オープニングをスキップ",
                 onClick = ::finishOnce
             )
-            // OP全体を1つの読み上げ要素に束ねる。名称は可視の Text("Obsidian Mind")
+            // OP全体を1つの読み上げ要素に束ねる。名称は可視の Text("Vigilith AI")
             // が供給するため、ここで contentDescription を重ねると二重読み上げになる。
             .semantics(mergeDescendants = true) {}
     ) {
@@ -182,7 +182,7 @@ private fun OpeningBrand(
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
-                text = "Obsidian Mind",
+                text = "Vigilith AI",
                 color = OnVibrant,
                 fontSize = titleSize,
                 fontWeight = FontWeight.Medium,

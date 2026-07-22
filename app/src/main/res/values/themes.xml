@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ObsidianMind" parent="android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.Vigilith" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:navigationBarColor">@color/indigo</item>
         <item name="android:statusBarColor">@color/indigo</item>
     </style>
 
-    <style name="Theme.ObsidianMind.Starting" parent="Theme.SplashScreen">
+    <style name="Theme.Vigilith.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/logo_navy</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
-        <item name="postSplashScreenTheme">@style/Theme.ObsidianMind</item>
+        <item name="postSplashScreenTheme">@style/Theme.Vigilith</item>
         <item name="android:navigationBarColor">@color/logo_navy</item>
         <item name="android:statusBarColor">@color/logo_navy</item>
     </style>

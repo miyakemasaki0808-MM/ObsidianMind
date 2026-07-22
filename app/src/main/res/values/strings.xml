@@ -2,5 +2,5 @@
 <resources>
     <!-- UI文字列はコード内の日本語直書きに統一する方針（単一言語アプリのため）。
          ここにはマニフェスト等から参照されるリソースのみを置く。 -->
-    <string name="app_name">Obsidian Mind</string>
+    <string name="app_name">Vigilith AI</string>
 </resources>
