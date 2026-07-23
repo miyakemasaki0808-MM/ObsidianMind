@@ -14,12 +14,15 @@
 マルチモジュール化や機能別ViewModel化ではなく、「`NoteViewModel` は窓口として残し、実装を機能Controllerへ委譲する」方式を採った。
 
 ```
-NoteViewModel（348行・窓口と横断調停）
+NoteViewModel（窓口と横断調停）
  ├── SectionChatController
  ├── QuizController
  ├── AnnotationController
- └── SearchController
+ ├── SearchController
+ └── DistillController      ← PR #32 で追加
 ```
+
+分割時点では 906行 → 348行・Controller 4つ。現在（`be1c0e9`）は機能追加を経て `NoteViewModel` 485行・Controller 5つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。
 
 - 各Controllerは `viewModelScope` と `MutableStateFlow<NoteUiState>` を注入され、**担当フィールドだけ**を `copy()` で更新する
 - 公開APIと `uiState` の形を維持したため、UI層の変更ゼロで移行できた
@@ -44,7 +47,7 @@ NoteViewModel（348行・窓口と横断調停）
 
 27項目の多くは「同じ形のコードを複数箇所に書いた」ことに起因していた（状態リセット3重複・SAFカーソルループ5重複・タブ遷移2重複・AIタイトル整形2重複）。**同じ形を2度書いたら共通化を検討する**を目安とする。
 
-ただし共通化は早すぎても失敗する。QuizとAnnotationのController相似形は2件の段階では意図的に共通化せず、3件目が現れてパターンが確定してから抽出する方針（[background_ai_ux](background_ai_ux.md) 参照）。
+ただし共通化は早すぎても失敗する。QuizとAnnotationのController相似形は2件の段階では意図的に共通化せず、3件目が現れてパターンが確定してから抽出する方針とした（[background_ai_ux](background_ai_ux.md) 参照）。→ **この判断は下記「追記 2026-07-24」で決着済み（結論: 共通化しない）。**
 
 ## 並行処理の規約
 
@@ -62,3 +65,26 @@ NoteViewModel（348行・窓口と横断調停）
 **1. SDKの制約は公式ドキュメントでなくバイナリで確認する。** genai-prompt beta2 の `maxOutputTokens` に1024を設定したところ、SDK内部のバリデーション「1〜256」に弾かれ全AI生成が失敗した（要約エラーとして発覚）。公式ドキュメントの「256トークン超の出力は避けるべき」は推奨ではなくAPIレベルの強制だった。ローカルのGradleキャッシュからAARを展開しclassファイルの文字列を調べれば、バリデーション文言・メソッド有無・定数を確実に確認できる。実装前にこれをやっていれば1往復防げた。
 
 **2. `pointerInput(Unit)` は初回コンポーズ時のクロージャを固定する。** 吹き出しのタップ処理が古い状態（セッション有無）を抱き込んだクロージャを呼び続け、「クイズ画面から戻る→確認終了→タップ」で完全な無反応になった。画面遷移から戻ると「その時点の状態」でコンポジションが再生成されるため、初回＝素の状態という思い込みは通用しない。**外から渡されたラムダを `pointerInput` / `LaunchedEffect` 等の長寿命ブロック内から呼ぶときは `rememberUpdatedState` を通す**を定石とする。
+
+### 2026-07-24 — Controller共通化の判断（結論: 共通化せず、相似のまま維持）
+
+`DistillController`（PR #32）が3件目の Controller となり、「3件目が現れたら共通パターンを抽出する」という保留の期限が来た。実装を突き合わせた結果、**共通化しない**と決めた。
+
+**共通しているのは requestId ガードだけだった。**
+
+| 要素 | Quiz | Annotation | Distill |
+|---|---|---|---|
+| `++activeRequestId` で採番 | ✓ | ✓ | ✓ |
+| suspend地点の後の `isCurrent()` 確認 | ✓ | ✓ | ✓（`ifCurrent {}` 形） |
+| `cancelAndClear()` | ✓ | ✓ | ✓ |
+| モデルDLを**自動**開始して完了後に自動再開 | ✓ | ✓ | **✗（明示タップ）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✓ | **✗** |
+| 責務の形 | 生成して終わり | 生成して保存して終わり | **候補提示→ユーザー選択→Vault書込→検証→復旧判定** |
+
+- **DLポリシーが逆**: Quiz/Annotation は `NeedsDownload` を検知すると `pending` に積んで自動DL→自動再開する。Distill は `DistillState.NeedsDownload` で停止し、ユーザーが明示的にタップして初めて `downloadModelAndResume()` が走る。これは「未ダウンロードは明示確認・自動DLしない」という [reflect_distill](reflect_distill.md) の意図的な設計判断であり、共通基底に吸収すると設計意図が消える。
+- **状態数と寿命が違う**: Quiz/Annotation は Idle/Loading/Success/Error の4状態。Distill は11状態（AI生成に加えVault書き戻しの競合・中断復旧まで表現する）。
+- **したがって抽出できるのは「requestId採番＋`isCurrent()`」の数行だけ**で、`background_ai_ux` が想定していた「バックグラウンドAI機能の共通基底」にはならない。数行のために継承/委譲の1階層を増やすのは、判断1（窓口は薄く、実装はControllerへ）の見通しを下げるだけと判断した。
+
+**教訓の更新**: 「同じ形を2度書いたら共通化を検討する」は維持する。ただし**検討の結果「しない」も正当な結論**であり、3件目の到達は共通化の実行トリガーではなく**判断のトリガー**である。今回のように「共通なのは3行、周りは全部違う」と分かったこと自体が、保留していた価値の回収にあたる。
+
+**再検討の条件**: 4件目が現れ、かつそれが Quiz/Annotation 型（自動DL＋Snackbar＋`isViewed`）に**そのまま乗る**場合。TimeCapsule はこの型に乗らない（オンデマンド1回・バックグラウンド生成ではない）ため、トリガーにはならない。

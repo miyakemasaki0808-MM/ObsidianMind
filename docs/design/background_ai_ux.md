@@ -35,7 +35,9 @@ Success/Errorに `isViewed` フラグを持たせ、「結果はあるがユー�
 
 ## Controller構成
 
-Q&Aは `NoteViewModel` ベタ書きから `QuizController` に切り出し、`AnnotationController` と相似形にした。**共通化は意図的に保留**している。2件では抽象の形を決めるには早く、3件目のバックグラウンドAI機能が来た時点で共通パターンを抽出する判断とした。
+Q&Aは `NoteViewModel` ベタ書きから `QuizController` に切り出し、`AnnotationController` と相似形にした。**共通化は意図的に保留**する。2件では抽象の形を決めるには早く、3件目のバックグラウンドAI機能が来た時点で共通パターンを抽出する判断とした。
+
+> **決着（2026-07-24）**: 3件目の `DistillController`（PR #32）が到達したため判断を実施し、**共通化しない**結論に至った。共通なのは requestId ガードの数行だけで、モデルDLポリシー（自動再開 vs 明示タップ）・通知の有無（Snackbar＋`isViewed`）・状態数（4 vs 11）・責務の形がいずれも異なる。詳細な比較と再検討の条件は [architecture](architecture.md) の追記「2026-07-24 — Controller共通化の判断」を参照。
 
 ---
 
