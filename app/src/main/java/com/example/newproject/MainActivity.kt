@@ -230,7 +230,11 @@ class MainActivity : ComponentActivity() {
                                 snackbarHostState.currentSnackbarData?.dismiss()
                                 // ⛶連打での多重pushを防ぐ。
                                 navController.navigate("note_fullscreen") { launchSingleTop = true }
-                            }
+                            },
+                            onReadingProgress = { blockIndex, totalBlocks, sectionTitle ->
+                                viewModel.reportReadingProgress(blockIndex, totalBlocks, sectionTitle)
+                            },
+                            onDismissReadingTrace = { viewModel.dismissReadingTraceCard() }
                         )
                     }
 
@@ -244,6 +248,9 @@ class MainActivity : ComponentActivity() {
                             onOpenSummary = {
                                 navController.popBackStack()
                                 viewModel.showSectionChat()
+                            },
+                            onReadingProgress = { blockIndex, totalBlocks, sectionTitle ->
+                                viewModel.reportReadingProgress(blockIndex, totalBlocks, sectionTitle)
                             }
                         )
                     }
@@ -338,6 +345,13 @@ class MainActivity : ComponentActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideStatusBar()
+    }
+
+    // ノートを表示したままホームへ戻った読書を取りこぼさないため、背面に回る時点で
+    // 読書痕跡を確定させる。ノート切替時の確定は ViewModel 側（cancelNoteScopedJobs）が担う。
+    override fun onStop() {
+        super.onStop()
+        viewModel.flushReadingTrace()
     }
 
     private fun hideStatusBar() {

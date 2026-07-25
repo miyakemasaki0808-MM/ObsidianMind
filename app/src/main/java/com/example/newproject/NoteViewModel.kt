@@ -3,6 +3,7 @@ package com.example.newproject
 import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
@@ -57,6 +58,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         persistence = distillPersistence,
         reloadBody = ::reloadNoteBody
     )
+    private val readingTrace = ReadingTraceController(
+        scope = viewModelScope,
+        aiClient = aiClient,
+        uiState = _uiState,
+        persistence = ReadingTraceStore(
+            SafReadingTraceDocumentGateway(application.contentResolver) { vaultUri }
+        )
+    )
 
     // DL完了後に要約を再実行するために保持
     private var pendingTitle: String = ""
@@ -96,6 +105,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveVault(uri: Uri) {
+        // 保存先は書き込み時点の vaultUri から解決されるため、切替前に記録中の
+        // セッションを捨てる。捨てないと旧ノートの痕跡が新Vaultへ書き込まれる。
+        readingTrace.discard()
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
@@ -127,13 +139,21 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         quizState = QuizState.Idle,
         annotationState = AnnotationState.Idle,
         sectionChat = null,
-        isSectionChatSheetVisible = false
+        isSectionChatSheetVisible = false,
+        // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保になっている
+        // （設定するのは loadRandomNote だけ）。由来フラグを別に持たない理由。
+        readingTraceCard = null
     )
 
     // ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
     // 旧ノートの生成が残っていると、結果の上書きだけでなく generate() の
     // 直列化ロックを握り続けて新ノートの要約開始も遅らせてしまう。
     private fun cancelNoteScopedJobs() {
+        // ここは「ノートを離れる」唯一の合流点（loadRandomNote / openNote の先頭）なので、
+        // 離脱フックを別に設けず読書痕跡の確定もここで行う。
+        // flush は自前のスナップショットで書くため、以降のキャンセルに影響されない。
+        readingTrace.flush()
+        readingTrace.cancelForNoteChange()
         noteLoadJob?.cancel()
         summaryJob?.cancel()
         relatedNotesJob?.cancel()
@@ -174,8 +194,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val note = notes.random()
                 val loaded = loadNoteForDistill(contentResolver, note.name, note.uri)
+                // 本文を出す前にセッションを作る。表示後だと、痕跡レポータの初回emitが
+                // セッションより先に届いて訪問を取りこぼしうる。
+                // 走査で得た NoteFile なので相対パスは常に揃っている。
+                startReadingTrace(note.name, note.uri, note.vaultRelativePath)
                 _uiState.update { current -> current.copy(noteState = loaded) }
                 recordHistory(note.name, note.uri)
+                // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
+                readingTrace.revealTrace(note.vaultRelativePath)
                 fetchSummary(note.name, loaded.content)
                 fetchRelatedNotes(note.name, loaded.content)
             } catch (e: CancellationException) {
@@ -196,8 +222,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
             }
             try {
                 val loaded = loadNoteForDistill(contentResolver, note.title, note.uri)
+                // RelatedNote は相対パスを持たない。キャッシュにあれば即使い、無ければ
+                // パス未確定でセッションだけ作る（表示前にVault走査を挟まないため）。
+                // 本文を出す前に呼ぶ理由は loadRandomNote 側のコメント参照。
+                val sessionId = startReadingTrace(note.title, note.uri, cachedRelativePath(note.uri))
                 _uiState.update { current -> current.copy(noteState = loaded) }
                 recordHistory(note.title, note.uri)
+                // 表示を終えてから相対パスを確定させる。さがすタブは collectNotesInScope を
+                // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
+                // 「さがす経由の最初の1件」が記録から漏れる。
+                bindReadingTracePath(contentResolver, note.uri, sessionId)
                 fetchSummary(note.title, loaded.content)
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
@@ -208,6 +242,63 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
+
+    /** 最終可視ブロックの報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
+    fun reportReadingProgress(blockIndex: Int, totalBlocks: Int, sectionTitle: String?) =
+        readingTrace.onReadingProgress(blockIndex, totalBlocks, sectionTitle)
+
+    /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
+    fun flushReadingTrace() = readingTrace.flush()
+
+    /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
+    fun dismissReadingTraceCard() = readingTrace.dismissCard()
+
+    /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
+    private fun startReadingTrace(title: String, uri: Uri, vaultRelativePath: String?): Long =
+        readingTrace.onNoteOpened(
+            vaultRelativePath = vaultRelativePath,
+            noteTitle = title,
+            // 端末内キャッシュとしてだけ持つ値なので、取れなければ null で構わない。
+            documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+        )
+
+    /**
+     * uri から vault相対パスを引く。既に走査済みのキャッシュだけを見て、**I/Oはしない**。
+     *
+     * 表示前にVault全走査を挟むとノート表示が遅れ「本質（ノートを読む）を妨げない」に反する。
+     * 加えて、ここで suspend すると uiState 更新とセッション開始の間でメインスレッドを譲り、
+     * 痕跡レポータの初回emitを取りこぼして訪問がまるごと記録されなくなる。
+     * キャッシュが冷えている場合は [bindReadingTracePath] が表示後に埋める。
+     */
+    private fun cachedRelativePath(uri: Uri): String? =
+        cachedNotes.firstOrNull { it.uri == uri }
+            ?.vaultRelativePath
+            ?.takeIf { it.isNotEmpty() }
+
+    /**
+     * 表示後に相対パスを確定させる。走査はTTLキャッシュ付きなので通常は追加I/Oなし。
+     * `_AI補記` 配下は collectNotes の対象外なので見つからず、痕跡も残らない（意図どおり）。
+     */
+    private suspend fun bindReadingTracePath(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        sessionId: Long
+    ) {
+        val vault = vaultUri ?: return
+        val path = try {
+            collectAllNotesCached(contentResolver, vault)
+                .firstOrNull { it.uri == uri }
+                ?.vaultRelativePath
+                ?.takeIf { it.isNotEmpty() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        } ?: return
+        readingTrace.bindPath(sessionId, path)
     }
 
     // ── さがすタブ（実装は SearchController）──────────────────────────────────

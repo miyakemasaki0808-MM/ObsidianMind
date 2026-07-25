@@ -19,10 +19,11 @@ NoteViewModel（窓口と横断調停）
  ├── QuizController
  ├── AnnotationController
  ├── SearchController
- └── DistillController      ← PR #32 で追加
+ ├── DistillController        ← PR #32 で追加
+ └── ReadingTraceController   ← ReadingTrace v1 で追加
 ```
 
-分割時点では 906行 → 348行・Controller 4つ。現在（`be1c0e9`）は機能追加を経て `NoteViewModel` 485行・Controller 5つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。
+分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て `NoteViewModel` 576行・Controller 6つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。
 
 - 各Controllerは `viewModelScope` と `MutableStateFlow<NoteUiState>` を注入され、**担当フィールドだけ**を `copy()` で更新する
 - 公開APIと `uiState` の形を維持したため、UI層の変更ゼロで移行できた
@@ -87,4 +88,21 @@ NoteViewModel（窓口と横断調停）
 
 **教訓の更新**: 「同じ形を2度書いたら共通化を検討する」は維持する。ただし**検討の結果「しない」も正当な結論**であり、3件目の到達は共通化の実行トリガーではなく**判断のトリガー**である。今回のように「共通なのは3行、周りは全部違う」と分かったこと自体が、保留していた価値の回収にあたる。
 
-**再検討の条件**: 4件目が現れ、かつそれが Quiz/Annotation 型（自動DL＋Snackbar＋`isViewed`）に**そのまま乗る**場合。TimeCapsule はこの型に乗らない（オンデマンド1回・バックグラウンド生成ではない）ため、トリガーにはならない。
+**再検討の条件**: 4件目が現れ、かつそれが Quiz/Annotation 型（自動DL＋Snackbar＋`isViewed`）に**そのまま乗る**場合。2026-07-25に4件目の `ReadingTraceController` で再判定したが、未DL時は黙って諦め、Snackbarも`isViewed`も持たないため、この型には乗らなかった（次節参照）。
+
+### 2026-07-25 — 4件目（ReadingTraceController）での再判定: やはり共通化しない
+
+上記の再検討条件に沿って、4件目である `ReadingTraceController`（[reflect_reading_trace](reflect_reading_trace.md)）を Quiz/Annotation 型と突き合わせた。結論は**乗らない**ので、共通化のトリガーにはならなかった。
+
+| 要素 | Quiz / Annotation | ReadingTrace |
+|---|---|---|
+| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（未DLなら黙って諦める）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | **✗（通知しない）** |
+| 失敗をユーザーへ見せる | ✓ | **✗（黙って劣化する）** |
+| 起動契機 | ユーザーの明示操作 | **ノート表示・離脱（ユーザーは操作しない）** |
+
+**「ユーザーが意識しない機能」であることが、共通化を拒む本質だった。** Quiz/Annotation の共通部分は「生成中/完了/失敗をどう通知するか」に集約されているが、ReadingTrace はそのすべてを**出さない**のが仕様である。共通基底に載せると、まず通知経路を無効化する分岐を足すことになり、抽象が薄まるだけになる。
+
+一方で ReadingTrace 固有の関心事（読書セッションのスナップショット、離脱時の1回だけの書き込み、read-modify-write の直列化）は他の4つに存在しない。**共有できるのは依然として requestId ガードの数行だけ**で、2026-07-24 の判断がそのまま維持される。
+
+**教訓の更新**: 「4件目が同じ型なら共通化」という条件設定は有効だったが、判定は**通知と失敗の見せ方**を軸に見るべきだった。バックグラウンドAI機能の共通性は生成処理そのものではなく「ユーザーへの見せ方」に宿るため、そこが違えば処理が似ていても共通化できない。

@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -74,6 +75,7 @@ import com.example.newproject.SectionChatState
 import com.example.newproject.ui.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.ui.markdown.NoteSectionModel
 import com.example.newproject.ui.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonPrimary
@@ -87,10 +89,39 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 
 // ---------------------------------------------------------------------------
 // タブ1: ノート（本文リーダー）
 // ---------------------------------------------------------------------------
+
+/**
+ * 読書痕跡（ReadingTrace）へ「どこまで読んだか」を報告する。
+ * 通常タブと全画面は別の [LazyListState] を持つため、両方から呼ぶ。
+ *
+ * 先頭可視ではなく**最終可視**ブロックを見るのは、先頭基準だと1画面に収まる分だけ
+ * 末尾に届かず「読み切った」を表現できないため。
+ */
+@Composable
+private fun ReadingProgressReporter(
+    sectionModel: NoteSectionModel?,
+    listState: LazyListState,
+    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit
+) {
+    // 長寿命ブロックから外部のラムダを呼ぶので rememberUpdatedState を通す
+    // （pointerInput/LaunchedEffect が初回のクロージャを固定する問題への定石）。
+    val report by rememberUpdatedState(onReadingProgress)
+    LaunchedEffect(sectionModel) {
+        val model = sectionModel ?: return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { index ->
+                report(index, model.blocks.size, model.sectionForBlockIndex(index)?.title)
+            }
+    }
+}
 
 @Composable
 fun NoteReaderTab(
@@ -105,7 +136,9 @@ fun NoteReaderTab(
     onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
     onOpenQuizResult: () -> Unit,
     noteListState: LazyListState,
-    onEnterFullscreen: () -> Unit
+    onEnterFullscreen: () -> Unit,
+    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit,
+    onDismissReadingTrace: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -126,6 +159,8 @@ fun NoteReaderTab(
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
+
+    ReadingProgressReporter(sectionModel, listState, onReadingProgress)
 
     // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
     // AnimatedContent だと新旧リストが1つの listState を共有してしまうため graphicsLayer で行う。
@@ -216,11 +251,24 @@ fun NoteReaderTab(
                 )
             }
 
+            // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
+            // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
+            //  セクション判定とスクロール継承を壊さない）。
+            val traceCard = uiState.readingTraceCard
+            val showTraceCard = successState != null && traceCard != null && !traceCard.isDismissed
+            if (showTraceCard && traceCard != null) {
+                ReadingTraceCardPanel(
+                    card = traceCard,
+                    modifier = Modifier.padding(top = 20.dp),
+                    onDismiss = onDismissReadingTrace
+                )
+            }
+
             NoteContentPanel(
                 uiState = uiState,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(top = if (isLoading) 8.dp else 20.dp)
+                    .padding(top = if (isLoading || showTraceCard) 8.dp else 20.dp)
                     .graphicsLayer {
                         alpha = noteAppear.value
                         val scale = 0.95f + 0.05f * noteAppear.value
@@ -439,7 +487,8 @@ internal fun FullscreenNoteScreen(
     uiState: NoteUiState,
     tabListState: LazyListState,
     onExit: () -> Unit,
-    onOpenSummary: () -> Unit
+    onOpenSummary: () -> Unit,
+    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -482,6 +531,10 @@ internal fun FullscreenNoteScreen(
         successState?.content?.let { buildNoteSectionModel(it) }
     }
     val activeChat = uiState.sectionChat
+
+    // 全画面でも読んだ位置を報告する。全画面は専用の listState を持つため、
+    // ここで報告しないと「全画面で読み進めてそのままアプリを離れた」分が記録から漏れる。
+    ReadingProgressReporter(sectionModel, listState, onReadingProgress)
 
     // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
     val summaryStatus = when {

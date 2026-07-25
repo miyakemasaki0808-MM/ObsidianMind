@@ -2,7 +2,7 @@
 
 **対象:** アプリ「Vigilith AI」のマスコット／AI相棒
 **作成日:** 2026-07-22
-**関連:** [reflect_distill](reflect_distill.md)・[reflect_timecapsule](reflect_timecapsule.md)・[opening_animation](opening_animation.md)
+**関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)・[opening_animation](opening_animation.md)
 **状態:** コンセプト確定・造形たたき台段階
 
 > このシートは「Vigilithとは何か」を言語化した設計図。作画発注・実装・アイコン展開の基準に使う。
@@ -25,8 +25,8 @@
 
 Vigilithはアプリの北極星（過去の自分の思考と再会し、もう一段深める、端末内AIの読書相手）を**身体に宿した存在**。
 
-- **AIに身体を与えるが、記憶は与えない器。** Vigilith自身は何も覚えていない。記憶は TimeCapsule（.json）と、ノートの太字（蒸留の痕跡）にある。Vigilithはそれを**見守り、運び、差し出すだけ**。
-- 生成AIの饒舌さを持たない。**選ぶ（蒸留）・指す（観点）・運ぶ（カプセル）**に徹する。
+- **AIに身体を与えるが、記憶は与えない器。** Vigilith自身は何も覚えていない。記憶は ReadingTrace（`_ReadingTraces/*.json` の読書痕跡）と、ノートの太字（蒸留の痕跡）にある。Vigilithはそれを**見守り、運び、差し出すだけ**。
+- 生成AIの饒舌さを持たない。**選ぶ（蒸留）・指す（観点）・運ぶ（痕跡）**に徹する。
 - 「読書**相手**」の相棒感は、AIの人格ではなく**キャラという器**が担う（ステートレス原則を守るための設計）。
 
 ## 3. 造形
@@ -73,7 +73,7 @@ Vigilithは Reflect/Rediscover ループの**一貫した見守り手／配達�
 |---|---|---|
 | **要約** | ノートを開くと隅に現れ、要約を差し出す（現在を掴む） | 前傾・目が静かに灯る |
 | **蒸留** | 過去に引いた線／候補文を**指し示す**（選ぶAI・生成しない） | 片翼で本文の一節を指す |
-| **TimeCapsule** | Rediscoverで**カプセルを抱えて登場**し、過去の自分の問いを運ぶ | 使者モード・カプセルがAquaに明滅 |
+| **ReadingTrace** | Rediscoverで**前回の足跡を抱えて登場**し、過去の自分の読み方を運ぶ | 使者モード・痕跡がAquaに明滅 |
 
 **待機時:** 画面の隅で静止（不寝番）。目がゆっくり明滅するのみ（存在するが邪魔しない）。
 

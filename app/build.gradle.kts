@@ -51,4 +51,8 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    // android.jar の org.json は unit test では Stub!（呼ぶと例外）になるため、
+    // 実装を test スコープだけに載せる。ReadingTrace のサイドカーJSONを
+    // 素のJVMテストで検証するのに必要。
+    testImplementation("org.json:json:20240303")
 }

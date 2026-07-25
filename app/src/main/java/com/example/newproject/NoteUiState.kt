@@ -170,6 +170,28 @@ enum class ChatRole { User, Ai }
 
 data class ChatMessage(val role: ChatRole, val text: String)
 
+/**
+ * 「前回のあなた」の再会カード。null のとき出さない。
+ *
+ * Rediscover で引いた時だけ組み立てる（検索・関連・直接オープンでは出さない）。
+ * 由来を示すフラグを別に持たないのは、このフィールドを設定する経路が
+ * `loadRandomNote` だけで、ノートを開くたび [NoteUiState.resetNoteScopedStates] が
+ * 消すため。二重の真実を作らない。
+ *
+ * [aiSummary] は俯瞰要約。生成前・生成失敗時は null で、その場合カードは
+ * 生の痕跡（[lastSectionTitle] / [lastProgressPercent]）だけを見せる。
+ */
+data class ReadingTraceCard(
+    val visitCount: Int,
+    val lastVisitAtMillis: Long,
+    val lastSectionTitle: String?,
+    val lastProgressPercent: Int,
+    val aiSummary: String? = null,
+    val isSummaryLoading: Boolean = false,
+    /** 「読んだ」で畳んだ状態。永続化しないので次回 Rediscover では再表示される。 */
+    val isDismissed: Boolean = false
+)
+
 // セクション単位のAIチャット。null のときシートは閉じている。
 data class SectionChatState(
     val sectionTitle: String,
@@ -196,6 +218,8 @@ data class NoteUiState(
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
     // AI生成と結果を保持し、吹き出しから再表示できる。
     val isSectionChatSheetVisible: Boolean = false,
+    // Rediscover で引いた時だけ入る「前回のあなた」カード
+    val readingTraceCard: ReadingTraceCard? = null,
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
@@ -207,6 +231,10 @@ data class NoteUiState(
 /**
  * 蒸留は意味を変えずMarkdown装飾だけを更新するため、ノート全体から得たAI結果は維持する。
  * 一方、生Markdownのセクション本文に結び付くチャットとクイズは照合不能になるため破棄する。
+ *
+ * 再会カード（[NoteUiState.readingTraceCard]）も維持する。同じノートのままで、痕跡は
+ * vault相対パスをキーにしているため有効なまま（維持しないと Rediscover→蒸留保存で
+ * カードだけが消える）。
  */
 internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
     noteState = loaded,
