@@ -29,15 +29,15 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
         return try {
             // 候補が上限超のときだけ、取りこぼさない程度に粗く絞る（精度は Nano が担保）。
             val candidates = if (scopeNotes.size > CANDIDATE_LIMIT) {
-                keywordRecallCut(query, scopeNotes, CANDIDATE_LIMIT)
+                recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { it.name }
             } else {
                 scopeNotes
             }
             val notesByTitle = candidates.associateBy { it.name.toNormalizedObsidianTitle() }
 
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable -> fallback(candidates, AiRecommendationStatus.Unavailable)
-                AiAvailability.NeedsDownload -> fallback(candidates, AiRecommendationStatus.NeedsDownload)
+                AiAvailability.Unavailable -> fallback(query, candidates, AiRecommendationStatus.Unavailable)
+                AiAvailability.NeedsDownload -> fallback(query, candidates, AiRecommendationStatus.NeedsDownload)
                 AiAvailability.Available -> {
                     val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })
                     val response = aiClient.generate(prompt)
@@ -50,8 +50,8 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                         .map { it.toRelatedNote() }
                         .toList()
 
-                    // Nano が候補外/空を返したら、キーワードカット結果でフォールバック。
-                    if (picked.isEmpty()) fallback(candidates, AiRecommendationStatus.Ready)
+                    // Nano が候補外/空を返したら、キーワード一致でフォールバック。
+                    if (picked.isEmpty()) fallback(query, candidates, AiRecommendationStatus.Ready)
                     else PickerResult.Success(picked, AiRecommendationStatus.Ready)
                 }
             }
@@ -60,34 +60,20 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
         }
     }
 
-    // AI が使えない/失敗したときは、絞り込み結果の先頭を素の検索結果として返す。
-    private fun fallback(candidates: List<NoteFile>, status: AiRecommendationStatus): PickerResult =
-        PickerResult.Success(
-            notes = candidates.take(PICK_LIMIT).map { it.toRelatedNote() },
-            aiStatus = status
-        )
-
-    // 文字bigramの重なり数で並べ替えて上位を返す（日本語トークナイザ不要・再現率重視）。
-    // スコアは事前に1回だけ計算する。sortedByDescending のセレクタは比較のたびに
-    // 呼ばれるため、以前は bigram 集合の構築が O(n log n) 回走っていた（P4）。
-    private fun keywordRecallCut(query: String, notes: List<NoteFile>, limit: Int): List<NoteFile> {
-        val queryBigrams = query.toBigrams()
-        if (queryBigrams.isEmpty()) return notes.take(limit)
-        return notes
-            .map { note -> note to note.name.toBigrams().count { it in queryBigrams } }
-            .sortedByDescending { it.second }
-            .take(limit)
-            .map { it.first }
-    }
-
-    private fun String.toBigrams(): Set<String> {
-        val cleaned = lowercase().filterNot { it.isWhitespace() }
-        return when {
-            cleaned.isEmpty() -> emptySet()
-            cleaned.length == 1 -> setOf(cleaned)
-            else -> (0 until cleaned.length - 1).map { cleaned.substring(it, it + 2) }.toSet()
-        }
-    }
+    // AI が使えない/失敗したときは、キーワード一致の強い順に返す。
+    //
+    // 以前は絞り込み結果の先頭をそのまま返していたため、候補が上限以下だと
+    // 並べ替えを通らず、SAF の列挙順のまま「キーワード一致で表示しています」と
+    // 表示していた（UI文言と実装の不一致）。候補数に関係なくスコア順へ統一し、
+    // 一致0件は返さない（0件なら画面は「見つかりませんでした。」になる）。
+    private fun fallback(
+        query: String,
+        candidates: List<NoteFile>,
+        status: AiRecommendationStatus
+    ): PickerResult = PickerResult.Success(
+        notes = pickByKeyword(query, candidates, PICK_LIMIT) { it.name }.map { it.toRelatedNote() },
+        aiStatus = status
+    )
 
     private fun NoteFile.toRelatedNote(): RelatedNote =
         RelatedNote(title = name, uri = uri, isWikilinked = false, lastModified = lastModified)
