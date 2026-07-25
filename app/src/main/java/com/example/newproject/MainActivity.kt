@@ -231,8 +231,8 @@ class MainActivity : ComponentActivity() {
                                 // ⛶連打での多重pushを防ぐ。
                                 navController.navigate("note_fullscreen") { launchSingleTop = true }
                             },
-                            onReadingProgress = { blockIndex, totalBlocks, sectionTitle ->
-                                viewModel.reportReadingProgress(blockIndex, totalBlocks, sectionTitle)
+                            onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
+                                viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                             },
                             onDismissReadingTrace = { viewModel.dismissReadingTraceCard() }
                         )
@@ -249,8 +249,8 @@ class MainActivity : ComponentActivity() {
                                 navController.popBackStack()
                                 viewModel.showSectionChat()
                             },
-                            onReadingProgress = { blockIndex, totalBlocks, sectionTitle ->
-                                viewModel.reportReadingProgress(blockIndex, totalBlocks, sectionTitle)
+                            onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
+                                viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                             }
                         )
                     }

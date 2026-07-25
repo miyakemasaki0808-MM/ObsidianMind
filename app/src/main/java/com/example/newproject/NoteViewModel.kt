@@ -246,9 +246,13 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
 
-    /** 最終可視ブロックの報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
-    fun reportReadingProgress(blockIndex: Int, totalBlocks: Int, sectionTitle: String?) =
-        readingTrace.onReadingProgress(blockIndex, totalBlocks, sectionTitle)
+    /** 最終可視ブロックと、そのブロックの可視割合の報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
+    fun reportReadingProgress(
+        blockIndex: Int,
+        blockFraction: Float,
+        totalBlocks: Int,
+        sectionTitle: String?
+    ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
     fun flushReadingTrace() = readingTrace.flush()

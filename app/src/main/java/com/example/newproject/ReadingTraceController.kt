@@ -51,6 +51,12 @@ internal class ReadingTraceController(
         val openedAtMillis: Long
     ) {
         var deepestBlockIndex = 0
+
+        /**
+         * 最深ブロックがどこまで見えていたか（0f〜1f）。ブロック数だけで到達率を測ると
+         * 長大な1ブロックを冒頭だけ見ても100%になるため、ブロック内の可視量まで見る。
+         */
+        var deepestBlockFraction = 0f
         var totalBlocks = 0
         var deepestSectionTitle: String? = null
         var recorded = false
@@ -104,18 +110,28 @@ internal class ReadingTraceController(
     }
 
     /**
-     * 表示位置の報告。[blockIndex] は「最後に見えていたブロック」の index。
+     * 表示位置の報告。[blockIndex] は「最後に見えていたブロック」の index、
+     * [blockFraction] はそのブロックがどこまで見えていたか（0f〜1f）。
      * 先頭可視ブロックではなく最終可視ブロックを見るのは、先頭基準だと画面に
      * 収まる分だけ最後まで届かず「読み切った」を表現できないため。
      * [sectionTitle] は UI 側が sectionModel から解決済みの値を渡す
      * （本文の再パースを避け、Controller が ui パッケージへ依存しないようにする）。
      */
-    fun onReadingProgress(blockIndex: Int, totalBlocks: Int, sectionTitle: String?) {
+    fun onReadingProgress(
+        blockIndex: Int,
+        blockFraction: Float,
+        totalBlocks: Int,
+        sectionTitle: String?
+    ) {
         val active = session ?: return
         if (totalBlocks > active.totalBlocks) active.totalBlocks = totalBlocks
-        // スクロールを戻しても最深到達点は下げない。
-        if (blockIndex >= active.deepestBlockIndex) {
+        // スクロールを戻しても最深到達点は下げない。同じブロックに留まっていても、
+        // より深くまで見えていれば（長大ブロックを読み進めた）最深を更新する。
+        val deeper = blockIndex > active.deepestBlockIndex ||
+            (blockIndex == active.deepestBlockIndex && blockFraction > active.deepestBlockFraction)
+        if (deeper) {
             active.deepestBlockIndex = blockIndex
+            active.deepestBlockFraction = blockFraction.coerceIn(0f, 1f)
             active.deepestSectionTitle = sectionTitle
         }
     }
@@ -141,7 +157,11 @@ internal class ReadingTraceController(
         val visit = ReadingVisit(
             atEpochMillis = clock(),
             deepestSectionTitle = active.deepestSectionTitle,
-            progressPercent = progressPercent(active.deepestBlockIndex, active.totalBlocks)
+            progressPercent = progressPercent(
+                active.deepestBlockIndex,
+                active.deepestBlockFraction,
+                active.totalBlocks
+            )
         )
         val title = active.noteTitle
         val documentId = active.documentId
@@ -286,10 +306,22 @@ internal class ReadingTraceController(
 
     private fun isCurrent(requestId: Long): Boolean = requestId == activeRequestId
 
-    private fun progressPercent(deepestBlockIndex: Int, totalBlocks: Int): Int {
+    /**
+     * 到達率。分子は「読み終えたブロック数＋最深ブロックの可視割合」。
+     *
+     * 切り捨てにしているのは、100% を「最終ブロックの末端が画面に入った」場合だけに
+     * 限定するため。丸めにすると末尾が少し残っていても100%になり、カードが
+     * 「最後まで読んでいます」と誤って断定してしまう。
+     */
+    private fun progressPercent(
+        deepestBlockIndex: Int,
+        deepestBlockFraction: Float,
+        totalBlocks: Int
+    ): Int {
         if (totalBlocks <= 0) return 0
-        val reached = (deepestBlockIndex + 1).coerceIn(1, totalBlocks)
-        return (reached * 100 / totalBlocks).coerceIn(0, 100)
+        val reached = deepestBlockIndex.coerceIn(0, totalBlocks - 1) +
+            deepestBlockFraction.coerceIn(0f, 1f)
+        return (reached * 100f / totalBlocks).toInt().coerceIn(0, 100)
     }
 
     private companion object {
