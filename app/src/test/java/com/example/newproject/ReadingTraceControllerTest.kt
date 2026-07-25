@@ -247,6 +247,152 @@ class ReadingTraceControllerTest {
         assertEquals(1, persistence.saved.size)
     }
 
+    // ── 背面化・復帰（pause / resume）──────────────────────────────────────────
+
+    // 背面のままプロセスが終了しても読書が失われないよう、背面化の時点で書き出す。
+    @Test
+    fun `pause records the visit without ending the session`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // ホームボタンを押すたび「これまで◯回開いています」が増えてはいけない。
+    // 復帰後に読み進めた分は、訪問を増やさず同じ1件を更新する。
+    @Test
+    fun `reading after resume updates the same visit instead of adding one`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+        // 復帰後に読み進めた最深が残っていること
+        assertEquals(90, stored.visits.single().progressPercent)
+        assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
+    }
+
+    // 背面にいた時間を10秒判定へ混ぜない（実際には短時間しか読んでいない）。
+    @Test
+    fun `time spent in the background does not count towards the threshold`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause()
+        clock.advance(600_000L) // 10分放置
+        controller.resume()
+        clock.advance(3_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
+    // 背面をまたいでも能動読書時間は積算される（5秒＋6秒で条件を満たす）。
+    @Test
+    fun `active reading time accumulates across a background trip`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause()
+        clock.advance(600_000L)
+        controller.resume()
+        clock.advance(6_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // 何も変わっていなければ書き込まない（クラウドVaultでの無駄な同期を出さない）。
+    @Test
+    fun `pausing again without any change does not write`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+        val afterFirstPause = persistence.saveAttempts
+
+        controller.pause()
+        advanceUntilIdle()
+
+        assertEquals(afterFirstPause, persistence.saveAttempts)
+    }
+
+    // 別端末が後から追記していれば末尾が自分の訪問ではない。その場合は差し替えず追記する。
+    @Test
+    fun `a visit appended by another device is not overwritten`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        // 同期で別端末の訪問が末尾に足された
+        val synced = persistence.stored("ideas/habit.md")!!
+        persistence.put(synced.withVisit(ReadingVisit(9_999_999L, "別端末", 50)))
+
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(3, stored.visits.size)
+        assertEquals("別端末", stored.visits[1].deepestSectionTitle)
+    }
+
+    @Test
+    fun `resume without a session does nothing`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.resume()
+        controller.pause()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
     // 保存先は書き込み時点の vaultUri から解決されるため、切替前に捨てないと
     // 旧Vaultのノートの痕跡が新Vaultへ書き込まれる。
     @Test

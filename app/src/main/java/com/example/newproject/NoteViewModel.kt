@@ -255,7 +255,10 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
-    fun flushReadingTrace() = readingTrace.flush()
+    fun pauseReadingTrace() = readingTrace.pause()
+
+    /** 背面から復帰したときに呼ぶ（背面にいた時間を読書時間に含めないため）。 */
+    fun resumeReadingTrace() = readingTrace.resume()
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = readingTrace.dismissCard()

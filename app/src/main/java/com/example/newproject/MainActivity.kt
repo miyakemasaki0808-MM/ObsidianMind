@@ -347,11 +347,20 @@ class MainActivity : ComponentActivity() {
         if (hasFocus) hideStatusBar()
     }
 
+    // 背面から戻ったら読書時間の計測を再開する。背面にいた時間を積算しないことで、
+    // 「少し読んで放置し、戻ってすぐ離れた」が訪問条件（10秒）を満たさないようにする。
+    override fun onStart() {
+        super.onStart()
+        viewModel.resumeReadingTrace()
+    }
+
     // ノートを表示したままホームへ戻った読書を取りこぼさないため、背面に回る時点で
-    // 読書痕跡を確定させる。ノート切替時の確定は ViewModel 側（cancelNoteScopedJobs）が担う。
+    // 読書痕跡を確定させる。セッションは残るので、復帰して読み進めれば同じ訪問が
+    // 更新される（背面化のたびに閲覧回数が増えない）。
+    // ノート切替時の確定は ViewModel 側（cancelNoteScopedJobs）が担う。
     override fun onStop() {
         super.onStop()
-        viewModel.flushReadingTrace()
+        viewModel.pauseReadingTrace()
     }
 
     private fun hideStatusBar() {
