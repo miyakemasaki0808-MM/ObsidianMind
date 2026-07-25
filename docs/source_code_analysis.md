@@ -4,13 +4,13 @@
 
 **解析日:** 2026-07-25
 
-**対象ブランチ:** `feature/New_AI_Function_TimeCapcel`
+**対象ブランチ:** `feature/TimeCapcel_Improvement_Plus_Alpha`
 
-**対象状態:** HEAD `e6ac842` ＋ 未コミットの ReadingTrace v1 実装・ドキュメント更新
+**対象状態:** HEAD `41228a1`（ReadingTrace v1 / PR #34）＋ レビュー指摘4件の修正
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** `testDebugUnitTest` 成功（2026-07-25 CLI実行）。ReadingTraceを含む全282ケースがグリーン。ただし実装レビューで到達率・Activity lifecycle・Vault切替に未解決事項あり
+**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消し、全317ケースへ拡充。**本修正分のテスト実行と実機確認はAndroid Studio側で未実施**（開発機にJDKが無くCLIビルド不可）
 
 ---
 
@@ -36,11 +36,11 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査など、壊れやすい純粋ロジックにはユニットテストが整備されている（282ケース）。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査など、壊れやすい純粋ロジックにはユニットテストが整備されている（317ケース）。
 - クイズ・補記・蒸留はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
-- ReadingTraceは主要経路とJVMテストが揃った一方、ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存に高優先度の修正が必要である。
+- ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度3件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
 
 ---
 
@@ -50,8 +50,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 57ファイル | 10,630行 |
-| ユニットテスト Kotlin | 34ファイル | 4,348行、282テスト |
+| 本番 Kotlin | 59ファイル | 10,926行 |
+| ユニットテスト Kotlin | 36ファイル | 4,828行、317テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -107,9 +107,9 @@ app/src/
 │   │   ├── DistillRecoveryStore.kt         # 中断復旧レコード（noBackupFilesDir）
 │   │   ├── DistillHashing.kt               # SHA-256（原バイト／出力の照合用）
 │   │   ├── ReadingTrace.kt                 # 読書痕跡モデル・上限・検証
-│   │   ├── ReadingTraceController.kt       # 読書セッション・離脱時保存・再会カード・AI俯瞰要約
+│   │   ├── ReadingTraceController.kt       # 読書セッション・能動読書時間の積算・離脱/背面時保存・再会カード・AI俯瞰要約
 │   │   ├── ReadingTraceJson.kt             # サイドカーJSON・canonical checksum
-│   │   ├── ReadingTraceStore.kt            # 痕跡永続化境界・SAF Gateway・フォルダ索引
+│   │   ├── ReadingTraceStore.kt            # 痕跡永続化境界・SAF Gateway・フォルダ索引・Vault照合
 │   │   ├── SafDocuments.kt                 # SAF子要素列挙・ルート機能フォルダの探索/作成
 │   │   ├── VaultPathTraversal.kt           # Vault相対パス付きBFS（Android非依存）
 │   │   ├── AnnotationComposer.kt           # 補記Markdown検証・整形（純粋ロジック）
@@ -132,6 +132,7 @@ app/src/
 │   │   │   ├── DistillCandidateScoring.kt   # 蒸留候補のサリエンス採点・チャンク網羅（DistillLimits）
 │   │   │   ├── DistillResponseParser.kt     # 蒸留AI応答からのID抽出（許可集合で検証）
 │   │   │   ├── DistillTransformer.kt        # オフセット降順の `**` 挿入・太字比率上限
+│   │   │   ├── SearchKeywordMatching.kt     # キーワード一致の採点・選抜（純関数）
 │   │   │   ├── SearchPickerUseCase.kt       # 自然文検索による3件選定
 │   │   │   └── AiResponseParsing.kt         # AI返却タイトルの共通正規化
 │   │   └── ui/
@@ -146,6 +147,7 @@ app/src/
 │   │       ├── AnnotationResultScreen.kt   # 生成した補記メモ表示
 │   │       ├── AnnotationManagerScreen.kt  # 補記一覧・削除
 │   │       ├── SectionChatSheet.kt         # セクションAIボトムシート
+│   │       ├── ReadingProgressGeometry.kt  # 最終可視ブロックの可視割合・量子化（純関数）
 │   │       ├── ReadingTraceCard.kt         # 「前回のあなた」カード・経過文面
 │   │       ├── markdown/
 │   │       │   ├── MarkdownParser.kt       # ブロック・インラインMarkdown解析
@@ -162,7 +164,8 @@ app/src/
     ├── SectionChatControllerTest.kt / QuizControllerTest.kt / AnnotationControllerTest.kt
     ├── DistillControllerTest.kt / DistillWriteRepositoryTest.kt / DistillRecoveryStoreTest.kt
     ├── ReadingTraceControllerTest.kt / ReadingTraceJsonTest.kt / ReadingTraceStoreTest.kt
-    ├── VaultPathTraversalTest.kt / ui/ReadingTraceHeadlineTest.kt
+    ├── VaultPathTraversalTest.kt / ui/ReadingTraceHeadlineTest.kt / ui/ReadingProgressGeometryTest.kt
+    ├── domain/SearchKeywordMatchingTest.kt
     ├── EventKeyTest.kt
     ├── ai/DistillPromptBuilderTest.kt
     ├── domain/Distill*Test.kt                 # SourceModel / CandidateScoring / ResponseParser / Transformer
@@ -276,7 +279,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - 本文パネルのフェード＋スケール表示
 - ⛶ボタンで全画面ルート（`note_fullscreen`）へ。バー/レール・システムバーを隠し、本文カラムは最大720dp中央寄せ。通常表示とスクロール位置を継承し、読書中も要約/クイズの合成状態を最小FABで表示（完了/エラー時のみラベルを数秒フラッシュ）
 - スクロール位置から現在セクションを判定
-- 最終可視MarkdownブロックをReadingTraceへ報告し、Rediscover由来で過去痕跡があれば本文上に「前回のあなた」カードを表示
+- 最終可視Markdownブロックとその可視割合をReadingTraceへ報告し、Rediscover由来で過去痕跡があれば本文上に「前回のあなた」カードを表示
 - ドラッグ可能な吹き出しからセクションAIを起動
 - 吹き出しシート内の「この部分でクイズ」からフォーカス周辺クイズを起動
 - 読書画面向けの低彩度グラデーションを使用
@@ -476,11 +479,12 @@ Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、�
 ```text
 ノート表示前
   → vault相対パス・タイトル・documentIdでSession開始
-  → Composeが最終可視Markdownブロックを報告
-  → Controllerは最深blockIndexとsectionTitleをメモリ上で更新
-  → ノート切替またはActivity.onStop
-  → 10秒以上かつ本文描画済みなら訪問を1件追記
-  → `_ReadingTraces/<sha256(relativePath)>.json`へ保存
+  → Composeが最終可視Markdownブロックとその可視割合を報告（5%刻み）
+  → Controllerは最深blockIndex・可視割合・sectionTitleをメモリ上で更新
+  → ノート切替（flush＝セッション終了）またはActivity.onStop（pause＝計測停止・セッション保持）
+  → 能動読書10秒以上かつ本文描画済みなら訪問を記録
+  → 開いた時点のVaultキーを添えて `_ReadingTraces/<sha256(relativePath)>.json`へ保存
+  → Activity.onStart（resume）後に読み進めたら、同じ訪問を差し替える
 
 Rediscover
   → 相対パスのサイドカーを照合
@@ -491,15 +495,14 @@ Rediscover
 
 サイドカーはschemaVersion、UTF-8バイト上限、canonical payloadのchecksumで検証する。訪問は直近30件を保持し、AI要約には説明対象の訪問件数を併記して、訪問が増えた時だけ作り直す。書き込みはSAF `"wt"` のベストエフォートで、破損時はカードを出さず次回訪問で作り直す。
 
-実装レビューでは次の未解決事項を確認した。
+到達率は `(最深ブロックindex + そのブロックの可視割合) / 総ブロック数` の切り捨てで、100%は最終ブロックの末端が画面へ入った場合だけに成立する。読書時間は背面にいた分を除いた能動時間で測り、背面化で書いた訪問は復帰後の読み進めで差し替える（1回の閲覧＝1訪問）。保存・照合要求はノートを開いた時点のVaultキーを運び、Gatewayが書込直前に現在のVaultと照合して不一致なら捨てる。
 
-- 到達率が描画距離ではなくMarkdownブロック数基準のため、長大な1ブロックを冒頭だけ見ても100%になる。
-- `onStop`後の復帰でSessionを再開始せず、復帰後の進捗を失う、または背面時間が10秒判定へ混ざる。
-- 起動済み保存はVault切替時の`discard()`では止まらず、新Vaultへ旧痕跡を書き得る。
+実装レビューで見つかった高優先度3件は上記で解消済み。残る未解決事項は次の2件。
+
 - フォルダ索引が外部同期で増えたファイルをプロセス再起動まで認識しない。
 - 30件の保持上限と累計訪問回数を分離していない。
 
-詳細は [current_issues.md](_wip/current_issues.md) 1-1〜1-3 / 2-4〜2-5。
+詳細は [current_issues.md](_wip/current_issues.md) 2-4〜2-5。
 
 ---
 
@@ -739,9 +742,9 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `DistillControllerTest.kt` | 14 | 蒸留フローの直列化、requestIdガード、保存後の状態遷移・復旧分岐 |
 | `DistillWriteRepositoryTest.kt` | 15 | 二重ハッシュ照合、原子確定、出力ハッシュ検証、中断・容量不足 |
 | `DistillRecoveryStoreTest.kt` | 3 | 復旧レコードの書込・読出・破棄 |
-| `ReadingTraceControllerTest.kt` | 36 | 10秒閾値、最深到達点、追記上限、後続bind、二重flush、再会カード、AI要約・キャンセル |
+| `ReadingTraceControllerTest.kt` | 50 | 能動読書10秒閾値、最深到達点（可視割合込み）、追記上限、後続bind、二重flush、pause/resumeと訪問の差し替え、Vaultキーの持ち回り、再会カード、AI要約・キャンセル |
 | `ReadingTraceJsonTest.kt` | 24 | JSON往復、checksum、UTF-8、必須項目・上限、要約キャッシュ整合 |
-| `ReadingTraceStoreTest.kt` | 12 | ハッシュキー、保存/読込、破損・パス不一致、フォルダ/書込失敗 |
+| `ReadingTraceStoreTest.kt` | 15 | ハッシュキー、保存/読込、破損・パス不一致、フォルダ/書込失敗、Vaultキーの受け渡しと不一致時の拒否 |
 | `VaultPathTraversalTest.kt` | 10 | 相対パス付きBFS、除外フォルダ、循環、同名階層、非Markdown除外 |
 | `EventKeyTest.kt` | 5 | Snackbar通知の発火判定キー |
 | `ai/DistillPromptBuilderTest.kt` | 4 | 候補件数・文字予算内への収容、プロンプト出力契約 |
@@ -758,6 +761,8 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `domain/RelatedContextScoringTest.kt` | 6 | 本文シグナル再ランク（tags/snippet/title） |
 | `ui/AiTabBadgeStateTest.kt` | 3 | AIタブバッジの優先順位 |
 | `ui/ReadingTraceHeadlineTest.kt` | 8 | 経過日・セクション・到達率・訪問回数のカード文面 |
+| `ui/ReadingProgressGeometryTest.kt` | 8 | 最終可視ブロックの可視割合（完全/一部/画面外/高さ未確定）、5%刻みの量子化 |
+| `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
 | **合計（34ファイル）** | **282** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
@@ -769,22 +774,22 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した。前回は2026-07-24の192ケースで、ReadingTrace関連5ファイル・90ケースが増加した。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケースを追加し317ケースになったが、**この追加分の実行は未実施**（開発機のJDKが利用できずCLIビルド不可のため、Android Studio側での実行待ち）。
 
 ### 13.3 未カバー領域
 
 - `NoteViewModel` の状態遷移（Controllerは一部テスト済み、網羅はしていない）
-- `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` の候補選定・フォールバック
+- `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` のAI応答解釈（キーワード採点・フォールバックの選抜は `SearchKeywordMatchingTest` でカバー済み）
 - `NoteHistoryStore` の日付判定・重複排除（Android依存のため素のユニットテスト不可）
 - `PromptBuilder` の出力契約（クイズ・蒸留は `QuizPromptBuilderTest` / `DistillPromptBuilderTest` でカバー済み。要約・関連・ピッカー・補記・セクション系の5経路は未カバー）
 - SAFのカーソル走査、ファイル作成、削除（蒸留の書き込み経路のみ `DistillWriteRepositoryTest` でフェイクを使って検証済み）
-- ReadingTraceのCompose上のブロック内可視量、Activity停止・再開、Vault切替と遅延保存、外部同期によるSAFフォルダ索引の変更
+- ReadingTraceのCompose実レイアウト上の可視量（算出そのものは純関数として検証済み）、Activity lifecycleを通した pause/resume の実挙動、SAF Gatewayでの実Vault照合、外部同期によるSAFフォルダ索引の変更
 - Gemini Nanoの利用可否、ダウンロード、生成、タイムアウト
 - Compose UI、NavigationBar/Rail、全画面遷移
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の282テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。特にReadingTraceの高優先度3件は、この境界外で見つかった。
+現在の317テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。
 
 ---
 
@@ -822,10 +827,6 @@ BUILD SUCCESSFUL
 
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
-| 高 | ReadingTrace到達率 | Markdownブロック数基準のため、長い1ブロックを冒頭だけ見ても100%になり得る |
-| 高 | ReadingTrace lifecycle | `onStop`後にSessionを再開せず、復帰後の進捗消失または背面時間の混入が起きる |
-| 高 | Vault切替中の遅延保存 | 起動済みflushが動的な`vaultUri`を参照し、旧痕跡を新Vaultへ書き得る |
-| 高 | 検索フォールバックの意味差 | 40件以下ではキーワード順位付けされず先頭3件。UI説明と利用者期待に差が出る |
 | 中 | Job管理の不統一 | クイズ・補記・蒸留はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
 | 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない |
 | 中 | ReadingTrace同期索引 | 外部同期で追加されたサイドカーをプロセス再起動まで認識しない |
@@ -843,13 +844,13 @@ BUILD SUCCESSFUL
 
 本節は現状解析から導かれる候補であり、今回の解析書更新では実装変更していない。
 
-1. ReadingTraceの到達率をブロック内可視量まで考慮する方式へ変え、最終ブロック末端を見ていない状態では100%にしない。
-2. Activity停止・再開に対応するSessionのpause/resumeまたは再開始を実装し、背面時間を10秒判定から除外する。
-3. ReadingTraceの保存要求へVaultをスナップショットし、Vault切替前に起動済みの保存が新Vaultへ到達しないようにする。
-4. `SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、UI文言と一致させる。
+1. （実装済み・2026-07-25）ReadingTraceの到達率をブロック内可視量まで考慮する方式へ変えた。最終ブロック末端を見ていなければ100%にならない。
+2. （実装済み・2026-07-25）Sessionの pause/resume を実装し、背面時間を10秒判定から除外した。背面化で書いた訪問は復帰後の読み進めで差し替え、閲覧回数が膨らまないようにした。
+3. （実装済み・2026-07-25）ReadingTraceの保存要求へVaultキーを持たせ、書込直前の照合で旧痕跡が新Vaultへ到達しないようにした。
+4. （実装済み・2026-07-25）`SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、一致0件は返さないことでUI文言と一致させた。
 5. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記・蒸留は導入済み）。
 6. `CancellationException` の再throw方針を全非同期処理で統一する。
-7. `PromptBuilder` の出力契約、`SearchPickerUseCase`、Controller状態遷移のユニットテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
+7. `PromptBuilder` の出力契約、`SearchPickerUseCase` のAI応答解釈、Controller状態遷移のユニットテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
 8. Fake `ContentResolver` またはinstrumentationテストで、Vault走査・補記保存・削除に加え、ReadingTraceのActivity lifecycle・Vault切替・外部同期を検証する。
 9. ReadingTrace索引にミス時再走査またはTTLを設け、保持履歴30件とは別に累計訪問数を扱う。
 10. AI入力を単純な先頭切り出しから、見出し・冒頭・末尾・重要語を考慮した抽出へ発展させる。
@@ -866,6 +867,7 @@ BUILD SUCCESSFUL
 - 2026-07-22の更新（コミット `48a121b`）は §6.7 のクイズ適応出題と §6.10 の蒸留v1を本文へ追記したが、§2.1 コード規模・§3 ファイル構成・§13 テスト状況の数値を更新しておらず、実装と乖離した状態が残っていた。
 - 2026-07-24の更新は上記の乖離を実測値で解消した。本番Kotlin 33ファイル・約5,900行 → 50ファイル・9,377行、テスト 10ファイル・60（本文中は41と不整合）→ 29ファイル・192ケースへ訂正。あわせて §3 のファイル構成へ `Distill*` 8ファイル・`NoteSnapshot.kt`・`QuizInputProfile.kt` を追加し、§1・§4・§8.4・§12・§13・§14 に蒸留とクイズ適応出題を反映。アプリ名の `Obsidian Mind` → `Vigilith AI` 改称（コミット `be1c0e9`）も反映した。同日、Android Studio 側で `testDebugUnitTest` を実行し192ケース全グリーンを確認済み。
 - 2026-07-25の更新は未コミットのReadingTrace v1を反映した。本番Kotlin 57ファイル・10,630行、テスト34ファイル・282ケースへ再測定し、CLIで`testDebugUnitTest`全件成功を確認した。一方、JVMテスト成功を完成判定にはせず、実装レビューで見つかった到達率・Activity lifecycle・Vault切替の高優先度3件と、同期索引・累計回数の中優先度2件を明記した。
+- 2026-07-25（同日・2回目）の更新は、上記の高優先度3件＋検索フォールバックの計4件の修正を反映した。本番Kotlin 59ファイル・10,926行、テスト36ファイル・317ケースへ再測定。§6.11 のフロー・§13 のテスト表・§14 のリスク表・§15 の改善候補を更新し、**§14 の「高」は0件になった**。ただし本修正分のテスト実行と実機確認は未実施であり、SAF照合とActivity lifecycleの実挙動はJVMテストでは担保できないことを §13.3 に明記した。
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 
   ```bash
