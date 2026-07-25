@@ -1,7 +1,5 @@
 package com.example.newproject.domain
 
-import com.example.newproject.toNormalizedObsidianTitle
-
 // 関連ノートAI候補の話題スコアリング（純ロジック・Uri非依存）。
 // タイトル類似を主シグナル、採番近接を従シグナルにすることで、採番が離れた候補も
 // Nanoへ渡す上位集合へ引き上げつつ、既存Vaultの採番規律も弱い加点として活かす。

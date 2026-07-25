@@ -24,16 +24,24 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.parseMarkdownBlocks
+import com.example.newproject.ui.theme.LinkText
+import com.example.newproject.ui.theme.CheckboxOutline
+import com.example.newproject.ui.theme.ContentDivider
+import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceMuted
+import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
 import com.example.newproject.ui.theme.OnSurface
 
@@ -73,7 +81,15 @@ internal fun MarkdownNoteContent(
 // inlineMarkdown（AnnotatedString構築）は軽くないため、再コンポジションの
 // たびに作り直さないようテキスト単位でメモ化する。
 @Composable
-private fun rememberInline(text: String) = remember(text) { inlineMarkdown(text) }
+private fun rememberInline(text: String): AnnotatedString {
+    // 色はテーマ由来なので、非Composableな remember ブロックの外で読んでキーに含める。
+    val colors = InlineMarkdownColors(
+        strikethrough = OnSurfaceHint,
+        codeBackground = CodePanel,
+        link = LinkText
+    )
+    return remember(text, colors) { inlineMarkdown(text, colors) }
+}
 
 @Composable
 internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
@@ -89,7 +105,7 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
 
     Text(
         text = rememberInline(block.text),
-        color = if (block.level >= 5) Color(0xFF555555) else OnSurface,
+        color = if (block.level >= 5) OnSurfaceMuted else OnSurface,
         fontSize = size,
         lineHeight = (size.value + 6).sp,
         fontWeight = FontWeight.Bold,
@@ -101,7 +117,7 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
 @Composable
 internal fun MarkdownHorizontalRule() {
     HorizontalDivider(
-        color = Color(0xFFCCCCCC),
+        color = ContentDivider,
         thickness = 1.dp,
         modifier = Modifier.padding(vertical = 8.dp)
     )
@@ -120,13 +136,13 @@ internal fun MarkdownBlockquote(lines: List<String>) {
             modifier = Modifier
                 .width(4.dp)
                 .fillMaxHeight()
-                .background(Color(0xFFAAAAAA), RoundedCornerShape(2.dp))
+                .background(CheckboxOutline, RoundedCornerShape(2.dp))
         )
         Column(modifier = Modifier.padding(start = 12.dp)) {
             lines.forEach { line ->
                 Text(
                     text = rememberInline(line),
-                    color = Color(0xFF666666),
+                    color = OnSurfaceSubtle,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
                     fontStyle = FontStyle.Italic
@@ -151,7 +167,7 @@ internal fun MarkdownTaskList(items: List<Pair<Boolean, String>>) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = rememberInline(text),
-                    color = if (checked) Color(0xFF888888) else OnSurface,
+                    color = if (checked) OnSurfaceHint else OnSurface,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
                     textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,
@@ -164,13 +180,13 @@ internal fun MarkdownTaskList(items: List<Pair<Boolean, String>>) {
 
 @Composable
 internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
-    val borderColor = Color(0xFFCCCCCC)
+    val borderColor = ContentDivider
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, borderColor, RoundedCornerShape(4.dp))
     ) {
-        Row(modifier = Modifier.background(Color(0xFFF1F4F8))) {
+        Row(modifier = Modifier.background(CodePanel)) {
             headers.forEachIndexed { i, header ->
                 Text(
                     text = rememberInline(header.trim()),

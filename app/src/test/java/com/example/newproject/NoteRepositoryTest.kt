@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.data.NoteRepository
+import com.example.newproject.data.isMarkdownFile
+import com.example.newproject.data.sanitizeAnnotationFileTitle
+import com.example.newproject.domain.toNormalizedObsidianTitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

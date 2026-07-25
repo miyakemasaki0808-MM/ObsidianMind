@@ -1,7 +1,7 @@
 package com.example.newproject
 
-import com.example.newproject.ui.markdown.MarkdownBlock
-import com.example.newproject.ui.markdown.parseMarkdownBlocks
+import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

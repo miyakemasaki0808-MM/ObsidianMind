@@ -1,5 +1,15 @@
 package com.example.newproject
 
+import com.example.newproject.data.NoteFileTooLargeException
+import com.example.newproject.data.ReadingTraceDocumentGateway
+import com.example.newproject.data.ReadingTraceFolderStatus
+import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.data.ReadingTraceStore
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.withVisit
 import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

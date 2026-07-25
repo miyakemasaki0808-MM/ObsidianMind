@@ -1,13 +1,11 @@
 package com.example.newproject.domain
 
 import android.net.Uri
-import com.example.newproject.NoteFile
-import com.example.newproject.NoteMeta
+import com.example.newproject.data.NoteFile
+import com.example.newproject.data.NoteMeta
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.ai.RelatedCandidateLine
-import com.example.newproject.toNormalizedObsidianTitle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll

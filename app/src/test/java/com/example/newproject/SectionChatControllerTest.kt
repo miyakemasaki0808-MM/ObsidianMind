@@ -1,8 +1,10 @@
 package com.example.newproject
 
+import com.example.newproject.controller.SectionChatController
+import com.example.newproject.model.NoteUiState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi

@@ -1,10 +1,9 @@
 package com.example.newproject.domain
 
-import com.example.newproject.NoteFile
+import com.example.newproject.data.NoteFile
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.toNormalizedObsidianTitle
 
 sealed class PickerResult {
     data class Success(

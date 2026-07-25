@@ -1,5 +1,33 @@
 package com.example.newproject
 
+import com.example.newproject.controller.AnnotationController
+import com.example.newproject.controller.DistillController
+import com.example.newproject.controller.QuizController
+import com.example.newproject.controller.ReadingTraceController
+import com.example.newproject.controller.SearchController
+import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.NOTES_CACHE_TTL_MS
+import com.example.newproject.data.DistillPersistence
+import com.example.newproject.data.DistillRecoveryStore
+import com.example.newproject.data.DistillWriteRepository
+import com.example.newproject.data.InvalidNoteEncodingException
+import com.example.newproject.data.NoteFile
+import com.example.newproject.data.NoteFileTooLargeException
+import com.example.newproject.data.NoteFolder
+import com.example.newproject.data.NoteHistoryStore
+import com.example.newproject.data.NoteRepository
+import com.example.newproject.data.ReadingTraceStore
+import com.example.newproject.data.SafDistillDocumentGateway
+import com.example.newproject.data.SafReadingTraceDocumentGateway
+import com.example.newproject.model.AnnotationState
+import com.example.newproject.model.NoteState
+import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.QuizState
+import com.example.newproject.model.RelatedNotesState
+import com.example.newproject.model.SearchState
+import com.example.newproject.model.SummaryState
+import com.example.newproject.model.withDistillBodyReloaded
+import com.example.newproject.ui.screen.NoteReaderTab
 import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
@@ -9,7 +37,6 @@ import androidx.lifecycle.viewModelScope
 import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
-import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
@@ -17,7 +44,7 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.domain.DistillLimits
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,8 +115,24 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     init {
+        restoreTheme()
         restoreVault()
         distill.checkRecovery()
+    }
+
+    private fun restoreTheme() {
+        val dark = prefs.getBoolean(KEY_DARK_THEME, false)
+        if (dark) _uiState.update { it.copy(darkTheme = true) }
+    }
+
+    /**
+     * 表示テーマを切り替える。OS設定には追従しないので、ここが唯一の切替点。
+     * 端末に残すのは真偽値1つだけで、Vaultにも痕跡にも書かない。
+     */
+    fun setDarkTheme(enabled: Boolean) {
+        if (_uiState.value.darkTheme == enabled) return
+        prefs.edit().putBoolean(KEY_DARK_THEME, enabled).apply()
+        _uiState.update { it.copy(darkTheme = enabled) }
     }
 
     private fun restoreVault() {
@@ -582,6 +625,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
+        private const val KEY_DARK_THEME = "dark_theme"
         private const val DISTILL_OUTPUT_GROWTH_BYTES = DistillLimits.FINAL_SELECTION_LIMIT * 4
     }
 }

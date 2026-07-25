@@ -1,5 +1,15 @@
 package com.example.newproject
 
+import com.example.newproject.controller.ReadingTraceController
+import com.example.newproject.data.ReadingTraceFolderStatus
+import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingTraceLimits
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.AiTimeoutException
