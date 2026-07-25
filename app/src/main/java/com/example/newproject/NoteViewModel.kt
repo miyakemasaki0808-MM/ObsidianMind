@@ -81,6 +81,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private var summaryJob: Job? = null
     private var relatedNotesJob: Job? = null
 
+    // 更新はメインスレッドだが、読み取りは痕跡保存などIOスレッドからも走る。
+    // 可視性を保証しないと、切替がIO側へいつ伝わるか決まらない。
+    @Volatile
     var vaultUri: Uri? = null
         private set
 

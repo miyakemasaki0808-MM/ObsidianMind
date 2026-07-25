@@ -147,8 +147,7 @@ internal class SafReadingTraceDocumentGateway(
 
     @Synchronized
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
-        if (!isCurrentVault(vaultKey)) return null
-        val file = folderIndex()?.files?.get(key) ?: return null
+        val file = folderIndex(vaultKey)?.files?.get(key) ?: return null
         return try {
             contentResolver.openInputStream(file)?.use { readBoundedBytes(it, maximumBytes) }
         } catch (error: Exception) {
@@ -164,13 +163,11 @@ internal class SafReadingTraceDocumentGateway(
 
     @Synchronized
     override fun write(key: String, bytes: ByteArray, vaultKey: String) {
-        // 要求を出した時点のVaultと現在のVaultが違えば、書かずに捨てる。
-        // 起動済みの保存コルーチンが、切替後の新Vaultへ旧ノートの痕跡を書くのを防ぐ
-        // （@Synchronized と組み合わせ、照合と書き込みの間に切替が挟まらないようにする）。
-        if (!isCurrentVault(vaultKey)) {
-            throw IOException("Vaultが切り替わったため痕跡を保存しませんでした。")
-        }
-        val current = folderIndex() ?: throw IOException("痕跡の保存先を用意できませんでした。")
+        // 要求を出した時点のVaultと現在のVaultが違えば、書かずに捨てる。判定と保存先の解決を
+        // [folderIndex] の中へ寄せているのは、そこが vaultUri() を読む唯一の場所であることを
+        // 保証するため（→ [folderIndex] のコメント）。
+        val current = folderIndex(vaultKey)
+            ?: throw IOException("痕跡の保存先を用意できませんでした（Vault切替またはフォルダ作成失敗）。")
         val target = current.files[key] ?: createFile(current, key)
         try {
             contentResolver.openOutputStream(target, "wt")?.use { output ->
@@ -195,10 +192,28 @@ internal class SafReadingTraceDocumentGateway(
         return created
     }
 
-    private fun isCurrentVault(vaultKey: String): Boolean = vaultUri()?.toString() == vaultKey
-
-    private fun folderIndex(): FolderIndex? {
+    /**
+     * [vaultKey] が指すVaultの置き場。現在のVaultが違えば null。
+     *
+     * **`vaultUri()` を読むのは1回だけ**で、その1つの値を照合にも保存先の解決にも使う。
+     * 読み直してはいけない: `vaultUri` はこのクラスのロックの外（ViewModel／メインスレッド）で
+     * 更新されるため、「一致を確認してから改めて読む」と、その隙にVaultが切り替わった場合に
+     * **切替後のVaultへ旧ノートの痕跡を書いてしまう**（`@Synchronized` は自身の状態しか守らない）。
+     * 1回だけ読めば、書き込み先は必ず「読んだ瞬間に選択されていたVault」＝[vaultKey] のVaultになる。
+     *
+     * 読んだ直後に切り替わった場合は旧Vaultへ書き切ることになるが、それは正しい
+     * （その訪問は旧Vaultのノートで起きたもので、永続化した権限も生きている）。
+     */
+    private fun folderIndex(vaultKey: String): FolderIndex? {
         val vault = vaultUri() ?: return null
+        if (vault.toString() != vaultKey) return null
+        return folderIndexOf(vault)
+    }
+
+    /** 現在のVaultの置き場。利用可否の確認（[ensureFolder]）専用。 */
+    private fun folderIndex(): FolderIndex? = folderIndexOf(vaultUri() ?: return null)
+
+    private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }
         val folder = findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
             ?: createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
