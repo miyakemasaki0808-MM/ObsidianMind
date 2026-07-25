@@ -2,15 +2,15 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind。`strings.xml` の `app_name` を改称済み）
 
-**解析日:** 2026-07-25
+**解析日:** 2026-07-26
 
-**対象ブランチ:** `feature/TimeCapcel_Improvement_Plus_Alpha`
+**対象ブランチ:** `feature/VigilithAI_Aicon_Character`
 
-**対象状態:** HEAD `41228a1`（ReadingTrace v1 / PR #34）＋ レビュー指摘4件の修正
+**対象実装:** `2094d3c`（アプリ内Vigilith Phase 3。文書追補コミットは対象外）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消し、全317ケースへ拡充。**本修正分のテスト実行と実機確認はAndroid Studio側で未実施**（開発機にJDKが無くCLIビルド不可）
+**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消。Vigilith起動OP、状態別モーション、Phase 3の画面内clamp・Fold再配置・TalkBack文言を含め、2026-07-26 に `testDebugUnitTest` をCLI実行し**352ケース全件グリーン**を確認済み。Debug APKビルド・Pixel 10 Pro Foldへのインストールも成功（認証ロックによりアプリ画面の目視は未完了）
 
 ---
 
@@ -36,7 +36,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査など、壊れやすい純粋ロジックにはユニットテストが整備されている（317ケース）。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算など、壊れやすい純粋ロジックにはユニットテストが整備されている（352ケース）。
 - クイズ・補記・蒸留はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
@@ -50,8 +50,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 59ファイル | 10,926行 |
-| ユニットテスト Kotlin | 36ファイル | 4,828行、317テスト |
+| 本番 Kotlin | 65ファイル | 11,723行 |
+| ユニットテスト Kotlin | 41ファイル | 5,456行、352テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -136,9 +136,15 @@ app/src/
 │   │   │   ├── SearchPickerUseCase.kt       # 自然文検索による3件選定
 │   │   │   └── AiResponseParsing.kt         # AI返却タイトルの共通正規化
 │   │   └── ui/
-│   │       ├── OpeningScreen.kt            # 起動時ブランドOP（Compose、純ロジックfractionBetweenで進行導出）
+│   │       ├── OpeningScreen.kt            # Vigilith起動OP（Compose描画・スキップ・完了通知）
+│   │       ├── VigilithOpeningMotion.kt    # ハロー→全身→名称→退場の純粋タイムライン
+│   │       ├── VigilithMascot.kt           # アプリ内4状態WebP・補助光・AI状態バッジ
+│   │       ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルの純粋モーション
+│   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態を導出する純関数
+│   │       ├── VigilithHost.kt             # 5タブ共通配置・Note操作文脈・ドラッグ
+│   │       ├── VigilithPlacement.kt        # clamp・画面変更・予約領域を扱う純粋配置計算
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
-│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート（FullscreenNoteScreen）、セクションFAB
+│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート、Vigilithセクション操作
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
 │   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
 │   │       ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
@@ -155,7 +161,7 @@ app/src/
 │   │       │   └── NoteSections.kt         # 見出し単位セクションモデル
 │   │       └── theme/AppColors.kt          # 色・グラデーション・ボタン役割
 │   └── res/values/                         # app_name、テーマ、最低限の色定義
-└── test/java/com/example/newproject/          # 34ファイル・282テスト（内訳は §13.1）
+└── test/java/com/example/newproject/          # 41ファイル・352テスト（内訳は §13.1）
     ├── NoteRepositoryTest.kt / NoteSnapshotTest.kt
     ├── MarkdownParserTest.kt / InlineMarkdownTest.kt
     ├── QuizResponseParserTest.kt / QuizInputProfileTest.kt / QuizPromptBuilderTest.kt
@@ -762,8 +768,13 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `ui/AiTabBadgeStateTest.kt` | 3 | AIタブバッジの優先順位 |
 | `ui/ReadingTraceHeadlineTest.kt` | 8 | 経過日・セクション・到達率・訪問回数のカード文面 |
 | `ui/ReadingProgressGeometryTest.kt` | 8 | 最終可視ブロックの可視割合（完全/一部/画面外/高さ未確定）、5%刻みの量子化 |
+| `ui/VigilithOpeningMotionTest.kt` | 8 | ハロー・全身・名称の登場順、保持区間、退場、終端・範囲外入力 |
+| `ui/VigilithModeTest.kt` | 10 | Idle/Summarizing/Distilling/Messengerの優先順位、蒸留3工程、モデル取得除外、カードdismiss、全画面・シート非表示 |
+| `ui/VigilithMascotMotionTest.kt` | 9 | Summaryの片翼案内、蒸留の断片収集・両翼保持・下線、Messengerの着地・一度だけの発光、入力clamp・出力範囲 |
+| `ui/VigilithPlacementTest.kt` | 6 | 四辺clamp、Fold再配置、ラベル寸法、Snackbar / IME予約領域、狭小画面 |
+| `ui/VigilithAccessibilityTest.kt` | 2 | 状態・対象節をまとめたTalkBack文言、回答／要約の区別 |
 | `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
-| **合計（34ファイル）** | **282** | |
+| **合計（41ファイル）** | **352** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -774,7 +785,9 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケースを追加し317ケースになったが、**この追加分の実行は未実施**（開発機のJDKが利用できずCLIビルド不可のため、Android Studio側での実行待ち）。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を再確認した。
+
+JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるため `/usr/libexec/java_home` では検出されない。`JAVA_HOME` へ明示指定して `./gradlew testDebugUnitTest --offline` で実行する。
 
 ### 13.3 未カバー領域
 
@@ -789,7 +802,7 @@ BUILD SUCCESSFUL
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の317テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。
+現在の352テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
 
 ---
 
@@ -868,6 +881,15 @@ BUILD SUCCESSFUL
 - 2026-07-24の更新は上記の乖離を実測値で解消した。本番Kotlin 33ファイル・約5,900行 → 50ファイル・9,377行、テスト 10ファイル・60（本文中は41と不整合）→ 29ファイル・192ケースへ訂正。あわせて §3 のファイル構成へ `Distill*` 8ファイル・`NoteSnapshot.kt`・`QuizInputProfile.kt` を追加し、§1・§4・§8.4・§12・§13・§14 に蒸留とクイズ適応出題を反映。アプリ名の `Obsidian Mind` → `Vigilith AI` 改称（コミット `be1c0e9`）も反映した。同日、Android Studio 側で `testDebugUnitTest` を実行し192ケース全グリーンを確認済み。
 - 2026-07-25の更新は未コミットのReadingTrace v1を反映した。本番Kotlin 57ファイル・10,630行、テスト34ファイル・282ケースへ再測定し、CLIで`testDebugUnitTest`全件成功を確認した。一方、JVMテスト成功を完成判定にはせず、実装レビューで見つかった到達率・Activity lifecycle・Vault切替の高優先度3件と、同期索引・累計回数の中優先度2件を明記した。
 - 2026-07-25（同日・2回目）の更新は、上記の高優先度3件＋検索フォールバックの計4件の修正を反映した。本番Kotlin 59ファイル・10,926行、テスト36ファイル・317ケースへ再測定。§6.11 のフロー・§13 のテスト表・§14 のリスク表・§15 の改善候補を更新し、**§14 の「高」は0件になった**。ただし本修正分のテスト実行と実機確認は未実施であり、SAF照合とActivity lifecycleの実挙動はJVMテストでは担保できないことを §13.3 に明記した。
+- 2026-07-25（同日・3回目）の更新は、Vigilith起動OPへの移行を反映した。本番Kotlin 60ファイル・11,044行、テスト37ファイル・324ケースへ再測定し、`testDebugUnitTest`全件成功と`assembleDebug`成功を確認。接続実機へのAPKインストールは成功したが、端末の認証ロックによりOPの目視確認は未完了。
+- 2026-07-25（同日・4回目）の更新は、アプリ内Vigilith Phase 1を反映した。本番Kotlin 62ファイル・11,215行、テスト38ファイル・331ケースへ再測定。NoteタブのAI吹き出しを3ポーズのVigilithへ置換し、状態優先順位の7ケース、`testDebugUnitTest`、`assembleDebug`、接続実機へのAPKインストール成功を確認した。認証ロックによりアプリ画面の目視確認は未完了。
+- 2026-07-25（同日・5回目）の更新は、アプリ内Vigilith Phase 2を反映した。本番Kotlin 64ファイル・11,575行、テスト39ファイル・343ケースへ再測定。`AppScaffold`直下の共通Hostによる5タブ常駐に加え、Summaryの正面レンズ動作とDistillingの横向き文章面・候補探索・指示停止・保存下線を分離した。`testDebugUnitTest`全件成功、`assembleDebug`成功、接続実機へのAPKインストール成功を確認した。認証ロックによりアプリ画面の目視確認は未完了。
+- 2026-07-26の更新は、新しいキャラクター資料を正として目と2つの機能ポーズを修正した。目は全ポーズ・ランチャー・起動OPで分割ベゼル／Aqua虹彩／濃色瞳孔／左上キャッチライトへ統一。Summaryは片翼の案内、Distillingは正面で断片を中央へ集め両翼で保持して下線を確定する動作へ変更し、旧横向き指示ポーズを削除した。`testDebugUnitTest`全343件、`assembleDebug`、接続実機へのAPKインストールに成功した。端末が認証ロック中のため画面の目視確認は未完了。
+- 2026-07-26（同日・2回目）の更新は、アプリ内Idleを透過WebPへ移行した。丸い体形、多面体の陰影、Aqua虹彩と濃色瞳孔を76×93dpでも維持し、Composeのレンズ／コア呼吸光は素材内の実測座標へ補正した。Summary／Distilling／MessengerとAdaptive Iconは既存ベクターを維持する。`testDebugUnitTest`全343件、`assembleDebug`、接続実機へのAPKインストールに成功した。
+- 2026-07-26（同日・3回目）の更新は、Summary／Distilling／Messengerも専用の透過ロスレスWebPへ移行し、起動OPもIdle WebPへ統一した。各素材は生成原寸から約749〜802×936px、260〜300KBへロスレス最適化。4状態の虹彩・コア・カプセル位置を個別に補正し、蒸留の候補収集／保存下線とMessenger登場発光はCompose Canvasで維持した。旧アプリ内ポーズVectorDrawable 5ファイルを削除。`testDebugUnitTest`全343件、`assembleDebug`、接続実機へのAPKインストールに成功した。
+- 2026-07-26（同日・4回目）の更新は、Summaryを正面＋片翼ポーズから、胴体と足を三分の二横向きにして頭をこちらへ戻す自然な案内姿勢へ置換した。起動OPは先行点灯用の目レイヤーを本体登場時に消し、退場時に目だけ残って見える現象を解消。引き継ぎテスト1件を追加し、`testDebugUnitTest`全344件、`assembleDebug`、接続実機へのAPKインストールに成功した。
+- 2026-07-26（同日・5回目）の更新は、起動OPの目専用Canvasレイヤーと対応する`eyeAlpha`／焦点／パルス状態を完全削除した。演出をハロー→完成WebP全身→名称へ簡潔化し、目だけが残る余地を構造的になくした。テスト8件は新タイムラインの登場順・保持・退場へ置換し、全344件成功と`assembleDebug`成功を確認した。
+- 2026-07-26（同日・6回目）の更新は、アプリ内Vigilith Phase 3を反映した。ドラッグ位置を配置可能領域内の相対座標で保存し、四辺clamp、Fold開閉・回転・状態ラベル変更後の再配置、NavigationBar / Rail、Snackbar、IMEの予約領域を実装。TalkBackは可視ラベルとの二重フォーカスをなくし、76×93dpの本体ボタンへ状態・操作・対象節を集約した。本番Kotlin 65ファイル・11,723行、テスト41ファイル・352ケースへ再測定し、全テスト・`assembleDebug`・Pixel 10 Pro FoldへのAPKインストールに成功した。端末の認証ロックによりアプリ画面の最終目視は未完了。
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 
   ```bash

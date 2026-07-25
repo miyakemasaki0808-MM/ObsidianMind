@@ -211,7 +211,10 @@ internal class SafReadingTraceDocumentGateway(
     }
 
     /** 現在のVaultの置き場。利用可否の確認（[ensureFolder]）専用。 */
-    private fun folderIndex(): FolderIndex? = folderIndexOf(vaultUri() ?: return null)
+    private fun folderIndex(): FolderIndex? {
+        val vault = vaultUri() ?: return null
+        return folderIndexOf(vault)
+    }
 
     private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }

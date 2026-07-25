@@ -40,10 +40,10 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.R
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.Indigo
-import com.example.newproject.ui.theme.LogoNavy
 import com.example.newproject.ui.theme.LogoPurple
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.ReadingGradient
+import com.example.newproject.ui.theme.VigilithSlate
 
 private const val OpeningDurationMillis = 2_000
 
@@ -95,15 +95,15 @@ fun OpeningScreen(
             .semantics(mergeDescendants = true) {}
     ) {
         val timeline = progress.value
-        val navyAlpha = 1f - timeline.fractionBetween(0.75f, 1f)
+        val motion = vigilithOpeningMotion(timeline)
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(LogoNavy.copy(alpha = navyAlpha))
+                .background(VigilithSlate.copy(alpha = motion.backdropAlpha))
         )
 
         OpeningBrand(
-            timeline = timeline,
+            motion = motion,
             modifier = Modifier
                 .fillMaxSize()
                 .safeDrawingPadding()
@@ -113,20 +113,14 @@ fun OpeningScreen(
 
 @Composable
 private fun OpeningBrand(
-    timeline: Float,
+    motion: VigilithOpeningMotion,
     modifier: Modifier = Modifier
 ) {
-    val iconProgress = timeline.fractionBetween(0f, 0.325f)
-    val titleProgress = timeline.fractionBetween(0.225f, 0.525f)
-    val haloAlpha = when {
-        timeline < 0.09f -> 0f
-        timeline < 0.325f -> timeline.fractionBetween(0.09f, 0.325f) * 0.52f
-        timeline < 0.75f -> 0.52f
-        else -> (1f - timeline.fractionBetween(0.75f, 1f)) * 0.52f
-    }
-    val iconScale = 0.88f + (0.12f * iconProgress)
     val titleTranslation = with(LocalDensity.current) {
-        (12.dp * (1f - titleProgress)).toPx()
+        (12.dp * motion.titleLiftFraction).toPx()
+    }
+    val bodyTranslation = with(LocalDensity.current) {
+        (8.dp * motion.bodyLiftFraction).toPx()
     }
 
     BoxWithConstraints(modifier = modifier) {
@@ -145,17 +139,18 @@ private fun OpeningBrand(
                     modifier = Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            alpha = haloAlpha
-                            scaleX = 0.90f + (0.10f * iconProgress)
+                            alpha = motion.haloAlpha
+                            scaleX = motion.haloScale
                             scaleY = scaleX
                         }
                 ) {
                     drawCircle(
                         brush = Brush.radialGradient(
                             colors = listOf(
-                                Aqua.copy(alpha = 0.50f),
-                                Indigo.copy(alpha = 0.32f),
-                                LogoPurple.copy(alpha = 0.18f),
+                                // Adaptive Icon背景と同じ実効アルファ。
+                                Aqua.copy(alpha = 0.16f),
+                                Indigo.copy(alpha = 0.14f),
+                                LogoPurple.copy(alpha = 0.10f),
                                 Color.Transparent
                             ),
                             center = Offset(size.width / 2f, size.height / 2f),
@@ -166,17 +161,19 @@ private fun OpeningBrand(
                 }
 
                 Image(
-                    painter = painterResource(R.drawable.mm_ai_solutions_logo),
+                    painter = painterResource(R.drawable.vigilith_idle_rich),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .size(iconSize)
                         .graphicsLayer {
-                            alpha = iconProgress
-                            scaleX = iconScale
-                            scaleY = iconScale
+                            alpha = motion.bodyAlpha
+                            scaleX = motion.bodyScale
+                            scaleY = motion.bodyScale
+                            translationY = bodyTranslation
                         }
                 )
+
             }
 
             Spacer(modifier = Modifier.height(18.dp))
@@ -189,13 +186,10 @@ private fun OpeningBrand(
                 letterSpacing = 1.2.sp,
                 maxLines = 1,
                 modifier = Modifier.graphicsLayer {
-                    alpha = titleProgress
+                    alpha = motion.titleAlpha
                     translationY = titleTranslation
                 }
             )
         }
     }
 }
-
-private fun Float.fractionBetween(start: Float, end: Float): Float =
-    ((this - start) / (end - start)).coerceIn(0f, 1f)

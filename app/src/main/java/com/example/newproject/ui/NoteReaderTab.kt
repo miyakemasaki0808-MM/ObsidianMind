@@ -8,7 +8,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,9 +47,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -62,7 +59,6 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,7 +76,6 @@ import com.example.newproject.ui.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.Coral
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -145,12 +140,10 @@ private fun ReadingProgressReporter(
 }
 
 @Composable
-fun NoteReaderTab(
+internal fun NoteReaderTab(
     uiState: NoteUiState,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
-    onOpenSection: (NoteSection) -> Unit,
-    onShowSectionChat: () -> Unit,
     onSuggestionTap: (String) -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
@@ -159,7 +152,8 @@ fun NoteReaderTab(
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
-    onDismissReadingTrace: () -> Unit
+    onDismissReadingTrace: () -> Unit,
+    onVigilithActionChanged: (VigilithNoteAction?) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -202,12 +196,25 @@ fun NoteReaderTab(
         else -> SectionFabStatus.Loading
     }
     val fabSectionLabel = activeChat?.sectionTitle ?: currentSection?.title ?: "ノート全体"
-    val onFabTap = {
-        if (activeChat != null) {
-            onShowSectionChat()
-        } else if (successState != null) {
-            onOpenSection(currentSection ?: NoteSection(successState.title, 0, successState.content))
-        }
+    val vigilithAction = successState?.let { note ->
+        VigilithNoteAction(
+            section = currentSection ?: NoteSection(note.title, 0, note.content),
+            sectionLabel = fabSectionLabel,
+            status = when (fabStatus) {
+                SectionFabStatus.Idle -> VigilithActionStatus.Idle
+                SectionFabStatus.Loading -> VigilithActionStatus.Working
+                SectionFabStatus.Ready -> VigilithActionStatus.Ready
+                SectionFabStatus.Error -> VigilithActionStatus.Error
+            },
+            isAnswerGenerating = activeChat?.isGenerating == true
+        )
+    }
+    val currentVigilithActionChanged by rememberUpdatedState(onVigilithActionChanged)
+    LaunchedEffect(vigilithAction) {
+        currentVigilithActionChanged(vigilithAction)
+    }
+    DisposableEffect(Unit) {
+        onDispose { currentVigilithActionChanged(null) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -275,11 +282,13 @@ fun NoteReaderTab(
             // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
             // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
             //  セクション判定とスクロール継承を壊さない）。
-            val traceCard = uiState.readingTraceCard
-            val showTraceCard = successState != null && traceCard != null && !traceCard.isDismissed
-            if (showTraceCard && traceCard != null) {
+            val visibleTraceCard = uiState.readingTraceCard?.takeIf {
+                successState != null && !it.isDismissed
+            }
+            val showTraceCard = visibleTraceCard != null
+            if (visibleTraceCard != null) {
                 ReadingTraceCardPanel(
-                    card = traceCard,
+                    card = visibleTraceCard,
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace
                 )
@@ -301,16 +310,6 @@ fun NoteReaderTab(
             )
         }
 
-        // 浮遊吹き出し（今見ているセクションを対象に。タップで要約＋質問シート）
-        // 全画面は独立ルート（note_fullscreen）へ移したため、ここではタブ表示時のみ出す。
-        if (successState != null) {
-            SectionFab(
-                sectionLabel = fabSectionLabel,
-                status = fabStatus,
-                isAnswerGenerating = activeChat?.isGenerating == true,
-                onTap = onFabTap
-            )
-        }
     }
 
     // セクションチャットのボトムシート
@@ -345,116 +344,6 @@ fun NoteReaderTab(
 }
 
 private enum class SectionFabStatus { Idle, Loading, Ready, Error }
-
-/** 画面に浮かぶ半透明・立体的な吹き出しボタン。ドラッグで移動、タップで要約＋質問シート。 */
-@Composable
-private fun BoxScope.SectionFab(
-    sectionLabel: String,
-    status: SectionFabStatus,
-    isAnswerGenerating: Boolean,
-    onTap: () -> Unit
-) {
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
-    // pointerInput(Unit) は初回コンポーズ時のクロージャを固定するため、直接 onTap を
-    // 参照すると古いセッション状態を抱き込んだ処理が呼ばれ続ける（クイズ画面から
-    // 戻った後に「確認終了→吹き出しタップ」が無反応になる不具合の原因）。
-    // rememberUpdatedState 経由で常に最新の onTap を呼ぶ。
-    val currentOnTap by rememberUpdatedState(onTap)
-
-    Box(
-        modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
-            .safeDrawingPadding()
-            .padding(end = 20.dp, bottom = 20.dp)
-    ) {
-        Column(horizontalAlignment = Alignment.End) {
-            // 対象セクションラベル（半透明・アクセント色）
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Indigo.copy(alpha = 0.55f))
-                    .widthIn(max = 260.dp)
-                    .padding(horizontal = 11.dp, vertical = 5.dp)
-            ) {
-                Text(
-                    text = when (status) {
-                        SectionFabStatus.Idle -> "📌 $sectionLabel"
-                        SectionFabStatus.Loading -> if (isAnswerGenerating) {
-                            "⏳ AI回答中 · $sectionLabel"
-                        } else {
-                            "⏳ AI要約中 · $sectionLabel"
-                        }
-                        SectionFabStatus.Ready -> "✓ 要約完了 · $sectionLabel"
-                        SectionFabStatus.Error -> "! 要約を確認 · $sectionLabel"
-                    },
-                    color = OnVibrant,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            // 吹き出し本体：半透明のアクセント色ガラス＋立体感（影・上部ハイライト・色リム）
-            Box(
-                modifier = Modifier
-                    .size(62.dp)
-                    .shadow(elevation = 18.dp, shape = CircleShape, clip = false)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Indigo.copy(alpha = 0.62f),
-                                Coral.copy(alpha = 0.55f)
-                            )
-                        )
-                    )
-                    .border(1.5.dp, Indigo.copy(alpha = 0.55f), CircleShape)
-                    .pointerInput(Unit) {
-                        detectDragGestures { change, dragAmount ->
-                            change.consume()
-                            dragOffset += dragAmount
-                        }
-                    }
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { currentOnTap() })
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                // 上部スペキュラハイライト（ガラスの艶・アクセント色）
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp)
-                        .size(width = 26.dp, height = 12.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Aqua.copy(alpha = 0.40f))
-                )
-                when (status) {
-                    SectionFabStatus.Loading -> CircularProgressIndicator(
-                        modifier = Modifier.size(25.dp),
-                        color = OnVibrant,
-                        strokeWidth = 2.5.dp
-                    )
-                    SectionFabStatus.Ready -> Text(
-                        "✓",
-                        color = OnVibrant,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    SectionFabStatus.Error -> Text(
-                        "!",
-                        color = OnVibrant,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    SectionFabStatus.Idle -> Text("💬", fontSize = 26.sp)
-                }
-            }
-        }
-    }
-}
 
 /**
  * タブ内の丸いアイコンボタン（material-icons 依存を避けるため絵文字/記号を使用）。

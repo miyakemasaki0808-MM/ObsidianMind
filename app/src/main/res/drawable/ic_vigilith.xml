@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vigilith（黒曜の梟オートマトン）のマーク。
+  design/character_vigilith.md §8「顔＝二つのレンズ＋耳シャード」の縮約。
+  ハローはAdaptive Iconの背景レイヤー（ic_vigilith_background）へ分離している。
+
+  座標系は Adaptive Icon の 108x108。造形はすべて中央66dpのセーフゾーン
+  （中心 54,54 から半径33）に収め、円形マスクでも耳シャードが欠けないようにしている。
+
+  ランチャーの最小48pxでも「二つのアクアの目」が判別できることを優先し、
+  レンズを大きく取って頭部のファセットは輪郭＋稜線だけに留めた
+  （面を描き込むと小サイズで黒い塊に潰れる）。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 耳（羽角）＝黒曜石のシャード。梟性と鉱物性を同時に担う要素。 -->
+    <path
+        android:pathData="M40,40 L34,27 L51,35 Z"
+        android:strokeColor="#4D3DFF"
+        android:strokeWidth="0.9"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="42.5" android:startY="27"
+                android:endX="42.5" android:endY="40">
+                <item android:offset="0" android:color="#FF33456E" />
+                <item android:offset="1" android:color="#FF0A1428" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:pathData="M68,40 L74,27 L57,35 Z"
+        android:strokeColor="#4D3DFF"
+        android:strokeWidth="0.9"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="65.5" android:startY="27"
+                android:endX="65.5" android:endY="40">
+                <item android:offset="0" android:color="#FF33456E" />
+                <item android:offset="1" android:color="#FF0A1428" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 頭部。低ポリにカットした黒曜石。 -->
+    <path
+        android:pathData="M54,32 L36,39 L31,56 L39,72 L54,78 L69,72 L77,56 L72,39 Z"
+        android:strokeColor="#4D3DFF"
+        android:strokeWidth="1.1"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="40.2" android:startY="32"
+                android:endX="63.2" android:endY="78">
+                <item android:offset="0" android:color="#FF1A2A48" />
+                <item android:offset="0.5" android:color="#FF0C1730" />
+                <item android:offset="1" android:color="#FF050E1D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- 稜線（ファセットの示唆）。面を塗り分けず線だけで鉱物感を出す。 -->
+    <path
+        android:pathData="M54,32 L54,42"
+        android:strokeColor="#4D3DFF" android:strokeWidth="0.7" android:strokeAlpha="0.55" />
+    <path
+        android:pathData="M36,39 L54,42 L72,39"
+        android:strokeColor="#4D3DFF" android:strokeWidth="0.7" android:strokeAlpha="0.55" />
+    <path
+        android:pathData="M39,72 L54,78 L69,72"
+        android:strokeColor="#4D3DFF" android:strokeWidth="0.7" android:strokeAlpha="0.55" />
+
+    <!-- 読書レンズ。添付デザインに合わせ、明るい機械枠・Aquaの虹彩・濃色の瞳孔で構成。 -->
+    <path android:fillColor="#FFD5E5EE"
+        android:pathData="M32,56 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0" />
+    <path android:fillColor="#FF71899E"
+        android:pathData="M34,56 a10,10 0,1 0,20 0 a10,10 0,1 0,-20 0" />
+    <path android:fillColor="#FF071326"
+        android:pathData="M35.5,56 a8.5,8.5 0,1 0,17 0 a8.5,8.5 0,1 0,-17 0" />
+    <path android:fillColor="#FF35D6F2"
+        android:pathData="M37,56 a7,7 0,1 0,14 0 a7,7 0,1 0,-14 0" />
+    <path android:fillColor="#FF26394B"
+        android:pathData="M40.5,56 a3.5,3.5 0,1 0,7 0 a3.5,3.5 0,1 0,-7 0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M39.2,51.5 a1.6,1.6 0,1 0,3.2 0 a1.6,1.6 0,1 0,-3.2 0" />
+
+    <path android:fillColor="#FFD5E5EE"
+        android:pathData="M52,56 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0" />
+    <path android:fillColor="#FF71899E"
+        android:pathData="M54,56 a10,10 0,1 0,20 0 a10,10 0,1 0,-20 0" />
+    <path android:fillColor="#FF071326"
+        android:pathData="M55.5,56 a8.5,8.5 0,1 0,17 0 a8.5,8.5 0,1 0,-17 0" />
+    <path android:fillColor="#FF35D6F2"
+        android:pathData="M57,56 a7,7 0,1 0,14 0 a7,7 0,1 0,-14 0" />
+    <path android:fillColor="#FF26394B"
+        android:pathData="M60.5,56 a3.5,3.5 0,1 0,7 0 a3.5,3.5 0,1 0,-7 0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M59.2,51.5 a1.6,1.6 0,1 0,3.2 0 a1.6,1.6 0,1 0,-3.2 0" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M44,44 L44,46 M32,56 L35,56 M44,66 L44,68 M56,56 L53,56 M64,44 L64,46 M52,56 L55,56 M64,66 L64,68 M76,56 L73,56"
+        android:strokeColor="#FF9FB7C8"
+        android:strokeWidth="1.1" />
+
+    <!-- 嘴。唯一の暖色差し色（AppGradient第3色のCoralと呼応）。 -->
+    <path
+        android:pathData="M50,67 L58,67 L54,76 Z"
+        android:fillColor="#FFFF6B8A" />
+</vector>

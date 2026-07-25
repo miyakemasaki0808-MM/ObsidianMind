@@ -1,8 +1,9 @@
 # 直近課題抽出
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**抽出日:** 2026-07-22（最終更新: 2026-07-25）
-**基準:** ReadingTrace v1 実装済み・高優先度4件は解消済み（実機確認待ち） / `feature/TimeCapcel_Improvement_Plus_Alpha`
+**抽出日:** 2026-07-22（最終更新: 2026-07-26）
+**基準:** ReadingTrace v1・Vigilith Phase 3実装済み（ともに実機確認待ち） /
+`feature/VigilithAI_Aicon_Character`
 **目的:** 次の一手を決めるための、現時点で確認できる課題の棚卸し。ロードマップ（[roadmap.md](roadmap.md)）の入力とする。
 
 > 何をいつ変えたかは [change_history.md](../change_history.md)、今どうなっているかは [source_code_analysis.md](../source_code_analysis.md)、なぜそうしたかは [design/](../design/) を参照。本ファイルは「まだ手を付けていない/追いついていない」課題のみを新しい順の観点で集約する。**解消した課題はこのファイルから削除する**（記録は上記3文書に残るので、ここに残すと未対応課題が埋もれる）。
@@ -19,6 +20,7 @@
 | 中 | 30件上限後も保持件数を「これまで開いた回数」と表示する | 正確性/UX | 31回目以降も「30回」と誤表示 |
 | 中 | AI入力が先頭固定長切り出し | AI品質 | 長文ノートの後半が無視される |
 | 低 | 統合テスト不足（SAF・端末AI・Navigation） | テスト | 実端末依存の回帰を検出できない |
+| 低 | Vigilith Phase 3の最終実機操作確認が未完了 | 実機QA | 衝突回避・TalkBackの視覚／操作品質が未確定 |
 | 低 | エラー通知の握りつぶし（フォルダ取得失敗・補記削除失敗等） | 堅牢性 | 無言の失敗 |
 | 低 | AI状態の一時エラーと非対応の同一視 | UX | 原因の区別ができない |
 
@@ -90,6 +92,14 @@ Vault照合の作り直しは [bugfix_reports](../bugfix_reports.md) #4 に残�
 - Markdownが限定実装（ordered list番号・クリック可能リンク・画像・埋め込み・数式は未対応）
 - キャッシュTTL 60秒により外部同期・編集結果の反映が最大60秒遅れる
 
+### 3-5. Vigilith Phase 3の最終実機操作確認
+- **実装・自動検証済み:** 四辺clamp、Fold再配置、NavigationBar / Rail、Snackbar、IMEの予約領域、
+  TalkBack文言を実装し、全352件のJVMテストとDebug APKビルド、Pixel 10 Pro Foldへのインストールに成功。
+- **未確認:** 端末が認証ロック中だったため、アプリ画面でのタップ／ドラッグ、Compact／Fold、
+  Snackbar／IME／ReadingTraceとの視覚的な重なり、Animator duration scale 0倍、TalkBack操作は未確認。
+- **完了条件:** 上記を実機で一巡し、必要なら余白定数だけを調整する。
+  → [vigilith_in_app](../design/vigilith_in_app.md) Phase 3
+
 ---
 
 ## 4. 横断テーマ（課題の背景にある構造）
@@ -105,7 +115,8 @@ Vault照合の作り直しは [bugfix_reports](../bugfix_reports.md) #4 に残�
 
 ## 5. 次アクションの選択肢
 
-- **A. 実機確認**（解消済み4件が実端末で効いているかの確認。これが済むまで roadmap N-1 は完了扱いにしない）
+- **A. 実機確認**（ReadingTraceの解消済み4件とVigilith Phase 3の操作／衝突回避を同じ端末で確認。
+  これが済むまで roadmap N-1／N-4は完了扱いにしない）
 - **B. 読書痕跡の保守性に手を入れる**（2-3〜2-5）
 - **C. Job管理の統一**（2-1）
 - **D. 「意図して問いを残す」の検討**（ReadingTraceで回収できなかった思考の連続性 → roadmap X-2）

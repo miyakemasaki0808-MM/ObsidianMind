@@ -1,8 +1,8 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**初版:** 2026-07-22（最終更新: 2026-07-25）
-**基準:** ReadingTrace v1 実装済み・レビュー指摘の高優先度4件を解消（実機確認待ち。旧 TimeCapsule 設計は棄却）
+**初版:** 2026-07-22（最終更新: 2026-07-26）
+**基準:** ReadingTrace v1・Vigilith Phase 3実装済み（ともに実機確認待ち。旧 TimeCapsule 設計は棄却）
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
 **主眼:** プロダクトの方向性（北極星）を上位に置き、機能はそこから導く
 
@@ -47,8 +47,19 @@ ReadingTrace v1の主要経路は実装され、2026-07-25の実装レビュー�
 ### ~~N-2. 検索フォールバックの文言差を解消~~ ✅ 完了（2026-07-25）
 - 候補数に依らず bigramスコア順へ統一し、UI文言「キーワード一致」と実装を一致させた。加えて**一致0件は返さない**ようにして、文言が常に真になるようにした（0件時は「見つかりませんでした。」）。採点・選抜は `domain/SearchKeywordMatching.kt` の純関数へ切り出し、フォールバックと再現率カットで求めるものが違うことを型で分けた。→ [change_history.md](../change_history.md) PR #35
 
-### ~~N-3. 解析書の実装追従~~ ✅ 更新（2026-07-24、2026-07-25）
-- 2026-07-24に蒸留v1時点へ追従。2026-07-25にReadingTrace実装を反映し、本番57ファイル・10,630行、テスト34ファイル・282ケースへ再測定した。`testDebugUnitTest`はCLIで全件成功。レビューで見つかった未解決事項は完了扱いにせず、[current_issues.md](current_issues.md)へ記録した。
+### ~~N-3. 解析書の実装追従~~ ✅ 更新（2026-07-24〜2026-07-26）
+- 蒸留、ReadingTrace、Vigilith Phase 3まで追従し、本番65ファイル・11,723行、
+  テスト41ファイル・352ケースへ再測定した。未確認事項は完了扱いにせず、
+  [current_issues.md](current_issues.md)へ記録する運用を維持。
+
+### N-4. Vigilithを「読書相手」の身体として常駐させる（feature_ideas N-1／Phase 3実装済み・実機確認待ち）
+- **達成:** 既存AI状態だけからIdle／Summarizing／Distilling／Messengerを導出し、
+  5タブ共通Hostで常駐。4状態の透過WebP、状態別モーション、画面内clamp、Fold再配置、
+  Navigation UI／Snackbar／IME回避、TalkBackの単一ボタン化まで実装した。
+- **ガードレール:** 主役はノート。キャラクター専用の記憶・催促・報酬状態は作らない。
+- **完了の定義:** Pixel 10 Pro Foldでタップ／ドラッグ、Compact／Fold、Snackbar／IME／ReadingTrace、
+  Animator duration scale 0倍、TalkBackを一巡する。自動テスト352件、APKビルド・インストールは通過済み。
+  → [vigilith_in_app](../design/vigilith_in_app.md)・[current_issues](current_issues.md) 3-5
 
 ---
 
