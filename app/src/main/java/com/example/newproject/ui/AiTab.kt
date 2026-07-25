@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,10 +42,14 @@ import com.example.newproject.DistillState
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
 import com.example.newproject.SummaryState
+import com.example.newproject.ui.theme.OnButtonAi
+import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceMuted
+import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
@@ -171,9 +174,9 @@ fun AiTab(
             onClick = annotationAction,
             enabled = !isAnnotationLoading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
+            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
             shape = RoundedCornerShape(24.dp)
-        ) { Text(annotationLabel, color = OnVibrant) }
+        ) { Text(annotationLabel, color = OnButtonAi) }
     }
 }
 
@@ -202,7 +205,7 @@ private fun DistillPanel(
         shape = RoundedCornerShape(12.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            Text("✦ ノートを蒸留", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Indigo)
+            Text("✦ ノートを蒸留", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
                 "AIが重要文を選び、確認した文だけをノート内で太字にします。",
@@ -215,13 +218,13 @@ private fun DistillPanel(
             when (state) {
                 is DistillState.Idle -> {
                     if (noteUnavailableReason != null) {
-                        Text(noteUnavailableReason, fontSize = 13.sp, color = ErrorRed)
+                        Text(noteUnavailableReason, fontSize = 13.sp, color = ErrorText)
                     } else {
                         Button(
                             onClick = onStart,
                             modifier = Modifier.fillMaxWidth().height(48.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi)
-                        ) { Text("重要文を見つける", color = OnVibrant) }
+                            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi)
+                        ) { Text("重要文を見つける", color = OnButtonAi) }
                     }
                 }
                 is DistillState.Analyzing -> ProgressRow("AIを待っています／分析中…")
@@ -241,13 +244,13 @@ private fun DistillPanel(
                     Text("Gemini Nanoをダウンロード中…", fontSize = 13.sp, color = OnSurface)
                     Spacer(modifier = Modifier.height(8.dp))
                     if (progress >= 0f) {
-                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = Indigo)
+                        LinearProgressIndicator(progress = { progress }, modifier = Modifier.fillMaxWidth(), color = AccentText)
                     } else {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = Indigo)
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), color = AccentText)
                     }
                 }
                 is DistillState.Unavailable -> {
-                    Text(state.message, fontSize = 13.sp, color = ErrorRed)
+                    Text(state.message, fontSize = 13.sp, color = ErrorText)
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(onClick = onDismiss) { Text("閉じる") }
                 }
@@ -261,9 +264,9 @@ private fun DistillPanel(
                         "選択 ${state.selectedCount}文・変更後の太字率 %.1f%%".format(ratioPercent),
                         fontSize = 12.sp,
                         color = when {
-                            state.isSingleSentenceException -> Indigo
+                            state.isSingleSentenceException -> AccentText
                             state.isWithinBoldLimit -> OnSurface
-                            else -> ErrorRed
+                            else -> ErrorText
                         }
                     )
                     when {
@@ -271,17 +274,17 @@ private fun DistillPanel(
                             "短いノートのため、最重要の1文だけを上限の例外として選択しています。保存前に太字率を確認してください。",
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
-                            color = Indigo
+                            color = AccentText
                         )
                         !state.isWithinBoldLimit && state.selectedCount == 0 -> Text(
                             "既存の太字率が累積上限30%に達しているため、これ以上追加できません。",
                             fontSize = 12.sp,
-                            color = ErrorRed
+                            color = ErrorText
                         )
                         !state.isWithinBoldLimit -> Text(
                             "累積上限30%を超えています。選択を減らしてください。",
                             fontSize = 12.sp,
-                            color = ErrorRed
+                            color = ErrorText
                         )
                     }
                     Spacer(modifier = Modifier.height(10.dp))
@@ -291,22 +294,22 @@ private fun DistillPanel(
                             onClick = { showConfirmation = true },
                             enabled = state.canSaveSelection,
                             modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi)
-                        ) { Text("プレビュー", color = OnVibrant) }
+                            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi)
+                        ) { Text("プレビュー", color = OnButtonAi) }
                     }
                 }
                 is DistillState.Saving -> ProgressRow("保存して内容を検証中…")
                 is DistillState.Saved -> {
-                    Text("${state.sentenceCount}文を太字にしました。", fontSize = 13.sp, color = Indigo)
+                    Text("${state.sentenceCount}文を太字にしました。", fontSize = 13.sp, color = AccentText)
                     TextButton(onClick = onDismiss) { Text("完了") }
                 }
                 is DistillState.Conflict -> {
-                    Text(state.message, fontSize = 13.sp, color = ErrorRed)
+                    Text(state.message, fontSize = 13.sp, color = ErrorText)
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) { Text("最新の本文で再解析") }
                 }
                 is DistillState.RecoveryRequired -> {
-                    Text("復旧が必要です", fontWeight = FontWeight.Bold, color = ErrorRed)
+                    Text("復旧が必要です", fontWeight = FontWeight.Bold, color = ErrorText)
                     Text(state.message, fontSize = 13.sp, lineHeight = 19.sp, color = OnSurface)
                     Spacer(modifier = Modifier.height(10.dp))
                     if (state.canRestore) {
@@ -328,11 +331,11 @@ private fun DistillPanel(
                     }
                 }
                 is DistillState.RecoveryResolved -> {
-                    Text(state.message, fontSize = 13.sp, color = Indigo)
+                    Text(state.message, fontSize = 13.sp, color = AccentText)
                     TextButton(onClick = onDismiss) { Text("完了") }
                 }
                 is DistillState.Error -> {
-                    Text(state.message, fontSize = 13.sp, color = ErrorRed)
+                    Text(state.message, fontSize = 13.sp, color = ErrorText)
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (state.canRetry) {
@@ -363,10 +366,10 @@ private fun DistillPanel(
                                 .format(candidates.projectedBoldRatio * 100.0),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
-                            color = Indigo
+                            color = AccentText
                         )
                     }
-                    Text("元の文字は削除しません。この操作の取り消し機能はありません。", fontSize = 12.sp, color = ErrorRed)
+                    Text("元の文字は削除しません。この操作の取り消し機能はありません。", fontSize = 12.sp, color = ErrorText)
                 }
             },
             confirmButton = {
@@ -423,9 +426,9 @@ private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -
             Checkbox(checked = item.isSelected, onCheckedChange = { onToggle(item.id) })
             Column(modifier = Modifier.weight(1f).padding(top = 4.dp, end = 4.dp)) {
                 val meta = listOfNotNull(item.heading, item.positionLabel).joinToString(" · ")
-                Text(meta, fontSize = 11.sp, color = Color(0xFF666666))
+                Text(meta, fontSize = 11.sp, color = OnSurfaceSubtle)
                 item.context?.takeIf { it.isNotBlank() }?.let { context ->
-                    Text(context, fontSize = 11.sp, color = Color(0xFF888888), maxLines = 2)
+                    Text(context, fontSize = 11.sp, color = OnSurfaceHint, maxLines = 2)
                     Spacer(modifier = Modifier.height(3.dp))
                 }
                 Text(item.text, fontSize = 14.sp, lineHeight = 20.sp, color = OnSurface)
@@ -437,7 +440,7 @@ private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -
 @Composable
 private fun ProgressRow(label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Indigo)
+        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentText)
         Spacer(modifier = Modifier.width(8.dp))
         Text(label, fontSize = 13.sp, color = OnSurface)
     }
@@ -464,15 +467,15 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                 text = "📝 AI 要約",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Indigo
+                color = AccentText
             )
             Spacer(modifier = Modifier.height(8.dp))
             when (summaryState) {
                 is SummaryState.Loading -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Indigo)
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentText)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("要約を生成中…", fontSize = 13.sp, color = Color(0xFF555555))
+                        Text("要約を生成中…", fontSize = 13.sp, color = OnSurfaceMuted)
                     }
                 }
                 is SummaryState.Downloading -> {
@@ -489,17 +492,17 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                         }
                     }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(label, fontSize = 13.sp, color = Color(0xFF555555))
+                        Text(label, fontSize = 13.sp, color = OnSurfaceMuted)
                         if (progress >= 0) {
                             LinearProgressIndicator(
                                 progress = { progress },
                                 modifier = Modifier.fillMaxWidth(),
-                                color = Indigo
+                                color = AccentText
                             )
                         } else {
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth(),
-                                color = Indigo
+                                color = AccentText
                             )
                         }
                     }
@@ -508,10 +511,10 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
                 }
                 is SummaryState.AiUnavailable -> {
-                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = Color(0xFF888888))
+                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceHint)
                 }
                 is SummaryState.Error -> {
-                    Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorRed)
+                    Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)
                 }
                 else -> {}
             }

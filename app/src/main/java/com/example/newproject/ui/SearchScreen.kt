@@ -31,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,11 +40,16 @@ import com.example.newproject.NoteUiState
 import com.example.newproject.SearchState
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
+import com.example.newproject.ui.theme.OnButtonPrimary
+import com.example.newproject.ui.theme.OnButtonSecondary
+import com.example.newproject.ui.theme.OnSurfaceFaint
+import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
@@ -134,16 +138,16 @@ fun SearchTab(
                 onClick = onRandom,
                 enabled = !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary),
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary, contentColor = OnButtonSecondary),
                 shape = RoundedCornerShape(24.dp)
-            ) { Text("🎰 ランダムに引く", color = OnVibrant) }
+            ) { Text("🎰 ランダムに引く", color = OnButtonSecondary) }
             Button(
                 onClick = { onSearch(query) },
                 enabled = query.isNotBlank() && !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
                 shape = RoundedCornerShape(24.dp)
-            ) { Text("🔎 ことばでさがす", color = OnVibrant) }
+            ) { Text("🔎 ことばでさがす", color = OnButtonPrimary) }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -215,19 +219,19 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                 is SearchState.Idle -> Text(
                     "フォルダを選んで検索すると、ここに3件出ます。",
                     fontSize = 13.sp,
-                    color = Color(0xFF777777)
+                    color = OnSurfaceFaint
                 )
                 is SearchState.Loading -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Indigo)
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentText)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("さがしています…", fontSize = 13.sp, color = Color(0xFF555555))
+                    Text("さがしています…", fontSize = 13.sp, color = OnSurfaceMuted)
                 }
                 is SearchState.Success -> {
                     if (state.results.isEmpty()) {
-                        Text("見つかりませんでした。", fontSize = 13.sp, color = Color(0xFF777777))
+                        Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
                         fallbackNotice(state.aiStatus)?.let { notice ->
-                            Text(notice, fontSize = 12.sp, color = Color(0xFF888888))
+                            Text(notice, fontSize = 12.sp, color = OnSurfaceHint)
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         state.results.forEachIndexed { index, note ->
@@ -241,7 +245,7 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                 is SearchState.Error -> Text(
                     "検索に失敗しました: ${state.message}",
                     fontSize = 13.sp,
-                    color = ErrorRed
+                    color = ErrorText
                 )
             }
         }

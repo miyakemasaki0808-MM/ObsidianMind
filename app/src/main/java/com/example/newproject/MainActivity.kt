@@ -44,8 +44,8 @@ import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RelatedTab
 import com.example.newproject.ui.SearchTab
-import com.example.newproject.ui.VigilithNoteAction
-import com.example.newproject.ui.resolveVigilithPresentation
+import com.example.newproject.ui.rememberVigilithState
+import com.example.newproject.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -75,294 +75,282 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         hideStatusBar()
         setContent {
-            // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
-            // savedInstanceStateが非nullになるため、OPを再生し直さない。
-            var showOpening by remember { mutableStateOf(savedInstanceState == null) }
-            if (showOpening) {
-                OpeningScreen(onFinished = { showOpening = false })
-                return@setContent
-            }
-
+            // テーマ判定に使うため、AppThemeの外で購読する。
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-            val windowSizeClass = calculateWindowSizeClass(this)
-            val navController = rememberNavController()
-            val snackbarHostState = remember { SnackbarHostState() }
-            // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
-            val noteListState = rememberLazyListState()
-            // Noteタブが現在の読書位置を共通Vigilith Hostへ渡す。
-            // キャラクター専用の永続状態ではなく、画面内だけの操作文脈。
-            var vigilithNoteAction by remember { mutableStateOf<VigilithNoteAction?>(null) }
-            // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
-            val currentRoute = navController
-                .currentBackStackEntryAsState().value?.destination?.route
-            val isFullscreenRoute = currentRoute == "note_fullscreen"
-            val vigilithPresentation = resolveVigilithPresentation(
-                currentRoute = currentRoute,
-                distillState = uiState.distillState,
-                readingTraceCard = uiState.readingTraceCard,
-                summaryState = uiState.summaryState,
-                isSectionSummaryLoading = uiState.sectionChat?.isSummaryLoading == true,
-                isBlockingOverlayVisible = uiState.isSectionChatSheetVisible
-            )
-            val activeVigilithAction = vigilithNoteAction.takeIf {
-                currentRoute == AppDestination.Note.route
-            }
-            val onVigilithTap = activeVigilithAction?.let { action ->
-                {
-                    if (uiState.sectionChat != null) {
-                        viewModel.showSectionChat()
-                    } else {
-                        viewModel.openSection(action.section)
-                    }
+            AppTheme(darkTheme = uiState.darkTheme) {
+                // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
+                // savedInstanceStateが非nullになるため、OPを再生し直さない。
+                var showOpening by remember { mutableStateOf(savedInstanceState == null) }
+                if (showOpening) {
+                    OpeningScreen(onFinished = { showOpening = false })
+                    return@AppTheme
                 }
-            }
 
-            val openQuizResult = {
-                snackbarHostState.currentSnackbarData?.dismiss()
-                viewModel.markQuizViewed()
-                navController.navigate("quiz") { launchSingleTop = true }
-            }
-            val openAnnotationResult = {
-                snackbarHostState.currentSnackbarData?.dismiss()
-                viewModel.markAnnotationViewed()
-                navController.navigate("annotation") { launchSingleTop = true }
-            }
-            val startAnnotation = {
-                val noteState = uiState.noteState
-                if (noteState is NoteState.Success) {
+                val windowSizeClass = calculateWindowSizeClass(this)
+                val navController = rememberNavController()
+                val snackbarHostState = remember { SnackbarHostState() }
+                // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
+                val noteListState = rememberLazyListState()
+                // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
+                val currentRoute = navController
+                    .currentBackStackEntryAsState().value?.destination?.route
+                val isFullscreenRoute = currentRoute == "note_fullscreen"
+                val vigilith = rememberVigilithState(
+                    uiState = uiState,
+                    currentRoute = currentRoute,
+                    onOpenSection = { section -> viewModel.openSection(section) },
+                    onShowSectionChat = { viewModel.showSectionChat() }
+                )
+
+                val openQuizResult = {
                     snackbarHostState.currentSnackbarData?.dismiss()
-                    val summary = (uiState.summaryState as? SummaryState.Success)?.summary
-                    val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
-                    viewModel.createAnnotation(
-                        contentResolver = contentResolver,
-                        title = noteState.title,
-                        content = noteState.content,
-                        summary = summary,
-                        relatedNotes = relatedState?.relatedNotes.orEmpty(),
-                        aiNotes = relatedState?.aiNotes.orEmpty(),
-                        wikilinkTitles = uiState.wikilinkTitles
-                    )
-                    // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
-                    navController.navigateToTab(AppDestination.Note)
+                    viewModel.markQuizViewed()
+                    navController.navigate("quiz") { launchSingleTop = true }
                 }
-            }
+                val openAnnotationResult = {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    viewModel.markAnnotationViewed()
+                    navController.navigate("annotation") { launchSingleTop = true }
+                }
+                val startAnnotation = {
+                    val noteState = uiState.noteState
+                    if (noteState is NoteState.Success) {
+                        snackbarHostState.currentSnackbarData?.dismiss()
+                        val summary = (uiState.summaryState as? SummaryState.Success)?.summary
+                        val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
+                        viewModel.createAnnotation(
+                            contentResolver = contentResolver,
+                            title = noteState.title,
+                            content = noteState.content,
+                            summary = summary,
+                            relatedNotes = relatedState?.relatedNotes.orEmpty(),
+                            aiNotes = relatedState?.aiNotes.orEmpty(),
+                            wikilinkTitles = uiState.wikilinkTitles
+                        )
+                        // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
+                        navController.navigateToTab(AppDestination.Note)
+                    }
+                }
 
-            val quizEventKey = uiState.quizState.toEventKey()
-            // 画面回転でActivityが再生成されてもSnackbarを再表示しないよう、
-            // 表示済みキーをrememberSaveableで保持する。Idleでリセットし、
-            // 同じノートの再生成では再び通知できるようにする。
-            var lastShownQuizEvent by rememberSaveable { mutableStateOf<String?>(null) }
-            LaunchedEffect(quizEventKey) {
-                if (quizEventKey == null) {
-                    lastShownQuizEvent = null
-                    return@LaunchedEffect
-                }
-                if (quizEventKey == lastShownQuizEvent) return@LaunchedEffect
-                lastShownQuizEvent = quizEventKey
-                if (isFullscreenRoute) return@LaunchedEffect
-                when (val state = uiState.quizState) {
-                    is QuizState.Loading -> snackbarHostState.showSnackbar(
-                        message = "Q&Aを作成中…",
-                        duration = SnackbarDuration.Short
-                    )
-                    is QuizState.Success -> if (!state.isViewed) {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "Q&Aを作成しました",
-                            actionLabel = "始める",
-                            duration = SnackbarDuration.Long
-                        )
-                        if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                val quizEventKey = uiState.quizState.toEventKey()
+                // 画面回転でActivityが再生成されてもSnackbarを再表示しないよう、
+                // 表示済みキーをrememberSaveableで保持する。Idleでリセットし、
+                // 同じノートの再生成では再び通知できるようにする。
+                var lastShownQuizEvent by rememberSaveable { mutableStateOf<String?>(null) }
+                LaunchedEffect(quizEventKey) {
+                    if (quizEventKey == null) {
+                        lastShownQuizEvent = null
+                        return@LaunchedEffect
                     }
-                    is QuizState.Error -> if (!state.isViewed) {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "Q&Aを作成できませんでした",
-                            actionLabel = "詳細",
-                            duration = SnackbarDuration.Long
+                    if (quizEventKey == lastShownQuizEvent) return@LaunchedEffect
+                    lastShownQuizEvent = quizEventKey
+                    if (isFullscreenRoute) return@LaunchedEffect
+                    when (val state = uiState.quizState) {
+                        is QuizState.Loading -> snackbarHostState.showSnackbar(
+                            message = "Q&Aを作成中…",
+                            duration = SnackbarDuration.Short
                         )
-                        if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                        is QuizState.Success -> if (!state.isViewed) {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Q&Aを作成しました",
+                                actionLabel = "始める",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                        }
+                        is QuizState.Error -> if (!state.isViewed) {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Q&Aを作成できませんでした",
+                                actionLabel = "詳細",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) openQuizResult()
+                        }
+                        is QuizState.Idle -> Unit
                     }
-                    is QuizState.Idle -> Unit
                 }
-            }
 
-            val annotationEventKey = uiState.annotationState.toEventKey()
-            var lastShownAnnotationEvent by rememberSaveable { mutableStateOf<String?>(null) }
-            LaunchedEffect(annotationEventKey) {
-                if (annotationEventKey == null) {
-                    lastShownAnnotationEvent = null
-                    return@LaunchedEffect
-                }
-                if (annotationEventKey == lastShownAnnotationEvent) return@LaunchedEffect
-                lastShownAnnotationEvent = annotationEventKey
-                if (isFullscreenRoute) return@LaunchedEffect
-                when (val state = uiState.annotationState) {
-                    is AnnotationState.Loading -> snackbarHostState.showSnackbar(
-                        message = "AI補記メモを作成中…",
-                        duration = SnackbarDuration.Short
-                    )
-                    is AnnotationState.Success -> if (!state.isViewed) {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "AI補記メモを保存しました",
-                            actionLabel = "見る",
-                            duration = SnackbarDuration.Long
-                        )
-                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                val annotationEventKey = uiState.annotationState.toEventKey()
+                var lastShownAnnotationEvent by rememberSaveable { mutableStateOf<String?>(null) }
+                LaunchedEffect(annotationEventKey) {
+                    if (annotationEventKey == null) {
+                        lastShownAnnotationEvent = null
+                        return@LaunchedEffect
                     }
-                    is AnnotationState.Error -> if (!state.isViewed) {
-                        val result = snackbarHostState.showSnackbar(
-                            message = "AI補記メモを作成できませんでした",
-                            actionLabel = "詳細",
-                            duration = SnackbarDuration.Long
+                    if (annotationEventKey == lastShownAnnotationEvent) return@LaunchedEffect
+                    lastShownAnnotationEvent = annotationEventKey
+                    if (isFullscreenRoute) return@LaunchedEffect
+                    when (val state = uiState.annotationState) {
+                        is AnnotationState.Loading -> snackbarHostState.showSnackbar(
+                            message = "AI補記メモを作成中…",
+                            duration = SnackbarDuration.Short
                         )
-                        if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                        is AnnotationState.Success -> if (!state.isViewed) {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "AI補記メモを保存しました",
+                                actionLabel = "見る",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                        }
+                        is AnnotationState.Error -> if (!state.isViewed) {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "AI補記メモを作成できませんでした",
+                                actionLabel = "詳細",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                        }
+                        is AnnotationState.Idle -> Unit
                     }
-                    is AnnotationState.Idle -> Unit
                 }
-            }
 
-            AppScaffold(
-                windowSizeClass = windowSizeClass,
-                navController = navController,
-                annotationState = uiState.annotationState,
-                snackbarHostState = snackbarHostState,
-                vigilithPresentation = vigilithPresentation,
-                vigilithNoteAction = activeVigilithAction,
-                onVigilithTap = onVigilithTap
-            ) { modifier ->
-                NavHost(
+                AppScaffold(
+                    windowSizeClass = windowSizeClass,
                     navController = navController,
-                    startDestination = "note",
-                    modifier = modifier
-                ) {
-                    composable("note") {
-                        NoteReaderTab(
-                            uiState = uiState,
-                            onSelectVault = { openVault.launch(null) },
-                            onRandomNote = {
-                                if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
-                                else openVault.launch(null)
-                            },
-                            onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
-                            onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
-                            onEndSectionChat = { viewModel.endSectionChat() },
-                            onGenerateQuiz = { sourceLabel, context ->
-                                snackbarHostState.currentSnackbarData?.dismiss()
-                                viewModel.generateQuiz(sourceLabel, context)
-                            },
-                            onOpenQuizResult = openQuizResult,
-                            noteListState = noteListState,
-                            onEnterFullscreen = {
-                                // 進入前から表示中のSnackbarはHostが全画面でも描画し続けるため消す。
-                                snackbarHostState.currentSnackbarData?.dismiss()
-                                // ⛶連打での多重pushを防ぐ。
-                                navController.navigate("note_fullscreen") { launchSingleTop = true }
-                            },
-                            onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
-                                viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-                            },
-                            onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
-                            onVigilithActionChanged = { vigilithNoteAction = it }
-                        )
-                    }
-
-                    composable("note_fullscreen") {
-                        FullscreenNoteScreen(
-                            uiState = uiState,
-                            tabListState = noteListState,
-                            onExit = { navController.popBackStack() },
-                            // 要約シートは通常表示（noteルート）で描画されるため、
-                            // 全画面を閉じてからシートを開く。
-                            onOpenSummary = {
-                                navController.popBackStack()
-                                viewModel.showSectionChat()
-                            },
-                            onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
-                                viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-                            }
-                        )
-                    }
-
-                    composable("search") {
-                        LaunchedEffect(uiState.vaultSelected) {
-                            if (uiState.vaultSelected) viewModel.loadFolders(contentResolver)
+                    annotationState = uiState.annotationState,
+                    snackbarHostState = snackbarHostState,
+                    vigilithPresentation = vigilith.presentation,
+                    vigilithNoteAction = vigilith.noteAction,
+                    onVigilithTap = vigilith.onTap
+                ) { modifier ->
+                    NavHost(
+                        navController = navController,
+                        startDestination = "note",
+                        modifier = modifier
+                    ) {
+                        composable("note") {
+                            NoteReaderTab(
+                                uiState = uiState,
+                                onSelectVault = { openVault.launch(null) },
+                                onRandomNote = {
+                                    if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
+                                    else openVault.launch(null)
+                                },
+                                onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
+                                onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
+                                onEndSectionChat = { viewModel.endSectionChat() },
+                                onGenerateQuiz = { sourceLabel, context ->
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    viewModel.generateQuiz(sourceLabel, context)
+                                },
+                                onOpenQuizResult = openQuizResult,
+                                noteListState = noteListState,
+                                onEnterFullscreen = {
+                                    // 進入前から表示中のSnackbarはHostが全画面でも描画し続けるため消す。
+                                    snackbarHostState.currentSnackbarData?.dismiss()
+                                    // ⛶連打での多重pushを防ぐ。
+                                    navController.navigate("note_fullscreen") { launchSingleTop = true }
+                                },
+                                onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
+                                    viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
+                                },
+                                onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
+                                onVigilithActionChanged = vigilith.onNoteActionChanged
+                            )
                         }
-                        SearchTab(
-                            uiState = uiState,
-                            onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
-                            onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
-                            onRandom = { viewModel.pickRandomInScope(contentResolver) },
-                            onOpenNote = { note ->
-                                viewModel.openNote(contentResolver, note)
-                                navController.navigateToTab(AppDestination.Note)
-                            }
-                        )
-                    }
 
-                    composable("related") {
-                        RelatedTab(
-                            uiState = uiState,
-                            onOpenNote = { note ->
-                                viewModel.openNote(contentResolver, note)
-                                navController.navigateToTab(AppDestination.Note)
-                            }
-                        )
-                    }
-
-                    composable("ai") {
-                        AiTab(
-                            uiState = uiState,
-                            onCreateAnnotation = startAnnotation,
-                            onOpenAnnotation = openAnnotationResult,
-                            onStartDistill = { viewModel.startDistill() },
-                            onDownloadDistillModel = { viewModel.downloadDistillModel() },
-                            onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
-                            onSaveDistill = { viewModel.saveDistillSelection() },
-                            onRetryDistill = { viewModel.retryDistill() },
-                            onDismissDistill = { viewModel.dismissDistillResult() },
-                            onKeepCurrentRecovery = { viewModel.keepCurrentAfterDistillRecovery() },
-                            onRestoreOriginal = { viewModel.restoreDistillOriginal() },
-                            onExportOriginal = { exportDistillOriginal.launch("distill_original.md") }
-                        )
-                    }
-
-                    composable("options") {
-                        OptionsScreen(
-                            vaultSelected = uiState.vaultSelected,
-                            onSelectVault = { openVault.launch(null) },
-                            onManageAnnotations = { navController.navigate("annotation_manager") }
-                        )
-                    }
-
-                    composable("annotation_manager") {
-                        AnnotationManagerScreen(
-                            state = uiState.annotationListState,
-                            onLoad = { viewModel.loadAnnotations(contentResolver) },
-                            onDelete = { uri -> viewModel.deleteAnnotation(contentResolver, uri) },
-                            onDeleteAll = { viewModel.deleteAllAnnotations(contentResolver) },
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-
-                    composable("annotation") {
-                        AnnotationResultScreen(
-                            annotationState = uiState.annotationState,
-                            onBack = { navController.popBackStack() }
-                        )
-                    }
-
-                    composable("quiz") {
-                        val noteTitle = when (val state = uiState.quizState) {
-                            is QuizState.Loading -> state.sourceTitle
-                            is QuizState.Success -> state.sourceTitle
-                            is QuizState.Error -> state.sourceTitle
-                            is QuizState.Idle ->
-                                (uiState.noteState as? NoteState.Success)?.title.orEmpty()
+                        composable("note_fullscreen") {
+                            FullscreenNoteScreen(
+                                uiState = uiState,
+                                tabListState = noteListState,
+                                onExit = { navController.popBackStack() },
+                                // 要約シートは通常表示（noteルート）で描画されるため、
+                                // 全画面を閉じてからシートを開く。
+                                onOpenSummary = {
+                                    navController.popBackStack()
+                                    viewModel.showSectionChat()
+                                },
+                                onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
+                                    viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
+                                }
+                            )
                         }
-                        QuizScreen(
-                            noteTitle = noteTitle,
-                            quizState = uiState.quizState,
-                            onBack = { navController.popBackStack() }
-                        )
+
+                        composable("search") {
+                            LaunchedEffect(uiState.vaultSelected) {
+                                if (uiState.vaultSelected) viewModel.loadFolders(contentResolver)
+                            }
+                            SearchTab(
+                                uiState = uiState,
+                                onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
+                                onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
+                                onRandom = { viewModel.pickRandomInScope(contentResolver) },
+                                onOpenNote = { note ->
+                                    viewModel.openNote(contentResolver, note)
+                                    navController.navigateToTab(AppDestination.Note)
+                                }
+                            )
+                        }
+
+                        composable("related") {
+                            RelatedTab(
+                                uiState = uiState,
+                                onOpenNote = { note ->
+                                    viewModel.openNote(contentResolver, note)
+                                    navController.navigateToTab(AppDestination.Note)
+                                }
+                            )
+                        }
+
+                        composable("ai") {
+                            AiTab(
+                                uiState = uiState,
+                                onCreateAnnotation = startAnnotation,
+                                onOpenAnnotation = openAnnotationResult,
+                                onStartDistill = { viewModel.startDistill() },
+                                onDownloadDistillModel = { viewModel.downloadDistillModel() },
+                                onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
+                                onSaveDistill = { viewModel.saveDistillSelection() },
+                                onRetryDistill = { viewModel.retryDistill() },
+                                onDismissDistill = { viewModel.dismissDistillResult() },
+                                onKeepCurrentRecovery = { viewModel.keepCurrentAfterDistillRecovery() },
+                                onRestoreOriginal = { viewModel.restoreDistillOriginal() },
+                                onExportOriginal = { exportDistillOriginal.launch("distill_original.md") }
+                            )
+                        }
+
+                        composable("options") {
+                            OptionsScreen(
+                                vaultSelected = uiState.vaultSelected,
+                                darkTheme = uiState.darkTheme,
+                                onSelectVault = { openVault.launch(null) },
+                                onManageAnnotations = { navController.navigate("annotation_manager") },
+                                onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) }
+                            )
+                        }
+
+                        composable("annotation_manager") {
+                            AnnotationManagerScreen(
+                                state = uiState.annotationListState,
+                                onLoad = { viewModel.loadAnnotations(contentResolver) },
+                                onDelete = { uri -> viewModel.deleteAnnotation(contentResolver, uri) },
+                                onDeleteAll = { viewModel.deleteAllAnnotations(contentResolver) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("annotation") {
+                            AnnotationResultScreen(
+                                annotationState = uiState.annotationState,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("quiz") {
+                            val noteTitle = when (val state = uiState.quizState) {
+                                is QuizState.Loading -> state.sourceTitle
+                                is QuizState.Success -> state.sourceTitle
+                                is QuizState.Error -> state.sourceTitle
+                                is QuizState.Idle ->
+                                    (uiState.noteState as? NoteState.Success)?.title.orEmpty()
+                            }
+                            QuizScreen(
+                                noteTitle = noteTitle,
+                                quizState = uiState.quizState,
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
                     }
                 }
             }
@@ -394,6 +382,17 @@ class MainActivity : ComponentActivity() {
         WindowCompat.getInsetsController(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.statusBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            // 引数なしの enableEdgeToEdge() は、システムバーのアイコン明暗を **OSの uiMode**
+            // から決める。アプリのテーマはOS設定と独立しているため、「OSライト＋アプリダーク」
+            // では暗い背景に暗いナビゲーションアイコンが描かれて見えなくなる。
+            //
+            // ここで明示的に「常に明るいアイコン（＝暗い背景を前提）」へ固定する。
+            // ライトでもダークでもナビゲーションバーの下地は暗い側だからで
+            // （ライト＝Indigo `#4D3DFF`、ダーク＝`#232640`、いずれも白アイコンで十分な差がある）、
+            // テーマ切替のたびに切り替える必要はない。下地の明度を変えるときは
+            // この前提も見直すこと。
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
     }
 }

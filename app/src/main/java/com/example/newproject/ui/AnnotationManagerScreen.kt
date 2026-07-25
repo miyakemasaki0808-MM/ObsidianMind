@@ -37,12 +37,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationListState
 import com.example.newproject.NoteFile
+import com.example.newproject.ui.theme.DangerAction
+import com.example.newproject.ui.theme.OnDangerAction
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
-
-private val DangerRed = Color(0xFFD32F2F)
 
 @Composable
 fun AnnotationManagerScreen(
@@ -71,7 +71,7 @@ fun AnnotationManagerScreen(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            IconPillButton(symbol = "‹", contentDescription = "戻る", onClick = onBack)
+            IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack)
             Text(
                 text = "補記メモの削除",
                 color = OnVibrant,
@@ -82,12 +82,12 @@ fun AnnotationManagerScreen(
             if (files.isNotEmpty()) {
                 Surface(
                     modifier = Modifier.clickable { showDeleteAll = true },
-                    color = DangerRed,
+                    color = DangerAction,
                     shape = RoundedCornerShape(20.dp)
                 ) {
                     Text(
                         text = "すべて削除",
-                        color = Color.White,
+                        color = OnDangerAction,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
@@ -113,7 +113,7 @@ fun AnnotationManagerScreen(
                 ) {
                     Text(
                         text = "補記メモの読み込みに失敗しました: ${state.message}",
-                        color = DangerRed,
+                        color = DangerAction,
                         fontSize = 14.sp,
                         modifier = Modifier.padding(16.dp)
                     )
@@ -160,7 +160,7 @@ fun AnnotationManagerScreen(
                 TextButton(onClick = {
                     onDelete(target.uri)
                     pendingDelete = null
-                }) { Text("削除", color = DangerRed) }
+                }) { Text("削除", color = DangerAction) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingDelete = null }) { Text("キャンセル") }
@@ -178,7 +178,7 @@ fun AnnotationManagerScreen(
                 TextButton(onClick = {
                     onDeleteAll()
                     showDeleteAll = false
-                }) { Text("すべて削除", color = DangerRed) }
+                }) { Text("すべて削除", color = DangerAction) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteAll = false }) { Text("キャンセル") }
@@ -216,27 +216,12 @@ private fun AnnotationRow(file: NoteFile, onDeleteClick: () -> Unit) {
                     .size(40.dp)
                     .clickable(onClick = onDeleteClick),
                 shape = CircleShape,
-                color = DangerRed.copy(alpha = 0.10f)
+                color = DangerAction.copy(alpha = 0.10f)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Text("🗑", fontSize = 18.sp)
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun IconPillButton(symbol: String, contentDescription: String, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .size(40.dp)
-            .clickable(onClick = onClick),
-        shape = CircleShape,
-        color = Panel.copy(alpha = 0.22f)
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(symbol, color = OnVibrant, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

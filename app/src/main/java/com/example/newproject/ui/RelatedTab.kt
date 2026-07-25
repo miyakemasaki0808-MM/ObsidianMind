@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,9 +31,15 @@ import com.example.newproject.NoteUiState
 import com.example.newproject.RelatedNotesState
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
+import com.example.newproject.ui.theme.AiHeading
+import com.example.newproject.ui.theme.OnSurfaceFaint
+import com.example.newproject.ui.theme.OnSurfaceMetaBlue
+import com.example.newproject.ui.theme.OnSurfaceMuted
+import com.example.newproject.ui.theme.PanelDividerStrong
+import com.example.newproject.ui.theme.RelatedHeading
 import com.example.newproject.ui.theme.AppGradient
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
@@ -113,7 +118,7 @@ internal fun RelatedNotesPanel(
                 text = "🔗 関連ノート",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Indigo
+                color = AccentText
             )
             Spacer(modifier = Modifier.height(8.dp))
             when (state) {
@@ -122,24 +127,24 @@ internal fun RelatedNotesPanel(
                         CircularProgressIndicator(
                             modifier = Modifier.size(16.dp),
                             strokeWidth = 2.dp,
-                            color = Indigo
+                            color = AccentText
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("関連ノートを検索中…", fontSize = 13.sp, color = Color(0xFF555555))
+                        Text("関連ノートを検索中…", fontSize = 13.sp, color = OnSurfaceMuted)
                     }
                 }
                 is RelatedNotesState.Success -> {
                     val hasRelated = state.relatedNotes.isNotEmpty()
                     val hasAi = state.aiNotes.isNotEmpty()
                     if (!hasRelated && !hasAi && state.aiStatus == AiRecommendationStatus.Ready) {
-                        Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = Color(0xFF777777))
+                        Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
                         if (hasRelated) {
                             Text(
                                 text = "関連ノート",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF7B6FFF)
+                                color = RelatedHeading
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             state.relatedNotes.forEachIndexed { index, note ->
@@ -153,14 +158,14 @@ internal fun RelatedNotesPanel(
                         if (showAiSection) {
                             if (hasRelated) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                HorizontalDivider(color = Color(0xFFB0BBEE), thickness = 1.dp)
+                                HorizontalDivider(color = PanelDividerStrong, thickness = 1.dp)
                                 Spacer(modifier = Modifier.height(8.dp))
                             }
                             Text(
                                 text = "AI推薦",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF16B8A6)
+                                color = AiHeading
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             if (hasAi) {
@@ -180,7 +185,7 @@ internal fun RelatedNotesPanel(
                     }
                 }
                 is RelatedNotesState.Error -> {
-                    Text("関連ノートの取得に失敗しました: ${state.message}", fontSize = 13.sp, color = ErrorRed)
+                    Text("関連ノートの取得に失敗しました: ${state.message}", fontSize = 13.sp, color = ErrorText)
                 }
                 else -> {}
             }
@@ -200,10 +205,10 @@ internal fun AiRecommendationStatusText(
         AiRecommendationStatus.Error -> "AI推薦の取得に失敗しました: ${errorMessage ?: "Unknown error"}"
     }
     val color = when (status) {
-        AiRecommendationStatus.Ready -> Color(0xFF777777)
-        AiRecommendationStatus.NeedsDownload -> Color(0xFF555555)
+        AiRecommendationStatus.Ready -> OnSurfaceFaint
+        AiRecommendationStatus.NeedsDownload -> OnSurfaceMuted
         AiRecommendationStatus.Unavailable,
-        AiRecommendationStatus.Error -> ErrorRed
+        AiRecommendationStatus.Error -> ErrorText
     }
     Text(message, fontSize = 13.sp, color = color)
 }
@@ -230,14 +235,14 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
                 Text(
                     text = "更新 ${formatNoteDate(millis)}",
                     fontSize = 11.sp,
-                    color = Color(0xFF8A90A8),
+                    color = OnSurfaceMetaBlue,
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
         if (note.isWikilinked) {
             Surface(
-                color = Indigo,
+                color = AccentText,
                 shape = RoundedCornerShape(4.dp)
             ) {
                 Text(

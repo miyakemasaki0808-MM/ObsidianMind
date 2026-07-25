@@ -88,8 +88,24 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         private set
 
     init {
+        restoreTheme()
         restoreVault()
         distill.checkRecovery()
+    }
+
+    private fun restoreTheme() {
+        val dark = prefs.getBoolean(KEY_DARK_THEME, false)
+        if (dark) _uiState.update { it.copy(darkTheme = true) }
+    }
+
+    /**
+     * 表示テーマを切り替える。OS設定には追従しないので、ここが唯一の切替点。
+     * 端末に残すのは真偽値1つだけで、Vaultにも痕跡にも書かない。
+     */
+    fun setDarkTheme(enabled: Boolean) {
+        if (_uiState.value.darkTheme == enabled) return
+        prefs.edit().putBoolean(KEY_DARK_THEME, enabled).apply()
+        _uiState.update { it.copy(darkTheme = enabled) }
     }
 
     private fun restoreVault() {
@@ -582,6 +598,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
+        private const val KEY_DARK_THEME = "dark_theme"
         private const val DISTILL_OUTPUT_GROWTH_BYTES = DistillLimits.FINAL_SELECTION_LIMIT * 4
     }
 }

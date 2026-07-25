@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.markdown.NoteSection
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnVibrant
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -234,7 +234,7 @@ private val VigilithImeMargin = 16.dp
 private fun VigilithActionLabel(action: VigilithNoteAction) {
     Box(
         modifier = Modifier
-            .background(Indigo.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+            .background(AccentGlass, RoundedCornerShape(999.dp))
             .widthIn(max = 260.dp)
             .padding(horizontal = 11.dp, vertical = 5.dp)
             // 読み上げは本体の1つのボタンへ集約し、ラベルとの二重フォーカスを避ける。

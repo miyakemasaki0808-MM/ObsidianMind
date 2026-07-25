@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Vigilith" parent="android:style/Theme.Material.Light.NoActionBar">
+    <!--
+      システムバーはテーマ（ライト／ダーク）で色が変わるため、XMLで色を固定しない。
+      透明にして enableEdgeToEdge() に任せ、背後のCompose側の背景を透けさせる。
+      以前は @color/indigo を直指定しており、ダーク時にナビゲーションバーだけが
+      明るいIndigoで残ってしまう。
+      OS設定には追従しない仕様のため values-night/ は使わない（アプリ内の切替と食い違う）。
+    -->
+    <style name="Theme.Vigilith" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:navigationBarColor">@color/indigo</item>
-        <item name="android:statusBarColor">@color/indigo</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@color/vigilith_slate</item>
     </style>
 
     <style name="Theme.Vigilith.Starting" parent="Theme.SplashScreen">

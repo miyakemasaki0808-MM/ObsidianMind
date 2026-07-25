@@ -140,11 +140,14 @@ app/src/
 │   │       ├── VigilithOpeningMotion.kt    # ハロー→全身→名称→退場の純粋タイムライン
 │   │       ├── VigilithMascot.kt           # アプリ内4状態WebP・補助光・AI状態バッジ
 │   │       ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルの純粋モーション
-│   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態を導出する純関数
+│   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態・AI操作4状態を導出する純関数
 │   │       ├── VigilithHost.kt             # 5タブ共通配置・Note操作文脈・ドラッグ
+│   │       ├── VigilithState.kt            # MainActivityから切り出したVigilithの配線（rememberVigilithState）
 │   │       ├── VigilithPlacement.kt        # clamp・画面変更・予約領域を扱う純粋配置計算
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
-│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート、Vigilithセクション操作
+│   │       ├── NoteReaderTab.kt            # ノートタブ本体（Markdown閲覧、Vigilithセクション操作）
+│   │       ├── FullscreenNoteScreen.kt     # 全画面読書ルート（システムバー没入・最小AIインジケータ）
+│   │       ├── NoteComponents.kt           # タブと全画面の共用部品（読書位置報告・IconPill・本文パネル）
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
 │   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
 │   │       ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
@@ -155,13 +158,15 @@ app/src/
 │   │       ├── SectionChatSheet.kt         # セクションAIボトムシート
 │   │       ├── ReadingProgressGeometry.kt  # 最終可視ブロックの可視割合・量子化（純関数）
 │   │       ├── ReadingTraceCard.kt         # 「前回のあなた」カード・経過文面
-│   │       ├── markdown/
-│   │       │   ├── MarkdownParser.kt       # ブロック・インラインMarkdown解析
-│   │       │   ├── MarkdownRenderer.kt     # Compose描画
-│   │       │   └── NoteSections.kt         # 見出し単位セクションモデル
-│   │       └── theme/AppColors.kt          # 色・グラデーション・ボタン役割
-│   └── res/values/                         # app_name、テーマ、最低限の色定義
-└── test/java/com/example/newproject/          # 41ファイル・352テスト（内訳は §13.1）
+│   │       ├── theme/
+│   │       │   ├── AppColors.kt            # ブランドパレット・明暗2組の実体・役割トークン（@Composableの窓口）
+│   │       │   └── AppTheme.kt             # AppColorScheme／LocalAppColors／AppTheme（ダークモード切替）
+│   │       └── markdown/
+│   │           ├── MarkdownParser.kt       # ブロック・インラインMarkdown解析
+│   │           ├── MarkdownRenderer.kt     # Compose描画
+│   │           └── NoteSections.kt         # 見出し単位セクションモデル
+│   └── res/values/                         # app_name、テーマ（システムバーは透明・色はCompose側）
+└── test/java/com/example/newproject/          # 43ファイル・376テスト（内訳は §13.1）
     ├── NoteRepositoryTest.kt / NoteSnapshotTest.kt
     ├── MarkdownParserTest.kt / InlineMarkdownTest.kt
     ├── QuizResponseParserTest.kt / QuizInputProfileTest.kt / QuizPromptBuilderTest.kt

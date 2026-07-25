@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -47,9 +46,21 @@ import com.example.newproject.ChatMessage
 import com.example.newproject.ChatRole
 import com.example.newproject.QuizState
 import com.example.newproject.SectionChatState
+import com.example.newproject.ui.theme.AccentSurface
+import com.example.newproject.ui.theme.OnAccentSurface
+import com.example.newproject.ui.theme.OnButtonAi
+import com.example.newproject.ui.theme.ChatDivider
+import com.example.newproject.ui.theme.OnSurfaceDisabled
+import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceSubtle
+import com.example.newproject.ui.theme.PanelBubble
+import com.example.newproject.ui.theme.PanelChip
+import com.example.newproject.ui.theme.PanelRow
+import com.example.newproject.ui.theme.SkeletonBase
+import com.example.newproject.ui.theme.SkeletonHighlight
 import com.example.newproject.ui.theme.ButtonAi
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 
@@ -79,10 +90,10 @@ fun SectionChatSheet(
                 .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
         ) {
             // スコープ
-            Surface(color = Color(0xFFEEF0FF), shape = RoundedCornerShape(999.dp)) {
+            Surface(color = PanelChip, shape = RoundedCornerShape(999.dp)) {
                 Text(
                     text = "📌 ${state.sectionTitle}",
-                    color = Indigo,
+                    color = AccentText,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -102,12 +113,12 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorRed)
-                else -> Text("—", fontSize = 14.sp, color = Color(0xFF999999))
+                state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorText)
+                else -> Text("—", fontSize = 14.sp, color = OnSurfaceDisabled)
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = Color(0xFFE6E9F5))
+            HorizontalDivider(color = ChatDivider)
             Spacer(modifier = Modifier.height(20.dp))
 
             // ── 質問（下）─────────────────────────────
@@ -116,12 +127,12 @@ fun SectionChatSheet(
             Text(
                 text = "気になる質問をタップすると回答します。",
                 fontSize = 12.sp,
-                color = Color(0xFF888888)
+                color = OnSurfaceHint
             )
             Spacer(modifier = Modifier.height(10.dp))
 
             if (state.suggestions.isEmpty() && !state.isSummaryLoading) {
-                Text("質問候補を準備中…", fontSize = 13.sp, color = Color(0xFF888888))
+                Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceHint)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.suggestions.forEach { q ->
@@ -154,9 +165,9 @@ fun SectionChatSheet(
                 onClick = onQuizTap,
                 enabled = !isQuizBusy,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonAi),
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
                 shape = RoundedCornerShape(12.dp)
-            ) { Text(quizLabel, color = OnVibrant) }
+            ) { Text(quizLabel, color = OnButtonAi) }
 
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
@@ -166,7 +177,7 @@ fun SectionChatSheet(
             ) {
                 Text(
                     text = if (state.isSummaryLoading || state.isGenerating) "生成を中止" else "確認を終了",
-                    color = if (state.isSummaryLoading || state.isGenerating) ErrorRed else Indigo
+                    color = if (state.isSummaryLoading || state.isGenerating) ErrorText else AccentText
                 )
             }
         }
@@ -178,7 +189,7 @@ private fun SectionHeader(emoji: String, title: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(emoji, fontSize = 16.sp)
         Spacer(modifier = Modifier.width(6.dp))
-        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Indigo)
+        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
     }
 }
 
@@ -188,7 +199,7 @@ private fun SuggestionRow(text: String, enabled: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick),
-        color = Color(0xFFF3F4FB),
+        color = PanelRow,
         shape = RoundedCornerShape(12.dp)
     ) {
         Row(
@@ -197,13 +208,13 @@ private fun SuggestionRow(text: String, enabled: Boolean, onClick: () -> Unit) {
         ) {
             Text(
                 text = text,
-                color = Indigo,
+                color = AccentText,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f)
             )
-            Text("＋", color = Indigo, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("＋", color = AccentText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -222,7 +233,7 @@ private fun SummarySkeleton() {
         label = "shimmerShift"
     )
     val brush = Brush.linearGradient(
-        colors = listOf(Color(0xFFECEEF6), Color(0xFFF6F7FB), Color(0xFFECEEF6)),
+        colors = listOf(SkeletonBase, SkeletonHighlight, SkeletonBase),
         start = Offset(shift - 300f, 0f),
         end = Offset(shift, 0f)
     )
@@ -246,9 +257,9 @@ private fun SkeletonLine(brush: Brush, widthFraction: Float) {
 @Composable
 private fun LoadingRow(label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Indigo)
+        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentText)
         Spacer(modifier = Modifier.width(8.dp))
-        Text(label, fontSize = 13.sp, color = Color(0xFF666666))
+        Text(label, fontSize = 13.sp, color = OnSurfaceSubtle)
     }
 }
 
@@ -260,7 +271,7 @@ private fun ChatBubble(message: ChatMessage) {
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
         Surface(
-            color = if (isUser) Indigo else Color(0xFFF0F2FB),
+            color = if (isUser) AccentSurface else PanelBubble,
             shape = RoundedCornerShape(
                 topStart = 14.dp,
                 topEnd = 14.dp,
@@ -271,7 +282,7 @@ private fun ChatBubble(message: ChatMessage) {
         ) {
             Text(
                 text = message.text,
-                color = if (isUser) OnVibrant else OnSurface,
+                color = if (isUser) OnAccentSurface else OnSurface,
                 fontSize = 14.sp,
                 lineHeight = 21.sp,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)

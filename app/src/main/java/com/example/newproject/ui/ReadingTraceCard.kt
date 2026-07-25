@@ -14,12 +14,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ReadingTraceCard
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.PanelBlue
 
@@ -48,7 +48,7 @@ internal fun ReadingTraceCardPanel(
                 text = "✦ 前回のあなた",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = Indigo
+                color = AccentText
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
@@ -73,7 +73,7 @@ internal fun ReadingTraceCardPanel(
                 Text(
                     text = "読み方をまとめています…",
                     fontSize = 12.sp,
-                    color = Color(0xFF888888)
+                    color = OnSurfaceHint
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))

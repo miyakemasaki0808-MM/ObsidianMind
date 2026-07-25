@@ -1,8 +1,60 @@
 package com.example.newproject.ui
 
 import com.example.newproject.DistillState
+import com.example.newproject.QuizState
 import com.example.newproject.ReadingTraceCard
+import com.example.newproject.SectionChatState
 import com.example.newproject.SummaryState
+
+/**
+ * AI操作の4状態。Vigilith本体の状態バッジと全画面の最小AIインジケータで共用する。
+ *
+ * 以前は同じ4状態が `NoteReaderTab.SectionFabStatus`（Idle/Loading/Ready/Error）としても
+ * 定義され、導出ロジックごと2箇所に重複していた。型と導出の両方をここへ集約する。
+ */
+internal enum class VigilithActionStatus {
+    Idle,
+    Working,
+    Ready,
+    Error
+}
+
+/**
+ * セクションチャット（要約・質問）の状態から [VigilithActionStatus] を導出する。
+ *
+ * 判定順に意味がある。エラーを最優先で拾い、次に生成中、最後に完了。
+ * チャットが存在するのに要約もエラーも無い場合は「これから要約が始まる」= Working とする。
+ */
+internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = when {
+    chat == null -> VigilithActionStatus.Idle
+    chat.error != null -> VigilithActionStatus.Error
+    chat.isSummaryLoading || chat.isGenerating -> VigilithActionStatus.Working
+    chat.summary != null -> VigilithActionStatus.Ready
+    else -> VigilithActionStatus.Working
+}
+
+/**
+ * 全画面読書の最小AIインジケータ用に、要約状態とクイズ状態を合成する。
+ *
+ * 生成中を最優先にするのは「まだ動いている」ことが最も伝えるべき情報のため。
+ * クイズは未閲覧（`isViewed == false`）のときだけ状態に影響させる。閲覧済みの結果で
+ * インジケータが光り続けると、新しい完了と区別できなくなる。
+ */
+internal fun fullscreenAiStatus(
+    chat: SectionChatState?,
+    quiz: QuizState
+): VigilithActionStatus {
+    val summaryStatus = sectionChatStatus(chat)
+    return when {
+        summaryStatus == VigilithActionStatus.Working || quiz is QuizState.Loading ->
+            VigilithActionStatus.Working
+        summaryStatus == VigilithActionStatus.Error ||
+            (quiz is QuizState.Error && !quiz.isViewed) -> VigilithActionStatus.Error
+        summaryStatus == VigilithActionStatus.Ready ||
+            (quiz is QuizState.Success && !quiz.isViewed) -> VigilithActionStatus.Ready
+        else -> VigilithActionStatus.Idle
+    }
+}
 
 /** アプリ内に常駐するVigilithの表示状態。 */
 internal enum class VigilithMode {

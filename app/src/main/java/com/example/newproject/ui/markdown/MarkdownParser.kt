@@ -1,6 +1,5 @@
 package com.example.newproject.ui.markdown
 
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -8,8 +7,29 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
-import com.example.newproject.ui.theme.CodePanel
-import com.example.newproject.ui.theme.LinkBlue
+import androidx.compose.ui.graphics.Color
+import com.example.newproject.ui.theme.LightAppColors
+
+/**
+ * インラインMarkdownの装飾色。
+ *
+ * [inlineMarkdown] は `remember{}` の中（＝非Composable）から呼ばれるため、
+ * 役割トークンを直接引けない。テーマの現在値を呼び出し側で束ねて渡す。
+ */
+internal data class InlineMarkdownColors(
+    val strikethrough: Color,
+    val codeBackground: Color,
+    val link: Color
+) {
+    companion object {
+        /** テーマを持たない文脈（テスト等）用のフォールバック。 */
+        val Light = InlineMarkdownColors(
+            strikethrough = LightAppColors.onSurfaceHint,
+            codeBackground = LightAppColors.codePanel,
+            link = LightAppColors.linkText
+        )
+    }
+}
 
 internal val HeadingRegex = Regex("^(#{1,6})\\s+(.+)$")
 internal val UnorderedListRegex = Regex("^\\s*[-*+]\\s+(.+)$")
@@ -169,7 +189,10 @@ private fun List<String>.stripFrontmatter(): List<String> {
     return if (endIndex >= 0) drop(endIndex + 2) else this
 }
 
-internal fun inlineMarkdown(text: String) = buildAnnotatedString {
+internal fun inlineMarkdown(
+    text: String,
+    colors: InlineMarkdownColors = InlineMarkdownColors.Light
+) = buildAnnotatedString {
     var index = 0
 
     while (index < text.length) {
@@ -208,7 +231,7 @@ internal fun inlineMarkdown(text: String) = buildAnnotatedString {
             text.startsWith("~~", index) -> {
                 val end = text.indexOf("~~", startIndex = index + 2)
                 if (end != -1) {
-                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = Color(0xFF888888))) {
+                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = colors.strikethrough)) {
                         append(text.substring(index + 2, end))
                     }
                     index = end + 2
@@ -218,7 +241,7 @@ internal fun inlineMarkdown(text: String) = buildAnnotatedString {
             text[index] == '`' -> {
                 val end = text.indexOf('`', startIndex = index + 1)
                 if (end != -1) {
-                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = CodePanel)) {
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = colors.codeBackground)) {
                         append(text.substring(index + 1, end))
                     }
                     index = end + 1
@@ -229,7 +252,7 @@ internal fun inlineMarkdown(text: String) = buildAnnotatedString {
                 val end = text.indexOf("]]", startIndex = index + 2)
                 if (end != -1) {
                     val linkText = text.substring(index + 2, end).split("|").last()
-                    withStyle(SpanStyle(color = LinkBlue, textDecoration = TextDecoration.Underline)) {
+                    withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
                         append(linkText)
                     }
                     index = end + 2
@@ -244,7 +267,7 @@ internal fun inlineMarkdown(text: String) = buildAnnotatedString {
                 val isLink = closeBracket != -1 && text.startsWith("](", closeBracket)
                 val closeUrl = if (isLink) text.indexOf(')', startIndex = closeBracket + 2) else -1
                 if (isLink && closeUrl != -1) {
-                    withStyle(SpanStyle(color = LinkBlue, textDecoration = TextDecoration.Underline)) {
+                    withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
                         append(text.substring(index + 1, closeBracket))
                     }
                     index = closeUrl + 1

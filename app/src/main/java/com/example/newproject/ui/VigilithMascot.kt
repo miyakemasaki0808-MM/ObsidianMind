@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -37,18 +38,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.R
 import com.example.newproject.ui.theme.Aqua
-import com.example.newproject.ui.theme.ErrorRed
+import com.example.newproject.ui.theme.VigilithHalo
+import com.example.newproject.ui.theme.AccentSurface
+import com.example.newproject.ui.theme.ErrorSurface
+import com.example.newproject.ui.theme.OnAccentSurface
+import com.example.newproject.ui.theme.OnErrorSurface
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnVibrant
 import androidx.compose.foundation.shape.CircleShape
 
-/** Vigilith本体とは別に、既存のAI操作結果を知らせる小さな状態表示。 */
-internal enum class VigilithActionStatus {
-    Idle,
-    Working,
-    Ready,
-    Error
-}
+// VigilithActionStatus は全画面読書側とも共用するため VigilithMode.kt へ移動した。
 
 /**
  * アプリ内Vigilithの描画本体。
@@ -90,6 +89,22 @@ internal fun VigilithMascot(
     val liftPx = with(LocalDensity.current) { (8.dp * motion.bodyLiftFraction).toPx() }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        // ダークではVigilithの黒曜石の胴体が背景に溶ける。WebPは4状態とも
+        // VigilithSlate(月光色)で背景から分離する前提で描かれており、描き直すコストは大きい。
+        // 代わりに背後へごく淡いhaloを敷いて輪郭だけを取り戻す（ライトでは透明＝従来どおり）。
+        val halo = VigilithHalo
+        if (halo.alpha > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(halo, Color.Transparent),
+                            radius = with(LocalDensity.current) { 46.dp.toPx() }
+                        )
+                    )
+            )
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -133,8 +148,8 @@ internal fun VigilithMascot(
                 trackColor = Indigo.copy(alpha = 0.35f),
                 strokeWidth = 2.dp
             )
-            VigilithActionStatus.Ready -> VigilithStatusBadge("✓", Indigo)
-            VigilithActionStatus.Error -> VigilithStatusBadge("!", ErrorRed)
+            VigilithActionStatus.Ready -> VigilithStatusBadge("✓", AccentSurface, OnAccentSurface)
+            VigilithActionStatus.Error -> VigilithStatusBadge("!", ErrorSurface, OnErrorSurface)
             VigilithActionStatus.Idle -> Unit
         }
     }
@@ -227,7 +242,7 @@ private fun VigilithLightLayer(
 }
 
 @Composable
-private fun BoxScope.VigilithStatusBadge(text: String, color: Color) {
+private fun BoxScope.VigilithStatusBadge(text: String, color: Color, contentColor: Color) {
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
@@ -238,7 +253,7 @@ private fun BoxScope.VigilithStatusBadge(text: String, color: Color) {
     ) {
         Text(
             text = text,
-            color = OnVibrant,
+            color = contentColor,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )

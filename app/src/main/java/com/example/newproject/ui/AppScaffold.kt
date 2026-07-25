@@ -33,8 +33,10 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.newproject.AnnotationState
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorSurface
+import com.example.newproject.ui.theme.OnErrorSurface
+import com.example.newproject.ui.theme.NavBar
+import com.example.newproject.ui.theme.NavIndicator
 import com.example.newproject.ui.theme.OnVibrant
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
@@ -45,8 +47,6 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
     Ai("ai", "AI", "✨"),
     Options("options", "オプション", "⚙️")
 }
-
-private val NavBarColor = Indigo
 
 /**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
@@ -82,7 +82,7 @@ internal fun AppScaffold(
             }
             useRail -> {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    NavigationRail(containerColor = NavBarColor) {
+                    NavigationRail(containerColor = NavBar) {
                         AppDestination.entries.forEach { dest ->
                             NavigationRailItem(
                                 selected = currentRoute == dest.route,
@@ -94,7 +94,7 @@ internal fun AppScaffold(
                                     selectedTextColor = OnVibrant,
                                     unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
                                     unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
-                                    indicatorColor = Aqua
+                                    indicatorColor = NavIndicator
                                 )
                             )
                         }
@@ -105,7 +105,7 @@ internal fun AppScaffold(
             else -> {
                 Column(modifier = Modifier.fillMaxSize()) {
                     Box(modifier = Modifier.weight(1f).fillMaxSize()) { content(Modifier.fillMaxSize()) }
-                    NavigationBar(containerColor = NavBarColor) {
+                    NavigationBar(containerColor = NavBar) {
                         AppDestination.entries.forEach { dest ->
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
@@ -117,7 +117,7 @@ internal fun AppScaffold(
                                     selectedTextColor = OnVibrant,
                                     unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
                                     unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
-                                    indicatorColor = Aqua
+                                    indicatorColor = NavIndicator
                                 )
                             )
                         }
@@ -181,8 +181,8 @@ private fun TabIcon(
                 AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
                     Text("✓", color = OnVibrant, fontSize = 9.sp)
                 }
-                AiTabBadgeState.Error -> Badge(containerColor = ErrorRed) {
-                    Text("!", color = OnVibrant, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
+                    Text("!", color = OnErrorSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
                 AiTabBadgeState.None -> Unit
             }

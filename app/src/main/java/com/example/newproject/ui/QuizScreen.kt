@@ -28,7 +28,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,9 +35,24 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.QuizCard
 import com.example.newproject.QuizFormat
 import com.example.newproject.QuizState
+import com.example.newproject.ui.theme.OnButtonPrimary
+import com.example.newproject.ui.theme.OnQuizLoading
+import com.example.newproject.ui.theme.OnQuizError
+import com.example.newproject.ui.theme.FailureMark
+import com.example.newproject.ui.theme.OnQuizAccent
+import com.example.newproject.ui.theme.OnQuizDisabled
+import com.example.newproject.ui.theme.OnQuizFaint
+import com.example.newproject.ui.theme.OnQuizMuted
+import com.example.newproject.ui.theme.OnQuizSurface
+import com.example.newproject.ui.theme.OnQuizEmpty
+import com.example.newproject.ui.theme.QuizCorrectPanel
+import com.example.newproject.ui.theme.QuizOutline
+import com.example.newproject.ui.theme.QuizPanel
+import com.example.newproject.ui.theme.QuizPanelDim
+import com.example.newproject.ui.theme.QuizSurface
+import com.example.newproject.ui.theme.QuizWrongPanel
+import com.example.newproject.ui.theme.SuccessMark
 import com.example.newproject.ui.theme.ButtonPrimary
-import com.example.newproject.ui.theme.Indigo
-import com.example.newproject.ui.theme.OnVibrant
 
 @Composable
 fun QuizScreen(
@@ -49,7 +63,7 @@ fun QuizScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF1A1C2E))
+            .background(QuizSurface)
             .statusBarsPadding()
             .padding(horizontal = 16.dp)
     ) {
@@ -58,7 +72,7 @@ fun QuizScreen(
             text = noteTitle,
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = Color(0xFFB0B8FF),
+            color = OnQuizAccent,
             maxLines = 2
         )
         Spacer(modifier = Modifier.height(16.dp))
@@ -68,25 +82,25 @@ fun QuizScreen(
                 is QuizState.Loading -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = Indigo)
+                            CircularProgressIndicator(color = OnQuizAccent)
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
                                 "${quizState.format.displayName}を生成中…",
                                 fontSize = 14.sp,
-                                color = Color(0xFFAAAAAA)
+                                color = OnQuizLoading
                             )
                         }
                     }
                 }
                 is QuizState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text("エラー: ${quizState.message}", color = Color(0xFFCC0000))
+                        Text("エラー: ${quizState.message}", color = OnQuizError)
                     }
                 }
                 is QuizState.Success -> {
                     if (quizState.cards.isEmpty()) {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text("問題を生成できませんでした。", fontSize = 14.sp, color = Color(0xFF555555))
+                            Text("問題を生成できませんでした。", fontSize = 14.sp, color = OnQuizEmpty)
                         }
                     } else {
                         MultipleChoicePager(cards = quizState.cards)
@@ -102,7 +116,7 @@ fun QuizScreen(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(8.dp)
         ) {
-            Text("← ノートに戻る", color = Color(0xFFB0B8FF))
+            Text("← ノートに戻る", color = OnQuizAccent)
         }
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -117,7 +131,7 @@ private fun MultipleChoicePager(cards: List<QuizCard>) {
         Text(
             text = "${currentIndex + 1} / ${cards.size}",
             fontSize = 13.sp,
-            color = Color(0xFF777799)
+            color = OnQuizFaint
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -144,14 +158,14 @@ private fun QuestionCard(question: String) {
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
         shadowElevation = 2.dp,
-        color = Color(0xFF2A2D45)
+        color = QuizPanel
     ) {
         Text(
             text = question,
             fontSize = 16.sp,
             lineHeight = 24.sp,
             fontWeight = FontWeight.Medium,
-            color = Color(0xFFEEEEFF),
+            color = OnQuizSurface,
             modifier = Modifier.padding(16.dp)
         )
     }
@@ -171,22 +185,22 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
         val isSelected = selected == index
         val isCorrect = index == card.correctIndex
         val bgColor = when {
-            selected == null -> Color(0xFF2A2D45)
-            isCorrect -> Color(0xFF1B3A2A)
-            isSelected -> Color(0xFF3A1B1B)
-            else -> Color(0xFF222436)
+            selected == null -> QuizPanel
+            isCorrect -> QuizCorrectPanel
+            isSelected -> QuizWrongPanel
+            else -> QuizPanelDim
         }
         val borderColor = when {
-            selected == null -> Color(0xFF3D4070)
-            isCorrect -> Color(0xFF4CAF50)
-            isSelected -> Color(0xFFEF5350)
-            else -> Color(0xFF3D4070)
+            selected == null -> QuizOutline
+            isCorrect -> SuccessMark
+            isSelected -> FailureMark
+            else -> QuizOutline
         }
         val labelColor = when {
-            selected == null -> Color(0xFFB0B8FF)
-            isCorrect -> Color(0xFF4CAF50)
-            isSelected -> Color(0xFFEF5350)
-            else -> Color(0xFF555577)
+            selected == null -> OnQuizAccent
+            isCorrect -> SuccessMark
+            isSelected -> FailureMark
+            else -> OnQuizDisabled
         }
 
         Surface(
@@ -213,7 +227,7 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
                     text = choice,
                     fontSize = 14.sp,
                     lineHeight = 20.sp,
-                    color = if (selected != null && !isCorrect && !isSelected) Color(0xFF555577) else Color(0xFFEEEEFF)
+                    color = if (selected != null && !isCorrect && !isSelected) OnQuizDisabled else OnQuizSurface
                 )
             }
         }
@@ -227,14 +241,14 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
                 .fillMaxWidth()
                 .wrapContentHeight(),
             shape = RoundedCornerShape(10.dp),
-            color = if (isCorrect) Color(0xFF1B3A2A) else Color(0xFF3A1B1B)
+            color = if (isCorrect) QuizCorrectPanel else QuizWrongPanel
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = if (isCorrect) "✅ 正解！" else "❌ 不正解。正解は ${labelAt(card.correctIndex)}",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isCorrect) Color(0xFF4CAF50) else Color(0xFFEF5350)
+                    color = if (isCorrect) SuccessMark else FailureMark
                 )
                 if (card.explanation.isNotBlank()) {
                     Spacer(modifier = Modifier.height(8.dp))
@@ -242,7 +256,7 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
                         text = card.explanation,
                         fontSize = 14.sp,
                         lineHeight = 22.sp,
-                        color = Color(0xFFCCCCDD)
+                        color = OnQuizMuted
                     )
                 }
             }
@@ -252,9 +266,9 @@ private fun ChoiceButtons(card: QuizCard, isLast: Boolean, onNext: () -> Unit) {
             Button(
                 onClick = onNext,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary)
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary)
             ) {
-                Text("次の問題 →", color = OnVibrant)
+                Text("次の問題 →", color = OnButtonPrimary)
             }
         }
     }

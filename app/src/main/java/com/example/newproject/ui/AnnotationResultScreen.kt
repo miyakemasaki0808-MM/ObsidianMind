@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
-import com.example.newproject.ui.theme.ErrorRed
-import com.example.newproject.ui.theme.Indigo
+import com.example.newproject.ui.theme.ErrorText
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
@@ -89,7 +89,7 @@ private fun AnnotationLoadingContent(modifier: Modifier = Modifier) {
     ) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(color = Indigo)
+                CircularProgressIndicator(color = AccentText)
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("AI補記メモを生成中…", color = OnSurface, fontSize = 14.sp)
             }
@@ -107,7 +107,7 @@ private fun AnnotationErrorContent(message: String, modifier: Modifier = Modifie
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "AI補記メモの作成に失敗しました",
-                color = ErrorRed,
+                color = ErrorText,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -134,7 +134,7 @@ private fun AnnotationSuccessContent(
             Column(modifier = Modifier.padding(14.dp)) {
                 Text(
                     text = "補記するべきかの評価",
-                    color = Indigo,
+                    color = AccentText,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
@@ -159,7 +159,7 @@ private fun AnnotationSuccessContent(
                 .padding(14.dp)) {
                 Text(
                     text = "補記すべき内容",
-                    color = Indigo,
+                    color = AccentText,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold
                 )
