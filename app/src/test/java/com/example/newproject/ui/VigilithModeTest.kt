@@ -3,6 +3,7 @@ package com.example.newproject.ui
 import com.example.newproject.DistillCandidateItem
 import com.example.newproject.DistillState
 import com.example.newproject.ReadingTraceCard
+import com.example.newproject.SummaryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,6 +32,7 @@ class VigilithModeTest {
         )
 
         assertEquals(VigilithMode.Distilling, result.mode)
+        assertEquals(VigilithDistillPhase.FindingCandidates, result.distillPhase)
     }
 
     @Test
@@ -44,10 +46,9 @@ class VigilithModeTest {
             isWithinBoldLimit = true
         )
 
-        assertEquals(
-            VigilithMode.Distilling,
-            resolveVigilithPresentation("ai", candidates, null).mode
-        )
+        val aiResult = resolveVigilithPresentation("ai", candidates, null)
+        assertEquals(VigilithMode.Distilling, aiResult.mode)
+        assertEquals(VigilithDistillPhase.HoldingCandidate, aiResult.distillPhase)
         assertEquals(
             VigilithMode.Idle,
             resolveVigilithPresentation("search", candidates, null).mode
@@ -92,6 +93,64 @@ class VigilithModeTest {
 
         assertFalse(fullscreen.isVisible)
         assertFalse(sheet.isVisible)
+    }
+
+    @Test
+    fun `要約中は正面のSummarizingになり蒸留姿勢を使わない`() {
+        val background = resolveVigilithPresentation(
+            currentRoute = "search",
+            distillState = DistillState.Idle,
+            readingTraceCard = null,
+            summaryState = SummaryState.Loading
+        )
+        val section = resolveVigilithPresentation(
+            currentRoute = "note",
+            distillState = DistillState.Idle,
+            readingTraceCard = null,
+            isSectionSummaryLoading = true
+        )
+
+        assertEquals(VigilithMode.Summarizing, background.mode)
+        assertEquals(VigilithMode.Summarizing, section.mode)
+        assertEquals(null, background.distillPhase)
+    }
+
+    @Test
+    fun `再会カードはバックグラウンド要約より優先するが明示要約には譲る`() {
+        val background = resolveVigilithPresentation(
+            currentRoute = "note",
+            distillState = DistillState.Idle,
+            readingTraceCard = traceCard(),
+            summaryState = SummaryState.Loading
+        )
+        val interactive = resolveVigilithPresentation(
+            currentRoute = "note",
+            distillState = DistillState.Idle,
+            readingTraceCard = traceCard(),
+            summaryState = SummaryState.Loading,
+            isSectionSummaryLoading = true
+        )
+
+        assertEquals(VigilithMode.Messenger, background.mode)
+        assertEquals(VigilithMode.Summarizing, interactive.mode)
+    }
+
+    @Test
+    fun `保存中だけ下線工程になりモデル取得中は蒸留を演じない`() {
+        val saving = resolveVigilithPresentation(
+            currentRoute = "note",
+            distillState = DistillState.Saving("ノート"),
+            readingTraceCard = null
+        )
+        val downloading = resolveVigilithPresentation(
+            currentRoute = "ai",
+            distillState = DistillState.Downloading("ノート", 1L, 10L),
+            readingTraceCard = null
+        )
+
+        assertEquals(VigilithMode.Distilling, saving.mode)
+        assertEquals(VigilithDistillPhase.Underlining, saving.distillPhase)
+        assertEquals(VigilithMode.Idle, downloading.mode)
     }
 
     @Test

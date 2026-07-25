@@ -44,6 +44,8 @@ import com.example.newproject.ui.OptionsScreen
 import com.example.newproject.ui.QuizScreen
 import com.example.newproject.ui.RelatedTab
 import com.example.newproject.ui.SearchTab
+import com.example.newproject.ui.VigilithNoteAction
+import com.example.newproject.ui.resolveVigilithPresentation
 
 class MainActivity : ComponentActivity() {
 
@@ -87,10 +89,33 @@ class MainActivity : ComponentActivity() {
             val snackbarHostState = remember { SnackbarHostState() }
             // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
             val noteListState = rememberLazyListState()
+            // Noteタブが現在の読書位置を共通Vigilith Hostへ渡す。
+            // キャラクター専用の永続状態ではなく、画面内だけの操作文脈。
+            var vigilithNoteAction by remember { mutableStateOf<VigilithNoteAction?>(null) }
             // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
             val currentRoute = navController
                 .currentBackStackEntryAsState().value?.destination?.route
             val isFullscreenRoute = currentRoute == "note_fullscreen"
+            val vigilithPresentation = resolveVigilithPresentation(
+                currentRoute = currentRoute,
+                distillState = uiState.distillState,
+                readingTraceCard = uiState.readingTraceCard,
+                summaryState = uiState.summaryState,
+                isSectionSummaryLoading = uiState.sectionChat?.isSummaryLoading == true,
+                isBlockingOverlayVisible = uiState.isSectionChatSheetVisible
+            )
+            val activeVigilithAction = vigilithNoteAction.takeIf {
+                currentRoute == AppDestination.Note.route
+            }
+            val onVigilithTap = activeVigilithAction?.let { action ->
+                {
+                    if (uiState.sectionChat != null) {
+                        viewModel.showSectionChat()
+                    } else {
+                        viewModel.openSection(action.section)
+                    }
+                }
+            }
 
             val openQuizResult = {
                 snackbarHostState.currentSnackbarData?.dismiss()
@@ -199,7 +224,10 @@ class MainActivity : ComponentActivity() {
                 windowSizeClass = windowSizeClass,
                 navController = navController,
                 annotationState = uiState.annotationState,
-                snackbarHostState = snackbarHostState
+                snackbarHostState = snackbarHostState,
+                vigilithPresentation = vigilithPresentation,
+                vigilithNoteAction = activeVigilithAction,
+                onVigilithTap = onVigilithTap
             ) { modifier ->
                 NavHost(
                     navController = navController,
@@ -214,8 +242,6 @@ class MainActivity : ComponentActivity() {
                                 if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                 else openVault.launch(null)
                             },
-                            onOpenSection = { section -> viewModel.openSection(section) },
-                            onShowSectionChat = { viewModel.showSectionChat() },
                             onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                             onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                             onEndSectionChat = { viewModel.endSectionChat() },
@@ -234,7 +260,8 @@ class MainActivity : ComponentActivity() {
                             onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
                                 viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                             },
-                            onDismissReadingTrace = { viewModel.dismissReadingTraceCard() }
+                            onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
+                            onVigilithActionChanged = { vigilithNoteAction = it }
                         )
                     }
 

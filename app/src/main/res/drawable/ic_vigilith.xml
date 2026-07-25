@@ -79,59 +79,37 @@
         android:pathData="M39,72 L54,78 L69,72"
         android:strokeColor="#4D3DFF" android:strokeWidth="0.7" android:strokeAlpha="0.55" />
 
-    <!-- 左の読書レンズ。アパーチャ（虹彩絞り）を思わせる同心円。 -->
-    <path
-        android:pathData="M33,56 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"
-        android:fillColor="#FF03091A"
-        android:strokeColor="#4D3DFF" android:strokeWidth="1.1" />
-    <path
-        android:pathData="M36,56 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0"
-        android:strokeColor="#00C2FF" android:strokeWidth="2.2" />
-    <path
-        android:pathData="M39.6,56 a4.4,4.4 0 1,0 8.8,0 a4.4,4.4 0 1,0 -8.8,0"
-        android:strokeColor="#00C2FF" android:strokeWidth="0.8" android:strokeAlpha="0.6" />
-    <path android:pathData="M41.3,56 a2.7,2.7 0 1,0 5.4,0 a2.7,2.7 0 1,0 -5.4,0">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="44" android:centerY="56" android:gradientRadius="2.7">
-                <item android:offset="0" android:color="#FFFFFFFF" />
-                <item android:offset="0.3" android:color="#FF8ADCFF" />
-                <item android:offset="0.65" android:color="#FF00C2FF" />
-                <item android:offset="1" android:color="#590079B8" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:pathData="M40.85,53.8 a0.95,0.95 0 1,0 1.9,0 a0.95,0.95 0 1,0 -1.9,0"
-        android:fillColor="#FFFFFFFF" />
+    <!-- 読書レンズ。添付デザインに合わせ、明るい機械枠・Aquaの虹彩・濃色の瞳孔で構成。 -->
+    <path android:fillColor="#FFD5E5EE"
+        android:pathData="M32,56 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0" />
+    <path android:fillColor="#FF71899E"
+        android:pathData="M34,56 a10,10 0,1 0,20 0 a10,10 0,1 0,-20 0" />
+    <path android:fillColor="#FF071326"
+        android:pathData="M35.5,56 a8.5,8.5 0,1 0,17 0 a8.5,8.5 0,1 0,-17 0" />
+    <path android:fillColor="#FF35D6F2"
+        android:pathData="M37,56 a7,7 0,1 0,14 0 a7,7 0,1 0,-14 0" />
+    <path android:fillColor="#FF26394B"
+        android:pathData="M40.5,56 a3.5,3.5 0,1 0,7 0 a3.5,3.5 0,1 0,-7 0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M39.2,51.5 a1.6,1.6 0,1 0,3.2 0 a1.6,1.6 0,1 0,-3.2 0" />
 
-    <!-- 右の読書レンズ。 -->
+    <path android:fillColor="#FFD5E5EE"
+        android:pathData="M52,56 a12,12 0,1 0,24 0 a12,12 0,1 0,-24 0" />
+    <path android:fillColor="#FF71899E"
+        android:pathData="M54,56 a10,10 0,1 0,20 0 a10,10 0,1 0,-20 0" />
+    <path android:fillColor="#FF071326"
+        android:pathData="M55.5,56 a8.5,8.5 0,1 0,17 0 a8.5,8.5 0,1 0,-17 0" />
+    <path android:fillColor="#FF35D6F2"
+        android:pathData="M57,56 a7,7 0,1 0,14 0 a7,7 0,1 0,-14 0" />
+    <path android:fillColor="#FF26394B"
+        android:pathData="M60.5,56 a3.5,3.5 0,1 0,7 0 a3.5,3.5 0,1 0,-7 0" />
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M59.2,51.5 a1.6,1.6 0,1 0,3.2 0 a1.6,1.6 0,1 0,-3.2 0" />
     <path
-        android:pathData="M53,56 a11,11 0 1,0 22,0 a11,11 0 1,0 -22,0"
-        android:fillColor="#FF03091A"
-        android:strokeColor="#4D3DFF" android:strokeWidth="1.1" />
-    <path
-        android:pathData="M56,56 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0"
-        android:strokeColor="#00C2FF" android:strokeWidth="2.2" />
-    <path
-        android:pathData="M59.6,56 a4.4,4.4 0 1,0 8.8,0 a4.4,4.4 0 1,0 -8.8,0"
-        android:strokeColor="#00C2FF" android:strokeWidth="0.8" android:strokeAlpha="0.6" />
-    <path android:pathData="M61.3,56 a2.7,2.7 0 1,0 5.4,0 a2.7,2.7 0 1,0 -5.4,0">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="64" android:centerY="56" android:gradientRadius="2.7">
-                <item android:offset="0" android:color="#FFFFFFFF" />
-                <item android:offset="0.3" android:color="#FF8ADCFF" />
-                <item android:offset="0.65" android:color="#FF00C2FF" />
-                <item android:offset="1" android:color="#590079B8" />
-            </gradient>
-        </aapt:attr>
-    </path>
-    <path
-        android:pathData="M60.85,53.8 a0.95,0.95 0 1,0 1.9,0 a0.95,0.95 0 1,0 -1.9,0"
-        android:fillColor="#FFFFFFFF" />
+        android:fillColor="#00000000"
+        android:pathData="M44,44 L44,46 M32,56 L35,56 M44,66 L44,68 M56,56 L53,56 M64,44 L64,46 M52,56 L55,56 M64,66 L64,68 M76,56 L73,56"
+        android:strokeColor="#FF9FB7C8"
+        android:strokeWidth="1.1" />
 
     <!-- 嘴。唯一の暖色差し色（AppGradient第3色のCoralと呼応）。 -->
     <path

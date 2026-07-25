@@ -2,7 +2,7 @@
 
 **対象領域:** アプリ起動時のブランド演出（システムスプラッシュ＋Compose OP）
 **初版:** 2026-07-20（PR #26）
-**改稿:** 2026-07-25（Vigilithキャラクター演出へ移行）
+**改稿:** 2026-07-26（アプリ内Idle WebPへ統一）
 
 ---
 
@@ -29,30 +29,32 @@
 | 黒曜石と背景の分離 | 外周を月光スレート **`#314158`** にし、中央に **Aqua 16% → Indigo 14% → Purple 10%** の低強度ハロー | 背景自体の明度差でLogoNavyの頭部を読みやすくし、ハローは補助に留める。Adaptive Icon背景とCompose OPで同じ色・実効アルファを使う |
 | 本体の配置 | OP中は本体をコンポーズせず、完了時に入れ替え（`return@setContent`） | OP背面の誤タップ・TalkBack読み上げ・Snackbar表示を構造的に遮断。`NoteViewModel.init` の `restoreVault()` はcomposition非依存で走るため取りこぼしなし |
 | 進行の駆動 | 単一 `Animatable` を `tween` で 0→1 に進め、全要素をそこから導出 | 固定 `delay` を使わず、端末の Animator duration scale（0倍含む）にCompose標準挙動で追従。倍率0ならほぼ即時に本体へ |
-| Vigilithの登場 | **読書レンズ点灯 → 黒曜石の輪郭 → ハローと名称** | キャラクターシートの「目が知性の本体」「寡黙な不寝番」を動きへ翻訳。回転・バウンド・常時点滅は使わない |
+| Vigilithの登場 | **ハロー → 完成WebP全身 → 名称** | 目だけの別描画は完成イラストとの二重表現になり違和感を生むため削除。回転・バウンド・常時点滅も使わない |
 | 再生判定 | `savedInstanceState == null` のときだけ再生 | 新規起動＝null、回転/Fold開閉/バックグラウンド復帰/プロセス復元＝非null。`rememberSaveable` ではなく `remember` で保持し、config変更で再評価される点を利用 |
 | スキップ | 画面全体タップで即終了 | `finishOnce()` で完了コールバックの1回実行を保証（自然終了とスキップの競合対策） |
 
 ## 実装上の判断
 
 - **外部ラムダは `rememberUpdatedState` 経由で呼ぶ**。`OpeningScreen` の `onFinished` は `LaunchedEffect`（長寿命ブロック）から呼ぶため、PR #25で文書化した「stale closure」の教訓（[architecture](architecture.md) 参照）に従う。
-- **タイムライン計算は純関数 `vigilithOpeningMotion` に集約**し、区間ごとのα・スケール・レンズ焦点・一度だけの光量変化を1フレーム分の値へ変換する。ComposeやAndroid型を含めないためJVMテストで演出順と終端を検証できる。
-- **レンズだけをCompose Canvasで重ねる。** `ic_vigilith.xml` と同じ108×108座標比（中心44/64, 56）を使い、アイコンを別パーツへ分解せず「目が先に灯る」を実現する。
+- **タイムライン計算は純関数 `vigilithOpeningMotion` に集約**し、区間ごとの背景・本体・ハロー・名称の
+  αとスケールを1フレーム分の値へ変換する。ComposeやAndroid型を含めないためJVMテストで演出順と終端を検証できる。
+- **目専用のCanvasレイヤーは置かない。** 完成WebPに描かれた目だけを使い、起動中の二重描画と
+  退場時に目だけ残って見える現象を構造的に防ぐ。
 - **ハローの色側へ最終アルファを持たせ、モーション側は登退場だけを制御する。** Adaptive Icon背景と数値を比較しやすくし、二重のα乗算で意図より暗くなることを防ぐ。
 
 ## Vigilithへの移行（2026-07-25）
 
 旧OPは開発元のM.M AI Solutionsロゴを表示しており、Vigilithへ差し替えたランチャーアイコンと不整合だった。
-Compose OPの画像を `ic_vigilith.xml` へ統一し、次の2秒タイムラインへ置き換えた。
+Compose OPは2026-07-25に `ic_vigilith.xml` へ移行し、2026-07-26にアプリ内と同じ
+`vigilith_idle_rich.webp`へ統一した。演出は次の2秒タイムラインを維持する。
 
-1. 月光スレートの薄闇で二つのAquaレンズが灯る
-2. 広がった光が同心円へ絞られ、一度だけ焦点を結ぶ
-3. 黒曜石の頭部がわずかに浮上しながら現れる
-4. Aqua→Indigo→Purpleのハローと「Vigilith AI」が整う
+1. 月光スレートの薄闇にAqua→Indigo→Purpleのハローが現れる
+2. 黒曜石の全身がわずかに浮上しながら現れる
+3. 完成WebPの目・嘴・コアを含む全身が一体として整う
+4. 「Vigilith AI」の名称が現れる
 5. キャラクターと月光スレートが消え、背面のReadingGradientへ着地する
 
-レンズ点灯はキャラクターの覚醒を大げさに演じるものではなく、「すでにそこにいた不寝番へ焦点が合う」
-程度に留める。途中タップによるスキップ、2秒という総時間、Animator duration scaleへの追従は維持する。
+途中タップによるスキップ、2秒という総時間、Animator duration scaleへの追従は維持する。
 
 ## コードレビューで直した点（PR #26 レビュー）
 

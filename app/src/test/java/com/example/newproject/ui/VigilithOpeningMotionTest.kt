@@ -12,16 +12,15 @@ class VigilithOpeningMotionTest {
 
         assertEquals(1f, motion.backdropAlpha, 0f)
         assertEquals(0f, motion.bodyAlpha, 0f)
-        assertEquals(0f, motion.eyeAlpha, 0f)
         assertEquals(0f, motion.haloAlpha, 0f)
         assertEquals(0f, motion.titleAlpha, 0f)
     }
 
     @Test
-    fun `reading lenses light before the obsidian body`() {
+    fun `halo appears before the obsidian body`() {
         val motion = vigilithOpeningMotion(0.12f)
 
-        assertTrue(motion.eyeAlpha > 0f)
+        assertTrue(motion.haloAlpha > 0f)
         assertEquals(0f, motion.bodyAlpha, 0f)
         assertEquals(0f, motion.titleAlpha, 0f)
     }
@@ -39,19 +38,33 @@ class VigilithOpeningMotionTest {
     }
 
     @Test
-    fun `lens focus contracts while it wakes`() {
-        val early = vigilithOpeningMotion(0.08f)
-        val focused = vigilithOpeningMotion(0.30f)
+    fun `halo expands while the body appears`() {
+        val early = vigilithOpeningMotion(0.10f)
+        val settled = vigilithOpeningMotion(0.38f)
 
-        assertTrue(early.eyeFocusScale > focused.eyeFocusScale)
-        assertEquals(1f, focused.eyeFocusScale, 0.0001f)
+        assertTrue(early.haloScale < settled.haloScale)
+        assertEquals(1f, settled.haloScale, 0.0001f)
     }
 
     @Test
-    fun `lens pulse happens once around focus lock`() {
-        assertEquals(0f, vigilithOpeningMotion(0.20f).eyePulse, 0f)
-        assertEquals(1f, vigilithOpeningMotion(0.38f).eyePulse, 0.0001f)
-        assertEquals(0f, vigilithOpeningMotion(0.60f).eyePulse, 0f)
+    fun `body remains settled during the hold interval`() {
+        val middle = vigilithOpeningMotion(0.55f)
+        val late = vigilithOpeningMotion(0.75f)
+
+        assertEquals(1f, middle.bodyAlpha, 0f)
+        assertEquals(1f, late.bodyAlpha, 0f)
+        assertEquals(1f, middle.bodyScale, 0f)
+        assertEquals(0f, middle.bodyLiftFraction, 0f)
+    }
+
+    @Test
+    fun `body halo and title fade during exit`() {
+        val before = vigilithOpeningMotion(0.78f)
+        val during = vigilithOpeningMotion(0.87f)
+
+        assertTrue(during.bodyAlpha < before.bodyAlpha)
+        assertTrue(during.haloAlpha < before.haloAlpha)
+        assertTrue(during.titleAlpha < before.titleAlpha)
     }
 
     @Test
@@ -60,7 +73,6 @@ class VigilithOpeningMotionTest {
 
         assertEquals(0f, motion.backdropAlpha, 0f)
         assertEquals(0f, motion.bodyAlpha, 0f)
-        assertEquals(0f, motion.eyeAlpha, 0f)
         assertEquals(0f, motion.haloAlpha, 0f)
         assertEquals(0f, motion.titleAlpha, 0f)
     }

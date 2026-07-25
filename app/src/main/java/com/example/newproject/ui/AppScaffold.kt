@@ -59,11 +59,14 @@ private val NavBarColor = Indigo
  */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
-fun AppScaffold(
+internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
     annotationState: AnnotationState,
     snackbarHostState: SnackbarHostState,
+    vigilithPresentation: VigilithPresentation,
+    vigilithNoteAction: VigilithNoteAction?,
+    onVigilithTap: (() -> Unit)?,
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -122,6 +125,13 @@ fun AppScaffold(
                 }
             }
         }
+
+        VigilithHost(
+            presentation = vigilithPresentation,
+            useNavigationRail = useRail,
+            noteAction = vigilithNoteAction,
+            onTap = onVigilithTap
+        )
 
         SnackbarHost(
             hostState = snackbarHostState,

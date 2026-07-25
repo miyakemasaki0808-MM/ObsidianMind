@@ -30,7 +30,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -162,7 +161,7 @@ private fun OpeningBrand(
                 }
 
                 Image(
-                    painter = painterResource(R.drawable.ic_vigilith),
+                    painter = painterResource(R.drawable.vigilith_idle_rich),
                     contentDescription = null,
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
@@ -175,49 +174,6 @@ private fun OpeningBrand(
                         }
                 )
 
-                // アイコン本体とは別レイヤーで二眼だけを先に灯す。
-                // VectorDrawableを分割せず、108×108の座標比をそのままCanvasへ写すことで
-                // ランチャーアイコンと同じ顔を保ちながら「不寝番が目覚める」順序を作る。
-                Canvas(
-                    modifier = Modifier
-                        .size(iconSize)
-                        .graphicsLayer { alpha = motion.eyeAlpha }
-                ) {
-                    val unit = size.minDimension / 108f
-                    val focus = motion.eyeFocusScale
-                    val pulse = motion.eyePulse
-                    val centers = listOf(
-                        Offset(44f * unit, 56f * unit),
-                        Offset(64f * unit, 56f * unit)
-                    )
-                    centers.forEach { center ->
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color.White.copy(alpha = 0.88f + (0.12f * pulse)),
-                                    Aqua.copy(alpha = 0.72f + (0.20f * pulse)),
-                                    Aqua.copy(alpha = 0.18f),
-                                    Color.Transparent
-                                ),
-                                center = center,
-                                radius = 10f * unit * focus
-                            ),
-                            center = center,
-                            radius = 10f * unit * focus
-                        )
-                        drawCircle(
-                            color = Aqua.copy(alpha = 0.82f + (0.18f * pulse)),
-                            center = center,
-                            radius = 8f * unit * focus,
-                            style = Stroke(width = 1.35f * unit)
-                        )
-                        drawCircle(
-                            color = Color.White.copy(alpha = 0.92f),
-                            center = center,
-                            radius = (1.35f + (0.35f * pulse)) * unit
-                        )
-                    }
-                }
             }
 
             Spacer(modifier = Modifier.height(18.dp))
