@@ -64,7 +64,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         uiState = _uiState,
         persistence = ReadingTraceStore(
             SafReadingTraceDocumentGateway(application.contentResolver) { vaultUri }
-        )
+        ),
+        currentVaultKey = { vaultUri?.toString() }
     )
 
     // DL完了後に要約を再実行するために保持
@@ -80,6 +81,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private var summaryJob: Job? = null
     private var relatedNotesJob: Job? = null
 
+    // 更新はメインスレッドだが、読み取りは痕跡保存などIOスレッドからも走る。
+    // 可視性を保証しないと、切替がIO側へいつ伝わるか決まらない。
+    @Volatile
     var vaultUri: Uri? = null
         private set
 
@@ -246,12 +250,19 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
 
-    /** 最終可視ブロックの報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
-    fun reportReadingProgress(blockIndex: Int, totalBlocks: Int, sectionTitle: String?) =
-        readingTrace.onReadingProgress(blockIndex, totalBlocks, sectionTitle)
+    /** 最終可視ブロックと、そのブロックの可視割合の報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
+    fun reportReadingProgress(
+        blockIndex: Int,
+        blockFraction: Float,
+        totalBlocks: Int,
+        sectionTitle: String?
+    ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
-    fun flushReadingTrace() = readingTrace.flush()
+    fun pauseReadingTrace() = readingTrace.pause()
+
+    /** 背面から復帰したときに呼ぶ（背面にいた時間を読書時間に含めないため）。 */
+    fun resumeReadingTrace() = readingTrace.resume()
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = readingTrace.dismissCard()

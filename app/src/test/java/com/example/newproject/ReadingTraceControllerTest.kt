@@ -29,7 +29,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
-        controller.onReadingProgress(blockIndex = 3, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -51,7 +51,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 0, totalBlocks = 10, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(9_999L)
         controller.flush()
         advanceUntilIdle()
@@ -67,7 +67,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("short.md", "短いノート", null)
-        controller.onReadingProgress(blockIndex = 0, totalBlocks = 1, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 1f, totalBlocks = 1, sectionTitle = null)
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -82,8 +82,8 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 8, totalBlocks = 10, sectionTitle = "まとめ")
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -100,12 +100,79 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 9, totalBlocks = 10, sectionTitle = "まとめ")
+        controller.onReadingProgress(blockIndex = 9, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
 
         assertEquals(100, persistence.saved.single().visits.single().progressPercent)
+    }
+
+    // 長大な段落・コードブロックは1ブロックとして描画される。冒頭しか見ていないのに
+    // 「最後まで読んでいます」と断定してしまうのを防ぐ（機能の中心データが誤るため）。
+    @Test
+    fun `a single huge block seen only at the top is not complete`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("long.md", "長大な1ブロック", null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 0.1f, totalBlocks = 1, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(10, persistence.saved.single().visits.single().progressPercent)
+    }
+
+    // 100% は最終ブロックの末端が画面へ入った時だけ。末尾が少しでも残っていれば届かない。
+    @Test
+    fun `partially visible last block does not reach one hundred`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 9, blockFraction = 0.5f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(95, persistence.saved.single().visits.single().progressPercent)
+    }
+
+    // 同じブロックに留まったまま読み進めた（長大ブロックのスクロール）分も最深に反映する。
+    @Test
+    fun `scrolling within the same block deepens the progress`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("long.md", "長大な1ブロック", null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 0.2f, totalBlocks = 1, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 0.8f, totalBlocks = 1, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(80, persistence.saved.single().visits.single().progressPercent)
+    }
+
+    // 巻き戻しは可視割合でも最深を下げない。
+    @Test
+    fun `scrolling back within the same block keeps the deepest fraction`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("long.md", "長大な1ブロック", null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 0.9f, totalBlocks = 1, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 0.2f, totalBlocks = 1, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(90, persistence.saved.single().visits.single().progressPercent)
     }
 
     // 見出しのないノートは sectionForBlockIndex が null を返すので、到達率だけが残る。
@@ -116,7 +183,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("plain.md", "見出しなし", null)
-        controller.onReadingProgress(blockIndex = 2, totalBlocks = 4, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 2, blockFraction = 1f, totalBlocks = 4, sectionTitle = null)
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -134,7 +201,7 @@ class ReadingTraceControllerTest {
 
         repeat(3) {
             controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-            controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
             clock.advance(10_000L)
             controller.flush()
             advanceUntilIdle()
@@ -151,7 +218,7 @@ class ReadingTraceControllerTest {
 
         repeat(ReadingTraceLimits.MAX_VISITS + 3) {
             controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-            controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
             clock.advance(10_000L)
             controller.flush()
             advanceUntilIdle()
@@ -171,13 +238,159 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         controller.flush()
         advanceUntilIdle()
 
         assertEquals(1, persistence.saved.size)
+    }
+
+    // ── 背面化・復帰（pause / resume）──────────────────────────────────────────
+
+    // 背面のままプロセスが終了しても読書が失われないよう、背面化の時点で書き出す。
+    @Test
+    fun `pause records the visit without ending the session`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // ホームボタンを押すたび「これまで◯回開いています」が増えてはいけない。
+    // 復帰後に読み進めた分は、訪問を増やさず同じ1件を更新する。
+    @Test
+    fun `reading after resume updates the same visit instead of adding one`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+        // 復帰後に読み進めた最深が残っていること
+        assertEquals(90, stored.visits.single().progressPercent)
+        assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
+    }
+
+    // 背面にいた時間を10秒判定へ混ぜない（実際には短時間しか読んでいない）。
+    @Test
+    fun `time spent in the background does not count towards the threshold`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause()
+        clock.advance(600_000L) // 10分放置
+        controller.resume()
+        clock.advance(3_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
+    // 背面をまたいでも能動読書時間は積算される（5秒＋6秒で条件を満たす）。
+    @Test
+    fun `active reading time accumulates across a background trip`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause()
+        clock.advance(600_000L)
+        controller.resume()
+        clock.advance(6_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // 何も変わっていなければ書き込まない（クラウドVaultでの無駄な同期を出さない）。
+    @Test
+    fun `pausing again without any change does not write`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+        val afterFirstPause = persistence.saveAttempts
+
+        controller.pause()
+        advanceUntilIdle()
+
+        assertEquals(afterFirstPause, persistence.saveAttempts)
+    }
+
+    // 別端末が後から追記していれば末尾が自分の訪問ではない。その場合は差し替えず追記する。
+    @Test
+    fun `a visit appended by another device is not overwritten`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        // 同期で別端末の訪問が末尾に足された
+        val synced = persistence.stored("ideas/habit.md")!!
+        persistence.put(synced.withVisit(ReadingVisit(9_999_999L, "別端末", 50)))
+
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(3, stored.visits.size)
+        assertEquals("別端末", stored.visits[1].deepestSectionTitle)
+    }
+
+    @Test
+    fun `resume without a session does nothing`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.resume()
+        controller.pause()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
     }
 
     // 保存先は書き込み時点の vaultUri から解決されるため、切替前に捨てないと
@@ -189,9 +402,63 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.discard()
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
+    // 保存は非同期に走るため、書込時点の現在Vaultから保存先を解決すると、切替後の
+    // 新Vaultへ旧ノートの痕跡が書き込まれ得る。要求は常に「開いた時点のVault」へ向かう。
+    @Test
+    fun `a save requested before a vault switch still targets the old vault`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val vault = FakeVault(VAULT_A)
+        val controller = controller(persistence, clock, vault = vault)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        // 保存コルーチンが走る前にVaultが切り替わる
+        vault.key = VAULT_B
+        advanceUntilIdle()
+
+        assertEquals(listOf(VAULT_A), persistence.savedVaultKeys)
+    }
+
+    // 切替後に開いたノートは、新しいVaultへ向けて記録される。
+    @Test
+    fun `a note opened after the switch targets the new vault`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val vault = FakeVault(VAULT_A)
+        val controller = controller(persistence, clock, vault = vault)
+
+        vault.key = VAULT_B
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(listOf(VAULT_B), persistence.savedVaultKeys)
+    }
+
+    // Vault未選択なら保存先が無いので、そもそも追跡しない。
+    @Test
+    fun `no vault means no tracking`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock, vault = FakeVault(null))
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
 
@@ -206,7 +473,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened(null, "パス不明", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -221,7 +488,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("", "パス不明", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -238,7 +505,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         val session = controller.onNoteOpened(null, "習慣について", "doc-1")
-        controller.onReadingProgress(blockIndex = 4, totalBlocks = 10, sectionTitle = "本題")
+        controller.onReadingProgress(blockIndex = 4, blockFraction = 1f, totalBlocks = 10, sectionTitle = "本題")
         controller.bindPath(session, "ideas/habit.md")
         clock.advance(10_000L)
         controller.flush()
@@ -258,7 +525,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         val session = controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         controller.bindPath(session, "other/note.md")
         clock.advance(10_000L)
         controller.flush()
@@ -279,7 +546,7 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened(null, "B", null)
         // Aの解決結果が遅れて届く
         controller.bindPath(first, "a.md")
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 2, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 2, sectionTitle = null)
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -324,12 +591,12 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("a.md", "A", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 2, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 2, sectionTitle = null)
         clock.advance(10_000L)
         controller.flush()
 
         controller.onNoteOpened("b.md", "B", null)
-        controller.onReadingProgress(blockIndex = 0, totalBlocks = 2, sectionTitle = null)
+        controller.onReadingProgress(blockIndex = 0, blockFraction = 1f, totalBlocks = 2, sectionTitle = null)
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -347,7 +614,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -371,7 +638,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "新しいタイトル", "new-doc")
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -389,7 +656,7 @@ class ReadingTraceControllerTest {
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -630,7 +897,7 @@ class ReadingTraceControllerTest {
         assertEquals(2, state.value.readingTraceCard!!.visitCount)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
-        controller.onReadingProgress(blockIndex = 1, totalBlocks = 10, sectionTitle = "導入")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
@@ -646,7 +913,8 @@ private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
     aiClient: AiClient = ImmediateAiClient(),
-    state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState())
+    state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState()),
+    vault: FakeVault = FakeVault()
 ): ReadingTraceController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReadingTraceController(
@@ -654,10 +922,17 @@ private fun TestScope.controller(
         aiClient = aiClient,
         uiState = state,
         persistence = persistence,
+        currentVaultKey = { vault.key },
         clock = clock::now,
         ioDispatcher = dispatcher
     )
 }
+
+/** 現在選択中のVault。切替を再現するために書き換えられる。 */
+private class FakeVault(var key: String? = VAULT_A)
+
+private const val VAULT_A = "content://vault-a"
+private const val VAULT_B = "content://vault-b"
 
 private class ImmediateAiClient(
     private val availability: AiAvailability = AiAvailability.Available,
@@ -715,6 +990,7 @@ private class TestClock(private var current: Long = 1_000_000L) {
 
 private class FakePersistence : ReadingTracePersistence {
     val saved = mutableListOf<ReadingTrace>()
+    val savedVaultKeys = mutableListOf<String>()
     val corruptPaths = mutableSetOf<String>()
     var failSave = false
     var saveAttempts = 0
@@ -730,15 +1006,16 @@ private class FakePersistence : ReadingTracePersistence {
 
     override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
 
-    override fun load(vaultRelativePath: String): ReadingTraceReadResult = when {
+    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = when {
         vaultRelativePath in corruptPaths -> ReadingTraceReadResult.Corrupt("壊れています")
         else -> files[vaultRelativePath]
             ?.let { ReadingTraceReadResult.Valid(it) }
             ?: ReadingTraceReadResult.None
     }
 
-    override fun save(trace: ReadingTrace): ReadingTraceSaveResult {
+    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
+        savedVaultKeys += vaultKey
         if (failSave) return ReadingTraceSaveResult.Failure("書き込めませんでした")
         saved += trace
         files[trace.vaultRelativePath] = trace

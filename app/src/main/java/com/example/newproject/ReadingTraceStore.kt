@@ -38,10 +38,20 @@ internal sealed interface ReadingTraceSaveResult {
     data class Failure(val message: String) : ReadingTraceSaveResult
 }
 
+/**
+ * [vaultKey] は「どのVaultへの要求か」を表す不透明な識別子。
+ *
+ * 保存は非同期に起動されるため、書き込みが実際に走る時点では利用者が別のVaultへ
+ * 切り替えているかもしれない。保存先を書込時点の現在Vaultから解決すると、旧Vaultの
+ * ノートの痕跡が新Vaultへ書き込まれてしまう。要求を出した時点のVaultを要求自身に
+ * 持たせ、書き込み直前に照合することでこれを防ぐ。
+ *
+ * Uri ではなく String にしているのは、この境界より上を Android 非依存に保つため。
+ */
 internal interface ReadingTracePersistence {
     fun folderStatus(): ReadingTraceFolderStatus
-    fun load(vaultRelativePath: String): ReadingTraceReadResult
-    fun save(trace: ReadingTrace): ReadingTraceSaveResult
+    fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult
+    fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult
 }
 
 /**
@@ -52,10 +62,11 @@ internal interface ReadingTraceDocumentGateway {
     /** 置き場を確保する。Vault未選択・作成不可なら false。 */
     fun ensureFolder(): Boolean
 
-    /** 該当ファイルが無ければ null。 */
-    fun read(key: String, maximumBytes: Int): ByteArray?
+    /** 該当ファイルが無ければ null。[vaultKey] が現在のVaultと違う場合も null。 */
+    fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray?
 
-    fun write(key: String, bytes: ByteArray)
+    /** [vaultKey] が現在のVaultと違う場合は書き込まず例外を投げる。 */
+    fun write(key: String, bytes: ByteArray, vaultKey: String)
 }
 
 internal class ReadingTraceStore(
@@ -72,8 +83,8 @@ internal class ReadingTraceStore(
         ReadingTraceFolderStatus.Unavailable(error.message ?: "痕跡の保存先を用意できませんでした。")
     }
 
-    override fun load(vaultRelativePath: String): ReadingTraceReadResult = try {
-        val bytes = gateway.read(keyFor(vaultRelativePath), ReadingTraceLimits.MAX_FILE_BYTES)
+    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = try {
+        val bytes = gateway.read(keyFor(vaultRelativePath), ReadingTraceLimits.MAX_FILE_BYTES, vaultKey)
             ?: return ReadingTraceReadResult.None
         val result = ReadingTraceJson.decode(bytes)
         // ファイル名は相対パスのハッシュなので、中身のパスが食い違っていたら
@@ -87,9 +98,9 @@ internal class ReadingTraceStore(
         ReadingTraceReadResult.Corrupt(error.message ?: error::class.java.simpleName)
     }
 
-    override fun save(trace: ReadingTrace): ReadingTraceSaveResult = try {
+    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult = try {
         val bytes = ReadingTraceJson.encode(trace)
-        gateway.write(keyFor(trace.vaultRelativePath), bytes)
+        gateway.write(keyFor(trace.vaultRelativePath), bytes, vaultKey)
         ReadingTraceSaveResult.Success
     } catch (error: Exception) {
         ReadingTraceSaveResult.Failure(error.message ?: error::class.java.simpleName)
@@ -135,8 +146,8 @@ internal class SafReadingTraceDocumentGateway(
     override fun ensureFolder(): Boolean = folderIndex() != null
 
     @Synchronized
-    override fun read(key: String, maximumBytes: Int): ByteArray? {
-        val file = folderIndex()?.files?.get(key) ?: return null
+    override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
+        val file = folderIndex(vaultKey)?.files?.get(key) ?: return null
         return try {
             contentResolver.openInputStream(file)?.use { readBoundedBytes(it, maximumBytes) }
         } catch (error: Exception) {
@@ -151,8 +162,12 @@ internal class SafReadingTraceDocumentGateway(
     }
 
     @Synchronized
-    override fun write(key: String, bytes: ByteArray) {
-        val current = folderIndex() ?: throw IOException("痕跡の保存先を用意できませんでした。")
+    override fun write(key: String, bytes: ByteArray, vaultKey: String) {
+        // 要求を出した時点のVaultと現在のVaultが違えば、書かずに捨てる。判定と保存先の解決を
+        // [folderIndex] の中へ寄せているのは、そこが vaultUri() を読む唯一の場所であることを
+        // 保証するため（→ [folderIndex] のコメント）。
+        val current = folderIndex(vaultKey)
+            ?: throw IOException("痕跡の保存先を用意できませんでした（Vault切替またはフォルダ作成失敗）。")
         val target = current.files[key] ?: createFile(current, key)
         try {
             contentResolver.openOutputStream(target, "wt")?.use { output ->
@@ -177,8 +192,28 @@ internal class SafReadingTraceDocumentGateway(
         return created
     }
 
-    private fun folderIndex(): FolderIndex? {
+    /**
+     * [vaultKey] が指すVaultの置き場。現在のVaultが違えば null。
+     *
+     * **`vaultUri()` を読むのは1回だけ**で、その1つの値を照合にも保存先の解決にも使う。
+     * 読み直してはいけない: `vaultUri` はこのクラスのロックの外（ViewModel／メインスレッド）で
+     * 更新されるため、「一致を確認してから改めて読む」と、その隙にVaultが切り替わった場合に
+     * **切替後のVaultへ旧ノートの痕跡を書いてしまう**（`@Synchronized` は自身の状態しか守らない）。
+     * 1回だけ読めば、書き込み先は必ず「読んだ瞬間に選択されていたVault」＝[vaultKey] のVaultになる。
+     *
+     * 読んだ直後に切り替わった場合は旧Vaultへ書き切ることになるが、それは正しい
+     * （その訪問は旧Vaultのノートで起きたもので、永続化した権限も生きている）。
+     */
+    private fun folderIndex(vaultKey: String): FolderIndex? {
         val vault = vaultUri() ?: return null
+        if (vault.toString() != vaultKey) return null
+        return folderIndexOf(vault)
+    }
+
+    /** 現在のVaultの置き場。利用可否の確認（[ensureFolder]）専用。 */
+    private fun folderIndex(): FolderIndex? = folderIndexOf(vaultUri() ?: return null)
+
+    private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }
         val folder = findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
             ?: createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)

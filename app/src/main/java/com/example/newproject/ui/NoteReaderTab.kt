@@ -102,23 +102,44 @@ import kotlinx.coroutines.flow.filterNotNull
  *
  * 先頭可視ではなく**最終可視**ブロックを見るのは、先頭基準だと1画面に収まる分だけ
  * 末尾に届かず「読み切った」を表現できないため。
+ *
+ * ブロックの index だけでなく、そのブロックがどこまで見えているか（可視割合）も送る。
+ * 長大な段落・コードブロックは1ブロックとして描画されるため、index だけでは冒頭しか
+ * 見ていなくても最終ブロック＝到達率100%になってしまう（→ [visibleFractionOfBlock]）。
  */
 @Composable
 private fun ReadingProgressReporter(
     sectionModel: NoteSectionModel?,
     listState: LazyListState,
-    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit
+    onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit
 ) {
     // 長寿命ブロックから外部のラムダを呼ぶので rememberUpdatedState を通す
     // （pointerInput/LaunchedEffect が初回のクロージャを固定する問題への定石）。
     val report by rememberUpdatedState(onReadingProgress)
     LaunchedEffect(sectionModel) {
         val model = sectionModel ?: return@LaunchedEffect
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+        snapshotFlow {
+            val layout = listState.layoutInfo
+            val last = layout.visibleItemsInfo.lastOrNull() ?: return@snapshotFlow null
+            val fraction = visibleFractionOfBlock(
+                itemOffset = last.offset,
+                itemSize = last.size,
+                // 下端の contentPadding は本文が表示されない余白なので実表示域から外す。
+                viewportEndOffset = layout.viewportEndOffset - layout.afterContentPadding
+            )
+            // 割合はスクロール中ずっと変わり続けるので、粗い段階へ落としてから
+            // distinctUntilChanged に掛け、報告を必要な回数だけに絞る。
+            last.index to quantizeReadingFraction(fraction)
+        }
             .filterNotNull()
             .distinctUntilChanged()
-            .collect { index ->
-                report(index, model.blocks.size, model.sectionForBlockIndex(index)?.title)
+            .collect { (index, step) ->
+                report(
+                    index,
+                    step.toFloat() / READING_FRACTION_STEPS,
+                    model.blocks.size,
+                    model.sectionForBlockIndex(index)?.title
+                )
             }
     }
 }
@@ -137,7 +158,7 @@ fun NoteReaderTab(
     onOpenQuizResult: () -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
-    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit,
+    onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit
 ) {
     val context = LocalContext.current
@@ -488,7 +509,7 @@ internal fun FullscreenNoteScreen(
     tabListState: LazyListState,
     onExit: () -> Unit,
     onOpenSummary: () -> Unit,
-    onReadingProgress: (blockIndex: Int, totalBlocks: Int, sectionTitle: String?) -> Unit
+    onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
