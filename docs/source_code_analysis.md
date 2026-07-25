@@ -2,11 +2,11 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind。`strings.xml` の `app_name` を改称済み）
 
-**解析日:** 2026-07-25
+**解析日:** 2026-07-26
 
 **対象ブランチ:** `feature/VigilithAI_Aicon_Character`
 
-**対象状態:** HEAD `73df6bb`（アプリ内Vigilith Phase 2）＋ 未コミットのPhase 3
+**対象実装:** `2094d3c`（アプリ内Vigilith Phase 3。文書追補コミットは対象外）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
@@ -138,7 +138,7 @@ app/src/
 │   │   └── ui/
 │   │       ├── OpeningScreen.kt            # Vigilith起動OP（Compose描画・スキップ・完了通知）
 │   │       ├── VigilithOpeningMotion.kt    # ハロー→全身→名称→退場の純粋タイムライン
-│   │       ├── VigilithMascot.kt           # アプリ内3ポーズ・補助光・AI状態バッジ
+│   │       ├── VigilithMascot.kt           # アプリ内4状態WebP・補助光・AI状態バッジ
 │   │       ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルの純粋モーション
 │   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態を導出する純関数
 │   │       ├── VigilithHost.kt             # 5タブ共通配置・Note操作文脈・ドラッグ
