@@ -1,5 +1,6 @@
 package com.example.newproject.domain.markdown
 
+import com.example.newproject.ui.markdown.MarkdownNoteContent
 /**
  * ノート本文のセクション（見出し＋その配下）。
  * text は LLM に渡すための再構成済み Markdown。

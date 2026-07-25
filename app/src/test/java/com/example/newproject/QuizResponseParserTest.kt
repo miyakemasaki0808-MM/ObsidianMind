@@ -1,5 +1,7 @@
 package com.example.newproject
 
+import com.example.newproject.domain.parseQuizResponse
+import com.example.newproject.model.QuizFormat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

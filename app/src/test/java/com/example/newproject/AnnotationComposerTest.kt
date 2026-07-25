@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.AnnotationComposer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

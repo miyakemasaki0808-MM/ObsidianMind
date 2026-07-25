@@ -1,9 +1,13 @@
 package com.example.newproject.ui
 
-import com.example.newproject.DistillCandidateItem
-import com.example.newproject.DistillState
-import com.example.newproject.ReadingTraceCard
-import com.example.newproject.SummaryState
+import com.example.newproject.domain.projectedBoldRatio
+import com.example.newproject.ui.vigilith.VigilithDistillPhase
+import com.example.newproject.ui.vigilith.VigilithMode
+import com.example.newproject.ui.vigilith.resolveVigilithPresentation
+import com.example.newproject.model.DistillCandidateItem
+import com.example.newproject.model.DistillState
+import com.example.newproject.model.ReadingTraceCard
+import com.example.newproject.model.SummaryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

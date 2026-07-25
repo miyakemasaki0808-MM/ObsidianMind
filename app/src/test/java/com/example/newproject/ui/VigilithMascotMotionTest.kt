@@ -1,5 +1,10 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.vigilith.VigilithDistillPhase
+import com.example.newproject.ui.vigilith.VigilithMascotMotion
+import com.example.newproject.ui.vigilith.VigilithMode
+import com.example.newproject.ui.vigilith.VigilithPresentation
+import com.example.newproject.ui.vigilith.vigilithMascotMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

@@ -1,5 +1,8 @@
 package com.example.newproject
 
+import com.example.newproject.data.ChildDoc
+import com.example.newproject.data.joinVaultPath
+import com.example.newproject.data.traverseMarkdownPaths
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

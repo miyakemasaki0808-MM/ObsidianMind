@@ -1,8 +1,12 @@
 package com.example.newproject.ui
 
-import com.example.newproject.QuizCard
-import com.example.newproject.QuizState
-import com.example.newproject.SectionChatState
+import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.vigilith.VigilithActionStatus
+import com.example.newproject.ui.vigilith.fullscreenAiStatus
+import com.example.newproject.ui.vigilith.sectionChatStatus
+import com.example.newproject.model.QuizCard
+import com.example.newproject.model.QuizState
+import com.example.newproject.model.SectionChatState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

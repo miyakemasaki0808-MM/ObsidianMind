@@ -1,5 +1,6 @@
 package com.example.newproject.domain.markdown
 
+import com.example.newproject.data.NoteRepository
 // ---------------------------------------------------------------------------
 // Markdownのブロック解析。Composeに依存しない純粋ロジックなので、UIではなく
 // domain 側に置く。ViewModel・Controller は本文をセクションへ切るためにこれを使う

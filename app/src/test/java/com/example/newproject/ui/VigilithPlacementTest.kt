@@ -1,5 +1,11 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.vigilith.VigilithPlacement
+import com.example.newproject.ui.vigilith.VigilithPlacementOffset
+import com.example.newproject.ui.vigilith.calculateVigilithBottomReserved
+import com.example.newproject.ui.vigilith.calculateVigilithPlacementBounds
+import com.example.newproject.ui.vigilith.moveVigilithPlacement
+import com.example.newproject.ui.vigilith.resolveVigilithPlacement
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

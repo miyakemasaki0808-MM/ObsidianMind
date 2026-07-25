@@ -1,5 +1,8 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.vigilith.VigilithNoteAction
+import com.example.newproject.ui.vigilith.VigilithPresentation
+import com.example.newproject.ui.vigilith.VigilithHost
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.newproject.AnnotationState
+import com.example.newproject.model.AnnotationState
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorSurface

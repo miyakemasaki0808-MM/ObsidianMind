@@ -1,5 +1,13 @@
 package com.example.newproject
 
+import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingTraceLimits
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
+import com.example.newproject.model.needsAiSummary
+import com.example.newproject.model.withVisit
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

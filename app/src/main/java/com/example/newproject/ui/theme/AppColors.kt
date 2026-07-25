@@ -1,5 +1,6 @@
 package com.example.newproject.ui.theme
 
+import com.example.newproject.ui.screen.QuizScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.geometry.Offset

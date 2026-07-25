@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.model.AnnotationState
+import com.example.newproject.model.SummaryState
+import com.example.newproject.model.toEventKey
+import com.example.newproject.ui.theme.Indigo
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -28,23 +32,23 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.newproject.RelatedNotesState
-import com.example.newproject.NoteState
-import com.example.newproject.QuizState
-import com.example.newproject.ui.AiTab
-import com.example.newproject.ui.AnnotationManagerScreen
-import com.example.newproject.ui.AnnotationResultScreen
+import com.example.newproject.model.RelatedNotesState
+import com.example.newproject.model.NoteState
+import com.example.newproject.model.QuizState
+import com.example.newproject.ui.screen.AiTab
+import com.example.newproject.ui.screen.AnnotationManagerScreen
+import com.example.newproject.ui.screen.AnnotationResultScreen
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
-import com.example.newproject.ui.FullscreenNoteScreen
+import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.navigateToTab
-import com.example.newproject.ui.NoteReaderTab
-import com.example.newproject.ui.OpeningScreen
-import com.example.newproject.ui.OptionsScreen
-import com.example.newproject.ui.QuizScreen
-import com.example.newproject.ui.RelatedTab
-import com.example.newproject.ui.SearchTab
-import com.example.newproject.ui.rememberVigilithState
+import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.OpeningScreen
+import com.example.newproject.ui.screen.OptionsScreen
+import com.example.newproject.ui.screen.QuizScreen
+import com.example.newproject.ui.screen.RelatedTab
+import com.example.newproject.ui.screen.SearchTab
+import com.example.newproject.ui.vigilith.rememberVigilithState
 import com.example.newproject.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {

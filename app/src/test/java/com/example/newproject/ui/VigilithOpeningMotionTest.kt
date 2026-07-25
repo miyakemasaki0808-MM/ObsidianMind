@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.vigilith.vigilithOpeningMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

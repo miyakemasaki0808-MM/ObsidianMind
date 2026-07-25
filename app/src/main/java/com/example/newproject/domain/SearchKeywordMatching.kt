@@ -1,5 +1,6 @@
 package com.example.newproject.domain
 
+import com.example.newproject.data.NoteFile
 // ---------------------------------------------------------------------------
 // さがすタブのキーワード一致。
 //

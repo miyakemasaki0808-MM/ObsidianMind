@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
-import com.example.newproject.ReadingTraceCard
+import com.example.newproject.ui.component.elapsedLabel
+import com.example.newproject.ui.component.readingTraceHeadline
+import com.example.newproject.model.ReadingTraceCard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

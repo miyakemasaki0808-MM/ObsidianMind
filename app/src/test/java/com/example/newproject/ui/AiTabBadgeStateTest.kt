@@ -1,6 +1,6 @@
 package com.example.newproject.ui
 
-import com.example.newproject.AnnotationState
+import com.example.newproject.model.AnnotationState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

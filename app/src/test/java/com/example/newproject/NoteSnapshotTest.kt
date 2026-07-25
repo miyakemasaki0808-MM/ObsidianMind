@@ -1,5 +1,10 @@
 package com.example.newproject
 
+import com.example.newproject.data.InvalidNoteEncodingException
+import com.example.newproject.data.NoteFileTooLargeException
+import com.example.newproject.data.decodeUtf8Strict
+import com.example.newproject.data.readBoundedBytes
+import com.example.newproject.data.sha256Hex
 import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
