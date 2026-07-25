@@ -1,6 +1,7 @@
 package com.example.newproject.ai
 
 import com.example.newproject.QuizFormat
+import com.example.newproject.ReadingVisit
 import com.example.newproject.domain.DistillCandidate
 import com.example.newproject.domain.DistillLimits
 
@@ -33,6 +34,8 @@ object PromptBuilder {
     private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
     private const val SECTION_SNIPPET_LENGTH = 1500
     private const val PICKER_TITLE_LIMIT = 40
+    // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
+    private const val READING_TRACE_VISIT_LINES = 10
 
     fun buildSummarizePrompt(title: String, content: String): String {
         val snippet = content.take(CONTENT_SNIPPET_LENGTH)
@@ -43,6 +46,34 @@ object PromptBuilder {
             Note title: $title
             Note content:
             $snippet
+        """.trimIndent()
+    }
+
+    /**
+     * 読書痕跡の俯瞰要約。
+     *
+     * AIに新しい内容を作らせるのではなく、**ユーザー自身の読み方を要約させるだけ**。
+     * これが「前回の自分からの申し送り」という体験を保つ肝なので、データに無いことを
+     * 書かせない・助言や問いを足させない、を明示する。
+     * 出力は Nano の256トークン上限に収まるよう1〜2文に絞る。
+     */
+    internal fun buildReadingTraceSummaryPrompt(noteTitle: String, visits: List<ReadingVisit>): String {
+        val history = visits.takeLast(READING_TRACE_VISIT_LINES).joinToString("\n") { visit ->
+            val where = visit.deepestSectionTitle
+                ?.takeIf { it.isNotBlank() }
+                ?.let { "section \"$it\"" }
+                ?: "no heading reached"
+            "- stopped at $where (${visit.progressPercent}% of the note)"
+        }
+        return """
+            The user has opened the following note several times. Below is where they stopped reading each time, oldest first.
+            In 1–2 short sentences, in Japanese, describe the pattern in how they have been reading it: how many times they opened it, and where they tend to stop.
+            Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
+
+            Note title: $noteTitle
+            Times opened: ${visits.size}
+            Reading history:
+            $history
         """.trimIndent()
     }
 

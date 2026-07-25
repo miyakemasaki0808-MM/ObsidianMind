@@ -8,7 +8,18 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 // lastModified はエポックミリ秒。SAFプロバイダが値を返さない場合は null。
-data class NoteFile(val name: String, val uri: Uri, val lastModified: Long? = null)
+//
+// vaultRelativePath は Vault ルートからの相対パス（例 "ideas/habit.md"）。
+// SAF の documentId は端末／権限グラントごとに異なり、同期した別端末では同じファイルでも
+// 別IDになる＝可搬キーにならない。そのため ReadingTrace のサイドカー引き当てには
+// 同期をまたいで安定するこの相対パスを使う。
+// 再帰走査でのみ組み立てるので、非再帰の列挙（_AI補記 一覧）では既定の空文字が入る。
+data class NoteFile(
+    val name: String,
+    val uri: Uri,
+    val lastModified: Long? = null,
+    val vaultRelativePath: String = ""
+)
 
 // Vault 直下のフォルダ。documentId は配下をたどる起点に使う。
 data class NoteFolder(val name: String, val documentId: String)
@@ -32,89 +43,60 @@ internal fun sanitizeAnnotationFileTitle(title: String): String {
 
 class NoteRepository {
 
-    // SAFの子要素1件。カーソル列の詰め替え先として共通ヘルパが返す。
-    private data class ChildDoc(
-        val documentId: String,
-        val name: String,
-        val isDirectory: Boolean,
-        val lastModified: Long?
-    )
-
-    // 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）
+    // カーソルループと ChildDoc は SafDocuments.kt / VaultPathTraversal.kt へ移した
+    // （ReadingTrace のサイドカー保存と共有するため）。
     private fun queryChildren(
         contentResolver: ContentResolver,
         vaultUri: Uri,
         documentId: String
-    ): List<ChildDoc> {
-        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
-        val projection = arrayOf(
-            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-            DocumentsContract.Document.COLUMN_MIME_TYPE,
-            DocumentsContract.Document.COLUMN_LAST_MODIFIED
-        )
-        val result = mutableListOf<ChildDoc>()
-        contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-            while (cursor.moveToNext()) {
-                result.add(
-                    ChildDoc(
-                        documentId = cursor.getString(0),
-                        name = cursor.getString(1),
-                        isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
-                        lastModified = if (cursor.isNull(3)) null else cursor.getLong(3)
-                    )
-                )
-            }
-        }
-        return result
-    }
+    ): List<ChildDoc> = querySafChildren(contentResolver, vaultUri, documentId)
 
     // startId 配下を再帰BFSで走査して .md を集める。
-    // excludeFolderNames に一致するフォルダは潜らない。
+    // 走査と相対パス連結の本体は traverseMarkdownPaths（純関数）に置き、
+    // ここではカーソル読み出しと Uri 構築だけを担う。
     private fun collectNotesRecursive(
         contentResolver: ContentResolver,
         vaultUri: Uri,
         startId: String,
+        startPath: String = "",
         excludeFolderNames: Set<String> = emptySet()
-    ): List<NoteFile> {
-        val result = mutableListOf<NoteFile>()
-        val queue = ArrayDeque<String>()
-        queue.add(startId)
-        while (queue.isNotEmpty()) {
-            val documentId = queue.removeFirst()
-            for (child in queryChildren(contentResolver, vaultUri, documentId)) {
-                when {
-                    child.isDirectory ->
-                        if (child.name !in excludeFolderNames) queue.add(child.documentId)
-                    isMarkdownFile(child.name) ->
-                        result.add(child.toNoteFile(vaultUri))
-                }
+    ): List<NoteFile> =
+        traverseMarkdownPaths(
+            startId = startId,
+            startPath = startPath,
+            excludeFolderNames = excludeFolderNames
+        ) { documentId -> queryChildren(contentResolver, vaultUri, documentId) }
+            .map { entry ->
+                NoteFile(
+                    name = entry.name,
+                    uri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, entry.documentId),
+                    lastModified = entry.lastModified,
+                    vaultRelativePath = entry.vaultRelativePath
+                )
             }
-        }
-        return result
-    }
 
     private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
         NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId), lastModified)
 
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
     // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。
-    // ※さがすタブ（collectNotesInScope）は仕様どおり除外しない。
+    // ※さがすタブ（collectNotesInScope）は _AI補記 だけは仕様どおり除外しない。
     suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
         withContext(Dispatchers.IO) {
             collectNotesRecursive(
                 contentResolver = contentResolver,
                 vaultUri = vaultUri,
                 startId = DocumentsContract.getTreeDocumentId(vaultUri),
-                excludeFolderNames = setOf(ANNOTATION_FOLDER_NAME)
+                excludeFolderNames = setOf(ANNOTATION_FOLDER_NAME, READING_TRACE_FOLDER_NAME)
             )
         }
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
+    // _ReadingTraces はユーザーのノートを含まない機能の内部データなので候補に出さない。
     suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
         withContext(Dispatchers.IO) {
             queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
-                .filter { it.isDirectory }
+                .filter { it.isDirectory && it.name != READING_TRACE_FOLDER_NAME }
                 .map { NoteFolder(it.name, it.documentId) }
                 .sortedBy { it.name }
         }
@@ -122,7 +104,8 @@ class NoteRepository {
     // 検索スコープ配下のノートを収集する。
     //   scope=null      → Vault ルート直下の .md のみ（非再帰）
     //   scope=NoteFolder → そのフォルダ配下を再帰的に収集（サブフォルダのノートも含む）
-    // さがすタブは _AI補記 も選択対象に含める仕様のため、ここでは除外しない。
+    // さがすタブは _AI補記 も選択対象に含める仕様のため、そちらは除外しない。
+    // 一方 _ReadingTraces は機能の内部データ（.json）でユーザーが読むノートではないため除外する。
     suspend fun collectNotesInScope(
         contentResolver: ContentResolver,
         vaultUri: Uri,
@@ -131,9 +114,16 @@ class NoteRepository {
         if (scope == null) {
             queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
                 .filter { !it.isDirectory && isMarkdownFile(it.name) }
-                .map { it.toNoteFile(vaultUri) }
+                // ルート直下なので相対パスはファイル名そのもの。
+                .map { it.toNoteFile(vaultUri).copy(vaultRelativePath = it.name) }
         } else {
-            collectNotesRecursive(contentResolver, vaultUri, startId = scope.documentId)
+            collectNotesRecursive(
+                contentResolver = contentResolver,
+                vaultUri = vaultUri,
+                startId = scope.documentId,
+                startPath = scope.name,
+                excludeFolderNames = setOf(READING_TRACE_FOLDER_NAME)
+            )
         }
     }
 
@@ -263,23 +253,12 @@ class NoteRepository {
             .filter { it.isNotBlank() }
     }
 
-    // _AI補記 フォルダはルート直下に作成する仕様（createAnnotationFolder 参照）のため、
-    // ルート直下のみ探索する。以前はVault全体をBFSしており保存・一覧のたびに重かった。
     private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? =
-        queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
-            .firstOrNull { it.isDirectory && it.name == ANNOTATION_FOLDER_NAME }
-            ?.let { DocumentsContract.buildDocumentUriUsingTree(vaultUri, it.documentId) }
+        findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
 
-    private fun createAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri {
-        val rootDocumentId = DocumentsContract.getTreeDocumentId(vaultUri)
-        val rootDocumentUri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, rootDocumentId)
-        return DocumentsContract.createDocument(
-            contentResolver,
-            rootDocumentUri,
-            DocumentsContract.Document.MIME_TYPE_DIR,
-            ANNOTATION_FOLDER_NAME
-        ) ?: error("補記メモフォルダを作成できませんでした。")
-    }
+    private fun createAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri =
+        createRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
+            ?: error("補記メモフォルダを作成できませんでした。")
 
     companion object {
         private const val ANNOTATION_FOLDER_NAME = "_AI補記"
