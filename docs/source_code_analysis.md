@@ -6,11 +6,11 @@
 
 **対象ブランチ:** `feature/VigilithAI_Aicon_Character`
 
-**対象状態:** HEAD `7578a52`（Vigilithアプリアイコン）＋ 未コミットのVigilith起動OP
+**対象状態:** HEAD `4d6d1f9`（Vigilith起動OP・月光スレート背景）＋ 未コミットのアプリ内Vigilith Phase 1
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消。Vigilith起動OPの純粋タイムラインテスト7件を加え、2026-07-25 に `testDebugUnitTest` をCLI実行し**324ケース全件グリーン**を確認済み。Debug APKの実機インストールは成功、OPの目視確認は端末の認証ロックにより未完了
+**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消。Vigilith起動OPとアプリ内3状態の純粋テスト14件を加え、2026-07-25 に `testDebugUnitTest` をCLI実行し**331ケース全件グリーン**を確認済み。Debug APKの実機インストールは成功、Vigilithの実画面確認は端末の認証ロックにより未完了
 
 ---
 
@@ -36,7 +36,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動モーションなど、壊れやすい純粋ロジックにはユニットテストが整備されている（324ケース）。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動モーション・表示状態など、壊れやすい純粋ロジックにはユニットテストが整備されている（331ケース）。
 - クイズ・補記・蒸留はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
@@ -50,8 +50,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 60ファイル | 11,044行 |
-| ユニットテスト Kotlin | 37ファイル | 4,899行、324テスト |
+| 本番 Kotlin | 62ファイル | 11,215行 |
+| ユニットテスト Kotlin | 38ファイル | 5,024行、331テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -138,8 +138,10 @@ app/src/
 │   │   └── ui/
 │   │       ├── OpeningScreen.kt            # Vigilith起動OP（Compose描画・スキップ・完了通知）
 │   │       ├── VigilithOpeningMotion.kt    # レンズ点灯→輪郭→名称→退場の純粋タイムライン
+│   │       ├── VigilithMascot.kt           # アプリ内3ポーズ・補助光・AI状態バッジ
+│   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態を導出する純関数
 │   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
-│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート（FullscreenNoteScreen）、セクションFAB
+│   │       ├── NoteReaderTab.kt            # Markdown閲覧、全画面ルート、Vigilithセクション操作
 │   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
 │   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
 │   │       ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
@@ -156,7 +158,7 @@ app/src/
 │   │       │   └── NoteSections.kt         # 見出し単位セクションモデル
 │   │       └── theme/AppColors.kt          # 色・グラデーション・ボタン役割
 │   └── res/values/                         # app_name、テーマ、最低限の色定義
-└── test/java/com/example/newproject/          # 37ファイル・324テスト（内訳は §13.1）
+└── test/java/com/example/newproject/          # 38ファイル・331テスト（内訳は §13.1）
     ├── NoteRepositoryTest.kt / NoteSnapshotTest.kt
     ├── MarkdownParserTest.kt / InlineMarkdownTest.kt
     ├── QuizResponseParserTest.kt / QuizInputProfileTest.kt / QuizPromptBuilderTest.kt
@@ -764,8 +766,9 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `ui/ReadingTraceHeadlineTest.kt` | 8 | 経過日・セクション・到達率・訪問回数のカード文面 |
 | `ui/ReadingProgressGeometryTest.kt` | 8 | 最終可視ブロックの可視割合（完全/一部/画面外/高さ未確定）、5%刻みの量子化 |
 | `ui/VigilithOpeningMotionTest.kt` | 7 | 二眼先行点灯、輪郭・名称の登場順、焦点収束、一度だけの光量変化、終端・範囲外入力 |
+| `ui/VigilithModeTest.kt` | 7 | Idle/Distilling/Messengerの優先順位、候補表示の画面条件、カードdismiss、全画面・シート非表示 |
 | `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
-| **合計（37ファイル）** | **324** | |
+| **合計（38ファイル）** | **331** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -776,7 +779,7 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケース、Vigilith起動OPで7ケースを追加し、同日**324ケース全件グリーン**を再確認した。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケース、Vigilith起動OPで7ケース、アプリ内表示状態で7ケースを追加し、同日**331ケース全件グリーン**を再確認した。
 
 JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるため `/usr/libexec/java_home` では検出されない。`JAVA_HOME` へ明示指定して `./gradlew testDebugUnitTest --offline` で実行する。
 
@@ -793,7 +796,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の324テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilith起動OPも演出順と終端は純関数で検証しているが、実フレームの見え方は目視確認が必要。
+現在の331テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも表示状態の優先順位は純関数で検証しているが、実フレームの見え方とタッチ領域は目視確認が必要。
 
 ---
 
@@ -873,6 +876,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 2026-07-25の更新は未コミットのReadingTrace v1を反映した。本番Kotlin 57ファイル・10,630行、テスト34ファイル・282ケースへ再測定し、CLIで`testDebugUnitTest`全件成功を確認した。一方、JVMテスト成功を完成判定にはせず、実装レビューで見つかった到達率・Activity lifecycle・Vault切替の高優先度3件と、同期索引・累計回数の中優先度2件を明記した。
 - 2026-07-25（同日・2回目）の更新は、上記の高優先度3件＋検索フォールバックの計4件の修正を反映した。本番Kotlin 59ファイル・10,926行、テスト36ファイル・317ケースへ再測定。§6.11 のフロー・§13 のテスト表・§14 のリスク表・§15 の改善候補を更新し、**§14 の「高」は0件になった**。ただし本修正分のテスト実行と実機確認は未実施であり、SAF照合とActivity lifecycleの実挙動はJVMテストでは担保できないことを §13.3 に明記した。
 - 2026-07-25（同日・3回目）の更新は、Vigilith起動OPへの移行を反映した。本番Kotlin 60ファイル・11,044行、テスト37ファイル・324ケースへ再測定し、`testDebugUnitTest`全件成功と`assembleDebug`成功を確認。接続実機へのAPKインストールは成功したが、端末の認証ロックによりOPの目視確認は未完了。
+- 2026-07-25（同日・4回目）の更新は、アプリ内Vigilith Phase 1を反映した。本番Kotlin 62ファイル・11,215行、テスト38ファイル・331ケースへ再測定。NoteタブのAI吹き出しを3ポーズのVigilithへ置換し、状態優先順位の7ケース、`testDebugUnitTest`、`assembleDebug`、接続実機へのAPKインストール成功を確認した。認証ロックによりアプリ画面の目視確認は未完了。
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 
   ```bash

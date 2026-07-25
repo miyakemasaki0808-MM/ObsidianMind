@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vigilith app companion: Idle pose. 108 x 132 shared pose viewport. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="132dp"
+    android:viewportWidth="108"
+    android:viewportHeight="132">
+
+    <path
+        android:fillColor="#26050E1D"
+        android:pathData="M20,123 C27,117 81,117 88,123 C81,130 27,130 20,123 Z" />
+
+    <!-- feet -->
+    <path
+        android:fillColor="#FF091426"
+        android:pathData="M38,111 L49,111 L47,124 L40,124 L35,128 L36,120 Z"
+        android:strokeColor="#804D3DFF"
+        android:strokeWidth="1" />
+    <path
+        android:fillColor="#FF091426"
+        android:pathData="M59,111 L70,111 L72,120 L73,128 L68,124 L61,124 Z"
+        android:strokeColor="#804D3DFF"
+        android:strokeWidth="1" />
+
+    <!-- body -->
+    <path
+        android:pathData="M54,50 L32,59 L24,83 L30,109 L42,119 L66,119 L78,109 L84,83 L76,59 Z"
+        android:strokeColor="#CC4D3DFF"
+        android:strokeWidth="1.2"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="35"
+                android:startY="54"
+                android:endX="71"
+                android:endY="119">
+                <item android:offset="0" android:color="#FF263858" />
+                <item android:offset="0.48" android:color="#FF101D36" />
+                <item android:offset="1" android:color="#FF050E1D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- folded wings -->
+    <path
+        android:fillColor="#FF0A162C"
+        android:pathData="M33,59 L18,70 L22,101 L36,115 L43,91 L41,69 Z"
+        android:strokeColor="#994D3DFF"
+        android:strokeWidth="1.1"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FF0A162C"
+        android:pathData="M75,59 L90,70 L86,101 L72,115 L65,91 L67,69 Z"
+        android:strokeColor="#994D3DFF"
+        android:strokeWidth="1.1"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M22,76 L37,68 M22,86 L39,77 M24,97 L38,88 M86,76 L71,68 M86,86 L69,77 M84,97 L70,88"
+        android:strokeColor="#5C4D3DFF"
+        android:strokeWidth="1" />
+
+    <!-- chest facets and core -->
+    <path
+        android:fillColor="#331B3452"
+        android:pathData="M54,65 L69,86 L54,110 L39,86 Z"
+        android:strokeColor="#B34D3DFF"
+        android:strokeWidth="1.1" />
+    <path
+        android:fillColor="#2E00C2FF"
+        android:pathData="M54,75 L63,87 L54,100 L45,87 Z"
+        android:strokeColor="#B300C2FF"
+        android:strokeWidth="1.2" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M50,87 a4,4 0,1 0,8 0 a4,4 0,1 0,-8 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="2.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M29,89 L40,85 M68,85 L80,89 M54,101 L54,112"
+        android:strokeColor="#8000C2FF"
+        android:strokeWidth="1.1" />
+
+    <!-- ear shards -->
+    <path
+        android:fillColor="#FF14233F"
+        android:pathData="M38,27 L27,7 L50,20 Z"
+        android:strokeColor="#B34D3DFF"
+        android:strokeWidth="1.1"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FF14233F"
+        android:pathData="M70,27 L81,7 L58,20 Z"
+        android:strokeColor="#B34D3DFF"
+        android:strokeWidth="1.1"
+        android:strokeLineJoin="round" />
+
+    <!-- head -->
+    <path
+        android:pathData="M54,17 L32,25 L24,45 L34,63 L54,70 L74,63 L84,45 L76,25 Z"
+        android:strokeColor="#CC4D3DFF"
+        android:strokeWidth="1.3"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="34"
+                android:startY="20"
+                android:endX="69"
+                android:endY="68">
+                <item android:offset="0" android:color="#FF2B3E61" />
+                <item android:offset="0.5" android:color="#FF101D36" />
+                <item android:offset="1" android:color="#FF050E1D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,17 L54,29 M32,25 L54,29 L76,25 M34,63 L54,70 L74,63"
+        android:strokeColor="#704D3DFF"
+        android:strokeWidth="1" />
+
+    <!-- reading lenses -->
+    <path
+        android:fillColor="#FF03091A"
+        android:pathData="M29,45 a11,11 0,1 0,22 0 a11,11 0,1 0,-22 0"
+        android:strokeColor="#FF4D3DFF"
+        android:strokeWidth="1.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,45 a8,8 0,1 0,16 0 a8,8 0,1 0,-16 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="2.2" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M37,45 a3,3 0,1 0,6 0 a3,3 0,1 0,-6 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="1.4" />
+    <path
+        android:fillColor="#FF03091A"
+        android:pathData="M57,45 a11,11 0,1 0,22 0 a11,11 0,1 0,-22 0"
+        android:strokeColor="#FF4D3DFF"
+        android:strokeWidth="1.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M60,45 a8,8 0,1 0,16 0 a8,8 0,1 0,-16 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="2.2" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M65,45 a3,3 0,1 0,6 0 a3,3 0,1 0,-6 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="1.4" />
+
+    <!-- beak -->
+    <path
+        android:fillColor="#FFFF6B8A"
+        android:pathData="M49,55 L59,55 L54,66 Z" />
+</vector>

@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Vigilith app companion: Rediscover / Messenger pose with a trace capsule. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="132dp"
+    android:viewportWidth="108"
+    android:viewportHeight="132">
+
+    <path
+        android:fillColor="#26050E1D"
+        android:pathData="M20,123 C27,117 81,117 88,123 C81,130 27,130 20,123 Z" />
+
+    <!-- feet and body -->
+    <path
+        android:fillColor="#FF091426"
+        android:pathData="M38,111 L49,111 L47,124 L36,127 L39,119 Z M59,111 L70,111 L73,127 L61,124 Z"
+        android:strokeColor="#804D3DFF"
+        android:strokeWidth="1" />
+    <path
+        android:pathData="M54,50 L32,59 L24,84 L30,109 L42,119 L66,119 L78,109 L84,84 L76,59 Z"
+        android:strokeColor="#CC4D3DFF"
+        android:strokeWidth="1.2">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="35"
+                android:startY="53"
+                android:endX="71"
+                android:endY="119">
+                <item android:offset="0" android:color="#FF263858" />
+                <item android:offset="0.5" android:color="#FF101D36" />
+                <item android:offset="1" android:color="#FF050E1D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- wings cradle the capsule -->
+    <path
+        android:fillColor="#FF0A162C"
+        android:pathData="M32,60 L17,72 L22,100 L38,111 L50,97 L43,76 Z"
+        android:strokeColor="#994D3DFF"
+        android:strokeWidth="1.1" />
+    <path
+        android:fillColor="#FF0A162C"
+        android:pathData="M76,60 L91,72 L86,100 L70,111 L58,97 L65,76 Z"
+        android:strokeColor="#994D3DFF"
+        android:strokeWidth="1.1" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M21,78 L42,91 M20,88 L39,98 M87,78 L66,91 M88,88 L69,98"
+        android:strokeColor="#5C4D3DFF"
+        android:strokeWidth="1" />
+
+    <!-- trace capsule -->
+    <path
+        android:fillColor="#52314158"
+        android:pathData="M34,89 a20,20 0,1 0,40 0 a20,20 0,1 0,-40 0"
+        android:strokeColor="#E600C2FF"
+        android:strokeWidth="1.8" />
+    <path
+        android:fillColor="#2600C2FF"
+        android:pathData="M39,89 a15,15 0,1 0,30 0 a15,15 0,1 0,-30 0"
+        android:strokeColor="#B34D3DFF"
+        android:strokeWidth="1.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M46,82 L62,82 M43,89 L65,89 M48,96 L60,96"
+        android:strokeColor="#E600C2FF"
+        android:strokeWidth="1.4"
+        android:strokeLineCap="round" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M51,89 a3,3 0,1 0,6 0 a3,3 0,1 0,-6 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="1.8" />
+
+    <!-- ear shards and head -->
+    <path
+        android:fillColor="#FF14233F"
+        android:pathData="M38,27 L27,7 L50,20 Z M70,27 L81,7 L58,20 Z"
+        android:strokeColor="#B34D3DFF"
+        android:strokeWidth="1.1" />
+    <path
+        android:pathData="M54,17 L32,25 L24,45 L34,63 L54,70 L74,63 L84,45 L76,25 Z"
+        android:strokeColor="#CC4D3DFF"
+        android:strokeWidth="1.3">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="34"
+                android:startY="20"
+                android:endX="69"
+                android:endY="68">
+                <item android:offset="0" android:color="#FF2B3E61" />
+                <item android:offset="0.5" android:color="#FF101D36" />
+                <item android:offset="1" android:color="#FF050E1D" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M54,17 L54,29 M32,25 L54,29 L76,25 M34,63 L54,70 L74,63"
+        android:strokeColor="#704D3DFF"
+        android:strokeWidth="1" />
+
+    <!-- bright messenger lenses -->
+    <path
+        android:fillColor="#FF03091A"
+        android:pathData="M29,45 a11,11 0,1 0,22 0 a11,11 0,1 0,-22 0 M57,45 a11,11 0,1 0,22 0 a11,11 0,1 0,-22 0"
+        android:strokeColor="#FF4D3DFF"
+        android:strokeWidth="1.2" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,45 a8,8 0,1 0,16 0 a8,8 0,1 0,-16 0 M60,45 a8,8 0,1 0,16 0 a8,8 0,1 0,-16 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="2.5" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M37,45 a3,3 0,1 0,6 0 a3,3 0,1 0,-6 0 M65,45 a3,3 0,1 0,6 0 a3,3 0,1 0,-6 0"
+        android:strokeColor="#FF00C2FF"
+        android:strokeWidth="1.5" />
+    <path
+        android:fillColor="#FFFF6B8A"
+        android:pathData="M49,55 L59,55 L54,66 Z" />
+</vector>

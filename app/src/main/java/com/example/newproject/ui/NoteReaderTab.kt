@@ -8,7 +8,6 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,9 +47,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -80,7 +77,6 @@ import com.example.newproject.ui.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.Coral
 import com.example.newproject.ui.theme.Indigo
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -202,6 +198,12 @@ fun NoteReaderTab(
         else -> SectionFabStatus.Loading
     }
     val fabSectionLabel = activeChat?.sectionTitle ?: currentSection?.title ?: "ノート全体"
+    val vigilithPresentation = resolveVigilithPresentation(
+        currentRoute = AppDestination.Note.route,
+        distillState = uiState.distillState,
+        readingTraceCard = uiState.readingTraceCard,
+        isBlockingOverlayVisible = uiState.isSectionChatSheetVisible
+    )
     val onFabTap = {
         if (activeChat != null) {
             onShowSectionChat()
@@ -275,11 +277,13 @@ fun NoteReaderTab(
             // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
             // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
             //  セクション判定とスクロール継承を壊さない）。
-            val traceCard = uiState.readingTraceCard
-            val showTraceCard = successState != null && traceCard != null && !traceCard.isDismissed
-            if (showTraceCard && traceCard != null) {
+            val visibleTraceCard = uiState.readingTraceCard?.takeIf {
+                successState != null && !it.isDismissed
+            }
+            val showTraceCard = visibleTraceCard != null
+            if (visibleTraceCard != null) {
                 ReadingTraceCardPanel(
-                    card = traceCard,
+                    card = visibleTraceCard,
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace
                 )
@@ -301,13 +305,14 @@ fun NoteReaderTab(
             )
         }
 
-        // 浮遊吹き出し（今見ているセクションを対象に。タップで要約＋質問シート）
-        // 全画面は独立ルート（note_fullscreen）へ移したため、ここではタブ表示時のみ出す。
-        if (successState != null) {
-            SectionFab(
+        // Vigilithが従来の浮遊吹き出しを引き継ぐ。今見ているセクションを対象に、
+        // タップで要約＋質問シートを開く。シート表示中は本文を覆わないよう退場する。
+        if (successState != null && vigilithPresentation.isVisible) {
+            VigilithSectionCompanion(
                 sectionLabel = fabSectionLabel,
                 status = fabStatus,
                 isAnswerGenerating = activeChat?.isGenerating == true,
+                mode = vigilithPresentation.mode,
                 onTap = onFabTap
             )
         }
@@ -346,12 +351,16 @@ fun NoteReaderTab(
 
 private enum class SectionFabStatus { Idle, Loading, Ready, Error }
 
-/** 画面に浮かぶ半透明・立体的な吹き出しボタン。ドラッグで移動、タップで要約＋質問シート。 */
+/**
+ * 画面に浮かぶVigilith。従来の吹き出しと同じくドラッグで移動し、
+ * タップで要約＋質問シートを開く。
+ */
 @Composable
-private fun BoxScope.SectionFab(
+private fun BoxScope.VigilithSectionCompanion(
     sectionLabel: String,
     status: SectionFabStatus,
     isAnswerGenerating: Boolean,
+    mode: VigilithMode,
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
@@ -360,6 +369,12 @@ private fun BoxScope.SectionFab(
     // 戻った後に「確認終了→吹き出しタップ」が無反応になる不具合の原因）。
     // rememberUpdatedState 経由で常に最新の onTap を呼ぶ。
     val currentOnTap by rememberUpdatedState(onTap)
+    val companionDescription = when (status) {
+        SectionFabStatus.Idle -> "Vigilith。AIメニューを開く"
+        SectionFabStatus.Loading -> "Vigilith。AI生成中"
+        SectionFabStatus.Ready -> "Vigilith。AI生成完了。タップで開く"
+        SectionFabStatus.Error -> "Vigilith。AIエラー。タップで確認"
+    }
 
     Box(
         modifier = Modifier
@@ -396,21 +411,16 @@ private fun BoxScope.SectionFab(
                 )
             }
             Spacer(modifier = Modifier.height(10.dp))
-            // 吹き出し本体：半透明のアクセント色ガラス＋立体感（影・上部ハイライト・色リム）
-            Box(
+            VigilithMascot(
+                mode = mode,
+                actionStatus = when (status) {
+                    SectionFabStatus.Idle -> VigilithActionStatus.Idle
+                    SectionFabStatus.Loading -> VigilithActionStatus.Working
+                    SectionFabStatus.Ready -> VigilithActionStatus.Ready
+                    SectionFabStatus.Error -> VigilithActionStatus.Error
+                },
                 modifier = Modifier
-                    .size(62.dp)
-                    .shadow(elevation = 18.dp, shape = CircleShape, clip = false)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Indigo.copy(alpha = 0.62f),
-                                Coral.copy(alpha = 0.55f)
-                            )
-                        )
-                    )
-                    .border(1.5.dp, Indigo.copy(alpha = 0.55f), CircleShape)
+                    .size(width = 76.dp, height = 93.dp)
                     .pointerInput(Unit) {
                         detectDragGestures { change, dragAmount ->
                             change.consume()
@@ -419,39 +429,14 @@ private fun BoxScope.SectionFab(
                     }
                     .pointerInput(Unit) {
                         detectTapGestures(onTap = { currentOnTap() })
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                // 上部スペキュラハイライト（ガラスの艶・アクセント色）
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .padding(top = 8.dp)
-                        .size(width = 26.dp, height = 12.dp)
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Aqua.copy(alpha = 0.40f))
-                )
-                when (status) {
-                    SectionFabStatus.Loading -> CircularProgressIndicator(
-                        modifier = Modifier.size(25.dp),
-                        color = OnVibrant,
-                        strokeWidth = 2.5.dp
-                    )
-                    SectionFabStatus.Ready -> Text(
-                        "✓",
-                        color = OnVibrant,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    SectionFabStatus.Error -> Text(
-                        "!",
-                        color = OnVibrant,
-                        fontSize = 30.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    SectionFabStatus.Idle -> Text("💬", fontSize = 26.sp)
-                }
-            }
+                    }
+                    // pointerInputだけでは読み上げ・キーボード操作を提供しないため明示する。
+                    .clearAndSetSemantics {
+                        contentDescription = companionDescription
+                        role = Role.Button
+                        onClick { currentOnTap(); true }
+                    }
+            )
         }
     }
 }
