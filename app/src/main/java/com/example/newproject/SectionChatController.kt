@@ -3,7 +3,7 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job

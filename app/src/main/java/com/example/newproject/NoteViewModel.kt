@@ -17,7 +17,7 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.domain.DistillLimits
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow

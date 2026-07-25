@@ -7,7 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import com.example.newproject.NoteUiState
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 
 /**
  * 画面に出す常駐Vigilithの、表示・対象・タップ挙動をひとまとめにしたもの。

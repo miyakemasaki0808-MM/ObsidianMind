@@ -51,7 +51,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
-import com.example.newproject.ui.markdown.buildNoteSectionModel
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant

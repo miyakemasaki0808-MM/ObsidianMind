@@ -1,6 +1,6 @@
 package com.example.newproject.ui
 
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

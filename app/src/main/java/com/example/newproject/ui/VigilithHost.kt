@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.ui.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnVibrant
 import kotlin.math.max

@@ -30,9 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
-import com.example.newproject.ui.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
-import com.example.newproject.ui.markdown.NoteSectionModel
+import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel

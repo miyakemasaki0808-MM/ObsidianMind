@@ -1,4 +1,4 @@
-package com.example.newproject.ui.markdown
+package com.example.newproject.domain.markdown
 
 /**
  * ノート本文のセクション（見出し＋その配下）。

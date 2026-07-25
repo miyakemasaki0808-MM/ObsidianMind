@@ -37,8 +37,8 @@ import com.example.newproject.NoteState
 import com.example.newproject.NoteUiState
 import com.example.newproject.QuizState
 import com.example.newproject.SectionChatState
-import com.example.newproject.ui.markdown.NoteSection
-import com.example.newproject.ui.markdown.buildNoteSectionModel
+import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.ButtonPrimary
