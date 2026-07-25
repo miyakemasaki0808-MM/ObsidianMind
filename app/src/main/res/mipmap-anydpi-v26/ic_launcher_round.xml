@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/logo_navy" />
+    <background android:drawable="@drawable/ic_vigilith_background" />
     <foreground android:drawable="@drawable/ic_vigilith" />
     <!-- Android 13+ のテーマアイコン。システムが単色でtintする。 -->
     <monochrome android:drawable="@drawable/ic_vigilith_mono" />

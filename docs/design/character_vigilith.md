@@ -3,7 +3,7 @@
 **対象:** アプリ「Vigilith AI」のマスコット／AI相棒
 **作成日:** 2026-07-22
 **関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)・[opening_animation](opening_animation.md)
-**状態:** コンセプト確定・アプリアイコン実装済み（1枚絵の作画は未着手）
+**状態:** コンセプト確定・アプリアイコン／起動OP実装済み（1枚絵の作画は未着手）
 
 > このシートは「Vigilithとは何か」を言語化した設計図。作画発注・実装・アイコン展開の基準に使う。
 
@@ -87,14 +87,16 @@ Vigilithは Reflect/Rediscover ループの**一貫した見守り手／配達�
 ## 8. 展開
 
 - **アプリアイコン:** 実装済み（下記 §9）。
+- **起動OP:** 実装済み。暗闇で読書レンズが先に灯り、黒曜石の輪郭が現れる（下記 §9・[opening_animation](opening_animation.md)）。
 - **将来の作画:** 本シート＋§10の発注プロンプトを、外部作画やイラスト依頼の**発注資料**として使う。
 
 ---
 
 ## 9. アプリアイコン（実装済み・2026-07-25）
 
-`res/drawable/ic_vigilith.xml`（カラー）と `ic_vigilith_mono.xml`（Android 13+ テーマアイコン）。
-`mipmap-anydpi-v26/ic_launcher(_round).xml` から参照する。背景は `@color/logo_navy` の単色。
+`res/drawable/ic_vigilith.xml`（カラー）、`ic_vigilith_mono.xml`（Android 13+ テーマアイコン）、
+`ic_vigilith_background.xml`（月光スレート＋低強度ハロー）を
+`mipmap-anydpi-v26/ic_launcher(_round).xml` から参照する。
 
 ### 判断1: 「顔」ではなく「目」を主役に縮約した
 
@@ -123,9 +125,26 @@ Adaptive Icon は中央66dp（中心から半径33）しか安全でなく、円
 これは**開発元の顔であってアプリの顔ではない**ため破棄した。ただし背面ハローの発光（Aqua→Indigo→Purple）が
 同じ色域なので、色の記憶は連続している。
 
-> **未対応:** 起動OP（`OpeningScreen.kt`）は今も `mm_ai_solutions_logo.png` を表示している。
-> ランチャーがVigilithでOPがM.Mロゴという不整合が残るため、OPの差し替えは別途判断が要る
-> （OPのアニメーションは円形ロゴの回転・発光を前提に組まれており、造形を変えると演出の再設計を伴う）。
+### 判断5: 起動OPは「二眼が先に灯る」
+
+起動OPも旧M.Mロゴから `ic_vigilith.xml` へ差し替えた。単純なフェードインではなく、
+**暗闇で二つの読書レンズが先に灯り、焦点を結んだ後に黒曜石の輪郭と名称が現れる**順序にした。
+回転・跳ね・常時点滅は、寡黙な不寝番よりゲーム的なマスコット性を強めるため使わない。
+
+レンズの光はVectorDrawableを分割せず、同じ108×108座標比をCompose Canvasへ写した別レイヤーで描く。
+これによりランチャーと同一の顔を保ちつつ、目だけを先行表示できる。終端ではVigilithと月光スレートをともに
+フェードアウトし、背面の `ReadingGradient` へ静かに着地する。時間は従来どおり2秒。
+
+### 判断6: 背景は見やすさ優先の月光スレートにする
+
+LogoNavyの頭部を同じLogoNavy単色背景へ置くと、目と嘴だけが浮いて黒曜石の輪郭が消える。
+白いリムを強くするとネオンロボットへ寄るため、**本体色と既存の細いIndigo稜線は変えず、
+背景を月光スレート `#314158` まで明るくして分離した**。黒曜石らしい本体色はLogoNavyのまま保つ。
+
+ハローは `ic_vigilith.xml` から `ic_vigilith_background.xml` へ移し、背景色を主役にするため
+中央Aqua 16%、中間Indigo 14%、外側Purple 10%まで抑えた。前景から分離したため、Adaptive Iconの
+パララックスでもハローが梟へ貼り付いて動かず、背景の薄明かりとして残る。システムスプラッシュと
+Compose OPにも同じ月光スレートと実効アルファを使い、起動中に背景色が跳ねないよう統一する。
 
 ---
 

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vigilith Adaptive Iconの背景。
+
+  黒曜石の頭部（LogoNavy）が暗い背景へ溶け込まないよう、外周まで月光スレート
+  （VigilithSlate #314158）で持ち上げる。キャラクターの背後には低強度の
+  Aqua→Indigo→Purpleハローを重ね、目を主役にしたまま輪郭だけを補助する。
+
+  ハローを前景ではなく背景へ置くことで、Adaptive Iconのパララックス時にも
+  「キャラクター自身が発光円を貼り付けて動かしている」見え方を避ける。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 見やすさを優先した月光スレート。 -->
+    <path
+        android:fillColor="#FF314158"
+        android:pathData="M0,0 H108 V108 H0 Z" />
+
+    <!-- 単色感を壊さない低強度ハロー。 -->
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54"
+                android:centerY="55"
+                android:gradientRadius="50">
+                <item android:offset="0" android:color="#2900C2FF" />
+                <item android:offset="0.45" android:color="#244D3DFF" />
+                <item android:offset="0.78" android:color="#1A9A5CE6" />
+                <item android:offset="1" android:color="#009A5CE6" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

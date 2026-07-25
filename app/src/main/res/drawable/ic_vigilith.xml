@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Vigilith（黒曜の梟オートマトン）のマーク。
-  design/character_vigilith.md §8「顔＝二つのレンズ＋耳シャード＋ハロー」の縮約。
+  design/character_vigilith.md §8「顔＝二つのレンズ＋耳シャード」の縮約。
+  ハローはAdaptive Iconの背景レイヤー（ic_vigilith_background）へ分離している。
 
   座標系は Adaptive Icon の 108x108。造形はすべて中央66dpのセーフゾーン
   （中心 54,54 から半径33）に収め、円形マスクでも耳シャードが欠けないようにしている。
@@ -16,22 +17,6 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-
-    <!-- 背面ハロー。起動OPの発光（Aqua→Indigo→Purple）と同一設計。 -->
-    <path android:pathData="M19,55 a35,35 0 1,0 70,0 a35,35 0 1,0 -70,0">
-        <aapt:attr name="android:fillColor">
-            <gradient
-                android:type="radial"
-                android:centerX="54"
-                android:centerY="55"
-                android:gradientRadius="35">
-                <item android:offset="0" android:color="#6B00C2FF" />
-                <item android:offset="0.45" android:color="#424D3DFF" />
-                <item android:offset="0.78" android:color="#249A5CE6" />
-                <item android:offset="1" android:color="#009A5CE6" />
-            </gradient>
-        </aapt:attr>
-    </path>
 
     <!-- 耳（羽角）＝黒曜石のシャード。梟性と鉱物性を同時に担う要素。 -->
     <path

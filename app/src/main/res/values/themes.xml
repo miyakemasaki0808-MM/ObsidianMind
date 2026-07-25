@@ -8,10 +8,10 @@
     </style>
 
     <style name="Theme.Vigilith.Starting" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/logo_navy</item>
+        <item name="windowSplashScreenBackground">@color/vigilith_slate</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
         <item name="postSplashScreenTheme">@style/Theme.Vigilith</item>
-        <item name="android:navigationBarColor">@color/logo_navy</item>
-        <item name="android:statusBarColor">@color/logo_navy</item>
+        <item name="android:navigationBarColor">@color/vigilith_slate</item>
+        <item name="android:statusBarColor">@color/vigilith_slate</item>
     </style>
 </resources>
