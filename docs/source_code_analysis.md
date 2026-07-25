@@ -10,7 +10,7 @@
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消し、全317ケースへ拡充。**本修正分のテスト実行と実機確認はAndroid Studio側で未実施**（開発機にJDKが無くCLIビルド不可）
+**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消し、全317ケースへ拡充。2026-07-25 に `testDebugUnitTest` を CLI 実行し**317ケース全件グリーン**を確認済み。**実機確認は未実施**
 
 ---
 
@@ -774,7 +774,9 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケースを追加し317ケースになったが、**この追加分の実行は未実施**（開発機のJDKが利用できずCLIビルド不可のため、Android Studio側での実行待ち）。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後のレビュー修正4件で35ケースを追加し、同日**317ケース全件グリーン**を再確認した。
+
+JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるため `/usr/libexec/java_home` では検出されない。`JAVA_HOME` へ明示指定して `./gradlew testDebugUnitTest --offline` で実行する。
 
 ### 13.3 未カバー領域
 
