@@ -32,6 +32,12 @@ internal class ReadingTraceController(
     private val aiClient: AiClient,
     private val uiState: MutableStateFlow<NoteUiState>,
     private val persistence: ReadingTracePersistence,
+    /**
+     * 現在のVaultの識別子。ノートを開いた時点の値をセッションへ写し取り、保存要求に
+     * 添えて運ぶ。保存は非同期に走るため、書込時点の現在Vaultから保存先を解決すると
+     * 旧ノートの痕跡が切替後の新Vaultへ書き込まれ得る。
+     */
+    private val currentVaultKey: () -> String?,
     private val clock: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
@@ -49,6 +55,8 @@ internal class ReadingTraceController(
         var vaultRelativePath: String?,
         val noteTitle: String,
         val documentId: String?,
+        /** このノートを開いた時点のVault。保存はここへ向けてしか行わない。 */
+        val vaultKey: String,
         openedAtMillis: Long
     ) {
         var deepestBlockIndex = 0
@@ -103,13 +111,18 @@ internal class ReadingTraceController(
      */
     fun onNoteOpened(vaultRelativePath: String?, noteTitle: String, documentId: String?): Long {
         val id = ++sessionCounter
-        session = Session(
-            id = id,
-            vaultRelativePath = vaultRelativePath?.takeIf { it.isNotBlank() },
-            noteTitle = noteTitle,
-            documentId = documentId,
-            openedAtMillis = clock()
-        )
+        // Vault未選択なら保存先が無いので、そもそも追跡しない。
+        val vaultKey = currentVaultKey()
+        session = vaultKey?.let {
+            Session(
+                id = id,
+                vaultRelativePath = vaultRelativePath?.takeIf { path -> path.isNotBlank() },
+                noteTitle = noteTitle,
+                documentId = documentId,
+                vaultKey = it,
+                openedAtMillis = clock()
+            )
+        }
         return id
     }
 
@@ -231,11 +244,12 @@ internal class ReadingTraceController(
         active.dirty = false
         val title = active.noteTitle
         val documentId = active.documentId
+        val vaultKey = active.vaultKey
 
         scope.launch {
             withContext(ioDispatcher) {
                 writeMutex.withLock {
-                    val base = when (val existing = persistence.load(path)) {
+                    val base = when (val existing = persistence.load(path, vaultKey)) {
                         is ReadingTraceReadResult.Valid -> {
                             // タイトルと documentId は最新の値へ寄せ直す（改名・別端末での再バインド）。
                             val trace = existing.trace.copy(noteTitle = title, documentId = documentId)
@@ -256,7 +270,7 @@ internal class ReadingTraceController(
                             visits = emptyList()
                         )
                     }
-                    persistence.save(base.withVisit(visit))
+                    persistence.save(base.withVisit(visit), vaultKey)
                 }
             }
         }
@@ -264,8 +278,10 @@ internal class ReadingTraceController(
 
     /**
      * 記録せずにセッションを捨てる。Vault切替時に使う。
-     * 保存先は書き込み時点の vaultUri から解決されるため、切替後に flush すると
-     * 旧Vaultのノートの痕跡を新Vaultへ書いてしまう。
+     *
+     * 起動済みの保存コルーチンには効かないが、それらは要求時点の [Session.vaultKey] を
+     * 運んでおり、Gateway が現在のVaultと照合して不一致なら捨てる。ここで捨てるのは
+     * 「切替後に新しく保存要求が生まれること」を止めるため。
      */
     fun discard() {
         session = null
@@ -288,9 +304,11 @@ internal class ReadingTraceController(
         revealJob?.cancel()
         val requestId = ++activeRequestId
         if (vaultRelativePath.isBlank()) return
+        // どのVaultへの照合かは、サスペンドする前のこの時点で決める。
+        val vaultKey = currentVaultKey() ?: return
         revealJob = scope.launch {
             val trace = withContext(ioDispatcher) {
-                (persistence.load(vaultRelativePath) as? ReadingTraceReadResult.Valid)?.trace
+                (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)?.trace
             } ?: return@launch
             if (!isCurrent(requestId)) return@launch
 
@@ -307,7 +325,7 @@ internal class ReadingTraceController(
                 return@launch
             }
             setCard(cardOf(trace, aiSummary = summary))
-            persistSummary(trace, summary)
+            persistSummary(trace, summary, vaultKey)
         }
     }
 
@@ -362,17 +380,18 @@ internal class ReadingTraceController(
         null
     }
 
-    private suspend fun persistSummary(trace: ReadingTrace, summary: String) {
+    private suspend fun persistSummary(trace: ReadingTrace, summary: String, vaultKey: String) {
         withContext(ioDispatcher) {
             writeMutex.withLock {
                 // 生成中に flush が訪問を足している可能性があるので、最新を読み直して
                 // 要約だけを載せる。件数は「要約が説明している訪問数」を記録するので、
                 // 生成中に増えていれば次回の再会でちゃんと作り直される。
-                val latest = (persistence.load(trace.vaultRelativePath) as? ReadingTraceReadResult.Valid)
+                val latest = (persistence.load(trace.vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
                     ?.trace
                     ?: return@withLock
                 persistence.save(
-                    latest.copy(aiSummary = summary, aiSummaryVisitCount = trace.visits.size)
+                    latest.copy(aiSummary = summary, aiSummaryVisitCount = trace.visits.size),
+                    vaultKey
                 )
             }
         }

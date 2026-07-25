@@ -64,7 +64,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         uiState = _uiState,
         persistence = ReadingTraceStore(
             SafReadingTraceDocumentGateway(application.contentResolver) { vaultUri }
-        )
+        ),
+        currentVaultKey = { vaultUri?.toString() }
     )
 
     // DL完了後に要約を再実行するために保持

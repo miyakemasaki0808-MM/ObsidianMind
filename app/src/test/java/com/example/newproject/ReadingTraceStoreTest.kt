@@ -13,15 +13,15 @@ class ReadingTraceStoreTest {
         val store = ReadingTraceStore(gateway)
         val trace = trace()
 
-        assertEquals(ReadingTraceSaveResult.Success, store.save(trace))
-        assertEquals(ReadingTraceReadResult.Valid(trace), store.load(trace.vaultRelativePath))
+        assertEquals(ReadingTraceSaveResult.Success, store.save(trace, VAULT))
+        assertEquals(ReadingTraceReadResult.Valid(trace), store.load(trace.vaultRelativePath, VAULT))
     }
 
     @Test
     fun `unknown note reports none`() {
         val store = ReadingTraceStore(FakeGateway())
 
-        assertEquals(ReadingTraceReadResult.None, store.load("never/read.md"))
+        assertEquals(ReadingTraceReadResult.None, store.load("never/read.md", VAULT))
     }
 
     @Test
@@ -30,7 +30,7 @@ class ReadingTraceStoreTest {
         gateway.files[ReadingTraceStore.keyFor("ideas/habit.md")] = "これはJSONではない".toByteArray()
         val store = ReadingTraceStore(gateway)
 
-        assertTrue(store.load("ideas/habit.md") is ReadingTraceReadResult.Corrupt)
+        assertTrue(store.load("ideas/habit.md", VAULT) is ReadingTraceReadResult.Corrupt)
         assertEquals(0, gateway.writeCount)
     }
 
@@ -44,7 +44,7 @@ class ReadingTraceStoreTest {
             ReadingTraceJson.encode(trace(path = "other/note.md"))
         val store = ReadingTraceStore(gateway)
 
-        assertTrue(store.load("ideas/habit.md") is ReadingTraceReadResult.Corrupt)
+        assertTrue(store.load("ideas/habit.md", VAULT) is ReadingTraceReadResult.Corrupt)
     }
 
     @Test
@@ -65,7 +65,7 @@ class ReadingTraceStoreTest {
     fun `save fails when the folder cannot be made`() {
         val gateway = FakeGateway().apply { folderAvailable = false }
 
-        val result = ReadingTraceStore(gateway).save(trace())
+        val result = ReadingTraceStore(gateway).save(trace(), VAULT)
 
         assertTrue(result is ReadingTraceSaveResult.Failure)
     }
@@ -74,7 +74,7 @@ class ReadingTraceStoreTest {
     fun `write failure is reported without throwing`() {
         val gateway = FakeGateway().apply { writeError = IOException("書き込めませんでした") }
 
-        val result = ReadingTraceStore(gateway).save(trace())
+        val result = ReadingTraceStore(gateway).save(trace(), VAULT)
 
         assertEquals("書き込めませんでした", (result as ReadingTraceSaveResult.Failure).message)
     }
@@ -83,7 +83,7 @@ class ReadingTraceStoreTest {
     fun `invalid trace is rejected before any write`() {
         val gateway = FakeGateway()
 
-        val result = ReadingTraceStore(gateway).save(trace(visits = emptyList()))
+        val result = ReadingTraceStore(gateway).save(trace(visits = emptyList()), VAULT)
 
         assertTrue(result is ReadingTraceSaveResult.Failure)
         assertEquals(0, gateway.writeCount)
@@ -96,11 +96,11 @@ class ReadingTraceStoreTest {
         val first = trace()
         val second = first.withVisit(ReadingVisit(2_000L, "まとめ", 100))
 
-        store.save(first)
-        store.save(second)
+        store.save(first, VAULT)
+        store.save(second, VAULT)
 
         assertEquals(1, gateway.files.size)
-        assertEquals(ReadingTraceReadResult.Valid(second), store.load(second.vaultRelativePath))
+        assertEquals(ReadingTraceReadResult.Valid(second), store.load(second.vaultRelativePath, VAULT))
     }
 
     @Test
@@ -121,12 +121,56 @@ class ReadingTraceStoreTest {
 
         assertTrue("16進64桁でない: $key", Regex("[0-9a-f]{64}").matches(key))
     }
+
+    // ── Vault識別子の受け渡し ──────────────────────────────────────────────────
+
+    // 「どのVaultへの要求か」はStoreが判断せず、そのままGatewayへ運ぶ。
+    // 実際の照合はGateway（＝書き込み直前）で行うことで、切替との競合を閉じる。
+    @Test
+    fun `vault key is forwarded to the gateway`() {
+        val gateway = FakeGateway().apply { currentVaultKey = "content://old-vault" }
+        val store = ReadingTraceStore(gateway)
+
+        store.save(trace(), "content://old-vault")
+        store.load("ideas/habit.md", "content://old-vault")
+
+        assertEquals(listOf("content://old-vault"), gateway.writtenVaultKeys)
+        assertEquals(listOf("content://old-vault"), gateway.readVaultKeys)
+    }
+
+    // 切替後のVaultへ旧Vault向けの要求が届いても、書かずに失敗として返る。
+    @Test
+    fun `save for a stale vault is rejected`() {
+        val gateway = FakeGateway().apply { currentVaultKey = "content://new-vault" }
+        val store = ReadingTraceStore(gateway)
+
+        val result = store.save(trace(), "content://old-vault")
+
+        assertTrue(result is ReadingTraceSaveResult.Failure)
+        assertTrue(gateway.files.isEmpty())
+    }
+
+    @Test
+    fun `load for a stale vault reports none`() {
+        val gateway = FakeGateway()
+        val store = ReadingTraceStore(gateway)
+        store.save(trace(), VAULT)
+        gateway.currentVaultKey = "content://new-vault"
+
+        assertEquals(ReadingTraceReadResult.None, store.load("ideas/habit.md", VAULT))
+    }
 }
+
+private const val VAULT = "content://vault"
 
 private class FakeGateway : ReadingTraceDocumentGateway {
     val files = mutableMapOf<String, ByteArray>()
+    val readVaultKeys = mutableListOf<String>()
+    val writtenVaultKeys = mutableListOf<String>()
     var folderAvailable = true
     var writeError: Exception? = null
+    /** SAF実装と同じく、要求のVaultキーが現在のVaultと違えば拒む。 */
+    var currentVaultKey = VAULT
     var readCount = 0
         private set
     var writeCount = 0
@@ -134,16 +178,22 @@ private class FakeGateway : ReadingTraceDocumentGateway {
 
     override fun ensureFolder(): Boolean = folderAvailable
 
-    override fun read(key: String, maximumBytes: Int): ByteArray? {
+    override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
         readCount++
+        readVaultKeys += vaultKey
+        if (vaultKey != currentVaultKey) return null
         if (!folderAvailable) return null
         val bytes = files[key] ?: return null
         if (bytes.size > maximumBytes) throw NoteFileTooLargeException(bytes.size, maximumBytes)
         return bytes.copyOf()
     }
 
-    override fun write(key: String, bytes: ByteArray) {
+    override fun write(key: String, bytes: ByteArray, vaultKey: String) {
         writeCount++
+        writtenVaultKeys += vaultKey
+        if (vaultKey != currentVaultKey) {
+            throw IOException("Vaultが切り替わったため痕跡を保存しませんでした。")
+        }
         writeError?.let { throw it }
         if (!folderAvailable) throw IOException("痕跡の保存先を用意できませんでした。")
         files[key] = bytes.copyOf()

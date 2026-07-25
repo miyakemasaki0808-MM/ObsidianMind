@@ -411,6 +411,60 @@ class ReadingTraceControllerTest {
         assertTrue(persistence.saved.isEmpty())
     }
 
+    // 保存は非同期に走るため、書込時点の現在Vaultから保存先を解決すると、切替後の
+    // 新Vaultへ旧ノートの痕跡が書き込まれ得る。要求は常に「開いた時点のVault」へ向かう。
+    @Test
+    fun `a save requested before a vault switch still targets the old vault`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val vault = FakeVault(VAULT_A)
+        val controller = controller(persistence, clock, vault = vault)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        // 保存コルーチンが走る前にVaultが切り替わる
+        vault.key = VAULT_B
+        advanceUntilIdle()
+
+        assertEquals(listOf(VAULT_A), persistence.savedVaultKeys)
+    }
+
+    // 切替後に開いたノートは、新しいVaultへ向けて記録される。
+    @Test
+    fun `a note opened after the switch targets the new vault`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val vault = FakeVault(VAULT_A)
+        val controller = controller(persistence, clock, vault = vault)
+
+        vault.key = VAULT_B
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(listOf(VAULT_B), persistence.savedVaultKeys)
+    }
+
+    // Vault未選択なら保存先が無いので、そもそも追跡しない。
+    @Test
+    fun `no vault means no tracking`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock, vault = FakeVault(null))
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
     // 相対パスが最後まで分からなかったノート（_AI補記 の一覧から開いた等）は追跡しない。
     @Test
     fun `unresolved relative path is not tracked`() = runTest {
@@ -859,7 +913,8 @@ private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
     aiClient: AiClient = ImmediateAiClient(),
-    state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState())
+    state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState()),
+    vault: FakeVault = FakeVault()
 ): ReadingTraceController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReadingTraceController(
@@ -867,10 +922,17 @@ private fun TestScope.controller(
         aiClient = aiClient,
         uiState = state,
         persistence = persistence,
+        currentVaultKey = { vault.key },
         clock = clock::now,
         ioDispatcher = dispatcher
     )
 }
+
+/** 現在選択中のVault。切替を再現するために書き換えられる。 */
+private class FakeVault(var key: String? = VAULT_A)
+
+private const val VAULT_A = "content://vault-a"
+private const val VAULT_B = "content://vault-b"
 
 private class ImmediateAiClient(
     private val availability: AiAvailability = AiAvailability.Available,
@@ -928,6 +990,7 @@ private class TestClock(private var current: Long = 1_000_000L) {
 
 private class FakePersistence : ReadingTracePersistence {
     val saved = mutableListOf<ReadingTrace>()
+    val savedVaultKeys = mutableListOf<String>()
     val corruptPaths = mutableSetOf<String>()
     var failSave = false
     var saveAttempts = 0
@@ -943,15 +1006,16 @@ private class FakePersistence : ReadingTracePersistence {
 
     override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
 
-    override fun load(vaultRelativePath: String): ReadingTraceReadResult = when {
+    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = when {
         vaultRelativePath in corruptPaths -> ReadingTraceReadResult.Corrupt("壊れています")
         else -> files[vaultRelativePath]
             ?.let { ReadingTraceReadResult.Valid(it) }
             ?: ReadingTraceReadResult.None
     }
 
-    override fun save(trace: ReadingTrace): ReadingTraceSaveResult {
+    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
+        savedVaultKeys += vaultKey
         if (failSave) return ReadingTraceSaveResult.Failure("書き込めませんでした")
         saved += trace
         files[trace.vaultRelativePath] = trace
