@@ -96,7 +96,7 @@ class VigilithModeTest {
     }
 
     @Test
-    fun `要約中は正面のSummarizingになり蒸留姿勢を使わない`() {
+    fun `要約中は横向き案内のSummarizingになり蒸留姿勢を使わない`() {
         val background = resolveVigilithPresentation(
             currentRoute = "search",
             distillState = DistillState.Idle,

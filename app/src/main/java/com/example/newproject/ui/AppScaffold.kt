@@ -129,6 +129,7 @@ internal fun AppScaffold(
         VigilithHost(
             presentation = vigilithPresentation,
             useNavigationRail = useRail,
+            isSnackbarVisible = snackbarHostState.currentSnackbarData != null,
             noteAction = vigilithNoteAction,
             onTap = onVigilithTap
         )

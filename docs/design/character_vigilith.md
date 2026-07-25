@@ -3,7 +3,7 @@
 **対象:** アプリ「Vigilith AI」のマスコット／AI相棒
 **作成日:** 2026-07-22
 **関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)・[opening_animation](opening_animation.md)
-**状態:** コンセプト確定・アプリアイコン／起動OP／アプリ内Phase 2実装済み（1枚絵の作画は未着手）
+**状態:** コンセプト確定・アプリアイコン／起動OP／アプリ内Phase 3実装済み
 
 > このシートは「Vigilithとは何か」を言語化した設計図。作画発注・実装・アイコン展開の基準に使う。
 
@@ -88,7 +88,8 @@ Vigilithは Reflect/Rediscover ループの**一貫した見守り手／配達�
 
 - **アプリアイコン:** 実装済み（下記 §9）。
 - **起動OP:** 実装済み。暗闇で読書レンズが先に灯り、黒曜石の輪郭が現れる（下記 §9・[opening_animation](opening_animation.md)）。
-- **アプリ内マスコット:** Phase 2実装済み。5タブ共通Hostで3姿勢のVigilithを常駐させ、状態別に動作
+- **アプリ内マスコット:** Phase 3実装済み。5タブ共通Hostで3基本姿勢・4状態のVigilithを常駐させ、
+  状態別に動作し、画面内clampとNavigation UI／Snackbar／IME回避を行う
   （[vigilith_in_app](vigilith_in_app.md)）。
 - **将来の作画:** 本シート＋§10の発注プロンプトを、外部作画やイラスト依頼の**発注資料**として使う。
 

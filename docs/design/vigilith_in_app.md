@@ -3,7 +3,7 @@
 **対象:** N-1「マスコット＝読書相手の身体化」
 **初版:** 2026-07-25
 **関連:** [character_vigilith](character_vigilith.md)・[feature_ideas](../_wip/feature_ideas.md)
-**状態:** Phase 2実装済み、Phase 3は未実装
+**状態:** Phase 3実装済み（実機画面の目視確認のみ認証ロックで保留）
 
 ---
 
@@ -71,23 +71,31 @@ Vigilith自身の感情として演じないため、これらはIdleへ戻し�
 - アプリ内4状態と起動OPは専用の透過ロスレスWebP、ランチャーはAdaptive Icon用VectorDrawableを使用
 - 目は全表示で、明るい機械枠／Aqua虹彩／濃色瞳孔／左上キャッチライトへ統一
 
-### Phase 3 — 衝突回避と実機品質
+### Phase 3 — 衝突回避と実機品質（実装済み）
 
-- Compact / Fold展開時のサイズと余白を調整
-- Snackbar表示中の上方退避
-- IME、NavigationBar / Rail、ReadingTraceカードとの重なり検証
-- Animator duration scale 0倍、TalkBack、タッチターゲットを検証
-- ドラッグ位置を画面内へclampし、画面サイズ変更時に再計算
-- 必要ならIdleラベルの表示頻度を下げ、本文優先を再確認
+- ドラッグ位置をpxではなく配置可能領域内の相対座標（0〜1）で保持し、四辺へclamp
+- Fold開閉・回転・状態ラベルの寸法変更後も、同じ相対位置から安全な座標を再計算
+- CompactではNavigationBar、展開時はNavigationRailを予約領域に含め、システムバーも
+  `WindowInsets.safeDrawing`から実測
+- Snackbar表示中は72dp上方へ退避し、IME表示中はキーボード上端＋16dpを下限として優先
+- ReadingTraceカードは本文上部、Vigilithの既定位置はナビゲーション上の右下となるため、
+  Compact / Foldとも初期配置では競合しない。ユーザーが移動した位置も画面変更後にclampされる
+- 76×93dpのタッチ領域を維持。Noteタブでは1つのButton semanticsへ状態・操作・対象節を集約し、
+  可視ラベルは読み上げ対象から外してTalkBackの二重フォーカスを防止
+- Animator duration scale 0倍ではComposeの遷移が即時完了しても最終ポーズが成立する構成を維持
+- 画面内clamp、Fold再配置、ラベル寸法、Snackbar / IME退避を純粋ロジック6件、
+  TalkBack文言を2件のJVMテストで固定
 
-## 5. Phase 2終了時点の既知の境界
+## 5. Phase 3終了時点の既知の境界
 
-- 5タブ共通Host化と4表示状態（3基本姿勢）のモーションは実装済み。
-- Snackbar表示中の上方退避とドラッグ範囲のclampはPhase 3で行う。
-- Compact / Fold展開時の基本余白はNavigationBar / Rail別に分けたが、実機での最終調整はPhase 3。
+- 5タブ共通Host化、4表示状態（3基本姿勢）のモーション、衝突回避を実装済み。
+- 画面外へのドラッグ、Compact / Fold再配置、Snackbar / IME / Navigation UIの予約領域は
+  純粋計算とJVMテストで検証済み。
 - 提示資料と承認済みIdleを造形参照にして4状態の透過WebPを新規生成した。資料自体の切り抜きではなく、
   76×93dp表示に合わせたIdle／Summary／Distilling／Messengerの専用素材である。
-- Phase 2のDebug APKは接続実機へインストール済み。端末の認証ロックによりアプリ画面の目視確認は未完了。
+- 4素材はいずれも透過WebP（高さ936px、幅749〜802px）で、76×93dpの表示枠に対して十分な解像度を持つ。
+- Phase 3のDebug APKはPixel 10 Pro Foldへインストール済み。ただし端末の認証ロックにより、
+  アプリ画面でのドラッグ・Snackbar・IME・Animator 0倍・TalkBackの最終目視／操作確認は未完了。
 
 ## 6. ガードレール
 
