@@ -1,41 +1,42 @@
 # ソースコード解析書
 
-**プロジェクト:** Obsidian Mind
+**プロジェクト:** Vigilith AI（旧 Obsidian Mind。`strings.xml` の `app_name` を改称済み）
 
-**解析日:** 2026-07-20
+**解析日:** 2026-07-24
 
-**対象ブランチ:** `feature/Improve_AI_Function_RelationalNote`
+**対象ブランチ:** `feature/NewAIFunction_TimeCapcel`
 
-**対象コミット:** `aae2ea8`（起動OPアニメーション追加まで。PR #25マージ後・PR #26）
+**対象コミット:** `be1c0e9`（蒸留v1・クイズ適応出題・ブランド改称まで。PR #32マージ後）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** `testDebugUnitTest` 成功（2026-07-19実行）。以降の追加分はAndroid Studio側での実行が必要
+**検証結果:** `testDebugUnitTest` 成功（2026-07-24実行）。蒸留・クイズ適応出題を含む全192ケースがグリーン
 
 ---
 
 ## 1. エグゼクティブサマリー
 
-Obsidian Mind は、Android の Storage Access Framework（SAF）でユーザーが選択した Obsidian Vault を読み込み、Markdown ノートの閲覧・検索・関連ノート抽出・復習支援を行う Jetpack Compose アプリである。
+Vigilith AI は、Android の Storage Access Framework（SAF）でユーザーが選択した Obsidian Vault を読み込み、Markdown ノートの閲覧・検索・関連ノート抽出・復習支援を行う Jetpack Compose アプリである。
 
 AI機能はクラウドAPIではなく、ML Kit GenAI Prompt API を通じて端末内の Gemini Nano を使用する。現在実装されているAI機能は次のとおり。
 
 - ノート全体の要約
 - wikilink・ファイル名規則と組み合わせた関連ノート推薦
 - 自然文によるノート選択（AIピッカー）
-- ノート内容からの4択問題生成
+- 読書中セクションの周辺テキストからの適応出題Q&A（○×／3択／4択）
 - ノートを成長させるためのAI補記メモ生成・Vaultへの保存
 - 表示中セクションの要約、質問候補生成、セクション限定Q&A
+- 蒸留（Distill）: AIが重要文を選び、ユーザー確認後に元ノートを `**太字**` へ書き換えるプログレッシブ要約支援
 
 Q&AとAI補記はバックグラウンド生成方式で、生成中もノート閲覧を継続でき、完了・エラーはSnackbarとAIタブのバッジで通知される。AI以外の補助機能として、当日分のみの閲覧履歴（さがすタブ「今日読んだノート」）を持つ。
 
-アーキテクチャは「単一 Activity + Compose Navigation + 単一 ViewModel」を入口としつつ、肥大化を避けるため検索・補記・セクションチャットを機能別 Controller に分割している。ファイルI/Oは `NoteRepository`、AI判定を含む主要ロジックは UseCase、AI接続は `AiClient`、Markdown生成・応答パースは純粋ロジックへ分離されている。
+アーキテクチャは「単一 Activity + Compose Navigation + 単一 ViewModel」を入口としつつ、肥大化を避けるため検索・セクションチャット・クイズ・補記・蒸留を機能別 Controller（5つ）に分割している。ファイルI/Oは `NoteRepository`、AI判定を含む主要ロジックは UseCase、AI接続は `AiClient`、Markdown生成・応答パースは純粋ロジックへ分離されている。蒸留のVault書き戻しだけは `DistillWriteRepository` が専用の安全書き込み経路（ハッシュ照合・復旧レコード）を持つ。
 
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサーなど、壊れやすい純粋ロジックにはユニットテストが整備されている。
-- クイズ・補記はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入など、壊れやすい純粋ロジックにはユニットテストが整備されている（192ケース）。
+- クイズ・補記・蒸留はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
 
@@ -47,8 +48,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 33ファイル | 約5,900行 |
-| ユニットテスト Kotlin | 10ファイル | 約838行、60テスト |
+| 本番 Kotlin | 50ファイル | 9,377行 |
+| ユニットテスト Kotlin | 29ファイル | 2,918行、192テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -92,17 +93,23 @@ app/src/
 │   │   ├── NoteViewModel.kt                # 状態の統合、ノート読込、要約・関連の調停、履歴記録
 │   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state、通知イベントキー
 │   │   ├── NoteRepository.kt               # SAF走査・読書き・メタデータ解析
+│   │   ├── NoteSnapshot.kt                 # 蒸留用の原バイト保持・上限付き読込・UTF-8厳格判定
 │   │   ├── NoteHistoryStore.kt             # 当日分のみの閲覧履歴（SharedPreferences）
 │   │   ├── NoteTitleNormalizer.kt          # Obsidianタイトル正規化
 │   │   ├── SearchController.kt             # フォルダ検索・スコープキャッシュ
 │   │   ├── SectionChatController.kt        # セクション要約・質問・Q&A
-│   │   ├── QuizController.kt               # 4択Q&Aのバックグラウンド生成・確認状態
+│   │   ├── QuizController.kt               # 適応出題Q&Aのバックグラウンド生成・確認状態
 │   │   ├── AnnotationController.kt         # AI補記の生成・保存・一覧・削除
+│   │   ├── DistillController.kt            # 蒸留の候補提示・選択・保存・復旧の直列化
+│   │   ├── DistillWriteRepository.kt       # 蒸留のSAF安全書き込み（二重ハッシュ照合・原子確定）
+│   │   ├── DistillRecoveryStore.kt         # 中断復旧レコード（noBackupFilesDir）
+│   │   ├── DistillHashing.kt               # SHA-256（原バイト／出力の照合用）
 │   │   ├── AnnotationComposer.kt           # 補記Markdown検証・整形（純粋ロジック）
 │   │   ├── QuizResponseParser.kt           # AIクイズ応答パース（純粋ロジック）
+│   │   ├── QuizInputProfile.kt             # AI不使用の入力分類→出題形式決定（純粋ロジック）
 │   │   ├── ai/
 │   │   │   ├── AICoreClient.kt             # AiClient、Gemini Nano接続、Mutex、タイムアウト
-│   │   │   └── PromptBuilder.kt            # 7種類のプロンプト構築
+│   │   │   └── PromptBuilder.kt            # 9種類のプロンプト構築
 │   │   ├── domain/
 │   │   │   ├── SummarizeUseCase.kt          # 要約ユースケース
 │   │   │   ├── RelatedNotesUseCase.kt       # 規則ベース＋AI関連ノート抽出（多段パイプライン）
@@ -113,6 +120,10 @@ app/src/
 │   │   │   ├── RelatedCandidateContext.kt   # 候補の本文肉付け・入力予算内への整形
 │   │   │   ├── RelatedCandidateId.kt        # 一時ID(C01..)採番と応答からのID抽出
 │   │   │   ├── KeyedMemoCache.kt            # 汎用LRUメモ化（成功時のみ格納）
+│   │   │   ├── DistillSourceModel.kt        # 蒸留用の文分割（UTF-16オフセット保持・Markdown構造認識）
+│   │   │   ├── DistillCandidateScoring.kt   # 蒸留候補のサリエンス採点・チャンク網羅（DistillLimits）
+│   │   │   ├── DistillResponseParser.kt     # 蒸留AI応答からのID抽出（許可集合で検証）
+│   │   │   ├── DistillTransformer.kt        # オフセット降順の `**` 挿入・太字比率上限
 │   │   │   ├── SearchPickerUseCase.kt       # 自然文検索による3件選定
 │   │   │   └── AiResponseParsing.kt         # AI返却タイトルの共通正規化
 │   │   └── ui/
@@ -133,16 +144,19 @@ app/src/
 │   │       │   └── NoteSections.kt         # 見出し単位セクションモデル
 │   │       └── theme/AppColors.kt          # 色・グラデーション・ボタン役割
 │   └── res/values/                         # app_name、テーマ、最低限の色定義
-└── test/java/com/example/newproject/
-    ├── NoteRepositoryTest.kt
-    ├── MarkdownParserTest.kt
-    ├── InlineMarkdownTest.kt
-    ├── QuizResponseParserTest.kt
+└── test/java/com/example/newproject/          # 29ファイル・192テスト（内訳は §13.1）
+    ├── NoteRepositoryTest.kt / NoteSnapshotTest.kt
+    ├── MarkdownParserTest.kt / InlineMarkdownTest.kt
+    ├── QuizResponseParserTest.kt / QuizInputProfileTest.kt / QuizPromptBuilderTest.kt
+    ├── SurroundingContextTest.kt
     ├── AnnotationComposerTest.kt
-    ├── SectionChatControllerTest.kt
-    ├── QuizControllerTest.kt
-    ├── AnnotationControllerTest.kt
+    ├── SectionChatControllerTest.kt / QuizControllerTest.kt / AnnotationControllerTest.kt
+    ├── DistillControllerTest.kt / DistillWriteRepositoryTest.kt / DistillRecoveryStoreTest.kt
     ├── EventKeyTest.kt
+    ├── ai/DistillPromptBuilderTest.kt
+    ├── domain/Distill*Test.kt                 # SourceModel / CandidateScoring / ResponseParser / Transformer
+    ├── domain/Related*Test.kt                 # CandidateContext / CandidateId / Ordering / Ranking / Scoring / ContextScoring
+    ├── domain/KeyedMemoCacheTest.kt
     └── ui/AiTabBadgeStateTest.kt
 ```
 
@@ -160,15 +174,19 @@ Compose UI / MainActivity
        ├── SearchController
        ├── SectionChatController
        ├── QuizController
-       └── AnnotationController
+       ├── AnnotationController
+       └── DistillController
           │
           ├──────────────► NoteRepository ──► SAF / DocumentsContract
+          ├──────────────► DistillWriteRepository ──► SAF（安全書き込み）
+          │                  └── DistillRecoveryStore ──► noBackupFilesDir
           │
           └──────────────► UseCase ──► AiClient ──► ML Kit / Gemini Nano
 
 純粋ロジック:
-MarkdownParser / NoteSections / QuizResponseParser /
-AnnotationComposer / NoteTitleNormalizer / AiResponseParsing
+MarkdownParser / NoteSections / QuizResponseParser / QuizInputProfile /
+AnnotationComposer / NoteTitleNormalizer / AiResponseParsing /
+DistillSourceModel / DistillCandidateScoring / DistillResponseParser / DistillTransformer
 ```
 
 この構成は厳密なマルチモジュールClean Architectureではない。すべて同一 `:app` モジュール内にあり、Controller が `MutableStateFlow<NoteUiState>` を直接更新する。ただし、責務境界はファイル単位で明示されており、小規模アプリとしては理解しやすい構成である。
@@ -186,18 +204,20 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 | `SectionChatController` | `sectionChat` |
 | `QuizController` | `quizState` |
 | `AnnotationController` | `annotationState`、`annotationListState` |
+| `DistillController` | `distillState` |
 
 ### 4.3 状態モデル
 
 `NoteUiState` は次の状態を集約する。
 
 - `vaultSelected`: Vault選択済み表示用フラグ
-- `noteState`: Idle / Loading / Success / Empty / Error
+- `noteState`: Idle / Loading / Success / Empty / Error。`Success` は表示用のタイトル・本文に加え、蒸留の書き戻し用に `targetUri`・原バイトの `originalHash`・蒸留不可理由（`distillUnavailableReason`）を保持する
 - `summaryState`: Idle / Loading / Success / Downloading / AiUnavailable / Error
 - `relatedNotesState`: Idle / Loading / Success / Error
 - `quizState`: Idle / Loading / Success / Error（Loading以降は `sourceTitle`、Success/Errorは `isViewed` を保持）
 - `annotationState`: Idle / Loading / Success / Error（同上）
 - `annotationListState`: Idle / Loading / Success / Error
+- `distillState`: Idle / Analyzing / NeedsDownload / Downloading / Unavailable / Candidates / Saving / Saved / Conflict / RecoveryRequired / RecoveryResolved / Error（他機能より状態数が多いのは、AI生成に加えVault書き戻しの競合・中断復旧まで表現するため）
 - `sectionChat`: シートを閉じている場合は `null`
 - `folders`、`selectedFolder`、`searchState`: 検索タブ用
 - `wikilinkTitles`: 現在ノートから抽出したリンク先タイトル
@@ -264,6 +284,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 - 自動生成されたノート要約を表示
 - AI補記メモのバックグラウンド生成の起点。ボタンラベルは状態に応じて「作る／作成中…／開く／エラーを確認／再試行」と変化する
+- Reflect（蒸留）の起点。AIが選んだ重要文を候補リストで提示し、ユーザーが確認した文だけを元ノートへ `**太字**` として書き戻す（§6.10）
 - 4択Q&Aの起点は読書画面の吹き出しシートへ移動した（フォーカス周辺クイズ）。AIタブにQ&Aボタンはない
 - モデルダウンロード時は進捗を表示
 - タブアイコンのバッジ対象は補記メモのみ。未確認の重要度順（エラー > 未確認完了 > 生成中）で1つだけ表示（`resolveAiTabBadgeState`）
@@ -412,7 +433,7 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 
 補記一覧はファイル名の `__補記_` より後ろのタイムスタンプで降順に並べる。削除は `DocumentsContract.deleteDocument()` を使う。
 
-補記生成もQ&Aと同じバックグラウンド方式で、生成開始後はノートタブへ戻り、完了・失敗はSnackbarとバッジで通知される。requestIdガード・Loadingガード・モデルDL自動再開の仕組みも共通の形をとる（Controllerは意図的に共通化せず相似形のまま。3機能目が現れた時点で共通化を検討する方針）。
+補記生成もQ&Aと同じバックグラウンド方式で、生成開始後はノートタブへ戻り、完了・失敗はSnackbarとバッジで通知される。requestIdガード・Loadingガード・モデルDL自動再開の仕組みも共通の形をとる。Controllerは意図的に共通化せず相似形のまま維持する方針で、3機能目（`DistillController`）到達時に判断を実施し、**共通化しない結論**となった（共通なのはrequestIdガードの数行のみで、モデルDLポリシー・通知の有無・状態数が異なる。詳細は [architecture](design/architecture.md) の2026-07-24追記）。
 
 ### 6.9 当日閲覧履歴
 
@@ -521,12 +542,13 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | 要約 | 1,200文字 | 2〜4文 |
 | 関連ノート | 600文字 | 候補最大40件（`ID｜タイトル — 本文/タグ等`を予算3,500文字内へ動的短縮）、ID応答で5件要求 |
 | AIピッカー | 本文なし | タイトル最大40件、3件要求 |
-| クイズ | フォーカス周辺1,200文字 | 4択2問（解説付き） |
+| クイズ | フォーカス周辺1,200文字 | 入力量に応じて ○×2問／3択2問／4択1問（解説は4択のみ1文） |
+| 蒸留 | 本文なし（候補文のみ） | 候補最大24件を予算1,500文字内へ収め、ID応答で最大6件要求 |
 | AI補記 | 1,500文字 | 必須2セクション（補記すべき内容は3項目・各1行固定） |
 | セクション要約 | 1,500文字 | 2〜4文 |
 | セクション質問・Q&A | 1,500文字 | 質問候補最大3件 |
 
-すべて `String.take()` による文字数上限であり、トークン数や意味境界では切っていない。長いノートの後半はAI入力に含まれない。
+蒸留を除き、すべて `String.take()` による文字数上限であり、トークン数や意味境界では切っていない。長いノートの後半はAI入力に含まれない。蒸留だけは例外で、ノート全体を文単位へ分割し（最大400文）、チャンク網羅を条件にスコア上位を候補化するため、後半の文もAI入力に到達し得る。
 
 ---
 
@@ -635,7 +657,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - ノート本文はアプリ内で読み取り、AI生成は端末内 Gemini Nano を利用する設計である。
 - クラウドAI API、独自サーバー、解析SDKへの送信コードは存在しない。
 - 初回モデル取得にはML Kit側のダウンロードが必要になる。
-- Vaultへの書き込みは `_AI補記` フォルダの作成と補記Markdown保存、補記削除に限定される。
+- Vaultへの書き込みは、`_AI補記` フォルダの作成と補記Markdown保存・削除に加え、蒸留による既存ノートの上書き（`**` の挿入のみ・削除なし）がある。上書きは原バイトSHA-256の二重照合と出力ハッシュ検証を通し、中断時は `noBackupFilesDir` の復旧レコードから起動時に復旧判定する。
 - `android:allowBackup="true"` であり、SharedPreferencesのVault URI文字列はバックアップ対象になり得る。実際のSAFアクセス可否は端末側の永続URI権限に依存する。
 - ログ出力コードはなく、ノート本文やAIプロンプトをLogcatへ明示出力していない。
 
@@ -648,16 +670,35 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | テストファイル | ケース数 | 主な対象 |
 |---|---:|---|
 | `NoteRepositoryTest.kt` | 5 | Markdown判定、wikilink・タイトル正規化、補記ファイル名安全化 |
+| `NoteSnapshotTest.kt` | 5 | 上限付きバイト読込、UTF-8厳格判定、ハッシュ |
 | `MarkdownParserTest.kt` | 7 | frontmatter、テーブル空セル、見出し、コード、CRLF、引用 |
 | `InlineMarkdownTest.kt` | 11 | 強調、リンク、コード、打ち消し、誤検出防止 |
-| `QuizResponseParserTest.kt` | 10 | 改行揺れ、前置き、欠落項目、不正な正解、説明省略 |
+| `QuizResponseParserTest.kt` | 14 | 改行揺れ、前置き、欠落項目、不正な正解、○×/3択/4択の形式別パース |
+| `QuizInputProfileTest.kt` | 4 | 入力量・コード比率からの出題形式決定 |
+| `QuizPromptBuilderTest.kt` | 3 | 形式別クイズプロンプトの出力契約 |
+| `SurroundingContextTest.kt` | 6 | フォーカス周辺テキスト構築（親子重複の回避・フォールバック） |
 | `AnnotationComposerTest.kt` | 8 | 必須セクション、Markdown組立、インデント混入防止 |
 | `SectionChatControllerTest.kt` | 4 | セクションチャットの状態遷移・破棄 |
 | `QuizControllerTest.kt` | 5 | バックグラウンド生成・確認状態・破棄 |
 | `AnnotationControllerTest.kt` | 2 | 確認状態・ノート切替時の破棄 |
-| `EventKeyTest.kt` | 4 | Snackbar通知の発火判定キー |
-| `AiTabBadgeStateTest.kt` | 4 | AIタブバッジの優先順位 |
-| **合計** | **60** | |
+| `DistillControllerTest.kt` | 14 | 蒸留フローの直列化、requestIdガード、保存後の状態遷移・復旧分岐 |
+| `DistillWriteRepositoryTest.kt` | 15 | 二重ハッシュ照合、原子確定、出力ハッシュ検証、中断・容量不足 |
+| `DistillRecoveryStoreTest.kt` | 3 | 復旧レコードの書込・読出・破棄 |
+| `EventKeyTest.kt` | 5 | Snackbar通知の発火判定キー |
+| `ai/DistillPromptBuilderTest.kt` | 4 | 候補件数・文字予算内への収容、プロンプト出力契約 |
+| `domain/DistillSourceModelTest.kt` | 13 | 文分割、UTF-16オフセット、コード/テーブル/frontmatter除外 |
+| `domain/DistillCandidateScoringTest.kt` | 5 | サリエンス採点、構造的重み、チャンク網羅 |
+| `domain/DistillResponseParserTest.kt` | 3 | ID抽出、許可集合外の棄却 |
+| `domain/DistillTransformerTest.kt` | 5 | オフセット降順の `**` 挿入、太字比率上限、短文例外 |
+| `domain/KeyedMemoCacheTest.kt` | 5 | LRUメモ化（成功時のみ格納） |
+| `domain/RelatedCandidateContextTest.kt` | 10 | 候補の本文肉付け・入力予算内への整形 |
+| `domain/RelatedCandidateIdTest.kt` | 9 | 一時ID採番と応答からのID抽出 |
+| `domain/RelatedCandidateOrderingTest.kt` | 3 | 採番プレフィックス抽出 |
+| `domain/RelatedCandidateRankingTest.kt` | 5 | 採点戦略注入の汎用ランキング |
+| `domain/RelatedCandidateScoringTest.kt` | 10 | タイトル話題スコア（bigram Dice＋採番近接） |
+| `domain/RelatedContextScoringTest.kt` | 6 | 本文シグナル再ランク（tags/snippet/title） |
+| `ui/AiTabBadgeStateTest.kt` | 3 | AIタブバッジの優先順位 |
+| **合計（29ファイル）** | **192** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -668,21 +709,21 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 BUILD SUCCESSFUL
 ```
 
-2026-07-19に Android Studio同梱JBRを指定して実行し、コンパイルと全ユニットテストが成功した。以降に追加されたテスト（EventKeyTest等）を含む再実行はAndroid Studio側で行う運用。
+2026-07-24に Android Studio 側で実行し、コンパイルと全192ケースが成功した（蒸留関連8ファイル・クイズ適応出題関連3ファイルを含む）。前回の確認は2026-07-19（60ケース時点）。実行環境はAndroid Studio同梱JBRを指定する運用で、CLI単体からの実行ログは取得していない。
 
 ### 13.3 未カバー領域
 
 - `NoteViewModel` の状態遷移（Controllerは一部テスト済み、網羅はしていない）
 - `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` の候補選定・フォールバック
 - `NoteHistoryStore` の日付判定・重複排除（Android依存のため素のユニットテスト不可）
-- `PromptBuilder` の出力契約
-- SAFのカーソル走査、ファイル作成、削除
+- `PromptBuilder` の出力契約（クイズ・蒸留は `QuizPromptBuilderTest` / `DistillPromptBuilderTest` でカバー済み。要約・関連・ピッカー・補記・セクション系の5経路は未カバー）
+- SAFのカーソル走査、ファイル作成、削除（蒸留の書き込み経路のみ `DistillWriteRepositoryTest` でフェイクを使って検証済み）
 - Gemini Nanoの利用可否、ダウンロード、生成、タイムアウト
 - Compose UI、NavigationBar/Rail、全画面遷移
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の41テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。
+現在の192テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。
 
 ---
 
@@ -692,7 +733,7 @@ BUILD SUCCESSFUL
 
 1. **責務分割が明確**
 
-   旧来の巨大ViewModelにすべてを置かず、検索・セクションAI・補記をControllerへ分離している。
+   旧来の巨大ViewModelにすべてを置かず、検索・セクションAI・クイズ・補記・蒸留をControllerへ分離している。Vaultへの破壊的書き込みを伴う蒸留は、書き込み経路自体も `DistillWriteRepository` / `DistillRecoveryStore` へ切り出している。
 
 2. **UI状態が一元化されている**
 
@@ -721,7 +762,7 @@ BUILD SUCCESSFUL
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
 | 高 | 検索フォールバックの意味差 | 40件以下ではキーワード順位付けされず先頭3件。UI説明と利用者期待に差が出る |
-| 中 | Job管理の不統一 | クイズ・補記はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
+| 中 | Job管理の不統一 | クイズ・補記・蒸留はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
 | 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない |
 | 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
 | 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時ID（`idToNote`）で解決するため、同名・別URIも別IDになり不定にならない（ID応答方式で解消済み）。決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |
@@ -737,7 +778,7 @@ BUILD SUCCESSFUL
 本節は現状解析から導かれる候補であり、今回の解析書更新では実装変更していない。
 
 1. `SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、UI文言と一致させる。
-2. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記は導入済み）。
+2. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記・蒸留は導入済み）。
 3. `CancellationException` の再throw方針を全非同期処理で統一する。
 4. `PromptBuilder` の出力契約、`SearchPickerUseCase`、Controller状態遷移のユニットテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
 5. Fake `ContentResolver` またはinstrumentationテストで、Vault走査・補記保存・削除を検証する。
@@ -752,3 +793,12 @@ BUILD SUCCESSFUL
 - 本解析は現行ソースコードを基準にし、過去の設計書ではなく実装との突合を優先した。
 - 2026-07-20の更新はdocs再構成（変更履歴表・design/の新設）と同時に実施した。変更の経緯は [change_history.md](change_history.md)、設計判断は [design/](design/) を参照。
 - 2026-07-21の更新は関連ノートAI推薦のPhase 1〜3（PR #27/#28/#29）を反映した。多段パイプライン化（タイトル話題スコア→本文肉付け→本文再ランク→ID応答）、tags/aliasesの利用開始、同名曖昧性の解消を §6.4・§7.3・§8.4・§14・§15 に反映。設計と知見は [related_notes_ai](design/related_notes_ai.md) を参照。
+- 2026-07-22の更新（コミット `48a121b`）は §6.7 のクイズ適応出題と §6.10 の蒸留v1を本文へ追記したが、§2.1 コード規模・§3 ファイル構成・§13 テスト状況の数値を更新しておらず、実装と乖離した状態が残っていた。
+- 2026-07-24の更新は上記の乖離を実測値で解消した。本番Kotlin 33ファイル・約5,900行 → 50ファイル・9,377行、テスト 10ファイル・60（本文中は41と不整合）→ 29ファイル・192ケースへ訂正。あわせて §3 のファイル構成へ `Distill*` 8ファイル・`NoteSnapshot.kt`・`QuizInputProfile.kt` を追加し、§1・§4・§8.4・§12・§13・§14 に蒸留とクイズ適応出題を反映。アプリ名の `Obsidian Mind` → `Vigilith AI` 改称（コミット `be1c0e9`）も反映した。同日、Android Studio 側で `testDebugUnitTest` を実行し192ケース全グリーンを確認済み。
+- 数値の再測定手順（次回更新時に同じ値を再現するため）:
+
+  ```bash
+  find app/src/main -name "*.kt" | wc -l && find app/src/main -name "*.kt" -exec wc -l {} + | tail -1
+  find app/src/test -name "*.kt" | wc -l && find app/src/test -name "*.kt" -exec wc -l {} + | tail -1
+  grep -rh --include='*.kt' -c '^\s*@Test' app/src/test | awk '{s+=$1} END {print s}'
+  ```
