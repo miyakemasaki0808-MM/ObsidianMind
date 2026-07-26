@@ -11,12 +11,24 @@ import java.util.Locale
 data class HistoryEntry(val title: String, val uri: Uri)
 
 /**
+ * 当日履歴の保管契約。実装は [NoteHistoryStore]（SharedPreferences）。
+ *
+ * インターフェースを切っているのは、履歴の破棄が Vault切替の一斉初期化の一部であり、
+ * それを素のJVMテストで固定するため（SharedPreferences はテストで用意できない）。
+ */
+interface HistoryStore {
+    fun load(): List<HistoryEntry>
+    fun record(title: String, uri: Uri): List<HistoryEntry>
+    fun clear()
+}
+
+/**
  * 当日分のみの閲覧履歴。「さっき読んだノートを見返したい」瞬間に応えるための
  * 短期記憶なので、日付が変わったら破棄し翌日へは持ち越さない。
  */
-class NoteHistoryStore(private val prefs: SharedPreferences) {
+class NoteHistoryStore(private val prefs: SharedPreferences) : HistoryStore {
 
-    fun load(): List<HistoryEntry> {
+    override fun load(): List<HistoryEntry> {
         if (prefs.getString(KEY_DATE, null) != today()) return emptyList()
         val raw = prefs.getString(KEY_ENTRIES, null) ?: return emptyList()
         return try {
@@ -34,7 +46,7 @@ class NoteHistoryStore(private val prefs: SharedPreferences) {
     }
 
     /** 先頭に追加して保存する。同じノートは重複させず先頭へ移動する。 */
-    fun record(title: String, uri: Uri): List<HistoryEntry> {
+    override fun record(title: String, uri: Uri): List<HistoryEntry> {
         val updated = (listOf(HistoryEntry(title, uri)) + load().filter { it.uri != uri })
             .take(MAX_ENTRIES)
         val array = JSONArray()
@@ -53,7 +65,7 @@ class NoteHistoryStore(private val prefs: SharedPreferences) {
     }
 
     /** Vault切替時に呼ぶ。旧VaultのURIは新Vaultでは開けないため全破棄する。 */
-    fun clear() {
+    override fun clear() {
         prefs.edit().remove(KEY_DATE).remove(KEY_ENTRIES).apply()
     }
 
