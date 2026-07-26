@@ -2,7 +2,10 @@ package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
+import com.example.newproject.controller.AnnotationController
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.controller.ReadingTraceController
+import com.example.newproject.controller.SearchController
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
@@ -40,6 +43,7 @@ import android.net.Uri
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -65,18 +69,11 @@ import java.lang.reflect.Modifier
  *  - **状態変換の網羅**（[resetNoteScopedStates] / [resetVaultScopedStates]）:
  *    全フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
  *    フィールドを足してリセット登録を忘れたら落ちる。
- *  - **調停の結線**: 7 Controller すべてを非初期状態にしてから切替を通し、
- *    どれか1つの後始末を消したら落ちるようにする。
+ *  - **調停の結線**: 7 Controller すべてのUI状態を非初期状態にしてから切替を通す。
+ *    UI状態の一括リセットと重複して観測できない内部状態（Searchのキャッシュ／Job、
+ *    Annotationの生成Job）は、実物Controllerへテスト用の値を直接積んで個別に確認する。
  *  - **ジョブ停止**: 走行中のAI生成を止めずに切り替えると旧結果が後着することの確認。
  *    状態リセットだけでは防げないので、対になっていること自体をここで担保する。
- *
- * ## ここで保証していないこと
- *
- * **`SearchController.onVaultChanged()` の後始末だけは覆えていない。** このメソッドが
- * 落とすのはスコープ単位の走査キャッシュと走行中の検索・フォルダ列挙ジョブで、
- * どちらも `ContentResolver` を要する経路でしか作れない。`ContentResolver` は
- * 素のJVMテストではインスタンス化できないため、ここを消してもこのテストは緑のままになる。
- * 担保手段は実機確認（Vault切替直後にさがすタブへ入り、旧Vaultのフォルダchipsが出ないこと）。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteSessionCoordinatorTest {
@@ -213,6 +210,55 @@ class NoteSessionCoordinatorTest {
         assertEquals(1, state.todayHistory.size)
     }
 
+    /**
+     * SearchController のキャッシュと2種類のJobは `ContentResolver` を要する経路でしか
+     * 通常は作れない。素のJVMではその実体を作れないため、実物Controllerの内部へ
+     * 型消去で番兵を積み、Coordinatorからの [SearchController.onVaultChanged] 呼び出しを確認する。
+     *
+     * private名への依存はあるが、名前変更でテストが落ちる方が、後始末が無検証になるより安全。
+     */
+    @Test
+    fun `Vault切替でSearchの走査キャッシュとJobが破棄される`() {
+        val coordinator = Env(TestScope()).coordinator()
+        val search: Any = privateField(coordinator, "search")
+        val cache: MutableMap<Any?, Any?> = privateField(search, "scopeNotesCache")
+        val searchJob = Job()
+        val foldersJob = Job()
+        cache["old-folder"] = "old-cache"
+        setPrivateField(search, "searchJob", searchJob)
+        setPrivateField(search, "foldersJob", foldersJob)
+
+        coordinator.onVaultChanged()
+
+        assertTrue(cache.isEmpty())
+        assertTrue(searchJob.isCancelled)
+        assertTrue(foldersJob.isCancelled)
+        assertNull(privateField<Job?>(search, "searchJob"))
+        assertNull(privateField<Job?>(search, "foldersJob"))
+    }
+
+    /**
+     * `annotationState` は一括リセットでも Idle になるため、状態だけでは
+     * [AnnotationController.cancelAndClear] の呼び忘れを検出できない。
+     * 実物Controllerへ生成Jobを積み、Coordinatorのノート切替から停止されることを確認する。
+     */
+    @Test
+    fun `ノート切替でAnnotationの生成Jobが停止される`() {
+        val coordinator = Env(TestScope()).coordinator()
+        val annotation: Any = privateField(coordinator, "annotation")
+        val createJob = Job()
+        val downloadJob = Job()
+        setPrivateField(annotation, "createJob", createJob)
+        setPrivateField(annotation, "downloadJob", downloadJob)
+
+        coordinator.onNoteChanged()
+
+        assertTrue(createJob.isCancelled)
+        assertTrue(downloadJob.isCancelled)
+        assertNull(privateField<Job?>(annotation, "createJob"))
+        assertNull(privateField<Job?>(annotation, "downloadJob"))
+    }
+
     // ── ジョブ停止（状態リセットだけでは防げない後着）────────────────────────
 
     /**
@@ -274,6 +320,32 @@ class NoteSessionCoordinatorTest {
         advanceUntilIdle()
 
         assertEquals(emptyList<ReadingTrace>(), env.trace.saved)
+    }
+
+    /**
+     * 通常のノート切替では、離れるノートの読書セッションを捨てずに確定保存する。
+     * Vault切替の [ReadingTraceController.discard] とは逆の契約なので別々に固定する。
+     */
+    @Test
+    fun `ノート切替で離れるノートの読書痕跡が保存される`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", "doc-1")
+        coordinator.reportReadingProgress(
+            blockIndex = 3,
+            blockFraction = 1f,
+            totalBlocks = 10,
+            sectionTitle = "導入"
+        )
+        clock.advance(10_000L)
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+
+        assertEquals(1, env.trace.saved.size)
+        assertEquals("ideas/habit.md", env.trace.saved.single().vaultRelativePath)
     }
 
     /**
@@ -409,6 +481,19 @@ class NoteSessionCoordinatorTest {
             emptyList<String>(),
             unexpected
         )
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> privateField(owner: Any, name: String): T {
+        val field = owner.javaClass.getDeclaredField(name)
+        field.isAccessible = true
+        return field.get(owner) as T
+    }
+
+    private fun setPrivateField(owner: Any, name: String, value: Any?) {
+        val field = owner.javaClass.getDeclaredField(name)
+        field.isAccessible = true
+        field.set(owner, value)
     }
 
     private class Env(
