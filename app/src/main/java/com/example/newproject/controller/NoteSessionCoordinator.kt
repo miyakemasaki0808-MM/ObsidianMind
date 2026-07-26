@@ -143,7 +143,7 @@ internal class NoteSessionCoordinator(
     )
 
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
-    // 対になる状態リセット側の契約は [NoteUiStateStore.resetNoteScoped]。
+    // 対になる状態リセット側の契約は [NoteUiStateStore] 内の withNoteScopedReset。
 
     /**
      * ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。

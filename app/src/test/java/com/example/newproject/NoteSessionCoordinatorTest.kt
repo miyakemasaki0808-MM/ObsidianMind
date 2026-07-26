@@ -65,7 +65,7 @@ import java.lang.reflect.Modifier
  * Android APIを呼ばない [NoteSessionCoordinator] へ調停を出したことで、ここが検証できる。
  *
  * テストは3層で見る。
- *  - **状態変換の網羅**（[NoteUiStateStore.resetNoteScoped] /
+ *  - **状態変換の網羅**（[NoteUiStateStore.beginNoteLoad] /
  *    [NoteUiStateStore.resetVaultScoped]）:
  *    全フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
  *    フィールドを足してリセット登録を忘れたら落ちる。
@@ -115,7 +115,7 @@ class NoteSessionCoordinatorTest {
     @Test
     fun `ノート切替ではVault単位の状態が残る`() {
         val store = NoteUiStateStore(fullyPopulatedState())
-        store.resetNoteScoped()
+        store.beginNoteLoad()
         val reset = store.value
 
         // 補記管理画面の一覧とさがすタブのスコープはノートと無関係なので、

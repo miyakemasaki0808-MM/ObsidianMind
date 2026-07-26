@@ -174,17 +174,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         mutableState.update { it.copy(vaultSelected = true, todayHistory = todayHistory) }
     }
 
-    /**
-     * ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
-     *
-     * **ノート単位の状態を [NoteUiState] へ足したら、ここへ必ず登録する。**
-     * 対になるジョブ停止側の契約は
-     * [com.example.newproject.controller.NoteSessionCoordinator.cancelNoteScopedJobs]。
-     */
-    fun resetNoteScoped() {
-        mutableState.update { it.withNoteScopedReset() }
-    }
-
     fun beginNoteLoad() {
         mutableState.update { it.withNoteScopedReset().copy(noteState = NoteState.Loading) }
     }
@@ -229,6 +218,15 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     }
 }
 
+/**
+ * ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
+ * [NoteUiStateStore.beginNoteLoad] と [NoteUiStateStore.resetVaultScoped] が共有する
+ * 唯一の登録点で、前者では `Loading` への遷移まで1回の更新にまとめる。
+ *
+ * **ノート単位の状態を [NoteUiState] へ足したら、ここへ必ず登録する。**
+ * 対になるジョブ停止側の契約は
+ * [com.example.newproject.controller.NoteSessionCoordinator.cancelNoteScopedJobs]。
+ */
 private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
