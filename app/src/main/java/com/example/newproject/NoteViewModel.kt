@@ -25,7 +25,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 // 状態定義は NoteUiState.kt を参照。
@@ -80,6 +82,8 @@ class NoteViewModel internal constructor(
     )
 
     val uiState: StateFlow<NoteUiState> = session.uiState
+    private val mutableDarkTheme = MutableStateFlow(preferences.darkTheme)
+    val darkTheme: StateFlow<Boolean> = mutableDarkTheme.asStateFlow()
 
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
@@ -95,13 +99,8 @@ class NoteViewModel internal constructor(
         get() = vaultLocation.uri
 
     init {
-        restoreTheme()
         restoreVault()
         session.checkDistillRecovery()
-    }
-
-    private fun restoreTheme() {
-        if (preferences.darkTheme) session.setDarkTheme(true)
     }
 
     /**
@@ -109,9 +108,9 @@ class NoteViewModel internal constructor(
      * 端末に残すのは真偽値1つだけで、Vaultにも痕跡にも書かない。
      */
     fun setDarkTheme(enabled: Boolean) {
-        if (uiState.value.darkTheme == enabled) return
+        if (mutableDarkTheme.value == enabled) return
         preferences.darkTheme = enabled
-        session.setDarkTheme(enabled)
+        mutableDarkTheme.value = enabled
     }
 
     private fun restoreVault() {

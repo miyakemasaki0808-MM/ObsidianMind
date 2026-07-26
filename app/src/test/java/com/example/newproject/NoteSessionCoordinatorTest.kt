@@ -90,8 +90,6 @@ class NoteSessionCoordinatorTest {
     private val survivesVaultChangeTransform = mapOf(
         // 選択済みであることそのもの（切替先を選んだ直後なので true）
         "vaultSelected" to true,
-        // 端末設定。Vaultと無関係
-        "darkTheme" to true,
         // 切替直後に loadRandomNote が走って差し替わるため、ここで落とすと画面が点滅する
         "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
         "wikilinkTitles" to setOf("旧リンク"),
@@ -158,13 +156,12 @@ class NoteSessionCoordinatorTest {
         coordinator.onVaultChanged()
         advanceUntilIdle()
 
-        // Vault切替後に残ってよいのは、Vaultと無関係な端末設定と、
-        // 直後の loadRandomNote で差し替わる表示中ノートだけ。
+        // Vault切替後に残ってよいのは、直後の loadRandomNote で
+        // 差し替わる表示中ノートだけ。
         assertEachFieldReset(
             actual = coordinator.uiState.value,
             survivors = mapOf(
                 "vaultSelected" to true,
-                "darkTheme" to true,
                 "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
                 "wikilinkTitles" to setOf("旧リンク")
             )
@@ -452,8 +449,7 @@ class NoteSessionCoordinatorTest {
         foldersError = "列挙できませんでした",
         searchState = SearchState.Success(emptyList()),
         // HistoryEntry は Uri を要るので作れない。ここで見たいのは「空へ戻るか」だけ。
-        todayHistory = listOf("旧Vaultの履歴") as List<HistoryEntry>,
-        darkTheme = true
+        todayHistory = listOf("旧Vaultの履歴") as List<HistoryEntry>
     )
 
     /**

@@ -207,10 +207,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         mutableState.update { it.copy(todayHistory = history) }
     }
 
-    fun setDarkTheme(enabled: Boolean) {
-        mutableState.update { it.copy(darkTheme = enabled) }
-    }
-
     fun setRelatedNotesState(state: RelatedNotesState) {
         mutableState.update { it.copy(relatedNotesState = state) }
     }

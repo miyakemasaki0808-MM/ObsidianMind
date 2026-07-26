@@ -79,9 +79,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         hideStatusBar()
         setContent {
-            // テーマ判定に使うため、AppThemeの外で購読する。
-            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-            AppTheme(darkTheme = uiState.darkTheme) {
+            // テーマ判定に必要な1値だけをAppThemeの外で購読する。
+            val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
+            AppTheme(darkTheme = darkTheme) {
+                val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
                 // savedInstanceStateが非nullになるため、OPを再生し直さない。
                 var showOpening by remember { mutableStateOf(savedInstanceState == null) }
@@ -317,7 +318,7 @@ class MainActivity : ComponentActivity() {
                         composable("options") {
                             OptionsScreen(
                                 vaultSelected = uiState.vaultSelected,
-                                darkTheme = uiState.darkTheme,
+                                darkTheme = darkTheme,
                                 onSelectVault = { openVault.launch(null) },
                                 onManageAnnotations = { navController.navigate("annotation_manager") },
                                 onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) }

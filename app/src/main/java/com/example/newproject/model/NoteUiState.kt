@@ -38,9 +38,7 @@ data class NoteUiState(
     val foldersError: String? = null,
     val searchState: SearchState = SearchState.Idle,
     // 当日分のみの閲覧履歴（`NoteHistoryStore` が日付判定を担当）
-    val todayHistory: List<HistoryEntry> = emptyList(),
-    // 表示テーマ。OS設定には追従せず、オプション画面での明示切替だけで変わる。
-    val darkTheme: Boolean = false
+    val todayHistory: List<HistoryEntry> = emptyList()
 )
 
 /**

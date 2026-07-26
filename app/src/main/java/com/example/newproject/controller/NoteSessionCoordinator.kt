@@ -234,12 +234,6 @@ internal class NoteSessionCoordinator(
         return stateStore.applyReloadedBody(targetUri, loaded)
     }
 
-    // ── 表示テーマ ──────────────────────────────────────────────────────────
-
-    fun setDarkTheme(enabled: Boolean) {
-        stateStore.setDarkTheme(enabled)
-    }
-
     // ── 要約・関連ノート ────────────────────────────────────────────────────
 
     fun fetchSummary(title: String, content: String) = summary.fetch(title, content)
