@@ -84,7 +84,7 @@
 | 文書 | 役割 |
 |---|---|
 | [current_issues.md](_wip/current_issues.md) | 課題台帳。未対応のものだけを残し、解消したら削除する |
-| [roadmap.md](_wip/roadmap.md) | Now / Next / Later。日付を切らず優先度と成熟度で3段 |
+| [roadmap.md](_wip/roadmap.md) | Now / Next / Later。日付を切らず優先度と成熟度で3段。**使い捨て**（完了項目は取り消し線を残さず削除する） |
 | [feature_ideas.md](_wip/feature_ideas.md) | 未実装の採用候補（使い捨て。実装済み・却下は残さない） |
 
 ---
