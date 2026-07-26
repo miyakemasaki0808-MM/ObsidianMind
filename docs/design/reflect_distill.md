@@ -135,7 +135,7 @@ score = 1.0 * dice(文, タイトル)
 
 ## 判断10: ノート識別を状態に持ち、requestId で切替をガード
 
-現 `NoteState.Success(title, content)`（[NoteUiState.kt](../../app/src/main/java/com/example/newproject/NoteUiState.kt)）はURIもハッシュも持たず、タイトルは非一意。
+現 `NoteState.Success(title, content)`（[NoteUiState.kt](../../app/src/main/java/com/example/newproject/model/NoteUiState.kt)）はURIもハッシュも持たず、タイトルは非一意。
 
 - `NoteState.Success` に **URI＋基準ハッシュ**を追加、または別 `CurrentNoteIdentity` として保持
 - ViewModelで現在アクティブな **`requestId`（or identity）** を保持し、生成完了コールバックで **`if (currentIdentity != result.identity) return`**（PR #31 の全画面遷移×`scrollToItem` と同種の状態不整合を防ぐ）

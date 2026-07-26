@@ -99,12 +99,12 @@ Coroutines の `withContext(Dispatchers.IO)` でバックグラウンド処理�
 - [x] Gemini Nano 4 によるオンデバイスノート要約（ML Kit GenAI Prompt API）
 - [x] Pixel 10 Pro Fold 展開時の Two-Pane レイアウト対応
 - [x] 最後に読んだノートの履歴表示（当日分のみの「今日読んだノート」/ PR #24）
-- [ ] ウィジェット対応（ホーム画面からワンタップでランダム表示）— 非優先（`_wip/feature_ideas.md`）
+- [ ] ウィジェット対応（ホーム画面からワンタップでランダム表示）— 非優先
 - [x] ダークモード対応 — 2026-07-22に見送り確定→2026-07-26に再検討し実装（オプション画面での明示切替・OS追従なし / `design/dark_mode.md`）
 - [ ] ネストリスト対応
-- [ ] 画像レンダリング対応（`![alt](path)`）— 生きているバックログ（`_wip/feature_ideas.md` N-4）
+- [ ] 画像レンダリング対応（`![alt](path)`）— 生きているバックログ
 - [x] 関連ノート表示（wikilink ベース + AI 推薦の 2 段構成、タップで本文切り替え）
 - [x] Q&A フラッシュカード生成（Gemini Nano によるオンデバイス多肢選択問題）
 - [x] 補記メモ機能（AI が粒度評価・補記案を生成し `_AI補記/` フォルダに保存）
-- [ ] ~~ノート一覧画面の実装~~ — 見送り確定（Vault全体の一覧はObsidian本体の領分・Rediscover中心の思想と衝突 / `_wip/feature_ideas.md`）
+- [ ] ~~ノート一覧画面の実装~~ — 見送り確定（Vault全体の一覧はObsidian本体の領分・Rediscover中心の思想と衝突）
 - [x] セクション単位AIチャット・適応出題Q&A・蒸留（Distill）— 当初の想定外に追加された機能群（詳細は `change_history.md`）

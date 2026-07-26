@@ -2,7 +2,7 @@
 
 **対象:** N-1「マスコット＝読書相手の身体化」
 **初版:** 2026-07-25
-**関連:** [character_vigilith](character_vigilith.md)・[feature_ideas](../_wip/feature_ideas.md)
+**関連:** [character_vigilith](character_vigilith.md)（キャラクターシート）
 **状態:** Phase 3実装済み（実機画面の目視確認のみ認証ロックで保留）
 
 ---

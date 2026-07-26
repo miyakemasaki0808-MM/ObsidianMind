@@ -1,6 +1,6 @@
 # 設計思想 — テーマ基盤とUI構造のリファクタ（R-1〜R-4）
 
-**対象:** [current_issues](../_wip/current_issues.md) 2-6・2-7・2-8 ＋ ダークモードの土台
+**対象:** Vigilith 周辺のリファクタ3件（状態導出の重複・巨大化した `NoteReaderTab`・`Color(0x…)` 直書きの散在）＋ ダークモードの土台
 **初版:** 2026-07-26
 **関連:** [dark_mode](dark_mode.md)・[vigilith_in_app](vigilith_in_app.md)・[note_fullscreen](note_fullscreen.md)・[architecture](architecture.md)
 **状態:** R-1〜R-4 実装済み（2026-07-26・372テスト通過／実機の目視確認待ち）。
@@ -8,7 +8,7 @@
 > **実装後の追記（設計との差分）**
 > - **R-4 のグレー統合は見送った。** 設計では「7段階を3トークンへ集約」としたが、集約は必ず見た目を変える。
 >   本リファクタの完了条件は「ライトの見た目が変わらないこと」なので、値を保ったまま5つの役割名を与えるに留めた。
->   統合は暗色値を決める Phase 3 と同時に判断する（→ [current_issues](../_wip/current_issues.md) 3-9）。
+>   統合は暗色値を決める Phase 3 と同時に判断する（無彩色グレー5段階の意味的な区別が薄い件は未解決のまま）。
 > - **`MaterialTheme` の `colorScheme` は差し替えていない。** 差し替えると `onPrimary` 等が M3 コンポーネントの
 >   既定へ一斉に波及し、ライト側に予期しない変化が出る。写像は実機確認を伴える Phase 3 で行う（[AppTheme.kt](../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt) に理由を明記）。
 > - **`LocalAppColors` にはまだ参照側がいない。** 画面はトップレベルのトークンを直接読んでいる。
