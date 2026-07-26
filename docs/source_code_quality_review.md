@@ -11,12 +11,12 @@
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定、AndroidManifest
 
 > **この文書の位置づけ:** ある時点の**採点結果のスナップショット**。事実の網羅は [source_code_analysis.md](source_code_analysis.md)、
-> ここから起票した課題の追跡は `_wip/` の課題台帳が持つ（`_wip/` はリリース時に廃棄する一時置き場のため、本書からは番号で参照しない）。
+> ここから起票した課題の追跡は [_wip/current_issues.md](_wip/current_issues.md)（1-1・2-9〜2-11・3-10〜3-13）が持つ。
 > **本書は更新せず、次回レビュー時に新しい日付の総評を追記する**（点数の推移を残すため）。
 >
 > **突合結果（2026-07-26）:** 記載の数値・箇所はすべて実コードで確認でき、**誤りは無かった**。
 > 未使用importのみ実測6件（本文は4件）で、`model/NoteUiState.kt` の `NoteHistoryStore` と
-> `projectedBoldRatio` が追加。
+> `projectedBoldRatio` が追加。詳細は current_issues 3-10。
 
 ---
 

@@ -27,9 +27,9 @@
 |---|---|---|
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
 | [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（914行・16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
-| [source_code_quality_review.md](source_code_quality_review.md) | 品質の採点結果（11軸・総合7.2/10・2026-07-26） | **更新せず、次回レビューを追記**（推移を残す） |
+| [source_code_quality_review.md](source_code_quality_review.md) | 品質の採点結果（11軸・総合7.2/10・2026-07-26）。**Codexが評価者として作成する外部レビュー** | **書き換えない。** 次回レビュー時に新しい日付の総評を追記する（推移を残す） |
 | [bugfix_reports.md](bugfix_reports.md) | AIが生成しがちで通常フローでは表面化しない潜在バグの記録 | 該当する型のバグを踏んだとき |
-| [project_origin.md](project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
+| [project_origin.md](project_origin.md) | 2026-04-30 の第一歩の報告書。Android開発の最初の記録としてのみ存在し、現状とは一致しない | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
 
@@ -85,6 +85,9 @@
 > 参照は一方通行で、`_wip/` → 恒久文書のみ。恒久側で課題に触れるときは、リンクや項目番号ではなく**内容そのものを書く**
 > （例: `**未解決:** current_issues 2-9` ではなく `**未解決:** 依存の循環が3組（model ⇄ data / …）`）。
 > この向きを守っている限り、`_wip/` はいつ捨てても、中の番号をいつ振り直しても、恒久文書は壊れない。
+>
+> **例外は [source_code_quality_review.md](source_code_quality_review.md) のみ。** Codexが書く外部レビューなので
+> こちらから手を入れない。`_wip/` 廃棄時にリンク切れが残るが、本書は当時のスナップショットなので許容する。
 
 | 文書 | 役割 |
 |---|---|
