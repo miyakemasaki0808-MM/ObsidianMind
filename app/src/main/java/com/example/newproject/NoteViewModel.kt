@@ -6,6 +6,7 @@ import com.example.newproject.controller.QuizController
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
 import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.SummaryController
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
@@ -34,7 +35,6 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.RelatedNote
@@ -42,7 +42,6 @@ import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
-import com.example.newproject.domain.SummaryResult
 import com.example.newproject.domain.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
@@ -71,6 +70,15 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
     private val quiz = QuizController(viewModelScope, aiClient, _uiState)
+    private val summary = SummaryController(
+        scope = viewModelScope,
+        summarizeUseCase = summarizeUseCase,
+        aiClient = aiClient,
+        uiState = _uiState,
+        // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
+        // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
+        onModelReady = { title, content -> fetchRelatedNotes(title, content) }
+    )
     private val annotation = AnnotationController(
         scope = viewModelScope,
         repository = repository,
@@ -109,17 +117,13 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         currentVaultKey = { vaultUri?.toString() }
     )
 
-    // DL完了後に要約を再実行するために保持
-    private var pendingTitle: String = ""
-    private var pendingContent: String = ""
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
 
     // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
-    // （セクションチャットのジョブは SectionChatController が保持）
+    // （要約・セクションチャット等のジョブは各Controllerが保持）
     private var noteLoadJob: Job? = null
-    private var summaryJob: Job? = null
     private var relatedNotesJob: Job? = null
 
     // 更新はメインスレッドだが、読み取りは痕跡保存などIOスレッドからも走る。
@@ -231,8 +235,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         readingTrace.flush()
         readingTrace.cancelForNoteChange()
         noteLoadJob?.cancel()
-        summaryJob?.cancel()
         relatedNotesJob?.cancel()
+        summary.cancelAndClear()
         quiz.cancelAndClear()
         annotation.cancelAndClear()
         sectionChat.cancelAndClear()
@@ -278,7 +282,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 recordHistory(note.name, note.uri)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
                 readingTrace.revealTrace(note.vaultRelativePath)
-                fetchSummary(note.name, loaded.content)
+                summary.fetch(note.name, loaded.content)
                 fetchRelatedNotes(note.name, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -308,7 +312,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
                 // 「さがす経由の最初の1件」が記録から漏れる。
                 bindReadingTracePath(contentResolver, note.uri, sessionId)
-                fetchSummary(note.title, loaded.content)
+                summary.fetch(note.title, loaded.content)
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -446,34 +450,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         wikilinkTitles: Set<String>
     ) = annotation.create(contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
 
-    private fun fetchSummary(title: String, content: String) {
-        summaryJob?.cancel()
-        summaryJob = viewModelScope.launch {
-            _uiState.update { current -> current.copy(summaryState = SummaryState.Loading) }
-            when (val result = summarizeUseCase.summarize(title, content)) {
-                is SummaryResult.Success      -> {
-                    _uiState.update { current ->
-                        current.copy(summaryState = SummaryState.Success(result.summary))
-                    }
-                }
-                is SummaryResult.AiUnavailable -> {
-                    _uiState.update { current -> current.copy(summaryState = SummaryState.AiUnavailable) }
-                }
-                is SummaryResult.AiNeedsDownload -> {
-                    // モデル未DL → 自動でダウンロード開始
-                    pendingTitle = title
-                    pendingContent = content
-                    startModelDownload()
-                }
-                is SummaryResult.Error -> {
-                    _uiState.update { current ->
-                        current.copy(summaryState = SummaryState.Error(result.message))
-                    }
-                }
-            }
-        }
-    }
-
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,
         title: String,
@@ -603,49 +579,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     _uiState.update { current ->
                         current.copy(relatedNotesState = RelatedNotesState.Error(result.message))
                     }
-                }
-            }
-        }
-    }
-
-    private fun startModelDownload() {
-        viewModelScope.launch {
-            _uiState.update { current ->
-                current.copy(summaryState = SummaryState.Downloading(downloaded = -1L, total = 0L))
-            }
-            try {
-                aiClient.downloadModel().collect { status ->
-                    when (status) {
-                        is DownloadStatus.DownloadStarted -> {
-                            _uiState.update { current ->
-                                current.copy(summaryState = SummaryState.Downloading(0L, status.bytesToDownload))
-                            }
-                        }
-                        is DownloadStatus.DownloadProgress -> {
-                            val total = (_uiState.value.summaryState as? SummaryState.Downloading)?.total ?: 0L
-                            _uiState.update { current ->
-                                current.copy(summaryState = SummaryState.Downloading(status.totalBytesDownloaded, total))
-                            }
-                        }
-                        is DownloadStatus.DownloadCompleted -> {
-                            // DL完了 → 要約を実行
-                            fetchSummary(pendingTitle, pendingContent)
-                            fetchRelatedNotes(pendingTitle, pendingContent)
-                        }
-                        is DownloadStatus.DownloadFailed -> {
-                            _uiState.update { current ->
-                                current.copy(
-                                    summaryState = SummaryState.Error(
-                                        "モデルのダウンロードに失敗しました: ${status.e.message}"
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update { current ->
-                    current.copy(summaryState = SummaryState.Error("ダウンロードエラー: ${e.message}"))
                 }
             }
         }
