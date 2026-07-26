@@ -3,6 +3,8 @@
 **対象領域:** アプリ起動時のブランド演出（システムスプラッシュ＋Compose OP）
 **初版:** 2026-07-20（PR #26）
 **改稿:** 2026-07-26（アプリ内Idle WebPへ統一）
+**状態:** 実装済み。新規Activity起動時のみ再生（回転・Fold開閉・プロセス復元では再生しない）
+**関連:** [character_vigilith](character_vigilith.md)・[vigilith_in_app](vigilith_in_app.md)
 
 ---
 

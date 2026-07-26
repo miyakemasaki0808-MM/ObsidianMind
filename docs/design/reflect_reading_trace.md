@@ -3,7 +3,7 @@
 **対象領域:** Rediscover連動・読書位置の記録・ノートメタデータ（サイドカー）
 **初版:** 2026-07-21（TimeCapsule として起案）
 **改稿:** 2026-07-25（**設計を全面的に置換**。TimeCapsule を棄却し ReadingTrace として実装）
-**状態:** v1 実装済み・JVMテスト通過・実装レビュー修正待ち
+**状態:** v1 実装済み・JVMテスト通過・**実機確認待ち**（レビュー指摘4件＝到達率・Lifecycle・Vault分離・検索フォールバックは PR #35 で解消済み。完了判定は [roadmap](../_wip/roadmap.md) N-1）
 **関連:** [reflect_distill](reflect_distill.md)・[architecture](architecture.md)・[tab_navigation](tab_navigation.md)
 
 > **改稿の経緯**: このファイルは元々「読み終わりに未来の自分へ問いを1つ残す」タイムカプセル機能の設計書だった（全論点確定・実装前）。実装着手時の検討で**前提が棄却された**ため、同じ狙い（Rediscoverに意図の糸を通す）を別の手段で果たす設計に置き換えた。棄却の理由は §2 に残す。旧設計の内容はこのファイルのgit履歴から辿れる。
