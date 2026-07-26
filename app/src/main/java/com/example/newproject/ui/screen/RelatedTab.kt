@@ -29,8 +29,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.domain.AiRecommendationStatus
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.theme.AiHeading
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMetaBlue

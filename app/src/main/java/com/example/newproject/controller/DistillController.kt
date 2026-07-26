@@ -13,10 +13,10 @@ import com.example.newproject.model.DistillStateWriter
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.domain.DistillCandidate
-import com.example.newproject.domain.DistillLimits
-import com.example.newproject.domain.DistillSourceModel
-import com.example.newproject.domain.DistillTextRange
+import com.example.newproject.model.DistillCandidate
+import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.DistillSourceModel
+import com.example.newproject.model.DistillTextRange
 import com.example.newproject.domain.applyDistillBold
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.isWithinDistillBoldLimit

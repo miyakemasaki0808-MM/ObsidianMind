@@ -3,9 +3,9 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SearchController
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
-import com.example.newproject.domain.AiRecommendationStatus
+import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState

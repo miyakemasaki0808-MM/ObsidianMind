@@ -1,7 +1,7 @@
 package com.example.newproject.model.state
 
 import android.net.Uri
-import com.example.newproject.data.NoteFile
+import com.example.newproject.model.NoteFile
 
 sealed class AnnotationState {
     object Idle : AnnotationState()

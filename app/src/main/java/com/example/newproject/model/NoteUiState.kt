@@ -1,7 +1,7 @@
 package com.example.newproject.model
 
-import com.example.newproject.data.HistoryEntry
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.HistoryEntry
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState

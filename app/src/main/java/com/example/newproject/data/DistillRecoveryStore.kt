@@ -1,6 +1,6 @@
 package com.example.newproject.data
 
-import com.example.newproject.domain.DistillLimits
+import com.example.newproject.model.DistillLimits
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream

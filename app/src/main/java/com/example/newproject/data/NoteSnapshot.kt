@@ -1,7 +1,7 @@
 package com.example.newproject.data
 
 import android.net.Uri
-import com.example.newproject.domain.DistillLimits
+import com.example.newproject.model.DistillLimits
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.nio.ByteBuffer

@@ -2,13 +2,12 @@ package com.example.newproject.data
 
 import android.content.SharedPreferences
 import android.net.Uri
+import com.example.newproject.model.HistoryEntry
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-
-data class HistoryEntry(val title: String, val uri: Uri)
 
 /**
  * 当日履歴の保管契約。実装は [NoteHistoryStore]（SharedPreferences）。

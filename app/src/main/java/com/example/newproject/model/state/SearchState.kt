@@ -1,7 +1,7 @@
 package com.example.newproject.model.state
 
-import com.example.newproject.domain.AiRecommendationStatus
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.RelatedNote
 
 // AIピッカー（さがすタブ）の検索状態。キーワード/ランダム両モードで共有する。
 sealed class SearchState {

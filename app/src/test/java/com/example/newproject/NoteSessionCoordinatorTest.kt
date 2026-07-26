@@ -11,9 +11,9 @@ import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
-import com.example.newproject.data.HistoryEntry
+import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.ReadingTraceFolderStatus

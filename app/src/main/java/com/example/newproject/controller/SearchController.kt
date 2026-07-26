@@ -1,14 +1,14 @@
 package com.example.newproject.controller
 
-import com.example.newproject.data.NoteFile
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.model.SearchStateWriter
 import com.example.newproject.model.state.SearchState
 import android.content.ContentResolver
 import android.net.Uri
 import com.example.newproject.domain.PickerResult
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope

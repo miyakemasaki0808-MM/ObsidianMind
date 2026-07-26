@@ -1,7 +1,7 @@
 package com.example.newproject.model.state
 
-import com.example.newproject.domain.AiRecommendationStatus
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.RelatedNote
 
 sealed class RelatedNotesState {
     object Idle : RelatedNotesState()

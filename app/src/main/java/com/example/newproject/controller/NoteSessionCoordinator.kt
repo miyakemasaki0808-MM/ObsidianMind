@@ -5,10 +5,10 @@ import android.net.Uri
 import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.ReadingTracePersistence
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection

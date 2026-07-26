@@ -1,6 +1,6 @@
 package com.example.newproject
 
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.AnnotationSlice
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore

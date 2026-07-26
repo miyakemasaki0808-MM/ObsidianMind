@@ -3,9 +3,9 @@ package com.example.newproject
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.data.InvalidNoteEncodingException
-import com.example.newproject.data.NoteFile
+import com.example.newproject.model.NoteFile
 import com.example.newproject.data.NoteFileTooLargeException
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
@@ -16,9 +16,9 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
-import com.example.newproject.domain.DistillLimits
+import com.example.newproject.model.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope

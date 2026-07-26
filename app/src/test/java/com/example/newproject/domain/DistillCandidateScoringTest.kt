@@ -1,5 +1,6 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.DistillLimits
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
