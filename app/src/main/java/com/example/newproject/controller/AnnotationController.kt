@@ -32,13 +32,22 @@ class AnnotationController(
     private val repository: NoteRepository,
     private val aiClient: AiClient,
     private val uiState: MutableStateFlow<NoteUiState>,
-    private val vaultUri: () -> Uri?
+    private val vaultUri: () -> Uri?,
+    // Vault切替の世代。NoteViewModel が saveVault() で採番する。
+    // 補記の作成は「ノート単位」で activeRequestId が見るが、一覧と削除は
+    // 「Vault単位」で寿命が違う（補記管理画面はノート切替と無関係）。
+    private val vaultGeneration: () -> Long
 ) {
     // モデルDL完了後に作成を再開するために保持
     private var pending: PendingAnnotation? = null
     private var createJob: Job? = null
     private var downloadJob: Job? = null
     private var activeRequestId = 0L
+
+    // 一覧・削除は同じ annotationListState を奪い合うのでJobは1本で共有する
+    // （削除→再読込の途中で別の削除が走ると、消したはずの項目が戻って見える）。
+    // 生成用の createJob とは分ける。ノート切替で一覧を巻き込まないため。
+    private var listJob: Job? = null
 
     fun create(
         contentResolver: ContentResolver,
@@ -130,6 +139,19 @@ class AnnotationController(
         uiState.update { current -> current.copy(annotationState = AnnotationState.Idle) }
     }
 
+    /**
+     * Vault切替時に NoteViewModel の saveVault() から呼ばれる契約。
+     *
+     * 一覧は [cancelAndClear]（ノート切替）では止めない。補記管理画面はノートと
+     * 無関係なので、ノートを開き直しただけで一覧が消えるのは誤りになる。
+     * 止めるのはVaultが変わったときだけで、そのとき旧Vaultの一覧は無効になる。
+     */
+    fun onVaultChanged() {
+        listJob?.cancel()
+        listJob = null
+        uiState.update { current -> current.copy(annotationListState = AnnotationListState.Idle) }
+    }
+
     fun loadList(contentResolver: ContentResolver) {
         val uri = vaultUri()
         if (uri == null) {
@@ -138,46 +160,62 @@ class AnnotationController(
             }
             return
         }
-        scope.launch {
+        val generation = vaultGeneration()
+        listJob?.cancel()
+        listJob = scope.launch {
             uiState.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
-            try {
-                val files = repository.listAnnotationFiles(contentResolver, uri)
-                uiState.update { current ->
-                    current.copy(annotationListState = AnnotationListState.Success(files))
-                }
-            } catch (e: Exception) {
-                uiState.update { current ->
-                    current.copy(annotationListState = AnnotationListState.Error(e.message ?: "Unknown error"))
-                }
-            }
+            reloadList(contentResolver, generation)
         }
     }
 
     fun delete(contentResolver: ContentResolver, uri: Uri) {
-        scope.launch {
+        val generation = vaultGeneration()
+        listJob?.cancel()
+        listJob = scope.launch {
             repository.deleteDocument(contentResolver, uri)
-            reloadList(contentResolver)
+            reloadList(contentResolver, generation)
         }
     }
 
+    /**
+     * 表示中の一覧をまとめて削除する。
+     *
+     * 削除対象は「起動時に表示されていた一覧」で固定する。走行中にVaultが
+     * 切り替わっても、拾い直した新Vaultのファイルを消しにいかないようにするため。
+     */
     fun deleteAll(contentResolver: ContentResolver) {
         val current = uiState.value.annotationListState as? AnnotationListState.Success ?: return
-        scope.launch {
+        val generation = vaultGeneration()
+        listJob?.cancel()
+        listJob = scope.launch {
             current.files.forEach { file ->
+                // 旧Vaultのファイルを消し続けないよう、1件ごとに世代を見る。
+                // 永続URI権限が残っている端末では、切替後もURIが有効なまま消せてしまう。
+                if (generation != vaultGeneration()) return@launch
                 repository.deleteDocument(contentResolver, file.uri)
             }
-            reloadList(contentResolver)
+            reloadList(contentResolver, generation)
         }
     }
 
-    private suspend fun reloadList(contentResolver: ContentResolver) {
+    /**
+     * 一覧を読み直して [AnnotationListState] へ反映する。
+     *
+     * 起動時の世代と食い違っていたら書かない。`cancel()` だけに頼ると、
+     * SAF列挙から戻った直後にVault切替が起きた場合に旧Vaultの補記が並ぶ。
+     */
+    private suspend fun reloadList(contentResolver: ContentResolver, generation: Long) {
         val uri = vaultUri() ?: return
         try {
             val files = repository.listAnnotationFiles(contentResolver, uri)
+            if (generation != vaultGeneration()) return
             uiState.update { current ->
                 current.copy(annotationListState = AnnotationListState.Success(files))
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            if (generation != vaultGeneration()) return
             uiState.update { current ->
                 current.copy(annotationListState = AnnotationListState.Error(e.message ?: "Unknown error"))
             }

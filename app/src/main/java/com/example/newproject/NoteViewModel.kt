@@ -71,7 +71,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
     private val quiz = QuizController(viewModelScope, aiClient, _uiState)
-    private val annotation = AnnotationController(viewModelScope, repository, aiClient, _uiState) { vaultUri }
+    private val annotation = AnnotationController(
+        scope = viewModelScope,
+        repository = repository,
+        aiClient = aiClient,
+        uiState = _uiState,
+        vaultUri = { vaultUri },
+        vaultGeneration = { vaultGeneration }
+    )
     private val search = SearchController(
         scope = viewModelScope,
         repository = repository,
@@ -181,6 +188,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         cachedNotesLoadedAt = 0L
         relatedNotesUseCase.clearCache()
         search.onVaultChanged()
+        annotation.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()

@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.controller.AnnotationController
 import com.example.newproject.data.NoteRepository
+import com.example.newproject.model.AnnotationListState
 import com.example.newproject.model.AnnotationState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.ai.AiAvailability
@@ -48,12 +49,43 @@ class AnnotationControllerTest {
         assertFalse(state.value.annotationState is AnnotationState.Loading)
     }
 
+    @Test
+    fun `Vault切替で補記一覧が破棄される`() = runTest {
+        val state = MutableStateFlow(
+            NoteUiState(annotationListState = AnnotationListState.Loading)
+        )
+        val controller = controller(state)
+
+        controller.onVaultChanged()
+
+        assertTrue(state.value.annotationListState is AnnotationListState.Idle)
+    }
+
+    // 補記管理画面はノートと無関係なので、ノート切替では一覧を巻き込まない。
+    // createJob と listJob を分けている理由がここ。
+    @Test
+    fun `ノート切替では補記一覧を巻き込まない`() = runTest {
+        val state = MutableStateFlow(
+            NoteUiState(
+                annotationState = AnnotationState.Loading("対象ノート"),
+                annotationListState = AnnotationListState.Error("読み込み失敗")
+            )
+        )
+        val controller = controller(state)
+
+        controller.cancelAndClear()
+
+        assertTrue(state.value.annotationState is AnnotationState.Idle)
+        assertTrue(state.value.annotationListState is AnnotationListState.Error)
+    }
+
     private fun controller(state: MutableStateFlow<NoteUiState>) = AnnotationController(
         scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
         repository = NoteRepository(),
         aiClient = NoOpAiClient,
         uiState = state,
-        vaultUri = { null }
+        vaultUri = { null },
+        vaultGeneration = { 0L }
     )
 
     private object NoOpAiClient : AiClient {
