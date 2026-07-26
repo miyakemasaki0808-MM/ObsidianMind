@@ -472,20 +472,46 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 } else null
             )
         } catch (error: NoteFileTooLargeException) {
-            NoteState.Success(
+            displayFallback(
+                contentResolver = contentResolver,
                 title = title,
-                content = repository.readNoteContent(contentResolver, uri),
-                targetUri = uri.toString(),
-                distillUnavailableReason = "このノートは256KBを超えるため蒸留できません。"
+                uri = uri,
+                reason = "このノートは256KBを超えるため蒸留できません。"
             )
         } catch (error: InvalidNoteEncodingException) {
-            NoteState.Success(
+            displayFallback(
+                contentResolver = contentResolver,
                 title = title,
-                content = repository.readNoteContent(contentResolver, uri),
-                targetUri = uri.toString(),
-                distillUnavailableReason = "このノートはUTF-8として安全に確認できないため蒸留できません。"
+                uri = uri,
+                reason = "このノートはUTF-8として安全に確認できないため蒸留できません。"
             )
         }
+    }
+
+    /**
+     * 蒸留できないノートを、表示だけはできるように読み直す。
+     *
+     * ここへ落ちてくるのは一番大きいノートなので読込にも上限がある。切り詰めたときは
+     * 黙って先頭だけ見せるのではなく、蒸留できない理由と一緒にその旨を伝える
+     * （この経路は元々理由を表示しているので、新しいUIの受け皿は要らない）。
+     */
+    private suspend fun displayFallback(
+        contentResolver: ContentResolver,
+        title: String,
+        uri: Uri,
+        reason: String
+    ): NoteState.Success {
+        val loaded = repository.readNoteForDisplay(contentResolver, uri)
+        return NoteState.Success(
+            title = title,
+            content = loaded.text,
+            targetUri = uri.toString(),
+            distillUnavailableReason = if (loaded.isTruncated) {
+                "$reason 大きすぎるため先頭1MBのみ表示しています。"
+            } else {
+                reason
+            }
+        )
     }
 
     /**
@@ -559,7 +585,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     currentContent = content,
                     allNotes = cachedNotes,
                     wikilinkTitles = wikilinkTitles,
-                    readContent = { uri -> repository.readNoteContent(contentResolver, uri) },
+                    // 候補はスニペットとfront matterしか使わないので、先頭だけ読む
+                    readContent = { uri -> repository.readNoteSnippet(contentResolver, uri) },
                     parseMeta = { repository.parseMeta(it) }
                 )
             ) {

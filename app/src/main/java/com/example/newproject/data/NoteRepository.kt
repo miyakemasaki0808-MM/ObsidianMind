@@ -27,6 +27,21 @@ data class NoteFile(
 // Vault 直下のフォルダ。documentId は配下をたどる起点に使う。
 data class NoteFolder(val name: String, val documentId: String)
 
+/** 上限付きで読んだ本文。[isTruncated] が真なら、ノートにはまだ続きがある。 */
+data class BoundedText(val text: String, val isTruncated: Boolean)
+
+/**
+ * 本文読込の予算。用途ごとに別の入口を持たせ、**呼び出し側にバイト数を選ばせない**。
+ * 引数で受けると「とりあえず大きめ」を渡せてしまい、上限を置く意味が薄れる。
+ */
+internal object NoteReadLimits {
+    /** 表示用。蒸留の256KBを超えるノートでも、先頭はここまで見せる。 */
+    const val DISPLAY_MAX_BYTES = 1024 * 1024
+
+    /** 関連ノート候補用。front matter と冒頭150文字を取れれば足りる。 */
+    const val SNIPPET_MAX_BYTES = 8 * 1024
+}
+
 data class NoteMeta(
     val tags: List<String> = emptyList(),
     val aliases: List<String> = emptyList(),
@@ -130,12 +145,46 @@ class NoteRepository {
         }
     }
 
-    suspend fun readNoteContent(contentResolver: ContentResolver, uri: Uri): String =
-        withContext(Dispatchers.IO) {
-            contentResolver.openInputStream(uri)?.use { stream ->
-                stream.bufferedReader(Charsets.UTF_8).readText()
-            } ?: ""
-        }
+    /**
+     * 表示用に読む。[NoteReadLimits.DISPLAY_MAX_BYTES] を超える分は切り詰める。
+     *
+     * 蒸留できないほど大きいノート・UTF-8として厳密に読めないノートのフォールバック経路。
+     * 皮肉なことに、ここへ落ちてくるのは一番大きいノートなので、上限が無いと
+     * 「蒸留は256KBで止めたのに表示は無制限」という抜け道になる。
+     */
+    suspend fun readNoteForDisplay(contentResolver: ContentResolver, uri: Uri): BoundedText =
+        readBoundedText(contentResolver, uri, NoteReadLimits.DISPLAY_MAX_BYTES)
+
+    /**
+     * 関連ノート候補のスニペットとfront matterを取るために、**先頭だけ**読む。
+     *
+     * 候補は最大40件を並列で読むため、ここが無制限だと巨大ファイル1つで詰まる。
+     * 呼び出し側（`RelatedNotesUseCase`）が使うのは冒頭150文字のスニペットと
+     * front matter の tags / aliases だけなので、先頭数KBあれば足りる。
+     */
+    suspend fun readNoteSnippet(contentResolver: ContentResolver, uri: Uri): String =
+        readBoundedText(contentResolver, uri, NoteReadLimits.SNIPPET_MAX_BYTES).text
+
+    /**
+     * 上限付きでテキストを読む。上限で切ると多バイト文字が割れるため、
+     * 復号前に末尾の不完全なシーケンスを落とす。
+     *
+     * 復号は厳密検証しない（この2経路は「読めるところまで見せる」のが目的で、
+     * 不正UTF-8を弾く役目は蒸留用の [readNoteSnapshot] が持つ）。
+     */
+    private suspend fun readBoundedText(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        maximumBytes: Int
+    ): BoundedText = withContext(Dispatchers.IO) {
+        val bounded = contentResolver.openInputStream(uri)?.use { stream ->
+            readAtMostBytes(stream, maximumBytes)
+        } ?: return@withContext BoundedText("", isTruncated = false)
+        BoundedText(
+            text = String(dropIncompleteUtf8Tail(bounded.bytes), Charsets.UTF_8),
+            isTruncated = bounded.isTruncated
+        )
+    }
 
     /** 蒸留用。競合判定に使う生バイト列を保持し、UTF-8を置換なしで検証する。 */
     internal suspend fun readNoteSnapshot(
