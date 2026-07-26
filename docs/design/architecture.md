@@ -2,9 +2,9 @@
 
 **対象領域:** 横断的なコード構造・状態管理・並行処理の規約
 **初版:** 2026-07-19（品質改善活動 PR #16〜#20）
-**状態:** 実装済み。Controller共通化は2026-07-25の4件目再判定まで含めて決着（**共通化せず、相似のまま維持**）。パッケージのレイヤー別整理は PR #37 で実施済み。
-**未解決:** ①パッケージ間の依存が循環している（`model ⇄ data` / `model ⇄ domain` / `domain ⇄ ai` の3組）②`NoteViewModel` が依存をすべて内部生成しており差し替え口が無く、JVMテストが1件も通っていない③単一 `NoteUiState` を6 Controller 全員が `update` しており、担当外フィールドも書ける。**パッケージは整理されたが依存の「向き」はまだ制約されていない。**
-（検索の世代管理は 2026-07-26 に解消し、6 Controller すべてが requestId ＋ Job 追跡で揃った）
+**状態:** 実装済み。Controller共通化は2026-07-26の5件目再判定まで含めて決着（**共通化せず、相似のまま維持**。以後は件数をトリガーにしない）。パッケージのレイヤー別整理は PR #37 で実施済み。非同期の世代IDは2026-07-26に二層（Vault単位＝共有／ノート単位＝Controller自前）で確定。
+**未解決:** ①パッケージ間の依存が循環している（`model ⇄ data` / `model ⇄ domain` / `domain ⇄ ai` の3組）②`NoteViewModel` が依存をすべて内部生成しており差し替え口が無く、JVMテストが1件も通っていない③単一 `NoteUiState` を7 Controller 全員が `update` しており、担当外フィールドも書ける。**パッケージは整理されたが依存の「向き」はまだ制約されていない。**
+（非同期の世代管理は 2026-07-26 に解消し、7 Controller すべてが requestId ＋ Job 追跡で揃った。Vault単位の要求だけは共有の `vaultGeneration` を見る）
 
 ---
 
@@ -23,10 +23,11 @@ NoteViewModel（窓口と横断調停）
  ├── AnnotationController
  ├── SearchController
  ├── DistillController        ← PR #32 で追加
- └── ReadingTraceController   ← ReadingTrace v1 で追加
+ ├── ReadingTraceController   ← ReadingTrace v1 で追加
+ └── SummaryController        ← 2026-07-26（ViewModel直書きから切り出し）
 ```
 
-分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て `NoteViewModel` 576行・Controller 6つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。
+分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 7つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
 
 - 各Controllerは `viewModelScope` と `MutableStateFlow<NoteUiState>` を注入され、**担当フィールドだけ**を `copy()` で更新する
 - 公開APIと `uiState` の形を維持したため、UI層の変更ゼロで移行できた
@@ -109,3 +110,33 @@ NoteViewModel（窓口と横断調停）
 一方で ReadingTrace 固有の関心事（読書セッションのスナップショット、離脱時の1回だけの書き込み、read-modify-write の直列化）は他の4つに存在しない。**共有できるのは依然として requestId ガードの数行だけ**で、2026-07-24 の判断がそのまま維持される。
 
 **教訓の更新**: 「4件目が同じ型なら共通化」という条件設定は有効だったが、判定は**通知と失敗の見せ方**を軸に見るべきだった。バックグラウンドAI機能の共通性は生成処理そのものではなく「ユーザーへの見せ方」に宿るため、そこが違えば処理が似ていても共通化できない。
+
+### 2026-07-26 — 非同期の世代IDを二層にする（A案）
+
+ノート・Vault切替後に旧要求の結果が画面へ後着する経路が4つ残っていた（補記一覧・補記削除・フォルダ一覧・要約のモデルDL）。塞ぐにあたって、**壊れている4経路はスコープが2種類ある**ことが分かった。
+
+| スコープ | 対象 | 無効化の契機 | 持ち主 |
+|---|---|---|---|
+| ノート単位 | 要約・DL・クイズ・補記生成・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`**（従来どおり） |
+| Vault単位 | 補記一覧・補記削除・フォルダ一覧 | Vault切替（`saveVault()`） | **`NoteViewModel.vaultGeneration`**（新設・共有） |
+
+**混ぜられない理由がはっきりしている。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤りになる。既存の `cancelAndClear()` はノート切替で呼ばれるため、Vault単位の要求をそこに相乗りさせられない。逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**したがって層を分けるのが正しく、片方に寄せると必ずどちらかが壊れる。**
+
+**Vault世代を `vaultUri` の比較で代用しない。** Vault を A→B→A と選び直すと `cachedNotes` もスコープキャッシュも破棄されるため無効化したいが、Uri比較では同じ値になって素通りする。単調増加する `Long` なら選び直しも1回の切替として数えられる。副次的に、Android依存が無いのでJVMテストでも扱える。
+
+**照合は `update` の直前に1箇所へ集約する。** `SearchController.setStateIfCurrent` / `SummaryController.setStateIfCurrent` / `AnnotationController.reloadList` が唯一の書き込み口になっている。呼び出し側に `if (!isCurrent) return` を重ねるとテストで検出できない等価な分岐が増える（実際、DL進捗に重ねた1件は変異テストで冗長と判明して削除した）。
+
+### 2026-07-26 — 5件目（SummaryController）での再判定: やはり共通化しない
+
+要約のモデルDL経路を `SummaryController` として切り出した。これで Controller は7つになり、**5件目として上記の再検討条件（Quiz/Annotation 型にそのまま乗るか）を再び満たすか判定した。結論は乗らない。**
+
+| 要素 | Quiz / Annotation | Summary |
+|---|---|---|
+| `activeRequestId` ＋ Job 追跡 | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | ✓ | **✓（初めて完全に一致した）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | **✗** |
+| 起動契機 | ユーザーの明示操作 | **ノート表示（自動）** |
+
+**自動DLの型には初めて完全に乗ったが、通知の型に乗らなかった。** 要約は画面の要約欄に直接出るため「見たかどうか」を管理する必要がなく、`markViewed()` に相当する概念が無い。2026-07-25 に「共通性は生成処理ではなく**ユーザーへの見せ方**に宿る」と更新した判定軸をそのまま当てると、ここでも共通化には届かない。共有できるのは依然として requestId ガードの数行だけである。
+
+**再検討条件を更新する。** 「自動DL＋Snackbar＋`isViewed` が揃った4件目」という条件は、5件中3件が部分一致するだけで一度も揃わなかった。今後は件数をトリガーにせず、**`markViewed()` と Snackbar 通知を持つ Controller が3つ目に現れたとき**に「AI結果の未確認管理」だけを共通化する候補として再検討する（現状は Quiz と Annotation の2件）。生成・DL側の共通化は打ち切る。
