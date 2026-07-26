@@ -5,7 +5,7 @@
 **基準:** ReadingTrace v1（実機確認待ち）・Vigilith Phase 3（最終実機確認済み）・
 ダークモード（実機確認済み） / `feature/result_source_analys`
 **直近の入力:** 2026-07-26 のソースコード品質総評（[source_code_quality_review.md](../source_code_quality_review.md)）。
-全指摘を実コードで突合し、新規課題として 1-1・2-9〜2-11・3-10〜3-13 を追加した。
+全指摘を実コードで突合して起票し、うち軽量なものから順次解消している。
 **目的:** 次の一手を決めるための、現時点で確認できる課題の棚卸し。ロードマップ（[roadmap.md](roadmap.md)）の入力とする。
 
 > 何をいつ変えたかは [change_history.md](../change_history.md)、今どうなっているかは [source_code_analysis.md](../source_code_analysis.md)、なぜそうしたかは [design/](../design/) を参照。本ファイルは「まだ手を付けていない/追いついていない」課題のみを新しい順の観点で集約する。**解消した課題はこのファイルから削除する**（記録は上記3文書に残るので、ここに残すと未対応課題が埋もれる）。
@@ -18,12 +18,11 @@
 
 | 優先度 | 課題 | 種別 | 影響 |
 |---|---|---|---|
-| **高** | **1-1 検索の非同期に世代管理がない** | 並行処理 | 古い検索結果が新しい結果を上書きし得る |
 | 中 | 2-1 Job管理の不統一（補記一覧/削除・モデルDLが未保護） | 並行処理 | 連続操作時の競合余地 |
 | 中 | 2-2 AI入力が先頭固定長切り出し | AI品質 | 長文ノートの後半が無視される |
 | 中 | 2-3 読書痕跡の孤児ファイルが掃除されない／move・rename に追従しない | 保守 | 長期運用でファイル数が単調増加 |
 | 中 | 2-4 `_ReadingTraces`の索引が外部同期で追加されたファイルをプロセス再起動まで認識しない | 同期/キャッシュ | 再会カードの見逃し・重複作成余地 |
-| 中 | 2-5 30件上限後も保持件数を「これまで開いた回数」と表示する | 正確性/UX | 31回目以降も「30回」と誤表示 |
+| 中 | 2-5 30件上限後も保持件数を「これまで開いた回数」と表示する | 正確性/UX | 31回目以降も「30回」と誤表示。**AI俯瞰要約も更新停止** |
 | 中 | **2-9 パッケージ間の依存が循環している** | 構造 | 機能追加時の変更範囲が読めない |
 | 中 | **2-10 `NoteViewModel` が依存を内部生成しておりテスト不能** | テスト容易性 | Controller間の調停が379件の検証範囲外 |
 | 中 | **2-11 単一 UiState を6 Controller が共有所有している** | 状態管理 | 担当外フィールドを書ける／全体再評価 |
@@ -40,13 +39,7 @@
 
 ## 1. 高優先度
 
-### 1-1. 検索の非同期に世代管理がない
-- **現状:** [`SearchController`](../../app/src/main/java/com/example/newproject/controller/SearchController.kt#L60) の `searchByKeyword()` と `pickRandomInScope()` が無条件に `scope.launch` する。Job も requestId も持たない。**Controller 6本のうち、世代管理を持たないのはここだけ**（Annotation / Distill / Quiz / ReadingTrace / SectionChat はいずれも `activeRequestId` か `Job?.cancel()` を実装済み）。
-- **問題（2つあり、分割不可）:**
-  1. **古い結果が新しい結果を上書きする。** 連続検索だけでなく、検索⇄ランダム切替でも競合する。SAF走査は重く、スコープキャッシュを跨ぐと所要時間が大きく変わるため完了順は保証されない。
-  2. **`catch (e: Exception)` が `CancellationException` も通常エラーへ変換する**（[L77](../../app/src/main/java/com/example/newproject/controller/SearchController.kt#L77)・[L97](../../app/src/main/java/com/example/newproject/controller/SearchController.kt#L97)）。ただし現状は明示的な `cancel()` がどこにも無いため、キャンセルが起きるのは `viewModelScope` 破棄時＝画面消滅時だけで、**実害はほぼ出ていない**。①を直す（前Jobを `cancel()` する）と**この瞬間に「キャンセルがエラー表示に化ける」バグが顕在化する**ため、①②は必ず同時に直す。
-- **対応候補:** 他5 Controller と同じ `activeRequestId` ＋ `Job?.cancel()` 方式へ揃え、`catch` から `CancellationException` を除外する。あわせて `scopeNotesCache`（素の `mutableMapOf`）が Main 単一スレッド前提で成立していることをコメントで明文化する。
-- **規模感:** 小。既存パターンの横展開で、新しい設計判断が要らない。
+**現在なし。**（1-1 の検索の世代管理は 2026-07-26 に解消）
 
 > ReadingTrace v1 で 2026-07-25 に解消した4件（到達率・Lifecycle・Vault分離・検索フォールバック）は
 > SAF実装のVault照合と Activity lifecycle を通した pause/resume が JVMテストの範囲外のため、
@@ -57,9 +50,9 @@
 ## 2. 中優先度
 
 ### 2-1. Job管理の不統一（残り）
-- **現状:** 検索は 1-1 として切り出した。残る未保護は **補記一覧の読み込み／削除／全削除**（[`AnnotationController.loadList` / `delete` / `deleteAll`](../../app/src/main/java/com/example/newproject/controller/AnnotationController.kt#L133)）と、**要約側のモデルDL Job**（[`NoteViewModel.startModelDownload`](../../app/src/main/java/com/example/newproject/NoteViewModel.kt#L582)）。いずれも裸の `scope.launch` で要求単位に追跡されない。補記の生成・DL（`createJob` / `downloadJob`）、要約・関連・ノート読み込み（`summaryJob` / `relatedNotesJob` / `noteLoadJob`）は保護済み。
+- **現状:** 検索は 2026-07-26 に解消した（全Controllerが `activeRequestId` ＋ `Job?.cancel()` で揃った）。残る未保護は **補記一覧の読み込み／削除／全削除**（[`AnnotationController.loadList` / `delete` / `deleteAll`](../../app/src/main/java/com/example/newproject/controller/AnnotationController.kt#L133)）と、**要約側のモデルDL Job**（[`NoteViewModel.startModelDownload`](../../app/src/main/java/com/example/newproject/NoteViewModel.kt#L582)）。いずれも裸の `scope.launch` で要求単位に追跡されない。補記の生成・DL（`createJob` / `downloadJob`）、要約・関連・ノート読み込み（`summaryJob` / `relatedNotesJob` / `noteLoadJob`）は保護済み。
 - **問題:** 短時間に複数要求できる経路で、完了順による状態上書きの余地が残る。削除→再読込の順序が逆転すると消したはずの項目が戻って見える。
-- **対応候補:** 1-1 と同じ形へ揃える。（解析書 §10.1 / §14.2 / §15-2）
+- **対応候補:** `SearchController` と同じ形へ揃える。**UseCase 側が `CancellationException` を握りつぶしていないかも併せて確認する**（`SearchPickerUseCase` は畳んでおり、`cancel()` だけでは防げなかった）。（解析書 §10.1 / §14.2 / §15-2）
 - **規模感:** 小〜中。
 
 ### 2-2. AI入力の先頭固定長切り出し（関連ノートは設計書との乖離も含む）
@@ -84,6 +77,7 @@
 ### 2-5. 訪問保持上限と累計回数の混同
 - **現状:** [`withVisit()`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L71) は訪問を最大30件へ切り詰める。一方、カード（[`ReadingTraceController` L365](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt#L365)）とAIプロンプト（[`PromptBuilder` L74](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L74) `Times opened:`）は `visits.size` を「これまで開いた回数」として使う。`totalVisitCount` 相当のフィールドは存在しない。
 - **問題:** 31回目以降も常に「これまで30回」と表示・要約される。保存履歴数と累計訪問数は異なる概念。
+- **見た目だけの問題ではない（2026-07-26 追記）:** [`needsAiSummary`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L79) は `aiSummaryVisitCount != visits.size` で再生成を判定する。訪問が30件で頭打ちになると `visits.size` は永久に30固定になるため、**31回目以降どれだけ読んでもAI俯瞰要約が二度と更新されない**。カード側の出し分け（[`ReadingTraceController` L360](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt#L360)）も同じ式なので、古い要約が「最新」として出続ける。根本原因は本課題と同一（保持件数を累計として使っている）で、`totalVisitCount` へ判定を移せば同時に直る。
 - **対応候補:** `totalVisitCount`を別フィールドとして累積し、`visits`は傾向分析用の直近30件として維持する。既存schemaからの移行方針も合わせて決める。簡易対応なら文言を「記録に残っている直近30回」に限定する。
 - **規模感:** 小〜中。schemaVersion更新を伴う場合は移行テストが必要。
 
@@ -193,7 +187,7 @@
 
 - **A. ReadingTraceの実機確認**（解消済み4件を同じ端末で確認。これが済むまで roadmap N-1は完了扱いにしない）
 - **B. 読書痕跡の保守性に手を入れる**（2-3〜2-5）
-- **C. 非同期の世代管理を揃える**（1-1 → 2-1。1-1 は小さく効果が確実なので、他の何を選ぶにせよ先に片付けてよい）
+- **C. 非同期の世代管理を揃える**（残り 2-1。1-1 は 2026-07-26 に完了し、`SearchController` が参照実装になっている）
 - **D. 「意図して問いを残す」の検討**（ReadingTraceで回収できなかった思考の連続性 → roadmap X-2）
 - **G. 構造の土台を固める**（2-9 → 2-10 → 3-1）
   依存方向・状態の所有者・ViewModelのテスト可能性の3点。地ならしの 3-10（未使用import削除）は 2026-07-26 に完了し、`domain → ui` と `domain → controller` の依存は消えた。残る 2-9 は「方向を決める」だけなら小。2-10 を通すと初めて ViewModel を絡めたテスト（3-1）が書けるようになる。

@@ -37,7 +37,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
 - Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算など、壊れやすい純粋ロジックにはユニットテストが整備されている（352ケース）。
-- クイズ・補記・蒸留はrequestId＋Job追跡で古い結果の混入を防いでいるが、検索は要求単位で追跡されず、連続操作時の競合余地が残る。
+- 6 Controller すべてが requestId ＋ Job 追跡で古い結果の混入を防ぐ。要求単位で未追跡なのは補記一覧／削除と要約側のモデルDL Jobのみ。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
 - 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
 - ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度3件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
@@ -671,11 +671,10 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - `summaryJob`
 - `relatedNotesJob`
 
-`SectionChatController` は `openJob` と `answerJob` を保持する。`QuizController` と `AnnotationController` は生成Job・モデルDL Jobに加えて requestId を採番し、suspend地点の後に `isCurrent()` を確認してから状態を更新する。`ReadingTraceController` は再会照合/要約の `revealJob` とrequestIdを持ち、ノート切替後に古いカードを出さない。Jobキャンセルだけに頼らないのは、モデルDLコールバック等でキャンセルをすり抜ける完了通知があるため。ノート切替・Vault切替時は各Controllerのキャンセル処理で一括破棄する。
+`SectionChatController` は `openJob` と `answerJob` を保持する。`QuizController` と `AnnotationController` は生成Job・モデルDL Jobに加えて requestId を採番し、suspend地点の後に `isCurrent()` を確認してから状態を更新する。`ReadingTraceController` は再会照合/要約の `revealJob` とrequestIdを持ち、ノート切替後に古いカードを出さない。`SearchController` は検索とスコープ内ランダムで `searchJob` 1本と requestId を共有する（同じ `searchState` を奪い合うため、検索⇄ランダムの切替でも前の要求を止める）。Jobキャンセルだけに頼らないのは、モデルDLコールバック等でキャンセルをすり抜ける完了通知があるため。ノート切替・Vault切替時は各Controllerのキャンセル処理で一括破棄する。
 
 一方、次の処理は要求単位のJobを保持していない。
 
-- 検索・スコープ内ランダム
 - 補記一覧・削除
 - 要約側のモデルダウンロードJob
 
@@ -683,9 +682,9 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 ### 10.2 CancellationException
 
-要約、関連ノート、セクションAI、クイズ、補記の主要経路では `CancellationException` を再throwし、キャンセルを一般エラーに変換しない。
+要約、関連ノート、セクションAI、クイズ、補記、検索の主要経路では `CancellationException` を再throwし、キャンセルを一般エラーに変換しない。
 
-一方、`SearchPickerUseCase` など一部は広い `Exception` で捕捉しており、キャンセル方針は機能間で完全には統一されていない。
+`SearchPickerUseCase` は 2026-07-26 まで広い `Exception` でキャンセルも捕捉し `PickerResult.Error` へ畳んでいた。**この形は呼び出し側の `catch` では防げない**（中断せず正常に戻るため、そのまま状態更新に到達する）。UseCase 側の再throwと、`SearchController` の requestId ガードの二重で塞いだ。UseCase が結果型でエラーを返す設計を採る場合は、キャンセルだけは例外のまま通す必要がある。
 
 ### 10.3 キャッシュ
 
@@ -855,7 +854,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
-| 中 | Job管理の不統一 | クイズ・補記・蒸留はrequestId＋Jobで保護済みだが、検索・補記一覧等は未保護。将来UI導線が増えると古い完了結果が上書きし得る |
+| 中 | Job管理の不統一 | 6 Controller は保護済み。補記一覧／削除と要約側のモデルDL Jobが未保護で、将来UI導線が増えると古い完了結果が上書きし得る |
 | 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない |
 | 中 | ReadingTrace同期索引 | 外部同期で追加されたサイドカーをプロセス再起動まで認識しない |
 | 中 | ReadingTrace累計回数 | 直近30件の保持数を「これまで開いた回数」と表示し、31回目以降が不正確 |

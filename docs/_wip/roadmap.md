@@ -87,7 +87,9 @@ ReadingTraceの高優先度修正後、再会体験を濃くする拡張と、�
 - **累計回数:** 直近30件の保持数と「これまで開いた回数」を分離する。`totalVisitCount`追加または表示文言の限定を検討する。→ [current_issues.md](current_issues.md) 2-5
 
 ### X-5. Job管理の統一
-- **なぜここ:** 検索・補記一覧等が要求単位で未保護。UI導線が増える前に、requestIdまたはJobで「最後の要求だけが状態を更新する」形へ揃える。→ [current_issues.md](current_issues.md) 2-1
+- **なぜここ:** 補記一覧／削除と要約側のモデルDLが要求単位で未保護。UI導線が増える前に、requestIdまたはJobで「最後の要求だけが状態を更新する」形へ揃える。
+  検索は 2026-07-26 に解消済みで、`SearchController` が参照実装になる。**UseCase が `CancellationException` を握りつぶしていないかも併せて見る**
+  （`SearchPickerUseCase` は畳んでおり、`cancel()` だけでは防げなかった）。→ [current_issues.md](current_issues.md) 2-1
 
 ### X-6. AI状態UXの統一
 - **なぜここ:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとにバラつく。蒸留の「インライン説明フォールバック」を良い先例として、要約・検索・クイズ・補記へ横展開。**ReadingTrace は例外として扱う**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。→ [current_issues.md](current_issues.md) 3-3
