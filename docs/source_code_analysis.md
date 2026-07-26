@@ -727,7 +727,7 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 - クラウドAI API、独自サーバー、解析SDKへの送信コードは存在しない。
 - 初回モデル取得にはML Kit側のダウンロードが必要になる。
 - Vaultへの書き込みは、`_AI補記` フォルダの作成と補記Markdown保存・削除、蒸留による既存ノートの上書き（`**` の挿入のみ・削除なし）、`_ReadingTraces`への読書痕跡JSON保存がある。蒸留の上書きは原バイトSHA-256の二重照合と出力ハッシュ検証を通し、中断時は `noBackupFilesDir` の復旧レコードから起動時に復旧判定する。読書痕跡はユーザーの`.md`に触れないベストエフォート設計で、checksum破損検知はあるが復旧ファイルと原子更新は持たない。
-- `android:allowBackup="true"` であり、SharedPreferencesのVault URI文字列はバックアップ対象になり得る。実際のSAFアクセス可否は端末側の永続URI権限に依存する。
+- `android:allowBackup="true"` だが、`random_note_prefs`（Vault の SAF URI・テーマ設定・当日分の閲覧履歴タイトル）はバックアップ・端末移行の両方から除外している。`dataExtractionRules`（`res/xml/data_extraction_rules.xml`／API 31以上）と `fullBackupContent`（`res/xml/backup_rules.xml`／API 30以下）を併記し、minSdk 26 の全レンジを覆う。API 31以上では `cloud-backup` に加え `device-transfer` からも除外する（SAFの永続URI権限は移行先端末で無効になり、復元しても壊れた参照が残るだけのため）。`allowBackup` 自体は true のまま残し、将来バックアップしたいデータが出た時に個別許可できるようにしている。
 - ログ出力コードはなく、ノート本文やAIプロンプトをLogcatへ明示出力していない。
 
 ---
@@ -775,11 +775,13 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `ui/ReadingProgressGeometryTest.kt` | 8 | 最終可視ブロックの可視割合（完全/一部/画面外/高さ未確定）、5%刻みの量子化 |
 | `ui/VigilithOpeningMotionTest.kt` | 8 | ハロー・全身・名称の登場順、保持区間、退場、終端・範囲外入力 |
 | `ui/VigilithModeTest.kt` | 10 | Idle/Summarizing/Distilling/Messengerの優先順位、蒸留3工程、モデル取得除外、カードdismiss、全画面・シート非表示 |
-| `ui/VigilithMascotMotionTest.kt` | 9 | Summaryの片翼案内、蒸留の断片収集・両翼保持・下線、Messengerの着地・一度だけの発光、入力clamp・出力範囲 |
+| `ui/VigilithMascotMotionTest.kt` | 10 | Summaryの片翼案内、蒸留の断片収集・両翼保持・下線、Messengerの着地・一度だけの発光、入力clamp・出力範囲、Summarizing>Idleのレンズ輝度差 |
 | `ui/VigilithPlacementTest.kt` | 6 | 四辺clamp、Fold再配置、ラベル寸法、Snackbar / IME予約領域、狭小画面 |
 | `ui/VigilithAccessibilityTest.kt` | 2 | 状態・対象節をまとめたTalkBack文言、回答／要約の区別 |
+| `ui/VigilithStatusDerivationTest.kt` | 11 | セクションチャット／全画面AIの状態導出（要約×クイズの合成） |
+| `ui/theme/AppColorContrastTest.kt` | 15 | 明暗の役割トークンのコントラスト比（既知未達7件は実測値を記録する形で固定） |
 | `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
-| **合計（41ファイル）** | **352** | |
+| **合計（43ファイル）** | **379** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -790,11 +792,19 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を再確認した。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を確認した。
+
+その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加し、**現在は43ファイル・379ケース全件グリーン**。13.1の表は2026-07-26に実行結果XMLと突合して更新した。
 
 JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるため `/usr/libexec/java_home` では検出されない。`JAVA_HOME` へ明示指定して `./gradlew testDebugUnitTest --offline` で実行する。
 
-### 13.3 未カバー領域
+### 13.3 自動実行（CI）
+
+2026-07-26に `.github/workflows/ci.yml` を新設した。PR と `main` への push で `./gradlew testDebugUnitTest` と `./gradlew lintDebug` を実行する（JDK 21／ローカルの Android Studio 同梱 JBR に合わせた）。テストレポートと Lint レポートは失敗時の追跡用に artifact として保存し、同一ブランチへの連続pushでは古い実行を打ち切る。
+
+現在 Lint は Error 0件・Warning 28件で、**警告ではビルドを落としていない**（警告数を固定する設定は未導入）。
+
+### 13.4 未カバー領域
 
 - `NoteViewModel` の状態遷移（Controllerは一部テスト済み、網羅はしていない）
 - `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` のAI応答解釈（キーワード採点・フォールバックの選抜は `SearchKeywordMatchingTest` でカバー済み）

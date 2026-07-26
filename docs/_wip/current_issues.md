@@ -10,7 +10,7 @@
 
 > 何をいつ変えたかは [change_history.md](../change_history.md)、今どうなっているかは [source_code_analysis.md](../source_code_analysis.md)、なぜそうしたかは [design/](../design/) を参照。本ファイルは「まだ手を付けていない/追いついていない」課題のみを新しい順の観点で集約する。**解消した課題はこのファイルから削除する**（記録は上記3文書に残るので、ここに残すと未対応課題が埋もれる）。
 >
-> **番号は再利用しない。** 削除した課題の番号は欠番のままにする（他文書からのリンクが別の課題を指してしまうため）。現在の欠番: 2-6〜2-8（Vigilith周辺のリファクタリング／2026-07-26 完了 → [theme_and_ui_refactor](../design/theme_and_ui_refactor.md)）。
+> **番号は再利用しない。** 削除した課題の番号は欠番のままにする（他文書からのリンクが別の課題を指してしまうため）。現在の欠番: 2-6〜2-8（Vigilith周辺のリファクタリング／2026-07-26 完了 → [theme_and_ui_refactor](../design/theme_and_ui_refactor.md)）、3-6・3-7・3-10・3-11（軽量課題の一括消化／2026-07-26 完了）。
 
 ---
 
@@ -25,20 +25,16 @@
 | 中 | 2-4 `_ReadingTraces`の索引が外部同期で追加されたファイルをプロセス再起動まで認識しない | 同期/キャッシュ | 再会カードの見逃し・重複作成余地 |
 | 中 | 2-5 30件上限後も保持件数を「これまで開いた回数」と表示する | 正確性/UX | 31回目以降も「30回」と誤表示 |
 | 中 | **2-9 パッケージ間の依存が循環している** | 構造 | 機能追加時の変更範囲が読めない |
-| 中 | **2-10 `NoteViewModel` が依存を内部生成しておりテスト不能** | テスト容易性 | Controller間の調停が378件の検証範囲外 |
+| 中 | **2-10 `NoteViewModel` が依存を内部生成しておりテスト不能** | テスト容易性 | Controller間の調停が379件の検証範囲外 |
 | 中 | **2-11 単一 UiState を6 Controller が共有所有している** | 状態管理 | 担当外フィールドを書ける／全体再評価 |
 | 低 | 3-1 統合テスト不足（SAF・端末AI・Navigation） | テスト | 実端末依存の回帰を検出できない |
 | 低 | 3-2 エラー通知の握りつぶし（フォルダ取得失敗・補記削除失敗等） | 堅牢性 | 無言の失敗 |
 | 低 | 3-3 AI状態の一時エラーと非対応の同一視 | UX | 原因の区別ができない |
 | 低 | 3-4 YAML/Markdownの限定実装・キャッシュTTL 60秒 | 機能限定 | 取りこぼし・反映遅延 |
 | 低 | 3-5 ダークモードの最終実機確認が未完了 | 実機QA | 暗所での可読性・システムバー・Vigilith haloの品質が未確定 |
-| 低 | 3-6 `fractionBetween` のユーティリティ所在が曖昧 | リファクタ | 将来の二重定義リスク |
-| 低 | 3-7 Vigilith `Summarizing` モードの輝度差テストが未固定 | テスト | 意図しない回帰の検出漏れ |
 | 低 | 3-8 **ライトの弱い文字6色＋緑ボタンがAA未達** | a11y | 2.46〜4.43。ダークは全て基準内 |
 | 低 | 3-9 無彩色グレーが5段階あり意味的な区別がない | リファクタ | ダーク値を5つ決める必要が出る |
-| 低 | **3-10 コメント説明のためだけの未使用import 6件** | 構造 | ロジック層→UI層の依存が消えていない |
-| 低 | **3-11 CI が無い** | 開発運用 | PRごとの自動 test / lint がない |
-| 低 | **3-12 `applicationId` と `allowBackup` が初期値のまま** | リリース/privacy | 公開後は変更不可／Vault URIがバックアップされ得る |
+| 低 | **3-12 `applicationId` が `com.example.newproject` のまま** | リリース | 公開後は変更不可 |
 | 低 | **3-13 Lint warning 28件** | 保守 | 依存更新・KTX移行の積み残し |
 
 ---
@@ -107,7 +103,7 @@
 
 ### 2-10. `NoteViewModel` が依存を内部生成しておりテスト不能
 - **現状:** [`NoteViewModel` L60-88](../../app/src/main/java/com/example/newproject/NoteViewModel.kt#L60) が `NoteHistoryStore`・`NoteRepository`・`AICoreClient`・3 UseCase・6 Controller・`DistillWriteRepository` を**すべて内部で直接生成**している。631行で、依存生成・Vault/テーマ/キャッシュ・6 Controllerの調停・ノート読込・要約/関連/モデルDL・状態リセット・Lifecycle連携を担う。
-- **問題:** 差し替え口が無いため、**JVMテスト378件が1件も `NoteViewModel` を通っていない**。Controller間の調停ロジック（蒸留保存後の状態維持・Vault切替時の一斉リセット等）は最も壊れやすい部分なのに無検証。
+- **問題:** 差し替え口が無いため、**JVMテスト379件が1件も `NoteViewModel` を通っていない**。Controller間の調停ロジック（蒸留保存後の状態維持・Vault切替時の一斉リセット等）は最も壊れやすい部分なのに無検証。
 - **対応候補:** `ViewModelProvider.Factory` かコンストラクタ引数へ依存生成を出す。DIライブラリの導入までは不要。
 - **前提関係:** **これを先にやらないと 3-1 の ViewModel 統合テストが書けない。**
 - **規模感:** 中。
@@ -125,8 +121,8 @@
 ## 3. 低優先度（顕在化していないが記録）
 
 ### 3-1. 統合テスト不足
-- SAF走査・補記保存/削除・Gemini Nano・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合を絡めたテストがない。`app/src/androidTest` ソースセット自体が存在しない。ローカルユニットテスト378件は純粋ロジックの回帰防止には有効だが、実端末依存の動作は保証範囲外。
-- 対応候補: Fake `ContentResolver` または instrumentation テストで Vault走査・保存・削除を検証。（解析書 §13.3 / §15-5）
+- SAF走査・補記保存/削除・Gemini Nano・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合を絡めたテストがない。`app/src/androidTest` ソースセット自体が存在しない。ローカルユニットテスト379件は純粋ロジックの回帰防止には有効だが、実端末依存の動作は保証範囲外。
+- 対応候補: Fake `ContentResolver` または instrumentation テストで Vault走査・保存・削除を検証。（解析書 §13.4 / §15-5）
 - **前提:** ViewModelを絡めたテストは 2-10 の解消が先。
 
 ### 3-2. エラー通知の握りつぶし
@@ -149,14 +145,6 @@
 - **完了条件:** 上記を実機で一巡し、必要なら色・余白定数だけを調整する。
   → [dark_mode](../design/dark_mode.md) §6
 
-### 3-6. `fractionBetween` のユーティリティ所在整理
-- `Float.fractionBetween()` が [`VigilithOpeningMotion.kt` L45](../../app/src/main/java/com/example/newproject/ui/vigilith/VigilithOpeningMotion.kt#L45) に `internal` 拡張関数として定義されており、同パッケージ内の他ファイルから呼べてしまう。`VigilithMascotMotion.kt` は現状使っていないが、将来の二重定義や意図しない依存のリスクがある。
-- 対応候補: 共通ユーティリティに移すか、`private` に変更して外部依存を断つ。
-
-### 3-7. Vigilith `Summarizing` モードの輝度差テスト補強
-- `VigilithMascotMotionTest` は各モードの**内部での**変化（`start` vs `peak`／`focus`）を検証しているが、**モードを跨いだ大小関係**は固定していない。`Summarizing` の `lensGlowAlpha` が Idle より強い（ベース 0.18 vs 0.08）という意図的な輝度差が将来の変更で崩れても検出できない。
-- 対応候補: Summarizing と Idle の `lensGlowAlpha` の大小関係を固定するアサーションを追加する。
-
 ### 3-8. ライトの弱い文字が軒並みAA未達（ダークは基準内）
 - ダークモード実装時に明暗の全トークンを実測した結果、**ライトの文字トークン12件中6件が基準4.5:1を割っていた**。
   ダーク側は設計時に測って決めたため全て基準内で、**同じ画面がライトでだけ読みにくい**という逆転が起きている。
@@ -175,7 +163,7 @@
   エラーバッジ側はダークで新たに読めなくなっていたため塗り用トークンで修正済みだが、
   こちらは明暗共通の既存問題なので、ライトの見た目を変えないため未修正。
 - **現状:** 値を変えるとライトの見た目が変わるため未修正。[`AppColorContrastTest`](../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt#L127) が既知未達7件の実測値を「失敗させず記録する」形で固定しており、悪化しても改善しても検出できる。
-  **裏を返すと、テスト378件が全緑であることは全配色AA準拠を意味しない。**
+  **裏を返すと、テスト379件が全緑であることは全配色AA準拠を意味しない。**
 - 対応候補: グレー階調の整理（3-9）と同時に、暗い側へ寄せる。見出し2色は彩度を落として明度を下げる。
 
 ### 3-9. 無彩色グレーが5段階あり意味的な区別がない
@@ -185,37 +173,15 @@
 - 対応候補: 3段階（本文に次ぐ／弱い／最も弱い）へ統合する。実行するとライトの見た目がわずかに変わるため、
   ライト側の弱い文字（3-8）を是正するタイミングでまとめて判断する。
 
-### 3-10. コメント説明のためだけの未使用import 6件
-- **現状:** 本文中の説明コメントで型名に触れるためだけに import が残っており、**実コードでは一切使われていない**。
-
-| ファイル | 未使用import | 実際の出現箇所 |
-|---|---|---|
-| [`domain/markdown/MarkdownBlocks.kt` L3](../../app/src/main/java/com/example/newproject/domain/markdown/MarkdownBlocks.kt#L3) | `data.NoteRepository` | L160 コメントのみ |
-| [`domain/markdown/NoteSections.kt` L3](../../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt#L3) | `ui.markdown.MarkdownNoteContent` | L22 コメントのみ |
-| [`domain/AnnotationComposer.kt` L3](../../app/src/main/java/com/example/newproject/domain/AnnotationComposer.kt#L3) | `controller.AnnotationController` | L8 コメントのみ |
-| [`model/ReadingTrace.kt` L3](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L3) | `data.ReadingTraceJson` | L11 コメントのみ |
-| [`model/NoteUiState.kt` L6](../../app/src/main/java/com/example/newproject/model/NoteUiState.kt#L6) | `data.NoteHistoryStore` | L232 コメントのみ |
-| [`model/NoteUiState.kt` L7](../../app/src/main/java/com/example/newproject/model/NoteUiState.kt#L7) | `domain.projectedBoldRatio` | L50 は同名フィールドの**宣言**であって関数の使用ではない（完全な未使用） |
-
-- **問題:** このうち `NoteSections` と `AnnotationComposer` の2件があるため、「**ビジネスロジックからUIへの依存が完全に消えた**」（PR #36 の主張）は厳密には成立していない。
-- **対応候補:** import を消し、コメント内の型名はバッククォート等でそのまま残す。**この6件を消すだけで `domain → ui` と `domain → controller` の依存は消滅する**（2-9 の残り3組は型の移動が必要な別課題）。
-- **規模感:** 極小。ロジック変更ゼロ。2-9 に着手する前の地ならしとして単独コミットで片付けられる。
-
-### 3-11. CI が無い
-- **現状:** `.github/workflows` が存在せず、PRごとに test / lint を自動実行する仕組みがない。378件のテストと Lint はローカル実行に依存している。
-- **問題:** 「対策を入れた」と「対策が効いている」は別（横断テーマ6）という反省が、機械的な歯止めになっていない。
-- 対応候補: `./gradlew testDebugUnitTest lintDebug` を走らせる最小のワークフローから始める。
-- **規模感:** 小。
-
-### 3-12. `applicationId` と `allowBackup` が初期値のまま
+### 3-12. `applicationId` が初期値のまま
 - **`applicationId = "com.example.newproject"`**（[app/build.gradle.kts L15](../../app/build.gradle.kts#L15)、`namespace` も同じ）。**Play Storeへ公開すると変更不可**になるため、未公開の今のうちに正式IDを決めるのが安全。
-- **`android:allowBackup="true"`** かつ `dataExtractionRules` 未指定（[AndroidManifest.xml L3](../../app/src/main/AndroidManifest.xml#L3)）。SharedPreferences（Vault URI・当日履歴のタイトル・テーマ設定）がクラウドバックアップの対象になり得る。ノート本文は保存していないが、**「完全に端末内で完結する」を売りにするなら**除外ルールを明示すべき。インターネット権限を持たないという強みと方針が揃っていない。
-- **規模感:** 小（判断さえ決まれば設定変更のみ）。
+- **規模感:** 小（名前さえ決まれば設定変更のみ）。ただし `namespace` も併せて変えるとimport全書き換えになるため、`applicationId` だけ先に変える判断もあり得る。
+- **バックアップ側は 2026-07-26 に解消:** `dataExtractionRules`／`fullBackupContent` で `random_note_prefs` をクラウドバックアップと端末移行の両方から除外した。
 
 ### 3-13. Lint warning 28件
 - Error 0件・Warning 28件。内訳: `UseKtx` 9／`GradleDependency` 7／`UnusedResources` 3／`NewerVersionAvailable` 3／`UsableSpace` 2／`ConstantLocale` 2／`ObsoleteSdkInt` 1／`AndroidGradlePluginVersion` 1。
 - 依存更新系11件は方針（いつ・どこまで上げるか）を決めていないことが根本。`ConstantLocale` は `SimpleDateFormat` の Locale 固定で、[`AnnotationComposer`](../../app/src/main/java/com/example/newproject/domain/AnnotationComposer.kt#L10) が「メインスレッド専用」前提で持つ箇所と関係する。
-- **規模感:** 小。3-11 の CI で警告数を固定すると再発しない。
+- **規模感:** 小。CI（2026-07-26 導入済み）で警告数を固定すると再発しない。
 
 ---
 
@@ -227,7 +193,7 @@
 4. **AIの役割を「創作」から「要約」へ落とすと導線が要らなくなる** — ReadingTrace で得た知見。ユーザーの操作を増やさずに価値を出せるかは、**既にある行動の痕跡で足りないか**を先に問うと判断しやすい。→ [reflect_reading_trace](../design/reflect_reading_trace.md) §2
 5. **「意識させない機能」は他の機能と作法が違う** — 通知しない・失敗を見せない・自動DLしない、が仕様になる。AI状態UXの統一（3-3）を進める際、ReadingTrace は横展開の対象外として扱う必要がある。
 6. **「対策を入れた」と「対策が効いている」は別** — Vault分離（2026-07-25）は、方針が正しかったぶん実装が効いていなくても文書・コミットメッセージが通ってしまった。修正の主張は、修正コードを別の目で読むまで確定させない。→ [bugfix_reports](../bugfix_reports.md) #4
-7. **「整理した」と「境界が効いている」も別**（2026-07-26 追加） — パッケージのレイヤー別整理（PR #37）は正しい方向だったが、依存の**向き**は制約されないままで循環が3組残った（2-9）。同様に、コントラストテストが全緑でもAA準拠は意味しない（3-8）し、テスト378件が全緑でも ViewModel は1行も通っていない（2-10）。**「何を保証していないか」を測定と同じ場所に書く**と、この型の誤読を防げる。
+7. **「整理した」と「境界が効いている」も別**（2026-07-26 追加） — パッケージのレイヤー別整理（PR #37）は正しい方向だったが、依存の**向き**は制約されないままで循環が3組残った（2-9）。同様に、コントラストテストが全緑でもAA準拠は意味しない（3-8）し、テスト379件が全緑でも ViewModel は1行も通っていない（2-10）。**「何を保証していないか」を測定と同じ場所に書く**と、この型の誤読を防げる。
 
 ---
 
@@ -239,9 +205,10 @@
 - **D. 「意図して問いを残す」の検討**（ReadingTraceで回収できなかった思考の連続性 → roadmap X-2）
 - **F. ダークモードの実機確認**（実装済み。残る確認項目は3-5）
   → [dark_mode](../design/dark_mode.md) §6
-- **G. 構造の土台を固める**（3-10 → 2-9 → 2-10 → 3-1）
-  依存方向・状態の所有者・ViewModelのテスト可能性の3点。順序に前提関係があり、**3-10 は極小・2-9 は「方向を決める」だけなら小**なので、大きく見えるわりに着手コストは低い。2-10 を通すと初めて ViewModel を絡めたテスト（3-1）が書けるようになる。
-- **H. 開発運用の最低ライン**（3-11 CI → 3-12 applicationId/backup → 3-13 Lint）
-  いずれも小さく、他の作業と並行できる。CIを先に置くと以降の変更が機械的に守られる。
+- **G. 構造の土台を固める**（2-9 → 2-10 → 3-1）
+  依存方向・状態の所有者・ViewModelのテスト可能性の3点。地ならしの 3-10（未使用import削除）は 2026-07-26 に完了し、`domain → ui` と `domain → controller` の依存は消えた。残る 2-9 は「方向を決める」だけなら小。2-10 を通すと初めて ViewModel を絡めたテスト（3-1）が書けるようになる。
+- **H. 開発運用の最低ライン**（残り: 3-12 applicationId → 3-13 Lint）
+  CI と backup 除外は 2026-07-26 に完了。残るのは正式 applicationId の決定と Lint warning 28件で、
+  警告数を CI で固定すれば再発しない。
 
 → 中長期の進め方は [roadmap.md](roadmap.md) に整理する。
