@@ -59,7 +59,8 @@ ReadingTrace v1の主要経路は実装され、2026-07-25の実装レビュー�
 - **ガードレール:** 主役はノート。キャラクター専用の記憶・催促・報酬状態は作らない。
 - **完了の定義:** Pixel 10 Pro Foldでタップ／ドラッグ、Compact／Fold、Snackbar／IME／ReadingTrace、
   Animator duration scale 0倍、TalkBackを一巡する。自動テスト352件、APKビルド・インストールは通過済み。
-  → [vigilith_in_app](../design/vigilith_in_app.md)・[current_issues](current_issues.md) 3-5
+  → [vigilith_in_app](../design/vigilith_in_app.md)
+- **ダークモードの実機確認は 2026-07-26 に完了**（同じ端末で一巡）。残るのは本項目のVigilith一巡のみ。
 
 ---
 
