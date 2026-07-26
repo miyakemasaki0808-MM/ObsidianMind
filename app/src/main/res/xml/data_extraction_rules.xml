@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 以上（API 31から）向けの抽出ルール。意図は backup_rules.xml と同じ。
+
+  cloud-backup（Googleドライブ経由のバックアップ）に加え、
+  device-transfer（新端末への直接移行）からも除外する。SAF の永続URI権限は
+  移行先端末では無効で、復元しても壊れた参照が残るだけになるため。
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="random_note_prefs.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="random_note_prefs.xml" />
+    </device-transfer>
+</data-extraction-rules>
