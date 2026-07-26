@@ -8,7 +8,7 @@
 > **実装後の追記（設計との差分）**
 > - **R-4 のグレー統合は見送った。** 設計では「7段階を3トークンへ集約」としたが、集約は必ず見た目を変える。
 >   本リファクタの完了条件は「ライトの見た目が変わらないこと」なので、値を保ったまま5つの役割名を与えるに留めた。
->   統合は暗色値を決める Phase 3 と同時に判断する（→ [current_issues](../_wip/current_issues.md) 3-10）。
+>   統合は暗色値を決める Phase 3 と同時に判断する（→ [current_issues](../_wip/current_issues.md) 3-9）。
 > - **`MaterialTheme` の `colorScheme` は差し替えていない。** 差し替えると `onPrimary` 等が M3 コンポーネントの
 >   既定へ一斉に波及し、ライト側に予期しない変化が出る。写像は実機確認を伴える Phase 3 で行う（[AppTheme.kt](../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt) に理由を明記）。
 > - **`LocalAppColors` にはまだ参照側がいない。** 画面はトップレベルのトークンを直接読んでいる。
