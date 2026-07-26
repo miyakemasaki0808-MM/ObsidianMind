@@ -246,6 +246,46 @@ data class NoteUiState(
 )
 
 /**
+ * ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
+ * リセットをここに集約することで、状態を追加したときのリセット漏れを防ぐ。
+ *
+ * **ノート単位の状態を [NoteUiState] へ足したら、ここへ必ず登録する。**
+ * 対になるジョブ停止側の契約は
+ * [com.example.newproject.controller.NoteSessionCoordinator.cancelNoteScopedJobs]。
+ *
+ * 純粋な状態変換としてここに置いてあるのは、Android依存なしで網羅的に検証するため
+ * （調停クラス経由だと、`Uri` を要する状態を作れず登録漏れを検出できない）。
+ */
+internal fun NoteUiState.resetNoteScopedStates(): NoteUiState = copy(
+    summaryState = SummaryState.Idle,
+    relatedNotesState = RelatedNotesState.Idle,
+    quizState = QuizState.Idle,
+    annotationState = AnnotationState.Idle,
+    sectionChat = null,
+    isSectionChatSheetVisible = false,
+    // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保になっている
+    // （設定するのは loadRandomNote だけ）。由来フラグを別に持たない理由。
+    readingTraceCard = null
+)
+
+/**
+ * Vault切替時の一斉初期化。ノート単位の状態に加え、さがすタブのスコープと当日履歴も破棄する
+ * （`selectedFolder` は旧Vaultの documentId を保持しているため必須）。
+ *
+ * `noteState` と `wikilinkTitles` は**あえて残す**。切替直後に `loadRandomNote` が走って
+ * すぐ差し替わるため、ここで一度 Idle に落とすと画面が白く点滅するだけになる。
+ * `darkTheme` は端末設定でVaultと無関係なので当然残す。
+ */
+internal fun NoteUiState.resetVaultScopedStates(): NoteUiState = resetNoteScopedStates().copy(
+    vaultSelected = true,
+    folders = emptyList(),
+    selectedFolder = null,
+    foldersError = null,
+    searchState = SearchState.Idle,
+    todayHistory = emptyList()
+)
+
+/**
  * 蒸留は意味を変えずMarkdown装飾だけを更新するため、ノート全体から得たAI結果は維持する。
  * 一方、生Markdownのセクション本文に結び付くチャットとクイズは照合不能になるため破棄する。
  *

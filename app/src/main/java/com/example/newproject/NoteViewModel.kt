@@ -1,33 +1,14 @@
 package com.example.newproject
 
-import com.example.newproject.controller.AnnotationController
-import com.example.newproject.controller.DistillController
-import com.example.newproject.controller.QuizController
-import com.example.newproject.controller.ReadingTraceController
-import com.example.newproject.controller.SearchController
-import com.example.newproject.controller.SectionChatController
-import com.example.newproject.controller.SummaryController
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
-import com.example.newproject.data.DistillPersistence
-import com.example.newproject.data.DistillRecoveryStore
-import com.example.newproject.data.DistillWriteRepository
+import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.data.InvalidNoteEncodingException
 import com.example.newproject.data.NoteFile
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.data.NoteFolder
-import com.example.newproject.data.NoteHistoryStore
-import com.example.newproject.data.NoteRepository
-import com.example.newproject.data.ReadingTraceStore
-import com.example.newproject.data.SafDistillDocumentGateway
-import com.example.newproject.data.SafReadingTraceDocumentGateway
-import com.example.newproject.model.AnnotationState
 import com.example.newproject.model.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.QuizState
 import com.example.newproject.model.RelatedNotesState
-import com.example.newproject.model.SearchState
-import com.example.newproject.model.SummaryState
-import com.example.newproject.model.withDistillBodyReloaded
 import com.example.newproject.ui.screen.NoteReaderTab
 import android.app.Application
 import android.content.ContentResolver
@@ -35,13 +16,8 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.newproject.ai.AICoreClient
-import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
-import com.example.newproject.domain.RelatedNotesUseCase
-import com.example.newproject.domain.SearchPickerUseCase
-import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
@@ -49,112 +25,76 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 // 状態定義は NoteUiState.kt を参照。
 
-class NoteViewModel(application: Application) : AndroidViewModel(application) {
+/**
+ * 画面の窓口。**Android（SAF・SharedPreferences・Uri）に触れる仕事だけ**を持ち、
+ * Controller間の調停と状態の所有は [NoteSessionCoordinator] へ委ねる。
+ *
+ * 手元に残しているのは、いずれも `Uri` か `ContentResolver` を解決する処理:
+ * Vault走査のTTLキャッシュ・ノート本文の読込・関連ノート・痕跡の相対パス解決。
+ */
+class NoteViewModel internal constructor(
+    application: Application,
+    dependencies: NoteViewModelDependencies
+) : AndroidViewModel(application) {
 
-    private val prefs = application.getSharedPreferences(PREFS_NAME, Application.MODE_PRIVATE)
-    private val history = NoteHistoryStore(prefs)
-    private val repository = NoteRepository()
-    private val aiClient: AiClient = AICoreClient()
-    private val summarizeUseCase = SummarizeUseCase(aiClient)
-    private val relatedNotesUseCase = RelatedNotesUseCase(aiClient)
-    private val searchPickerUseCase = SearchPickerUseCase(aiClient)
+    constructor(application: Application) :
+        this(application, NoteViewModelDependencies.default(application))
 
-    private val _uiState = MutableStateFlow(NoteUiState())
-    val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
+    private val preferences = dependencies.preferences
+    private val repository = dependencies.repository
+    private val relatedNotesUseCase = dependencies.relatedNotesUseCase
+    private val vaultLocation = dependencies.vaultLocation
 
-    // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
-    private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
-    private val quiz = QuizController(viewModelScope, aiClient, _uiState)
-    private val summary = SummaryController(
-        scope = viewModelScope,
-        summarizeUseCase = summarizeUseCase,
-        aiClient = aiClient,
-        uiState = _uiState,
-        // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
-        // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
-        onModelReady = { title, content -> fetchRelatedNotes(title, content) }
-    )
-    private val annotation = AnnotationController(
-        scope = viewModelScope,
-        repository = repository,
-        aiClient = aiClient,
-        uiState = _uiState,
-        vaultUri = { vaultUri },
-        vaultGeneration = { vaultGeneration }
-    )
-    private val search = SearchController(
-        scope = viewModelScope,
-        repository = repository,
-        searchPickerUseCase = searchPickerUseCase,
-        uiState = _uiState,
-        vaultUri = { vaultUri },
-        vaultGeneration = { vaultGeneration }
-    )
-    private val distillPersistence: DistillPersistence = DistillWriteRepository(
-        gateway = SafDistillDocumentGateway(application.contentResolver),
-        recoveryStore = DistillRecoveryStore(application.noBackupFilesDir),
-        cacheDirectory = java.io.File(application.cacheDir, "distill")
-    )
-    private val distill = DistillController(
-        scope = viewModelScope,
-        aiClient = aiClient,
-        uiState = _uiState,
-        persistence = distillPersistence,
-        reloadBody = ::reloadNoteBody
-    )
-    private val readingTrace = ReadingTraceController(
+    private val session = NoteSessionCoordinator(
         scope = viewModelScope,
         persistScope = readingTraceWriteScope,
-        aiClient = aiClient,
-        uiState = _uiState,
-        persistence = ReadingTraceStore(
-            SafReadingTraceDocumentGateway(application.contentResolver) { vaultUri }
-        ),
-        currentVaultKey = { vaultUri?.toString() }
+        repository = dependencies.repository,
+        aiClient = dependencies.aiClient,
+        summarizeUseCase = dependencies.summarizeUseCase,
+        searchPickerUseCase = dependencies.searchPickerUseCase,
+        distillPersistence = dependencies.distillPersistence,
+        readingTracePersistence = dependencies.readingTracePersistence,
+        history = dependencies.history,
+        vaultUri = { vaultLocation.uri },
+        currentVaultKey = { vaultLocation.uri?.toString() },
+        // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
+        // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
+        onModelReady = { title, content -> fetchRelatedNotes(title, content) },
+        reloadBody = ::reloadNoteBody,
+        cancelHostJobs = {
+            noteLoadJob?.cancel()
+            relatedNotesJob?.cancel()
+        }
     )
+
+    val uiState: StateFlow<NoteUiState> = session.uiState
 
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
 
-    // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
+    // ノート切替時に前のノートの読込・関連ノートが後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
     // （要約・セクションチャット等のジョブは各Controllerが保持）
     private var noteLoadJob: Job? = null
     private var relatedNotesJob: Job? = null
 
-    // 更新はメインスレッドだが、読み取りは痕跡保存などIOスレッドからも走る。
-    // 可視性を保証しないと、切替がIO側へいつ伝わるか決まらない。
-    @Volatile
-    var vaultUri: Uri? = null
-        private set
-
-    // Vault単位の非同期要求の世代。saveVault() のたびに進めて、補記一覧・フォルダ一覧の
-    // 結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
-    //
-    // vaultUri の比較で代用しないのは、A→B→A と選び直したときに同じ値になるため。
-    // 選び直しでも cachedNotes とスコープキャッシュは破棄されるので、無効化したい。
-    //
-    // ノート単位の世代は各Controllerが activeRequestId として自前で持つ（寿命が違う。
-    // 補記一覧はノート切替では無効化してはいけない）。
-    private var vaultGeneration = 0L
+    /** 選択中Vault。痕跡のSAFゲートウェイと同じ実体を見る（[vaultLocation]）。 */
+    val vaultUri: Uri?
+        get() = vaultLocation.uri
 
     init {
         restoreTheme()
         restoreVault()
-        distill.checkRecovery()
+        session.checkDistillRecovery()
     }
 
     private fun restoreTheme() {
-        val dark = prefs.getBoolean(KEY_DARK_THEME, false)
-        if (dark) _uiState.update { it.copy(darkTheme = true) }
+        if (preferences.darkTheme) session.setDarkTheme(true)
     }
 
     /**
@@ -162,89 +102,27 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
      * 端末に残すのは真偽値1つだけで、Vaultにも痕跡にも書かない。
      */
     fun setDarkTheme(enabled: Boolean) {
-        if (_uiState.value.darkTheme == enabled) return
-        prefs.edit().putBoolean(KEY_DARK_THEME, enabled).apply()
-        _uiState.update { it.copy(darkTheme = enabled) }
+        if (uiState.value.darkTheme == enabled) return
+        preferences.darkTheme = enabled
+        session.setDarkTheme(enabled)
     }
 
     private fun restoreVault() {
-        val savedUri = prefs.getString(KEY_VAULT_URI, null) ?: return
-        vaultUri = Uri.parse(savedUri)
-        _uiState.update { current ->
-            current.copy(
-                vaultSelected = true,
-                todayHistory = history.load()
-            )
-        }
-    }
-
-    // ノートを開けた時点で当日履歴に積む（loadRandomNote / openNote の成功時に呼ぶ）
-    private fun recordHistory(title: String, uri: Uri) {
-        _uiState.update { current -> current.copy(todayHistory = history.record(title, uri)) }
+        val savedUri = preferences.vaultUri ?: return
+        vaultLocation.uri = Uri.parse(savedUri)
+        session.onVaultRestored()
     }
 
     fun saveVault(uri: Uri) {
-        // 保存先は書き込み時点の vaultUri から解決されるため、切替前に記録中の
-        // セッションを捨てる。捨てないと旧ノートの痕跡が新Vaultへ書き込まれる。
-        readingTrace.discard()
-        // 走行中のVault単位要求を無効化する。cancel より先に進めておかないと、
-        // すでに結果を持ち帰っている要求が旧世代のまま素通りする。
-        vaultGeneration++
-        vaultUri = uri
-        prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
-        cachedNotes = emptyList()
-        cachedNotesLoadedAt = 0L
-        relatedNotesUseCase.clearCache()
-        search.onVaultChanged()
-        annotation.onVaultChanged()
-        cancelNoteScopedJobs()
-        // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
-        history.clear()
-        // Vault切替時はノート単位の状態に加え、さがすタブのスコープも破棄する
-        // （selectedFolder は旧Vaultの documentId を保持しているため必須）
-        _uiState.update { current ->
-            current.resetNoteScopedStates().copy(
-                vaultSelected = true,
-                folders = emptyList(),
-                selectedFolder = null,
-                foldersError = null,
-                searchState = SearchState.Idle,
-                todayHistory = emptyList()
-            )
+        // 新しいVaultを指すのは、記録中セッションの破棄と世代の採番が済んだ後。
+        // 順序は調停クラス側（onVaultChanged）が持つ。
+        session.onVaultChanged {
+            vaultLocation.uri = uri
+            preferences.vaultUri = uri.toString()
+            cachedNotes = emptyList()
+            cachedNotesLoadedAt = 0L
+            relatedNotesUseCase.clearCache()
         }
-        distill.checkRecovery()
-    }
-
-    // ノートを開き直す・Vaultを切り替える際に、ノート単位の状態をまとめて初期化する。
-    // リセットをここに集約することで、状態を追加したときのリセット漏れを防ぐ。
-    private fun NoteUiState.resetNoteScopedStates(): NoteUiState = copy(
-        summaryState = SummaryState.Idle,
-        relatedNotesState = RelatedNotesState.Idle,
-        quizState = QuizState.Idle,
-        annotationState = AnnotationState.Idle,
-        sectionChat = null,
-        isSectionChatSheetVisible = false,
-        // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保になっている
-        // （設定するのは loadRandomNote だけ）。由来フラグを別に持たない理由。
-        readingTraceCard = null
-    )
-
-    // ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
-    // 旧ノートの生成が残っていると、結果の上書きだけでなく generate() の
-    // 直列化ロックを握り続けて新ノートの要約開始も遅らせてしまう。
-    private fun cancelNoteScopedJobs() {
-        // ここは「ノートを離れる」唯一の合流点（loadRandomNote / openNote の先頭）なので、
-        // 離脱フックを別に設けず読書痕跡の確定もここで行う。
-        // flush は自前のスナップショットで書くため、以降のキャンセルに影響されない。
-        readingTrace.flush()
-        readingTrace.cancelForNoteChange()
-        noteLoadJob?.cancel()
-        relatedNotesJob?.cancel()
-        summary.cancelAndClear()
-        quiz.cancelAndClear()
-        annotation.cancelAndClear()
-        sectionChat.cancelAndClear()
-        distill.cancelForNoteChange()
     }
 
     // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
@@ -264,16 +142,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadRandomNote(contentResolver: ContentResolver) {
-        val uri = vaultUri ?: return
-        cancelNoteScopedJobs()
+        val uri = vaultLocation.uri ?: return
+        session.cancelNoteScopedJobs()
         noteLoadJob = viewModelScope.launch {
-            _uiState.update { current ->
-                current.resetNoteScopedStates().copy(noteState = NoteState.Loading)
-            }
+            session.beginNoteLoad()
             try {
                 val notes = collectAllNotesCached(contentResolver, uri)
                 if (notes.isEmpty()) {
-                    _uiState.update { current -> current.copy(noteState = NoteState.Empty) }
+                    session.setNoteState(NoteState.Empty)
                     return@launch
                 }
                 val note = notes.random()
@@ -282,48 +158,42 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 // セッションより先に届いて訪問を取りこぼしうる。
                 // 走査で得た NoteFile なので相対パスは常に揃っている。
                 startReadingTrace(note.name, note.uri, note.vaultRelativePath)
-                _uiState.update { current -> current.copy(noteState = loaded) }
-                recordHistory(note.name, note.uri)
+                session.setNoteState(loaded)
+                session.recordHistory(note.name, note.uri)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
-                readingTrace.revealTrace(note.vaultRelativePath)
-                summary.fetch(note.name, loaded.content)
+                session.revealReadingTrace(note.vaultRelativePath)
+                session.fetchSummary(note.name, loaded.content)
                 fetchRelatedNotes(note.name, loaded.content)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { current ->
-                    current.copy(noteState = NoteState.Error(e.message ?: "Unknown error"))
-                }
+                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
     }
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
-        cancelNoteScopedJobs()
+        session.cancelNoteScopedJobs()
         noteLoadJob = viewModelScope.launch {
-            _uiState.update { current ->
-                current.resetNoteScopedStates().copy(noteState = NoteState.Loading)
-            }
+            session.beginNoteLoad()
             try {
                 val loaded = loadNoteForDistill(contentResolver, note.title, note.uri)
                 // RelatedNote は相対パスを持たない。キャッシュにあれば即使い、無ければ
                 // パス未確定でセッションだけ作る（表示前にVault走査を挟まないため）。
                 // 本文を出す前に呼ぶ理由は loadRandomNote 側のコメント参照。
                 val sessionId = startReadingTrace(note.title, note.uri, cachedRelativePath(note.uri))
-                _uiState.update { current -> current.copy(noteState = loaded) }
-                recordHistory(note.title, note.uri)
+                session.setNoteState(loaded)
+                session.recordHistory(note.title, note.uri)
                 // 表示を終えてから相対パスを確定させる。さがすタブは collectNotesInScope を
                 // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
                 // 「さがす経由の最初の1件」が記録から漏れる。
                 bindReadingTracePath(contentResolver, note.uri, sessionId)
-                summary.fetch(note.title, loaded.content)
+                session.fetchSummary(note.title, loaded.content)
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { current ->
-                    current.copy(noteState = NoteState.Error(e.message ?: "Unknown error"))
-                }
+                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
     }
@@ -336,22 +206,22 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         blockFraction: Float,
         totalBlocks: Int,
         sectionTitle: String?
-    ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
+    ) = session.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
-    fun pauseReadingTrace() = readingTrace.pause()
+    fun pauseReadingTrace() = session.pauseReadingTrace()
 
     /** 背面から復帰したときに呼ぶ（背面にいた時間を読書時間に含めないため）。 */
-    fun resumeReadingTrace() = readingTrace.resume()
+    fun resumeReadingTrace() = session.resumeReadingTrace()
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
-    fun dismissReadingTraceCard() = readingTrace.dismissCard()
+    fun dismissReadingTraceCard() = session.dismissReadingTraceCard()
 
     /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
     private fun startReadingTrace(title: String, uri: Uri, vaultRelativePath: String?): Long =
-        readingTrace.onNoteOpened(
+        session.startReadingTrace(
+            title = title,
             vaultRelativePath = vaultRelativePath,
-            noteTitle = title,
             // 端末内キャッシュとしてだけ持つ値なので、取れなければ null で構わない。
             documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
         )
@@ -378,7 +248,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         uri: Uri,
         sessionId: Long
     ) {
-        val vault = vaultUri ?: return
+        val vault = vaultLocation.uri ?: return
         val path = try {
             collectAllNotesCached(contentResolver, vault)
                 .firstOrNull { it.uri == uri }
@@ -389,60 +259,52 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) {
             null
         } ?: return
-        readingTrace.bindPath(sessionId, path)
+        session.bindReadingTracePath(sessionId, path)
     }
 
     // ── さがすタブ（実装は SearchController）──────────────────────────────────
 
-    fun loadFolders(contentResolver: ContentResolver) = search.loadFolders(contentResolver)
-    fun selectSearchFolder(folder: NoteFolder?) = search.selectFolder(folder)
-    fun searchByKeyword(contentResolver: ContentResolver, query: String) = search.searchByKeyword(contentResolver, query)
-    fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
+    fun loadFolders(contentResolver: ContentResolver) = session.loadFolders(contentResolver)
+    fun selectSearchFolder(folder: NoteFolder?) = session.selectSearchFolder(folder)
+    fun searchByKeyword(contentResolver: ContentResolver, query: String) =
+        session.searchByKeyword(contentResolver, query)
+    fun pickRandomInScope(contentResolver: ContentResolver) = session.pickRandomInScope(contentResolver)
 
     // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
-    fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
-    fun markQuizViewed() = quiz.markViewed()
+    fun generateQuiz(sourceLabel: String, context: String) = session.generateQuiz(sourceLabel, context)
+    fun markQuizViewed() = session.markQuizViewed()
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
 
-    fun loadAnnotations(contentResolver: ContentResolver) = annotation.loadList(contentResolver)
-    fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) = annotation.delete(contentResolver, uri)
-    fun deleteAllAnnotations(contentResolver: ContentResolver) = annotation.deleteAll(contentResolver)
-    fun markAnnotationViewed() = annotation.markViewed()
+    fun loadAnnotations(contentResolver: ContentResolver) = session.loadAnnotations(contentResolver)
+    fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) =
+        session.deleteAnnotation(contentResolver, uri)
+    fun deleteAllAnnotations(contentResolver: ContentResolver) =
+        session.deleteAllAnnotations(contentResolver)
+    fun markAnnotationViewed() = session.markAnnotationViewed()
 
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
 
-    fun startDistill() = distill.start()
-    fun downloadDistillModel() = distill.downloadModelAndResume()
-    fun toggleDistillCandidate(id: String) = distill.toggleCandidate(id)
-    fun saveDistillSelection() = distill.saveSelection()
-    fun retryDistill() = distill.retry()
-    fun dismissDistillResult() = distill.dismissResult()
-    fun keepCurrentAfterDistillRecovery() = distill.keepCurrentAndFinishRecovery()
-    fun restoreDistillOriginal() = distill.restoreOriginal()
+    fun startDistill() = session.startDistill()
+    fun downloadDistillModel() = session.downloadDistillModel()
+    fun toggleDistillCandidate(id: String) = session.toggleDistillCandidate(id)
+    fun saveDistillSelection() = session.saveDistillSelection()
+    fun retryDistill() = session.retryDistill()
+    fun dismissDistillResult() = session.dismissDistillResult()
+    fun keepCurrentAfterDistillRecovery() = session.keepCurrentAfterDistillRecovery()
+    fun restoreDistillOriginal() = session.restoreDistillOriginal()
     fun exportDistillOriginal(contentResolver: ContentResolver, destination: Uri) =
-        distill.exportOriginal { bytes -> repository.writeDocumentBytes(contentResolver, destination, bytes) }
+        session.exportDistillOriginal { bytes ->
+            repository.writeDocumentBytes(contentResolver, destination, bytes)
+        }
 
     // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
 
-    /**
-     * 吹き出しから新しいセクション文脈を開くとき、前のセクションで作ったクイズを
-     * 持ち越さない（別セクションの古いクイズがシートに残り続ける問題の防止）。
-     * 既存セッションの再表示（sectionChat != null）ではクイズも保持する。
-     */
-    fun openSection(section: NoteSection) {
-        if (_uiState.value.sectionChat == null) quiz.cancelAndClear()
-        sectionChat.open(section)
-    }
-    fun showSectionChat() = sectionChat.showSheet()
-    fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
-    fun dismissSectionChatSheet() = sectionChat.dismissSheet()
-
-    /** セッションの明示終了。文脈が閉じるので、そのセッションで作ったクイズも破棄する。 */
-    fun endSectionChat() {
-        sectionChat.cancelAndClear()
-        quiz.cancelAndClear()
-    }
+    fun openSection(section: NoteSection) = session.openSection(section)
+    fun showSectionChat() = session.showSectionChat()
+    fun sendSectionMessage(text: String) = session.sendSectionMessage(text)
+    fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
+    fun endSectionChat() = session.endSectionChat()
 
     fun createAnnotation(
         contentResolver: ContentResolver,
@@ -452,7 +314,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         relatedNotes: List<RelatedNote>,
         aiNotes: List<RelatedNote>,
         wikilinkTitles: Set<String>
-    ) = annotation.create(contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
+    ) = session.createAnnotation(
+        contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles
+    )
 
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,
@@ -519,11 +383,11 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 同一ノートの本文と基準ハッシュを更新する。
-     * ノート全体のAI結果は維持し、生Markdown文脈に依存するチャット・クイズだけを破棄する。
+     * 同一ノートの本文と基準ハッシュを更新する。読み直しだけを担当し、
+     * 状態の差し替え（＝どのAI結果を捨てるか）は調停クラスが持つ。
      */
     private suspend fun reloadNoteBody(targetUri: String, expectedHash: String?): Boolean {
-        val current = _uiState.value.noteState as? NoteState.Success ?: return false
+        val current = session.currentNote() ?: return false
         if (current.targetUri != targetUri) return false
         return try {
             val loaded = loadNoteForDistill(
@@ -532,15 +396,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 Uri.parse(targetUri)
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
-            val latest = _uiState.value.noteState as? NoteState.Success ?: return false
-            if (latest.targetUri != targetUri) return false
-            // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
-            sectionChat.cancelAndClear()
-            quiz.cancelAndClear()
-            _uiState.update { state ->
-                val active = state.noteState as? NoteState.Success
-                if (active?.targetUri != targetUri) state else state.withDistillBodyReloaded(loaded)
-            }
+            if (!session.applyReloadedBody(targetUri, loaded)) return false
             cachedNotes = emptyList()
             cachedNotesLoadedAt = 0L
             relatedNotesUseCase.clearCache()
@@ -553,11 +409,11 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private fun fetchRelatedNotes(title: String, content: String) {
         relatedNotesJob?.cancel()
         relatedNotesJob = viewModelScope.launch {
-            _uiState.update { current -> current.copy(relatedNotesState = RelatedNotesState.Loading) }
+            session.setRelatedNotesState(RelatedNotesState.Loading)
 
             // さがすタブ等、loadRandomNote を経由しない導線では未収集のことがあるため補填する
             if (cachedNotes.isEmpty()) {
-                val uri = vaultUri
+                val uri = vaultLocation.uri
                 if (uri != null) {
                     try {
                         collectAllNotesCached(getApplication<Application>().contentResolver, uri)
@@ -569,19 +425,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             if (cachedNotes.isEmpty()) {
-                _uiState.update { current ->
-                    current.copy(
-                        relatedNotesState = RelatedNotesState.Success(
-                            relatedNotes = emptyList(),
-                            aiNotes = emptyList()
-                        )
-                    )
-                }
+                session.setRelatedNotesState(
+                    RelatedNotesState.Success(relatedNotes = emptyList(), aiNotes = emptyList())
+                )
                 return@launch
             }
 
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
-            _uiState.update { current -> current.copy(wikilinkTitles = wikilinkTitles) }
+            session.setWikilinkTitles(wikilinkTitles)
             val contentResolver = getApplication<Application>().contentResolver
             when (
                 val result = relatedNotesUseCase.findRelated(
@@ -594,23 +445,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     parseMeta = { repository.parseMeta(it) }
                 )
             ) {
-                is RelatedNotesResult.Success -> {
-                    _uiState.update { current ->
-                        current.copy(
-                            relatedNotesState = RelatedNotesState.Success(
-                                relatedNotes = result.relatedNotes,
-                                aiNotes = result.aiNotes,
-                                aiStatus = result.aiStatus,
-                                aiErrorMessage = result.aiErrorMessage
-                            )
-                        )
-                    }
-                }
-                is RelatedNotesResult.Error -> {
-                    _uiState.update { current ->
-                        current.copy(relatedNotesState = RelatedNotesState.Error(result.message))
-                    }
-                }
+                is RelatedNotesResult.Success -> session.setRelatedNotesState(
+                    RelatedNotesState.Success(
+                        relatedNotes = result.relatedNotes,
+                        aiNotes = result.aiNotes,
+                        aiStatus = result.aiStatus,
+                        aiErrorMessage = result.aiErrorMessage
+                    )
+                )
+                is RelatedNotesResult.Error ->
+                    session.setRelatedNotesState(RelatedNotesState.Error(result.message))
             }
         }
     }
@@ -632,9 +476,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         private val readingTraceWriteScope =
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-        private const val PREFS_NAME = "random_note_prefs"
-        private const val KEY_VAULT_URI = "vault_uri"
-        private const val KEY_DARK_THEME = "dark_theme"
         private const val DISTILL_OUTPUT_GROWTH_BYTES = DistillLimits.FINAL_SELECTION_LIMIT * 4
     }
 }
