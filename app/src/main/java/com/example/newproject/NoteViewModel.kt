@@ -72,7 +72,14 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
     private val quiz = QuizController(viewModelScope, aiClient, _uiState)
     private val annotation = AnnotationController(viewModelScope, repository, aiClient, _uiState) { vaultUri }
-    private val search = SearchController(viewModelScope, repository, searchPickerUseCase, _uiState) { vaultUri }
+    private val search = SearchController(
+        scope = viewModelScope,
+        repository = repository,
+        searchPickerUseCase = searchPickerUseCase,
+        uiState = _uiState,
+        vaultUri = { vaultUri },
+        vaultGeneration = { vaultGeneration }
+    )
     private val distillPersistence: DistillPersistence = DistillWriteRepository(
         gateway = SafDistillDocumentGateway(application.contentResolver),
         recoveryStore = DistillRecoveryStore(application.noBackupFilesDir),
@@ -113,6 +120,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile
     var vaultUri: Uri? = null
         private set
+
+    // Vault単位の非同期要求の世代。saveVault() のたびに進めて、補記一覧・フォルダ一覧の
+    // 結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
+    //
+    // vaultUri の比較で代用しないのは、A→B→A と選び直したときに同じ値になるため。
+    // 選び直しでも cachedNotes とスコープキャッシュは破棄されるので、無効化したい。
+    //
+    // ノート単位の世代は各Controllerが activeRequestId として自前で持つ（寿命が違う。
+    // 補記一覧はノート切替では無効化してはいけない）。
+    private var vaultGeneration = 0L
 
     init {
         restoreTheme()
@@ -155,6 +172,9 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         // 保存先は書き込み時点の vaultUri から解決されるため、切替前に記録中の
         // セッションを捨てる。捨てないと旧ノートの痕跡が新Vaultへ書き込まれる。
         readingTrace.discard()
+        // 走行中のVault単位要求を無効化する。cancel より先に進めておかないと、
+        // すでに結果を持ち帰っている要求が旧世代のまま素通りする。
+        vaultGeneration++
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
@@ -171,6 +191,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 vaultSelected = true,
                 folders = emptyList(),
                 selectedFolder = null,
+                foldersError = null,
                 searchState = SearchState.Idle,
                 todayHistory = emptyList()
             )

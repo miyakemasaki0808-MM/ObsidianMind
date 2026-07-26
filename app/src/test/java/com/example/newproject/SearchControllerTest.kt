@@ -93,7 +93,8 @@ class SearchControllerTest {
         repository = NoteRepository(),
         searchPickerUseCase = SearchPickerUseCase(NoOpAiClient),
         uiState = state,
-        vaultUri = { null }
+        vaultUri = { null },
+        vaultGeneration = { 0L }
     )
 
     private object NoOpAiClient : AiClient {

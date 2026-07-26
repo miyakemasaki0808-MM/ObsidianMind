@@ -226,6 +226,10 @@ data class NoteUiState(
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
+    // フォルダ列挙に失敗したときだけ入る。ルート直下スコープは使えるので致命的ではないが、
+    // 黙って chips が出ないと「フォルダが無い」のか「取れなかった」のか区別できない。
+    // Vault単位の状態なので、リセットは resetNoteScopedStates ではなく saveVault が持つ。
+    val foldersError: String? = null,
     val searchState: SearchState = SearchState.Idle,
     // 当日分のみの閲覧履歴（`NoteHistoryStore` が日付判定を担当）
     val todayHistory: List<HistoryEntry> = emptyList(),

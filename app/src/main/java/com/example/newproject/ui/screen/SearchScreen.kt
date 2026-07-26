@@ -108,6 +108,17 @@ fun SearchTab(
             }
         }
 
+        // フォルダ列挙に失敗しても、ルート直下スコープでは検索できる。
+        // 操作を止めない注記として chips の下に添えるだけにする。
+        uiState.foldersError?.let { message ->
+            Text(
+                text = message,
+                color = OnVibrantMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },

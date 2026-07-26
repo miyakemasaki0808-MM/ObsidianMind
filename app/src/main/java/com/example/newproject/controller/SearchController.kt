@@ -27,7 +27,10 @@ class SearchController(
     private val repository: NoteRepository,
     private val searchPickerUseCase: SearchPickerUseCase,
     private val uiState: MutableStateFlow<NoteUiState>,
-    private val vaultUri: () -> Uri?
+    private val vaultUri: () -> Uri?,
+    // Vault切替の世代。NoteViewModel が saveVault() で採番する。
+    // 検索用の activeRequestId とは寿命が違う（フォルダ列挙は検索要求では無効化しない）。
+    private val vaultGeneration: () -> Long
 ) {
     // スコープ（フォルダ）単位の走査結果キャッシュ。SAFの再帰走査は1フォルダごとに
     // IPCが発生して重いため、短時間の連続操作（検索→ランダム→検索）で再走査しない。
@@ -45,6 +48,10 @@ class SearchController(
     private var searchJob: Job? = null
     private var activeRequestId = 0L
 
+    // フォルダ列挙は検索とは別寿命（検索要求では止めない／Vault切替では止める）なので、
+    // searchJob には相乗りさせず独立して保持する。
+    private var foldersJob: Job? = null
+
     // Vault切替時に NoteViewModel の saveVault() から呼ばれる契約。
     // 旧Vaultの documentId をキーに持つキャッシュを破棄する。
     // 走行中の要求も止める。放置すると旧Vaultのノートが、切替後に
@@ -53,18 +60,36 @@ class SearchController(
         activeRequestId++
         searchJob?.cancel()
         searchJob = null
+        foldersJob?.cancel()
+        foldersJob = null
         scopeNotesCache.clear()
     }
 
-    // タブ表示時にフォルダchips用の第一階層フォルダを列挙する。
+    /**
+     * タブ表示時にフォルダchips用の第一階層フォルダを列挙する。
+     *
+     * 起動時の世代を捕まえて `update` の直前に照合する。`onVaultChanged()` の
+     * `cancel()` だけに頼ると、SAF走査から戻った直後に切替が起きた場合に
+     * 旧Vaultのフォルダが新Vaultの chips として並ぶ。
+     */
     fun loadFolders(contentResolver: ContentResolver) {
         val uri = vaultUri() ?: return
-        scope.launch {
+        val generation = vaultGeneration()
+        foldersJob?.cancel()
+        foldersJob = scope.launch {
             try {
                 val folders = repository.listTopLevelFolders(contentResolver, uri)
-                uiState.update { current -> current.copy(folders = folders) }
-            } catch (_: Exception) {
-                // フォルダ列挙の失敗は致命的でない（ルート直下スコープは使える）
+                if (generation != vaultGeneration()) return@launch
+                uiState.update { current -> current.copy(folders = folders, foldersError = null) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // ルート直下スコープは使えるので致命的ではないが、黙って消すと
+                // 「フォルダが無い」と区別できない。chips の下に注記として出す。
+                if (generation != vaultGeneration()) return@launch
+                uiState.update { current ->
+                    current.copy(foldersError = "フォルダ一覧を取得できませんでした。")
+                }
             }
         }
     }
