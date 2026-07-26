@@ -29,6 +29,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.QuizState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceCard
+import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.RelatedNotesState
 import com.example.newproject.model.SearchState
 import com.example.newproject.model.SectionChatState
@@ -37,13 +38,16 @@ import com.example.newproject.model.resetNoteScopedStates
 import com.example.newproject.model.resetVaultScopedStates
 import android.net.Uri
 import com.google.mlkit.genai.common.DownloadStatus
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -57,11 +61,22 @@ import java.lang.reflect.Modifier
  * 素のJVMテストではインスタンスを作れず、410件のテストが1件も通っていなかった。
  * Android APIを呼ばない [NoteSessionCoordinator] へ調停を出したことで、ここが検証できる。
  *
- * テストは2層に分けている。
+ * テストは3層で見る。
  *  - **状態変換の網羅**（[resetNoteScopedStates] / [resetVaultScopedStates]）:
- *    全17フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
- *    `Uri` を持つフィールド（補記の保存先・履歴・候補ノート）は空リスト等で代用する。
- *  - **調停の結線**: 7 Controller を実物のまま組み立て、切替で実際に一斉初期化されること。
+ *    全フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
+ *    フィールドを足してリセット登録を忘れたら落ちる。
+ *  - **調停の結線**: 7 Controller すべてを非初期状態にしてから切替を通し、
+ *    どれか1つの後始末を消したら落ちるようにする。
+ *  - **ジョブ停止**: 走行中のAI生成を止めずに切り替えると旧結果が後着することの確認。
+ *    状態リセットだけでは防げないので、対になっていること自体をここで担保する。
+ *
+ * ## ここで保証していないこと
+ *
+ * **`SearchController.onVaultChanged()` の後始末だけは覆えていない。** このメソッドが
+ * 落とすのはスコープ単位の走査キャッシュと走行中の検索・フォルダ列挙ジョブで、
+ * どちらも `ContentResolver` を要する経路でしか作れない。`ContentResolver` は
+ * 素のJVMテストではインスタンス化できないため、ここを消してもこのテストは緑のままになる。
+ * 担保手段は実機確認（Vault切替直後にさがすタブへ入り、旧Vaultのフォルダchipsが出ないこと）。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class NoteSessionCoordinatorTest {
@@ -75,7 +90,7 @@ class NoteSessionCoordinatorTest {
      * 新しい状態を [NoteUiState] へ足してリセット登録を忘れると、下のテストが
      * 「初期値へ戻っていない」で落ちる。意図して残す場合だけ、理由を添えてここへ足す。
      */
-    private val survivesVaultChange = mapOf(
+    private val survivesVaultChangeTransform = mapOf(
         // 選択済みであることそのもの（切替先を選んだ直後なので true）
         "vaultSelected" to true,
         // 端末設定。Vaultと無関係
@@ -97,7 +112,7 @@ class NoteSessionCoordinatorTest {
     fun `Vault切替の状態リセットに登録漏れが無い`() {
         val reset = fullyPopulatedState().resetVaultScopedStates()
 
-        assertEachFieldReset(actual = reset, survivors = survivesVaultChange)
+        assertEachFieldReset(actual = reset, survivors = survivesVaultChangeTransform)
     }
 
     @Test
@@ -111,6 +126,7 @@ class NoteSessionCoordinatorTest {
         assertEquals("下書き", reset.selectedFolder?.name)
         assertTrue(reset.searchState is SearchState.Success)
         assertEquals("列挙できませんでした", reset.foldersError)
+        assertEquals(1, reset.todayHistory.size)
 
         // ノート単位はすべて消える
         assertTrue(reset.summaryState is SummaryState.Idle)
@@ -124,47 +140,177 @@ class NoteSessionCoordinatorTest {
 
     // ── 調停の結線 ─────────────────────────────────────────────────────────
 
+    /**
+     * 7 Controller すべてを非初期状態にしてから Vault を切り替える。
+     *
+     * 状態変換だけでは落ちない `distillState`（DistillController）と
+     * `annotationListState`（AnnotationController）を含めているので、
+     * どちらかの後始末を [NoteSessionCoordinator.onVaultChanged] から消すと落ちる。
+     */
     @Test
     fun `Vault切替で7 Controller の状態が一斉に初期化される`() = runTest {
         val env = Env(this)
+        val coordinator = env.coordinator(initialState = fullyPopulatedState())
+
+        assertAllControllersDirty(coordinator.uiState.value)
+
+        coordinator.onVaultChanged()
+        advanceUntilIdle()
+
+        // Vault切替後に残ってよいのは、Vaultと無関係な端末設定と、
+        // 直後の loadRandomNote で差し替わる表示中ノートだけ。
+        assertEachFieldReset(
+            actual = coordinator.uiState.value,
+            survivors = mapOf(
+                "vaultSelected" to true,
+                "darkTheme" to true,
+                "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
+                "wikilinkTitles" to setOf("旧リンク")
+            )
+        )
+        // 旧VaultのURIは新Vaultで開けないので履歴の永続化ごと捨てる
+        assertEquals(1, env.history.clearCount)
+    }
+
+    /**
+     * ノート切替は「ジョブ停止」と「状態リセット」が必ず対になる。
+     * 呼び出し側で2手に分けると片方だけ消しても動いてしまうため、
+     * 調停クラスの [NoteSessionCoordinator.onNoteChanged] 1手に閉じてある。
+     */
+    @Test
+    fun `ノート切替でノート単位だけが初期化されVault単位は残る`() = runTest {
+        val env = Env(this)
+        var hostCancelCount = 0
+        val coordinator = env.coordinator(
+            initialState = fullyPopulatedState(),
+            cancelHostJobs = { hostCancelCount++ }
+        )
+
+        assertAllControllersDirty(coordinator.uiState.value)
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+
+        val state = coordinator.uiState.value
+        // ノート単位はすべて消えて、次の読込中になる
+        assertTrue(state.noteState is NoteState.Loading)
+        assertTrue(state.summaryState is SummaryState.Idle)
+        assertTrue(state.relatedNotesState is RelatedNotesState.Idle)
+        assertTrue(state.quizState is QuizState.Idle)
+        assertTrue(state.annotationState is AnnotationState.Idle)
+        assertTrue(state.distillState is DistillState.Idle)
+        assertNull(state.sectionChat)
+        assertEquals(false, state.isSectionChatSheetVisible)
+        assertNull(state.readingTraceCard)
+        // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
+        assertEquals(1, hostCancelCount)
+
+        // Vault単位は巻き込まない（補記管理画面とさがすタブのスコープ）
+        assertTrue(state.annotationListState is AnnotationListState.Success)
+        assertEquals(1, state.folders.size)
+        assertEquals("下書き", state.selectedFolder?.name)
+        assertTrue(state.searchState is SearchState.Success)
+        assertEquals(1, state.todayHistory.size)
+    }
+
+    // ── ジョブ停止（状態リセットだけでは防げない後着）────────────────────────
+
+    /**
+     * 走行中のAI生成を抱えたままノートを切り替える。
+     *
+     * 状態リセットは切替の瞬間に効くだけなので、ジョブが生きていると
+     * **リセットの後から**旧ノートの結果が書き戻される。
+     * [NoteSessionCoordinator.cancelNoteScopedJobs] のどれか1行を消すと、
+     * ここが「Idleのはずが Success」で落ちる。
+     */
+    @Test
+    fun `ノート切替後に旧ノートのAI結果が後着しない`() = runTest {
+        val env = Env(this)
         val coordinator = env.coordinator()
 
-        // 各Controllerを非Idleにする（Uriを要さない経路だけで作れる）。
-        // openSection はセッションが無いとき前セクションのクイズを捨てる仕様なので、
-        // クイズより先に呼ぶ。
         coordinator.fetchSummary("ノートA", "Aの本文")
         coordinator.openSection(NoteSection(title = "導入", level = 2, text = "セクション本文"))
         coordinator.generateQuiz("セクション", "十分な長さの本文をここに置く。".repeat(20))
         advanceUntilIdle()
 
-        assertTrue(coordinator.uiState.value.summaryState !is SummaryState.Idle)
-        assertTrue(coordinator.uiState.value.quizState !is QuizState.Idle)
-        assertTrue(coordinator.uiState.value.sectionChat != null)
+        // まだ生成は返っていない
+        assertTrue(coordinator.uiState.value.summaryState is SummaryState.Loading)
+        assertNotNull(coordinator.uiState.value.sectionChat)
 
-        coordinator.onVaultChanged()
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+
+        // 切替後に生成が返ってきても、新しいノートの画面には書き戻らない
+        env.ai.completeAll("生成結果")
         advanceUntilIdle()
 
         val state = coordinator.uiState.value
         assertTrue(state.summaryState is SummaryState.Idle)
         assertTrue(state.quizState is QuizState.Idle)
-        assertTrue(state.annotationState is AnnotationState.Idle)
-        assertTrue(state.annotationListState is AnnotationListState.Idle)
-        assertTrue(state.distillState is DistillState.Idle)
         assertNull(state.sectionChat)
-        assertEquals(false, state.isSectionChatSheetVisible)
-        assertNull(state.readingTraceCard)
-        assertTrue(state.searchState is SearchState.Idle)
-        assertEquals(emptyList<NoteFolder>(), state.folders)
-        assertEquals(emptyList<HistoryEntry>(), state.todayHistory)
-        assertTrue(state.vaultSelected)
-        // 旧VaultのURIは新Vaultで開けないので履歴の永続化ごと捨てる
-        assertEquals(1, env.history.clearCount)
     }
+
+    /**
+     * Vault切替では、記録中の読書セッションを**記録せずに**捨てる。
+     * 捨て損なうと、旧ノートの痕跡が切替後のVaultへ書き込まれる（C案で塞いだ経路）。
+     */
+    @Test
+    fun `Vault切替で記録中の読書セッションが捨てられる`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", "doc-1")
+        coordinator.reportReadingProgress(
+            blockIndex = 3,
+            blockFraction = 1f,
+            totalBlocks = 10,
+            sectionTitle = "導入"
+        )
+        // 訪問として記録される条件（10秒以上）を満たしておく
+        clock.advance(10_000L)
+
+        coordinator.onVaultChanged()
+        advanceUntilIdle()
+
+        assertEquals(emptyList<ReadingTrace>(), env.trace.saved)
+    }
+
+    /**
+     * ノート切替では、走行中の痕跡照合も止める。
+     * 止め損なうと、**リセットの後から**旧ノートの「前回のあなた」カードが出る。
+     */
+    @Test
+    fun `ノート切替後に旧ノートの再会カードが後着しない`() = runTest {
+        val env = Env(this)
+        env.trace.put(
+            ReadingTrace(
+                vaultRelativePath = "ideas/habit.md",
+                noteTitle = "習慣について",
+                documentId = "doc-1",
+                visits = listOf(
+                    ReadingVisit(atEpochMillis = 1L, progressPercent = 40, deepestSectionTitle = "導入")
+                ),
+                totalVisitCount = 2
+            )
+        )
+        val coordinator = env.coordinator()
+
+        // 照合はIOディスパッチャへ渡った時点で待たされる（まだカードは出ていない）
+        coordinator.revealReadingTrace("ideas/habit.md")
+        assertNull(coordinator.uiState.value.readingTraceCard)
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+
+        assertNull(coordinator.uiState.value.readingTraceCard)
+    }
+
+    // ── Vault世代 ──────────────────────────────────────────────────────────
 
     @Test
     fun `Vault切替のたびに世代が進む`() {
-        val env = Env(TestScope())
-        val coordinator = env.coordinator()
+        val coordinator = Env(TestScope()).coordinator()
 
         assertEquals(0L, coordinator.vaultGeneration)
         coordinator.onVaultChanged()
@@ -176,8 +322,7 @@ class NoteSessionCoordinatorTest {
     /** 新しいVaultを指すのは、記録中セッションの破棄と世代の採番が済んだ後。 */
     @Test
     fun `Vaultの差し替えは世代を進めた後に反映される`() {
-        val env = Env(TestScope())
-        val coordinator = env.coordinator()
+        val coordinator = Env(TestScope()).coordinator()
         var generationWhenApplied = -1L
 
         coordinator.onVaultChanged { generationWhenApplied = coordinator.vaultGeneration }
@@ -185,27 +330,29 @@ class NoteSessionCoordinatorTest {
         assertEquals(1L, generationWhenApplied)
     }
 
-    @Test
-    fun `窓口が持つノート単位ジョブも契約から止まる`() {
-        val env = Env(TestScope())
-        var hostCancelCount = 0
-        val coordinator = env.coordinator(cancelHostJobs = { hostCancelCount++ })
-
-        coordinator.cancelNoteScopedJobs()
-        assertEquals(1, hostCancelCount)
-
-        // Vault切替も同じ契約を通る
-        coordinator.onVaultChanged()
-        assertEquals(2, hostCancelCount)
-    }
-
     // ── ヘルパー ───────────────────────────────────────────────────────────
+
+    /** 切替前に7 Controller すべてが非初期状態であることを明示する。 */
+    private fun assertAllControllersDirty(state: NoteUiState) {
+        assertTrue("Summary", state.summaryState !is SummaryState.Idle)
+        assertTrue("Quiz", state.quizState !is QuizState.Idle)
+        assertTrue("SectionChat", state.sectionChat != null)
+        assertTrue("Annotation(生成)", state.annotationState !is AnnotationState.Idle)
+        assertTrue("Annotation(一覧)", state.annotationListState !is AnnotationListState.Idle)
+        assertTrue("Distill", state.distillState !is DistillState.Idle)
+        assertTrue("ReadingTrace", state.readingTraceCard != null)
+        assertTrue("Search", state.searchState !is SearchState.Idle)
+    }
 
     /**
      * 全フィールドを初期値と異なる値で埋めた状態。
-     * `Uri` を要する中身（補記の保存先・履歴・候補ノート・ノートファイル）は
-     * 素のJVMテストで作れないため、空リストや `Uri` を持たない派生で代用する。
+     *
+     * `Uri` を要する中身（補記の保存先・候補ノート・ノートファイル）は素のJVMテストで
+     * 作れないため、`Uri` を持たない派生や空リストで代用する。
+     * `todayHistory` だけは**空だとリセット漏れを検出できない**ので、
+     * 要素の中身を見ないことを承知のうえで型消去で非空にする。
      */
+    @Suppress("UNCHECKED_CAST")
     private fun fullyPopulatedState() = NoteUiState(
         vaultSelected = true,
         noteState = NoteState.Success(title = "旧ノート", content = "本文"),
@@ -228,7 +375,8 @@ class NoteSessionCoordinatorTest {
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
         searchState = SearchState.Success(emptyList()),
-        todayHistory = emptyList(),
+        // HistoryEntry は Uri を要るので作れない。ここで見たいのは「空へ戻るか」だけ。
+        todayHistory = listOf("旧Vaultの履歴") as List<HistoryEntry>,
         darkTheme = true
     )
 
@@ -263,13 +411,19 @@ class NoteSessionCoordinatorTest {
         )
     }
 
-    private class Env(private val scope: TestScope) {
+    private class Env(
+        private val scope: TestScope,
+        private val clock: TestClock = TestClock()
+    ) {
         val ai = FakeAi()
         val history = FakeHistoryStore()
         val distill = FakeDistillPersistence()
         val trace = FakeTracePersistence()
 
-        fun coordinator(cancelHostJobs: () -> Unit = {}) = NoteSessionCoordinator(
+        fun coordinator(
+            cancelHostJobs: () -> Unit = {},
+            initialState: NoteUiState = NoteUiState()
+        ) = NoteSessionCoordinator(
             scope = scope,
             persistScope = scope,
             repository = NoteRepository(),
@@ -283,14 +437,40 @@ class NoteSessionCoordinatorTest {
             currentVaultKey = { "vault-a" },
             onModelReady = { _, _ -> },
             reloadBody = { _, _ -> false },
-            cancelHostJobs = cancelHostJobs
+            cancelHostJobs = cancelHostJobs,
+            initialState = initialState,
+            clock = clock::now,
+            // 痕跡I/Oもテストスケジューラに載せて、照合が走行中のまま切り替える状況を作る。
+            ioDispatcher = StandardTestDispatcher(scope.testScheduler)
         )
     }
 
+    private class TestClock {
+        private var now = 0L
+        fun now(): Long = now
+        fun advance(millis: Long) {
+            now += millis
+        }
+    }
+
+    /** 生成を止めたまま保持し、[completeAll] で一斉に返す。切替後の後着を作るため。 */
     private class FakeAi : AiClient {
+        private val pending = mutableListOf<CompletableDeferred<String>>()
+
         override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
-        override suspend fun generate(prompt: String): String = "生成結果"
+
+        override suspend fun generate(prompt: String): String {
+            val deferred = CompletableDeferred<String>()
+            pending += deferred
+            return deferred.await()
+        }
+
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
+
+        fun completeAll(result: String) {
+            pending.forEach { it.complete(result) }
+            pending.clear()
+        }
     }
 
     private class FakeHistoryStore : HistoryStore {
@@ -316,10 +496,21 @@ class NoteSessionCoordinatorTest {
     }
 
     private class FakeTracePersistence : ReadingTracePersistence {
+        val saved = mutableListOf<ReadingTrace>()
+        private val files = mutableMapOf<String, ReadingTrace>()
+
+        fun put(trace: ReadingTrace) {
+            files[trace.vaultRelativePath] = trace
+        }
+
         override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
         override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult =
-            ReadingTraceReadResult.None
-        override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult =
-            ReadingTraceSaveResult.Success
+            files[vaultRelativePath]?.let { ReadingTraceReadResult.Valid(it) }
+                ?: ReadingTraceReadResult.None
+        override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
+            saved += trace
+            files[trace.vaultRelativePath] = trace
+            return ReadingTraceSaveResult.Success
+        }
     }
 }
