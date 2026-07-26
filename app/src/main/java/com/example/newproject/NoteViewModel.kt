@@ -6,6 +6,7 @@ import com.example.newproject.controller.QuizController
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
 import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.SummaryController
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
@@ -34,7 +35,6 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.mlkit.genai.common.DownloadStatus
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.RelatedNote
@@ -42,10 +42,12 @@ import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
-import com.example.newproject.domain.SummaryResult
 import com.example.newproject.domain.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -71,8 +73,31 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
     private val sectionChat = SectionChatController(viewModelScope, aiClient, _uiState)
     private val quiz = QuizController(viewModelScope, aiClient, _uiState)
-    private val annotation = AnnotationController(viewModelScope, repository, aiClient, _uiState) { vaultUri }
-    private val search = SearchController(viewModelScope, repository, searchPickerUseCase, _uiState) { vaultUri }
+    private val summary = SummaryController(
+        scope = viewModelScope,
+        summarizeUseCase = summarizeUseCase,
+        aiClient = aiClient,
+        uiState = _uiState,
+        // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
+        // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
+        onModelReady = { title, content -> fetchRelatedNotes(title, content) }
+    )
+    private val annotation = AnnotationController(
+        scope = viewModelScope,
+        repository = repository,
+        aiClient = aiClient,
+        uiState = _uiState,
+        vaultUri = { vaultUri },
+        vaultGeneration = { vaultGeneration }
+    )
+    private val search = SearchController(
+        scope = viewModelScope,
+        repository = repository,
+        searchPickerUseCase = searchPickerUseCase,
+        uiState = _uiState,
+        vaultUri = { vaultUri },
+        vaultGeneration = { vaultGeneration }
+    )
     private val distillPersistence: DistillPersistence = DistillWriteRepository(
         gateway = SafDistillDocumentGateway(application.contentResolver),
         recoveryStore = DistillRecoveryStore(application.noBackupFilesDir),
@@ -87,6 +112,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     )
     private val readingTrace = ReadingTraceController(
         scope = viewModelScope,
+        persistScope = readingTraceWriteScope,
         aiClient = aiClient,
         uiState = _uiState,
         persistence = ReadingTraceStore(
@@ -95,17 +121,13 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         currentVaultKey = { vaultUri?.toString() }
     )
 
-    // DL完了後に要約を再実行するために保持
-    private var pendingTitle: String = ""
-    private var pendingContent: String = ""
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
 
     // ノート切替時に前のノートのAI応答が後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
-    // （セクションチャットのジョブは SectionChatController が保持）
+    // （要約・セクションチャット等のジョブは各Controllerが保持）
     private var noteLoadJob: Job? = null
-    private var summaryJob: Job? = null
     private var relatedNotesJob: Job? = null
 
     // 更新はメインスレッドだが、読み取りは痕跡保存などIOスレッドからも走る。
@@ -113,6 +135,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile
     var vaultUri: Uri? = null
         private set
+
+    // Vault単位の非同期要求の世代。saveVault() のたびに進めて、補記一覧・フォルダ一覧の
+    // 結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
+    //
+    // vaultUri の比較で代用しないのは、A→B→A と選び直したときに同じ値になるため。
+    // 選び直しでも cachedNotes とスコープキャッシュは破棄されるので、無効化したい。
+    //
+    // ノート単位の世代は各Controllerが activeRequestId として自前で持つ（寿命が違う。
+    // 補記一覧はノート切替では無効化してはいけない）。
+    private var vaultGeneration = 0L
 
     init {
         restoreTheme()
@@ -155,12 +187,16 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         // 保存先は書き込み時点の vaultUri から解決されるため、切替前に記録中の
         // セッションを捨てる。捨てないと旧ノートの痕跡が新Vaultへ書き込まれる。
         readingTrace.discard()
+        // 走行中のVault単位要求を無効化する。cancel より先に進めておかないと、
+        // すでに結果を持ち帰っている要求が旧世代のまま素通りする。
+        vaultGeneration++
         vaultUri = uri
         prefs.edit().putString(KEY_VAULT_URI, uri.toString()).apply()
         cachedNotes = emptyList()
         cachedNotesLoadedAt = 0L
         relatedNotesUseCase.clearCache()
         search.onVaultChanged()
+        annotation.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
@@ -171,6 +207,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 vaultSelected = true,
                 folders = emptyList(),
                 selectedFolder = null,
+                foldersError = null,
                 searchState = SearchState.Idle,
                 todayHistory = emptyList()
             )
@@ -202,8 +239,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         readingTrace.flush()
         readingTrace.cancelForNoteChange()
         noteLoadJob?.cancel()
-        summaryJob?.cancel()
         relatedNotesJob?.cancel()
+        summary.cancelAndClear()
         quiz.cancelAndClear()
         annotation.cancelAndClear()
         sectionChat.cancelAndClear()
@@ -249,7 +286,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 recordHistory(note.name, note.uri)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
                 readingTrace.revealTrace(note.vaultRelativePath)
-                fetchSummary(note.name, loaded.content)
+                summary.fetch(note.name, loaded.content)
                 fetchRelatedNotes(note.name, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -279,7 +316,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
                 // 「さがす経由の最初の1件」が記録から漏れる。
                 bindReadingTracePath(contentResolver, note.uri, sessionId)
-                fetchSummary(note.title, loaded.content)
+                summary.fetch(note.title, loaded.content)
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -417,34 +454,6 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         wikilinkTitles: Set<String>
     ) = annotation.create(contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
 
-    private fun fetchSummary(title: String, content: String) {
-        summaryJob?.cancel()
-        summaryJob = viewModelScope.launch {
-            _uiState.update { current -> current.copy(summaryState = SummaryState.Loading) }
-            when (val result = summarizeUseCase.summarize(title, content)) {
-                is SummaryResult.Success      -> {
-                    _uiState.update { current ->
-                        current.copy(summaryState = SummaryState.Success(result.summary))
-                    }
-                }
-                is SummaryResult.AiUnavailable -> {
-                    _uiState.update { current -> current.copy(summaryState = SummaryState.AiUnavailable) }
-                }
-                is SummaryResult.AiNeedsDownload -> {
-                    // モデル未DL → 自動でダウンロード開始
-                    pendingTitle = title
-                    pendingContent = content
-                    startModelDownload()
-                }
-                is SummaryResult.Error -> {
-                    _uiState.update { current ->
-                        current.copy(summaryState = SummaryState.Error(result.message))
-                    }
-                }
-            }
-        }
-    }
-
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,
         title: String,
@@ -467,20 +476,46 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                 } else null
             )
         } catch (error: NoteFileTooLargeException) {
-            NoteState.Success(
+            displayFallback(
+                contentResolver = contentResolver,
                 title = title,
-                content = repository.readNoteContent(contentResolver, uri),
-                targetUri = uri.toString(),
-                distillUnavailableReason = "このノートは256KBを超えるため蒸留できません。"
+                uri = uri,
+                reason = "このノートは256KBを超えるため蒸留できません。"
             )
         } catch (error: InvalidNoteEncodingException) {
-            NoteState.Success(
+            displayFallback(
+                contentResolver = contentResolver,
                 title = title,
-                content = repository.readNoteContent(contentResolver, uri),
-                targetUri = uri.toString(),
-                distillUnavailableReason = "このノートはUTF-8として安全に確認できないため蒸留できません。"
+                uri = uri,
+                reason = "このノートはUTF-8として安全に確認できないため蒸留できません。"
             )
         }
+    }
+
+    /**
+     * 蒸留できないノートを、表示だけはできるように読み直す。
+     *
+     * ここへ落ちてくるのは一番大きいノートなので読込にも上限がある。切り詰めたときは
+     * 黙って先頭だけ見せるのではなく、蒸留できない理由と一緒にその旨を伝える
+     * （この経路は元々理由を表示しているので、新しいUIの受け皿は要らない）。
+     */
+    private suspend fun displayFallback(
+        contentResolver: ContentResolver,
+        title: String,
+        uri: Uri,
+        reason: String
+    ): NoteState.Success {
+        val loaded = repository.readNoteForDisplay(contentResolver, uri)
+        return NoteState.Success(
+            title = title,
+            content = loaded.text,
+            targetUri = uri.toString(),
+            distillUnavailableReason = if (loaded.isTruncated) {
+                "$reason 大きすぎるため先頭1MBのみ表示しています。"
+            } else {
+                reason
+            }
+        )
     }
 
     /**
@@ -554,7 +589,8 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
                     currentContent = content,
                     allNotes = cachedNotes,
                     wikilinkTitles = wikilinkTitles,
-                    readContent = { uri -> repository.readNoteContent(contentResolver, uri) },
+                    // 候補はスニペットとfront matterしか使わないので、先頭だけ読む
+                    readContent = { uri -> repository.readNoteSnippet(contentResolver, uri) },
                     parseMeta = { repository.parseMeta(it) }
                 )
             ) {
@@ -579,50 +615,23 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun startModelDownload() {
-        viewModelScope.launch {
-            _uiState.update { current ->
-                current.copy(summaryState = SummaryState.Downloading(downloaded = -1L, total = 0L))
-            }
-            try {
-                aiClient.downloadModel().collect { status ->
-                    when (status) {
-                        is DownloadStatus.DownloadStarted -> {
-                            _uiState.update { current ->
-                                current.copy(summaryState = SummaryState.Downloading(0L, status.bytesToDownload))
-                            }
-                        }
-                        is DownloadStatus.DownloadProgress -> {
-                            val total = (_uiState.value.summaryState as? SummaryState.Downloading)?.total ?: 0L
-                            _uiState.update { current ->
-                                current.copy(summaryState = SummaryState.Downloading(status.totalBytesDownloaded, total))
-                            }
-                        }
-                        is DownloadStatus.DownloadCompleted -> {
-                            // DL完了 → 要約を実行
-                            fetchSummary(pendingTitle, pendingContent)
-                            fetchRelatedNotes(pendingTitle, pendingContent)
-                        }
-                        is DownloadStatus.DownloadFailed -> {
-                            _uiState.update { current ->
-                                current.copy(
-                                    summaryState = SummaryState.Error(
-                                        "モデルのダウンロードに失敗しました: ${status.e.message}"
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                _uiState.update { current ->
-                    current.copy(summaryState = SummaryState.Error("ダウンロードエラー: ${e.message}"))
-                }
-            }
-        }
-    }
-
     companion object {
+        /**
+         * 読書痕跡の書き出し専用スコープ。**プロセスと同じ寿命**。
+         *
+         * `viewModelScope` に載せると、タスクスワイプや Activity finish で
+         * `onStop()` → `pauseReadingTrace()` の直後に `onCleared()` が走り、
+         * IOへディスパッチされる前の保存がキャンセルされて訪問が失われる。
+         *
+         * `ProcessLifecycleOwner` を使わないのは、`lifecycle-process` の依存追加に対して
+         * 必要なのが「`onCleared()` で死なないスコープ」1つだけだから。Activity も
+         * ViewModel も参照しないので、明示的なキャンセル契機は持たない。
+         * `Main.immediate` を土台にするのは `ReadingTraceController` の
+         * スレッド規律（セッション状態はメインスレッドのみ）に合わせるため。
+         */
+        private val readingTraceWriteScope =
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
         private const val KEY_DARK_THEME = "dark_theme"

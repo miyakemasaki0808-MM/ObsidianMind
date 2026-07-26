@@ -14,7 +14,17 @@ package com.example.newproject.model
 /** Vault内のサイドカー置き場。アンダースコア始まりの可視フォルダ。 */
 internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
 
-internal const val READING_TRACE_SCHEMA_VERSION = 1
+/**
+ * 現行の保存形式。**書き込むのは常にこの版**。
+ *
+ * v2 で [ReadingTrace.totalVisitCount] を足した。v1 は保持件数（最大30）を累計回数として
+ * 使っており、30回を超えると表示が「30回」で止まるだけでなく、AI俯瞰要約の再生成判定
+ * （[needsAiSummary]）も止まって古い要約が「最新」として出続けていた。
+ */
+internal const val READING_TRACE_SCHEMA_VERSION = 2
+
+/** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
+internal val READING_TRACE_READABLE_SCHEMA_VERSIONS = setOf(1, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -63,21 +73,48 @@ internal data class ReadingTrace(
     val visits: List<ReadingVisit>,
     val aiSummary: String? = null,
     val aiSummaryVisitCount: Int? = null,
+    /**
+     * これまで開いた**延べ回数**。[visits] は直近30件しか残さないので、
+     * 保持件数とは別に数える。表示・AI要約の鮮度判定はすべてこちらを見る。
+     *
+     * 既定値が `visits.size` なのは、v1 から移行した痕跡と、既存の構築箇所の
+     * 素直な初期値がどちらもそれになるため。**`copy()` は既定値を再評価しない**ので、
+     * 訪問を外すときは [withoutLastVisit] を使うこと（手で `copy(visits = ...)` すると
+     * 累計だけ取り残される）。
+     */
+    val totalVisitCount: Int = visits.size,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 )
 
-/** 訪問を1件足す。上限を超えた分は古い方から捨てる。 */
-internal fun ReadingTrace.withVisit(visit: ReadingVisit): ReadingTrace =
-    copy(visits = (visits + visit).takeLast(ReadingTraceLimits.MAX_VISITS))
+/** 訪問を1件足す。保持は直近[ReadingTraceLimits.MAX_VISITS]件までだが、累計は積み上げる。 */
+internal fun ReadingTrace.withVisit(visit: ReadingVisit): ReadingTrace = copy(
+    visits = (visits + visit).takeLast(ReadingTraceLimits.MAX_VISITS),
+    totalVisitCount = totalVisitCount + 1
+)
+
+/**
+ * 末尾の訪問を外す。**この閲覧で自分が書いた訪問を差し替えるためだけに使う。**
+ *
+ * 累計も一緒に戻すのが要点。戻さずに [withVisit] で書き直すと、背面化のたびに
+ * 累計が増えて「ホームボタンを押すたび回数が膨らむ」に逆戻りする
+ * （保持件数は30で頭打ちになるので、v1ではこの誤りが見えなかった）。
+ */
+internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
+    visits = visits.dropLast(1),
+    totalVisitCount = (totalVisitCount - 1).coerceAtLeast(0)
+)
 
 /**
  * AI俯瞰要約を作り直す必要があるか。
  * 訪問が増えていなければキャッシュ済みの要約をそのまま使えるので、
  * 2回目以降の再会は生成を待たずに即表示できる。
+ *
+ * 判定に累計を使う。保持件数で見ると30件で頭打ちになり、31回目以降は
+ * どれだけ読んでも「増えていない」と判定されて要約が二度と更新されない。
  */
 internal val ReadingTrace.needsAiSummary: Boolean
     get() = visits.size >= ReadingTraceLimits.MIN_VISITS_FOR_AI_SUMMARY &&
-        (aiSummary == null || aiSummaryVisitCount != visits.size)
+        (aiSummary == null || aiSummaryVisitCount != totalVisitCount)
 
 /**
  * UTF-8バイト上限で切る。マルチバイト文字の途中では切らない。
@@ -100,9 +137,14 @@ private fun requireWithinBytes(value: String, maximumBytes: Int, label: String) 
     require(value.toByteArray(Charsets.UTF_8).size <= maximumBytes) { "${label}が長すぎます。" }
 }
 
-/** 読み書き両方で使う厳格検証。壊れたものを見せないための最後の砦。 */
+/**
+ * 読み書き両方で使う厳格検証。壊れたものを見せないための最後の砦。
+ *
+ * 読める版は [READING_TRACE_READABLE_SCHEMA_VERSIONS]（v1 の既存痕跡を破損扱いに
+ * しないため）。書き込み側は現行版だけを許す（`ReadingTraceJson.encode` が別途確認する）。
+ */
 internal fun validateReadingTrace(trace: ReadingTrace) {
-    require(trace.schemaVersion == READING_TRACE_SCHEMA_VERSION) {
+    require(trace.schemaVersion in READING_TRACE_READABLE_SCHEMA_VERSIONS) {
         "未対応の痕跡フォーマットです（version=${trace.schemaVersion}）。"
     }
     require(trace.vaultRelativePath.isNotBlank()) { "ノートの相対パスが空です。" }
@@ -116,6 +158,10 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
     require(trace.visits.size <= ReadingTraceLimits.MAX_VISITS) {
         "訪問が上限（${ReadingTraceLimits.MAX_VISITS}件）を超えています。"
     }
+    // 累計が保持件数を下回るのは、片方だけ更新した実装ミスか改変。
+    require(trace.totalVisitCount >= trace.visits.size) {
+        "累計の閲覧回数が保持している訪問件数を下回っています。"
+    }
     trace.visits.forEach { visit ->
         require(visit.atEpochMillis >= 0) { "訪問日時が不正です。" }
         require(visit.progressPercent in 0..100) { "到達率が0〜100の範囲外です。" }
@@ -128,7 +174,7 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
         requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "AI要約")
     }
     trace.aiSummaryVisitCount?.let {
-        require(it in 0..trace.visits.size) { "AI要約の訪問数が訪問件数と矛盾しています。" }
+        require(it in 0..trace.totalVisitCount) { "AI要約の訪問数が閲覧回数と矛盾しています。" }
     }
     // 要約だけがあって基準の訪問数が無い状態は、次回の再会で無効化できず古い要約を
     // 出し続けてしまうため受け付けない。

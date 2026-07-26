@@ -165,7 +165,15 @@ internal fun AnnotationState.toEventKey(): String? = when (this) {
 sealed class AnnotationListState {
     object Idle : AnnotationListState()
     object Loading : AnnotationListState()
-    data class Success(val files: List<NoteFile>) : AnnotationListState()
+    /**
+     * @param deleteFailureCount 直前の削除操作で失敗した件数。0 なら表示しない。
+     *   失敗を [Error] に倒すと一覧ごと消えて再削除できなくなるため、
+     *   一覧は保ったまま件数だけ添える。
+     */
+    data class Success(
+        val files: List<NoteFile>,
+        val deleteFailureCount: Int = 0
+    ) : AnnotationListState()
     data class Error(val message: String) : AnnotationListState()
 }
 
@@ -226,6 +234,10 @@ data class NoteUiState(
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
+    // フォルダ列挙に失敗したときだけ入る。ルート直下スコープは使えるので致命的ではないが、
+    // 黙って chips が出ないと「フォルダが無い」のか「取れなかった」のか区別できない。
+    // Vault単位の状態なので、リセットは resetNoteScopedStates ではなく saveVault が持つ。
+    val foldersError: String? = null,
     val searchState: SearchState = SearchState.Idle,
     // 当日分のみの閲覧履歴（`NoteHistoryStore` が日付判定を担当）
     val todayHistory: List<HistoryEntry> = emptyList(),
