@@ -38,6 +38,23 @@ class VigilithMascotMotionTest {
     }
 
     @Test
+    fun `Summarizingのレンズ輝度は常にIdleより強い`() {
+        // モード内の変化は上2件が見ているが、モードを跨いだ大小関係は誰も固定していなかった。
+        // 「要約中はIdleより明るく光る」は意図的な差（ベース 0.18 vs 0.08）なので、
+        // 係数を触った時に崩れたら気付けるよう同一 loopFraction 同士で比較する。
+        listOf(0f, 0.25f, 0.5f, 0.75f, 1f).forEach { loop ->
+            val idle = motion(VigilithMode.Idle, loop, 1f)
+            val summarizing = motion(VigilithMode.Summarizing, loop, 1f)
+
+            assertTrue(
+                "loop=$loop で Summarizing(${summarizing.lensGlowAlpha}) が " +
+                    "Idle(${idle.lensGlowAlpha}) を上回らなかった",
+                summarizing.lensGlowAlpha > idle.lensGlowAlpha
+            )
+        }
+    }
+
+    @Test
     fun `蒸留の候補探索は断片を中央へ集め両翼を寄せる`() {
         val frame = motion(
             mode = VigilithMode.Distilling,
