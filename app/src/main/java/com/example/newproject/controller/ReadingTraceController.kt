@@ -2,6 +2,7 @@ package com.example.newproject.controller
 
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceCard
@@ -40,6 +41,18 @@ import kotlinx.coroutines.withContext
  */
 internal class ReadingTraceController(
     private val scope: CoroutineScope,
+    /**
+     * 訪問の書き出し専用スコープ。**アプリ寿命であること**が前提。
+     *
+     * `viewModelScope` に載せてはいけない。タスクスワイプや Activity finish では
+     * `onStop()` → [pause] の直後に `onCleared()` が走るため、IOへディスパッチされる
+     * 前のコルーチンがキャンセルされ、確定させたはずの訪問が失われる
+     * （背面化だけなら失われないので、KDocの意図が終了経路でだけ破れていた）。
+     *
+     * 土台は Main.immediate であることも前提。[Session] の各フィールドはメインスレッド
+     * からのみ触る規律で書かれており、保存失敗時の巻き戻しもそこへ戻ってくる。
+     */
+    private val persistScope: CoroutineScope,
     private val aiClient: AiClient,
     private val uiState: MutableStateFlow<NoteUiState>,
     private val persistence: ReadingTracePersistence,
@@ -250,15 +263,17 @@ internal class ReadingTraceController(
             )
         )
         // 起動前に消費済みにして、同じ状態で二重に書き込まないようにする。
+        // 書けなかった場合はこの2つを戻し、次の契機で書き直させる（下の Failure 分岐）。
         val previous = active.recordedVisit
         active.recordedVisit = visit
         active.dirty = false
         val title = active.noteTitle
         val documentId = active.documentId
         val vaultKey = active.vaultKey
+        val owner = active
 
-        scope.launch {
-            withContext(ioDispatcher) {
+        persistScope.launch {
+            val result = withContext(ioDispatcher) {
                 writeMutex.withLock {
                     val base = when (val existing = persistence.load(path, vaultKey)) {
                         is ReadingTraceReadResult.Valid -> {
@@ -284,6 +299,18 @@ internal class ReadingTraceController(
                     }
                     persistence.save(base.withVisit(visit), vaultKey)
                 }
+            }
+            // 書けていなければ「まだ書いていない」状態へ戻し、次の契機（背面化・離脱）で
+            // 書き直させる。ここを捨てると、消費済みの印だけが残って
+            // そのセッションの訪問は恒久的に失われる。
+            //
+            // 巻き戻すのは、自分が書こうとした訪問がまだ最新である場合だけ。待っている間に
+            // さらに読み進めて別の訪問が積まれていたら、戻すと古い方を復活させてしまう。
+            // 既に別ノートへ移っていた場合は owner が現役でないセッションを指すが、
+            // 誰も読まないので害はない（そのための照合は置かない）。
+            if (result is ReadingTraceSaveResult.Failure && owner.recordedVisit === visit) {
+                owner.recordedVisit = previous
+                owner.dirty = true
             }
         }
     }
@@ -397,6 +424,15 @@ internal class ReadingTraceController(
         null
     }
 
+    /**
+     * 生成した要約をサイドカーへ載せる。
+     *
+     * 訪問の保存（[recordVisit]）と違い、**保存結果を見ないし再試行もしない**。
+     * 書けなければ `aiSummaryVisitCount` が更新されないだけで、次回の再会で
+     * [needsAiSummary] が真になり自動的に作り直される（自己修復する）。
+     * 同じ理由でアプリ寿命のスコープにも載せない — 失っても取り返せるものを
+     * ノート切替後まで走らせ続ける必要はない。
+     */
     private suspend fun persistSummary(trace: ReadingTrace, summary: String, vaultKey: String) {
         withContext(ioDispatcher) {
             writeMutex.withLock {

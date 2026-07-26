@@ -15,6 +15,8 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.AiTimeoutException
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -303,6 +305,124 @@ class ReadingTraceControllerTest {
         // 復帰後に読み進めた最深が残っていること
         assertEquals(90, stored.visits.single().progressPercent)
         assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
+    }
+
+    // ── 保存の寿命と失敗の扱い ──────────────────────────────────────────────
+
+    // タスクスワイプでは onStop() → pause() の直後に onCleared() が走る。
+    // 保存が viewModelScope に載っていると、IOへディスパッチされる前に
+    // キャンセルされて確定済みの訪問が消える。
+    @Test
+    fun `UI側のスコープがキャンセルされても訪問は書き出される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val uiScope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        val controller = controller(persistence, clock, scope = uiScope, persistScope = this)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.pause()
+        // 書き出しがIOへ渡る前に ViewModel が畳まれる
+        uiScope.cancel()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.saved.size)
+    }
+
+    // 消費済みの印（dirty=false / recordedVisit）は保存の起動前に立てている。
+    // 書けなかったのに戻さないと、そのセッションの訪問は恒久的に失われる。
+    //
+    // 背面化のあと **resume を挟まずに** 離脱するのが要点。resume() は無条件に
+    // dirty を立てるので、それを挟むと巻き戻しを経由しなくても通ってしまう。
+    @Test
+    fun `保存に失敗したら次の契機で書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        persistence.failSave = true
+        controller.pause()
+        advanceUntilIdle()
+        assertTrue(persistence.saved.isEmpty())
+
+        // 背面のまま離脱する（＝次の契機）。dirty が戻っていなければ二度と書かれない。
+        persistence.failSave = false
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.saved.size)
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.totalVisitCount)
+    }
+
+    // 成功した保存のあとに失敗した保存が続いても、読み進めた分が失われない。
+    // 巻き戻しが「自分が書いた訪問がまだ最新のときだけ」に効くことの確認でもある。
+    @Test
+    fun `後続の保存が失敗しても読み進めた分は次の契機で書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+        assertEquals(20, persistence.stored("ideas/habit.md")!!.visits.single().progressPercent)
+
+        // 復帰して読み進めるが、その保存は失敗する
+        persistence.failSave = true
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(1_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        // さらに次の契機で書き直される。訪問は増えず、最深だけが進む。
+        persistence.failSave = false
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+        assertEquals(1, stored.totalVisitCount)
+        assertEquals(90, stored.visits.single().progressPercent)
+    }
+
+    // 保存2件が同時に飛んでいるとき、先に失敗した方の巻き戻しが後発の訪問を潰さない。
+    //
+    // 巻き戻しは「自分が書こうとした訪問がまだ最新のときだけ」に限っている。
+    // その照合が無いと、先発の失敗が recordedVisit を古い値へ戻してしまい、
+    // 次の離脱で同じ閲覧が2件目の訪問として積まれる（1回の閲覧＝1訪問が崩れる）。
+    @Test
+    fun `先行した保存の失敗が後発の訪問を巻き戻さない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+        persistence.failSaveOnAttempt = 1
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        // 1件目の保存を起動したまま（advanceUntilIdle を挟まない）読み進めて2件目を起動する
+        controller.pause()
+        controller.resume()
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(1_000L)
+        controller.pause()
+        advanceUntilIdle()
+
+        // 2件目は成功しているので、離脱時に書き直すものは無い
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+        assertEquals(1, stored.totalVisitCount)
+        assertEquals(90, stored.visits.single().progressPercent)
     }
 
     // ── 累計回数（保持件数と分離）────────────────────────────────────────────
@@ -994,11 +1114,16 @@ private fun TestScope.controller(
     clock: TestClock,
     aiClient: AiClient = ImmediateAiClient(),
     state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState()),
-    vault: FakeVault = FakeVault()
+    vault: FakeVault = FakeVault(),
+    // 既定では UI 用と同じスコープ。両者を分ける必要があるのは
+    // 「scope をキャンセルしても保存が走る」を確かめるときだけ。
+    scope: CoroutineScope = this,
+    persistScope: CoroutineScope = this
 ): ReadingTraceController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReadingTraceController(
-        scope = this,
+        scope = scope,
+        persistScope = persistScope,
         aiClient = aiClient,
         uiState = state,
         persistence = persistence,
@@ -1073,6 +1198,9 @@ private class FakePersistence : ReadingTracePersistence {
     val savedVaultKeys = mutableListOf<String>()
     val corruptPaths = mutableSetOf<String>()
     var failSave = false
+
+    /** この回数目の保存だけを失敗させる（1始まり）。先行・後続の順序が要る検証用。 */
+    var failSaveOnAttempt: Int? = null
     var saveAttempts = 0
         private set
 
@@ -1096,7 +1224,9 @@ private class FakePersistence : ReadingTracePersistence {
     override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
         savedVaultKeys += vaultKey
-        if (failSave) return ReadingTraceSaveResult.Failure("書き込めませんでした")
+        if (failSave || failSaveOnAttempt == saveAttempts) {
+            return ReadingTraceSaveResult.Failure("書き込めませんでした")
+        }
         saved += trace
         files[trace.vaultRelativePath] = trace
         return ReadingTraceSaveResult.Success

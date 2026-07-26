@@ -45,6 +45,9 @@ import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,6 +112,7 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     )
     private val readingTrace = ReadingTraceController(
         scope = viewModelScope,
+        persistScope = readingTraceWriteScope,
         aiClient = aiClient,
         uiState = _uiState,
         persistence = ReadingTraceStore(
@@ -612,6 +616,22 @@ class NoteViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     companion object {
+        /**
+         * 読書痕跡の書き出し専用スコープ。**プロセスと同じ寿命**。
+         *
+         * `viewModelScope` に載せると、タスクスワイプや Activity finish で
+         * `onStop()` → `pauseReadingTrace()` の直後に `onCleared()` が走り、
+         * IOへディスパッチされる前の保存がキャンセルされて訪問が失われる。
+         *
+         * `ProcessLifecycleOwner` を使わないのは、`lifecycle-process` の依存追加に対して
+         * 必要なのが「`onCleared()` で死なないスコープ」1つだけだから。Activity も
+         * ViewModel も参照しないので、明示的なキャンセル契機は持たない。
+         * `Main.immediate` を土台にするのは `ReadingTraceController` の
+         * スレッド規律（セッション状態はメインスレッドのみ）に合わせるため。
+         */
+        private val readingTraceWriteScope =
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
         private const val PREFS_NAME = "random_note_prefs"
         private const val KEY_VAULT_URI = "vault_uri"
         private const val KEY_DARK_THEME = "dark_theme"
