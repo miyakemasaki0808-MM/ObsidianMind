@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 以下（API 30まで）向けの自動バックアップ除外ルール。
+  API 31以上は data_extraction_rules.xml が使われるため、両方を維持する。
+
+  random_note_prefs には Vault の SAF URI・テーマ設定・当日分の閲覧履歴
+  （ノートのタイトル）が入る。ノート本文は保存していないが、タイトルは
+  ユーザーの個人的な内容であり、SAF URI の権限付与も端末を跨げば無効になる。
+  「インターネット権限を持たず端末内で完結する」という方針と揃えるため、
+  クラウドへは一切出さない。
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="random_note_prefs.xml" />
+</full-backup-content>

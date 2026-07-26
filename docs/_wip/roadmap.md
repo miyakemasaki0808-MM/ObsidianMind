@@ -2,11 +2,13 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **初版:** 2026-07-22（最終更新: 2026-07-26）
-**基準:** ReadingTrace v1・Vigilith Phase 3実装済み（ともに実機確認待ち。旧 TimeCapsule 設計は棄却）
+**基準:** ReadingTrace v1・Vigilith Phase 3実装済み（ともに実機確認待ち。ダークモードは確認済み。旧 TimeCapsule 設計は棄却）
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
 **主眼:** プロダクトの方向性（北極星）を上位に置き、機能はそこから導く
 
-> このロードマップは「何をやるか」の羅列ではなく「なぜこの順で育てるか」を残す文書。課題の棚卸しは [current_issues.md](current_issues.md)、過去の変更は [change_history.md](../change_history.md)、各機能の設計判断は [design/](../design/) を参照。
+> **この文書は使い捨て。** 今の並び順と「なぜこの順か」だけを持ち、**完了した項目は取り消し線で残さずその場で削除する**。
+> 記録は残る場所が別にあるため（変更は [change_history.md](../change_history.md)、判断は [design/](../design/)、未対応課題は [current_issues.md](current_issues.md)）、
+> ここに履歴を溜めると「次に何をやるか」が読み取れなくなる。**項目番号はこのファイル内だけの見出し**なので、振り直しても再利用しても構わない。
 
 ---
 
@@ -34,8 +36,8 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: ReadingTraceの正確性を確立し、土台の"約束と実装のズレ"を潰す。**
-ReadingTrace v1の主要経路は実装され、2026-07-25の実装レビューで見つかった高優先度課題（到達率・Lifecycle・Vault分離）と検索フォールバックの文言差は、いずれもJVMテスト付きで解消した。残るは実機確認。
+**テーマ: 実装済みの土台を実機で確定させる。**
+ReadingTrace v1 と Vigilith Phase 3 はJVMテストまで通過済み。残るのは実端末での一巡のみ。
 
 ### N-1. ReadingTrace v1を完成状態へする（実装・修正済み／実機確認待ち）
 - **設計を棄却して置き換えた。** 「ボタンではなく無意識の補助機能に」という要求で旧設計（明示ボタンで問いを書く）の前提が崩れ、(a)自分由来・(b)全ノートに残る・(c)無意識 の3条件が同時に満たせないことが判明。**AIの役割を「問いの創作」から「痕跡の要約」へ落として解決**し、**ReadingTrace**（読書位置を自動記録し、Rediscoverで「前回のあなた」を見せる）として実装した。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
@@ -44,22 +46,14 @@ ReadingTrace v1の主要経路は実装され、2026-07-25の実装レビュー�
 - **レビュー指摘3件は修正済み（2026-07-25）:** ①到達率をブロック内の可視量まで見る方式へ変更（100%は最終ブロック末端が画面へ入った時だけ）②`pause`/`resume` による能動読書時間の積算（背面時間を除外し、1回の閲覧＝1訪問を保つ）③保存要求にVault識別子を持たせ、書込直前に照合（当初の実装は確認後に `vaultUri()` を読み直しており効いていなかったため作り直した → [bugfix_reports](../bugfix_reports.md) #4）。→ [change_history.md](../change_history.md) PR #35
 - **完了の定義:** 長大な1ブロックを冒頭だけ見ても100%にならない／背面化・復帰をまたいで読書時間と最深位置が正しい／Vault切替で旧痕跡が新Vaultへ入らない、を自動テストと**実端末確認**で満たす。JVMテストは通過済みで、**残るは実端末確認のみ**（SAF照合とActivity lifecycleはJVMテストの範囲外）。
 
-### ~~N-2. 検索フォールバックの文言差を解消~~ ✅ 完了（2026-07-25）
-- 候補数に依らず bigramスコア順へ統一し、UI文言「キーワード一致」と実装を一致させた。加えて**一致0件は返さない**ようにして、文言が常に真になるようにした（0件時は「見つかりませんでした。」）。採点・選抜は `domain/SearchKeywordMatching.kt` の純関数へ切り出し、フォールバックと再現率カットで求めるものが違うことを型で分けた。→ [change_history.md](../change_history.md) PR #35
-
-### ~~N-3. 解析書の実装追従~~ ✅ 更新（2026-07-24〜2026-07-26）
-- 蒸留、ReadingTrace、Vigilith Phase 3まで追従し、本番65ファイル・11,723行、
-  テスト41ファイル・352ケースへ再測定した。未確認事項は完了扱いにせず、
-  [current_issues.md](current_issues.md)へ記録する運用を維持。
-
 ### N-4. Vigilithを「読書相手」の身体として常駐させる（feature_ideas N-1／Phase 3実装済み・実機確認待ち）
 - **達成:** 既存AI状態だけからIdle／Summarizing／Distilling／Messengerを導出し、
   5タブ共通Hostで常駐。4状態の透過WebP、状態別モーション、画面内clamp、Fold再配置、
   Navigation UI／Snackbar／IME回避、TalkBackの単一ボタン化まで実装した。
 - **ガードレール:** 主役はノート。キャラクター専用の記憶・催促・報酬状態は作らない。
 - **完了の定義:** Pixel 10 Pro Foldでタップ／ドラッグ、Compact／Fold、Snackbar／IME／ReadingTrace、
-  Animator duration scale 0倍、TalkBackを一巡する。自動テスト352件、APKビルド・インストールは通過済み。
-  → [vigilith_in_app](../design/vigilith_in_app.md)・[current_issues](current_issues.md) 3-5
+  Animator duration scale 0倍、TalkBackを一巡する。自動テストとAPKビルド・インストールは通過済み。
+  → [vigilith_in_app](../design/vigilith_in_app.md)
 
 ---
 
@@ -67,9 +61,6 @@ ReadingTrace v1の主要経路は実装され、2026-07-25の実装レビュー�
 
 **テーマ:「再会」を深く、機能追加に耐える土台へ。**
 ReadingTraceの高優先度修正後、再会体験を濃くする拡張と、機能が揃った今こそ判断すべきリファクタを行う。
-
-### ~~X-1. Controller共通化の方針決定~~ ✅ 完了（2026-07-24・2026-07-25に再判定）
-- 判断を実施し **「相似のまま維持（共通化しない）」** で決着。共通なのは requestId ガードの数行のみで、モデルDLポリシー・通知の有無・状態数が異なるため、共通基底にする価値がないと判断した。4件目の `ReadingTraceController` でも再判定し**同じ結論**（「ユーザーに通知しない」ことが本質的に共通化を拒む）。根拠と再検討条件は [architecture](../design/architecture.md) の 2026-07-24／2026-07-25 追記に記録。
 
 ### X-2. 「意図して問いを残す」機能（旧 TimeCapsule の核）
 - **なぜここ:** ReadingTrace は行動データなので「**何を考えていたか**」を回収できない。「前回は40%で止まった」は「前回は〇〇が引っかかった」ではない。思考の連続性は依然として未達。
@@ -86,7 +77,9 @@ ReadingTraceの高優先度修正後、再会体験を濃くする拡張と、�
 - **累計回数:** 直近30件の保持数と「これまで開いた回数」を分離する。`totalVisitCount`追加または表示文言の限定を検討する。→ [current_issues.md](current_issues.md) 2-5
 
 ### X-5. Job管理の統一
-- **なぜここ:** 検索・補記一覧等が要求単位で未保護。UI導線が増える前に、requestIdまたはJobで「最後の要求だけが状態を更新する」形へ揃える。→ [current_issues.md](current_issues.md) 2-1
+- **なぜここ:** 補記一覧／削除と要約側のモデルDLが要求単位で未保護。UI導線が増える前に、requestIdまたはJobで「最後の要求だけが状態を更新する」形へ揃える。
+  検索は 2026-07-26 に解消済みで、`SearchController` が参照実装になる。**UseCase が `CancellationException` を握りつぶしていないかも併せて見る**
+  （`SearchPickerUseCase` は畳んでおり、`cancel()` だけでは防げなかった）。→ [current_issues.md](current_issues.md) 2-1
 
 ### X-6. AI状態UXの統一
 - **なぜここ:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとにバラつく。蒸留の「インライン説明フォールバック」を良い先例として、要約・検索・クイズ・補記へ横展開。**ReadingTrace は例外として扱う**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。→ [current_issues.md](current_issues.md) 3-3
@@ -125,5 +118,7 @@ ReadingTraceの高優先度修正後、再会体験を濃くする拡張と、�
 ## 更新運用
 
 - 大きめのPRやマイルストーン到達時に、Now/Next/Laterの中身を1回見直す。
-- 完了したNow項目は [change_history.md](../change_history.md) へ記録し、本ファイルからは削除してNextを繰り上げる。
+- **完了項目は取り消し線を残さず削除する。** 記録は [change_history.md](../change_history.md) が持つ。
+  取り消し線で残すと、完了分がNowの先頭に溜まって「次に何をやるか」が読み取れなくなる。
+- 削除でNowが空いたらNextを繰り上げる。**番号は振り直さない**（design/・current_issues が番号で参照するため）。
 - 北極星（§0）は安易に変えない。変える時は「なぜ変えたか」をこのセクションに残す。

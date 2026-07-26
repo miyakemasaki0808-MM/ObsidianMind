@@ -3,6 +3,10 @@
 **日付:** 2026-04-30  
 **プロジェクト:** Random Note (Obsidian Vault ビューア)
 
+> **この文書は2026-04-30時点の記録で、以後更新しない。** Android開発の第一歩の資料としてのみ存在する。
+> 当時の minSdk は API 23（現在は 26）、アプリ名も Random Note（現 Vigilith AI）で、記載内容は現状と一致しない。
+> 今どうなっているかは [source_code_analysis.md](source_code_analysis.md)、その後の変更は [change_history.md](change_history.md) を参照。
+
 ---
 
 ## 1. 概要
@@ -87,24 +91,3 @@ Coroutines の `withContext(Dispatchers.IO)` でバックグラウンド処理�
 - **ViewModel** は画面回転などの構成変更を跨いで状態を保持する。Activity に状態を持たせると回転のたびにリセットされるため必須。
 - **StateFlow** は `LiveData` の Kotlin 版にあたり、コルーチンと自然に統合できる。`repeatOnLifecycle(STARTED)` と組み合わせることでライフサイクルセーフな UI 更新が実現できる。
 - **Gradle のプラグイン管理** はルートの `build.gradle.kts` で宣言し、各モジュールで `apply` する二段構成を理解することが大切。
-
----
-
-## 6. 次のステップ候補
-
-> §1〜5は2026-04-30時点の記録として保存する（当時の minSdk は API 23。現在は 26）。本節のみ、その後の実装状況に合わせて追記している（最終更新 2026-07-24）。
-
-- [x] Markdown のレンダリング（見出し・太字・イタリック・コードブロック・引用・テーブル・タスクリスト・Obsidian リンク等）
-- [x] Compose UI への移行
-- [x] Gemini Nano 4 によるオンデバイスノート要約（ML Kit GenAI Prompt API）
-- [x] Pixel 10 Pro Fold 展開時の Two-Pane レイアウト対応
-- [x] 最後に読んだノートの履歴表示（当日分のみの「今日読んだノート」/ PR #24）
-- [ ] ウィジェット対応（ホーム画面からワンタップでランダム表示）— 非優先（`_wip/feature_ideas.md`）
-- [x] ダークモード対応 — 2026-07-22に見送り確定→2026-07-26に再検討し実装（オプション画面での明示切替・OS追従なし / `design/dark_mode.md`）
-- [ ] ネストリスト対応
-- [ ] 画像レンダリング対応（`![alt](path)`）— 生きているバックログ（`_wip/feature_ideas.md` N-4）
-- [x] 関連ノート表示（wikilink ベース + AI 推薦の 2 段構成、タップで本文切り替え）
-- [x] Q&A フラッシュカード生成（Gemini Nano によるオンデバイス多肢選択問題）
-- [x] 補記メモ機能（AI が粒度評価・補記案を生成し `_AI補記/` フォルダに保存）
-- [ ] ~~ノート一覧画面の実装~~ — 見送り確定（Vault全体の一覧はObsidian本体の領分・Rediscover中心の思想と衝突 / `_wip/feature_ideas.md`）
-- [x] セクション単位AIチャット・適応出題Q&A・蒸留（Distill）— 当初の想定外に追加された機能群（詳細は `change_history.md`）

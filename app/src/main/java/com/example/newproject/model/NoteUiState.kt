@@ -3,8 +3,6 @@ package com.example.newproject.model
 import com.example.newproject.data.HistoryEntry
 import com.example.newproject.data.NoteFile
 import com.example.newproject.data.NoteFolder
-import com.example.newproject.data.NoteHistoryStore
-import com.example.newproject.domain.projectedBoldRatio
 import android.net.Uri
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
@@ -229,7 +227,7 @@ data class NoteUiState(
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
     val searchState: SearchState = SearchState.Idle,
-    // 当日分のみの閲覧履歴（NoteHistoryStore が日付判定を担当）
+    // 当日分のみの閲覧履歴（`NoteHistoryStore` が日付判定を担当）
     val todayHistory: List<HistoryEntry> = emptyList(),
     // 表示テーマ。OS設定には追従せず、オプション画面での明示切替だけで変わる。
     val darkTheme: Boolean = false

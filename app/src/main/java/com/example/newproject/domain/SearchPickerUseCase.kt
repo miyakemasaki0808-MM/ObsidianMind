@@ -4,6 +4,7 @@ import com.example.newproject.data.NoteFile
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import kotlinx.coroutines.CancellationException
 
 sealed class PickerResult {
     data class Success(
@@ -54,6 +55,10 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                     else PickerResult.Success(picked, AiRecommendationStatus.Ready)
                 }
             }
+        } catch (e: CancellationException) {
+            // キャンセルを Error へ畳むと、呼び出し側は「正常に失敗が返った」と
+            // 区別できず、追い越された古い要求がエラー表示になる。素通しする。
+            throw e
         } catch (e: Exception) {
             PickerResult.Error(e.message ?: "Unknown error")
         }
