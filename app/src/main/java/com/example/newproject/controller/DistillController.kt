@@ -9,7 +9,7 @@ import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillRecoveryKind
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
-import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.DistillStateWriter
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
@@ -29,8 +29,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -38,7 +36,8 @@ import kotlinx.coroutines.withContext
 internal class DistillController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>,
+    private val state: DistillStateWriter,
+    private val currentNote: () -> NoteState.Success?,
     private val persistence: DistillPersistence,
     private val reloadBody: suspend (targetUri: String, expectedHash: String?) -> Boolean,
     private val analysisDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -65,12 +64,12 @@ internal class DistillController(
     private var session: ActiveSession? = null
 
     fun start() {
-        if (uiState.value.distillState is DistillState.Analyzing ||
-            uiState.value.distillState is DistillState.Downloading ||
-            uiState.value.distillState is DistillState.Saving
+        if (state.current is DistillState.Analyzing ||
+            state.current is DistillState.Downloading ||
+            state.current is DistillState.Saving
         ) return
 
-        val note = uiState.value.noteState as? NoteState.Success
+        val note = currentNote()
         if (note == null) {
             update(DistillState.Error("先にノートを開いてください。", canRetry = false))
             return
@@ -127,7 +126,7 @@ internal class DistillController(
                             DistillState.Downloading(input.title, 0L, status.bytesToDownload)
                         )
                         is DownloadStatus.DownloadProgress -> {
-                            val total = (uiState.value.distillState as? DistillState.Downloading)?.total ?: 0L
+                            val total = (state.current as? DistillState.Downloading)?.total ?: 0L
                             update(DistillState.Downloading(input.title, status.totalBytesDownloaded, total))
                         }
                         is DownloadStatus.DownloadCompleted -> {
@@ -198,7 +197,7 @@ internal class DistillController(
     }
 
     fun toggleCandidate(id: String) {
-        val current = uiState.value.distillState as? DistillState.Candidates ?: return
+        val current = state.current as? DistillState.Candidates ?: return
         if (session?.candidatesById?.containsKey(id) != true) return
         updateCandidateState(
             current.sourceTitle,
@@ -227,7 +226,7 @@ internal class DistillController(
 
     fun saveSelection() {
         val active = session ?: return
-        val current = uiState.value.distillState as? DistillState.Candidates ?: return
+        val current = state.current as? DistillState.Candidates ?: return
         val selected = current.items.filter { it.isSelected }
         if (!current.canSaveSelection) return
         val ranges = selected.mapNotNull { active.candidatesById[it.id]?.sentence?.range }
@@ -309,7 +308,7 @@ internal class DistillController(
 
     fun retry() {
         val target = session?.input?.targetUri
-        if (uiState.value.distillState is DistillState.Conflict && target != null) {
+        if (state.current is DistillState.Conflict && target != null) {
             val requestId = ++activeRequestId
             job?.cancel()
             update(DistillState.Analyzing(session?.input?.title.orEmpty()))
@@ -327,7 +326,7 @@ internal class DistillController(
     }
 
     fun dismissResult() {
-        if (uiState.value.distillState is DistillState.RecoveryRequired) return
+        if (state.current is DistillState.RecoveryRequired) return
         session = null
         update(DistillState.Idle)
     }
@@ -454,11 +453,11 @@ internal class DistillController(
         job = null
         pendingDownload = null
         session = null
-        if (uiState.value.distillState !is DistillState.RecoveryRequired) update(DistillState.Idle)
+        if (state.current !is DistillState.RecoveryRequired) update(DistillState.Idle)
     }
 
-    private fun update(state: DistillState) {
-        uiState.update { current -> current.copy(distillState = state) }
+    private fun update(next: DistillState) {
+        state.update { next }
     }
 
     private fun isCurrent(requestId: Long): Boolean = requestId == activeRequestId

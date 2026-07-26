@@ -10,7 +10,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -27,8 +27,8 @@ class SectionChatControllerTest {
     @Test
     fun `シートを閉じても要約生成が継続して結果が保持される`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = SectionChatController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(this, aiClient, state.sectionChatWriter)
 
         controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
         runCurrent()
@@ -52,8 +52,8 @@ class SectionChatControllerTest {
     @Test
     fun `生成中に再度開いても二重生成せず元のセクションを再表示する`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = SectionChatController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(this, aiClient, state.sectionChatWriter)
 
         controller.open(NoteSection("最初のセクション", 2, "最初の本文"))
         runCurrent()
@@ -72,8 +72,8 @@ class SectionChatControllerTest {
     @Test
     fun `完了後に吹き出しを開くと再生成せず既存結果を表示する`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = SectionChatController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(this, aiClient, state.sectionChatWriter)
 
         controller.open(NoteSection("対象", 2, "本文"))
         runCurrent()
@@ -93,8 +93,8 @@ class SectionChatControllerTest {
     @Test
     fun `明示終了すると生成をキャンセルしてセッションを破棄する`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = SectionChatController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(this, aiClient, state.sectionChatWriter)
 
         controller.open(NoteSection("対象", 2, "本文"))
         runCurrent()

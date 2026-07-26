@@ -2,7 +2,7 @@ package com.example.newproject.controller
 
 import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
-import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.SectionChatStateWriter
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -11,8 +11,6 @@ import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -22,7 +20,7 @@ import kotlinx.coroutines.launch
 class SectionChatController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>
+    private val state: SectionChatStateWriter
 ) {
     // 前のセクションの生成が後から届いて新しいシートを上書きしないよう保持する
     private var openJob: Job? = null
@@ -32,12 +30,12 @@ class SectionChatController(
     fun open(section: NoteSection) {
         // 生成中・完了済みのセッションがあれば、その結果を再表示する。
         // スクロール先の別セクションで重複生成しないよう、対象は開始時のものに固定する。
-        if (uiState.value.sectionChat != null) {
+        if (state.current.sectionChat != null) {
             showSheet()
             return
         }
         cancelJobs()
-        uiState.update { current ->
+        state.update { current ->
             current.copy(
                 sectionChat = SectionChatState(
                     sectionTitle = section.title,
@@ -76,7 +74,7 @@ class SectionChatController(
     }
 
     fun sendMessage(text: String) {
-        val chat = uiState.value.sectionChat ?: return
+        val chat = state.current.sectionChat ?: return
         val question = text.trim()
         if (question.isBlank() || chat.isGenerating) return
 
@@ -123,8 +121,8 @@ class SectionChatController(
 
     /** 生成中・完了済みのセッションをシートに再表示する。 */
     fun showSheet() {
-        if (uiState.value.sectionChat == null) return
-        uiState.update { current -> current.copy(isSectionChatSheetVisible = true) }
+        if (state.current.sectionChat == null) return
+        state.update { current -> current.copy(isSectionChatSheetVisible = true) }
     }
 
     /**
@@ -132,13 +130,13 @@ class SectionChatController(
      * AI生成と結果は同じノート内に保持し、読書を妨げない。
      */
     fun dismissSheet() {
-        uiState.update { current -> current.copy(isSectionChatSheetVisible = false) }
+        state.update { current -> current.copy(isSectionChatSheetVisible = false) }
     }
 
     /** 明示キャンセル・確認終了・ノート/Vault切替時にセッション全体を破棄する。 */
     fun cancelAndClear() {
         cancelJobs()
-        uiState.update { current ->
+        state.update { current ->
             current.copy(
                 sectionChat = null,
                 isSectionChatSheetVisible = false
@@ -174,7 +172,7 @@ class SectionChatController(
 
     // sectionChat が開いている場合のみ安全に更新する
     private fun updateChat(block: (SectionChatState) -> SectionChatState) {
-        uiState.update { state ->
+        state.update { state ->
             val current = state.sectionChat ?: return@update state
             state.copy(sectionChat = block(current))
         }

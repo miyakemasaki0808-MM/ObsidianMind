@@ -9,7 +9,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertFalse
@@ -20,7 +20,7 @@ class AnnotationControllerTest {
 
     @Test
     fun `エラー結果を開くと通知が確認済みになる`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 annotationState = AnnotationState.Error(
                     message = "生成エラー",
@@ -38,7 +38,7 @@ class AnnotationControllerTest {
 
     @Test
     fun `ノート切替時の破棄で補記状態がIdleに戻る`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(annotationState = AnnotationState.Loading("対象ノート"))
         )
         val controller = controller(state)
@@ -51,7 +51,7 @@ class AnnotationControllerTest {
 
     @Test
     fun `Vault切替で補記一覧が破棄される`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(annotationListState = AnnotationListState.Loading)
         )
         val controller = controller(state)
@@ -65,7 +65,7 @@ class AnnotationControllerTest {
     // createJob と listJob を分けている理由がここ。
     @Test
     fun `ノート切替では補記一覧を巻き込まない`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 annotationState = AnnotationState.Loading("対象ノート"),
                 annotationListState = AnnotationListState.Error("読み込み失敗")
@@ -79,11 +79,11 @@ class AnnotationControllerTest {
         assertTrue(state.value.annotationListState is AnnotationListState.Error)
     }
 
-    private fun controller(state: MutableStateFlow<NoteUiState>) = AnnotationController(
+    private fun controller(state: NoteUiStateStore) = AnnotationController(
         scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
         repository = NoteRepository(),
         aiClient = NoOpAiClient,
-        uiState = state,
+        state = state.annotationWriter,
         vaultUri = { null },
         vaultGeneration = { 0L }
     )

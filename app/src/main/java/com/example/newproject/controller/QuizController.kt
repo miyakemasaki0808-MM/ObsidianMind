@@ -4,7 +4,7 @@ import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.domain.profileQuizInput
 import com.example.newproject.domain.toObsidianNoteTitle
-import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.QuizStateWriter
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.ai.AiAvailability
@@ -14,8 +14,6 @@ import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -27,7 +25,7 @@ import kotlinx.coroutines.launch
 class QuizController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>
+    private val state: QuizStateWriter
 ) {
     private var pending: PendingQuiz? = null
     private var generateJob: Job? = null
@@ -36,7 +34,7 @@ class QuizController(
 
     fun create(title: String, content: String) {
         // 生成中の再タップは同じ要求として扱い、モデルの順番待ちを重複させない。
-        if (uiState.value.quizState is QuizState.Loading) return
+        if (state.current is QuizState.Loading) return
 
         val format = profileQuizInput(content).format
         val request = PendingQuiz(
@@ -45,12 +43,10 @@ class QuizController(
             content = content,
             format = format
         )
-        uiState.update { current ->
-            current.copy(
-                quizState = QuizState.Loading(
-                    sourceTitle = title.toObsidianNoteTitle(),
-                    format = format
-                )
+        state.update {
+            QuizState.Loading(
+                sourceTitle = title.toObsidianNoteTitle(),
+                format = format
             )
         }
         generateJob = scope.launch {
@@ -75,13 +71,12 @@ class QuizController(
     }
 
     fun markViewed() {
-        uiState.update { current ->
-            val next = when (val state = current.quizState) {
-                is QuizState.Success -> state.copy(isViewed = true)
-                is QuizState.Error -> state.copy(isViewed = true)
-                else -> return@update current
+        state.update { current ->
+            when (current) {
+                is QuizState.Success -> current.copy(isViewed = true)
+                is QuizState.Error -> current.copy(isViewed = true)
+                else -> current
             }
-            current.copy(quizState = next)
         }
     }
 
@@ -96,7 +91,7 @@ class QuizController(
         generateJob = null
         downloadJob = null
         pending = null
-        uiState.update { current -> current.copy(quizState = QuizState.Idle) }
+        state.update { QuizState.Idle }
     }
 
     private suspend fun generateWithAvailableModel(request: PendingQuiz) {
@@ -114,12 +109,10 @@ class QuizController(
                 updateError(request, "Q&Aの生成結果を読み取れませんでした。")
                 return
             }
-            uiState.update { current ->
-                current.copy(
-                    quizState = QuizState.Success(
-                        sourceTitle = request.title.toObsidianNoteTitle(),
-                        cards = cards
-                    )
+            state.update {
+                QuizState.Success(
+                    sourceTitle = request.title.toObsidianNoteTitle(),
+                    cards = cards
                 )
             }
         } catch (e: CancellationException) {
@@ -167,12 +160,10 @@ class QuizController(
 
     private fun updateError(request: PendingQuiz, message: String) {
         if (!isCurrent(request.requestId)) return
-        uiState.update { current ->
-            current.copy(
-                quizState = QuizState.Error(
-                    message = message,
-                    sourceTitle = request.title.toObsidianNoteTitle()
-                )
+        state.update {
+            QuizState.Error(
+                message = message,
+                sourceTitle = request.title.toObsidianNoteTitle()
             )
         }
     }

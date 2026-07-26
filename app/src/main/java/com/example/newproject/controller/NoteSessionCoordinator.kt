@@ -12,19 +12,14 @@ import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
-import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.model.resetNoteScopedStates
-import com.example.newproject.model.resetVaultScopedStates
-import com.example.newproject.model.withDistillBodyReloaded
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 
 /**
  * 7つの機能Controllerを束ね、**Controller間の調停**（ノート切替・Vault切替での
@@ -87,8 +82,8 @@ internal class NoteSessionCoordinator(
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
 
-    private val _uiState = MutableStateFlow(initialState)
-    val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
+    private val stateStore = NoteUiStateStore(initialState)
+    val uiState: StateFlow<NoteUiState> = stateStore.uiState
 
     /**
      * Vault単位の非同期要求の世代。[onVaultChanged] のたびに進めて、補記一覧・
@@ -102,21 +97,21 @@ internal class NoteSessionCoordinator(
     var vaultGeneration = 0L
         private set
 
-    // 機能ごとのController。scope と状態Flowを共有し、担当領域の状態のみ更新する
-    private val sectionChat = SectionChatController(scope, aiClient, _uiState)
-    private val quiz = QuizController(scope, aiClient, _uiState)
+    // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
+    private val sectionChat = SectionChatController(scope, aiClient, stateStore.sectionChatWriter)
+    private val quiz = QuizController(scope, aiClient, stateStore.quizWriter)
     private val summary = SummaryController(
         scope = scope,
         summarizeUseCase = summarizeUseCase,
         aiClient = aiClient,
-        uiState = _uiState,
+        state = stateStore.summaryWriter,
         onModelReady = onModelReady
     )
     private val annotation = AnnotationController(
         scope = scope,
         repository = repository,
         aiClient = aiClient,
-        uiState = _uiState,
+        state = stateStore.annotationWriter,
         vaultUri = vaultUri,
         vaultGeneration = { vaultGeneration }
     )
@@ -124,14 +119,15 @@ internal class NoteSessionCoordinator(
         scope = scope,
         repository = repository,
         searchPickerUseCase = searchPickerUseCase,
-        uiState = _uiState,
+        state = stateStore.searchWriter,
         vaultUri = vaultUri,
         vaultGeneration = { vaultGeneration }
     )
     private val distill = DistillController(
         scope = scope,
         aiClient = aiClient,
-        uiState = _uiState,
+        state = stateStore.distillWriter,
+        currentNote = stateStore::currentNote,
         persistence = distillPersistence,
         reloadBody = reloadBody
     )
@@ -139,7 +135,7 @@ internal class NoteSessionCoordinator(
         scope = scope,
         persistScope = persistScope,
         aiClient = aiClient,
-        uiState = _uiState,
+        state = stateStore.readingTraceWriter,
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
         clock = clock,
@@ -147,7 +143,7 @@ internal class NoteSessionCoordinator(
     )
 
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
-    // 対になる状態リセット側の契約は model の [resetNoteScopedStates]。
+    // 対になる状態リセット側の契約は [NoteUiStateStore.resetNoteScoped]。
 
     /**
      * ノート単位の実行中AIジョブをまとめて止める（状態リセットと対で呼ぶ）。
@@ -172,9 +168,7 @@ internal class NoteSessionCoordinator(
 
     /** 起動時に保存済みVaultを復元したときに呼ぶ。 */
     fun onVaultRestored() {
-        _uiState.update { current ->
-            current.copy(vaultSelected = true, todayHistory = history.load())
-        }
+        stateStore.restoreVault(history.load())
     }
 
     /**
@@ -198,7 +192,7 @@ internal class NoteSessionCoordinator(
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
-        _uiState.update { current -> current.resetVaultScopedStates() }
+        stateStore.resetVaultScoped()
         distill.checkRecovery()
     }
 
@@ -213,20 +207,18 @@ internal class NoteSessionCoordinator(
      */
     fun onNoteChanged() {
         cancelNoteScopedJobs()
-        _uiState.update { current ->
-            current.resetNoteScopedStates().copy(noteState = NoteState.Loading)
-        }
+        stateStore.beginNoteLoad()
     }
 
     fun setNoteState(state: NoteState) {
-        _uiState.update { current -> current.copy(noteState = state) }
+        stateStore.setNoteState(state)
     }
 
-    fun currentNote(): NoteState.Success? = _uiState.value.noteState as? NoteState.Success
+    fun currentNote(): NoteState.Success? = stateStore.currentNote()
 
     /** ノートを開けた時点で当日履歴に積む。 */
     fun recordHistory(title: String, uri: Uri) {
-        _uiState.update { current -> current.copy(todayHistory = history.record(title, uri)) }
+        stateStore.setTodayHistory(history.record(title, uri))
     }
 
     /**
@@ -239,17 +231,13 @@ internal class NoteSessionCoordinator(
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
-        _uiState.update { state ->
-            val active = state.noteState as? NoteState.Success
-            if (active?.targetUri != targetUri) state else state.withDistillBodyReloaded(loaded)
-        }
-        return true
+        return stateStore.applyReloadedBody(targetUri, loaded)
     }
 
     // ── 表示テーマ ──────────────────────────────────────────────────────────
 
     fun setDarkTheme(enabled: Boolean) {
-        _uiState.update { current -> current.copy(darkTheme = enabled) }
+        stateStore.setDarkTheme(enabled)
     }
 
     // ── 要約・関連ノート ────────────────────────────────────────────────────
@@ -257,11 +245,11 @@ internal class NoteSessionCoordinator(
     fun fetchSummary(title: String, content: String) = summary.fetch(title, content)
 
     fun setRelatedNotesState(state: RelatedNotesState) {
-        _uiState.update { current -> current.copy(relatedNotesState = state) }
+        stateStore.setRelatedNotesState(state)
     }
 
     fun setWikilinkTitles(titles: Set<String>) {
-        _uiState.update { current -> current.copy(wikilinkTitles = titles) }
+        stateStore.setWikilinkTitles(titles)
     }
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────
@@ -339,7 +327,7 @@ internal class NoteSessionCoordinator(
      * 既存セッションの再表示（sectionChat != null）ではクイズも保持する。
      */
     fun openSection(section: NoteSection) {
-        if (_uiState.value.sectionChat == null) quiz.cancelAndClear()
+        if (!stateStore.hasSectionChat()) quiz.cancelAndClear()
         sectionChat.open(section)
     }
 

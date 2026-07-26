@@ -13,7 +13,7 @@ import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -32,7 +32,7 @@ class SearchControllerTest {
 
     @Test
     fun `スコープを切り替えると前のスコープの検索結果が消える`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 searchState = SearchState.Success(emptyList(), AiRecommendationStatus.Ready)
             )
@@ -47,7 +47,7 @@ class SearchControllerTest {
 
     @Test
     fun `検索中にスコープを切り替えるとLoadingが残らない`() = runTest {
-        val state = MutableStateFlow(NoteUiState(searchState = SearchState.Loading))
+        val state = NoteUiStateStore(NoteUiState(searchState = SearchState.Loading))
         val controller = controller(state)
 
         controller.selectFolder(NoteFolder(name = "ideas", documentId = "doc-ideas"))
@@ -57,7 +57,7 @@ class SearchControllerTest {
 
     @Test
     fun `ルート直下へ戻しても検索結果は破棄される`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 selectedFolder = NoteFolder(name = "ideas", documentId = "doc-ideas"),
                 searchState = SearchState.Success(emptyList(), AiRecommendationStatus.Ready)
@@ -75,7 +75,7 @@ class SearchControllerTest {
     @Test
     fun `同じスコープを選び直しても結果は保持される`() = runTest {
         val folder = NoteFolder(name = "ideas", documentId = "doc-ideas")
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 selectedFolder = folder,
                 searchState = SearchState.Success(emptyList(), AiRecommendationStatus.Ready)
@@ -88,11 +88,11 @@ class SearchControllerTest {
         assertTrue(state.value.searchState is SearchState.Success)
     }
 
-    private fun controller(state: MutableStateFlow<NoteUiState>) = SearchController(
+    private fun controller(state: NoteUiStateStore) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         repository = NoteRepository(),
         searchPickerUseCase = SearchPickerUseCase(NoOpAiClient),
-        uiState = state,
+        state = state.searchWriter,
         vaultUri = { null },
         vaultGeneration = { 0L }
     )

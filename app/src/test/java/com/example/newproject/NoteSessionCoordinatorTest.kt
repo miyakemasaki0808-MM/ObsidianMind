@@ -29,6 +29,7 @@ import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
@@ -37,8 +38,6 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
-import com.example.newproject.model.resetNoteScopedStates
-import com.example.newproject.model.resetVaultScopedStates
 import android.net.Uri
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
@@ -66,7 +65,8 @@ import java.lang.reflect.Modifier
  * Android APIを呼ばない [NoteSessionCoordinator] へ調停を出したことで、ここが検証できる。
  *
  * テストは3層で見る。
- *  - **状態変換の網羅**（[resetNoteScopedStates] / [resetVaultScopedStates]）:
+ *  - **状態変換の網羅**（[NoteUiStateStore.resetNoteScoped] /
+ *    [NoteUiStateStore.resetVaultScoped]）:
  *    全フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
  *    フィールドを足してリセット登録を忘れたら落ちる。
  *  - **調停の結線**: 7 Controller すべてのUI状態を非初期状態にしてから切替を通す。
@@ -81,7 +81,7 @@ class NoteSessionCoordinatorTest {
     // ── 状態変換の網羅 ──────────────────────────────────────────────────────
 
     /**
-     * 状態変換 [resetVaultScopedStates] が落とさないフィールド。
+     * 状態変換 [NoteUiStateStore.resetVaultScoped] が落とさないフィールド。
      * **ここに無いフィールドは必ず初期値へ戻る。**
      *
      * 新しい状態を [NoteUiState] へ足してリセット登録を忘れると、下のテストが
@@ -107,14 +107,18 @@ class NoteSessionCoordinatorTest {
 
     @Test
     fun `Vault切替の状態リセットに登録漏れが無い`() {
-        val reset = fullyPopulatedState().resetVaultScopedStates()
+        val store = NoteUiStateStore(fullyPopulatedState())
+        store.resetVaultScoped()
+        val reset = store.value
 
         assertEachFieldReset(actual = reset, survivors = survivesVaultChangeTransform)
     }
 
     @Test
     fun `ノート切替ではVault単位の状態が残る`() {
-        val reset = fullyPopulatedState().resetNoteScopedStates()
+        val store = NoteUiStateStore(fullyPopulatedState())
+        store.resetNoteScoped()
+        val reset = store.value
 
         // 補記管理画面の一覧とさがすタブのスコープはノートと無関係なので、
         // ノートを開き直しただけで消えてはいけない（A案で分けた二層の担保）。

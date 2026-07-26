@@ -12,7 +12,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -27,8 +27,8 @@ class QuizControllerTest {
     @Test
     fun `生成画面を開かなくてもQ&A生成が完了して保持される`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = QuizController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(this, aiClient, state.quizWriter)
 
         controller.create("対象ノート.md", "本文")
         runCurrent()
@@ -49,8 +49,8 @@ class QuizControllerTest {
     @Test
     fun `生成中の再タップでは要求を重複させない`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = QuizController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(this, aiClient, state.quizWriter)
 
         controller.create("対象ノート", "本文")
         runCurrent()
@@ -65,8 +65,8 @@ class QuizControllerTest {
     @Test
     fun `ノート切替時の破棄後に古い生成結果を反映しない`() = runTest {
         val aiClient = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
-        val controller = QuizController(this, aiClient, state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(this, aiClient, state.quizWriter)
 
         controller.create("古いノート", "本文")
         runCurrent()
@@ -79,8 +79,8 @@ class QuizControllerTest {
 
     @Test
     fun `有効な問題がない応答は成功にしない`() = runTest {
-        val state = MutableStateFlow(NoteUiState())
-        val controller = QuizController(this, ImmediateAiClient("生成できませんでした"), state)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(this, ImmediateAiClient("生成できませんでした"), state.quizWriter)
 
         controller.create("対象ノート", "本文")
         advanceUntilIdle()
@@ -90,7 +90,7 @@ class QuizControllerTest {
 
     @Test
     fun `Q&Aを開くと完了通知が確認済みになる`() = runTest {
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 quizState = QuizState.Success(
                     sourceTitle = "対象ノート",
@@ -98,7 +98,7 @@ class QuizControllerTest {
                 )
             )
         )
-        val controller = QuizController(this, ImmediateAiClient(""), state)
+        val controller = QuizController(this, ImmediateAiClient(""), state.quizWriter)
 
         controller.markViewed()
 

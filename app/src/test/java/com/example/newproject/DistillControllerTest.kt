@@ -19,7 +19,6 @@ import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
-import com.example.newproject.model.withDistillBodyReloaded
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus
@@ -27,8 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -94,38 +92,36 @@ class DistillControllerTest {
         val related = RelatedNotesState.Success(emptyList(), emptyList())
         val annotation = AnnotationState.Loading("対象ノート")
         val quiz = QuizState.Success("ノート", listOf(QuizCard("Q", listOf("A", "B"), 0)))
-        val state = stateWithNote().apply {
-            update { current ->
-                current.copy(
-                    summaryState = summary,
-                    relatedNotesState = related,
-                    annotationState = annotation,
-                    quizState = quiz,
-                    sectionChat = SectionChatState(
-                        sectionTitle = "旧セクション",
-                        sectionContext = "太字化前の本文",
-                        error = "旧エラー"
-                    ),
-                    isSectionChatSheetVisible = true
-                )
-            }
-        }
+        val state = NoteUiStateStore(
+            stateWithNote().value.copy(
+                summaryState = summary,
+                relatedNotesState = related,
+                annotationState = annotation,
+                quizState = quiz,
+                sectionChat = SectionChatState(
+                    sectionTitle = "旧セクション",
+                    sectionContext = "太字化前の本文",
+                    error = "旧エラー"
+                ),
+                isSectionChatSheetVisible = true
+            )
+        )
         val persistence = FakePersistence()
         var reloadCalls = 0
         val dispatcher = StandardTestDispatcher(testScheduler)
         val controller = DistillController(
-            this,
-            ImmediateAiClient(response = "S001"),
-            state,
-            persistence,
+            scope = this,
+            aiClient = ImmediateAiClient(response = "S001"),
+            state = state.distillWriter,
+            currentNote = state::currentNote,
+            persistence = persistence,
             reloadBody = { _, expectedHash ->
                 reloadCalls++
                 val current = state.value.noteState as NoteState.Success
-                state.update { uiState ->
-                    uiState.withDistillBodyReloaded(
-                        current.copy(content = "再読込本文", originalHash = expectedHash)
-                    )
-                }
+                state.applyReloadedBody(
+                    current.targetUri,
+                    current.copy(content = "再読込本文", originalHash = expectedHash)
+                )
                 true
             },
             analysisDispatcher = dispatcher,
@@ -176,7 +172,7 @@ class DistillControllerTest {
     @Test
     fun `short note allows the top sentence as a confirmed limit exception`() = runTest {
         val content = "一つ目の重要な文章です。\n二つ目の重要な文章です。"
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 noteState = NoteState.Success(
                     "短いノート",
@@ -221,7 +217,7 @@ class DistillControllerTest {
     @Test
     fun `only the highest ranked oversized sentence receives the exception`() = runTest {
         val content = "一つ目の重要な文章です。\n二つ目の重要な文章です。"
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 noteState = NoteState.Success(
                     "短いノート",
@@ -250,7 +246,7 @@ class DistillControllerTest {
     @Test
     fun `existing body bold at the limit does not grant a sentence exception`() = runTest {
         val content = "**既存の重要な太字です。**\n追加候補です。"
-        val state = MutableStateFlow(
+        val state = NoteUiStateStore(
             NoteUiState(
                 noteState = NoteState.Success(
                     "既存太字ノート",
@@ -280,15 +276,16 @@ class DistillControllerTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         var reloadCalls = 0
         val controller = DistillController(
-            this,
-            ImmediateAiClient(response = "S001"),
-            state,
-            persistence,
+            scope = this,
+            aiClient = ImmediateAiClient(response = "S001"),
+            state = state.distillWriter,
+            currentNote = state::currentNote,
+            persistence = persistence,
             reloadBody = { _, _ ->
                 reloadCalls++
                 val latest = noteContent() + "\n最新の追記文章です。"
-                state.value = state.value.copy(
-                    noteState = (state.value.noteState as NoteState.Success).copy(
+                state.setNoteState(
+                    (state.value.noteState as NoteState.Success).copy(
                         content = latest,
                         originalHash = sha256Hex(latest.toByteArray())
                     )
@@ -361,7 +358,7 @@ class DistillControllerTest {
     }
 
     private fun TestScope.controller(
-        state: MutableStateFlow<NoteUiState>,
+        state: NoteUiStateStore,
         aiClient: AiClient,
         persistence: FakePersistence = FakePersistence()
     ): DistillController {
@@ -369,7 +366,8 @@ class DistillControllerTest {
         return DistillController(
             scope = this,
             aiClient = aiClient,
-            uiState = state,
+            state = state.distillWriter,
+            currentNote = state::currentNote,
             persistence = persistence,
             reloadBody = { _, _ -> true },
             analysisDispatcher = dispatcher,
@@ -377,9 +375,9 @@ class DistillControllerTest {
         )
     }
 
-    private fun stateWithNote(): MutableStateFlow<NoteUiState> {
+    private fun stateWithNote(): NoteUiStateStore {
         val content = noteContent()
-        return MutableStateFlow(
+        return NoteUiStateStore(
             NoteUiState(
                 noteState = NoteState.Success(
                     title = "対象ノート",

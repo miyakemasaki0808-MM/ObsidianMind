@@ -19,7 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -473,7 +473,7 @@ class ReadingTraceControllerTest {
                 totalVisitCount = cap
             )
         )
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, clock, state = state)
 
         // 31回目の閲覧を記録してから再会する
@@ -868,7 +868,7 @@ class ReadingTraceControllerTest {
 
     @Test
     fun `no trace means no card`() = runTest {
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(FakePersistence(), TestClock(), state = state)
 
         controller.revealTrace("ideas/habit.md")
@@ -881,7 +881,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `corrupt trace means no card`() = runTest {
         val persistence = FakePersistence().apply { corruptPaths += "ideas/habit.md" }
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), state = state)
 
         controller.revealTrace("ideas/habit.md")
@@ -892,7 +892,7 @@ class ReadingTraceControllerTest {
 
     @Test
     fun `blank path does nothing`() = runTest {
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(FakePersistence(), TestClock(), state = state)
 
         controller.revealTrace("")
@@ -906,7 +906,7 @@ class ReadingTraceControllerTest {
     fun `single visit shows raw trace without calling ai`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 1)) }
         val ai = ImmediateAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -925,7 +925,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `raw trace is visible while the summary is still generating`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ControllableAiClient(), state)
 
         controller.revealTrace("ideas/habit.md")
@@ -944,7 +944,7 @@ class ReadingTraceControllerTest {
     fun `summary is generated once visits accumulated`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val ai = ImmediateAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -976,7 +976,7 @@ class ReadingTraceControllerTest {
             put(storedTrace(count = 2, aiSummary = "キャッシュ済み", aiSummaryVisitCount = 2))
         }
         val ai = ImmediateAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -992,7 +992,7 @@ class ReadingTraceControllerTest {
             put(storedTrace(count = 3, aiSummary = "古い要約", aiSummaryVisitCount = 2))
         }
         val ai = ImmediateAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1007,7 +1007,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `ai failure keeps the raw trace visible`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), FailingAiClient(), state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1024,7 +1024,7 @@ class ReadingTraceControllerTest {
     fun `needs download does not generate and keeps the raw trace`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val ai = ImmediateAiClient(availability = AiAvailability.NeedsDownload)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1040,7 +1040,7 @@ class ReadingTraceControllerTest {
     fun `note change discards a late summary`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val ai = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1055,7 +1055,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `dismiss marks the card`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 1)) }
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), state = state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1070,7 +1070,7 @@ class ReadingTraceControllerTest {
     fun `dismissed card stays folded when the summary arrives`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val ai = ControllableAiClient()
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1089,7 +1089,7 @@ class ReadingTraceControllerTest {
     fun `card shows only visits recorded before this reading`() = runTest {
         val clock = TestClock()
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, clock, state = state)
 
         controller.revealTrace("ideas/habit.md")
@@ -1113,7 +1113,7 @@ private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
     aiClient: AiClient = ImmediateAiClient(),
-    state: MutableStateFlow<NoteUiState> = MutableStateFlow(NoteUiState()),
+    state: NoteUiStateStore = NoteUiStateStore(NoteUiState()),
     vault: FakeVault = FakeVault(),
     // 既定では UI 用と同じスコープ。両者を分ける必要があるのは
     // 「scope をキャンセルしても保存が走る」を確かめるときだけ。
@@ -1125,7 +1125,7 @@ private fun TestScope.controller(
         scope = scope,
         persistScope = persistScope,
         aiClient = aiClient,
-        uiState = state,
+        state = state.readingTraceWriter,
         persistence = persistence,
         currentVaultKey = { vault.key },
         clock = clock::now,
