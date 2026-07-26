@@ -57,7 +57,13 @@ object PromptBuilder {
      * 書かせない・助言や問いを足させない、を明示する。
      * 出力は Nano の256トークン上限に収まるよう1〜2文に絞る。
      */
-    internal fun buildReadingTraceSummaryPrompt(noteTitle: String, visits: List<ReadingVisit>): String {
+    internal fun buildReadingTraceSummaryPrompt(
+        noteTitle: String,
+        visits: List<ReadingVisit>,
+        // 保持している訪問は直近30件まで。「何回開いたか」は延べ回数を渡す
+        // （visits.size を使うと31回目以降ずっと「30回」と要約される）。
+        totalVisitCount: Int
+    ): String {
         val history = visits.takeLast(READING_TRACE_VISIT_LINES).joinToString("\n") { visit ->
             val where = visit.deepestSectionTitle
                 ?.takeIf { it.isNotBlank() }
@@ -71,7 +77,7 @@ object PromptBuilder {
             Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
 
             Note title: $noteTitle
-            Times opened: ${visits.size}
+            Times opened: $totalVisitCount
             Reading history:
             $history
         """.trimIndent()

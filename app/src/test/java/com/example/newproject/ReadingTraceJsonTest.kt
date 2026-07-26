@@ -2,6 +2,10 @@ package com.example.newproject
 
 import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.sha256Hex
+import java.io.ByteArrayOutputStream
+import java.io.DataOutputStream
+import org.json.JSONArray
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -221,6 +225,118 @@ class ReadingTraceJsonTest {
 
         assertTrue(!subject.needsAiSummary)
     }
+
+    // ── schema v1 → v2 の移行 ────────────────────────────────────────────
+    //
+    // v1 は累計回数を持たず、保持件数（最大30）を回数として使っていた。
+    // 既存の痕跡を破損扱いにせず読めることが最優先（読めないと全部消える）。
+
+    @Test
+    fun `v1 の痕跡は累計を保持件数で補って読める`() {
+        val visits = listOf(visit(at = 1L), visit(at = 2L), visit(at = 3L))
+
+        val decoded = ReadingTraceJson.decode(encodeAsV1(trace(visits = visits)))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(3, loaded.totalVisitCount)
+        assertEquals(3, loaded.visits.size)
+    }
+
+    // 読み込んだ時点で現行版へ寄せる。次の保存で v1 が書き戻されないことの担保。
+    @Test
+    fun `v1 を読むと現行フォーマットへ移行される`() {
+        val decoded = ReadingTraceJson.decode(encodeAsV1(trace()))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = JSONObject(ReadingTraceJson.encode(loaded).toString(Charsets.UTF_8))
+        assertEquals(READING_TRACE_SCHEMA_VERSION, reencoded.getInt("schemaVersion"))
+        assertEquals(1, reencoded.getInt("totalVisitCount"))
+    }
+
+    // v1 の checksum を v2 の正規形で照合すると全ての既存痕跡が破損になる。
+    // 逆に、改変された v1 は従来どおり弾けていること。
+    @Test
+    fun `改変された v1 は破損扱いのまま`() {
+        val bytes = encodeAsV1(trace())
+        val root = JSONObject(bytes.toString(Charsets.UTF_8))
+        root.put("noteTitle", "すり替えたタイトル")
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+    // v1 の checksum は累計を含まないため、書き足されていても信用しない
+    // （読むと checksum を通り抜けて任意の回数を名乗れる入口になる）。
+    @Test
+    fun `v1 に書き足された累計は無視される`() {
+        val visits = listOf(visit(at = 1L), visit(at = 2L))
+        val root = JSONObject(encodeAsV1(trace(visits = visits)).toString(Charsets.UTF_8))
+        root.put("totalVisitCount", 999)
+
+        val decoded = ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8))
+
+        assertEquals(2, (decoded as ReadingTraceReadResult.Valid).trace.totalVisitCount)
+    }
+}
+
+/**
+ * schema v1 のサイドカーを組み立てる（本番の encode は現行版しか書けないため）。
+ *
+ * **v1 の正規形をテスト側に写し取っている。** production の canonicalPayload を
+ * 呼べば楽だが、それでは「v1 の checksum を v1 の形で照合している」ことを検証できず、
+ * 実装を変えたときに一緒に壊れて気付けない。旧形式は仕様として固定する。
+ */
+private fun encodeAsV1(trace: ReadingTrace): ByteArray {
+    val visits = JSONArray()
+    trace.visits.forEach { v ->
+        visits.put(
+            JSONObject()
+                .put("at", v.atEpochMillis)
+                .put("deepestSection", v.deepestSectionTitle ?: JSONObject.NULL)
+                .put("progressPercent", v.progressPercent)
+        )
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(1)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            if (v.deepestSectionTitle == null) {
+                out.writeByte(0)
+            } else {
+                out.writeByte(1)
+                out.writeSizedForTest(v.deepestSectionTitle)
+            }
+        }
+        if (trace.aiSummary == null) {
+            out.writeByte(0)
+        } else {
+            out.writeByte(1)
+            out.writeSizedForTest(trace.aiSummary)
+        }
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+    }
+    return JSONObject()
+        .put("schemaVersion", 1)
+        .put("vaultRelativePath", trace.vaultRelativePath)
+        .put("noteTitle", trace.noteTitle)
+        .put("documentId", trace.documentId ?: JSONObject.NULL)
+        .put("visits", visits)
+        .put("aiSummary", trace.aiSummary ?: JSONObject.NULL)
+        .put("aiSummaryVisitCount", trace.aiSummaryVisitCount ?: JSONObject.NULL)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
+}
+
+private fun DataOutputStream.writeSizedForTest(value: String) {
+    val encoded = value.toByteArray(Charsets.UTF_8)
+    writeInt(encoded.size)
+    write(encoded)
 }
 
 // --- ヘルパ ---------------------------------------------------------------

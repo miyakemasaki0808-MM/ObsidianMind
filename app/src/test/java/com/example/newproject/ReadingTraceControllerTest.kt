@@ -297,9 +297,79 @@ class ReadingTraceControllerTest {
 
         val stored = persistence.stored("ideas/habit.md")!!
         assertEquals(1, stored.visits.size)
+        // 累計も増えない。保持件数だけ見ていると 30 件で頭打ちになって
+        // この誤りが隠れるので、累計そのものを確かめる。
+        assertEquals(1, stored.totalVisitCount)
         // 復帰後に読み進めた最深が残っていること
         assertEquals(90, stored.visits.single().progressPercent)
         assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
+    }
+
+    // ── 累計回数（保持件数と分離）────────────────────────────────────────────
+
+    // 保持は30件で頭打ちになるが、累計は積み上がる。
+    @Test
+    fun `訪問の保持上限を超えても累計は増える`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val cap = ReadingTraceLimits.MAX_VISITS
+        persistence.put(
+            ReadingTrace(
+                vaultRelativePath = "ideas/habit.md",
+                noteTitle = "習慣について",
+                documentId = null,
+                visits = List(cap) { ReadingVisit(it.toLong(), null, 10) },
+                totalVisitCount = cap
+            )
+        )
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 5, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(cap, stored.visits.size)
+        assertEquals(cap + 1, stored.totalVisitCount)
+    }
+
+    // 31回目以降もAI俯瞰要約が作り直される。保持件数で判定していた頃は
+    // visits.size が 30 で固定になり、古い要約が「最新」として出続けていた。
+    @Test
+    fun `保持上限に達した後も再訪でAI要約が作り直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val cap = ReadingTraceLimits.MAX_VISITS
+        persistence.put(
+            ReadingTrace(
+                vaultRelativePath = "ideas/habit.md",
+                noteTitle = "習慣について",
+                documentId = null,
+                visits = List(cap) { ReadingVisit(it.toLong(), null, 10) },
+                aiSummary = "30回時点の古い要約",
+                aiSummaryVisitCount = cap,
+                totalVisitCount = cap
+            )
+        )
+        val state = MutableStateFlow(NoteUiState())
+        val controller = controller(persistence, clock, state = state)
+
+        // 31回目の閲覧を記録してから再会する
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 5, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+        controller.revealTrace("ideas/habit.md")
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(cap + 1, card.visitCount)
+        // 古い要約が「最新」として出ていないこと＝作り直されたこと
+        assertEquals(AI_SUMMARY, card.aiSummary)
+        assertEquals(cap + 1, persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount)
     }
 
     // 背面にいた時間を10秒判定へ混ぜない（実際には短時間しか読んでいない）。

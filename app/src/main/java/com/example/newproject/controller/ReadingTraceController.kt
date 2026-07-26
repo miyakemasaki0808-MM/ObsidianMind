@@ -10,6 +10,7 @@ import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.truncateToUtf8Bytes
 import com.example.newproject.model.needsAiSummary
 import com.example.newproject.model.withVisit
+import com.example.newproject.model.withoutLastVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
@@ -265,8 +266,9 @@ internal class ReadingTraceController(
                             val trace = existing.trace.copy(noteTitle = title, documentId = documentId)
                             // この閲覧で既に書いた訪問が末尾にあれば、追記ではなく差し替える。
                             // 別端末が後から追記していれば末尾が一致しないので、その時は素直に追記する。
+                            // withoutLastVisit は累計も戻す（戻さないと背面化のたびに回数が増える）。
                             if (previous != null && trace.visits.lastOrNull() == previous) {
-                                trace.copy(visits = trace.visits.dropLast(1))
+                                trace.withoutLastVisit()
                             } else {
                                 trace
                             }
@@ -357,12 +359,13 @@ internal class ReadingTraceController(
     private fun cardOf(
         trace: ReadingTrace,
         // 訪問が増えていればキャッシュ済み要約は古いので出さない。
-        aiSummary: String? = trace.aiSummary?.takeIf { trace.aiSummaryVisitCount == trace.visits.size },
+        // 保持件数ではなく累計で見る（30件で頭打ちになると古い要約が出続ける）。
+        aiSummary: String? = trace.aiSummary?.takeIf { trace.aiSummaryVisitCount == trace.totalVisitCount },
         isSummaryLoading: Boolean = false
     ): ReadingTraceCard {
         val last = trace.visits.last()
         return ReadingTraceCard(
-            visitCount = trace.visits.size,
+            visitCount = trace.totalVisitCount,
             lastVisitAtMillis = last.atEpochMillis,
             lastSectionTitle = last.deepestSectionTitle,
             lastProgressPercent = last.progressPercent,
@@ -376,7 +379,11 @@ internal class ReadingTraceController(
         if (aiClient.checkAvailability() != AiAvailability.Available) {
             null
         } else {
-            val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(trace.noteTitle, trace.visits)
+            val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
+                noteTitle = trace.noteTitle,
+                visits = trace.visits,
+                totalVisitCount = trace.totalVisitCount
+            )
             aiClient.generate(prompt)
                 .trim()
                 .takeIf { it.isNotBlank() }
@@ -400,7 +407,7 @@ internal class ReadingTraceController(
                     ?.trace
                     ?: return@withLock
                 persistence.save(
-                    latest.copy(aiSummary = summary, aiSummaryVisitCount = trace.visits.size),
+                    latest.copy(aiSummary = summary, aiSummaryVisitCount = trace.totalVisitCount),
                     vaultKey
                 )
             }
