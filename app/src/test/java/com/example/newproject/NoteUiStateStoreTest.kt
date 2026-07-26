@@ -9,14 +9,22 @@ import com.example.newproject.model.SectionChatSlice
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class NoteUiStateStoreTest {
 
     @Test
@@ -78,5 +86,27 @@ class NoteUiStateStoreTest {
         store.readingTraceWriter.update { card }
         expected = expected.copy(readingTraceCard = card)
         assertEquals(expected, store.value)
+    }
+
+    @Test
+    fun `ノート読込開始はリセット済みLoadingを一度だけ通知する`() = runTest {
+        val store = NoteUiStateStore(
+            NoteUiState(
+                summaryState = SummaryState.Success("旧要約"),
+                quizState = QuizState.Loading("旧ノート")
+            )
+        )
+        val emissions = mutableListOf<NoteUiState>()
+        val collectJob = launch(UnconfinedTestDispatcher(testScheduler)) {
+            store.uiState.drop(1).collect(emissions::add)
+        }
+
+        store.beginNoteLoad()
+
+        assertEquals(1, emissions.size)
+        assertTrue(emissions.single().noteState is NoteState.Loading)
+        assertTrue(emissions.single().summaryState is SummaryState.Idle)
+        assertTrue(emissions.single().quizState is QuizState.Idle)
+        collectJob.cancel()
     }
 }
