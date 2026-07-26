@@ -96,6 +96,24 @@ fun AnnotationManagerScreen(
             }
         }
 
+        // 削除に失敗しても一覧は残す（消えると再削除できない）。件数だけ上に添える。
+        val deleteFailureCount = (state as? AnnotationListState.Success)?.deleteFailureCount ?: 0
+        if (deleteFailureCount > 0) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Panel,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "${deleteFailureCount}件の削除に失敗しました。",
+                    color = DangerAction,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(14.dp))
 
         when (state) {

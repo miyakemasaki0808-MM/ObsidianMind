@@ -172,8 +172,8 @@ class AnnotationController(
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
-            repository.deleteDocument(contentResolver, uri)
-            reloadList(contentResolver, generation)
+            val deleted = repository.deleteDocument(contentResolver, uri)
+            reloadList(contentResolver, generation, failureCount = if (deleted) 0 else 1)
         }
     }
 
@@ -188,13 +188,14 @@ class AnnotationController(
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
+            var failureCount = 0
             current.files.forEach { file ->
                 // 旧Vaultのファイルを消し続けないよう、1件ごとに世代を見る。
                 // 永続URI権限が残っている端末では、切替後もURIが有効なまま消せてしまう。
                 if (generation != vaultGeneration()) return@launch
-                repository.deleteDocument(contentResolver, file.uri)
+                if (!repository.deleteDocument(contentResolver, file.uri)) failureCount++
             }
-            reloadList(contentResolver, generation)
+            reloadList(contentResolver, generation, failureCount)
         }
     }
 
@@ -203,14 +204,22 @@ class AnnotationController(
      *
      * 起動時の世代と食い違っていたら書かない。`cancel()` だけに頼ると、
      * SAF列挙から戻った直後にVault切替が起きた場合に旧Vaultの補記が並ぶ。
+     *
+     * @param failureCount 直前の削除で失敗した件数。読み直した一覧に添えて表示する。
      */
-    private suspend fun reloadList(contentResolver: ContentResolver, generation: Long) {
+    private suspend fun reloadList(
+        contentResolver: ContentResolver,
+        generation: Long,
+        failureCount: Int = 0
+    ) {
         val uri = vaultUri() ?: return
         try {
             val files = repository.listAnnotationFiles(contentResolver, uri)
             if (generation != vaultGeneration()) return
             uiState.update { current ->
-                current.copy(annotationListState = AnnotationListState.Success(files))
+                current.copy(
+                    annotationListState = AnnotationListState.Success(files, failureCount)
+                )
             }
         } catch (e: CancellationException) {
             throw e
