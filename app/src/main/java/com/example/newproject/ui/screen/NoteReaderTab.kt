@@ -39,10 +39,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.NoteState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.QuizState
-import com.example.newproject.model.SectionChatState
+import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.OnButtonPrimary

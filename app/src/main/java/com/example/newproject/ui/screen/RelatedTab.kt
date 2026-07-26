@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.RelatedNotesState
+import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.ui.theme.AiHeading

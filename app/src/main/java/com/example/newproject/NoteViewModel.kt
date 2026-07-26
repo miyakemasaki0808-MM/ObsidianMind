@@ -6,9 +6,9 @@ import com.example.newproject.data.InvalidNoteEncodingException
 import com.example.newproject.data.NoteFile
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.data.NoteFolder
-import com.example.newproject.model.NoteState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.RelatedNotesState
+import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.ui.screen.NoteReaderTab
 import android.app.Application
 import android.content.ContentResolver

@@ -2,9 +2,9 @@ package com.example.newproject
 
 import com.example.newproject.controller.QuizController
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.QuizCard
-import com.example.newproject.model.QuizFormat
-import com.example.newproject.model.QuizState
+import com.example.newproject.model.state.QuizCard
+import com.example.newproject.model.state.QuizFormat
+import com.example.newproject.model.state.QuizState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus

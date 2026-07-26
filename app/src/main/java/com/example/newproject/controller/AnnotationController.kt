@@ -4,8 +4,8 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.AnnotationComposer
 import com.example.newproject.domain.toObsidianNoteTitle
-import com.example.newproject.model.AnnotationListState
-import com.example.newproject.model.AnnotationState
+import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.NoteUiState
 import android.content.ContentResolver
 import android.net.Uri

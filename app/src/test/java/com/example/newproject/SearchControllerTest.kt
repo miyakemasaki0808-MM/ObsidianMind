@@ -8,7 +8,7 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SearchState
+import com.example.newproject.model.state.SearchState
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

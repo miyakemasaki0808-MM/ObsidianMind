@@ -2,8 +2,8 @@ package com.example.newproject
 
 import com.example.newproject.controller.AnnotationController
 import com.example.newproject.data.NoteRepository
-import com.example.newproject.model.AnnotationListState
-import com.example.newproject.model.AnnotationState
+import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient

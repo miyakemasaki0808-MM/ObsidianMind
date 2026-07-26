@@ -5,10 +5,10 @@ import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
-import com.example.newproject.model.DistillCandidateItem
-import com.example.newproject.model.DistillRecoveryKind
-import com.example.newproject.model.DistillState
-import com.example.newproject.model.NoteState
+import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRecoveryKind
+import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient

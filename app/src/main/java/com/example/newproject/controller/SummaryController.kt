@@ -4,7 +4,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.state.SummaryState
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope

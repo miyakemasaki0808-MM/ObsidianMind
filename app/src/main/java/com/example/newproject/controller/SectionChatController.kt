@@ -1,9 +1,9 @@
 package com.example.newproject.controller
 
-import com.example.newproject.model.ChatMessage
-import com.example.newproject.model.ChatRole
+import com.example.newproject.model.state.ChatMessage
+import com.example.newproject.model.state.ChatRole
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SectionChatState
+import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder

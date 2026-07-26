@@ -5,8 +5,8 @@ import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.domain.profileQuizInput
 import com.example.newproject.domain.toObsidianNoteTitle
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.QuizFormat
-import com.example.newproject.model.QuizState
+import com.example.newproject.model.state.QuizFormat
+import com.example.newproject.model.state.QuizState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder

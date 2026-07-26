@@ -1,7 +1,7 @@
 package com.example.newproject.domain
 
-import com.example.newproject.model.QuizCard
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.state.QuizCard
+import com.example.newproject.model.state.QuizFormat
 // LLMの行形式応答を2〜4択のQuizCardへ変換する。空行には依存せず、Q:を問題境界にする。
 internal fun parseQuizResponse(
     raw: String,

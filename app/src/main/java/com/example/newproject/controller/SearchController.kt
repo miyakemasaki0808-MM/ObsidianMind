@@ -4,7 +4,7 @@ import com.example.newproject.data.NoteFile
 import com.example.newproject.data.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SearchState
+import com.example.newproject.model.state.SearchState
 import android.content.ContentResolver
 import android.net.Uri
 import com.example.newproject.domain.PickerResult

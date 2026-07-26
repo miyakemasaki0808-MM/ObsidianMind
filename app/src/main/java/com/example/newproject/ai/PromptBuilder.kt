@@ -1,7 +1,7 @@
 package com.example.newproject.ai
 
 import com.example.newproject.domain.DistillCandidate
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.domain.DistillLimits
 

@@ -17,7 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.ReadingTraceCard
+import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.theme.OnSurfaceHint
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface

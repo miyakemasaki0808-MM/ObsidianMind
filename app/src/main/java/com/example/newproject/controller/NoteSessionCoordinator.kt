@@ -12,9 +12,9 @@ import com.example.newproject.domain.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
-import com.example.newproject.model.NoteState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.RelatedNotesState
+import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.resetNoteScopedStates
 import com.example.newproject.model.resetVaultScopedStates
 import com.example.newproject.model.withDistillBodyReloaded

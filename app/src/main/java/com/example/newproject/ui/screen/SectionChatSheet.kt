@@ -42,10 +42,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.ChatMessage
-import com.example.newproject.model.ChatRole
-import com.example.newproject.model.QuizState
-import com.example.newproject.model.SectionChatState
+import com.example.newproject.model.state.ChatMessage
+import com.example.newproject.model.state.ChatRole
+import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ui.theme.AccentSurface
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.OnButtonAi

@@ -37,7 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.data.HistoryEntry
 import com.example.newproject.data.NoteFolder
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SearchState
+import com.example.newproject.model.state.SearchState
 import com.example.newproject.domain.AiRecommendationStatus
 import com.example.newproject.domain.RelatedNote
 import com.example.newproject.ui.theme.OnButtonPrimary
