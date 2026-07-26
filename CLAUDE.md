@@ -28,9 +28,9 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 **構造**
 
 - UIへ業務ロジックを書かない。UI分岐は純関数に切り出す（切り出せばそのままテストになる）
-- 機能責務は既存Controllerへ置く。`NoteViewModel` は窓口と横断調停に留める
+- 機能責務は既存Controllerへ置く。`NoteViewModel` はAndroid境界の窓口、横断調停は `NoteSessionCoordinator` に留める
 - 壊れやすいロジック（文字列処理・パース・採点）はAndroid依存から分離し、JVMテストを同時に書く
-- **新しいノート単位の状態を足したら、契約2箇所へ必ず登録する** — `cancelNoteScopedJobs()`（実行中Jobの停止）と `resetNoteScopedStates()`（状態の一括リセット）。登録漏れ＝旧ノートの状態残留バグ
+- **新しいノート単位の状態を足したら、契約2箇所へ必ず登録する** — `NoteSessionCoordinator.cancelNoteScopedJobs()`（実行中Jobの停止）と `NoteUiStateStore` の `withNoteScopedReset()`（状態の一括リセット）。登録漏れ＝旧ノートの状態残留バグ
 
 **並行処理**
 

@@ -1,7 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.domain.profileQuizInput
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.state.QuizFormat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test

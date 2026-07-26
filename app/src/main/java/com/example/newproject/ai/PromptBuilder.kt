@@ -1,9 +1,9 @@
 package com.example.newproject.ai
 
-import com.example.newproject.domain.DistillCandidate
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.DistillCandidate
+import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.domain.DistillLimits
+import com.example.newproject.model.DistillLimits
 
 private const val DISTILL_HEADING_LENGTH = 80
 

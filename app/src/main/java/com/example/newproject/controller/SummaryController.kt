@@ -3,14 +3,12 @@ package com.example.newproject.controller
 import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryResult
-import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.SummaryStateWriter
+import com.example.newproject.model.state.SummaryState
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -30,7 +28,7 @@ class SummaryController(
     private val scope: CoroutineScope,
     private val summarizeUseCase: SummarizeUseCase,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>,
+    private val state: SummaryStateWriter,
     private val onModelReady: (title: String, content: String) -> Unit
 ) {
     // モデルDL完了後に要約を再開するために保持
@@ -69,7 +67,7 @@ class SummaryController(
         summaryJob = null
         downloadJob = null
         pending = null
-        uiState.update { current -> current.copy(summaryState = SummaryState.Idle) }
+        state.update { SummaryState.Idle }
     }
 
     private fun startModelDownload() {
@@ -88,7 +86,7 @@ class SummaryController(
                         is DownloadStatus.DownloadProgress -> {
                             // total は直前の Downloading から引き継ぐ。照合は
                             // setStateIfCurrent が一手に引き受ける（ここで重ねない）。
-                            val total = (uiState.value.summaryState as? SummaryState.Downloading)?.total ?: 0L
+                            val total = (state.current as? SummaryState.Downloading)?.total ?: 0L
                             setStateIfCurrent(
                                 request.requestId,
                                 SummaryState.Downloading(status.totalBytesDownloaded, total)
@@ -133,7 +131,7 @@ class SummaryController(
      */
     private fun setStateIfCurrent(requestId: Long, state: SummaryState) {
         if (!isCurrent(requestId)) return
-        uiState.update { current -> current.copy(summaryState = state) }
+        this.state.update { state }
     }
 
     private data class PendingSummary(

@@ -1,31 +1,19 @@
 package com.example.newproject.domain
 
 import android.net.Uri
-import com.example.newproject.data.NoteFile
-import com.example.newproject.data.NoteMeta
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteMeta
+import com.example.newproject.model.RelatedNote
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-
-data class RelatedNote(
-    val title: String,
-    val uri: Uri,
-    val isWikilinked: Boolean,
-    val lastModified: Long? = null
-)
-
-enum class AiRecommendationStatus {
-    Ready,
-    Unavailable,
-    NeedsDownload,
-    Error
-}
 
 sealed class RelatedNotesResult {
     data class Success(

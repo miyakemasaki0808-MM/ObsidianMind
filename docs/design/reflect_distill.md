@@ -129,7 +129,7 @@ score = 1.0 * dice(文, タイトル)
 
 ## 判断9: 保存後は「本文専用リロード」（`openNote()` を使わない）
 
-`NoteViewModel.openNote()` は `resetNoteScopedStates()` ＋ `fetchSummary()` ＋ `fetchRelatedNotes()` を発火する。流用すると**太字追加だけでAIが2回再生成**され、再利用可能なノート全体のAI結果まで消える。
+`NoteViewModel.openNote()` は `NoteSessionCoordinator.onNoteChanged()` ＋ `fetchSummary()` ＋ `fetchRelatedNotes()` を発火する。流用すると**太字追加だけでAIが2回再生成**され、再利用可能なノート全体のAI結果まで消える。
 
 → 専用の**本文専用リロード**：URI・本文・基準ハッシュ（→期待出力ハッシュ）を更新し、ノート全体から生成する要約・関連・補記の状態とジョブは**維持**する。一方、保存前の生Markdown本文に結び付いた**セクションチャットとセクション由来クイズは、実行中ジョブをキャンセルして破棄**し、チャットシートも閉じる。これにより完成結果の再生成を避けつつ、`**` 挿入後に旧 `sectionContext` を完全一致検索して誤ったセクションへフォールバックすることを防ぐ。無効化するキャッシュは必要なノート一覧・関連候補キャッシュのみ。
 

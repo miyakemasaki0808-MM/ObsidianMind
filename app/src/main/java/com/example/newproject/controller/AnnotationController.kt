@@ -4,21 +4,19 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.AnnotationComposer
 import com.example.newproject.domain.toObsidianNoteTitle
-import com.example.newproject.model.AnnotationListState
-import com.example.newproject.model.AnnotationState
-import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.AnnotationStateWriter
 import android.content.ContentResolver
 import android.net.Uri
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.RelatedNote
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Date
 
@@ -31,7 +29,7 @@ class AnnotationController(
     private val scope: CoroutineScope,
     private val repository: NoteRepository,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>,
+    private val state: AnnotationStateWriter,
     private val vaultUri: () -> Uri?,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 補記の作成は「ノート単位」で activeRequestId が見るが、一覧と削除は
@@ -59,11 +57,11 @@ class AnnotationController(
         wikilinkTitles: Set<String>
     ) {
         // 生成中の連続タップによる重複ファイル作成を防ぐ。
-        if (uiState.value.annotationState is AnnotationState.Loading) return
+        if (state.current.annotationState is AnnotationState.Loading) return
 
         val vault = vaultUri()
         if (vault == null) {
-            uiState.update { current ->
+            state.update { current ->
                 current.copy(
                     annotationState = AnnotationState.Error(
                         message = "Vault が選択されていません。",
@@ -85,7 +83,7 @@ class AnnotationController(
             wikilinkTitles = wikilinkTitles
         )
 
-        uiState.update { current ->
+        state.update { current ->
             current.copy(annotationState = AnnotationState.Loading(title.toObsidianNoteTitle()))
         }
         createJob = scope.launch {
@@ -118,10 +116,10 @@ class AnnotationController(
 
     /** 完了・エラー通知を確認済みにする。結果自体は同じノート内で保持する。 */
     fun markViewed() {
-        uiState.update { current ->
-            val next = when (val state = current.annotationState) {
-                is AnnotationState.Success -> state.copy(isViewed = true)
-                is AnnotationState.Error -> state.copy(isViewed = true)
+        state.update { current ->
+            val next = when (val annotation = current.annotationState) {
+                is AnnotationState.Success -> annotation.copy(isViewed = true)
+                is AnnotationState.Error -> annotation.copy(isViewed = true)
                 else -> return@update current
             }
             current.copy(annotationState = next)
@@ -136,7 +134,7 @@ class AnnotationController(
         createJob = null
         downloadJob = null
         pending = null
-        uiState.update { current -> current.copy(annotationState = AnnotationState.Idle) }
+        state.update { current -> current.copy(annotationState = AnnotationState.Idle) }
     }
 
     /**
@@ -149,13 +147,13 @@ class AnnotationController(
     fun onVaultChanged() {
         listJob?.cancel()
         listJob = null
-        uiState.update { current -> current.copy(annotationListState = AnnotationListState.Idle) }
+        state.update { current -> current.copy(annotationListState = AnnotationListState.Idle) }
     }
 
     fun loadList(contentResolver: ContentResolver) {
         val uri = vaultUri()
         if (uri == null) {
-            uiState.update { current ->
+            state.update { current ->
                 current.copy(annotationListState = AnnotationListState.Error("Vault が選択されていません。"))
             }
             return
@@ -163,7 +161,7 @@ class AnnotationController(
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
-            uiState.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
+            state.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
             reloadList(contentResolver, generation)
         }
     }
@@ -184,7 +182,7 @@ class AnnotationController(
      * 切り替わっても、拾い直した新Vaultのファイルを消しにいかないようにするため。
      */
     fun deleteAll(contentResolver: ContentResolver) {
-        val current = uiState.value.annotationListState as? AnnotationListState.Success ?: return
+        val current = state.current.annotationListState as? AnnotationListState.Success ?: return
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
@@ -216,7 +214,7 @@ class AnnotationController(
         try {
             val files = repository.listAnnotationFiles(contentResolver, uri)
             if (generation != vaultGeneration()) return
-            uiState.update { current ->
+            state.update { current ->
                 current.copy(
                     annotationListState = AnnotationListState.Success(files, failureCount)
                 )
@@ -225,7 +223,7 @@ class AnnotationController(
             throw e
         } catch (e: Exception) {
             if (generation != vaultGeneration()) return
-            uiState.update { current ->
+            state.update { current ->
                 current.copy(annotationListState = AnnotationListState.Error(e.message ?: "Unknown error"))
             }
         }
@@ -276,7 +274,7 @@ class AnnotationController(
                 content = markdown
             )
             if (!isCurrent(annotation.requestId)) return
-            uiState.update { current ->
+            state.update { current ->
                 current.copy(
                     annotationState = AnnotationState.Success(
                         sourceTitle = sourceTitle,
@@ -347,7 +345,7 @@ class AnnotationController(
 
     private fun updateError(requestId: Long, sourceTitle: String, message: String) {
         if (!isCurrent(requestId)) return
-        uiState.update { current ->
+        state.update { current ->
             current.copy(
                 annotationState = AnnotationState.Error(
                     message = message,

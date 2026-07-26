@@ -1,6 +1,8 @@
 package com.example.newproject.domain
 
-import com.example.newproject.data.NoteFile
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder

@@ -1,5 +1,9 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.DistillSourceModel
+import com.example.newproject.model.DistillTextRange
+
 internal data class DistillTransformResult(
     val content: String,
     val insertedRanges: List<DistillTextRange>

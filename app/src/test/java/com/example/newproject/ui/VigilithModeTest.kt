@@ -4,10 +4,10 @@ import com.example.newproject.domain.projectedBoldRatio
 import com.example.newproject.ui.vigilith.VigilithDistillPhase
 import com.example.newproject.ui.vigilith.VigilithMode
 import com.example.newproject.ui.vigilith.resolveVigilithPresentation
-import com.example.newproject.model.DistillCandidateItem
-import com.example.newproject.model.DistillState
-import com.example.newproject.model.ReadingTraceCard
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.SummaryState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

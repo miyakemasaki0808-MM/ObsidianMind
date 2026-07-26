@@ -1,6 +1,6 @@
 package com.example.newproject
 
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.ai.PromptBuilder
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

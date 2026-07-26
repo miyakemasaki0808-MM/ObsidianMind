@@ -1,49 +1,9 @@
 package com.example.newproject.domain
 
-/** 蒸留対象の原文範囲。offset は Kotlin String と同じ UTF-16 code unit 基準。 */
-internal data class DistillTextRange(
-    val start: Int,
-    val endExclusive: Int
-) {
-    init {
-        require(start >= 0)
-        require(endExclusive >= start)
-    }
-
-    val length: Int get() = endExclusive - start
-
-    fun overlaps(other: DistillTextRange): Boolean =
-        start < other.endExclusive && other.start < endExclusive
-
-    fun contains(offset: Int): Boolean = offset > start && offset < endExclusive
-}
-
-/** AI候補になる前の、原文位置を保持した1文。 */
-internal data class DistillSentence(
-    val sourceIndex: Int,
-    val text: String,
-    val range: DistillTextRange,
-    val heading: String?,
-    val chunkIndex: Int,
-    val isParagraphFirst: Boolean,
-    val isHeadingAdjacent: Boolean,
-    val isChunkLast: Boolean,
-    val isNoteLast: Boolean
-)
-
-internal data class DistillChunk(
-    val index: Int,
-    val heading: String?,
-    val sentenceIndices: List<Int>
-)
-
-internal data class DistillSourceModel(
-    val content: String,
-    val sentences: List<DistillSentence>,
-    val chunks: List<DistillChunk>,
-    val eligibleBodyCharacterCount: Int,
-    val existingBoldCharacterCount: Int
-)
+import com.example.newproject.model.DistillChunk
+import com.example.newproject.model.DistillSentence
+import com.example.newproject.model.DistillSourceModel
+import com.example.newproject.model.DistillTextRange
 
 private data class SourceLine(
     val index: Int,

@@ -1,10 +1,10 @@
 package com.example.newproject
 
-import com.example.newproject.model.AnnotationState
-import com.example.newproject.model.QuizCard
-import com.example.newproject.model.QuizFormat
-import com.example.newproject.model.QuizState
-import com.example.newproject.model.toEventKey
+import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.QuizCard
+import com.example.newproject.model.state.QuizFormat
+import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.toEventKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull

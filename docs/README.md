@@ -83,7 +83,7 @@
 
 > **`_wip/` はリリース時点で3ファイルとも廃棄する一時置き場。** そのため**恒久文書（§1・§2）から `_wip/` を参照しない**。
 > 参照は一方通行で、`_wip/` → 恒久文書のみ。恒久側で課題に触れるときは、リンクや項目番号ではなく**内容そのものを書く**
-> （例: `**未解決:** current_issues 2-9` ではなく `**未解決:** 依存の循環が3組（model ⇄ data / …）`）。
+> （例: `**未解決:** current_issues 3-14` ではなく `**未解決:** instrumentation テストの構成が未定義`）。
 > この向きを守っている限り、`_wip/` はいつ捨てても、中の番号をいつ振り直しても、恒久文書は壊れない。
 >
 > **例外は [source_code_quality_review.md](source_code_quality_review.md) のみ。** Codexが書く外部レビューなので
@@ -126,11 +126,13 @@
 
 | 触るパッケージ | 先に読む |
 |---|---|
-| `NoteViewModel.kt` / `controller/` | [architecture](design/architecture.md) → 該当機能の設計書 |
+| `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` | [architecture](design/architecture.md) → 該当機能の設計書 |
+| `controller/` | [architecture](design/architecture.md) → 該当機能の設計書 |
 | `ai/` | [background_ai_ux](design/background_ai_ux.md) → [reflect_distill](design/reflect_distill.md) / [related_notes_ai](design/related_notes_ai.md) |
 | `domain/` | [related_notes_ai](design/related_notes_ai.md) / [reflect_distill](design/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](design/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](design/reflect_distill.md)（原子性・復旧） |
-| `model/NoteUiState.kt` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
+| `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
+| `model/` の共有データ型 | [architecture](design/architecture.md) → 該当機能の設計書 |
 | `ui/theme/` | [theme_and_ui_refactor](design/theme_and_ui_refactor.md) → [dark_mode](design/dark_mode.md) |
 | `ui/vigilith/` | [character_vigilith](design/character_vigilith.md) → [vigilith_in_app](design/vigilith_in_app.md) → [opening_animation](design/opening_animation.md) |
 | `ui/screen/` | [tab_navigation](design/tab_navigation.md) / [note_fullscreen](design/note_fullscreen.md) / [section_ai_chat](design/section_ai_chat.md) |

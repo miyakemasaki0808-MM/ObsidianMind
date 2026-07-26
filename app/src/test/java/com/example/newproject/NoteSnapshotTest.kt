@@ -9,7 +9,7 @@ import java.io.ByteArrayInputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import com.example.newproject.domain.DistillLimits
+import com.example.newproject.model.DistillLimits
 
 class NoteSnapshotTest {
 

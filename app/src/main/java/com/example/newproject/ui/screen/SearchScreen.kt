@@ -34,12 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.data.HistoryEntry
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.HistoryEntry
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SearchState
-import com.example.newproject.domain.AiRecommendationStatus
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurfaceFaint

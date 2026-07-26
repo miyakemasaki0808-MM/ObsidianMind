@@ -1,6 +1,6 @@
 package com.example.newproject.domain
 
-import com.example.newproject.model.QuizFormat
+import com.example.newproject.model.state.QuizFormat
 import kotlin.math.max
 
 /** AIを使わず、実際にクイズへ渡す文脈の構造だけから出題形式を決める。 */

@@ -1,22 +1,9 @@
 package com.example.newproject.domain
 
-internal data class DistillCandidate(
-    val id: String,
-    val sentence: DistillSentence,
-    val score: Double,
-    val structuralWeight: Double
-)
-
-internal object DistillLimits {
-    const val MAX_FILE_BYTES = 256 * 1024
-    const val MAX_SENTENCES_FOR_SCORING = 400
-    const val MAX_AI_CANDIDATES = 24
-    const val AI_CANDIDATE_CHAR_BUDGET = 1_500
-    const val FINAL_SELECTION_LIMIT = 6
-    const val MAX_SENTENCE_CHARACTERS = 160
-    const val CHUNK_CHARACTER_LIMIT = 1_200
-    const val MAX_BOLD_RATIO = 0.30
-}
+import com.example.newproject.model.DistillCandidate
+import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.DistillSentence
+import com.example.newproject.model.DistillSourceModel
 
 private const val TITLE_WEIGHT = 1.0
 private const val HEADING_WEIGHT = 0.7

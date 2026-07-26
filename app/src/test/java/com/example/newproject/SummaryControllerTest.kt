@@ -5,13 +5,13 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SummaryController
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.state.SummaryState
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -33,7 +33,7 @@ class SummaryControllerTest {
     fun `DL中にノートを切り替えると完了後の要約が書き戻されない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         var modelReadyCalls = 0
         val controller = controller(state, ai) { _, _ -> modelReadyCalls++ }
 
@@ -67,7 +67,7 @@ class SummaryControllerTest {
     fun `DL中に次の要約が始まると完了後に前の入力で走らない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val readyWith = mutableListOf<Pair<String, String>>()
         val controller = controller(state, ai) { title, content -> readyWith += title to content }
 
@@ -100,7 +100,7 @@ class SummaryControllerTest {
     fun `DL中に次の要約が始まると進捗で新しい要約が上書きされない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
         controller.fetch("ノートA", "Aの本文")
@@ -121,7 +121,7 @@ class SummaryControllerTest {
     fun `DL完了で要約と関連ノートが再開される`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val readyWith = mutableListOf<Pair<String, String>>()
         val controller = controller(state, ai) { title, content -> readyWith += title to content }
 
@@ -140,7 +140,7 @@ class SummaryControllerTest {
     fun `DL失敗はエラーとして表示される`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
         controller.fetch("ノートA", "Aの本文")
@@ -155,7 +155,7 @@ class SummaryControllerTest {
     @Test
     fun `モデルDL済みならそのまま要約が出る`() = runTest {
         val ai = FakeAiClient(AiAvailability.Available, Channel())
-        val state = MutableStateFlow(NoteUiState())
+        val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
         controller.fetch("ノートA", "Aの本文")
@@ -165,14 +165,14 @@ class SummaryControllerTest {
     }
 
     private fun kotlinx.coroutines.test.TestScope.controller(
-        state: MutableStateFlow<NoteUiState>,
+        state: NoteUiStateStore,
         ai: FakeAiClient,
         onModelReady: (String, String) -> Unit = { _, _ -> }
     ) = SummaryController(
         scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
         summarizeUseCase = SummarizeUseCase(ai),
         aiClient = ai,
-        uiState = state,
+        state = state.summaryWriter,
         onModelReady = onModelReady
     )
 

@@ -35,8 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.AnnotationListState
-import com.example.newproject.data.NoteFile
+import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.NoteFile
 import com.example.newproject.ui.theme.DangerAction
 import com.example.newproject.ui.theme.OnDangerAction
 import com.example.newproject.ui.theme.AppGradient

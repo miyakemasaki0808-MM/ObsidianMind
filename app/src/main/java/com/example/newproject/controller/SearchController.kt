@@ -1,20 +1,18 @@
 package com.example.newproject.controller
 
-import com.example.newproject.data.NoteFile
-import com.example.newproject.data.NoteFolder
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
-import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SearchState
+import com.example.newproject.model.SearchStateWriter
+import com.example.newproject.model.state.SearchState
 import android.content.ContentResolver
 import android.net.Uri
 import com.example.newproject.domain.PickerResult
-import com.example.newproject.domain.RelatedNote
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -26,7 +24,7 @@ class SearchController(
     private val scope: CoroutineScope,
     private val repository: NoteRepository,
     private val searchPickerUseCase: SearchPickerUseCase,
-    private val uiState: MutableStateFlow<NoteUiState>,
+    private val state: SearchStateWriter,
     private val vaultUri: () -> Uri?,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 検索用の activeRequestId とは寿命が違う（フォルダ列挙は検索要求では無効化しない）。
@@ -80,14 +78,14 @@ class SearchController(
             try {
                 val folders = repository.listTopLevelFolders(contentResolver, uri)
                 if (generation != vaultGeneration()) return@launch
-                uiState.update { current -> current.copy(folders = folders, foldersError = null) }
+                state.update { current -> current.copy(folders = folders, foldersError = null) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // ルート直下スコープは使えるので致命的ではないが、黙って消すと
                 // 「フォルダが無い」と区別できない。chips の下に注記として出す。
                 if (generation != vaultGeneration()) return@launch
-                uiState.update { current ->
+                state.update { current ->
                     current.copy(foldersError = "フォルダ一覧を取得できませんでした。")
                 }
             }
@@ -105,10 +103,10 @@ class SearchController(
      * 何も起きないようにして、取り違えで結果を失わないようにする。
      */
     fun selectFolder(folder: NoteFolder?) {
-        if (uiState.value.selectedFolder?.documentId == folder?.documentId) return
+        if (state.current.selectedFolder?.documentId == folder?.documentId) return
         startRequest()
         searchJob = null
-        uiState.update { current ->
+        state.update { current ->
             current.copy(selectedFolder = folder, searchState = SearchState.Idle)
         }
     }
@@ -122,7 +120,7 @@ class SearchController(
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
-                val folder = uiState.value.selectedFolder
+                val folder = state.current.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
                     is PickerResult.Success ->
@@ -146,7 +144,7 @@ class SearchController(
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
-                val folder = uiState.value.selectedFolder
+                val folder = state.current.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 val picked = notes.shuffled().take(3).map {
                     RelatedNote(title = it.name, uri = it.uri, isWikilinked = false, lastModified = it.lastModified)
@@ -174,9 +172,9 @@ class SearchController(
      * [SearchPickerUseCase.pick] のように内部で結果型を返す経路は
      * 中断せずに戻り、そのまま update に到達し得るため。
      */
-    private fun setStateIfCurrent(requestId: Long, state: SearchState) {
+    private fun setStateIfCurrent(requestId: Long, next: SearchState) {
         if (requestId != activeRequestId) return
-        uiState.update { current -> current.copy(searchState = state) }
+        state.update { current -> current.copy(searchState = next) }
     }
 
     // さがすタブのスコープ走査をTTL付きで取得する。

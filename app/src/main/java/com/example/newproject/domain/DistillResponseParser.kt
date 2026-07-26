@@ -1,5 +1,7 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.DistillLimits
+
 private val DISTILL_ID_PATTERN = Regex(
     "(?<![A-Z0-9])S\\d{3}(?![A-Z0-9])",
     RegexOption.IGNORE_CASE

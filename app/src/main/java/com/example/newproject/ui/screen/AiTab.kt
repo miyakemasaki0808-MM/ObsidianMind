@@ -36,12 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.AnnotationState
-import com.example.newproject.model.DistillCandidateItem
-import com.example.newproject.model.DistillState
-import com.example.newproject.model.NoteState
+import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.OnButtonAi
 import com.example.newproject.ui.theme.OnSurfaceHint
 import com.example.newproject.ui.theme.OnSurfaceMuted

@@ -2,11 +2,11 @@ package com.example.newproject.ui.vigilith
 
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.screen.NoteReaderTab
-import com.example.newproject.model.DistillState
-import com.example.newproject.model.QuizState
-import com.example.newproject.model.ReadingTraceCard
-import com.example.newproject.model.SectionChatState
-import com.example.newproject.model.SummaryState
+import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SummaryState
 
 /**
  * AI操作の4状態。Vigilith本体の状態バッジと全画面の最小AIインジケータで共用する。

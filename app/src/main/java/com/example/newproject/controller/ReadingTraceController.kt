@@ -3,9 +3,9 @@ package com.example.newproject.controller
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
-import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.ReadingTraceStateWriter
 import com.example.newproject.model.ReadingTrace
-import com.example.newproject.model.ReadingTraceCard
+import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.truncateToUtf8Bytes
@@ -20,8 +20,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -54,7 +52,7 @@ internal class ReadingTraceController(
      */
     private val persistScope: CoroutineScope,
     private val aiClient: AiClient,
-    private val uiState: MutableStateFlow<NoteUiState>,
+    private val state: ReadingTraceStateWriter,
     private val persistence: ReadingTracePersistence,
     /**
      * 現在のVaultの識別子。ノートを開いた時点の値をセッションへ写し取り、保存要求に
@@ -370,16 +368,14 @@ internal class ReadingTraceController(
 
     /** 「読んだ」で畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissCard() {
-        uiState.update { current ->
-            current.copy(readingTraceCard = current.readingTraceCard?.copy(isDismissed = true))
-        }
+        state.update { it?.copy(isDismissed = true) }
     }
 
     private fun setCard(card: ReadingTraceCard) {
-        uiState.update { current ->
+        state.update { current ->
             // 畳んだ状態は、後から届いた要約で開き直さない。
-            val dismissed = current.readingTraceCard?.isDismissed == true
-            current.copy(readingTraceCard = card.copy(isDismissed = dismissed))
+            val dismissed = current?.isDismissed == true
+            card.copy(isDismissed = dismissed)
         }
     }
 

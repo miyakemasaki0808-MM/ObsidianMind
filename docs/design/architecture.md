@@ -2,9 +2,7 @@
 
 **対象領域:** 横断的なコード構造・状態管理・並行処理の規約
 **初版:** 2026-07-19（品質改善活動 PR #16〜#20）
-**状態:** 実装済み。Controller共通化は2026-07-26の5件目再判定まで含めて決着（**共通化せず、相似のまま維持**。以後は件数をトリガーにしない）。パッケージのレイヤー別整理は PR #37 で実施済み。非同期の世代IDは2026-07-26に二層（Vault単位＝共有／ノート単位＝Controller自前）で確定。
-**未解決:** ①パッケージ間の依存が循環している（`model ⇄ data` / `model ⇄ domain` / `domain ⇄ ai` の3組）②`NoteViewModel` が依存をすべて内部生成しており差し替え口が無く、JVMテストが1件も通っていない③単一 `NoteUiState` を7 Controller 全員が `update` しており、担当外フィールドも書ける。**パッケージは整理されたが依存の「向き」はまだ制約されていない。**
-（非同期の世代管理は 2026-07-26 に解消し、7 Controller すべてが requestId ＋ Job 追跡で揃った。Vault単位の要求だけは共有の `vaultGeneration` を見る）
+**状態:** 実装済み。Controller共通化は2026-07-26の5件目再判定まで含めて決着（**共通化せず、相似のまま維持**。以後は件数をトリガーにしない）。非同期の世代IDは二層（Vault単位＝共有／ノート単位＝Controller自前）で確定。2026-07-27に依存生成・状態所有・パッケージ依存の境界を型とJVMテストで固定した。
 
 ---
 
@@ -17,21 +15,24 @@
 マルチモジュール化や機能別ViewModel化ではなく、「`NoteViewModel` は窓口として残し、実装を機能Controllerへ委譲する」方式を採った。
 
 ```
-NoteViewModel（窓口と横断調停）
- ├── SectionChatController
- ├── QuizController
- ├── AnnotationController
- ├── SearchController
- ├── DistillController        ← PR #32 で追加
- ├── ReadingTraceController   ← ReadingTrace v1 で追加
- └── SummaryController        ← 2026-07-26（ViewModel直書きから切り出し）
+NoteViewModel（Android境界の窓口）
+ └── NoteSessionCoordinator（横断調停・状態所有）
+      ├── NoteUiStateStore（機能別Writerを配る）
+      ├── SectionChatController
+      ├── QuizController
+      ├── AnnotationController
+      ├── SearchController
+      ├── DistillController        ← PR #32 で追加
+      ├── ReadingTraceController   ← ReadingTrace v1 で追加
+      └── SummaryController        ← 2026-07-26（ViewModel直書きから切り出し）
 ```
 
 分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 7つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
 
-- 各Controllerは `viewModelScope` と `MutableStateFlow<NoteUiState>` を注入され、**担当フィールドだけ**を `copy()` で更新する
+- 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
+- `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
 - 公開APIと `uiState` の形を維持したため、UI層の変更ゼロで移行できた
-- 状態の単一ソース（1つの `NoteUiState`）は維持。画面ごとの状態追跡が分散しない利点を捨てない
+- 状態の単一ソース（1つの `NoteUiState`）は維持。テーマだけは独立した `StateFlow<Boolean>` とし、状態17項目の変更でアプリ最上位まで再評価されないようにした
 
 ## 判断2: 結合点を「明示契約」に変換する
 
@@ -39,10 +40,12 @@ NoteViewModel（窓口と横断調停）
 
 | 契約 | 役割 |
 |------|------|
-| `cancelNoteScopedJobs()`＋各Controllerの `cancelAndClear()` | 実行中AIジョブの停止（旧ノートの結果混入と、Mutexロックの占有継続を防ぐ） |
-| `resetNoteScopedStates()` | ノート単位状態の一括リセット（リセット漏れを構造的に防ぐ） |
+| `NoteSessionCoordinator.cancelNoteScopedJobs()`＋各Controllerの `cancelAndClear()` | 実行中AIジョブの停止（旧ノートの結果混入と、Mutexロックの占有継続を防ぐ） |
+| `NoteUiStateStore` の `withNoteScopedReset()` | ノート単位状態の一括リセット（リセット漏れを構造的に防ぐ） |
 
-**機能追加の定型**: Controller 1ファイル＋状態1フィールド＋この契約2箇所への登録。純粋ロジックは最初から別ファイルに切り、テストを同時に書く。
+`NoteSessionCoordinator.onNoteChanged()` がジョブ停止と `beginNoteLoad()` を1手で呼ぶ。呼び出し側へ2手を公開しないことで、「状態だけ消したが旧ジョブは生きている」という中間状態を作らない。
+
+**機能追加の定型**: Controller 1ファイル＋状態1フィールド＋対応するWriter＋この契約2箇所への登録。純粋ロジックは最初から別ファイルに切り、テストを同時に書く。
 
 ## 判断3: 壊れやすいロジックは純関数に切り出す
 
@@ -118,7 +121,7 @@ NoteViewModel（窓口と横断調停）
 | スコープ | 対象 | 無効化の契機 | 持ち主 |
 |---|---|---|---|
 | ノート単位 | 要約・DL・クイズ・補記生成・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`**（従来どおり） |
-| Vault単位 | 補記一覧・補記削除・フォルダ一覧 | Vault切替（`saveVault()`） | **`NoteViewModel.vaultGeneration`**（新設・共有） |
+| Vault単位 | 補記一覧・補記削除・フォルダ一覧 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`**（A案ではViewModelに新設、B案で調停とともに移動） |
 
 **混ぜられない理由がはっきりしている。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤りになる。既存の `cancelAndClear()` はノート切替で呼ばれるため、Vault単位の要求をそこに相乗りさせられない。逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**したがって層を分けるのが正しく、片方に寄せると必ずどちらかが壊れる。**
 
@@ -140,3 +143,26 @@ NoteViewModel（窓口と横断調停）
 **自動DLの型には初めて完全に乗ったが、通知の型に乗らなかった。** 要約は画面の要約欄に直接出るため「見たかどうか」を管理する必要がなく、`markViewed()` に相当する概念が無い。2026-07-25 に「共通性は生成処理ではなく**ユーザーへの見せ方**に宿る」と更新した判定軸をそのまま当てると、ここでも共通化には届かない。共有できるのは依然として requestId ガードの数行だけである。
 
 **再検討条件を更新する。** 「自動DL＋Snackbar＋`isViewed` が揃った4件目」という条件は、5件中3件が部分一致するだけで一度も揃わなかった。今後は件数をトリガーにせず、**`markViewed()` と Snackbar 通知を持つ Controller が3つ目に現れたとき**に「AI結果の未確認管理」だけを共通化する候補として再検討する（現状は Quiz と Annotation の2件）。生成・DL側の共通化は打ち切る。
+
+### 2026-07-27 — 依存・状態・パッケージの境界を実効化する（B案）
+
+単一 `NoteViewModel` と7 Controllerの構成は維持しつつ、境界をKDoc上の約束から型とテストへ移した。
+
+**1. 依存生成と横断調停を分ける。** `NoteViewModelDependencies` が本番依存を組み立て、`NoteViewModel` の内部コンストラクタからテスト用依存と `CoroutineScope` を差し替えられるようにした。7 Controllerの生成・状態所有・ノート/Vault切替は `NoteSessionCoordinator` へ移し、ViewModelには `Uri`・`ContentResolver`・`SharedPreferences` を実際に扱うAndroid境界だけを残した。DIライブラリは、差し替え対象がこの1グラフだけで自動解決を要しないため導入しない。
+
+当初の完了条件は「ViewModel越しのJVM統合テスト」だったが、`AndroidViewModel` と `Uri` は素のJVMではスタブが例外を投げ、直接生成には Robolectric またはモック依存が要る。追加依存を避け、壊れやすい調停そのものをAndroid APIを**呼ばない**Coordinatorへ出し、実物の7 Controllerを束ねた状態で直接検証する形へ読み替えた。`ContentResolver` は下位へ素通しできるが、Coordinator内部でAndroid APIを呼ばないことをテスト可能性の境界とする。
+
+**2. 状態の所有権を型で狭める。** `NoteUiStateStore` だけが全体の `MutableStateFlow` を持ち、各Controllerへは担当スライスの `*StateWriter` だけを渡す。フラットな `NoteUiState` とUI APIは維持したまま、担当外フィールドの書き換えをコンパイル時に不可能にした。ノート単位の状態リセットはStore内の `withNoteScopedReset()` を唯一の登録点とし、`beginNoteLoad()` ではリセットと `Loading` 遷移を1回の `update` で原子的に行う。
+
+**3. `model` を依存グラフの葉にする。** 許可する向きは次のとおり。
+
+| パッケージ | importしてよいプロジェクト内パッケージ |
+|---|---|
+| `model` | なし |
+| `ai` | `model` |
+| `domain` | `model`, `ai` |
+| `data` | `model`, `domain` |
+| `controller` | `model`, `data`, `domain`, `ai` |
+| `ui` | `model`, `domain` |
+
+`NoteFile`・`HistoryEntry`・`RelatedNote`・蒸留候補など、層をまたいで共有する純データ型を `model` へ移し、4組の循環を除去した。蒸留候補は `DistillSentence` を参照するため、候補だけでなく同じ純データ群（範囲・文・チャンク・入力モデル）も一緒に移した。`model → data → domain → ai` という案は、`model` が上位実装を知って循環の起点になるため採らない。`PackageDependencyTest` がimportを走査して上表をCIで固定し、`model → data` を意図的に混入させる変異確認でも失敗することを確認した。

@@ -31,9 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.QuizCard
-import com.example.newproject.model.QuizFormat
-import com.example.newproject.model.QuizState
+import com.example.newproject.model.state.QuizCard
+import com.example.newproject.model.state.QuizFormat
+import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnQuizLoading
 import com.example.newproject.ui.theme.OnQuizError
