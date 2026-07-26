@@ -4,13 +4,13 @@
 
 **解析日:** 2026-07-26
 
-**対象ブランチ:** `feature/VigilithAI_Aicon_Character`
+**対象ブランチ:** `feature/result_source_analys`
 
-**対象実装:** `2094d3c`（アプリ内Vigilith Phase 3。文書追補コミットは対象外）
+**対象実装:** `25ec429`（検索の世代管理まで。文書のみのコミットは対象外）
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** レビュー指摘の高優先度4件（到達率・Activity lifecycle・Vault分離・検索フォールバック）をJVMテスト付きで解消。Vigilith起動OP、状態別モーション、Phase 3の画面内clamp・Fold再配置・TalkBack文言を含め、2026-07-26 に `testDebugUnitTest` をCLI実行し**352ケース全件グリーン**を確認済み。Debug APKビルド・Pixel 10 Pro Foldへのインストールも成功（認証ロックによりアプリ画面の目視は未完了）
+**検証結果:** 2026-07-26 に `testDebugUnitTest` と `lintDebug` をCLI実行し、**379ケース全件グリーン・Lint 0 error / 28 warning** を確認済み。ダークモードは同日に実機で一巡し問題なし。ReadingTrace v1 と Vigilith Phase 3 の実機一巡は未実施
 
 ---
 
@@ -36,11 +36,11 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算など、壊れやすい純粋ロジックにはユニットテストが整備されている（352ケース）。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算、明暗トークンのコントラストなど、壊れやすい純粋ロジックにはユニットテストが整備されている（379ケース）。
 - 6 Controller すべてが requestId ＋ Job 追跡で古い結果の混入を防ぐ。要求単位で未追跡なのは補記一覧／削除と要約側のモデルDL Jobのみ。
 - SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。
-- 「AI非対応時はキーワード一致で表示」という検索画面の文言と、候補40件以下で単純に先頭3件を返す実装には差がある。
-- ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度3件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
+- ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度4件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存、検索フォールバックの文言差）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
+- パッケージはレイヤー別に整理されたが依存の**向き**は制約されておらず、循環が3組残る。`NoteViewModel` は依存を内部生成しており、テスト379件が1件もここを通っていない。構造面が次の成長限界になっている。
 
 ---
 
@@ -50,8 +50,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 65ファイル | 11,723行 |
-| ユニットテスト Kotlin | 41ファイル | 5,456行、352テスト |
+| 本番 Kotlin | 70ファイル | 12,535行 |
+| ユニットテスト Kotlin | 43ファイル | 6,007行、379テスト |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -89,100 +89,97 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 ```text
 app/src/
 ├── main/
-│   ├── AndroidManifest.xml
+│   ├── AndroidManifest.xml                     # allowBackup除外ルールの指定を含む
 │   ├── java/com/example/newproject/
-│   │   ├── MainActivity.kt                 # Activity、システムスプラッシュ／起動OP、Vault選択、NavHost、Snackbar通知、画面イベント接続
-│   │   ├── NoteViewModel.kt                # 状態の統合、ノート読込、要約・関連の調停、履歴記録
-│   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state、通知イベントキー
-│   │   ├── NoteRepository.kt               # SAF走査・読書き・メタデータ解析
-│   │   ├── NoteSnapshot.kt                 # 蒸留用の原バイト保持・上限付き読込・UTF-8厳格判定
-│   │   ├── NoteHistoryStore.kt             # 当日分のみの閲覧履歴（SharedPreferences）
-│   │   ├── NoteTitleNormalizer.kt          # Obsidianタイトル正規化
-│   │   ├── SearchController.kt             # フォルダ検索・スコープキャッシュ
-│   │   ├── SectionChatController.kt        # セクション要約・質問・Q&A
-│   │   ├── QuizController.kt               # 適応出題Q&Aのバックグラウンド生成・確認状態
-│   │   ├── AnnotationController.kt         # AI補記の生成・保存・一覧・削除
-│   │   ├── DistillController.kt            # 蒸留の候補提示・選択・保存・復旧の直列化
-│   │   ├── DistillWriteRepository.kt       # 蒸留のSAF安全書き込み（二重ハッシュ照合・原子確定）
-│   │   ├── DistillRecoveryStore.kt         # 中断復旧レコード（noBackupFilesDir）
-│   │   ├── DistillHashing.kt               # SHA-256（原バイト／出力の照合用）
-│   │   ├── ReadingTrace.kt                 # 読書痕跡モデル・上限・検証
-│   │   ├── ReadingTraceController.kt       # 読書セッション・能動読書時間の積算・離脱/背面時保存・再会カード・AI俯瞰要約
-│   │   ├── ReadingTraceJson.kt             # サイドカーJSON・canonical checksum
-│   │   ├── ReadingTraceStore.kt            # 痕跡永続化境界・SAF Gateway・フォルダ索引・Vault照合
-│   │   ├── SafDocuments.kt                 # SAF子要素列挙・ルート機能フォルダの探索/作成
-│   │   ├── VaultPathTraversal.kt           # Vault相対パス付きBFS（Android非依存）
-│   │   ├── AnnotationComposer.kt           # 補記Markdown検証・整形（純粋ロジック）
-│   │   ├── QuizResponseParser.kt           # AIクイズ応答パース（純粋ロジック）
-│   │   ├── QuizInputProfile.kt             # AI不使用の入力分類→出題形式決定（純粋ロジック）
+│   │   ├── MainActivity.kt                     # Activity、システムスプラッシュ／起動OP、Vault選択、NavHost、Snackbar通知、テーマ適用
+│   │   ├── NoteViewModel.kt                    # 状態の統合、依存生成、6 Controllerの調停、ノート読込、要約・関連・モデルDL
 │   │   ├── ai/
-│   │   │   ├── AICoreClient.kt             # AiClient、Gemini Nano接続、Mutex、タイムアウト
-│   │   │   └── PromptBuilder.kt            # 10種類のプロンプト構築
+│   │   │   ├── AICoreClient.kt                 # AiClient、Gemini Nano接続、Mutex、タイムアウト
+│   │   │   └── PromptBuilder.kt                # 各機能のプロンプト構築
+│   │   ├── controller/
+│   │   │   ├── SearchController.kt             # フォルダ検索・スコープキャッシュ・requestId／Job
+│   │   │   ├── SectionChatController.kt        # セクション要約・質問・Q&A
+│   │   │   ├── QuizController.kt               # 適応出題Q&Aのバックグラウンド生成・確認状態
+│   │   │   ├── AnnotationController.kt         # AI補記の生成・保存・一覧・削除
+│   │   │   ├── DistillController.kt            # 蒸留の候補提示・選択・保存・復旧の直列化
+│   │   │   └── ReadingTraceController.kt       # 読書セッション・能動読書時間の積算・再会カード・AI俯瞰要約
+│   │   ├── data/
+│   │   │   ├── NoteRepository.kt               # SAF走査・読書き・メタデータ解析
+│   │   │   ├── NoteSnapshot.kt                 # 蒸留用の原バイト保持・上限付き読込・UTF-8厳格判定
+│   │   │   ├── NoteHistoryStore.kt             # 当日分のみの閲覧履歴（SharedPreferences）
+│   │   │   ├── SafDocuments.kt                 # SAF子要素列挙・ルート機能フォルダの探索/作成
+│   │   │   ├── VaultPathTraversal.kt           # Vault相対パス付きBFS（Android非依存）
+│   │   │   ├── DistillWriteRepository.kt       # 蒸留のSAF安全書き込み（二重ハッシュ照合・原子確定）
+│   │   │   ├── DistillRecoveryStore.kt         # 中断復旧レコード（noBackupFilesDir）
+│   │   │   ├── DistillHashing.kt               # SHA-256（原バイト／出力の照合用）
+│   │   │   ├── ReadingTraceJson.kt             # サイドカーJSON・canonical checksum
+│   │   │   └── ReadingTraceStore.kt            # 痕跡永続化境界・SAF Gateway・フォルダ索引・Vault照合
 │   │   ├── domain/
-│   │   │   ├── SummarizeUseCase.kt          # 要約ユースケース
-│   │   │   ├── RelatedNotesUseCase.kt       # 規則ベース＋AI関連ノート抽出（多段パイプライン）
-│   │   │   ├── RelatedCandidateOrdering.kt  # 採番プレフィックス抽出（extractHexPrefix・共用）
-│   │   │   ├── RelatedCandidateScoring.kt   # タイトル話題スコア（文字bigram Dice＋採番近接）
-│   │   │   ├── RelatedContextScoring.kt     # 本文シグナル再ランク（tags/snippet/title）
-│   │   │   ├── RelatedCandidateRanking.kt   # 採点戦略注入の汎用ランキング（rankByScore）
-│   │   │   ├── RelatedCandidateContext.kt   # 候補の本文肉付け・入力予算内への整形
-│   │   │   ├── RelatedCandidateId.kt        # 一時ID(C01..)採番と応答からのID抽出
-│   │   │   ├── KeyedMemoCache.kt            # 汎用LRUメモ化（成功時のみ格納）
-│   │   │   ├── DistillSourceModel.kt        # 蒸留用の文分割（UTF-16オフセット保持・Markdown構造認識）
-│   │   │   ├── DistillCandidateScoring.kt   # 蒸留候補のサリエンス採点・チャンク網羅（DistillLimits）
-│   │   │   ├── DistillResponseParser.kt     # 蒸留AI応答からのID抽出（許可集合で検証）
-│   │   │   ├── DistillTransformer.kt        # オフセット降順の `**` 挿入・太字比率上限
-│   │   │   ├── SearchKeywordMatching.kt     # キーワード一致の採点・選抜（純関数）
-│   │   │   ├── SearchPickerUseCase.kt       # 自然文検索による3件選定
-│   │   │   └── AiResponseParsing.kt         # AI返却タイトルの共通正規化
+│   │   │   ├── SummarizeUseCase.kt             # 要約ユースケース
+│   │   │   ├── RelatedNotesUseCase.kt          # 規則ベース＋AI関連ノート抽出（多段パイプライン）
+│   │   │   ├── SearchPickerUseCase.kt          # 自然文検索による3件選定
+│   │   │   ├── SearchKeywordMatching.kt        # キーワード一致の採点・選抜（純関数）
+│   │   │   ├── RelatedCandidateOrdering.kt     # 採番プレフィックス抽出（extractHexPrefix・共用）
+│   │   │   ├── RelatedCandidateScoring.kt      # タイトル話題スコア（文字bigram Dice＋採番近接）
+│   │   │   ├── RelatedContextScoring.kt        # 本文シグナル再ランク（tags/snippet/title）
+│   │   │   ├── RelatedCandidateRanking.kt      # 採点戦略注入の汎用ランキング（rankByScore）
+│   │   │   ├── RelatedCandidateContext.kt      # 候補の本文肉付け・入力予算内への整形
+│   │   │   ├── RelatedCandidateId.kt           # 一時ID(C01..)採番と応答からのID抽出
+│   │   │   ├── KeyedMemoCache.kt               # 汎用LRUメモ化（成功時のみ格納）
+│   │   │   ├── DistillSourceModel.kt           # 蒸留用の文分割（UTF-16オフセット保持・Markdown構造認識）
+│   │   │   ├── DistillCandidateScoring.kt      # 蒸留候補のサリエンス採点・チャンク網羅（DistillLimits）
+│   │   │   ├── DistillResponseParser.kt        # 蒸留AI応答からのID抽出（許可集合で検証）
+│   │   │   ├── DistillTransformer.kt           # オフセット降順の `**` 挿入・太字比率上限
+│   │   │   ├── AnnotationComposer.kt           # 補記Markdown検証・整形（純粋ロジック）
+│   │   │   ├── QuizResponseParser.kt           # AIクイズ応答パース（純粋ロジック）
+│   │   │   ├── QuizInputProfile.kt             # AI不使用の入力分類→出題形式決定（純粋ロジック）
+│   │   │   ├── NoteTitleNormalizer.kt          # Obsidianタイトル正規化
+│   │   │   ├── AiResponseParsing.kt            # AI返却タイトルの共通正規化
+│   │   │   └── markdown/
+│   │   │       ├── MarkdownBlocks.kt           # ブロック解析（Compose非依存の純粋ロジック）
+│   │   │       └── NoteSections.kt             # 見出し単位セクションモデル
+│   │   ├── model/
+│   │   │   ├── NoteUiState.kt                  # 全UI状態と各sealed state、通知イベントキー
+│   │   │   └── ReadingTrace.kt                 # 読書痕跡モデル・上限・検証
 │   │   └── ui/
-│   │       ├── OpeningScreen.kt            # Vigilith起動OP（Compose描画・スキップ・完了通知）
-│   │       ├── VigilithOpeningMotion.kt    # ハロー→全身→名称→退場の純粋タイムライン
-│   │       ├── VigilithMascot.kt           # アプリ内4状態WebP・補助光・AI状態バッジ
-│   │       ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルの純粋モーション
-│   │       ├── VigilithMode.kt             # 既存状態からVigilith表示状態・AI操作4状態を導出する純関数
-│   │       ├── VigilithHost.kt             # 5タブ共通配置・Note操作文脈・ドラッグ
-│   │       ├── VigilithState.kt            # MainActivityから切り出したVigilithの配線（rememberVigilithState）
-│   │       ├── VigilithPlacement.kt        # clamp・画面変更・予約領域を扱う純粋配置計算
-│   │       ├── AppScaffold.kt              # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
-│   │       ├── NoteReaderTab.kt            # ノートタブ本体（Markdown閲覧、Vigilithセクション操作）
-│   │       ├── FullscreenNoteScreen.kt     # 全画面読書ルート（システムバー没入・最小AIインジケータ）
-│   │       ├── NoteComponents.kt           # タブと全画面の共用部品（読書位置報告・IconPill・本文パネル）
-│   │       ├── SearchScreen.kt             # AI検索・ランダム抽出
-│   │       ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
-│   │       ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
-│   │       ├── OptionsScreen.kt            # オプション入口
-│   │       ├── QuizScreen.kt               # 4択問題UI
-│   │       ├── AnnotationResultScreen.kt   # 生成した補記メモ表示
-│   │       ├── AnnotationManagerScreen.kt  # 補記一覧・削除
-│   │       ├── SectionChatSheet.kt         # セクションAIボトムシート
-│   │       ├── ReadingProgressGeometry.kt  # 最終可視ブロックの可視割合・量子化（純関数）
-│   │       ├── ReadingTraceCard.kt         # 「前回のあなた」カード・経過文面
+│   │       ├── AppScaffold.kt                  # 5タブ、NavigationBar/Rail切替、AIタブバッジ、SnackbarHost
+│   │       ├── ReadingProgressGeometry.kt      # 最終可視ブロックの可視割合・量子化（純関数）
+│   │       ├── component/
+│   │       │   ├── NoteComponents.kt           # タブと全画面の共用部品（読書位置報告・IconPill・本文パネル）
+│   │       │   └── ReadingTraceCard.kt         # 「前回のあなた」カード・経過文面
+│   │       ├── markdown/
+│   │       │   ├── InlineMarkdown.kt           # インライン装飾のAnnotatedString生成
+│   │       │   └── MarkdownRenderer.kt         # Compose描画
+│   │       ├── screen/
+│   │       │   ├── OpeningScreen.kt            # Vigilith起動OP（Compose描画・スキップ・完了通知）
+│   │       │   ├── NoteReaderTab.kt            # ノートタブ本体（Markdown閲覧、Vigilithセクション操作）
+│   │       │   ├── FullscreenNoteScreen.kt     # 全画面読書ルート（システムバー没入・最小AIインジケータ）
+│   │       │   ├── SearchScreen.kt             # AI検索・ランダム抽出
+│   │       │   ├── RelatedTab.kt               # 関連・AI推薦ノート一覧
+│   │       │   ├── AiTab.kt                    # 要約、Q&A、AI補記の入口
+│   │       │   ├── OptionsScreen.kt            # オプション入口（Vault選択・ダークモード切替）
+│   │       │   ├── QuizScreen.kt               # クイズUI（○×／3択／4択）
+│   │       │   ├── AnnotationResultScreen.kt   # 生成した補記メモ表示
+│   │       │   ├── AnnotationManagerScreen.kt  # 補記一覧・削除
+│   │       │   └── SectionChatSheet.kt         # セクションAIボトムシート
 │   │       ├── theme/
-│   │       │   ├── AppColors.kt            # ブランドパレット・明暗2組の実体・役割トークン（@Composableの窓口）
-│   │       │   └── AppTheme.kt             # AppColorScheme／LocalAppColors／AppTheme（ダークモード切替）
-│   │       └── markdown/
-│   │           ├── MarkdownParser.kt       # ブロック・インラインMarkdown解析
-│   │           ├── MarkdownRenderer.kt     # Compose描画
-│   │           └── NoteSections.kt         # 見出し単位セクションモデル
-│   └── res/values/                         # app_name、テーマ（システムバーは透明・色はCompose側）
-└── test/java/com/example/newproject/          # 43ファイル・376テスト（内訳は §13.1）
-    ├── NoteRepositoryTest.kt / NoteSnapshotTest.kt
-    ├── MarkdownParserTest.kt / InlineMarkdownTest.kt
-    ├── QuizResponseParserTest.kt / QuizInputProfileTest.kt / QuizPromptBuilderTest.kt
-    ├── SurroundingContextTest.kt
-    ├── AnnotationComposerTest.kt
-    ├── SectionChatControllerTest.kt / QuizControllerTest.kt / AnnotationControllerTest.kt
-    ├── DistillControllerTest.kt / DistillWriteRepositoryTest.kt / DistillRecoveryStoreTest.kt
-    ├── ReadingTraceControllerTest.kt / ReadingTraceJsonTest.kt / ReadingTraceStoreTest.kt
-    ├── VaultPathTraversalTest.kt / ui/ReadingTraceHeadlineTest.kt / ui/ReadingProgressGeometryTest.kt
-    ├── domain/SearchKeywordMatchingTest.kt
-    ├── EventKeyTest.kt
-    ├── ai/DistillPromptBuilderTest.kt
-    ├── domain/Distill*Test.kt                 # SourceModel / CandidateScoring / ResponseParser / Transformer
-    ├── domain/Related*Test.kt                 # CandidateContext / CandidateId / Ordering / Ranking / Scoring / ContextScoring
-    ├── domain/KeyedMemoCacheTest.kt
-    └── ui/AiTabBadgeStateTest.kt
+│   │       │   ├── AppColors.kt                # ブランドパレット・明暗2組の実体・役割トークン（@Composableの窓口）
+│   │       │   └── AppTheme.kt                 # AppColorScheme／LocalAppColors／AppTheme（ダークモード切替）
+│   │       └── vigilith/
+│   │           ├── VigilithHost.kt             # 5タブ共通配置・Note操作文脈・ドラッグ
+│   │           ├── VigilithState.kt            # MainActivityから切り出したVigilithの配線（rememberVigilithState）
+│   │           ├── VigilithMascot.kt           # アプリ内4状態WebP・補助光・AI状態バッジ
+│   │           ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルの純粋モーション
+│   │           ├── VigilithMode.kt             # 既存状態からVigilith表示状態・AI操作4状態を導出する純関数
+│   │           ├── VigilithOpeningMotion.kt    # ハロー→全身→名称→退場の純粋タイムライン
+│   │           └── VigilithPlacement.kt        # clamp・画面変更・予約領域を扱う純粋配置計算
+│   └── res/
+│       ├── values/                             # app_name、テーマ（システムバーは透明・色はCompose側）
+│       └── xml/                                # backup_rules / data_extraction_rules（バックアップ除外）
+├── test/java/com/example/newproject/           # 43ファイル・379テスト（内訳は §13.1）
+└── （androidTest ソースセットは存在しない）
+
+.github/workflows/ci.yml                        # PR・mainへのpushで testDebugUnitTest / lintDebug
 ```
 
 ---
@@ -211,10 +208,12 @@ Compose UI / MainActivity
           └──────────────► UseCase ──► AiClient ──► ML Kit / Gemini Nano
 
 純粋ロジック:
-MarkdownParser / NoteSections / QuizResponseParser / QuizInputProfile /
+MarkdownBlocks / NoteSections / QuizResponseParser / QuizInputProfile /
 AnnotationComposer / NoteTitleNormalizer / AiResponseParsing /
 DistillSourceModel / DistillCandidateScoring / DistillResponseParser / DistillTransformer /
-VaultPathTraversal / ReadingTraceJson / ReadingTraceHeadline
+SearchKeywordMatching / RelatedCandidate* / RelatedContextScoring / KeyedMemoCache /
+VaultPathTraversal / ReadingTraceJson / ReadingProgressGeometry /
+VigilithMode / VigilithMascotMotion / VigilithOpeningMotion / VigilithPlacement
 ```
 
 この構成は厳密なマルチモジュールClean Architectureではない。すべて同一 `:app` モジュール内にあり、Controller が `MutableStateFlow<NoteUiState>` を直接更新する。ただし、責務境界はファイル単位で明示されており、小規模アプリとしては理解しやすい構成である。
@@ -227,9 +226,9 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 | 担当 | 更新する主な状態 |
 |---|---|
-| `NoteViewModel` | `noteState`、`summaryState`、`relatedNotesState`、`wikilinkTitles`、`todayHistory` |
+| `NoteViewModel` | `noteState`、`summaryState`、`relatedNotesState`、`wikilinkTitles`、`todayHistory`、`vaultSelected`、`darkTheme` |
 | `SearchController` | `folders`、`selectedFolder`、`searchState` |
-| `SectionChatController` | `sectionChat` |
+| `SectionChatController` | `sectionChat`、`isSectionChatSheetVisible` |
 | `QuizController` | `quizState` |
 | `AnnotationController` | `annotationState`、`annotationListState` |
 | `DistillController` | `distillState` |
@@ -248,14 +247,18 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - `annotationListState`: Idle / Loading / Success / Error
 - `distillState`: Idle / Analyzing / NeedsDownload / Downloading / Unavailable / Candidates / Saving / Saved / Conflict / RecoveryRequired / RecoveryResolved / Error（他機能より状態数が多いのは、AI生成に加えVault書き戻しの競合・中断復旧まで表現するため）
 - `readingTraceCard`: Rediscoverで過去の痕跡が見つかった場合だけ入る「前回のあなた」カード。訪問回数・前回日時・最深セクション・到達率・AI俯瞰要約・読み込み中・現在表示中だけのdismiss状態を持つ
-- `sectionChat`: シートを閉じている場合は `null`
+- `sectionChat`: セクションAIのセッション。ノート内でセッションを持たない場合は `null`
+- `isSectionChatSheetVisible`: シートの表示有無。セッションの有無と分離しており、閉じても同じノート内なら生成結果を保持して吹き出しから再表示できる
 - `folders`、`selectedFolder`、`searchState`: 検索タブ用
 - `wikilinkTitles`: 現在ノートから抽出したリンク先タイトル
 - `todayHistory`: 当日分の閲覧履歴（最大10件）
+- `darkTheme`: 表示テーマ。OS設定には追従せず、オプション画面での明示切替だけで変わる（`SharedPreferences` に永続化）
 
 `quizState`/`annotationState` の `sourceTitle` は「どのノートの生成結果か」を、`isViewed` は「結果をユーザーがまだ確認していない」を表し、Snackbar通知とAIタブバッジの表示判定に使う。通知の発火判定キーは `toEventKey()` 拡張関数（`NoteUiState.kt`）が組み立てる。
 
 ノートまたはVaultの切替時は `resetNoteScopedStates()` により、要約・関連・クイズ・補記結果・セクションチャット・再会カードを一括リセットする。検索状態と閲覧履歴はVault切替時だけ別途リセットする。
+
+全17フィールドを単一の `data class` に持ち、6 Controller 全員が同じ `MutableStateFlow` を `update` する構造のため、担当外フィールドへの書き込みをコンパイラは止められない（制約はKDocの記述のみ）。また `MainActivity` は `darkTheme` の判定のため `AppTheme` の外で全体を購読しており、どのフィールドが変わっても最上位から再評価が走る。
 
 ---
 
@@ -271,7 +274,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 | トップレベル | `ai` | AIアシスト |
 | トップレベル | `options` | オプション |
 | 全画面 | `note_fullscreen` | 全画面ノート閲覧（バー/レール非表示・システムバー没入） |
-| 全画面 | `quiz` | 4択Q&A |
+| 全画面 | `quiz` | クイズ（○×／3択／4択を入力量から自動選択） |
 | 全画面 | `annotation` | AI補記生成結果 |
 | 全画面 | `annotation_manager` | AI補記の削除管理 |
 
@@ -316,7 +319,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 - 自動生成されたノート要約を表示
 - AI補記メモのバックグラウンド生成の起点。ボタンラベルは状態に応じて「作る／作成中…／開く／エラーを確認／再試行」と変化する
 - Reflect（蒸留）の起点。AIが選んだ重要文を候補リストで提示し、ユーザーが確認した文だけを元ノートへ `**太字**` として書き戻す（§6.10）
-- 4択Q&Aの起点は読書画面の吹き出しシートへ移動した（フォーカス周辺クイズ）。AIタブにQ&Aボタンはない
+- クイズの起点は読書画面の吹き出しシートへ移動した（フォーカス周辺クイズ）。AIタブにQ&Aボタンはない
 - モデルダウンロード時は進捗を表示
 - タブアイコンのバッジ対象は補記メモのみ。未確認の重要度順（エラー > 未確認完了 > 生成中）で1つだけ表示（`resolveAiTabBadgeState`）
 
@@ -324,6 +327,7 @@ Controller は独自の Flow を作らず、共有された `_uiState` の担当
 
 - 「Vaultを変更」: フォルダ選択のやり直し（現在の選択状態をサブタイトル表示）
 - 「AI補記メモを削除」: 補記一覧で1件削除・全件削除、削除前に確認ダイアログ
+- 「ダークモード」: 明暗テーマのトグル。OS設定には追従せず、ここでの明示切替だけで変わる。`SharedPreferences` に保存し、プロセス再起動なしで即時反映する
 
 #### 横断: Snackbar通知
 
@@ -415,11 +419,13 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 
 検索タブでは `_AI補記` を除外しないため、補記メモも検索・ランダム候補になり得る。
 
-自然文検索では候補が40件を超える場合だけ、クエリとファイル名の文字bigram重複数で上位40件に絞る。その後AIへタイトル一覧を渡し、最大3件を取得する。AIが利用不可・未ダウンロードの場合はフォールバックする。
+自然文検索では候補が40件を超える場合だけ、クエリとファイル名の文字bigram重複数で上位40件に絞る（再現率カット）。その後AIへタイトル一覧を渡し、最大3件を取得する。AIが利用不可・未ダウンロードの場合はフォールバックする。
 
-重要な現状仕様として、候補が40件以下の場合はbigram並べ替えを行わない。したがってAI非対応時のフォールバックは「キーワード一致上位」ではなく、SAFから得た候補リストの先頭3件である。画面文言の「キーワード一致で表示しています」とは厳密には一致しない。
+フォールバックは候補数に依らず bigramスコア順で選び、**一致0件は返さない**（0件時は画面が「見つかりませんでした。」になる）。これにより画面文言の「キーワード一致で表示しています」が常に真になる。採点・選抜は `domain/SearchKeywordMatching.kt` の純関数が持ち、フォールバック（0件は落とす）と再現率カット（Nanoへ渡すので0件も残す）で戻り値の扱いを分けている。1文字クエリはbigramを作れないため部分一致で救済する。
 
 ランダムモードはAIを使用せず、`shuffled().take(3)` で選ぶ。
+
+検索とランダムは同じ `searchState` を更新するため、`SearchController` は `searchJob` 1本と `activeRequestId` を共有し、新しい要求が前の要求をキャンセルする。`SearchPickerUseCase` は結果型（`PickerResult`）でエラーを返す設計だが、`CancellationException` だけは畳まず再throwする（畳むと中断せず正常に戻り、追い越された古い要求がエラー表示になるため）。
 
 ### 6.6 セクションAI
 
@@ -791,7 +797,7 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 BUILD SUCCESSFUL
 ```
 
-2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を確認した。
+2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を確認した（Phase 3時点）。
 
 その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加し、**現在は43ファイル・379ケース全件グリーン**。13.1の表は2026-07-26に実行結果XMLと突合して更新した。
 
@@ -816,7 +822,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の352テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
+現在の379テストは、Android依存の薄い純粋ロジックの回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。**`NoteViewModel` は1件も通っていない**（依存を内部生成しており差し替え口が無いため）。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
 
 ---
 
@@ -834,7 +840,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 
 3. **AI非依存の価値を残している**
 
-   関連ノートはwikilinkとファイル名規則で動作し、検索にはランダムモードと限定的フォールバックがある。
+   関連ノートはwikilinkとファイル名規則で動作し、検索にはランダムモードとキーワード一致フォールバック（bigramスコア順・0件は返さない）がある。
 
 4. **端末負荷への配慮がある**
 
@@ -864,6 +870,11 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 | 低 | Markdownが限定実装 | ordered list番号、クリック可能リンク、画像、埋め込み、数式などは未対応 |
 | 低 | 削除失敗の通知不足 | 補記削除失敗時に明示メッセージがない |
 | 低 | 状態取得失敗と非対応の同一視 | AI状態確認の一時エラーも「利用不可」として扱われる |
+| 中 | パッケージ間の依存が循環 | レイヤー別に整理したが依存の向きは制約されておらず、`model ⇄ data` / `model ⇄ domain` / `domain ⇄ ai` の3組が残る。機能追加時の影響範囲が読めない |
+| 中 | `NoteViewModel` がテスト不能 | 依存を内部生成しており差し替え口が無い。JVMテスト379件が1件も `NoteViewModel` を通っておらず、Controller間の調停は無検証 |
+| 中 | 単一 UiState の共有所有 | 17フィールドを6 Controller 全員が `update` する。担当外フィールドを書けること、`darkTheme` 購読のため最上位から再評価が走ることの2点 |
+| 低 | ライト配色のAA未達 | 明暗の全トークンを実測した結果、ライトの文字6色（2.46〜4.43）と緑ボタンの塗りが基準割れ。ダークは全て基準内。`AppColorContrastTest` は既知未達を「失敗させず記録する」形で固定しているため、**テスト全緑はAA準拠を意味しない** |
+| 低 | `applicationId` が初期値 | `com.example.newproject` のまま。Play Store公開後は変更できない |
 
 ---
 
@@ -875,14 +886,16 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 2. （実装済み・2026-07-25）Sessionの pause/resume を実装し、背面時間を10秒判定から除外した。背面化で書いた訪問は復帰後の読み進めで差し替え、閲覧回数が膨らまないようにした。
 3. （実装済み・2026-07-25）ReadingTraceの保存要求へVaultキーを持たせ、書込直前の照合で旧痕跡が新Vaultへ到達しないようにした。
 4. （実装済み・2026-07-25）`SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、一致0件は返さないことでUI文言と一致させた。
-5. 検索にもJobまたはrequest IDを導入し、最後の要求だけが状態を更新できるようにする（クイズ・補記・蒸留は導入済み）。
-6. `CancellationException` の再throw方針を全非同期処理で統一する。
-7. `PromptBuilder` の出力契約、`SearchPickerUseCase` のAI応答解釈、Controller状態遷移のユニットテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
+5. （実装済み・2026-07-26）`SearchController` に `activeRequestId` と `searchJob` を導入し、最後の要求だけが `searchState` を更新するようにした。検索とランダムはJobを共有する。
+6. （一部実装済み・2026-07-26）`SearchPickerUseCase` の `CancellationException` 握りつぶしを解消した。結果型でエラーを返すUseCaseは、キャンセルだけ例外のまま通さないと呼び出し側の `catch` では防げない。補記一覧／削除と要約側のモデルDL Jobは未保護のまま。
+7. `NoteViewModel` の依存生成をFactoryまたはコンストラクタ境界へ出し、Controller間の調停をテスト可能にする。あわせて `PromptBuilder` の出力契約、`SearchPickerUseCase` のAI応答解釈のテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
 8. Fake `ContentResolver` またはinstrumentationテストで、Vault走査・補記保存・削除に加え、ReadingTraceのActivity lifecycle・Vault切替・外部同期を検証する。
 9. ReadingTrace索引にミス時再走査またはTTLを設け、保持履歴30件とは別に累計訪問数を扱う。
 10. AI入力を単純な先頭切り出しから、見出し・冒頭・末尾・重要語を考慮した抽出へ発展させる。
 11. （実装済み）AI推薦の同名ノート解決に一意な候補ID（`C01..` / `idToNote`）を導入した。決定的チャンネル・除外判定の正規化タイトル集合は同名畳み込みが残るため、必要ならそちらも一意化する。
 12. AI非対応・モデル未準備・一時エラーのUXを要約・検索・クイズ・補記で統一する。
+13. 許可するパッケージ依存方向を決めて明文化し、`NoteUiState` が抱える `data` / `domain` 型の所属を見直す。
+14. ライト配色のAA未達（文字6色・緑ボタン）を、無彩色グレー5段階の整理と同時に是正する。
 
 ---
 
@@ -904,6 +917,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 2026-07-26（同日・4回目）の更新は、Summaryを正面＋片翼ポーズから、胴体と足を三分の二横向きにして頭をこちらへ戻す自然な案内姿勢へ置換した。起動OPは先行点灯用の目レイヤーを本体登場時に消し、退場時に目だけ残って見える現象を解消。引き継ぎテスト1件を追加し、`testDebugUnitTest`全344件、`assembleDebug`、接続実機へのAPKインストールに成功した。
 - 2026-07-26（同日・5回目）の更新は、起動OPの目専用Canvasレイヤーと対応する`eyeAlpha`／焦点／パルス状態を完全削除した。演出をハロー→完成WebP全身→名称へ簡潔化し、目だけが残る余地を構造的になくした。テスト8件は新タイムラインの登場順・保持・退場へ置換し、全344件成功と`assembleDebug`成功を確認した。
 - 2026-07-26（同日・6回目）の更新は、アプリ内Vigilith Phase 3を反映した。ドラッグ位置を配置可能領域内の相対座標で保存し、四辺clamp、Fold開閉・回転・状態ラベル変更後の再配置、NavigationBar / Rail、Snackbar、IMEの予約領域を実装。TalkBackは可視ラベルとの二重フォーカスをなくし、76×93dpの本体ボタンへ状態・操作・対象節を集約した。本番Kotlin 65ファイル・11,723行、テスト41ファイル・352ケースへ再測定し、全テスト・`assembleDebug`・Pixel 10 Pro FoldへのAPKインストールに成功した。端末の認証ロックによりアプリ画面の最終目視は未完了。
+- 2026-07-26（同日・7回目）の更新は、ダークモード実装・テーマ基盤リファクタ（R-1〜R-4）・パッケージのレイヤー別整理（PR #37）・軽量課題5件・検索の世代管理までを反映した。**§3 のファイル構成が PR #37 前のフラット構成のまま**で、`SearchController.kt` や `NoteUiState.kt` をルート直下に記載するなど実態と大きく乖離していたため、実ファイル一覧と突合して全面的に書き直した（70ファイル全件が一致することを機械的に確認）。また §6.5 に PR #35 で解消済みの旧フォールバック仕様（「候補40件以下では先頭3件を返すため画面文言と一致しない」）が残っていたため実装へ合わせた。§4.3 に `darkTheme` と `isSectionChatSheetVisible` の2フィールドが欠けていた点、§5.3 のオプション画面にダークモード切替が無かった点も補った。本番Kotlin 70ファイル・12,535行、テスト43ファイル・379ケースへ再測定し、`testDebugUnitTest` と `lintDebug` の成功を確認した（Lint 0 error / 28 warning）。CIは §13.3 を参照。
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 
   ```bash
