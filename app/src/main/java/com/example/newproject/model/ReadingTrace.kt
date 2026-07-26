@@ -1,6 +1,5 @@
 package com.example.newproject.model
 
-import com.example.newproject.data.ReadingTraceJson
 // ---------------------------------------------------------------------------
 // ReadingTrace（読書痕跡）のデータモデル。
 //
@@ -8,7 +7,7 @@ import com.example.newproject.data.ReadingTraceJson
 // 溜まり、Rediscover で再会した時に「前回の自分はこう読んでいた」を見せる。
 // AIの役割は問いの創作ではなく、溜まった訪問の俯瞰要約のみ。
 //
-// checksum はこのモデルには持たせない（保存形式の関心事なので ReadingTraceJson が
+// checksum はこのモデルには持たせない（保存形式の関心事なので `ReadingTraceJson` が
 // encode 時に付与し decode 時に検証する）。
 // ---------------------------------------------------------------------------
 

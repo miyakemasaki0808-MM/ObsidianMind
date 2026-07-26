@@ -1,6 +1,5 @@
 package com.example.newproject.domain.markdown
 
-import com.example.newproject.ui.markdown.MarkdownNoteContent
 /**
  * ノート本文のセクション（見出し＋その配下）。
  * text は LLM に渡すための再構成済み Markdown。
@@ -19,7 +18,7 @@ data class NoteSection(
 class NoteSectionModel internal constructor(
     private val headingBlockIndices: List<Int>,
     val sections: List<NoteSection>,
-    // 描画側（MarkdownNoteContent）で再パースせず使い回すためのパース済みブロック列
+    // 描画側（`MarkdownNoteContent`）で再パースせず使い回すためのパース済みブロック列
     internal val blocks: List<MarkdownBlock>
 ) {
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */

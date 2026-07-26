@@ -1,11 +1,10 @@
 package com.example.newproject.domain
 
-import com.example.newproject.controller.AnnotationController
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 // 補記メモの生成結果を検証し、保存用Markdownへ整形する純粋ロジック。
-// AI呼び出しやファイルI/Oは持たない（AnnotationController が担当）。
+// AI呼び出しやファイルI/Oは持たない（`AnnotationController` が担当）。
 internal object AnnotationComposer {
 
     // メイン（viewModelScope）からのみ使う前提。SimpleDateFormat はスレッド非安全のため
