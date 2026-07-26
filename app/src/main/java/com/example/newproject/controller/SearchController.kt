@@ -69,8 +69,23 @@ class SearchController(
         }
     }
 
+    /**
+     * 検索スコープ（フォルダ）を切り替える。
+     *
+     * 進行中の検索・ランダムは走査対象のスコープごと変わるため、ここで無効化する。
+     * [startRequest] で採番を進めておくと、走行中の要求が結果を持ち帰っても
+     * [setStateIfCurrent] の照合で弾かれる（`cancel()` だけでは足りない理由は同KDoc参照）。
+     *
+     * 表示中の結果も前のスコープのものなので `Idle` へ戻す。同じchipの再タップでは
+     * 何も起きないようにして、取り違えで結果を失わないようにする。
+     */
     fun selectFolder(folder: NoteFolder?) {
-        uiState.update { current -> current.copy(selectedFolder = folder) }
+        if (uiState.value.selectedFolder?.documentId == folder?.documentId) return
+        startRequest()
+        searchJob = null
+        uiState.update { current ->
+            current.copy(selectedFolder = folder, searchState = SearchState.Idle)
+        }
     }
 
     // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
