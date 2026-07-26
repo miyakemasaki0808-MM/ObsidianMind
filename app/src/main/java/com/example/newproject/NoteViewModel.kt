@@ -50,8 +50,15 @@ class NoteViewModel internal constructor(
     private val relatedNotesUseCase = dependencies.relatedNotesUseCase
     private val vaultLocation = dependencies.vaultLocation
 
+    /**
+     * ノート単位ジョブを載せるスコープ。既定は `viewModelScope` で、
+     * 差し替えられるのはテスト（`TestScope`）のため。
+     * 痕跡の書き出しだけは寿命が違うので [readingTraceWriteScope] を使う。
+     */
+    private val scope: CoroutineScope = dependencies.scope ?: viewModelScope
+
     private val session = NoteSessionCoordinator(
-        scope = viewModelScope,
+        scope = scope,
         persistScope = readingTraceWriteScope,
         repository = dependencies.repository,
         aiClient = dependencies.aiClient,
@@ -143,9 +150,8 @@ class NoteViewModel internal constructor(
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultLocation.uri ?: return
-        session.cancelNoteScopedJobs()
-        noteLoadJob = viewModelScope.launch {
-            session.beginNoteLoad()
+        session.onNoteChanged()
+        noteLoadJob = scope.launch {
             try {
                 val notes = collectAllNotesCached(contentResolver, uri)
                 if (notes.isEmpty()) {
@@ -173,9 +179,8 @@ class NoteViewModel internal constructor(
     }
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
-        session.cancelNoteScopedJobs()
-        noteLoadJob = viewModelScope.launch {
-            session.beginNoteLoad()
+        session.onNoteChanged()
+        noteLoadJob = scope.launch {
             try {
                 val loaded = loadNoteForDistill(contentResolver, note.title, note.uri)
                 // RelatedNote は相対パスを持たない。キャッシュにあれば即使い、無ければ
@@ -408,7 +413,7 @@ class NoteViewModel internal constructor(
 
     private fun fetchRelatedNotes(title: String, content: String) {
         relatedNotesJob?.cancel()
-        relatedNotesJob = viewModelScope.launch {
+        relatedNotesJob = scope.launch {
             session.setRelatedNotesState(RelatedNotesState.Loading)
 
             // さがすタブ等、loadRandomNote を経由しない導線では未収集のことがあるため補填する

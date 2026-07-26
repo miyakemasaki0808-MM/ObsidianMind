@@ -19,6 +19,7 @@ import com.example.newproject.data.VaultLocation
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
+import kotlinx.coroutines.CoroutineScope
 import java.io.File
 
 /**
@@ -45,7 +46,13 @@ internal class NoteViewModelDependencies(
      * Vaultの現在地。ViewModel と痕跡のSAFゲートウェイが**同じ実体**を見る必要がある
      * （書き込み時点のVaultを引き直すため）。共有先をここで固定する。
      */
-    val vaultLocation: VaultLocation
+    val vaultLocation: VaultLocation,
+    /**
+     * ノート単位ジョブを載せるスコープ。null なら `viewModelScope` を使う。
+     * 既定を null にしているのは、`viewModelScope` が ViewModel の生成後にしか
+     * 参照できず、依存の組み立て時点では決められないため。
+     */
+    val scope: CoroutineScope? = null
 ) {
     companion object {
         /** 本番の組み立て。1つの [AiClient] を全機能で共有する（生成はその中でMutex直列化される）。 */

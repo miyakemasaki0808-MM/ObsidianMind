@@ -18,7 +18,9 @@ import com.example.newproject.model.RelatedNotesState
 import com.example.newproject.model.resetNoteScopedStates
 import com.example.newproject.model.resetVaultScopedStates
 import com.example.newproject.model.withDistillBodyReloaded
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,10 +70,24 @@ internal class NoteSessionCoordinator(
      * 契約 [cancelNoteScopedJobs] を1箇所に保つために、Controller の外にあるジョブも
      * ここから呼ぶ。ノート単位のジョブを ViewModel に足したらここへ登録する。
      */
-    private val cancelHostJobs: () -> Unit = {}
+    private val cancelHostJobs: () -> Unit = {},
+    /**
+     * 状態の初期値。本番は既定の [NoteUiState] のまま使う。
+     * テストが「切替前にすべてのControllerが非初期値」の状況を作るための差し込み口で、
+     * `Uri` を要する状態（補記の保存先など）を外から与えられるようにしている。
+     */
+    initialState: NoteUiState = NoteUiState(),
+    /**
+     * 読書時間の計測に使う時計と、痕跡I/Oのディスパッチャ。
+     * [ReadingTraceController] が同じ理由で持っているものをここから差し込めるようにしている
+     * （Vault切替でセッションが捨てられること・照合の後着が止まることは、
+     * 時間を進められないと検証できない）。
+     */
+    clock: () -> Long = System::currentTimeMillis,
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
 
-    private val _uiState = MutableStateFlow(NoteUiState())
+    private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<NoteUiState> = _uiState.asStateFlow()
 
     /**
@@ -125,7 +141,9 @@ internal class NoteSessionCoordinator(
         aiClient = aiClient,
         uiState = _uiState,
         persistence = readingTracePersistence,
-        currentVaultKey = currentVaultKey
+        currentVaultKey = currentVaultKey,
+        clock = clock,
+        ioDispatcher = ioDispatcher
     )
 
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
@@ -186,8 +204,15 @@ internal class NoteSessionCoordinator(
 
     // ── ノートのライフサイクル ──────────────────────────────────────────────
 
-    /** ノート読込の開始。ジョブ停止は呼び出し側が [cancelNoteScopedJobs] で先に行う。 */
-    fun beginNoteLoad() {
+    /**
+     * ノートを離れて次のノートの読込を始める。**ジョブ停止と状態リセットは必ずここで対になる。**
+     *
+     * 呼び出し側で2手に分けると、片方だけを消しても動いてしまい
+     * 「旧ノートのAI結果が新しいノートの画面へ後着する」型のバグが復活する。
+     * 実際この対を崩したことが過去の不具合の原因になっている。
+     */
+    fun onNoteChanged() {
+        cancelNoteScopedJobs()
         _uiState.update { current ->
             current.resetNoteScopedStates().copy(noteState = NoteState.Loading)
         }
