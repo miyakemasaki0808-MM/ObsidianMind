@@ -117,9 +117,9 @@ class AnnotationController(
     /** 完了・エラー通知を確認済みにする。結果自体は同じノート内で保持する。 */
     fun markViewed() {
         state.update { current ->
-            val next = when (val state = current.annotationState) {
-                is AnnotationState.Success -> state.copy(isViewed = true)
-                is AnnotationState.Error -> state.copy(isViewed = true)
+            val next = when (val annotation = current.annotationState) {
+                is AnnotationState.Success -> annotation.copy(isViewed = true)
+                is AnnotationState.Error -> annotation.copy(isViewed = true)
                 else -> return@update current
             }
             current.copy(annotationState = next)
