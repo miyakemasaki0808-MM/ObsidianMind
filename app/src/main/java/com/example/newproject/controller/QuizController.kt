@@ -1,9 +1,11 @@
 package com.example.newproject.controller
 
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.domain.profileQuizInput
 import com.example.newproject.domain.toObsidianNoteTitle
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.QuizStateWriter
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
@@ -98,7 +100,7 @@ class QuizController(
         try {
             val prompt = PromptBuilder.buildQuizPrompt(
                 sourceLabel = request.title,
-                content = request.content,
+                excerpt = buildNoteExcerpt(request.content, NoteExcerptLimits.QUIZ),
                 format = request.format
             )
             val raw = aiClient.generate(prompt)

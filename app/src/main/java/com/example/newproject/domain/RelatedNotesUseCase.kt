@@ -7,6 +7,7 @@ import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteMeta
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.RelatedNote
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -128,7 +129,7 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                     )
                     val prompt = PromptBuilder.buildRelatedNotesPrompt(
                         currentTitle = currentTitle,
-                        currentContent = currentContent,
+                        currentExcerpt = buildNoteExcerpt(currentContent, NoteExcerptLimits.RELATED),
                         candidates = candidateLines
                     )
                     val response = aiClient.generate(prompt)

@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
 
 sealed class SummaryResult {
@@ -19,7 +20,10 @@ class SummarizeUseCase(private val aiClient: AiClient) {
             AiAvailability.Unavailable   -> SummaryResult.AiUnavailable
             AiAvailability.NeedsDownload -> SummaryResult.AiNeedsDownload
             AiAvailability.Available     -> try {
-                val prompt = PromptBuilder.buildSummarizePrompt(title, content)
+                val prompt = PromptBuilder.buildSummarizePrompt(
+                    title,
+                    buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
+                )
                 val summary = aiClient.generate(prompt)
                 SummaryResult.Success(summary.trim())
             } catch (e: CancellationException) {

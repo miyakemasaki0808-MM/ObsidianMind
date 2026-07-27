@@ -3,7 +3,9 @@ package com.example.newproject.controller
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.AnnotationComposer
+import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.toObsidianNoteTitle
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.AnnotationStateWriter
@@ -239,7 +241,7 @@ class AnnotationController(
             val fileTimestamp = AnnotationComposer.FILE_TIMESTAMP_FORMAT.format(Date())
             val prompt = PromptBuilder.buildAnnotationPrompt(
                 title = annotation.title,
-                content = annotation.content,
+                excerpt = buildNoteExcerpt(annotation.content, NoteExcerptLimits.ANNOTATION),
                 summary = annotation.summary,
                 relatedTitles = annotation.relatedNotes.map { it.title.toObsidianNoteTitle() },
                 aiRecommendedTitles = annotation.aiNotes.map { it.title.toObsidianNoteTitle() },

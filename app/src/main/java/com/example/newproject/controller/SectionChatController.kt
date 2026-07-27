@@ -7,7 +7,9 @@ import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -54,7 +56,12 @@ class SectionChatController(
                 AiAvailability.Available -> {
                     try {
                         val summary = aiClient
-                            .generate(PromptBuilder.buildSectionSummaryPrompt(section.title, section.text))
+                            .generate(
+                                PromptBuilder.buildSectionSummaryPrompt(
+                                    section.title,
+                                    buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                                )
+                            )
                             .trim()
                         updateChat {
                             it.copy(
@@ -97,7 +104,10 @@ class SectionChatController(
                 val answer = aiClient.generate(
                     PromptBuilder.buildSectionChatPrompt(
                         sectionTitle = chat.sectionTitle,
-                        sectionText = chat.sectionContext,
+                        sectionExcerpt = buildNoteExcerpt(
+                            chat.sectionContext,
+                            NoteExcerptLimits.SECTION
+                        ),
                         history = history,
                         question = question
                     )
@@ -155,7 +165,10 @@ class SectionChatController(
     private suspend fun fetchSuggestions(section: NoteSection) {
         try {
             val raw = aiClient.generate(
-                PromptBuilder.buildSectionSuggestionsPrompt(section.title, section.text)
+                PromptBuilder.buildSectionSuggestionsPrompt(
+                    section.title,
+                    buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                )
             )
             val questions = raw.lineSequence()
                 .map { it.trim().removePrefix("-").trim().trim('"').trim() }
