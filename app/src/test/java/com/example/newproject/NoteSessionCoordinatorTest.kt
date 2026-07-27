@@ -513,7 +513,10 @@ class NoteSessionCoordinatorTest {
             persistScope = scope,
             repository = NoteRepository(),
             aiClient = ai,
-            summarizeUseCase = SummarizeUseCase(ai),
+            summarizeUseCase = SummarizeUseCase(
+                ai,
+                excerptDispatcher = StandardTestDispatcher(scope.testScheduler)
+            ),
             searchPickerUseCase = SearchPickerUseCase(ai),
             distillPersistence = distill,
             readingTracePersistence = trace,

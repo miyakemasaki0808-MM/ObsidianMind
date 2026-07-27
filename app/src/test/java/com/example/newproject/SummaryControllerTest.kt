@@ -170,7 +170,10 @@ class SummaryControllerTest {
         onModelReady: (String, String) -> Unit = { _, _ -> }
     ) = SummaryController(
         scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
-        summarizeUseCase = SummarizeUseCase(ai),
+        summarizeUseCase = SummarizeUseCase(
+            ai,
+            excerptDispatcher = StandardTestDispatcher(testScheduler)
+        ),
         aiClient = ai,
         state = state.summaryWriter,
         onModelReady = onModelReady

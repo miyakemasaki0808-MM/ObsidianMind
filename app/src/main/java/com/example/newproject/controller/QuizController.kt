@@ -14,9 +14,12 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 入力内容に応じた○×・3択・4択Q&Aのバックグラウンド生成と結果の確認状態を担当する。
@@ -27,7 +30,8 @@ import kotlinx.coroutines.launch
 class QuizController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    private val state: QuizStateWriter
+    private val state: QuizStateWriter,
+    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var pending: PendingQuiz? = null
     private var generateJob: Job? = null
@@ -98,9 +102,12 @@ class QuizController(
 
     private suspend fun generateWithAvailableModel(request: PendingQuiz) {
         try {
+            val excerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(request.content, NoteExcerptLimits.QUIZ)
+            }
             val prompt = PromptBuilder.buildQuizPrompt(
                 sourceLabel = request.title,
-                excerpt = buildNoteExcerpt(request.content, NoteExcerptLimits.QUIZ),
+                excerpt = excerpt,
                 format = request.format
             )
             val raw = aiClient.generate(prompt)
