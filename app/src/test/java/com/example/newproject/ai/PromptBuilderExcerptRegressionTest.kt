@@ -1,8 +1,11 @@
 package com.example.newproject.ai
 
 import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.QuizFormat
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -192,4 +195,45 @@ class PromptBuilderExcerptRegressionTest {
             )
         )
     }
+
+    @Test
+    fun `7プロンプトは抜粋時だけ注意書きを出す`() {
+        val abridgedPrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = true))
+        val completePrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = false))
+
+        assertEquals(7, abridgedPrompts.size)
+        abridgedPrompts.forEach { prompt ->
+            assertTrue(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE))
+        }
+        completePrompts.forEach { prompt ->
+            assertFalse(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE))
+        }
+    }
+
+    private fun buildAllExcerptPrompts(value: NoteExcerpt): List<String> = listOf(
+        PromptBuilder.buildSummarizePrompt("題名", value),
+        PromptBuilder.buildRelatedNotesPrompt(
+            currentTitle = "題名",
+            currentExcerpt = value,
+            candidates = listOf(RelatedCandidateLine("C01", "候補"))
+        ),
+        PromptBuilder.buildQuizPrompt("題名", value, QuizFormat.TrueFalse),
+        PromptBuilder.buildAnnotationPrompt(
+            title = "題名",
+            excerpt = value,
+            summary = null,
+            relatedTitles = emptyList(),
+            aiRecommendedTitles = emptyList(),
+            wikilinkTitles = emptySet(),
+            createdAt = "2026-07-27"
+        ),
+        PromptBuilder.buildSectionSummaryPrompt("節", value),
+        PromptBuilder.buildSectionSuggestionsPrompt("節", value),
+        PromptBuilder.buildSectionChatPrompt(
+            sectionTitle = "節",
+            sectionExcerpt = value,
+            history = emptyList(),
+            question = "質問"
+        )
+    )
 }

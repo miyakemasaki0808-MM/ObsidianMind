@@ -3,6 +3,7 @@ package com.example.newproject.ai
 import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 
@@ -40,7 +41,7 @@ object PromptBuilder {
 
             Note title: $title
             Note content:
-            ${excerpt.text}
+            ${excerpt.renderForPrompt()}
         """.trimIndent()
     }
 
@@ -96,7 +97,7 @@ object PromptBuilder {
 
             Current note title: $currentTitle
             Current note content snippet:
-            ${currentExcerpt.text}
+            ${currentExcerpt.renderForPrompt()}
 
             Candidates:
             $candidateList
@@ -210,7 +211,7 @@ object PromptBuilder {
 
             Source: $sourceLabel
             --- BEGIN EXCERPT ---
-            ${excerpt.text}
+            ${excerpt.renderForPrompt()}
             --- END EXCERPT ---
         """.trimIndent()
     }
@@ -271,7 +272,7 @@ object PromptBuilder {
             $wikilinkText
 
             Current note content snippet:
-            ${excerpt.text}
+            ${excerpt.renderForPrompt()}
         """.trimIndent()
     }
 
@@ -284,7 +285,7 @@ object PromptBuilder {
 
             Section heading: $sectionTitle
             Section content:
-            ${sectionExcerpt.text}
+            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
     }
 
@@ -296,7 +297,7 @@ object PromptBuilder {
 
             Section heading: $sectionTitle
             Section content:
-            ${sectionExcerpt.text}
+            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
     }
 
@@ -317,7 +318,7 @@ object PromptBuilder {
 
             Section heading: $sectionTitle
             Section content:
-            ${sectionExcerpt.text}
+            ${sectionExcerpt.renderForPrompt()}
 
             Conversation so far:
             $historyText
@@ -331,6 +332,13 @@ object PromptBuilder {
         takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { "- $it" }
             ?: emptyText
+
+    private fun NoteExcerpt.renderForPrompt(): String =
+        if (isAbridged) {
+            "${NoteExcerptLimits.ABRIDGED_NOTICE}\n$text"
+        } else {
+            text
+        }
 
 }
 
