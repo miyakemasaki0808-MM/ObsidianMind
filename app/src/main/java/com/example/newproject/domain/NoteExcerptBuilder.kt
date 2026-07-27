@@ -28,17 +28,18 @@ private const val MIN_OUTLINE_HEADING_CHARS = 16
  * コードフェンス言語名の除去、段落内改行の空白化が起きる。短いノートとの非対称は、
  * 超過した入力だけを圧縮する仕様として受け入れる。
  *
- * 戻り値は `text.length + ABRIDGED_NOTICE.length <= budget` を満たす。注意書き自体を
- * 収められない予算で長文を切ることはできないため、その場合は引数を拒否する。
+ * 戻り値は `text.length + ABRIDGED_NOTICE_PREFIX.length <= budget` を満たす。注意書きと
+ * 本文をつなぐ改行まで収められない予算で長文を切ることはできないため、その場合は
+ * 引数を拒否する。
  */
 fun buildNoteExcerpt(content: String, budget: Int): NoteExcerpt {
     require(budget >= 0) { "budget must be non-negative" }
     if (content.length <= budget) return NoteExcerpt(content, isAbridged = false)
-    require(budget >= NoteExcerptLimits.ABRIDGED_NOTICE.length) {
-        "budget must fit the abridged notice"
+    require(budget >= NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length) {
+        "budget must fit the abridged notice and separator"
     }
 
-    val textBudget = budget - NoteExcerptLimits.ABRIDGED_NOTICE.length
+    val textBudget = budget - NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length
     val blocks = parseMarkdownBlocks(content)
     if (blocks.isEmpty() || textBudget == 0) {
         return NoteExcerpt(

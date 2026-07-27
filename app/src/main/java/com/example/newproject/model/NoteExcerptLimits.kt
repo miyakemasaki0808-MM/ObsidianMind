@@ -14,6 +14,10 @@ object NoteExcerptLimits {
     const val QUIZ = 1200
 
     const val ABRIDGED_NOTICE =
-        "The following content is an abridged excerpt composed of the note outline, beginning, " +
-            "and ending; omitted parts are marked with (omitted). Do not assume it is continuous or complete."
+        "The following content has been compacted and may combine a note outline with excerpts " +
+            "from the beginning and ending. A (omitted) marker denotes a skipped span when present. " +
+            "Do not assume the content is continuous or complete."
+
+    /** 注意書きと本文をつなぐ改行まで含め、抜粋予算と描画で共有する。 */
+    const val ABRIDGED_NOTICE_PREFIX = ABRIDGED_NOTICE + "\n"
 }

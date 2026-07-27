@@ -335,7 +335,7 @@ object PromptBuilder {
 
     private fun NoteExcerpt.renderForPrompt(): String =
         if (isAbridged) {
-            "${NoteExcerptLimits.ABRIDGED_NOTICE}\n$text"
+            NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX + text
         } else {
             text
         }

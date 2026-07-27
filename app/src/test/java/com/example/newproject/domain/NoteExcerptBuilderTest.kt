@@ -241,7 +241,7 @@ class NoteExcerptBuilderTest {
 
     @Test
     fun `注意書きを収められない予算での切り出しは拒否する`() {
-        val tooSmall = NoteExcerptLimits.ABRIDGED_NOTICE.length - 1
+        val tooSmall = NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length - 1
         val content = "x".repeat(tooSmall + 1)
 
         val error = runCatching { buildNoteExcerpt(content, tooSmall) }.exceptionOrNull()
@@ -255,9 +255,10 @@ class NoteExcerptBuilderTest {
     }
 
     private fun assertWithinBudget(excerpt: NoteExcerpt, expectedBudget: Int) {
-        val noticeLength = if (excerpt.isAbridged) NoteExcerptLimits.ABRIDGED_NOTICE.length else 0
+        val noticeLength = if (excerpt.isAbridged) NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length else 0
         assertTrue(
-            "抜粋と注意書きが予算を超えています: ${excerpt.text.length} + $noticeLength > $expectedBudget",
+            "抜粋と注意書き・区切りが予算を超えています: " +
+                "${excerpt.text.length} + $noticeLength > $expectedBudget",
             excerpt.text.length + noticeLength <= expectedBudget
         )
     }

@@ -198,12 +198,13 @@ class PromptBuilderExcerptRegressionTest {
 
     @Test
     fun `7プロンプトは抜粋時だけ注意書きを出す`() {
+        assertTrue(NoteExcerptLimits.ABRIDGED_NOTICE.contains("when present"))
         val abridgedPrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = true))
         val completePrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = false))
 
         assertEquals(7, abridgedPrompts.size)
         abridgedPrompts.forEach { prompt ->
-            assertTrue(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE))
+            assertTrue(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX + "本文"))
         }
         completePrompts.forEach { prompt ->
             assertFalse(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE))
