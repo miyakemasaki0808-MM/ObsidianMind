@@ -2,7 +2,7 @@
 
 **対象領域:** 7つのプロンプトへ渡す「本文」の作り方（用途別の文字数上限と、その中身の選び方）
 **初版:** 2026-07-28（先頭固定長切り出しの解消）
-**状態:** 実装済み・**実機確認待ち**。予算値の見直しと、関連ノートのフォーカスセクション文脈は意図的に別作業として切り離した。
+**状態:** 実装済み・**実機確認済み（2026-07-28・[PR #43](https://github.com/miyakemasaki0808-MM/ObsidianMind/pull/43)）**。予算値の見直しと、関連ノートのフォーカスセクション文脈は意図的に別作業として切り離した。
 
 - **今どうなっているか**は [source_code_analysis.md](../source_code_analysis.md) §8.4、**いつ変えたか**は [change_history.md](../change_history.md) を参照。
 - 対象コード: `model/NoteExcerpt.kt`・`model/NoteExcerptLimits.kt`・`domain/NoteExcerptBuilder.kt`・`ai/PromptBuilder.kt`。
