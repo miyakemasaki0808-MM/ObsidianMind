@@ -7,11 +7,16 @@ import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * セクション単位のAIチャット（吹き出し→ボトムシート）を担当する。
@@ -20,7 +25,8 @@ import kotlinx.coroutines.launch
 class SectionChatController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    private val state: SectionChatStateWriter
+    private val state: SectionChatStateWriter,
+    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     // 前のセクションの生成が後から届いて新しいシートを上書きしないよう保持する
     private var openJob: Job? = null
@@ -53,8 +59,16 @@ class SectionChatController(
                     updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
                 AiAvailability.Available -> {
                     try {
+                        val sectionExcerpt = withContext(excerptDispatcher) {
+                            buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                        }
                         val summary = aiClient
-                            .generate(PromptBuilder.buildSectionSummaryPrompt(section.title, section.text))
+                            .generate(
+                                PromptBuilder.buildSectionSummaryPrompt(
+                                    section.title,
+                                    sectionExcerpt
+                                )
+                            )
                             .trim()
                         updateChat {
                             it.copy(
@@ -94,10 +108,13 @@ class SectionChatController(
                 return@launch
             }
             try {
+                val sectionExcerpt = withContext(excerptDispatcher) {
+                    buildNoteExcerpt(chat.sectionContext, NoteExcerptLimits.SECTION)
+                }
                 val answer = aiClient.generate(
                     PromptBuilder.buildSectionChatPrompt(
                         sectionTitle = chat.sectionTitle,
-                        sectionText = chat.sectionContext,
+                        sectionExcerpt = sectionExcerpt,
                         history = history,
                         question = question
                     )
@@ -154,8 +171,14 @@ class SectionChatController(
 
     private suspend fun fetchSuggestions(section: NoteSection) {
         try {
+            val sectionExcerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+            }
             val raw = aiClient.generate(
-                PromptBuilder.buildSectionSuggestionsPrompt(section.title, section.text)
+                PromptBuilder.buildSectionSuggestionsPrompt(
+                    section.title,
+                    sectionExcerpt
+                )
             )
             val questions = raw.lineSequence()
                 .map { it.trim().removePrefix("-").trim().trim('"').trim() }

@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.RelatedCandidateLine
+import com.example.newproject.model.NoteExcerpt
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -32,7 +33,7 @@ class RelatedCandidateOrderingTest {
     fun `プロンプトはID付き候補を提示しIDだけ返させる（linked撤去）`() {
         val prompt = PromptBuilder.buildRelatedNotesPrompt(
             currentTitle = "現在ノート",
-            currentContent = "本文スニペット",
+            currentExcerpt = NoteExcerpt("本文スニペット", false),
             candidates = listOf(
                 RelatedCandidateLine("C01", "候補A"),
                 RelatedCandidateLine("C02", "候補B")

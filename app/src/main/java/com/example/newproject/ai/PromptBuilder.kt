@@ -1,9 +1,11 @@
 package com.example.newproject.ai
 
 import com.example.newproject.model.DistillCandidate
-import com.example.newproject.model.state.QuizFormat
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.state.QuizFormat
 
 private const val DISTILL_HEADING_LENGTH = 80
 
@@ -28,24 +30,18 @@ internal data class DistillPrompt(
 
 object PromptBuilder {
 
-    private const val CONTENT_SNIPPET_LENGTH = 1200
-    // 補記は入力が最大のプロンプト。入力を絞って生成時間とコンテキスト圧迫を抑える
-    private const val ANNOTATION_CONTENT_SNIPPET_LENGTH = 1500
-    private const val RELATED_CONTENT_SNIPPET_LENGTH = 600
-    private const val SECTION_SNIPPET_LENGTH = 1500
     private const val PICKER_TITLE_LIMIT = 40
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
 
-    fun buildSummarizePrompt(title: String, content: String): String {
-        val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+    fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         return """
             You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
 
             Note title: $title
             Note content:
-            $snippet
+            ${excerpt.renderForPrompt()}
         """.trimIndent()
     }
 
@@ -88,10 +84,9 @@ object PromptBuilder {
     // 絞り込み・並べ替え・上限はUseCase側が担い、ここでは整形のみ（上限で切らない）。
     fun buildRelatedNotesPrompt(
         currentTitle: String,
-        currentContent: String,
+        currentExcerpt: NoteExcerpt,
         candidates: List<RelatedCandidateLine>
     ): String {
-        val snippet = currentContent.take(RELATED_CONTENT_SNIPPET_LENGTH)
         val candidateList = candidates.joinToString("\n") { it.renderForPrompt() }
 
         return """
@@ -102,7 +97,7 @@ object PromptBuilder {
 
             Current note title: $currentTitle
             Current note content snippet:
-            $snippet
+            ${currentExcerpt.renderForPrompt()}
 
             Candidates:
             $candidateList
@@ -173,8 +168,7 @@ object PromptBuilder {
 
     // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
     // オンデバイスモデルの出力上限内へ収める。
-    fun buildQuizPrompt(sourceLabel: String, content: String, format: QuizFormat): String {
-        val snippet = content.take(CONTENT_SNIPPET_LENGTH)
+    fun buildQuizPrompt(sourceLabel: String, excerpt: NoteExcerpt, format: QuizFormat): String {
         val formatContract = when (format) {
             QuizFormat.TrueFalse -> """
                 Generate exactly 2 true-or-false statements about what the excerpt says.
@@ -217,21 +211,20 @@ object PromptBuilder {
 
             Source: $sourceLabel
             --- BEGIN EXCERPT ---
-            $snippet
+            ${excerpt.renderForPrompt()}
             --- END EXCERPT ---
         """.trimIndent()
     }
 
     fun buildAnnotationPrompt(
         title: String,
-        content: String,
+        excerpt: NoteExcerpt,
         summary: String?,
         relatedTitles: List<String>,
         aiRecommendedTitles: List<String>,
         wikilinkTitles: Set<String>,
         createdAt: String
     ): String {
-        val snippet = content.take(ANNOTATION_CONTENT_SNIPPET_LENGTH)
         val summaryText = summary?.takeIf { it.isNotBlank() } ?: "なし"
         val relatedText = relatedTitles.asBulletList("関連ノートなし")
         val aiRecommendedText = aiRecommendedTitles.asBulletList("AI推薦ノートなし")
@@ -279,26 +272,24 @@ object PromptBuilder {
             $wikilinkText
 
             Current note content snippet:
-            $snippet
+            ${excerpt.renderForPrompt()}
         """.trimIndent()
     }
 
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
 
-    fun buildSectionSummaryPrompt(sectionTitle: String, sectionText: String): String {
-        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
+    fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
         return """
             You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
 
             Section heading: $sectionTitle
             Section content:
-            $snippet
+            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
     }
 
-    fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionText: String): String {
-        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
+    fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
         return """
             You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
             Answer in the same language as the section content.
@@ -306,17 +297,16 @@ object PromptBuilder {
 
             Section heading: $sectionTitle
             Section content:
-            $snippet
+            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
     }
 
     fun buildSectionChatPrompt(
         sectionTitle: String,
-        sectionText: String,
+        sectionExcerpt: NoteExcerpt,
         history: List<Pair<String, String>>,
         question: String
     ): String {
-        val snippet = sectionText.take(SECTION_SNIPPET_LENGTH)
         val historyText = history
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { (role, text) -> "$role: $text" }
@@ -328,7 +318,7 @@ object PromptBuilder {
 
             Section heading: $sectionTitle
             Section content:
-            $snippet
+            ${sectionExcerpt.renderForPrompt()}
 
             Conversation so far:
             $historyText
@@ -342,6 +332,13 @@ object PromptBuilder {
         takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { "- $it" }
             ?: emptyText
+
+    private fun NoteExcerpt.renderForPrompt(): String =
+        if (isAbridged) {
+            NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX + text
+        } else {
+            text
+        }
 
 }
 

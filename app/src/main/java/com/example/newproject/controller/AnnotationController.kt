@@ -3,7 +3,9 @@ package com.example.newproject.controller
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.AnnotationComposer
+import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.toObsidianNoteTitle
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.AnnotationStateWriter
@@ -15,9 +17,12 @@ import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.RelatedNote
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.Date
 
 /**
@@ -34,7 +39,8 @@ class AnnotationController(
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 補記の作成は「ノート単位」で activeRequestId が見るが、一覧と削除は
     // 「Vault単位」で寿命が違う（補記管理画面はノート切替と無関係）。
-    private val vaultGeneration: () -> Long
+    private val vaultGeneration: () -> Long,
+    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     // モデルDL完了後に作成を再開するために保持
     private var pending: PendingAnnotation? = null
@@ -237,9 +243,12 @@ class AnnotationController(
         try {
             val displayTimestamp = AnnotationComposer.DISPLAY_TIMESTAMP_FORMAT.format(Date())
             val fileTimestamp = AnnotationComposer.FILE_TIMESTAMP_FORMAT.format(Date())
+            val excerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(annotation.content, NoteExcerptLimits.ANNOTATION)
+            }
             val prompt = PromptBuilder.buildAnnotationPrompt(
                 title = annotation.title,
-                content = annotation.content,
+                excerpt = excerpt,
                 summary = annotation.summary,
                 relatedTitles = annotation.relatedNotes.map { it.title.toObsidianNoteTitle() },
                 aiRecommendedTitles = annotation.aiNotes.map { it.title.toObsidianNoteTitle() },

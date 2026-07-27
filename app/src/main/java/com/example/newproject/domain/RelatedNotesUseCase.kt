@@ -7,13 +7,17 @@ import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteMeta
+import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.RelatedNote
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 
 sealed class RelatedNotesResult {
     data class Success(
@@ -25,7 +29,10 @@ sealed class RelatedNotesResult {
     data class Error(val message: String) : RelatedNotesResult()
 }
 
-class RelatedNotesUseCase(private val aiClient: AiClient) {
+class RelatedNotesUseCase(
+    private val aiClient: AiClient,
+    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
+) {
 
     // 候補の本文コンテキスト（スニペット・タグ・aliases）を URI+lastModified で記憶する。
     // ノートを開き直すたびに候補集合は大きく重なるため、再読込を避けられる。
@@ -126,9 +133,12 @@ class RelatedNotesUseCase(private val aiClient: AiClient) {
                         maxSnippetLen = RELATED_SNIPPET_LEN,
                         minSnippetLen = RELATED_MIN_SNIPPET_LEN
                     )
+                    val currentExcerpt = withContext(excerptDispatcher) {
+                        buildNoteExcerpt(currentContent, NoteExcerptLimits.RELATED)
+                    }
                     val prompt = PromptBuilder.buildRelatedNotesPrompt(
                         currentTitle = currentTitle,
-                        currentContent = currentContent,
+                        currentExcerpt = currentExcerpt,
                         candidates = candidateLines
                     )
                     val response = aiClient.generate(prompt)
