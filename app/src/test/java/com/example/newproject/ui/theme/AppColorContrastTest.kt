@@ -88,38 +88,29 @@ class AppColorContrastTest {
 
     // -- 面の上の文字 ---------------------------------------------------------
 
+    /**
+     * 面の上に置く文字は、明暗どちらでも例外なくAAを満たす。
+     *
+     * 見出し2色は 11sp Bold で、AAの大文字例外（18pt相当／Bold 14pt相当）に**入らない**。
+     * 小さい文字ほど基準が要るので、装飾的な色でも4.5:1から降りない。
+     */
     @Test
-    fun `ダークでは全ての文字トークンがAA基準を満たす`() {
-        val c = DarkAppColors
-        mapOf(
-            "onSurface" to c.onSurface,
-            "onSurfaceMuted" to c.onSurfaceMuted,
-            "onSurfaceSubtle" to c.onSurfaceSubtle,
-            "onSurfaceFaint" to c.onSurfaceFaint,
-            "onSurfaceMetaBlue" to c.onSurfaceMetaBlue,
-            "linkText" to c.linkText,
-            "errorText" to c.errorText,
-            "dangerAction" to c.dangerAction,
-            "relatedHeading" to c.relatedHeading,
-            "aiHeading" to c.aiHeading
-        ).forEach { (token, color) ->
-            assertAtLeast(4.5, contrast(color, c.panel), "ダーク $token（panel上）")
-        }
-    }
-
-    @Test
-    fun `ライトで基準を満たしている文字トークンは維持される`() {
-        val c = LightAppColors
-        mapOf(
-            "onSurface" to c.onSurface,
-            "onSurfaceMuted" to c.onSurfaceMuted,
-            "onSurfaceSubtle" to c.onSurfaceSubtle,
-            "onSurfaceFaint" to c.onSurfaceFaint,
-            "linkText" to c.linkText,
-            "errorText" to c.errorText,
-            "dangerAction" to c.dangerAction
-        ).forEach { (token, color) ->
-            assertAtLeast(4.5, contrast(color, c.panel), "ライト $token（panel上）")
+    fun `面の上の文字トークンは明暗どちらでもAA基準を満たす`() {
+        schemes.forEach { (name, c) ->
+            mapOf(
+                "onSurface" to c.onSurface,
+                "onSurfaceMuted" to c.onSurfaceMuted,
+                "onSurfaceSubtle" to c.onSurfaceSubtle,
+                "onSurfaceFaint" to c.onSurfaceFaint,
+                "onSurfaceMetaBlue" to c.onSurfaceMetaBlue,
+                "linkText" to c.linkText,
+                "errorText" to c.errorText,
+                "dangerAction" to c.dangerAction,
+                "relatedHeading" to c.relatedHeading,
+                "aiHeading" to c.aiHeading
+            ).forEach { (token, color) ->
+                assertAtLeast(4.5, contrast(color, c.panel), "$name $token（panel上）")
+            }
         }
     }
 
@@ -148,33 +139,14 @@ class AppColorContrastTest {
     }
 
     /**
-     * **ライトに残る既知の未達7件**（ダークは全て基準内）。
+     * **ライトに残る既知の未達1件**（文字は明暗とも全て基準内になった）。
      *
-     * いずれもダークモード以前からある。値を変えるとライトの見た目が変わるため今回は触っていない。
      * 実測値をここで固定しておくことで、①気づかないうちに悪化する ②直したのに記録が残らない、
      * のどちらも防ぐ。直すとこのテストが落ちるので、そのとき該当行を消して上のテストへ移すこと。
-     *
-     * 無彩色グレー5段階（#777777〜#999999 の3つが未達）は3段階へ統合して解消した。
-     * 残るのは彩度を持つ3件で、いずれも明度を下げると見た目が変わるため個別に扱う。
      */
     @Test
     fun `ライトに残る既知のコントラスト未達を記録する`() {
         val c = LightAppColors
-        // 文字（基準 4.5:1）。値は実測。
-        val textMisses = listOf(
-            Triple("aiHeading #16B8A6（AI推薦の見出し）", c.aiHeading, 2.46),
-            Triple("onSurfaceMetaBlue #8A90A8（一覧の更新日時）", c.onSurfaceMetaBlue, 3.13),
-            Triple("relatedHeading #7B6FFF（関連ノートの見出し）", c.relatedHeading, 3.74)
-        )
-        textMisses.forEach { (label, color, expected) ->
-            val actual = contrast(color, c.panel)
-            assertTrue(
-                "$label が改善された（実測 ${"%.2f".format(actual)}）。" +
-                    "修正が入ったならこの行を消し、上のテストへ移すこと",
-                actual < 4.5
-            )
-            assertEquals("$label の実測値が変わった", expected, actual, 0.05)
-        }
         // 塗り（非文字 3:1）。ラベル自体は黒で 8.44 と読めるが、白い面の上では
         // ボタンの輪郭が見つけにくい。
         val secondary = contrast(c.buttonSecondary, c.panel)

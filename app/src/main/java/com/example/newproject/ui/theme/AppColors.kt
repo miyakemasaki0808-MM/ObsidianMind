@@ -53,7 +53,8 @@ internal val LightAppColors = AppColorScheme(
     // 端数で割らないようにする。旧 #777777（4.43）・#888888（3.51）・#999999（2.82）は
     // 「見た目の薄さ」で決まっており可読性で決まっていなかった。
     onSurfaceFaint = Color(0xFF757575),   // panel上で 4.56
-    onSurfaceMetaBlue = Color(0xFF8A90A8),
+    // 一覧の更新日時。青みは残したいので色相228を保ったまま明度だけ下げた（3.13 → 4.58）。
+    onSurfaceMetaBlue = Color(0xFF6D748F),
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFEAF7FF),
     linkText = Color(0xFF2563EB),
@@ -64,8 +65,12 @@ internal val LightAppColors = AppColorScheme(
     onDangerAction = Color.White,      // #D32F2F 上で 4.98
     successMark = Color(0xFF4CAF50),
     failureMark = Color(0xFFEF5350),
-    relatedHeading = Color(0xFF7B6FFF),
-    aiHeading = Color(0xFF16B8A6),
+    // 見出し2色は 11sp Bold なのでAAの大文字例外に入らず、4.5:1 が要る。
+    // どちらも色相を1度も動かさずに済ませた（見分けの根拠が色相の差だけのため）。
+    // 関連ノート: 色相245を保ち、彩度100→68・明度72→63へ（3.74 → 4.81）。
+    relatedHeading = Color(0xFF6A5FE0),
+    // AI推薦: 色相173を保ち、明度だけ40→28へ（2.46 → 4.60）。彩度は据え置き。
+    aiHeading = Color(0xFF0D8375),
     accentText = Indigo,
     accentSurface = Indigo,
     onAccentSurface = Color.White,
