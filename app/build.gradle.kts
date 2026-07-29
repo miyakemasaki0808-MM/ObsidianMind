@@ -1,6 +1,18 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_11
+        // Lint の `warningsAsErrors` は Android Lint にしか効かない。Kotlin コンパイラの
+        // 警告はそちらでは止まらないので、同じ歯止めをこちらにも置く。
+        // これが無いと「警告0にした」と言えるのは Lint に限った話になる。
+        allWarningsAsErrors = true
+    }
 }
 
 android {
