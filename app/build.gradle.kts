@@ -19,14 +19,31 @@ android {
         }
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildTypes {
+        release {
+            // R8はまだ有効にしない。Compose と ML Kit GenAI の keep ルールを確認しないと
+            // オンデバイスAIの呼び出しが実機でだけ落ちる可能性があり、確認には release
+            // ビルドでの実機検証が要る。まず「構成が存在する」状態を作るのが目的。
+            isMinifyEnabled = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
         compose = true
+    }
+
+    lint {
+        // 依存更新系は「いつ・どこまで上げるか」の方針が未定。方針を決めるまでは
+        // ビルドのたびに出しても行動につながらないので黙らせる。方針が決まったら外す。
+        disable += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion")
     }
 }
 
@@ -55,4 +72,13 @@ dependencies {
     // 実装を test スコープだけに載せる。ReadingTrace のサイドカーJSONを
     // 素のJVMテストで検証するのに必要。
     testImplementation("org.json:json:20240303")
+
+    // instrumentation テストの土台。テスト本体はまだ無いが、依存とRunnerが揃って
+    // いないと「書こうとした時点で環境構築から始まる」状態が続くため先に置く。
+    // SAF走査・端末AI・Compose Navigation・画面回転は素のJVMでは覆えない。
+    androidTestImplementation(composeBom)
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
