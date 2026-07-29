@@ -43,7 +43,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.OnButtonAi
-import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.AppGradient
@@ -428,7 +428,7 @@ private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -
                 val meta = listOfNotNull(item.heading, item.positionLabel).joinToString(" · ")
                 Text(meta, fontSize = 11.sp, color = OnSurfaceSubtle)
                 item.context?.takeIf { it.isNotBlank() }?.let { context ->
-                    Text(context, fontSize = 11.sp, color = OnSurfaceHint, maxLines = 2)
+                    Text(context, fontSize = 11.sp, color = OnSurfaceFaint, maxLines = 2)
                     Spacer(modifier = Modifier.height(3.dp))
                 }
                 Text(item.text, fontSize = 14.sp, lineHeight = 20.sp, color = OnSurface)
@@ -511,7 +511,7 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
                 }
                 is SummaryState.AiUnavailable -> {
-                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceHint)
+                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceFaint)
                 }
                 is SummaryState.Error -> {
                     Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)

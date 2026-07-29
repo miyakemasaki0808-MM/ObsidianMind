@@ -32,13 +32,13 @@ internal class AppColorScheme(
     val chatDivider: Color,
     val contentDivider: Color,
     val checkboxOutline: Color,
-    // 文字
+    // 文字。弱さは3段階だけ持つ（本文に次ぐ／弱い／最も弱い）。
+    // ライトは白面に対し4.5:1が要るため、最も弱い側は #757575 より暗くできない。
+    // この床があるので4段階以上は「意味の違う名前で同じ濃さ」になる。
     val onSurface: Color,
     val onSurfaceMuted: Color,
     val onSurfaceSubtle: Color,
     val onSurfaceFaint: Color,
-    val onSurfaceHint: Color,
-    val onSurfaceDisabled: Color,
     val onSurfaceMetaBlue: Color,
     val onVibrant: Color,
     val onVibrantMuted: Color,

@@ -96,8 +96,6 @@ class AppColorContrastTest {
             "onSurfaceMuted" to c.onSurfaceMuted,
             "onSurfaceSubtle" to c.onSurfaceSubtle,
             "onSurfaceFaint" to c.onSurfaceFaint,
-            "onSurfaceHint" to c.onSurfaceHint,
-            "onSurfaceDisabled" to c.onSurfaceDisabled,
             "onSurfaceMetaBlue" to c.onSurfaceMetaBlue,
             "linkText" to c.linkText,
             "errorText" to c.errorText,
@@ -116,11 +114,36 @@ class AppColorContrastTest {
             "onSurface" to c.onSurface,
             "onSurfaceMuted" to c.onSurfaceMuted,
             "onSurfaceSubtle" to c.onSurfaceSubtle,
+            "onSurfaceFaint" to c.onSurfaceFaint,
             "linkText" to c.linkText,
             "errorText" to c.errorText,
             "dangerAction" to c.dangerAction
         ).forEach { (token, color) ->
             assertAtLeast(4.5, contrast(color, c.panel), "ライト $token（panel上）")
+        }
+    }
+
+    /**
+     * 弱い文字は3段階しか持たない。
+     *
+     * ライトの白面ではAAの床が #767676（ちょうど4.50）にあり、本文 `#202124` から
+     * そこまでの間に区別できる濃さは3つしか取れない。4つ目を足すと、名前は違うのに
+     * 実質同じ濃さのトークンが増えて「どれを使うか」が決められなくなる。
+     * 段数を明暗で揃えることも同時に固定する（片方だけ増える事故の検出）。
+     */
+    @Test
+    fun `弱い文字は明暗どちらも3段階で単調に薄くなる`() {
+        schemes.forEach { (name, c) ->
+            val steps = listOf(c.onSurface, c.onSurfaceMuted, c.onSurfaceSubtle, c.onSurfaceFaint)
+                .map { contrast(it, c.panel) }
+            steps.zipWithNext().forEach { (strong, weak) ->
+                assertTrue(
+                    "$name の弱い文字は onSurface → Muted → Subtle → Faint の順に薄くなること" +
+                        "（実測 ${steps.joinToString { "%.2f".format(it) }}）",
+                    strong > weak
+                )
+            }
+            assertAtLeast(4.5, steps.last(), "$name の最も弱い文字（onSurfaceFaint）")
         }
     }
 
@@ -131,8 +154,8 @@ class AppColorContrastTest {
      * 実測値をここで固定しておくことで、①気づかないうちに悪化する ②直したのに記録が残らない、
      * のどちらも防ぐ。直すとこのテストが落ちるので、そのとき該当行を消して上のテストへ移すこと。
      *
-     * 弱い文字（#777777以降）が軒並み届いていないのは、グレー階調が「見た目の薄さ」で
-     * 決められており可読性で決められていないため。階調の整理と同時に直すのが筋。
+     * 無彩色グレー5段階（#777777〜#999999 の3つが未達）は3段階へ統合して解消した。
+     * 残るのは彩度を持つ3件で、いずれも明度を下げると見た目が変わるため個別に扱う。
      */
     @Test
     fun `ライトに残る既知のコントラスト未達を記録する`() {
@@ -140,11 +163,8 @@ class AppColorContrastTest {
         // 文字（基準 4.5:1）。値は実測。
         val textMisses = listOf(
             Triple("aiHeading #16B8A6（AI推薦の見出し）", c.aiHeading, 2.46),
-            Triple("onSurfaceDisabled #999999（要約前の「—」）", c.onSurfaceDisabled, 2.82),
             Triple("onSurfaceMetaBlue #8A90A8（一覧の更新日時）", c.onSurfaceMetaBlue, 3.13),
-            Triple("onSurfaceHint #888888（注記・完了済み・打ち消し線）", c.onSurfaceHint, 3.51),
-            Triple("relatedHeading #7B6FFF（関連ノートの見出し）", c.relatedHeading, 3.74),
-            Triple("onSurfaceFaint #777777（空状態の案内）", c.onSurfaceFaint, 4.43)
+            Triple("relatedHeading #7B6FFF（関連ノートの見出し）", c.relatedHeading, 3.74)
         )
         textMisses.forEach { (label, color, expected) ->
             val actual = contrast(color, c.panel)

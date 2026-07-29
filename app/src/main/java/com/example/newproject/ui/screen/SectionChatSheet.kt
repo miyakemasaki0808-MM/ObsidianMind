@@ -50,8 +50,7 @@ import com.example.newproject.ui.theme.AccentSurface
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.OnButtonAi
 import com.example.newproject.ui.theme.ChatDivider
-import com.example.newproject.ui.theme.OnSurfaceDisabled
-import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.PanelBubble
 import com.example.newproject.ui.theme.PanelChip
@@ -113,7 +112,7 @@ fun SectionChatSheet(
                     color = OnSurface
                 )
                 state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorText)
-                else -> Text("—", fontSize = 14.sp, color = OnSurfaceDisabled)
+                else -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -126,12 +125,12 @@ fun SectionChatSheet(
             Text(
                 text = "気になる質問をタップすると回答します。",
                 fontSize = 12.sp,
-                color = OnSurfaceHint
+                color = OnSurfaceFaint
             )
             Spacer(modifier = Modifier.height(10.dp))
 
             if (state.suggestions.isEmpty() && !state.isSummaryLoading) {
-                Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceHint)
+                Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.suggestions.forEach { q ->

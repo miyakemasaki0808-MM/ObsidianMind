@@ -47,11 +47,12 @@ internal val LightAppColors = AppColorScheme(
     contentDivider = Color(0xFFCCCCCC),
     checkboxOutline = Color(0xFFAAAAAA),
     onSurface = Color(0xFF202124),
-    onSurfaceMuted = Color(0xFF555555),
-    onSurfaceSubtle = Color(0xFF666666),
-    onSurfaceFaint = Color(0xFF777777),
-    onSurfaceHint = Color(0xFF888888),
-    onSurfaceDisabled = Color(0xFF999999),
+    onSurfaceMuted = Color(0xFF555555),   // panel上で 7.38
+    onSurfaceSubtle = Color(0xFF666666),  // panel上で 5.69
+    // 白面でAAを満たす最も薄いグレーは #767676（ちょうど4.50）。1段暗い値を採って
+    // 端数で割らないようにする。旧 #777777（4.43）・#888888（3.51）・#999999（2.82）は
+    // 「見た目の薄さ」で決まっており可読性で決まっていなかった。
+    onSurfaceFaint = Color(0xFF757575),   // panel上で 4.56
     onSurfaceMetaBlue = Color(0xFF8A90A8),
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFEAF7FF),
@@ -117,9 +118,9 @@ internal val DarkAppColors = AppColorScheme(
     onSurface = Color(0xFFE6EAF2),
     onSurfaceMuted = Color(0xFFC3C9DA),
     onSurfaceSubtle = Color(0xFFB4BACD),
+    // 3段階へ統合した際、旧 onSurfaceHint #99A1B8／onSurfaceDisabled #949CB4 は
+    // ここへ寄せた。暗面では床が無いぶん余裕があるが、明暗で段数を揃える。
     onSurfaceFaint = Color(0xFFA6ADC2),
-    onSurfaceHint = Color(0xFF99A1B8),
-    onSurfaceDisabled = Color(0xFF949CB4),
     onSurfaceMetaBlue = Color(0xFF9AA2BC),
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFC6D3E6),
@@ -200,8 +201,6 @@ internal val OnSurface: Color @Composable @ReadOnlyComposable get() = current.on
 internal val OnSurfaceMuted: Color @Composable @ReadOnlyComposable get() = current.onSurfaceMuted
 internal val OnSurfaceSubtle: Color @Composable @ReadOnlyComposable get() = current.onSurfaceSubtle
 internal val OnSurfaceFaint: Color @Composable @ReadOnlyComposable get() = current.onSurfaceFaint
-internal val OnSurfaceHint: Color @Composable @ReadOnlyComposable get() = current.onSurfaceHint
-internal val OnSurfaceDisabled: Color @Composable @ReadOnlyComposable get() = current.onSurfaceDisabled
 internal val OnSurfaceMetaBlue: Color @Composable @ReadOnlyComposable get() = current.onSurfaceMetaBlue
 internal val OnVibrant: Color @Composable @ReadOnlyComposable get() = current.onVibrant
 internal val OnVibrantMuted: Color @Composable @ReadOnlyComposable get() = current.onVibrantMuted

@@ -43,7 +43,6 @@ import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurfaceFaint
-import com.example.newproject.ui.theme.OnSurfaceHint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonPrimary
@@ -242,7 +241,7 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
                         fallbackNotice(state.aiStatus)?.let { notice ->
-                            Text(notice, fontSize = 12.sp, color = OnSurfaceHint)
+                            Text(notice, fontSize = 12.sp, color = OnSurfaceFaint)
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         state.results.forEachIndexed { index, note ->
