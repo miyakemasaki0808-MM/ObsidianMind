@@ -6,6 +6,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
@@ -78,8 +79,23 @@ internal class AppColorScheme(
     // （理由は LightAppColors のコメント）。ダークは塗りが足りているので透明。
     val buttonOutlineOnGradient: Color,
     // 背景
-    val appGradient: Brush,
-    val readingGradient: Brush
+    // 背景グラデーションは**停止色のリストだけ**を受け取り、`Brush` はここで組み立てる。
+    // 以前は `Brush` を直接渡していたため、色を検証したいテストは同じ値を自前で
+    // 書き写すしかなく、実際に停止色とテストの参照先が食い違ったまま全緑になった
+    // （テストは最も暗い停止色だけを測っていた）。`Brush` から色は取り出せないので、
+    // **単一ソースにするには色の側を持つしかない**。
+    val appGradientStops: List<Color>,
+    val readingGradientStops: List<Color>
+) {
+    val appGradient: Brush = diagonalGradient(appGradientStops)
+    val readingGradient: Brush = diagonalGradient(readingGradientStops)
+}
+
+/** 左下から右上へ流す。全画面で向きを揃えるため1箇所に閉じる。 */
+private fun diagonalGradient(stops: List<Color>): Brush = Brush.linearGradient(
+    colors = stops,
+    start = Offset(0f, Float.POSITIVE_INFINITY),
+    end = Offset(Float.POSITIVE_INFINITY, 0f)
 )
 
 internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }

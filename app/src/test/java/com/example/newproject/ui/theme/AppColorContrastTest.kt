@@ -45,15 +45,11 @@ class AppColorContrastTest {
 
     private val schemes = listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors)
 
-    // グラデーションの停止色。`Brush` からは色を取り出せないので、AppColors.kt の
-    // 定義と対で持つ。片方だけ変えると、下のテストが実物と食い違う。
-    private val lightGradientStops = mapOf(
-        "AppGradient" to listOf(Indigo, Aqua, Coral),
-        "ReadingGradient" to listOf(MutedIndigo, MutedAqua, MutedCoral)
-    )
-    private val darkGradientStops = mapOf(
-        "AppGradient(dark)" to listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
-        "ReadingGradient(dark)" to listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
+    // 停止色は `AppColorScheme` から読む。以前はここに同じ値を書き写しており、
+    // 実装だけ変えるとテストが古い色を測ったまま全緑になる状態だった。
+    private fun AppColorScheme.gradients(): Map<String, List<Color>> = mapOf(
+        "AppGradient" to appGradientStops,
+        "ReadingGradient" to readingGradientStops
     )
 
     /** 半透明の面を下地へ重ねた実効色。`Color.copy(alpha = …)` の見え方に対応する。 */
@@ -115,7 +111,7 @@ class AppColorContrastTest {
     fun `ライトのグラデーション上では塗りだけで境界を出せない`() {
         val c = LightAppColors
         val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
-        lightGradientStops.forEach { (gradient, stops) ->
+        LightAppColors.gradients().forEach { (gradient, stops) ->
             roles.forEach { (role, fill) ->
                 val worst = stops.minOf { contrast(fill, it) }
                 assertTrue(
@@ -130,7 +126,7 @@ class AppColorContrastTest {
 
     @Test
     fun `ライトの輪郭線はどの停止色の上でも境界として見える`() {
-        lightGradientStops.forEach { (gradient, stops) ->
+        LightAppColors.gradients().forEach { (gradient, stops) ->
             stops.forEach { stop ->
                 assertAtLeast(
                     3.0,
@@ -150,7 +146,7 @@ class AppColorContrastTest {
         val c = DarkAppColors
         assertEquals("ダークの輪郭線は透明であること", Color.Transparent, c.buttonOutlineOnGradient)
         val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
-        darkGradientStops.forEach { (gradient, stops) ->
+        DarkAppColors.gradients().forEach { (gradient, stops) ->
             roles.forEach { (role, fill) ->
                 assertAtLeast(
                     3.0,
@@ -324,14 +320,48 @@ class AppColorContrastTest {
         )
     }
 
+    /**
+     * グラデーション直上の文字は、**全ての停止色**の上で読めなければならない。
+     *
+     * 以前のこのテストは「最も明るい停止色との比で見る（ライトはAqua）」とコメントしながら、
+     * 実際には `Indigo` を渡していた。Indigo はライトで**最も暗い**停止色なので、
+     * 白文字にとって最も有利な条件だけを測っていたことになる。
+     * `onVibrantMuted` に至っては、停止色ですらない `LogoNavy` と比べていた。
+     *
+     * どの停止色が最悪かは色を変えれば入れ替わるので、代表を選ばずに総当たりする。
+     */
     @Test
-    fun `グラデーション上の文字は明暗どちらでも読める`() {
-        // 背景がグラデーションなので、最も明るい停止色との比で見る
-        // （ライトはAqua、ダークは最も明るい暗色）。
-        assertAtLeast(4.5, contrast(LightAppColors.onVibrant, Indigo), "ライト onVibrant（Indigo上）")
-        schemes.forEach { (name, c) ->
-            assertAtLeast(4.5, contrast(c.onVibrantMuted, LogoNavy), "$name onVibrantMuted")
+    fun `ダークのグラデーション上の文字は全ての停止色の上で読める`() {
+        val c = DarkAppColors
+        c.gradients().forEach { (gradient, stops) ->
+            stops.forEach { stop ->
+                assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$gradient $stop 上）")
+                assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$gradient $stop 上）")
+            }
         }
+    }
+
+    /**
+     * **ライトのグラデーション直上の文字は未達**（実測を記録する。修正は次段）。
+     *
+     * ライトの停止色は Aqua / Coral が明るく、白文字でも 2.07 / 2.72 しか出ない。
+     * 28sp Bold の大見出しは大文字扱いで3:1に緩むが、**それすら満たさない**。
+     * 色を選び直しても解けない（白より明るい文字は無い）ので、背後へ暗幕を敷く。
+     *
+     * 直したらこのテストを消し、上のダーク用テストを明暗両方へ広げること。
+     */
+    @Test
+    fun `ライトのグラデーション上の文字が未達であることを記録する`() {
+        val c = LightAppColors
+        val worst = c.gradients().values.flatten().minOf { stop ->
+            minOf(contrast(c.onVibrant, stop), contrast(c.onVibrantMuted, stop))
+        }
+        assertTrue(
+            "ライトのグラデーション上の文字が4.5:1を満たすようになった（最悪 ${"%.2f".format(worst)}）。" +
+                "暗幕が入ったなら、このテストを消して基準テストを明暗両方へ広げること",
+            worst < 4.5
+        )
+        assertEquals("最悪値が変わった（Aqua上の onVibrantMuted）", 1.89, worst, 0.05)
     }
 
     // -- 塗りの上に載る文字（バッジ・チップ） -----------------------------------

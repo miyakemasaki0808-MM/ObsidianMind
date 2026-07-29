@@ -96,16 +96,8 @@ internal val LightAppColors = AppColorScheme(
     // したがって輪郭線で境界を作る（WCAG 1.4.11 は隣接する輪郭でも可）。
     // LogoNavy は最も不利な Indigo 停止色に対して 3.15、Reading側で 4.19。
     buttonOutlineOnGradient = LogoNavy,
-    appGradient = Brush.linearGradient(
-        colors = listOf(Indigo, Aqua, Coral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    ),
-    readingGradient = Brush.linearGradient(
-        colors = listOf(MutedIndigo, MutedAqua, MutedCoral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
+    appGradientStops = listOf(Indigo, Aqua, Coral),
+    readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
 )
 
 /**
@@ -175,17 +167,9 @@ internal val DarkAppColors = AppColorScheme(
     buttonOutlineOnGradient = Color.Transparent,
     // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
     // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
-    appGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    ),
+    appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
     // 「読む」画面はさらに静かに。触る画面との性質の差はダークでも保つ。
-    readingGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24)),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
+    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
 )
 
 // ---------------------------------------------------------------------------
