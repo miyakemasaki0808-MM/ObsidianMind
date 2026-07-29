@@ -2,193 +2,196 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 
-**評価日:** 2026-07-26
+**評価日:** 2026-07-28
 
-**対象ブランチ:** `feature/Improvement_Issue_No.2`
+**対象ブランチ:** `feature/Improvement_Function_No.5`
 
-**対象コミット:** `c62fb75`
+**対象コミット:** `ac53749`
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定、AndroidManifest、GitHub Actions
 
-**検証コマンド:** `./gradlew testDebugUnitTest --rerun-tasks`、`./gradlew lintDebug`
+**検証コマンド:**
 
-> **この文書の位置づけ:** 現在の実装に対する品質評価のスナップショット。
-> 機能・構成の網羅的な説明は [source_code_analysis.md](source_code_analysis.md)、
-> 課題の進行管理は [_wip/current_issues.md](_wip/current_issues.md) が担う。
+```bash
+./gradlew testDebugUnitTest lintDebug --offline --rerun-tasks
+./gradlew assembleRelease --offline
+```
+
+> **この文書の位置づけ:** 対象コミット時点の実装に対する品質評価のスナップショット。
+> 機能・構成の説明は [source_code_analysis.md](source_code_analysis.md)、
+> 未解決課題の進行管理は [_wip/current_issues.md](_wip/current_issues.md) が担う。
 
 ---
 
 ## 1. 結論
 
-現状は、**純粋ロジックとVault書き戻しの安全性は強い一方、Vault単位の非同期状態管理とアーキテクチャ境界が弱い**状態です。
-全面的な作り直しは不要ですが、次の機能追加より先に、旧Vaultの状態が後着する経路とReadingTraceの累計回数を修正する価値があります。
+現状は、**機能追加を継続できる堅実な内部品質に到達している一方、長文表示のUI性能と実端末境界、公開リリース構成には未完部分がある**状態です。
 
-- 本番Kotlin: **70ファイル・12,535行**
-- JVMテスト: **43ファイル・6,007行・379件**
-- テスト結果: **379 success / 0 failure / 0 skipped**
-- Android Lint: **0 errors / 28 warnings**
+前回の主要指摘だったVault世代管理、検索スコープ競合、ReadingTraceの累計回数、無制限本文読込、パッケージ循環、状態所有の曖昧さは、実装と回帰テストの両方で解消されています。全面的な再設計は不要です。次の品質改善は、既存のController構成を保ったまま、UI側の重い解析をMainから外し、復旧・SAF境界のテスト可能性を補うのが最も費用対効果に優れます。
+
+- 本番Kotlin: **92ファイル・14,084行**
+- JVMテスト: **52ファイル・8,222行・450件**
+- テスト結果: **450 success / 0 failure / 0 error / 0 skipped**
+- Android Lint: **0 errors / 21 warnings**
+- Kotlinテストコンパイル警告: **14件**（`SummaryControllerTest`のExperimental Coroutines API）
 - Android instrumentation test: **0件**
+- リリース組み立て: **成功**（`app-release-unsigned.apk`、約11MB）
 - CI: PRと`main`へのpushでJVMテストとLintを実行
 - 作業ツリー: レビュー開始時点でクリーン
 
-総合評価の目安は **7.2 / 10** です。379件のテスト、蒸留の復旧設計、AI呼び出しの直列化、CI導入は高く評価できます。一方、テスト件数だけでは捕捉できていない高優先度の状態競合が残っています。
+総合評価は **8.0 / 10** です。前回の7.2から明確に改善しました。特に、状態競合を世代IDと集中調停で防ぐ設計、パッケージ依存をテストで固定した点、用途別の読込上限、蒸留の復旧可能な書き戻しは高く評価できます。一方、テスト全件成功は実SAF、Compose、Activity、Gemini Nanoの統合動作や、既知のライト配色コントラストを保証しません。
 
 | 評価軸 | 評価 | 要点 |
 |---|---:|---|
-| 可読性 | 7.5 | 命名・KDoc・責務コメントは良好。大きな統合クラスが残る |
-| 保守性 | 6.5 | パッケージ間循環、共有UiState、依存の内部生成が変更範囲を広げる |
-| 拡張性 | 6.5 | Controller追加は容易だが、状態と依存の境界が型で守られていない |
-| 信頼性 | 7.0 | 蒸留は非常に堅牢。Vault切替とReadingTraceに実害のある境界不備が残る |
-| テスト容易性 | 7.5 | 純粋ロジックは強いが、ViewModel・検索Controller・SAF・Navigationが未検証 |
-| 並行処理 | 7.0 | 主要AI処理は保護済み。Vault単位の一覧取得・削除は未追跡 |
-| 性能 | 6.5 | キャッシュ・候補上限はあるが、Markdown本文の無制限読込が残る |
-| セキュリティ・プライバシー | 8.5 | オンデバイスAI、INTERNET権限なし、SharedPreferencesのバックアップ除外 |
-| アクセシビリティ | 6.5 | semanticsは丁寧だが、ライト配色に既知のコントラスト未達がある |
-| 開発・リリース運用 | 7.0 | CI導入済み。Lint警告の増加防止、実機テスト、正式IDは未整備 |
-| ドキュメント | 8.5 | 設計判断と制約が詳しく、実装への参照も多い |
+| 可読性 | 8.0 | 責務・命名・KDocは良好。大きい画面／調停ファイルは残る |
+| 保守性 | 8.0 | 依存方向と状態所有を型・テストで固定。Android型が下位モデルへ残る |
+| 拡張性 | 7.5 | Controller追加の型は明確。状態・ジョブの登録契約は手動 |
+| 信頼性 | 8.5 | 蒸留と非同期世代管理は強い。補記保存と復旧チェックに境界上の隙がある |
+| テスト容易性 | 8.0 | 純粋ロジックと調停は強い。非null `Uri` を使う実行経路とUIは未検証 |
+| 並行処理 | 8.0 | 主要要求はJob＋世代IDで保護。復旧チェックだけ要求管理の外にある |
+| 性能 | 7.0 | I/O上限・キャッシュ・並列数制限は良好。Markdown解析がMainに残る |
+| セキュリティ・プライバシー | 8.5 | INTERNET権限なし、オンデバイスAI、機微設定のバックアップ除外 |
+| アクセシビリティ | 6.5 | semanticsは丁寧だが、ライト配色に既知のAA未達が残る |
+| 開発・リリース運用 | 7.0 | CIとrelease assembleは成立。署名・R8・正式ID・警告予算が未整備 |
+| ドキュメント | 8.0 | 判断理由は非常に豊富。一部の件数・性能説明が現実装とずれている |
+
+**P0相当の問題、確認済みのユーザーノート消失経路、ネットワークへの本文送信は見つかりませんでした。**
 
 ---
 
 ## 2. 優先度の高い指摘
 
-### P1-1. Vault切替時に旧Vaultの一覧処理が残り、補記の誤削除へ進める
+### P1-1. 最大1MBのMarkdown解析がComposeのMain上で走り、全画面進入時に同じ本文を再解析する
 
-生成処理のキャンセルは整っていますが、Vaultに属する「一覧」のJobは追跡されていません。
+AI入力用の抜粋生成は `Dispatchers.Default` へ移されましたが、**表示用の同じMarkdownパーサはMain上に残っています**。
 
-- [`AnnotationController.cancelAndClear()`](../app/src/main/java/com/example/newproject/controller/AnnotationController.kt#L122) が止めるのは生成・モデルDLだけで、補記一覧の読込・削除Jobは対象外
-- [`loadList()`](../app/src/main/java/com/example/newproject/controller/AnnotationController.kt#L133) は取得開始時のVault URIを保持したまま、無条件で共有UiStateへ結果を書き戻す
-- [`NoteViewModel.saveVault()`](../app/src/main/java/com/example/newproject/NoteViewModel.kt#L154) は `annotationListState` を初期化しない
-- [`deleteAll()`](../app/src/main/java/com/example/newproject/controller/AnnotationController.kt#L163) は現在UiStateにあるURIをそのまま削除する
-- [`deleteDocument()`](../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L206) の成否も呼び出し側で確認していない
+- 通常表示は [`NoteReaderTab`](../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt#L92) の `remember` 内で `buildNoteSectionModel(content)` を同期実行する
+- 全画面表示は [`FullscreenNoteScreen`](../app/src/main/java/com/example/newproject/ui/screen/FullscreenNoteScreen.kt#L125) で同じ本文をもう一度同期解析する
+- [`buildNoteSectionModel`](../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt#L87) は全本文をブロック解析し、各セクション本文も再構成する
+- 表示フォールバックは最大1MBまで許可されている
+- 同じパーサを使う抜粋処理は、既存の実測で1MB約460ms、200KB約20msと記録されている
 
-したがって、Vault Aの一覧取得中にVault Bへ切り替えると、Aの一覧がBの状態へ後着できます。その状態で「すべて削除」を実行すると、Aの永続URI権限が残っている端末では、表示上の現在VaultがBでもA側を削除し得ます。
+したがって、大きなノートを開いた瞬間と全画面へ入る瞬間に、端末のUIスレッドが目に見えて停止し得ます。`source_code_analysis.md`は通常表示と全画面表示が「同じパース済みブロック」を使うと説明していますが、実装上は各Composableが独立した`remember`を持つため共有されません。
 
-**推奨:** 一覧・削除にもJobとVault世代IDを持たせ、`saveVault()`でキャンセル、世代更新、`annotationListState = Idle`を同時に行う。削除はBoolean結果を集計し、失敗件数を表示する。この競合を遅延可能なFakeで固定するテストを追加する。
-
-### P1-2. 検索の要求世代管理は入ったが、フォルダ変更と一覧取得は保護されていない
-
-キーワード検索とランダム取得には、Job・request ID・`CancellationException`の再送出が追加され、連続検索による古い結果の上書きは解消しています。
-
-ただし、次の2経路は保護の外です。
-
-1. [`loadFolders()`](../app/src/main/java/com/example/newproject/controller/SearchController.kt#L60) のJobを保持していないため、Vault Aのフォルダ一覧がVault Bへの切替後に後着できる
-2. [`selectFolder()`](../app/src/main/java/com/example/newproject/controller/SearchController.kt#L72) は進行中検索をキャンセルせず、`searchState`も初期化しない
-
-画面側も、検索中は検索・ランダムボタンを無効化しますが、[`FolderChip`](../app/src/main/java/com/example/newproject/ui/screen/SearchScreen.kt#L92) は操作可能です。そのため、フォルダAの検索中にフォルダBへ切り替えると、選択表示はBのまま結果だけAになる可能性があります。`SearchController`を直接検証するテストもありません。
-
-**推奨:** フォルダ一覧Jobと検索Jobを同じVault世代で検証する。`selectFolder()`では検索を無効化して結果を`Idle`へ戻すか、検索要求へスコープIDを含める。検索→フォルダ変更、Vault切替中の一覧後着をテストする。
-
-### P1-3. ReadingTraceは31回目以降、累計回数とAI要約が更新されない
-
-[`ReadingTrace.withVisit()`](../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L69) は訪問履歴を直近30件へ切り詰めます。一方、次の処理は保持件数 `visits.size` を累計回数として使っています。
-
-- 要約再生成判定: [`needsAiSummary`](../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L78)
-- カードの訪問回数と要約の鮮度判定: [`ReadingTraceController.cardOf()`](../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt#L357)
-- 保存する要約時点: [`persistSummary()`](../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt#L393)
-- AIプロンプトの「開いた回数」: [`PromptBuilder`](../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L60)
-
-30件到達後は `visits.size` が増えないため、表示は常に30回となり、30件時点の要約が「最新」と判定され続けます。既存テストは履歴の切り詰めと30件未満での要約更新を個別に確認していますが、上限到達後の再訪を組み合わせていません。
-
-**推奨:** `totalVisitCount`を履歴保持数と分離し、要約の鮮度も累計値で判定する。schema v2へ上げ、v1は少なくとも`visits.size`を初期累計値として移行する。31回目で要約が再生成される回帰テストを追加する。
-
-### P1-4. Markdown本文の無制限読込が、大きなVaultでメモリ上限を無効化する
-
-蒸留用の読込には256KB基準と境界検査がありますが、汎用の [`readNoteContent()`](../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L133) は `readText()`でEOFまで読みます。
-
-この無制限経路は、
-
-- 大きすぎるノートや不正UTF-8からの表示フォールバック（[`loadNoteForDistill()`](../app/src/main/java/com/example/newproject/NoteViewModel.kt#L448)）
-- 関連ノート候補の本文読込（[`fetchRelatedNotes()`](../app/src/main/java/com/example/newproject/NoteViewModel.kt#L518)）
-
-で使われます。関連ノート処理は候補40件、最大8並列まで制御していますが、[`RelatedNotesUseCase`](../app/src/main/java/com/example/newproject/domain/RelatedNotesUseCase.kt#L93) が各本文を丸ごと読んだ後で短いスニペットへ縮めます。巨大ファイルが混ざると、入力文字数の上限より前にメモリとI/Oを消費します。
-
-**推奨:** 表示用、メタデータ・スニペット用、蒸留用で読込APIと上限を分ける。候補抽出は必要な先頭バイトだけをストリーム処理し、表示用にも明示的な最大サイズまたは段階読込を設ける。
+**推奨:** ノート読込後に `Dispatchers.Default` で `NoteSectionModel` を1回だけ作り、通常／全画面で共有する。少なくともComposable内の同期解析を検出するテストと、200KB・1MB入力の時間／キャンセル計測を追加する。実端末では長文を開く操作と全画面進入のフレーム停止を確認する。
 
 ---
 
-## 3. 構造上の課題
+## 3. 中優先度の指摘
 
-### P2-1. レイヤー名のパッケージ間に4組の双方向依存がある
+### P2-1. 蒸留の復旧チェックだけJob・requestId管理の外にある
 
-現在のimportを突合すると、少なくとも次の双方向依存があります。
+[`DistillController.checkRecovery()`](../app/src/main/java/com/example/newproject/controller/DistillController.kt#L334) は、`scope.launch`したJobを保持せず、要求世代も採番しません。通常の分析・保存は`activeRequestId`で保護されていますが、復旧チェックの後着はその世代を無効化せず、`RecoveryRequired`を直接書き込みます。
 
-| 循環 | 代表例 |
-|---|---|
-| `model ⇄ data` | [`NoteUiState`](../app/src/main/java/com/example/newproject/model/NoteUiState.kt#L3) がdata型を参照し、[`ReadingTraceJson`](../app/src/main/java/com/example/newproject/data/ReadingTraceJson.kt#L3) がmodel型を参照 |
-| `model ⇄ domain` | `NoteUiState`がdomain型を参照し、[`QuizResponseParser`](../app/src/main/java/com/example/newproject/domain/QuizResponseParser.kt#L3) がmodel型を参照 |
-| `data ⇄ domain` | [`NoteRepository`](../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L3) がdomain定数・関数を参照し、[`RelatedNotesUseCase`](../app/src/main/java/com/example/newproject/domain/RelatedNotesUseCase.kt#L4) がdata型を参照 |
-| `domain ⇄ ai` | `RelatedNotesUseCase`などがAI実装側の型を参照し、[`PromptBuilder`](../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L3) がdomain型を参照 |
+起動OP中は表面化しにくいものの、Vault切替直後に復旧確認が遅延し、その間にユーザーが蒸留を始めると、次の順序が成立します。
 
-パッケージ整理自体は可読性を上げていますが、依存方向はまだ境界として機能していません。コメント説明用の不要importは除去済みなので、上表は実使用による循環です。
+1. 復旧確認を開始
+2. 新しい蒸留分析を開始
+3. 復旧確認が後着して`RecoveryRequired`を表示
+4. 進行中の分析が同じrequestIdのまま候補を返し、復旧表示を上書き
 
-**推奨:** 先に許可する依存方向を決める。`NoteFile`等の共有データ型、`AiClient`等のポート、`DistillLimits`等の境界定数の所属を整理し、ビルド時に依存規則を検査する。現段階でマルチモジュール化する必要はない。
+保存層の [`DistillWriteRepository.write()`](../app/src/main/java/com/example/newproject/data/DistillWriteRepository.kt#L114) が未解決レコードを再確認するため、危険な書き込みは止まります。現時点の主な影響は、復旧表示の一時的な消失、不要なAI実行、状態遷移の混乱です。
 
-### P2-2. `NoteViewModel`が構築・調停・状態所有を一手に担い、統合テストできない
+**推奨:** 復旧確認を追跡Jobへ載せ、開始中は新規蒸留を許可しないか、復旧結果を反映する時点で分析世代を無効化する。「遅い復旧確認」と「進行中分析」を交差させるテストを追加する。
 
-[`NoteViewModel`](../app/src/main/java/com/example/newproject/NoteViewModel.kt#L58) は631行あり、Repository、AI client、UseCase、6 Controller、永続化実装を内部で直接生成しています。JVMテスト379件のうち、`NoteViewModel`を通るものはありません。
+### P2-2. AI補記ファイルは作成後の書込失敗で空・部分ファイルを残し得る
 
-さらに、[`NoteUiState`](../app/src/main/java/com/example/newproject/model/NoteUiState.kt#L210) は17フィールドを持ち、6 Controllerへ同じ `MutableStateFlow<NoteUiState>`を渡しています。各Controllerが担当外フィールドを書けないことは型では保証されません。[`MainActivity`](../app/src/main/java/com/example/newproject/MainActivity.kt#L81) もテーマ判定のためルートでUiState全体を購読します。
+[`NoteRepository.createAnnotationFile()`](../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L197) は、`createDocument()`で保存先を作った後、そのURIへ直接書き込みます。ストリームを開けない、途中書込で例外になる、プロセスが終了する、といった場合の削除・再読込検証はありません。
 
-**推奨:** DIライブラリ導入より先に、Factoryまたはテスト用コンストラクタで依存を渡せるようにする。Controllerには機能別の状態更新インターフェースまたは状態スライスだけを渡す。`NoteUiState.kt`の機械的なファイル分割だけでは、所有権と再評価範囲は改善しない。
+蒸留ほど重い復旧設計は不要ですが、生成失敗を表示した一方で`_AI補記`に空または途中までのファイルが残る可能性があります。また、ファイル名は分単位のため、同じノートで同一分に再生成するとSAFプロバイダが名称を変える場合があり、Controllerが予測した表示名と実名が一致しないことがあります。
 
-### P2-3. ReadingTraceの索引は外部同期による追加をプロセス中に認識しない
+**推奨:** 作成後の書込失敗時に作成済みURIをベストエフォートで削除する。書込後に最低限のサイズ／本文検証を行い、表示名は保存後のメタデータから取得する。Fake gatewayを介した失敗注入テストを追加する。
 
-[`SafReadingTraceDocumentGateway`](../app/src/main/java/com/example/newproject/data/ReadingTraceStore.kt#L140) はVaultごとのファイル索引を一度構築し、[`folderIndexOf()`](../app/src/main/java/com/example/newproject/data/ReadingTraceStore.kt#L222) で無期限に再利用します。自身が作成したファイルは索引へ追加しますが、外部同期で後から増えた痕跡には無効化契機がありません。
+### P2-3. 重要なAndroid境界は、設計上テストできないまま残る
 
-**推奨:** 未ヒット時だけ再走査する、短いTTLを設ける、または監視で無効化する。同名キーが複数あった場合の採用規則も決める。
+JVMテスト450件は強力ですが、[`SearchControllerTest`](../app/src/test/java/com/example/newproject/SearchControllerTest.kt#L23) 自身が明記するように、検索実行とVault世代照合は非nullの`android.net.Uri`が必要なため検証していません。
+
+- `model`の [`NoteFile`](../app/src/main/java/com/example/newproject/model/NoteTypes.kt#L12) と [`RelatedNote`](../app/src/main/java/com/example/newproject/model/RelatedNote.kt#L5) がAndroidの`Uri`を直接保持する
+- `NoteViewModel`はAndroidスタブの制約からJVMで直接生成していない
+- `app/src/androidTest`と`androidTestImplementation`、`testInstrumentationRunner`が存在しない
+- 実ContentResolver／SAFプロバイダ、Navigation、Activity再生成、TalkBack、Gemini Nanoは自動検証外
+
+`NoteSessionCoordinator`の分離で調停の大半は検証可能になりましたが、「世代ガードが実SAFの完了順で効くか」は依然として実機確認だけが担保です。
+
+**推奨:** まずRepositoryの必要操作を小さいgateway/interfaceに分け、Controllerテストで`Uri`を解釈せず不透明な参照として扱えるようにする。その後、少数のinstrumentationテストでSAF・Navigation・Activity再生成を通す。
+
+### P2-4. ReadingTraceの外部同期・改名・孤児管理は未解決
+
+[`SafReadingTraceDocumentGateway`](../app/src/main/java/com/example/newproject/data/ReadingTraceStore.kt#L222) はVaultごとのファイル索引をプロセス中無期限に再利用します。自身が作ったファイルは追加しますが、外部同期で後から増えた痕跡は再起動まで認識しません。
+
+また、相対パスのSHA-256をキーにするため、ノートのrename／move／deleteで旧痕跡が孤児になります。これはノート本文を壊す問題ではありませんが、長期利用と複数端末同期では再会カードの見逃し、重複ファイル、孤児数の増加につながります。
+
+**推奨:** 索引ミス時の1回だけ再走査、短いTTL、または明示無効化を追加する。孤児は同期途中の誤削除を避けるため、自動即時削除ではなく手動整理か猶予期間付き清掃が安全です。
+
+### P2-5. 関連ノートの抜粋予算は注意書きの比率が高い
+
+[`NoteExcerptLimits.RELATED`](../app/src/main/java/com/example/newproject/model/NoteExcerptLimits.kt#L12) は600文字ですが、長文時は共通注意書き226文字もこの予算内から支払います。固定ラベルも含めると、現ノート本文の実質領域は約228文字です。
+
+型で上限を守り、冒頭だけでなく骨格・末尾も渡す設計自体は良好です。ただし関連ノート経路だけは、構造化の固定費が本文より大きくなりやすく、AI推薦品質のボトルネックになっています。
+
+**推奨:** 完成プロンプトの実トークン数を計測してから、関連ノート専用の短い注意書き、または600文字上限の段階的引上げを判断する。候補ブロック3,500文字との合算を見ずに単独で増やさない。
 
 ---
 
-## 4. テスト・CI・静的解析
+## 4. テスト・静的解析・CI
 
 ### 良い点
 
-- JVMテスト379件はすべて実行成功し、失敗・スキップはありません。
-- Markdown解析、AI応答パース、候補採点、キャッシュ、各主要Controller、ReadingTrace JSON、テーマコントラストなど、壊れやすい純粋ロジックを広く覆っています。
-- 蒸留は障害注入を含むRepositoryテストがあり、保存前後のハッシュ、外部変更、復旧レコード、UTF-8、容量不足を検証しています。
-- [CI](../.github/workflows/ci.yml#L16) がPRと`main`へのpushでテストとLintを実行し、失敗時もレポートを保存します。
+- 450件がすべて成功し、失敗・エラー・スキップはありません。
+- Markdown、AI応答パース、関連候補採点、キャッシュ、Controller、ReadingTrace JSON、蒸留保存、色コントラストなど、壊れやすい純粋ロジックを広く覆っています。
+- `NoteSessionCoordinatorTest`は、全UiStateフィールドのリセット漏れをリフレクションで検査し、7 Controllerの一斉停止・初期化を実物で確認しています。
+- `PackageDependencyTest`は、以前残っていた4組のパッケージ循環を再導入できないよう依存方向を固定しています。
+- `NoteExcerptThreadingTest`は、AI入力用の重い抜粋生成がMainへ戻らないよう全呼び出し箇所を固定しています。
+- CIはPRと`main`へのpushでテストとLintを実行し、レポートを保存します。
 
 ### 保証していない範囲
 
-- `app/src/androidTest`は存在せず、ContentResolver／実SAFプロバイダ、Compose Navigation、Activity再生成、実TalkBack、Gemini Nano実機挙動は未検証です。
-- 検索の世代管理を直接検証する`SearchControllerTest`はありません。
-- `NoteViewModel`の依存生成とController間調停を通るテストはありません。
-- CIのLintは警告を失敗扱いにしないため、現在の28件から増えてもビルドは成功します。
+- instrumentationテストが無いため、実SAF、Compose Navigation、Activity／プロセス再生成、TalkBack、端末AIは保証外です。
+- UI側の`buildNoteSectionModel()`は、`NoteExcerptThreadingTest`の対象外です。
+- `NoteViewModel`本体を通すテストはなく、Android境界とCoordinatorの結線はコンパイルと実機確認に依存します。
+- テストカバレッジ率は計測されていません。件数は広さの参考にはなりますが、行／分岐網羅率ではありません。
 
-Lint警告の内訳は次のとおりです。
+### 警告
+
+今回の`--offline --rerun-tasks`実行では、Lintは **0 errors / 21 warnings** でした。
 
 | 種別 | 件数 |
 |---|---:|
 | `UseKtx` | 9 |
-| `GradleDependency` | 7 |
-| `UnusedResources` | 3 |
 | `NewerVersionAvailable` | 3 |
+| `UnusedResources` | 3 |
 | `UsableSpace` | 2 |
 | `ConstantLocale` | 2 |
 | `ObsoleteSdkInt` | 1 |
 | `AndroidGradlePluginVersion` | 1 |
 
-依存更新系11件は一括更新せず、ML Kit GenAIを含めて機能単位で更新・実機確認するのが安全です。警告数の増加防止にはLint baseline、レポート差分、または段階的な`warningsAsErrors`を検討できます。
+さらに [`SummaryControllerTest`](../app/src/test/java/com/example/newproject/SummaryControllerTest.kt#L30) は`ExperimentalCoroutinesApi`をopt-inせず`advanceUntilIdle()`等を使うため、Kotlinコンパイラ警告を14件出します。テスト結果には影響しませんが、本当に新しい警告を見つけにくくします。
+
+CIはLint警告数とKotlinコンパイラ警告数の増加を失敗扱いにしません。現行件数を固定するbaseline／差分検査、または対象を整理した後の`warningsAsErrors`が必要です。
 
 ---
 
 ## 5. 強い部分
 
+### 非同期状態の境界
+
+`NoteSessionCoordinator`がノート／Vault切替を一手に引き受け、`NoteUiStateStore`が機能別WriterだけをControllerへ渡します。Job停止と状態リセットが同じ合流点にあり、Vault単位の処理はURI比較ではなく世代番号で照合します。A→B→Aの再選択でも古い要求を識別できる設計です。
+
 ### データ保護
 
-[`DistillWriteRepository`](../app/src/main/java/com/example/newproject/data/DistillWriteRepository.kt#L103) は、入力検証、保存直前の競合再確認、ステージファイル、復旧レコード、書込後ハッシュ検証まで実装しています。SAFがrenameの原子性を保証しない前提に正面から対応しており、本プロジェクトで最も品質の高い部分です。
+[`DistillWriteRepository`](../app/src/main/java/com/example/newproject/data/DistillWriteRepository.kt#L103) は、入力検証、保存直前の競合再確認、ステージファイル、復旧レコード、フェーズ更新、書込後ハッシュ検証まで実装しています。SAFがrenameの原子性を保証しない前提で、ユーザーノートを書き換える機能に必要な堅牢性を確保しています。
 
-### AI境界
+### 入力量の境界
 
-[`AICoreClient`](../app/src/main/java/com/example/newproject/ai/AICoreClient.kt#L47) は生成をMutexで直列化し、ロック取得後から60秒を計測し、トークン上限終了を明示エラーへ変換します。主要UseCaseとControllerは`CancellationException`を再送出し、キャンセルを通常エラーへ畳まない実装へ概ね統一されています。
+表示1MB、候補スニペット8KB、蒸留256KBという用途別入口に分かれ、呼び出し側が任意の巨大上限を渡せません。AI入力も`NoteExcerpt`型を経由し、長文では見出し骨格・冒頭・末尾を予算内に収めます。前回の無制限読込は解消済みです。
+
+### パッケージと状態所有
+
+`model`をプロジェクト内依存の葉にし、`ai → model`、`domain → model, ai`、`data → model, domain`、`controller → model, data, domain, ai`、`ui → model, domain`の方向をテストで固定しています。単なるフォルダ整理から、破るとCIが落ちる境界へ進んだ点は大きな改善です。
 
 ### プライバシー
 
-AndroidManifestにINTERNET権限はなく、AI処理はオンデバイスです。Vault URI、テーマ、当日履歴を含むSharedPreferencesは、[`backup_rules.xml`](../app/src/main/res/xml/backup_rules.xml#L12) と [`data_extraction_rules.xml`](../app/src/main/res/xml/data_extraction_rules.xml#L9) によりクラウドバックアップと端末移行から除外されています。旧レビュー時のバックアップ懸念は解消済みです。
-
-### ドキュメント
-
-制約、採用理由、劣化時の振る舞いがKDocと設計文書に残っています。単なる処理説明ではなく、「なぜその堅牢性レベルか」が記録されている点は、長期保守に有効です。
+AndroidManifestにINTERNET権限はなく、AI処理はオンデバイスです。Vault URI、テーマ、当日履歴を含むSharedPreferencesはクラウドバックアップと端末移行から除外されています。蒸留復旧元は`noBackupFilesDir`に置かれます。
 
 ---
 
@@ -196,42 +199,54 @@ AndroidManifestにINTERNET権限はなく、AI処理はオンデバイスです�
 
 ### アクセシビリティ
 
-[`AppColorContrastTest`](../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt#L127) はライト配色の既知未達7件を、失敗させるのではなく現在値として固定しています。したがってテスト全件成功は、全配色のWCAG AA準拠を意味しません。ライト側の文字6色、緑ボタンの輪郭、成功バッジを是正する必要があります。
-
-### エラー表現
-
-[`SearchController.loadFolders()`](../app/src/main/java/com/example/newproject/controller/SearchController.kt#L60) は失敗を黙殺し、補記削除はBoolean結果を捨てています。また、[`AICoreClient.checkAvailability()`](../app/src/main/java/com/example/newproject/ai/AICoreClient.kt#L59) は状態取得例外も`Unavailable`へまとめるため、非対応端末と一時エラーを区別できません。
+`contentDescription`、Role、pointer inputのsemantics、stale closure対策は丁寧です。一方、[`AppColorContrastTest`](../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt#L127) はライト配色の既知未達7件を「現在値」として固定しており、失敗させません。ライト側の弱い文字6色、緑ボタン輪郭、成功バッジはWCAG AA未達のままです。
 
 ### リリース設定
 
-[`app/build.gradle.kts`](../app/build.gradle.kts#L6) の `applicationId` と `namespace` は `com.example.newproject`、`versionCode`は1のままです。公開後に変更できない`applicationId`は、リリース準備の初期段階で正式値を決める必要があります。
+`assembleRelease`は成功しますが、生成物は`app-release-unsigned.apk`です。[`app/build.gradle.kts`](../app/build.gradle.kts#L6) には`buildTypes`、署名、R8／resource shrinking、instrumentation runner、Lint方針がありません。`applicationId`と`namespace`は`com.example.newproject`、`versionCode`は1、Java互換性は8のままです。
+
+### AI状態とモデル準備
+
+[`AICoreClient.checkAvailability()`](../app/src/main/java/com/example/newproject/ai/AICoreClient.kt#L59) は状態取得例外も`Unavailable`へまとめるため、非対応端末と一時エラーを区別できません。また、要約・クイズ・補記・蒸留が個別に`downloadModel()`を収集し、アプリ全体のsingle-flightはありません。SDK側の重複処理挙動を実機で確認し、必要ならモデル準備状態を共有する余地があります。
+
+### Markdown仕様
+
+番号付きリストは箇条書きへ正規化され、リンクは見た目だけでタップ不可です。画像、埋め込み、脚注、HTML、数式は専用対応していません。これは限定実装として明文化されていますが、AI入力用抜粋も同じパーサを使うため、手順番号は長文ノートのAI文脈からも失われます。
 
 ---
 
 ## 7. 前回レビューからの更新
 
-前回の基準コミット`439d23b`以降、次の改善を確認しました。
+前回の基準コミット`c62fb75`から、次を確認しました。
 
-- 検索・ランダム取得にJobとrequest IDを導入し、古い要求の上書きを防止
-- `CancellationException`を検索UseCaseとControllerで再送出
-- コメント説明用だった未使用import 6件を削除
-- PRごとのJVMテスト・Lint CIを追加
-- SharedPreferencesをバックアップ・端末移行から除外
-- JVMテストを378件から379件へ増加
+| 前回指摘 | 現在 |
+|---|---|
+| 補記一覧・削除がVault切替をすり抜ける | `vaultGeneration`、`listJob`、削除失敗件数で解消 |
+| 検索中のフォルダ変更・フォルダ一覧後着 | 検索requestId、`foldersJob`、スコープ初期化で解消 |
+| ReadingTraceが30回で止まる | `totalVisitCount`とschema v2で解消 |
+| Markdown本文の無制限読込 | 表示1MB／候補8KB／蒸留256KBへ分離して解消 |
+| パッケージ間4循環 | 共有型移動と`PackageDependencyTest`で解消 |
+| ViewModelの依存内部生成・共有状態の無制限更新 | `NoteViewModelDependencies`、Coordinator、機能別Writerで改善 |
+| SearchController／ViewModel調停テストなし | 状態と調停テストは追加。非null Uriを使う検索実行は未検証 |
+| ReadingTrace索引の外部同期 | 未解決 |
+| instrumentation testなし | 未解決 |
+| ライト配色AA未達 | 未解決 |
+| 正式ID・Lint警告・リリース構成 | 未解決 |
 
-一方、「検索の並行処理は解消済み」という評価は範囲を限定する必要があります。**検索要求同士**の追い越しは解消していますが、フォルダ選択変更とフォルダ一覧取得は未保護です。また、旧レビューの「バックアップ設定は要確認」「CIが存在しない」は現在は該当しません。
+AI入力の先頭固定長切り出しは、型付きの見出し骨格＋冒頭＋末尾の抜粋へ改善されました。呼び出し側での`Dispatchers.Default`切替もテストで固定されています。ただし、同じMarkdown解析のUI表示経路はMainに残っており、今回の新しい最優先指摘です。
 
 ---
 
 ## 8. 推奨する実施順序
 
-1. Vault切替時の補記一覧・削除・フォルダ一覧Jobを世代管理し、Vault単位の状態を必ず初期化する
-2. 検索中のフォルダ変更をキャンセルまたはスコープIDで無効化し、競合テストを追加する
-3. ReadingTraceへ`totalVisitCount`を追加し、31回目以降も表示・AI要約を更新する
-4. Markdown本文読込へ用途別の上限を設け、関連候補は必要部分だけ読む
-5. `NoteViewModel`の依存生成を外へ出し、Vault切替とController調停の統合テストを追加する
-6. 許可するパッケージ依存方向を決め、4組の循環を段階的に解消する
-7. SAF・Navigation・Activity再生成のinstrumentationテストを追加する
-8. ライト配色のAA未達、Lint警告、正式`applicationId`をリリース前に整理する
+1. 通常／全画面の`NoteSectionModel`をMain外で1回だけ生成・共有し、長文表示の停止を解消する
+2. 蒸留の復旧チェックを追跡Jobと世代管理へ載せ、分析との交差テストを追加する
+3. AI補記ファイルの作成失敗時に後始末と保存後検証を行う
+4. RepositoryのAndroid境界を小さいgatewayへ分け、検索・補記の世代照合をJVMテスト可能にする
+5. SAF・Navigation・Activity再生成を通す最小のinstrumentation基盤を作る
+6. ReadingTrace索引の再走査契機と孤児整理方針を決める
+7. ライト配色のAA未達をグレー階調整理と合わせて解消する
+8. 正式`applicationId`、署名、release build type、R8、Lint／Kotlin警告予算を整備する
+9. 完成プロンプトのトークン計測後に関連ノートの抜粋予算を調整する
 
-最も費用対効果が高いのは、**「Vault世代をすべてのVault依存Jobへ通す」「履歴保持数と累計数を分ける」「読込量を入口で制限する」**の3点です。これらを先に直せば、既存のController分割や豊富な純粋ロジックテストを活かしたまま、実害のある境界不備を減らせます。
+最初の3件は既存設計を崩さず局所的に直せます。特に、**「表示用MarkdownをMain外で1回だけ解析する」**対応は、既にAI入力側で確立したdispatcher注入とソース走査テストの考え方を再利用でき、効果が明確です。

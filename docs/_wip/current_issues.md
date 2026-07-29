@@ -4,10 +4,10 @@
 **抽出日:** 2026-07-22（最終更新: 2026-07-28）
 **基準:** ReadingTrace（実機確認待ち・サイドカーは schema v2）・Vigilith Phase 3（最終実機確認済み）・
 ダークモード・B案（実機確認済み）・A案／C案（コード上は完了、実機確認待ち）・
-AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_FunctionNo.4`
-**直近の入力:** 2026-07-26 のソースコード品質総評（[source_code_quality_review.md](../source_code_quality_review.md)）。
-全指摘を実コードで突合して起票し、うち軽量なものから順次解消している。
-同日の再突合で総評が拾えていなかった3件も起票したが、うち2件（要約DLジョブの実害・痕跡の保存スコープ）はA案・C案で解消済み。残るのは 3-14 のみ。
+AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Function_No.5`
+**直近の入力:** 2026-07-28 のソースコード品質再評価（[source_code_quality_review.md](../source_code_quality_review.md)）。
+前回の主要指摘はA〜C案で解消し、総合評価は7.2→8.0へ改善した。再評価で別系統の3件
+（UI側Markdown解析、蒸留復旧チェックの競合、補記保存失敗時の残骸）を追加起票した。
 **目的:** 次の一手を決めるための、現時点で確認できる課題の棚卸し。ロードマップ（[roadmap.md](roadmap.md)）の入力とする。
 
 > 何をいつ変えたかは [change_history.md](../change_history.md)、今どうなっているかは [source_code_analysis.md](../source_code_analysis.md)、なぜそうしたかは [design/](../design/) を参照。本ファイルは「まだ手を付けていない/追いついていない」課題のみを新しい順の観点で集約する。**解消した課題はこのファイルから削除する**（記録は上記3文書に残るので、ここに残すと未対応課題が埋もれる）。
@@ -18,11 +18,14 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 
 ## 0. サマリー（優先度マップ）
 
-> **A案（非同期の境界）・C案（入出力の境界）は 2026-07-26、B案（依存と状態の境界）は 2026-07-27 に完了**したため、対象だった課題は本ファイルから削除した。効果の見込みは [§5](#5-改善活動abc案は完了) にまとめる。
+> **A案（非同期の境界）・C案（入出力の境界）は 2026-07-26、B案（依存と状態の境界）は 2026-07-27 に完了**したため、対象だった課題は本ファイルから削除した。実施前の効果見込みは [§5](#5-改善活動abc案は完了)、完了後の再評価は [source_code_quality_review.md](../source_code_quality_review.md) にまとめる。
 
 | 優先度 | 課題 | 種別 | 影響 | 計画 |
 |---|---|---|---|:--:|
+| 高 | **2-6 最大1MBのMarkdownをCompose Main上で解析し、全画面で再解析する** | 性能 | 長文を開く時と全画面進入時にUIが停止し得る | — |
 | 中 | **2-5 関連ノートは抜粋予算600のうち38%を注意書きに払っている** | AI品質 | 現ノート文脈が実質228文字しか届かない | — |
+| 中 | **2-7 蒸留の復旧チェックだけJob・requestId管理の外にある** | 並行処理 | 復旧表示を進行中分析が上書きし得る | — |
+| 中 | **2-8 補記ファイルの書込失敗で空・部分ファイルが残り得る** | 保存 | 失敗表示後もVaultに残骸が残る | — |
 | 中 | 2-3 読書痕跡の孤児ファイルが掃除されない／move・rename に追従しない | 保守 | 長期運用でファイル数が単調増加 | — |
 | 中 | 2-4 `_ReadingTraces`の索引が外部同期で追加されたファイルをプロセス再起動まで認識しない | 同期/キャッシュ | 再会カードの見逃し・重複作成余地 | — |
 | 低 | 3-1 統合テスト不足（SAF・端末AI・Navigation） | テスト | 実端末依存の回帰を検出できない | — |
@@ -31,7 +34,7 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 | 低 | 3-8 **ライトの弱い文字6色＋緑ボタンがAA未達** | a11y | 2.46〜4.43。ダークは全て基準内 | — |
 | 低 | 3-9 無彩色グレーが5段階あり意味的な区別がない | リファクタ | ダーク値を5つ決める必要が出る | — |
 | 低 | **3-12 `applicationId` が `com.example.newproject` のまま** | リリース | 公開後は変更不可 | — |
-| 低 | **3-13 Lint warning 28件** | 保守 | 依存更新・KTX移行の積み残し | — |
+| 低 | **3-13 Lint warning 21件＋テストコンパイルwarning 14件** | 保守 | 依存更新・KTX移行・Experimental API opt-inの積み残し | — |
 | 低 | **3-14 `buildTypes` ブロックが無く、リリースビルド構成が未定義** | リリース | R8・署名・androidTest基盤がすべて未設定 | — |
 
 **A〜C案でも動かなかった軸:** アクセシビリティ（3-8・3-9）と開発・リリース運用（3-12〜3-14）。
@@ -41,7 +44,18 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 
 ## 1. 高優先度
 
-**現在なし。**（検索の世代管理・Job管理の不統一・エラー通知の握りつぶしは 2026-07-26 に解消）
+### 2-6. 表示用Markdown解析がMain上に残り、通常／全画面で二重に走る（2026-07-28 追加）
+- **現状:** [`NoteReaderTab`](../../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt#L92) と
+  [`FullscreenNoteScreen`](../../app/src/main/java/com/example/newproject/ui/screen/FullscreenNoteScreen.kt#L125) が、
+  それぞれの `remember` 内で `buildNoteSectionModel(content)` を同期実行する。表示フォールバックは最大1MB。
+- **問題:** 同じMarkdownパーサを使うAI入力抜粋は、既存実測で1MB約460ms・200KB約20msだったため
+  `Dispatchers.Default` へ移したが、表示経路はComposeのMain上に残っている。全画面は別Composableの
+  `remember`なので、同じ本文を進入時にもう一度解析する。長文を開く時と全画面進入時にUIが停止し得る。
+- **文書との差:** `source_code_analysis.md` §9.4は通常／全画面が「同じパース済みブロック」を使うと説明するが、
+  実装上は共有されない。
+- **対応候補:** ノート読込後にDefault上で `NoteSectionModel` を1回だけ作り、通常／全画面へ共有する。
+  Composable内の同期解析を検出するソース走査テストと、200KB／1MBの時間・キャンセル計測を追加する。
+- **規模感:** 中。見た目は変えず、状態または専用キャッシュへパース結果を通す必要がある。
 
 > ReadingTrace v1 で 2026-07-25 に解消した4件（到達率・Lifecycle・Vault分離・検索フォールバック）は
 > SAF実装のVault照合と Activity lifecycle を通した pause/resume が JVMテストの範囲外のため、
@@ -50,6 +64,25 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 ---
 
 ## 2. 中優先度
+
+### 2-7. 蒸留の復旧チェックだけJob・requestId管理の外にある（2026-07-28 追加）
+- **現状:** [`DistillController.checkRecovery()`](../../app/src/main/java/com/example/newproject/controller/DistillController.kt#L334) は
+  裸の `scope.launch` で、Jobを保持せず、通常の分析が使う `activeRequestId` も進めない。
+- **問題:** Vault切替直後などに復旧確認が遅延し、その間に新しい分析が始まると、復旧結果が
+  `RecoveryRequired` を出した後で進行中分析の候補が同じrequestIdのまま後着し、復旧表示を上書きできる。
+  保存層は未解決レコードを再確認するので危険な書込は止まるが、表示の混乱と不要なAI実行が起きる。
+- **対応候補:** 復旧確認を追跡Jobへ載せ、確認中は新規分析を開始させないか、復旧結果を反映する時点で
+  分析世代を無効化する。遅い復旧確認と分析を交差させるJVMテストを追加する。
+- **規模感:** 小〜中。
+
+### 2-8. AI補記は書込失敗時に作成済みファイルを後始末しない（2026-07-28 追加）
+- **現状:** [`NoteRepository.createAnnotationFile()`](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L197) は
+  `createDocument()` の後に対象URIへ直接書き込み、ストリームopen失敗・途中書込例外時の削除や再読込検証を行わない。
+- **問題:** UIは生成失敗を表示しても、`_AI補記` に空または部分ファイルが残り得る。ファイル名も分単位なので、
+  同一分の再生成でプロバイダが改名した場合、Controllerの予測名と実名がずれる。
+- **対応候補:** 書込失敗時に作成済みURIをベストエフォート削除し、書込後の最低限の内容検証を行う。
+  表示名は保存後のメタデータから取得し、Fake gatewayによる失敗注入テストを追加する。
+- **規模感:** 小〜中。蒸留ほどの復旧機構は不要。
 
 ### 2-5. 関連ノートは抜粋予算の38%を注意書きに払っている（2026-07-28 追加）
 - **現状:** AI入力の抜粋化で、抜粋であることを伝える注意書き（226文字）を用途別上限の**内側**から支払う設計にした。上限を超えない不変条件が保てる代わりに、予算の小さい経路ほど占有率が跳ね上がる。
@@ -134,13 +167,18 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 - **規模感:** 小（名前さえ決まれば設定変更のみ）。ただし `namespace` も併せて変えるとimport全書き換えになるため、`applicationId` だけ先に変える判断もあり得る。
 - **バックアップ側は 2026-07-26 に解消:** `dataExtractionRules`／`fullBackupContent` で `random_note_prefs` をクラウドバックアップと端末移行の両方から除外した。
 
-### 3-13. Lint warning 28件
-- Error 0件・Warning 28件。内訳: `UseKtx` 9／`GradleDependency` 7／`UnusedResources` 3／`NewerVersionAvailable` 3／`UsableSpace` 2／`ConstantLocale` 2／`ObsoleteSdkInt` 1／`AndroidGradlePluginVersion` 1。
-- 依存更新系11件は方針（いつ・どこまで上げるか）を決めていないことが根本。`ConstantLocale` は `SimpleDateFormat` の Locale 固定で、[`AnnotationComposer`](../../app/src/main/java/com/example/newproject/domain/AnnotationComposer.kt#L10) が「メインスレッド専用」前提で持つ箇所と関係する。
+### 3-13. Lint warning 21件＋テストコンパイルwarning 14件
+- 2026-07-28 の `--offline --rerun-tasks` 実行では Error 0件・Warning 21件。内訳:
+  `UseKtx` 9／`UnusedResources` 3／`NewerVersionAvailable` 3／`UsableSpace` 2／`ConstantLocale` 2／`ObsoleteSdkInt` 1／`AndroidGradlePluginVersion` 1。
+- これとは別に、[`SummaryControllerTest`](../../app/src/test/java/com/example/newproject/SummaryControllerTest.kt#L30) が
+  `ExperimentalCoroutinesApi` をopt-inせず `advanceUntilIdle()` 等を使うため、Kotlinコンパイルwarningを14件出す。
+- 依存更新系は方針（いつ・どこまで上げるか）を決めていないことが根本。`ConstantLocale` は `SimpleDateFormat` の Locale 固定で、[`AnnotationComposer`](../../app/src/main/java/com/example/newproject/domain/AnnotationComposer.kt#L10) が「メインスレッド専用」前提で持つ箇所と関係する。
 - **規模感:** 小。CI（2026-07-26 導入済み）で警告数を固定すると再発しない。ただし `lint { }` ブロック自体が無いため、baseline も `warningsAsErrors` も**現状は設定する場所が無い**（→ 3-14）。
 
 ### 3-14. `buildTypes` ブロックが無く、リリースビルド構成が未定義（2026-07-26 追加）
 - **現状:** [app/build.gradle.kts](../../app/build.gradle.kts) に **`buildTypes { }` 自体が存在しない**。3-12 は `applicationId` 単体の課題として起票していたが、リリース可能性のギャップはもっと広い。
+  2026-07-28 に `assembleRelease --offline` 自体は成功したが、生成物は約11MBの
+  **`app-release-unsigned.apk`**であり、配布可能性を意味しない。
 
 | 未設定 | 影響 |
 |---|---|
@@ -192,7 +230,7 @@ AI入力の抜粋化（実機確認済み・PR #43） / `feature/Improvement_Fun
 
 ### 合計効果
 
-A・B・C案のコード上の完了を反映した見込み値。**再採点と実機確認前なので確定値ではない。**
+下表はA・B・C案の実施前に置いた見込み値。2026-07-28の再評価では総合 **8.0 / 10** を確認したが、新規課題も3件見つかったため、現在の軸別評価は [source_code_quality_review.md](../source_code_quality_review.md) を正とする。
 
 | 評価軸 | 当初 | A・B・C案後（見込み） | 効いた案 |
 |---|---:|---:|---|
@@ -209,7 +247,7 @@ A・B・C案のコード上の完了を反映した見込み値。**再採点と
 | ドキュメント | 8.5 | 8.5 | — |
 | **総合** | **7.2** | **約8.0** | |
 
-> **2026-07-28 のAI入力の抜粋化はこの表の外側にある**（A・B・C案の一部ではない）。再採点時は別枠で見る。
+> **2026-07-28 のAI入力の抜粋化はこの表の外側にある**（A・B・C案の一部ではない）。再評価では抜粋化の効果を確認した一方、表示用Markdown解析がMainに残るため、性能は7.0と評価した。
 > 性能軸には注意が要る — 抜粋生成は1MBノートで約460msかかり、**従来の `take()` に無かった負荷**である。
 > `Dispatchers.Default` へ逃がしてMainは止めないが、処理そのものが消えたわけではない。
 
