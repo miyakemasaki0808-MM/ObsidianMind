@@ -136,14 +136,17 @@ fun AiTab(
         }
 
         if (!hasNote) {
+            // 半透明にするとグラデーションが透けて、実効的な背景が停止色ごとに変わる。
+            // 白文字ではAqua上で1.82まで落ちていた（透過22%では下地をほとんど隠せない）。
+            // 面を不透明にして、背景が何色でも文字の条件が動かないようにする。
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Panel.copy(alpha = 0.22f),
+                color = Panel,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
                     text = "先に「ノート」タブでノートを表示してください。",
-                    color = OnVibrant,
+                    color = OnSurface,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(16.dp)
                 )
