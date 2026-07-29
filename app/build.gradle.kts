@@ -47,7 +47,12 @@ android {
     lint {
         // 依存更新系は「いつ・どこまで上げるか」の方針が未定。方針を決めるまでは
         // ビルドのたびに出しても行動につながらないので黙らせる。方針が決まったら外す。
-        disable += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion")
+        // （CLAUDE.md の「依存ライブラリを一括更新しない」に対応する枠でもある）
+        disable += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion", "GradleDependency")
+        // 残りは0件にしたので、増えたら失敗させる。件数を数えて見張るより、
+        // 増やせないようにするほうが確実（baselineは「見なかったことにする」側なので使わない）。
+        warningsAsErrors = true
+        abortOnError = true
     }
 }
 
@@ -60,6 +65,10 @@ dependencies {
     implementation("androidx.compose.material3:material3-window-size-class")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.activity:activity-compose:1.9.3")
+    // これまで lifecycle 経由で入っていた版（1.13.1）をそのまま明示する。
+    // `SharedPreferences.edit {}` と `String.toUri()` を直接使うため、
+    // 推移的依存に頼ったままにしない。版は変えていない。
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")

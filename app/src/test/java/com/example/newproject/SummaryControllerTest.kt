@@ -9,6 +9,7 @@ import com.example.newproject.model.state.SummaryState
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import com.example.newproject.model.NoteUiStateStore
@@ -26,7 +27,11 @@ import org.junit.Test
  * これは 2026-07-26 時点で唯一「ユーザーに見える誤情報」まで到達していた経路。
  * ノートAのDL中にノートBへ切り替えると、DL完了時に**ノートAの本文で要約が走り、
  * ノートBの画面へ書き戻されていた**。Uri に触れないので素のJVMテストで固定できる。
+ *
+ * `advanceUntilIdle()` と `StandardTestDispatcher` は実験的APIなので明示的にopt-inする
+ * （未指定だとコンパイル警告が14件出ていた）。
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SummaryControllerTest {
 
     @Test

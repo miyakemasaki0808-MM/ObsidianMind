@@ -1,16 +1,29 @@
 package com.example.newproject.domain
 
 import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 // 補記メモの生成結果を検証し、保存用Markdownへ整形する純粋ロジック。
 // AI呼び出しやファイルI/Oは持たない（`AnnotationController` が担当）。
 internal object AnnotationComposer {
 
-    // メイン（viewModelScope）からのみ使う前提。SimpleDateFormat はスレッド非安全のため
-    // 別スレッドから使う場合は都度生成に変えること。
-    val DISPLAY_TIMESTAMP_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    val FILE_TIMESTAMP_FORMAT = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault())
+    // SimpleDateFormat は都度生成する。共有インスタンスには問題が2つあった。
+    // ①スレッド非安全（「メインからのみ使う」という前提をコメントで守っていた）
+    // ②`Locale.getDefault()` を生成時に焼き付けるため、実行中にロケールが変わっても追従しない
+    /** 補記メモの本文に載せる日時。読む人の言語設定に従う。 */
+    fun formatDisplayTimestamp(at: Date): String =
+        SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(at)
+
+    /**
+     * ファイル名に使う日時。**端末のロケールで変わってはいけない**ので固定する。
+     *
+     * 既定ロケールのままだと、仏暦カレンダーを使うロケール（th-TH等）で `yyyy` が
+     * 2569 のような値になる。`AnnotationController` は保存前にこの名前を予測して
+     * 突き合わせるため、名前が揺れると同じノートの補記が別物として並ぶ。
+     */
+    fun formatFileTimestamp(at: Date): String =
+        SimpleDateFormat("yyyyMMdd_HHmm", Locale.ROOT).format(at)
 
     private val REQUIRED_SECTIONS = listOf("粒度評価", "補記すべき内容")
 

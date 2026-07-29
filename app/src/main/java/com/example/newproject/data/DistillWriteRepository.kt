@@ -2,6 +2,7 @@ package com.example.newproject.data
 
 import android.content.ContentResolver
 import android.net.Uri
+import androidx.core.net.toUri
 import com.example.newproject.model.DistillLimits
 import java.io.File
 import java.io.FileOutputStream
@@ -17,13 +18,13 @@ internal class SafDistillDocumentGateway(
     private val contentResolver: ContentResolver
 ) : DistillDocumentGateway {
     override fun read(targetUri: String, maximumBytes: Int): ByteArray {
-        val uri = Uri.parse(targetUri)
+        val uri = targetUri.toUri()
         return contentResolver.openInputStream(uri)?.use { readBoundedBytes(it, maximumBytes) }
             ?: throw IOException("対象ノートを開けませんでした。")
     }
 
     override fun writeFromFile(targetUri: String, source: File) {
-        val uri = Uri.parse(targetUri)
+        val uri = targetUri.toUri()
         contentResolver.openOutputStream(uri, "wt")?.use { output ->
             source.inputStream().use { input -> input.copyTo(output) }
             output.flush()
@@ -164,6 +165,8 @@ internal class DistillWriteRepository(
 
         val requiredBytes = requiredDistillStorageBytes(initialBytes.size, request.outputBytes.size)
         val availableBytes = try {
+            // `usableSpace` の採用理由は DistillRecoveryStore.usableSpace() のコメントを参照。
+            @Suppress("UsableSpace")
             availableSpaceProvider?.invoke() ?: run {
                 val cacheSpace = (cacheDirectory.takeIf { it.exists() } ?: cacheDirectory.parentFile)
                     ?.usableSpace ?: 0L
