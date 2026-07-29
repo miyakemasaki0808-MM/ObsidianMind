@@ -4,6 +4,9 @@ plugins {
 }
 
 android {
+    // `namespace`（＝生成されるRクラスとソースのパッケージ）は据え置く。
+    // `applicationId` と揃える必要は無く、揃えに行くと全ソースのパッケージ宣言と
+    // import を書き換えることになる。見返りは名前の一致だけなので取らない。
     namespace = "com.example.newproject"
     compileSdk {
         version = release(36) {
@@ -12,7 +15,8 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.newproject"
+        // Play Storeへ公開すると二度と変更できない。未公開の今のうちに確定させる。
+        applicationId = "com.vigilith.ai"
         minSdk = 26
         targetSdk {
             version = release(36)
