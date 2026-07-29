@@ -9,6 +9,7 @@ import com.example.newproject.ui.vigilith.sectionChatStatus
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,6 +48,7 @@ import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
+import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
@@ -169,6 +171,7 @@ internal fun NoteReaderTab(
                         onClick = onSelectVault,
                         modifier = Modifier.weight(1f).height(48.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary, contentColor = OnButtonSecondary),
+                        border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
                         shape = RoundedCornerShape(24.dp)
                     ) { Text("Vaultを選択", color = OnButtonSecondary) }
                 }
@@ -177,6 +180,7 @@ internal fun NoteReaderTab(
                     enabled = !isLoading,
                     modifier = Modifier.weight(1f).height(48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
+                    border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
                     shape = RoundedCornerShape(24.dp)
                 ) { Text("別のノートをひらく", color = OnButtonPrimary) }
             }

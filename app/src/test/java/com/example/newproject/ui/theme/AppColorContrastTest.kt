@@ -45,6 +45,17 @@ class AppColorContrastTest {
 
     private val schemes = listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors)
 
+    // グラデーションの停止色。`Brush` からは色を取り出せないので、AppColors.kt の
+    // 定義と対で持つ。片方だけ変えると、下のテストが実物と食い違う。
+    private val lightGradientStops = mapOf(
+        "AppGradient" to listOf(Indigo, Aqua, Coral),
+        "ReadingGradient" to listOf(MutedIndigo, MutedAqua, MutedCoral)
+    )
+    private val darkGradientStops = mapOf(
+        "AppGradient(dark)" to listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
+        "ReadingGradient(dark)" to listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
+    )
+
     /** 半透明の面を下地へ重ねた実効色。`Color.copy(alpha = …)` の見え方に対応する。 */
     private fun blend(foreground: Color, background: Color, alpha: Float): Color = Color(
         red = foreground.red * alpha + background.red * (1 - alpha),
@@ -78,12 +89,75 @@ class AppColorContrastTest {
         }
     }
 
+    /**
+     * パネルの上に載るボタン（SectionChatSheet・DistillPanel）は、塗り自身で境界を出す。
+     * グラデーション直上のボタンは条件が違うので、下の別テストで扱う。
+     */
     @Test
-    fun `塗りボタンは自面の上で輪郭が判別できる`() {
+    fun `パネル上の塗りボタンは輪郭が判別できる`() {
         schemes.forEach { (name, c) ->
-            assertAtLeast(3.0, contrast(c.buttonPrimary, c.panel), "$name ButtonPrimary の塗り")
-            assertAtLeast(3.0, contrast(c.buttonSecondary, c.panel), "$name ButtonSecondary の塗り")
-            assertAtLeast(3.0, contrast(c.buttonAi, c.panel), "$name ButtonAi の塗り")
+            listOf("panel" to c.panel, "panelBlue" to c.panelBlue).forEach { (sn, surface) ->
+                assertAtLeast(3.0, contrast(c.buttonPrimary, surface), "$name ButtonPrimary の塗り（$sn 上）")
+                assertAtLeast(3.0, contrast(c.buttonSecondary, surface), "$name ButtonSecondary の塗り（$sn 上）")
+                assertAtLeast(3.0, contrast(c.buttonAi, surface), "$name ButtonAi の塗り（$sn 上）")
+            }
+        }
+    }
+
+    /**
+     * グラデーション直上のボタンは、**塗りの色をどう選んでも境界を出せない**。
+     *
+     * 停止色の相対輝度が広く散っているため、全停止色に3:1を満たす塗りは
+     * 「ほぼ黒」しか存在しない（明るい側は輝度1.0を超える値が必要で不可能）。
+     * この事実を固定しておかないと、「もっと良い緑を探す」方向へ何度でも戻る。
+     */
+    @Test
+    fun `ライトのグラデーション上では塗りだけで境界を出せない`() {
+        val c = LightAppColors
+        val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
+        lightGradientStops.forEach { (gradient, stops) ->
+            roles.forEach { (role, fill) ->
+                val worst = stops.minOf { contrast(fill, it) }
+                assertTrue(
+                    "$gradient 上の Button$role の塗りが3:1を満たすようになった" +
+                        "（実測 ${"%.2f".format(worst)}）。輪郭線が不要になったなら、" +
+                        "このテストと buttonOutlineOnGradient を見直すこと",
+                    worst < 3.0
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `ライトの輪郭線はどの停止色の上でも境界として見える`() {
+        lightGradientStops.forEach { (gradient, stops) ->
+            stops.forEach { stop ->
+                assertAtLeast(
+                    3.0,
+                    contrast(LightAppColors.buttonOutlineOnGradient, stop),
+                    "$gradient の停止色に対する輪郭線"
+                )
+            }
+        }
+    }
+
+    /**
+     * ダークは輪郭線を置かない。**足りているから置かない**のであって、
+     * 忘れているのではないことをここで示す。
+     */
+    @Test
+    fun `ダークは塗りだけでグラデーションから浮くので輪郭線を持たない`() {
+        val c = DarkAppColors
+        assertEquals("ダークの輪郭線は透明であること", Color.Transparent, c.buttonOutlineOnGradient)
+        val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
+        darkGradientStops.forEach { (gradient, stops) ->
+            roles.forEach { (role, fill) ->
+                assertAtLeast(
+                    3.0,
+                    stops.minOf { contrast(fill, it) },
+                    "$gradient 上の Button$role の塗り（輪郭線なしで成立すること）"
+                )
+            }
         }
     }
 

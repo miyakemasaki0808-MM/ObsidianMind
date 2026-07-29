@@ -89,6 +89,13 @@ internal val LightAppColors = AppColorScheme(
     onButtonPrimary = Color(0xFF000000),   // #FF3D71 上で 6.16
     onButtonSecondary = Color(0xFF000000), // #109384 上で 5.53
     onButtonAi = Color.White,              // #4D3DFF 上で 6.13
+    // グラデーション直上のボタンは、**塗りの色をどう選んでも境界を出せない**。
+    // AppGradient の停止色は相対輝度 0.121〜0.458 に散っており、全停止色に対し
+    // 3:1 を満たすには L<=0.007（ほぼ黒）か L>=1.47（存在しない）しかない。
+    // 実測でも3役すべてが 1.00〜1.40 で、ButtonAi は Indigo 停止色の上で 1.00（同色）。
+    // したがって輪郭線で境界を作る（WCAG 1.4.11 は隣接する輪郭でも可）。
+    // LogoNavy は最も不利な Indigo 停止色に対して 3.15、Reading側で 4.19。
+    buttonOutlineOnGradient = LogoNavy,
     appGradient = Brush.linearGradient(
         colors = listOf(Indigo, Aqua, Coral),
         start = Offset(0f, Float.POSITIVE_INFINITY),
@@ -162,6 +169,10 @@ internal val DarkAppColors = AppColorScheme(
     onButtonPrimary = Color(0xFF000000),
     onButtonSecondary = Color(0xFF000000),
     onButtonAi = Color(0xFF000000),
+    // ダークのグラデーションは明度で沈めてあるため、3役の塗り自体が停止色に対し
+    // 4.45〜6.10 を確保できている。輪郭線を足すと明るい環を描くことになるので置かない。
+    // 「置かなくて足りている」ことは AppColorContrastTest が確かめる。
+    buttonOutlineOnGradient = Color.Transparent,
     // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
     // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
     appGradient = Brush.linearGradient(
@@ -248,6 +259,16 @@ internal val ButtonAi: Color @Composable @ReadOnlyComposable get() = current.but
 internal val OnButtonPrimary: Color @Composable @ReadOnlyComposable get() = current.onButtonPrimary
 internal val OnButtonSecondary: Color @Composable @ReadOnlyComposable get() = current.onButtonSecondary
 internal val OnButtonAi: Color @Composable @ReadOnlyComposable get() = current.onButtonAi
+
+/**
+ * グラデーション直上に置く塗りボタンに付ける輪郭線。
+ *
+ * **パネルの上に載るボタンには付けない。** そちらは塗り自身が3:1を満たしており、
+ * 足すと理由のない線が増える。付ける対象は現在5箇所（さがす2・ノート2・AI 1）で、
+ * どれも `AppGradient` / `ReadingGradient` を直接の背景にしている。
+ */
+internal val ButtonOutlineOnGradient: Color
+    @Composable @ReadOnlyComposable get() = current.buttonOutlineOnGradient
 
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient

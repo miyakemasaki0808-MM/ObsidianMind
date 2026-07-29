@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,7 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.AppGradient
+import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.AccentText
@@ -178,6 +180,7 @@ fun AiTab(
             enabled = !isAnnotationLoading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
+            border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
             shape = RoundedCornerShape(24.dp)
         ) { Text(annotationLabel, color = OnButtonAi) }
     }

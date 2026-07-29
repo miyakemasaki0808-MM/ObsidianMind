@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,7 @@ import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.AppGradient
+import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorText
@@ -149,6 +151,7 @@ fun SearchTab(
                 enabled = !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary, contentColor = OnButtonSecondary),
+                border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
                 shape = RoundedCornerShape(24.dp)
             ) { Text("🎰 ランダムに引く", color = OnButtonSecondary) }
             Button(
@@ -156,6 +159,7 @@ fun SearchTab(
                 enabled = query.isNotBlank() && !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
+                border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
                 shape = RoundedCornerShape(24.dp)
             ) { Text("🔎 ことばでさがす", color = OnButtonPrimary) }
         }

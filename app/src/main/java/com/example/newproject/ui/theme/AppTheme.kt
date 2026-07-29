@@ -74,6 +74,9 @@ internal class AppColorScheme(
     val onButtonPrimary: Color,
     val onButtonSecondary: Color,
     val onButtonAi: Color,
+    // グラデーション直上に置くボタンの輪郭線。塗り自身では境界を出せないため使う
+    // （理由は LightAppColors のコメント）。ダークは塗りが足りているので透明。
+    val buttonOutlineOnGradient: Color,
     // 背景
     val appGradient: Brush,
     val readingGradient: Brush
