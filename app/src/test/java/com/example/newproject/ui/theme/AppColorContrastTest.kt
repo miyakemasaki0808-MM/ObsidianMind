@@ -342,23 +342,58 @@ class AppColorContrastTest {
     }
 
     /**
-     * **ライトのグラデーション直上の文字は未達**（実測を記録する。修正は次段）。
+     * 見出しの帯は、暗幕を敷いた**実効的な背景**で基準を満たす。
      *
-     * ライトの停止色は Aqua / Coral が明るく、白文字でも 2.07 / 2.72 しか出ない。
-     * 28sp Bold の大見出しは大文字扱いで3:1に緩むが、**それすら満たさない**。
-     * 色を選び直しても解けない（白より明るい文字は無い）ので、背後へ暗幕を敷く。
-     *
-     * 直したらこのテストを消し、上のダーク用テストを明暗両方へ広げること。
+     * 素のグラデーションでは白でも 2.07（Aqua）しか出ず、色では解けない。
+     * `GradientHeader` が背後へ `gradientHeaderScrim` を敷くので、
+     * 検証もその合成後の色に対して行う。**素の停止色で測ると通らないのが正しい。**
      */
     @Test
-    fun `ライトのグラデーション上の文字が未達であることを記録する`() {
+    fun `見出しの帯は暗幕を敷いた実効面で基準を満たす`() {
+        schemes.forEach { (name, c) ->
+            c.gradients().forEach { (gradient, stops) ->
+                stops.forEach { stop ->
+                    val effective = blend(c.gradientHeaderScrim, stop, c.gradientHeaderScrim.alpha)
+                    assertAtLeast(4.5, contrast(c.onVibrant, effective), "$name onVibrant（$gradient $stop ＋暗幕）")
+                    assertAtLeast(4.5, contrast(c.onVibrantMuted, effective), "$name onVibrantMuted（$gradient $stop ＋暗幕）")
+                }
+            }
+        }
+    }
+
+    /**
+     * ダークは暗幕を敷かない。**足りているから置かない**ことを示す
+     * （上のテストはダークでは実質「素の停止色」を測っている）。
+     */
+    @Test
+    fun `ダークは暗幕なしでグラデーション上の文字が読める`() {
+        val c = DarkAppColors
+        assertEquals("ダークの暗幕は透明であること", 0f, c.gradientHeaderScrim.alpha, 0.001f)
+        c.gradients().values.flatten().forEach { stop ->
+            assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$stop 上・暗幕なし）")
+            assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$stop 上・暗幕なし）")
+        }
+    }
+
+    /**
+     * **見出しの帯の外にも `onVibrant` が残っている**（既知・未修正）。
+     *
+     * 検索欄・フォルダチップ・空状態・進捗インジケータ・戻るボタンなどが、
+     * まだグラデーション直上に白文字を置いている。これらは暗幕ではなく
+     * **部品ごとに不透明面＋対の前景へ寄せる**方針なので、帯とは別に直す。
+     *
+     * ここで固定するのは「帯の外は素の停止色の上にいる＝未達である」という事実。
+     * 全部品が移行したらこのテストを消し、`onVibrant` の画面からの直接使用を
+     * 禁じるソース走査テストへ置き換えること。
+     */
+    @Test
+    fun `帯の外のグラデーション直上の文字が未達であることを記録する`() {
         val c = LightAppColors
         val worst = c.gradients().values.flatten().minOf { stop ->
             minOf(contrast(c.onVibrant, stop), contrast(c.onVibrantMuted, stop))
         }
         assertTrue(
-            "ライトのグラデーション上の文字が4.5:1を満たすようになった（最悪 ${"%.2f".format(worst)}）。" +
-                "暗幕が入ったなら、このテストを消して基準テストを明暗両方へ広げること",
+            "帯の外の文字が素の停止色の上で4.5:1を満たすようになった（最悪 ${"%.2f".format(worst)}）",
             worst < 4.5
         )
         assertEquals("最悪値が変わった（Aqua上の onVibrantMuted）", 1.89, worst, 0.05)

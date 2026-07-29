@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
@@ -82,12 +83,9 @@ fun SearchTab(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text("Explore", color = OnVibrant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            text = "フォルダを選んで、言葉で手繰るか、偶然にまかせる。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
+        GradientHeader(
+            title = "Explore",
+            subtitle = "フォルダを選んで、言葉で手繰るか、偶然にまかせる。"
         )
 
         // フォルダchips（横スクロール）

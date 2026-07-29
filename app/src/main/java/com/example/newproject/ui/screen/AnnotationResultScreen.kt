@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.theme.ErrorText
@@ -46,12 +47,7 @@ fun AnnotationResultScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = "AI補記メモ",
-            color = OnVibrant,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
+        GradientHeader(title = "AI補記メモ", titleSize = 26.sp)
 
         when (annotationState) {
             is AnnotationState.Idle,

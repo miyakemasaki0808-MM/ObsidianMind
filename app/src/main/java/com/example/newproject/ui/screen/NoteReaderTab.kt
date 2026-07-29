@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.component.ReadingProgressReporter
@@ -136,30 +137,15 @@ internal fun NoteReaderTab(
                 .safeDrawingPadding()
                 .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Rediscover",
-                        color = OnVibrant,
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    // 未選択時はVault案内、通常時はコンセプト文を出す。
-                    Text(
-                        text = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
-                        else "過去のノートから、思考をひとつ。",
-                        color = OnVibrantMuted,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-                if (hasNote) {
-                    IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
-                }
-            }
+            // 未選択時はVault案内、通常時はコンセプト文を出す。
+            GradientHeader(
+                title = "Rediscover",
+                subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
+                else "過去のノートから、思考をひとつ。",
+                trailing = if (hasNote) {
+                    { IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() } }
+                } else null
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 16.dp),

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.AiRecommendationStatus
@@ -65,19 +66,10 @@ fun RelatedTab(
             .safeDrawingPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            text = "Connect",
-            color = OnVibrant,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+        GradientHeader(
+            title = "Connect",
+            subtitle = "いま読んでいるノートと、つながる思考。"
         )
-        Text(
-            text = "いま読んでいるノートと、つながる思考。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             if (uiState.relatedNotesState is RelatedNotesState.Idle) {
                 Text(

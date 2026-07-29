@@ -27,6 +27,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.OnButtonAi
@@ -50,13 +51,7 @@ fun OptionsScreen(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            text = "オプション",
-            color = OnVibrant,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+        GradientHeader(title = "オプション")
 
         OptionRow(
             emoji = "📁",

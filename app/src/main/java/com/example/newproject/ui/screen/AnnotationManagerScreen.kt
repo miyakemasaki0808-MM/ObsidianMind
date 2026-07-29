@@ -74,7 +74,6 @@ fun AnnotationManagerScreen(
             IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack)
             Text(
                 text = "補記メモの削除",
-                color = OnVibrant,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)

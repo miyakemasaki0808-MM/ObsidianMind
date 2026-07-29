@@ -75,6 +75,9 @@ internal class AppColorScheme(
     val onButtonPrimary: Color,
     val onButtonSecondary: Color,
     val onButtonAi: Color,
+    // グラデーション見出しの背後に敷く暗幕。明暗で同じ値を使う
+    // （ダークは元から基準内だが、分岐を作らないほうが忘れない）。
+    val gradientHeaderScrim: Color,
     // グラデーション直上に置くボタンの輪郭線。塗り自身では境界を出せないため使う
     // （理由は LightAppColors のコメント）。ダークは塗りが足りているので透明。
     val buttonOutlineOnGradient: Color,

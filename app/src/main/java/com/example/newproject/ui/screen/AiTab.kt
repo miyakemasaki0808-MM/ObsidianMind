@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillState
@@ -105,19 +106,10 @@ fun AiTab(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            text = "Reflect",
-            color = OnVibrant,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+        GradientHeader(
+            title = "Reflect",
+            subtitle = "AIと一緒に、ノートを深く読み直す。"
         )
-        Text(
-            text = "AIと一緒に、ノートを深く読み直す。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
 
         val recoveryVisible = uiState.distillState is DistillState.RecoveryRequired
         if (recoveryVisible) {
