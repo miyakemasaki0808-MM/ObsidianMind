@@ -45,6 +45,27 @@ class AppColorContrastTest {
 
     private val schemes = listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors)
 
+    /** 半透明の面を下地へ重ねた実効色。`Color.copy(alpha = …)` の見え方に対応する。 */
+    private fun blend(foreground: Color, background: Color, alpha: Float): Color = Color(
+        red = foreground.red * alpha + background.red * (1 - alpha),
+        green = foreground.green * alpha + background.green * (1 - alpha),
+        blue = foreground.blue * alpha + background.blue * (1 - alpha)
+    )
+
+    private fun AppColorScheme.textToken(name: String): Color = when (name) {
+        "onSurface" -> onSurface
+        "onSurfaceMuted" -> onSurfaceMuted
+        "onSurfaceSubtle" -> onSurfaceSubtle
+        "onSurfaceFaint" -> onSurfaceFaint
+        "onSurfaceMetaBlue" -> onSurfaceMetaBlue
+        "relatedHeading" -> relatedHeading
+        "aiHeading" -> aiHeading
+        "linkText" -> linkText
+        "errorText" -> errorText
+        "dangerAction" -> dangerAction
+        else -> error("未知の文字トークン: $name")
+    }
+
     // -- ボタン3役 -----------------------------------------------------------
     // ラベルは 4.5:1（文字）、塗りは 3:1（非文字＝ボタンの輪郭が見つかること）。
 
@@ -88,28 +109,84 @@ class AppColorContrastTest {
     // -- 面の上の文字 ---------------------------------------------------------
 
     /**
-     * 面の上に置く文字は、明暗どちらでも例外なくAAを満たす。
+     * 文字トークンを、**実際に載る面**との組み合わせで検証する。
      *
+     * 以前はすべて `panel` の上で測っていたが、`panel` に載る文字はごく一部で、
+     * 見出しや更新日時は `panelBlue`、チャットシートは M3 標準面の上にある。
+     * 「一番明るい面で測って全部通った」と言えてしまうのが、この検証の壊れ方だった。
+     *
+     * 下の対応表はコードを追って作ったもの。**トークンの使用箇所を増やすときは、
+     * その面をここへ追加する**。表に無い面へ載せると、この検証は嘘になる。
+     */
+    private fun AppColorScheme.surfacesOf(token: String): List<Pair<String, Color>> {
+        // 面の実体（明暗で差し替わる）
+        val panelS = "panel" to panel
+        val tinted = "panelTinted" to panelTinted
+        val blue = "panelBlue" to panelBlue
+        val chip = "panelChip" to panelChip
+        val row = "panelRow" to panelRow
+        val bubble = "panelBubble" to panelBubble
+        val code = "codePanel" to codePanel
+        // ModalBottomSheet / Snackbar など M3 が自前で描く面。ライトは既定の
+        // lightColorScheme（`AppTheme` はライトで colorScheme を差し替えない）。
+        val sheet = "M3既定面" to if (panel == LightAppColors.panel) Color(0xFFFFFBFE) else panel
+        return when (token) {
+            // 本文Markdown（NoteComponents は Panel、AnnotationResultScreen は Panel/PanelTinted、
+            // FullscreenNoteScreen は Panel）＋各パネルの本文
+            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet)
+            // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
+            "onSurfaceMuted" -> listOf(panelS, tinted, blue)
+            // Markdown の引用＋SectionChatSheet の進捗ラベル＋DistillCandidateRow
+            "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet)
+            // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／チャットシート
+            "onSurfaceFaint" -> listOf(panelS, tinted, blue, sheet)
+            "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
+            "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
+            "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
+            "linkText" -> listOf(panelS, tinted)         // Markdown のリンク
+            "errorText" -> listOf(panelS, blue, sheet)
+            "dangerAction" -> listOf(panelS, blue)
+            else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")
+        }
+    }
+
+    /**
      * 見出し2色は 11sp Bold で、AAの大文字例外（18pt相当／Bold 14pt相当）に**入らない**。
      * 小さい文字ほど基準が要るので、装飾的な色でも4.5:1から降りない。
      */
     @Test
-    fun `面の上の文字トークンは明暗どちらでもAA基準を満たす`() {
-        schemes.forEach { (name, c) ->
-            mapOf(
-                "onSurface" to c.onSurface,
-                "onSurfaceMuted" to c.onSurfaceMuted,
-                "onSurfaceSubtle" to c.onSurfaceSubtle,
-                "onSurfaceFaint" to c.onSurfaceFaint,
-                "onSurfaceMetaBlue" to c.onSurfaceMetaBlue,
-                "linkText" to c.linkText,
-                "errorText" to c.errorText,
-                "dangerAction" to c.dangerAction,
-                "relatedHeading" to c.relatedHeading,
-                "aiHeading" to c.aiHeading
-            ).forEach { (token, color) ->
-                assertAtLeast(4.5, contrast(color, c.panel), "$name $token（panel上）")
+    fun `文字トークンは実際に載る面すべてでAA基準を満たす`() {
+        val tokens = listOf(
+            "onSurface", "onSurfaceMuted", "onSurfaceSubtle", "onSurfaceFaint",
+            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText",
+            "errorText", "dangerAction"
+        )
+        schemes.forEach { (schemeName, c) ->
+            tokens.forEach { token ->
+                val color = c.textToken(token)
+                c.surfacesOf(token).forEach { (surfaceName, surface) ->
+                    assertAtLeast(
+                        4.5,
+                        contrast(color, surface),
+                        "$schemeName $token（$surfaceName 上）"
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * 半透明の面は、下地が透けるぶん実効的な背景が変わる。
+     * `DistillCandidateRow` は `Panel` を72%で `PanelBlue` の上に重ねている。
+     */
+    @Test
+    fun `半透明パネルの上の文字も実効的な背景で基準を満たす`() {
+        schemes.forEach { (name, c) ->
+            val effective = blend(c.panel, c.panelBlue, 0.72f)
+            listOf("onSurface" to c.onSurface, "onSurfaceSubtle" to c.onSurfaceSubtle, "onSurfaceFaint" to c.onSurfaceFaint)
+                .forEach { (token, color) ->
+                    assertAtLeast(4.5, contrast(color, effective), "$name $token（DistillCandidateRow の実効面）")
+                }
         }
     }
 

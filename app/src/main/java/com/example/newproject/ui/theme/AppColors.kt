@@ -47,14 +47,15 @@ internal val LightAppColors = AppColorScheme(
     contentDivider = Color(0xFFCCCCCC),
     checkboxOutline = Color(0xFFAAAAAA),
     onSurface = Color(0xFF202124),
-    onSurfaceMuted = Color(0xFF555555),   // panel上で 7.38
-    onSurfaceSubtle = Color(0xFF666666),  // panel上で 5.69
-    // 白面でAAを満たす最も薄いグレーは #767676（ちょうど4.50）。1段暗い値を採って
-    // 端数で割らないようにする。旧 #777777（4.43）・#888888（3.51）・#999999（2.82）は
-    // 「見た目の薄さ」で決まっており可読性で決まっていなかった。
-    onSurfaceFaint = Color(0xFF757575),   // panel上で 4.56
-    // 一覧の更新日時。青みは残したいので色相228を保ったまま明度だけ下げた（3.13 → 4.58）。
-    onSurfaceMetaBlue = Color(0xFF6D748F),
+    // 弱い文字の基準面は `panel` ではなく **`panelChip #EEF0FF`**（文字を載せる面のうち
+    // 最も暗い）。`panel` で測ると、同じトークンが別の面へ載った瞬間に基準を割る。
+    // 以下の比は panelChip 上の値で、より明るい面ではこれより良くなる。
+    onSurfaceMuted = Color(0xFF555555),   // 6.58
+    onSurfaceSubtle = Color(0xFF666666),  // 5.07
+    // #6E6E6E がちょうど4.50なので、端数で割らないよう1段暗い値を採る。
+    onSurfaceFaint = Color(0xFF6D6D6D),   // 4.57
+    // 一覧の更新日時。青みは残したいので色相228を保ったまま明度だけ下げた。
+    onSurfaceMetaBlue = Color(0xFF656C85), // 4.59
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFEAF7FF),
     linkText = Color(0xFF2563EB),
@@ -66,11 +67,10 @@ internal val LightAppColors = AppColorScheme(
     successMark = Color(0xFF4CAF50),
     failureMark = Color(0xFFEF5350),
     // 見出し2色は 11sp Bold なのでAAの大文字例外に入らず、4.5:1 が要る。
+    // 実際に載るのは `panelBlue`（RelatedTab のカード）。下の比は基準面 panelChip の値。
     // どちらも色相を1度も動かさずに済ませた（見分けの根拠が色相の差だけのため）。
-    // 関連ノート: 色相245を保ち、彩度100→68・明度72→63へ（3.74 → 4.81）。
-    relatedHeading = Color(0xFF6A5FE0),
-    // AI推薦: 色相173を保ち、明度だけ40→28へ（2.46 → 4.60）。彩度は据え置き。
-    aiHeading = Color(0xFF0D8375),
+    relatedHeading = Color(0xFF6054DE), // 色相245を保ち彩度100→68・明度72→60。4.85
+    aiHeading = Color(0xFF0C796C),      // 色相173を保ち明度40→26。彩度は据え置き。4.67
     accentText = Indigo,
     accentSurface = Indigo,
     onAccentSurface = Color.White,
