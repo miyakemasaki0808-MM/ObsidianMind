@@ -40,6 +40,7 @@ import com.example.newproject.ui.theme.ErrorSurface
 import com.example.newproject.ui.theme.OnErrorSurface
 import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
+import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
@@ -181,8 +182,10 @@ private fun TabIcon(
                     color = Aqua,
                     strokeWidth = 1.5.dp
                 )
+                // 塗りには対の前景を使う。白の「✓」は緑の上で 2.49 しかなかった
+                // （Errorバッジ側は既に対で持っており、ここだけ取り残されていた）。
                 AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
-                    Text("✓", color = OnVibrant, fontSize = 9.sp)
+                    Text("✓", color = OnButtonSecondary, fontSize = 9.sp)
                 }
                 AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
                     Text("!", color = OnErrorSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)

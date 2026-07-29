@@ -79,12 +79,15 @@ internal val LightAppColors = AppColorScheme(
     navIndicator = Aqua,
     vigilithHalo = Color.Transparent,
     buttonPrimary = Color(0xFFFF3D71),
-    buttonSecondary = Color(0xFF16B8A6),
+    // 旧 #16B8A6 は白面で 2.46 しかなく、輪郭が見つからなかった（非文字基準は3:1）。
+    // 色相173を保ったまま明度を下げて 3.76 へ。塗りは暗くするほど白面で見つけやすくなるが、
+    // 黒ラベルは逆に読みにくくなるため、両方を満たす帯（相対輝度 0.175〜0.297）の中央を採る。
+    buttonSecondary = Color(0xFF109384),
     buttonAi = Indigo,
     // ラベルは塗りごとに変える。省略するとMaterial3の既定 onPrimary（純白）が効き、
     // ピンク3.41／緑2.49までコントラストが落ちる（AAは4.5:1）。Indigoだけ白が正しい。
     onButtonPrimary = Color(0xFF000000),   // #FF3D71 上で 6.16
-    onButtonSecondary = Color(0xFF000000), // #16B8A6 上で 8.44
+    onButtonSecondary = Color(0xFF000000), // #109384 上で 5.53
     onButtonAi = Color.White,              // #4D3DFF 上で 6.13
     appGradient = Brush.linearGradient(
         colors = listOf(Indigo, Aqua, Coral),

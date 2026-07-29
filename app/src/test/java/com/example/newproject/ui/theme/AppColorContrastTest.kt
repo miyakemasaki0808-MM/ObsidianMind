@@ -61,10 +61,9 @@ class AppColorContrastTest {
     fun `塗りボタンは自面の上で輪郭が判別できる`() {
         schemes.forEach { (name, c) ->
             assertAtLeast(3.0, contrast(c.buttonPrimary, c.panel), "$name ButtonPrimary の塗り")
+            assertAtLeast(3.0, contrast(c.buttonSecondary, c.panel), "$name ButtonSecondary の塗り")
             assertAtLeast(3.0, contrast(c.buttonAi, c.panel), "$name ButtonAi の塗り")
         }
-        // ButtonSecondary はダークでのみ基準を満たす（下記の既知未達を参照）。
-        assertAtLeast(3.0, contrast(DarkAppColors.buttonSecondary, DarkAppColors.panel), "ダーク ButtonSecondary の塗り")
     }
 
     @Test
@@ -139,19 +138,39 @@ class AppColorContrastTest {
     }
 
     /**
-     * **ライトに残る既知の未達1件**（文字は明暗とも全て基準内になった）。
+     * **バッジの塗りは下部ナビ帯の上では基準を満たしていない**（既知・未修正）。
      *
-     * 実測値をここで固定しておくことで、①気づかないうちに悪化する ②直したのに記録が残らない、
-     * のどちらも防ぐ。直すとこのテストが落ちるので、そのとき該当行を消して上のテストへ移すこと。
+     * パネル上の塗りと違い、バッジはブランド色そのものの帯（ライト=Indigo／ダーク=`navBar`）
+     * に載る。ライトのIndigoは彩度が高く相対輝度も中位なので、その上で3:1を取れる塗りが
+     * ほとんど無い。中の記号は対の前景で読めるようにしてあるため、状態の判別は記号が担う。
+     *
+     * 直すには塗りの明度を上げるか輪郭線を足すかで、どちらもナビ帯の見た目に踏み込む。
+     * ここは実測値を固定するだけに留め、判断は別途行う。
      */
     @Test
-    fun `ライトに残る既知のコントラスト未達を記録する`() {
-        val c = LightAppColors
-        // 塗り（非文字 3:1）。ラベル自体は黒で 8.44 と読めるが、白い面の上では
-        // ボタンの輪郭が見つけにくい。
-        val secondary = contrast(c.buttonSecondary, c.panel)
-        assertTrue("ButtonSecondary の塗りが改善された（実測 ${"%.2f".format(secondary)}）", secondary < 3.0)
-        assertEquals("ButtonSecondary の実測値が変わった", 2.46, secondary, 0.05)
+    fun `ナビ帯の上のバッジ塗りが基準未達であることを記録する`() {
+        val onLightNav = mapOf(
+            "Successバッジ（緑）" to contrast(LightAppColors.buttonSecondary, LightAppColors.navBar),
+            "Errorバッジ（赤）" to contrast(LightAppColors.errorSurface, LightAppColors.navBar)
+        )
+        onLightNav.forEach { (label, actual) ->
+            assertTrue(
+                "$label がライトのナビ帯で3:1を満たすようになった（実測 ${"%.2f".format(actual)}）。" +
+                    "修正が入ったならこのテストを消し、上の基準テストへ移すこと",
+                actual < 3.0
+            )
+        }
+        // 中の記号は塗りの上で読めていること（ここは満たしている）。
+        assertAtLeast(
+            4.5,
+            contrast(LightAppColors.onButtonSecondary, LightAppColors.buttonSecondary),
+            "Successバッジの「✓」"
+        )
+        assertAtLeast(
+            4.5,
+            contrast(LightAppColors.onErrorSurface, LightAppColors.errorSurface),
+            "Errorバッジの「!」"
+        )
     }
 
     @Test
@@ -251,7 +270,6 @@ class AppColorContrastTest {
         val intentionallyShared = setOf(
             "onVibrant",          // 白。暗面でも明面（グラデーション）でも文字として成立する
             "buttonPrimary",      // ピンク。明暗どちらでも塗りとして基準を満たす
-            "buttonSecondary",    // 緑。同上
             "onButtonPrimary",    // 黒ラベル
             "onButtonSecondary",  // 黒ラベル
             "failureMark"         // 誤答の赤。明暗どちらでも区別できる
