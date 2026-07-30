@@ -155,9 +155,31 @@ internal fun NoteReaderTab(
                 } else null
             )
 
-            // ノートが出ていないときは、案内とボタンを1枚のカードにまとめる。
-            // 空状態で本文パネルを画面いっぱいに伸ばすと、中身の無い白が大半を占める。
-            // ボタンをカードの中へ入れると不透明な面の上に載るので、輪郭線も要らなくなる。
+            // ボタンは画面の操作であってノートの操作ではないので、**状態によらず常にここ**。
+            // ノートの有無で位置が動くと、同じボタンを毎回探し直すことになる。
+            NoteActionButtons(
+                vaultSelected = uiState.vaultSelected,
+                isLoading = isLoading,
+                onSelectVault = onSelectVault,
+                onRandomNote = onRandomNote,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+
+            if (isLoading) {
+                Surface(
+                    color = Panel,
+                    shape = CircleShape,
+                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = AccentText,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            // ノートが出ていないときは、案内カードを内容なりの高さに留める。
+            // 本文パネルと同じく `weight(1f)` で伸ばすと、中身の無い白が画面の大半を占める。
             if (!hasNote) {
                 Surface(
                     modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
@@ -182,23 +204,6 @@ internal fun NoteReaderTab(
                             lineHeight = 20.sp,
                             modifier = Modifier.padding(top = 8.dp)
                         )
-                        NoteActionButtons(
-                            vaultSelected = uiState.vaultSelected,
-                            isLoading = isLoading,
-                            onSelectVault = onSelectVault,
-                            onRandomNote = onRandomNote,
-                            onGradient = false,
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
-                    }
-                }
-                if (isLoading) {
-                    Surface(
-                        color = Panel,
-                        shape = CircleShape,
-                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
-                    ) {
-                        CircularProgressIndicator(color = AccentText, modifier = Modifier.padding(12.dp))
                     }
                 }
                 // 余りをカードではなく余白へ逃がす。
@@ -206,33 +211,10 @@ internal fun NoteReaderTab(
                 return@Column
             }
 
-            NoteActionButtons(
-                vaultSelected = uiState.vaultSelected,
-                isLoading = isLoading,
-                onSelectVault = onSelectVault,
-                onRandomNote = onRandomNote,
-                onGradient = true,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-
-            if (isLoading) {
-                Surface(
-                    color = Panel,
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
-                ) {
-                    CircularProgressIndicator(
-                        color = AccentText,
-                        modifier = Modifier.padding(12.dp)
-                    )
-                }
-            }
-
             // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
             // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
             //  セクション判定とスクロール継承を壊さない）。
-            // ここへ来る時点で hasNote は true（＝successState は非null）なので、
-            // 以前あった successState の確認は落とす。
+            // ここへ来る時点で hasNote は true。
             val visibleTraceCard = uiState.readingTraceCard?.takeIf { !it.isDismissed }
             val showTraceCard = visibleTraceCard != null
             if (visibleTraceCard != null) {
@@ -299,9 +281,8 @@ internal fun NoteReaderTab(
  * これで、「別のノートをひらく」は押しても開くノートが無い（無効にする）。
  * 以前は逆で、目立つピンクが機能しないほうに付いていた。
  *
- * [onGradient] はボタンがグラデーション直上に置かれるかどうか。直上のときだけ
- * 輪郭線を描く。塗りの色をどう選んでも停止色との3:1を満たせないためで、
- * 不透明な面の上に載るなら塗り自身で境界が出るので描かない。
+ * このボタンは常にグラデーション直上に置かれるので、輪郭線を必ず描く。
+ * 塗りの色をどう選んでも停止色との3:1は満たせない（→ ButtonOutlineOnGradient）。
  */
 @Composable
 private fun NoteActionButtons(
@@ -309,10 +290,9 @@ private fun NoteActionButtons(
     isLoading: Boolean,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
-    onGradient: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val outline = if (onGradient) BorderStroke(1.dp, ButtonOutlineOnGradient) else null
+    val outline = BorderStroke(1.dp, ButtonOutlineOnGradient)
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
