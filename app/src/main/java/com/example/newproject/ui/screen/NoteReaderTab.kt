@@ -1,5 +1,9 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.theme.PanelChip
+import com.example.newproject.ui.theme.OnSurfaceFaint
+import com.example.newproject.ui.theme.OnSurface
+import androidx.compose.foundation.layout.Spacer
 import com.example.newproject.ui.theme.Panel
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
@@ -151,29 +155,65 @@ internal fun NoteReaderTab(
                 } else null
             )
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Vault切替はオプションへ移動。初回セットアップ時だけここにも出す。
-                if (!uiState.vaultSelected) {
-                    Button(
-                        onClick = onSelectVault,
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary, contentColor = OnButtonSecondary),
-                        border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
-                        shape = RoundedCornerShape(24.dp)
-                    ) { Text("Vaultを選択", color = OnButtonSecondary) }
+            // ノートが出ていないときは、案内とボタンを1枚のカードにまとめる。
+            // 空状態で本文パネルを画面いっぱいに伸ばすと、中身の無い白が大半を占める。
+            // ボタンをカードの中へ入れると不透明な面の上に載るので、輪郭線も要らなくなる。
+            if (!hasNote) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                    color = Panel,
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            text = "ノート未表示",
+                            color = OnSurface,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = when (uiState.noteState) {
+                                is NoteState.Empty -> "このVaultにMarkdownノートが見つかりませんでした。"
+                                is NoteState.Error -> "Vaultを読み込めませんでした。"
+                                else -> "Vaultフォルダを選択して「別のノートをひらく」をタップしてください。"
+                            },
+                            color = OnSurfaceFaint,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                        NoteActionButtons(
+                            vaultSelected = uiState.vaultSelected,
+                            isLoading = isLoading,
+                            onSelectVault = onSelectVault,
+                            onRandomNote = onRandomNote,
+                            onGradient = false,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
+                    }
                 }
-                Button(
-                    onClick = onRandomNote,
-                    enabled = !isLoading,
-                    modifier = Modifier.weight(1f).height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
-                    border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
-                    shape = RoundedCornerShape(24.dp)
-                ) { Text("別のノートをひらく", color = OnButtonPrimary) }
+                if (isLoading) {
+                    Surface(
+                        color = Panel,
+                        shape = CircleShape,
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
+                    ) {
+                        CircularProgressIndicator(color = AccentText, modifier = Modifier.padding(12.dp))
+                    }
+                }
+                // 余りをカードではなく余白へ逃がす。
+                Spacer(modifier = Modifier.weight(1f))
+                return@Column
             }
+
+            NoteActionButtons(
+                vaultSelected = uiState.vaultSelected,
+                isLoading = isLoading,
+                onSelectVault = onSelectVault,
+                onRandomNote = onRandomNote,
+                onGradient = true,
+                modifier = Modifier.padding(top = 16.dp)
+            )
 
             if (isLoading) {
                 Surface(
@@ -191,9 +231,9 @@ internal fun NoteReaderTab(
             // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
             // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
             //  セクション判定とスクロール継承を壊さない）。
-            val visibleTraceCard = uiState.readingTraceCard?.takeIf {
-                successState != null && !it.isDismissed
-            }
+            // ここへ来る時点で hasNote は true（＝successState は非null）なので、
+            // 以前あった successState の確認は落とす。
+            val visibleTraceCard = uiState.readingTraceCard?.takeIf { !it.isDismissed }
             val showTraceCard = visibleTraceCard != null
             if (visibleTraceCard != null) {
                 ReadingTraceCardPanel(
@@ -214,7 +254,7 @@ internal fun NoteReaderTab(
                         scaleX = scale
                         scaleY = scale
                     },
-                listState = if (hasNote) listState else null,
+                listState = listState,
                 precomputedBlocks = sectionModel?.blocks
             )
         }
@@ -249,5 +289,66 @@ internal fun NoteReaderTab(
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )
+    }
+}
+
+/**
+ * ノート画面の操作ボタン。
+ *
+ * **Vault未選択のときは「Vaultを選択」が主役になる。** その状態で唯一意味のある操作が
+ * これで、「別のノートをひらく」は押しても開くノートが無い（無効にする）。
+ * 以前は逆で、目立つピンクが機能しないほうに付いていた。
+ *
+ * [onGradient] はボタンがグラデーション直上に置かれるかどうか。直上のときだけ
+ * 輪郭線を描く。塗りの色をどう選んでも停止色との3:1を満たせないためで、
+ * 不透明な面の上に載るなら塗り自身で境界が出るので描かない。
+ */
+@Composable
+private fun NoteActionButtons(
+    vaultSelected: Boolean,
+    isLoading: Boolean,
+    onSelectVault: () -> Unit,
+    onRandomNote: () -> Unit,
+    onGradient: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val outline = if (onGradient) BorderStroke(1.dp, ButtonOutlineOnGradient) else null
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Vault切替はオプションへ移動。初回セットアップ時だけここにも出す。
+        if (!vaultSelected) {
+            Button(
+                onClick = onSelectVault,
+                modifier = Modifier.weight(1f).height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
+                border = outline,
+                shape = RoundedCornerShape(24.dp)
+            ) { Text("Vaultを選択", color = OnButtonPrimary) }
+        }
+        Button(
+            onClick = onRandomNote,
+            enabled = !isLoading && vaultSelected,
+            modifier = Modifier.weight(1f).height(48.dp),
+            colors = if (vaultSelected) {
+                ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary)
+            } else {
+                ButtonDefaults.buttonColors(
+                    containerColor = ButtonSecondary,
+                    contentColor = OnButtonSecondary,
+                    // 無効時の既定はテーマ由来のαなので、明示して不透明に保つ。
+                    disabledContainerColor = PanelChip,
+                    disabledContentColor = OnSurfaceFaint
+                )
+            },
+            border = outline,
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Text(
+                "別のノートをひらく",
+                color = if (vaultSelected) OnButtonPrimary else OnSurfaceFaint
+            )
+        }
     }
 }

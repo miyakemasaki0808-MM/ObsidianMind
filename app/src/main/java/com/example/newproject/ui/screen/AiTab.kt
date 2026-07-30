@@ -172,7 +172,7 @@ fun AiTab(
             enabled = !isAnnotationLoading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
-            border = BorderStroke(1.5.dp, ButtonOutlineOnGradient),
+            border = BorderStroke(1.dp, ButtonOutlineOnGradient),
             shape = RoundedCornerShape(24.dp)
         ) { Text(annotationLabel, color = OnButtonAi) }
     }
