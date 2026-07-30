@@ -11,7 +11,7 @@ AI入力の抜粋化・D案（ライト配色のAA是正）・E案（リリー�
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** 2026-07-30 に `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` / `assembleRelease` をCLI実行し、**459ケース全件グリーン・Lint Error 0 / Warning 0・Kotlinコンパイル警告 0** を確認済み。警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。ReadingTrace v1・Vigilith Phase 3・A案／B案／C案／E案の実機一巡は未実施
+**検証結果:** 2026-07-30 に `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` / `assembleRelease` をCLI実行し、**459ケース全件グリーン・Lint Error 0 / Warning 0・Kotlinコンパイル警告 0** を確認済み。警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。**E案は 2026-07-31 に確認済み**（`applicationId` の変更どおり別アプリとしてインストールされる。旧パッケージは端末に残る）。ReadingTrace v1・Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
 
 ---
 
