@@ -342,36 +342,56 @@ class AppColorContrastTest {
     }
 
     /**
-     * 見出しの帯は、暗幕を敷いた**実効的な背景**で基準を満たす。
+     * 見出しは、面を敷いた**実効的な背景**で基準を満たす。
      *
-     * 素のグラデーションでは白でも 2.07（Aqua）しか出ず、色では解けない。
-     * `GradientHeader` が背後へ `gradientHeaderScrim` を敷くので、
-     * 検証もその合成後の色に対して行う。**素の停止色で測ると通らないのが正しい。**
+     * ライトは白のヘイズで停止色を持ち上げ、そこへ濃い文字を置く。
+     * ダークは何も敷かないので実効背景＝停止色そのもの（白文字が元から通る）。
+     * **明暗で面と文字が反転するため、どちらも同じ式で測れる形にしてある。**
      */
     @Test
-    fun `見出しの帯は暗幕を敷いた実効面で基準を満たす`() {
+    fun `見出しは実効的な背景で基準を満たす`() {
         schemes.forEach { (name, c) ->
             c.gradients().forEach { (gradient, stops) ->
                 stops.forEach { stop ->
                     val effective = blend(c.gradientHeaderScrim, stop, c.gradientHeaderScrim.alpha)
-                    assertAtLeast(4.5, contrast(c.onVibrant, effective), "$name onVibrant（$gradient $stop ＋暗幕）")
-                    assertAtLeast(4.5, contrast(c.onVibrantMuted, effective), "$name onVibrantMuted（$gradient $stop ＋暗幕）")
+                    assertAtLeast(
+                        4.5,
+                        contrast(c.onGradientHeaderTitle, effective),
+                        "$name 見出しタイトル（$gradient $stop ＋面）"
+                    )
+                    assertAtLeast(
+                        4.5,
+                        contrast(c.onGradientHeaderSubtitle, effective),
+                        "$name 見出し副題（$gradient $stop ＋面）"
+                    )
                 }
             }
         }
     }
 
     /**
-     * ダークは暗幕を敷かない。**足りているから置かない**ことを示す
-     * （上のテストはダークでは実質「素の停止色」を測っている）。
+     * ライトは霞ませる、ダークは何もしない。**明暗で解き方が反転している**ことを固定する。
+     * 片方の値をもう片方へコピーする事故は、この形でしか検出できない。
      */
     @Test
-    fun `ダークは暗幕なしでグラデーション上の文字が読める`() {
-        val c = DarkAppColors
-        assertEquals("ダークの暗幕は透明であること", 0f, c.gradientHeaderScrim.alpha, 0.001f)
-        c.gradients().values.flatten().forEach { stop ->
-            assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$stop 上・暗幕なし）")
-            assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$stop 上・暗幕なし）")
+    fun `見出しの解き方は明暗で反転している`() {
+        // ライト: 面を敷いて、その上に濃い文字
+        assertTrue(
+            "ライトの見出しは面を敷くこと",
+            LightAppColors.gradientHeaderScrim.alpha > 0f
+        )
+        assertTrue(
+            "ライトの見出し文字は面より濃いこと",
+            relativeLuminance(LightAppColors.onGradientHeaderTitle) <
+                relativeLuminance(LightAppColors.gradientHeaderScrim)
+        )
+        // ダーク: 何も敷かず、白い文字
+        assertEquals("ダークの見出しは面を敷かないこと", 0f, DarkAppColors.gradientHeaderScrim.alpha, 0.001f)
+        DarkAppColors.gradients().values.flatten().forEach { stop ->
+            assertTrue(
+                "ダークの見出し文字は停止色より明るいこと",
+                relativeLuminance(DarkAppColors.onGradientHeaderTitle) > relativeLuminance(stop)
+            )
         }
     }
 

@@ -5,50 +5,46 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material3.Text
 import com.example.newproject.ui.theme.GradientHeaderScrim
-import com.example.newproject.ui.theme.OnVibrant
-import com.example.newproject.ui.theme.OnVibrantMuted
+import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
+import com.example.newproject.ui.theme.OnGradientHeaderTitle
 
 /**
  * グラデーション直上に置く画面見出し。**背景を自分で持つ**のが要点。
  *
- * 白文字はライトのグラデーション上で読めない（Aqua停止色に対し 2.07、副題は 1.89）。
- * 28sp Bold は大文字扱いで3:1に緩むが、それすら満たさない。**白より明るい文字は
- * 無いので色では解けず**、背後を暗くするしかない。
+ * ライトのグラデーション上では白文字が読めない（Aqua停止色に対し 2.07、副題 1.89）。
+ * 28sp Bold は大文字扱いで3:1に緩むが、それすら満たさない。
  *
- * 各画面で個別に暗幕を敷くとどこかで必ず忘れるので、
- * **見出しの体裁と暗幕と文字色を1つの部品が同時に持つ**形にした。
- * 画面側は文字列とスロットを渡すだけで、`OnVibrant` に触れない。
+ * **解き方を「暗くする」から「白で霞ませる」へ反転させた。** 暗幕は帯として重く出て、
+ * 角丸を付けるとカードにしか見えない。白を薄く重ねると停止色が持ち上がり、そこへ
+ * 濃い文字を置ける。白文字と違い、濃い側は最も暗い Indigo 停止色でも余裕がある
+ * （α=0.35 でタイトル 6.15／副題 5.12）。
  *
- * 暗幕は**文字領域とフェードを別の要素に分ける**。1つの縦グラデーションで兼ねると、
- * 一定の濃さを保つ割合が要素全体の高さに対する比になるため、**副題が2行に折り返した
- * 瞬間にフェードの開始位置が文字へ食い込む**。文字領域は一様な濃さの面、
- * フェードは固定高さの [Spacer] とし、両者を独立させる。
+ * ダークは何も敷かない。暗いグラデーションでは白文字が元から基準を満たしており、
+ * 霞ませる意味が無いため。**したがって面と文字は明暗で反転する。**
  *
- * フェードを入れるのは、矩形のまま切ると帯の下端が線として見えて
- * 「グラデーションの上に別の面が乗っている」ように読めてしまうため。
+ * 文字領域とフェードは別の要素に分ける。1つの縦グラデーションで兼ねると、一定の
+ * 濃さを保つ割合が要素全体の高さに対する比になるため、**副題が2行に折り返した瞬間に
+ * フェードの開始位置が文字へ食い込む**。
  *
- * **水平方向は帯の内側だけに余白を持つ。** 呼び出し側の画面が既に左右20dpを与えて
- * いるので、ここで同じ幅を足すと二重になる。帯はその20dpの内側に収まる角丸として
- * 意図的に見せる（画面端まで抜くと全面スクリムと変わらなくなる）。
- *
- * ダークでは暗幕が透明になる。暗いグラデーションでは白文字も副題も元から基準を
- * 満たしており、暗い矩形を重ねる意味が無いため。
+ * 面はメイン領域の**全幅**へ広げる（[horizontalBleed]）。角丸を付けず端まで抜くことで、
+ * 「上に乗ったカード」ではなく「上部が霞んだ背景」として読ませる。
  */
 @Composable
 internal fun GradientHeader(
@@ -56,17 +52,19 @@ internal fun GradientHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     titleSize: TextUnit = 28.sp,
+    horizontalBleed: Dp = DEFAULT_HORIZONTAL_BLEED,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
     val scrim = GradientHeaderScrim
-    Column(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))) {
+    Column(modifier = modifier.fillMaxWidth().bleedHorizontally(horizontalBleed)) {
         // 文字領域。濃さは一様で、高さは中身に任せる。
+        // 内側の余白を bleed と同じにすることで、外へ広げても文字の位置は動かない。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(scrim)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = horizontalBleed, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -74,14 +72,14 @@ internal fun GradientHeader(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    color = OnVibrant,
+                    color = OnGradientHeaderTitle,
                     fontSize = titleSize,
                     fontWeight = FontWeight.Bold
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
-                        color = OnVibrantMuted,
+                        color = OnGradientHeaderSubtitle,
                         fontSize = 13.sp,
                         modifier = Modifier.padding(top = 4.dp)
                     )
@@ -99,5 +97,33 @@ internal fun GradientHeader(
     }
 }
 
-/** 帯の下端で暗幕を透明へ抜く区間の高さ。文字は載らない。 */
-internal val SCRIM_FADE_HEIGHT = 24.dp
+/**
+ * 親が与えた左右の余白の外側まで広がる。
+ *
+ * 各画面は本文用に左右20dpを持っており、その内側で背景を描くと帯が浮いたカードに
+ * 見える。見出しの面だけは端まで抜きたいので、測定時に横幅を広げて負のオフセットで
+ * 戻す。**[bleed] は呼び出し側の水平パディングと一致していなければならない**
+ * （既定値は現在の全画面共通の20dp）。
+ */
+private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, constraints ->
+    val extra = bleed.roundToPx() * 2
+    val widened = constraints.copy(
+        minWidth = constraints.minWidth + extra,
+        maxWidth = if (constraints.maxWidth == Constraints.Infinity) {
+            Constraints.Infinity
+        } else {
+            constraints.maxWidth + extra
+        }
+    )
+    val placeable = measurable.measure(widened)
+    // 親には元の幅で報告する。広げた分は描画だけに使い、後続の配置をずらさない。
+    layout(placeable.width - extra, placeable.height) {
+        placeable.place(-bleed.roundToPx(), 0)
+    }
+}
+
+/** 各画面が本文へ与えている水平パディング。 */
+private val DEFAULT_HORIZONTAL_BLEED = 20.dp
+
+/** 帯の下端で面を透明へ抜く区間の高さ。文字は載らない。 */
+internal val SCRIM_FADE_HEIGHT = 10.dp

@@ -26,13 +26,16 @@ internal val MutedIndigo = Color(0xFF6E63E3)
 internal val MutedAqua = Color(0xFF54B5D4)
 internal val MutedCoral = Color(0xFFE28D9F)
 
+/** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
+private val LightPanel = Color(0xFFFDFEFF)
+
 // ---------------------------------------------------------------------------
 // 2. 明暗それぞれの実体
 //    値を書くのはここだけ。§3のトークンは、現在のテーマからこれを引くだけの窓口。
 // ---------------------------------------------------------------------------
 
 internal val LightAppColors = AppColorScheme(
-    panel = Color(0xFFFDFEFF),
+    panel = LightPanel,
     codePanel = Color(0xFFF1F4F8),
     panelTinted = Color(0xFFF7F3FF),
     panelBlue = Color(0xFFF0F4FF),
@@ -97,11 +100,14 @@ internal val LightAppColors = AppColorScheme(
     // 実測でも3役すべてが 1.00〜1.40 で、ButtonAi は Indigo 停止色の上で 1.00（同色）。
     // したがって輪郭線で境界を作る（WCAG 1.4.11 は隣接する輪郭でも可）。
     // LogoNavy は最も不利な Indigo 停止色に対して 3.15、Reading側で 4.19。
-    // 白文字はライトのグラデーション上で 2.07（Aqua）しか出ず、**色では解けない**
-    // （白より明るい文字は無い）。見出しの帯の背後だけを暗くする。
-    // α=0.42 は、副題 `onVibrantMuted` が最悪の Aqua 停止色で 4.69 を取れる下限。
-    // 0.40 では 4.45 で僅かに届かない。白は 5.12。
-    gradientHeaderScrim = LogoNavy.copy(alpha = 0.42f),
+    // 見出しの背後は**暗くせず、白で霞ませる**。暗幕は帯として重く出てしまうため。
+    // 白を薄く重ねると停止色が持ち上がり、そこへ濃い文字を置ける
+    // （白文字と違い、濃い側は Indigo 停止色でも余裕がある）。
+    // α=0.35 での最悪はIndigo上で タイトル6.15／副題5.12。
+    gradientHeaderScrim = LightPanel.copy(alpha = 0.35f),
+    // ヘイズの上に置く文字。ロゴの濃紺で見出しの性格を残す。
+    onGradientHeaderTitle = LogoNavy,
+    onGradientHeaderSubtitle = Color(0xFF202124),
     buttonOutlineOnGradient = LogoNavy,
     appGradientStops = listOf(Indigo, Aqua, Coral),
     readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
@@ -172,9 +178,11 @@ internal val DarkAppColors = AppColorScheme(
     // 4.45〜6.10 を確保できている。輪郭線を足すと明るい環を描くことになるので置かない。
     // 「置かなくて足りている」ことは AppColorContrastTest が確かめる。
     // ダークのグラデーションは明度で沈めてあり、白文字も副題も元から基準を満たす。
-    // 帯を敷くと暗い上に暗い矩形が乗るだけなので置かない。
+    // 霞ませる必要が無いので何も敷かず、文字も白のまま据え置く。
     // 「足りているから置かない」ことは AppColorContrastTest が確かめる。
     gradientHeaderScrim = Color.Transparent,
+    onGradientHeaderTitle = Color.White,
+    onGradientHeaderSubtitle = Color(0xFFC6D3E6),
     buttonOutlineOnGradient = Color.Transparent,
     // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
     // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
@@ -262,9 +270,14 @@ internal val OnButtonAi: Color @Composable @ReadOnlyComposable get() = current.o
  * 足すと理由のない線が増える。付ける対象は現在5箇所（さがす2・ノート2・AI 1）で、
  * どれも `AppGradient` / `ReadingGradient` を直接の背景にしている。
  */
-/** グラデーション見出しの暗幕。`GradientHeader` だけが使う。 */
+// -- グラデーション見出し（`GradientHeader` だけが使う） --
+/** 見出しの背後へ薄く敷く面。ライトは白のヘイズ、ダークは透明。 */
 internal val GradientHeaderScrim: Color
     @Composable @ReadOnlyComposable get() = current.gradientHeaderScrim
+internal val OnGradientHeaderTitle: Color
+    @Composable @ReadOnlyComposable get() = current.onGradientHeaderTitle
+internal val OnGradientHeaderSubtitle: Color
+    @Composable @ReadOnlyComposable get() = current.onGradientHeaderSubtitle
 
 internal val ButtonOutlineOnGradient: Color
     @Composable @ReadOnlyComposable get() = current.buttonOutlineOnGradient
