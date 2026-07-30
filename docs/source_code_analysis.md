@@ -2,15 +2,16 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind。`strings.xml` の `app_name` を改称済み）
 
-**解析日:** 2026-07-27（**2026-07-28 のAI入力の抜粋化に伴い §6.3・§6.4・§6.6・§6.7・§8.4・§13 のみ部分更新**。他章は 07-27 時点のまま）
+**解析日:** 2026-07-30（**D案・E案に伴い §1・§2・§3・§13・§14・§15 を更新**。他章は 07-27〜28 時点のまま）
 
-**対象ブランチ:** `feature/Improvement_Function_No.3`
+**対象ブランチ:** `feature/Improvement_Function_No.5`
 
-**対象実装:** 改善活動A案（非同期の境界）・C案（入出力の境界）・B案（依存と状態の境界）まで。文書のみのコミットは対象外
+**対象実装:** 改善活動A案（非同期の境界）・C案（入出力の境界）・B案（依存と状態の境界）・
+AI入力の抜粋化・D案（ライト配色のAA是正）・E案（リリース構成の整備）まで。文書のみのコミットは対象外
 
 **対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
 
-**検証結果:** 2026-07-28 に `testDebugUnitTest` と `lintDebug` をCLI実行し、**450ケース全件グリーン・Lint 0 error** を確認済み。warning は 28件で変化なし（`--offline` 実行では依存更新系の `GradleDependency` 7件が走らず21件と表示される）。ダークモードは 2026-07-26 に実機で一巡し問題なし。ReadingTrace v1・Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
+**検証結果:** 2026-07-30 に `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` / `assembleRelease` をCLI実行し、**459ケース全件グリーン・Lint Error 0 / Warning 0・Kotlinコンパイル警告 0** を確認済み。警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案の見出し周りはエミュレータで一巡し、暗幕がカードに見える問題を発見して白ヘイズへ作り直した**。ReadingTrace v1・Vigilith Phase 3・A案／B案／C案／E案の実機一巡は未実施
 
 ---
 
@@ -40,9 +41,9 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 - 7 Controller すべてが requestId ＋ Job 追跡で古い結果の混入を防ぐ。Vault単位の要求（補記一覧・削除・フォルダ一覧）だけは寿命が違うため、共有の `vaultGeneration` を `update` 直前に照合する二層構成になっている。
 - 状態は `NoteUiStateStore` だけが所有し、各Controllerへは機能別の `*StateWriter` を渡すため、担当外フィールドへの書き込みはコンパイル時に不可能である。ノート切替のジョブ停止と状態リセットは `onNoteChanged()` の1手に閉じている。
 - パッケージ依存は `model` を葉とする一方向に整理され、`PackageDependencyTest` がimportを走査してCIで固定している。循環は残っていない。
-- SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。`androidTest` ソースセットは依存も設定も無く、書ける状態ですらない。
+- SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。`androidTest` ソースセットと依存一式は 2026-07-29 に整備し、CIでコンパイルも通しているが、**スモークテストを含め一度も実行していない**（実端末かエミュレータが要る）。
 - ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度4件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存、検索フォールバックの文言差）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
-- 構造面の成長限界（依存の循環・ViewModelのテスト不能・状態の共有所有）は 2026-07-27 のB案で解消した。残る弱点はアクセシビリティ（ライト配色のAA未達）とリリース構成（`buildTypes` 未定義・`applicationId` が初期値）に移っている。
+- 構造面の成長限界（依存の循環・ViewModelのテスト不能・状態の共有所有）は 2026-07-27 のB案で解消した。アクセシビリティとリリース構成は 2026-07-29〜30 のD案・E案で着手し、**ライトの文字トークンは実際に載る面すべてで4.5:1を満たす**ようになった。残る弱点は R8・署名が未設定であること、下部ナビ帯の上のバッジ塗りが基準未達であること、instrumentation を一度も実行していないことに移っている。
 
 ---
 
@@ -52,8 +53,9 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 89ファイル | 13,660行 |
-| ユニットテスト Kotlin | 49ファイル | 7,593行、425テスト |
+| 本番 Kotlin | 93ファイル | 14,400行 |
+| ユニットテスト Kotlin | 53ファイル | 8,553行、459テスト |
+| instrumentation テスト Kotlin | 1ファイル | 土台のスモークのみ（未実行） |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -67,7 +69,10 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 | compileSdk | Android 36.1 |
 | targetSdk | Android 36 |
 | minSdk | Android 26 |
-| Java互換性 | Java 8 |
+| applicationId | `com.vigilith.ai`（`namespace` は `com.example.newproject` のまま据え置き） |
+| Java互換性 | Java 11（Kotlin の `jvmTarget` も 11 を明示） |
+| buildTypes | `release` を定義。**R8は未有効**（`isMinifyEnabled = false`）・署名未設定 |
+| 警告の扱い | Lint `warningsAsErrors` ＋ Kotlin `allWarningsAsErrors`。依存更新系3チェックのみ `disable` |
 | Compose BOM | 2024.09.03 |
 | Navigation Compose | 2.7.7 |
 | Core SplashScreen | 1.0.1 |
@@ -75,6 +80,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 | Coroutines | 1.9.0 |
 | ML Kit GenAI Prompt | 1.0.0-beta2 |
 | JUnit | 4.13.2 |
+| AndroidX Core KTX | 1.13.1（従来は推移的。`edit {}` / `toUri()` を直接使うため明示） |
+| Compose UI Test / Espresso | BOM準拠 / 3.6.1（instrumentation の土台） |
 
 ### 2.3 外部依存の特徴
 
@@ -190,11 +197,13 @@ app/src/
 │   └── res/
 │       ├── values/                             # app_name、テーマ（システムバーは透明・色はCompose側）
 │       └── xml/                                # backup_rules / data_extraction_rules（バックアップ除外）
-├── test/java/com/example/newproject/           # 49ファイル・425テスト（内訳は §13.1）
-│   └── architecture/PackageDependencyTest.kt   # importを走査してパッケージ依存の向きを固定
-└── （androidTest ソースセットは存在しない）
+├── test/java/com/example/newproject/           # 53ファイル・459テスト（内訳は §13.1）
+│   ├── architecture/PackageDependencyTest.kt   # importを走査してパッケージ依存の向きを固定
+│   └── ui/theme/VibrantTextUsageTest.kt        # 画面からのonVibrant直接使用と文字色のcopy(alpha)を禁じる
+└── androidTest/java/com/example/newproject/
+    └── InstrumentationSetupTest.kt             # 土台の確認のみ（Runner起動・対象Context・Compose描画）。**未実行**
 
-.github/workflows/ci.yml                        # PR・mainへのpushで testDebugUnitTest / lintDebug
+.github/workflows/ci.yml                        # PR・mainへのpushで testDebugUnitTest / lintDebug / assembleDebugAndroidTest
 ```
 
 ---
@@ -849,7 +858,9 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `domain/NoteExcerptBuilderTest.kt` | 16 | 抜粋の予算不変条件（注意書き・ラベル込み）、境界、見出しの均等選抜、単一巨大ブロック（段落・コード・表・リスト）、frontmatter除去、ordered list正規化、中略なしの連続レイアウト |
 | `ai/PromptBuilderExcerptRegressionTest.kt` | 8 | 7プロンプトの出力文字列の固定、抜粋時だけ注意書きが出ること |
 | `architecture/NoteExcerptThreadingTest.kt` | 1 | 抜粋生成が本番7経路すべてで `Dispatchers.Default` 側にあること（呼び出し箇所の一覧ごとソース走査で固定） |
-| **合計（52ファイル）** | **450** | |
+| `ui/theme/AppColorContrastTest.kt` | （上記に含む） | トークン×**実際に載る面**の総当たり、半透明面の実効色、グラデーション停止色との比、明暗の反転 |
+| `ui/theme/VibrantTextUsageTest.kt` | 2 | 画面からの `onVibrant` 直接使用と、文字色への任意の `copy(alpha)` をソース走査で禁じる |
+| **合計（53ファイル）** | **459** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -862,15 +873,28 @@ BUILD SUCCESSFUL
 
 2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を確認した（Phase 3時点）。
 
-その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加。さらに改善活動A案（要約Controllerの世代管理・検索スコープ）、C案（用途別の読込予算・累計回数）、B案（切替の一斉停止と一斉初期化・状態Writer・パッケージ依存）で計46件を追加して49ファイル・425ケースとなった。2026-07-28のAI入力の抜粋化で25件を追加し、**現在は52ファイル・450ケース全件グリーン**。13.1の表は同日に実行結果XMLと突合して更新した。
+その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加。さらに改善活動A案（要約Controllerの世代管理・検索スコープ）、C案（用途別の読込予算・累計回数）、B案（切替の一斉停止と一斉初期化・状態Writer・パッケージ依存）で計46件を追加して49ファイル・425ケースとなった。2026-07-28のAI入力の抜粋化で25件を追加して450ケース。2026-07-29〜30のD案・E案でコントラスト検証を作り直し（面の総当たり・半透明の実効色・停止色との比・明暗の反転）、使用箇所の禁止テストを新設して9件増え、**現在は53ファイル・459ケース全件グリーン**。
+
+**コントラスト系のテストは2度作り直している。** 初版は全色を最も明るい `panel` の上で測り、2版目も
+グラデーション上の文字を最も有利な停止色でだけ測っていた。どちらも全緑のまま基準を割っており、
+**「テストが通ること」と「正しい対象を測っていること」は別**であることが実際に2度起きた。
+現在は停止色を `AppColorScheme` の単一ソースから読んで総当たりし、表に載らない書き方は
+`VibrantTextUsageTest` がソース走査で禁じる。
 
 JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるため `/usr/libexec/java_home` では検出されない。`JAVA_HOME` へ明示指定して `./gradlew testDebugUnitTest --offline` で実行する。
 
 ### 13.3 自動実行（CI）
 
-2026-07-26に `.github/workflows/ci.yml` を新設した。PR と `main` への push で `./gradlew testDebugUnitTest` と `./gradlew lintDebug` を実行する（JDK 21／ローカルの Android Studio 同梱 JBR に合わせた）。テストレポートと Lint レポートは失敗時の追跡用に artifact として保存し、同一ブランチへの連続pushでは古い実行を打ち切る。
+2026-07-26に `.github/workflows/ci.yml` を新設した。PR と `main` への push で `./gradlew testDebugUnitTest`・`./gradlew lintDebug`・`./gradlew assembleDebugAndroidTest` を実行する（JDK 21／ローカルの Android Studio 同梱 JBR に合わせた）。テストレポートと Lint レポートは失敗時の追跡用に artifact として保存し、同一ブランチへの連続pushでは古い実行を打ち切る。
 
-現在 Lint は Error 0件・Warning 28件で、**警告ではビルドを落としていない**（警告数を固定する設定は未導入）。
+現在 Lint は **Error 0件・Warning 0件**で、`lint { warningsAsErrors = true }` により警告でビルドが落ちる。
+Kotlinコンパイラ側も `allWarningsAsErrors = true` を設定した（**Lintの設定はAndroid Lintにしか効かず、
+これが無い間はテストコンパイル警告を何件でも追加できた**）。依存更新系の3チェック
+（`GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`）だけは、更新方針が
+未定のうちは行動につながらないため `disable` にしている。
+
+`assembleDebugAndroidTest` が保証するのは**テストAPKのコンパイルと組み立てまで**で、
+Runnerの起動もCompose描画も実行していない。instrumentation の実行には実端末かエミュレータが要る。
 
 ### 13.4 未カバー領域
 
@@ -886,7 +910,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 連続操作時のキャンセルと競合
 - 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
 
-現在の425テストは、Android依存の薄い純粋ロジックと、Controller間の調停の回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
+現在の459テストは、Android依存の薄い純粋ロジックと、Controller間の調停の回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
 
 ---
 
@@ -928,7 +952,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
-| 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない。`androidTest` は依存も `testInstrumentationRunner` も無く、書ける状態ですらない |
+| 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない。土台（依存・Runner・スモークテスト・CIでのコンパイル）は整えたが、**一度も実行していない** |
 | 中 | 読書痕跡の孤児ファイル | ノートの削除・改名で対応する痕跡が残り続け、掃除する導線もない。長期運用でファイル数が単調増加する |
 | 中 | ReadingTrace同期索引 | 外部同期で追加されたサイドカーをプロセス再起動まで認識しない |
 | 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
@@ -936,9 +960,9 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 | 低 | YAML解析が簡易 | 複雑なYAML、引用、ネスト、複数行値には対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
 | 低 | Markdownが限定実装 | ordered list番号、クリック可能リンク、画像、埋め込み、数式などは未対応 |
 | 低 | 状態取得失敗と非対応の同一視 | AI状態確認の一時エラーも「利用不可」として扱われる |
-| 低 | ライト配色のAA未達 | 明暗の全トークンを実測した結果、ライトの文字6色（2.46〜4.43）と緑ボタンの塗りが基準割れ。ダークは全て基準内。`AppColorContrastTest` は既知未達を「失敗させず記録する」形で固定しているため、**テスト全緑はAA準拠を意味しない** |
-| 低 | `applicationId` が初期値 | `com.example.newproject` のまま。Play Store公開後は変更できない |
-| 低 | リリースビルド構成が未定義 | `buildTypes { }` 自体が無く、R8・署名・`lint { }` の置き場がすべて未設定。Lint警告数の固定と instrumentation の前提になる |
+| 低 | バッジ塗りがナビ帯で未達 | AIタブのバッジはパネルではなく下部ナビ帯（ライトは彩度の高いIndigo）に載る。塗りは Success 1.61・Error 1.04 で、その上で3:1を取れる色がほとんど無い。中の記号は対の前景で読めるので、状態の判別は記号が担う |
+| 低 | R8・署名が未設定 | `release` は定義したが `isMinifyEnabled = false`・署名なし。R8を有効化すると ML Kit GenAI のリフレクション解決部分が縮小で消え、**全AI機能が release ビルドでだけ落ちる**可能性がある。JVMテストは縮小前のクラスを見るため検出できず、実機検証とセットになる |
+| 低 | 依存更新の方針が無い | Lintの更新系3チェックを `disable` にしたため、更新の判断を誰も促さなくなった。ML Kit GenAI は beta2 で、SDK制約がバイナリを見ないと分からない前例がある |
 
 ---
 
@@ -956,13 +980,17 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 8. （実装済み・2026-07-26）ノート本文の読込を用途別の予算（表示1MB／候補スニペット8KB／蒸留256KB）へ分け、`totalVisitCount` を追加して累計訪問数を保持件数30と分離した（サイドカー schema v2）。
 9. （実装済み・2026-07-27）`NoteViewModel` の依存生成を `NoteViewModelDependencies` へ出し、Controller間の調停を `NoteSessionCoordinator` へ分離してJVMテスト可能にした。状態は `NoteUiStateStore` の機能別Writerで所有権を型に落とし、パッケージ依存の向きを `PackageDependencyTest` でCI固定した。
 10. `PromptBuilder` の出力契約（要約・関連・ピッカー・補記・セクション）と `SearchPickerUseCase` のAI応答解釈のテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
-11. `buildTypes { }` を定義して instrumentation の土台（`androidTestImplementation` / `testInstrumentationRunner`）と `lint { }` を用意し、Vault走査・補記保存・削除、ReadingTraceのActivity lifecycle・Vault切替・外部同期を実端末で検証する。
+11. （土台は実装済み・2026-07-29）`buildTypes { }`・`lint { }`・`androidTestImplementation` 一式・`testInstrumentationRunner` を用意し、土台スモークテストを置いてCIでコンパイルまで通した。**残るは実行**で、Vault走査・補記保存・削除、ReadingTraceのActivity lifecycle・Vault切替・外部同期を実端末で検証する。
 12. ReadingTrace索引にミス時再走査またはTTLを設ける。あわせて孤児サイドカーの手動一括削除をオプション画面へ置く。
 13. AI入力を単純な先頭切り出しから、見出し・冒頭・末尾・重要語を考慮した抽出へ発展させる。
 14. （実装済み）AI推薦の同名ノート解決に一意な候補ID（`C01..` / `idToNote`）を導入した。決定的チャンネル・除外判定の正規化タイトル集合は同名畳み込みが残るため、必要ならそちらも一意化する。
 15. AI非対応・モデル未準備・一時エラーのUXを要約・検索・クイズ・補記で統一する。
-16. ライト配色のAA未達（文字6色・緑ボタン）を、無彩色グレー5段階の整理と同時に是正する。
-17. 正式な `applicationId` を決める（Play Store公開後は変更不可）。
+16. （実装済み・2026-07-29〜30）ライト配色のAA未達を是正した。無彩色グレーを3段階へ統合し、基準面を `panelChip` に統一。見出し2色と更新日時は色相を保ったまま明度を下げ、グラデーション直上の文字は共通部品が背景ごと持ち、ボタンは輪郭線で境界を出す。検証は「トークン×実際に載る面」の総当たりへ移し、使用箇所の禁止をソース走査で強制した。
+17. （実装済み・2026-07-29）`applicationId` を `com.vigilith.ai` に確定した（`namespace` は据え置き）。
+18. R8を有効化して keep ルールを確認し、リリース署名の手順を決める。7つのAI経路を release ビルドで一巡する必要がある。
+19. instrumentation スモークテストを実端末かエミュレータで一度実行し、土台が動くことを確かめる。
+20. 依存更新の単位と頻度を決め、Lintの更新系3チェックを `disable` から外す。
+21. 下部ナビ帯の上のバッジ塗りを、輪郭線か明度の見直しで3:1へ乗せる。
 
 ---
 
@@ -985,6 +1013,7 @@ JBRは `/Applications` 直下ではなく `/Applications/AIセット/Android Stu
 - 2026-07-26（同日・5回目）の更新は、起動OPの目専用Canvasレイヤーと対応する`eyeAlpha`／焦点／パルス状態を完全削除した。演出をハロー→完成WebP全身→名称へ簡潔化し、目だけが残る余地を構造的になくした。テスト8件は新タイムラインの登場順・保持・退場へ置換し、全344件成功と`assembleDebug`成功を確認した。
 - 2026-07-26（同日・6回目）の更新は、アプリ内Vigilith Phase 3を反映した。ドラッグ位置を配置可能領域内の相対座標で保存し、四辺clamp、Fold開閉・回転・状態ラベル変更後の再配置、NavigationBar / Rail、Snackbar、IMEの予約領域を実装。TalkBackは可視ラベルとの二重フォーカスをなくし、76×93dpの本体ボタンへ状態・操作・対象節を集約した。本番Kotlin 65ファイル・11,723行、テスト41ファイル・352ケースへ再測定し、全テスト・`assembleDebug`・Pixel 10 Pro FoldへのAPKインストールに成功した。端末の認証ロックによりアプリ画面の最終目視は未完了。
 - 2026-07-26（同日・7回目）の更新は、ダークモード実装・テーマ基盤リファクタ（R-1〜R-4）・パッケージのレイヤー別整理（PR #37）・軽量課題5件・検索の世代管理までを反映した。**§3 のファイル構成が PR #37 前のフラット構成のまま**で、`SearchController.kt` や `NoteUiState.kt` をルート直下に記載するなど実態と大きく乖離していたため、実ファイル一覧と突合して全面的に書き直した（70ファイル全件が一致することを機械的に確認）。また §6.5 に PR #35 で解消済みの旧フォールバック仕様（「候補40件以下では先頭3件を返すため画面文言と一致しない」）が残っていたため実装へ合わせた。§4.3 に `darkTheme` と `isSectionChatSheetVisible` の2フィールドが欠けていた点、§5.3 のオプション画面にダークモード切替が無かった点も補った。本番Kotlin 70ファイル・12,535行、テスト43ファイル・379ケースへ再測定し、`testDebugUnitTest` と `lintDebug` の成功を確認した（Lint 0 error / 28 warning）。CIは §13.3 を参照。
+- 2026-07-30の更新は、D案（ライト配色のAA是正）とE案（リリース構成の整備）を反映した。**この2案はレビューで2度差し戻されており、解析書もその経緯ごと記録する。** 1度目は全色を最も明るい `panel` の上で測っていたため、実際に載る `panelBlue` で 4.19〜4.41・グラデーション直上のボタンで 1.21〜1.84 と割ったまま「準拠」と判定していた。2度目は対応表を作った後も、グラデーション上の白文字を最も有利な `Indigo` 停止色でだけ測り、`copy(alpha)` 派生と `onVibrant` を覆えていなかった。現在は停止色を `AppColorScheme` の単一ソースから読んで総当たりし、表に載らない書き方は `VibrantTextUsageTest` がソース走査で禁じる。見出しは暗幕（`LogoNavy` α=0.42）を実機で見たうえで白ヘイズ（`Panel` α=0.35＋濃色の文字）へ反転した — **基準を満たす実装と成立しているデザインは別で、前者だけでは差し戻される**。E案は `buildTypes`・`lint {}`・androidTest基盤・Java 11・`applicationId` を入れ、Lint警告に加えKotlinコンパイラ警告もビルドを落とす設定にした（`lint { warningsAsErrors }` はAndroid Lintにしか効かない）。本番Kotlin 93ファイル・14,400行、テスト53ファイル・459ケースへ再測定し、`testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` / `assembleRelease` の成功を確認した（Lint 0/0・Kotlin警告0）。§14.2 から「ライト配色のAA未達」「`applicationId` が初期値」「リリースビルド構成が未定義」の3行が消え、代わりに「バッジ塗りがナビ帯で未達」「R8・署名が未設定」「依存更新の方針が無い」が入った。**instrumentation はコンパイルまでで一度も実行していない**点は §13.3 に明記した。
 - 2026-07-27の更新は、改善活動A案（非同期の境界）・C案（入出力の境界）・B案（依存と状態の境界）を反映した。**解析書は `25ec429`（検索の世代管理まで）で止まっており、A案・C案の完了分も未反映だった**ため、3案まとめて突合した。主な書き換えは §1 サマリー、§3 ファイル構成（`NoteSessionCoordinator` / `NoteUiStateStore` / `model/state/` / 共有データ型の `model` 移動）、§4.1 依存方向の許可表、§4.2 機能別Writerの担当表、§4.3 リセット契約の名称と原子性、§10.1 二層の世代管理、§13 テスト内訳と未カバー領域、§14 リスク表、§15 改善候補。本番Kotlin 89ファイル・13,660行、テスト49ファイル・425ケースへ再測定し、`testDebugUnitTest` と `lintDebug` の成功を確認した（Lint 0 error / 28 warning）。§14.2 から「Job管理の不統一」「パッケージ間の依存が循環」「`NoteViewModel` がテスト不能」「単一 UiState の共有所有」「削除失敗の通知不足」「ReadingTrace累計回数」の6行が消え、残る中優先度は統合テスト不足・痕跡の保守性・AI入力の切り出し方になった。**A案／B案／C案はいずれも実機確認が未実施**であり、コード上の完了と動作確認は別である。
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 
