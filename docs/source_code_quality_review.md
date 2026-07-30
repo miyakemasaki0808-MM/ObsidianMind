@@ -475,3 +475,30 @@ NoSuchMethodException: android.hardware.input.InputManager.getInstance []
 10. 完成プロンプトのトークン計測後に関連ノートの抜粋予算を調整する
 
 最初の4件は、現在のController／Repository構成を全面的に変えず局所的に直せます。特にinstrumentationは、基盤の有無を議論する段階から、**実行して具体的な互換性障害を再現できる段階**へ進みました。ここを緑に戻して初めて、「androidTestの土台が動く」と評価できます。
+
+---
+
+## 8. 対応判断の追記（2026-07-31）
+
+P2-1のinstrumentation互換性修正は、**今回のD案・E案の活動には含めず、次回の独立した作業で対応する**。
+
+今回の活動で確定した状態は次のとおり。
+
+- androidTestの依存、Runner、スモークテスト2件、CI上のコンパイル確認までは追加済み
+- `connectedDebugAndroidTest`をAndroid 16エミュレータで実行済み
+- 2件とも`createComposeRule()`の初期化段階で失敗し、結果は **0 success / 2 failure**
+- 例外は`NoSuchMethodException: android.hardware.input.InputManager.getInstance []`
+- したがって、現時点では「土台を組み立てられる」とは言えるが、**「土台が動く」「スモークテストが通る」とは言わない**
+
+次回は、現在の`espresso-core:3.6.1`に対し、AndroidX Test公式リリースノートで同じ反射呼び出しを`getSystemService`へ置き換えたと明記されている
+[`espresso-core:3.7.0`](https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0)への限定更新から着手する。必要に応じて`ext:junit`も対応する1.3.0へ揃えるが、Compose BOMや本番依存を含む一括更新には広げない。
+
+再開時の確認順序は次のとおり。
+
+1. Context確認テストをComposeルールのないクラスへ分離し、RunnerとComposeの故障を別々に観測できるようにする
+2. AndroidX Test／Espressoだけを限定更新する
+3. Android 16エミュレータで`connectedDebugAndroidTest`を再実行する
+4. 2件が通れば、SAF・Navigation・Activity再生成の実テスト追加へ進む
+5. 同じ範囲で直らなければ、結果を記録して依存互換性の独立課題として調査する
+
+併せて、[`build.gradle.kts`](../app/build.gradle.kts#L101) の「テスト本体はまだ無い」というコメントは現在の実装と一致しないため、次回のコード変更時に修正する。[`GradientHeader`](../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt#L50) の`horizontalBleed = 20.dp`と呼び出し側余白の手動契約は既知の軽微な保守課題とし、今回の完了を妨げる問題にはしない。
