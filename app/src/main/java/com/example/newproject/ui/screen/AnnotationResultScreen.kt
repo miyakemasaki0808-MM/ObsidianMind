@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.theme.PanelDividerStrong
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
@@ -68,10 +70,12 @@ fun AnnotationResultScreen(
         OutlinedButton(
             onClick = onBack,
             modifier = Modifier.fillMaxWidth(),
-            border = BorderStroke(1.dp, OnVibrant.copy(alpha = 0.6f)),
+            // 枠線も文字もグラデーション直上では基準を割る。面を持たせて解く。
+            colors = ButtonDefaults.outlinedButtonColors(containerColor = Panel, contentColor = OnSurface),
+            border = BorderStroke(1.dp, PanelDividerStrong),
             shape = RoundedCornerShape(8.dp)
         ) {
-            Text("戻る", color = OnVibrant)
+            Text("戻る", color = OnSurface)
         }
     }
 }

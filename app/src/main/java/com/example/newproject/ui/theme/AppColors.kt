@@ -74,7 +74,9 @@ internal val LightAppColors = AppColorScheme(
     accentText = Indigo,
     accentSurface = Indigo,
     onAccentSurface = Color.White,
-    accentGlass = Indigo.copy(alpha = 0.55f),
+    // 透過のままだとグラデーションが透けて、白文字のコントラストが下地しだいで
+    // 3.98〜6.13 に動く（Aqua停止色の上で基準割れ）。ダークは既に不透明なので揃える。
+    accentGlass = Indigo,
     navBar = Indigo,
     navIndicator = Aqua,
     vigilithHalo = Color.Transparent,

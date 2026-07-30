@@ -1,5 +1,9 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.theme.Panel
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
@@ -172,10 +176,16 @@ internal fun NoteReaderTab(
             }
 
             if (isLoading) {
-                CircularProgressIndicator(
-                    color = OnVibrant,
+                Surface(
+                    color = Panel,
+                    shape = CircleShape,
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
-                )
+                ) {
+                    CircularProgressIndicator(
+                        color = AccentText,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
 
             // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない

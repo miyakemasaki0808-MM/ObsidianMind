@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorSurface
@@ -96,8 +97,8 @@ internal fun AppScaffold(
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
                                     selectedTextColor = OnVibrant,
-                                    unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
-                                    unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
+                                    unselectedIconColor = OnVibrantMuted,
+                                    unselectedTextColor = OnVibrantMuted,
                                     indicatorColor = NavIndicator
                                 )
                             )
@@ -119,8 +120,8 @@ internal fun AppScaffold(
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
                                     selectedTextColor = OnVibrant,
-                                    unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
-                                    unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
+                                    unselectedIconColor = OnVibrantMuted,
+                                    unselectedTextColor = OnVibrantMuted,
                                     indicatorColor = NavIndicator
                                 )
                             )

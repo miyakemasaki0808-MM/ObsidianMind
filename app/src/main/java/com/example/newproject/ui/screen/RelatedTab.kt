@@ -32,6 +32,8 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.ui.theme.OnAccentSurface
+import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.AiHeading
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMetaBlue
@@ -72,11 +74,14 @@ fun RelatedTab(
         )
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             if (uiState.relatedNotesState is RelatedNotesState.Idle) {
-                Text(
-                    text = "ノートを開くと、リンクとAIの関連がここに集まります。",
-                    color = OnVibrantMuted,
-                    fontSize = 14.sp
-                )
+                Surface(color = Panel, shape = RoundedCornerShape(8.dp)) {
+                    Text(
+                        text = "ノートを開くと、リンクとAIの関連がここに集まります。",
+                        color = OnSurfaceFaint,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             } else {
                 RelatedNotesPanel(
                     state = uiState.relatedNotesState,
@@ -239,7 +244,7 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
             ) {
                 Text(
                     text = "linked",
-                    color = OnVibrant,
+                    color = OnAccentSurface,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )

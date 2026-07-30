@@ -42,6 +42,8 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.ui.theme.PanelChip
+import com.example.newproject.ui.theme.PanelDividerStrong
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurfaceFaint
@@ -110,12 +112,19 @@ fun SearchTab(
         // フォルダ列挙に失敗しても、ルート直下スコープでは検索できる。
         // 操作を止めない注記として chips の下に添えるだけにする。
         uiState.foldersError?.let { message ->
-            Text(
-                text = message,
-                color = OnVibrantMuted,
-                fontSize = 12.sp,
+            // グラデーション直上に文字を置かない。注記も面を持たせる。
+            Surface(
+                color = Panel,
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.padding(top = 6.dp)
-            )
+            ) {
+                Text(
+                    text = message,
+                    color = OnSurfaceFaint,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
         }
 
         OutlinedTextField(
@@ -127,14 +136,18 @@ fun SearchTab(
             placeholder = { Text("例: 習慣化について書いたやつ") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
+            // 入力欄も不透明な面を持たせる。透けたままだと入力文字のコントラストが
+            // 背後の停止色で変わり、Aqua帯では白文字が 2.07 まで落ちる。
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = OnVibrant,
-                unfocusedTextColor = OnVibrant,
-                cursorColor = OnVibrant,
-                focusedBorderColor = OnVibrant,
-                unfocusedBorderColor = OnVibrant.copy(alpha = 0.5f),
-                focusedPlaceholderColor = OnVibrantMuted,
-                unfocusedPlaceholderColor = OnVibrantMuted
+                focusedContainerColor = Panel,
+                unfocusedContainerColor = Panel,
+                focusedTextColor = OnSurface,
+                unfocusedTextColor = OnSurface,
+                cursorColor = AccentText,
+                focusedBorderColor = AccentText,
+                unfocusedBorderColor = PanelDividerStrong,
+                focusedPlaceholderColor = OnSurfaceFaint,
+                unfocusedPlaceholderColor = OnSurfaceFaint
             )
         )
 
@@ -207,11 +220,13 @@ private fun FolderChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
-        color = if (selected) Panel else Panel.copy(alpha = 0.22f)
+        // 未選択も不透明にする。透過22%ではグラデーションが透けて、
+        // 白文字が 1.82〜4.10 と下地しだいで変わっていた。
+        color = if (selected) Panel else PanelChip
     ) {
         Text(
             text = label,
-            color = if (selected) OnSurface else OnVibrant,
+            color = OnSurface,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)

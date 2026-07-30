@@ -376,27 +376,22 @@ class AppColorContrastTest {
     }
 
     /**
-     * **見出しの帯の外にも `onVibrant` が残っている**（既知・未修正）。
+     * `onVibrant` を許した部品が持つ面の上でも読めること。
      *
-     * 検索欄・フォルダチップ・空状態・進捗インジケータ・戻るボタンなどが、
-     * まだグラデーション直上に白文字を置いている。これらは暗幕ではなく
-     * **部品ごとに不透明面＋対の前景へ寄せる**方針なので、帯とは別に直す。
-     *
-     * ここで固定するのは「帯の外は素の停止色の上にいる＝未達である」という事実。
-     * 全部品が移行したらこのテストを消し、`onVibrant` の画面からの直接使用を
-     * 禁じるソース走査テストへ置き換えること。
+     * [VibrantTextUsageTest] の許可リストと対になる。あちらへ部品を足したら、
+     * その面の比をここへ足す。**許可だけ増やして検証を増やさないと穴になる。**
      */
     @Test
-    fun `帯の外のグラデーション直上の文字が未達であることを記録する`() {
-        val c = LightAppColors
-        val worst = c.gradients().values.flatten().minOf { stop ->
-            minOf(contrast(c.onVibrant, stop), contrast(c.onVibrantMuted, stop))
+    fun `onVibrantを許した部品の面でも文字が読める`() {
+        schemes.forEach { (name, c) ->
+            // 全画面FAB・Vigilithのラベル（accentGlass を直接背景に敷く）
+            assertAtLeast(4.5, contrast(c.onVibrant, c.accentGlass), "$name onVibrant（accentGlass 上）")
+            // 下部ナビ／レール
+            assertAtLeast(4.5, contrast(c.onVibrant, c.navBar), "$name onVibrant（navBar 上）")
+            assertAtLeast(4.5, contrast(c.onVibrantMuted, c.navBar), "$name onVibrantMuted（navBar 上・未選択）")
         }
-        assertTrue(
-            "帯の外の文字が素の停止色の上で4.5:1を満たすようになった（最悪 ${"%.2f".format(worst)}）",
-            worst < 4.5
-        )
-        assertEquals("最悪値が変わった（Aqua上の onVibrantMuted）", 1.89, worst, 0.05)
+        // 起動アニメの専用面。テーマに追従しない固定値。
+        assertAtLeast(4.5, contrast(LightAppColors.onVibrant, VigilithSlate), "onVibrant（VigilithSlate 上）")
     }
 
     // -- 塗りの上に載る文字（バッジ・チップ） -----------------------------------

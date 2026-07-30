@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.OnButtonAi
@@ -109,7 +110,9 @@ private fun OptionSwitchRow(
             Text(emoji, fontSize = 22.sp)
             Column(modifier = Modifier.weight(1f)) {
                 Text(title, color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = OnSurface.copy(alpha = 0.6f), fontSize = 12.sp)
+                // 任意のαで薄めない。12sp は AA の大文字例外に入らないので、
+                // 弱い文字は名前付きトークンの範囲から選ぶ（旧 α=0.6 は 4.31 で未達）。
+                Text(subtitle, color = OnSurfaceFaint, fontSize = 12.sp)
             }
             Switch(
                 checked = checked,
@@ -149,7 +152,7 @@ private fun OptionRow(
             Text(emoji, fontSize = 22.sp)
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(title, color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = OnSurface.copy(alpha = 0.6f), fontSize = 12.sp)
+                Text(subtitle, color = OnSurfaceFaint, fontSize = 12.sp)
             }
         }
     }

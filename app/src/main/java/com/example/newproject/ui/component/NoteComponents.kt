@@ -39,6 +39,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.Panel
@@ -112,7 +113,7 @@ internal fun IconPill(
     symbol: String,
     contentDescription: String,
     modifier: Modifier = Modifier,
-    containerColor: Color = Panel.copy(alpha = 0.22f),
+    containerColor: Color = AccentGlass,
     symbolSize: TextUnit = 18.sp,
     onClick: () -> Unit
 ) {
