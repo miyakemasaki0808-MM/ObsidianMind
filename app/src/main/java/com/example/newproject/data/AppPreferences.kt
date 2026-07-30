@@ -1,6 +1,7 @@
 package com.example.newproject.data
 
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 /**
  * 端末に残す設定値。**Vaultにも痕跡にも書かない小さな2つだけ**を扱う。
@@ -22,13 +23,13 @@ class SharedAppPreferences(private val prefs: SharedPreferences) : AppPreference
     override var darkTheme: Boolean
         get() = prefs.getBoolean(KEY_DARK_THEME, false)
         set(value) {
-            prefs.edit().putBoolean(KEY_DARK_THEME, value).apply()
+            prefs.edit { putBoolean(KEY_DARK_THEME, value) }
         }
 
     override var vaultUri: String?
         get() = prefs.getString(KEY_VAULT_URI, null)
         set(value) {
-            prefs.edit().putString(KEY_VAULT_URI, value).apply()
+            prefs.edit { putString(KEY_VAULT_URI, value) }
         }
 
     companion object {

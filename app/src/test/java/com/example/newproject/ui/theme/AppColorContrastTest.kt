@@ -45,6 +45,34 @@ class AppColorContrastTest {
 
     private val schemes = listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors)
 
+    // 停止色は `AppColorScheme` から読む。以前はここに同じ値を書き写しており、
+    // 実装だけ変えるとテストが古い色を測ったまま全緑になる状態だった。
+    private fun AppColorScheme.gradients(): Map<String, List<Color>> = mapOf(
+        "AppGradient" to appGradientStops,
+        "ReadingGradient" to readingGradientStops
+    )
+
+    /** 半透明の面を下地へ重ねた実効色。`Color.copy(alpha = …)` の見え方に対応する。 */
+    private fun blend(foreground: Color, background: Color, alpha: Float): Color = Color(
+        red = foreground.red * alpha + background.red * (1 - alpha),
+        green = foreground.green * alpha + background.green * (1 - alpha),
+        blue = foreground.blue * alpha + background.blue * (1 - alpha)
+    )
+
+    private fun AppColorScheme.textToken(name: String): Color = when (name) {
+        "onSurface" -> onSurface
+        "onSurfaceMuted" -> onSurfaceMuted
+        "onSurfaceSubtle" -> onSurfaceSubtle
+        "onSurfaceFaint" -> onSurfaceFaint
+        "onSurfaceMetaBlue" -> onSurfaceMetaBlue
+        "relatedHeading" -> relatedHeading
+        "aiHeading" -> aiHeading
+        "linkText" -> linkText
+        "errorText" -> errorText
+        "dangerAction" -> dangerAction
+        else -> error("未知の文字トークン: $name")
+    }
+
     // -- ボタン3役 -----------------------------------------------------------
     // ラベルは 4.5:1（文字）、塗りは 3:1（非文字＝ボタンの輪郭が見つかること）。
 
@@ -57,14 +85,76 @@ class AppColorContrastTest {
         }
     }
 
+    /**
+     * パネルの上に載るボタン（SectionChatSheet・DistillPanel）は、塗り自身で境界を出す。
+     * グラデーション直上のボタンは条件が違うので、下の別テストで扱う。
+     */
     @Test
-    fun `塗りボタンは自面の上で輪郭が判別できる`() {
+    fun `パネル上の塗りボタンは輪郭が判別できる`() {
         schemes.forEach { (name, c) ->
-            assertAtLeast(3.0, contrast(c.buttonPrimary, c.panel), "$name ButtonPrimary の塗り")
-            assertAtLeast(3.0, contrast(c.buttonAi, c.panel), "$name ButtonAi の塗り")
+            listOf("panel" to c.panel, "panelBlue" to c.panelBlue).forEach { (sn, surface) ->
+                assertAtLeast(3.0, contrast(c.buttonPrimary, surface), "$name ButtonPrimary の塗り（$sn 上）")
+                assertAtLeast(3.0, contrast(c.buttonSecondary, surface), "$name ButtonSecondary の塗り（$sn 上）")
+                assertAtLeast(3.0, contrast(c.buttonAi, surface), "$name ButtonAi の塗り（$sn 上）")
+            }
         }
-        // ButtonSecondary はダークでのみ基準を満たす（下記の既知未達を参照）。
-        assertAtLeast(3.0, contrast(DarkAppColors.buttonSecondary, DarkAppColors.panel), "ダーク ButtonSecondary の塗り")
+    }
+
+    /**
+     * グラデーション直上のボタンは、**塗りの色をどう選んでも境界を出せない**。
+     *
+     * 停止色の相対輝度が広く散っているため、全停止色に3:1を満たす塗りは
+     * 「ほぼ黒」しか存在しない（明るい側は輝度1.0を超える値が必要で不可能）。
+     * この事実を固定しておかないと、「もっと良い緑を探す」方向へ何度でも戻る。
+     */
+    @Test
+    fun `ライトのグラデーション上では塗りだけで境界を出せない`() {
+        val c = LightAppColors
+        val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
+        LightAppColors.gradients().forEach { (gradient, stops) ->
+            roles.forEach { (role, fill) ->
+                val worst = stops.minOf { contrast(fill, it) }
+                assertTrue(
+                    "$gradient 上の Button$role の塗りが3:1を満たすようになった" +
+                        "（実測 ${"%.2f".format(worst)}）。輪郭線が不要になったなら、" +
+                        "このテストと buttonOutlineOnGradient を見直すこと",
+                    worst < 3.0
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `ライトの輪郭線はどの停止色の上でも境界として見える`() {
+        LightAppColors.gradients().forEach { (gradient, stops) ->
+            stops.forEach { stop ->
+                assertAtLeast(
+                    3.0,
+                    contrast(LightAppColors.buttonOutlineOnGradient, stop),
+                    "$gradient の停止色に対する輪郭線"
+                )
+            }
+        }
+    }
+
+    /**
+     * ダークは輪郭線を置かない。**足りているから置かない**のであって、
+     * 忘れているのではないことをここで示す。
+     */
+    @Test
+    fun `ダークは塗りだけでグラデーションから浮くので輪郭線を持たない`() {
+        val c = DarkAppColors
+        assertEquals("ダークの輪郭線は透明であること", Color.Transparent, c.buttonOutlineOnGradient)
+        val roles = mapOf("Primary" to c.buttonPrimary, "Secondary" to c.buttonSecondary, "Ai" to c.buttonAi)
+        DarkAppColors.gradients().forEach { (gradient, stops) ->
+            roles.forEach { (role, fill) ->
+                assertAtLeast(
+                    3.0,
+                    stops.minOf { contrast(fill, it) },
+                    "$gradient 上の Button$role の塗り（輪郭線なしで成立すること）"
+                )
+            }
+        }
     }
 
     @Test
@@ -88,88 +178,240 @@ class AppColorContrastTest {
 
     // -- 面の上の文字 ---------------------------------------------------------
 
-    @Test
-    fun `ダークでは全ての文字トークンがAA基準を満たす`() {
-        val c = DarkAppColors
-        mapOf(
-            "onSurface" to c.onSurface,
-            "onSurfaceMuted" to c.onSurfaceMuted,
-            "onSurfaceSubtle" to c.onSurfaceSubtle,
-            "onSurfaceFaint" to c.onSurfaceFaint,
-            "onSurfaceHint" to c.onSurfaceHint,
-            "onSurfaceDisabled" to c.onSurfaceDisabled,
-            "onSurfaceMetaBlue" to c.onSurfaceMetaBlue,
-            "linkText" to c.linkText,
-            "errorText" to c.errorText,
-            "dangerAction" to c.dangerAction,
-            "relatedHeading" to c.relatedHeading,
-            "aiHeading" to c.aiHeading
-        ).forEach { (token, color) ->
-            assertAtLeast(4.5, contrast(color, c.panel), "ダーク $token（panel上）")
-        }
-    }
-
-    @Test
-    fun `ライトで基準を満たしている文字トークンは維持される`() {
-        val c = LightAppColors
-        mapOf(
-            "onSurface" to c.onSurface,
-            "onSurfaceMuted" to c.onSurfaceMuted,
-            "onSurfaceSubtle" to c.onSurfaceSubtle,
-            "linkText" to c.linkText,
-            "errorText" to c.errorText,
-            "dangerAction" to c.dangerAction
-        ).forEach { (token, color) ->
-            assertAtLeast(4.5, contrast(color, c.panel), "ライト $token（panel上）")
+    /**
+     * 文字トークンを、**実際に載る面**との組み合わせで検証する。
+     *
+     * 以前はすべて `panel` の上で測っていたが、`panel` に載る文字はごく一部で、
+     * 見出しや更新日時は `panelBlue`、チャットシートは M3 標準面の上にある。
+     * 「一番明るい面で測って全部通った」と言えてしまうのが、この検証の壊れ方だった。
+     *
+     * 下の対応表はコードを追って作ったもの。**トークンの使用箇所を増やすときは、
+     * その面をここへ追加する**。表に無い面へ載せると、この検証は嘘になる。
+     */
+    private fun AppColorScheme.surfacesOf(token: String): List<Pair<String, Color>> {
+        // 面の実体（明暗で差し替わる）
+        val panelS = "panel" to panel
+        val tinted = "panelTinted" to panelTinted
+        val blue = "panelBlue" to panelBlue
+        val chip = "panelChip" to panelChip
+        val row = "panelRow" to panelRow
+        val bubble = "panelBubble" to panelBubble
+        val code = "codePanel" to codePanel
+        // ModalBottomSheet / Snackbar など M3 が自前で描く面。ライトは既定の
+        // lightColorScheme（`AppTheme` はライトで colorScheme を差し替えない）。
+        val sheet = "M3既定面" to if (panel == LightAppColors.panel) Color(0xFFFFFBFE) else panel
+        return when (token) {
+            // 本文Markdown（NoteComponents は Panel、AnnotationResultScreen は Panel/PanelTinted、
+            // FullscreenNoteScreen は Panel）＋各パネルの本文
+            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet)
+            // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
+            "onSurfaceMuted" -> listOf(panelS, tinted, blue)
+            // Markdown の引用＋SectionChatSheet の進捗ラベル＋DistillCandidateRow
+            "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet)
+            // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／チャットシート
+            "onSurfaceFaint" -> listOf(panelS, tinted, blue, sheet)
+            "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
+            "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
+            "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
+            "linkText" -> listOf(panelS, tinted)         // Markdown のリンク
+            "errorText" -> listOf(panelS, blue, sheet)
+            "dangerAction" -> listOf(panelS, blue)
+            else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")
         }
     }
 
     /**
-     * **ライトに残る既知の未達7件**（ダークは全て基準内）。
-     *
-     * いずれもダークモード以前からある。値を変えるとライトの見た目が変わるため今回は触っていない。
-     * 実測値をここで固定しておくことで、①気づかないうちに悪化する ②直したのに記録が残らない、
-     * のどちらも防ぐ。直すとこのテストが落ちるので、そのとき該当行を消して上のテストへ移すこと。
-     *
-     * 弱い文字（#777777以降）が軒並み届いていないのは、グレー階調が「見た目の薄さ」で
-     * 決められており可読性で決められていないため。階調の整理と同時に直すのが筋。
+     * 見出し2色は 11sp Bold で、AAの大文字例外（18pt相当／Bold 14pt相当）に**入らない**。
+     * 小さい文字ほど基準が要るので、装飾的な色でも4.5:1から降りない。
      */
     @Test
-    fun `ライトに残る既知のコントラスト未達を記録する`() {
-        val c = LightAppColors
-        // 文字（基準 4.5:1）。値は実測。
-        val textMisses = listOf(
-            Triple("aiHeading #16B8A6（AI推薦の見出し）", c.aiHeading, 2.46),
-            Triple("onSurfaceDisabled #999999（要約前の「—」）", c.onSurfaceDisabled, 2.82),
-            Triple("onSurfaceMetaBlue #8A90A8（一覧の更新日時）", c.onSurfaceMetaBlue, 3.13),
-            Triple("onSurfaceHint #888888（注記・完了済み・打ち消し線）", c.onSurfaceHint, 3.51),
-            Triple("relatedHeading #7B6FFF（関連ノートの見出し）", c.relatedHeading, 3.74),
-            Triple("onSurfaceFaint #777777（空状態の案内）", c.onSurfaceFaint, 4.43)
+    fun `文字トークンは実際に載る面すべてでAA基準を満たす`() {
+        val tokens = listOf(
+            "onSurface", "onSurfaceMuted", "onSurfaceSubtle", "onSurfaceFaint",
+            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText",
+            "errorText", "dangerAction"
         )
-        textMisses.forEach { (label, color, expected) ->
-            val actual = contrast(color, c.panel)
-            assertTrue(
-                "$label が改善された（実測 ${"%.2f".format(actual)}）。" +
-                    "修正が入ったならこの行を消し、上のテストへ移すこと",
-                actual < 4.5
-            )
-            assertEquals("$label の実測値が変わった", expected, actual, 0.05)
+        schemes.forEach { (schemeName, c) ->
+            tokens.forEach { token ->
+                val color = c.textToken(token)
+                c.surfacesOf(token).forEach { (surfaceName, surface) ->
+                    assertAtLeast(
+                        4.5,
+                        contrast(color, surface),
+                        "$schemeName $token（$surfaceName 上）"
+                    )
+                }
+            }
         }
-        // 塗り（非文字 3:1）。ラベル自体は黒で 8.44 と読めるが、白い面の上では
-        // ボタンの輪郭が見つけにくい。
-        val secondary = contrast(c.buttonSecondary, c.panel)
-        assertTrue("ButtonSecondary の塗りが改善された（実測 ${"%.2f".format(secondary)}）", secondary < 3.0)
-        assertEquals("ButtonSecondary の実測値が変わった", 2.46, secondary, 0.05)
     }
 
+    /**
+     * 半透明の面は、下地が透けるぶん実効的な背景が変わる。
+     * `DistillCandidateRow` は `Panel` を72%で `PanelBlue` の上に重ねている。
+     */
     @Test
-    fun `グラデーション上の文字は明暗どちらでも読める`() {
-        // 背景がグラデーションなので、最も明るい停止色との比で見る
-        // （ライトはAqua、ダークは最も明るい暗色）。
-        assertAtLeast(4.5, contrast(LightAppColors.onVibrant, Indigo), "ライト onVibrant（Indigo上）")
+    fun `半透明パネルの上の文字も実効的な背景で基準を満たす`() {
         schemes.forEach { (name, c) ->
-            assertAtLeast(4.5, contrast(c.onVibrantMuted, LogoNavy), "$name onVibrantMuted")
+            val effective = blend(c.panel, c.panelBlue, 0.72f)
+            listOf("onSurface" to c.onSurface, "onSurfaceSubtle" to c.onSurfaceSubtle, "onSurfaceFaint" to c.onSurfaceFaint)
+                .forEach { (token, color) ->
+                    assertAtLeast(4.5, contrast(color, effective), "$name $token（DistillCandidateRow の実効面）")
+                }
         }
+    }
+
+    /**
+     * 弱い文字は3段階しか持たない。
+     *
+     * ライトの白面ではAAの床が #767676（ちょうど4.50）にあり、本文 `#202124` から
+     * そこまでの間に区別できる濃さは3つしか取れない。4つ目を足すと、名前は違うのに
+     * 実質同じ濃さのトークンが増えて「どれを使うか」が決められなくなる。
+     * 段数を明暗で揃えることも同時に固定する（片方だけ増える事故の検出）。
+     */
+    @Test
+    fun `弱い文字は明暗どちらも3段階で単調に薄くなる`() {
+        schemes.forEach { (name, c) ->
+            val steps = listOf(c.onSurface, c.onSurfaceMuted, c.onSurfaceSubtle, c.onSurfaceFaint)
+                .map { contrast(it, c.panel) }
+            steps.zipWithNext().forEach { (strong, weak) ->
+                assertTrue(
+                    "$name の弱い文字は onSurface → Muted → Subtle → Faint の順に薄くなること" +
+                        "（実測 ${steps.joinToString { "%.2f".format(it) }}）",
+                    strong > weak
+                )
+            }
+            assertAtLeast(4.5, steps.last(), "$name の最も弱い文字（onSurfaceFaint）")
+        }
+    }
+
+    /**
+     * **バッジの塗りは下部ナビ帯の上では基準を満たしていない**（既知・未修正）。
+     *
+     * パネル上の塗りと違い、バッジはブランド色そのものの帯（ライト=Indigo／ダーク=`navBar`）
+     * に載る。ライトのIndigoは彩度が高く相対輝度も中位なので、その上で3:1を取れる塗りが
+     * ほとんど無い。中の記号は対の前景で読めるようにしてあるため、状態の判別は記号が担う。
+     *
+     * 直すには塗りの明度を上げるか輪郭線を足すかで、どちらもナビ帯の見た目に踏み込む。
+     * ここは実測値を固定するだけに留め、判断は別途行う。
+     */
+    @Test
+    fun `ナビ帯の上のバッジ塗りが基準未達であることを記録する`() {
+        val onLightNav = mapOf(
+            "Successバッジ（緑）" to contrast(LightAppColors.buttonSecondary, LightAppColors.navBar),
+            "Errorバッジ（赤）" to contrast(LightAppColors.errorSurface, LightAppColors.navBar)
+        )
+        onLightNav.forEach { (label, actual) ->
+            assertTrue(
+                "$label がライトのナビ帯で3:1を満たすようになった（実測 ${"%.2f".format(actual)}）。" +
+                    "修正が入ったならこのテストを消し、上の基準テストへ移すこと",
+                actual < 3.0
+            )
+        }
+        // 中の記号は塗りの上で読めていること（ここは満たしている）。
+        assertAtLeast(
+            4.5,
+            contrast(LightAppColors.onButtonSecondary, LightAppColors.buttonSecondary),
+            "Successバッジの「✓」"
+        )
+        assertAtLeast(
+            4.5,
+            contrast(LightAppColors.onErrorSurface, LightAppColors.errorSurface),
+            "Errorバッジの「!」"
+        )
+    }
+
+    /**
+     * グラデーション直上の文字は、**全ての停止色**の上で読めなければならない。
+     *
+     * 以前のこのテストは「最も明るい停止色との比で見る（ライトはAqua）」とコメントしながら、
+     * 実際には `Indigo` を渡していた。Indigo はライトで**最も暗い**停止色なので、
+     * 白文字にとって最も有利な条件だけを測っていたことになる。
+     * `onVibrantMuted` に至っては、停止色ですらない `LogoNavy` と比べていた。
+     *
+     * どの停止色が最悪かは色を変えれば入れ替わるので、代表を選ばずに総当たりする。
+     */
+    @Test
+    fun `ダークのグラデーション上の文字は全ての停止色の上で読める`() {
+        val c = DarkAppColors
+        c.gradients().forEach { (gradient, stops) ->
+            stops.forEach { stop ->
+                assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$gradient $stop 上）")
+                assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$gradient $stop 上）")
+            }
+        }
+    }
+
+    /**
+     * 見出しは、面を敷いた**実効的な背景**で基準を満たす。
+     *
+     * ライトは白のヘイズで停止色を持ち上げ、そこへ濃い文字を置く。
+     * ダークは何も敷かないので実効背景＝停止色そのもの（白文字が元から通る）。
+     * **明暗で面と文字が反転するため、どちらも同じ式で測れる形にしてある。**
+     */
+    @Test
+    fun `見出しは実効的な背景で基準を満たす`() {
+        schemes.forEach { (name, c) ->
+            c.gradients().forEach { (gradient, stops) ->
+                stops.forEach { stop ->
+                    val effective = blend(c.gradientHeaderScrim, stop, c.gradientHeaderScrim.alpha)
+                    assertAtLeast(
+                        4.5,
+                        contrast(c.onGradientHeaderTitle, effective),
+                        "$name 見出しタイトル（$gradient $stop ＋面）"
+                    )
+                    assertAtLeast(
+                        4.5,
+                        contrast(c.onGradientHeaderSubtitle, effective),
+                        "$name 見出し副題（$gradient $stop ＋面）"
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * ライトは霞ませる、ダークは何もしない。**明暗で解き方が反転している**ことを固定する。
+     * 片方の値をもう片方へコピーする事故は、この形でしか検出できない。
+     */
+    @Test
+    fun `見出しの解き方は明暗で反転している`() {
+        // ライト: 面を敷いて、その上に濃い文字
+        assertTrue(
+            "ライトの見出しは面を敷くこと",
+            LightAppColors.gradientHeaderScrim.alpha > 0f
+        )
+        assertTrue(
+            "ライトの見出し文字は面より濃いこと",
+            relativeLuminance(LightAppColors.onGradientHeaderTitle) <
+                relativeLuminance(LightAppColors.gradientHeaderScrim)
+        )
+        // ダーク: 何も敷かず、白い文字
+        assertEquals("ダークの見出しは面を敷かないこと", 0f, DarkAppColors.gradientHeaderScrim.alpha, 0.001f)
+        DarkAppColors.gradients().values.flatten().forEach { stop ->
+            assertTrue(
+                "ダークの見出し文字は停止色より明るいこと",
+                relativeLuminance(DarkAppColors.onGradientHeaderTitle) > relativeLuminance(stop)
+            )
+        }
+    }
+
+    /**
+     * `onVibrant` を許した部品が持つ面の上でも読めること。
+     *
+     * [VibrantTextUsageTest] の許可リストと対になる。あちらへ部品を足したら、
+     * その面の比をここへ足す。**許可だけ増やして検証を増やさないと穴になる。**
+     */
+    @Test
+    fun `onVibrantを許した部品の面でも文字が読める`() {
+        schemes.forEach { (name, c) ->
+            // 全画面FAB・Vigilithのラベル（accentGlass を直接背景に敷く）
+            assertAtLeast(4.5, contrast(c.onVibrant, c.accentGlass), "$name onVibrant（accentGlass 上）")
+            // 下部ナビ／レール
+            assertAtLeast(4.5, contrast(c.onVibrant, c.navBar), "$name onVibrant（navBar 上）")
+            assertAtLeast(4.5, contrast(c.onVibrantMuted, c.navBar), "$name onVibrantMuted（navBar 上・未選択）")
+        }
+        // 起動アニメの専用面。テーマに追従しない固定値。
+        assertAtLeast(4.5, contrast(LightAppColors.onVibrant, VigilithSlate), "onVibrant（VigilithSlate 上）")
     }
 
     // -- 塗りの上に載る文字（バッジ・チップ） -----------------------------------
@@ -259,7 +501,6 @@ class AppColorContrastTest {
         val intentionallyShared = setOf(
             "onVibrant",          // 白。暗面でも明面（グラデーション）でも文字として成立する
             "buttonPrimary",      // ピンク。明暗どちらでも塗りとして基準を満たす
-            "buttonSecondary",    // 緑。同上
             "onButtonPrimary",    // 黒ラベル
             "onButtonSecondary",  // 黒ラベル
             "failureMark"         // 誤答の赤。明暗どちらでも区別できる

@@ -34,12 +34,14 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorSurface
 import com.example.newproject.ui.theme.OnErrorSurface
 import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
+import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
@@ -95,8 +97,8 @@ internal fun AppScaffold(
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
                                     selectedTextColor = OnVibrant,
-                                    unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
-                                    unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
+                                    unselectedIconColor = OnVibrantMuted,
+                                    unselectedTextColor = OnVibrantMuted,
                                     indicatorColor = NavIndicator
                                 )
                             )
@@ -118,8 +120,8 @@ internal fun AppScaffold(
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
                                     selectedTextColor = OnVibrant,
-                                    unselectedIconColor = OnVibrant.copy(alpha = 0.6f),
-                                    unselectedTextColor = OnVibrant.copy(alpha = 0.6f),
+                                    unselectedIconColor = OnVibrantMuted,
+                                    unselectedTextColor = OnVibrantMuted,
                                     indicatorColor = NavIndicator
                                 )
                             )
@@ -181,8 +183,10 @@ private fun TabIcon(
                     color = Aqua,
                     strokeWidth = 1.5.dp
                 )
+                // 塗りには対の前景を使う。白の「✓」は緑の上で 2.49 しかなかった
+                // （Errorバッジ側は既に対で持っており、ここだけ取り残されていた）。
                 AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
-                    Text("✓", color = OnVibrant, fontSize = 9.sp)
+                    Text("✓", color = OnButtonSecondary, fontSize = 9.sp)
                 }
                 AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
                     Text("!", color = OnErrorSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)

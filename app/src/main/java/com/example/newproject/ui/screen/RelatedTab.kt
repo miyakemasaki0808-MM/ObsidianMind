@@ -27,10 +27,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.ui.theme.OnAccentSurface
+import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.AiHeading
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMetaBlue
@@ -65,26 +68,20 @@ fun RelatedTab(
             .safeDrawingPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            text = "Connect",
-            color = OnVibrant,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+        GradientHeader(
+            title = "Connect",
+            subtitle = "いま読んでいるノートと、つながる思考。"
         )
-        Text(
-            text = "いま読んでいるノートと、つながる思考。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             if (uiState.relatedNotesState is RelatedNotesState.Idle) {
-                Text(
-                    text = "ノートを開くと、リンクとAIの関連がここに集まります。",
-                    color = OnVibrantMuted,
-                    fontSize = 14.sp
-                )
+                Surface(color = Panel, shape = RoundedCornerShape(8.dp)) {
+                    Text(
+                        text = "ノートを開くと、リンクとAIの関連がここに集まります。",
+                        color = OnSurfaceFaint,
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             } else {
                 RelatedNotesPanel(
                     state = uiState.relatedNotesState,
@@ -247,7 +244,7 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
             ) {
                 Text(
                     text = "linked",
-                    color = OnVibrant,
+                    color = OnAccentSurface,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )

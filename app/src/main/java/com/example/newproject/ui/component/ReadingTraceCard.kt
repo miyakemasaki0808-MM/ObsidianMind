@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.ReadingTraceCard
-import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.PanelBlue
@@ -73,7 +73,7 @@ internal fun ReadingTraceCardPanel(
                 Text(
                     text = "読み方をまとめています…",
                     fontSize = 12.sp,
-                    color = OnSurfaceHint
+                    color = OnSurfaceFaint
                 )
             }
             Spacer(modifier = Modifier.height(4.dp))

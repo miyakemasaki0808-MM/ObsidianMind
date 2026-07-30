@@ -149,8 +149,8 @@ internal fun FullscreenNoteScreen(
             symbol = "✕",
             contentDescription = "全画面表示を閉じる",
             modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
-            // 白いノートパネルの上に重なるため、暗い半透明の下地を敷く。
-            containerColor = OnSurface.copy(alpha = 0.45f)
+            // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
+            // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
         ) { leaveWith(onExit) }
         // 読書中もAIの状態（要約・クイズ）が分かるよう最小インジケータを残す。
         if (activeChat != null) {

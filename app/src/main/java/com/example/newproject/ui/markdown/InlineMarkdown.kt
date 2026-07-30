@@ -24,7 +24,7 @@ internal data class InlineMarkdownColors(
     companion object {
         /** テーマを持たない文脈（テスト等）用のフォールバック。 */
         val Light = InlineMarkdownColors(
-            strikethrough = LightAppColors.onSurfaceHint,
+            strikethrough = LightAppColors.onSurfaceFaint,
             codeBackground = LightAppColors.codePanel,
             link = LightAppColors.linkText
         )

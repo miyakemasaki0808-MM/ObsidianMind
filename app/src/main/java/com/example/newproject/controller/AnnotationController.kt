@@ -241,8 +241,9 @@ class AnnotationController(
         annotation: PendingAnnotation
     ) {
         try {
-            val displayTimestamp = AnnotationComposer.DISPLAY_TIMESTAMP_FORMAT.format(Date())
-            val fileTimestamp = AnnotationComposer.FILE_TIMESTAMP_FORMAT.format(Date())
+            val generatedAt = Date()
+            val displayTimestamp = AnnotationComposer.formatDisplayTimestamp(generatedAt)
+            val fileTimestamp = AnnotationComposer.formatFileTimestamp(generatedAt)
             val excerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(annotation.content, NoteExcerptLimits.ANNOTATION)
             }

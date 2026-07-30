@@ -39,7 +39,7 @@ import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.ui.theme.LinkText
 import com.example.newproject.ui.theme.CheckboxOutline
 import com.example.newproject.ui.theme.ContentDivider
-import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
@@ -84,7 +84,7 @@ internal fun MarkdownNoteContent(
 private fun rememberInline(text: String): AnnotatedString {
     // 色はテーマ由来なので、非Composableな remember ブロックの外で読んでキーに含める。
     val colors = InlineMarkdownColors(
-        strikethrough = OnSurfaceHint,
+        strikethrough = OnSurfaceFaint,
         codeBackground = CodePanel,
         link = LinkText
     )
@@ -167,7 +167,7 @@ internal fun MarkdownTaskList(items: List<Pair<Boolean, String>>) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = rememberInline(text),
-                    color = if (checked) OnSurfaceHint else OnSurface,
+                    color = if (checked) OnSurfaceFaint else OnSurface,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
                     textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,

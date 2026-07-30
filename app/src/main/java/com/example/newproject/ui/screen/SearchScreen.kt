@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -34,18 +35,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.ui.theme.PanelChip
+import com.example.newproject.ui.theme.PanelDividerStrong
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurfaceFaint
-import com.example.newproject.ui.theme.OnSurfaceHint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.AppGradient
+import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorText
@@ -81,12 +85,9 @@ fun SearchTab(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text("Explore", color = OnVibrant, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Text(
-            text = "フォルダを選んで、言葉で手繰るか、偶然にまかせる。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
+        GradientHeader(
+            title = "Explore",
+            subtitle = "フォルダを選んで、言葉で手繰るか、偶然にまかせる。"
         )
 
         // フォルダchips（横スクロール）
@@ -111,12 +112,19 @@ fun SearchTab(
         // フォルダ列挙に失敗しても、ルート直下スコープでは検索できる。
         // 操作を止めない注記として chips の下に添えるだけにする。
         uiState.foldersError?.let { message ->
-            Text(
-                text = message,
-                color = OnVibrantMuted,
-                fontSize = 12.sp,
+            // グラデーション直上に文字を置かない。注記も面を持たせる。
+            Surface(
+                color = Panel,
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.padding(top = 6.dp)
-            )
+            ) {
+                Text(
+                    text = message,
+                    color = OnSurfaceFaint,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
+            }
         }
 
         OutlinedTextField(
@@ -128,14 +136,18 @@ fun SearchTab(
             placeholder = { Text("例: 習慣化について書いたやつ") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
+            // 入力欄も不透明な面を持たせる。透けたままだと入力文字のコントラストが
+            // 背後の停止色で変わり、Aqua帯では白文字が 2.07 まで落ちる。
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = OnVibrant,
-                unfocusedTextColor = OnVibrant,
-                cursorColor = OnVibrant,
-                focusedBorderColor = OnVibrant,
-                unfocusedBorderColor = OnVibrant.copy(alpha = 0.5f),
-                focusedPlaceholderColor = OnVibrantMuted,
-                unfocusedPlaceholderColor = OnVibrantMuted
+                focusedContainerColor = Panel,
+                unfocusedContainerColor = Panel,
+                focusedTextColor = OnSurface,
+                unfocusedTextColor = OnSurface,
+                cursorColor = AccentText,
+                focusedBorderColor = AccentText,
+                unfocusedBorderColor = PanelDividerStrong,
+                focusedPlaceholderColor = OnSurfaceFaint,
+                unfocusedPlaceholderColor = OnSurfaceFaint
             )
         )
 
@@ -150,6 +162,7 @@ fun SearchTab(
                 enabled = !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonSecondary, contentColor = OnButtonSecondary),
+                border = BorderStroke(1.dp, ButtonOutlineOnGradient),
                 shape = RoundedCornerShape(24.dp)
             ) { Text("🎰 ランダムに引く", color = OnButtonSecondary) }
             Button(
@@ -157,6 +170,7 @@ fun SearchTab(
                 enabled = query.isNotBlank() && !isLoading,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
+                border = BorderStroke(1.dp, ButtonOutlineOnGradient),
                 shape = RoundedCornerShape(24.dp)
             ) { Text("🔎 ことばでさがす", color = OnButtonPrimary) }
         }
@@ -206,11 +220,13 @@ private fun FolderChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
-        color = if (selected) Panel else Panel.copy(alpha = 0.22f)
+        // 未選択も不透明にする。透過22%ではグラデーションが透けて、
+        // 白文字が 1.82〜4.10 と下地しだいで変わっていた。
+        color = if (selected) Panel else PanelChip
     ) {
         Text(
             text = label,
-            color = if (selected) OnSurface else OnVibrant,
+            color = OnSurface,
             fontSize = 13.sp,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
@@ -242,7 +258,7 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
                         fallbackNotice(state.aiStatus)?.let { notice ->
-                            Text(notice, fontSize = 12.sp, color = OnSurfaceHint)
+                            Text(notice, fontSize = 12.sp, color = OnSurfaceFaint)
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         state.results.forEachIndexed { index, note ->

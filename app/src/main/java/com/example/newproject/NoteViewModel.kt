@@ -14,6 +14,7 @@ import android.app.Application
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.newproject.model.RelatedNote
@@ -115,7 +116,7 @@ class NoteViewModel internal constructor(
 
     private fun restoreVault() {
         val savedUri = preferences.vaultUri ?: return
-        vaultLocation.uri = Uri.parse(savedUri)
+        vaultLocation.uri = savedUri.toUri()
         session.onVaultRestored()
     }
 
@@ -397,7 +398,7 @@ class NoteViewModel internal constructor(
             val loaded = loadNoteForDistill(
                 getApplication<Application>().contentResolver,
                 current.title,
-                Uri.parse(targetUri)
+                targetUri.toUri()
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false

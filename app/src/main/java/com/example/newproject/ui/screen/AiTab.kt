@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -36,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillState
@@ -43,10 +45,11 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.OnButtonAi
-import com.example.newproject.ui.theme.OnSurfaceHint
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.AppGradient
+import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.AccentText
@@ -103,19 +106,10 @@ fun AiTab(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Text(
-            text = "Reflect",
-            color = OnVibrant,
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold
+        GradientHeader(
+            title = "Reflect",
+            subtitle = "AIと一緒に、ノートを深く読み直す。"
         )
-        Text(
-            text = "AIと一緒に、ノートを深く読み直す。",
-            color = OnVibrantMuted,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(top = 4.dp)
-        )
-        Spacer(modifier = Modifier.height(12.dp))
 
         val recoveryVisible = uiState.distillState is DistillState.RecoveryRequired
         if (recoveryVisible) {
@@ -136,14 +130,17 @@ fun AiTab(
         }
 
         if (!hasNote) {
+            // 半透明にするとグラデーションが透けて、実効的な背景が停止色ごとに変わる。
+            // 白文字ではAqua上で1.82まで落ちていた（透過22%では下地をほとんど隠せない）。
+            // 面を不透明にして、背景が何色でも文字の条件が動かないようにする。
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                color = Panel.copy(alpha = 0.22f),
+                color = Panel,
                 shape = RoundedCornerShape(8.dp)
             ) {
                 Text(
                     text = "先に「ノート」タブでノートを表示してください。",
-                    color = OnVibrant,
+                    color = OnSurface,
                     fontSize = 14.sp,
                     modifier = Modifier.padding(16.dp)
                 )
@@ -175,6 +172,7 @@ fun AiTab(
             enabled = !isAnnotationLoading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
+            border = BorderStroke(1.dp, ButtonOutlineOnGradient),
             shape = RoundedCornerShape(24.dp)
         ) { Text(annotationLabel, color = OnButtonAi) }
     }
@@ -428,7 +426,7 @@ private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -
                 val meta = listOfNotNull(item.heading, item.positionLabel).joinToString(" · ")
                 Text(meta, fontSize = 11.sp, color = OnSurfaceSubtle)
                 item.context?.takeIf { it.isNotBlank() }?.let { context ->
-                    Text(context, fontSize = 11.sp, color = OnSurfaceHint, maxLines = 2)
+                    Text(context, fontSize = 11.sp, color = OnSurfaceFaint, maxLines = 2)
                     Spacer(modifier = Modifier.height(3.dp))
                 }
                 Text(item.text, fontSize = 14.sp, lineHeight = 20.sp, color = OnSurface)
@@ -511,7 +509,7 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
                 }
                 is SummaryState.AiUnavailable -> {
-                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceHint)
+                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceFaint)
                 }
                 is SummaryState.Error -> {
                     Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)

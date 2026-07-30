@@ -1,5 +1,8 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.ui.theme.OnSurfaceFaint
+import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.component.IconPill
 import android.net.Uri
 import androidx.compose.foundation.background
@@ -66,35 +69,28 @@ fun AnnotationManagerScreen(
             .safeDrawingPadding()
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack)
-            Text(
-                text = "補記メモの削除",
-                color = OnVibrant,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-            if (files.isNotEmpty()) {
-                Surface(
-                    modifier = Modifier.clickable { showDeleteAll = true },
-                    color = DangerAction,
-                    shape = RoundedCornerShape(20.dp)
-                ) {
-                    Text(
-                        text = "すべて削除",
-                        color = OnDangerAction,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                    )
+        GradientHeader(
+            title = "補記メモの削除",
+            titleSize = 24.sp,
+            leading = { IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack) },
+            trailing = if (files.isNotEmpty()) {
+                {
+                    Surface(
+                        modifier = Modifier.clickable { showDeleteAll = true },
+                        color = DangerAction,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Text(
+                            text = "すべて削除",
+                            color = OnDangerAction,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
                 }
-            }
-        }
+            } else null
+        )
 
         // 削除に失敗しても一覧は残す（消えると再削除できない）。件数だけ上に添える。
         val deleteFailureCount = (state as? AnnotationListState.Success)?.deleteFailureCount ?: 0
@@ -120,7 +116,14 @@ fun AnnotationManagerScreen(
             is AnnotationListState.Idle,
             is AnnotationListState.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = OnVibrant)
+                    // グラデーション直上に置くと、下地しだいで輪郭が 2.35 まで落ちる。
+                    // 非文字も3:1が要るので、不透明な面に載せてから描く。
+                    Surface(color = Panel, shape = CircleShape) {
+                        CircularProgressIndicator(
+                            color = AccentText,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
                 }
             }
             is AnnotationListState.Error -> {
@@ -141,12 +144,12 @@ fun AnnotationManagerScreen(
                 if (files.isEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        color = Panel.copy(alpha = 0.22f),
+                        color = Panel,
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Text(
                             text = "補記メモはありません。",
-                            color = OnVibrant,
+                            color = OnSurface,
                             fontSize = 14.sp,
                             modifier = Modifier.padding(16.dp)
                         )
@@ -223,7 +226,7 @@ private fun AnnotationRow(file: NoteFile, onDeleteClick: () -> Unit) {
                 if (createdAt.isNotBlank()) {
                     Text(
                         text = "作成: $createdAt",
-                        color = OnSurface.copy(alpha = 0.6f),
+                        color = OnSurfaceFaint,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 2.dp)
                     )

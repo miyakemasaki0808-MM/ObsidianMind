@@ -80,6 +80,11 @@ internal class DistillRecoveryStore(
 
     fun delete(): Boolean = !recordFile.exists() || recordFile.delete()
 
+    // Lint は `StorageManager.getAllocatableBytes()` を勧めるが、そちらは `Context` を要求する。
+    // このクラスは `File` だけで完結していて素のJVMテストから回せることが利点なので、
+    // 空き容量の見積もり精度のためにAndroid依存を持ち込む取引はしない。
+    // 蒸留は書き込み前の見積もりが多少ずれても、実際の書き込み失敗で捕まえられる。
+    @Suppress("UsableSpace")
     fun usableSpace(): Long = (directory.takeIf { it.exists() } ?: directory.parentFile)?.usableSpace ?: 0L
 
     private fun persist(record: DistillRecoveryRecord, replaceExisting: Boolean) {

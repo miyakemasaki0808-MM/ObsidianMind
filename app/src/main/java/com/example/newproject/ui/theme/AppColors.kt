@@ -26,13 +26,16 @@ internal val MutedIndigo = Color(0xFF6E63E3)
 internal val MutedAqua = Color(0xFF54B5D4)
 internal val MutedCoral = Color(0xFFE28D9F)
 
+/** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
+private val LightPanel = Color(0xFFFDFEFF)
+
 // ---------------------------------------------------------------------------
 // 2. 明暗それぞれの実体
 //    値を書くのはここだけ。§3のトークンは、現在のテーマからこれを引くだけの窓口。
 // ---------------------------------------------------------------------------
 
 internal val LightAppColors = AppColorScheme(
-    panel = Color(0xFFFDFEFF),
+    panel = LightPanel,
     codePanel = Color(0xFFF1F4F8),
     panelTinted = Color(0xFFF7F3FF),
     panelBlue = Color(0xFFF0F4FF),
@@ -47,12 +50,15 @@ internal val LightAppColors = AppColorScheme(
     contentDivider = Color(0xFFCCCCCC),
     checkboxOutline = Color(0xFFAAAAAA),
     onSurface = Color(0xFF202124),
-    onSurfaceMuted = Color(0xFF555555),
-    onSurfaceSubtle = Color(0xFF666666),
-    onSurfaceFaint = Color(0xFF777777),
-    onSurfaceHint = Color(0xFF888888),
-    onSurfaceDisabled = Color(0xFF999999),
-    onSurfaceMetaBlue = Color(0xFF8A90A8),
+    // 弱い文字の基準面は `panel` ではなく **`panelChip #EEF0FF`**（文字を載せる面のうち
+    // 最も暗い）。`panel` で測ると、同じトークンが別の面へ載った瞬間に基準を割る。
+    // 以下の比は panelChip 上の値で、より明るい面ではこれより良くなる。
+    onSurfaceMuted = Color(0xFF555555),   // 6.58
+    onSurfaceSubtle = Color(0xFF666666),  // 5.07
+    // #6E6E6E がちょうど4.50なので、端数で割らないよう1段暗い値を採る。
+    onSurfaceFaint = Color(0xFF6D6D6D),   // 4.57
+    // 一覧の更新日時。青みは残したいので色相228を保ったまま明度だけ下げた。
+    onSurfaceMetaBlue = Color(0xFF656C85), // 4.59
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFEAF7FF),
     linkText = Color(0xFF2563EB),
@@ -63,33 +69,48 @@ internal val LightAppColors = AppColorScheme(
     onDangerAction = Color.White,      // #D32F2F 上で 4.98
     successMark = Color(0xFF4CAF50),
     failureMark = Color(0xFFEF5350),
-    relatedHeading = Color(0xFF7B6FFF),
-    aiHeading = Color(0xFF16B8A6),
+    // 見出し2色は 11sp Bold なのでAAの大文字例外に入らず、4.5:1 が要る。
+    // 実際に載るのは `panelBlue`（RelatedTab のカード）。下の比は基準面 panelChip の値。
+    // どちらも色相を1度も動かさずに済ませた（見分けの根拠が色相の差だけのため）。
+    relatedHeading = Color(0xFF6054DE), // 色相245を保ち彩度100→68・明度72→60。4.85
+    aiHeading = Color(0xFF0C796C),      // 色相173を保ち明度40→26。彩度は据え置き。4.67
     accentText = Indigo,
     accentSurface = Indigo,
     onAccentSurface = Color.White,
-    accentGlass = Indigo.copy(alpha = 0.55f),
+    // 透過のままだとグラデーションが透けて、白文字のコントラストが下地しだいで
+    // 3.98〜6.13 に動く（Aqua停止色の上で基準割れ）。ダークは既に不透明なので揃える。
+    accentGlass = Indigo,
     navBar = Indigo,
     navIndicator = Aqua,
     vigilithHalo = Color.Transparent,
     buttonPrimary = Color(0xFFFF3D71),
-    buttonSecondary = Color(0xFF16B8A6),
+    // 旧 #16B8A6 は白面で 2.46 しかなく、輪郭が見つからなかった（非文字基準は3:1）。
+    // 色相173を保ったまま明度を下げて 3.76 へ。塗りは暗くするほど白面で見つけやすくなるが、
+    // 黒ラベルは逆に読みにくくなるため、両方を満たす帯（相対輝度 0.175〜0.297）の中央を採る。
+    buttonSecondary = Color(0xFF109384),
     buttonAi = Indigo,
     // ラベルは塗りごとに変える。省略するとMaterial3の既定 onPrimary（純白）が効き、
     // ピンク3.41／緑2.49までコントラストが落ちる（AAは4.5:1）。Indigoだけ白が正しい。
     onButtonPrimary = Color(0xFF000000),   // #FF3D71 上で 6.16
-    onButtonSecondary = Color(0xFF000000), // #16B8A6 上で 8.44
+    onButtonSecondary = Color(0xFF000000), // #109384 上で 5.53
     onButtonAi = Color.White,              // #4D3DFF 上で 6.13
-    appGradient = Brush.linearGradient(
-        colors = listOf(Indigo, Aqua, Coral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    ),
-    readingGradient = Brush.linearGradient(
-        colors = listOf(MutedIndigo, MutedAqua, MutedCoral),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
+    // グラデーション直上のボタンは、**塗りの色をどう選んでも境界を出せない**。
+    // AppGradient の停止色は相対輝度 0.121〜0.458 に散っており、全停止色に対し
+    // 3:1 を満たすには L<=0.007（ほぼ黒）か L>=1.47（存在しない）しかない。
+    // 実測でも3役すべてが 1.00〜1.40 で、ButtonAi は Indigo 停止色の上で 1.00（同色）。
+    // したがって輪郭線で境界を作る（WCAG 1.4.11 は隣接する輪郭でも可）。
+    // LogoNavy は最も不利な Indigo 停止色に対して 3.15、Reading側で 4.19。
+    // 見出しの背後は**暗くせず、白で霞ませる**。暗幕は帯として重く出てしまうため。
+    // 白を薄く重ねると停止色が持ち上がり、そこへ濃い文字を置ける
+    // （白文字と違い、濃い側は Indigo 停止色でも余裕がある）。
+    // α=0.35 での最悪はIndigo上で タイトル6.15／副題5.12。
+    gradientHeaderScrim = LightPanel.copy(alpha = 0.35f),
+    // ヘイズの上に置く文字。ロゴの濃紺で見出しの性格を残す。
+    onGradientHeaderTitle = LogoNavy,
+    onGradientHeaderSubtitle = Color(0xFF202124),
+    buttonOutlineOnGradient = LogoNavy,
+    appGradientStops = listOf(Indigo, Aqua, Coral),
+    readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
 )
 
 /**
@@ -117,9 +138,9 @@ internal val DarkAppColors = AppColorScheme(
     onSurface = Color(0xFFE6EAF2),
     onSurfaceMuted = Color(0xFFC3C9DA),
     onSurfaceSubtle = Color(0xFFB4BACD),
+    // 3段階へ統合した際、旧 onSurfaceHint #99A1B8／onSurfaceDisabled #949CB4 は
+    // ここへ寄せた。暗面では床が無いぶん余裕があるが、明暗で段数を揃える。
     onSurfaceFaint = Color(0xFFA6ADC2),
-    onSurfaceHint = Color(0xFF99A1B8),
-    onSurfaceDisabled = Color(0xFF949CB4),
     onSurfaceMetaBlue = Color(0xFF9AA2BC),
     onVibrant = Color.White,
     onVibrantMuted = Color(0xFFC6D3E6),
@@ -153,19 +174,21 @@ internal val DarkAppColors = AppColorScheme(
     onButtonPrimary = Color(0xFF000000),
     onButtonSecondary = Color(0xFF000000),
     onButtonAi = Color(0xFF000000),
+    // ダークのグラデーションは明度で沈めてあるため、3役の塗り自体が停止色に対し
+    // 4.45〜6.10 を確保できている。輪郭線を足すと明るい環を描くことになるので置かない。
+    // 「置かなくて足りている」ことは AppColorContrastTest が確かめる。
+    // ダークのグラデーションは明度で沈めてあり、白文字も副題も元から基準を満たす。
+    // 霞ませる必要が無いので何も敷かず、文字も白のまま据え置く。
+    // 「足りているから置かない」ことは AppColorContrastTest が確かめる。
+    gradientHeaderScrim = Color.Transparent,
+    onGradientHeaderTitle = Color.White,
+    onGradientHeaderSubtitle = Color(0xFFC6D3E6),
+    buttonOutlineOnGradient = Color.Transparent,
     // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
     // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
-    appGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    ),
+    appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
     // 「読む」画面はさらに静かに。触る画面との性質の差はダークでも保つ。
-    readingGradient = Brush.linearGradient(
-        colors = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24)),
-        start = Offset(0f, Float.POSITIVE_INFINITY),
-        end = Offset(Float.POSITIVE_INFINITY, 0f)
-    )
+    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
 )
 
 // ---------------------------------------------------------------------------
@@ -200,8 +223,6 @@ internal val OnSurface: Color @Composable @ReadOnlyComposable get() = current.on
 internal val OnSurfaceMuted: Color @Composable @ReadOnlyComposable get() = current.onSurfaceMuted
 internal val OnSurfaceSubtle: Color @Composable @ReadOnlyComposable get() = current.onSurfaceSubtle
 internal val OnSurfaceFaint: Color @Composable @ReadOnlyComposable get() = current.onSurfaceFaint
-internal val OnSurfaceHint: Color @Composable @ReadOnlyComposable get() = current.onSurfaceHint
-internal val OnSurfaceDisabled: Color @Composable @ReadOnlyComposable get() = current.onSurfaceDisabled
 internal val OnSurfaceMetaBlue: Color @Composable @ReadOnlyComposable get() = current.onSurfaceMetaBlue
 internal val OnVibrant: Color @Composable @ReadOnlyComposable get() = current.onVibrant
 internal val OnVibrantMuted: Color @Composable @ReadOnlyComposable get() = current.onVibrantMuted
@@ -241,6 +262,25 @@ internal val ButtonAi: Color @Composable @ReadOnlyComposable get() = current.but
 internal val OnButtonPrimary: Color @Composable @ReadOnlyComposable get() = current.onButtonPrimary
 internal val OnButtonSecondary: Color @Composable @ReadOnlyComposable get() = current.onButtonSecondary
 internal val OnButtonAi: Color @Composable @ReadOnlyComposable get() = current.onButtonAi
+
+/**
+ * グラデーション直上に置く塗りボタンに付ける輪郭線。
+ *
+ * **パネルの上に載るボタンには付けない。** そちらは塗り自身が3:1を満たしており、
+ * 足すと理由のない線が増える。付ける対象は現在5箇所（さがす2・ノート2・AI 1）で、
+ * どれも `AppGradient` / `ReadingGradient` を直接の背景にしている。
+ */
+// -- グラデーション見出し（`GradientHeader` だけが使う） --
+/** 見出しの背後へ薄く敷く面。ライトは白のヘイズ、ダークは透明。 */
+internal val GradientHeaderScrim: Color
+    @Composable @ReadOnlyComposable get() = current.gradientHeaderScrim
+internal val OnGradientHeaderTitle: Color
+    @Composable @ReadOnlyComposable get() = current.onGradientHeaderTitle
+internal val OnGradientHeaderSubtitle: Color
+    @Composable @ReadOnlyComposable get() = current.onGradientHeaderSubtitle
+
+internal val ButtonOutlineOnGradient: Color
+    @Composable @ReadOnlyComposable get() = current.buttonOutlineOnGradient
 
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient

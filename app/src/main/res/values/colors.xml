@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="indigo">#4D3DFF</color>
-    <color name="logo_navy">#050E1D</color>
+    <!--
+      XMLから参照する色だけを置く。Compose側の色は AppColors.kt が持つので、
+      ここへ足すと同じ色の定義が2箇所に増える。
+      indigo / logo_navy はシステムバーの直指定をやめた時点で参照が消えたため削除した。
+    -->
     <color name="vigilith_slate">#314158</color>
 </resources>

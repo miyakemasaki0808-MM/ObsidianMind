@@ -37,6 +37,12 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --stacktrace
 
+      # instrumentation テストは実端末／エミュレータが要るのでCIでは実行しない。
+      # ただしコンパイルは通しておく。ここが無いと、androidTest 側だけ壊れたまま
+      # 誰も気付かない（ユニットテストとLintはどちらも androidTest を見ない）。
+      - name: androidTest compile
+        run: ./gradlew assembleDebugAndroidTest --stacktrace
+
       # 失敗時に原因を追えるようレポートを残す。
       - name: Upload reports
         if: always()

@@ -2,6 +2,8 @@ package com.example.newproject.data
 
 import android.content.SharedPreferences
 import android.net.Uri
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import com.example.newproject.model.HistoryEntry
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,7 +38,7 @@ class NoteHistoryStore(private val prefs: SharedPreferences) : HistoryStore {
                 val obj = array.getJSONObject(i)
                 HistoryEntry(
                     title = obj.getString("title"),
-                    uri = Uri.parse(obj.getString("uri"))
+                    uri = obj.getString("uri").toUri()
                 )
             }
         } catch (e: Exception) {
@@ -56,16 +58,16 @@ class NoteHistoryStore(private val prefs: SharedPreferences) : HistoryStore {
                     .put("uri", entry.uri.toString())
             )
         }
-        prefs.edit()
-            .putString(KEY_DATE, today())
-            .putString(KEY_ENTRIES, array.toString())
-            .apply()
+        prefs.edit {
+            putString(KEY_DATE, today())
+            putString(KEY_ENTRIES, array.toString())
+        }
         return updated
     }
 
     /** Vault切替時に呼ぶ。旧VaultのURIは新Vaultでは開けないため全破棄する。 */
     override fun clear() {
-        prefs.edit().remove(KEY_DATE).remove(KEY_ENTRIES).apply()
+        prefs.edit { remove(KEY_DATE); remove(KEY_ENTRIES) }
     }
 
     private fun today(): String = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
