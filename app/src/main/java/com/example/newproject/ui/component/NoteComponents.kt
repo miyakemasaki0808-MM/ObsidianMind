@@ -9,6 +9,7 @@ import com.example.newproject.ui.visibleFractionOfBlock
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -161,21 +162,30 @@ internal fun NoteContentPanel(
             }
             // precomputedBlocks はノート本文（Success時）のパース結果。
             // プレースホルダ表示時は内容と一致しないため渡さない。
-            val blocksForContent = if (uiState.noteState is NoteState.Success) precomputedBlocks else null
+            val isNote = uiState.noteState is NoteState.Success
+            val blocksForContent = if (isNote) precomputedBlocks else null
             Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            if (listState != null) {
-                MarkdownNoteContent(
-                    content = noteContent,
-                    modifier = Modifier.padding(top = 12.dp).weight(1f),
-                    listState = listState,
-                    precomputedBlocks = blocksForContent
-                )
+            // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
+            // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
+            // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので
+            // フォールバックのまま描いてよい。
+            if (!isNote || blocksForContent != null) {
+                if (listState != null) {
+                    MarkdownNoteContent(
+                        content = noteContent,
+                        modifier = Modifier.padding(top = 12.dp).weight(1f),
+                        listState = listState,
+                        precomputedBlocks = blocksForContent
+                    )
+                } else {
+                    MarkdownNoteContent(
+                        content = noteContent,
+                        modifier = Modifier.padding(top = 12.dp).weight(1f),
+                        precomputedBlocks = blocksForContent
+                    )
+                }
             } else {
-                MarkdownNoteContent(
-                    content = noteContent,
-                    modifier = Modifier.padding(top = 12.dp).weight(1f),
-                    precomputedBlocks = blocksForContent
-                )
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }

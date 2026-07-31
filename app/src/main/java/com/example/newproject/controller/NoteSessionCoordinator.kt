@@ -12,6 +12,7 @@ import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.NoteState
@@ -79,11 +80,22 @@ internal class NoteSessionCoordinator(
      * 時間を進められないと検証できない）。
      */
     clock: () -> Long = System::currentTimeMillis,
-    ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * 表示用Markdownの解析を載せるディスパッチャ。既定は [NoteSectionController] 側の
+     * `Dispatchers.Default`。テストがテストスケジューラへ差し替えるための口。
+     */
+    parseDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
     private val stateStore = NoteUiStateStore(initialState)
     val uiState: StateFlow<NoteUiState> = stateStore.uiState
+
+    /**
+     * 表示用Markdownのパース結果。`NoteUiState` ではなく独立した [StateFlow] なのは、
+     * `model` パッケージが葉で `domain` を import できないため（→ [NoteSectionController]）。
+     */
+    val sectionModel: StateFlow<NoteSectionModel?> get() = sections.model
 
     /**
      * Vault単位の非同期要求の世代。[onVaultChanged] のたびに進めて、補記一覧・
@@ -98,6 +110,8 @@ internal class NoteSessionCoordinator(
         private set
 
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
+    // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
+    private val sections = NoteSectionController(scope, parseDispatcher)
     private val sectionChat = SectionChatController(scope, aiClient, stateStore.sectionChatWriter)
     private val quiz = QuizController(scope, aiClient, stateStore.quizWriter)
     private val summary = SummaryController(
@@ -157,6 +171,7 @@ internal class NoteSessionCoordinator(
         readingTrace.flush()
         readingTrace.cancelForNoteChange()
         cancelHostJobs()
+        sections.cancelAndClear()
         summary.cancelAndClear()
         quiz.cancelAndClear()
         annotation.cancelAndClear()
@@ -210,8 +225,17 @@ internal class NoteSessionCoordinator(
         stateStore.beginNoteLoad()
     }
 
+    /**
+     * ノート本文の状態を反映し、表示用Markdownの解析を始める。
+     *
+     * **本文が変わる経路は2つしかない**（ここと [applyReloadedBody]）。解析の開始を
+     * 呼び出し側へ配らずこの2つへ集約するのは、片方を足し忘れると
+     * 「本文は新しいのにブロックが旧いまま」になるため。Success 以外では
+     * ブロックを持たないので破棄する（プレースホルダ本文はここでは解析しない）。
+     */
     fun setNoteState(state: NoteState) {
         stateStore.setNoteState(state)
+        if (state is NoteState.Success) sections.parse(state.content) else sections.cancelAndClear()
     }
 
     fun currentNote(): NoteState.Success? = stateStore.currentNote()
@@ -231,7 +255,11 @@ internal class NoteSessionCoordinator(
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
-        return stateStore.applyReloadedBody(targetUri, loaded)
+        val applied = stateStore.applyReloadedBody(targetUri, loaded)
+        // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
+        // 旧いブロックが描かれ続ける（[setNoteState] と対になる2つ目の経路）。
+        if (applied) sections.parse(loaded.content)
+        return applied
     }
 
     // ── 要約・関連ノート ────────────────────────────────────────────────────

@@ -83,6 +83,9 @@ class MainActivity : ComponentActivity() {
             val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
             AppTheme(darkTheme = darkTheme) {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+                // 本文のパース結果は Main の外で1回だけ作られる。noteListState と同じく
+                // ここで受けて通常表示と全画面表示へ配り、進入のたびの再解析をなくす。
+                val sectionModel by viewModel.sectionModel.collectAsStateWithLifecycle()
                 // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
                 // savedInstanceStateが非nullになるため、OPを再生し直さない。
                 var showOpening by remember { mutableStateOf(savedInstanceState == null) }
@@ -227,6 +230,7 @@ class MainActivity : ComponentActivity() {
                         composable("note") {
                             NoteReaderTab(
                                 uiState = uiState,
+                                sectionModel = sectionModel,
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
@@ -258,6 +262,7 @@ class MainActivity : ComponentActivity() {
                         composable("note_fullscreen") {
                             FullscreenNoteScreen(
                                 uiState = uiState,
+                                sectionModel = sectionModel,
                                 tabListState = noteListState,
                                 onExit = { navController.popBackStack() },
                                 // 要約シートは通常表示（noteルート）で描画されるため、

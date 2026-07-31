@@ -57,7 +57,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -80,6 +80,8 @@ import kotlinx.coroutines.delay
 @Composable
 internal fun FullscreenNoteScreen(
     uiState: NoteUiState,
+    /** タブ側と同じパース結果を受け取る。進入のたびに解析し直さないための共有（→ NoteSectionController）。 */
+    sectionModel: NoteSectionModel?,
     tabListState: LazyListState,
     onExit: () -> Unit,
     onOpenSummary: () -> Unit,
@@ -121,10 +123,6 @@ internal fun FullscreenNoteScreen(
     // システムバックでもスクロール位置を書き戻してから閉じる。
     BackHandler { leaveWith(onExit) }
 
-    val successState = uiState.noteState as? NoteState.Success
-    val sectionModel = remember(successState?.content) {
-        successState?.content?.let { buildNoteSectionModel(it) }
-    }
     val activeChat = uiState.sectionChat
 
     // 全画面でも読んだ位置を報告する。全画面は専用の listState を持つため、
