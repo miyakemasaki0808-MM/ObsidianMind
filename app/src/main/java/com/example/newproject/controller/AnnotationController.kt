@@ -269,14 +269,13 @@ class AnnotationController(
 
             val sourceTitle = annotation.title.toObsidianNoteTitle()
             val fileTitle = sanitizeAnnotationFileTitle(sourceTitle)
-            val fileName = "${fileTitle}__補記_$fileTimestamp.md"
             val markdown = AnnotationComposer.buildAnnotationMarkdown(
                 title = sourceTitle,
                 createdAt = displayTimestamp,
                 generatedBody = generated
             )
             if (!isCurrent(annotation.requestId)) return
-            val savedUri = repository.createAnnotationFile(
+            val saved = repository.createAnnotationFile(
                 contentResolver = contentResolver,
                 vaultUri = vault,
                 sanitizedTitle = fileTitle,
@@ -288,8 +287,10 @@ class AnnotationController(
                 current.copy(
                     annotationState = AnnotationState.Success(
                         sourceTitle = sourceTitle,
-                        savedUri = savedUri,
-                        fileName = fileName,
+                        savedUri = saved.uri,
+                        // 予測した名前ではなく保存後の実名。同じ分に再生成すると
+                        // プロバイダが改名することがあり、一覧の表示とずれる。
+                        fileName = saved.displayName,
                         content = markdown
                     )
                 )

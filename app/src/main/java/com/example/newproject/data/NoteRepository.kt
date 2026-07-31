@@ -10,11 +10,62 @@ import com.example.newproject.domain.toObsidianNoteTitle
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /** 上限付きで読んだ本文。[isTruncated] が真なら、ノートにはまだ続きがある。 */
 data class BoundedText(val text: String, val isTruncated: Boolean)
+
+/**
+ * 保存できた補記メモ。[displayName] は予測値ではなく**保存後のメタデータから取った実名**。
+ * 同じノートを同じ分に再生成するとプロバイダがファイル名を変えることがあるため。
+ */
+data class SavedAnnotation(val uri: Uri, val displayName: String)
+
+/** [AnnotationDocumentGateway] のSAF実装。参照は `Uri` の文字列表現をそのまま使う。 */
+private class SafAnnotationDocumentGateway(
+    private val contentResolver: ContentResolver,
+    private val folderUri: Uri
+) : AnnotationDocumentGateway {
+
+    override fun createFile(fileName: String): String? =
+        DocumentsContract.createDocument(contentResolver, folderUri, "text/markdown", fileName)
+            ?.toString()
+
+    override fun write(reference: String, bytes: ByteArray) {
+        contentResolver.openOutputStream(reference.toUri(), "wt")?.use { stream ->
+            stream.write(bytes)
+            stream.flush()
+        } ?: error("補記メモファイルを書き込めませんでした。")
+    }
+
+    override fun readBack(reference: String): ByteArray? = try {
+        contentResolver.openInputStream(reference.toUri())?.use { it.readBytes() }
+    } catch (e: Exception) {
+        null
+    }
+
+    override fun deleteQuietly(reference: String) {
+        try {
+            DocumentsContract.deleteDocument(contentResolver, reference.toUri())
+        } catch (e: Exception) {
+            // 後始末の失敗で元の失敗理由を隠さない（呼び出し側は書込失敗として扱う）。
+        }
+    }
+
+    override fun displayName(reference: String): String? = try {
+        contentResolver.query(
+            reference.toUri(),
+            arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null,
+            null,
+            null
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    } catch (e: Exception) {
+        null
+    }
+}
 
 /**
  * 本文読込の予算。用途ごとに別の入口を持たせ、**呼び出し側にバイト数を選ばせない**。
@@ -194,28 +245,28 @@ class NoteRepository {
         } ?: error("書き出し先を開けませんでした。")
     }
 
+    /**
+     * 補記メモを1件書き出す。**手順（作成→書込→検証→失敗時の後始末）は
+     * [AnnotationFileWriter] が持ち、ここはSAFの実装だけを渡す。**
+     * 表示名は予測せず、保存後のメタデータから取った実名を返す。
+     */
     suspend fun createAnnotationFile(
         contentResolver: ContentResolver,
         vaultUri: Uri,
         sanitizedTitle: String,
         timestamp: String,
         content: String
-    ): Uri = withContext(Dispatchers.IO) {
+    ): SavedAnnotation = withContext(Dispatchers.IO) {
         val folderUri = findAnnotationFolder(contentResolver, vaultUri)
             ?: createAnnotationFolder(contentResolver, vaultUri)
         val fileName = "${sanitizedTitle}${ANNOTATION_FILE_MARKER}$timestamp.md"
-        val fileUri = DocumentsContract.createDocument(
-            contentResolver,
-            folderUri,
-            "text/markdown",
-            fileName
-        ) ?: error("補記メモファイルを作成できませんでした。")
+        val writer = AnnotationFileWriter(SafAnnotationDocumentGateway(contentResolver, folderUri))
 
-        contentResolver.openOutputStream(fileUri)?.use { stream ->
-            stream.write(content.toByteArray(Charsets.UTF_8))
-        } ?: error("補記メモファイルを書き込めませんでした。")
-
-        fileUri
+        when (val result = writer.create(fileName, content)) {
+            is AnnotationWriteResult.Success ->
+                SavedAnnotation(result.reference.toUri(), result.displayName)
+            is AnnotationWriteResult.Failure -> error(result.message)
+        }
     }
 
     // _AI補記/ フォルダ内の補記メモファイルを列挙する（1階層のみ）
