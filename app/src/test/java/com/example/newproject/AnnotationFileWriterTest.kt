@@ -5,15 +5,18 @@ import com.example.newproject.data.AnnotationFileWriter
 import com.example.newproject.data.AnnotationWriteResult
 import kotlinx.coroutines.CancellationException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 補記1件の書き出しが、どの段階で失敗しても残骸を残さないことを固定する。
+ * 補記1件の書き出しが、どの段階で失敗しても後始末を試み、
+ * **消せなかった場合はそれを利用者へ伝える**ことを固定する。
  *
  * 以前は `createDocument()` の直後に書き込むだけで後始末が無く、画面に生成失敗と
- * 出しても `_AI補記` に空・部分ファイルが残り得た。
+ * 出しても `_AI補記` に空・部分ファイルが残り得た。削除はSAFプロバイダ側の都合で
+ * 失敗し得るので「必ず消える」とは言えない。**言えるのは「消すか、残ったと伝えるか」**。
  */
 class AnnotationFileWriterTest {
 
@@ -86,14 +89,47 @@ class AnnotationFileWriterTest {
     }
 
     @Test
-    fun `後始末の削除に失敗しても元の失敗理由を返す`() {
+    fun `後始末の削除に失敗したら残骸が残ったことを伝える`() {
         val gateway = FakeGateway(failWrite = true, failDelete = true)
 
-        val result = AnnotationFileWriter(gateway).create("メモ.md", "本文")
+        val result = AnnotationFileWriter(gateway).create("メモ.md", "本文") as AnnotationWriteResult.Failure
 
-        // 削除できないこと自体は握りつぶす。ここを例外にすると
-        // 「書けなかった」が「消せなかった」にすり替わる。
-        assertTrue(result is AnnotationWriteResult.Failure)
+        // 削除できないこと自体は例外にしない（「書けなかった」が「消せなかった」に
+        // すり替わる）。ただし黙ってもいけない — 残骸が残ったことは元の理由に足して伝える。
+        assertTrue("元の失敗理由が消えています", result.message.contains("書き込めませんでした"))
+        assertTrue("残骸の通知がありません", result.message.contains("残った可能性"))
+        assertTrue(result.residueLeft)
+        assertEquals(1, gateway.files.size)
+    }
+
+    @Test
+    fun `後始末に成功したら残骸の通知は付けない`() {
+        val gateway = FakeGateway(failWrite = true)
+
+        val result = AnnotationFileWriter(gateway).create("メモ.md", "本文") as AnnotationWriteResult.Failure
+
+        assertFalse("消せているのに残骸を通知しています", result.message.contains("残った可能性"))
+        assertFalse(result.residueLeft)
+    }
+
+    @Test
+    fun `検証に失敗して削除もできなければ残骸を伝える`() {
+        val gateway = FakeGateway(truncateWriteTo = 3, failDelete = true)
+
+        val result = AnnotationFileWriter(gateway).create("メモ.md", "十分な長さの本文") as AnnotationWriteResult.Failure
+
+        assertTrue(result.residueLeft)
+        assertTrue(result.message.contains("残った可能性"))
+    }
+
+    @Test
+    fun `作成そのものに失敗したときは残骸を通知しない`() {
+        // まだ何も作れていないので、後始末も残骸も無い。
+        val result = AnnotationFileWriter(FakeGateway(failCreate = true))
+            .create("メモ.md", "本文") as AnnotationWriteResult.Failure
+
+        assertFalse(result.residueLeft)
+        assertFalse(result.message.contains("残った可能性"))
     }
 
     @Test
@@ -149,11 +185,12 @@ class AnnotationFileWriterTest {
         override fun readBack(reference: String): ByteArray? =
             if (failReadBack) null else files[reference]
 
-        override fun deleteQuietly(reference: String) {
+        override fun delete(reference: String): Boolean {
             deleteCalls++
-            if (failDelete) return
+            if (failDelete) return false
             files.remove(reference)
             names.remove(reference)
+            return true
         }
 
         override fun displayName(reference: String): String? =

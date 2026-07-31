@@ -70,8 +70,9 @@ class NoteSectionControllerTest {
     fun `切替後に旧ノートの解析結果が後着しない`() = runTest {
         val controller = controller()
 
-        // 解析を走らせたまま切り替える。cancel だけでは素の同期関数を止められないため、
-        // 完走した結果が requestId ガードで捨てられることを確かめる。
+        // 解析を走らせたまま切り替える。buildNoteSectionModel は素の同期関数なので
+        // 走行中の解析自体は止まらないが、Jobがキャンセルされることで
+        // 完走した結果が反映されないことを確かめる。
         controller.parse("# 旧ノート\n\n本文")
         controller.cancelAndClear()
         advanceUntilIdle()

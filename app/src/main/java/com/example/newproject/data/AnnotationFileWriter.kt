@@ -25,25 +25,31 @@ internal class AnnotationFileWriter(private val gateway: AnnotationDocumentGatew
     /**
      * [fileName] で1件作って [content] を書き、読み直して一致を確かめる。
      *
-     * どの段階で失敗しても、**作成済みのファイルはベストエフォートで削除する**。
-     * 削除自体に失敗した場合は握りつぶす（そこで例外にすると、元の失敗理由が
-     * 後始末の失敗にすり替わって原因が分からなくなる）。
+     * どの段階で失敗しても、作成済みのファイルを削除してから失敗を返す。
+     * **削除は成功するとは限らない**（SAFプロバイダ側の都合で失敗し得る）ので、
+     * 消せなかったときは失敗メッセージに「残った可能性」を添える。
+     *
+     * 削除の失敗で例外を投げないのは、元の失敗理由が後始末の失敗にすり替わって
+     * 原因が分からなくなるため。**握りつぶすのではなく、元の理由に足して伝える。**
      */
     fun create(fileName: String, content: String): AnnotationWriteResult {
         val bytes = content.toByteArray(Charsets.UTF_8)
         val reference = gateway.createFile(fileName)
+            // ここだけはまだ何も作れていないので、後始末も残骸も無い。
             ?: return AnnotationWriteResult.Failure("補記メモファイルを作成できませんでした。")
 
         try {
             gateway.write(reference, bytes)
         } catch (error: CancellationException) {
-            // 中断は失敗ではないが、作りかけのファイルは残さない。
-            gateway.deleteQuietly(reference)
+            // 中断は失敗ではないので画面には出ない。作りかけの削除だけ試みる
+            // （消せなかった場合に伝える先が無いのはこの経路の限界で、
+            // 残骸は補記管理画面から手動で消せる）。
+            gateway.delete(reference)
             throw error
         } catch (error: Exception) {
-            gateway.deleteQuietly(reference)
-            return AnnotationWriteResult.Failure(
-                error.message ?: "補記メモファイルを書き込めませんでした。"
+            return failure(
+                reason = error.message ?: "補記メモファイルを書き込めませんでした。",
+                cleanedUp = gateway.delete(reference)
             )
         }
 
@@ -51,8 +57,10 @@ internal class AnnotationFileWriter(private val gateway: AnnotationDocumentGatew
         // 補記はAI出力（256トークン上限）なので、全文比較しても現実的なコストに収まる。
         val written = gateway.readBack(reference)
         if (written == null || !written.contentEquals(bytes)) {
-            gateway.deleteQuietly(reference)
-            return AnnotationWriteResult.Failure("補記メモを保存できましたが、内容を確認できませんでした。")
+            return failure(
+                reason = "補記メモを保存できましたが、内容を確認できませんでした。",
+                cleanedUp = gateway.delete(reference)
+            )
         }
 
         // 表示名は保存後のメタデータから取る。同じ分に再生成すると
@@ -62,11 +70,26 @@ internal class AnnotationFileWriter(private val gateway: AnnotationDocumentGatew
             displayName = gateway.displayName(reference) ?: fileName
         )
     }
+
+    private fun failure(reason: String, cleanedUp: Boolean) = AnnotationWriteResult.Failure(
+        message = if (cleanedUp) reason else reason + RESIDUE_NOTICE,
+        residueLeft = !cleanedUp
+    )
+
+    private companion object {
+        /**
+         * 後始末に失敗したときだけ足す。**黙って残すと、利用者は
+         * `_AI補記` の空ファイルに気づけない**（一覧には並ぶので削除はできる）。
+         */
+        const val RESIDUE_NOTICE = "（不完全なファイルが _AI補記 に残った可能性があります）"
+    }
 }
 
 internal sealed class AnnotationWriteResult {
     data class Success(val reference: String, val displayName: String) : AnnotationWriteResult()
-    data class Failure(val message: String) : AnnotationWriteResult()
+
+    /** [residueLeft] が真なら、`_AI補記` に消せなかったファイルが残っている。 */
+    data class Failure(val message: String, val residueLeft: Boolean = false) : AnnotationWriteResult()
 }
 
 /**
@@ -83,8 +106,11 @@ internal interface AnnotationDocumentGateway {
     /** 書き込み後の内容を読み直す。読めなければ null。 */
     fun readBack(reference: String): ByteArray?
 
-    /** ベストエフォート削除。失敗しても例外を投げない。 */
-    fun deleteQuietly(reference: String)
+    /**
+     * 後始末の削除。**例外は投げず、消せたかどうかを返す。**
+     * 例外にすると元の失敗理由がすり替わり、戻り値を捨てると残骸に誰も気づけない。
+     */
+    fun delete(reference: String): Boolean
 
     /** 保存後の実際の表示名。取れなければ null。 */
     fun displayName(reference: String): String?

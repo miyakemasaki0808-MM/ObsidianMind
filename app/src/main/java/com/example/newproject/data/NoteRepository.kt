@@ -46,12 +46,12 @@ private class SafAnnotationDocumentGateway(
         null
     }
 
-    override fun deleteQuietly(reference: String) {
-        try {
-            DocumentsContract.deleteDocument(contentResolver, reference.toUri())
-        } catch (e: Exception) {
-            // 後始末の失敗で元の失敗理由を隠さない（呼び出し側は書込失敗として扱う）。
-        }
+    override fun delete(reference: String): Boolean = try {
+        // 例外にしない代わりに、消せたかどうかは必ず呼び出し側へ返す。
+        // 握りつぶすと `_AI補記` に残った空ファイルを誰も知らせられない。
+        DocumentsContract.deleteDocument(contentResolver, reference.toUri())
+    } catch (e: Exception) {
+        false
     }
 
     override fun displayName(reference: String): String? = try {
