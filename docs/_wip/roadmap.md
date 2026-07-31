@@ -2,7 +2,8 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **初版:** 2026-07-22（最終更新: 2026-07-31）
-**基準:** ReadingTrace v1（実機確認待ち）・Vigilith Phase 3（実機確認済み）・ダークモード・A〜E案（A案は確認済み、C案は 4/6 件）・F-1／F-2（実機確認済み）。旧 TimeCapsule 設計は棄却
+**基準:** A〜E案と2026-07-31の品質改善（表示Markdownの非同期化・蒸留の復旧チェック・補記の後始末）は実機確認済み。ReadingTrace v1 と C案の一部に実機確認が残る。旧 TimeCapsule 設計は棄却
+**課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
 **主眼:** プロダクトの方向性（北極星）を上位に置き、機能はそこから導く
 
@@ -41,17 +42,19 @@
 実機確認まで完了した**（F-2 の2件も同日完了 → [change_history](../change_history.md)）。
 残るのは ReadingTrace v1 の完了条件（N-1）と、instrumentationの土台（N-6）の2つだけ。
 
-### N-6. instrumentationの土台を「動く」ところまで持っていく（current_issues F-3）
+### N-6. instrumentationの土台を「動く」ところまで持っていく（→ current_issues TEST-1）
 - **なぜここ:** E案で依存・Runner・スモークテスト2件を置き、CIでコンパイルと組み立ても通した。
   だが 2026-07-31 に初めて実行したところ **Android 16 エミュレータで 0 success / 2 failure** だった
   （`NoSuchMethodException: android.hardware.input.InputManager.getInstance []`）。
   **「土台がある」という認識だけが先に定着していた。**
 - **なぜ後回しにできないか:** SAF・Navigation・Activity再生成の実テスト（L-3）は、ここが緑でないと
   失敗時に「土台の故障」と「テスト対象の故障」を切り分けられない。スモークテストはまさにその切り分けの
-  ために置いたので、通さないまま先へ進むと本末転倒になる。→ [current_issues.md](current_issues.md) 2-9
+  ために置いたので、通さないまま先へ進むと本末転倒になる。→ [current_issues.md](current_issues.md) TEST-1
 - **取りうる道:** Contextだけのテストを Compose ルールのないクラスへ分ける／`espresso-core` を 3.7.0 へ
   限定更新する（本番依存やCompose BOMを含む一括更新には広げない）。**同じ範囲で直らなければ、
   結果を記録して依存互換性の独立課題に落とす。**
+- **効果とコスト:** テスト容易性 8.0 → 8.5、開発・リリース運用 7.5 → 8.0。コストは小〜中だが、
+  **直る保証が無い**のが特徴で、直らなければ点数は動かず調査課題が1件増える。
 
 ### N-1. ReadingTrace v1を完成状態へする（実装・修正済み／実機確認待ち）
 - **設計を棄却して置き換えた。** 「ボタンではなく無意識の補助機能に」という要求で旧設計（明示ボタンで問いを書く）の前提が崩れ、(a)自分由来・(b)全ノートに残る・(c)無意識 の3条件が同時に満たせないことが判明。**AIの役割を「問いの創作」から「痕跡の要約」へ落として解決**し、**ReadingTrace**（読書位置を自動記録し、Rediscoverで「前回のあなた」を見せる）として実装した。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
@@ -79,18 +82,20 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 - **取りうる道:** オプション画面に手動の一括削除を置く（`_AI補記` の `AnnotationManagerScreen` と同じ発想）／痕跡側に「最後に確認できた日時」を持たせ長期間見つからないものだけ落とす。
 
 ### X-4. ReadingTraceの同期索引を整える
-- **同期索引:** `_ReadingTraces`のkey→Uri索引はプロセス中に再走査されず、別端末から同期された新規ファイルを認識しない。ミス時だけの再走査やTTLで、常時全走査を避けつつ最終的整合性を持たせる。→ [current_issues.md](current_issues.md) 2-4
+- **同期索引:** `_ReadingTraces`のkey→Uri索引はプロセス中に再走査されず、別端末から同期された新規ファイルを認識しない。ミス時だけの再走査やTTLで、常時全走査を避けつつ最終的整合性を持たせる。→ [current_issues.md](current_issues.md) SYNC-2
 - **累計回数は C案（2026-07-26）で解消済み。** `totalVisitCount` とサイドカー schema v2 で、直近30件の保持数と「これまで開いた回数」を分離した。**残っているのは同期索引だけ**なので、X-3（孤児掃除）と同じ端末セッションで扱える。
 
-### X-8. SAF境界を小さいgatewayへ分ける（current_issues F-4）
+### X-8. SAF境界を小さいgatewayへ分ける（→ current_issues TEST-2）
 - **なぜここ:** `NoteFile` や `RelatedNote` が Android の `Uri` を直接持つため、検索実行・補記保存の世代照合が
   **JVMテストに落とせず実機確認だけが担保**になっている。`Uri` を不透明な参照として扱えるようにすると、
-  テスト容易性・保守性・拡張性の3軸が同時に動く。→ [current_issues.md](current_issues.md) 3-1
-- **規模感:** 大。中核の型に手を入れるのでA〜C案と同規模の活動になる。L-3 の前提を兼ねる。
+  テスト容易性・保守性・拡張性の3軸が同時に動く。→ [current_issues.md](current_issues.md) TEST-2
+- **効果とコスト:** テスト容易性 8.0 → 8.5、保守性 8.0 → 8.5、拡張性 7.5 → 8.0。
+  **3軸に同時に効く唯一の案**だが、コストは大。中核の型に手を入れるのでA〜C案と同規模の活動になり、
+  L-3 の前提も兼ねる。
 - **補記の範囲だけは 2026-07-31 に先行して切り出した**（`AnnotationDocumentGateway`）。1機能ぶんの gateway が実際に書けて失敗注入テストも通ったので、**同じ形を他へ広げられることは確認済み**。残るのは `NoteFile`・`RelatedNote` が持つ `Uri` の置き換えで、そこが本体。
 
 ### X-6. AI状態UXの統一
-- **なぜここ:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとにバラつく。蒸留の「インライン説明フォールバック」を良い先例として、要約・検索・クイズ・補記へ横展開。**ReadingTrace は例外として扱う**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。→ [current_issues.md](current_issues.md) 3-3
+- **なぜここ:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとにバラつく。蒸留の「インライン説明フォールバック」を良い先例として、要約・検索・クイズ・補記へ横展開。**ReadingTrace は例外として扱う**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。→ [current_issues.md](current_issues.md) AI-2
 
 ---
 
@@ -101,23 +106,29 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 
 ### L-1. AI入力抽出の残り（予算調整とフォーカスセクション文脈）
 - **本体は 2026-07-28 に完了した。** 先頭固定長切り出しは、見出し骨格＋冒頭＋末尾を用途別予算へ配分する抜粋へ置き換わり、実機確認も済んでいる（[PR #43](https://github.com/miyakemasaki0808-MM/ObsidianMind/pull/43)・[ai_input_excerpt](../design/ai_input_excerpt.md)）。**ここに残るのは意図的に切り離した2件だけ。**
-- **予算値の調整:** 関連ノートは上限600のうち226文字（38%）を共通注意書きに払っており、現ノート文脈が実質228文字しか届かない。**ただし単独で数字をいじってはいけない** — 候補ブロック3,500文字との合算があるため、実トークン計測が前提になる。計測手段そのものが無いので、実質的には feature_ideas D-1（プロンプトログ）が先。→ [current_issues.md](current_issues.md) 2-5
+- **予算値の調整:** 関連ノートは上限600のうち226文字（38%）を共通注意書きに払っており、現ノート文脈が実質228文字しか届かない。**ただし単独で数字をいじってはいけない** — 候補ブロック3,500文字との合算があるため、実トークン計測が前提になる。計測手段そのものが無いので、実質的には feature_ideas D-1（プロンプトログ）が先。→ [current_issues.md](current_issues.md) AI-1
 - **フォーカスセクション文脈:** [related_notes_ai](../design/related_notes_ai.md) Phase 1 の未実装案。関連ノートは「ノートを開いた瞬間」に自動起動するのに対しフォーカスはスクロールで動くため、**どの時点のセクションで推薦するかを先に決める**必要がある。現在の全体抜粋を置き換えるか補助シグナルにするかも含め、別機能として扱う。
 
 ### L-2. Reflect機能群の連携
 - 蒸留（重要文の太字化）× ReadingTrace（読書痕跡）× セクションAIを横断させる。例：前回止まった箇所を蒸留の候補選定に効かせる、痕跡をセクションAIのコンテキストに含める。「読書相手」としての一貫した人格に近づける。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
 
 ### L-3. 統合テストの中身
-- **土台の話は N-6 へ移した。** ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) 3-1
+- **土台の話は N-6 へ移した。** ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
 - **着手条件が2つある:** ①N-6 でスモークテストが緑になっていること（でないと土台の故障と切り分けられない）②X-8 で `Uri` 依存が gateway の裏へ入っていること（でないとJVMで書けるものまでinstrumentationへ流れ込む）。**どちらも前提であって、この項目自体を早める理由にはならない。**
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
-- YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) 3-4
+- YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
 - **ordered list の番号は描画だけでなくAI入力でも失われる。** 抜粋も同じパーサを通すため、番号自体に意味があるノート（手順書など）では順序がモデルへ届かない。Markdown対応拡充を検討する際は、読書体験だけでなくAI品質側の効果も一緒に数える。
 
-### L-5. 公開可能な成果物にする（current_issues F-5）
-- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) 3-16
+### L-5. 公開可能な成果物にする（→ current_issues REL-1）
+- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) TEST-26
 - **設定を1行変える作業ではない。** ML Kit GenAI はリフレクションで解決される部分があり、縮小で消えると**release ビルドの実機でだけ全AI機能が落ちる**。JVMテストは縮小前のクラスを見るので検出できない。**keepルール＋AI 7経路の release 実機一巡がセット**になる。配布の意思が固まってから着手する。
+- **効果とコスト:** 開発・リリース運用 7.5 → 8.5（**単一軸では最大の伸び**）。コストは大で、
+  R8を有効にした瞬間にJVMテストの守備範囲外へ出る。
+
+> **上の「効果」は品質再評価の軸別スコアから引いた見込みで、測定ではない**（→ [lessons.md](../lessons.md) L12）。
+> 総合の上がり幅だけを根拠に順序を決めない。現在の軸別評価は
+> [source_code_quality_review.md](../source_code_quality_review.md) を正とする。
 
 ---
 

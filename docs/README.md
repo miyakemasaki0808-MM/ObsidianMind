@@ -16,12 +16,16 @@
 | **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](source_code_quality_review.md) | スナップショット（日付で更新） |
 | **なぜそうしたか** | [design/](design/)（15本） | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](_wip/)（3本） | **解消したら削除する**（残すと未対応課題が埋もれる） |
+| **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加） |
 
-補助として、失敗の知見を横断的に集めた [bugfix_reports.md](bugfix_reports.md) と、出発点の記録 [project_origin.md](project_origin.md) がある。
+補助として、単発の潜在バグを記録する [bugfix_reports.md](bugfix_reports.md) と、出発点の記録 [project_origin.md](project_origin.md) がある。
+
+> **lessons.md と bugfix_reports.md の違い:** 前者は「構造的にまた起きる型」、後者は「再現手順のある個別のバグ」。
+> 前者は 2026-07-31 に `_wip/current_issues.md` の横断テーマ節から移した（`_wip/` は廃棄されるため）。
 
 ---
 
-## 1. 恒久記録（`docs/` 直下・5本）
+## 1. 恒久記録（`docs/` 直下・6本）
 
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
@@ -29,6 +33,7 @@
 | [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（914行・16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
 | [source_code_quality_review.md](source_code_quality_review.md) | 品質の採点結果（11軸・総合7.2/10・2026-07-26）。**Codexが評価者として作成する外部レビュー** | **書き換えない。** 次回レビュー時に新しい日付の総評を追記する（推移を残す） |
 | [bugfix_reports.md](bugfix_reports.md) | AIが生成しがちで通常フローでは表面化しない潜在バグの記録 | 該当する型のバグを踏んだとき |
+| [lessons.md](lessons.md) | 機能にもバグにも属さない、繰り返し現れた構造的な教訓（15件） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
 | [project_origin.md](project_origin.md) | 2026-04-30 の第一歩の報告書。Android開発の最初の記録としてのみ存在し、現状とは一致しない | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
@@ -92,7 +97,7 @@
 
 | 文書 | 役割 |
 |---|---|
-| [current_issues.md](_wip/current_issues.md) | 課題台帳。未対応のものだけを残し、解消したら削除する |
+| [current_issues.md](_wip/current_issues.md) | 課題台帳。**「いま何が壊れているか」だけ**を持ち、順序は書かない。未対応のものだけを残し、解消したら削除する。IDはカテゴリ記号（TEST-1・AI-1 など） |
 | [roadmap.md](_wip/roadmap.md) | Now / Next / Later。日付を切らず優先度と成熟度で3段。**使い捨て**（完了項目は取り消し線を残さず削除する） |
 | [feature_ideas.md](_wip/feature_ideas.md) | 未実装の採用候補（使い捨て。実装済み・却下は残さない） |
 
