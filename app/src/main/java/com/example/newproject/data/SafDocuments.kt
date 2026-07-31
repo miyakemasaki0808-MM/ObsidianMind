@@ -1,14 +1,32 @@
 package com.example.newproject.data
 
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.ReadingTrace
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
+import androidx.core.net.toUri
 
 // ---------------------------------------------------------------------------
 // SAF（Storage Access Framework）の低レベル操作。NoteRepository と
 // ReadingTrace のサイドカー保存で共有する（同じ形を2度書かないため）。
 // ---------------------------------------------------------------------------
+
+// --- DocumentRef ⇄ Uri -----------------------------------------------------
+//
+// **この2つが `Uri` と不透明参照のあいだの唯一の通り道。** 変換を `data` に閉じる
+// ことで、`model` / `domain` / `ui` は `Uri` を知らずに済む（`ui` と `domain` は
+// パッケージ依存の規約上そもそも `data` を import できないので、ここへ置くこと自体が
+// 「上位層で勝手に変換されない」保証になっている）。
+//
+// 変換関数を `model` 側へ置かないのも同じ理由で、置いた瞬間に `model` が
+// `android.net.Uri` を知ることになり、葉である前提が壊れる。
+
+/** SAFの実体参照を不透明参照へ包む。**この向きの生成は `data` の中だけで行う。** */
+internal fun Uri.toDocumentRef(): DocumentRef = DocumentRef(toString())
+
+/** 不透明参照をSAFの実体へ戻す。`data` がI/Oを行う直前だけで使う。 */
+internal fun DocumentRef.toUri(): Uri = value.toUri()
 
 /** 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）。 */
 internal fun querySafChildren(
