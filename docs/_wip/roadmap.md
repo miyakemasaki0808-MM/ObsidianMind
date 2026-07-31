@@ -59,10 +59,12 @@ Runnerが起動しComposeを描画できることが実証されたので、以�
   どちらも**参照を不透明な文字列として扱う**形。1機能ぶんの gateway が実際に書けて失敗注入テストも
   通っているので、**同じ形を他へ広げられることは確認済み**。残るのは `NoteFile`・`RelatedNote`・
   `HistoryEntry` が持つ `Uri` の置き換えで、そこが本体。
-- **設計は 2026-08-01 に確定した** → [saf_boundary_gateway](../design/saf_boundary_gateway.md)。
-  影響範囲の実測と7段階の段取りまで詰めてあり、**着手すればそのまま進められる**。
-  要点は「`Uri` は2種類あり直し方が違う」こと — Vaultルートは不透明化せず controller から消し、
-  ドキュメント参照だけを `DocumentRef` にする。完了は `PackageDependencyTest` の拡張で固定する。
+- **2026-08-01 にドキュメント参照側を実装した** → [saf_boundary_gateway](../design/saf_boundary_gateway.md)。
+  `model` / `domain` / `ui` から `android.net.Uri` が消え、`PackageDependencyTest` で固定済み
+  （import 1行の注入で落ちることを確認）。**残りは段階7 — Vaultルートを controller の引数から外す**。
+  こちらは型を変える話ではなく、Vault の解決を repository 側へ束ねる作業。
+- **実機確認が要る。** 変更は参照の持ち方だけで挙動は変えていないが、SAF の読み書き経路を
+  広く触っているので、ノートを開く・さがす・補記の生成と削除・履歴の並びを一巡する。
 
 
 ## 🟡 Next — 次に取り組む（ループを豊かにし、土台を強くする）

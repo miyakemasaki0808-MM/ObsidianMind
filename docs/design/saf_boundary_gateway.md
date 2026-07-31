@@ -2,7 +2,8 @@
 
 **対象領域:** `model` の共有データ型が持つ `android.net.Uri`・`domain` の Android 依存・SAF操作の呼び出し境界
 **初版:** 2026-08-01
-**状態:** **設計のみ。未実装。** 影響範囲の実測と段取りまで確定し、着手の判断待ち。
+**状態:** **段階1〜6 実装済み**（2026-08-01）。`model` / `domain` / `ui` から `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。**残るのは段階7（Vaultルートを controller の引数から外す）のみ。**
+**実装で段取りの誤りが1つ見つかり、下記§段取りに追記した。**
 
 ---
 
@@ -89,23 +90,80 @@ value class DocumentRef(val value: String)
 `.uri` の消費は約34箇所で、**`NoteViewModel` に17・`RelatedNotesUseCase` に8**と偏っている。
 残りは1〜2箇所ずつなので、**重いのは実質2ファイル**。
 
-## 段取り — 葉から順に、1段階ずつ
+## 段取り — 実装して分かったこと（**当初案は誤りだった**）
 
-**一度に全部やらない。** 中核の型に触るので、途中で壊れたときに原因を絞れる形にする。
+当初は「葉から1段階ずつ、2段目に `HistoryEntry` 単独」という7段階を組んだ。
+**これは実行できない。** 依存規約と噛み合わないことが着手して初めて分かった。
 
-| # | 段階 | 効果が見える形 |
+| # | 当初の想定 | 実際 |
 |---|---|---|
-| 1 | `DocumentRef` を `model` へ追加、`data` に変換関数を置く | 既存型は変えない。**何も壊れない** |
-| 2 | `HistoryEntry` を置き換える | `NoteHistoryStore` のJSON入出力が**JVMテストで書けるようになる**。最小で効果が目に見える |
-| 3 | `RelatedNote` を置き換える | `SearchController` の世代照合がJVMテストへ落ちる |
-| 4 | `NoteFile` を置き換える | **本体。** `NoteRepository`・`RelatedNotesUseCase`・`NoteViewModel` |
-| 5 | `AnnotationState.savedUri` を置き換える | `model/state` から Android が消える |
-| 6 | `PackageDependencyTest` に `android.*` 禁止を足す | **ここで初めて完了が固定される** |
-| 7 | Vault ルートを controller の引数から外す（判断0の1行目） | **別PR。** ここまでとは独立した変更 |
+| 1 | `DocumentRef` を追加、`data` に変換関数 | **そのとおり**（`2956735`） |
+| 2 | `HistoryEntry` だけを置き換える | **不可能。** 3型を同時に移すしかない |
+| 3〜5 | `RelatedNote` → `NoteFile` → `AnnotationState` と順に | **2と同時に実施**（`e7d61ee`） |
+| 6 | `PackageDependencyTest` を拡張 | そのとおり（同コミット） |
+| 7 | Vaultルートを controller から外す | **未着手** |
 
-段階2を先頭に置くのは、**最小の型で「この形が実際に効く」ことを確かめてから中核へ入る**ため。
-`HistoryEntry` は2フィールドしか無く、消費側も `SearchScreen` と `NoteViewModel` の2箇所しかない。
-ここで想定外（等価性・永続化・テストの書きにくさ）が出れば、`NoteFile` に触る前に方針を戻せる。
+**なぜ部分移行が不可能だったか。** 構築箇所が層をまたいで連鎖している。
+
+```
+data/NoteRepository ──生成──> NoteFile
+                                 │
+        domain/RelatedNotesUseCase ┴─組み立て──> RelatedNote
+        domain/SearchPickerUseCase ─組み立て──> RelatedNote
+        controller/SearchController ─組み立て──> RelatedNote
+        ui/SearchScreen ─── HistoryEntry から組み立て ──> RelatedNote
+```
+
+`HistoryEntry` だけを `DocumentRef` にすると、`ui/SearchScreen` が
+`RelatedNote(uri = entry.uri)` を組み立てられなくなり、`entry.ref` → `Uri` の変換が要る。
+`RelatedNote` だけを移せば、今度は `domain/RelatedNotesUseCase` が `NoteFile.uri` から
+組み立てられなくなり、同じく変換が要る。**ところが `ui` と `domain` は依存規約上
+`data` を import できず、変換関数に手が届かない。**
+
+つまり **「変換を `data` に閉じる」という判断1そのものが、部分移行を禁じていた。**
+3型を同時に移せば、どの構築箇所も `ref` をそのまま写すだけになり、変換は1つも要らない。
+
+**教訓: 段取りを「型の大きさ」で切ったのが誤りだった。** `HistoryEntry` は2フィールドで
+最小だから安全だろう、と考えたが、**移行の単位を決めるのはサイズではなく「その型が
+どの層で組み立てられるか」**である。同じ変換関数に手が届く範囲が1単位になる。
+
+## 実装で得られた副次的な効果
+
+**往復変換が2つ消えた。** どちらも「不透明な文字列を一度 `Uri` にしてから使う」形で、
+`DocumentRef` を入れたことで無駄が可視化された。
+
+- `SavedAnnotation` は `AnnotationDocumentGateway` が返す不透明文字列を
+  `toUri()` してから保持していた。`DocumentRef` を直接持たせて往復をやめた。
+- `reloadNoteBody` は `Uri.toString()` 由来の `targetUri`（`String`）を
+  `toUri()` して渡していた。そのまま `DocumentRef` へ包むようにした。
+
+**テスト側のハックが1つ消えた。** `NoteSessionCoordinatorTest` には
+`listOf("旧Vaultの履歴") as List<HistoryEntry>` という強制キャストがあり、
+「`HistoryEntry` は `Uri` を要るので作れない」というコメントが添えられていた。
+**この refactor が狙っていた痛みが、そのままコメントとして残っていた**ことになる。
+実物を組み立てる形に直した。
+
+## 完了の固定
+
+`PackageDependencyTest` に「`model` と `domain` は Android に依存しない」を足した。
+従来の依存テストは `com.example.newproject.*` の import しか見ておらず、
+**`android.*` を数えていなかったのが穴の正体**である。
+
+`ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` とルートは
+SAF・`ContentResolver` を実際に扱う境界なので依存してよい。
+`model` と `domain` のそれぞれへ import を1行注入し、テストが落ちることを確認済み。
+
+## 実測（2026-08-01・移行後）
+
+| 層 | 移行前 | 移行後 |
+|---|---:|---:|
+| `model` | 4 | **0** |
+| `domain` | 1 | **0** |
+| `ui` | 1 | **0** |
+| `controller` | 3 | 3（Vaultルートのみ。段階7の対象） |
+| `data` | 7 | 6（`NoteHistoryStore` が `Uri` から解放された） |
+| ルート | 1 | 1（Android境界の窓口。**正しい依存**） |
+| 合計 | 17 | **10** |
 
 ## この設計が引き受けないこと
 
