@@ -204,7 +204,7 @@ NoteViewModel（Android境界の窓口）
 
 そのため `model` は「プロジェクト内の何も import しない」を満たしながら、
 **`android.net.Uri` だけは import する**状態で残っている（`NoteFile`・`RelatedNote`・
-`HistoryEntry`・`state/AnnotationState` の4型）。`domain` にも同じ依存が2ファイル残る。
+`HistoryEntry`・`state/AnnotationState` の4型）。`domain` にも同じ依存が1ファイル残る（`RelatedNotesUseCase`）。
 `Uri` は素のJVMではスタブが例外を投げるため、これらの型を組み立てられず、
 **検索実行・補記保存の世代照合は実機確認だけが担保**になっている。
 

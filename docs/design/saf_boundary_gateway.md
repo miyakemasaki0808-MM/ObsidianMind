@@ -70,14 +70,21 @@ value class DocumentRef(val value: String)
 
 ## 影響範囲（2026-08-01 実測）
 
-| 層 | `android.net.Uri` を import するファイル | 備考 |
-|---|---|---|
-| `model` | 4（`NoteTypes`・`RelatedNote`・`HistoryEntry`・`state/AnnotationState`） | **全廃が目標** |
-| `domain` | 2（`RelatedNotesUseCase`・`KeyedMemoCache`） | **全廃が目標**。`KeyedMemoCache` は既に総称なのでKDocの言及だけ |
-| `controller` | 2（`SearchController`・`AnnotationController`） | 残るのは判断0のVaultルートのみ |
-| `data` | 6 | **正しい依存。残す**（SAF境界そのもの） |
-| `ui` | 1（`AnnotationManagerScreen`） | 削除コールバックの引数 |
-| ルート | 1（`NoteViewModel`） | **正しい依存。残す**（Android境界の窓口） |
+**`import android.net.Uri` を実際に持つのは17ファイル**（`grep "^import android.net.Uri"` で計測）。
+
+| 層 | ファイル数 | 内訳 | 備考 |
+|---|---:|---|---|
+| `model` | **4** | `NoteTypes`・`RelatedNote`・`HistoryEntry`・`state/AnnotationState` | **全廃が目標** |
+| `domain` | **1** | `RelatedNotesUseCase` | **全廃が目標** |
+| `controller` | 3 | `SearchController`・`AnnotationController`・`NoteSessionCoordinator` | 残るのは判断0のVaultルートのみ |
+| `data` | 7 | `NoteRepository`・`SafDocuments`・`VaultLocation`・`NoteSnapshot`・`NoteHistoryStore`・`ReadingTraceStore`・`DistillWriteRepository` | **正しい依存。残す**（SAF境界そのもの） |
+| `ui` | 1 | `AnnotationManagerScreen` | 削除コールバックの引数 |
+| ルート | 1 | `NoteViewModel` | **正しい依存。残す**（Android境界の窓口） |
+
+> **`KeyedMemoCache` は数えない。** `android.net.Uri` の文字列は出てくるが、
+> **KDocの本文で「実キーに依存しない総称実装にした」と説明しているだけ**で import は無い。
+> 初版はここを `grep -l` で数えて `domain` を2ファイルと書いていた。
+> **`grep` でファイルを数えるときは、コメントと import を区別する**（`^import` で固定する）。
 
 `.uri` の消費は約34箇所で、**`NoteViewModel` に17・`RelatedNotesUseCase` に8**と偏っている。
 残りは1〜2箇所ずつなので、**重いのは実質2ファイル**。

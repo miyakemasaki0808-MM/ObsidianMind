@@ -1,8 +1,8 @@
 # 設計思想 — 依存更新の方針（Lintの更新系チェックをどう扱うか）
 
 **対象領域:** `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・Lintの更新系3チェック
-**初版:** 2026-08-01
-**状態:** 方針確定。**更新の実行そのものは未着手**（棚卸しの結果は下記§4に2026-08-01時点のスナップショットとして置く）。
+**初版:** 2026-08-01（同日中に「`disable` 維持」→「`informational` へ降格」へ改稿）
+**状態:** 方針確定・実装済み（Lint設定1箇所）。**更新の実行そのものは未着手**（初回棚卸しの結果は §4）。
 
 ---
 
@@ -16,13 +16,10 @@ Lint警告を0にする活動で、`NewerVersionAvailable`・`GradleDependency`�
 `espresso-core` の反射呼び出し（`InputManager.getInstance`）で、**テスト依存の互換性がそのまま実害になった**。
 依存更新はもう「いつか決める保守課題」ではない。
 
-## 判断1: `disable` は維持する。ただし理由を差し替える
+## 判断1: `disable` でも `error` でもなく、`informational` へ降格する
 
-当初は「方針が決まったら `disable` から外す」つもりだったが、**これは実行できない**ことが実測で分かった。
-
-一時的に3チェックを有効化して `./gradlew lintDebug` を回すと、**12件すべてが Error になりビルドが落ちる**。
-このモジュールは `lint { warningsAsErrors = true; abortOnError = true }` を敷いているためで、
-つまり「更新チェックを戻す」は「全依存を常に最新に追随させ続ける」と同義になる。
+当初は「方針が決まったら `disable` から外す」つもりだった。だが3チェックを素のまま有効化すると、
+**12件すべてが Error になり `lintDebug` タスクが失敗する**。
 
 ```text
 Lint found 12 errors. First failure:
@@ -30,26 +27,42 @@ gradle/wrapper/gradle-wrapper.properties:5: Error: A newer version of Gradle tha
 > Lint found errors in the project; aborting build.
 ```
 
+このモジュールが `lint { warningsAsErrors = true; abortOnError = true }` を敷いているためで、
+素のまま戻すことは「全依存を常に最新へ追随させ続ける」と同義になる。
+
 **この3チェックは、他のLint警告と種類が違う。** 他は「自分のコードに欠陥がある」という指摘なので、
 直せば消えて、直さない限り出続けるのが正しい。更新系は**外界（上流のリリース）の変化**を報告するもので、
-**こちらが1行も触っていないのに、ある日突然赤くなる**。常時ゲートに載せると、
+**こちらが1行も触っていないのに、ある日突然赤くなる**。ゲートに載せると、
 
 - CIの赤が「直すべきもの」と「上流が新版を出しただけ」の2種類に分かれ、赤の意味が薄まる
 - 追随を強制されるので、CLAUDE.md の「依存ライブラリを一括更新しない。機能単位で上げ、実機確認を伴う」と正面から衝突する
 
-したがって `disable` は残す。**変えるのはコード側ではなくコメント側で、「方針未定だから」ではなく
-「常時ゲートに載せられない種類の指摘だから」と書き直す。** 前者は放置に読めるが、後者は判断である。
+**ただし選択肢は「ゲートに載せる」と「消す」の二択ではなかった。** Lint の severity は
+`error` / `warning` / `informational` / `ignore` に分かれており、`informational`（hint）は
+`warningsAsErrors` の昇格対象にならない。実測すると次のようになる。
 
-## 判断2: 棚卸しは「常時」ではなく「区切りごと」に、手動で行う
+| 設定 | `lintDebug` | 集計 | 12件は見えるか |
+|---|---|---|---|
+| 素のまま有効化 | **FAILED** | 12 errors | 見える（ただしCIが赤） |
+| `disable`（当初） | SUCCESSFUL | 0 errors, 0 warnings | **見えない** |
+| **`informational`（採用）** | **SUCCESSFUL** | **0 errors, 0 warnings, 12 hints** | **見える** |
 
-黙らせたまま忘れないために、催促をビルドから**運用の手順**へ移す。
+`--offline` でも同じく12 hints が出る。**「警告0」の主張も保ったまま、催促だけを残せる**ので、
+`disable` より厳密に良い。当初案（`disable` を維持し、棚卸しのたびに一時有効化して戻す）は
+手順が増えるうえ、戻し忘れればCIが赤になる。**採らない。**
+
+> **表現の注意:** ここで失敗するのは `lintDebug` タスクと、それを実行するCIジョブである。
+> **APKのコンパイルが必ず失敗するという意味ではない。** また `disable` を外すこと自体は
+> 技術的に可能で、「不可能」ではない — 現在の警告0運用と噛み合わないだけである。
+
+## 判断2: 棚卸しは「常時」ではなく「区切りごと」に行う
+
+hint は毎ビルド出るが、**hint は止めないので放っておける**。止めない以上、見る契機を決めておく。
 
 ```bash
-# 1. app/build.gradle.kts の `disable += setOf("NewerVersionAvailable", ...)` を一時的にコメントアウト
 export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home" && ./gradlew lintDebug
-# 2. 一覧を読む（--offline を付けない。上流の版を引きに行く必要がある）
-grep "Error:" app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
-# 3. コメントアウトを戻す。git diff が空であることを確認する
+grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt
+# HTMLレポート: app/build/reports/lint-results-debug.html（CIも成果物として保存している）
 ```
 
 **契機はカレンダーではなくマイルストーン**（大きめのPRの区切り、あるいはリリース準備）とする。
@@ -102,8 +115,13 @@ grep "Error:" app/build/intermediates/lint_intermediate_text_report/debug/lintRe
 | Kotlin/Coroutines | `kotlinx-coroutines-test` | 1.9.0 | 1.11.0 | 中 |
 | テスト専用 | `org.json:json` | 20240303 | 20260719 | 小 |
 
+内訳は Gradle 本体1件＋ライブラリ11件。
+
 **Compose BOM（2024.09.03）は指摘に出てこない。** `platform()` 宣言をLintが更新対象として見ていないためで、
 「最新である」という意味ではない。**BOMだけは棚卸しの自動検出から漏れる**ので、手で確認する必要がある。
 
 **AndroidX Test 枠は既に1回動かした。** `espresso-core` 3.6.1 → 3.7.0、`ext:junit` 1.2.1 → 1.3.0。
 この枠が「本番に影響せず、テスト実行だけで検証が閉じる」ことを示した先例になっている。
+
+**`NewerVersionAvailable` は毎回ネットワークへ問い合わせる**ぶん Lint が遅くなる
+（実測で概ね2倍）。それでも hint を残す価値のほうが大きいと判断した。
