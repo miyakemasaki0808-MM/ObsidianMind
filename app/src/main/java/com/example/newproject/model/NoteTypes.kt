@@ -1,6 +1,5 @@
 package com.example.newproject.model
 
-import android.net.Uri
 
 // lastModified はエポックミリ秒。SAFプロバイダが値を返さない場合は null。
 //
@@ -11,7 +10,7 @@ import android.net.Uri
 // 再帰走査でのみ組み立てるので、非再帰の列挙（_AI補記 一覧）では既定の空文字が入る。
 data class NoteFile(
     val name: String,
-    val uri: Uri,
+    val ref: DocumentRef,
     val lastModified: Long? = null,
     val vaultRelativePath: String = ""
 )

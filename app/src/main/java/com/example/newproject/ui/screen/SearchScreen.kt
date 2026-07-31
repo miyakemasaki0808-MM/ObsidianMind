@@ -205,7 +205,7 @@ private fun TodayHistoryPanel(
             )
             Spacer(modifier = Modifier.height(4.dp))
             entries.forEachIndexed { index, entry ->
-                val note = RelatedNote(title = entry.title, uri = entry.uri, isWikilinked = false)
+                val note = RelatedNote(title = entry.title, ref = entry.ref, isWikilinked = false)
                 RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
                 if (index < entries.lastIndex) {
                     HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)

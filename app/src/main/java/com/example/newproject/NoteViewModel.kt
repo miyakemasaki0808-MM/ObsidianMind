@@ -15,6 +15,8 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
+import com.example.newproject.data.toUri as toDocumentUri
+import com.example.newproject.model.DocumentRef
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.newproject.model.RelatedNote
@@ -168,13 +170,13 @@ class NoteViewModel internal constructor(
                     return@launch
                 }
                 val note = notes.random()
-                val loaded = loadNoteForDistill(contentResolver, note.name, note.uri)
+                val loaded = loadNoteForDistill(contentResolver, note.name, note.ref)
                 // 本文を出す前にセッションを作る。表示後だと、痕跡レポータの初回emitが
                 // セッションより先に届いて訪問を取りこぼしうる。
                 // 走査で得た NoteFile なので相対パスは常に揃っている。
-                startReadingTrace(note.name, note.uri, note.vaultRelativePath)
+                startReadingTrace(note.name, note.ref, note.vaultRelativePath)
                 session.setNoteState(loaded)
-                session.recordHistory(note.name, note.uri)
+                session.recordHistory(note.name, note.ref)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
                 session.revealReadingTrace(note.vaultRelativePath)
                 session.fetchSummary(note.name, loaded.content)
@@ -191,17 +193,17 @@ class NoteViewModel internal constructor(
         session.onNoteChanged()
         noteLoadJob = scope.launch {
             try {
-                val loaded = loadNoteForDistill(contentResolver, note.title, note.uri)
+                val loaded = loadNoteForDistill(contentResolver, note.title, note.ref)
                 // RelatedNote は相対パスを持たない。キャッシュにあれば即使い、無ければ
                 // パス未確定でセッションだけ作る（表示前にVault走査を挟まないため）。
                 // 本文を出す前に呼ぶ理由は loadRandomNote 側のコメント参照。
-                val sessionId = startReadingTrace(note.title, note.uri, cachedRelativePath(note.uri))
+                val sessionId = startReadingTrace(note.title, note.ref, cachedRelativePath(note.ref))
                 session.setNoteState(loaded)
-                session.recordHistory(note.title, note.uri)
+                session.recordHistory(note.title, note.ref)
                 // 表示を終えてから相対パスを確定させる。さがすタブは collectNotesInScope を
                 // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
                 // 「さがす経由の最初の1件」が記録から漏れる。
-                bindReadingTracePath(contentResolver, note.uri, sessionId)
+                bindReadingTracePath(contentResolver, note.ref, sessionId)
                 session.fetchSummary(note.title, loaded.content)
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
@@ -232,12 +234,12 @@ class NoteViewModel internal constructor(
     fun dismissReadingTraceCard() = session.dismissReadingTraceCard()
 
     /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
-    private fun startReadingTrace(title: String, uri: Uri, vaultRelativePath: String?): Long =
+    private fun startReadingTrace(title: String, ref: DocumentRef, vaultRelativePath: String?): Long =
         session.startReadingTrace(
             title = title,
             vaultRelativePath = vaultRelativePath,
             // 端末内キャッシュとしてだけ持つ値なので、取れなければ null で構わない。
-            documentId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull()
+            documentId = runCatching { DocumentsContract.getDocumentId(ref.toDocumentUri()) }.getOrNull()
         )
 
     /**
@@ -248,8 +250,8 @@ class NoteViewModel internal constructor(
      * 痕跡レポータの初回emitを取りこぼして訪問がまるごと記録されなくなる。
      * キャッシュが冷えている場合は [bindReadingTracePath] が表示後に埋める。
      */
-    private fun cachedRelativePath(uri: Uri): String? =
-        cachedNotes.firstOrNull { it.uri == uri }
+    private fun cachedRelativePath(ref: DocumentRef): String? =
+        cachedNotes.firstOrNull { it.ref == ref }
             ?.vaultRelativePath
             ?.takeIf { it.isNotEmpty() }
 
@@ -259,13 +261,13 @@ class NoteViewModel internal constructor(
      */
     private suspend fun bindReadingTracePath(
         contentResolver: ContentResolver,
-        uri: Uri,
+        ref: DocumentRef,
         sessionId: Long
     ) {
         val vault = vaultLocation.uri ?: return
         val path = try {
             collectAllNotesCached(contentResolver, vault)
-                .firstOrNull { it.uri == uri }
+                .firstOrNull { it.ref == ref }
                 ?.vaultRelativePath
                 ?.takeIf { it.isNotEmpty() }
         } catch (e: CancellationException) {
@@ -291,8 +293,8 @@ class NoteViewModel internal constructor(
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
 
     fun loadAnnotations(contentResolver: ContentResolver) = session.loadAnnotations(contentResolver)
-    fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) =
-        session.deleteAnnotation(contentResolver, uri)
+    fun deleteAnnotation(contentResolver: ContentResolver, ref: DocumentRef) =
+        session.deleteAnnotation(contentResolver, ref)
     fun deleteAllAnnotations(contentResolver: ContentResolver) =
         session.deleteAllAnnotations(contentResolver)
     fun markAnnotationViewed() = session.markAnnotationViewed()
@@ -335,8 +337,9 @@ class NoteViewModel internal constructor(
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,
         title: String,
-        uri: Uri
+        ref: DocumentRef
     ): NoteState.Success {
+        val uri = ref.toDocumentUri()
         return try {
             val snapshot = repository.readNoteSnapshot(
                 contentResolver,
@@ -407,7 +410,8 @@ class NoteViewModel internal constructor(
             val loaded = loadNoteForDistill(
                 getApplication<Application>().contentResolver,
                 current.title,
-                targetUri.toUri()
+                // targetUri は元から Uri.toString() の文字列。Uri へ戻さず参照へ包む。
+                DocumentRef(targetUri)
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
@@ -455,7 +459,7 @@ class NoteViewModel internal constructor(
                     allNotes = cachedNotes,
                     wikilinkTitles = wikilinkTitles,
                     // 候補はスニペットとfront matterしか使わないので、先頭だけ読む
-                    readContent = { uri -> repository.readNoteSnippet(contentResolver, uri) },
+                    readContent = { ref -> repository.readNoteSnippet(contentResolver, ref.toDocumentUri()) },
                     parseMeta = { repository.parseMeta(it) }
                 )
             ) {

@@ -147,7 +147,7 @@ class SearchController(
                 val folder = state.current.selectedFolder
                 val notes = collectInScopeCached(contentResolver, uri, folder)
                 val picked = notes.shuffled().take(3).map {
-                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false, lastModified = it.lastModified)
+                    RelatedNote(title = it.name, ref = it.ref, isWikilinked = false, lastModified = it.lastModified)
                 }
                 setStateIfCurrent(requestId, SearchState.Success(picked))
             } catch (e: CancellationException) {

@@ -5,6 +5,7 @@ import android.net.Uri
 import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.ReadingTracePersistence
@@ -241,8 +242,8 @@ internal class NoteSessionCoordinator(
     fun currentNote(): NoteState.Success? = stateStore.currentNote()
 
     /** ノートを開けた時点で当日履歴に積む。 */
-    fun recordHistory(title: String, uri: Uri) {
-        stateStore.setTodayHistory(history.record(title, uri))
+    fun recordHistory(title: String, ref: DocumentRef) {
+        stateStore.setTodayHistory(history.record(title, ref))
     }
 
     /**
@@ -312,8 +313,8 @@ internal class NoteSessionCoordinator(
     // ── AI補記メモ（実装は AnnotationController）────────────────────────────
 
     fun loadAnnotations(contentResolver: ContentResolver) = annotation.loadList(contentResolver)
-    fun deleteAnnotation(contentResolver: ContentResolver, uri: Uri) =
-        annotation.delete(contentResolver, uri)
+    fun deleteAnnotation(contentResolver: ContentResolver, ref: DocumentRef) =
+        annotation.delete(contentResolver, ref)
     fun deleteAllAnnotations(contentResolver: ContentResolver) = annotation.deleteAll(contentResolver)
     fun markAnnotationViewed() = annotation.markViewed()
     fun createAnnotation(

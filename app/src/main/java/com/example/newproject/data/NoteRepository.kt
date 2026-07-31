@@ -3,6 +3,7 @@ package com.example.newproject.data
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.READING_TRACE_FOLDER_NAME
 import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteMeta
@@ -21,7 +22,7 @@ data class BoundedText(val text: String, val isTruncated: Boolean)
  * 保存できた補記メモ。[displayName] は予測値ではなく**保存後のメタデータから取った実名**。
  * 同じノートを同じ分に再生成するとプロバイダがファイル名を変えることがあるため。
  */
-data class SavedAnnotation(val uri: Uri, val displayName: String)
+data class SavedAnnotation(val ref: DocumentRef, val displayName: String)
 
 /** [AnnotationDocumentGateway] のSAF実装。参照は `Uri` の文字列表現をそのまま使う。 */
 private class SafAnnotationDocumentGateway(
@@ -118,14 +119,14 @@ class NoteRepository {
             .map { entry ->
                 NoteFile(
                     name = entry.name,
-                    uri = DocumentsContract.buildDocumentUriUsingTree(vaultUri, entry.documentId),
+                    ref = DocumentsContract.buildDocumentUriUsingTree(vaultUri, entry.documentId).toDocumentRef(),
                     lastModified = entry.lastModified,
                     vaultRelativePath = entry.vaultRelativePath
                 )
             }
 
     private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
-        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId), lastModified)
+        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId).toDocumentRef(), lastModified)
 
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
     // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。
@@ -264,7 +265,7 @@ class NoteRepository {
 
         when (val result = writer.create(fileName, content)) {
             is AnnotationWriteResult.Success ->
-                SavedAnnotation(result.reference.toUri(), result.displayName)
+                SavedAnnotation(DocumentRef(result.reference), result.displayName)
             is AnnotationWriteResult.Failure -> error(result.message)
         }
     }

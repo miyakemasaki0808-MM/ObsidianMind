@@ -78,6 +78,46 @@ class PackageDependencyTest {
     private fun layerOf(identifier: String): String =
         if (identifier.isNotEmpty() && identifier.first().isLowerCase()) identifier else ROOT
 
+    /**
+     * `model` と `domain` は **Androidフレームワークにも依存しない**。
+     *
+     * 向きの表（上）が見ているのは `com.example.newproject.*` の import だけで、
+     * `android.*` は数えていなかった。そのため `model` は「プロジェクト内の何も
+     * import しない」を満たしながら `android.net.Uri` だけは import する状態で残り、
+     * **`model` の型を素のJVMテストで組み立てられなかった**（`Uri` はユニットテストでは
+     * スタブで、触ると例外を投げる）。
+     *
+     * テスト容易性の観点では、プロジェクト内の依存も外部フレームワークへの依存も
+     * 等しく「その層を素のJVMで扱えなくする」ので、**同じ規則で数える**。
+     *
+     * `ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` と
+     * ルートは SAF・`ContentResolver` を実際に扱う境界なので依存してよい。
+     */
+    @Test
+    fun `model と domain は Android に依存しない`() {
+        val sourceRoot = mainSourceRoot()
+        val violations = sourceRoot.walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { file ->
+                val source = file.readText()
+                val layer = PACKAGE_PATTERN.find(source)?.let { layerOf(it.groupValues[1]) }
+                if (layer !in ANDROID_FREE_LAYERS) {
+                    emptySequence()
+                } else {
+                    ANDROID_IMPORT_PATTERN.findAll(source)
+                        .map { "${file.relativePath()}: $layer -> ${it.groupValues[1]}" }
+                        .distinct()
+                }
+            }
+            .sorted()
+            .toList()
+
+        assertTrue(
+            "model / domain が Android に依存しています:\n${violations.joinToString("\n")}",
+            violations.isEmpty()
+        )
+    }
+
     private fun mainSourceRoot(): File {
         val workingDirectory = File(
             requireNotNull(System.getProperty("user.dir")) { "user.dir が設定されていません" }
@@ -101,6 +141,12 @@ class PackageDependencyTest {
         // ルート直下のファイルは `.<pkg>` を持たないので、その場合はグループ1が空になる。
         private val PACKAGE_PATTERN =
             Regex("""(?m)^package\s+com\.example\.newproject(?:\.([a-z][A-Za-z0-9_]*))?\b""")
+        /** `model` / `domain` は Android フレームワークにも依存しない。 */
+        private val ANDROID_FREE_LAYERS = setOf("model", "domain")
+
+        // `androidx.compose` などを含めないよう、`android.` と `androidx.` の両方を見る。
+        private val ANDROID_IMPORT_PATTERN =
+            Regex("""(?m)^import\s+(android(?:x)?\.[A-Za-z0-9_.]+)""")
         private val IMPORT_PATTERN =
             Regex("""(?m)^import\s+com\.example\.newproject\.([A-Za-z][A-Za-z0-9_]*)\b""")
     }

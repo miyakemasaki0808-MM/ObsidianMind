@@ -2,9 +2,11 @@ package com.example.newproject.controller
 
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.sanitizeAnnotationFileTitle
+import com.example.newproject.data.toUri
 import com.example.newproject.domain.AnnotationComposer
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.toObsidianNoteTitle
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
@@ -172,11 +174,11 @@ class AnnotationController(
         }
     }
 
-    fun delete(contentResolver: ContentResolver, uri: Uri) {
+    fun delete(contentResolver: ContentResolver, ref: DocumentRef) {
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
-            val deleted = repository.deleteDocument(contentResolver, uri)
+            val deleted = repository.deleteDocument(contentResolver, ref.toUri())
             reloadList(contentResolver, generation, failureCount = if (deleted) 0 else 1)
         }
     }
@@ -197,7 +199,7 @@ class AnnotationController(
                 // 旧Vaultのファイルを消し続けないよう、1件ごとに世代を見る。
                 // 永続URI権限が残っている端末では、切替後もURIが有効なまま消せてしまう。
                 if (generation != vaultGeneration()) return@launch
-                if (!repository.deleteDocument(contentResolver, file.uri)) failureCount++
+                if (!repository.deleteDocument(contentResolver, file.ref.toUri())) failureCount++
             }
             reloadList(contentResolver, generation, failureCount)
         }
@@ -287,7 +289,7 @@ class AnnotationController(
                 current.copy(
                     annotationState = AnnotationState.Success(
                         sourceTitle = sourceTitle,
-                        savedUri = saved.uri,
+                        savedRef = saved.ref,
                         // 予測した名前ではなく保存後の実名。同じ分に再生成すると
                         // プロバイダが改名することがあり、一覧の表示とずれる。
                         fileName = saved.displayName,

@@ -11,6 +11,7 @@ import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.NoteFolder
@@ -501,8 +502,7 @@ class NoteSessionCoordinatorTest {
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
         searchState = SearchState.Success(emptyList()),
-        // HistoryEntry は Uri を要るので作れない。ここで見たいのは「空へ戻るか」だけ。
-        todayHistory = listOf("旧Vaultの履歴") as List<HistoryEntry>
+        todayHistory = listOf(HistoryEntry("旧Vaultの履歴", DocumentRef("content://old/1")))
     )
 
     /**
@@ -631,7 +631,7 @@ class NoteSessionCoordinatorTest {
             private set
 
         override fun load(): List<HistoryEntry> = emptyList()
-        override fun record(title: String, uri: Uri): List<HistoryEntry> = emptyList()
+        override fun record(title: String, ref: DocumentRef): List<HistoryEntry> = emptyList()
         override fun clear() {
             clearCount++
         }

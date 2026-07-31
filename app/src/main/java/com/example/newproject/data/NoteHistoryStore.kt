@@ -1,9 +1,8 @@
 package com.example.newproject.data
 
 import android.content.SharedPreferences
-import android.net.Uri
 import androidx.core.content.edit
-import androidx.core.net.toUri
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.HistoryEntry
 import org.json.JSONArray
 import org.json.JSONObject
@@ -19,7 +18,7 @@ import java.util.Locale
  */
 interface HistoryStore {
     fun load(): List<HistoryEntry>
-    fun record(title: String, uri: Uri): List<HistoryEntry>
+    fun record(title: String, ref: DocumentRef): List<HistoryEntry>
     fun clear()
 }
 
@@ -38,7 +37,9 @@ class NoteHistoryStore(private val prefs: SharedPreferences) : HistoryStore {
                 val obj = array.getJSONObject(i)
                 HistoryEntry(
                     title = obj.getString("title"),
-                    uri = obj.getString("uri").toUri()
+                    // キー名 "uri" は据え置く。保存済みの文字列表現に型を付け直しただけで、
+                    // 中身は変わっていないため既存データをそのまま読める。
+                    ref = DocumentRef(obj.getString("uri"))
                 )
             }
         } catch (e: Exception) {
@@ -47,15 +48,15 @@ class NoteHistoryStore(private val prefs: SharedPreferences) : HistoryStore {
     }
 
     /** 先頭に追加して保存する。同じノートは重複させず先頭へ移動する。 */
-    override fun record(title: String, uri: Uri): List<HistoryEntry> {
-        val updated = (listOf(HistoryEntry(title, uri)) + load().filter { it.uri != uri })
+    override fun record(title: String, ref: DocumentRef): List<HistoryEntry> {
+        val updated = (listOf(HistoryEntry(title, ref)) + load().filter { it.ref != ref })
             .take(MAX_ENTRIES)
         val array = JSONArray()
         updated.forEach { entry ->
             array.put(
                 JSONObject()
                     .put("title", entry.title)
-                    .put("uri", entry.uri.toString())
+                    .put("uri", entry.ref.value)
             )
         }
         prefs.edit {
