@@ -37,10 +37,11 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: 残った実機確認を閉じ、instrumentationの土台を動く状態にする。**
-**読書体験を止めていた最優先の1件（表示用MarkdownのMain上での二重解析）は 2026-07-31 に実装し、
-実機確認まで完了した**（F-2 の2件も同日完了 → [change_history](../change_history.md)）。
-残るのは ReadingTrace v1 の完了条件（N-1）と、instrumentationの土台（N-6）の2つだけ。
+**テーマ: instrumentationの土台を動く状態にする。**
+性能の最優先課題（表示用MarkdownのMain上での二重解析）と F-2 の2件は 2026-07-31 に実装・実機確認とも完了し、
+**ReadingTrace v1 も同日クローズした**（残っていた実機確認は構造上ほぼ実施不可能と判断
+→ [reflect_reading_trace](../design/reflect_reading_trace.md) §12）。
+**Now に残るのは N-6 の1件だけ。**
 
 ### N-6. instrumentationの土台を「動く」ところまで持っていく（→ current_issues TEST-1）
 - **なぜここ:** E案で依存・Runner・スモークテスト2件を置き、CIでコンパイルと組み立ても通した。
@@ -56,14 +57,6 @@
 - **効果とコスト:** テスト容易性 8.0 → 8.5、開発・リリース運用 7.5 → 8.0。コストは小〜中だが、
   **直る保証が無い**のが特徴で、直らなければ点数は動かず調査課題が1件増える。
 
-### N-1. ReadingTrace v1を完成状態へする（実装・修正済み／実機確認待ち）
-- **設計を棄却して置き換えた。** 「ボタンではなく無意識の補助機能に」という要求で旧設計（明示ボタンで問いを書く）の前提が崩れ、(a)自分由来・(b)全ノートに残る・(c)無意識 の3条件が同時に満たせないことが判明。**AIの役割を「問いの創作」から「痕跡の要約」へ落として解決**し、**ReadingTrace**（読書位置を自動記録し、Rediscoverで「前回のあなた」を見せる）として実装した。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
-- **達成:** 10秒以上読んだノートの最深到達点を全経路で自動記録／Rediscover限定で再会カード／生の痕跡を即表示しAI俯瞰要約を裏で追記／サイドカー（`_ReadingTraces/*.json`）で保存され破損は孤立化。関門だった vault相対パス生成は純関数 `traverseMarkdownPaths` として解消（→ [reflect_reading_trace](../design/reflect_reading_trace.md) §6）。
-- **副産物:** `SafDocuments.kt` へSAF操作を集約し `_AI補記` と共有（`NoteRepository` は純減）。`org.json` を test スコープへ追加し、サイドカーJSONをJVMテストで検証可能にした。
-- **レビュー指摘3件は修正済み（2026-07-25）:** ①到達率をブロック内の可視量まで見る方式へ変更（100%は最終ブロック末端が画面へ入った時だけ）②`pause`/`resume` による能動読書時間の積算（背面時間を除外し、1回の閲覧＝1訪問を保つ）③保存要求にVault識別子を持たせ、書込直前に照合（当初の実装は確認後に `vaultUri()` を読み直しており効いていなかったため作り直した → [bugfix_reports](../bugfix_reports.md) #4）。→ [change_history.md](../change_history.md) PR #35
-- **完了の定義:** 長大な1ブロックを冒頭だけ見ても100%にならない／背面化・復帰をまたいで読書時間と最深位置が正しい／Vault切替で旧痕跡が新Vaultへ入らない、を自動テストと**実端末確認**で満たす。JVMテストは通過済みで、**残るは実端末確認のみ**（SAF照合とActivity lifecycleはJVMテストの範囲外）。
-
----
 
 ## 🟡 Next — 次に取り組む（ループを豊かにし、土台を強くする）
 
