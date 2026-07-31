@@ -729,7 +729,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 ノート画面では `buildNoteSectionModel()` が作成した `MarkdownBlock` をレンダラーへ渡し、セクション解析と描画による二重パースを避ける。インラインの `AnnotatedString` もテキスト単位で `remember()` する。
 
-通常表示と全画面表示はどちらも同じパース済みブロックから描画する。両者は別々の `LazyListState` を持つ（NavHost遷移中の同時コンポーズで単一stateを2つの `LazyColumn` へ装着すると例外になるため）が、全画面は進入時にタブ側の位置から開始し、離脱時（✕・システムバック・FAB）にタブ側へ書き戻すことでスクロール位置を継承する。
+通常表示と全画面表示はどちらも同じパース済みブロックから描画する（2026-07-31 以降は実際に共有している。それ以前は各Composableが自前の `remember` で同期解析しており、この記述だけが先行していた）。パースは `NoteSectionController` が `Dispatchers.Default` で1回だけ行い、`StateFlow<NoteSectionModel?>` を `MainActivity` が両画面へ配る。**結果が届くまでノート本文は描かない** — 描くと `MarkdownNoteContent` のフォールバックが最大1MBをMain上で解析し直すため。両者は別々の `LazyListState` を持つ（NavHost遷移中の同時コンポーズで単一stateを2つの `LazyColumn` へ装着すると例外になるため）が、全画面は進入時にタブ側の位置から開始し、離脱時（✕・システムバック・FAB）にタブ側へ書き戻すことでスクロール位置を継承する。
 
 ---
 

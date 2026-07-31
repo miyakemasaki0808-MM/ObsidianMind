@@ -339,6 +339,71 @@ class DistillControllerTest {
         assertTrue(state.value.distillState is DistillState.Idle)
     }
 
+    /**
+     * 2-7 の本体。復旧確認はSAF I/Oを伴うので遅れることがあり、その間にユーザーが
+     * 蒸留を始められる。復旧警告を出した時点で走行中の分析を無効化しないと、
+     * 直後に返ってきた候補が警告を上書きしてしまう。
+     */
+    @Test
+    fun `遅れて届いた復旧警告は走行中の分析に上書きされない`() = runTest {
+        val state = stateWithNote()
+        val ai = ControllableAiClient()
+        val persistence = FakePersistence().apply {
+            assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
+        }
+        val controller = controller(state, ai, persistence)
+
+        // 復旧確認を始めた直後に蒸留を開始する（確認はまだI/O待ち）。
+        controller.checkRecovery()
+        controller.start()
+        advanceUntilIdle()
+
+        // 先に復旧警告が出る
+        assertTrue(state.value.distillState is DistillState.RecoveryRequired)
+
+        // その後に分析のAI応答が返ってきても、警告を消してはいけない
+        ai.response.complete("S001")
+        advanceUntilIdle()
+
+        assertTrue(state.value.distillState is DistillState.RecoveryRequired)
+    }
+
+    /** 取り下げられた復旧確認は、I/Oそのものが走らない（重複した確認を残さない）。 */
+    @Test
+    fun `新しい復旧確認が始まると古い確認は取り下げられる`() = runTest {
+        val state = stateWithNote()
+        val persistence = FakePersistence().apply {
+            assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
+        }
+        val controller = controller(state, ImmediateAiClient(), persistence)
+
+        controller.checkRecovery()
+        controller.checkRecovery()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.assessCalls)
+        assertTrue(state.value.distillState is DistillState.RecoveryRequired)
+    }
+
+    /**
+     * 復旧レコードはアプリ内部の未解決1件で、ノートに紐づかない。
+     * ノート切替で確認を打ち切ると、データ安全性の警告が黙って消える。
+     */
+    @Test
+    fun `ノート切替では復旧確認が生き残る`() = runTest {
+        val state = stateWithNote()
+        val persistence = FakePersistence().apply {
+            assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
+        }
+        val controller = controller(state, ImmediateAiClient(), persistence)
+
+        controller.checkRecovery()
+        controller.cancelForNoteChange()
+        advanceUntilIdle()
+
+        assertTrue(state.value.distillState is DistillState.RecoveryRequired)
+    }
+
     @Test
     fun `export writes original bytes and resolves recovery`() = runTest {
         val state = stateWithNote()
@@ -416,6 +481,9 @@ class DistillControllerTest {
     private class FakePersistence : DistillPersistence {
         var lastWrite: DistillWriteRequest? = null
         var assessment: DistillRecoveryAssessment = DistillRecoveryAssessment.None
+        /** 復旧確認のI/Oが実際に走った回数。取り下げた確認が走らないことの確認に使う。 */
+        var assessCalls = 0
+            private set
         var pending: PendingDistillOriginal? = null
         var discarded = false
         var discardedResolved = false
@@ -428,7 +496,10 @@ class DistillControllerTest {
             lastWrite = request
             return writeResult(request)
         }
-        override fun assessPendingRecovery(): DistillRecoveryAssessment = assessment
+        override fun assessPendingRecovery(): DistillRecoveryAssessment {
+            assessCalls++
+            return assessment
+        }
         override fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean {
             discardedResolved = true
             return true

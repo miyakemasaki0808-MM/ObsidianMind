@@ -54,7 +54,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
-import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
@@ -74,6 +74,11 @@ import com.example.newproject.ui.theme.ReadingGradient
 @Composable
 internal fun NoteReaderTab(
     uiState: NoteUiState,
+    /**
+     * 本文のパース結果。Main の外で1回だけ作られ全画面表示と共有する（→ NoteSectionController）。
+     * 解析中は null で、その間は本文を描かない（描くと描画側がMainで解析し直してしまう）。
+     */
+    sectionModel: NoteSectionModel?,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onSuggestionTap: (String) -> Unit,
@@ -100,9 +105,6 @@ internal fun NoteReaderTab(
     val hasNote = successState != null
 
     val listState = noteListState
-    val sectionModel = remember(successState?.content) {
-        successState?.content?.let { buildNoteSectionModel(it) }
-    }
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }

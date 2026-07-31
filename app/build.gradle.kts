@@ -105,12 +105,12 @@ dependencies {
     // 素のJVMテストで検証するのに必要。
     testImplementation("org.json:json:20240303")
 
-    // instrumentation テストの土台。テスト本体はまだ無いが、依存とRunnerが揃って
-    // いないと「書こうとした時点で環境構築から始まる」状態が続くため先に置く。
+    // instrumentation テストの土台。Runner／Context と Compose 描画のスモークテストを
+    // 分け、環境とUI同期のどちらが壊れたかを個別に観測できるようにしている。
     // SAF走査・端末AI・Compose Navigation・画面回転は素のJVMでは覆えない。
     androidTestImplementation(composeBom)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

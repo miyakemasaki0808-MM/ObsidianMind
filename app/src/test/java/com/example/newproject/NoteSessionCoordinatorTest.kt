@@ -298,6 +298,59 @@ class NoteSessionCoordinatorTest {
     }
 
     /**
+     * セクションモデルは `NoteUiState` の外にあるため、リフレクションによる
+     * 「リセット漏れ検査」の網に掛からない。切替で消えることを個別に固定する。
+     */
+    @Test
+    fun `ノート切替でセクションモデルが破棄される`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote("# 見出し\n\n本文"))
+        advanceUntilIdle()
+        assertNotNull(coordinator.sectionModel.value)
+
+        coordinator.onNoteChanged()
+
+        assertNull(coordinator.sectionModel.value)
+    }
+
+    /** 本文が変わる2経路のうち、蒸留の差し替え側で解析し直しを落としていないこと。 */
+    @Test
+    fun `蒸留の本文差し替えでセクションモデルが作り直される`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote("# 蒸留前\n\n本文"))
+        advanceUntilIdle()
+        assertEquals(listOf("蒸留前"), coordinator.sectionModel.value?.sections?.map { it.title })
+
+        val applied = coordinator.applyReloadedBody(
+            targetUri = TARGET_URI,
+            loaded = successNote("# 蒸留後\n\n**本文**")
+        )
+        advanceUntilIdle()
+
+        assertTrue(applied)
+        assertEquals(listOf("蒸留後"), coordinator.sectionModel.value?.sections?.map { it.title })
+    }
+
+    /** Success 以外へ遷移したら、直前のノートのブロックを残さない。 */
+    @Test
+    fun `ノートの読込に失敗するとセクションモデルが消える`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote("# 見出し\n\n本文"))
+        advanceUntilIdle()
+        assertNotNull(coordinator.sectionModel.value)
+
+        coordinator.setNoteState(NoteState.Error("読み込めません"))
+
+        assertNull(coordinator.sectionModel.value)
+    }
+
+    /**
      * Vault切替では、記録中の読書セッションを**記録せずに**捨てる。
      * 捨て損なうと、旧ノートの痕跡が切替後のVaultへ書き込まれる（C案で塞いだ経路）。
      */
@@ -496,6 +549,16 @@ class NoteSessionCoordinatorTest {
         field.set(owner, value)
     }
 
+    private fun successNote(content: String) = NoteState.Success(
+        title = "ノート",
+        content = content,
+        targetUri = TARGET_URI
+    )
+
+    private companion object {
+        const val TARGET_URI = "content://vault/note.md"
+    }
+
     private class Env(
         private val scope: TestScope,
         private val clock: TestClock = TestClock()
@@ -529,7 +592,9 @@ class NoteSessionCoordinatorTest {
             initialState = initialState,
             clock = clock::now,
             // 痕跡I/Oもテストスケジューラに載せて、照合が走行中のまま切り替える状況を作る。
-            ioDispatcher = StandardTestDispatcher(scope.testScheduler)
+            ioDispatcher = StandardTestDispatcher(scope.testScheduler),
+            // 表示用Markdownの解析も同様。解析中に切り替える状況を作れるようにする。
+            parseDispatcher = StandardTestDispatcher(scope.testScheduler)
         )
     }
 

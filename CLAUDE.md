@@ -21,7 +21,16 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 | `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/design/reflect_reading_trace.md) / [reflect_distill](docs/design/reflect_distill.md) |
 | `ui/vigilith/` | [character_vigilith](docs/design/character_vigilith.md) → [vigilith_in_app](docs/design/vigilith_in_app.md) |
 
-未対応課題と改善計画は [docs/_wip/current_issues.md](docs/_wip/current_issues.md)（§5 に A案〜C案の実施計画）。
+**繰り返し現れた構造的な教訓は [docs/lessons.md](docs/lessons.md)。** 新しい仕組みを入れる前、
+テストを足す前、横展開する前に目を通す（過去に同じ形で失敗している型が集めてある）。
+
+`_wip/` は3本で役割が分かれている。**混ぜない。**
+
+| 知りたいこと | 見る文書 |
+|---|---|
+| いま何が壊れている／足りないのか | [_wip/current_issues.md](docs/_wip/current_issues.md)（課題だけ。順序は書かない） |
+| 何をどの順でやるか | [_wip/roadmap.md](docs/_wip/roadmap.md)（Now / Next / Later） |
+| まだ作っていない機能の候補 | [_wip/feature_ideas.md](docs/_wip/feature_ideas.md) |
 
 ## 必須原則
 
@@ -63,7 +72,8 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 1. [docs/change_history.md](docs/change_history.md) へPR単位で1行追記する
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/design/*.md` に追記する（自明な変更は履歴1行のみ）
-3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**解消したら削除する**（残すと未対応課題が埋もれる）
+3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
+4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/lessons.md](docs/lessons.md) へ追記する（番号は振り直さず末尾へ足す）
 
 ## 文書の扱い
 

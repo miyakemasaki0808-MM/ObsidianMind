@@ -21,6 +21,7 @@ import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.domain.markdown.NoteSectionModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -83,6 +84,14 @@ class NoteViewModel internal constructor(
     )
 
     val uiState: StateFlow<NoteUiState> = session.uiState
+
+    /**
+     * 表示用Markdownのパース結果。Main の外で1回だけ作り、通常表示と全画面表示が共有する。
+     * `uiState` と別の流れなのは `model` パッケージが `domain` を import できないため
+     * （→ [com.example.newproject.controller.NoteSectionController]）。テーマと同じ扱い。
+     */
+    val sectionModel: StateFlow<NoteSectionModel?> = session.sectionModel
+
     private val mutableDarkTheme = MutableStateFlow(preferences.darkTheme)
     val darkTheme: StateFlow<Boolean> = mutableDarkTheme.asStateFlow()
 

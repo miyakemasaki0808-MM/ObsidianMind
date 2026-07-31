@@ -63,6 +63,17 @@ internal class DistillController(
     private var pendingDownload: AnalysisInput? = null
     private var session: ActiveSession? = null
 
+    /**
+     * 復旧確認の追跡Job。**分析（[job]・[activeRequestId]）とは寿命が違う**ので別に持つ。
+     *
+     * 復旧レコードはアプリ内部ストレージにある未解決1件で、ノートにもVaultにも紐づかない。
+     * したがってノート切替では止めてはならず（[cancelForNoteChange] は触らない）、
+     * 取り下げの契機は「次の [checkRecovery] が始まったとき」だけである。
+     * 分析側の世代へ相乗りさせると、確認中にユーザーが蒸留を始めただけで
+     * データ安全性の警告が捨てられてしまう。
+     */
+    private var recoveryJob: Job? = null
+
     fun start() {
         if (state.current is DistillState.Analyzing ||
             state.current is DistillState.Downloading ||
@@ -331,33 +342,67 @@ internal class DistillController(
         update(DistillState.Idle)
     }
 
+    /**
+     * 起動時とVault切替時に、中断された保存の痕跡（未解決の復旧レコード）を確認する。
+     *
+     * SAF I/O を伴うので遅れることがあり、その間にユーザーが蒸留を始められる。
+     * そのため結果の反映は [applyRecoveryResult] を通し、**表示の直前に分析世代を
+     * 無効化する**。世代を進めないと、復旧警告を出した直後に走行中の分析が候補を返して
+     * 上書きしてしまう（保存層が未解決レコードを再確認するので危険な書き込みは止まるが、
+     * 警告が消えて不要なAI実行も走る）。
+     */
     fun checkRecovery() {
-        scope.launch {
+        // 走行中の確認を先に取り下げる。これが「取り下げた確認の結果が届かない」唯一の仕組み。
+        recoveryJob?.cancel()
+        recoveryJob = scope.launch {
             val assessment = withContext(ioDispatcher) { persistence.assessPendingRecovery() }
             when (assessment) {
                 is DistillRecoveryAssessment.OriginalStillPresent,
                 is DistillRecoveryAssessment.ExpectedOutputPresent -> {
                     val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
-                    if (!deleted) {
-                        update(
-                            DistillState.RecoveryRequired(
-                                DistillRecoveryKind.Corrupt,
-                                "書き込み内容は安全ですが、古い復旧情報を削除できませんでした。",
-                                canRestore = false,
-                                canExport = false,
-                                canKeepCurrent = true
-                            )
-                        )
-                    }
+                    // 解決済みなら黙って捨てる（起動のたびに知らせる意味がない）。
+                    // 削除に失敗したときだけ、確認を促すために表示する。
+                    if (!deleted) applyRecoveryResult(resolvedButUndeletableState())
                 }
                 DistillRecoveryAssessment.None -> Unit
-                else -> showRecoveryAssessment(assessment)
+                else -> unresolvedRecoveryState(assessment)?.let { applyRecoveryResult(it) }
             }
         }
     }
 
-    private suspend fun showRecoveryAssessment(assessment: DistillRecoveryAssessment) {
-        val state = when (assessment) {
+    /**
+     * 復旧の判定結果を画面へ反映する。分析の無効化をここ1箇所へ集約する
+     * （呼び出し側へ散らすと、テストで検出できない等価な分岐が増える）。
+     *
+     * 取り下げられた確認の結果が届かないのは [recoveryJob] のキャンセルによる。
+     * `recoveryRequestId` との照合は書いた上で1行消す変異確認を行ったが
+     * **どのテストも落ちなかった** — `recoveryRequestId` を進めるのは [checkRecovery] だけで、
+     * そこでは必ず先にJobをキャンセルするため照合へ到達する経路が無い。
+     * `NoteSectionController` と同じ判断で冗長として削除した。
+     * **再び足す場合は、先に「照合を消すと落ちるテスト」を書けることを確かめること。**
+     */
+    private fun applyRecoveryResult(next: DistillState) {
+        // 走行中の分析を無効化してから表示する。順序が要点で、先に表示すると
+        // 直後に返ってきた候補が同じ世代のまま復旧表示を上書きする。
+        activeRequestId++
+        job?.cancel()
+        job = null
+        pendingDownload = null
+        session = null
+        update(next)
+    }
+
+    private fun resolvedButUndeletableState() = DistillState.RecoveryRequired(
+        DistillRecoveryKind.Corrupt,
+        "書き込み内容は安全ですが、古い復旧情報を削除できませんでした。",
+        canRestore = false,
+        canExport = false,
+        canKeepCurrent = true
+    )
+
+    /** 中断・破損の3種を表示状態へ写す（I/Oなし）。解決済みの2種はここでは扱わないので null。 */
+    private fun unresolvedRecoveryState(assessment: DistillRecoveryAssessment): DistillState? =
+        when (assessment) {
             is DistillRecoveryAssessment.Diverged -> DistillState.RecoveryRequired(
                 DistillRecoveryKind.Diverged,
                 "保存が中断されたか、ファイルが外部で変更されました。現在のファイルを維持するか、保存前へ復元してください。",
@@ -379,22 +424,25 @@ internal class DistillController(
                 canExport = false,
                 canKeepCurrent = true
             )
+            else -> null
+        }
+
+    /**
+     * ユーザー操作（復元の失敗後）から呼ぶ判定表示。起動時の [checkRecovery] と違い、
+     * 解決済みだったことを黙らせずに知らせる（ユーザーが自分で操作した結果のため）。
+     */
+    private suspend fun showRecoveryAssessment(assessment: DistillRecoveryAssessment) {
+        val state = unresolvedRecoveryState(assessment) ?: when (assessment) {
             is DistillRecoveryAssessment.OriginalStillPresent,
             is DistillRecoveryAssessment.ExpectedOutputPresent -> {
                 val deleted = withContext(ioDispatcher) { persistence.discardResolvedRecovery(assessment) }
                 if (deleted) {
                     DistillState.RecoveryResolved("以前の保存処理を安全に確認しました。もう一度お試しください。")
                 } else {
-                    DistillState.RecoveryRequired(
-                        DistillRecoveryKind.Corrupt,
-                        "書き込み内容は安全ですが、古い復旧情報を削除できませんでした。",
-                        canRestore = false,
-                        canExport = false,
-                        canKeepCurrent = true
-                    )
+                    resolvedButUndeletableState()
                 }
             }
-            DistillRecoveryAssessment.None -> DistillState.Idle
+            else -> DistillState.Idle
         }
         update(state)
     }
