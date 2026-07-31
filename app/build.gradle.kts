@@ -57,9 +57,13 @@ android {
     }
 
     lint {
-        // 依存更新系は「いつ・どこまで上げるか」の方針が未定。方針を決めるまでは
-        // ビルドのたびに出しても行動につながらないので黙らせる。方針が決まったら外す。
-        // （CLAUDE.md の「依存ライブラリを一括更新しない」に対応する枠でもある）
+        // 依存更新系は**常時ゲートに載せられない種類の指摘**なので恒久的に黙らせる。
+        // 他のLint警告は「自分のコードに欠陥がある」ので直せば消えるが、これらは
+        // 上流が新版を出しただけで赤くなる。`warningsAsErrors` と併せると、こちらが
+        // 1行も触っていないのにある日ビルドが落ち、CIの赤から「直すべきもの」という
+        // 意味が失われる（実測: 有効化すると12件が Error になり lintDebug が FAILED）。
+        // 追随の強制は「依存を一括更新しない。機能単位で上げ、実機確認を伴う」とも衝突する。
+        // 代わりに棚卸しを運用手順へ移した → docs/design/dependency_policy.md
         disable += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion", "GradleDependency")
         // `OldTargetApi` はコードではなく実行環境（Lintが把握する「最新API」の定義）に
         // 依存する。ローカルでは compileSdk 36.1 / targetSdk 36 で警告ゼロだったが、
