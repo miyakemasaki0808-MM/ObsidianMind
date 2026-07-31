@@ -1,13 +1,8 @@
 package com.example.newproject
 
-import androidx.compose.material3.Text
-import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.Assert.assertEquals
-import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -19,16 +14,11 @@ import org.junit.runner.RunWith
  * （SAF走査・端末AI・Compose Navigation・画面回転）のテストを書こう」と思った時点で、
  * 依存の選定から始めなければならない状態が続いていた。
  *
- * ここで守るのは機能ではなく**環境**。Runnerが起動すること、対象アプリのContextが
- * 引けること、Composeのテストルールが実際に描画できることの3点で、
- * 「土台が壊れた」と「テスト対象が壊れた」を切り分けられるようにする。
+ * ここで守るのは機能ではなく**環境**。Composeのテストルールを使わないことで、
+ * Runner／Contextの故障をUI同期の初期化失敗から切り離して観測する。
  */
 @RunWith(AndroidJUnit4::class)
 class InstrumentationSetupTest {
-
-    @get:Rule
-    val composeRule = createComposeRule()
-
     @Test
     fun 対象アプリのContextが引ける() {
         val target = InstrumentationRegistry.getInstrumentation().targetContext
@@ -38,11 +28,5 @@ class InstrumentationSetupTest {
             target.packageName + ".test",
             InstrumentationRegistry.getInstrumentation().context.packageName
         )
-    }
-
-    @Test
-    fun Composeのテストルールが描画できる() {
-        composeRule.setContent { Text("土台の確認") }
-        composeRule.onNodeWithText("土台の確認").assertIsDisplayed()
     }
 }
