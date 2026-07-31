@@ -2,7 +2,7 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **初版:** 2026-07-22（最終更新: 2026-07-31）
-**基準:** ReadingTrace v1（実機確認待ち）・Vigilith Phase 3（実機確認済み）・ダークモード・A〜E案（実機確認はA案とC案が残る）。旧 TimeCapsule 設計は棄却
+**基準:** ReadingTrace v1（実機確認待ち）・Vigilith Phase 3（実機確認済み）・ダークモード・A〜E案（A案は確認済み、C案は 4/6 件）・F-1／F-2（実機確認済み）。旧 TimeCapsule 設計は棄却
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
 **主眼:** プロダクトの方向性（北極星）を上位に置き、機能はそこから導く
 
@@ -36,10 +36,10 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: 実装済みの土台を実機で確定させる。**
-**読書体験を止めていた最優先の1件（表示用MarkdownのMain上での二重解析）は 2026-07-31 に実装完了した**
-（→ [change_history](../change_history.md)・[architecture](../design/architecture.md) の同日追記）。
-残るのは実端末での確認と、instrumentationの土台を動く状態にすることの2つ。
+**テーマ: 残った実機確認を閉じ、instrumentationの土台を動く状態にする。**
+**読書体験を止めていた最優先の1件（表示用MarkdownのMain上での二重解析）は 2026-07-31 に実装し、
+実機確認まで完了した**（F-2 の2件も同日完了 → [change_history](../change_history.md)）。
+残るのは ReadingTrace v1 の完了条件（N-1）と、instrumentationの土台（N-6）の2つだけ。
 
 ### N-6. instrumentationの土台を「動く」ところまで持っていく（current_issues F-3）
 - **なぜここ:** E案で依存・Runner・スモークテスト2件を置き、CIでコンパイルと組み立ても通した。
