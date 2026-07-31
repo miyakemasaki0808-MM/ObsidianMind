@@ -2,7 +2,10 @@
 
 **対象領域:** `model` の共有データ型が持つ `android.net.Uri`・`domain` の Android 依存・SAF操作の呼び出し境界
 **初版:** 2026-08-01
-**状態:** **段階1〜6 実装済み**（2026-08-01）。`model` / `domain` / `ui` から `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。**残るのは段階7（Vaultルートを controller の引数から外す）のみ。**
+**状態:** **段階1〜6 実装済み・実機確認済み**（2026-08-01）。`model` / `domain` / `ui` から `android.net.Uri` が消え、
+`PackageDependencyTest` で固定済み。**段階7（Vaultルートを controller の引数から外す）には意図的に進まない** —
+型を変える話ではなく素通しの引数を1段削るだけの整理で、TEST-2 本体（実端末テストの中身）の前提ではないため。
+必要になれば独立した改善として再検討する。
 **実装で段取りの誤りが1つ見つかり、下記§段取りに追記した。**
 
 ---
@@ -101,7 +104,7 @@ value class DocumentRef(val value: String)
 | 2 | `HistoryEntry` だけを置き換える | **不可能。** 3型を同時に移すしかない |
 | 3〜5 | `RelatedNote` → `NoteFile` → `AnnotationState` と順に | **2と同時に実施**（`e7d61ee`） |
 | 6 | `PackageDependencyTest` を拡張 | そのとおり（同コミット） |
-| 7 | Vaultルートを controller から外す | **未着手** |
+| 7 | Vaultルートを controller から外す | **意図的に進まない**（2026-08-01・スコープ判断） |
 
 **なぜ部分移行が不可能だったか。** 構築箇所が層をまたいで連鎖している。
 

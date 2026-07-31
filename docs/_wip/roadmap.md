@@ -44,27 +44,8 @@
 
 **instrumentation の土台（旧 N-6）は 2026-08-01 に Android 16 で 2/2 成功し、閉じた。**
 Runnerが起動しComposeを描画できることが実証されたので、以後の失敗は「土台の故障」と
-切り分けられる。**Now に残るのは N-7 の1件だけ**で、これが L-3（統合テストの中身）の
-最後の前提にあたる。
-
-### N-7. SAF境界を小さいgatewayへ分ける（旧 X-8・→ current_issues TEST-2）
-- **Nextから繰り上げた。** 旧 N-6 が閉じたので、**L-3 の前提として残るのはこれだけ**になった。
-- **なぜやるか:** `NoteFile` や `RelatedNote` が Android の `Uri` を直接持つため、検索実行・補記保存の世代照合が
-  **JVMテストに落とせず実機確認だけが担保**になっている。`Uri` を不透明な参照として扱えるようにすると、
-  テスト容易性・保守性・拡張性の3軸が同時に動く。→ [current_issues.md](current_issues.md) TEST-2
-- **効果とコスト:** テスト容易性 8.0 → 8.5、保守性 8.0 → 8.5、拡張性 7.5 → 8.0。
-  **3軸に同時に効く唯一の案**だが、コストは大。中核の型に手を入れるのでA〜C案と同規模の活動になり、
-  L-3 の前提も兼ねる。
-- **先例が2つある。** `AnnotationDocumentGateway`（2026-07-31）と `ReadingTraceDocumentGateway` で、
-  どちらも**参照を不透明な文字列として扱う**形。1機能ぶんの gateway が実際に書けて失敗注入テストも
-  通っているので、**同じ形を他へ広げられることは確認済み**。残るのは `NoteFile`・`RelatedNote`・
-  `HistoryEntry` が持つ `Uri` の置き換えで、そこが本体。
-- **2026-08-01 にドキュメント参照側を実装した** → [saf_boundary_gateway](../design/saf_boundary_gateway.md)。
-  `model` / `domain` / `ui` から `android.net.Uri` が消え、`PackageDependencyTest` で固定済み
-  （import 1行の注入で落ちることを確認）。**残りは段階7 — Vaultルートを controller の引数から外す**。
-  こちらは型を変える話ではなく、Vault の解決を repository 側へ束ねる作業。
-- **実機確認が要る。** 変更は参照の持ち方だけで挙動は変えていないが、SAF の読み書き経路を
-  広く触っているので、ノートを開く・さがす・補記の生成と削除・履歴の並びを一巡する。
+切り分けられる。**N-7（旧 X-8）のドキュメント参照側も同日に実装・実機確認とも完了し、
+Nowから閉じた**（詳細は下記 L-3 §）。**Now は現在空。**
 
 
 ## 🟡 Next — 次に取り組む（ループを豊かにし、土台を強くする）
@@ -107,7 +88,14 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 
 ### L-3. 統合テストの中身
 - **土台の話はここには無い**（2026-08-01 に閉じた）。ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
-- **着手条件が2つある:** ①instrumentation の土台が緑であること（**2026-08-01 に達成**）②N-7 で `Uri` 依存が gateway の裏へ入っていること（でないとJVMで書けるものまでinstrumentationへ流れ込む）。**どちらも前提であって、この項目自体を早める理由にはならない。**
+- **着手条件は2つとも 2026-08-01 に満たした。** ①instrumentation の土台が緑であること（Android 16 で 2/2 成功）
+  ②ドキュメント参照が gateway の裏へ入っていること（`NoteFile`・`RelatedNote`・`HistoryEntry` を
+  `DocumentRef` へ移行し、`model` / `domain` / `ui` から `android.net.Uri` を追い出した。実機確認も同日完了。
+  → [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
+- **旧 N-7 の段階7（Vault ルートを controller の引数から外す）には意図的に進まない。**
+  型を変える話ではなく、`vaultUri: () -> Uri?` という素通しの引数を1段削るだけの整理で、
+  L-3 着手の前提ではない。**スコープを広げずに TEST-2 本体（実端末テストの中身）へ進める状態が整った**
+  ので、ここで一区切りとする。必要になれば独立した改善として再検討する。
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
 - YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
