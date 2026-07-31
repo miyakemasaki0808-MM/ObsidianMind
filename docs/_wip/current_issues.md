@@ -23,7 +23,6 @@
 
 | ID | 課題 | 優先度 | 影響 |
 |---|---|:--:|---|
-| [TEST-1](#test-1-instrumentationスモークテストがandroid-16で起動前に失敗する) | instrumentationスモークテストがAndroid 16で起動前に失敗する（**対策済み・再実行待ち**） | 中 | 土台が動く確証が無いまま実テストを書けない |
 | [SYNC-1](#sync-1-読書痕跡の孤児ファイルが掃除されずmoverenameにも追従しない) | 読書痕跡の孤児ファイルが掃除されず、move/renameにも追従しない | 中 | 長期運用でファイル数が単調増加 |
 | [SYNC-2](#sync-2-_readingtraces-索引が外部同期の追加を認識しない) | `_ReadingTraces` 索引が外部同期の追加を認識しない | 中 | 再会カードの見逃し・重複作成の余地 |
 | [AI-1](#ai-1-関連ノートは抜粋予算の38を注意書きに払っている) | 関連ノートは抜粋予算の38%を注意書きに払っている | 中 | 現ノート文脈が実質228文字しか届かない |
@@ -39,43 +38,6 @@
 **高優先度の課題は現在ゼロ。** 直近まで唯一のP1だった「表示用MarkdownのMain上での二重解析」は 2026-07-31 に解消し、実機確認まで終えた。
 
 ---
-
-## TEST-1. instrumentationスモークテストがAndroid 16で起動前に失敗する
-
-- **現状:** 2026-07-31 に Android 16 エミュレータで実行したところ **0 success / 2 failure** だった。
-
-  ```text
-  NoSuchMethodException: android.hardware.input.InputManager.getInstance []
-  ```
-
-  失敗はテスト本体へ入る前の Compose／Espresso のアイドル待機初期化で起きており、
-  Contextを見るだけのテストにもクラス共通の `createComposeRule()` が適用されるため2件とも止まっていた。
-- **対策は入れた。効いているかは未確認。** `6f21419` で2つを同時に適用済み。
-  - ①Context確認を [`InstrumentationSetupTest`](../../app/src/androidTest/java/com/example/newproject/InstrumentationSetupTest.kt)、
-    Compose描画を [`ComposeRenderingSetupTest`](../../app/src/androidTest/java/com/example/newproject/ComposeRenderingSetupTest.kt) へ**分離済み**
-  - ②`espresso-core` 3.6.1 → [3.7.0](https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0)、
-    `ext:junit` 1.2.1 → 1.3.0 へ**限定更新済み**（リリースノートに同じ反射呼び出しを `getSystemService` へ
-    置き換えたと明記がある）
-- **残っているのは再実行だけ:** `./gradlew connectedDebugAndroidTest` を Android 16 で1回。
-  **①②を1コミットで同時に入れたため、結果の読み方を先に決めておく。**
-
-  | 結果 | 意味 | 次 |
-  |---|---|---|
-  | 2/2 成功 | 土台が動いた | 本項目を削除し、実テストの追加へ進む（どちらが効いたかは追わない） |
-  | Instrumentation○ / ComposeRendering× | 分離は効いたが espresso 3.7.0 では直っていない | **AndroidX Test 互換性の独立課題**へ落とす。Composeを使わない実テストは先に書ける |
-  | 2/2 失敗 | 分離では切り分けられていない | **新しいスタックトレースを読んでから判断する。** 同じ `InputManager.getInstance` なら Runner／AGP／test-runner 側、別の例外なら別問題として起票し直す |
-
-  **3行目を「Runnerが壊れている」と即断しない。** 前回と同じ例外が出るとは限らず、
-  対策で一段進んで別の失敗に変わっている可能性がある。**読むのはスタックトレースであって、
-  この表ではない。** 表は当たりを付けるためだけのもの。
-
-- **問題の本体は「実証できていない」こと:** 依存とRunnerはコンパイルできるが、
-  「Runnerが起動しComposeを描画できる」は一度も確認できていない。
-  この状態で実テストを書き始めると、失敗時に「土台の故障」と「テスト対象の故障」を切り分けられない。
-- **CIでは検出できない:** [ci.yml](../../.github/workflows/ci.yml) は `assembleDebugAndroidTest` までで、
-  エミュレータ上の実行は行わない。組み立ては成功するので、この失敗はCIを素通りする。
-  **「土台がある」という認識だけが先に定着したのはこの穴のため。**
-- **規模感:** 極小（実行1回）。ただし直らない可能性があり、その場合は調査課題が1件増える。
 
 ## SYNC-1. 読書痕跡の孤児ファイルが掃除されず、move/renameにも追従しない
 
@@ -133,8 +95,8 @@
 - **現状:** SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・
   連続操作時の競合を絡めたテストがない。JVMテスト486件は純粋ロジックの回帰防止に有効だが、
   実端末依存の動作は保証範囲外。
-- **前提が2つある:** ①TEST-1 が緑になっていること（でないと土台の故障と切り分けられない）
-  ②`NoteFile`・`RelatedNote` が持つ `Uri` が gateway の裏へ入っていること
+- **前提が2つある。①は 2026-08-01 に満たした** — Android 16 で 2/2 成功し、**Runnerが起動しComposeを描画できることが実証された**（土台の故障と切り分けられる状態になった）。
+  残る②は `NoteFile`・`RelatedNote` が持つ `Uri` が gateway の裏へ入っていること
   （でないとJVMで書けるものまで instrumentation へ流れ込む）。
 - **部分的な前進:** 補記の保存経路だけは 2026-07-31 に `AnnotationDocumentGateway` として切り出し、
   失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。

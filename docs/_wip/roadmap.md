@@ -37,26 +37,18 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: 実端末テストの前提を2本とも揃える。**
+**テーマ: 実端末テストの残る前提を揃える。**
 性能の最優先課題（表示用MarkdownのMain上での二重解析）と F-2 の2件は 2026-07-31 に実装・実機確認とも完了し、
 **ReadingTrace v1 も同日クローズした**（残っていた実機確認は構造上ほぼ実施不可能と判断
 → [reflect_reading_trace](../design/reflect_reading_trace.md) §12）。
 
-**Now の2件は L-3（統合テストの中身）の前提そのもので、互いには依存しない。**
-N-6 は実機操作1回・N-7 は大きな実装で、**待ちと作業に分かれているので並行して進める**。
-
-### N-6. instrumentationの土台が動くことを確認する（→ current_issues TEST-1）
-- **残作業はエミュレータでの実行1回だけ。** 対策（クラス分離＋AndroidX Test の限定更新）は
-  `6f21419` で入っており、**効いているかだけが未確認**。
-- **なぜ後回しにできないか:** SAF・Navigation・Activity再生成の実テスト（L-3）は、ここが緑でないと
-  失敗時に「土台の故障」と「テスト対象の故障」を切り分けられない。スモークテストはまさにその切り分けの
-  ために置いたので、通さないまま先へ進むと本末転倒になる。→ [current_issues.md](current_issues.md) TEST-1
-- **効果とコスト:** テスト容易性 8.0 → 8.5、開発・リリース運用 7.5 → 8.0。コストは極小だが、
-  **直る保証が無い**のが特徴で、直らなければ点数は動かず調査課題が1件増える。
+**instrumentation の土台（旧 N-6）は 2026-08-01 に Android 16 で 2/2 成功し、閉じた。**
+Runnerが起動しComposeを描画できることが実証されたので、以後の失敗は「土台の故障」と
+切り分けられる。**Now に残るのは N-7 の1件だけ**で、これが L-3（統合テストの中身）の
+最後の前提にあたる。
 
 ### N-7. SAF境界を小さいgatewayへ分ける（旧 X-8・→ current_issues TEST-2）
-- **Nextから繰り上げた。** N-6 が実行1回まで縮み、かつ実機操作待ちになったため、
-  **Nowで手を動かせるのはこちらだけ**になった。N-6 の結果に依存しないので並行して進められる。
+- **Nextから繰り上げた。** 旧 N-6 が閉じたので、**L-3 の前提として残るのはこれだけ**になった。
 - **なぜやるか:** `NoteFile` や `RelatedNote` が Android の `Uri` を直接持つため、検索実行・補記保存の世代照合が
   **JVMテストに落とせず実機確認だけが担保**になっている。`Uri` を不透明な参照として扱えるようにすると、
   テスト容易性・保守性・拡張性の3軸が同時に動く。→ [current_issues.md](current_issues.md) TEST-2
@@ -112,15 +104,15 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 - 蒸留（重要文の太字化）× ReadingTrace（読書痕跡）× セクションAIを横断させる。例：前回止まった箇所を蒸留の候補選定に効かせる、痕跡をセクションAIのコンテキストに含める。「読書相手」としての一貫した人格に近づける。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
 
 ### L-3. 統合テストの中身
-- **土台の話は N-6 へ移した。** ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
-- **着手条件が2つある:** ①N-6 でスモークテストが緑になっていること（でないと土台の故障と切り分けられない）②N-7 で `Uri` 依存が gateway の裏へ入っていること（でないとJVMで書けるものまでinstrumentationへ流れ込む）。**どちらも前提であって、この項目自体を早める理由にはならない。**
+- **土台の話はここには無い**（2026-08-01 に閉じた）。ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
+- **着手条件が2つある:** ①instrumentation の土台が緑であること（**2026-08-01 に達成**）②N-7 で `Uri` 依存が gateway の裏へ入っていること（でないとJVMで書けるものまでinstrumentationへ流れ込む）。**どちらも前提であって、この項目自体を早める理由にはならない。**
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
 - YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
 - **ordered list の番号は描画だけでなくAI入力でも失われる。** 抜粋も同じパーサを通すため、番号自体に意味があるノート（手順書など）では順序がモデルへ届かない。Markdown対応拡充を検討する際は、読書体験だけでなくAI品質側の効果も一緒に数える。
 
 ### L-5. 公開可能な成果物にする（→ current_issues REL-1）
-- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) TEST-26
+- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) REL-1
 - **設定を1行変える作業ではない。** ML Kit GenAI はリフレクションで解決される部分があり、縮小で消えると**release ビルドの実機でだけ全AI機能が落ちる**。JVMテストは縮小前のクラスを見るので検出できない。**keepルール＋AI 7経路の release 実機一巡がセット**になる。配布の意思が固まってから着手する。
 - **効果とコスト:** 開発・リリース運用 7.5 → 8.5（**単一軸では最大の伸び**）。コストは大で、
   R8を有効にした瞬間にJVMテストの守備範囲外へ出る。
