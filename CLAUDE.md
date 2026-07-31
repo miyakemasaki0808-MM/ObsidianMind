@@ -72,7 +72,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 1. [docs/change_history.md](docs/change_history.md) へPR単位で1行追記する
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/design/*.md` に追記する（自明な変更は履歴1行のみ）
-3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**解消したら即座に削除する**（完了の記録は 1. が持つ。台帳に残すと未対応課題が埋もれる）
+3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
 4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/lessons.md](docs/lessons.md) へ追記する（番号は振り直さず末尾へ足す）
 
 ## 文書の扱い
