@@ -109,6 +109,9 @@ internal val LightAppColors = AppColorScheme(
     onGradientHeaderTitle = LogoNavy,
     onGradientHeaderSubtitle = Color(0xFF202124),
     buttonOutlineOnGradient = LogoNavy,
+    // LogoNavy はナビ帯（Indigo）に対しても 3.15（→ AppColorContrastTest）。
+    // ブランド色を新設せず、既に用途の近い値を再利用する。
+    badgeOutlineOnNav = LogoNavy,
     appGradientStops = listOf(Indigo, Aqua, Coral),
     readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
 )
@@ -184,6 +187,9 @@ internal val DarkAppColors = AppColorScheme(
     onGradientHeaderTitle = Color.White,
     onGradientHeaderSubtitle = Color(0xFFC6D3E6),
     buttonOutlineOnGradient = Color.Transparent,
+    // ダークのナビ帯上でSuccess/Errorバッジの塗りは元から3:1を満たす
+    // （実測 5.93／5.32、→ AppColorContrastTest）ので輪郭線は要らない。
+    badgeOutlineOnNav = Color.Transparent,
     // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
     // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
     appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
@@ -281,6 +287,9 @@ internal val OnGradientHeaderSubtitle: Color
 
 internal val ButtonOutlineOnGradient: Color
     @Composable @ReadOnlyComposable get() = current.buttonOutlineOnGradient
+
+internal val BadgeOutlineOnNav: Color
+    @Composable @ReadOnlyComposable get() = current.badgeOutlineOnNav
 
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient

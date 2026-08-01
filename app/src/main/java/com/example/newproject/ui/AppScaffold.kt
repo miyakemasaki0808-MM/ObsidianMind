@@ -3,12 +3,14 @@ package com.example.newproject.ui
 import com.example.newproject.ui.vigilith.VigilithNoteAction
 import com.example.newproject.ui.vigilith.VigilithPresentation
 import com.example.newproject.ui.vigilith.VigilithHost
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,6 +45,7 @@ import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
+import com.example.newproject.ui.theme.BadgeOutlineOnNav
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
 enum class AppDestination(val route: String, val label: String, val emoji: String) {
@@ -185,10 +188,21 @@ private fun TabIcon(
                 )
                 // 塗りには対の前景を使う。白の「✓」は緑の上で 2.49 しかなかった
                 // （Errorバッジ側は既に対で持っており、ここだけ取り残されていた）。
-                AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
+                //
+                // 塗り自体はナビ帯（ライトはIndigo）の上で3:1を出せない
+                // （Success 1.61・Error 1.04）。buttonOutlineOnGradient と同じ理由・
+                // 同じ解き方で輪郭線を足す（ダークは元から足りているので透明）。
+                // → docs/design/theme_and_ui_refactor.md 判断8
+                AiTabBadgeState.Success -> Badge(
+                    containerColor = ButtonSecondary,
+                    modifier = Modifier.border(1.dp, BadgeOutlineOnNav, CircleShape)
+                ) {
                     Text("✓", color = OnButtonSecondary, fontSize = 9.sp)
                 }
-                AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
+                AiTabBadgeState.Error -> Badge(
+                    containerColor = ErrorSurface,
+                    modifier = Modifier.border(1.dp, BadgeOutlineOnNav, CircleShape)
+                ) {
                     Text("!", color = OnErrorSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
                 AiTabBadgeState.None -> Unit
