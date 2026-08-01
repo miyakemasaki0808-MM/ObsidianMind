@@ -8,6 +8,7 @@ import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
+import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
@@ -50,6 +51,7 @@ internal class NoteSessionCoordinator(
     scope: CoroutineScope,
     persistScope: CoroutineScope,
     repository: NoteRepository,
+    vaultBrowser: VaultBrowser,
     aiClient: AiClient,
     summarizeUseCase: SummarizeUseCase,
     searchPickerUseCase: SearchPickerUseCase,
@@ -124,18 +126,16 @@ internal class NoteSessionCoordinator(
     )
     private val annotation = AnnotationController(
         scope = scope,
-        repository = repository,
+        vault = vaultBrowser,
         aiClient = aiClient,
         state = stateStore.annotationWriter,
-        vaultUri = vaultUri,
         vaultGeneration = { vaultGeneration }
     )
     private val search = SearchController(
         scope = scope,
-        repository = repository,
+        vault = vaultBrowser,
         searchPickerUseCase = searchPickerUseCase,
         state = stateStore.searchWriter,
-        vaultUri = vaultUri,
         vaultGeneration = { vaultGeneration }
     )
     private val distill = DistillController(
@@ -299,11 +299,10 @@ internal class NoteSessionCoordinator(
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────
 
-    fun loadFolders(contentResolver: ContentResolver) = search.loadFolders(contentResolver)
+    fun loadFolders() = search.loadFolders()
     fun selectSearchFolder(folder: NoteFolder?) = search.selectFolder(folder)
-    fun searchByKeyword(contentResolver: ContentResolver, query: String) =
-        search.searchByKeyword(contentResolver, query)
-    fun pickRandomInScope(contentResolver: ContentResolver) = search.pickRandomInScope(contentResolver)
+    fun searchByKeyword(query: String) = search.searchByKeyword(query)
+    fun pickRandomInScope() = search.pickRandomInScope()
 
     // ── クイズ（実装は QuizController）──────────────────────────────────────
 
@@ -312,22 +311,18 @@ internal class NoteSessionCoordinator(
 
     // ── AI補記メモ（実装は AnnotationController）────────────────────────────
 
-    fun loadAnnotations(contentResolver: ContentResolver) = annotation.loadList(contentResolver)
-    fun deleteAnnotation(contentResolver: ContentResolver, ref: DocumentRef) =
-        annotation.delete(contentResolver, ref)
-    fun deleteAllAnnotations(contentResolver: ContentResolver) = annotation.deleteAll(contentResolver)
+    fun loadAnnotations() = annotation.loadList()
+    fun deleteAnnotation(ref: DocumentRef) = annotation.delete(ref)
+    fun deleteAllAnnotations() = annotation.deleteAll()
     fun markAnnotationViewed() = annotation.markViewed()
     fun createAnnotation(
-        contentResolver: ContentResolver,
         title: String,
         content: String,
         summary: String?,
         relatedNotes: List<RelatedNote>,
         aiNotes: List<RelatedNote>,
         wikilinkTitles: Set<String>
-    ) = annotation.create(
-        contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles
-    )
+    ) = annotation.create(title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
 
     // ── 蒸留（実装は DistillController）─────────────────────────────────────
 

@@ -575,6 +575,7 @@ class NoteSessionCoordinatorTest {
             scope = scope,
             persistScope = scope,
             repository = NoteRepository(),
+            vaultBrowser = FakeVaultBrowser(handle = null),
             aiClient = ai,
             summarizeUseCase = SummarizeUseCase(
                 ai,

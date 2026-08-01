@@ -67,6 +67,7 @@ class NoteViewModel internal constructor(
         scope = scope,
         persistScope = readingTraceWriteScope,
         repository = dependencies.repository,
+        vaultBrowser = dependencies.vaultBrowser,
         aiClient = dependencies.aiClient,
         summarizeUseCase = dependencies.summarizeUseCase,
         searchPickerUseCase = dependencies.searchPickerUseCase,
@@ -280,11 +281,10 @@ class NoteViewModel internal constructor(
 
     // ── さがすタブ（実装は SearchController）──────────────────────────────────
 
-    fun loadFolders(contentResolver: ContentResolver) = session.loadFolders(contentResolver)
+    fun loadFolders() = session.loadFolders()
     fun selectSearchFolder(folder: NoteFolder?) = session.selectSearchFolder(folder)
-    fun searchByKeyword(contentResolver: ContentResolver, query: String) =
-        session.searchByKeyword(contentResolver, query)
-    fun pickRandomInScope(contentResolver: ContentResolver) = session.pickRandomInScope(contentResolver)
+    fun searchByKeyword(query: String) = session.searchByKeyword(query)
+    fun pickRandomInScope() = session.pickRandomInScope()
 
     // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
     fun generateQuiz(sourceLabel: String, context: String) = session.generateQuiz(sourceLabel, context)
@@ -292,11 +292,9 @@ class NoteViewModel internal constructor(
 
     // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
 
-    fun loadAnnotations(contentResolver: ContentResolver) = session.loadAnnotations(contentResolver)
-    fun deleteAnnotation(contentResolver: ContentResolver, ref: DocumentRef) =
-        session.deleteAnnotation(contentResolver, ref)
-    fun deleteAllAnnotations(contentResolver: ContentResolver) =
-        session.deleteAllAnnotations(contentResolver)
+    fun loadAnnotations() = session.loadAnnotations()
+    fun deleteAnnotation(ref: DocumentRef) = session.deleteAnnotation(ref)
+    fun deleteAllAnnotations() = session.deleteAllAnnotations()
     fun markAnnotationViewed() = session.markAnnotationViewed()
 
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
@@ -323,16 +321,13 @@ class NoteViewModel internal constructor(
     fun endSectionChat() = session.endSectionChat()
 
     fun createAnnotation(
-        contentResolver: ContentResolver,
         title: String,
         content: String,
         summary: String?,
         relatedNotes: List<RelatedNote>,
         aiNotes: List<RelatedNote>,
         wikilinkTitles: Set<String>
-    ) = session.createAnnotation(
-        contentResolver, title, content, summary, relatedNotes, aiNotes, wikilinkTitles
-    )
+    ) = session.createAnnotation(title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
 
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,

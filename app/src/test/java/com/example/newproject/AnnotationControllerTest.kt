@@ -1,7 +1,6 @@
 package com.example.newproject
 
 import com.example.newproject.controller.AnnotationController
-import com.example.newproject.data.NoteRepository
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.NoteUiState
@@ -79,13 +78,16 @@ class AnnotationControllerTest {
         assertTrue(state.value.annotationListState is AnnotationListState.Error)
     }
 
-    private fun controller(state: NoteUiStateStore) = AnnotationController(
+    private fun controller(
+        state: NoteUiStateStore,
+        vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
+        vaultGeneration: () -> Long = { 0L }
+    ) = AnnotationController(
         scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined),
-        repository = NoteRepository(),
+        vault = vault,
         aiClient = NoOpAiClient,
         state = state.annotationWriter,
-        vaultUri = { null },
-        vaultGeneration = { 0L }
+        vaultGeneration = vaultGeneration
     )
 
     private object NoOpAiClient : AiClient {

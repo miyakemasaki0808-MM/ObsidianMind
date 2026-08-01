@@ -88,13 +88,17 @@ class SearchControllerTest {
         assertTrue(state.value.searchState is SearchState.Success)
     }
 
-    private fun controller(state: NoteUiStateStore) = SearchController(
+    private fun controller(
+        state: NoteUiStateStore,
+        vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
+        vaultGeneration: () -> Long = { 0L },
+        aiClient: AiClient = NoOpAiClient
+    ) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
-        repository = NoteRepository(),
-        searchPickerUseCase = SearchPickerUseCase(NoOpAiClient),
+        vault = vault,
+        searchPickerUseCase = SearchPickerUseCase(aiClient),
         state = state.searchWriter,
-        vaultUri = { null },
-        vaultGeneration = { 0L }
+        vaultGeneration = vaultGeneration
     )
 
     private object NoOpAiClient : AiClient {
