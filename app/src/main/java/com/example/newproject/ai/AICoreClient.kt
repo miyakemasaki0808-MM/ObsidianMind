@@ -135,21 +135,41 @@ class AICoreClient : AiClient {
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * プロンプト1本の入力トークン数・出力予約・合計上限を実測する。
+     * プロンプト1本の入力トークン数を数える。
      *
      * [generate] の Mutex には相乗りさせない。計測は生成を伴わないので、直列化の待ち行列へ
      * 並べると「計測のために生成が待たされる」だけになる。
      */
+    internal suspend fun countPromptTokens(prompt: String): Int = withContext(Dispatchers.IO) {
+        model.countTokens(buildRequest(prompt)).totalTokens
+    }
+
+    /** 入力と出力を合わせたトークン上限。 */
+    internal suspend fun tokenLimit(): Int = withContext(Dispatchers.IO) {
+        model.getTokenLimit()
+    }
+
+    /**
+     * 生成時に予約される出力トークン数。
+     *
+     * SDKが埋めた実値をリクエストから読むので、SDK版を上げれば既定値の変化に自動で追随する。
+     * 端末へ問い合わせないため、AICoreの対応状況に関係なく必ず取れる。
+     */
+    internal fun reservedOutputTokens(): Int = buildRequest("").maxOutputTokens
+
+    /**
+     * [countPromptTokens] と [tokenLimit] を1つにまとめる。
+     *
+     * **どちらが落ちたかを切り分けたい場合は個別に呼ぶこと。** 端末AIの能力は
+     * 「生成できる」「トークンを数えられる」が別々に決まり得るため、まとめて呼ぶと
+     * 欠けている能力を特定できない。
+     */
     internal suspend fun measurePrompt(prompt: String): PromptTokenMeasurement =
-        withContext(Dispatchers.IO) {
-            val request = buildRequest(prompt)
-            PromptTokenMeasurement(
-                inputTokens = model.countTokens(request).totalTokens,
-                // SDKが埋めた実値を読むので、SDK版を上げれば既定値の変化に自動で追随する。
-                maxOutputTokens = request.maxOutputTokens,
-                tokenLimit = model.getTokenLimit()
-            )
-        }
+        PromptTokenMeasurement(
+            inputTokens = countPromptTokens(prompt),
+            maxOutputTokens = reservedOutputTokens(),
+            tokenLimit = tokenLimit()
+        )
 
     /** 計測ログへ載せるモデル識別子。端末やモデル世代が違う数値を後から比較するために要る。 */
     internal suspend fun baseModelName(): String = withContext(Dispatchers.IO) {

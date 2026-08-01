@@ -67,6 +67,57 @@ class PromptTokenBudgetTest {
         )
     }
 
+    /**
+     * どの能力が使えてどれが使えないかを、1回の実行で切り分ける。
+     *
+     * **端末AIの能力は「生成できる」と「トークンを数えられる」が別々に決まり得る。**
+     * まとめて呼ぶと、落ちたときに欠けている能力を特定できない（実際に一度そうなった）。
+     * ここでは各呼び出しを独立に試し、成否を表にしてから**まとめて**失敗させる。
+     * 最初の1つで止めると、2つ目以降が使えるかどうかが分からないまま終わる。
+     *
+     * このテストは他の計測テストより先に読む前提の診断であり、
+     * **`FeatureStatus` を確認する前に走らせる**（`checkStatus()` 自体が投げる可能性があるため）。
+     */
+    @Test
+    fun 端末AIのどの能力が使えるかを切り分ける() {
+        logHeader()
+        val results = listOf(
+            probe("checkStatus()") { featureStatusLabel(client.featureStatus()) },
+            probe("getBaseModelName()") { client.baseModelName() },
+            probe("getTokenLimit()") { client.tokenLimit().toString() },
+            probe("countTokens()") { client.countPromptTokens("トークン計測の疎通確認").toString() },
+            probe("maxOutputTokens（端末へ問い合わせない）") { client.reservedOutputTokens().toString() }
+        )
+
+        log("── 能力プローブ ${"─".repeat(34)}")
+        results.forEach { log(it.render()) }
+
+        val failed = results.filter { it.error != null }
+        assertTrue(
+            "端末AIの能力プローブが失敗した:\n" + failed.joinToString("\n") { it.render() },
+            failed.isEmpty()
+        )
+    }
+
+    private fun probe(name: String, block: suspend () -> String): ProbeResult =
+        try {
+            ProbeResult(name, runBlocking { block() }, null)
+        } catch (e: Exception) {
+            ProbeResult(name, null, "${e.javaClass.simpleName}: ${e.message}")
+        }
+
+    private data class ProbeResult(val name: String, val value: String?, val error: String?) {
+        fun render(): String = "%-38s %s".format(name, value ?: "✗ $error")
+    }
+
+    private fun featureStatusLabel(status: Int): String = when (status) {
+        FeatureStatus.AVAILABLE -> "AVAILABLE"
+        FeatureStatus.DOWNLOADABLE -> "DOWNLOADABLE"
+        FeatureStatus.DOWNLOADING -> "DOWNLOADING"
+        FeatureStatus.UNAVAILABLE -> "UNAVAILABLE"
+        else -> "UNKNOWN($status)"
+    }
+
     @Test
     fun 全計測ケースが入力と出力予約の合計を上限内に収める() = runBlocking {
         requireNanoAvailable()
@@ -249,11 +300,20 @@ class PromptTokenBudgetTest {
     /**
      * 端末・モデル・SDK版を毎回添える。これが無いと、別端末で採った数値と並べたときに
      * 「モデルが違うのか予算が違うのか」を後から切り分けられない。
+     *
+     * **ヘッダの取得で失敗させない。** `getBaseModelName()` も端末AIへの問い合わせなので
+     * 投げ得るが、ここで落とすと**本題の計測が始まる前にテストが終わり、何が使えないのかが
+     * 分からなくなる**。取れなければ理由を書いて先へ進み、判定は各テスト本体に任せる。
      */
-    private fun logHeader() = runBlocking {
+    private fun logHeader() {
+        val modelName = try {
+            runBlocking { client.baseModelName() }
+        } catch (e: Exception) {
+            "取得できず（${e.javaClass.simpleName}: ${e.message}）"
+        }
         log("=".repeat(64))
         log("端末            : ${Build.MANUFACTURER} ${Build.MODEL} (API ${Build.VERSION.SDK_INT})")
-        log("baseModelName   : ${client.baseModelName()}")
+        log("baseModelName   : $modelName")
         log("genai-prompt    : $GENAI_PROMPT_VERSION")
         log("=".repeat(64))
     }
