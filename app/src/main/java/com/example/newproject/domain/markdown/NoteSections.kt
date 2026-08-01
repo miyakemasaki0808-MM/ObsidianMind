@@ -114,13 +114,26 @@ fun buildNoteSectionModel(content: String): NoteSectionModel {
     return NoteSectionModel(headingIndices, sections, blocks)
 }
 
+/**
+ * 書き戻しの1段あたりインデント。**元の列幅は復元しない** — [ListItem.depth] は
+ * 段数までしか保持しておらず、そもそも幅の絶対値には意味がないため。
+ */
+private const val LIST_INDENT = "  "
+
+private fun ListMarker.render(): String = when (this) {
+    is ListMarker.Bullet -> "-"
+    is ListMarker.Ordered -> "$number$delimiter"
+}
+
 /** パース済みブロック列を LLM 入力用の Markdown 文字列に再構成する。 */
 internal fun blocksToMarkdown(blocks: List<MarkdownBlock>): String =
     blocks.joinToString("\n\n") { block ->
         when (block) {
             is MarkdownBlock.Heading -> "#".repeat(block.level) + " " + block.text
             is MarkdownBlock.Paragraph -> block.text
-            is MarkdownBlock.ListBlock -> block.items.joinToString("\n") { "- $it" }
+            is MarkdownBlock.ListBlock -> block.items.joinToString("\n") { item ->
+                LIST_INDENT.repeat(item.depth) + item.marker.render() + " " + item.text
+            }
             is MarkdownBlock.CodeBlock -> "```\n" + block.code + "\n```"
             is MarkdownBlock.HorizontalRule -> "---"
             is MarkdownBlock.Blockquote -> block.lines.joinToString("\n") { "> $it" }
