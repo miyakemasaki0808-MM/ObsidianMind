@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**初版:** 2026-07-22（最終更新: 2026-08-02）
+**初版:** 2026-07-22（最終更新: 2026-08-01）
 **基準:** A〜E案と2026-07-31の品質改善（表示Markdownの非同期化・蒸留の復旧チェック・補記の後始末）は実機確認済み。ReadingTrace v1 と C案の一部に実機確認が残る。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -43,7 +43,7 @@
 → [reflect_reading_trace](../design/reflect_reading_trace.md) §12）。
 
 **instrumentation の土台（旧 N-6）は 2026-08-01 に Android 16 で 2/2 成功し、閉じた。**
-**SAF境界の gateway 化（旧 N-7）も 2026-08-02 に全段階が完了した** — ドキュメント参照の
+**SAF境界の gateway 化（旧 N-7）も 2026-08-01 に全段階が完了した** — ドキュメント参照の
 `DocumentRef` 化に加え、さがす／補記の `ContentResolver` と Vault ルートを `VaultBrowser` の裏へ束ね、
 `model` / `domain` / `controller` / `ui` から `android.net.Uri` が消えた（詳細は下記 L-3 §）。
 
@@ -92,9 +92,9 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 ### L-3. 統合テストの中身
 - **土台の話はここには無い**（2026-08-01 に閉じた）。ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
 - **着手条件は2つとも満たした。** ①instrumentation の土台が緑（2026-08-01・Android 16 で 2/2 成功）
-  ②SAF境界が gateway の裏へ入った（2026-08-02・→ [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
+  ②SAF境界が gateway の裏へ入った（2026-08-01・→ [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
 - **JVMで書けるものは JVM へ寄せ切った。** さがす・補記の世代照合と走査キャッシュは
-  2026-08-02 に19件のJVMテストで覆われた（5つのガードを削る変異で確認済み）。
+  2026-08-01 に21件のJVMテストで覆われた（5つのガードを削る変異で確認済み）。
   **ここへ残すのは実端末でしか確かめられないものだけ**にする — 逆に言えば、
   instrumentation に何かを書きたくなったら、まず「JVMで書けないか」を先に問う。
 

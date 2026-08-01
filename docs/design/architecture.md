@@ -213,7 +213,7 @@ NoteViewModel（Android境界の窓口）
 **同じ規則で数える必要がある**。不透明な参照型への置き換えと、`model` / `domain` からの
 `android.*` 禁止をテストへ足す設計は [saf_boundary_gateway](saf_boundary_gateway.md) が持つ。
 
-### 2026-08-02 — `controller` も Android 非依存になった
+### 2026-08-01 — `controller` も Android 非依存になった
 
 `VaultBrowser` が `ContentResolver` と Vault ルートを束ねたことで、
 `SearchController` / `AnnotationController` から最後の `Uri` が消え、
