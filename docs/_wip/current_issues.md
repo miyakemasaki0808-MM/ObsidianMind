@@ -1,7 +1,7 @@
 # 未対応課題の台帳
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-07-31（`feature/Improvement_Function_No.6`）
+**最終更新:** 2026-08-01（`feature/Improvement_Function_No.7`）
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -23,7 +23,6 @@
 
 | ID | 課題 | 優先度 | 影響 |
 |---|---|:--:|---|
-| [TEST-1](#test-1-instrumentationスモークテストがandroid-16で起動前に失敗する) | instrumentationスモークテストがAndroid 16で起動前に失敗する | 中 | 土台が動く確証が無いまま実テストを書けない |
 | [SYNC-1](#sync-1-読書痕跡の孤児ファイルが掃除されずmoverenameにも追従しない) | 読書痕跡の孤児ファイルが掃除されず、move/renameにも追従しない | 中 | 長期運用でファイル数が単調増加 |
 | [SYNC-2](#sync-2-_readingtraces-索引が外部同期の追加を認識しない) | `_ReadingTraces` 索引が外部同期の追加を認識しない | 中 | 再会カードの見逃し・重複作成の余地 |
 | [AI-1](#ai-1-関連ノートは抜粋予算の38を注意書きに払っている) | 関連ノートは抜粋予算の38%を注意書きに払っている | 中 | 現ノート文脈が実質228文字しか届かない |
@@ -32,36 +31,13 @@
 | [FEAT-1](#feat-1-yamlmarkdownの限定実装とキャッシュttl) | YAML/Markdownの限定実装とキャッシュTTL 60秒 | 低 | 取りこぼし・反映遅延 |
 | [A11Y-1](#a11y-1-バッジの塗りが下部ナビ帯の上で判別できない) | バッジの塗りが下部ナビ帯の上で判別できない | 低 | 記号は読めるが、存在に気づけない |
 | [REL-1](#rel-1-r8とリリース署名が未設定) | R8とリリース署名が未設定 | 低 | 配布可能な成果物がまだ作れない |
-| [MAINT-1](#maint-1-依存更新の方針が無くlintの更新系3チェックを無効化している) | 依存更新の方針が無く、Lintの更新系3チェックを無効化している | 低 | 更新の判断が先送りされ続ける |
-| [MAINT-2](#maint-2-レイアウトとコメントに手動契約が残る) | レイアウトとコメントに手動契約が残る | 低 | 余白変更で見出しが崩れる・記述が実態とずれる |
+| [MAINT-1](#maint-1-依存が12件古くml-kit-genai-の新版を調査していない) | 依存が12件古く、ML Kit GenAI の新版を調査していない | 低 | AI基盤の新版を評価できていない |
+| [MAINT-2](#maint-2-gradientheader-の全幅化が呼び出し側との手動契約になっている) | `GradientHeader` の全幅化が呼び出し側との手動契約になっている | 低 | 余白変更で見出しが崩れる |
 | [VERIFY-2](#verify-2-c案の実機確認が2件残っている) | C案の実機確認が2件残っている | 低 | 切り詰め文言と関連ノート速度が未確認 |
 
 **高優先度の課題は現在ゼロ。** 直近まで唯一のP1だった「表示用MarkdownのMain上での二重解析」は 2026-07-31 に解消し、実機確認まで終えた。
 
 ---
-
-## TEST-1. instrumentationスモークテストがAndroid 16で起動前に失敗する
-
-- **現状:** [`InstrumentationSetupTest`](../../app/src/androidTest/java/com/example/newproject/InstrumentationSetupTest.kt) の2件を
-  Android 16 エミュレータで実行すると、**0 success / 2 failure** になる。
-
-  ```text
-  NoSuchMethodException: android.hardware.input.InputManager.getInstance []
-  ```
-
-- **問題:** 失敗はテスト本体へ入る前の Compose／Espresso のアイドル待機初期化で起きる。
-  Contextを見るだけのテストにもクラス共通の `createComposeRule()` が適用されるため、2件が同じ理由で止まる。
-  **依存とRunnerはコンパイルできるが、「Runnerが起動しComposeを描画できる」は実証できていない。**
-  この状態で実テストを書き始めると、失敗時に「土台の故障」と「テスト対象の故障」を切り分けられない。
-- **CIでは検出できない:** [ci.yml](../../.github/workflows/ci.yml) は `assembleDebugAndroidTest` までで、
-  エミュレータ上の実行は行わない。組み立ては成功するので、この失敗はCIを素通りする。
-- **対応候補:** ①Contextだけのテストを Compose ルールのないクラスへ分離する
-  ②`espresso-core` を 3.6.1 → [3.7.0](https://developer.android.com/jetpack/androidx/releases/test#espresso-3.7.0)
-  へ限定更新する（公式リリースノートに同じ反射呼び出しを `getSystemService` へ置き換えたと明記がある）
-  ③再実行して2件が通れば実テスト追加へ進む。**同じ範囲で直らなければ、依存互換性の独立課題として調査する。**
-- **MAINT-1 と接続している:** テスト依存と対象APIの互換性が実害になったため、依存更新はもう
-  「いつか決める保守課題」ではない。ただし対象は AndroidX Test 系のみに限る。
-- **規模感:** 小〜中。ただし直らない可能性があり、その場合は調査課題が1件増える。
 
 ## SYNC-1. 読書痕跡の孤児ファイルが掃除されず、move/renameにも追従しない
 
@@ -119,12 +95,18 @@
 - **現状:** SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・
   連続操作時の競合を絡めたテストがない。JVMテスト486件は純粋ロジックの回帰防止に有効だが、
   実端末依存の動作は保証範囲外。
-- **前提が2つある:** ①TEST-1 が緑になっていること（でないと土台の故障と切り分けられない）
-  ②`NoteFile`・`RelatedNote` が持つ `Uri` が gateway の裏へ入っていること
-  （でないとJVMで書けるものまで instrumentation へ流れ込む）。
+- **前提が2つある。①は 2026-08-01 に満たした** — Android 16 で 2/2 成功し、**Runnerが起動しComposeを描画できることが実証された**（土台の故障と切り分けられる状態になった）。
+  **②も 2026-08-01 に完了した。** `DocumentRef` 化（段階1〜6）に加え、`VaultBrowser` で
+  `ContentResolver` と Vault ルートを束ねた（段階7）。`model` / `domain` / `controller` / `ui` から
+  `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。
+  **JVMで書けるものが instrumentation へ流れ込む状態は解消した** — さがす・補記の世代照合と
+  走査キャッシュは21件のJVMテストで覆われている。**`VaultBrowser` 移行の実機確認も完了した**
+  （旧 VERIFY-4）。
 - **部分的な前進:** 補記の保存経路だけは 2026-07-31 に `AnnotationDocumentGateway` として切り出し、
   失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。
-- **規模感:** 大。前提2つが揃ってから。
+- **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../design/saf_boundary_gateway.md)。
+  残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
+- **規模感:** 大。**前提は2つとも揃ったので、残るのは実テストの中身そのものだけ。**
 
 ## AI-2. AI状態の一時エラーと非対応を同一視している
 
@@ -173,32 +155,32 @@
   署名は keystore の保管方針を決めてから。
 - **規模感:** 中。実機確認が必須。
 
-## MAINT-1. 依存更新の方針が無く、Lintの更新系3チェックを無効化している
+## MAINT-1. 依存が12件古く、ML Kit GenAI の新版を調査していない
 
-- **現状:** 警告0を達成する際、`GradleDependency`・`NewerVersionAvailable`・`AndroidGradlePluginVersion` を
-  [app/build.gradle.kts](../../app/build.gradle.kts) の `lint { disable }` へ入れた。
-  **指摘そのものは消えていない**（9件相当）。
-- **無効化した理由:** 「いつ・どこまで上げるか」の方針が無いまま毎ビルドで出しても行動につながらない。
-  CLAUDE.md は「依存ライブラリを一括更新しない。機能単位で上げ、実機確認を伴う」と定めているので、
-  **出しっぱなしにすると規約と矛盾した状態が常態化する**。
-- **問題:** 黙らせた以上、更新の判断が誰からも催促されなくなった。**この放置には既に期限が付いている** —
-  TEST-1 がテスト依存の互換性問題だったため。→ [lessons.md](../lessons.md) L15
-- **対応候補:** 更新の単位と頻度を決める（例: 四半期に1回、ML Kit GenAI は単独で、Compose BOM は BOM ごと、
-  実機確認をセットにする）。決めたら `disable` から外す。
-- **規模感:** 小（方針を決めるだけ）。実行は別。
+- **方針は 2026-08-01 に確定した** → [design/dependency_policy.md](../design/dependency_policy.md)。
+  更新の単位（7グループ）・棚卸しの手順と契機・各グループの確認範囲を決めてある。
+  3チェックは `disable` から **`informational`（hint）へ変えた** — 素のまま有効化すると12件が
+  Error になり `lintDebug` タスクが失敗するが、`informational` なら
+  **「0 errors, 0 warnings, 12 hints」で成功し、12件はレポートに残る**。
+  ゲートに載せずに催促だけ残せる。
+- **残っている問題:** 方針ができても**依存は12件古いまま**で、1件も上げていない。距離の内訳は
+  [dependency_policy.md](../design/dependency_policy.md) §4 のスナップショットにある。
+  優先して見るべきは2つ。
+  - **`com.google.mlkit:genai-prompt` 1.0.0-beta2 → beta4。** アプリの心臓部で、beta 2つぶんの差がある。
+    **変更点を一度も確認していない。** `maxOutputTokens` の 1〜256 制限を公式ドキュメントから読み取れず
+    全AI生成が落ちた前例があるので、**上げる前にAARを展開して制約を確かめる**。
+  - **Compose BOM（2024.09.03）はLintの指摘に出てこない。** `platform()` 宣言が更新対象として
+    見られていないためで、最新である意味ではない。**棚卸しの自動検出から漏れる唯一の枠**なので手で確認する。
+- **規模感:** 調査は小。更新の実行はグループごとに小〜中で、いずれも実機確認を伴う。
 
-## MAINT-2. レイアウトとコメントに手動契約が残る
+## MAINT-2. `GradientHeader` の全幅化が呼び出し側との手動契約になっている
 
-**どちらも単独では着手しない。** 該当ファイルを別の理由で触るときに、ついでに直す。
+**単独では着手しない。** 該当ファイルを別の理由で触るときに、ついでに直す。
 
-- **`GradientHeader` の全幅化は呼び出し側との手動契約:**
-  [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt#L50) の
+- [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt#L50) の
   `horizontalBleed = 20.dp` は、呼び出し側の水平余白と一致している前提で成立する。現在の画面では
   合っているが、**余白を変えた瞬間に見出しだけがずれる**。レイアウトテストは無い。
   配色は「テストで強制する」ところまで持っていったのに対し、寸法の対応関係は約束のままである。
-- **`build.gradle.kts` のコメントが実態とずれている:**
-  [依存定義付近](../../app/build.gradle.kts#L101) の「テスト本体はまだ無いが」というコメントは、
-  スモークテストを置いた時点で古くなった。TEST-1 に着手すれば同じ場所を触るので、そこで直す。
 - **規模感:** 極小。
 
 ## VERIFY-2. C案の実機確認が2件残っている

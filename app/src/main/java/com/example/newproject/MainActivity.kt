@@ -127,7 +127,6 @@ class MainActivity : ComponentActivity() {
                         val summary = (uiState.summaryState as? SummaryState.Success)?.summary
                         val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
                         viewModel.createAnnotation(
-                            contentResolver = contentResolver,
                             title = noteState.title,
                             content = noteState.content,
                             summary = summary,
@@ -279,13 +278,13 @@ class MainActivity : ComponentActivity() {
 
                         composable("search") {
                             LaunchedEffect(uiState.vaultSelected) {
-                                if (uiState.vaultSelected) viewModel.loadFolders(contentResolver)
+                                if (uiState.vaultSelected) viewModel.loadFolders()
                             }
                             SearchTab(
                                 uiState = uiState,
                                 onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
-                                onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
-                                onRandom = { viewModel.pickRandomInScope(contentResolver) },
+                                onSearch = { q -> viewModel.searchByKeyword(q) },
+                                onRandom = { viewModel.pickRandomInScope() },
                                 onOpenNote = { note ->
                                     viewModel.openNote(contentResolver, note)
                                     navController.navigateToTab(AppDestination.Note)
@@ -333,9 +332,9 @@ class MainActivity : ComponentActivity() {
                         composable("annotation_manager") {
                             AnnotationManagerScreen(
                                 state = uiState.annotationListState,
-                                onLoad = { viewModel.loadAnnotations(contentResolver) },
-                                onDelete = { uri -> viewModel.deleteAnnotation(contentResolver, uri) },
-                                onDeleteAll = { viewModel.deleteAllAnnotations(contentResolver) },
+                                onLoad = { viewModel.loadAnnotations() },
+                                onDelete = { ref -> viewModel.deleteAnnotation(ref) },
+                                onDeleteAll = { viewModel.deleteAllAnnotations() },
                                 onBack = { navController.popBackStack() }
                             )
                         }

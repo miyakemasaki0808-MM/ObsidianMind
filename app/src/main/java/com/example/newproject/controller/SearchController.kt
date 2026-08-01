@@ -2,11 +2,10 @@ package com.example.newproject.controller
 
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
-import com.example.newproject.data.NoteRepository
+import com.example.newproject.data.VaultBrowser
+import com.example.newproject.data.VaultHandle
 import com.example.newproject.model.SearchStateWriter
 import com.example.newproject.model.state.SearchState
-import android.content.ContentResolver
-import android.net.Uri
 import com.example.newproject.domain.PickerResult
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
@@ -22,10 +21,9 @@ import kotlinx.coroutines.launch
  */
 class SearchController(
     private val scope: CoroutineScope,
-    private val repository: NoteRepository,
+    private val vault: VaultBrowser,
     private val searchPickerUseCase: SearchPickerUseCase,
     private val state: SearchStateWriter,
-    private val vaultUri: () -> Uri?,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 検索用の activeRequestId とは寿命が違う（フォルダ列挙は検索要求では無効化しない）。
     private val vaultGeneration: () -> Long
@@ -70,13 +68,13 @@ class SearchController(
      * `cancel()` だけに頼ると、SAF走査から戻った直後に切替が起きた場合に
      * 旧Vaultのフォルダが新Vaultの chips として並ぶ。
      */
-    fun loadFolders(contentResolver: ContentResolver) {
-        val uri = vaultUri() ?: return
+    fun loadFolders() {
+        val handle = vault.current() ?: return
         val generation = vaultGeneration()
         foldersJob?.cancel()
         foldersJob = scope.launch {
             try {
-                val folders = repository.listTopLevelFolders(contentResolver, uri)
+                val folders = handle.listTopLevelFolders()
                 if (generation != vaultGeneration()) return@launch
                 state.update { current -> current.copy(folders = folders, foldersError = null) }
             } catch (e: CancellationException) {
@@ -112,8 +110,8 @@ class SearchController(
     }
 
     // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
-    fun searchByKeyword(contentResolver: ContentResolver, query: String) {
-        val uri = vaultUri() ?: return
+    fun searchByKeyword(query: String) {
+        val handle = vault.current() ?: return
         val q = query.trim()
         if (q.isBlank()) return
         val requestId = startRequest()
@@ -121,7 +119,7 @@ class SearchController(
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
                 val folder = state.current.selectedFolder
-                val notes = collectInScopeCached(contentResolver, uri, folder)
+                val notes = collectInScopeCached(handle, folder)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
                     is PickerResult.Success ->
                         setStateIfCurrent(requestId, SearchState.Success(result.notes, result.aiStatus))
@@ -138,16 +136,16 @@ class SearchController(
     }
 
     // ランダムモード: スコープ内からシャッフルして3件（AI不使用）。
-    fun pickRandomInScope(contentResolver: ContentResolver) {
-        val uri = vaultUri() ?: return
+    fun pickRandomInScope() {
+        val handle = vault.current() ?: return
         val requestId = startRequest()
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
                 val folder = state.current.selectedFolder
-                val notes = collectInScopeCached(contentResolver, uri, folder)
+                val notes = collectInScopeCached(handle, folder)
                 val picked = notes.shuffled().take(3).map {
-                    RelatedNote(title = it.name, uri = it.uri, isWikilinked = false, lastModified = it.lastModified)
+                    RelatedNote(title = it.name, ref = it.ref, isWikilinked = false, lastModified = it.lastModified)
                 }
                 setStateIfCurrent(requestId, SearchState.Success(picked))
             } catch (e: CancellationException) {
@@ -179,8 +177,7 @@ class SearchController(
 
     // さがすタブのスコープ走査をTTL付きで取得する。
     private suspend fun collectInScopeCached(
-        contentResolver: ContentResolver,
-        vaultUri: Uri,
+        handle: VaultHandle,
         folder: NoteFolder?
     ): List<NoteFile> {
         val key = folder?.documentId
@@ -188,7 +185,7 @@ class SearchController(
         scopeNotesCache[key]?.let { entry ->
             if (now - entry.loadedAt < NOTES_CACHE_TTL_MS) return entry.notes
         }
-        val notes = repository.collectNotesInScope(contentResolver, vaultUri, folder)
+        val notes = handle.collectNotesInScope(folder)
         scopeNotesCache[key] = ScopeCacheEntry(notes, now)
         return notes
     }

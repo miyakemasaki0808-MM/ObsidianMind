@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**初版:** 2026-07-22（最終更新: 2026-07-31）
+**初版:** 2026-07-22（最終更新: 2026-08-01）
 **基準:** A〜E案と2026-07-31の品質改善（表示Markdownの非同期化・蒸留の復旧チェック・補記の後始末）は実機確認済み。ReadingTrace v1 と C案の一部に実機確認が残る。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -37,31 +37,24 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: instrumentationの土台を動く状態にする。**
+**テーマ: 前提が揃った。次の一手を選ぶ段。**
 性能の最優先課題（表示用MarkdownのMain上での二重解析）と F-2 の2件は 2026-07-31 に実装・実機確認とも完了し、
 **ReadingTrace v1 も同日クローズした**（残っていた実機確認は構造上ほぼ実施不可能と判断
 → [reflect_reading_trace](../design/reflect_reading_trace.md) §12）。
-**Now に残るのは N-6 の1件だけ。**
 
-### N-6. instrumentationの土台を「動く」ところまで持っていく（→ current_issues TEST-1）
-- **なぜここ:** E案で依存・Runner・スモークテスト2件を置き、CIでコンパイルと組み立ても通した。
-  だが 2026-07-31 に初めて実行したところ **Android 16 エミュレータで 0 success / 2 failure** だった
-  （`NoSuchMethodException: android.hardware.input.InputManager.getInstance []`）。
-  **「土台がある」という認識だけが先に定着していた。**
-- **なぜ後回しにできないか:** SAF・Navigation・Activity再生成の実テスト（L-3）は、ここが緑でないと
-  失敗時に「土台の故障」と「テスト対象の故障」を切り分けられない。スモークテストはまさにその切り分けの
-  ために置いたので、通さないまま先へ進むと本末転倒になる。→ [current_issues.md](current_issues.md) TEST-1
-- **取りうる道:** Contextだけのテストを Compose ルールのないクラスへ分ける／`espresso-core` を 3.7.0 へ
-  限定更新する（本番依存やCompose BOMを含む一括更新には広げない）。**同じ範囲で直らなければ、
-  結果を記録して依存互換性の独立課題に落とす。**
-- **効果とコスト:** テスト容易性 8.0 → 8.5、開発・リリース運用 7.5 → 8.0。コストは小〜中だが、
-  **直る保証が無い**のが特徴で、直らなければ点数は動かず調査課題が1件増える。
+**instrumentation の土台（旧 N-6）は 2026-08-01 に Android 16 で 2/2 成功し、閉じた。**
+**SAF境界の gateway 化（旧 N-7）も 2026-08-01 に全段階が完了した** — ドキュメント参照の
+`DocumentRef` 化に加え、さがす／補記の `ContentResolver` と Vault ルートを `VaultBrowser` の裏へ束ね、
+`model` / `domain` / `controller` / `ui` から `android.net.Uri` が消えた（詳細は下記 L-3 §）。
+
+**Now は空。** L-3 の着手条件は2つとも揃っており、次に何をやるかは Next / Later から選んで決める。
+**選ぶ前に VERIFY-4（`VaultBrowser` 移行の実機確認）を先に片付ける。**
 
 
 ## 🟡 Next — 次に取り組む（ループを豊かにし、土台を強くする）
 
 **テーマ:「再会」を深く、機能追加に耐える土台へ。**
-Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運用・テスト容易性のための地ならし（X-3・X-4・X-8）を行う。
+Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運用のための地ならし（X-3・X-4・X-6）を行う。
 **新機能側の選択肢は X-2 ただ1つで、残りはすべて土台側である**点を意識して順序を決める。
 
 ### X-2. 「意図して問いを残す」機能（旧 TimeCapsule の核）
@@ -77,15 +70,6 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 ### X-4. ReadingTraceの同期索引を整える
 - **同期索引:** `_ReadingTraces`のkey→Uri索引はプロセス中に再走査されず、別端末から同期された新規ファイルを認識しない。ミス時だけの再走査やTTLで、常時全走査を避けつつ最終的整合性を持たせる。→ [current_issues.md](current_issues.md) SYNC-2
 - **累計回数は C案（2026-07-26）で解消済み。** `totalVisitCount` とサイドカー schema v2 で、直近30件の保持数と「これまで開いた回数」を分離した。**残っているのは同期索引だけ**なので、X-3（孤児掃除）と同じ端末セッションで扱える。
-
-### X-8. SAF境界を小さいgatewayへ分ける（→ current_issues TEST-2）
-- **なぜここ:** `NoteFile` や `RelatedNote` が Android の `Uri` を直接持つため、検索実行・補記保存の世代照合が
-  **JVMテストに落とせず実機確認だけが担保**になっている。`Uri` を不透明な参照として扱えるようにすると、
-  テスト容易性・保守性・拡張性の3軸が同時に動く。→ [current_issues.md](current_issues.md) TEST-2
-- **効果とコスト:** テスト容易性 8.0 → 8.5、保守性 8.0 → 8.5、拡張性 7.5 → 8.0。
-  **3軸に同時に効く唯一の案**だが、コストは大。中核の型に手を入れるのでA〜C案と同規模の活動になり、
-  L-3 の前提も兼ねる。
-- **補記の範囲だけは 2026-07-31 に先行して切り出した**（`AnnotationDocumentGateway`）。1機能ぶんの gateway が実際に書けて失敗注入テストも通ったので、**同じ形を他へ広げられることは確認済み**。残るのは `NoteFile`・`RelatedNote` が持つ `Uri` の置き換えで、そこが本体。
 
 ### X-6. AI状態UXの統一
 - **なぜここ:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとにバラつく。蒸留の「インライン説明フォールバック」を良い先例として、要約・検索・クイズ・補記へ横展開。**ReadingTrace は例外として扱う**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。→ [current_issues.md](current_issues.md) AI-2
@@ -106,15 +90,20 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 - 蒸留（重要文の太字化）× ReadingTrace（読書痕跡）× セクションAIを横断させる。例：前回止まった箇所を蒸留の候補選定に効かせる、痕跡をセクションAIのコンテキストに含める。「読書相手」としての一貫した人格に近づける。→ [reflect_reading_trace](../design/reflect_reading_trace.md)
 
 ### L-3. 統合テストの中身
-- **土台の話は N-6 へ移した。** ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
-- **着手条件が2つある:** ①N-6 でスモークテストが緑になっていること（でないと土台の故障と切り分けられない）②X-8 で `Uri` 依存が gateway の裏へ入っていること（でないとJVMで書けるものまでinstrumentationへ流れ込む）。**どちらも前提であって、この項目自体を早める理由にはならない。**
+- **土台の話はここには無い**（2026-08-01 に閉じた）。ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
+- **着手条件は2つとも満たした。** ①instrumentation の土台が緑（2026-08-01・Android 16 で 2/2 成功）
+  ②SAF境界が gateway の裏へ入った（2026-08-01・→ [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
+- **JVMで書けるものは JVM へ寄せ切った。** さがす・補記の世代照合と走査キャッシュは
+  2026-08-01 に21件のJVMテストで覆われた（5つのガードを削る変異で確認済み）。
+  **ここへ残すのは実端末でしか確かめられないものだけ**にする — 逆に言えば、
+  instrumentation に何かを書きたくなったら、まず「JVMで書けないか」を先に問う。
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
 - YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
 - **ordered list の番号は描画だけでなくAI入力でも失われる。** 抜粋も同じパーサを通すため、番号自体に意味があるノート（手順書など）では順序がモデルへ届かない。Markdown対応拡充を検討する際は、読書体験だけでなくAI品質側の効果も一緒に数える。
 
 ### L-5. 公開可能な成果物にする（→ current_issues REL-1）
-- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) TEST-26
+- `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) REL-1
 - **設定を1行変える作業ではない。** ML Kit GenAI はリフレクションで解決される部分があり、縮小で消えると**release ビルドの実機でだけ全AI機能が落ちる**。JVMテストは縮小前のクラスを見るので検出できない。**keepルール＋AI 7経路の release 実機一巡がセット**になる。配布の意思が固まってから着手する。
 - **効果とコスト:** 開発・リリース運用 7.5 → 8.5（**単一軸では最大の伸び**）。コストは大で、
   R8を有効にした瞬間にJVMテストの守備範囲外へ出る。

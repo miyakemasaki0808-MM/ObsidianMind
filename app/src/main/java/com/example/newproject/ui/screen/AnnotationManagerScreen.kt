@@ -4,7 +4,7 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.component.IconPill
-import android.net.Uri
+import com.example.newproject.model.DocumentRef
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -51,7 +51,7 @@ import com.example.newproject.ui.theme.Panel
 fun AnnotationManagerScreen(
     state: AnnotationListState,
     onLoad: () -> Unit,
-    onDelete: (Uri) -> Unit,
+    onDelete: (DocumentRef) -> Unit,
     onDeleteAll: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -179,7 +179,7 @@ fun AnnotationManagerScreen(
             text = { Text("「$title」を削除しますか？この操作は取り消せません。") },
             confirmButton = {
                 TextButton(onClick = {
-                    onDelete(target.uri)
+                    onDelete(target.ref)
                     pendingDelete = null
                 }) { Text("削除", color = DangerAction) }
             },

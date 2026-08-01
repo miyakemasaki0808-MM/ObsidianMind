@@ -15,6 +15,8 @@ import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.SafDistillDocumentGateway
 import com.example.newproject.data.SafReadingTraceDocumentGateway
 import com.example.newproject.data.SharedAppPreferences
+import com.example.newproject.data.SafVaultBrowser
+import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.VaultLocation
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SearchPickerUseCase
@@ -36,6 +38,11 @@ internal class NoteViewModelDependencies(
     val preferences: AppPreferences,
     val history: HistoryStore,
     val repository: NoteRepository,
+    /**
+     * さがす／補記が使う Vault スコープの操作。`ContentResolver` と Vault ルートを束ねてあるので、
+     * この2つを controller の引数から消せる（＝素のJVMテストで happy path を書ける）。
+     */
+    val vaultBrowser: VaultBrowser,
     val aiClient: AiClient,
     val summarizeUseCase: SummarizeUseCase,
     val relatedNotesUseCase: RelatedNotesUseCase,
@@ -63,10 +70,16 @@ internal class NoteViewModelDependencies(
             )
             val aiClient: AiClient = AICoreClient()
             val vaultLocation = VaultLocation()
+            val repository = NoteRepository()
             return NoteViewModelDependencies(
                 preferences = SharedAppPreferences(prefs),
                 history = NoteHistoryStore(prefs),
-                repository = NoteRepository(),
+                repository = repository,
+                vaultBrowser = SafVaultBrowser(
+                    contentResolver = application.contentResolver,
+                    repository = repository,
+                    vaultUri = { vaultLocation.uri }
+                ),
                 aiClient = aiClient,
                 summarizeUseCase = SummarizeUseCase(aiClient),
                 relatedNotesUseCase = RelatedNotesUseCase(aiClient),

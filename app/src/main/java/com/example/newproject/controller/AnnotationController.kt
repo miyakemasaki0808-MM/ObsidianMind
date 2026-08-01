@@ -1,16 +1,16 @@
 package com.example.newproject.controller
 
-import com.example.newproject.data.NoteRepository
+import com.example.newproject.data.VaultBrowser
+import com.example.newproject.data.VaultHandle
 import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.AnnotationComposer
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.toObsidianNoteTitle
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.AnnotationStateWriter
-import android.content.ContentResolver
-import android.net.Uri
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
@@ -32,10 +32,9 @@ import java.util.Date
  */
 class AnnotationController(
     private val scope: CoroutineScope,
-    private val repository: NoteRepository,
+    private val vault: VaultBrowser,
     private val aiClient: AiClient,
     private val state: AnnotationStateWriter,
-    private val vaultUri: () -> Uri?,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 補記の作成は「ノート単位」で activeRequestId が見るが、一覧と削除は
     // 「Vault単位」で寿命が違う（補記管理画面はノート切替と無関係）。
@@ -54,7 +53,6 @@ class AnnotationController(
     private var listJob: Job? = null
 
     fun create(
-        contentResolver: ContentResolver,
         title: String,
         content: String,
         summary: String?,
@@ -65,8 +63,8 @@ class AnnotationController(
         // 生成中の連続タップによる重複ファイル作成を防ぐ。
         if (state.current.annotationState is AnnotationState.Loading) return
 
-        val vault = vaultUri()
-        if (vault == null) {
+        val handle = vault.current()
+        if (handle == null) {
             state.update { current ->
                 current.copy(
                     annotationState = AnnotationState.Error(
@@ -102,14 +100,10 @@ class AnnotationController(
                     )
                     AiAvailability.NeedsDownload -> {
                         pending = annotation
-                        startModelDownload(contentResolver)
+                        startModelDownload()
                     }
                     AiAvailability.Available -> {
-                        createWithAvailableModel(
-                            contentResolver = contentResolver,
-                            vault = vault,
-                            annotation = annotation
-                        )
+                        createWithAvailableModel(handle = handle, annotation = annotation)
                     }
                 }
             } catch (e: CancellationException) {
@@ -156,9 +150,9 @@ class AnnotationController(
         state.update { current -> current.copy(annotationListState = AnnotationListState.Idle) }
     }
 
-    fun loadList(contentResolver: ContentResolver) {
-        val uri = vaultUri()
-        if (uri == null) {
+    fun loadList() {
+        val handle = vault.current()
+        if (handle == null) {
             state.update { current ->
                 current.copy(annotationListState = AnnotationListState.Error("Vault が選択されていません。"))
             }
@@ -168,16 +162,17 @@ class AnnotationController(
         listJob?.cancel()
         listJob = scope.launch {
             state.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
-            reloadList(contentResolver, generation)
+            reloadList(handle, generation)
         }
     }
 
-    fun delete(contentResolver: ContentResolver, uri: Uri) {
+    fun delete(ref: DocumentRef) {
+        val handle = vault.current() ?: return
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
-            val deleted = repository.deleteDocument(contentResolver, uri)
-            reloadList(contentResolver, generation, failureCount = if (deleted) 0 else 1)
+            val deleted = handle.deleteDocument(ref)
+            reloadList(handle, generation, failureCount = if (deleted) 0 else 1)
         }
     }
 
@@ -187,8 +182,9 @@ class AnnotationController(
      * 削除対象は「起動時に表示されていた一覧」で固定する。走行中にVaultが
      * 切り替わっても、拾い直した新Vaultのファイルを消しにいかないようにするため。
      */
-    fun deleteAll(contentResolver: ContentResolver) {
+    fun deleteAll() {
         val current = state.current.annotationListState as? AnnotationListState.Success ?: return
+        val handle = vault.current() ?: return
         val generation = vaultGeneration()
         listJob?.cancel()
         listJob = scope.launch {
@@ -197,9 +193,9 @@ class AnnotationController(
                 // 旧Vaultのファイルを消し続けないよう、1件ごとに世代を見る。
                 // 永続URI権限が残っている端末では、切替後もURIが有効なまま消せてしまう。
                 if (generation != vaultGeneration()) return@launch
-                if (!repository.deleteDocument(contentResolver, file.uri)) failureCount++
+                if (!handle.deleteDocument(file.ref)) failureCount++
             }
-            reloadList(contentResolver, generation, failureCount)
+            reloadList(handle, generation, failureCount)
         }
     }
 
@@ -209,16 +205,21 @@ class AnnotationController(
      * 起動時の世代と食い違っていたら書かない。`cancel()` だけに頼ると、
      * SAF列挙から戻った直後にVault切替が起きた場合に旧Vaultの補記が並ぶ。
      *
+     * **[handle] は呼び出し側が取ったものを受け取る。ここで引き直さない。**
+     * 引き直すと、削除は旧Vaultへ・読み直しは新Vaultへ、という食い違いが起こる。
+     * 表示は世代照合で弾かれるが、**切り替えた先のVaultへ無駄なSAF列挙が飛ぶ**うえ、
+     * 将来この関数から世代照合が外れたときに表示混入まで戻る。
+     * [VaultHandle] の「開始時に1回だけ取る」規約はここにも効く。
+     *
      * @param failureCount 直前の削除で失敗した件数。読み直した一覧に添えて表示する。
      */
     private suspend fun reloadList(
-        contentResolver: ContentResolver,
+        handle: VaultHandle,
         generation: Long,
         failureCount: Int = 0
     ) {
-        val uri = vaultUri() ?: return
         try {
-            val files = repository.listAnnotationFiles(contentResolver, uri)
+            val files = handle.listAnnotationFiles()
             if (generation != vaultGeneration()) return
             state.update { current ->
                 current.copy(
@@ -236,8 +237,7 @@ class AnnotationController(
     }
 
     private suspend fun createWithAvailableModel(
-        contentResolver: ContentResolver,
-        vault: Uri,
+        handle: VaultHandle,
         annotation: PendingAnnotation
     ) {
         try {
@@ -275,9 +275,7 @@ class AnnotationController(
                 generatedBody = generated
             )
             if (!isCurrent(annotation.requestId)) return
-            val saved = repository.createAnnotationFile(
-                contentResolver = contentResolver,
-                vaultUri = vault,
+            val saved = handle.createAnnotationFile(
                 sanitizedTitle = fileTitle,
                 timestamp = fileTimestamp,
                 content = markdown
@@ -287,7 +285,7 @@ class AnnotationController(
                 current.copy(
                     annotationState = AnnotationState.Success(
                         sourceTitle = sourceTitle,
-                        savedUri = saved.uri,
+                        savedRef = saved.ref,
                         // 予測した名前ではなく保存後の実名。同じ分に再生成すると
                         // プロバイダが改名することがあり、一覧の表示とずれる。
                         fileName = saved.displayName,
@@ -306,7 +304,7 @@ class AnnotationController(
         }
     }
 
-    private fun startModelDownload(contentResolver: ContentResolver) {
+    private fun startModelDownload() {
         downloadJob?.cancel()
         downloadJob = scope.launch {
             try {
@@ -319,13 +317,10 @@ class AnnotationController(
                         is DownloadStatus.DownloadCompleted -> {
                             val annotation = pending ?: return@collect
                             if (!isCurrent(annotation.requestId)) return@collect
-                            val vault = vaultUri() ?: return@collect
+                            // DL完了は数分後になり得るので、ここで引き直すのが正しい。
+                            val resumed = vault.current() ?: return@collect
                             pending = null
-                            createWithAvailableModel(
-                                contentResolver = contentResolver,
-                                vault = vault,
-                                annotation = annotation
-                            )
+                            createWithAvailableModel(handle = resumed, annotation = annotation)
                         }
                         is DownloadStatus.DownloadFailed -> {
                             val annotation = pending ?: return@collect

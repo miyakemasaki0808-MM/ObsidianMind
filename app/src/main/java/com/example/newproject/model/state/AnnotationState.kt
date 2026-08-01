@@ -1,6 +1,6 @@
 package com.example.newproject.model.state
 
-import android.net.Uri
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 
 sealed class AnnotationState {
@@ -8,7 +8,7 @@ sealed class AnnotationState {
     data class Loading(val sourceTitle: String) : AnnotationState()
     data class Success(
         val sourceTitle: String,
-        val savedUri: Uri,
+        val savedRef: DocumentRef,
         val fileName: String,
         val content: String,
         val isViewed: Boolean = false
@@ -23,7 +23,7 @@ sealed class AnnotationState {
 internal fun AnnotationState.toEventKey(): String? = when (this) {
     is AnnotationState.Idle -> null
     is AnnotationState.Loading -> "loading:$sourceTitle"
-    is AnnotationState.Success -> "success:$savedUri:$isViewed"
+    is AnnotationState.Success -> "success:${savedRef.value}:$isViewed"
     is AnnotationState.Error -> "error:$sourceTitle:$message:$isViewed"
 }
 

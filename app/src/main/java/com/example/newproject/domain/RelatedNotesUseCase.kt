@@ -1,10 +1,10 @@
 package com.example.newproject.domain
 
-import android.net.Uri
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.AiRecommendationStatus
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteMeta
 import com.example.newproject.model.NoteExcerptLimits
@@ -41,7 +41,7 @@ class RelatedNotesUseCase(
     // Vault切替時に呼ぶ。旧VaultのURIは新Vaultで開けないため全破棄する。
     fun clearCache() = candidateCache.clear()
 
-    private data class CandidateCacheKey(val uri: Uri, val lastModified: Long?)
+    private data class CandidateCacheKey(val ref: DocumentRef, val lastModified: Long?)
 
     // 本文読込後・ID採番前の候補。Phase 3b の再ランクはこの粒度で並べ替える（IDは順確定後に振る）。
     private data class ReadCandidate(val note: NoteFile, val data: CandidateContextData)
@@ -51,7 +51,7 @@ class RelatedNotesUseCase(
         currentContent: String,
         allNotes: List<NoteFile>,
         wikilinkTitles: Set<String>,
-        readContent: suspend (Uri) -> String,
+        readContent: suspend (DocumentRef) -> String,
         parseMeta: (String) -> NoteMeta
     ): RelatedNotesResult {
         return try {
@@ -113,7 +113,7 @@ class RelatedNotesUseCase(
                         scoreOf = { relatedContextScore(currentSignals, it.note.name, it.data.snippet, it.data.tags) }
                     )
                     // 再ランク後の並びで一時ID（C01..）を採番。ID＝プロンプト順＝idToNote が一致する。
-                    // 同名・別Uriも別IDになり確実に解決できる。
+                    // 同名・別参照も別IDになり確実に解決できる。
                     val idToNote = reranked
                         .mapIndexed { index, rc -> relatedCandidateId(index) to rc.note }
                         .toMap()
@@ -144,17 +144,17 @@ class RelatedNotesUseCase(
                     val response = aiClient.generate(prompt)
 
                     // 応答からIDを抽出→ノートへ解決。候補は既に決定的枠を除外済みだが、
-                    // モデルが既出を混ぜても拾わないようUri単位でも念のため落とす（防御）。
-                    val relatedUris = relatedNotes.map { it.uri }.toSet()
+                    // モデルが既出を混ぜても拾わないよう参照単位でも念のため落とす（防御）。
+                    val relatedRefs = relatedNotes.map { it.ref }.toSet()
                     val aiNotes = parseCandidateIds(response, idToNote.keys, AI_RECOMMENDATION_LIMIT)
                         .mapNotNull { id -> idToNote[id] }
-                        .filterNot { it.uri in relatedUris }
-                        .distinctBy { it.uri }
+                        .filterNot { it.ref in relatedRefs }
+                        .distinctBy { it.ref }
                         .take(AI_RECOMMENDATION_LIMIT)
                         .map { note ->
                             RelatedNote(
                                 title = note.name,
-                                uri = note.uri,
+                                ref = note.ref,
                                 isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet,
                                 lastModified = note.lastModified
                             )
@@ -193,12 +193,12 @@ class RelatedNotesUseCase(
         val sameGroupNotes = extractSameGroup(currentTitle, candidateNotes)
 
         return (wikilinkedNotes + sameGroupNotes)
-            .distinctBy { it.uri }
+            .distinctBy { it.ref }
             .take(RELATED_NOTE_LIMIT)
             .map { note ->
                 RelatedNote(
                     title = note.name,
-                    uri = note.uri,
+                    ref = note.ref,
                     isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet,
                     lastModified = note.lastModified
                 )
@@ -220,11 +220,11 @@ class RelatedNotesUseCase(
     // その候補だけタイトルのみで続行し、AI推薦全体を巻き添えにしない。キャンセルは伝播。
     private suspend fun loadContextOrEmpty(
         note: NoteFile,
-        readContent: suspend (Uri) -> String,
+        readContent: suspend (DocumentRef) -> String,
         parseMeta: (String) -> NoteMeta
     ): CandidateContextData = try {
-        candidateCache.getOrLoad(CandidateCacheKey(note.uri, note.lastModified)) {
-            val content = readContent(note.uri)
+        candidateCache.getOrLoad(CandidateCacheKey(note.ref, note.lastModified)) {
+            val content = readContent(note.ref)
             val meta = parseMeta(content)
             CandidateContextData(
                 snippet = extractRelatedSnippet(content, RELATED_SNIPPET_LEN),

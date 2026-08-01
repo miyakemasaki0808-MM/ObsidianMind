@@ -47,7 +47,7 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                         .map { it.cleanAiTitle() }
                         .filter { it.isNotBlank() }
                         .mapNotNull { title -> notesByTitle[title.toNormalizedObsidianTitle()] }
-                        .distinctBy { it.uri }
+                        .distinctBy { it.ref }
                         .take(PICK_LIMIT)
                         .map { it.toRelatedNote() }
                         .toList()
@@ -82,7 +82,7 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
     )
 
     private fun NoteFile.toRelatedNote(): RelatedNote =
-        RelatedNote(title = name, uri = uri, isWikilinked = false, lastModified = lastModified)
+        RelatedNote(title = name, ref = ref, isWikilinked = false, lastModified = lastModified)
 
     companion object {
         private const val CANDIDATE_LIMIT = 40

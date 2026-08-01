@@ -1,10 +1,8 @@
 package com.example.newproject.model
 
-import android.net.Uri
-
 data class RelatedNote(
     val title: String,
-    val uri: Uri,
+    val ref: DocumentRef,
     val isWikilinked: Boolean,
     val lastModified: Long? = null
 )
