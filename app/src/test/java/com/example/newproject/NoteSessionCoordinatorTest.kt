@@ -213,26 +213,49 @@ class NoteSessionCoordinatorTest {
     }
 
     /**
-     * SearchController のキャッシュと2種類のJobは `ContentResolver` を要する経路でしか
-     * 通常は作れない。素のJVMではその実体を作れないため、実物Controllerの内部へ
-     * 型消去で番兵を積み、Coordinatorからの [SearchController.onVaultChanged] 呼び出しを確認する。
+     * 走査キャッシュの破棄は**実際に走査させて**確認する。
+     *
+     * 以前はここも `ContentResolver` を作れず、実物Controllerの private フィールドへ
+     * 型消去で番兵を積んでいた。[FakeVaultBrowser]（N-7 段階7）で本来の経路を
+     * 通せるようになったので、番兵をやめて回数で見る。
+     */
+    @Test
+    fun `Vault切替でSearchの走査キャッシュが破棄される`() = runTest {
+        val env = Env(this)
+        val handle = FakeVaultHandle(notesByFolder = mapOf(null to listOf(noteFile("a.md"))))
+        env.vault.handle = handle
+        val coordinator = env.coordinator()
+
+        coordinator.pickRandomInScope()
+        advanceUntilIdle()
+        coordinator.pickRandomInScope()
+        advanceUntilIdle()
+        assertEquals(1, handle.collectCount)
+
+        coordinator.onVaultChanged()
+        coordinator.pickRandomInScope()
+        advanceUntilIdle()
+
+        assertEquals(2, handle.collectCount)
+    }
+
+    /**
+     * Jobの停止だけは番兵が残る。走行中のJobを外から観測する手段が無く、
+     * 「停止された」は private フィールドの状態でしか確かめられないため。
      *
      * private名への依存はあるが、名前変更でテストが落ちる方が、後始末が無検証になるより安全。
      */
     @Test
-    fun `Vault切替でSearchの走査キャッシュとJobが破棄される`() {
+    fun `Vault切替でSearchの2種類のJobが停止される`() {
         val coordinator = Env(TestScope()).coordinator()
         val search: Any = privateField(coordinator, "search")
-        val cache: MutableMap<Any?, Any?> = privateField(search, "scopeNotesCache")
         val searchJob = Job()
         val foldersJob = Job()
-        cache["old-folder"] = "old-cache"
         setPrivateField(search, "searchJob", searchJob)
         setPrivateField(search, "foldersJob", foldersJob)
 
         coordinator.onVaultChanged()
 
-        assertTrue(cache.isEmpty())
         assertTrue(searchJob.isCancelled)
         assertTrue(foldersJob.isCancelled)
         assertNull(privateField<Job?>(search, "searchJob"))
@@ -564,6 +587,7 @@ class NoteSessionCoordinatorTest {
         private val clock: TestClock = TestClock()
     ) {
         val ai = FakeAi()
+        val vault = FakeVaultBrowser(handle = null)
         val history = FakeHistoryStore()
         val distill = FakeDistillPersistence()
         val trace = FakeTracePersistence()
@@ -575,7 +599,7 @@ class NoteSessionCoordinatorTest {
             scope = scope,
             persistScope = scope,
             repository = NoteRepository(),
-            vaultBrowser = FakeVaultBrowser(handle = null),
+            vaultBrowser = vault,
             aiClient = ai,
             summarizeUseCase = SummarizeUseCase(
                 ai,
