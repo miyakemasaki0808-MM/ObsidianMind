@@ -1,7 +1,5 @@
 package com.example.newproject.controller
 
-import android.content.ContentResolver
-import android.net.Uri
 import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
@@ -58,7 +56,6 @@ internal class NoteSessionCoordinator(
     distillPersistence: DistillPersistence,
     readingTracePersistence: ReadingTracePersistence,
     private val history: HistoryStore,
-    vaultUri: () -> Uri?,
     currentVaultKey: () -> String?,
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,

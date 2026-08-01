@@ -609,7 +609,6 @@ class NoteSessionCoordinatorTest {
             distillPersistence = distill,
             readingTracePersistence = trace,
             history = history,
-            vaultUri = { null },
             currentVaultKey = { "vault-a" },
             onModelReady = { _, _ -> },
             reloadBody = { _, _ -> false },
