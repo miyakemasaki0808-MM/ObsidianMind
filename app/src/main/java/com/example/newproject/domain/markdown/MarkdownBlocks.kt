@@ -12,7 +12,7 @@ internal val UnorderedListRegex = Regex("^(\\s*)([-*+])\\s+(.+)$")
 internal val OrderedListRegex = Regex("^(\\s*)(\\d+)([.)])\\s+(.+)$")
 internal val HorizontalRuleRegex = Regex("^\\s*([-*_])\\s*(\\1\\s*){2,}$")
 internal val BlockquoteRegex = Regex("^>\\s?(.*)")
-internal val TaskListRegex = Regex("^\\s*[-*+]\\s+\\[([ xX])\\]\\s+(.+)$")
+internal val TaskListRegex = Regex("^(\\s*)([-*+])\\s+\\[([ xX])\\]\\s+(.+)$")
 internal val TableRowRegex = Regex("^\\|(.+)\\|\\s*$")
 internal val TableSeparatorRegex = Regex("^\\|[\\s|:-]+\\|\\s*$")
 
@@ -30,11 +30,18 @@ internal sealed interface ListMarker {
     data class Ordered(val number: String, val delimiter: Char) : ListMarker
 }
 
-/** [depth] は0起点の入れ子段数。算出規則は [ListDepthTracker]。 */
+/**
+ * [depth] は0起点の入れ子段数。算出規則は [ListDepthTracker]。
+ * [checked] が null ならタスクではない。
+ *
+ * **タスクは専用ブロックではなくリスト項目の属性として持つ。** 別ブロックに分けると
+ * `- 親` / `  - [ ] 子` の混在で入れ子が2ブロックへまたがり、段数が壊れるため。
+ */
 internal data class ListItem(
     val depth: Int,
     val marker: ListMarker,
-    val text: String
+    val text: String,
+    val checked: Boolean? = null
 )
 
 internal sealed class MarkdownBlock {
@@ -44,7 +51,6 @@ internal sealed class MarkdownBlock {
     data class CodeBlock(val code: String) : MarkdownBlock()
     object HorizontalRule : MarkdownBlock()
     data class Blockquote(val lines: List<String>) : MarkdownBlock()
-    data class TaskListBlock(val items: List<Pair<Boolean, String>>) : MarkdownBlock()
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
 }
 
@@ -112,27 +118,13 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
             continue
         }
 
-        // タスクリスト（通常リストより先にチェック）
-        if (TaskListRegex.matches(line)) {
-            val items = mutableListOf<Pair<Boolean, String>>()
-            while (index < lines.size && TaskListRegex.matches(lines[index])) {
-                val m = TaskListRegex.matchEntire(lines[index])!!
-                items.add((m.groupValues[1].lowercase() == "x") to m.groupValues[2])
-                index++
-            }
-            blocks.add(MarkdownBlock.TaskListBlock(items))
-            continue
-        }
-
-        // 通常リスト
+        // リスト（タスクは項目の属性なので、ここで一緒に読む）
         if (UnorderedListRegex.matches(line) || OrderedListRegex.matches(line)) {
             val items = mutableListOf<ListItem>()
             // 段数はブロック単位で追跡する。別のリストへ跨いで幅を覚えない。
             val depths = ListDepthTracker()
             while (index < lines.size) {
-                val current = lines[index]
-                if (TaskListRegex.matches(current)) break
-                val item = parseListItem(current, depths) ?: break
+                val item = parseListItem(lines[index], depths) ?: break
                 items.add(item)
                 index++
             }
@@ -166,6 +158,17 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
 }
 
 private fun parseListItem(line: String, depths: ListDepthTracker): ListItem? {
+    // タスクは箇条書きの部分集合なので、通常の箇条書きより先に見る。
+    // **`1. [ ]` は受理しない** — 型としては Ordered + checked を表現できるが、
+    // 型の表現力が広がったことを仕様拡大の理由にはしない。
+    TaskListRegex.matchEntire(line)?.let { m ->
+        return ListItem(
+            depth = depths.depthFor(indentWidth(m.groupValues[1])),
+            marker = ListMarker.Bullet,
+            text = m.groupValues[4],
+            checked = m.groupValues[3].lowercase() == "x"
+        )
+    }
     OrderedListRegex.matchEntire(line)?.let { m ->
         return ListItem(
             depth = depths.depthFor(indentWidth(m.groupValues[1])),

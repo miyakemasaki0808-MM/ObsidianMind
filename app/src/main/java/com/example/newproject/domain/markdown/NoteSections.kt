@@ -132,14 +132,12 @@ internal fun blocksToMarkdown(blocks: List<MarkdownBlock>): String =
             is MarkdownBlock.Heading -> "#".repeat(block.level) + " " + block.text
             is MarkdownBlock.Paragraph -> block.text
             is MarkdownBlock.ListBlock -> block.items.joinToString("\n") { item ->
-                LIST_INDENT.repeat(item.depth) + item.marker.render() + " " + item.text
+                val checkbox = item.checked?.let { if (it) "[x] " else "[ ] " } ?: ""
+                LIST_INDENT.repeat(item.depth) + item.marker.render() + " " + checkbox + item.text
             }
             is MarkdownBlock.CodeBlock -> "```\n" + block.code + "\n```"
             is MarkdownBlock.HorizontalRule -> "---"
             is MarkdownBlock.Blockquote -> block.lines.joinToString("\n") { "> $it" }
-            is MarkdownBlock.TaskListBlock -> block.items.joinToString("\n") { (checked, t) ->
-                "- [${if (checked) "x" else " "}] $t"
-            }
             is MarkdownBlock.Table -> buildString {
                 append("| ").append(block.headers.joinToString(" | ")).append(" |\n")
                 append("|").append(block.headers.joinToString("|") { "---" }).append("|\n")

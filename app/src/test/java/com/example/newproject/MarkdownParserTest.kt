@@ -153,11 +153,44 @@ class MarkdownParserTest {
         assertEquals(0, lists[1].items.single().depth)
     }
 
+    // --- タスクとの混在 -------------------------------------------------------
+
+    @Test
+    fun `タスクと箇条書きの混在は1ブロックにまとまり、入れ子段数が保たれる`() {
+        val items = itemsOf("- 親\n  - [ ] 未完\n  - [x] 完了\n  - ただの子\n- 親に戻る")
+        assertEquals(listOf(0, 1, 1, 1, 0), items.map { it.depth })
+        assertEquals(listOf(null, false, true, null, null), items.map { it.checked })
+    }
+
+    @Test
+    fun `同じ階層で箇条書きと番号付きとタスクが切り替わってもまとまる`() {
+        val items = itemsOf("- 箇条書き\n1. 番号\n- [x] タスク")
+        assertEquals(listOf(0, 0, 0), items.map { it.depth })
+        assertEquals(listOf(null, null, true), items.map { it.checked })
+    }
+
+    @Test
+    fun `番号付きのチェックボックス表記はタスクとして扱わない`() {
+        // 型としては Ordered + checked を表現できるが、仕様は広げない
+        val item = itemsOf("1. [ ] やること").single()
+        assertEquals(null, item.checked)
+        assertEquals(ListMarker.Ordered("1", '.'), item.marker)
+        assertEquals("[ ] やること", item.text)
+    }
+
     // --- 往復 -----------------------------------------------------------------
 
     @Test
     fun `番号と階層はblocksToMarkdownを往復しても同じ型に戻る`() {
         val content = "1. 手順いち\n    - 補足\n2) 手順に\n- 箇条書き"
+        val once = parseMarkdownBlocks(content)
+        val twice = parseMarkdownBlocks(blocksToMarkdown(once))
+        assertEquals(once, twice)
+    }
+
+    @Test
+    fun `タスクの混在も往復して同じ型に戻る`() {
+        val content = "- 親\n  - [ ] 未完\n  - [x] 完了\n- 親に戻る"
         val once = parseMarkdownBlocks(content)
         val twice = parseMarkdownBlocks(blocksToMarkdown(once))
         assertEquals(once, twice)
