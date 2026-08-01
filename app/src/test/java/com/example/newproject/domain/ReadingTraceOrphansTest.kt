@@ -116,6 +116,42 @@ class ReadingTraceOrphansTest {
         assertEquals(OrphanWithholdReason.FOLDER_WIDE_ABSENCE, assessed(result).withheld.single().reason)
     }
 
+    // 故障は**任意の階層**で起きる。上位フォルダが「成功したまま空を返す」と、
+    // その配下のノートは走査から丸ごと消えるが unreadableFolderPaths には現れない。
+    // 直接の親でグループ化すると、配下の各フォルダは1件ずつなのですり抜ける。
+    @Test
+    fun `a silently empty ancestor withholds candidates spread across its subfolders`() {
+        val result = assess(
+            traces = mapOf(
+                "k-1" to info("ideas/a/x.md"),
+                "k-2" to info("ideas/b/y.md")
+            ),
+            noteKeys = emptySet()
+        )
+
+        assertTrue(assessed(result).orphans.isEmpty())
+        val withheld = assessed(result).withheld.single()
+        assertEquals("ideas", withheld.folderPath)
+        assertEquals(OrphanWithholdReason.FOLDER_WIDE_ABSENCE, withheld.reason)
+    }
+
+    // 祖先を共有しないなら、同時に欠けてもフォルダ列挙の失敗では説明できない。
+    @Test
+    fun `candidates under different top level folders are still offered`() {
+        val result = assess(
+            traces = mapOf(
+                "k-1" to info("ideas/a/x.md"),
+                "k-2" to info("journal/b/y.md")
+            ),
+            noteKeys = emptySet()
+        )
+
+        assertEquals(
+            listOf("ideas/a/x.md", "journal/b/y.md"),
+            assessed(result).orphans.map { it.vaultRelativePath }
+        )
+    }
+
     // --- 遮断器: 不完全な走査 ---------------------------------------------------
 
     @Test

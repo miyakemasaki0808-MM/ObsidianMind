@@ -18,6 +18,7 @@ import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.VaultScan
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -147,6 +148,30 @@ class ReadingTraceCleanupControllerTest {
         assertTrue(env.state.value is ReadingTraceCleanupState.Error)
     }
 
+    /**
+     * 走行中にキャンセルされたら、状態を書き換えずに終わる。
+     *
+     * `CancellationException` を一般エラーへ畳むと**偽のエラー表示**が出る。しかも
+     * `state.set` は suspend しないので、キャンセル後も素通りして書き込まれてしまう
+     * （→ CLAUDE.md「CancellationException は握りつぶさず再throwする」）。
+     */
+    @Test
+    fun `a cancelled assessment does not write an error state`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        // 走査から戻る途中で Vault が切り替わり、走行中のJobがキャンセルされる。
+        env.vault.handle!!.beforeEachCall = { env.controller.onVaultChanged() }
+
+        env.controller.assess()
+        advanceUntilIdle()
+
+        assertTrue(
+            "キャンセルがエラーとして表示された: ${env.state.value}",
+            env.state.value is ReadingTraceCleanupState.Loading
+        )
+    }
+
     // --- 削除（段階4）-----------------------------------------------------------
 
     @Test
@@ -158,7 +183,7 @@ class ReadingTraceCleanupControllerTest {
         env.controller.assess()
         advanceUntilIdle()
 
-        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
         advanceUntilIdle()
 
         val success = env.state.value as ReadingTraceCleanupState.Success
@@ -176,7 +201,7 @@ class ReadingTraceCleanupControllerTest {
         advanceUntilIdle()
         env.persistence.undeletableKeys += ReadingTraceStore.keyFor("ideas/a.md")
 
-        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
         advanceUntilIdle()
 
         val success = env.state.value as ReadingTraceCleanupState.Success
@@ -184,25 +209,60 @@ class ReadingTraceCleanupControllerTest {
         assertEquals(1, success.deleteFailureCount)
     }
 
-    // 保留した分は候補一覧に入っていないので、「すべて削除」でも消えない。
+    // 保留した分は候補一覧に入らないので、削除要求を出しても消えない。
     @Test
-    fun `deleting everything never touches withheld traces`() = runTest {
+    fun `withheld traces cannot be deleted even if their key is passed`() = runTest {
         val env = Env(this)
         env.persistence.put(trace("ideas/a.md"))
         env.persistence.put(trace("ideas/b.md"))
-        env.persistence.put(trace("journal/c.md"))
         env.vault.handle!!.vaultScan = VaultScan(emptyList())
         env.controller.assess()
         advanceUntilIdle()
-        val success = env.state.value as ReadingTraceCleanupState.Success
 
-        env.controller.delete(success.orphans.map { it.key })
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
         advanceUntilIdle()
 
-        // ideas/ の2件はフォルダ一括欠落で保留されており、削除対象に入らない。
+        // ideas/ の2件はフォルダ一括欠落で保留されており、候補ではない。
         assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
         assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/b.md")))
-        assertTrue(!env.persistence.stored(ReadingTraceStore.keyFor("journal/c.md")))
+    }
+
+    /**
+     * 洗い出しと削除のあいだに同期が完了し、ノートが現れたら削除しない。
+     * 判定結果は時間が経つほど古くなるので、消す瞬間に確かめ直す。
+     */
+    @Test
+    fun `does not delete a trace whose note reappeared before the tap`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        // 同期が終わってノートが現れた。
+        env.vault.handle!!.vaultScan = VaultScan(listOf(note("ideas/a.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+        // もう孤児ではないので候補からは外す。
+        assertTrue((env.state.value as ReadingTraceCleanupState.Success).orphans.isEmpty())
+    }
+
+    // 削除直前の再走査でそのフォルダが読めなくなっていたら、消さない。
+    @Test
+    fun `does not delete when the folder became unreadable before the tap`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.vault.handle!!.vaultScan = VaultScan(emptyList(), unreadableFolderPaths = setOf("ideas"))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
     }
 
     // 画面に出ていないキーを渡されても消さない（一覧に固定する規律）。
@@ -215,7 +275,7 @@ class ReadingTraceCleanupControllerTest {
         env.controller.assess()
         advanceUntilIdle()
 
-        env.controller.delete(listOf(ReadingTraceStore.keyFor("journal/b.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("journal/b.md"))
         advanceUntilIdle()
 
         // journal/b.md は現存ノートなので候補ではない。消えてはいけない。
@@ -239,7 +299,7 @@ class ReadingTraceCleanupControllerTest {
         val before = env.state.value
 
         env.vaultKey = "content://another-vault"
-        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
         advanceUntilIdle()
 
         assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
@@ -259,7 +319,10 @@ class ReadingTraceCleanupControllerTest {
             state = state,
             currentVaultKey = { vaultKey },
             vaultGeneration = { generation },
-            limits = OrphanLimits()
+            limits = OrphanLimits(),
+            // Dispatchers.IO はテストスケジューラの管理外なので差し替える
+            // （既存の ReadingTraceController テストと同じ形）。
+            ioDispatcher = StandardTestDispatcher(scope.testScheduler)
         )
     }
 

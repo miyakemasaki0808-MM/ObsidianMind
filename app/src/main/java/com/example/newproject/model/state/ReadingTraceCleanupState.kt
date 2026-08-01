@@ -7,8 +7,8 @@ import com.example.newproject.model.WithheldOrphans
 /**
  * 読書痕跡の整理画面の状態。**Vault単位**（ノート切替では消えない）。
  *
- * 段階3 の時点では**削除しない**。候補と、遮断器が保留した一群を並べて見せるだけの
- * シャドーモードで、「この判定は信用できるか」を実運用で観測するのが目的
+ * 候補と、遮断器が保留した一群の両方を持つ。**保留は隠さない** —
+ * 「この判定は信用できるか」を運用で見るための観測対象そのものだから
  * （→ reflect_reading_trace §14）。
  */
 sealed interface ReadingTraceCleanupState {

@@ -215,7 +215,12 @@ internal class SafReadingTraceDocumentGateway(
     private class FolderIndex(
         val vault: Uri,
         val folder: Uri,
-        val files: MutableMap<String, Uri>,
+        /**
+         * key → **同じキーを名乗る実体すべて**。プロバイダの改名や外部同期で
+         * `hash.json` と `hash (1).json` が並びうるため、1件に潰さず全部持つ。
+         * 潰すと掃除で片方しか消えず、次の洗い出しで復活する。
+         */
+        val files: MutableMap<String, MutableList<Uri>>,
         /**
          * 置き場の子一覧を最後まで読めたか。false なら [files] に載っていないキーが
          * **存在しないことを意味しない**ので、新規作成してはいけない（重複ファイルを作る）。
@@ -230,7 +235,8 @@ internal class SafReadingTraceDocumentGateway(
 
     @Synchronized
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
-        val file = folderIndex(vaultKey)?.files?.get(key) ?: return null
+        // 読むのは先頭1件でよい（内容は同じキーの痕跡で、last-writer-wins）。
+        val file = folderIndex(vaultKey)?.files?.get(key)?.firstOrNull() ?: return null
         return try {
             contentResolver.openInputStream(file)?.use { readBoundedBytes(it, maximumBytes) }
         } catch (error: Exception) {
@@ -254,7 +260,7 @@ internal class SafReadingTraceDocumentGateway(
         // 索引が不完全なら、キーが載っていなくても「まだ無い」とは言えない。
         // ここで作ると同じキーのファイルが2つでき、次回どちらを採るかが列挙順依存になる。
         // 書けなかった訪問は消費済みの印が巻き戻されて次の契機で書き直される（判断10）。
-        val target = current.files[key]
+        val target = current.files[key]?.firstOrNull()
             ?: if (current.isComplete) {
                 createFile(current, key)
             } else {
@@ -279,7 +285,7 @@ internal class SafReadingTraceDocumentGateway(
             MIME_TYPE_JSON,
             "$key.json"
         ) ?: throw IOException("痕跡ファイルを作成できませんでした。")
-        current.files[key] = created
+        current.files.getOrPut(key) { mutableListOf() } += created
         return created
     }
 
@@ -336,33 +342,44 @@ internal class SafReadingTraceDocumentGateway(
      * MIMEに合わせた "foo.json.json" 等）。先頭のキーだけは残るので、そこを索引キーにする。
      * この置き場には自分が作ったファイルしか入らないため取り違えない。
      */
-    private fun indexFiles(vault: Uri, children: SafChildren): MutableMap<String, Uri> {
-        val files = mutableMapOf<String, Uri>()
+    private fun indexFiles(vault: Uri, children: SafChildren): MutableMap<String, MutableList<Uri>> {
+        val files = mutableMapOf<String, MutableList<Uri>>()
         children.items
             .filter { !it.isDirectory }
             .forEach { child ->
                 val key = child.name.take(KEY_LENGTH)
-                if (key.length == KEY_LENGTH && !files.containsKey(key)) {
-                    files[key] = DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
+                if (key.length == KEY_LENGTH) {
+                    files.getOrPut(key) { mutableListOf() } +=
+                        DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
                 }
             }
         return files
     }
 
+    /**
+     * 同じキーを名乗る実体を**すべて**消す。1件でも残すと、掃除したのに次の洗い出しで
+     * 復活して見える（プロバイダの改名や外部同期で重複しうる）。
+     * **1つでも消せなければ false**（残っている以上「消えた」とは言えない）。
+     */
     @Synchronized
     override fun delete(key: String, vaultKey: String): Boolean {
         val current = folderIndex(vaultKey) ?: return false
-        val target = current.files[key] ?: return false
-        val removed = try {
-            DocumentsContract.deleteDocument(contentResolver, target)
-        } catch (error: Exception) {
-            // プロバイダ側の異常。索引が指すUriが無効になっている可能性があるので捨てる。
-            index = null
-            false
+        val targets = current.files[key] ?: return false
+        if (targets.isEmpty()) return false
+        val survivors = mutableListOf<Uri>()
+        targets.forEach { target ->
+            val removed = try {
+                DocumentsContract.deleteDocument(contentResolver, target)
+            } catch (error: Exception) {
+                // プロバイダ側の異常。索引が指すUriが無効になっている可能性があるので捨てる。
+                index = null
+                false
+            }
+            if (!removed) survivors += target
         }
-        // 消えたものだけ索引から外す。失敗した分を外すと、一覧から消えて再試行できなくなる。
-        if (removed) current.files.remove(key)
-        return removed
+        // 消えたものだけ索引から外す。失敗した分を残すのは、一覧から消えると再試行できないため。
+        if (survivors.isEmpty()) current.files.remove(key) else current.files[key] = survivors
+        return survivors.isEmpty()
     }
 
     /**

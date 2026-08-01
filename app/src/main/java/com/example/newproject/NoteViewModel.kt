@@ -302,8 +302,8 @@ class NoteViewModel internal constructor(
     /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
     fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
 
-    /** 洗い出した候補のうち、指定されたものだけ削除する。ノート本文には触れない。 */
-    fun deleteReadingTraces(keys: List<String>) = session.deleteReadingTraces(keys)
+    /** 洗い出した候補を1件削除する。ノート本文には触れない。 */
+    fun deleteReadingTrace(key: String) = session.deleteReadingTrace(key)
 
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
 

@@ -23,6 +23,15 @@ import com.example.newproject.model.WithheldOrphans
 // 観測回数を重ねるだけでは持続的な列挙失敗を排除できない（毎回同じフォルダが失敗すれば
 // 何回数えても欠け続ける）。
 //
+// **粒度は「直接の親」ではなく「全祖先」で見る。** 故障は任意の階層で起こり、しかも
+// 上位フォルダが**成功したまま空を返す**場合は unreadableFolderPaths にも現れない
+// （BFSがその配下へ潜らないので、配下のノートが丸ごと走査から消える）。
+// 直接の親で数えると、配下の各フォルダは1件ずつになって遮断器をすり抜ける。
+//
+// **ルートは祖先として数えない。** 数えると全候補が共通の祖先を持つので
+// 「Vault全体で常に1件まで」となり、正当な孤児が2件溜まった時点で永久に掃除できなくなる。
+// ルート直下が静かに欠ける場合は候補が広く分散するため、総数の上限で受ける。
+//
 // **代償を明記する。** フォルダごと削除された場合も「同じフォルダから複数件が欠けた」に
 // 見えるので、**まとめて消したノートの痕跡は掃除されない**。これは意図した割り切りで、
 // この機能が狙うのは日常的に発生する単発の孤児のほう。安全側に倒している。
@@ -81,19 +90,34 @@ fun assessReadingTraceOrphans(
 
     val orphans = mutableListOf<OrphanCandidate>()
     val withheld = mutableListOf<WithheldOrphans>()
-    resolved.groupBy { parentVaultPath(it.vaultRelativePath) }
+
+    // 読めなかったサブツリーの分を先に落とす。
+    val (unreadableItems, readableItems) = resolved.partition {
+        isUnderUnreadableFolder(parentVaultPath(it.vaultRelativePath), unreadableFolderPaths)
+    }
+    unreadableItems.groupBy { parentVaultPath(it.vaultRelativePath) }
         .forEach { (folderPath, items) ->
-            when {
-                isUnderUnreadableFolder(folderPath, unreadableFolderPaths) ->
-                    withheld += WithheldOrphans(
-                        folderPath, items.size, OrphanWithholdReason.UNREADABLE_FOLDER
-                    )
-                // 故障はフォルダ単位で起きるので、まとまって欠けたら列挙失敗を疑う。
-                items.size > limits.maxCandidatesPerFolder ->
-                    withheld += WithheldOrphans(
-                        folderPath, items.size, OrphanWithholdReason.FOLDER_WIDE_ABSENCE
-                    )
-                else -> orphans += items
+            withheld += WithheldOrphans(folderPath, items.size, OrphanWithholdReason.UNREADABLE_FOLDER)
+        }
+
+    // 上限を超えたフォルダを洗い出し、その配下をまとめて保留する。
+    val blocked = readableItems
+        .flatMap { breakerGroupPaths(it.vaultRelativePath) }
+        .groupingBy { it }
+        .eachCount()
+        .filterValues { it > limits.maxCandidatesPerFolder }
+        .keys
+    // 報告は**最も浅いフォルダ**へ寄せる（`ideas` と `ideas/a` が両方該当しても1件）。
+    val shallowest = blocked.filterNot { path ->
+        blocked.any { other -> other != path && isDescendantFolder(path, other) }
+    }
+    readableItems
+        .groupBy { item -> shallowest.firstOrNull { it in breakerGroupPaths(item.vaultRelativePath) } }
+        .forEach { (blockedBy, items) ->
+            if (blockedBy == null) {
+                orphans += items
+            } else {
+                withheld += WithheldOrphans(blockedBy, items.size, OrphanWithholdReason.FOLDER_WIDE_ABSENCE)
             }
         }
     if (unresolvable > 0) {
@@ -108,6 +132,30 @@ fun assessReadingTraceOrphans(
 
 /** Vaultルートを表す相対パス。ルート直下のノートの親はこれになる。 */
 private const val ROOT_PATH = ""
+
+/**
+ * 遮断器が候補を数える単位。**直接の親と、ルートを除く全祖先。**
+ *
+ * - `ideas/2026/habit.md` → `["ideas", "ideas/2026"]`
+ * - `habit.md` → `[""]`（ルート直下。ルートは**直接の親のときだけ**数える）
+ *
+ * 全祖先を見るのは、故障が任意の階層で起こるため。直接の親だけだと、上位フォルダが
+ * 静かに空を返したときに配下の各フォルダが1件ずつになってすり抜ける。
+ *
+ * **ルートを祖先としては数えない。** 数えると全候補が共通の祖先を持つので
+ * 「Vault全体で常に1件まで」となり、正当な孤児が2件溜まった時点で永久に掃除できなくなる。
+ * ただし**ルート直下のノートどうしは直接の親が同じ**なので、そこは従来どおり括られる。
+ */
+internal fun breakerGroupPaths(vaultRelativePath: String): List<String> {
+    val folder = parentVaultPath(vaultRelativePath)
+    if (folder.isEmpty()) return listOf(ROOT_PATH)
+    val segments = folder.split('/')
+    return segments.indices.map { segments.take(it + 1).joinToString("/") }
+}
+
+/** [candidate] が [ancestor] の配下か（同一は含めない）。 */
+internal fun isDescendantFolder(candidate: String, ancestor: String): Boolean =
+    ancestor.isEmpty() && candidate.isNotEmpty() || candidate.startsWith("$ancestor/")
 
 /** `ideas/2026/habit.md` → `ideas/2026`、`habit.md` → `""`（ルート）。 */
 internal fun parentVaultPath(vaultRelativePath: String): String =

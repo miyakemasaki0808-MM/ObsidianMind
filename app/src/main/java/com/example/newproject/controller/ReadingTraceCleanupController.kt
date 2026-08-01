@@ -7,13 +7,20 @@ import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.domain.assessReadingTraceOrphans
 import com.example.newproject.model.OrphanAssessment
+import com.example.newproject.domain.isUnderUnreadableFolder
+import com.example.newproject.domain.parentVaultPath
+import com.example.newproject.model.OrphanCandidate
 import com.example.newproject.model.OrphanLimits
 import com.example.newproject.model.OrphanTraceInfo
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTraceCleanupStateWriter
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 読書痕跡の整理（孤児の洗い出し）。
@@ -22,8 +29,9 @@ import kotlinx.coroutines.launch
  * （[AnnotationController] の `listJob`）と同じで、無効化の契機は Vault切替だけ。
  * したがってノート単位の契約（`cancelNoteScopedJobs` / `withNoteScopedReset`）へは登録しない。
  *
- * **段階3 の時点では削除しない。** 候補と、遮断器が保留した一群を並べて見せるだけの
- * シャドーモードで、判定が信用できるかを実運用で観測する（→ reflect_reading_trace §14）。
+ * 候補と、遮断器が保留した一群を洗い出す。削除は**1件ずつのみ**で、一括削除は持たない
+ * （遮断器は上位フォルダが静かに欠けた場合を完全には塞げないため、実績が集まるまで外す
+ * → reflect_reading_trace §14）。
  */
 internal class ReadingTraceCleanupController(
     private val scope: CoroutineScope,
@@ -34,7 +42,14 @@ internal class ReadingTraceCleanupController(
     private val currentVaultKey: () -> String?,
     /** Vault単位の世代。走行中に切り替わったら結果を捨てる。 */
     private val vaultGeneration: () -> Long,
-    private val limits: OrphanLimits = OrphanLimits()
+    private val limits: OrphanLimits = OrphanLimits(),
+    /**
+     * SAF I/O を逃がす先。**痕跡の列挙・読み出し・削除は同期I/O**で、
+     * `scope` は本番では `viewModelScope`（Main）なので、ここを通さないと
+     * Google Drive 等の遠いプロバイダで画面が止まる。
+     * 既存の [ReadingTraceController] と同じ規律。
+     */
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private var job: Job? = null
 
@@ -49,8 +64,12 @@ internal class ReadingTraceCleanupController(
     private var assessedVaultKey: String? = null
 
     /**
-     * 孤児候補を洗い直す。画面を開くたびに走らせてよい
-     * （ノート一覧はTTLキャッシュ、痕跡の列挙は掃除のためだけの1回）。
+     * 孤児候補を洗い直す。画面を開くたびに走る。
+     *
+     * **ノート一覧のTTLキャッシュには相乗りしない** — `collectAllNotes()` は
+     * Repository へ直行するので毎回フル走査になる。掃除は「不在」を根拠にする以上
+     * 鮮度を優先すべきで、キャッシュ済みの古い一覧で判断すると
+     * 消えたはずのノートが残って見える（＝候補を取りこぼす）。
      */
     fun assess() {
         val handle = vault.current()
@@ -79,7 +98,7 @@ internal class ReadingTraceCleanupController(
         handle: com.example.newproject.data.VaultHandle,
         vaultKey: String
     ): ReadingTraceCleanupState = try {
-        val listing = persistence.listKeys(vaultKey)
+        val listing = withContext(ioDispatcher) { persistence.listKeys(vaultKey) }
         when (listing) {
             is ReadingTraceKeyListing.Unavailable ->
                 ReadingTraceCleanupState.Error(listing.reason)
@@ -89,15 +108,22 @@ internal class ReadingTraceCleanupController(
                 val noteKeys = scan.notes.mapTo(mutableSetOf()) {
                     ReadingTraceStore.keyFor(it.vaultRelativePath)
                 }
-                val assessment = assessReadingTraceOrphans(
-                    traceKeys = listing.keys,
-                    noteKeys = noteKeys,
-                    unreadableFolderPaths = scan.unreadableFolderPaths,
-                    limits = limits
-                ) { key -> resolve(key, vaultKey) }
+                // 候補の中身読みも同期I/O。判定ごと IO へ載せる。
+                val assessment = withContext(ioDispatcher) {
+                    assessReadingTraceOrphans(
+                        traceKeys = listing.keys,
+                        noteKeys = noteKeys,
+                        unreadableFolderPaths = scan.unreadableFolderPaths,
+                        limits = limits
+                    ) { key -> resolve(key, vaultKey) }
+                }
                 assessment.toState()
             }
         }
+    } catch (error: CancellationException) {
+        // キャンセルを一般エラーへ畳むと、Vault切替のたびに偽エラーが出るうえ、
+        // `state.set` は suspend しないのでキャンセル後も書き込まれてしまう。
+        throw error
     } catch (error: Exception) {
         ReadingTraceCleanupState.Error(error.message ?: error::class.java.simpleName)
     }
@@ -118,38 +144,71 @@ internal class ReadingTraceCleanupController(
         }
 
     /**
-     * 候補を削除する。**対象は「いま画面に出ている候補」に固定する。**
+     * 候補を1件削除する。**削除の直前にVaultを走査し直して、まだ不在であることを確かめる。**
      *
-     * 洗い出し直後の一覧だけを消しにいくのは、走行中にVaultが切り替わっても
+     * 洗い出しと削除のあいだに同期が完了したり、同名のノートが作り直されたりすると、
+     * **その痕跡は生きている**。判定結果は時間が経つほど古くなるので、
+     * 消す瞬間に一度だけ確かめ直す（対象は1件なので走査1回で足りる）。
+     *
+     * 対象は「いま画面に出ている候補」に固定する。走行中にVaultが切り替わっても
      * 拾い直した新Vaultのファイルを消さないため（[AnnotationController.deleteAll] と同じ規律）。
      *
-     * **削除後に洗い直さない。** もう一度 Vault 全走査を掛けるのは重く、
-     * 残った候補は同じ判定で一緒に評価済みなので、消えた分を落とすだけで一覧は正しい。
-     * **失敗した候補は残す** — 消えると再試行できなくなる。
+     * **失敗した候補は一覧に残す** — 消えると再試行できなくなる。
      */
-    fun delete(keys: List<String>) {
+    fun delete(key: String) {
         val current = state.current as? ReadingTraceCleanupState.Success ?: return
+        val target = current.orphans.firstOrNull { it.key == key } ?: return
         // 洗い出した時点のVaultへ削除する。現在のVaultと違っていれば何もしない
         // （キーが衝突して別Vaultの生きた痕跡を消すのを防ぐ）。
         val vaultKey = assessedVaultKey ?: return
         if (vaultKey != currentVaultKey()) return
-        val targets = current.orphans.filter { it.key in keys }
-        if (targets.isEmpty()) return
+        val handle = vault.current() ?: return
         val generation = vaultGeneration()
         job?.cancel()
         job = scope.launch {
-            val failed = mutableSetOf<String>()
-            targets.forEach { candidate ->
-                if (!persistence.deleteByKey(candidate.key, vaultKey)) failed += candidate.key
-            }
+            val outcome = runDelete(handle, target, vaultKey)
             if (generation != vaultGeneration()) return@launch
             state.set(
-                current.copy(
-                    orphans = current.orphans.filter { it.key !in keys || it.key in failed },
-                    deleteFailureCount = failed.size
-                )
+                when (outcome) {
+                    DeleteOutcome.DELETED -> current.copy(
+                        orphans = current.orphans.filterNot { it.key == key },
+                        deleteFailureCount = 0
+                    )
+                    // 生き返っていた。消さずに候補からも外す（もう孤児ではない）。
+                    DeleteOutcome.NOT_ORPHAN_ANYMORE -> current.copy(
+                        orphans = current.orphans.filterNot { it.key == key },
+                        deleteFailureCount = 0
+                    )
+                    DeleteOutcome.FAILED -> current.copy(deleteFailureCount = 1)
+                }
             )
         }
+    }
+
+    private enum class DeleteOutcome { DELETED, NOT_ORPHAN_ANYMORE, FAILED }
+
+    private suspend fun runDelete(
+        handle: com.example.newproject.data.VaultHandle,
+        target: OrphanCandidate,
+        vaultKey: String
+    ): DeleteOutcome = try {
+        val scan = handle.collectAllNotes()
+        val stillMissing = scan.notes.none {
+            ReadingTraceStore.keyFor(it.vaultRelativePath) == target.key
+        } && !isUnderUnreadableFolder(
+            parentVaultPath(target.vaultRelativePath),
+            scan.unreadableFolderPaths
+        )
+        when {
+            !stillMissing -> DeleteOutcome.NOT_ORPHAN_ANYMORE
+            withContext(ioDispatcher) { persistence.deleteByKey(target.key, vaultKey) } ->
+                DeleteOutcome.DELETED
+            else -> DeleteOutcome.FAILED
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        DeleteOutcome.FAILED
     }
 
     /** Vault切替。走行中の洗い出しを止める（状態のリセットは状態変換側が行う）。 */

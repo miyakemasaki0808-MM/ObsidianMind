@@ -47,11 +47,14 @@ import com.example.newproject.ui.withheldLocation
 import com.example.newproject.ui.withheldReasonText
 
 /**
- * 読書痕跡の整理（シャドーモード）。
+ * 読書痕跡の整理。
  *
- * **段階3 では削除しない。削除ボタンも置かない。** 「自動なら消していた候補」と
- * 「遮断器が止めた一群」を並べて見せ、判定が信用できるかを実運用で観測するのが目的。
- * ここで再出現する候補が出れば、それが自動化の条件が危険だったことの反証になる
+ * 削除候補と、**遮断器が保留した一群を理由つき**で並べる。保留の理由は
+ * 「この判定は信用できるか」を運用で見るための観測対象そのものなので、隠さない。
+ *
+ * **削除は1件ずつだけ。一括削除は置かない。** 遮断器は上位フォルダが静かに欠けた場合を
+ * 完全には塞げず（ルート直下が欠けると候補が広く分散する）、一括削除があると
+ * §4 が許容した「稀に1件」を超える一括消失が起こりうる。実績が集まるまで外してある
  * （→ reflect_reading_trace §14）。
  *
  * 文言の方針: **「候補ゼロ」と「判定できなかった」を必ず別の言葉で出す。**
@@ -61,14 +64,12 @@ import com.example.newproject.ui.withheldReasonText
 fun ReadingTraceCleanupScreen(
     state: ReadingTraceCleanupState,
     onLoad: () -> Unit,
-    onDelete: (List<String>) -> Unit,
+    onDelete: (String) -> Unit,
     onBack: () -> Unit
 ) {
     LaunchedEffect(Unit) { onLoad() }
 
     var pendingDelete by remember { mutableStateOf<OrphanCandidate?>(null) }
-    var showDeleteAll by remember { mutableStateOf(false) }
-    val orphans = (state as? ReadingTraceCleanupState.Success)?.orphans.orEmpty()
 
     Column(
         modifier = Modifier
@@ -82,24 +83,7 @@ fun ReadingTraceCleanupScreen(
             titleSize = 24.sp,
             leading = {
                 IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack)
-            },
-            trailing = if (orphans.isNotEmpty()) {
-                {
-                    Surface(
-                        modifier = Modifier.clickable { showDeleteAll = true },
-                        color = DangerAction,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Text(
-                            text = "すべて削除",
-                            color = OnDangerAction,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
-                        )
-                    }
-                }
-            } else null
+            }
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -130,28 +114,18 @@ fun ReadingTraceCleanupScreen(
             title = "この読書痕跡を削除しますか",
             // 何が消えて何が消えないかを必ず並べて書く。痕跡とノートの区別が付かないと
             // 「ノートが消える」と受け取られる。
+            // 「存在しない」と断定しない。**現在の走査で見つからない**が事実の限界で、
+            // 同期途中なら後から現れうる（→ lessons L24）。
             body = "「${candidate.noteTitle}」の読書記録を削除します。\n" +
-                "ノート本文は削除されません（すでに見つからないノートです）。",
+                "現在の走査ではこのノートが見つかりません。ノート本文は削除されません。",
             onConfirm = {
-                onDelete(listOf(candidate.key))
+                onDelete(candidate.key)
                 pendingDelete = null
             },
             onDismiss = { pendingDelete = null }
         )
     }
 
-    if (showDeleteAll) {
-        ConfirmDialog(
-            title = "候補をすべて削除しますか",
-            body = "${orphans.size}件の読書記録を削除します。\n" +
-                "ノート本文は削除されません。安全のため保留した分は削除されません。",
-            onConfirm = {
-                onDelete(orphans.map { it.key })
-                showDeleteAll = false
-            },
-            onDismiss = { showDeleteAll = false }
-        )
-    }
 }
 
 @Composable
