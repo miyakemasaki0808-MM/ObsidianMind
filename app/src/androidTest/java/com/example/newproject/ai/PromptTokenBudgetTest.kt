@@ -84,9 +84,17 @@ class PromptTokenBudgetTest {
         val results = listOf(
             probe("checkStatus()") { featureStatusLabel(client.featureStatus()) },
             probe("getBaseModelName()") { client.baseModelName() },
-            probe("getTokenLimit()") { client.tokenLimit().toString() },
-            probe("countTokens()") { client.countPromptTokens("トークン計測の疎通確認").toString() },
-            probe("maxOutputTokens（端末へ問い合わせない）") { client.reservedOutputTokens().toString() }
+            probe("maxOutputTokens（端末へ問い合わせない）") { client.reservedOutputTokens().toString() },
+            probe("countTokens()（warmup前）") { client.countPromptTokens(PROBE_PROMPT).toString() },
+            probe("getTokenLimit()（warmup前）") { client.tokenLimit().toString() },
+            // トークン系がセッション確立を前提にしている可能性を切り分ける。
+            // warmup 後だけ通るなら、計測の前に warmup を挟めば済む。
+            probe("warmup()") { client.warmup(); "ok" },
+            probe("countTokens()（warmup後）") { client.countPromptTokens(PROBE_PROMPT).toString() },
+            probe("getTokenLimit()（warmup後）") { client.tokenLimit().toString() },
+            // 生成が通ることを同じ実行の中で確かめる。これが通ってトークン系だけ落ちるなら、
+            // 「端末AIが使えない」ではなく「計測APIだけ使えない」が確定する。
+            probe("generate()（対照）") { client.generate("1+1は？ 数字だけ答えて。").take(40) }
         )
 
         log("── 能力プローブ ${"─".repeat(34)}")
@@ -336,6 +344,7 @@ class PromptTokenBudgetTest {
         /** `app/build.gradle.kts` の宣言と揃える。ログの数値がどのSDKで採れたかを残すため。 */
         const val GENAI_PROMPT_VERSION = "1.0.0-beta2"
 
+        const val PROBE_PROMPT = "トークン計測の疎通確認"
         const val TITLE = "オンデバイスAIの入力予算に関する検討"
         const val SECTION = "予算配分の考え方"
         const val RELATED_SNIPPET_LEN = 150

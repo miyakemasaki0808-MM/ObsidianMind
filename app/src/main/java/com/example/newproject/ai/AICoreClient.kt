@@ -150,6 +150,16 @@ class AICoreClient : AiClient {
     }
 
     /**
+     * モデルを事前に立ち上げる。
+     *
+     * 本番の生成経路では呼んでいない（初回の遅さは許容している）。計測で使うのは、
+     * **トークン系APIがセッション確立を前提にしている可能性**を切り分けるため。
+     */
+    internal suspend fun warmup() = withContext(Dispatchers.IO) {
+        model.warmup()
+    }
+
+    /**
      * 生成時に予約される出力トークン数。
      *
      * SDKが埋めた実値をリクエストから読むので、SDK版を上げれば既定値の変化に自動で追随する。
