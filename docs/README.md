@@ -53,9 +53,9 @@
 | [architecture.md](design/architecture.md) | ViewModel分割・状態管理・並行処理の規約 | 実装済み（PR #16〜#20） |
 | [ui_design_principles.md](design/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** | 運用中 |
 | [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 | 実装済み |
-| [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み |
+| [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み・実機確認済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
-| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み（段階7は実機確認待ち） |
+| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み・実機確認済み |
 
 ### 読む導線
 
@@ -70,11 +70,11 @@
 | 文書 | 対象 | 状態 |
 |---|---|---|
 | [reflect_distill.md](design/reflect_distill.md) | 蒸留（Distill） | v1 Phase 1〜6 実装済み・実機確認待ち |
-| [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） | v1 実装済み・実機確認待ち |
+| [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） | **v1完了**（実機確認は2026-07-31にクローズ） |
 | [section_ai_chat.md](design/section_ai_chat.md) | セクション単位AIチャット | 実装済み（PR #14） |
 | [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
-| [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認待ち |
+| [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認済み |
 | [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認済み |
 
 ### Vigilith（人格と演出）
@@ -82,7 +82,7 @@
 | 文書 | 対象 | 状態 |
 |---|---|---|
 | [character_vigilith.md](design/character_vigilith.md) | キャラクターシート（黒曜の梟オートマトン） | コンセプト確定 |
-| [vigilith_in_app.md](design/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） | Phase 3 実装済み・実機確認待ち |
+| [vigilith_in_app.md](design/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） | Phase 3 実装済み・実機確認待ち（認証ロックで保留） |
 | [opening_animation.md](design/opening_animation.md) | 起動OPアニメーション | 実装済み（PR #26・2026-07-26改稿） |
 
 ---
