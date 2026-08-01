@@ -74,7 +74,7 @@
 | [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
 | [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認待ち |
-| [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認待ち |
+| [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認済み |
 
 ### Vigilith（人格と演出）
 

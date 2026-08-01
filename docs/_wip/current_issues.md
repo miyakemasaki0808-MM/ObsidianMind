@@ -1,7 +1,7 @@
 # 未対応課題の台帳
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-08-01（`feature/Improvement_Function_No.9`）
+**最終更新:** 2026-08-02（`feature/Improvement_Function_No.10`）
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -78,17 +78,13 @@
 
 ## FEAT-1. YAML/Markdownの限定実装とキャッシュTTL
 
-**リスト部分は 2026-08-02 に解消した（実機確認待ち）。** 入れ子段数・番号（`1.` と `1)`、
-先頭ゼロを含む原文表記）・タスク混在を保持するようになり、**AI入力にも順序が届く**。
-準拠先を持たないパーサであることを明示した設計書を起こしてある
-→ [design/markdown_rendering.md](../design/markdown_rendering.md)。
-
 - YAML解析が簡易（[`parseMeta`](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L217) は
   `---` 囲みの先頭ブロックから `tags`/`aliases` を単純抽出するだけ。ネスト・複数行値は未対応 → 取りこぼし）。
 - Markdownの残り: **クリック可能リンク・画像・埋め込み・数式**、および段落の遅延継続・ネスト引用。
   **クリック可能リンクだけは性質が違う** — `[[wikilink]]` のタップでVault内ノートへ飛べると
   Rediscover→Reflect のループに直接効くため、単なる表示拡張ではない。
   実装時は `SelectionContainer` 内でのクリック検証が要る。
+  （リストの入れ子・番号・タスク混在は 2026-08-02 に解消し実機確認済み → [design/markdown_rendering.md](../design/markdown_rendering.md)）
 - キャッシュTTL 60秒（`NOTES_CACHE_TTL_MS`）により外部同期・編集結果の反映が最大60秒遅れる。
 
 ## A11Y-1. バッジの塗りが下部ナビ帯の上で判別できない
