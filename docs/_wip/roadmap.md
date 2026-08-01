@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**初版:** 2026-07-22（最終更新: 2026-08-01）
+**初版:** 2026-07-22（最終更新: 2026-08-02）
 **基準:** A〜E案と2026-07-31の品質改善（表示Markdownの非同期化・蒸留の復旧チェック・補記の後始末）は実機確認済み。ReadingTrace v1 と C案の一部に実機確認が残る。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -37,15 +37,18 @@
 
 ## 🟢 Now — 直近で着手（今のループを完成させる）
 
-**テーマ: 実端末テストの残る前提を揃える。**
+**テーマ: 前提が揃った。次の一手を選ぶ段。**
 性能の最優先課題（表示用MarkdownのMain上での二重解析）と F-2 の2件は 2026-07-31 に実装・実機確認とも完了し、
 **ReadingTrace v1 も同日クローズした**（残っていた実機確認は構造上ほぼ実施不可能と判断
 → [reflect_reading_trace](../design/reflect_reading_trace.md) §12）。
 
 **instrumentation の土台（旧 N-6）は 2026-08-01 に Android 16 で 2/2 成功し、閉じた。**
-Runnerが起動しComposeを描画できることが実証されたので、以後の失敗は「土台の故障」と
-切り分けられる。**N-7（旧 X-8）のドキュメント参照側も同日に実装・実機確認とも完了し、
-Nowから閉じた**（詳細は下記 L-3 §）。**Now は現在空。**
+**SAF境界の gateway 化（旧 N-7）も 2026-08-02 に全段階が完了した** — ドキュメント参照の
+`DocumentRef` 化に加え、さがす／補記の `ContentResolver` と Vault ルートを `VaultBrowser` の裏へ束ね、
+`model` / `domain` / `controller` / `ui` から `android.net.Uri` が消えた（詳細は下記 L-3 §）。
+
+**Now は空。** L-3 の着手条件は2つとも揃っており、次に何をやるかは Next / Later から選んで決める。
+**選ぶ前に VERIFY-4（`VaultBrowser` 移行の実機確認）を先に片付ける。**
 
 
 ## 🟡 Next — 次に取り組む（ループを豊かにし、土台を強くする）
@@ -88,14 +91,12 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 
 ### L-3. 統合テストの中身
 - **土台の話はここには無い**（2026-08-01 に閉じた）。ここに残るのは中身 — SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・連続操作時の競合。いずれも実端末が要る。→ [current_issues.md](current_issues.md) TEST-2
-- **着手条件は2つとも 2026-08-01 に満たした。** ①instrumentation の土台が緑であること（Android 16 で 2/2 成功）
-  ②ドキュメント参照が gateway の裏へ入っていること（`NoteFile`・`RelatedNote`・`HistoryEntry` を
-  `DocumentRef` へ移行し、`model` / `domain` / `ui` から `android.net.Uri` を追い出した。実機確認も同日完了。
-  → [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
-- **旧 N-7 の段階7（Vault ルートを controller の引数から外す）には意図的に進まない。**
-  型を変える話ではなく、`vaultUri: () -> Uri?` という素通しの引数を1段削るだけの整理で、
-  L-3 着手の前提ではない。**スコープを広げずに TEST-2 本体（実端末テストの中身）へ進める状態が整った**
-  ので、ここで一区切りとする。必要になれば独立した改善として再検討する。
+- **着手条件は2つとも満たした。** ①instrumentation の土台が緑（2026-08-01・Android 16 で 2/2 成功）
+  ②SAF境界が gateway の裏へ入った（2026-08-02・→ [saf_boundary_gateway](../design/saf_boundary_gateway.md)）。
+- **JVMで書けるものは JVM へ寄せ切った。** さがす・補記の世代照合と走査キャッシュは
+  2026-08-02 に19件のJVMテストで覆われた（5つのガードを削る変異で確認済み）。
+  **ここへ残すのは実端末でしか確かめられないものだけ**にする — 逆に言えば、
+  instrumentation に何かを書きたくなったら、まず「JVMで書けないか」を先に問う。
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
 - YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1

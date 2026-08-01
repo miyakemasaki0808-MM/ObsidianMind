@@ -79,7 +79,7 @@ class PackageDependencyTest {
         if (identifier.isNotEmpty() && identifier.first().isLowerCase()) identifier else ROOT
 
     /**
-     * `model` と `domain` は **Androidフレームワークにも依存しない**。
+     * `model`・`domain`・`controller` は **Androidフレームワークにも依存しない**。
      *
      * 向きの表（上）が見ているのは `com.example.newproject.*` の import だけで、
      * `android.*` は数えていなかった。そのため `model` は「プロジェクト内の何も
@@ -90,11 +90,17 @@ class PackageDependencyTest {
      * テスト容易性の観点では、プロジェクト内の依存も外部フレームワークへの依存も
      * 等しく「その層を素のJVMで扱えなくする」ので、**同じ規則で数える**。
      *
+     * `controller` は 2026-08-02 に加えた。`VaultBrowser` が `ContentResolver` と
+     * Vault ルートを束ねたことで最後の `Uri` が消え、`NoteSessionCoordinator` の
+     * 「Android API を呼ばない」というKDocの約束が import の不在として確かめられる
+     * ようになったため。**約束のままにせず、ここで固定する。**
+     *
      * `ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` と
-     * ルートは SAF・`ContentResolver` を実際に扱う境界なので依存してよい。
+     * ルート（`NoteViewModel` / `MainActivity`）は SAF・`ContentResolver` を
+     * 実際に扱う境界なので依存してよい。
      */
     @Test
-    fun `model と domain は Android に依存しない`() {
+    fun `model と domain と controller は Android に依存しない`() {
         val sourceRoot = mainSourceRoot()
         val violations = sourceRoot.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
@@ -113,7 +119,7 @@ class PackageDependencyTest {
             .toList()
 
         assertTrue(
-            "model / domain が Android に依存しています:\n${violations.joinToString("\n")}",
+            "model / domain / controller が Android に依存しています:\n${violations.joinToString("\n")}",
             violations.isEmpty()
         )
     }
@@ -141,8 +147,8 @@ class PackageDependencyTest {
         // ルート直下のファイルは `.<pkg>` を持たないので、その場合はグループ1が空になる。
         private val PACKAGE_PATTERN =
             Regex("""(?m)^package\s+com\.example\.newproject(?:\.([a-z][A-Za-z0-9_]*))?\b""")
-        /** `model` / `domain` は Android フレームワークにも依存しない。 */
-        private val ANDROID_FREE_LAYERS = setOf("model", "domain")
+        /** `model` / `domain` / `controller` は Android フレームワークにも依存しない。 */
+        private val ANDROID_FREE_LAYERS = setOf("model", "domain", "controller")
 
         // `androidx.compose` などを含めないよう、`android.` と `androidx.` の両方を見る。
         private val ANDROID_IMPORT_PATTERN =

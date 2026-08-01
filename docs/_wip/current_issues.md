@@ -1,7 +1,7 @@
 # 未対応課題の台帳
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-08-01（`feature/Improvement_Function_No.7`）
+**最終更新:** 2026-08-02（`feature/Improvement_Function_No.7`）
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -33,6 +33,7 @@
 | [REL-1](#rel-1-r8とリリース署名が未設定) | R8とリリース署名が未設定 | 低 | 配布可能な成果物がまだ作れない |
 | [MAINT-1](#maint-1-依存が12件古くml-kit-genai-の新版を調査していない) | 依存が12件古く、ML Kit GenAI の新版を調査していない | 低 | AI基盤の新版を評価できていない |
 | [MAINT-2](#maint-2-gradientheader-の全幅化が呼び出し側との手動契約になっている) | `GradientHeader` の全幅化が呼び出し側との手動契約になっている | 低 | 余白変更で見出しが崩れる |
+| [VERIFY-4](#verify-4-vaultbrowser-移行の実機確認が未実施) | `VaultBrowser` 移行の実機確認が未実施 | **中** | さがす・補記の全経路を通っている |
 | [VERIFY-2](#verify-2-c案の実機確認が2件残っている) | C案の実機確認が2件残っている | 低 | 切り詰め文言と関連ノート速度が未確認 |
 
 **高優先度の課題は現在ゼロ。** 直近まで唯一のP1だった「表示用MarkdownのMain上での二重解析」は 2026-07-31 に解消し、実機確認まで終えた。
@@ -96,16 +97,16 @@
   連続操作時の競合を絡めたテストがない。JVMテスト486件は純粋ロジックの回帰防止に有効だが、
   実端末依存の動作は保証範囲外。
 - **前提が2つある。①は 2026-08-01 に満たした** — Android 16 で 2/2 成功し、**Runnerが起動しComposeを描画できることが実証された**（土台の故障と切り分けられる状態になった）。
-  **②も 2026-08-01 にドキュメント参照側が済み、同日中に実機確認も完了した**（旧 VERIFY-3）。
-  `NoteFile`・`RelatedNote`・`HistoryEntry` は `DocumentRef` になり、`model` / `domain` / `ui` から
-  `android.net.Uri` が消えた。**Vault ルートの `Uri` を controller の引数から外す作業（段階7）は
-  意図的に着手しない** — 型を変える話ではなく素通しの引数を1段削るだけの整理で、
-  TEST-2 本体（実端末テストの中身）の前提としては必須ではないと判断した。
+  **②も 2026-08-02 に完了した。** `DocumentRef` 化（段階1〜6）に加え、`VaultBrowser` で
+  `ContentResolver` と Vault ルートを束ねた（段階7）。`model` / `domain` / `controller` / `ui` から
+  `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。
+  **JVMで書けるものが instrumentation へ流れ込む状態は解消した** — さがす・補記の世代照合と
+  走査キャッシュは19件のJVMテストで覆われている。
 - **部分的な前進:** 補記の保存経路だけは 2026-07-31 に `AnnotationDocumentGateway` として切り出し、
   失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。
-- **`Uri` を import するファイルは17→10になった** → [design/saf_boundary_gateway.md](../design/saf_boundary_gateway.md)。
-  残る10は `data` 6・`controller` 3・`NoteViewModel` 1 で、**`controller` の3件以外はいずれも正しい依存**。
-- **規模感:** 大。ただし前提はほぼ揃ったので、次は実テストの中身そのものが主作業になる。
+- **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../design/saf_boundary_gateway.md)。
+  残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
+- **規模感:** 大。**前提は2つとも揃ったので、残るのは実テストの中身そのものだけ。**
 
 ## AI-2. AI状態の一時エラーと非対応を同一視している
 
@@ -181,6 +182,26 @@
   合っているが、**余白を変えた瞬間に見出しだけがずれる**。レイアウトテストは無い。
   配色は「テストで強制する」ところまで持っていったのに対し、寸法の対応関係は約束のままである。
 - **規模感:** 極小。
+
+## VERIFY-4. `VaultBrowser` 移行の実機確認が未実施
+
+- **現状:** 2026-08-02 に、さがす／補記の `ContentResolver` と Vault ルートを
+  `VaultBrowser` / `VaultHandle` の裏へ束ねた。**挙動は変えていない**が、
+  **さがすタブと補記の全経路が新しい呼び出し口を通る**。
+- **JVMテストで担保できている範囲:** 507件全件グリーン。世代照合3種・検索とランダムの実行・
+  走査キャッシュのヒットと破棄・削除失敗の件数は**新たに19件のテストで覆った**（変異確認済み）。
+  むしろ移行によって覆える範囲が大きく増えた側である。
+- **実機でしか確かめられないのは、実 `ContentResolver` を通すSAF操作そのもの。**
+  `SafVaultHandle` が `NoteRepository` へ渡す引数は移行前と同じだが、束ね方が変わっている。
+- **確認したいこと（一巡）:**
+  1. さがすタブでフォルダchipsが出る（`listTopLevelFolders`）
+  2. フォルダを選んでキーワード検索・ランダムができる（`collectNotesInScope`）
+  3. Vaultを切り替えるとchipsと検索結果が入れ替わる（**旧Vaultのものが残らない**）
+  4. 補記を生成できる（`createAnnotationFile`）
+  5. 補記管理画面で一覧が出て、個別削除・一括削除ができる（`listAnnotationFiles` / `deleteDocument`）
+  6. Vault未選択の状態で補記を作ろうとすると「Vault が選択されていません。」が出る
+- **3と6は特に見る。** 3は世代照合の実挙動、6は「未選択ポリシーを controller に残した」判断の確認。
+- **規模感:** 小（一巡するだけ）。
 
 ## VERIFY-2. C案の実機確認が2件残っている
 

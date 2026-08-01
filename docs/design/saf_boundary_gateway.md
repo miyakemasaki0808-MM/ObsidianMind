@@ -2,11 +2,9 @@
 
 **対象領域:** `model` の共有データ型が持つ `android.net.Uri`・`domain` の Android 依存・SAF操作の呼び出し境界
 **初版:** 2026-08-01
-**状態:** **段階1〜6 実装済み・実機確認済み**（2026-08-01）。`model` / `domain` / `ui` から `android.net.Uri` が消え、
-`PackageDependencyTest` で固定済み。**段階7（Vaultルートを controller の引数から外す）には意図的に進まない** —
-型を変える話ではなく素通しの引数を1段削るだけの整理で、TEST-2 本体（実端末テストの中身）の前提ではないため。
-必要になれば独立した改善として再検討する。
-**実装で段取りの誤りが1つ見つかり、下記§段取りに追記した。**
+**状態:** **全段階 実装済み**（段階1〜6: 2026-08-01・実機確認済み／段階7: 2026-08-02・**実機確認待ち**）。
+`model` / `domain` / `controller` / `ui` から `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。
+**実装で当初案の誤りが2つ見つかった** — 段取り（下記§段取り）と、段階7の意義そのもの（下記§段階7）。
 
 ---
 
@@ -41,6 +39,12 @@
 
 逆にドキュメント側は、controller と domain が**中身を見ずキーとしてだけ**使っている。
 つまり既に不透明に扱われており、型がそれに追いついていないだけである。
+
+> **この節の後半は 2026-08-02 に訂正した。** 「Vaultルートを不透明化しても
+> **テスト容易性は1ミリも上がらない**」と書いていたが、これは誤りだった。
+> 正しくは「**不透明化するだけでは上がらない**」で、Vault・`ContentResolver`・
+> `NoteRepository` の3つを同時に外せば上がる。詳細は §段階7。
+> 結論（不透明化ではなく束ねる）は変わらないが、**理由が違うと次の判断を誤る。**
 
 ## 判断1: 参照は `model` に置く `DocumentRef`（value class）
 
@@ -104,7 +108,7 @@ value class DocumentRef(val value: String)
 | 2 | `HistoryEntry` だけを置き換える | **不可能。** 3型を同時に移すしかない |
 | 3〜5 | `RelatedNote` → `NoteFile` → `AnnotationState` と順に | **2と同時に実施**（`e7d61ee`） |
 | 6 | `PackageDependencyTest` を拡張 | そのとおり（同コミット） |
-| 7 | Vaultルートを controller から外す | **意図的に進まない**（2026-08-01・スコープ判断） |
+| 7 | Vaultルートを controller から外す | **実施した**（2026-08-02。ただし当初の想定とは中身が違う → §段階7） |
 
 **なぜ部分移行が不可能だったか。** 構築箇所が層をまたいで連鎖している。
 
@@ -148,25 +152,98 @@ data/NoteRepository ──生成──> NoteFile
 
 ## 完了の固定
 
-`PackageDependencyTest` に「`model` と `domain` は Android に依存しない」を足した。
+`PackageDependencyTest` に「**`model`・`domain`・`controller` は Android に依存しない**」を足した。
 従来の依存テストは `com.example.newproject.*` の import しか見ておらず、
 **`android.*` を数えていなかったのが穴の正体**である。
 
-`ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` とルートは
-SAF・`ContentResolver` を実際に扱う境界なので依存してよい。
-`model` と `domain` のそれぞれへ import を1行注入し、テストが落ちることを確認済み。
+`controller` は段階7で加えた。`VaultBrowser` が最後の `Uri` を消したことで、
+`NoteSessionCoordinator` のKDocにあった「Android API を呼ばない」という約束が
+**import の不在として機械的に確かめられる**ようになったため。**約束のままにしない。**
 
-## 実測（2026-08-01・移行後）
+`ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` とルート
+（`NoteViewModel` / `MainActivity`）は SAF・`ContentResolver` を実際に扱う境界なので依存してよい。
+`model`・`domain`・`controller` のそれぞれへ import を1行注入し、テストが落ちることを確認済み。
 
-| 層 | 移行前 | 移行後 |
-|---|---:|---:|
-| `model` | 4 | **0** |
-| `domain` | 1 | **0** |
-| `ui` | 1 | **0** |
-| `controller` | 3 | 3（Vaultルートのみ。段階7の対象） |
-| `data` | 7 | 6（`NoteHistoryStore` が `Uri` から解放された） |
-| ルート | 1 | 1（Android境界の窓口。**正しい依存**） |
-| 合計 | 17 | **10** |
+## 実測（`import android.net.Uri` を持つファイル数）
+
+| 層 | 着手前 | 段階1〜6後 | 段階7後 |
+|---|---:|---:|---:|
+| `model` | 4 | **0** | **0** |
+| `domain` | 1 | **0** | **0** |
+| `ui` | 1 | **0** | **0** |
+| `controller` | 3 | 3 | **0** |
+| `data` | 7 | 6 | 7（`VaultBrowser` が増え、`NoteHistoryStore` が減った） |
+| ルート | 1 | 1 | 1（Android境界の窓口。**正しい依存**） |
+| 合計 | 17 | 10 | **8** |
+
+**残る8はすべて意図した依存**で、`data`（SAF境界そのもの）とルート（Android境界の窓口）だけである。
+
+## 段階7 — 「引数を1つ消す」ではなく「3つ同時に外す」だった（2026-08-02）
+
+当初の処方は「Vault の解決を repository / gateway 側へ束ねて、controller の引数から消す」で、
+**効果は依存の見た目が整うことだと考えていた**。着手前に測ったら、それでは何も起きないと分かった。
+
+**Vault スコープの経路をJVMで検証できない壁は3つある。**
+
+| # | 壁 | 着手前の実態 |
+|---|---|---|
+| 1 | `vaultUri(): Uri?` が非nullで要る | 全テストが `vaultUri = { null }` を渡していた |
+| 2 | `NoteRepository` が具象クラスで差し替え口が無い | 全テストが実物の `NoteRepository()` を渡していた |
+| 3 | 全公開メソッドが `contentResolver: ContentResolver` を取る | **どのテストも渡していない**（JVMで作れない） |
+
+**1つだけ外しても、2と3で詰まって happy path には到達しない。** 当初案は1しか外さないので、
+新しく書けるテストは0件だった。証拠はテスト側のコメントに残っていた —
+`SearchControllerTest` は「検索の実行と `loadFolders` の世代照合は検証できない…実機確認で担保する」、
+`NoteSessionCoordinatorTest` は `ContentResolver` を作れないため
+**private フィールドへリフレクションで番兵を積んでいた**。
+
+**3つを同時に外す形が [VaultBrowser] / [VaultHandle]。** `ContentResolver` と Vault ルートを
+実装側で束ね、controller は「未選択なら null」だけを見る。
+
+**これは新しい発明ではない。** 蒸留（`DistillPersistence` ＋ `SafDistillDocumentGateway`）と
+読書痕跡（`ReadingTracePersistence` ＋ `SafReadingTraceDocumentGateway`）は既にこの形で、
+どちらも `ContentResolver` を構築時に束ねているから Fake を書ける。
+**7機能のうち2つだけが解けていて、残りが取り残されていた**（テーマ8: 横展開は最後の1本を取り残す）。
+
+### 「Vault未選択」のポリシーは controller に残す
+
+[VaultBrowser.current] が null を返すところまでが `data` の責任で、そのとき何を出すかは
+呼び出し側が決める。**実際に挙動が違う。**
+
+| 経路 | Vault未選択のとき |
+|---|---|
+| `SearchController`（列挙・検索・ランダム） | 黙って返る |
+| `AnnotationController.create` | `AnnotationState.Error("Vault が選択されていません。")` |
+| `AnnotationController.loadList` | `AnnotationListState.Error("Vault が選択されていません。")` |
+
+下へ押し込むとこの差が消える。**共通化できるのは「未選択かどうか」までで、その先ではない。**
+
+### ハンドルは1回だけ取る
+
+処理の開始時に [VaultBrowser.current] を1回呼び、その1つを最後まで使う。
+途中で引き直すと「照合は旧Vault・書き込みは新Vault」という食い違いが起こり得る。
+これは `ReadingTraceStore` が既にKDocへ明記している規約（「`vaultUri()` を読むのは1回だけ。
+読み直してはいけない」）と同じで、走行中の切替は `vaultGeneration` が弾く。
+
+**例外はモデルDL完了後の再開だけ。** 完了は数分後になり得るので、その時点で引き直す（従来と同じ）。
+
+### 得られたもの
+
+- **JVMテスト +19件**（`SearchControllerTest` +11・`AnnotationControllerTest` +8）。
+  世代照合3種・検索とランダムの実行・走査キャッシュのヒットと破棄・削除失敗の件数。
+  **5つのガードを1つずつ削る変異で、対応するテストが落ちることを確認済み。**
+- **リフレクション番兵が半分消えた。** 走査キャッシュの破棄は実際に走査させて回数で見る形になった。
+  Jobの停止だけは番兵が残る（走行中のJobを外から観測する手段が無いため）。
+- **`controller` から `android.*` が完全に消えた。** 使われなくなった `vaultUri` パラメータと
+  `ContentResolver` の import も落ちた。`NoteSessionCoordinator` の「Android API を呼ばない」という
+  KDocの約束が、**import の不在として確かめられる**ようになった。
+
+### 教訓
+
+**「処方」だけを設計書に書くと、効果の見積もりが検証されないまま残る。**
+判断0は結論（不透明化ではなく束ねる）は正しかったが、理由（テスト容易性は上がらない）が誤りで、
+処方の範囲（Vaultだけ外す）が不足していた。**着手前に「これで何が書けるようになるか」を
+1件でも具体的に挙げれば、3つの壁のうち1つしか崩していないことに気づけた。**
 
 ## この設計が引き受けないこと
 

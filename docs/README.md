@@ -1,7 +1,7 @@
 # ドキュメント地図
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-08-01
+**最終更新:** 2026-08-02
 
 このフォルダは**26文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
 同じ機能の話が複数の文書に分かれるのは意図的で、「確定した判断」と「まだ決まっていないこと」を物理的に隔離するため。
@@ -33,7 +33,7 @@
 | [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（914行・16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
 | [source_code_quality_review.md](source_code_quality_review.md) | 品質の採点結果（11軸・総合7.2/10・2026-07-26）。**Codexが評価者として作成する外部レビュー** | **書き換えない。** 次回レビュー時に新しい日付の総評を追記する（推移を残す） |
 | [bugfix_reports.md](bugfix_reports.md) | AIが生成しがちで通常フローでは表面化しない潜在バグの記録 | 該当する型のバグを踏んだとき |
-| [lessons.md](lessons.md) | 機能にもバグにも属さない、繰り返し現れた構造的な教訓（18件） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
+| [lessons.md](lessons.md) | 機能にもバグにも属さない、繰り返し現れた構造的な教訓（19件） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
 | [project_origin.md](project_origin.md) | 2026-04-30 の第一歩の報告書。Android開発の最初の記録としてのみ存在し、現状とは一致しない | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
@@ -54,7 +54,7 @@
 | [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4） | 実装済み |
 | [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
-| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 段階1〜6 実装済み・実機確認待ち（段階7は未着手） |
+| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み（段階7は実機確認待ち） |
 
 ### 読む導線
 
@@ -147,4 +147,4 @@
 | `ui/vigilith/` | [character_vigilith](design/character_vigilith.md) → [vigilith_in_app](design/vigilith_in_app.md) → [opening_animation](design/opening_animation.md) |
 | `ui/screen/` | [tab_navigation](design/tab_navigation.md) / [note_fullscreen](design/note_fullscreen.md) / [section_ai_chat](design/section_ai_chat.md) |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper` | [dependency_policy](design/dependency_policy.md) |
-| `data/SafDocuments.kt` / `model` の `Uri` を持つ型 | [saf_boundary_gateway](design/saf_boundary_gateway.md) → [architecture](design/architecture.md) |
+| `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](design/saf_boundary_gateway.md) → [architecture](design/architecture.md) |
