@@ -14,7 +14,7 @@
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
 | **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](source_code_quality_review.md) | スナップショット（日付で更新） |
-| **なぜそうしたか** | [design/](design/)（17本） | 判断ごとに1本。判断が覆っても改稿して残す |
+| **なぜそうしたか** | [design/](design/)（18本） | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](_wip/)（3本） | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加） |
 
@@ -40,9 +40,9 @@
 
 ---
 
-## 2. 設計判断（`design/`・17本）
+## 2. 設計判断（`design/`・18本）
 
-「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（17本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
+「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（18本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
 
 > 状態列は**実装が入ったかどうか**だけを示す。未着手のPhaseや設計書と実装の乖離といった個別の話は、各文書の冒頭（`**状態:**` / `**未解決:**` 行）と [_wip/current_issues.md](_wip/current_issues.md) が持つ。ここには書かない。
 
@@ -74,6 +74,7 @@
 | [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
 | [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認待ち |
+| [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認待ち |
 
 ### Vigilith（人格と演出）
 
@@ -139,6 +140,7 @@
 | `ai/PromptBuilder.kt` | [ai_input_excerpt](design/ai_input_excerpt.md) → 該当機能の設計書 |
 | `ai/` | [background_ai_ux](design/background_ai_ux.md) → [reflect_distill](design/reflect_distill.md) / [related_notes_ai](design/related_notes_ai.md) |
 | `domain/NoteExcerptBuilder.kt` / `model/NoteExcerptLimits.kt` | [ai_input_excerpt](design/ai_input_excerpt.md) |
+| `domain/markdown/` / `ui/markdown/` | [markdown_rendering](design/markdown_rendering.md) → [ai_input_excerpt](design/ai_input_excerpt.md)（同じパーサがAI入力にも効くため） |
 | `domain/` | [related_notes_ai](design/related_notes_ai.md) / [reflect_distill](design/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](design/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](design/reflect_distill.md)（原子性・復旧） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |

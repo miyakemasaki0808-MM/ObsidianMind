@@ -112,8 +112,9 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
   instrumentation に何かを書きたくなったら、まず「JVMで書けないか」を先に問う。
 
 ### L-4. Vault規模・堅牢性への投資（必要になったら）
-- YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML・ネストリスト）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
-- **ordered list の番号は描画だけでなくAI入力でも失われる。** 抜粋も同じパーサを通すため、番号自体に意味があるノート（手順書など）では順序がモデルへ届かない。Markdown対応拡充を検討する際は、読書体験だけでなくAI品質側の効果も一緒に数える。
+- YAML/Markdown対応拡充（画像・クリックリンク・複数行YAML）、キャッシュ戦略の見直し。ユーザー体験を壊す顕在化があった時に引き上げる。→ [current_issues.md](current_issues.md) FEAT-1
+- **リストの入れ子・番号・タスク混在は 2026-08-02 に対応した**（→ [design/markdown_rendering.md](../design/markdown_rendering.md)）。残るのはクリック可能リンク・画像・埋め込み・数式。
+- **Markdown対応拡充を検討する際は、読書体験だけでなくAI品質側の効果も一緒に数える。** リストの件では、失われていたのが描画だけでなくAI入力の順序情報でもあったため、読書体験だけで測ると過小評価になっていた。**残っている項目にも同じ問いを当てる** — 画像は代替テキストが、リンクは遷移先のタイトルが、いずれもAI入力側で意味を持ち得る。
 
 ### L-5. 公開可能な成果物にする（→ current_issues REL-1）
 - `applicationId` は `com.vigilith.ai` へ確定し release build type も入ったが、生成物は依然 `app-release-unsigned.apk` で `isMinifyEnabled = false`。**署名も R8 も未設定。** → [current_issues.md](current_issues.md) REL-1

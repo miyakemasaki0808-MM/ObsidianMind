@@ -699,7 +699,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - 上表の本文を持つ7経路は、`PromptBuilder` ではなく呼び出し側が `buildNoteExcerpt(content, 上限)` で `NoteExcerpt` を作って渡す。`PromptBuilder` に `take()` は残っていない。
 - **予算内のノートはMarkdownを解析せず原文をそのまま渡す**（移行前のプロンプトと文字列単位で同一）。
 - **超過時だけ**、level 3までの見出しを全体から均等選抜した骨格＋冒頭60%＋末尾40%を、`## Note outline` / `## Beginning excerpt` / `(omitted)` / `## Ending excerpt` の明示ラベル付きで構成する。単一ブロックが枠を超える場合も捨てずに切り、コードブロックは閉じフェンスを復元する。
-- 超過時は表示用パーサ（`parseMarkdownBlocks`）を通すため、frontmatter除去・ordered listの箇条書き化・コードフェンス言語名の消失・段落内改行の空白化が起きる。
+- 超過時は表示用パーサ（`parseMarkdownBlocks`）を通すため、frontmatter除去・コードフェンス言語名の消失・段落内改行の空白化・箇条書き記号の `-` への統一が起きる。**リストの番号と入れ子段数は保持される**（2026-08-02）。
 - 抜粋時のみ226文字の注意書き（`ABRIDGED_NOTICE_PREFIX`）を本文直前へ置く。**この注意書きは上限の内側から支払う**ため、AIへ渡る本文由来領域の合計が上限を超えない。
 - 解析コストは1MBノートで約460ms（デスクトップJVM実測）あるため、抜粋生成のみ `Dispatchers.Default` で実行する（`excerptDispatcher`）。
 
@@ -713,14 +713,13 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 - 見出し H1〜H6
 - 段落
-- 箇条書き・番号付きリスト
+- 箇条書き・番号付きリスト・タスクリスト（**入れ子と番号を保持**。1つの `ListBlock` にまとまる）
 - fenced code block
 - 水平線
 - 引用
-- タスクリスト
 - パイプテーブル
 
-番号付きリストは解析時に番号情報を保持せず、描画では通常の箇条書きになる。コードフェンスの言語指定も保持しない。
+リスト項目は `ListItem(depth, marker, text, checked)` で、入れ子段数・番号（`1.` と `1)`、先頭ゼロを含む原文表記）・タスクのチェック状態を保持する。段数の算出はCommonMarkにもObsidianにも準拠しない独自の寛容規則で、設計は [design/markdown_rendering.md](design/markdown_rendering.md)。箇条書き記号 `-` / `*` / `+` の違いだけは意図的に落とす。コードフェンスの言語指定も保持しない。
 
 ### 9.2 対応インライン記法
 
@@ -732,7 +731,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - `[[Obsidianリンク]]`
 - `[ラベル](URL)`
 
-リンクは色と下線で装飾するだけで、タップ遷移やURLオープンは実装していない。画像、埋め込み、脚注、HTML、数式などは専用対応していない。
+リンクは色と下線で装飾するだけで、タップ遷移やURLオープンは実装していない。画像、埋め込み、脚注、HTML、数式などは専用対応していない。また段落の遅延継続（リスト項目に続く字下げなしの本文行）にも対応せず、別ブロックへ分かれる。
 
 ### 9.3 防御的処理
 
@@ -826,7 +825,7 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `NoteRepositoryTest.kt` | 5 | Markdown判定、wikilink・タイトル正規化、補記ファイル名安全化 |
 | `NoteSnapshotTest.kt` | 5 | 上限付きバイト読込、UTF-8厳格判定、ハッシュ |
 | `BoundedNoteReadTest.kt` | 9 | 用途別の読込予算、上限到達の判定、多バイト文字の末尾切り |
-| `MarkdownParserTest.kt` | 7 | frontmatter、テーブル空セル、見出し、コード、CRLF、引用 |
+| `MarkdownParserTest.kt` | 22 | frontmatter、テーブル空セル、見出し、コード、CRLF、引用、リストのマーカー保持（区切り記号・先頭ゼロ・巨大桁）、段数の算出規則5つ、タブの4列展開、タスク混在、`blocksToMarkdown` の往復 |
 | `InlineMarkdownTest.kt` | 11 | 強調、リンク、コード、打ち消し、誤検出防止 |
 | `QuizResponseParserTest.kt` | 14 | 改行揺れ、前置き、欠落項目、不正な正解、○×/3択/4択の形式別パース |
 | `QuizInputProfileTest.kt` | 4 | 入力量・コード比率からの出題形式決定 |
@@ -872,12 +871,12 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `ui/theme/AppColorContrastTest.kt` | 15 | 明暗の役割トークンのコントラスト比（既知未達7件は実測値を記録する形で固定） |
 | `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
 | `architecture/PackageDependencyTest.kt` | 1 | パッケージ依存の向き（ルートパッケージ経由の抜け道を含む） |
-| `domain/NoteExcerptBuilderTest.kt` | 16 | 抜粋の予算不変条件（注意書き・ラベル込み）、境界、見出しの均等選抜、単一巨大ブロック（段落・コード・表・リスト）、frontmatter除去、ordered list正規化、中略なしの連続レイアウト |
+| `domain/NoteExcerptBuilderTest.kt` | 18 | 抜粋の予算不変条件（注意書き・ラベル込み）、境界、見出しの均等選抜、単一巨大ブロック（段落・コード・表・リスト）、frontmatter除去、リストの番号と段数がモデルへ届くこと、記法増加後も全予算で上限を超えないこと、中略なしの連続レイアウト |
 | `ai/PromptBuilderExcerptRegressionTest.kt` | 8 | 7プロンプトの出力文字列の固定、抜粋時だけ注意書きが出ること |
 | `architecture/NoteExcerptThreadingTest.kt` | 1 | 抜粋生成が本番7経路すべてで `Dispatchers.Default` 側にあること（呼び出し箇所の一覧ごとソース走査で固定） |
 | `ui/theme/AppColorContrastTest.kt` | （上記に含む） | トークン×**実際に載る面**の総当たり、半透明面の実効色、グラデーション停止色との比、明暗の反転 |
 | `ui/theme/VibrantTextUsageTest.kt` | 2 | 画面からの `onVibrant` 直接使用と、文字色への任意の `copy(alpha)` をソース走査で禁じる |
-| **合計（57ファイル）** | **508** | |
+| **合計（59ファイル）** | **581** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -989,7 +988,7 @@ CIは組み立てまでなので、**この種の失敗は今もCIを素通り�
 | 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
 | 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時ID（`idToNote`）で解決するため、同名・別URIも別IDになり不定にならない（ID応答方式で解消済み）。決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |
 | 低 | YAML解析が簡易 | 複雑なYAML、引用、ネスト、複数行値には対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
-| 低 | Markdownが限定実装 | ordered list番号、クリック可能リンク、画像、埋め込み、数式などは未対応 |
+| 低 | Markdownが限定実装 | クリック可能リンク、画像、埋め込み、数式などは未対応（リストの番号・入れ子・タスク混在は 2026-08-02 に対応済み） |
 | 低 | 状態取得失敗と非対応の同一視 | AI状態確認の一時エラーも「利用不可」として扱われる |
 | 低 | バッジ塗りがナビ帯で未達 | AIタブのバッジはパネルではなく下部ナビ帯（ライトは彩度の高いIndigo）に載る。塗りは Success 1.61・Error 1.04 で、その上で3:1を取れる色がほとんど無い。中の記号は対の前景で読めるので、状態の判別は記号が担う |
 | 低 | R8・署名が未設定 | `release` は定義したが `isMinifyEnabled = false`・署名なし。R8を有効化すると ML Kit GenAI のリフレクション解決部分が縮小で消え、**全AI機能が release ビルドでだけ落ちる**可能性がある。JVMテストは縮小前のクラスを見るため検出できず、実機検証とセットになる |
