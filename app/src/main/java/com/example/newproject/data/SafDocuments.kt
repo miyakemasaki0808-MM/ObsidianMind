@@ -28,12 +28,23 @@ internal fun Uri.toDocumentRef(): DocumentRef = DocumentRef(toString())
 /** 不透明参照をSAFの実体へ戻す。`data` がI/Oを行う直前だけで使う。 */
 internal fun DocumentRef.toUri(): Uri = value.toUri()
 
-/** 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）。 */
+/**
+ * 指定ドキュメント直下の子を列挙する（散在していたカーソルループの共通化）。
+ *
+ * **`query()` が null を返したら [SafChildren.UNREADABLE] を返す。**
+ * 以前はここで `?.use { }` と書いて null を素通りさせ、空リストを返していた。
+ * その形だと「読めなかった」と「本当に空」が呼び出し側で区別できず、
+ * 走査は成功したまま配下のノートが静かに0件になっていた
+ * （＝Rediscoverの母集団と検索結果が理由なく減り、痕跡フォルダでは重複ファイルを作る）。
+ *
+ * 例外はここでは畳まない。投げられれば走査ごと失敗するので、
+ * 「成功したように見えて欠けている」状態にはならない。
+ */
 internal fun querySafChildren(
     contentResolver: ContentResolver,
     vaultUri: Uri,
     documentId: String
-): List<ChildDoc> {
+): SafChildren {
     val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(vaultUri, documentId)
     val projection = arrayOf(
         DocumentsContract.Document.COLUMN_DOCUMENT_ID,
@@ -41,24 +52,43 @@ internal fun querySafChildren(
         DocumentsContract.Document.COLUMN_MIME_TYPE,
         DocumentsContract.Document.COLUMN_LAST_MODIFIED
     )
+    val cursor = contentResolver.query(childrenUri, projection, null, null, null)
+        ?: return SafChildren.UNREADABLE
     val result = mutableListOf<ChildDoc>()
-    contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
-        while (cursor.moveToNext()) {
+    cursor.use {
+        while (it.moveToNext()) {
             result.add(
                 ChildDoc(
-                    documentId = cursor.getString(0),
-                    name = cursor.getString(1),
-                    isDirectory = cursor.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
-                    lastModified = if (cursor.isNull(3)) null else cursor.getLong(3)
+                    documentId = it.getString(0),
+                    name = it.getString(1),
+                    isDirectory = it.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR,
+                    lastModified = if (it.isNull(3)) null else it.getLong(3)
                 )
             )
         }
     }
-    return result
+    return SafChildren.complete(result)
 }
 
 /**
- * Vault ルート直下にある同名フォルダを返す。無ければ null。
+ * ルート直下フォルダの探索結果。
+ *
+ * **[Absent] と [Unreadable] を分けるのが要点。** 以前は両方 null で返していたため、
+ * 呼び出し側の `findRootChildFolder(...) ?: createRootChildFolder(...)` が
+ * **ルート列挙に失敗しただけで2つ目の `_ReadingTraces` を作りうる**状態だった。
+ */
+internal sealed interface RootFolderLookup {
+    data class Found(val uri: Uri) : RootFolderLookup
+
+    /** ルートは読めたが同名フォルダは無い。**作成してよい。** */
+    object Absent : RootFolderLookup
+
+    /** ルートの列挙に失敗した。**作成してはいけない**（重複フォルダを作る）。 */
+    object Unreadable : RootFolderLookup
+}
+
+/**
+ * Vault ルート直下にある同名フォルダを探す。
  * 機能フォルダ（`_AI補記` / `_ReadingTraces`）はいずれもルート直下に作る仕様なので
  * Vault全体をBFSせずルート直下だけを見る（以前は保存・一覧のたびに全走査していた）。
  */
@@ -66,10 +96,16 @@ internal fun findRootChildFolder(
     contentResolver: ContentResolver,
     vaultUri: Uri,
     folderName: String
-): Uri? =
-    querySafChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
-        .firstOrNull { it.isDirectory && it.name == folderName }
-        ?.let { DocumentsContract.buildDocumentUriUsingTree(vaultUri, it.documentId) }
+): RootFolderLookup {
+    val children =
+        querySafChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+    if (!children.isComplete) return RootFolderLookup.Unreadable
+    val match = children.items.firstOrNull { it.isDirectory && it.name == folderName }
+        ?: return RootFolderLookup.Absent
+    return RootFolderLookup.Found(
+        DocumentsContract.buildDocumentUriUsingTree(vaultUri, match.documentId)
+    )
+}
 
 /** Vault ルート直下にフォルダを作る。作成できなければ null。 */
 internal fun createRootChildFolder(

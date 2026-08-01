@@ -140,7 +140,12 @@ internal class SafReadingTraceDocumentGateway(
     private class FolderIndex(
         val vault: Uri,
         val folder: Uri,
-        val files: MutableMap<String, Uri>
+        val files: MutableMap<String, Uri>,
+        /**
+         * 置き場の子一覧を最後まで読めたか。false なら [files] に載っていないキーが
+         * **存在しないことを意味しない**ので、新規作成してはいけない（重複ファイルを作る）。
+         */
+        val isComplete: Boolean
     )
 
     private var index: FolderIndex? = null
@@ -171,7 +176,15 @@ internal class SafReadingTraceDocumentGateway(
         // 保証するため（→ [folderIndex] のコメント）。
         val current = folderIndex(vaultKey)
             ?: throw IOException("痕跡の保存先を用意できませんでした（Vault切替またはフォルダ作成失敗）。")
-        val target = current.files[key] ?: createFile(current, key)
+        // 索引が不完全なら、キーが載っていなくても「まだ無い」とは言えない。
+        // ここで作ると同じキーのファイルが2つでき、次回どちらを採るかが列挙順依存になる。
+        // 書けなかった訪問は消費済みの印が巻き戻されて次の契機で書き直される（判断10）。
+        val target = current.files[key]
+            ?: if (current.isComplete) {
+                createFile(current, key)
+            } else {
+                throw IOException("痕跡フォルダの一覧を読めなかったため、新規作成を見送りました。")
+            }
         try {
             contentResolver.openOutputStream(target, "wt")?.use { output ->
                 output.write(bytes)
@@ -221,11 +234,20 @@ internal class SafReadingTraceDocumentGateway(
 
     private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }
-        val folder = findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
-            ?: createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
-            ?: return null
+        // 「探して、無ければ作る」を1回の探索で行う。**ルートを読めなかった場合は作らない** —
+        // 以前は find の失敗と不在が同じ null だったため、ルート列挙に失敗しただけで
+        // 2つ目の _ReadingTraces を作りうる状態だった。
+        val folder = when (val lookup =
+            findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)) {
+            is RootFolderLookup.Found -> lookup.uri
+            RootFolderLookup.Unreadable -> return null
+            RootFolderLookup.Absent ->
+                createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
+                    ?: return null
+        }
+        val children = querySafChildren(contentResolver, vault, DocumentsContract.getDocumentId(folder))
         val files = mutableMapOf<String, Uri>()
-        querySafChildren(contentResolver, vault, DocumentsContract.getDocumentId(folder))
+        children.items
             .filter { !it.isDirectory }
             .forEach { child ->
                 // ファイル名は "<64桁hex>.json"。完全一致で引かないのは、SAF の
@@ -238,7 +260,11 @@ internal class SafReadingTraceDocumentGateway(
                     files[key] = DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
                 }
             }
-        return FolderIndex(vault, folder, files).also { index = it }
+        val resolved = FolderIndex(vault, folder, files, isComplete = children.isComplete)
+        // 不完全な索引はキャッシュしない。載せると、一度読み損ねただけで
+        // Vault切替まで新規作成が止まり続ける。次の呼び出しで読み直させる。
+        if (children.isComplete) index = resolved
+        return resolved
     }
 
     private companion object {

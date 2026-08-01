@@ -153,7 +153,10 @@ class NoteViewModel internal constructor(
         if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
             return cachedNotes
         }
-        val notes = repository.collectNotes(contentResolver, vaultUri)
+        // 走査が部分的に失敗していても、読めた分でランダム表示・関連ノートを続ける
+        // （止めるほうが体験として悪い）。完全性を要求するのは、不在を根拠に
+        // 何かを消す処理だけ。→ VaultScan のKDoc
+        val notes = repository.collectNotes(contentResolver, vaultUri).notes
         cachedNotes = notes
         cachedNotesLoadedAt = now
         return notes
