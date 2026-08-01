@@ -4,6 +4,7 @@ import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.data.ReadingTraceDocumentGateway
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
@@ -169,6 +170,114 @@ class ReadingTraceStoreTest {
 
         assertEquals(ReadingTraceReadResult.None, store.load("ideas/habit.md", VAULT))
     }
+
+    // --- 列挙API（段階1）-------------------------------------------------------
+    //
+    // 孤児判定はキーの集合差で行う（キー = sha256(相対パス) なのでファイルを1つも
+    // 読まずに済む）。したがって「列挙できなかった」を「1件も無い」に畳むと、
+    // 全痕跡が孤児に見える。ここはその一点を守るためのテスト群。
+
+    @Test
+    fun `listKeys returns the key of every saved trace`() {
+        val store = ReadingTraceStore(FakeGateway())
+        store.save(trace(path = "ideas/habit.md"), VAULT)
+        store.save(trace(path = "journal/2026.md"), VAULT)
+
+        val listing = store.listKeys(VAULT)
+
+        assertEquals(
+            setOf(
+                ReadingTraceStore.keyFor("ideas/habit.md"),
+                ReadingTraceStore.keyFor("journal/2026.md")
+            ),
+            (listing as ReadingTraceKeyListing.Available).keys
+        )
+    }
+
+    @Test
+    fun `listKeys reports unavailable instead of an empty set when listing fails`() {
+        val gateway = FakeGateway()
+        val store = ReadingTraceStore(gateway)
+        store.save(trace(), VAULT)
+        gateway.listingUnreadable = true
+
+        // ここが空集合になると、保存済みの痕跡がすべて孤児として削除候補になる。
+        assertTrue(store.listKeys(VAULT) is ReadingTraceKeyListing.Unavailable)
+    }
+
+    @Test
+    fun `listKeys returns an empty set when nothing has been saved`() {
+        val store = ReadingTraceStore(FakeGateway())
+
+        // 「本当に0件」は Available(empty)。Unavailable と混ぜない。
+        assertEquals(
+            emptySet<String>(),
+            (store.listKeys(VAULT) as ReadingTraceKeyListing.Available).keys
+        )
+    }
+
+    @Test
+    fun `listKeys is unavailable for a different vault`() {
+        val gateway = FakeGateway()
+        val store = ReadingTraceStore(gateway)
+        store.save(trace(), VAULT)
+        gateway.currentVaultKey = "content://new-vault"
+
+        assertTrue(store.listKeys(VAULT) is ReadingTraceKeyListing.Unavailable)
+    }
+
+    @Test
+    fun `listKeys surfaces gateway exceptions as unavailable`() {
+        val store = ReadingTraceStore(ThrowingListGateway())
+
+        assertTrue(store.listKeys(VAULT) is ReadingTraceKeyListing.Unavailable)
+    }
+
+    // --- キー指定の読み出し（孤児はパスが分からないため必要）---------------------
+
+    @Test
+    fun `loadByKey reads a trace when only the key is known`() {
+        val store = ReadingTraceStore(FakeGateway())
+        store.save(trace(path = "ideas/habit.md"), VAULT)
+
+        val result = store.loadByKey(ReadingTraceStore.keyFor("ideas/habit.md"), VAULT)
+
+        assertEquals(
+            "ideas/habit.md",
+            (result as ReadingTraceReadResult.Valid).trace.vaultRelativePath
+        )
+    }
+
+    @Test
+    fun `loadByKey returns none for an unknown key`() {
+        val store = ReadingTraceStore(FakeGateway())
+
+        assertEquals(
+            ReadingTraceReadResult.None,
+            store.loadByKey(ReadingTraceStore.keyFor("missing.md"), VAULT)
+        )
+    }
+
+    @Test
+    fun `loadByKey rejects a file whose contents do not match its key`() {
+        val gateway = FakeGateway()
+        val store = ReadingTraceStore(gateway)
+        store.save(trace(path = "ideas/habit.md"), VAULT)
+        // 中身は habit.md のまま、別キーのファイルとして置き直す（改名・取り違えの再現）。
+        val body = gateway.files.remove(ReadingTraceStore.keyFor("ideas/habit.md"))!!
+        gateway.files[ReadingTraceStore.keyFor("journal/other.md")] = body
+
+        val result = store.loadByKey(ReadingTraceStore.keyFor("journal/other.md"), VAULT)
+
+        assertTrue(result is ReadingTraceReadResult.Corrupt)
+    }
+}
+
+private class ThrowingListGateway : ReadingTraceDocumentGateway {
+    override fun ensureFolder(): Boolean = true
+    override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? = null
+    override fun write(key: String, bytes: ByteArray, vaultKey: String) = Unit
+    override fun listKeys(vaultKey: String): Set<String>? = throw RuntimeException("boom")
 }
 
 private const val VAULT = "content://vault"
@@ -186,7 +295,19 @@ private class FakeGateway : ReadingTraceDocumentGateway {
     var writeCount = 0
         private set
 
+    /** SAF実装が「列挙できなかった」を返す状態。空フォルダとは区別する。 */
+    var listingUnreadable = false
+    var listKeysCount = 0
+        private set
+
     override fun ensureFolder(): Boolean = folderAvailable
+
+    override fun listKeys(vaultKey: String): Set<String>? {
+        listKeysCount++
+        if (vaultKey != currentVaultKey) return null
+        if (listingUnreadable) return null
+        return files.keys.toSet()
+    }
 
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
         readCount++

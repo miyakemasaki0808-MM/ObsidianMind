@@ -19,8 +19,10 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -683,6 +685,14 @@ class NoteSessionCoordinatorTest {
         override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
         override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult =
             files[vaultRelativePath]?.let { ReadingTraceReadResult.Valid(it) }
+                ?: ReadingTraceReadResult.None
+
+        override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
+            ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
+
+        override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
+            files.entries.firstOrNull { ReadingTraceStore.keyFor(it.key) == key }
+                ?.let { ReadingTraceReadResult.Valid(it.value) }
                 ?: ReadingTraceReadResult.None
         override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
             saved += trace
