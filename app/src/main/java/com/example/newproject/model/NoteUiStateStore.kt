@@ -3,6 +3,7 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -67,6 +68,11 @@ interface SectionChatStateWriter {
 interface ReadingTraceStateWriter {
     val current: ReadingTraceCard?
     fun update(transform: (ReadingTraceCard?) -> ReadingTraceCard?)
+}
+
+interface ReadingTraceCleanupStateWriter {
+    val current: ReadingTraceCleanupState
+    fun set(state: ReadingTraceCleanupState)
 }
 
 /**
@@ -170,6 +176,16 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         }
     }
 
+    val readingTraceCleanupWriter: ReadingTraceCleanupStateWriter =
+        object : ReadingTraceCleanupStateWriter {
+            override val current: ReadingTraceCleanupState
+                get() = mutableState.value.readingTraceCleanupState
+
+            override fun set(state: ReadingTraceCleanupState) {
+                mutableState.update { it.copy(readingTraceCleanupState = state) }
+            }
+        }
+
     fun restoreVault(todayHistory: List<HistoryEntry>) {
         mutableState.update { it.copy(vaultSelected = true, todayHistory = todayHistory) }
     }
@@ -244,5 +260,9 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     selectedFolder = null,
     foldersError = null,
     searchState = SearchState.Idle,
-    todayHistory = emptyList()
+    todayHistory = emptyList(),
+    // 旧Vaultの候補を新Vaultの画面へ残さない。Controller 側ではなく状態変換で落とすのは、
+    // 「別Vaultのノートを消しませんか」と尋ねる状態を作らないことを構造的に保証するため
+    // （補記一覧は Controller が落とすが、あちらは誤って消す危険が無い）。
+    readingTraceCleanupState = ReadingTraceCleanupState.Idle
 )

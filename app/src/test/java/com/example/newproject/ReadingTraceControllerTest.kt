@@ -3,8 +3,10 @@ package com.example.newproject
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
@@ -1220,6 +1222,18 @@ private class FakePersistence : ReadingTracePersistence {
             ?.let { ReadingTraceReadResult.Valid(it) }
             ?: ReadingTraceReadResult.None
     }
+
+    override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
+        ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
+
+    override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
+        files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
+            ?.let { load(it, vaultKey) }
+            ?: ReadingTraceReadResult.None
+
+    override fun deleteByKey(key: String, vaultKey: String): Boolean =
+        files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
+            ?.let { files.remove(it) != null } ?: false
 
     override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++

@@ -153,7 +153,10 @@ class NoteViewModel internal constructor(
         if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
             return cachedNotes
         }
-        val notes = repository.collectNotes(contentResolver, vaultUri)
+        // 走査が部分的に失敗していても、読めた分でランダム表示・関連ノートを続ける
+        // （止めるほうが体験として悪い）。完全性を要求するのは、不在を根拠に
+        // 何かを消す処理だけ。→ VaultScan のKDoc
+        val notes = repository.collectNotes(contentResolver, vaultUri).notes
         cachedNotes = notes
         cachedNotesLoadedAt = now
         return notes
@@ -295,6 +298,12 @@ class NoteViewModel internal constructor(
     fun deleteAnnotation(ref: DocumentRef) = session.deleteAnnotation(ref)
     fun deleteAllAnnotations() = session.deleteAllAnnotations()
     fun markAnnotationViewed() = session.markAnnotationViewed()
+
+    /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
+    fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
+
+    /** 洗い出した候補を1件削除する。ノート本文には触れない。 */
+    fun deleteReadingTrace(key: String) = session.deleteReadingTrace(key)
 
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
 

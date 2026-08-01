@@ -14,6 +14,42 @@ internal data class ChildDoc(
     val lastModified: Long?
 )
 
+/**
+ * SAFの子一覧と、その列挙が成功したかどうか。
+ *
+ * **[isComplete] が false のとき [items] が空でも「子が無い」を意味しない。**
+ * 素の `List` で返すと、この2つが同じ値へ潰れる（`query()` が null を返した場合と
+ * 本当に空フォルダだった場合が区別できない）。潰すと、不在を根拠にする処理
+ * — 孤児判定・索引作成 — が誤った結論を出す。
+ *
+ * 表示系は [items] だけ見て構わない（読めた分で動き続けるのが仕様）。
+ * [isComplete] を見る義務があるのは、**不在から何かを結論する側**だけ。
+ */
+internal data class SafChildren(
+    val items: List<ChildDoc>,
+    val isComplete: Boolean
+) {
+    internal companion object {
+        fun complete(items: List<ChildDoc>): SafChildren = SafChildren(items, isComplete = true)
+
+        /** 列挙そのものが失敗した。空フォルダとは異なる。 */
+        val UNREADABLE: SafChildren = SafChildren(emptyList(), isComplete = false)
+    }
+}
+
+/**
+ * 走査結果。[unreadableFolderPaths] は**列挙に失敗したフォルダ**のVault相対パス
+ * （走査の起点そのものが読めなければ起点のパス。ルート起点なら空文字）。
+ *
+ * 失敗を全体の1フラグに畳まずパス集合で持つのは、孤児判定が
+ * 「読めなかったサブツリー配下だけ候補から外す」と精密に書けるようにするため。
+ * 1フラグにすると、どこか1フォルダを読み損ねただけで掃除が全面停止する。
+ */
+internal data class MarkdownScan(
+    val entries: List<MarkdownEntry>,
+    val unreadableFolderPaths: Set<String>
+)
+
 /** 走査で見つかった .md 1件。[vaultRelativePath] はVaultルートからの相対パス。 */
 internal data class MarkdownEntry(
     val documentId: String,
@@ -41,15 +77,20 @@ internal fun traverseMarkdownPaths(
     startId: String,
     startPath: String = "",
     excludeFolderNames: Set<String> = emptySet(),
-    listChildren: (String) -> List<ChildDoc>
-): List<MarkdownEntry> {
+    listChildren: (String) -> SafChildren
+): MarkdownScan {
     val result = mutableListOf<MarkdownEntry>()
+    val unreadable = mutableSetOf<String>()
     val visited = mutableSetOf(startId)
     val queue = ArrayDeque<Pair<String, String>>()
     queue.add(startId to startPath)
     while (queue.isNotEmpty()) {
         val (documentId, path) = queue.removeFirst()
-        for (child in listChildren(documentId)) {
+        val children = listChildren(documentId)
+        // 読めなかったフォルダは、その時点のパスで記録して走査は続ける。
+        // 中断しないのは、他の枝で見つかったノートは正しいため（表示系はそれで動く）。
+        if (!children.isComplete) unreadable.add(path)
+        for (child in children.items) {
             when {
                 child.isDirectory ->
                     if (child.name !in excludeFolderNames && visited.add(child.documentId)) {
@@ -67,5 +108,5 @@ internal fun traverseMarkdownPaths(
             }
         }
     }
-    return result
+    return MarkdownScan(entries = result, unreadableFolderPaths = unreadable)
 }

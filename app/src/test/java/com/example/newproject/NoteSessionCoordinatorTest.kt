@@ -19,8 +19,10 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -32,6 +34,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.ReadingVisit
@@ -513,6 +516,7 @@ class NoteSessionCoordinatorTest {
         annotationState = AnnotationState.Error(message = "失敗", sourceTitle = "旧ノート"),
         distillState = DistillState.Saved(sourceTitle = "旧ノート", sentenceCount = 3),
         annotationListState = AnnotationListState.Success(emptyList()),
+        readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(
@@ -684,6 +688,18 @@ class NoteSessionCoordinatorTest {
         override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult =
             files[vaultRelativePath]?.let { ReadingTraceReadResult.Valid(it) }
                 ?: ReadingTraceReadResult.None
+
+        override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
+            ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
+
+        override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
+            files.entries.firstOrNull { ReadingTraceStore.keyFor(it.key) == key }
+                ?.let { ReadingTraceReadResult.Valid(it.value) }
+                ?: ReadingTraceReadResult.None
+
+        override fun deleteByKey(key: String, vaultKey: String): Boolean =
+            files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
+                ?.let { files.remove(it) != null } ?: false
         override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
             saved += trace
             files[trace.vaultRelativePath] = trace

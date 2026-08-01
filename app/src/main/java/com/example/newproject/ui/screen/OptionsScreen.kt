@@ -42,6 +42,7 @@ fun OptionsScreen(
     darkTheme: Boolean,
     onSelectVault: () -> Unit,
     onManageAnnotations: () -> Unit,
+    onManageReadingTraces: () -> Unit,
     onToggleDarkTheme: (Boolean) -> Unit
 ) {
     Column(
@@ -67,6 +68,14 @@ fun OptionsScreen(
             title = "AI補記メモを削除",
             subtitle = "保存済みの補記メモを管理・削除",
             onClick = onManageAnnotations
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OptionRow(
+            emoji = "🧹",
+            title = "読書痕跡を整理",
+            subtitle = "無くなったノートの読書痕跡を確認",
+            onClick = onManageReadingTraces
         )
         Spacer(modifier = Modifier.height(10.dp))
 

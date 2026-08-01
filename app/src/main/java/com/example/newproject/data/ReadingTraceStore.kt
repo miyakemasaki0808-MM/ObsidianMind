@@ -51,10 +51,45 @@ internal sealed interface ReadingTraceSaveResult {
  *
  * Uri ではなく String にしているのは、この境界より上を Android 非依存に保つため。
  */
+/**
+ * 保存済み痕跡のキー一覧。
+ *
+ * **[Unavailable] を空集合で代用しない。** 「列挙できなかった」を「1件も無い」に
+ * 畳むと、不在を根拠にする処理（孤児判定）が全痕跡を削除対象と誤読する。
+ * 型で分けているのは、呼び出し側が畳めないようにするため。
+ */
+internal sealed interface ReadingTraceKeyListing {
+    /** 置き場を最後まで列挙できた。[keys] が保存済み痕跡のすべて。 */
+    data class Available(val keys: Set<String>) : ReadingTraceKeyListing
+
+    /** 列挙できなかった。**痕跡が無いことを意味しない。** */
+    data class Unavailable(val reason: String) : ReadingTraceKeyListing
+}
+
 internal interface ReadingTracePersistence {
     fun folderStatus(): ReadingTraceFolderStatus
     fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult
     fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult
+
+    /**
+     * 保存済み痕跡のキーをすべて列挙する。**索引キャッシュを使わず毎回読み直す。**
+     *
+     * キャッシュ経由にすると、外部同期で後から増えたファイルを見落とす（→ SYNC-2）。
+     * 掃除は「1回だけ実行される重い操作」なので、鮮度をコストより優先してよい。
+     */
+    fun listKeys(vaultKey: String): ReadingTraceKeyListing
+
+    /**
+     * キーだけを手掛かりに読む。孤児はパスが分からない（キーはパスのハッシュで不可逆）ため、
+     * [load] の相対パス指定では引けない。
+     */
+    fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult
+
+    /**
+     * 痕跡1件を削除する。**成功したかどうかを必ず返す** —
+     * SAFプロバイダは削除に失敗し得るので、結果を捨てると「消したつもり」が残る。
+     */
+    fun deleteByKey(key: String, vaultKey: String): Boolean
 }
 
 /**
@@ -70,6 +105,17 @@ internal interface ReadingTraceDocumentGateway {
 
     /** [vaultKey] が現在のVaultと違う場合は書き込まず例外を投げる。 */
     fun write(key: String, bytes: ByteArray, vaultKey: String)
+
+    /**
+     * 置き場のキーを**新規に列挙**する（索引キャッシュを使わない）。
+     *
+     * **列挙に失敗したら null。空集合と区別する** — 置き場がまだ無い場合は
+     * 「痕跡ゼロ」が正しい答えなので空集合を返す。[vaultKey] 不一致も null。
+     */
+    fun listKeys(vaultKey: String): Set<String>?
+
+    /** 1件削除する。[vaultKey] 不一致・失敗なら false。 */
+    fun delete(key: String, vaultKey: String): Boolean
 }
 
 internal class ReadingTraceStore(
@@ -86,19 +132,48 @@ internal class ReadingTraceStore(
         ReadingTraceFolderStatus.Unavailable(error.message ?: "痕跡の保存先を用意できませんでした。")
     }
 
-    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = try {
-        val bytes = gateway.read(keyFor(vaultRelativePath), ReadingTraceLimits.MAX_FILE_BYTES, vaultKey)
-            ?: return ReadingTraceReadResult.None
-        val result = ReadingTraceJson.decode(bytes)
+    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult {
+        val result = loadByKey(keyFor(vaultRelativePath), vaultKey)
         // ファイル名は相対パスのハッシュなので、中身のパスが食い違っていたら
         // ハッシュ衝突か手による改変。信用せず孤立扱いにする。
-        if (result is ReadingTraceReadResult.Valid && result.trace.vaultRelativePath != vaultRelativePath) {
+        // loadByKey 側はハッシュ一致までしか見られない（パスを知らない）ので、
+        // 完全一致の確認はパスを持っているこちらで行う。
+        return if (result is ReadingTraceReadResult.Valid &&
+            result.trace.vaultRelativePath != vaultRelativePath
+        ) {
+            ReadingTraceReadResult.Corrupt("痕跡ファイルの対象ノートが一致しません。")
+        } else {
+            result
+        }
+    }
+
+    override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult = try {
+        val bytes = gateway.read(key, ReadingTraceLimits.MAX_FILE_BYTES, vaultKey)
+            ?: return ReadingTraceReadResult.None
+        val result = ReadingTraceJson.decode(bytes)
+        // 中身のパスからキーを作り直して照合する。プロバイダの改名やファイルの
+        // 取り違えで、キーと中身が対応しないファイルを掴んでいないことを確かめる。
+        if (result is ReadingTraceReadResult.Valid && keyFor(result.trace.vaultRelativePath) != key) {
             ReadingTraceReadResult.Corrupt("痕跡ファイルの対象ノートが一致しません。")
         } else {
             result
         }
     } catch (error: Exception) {
         ReadingTraceReadResult.Corrupt(error.message ?: error::class.java.simpleName)
+    }
+
+    override fun deleteByKey(key: String, vaultKey: String): Boolean = try {
+        gateway.delete(key, vaultKey)
+    } catch (error: Exception) {
+        false
+    }
+
+    override fun listKeys(vaultKey: String): ReadingTraceKeyListing = try {
+        gateway.listKeys(vaultKey)
+            ?.let { ReadingTraceKeyListing.Available(it) }
+            ?: ReadingTraceKeyListing.Unavailable("痕跡の置き場を列挙できませんでした。")
+    } catch (error: Exception) {
+        ReadingTraceKeyListing.Unavailable(error.message ?: error::class.java.simpleName)
     }
 
     override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult = try {
@@ -140,7 +215,17 @@ internal class SafReadingTraceDocumentGateway(
     private class FolderIndex(
         val vault: Uri,
         val folder: Uri,
-        val files: MutableMap<String, Uri>
+        /**
+         * key → **同じキーを名乗る実体すべて**。プロバイダの改名や外部同期で
+         * `hash.json` と `hash (1).json` が並びうるため、1件に潰さず全部持つ。
+         * 潰すと掃除で片方しか消えず、次の洗い出しで復活する。
+         */
+        val files: MutableMap<String, MutableList<Uri>>,
+        /**
+         * 置き場の子一覧を最後まで読めたか。false なら [files] に載っていないキーが
+         * **存在しないことを意味しない**ので、新規作成してはいけない（重複ファイルを作る）。
+         */
+        val isComplete: Boolean
     )
 
     private var index: FolderIndex? = null
@@ -150,7 +235,8 @@ internal class SafReadingTraceDocumentGateway(
 
     @Synchronized
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
-        val file = folderIndex(vaultKey)?.files?.get(key) ?: return null
+        // 読むのは先頭1件でよい（内容は同じキーの痕跡で、last-writer-wins）。
+        val file = folderIndex(vaultKey)?.files?.get(key)?.firstOrNull() ?: return null
         return try {
             contentResolver.openInputStream(file)?.use { readBoundedBytes(it, maximumBytes) }
         } catch (error: Exception) {
@@ -171,7 +257,15 @@ internal class SafReadingTraceDocumentGateway(
         // 保証するため（→ [folderIndex] のコメント）。
         val current = folderIndex(vaultKey)
             ?: throw IOException("痕跡の保存先を用意できませんでした（Vault切替またはフォルダ作成失敗）。")
-        val target = current.files[key] ?: createFile(current, key)
+        // 索引が不完全なら、キーが載っていなくても「まだ無い」とは言えない。
+        // ここで作ると同じキーのファイルが2つでき、次回どちらを採るかが列挙順依存になる。
+        // 書けなかった訪問は消費済みの印が巻き戻されて次の契機で書き直される（判断10）。
+        val target = current.files[key]?.firstOrNull()
+            ?: if (current.isComplete) {
+                createFile(current, key)
+            } else {
+                throw IOException("痕跡フォルダの一覧を読めなかったため、新規作成を見送りました。")
+            }
         try {
             contentResolver.openOutputStream(target, "wt")?.use { output ->
                 output.write(bytes)
@@ -191,7 +285,7 @@ internal class SafReadingTraceDocumentGateway(
             MIME_TYPE_JSON,
             "$key.json"
         ) ?: throw IOException("痕跡ファイルを作成できませんでした。")
-        current.files[key] = created
+        current.files.getOrPut(key) { mutableListOf() } += created
         return created
     }
 
@@ -221,24 +315,97 @@ internal class SafReadingTraceDocumentGateway(
 
     private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }
-        val folder = findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
-            ?: createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
-            ?: return null
-        val files = mutableMapOf<String, Uri>()
-        querySafChildren(contentResolver, vault, DocumentsContract.getDocumentId(folder))
+        // 「探して、無ければ作る」を1回の探索で行う。**ルートを読めなかった場合は作らない** —
+        // 以前は find の失敗と不在が同じ null だったため、ルート列挙に失敗しただけで
+        // 2つ目の _ReadingTraces を作りうる状態だった。
+        val folder = when (val lookup =
+            findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)) {
+            is RootFolderLookup.Found -> lookup.uri
+            RootFolderLookup.Unreadable -> return null
+            RootFolderLookup.Absent ->
+                createRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)
+                    ?: return null
+        }
+        val children = querySafChildren(contentResolver, vault, DocumentsContract.getDocumentId(folder))
+        val resolved = FolderIndex(vault, folder, indexFiles(vault, children), isComplete = children.isComplete)
+        // 不完全な索引はキャッシュしない。載せると、一度読み損ねただけで
+        // Vault切替まで新規作成が止まり続ける。次の呼び出しで読み直させる。
+        if (children.isComplete) index = resolved
+        return resolved
+    }
+
+    /**
+     * 子一覧を key→Uri の索引へ詰め替える。
+     *
+     * ファイル名は "<64桁hex>.json"。完全一致で引かないのは、SAF の createDocument が
+     * displayName をプロバイダに改名されうるため（重複時の "foo (1).json"、
+     * MIMEに合わせた "foo.json.json" 等）。先頭のキーだけは残るので、そこを索引キーにする。
+     * この置き場には自分が作ったファイルしか入らないため取り違えない。
+     */
+    private fun indexFiles(vault: Uri, children: SafChildren): MutableMap<String, MutableList<Uri>> {
+        val files = mutableMapOf<String, MutableList<Uri>>()
+        children.items
             .filter { !it.isDirectory }
             .forEach { child ->
-                // ファイル名は "<64桁hex>.json"。完全一致で引かないのは、SAF の
-                // createDocument が displayName をプロバイダに改名されうるため
-                // （重複時の "foo (1).json"、MIMEに合わせた "foo.json.json" 等）。
-                // 先頭のキーだけは残るので、そこを索引キーにする。この置き場には
-                // 自分が作ったファイルしか入らないため取り違えない。
                 val key = child.name.take(KEY_LENGTH)
-                if (key.length == KEY_LENGTH && !files.containsKey(key)) {
-                    files[key] = DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
+                if (key.length == KEY_LENGTH) {
+                    files.getOrPut(key) { mutableListOf() } +=
+                        DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
                 }
             }
-        return FolderIndex(vault, folder, files).also { index = it }
+        return files
+    }
+
+    /**
+     * 同じキーを名乗る実体を**すべて**消す。1件でも残すと、掃除したのに次の洗い出しで
+     * 復活して見える（プロバイダの改名や外部同期で重複しうる）。
+     * **1つでも消せなければ false**（残っている以上「消えた」とは言えない）。
+     */
+    @Synchronized
+    override fun delete(key: String, vaultKey: String): Boolean {
+        val current = folderIndex(vaultKey) ?: return false
+        val targets = current.files[key] ?: return false
+        if (targets.isEmpty()) return false
+        val survivors = mutableListOf<Uri>()
+        targets.forEach { target ->
+            val removed = try {
+                DocumentsContract.deleteDocument(contentResolver, target)
+            } catch (error: Exception) {
+                // プロバイダ側の異常。索引が指すUriが無効になっている可能性があるので捨てる。
+                index = null
+                false
+            }
+            if (!removed) survivors += target
+        }
+        // 消えたものだけ索引から外す。失敗した分を残すのは、一覧から消えると再試行できないため。
+        if (survivors.isEmpty()) current.files.remove(key) else current.files[key] = survivors
+        return survivors.isEmpty()
+    }
+
+    /**
+     * 置き場を**その場で読み直して**キーを返す。索引キャッシュは経由しない。
+     *
+     * 置き場がまだ無ければ「痕跡ゼロ」が正しい答えなので空集合を返す。
+     * **ここでフォルダを作らない** — 列挙が副作用で書き込みを起こすのは筋が悪く、
+     * 掃除の下見のたびに空フォルダができる。
+     */
+    @Synchronized
+    override fun listKeys(vaultKey: String): Set<String>? {
+        val vault = vaultUri() ?: return null
+        if (vault.toString() != vaultKey) return null
+        val folder = when (val lookup =
+            findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)) {
+            is RootFolderLookup.Found -> lookup.uri
+            RootFolderLookup.Absent -> return emptySet()
+            RootFolderLookup.Unreadable -> return null
+        }
+        val children = querySafChildren(contentResolver, vault, DocumentsContract.getDocumentId(folder))
+        if (!children.isComplete) return null
+        val files = indexFiles(vault, children)
+        // 新鮮で完全な一覧が取れたので、索引キャッシュもここで更新しておく。
+        // 掃除の下見をした瞬間だけ SYNC-2 の陳腐化が解消する（副作用として害はない）。
+        index = FolderIndex(vault, folder, files, isComplete = true)
+        return files.keys.toSet()
     }
 
     private companion object {

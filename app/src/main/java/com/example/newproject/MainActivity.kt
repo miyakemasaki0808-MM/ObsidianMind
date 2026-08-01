@@ -37,6 +37,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.AnnotationManagerScreen
+import com.example.newproject.ui.screen.ReadingTraceCleanupScreen
 import com.example.newproject.ui.screen.AnnotationResultScreen
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
@@ -325,6 +326,7 @@ class MainActivity : ComponentActivity() {
                                 darkTheme = darkTheme,
                                 onSelectVault = { openVault.launch(null) },
                                 onManageAnnotations = { navController.navigate("annotation_manager") },
+                                onManageReadingTraces = { navController.navigate("reading_trace_cleanup") },
                                 onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) }
                             )
                         }
@@ -335,6 +337,15 @@ class MainActivity : ComponentActivity() {
                                 onLoad = { viewModel.loadAnnotations() },
                                 onDelete = { ref -> viewModel.deleteAnnotation(ref) },
                                 onDeleteAll = { viewModel.deleteAllAnnotations() },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("reading_trace_cleanup") {
+                            ReadingTraceCleanupScreen(
+                                state = uiState.readingTraceCleanupState,
+                                onLoad = { viewModel.assessReadingTraceOrphans() },
+                                onDelete = { key -> viewModel.deleteReadingTrace(key) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

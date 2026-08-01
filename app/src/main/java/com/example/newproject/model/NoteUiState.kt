@@ -3,6 +3,7 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -23,6 +24,8 @@ data class NoteUiState(
     val annotationState: AnnotationState = AnnotationState.Idle,
     val distillState: DistillState = DistillState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
+    // 読書痕跡の整理画面。補記一覧と同じくVault単位（ノート切替では消えない）。
+    val readingTraceCleanupState: ReadingTraceCleanupState = ReadingTraceCleanupState.Idle,
     val sectionChat: SectionChatState? = null,
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
     // AI生成と結果を保持し、吹き出しから再表示できる。

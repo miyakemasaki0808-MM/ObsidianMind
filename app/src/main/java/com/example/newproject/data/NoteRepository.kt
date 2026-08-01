@@ -7,6 +7,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteMeta
+import com.example.newproject.model.VaultScan
 import com.example.newproject.domain.toObsidianNoteTitle
 import android.content.ContentResolver
 import android.net.Uri
@@ -99,7 +100,7 @@ class NoteRepository {
         contentResolver: ContentResolver,
         vaultUri: Uri,
         documentId: String
-    ): List<ChildDoc> = querySafChildren(contentResolver, vaultUri, documentId)
+    ): SafChildren = querySafChildren(contentResolver, vaultUri, documentId)
 
     // startId 配下を再帰BFSで走査して .md を集める。
     // 走査と相対パス連結の本体は traverseMarkdownPaths（純関数）に置き、
@@ -110,20 +111,24 @@ class NoteRepository {
         startId: String,
         startPath: String = "",
         excludeFolderNames: Set<String> = emptySet()
-    ): List<NoteFile> =
-        traverseMarkdownPaths(
+    ): VaultScan {
+        val scan = traverseMarkdownPaths(
             startId = startId,
             startPath = startPath,
             excludeFolderNames = excludeFolderNames
         ) { documentId -> queryChildren(contentResolver, vaultUri, documentId) }
-            .map { entry ->
+        return VaultScan(
+            notes = scan.entries.map { entry ->
                 NoteFile(
                     name = entry.name,
                     ref = DocumentsContract.buildDocumentUriUsingTree(vaultUri, entry.documentId).toDocumentRef(),
                     lastModified = entry.lastModified,
                     vaultRelativePath = entry.vaultRelativePath
                 )
-            }
+            },
+            unreadableFolderPaths = scan.unreadableFolderPaths
+        )
+    }
 
     private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
         NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId).toDocumentRef(), lastModified)
@@ -131,7 +136,10 @@ class NoteRepository {
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
     // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。
     // ※さがすタブ（collectNotesInScope）は _AI補記 だけは仕様どおり除外しない。
-    suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
+    // 完全性まで返すのは、不在を根拠に何かを消す処理（読書痕跡の孤児判定）が
+    // 「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
+    // 表示系は VaultScan.notes だけ取ればよい。
+    suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): VaultScan =
         withContext(Dispatchers.IO) {
             collectNotesRecursive(
                 contentResolver = contentResolver,
@@ -143,9 +151,13 @@ class NoteRepository {
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
     // _ReadingTraces はユーザーのノートを含まない機能の内部データなので候補に出さない。
+    //
+    // 列挙に失敗したら空一覧になる。ここは「フォルダが1つも出ない」という形で
+    // ユーザーの目に見える（黙って一部が欠けるのではない）ので、読めた分をそのまま返す。
     suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
         withContext(Dispatchers.IO) {
             queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+                .items
                 .filter { it.isDirectory && it.name != READING_TRACE_FOLDER_NAME }
                 .map { NoteFolder(it.name, it.documentId) }
                 .sortedBy { it.name }
@@ -160,9 +172,12 @@ class NoteRepository {
         contentResolver: ContentResolver,
         vaultUri: Uri,
         scope: NoteFolder?
+    // さがすは読めた分で結果を出す（完全性は使わない）。不在から何かを消すわけではないので、
+    // 部分的に読めなかった場合も「候補が少ない検索結果」に留まる。
     ): List<NoteFile> = withContext(Dispatchers.IO) {
         if (scope == null) {
             queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
+                .items
                 .filter { !it.isDirectory && isMarkdownFile(it.name) }
                 // ルート直下なので相対パスはファイル名そのもの。
                 .map { it.toNoteFile(vaultUri).copy(vaultRelativePath = it.name) }
@@ -173,7 +188,7 @@ class NoteRepository {
                 startId = scope.documentId,
                 startPath = scope.name,
                 excludeFolderNames = setOf(READING_TRACE_FOLDER_NAME)
-            )
+            ).notes
         }
     }
 
@@ -258,8 +273,9 @@ class NoteRepository {
         timestamp: String,
         content: String
     ): SavedAnnotation = withContext(Dispatchers.IO) {
-        val folderUri = findAnnotationFolder(contentResolver, vaultUri)
-            ?: createAnnotationFolder(contentResolver, vaultUri)
+        // 「探して、無ければ作る」を1回の探索で行う。`find(...) ?: create(...)` と分けて書くと、
+        // ルートを読めなかった場合まで「無い」に見えて2つ目の _AI補記 を作る。
+        val folderUri = resolveOrCreateAnnotationFolder(contentResolver, vaultUri)
         val fileName = "${sanitizedTitle}${ANNOTATION_FILE_MARKER}$timestamp.md"
         val writer = AnnotationFileWriter(SafAnnotationDocumentGateway(contentResolver, folderUri))
 
@@ -278,7 +294,9 @@ class NoteRepository {
             // 作成日時の新しい順に並べる。ファイル名は "{タイトル}__補記_{yyyyMMdd_HHmm}.md"
             // 形式のため、名前全体でなくタイムスタンプ部をソートキーにする
             // （名前降順だとタイトルの辞書順が支配して日付順にならない）
+            // 補記の一覧は読めた分を出す（削除判断には使わないため完全性を要求しない）。
             queryChildren(contentResolver, vaultUri, folderId)
+                .items
                 .filter { !it.isDirectory && isMarkdownFile(it.name) }
                 .map { it.toNoteFile(vaultUri) }
                 .sortedByDescending { it.name.substringAfterLast(ANNOTATION_FILE_MARKER, "") }
@@ -337,12 +355,24 @@ class NoteRepository {
             .filter { it.isNotBlank() }
     }
 
+    // Found 以外は null。Absent（本当に無い）と Unreadable（読めなかった）を
+    // ここで潰してよいのは、この戻り値で作成判断をしないため
+    // （作成は createAnnotationFolder が別に呼ばれる経路になっている）。
     private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? =
-        findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
+        (findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
+            as? RootFolderLookup.Found)?.uri
 
-    private fun createAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri =
-        createRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
-            ?: error("補記メモフォルダを作成できませんでした。")
+    // 既にあるなら作らない。**ルートを読めなかった場合も作らない** —
+    // 「無い」と誤認して2つ目の _AI補記 を作るのを防ぐ。
+    private fun resolveOrCreateAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri =
+        when (val lookup = findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)) {
+            is RootFolderLookup.Found -> lookup.uri
+            RootFolderLookup.Unreadable ->
+                error("Vaultルートを読めなかったため補記メモフォルダを作成できませんでした。")
+            RootFolderLookup.Absent ->
+                createRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
+                    ?: error("補記メモフォルダを作成できませんでした。")
+        }
 
     companion object {
         private const val ANNOTATION_FOLDER_NAME = "_AI補記"
