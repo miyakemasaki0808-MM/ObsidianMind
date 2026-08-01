@@ -24,10 +24,12 @@ NoteViewModel（Android境界の窓口）
       ├── SearchController
       ├── DistillController        ← PR #32 で追加
       ├── ReadingTraceController   ← ReadingTrace v1 で追加
-      └── SummaryController        ← 2026-07-26（ViewModel直書きから切り出し）
+      ├── SummaryController        ← 2026-07-26（ViewModel直書きから切り出し）
+      ├── NoteSectionController    ← 2026-07-31（表示用Markdown解析をMainの外へ）
+      └── ReadingTraceCleanupController ← 2026-08-01（痕跡の孤児掃除。**Vault単位**）
 ```
 
-分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 7つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
+分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 9つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -230,3 +232,25 @@ NoteViewModel（Android境界の窓口）
 **「引数として受け取って素通しする」は、依存を消したことにならない。**
 型として残っている限りテストはその型を作らねばならず、作れなければその経路は検証できない。
 → [saf_boundary_gateway](saf_boundary_gateway.md) §段階7
+
+### 2026-08-01 — 8・9件目（NoteSection / ReadingTraceCleanup）: 共通化の再検討には当たらない
+
+Controller が 9つになった。2026-07-26 に更新した再検討条件は
+**「`markViewed()` と Snackbar 通知を持つ Controller が3つ目に現れたとき」**なので、
+**どちらも当たらない** — `NoteSectionController` はAI生成を伴わず、
+`ReadingTraceCleanupController` は通知も未確認管理も持たない。
+未確認管理を持つのは依然 Quiz と Annotation の2件で、条件は満たされていない。
+**件数をトリガーにしないと決めた判断がそのまま効いており、判定は毎回1行で済む。**
+
+**この一覧は 2026-07-31 の `NoteSectionController` 追加時に更新し損ねていた**
+（本文には書いたが、上の系統図と件数が7のまま残っていた）。
+**系統図は「機能を足したら触る場所」の一覧ではないので、定型から漏れる。**
+機能追加の定型（Controller 1ファイル＋状態1フィールド＋Writer＋契約2箇所）に、
+**この系統図の更新を数えていなかった**のが原因。
+
+**Vault単位のControllerはノート単位の契約に登録しない。**
+`ReadingTraceCleanupController` は無効化の契機が Vault切替だけなので、
+`cancelNoteScopedJobs()` にも `withNoteScopedReset()` にも載せない
+（ノートを開き直しただけで洗い出しが消えるのは誤り）。世代も `vaultGeneration` 側を使う。
+**契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、
+すべてのControllerが従うものではない。
