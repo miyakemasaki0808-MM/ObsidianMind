@@ -3,6 +3,7 @@ package com.example.newproject.ai
 import com.google.mlkit.genai.common.DownloadStatus
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.prompt.Candidate
+import com.google.mlkit.genai.prompt.GenerateContentRequest
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerationConfig
 import com.google.mlkit.genai.prompt.ModelConfig
@@ -39,6 +40,21 @@ class AiTimeoutException(message: String) : Exception(message)
 // 途切れた文章をそのまま保存・表示するより、エラーとして再試行を促す方が安全。
 class AiTruncatedException(message: String) : Exception(message)
 
+/**
+ * プロンプト1本ぶんのトークン計測結果。
+ *
+ * **[tokenLimit] は入力と出力の合計上限**で、[inputTokens] は入力ぶんだけを数えた値。
+ * したがって「まだ入るか」は入力だけを見ても分からず、生成のために予約される
+ * [maxOutputTokens] も引いた [headroom] で判断する。
+ */
+internal data class PromptTokenMeasurement(
+    val inputTokens: Int,
+    val maxOutputTokens: Int,
+    val tokenLimit: Int
+) {
+    val headroom: Int get() = tokenLimit - inputTokens - maxOutputTokens
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // AICoreClient — Gemini Nano via ML Kit GenAI Prompt API
 // 実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める。
@@ -69,18 +85,30 @@ class AICoreClient : AiClient {
         }
     }
 
+    /**
+     * 生成と計測で同じリクエストを組む。別々に作ると「測ったもの」と「実際に投げたもの」がずれ、
+     * 計測値が予算判断の根拠として使えなくなる。
+     *
+     * **`maxOutputTokens` は明示設定しない。** genai-prompt 1.0.0-beta2 は「1〜256」しか
+     * 受け付けず（超過は `IllegalArgumentException` で全生成が失敗する）、かつ
+     * **未指定時の既定値もちょうど256**である（`GenerateContentRequest.Builder.build()` の
+     * null 分岐を逆アセンブルして確認済み）。つまり未指定と256明示は同義なので、
+     * 明示して「選んだ値」だと読み手に誤解させるより未指定のままにする。
+     * 途切れは [generate] の finishReason 検知で拾う。
+     *
+     * beta4 では許容範囲・既定値とも 4096 へ上がる。**ソース互換だが動作互換ではない**ので、
+     * 上げる際は応答長・推論時間・[GENERATE_TIMEOUT_MS]・Mutex の占有時間が同時に動く。
+     */
+    private fun buildRequest(prompt: String): GenerateContentRequest =
+        generateContentRequest(TextPart(prompt)) {}
+
     // 複数機能（要約・関連・セクションチャット等）からの同時呼び出しを直列化する。
     // タイムアウトは待ち時間を含めないよう、ロック取得後に計測する。
     override suspend fun generate(prompt: String): String = generateMutex.withLock {
         withContext(Dispatchers.IO) {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
-                    // maxOutputTokens は明示設定しない。genai-prompt 1.0.0-beta2 は
-                    // 「1〜256」しか受け付けず（超過は IllegalArgumentException で
-                    // 全生成が失敗する）、かといって256を明示すると未設定時の内部
-                    // デフォルトがそれより大きい場合にクイズ等の長出力を新たに切る。
-                    // 途切れは下の finishReason 検知で拾う。
-                    val request = generateContentRequest(TextPart(prompt)) {}
+                    val request = buildRequest(prompt)
                     val candidate = model.generateContent(request).candidates.firstOrNull()
                     if (candidate?.finishReason == Candidate.FinishReason.MAX_TOKENS) {
                         throw AiTruncatedException(
@@ -97,6 +125,46 @@ class AICoreClient : AiClient {
 
     // DOWNLOADABLE 時に呼ぶ。Flow が DownloadCompleted を emit したら generate() が使える
     override fun downloadModel(): Flow<DownloadStatus> = model.download()
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 計測用（開発専用）— 本番の生成経路からは呼ばない。
+    //
+    // `AiClient` インターフェースへ載せないのは、計測が端末AI固有の関心事であり、
+    // `StubAiClient` に実装義務を負わせる筋合いが無いため。ここに置く限り、
+    // 本番の呼び出し経路は1つも増えない。
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * プロンプト1本の入力トークン数・出力予約・合計上限を実測する。
+     *
+     * [generate] の Mutex には相乗りさせない。計測は生成を伴わないので、直列化の待ち行列へ
+     * 並べると「計測のために生成が待たされる」だけになる。
+     */
+    internal suspend fun measurePrompt(prompt: String): PromptTokenMeasurement =
+        withContext(Dispatchers.IO) {
+            val request = buildRequest(prompt)
+            PromptTokenMeasurement(
+                inputTokens = model.countTokens(request).totalTokens,
+                // SDKが埋めた実値を読むので、SDK版を上げれば既定値の変化に自動で追随する。
+                maxOutputTokens = request.maxOutputTokens,
+                tokenLimit = model.getTokenLimit()
+            )
+        }
+
+    /** 計測ログへ載せるモデル識別子。端末やモデル世代が違う数値を後から比較するために要る。 */
+    internal suspend fun baseModelName(): String = withContext(Dispatchers.IO) {
+        model.getBaseModelName()
+    }
+
+    /**
+     * skip 判定に使う生の [FeatureStatus]。
+     *
+     * [checkAvailability] は例外まで `Unavailable` へ畳んでしまうため、計測テストの
+     * skip 判定に使うと**SDKの回帰が「非対応端末」に化けて見逃される**。ここでは畳まない。
+     */
+    internal suspend fun featureStatus(): Int = withContext(Dispatchers.IO) {
+        model.checkStatus()
+    }
 
     companion object {
         private val generateMutex = Mutex()

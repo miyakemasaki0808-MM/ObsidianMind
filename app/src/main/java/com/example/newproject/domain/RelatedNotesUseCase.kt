@@ -246,7 +246,9 @@ class RelatedNotesUseCase(
         // 以下は実機計測で調整する前提の初期値。
         private const val RELATED_SNIPPET_LEN = 150        // 1候補あたりのスニペット最大長
         private const val RELATED_MIN_SNIPPET_LEN = 40     // 短縮時の下限
-        private const val RELATED_CANDIDATES_BUDGET = 3500 // 候補ブロック全体の入力文字数上限
+        // 候補ブロック全体の入力文字数上限。トークン計測テストが同じ値で候補を組むため
+        // internal にしてある（テストへ直書きすると、本番値を変えても計測だけ旧値で回り続ける）。
+        internal const val RELATED_CANDIDATES_BUDGET = 3500
         private const val CANDIDATE_CACHE_MAX_ENTRIES = 300
         // 候補本文の同時読み込み数。SAFプロバイダ（別プロセス）の詰まりを避けつつ速度を稼ぐ。
         private const val MAX_PARALLEL_READS = 8
