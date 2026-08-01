@@ -225,8 +225,15 @@ class NoteExcerptBuilderTest {
             "$i. step-$i ${"x".repeat(12)}\n        - note-$i ${"x".repeat(12)}"
         }
 
-        // 実際に使われている予算（NoteExcerptLimits）を全部通す
-        listOf(600, 1200, 1500, 3500).forEach { b ->
+        // 予算は定数から引く。値を直書きすると、上限を動かしたときに
+        // 「もう使われていない値だけを通すテスト」が残って気づけない。
+        listOf(
+            NoteExcerptLimits.SUMMARY,
+            NoteExcerptLimits.ANNOTATION,
+            NoteExcerptLimits.RELATED,
+            NoteExcerptLimits.SECTION,
+            NoteExcerptLimits.QUIZ
+        ).forEach { b ->
             assertWithinBudget(buildNoteExcerpt(content, b), b)
         }
     }

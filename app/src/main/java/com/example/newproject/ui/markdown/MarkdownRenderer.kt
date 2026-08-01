@@ -206,7 +206,7 @@ internal fun MarkdownParagraph(text: String) {
     )
 }
 
-/** \u5165\u308c\u5b501\u6bb5\u3042\u305f\u308a\u306e\u5b57\u4e0b\u3052\u5e45\u3002\u6df1\u3055\u306f\u5b57\u4e0b\u3052\u3060\u3051\u3067\u793a\u3057\u3001\u8a18\u53f7\u306f\u6bb5\u306b\u3088\u3089\u305a\u5909\u3048\u306a\u3044\u3002 */
+/** 入れ子1段あたりの字下げ幅。深さは字下げだけで示し、記号は段によらず変えない。 */
 private val ListIndentPerDepth = 16.dp
 
 @Composable
@@ -220,8 +220,8 @@ internal fun MarkdownList(items: List<ListItem>) {
             ) {
                 if (checked == null) {
                     Text(
-                        // \u756a\u53f7\u4ed8\u304d\u306f\u539f\u6587\u306e\u8868\u8a18\u3092\u305d\u306e\u307e\u307e\u51fa\u3059\u3002\u81ea\u52d5\u63a1\u756a\u3059\u308b\u3068 `1. 1. 1.` \u3068
-                        // \u66f8\u304b\u308c\u305f\u30ce\u30fc\u30c8\u3067\u8868\u793a\u304c\u539f\u6587\u3068\u98df\u3044\u9055\u3046\uff08\u672c\u30a2\u30d7\u30ea\u306f\u7de8\u96c6\u5668\u3067\u306f\u306a\u3044\uff09\u3002
+                        // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
+                        // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
                         text = when (val marker = item.marker) {
                             is ListMarker.Bullet -> "\u2022"
                             is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
