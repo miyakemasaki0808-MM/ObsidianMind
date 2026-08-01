@@ -345,6 +345,7 @@ class MainActivity : ComponentActivity() {
                             ReadingTraceCleanupScreen(
                                 state = uiState.readingTraceCleanupState,
                                 onLoad = { viewModel.assessReadingTraceOrphans() },
+                                onDelete = { keys -> viewModel.deleteReadingTraces(keys) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

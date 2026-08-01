@@ -278,6 +278,7 @@ private class ThrowingListGateway : ReadingTraceDocumentGateway {
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? = null
     override fun write(key: String, bytes: ByteArray, vaultKey: String) = Unit
     override fun listKeys(vaultKey: String): Set<String>? = throw RuntimeException("boom")
+    override fun delete(key: String, vaultKey: String): Boolean = throw RuntimeException("boom")
 }
 
 private const val VAULT = "content://vault"
@@ -307,6 +308,17 @@ private class FakeGateway : ReadingTraceDocumentGateway {
         if (vaultKey != currentVaultKey) return null
         if (listingUnreadable) return null
         return files.keys.toSet()
+    }
+
+    /** SAF実装と同じく、Vault不一致・削除失敗は false。 */
+    var deleteSucceeds = true
+    var deletedKeys = mutableListOf<String>()
+
+    override fun delete(key: String, vaultKey: String): Boolean {
+        if (vaultKey != currentVaultKey) return false
+        if (!deleteSucceeds) return false
+        deletedKeys += key
+        return files.remove(key) != null
     }
 
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {

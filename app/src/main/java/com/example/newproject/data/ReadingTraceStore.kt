@@ -84,6 +84,12 @@ internal interface ReadingTracePersistence {
      * [load] の相対パス指定では引けない。
      */
     fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult
+
+    /**
+     * 痕跡1件を削除する。**成功したかどうかを必ず返す** —
+     * SAFプロバイダは削除に失敗し得るので、結果を捨てると「消したつもり」が残る。
+     */
+    fun deleteByKey(key: String, vaultKey: String): Boolean
 }
 
 /**
@@ -107,6 +113,9 @@ internal interface ReadingTraceDocumentGateway {
      * 「痕跡ゼロ」が正しい答えなので空集合を返す。[vaultKey] 不一致も null。
      */
     fun listKeys(vaultKey: String): Set<String>?
+
+    /** 1件削除する。[vaultKey] 不一致・失敗なら false。 */
+    fun delete(key: String, vaultKey: String): Boolean
 }
 
 internal class ReadingTraceStore(
@@ -151,6 +160,12 @@ internal class ReadingTraceStore(
         }
     } catch (error: Exception) {
         ReadingTraceReadResult.Corrupt(error.message ?: error::class.java.simpleName)
+    }
+
+    override fun deleteByKey(key: String, vaultKey: String): Boolean = try {
+        gateway.delete(key, vaultKey)
+    } catch (error: Exception) {
+        false
     }
 
     override fun listKeys(vaultKey: String): ReadingTraceKeyListing = try {
@@ -332,6 +347,22 @@ internal class SafReadingTraceDocumentGateway(
                 }
             }
         return files
+    }
+
+    @Synchronized
+    override fun delete(key: String, vaultKey: String): Boolean {
+        val current = folderIndex(vaultKey) ?: return false
+        val target = current.files[key] ?: return false
+        val removed = try {
+            DocumentsContract.deleteDocument(contentResolver, target)
+        } catch (error: Exception) {
+            // プロバイダ側の異常。索引が指すUriが無効になっている可能性があるので捨てる。
+            index = null
+            false
+        }
+        // 消えたものだけ索引から外す。失敗した分を外すと、一覧から消えて再試行できなくなる。
+        if (removed) current.files.remove(key)
+        return removed
     }
 
     /**

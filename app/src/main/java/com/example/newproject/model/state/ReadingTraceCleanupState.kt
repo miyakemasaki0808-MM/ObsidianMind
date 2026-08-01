@@ -24,7 +24,12 @@ sealed interface ReadingTraceCleanupState {
      */
     data class Success(
         val orphans: List<OrphanCandidate>,
-        val withheld: List<WithheldOrphans>
+        val withheld: List<WithheldOrphans>,
+        /**
+         * 直近の削除で失敗した件数。**失敗した候補は一覧に残す** —
+         * 消えると再試行できなくなる（SAFプロバイダは削除に失敗し得る）。
+         */
+        val deleteFailureCount: Int = 0
     ) : ReadingTraceCleanupState
 
     /**

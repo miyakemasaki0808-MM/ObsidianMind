@@ -147,17 +147,117 @@ class ReadingTraceCleanupControllerTest {
         assertTrue(env.state.value is ReadingTraceCleanupState.Error)
     }
 
+    // --- 削除（段階4）-----------------------------------------------------------
+
+    @Test
+    fun `deletes only the requested candidate`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(listOf("journal/b.md"), success.orphans.map { it.vaultRelativePath })
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("journal/b.md")))
+    }
+
+    // SAFプロバイダは削除に失敗し得る。消えたことにして一覧から外すと再試行できない。
+    @Test
+    fun `keeps a candidate that could not be deleted and reports the failure`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        env.persistence.undeletableKeys += ReadingTraceStore.keyFor("ideas/a.md")
+
+        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(listOf("ideas/a.md"), success.orphans.map { it.vaultRelativePath })
+        assertEquals(1, success.deleteFailureCount)
+    }
+
+    // 保留した分は候補一覧に入っていないので、「すべて削除」でも消えない。
+    @Test
+    fun `deleting everything never touches withheld traces`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("ideas/b.md"))
+        env.persistence.put(trace("journal/c.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        val success = env.state.value as ReadingTraceCleanupState.Success
+
+        env.controller.delete(success.orphans.map { it.key })
+        advanceUntilIdle()
+
+        // ideas/ の2件はフォルダ一括欠落で保留されており、削除対象に入らない。
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/b.md")))
+        assertTrue(!env.persistence.stored(ReadingTraceStore.keyFor("journal/c.md")))
+    }
+
+    // 画面に出ていないキーを渡されても消さない（一覧に固定する規律）。
+    @Test
+    fun `ignores keys that are not in the displayed candidate list`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(listOf(note("journal/b.md")))
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.controller.delete(listOf(ReadingTraceStore.keyFor("journal/b.md")))
+        advanceUntilIdle()
+
+        // journal/b.md は現存ノートなので候補ではない。消えてはいけない。
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("journal/b.md")))
+    }
+
+    /**
+     * 洗い出しと削除のあいだに Vault が切り替わったら削除しない。
+     *
+     * **キーは相対パスのハッシュなので、別のVaultに同じ相対パスのノートがあれば
+     * キーも一致する。** 削除時に現在のVaultを読み直すと、旧Vaultの候補キーで
+     * 新Vaultの**生きている痕跡**を消してしまう。
+     */
+    @Test
+    fun `does not delete when the vault changed since the assessment`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        val before = env.state.value
+
+        env.vaultKey = "content://another-vault"
+        env.controller.delete(listOf(ReadingTraceStore.keyFor("ideas/a.md")))
+        advanceUntilIdle()
+
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+        assertEquals(before, env.state.value)
+    }
+
     private class Env(scope: kotlinx.coroutines.test.TestScope) {
         val vault = FakeVaultBrowser()
         val persistence = FakeCleanupPersistence()
         var generation = 0L
+        var vaultKey: String? = VAULT
         val state = RecordingWriter()
         val controller = ReadingTraceCleanupController(
             scope = scope,
             vault = vault,
             persistence = persistence,
             state = state,
-            currentVaultKey = { VAULT },
+            currentVaultKey = { vaultKey },
             vaultGeneration = { generation },
             limits = OrphanLimits()
         )
@@ -166,6 +266,8 @@ class ReadingTraceCleanupControllerTest {
     private class RecordingWriter : ReadingTraceCleanupStateWriter {
         var value: ReadingTraceCleanupState = ReadingTraceCleanupState.Idle
             private set
+
+        override val current: ReadingTraceCleanupState get() = value
 
         override fun set(state: ReadingTraceCleanupState) {
             value = state
@@ -219,5 +321,16 @@ private class FakeCleanupPersistence : ReadingTracePersistence {
         loadByKeyCount++
         if (key in corruptKeys) return ReadingTraceReadResult.Corrupt("壊れています")
         return traces[key]?.let { ReadingTraceReadResult.Valid(it) } ?: ReadingTraceReadResult.None
+    }
+
+    /** 削除に失敗させるキー。SAFプロバイダが消せない状況を作る。 */
+    val undeletableKeys = mutableSetOf<String>()
+
+    fun stored(key: String): Boolean = traces.containsKey(key)
+
+    override fun deleteByKey(key: String, vaultKey: String): Boolean {
+        if (vaultKey != VAULT) return false
+        if (key in undeletableKeys) return false
+        return traces.remove(key) != null
     }
 }

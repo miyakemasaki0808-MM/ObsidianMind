@@ -39,6 +39,16 @@ internal class ReadingTraceCleanupController(
     private var job: Job? = null
 
     /**
+     * 候補を洗い出した時点のVault識別子。**削除はこの値に対して行う。**
+     *
+     * 削除時に `currentVaultKey()` を読み直してはいけない。キーは相対パスのハッシュなので、
+     * **別のVaultに同じ相対パスのノートがあればキーも一致する** — 洗い出しと削除の間に
+     * Vaultが切り替わると、旧Vaultの候補キーで**新Vaultの生きた痕跡を消し得る**。
+     * 要求時点のVaultを要求自身に持たせる規律は [ReadingTraceController] と同じ。
+     */
+    private var assessedVaultKey: String? = null
+
+    /**
      * 孤児候補を洗い直す。画面を開くたびに走らせてよい
      * （ノート一覧はTTLキャッシュ、痕跡の列挙は掃除のためだけの1回）。
      */
@@ -58,6 +68,7 @@ internal class ReadingTraceCleanupController(
         job = scope.launch {
             state.set(ReadingTraceCleanupState.Loading)
             val next = runAssessment(handle, vaultKey)
+            assessedVaultKey = vaultKey
             // 走行中にVaultが切り替わっていたら、旧Vaultの候補を新Vaultの画面へ出さない。
             // ここを落とすと、切替直後に「別Vaultのノートを消しませんか」と尋ねることになる。
             if (generation == vaultGeneration()) state.set(next)
@@ -106,10 +117,46 @@ internal class ReadingTraceCleanupController(
             else -> null
         }
 
+    /**
+     * 候補を削除する。**対象は「いま画面に出ている候補」に固定する。**
+     *
+     * 洗い出し直後の一覧だけを消しにいくのは、走行中にVaultが切り替わっても
+     * 拾い直した新Vaultのファイルを消さないため（[AnnotationController.deleteAll] と同じ規律）。
+     *
+     * **削除後に洗い直さない。** もう一度 Vault 全走査を掛けるのは重く、
+     * 残った候補は同じ判定で一緒に評価済みなので、消えた分を落とすだけで一覧は正しい。
+     * **失敗した候補は残す** — 消えると再試行できなくなる。
+     */
+    fun delete(keys: List<String>) {
+        val current = state.current as? ReadingTraceCleanupState.Success ?: return
+        // 洗い出した時点のVaultへ削除する。現在のVaultと違っていれば何もしない
+        // （キーが衝突して別Vaultの生きた痕跡を消すのを防ぐ）。
+        val vaultKey = assessedVaultKey ?: return
+        if (vaultKey != currentVaultKey()) return
+        val targets = current.orphans.filter { it.key in keys }
+        if (targets.isEmpty()) return
+        val generation = vaultGeneration()
+        job?.cancel()
+        job = scope.launch {
+            val failed = mutableSetOf<String>()
+            targets.forEach { candidate ->
+                if (!persistence.deleteByKey(candidate.key, vaultKey)) failed += candidate.key
+            }
+            if (generation != vaultGeneration()) return@launch
+            state.set(
+                current.copy(
+                    orphans = current.orphans.filter { it.key !in keys || it.key in failed },
+                    deleteFailureCount = failed.size
+                )
+            )
+        }
+    }
+
     /** Vault切替。走行中の洗い出しを止める（状態のリセットは状態変換側が行う）。 */
     fun onVaultChanged() {
         job?.cancel()
         job = null
+        assessedVaultKey = null
     }
 }
 

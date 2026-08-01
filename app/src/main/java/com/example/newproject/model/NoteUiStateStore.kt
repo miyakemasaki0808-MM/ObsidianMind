@@ -71,6 +71,7 @@ interface ReadingTraceStateWriter {
 }
 
 interface ReadingTraceCleanupStateWriter {
+    val current: ReadingTraceCleanupState
     fun set(state: ReadingTraceCleanupState)
 }
 
@@ -177,6 +178,9 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
 
     val readingTraceCleanupWriter: ReadingTraceCleanupStateWriter =
         object : ReadingTraceCleanupStateWriter {
+            override val current: ReadingTraceCleanupState
+                get() = mutableState.value.readingTraceCleanupState
+
             override fun set(state: ReadingTraceCleanupState) {
                 mutableState.update { it.copy(readingTraceCleanupState = state) }
             }

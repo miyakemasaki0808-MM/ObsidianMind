@@ -169,6 +169,8 @@ internal class NoteSessionCoordinator(
 
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
 
+    fun deleteReadingTraces(keys: List<String>) = readingTraceCleanup.delete(keys)
+
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
     // 対になる状態リセット側の契約は [NoteUiStateStore] 内の withNoteScopedReset。
 

@@ -1,6 +1,7 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,11 +14,17 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +40,7 @@ import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.DangerAction
 import com.example.newproject.ui.theme.OnSurface
+import com.example.newproject.ui.theme.OnDangerAction
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.withheldLocation
@@ -53,9 +61,14 @@ import com.example.newproject.ui.withheldReasonText
 fun ReadingTraceCleanupScreen(
     state: ReadingTraceCleanupState,
     onLoad: () -> Unit,
+    onDelete: (List<String>) -> Unit,
     onBack: () -> Unit
 ) {
     LaunchedEffect(Unit) { onLoad() }
+
+    var pendingDelete by remember { mutableStateOf<OrphanCandidate?>(null) }
+    var showDeleteAll by remember { mutableStateOf(false) }
+    val orphans = (state as? ReadingTraceCleanupState.Success)?.orphans.orEmpty()
 
     Column(
         modifier = Modifier
@@ -69,7 +82,24 @@ fun ReadingTraceCleanupScreen(
             titleSize = 24.sp,
             leading = {
                 IconPill(symbol = "‹", contentDescription = "戻る", symbolSize = 22.sp, onClick = onBack)
-            }
+            },
+            trailing = if (orphans.isNotEmpty()) {
+                {
+                    Surface(
+                        modifier = Modifier.clickable { showDeleteAll = true },
+                        color = DangerAction,
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Text(
+                            text = "すべて削除",
+                            color = OnDangerAction,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+            } else null
         )
 
         Spacer(modifier = Modifier.height(14.dp))
@@ -90,9 +120,59 @@ fun ReadingTraceCleanupScreen(
                 emphasis = true
             )
 
-            is ReadingTraceCleanupState.Success -> SuccessBody(state)
+            is ReadingTraceCleanupState.Success ->
+                SuccessBody(state, onRequestDelete = { pendingDelete = it })
         }
     }
+
+    pendingDelete?.let { candidate ->
+        ConfirmDialog(
+            title = "この読書痕跡を削除しますか",
+            // 何が消えて何が消えないかを必ず並べて書く。痕跡とノートの区別が付かないと
+            // 「ノートが消える」と受け取られる。
+            body = "「${candidate.noteTitle}」の読書記録を削除します。\n" +
+                "ノート本文は削除されません（すでに見つからないノートです）。",
+            onConfirm = {
+                onDelete(listOf(candidate.key))
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null }
+        )
+    }
+
+    if (showDeleteAll) {
+        ConfirmDialog(
+            title = "候補をすべて削除しますか",
+            body = "${orphans.size}件の読書記録を削除します。\n" +
+                "ノート本文は削除されません。安全のため保留した分は削除されません。",
+            onConfirm = {
+                onDelete(orphans.map { it.key })
+                showDeleteAll = false
+            },
+            onDismiss = { showDeleteAll = false }
+        )
+    }
+}
+
+@Composable
+private fun ConfirmDialog(
+    title: String,
+    body: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = title, color = OnSurface) },
+        text = { Text(text = body, color = OnSurfaceFaint, fontSize = 14.sp) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) { Text(text = "削除", color = DangerAction) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(text = "キャンセル", color = OnSurface) }
+        },
+        containerColor = Panel
+    )
 }
 
 @Composable
@@ -109,14 +189,21 @@ private fun LoadingBody() {
 }
 
 @Composable
-private fun SuccessBody(state: ReadingTraceCleanupState.Success) {
+private fun SuccessBody(
+    state: ReadingTraceCleanupState.Success,
+    onRequestDelete: (OrphanCandidate) -> Unit
+) {
     Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-        NoticeCard(
-            title = "まだ削除はしません",
-            body = "この画面は動作確認中です。いま削除するとしたらどれが対象になるかだけを表示しています。"
-        )
+        // 削除に失敗しても候補は一覧に残す（消えると再試行できない）。件数だけ上に添える。
+        if (state.deleteFailureCount > 0) {
+            NoticeCard(
+                title = "${state.deleteFailureCount}件を削除できませんでした",
+                body = "しばらくしてからもう一度お試しください。",
+                emphasis = true
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
 
-        Spacer(modifier = Modifier.height(14.dp))
         SectionTitle("削除候補 ${state.orphans.size}件")
         if (state.orphans.isEmpty()) {
             // 「候補ゼロ」を明示する。無表示にすると保留中の状態と見分けが付かない。
@@ -129,7 +216,7 @@ private fun SuccessBody(state: ReadingTraceCleanupState.Success) {
         } else {
             state.orphans.forEach { candidate ->
                 Spacer(modifier = Modifier.height(8.dp))
-                CandidateRow(candidate)
+                CandidateRow(candidate, onDelete = { onRequestDelete(candidate) })
             }
         }
 
@@ -158,9 +245,13 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun CandidateRow(candidate: OrphanCandidate) {
+private fun CandidateRow(candidate: OrphanCandidate, onDelete: () -> Unit) {
     Surface(modifier = Modifier.fillMaxWidth(), color = Panel, shape = RoundedCornerShape(8.dp)) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = candidate.noteTitle,
                 color = OnSurface,
@@ -174,6 +265,13 @@ private fun CandidateRow(candidate: OrphanCandidate) {
                 text = "これまで${candidate.totalVisitCount}回開いています",
                 color = OnSurfaceFaint,
                 fontSize = 12.sp
+            )
+        }
+            IconPill(
+                symbol = "×",
+                contentDescription = "${candidate.noteTitle} の読書痕跡を削除",
+                symbolSize = 18.sp,
+                onClick = onDelete
             )
         }
     }

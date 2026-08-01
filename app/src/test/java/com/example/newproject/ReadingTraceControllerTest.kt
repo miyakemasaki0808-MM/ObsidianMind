@@ -1231,6 +1231,10 @@ private class FakePersistence : ReadingTracePersistence {
             ?.let { load(it, vaultKey) }
             ?: ReadingTraceReadResult.None
 
+    override fun deleteByKey(key: String, vaultKey: String): Boolean =
+        files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
+            ?.let { files.remove(it) != null } ?: false
+
     override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
         savedVaultKeys += vaultKey

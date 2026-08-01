@@ -696,6 +696,10 @@ class NoteSessionCoordinatorTest {
             files.entries.firstOrNull { ReadingTraceStore.keyFor(it.key) == key }
                 ?.let { ReadingTraceReadResult.Valid(it.value) }
                 ?: ReadingTraceReadResult.None
+
+        override fun deleteByKey(key: String, vaultKey: String): Boolean =
+            files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
+                ?.let { files.remove(it) != null } ?: false
         override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
             saved += trace
             files[trace.vaultRelativePath] = trace
