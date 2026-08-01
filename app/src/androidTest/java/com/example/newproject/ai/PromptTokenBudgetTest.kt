@@ -2,7 +2,9 @@ package com.example.newproject.ai
 
 import android.os.Build
 import android.util.Log
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.MainActivity
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.buildNoteExcerpt
@@ -15,6 +17,7 @@ import com.google.mlkit.genai.common.FeatureStatus
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -48,6 +51,26 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class PromptTokenBudgetTest {
 
+    /**
+     * **AICore はバックグラウンドからの利用を拒否する。**
+     *
+     * Activity を立てずに端末AIを呼ぶと `GenAiException [ErrorCode 30]
+     * "Background usage is blocked. Please use the API when your app is in the foreground instead."`
+     * になる。instrumentation テストは既定でフォアグラウンドのActivityを持たないため、
+     * **このルールが無いと端末AIを使うテストは端末側の問題と区別できない形で必ず落ちる。**
+     *
+     * 実際に一度そうなった。`countTokens()` だけが `10003 Tokenization failed` という
+     * 別のメッセージで落ちたため「beta2 の計測APIが Android 17 で壊れている」と読みかけたが、
+     * 対照に置いた `generate()` が ErrorCode 30 で落ちたことで**推論経路全体が
+     * 止められている**と分かった（`getTokenLimit()` はメタデータ照会なので通っていた）。
+     * 10003 は同じ原因をトークナイザ側が別の文言で返しているものと見る。
+     *
+     * `ComposeRenderingSetupTest` が緑なのは Activity を立てているからで、
+     * **端末AIを呼ぶテストでは Activity の有無が前提条件そのものになる。**
+     */
+    @get:Rule
+    val activityRule = ActivityScenarioRule(MainActivity::class.java)
+
     private val client = AICoreClient()
 
     /**
@@ -78,6 +101,22 @@ class PromptTokenBudgetTest {
      * このテストは他の計測テストより先に読む前提の診断であり、
      * **`FeatureStatus` を確認する前に走らせる**（`checkStatus()` 自体が投げる可能性があるため）。
      */
+    /**
+     * トークンAPIの最小疎通。**計測ケースを疑う前に、APIそのものが動くかを見る。**
+     *
+     * 読み方:
+     * - `tokenLimit` 成功・`"hello"` 失敗 → `countTokens()` 経路のAICore／SDK互換問題
+     * - 両方失敗 → token-info 機能全体が使えない
+     * - 両方成功 → 元の失敗はプロンプト固有（長さ・内容）なので段階的に切り分ける
+     */
+    @Test
+    fun トークンAPIの最小疎通を確かめる() = runBlocking {
+        requireNanoAvailable()
+        log("── 最小疎通 ${"─".repeat(37)}")
+        log("getTokenLimit()          : ${client.tokenLimit()}")
+        log("countTokens(\"hello\")     : ${client.countPromptTokens("hello")}")
+    }
+
     @Test
     fun 端末AIのどの能力が使えるかを切り分ける() {
         logHeader()
