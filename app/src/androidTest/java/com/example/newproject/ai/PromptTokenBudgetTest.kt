@@ -233,6 +233,53 @@ class PromptTokenBudgetTest {
         assertTrue("注意書きありの関連ノートが上限を超えている", abridged.headroom >= 0)
     }
 
+    /**
+     * 関連ノートの抜粋予算（[NoteExcerptLimits.RELATED]）を動かしたときの余裕を、候補値ごとに測る。
+     *
+     * **AI-1（予算600が実測より小さい）の値を決めるための掃引。** 1回の実行で候補を全部測るのは、
+     * 「変えて回す」を繰り返すと実機実行が候補の数だけ要るため。
+     *
+     * 見るのは余裕だけではない。**100文字あたりの限界コスト**も出す。
+     * 日本語は1文字あたりのトークンが英語より高く、文字数を倍にしてもトークンが倍にならない
+     * （骨格・ラベル・注意書きの固定費が効く）ため、**文字数の増分から素朴に見積もると外れる。**
+     *
+     * このテストは判断材料を出すだけで、何も強制しない。**予算を決めるのは人間の仕事**であり、
+     * トークンの余裕は必要条件にすぎない（生成時間と推薦品質は別途見る）。
+     */
+    @Test
+    fun 関連ノートの予算候補ごとの余裕を測る() = runBlocking {
+        requireNanoAvailable()
+        logHeader()
+
+        Profile.entries.forEach { profile ->
+            val candidates = relatedCandidates(profile)
+            log("── 関連ノート予算の掃引: ${profile.label} ${"─".repeat(18)}")
+            log(String.format("%8s %8s %8s %9s %14s", "予算(字)", "入力", "上限", "余裕", "限界費用/100字"))
+
+            var previous: Pair<Int, Int>? = null
+            RELATED_BUDGET_CANDIDATES.forEach { budget ->
+                val prompt = PromptBuilder.buildRelatedNotesPrompt(
+                    currentTitle = TITLE,
+                    currentExcerpt = buildNoteExcerpt(profile.content, budget),
+                    candidates = candidates
+                )
+                val m = client.measurePrompt(prompt)
+                val marginal = previous?.let { (prevBudget, prevTokens) ->
+                    val deltaChars = budget - prevBudget
+                    if (deltaChars == 0) "—" else
+                        "%.1f".format((m.inputTokens - prevTokens) * 100.0 / deltaChars)
+                } ?: "—"
+                log(
+                    String.format(
+                        "%8d %8d %8d %9d %14s",
+                        budget, m.inputTokens, m.tokenLimit, m.headroom, marginal
+                    )
+                )
+                previous = budget to m.inputTokens
+            }
+        }
+    }
+
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
@@ -382,6 +429,14 @@ class PromptTokenBudgetTest {
 
         /** `app/build.gradle.kts` の宣言と揃える。ログの数値がどのSDKで採れたかを残すため。 */
         const val GENAI_PROMPT_VERSION = "1.0.0-beta2"
+
+        /**
+         * AI-1 で検討する関連ノート予算の候補（先頭は現行値）。
+         *
+         * 上限側を 2,000 まで見るのは、**採る気がなくても曲線の形を知るため**。
+         * 現行値の周辺だけ測ると、限界費用が一定なのか逓減するのかが分からない。
+         */
+        val RELATED_BUDGET_CANDIDATES = listOf(600, 800, 1000, 1200, 1500, 2000)
 
         const val PROBE_PROMPT = "トークン計測の疎通確認"
         const val TITLE = "オンデバイスAIの入力予算に関する検討"
