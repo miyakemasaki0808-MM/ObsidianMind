@@ -98,6 +98,12 @@ class PackageDependencyTest {
      * `ui` を対象にしないのは Compose 自体が `androidx.*` だから。`data` と
      * ルート（`NoteViewModel` / `MainActivity`）は SAF・`ContentResolver` を
      * 実際に扱う境界なので依存してよい。
+     *
+     * **import だけを見ない。** `android.net.Uri.parse(...)` のような完全修飾名は
+     * import を伴わないので、import 走査では素通りする（実際に注入して確認した）。
+     * ソースからコメントを落としたうえで `android.` / `androidx.` の出現を全て拾う。
+     * コメントを落とすのは、`DocumentRef` と `KeyedMemoCache` のKDocが
+     * **「`android.net.Uri` を持たない理由」の説明として同じ文字列を含む**ため。
      */
     @Test
     fun `model と domain と controller は Android に依存しない`() {
@@ -110,8 +116,8 @@ class PackageDependencyTest {
                 if (layer !in ANDROID_FREE_LAYERS) {
                     emptySequence()
                 } else {
-                    ANDROID_IMPORT_PATTERN.findAll(source)
-                        .map { "${file.relativePath()}: $layer -> ${it.groupValues[1]}" }
+                    ANDROID_REFERENCE_PATTERN.findAll(source.withoutComments())
+                        .map { "${file.relativePath()}: $layer -> ${it.value}" }
                         .distinct()
                 }
             }
@@ -139,6 +145,13 @@ class PackageDependencyTest {
     private fun File.relativePath(): String =
         invariantSeparatorsPath.substringAfter("/src/main/java/")
 
+    /**
+     * コメントを落とす。**Androidへ依存しない理由をKDocで説明している型があるため**、
+     * 本文だけを走査対象にしないと自分の説明文で落ちる。
+     */
+    private fun String.withoutComments(): String =
+        BLOCK_COMMENT.replace(this, "").let { LINE_COMMENT.replace(it, "") }
+
     companion object {
         /** ルートパッケージ（`com.example.newproject` 直下）を表す層名。 */
         private const val ROOT = "(root)"
@@ -150,9 +163,12 @@ class PackageDependencyTest {
         /** `model` / `domain` / `controller` は Android フレームワークにも依存しない。 */
         private val ANDROID_FREE_LAYERS = setOf("model", "domain", "controller")
 
-        // `androidx.compose` などを含めないよう、`android.` と `androidx.` の両方を見る。
-        private val ANDROID_IMPORT_PATTERN =
-            Regex("""(?m)^import\s+(android(?:x)?\.[A-Za-z0-9_.]+)""")
+        // import でも完全修飾名でも拾えるよう、行頭の `import` に縛らない。
+        private val ANDROID_REFERENCE_PATTERN =
+            Regex("""\bandroidx?\.[A-Za-z0-9_.]+""")
+
+        private val BLOCK_COMMENT = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
+        private val LINE_COMMENT = Regex("""//[^\n]*""")
         private val IMPORT_PATTERN =
             Regex("""(?m)^import\s+com\.example\.newproject\.([A-Za-z][A-Za-z0-9_]*)\b""")
     }

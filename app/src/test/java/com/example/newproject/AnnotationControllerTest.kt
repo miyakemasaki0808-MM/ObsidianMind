@@ -201,6 +201,23 @@ class AnnotationControllerTest {
         assertEquals(1, handle.deletedRefs.size)
     }
 
+    /**
+     * [VaultHandle] は「処理の開始時に1回だけ取り、その1つを最後まで使う」規約。
+     *
+     * 削除は「消す → 一覧を読み直す」の2段だが、途中で引き直すと
+     * **削除は旧Vaultへ・読み直しは新Vaultへ**という食い違いが起こる。
+     * 表示は世代照合で弾かれるものの、切り替えた先へ無駄なSAF列挙が飛ぶ。
+     */
+    @Test
+    fun `削除から一覧の読み直しまでVaultハンドルを取り直さない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val vault = FakeVaultBrowser(FakeVaultHandle())
+
+        controller(state, vault).delete(noteFile("消す補記.md").ref)
+
+        assertEquals(1, vault.currentCount)
+    }
+
     private fun controller(
         state: NoteUiStateStore,
         vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),

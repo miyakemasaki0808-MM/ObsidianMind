@@ -151,7 +151,8 @@ class AnnotationController(
     }
 
     fun loadList() {
-        if (vault.current() == null) {
+        val handle = vault.current()
+        if (handle == null) {
             state.update { current ->
                 current.copy(annotationListState = AnnotationListState.Error("Vault が選択されていません。"))
             }
@@ -161,7 +162,7 @@ class AnnotationController(
         listJob?.cancel()
         listJob = scope.launch {
             state.update { current -> current.copy(annotationListState = AnnotationListState.Loading) }
-            reloadList(generation)
+            reloadList(handle, generation)
         }
     }
 
@@ -171,7 +172,7 @@ class AnnotationController(
         listJob?.cancel()
         listJob = scope.launch {
             val deleted = handle.deleteDocument(ref)
-            reloadList(generation, failureCount = if (deleted) 0 else 1)
+            reloadList(handle, generation, failureCount = if (deleted) 0 else 1)
         }
     }
 
@@ -194,7 +195,7 @@ class AnnotationController(
                 if (generation != vaultGeneration()) return@launch
                 if (!handle.deleteDocument(file.ref)) failureCount++
             }
-            reloadList(generation, failureCount)
+            reloadList(handle, generation, failureCount)
         }
     }
 
@@ -204,13 +205,19 @@ class AnnotationController(
      * 起動時の世代と食い違っていたら書かない。`cancel()` だけに頼ると、
      * SAF列挙から戻った直後にVault切替が起きた場合に旧Vaultの補記が並ぶ。
      *
+     * **[handle] は呼び出し側が取ったものを受け取る。ここで引き直さない。**
+     * 引き直すと、削除は旧Vaultへ・読み直しは新Vaultへ、という食い違いが起こる。
+     * 表示は世代照合で弾かれるが、**切り替えた先のVaultへ無駄なSAF列挙が飛ぶ**うえ、
+     * 将来この関数から世代照合が外れたときに表示混入まで戻る。
+     * [VaultHandle] の「開始時に1回だけ取る」規約はここにも効く。
+     *
      * @param failureCount 直前の削除で失敗した件数。読み直した一覧に添えて表示する。
      */
     private suspend fun reloadList(
+        handle: VaultHandle,
         generation: Long,
         failureCount: Int = 0
     ) {
-        val handle = vault.current() ?: return
         try {
             val files = handle.listAnnotationFiles()
             if (generation != vaultGeneration()) return

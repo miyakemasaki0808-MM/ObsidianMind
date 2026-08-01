@@ -14,7 +14,14 @@ import com.example.newproject.model.NoteFolder
  * `vaultUri = { null }` しか渡せず「Vault未選択」の枝しか通せなかった。
  */
 class FakeVaultBrowser(var handle: FakeVaultHandle? = FakeVaultHandle()) : VaultBrowser {
-    override fun current(): VaultHandle? = handle
+    /** [current] が呼ばれた回数。**「開始時に1回だけ取る」規約の検証に使う。** */
+    var currentCount = 0
+        private set
+
+    override fun current(): VaultHandle? {
+        currentCount++
+        return handle
+    }
 }
 
 /**
