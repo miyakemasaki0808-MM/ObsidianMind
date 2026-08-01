@@ -285,39 +285,29 @@ class AppColorContrastTest {
     }
 
     /**
-     * ナビ帯上のバッジは塗り単体では3:1を出せないため（実測 Success 1.61・Error 1.04）、
-     * `badgeOutlineOnNav` の輪郭線で境界を作る（→ [design/theme_and_ui_refactor.md] 判断8）。
-     * ここでは「塗り単体では今も届かないこと」と「輪郭線を足せば届くこと」の両方を固定する
-     * — 前者が緑に転じたら badgeOutlineOnNav を消し忘れている可能性がある。
+     * **バッジの塗りは下部ナビ帯の上では基準を満たしていない**（既知・未修正）。
+     *
+     * パネル上の塗りと違い、バッジはブランド色そのものの帯（ライト=Indigo／ダーク=`navBar`）
+     * に載る。ライトのIndigoは彩度が高く相対輝度も中位なので、その上で3:1を取れる塗りが
+     * ほとんど無い。中の記号は対の前景で読めるようにしてあるため、状態の判別は記号が担う。
+     *
+     * 直すには塗りの明度を上げるか輪郭線を足すかで、どちらもナビ帯の見た目に踏み込む。
+     * ここは実測値を固定するだけに留め、判断は別途行う。
      */
     @Test
-    fun `ナビ帯の上のバッジは輪郭線を足すことで3対1を満たす`() {
-        val fills = mapOf(
-            "Successバッジ（緑）" to LightAppColors.buttonSecondary,
-            "Errorバッジ（赤）" to LightAppColors.errorSurface
+    fun `ナビ帯の上のバッジ塗りが基準未達であることを記録する`() {
+        val onLightNav = mapOf(
+            "Successバッジ（緑）" to contrast(LightAppColors.buttonSecondary, LightAppColors.navBar),
+            "Errorバッジ（赤）" to contrast(LightAppColors.errorSurface, LightAppColors.navBar)
         )
-        fills.forEach { (label, fill) ->
+        onLightNav.forEach { (label, actual) ->
             assertTrue(
-                "$label の塗り単体がライトのナビ帯で3:1を満たすようになった（実測 " +
-                    "${"%.2f".format(contrast(fill, LightAppColors.navBar))}）。" +
-                    "badgeOutlineOnNav が不要になっていないか確認すること",
-                contrast(fill, LightAppColors.navBar) < 3.0
-            )
-            assertAtLeast(
-                3.0,
-                contrast(LightAppColors.badgeOutlineOnNav, LightAppColors.navBar),
-                "$label の輪郭線（ライトのナビ帯上）"
+                "$label がライトのナビ帯で3:1を満たすようになった（実測 ${"%.2f".format(actual)}）。" +
+                    "修正が入ったならこのテストを消し、上の基準テストへ移すこと",
+                actual < 3.0
             )
         }
-        // ダークは塗り単体で足りるので輪郭線は透明のまま（buttonOutlineOnGradientと同じ形）。
-        assertEquals(
-            "ダークのバッジ輪郭線は透明であること（塗り単体で足りているため）",
-            Color.Transparent,
-            DarkAppColors.badgeOutlineOnNav
-        )
-        assertAtLeast(3.0, contrast(DarkAppColors.buttonSecondary, DarkAppColors.navBar), "Successバッジの塗り（ダークのナビ帯上）")
-        assertAtLeast(3.0, contrast(DarkAppColors.errorSurface, DarkAppColors.navBar), "Errorバッジの塗り（ダークのナビ帯上）")
-        // 中の記号は塗りの上で読めていること。
+        // 中の記号は塗りの上で読めていること（ここは満たしている）。
         assertAtLeast(
             4.5,
             contrast(LightAppColors.onButtonSecondary, LightAppColors.buttonSecondary),

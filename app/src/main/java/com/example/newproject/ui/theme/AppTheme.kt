@@ -83,11 +83,6 @@ internal class AppColorScheme(
     // グラデーション直上に置くボタンの輪郭線。塗り自身では境界を出せないため使う
     // （理由は LightAppColors のコメント）。ダークは塗りが足りているので透明。
     val buttonOutlineOnGradient: Color,
-    // ナビ帯の上に置くバッジの輪郭線。ライトのナビ帯（Indigo）は彩度が高く相対輝度も
-    // 中位のため、バッジの塗り自体では3:1を出せない（→ AppColorContrastTest）。
-    // buttonOutlineOnGradient と同じ理由・同じ解き方（輪郭で境界を作る）。
-    // ダークは塗りが元から3:1を満たすので透明。
-    val badgeOutlineOnNav: Color,
     // 背景
     // 背景グラデーションは**停止色のリストだけ**を受け取り、`Brush` はここで組み立てる。
     // 以前は `Brush` を直接渡していたため、色を検証したいテストは同じ値を自前で
