@@ -154,6 +154,21 @@ internal class NoteSessionCoordinator(
         ioDispatcher = ioDispatcher
     )
 
+    /**
+     * 読書痕跡の整理。**Vault単位**なのでノート単位の契約へは登録しない
+     * （ノートを開き直しただけで洗い出しが消えるのは誤り）。
+     */
+    private val readingTraceCleanup = ReadingTraceCleanupController(
+        scope = scope,
+        vault = vaultBrowser,
+        persistence = readingTracePersistence,
+        state = stateStore.readingTraceCleanupWriter,
+        currentVaultKey = currentVaultKey,
+        vaultGeneration = { vaultGeneration }
+    )
+
+    fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
+
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
     // 対になる状態リセット側の契約は [NoteUiStateStore] 内の withNoteScopedReset。
 
@@ -202,6 +217,7 @@ internal class NoteSessionCoordinator(
         applyLocation()
         search.onVaultChanged()
         annotation.onVaultChanged()
+        readingTraceCleanup.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()

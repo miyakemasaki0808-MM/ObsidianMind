@@ -688,6 +688,47 @@ Vault走査で得たノートのパスをハッシュして集合差を取れば
 この機能が狙うのは**日常的に発生する単発の孤児**のほうで、一括削除の後始末ではない。
 
 **変異検証: 6箇所すべてで落ちるテストがあることを確認した。**
+
+### 段階3 の実装（2026-08-01 完了・実機確認待ち）
+
+オプション画面に「読書痕跡を整理」を置き、専用画面で**候補と保留の両方**を見せる。
+**削除ボタンは置かない**（段階4 で足す）。
+
+| 置いたもの | 場所 |
+|---|---|
+| `ReadingTraceCleanupState` | `model.state`（Vault単位・ノート切替では消えない） |
+| `ReadingTraceCleanupController` | `controller`（8つ目。**Vault単位なのでノート単位の契約へは登録しない**） |
+| 文面の純関数 | `ui/ReadingTraceCleanupText.kt` |
+| 画面 | `ui/screen/ReadingTraceCleanupScreen.kt` |
+| `VaultHandle.collectAllNotes()` | `data`（完全性つきの全走査。既存の `collectNotesInScope` は完全性を持たない） |
+
+**判定の型を `model` へ移した。** `OrphanCandidate` などを `domain` に置いたままだと
+`model.state` の画面状態がそれらを import することになり、**葉であるはずの `model` が
+`domain` を知る**。`NoteExcerpt`（model）と `buildNoteExcerpt`（domain）と同じ切り分けにし、
+判定関数だけを `domain` に残した。
+
+**1. Vault切替のリセットは Controller ではなく状態変換に置いた。** 補記一覧は
+`AnnotationController.onVaultChanged()` が落とす前例があるが、こちらは**状態変換
+（`withVaultScopedReset`）側**にした。旧Vaultの候補が新Vaultの画面に残ると
+「別Vaultのノートを消しませんか」と尋ねる状態になり、**補記一覧と違って誤削除に直結する**。
+Controller に任せず構造的に保証する。Controller は走行中Jobのキャンセルだけを持つ。
+
+**2. 世代照合は `vaultGeneration`。** ノート単位の `activeRequestId` ではない。
+掃除はノートと無関係なので、ノートを開き直しただけで洗い出しが消えるのは誤り。
+
+**3. 「候補ゼロ」と「判定できなかった」を画面でも別の言葉にする。**
+型（`Success` / `Blocked` / `Error`）で分けても、文面が同じ「何も無い」だと
+遮断器が働いている状態を「掃除するものが無い」と読み違える。
+文面は純関数へ切り出し、**内部語（孤児・遮断器・列挙）を出さないことをテストで固定**した。
+
+**リセット網羅テストは、フィールドを足しただけでは効かなかった。**
+`NoteSessionCoordinatorTest` はリフレクションで全フィールドを突き合わせるが、
+`fullyPopulatedState()` に**非初期値を積まないと素通りする**。積んだうえで
+リセット登録を外す変異を当て、2件落ちることを確認した。
+**「網羅テストがあること」と「そのフィールドが網羅されていること」は別。**
+
+**変異検証:** 世代照合を外すと1件、列挙失敗を空の成功へ畳むと1件、
+Vault切替のリセット登録を外すと2件が落ちる。
 ①フォルダ一括ガード（2件）②不完全走査ガード（3件）③ルート不読ガード（1件）
 ④急増ガードを resolve の後ろへ回す（2件・**ファイルを読まないことの検証を含む**）
 ⑤読めない候補の保留（2件）⑥区切り無しの `startsWith`（2件）。

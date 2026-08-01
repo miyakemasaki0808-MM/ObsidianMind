@@ -299,6 +299,9 @@ class NoteViewModel internal constructor(
     fun deleteAllAnnotations() = session.deleteAllAnnotations()
     fun markAnnotationViewed() = session.markAnnotationViewed()
 
+    /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。段階3 では削除しない。 */
+    fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
+
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
 
     fun startDistill() = session.startDistill()

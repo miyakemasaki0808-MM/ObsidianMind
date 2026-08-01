@@ -34,6 +34,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.ReadingVisit
@@ -515,6 +516,7 @@ class NoteSessionCoordinatorTest {
         annotationState = AnnotationState.Error(message = "失敗", sourceTitle = "旧ノート"),
         distillState = DistillState.Saved(sourceTitle = "旧ノート", sentenceCount = 3),
         annotationListState = AnnotationListState.Success(emptyList()),
+        readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(

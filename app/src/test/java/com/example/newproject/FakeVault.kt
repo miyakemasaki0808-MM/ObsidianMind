@@ -6,6 +6,7 @@ import com.example.newproject.data.VaultHandle
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.VaultScan
 
 /**
  * [VaultBrowser] の差し替え。**Vault未選択は `handle = null` で表す。**
@@ -35,6 +36,8 @@ class FakeVaultHandle(
     var folders: List<NoteFolder> = emptyList(),
     var notesByFolder: Map<String?, List<NoteFile>> = emptyMap(),
     var annotationFiles: List<NoteFile> = emptyList(),
+    /** [collectAllNotes] が返すVault全体の走査結果。**完全性ごと差し替えられる。** */
+    var vaultScan: VaultScan = VaultScan(emptyList()),
     /** null 以外にすると、その操作が例外を投げる。 */
     var failure: Exception? = null,
     /** [deleteDocument] の戻り値。false は「SAFプロバイダが消せなかった」を表す。 */
@@ -48,6 +51,8 @@ class FakeVaultHandle(
         private set
     var listAnnotationsCount = 0
         private set
+    var collectAllCount = 0
+        private set
     val deletedRefs = mutableListOf<DocumentRef>()
 
     override suspend fun listTopLevelFolders(): List<NoteFolder> {
@@ -55,6 +60,13 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return folders
+    }
+
+    override suspend fun collectAllNotes(): VaultScan {
+        collectAllCount++
+        beforeEachCall()
+        failure?.let { throw it }
+        return vaultScan
     }
 
     override suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile> {

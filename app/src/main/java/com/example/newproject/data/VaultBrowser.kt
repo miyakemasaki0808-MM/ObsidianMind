@@ -5,6 +5,7 @@ import android.net.Uri
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.VaultScan
 
 /**
  * さがす／補記が使う Vault スコープの操作。**`ContentResolver` と Vault ルートは実装が束ねる。**
@@ -59,6 +60,16 @@ interface VaultHandle {
     /** 検索スコープ配下の `.md`。[folder] が null ならルート直下のみ（非再帰）。 */
     suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile>
 
+    /**
+     * Vault全体の `.md` を**完全性つきで**集める。
+     *
+     * 痕跡の孤児判定はノートの**不在**を根拠にするため、「見つからなかった」と
+     * 「そのフォルダを読めなかった」を必ず区別する必要がある
+     * （→ [VaultScan.unreadableFolderPaths]）。表示系が使う
+     * [collectNotesInScope] と違い、ここでは完全性を捨ててはいけない。
+     */
+    suspend fun collectAllNotes(): VaultScan
+
     /** `_AI補記` 配下の一覧。フォルダが無ければ空。 */
     suspend fun listAnnotationFiles(): List<NoteFile>
 
@@ -94,6 +105,9 @@ private class SafVaultHandle(
 
     override suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile> =
         repository.collectNotesInScope(contentResolver, vaultUri, folder)
+
+    override suspend fun collectAllNotes(): VaultScan =
+        repository.collectNotes(contentResolver, vaultUri)
 
     override suspend fun listAnnotationFiles(): List<NoteFile> =
         repository.listAnnotationFiles(contentResolver, vaultUri)

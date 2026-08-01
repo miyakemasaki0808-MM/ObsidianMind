@@ -1,5 +1,10 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.OrphanAssessment
+import com.example.newproject.model.OrphanBlockReason
+import com.example.newproject.model.OrphanLimits
+import com.example.newproject.model.OrphanTraceInfo
+import com.example.newproject.model.OrphanWithholdReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
