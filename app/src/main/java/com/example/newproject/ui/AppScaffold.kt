@@ -38,10 +38,9 @@ import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorSurface
-import com.example.newproject.ui.theme.OnErrorSurface
+import com.example.newproject.ui.theme.OnStatusBadge
 import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
-import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
 
 /** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
@@ -183,13 +182,15 @@ private fun TabIcon(
                     color = Aqua,
                     strokeWidth = 1.5.dp
                 )
-                // 塗りには対の前景を使う。白の「✓」は緑の上で 2.49 しかなかった
-                // （Errorバッジ側は既に対で持っており、ここだけ取り残されていた）。
+                // バッジの中身は「読む文字」ではなく状態を示す記号なので、基準は
+                // WCAG 1.4.11 の 3:1（ボタンのラベルは 1.4.3 の 4.5:1）。
+                // 同じ塗りでも前景が別トークンになるのはこのため
+                // → docs/design/ui_design_principles.md
                 AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
-                    Text("✓", color = OnButtonSecondary, fontSize = 9.sp)
+                    Text("✓", color = OnStatusBadge, fontSize = 9.sp)
                 }
                 AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
-                    Text("!", color = OnErrorSurface, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    Text("!", color = OnStatusBadge, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                 }
                 AiTabBadgeState.None -> Unit
             }

@@ -3,7 +3,7 @@
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **最終更新:** 2026-08-02
 
-このフォルダは**27文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
+このフォルダは**28文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
 同じ機能の話が複数の文書に分かれるのは意図的で、「確定した判断」と「まだ決まっていないこと」を物理的に隔離するため。
 
 ---
@@ -14,7 +14,7 @@
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
 | **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](source_code_quality_review.md) | スナップショット（日付で更新） |
-| **なぜそうしたか** | [design/](design/)（18本） | 判断ごとに1本。判断が覆っても改稿して残す |
+| **なぜそうしたか** | [design/](design/)（19本） | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](_wip/)（3本） | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加） |
 
@@ -40,9 +40,9 @@
 
 ---
 
-## 2. 設計判断（`design/`・18本）
+## 2. 設計判断（`design/`・19本）
 
-「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（18本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
+「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（19本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
 
 > 状態列は**実装が入ったかどうか**だけを示す。未着手のPhaseや設計書と実装の乖離といった個別の話は、各文書の冒頭（`**状態:**` / `**未解決:**` 行）と [_wip/current_issues.md](_wip/current_issues.md) が持つ。ここには書かない。
 
@@ -51,7 +51,8 @@
 | 文書 | 対象 | 状態 |
 |---|---|---|
 | [architecture.md](design/architecture.md) | ViewModel分割・状態管理・並行処理の規約 | 実装済み（PR #16〜#20） |
-| [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4） | 実装済み |
+| [ui_design_principles.md](design/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** | 運用中 |
+| [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 | 実装済み |
 | [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
 | [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み（段階7は実機確認待ち） |
@@ -145,7 +146,7 @@
 | `data/` | [reflect_reading_trace](design/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](design/reflect_distill.md)（原子性・復旧） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](design/architecture.md) → 該当機能の設計書 |
-| `ui/theme/` | [theme_and_ui_refactor](design/theme_and_ui_refactor.md) → [dark_mode](design/dark_mode.md) |
+| `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](design/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](design/theme_and_ui_refactor.md) → [dark_mode](design/dark_mode.md) |
 | `ui/vigilith/` | [character_vigilith](design/character_vigilith.md) → [vigilith_in_app](design/vigilith_in_app.md) → [opening_animation](design/opening_animation.md) |
 | `ui/screen/` | [tab_navigation](design/tab_navigation.md) / [note_fullscreen](design/note_fullscreen.md) / [section_ai_chat](design/section_ai_chat.md) |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper` | [dependency_policy](design/dependency_policy.md) |

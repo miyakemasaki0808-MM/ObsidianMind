@@ -307,16 +307,46 @@ class AppColorContrastTest {
                 actual < 3.0
             )
         }
-        // 中の記号は塗りの上で読めていること（ここは満たしている）。
-        assertAtLeast(
-            4.5,
-            contrast(LightAppColors.onButtonSecondary, LightAppColors.buttonSecondary),
-            "Successバッジの「✓」"
+    }
+
+    /**
+     * バッジの中の記号は**読む文字ではなく状態を示す記号**なので、基準は
+     * WCAG 1.4.11（非テキスト）の 3:1。1.4.3 の 4.5:1 は当てない
+     * （→ [design/ui_design_principles.md]）。
+     *
+     * **同じ塗りに載るのに、ボタンのラベルとは別トークンになる。** `buttonSecondary` は
+     * ボタンの塗りでもバッジの塗りでもあるが、ラベルは読む文字なので 4.5:1 が要り、
+     * 記号は 3:1 でよい。この非対称を消すと、どちらかが不必要に制約される。
+     */
+    @Test
+    fun `ステータスバッジの記号は非テキスト基準を満たす`() {
+        schemes.forEach { (name, c) ->
+            assertAtLeast(3.0, contrast(c.onStatusBadge, c.buttonSecondary), "$name Successバッジの「✓」")
+            assertAtLeast(3.0, contrast(c.onStatusBadge, c.errorSurface), "$name Errorバッジの「!」")
+        }
+    }
+
+    /**
+     * 記号の色は明暗で反転する。ライトは塗りが暗いので白、ダークは塗りが明るいので黒。
+     * 片方の値をもう片方へコピーする事故は、この形でしか検出できない
+     * （`gradientHeaderScrim` の3つ揃いと同じ理由）。
+     */
+    @Test
+    fun `バッジ記号の色は明暗で反転している`() {
+        assertTrue(
+            "ライトのバッジ記号は塗りより明るいこと",
+            relativeLuminance(LightAppColors.onStatusBadge) >
+                relativeLuminance(LightAppColors.buttonSecondary)
         )
-        assertAtLeast(
-            4.5,
-            contrast(LightAppColors.onErrorSurface, LightAppColors.errorSurface),
-            "Errorバッジの「!」"
+        assertTrue(
+            "ダークのバッジ記号は塗りより暗いこと",
+            relativeLuminance(DarkAppColors.onStatusBadge) <
+                relativeLuminance(DarkAppColors.buttonSecondary)
+        )
+        // ダークで白へ戻すと 2.49／2.78 で 3:1 すら割る。逆転を禁じる根拠として固定する。
+        assertTrue(
+            "ダークの塗りは明るいので、白の記号では非テキスト基準に届かない",
+            contrast(Color.White, DarkAppColors.buttonSecondary) < 3.0
         )
     }
 

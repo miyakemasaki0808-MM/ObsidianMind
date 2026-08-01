@@ -50,6 +50,12 @@ internal class AppColorScheme(
     // 流用すると、暗所で「明るい赤に白文字」という読めない組み合わせが生まれる。
     val errorSurface: Color,
     val onErrorSurface: Color,
+    // ステータスバッジ（AIタブの ✓ / !）の中の記号。**塗りの上のラベルとは基準が違う。**
+    // ボタンのラベルは読む文字なので WCAG 1.4.3 の 4.5:1 が要るが、バッジの中身は
+    // 状態を示す記号なので 1.4.11（非テキスト）の 3:1 で足りる。同じ塗り
+    // （buttonSecondary）の上に載るのに前景が別値になるのはこのため。
+    // Success/Error の両バッジで共有する（塗りは違うが、どちらも同じ基準で通る）。
+    val onStatusBadge: Color,
     val dangerAction: Color,
     val onDangerAction: Color,
     val successMark: Color,
