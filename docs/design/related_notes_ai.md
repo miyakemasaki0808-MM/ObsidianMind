@@ -1,7 +1,7 @@
 # 関連ノートAI推薦の設計
 
 **対象領域:** ノートを開いたときの関連ノート推薦（候補ランキング＋Nano選定）
-**状態:** 実装済み。現ノート側の先頭600文字固定切り出しは、2026-07-27 に見出し骨格＋冒頭＋末尾の抜粋へ置換した（抜粋の設計は [ai_input_excerpt](ai_input_excerpt.md)）。
+**状態:** 実装済み。現ノート側の先頭600文字固定切り出しは、2026-07-27 に見出し骨格＋冒頭＋末尾の抜粋へ置換した（抜粋の設計は [ai_input_excerpt](ai_input_excerpt.md)）。上限は 2026-08-01 に **600→800文字**へ引き上げ済み。
 **未解決:** Phase 1 で構想した「フォーカスセクション文脈での推薦」は未実装。自動起動とスクロール追従するフォーカスのどの時点を採るかが未決のため、現在の抜粋とは別の将来候補として残す。
 
 ノートを開いたとき、話題的に近い他ノートを提示する機能の設計と、その改修（Phase 1〜3）で得た知見をまとめる。
@@ -138,7 +138,7 @@ Phase 3b 適用後、`jetpackcompose` ノートの関連候補が **すべて Ko
 | `AI_RECOMMENDATION_LIMIT` | 5 | 最終的な関連ノート件数 | 〃 |
 | `RELATED_SNIPPET_LEN` / `_MIN_` | 150 / 40 | スニペット最大長 / 短縮下限 | 〃 |
 | `RELATED_CANDIDATES_BUDGET` | 3500 | 候補ブロックの入力文字数予算 | 〃 |
-| `NoteExcerptLimits.RELATED` | 600 | 現ノート側の抜粋上限（注意書きを含む文字数。プロンプト全体のトークン予算ではない） | `NoteExcerptLimits.kt` |
+| `NoteExcerptLimits.RELATED` | 800 | 現ノート側の抜粋上限（注意書きを含む文字数。プロンプト全体のトークン予算ではない） | `NoteExcerptLimits.kt` |
 | `CANDIDATE_CACHE_MAX_ENTRIES` | 300 | 本文キャッシュのLRU上限 | 〃 |
 | `MAX_PARALLEL_READS` | 8 | SAF同時読込数 | 〃 |
 

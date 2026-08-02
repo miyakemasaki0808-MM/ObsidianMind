@@ -34,6 +34,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.markdown.ListItem
+import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.ui.theme.LinkText
@@ -70,7 +72,6 @@ internal fun MarkdownNoteContent(
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
                     is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.lines)
-                    is MarkdownBlock.TaskListBlock -> MarkdownTaskList(block.items)
                     is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
                 }
             }
@@ -153,32 +154,6 @@ internal fun MarkdownBlockquote(lines: List<String>) {
 }
 
 @Composable
-internal fun MarkdownTaskList(items: List<Pair<Boolean, String>>) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        items.forEach { (checked, text) ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Checkbox(
-                    checked = checked,
-                    onCheckedChange = null,
-                    modifier = Modifier
-                        .width(20.dp)
-                        .height(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = rememberInline(text),
-                    color = if (checked) OnSurfaceFaint else OnSurface,
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    textDecoration = if (checked) TextDecoration.LineThrough else TextDecoration.None,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-    }
-}
-
-@Composable
 internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
     val borderColor = ContentDivider
     Column(
@@ -231,23 +206,46 @@ internal fun MarkdownParagraph(text: String) {
     )
 }
 
+/** 入れ子1段あたりの字下げ幅。深さは字下げだけで示し、記号は段によらず変えない。 */
+private val ListIndentPerDepth = 16.dp
+
 @Composable
-internal fun MarkdownList(items: List<String>) {
+internal fun MarkdownList(items: List<ListItem>) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEach { item ->
-            Row {
-                Text(
-                    text = "\u2022",
-                    color = OnSurface,
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp
-                )
+            val checked = item.checked
+            Row(
+                modifier = Modifier.padding(start = ListIndentPerDepth * item.depth),
+                verticalAlignment = if (checked == null) Alignment.Top else Alignment.CenterVertically
+            ) {
+                if (checked == null) {
+                    Text(
+                        // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
+                        // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
+                        text = when (val marker = item.marker) {
+                            is ListMarker.Bullet -> "\u2022"
+                            is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
+                        },
+                        color = OnSurface,
+                        fontSize = 16.sp,
+                        lineHeight = 24.sp
+                    )
+                } else {
+                    Checkbox(
+                        checked = checked,
+                        onCheckedChange = null,
+                        modifier = Modifier
+                            .width(20.dp)
+                            .height(20.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = rememberInline(item),
-                    color = OnSurface,
+                    text = rememberInline(item.text),
+                    color = if (checked == true) OnSurfaceFaint else OnSurface,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
+                    textDecoration = if (checked == true) TextDecoration.LineThrough else TextDecoration.None,
                     modifier = Modifier.weight(1f)
                 )
             }

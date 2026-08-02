@@ -65,6 +65,10 @@ internal val LightAppColors = AppColorScheme(
     errorText = Color(0xFFCC0000),
     errorSurface = Color(0xFFCC0000),
     onErrorSurface = Color.White,      // #CC0000 上で 5.89
+    // 記号なので基準は3:1（→ ui_design_principles）。白は緑 #109384 上で 3.80、
+    // 赤 #CC0000 上で 5.89 と両バッジで通る。黒だと緑5.53／赤3.57で通りはするが、
+    // 小さな塗りの中に黒の記号を置くと面積の大半が黒く見えて重い。
+    onStatusBadge = Color.White,
     dangerAction = Color(0xFFD32F2F),
     onDangerAction = Color.White,      // #D32F2F 上で 4.98
     successMark = Color(0xFF4CAF50),
@@ -149,6 +153,9 @@ internal val DarkAppColors = AppColorScheme(
     // 暗所の赤は明るいので、その上に載る文字は黒。白のままだと 2.78 まで落ちる。
     errorSurface = Color(0xFFFF6B6B),
     onErrorSurface = Color(0xFF000000), // #FF6B6B 上で 7.57
+    // ダークの塗りは明るいので、記号は黒でないと通らない（白は緑2.49／赤2.78で
+    // 3:1 すら割る）。**明暗で反転する**トークンのひとつ。
+    onStatusBadge = Color(0xFF000000), // 緑 #16B8A6 上で 8.44、赤 #FF6B6B 上で 7.57
     dangerAction = Color(0xFFFF7A7A),
     onDangerAction = Color(0xFF000000), // #FF7A7A 上で 8.32
     successMark = Color(0xFF66BB6A),
@@ -232,6 +239,7 @@ internal val LinkText: Color @Composable @ReadOnlyComposable get() = current.lin
 internal val ErrorText: Color @Composable @ReadOnlyComposable get() = current.errorText
 internal val ErrorSurface: Color @Composable @ReadOnlyComposable get() = current.errorSurface
 internal val OnErrorSurface: Color @Composable @ReadOnlyComposable get() = current.onErrorSurface
+internal val OnStatusBadge: Color @Composable @ReadOnlyComposable get() = current.onStatusBadge
 internal val DangerAction: Color @Composable @ReadOnlyComposable get() = current.dangerAction
 internal val OnDangerAction: Color @Composable @ReadOnlyComposable get() = current.onDangerAction
 internal val SuccessMark: Color @Composable @ReadOnlyComposable get() = current.successMark

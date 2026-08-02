@@ -8,22 +8,49 @@ package com.example.newproject.domain.markdown
 // ---------------------------------------------------------------------------
 
 internal val HeadingRegex = Regex("^(#{1,6})\\s+(.+)$")
-internal val UnorderedListRegex = Regex("^\\s*[-*+]\\s+(.+)$")
-internal val OrderedListRegex = Regex("^\\s*\\d+[.)]\\s+(.+)$")
+internal val UnorderedListRegex = Regex("^(\\s*)([-*+])\\s+(.+)$")
+internal val OrderedListRegex = Regex("^(\\s*)(\\d+)([.)])\\s+(.+)$")
 internal val HorizontalRuleRegex = Regex("^\\s*([-*_])\\s*(\\1\\s*){2,}$")
 internal val BlockquoteRegex = Regex("^>\\s?(.*)")
-internal val TaskListRegex = Regex("^\\s*[-*+]\\s+\\[([ xX])\\]\\s+(.+)$")
+internal val TaskListRegex = Regex("^(\\s*)([-*+])\\s+\\[([ xX])\\]\\s+(.+)$")
 internal val TableRowRegex = Regex("^\\|(.+)\\|\\s*$")
 internal val TableSeparatorRegex = Regex("^\\|[\\s|:-]+\\|\\s*$")
+
+/**
+ * リスト項目の行頭マーカー。
+ *
+ * **番号付きだけ原文を保持し、箇条書きは正規化する**（非対称は意図的）。
+ * `-` / `*` / `+` の違いは意味を持たず、描画は常に `•`、書き戻しは `-` で足りる。
+ * むしろ `*` を復元すると強調記号と紛らわしい。一方で番号は意味を持つため、
+ * `1.` と `1)`、`01.` の先頭ゼロ、桁数を落とさずに持つ。
+ * [number] を [Int] にすると区切り記号と先頭ゼロを失い、桁溢れもあり得るので [String] で持つ。
+ */
+internal sealed interface ListMarker {
+    object Bullet : ListMarker
+    data class Ordered(val number: String, val delimiter: Char) : ListMarker
+}
+
+/**
+ * [depth] は0起点の入れ子段数。算出規則は [ListDepthTracker]。
+ * [checked] が null ならタスクではない。
+ *
+ * **タスクは専用ブロックではなくリスト項目の属性として持つ。** 別ブロックに分けると
+ * `- 親` / `  - [ ] 子` の混在で入れ子が2ブロックへまたがり、段数が壊れるため。
+ */
+internal data class ListItem(
+    val depth: Int,
+    val marker: ListMarker,
+    val text: String,
+    val checked: Boolean? = null
+)
 
 internal sealed class MarkdownBlock {
     data class Heading(val level: Int, val text: String) : MarkdownBlock()
     data class Paragraph(val text: String) : MarkdownBlock()
-    data class ListBlock(val items: List<String>) : MarkdownBlock()
+    data class ListBlock(val items: List<ListItem>) : MarkdownBlock()
     data class CodeBlock(val code: String) : MarkdownBlock()
     object HorizontalRule : MarkdownBlock()
     data class Blockquote(val lines: List<String>) : MarkdownBlock()
-    data class TaskListBlock(val items: List<Pair<Boolean, String>>) : MarkdownBlock()
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
 }
 
@@ -91,29 +118,13 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
             continue
         }
 
-        // タスクリスト（通常リストより先にチェック）
-        if (TaskListRegex.matches(line)) {
-            val items = mutableListOf<Pair<Boolean, String>>()
-            while (index < lines.size && TaskListRegex.matches(lines[index])) {
-                val m = TaskListRegex.matchEntire(lines[index])!!
-                items.add((m.groupValues[1].lowercase() == "x") to m.groupValues[2])
-                index++
-            }
-            blocks.add(MarkdownBlock.TaskListBlock(items))
-            continue
-        }
-
-        // 通常リスト
-        val unorderedMatch = UnorderedListRegex.matchEntire(line)
-        val orderedMatch = OrderedListRegex.matchEntire(line)
-        if (unorderedMatch != null || orderedMatch != null) {
-            val items = mutableListOf<String>()
+        // リスト（タスクは項目の属性なので、ここで一緒に読む）
+        if (UnorderedListRegex.matches(line) || OrderedListRegex.matches(line)) {
+            val items = mutableListOf<ListItem>()
+            // 段数はブロック単位で追跡する。別のリストへ跨いで幅を覚えない。
+            val depths = ListDepthTracker()
             while (index < lines.size) {
-                val current = lines[index]
-                if (TaskListRegex.matches(current)) break
-                val item = UnorderedListRegex.matchEntire(current)?.groupValues?.get(1)
-                    ?: OrderedListRegex.matchEntire(current)?.groupValues?.get(1)
-                    ?: break
+                val item = parseListItem(lines[index], depths) ?: break
                 items.add(item)
                 index++
             }
@@ -145,6 +156,77 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
 
     return blocks
 }
+
+private fun parseListItem(line: String, depths: ListDepthTracker): ListItem? {
+    // タスクは箇条書きの部分集合なので、通常の箇条書きより先に見る。
+    // **`1. [ ]` は受理しない** — 型としては Ordered + checked を表現できるが、
+    // 型の表現力が広がったことを仕様拡大の理由にはしない。
+    TaskListRegex.matchEntire(line)?.let { m ->
+        return ListItem(
+            depth = depths.depthFor(indentWidth(m.groupValues[1])),
+            marker = ListMarker.Bullet,
+            text = m.groupValues[4],
+            checked = m.groupValues[3].lowercase() == "x"
+        )
+    }
+    OrderedListRegex.matchEntire(line)?.let { m ->
+        return ListItem(
+            depth = depths.depthFor(indentWidth(m.groupValues[1])),
+            marker = ListMarker.Ordered(m.groupValues[2], m.groupValues[3][0]),
+            text = m.groupValues[4]
+        )
+    }
+    val unordered = UnorderedListRegex.matchEntire(line) ?: return null
+    return ListItem(
+        depth = depths.depthFor(indentWidth(unordered.groupValues[1])),
+        marker = ListMarker.Bullet,
+        text = unordered.groupValues[3]
+    )
+}
+
+/**
+ * 行頭インデントの列幅。**タブは4文字置換ではなく次の4列境界まで展開する**
+ * （`"  \t"` は 2 → 4 であって 2+4=6 ではない）。
+ */
+private fun indentWidth(indent: String): Int {
+    var width = 0
+    for (ch in indent) {
+        width = if (ch == '\t') (width / TAB_STOP + 1) * TAB_STOP else width + 1
+    }
+    return width
+}
+
+/**
+ * インデント列幅から入れ子段数を決める。**CommonMark にも Obsidian にも準拠しない、
+ * 意図的に寛容な規則**である（規格は親のマーカー直後の列位置で入れ子を定義するが、
+ * ここでは幅の絶対値を見ず相対的な深浅だけで判定する）。理由は
+ * [markdown_rendering](../../../../../../../../docs/design/markdown_rendering.md) にある。
+ *
+ * 規則は5つ。
+ * 1. 同じ幅は同じ段数
+ * 2. 直前より深ければ、幅の差に関係なく段数 +1
+ * 3. 既知の祖先幅へ戻れば、その段数
+ * 4. 未知の浅い幅は「直近の浅い祖先 +1」へ正規化する
+ * 5. ある枝を抜けたら、その枝の幅は忘れる（別の枝で同じ幅が違う段数になり得る）
+ */
+private class ListDepthTracker {
+    /** index が段数、値がその段のインデント列幅。単調増加を保つ。 */
+    private val widths = mutableListOf<Int>()
+
+    fun depthFor(width: Int): Int {
+        // 規則5: 現在幅より深い枝は忘れる
+        while (widths.isNotEmpty() && widths.last() > width) {
+            widths.removeAt(widths.lastIndex)
+        }
+        // 規則3で祖先幅と一致した場合はここで確定する
+        if (widths.isNotEmpty() && widths.last() == width) return widths.lastIndex
+        // 規則2（深くなった）と規則4（未知の浅い幅）は、どちらも「今の親 +1」に落ちる
+        widths.add(width)
+        return widths.lastIndex
+    }
+}
+
+private const val TAB_STOP = 4
 
 /**
  * テーブル行をセルに分割する。先頭・末尾の | の外側だけを捨て、

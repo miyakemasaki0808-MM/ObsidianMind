@@ -194,14 +194,48 @@ class NoteExcerptBuilderTest {
     }
 
     @Test
-    fun `超過ノートのordered listは通常の箇条書きへ正規化する`() {
+    fun `超過ノートでもordered listの番号はモデルへ届く`() {
         val content = (1..100).joinToString("\n") { "$it. ordered-item-$it ${"x".repeat(8)}" }
 
         val excerpt = buildNoteExcerpt(content, budget)
 
-        assertTrue(excerpt.text.contains("- ordered-item-1"))
-        assertFalse(excerpt.text.contains("1. ordered-item-1"))
+        assertTrue(excerpt.text.contains("1. ordered-item-1"))
+        assertFalse(excerpt.text.contains("- ordered-item-1"))
         assertWithinBudget(excerpt, budget)
+    }
+
+    @Test
+    fun `超過ノートでもリストの入れ子段数はモデルへ届く`() {
+        val content = (1..60).joinToString("\n") { i ->
+            "- parent-$i ${"x".repeat(8)}\n    - child-$i ${"x".repeat(8)}"
+        }
+
+        val excerpt = buildNoteExcerpt(content, budget)
+
+        assertTrue(excerpt.text.contains("- parent-1"))
+        assertTrue(excerpt.text.contains("  - child-1"))
+        assertWithinBudget(excerpt, budget)
+    }
+
+    @Test
+    fun `記法が増えても抜粋は予算を超えない`() {
+        // 番号と字下げの復元でブロックの再構成長が伸びるため、境界の取り方が変わる。
+        // 「増加文字数」を固定すると壊れやすいので、不変条件の側を契約にする。
+        val content = (1..80).joinToString("\n") { i ->
+            "$i. step-$i ${"x".repeat(12)}\n        - note-$i ${"x".repeat(12)}"
+        }
+
+        // 予算は定数から引く。値を直書きすると、上限を動かしたときに
+        // 「もう使われていない値だけを通すテスト」が残って気づけない。
+        listOf(
+            NoteExcerptLimits.SUMMARY,
+            NoteExcerptLimits.ANNOTATION,
+            NoteExcerptLimits.RELATED,
+            NoteExcerptLimits.SECTION,
+            NoteExcerptLimits.QUIZ
+        ).forEach { b ->
+            assertWithinBudget(buildNoteExcerpt(content, b), b)
+        }
     }
 
     @Test
