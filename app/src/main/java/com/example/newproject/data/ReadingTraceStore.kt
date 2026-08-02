@@ -74,8 +74,8 @@ internal interface ReadingTracePersistence {
     /**
      * 保存済み痕跡のキーをすべて列挙する。**索引キャッシュを使わず毎回読み直す。**
      *
-     * キャッシュ経由にすると、外部同期で後から増えたファイルを見落とす（→ SYNC-2）。
-     * 掃除は「1回だけ実行される重い操作」なので、鮮度をコストより優先してよい。
+     * キャッシュ経由にすると、外部同期で後から増えたファイルを見落とす。掃除は
+     * 「1回だけ実行される重い操作」なので、鮮度をコストより優先してよい。
      */
     fun listKeys(vaultKey: String): ReadingTraceKeyListing
 
@@ -116,11 +116,42 @@ internal interface ReadingTraceDocumentGateway {
 
     /** 1件削除する。[vaultKey] 不一致・失敗なら false。 */
     fun delete(key: String, vaultKey: String): Boolean
+
+    /**
+     * 保持している索引キャッシュを捨てる。**捨てるだけで列挙はしない**
+     * （次の読み書きが必要になった時点で作り直す）。
+     *
+     * **いつ捨てるかの判定はここに持たない。** 頻度の上限は呼び出し側（[ReadingTraceStore]）が
+     * 持ち、この境界はAndroid依存のまま「言われたら捨てる」に徹する。
+     *
+     * **[vaultKey] を要求するのは、他Vaultの索引を巻き添えにしないため。** Vault不一致の
+     * [read] は通常の不在と同じ null を返すので、引数が無いと「Vault A 向けの遅れた読み出し」が
+     * 現在の Vault B の正常な索引を捨てる。照合するのは*現在のVault*ではなく
+     * **キャッシュ中の索引が属するVault**。
+     *
+     * @return 実際に捨てたなら true。**結果を返すのは [delete] と同じ理由** — 捨てていないのに
+     *   捨てたものとして扱うと、呼び出し側が頻度の枠を消費して無駄な読み直しをする。
+     */
+    fun invalidateIndex(vaultKey: String): Boolean
 }
 
 internal class ReadingTraceStore(
-    private val gateway: ReadingTraceDocumentGateway
+    private val gateway: ReadingTraceDocumentGateway,
+    /**
+     * 経過時間の測定源。**壁時計を使わない** — 測りたいのは「前回の作り直しから何ミリ秒経ったか」
+     * だけで、`currentTimeMillis` は時刻同期や手動変更で後退しうる。
+     * `SystemClock.elapsedRealtime()` は `android.*` なのでこの層には置けない。
+     */
+    private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000 },
+    /** 索引の作り直しをこの間隔に1回までへ制限する。 */
+    private val indexRefreshIntervalMillis: Long = DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS
 ) : ReadingTracePersistence {
+
+    /**
+     * 最後に索引を作り直した時刻。**nullable にしてある** — `0L` 初期化にすると、
+     * 測定源が 0 付近を返す間（テストの偽時計が典型）初回の作り直しが抑止される。
+     */
+    private var lastIndexRefreshAtMillis: Long? = null
 
     override fun folderStatus(): ReadingTraceFolderStatus = try {
         if (gateway.ensureFolder()) {
@@ -147,19 +178,64 @@ internal class ReadingTraceStore(
         }
     }
 
-    override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult = try {
+    /**
+     * **メソッドごと `@Synchronized` にしてある。** 索引の作り直しは
+     * 「読む → 捨てる → もう一度読む」の3手で、[lastIndexRefreshAtMillis] はその途中で
+     * 読み書きされる。再会時の照合（`revealTrace`）は `ReadingTraceController` の Mutex の
+     * **外側**を走るので、訪問の書き出しと並行しうる。3手を1操作にし、素の `var` の
+     * 可視性も同じロックで保証する。
+     *
+     * Gateway 側の各メソッドも `@Synchronized` だが、ロックの取得は Store → Gateway の
+     * 一方向しかない（Gateway から Store を呼ぶ経路が無い）ので、順序が逆転しない。
+     */
+    @Synchronized
+    override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult {
+        val first = readAndDecode(key, vaultKey)
+        // 見つからなかった時だけ索引を疑う。壊れていた（Corrupt）場合はファイル自体は
+        // 見えているので、索引が古いことの証拠にならない。
+        if (first != ReadingTraceReadResult.None) return first
+        // 読み直す価値が無い（＝要求が旧Vault向け）なら、そこで終える。枠も消費しない。
+        if (!refreshIndex(vaultKey)) return first
+        // 読み直しは1回だけ。回数を構造で固定して、ループになり得ないようにする。
+        return readAndDecode(key, vaultKey)
+    }
+
+    private fun readAndDecode(key: String, vaultKey: String): ReadingTraceReadResult = try {
         val bytes = gateway.read(key, ReadingTraceLimits.MAX_FILE_BYTES, vaultKey)
-            ?: return ReadingTraceReadResult.None
-        val result = ReadingTraceJson.decode(bytes)
-        // 中身のパスからキーを作り直して照合する。プロバイダの改名やファイルの
-        // 取り違えで、キーと中身が対応しないファイルを掴んでいないことを確かめる。
-        if (result is ReadingTraceReadResult.Valid && keyFor(result.trace.vaultRelativePath) != key) {
-            ReadingTraceReadResult.Corrupt("痕跡ファイルの対象ノートが一致しません。")
+        if (bytes == null) {
+            ReadingTraceReadResult.None
         } else {
-            result
+            val result = ReadingTraceJson.decode(bytes)
+            // 中身のパスからキーを作り直して照合する。プロバイダの改名やファイルの
+            // 取り違えで、キーと中身が対応しないファイルを掴んでいないことを確かめる。
+            if (result is ReadingTraceReadResult.Valid && keyFor(result.trace.vaultRelativePath) != key) {
+                ReadingTraceReadResult.Corrupt("痕跡ファイルの対象ノートが一致しません。")
+            } else {
+                result
+            }
         }
     } catch (error: Exception) {
         ReadingTraceReadResult.Corrupt(error.message ?: error::class.java.simpleName)
+    }
+
+    /**
+     * 索引を捨てて作り直させる。**[indexRefreshIntervalMillis] に1回まで。**
+     *
+     * 上限が要るのは、まだ一度も読んでいないノートを開くたびに不在になるため。
+     * 制限しないと開くたびフォルダ全走査になり、索引キャッシュを置いた意味が消える。
+     *
+     * 枠を進めるのは**実際に捨てられた後**。**この順序が効いている** — 先に枠を進めると
+     * 「枠は消費済みなのに索引はまだ古い」という状態が一瞬でき、その隙に入った要求が
+     * 作り直せないまま不在と判断して新規作成へ進む。捨ててから進める限り、枠の消費を
+     * 観測できる時点では索引は必ず捨てられている。
+     */
+    private fun refreshIndex(vaultKey: String): Boolean {
+        val now = elapsedMillis()
+        val last = lastIndexRefreshAtMillis
+        if (last != null && now - last < indexRefreshIntervalMillis) return false
+        if (!gateway.invalidateIndex(vaultKey)) return false
+        lastIndexRefreshAtMillis = now
+        return true
     }
 
     override fun deleteByKey(key: String, vaultKey: String): Boolean = try {
@@ -186,6 +262,15 @@ internal class ReadingTraceStore(
 
     companion object {
         /**
+         * 索引を作り直す間隔の下限。ノート一覧の走査キャッシュ
+         * （`NoteViewModel.collectAllNotesCached`）のTTLと値を揃えてある。
+         *
+         * 外部同期の反映自体が分単位なので、最大この長さの陳腐化は実害にならない。
+         * 短くすると未読ノートを続けて開いた時の全走査が増え、索引キャッシュの意味が薄れる。
+         */
+        const val DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS = 60_000L
+
+        /**
          * 相対パスをそのままファイル名にはできない（`/` を含み、長さ・使用可能文字も
          * プロバイダ依存）ため、SHA-256 の16進表記を使う。
          */
@@ -198,10 +283,13 @@ internal class ReadingTraceStore(
  * SAF実装。Android依存のためJVMユニットテストの対象外（テストは
  * [ReadingTraceDocumentGateway] のFakeで [ReadingTraceStore] 側を検証する）。
  *
- * 置き場の子一覧は**セッション中1回だけ**読み、key→Uri のインデックスに保持する。
+ * 置き場の子一覧は**必要になった時に1回だけ**読み、key→Uri のインデックスに保持する。
  * 毎回 [querySafChildren] するとノートを開く／離れるたびにフォルダ全走査になり、
  * 痕跡ファイルが増えるほど重くなる（特にGoogle Drive等の遠いプロバイダ）。
- * 作成したファイルは即インデックスへ足すので、同一セッション内で取りこぼさない。
+ * 作成したファイルは即インデックスへ足すので、自分の書き込みは取りこぼさない。
+ *
+ * 外部同期で後から増えたファイルは自力では気づけないので、
+ * [invalidateIndex] で捨てて作り直す。**その契機を決めるのは [ReadingTraceStore] 側**。
  *
  * 読み書きは [Synchronized] で直列化する。訪問の追記は Controller 側の Mutex で
  * 直列化されているが、再会時の照合（load）はその外側で走るため、
@@ -232,6 +320,20 @@ internal class SafReadingTraceDocumentGateway(
 
     @Synchronized
     override fun ensureFolder(): Boolean = folderIndex() != null
+
+    /**
+     * 索引を捨てる。次の読み書きが [folderIndexOf] で作り直す。
+     *
+     * 捨てる対象は**キャッシュ中の索引が属するVault**で判定する（現在のVaultではない）。
+     * `read` / `write` の失敗時に `index = null` している自己修復と同じ操作を、
+     * 契機だけ呼び出し側へ開いたもの。
+     */
+    @Synchronized
+    override fun invalidateIndex(vaultKey: String): Boolean {
+        if (index?.vault?.toString() != vaultKey) return false
+        index = null
+        return true
+    }
 
     @Synchronized
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
