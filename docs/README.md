@@ -10,6 +10,12 @@
 
 > **例外は §5 の逆引き表だけ。** [CLAUDE.md](../CLAUDE.md) が「コードを触る前にここで設計書を引く」導線として
 > 参照しているため、**設計書を追加・削除したらその場で直す**。古いと違う設計書へ送ってしまう。
+>
+> **直す表は2つある。** [CLAUDE.md](../CLAUDE.md) は主要な行だけを**再掲**しており、
+> §5 だけ直すと憲法側が古いまま残る。実際 2026-08-02 に、同日新設した
+> [ui_design_principles](design/ui_design_principles.md) が §5 にはあるのに CLAUDE.md には無い、
+> という状態が起きた（常時読み込まれるのは CLAUDE.md のほうなので、影響は逆に大きい）。
+> **再掲の対象を変えたなら両方**、§5 だけの追加なら §5 だけ直す。
 
 ---
 
@@ -42,7 +48,7 @@
 
 ## 文書の地図
 
-このフォルダは**28文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
+このフォルダは**29文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
 同じ機能の話が複数の文書に分かれるのは意図的で、「確定した判断」と「まだ決まっていないこと」を物理的に隔離するため。
 
 ---
@@ -53,7 +59,7 @@
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
 | **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](source_code_quality_review.md) | スナップショット（日付で更新） |
-| **なぜそうしたか** | [design/](design/)（19本） | 判断ごとに1本。判断が覆っても改稿して残す |
+| **なぜそうしたか** | [design/](design/)（20本） | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](_wip/)（3本） | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加）。**§0 だけは差し替える**（効かなければ打ち切る） |
 
@@ -79,9 +85,9 @@
 
 ---
 
-## 2. 設計判断（`design/`・19本）
+## 2. 設計判断（`design/`・20本）
 
-「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（19本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
+「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（20本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
 
 > 状態列は**俯瞰のための要約**で、実装が入ったか・実機確認まで済んだかを1行で示す。
 > **正は各文書の冒頭（`**状態:**` 行）** で、こちらはスナップショットなので遅れることがある。
@@ -95,6 +101,7 @@
 | [ui_design_principles.md](design/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** | 運用中 |
 | [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 | 実装済み |
 | [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み・実機確認済み |
+| [note_age_paper.md](design/note_age_paper.md) | ノートの年代を紙の地色で伝える | 実装済み・実機確認済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
 | [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み・実機確認済み |
 
@@ -188,6 +195,7 @@
 | `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](design/architecture.md) → 該当機能の設計書 |
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](design/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](design/theme_and_ui_refactor.md) → [dark_mode](design/dark_mode.md) |
+| `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](design/ui_design_principles.md) → [note_age_paper](design/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](design/character_vigilith.md) → [vigilith_in_app](design/vigilith_in_app.md) → [opening_animation](design/opening_animation.md) |
 | `ui/screen/` | [tab_navigation](design/tab_navigation.md) / [note_fullscreen](design/note_fullscreen.md) / [section_ai_chat](design/section_ai_chat.md) |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper` | [dependency_policy](design/dependency_policy.md) |

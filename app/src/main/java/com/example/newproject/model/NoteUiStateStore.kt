@@ -2,6 +2,7 @@ package com.example.newproject.model
 
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.AnnotationState
@@ -206,6 +207,14 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         mutableState.update { it.copy(noteState = state) }
     }
 
+    /**
+     * 紙の地色の段階を決める。**本文を出す前に呼ぶ**（[setNoteState] より先）。
+     * 後から呼ぶと、本文が現行のパネル色で1フレーム描かれてから色が変わる。
+     */
+    fun setNotePaperTone(tone: NotePaperTone) {
+        mutableState.update { it.copy(notePaperTone = tone) }
+    }
+
     fun currentNote(): NoteState.Success? = mutableState.value.noteState as? NoteState.Success
 
     fun setTodayHistory(history: List<HistoryEntry>) {
@@ -244,6 +253,9 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
  * [com.example.newproject.controller.NoteSessionCoordinator.cancelNoteScopedJobs]。
  */
 private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
+    // 紙の地色は前のノートの放置期間で決まっているので、必ず現行のパネル色へ戻す。
+    // 残すと、新しいノートを開いた瞬間だけ旧ノートの色で本文が出る。
+    notePaperTone = NotePaperTone.Fresh,
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
     quizState = QuizState.Idle,

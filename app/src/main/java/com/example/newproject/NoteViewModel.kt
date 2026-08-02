@@ -4,6 +4,7 @@ import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.data.InvalidNoteEncodingException
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.NoteState
@@ -21,6 +22,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
+import com.example.newproject.domain.notePaperTone
+import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -97,6 +100,9 @@ class NoteViewModel internal constructor(
     private val mutableDarkTheme = MutableStateFlow(preferences.darkTheme)
     val darkTheme: StateFlow<Boolean> = mutableDarkTheme.asStateFlow()
 
+    private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
+    val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
+
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
 
@@ -123,6 +129,16 @@ class NoteViewModel internal constructor(
         if (mutableDarkTheme.value == enabled) return
         preferences.darkTheme = enabled
         mutableDarkTheme.value = enabled
+    }
+
+    /**
+     * 紙の地色の演出を切り替える。テーマ側の窓口が段階を色へ写す係なので、
+     * **開いているノートを読み直さずに切替が反映される**（段階は `uiState` に載ったまま）。
+     */
+    fun setNotePaperAging(enabled: Boolean) {
+        if (mutableNotePaperAging.value == enabled) return
+        preferences.notePaperAging = enabled
+        mutableNotePaperAging.value = enabled
     }
 
     private fun restoreVault() {
@@ -178,6 +194,9 @@ class NoteViewModel internal constructor(
                 // セッションより先に届いて訪問を取りこぼしうる。
                 // 走査で得た NoteFile なので相対パスは常に揃っている。
                 startReadingTrace(note.name, note.ref, note.vaultRelativePath)
+                // 紙の地色は本文より先に決める（後だと現行色で1フレーム描かれる）。
+                // この経路は走査結果を手元に持つので、常に段階が確定する。
+                session.setNotePaperTone(notePaperTone(note.lastModified, notes.map { it.lastModified }))
                 session.setNoteState(loaded)
                 session.recordHistory(note.name, note.ref)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
@@ -201,6 +220,7 @@ class NoteViewModel internal constructor(
                 // パス未確定でセッションだけ作る（表示前にVault走査を挟まないため）。
                 // 本文を出す前に呼ぶ理由は loadRandomNote 側のコメント参照。
                 val sessionId = startReadingTrace(note.title, note.ref, cachedRelativePath(note.ref))
+                session.setNotePaperTone(notePaperToneForCandidate(note, cachedNotes))
                 session.setNoteState(loaded)
                 session.recordHistory(note.title, note.ref)
                 // 表示を終えてから相対パスを確定させる。さがすタブは collectNotesInScope を
@@ -257,6 +277,7 @@ class NoteViewModel internal constructor(
         cachedNotes.firstOrNull { it.ref == ref }
             ?.vaultRelativePath
             ?.takeIf { it.isNotEmpty() }
+
 
     /**
      * 表示後に相対パスを確定させる。走査はTTLキャッシュ付きなので通常は追加I/Oなし。

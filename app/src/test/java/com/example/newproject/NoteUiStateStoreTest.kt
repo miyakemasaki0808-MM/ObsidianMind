@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.AnnotationSlice
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SearchSlice
 import com.example.newproject.model.SectionChatSlice
@@ -93,7 +94,8 @@ class NoteUiStateStoreTest {
         val store = NoteUiStateStore(
             NoteUiState(
                 summaryState = SummaryState.Success("旧要約"),
-                quizState = QuizState.Loading("旧ノート")
+                quizState = QuizState.Loading("旧ノート"),
+                notePaperTone = NotePaperTone.Weathered
             )
         )
         val emissions = mutableListOf<NoteUiState>()
@@ -107,6 +109,9 @@ class NoteUiStateStoreTest {
         assertTrue(emissions.single().noteState is NoteState.Loading)
         assertTrue(emissions.single().summaryState is SummaryState.Idle)
         assertTrue(emissions.single().quizState is QuizState.Idle)
+        // 紙の地色は前のノートの放置期間で決まっているので、必ず現行のパネル色へ戻る。
+        // 残ると、新しいノートを開いた瞬間だけ旧ノートの色で本文が出る。
+        assertEquals(NotePaperTone.Fresh, emissions.single().notePaperTone)
         collectJob.cancel()
     }
 }

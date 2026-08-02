@@ -61,7 +61,7 @@ import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
-import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.notePaperColor
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 
@@ -132,7 +132,9 @@ internal fun FullscreenNoteScreen(
     // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
     val combinedStatus = fullscreenAiStatus(activeChat, uiState.quizState)
 
-    Box(modifier = Modifier.fillMaxSize().background(Panel)) {
+    // 全画面はパネルが画面いっぱいに広がるので、下地も同じ紙の色にする。
+    // ここだけ Panel のままだと、縁に現行色の額縁が残る。
+    Box(modifier = Modifier.fillMaxSize().background(notePaperColor(uiState.notePaperTone))) {
         NoteContentPanel(
             uiState = uiState,
             modifier = Modifier

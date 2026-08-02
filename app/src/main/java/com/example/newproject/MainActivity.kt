@@ -82,7 +82,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             // テーマ判定に必要な1値だけをAppThemeの外で購読する。
             val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
-            AppTheme(darkTheme = darkTheme) {
+            val notePaperAging by viewModel.notePaperAging.collectAsStateWithLifecycle()
+            AppTheme(darkTheme = darkTheme, notePaperAging = notePaperAging) {
                 val uiState by viewModel.uiState.collectAsStateWithLifecycle()
                 // 本文のパース結果は Main の外で1回だけ作られる。noteListState と同じく
                 // ここで受けて通常表示と全画面表示へ配り、進入のたびの再解析をなくす。
@@ -324,10 +325,14 @@ class MainActivity : ComponentActivity() {
                             OptionsScreen(
                                 vaultSelected = uiState.vaultSelected,
                                 darkTheme = darkTheme,
+                                notePaperAging = notePaperAging,
                                 onSelectVault = { openVault.launch(null) },
                                 onManageAnnotations = { navController.navigate("annotation_manager") },
                                 onManageReadingTraces = { navController.navigate("reading_trace_cleanup") },
-                                onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) }
+                                onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) },
+                                onToggleNotePaperAging = { enabled ->
+                                    viewModel.setNotePaperAging(enabled)
+                                }
                             )
                         }
 

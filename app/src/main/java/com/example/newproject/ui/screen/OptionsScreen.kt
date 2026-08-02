@@ -40,10 +40,12 @@ import com.example.newproject.ui.theme.Panel
 fun OptionsScreen(
     vaultSelected: Boolean,
     darkTheme: Boolean,
+    notePaperAging: Boolean,
     onSelectVault: () -> Unit,
     onManageAnnotations: () -> Unit,
     onManageReadingTraces: () -> Unit,
-    onToggleDarkTheme: (Boolean) -> Unit
+    onToggleDarkTheme: (Boolean) -> Unit,
+    onToggleNotePaperAging: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -86,6 +88,24 @@ fun OptionsScreen(
             subtitle = if (darkTheme) "暗い配色で表示しています" else "明るい配色で表示しています",
             checked = darkTheme,
             onCheckedChange = onToggleDarkTheme
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // ダークでは効かないので、その旨を説明文で言い切る（トグル自体は隠さない。
+        // 隠すと「設定が消えた」に見えるうえ、ライトへ戻したときに気づけない）。
+        //
+        // 文言は「更新」と言い切る。判定材料は SAF の最終更新日時であって閲覧履歴ではないので、
+        // 「しばらく開いていない」と書くと、読書痕跡を見ている機能に読める（実際は見ていない）。
+        OptionSwitchRow(
+            emoji = "📜",
+            title = "ノートの紙色",
+            subtitle = when {
+                !notePaperAging -> "どのノートも同じ紙色で表示しています"
+                darkTheme -> "ダークモードの間は紙色を変えません"
+                else -> "更新から時間が経ったノートほど生成りに寄せています"
+            },
+            checked = notePaperAging,
+            onCheckedChange = onToggleNotePaperAging
         )
     }
 }

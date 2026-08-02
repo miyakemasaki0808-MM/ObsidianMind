@@ -200,23 +200,97 @@ class AppColorContrastTest {
         // ModalBottomSheet / Snackbar など M3 が自前で描く面。ライトは既定の
         // lightColorScheme（`AppTheme` はライトで colorScheme を差し替えない）。
         val sheet = "M3既定面" to if (panel == LightAppColors.panel) Color(0xFFFFFBFE) else panel
+        // ノート本文の紙。放置期間で `panel` から生成り側へ寄るので、**本文に載る文字は
+        // 全段階の上で測る**。Fresh は panel と同値なので panelS が兼ねる。
+        // ダークは uniform（全段階 panel）なので、ここは panel の再測定になるだけ。
+        val paper = listOf(
+            "notePaper(Settling)" to notePaper.settling,
+            "notePaper(Aged)" to notePaper.aged,
+            "notePaper(Weathered)" to notePaper.weathered
+        )
         return when (token) {
-            // 本文Markdown（NoteComponents は Panel、AnnotationResultScreen は Panel/PanelTinted、
-            // FullscreenNoteScreen は Panel）＋各パネルの本文
-            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet)
+            // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階、
+            // AnnotationResultScreen は Panel/PanelTinted）＋各パネルの本文
+            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
-            "onSurfaceMuted" -> listOf(panelS, tinted, blue)
+            "onSurfaceMuted" -> listOf(panelS, tinted, blue) + paper
             // Markdown の引用＋SectionChatSheet の進捗ラベル＋DistillCandidateRow
-            "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet)
+            "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet) + paper
             // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／チャットシート
-            "onSurfaceFaint" -> listOf(panelS, tinted, blue, sheet)
+            "onSurfaceFaint" -> listOf(panelS, tinted, blue, sheet) + paper
             "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
             "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
             "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
-            "linkText" -> listOf(panelS, tinted)         // Markdown のリンク
+            "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク
             "errorText" -> listOf(panelS, blue, sheet)
             "dangerAction" -> listOf(panelS, blue)
             else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")
+        }
+    }
+
+    /**
+     * **Fresh は `panel` と完全に同値**。オプションでオフのときと見た目を一致させるための要で、
+     * `notePaperColor` が無効時に `panel` を返すことと対になっている。
+     *
+     * **同時に、これは「最も新しい四分位ではトグルが視覚的に無反応になる」ことを意味する。**
+     * 仕様として正しいが、動作確認のときに「トグルが壊れている」と誤診する原因になるので
+     * 値として固定しておく。→ docs/design/note_age_paper.md §6
+     */
+    @Test
+    fun `最も新しい段階はパネル色と完全に一致する`() {
+        assertEquals(LightAppColors.panel, LightAppColors.notePaper.fresh)
+    }
+
+    /**
+     * 紙の地色は、弱い文字トークンの基準面 `panelChip` より暗くしてはならない。
+     *
+     * **個別の比だけを並べると、将来 `panelChip` が動いたときに気づけない。**
+     * 基準面が「文字が載る面のうち最も暗い」ことが全テキストトークンの前提なので、
+     * その関係そのものをここで守る。→ docs/design/note_age_paper.md §5
+     */
+    @Test
+    fun `紙の地色は弱い文字の基準面より暗くならない`() {
+        val floor = relativeLuminance(LightAppColors.panelChip)
+        val stages = listOf(
+            "Fresh" to LightAppColors.notePaper.fresh,
+            "Settling" to LightAppColors.notePaper.settling,
+            "Aged" to LightAppColors.notePaper.aged,
+            "Weathered" to LightAppColors.notePaper.weathered
+        )
+        stages.forEach { (name, color) ->
+            val luminance = relativeLuminance(color)
+            assertTrue(
+                "紙の $name（相対輝度 ${"%.4f".format(luminance)}）が " +
+                    "panelChip（${"%.4f".format(floor)}）より暗い。" +
+                    "既存の全テキストトークンが基準を割る。",
+                luminance >= floor
+            )
+        }
+    }
+
+    /**
+     * 段階は**新しいほど明るい**という順序を保つ。逆転すると「古いほど白い」になり、
+     * 演出の意味そのものが壊れる（コントラストは通ってしまうので数値では気づけない）。
+     */
+    @Test
+    fun `紙の地色は段階が進むほど暗くなる`() {
+        val ordered = with(LightAppColors.notePaper) {
+            listOf("Fresh" to fresh, "Settling" to settling, "Aged" to aged, "Weathered" to weathered)
+        }
+        ordered.zipWithNext().forEach { (newer, older) ->
+            assertTrue(
+                "紙の ${older.first} が ${newer.first} より明るい（順序が逆転している）",
+                relativeLuminance(older.second) < relativeLuminance(newer.second)
+            )
+        }
+    }
+
+    /** ダークでは段階を作らない（判断5）。全段階が `panel` と同値であることを固定する。 */
+    @Test
+    fun `ダークでは紙の地色に段差を作らない`() {
+        with(DarkAppColors) {
+            listOf(notePaper.fresh, notePaper.settling, notePaper.aged, notePaper.weathered)
+                .forEach { assertEquals(panel, it) }
         }
     }
 
