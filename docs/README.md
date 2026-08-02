@@ -48,7 +48,7 @@
 
 ## 文書の地図
 
-このフォルダは**29文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
+このフォルダは**30文書**を4つの役割で分けている。**分類の軸はソースコードのパッケージではなく「文書の役割と寿命」**。
 同じ機能の話が複数の文書に分かれるのは意図的で、「確定した判断」と「まだ決まっていないこと」を物理的に隔離するため。
 
 ---
@@ -59,7 +59,7 @@
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
 | **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](source_code_quality_review.md) | スナップショット（日付で更新） |
-| **なぜそうしたか** | [design/](design/)（20本） | 判断ごとに1本。判断が覆っても改稿して残す |
+| **なぜそうしたか** | [design/](design/)（21本） | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](_wip/)（3本） | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加）。**§0 だけは差し替える**（効かなければ打ち切る） |
 
@@ -85,9 +85,13 @@
 
 ---
 
-## 2. 設計判断（`design/`・20本）
+## 2. 設計判断（`design/`・21本）
 
 「なぜその設計にしたか」を機能単位で残す。**フォルダ分けはしていない**（20本なら一覧で足りるため。20本を超えたら下の4分類でサブフォルダ化する）。
+
+> **サブフォルダ化の契機に達している（2026-08-02・21本目 `note_image_rendering.md`）。**
+> ただし移動すると各文書の相対リンクと §5 の逆引き表を一斉に書き換えることになるため、
+> **契機に達した事実だけを記録し、移動は保留する。** 一覧が実際に読みにくくなったときに行う。
 
 > 状態列は**俯瞰のための要約**で、実装が入ったか・実機確認まで済んだかを1行で示す。
 > **正は各文書の冒頭（`**状態:**` 行）** で、こちらはスナップショットなので遅れることがある。
@@ -124,6 +128,7 @@
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
 | [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認済み |
 | [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認済み |
+| [note_image_rendering.md](design/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） | **設計確定・実装未着手** |
 
 ### Vigilith（人格と演出）
 
@@ -190,6 +195,7 @@
 | `ai/` | [background_ai_ux](design/background_ai_ux.md) → [reflect_distill](design/reflect_distill.md) / [related_notes_ai](design/related_notes_ai.md) |
 | `domain/NoteExcerptBuilder.kt` / `model/NoteExcerptLimits.kt` | [ai_input_excerpt](design/ai_input_excerpt.md) |
 | `domain/markdown/` / `ui/markdown/` | [markdown_rendering](design/markdown_rendering.md) → [ai_input_excerpt](design/ai_input_excerpt.md)（同じパーサがAI入力にも効くため） |
+| `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](design/note_image_rendering.md) → [markdown_rendering](design/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](design/related_notes_ai.md) / [reflect_distill](design/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](design/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](design/reflect_distill.md)（原子性・復旧） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
