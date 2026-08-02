@@ -364,6 +364,44 @@ class ReadingTraceStoreTest {
         assertEquals(2, gateway.readCount)
     }
 
+    // Gateway は読込に失敗すると**自力で索引を捨ててから** null を返す。
+    // 「実際に捨てたか」を作り直しの条件にすると、この直後だけ読み直しが行われず、
+    // 作り直せば読めるはずの痕跡をその回だけ取りこぼす。
+    @Test
+    fun `a read that already dropped the index still gets its rebuild`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        val existing = trace(path = "ideas/habit.md")
+        gateway.syncFromOutside(ReadingTraceStore.keyFor("ideas/habit.md"), ReadingTraceJson.encode(existing))
+        gateway.failNextReadAndDropIndex = true
+
+        assertEquals(ReadingTraceReadResult.Valid(existing), store.load("ideas/habit.md", VAULT))
+    }
+
+    // 旧Vaultの索引を抱えたまま切り替わり、新Vaultへ一度も触れないうちに
+    // 遅れた旧Vault向けの読み出しが届く順序。索引が旧Vaultのものかどうかで判定すると
+    // ここで枠を食い、直後の正当なミスが60秒作り直せなくなる。
+    @Test
+    fun `a stale vault load does not spend the budget when the cached index is also stale`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        // Vault A の索引を作る（1回目の作り直しがここで起きる）
+        store.load("ideas/habit.md", VAULT)
+        clock.advance(REFRESH_INTERVAL)
+        // Vault B へ切替。Bへは一度も触れていないので、索引はAのまま残っている。
+        gateway.currentVaultKey = "content://b"
+
+        // 切替前に出た A 向けの読み出しが遅れて届く
+        store.load("ideas/habit.md", VAULT)
+        assertEquals(1, gateway.invalidateCount)
+
+        // 枠が残っているので、B の正当なミスはちゃんと作り直せる
+        store.load("ideas/habit.md", "content://b")
+        assertEquals(2, gateway.invalidateCount)
+    }
+
     // 旧Vault向けの遅れた読み出しが、現在のVaultの正常な索引を捨ててはいけない。
     // 枠も消費させない（消費されると、直後の正当なミスが作り直せなくなる）。
     @Test
@@ -405,7 +443,7 @@ private class ThrowingListGateway : ReadingTraceDocumentGateway {
     override fun write(key: String, bytes: ByteArray, vaultKey: String) = Unit
     override fun listKeys(vaultKey: String): Set<String>? = throw RuntimeException("boom")
     override fun delete(key: String, vaultKey: String): Boolean = throw RuntimeException("boom")
-    override fun invalidateIndex(vaultKey: String): Boolean = false
+    override fun prepareIndexRebuild(vaultKey: String): Boolean = false
 }
 
 private const val VAULT = "content://vault"
@@ -470,24 +508,35 @@ private class FakeGateway : ReadingTraceDocumentGateway {
     /** 索引がどのVaultのものか。SAF実装の `FolderIndex.vault` にあたる。 */
     private var indexedVaultKey: String? = null
 
+    /**
+     * 次の [read] で、キャッシュ済みUriの読込に失敗したことにする。
+     * SAF実装はこの時**自力で索引を捨ててから** null を返す。
+     */
+    var failNextReadAndDropIndex = false
+
     /** 索引を経由せずディスクへ置く。外部同期で後からファイルが現れた状態を作る。 */
     fun syncFromOutside(key: String, bytes: ByteArray) {
         files[key] = bytes
     }
 
-    private fun index(): MutableSet<String> = indexedKeys ?: files.keys.toMutableSet().also {
-        indexedKeys = it
-        indexedVaultKey = currentVaultKey
+    /** SAF実装の `folderIndexOf` と同じく、別Vaultの索引は使わず作り直す。 */
+    private fun index(): MutableSet<String> {
+        indexedKeys?.let { if (indexedVaultKey == currentVaultKey) return it }
+        return files.keys.toMutableSet().also {
+            indexedKeys = it
+            indexedVaultKey = currentVaultKey
+        }
     }
 
     override fun ensureFolder(): Boolean = folderAvailable
 
     /**
      * SAF実装と同じく、**捨てるだけで作り直さない**（列挙は次の読み書きが行う）。
-     * 照合するのは現在のVaultではなく**索引が属するVault**で、他Vaultの索引を巻き添えにしない。
+     * 判定は「現在のVaultか」だけ。索引が既に無くても、旧Vaultの索引を抱えていても、
+     * 現在のVaultなら作り直す価値がある。
      */
-    override fun invalidateIndex(vaultKey: String): Boolean {
-        if (indexedKeys == null || indexedVaultKey != vaultKey) return false
+    override fun prepareIndexRebuild(vaultKey: String): Boolean {
+        if (vaultKey != currentVaultKey) return false
         invalidateCount++
         indexedKeys = null
         indexedVaultKey = null
@@ -516,6 +565,13 @@ private class FakeGateway : ReadingTraceDocumentGateway {
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
         readCount++
         readVaultKeys += vaultKey
+        // SAF実装は openInputStream の失敗時、索引を捨ててから null を返す。
+        if (failNextReadAndDropIndex) {
+            failNextReadAndDropIndex = false
+            indexedKeys = null
+            indexedVaultKey = null
+            return null
+        }
         if (vaultKey != currentVaultKey) return null
         if (!folderAvailable) return null
         // 索引に載っていないものは、ディスクにあっても見えない（SAF実装と同じ）。

@@ -118,21 +118,19 @@ internal interface ReadingTraceDocumentGateway {
     fun delete(key: String, vaultKey: String): Boolean
 
     /**
-     * 保持している索引キャッシュを捨てる。**捨てるだけで列挙はしない**
-     * （次の読み書きが必要になった時点で作り直す）。
+     * [vaultKey] について、次の読み書きが索引を作り直す状態にする。
+     * **捨てるだけで列挙はしない**（作り直すのは次に必要になった時）。
      *
      * **いつ捨てるかの判定はここに持たない。** 頻度の上限は呼び出し側（[ReadingTraceStore]）が
      * 持ち、この境界はAndroid依存のまま「言われたら捨てる」に徹する。
      *
-     * **[vaultKey] を要求するのは、他Vaultの索引を巻き添えにしないため。** Vault不一致の
-     * [read] は通常の不在と同じ null を返すので、引数が無いと「Vault A 向けの遅れた読み出し」が
-     * 現在の Vault B の正常な索引を捨てる。照合するのは*現在のVault*ではなく
-     * **キャッシュ中の索引が属するVault**。
-     *
-     * @return 実際に捨てたなら true。**結果を返すのは [delete] と同じ理由** — 捨てていないのに
-     *   捨てたものとして扱うと、呼び出し側が頻度の枠を消費して無駄な読み直しをする。
+     * @return **[vaultKey] を読み直す価値があるなら true。**「実際に索引を捨てたか」ではない —
+     *   [read] は失敗すると自力で索引を捨てて null を返すので、「捨てた」を条件にすると
+     *   **その直後の読み直しだけが行われず、作り直せば読めるはずの痕跡を取りこぼす**。
+     *   逆に [vaultKey] が現在のVaultでなければ、作り直しても [read] の Vault照合で
+     *   弾かれるので価値が無い（false）。現在のVaultの索引にも触らない。
      */
-    fun invalidateIndex(vaultKey: String): Boolean
+    fun prepareIndexRebuild(vaultKey: String): Boolean
 }
 
 internal class ReadingTraceStore(
@@ -224,16 +222,20 @@ internal class ReadingTraceStore(
      * 上限が要るのは、まだ一度も読んでいないノートを開くたびに不在になるため。
      * 制限しないと開くたびフォルダ全走査になり、索引キャッシュを置いた意味が消える。
      *
-     * 枠を進めるのは**実際に捨てられた後**。**この順序が効いている** — 先に枠を進めると
+     * 枠を進めるのは**索引を捨てた後**。**この順序が効いている** — 先に枠を進めると
      * 「枠は消費済みなのに索引はまだ古い」という状態が一瞬でき、その隙に入った要求が
      * 作り直せないまま不在と判断して新規作成へ進む。捨ててから進める限り、枠の消費を
      * 観測できる時点では索引は必ず捨てられている。
+     *
+     * **旧Vault向けの要求は枠を消費しない。** 消費させると、切替直後に遅れて届いた要求1つで
+     * 現在のVaultの正当な作り直しが60秒止まる。判定は Gateway 側が持つ
+     * （現在のVaultを知っているのはあちらだけ）。
      */
     private fun refreshIndex(vaultKey: String): Boolean {
         val now = elapsedMillis()
         val last = lastIndexRefreshAtMillis
         if (last != null && now - last < indexRefreshIntervalMillis) return false
-        if (!gateway.invalidateIndex(vaultKey)) return false
+        if (!gateway.prepareIndexRebuild(vaultKey)) return false
         lastIndexRefreshAtMillis = now
         return true
     }
@@ -289,7 +291,7 @@ internal class ReadingTraceStore(
  * 作成したファイルは即インデックスへ足すので、自分の書き込みは取りこぼさない。
  *
  * 外部同期で後から増えたファイルは自力では気づけないので、
- * [invalidateIndex] で捨てて作り直す。**その契機を決めるのは [ReadingTraceStore] 側**。
+ * [prepareIndexRebuild] で捨てて作り直す。**その契機を決めるのは [ReadingTraceStore] 側**。
  *
  * 読み書きは [Synchronized] で直列化する。訪問の追記は Controller 側の Mutex で
  * 直列化されているが、再会時の照合（load）はその外側で走るため、
@@ -323,14 +325,20 @@ internal class SafReadingTraceDocumentGateway(
 
     /**
      * 索引を捨てる。次の読み書きが [folderIndexOf] で作り直す。
-     *
-     * 捨てる対象は**キャッシュ中の索引が属するVault**で判定する（現在のVaultではない）。
      * `read` / `write` の失敗時に `index = null` している自己修復と同じ操作を、
      * 契機だけ呼び出し側へ開いたもの。
+     *
+     * **判定は「現在のVaultか」だけで行う。** キャッシュ中の索引が属するVaultで判定すると、
+     * ①[read] が自己修復で先に捨てた直後（索引は既に null）と
+     * ②旧Vaultの索引を抱えたまま切り替わった直後（索引は旧Vaultのもの）で答えを誤る。
+     * 現在のVaultなら索引の有無にかかわらず作り直す価値があり、そうでなければ無い。
+     *
+     * ここで `vaultUri()` を読み直すことは書き込みの取り違えに繋がらない
+     * （この後に走るのは [read] だけで、そちらも自分で Vault を照合する）。
      */
     @Synchronized
-    override fun invalidateIndex(vaultKey: String): Boolean {
-        if (index?.vault?.toString() != vaultKey) return false
+    override fun prepareIndexRebuild(vaultKey: String): Boolean {
+        if (vaultUri()?.toString() != vaultKey) return false
         index = null
         return true
     }
