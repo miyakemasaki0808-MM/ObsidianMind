@@ -21,8 +21,14 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 | `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/design/reflect_reading_trace.md) / [reflect_distill](docs/design/reflect_distill.md) |
 | `ui/vigilith/` | [character_vigilith](docs/design/character_vigilith.md) → [vigilith_in_app](docs/design/vigilith_in_app.md) |
 
-**繰り返し現れた構造的な教訓は [docs/lessons.md](docs/lessons.md)。** 新しい仕組みを入れる前、
-テストを足す前、横展開する前に目を通す（過去に同じ形で失敗している型が集めてある）。
+**繰り返し現れた構造的な教訓は [docs/lessons.md](docs/lessons.md)。**
+**着手前に全文を読まない。** 代わりに、**diffが出来上がった後**に
+[§0 の5問](docs/lessons.md#0-diffができたら自分の編集へ当てる5問)を自分の編集へ当て、
+**該当した行の出典だけ**を読む。L1〜L28 は事例アーカイブであって、日常の運用には出てこない。
+
+（旧運用は「新しい仕組みを入れる前・テストを足す前・横展開する前に目を通す」だったが、
+発火が自己申告の分類に依存していて実際には読まれなかった。**知識の在処ではなく、
+当て直す瞬間が無いことが問題**だったため、着手前の通読から変更後の粗取りへ移した。）
 
 `_wip/` は3本で役割が分かれている。**混ぜない。**
 
@@ -72,6 +78,11 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 **変更を終える前に:**
 
+**まず [lessons.md §0](docs/lessons.md#0-diffができたら自分の編集へ当てる5問) の5問を自分のdiffへ当てる。**
+そして**適用結果を報告に1行残す**（例: `§0適用: 1・3が該当／確認済み`）。
+残さないと、**当てたのか、たまたま問題が出なかったのかを後から区別できない**
+（§0 自体の効き目を3回で評価するため、この1行が唯一の証拠になる）。
+
 1. [docs/change_history.md](docs/change_history.md) へPR単位で1行追記する
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/design/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
@@ -89,3 +100,4 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 - PR本文も日本語で、修正表＋「見た目・挙動の変更点」＋「実機確認ポイント」を載せる
 - ブランチはユーザーがGitHub側で作成する。「フェッチして」と言われたら、main を ff-only で pull → マージ済み旧ブランチをローカル削除 → 新ブランチを checkout
 - **修正が効いていることの主張は、修正コードを別の目で読むまで確定させない。** 方針が正しいと、実装が効いていなくても文書とコミットメッセージだけ通ってしまう
+- **「別の目」は、実装したのとは別のモデル／エージェントがdiffをレビューすること。自分の2回目のパスは数えない。** コミット前に通す恒久の工程であって、余裕があるときの安全網ではない — 実績上、見落としを最も確実に捕まえているのはこの工程である（外部レビューで9件・4件・2件。自己パスの検出はゼロではないが同水準ではない）

@@ -258,14 +258,178 @@ class ReadingTraceStoreTest {
         )
     }
 
+    // --- 索引の陳腐化（外部同期で後から増えたファイル）-----------------------------
+    //
+    // Gateway は置き場の子一覧を1回だけ読んで索引に持つ。別端末が作った痕跡が
+    // 後から同期されても自力では気づけないので、**不在だった時にだけ**索引を捨てて
+    // 作り直す。作り直しには頻度の上限があり、未読ノートを開くたびに全走査しない。
+
+    @Test
+    fun `a trace that arrived by external sync becomes readable after the index is rebuilt`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        // 索引を作る（この時点では空）
+        store.load("ideas/habit.md", VAULT)
+        // 別端末が作った痕跡が、索引を作った後に同期で着地する
+        val synced = trace(path = "ideas/habit.md")
+        gateway.syncFromOutside(ReadingTraceStore.keyFor("ideas/habit.md"), ReadingTraceJson.encode(synced))
+        clock.advance(REFRESH_INTERVAL)
+
+        assertEquals(ReadingTraceReadResult.Valid(synced), store.load("ideas/habit.md", VAULT))
+    }
+
+    // 索引に無いまま保存すると、SAF実装は createDocument して同じキーのファイルを2つ作る。
+    // Controller は必ず load → save の順で書くので、load 側で作り直せばここも塞がる。
+    @Test
+    fun `appending to an externally synced trace does not create a second file`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        store.load("ideas/habit.md", VAULT)
+        gateway.syncFromOutside(
+            ReadingTraceStore.keyFor("ideas/habit.md"),
+            ReadingTraceJson.encode(trace(path = "ideas/habit.md"))
+        )
+        clock.advance(REFRESH_INTERVAL)
+
+        val existing = store.load("ideas/habit.md", VAULT) as ReadingTraceReadResult.Valid
+        store.save(existing.trace.withVisit(ReadingVisit(2_000L, "まとめ", 100)), VAULT)
+
+        assertEquals(0, gateway.createCount)
+        assertEquals(1, gateway.files.size)
+    }
+
+    // 見つかっている間は索引を疑わない。ここが崩れると、キャッシュを置いた意味が消える。
+    @Test
+    fun `a hit never rebuilds the index`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        store.save(trace(), VAULT)
+
+        clock.advance(REFRESH_INTERVAL * 10)
+        store.load("ideas/habit.md", VAULT)
+
+        assertEquals(0, gateway.invalidateCount)
+    }
+
+    // 未読ノートを続けて開くと毎回ミスする。ここで毎回作り直すと全走査が復活する。
+    @Test
+    fun `repeated misses within the interval rebuild the index only once`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+
+        store.load("never/read.md", VAULT)
+        clock.advance(REFRESH_INTERVAL - 1)
+        store.load("never/read.md", VAULT)
+
+        assertEquals(1, gateway.invalidateCount)
+    }
+
+    @Test
+    fun `a miss after the interval rebuilds the index again`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+
+        store.load("never/read.md", VAULT)
+        clock.advance(REFRESH_INTERVAL)
+        store.load("never/read.md", VAULT)
+
+        assertEquals(2, gateway.invalidateCount)
+    }
+
+    // 壊れたファイルは「見えている」ので、索引が古いことの証拠にならない。
+    @Test
+    fun `a corrupt file does not rebuild the index`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        gateway.files[ReadingTraceStore.keyFor("ideas/habit.md")] = "これはJSONではない".toByteArray()
+        val store = store(gateway, clock)
+
+        assertTrue(store.load("ideas/habit.md", VAULT) is ReadingTraceReadResult.Corrupt)
+        assertEquals(0, gateway.invalidateCount)
+    }
+
+    // 作り直しは1回だけ。本当に無いものを探して読み出しが繰り返されない。
+    @Test
+    fun `a trace that is really absent reports none after a single retry`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+
+        assertEquals(ReadingTraceReadResult.None, store.load("never/read.md", VAULT))
+        assertEquals(2, gateway.readCount)
+    }
+
+    // Gateway は読込に失敗すると**自力で索引を捨ててから** null を返す。
+    // 「実際に捨てたか」を作り直しの条件にすると、この直後だけ読み直しが行われず、
+    // 作り直せば読めるはずの痕跡をその回だけ取りこぼす。
+    @Test
+    fun `a read that already dropped the index still gets its rebuild`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        val existing = trace(path = "ideas/habit.md")
+        gateway.syncFromOutside(ReadingTraceStore.keyFor("ideas/habit.md"), ReadingTraceJson.encode(existing))
+        gateway.failNextReadAndDropIndex = true
+
+        assertEquals(ReadingTraceReadResult.Valid(existing), store.load("ideas/habit.md", VAULT))
+    }
+
+    // 旧Vaultの索引を抱えたまま切り替わり、新Vaultへ一度も触れないうちに
+    // 遅れた旧Vault向けの読み出しが届く順序。索引が旧Vaultのものかどうかで判定すると
+    // ここで枠を食い、直後の正当なミスが60秒作り直せなくなる。
+    @Test
+    fun `a stale vault load does not spend the budget when the cached index is also stale`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway()
+        val store = store(gateway, clock)
+        // Vault A の索引を作る（1回目の作り直しがここで起きる）
+        store.load("ideas/habit.md", VAULT)
+        clock.advance(REFRESH_INTERVAL)
+        // Vault B へ切替。Bへは一度も触れていないので、索引はAのまま残っている。
+        gateway.currentVaultKey = "content://b"
+
+        // 切替前に出た A 向けの読み出しが遅れて届く
+        store.load("ideas/habit.md", VAULT)
+        assertEquals(1, gateway.invalidateCount)
+
+        // 枠が残っているので、B の正当なミスはちゃんと作り直せる
+        store.load("ideas/habit.md", "content://b")
+        assertEquals(2, gateway.invalidateCount)
+    }
+
+    // 旧Vault向けの遅れた読み出しが、現在のVaultの正常な索引を捨ててはいけない。
+    // 枠も消費させない（消費されると、直後の正当なミスが作り直せなくなる）。
+    @Test
+    fun `a load for a stale vault neither drops the current index nor spends the budget`() {
+        val clock = ElapsedClock()
+        val gateway = FakeGateway().apply { currentVaultKey = "content://b" }
+        val store = store(gateway, clock)
+        // Vault B の索引を作る（1回目の作り直しがここで起きる）
+        store.load("ideas/habit.md", "content://b")
+        clock.advance(REFRESH_INTERVAL)
+
+        // 切替前の Vault A へ向けた読み出しが遅れて届く
+        store.load("ideas/habit.md", "content://a")
+        assertEquals(1, gateway.invalidateCount)
+
+        // 枠が残っているので、直後の B のミスはちゃんと作り直せる
+        store.load("ideas/habit.md", "content://b")
+        assertEquals(2, gateway.invalidateCount)
+    }
+
     @Test
     fun `loadByKey rejects a file whose contents do not match its key`() {
         val gateway = FakeGateway()
         val store = ReadingTraceStore(gateway)
-        store.save(trace(path = "ideas/habit.md"), VAULT)
-        // 中身は habit.md のまま、別キーのファイルとして置き直す（改名・取り違えの再現）。
-        val body = gateway.files.remove(ReadingTraceStore.keyFor("ideas/habit.md"))!!
-        gateway.files[ReadingTraceStore.keyFor("journal/other.md")] = body
+        // 中身は habit.md のまま、別キーのファイルとして置く（改名・取り違えの再現）。
+        // 索引を作る前に置くのは、**この検査が索引の作り直しに依存しないようにする**ため。
+        gateway.files[ReadingTraceStore.keyFor("journal/other.md")] =
+            ReadingTraceJson.encode(trace(path = "ideas/habit.md"))
 
         val result = store.loadByKey(ReadingTraceStore.keyFor("journal/other.md"), VAULT)
 
@@ -279,10 +443,38 @@ private class ThrowingListGateway : ReadingTraceDocumentGateway {
     override fun write(key: String, bytes: ByteArray, vaultKey: String) = Unit
     override fun listKeys(vaultKey: String): Set<String>? = throw RuntimeException("boom")
     override fun delete(key: String, vaultKey: String): Boolean = throw RuntimeException("boom")
+    override fun prepareIndexRebuild(vaultKey: String): Boolean = false
 }
 
 private const val VAULT = "content://vault"
 
+private val REFRESH_INTERVAL = ReadingTraceStore.DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS
+
+/**
+ * 経過時間の偽装。**0 から始める** — 本番の測定源が 0 付近を返す状況を含めて、
+ * 初回の作り直しが抑止されないことを確かめたい。
+ */
+private class ElapsedClock {
+    private var current = 0L
+
+    fun now(): Long = current
+
+    fun advance(by: Long) {
+        current += by
+    }
+}
+
+private fun store(gateway: FakeGateway, clock: ElapsedClock) =
+    ReadingTraceStore(gateway, clock::now, REFRESH_INTERVAL)
+
+/**
+ * SAF実装の構造を写したFake。**`files`（ディスク）と `indexedKeys`（索引）を分ける**のが要点で、
+ * 分けないと「外部同期でディスクにだけ増えたファイル」という状態を作れず、
+ * 索引の陳腐化を再現できない。
+ *
+ * 読み書きは索引経由。索引が null なら次の読み書きが `files` から作り直す
+ * （SAF実装の `folderIndexOf` と同じく遅延再構築）。
+ */
 private class FakeGateway : ReadingTraceDocumentGateway {
     val files = mutableMapOf<String, ByteArray>()
     val readVaultKeys = mutableListOf<String>()
@@ -296,12 +488,60 @@ private class FakeGateway : ReadingTraceDocumentGateway {
     var writeCount = 0
         private set
 
+    /**
+     * 索引に載っていないキーへ書いた回数＝**SAF実装が `createDocument` する回数**。
+     * 物理的な `hash (1).json` は再現しないが、「新規作成という判断が起きたか」は数えられる。
+     */
+    var createCount = 0
+        private set
+    var invalidateCount = 0
+        private set
+
     /** SAF実装が「列挙できなかった」を返す状態。空フォルダとは区別する。 */
     var listingUnreadable = false
     var listKeysCount = 0
         private set
 
+    /** null なら索引未構築。次の読み書きが `files` から作り直す。 */
+    private var indexedKeys: MutableSet<String>? = null
+
+    /** 索引がどのVaultのものか。SAF実装の `FolderIndex.vault` にあたる。 */
+    private var indexedVaultKey: String? = null
+
+    /**
+     * 次の [read] で、キャッシュ済みUriの読込に失敗したことにする。
+     * SAF実装はこの時**自力で索引を捨ててから** null を返す。
+     */
+    var failNextReadAndDropIndex = false
+
+    /** 索引を経由せずディスクへ置く。外部同期で後からファイルが現れた状態を作る。 */
+    fun syncFromOutside(key: String, bytes: ByteArray) {
+        files[key] = bytes
+    }
+
+    /** SAF実装の `folderIndexOf` と同じく、別Vaultの索引は使わず作り直す。 */
+    private fun index(): MutableSet<String> {
+        indexedKeys?.let { if (indexedVaultKey == currentVaultKey) return it }
+        return files.keys.toMutableSet().also {
+            indexedKeys = it
+            indexedVaultKey = currentVaultKey
+        }
+    }
+
     override fun ensureFolder(): Boolean = folderAvailable
+
+    /**
+     * SAF実装と同じく、**捨てるだけで作り直さない**（列挙は次の読み書きが行う）。
+     * 判定は「現在のVaultか」だけ。索引が既に無くても、旧Vaultの索引を抱えていても、
+     * 現在のVaultなら作り直す価値がある。
+     */
+    override fun prepareIndexRebuild(vaultKey: String): Boolean {
+        if (vaultKey != currentVaultKey) return false
+        invalidateCount++
+        indexedKeys = null
+        indexedVaultKey = null
+        return true
+    }
 
     override fun listKeys(vaultKey: String): Set<String>? {
         listKeysCount++
@@ -318,14 +558,24 @@ private class FakeGateway : ReadingTraceDocumentGateway {
         if (vaultKey != currentVaultKey) return false
         if (!deleteSucceeds) return false
         deletedKeys += key
+        indexedKeys?.remove(key)
         return files.remove(key) != null
     }
 
     override fun read(key: String, maximumBytes: Int, vaultKey: String): ByteArray? {
         readCount++
         readVaultKeys += vaultKey
+        // SAF実装は openInputStream の失敗時、索引を捨ててから null を返す。
+        if (failNextReadAndDropIndex) {
+            failNextReadAndDropIndex = false
+            indexedKeys = null
+            indexedVaultKey = null
+            return null
+        }
         if (vaultKey != currentVaultKey) return null
         if (!folderAvailable) return null
+        // 索引に載っていないものは、ディスクにあっても見えない（SAF実装と同じ）。
+        if (key !in index()) return null
         val bytes = files[key] ?: return null
         if (bytes.size > maximumBytes) throw NoteFileTooLargeException(bytes.size, maximumBytes)
         return bytes.copyOf()
@@ -339,6 +589,9 @@ private class FakeGateway : ReadingTraceDocumentGateway {
         }
         writeError?.let { throw it }
         if (!folderAvailable) throw IOException("痕跡の保存先を用意できませんでした。")
+        // 索引に無ければ新規作成。SAF実装ではここで createDocument が走り、
+        // 実体が既にディスクにあれば同じキーのファイルが2つできる。
+        if (index().add(key)) createCount++
         files[key] = bytes.copyOf()
     }
 }
