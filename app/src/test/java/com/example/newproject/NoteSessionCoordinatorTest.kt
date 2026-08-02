@@ -32,6 +32,7 @@ import com.example.newproject.model.state.AnnotationState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCleanupState
@@ -139,6 +140,7 @@ class NoteSessionCoordinatorTest {
         assertNull(reset.sectionChat)
         assertEquals(false, reset.isSectionChatSheetVisible)
         assertNull(reset.readingTraceCard)
+        assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
     }
 
     // ── 調停の結線 ─────────────────────────────────────────────────────────
@@ -509,6 +511,7 @@ class NoteSessionCoordinatorTest {
     private fun fullyPopulatedState() = NoteUiState(
         vaultSelected = true,
         noteState = NoteState.Success(title = "旧ノート", content = "本文"),
+        notePaperTone = NotePaperTone.Weathered,
         summaryState = SummaryState.Success("要約"),
         relatedNotesState = RelatedNotesState.Success(emptyList(), emptyList()),
         quizState = QuizState.Success(sourceTitle = "旧ノート", cards = emptyList()),

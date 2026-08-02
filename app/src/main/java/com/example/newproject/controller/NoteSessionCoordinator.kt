@@ -5,6 +5,7 @@ import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
@@ -252,6 +253,14 @@ internal class NoteSessionCoordinator(
     fun setNoteState(state: NoteState) {
         stateStore.setNoteState(state)
         if (state is NoteState.Success) sections.parse(state.content) else sections.cancelAndClear()
+    }
+
+    /**
+     * 紙の地色の段階を決める。**[setNoteState] より先に呼ぶ**（理由は Store 側のKDoc）。
+     * 段階の算出そのものはVault走査の結果が要るので、材料を持つ呼び出し側が行う。
+     */
+    fun setNotePaperTone(tone: NotePaperTone) {
+        stateStore.setNotePaperTone(tone)
     }
 
     fun currentNote(): NoteState.Success? = stateStore.currentNote()

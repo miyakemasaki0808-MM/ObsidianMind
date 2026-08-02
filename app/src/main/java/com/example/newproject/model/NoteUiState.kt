@@ -2,6 +2,7 @@ package com.example.newproject.model
 
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.AnnotationState
@@ -17,6 +18,9 @@ import com.example.newproject.model.state.SummaryState
 data class NoteUiState(
     val vaultSelected: Boolean = false,
     val noteState: NoteState = NoteState.Idle,
+    // 本文を載せる紙の地色の段階。Vault全体の最終更新の分布から決まるので、
+    // 材料（走査キャッシュ）が冷えていれば Fresh のまま＝見た目は現行と変わらない。
+    val notePaperTone: NotePaperTone = NotePaperTone.Fresh,
     val summaryState: SummaryState = SummaryState.Idle,
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,

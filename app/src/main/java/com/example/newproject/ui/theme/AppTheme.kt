@@ -5,10 +5,12 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.example.newproject.model.NotePaperTone
 
 /**
  * 画面が参照する色の一式。明暗で差し替わるのはこの型の中身だけ。
@@ -16,9 +18,39 @@ import androidx.compose.ui.graphics.Color
  * ブランドパレット（Indigo/Aqua/Coral など「その色であること」に意味がある値）は
  * 含めない。明暗で置き換える対象ではないため。
  */
+/**
+ * ノート本文を載せる紙の地色。放置期間の段階（[NotePaperTone]）から引く。
+ *
+ * **上限は `panelChip` の相対輝度（0.8772）。** 弱い文字トークンの基準面が
+ * 「文字が載る面のうち最も暗い `panelChip`」に置かれているため、ここがそれより暗くなると
+ * 既存の全テキストトークンが一斉に基準を割る。→ `docs/design/note_age_paper.md` §5
+ *
+ * [uniform] は全段階を同じ色にしたもので、**演出を無効化する形**にあたる
+ * （ダーク時と、オプションでオフのとき）。
+ */
+internal class NotePaperTones(
+    val fresh: Color,
+    val settling: Color,
+    val aged: Color,
+    val weathered: Color
+) {
+    fun color(tone: NotePaperTone): Color = when (tone) {
+        NotePaperTone.Fresh -> fresh
+        NotePaperTone.Settling -> settling
+        NotePaperTone.Aged -> aged
+        NotePaperTone.Weathered -> weathered
+    }
+
+    companion object {
+        fun uniform(color: Color) = NotePaperTones(color, color, color, color)
+    }
+}
+
 internal class AppColorScheme(
     // 面
     val panel: Color,
+    // 紙の地色。Fresh は panel と同値にする（既定オフのときと見た目を一致させるため）。
+    val notePaper: NotePaperTones,
     val codePanel: Color,
     val panelTinted: Color,
     val panelBlue: Color,
@@ -112,6 +144,27 @@ private fun diagonalGradient(stops: List<Color>): Brush = Brush.linearGradient(
 internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }
 
 /**
+ * 紙の地色の演出が有効かどうか。**[AppTheme] だけが提供する。**
+ *
+ * 段階そのもの（`NoteUiState.notePaperTone`）と分けて持つのは、オプションの切替を
+ * ノートを開き直さずに反映させるため。段階は状態に載ったままで、色へ写す係だけが切り替わる。
+ */
+private val LocalNotePaperAging = staticCompositionLocalOf { false }
+
+/**
+ * 放置期間の段階を実際の色へ写す唯一の窓口。**画面はこれだけを呼ぶ。**
+ *
+ * 無効時（オプションでオフ／ダーク）は現行の `panel` を返すので、
+ * 呼び出し側に「演出が効いているか」の分岐を書かせない。
+ */
+@Composable
+@ReadOnlyComposable
+internal fun notePaperColor(tone: NotePaperTone): Color {
+    val colors = LocalAppColors.current
+    return if (LocalNotePaperAging.current) colors.notePaper.color(tone) else colors.panel
+}
+
+/**
  * アプリ全体のテーマ。`setContent{}` の直下に1枚だけ置く。
  *
  * OSのダークモードには追従しない（[isSystemInDarkTheme] を使わない）。
@@ -125,7 +178,11 @@ internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }
  * （Snackbar・BottomSheet・AlertDialog・Badge）が暗所で浮かないようにするための最小限。
  */
 @Composable
-internal fun AppTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
+internal fun AppTheme(
+    darkTheme: Boolean,
+    notePaperAging: Boolean = false,
+    content: @Composable () -> Unit
+) {
     val colors = if (darkTheme) DarkAppColors else LightAppColors
     val material = if (darkTheme) {
         darkColorScheme(
@@ -142,7 +199,13 @@ internal fun AppTheme(darkTheme: Boolean, content: @Composable () -> Unit) {
     } else {
         lightColorScheme()
     }
-    CompositionLocalProvider(LocalAppColors provides colors) {
+    // ダークでは常に無効。暗所配色は「明るい画面を暗くしたもの」ではなく別配色として
+    // 設計されており、そこへ黄ばみ（光の当たった紙の比喩）を持ち込むと前提と衝突する。
+    // → docs/design/note_age_paper.md 判断5
+    CompositionLocalProvider(
+        LocalAppColors provides colors,
+        LocalNotePaperAging provides (notePaperAging && !darkTheme)
+    ) {
         MaterialTheme(colorScheme = material, content = content)
     }
 }

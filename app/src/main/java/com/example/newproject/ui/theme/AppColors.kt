@@ -29,6 +29,23 @@ internal val MutedCoral = Color(0xFFE28D9F)
 /** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
 private val LightPanel = Color(0xFFFDFEFF)
 
+/**
+ * 紙の地色（放置期間の段階 → 色）。**ライトのみ**。
+ *
+ * 相対輝度は 0.9899 / 0.9797 / 0.9554 / 0.9223 で、いずれも弱い文字トークンの基準面
+ * `panelChip`（0.8772）より明るい。**この順序が崩れると既存の全テキストトークンが基準を割る**ので、
+ * `AppColorContrastTest` が段階ごとの比と床の両方を強制する。
+ *
+ * **初期値は意図的に弱い。** 実機で見てから強めるかを決めるため、値をここ1箇所へ集約している。
+ * 強める余地は `#F7F1E2`（0.8818）まで。→ `docs/design/note_age_paper.md` §6
+ */
+internal val LightNotePaperTones = NotePaperTones(
+    fresh = LightPanel,
+    settling = Color(0xFFFDFDF9),
+    aged = Color(0xFFFCFAF3),
+    weathered = Color(0xFFFAF6EB)
+)
+
 // ---------------------------------------------------------------------------
 // 2. 明暗それぞれの実体
 //    値を書くのはここだけ。§3のトークンは、現在のテーマからこれを引くだけの窓口。
@@ -36,6 +53,7 @@ private val LightPanel = Color(0xFFFDFEFF)
 
 internal val LightAppColors = AppColorScheme(
     panel = LightPanel,
+    notePaper = LightNotePaperTones,
     codePanel = Color(0xFFF1F4F8),
     panelTinted = Color(0xFFF7F3FF),
     panelBlue = Color(0xFFF0F4FF),
@@ -126,6 +144,8 @@ internal val LightAppColors = AppColorScheme(
  */
 internal val DarkAppColors = AppColorScheme(
     panel = Color(0xFF2A2D45),
+    // ダークでは段階を作らない（判断5）。全段階を panel と同値にして演出を殺す。
+    notePaper = NotePaperTones.uniform(Color(0xFF2A2D45)),
     codePanel = Color(0xFF202234),
     panelTinted = Color(0xFF2B2740),
     panelBlue = Color(0xFF22273F),

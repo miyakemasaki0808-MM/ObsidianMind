@@ -43,7 +43,7 @@ import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
-import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.notePaperColor
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 
@@ -150,7 +150,8 @@ internal fun NoteContentPanel(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Panel,
+        // 紙の地色は放置期間で決まる。演出が無効なら現行の `Panel` と同値が返る。
+        color = notePaperColor(uiState.notePaperTone),
         shape = RoundedCornerShape(8.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
