@@ -2,6 +2,9 @@ package com.example.newproject
 
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.data.NoteImageGateway
+import com.example.newproject.data.VaultImageIndexStore
+import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.data.InvalidNoteEncodingException
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NotePaperTone
@@ -96,6 +99,22 @@ class NoteViewModel internal constructor(
      * （→ [com.example.newproject.controller.NoteSectionController]）。テーマと同じ扱い。
      */
     val sectionModel: StateFlow<NoteSectionModel?> = session.sectionModel
+
+    /**
+     * ノート内画像の読み込み口。**Vault世代を Coordinator から受けるのでここで組み立てる**
+     * （依存の組み立て時点では `vaultGeneration` がまだ存在しない）。
+     * 索引はVault単位なので、ノート単位の契約2箇所には登録しない。
+     */
+    internal val imageLoader: NoteImageLoader = AppNoteImageLoader(
+        NoteImageGateway(
+            contentResolver = application.contentResolver,
+            indexStore = VaultImageIndexStore(
+                vault = dependencies.vaultBrowser,
+                vaultGeneration = { session.vaultGeneration }
+            ),
+            loadScope = scope
+        )
+    )
 
     private val mutableDarkTheme = MutableStateFlow(preferences.darkTheme)
     val darkTheme: StateFlow<Boolean> = mutableDarkTheme.asStateFlow()

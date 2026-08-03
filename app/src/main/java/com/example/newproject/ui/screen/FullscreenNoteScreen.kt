@@ -3,6 +3,7 @@ package com.example.newproject.ui.screen
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.vigilith.VigilithActionStatus
 import com.example.newproject.ui.vigilith.fullscreenAiStatus
@@ -82,6 +83,7 @@ internal fun FullscreenNoteScreen(
     uiState: NoteUiState,
     /** タブ側と同じパース結果を受け取る。進入のたびに解析し直さないための共有（→ NoteSectionController）。 */
     sectionModel: NoteSectionModel?,
+    imageLoader: NoteImageLoader?,
     tabListState: LazyListState,
     onExit: () -> Unit,
     onOpenSummary: () -> Unit,
@@ -143,7 +145,8 @@ internal fun FullscreenNoteScreen(
                 .fillMaxSize()
                 .safeDrawingPadding(),
             listState = listState,
-            precomputedBlocks = sectionModel?.blocks
+            precomputedBlocks = sectionModel?.blocks,
+            imageLoader = imageLoader
         )
         IconPill(
             symbol = "✕",

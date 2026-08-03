@@ -54,7 +54,9 @@ internal fun MarkdownNoteContent(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     // セクションモデル側で既にパース済みなら渡して再パースを避ける
-    precomputedBlocks: List<MarkdownBlock>? = null
+    precomputedBlocks: List<MarkdownBlock>? = null,
+    // null なら画像を読み込まず原文のまま出す（画像を持たない文脈で使い回すため）
+    imageLoader: NoteImageLoader? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -69,9 +71,7 @@ internal fun MarkdownNoteContent(
                 when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
-                    // 段階1では見た目を据え置く。原文をそのまま段落として描くので、
-                    // 従来どおり `!` とリンク装飾された alt が出る（→ note_image_rendering §11）。
-                    is MarkdownBlock.Image         -> MarkdownParagraph(block.sourceText())
+                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()

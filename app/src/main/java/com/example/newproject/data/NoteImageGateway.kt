@@ -26,6 +26,12 @@ internal sealed interface NoteImageResult {
     data class Failed(val reason: NoteImageFailure) : NoteImageResult
 }
 
+/** 寸法だけの読み取り結果。 */
+internal sealed interface NoteImageMeasureResult {
+    data class Measured(val width: Int, val height: Int) : NoteImageMeasureResult
+    data class Failed(val reason: NoteImageFailure) : NoteImageMeasureResult
+}
+
 /** 復号を打ち切る内部例外。理由を [ByteBudgetCache] 越しに運ぶためだけに使う。 */
 private class ImageDecodeFailure(val reason: NoteImageFailure) : Exception()
 
@@ -92,13 +98,53 @@ internal class NoteImageGateway(
         }
     }
 
+    /**
+     * 寸法だけを読む。**ピクセルは復号しない**のでヘッダ分の読み取りで済む。
+     *
+     * 表示側がプレースホルダの高さを中身より先に確定させるために要る
+     * （高さ0のブロックを作ると読書痕跡の到達率が壊れる → note_image_rendering §6）。
+     *
+     * 寸法は [load] の中でももう一度読む。**共有しないのは、[load] が
+     * キャッシュから返る場合はそもそも読まないため** — 経路をまたいで
+     * 寸法だけを持ち回す仕掛けのほうが、ヘッダ1回ぶんより高くつく。
+     */
+    internal suspend fun measure(block: MarkdownBlock.Image): NoteImageMeasureResult {
+        val request = imageRequestOf(block)
+        if (request is ImageRequest.Lookup && !isDecodableImageFileName(request.fileName)) {
+            return NoteImageMeasureResult.Failed(NoteImageFailure.Unsupported)
+        }
+        val ref = when (val resolution = indexStore.resolve(request)) {
+            is ImageResolution.Resolved -> resolution.ref
+            is ImageResolution.Failed -> return NoteImageMeasureResult.Failed(resolution.reason)
+        }
+        return try {
+            withContext(ioDispatcher) {
+                val bounds = readBounds(ref)
+                rejectionForBounds(bounds.outWidth, bounds.outHeight)
+                    ?.let { NoteImageMeasureResult.Failed(it) }
+                    ?: NoteImageMeasureResult.Measured(bounds.outWidth, bounds.outHeight)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: ImageDecodeFailure) {
+            NoteImageMeasureResult.Failed(e.reason)
+        } catch (e: Exception) {
+            NoteImageMeasureResult.Failed(NoteImageFailure.Broken)
+        }
+    }
+
+    private fun readBounds(ref: DocumentRef): BitmapFactory.Options {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        openStream(ref) { BitmapFactory.decodeStream(it, null, bounds) }
+        return bounds
+    }
+
     private suspend fun decode(ref: DocumentRef, targetWidthPx: Int): Bitmap =
         withContext(ioDispatcher) {
             if (byteSizeOf(ref)?.let { it > NoteImageLimits.MAX_INPUT_BYTES } == true) {
                 throw ImageDecodeFailure(NoteImageFailure.TooLarge)
             }
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            openStream(ref) { BitmapFactory.decodeStream(it, null, bounds) }
+            val bounds = readBounds(ref)
             rejectionForBounds(bounds.outWidth, bounds.outHeight)?.let { throw ImageDecodeFailure(it) }
 
             val options = BitmapFactory.Options().apply {

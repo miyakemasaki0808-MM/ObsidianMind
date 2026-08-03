@@ -232,6 +232,7 @@ class MainActivity : ComponentActivity() {
                             NoteReaderTab(
                                 uiState = uiState,
                                 sectionModel = sectionModel,
+                                imageLoader = viewModel.imageLoader,
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
@@ -264,6 +265,7 @@ class MainActivity : ComponentActivity() {
                             FullscreenNoteScreen(
                                 uiState = uiState,
                                 sectionModel = sectionModel,
+                                imageLoader = viewModel.imageLoader,
                                 tabListState = noteListState,
                                 onExit = { navController.popBackStack() },
                                 // 要約シートは通常表示（noteルート）で描画されるため、
