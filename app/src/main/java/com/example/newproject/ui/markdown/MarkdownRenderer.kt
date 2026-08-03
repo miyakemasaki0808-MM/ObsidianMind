@@ -38,6 +38,7 @@ import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
+import com.example.newproject.domain.markdown.sourceText
 import com.example.newproject.ui.theme.LinkText
 import com.example.newproject.ui.theme.CheckboxOutline
 import com.example.newproject.ui.theme.ContentDivider
@@ -68,6 +69,9 @@ internal fun MarkdownNoteContent(
                 when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
+                    // 段階1では見た目を据え置く。原文をそのまま段落として描くので、
+                    // 従来どおり `!` とリンク装飾された alt が出る（→ note_image_rendering §11）。
+                    is MarkdownBlock.Image         -> MarkdownParagraph(block.sourceText())
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()

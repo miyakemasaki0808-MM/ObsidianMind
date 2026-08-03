@@ -178,7 +178,134 @@ class MarkdownParserTest {
         assertEquals("[ ] やること", item.text)
     }
 
+    // --- 画像 -----------------------------------------------------------------
+
+    @Test
+    fun `単独行のリンク記法は画像ブロックになる`() {
+        val blocks = parseMarkdownBlocks("![図の説明](attachments/zu.png)")
+        assertEquals(
+            MarkdownBlock.Image("図の説明", "attachments/zu.png", isEmbed = false),
+            blocks.single()
+        )
+    }
+
+    @Test
+    fun `単独行のwiki埋め込みは画像ブロックになる`() {
+        val blocks = parseMarkdownBlocks("![[Pasted image 20260802.png]]")
+        assertEquals(
+            MarkdownBlock.Image("", "Pasted image 20260802.png", isEmbed = true),
+            blocks.single()
+        )
+    }
+
+    @Test
+    fun `拡張子を持たないwiki埋め込みは画像として扱わない`() {
+        // ![[note]] は他ノートの埋め込みという別機能。画像として解決しにいってはいけない。
+        val blocks = parseMarkdownBlocks("![[別のノート]]")
+        assertTrue(blocks.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `md拡張子のwiki埋め込みも画像として扱わない`() {
+        val blocks = parseMarkdownBlocks("![[別のノート.md]]")
+        assertTrue(blocks.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `サイズヒントは判定から外すが原文のまま保持する`() {
+        // 埋め込みは `|` の前がファイル名（リンクの別名とは前後が逆）。
+        val blocks = parseMarkdownBlocks("![[zu.png|400]]")
+        assertEquals(
+            MarkdownBlock.Image("", "zu.png|400", isEmbed = true),
+            blocks.single()
+        )
+    }
+
+    @Test
+    fun `行内に他の文字があれば画像ブロックにしない`() {
+        val blocks = parseMarkdownBlocks("説明 ![図](zu.png) のように")
+        assertTrue(blocks.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `画像の後ろに括弧つきの文が続く行は画像ブロックにしない`() {
+        // `.*` の最長一致だと対象が "zu.png) と説明(補足" になる。迷ったら段落のままに倒す。
+        val blocks = parseMarkdownBlocks("![図](zu.png) と説明(補足)")
+        assertTrue(blocks.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `1行に画像が2つある場合は画像ブロックにしない`() {
+        val embeds = parseMarkdownBlocks("![[a.png]] ![[b.png]]")
+        assertTrue(embeds.single() is MarkdownBlock.Paragraph)
+        val links = parseMarkdownBlocks("![a](a.png) ![b](b.png)")
+        assertTrue(links.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `対象に閉じ括弧を含む行は画像ブロックにしない`() {
+        val blocks = parseMarkdownBlocks("![a](b)(c)")
+        assertTrue(blocks.single() is MarkdownBlock.Paragraph)
+    }
+
+    @Test
+    fun `リスト項目の画像は画像ブロックにしない`() {
+        val blocks = parseMarkdownBlocks("- ![図](zu.png)")
+        assertTrue(blocks.single() is MarkdownBlock.ListBlock)
+    }
+
+    @Test
+    fun `空行を挟まなくても画像行は段落を切る`() {
+        val blocks = parseMarkdownBlocks("説明の本文\n![[zu.png]]\n続きの本文")
+        assertEquals(3, blocks.size)
+        assertEquals(MarkdownBlock.Paragraph("説明の本文"), blocks[0])
+        assertEquals(MarkdownBlock.Image("", "zu.png", isEmbed = true), blocks[1])
+        assertEquals(MarkdownBlock.Paragraph("続きの本文"), blocks[2])
+    }
+
+    @Test
+    fun `altが空でも画像ブロックになる`() {
+        val blocks = parseMarkdownBlocks("![](zu.png)")
+        assertEquals(MarkdownBlock.Image("", "zu.png", isEmbed = false), blocks.single())
+    }
+
+    @Test
+    fun `拡張子を持たないリンク記法も画像として扱う`() {
+        // 外部URLは「ネットワーク権限が無いので出せない」という理由を出す必要があり、
+        // そのためには画像として認識されていなければならない。
+        val blocks = parseMarkdownBlocks("![外部](https://example.com/a)")
+        assertEquals(
+            MarkdownBlock.Image("外部", "https://example.com/a", isEmbed = false),
+            blocks.single()
+        )
+    }
+
     // --- 往復 -----------------------------------------------------------------
+
+    @Test
+    fun `画像は往復しても同じ型に戻る`() {
+        val content = "![図の説明](attachments/a%20b.png)\n\n![[zu.png|400]]\n\n![](x.png)"
+        val once = parseMarkdownBlocks(content)
+        val twice = parseMarkdownBlocks(blocksToMarkdown(once))
+        assertEquals(once, twice)
+    }
+
+    @Test
+    fun `画像として認識しなかった行も往復して同じ型に戻る`() {
+        // 段落へ倒した側も原文のまま往復する（倒したこと自体で情報が落ちない）。
+        val content = "![a](b)(c)\n\n![[a.png]] ![[b.png]]\n\n![図](zu.png) と説明(補足)"
+        val once = parseMarkdownBlocks(content)
+        val twice = parseMarkdownBlocks(blocksToMarkdown(once))
+        assertEquals(once, twice)
+        assertTrue(once.all { it is MarkdownBlock.Paragraph })
+    }
+
+    @Test
+    fun `画像のパスはAI入力から落ちない`() {
+        // レンダラを分離せず忠実復元を選んだので、AI入力は現状（原文どおり）を維持する。
+        val once = parseMarkdownBlocks("![図](attachments/zu.png)")
+        assertEquals("![図](attachments/zu.png)", blocksToMarkdown(once))
+    }
 
     @Test
     fun `番号と階層はblocksToMarkdownを往復しても同じ型に戻る`() {
