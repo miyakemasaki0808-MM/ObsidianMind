@@ -140,6 +140,9 @@ class VaultImageIndexStoreTest {
             store.resolve(ImageRequest.External("https://example.com/a.png"))
         )
         assertEquals(ImageResolution.Failed(NoteImageFailure.Empty), store.resolve(ImageRequest.Empty))
+        // 索引を要らない要求で走査を起こさない。外部画像しか無いノートを開いただけで
+        // Vault全走査が走ると、初回表示がそのぶん遅れる。
+        assertEquals(0, store.scanCount)
     }
 
     // --- 完全性 -------------------------------------------------------------

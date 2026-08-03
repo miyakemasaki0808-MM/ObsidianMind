@@ -1,13 +1,16 @@
 package com.example.newproject.domain
 
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ByteBudgetCacheTest {
 
     /** 大きさを外から決められる値。[Bitmap] の代わりにJVMで扱う。 */
@@ -108,6 +111,47 @@ class ByteBudgetCacheTest {
         val value = cache.getOrLoad("a", this) { attempts++; Sized("a", 10) }
 
         assertNotNull(caught)
+        assertEquals(Sized("a", 10), value)
+        assertEquals(2, attempts)
+    }
+
+    @Test
+    fun `要求元がキャンセルされても予算に計上される`() = runTest {
+        // 画像を素早くスクロールすると、復号の完了前に要求元だけが消える。
+        // 記帳を呼び出し側で行うと、この経路で予算計上も追い出しも永久に飛ぶ。
+        val cache = cache(100)
+        val gate = CompletableDeferred<Unit>()
+        val waiter = async { cache.getOrLoad("a", this@runTest) { gate.await(); Sized("a", 10) } }
+        advanceUntilIdle() // 要求が登録され、読み込みが走り出すところまで進める
+        waiter.cancel()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        // 復号は別スコープで完走するので、その結果が予算に載っていること。
+        cache.getOrLoad("a", this) { error("キャッシュから返るはず") }
+
+        assertEquals(10, cache.byteSize())
+        assertEquals(1, cache.count())
+    }
+
+    @Test
+    fun `要求元がキャンセルされた失敗は残り続けない`() = runTest {
+        // inFlight に完了済みの失敗が残ると、以後ずっとその失敗が返る。
+        val cache = cache(100)
+        val gate = CompletableDeferred<Unit>()
+        var attempts = 0
+        val waiter = async {
+            cache.getOrLoad("a", this@runTest) {
+                attempts++
+                gate.await()
+                throw IllegalStateException("失敗")
+            }
+        }
+        advanceUntilIdle()
+        waiter.cancel()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        val value = cache.getOrLoad("a", this) { attempts++; Sized("a", 10) }
+
         assertEquals(Sized("a", 10), value)
         assertEquals(2, attempts)
     }

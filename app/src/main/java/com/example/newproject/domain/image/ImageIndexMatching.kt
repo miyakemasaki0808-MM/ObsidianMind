@@ -8,8 +8,18 @@ import com.example.newproject.model.NoteImageFailure
 // 受け取って並べ替えるだけなので Android 型を持たない。
 // ---------------------------------------------------------------------------
 
-/** 走査で見つかった画像1件。[vaultRelativePath] はVaultルートからの相対パス。 */
-data class NoteImageEntry(val vaultRelativePath: String, val ref: DocumentRef)
+/**
+ * 走査で見つかった画像1件。[vaultRelativePath] はVaultルートからの相対パス。
+ *
+ * [lastModified] は**中身の世代**として使う。復号結果のキャッシュ鍵に含めないと、
+ * Obsidian側で同じファイルを上書きしても古い画像を返し続ける（参照が同じままなので）。
+ * プロバイダが返さなければ null。その場合は世代で見分けられないと分かる。
+ */
+data class NoteImageEntry(
+    val vaultRelativePath: String,
+    val ref: DocumentRef,
+    val lastModified: Long? = null
+)
 
 /**
  * Vault内の画像索引。
@@ -19,13 +29,13 @@ data class NoteImageEntry(val vaultRelativePath: String, val ref: DocumentRef)
  * 「画像がありません」と**断定して**しまう（→ N-1 段階0 と同じ型の誤り）。
  */
 internal class NoteImageIndex private constructor(
-    private val byPath: Map<String, DocumentRef>,
-    private val byFileName: Map<String, List<DocumentRef>>,
+    private val byPath: Map<String, NoteImageEntry>,
+    private val byFileName: Map<String, List<NoteImageEntry>>,
     val isComplete: Boolean
 ) {
-    internal fun pathMatch(vaultPath: String): DocumentRef? = byPath[vaultPath]
+    internal fun pathMatch(vaultPath: String): NoteImageEntry? = byPath[vaultPath]
 
-    internal fun fileNameMatches(fileName: String): List<DocumentRef> =
+    internal fun fileNameMatches(fileName: String): List<NoteImageEntry> =
         byFileName[fileName.lowercase()].orEmpty()
 
     internal companion object {
@@ -43,14 +53,14 @@ internal class NoteImageIndex private constructor(
          * プロバイダ依存だが、正規化後に衝突するのは実質同一ファイルなのでどちらでもよい。
          */
         internal fun of(entries: List<NoteImageEntry>, isComplete: Boolean): NoteImageIndex {
-            val byPath = LinkedHashMap<String, DocumentRef>(entries.size)
-            val byFileName = LinkedHashMap<String, MutableList<DocumentRef>>()
+            val byPath = LinkedHashMap<String, NoteImageEntry>(entries.size)
+            val byFileName = LinkedHashMap<String, MutableList<NoteImageEntry>>()
             for (entry in entries) {
                 val path = normalizeVaultImagePath(entry.vaultRelativePath)
                 if (path.isEmpty()) continue
-                byPath.putIfAbsent(path, entry.ref)
+                byPath.putIfAbsent(path, entry)
                 byFileName.getOrPut(path.substringAfterLast('/').lowercase()) { mutableListOf() }
-                    .add(entry.ref)
+                    .add(entry)
             }
             return NoteImageIndex(byPath, byFileName, isComplete)
         }
@@ -64,7 +74,8 @@ internal class NoteImageIndex private constructor(
  * 表示側が2つの型を突き合わせずに済むようにするため（→ note_image_rendering §9）。
  */
 internal sealed interface ImageResolution {
-    data class Resolved(val ref: DocumentRef) : ImageResolution
+    /** [contentVersion] は中身の世代（更新日時）。復号キャッシュの鍵に含める。 */
+    data class Resolved(val ref: DocumentRef, val contentVersion: Long? = null) : ImageResolution
 
     /**
      * 解決できなかった。
@@ -89,11 +100,12 @@ internal fun resolveImage(request: ImageRequest, index: NoteImageIndex): ImageRe
         is ImageRequest.Lookup -> {
             val exact = index.pathMatch(request.vaultPath)
             if (exact != null) {
-                ImageResolution.Resolved(exact)
+                ImageResolution.Resolved(exact.ref, exact.lastModified)
             } else {
                 val candidates = index.fileNameMatches(request.fileName)
                 when {
-                    candidates.size == 1 -> ImageResolution.Resolved(candidates.single())
+                    candidates.size == 1 ->
+                        candidates.single().let { ImageResolution.Resolved(it.ref, it.lastModified) }
                     candidates.size > 1 ->
                         ImageResolution.Failed(NoteImageFailure.Ambiguous(candidates.size))
                     // 見つからないときだけ完全性を見る。見つかったなら不完全でも正しい。

@@ -179,7 +179,8 @@ class NoteRepository {
                         vaultRelativePath = entry.vaultRelativePath,
                         ref = DocumentsContract
                             .buildDocumentUriUsingTree(vaultUri, entry.documentId)
-                            .toDocumentRef()
+                            .toDocumentRef(),
+                        lastModified = entry.lastModified
                     )
                 },
                 isComplete = scan.unreadableFolderPaths.isEmpty()

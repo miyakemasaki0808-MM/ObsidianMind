@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,13 +58,18 @@ internal fun MarkdownImage(block: MarkdownBlock.Image, loader: NoteImageLoader?)
 
     LaunchedEffect(block) { measurement = loader.measure(block) }
 
+    // 寸法が分かるまでは画面の高さを確保する。**誤るなら大きい側へ誤る** —
+    // 小さすぎる確保は後続ブロックを一瞬だけ画面へ入れ、最深到達点は下がらないので
+    // 誤った到達率がそのまま永続化される（→ note_image_rendering §6）。
+    val pendingHeightDp = LocalConfiguration.current.screenHeightDp
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val widthDp = maxWidth.value.toInt()
         val measured = measurement as? NoteImageMeasurement.Measured
         val heightDp = reservedImageHeightDp(
             widthDp = widthDp,
             sourceWidth = measured?.width ?: 0,
-            sourceHeight = measured?.height ?: 0
+            sourceHeight = measured?.height ?: 0,
+            pendingHeightDp = pendingHeightDp
         )
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
 
@@ -78,20 +84,23 @@ internal fun MarkdownImage(block: MarkdownBlock.Image, loader: NoteImageLoader?)
 
         when {
             failure != null -> NoteImageFailurePanel(block, failure, heightDp)
-            bitmap != null -> NoteImageBitmap(block, bitmap)
+            bitmap != null -> NoteImageBitmap(block, bitmap, heightDp)
             else -> NoteImagePlaceholder(heightDp)
         }
     }
 }
 
 @Composable
-private fun NoteImageBitmap(block: MarkdownBlock.Image, bitmap: ImageBitmap) {
+private fun NoteImageBitmap(block: MarkdownBlock.Image, bitmap: ImageBitmap, heightDp: Int) {
     Image(
         bitmap = bitmap,
         // alt が空ならファイル名を読む。ビューアなので画像は装飾ではなく内容。
-        contentDescription = noteImageContentDescription(block.alt, block.target),
-        contentScale = ContentScale.FillWidth,
-        modifier = Modifier.fillMaxWidth()
+        contentDescription = noteImageContentDescription(block.alt, noteImageDisplayName(block)),
+        // **確保したのと同じ高さで描く。** 高さを指定しないと縦横比なりの高さになり、
+        // 極端に横長な画像では最低高さを割って、成功した瞬間にブロックが縮む
+        // （＝確保していた意味が無くなり、到達率の水増しが起きる）。
+        contentScale = ContentScale.Fit,
+        modifier = Modifier.fillMaxWidth().height(heightDp.dp)
     )
 }
 
@@ -133,12 +142,12 @@ private fun NoteImageFailurePanel(
             Text(text = "⚠", color = OnSurfaceSubtle, fontSize = 16.sp)
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = noteImageFailureText(reason, block.target),
+                text = noteImageFailureText(reason, noteImageDisplayName(block)),
                 color = OnSurfaceSubtle,
                 fontSize = 14.sp,
                 lineHeight = 20.sp,
                 modifier = Modifier.semantics {
-                    contentDescription = noteImageFailureText(reason, block.target)
+                    contentDescription = noteImageFailureText(reason, noteImageDisplayName(block))
                 }
             )
         }

@@ -72,7 +72,14 @@ internal class VaultImageIndexStore(
      *
      * Vault未選択なら [NoteImageFailure.Unverifiable]（「無い」とは言えないため）。
      */
-    internal suspend fun resolve(request: ImageRequest): ImageResolution = mutex.withLock {
+    internal suspend fun resolve(request: ImageRequest): ImageResolution {
+        // **索引を要らない要求で走査を起こさない。** 外部URLと空は Vault を見るまでもなく
+        // 結論が出る。先に索引を作ると、外部画像しか無いノートを開いただけで全走査が走る。
+        if (request !is ImageRequest.Lookup) return resolveImage(request, NoteImageIndex.EMPTY_INCOMPLETE)
+        return resolveInVault(request)
+    }
+
+    private suspend fun resolveInVault(request: ImageRequest): ImageResolution = mutex.withLock {
         val handle = vault.current() ?: return ImageResolution.Failed(NoteImageFailure.Unverifiable)
         val generation = vaultGeneration()
         val index = indexFor(handle, generation)

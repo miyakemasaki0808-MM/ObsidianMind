@@ -215,6 +215,28 @@ class ImageLinkResolutionTest {
     }
 
     @Test
+    fun `解決結果に中身の世代を載せる`() {
+        // 復号キャッシュの鍵に含めるため。参照は上書きしても変わらないので、
+        // これが無いと同じファイルを更新しても古い画像を返し続ける。
+        // **照合の2つの枝それぞれで載せる。** 片方だけ確かめると、もう片方が
+        // 世代を落としても気づけない（実際、最初はファイル名一致の枝しか見ていなかった）。
+        val index = NoteImageIndex.of(
+            listOf(NoteImageEntry("a/zu.png", ref("doc-1"), lastModified = 4242L)),
+            isComplete = true
+        )
+        assertEquals(
+            "完全パス一致",
+            ImageResolution.Resolved(ref("doc-1"), contentVersion = 4242L),
+            resolveImage(imageRequestOf(link("a/zu.png")), index)
+        )
+        assertEquals(
+            "ファイル名一致",
+            ImageResolution.Resolved(ref("doc-1"), contentVersion = 4242L),
+            resolveImage(imageRequestOf(embed("zu.png")), index)
+        )
+    }
+
+    @Test
     fun `外部URLと空はそのまま結果へ通る`() {
         val index = index("a/zu.png" to "doc-1")
         assertEquals(

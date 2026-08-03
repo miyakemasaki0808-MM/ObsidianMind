@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.provider.DocumentsContract
+import com.example.newproject.domain.BoundedInputStream
 import com.example.newproject.domain.ByteBudgetCache
 import com.example.newproject.domain.image.ImageRequest
 import com.example.newproject.domain.image.ImageResolution
@@ -67,8 +68,16 @@ internal class NoteImageGateway(
         sizeOf = { it.allocationByteCount.toLong() }
     )
 
-    /** [targetWidthPx] を鍵に含めるのは、幅が変われば必要な解像度も変わるため。 */
-    private data class CacheKey(val ref: DocumentRef, val targetWidthPx: Int)
+    /**
+     * [targetWidthPx] を鍵に含めるのは、幅が変われば必要な解像度も変わるため。
+     * [contentVersion]（更新日時）を含めるのは、**同じファイルを上書きされたときに
+     * 古い画像を返し続けないため** — 参照は変わらないので、これが無いと見分けられない。
+     */
+    private data class CacheKey(
+        val ref: DocumentRef,
+        val contentVersion: Long?,
+        val targetWidthPx: Int
+    )
 
     /**
      * 画像ブロックを解決して復号する。
@@ -82,12 +91,13 @@ internal class NoteImageGateway(
         if (request is ImageRequest.Lookup && !isDecodableImageFileName(request.fileName)) {
             return NoteImageResult.Failed(NoteImageFailure.Unsupported)
         }
-        val ref = when (val resolution = indexStore.resolve(request)) {
-            is ImageResolution.Resolved -> resolution.ref
+        val resolved = when (val resolution = indexStore.resolve(request)) {
+            is ImageResolution.Resolved -> resolution
             is ImageResolution.Failed -> return NoteImageResult.Failed(resolution.reason)
         }
+        val ref = resolved.ref
         return try {
-            val key = CacheKey(ref, targetWidthPx)
+            val key = CacheKey(ref, resolved.contentVersion, targetWidthPx)
             NoteImageResult.Loaded(cache.getOrLoad(key, loadScope) { decode(ref, targetWidthPx) })
         } catch (e: CancellationException) {
             throw e
@@ -119,6 +129,9 @@ internal class NoteImageGateway(
         }
         return try {
             withContext(ioDispatcher) {
+                if (byteSizeOf(ref)?.let { it > NoteImageLimits.MAX_INPUT_BYTES } == true) {
+                    throw ImageDecodeFailure(NoteImageFailure.TooLarge)
+                }
                 val bounds = readBounds(ref)
                 rejectionForBounds(bounds.outWidth, bounds.outHeight)
                     ?.let { NoteImageMeasureResult.Failed(it) }
@@ -135,7 +148,12 @@ internal class NoteImageGateway(
 
     private fun readBounds(ref: DocumentRef): BitmapFactory.Options {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        openStream(ref) { BitmapFactory.decodeStream(it, null, bounds) }
+        val truncated = openStream(ref) {
+            BitmapFactory.decodeStream(it, null, bounds)
+            it.truncated
+        } == true
+        // 寸法すら読み切れないほど大きいなら「壊れている」ではなく「大きすぎる」。
+        if (truncated) throw ImageDecodeFailure(NoteImageFailure.TooLarge)
         return bounds
     }
 
@@ -150,13 +168,33 @@ internal class NoteImageGateway(
             val options = BitmapFactory.Options().apply {
                 inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, targetWidthPx)
             }
-            openStream(ref) { BitmapFactory.decodeStream(it, null, options) }
-                ?: throw ImageDecodeFailure(NoteImageFailure.Broken)
+            var truncated = false
+            val bitmap = openStream(ref) {
+                val decoded = BitmapFactory.decodeStream(it, null, options)
+                truncated = it.truncated
+                decoded
+            }
+            // 打ち切りは復号失敗として返ってくるので、理由を取り違えないよう先に見る。
+            if (truncated) throw ImageDecodeFailure(NoteImageFailure.TooLarge)
+            bitmap ?: throw ImageDecodeFailure(NoteImageFailure.Broken)
         }
 
-    private fun <T> openStream(ref: DocumentRef, read: (java.io.InputStream) -> T): T? =
+    /**
+     * 上限つきでストリームを開く。
+     *
+     * **メタデータのサイズ照会だけでは上限を強制できない。** `COLUMN_SIZE` を
+     * 返さないプロバイダでは照会が null になり、そのまま無制限に読み進んでしまう。
+     * 実際に読んだバイト数で打ち切るので、サイズを申告しない相手にも効く。
+     *
+     * 打ち切ったことは [BoundedInputStream.truncated] で分かる。
+     * `BitmapFactory` は途中で終わったストリームを「復号失敗」としか言わないので、
+     * **理由を [NoteImageFailure.TooLarge] へ直すために呼び出し側で見る**。
+     */
+    private fun <T> openStream(ref: DocumentRef, read: (BoundedInputStream) -> T): T? =
         try {
-            contentResolver.openInputStream(ref.toUri())?.use(read)
+            contentResolver.openInputStream(ref.toUri())?.use { raw ->
+                read(BoundedInputStream(raw, NoteImageLimits.MAX_INPUT_BYTES))
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

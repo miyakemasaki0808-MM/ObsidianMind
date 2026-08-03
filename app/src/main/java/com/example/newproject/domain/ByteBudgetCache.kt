@@ -57,35 +57,36 @@ internal class ByteBudgetCache<K : Any, V : Any>(
      * `async` をこのスコープへ載せることで、読み込みの寿命を要求元のコルーチンから切る。
      */
     internal suspend fun getOrLoad(key: K, scope: CoroutineScope, load: suspend () -> V): V {
-        mutex.withLock {
-            entries[key]?.let { return it }
-            inFlight[key]
-        }?.let { return it.await().getOrThrow() }
-
+        val created = CompletableDeferred<Result<V>>()
         val deferred = mutex.withLock {
-            // ロックを取り直す間に他が始めている可能性があるので、もう一度見る。
             entries[key]?.let { return it }
-            inFlight[key]?.let { return@withLock it }
-            val created = CompletableDeferred<Result<V>>()
-            inFlight[key] = created
+            inFlight.getOrPut(key) { created }
+        }
+        if (deferred === created) {
+            // **記帳は読み込み側で行う。** 要求元でやると、待っている間に
+            // 要求元がキャンセルされた瞬間（＝画像を素早くスクロールした瞬間）に
+            // `await()` が例外になり、取り下げも予算計上も飛ぶ。結果は
+            // 実行中のまま残り続けるので、以後そのキーは**予算の外で永久に生き**、
+            // 失敗なら**永久に同じ失敗を返す**。要求元の寿命に依存させてはいけない。
+            //
+            // `scope.async` はロックの外で始める（中で始めると、読み込みが
+            // 一度も中断しない場合に同じ Mutex を取りにいって止まりうる）。
             scope.async {
-                // **キャンセルも含めて必ず完了させる。** 握りつぶしてはいないが、
-                // ここで拾わないと先行者がキャンセルされたときに待ち手が永久に待つ。
-                // 例外は下の getOrThrow が呼び出し側へ投げ直す。
-                try {
-                    created.complete(Result.success(load()))
+                // キャンセルも含めて必ず完了させる。握りつぶさず、
+                // 例外は下の getOrThrow が要求元へ投げ直す。
+                val result = try {
+                    Result.success(load())
                 } catch (t: Throwable) {
-                    created.complete(Result.failure(t))
+                    Result.failure(t)
                 }
+                mutex.withLock {
+                    inFlight.remove(key)
+                    result.getOrNull()?.let { put(key, it) }
+                }
+                created.complete(result)
             }
-            created
         }
-        val result = deferred.await()
-        mutex.withLock {
-            inFlight.remove(key)
-            result.getOrNull()?.let { put(key, it) }
-        }
-        return result.getOrThrow()
+        return deferred.await().getOrThrow()
     }
 
     /** 予算を超えたぶんを、最も長く使われていないものから落とす。 */

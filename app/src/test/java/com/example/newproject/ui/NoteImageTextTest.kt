@@ -1,9 +1,11 @@
 package com.example.newproject.ui
 
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.ui.markdown.NOTE_IMAGE_MIN_HEIGHT_DP
 import com.example.newproject.ui.markdown.NOTE_IMAGE_PENDING_HEIGHT_DP
 import com.example.newproject.ui.markdown.noteImageContentDescription
+import com.example.newproject.ui.markdown.noteImageDisplayName
 import com.example.newproject.ui.markdown.noteImageFailureText
 import com.example.newproject.ui.markdown.reservedImageHeightDp
 import org.junit.Assert.assertEquals
@@ -29,6 +31,24 @@ class NoteImageTextTest {
         assertEquals(
             NOTE_IMAGE_PENDING_HEIGHT_DP,
             reservedImageHeightDp(widthDp = 400, sourceWidth = 0, sourceHeight = 0)
+        )
+    }
+
+    @Test
+    fun `寸法が分かるまでは渡された画面の高さを確保する`() {
+        // **誤るなら大きい側へ誤る。** 小さすぎる確保は後続ブロックを一瞬だけ
+        // 画面へ入れ、最深到達点は下がらないので誤った到達率が固着する。
+        assertEquals(
+            900,
+            reservedImageHeightDp(widthDp = 400, sourceWidth = 0, sourceHeight = 0, pendingHeightDp = 900)
+        )
+    }
+
+    @Test
+    fun `画面の高さが取れなくても最低高さは割らない`() {
+        assertEquals(
+            NOTE_IMAGE_MIN_HEIGHT_DP,
+            reservedImageHeightDp(widthDp = 400, sourceWidth = 0, sourceHeight = 0, pendingHeightDp = 0)
         )
     }
 
@@ -64,6 +84,26 @@ class NoteImageTextTest {
             sourceHeight = 1_000_000
         )
         assertTrue(height.toString(), height > 1_000_000)
+    }
+
+    // --- 参照先の表示名 -----------------------------------------------------
+
+    @Test
+    fun `埋め込みのサイズヒントは表示名に出さない`() {
+        val block = MarkdownBlock.Image("", "zu.png|400", isEmbed = true)
+        assertEquals("zu.png", noteImageDisplayName(block))
+    }
+
+    @Test
+    fun `パス付きの参照はファイル名だけを表示名にする`() {
+        val block = MarkdownBlock.Image("", "attachments/%E5%9B%B3.png", isEmbed = false)
+        assertEquals("図.png", noteImageDisplayName(block))
+    }
+
+    @Test
+    fun `外部URLはURLをそのまま表示名にする`() {
+        val url = "https://example.com/a.png"
+        assertEquals(url, noteImageDisplayName(MarkdownBlock.Image("", url, isEmbed = false)))
     }
 
     // --- 失敗の文面 ---------------------------------------------------------
