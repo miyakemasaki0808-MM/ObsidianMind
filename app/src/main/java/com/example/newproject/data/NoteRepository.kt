@@ -7,6 +7,8 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteMeta
+import com.example.newproject.model.isImageFileName
+import com.example.newproject.domain.image.NoteImageEntry
 import com.example.newproject.model.VaultScan
 import com.example.newproject.domain.toObsidianNoteTitle
 import android.content.ContentResolver
@@ -146,6 +148,41 @@ class NoteRepository {
                 vaultUri = vaultUri,
                 startId = DocumentsContract.getTreeDocumentId(vaultUri),
                 excludeFolderNames = setOf(ANNOTATION_FOLDER_NAME, READING_TRACE_FOLDER_NAME)
+            )
+        }
+
+    /**
+     * Vault全体の画像を収集する（画像索引用）。
+     *
+     * 除外するのは機能フォルダ（`_AI補記` / `_ReadingTraces`）と `.obsidian`。
+     * 前2つはアプリが作るものなのでユーザーのノートが参照する画像は入らず、
+     * `.obsidian` はテーマやプラグインの画像でノートの内容ではない。
+     *
+     * **完全性まで返すのは、ノート走査と同じ理由ではない。** ここでは
+     * 「索引に無い」を「Vaultに無い」と言い切ってよいかの判定に使う
+     * （→ `ImageResolution.Unverifiable`）。
+     */
+    suspend fun collectImages(contentResolver: ContentResolver, vaultUri: Uri): VaultImageScan =
+        withContext(Dispatchers.IO) {
+            val scan = traverseVaultFiles(
+                startId = DocumentsContract.getTreeDocumentId(vaultUri),
+                excludeFolderNames = setOf(
+                    ANNOTATION_FOLDER_NAME,
+                    READING_TRACE_FOLDER_NAME,
+                    OBSIDIAN_CONFIG_FOLDER_NAME
+                ),
+                accept = ::isImageFileName
+            ) { documentId -> queryChildren(contentResolver, vaultUri, documentId) }
+            VaultImageScan(
+                entries = scan.entries.map { entry ->
+                    NoteImageEntry(
+                        vaultRelativePath = entry.vaultRelativePath,
+                        ref = DocumentsContract
+                            .buildDocumentUriUsingTree(vaultUri, entry.documentId)
+                            .toDocumentRef()
+                    )
+                },
+                isComplete = scan.unreadableFolderPaths.isEmpty()
             )
         }
 

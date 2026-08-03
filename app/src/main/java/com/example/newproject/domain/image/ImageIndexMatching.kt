@@ -8,7 +8,7 @@ import com.example.newproject.model.DocumentRef
 // ---------------------------------------------------------------------------
 
 /** 走査で見つかった画像1件。[vaultRelativePath] はVaultルートからの相対パス。 */
-internal data class NoteImageEntry(val vaultRelativePath: String, val ref: DocumentRef)
+data class NoteImageEntry(val vaultRelativePath: String, val ref: DocumentRef)
 
 /**
  * Vault内の画像索引。

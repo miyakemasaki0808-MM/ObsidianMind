@@ -45,13 +45,13 @@ internal data class SafChildren(
  * 「読めなかったサブツリー配下だけ候補から外す」と精密に書けるようにするため。
  * 1フラグにすると、どこか1フォルダを読み損ねただけで掃除が全面停止する。
  */
-internal data class MarkdownScan(
-    val entries: List<MarkdownEntry>,
+internal data class VaultFileScan(
+    val entries: List<VaultFileEntry>,
     val unreadableFolderPaths: Set<String>
 )
 
-/** 走査で見つかった .md 1件。[vaultRelativePath] はVaultルートからの相対パス。 */
-internal data class MarkdownEntry(
+/** 走査で見つかったファイル1件。[vaultRelativePath] はVaultルートからの相対パス。 */
+internal data class VaultFileEntry(
     val documentId: String,
     val name: String,
     val vaultRelativePath: String,
@@ -63,7 +63,27 @@ internal fun joinVaultPath(parent: String, name: String): String =
     if (parent.isEmpty()) name else "$parent/$name"
 
 /**
- * [startId] 配下をBFSで走査して .md を集め、それぞれにVaultルートからの相対パスを付ける。
+ * [startId] 配下をBFSで走査して .md を集める。詳細は [traverseVaultFiles]。
+ *
+ * **受理条件だけを固定した [traverseVaultFiles] の別名**である。画像索引が
+ * 同じ走査を別の条件で使うため、歩き方と受理条件を分けた。
+ */
+internal fun traverseMarkdownPaths(
+    startId: String,
+    startPath: String = "",
+    excludeFolderNames: Set<String> = emptySet(),
+    listChildren: (String) -> SafChildren
+): VaultFileScan = traverseVaultFiles(
+    startId = startId,
+    startPath = startPath,
+    excludeFolderNames = excludeFolderNames,
+    accept = ::isMarkdownFile,
+    listChildren = listChildren
+)
+
+/**
+ * [startId] 配下をBFSで走査し、[accept] が真を返したファイルを集めて
+ * それぞれにVaultルートからの相対パスを付ける。
  * [excludeFolderNames] に一致するフォルダは潜らない。
  *
  * [startPath] は [startId] 自身までの相対パス。Vaultルートから始めるなら空文字、
@@ -72,14 +92,19 @@ internal fun joinVaultPath(parent: String, name: String): String =
  * documentId の訪問済み集合を持つのは、プロバイダが循環を返した場合に
  * 相対パスとメモリが無限に伸びるのを防ぐため（パスを持たない従来の走査では
  * 問題にならなかった）。
+ *
+ * **[accept] を引数にしたのは画像索引のため。** 歩き方（BFS・除外・循環対策・
+ * 完全性の記録）はノートと画像で完全に同じで、違うのは受理条件だけだった。
+ * 走査を2つ書くと、片方だけ直す形の失敗（→ lessons L14）が確実に起きる。
  */
-internal fun traverseMarkdownPaths(
+internal fun traverseVaultFiles(
     startId: String,
     startPath: String = "",
     excludeFolderNames: Set<String> = emptySet(),
+    accept: (String) -> Boolean,
     listChildren: (String) -> SafChildren
-): MarkdownScan {
-    val result = mutableListOf<MarkdownEntry>()
+): VaultFileScan {
+    val result = mutableListOf<VaultFileEntry>()
     val unreadable = mutableSetOf<String>()
     val visited = mutableSetOf(startId)
     val queue = ArrayDeque<Pair<String, String>>()
@@ -96,9 +121,9 @@ internal fun traverseMarkdownPaths(
                     if (child.name !in excludeFolderNames && visited.add(child.documentId)) {
                         queue.add(child.documentId to joinVaultPath(path, child.name))
                     }
-                isMarkdownFile(child.name) ->
+                accept(child.name) ->
                     result.add(
-                        MarkdownEntry(
+                        VaultFileEntry(
                             documentId = child.documentId,
                             name = child.name,
                             vaultRelativePath = joinVaultPath(path, child.name),
@@ -108,5 +133,5 @@ internal fun traverseMarkdownPaths(
             }
         }
     }
-    return MarkdownScan(entries = result, unreadableFolderPaths = unreadable)
+    return VaultFileScan(entries = result, unreadableFolderPaths = unreadable)
 }
