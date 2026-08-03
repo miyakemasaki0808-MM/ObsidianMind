@@ -1,6 +1,7 @@
 package com.example.newproject.domain.image
 
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteImageFailure
 
 // ---------------------------------------------------------------------------
 // Vault画像索引の組み立てと照合。走査（SAF）は data 側が行い、ここは結果を
@@ -56,35 +57,22 @@ internal class NoteImageIndex private constructor(
     }
 }
 
-/** 画像1つの解決結果。 */
+/**
+ * 画像1つの解決結果。
+ *
+ * 失敗の語彙は [NoteImageFailure]（`model`）を使う。**復号の失敗と同じ型にまとめる**のは、
+ * 表示側が2つの型を突き合わせずに済むようにするため（→ note_image_rendering §9）。
+ */
 internal sealed interface ImageResolution {
     data class Resolved(val ref: DocumentRef) : ImageResolution
 
-    /** 索引は完全で、そのうえで見つからなかった。**「Vaultに無い」と言ってよい。** */
-    object NotFound : ImageResolution
-
     /**
-     * 同名のファイルが複数あり、どれを指すか決められない。
+     * 解決できなかった。
      *
-     * **1つ選んで出さない。** それらしい答えを黙って出すと、誤りが誤りとして見えず
-     * 報告もされない（→ note_image_rendering §4）。
+     * **曖昧なときに1つ選んで返さない。** それらしい答えを黙って出すと、
+     * 誤りが誤りとして見えず報告もされない（→ note_image_rendering §4）。
      */
-    data class Ambiguous(val candidateCount: Int) : ImageResolution
-
-    /** 外部URL。ネットワーク権限が無いので取得しない。 */
-    data class External(val url: String) : ImageResolution
-
-    /** 参照先が空。 */
-    object Empty : ImageResolution
-
-    /**
-     * 索引が不完全なので**「無い」と断定できない**。
-     *
-     * [NotFound] と分けるのは、走査で読めなかったフォルダがあったときに
-     * 「Vaultにありません」と誤って言い切らないため。表示側は
-     * 「確認できませんでした」に相当する文言を出す。
-     */
-    object Unverifiable : ImageResolution
+    data class Failed(val reason: NoteImageFailure) : ImageResolution
 }
 
 /**
@@ -96,8 +84,8 @@ internal sealed interface ImageResolution {
  */
 internal fun resolveImage(request: ImageRequest, index: NoteImageIndex): ImageResolution =
     when (request) {
-        is ImageRequest.External -> ImageResolution.External(request.url)
-        is ImageRequest.Empty -> ImageResolution.Empty
+        is ImageRequest.External -> ImageResolution.Failed(NoteImageFailure.External(request.url))
+        is ImageRequest.Empty -> ImageResolution.Failed(NoteImageFailure.Empty)
         is ImageRequest.Lookup -> {
             val exact = index.pathMatch(request.vaultPath)
             if (exact != null) {
@@ -106,10 +94,11 @@ internal fun resolveImage(request: ImageRequest, index: NoteImageIndex): ImageRe
                 val candidates = index.fileNameMatches(request.fileName)
                 when {
                     candidates.size == 1 -> ImageResolution.Resolved(candidates.single())
-                    candidates.size > 1 -> ImageResolution.Ambiguous(candidates.size)
+                    candidates.size > 1 ->
+                        ImageResolution.Failed(NoteImageFailure.Ambiguous(candidates.size))
                     // 見つからないときだけ完全性を見る。見つかったなら不完全でも正しい。
-                    !index.isComplete -> ImageResolution.Unverifiable
-                    else -> ImageResolution.NotFound
+                    !index.isComplete -> ImageResolution.Failed(NoteImageFailure.Unverifiable)
+                    else -> ImageResolution.Failed(NoteImageFailure.NotFound)
                 }
             }
         }

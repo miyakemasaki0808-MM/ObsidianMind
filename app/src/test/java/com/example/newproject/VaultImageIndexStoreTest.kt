@@ -6,6 +6,7 @@ import com.example.newproject.domain.image.ImageRequest
 import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageEntry
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteImageFailure
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -78,7 +79,7 @@ class VaultImageIndexStoreTest {
         val handle = FakeVaultHandle(imageScan = scan())
         val store = store(FakeVaultBrowser(handle))
 
-        assertEquals(ImageResolution.NotFound, store.resolve(lookup("new.png")))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.NotFound), store.resolve(lookup("new.png")))
         clock += ttl
         handle.imageScan = scan("new.png" to "doc-new")
 
@@ -135,10 +136,10 @@ class VaultImageIndexStoreTest {
         val store = store(FakeVaultBrowser(FakeVaultHandle(imageScan = scan())))
 
         assertEquals(
-            ImageResolution.External("https://example.com/a.png"),
+            ImageResolution.Failed(NoteImageFailure.External("https://example.com/a.png")),
             store.resolve(ImageRequest.External("https://example.com/a.png"))
         )
-        assertEquals(ImageResolution.Empty, store.resolve(ImageRequest.Empty))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Empty), store.resolve(ImageRequest.Empty))
     }
 
     // --- 完全性 -------------------------------------------------------------
@@ -148,7 +149,7 @@ class VaultImageIndexStoreTest {
         val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", isComplete = false))
         val store = store(FakeVaultBrowser(handle))
 
-        assertEquals(ImageResolution.Unverifiable, store.resolve(lookup("nai.png")))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Unverifiable), store.resolve(lookup("nai.png")))
     }
 
     @Test
@@ -169,14 +170,14 @@ class VaultImageIndexStoreTest {
         val handle = FakeVaultHandle(imageScan = scan(), failure = IllegalStateException("SAF失敗"))
         val store = store(FakeVaultBrowser(handle))
 
-        assertEquals(ImageResolution.Unverifiable, store.resolve(lookup("a.png")))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Unverifiable), store.resolve(lookup("a.png")))
     }
 
     @Test
     fun `Vault未選択なら不在と断定しない`() = runTest {
         val store = store(FakeVaultBrowser(handle = null))
 
-        assertEquals(ImageResolution.Unverifiable, store.resolve(lookup("a.png")))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Unverifiable), store.resolve(lookup("a.png")))
         assertEquals(0, store.scanCount)
     }
 }

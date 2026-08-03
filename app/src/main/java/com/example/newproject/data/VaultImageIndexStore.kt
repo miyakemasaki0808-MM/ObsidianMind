@@ -5,6 +5,7 @@ import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageEntry
 import com.example.newproject.domain.image.NoteImageIndex
 import com.example.newproject.domain.image.resolveImage
+import com.example.newproject.model.NoteImageFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,7 +47,7 @@ internal const val OBSIDIAN_CONFIG_FOLDER_NAME = ".obsidian"
  * ## 不完全な索引もキャッシュする
  *
  * 設計書の初版は「不完全な索引はキャッシュしない」だったが、**段階2で
- * [ImageResolution.Unverifiable] を型として分けた時点で不要になった。**
+ * [NoteImageFailure.Unverifiable] を型として分けた時点で不要になった。**
  * キャッシュを禁じていたのは「無い」と断定させないためで、その保証は
  * いま型が持っている。禁じたままにすると、読めないフォルダが1つあるだけで
  * **画像1枚ごとにVault全走査**が走る（ノートは画像を何枚も持つ）。
@@ -69,10 +70,10 @@ internal class VaultImageIndexStore(
     /**
      * 要求を解決する。索引が無ければ作り、失敗して索引が古ければ1回だけ作り直す。
      *
-     * Vault未選択なら [ImageResolution.Unverifiable]（「無い」とは言えないため）。
+     * Vault未選択なら [NoteImageFailure.Unverifiable]（「無い」とは言えないため）。
      */
     internal suspend fun resolve(request: ImageRequest): ImageResolution = mutex.withLock {
-        val handle = vault.current() ?: return ImageResolution.Unverifiable
+        val handle = vault.current() ?: return ImageResolution.Failed(NoteImageFailure.Unverifiable)
         val generation = vaultGeneration()
         val index = indexFor(handle, generation)
         val first = resolveImage(request, index)
@@ -116,8 +117,10 @@ internal class VaultImageIndexStore(
         return index
     }
 
+    /** 「無い／断定できない」で外した状態。作り直して再試行する価値があるのはこの2つだけ。 */
     private fun ImageResolution.isMiss(): Boolean =
-        this is ImageResolution.NotFound || this is ImageResolution.Unverifiable
+        this is ImageResolution.Failed &&
+            (reason is NoteImageFailure.NotFound || reason is NoteImageFailure.Unverifiable)
 
     internal companion object {
         /** `collectAllNotesCached` と同じ 60 秒。走査の重さが同程度なので揃える。 */

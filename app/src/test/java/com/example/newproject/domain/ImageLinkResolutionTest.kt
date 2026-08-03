@@ -10,6 +10,7 @@ import com.example.newproject.domain.image.percentDecode
 import com.example.newproject.domain.image.resolveImage
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteImageFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -181,7 +182,7 @@ class ImageLinkResolutionTest {
     fun `同名が複数あるときは解決せず候補数を返す`() {
         val index = index("a/zu.png" to "doc-1", "b/zu.png" to "doc-2")
         val result = resolveImage(imageRequestOf(embed("zu.png")), index)
-        assertEquals(ImageResolution.Ambiguous(2), result)
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Ambiguous(2)), result)
     }
 
     @Test
@@ -195,7 +196,7 @@ class ImageLinkResolutionTest {
     fun `完全な索引で見つからなければ不在と断定する`() {
         val index = index("a/zu.png" to "doc-1", isComplete = true)
         val result = resolveImage(imageRequestOf(embed("nai.png")), index)
-        assertEquals(ImageResolution.NotFound, result)
+        assertEquals(ImageResolution.Failed(NoteImageFailure.NotFound), result)
     }
 
     @Test
@@ -203,7 +204,7 @@ class ImageLinkResolutionTest {
         // 読めなかったフォルダがある状態で「Vaultにありません」と言い切ってはいけない。
         val index = index("a/zu.png" to "doc-1", isComplete = false)
         val result = resolveImage(imageRequestOf(embed("nai.png")), index)
-        assertEquals(ImageResolution.Unverifiable, result)
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Unverifiable), result)
     }
 
     @Test
@@ -217,9 +218,9 @@ class ImageLinkResolutionTest {
     fun `外部URLと空はそのまま結果へ通る`() {
         val index = index("a/zu.png" to "doc-1")
         assertEquals(
-            ImageResolution.External("https://example.com/a.png"),
+            ImageResolution.Failed(NoteImageFailure.External("https://example.com/a.png")),
             resolveImage(imageRequestOf(link("https://example.com/a.png")), index)
         )
-        assertEquals(ImageResolution.Empty, resolveImage(imageRequestOf(link("")), index))
+        assertEquals(ImageResolution.Failed(NoteImageFailure.Empty), resolveImage(imageRequestOf(link("")), index))
     }
 }
