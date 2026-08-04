@@ -84,6 +84,15 @@ android {
     }
 }
 
+// `ReviewFindingsLedgerTest` は docs/ を読む。Gradle は既定でそれを入力と見なさないため、
+// **文書だけを直したときにテストが UP-TO-DATE で飛ぶ**（＝受付漏れの検査が発火しない）。
+// 実際、導入時に変異検証が1件も落ちずこの穴が判明した。入力として明示する。
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.layout.projectDirectory.dir("docs"))
+        .withPropertyName("docsForLedgerTest")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.03")
     implementation(composeBom)
