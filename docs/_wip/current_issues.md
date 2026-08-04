@@ -7,9 +7,9 @@
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
 > （実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。
 > **完了の経緯は残さない** — 経緯を引きたくなったら、それは下記の記録側が足りていないサインと考える。
-> 記録の行き先は別にある — 何をいつ変えたかは [change_history.md](../change_history.md)、
-> 今どうなっているかは [source_code_analysis.md](../source_code_analysis.md)、
-> なぜそうしたかは [design/](../design/)、繰り返し現れた教訓は [lessons.md](../lessons.md)。
+> 記録の行き先は別にある — 何をいつ変えたかは [change_history.md](../dev/change_history.md)、
+> 今どうなっているかは [source_code_analysis.md](../dev/source_code_analysis.md)、
+> なぜそうしたかは [design/](../dev/design/)、繰り返し現れた教訓は [lessons.md](../dev/lessons.md)。
 >
 > **順序と計画は [roadmap.md](roadmap.md) が持つ。** ここには「何が問題か」だけを書き、
 > 「いつ・どの順でやるか」は書かない。両方に書くと必ず片方が古くなる。
@@ -45,7 +45,7 @@
 - **IMG-1〜3** は画像表示（N-3）の外部レビュー2巡目で見つかった。1巡目の指摘7件へ修正を入れたが、
   **3件は受理条件まで満たしていなかった**（1件は部分解消、2件は目的未達）。
 - **TRACE-1〜3 と AI-3 は、2026-08-01 の総評（No.9）で指摘されながら起票されていなかった。**
-  総評を文書へ追記した時点で台帳へ落とす運用（[README](../README.md) §4 の2）が働かず、
+  総評を文書へ追記した時点で台帳へ落とす運用（[README](../dev/document_map.md) §4 の2）が働かず、
   **2日間どこにも追跡されていなかった。** コードを当たって4件とも未対応であることを確認済み。
 
 **「テストが緑」は受理条件を満たしたことを意味しない。** IMG-1〜3 はいずれも
@@ -80,7 +80,7 @@ Markdownノート本体ではない。それでも「不在は証明ではない
 ## IMG-1. 寸法未確定の画像がある間の進捗報告が到達率を水増しする
 
 **画像表示（N-3）の設計が最重要とした保護が、まだ閉じていない。**
-→ [design/note_image_rendering.md](../design/note_image_rendering.md) §6
+→ [design/note_image_rendering.md](../dev/design/note_image_rendering.md) §6
 
 - **現状:** 寸法が取れるまでのプレースホルダは画面1枚ぶんの高さを確保する。
   これは「初期オフセットが0なら直後のブロックを隠す」ことしか保証せず、**元画像の高さの上限ではない。**
@@ -198,7 +198,7 @@ Markdownノート本体ではない。それでも「不在は証明ではない
   （旧 VERIFY-4）。
 - **部分的な前進:** 補記の保存経路だけは 2026-07-31 に `AnnotationDocumentGateway` として切り出し、
   失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。
-- **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../design/saf_boundary_gateway.md)。
+- **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../dev/design/saf_boundary_gateway.md)。
   残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
 - **規模感:** 大。**前提は2つとも揃ったので、残るのは実テストの中身そのものだけ。**
 
@@ -208,7 +208,7 @@ Markdownノート本体ではない。それでも「不在は証明ではない
   非対応端末と一時的な状態取得失敗を区別できない。
 - **対応候補:** AI非対応・モデル未準備・一時エラーのUXを要約・検索・クイズ・補記で統一する。
   **ReadingTrace は横展開の対象外**（意識させない機能なので、失敗は黙って劣化させるのが仕様）。
-  → [lessons.md](../lessons.md) L4
+  → [lessons.md](../dev/lessons.md) L4
 - **規模感:** 中。
 
 ## A11Y-1. バッジの塗りが下部ナビ帯の上で判別できない
@@ -227,7 +227,7 @@ Markdownノート本体ではない。それでも「不在は証明ではない
   グラデーション上のボタン（`buttonOutlineOnGradient`）で同じ手が成立するのは面積が大きいからで、
   **同じ解き方が小さい部品へはそのまま移らない。** 再提案するなら輪郭線以外の道を先に検討する。
 - **見落としの構造:** 「塗りには必ず対の前景を持つ」は決めたが、**塗り自身が載る面を数えていなかった**。
-  → [lessons.md](../lessons.md) L9
+  → [lessons.md](../dev/lessons.md) L9
 - **規模感:** 小〜中（値を決めるだけなら小。ナビ帯の色に触るなら中）。
 
 ## REL-1. R8とリリース署名が未設定
@@ -250,17 +250,17 @@ Markdownノート本体ではない。それでも「不在は証明ではない
 **「上げない」と判断した**（下記）。残っているのは「古い」という状態だけで、**現時点で実害は無い。**
 **着手の契機は「新版に必要な機能が入ったとき」であって、新版が出たことではない。**
 
-- **方針は 2026-08-01 に確定した** → [design/dependency_policy.md](../design/dependency_policy.md)。
+- **方針は 2026-08-01 に確定した** → [design/dependency_policy.md](../dev/design/dependency_policy.md)。
   更新の単位（7グループ）・棚卸しの手順と契機・各グループの確認範囲を決めてある。
   3チェックは `disable` から **`informational`（hint）へ変えた** — 素のまま有効化すると12件が
   Error になり `lintDebug` タスクが失敗するが、`informational` なら
   **「0 errors, 0 warnings, 12 hints」で成功し、12件はレポートに残る**。
   ゲートに載せずに催促だけ残せる。
 - **残っている問題:** 方針ができても**依存は12件古いまま**で、1件も上げていない。距離の内訳は
-  [dependency_policy.md](../design/dependency_policy.md) §4 のスナップショットにある。
+  [dependency_policy.md](../dev/design/dependency_policy.md) §4 のスナップショットにある。
   優先して見るべきは2つ。
   - **`com.google.mlkit:genai-prompt` 1.0.0-beta2 → beta4 は当面着手しない（2026-08-01 決定）**
-    → [design/dependency_policy.md](../design/dependency_policy.md) §5。公開APIの削除はゼロでソース互換だが、
+    → [design/dependency_policy.md](../dev/design/dependency_policy.md) §5。公開APIの削除はゼロでソース互換だが、
     **`maxOutputTokens` の未指定時の既定値が 256 → 4096 へ変わる。**
     実測の `getTokenLimit()` が 4,352 なので入力に許されるのは256トークンだけになり、
     **最小の読書痕跡要約（349）すら通らない。** つまり**そのまま上げると8経路すべてが止まる。**
@@ -279,13 +279,13 @@ Markdownノート本体ではない。それでも「不在は証明ではない
 - **現状:** `_ReadingTraces/` はフラットな1階層で、セッション中1回だけ子一覧を全列挙して
   key→参照の索引を作る。容量は問題にならない（1ファイル最大3.3KB・2,000ノートで約1.4MB）が、
   **列挙コストはファイル数に比例**する。孤児削除（手動）は入ったが**押されるとは限らない**ため、
-  ファイル数は単調増加**しうる**（→ [design/reflect_reading_trace.md](../design/reflect_reading_trace.md) §14）。
+  ファイル数は単調増加**しうる**（→ [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md) §14）。
   遠いプロバイダ（Google Drive 等）ほど効く。
 - **対応候補:** 削除ではなく**分割**で解く。ファイル名が `sha256Hex(相対パス)` なので、
   **先頭1桁で16フォルダへ分ける**と1件の照合で列挙する件数が 1/16 になる。
   引く側はキーから所属フォルダを計算できるので探索は要らない。
   **生きた痕跡を1つも消さずに性能だけ守れる**のが孤児削除に対する優位点。
-  → [design/reflect_reading_trace.md](../design/reflect_reading_trace.md) §13 判断14
+  → [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md) §13 判断14
 - **着手の契機:** 実機で列挙の遅さが体感できたとき。既存ファイルの移行を伴うので、それまで動かさない。
 - **規模感:** 中（移行と実機確認を伴う）。
 

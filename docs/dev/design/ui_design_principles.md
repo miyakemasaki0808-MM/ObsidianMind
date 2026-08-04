@@ -62,7 +62,7 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 
 - **AAA（7:1）は目指さない。** AA を全面的に満たすことを完了条件とする
 - **アプリはOSのダークモードに追従しない**（切り替えの主導権はオプション画面）
-  → [AppTheme.kt](../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt)
+  → [AppTheme.kt](../../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt)
 
 ---
 
@@ -111,11 +111,11 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 ## 5. 検証
 
 数値はすべて
-[`AppColorContrastTest`](../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt)
+[`AppColorContrastTest`](../../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt)
 が強制する。**記録ではなく強制**（旧値へ戻す変異でテストが落ちることを確認する）
 → [theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4。
 
-[`VibrantTextUsageTest`](../../app/src/test/java/com/example/newproject/ui/theme/VibrantTextUsageTest.kt)
+[`VibrantTextUsageTest`](../../../app/src/test/java/com/example/newproject/ui/theme/VibrantTextUsageTest.kt)
 が、表に載らない書き方（画面からの `onVibrant` 直接使用・文字色への任意の `copy(alpha)`）を
 ソース走査で禁じる。**許可リストへ足したら、その面の比を `AppColorContrastTest` へ足す。**
 

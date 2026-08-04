@@ -33,7 +33,7 @@ Reflectの理想を一文で置くと「**ノートの内容を説明するAIで
 
 ## 判断3: 一段目スコア＝サリエンス（タイトル別・直近見出し別）＋構造的重み
 
-既存 `rankByScore`（[RelatedCandidateRanking.kt](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateRanking.kt)）は採点を委ねる並べ替えの器。蒸留の重要度は別途定義する。純・文間中心性（TextRank型）は**不採用**（繰り返しの一般文が上位・1回きりの結論が沈む＋O(N²)）。
+既存 `rankByScore`（[RelatedCandidateRanking.kt](../../../app/src/main/java/com/example/newproject/domain/RelatedCandidateRanking.kt)）は採点を委ねる並べ替えの器。蒸留の重要度は別途定義する。純・文間中心性（TextRank型）は**不採用**（繰り返しの一般文が上位・1回きりの結論が沈む＋O(N²)）。
 
 ### チャンク定義
 - **見出し間を基本単位**。見出しが無い or チャンクが長すぎる（チャンク文字上限超）場合は**固定文字数窓で非重複分割**（ハイブリッド）
@@ -81,7 +81,7 @@ score = 1.0 * dice(文, タイトル)
 ## 判断5: 文ID選択プロトコル＋境界付き緩いIDパーサー
 
 - アプリが候補文に `S001…` のIDを付与 → AIには**IDだけ**返させる
-- Nanoは前置き（「はい、IDは：S001, S005」）を吐くため完全一致は期待せず、**`DistillResponseParser` で緩く抽出**。既存 [RelatedCandidateId.kt](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt)（`C\d{1,2}` 抽出）・`QuizResponseParser`（前置き除去）の実証済みパターンを流用
+- Nanoは前置き（「はい、IDは：S001, S005」）を吐くため完全一致は期待せず、**`DistillResponseParser` で緩く抽出**。既存 [RelatedCandidateId.kt](../../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt)（`C\d{1,2}` 抽出）・`QuizResponseParser`（前置き除去）の実証済みパターンを流用
 - **抽出regexは前後境界必須**（`S\d{3}` 単体は `S0012` から `S001` を誤抽出する）：
   ```
   (?i)(?<![A-Z0-9])S\d{3}(?![A-Z0-9])
@@ -114,7 +114,7 @@ score = 1.0 * dice(文, タイトル)
 
 ## 判断8: 復旧レコードは `noBackupFilesDir`・起動時判定・v1最小復旧UI
 
-アプリは `allowBackup="true"`（[AndroidManifest.xml](../../app/src/main/AndroidManifest.xml)）のため `noBackupFilesDir` に置く（自動バックアップ対象化を防ぐ）。vault の `_AI補記` は用途が違うため使わない。
+アプリは `allowBackup="true"`（[AndroidManifest.xml](../../../app/src/main/AndroidManifest.xml)）のため `noBackupFilesDir` に置く（自動バックアップ対象化を防ぐ）。vault の `_AI補記` は用途が違うため使わない。
 
 復旧レコード：`対象URI / 元本文ハッシュ / 期待書込後ハッシュ / 元本文 / 書き込みフェーズ / 作成日時`。**未解決レコードは1件のみ**・**未解決中は他ノートの保存を禁止**・破損レコードは検知して確認扱い。
 
@@ -135,7 +135,7 @@ score = 1.0 * dice(文, タイトル)
 
 ## 判断10: ノート識別を状態に持ち、requestId で切替をガード
 
-現 `NoteState.Success(title, content)`（[NoteUiState.kt](../../app/src/main/java/com/example/newproject/model/NoteUiState.kt)）はURIもハッシュも持たず、タイトルは非一意。
+現 `NoteState.Success(title, content)`（[NoteUiState.kt](../../../app/src/main/java/com/example/newproject/model/NoteUiState.kt)）はURIもハッシュも持たず、タイトルは非一意。
 
 - `NoteState.Success` に **URI＋基準ハッシュ**を追加、または別 `CurrentNoteIdentity` として保持
 - ViewModelで現在アクティブな **`requestId`（or identity）** を保持し、生成完了コールバックで **`if (currentIdentity != result.identity) return`**（PR #31 の全画面遷移×`scrollToItem` と同種の状態不整合を防ぐ）

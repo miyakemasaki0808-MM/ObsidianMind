@@ -26,7 +26,7 @@ L23（台帳に長く残った課題ほど、着手時には前提が古い）�
 ### 訂正1: 「画像は alt テキストが抜粋から丸ごと落ちている」は誤り
 
 `![alt](img.png)` は単独行だとどのブロック規則にもマッチせず
-[`parseMarkdownBlocks`](../../app/src/main/java/com/example/newproject/domain/markdown/MarkdownBlocks.kt) の
+[`parseMarkdownBlocks`](../../../app/src/main/java/com/example/newproject/domain/markdown/MarkdownBlocks.kt) の
 段落へ落ちる。`blocksToMarkdown` は段落を原文のまま返すので、
 **alt は既にAI入力へ届いている。しかもパス文字列という無意味な文字列まで一緒に予算を食っている。**
 
@@ -35,7 +35,7 @@ L23（台帳に長く残った課題ほど、着手時には前提が古い）�
 
 ### 訂正2: 現在の見え方は「何も出ない」ではない
 
-[`inlineMarkdown`](../../app/src/main/java/com/example/newproject/ui/markdown/InlineMarkdown.kt) が
+[`inlineMarkdown`](../../../app/src/main/java/com/example/newproject/ui/markdown/InlineMarkdown.kt) が
 `[alt](path)` をリンクとして拾うため、**`!` が裸で残った上に alt がリンク色＋下線で出る**。
 `![](path)`（alt が空）だと**「!」1文字だけ**が本文に落ちている。
 `![[img.png]]` も同様に `!` ＋ `img.png` が下線付きで出る。
@@ -78,7 +78,7 @@ Vault に現れる画像記法は3種類ある。
 「まずパスで辿り、駄目なら索引」という二段構えは、速い経路を足しているように見えて
 **索引が必ず要る以上は純粋な追加コスト**にしかならない。
 
-走査の骨格は既にある — [`traverseMarkdownPaths`](../../app/src/main/java/com/example/newproject/data/VaultPathTraversal.kt) が
+走査の骨格は既にある — [`traverseMarkdownPaths`](../../../app/src/main/java/com/example/newproject/data/VaultPathTraversal.kt) が
 **全フォルダを歩いて `.md` 以外を捨てている**だけなので、受理条件を引数へ出して一般化すれば
 画像も同じ走査で拾える。既存呼び出しは `::isMarkdownFile` を渡すだけで等価になる
 （**等価であることをテストで固定してから**一般化する。この関数は孤児掃除が依存している）。
@@ -94,7 +94,7 @@ Vault に現れる画像記法は3種類ある。
 1. **既定設定では相対パスが生成されない。** Obsidian の「New link format」の既定は
    「Shortest path when possible」で、相対パス形式は opt-in である。
 2. **表示中ノートの相対パスがUIに存在しない。**
-   [`NoteState.Success`](../../app/src/main/java/com/example/newproject/model/state/NoteState.kt) は
+   [`NoteState.Success`](../../../app/src/main/java/com/example/newproject/model/state/NoteState.kt) は
    `title` / `content` / `targetUri` しか持たない。しかも `openNote`（さがす・関連経由）では
    相対パスが**表示時点で未確定**で、表示後に `bindReadingTracePath` が非同期に確定させ、
    その値は**読書痕跡のセッションにしか渡らない**。
@@ -118,7 +118,7 @@ Vault に現れる画像記法は3種類ある。
 **サイズヒントの `\|` は「割る」だけでなく「どちら側を取るか」に注意が要る。**
 リンク `[[note\|別名]]` は表示名が後ろなので `last()` だが、
 埋め込み `[[file\|400]]` は**ファイル名が前**なので `first()` になる。
-[`inlineMarkdown`](../../app/src/main/java/com/example/newproject/ui/markdown/InlineMarkdown.kt) の
+[`inlineMarkdown`](../../../app/src/main/java/com/example/newproject/ui/markdown/InlineMarkdown.kt) の
 既存コードは `last()` なので、**そのまま流用すると必ず外れる**。
 
 **wiki埋め込みは画像拡張子を持つものだけを画像として扱う。**
@@ -165,7 +165,7 @@ AI入力からのパス除去が両立しなくなる**。
 
 **分離して得られるものを先に数えた。**
 
-- 予算内のノート: [`buildNoteExcerpt`](../../app/src/main/java/com/example/newproject/domain/NoteExcerptBuilder.kt) は
+- 予算内のノート: [`buildNoteExcerpt`](../../../app/src/main/java/com/example/newproject/domain/NoteExcerptBuilder.kt) は
   `content.length <= budget` なら**原文を無加工で返す**ので、分離しても**何も変わらない**
 - 予算超過のノート: 今日も**既にパスが残っている**（段落として原文どおり往復するため）。
   分離して初めて減る
@@ -185,7 +185,7 @@ AI入力からのパス除去が両立しなくなる**。
 > 出力が1バイトも変わらないという意味ではない**ので、ここに明記しておく。
 
 短いノートと長いノートで扱いが違う非対称は、
-[`buildNoteExcerpt`](../../app/src/main/java/com/example/newproject/domain/NoteExcerptBuilder.kt) の
+[`buildNoteExcerpt`](../../../app/src/main/java/com/example/newproject/domain/NoteExcerptBuilder.kt) の
 KDocが既に「超過した入力だけを圧縮する仕様」として引き受けているものと同じで、新しく持ち込むものではない。
 
 > **再検討の契機は症状。** 「画像だらけのノートで要約が明らかに崩れる」が出たら、そのとき分離する。
@@ -196,7 +196,7 @@ KDocが既に「超過した入力だけを圧縮する仕様」として引き�
 
 **これが本機能で最も見落としやすい欠陥である。** 見た目の話ではなく、**永続データの話**になる。
 
-[`visibleFractionOfBlock`](../../app/src/main/java/com/example/newproject/ui/ReadingProgressGeometry.kt) は
+[`visibleFractionOfBlock`](../../../app/src/main/java/com/example/newproject/ui/ReadingProgressGeometry.kt) は
 
 ```kotlin
 if (itemSize <= 0) return 1f   // 高さが測れていないブロックは全可視扱い
@@ -209,7 +209,7 @@ if (itemSize <= 0) return 1f   // 高さが測れていないブロックは全�
 
 1. 読み込み待ちの画像ブロックの高さが0だと、**そのブロックは「全部読んだ」と報告される**
 2. 高さ0なので画面に一度に入るブロック数が増え、**`deepestBlockIndex` が実際より先へ進む**
-3. [`ReadingTraceController.onReadingProgress`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt) は
+3. [`ReadingTraceController.onReadingProgress`](../../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt) は
    **「スクロールを戻しても最深到達点は下げない」**ので、
    **画像が読み込まれた瞬間の水増しがそのセッションに固着し、サイドカーへ永続化される**
 
@@ -276,7 +276,7 @@ if (itemSize <= 0) return 1f   // 高さが測れていないブロックは全�
 （`cancelNoteScopedJobs()` にも `withNoteScopedReset()` にも載せない）。
 `ReadingTraceCleanupController` と同じ扱いで、無効化の契機は Vault 切替だけである。
 
-**世代の配線は既存と同じ。** [`NoteSessionCoordinator.vaultGeneration`](../../app/src/main/java/com/example/newproject/controller/NoteSessionCoordinator.kt) は
+**世代の配線は既存と同じ。** [`NoteSessionCoordinator.vaultGeneration`](../../../app/src/main/java/com/example/newproject/controller/NoteSessionCoordinator.kt) は
 `var ... private set` で**外から読めるので**、Annotation / Search / Cleanup と同じく `() -> Long` を渡すだけでよい。
 新しい配線機構は要らない。
 
