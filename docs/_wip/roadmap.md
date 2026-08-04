@@ -123,7 +123,7 @@ Nowを閉じた後、再会体験を濃くする拡張（X-2）と、長期運�
 
 > **上の「効果」は品質再評価の軸別スコアから引いた見込みで、測定ではない**（→ [lessons.md](../dev/lessons.md) L12）。
 > 総合の上がり幅だけを根拠に順序を決めない。現在の軸別評価は
-> [source_code_quality_review.md](../review/README.md) を正とする。
+> [レビュー一覧](../review/README.md) を正とする。
 
 ---
 

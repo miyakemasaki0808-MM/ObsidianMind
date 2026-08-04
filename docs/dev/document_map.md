@@ -18,7 +18,7 @@
 | 問い | 置き場 | 寿命 |
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
-| **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[source_code_quality_review.md](../review/README.md) | スナップショット（日付で更新） |
+| **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[review/](../review/README.md) | スナップショット（日付で更新） |
 | **なぜそうしたか** | [design/](design/) | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](../_wip/) | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md) | 累積（番号を振り直さず末尾へ追加）。**§0 だけは差し替える**（効かなければ打ち切る） |
@@ -114,7 +114,7 @@
 > 廃棄時に索引ごと直せばよく、項目IDに依存していないため壊れ方が局所で済む。
 > **禁じているのは「番号への依存」であって「存在への言及」ではない。**
 >
-> **例外は [source_code_quality_review.md](../review/README.md) のみ。** Codexが書く外部レビューなので
+> **例外は [レビュー](../review/README.md) のみ。** Codexが書く外部レビューなので
 > こちらから手を入れない。`_wip/` 廃棄時にリンク切れが残るが、本書は当時のスナップショットなので許容する。
 
 | 文書 | 役割 |
@@ -144,7 +144,7 @@
 |---|---|
 | プロジェクトを初めて把握する | [source_code_analysis.md](source_code_analysis.md) §1〜§4 → [design/architecture.md](design/architecture.md) |
 | 次に何を作るか決める | [_wip/roadmap.md](../_wip/roadmap.md) → [_wip/current_issues.md](../_wip/current_issues.md) → [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
-| 品質改善に着手する | [source_code_quality_review.md](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
+| 品質改善に着手する | [レビュー一覧](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
 | 既存コードを触る前に背景を知る | 下の逆引き表 → 該当する `design/` |
 | バグを踏んだ | [bugfix_reports.md](bugfix_reports.md)（同じ型か確認） |
 

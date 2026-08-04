@@ -4,14 +4,14 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ネットワーク権限は持たない。ユーザーのVault（Obsidian の `.md` 群）を SAF 経由で読み書きする。
 
 > **この文書の位置づけ = 憲法。** 常時効かせる原則・参照先・禁止事項・完了条件だけを置く。
-> 背景と判断理由は `docs/design/`（法律）、作業手順は Skill（作業標準書）が持つ。**ここに詳細を書き足さない。**
+> 背景と判断理由は `docs/dev/design/`（法律）、作業手順は Skill（作業標準書）が持つ。**ここに詳細を書き足さない。**
 
 ## 最優先文書
 
 @docs/dev/design/architecture.md
 
 上記は全変更に効く横断規約なので常時読み込む。**機能固有の変更では、着手前に対応する設計書を必ず読むこと。**
-どれを読むかは [docs/README.md](docs/dev/document_map.md) §5 の逆引き表で引く。主要なものだけ再掲する。
+どれを読むかは [docs/dev/document_map.md](docs/dev/document_map.md) §5 の逆引き表で引く。主要なものだけ再掲する。
 
 | 触るところ | 先に読む |
 |---|---|
@@ -21,7 +21,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 | `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/dev/design/reflect_reading_trace.md) / [reflect_distill](docs/dev/design/reflect_distill.md) |
 | `ui/vigilith/` | [character_vigilith](docs/dev/design/character_vigilith.md) → [vigilith_in_app](docs/dev/design/vigilith_in_app.md) |
 
-**繰り返し現れた構造的な教訓は [docs/lessons.md](docs/dev/lessons.md)。**
+**繰り返し現れた構造的な教訓は [docs/dev/lessons.md](docs/dev/lessons.md)。**
 **着手前に全文を読まない。** 代わりに、**diffが出来上がった後**に
 [§0 の5問](docs/dev/lessons.md#0-diffができたら自分の編集へ当てる5問)を自分の編集へ当て、
 **該当した行の出典だけ**を読む。L1〜L28 は事例アーカイブであって、日常の運用には出てこない。
@@ -83,10 +83,10 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 残さないと、**当てたのか、たまたま問題が出なかったのかを後から区別できない**
 （§0 自体の効き目を3回で評価するため、この1行が唯一の証拠になる）。
 
-1. [docs/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する
-2. 設計判断や試行錯誤があった変更だけ、対応する `docs/design/*.md` に追記する（自明な変更は履歴1行のみ）
+1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する
+2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/design/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
-4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/lessons.md](docs/dev/lessons.md) へ追記する（番号は振り直さず末尾へ足す）
+4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) へ追記する（番号は振り直さず末尾へ足す）
 
 ## 文書の扱い
 
