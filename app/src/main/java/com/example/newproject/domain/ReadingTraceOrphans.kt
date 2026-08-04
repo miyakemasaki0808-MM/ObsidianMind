@@ -166,8 +166,46 @@ internal fun parentVaultPath(vaultRelativePath: String): String =
  *
  * 区切りを足して比較するのは前方一致の取り違えを避けるため
  * （`ideas2` が `ideas` の配下と見なされないように）。
+ *
+ * **ルート（空文字）は全パスの祖先として特別扱いする。** 区切りを足す比較では
+ * `"ideas".startsWith("/")` になって偽を返すため、**ルートが読めなかったのに
+ * ネストしたパスが「読めている」と判定されていた**。走査がルートで止まっていれば
+ * 配下は1件も見えていないので、そこから不在を結論してはいけない。
  */
 internal fun isUnderUnreadableFolder(folderPath: String, unreadableFolderPaths: Set<String>): Boolean =
     unreadableFolderPaths.any { unreadable ->
-        folderPath == unreadable || folderPath.startsWith("$unreadable/")
+        unreadable.isEmpty() || folderPath == unreadable || folderPath.startsWith("$unreadable/")
     }
+
+/**
+ * 再走査でノートを確かめた結果。
+ *
+ * **「無い」と「確かめられなかった」を畳まない。** 畳むと、
+ * 走査が失敗しただけの状態を「削除してよい」と読んでしまう
+ * （→ 生きた痕跡を消す）。逆に「確認できなかった」を「生き返った」へ
+ * 畳むと、候補が一覧から消えて再試行できなくなる。
+ */
+internal enum class NotePresence { PRESENT, MISSING, INDETERMINATE }
+
+/**
+ * 削除の直前に、対象のノートが本当に不在かを確かめる。
+ *
+ * **洗い出しと削除で同じ判定を使うためにここへ置く。** 同じ意味の判定が
+ * 2箇所にあると、片方だけ強い状態が生まれる（実際そうなっていた —
+ * 洗い出しはルート読取失敗を止められたのに、削除直前だけ素通りしていた）。
+ *
+ * @param keyOf 相対パスから痕跡キーを作る関数。`data` 層の実装を注入して、この関数を純粋に保つ。
+ */
+internal fun notePresenceAfterRescan(
+    targetKey: String,
+    targetVaultRelativePath: String,
+    notes: List<String>,
+    unreadableFolderPaths: Set<String>,
+    keyOf: (String) -> String
+): NotePresence = when {
+    notes.any { keyOf(it) == targetKey } -> NotePresence.PRESENT
+    // **不在を結論する前に、読めなかった枝を先に見る。**
+    isUnderUnreadableFolder(parentVaultPath(targetVaultRelativePath), unreadableFolderPaths) ->
+        NotePresence.INDETERMINATE
+    else -> NotePresence.MISSING
+}

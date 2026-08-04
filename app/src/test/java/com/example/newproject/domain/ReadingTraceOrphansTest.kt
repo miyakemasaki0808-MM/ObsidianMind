@@ -326,6 +326,62 @@ class ReadingTraceOrphansTest {
         assertTrue(!isUnderUnreadableFolder("ideas2", unreadable))
         assertTrue(!isUnderUnreadableFolder("", unreadable))
     }
+
+    // ルート（空文字）は全パスの祖先。区切りを足す比較では表現できず、
+    // ネストしたパスが「読めている」と誤判定されていた。
+    @Test
+    fun `an unreadable root covers every path`() {
+        val unreadable = setOf("")
+
+        assertTrue(isUnderUnreadableFolder("", unreadable))
+        assertTrue(isUnderUnreadableFolder("ideas", unreadable))
+        assertTrue(isUnderUnreadableFolder("ideas/2026", unreadable))
+    }
+
+    // --- 削除直前の再確認（三値）---------------------------------------------
+
+    private fun presence(path: String, notes: List<String>, unreadable: Set<String>) =
+        notePresenceAfterRescan(
+            targetKey = "key:$path",
+            targetVaultRelativePath = path,
+            notes = notes,
+            unreadableFolderPaths = unreadable,
+            keyOf = { "key:$it" }
+        )
+
+    @Test
+    fun `a note that is present is reported as present`() {
+        assertEquals(NotePresence.PRESENT, presence("ideas/a.md", listOf("ideas/a.md"), emptySet()))
+    }
+
+    @Test
+    fun `a note missing from a fully readable scan is reported as missing`() {
+        assertEquals(NotePresence.MISSING, presence("ideas/a.md", listOf("other/b.md"), emptySet()))
+    }
+
+    @Test
+    fun `a note under an unreadable folder is indeterminate, not missing`() {
+        assertEquals(
+            NotePresence.INDETERMINATE,
+            presence("ideas/a.md", emptyList(), setOf("ideas"))
+        )
+    }
+
+    @Test
+    fun `an unreadable root makes every nested note indeterminate`() {
+        // ここが生きた痕跡を消していた経路。
+        assertEquals(NotePresence.INDETERMINATE, presence("ideas/a.md", emptyList(), setOf("")))
+        assertEquals(NotePresence.INDETERMINATE, presence("a.md", emptyList(), setOf("")))
+    }
+
+    @Test
+    fun `presence wins over an unreadable branch`() {
+        // 見つかっているなら、他の枝が読めなくても答えは確定している。
+        assertEquals(
+            NotePresence.PRESENT,
+            presence("ideas/a.md", listOf("ideas/a.md"), setOf(""))
+        )
+    }
 }
 
 private fun info(

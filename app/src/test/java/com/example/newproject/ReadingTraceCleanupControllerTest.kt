@@ -265,6 +265,63 @@ class ReadingTraceCleanupControllerTest {
         assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
     }
 
+    // **ルートが読めないときに、ネストした候補を消してしまう経路があった。**
+    // `isUnderUnreadableFolder("ideas", setOf(""))` が偽を返し、削除直前だけ
+    // 安全規則がすり抜けていた（洗い出し側は同じ状況を止められていた）。
+    @Test
+    fun `does not delete a nested candidate when the vault root became unreadable`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.vault.handle!!.vaultScan = VaultScan(emptyList(), unreadableFolderPaths = setOf(""))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+    }
+
+    // 確かめられなかった候補は**一覧に残す**。消すと再試行できない。
+    @Test
+    fun `keeps an unverifiable candidate in the list and reports it apart from failures`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.vault.handle!!.vaultScan = VaultScan(emptyList(), unreadableFolderPaths = setOf("ideas"))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(listOf("ideas/a.md"), success.orphans.map { it.vaultRelativePath })
+        // 「消せなかった」ではなく「確かめられなかった」として数える。
+        assertEquals(1, success.unverifiedCount)
+        assertEquals(0, success.deleteFailureCount)
+    }
+
+    // 生き返っていた場合だけ、消さずに候補から外す（確認できた結果なので残す必要がない）。
+    @Test
+    fun `removes a candidate from the list only when the note actually reappeared`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.vault.handle!!.vaultScan = VaultScan(listOf(noteFile("a.md").copy(vaultRelativePath = "ideas/a.md")))
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertTrue(success.orphans.isEmpty())
+        assertEquals(0, success.unverifiedCount)
+        assertTrue(env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+    }
+
     // 画面に出ていないキーを渡されても消さない（一覧に固定する規律）。
     @Test
     fun `ignores keys that are not in the displayed candidate list`() = runTest {
