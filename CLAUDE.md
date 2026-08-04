@@ -8,7 +8,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 
 ## 最優先文書
 
-@docs/design/architecture.md
+@docs/dev/design/architecture.md
 
 上記は全変更に効く横断規約なので常時読み込む。**機能固有の変更では、着手前に対応する設計書を必ず読むこと。**
 どれを読むかは [docs/README.md](docs/dev/document_map.md) §5 の逆引き表で引く。主要なものだけ再掲する。
@@ -91,7 +91,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 ## 文書の扱い
 
 - **`docs/review/` 配下の `2026-*.md` は書き換えない。** Codexが評価者として書く外部レビューで、当時のスナップショットとして保存する。様式（`review_template.md`）と受付簿（`findings.md`）はこちらが持つ
-- **恒久文書（`docs/` 直下・`design/`）から `_wip/` を参照しない。** 参照は `_wip/` → 恒久文書の一方通行。恒久側で課題に触れるときはリンクや項目番号ではなく**内容そのもの**を書く（`_wip/` はリリース時に廃棄するため）
+- **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
 - `design/` の各文書には `**状態:**` 行を置く
 
 ## 作業の進め方

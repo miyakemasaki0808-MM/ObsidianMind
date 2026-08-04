@@ -68,7 +68,7 @@ android {
         // かといって `disable` にすると指摘ごと消え、更新を誰も催促しなくなる。
         // `informational` は両方を避ける — 実測で「0 errors, 0 warnings, 12 hints」／
         // BUILD SUCCESSFUL となり、12件はレポートに残る（`--offline` でも同じ）。
-        // 棚卸しの手順は docs/design/dependency_policy.md
+        // 棚卸しの手順は docs/dev/design/dependency_policy.md
         informational += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion", "GradleDependency")
         // `OldTargetApi` はコードではなく実行環境（Lintが把握する「最新API」の定義）に
         // 依存する。ローカルでは compileSdk 36.1 / targetSdk 36 で警告ゼロだったが、
