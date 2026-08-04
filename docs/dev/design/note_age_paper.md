@@ -21,7 +21,7 @@
 
 ## 1. 判断1: 年代の判定材料は `lastModified`。ただし意味を読み替える
 
-SAF は**作成日を持たない**。[`SafDocuments.kt`](../../app/src/main/java/com/example/newproject/data/SafDocuments.kt) が取得しているのは
+SAF は**作成日を持たない**。[`SafDocuments.kt`](../../../app/src/main/java/com/example/newproject/data/SafDocuments.kt) が取得しているのは
 `COLUMN_LAST_MODIFIED` だけで、これは既に `NoteFile.lastModified` として流れている。
 frontmatter は各所で**除去**されるだけで、`created:` のようなキーを読む処理は存在しない。
 
@@ -101,7 +101,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 パーセンタイルをそのまま 0.0〜1.0 として色を補間する案を採らない。
 
-- **止まった値をテストで固定できない。** 既存の [`AppColorContrastTest`](../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt) は
+- **止まった値をテストで固定できない。** 既存の [`AppColorContrastTest`](../../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt) は
   トークンの実値に対して比を強制する形になっている（[theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4）。
   連続値だと「この比が最悪ケースか」を実装から導けず、**記録ではなく強制**という既存の性質が崩れる
 - **実機で検証しづらい。** 「このノートはどの色になるべきか」を目視で確認できない
@@ -115,7 +115,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 **これが本設計で最も重要な制約である。**
 
-[`AppColors.kt`](../../app/src/main/java/com/example/newproject/ui/theme/AppColors.kt) は、弱い文字トークンの基準面を
+[`AppColors.kt`](../../../app/src/main/java/com/example/newproject/ui/theme/AppColors.kt) は、弱い文字トークンの基準面を
 `panel` ではなく **`panelChip #EEF0FF`（文字が載る面のうち最も暗い）**と定めている。
 これは「同じトークンが別の面へ載った瞬間に基準を割る」ことを防ぐための床であり、
 **紙の地色がこの床を下回ると、既存の全テキストトークンが一斉に基準を割る。**
@@ -213,7 +213,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 | **算出結果**（`notePaperTone`） | 開いているノート1件の段階 | **ノート単位** | `NoteUiState`（契約2箇所へ登録） |
 
 **分布に新しい状態を足さなかった。** Vault全体の `lastModified` は
-[`NoteRepository`](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt) が返す `NoteFile.lastModified` として
+[`NoteRepository`](../../../app/src/main/java/com/example/newproject/data/NoteRepository.kt) が返す `NoteFile.lastModified` として
 **既に `cachedNotes`（TTL付きのVault単位キャッシュ）に載っている**。追加のSAF走査も、
 新しいフィールドも要らない。`saveVault()` がVault切替で空にするので、無効化も既存の経路に乗る。
 

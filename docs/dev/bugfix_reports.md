@@ -23,7 +23,7 @@
 ## #1 吹き出しボタンがクイズ画面から戻ると無反応になる（古いクロージャ固定）
 
 **日付:** 2026-07（Claude Fable 5 のコーディングで混入）
-**該当:** `SectionFab`（[NoteReaderTab.kt](../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt) の `SectionFab` / `pointerInput(Unit)` + `detectTapGestures`）
+**該当:** `SectionFab`（[NoteReaderTab.kt](../../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt) の `SectionFab` / `pointerInput(Unit)` + `detectTapGestures`）
 **関連設計:** [design/section_ai_chat.md](design/section_ai_chat.md)
 
 ### 症状
@@ -74,7 +74,7 @@ val currentOnTap by rememberUpdatedState(onTap)
 ## #2 折りたたみ解除後に全画面ノートを閉じられない（閉じる処理のsuspend依存）
 
 **日付:** 2026-07-21（PR #31 の修正①で混入 → 本セッションで修正）
-**該当:** `FullscreenNoteScreen` の `leaveWith`（[NoteReaderTab.kt](../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt)）
+**該当:** `FullscreenNoteScreen` の `leaveWith`（[NoteReaderTab.kt](../../app/src/main/java/com/example/newproject/ui/screen/NoteReaderTab.kt)）
 **関連設計:** [design/note_fullscreen.md](design/note_fullscreen.md)
 
 ### 症状
@@ -132,7 +132,7 @@ val leaveWith: (() -> Unit) -> Unit = { action ->
 ## #3 多択クイズの正解解釈が崩れた応答で失敗する（防御的パースの非対称）
 
 **日付:** 2026-07-22（Codex のクイズ改善で混入 → 本セッションのレビューで修正）
-**該当:** `parseQuizResponse` の多択パス（[QuizResponseParser.kt](../app/src/main/java/com/example/newproject/domain/QuizResponseParser.kt)）
+**該当:** `parseQuizResponse` の多択パス（[QuizResponseParser.kt](../../app/src/main/java/com/example/newproject/domain/QuizResponseParser.kt)）
 **関連設計:** [design/section_ai_chat.md](design/section_ai_chat.md)
 
 ### 症状

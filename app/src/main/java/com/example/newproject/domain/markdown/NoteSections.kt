@@ -131,6 +131,9 @@ internal fun blocksToMarkdown(blocks: List<MarkdownBlock>): String =
         when (block) {
             is MarkdownBlock.Heading -> "#".repeat(block.level) + " " + block.text
             is MarkdownBlock.Paragraph -> block.text
+            // 原文の記法へ忠実に戻す。alt だけにするとAI入力から意味が落ち、
+            // 再パースで段落になって往復も壊れる（→ note_image_rendering §5）。
+            is MarkdownBlock.Image -> block.sourceText()
             is MarkdownBlock.ListBlock -> block.items.joinToString("\n") { item ->
                 val checkbox = item.checked?.let { if (it) "[x] " else "[ ] " } ?: ""
                 LIST_INDENT.repeat(item.depth) + item.marker.render() + " " + checkbox + item.text

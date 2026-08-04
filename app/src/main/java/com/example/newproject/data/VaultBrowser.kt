@@ -70,6 +70,15 @@ interface VaultHandle {
      */
     suspend fun collectAllNotes(): VaultScan
 
+    /**
+     * Vault全体の画像を**完全性つきで**集める。
+     *
+     * ノートの走査（[collectAllNotes]）と同じ歩き方で受理条件だけが違う。
+     * **別のパスとして持つのは寿命が違うから** — ノート一覧は Rediscover が
+     * 常時使うが、画像索引は画像を含むノートを開いたときにだけ要る。
+     */
+    suspend fun collectImages(): VaultImageScan
+
     /** `_AI補記` 配下の一覧。フォルダが無ければ空。 */
     suspend fun listAnnotationFiles(): List<NoteFile>
 
@@ -108,6 +117,9 @@ private class SafVaultHandle(
 
     override suspend fun collectAllNotes(): VaultScan =
         repository.collectNotes(contentResolver, vaultUri)
+
+    override suspend fun collectImages(): VaultImageScan =
+        repository.collectImages(contentResolver, vaultUri)
 
     override suspend fun listAnnotationFiles(): List<NoteFile> =
         repository.listAnnotationFiles(contentResolver, vaultUri)

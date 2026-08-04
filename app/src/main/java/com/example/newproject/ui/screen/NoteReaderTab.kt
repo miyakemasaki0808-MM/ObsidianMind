@@ -11,6 +11,7 @@ import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.ui.vigilith.VigilithNoteAction
@@ -79,6 +80,7 @@ internal fun NoteReaderTab(
      * 解析中は null で、その間は本文を描かない（描くと描画側がMainで解析し直してしまう）。
      */
     sectionModel: NoteSectionModel?,
+    imageLoader: NoteImageLoader?,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onSuggestionTap: (String) -> Unit,
@@ -239,7 +241,8 @@ internal fun NoteReaderTab(
                         scaleY = scale
                     },
                 listState = listState,
-                precomputedBlocks = sectionModel?.blocks
+                precomputedBlocks = sectionModel?.blocks,
+                imageLoader = imageLoader
             )
         }
 

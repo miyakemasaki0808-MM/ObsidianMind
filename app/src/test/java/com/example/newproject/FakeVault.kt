@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.data.SavedAnnotation
 import com.example.newproject.data.VaultBrowser
+import com.example.newproject.data.VaultImageScan
 import com.example.newproject.data.VaultHandle
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
@@ -38,6 +39,8 @@ class FakeVaultHandle(
     var annotationFiles: List<NoteFile> = emptyList(),
     /** [collectAllNotes] が返すVault全体の走査結果。**完全性ごと差し替えられる。** */
     var vaultScan: VaultScan = VaultScan(emptyList()),
+    /** [collectImages] が返す画像走査。**完全性ごと差し替えられる。** */
+    var imageScan: VaultImageScan = VaultImageScan(emptyList(), isComplete = true),
     /** null 以外にすると、その操作が例外を投げる。 */
     var failure: Exception? = null,
     /** [deleteDocument] の戻り値。false は「SAFプロバイダが消せなかった」を表す。 */
@@ -53,6 +56,8 @@ class FakeVaultHandle(
         private set
     var collectAllCount = 0
         private set
+    var collectImagesCount = 0
+        private set
     val deletedRefs = mutableListOf<DocumentRef>()
 
     override suspend fun listTopLevelFolders(): List<NoteFolder> {
@@ -67,6 +72,13 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return vaultScan
+    }
+
+    override suspend fun collectImages(): VaultImageScan {
+        collectImagesCount++
+        beforeEachCall()
+        failure?.let { throw it }
+        return imageScan
     }
 
     override suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile> {

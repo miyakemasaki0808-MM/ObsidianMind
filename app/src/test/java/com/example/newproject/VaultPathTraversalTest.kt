@@ -4,6 +4,7 @@ import com.example.newproject.data.ChildDoc
 import com.example.newproject.data.SafChildren
 import com.example.newproject.data.joinVaultPath
 import com.example.newproject.data.traverseMarkdownPaths
+import com.example.newproject.data.traverseVaultFiles
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -251,6 +252,70 @@ class VaultPathTraversalTest {
         val result = traverseMarkdownPaths(startId = "root", listChildren = tree::list)
 
         assertEquals(emptySet<String>(), result.unreadableFolderPaths)
+    }
+
+    // --- 受理条件の一般化 ---------------------------------------------------
+    //
+    // traverseMarkdownPaths は traverseVaultFiles に受理条件を固定しただけの別名になった。
+    // 一般化で歩き方（除外・完全性）が変わっていないことをここで固定する。
+
+    @Test
+    fun `markdown traversal is the generalized walk with the markdown predicate`() {
+        val tree = FakeTree(
+            mapOf(
+                "root" to listOf(dir("d1", "ideas"), file("f1", "top.md")),
+                "d1" to listOf(file("f2", "habit.md"), file("f3", "zu.png"), file("f4", "memo.txt"))
+            )
+        )
+
+        val specialized = traverseMarkdownPaths(startId = "root", listChildren = tree::list)
+        val generalized = traverseVaultFiles(
+            startId = "root",
+            accept = { it.lowercase().endsWith(".md") },
+            listChildren = tree::list
+        )
+
+        assertEquals(generalized, specialized)
+        assertEquals(setOf("top.md", "ideas/habit.md"), specialized.entries.map { it.vaultRelativePath }.toSet())
+    }
+
+    @Test
+    fun `the same walk collects images when the predicate changes`() {
+        val tree = FakeTree(
+            mapOf(
+                "root" to listOf(dir("d1", "attachments"), file("f1", "top.md")),
+                "d1" to listOf(file("f2", "zu.png"), file("f3", "memo.txt"))
+            )
+        )
+
+        val images = traverseVaultFiles(
+            startId = "root",
+            accept = { it.lowercase().endsWith(".png") },
+            listChildren = tree::list
+        )
+
+        assertEquals(listOf("attachments/zu.png"), images.entries.map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `unreadable folders are reported the same regardless of the predicate`() {
+        val tree = FakeTree(
+            mapOf(
+                "root" to listOf(dir("d1", "ideas"), dir("d2", "attachments")),
+                "d1" to listOf(file("f1", "habit.md"))
+            ),
+            unreadable = setOf("d2")
+        )
+
+        val notes = traverseMarkdownPaths(startId = "root", listChildren = tree::list)
+        val images = traverseVaultFiles(
+            startId = "root",
+            accept = { it.lowercase().endsWith(".png") },
+            listChildren = tree::list
+        )
+
+        assertEquals(setOf("attachments"), notes.unreadableFolderPaths)
+        assertEquals(notes.unreadableFolderPaths, images.unreadableFolderPaths)
     }
 }
 

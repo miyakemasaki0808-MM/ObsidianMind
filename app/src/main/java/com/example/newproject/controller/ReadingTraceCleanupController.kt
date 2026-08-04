@@ -7,7 +7,8 @@ import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.domain.assessReadingTraceOrphans
 import com.example.newproject.model.OrphanAssessment
-import com.example.newproject.domain.isUnderUnreadableFolder
+import com.example.newproject.domain.NotePresence
+import com.example.newproject.domain.notePresenceAfterRescan
 import com.example.newproject.domain.parentVaultPath
 import com.example.newproject.model.OrphanCandidate
 import com.example.newproject.model.OrphanLimits
@@ -172,20 +173,30 @@ internal class ReadingTraceCleanupController(
                 when (outcome) {
                     DeleteOutcome.DELETED -> current.copy(
                         orphans = current.orphans.filterNot { it.key == key },
-                        deleteFailureCount = 0
+                        deleteFailureCount = 0,
+                        unverifiedCount = 0
                     )
                     // 生き返っていた。消さずに候補からも外す（もう孤児ではない）。
                     DeleteOutcome.NOT_ORPHAN_ANYMORE -> current.copy(
                         orphans = current.orphans.filterNot { it.key == key },
-                        deleteFailureCount = 0
+                        deleteFailureCount = 0,
+                        unverifiedCount = 0
                     )
-                    DeleteOutcome.FAILED -> current.copy(deleteFailureCount = 1)
+                    // 確かめられなかった。**候補は残す** — 消すと再試行できない。
+                    DeleteOutcome.UNVERIFIED ->
+                        current.copy(deleteFailureCount = 0, unverifiedCount = 1)
+                    DeleteOutcome.FAILED ->
+                        current.copy(deleteFailureCount = 1, unverifiedCount = 0)
                 }
             )
         }
     }
 
-    private enum class DeleteOutcome { DELETED, NOT_ORPHAN_ANYMORE, FAILED }
+    /**
+     * 削除の結果。**[UNVERIFIED] を [FAILED] や [NOT_ORPHAN_ANYMORE] へ畳まない** —
+     * 「消せなかった」「生き返っていた」「確かめられなかった」は次の行動が全部違う。
+     */
+    private enum class DeleteOutcome { DELETED, NOT_ORPHAN_ANYMORE, UNVERIFIED, FAILED }
 
     private suspend fun runDelete(
         handle: com.example.newproject.data.VaultHandle,
@@ -193,17 +204,23 @@ internal class ReadingTraceCleanupController(
         vaultKey: String
     ): DeleteOutcome = try {
         val scan = handle.collectAllNotes()
-        val stillMissing = scan.notes.none {
-            ReadingTraceStore.keyFor(it.vaultRelativePath) == target.key
-        } && !isUnderUnreadableFolder(
-            parentVaultPath(target.vaultRelativePath),
-            scan.unreadableFolderPaths
+        // 安全判定は純関数へ一元化してある（洗い出しと同じ規則を使う）。
+        val presence = notePresenceAfterRescan(
+            targetKey = target.key,
+            targetVaultRelativePath = target.vaultRelativePath,
+            notes = scan.notes.map { it.vaultRelativePath },
+            unreadableFolderPaths = scan.unreadableFolderPaths,
+            keyOf = ReadingTraceStore::keyFor
         )
-        when {
-            !stillMissing -> DeleteOutcome.NOT_ORPHAN_ANYMORE
-            withContext(ioDispatcher) { persistence.deleteByKey(target.key, vaultKey) } ->
-                DeleteOutcome.DELETED
-            else -> DeleteOutcome.FAILED
+        when (presence) {
+            NotePresence.PRESENT -> DeleteOutcome.NOT_ORPHAN_ANYMORE
+            NotePresence.INDETERMINATE -> DeleteOutcome.UNVERIFIED
+            NotePresence.MISSING ->
+                if (withContext(ioDispatcher) { persistence.deleteByKey(target.key, vaultKey) }) {
+                    DeleteOutcome.DELETED
+                } else {
+                    DeleteOutcome.FAILED
+                }
         }
     } catch (error: CancellationException) {
         throw error

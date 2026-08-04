@@ -178,6 +178,19 @@ private fun SuccessBody(
             Spacer(modifier = Modifier.height(14.dp))
         }
 
+        // **「消せなかった」とは別の文言にする。** 原因も次の行動も違う
+        // （前者は再試行、こちらは同期の完了待ち）。同じ文言にすると、
+        // 読み取れなかっただけの状態を「ファイルを消してしまった」と読み違える。
+        if (state.unverifiedCount > 0) {
+            NoticeCard(
+                title = "${state.unverifiedCount}件は削除してよいか確認できませんでした",
+                body = "ノートのフォルダを読み取れなかったため、消さずに残しています。" +
+                    "同期の完了を待ってから開き直してください。",
+                emphasis = true
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
         SectionTitle("削除候補 ${state.orphans.size}件")
         if (state.orphans.isEmpty()) {
             // 「候補ゼロ」を明示する。無表示にすると保留中の状態と見分けが付かない。

@@ -1,5 +1,7 @@
 package com.example.newproject.domain.markdown
 
+import com.example.newproject.model.isImageFileName
+
 // ---------------------------------------------------------------------------
 // Markdownのブロック解析。Composeに依存しない純粋ロジックなので、UIではなく
 // domain 側に置く。ViewModel・Controller は本文をセクションへ切るためにこれを使う
@@ -15,6 +17,23 @@ internal val BlockquoteRegex = Regex("^>\\s?(.*)")
 internal val TaskListRegex = Regex("^(\\s*)([-*+])\\s+\\[([ xX])\\]\\s+(.+)$")
 internal val TableRowRegex = Regex("^\\|(.+)\\|\\s*$")
 internal val TableSeparatorRegex = Regex("^\\|[\\s|:-]+\\|\\s*$")
+
+/**
+ * 単独行の画像。**行全体が画像1つのときだけ**マッチする（行内に他の文字があれば段落のまま）。
+ *
+ * **角括弧と閉じ括弧を対象から除外しているのが要点。** `.*` のままだと最長一致が
+ * 行末まで伸びて、次のような入力を1つの画像として誤認する。
+ *
+ * - `![a](x.png) と説明(補足)` → 対象が `x.png) と説明(補足` になる
+ * - `![[a.png]] ![[b.png]]` → 対象が `a.png]] ![[b.png` になる
+ *
+ * どちらも「行全体が画像1つ」ではないので、**迷ったら段落のまま**に倒す
+ * （段落は変更前の扱いなので、外した場合の挙動は現状維持になる）。
+ * その代わり alt に `[` `]` を含む画像は認識されないが、
+ * 誤った対象を解決しにいくより無害である。
+ */
+internal val ImageEmbedRegex = Regex("^!\\[\\[([^\\[\\]]+)]]$")
+internal val ImageLinkRegex = Regex("^!\\[([^\\[\\]]*)]\\(([^)]*)\\)$")
 
 /**
  * リスト項目の行頭マーカー。
@@ -47,11 +66,59 @@ internal data class ListItem(
 internal sealed class MarkdownBlock {
     data class Heading(val level: Int, val text: String) : MarkdownBlock()
     data class Paragraph(val text: String) : MarkdownBlock()
+
+    /**
+     * 単独行に置かれた画像。
+     *
+     * **[target] は原文のまま持つ**（サイズヒント `|400`・パーセントエンコード・
+     * `./` などを落とさない）。正規化して保持すると往復で原文へ戻らなくなるうえ、
+     * 正規化の規則は解決側の関心事であって解析側の関心事ではない。
+     * 落とすのは解決する直前でよい。
+     *
+     * [isEmbed] が真なら `![[target]]`、偽なら `![alt](target)`。
+     * **埋め込みは [alt] を持たない**（`![[file|400]]` の `|` 以降はサイズヒントであって
+     * 代替テキストではない）ので、その場合 [alt] は常に空文字になる。
+     */
+    data class Image(val alt: String, val target: String, val isEmbed: Boolean) : MarkdownBlock()
     data class ListBlock(val items: List<ListItem>) : MarkdownBlock()
     data class CodeBlock(val code: String) : MarkdownBlock()
     object HorizontalRule : MarkdownBlock()
     data class Blockquote(val lines: List<String>) : MarkdownBlock()
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
+}
+
+/**
+ * 原文の記法へ戻す。**AI入力への書き戻しと描画の両方がこれを使う。**
+ * 2箇所で別々に組み立てると、片方だけ直したときに往復が静かに壊れる。
+ */
+internal fun MarkdownBlock.Image.sourceText(): String =
+    if (isEmbed) "![[$target]]" else "![$alt]($target)"
+
+/**
+ * 行全体が画像1つなら [MarkdownBlock.Image] にする。そうでなければ null。
+ *
+ * **wiki埋め込みは画像拡張子を持つものだけを受理する。** `![[note]]` は
+ * 他ノートの埋め込みという別機能なので、画像として解決しにいってはいけない。
+ * 判定の前に `|` 以降（サイズヒント）を落とすが、**落とすのは判定に使う値だけ**で、
+ * [MarkdownBlock.Image.target] には原文をそのまま入れる。
+ *
+ * **リンク記法（`![alt](...)`）には拡張子を要求しない。** `!` が既に画像を意味しており、
+ * 外部URLのように拡張子を持たない対象も「外部URLなので出せない」という理由を
+ * 出すために画像として認識する必要がある。
+ */
+internal fun parseStandaloneImage(line: String): MarkdownBlock.Image? {
+    val trimmed = line.trim()
+    ImageEmbedRegex.matchEntire(trimmed)?.let { m ->
+        val target = m.groupValues[1]
+        if (!isImageFileName(target.substringBefore('|'))) return null
+        return MarkdownBlock.Image(alt = "", target = target, isEmbed = true)
+    }
+    val link = ImageLinkRegex.matchEntire(trimmed) ?: return null
+    return MarkdownBlock.Image(
+        alt = link.groupValues[1],
+        target = link.groupValues[2],
+        isEmbed = false
+    )
 }
 
 internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
@@ -132,6 +199,14 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
             continue
         }
 
+        // 単独行の画像（段落へ落ちる前に拾う）
+        val image = parseStandaloneImage(line)
+        if (image != null) {
+            blocks.add(image)
+            index++
+            continue
+        }
+
         // 段落
         val paragraphLines = mutableListOf(line.trim())
         index++
@@ -146,7 +221,10 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
                 BlockquoteRegex.matches(current) ||
                 TaskListRegex.matches(current) ||
                 UnorderedListRegex.matches(current) ||
-                OrderedListRegex.matches(current)
+                OrderedListRegex.matches(current) ||
+                // 画像行も段落を切る。空行を挟まず本文の直後へ画像を置く書き方は
+                // 実際のノートで普通に現れるので、吸収すると画像として描けない。
+                parseStandaloneImage(current) != null
             ) break
             paragraphLines.add(current.trim())
             index++
@@ -200,7 +278,7 @@ private fun indentWidth(indent: String): Int {
  * インデント列幅から入れ子段数を決める。**CommonMark にも Obsidian にも準拠しない、
  * 意図的に寛容な規則**である（規格は親のマーカー直後の列位置で入れ子を定義するが、
  * ここでは幅の絶対値を見ず相対的な深浅だけで判定する）。理由は
- * [markdown_rendering](../../../../../../../../docs/design/markdown_rendering.md) にある。
+ * [markdown_rendering](../../../../../../../../../docs/dev/design/markdown_rendering.md) にある。
  *
  * 規則は5つ。
  * 1. 同じ幅は同じ段数

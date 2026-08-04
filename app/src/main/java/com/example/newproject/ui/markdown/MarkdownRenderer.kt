@@ -38,6 +38,7 @@ import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
+import com.example.newproject.domain.markdown.sourceText
 import com.example.newproject.ui.theme.LinkText
 import com.example.newproject.ui.theme.CheckboxOutline
 import com.example.newproject.ui.theme.ContentDivider
@@ -53,7 +54,9 @@ internal fun MarkdownNoteContent(
     modifier: Modifier = Modifier,
     listState: LazyListState = rememberLazyListState(),
     // セクションモデル側で既にパース済みなら渡して再パースを避ける
-    precomputedBlocks: List<MarkdownBlock>? = null
+    precomputedBlocks: List<MarkdownBlock>? = null,
+    // null なら画像を読み込まず原文のまま出す（画像を持たない文脈で使い回すため）
+    imageLoader: NoteImageLoader? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -68,6 +71,7 @@ internal fun MarkdownNoteContent(
                 when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
+                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()

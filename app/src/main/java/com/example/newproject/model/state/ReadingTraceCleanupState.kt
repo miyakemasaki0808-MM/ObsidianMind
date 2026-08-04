@@ -29,7 +29,16 @@ sealed interface ReadingTraceCleanupState {
          * 直近の削除で失敗した件数。**失敗した候補は一覧に残す** —
          * 消えると再試行できなくなる（SAFプロバイダは削除に失敗し得る）。
          */
-        val deleteFailureCount: Int = 0
+        val deleteFailureCount: Int = 0,
+        /**
+         * 直近の削除で**不在を確かめられなかった**件数。
+         *
+         * **[deleteFailureCount] と畳まない。** 「消せなかった」と
+         * 「消してよいか確かめられなかった」は原因も次の行動も違う
+         * （前者は再試行、後者は同期の完了待ち）。
+         * この件数の候補も一覧に残す — 消えると再試行できなくなる。
+         */
+        val unverifiedCount: Int = 0
     ) : ReadingTraceCleanupState
 
     /**

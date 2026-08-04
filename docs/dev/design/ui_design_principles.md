@@ -31,6 +31,21 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 | **状態を示す記号** | **3:1** | **1.4.11 非テキストのコントラスト** | **バッジの ✓ / !・アイコン** |
 | 操作要素の輪郭 | 3:1 | 1.4.11 | ボタンの塗り・入力枠 |
 | 装飾のみ（情報を持たない） | 対象外 | 1.4.11 の除外 | 背景の飾り |
+| **色で区別させるもの** | **色以外の手がかりを併記** | **1.4.1 色の使用** | **状態の色分け・分類の色帯・エラー表示** |
+
+**1.4.1 は 2026-08-02 に足した（N-3 の画像プレースホルダで初めて要った）。**
+上の4行はすべて**コントラスト比**の話で、「色が唯一の手がかりになっていないか」は
+別の基準である。比を満たしていても、**赤い枠だけで「失敗」を伝えていれば 1.4.1 に反する。**
+
+適用の形は「色を使うな」ではなく**「色以外にもう1つ」**:
+
+| 場面 | 色以外の手がかり |
+|---|---|
+| 画像が出せなかった | **理由の文** ＋ 枠 ＋ 記号（色は手がかりに留める） |
+| 状態バッジ | 記号（✓ / !）そのもの |
+| 分野の色帯（未実装・N-10） | ラベルか位置。**色数を増やして識別させない** |
+
+**判定は「その色を灰色にしても伝わるか」で行う。** 伝わらないなら手がかりが1つ足りない。
 
 **「記号は3:1」を明示的に採る。** WCAG は実装（`Text()` で描いているか）ではなく**機能**で分類する。
 バッジの中の ✓ は読む文字ではなく状態の指示なので 1.4.11 側であり、4.5:1 は要求されない。
@@ -47,7 +62,7 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 
 - **AAA（7:1）は目指さない。** AA を全面的に満たすことを完了条件とする
 - **アプリはOSのダークモードに追従しない**（切り替えの主導権はオプション画面）
-  → [AppTheme.kt](../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt)
+  → [AppTheme.kt](../../../app/src/main/java/com/example/newproject/ui/theme/AppTheme.kt)
 
 ---
 
@@ -96,11 +111,11 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 ## 5. 検証
 
 数値はすべて
-[`AppColorContrastTest`](../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt)
+[`AppColorContrastTest`](../../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt)
 が強制する。**記録ではなく強制**（旧値へ戻す変異でテストが落ちることを確認する）
 → [theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4。
 
-[`VibrantTextUsageTest`](../../app/src/test/java/com/example/newproject/ui/theme/VibrantTextUsageTest.kt)
+[`VibrantTextUsageTest`](../../../app/src/test/java/com/example/newproject/ui/theme/VibrantTextUsageTest.kt)
 が、表に載らない書き方（画面からの `onVibrant` 直接使用・文字色への任意の `copy(alpha)`）を
 ソース走査で禁じる。**許可リストへ足したら、その面の比を `AppColorContrastTest` へ足す。**
 

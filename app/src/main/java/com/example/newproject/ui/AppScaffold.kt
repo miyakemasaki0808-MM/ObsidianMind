@@ -185,7 +185,7 @@ private fun TabIcon(
                 // バッジの中身は「読む文字」ではなく状態を示す記号なので、基準は
                 // WCAG 1.4.11 の 3:1（ボタンのラベルは 1.4.3 の 4.5:1）。
                 // 同じ塗りでも前景が別トークンになるのはこのため
-                // → docs/design/ui_design_principles.md
+                // → docs/dev/design/ui_design_principles.md
                 AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
                     Text("✓", color = OnStatusBadge, fontSize = 9.sp)
                 }

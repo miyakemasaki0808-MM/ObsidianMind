@@ -39,6 +39,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
@@ -146,7 +147,8 @@ internal fun NoteContentPanel(
     uiState: NoteUiState,
     modifier: Modifier = Modifier,
     listState: LazyListState? = null,
-    precomputedBlocks: List<MarkdownBlock>? = null
+    precomputedBlocks: List<MarkdownBlock>? = null,
+    imageLoader: NoteImageLoader? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -176,13 +178,15 @@ internal fun NoteContentPanel(
                         content = noteContent,
                         modifier = Modifier.padding(top = 12.dp).weight(1f),
                         listState = listState,
-                        precomputedBlocks = blocksForContent
+                        precomputedBlocks = blocksForContent,
+                        imageLoader = imageLoader
                     )
                 } else {
                     MarkdownNoteContent(
                         content = noteContent,
                         modifier = Modifier.padding(top = 12.dp).weight(1f),
-                        precomputedBlocks = blocksForContent
+                        precomputedBlocks = blocksForContent,
+                        imageLoader = imageLoader
                     )
                 }
             } else {
