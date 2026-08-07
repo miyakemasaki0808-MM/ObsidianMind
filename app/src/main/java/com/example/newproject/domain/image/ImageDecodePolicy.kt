@@ -69,6 +69,27 @@ internal fun rejectionForBounds(width: Int, height: Int): NoteImageFailure? = wh
 }
 
 /**
+ * 復号を試みた結果から失敗理由を決める。成功なら null。
+ *
+ * **順序がこの関数の全部である。** 上限で打ち切ると `BitmapFactory` は
+ * 「復号できなかった」としか言わないので、Bitmap が null であることを先に見ると
+ * **大きすぎる画像がすべて `Broken` になる。** ユーザーには原因も次の行動も違って見える
+ * （`TooLarge` は縮小すれば直る、`Broken` はファイルが壊れている）ので、
+ * **打ち切りを先に判定する。**
+ *
+ * 逆に、打ち切っていないのに Bitmap が null なら本当に壊れている。
+ * ここを `TooLarge` に倒すと、壊れた画像を前にユーザーが縮小を試み続ける。
+ *
+ * @param truncated 入力が上限を**超えて**打ち切られたか（上限ちょうどは超過ではない）
+ * @param decoded Bitmap が得られたか
+ */
+internal fun imageDecodeFailureFor(truncated: Boolean, decoded: Boolean): NoteImageFailure? = when {
+    truncated -> NoteImageFailure.TooLarge
+    !decoded -> NoteImageFailure.Broken
+    else -> null
+}
+
+/**
  * `BitmapFactory.Options.inSampleSize` に渡す間引き倍率（2の冪）。
  *
  * 2段階で決める。

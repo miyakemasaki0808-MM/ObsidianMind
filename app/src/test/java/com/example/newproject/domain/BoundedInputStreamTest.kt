@@ -73,8 +73,38 @@ class BoundedInputStreamTest {
         assertTrue(over.truncated)
     }
 
+    /**
+     * **`skip()` の直後に判定が確定していること。**
+     *
+     * ここで `read()` を挟むと、その `read()` が先読みを肩代わりして欠陥を隠す
+     * （実際、最初に書いたテストがそうなっていた）。`skip()` だけで確かめる。
+     */
     @Test
-    fun `skipで進めても上限を超えず、境界の判定も変わらない`() {
+    fun `skip単独で上限まで進めた時点で超過が確定する`() {
+        val exact = bounded(bytes(max.toInt()))
+        assertEquals(max, exact.skip(max + 1))
+        assertFalse(exact.truncated)
+
+        val over = bounded(bytes(max.toInt() + 1))
+        assertEquals(max, over.skip(max + 1))
+        assertTrue(over.truncated)
+    }
+
+    @Test
+    fun `上限までreadした後のskipでも超過が確定する`() {
+        val exact = bounded(bytes(max.toInt()))
+        exact.read(ByteArray(max.toInt()), 0, max.toInt())
+        assertEquals(0, exact.skip(1))
+        assertFalse(exact.truncated)
+
+        val over = bounded(bytes(max.toInt() + 1))
+        over.read(ByteArray(max.toInt()), 0, max.toInt())
+        assertEquals(0, over.skip(1))
+        assertTrue(over.truncated)
+    }
+
+    @Test
+    fun `skipで進めても上限を超えず、その後のreadは終端を返す`() {
         val exact = bounded(bytes(max.toInt()))
         assertEquals(max, exact.skip(100))
         assertEquals(-1, exact.read())
@@ -83,6 +113,18 @@ class BoundedInputStreamTest {
         val over = bounded(bytes(max.toInt() + 1))
         assertEquals(max, over.skip(100))
         assertEquals(-1, over.read())
+        assertTrue(over.truncated)
+    }
+
+    /** 配列readだけで上限まで進めた場合も、その時点で確定していること。 */
+    @Test
+    fun `配列readで上限ちょうどまで進めた時点で超過が確定する`() {
+        val exact = bounded(bytes(max.toInt()))
+        exact.read(ByteArray(max.toInt()), 0, max.toInt())
+        assertFalse(exact.truncated)
+
+        val over = bounded(bytes(max.toInt() + 1))
+        over.read(ByteArray(max.toInt()), 0, max.toInt())
         assertTrue(over.truncated)
     }
 

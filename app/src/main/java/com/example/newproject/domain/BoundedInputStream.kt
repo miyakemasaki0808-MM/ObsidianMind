@@ -43,6 +43,7 @@ internal class BoundedInputStream(
         if (exhausted()) return -1
         val value = source.read()
         if (value >= 0) readBytes++
+        settleOverflowAtLimit()
         return value
     }
 
@@ -54,15 +55,16 @@ internal class BoundedInputStream(
         val remaining = (maxBytes - readBytes).coerceAtMost(len.toLong()).toInt()
         val count = source.read(b, off, remaining)
         if (count > 0) readBytes += count
+        settleOverflowAtLimit()
         return count
     }
 
     override fun skip(n: Long): Long {
         if (n <= 0) return 0
-        val remaining = (maxBytes - readBytes).coerceAtLeast(0)
-        if (remaining == 0L) return 0
-        val skipped = source.skip(n.coerceAtMost(remaining))
+        if (exhausted()) return 0
+        val skipped = source.skip(n.coerceAtMost(maxBytes - readBytes))
         if (skipped > 0) readBytes += skipped
+        settleOverflowAtLimit()
         return skipped
     }
 
@@ -72,18 +74,23 @@ internal class BoundedInputStream(
         return source.available().toLong().coerceAtMost(remaining).toInt()
     }
 
-    /**
-     * 上限に達しており、かつ**もう返せるバイトが無い**か。
-     *
-     * 到達しただけでは決められないので、初回だけ元ストリームを1バイト先読みして
-     * 「上限ちょうどで終わり」と「まだ続きがある」を分ける。
-     */
+    /** 上限に達しており、もう返せるバイトが無いか。 */
     private fun exhausted(): Boolean {
-        if (readBytes < maxBytes) return false
-        if (!overflowChecked) {
-            overflowChecked = true
-            if (source.read() >= 0) truncated = true
-        }
-        return true
+        settleOverflowAtLimit()
+        return readBytes >= maxBytes
+    }
+
+    /**
+     * 上限に達していれば、初回だけ1バイト先読みして超過かどうかを確定する。
+     *
+     * **読み終えた側からも呼ぶ。** 「次に読もうとした時」だけに置くと、
+     * 上限まで進めた呼び出し側がそこで戻った場合に超過が観測されない
+     * （`skip()` で末尾まで進めて read せずに戻る復号器がこれに当たり、
+     * 超過した入力が `TooLarge` ではなく `Broken` や成功として扱われ得た）。
+     */
+    private fun settleOverflowAtLimit() {
+        if (readBytes < maxBytes || overflowChecked) return
+        overflowChecked = true
+        if (source.read() >= 0) truncated = true
     }
 }
