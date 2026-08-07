@@ -39,7 +39,8 @@ import org.junit.Test
  *   受付簿を更新しなくても 1 が通った。IDは**ファイルstem全体**にし、
  *   さらに 6 で潰れ自体を検出する（潰れたことに気づけないのが根だった）。
  * - **`起票` の参照先が1件でも実在すれば通っていた。** `none { it in known }` は
- *   実在IDと架空IDが混ざった `TRACE-2 / TYPO-999` を成功にする。**すべてを検証する。**
+ *   実在する課題IDと架空のIDが並んだ行（`実在ID / TYPO-999`）を成功にする。
+ *   **すべてを検証する。**
  *
  * **変異の型に「足す」を含める。** 既存行を壊す変異だけでは、この2つは永久に出ない。
  */
@@ -91,8 +92,8 @@ class ReviewFindingsLedgerTest {
             .filter { (_, disposition) -> disposition.startsWith("`起票`") }
             .mapNotNull { (id, disposition) ->
                 val referenced = ISSUE_ID_PATTERN.findAll(disposition).map { it.value }.toList()
-                // **1件でも実在すれば通る形にしない。** 実在IDと架空IDが混ざった
-                // 「TRACE-2 / TYPO-999」を成功にしてしまい、取りこぼしを見逃す。
+                // **1件でも実在すれば通る形にしない。** 実在する課題IDと架空のIDが
+                // 並んだ行を成功にしてしまい、取りこぼしを見逃す。
                 val unknown = referenced.filterNot { it in known }
                 when {
                     referenced.isEmpty() -> "$id: 起票と書いてあるが課題IDが無い"
