@@ -157,7 +157,7 @@ class ReviewFindingsLedgerTest {
     private fun duplicatesOf(ids: List<String>): List<String> =
         ids.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.sorted()
 
-    /** 受付簿の行。`| \`2026-08-01/P1-1\` | 指摘 | 処遇 |` を (ID, 処遇) に分解する。 */
+    /** 受付簿の行。`| \`2026-08-01-no9/P1-1\` | 指摘 | 処遇 |` を (ID, 処遇) に分解する。 */
     private fun ledgerRows(): List<Pair<String, String>> =
         LEDGER_ROW.findAll(reviewDir().resolve("findings.md").readText())
             .map { it.groupValues[1] to it.groupValues[3].trim() }
