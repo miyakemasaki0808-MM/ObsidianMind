@@ -108,8 +108,10 @@ fun assessReadingTraceOrphans(
         .filterValues { it > limits.maxCandidatesPerFolder }
         .keys
     // 報告は**最も浅いフォルダ**へ寄せる（`ideas` と `ideas/a` が両方該当しても1件）。
+    // 覆う／覆われるは **`breakerGroupPaths` と同じ定義**で判定する。別の判定を書くと、
+    // 「ルートは祖先か」で食い違ってルートの遮断器が別サブツリーの遮断器を消す。
     val shallowest = blocked.filterNot { path ->
-        blocked.any { other -> other != path && isDescendantFolder(path, other) }
+        blocked.any { other -> other != path && other in breakerGroupPathsOfFolder(path) }
     }
     readableItems
         .groupBy { item -> shallowest.firstOrNull { it in breakerGroupPaths(item.vaultRelativePath) } }
@@ -146,16 +148,23 @@ private const val ROOT_PATH = ""
  * 「Vault全体で常に1件まで」となり、正当な孤児が2件溜まった時点で永久に掃除できなくなる。
  * ただし**ルート直下のノートどうしは直接の親が同じ**なので、そこは従来どおり括られる。
  */
-internal fun breakerGroupPaths(vaultRelativePath: String): List<String> {
-    val folder = parentVaultPath(vaultRelativePath)
+internal fun breakerGroupPaths(vaultRelativePath: String): List<String> =
+    breakerGroupPathsOfFolder(parentVaultPath(vaultRelativePath))
+
+/**
+ * [folder] 直下のノートが属する遮断器グループ。[breakerGroupPaths] の実体。
+ *
+ * **遮断器の「覆う／覆われる」もこれで判定する。** 包含を別の式で書くと、
+ * **ルートを祖先として数えるか**で2つがずれる。実際にずれていて、
+ * ルート直下が遮断されると `ideas` の遮断器が「より浅い」に負けて消え、
+ * `ideas/` 配下の候補が保留されずに孤児として出ていた
+ * （この関数はルートを祖先として含めないのに、包含側は含めていた）。
+ */
+internal fun breakerGroupPathsOfFolder(folder: String): List<String> {
     if (folder.isEmpty()) return listOf(ROOT_PATH)
     val segments = folder.split('/')
     return segments.indices.map { segments.take(it + 1).joinToString("/") }
 }
-
-/** [candidate] が [ancestor] の配下か（同一は含めない）。 */
-internal fun isDescendantFolder(candidate: String, ancestor: String): Boolean =
-    ancestor.isEmpty() && candidate.isNotEmpty() || candidate.startsWith("$ancestor/")
 
 /** `ideas/2026/habit.md` → `ideas/2026`、`habit.md` → `""`（ルート）。 */
 internal fun parentVaultPath(vaultRelativePath: String): String =

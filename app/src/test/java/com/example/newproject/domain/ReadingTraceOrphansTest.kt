@@ -116,6 +116,32 @@ class ReadingTraceOrphansTest {
         assertEquals(OrphanWithholdReason.FOLDER_WIDE_ABSENCE, assessed(result).withheld.single().reason)
     }
 
+    // ルートの遮断器は**ルート直下だけ**を覆う。ルートを「全パスの祖先」として扱うと、
+    // ルート直下が遮断された瞬間に他サブツリーの遮断器が「より浅い」に負けて消え、
+    // 保留すべき候補がそのまま孤児として出てしまう。
+    // （`breakerGroupPaths` はルートを祖先として数えないので、覆う範囲も揃える必要がある）
+    @Test
+    fun `a blocked root does not swallow the breaker of another subtree`() {
+        val result = assess(
+            traces = mapOf(
+                "k-1" to info("a.md"),
+                "k-2" to info("b.md"),
+                "k-3" to info("ideas/x.md"),
+                "k-4" to info("ideas/y.md")
+            ),
+            noteKeys = emptySet()
+        )
+
+        // ルート直下2件も ideas/ 配下2件も、どちらもフォルダ単位で保留される。
+        assertTrue(assessed(result).orphans.isEmpty())
+        assertEquals(
+            listOf("" to 2, "ideas" to 2),
+            assessed(result).withheld
+                .filter { it.reason == OrphanWithholdReason.FOLDER_WIDE_ABSENCE }
+                .map { it.folderPath to it.count }
+        )
+    }
+
     // 故障は**任意の階層**で起きる。上位フォルダが「成功したまま空を返す」と、
     // その配下のノートは走査から丸ごと消えるが unreadableFolderPaths には現れない。
     // 直接の親でグループ化すると、配下の各フォルダは1件ずつなのですり抜ける。
