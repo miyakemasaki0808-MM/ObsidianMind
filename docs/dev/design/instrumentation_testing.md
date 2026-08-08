@@ -66,12 +66,13 @@ seam を本番へ入れるか判断する。**先回りで seam を作らない*
 | 2 | 実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）＋走査・補記の保存/削除・読取失敗の注入 | debug ソースセット追加 | **完了**（実機 6/6） |
 | 3 | `NoteImageGateway`（段階2の上に乗る） | なし | **完了**（実機 7/7） |
 | 4a | 端末AIの横展開（**本番プロンプトで実際に生成させる**） | なし | 実装済み・**実機未実行** |
-| 4b | 画面回転・プロセス再生成（`ActivityScenario.recreate()` / `StateRestorationTester`） | 要検討※ | 未着手 |
+| 4b | 画面回転・プロセス再生成（`ActivityScenario.recreate()`） | なし※ | 実装済み・**実機未実行** |
 | 4c | Compose Navigation の往復・連続操作時の競合 | なし | 未着手 |
 
-※ 4b は Activity を通すなら `MainActivity` の `by viewModels()` に差し替え口が要る
-（→ 判断2）。`StateRestorationTester` で済むなら本番変更は不要なので、
-**どちらで足りるかを先に決めてから着手する。**
+※ 着手前は「Activity を通すなら `MainActivity` の `by viewModels()` に差し替え口が
+要るのでは」と見ていたが、**要らなかった** — 確かめたい振る舞い
+（再生成でOPを再生し直さない）は **Vault 未選択のままで観測できる**ため、
+実依存のまま起動してよい。判断2（先回りで seam を作らない）を維持している。
 
 **4a・4b・4c は互いに独立**で、順序の制約が無い。3つとも段階1〜3の土台に乗る。
 
