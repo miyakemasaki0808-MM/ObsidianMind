@@ -1,7 +1,7 @@
 # 未対応課題の台帳
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-08-05（レビュー完了により3件をクローズ）
+**最終更新:** 2026-08-08（レビュー5件を起票し、TEST-2 をクローズ）
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -35,10 +35,8 @@
 | [TEST-5](#test-5-activity再生成をプロセス再生成として記録している) | Activity再生成をプロセス再生成として記録している | 中 | プロセス死亡に耐えると誤読される |
 | [TEST-6](#test-6-端末aiは10経路中4経路の生成だけを通す) | 端末AIは10経路中4経路の生成だけを通す | 中 | 残り6経路の退行が緑のまま通る |
 | [TEST-7](#test-7-偽vaultが異なるdocument-idを同じファイルへ潰す) | 偽Vaultが異なるdocument IDを同じファイルへ潰す | 低 | 今後のテストが誤った成功／失敗を返し得る |
-| [DOC-1](#doc-1-test-2-の状態が文書間で分岐している) | TEST-2 の状態が文書間で分岐している | 低 | 完了済みを再計画するか、手動運用のリスクを見落とす |
 | [ANNOT-2](#annot-2-補記へ渡した関連ノートとwikilinkが出力で使われない) | 補記へ渡した関連ノートとwikilinkが出力で使われない | 低 | 入力予算を払って捨てている |
 | [AI-5](#ai-5-関連ノートが算出した根拠を捨てている) | 関連ノートが算出した根拠を捨てている | 低 | なぜ関連なのかが画面から分からない |
-| [TEST-2](#test-2-実端末を通す統合テストの中身が無い) | 実端末を通す統合テストの中身が無い | 低 | 実端末依存の回帰を検出できない |
 | [AI-2](#ai-2-ai状態の一時エラーと非対応を同一視している) | AI状態の一時エラーと非対応を同一視している | 低 | 原因の区別ができない |
 | [A11Y-1](#a11y-1-バッジの塗りが下部ナビ帯の上で判別できない) | バッジの塗りが下部ナビ帯の上で判別できない | 低 | 記号は読めるが、存在に気づけない |
 | [REL-1](#rel-1-r8とリリース署名が未設定) | R8とリリース署名が未設定 | 低 | 配布可能な成果物がまだ作れない |
@@ -343,26 +341,6 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
   上記2件を実物の `ContentResolver` 経由で確かめる instrumentation が**修正前に失敗する**。
 - **規模感:** 小。
 
-## DOC-1. TEST-2 の状態が文書間で分岐している
-
-- **現状:** instrumentation を全34件実装し実機で確認し、CIエミュレータの見送りも確定したが、
-  **更新したのは `current_issues` の本文末尾だけ**だった。次の4箇所が古いまま残っている。
-  - `current_issues` の一覧行と見出し（「実端末を通す統合テストの中身が無い」）
-  - [roadmap.md](roadmap.md) L-3「統合テストの中身」
-  - [document_map.md](../dev/document_map.md)（「段階1 実装済み」）
-  - [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) 冒頭（「残るのはCI実行の要否だけ」）
-- **問題:** 読み手が**未実装・全実装・判断待ち・見送り確定の4状態を同時に読む**ことになる。
-  `current_issues`＝未対応だけ・roadmap＝順序だけ・design＝決定、という分担が崩れている。
-- **対応候補:** TEST-2 を残すなら**「instrumentation実行がCIで担保されない」へ表示名・影響・本文を揃える**。
-  見送りを受容済みリスクとして閉じるなら `current_issues` から削除し、
-  判断と再検討条件だけを設計書に残す。どちらでも roadmap・document map・設計書冒頭を同期する。
-- **CIの説明も直す:** トリガーは `pull_request` と `main` への push だけで、
-  **featureブランチへの単独pushでは走らない**（PRが開いていればその更新で走る）。
-- **受理条件:** 一覧・見出し・本文が同じ未対応内容を指す／roadmapが実装済み34件を「中身が無い」と扱わない／
-  document map が全段階完了を示す／設計書冒頭がCI見送り確定を示す／
-  旧状態へ戻す変異を文書整合テストか同等の検査が検出する。
-- **規模感:** 小。
-
 ## AI-5. 関連ノートが算出した根拠を捨てている
 
 - **現状:** [`relatedContextScore`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt#L44) は
@@ -395,60 +373,6 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
   **どちらかに決める** — 現状は「渡すが使わせない」で、両方の costs だけ払っている。
   足す場合は、存在しないノート名を書かせない仕組みが要る（渡した集合の中からのみ選ばせる＝ID契約と同じ考え方）。
 - **規模感:** 小。プロンプトのみ。
-
-## TEST-2. 実端末を通す統合テストの中身が無い
-
-- **現状:** SAF走査・補記保存/削除・端末AI・Compose Navigation・全画面遷移・画面回転/プロセス再生成・
-  連続操作時の競合を絡めたテストがない。JVMテストは純粋ロジックの回帰防止に有効だが、
-  実端末依存の動作は保証範囲外。**画像表示（N-3）で「テストが全件緑でも受理条件は満たしていない」
-  ことが実例として出た**（→ IMG-1・IMG-2）ので、この課題の重さは以前より上がっている。
-- **具体的に欠けている1件: `NoteImageGateway` を実物で通すテスト。**
-  画像の失敗理由（大きすぎる／壊れている）の切り分けは純関数
-  [`imageDecodeFailureFor`](../../app/src/main/java/com/example/newproject/domain/image/ImageDecodePolicy.kt)
-  へ切り出してJVMテストで固定したが、**Gateway がその判定を正しい材料で・正しい位置から
-  呼んでいるか**は検証できていない（`truncated` を読むタイミングと `openStream` との組み合わせ）。
-  `BitmapFactory`・`ContentResolver`・`DocumentsContract` に直結しており、
-  **Robolectric もモックライブラリも入っていないため JVM からは実物を動かせない**
-  （`testImplementation` は junit / coroutines-test / org.json のみ）。
-  **1機能の都合でテスト戦略を変えないと判断してここへ寄せた**（オーナー判断・2026-08-05）。
-- **前提が2つある。①は 2026-08-01 に満たした** — Android 16 で 2/2 成功し、**Runnerが起動しComposeを描画できることが実証された**（土台の故障と切り分けられる状態になった）。
-  **②も 2026-08-01 に完了した。** `DocumentRef` 化（段階1〜6）に加え、`VaultBrowser` で
-  `ContentResolver` と Vault ルートを束ねた（段階7）。`model` / `domain` / `controller` / `ui` から
-  `android.net.Uri` が消え、`PackageDependencyTest` で固定済み。
-  **JVMで書けるものが instrumentation へ流れ込む状態は解消した** — さがす・補記の世代照合と
-  走査キャッシュは21件のJVMテストで覆われている。**`VaultBrowser` 移行の実機確認も完了した**
-  （旧 VERIFY-4）。
-- **部分的な前進:** 補記の保存経路だけは 2026-07-31 に `AnnotationDocumentGateway` として切り出し、
-  失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。
-- **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../dev/design/saf_boundary_gateway.md)。
-  残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
-- **2026-08-08 に着手した。段階の分け方と規模の見直しは
-  [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) が持つ。**
-  **段階1（読書画面の4件）は実機確認まで完了**（Pixel 10 Pro Fold で 11/11 成功・0 skipped）。
-- **段階2（実物SAF）も実機確認まで完了**（6/6）。`src/debug/` のテスト用
-  `DocumentsProvider` を土台に、走査の相対パス・**読取失敗と不在の区別**・
-  補記の作成/一覧/削除を実物のSAF経路で通している。
-  **痕跡の孤児判定が依存する「不在 vs 読めなかった」は、これで実配線まで裏が取れた。**
-- **段階3（`NoteImageGateway`）も実機確認まで完了**（7/7）。
-  **IMG-3 のレビューで唯一満たせず、ここへ寄せた受理条件**
-  （実物の Gateway で `TooLarge` と `Broken` を分ける）は**これで満たした**。
-- **instrumentation は計24件で、実機 24/24 成功・0 skipped。**
-  設計書の再検討条件（20件超）に到達したので、**CIでのエミュレータ実行の要否が
-  オーナー判断待ち**になっている（19/24 は端末AI非依存で実際に走る）。
-- **段階4a・4b・4c も実機確認まで完了**（10件）。
-  段階の定義は [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) が持つ。
-  **4b・4c とも本番変更は不要だった**（Vault未選択のまま観測できるため、
-  `MainActivity` へ差し替え口を入れずに済んだ）。
-- **instrumentation は計34件で、実機 34/34 成功・0 skipped。当初リストは全項目を消化した。**
-- **CIでのエミュレータ実行は見送りで確定した**（2026-08-08）。
-  端末AI依存の9件はCIで守れず実機確認が二重に残ること、踏んだ失敗はどちらも
-  基盤の初期設定ミスで**実行忘れによる流出の実績が無い**こと、無料でも保守
-  （不安定な赤・KVM・system image・除外クラス）が要ることによる。
-  再検討の条件は [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) 判断4。
-- **残っているもの:** 実行の担保は「PR前にAndroid Studioで回す」運用のまま。
-  **TEST-2 としては、この運用が続く限り閉じられない**（検査ではないため）。
-- **規模感:** 中。**「大」は前提が無かった頃の見積もりで、
-  `VaultBrowser` のインターフェース化と Compose ハーネスの実証で下がっている。**
 
 ## AI-2. AI状態の一時エラーと非対応を同一視している
 

@@ -68,7 +68,7 @@
 | [note_age_paper.md](design/note_age_paper.md) | ノートの年代を紙の地色で伝える | 実装済み・実機確認済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
 | [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み・実機確認済み |
-| [instrumentation_testing.md](design/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 | 段階1 実装済み・実機確認済み |
+| [instrumentation_testing.md](design/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 | 全段階 実装済み・実機確認済み（CI実行は見送り確定） |
 
 ### 読む導線
 
