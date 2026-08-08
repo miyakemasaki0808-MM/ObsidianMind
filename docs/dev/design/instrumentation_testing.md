@@ -88,6 +88,24 @@ null を返す。例外を投げる形にすると本番が通っていない経
 `DocumentsProvider.enforceTree()` がこれを呼ぶので、実装しないと
 ルート直下しか読めない。
 
+**マニフェストの3条件は必須で、外すと「テストが0件」になる。**
+`DocumentsProvider.attachInfo()` は自分の宣言を検査し、
+`exported="true"` ／ `grantUriPermissions="true"` ／
+読み書きが `android.permission.MANAGE_DOCUMENTS` で保護されている、の
+どれかが欠けると `SecurityException` を投げる。
+**プロバイダはアプリ起動時に生成されるので、ここで落ちるとテストは1件も走らず、
+Gradle は「テスト結果を読めない」としか言わない**（テストの失敗として現れない）。
+最初に `exported="false"` で書いて実際にこれを踏んだ。
+
+`exported="true"` でも外部から触れるわけではない。`MANAGE_DOCUMENTS` は
+システム（DocumentsUI）だけが持つ署名権限で、通常のアプリは取得できない。
+自アプリからは同一UIDなので権限検査を通らずに済む。
+**`DOCUMENTS_PROVIDER` の intent-filter は置かない** — 宣言するとSAFのピッカーに
+偽Vaultが並ぶ。直接URIを組む用途では要らない。
+
+**教訓は「0 tests は失敗ではなく起動前の墜落」と読むこと。** 個々のテストを疑う前に
+プロセスが立ち上がったかを見る。原因は `adb logcat` に例外として出る。
+
 **`DocumentsProvider` の実体はシステムが生成する**ためテストから掴めない。
 木の組み立てと失敗注入は `companion` 側の API（`reset` / `putFile` / `makeUnreadable`）に置く。
 
