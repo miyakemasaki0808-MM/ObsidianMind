@@ -68,6 +68,7 @@
 | [note_age_paper.md](design/note_age_paper.md) | ノートの年代を紙の地色で伝える | 実装済み・実機確認済み |
 | [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
 | [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み・実機確認済み |
+| [instrumentation_testing.md](design/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 | 段階1 実装済み・**実機未実行** |
 
 ### 読む導線
 
@@ -166,6 +167,7 @@
 | `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](design/note_image_rendering.md) → [markdown_rendering](design/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](design/related_notes_ai.md) / [reflect_distill](design/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](design/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](design/reflect_distill.md)（原子性・復旧） |
+| `androidTest/` | [instrumentation_testing](design/instrumentation_testing.md)（何をここへ置くかの基準） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](design/architecture.md) / [tab_navigation](design/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](design/architecture.md) → 該当機能の設計書 |
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](design/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](design/theme_and_ui_refactor.md) → [dark_mode](design/dark_mode.md) |

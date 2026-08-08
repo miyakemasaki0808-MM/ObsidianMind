@@ -320,7 +320,15 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
   失敗注入をJVMテストで書けるようにした。**同じ形が機能することは確認済み**で、残るのは他への横展開。
 - **`Uri` を import するファイルは17→8になった** → [design/saf_boundary_gateway.md](../dev/design/saf_boundary_gateway.md)。
   残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
-- **規模感:** 大。**前提は2つとも揃ったので、残るのは実テストの中身そのものだけ。**
+- **2026-08-08 に着手した。段階の分け方と規模の見直しは
+  [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) が持つ。**
+  読書画面の4件を追加済み（**実機実行は未実施** — Claudeは instrumentation を実行できないため、
+  コンパイル通過までしか確認していない）。
+- **残っているもの:** ①実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）を土台にした
+  走査・補記の保存/削除・読取失敗の注入 ②その上に乗る `NoteImageGateway` の検証
+  ③端末AIの横展開 ④画面回転・プロセス再生成。
+- **規模感:** 中。**「大」は前提が無かった頃の見積もりで、
+  `VaultBrowser` のインターフェース化と Compose ハーネスの実証で下がっている。**
 
 ## AI-2. AI状態の一時エラーと非対応を同一視している
 
