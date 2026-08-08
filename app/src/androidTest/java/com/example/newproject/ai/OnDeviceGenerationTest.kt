@@ -70,7 +70,7 @@ class OnDeviceGenerationTest {
     }
 
     @Test
-    fun 要約プロンプトで生成が返る() = runBlocking {
+    fun 要約プロンプトで生成が返る() = runBlocking<Unit> {
         requireNanoAvailable()
 
         val prompt = PromptBuilder.buildSummarizePrompt(
@@ -89,7 +89,7 @@ class OnDeviceGenerationTest {
      * 書式が一致するかは assert しない（非決定的）。パース結果は logcat へ出す。
      */
     @Test
-    fun クイズプロンプトで生成が返りパーサが実出力を処理できる() = runBlocking {
+    fun クイズプロンプトで生成が返りパーサが実出力を処理できる() = runBlocking<Unit> {
         requireNanoAvailable()
 
         val prompt = PromptBuilder.buildQuizPrompt(
@@ -108,7 +108,7 @@ class OnDeviceGenerationTest {
 
     /** 関連ノートは候補IDだけを返させる経路。プロンプトの指示が強く、長さも他と違う。 */
     @Test
-    fun 関連ノートプロンプトで生成が返る() = runBlocking {
+    fun 関連ノートプロンプトで生成が返る() = runBlocking<Unit> {
         requireNanoAvailable()
 
         val prompt = PromptBuilder.buildRelatedNotesPrompt(
@@ -128,7 +128,7 @@ class OnDeviceGenerationTest {
 
     /** セクションチャットは会話文脈を含む経路。他の3つと入力の作り方が違う。 */
     @Test
-    fun セクション要約プロンプトで生成が返る() = runBlocking {
+    fun セクション要約プロンプトで生成が返る() = runBlocking<Unit> {
         requireNanoAvailable()
 
         val prompt = PromptBuilder.buildSectionSummaryPrompt(

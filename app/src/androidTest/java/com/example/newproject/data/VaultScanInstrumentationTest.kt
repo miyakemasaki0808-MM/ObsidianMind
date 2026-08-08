@@ -49,7 +49,7 @@ class VaultScanInstrumentationTest {
     }
 
     @Test
-    fun 入れ子のノートを相対パスつきで集める() = runBlocking {
+    fun 入れ子のノートを相対パスつきで集める() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putFile("root.md")
         FakeVaultDocumentsProvider.putFile("ideas/habit.md")
         FakeVaultDocumentsProvider.putFile("ideas/2026/deep.md")
@@ -70,7 +70,7 @@ class VaultScanInstrumentationTest {
      * ここが崩れると、同期途中のVaultで痕跡がまとめて削除候補になる。
      */
     @Test
-    fun 読めなかったフォルダは不在ではなく不完全として返る() = runBlocking {
+    fun 読めなかったフォルダは不在ではなく不完全として返る() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putFile("root.md")
         FakeVaultDocumentsProvider.putFile("ideas/habit.md")
         FakeVaultDocumentsProvider.makeUnreadable("ideas")
@@ -83,7 +83,7 @@ class VaultScanInstrumentationTest {
 
     /** ルートが読めなければ、Vault全体が不完全になる（1件も見えないのに「不在」と言わない）。 */
     @Test
-    fun ルートが読めなければVault全体が不完全になる() = runBlocking {
+    fun ルートが読めなければVault全体が不完全になる() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putFile("root.md")
         FakeVaultDocumentsProvider.makeUnreadable("")
 
@@ -94,7 +94,7 @@ class VaultScanInstrumentationTest {
     }
 
     @Test
-    fun 第一階層のフォルダだけを名前順に返す() = runBlocking {
+    fun 第一階層のフォルダだけを名前順に返す() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putFolder("journal")
         FakeVaultDocumentsProvider.putFolder("ideas")
         FakeVaultDocumentsProvider.putFolder("ideas/2026")
@@ -107,7 +107,7 @@ class VaultScanInstrumentationTest {
 
     /** 補記は作成→一覧→削除まで実物のSAFで通る。 */
     @Test
-    fun 補記を保存して一覧に出し削除できる() = runBlocking {
+    fun 補記を保存して一覧に出し削除できる() = runBlocking<Unit> {
         val handle = requireNotNull(browser().current())
 
         val saved = handle.createAnnotationFile(
@@ -136,7 +136,7 @@ class VaultScanInstrumentationTest {
      * これが理由（→ NoteRepository の `SavedAnnotation`）。
      */
     @Test
-    fun 同名の補記は実名が変わり一覧と一致する() = runBlocking {
+    fun 同名の補記は実名が変わり一覧と一致する() = runBlocking<Unit> {
         val handle = requireNotNull(browser().current())
 
         val first = handle.createAnnotationFile("習慣について", "20260808_2015", "1本目")

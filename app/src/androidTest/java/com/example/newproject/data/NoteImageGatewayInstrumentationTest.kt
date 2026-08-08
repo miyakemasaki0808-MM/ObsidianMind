@@ -69,7 +69,7 @@ class NoteImageGatewayInstrumentationTest {
     }
 
     @Test
-    fun Vault内の画像を復号して寸法どおりに返す() = runBlocking {
+    fun Vault内の画像を復号して寸法どおりに返す() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile("assets/photo.png", pngBytes(120, 80))
 
         val result = gateway().load(imageBlock("assets/photo.png"), targetWidthPx = 120)
@@ -80,7 +80,7 @@ class NoteImageGatewayInstrumentationTest {
     }
 
     @Test
-    fun 寸法だけを読む経路も実物のSAFで通る() = runBlocking {
+    fun 寸法だけを読む経路も実物のSAFで通る() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile("assets/photo.png", pngBytes(200, 100))
 
         val result = gateway().measure(imageBlock("assets/photo.png"))
@@ -99,7 +99,7 @@ class NoteImageGatewayInstrumentationTest {
      * PNGは中身がゼロ列だとヘッダで諦めるので、上限に到達せず境界を通らない。
      */
     @Test
-    fun 上限に収まる大きな画像は大きすぎる扱いにならない() = runBlocking {
+    fun 上限に収まる大きな画像は大きすぎる扱いにならない() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile(
             vaultRelativePath = "assets/large.bmp",
             bytes = bmpBytes(width = 2400, height = 2300),
@@ -122,7 +122,7 @@ class NoteImageGatewayInstrumentationTest {
      * これがレビューで唯一満たせなかった受理条件にあたる。
      */
     @Test
-    fun 上限を超えた入力はサイズ未申告でも大きすぎるとして扱う() = runBlocking {
+    fun 上限を超えた入力はサイズ未申告でも大きすぎるとして扱う() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile(
             vaultRelativePath = "assets/over.bmp",
             bytes = bmpBytes(width = 2400, height = 2400),
@@ -139,7 +139,7 @@ class NoteImageGatewayInstrumentationTest {
 
     /** サイズを申告するなら、読む前に弾ける。 */
     @Test
-    fun 申告サイズが上限を超えていれば読む前に弾く() = runBlocking {
+    fun 申告サイズが上限を超えていれば読む前に弾く() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile(
             vaultRelativePath = "assets/huge.png",
             bytes = ByteArray(NoteImageLimits.MAX_INPUT_BYTES.toInt() + 1)
@@ -156,7 +156,7 @@ class NoteImageGatewayInstrumentationTest {
      * ここが `TooLarge` に化けると、**ユーザーは縮小すれば直ると誤解する。**
      */
     @Test
-    fun 壊れた画像は大きすぎるではなく壊れているとして扱う() = runBlocking {
+    fun 壊れた画像は大きすぎるではなく壊れているとして扱う() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putBinaryFile("assets/broken.png", "これは画像ではない".toByteArray())
 
         val result = gateway().load(imageBlock("assets/broken.png"), targetWidthPx = 100)
@@ -166,7 +166,7 @@ class NoteImageGatewayInstrumentationTest {
 
     /** Vaultに無い参照は「見つからない」。走査は成功しているので断定してよい。 */
     @Test
-    fun Vaultに無い画像は見つからないとして扱う() = runBlocking {
+    fun Vaultに無い画像は見つからないとして扱う() = runBlocking<Unit> {
         FakeVaultDocumentsProvider.putFile("note.md")
 
         val result = gateway().load(imageBlock("assets/missing.png"), targetWidthPx = 100)

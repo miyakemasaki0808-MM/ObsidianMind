@@ -110,7 +110,7 @@ class PromptTokenBudgetTest {
      * - 両方成功 → 元の失敗はプロンプト固有（長さ・内容）なので段階的に切り分ける
      */
     @Test
-    fun トークンAPIの最小疎通を確かめる() = runBlocking {
+    fun トークンAPIの最小疎通を確かめる() = runBlocking<Unit> {
         requireNanoAvailable()
         log("── 最小疎通 ${"─".repeat(37)}")
         log("getTokenLimit()          : ${client.tokenLimit()}")
@@ -166,7 +166,7 @@ class PromptTokenBudgetTest {
     }
 
     @Test
-    fun 全計測ケースが入力と出力予約の合計を上限内に収める() = runBlocking {
+    fun 全計測ケースが入力と出力予約の合計を上限内に収める() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
@@ -200,7 +200,7 @@ class PromptTokenBudgetTest {
      * 予算600のうち注意書きへ払っている実コストになる。
      */
     @Test
-    fun 抜粋の注意書きが占めるトークン数を差分で測る() = runBlocking {
+    fun 抜粋の注意書きが占めるトークン数を差分で測る() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
@@ -247,7 +247,7 @@ class PromptTokenBudgetTest {
      * トークンの余裕は必要条件にすぎない（生成時間と推薦品質は別途見る）。
      */
     @Test
-    fun 関連ノートの予算候補ごとの余裕を測る() = runBlocking {
+    fun 関連ノートの予算候補ごとの余裕を測る() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
