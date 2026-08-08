@@ -322,8 +322,7 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
   残る8は `data` 7・`NoteViewModel` 1 で、**いずれもSAF境界／Android境界そのもの**。
 - **2026-08-08 に着手した。段階の分け方と規模の見直しは
   [design/instrumentation_testing.md](../dev/design/instrumentation_testing.md) が持つ。**
-  読書画面の4件を追加済み（**実機実行は未実施** — Claudeは instrumentation を実行できないため、
-  コンパイル通過までしか確認していない）。
+  **段階1（読書画面の4件）は実機確認まで完了**（Pixel 10 Pro Fold で 11/11 成功・0 skipped）。
 - **残っているもの:** ①実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）を土台にした
   走査・補記の保存/削除・読取失敗の注入 ②その上に乗る `NoteImageGateway` の検証
   ③端末AIの横展開 ④画面回転・プロセス再生成。
