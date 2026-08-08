@@ -65,7 +65,15 @@ seam を本番へ入れるか判断する。**先回りで seam を作らない*
 | 1 | 読書画面（解析待ちの描画抑止・全画面への位置引き継ぎ・進捗報告の整合） | なし | **完了**（実機 4/4） |
 | 2 | 実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）＋走査・補記の保存/削除・読取失敗の注入 | debug ソースセット追加 | **完了**（実機 6/6） |
 | 3 | `NoteImageGateway`（段階2の上に乗る） | なし | **完了**（実機 7/7） |
-| 4 | 端末AIの横展開・画面回転／プロセス再生成 | なし | 未着手 |
+| 4a | 端末AIの横展開（既存の `Assume` パターンを他の生成経路へ広げる） | なし | 未着手 |
+| 4b | 画面回転・プロセス再生成（`ActivityScenario.recreate()` / `StateRestorationTester`） | 要検討※ | 未着手 |
+| 4c | Compose Navigation の往復・連続操作時の競合 | なし | 未着手 |
+
+※ 4b は Activity を通すなら `MainActivity` の `by viewModels()` に差し替え口が要る
+（→ 判断2）。`StateRestorationTester` で済むなら本番変更は不要なので、
+**どちらで足りるかを先に決めてから着手する。**
+
+**4a・4b・4c は互いに独立**で、順序の制約が無い。3つとも段階1〜3の土台に乗る。
 
 **段階2のプロバイダは `androidTest` ではなく `src/debug/` へ置く。**
 `androidTest` 側に置くと別APK・別UIDになり、URI権限の付与が要る。
