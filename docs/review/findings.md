@@ -44,7 +44,7 @@
 |---|---|---|
 | `2026-08-08-source-state/P2-1` | 「連打」テストが操作間で同期し、バックスタック退行も検出しない | `起票` TEST-4 |
 | `2026-08-08-source-state/P2-2` | `ActivityScenario.recreate()` をプロセス再生成の検証として記録している | `解消` 2026-08-08。`ActivityRecreationTest` へ改名し、クラス名・KDoc・設計書・解析書の主張を同一プロセス内のActivity再生成へ狭めた |
-| `2026-08-08-source-state/P2-3` | 端末AIは10経路中4経路の生成だけを通すが「各プロンプト」と主張している | `起票` TEST-6 |
+| `2026-08-08-source-state/P2-3` | 端末AIは10経路中4経路の生成だけを通すが「各プロンプト」と主張している | `解消` 2026-08-08。主張を代表4経路へ狭め、未保証6経路を列挙。`PromptGenerationCoverageTest` が10 builder の分類網羅を固定する |
 | `2026-08-08-source-state/P3-1` | 偽Vaultが異なるdocument IDを同じファイルへ潰し、同一パスの再投入で子を重複させる | `起票` TEST-7 |
 | `2026-08-08-source-state/P3-2` | TEST-2 の状態が課題台帳・roadmap・document map・設計書で分岐している | `解消` 2026-08-08。TEST-2 を閉じて4箇所を同期し、`WipIssueReferenceTest` で宙吊り参照を検査に変えた |
 

@@ -29,10 +29,17 @@ import org.junit.runner.RunWith
  *
  * ## 何を主張し、何を主張しないか
  *
- * **主張する:** 本番の各プロンプトで `generate()` が空でない応答を返すこと。
- * SDK制約・プロンプト長・API互換の破壊はここで落ちる。
+ * **主張する:** **代表4経路**（要約・クイズ・関連ノート・セクション要約）で
+ * `generate()` が空でない応答を返すこと。SDK制約・API互換の破壊のような
+ * **全経路に共通する故障**はここで落ちる。
  *
- * **主張しない:** 応答の中身が期待どおりの形式であること。
+ * **主張しない（1）: 残り6経路の健全性。** `PromptBuilder` の builder は10個あり、
+ * [UNCOVERED_BUILDERS] に挙げた6つは**実生成を通していない。**
+ * プロンプト長や引数の組み立てなど**その経路に固有の退行は、ここが緑でも検出されない。**
+ * 分類の網羅は `PromptGenerationCoverageTest`（JVM）が固定しており、
+ * **builder を足したら覆うか未保証として挙げるかを決めるまで落ちる。**
+ *
+ * **主張しない（2）:** 応答の中身が期待どおりの形式であること。
  * 端末AIの出力は非決定的なので、書式の一致を assert すると**壊れていないのに赤くなる**。
  * パーサへ通した結果は logcat（[TAG]）へ出し、**人間が読む材料として残す**に留める。
  * パーサについて assert するのは「実出力を渡しても例外を投げない」ことだけ。
@@ -158,6 +165,25 @@ class OnDeviceGenerationTest {
 
     private companion object {
         const val TAG = "OnDeviceGeneration"
+
+        /**
+         * **実生成を通していないプロンプト。** ここに挙がっているものは、
+         * 本テストが緑でも**その経路固有の退行を検出しない。**
+         *
+         * 代表4経路に留めているのは、生成が `AiClient` の Mutex で直列化され
+         * 1件あたり最大60秒かかるため。**全経路へ広げるなら実行時間の設計から要る。**
+         *
+         * `PromptGenerationCoverageTest` が、10個の builder すべてが
+         * 「覆われている」か「ここに挙がっている」かのどちらかであることを固定する。
+         */
+        val UNCOVERED_BUILDERS = setOf(
+            "buildReadingTraceSummaryPrompt",
+            "buildDistillPrompt",
+            "buildPickerPrompt",
+            "buildAnnotationPrompt",
+            "buildSectionSuggestionsPrompt",
+            "buildSectionChatPrompt"
+        )
 
         const val NOTE_TITLE = "習慣について"
 
