@@ -10,7 +10,20 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * 画面回転・プロセス再生成をまたいだ振る舞い（→ instrumentation_testing 段階4b）。
+ * **同一プロセス内の Activity 再生成**をまたいだ振る舞い（→ instrumentation_testing 段階4b）。
+ *
+ * ## 覆う範囲と、覆わない範囲
+ *
+ * `ActivityScenario.recreate()` は `onSaveInstanceState()` の後に Activity を破棄し、
+ * 保存された Bundle で**新しい Activity を同じプロセス内に**作る。
+ * したがって覆うのは**回転・Fold開閉・設定変更**に相当する経路までである。
+ *
+ * **プロセス死亡後の復元は覆わない。** プロセス・Application・静的状態・
+ * プロセス内キャッシュはすべて生き残るため、
+ * **プロセス死亡時だけ初期化される状態や、永続層からの復元の退行は検出されない。**
+ * ここが緑でも「プロセス死亡に耐える」とは言えない。
+ * 保証したくなったら、対象プロセスを終了して永続状態から起動し直す
+ * 独立したシナリオを別に足すこと（→ current_issues TEST-5 の経緯）。
  *
  * ## JVMでは書けない理由
  *
@@ -32,23 +45,23 @@ import org.junit.runner.RunWith
  * （位置そのものではなく、保存キーの往復を見る等）。
  */
 @RunWith(AndroidJUnit4::class)
-class ProcessRecreationTest {
+class ActivityRecreationTest {
 
     @get:Rule
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     /**
-     * 再生成でオープニングを再生し直さない。
+     * Activity再生成でオープニングを再生し直さない。
      *
-     * `showOpening` は `savedInstanceState == null` で決まる。回転・Fold開閉・
-     * プロセス復元では非nullになるため、OPは出ない
+     * `showOpening` は `savedInstanceState == null` で決まる。回転・Fold開閉では
+     * 非nullになるため、OPは出ない
      * （出ると、回転のたびにブランドアニメが挟まって操作が中断される）。
      *
      * 判定に `Text("Vigilith AI")` を使えるのは、**UI上ここにしか無い**ため
      * （同じ文字列は補記ファイルの署名にも出るが、そちらは画面ではない）。
      */
     @Test
-    fun 再生成でオープニングを再生し直さない() {
+    fun Activity再生成でオープニングを再生し直さない() {
         // 起動直後のOPは有限アニメなので、ルールが idle を待つ間に終わっている。
         composeRule.onNodeWithText(VAULT_BUTTON).assertIsDisplayed()
 
@@ -62,11 +75,11 @@ class ProcessRecreationTest {
     /**
      * 再生成を繰り返しても描画が壊れない。
      *
-     * 回転を続けざまに行う操作に相当する。**1回で通ることと、繰り返して通ることは別** —
+     * 回転を続けざまに行う操作に相当する（プロセスは生き続ける）。**1回で通ることと、繰り返して通ることは別** —
      * 復元のたびに積み上がる状態があると2回目以降で崩れる。
      */
     @Test
-    fun 再生成を繰り返しても画面が描画され続ける() {
+    fun Activity再生成を繰り返しても画面が描画され続ける() {
         repeat(3) {
             composeRule.activityRule.scenario.recreate()
             composeRule.waitForIdle()

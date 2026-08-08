@@ -228,7 +228,7 @@ app/src/
 │   ├── data/VaultScanInstrumentationTest.kt    # 実物SAFでの走査・補記CRUD・読取失敗の注入
 │   ├── data/NoteImageGatewayInstrumentationTest.kt # 実物BitmapFactoryでの復号と上限の境界
 │   ├── ui/NoteReadingFlowTest.kt               # 描画抑止・全画面への位置引き継ぎ・進捗報告
-│   ├── ui/ProcessRecreationTest.kt             # Activity再生成（プロセス死亡は覆わない → §13.6）
+│   ├── ui/ActivityRecreationTest.kt            # Activity再生成（プロセス死亡は覆わない → §13.6）
 │   └── ui/TabNavigationTest.kt                 # タブ遷移（連打は競合を作れていない → §13.6）
 └── debug/java/com/example/newproject/testing/
     └── FakeVaultDocumentsProvider.kt           # instrumentation 用の偽SAF。**release には入らない**
@@ -1009,7 +1009,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 | `NoteImageGatewayInstrumentationTest` | 7 | 復号・寸法読み、上限の内外、`TooLarge`/`Broken` の切り分け | 実物の `BitmapFactory` |
 | `PromptTokenBudgetTest` | 5 | トークン計測と能力診断 | 端末AI（AICore） |
 | `OnDeviceGenerationTest` | 4 | 本番プロンプトでの実生成 | 端末AI（AICore） |
-| `ProcessRecreationTest` | 2 | Activity再生成でOPを再生しない、繰り返し再生成 | Activityライフサイクル |
+| `ActivityRecreationTest` | 2 | Activity再生成でOPを再生しない、繰り返し再生成（**プロセス死亡は覆わない**） | Activityライフサイクル |
 | `TabNavigationTest` | 4 | タブの往復・巡回・連打・遷移先での再生成 | `NavHost` のバックスタック |
 
 **土台は `src/debug` の `FakeVaultDocumentsProvider`。** 実物のSAF経路を通すために
@@ -1035,6 +1035,8 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 - **`ActivityScenario.recreate()` はプロセス死亡ではない。** 同一プロセス内でActivityを作り直すだけで、
   Application・静的状態・プロセス内キャッシュは生き残る。
   **34/34成功からプロセス死亡耐性は結論できない。**
+  → 2026-08-08 に `ActivityRecreationTest` へ改名し、KDoc・設計書・解析書の主張を
+  「同一プロセス内のActivity再生成」へ狭めた。**プロセス死亡の保証は未着手のまま。**
 - **端末AIの生成は10経路中4経路だけ。** Nano依存9件の内訳は生成4件・計測/診断5件で、
   読書痕跡要約・蒸留・検索picker・補記・セクション候補・セクションchatの**6経路は未保証**。
 
