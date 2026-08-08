@@ -10,6 +10,7 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsProvider
 import java.io.File
 import java.io.FileNotFoundException
+import java.security.MessageDigest
 
 /**
  * instrumentation 用の Vault。**実物のSAF経路をそのまま通すために置く。**
@@ -233,8 +234,10 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
                 lastModified = lastModified ?: clock++,
                 childIds = mutableListOf()
             )
-            nodes[id] = node
-            nodes[parentId]?.childIds?.add(id)
+            // **同じパスを2回置いても子は増やさない。** `nodes` は置換されるので、
+            // 無条件に足すと親の列挙だけが重複し、実プロバイダには無い行が見える。
+            val isNew = nodes.put(id, node) == null
+            if (isNew) nodes[parentId]?.childIds?.add(id)
             fileOf(id).writeBytes(bytes)
             // **サイズを申告しないプロバイダは実在する。** 上限の強制が
             // メタデータ照会だけに頼っていないかを試すために切り替えられるようにする。
@@ -278,14 +281,30 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
             else -> "application/octet-stream"
         }
 
+        /**
+         * document ID に対応する実体ファイル。
+         *
+         * **`/` を `_` へ置換してはいけない。** `a_b.md`（ID `root/a_b.md`）と
+         * `a/b.md`（ID `root/a/b.md`）が**同じ `root_a_b.md` へ潰れ**、
+         * 後から置いたほうが先の内容を上書きする。
+         * 現行のテストデータでは顕在化していなかったが、
+         * パス分離や外部上書きを試すテストが**実プロバイダには無い衝突を観測する**。
+         *
+         * ID の SHA-256 を使えば単射になる。中身は人が読まないので可読性は要らない。
+         */
         private fun fileOf(id: String): File {
             val root = requireNotNull(cacheRootHolder) {
                 "cacheRootHolder が未設定。テストの @Before で cacheDir を渡すこと。"
             }
             val dir = File(root, "fake-vault")
             dir.mkdirs()
-            return File(dir, id.replace('/', '_'))
+            return File(dir, sha256Of(id))
         }
+
+        private fun sha256Of(value: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(value.toByteArray())
+                .joinToString("") { "%02x".format(it) }
 
         /**
          * 中身の置き場。**provider の生成前にも [putFile] が呼ばれ得る**ので

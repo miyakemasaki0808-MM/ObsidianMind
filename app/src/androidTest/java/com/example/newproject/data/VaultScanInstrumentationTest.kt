@@ -2,6 +2,7 @@ package com.example.newproject.data
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.testing.FakeVaultDocumentsProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -40,6 +41,12 @@ class VaultScanInstrumentationTest {
         repository = NoteRepository(),
         vaultUri = { FakeVaultDocumentsProvider.treeUri }
     )
+
+    /** 実物の `ContentResolver` 経由で読む（偽Vaultの内部状態ではなくSAFの出力を見る）。 */
+    private fun readText(ref: DocumentRef): String =
+        requireNotNull(contentResolver.openInputStream(ref.toUri())) {
+            "ストリームを開けなかった: $ref"
+        }.use { it.readBytes().toString(Charsets.UTF_8) }
 
     @Before
     fun setUp() {
@@ -103,6 +110,50 @@ class VaultScanInstrumentationTest {
         val folders = requireNotNull(browser().current()).listTopLevelFolders()
 
         assertEquals(listOf("ideas", "journal"), folders.map { it.name })
+    }
+
+    /**
+     * **区切りだけが違うパスが、同じ実体を指さない。**
+     *
+     * 偽Vaultは document ID から実体ファイル名を作る。`/` を `_` へ置換していたため、
+     * `a_b.md`（ID `root/a_b.md`）と `a/b.md`（ID `root/a/b.md`）が
+     * **同じファイルへ潰れて後勝ちで上書き**されていた。
+     * 現行のテストデータでは顕在化していなかったが、
+     * **実プロバイダには無い衝突を観測する**土台になっていた（TEST-7）。
+     */
+    @Test
+    fun 区切りだけが違うパスは別の実体として扱われる() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("a_b.md", content = "フラット側の本文")
+        FakeVaultDocumentsProvider.putFile("a/b.md", content = "入れ子側の本文はこちらのほうが長い")
+
+        val notes = requireNotNull(browser().current()).collectAllNotes().notes
+            .associateBy { it.vaultRelativePath }
+
+        val flat = requireNotNull(notes["a_b.md"]) { "フラット側が見つからない" }
+        val nested = requireNotNull(notes["a/b.md"]) { "入れ子側が見つからない" }
+        assertEquals(
+            "区切りだけが違うパスが同じ実体を指している",
+            "フラット側の本文",
+            readText(flat.ref)
+        )
+        assertEquals("入れ子側の本文はこちらのほうが長い", readText(nested.ref))
+    }
+
+    /**
+     * **同じパスを2回置いても列挙は1行のまま。**
+     *
+     * `nodes` は置換されるのに親の `childIds` へ無条件に足していたため、
+     * 再投入すると**列挙だけが重複**していた。内容と更新日時だけが新しくなるのが正しい。
+     */
+    @Test
+    fun 同じパスへ2回置いても列挙は重複しない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md", content = "1回目")
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md", content = "2回目の本文")
+
+        val notes = requireNotNull(browser().current()).collectAllNotes().notes
+
+        assertEquals("列挙が重複している", 1, notes.count { it.vaultRelativePath == "ideas/habit.md" })
+        assertEquals("2回目の本文", readText(notes.single().ref))
     }
 
     /** 補記は作成→一覧→削除まで実物のSAFで通る。 */
