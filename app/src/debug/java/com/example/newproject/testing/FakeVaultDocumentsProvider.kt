@@ -131,8 +131,13 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
                     DocumentsContract.Document.COLUMN_DISPLAY_NAME -> node.name
                     DocumentsContract.Document.COLUMN_MIME_TYPE -> node.mimeType
                     DocumentsContract.Document.COLUMN_LAST_MODIFIED -> node.lastModified
-                    DocumentsContract.Document.COLUMN_SIZE ->
-                        if (node.isDirectory) null else fileOf(node.id).length()
+                    DocumentsContract.Document.COLUMN_SIZE -> when {
+                        node.isDirectory -> null
+                        // **サイズを返さないプロバイダの再現。** 実在するので、
+                        // 上限の強制がメタデータ照会だけに頼っていないかを試せる。
+                        node.id in sizelessIds -> null
+                        else -> fileOf(node.id).length()
+                    }
                     DocumentsContract.Document.COLUMN_FLAGS -> node.flags
                     else -> null
                 }
@@ -183,6 +188,7 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
 
         private val nodes = linkedMapOf<String, Node>()
         private val unreadableFolderIds = mutableSetOf<String>()
+        private val sizelessIds = mutableSetOf<String>()
         private var clock = 1_000L
 
         /** Vault ルートを指す tree URI。`SafVaultBrowser` へそのまま渡せる。 */
@@ -192,6 +198,7 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
         fun reset() {
             nodes.clear()
             unreadableFolderIds.clear()
+            sizelessIds.clear()
             clock = 1_000L
             nodes[ROOT_ID] = Node(
                 id = ROOT_ID,
@@ -204,6 +211,16 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
 
         /** `ideas/2026/habit.md` のように、途中のフォルダごと作る。 */
         fun putFile(vaultRelativePath: String, content: String = "", lastModified: Long? = null) {
+            putBinaryFile(vaultRelativePath, content.toByteArray(), lastModified)
+        }
+
+        /** 画像など、文字列で表せない中身を置く。 */
+        fun putBinaryFile(
+            vaultRelativePath: String,
+            bytes: ByteArray,
+            lastModified: Long? = null,
+            reportSize: Boolean = true
+        ) {
             val segments = vaultRelativePath.split('/')
             var parentId = ROOT_ID
             segments.dropLast(1).forEach { parentId = ensureFolder(parentId, it) }
@@ -218,7 +235,10 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
             )
             nodes[id] = node
             nodes[parentId]?.childIds?.add(id)
-            fileOf(id).writeBytes(content.toByteArray())
+            fileOf(id).writeBytes(bytes)
+            // **サイズを申告しないプロバイダは実在する。** 上限の強制が
+            // メタデータ照会だけに頼っていないかを試すために切り替えられるようにする。
+            if (reportSize) sizelessIds.remove(id) else sizelessIds.add(id)
         }
 
         fun putFolder(vaultRelativePath: String) {
@@ -254,6 +274,7 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
             name.endsWith(".md", ignoreCase = true) -> "text/markdown"
             name.endsWith(".png", ignoreCase = true) -> "image/png"
             name.endsWith(".jpg", ignoreCase = true) -> "image/jpeg"
+            name.endsWith(".bmp", ignoreCase = true) -> "image/bmp"
             else -> "application/octet-stream"
         }
 
