@@ -63,15 +63,33 @@ seam を本番へ入れるか判断する。**先回りで seam を作らない*
 | 段階 | 内容 | 本番変更 | 状態 |
 |---|---|---|---|
 | 1 | 読書画面（解析待ちの描画抑止・全画面への位置引き継ぎ・進捗報告の整合） | なし | **完了**（実機 4/4） |
-| 2 | 実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）＋走査・補記の保存/削除・読取失敗の注入 | debug ソースセット追加 | 未着手 |
+| 2 | 実物SAF（`src/debug/` のテスト用 `DocumentsProvider`）＋走査・補記の保存/削除・読取失敗の注入 | debug ソースセット追加 | 実装済み・**実機未実行** |
 | 3 | `NoteImageGateway`（段階2の上に乗る） | なし | 未着手 |
 | 4 | 端末AIの横展開・画面回転／プロセス再生成 | なし | 未着手 |
 
 **段階2のプロバイダは `androidTest` ではなく `src/debug/` へ置く。**
 `androidTest` 側に置くと別APK・別UIDになり、URI権限の付与が要る。
 debug ソースセットならアプリ本体と同じUIDになるので、`DocumentsContract` の
-tree URI をそのまま扱える。フォルダ読取失敗（`ReadingTraceOrphans` の三値判定が対象）も、
-プロバイダ側で例外を返すだけで再現できる。
+tree URI をそのまま扱える。**release には入らない。**
+
+## 判断5: 読取失敗は「例外」ではなく「null カーソル」で作る
+
+`querySafChildren` は `contentResolver.query(...) ?: SafChildren.UNREADABLE` という形なので、
+**実物の読取失敗は「query が null を返す」こと**である。したがって
+[FakeVaultDocumentsProvider] の `queryChildDocuments` も、失敗させたいフォルダで
+null を返す。例外を投げる形にすると本番が通っていない経路を試すことになる。
+
+これで初めて、**「ノートが無い」と「そのフォルダを読めなかった」の区別**を
+実物のSAF経路で確かめられる。痕跡の孤児判定は不在を根拠に**削除する**ため、
+ここが崩れると生きた痕跡が消える。TRACE-1・TRACE-2 で純関数側は固めたが、
+**`NoteRepository` から `VaultScan` までの実配線は手動確認しか担保が無かった。**
+
+**必要だったのは `isChildDocument` の override。** tree URI 配下の入れ子を触ると
+`DocumentsProvider.enforceTree()` がこれを呼ぶので、実装しないと
+ルート直下しか読めない。
+
+**`DocumentsProvider` の実体はシステムが生成する**ためテストから掴めない。
+木の組み立てと失敗注入は `companion` 側の API（`reset` / `putFile` / `makeUnreadable`）に置く。
 
 ## 判断4: CIでは実行せず、実行を運用で担保する
 

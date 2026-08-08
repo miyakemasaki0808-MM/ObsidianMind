@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          instrumentation 用の Vault（→ docs/dev/design/instrumentation_testing.md 段階2）。
+          debug ビルドにだけ入り、release には含まれない。
+
+          exported="false" にしてあるのは、SAFのピッカーへ出す必要が無いため。
+          テストは DocumentsContract.buildTreeDocumentUri で直接 URI を組み立てる。
+          アプリ本体と同じUIDなので、それだけで tree URI を扱える。
+        -->
+        <provider
+            android:name="com.example.newproject.testing.FakeVaultDocumentsProvider"
+            android:authorities="com.example.newproject.debug.fakevault"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+    </application>
+
+</manifest>
