@@ -2,18 +2,33 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind。`strings.xml` の `app_name` を改称済み）
 
-**解析日:** 2026-08-02（**Markdownリスト構造とバッジ記号の基準見直しに伴い §1・§2・§9・§13・§14 を更新**。他章は 07-27〜08-01 時点のまま）
+**解析日:** 2026-08-08（**テスト基盤の拡張に伴い §13 を全面更新し、§13.5 として instrumentation の内訳を新設**。冒頭メタと §1 も更新。**他章は 07-27〜08-02 時点のまま**）
 
-**対象ブランチ:** `feature/Improvement_Function_No.10`
+**対象ブランチ:** `feature/New_Function_No.2`（基準 `5c443d6`）
 
 **対象実装:** 改善活動A案（非同期の境界）・C案（入出力の境界）・B案（依存と状態の境界）・
 AI入力の抜粋化・D案（ライト配色のAA是正）・E案（リリース構成の整備）・
 F-1（表示用Markdownの非同期化）・F-2（蒸留の復旧チェックと補記の後始末）・依存更新方針・
-N-7（SAF境界の gateway 化）まで。文書のみのコミットは対象外
+N-7（SAF境界の gateway 化）・N-3（ノート内画像）に加えて、
+**2026-08-05〜08 の外部レビュー対応（上限つきストリームの境界・遮断器の包含判定・受付漏れ検査）と
+instrumentation の全段階**まで。文書のみのコミットは対象外
 
-**対象範囲:** `app/src/main`、`app/src/test`、Gradle設定
+**対象範囲:** `app/src/main`、`app/src/test`、**`app/src/androidTest`**、**`app/src/debug`**、Gradle設定
 
-**検証結果:** 2026-08-02 に `testDebugUnitTest` / `lintDebug` をCLI実行し、**JVM 583ケース全件グリーン・Lint Error 0 / Warning 0（更新系は12 hints）・Kotlinコンパイル警告 0・instrumentation 2/2 成功**（Android 16 / API 36 エミュレータ）を確認済み。警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。**E案は 2026-07-31 に確認済み**（`applicationId` の変更どおり別アプリとしてインストールされる。旧パッケージは端末に残る）。**ReadingTrace v1 は 2026-07-31 にクローズ済み**（→ [reflect_reading_trace](design/reflect_reading_trace.md) §12）。Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
+**検証結果:** 2026-08-08 に `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` をCLI実行し、
+**JVM 748ケース全件グリーン・Lint Error 0 / Warning 0（更新系は12 hints）・Kotlinコンパイル警告 0** を確認済み。
+**instrumentation は 34/34 成功・0 skipped**（Pixel 10 Pro Fold / Android 17・実機）。
+警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。
+ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、
+その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。
+**E案は 2026-07-31 に確認済み**（`applicationId` の変更どおり別アプリとしてインストールされる。旧パッケージは端末に残る）。
+**ReadingTrace v1 は 2026-07-31 にクローズ済み**（→ [reflect_reading_trace](design/reflect_reading_trace.md) §12）。
+Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
+
+> **注意:** instrumentation が34件になったことは、**保護範囲が34件ぶん広がったことを意味しない。**
+> 2026-08-08 の外部レビューで、**主張が実際に試していることより広い箇所が3件**指摘されている
+> （連打テストが操作間で同期している／`ActivityScenario.recreate()` はプロセス死亡ではない／
+> 端末AI生成は10経路中4経路）。→ §13.5・§13.6
 
 ---
 
@@ -39,13 +54,13 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 現時点の総評は次のとおり。
 
 - 主要責務の分割、状態の一元管理、古いAI処理のキャンセル、生成タイムアウト、SAF走査キャッシュが実装され、継続的な機能追加に耐えやすい構造になっている。
-- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算、明暗トークンのコントラストなど、壊れやすい純粋ロジックにはユニットテストが整備されている（583ケース。内訳は §13.1）。
+- Markdownパーサー、補記Markdown生成、クイズ応答パーサー、蒸留の文分割・採点・太字挿入、ReadingTraceのJSON・Controller・相対パス走査、Vigilith起動・表示状態・状態別モーション・配置計算、明暗トークンのコントラストなど、壊れやすい純粋ロジックにはユニットテストが整備されている（**748ケース**。内訳は §13.1）。
 - ノート単位の Controller は requestId ＋ Job 追跡で古い結果の混入を防ぐ。Vault単位の要求（補記一覧・削除・フォルダ一覧・痕跡の整理）は寿命が違うため、共有の `vaultGeneration` を `update` 直前に照合する二層構成になっている。**痕跡の削除だけは世代照合に加えて、洗い出した時点の Vault識別子を保持して照合する**（キーが相対パスのハッシュのため、別Vaultの同名パスと衝突しうる）。
 - 状態は `NoteUiStateStore` だけが所有し、各Controllerへは機能別の `*StateWriter` を渡すため、担当外フィールドへの書き込みはコンパイル時に不可能である。ノート切替のジョブ停止と状態リセットは `onNoteChanged()` の1手に閉じている。
 - パッケージ依存は `model` を葉とする一方向に整理され、`PackageDependencyTest` がimportを走査してCIで固定している。循環は残っていない。
-- SAF、Compose Navigation、Gemini Nano を組み合わせた統合テストはなく、実端末依存の動作はユニットテストだけでは保証されない。`androidTest` ソースセットと依存一式は 2026-07-29 に整備し、**土台のスモーク2件は 2026-08-01 に Android 16 で 2/2 成功した**が、**実テストの中身はまだ無い**（→ §13.3）。
+- **SAF・画像復号・Compose描画・画面遷移・端末AI生成を実機で通す instrumentation が 34件そろい、2026-08-08 に 34/34 成功した**（→ §13.5）。土台は `src/debug` のテスト用 `DocumentsProvider` で、本番の `NoteRepository` / `SafVaultBrowser` をそのまま動かす。**ただし保証範囲は主張より狭い** — 連打テストは競合を作れておらず、`recreate()` はプロセス死亡を覆わず、端末AI生成は10経路中4経路だけである（→ §13.6）。**CIでは実行しない**判断を 2026-08-08 に確定した（→ §13.3）。
 - ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度4件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存、検索フォールバックの文言差）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
-- 構造面の成長限界（依存の循環・ViewModelのテスト不能・状態の共有所有）は 2026-07-27 のB案で解消した。アクセシビリティとリリース構成は 2026-07-29〜30 のD案・E案で着手し、**ライトの文字トークンは実際に載る面すべてで4.5:1を満たす**ようになった。残る弱点は R8・署名が未設定であること、下部ナビ帯の上のバッジ塗りが基準未達であること、**instrumentation に実テストの中身が無いこと**に移っている（土台は 2026-08-01 に 2/2 成功して実証済み）。
+- 構造面の成長限界（依存の循環・ViewModelのテスト不能・状態の共有所有）は 2026-07-27 のB案で解消した。アクセシビリティとリリース構成は 2026-07-29〜30 のD案・E案で着手し、**ライトの文字トークンは実際に載る面すべてで4.5:1を満たす**ようになった。残る弱点は R8・署名が未設定であること、下部ナビ帯の上のバッジ塗りが基準未達であること、そして **instrumentation の実行がCIで担保されず「PR前に手で回す」運用のままであること**に移っている。
 
 ---
 
@@ -55,9 +70,10 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
-| 本番 Kotlin | 103ファイル | 16,373行 |
-| ユニットテスト Kotlin | 60ファイル | 10,877行、583テスト（テストクラスは59。残り1つは共有フェイク `FakeVault.kt`） |
-| instrumentation テスト Kotlin | 2ファイル | 土台のスモーク2件のみ（**2026-08-01 に Android 16 で 2/2 成功**。実テストの中身は未着手） |
+| 本番 Kotlin | 118ファイル | 18,396行 |
+| ユニットテスト Kotlin | 69ファイル | 13,139行、748テスト（テストクラスは68。残り1つは共有フェイク `FakeVault.kt`） |
+| instrumentation テスト Kotlin | 9ファイル | 1,544行、34テスト（**2026-08-08 に実機で 34/34 成功・0 skipped**。内訳は §13.5） |
+| debug ソースセット Kotlin | 1ファイル | 301行（instrumentation 用の偽SAFプロバイダ。**release には入らない**） |
 | Androidモジュール | 1 | `:app` |
 
 行数は空行・コメントを含む `wc -l` ベースであり、生成物とGradleスクリプトは含まない。
@@ -201,12 +217,21 @@ app/src/
 │   └── res/
 │       ├── values/                             # app_name、テーマ（システムバーは透明・色はCompose側）
 │       └── xml/                                # backup_rules / data_extraction_rules（バックアップ除外）
-├── test/java/com/example/newproject/           # 59ファイル・583テスト（内訳は §13.1）
+├── test/java/com/example/newproject/           # 68ファイル・748テスト（内訳は §13.1）
 │   ├── architecture/PackageDependencyTest.kt   # importを走査してパッケージ依存の向きを固定
 │   └── ui/theme/VibrantTextUsageTest.kt        # 画面からのonVibrant直接使用と文字色のcopy(alpha)を禁じる
-└── androidTest/java/com/example/newproject/
-    ├── InstrumentationSetupTest.kt             # Runner起動・対象Contextのみ（Composeルールを持たない）
-    └── ComposeRenderingSetupTest.kt             # Compose描画とEspressoのUI同期。**対策後は未実行**
+├── androidTest/java/com/example/newproject/    # 9ファイル・34テスト（内訳は §13.5）
+│   ├── InstrumentationSetupTest.kt             # Runner起動・対象Contextのみ（Composeルールを持たない）
+│   ├── ComposeRenderingSetupTest.kt            # Compose描画とEspressoのUI同期
+│   ├── ai/PromptTokenBudgetTest.kt             # 端末AIのトークン計測と能力診断
+│   ├── ai/OnDeviceGenerationTest.kt            # 本番プロンプトでの実生成（10経路中4経路）
+│   ├── data/VaultScanInstrumentationTest.kt    # 実物SAFでの走査・補記CRUD・読取失敗の注入
+│   ├── data/NoteImageGatewayInstrumentationTest.kt # 実物BitmapFactoryでの復号と上限の境界
+│   ├── ui/NoteReadingFlowTest.kt               # 描画抑止・全画面への位置引き継ぎ・進捗報告
+│   ├── ui/ProcessRecreationTest.kt             # Activity再生成（プロセス死亡は覆わない → §13.6）
+│   └── ui/TabNavigationTest.kt                 # タブ遷移（連打は競合を作れていない → §13.6）
+└── debug/java/com/example/newproject/testing/
+    └── FakeVaultDocumentsProvider.kt           # instrumentation 用の偽SAF。**release には入らない**
 
 .github/workflows/ci.yml                        # PR・mainへのpushで testDebugUnitTest / lintDebug / assembleDebugAndroidTest
 ```
@@ -876,7 +901,15 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `architecture/NoteExcerptThreadingTest.kt` | 1 | 抜粋生成が本番7経路すべてで `Dispatchers.Default` 側にあること（呼び出し箇所の一覧ごとソース走査で固定） |
 | `ui/theme/AppColorContrastTest.kt` | （上記に含む） | トークン×**実際に載る面**の総当たり、半透明面の実効色、グラデーション停止色との比、明暗の反転 |
 | `ui/theme/VibrantTextUsageTest.kt` | 2 | 画面からの `onVibrant` 直接使用と、文字色への任意の `copy(alpha)` をソース走査で禁じる |
-| **合計（59ファイル）** | **583** | |
+| `domain/ImageLinkResolutionTest.kt` | 29 | 画像参照の解析と索引照合（完全パス→ファイル名の順、曖昧・外部URL・空） |
+| `domain/ImageDecodePolicyTest.kt` | 17 | 復号可否の拡張子判定、寸法・ピクセル数の上限、間引き倍率、**`TooLarge`/`Broken` の切り分け順序** |
+| `domain/BoundedInputStreamTest.kt` | 13 | **上限の境界（-1／ちょうど／+1）を単一read・配列read・`skip`・混在で固定**、`len == 0` の契約、`available()` の丸め、先読みが1回だけであること |
+| `VaultImageIndexStoreTest.kt` | 12 | 画像索引のTTL・再走査の歯止め・Vault世代 |
+| `ui/NoteImageTextTest.kt` | 19 | 画像の失敗理由ごとの文言と代替テキスト |
+| `domain/ReadingTraceOrphansTest.kt` | 27 | 孤児判定の遮断器（フォルダ単位・読取失敗の伝播・**ルートと別サブツリーの混在**）、削除直前の三値再走査 |
+| `architecture/ReviewFindingsLedgerTest.kt` | 6 | レビュー指摘が受付簿へ全件載ること、処遇の語彙、**起票の参照先が実在すること**、ID重複の拒否 |
+| `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ §13.5の脚注） |
+| **合計（68ファイル）** | **748** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -889,7 +922,17 @@ BUILD SUCCESSFUL
 
 2026-07-25にAndroid Studio同梱JBRを指定してCLI実行し、コンパイルと全282ケースが成功した（ReadingTrace v1時点）。その後もVigilithの起動・表示状態・状態別モーションを追加し、2026-07-26のPhase 3では配置計算6件とアクセシビリティ文言2件を追加した。**352ケース全件グリーン**、`assembleDebug`、Pixel 10 Pro Foldへの上書きインストール成功を確認した（Phase 3時点）。
 
-その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加。さらに改善活動A案（要約Controllerの世代管理・検索スコープ）、C案（用途別の読込予算・累計回数）、B案（切替の一斉停止と一斉初期化・状態Writer・パッケージ依存）で計46件を追加して49ファイル・425ケースとなった。2026-07-28のAI入力の抜粋化で25件を追加して450ケース。2026-07-29〜30のD案・E案でコントラスト検証を作り直し（面の総当たり・半透明の実効色・停止色との比・明暗の反転）、使用箇所の禁止テストを新設して9件増え53ファイル・459ケースとなった。2026-07-31 の F-1（表示用Markdownの非同期化）で12件、F-2（蒸留の復旧チェック・補記の後始末）で15件を追加して56ファイル・486ケース。2026-08-01 の N-7 段階1〜6（`DocumentRef` 化）で1件、同段階7（`VaultBrowser`）で**さがす／補記の世代照合・検索実行・走査キャッシュ・削除失敗の件数・ハンドル取得の契約を21件追加**し、**57ファイル・508ケースとなった**。2026-08-02 の Markdownリスト構造（入れ子・番号・タスク混在）で17件、バッジ記号の基準見直しで2件を追加し、**現在は59ファイル・583ケース全件グリーン**。
+その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加。さらに改善活動A案（要約Controllerの世代管理・検索スコープ）、C案（用途別の読込予算・累計回数）、B案（切替の一斉停止と一斉初期化・状態Writer・パッケージ依存）で計46件を追加して49ファイル・425ケースとなった。2026-07-28のAI入力の抜粋化で25件を追加して450ケース。2026-07-29〜30のD案・E案でコントラスト検証を作り直し（面の総当たり・半透明の実効色・停止色との比・明暗の反転）、使用箇所の禁止テストを新設して9件増え53ファイル・459ケースとなった。2026-07-31 の F-1（表示用Markdownの非同期化）で12件、F-2（蒸留の復旧チェック・補記の後始末）で15件を追加して56ファイル・486ケース。2026-08-01 の N-7 段階1〜6（`DocumentRef` 化）で1件、同段階7（`VaultBrowser`）で**さがす／補記の世代照合・検索実行・走査キャッシュ・削除失敗の件数・ハンドル取得の契約を21件追加**し、**57ファイル・508ケースとなった**。2026-08-02 の Markdownリスト構造（入れ子・番号・タスク混在）で17件、バッジ記号の基準見直しで2件を追加し、59ファイル・583ケースとなった。
+その後 N-3（ノート内画像）で画像の参照解決・復号方針・索引・文言を追加し、
+**2026-08-05〜08 の外部レビュー対応**で上限つきストリームの境界13件・遮断器の混在ケース・
+受付漏れ検査6件・テスト形状の検査1件を足して、**現在は68ファイル・748ケース全件グリーン**。
+
+**この期間に増えた分は、性質が2つに分かれる。** 片方は本番の欠陥を閉じるもの
+（`BoundedInputStreamTest` の境界、`ReadingTraceOrphansTest` のルート混在、
+`ImageDecodePolicyTest` の判定順序）。もう片方は**テストや文書の運用そのものを検査に変えるもの**で、
+`ReviewFindingsLedgerTest`（レビュー指摘の取りこぼし）と
+`InstrumentationTestShapeTest`（`@Test` の戻り値）がこれにあたる。
+後者は**プロダクトコードを1行も守らないが、守る仕組みが壊れたことを検出する。**
 
 **コントラスト系のテストは2度作り直している。** 初版は全色を最も明るい `panel` の上で測り、2版目も
 グラデーション上の文字を最も有利な停止色でだけ測っていた。どちらも全緑のまま基準を割っており、
@@ -919,12 +962,20 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 入る前のアイドル待機初期化で起き、Contextを見るだけのテストにもクラス共通の `createComposeRule()` が
 効いていたため2件とも巻き添えになった。対策としてクラスを2つへ分離し、`espresso-core` を 3.6.1 → 3.7.0、
 `ext:junit` を 1.2.1 → 1.3.0 へ限定更新した結果、**2026-08-01 の再実行で 2/2 成功した**
-（Pixel_10_Pro_Fold AVD・Android 16 / API 36。`ComposeRenderingSetupTest` 3.9秒、
-`InstrumentationSetupTest` 0.001秒）。**クラス分離と依存更新を同時に入れたため、どちらが効いたかは
-切り分けていない** — 実害が消えたので追わない判断とした。
+（Pixel_10_Pro_Fold AVD・Android 16 / API 36）。**クラス分離と依存更新を同時に入れたため、
+どちらが効いたかは切り分けていない** — 実害が消えたので追わない判断とした。
 
-CIは組み立てまでなので、**この種の失敗は今もCIを素通りする**。土台が動くことを常時保証したいなら
-エミュレータを回すジョブが要るが、現時点では入れていない。
+**CIは組み立てまでなので、instrumentation の失敗は今もCIを素通りする。**
+2026-08-08 にエミュレータジョブの追加を検討し、**見送りで確定した**
+（→ [instrumentation_testing](design/instrumentation_testing.md) 判断4）。
+最も実機固有な端末AI依存の9件はエミュレータでは `Assume` で skip されるため実機確認が残り、
+確認が二重になること、無料でも保守（不安定な赤・KVM・system image・除外クラス）が残ることによる。
+**再検討の条件は件数ではなく実害へ置いた** — 実行忘れで実害が出た／複数人になった／
+頻度で明確に苦痛になった／配布ゲートが要る。
+
+**CIのトリガーを正確に書いておく。** `pull_request` と **`main` への push だけ**で、
+**featureブランチへの単独pushでは走らない**（PRが開いていればその更新で走る）。
+したがって**PRを作るまでの間、自動検査は一度も掛からない。**
 
 ### 13.4 未カバー領域
 
@@ -933,16 +984,63 @@ CIは組み立てまでなので、**この種の失敗は今もCIを素通り�
 - `RelatedNotesUseCase` のオーケストレーション本体（候補のスコアリング・並べ替え・整形・ID解決・キャッシュの純ロジックは `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` のテストで個別にカバー済み。`AiClient` とSAF読込を絡めた `findRelated` 全体の結線は未カバー）と `SearchPickerUseCase` のAI応答解釈（キーワード採点・フォールバックの選抜は `SearchKeywordMatchingTest` でカバー済み）
 - `NoteHistoryStore` の日付判定・重複排除（Android依存のため素のユニットテスト不可）
 - `PromptBuilder` の出力契約（クイズ・蒸留は `QuizPromptBuilderTest` / `DistillPromptBuilderTest` でカバー済み。要約・関連・ピッカー・補記・セクション系の5経路は未カバー）
-- SAFのカーソル走査、ファイル作成、削除（蒸留の書き込み経路のみ `DistillWriteRepositoryTest` でフェイクを使って検証済み）
+- ~~SAFのカーソル走査、ファイル作成、削除~~ → **§13.5 の `VaultScanInstrumentationTest` が実物のSAFで覆った**（走査の相対パス・読取失敗と不在の区別・補記の作成/一覧/削除）。蒸留の書き込み経路は引き続き `DistillWriteRepositoryTest` がフェイクで検証する
 - ReadingTraceのCompose実レイアウト上の可視量（算出そのものは純関数として検証済み）、Activity lifecycleを通した pause/resume の実挙動、SAF Gatewayでの実Vault照合、外部同期によるSAFフォルダ索引の変更
-- Gemini Nanoの利用可否、ダウンロード、生成、タイムアウト
-- Compose UI、NavigationBar/Rail、全画面遷移
-- 連続操作時のキャンセルと競合
-- 実際のObsidian Vaultを使ったinstrumentation/E2Eテスト
+- Gemini Nanoの**ダウンロードとタイムアウト**（利用可否と生成は §13.5 が覆うが、**生成は10経路中4経路だけ**）
+- ~~Compose UI、NavigationBar/Rail、全画面遷移~~ → **§13.5 が覆った**（読書画面の描画抑止・位置引き継ぎ・タブ遷移）。ただし画面幅による Rail 切替は未カバー
+- 連続操作時のキャンセルと競合（**タブ連打テストはあるが競合を作れていない** → §13.6・TEST-4）
+- 実際のObsidian Vaultを使ったE2Eテスト（偽Vaultでの経路は §13.5 が覆う。**実プロバイダ固有の挙動**は対象外）
 
-現在の583テストは、Android依存の薄い純粋ロジックと、Controller間の調停の回帰防止には有効だが、アプリ全体の動作保証範囲は限定的である。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
+現在の748テストは、Android依存の薄い純粋ロジックと、Controller間の調停の回帰防止に有効である。**2026-08-08 に instrumentation 34件が加わり、SAF・画像復号・Compose描画・画面遷移・端末AI生成の一部が実機で覆われた**が、**保証範囲は §13.6 のとおり主張より狭い**。ReadingTraceの高優先度3件はこの境界外で見つかったものであり、修正後も**Android側の実挙動は実端末確認でしか担保できない**。Vigilithも状態分離・モーション・配置範囲は純関数で検証しているが、実フレームの見え方、タップ／ドラッグの競合、Snackbar・IME・ReadingTraceとの視覚的な重なり、TalkBackは実機確認が必要。
 
 ---
+
+### 13.5 instrumentation の内訳（34件）
+
+2026-08-08 に段階1〜4cを実装し、**実機で 34/34 成功・0 skipped**（Pixel 10 Pro Fold / Android 17）。
+段階の定義と判断は [instrumentation_testing](design/instrumentation_testing.md) が持つ。
+
+| テストクラス | 件数 | 対象 | JVMで書けない理由 |
+|---|---:|---|---|
+| `InstrumentationSetupTest` | 1 | 対象アプリのContext取得 | Runnerの疎通 |
+| `ComposeRenderingSetupTest` | 1 | Composeテストルールの描画 | Compose実行環境 |
+| `NoteReadingFlowTest` | 4 | 解析待ちの描画抑止、全画面への位置引き継ぎ、進捗報告の整合 | レイアウト実測・可視判定 |
+| `VaultScanInstrumentationTest` | 6 | 走査の相対パス、**読取失敗と不在の区別**、補記の作成/一覧/削除 | 実物の `ContentResolver`・`DocumentsContract` |
+| `NoteImageGatewayInstrumentationTest` | 7 | 復号・寸法読み、上限の内外、`TooLarge`/`Broken` の切り分け | 実物の `BitmapFactory` |
+| `PromptTokenBudgetTest` | 5 | トークン計測と能力診断 | 端末AI（AICore） |
+| `OnDeviceGenerationTest` | 4 | 本番プロンプトでの実生成 | 端末AI（AICore） |
+| `ProcessRecreationTest` | 2 | Activity再生成でOPを再生しない、繰り返し再生成 | Activityライフサイクル |
+| `TabNavigationTest` | 4 | タブの往復・巡回・連打・遷移先での再生成 | `NavHost` のバックスタック |
+
+**土台は `src/debug` の `FakeVaultDocumentsProvider`。** 実物のSAF経路を通すために
+テスト用 `DocumentsProvider` をアプリ側（debug ソースセット）へ置き、
+`SafVaultBrowser` と `NoteRepository` は**本番のまま**動かす。
+`androidTest` へ置くと別APK・別UIDになり tree URI の権限付与が要るため、`src/debug` を選んだ。
+**release ビルドには入らない**（`processReleaseMainManifest` の出力で確認済み）。
+
+> **`@Test` の戻り値には検査を置いてある。** Kotlin の `fun x() = runBlocking { ... }` は
+> ブロック末尾の式の型が戻り値になるため、末尾が `Log.i()`（`Int`）だと JUnit4 の `void` 要求を
+> 満たさず、**そのクラスのテストが全件起動しない**。実際に4件が丸ごと止まった。
+> コンパイルは通り、失敗は赤ではなく**件数の減少**として現れる。
+> `InstrumentationTestShapeTest` が `runBlocking<Unit>` を強制する（→ [lessons L30](lessons.md)）。
+
+### 13.6 instrumentation が保証していない範囲
+
+**件数の増加を保護範囲の拡大と読み替えない。** 2026-08-08 の外部レビューで、
+**主張が実際に試していることより広い箇所が3件**指摘されている（TEST-4〜6として起票済み）。
+
+- **タブ連打は競合を作れていない。** `onNodeWithText(...).performClick()` は毎回
+  semantics を取り直して同期するため、遷移が重ならない。
+  さらに最後に Note を選べば最終assertは通るので、**`launchSingleTop` / `popUpTo` を外しても落ちない。**
+- **`ActivityScenario.recreate()` はプロセス死亡ではない。** 同一プロセス内でActivityを作り直すだけで、
+  Application・静的状態・プロセス内キャッシュは生き残る。
+  **34/34成功からプロセス死亡耐性は結論できない。**
+- **端末AIの生成は10経路中4経路だけ。** Nano依存9件の内訳は生成4件・計測/診断5件で、
+  読書痕跡要約・蒸留・検索picker・補記・セクション候補・セクションchatの**6経路は未保証**。
+
+加えて、**偽Vaultの実体ファイル名が document ID の `/` を `_` へ潰している**ため、
+`a_b.md` と `a/b.md` が同じファイルへ衝突する（TEST-7）。現行のテストデータでは顕在化していないが、
+**今後のパス分離・外部上書きテストが実プロバイダには無い挙動を観測し得る。**
 
 ## 14. コード品質評価
 
@@ -1018,7 +1116,7 @@ CIは組み立てまでなので、**この種の失敗は今もCIを素通り�
 16. （実装済み・2026-07-29〜30）ライト配色のAA未達を是正した。無彩色グレーを3段階へ統合し、基準面を `panelChip` に統一。見出し2色と更新日時は色相を保ったまま明度を下げ、グラデーション直上の文字は共通部品が背景ごと持ち、ボタンは輪郭線で境界を出す。検証は「トークン×実際に載る面」の総当たりへ移し、使用箇所の禁止をソース走査で強制した。
 17. （実装済み・2026-07-29）`applicationId` を `com.vigilith.ai` に確定した（`namespace` は据え置き）。
 18. R8を有効化して keep ルールを確認し、リリース署名の手順を決める。7つのAI経路を release ビルドで一巡する必要がある。
-19. instrumentation に実テストの中身を書く（SAF走査・Navigation・画面回転）。土台は 2026-08-01 に実証済みで、残る前提は `Uri` の gateway 化。
+19. （実装済み・2026-08-08）instrumentation の中身を34件書き、実機で 34/34 成功した（→ §13.5）。**残るのは、主張が観測より広い3件を狭めるか広げるか**（TEST-4〜6）と、実行がCIで担保されないこと。CIエミュレータは 2026-08-08 に見送りで確定した。
 20. 依存を実際に上げる。単位と契機は確定済み（→ design/dependency_policy.md）で、まず ML Kit GenAI beta4 の変更点をAARで確認する。**Compose BOM は Lint の検出から漏れる**ので手で見る。
 21. 下部ナビ帯の上のバッジ塗りを、輪郭線か明度の見直しで3:1へ乗せる。
 
@@ -1056,3 +1154,17 @@ CIは組み立てまでなので、**この種の失敗は今もCIを素通り�
   find app/src/test -name "*.kt" | wc -l && find app/src/test -name "*.kt" -exec wc -l {} + | tail -1
   grep -rh --include='*.kt' -c '^\s*@Test' app/src/test | awk '{s+=$1} END {print s}'
   ```
+
+- 2026-08-08の更新は、**テスト基盤の拡張と外部レビューの結果**を反映した。
+  2026-08-05〜08 に上限つきストリームの境界・遮断器の包含判定・受付漏れ検査を直し、
+  instrumentation を段階1〜4cまで実装して**実機 34/34 成功・0 skipped**を確認した。
+  §2.1 のコード規模（本番118ファイル・18,396行／テスト69ファイル・13,139行・748ケース／
+  androidTest 9ファイル・1,544行・34件／debug 1ファイル・301行）、§3 のツリー、
+  §13.1 のテスト表、§13.2 の実行結果、§13.3 の CI（**エミュレータ実行は見送りで確定**・
+  トリガーは `pull_request` と `main` への push だけ）、§13.4 の未カバー領域を書き換え、
+  **§13.5（instrumentation の内訳）と §13.6（保証していない範囲）を新設**した。
+  **§13.6 を分けたのが今回の要点である** — 34件という総数が
+  「連打の競合」「プロセス死亡」「全AI経路」の保証へ読み替えられていたことが
+  外部レビューで指摘され、TEST-4〜7・DOC-1 として起票した。
+  **件数は保護範囲を語らない**ので、内訳と非保証範囲を同じ章に並べて置く。
+  他章（§4〜§12・§14）は 07-27〜08-02 時点のまま。
