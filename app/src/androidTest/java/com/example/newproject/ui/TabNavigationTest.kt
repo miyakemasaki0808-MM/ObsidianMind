@@ -113,6 +113,10 @@ class TabNavigationTest {
      *
      * 座標は最初に1度だけ取り、以降は `sendPointerSync` で生のタップを送る。
      * Compose の待ち合わせを通らないので、遷移の処理中に次の入力が届く。
+     *
+     * **ここで戻る操作は試さない。** 最後に開始タブへ着いた状態で back を送ると、
+     * `NavController` に戻す先が無いので**Activityの終了へ伝播する**
+     * （2026-08-08 に実際にこれで落とした）。履歴の主張は上の2件が持つ。
      */
     @Test
     fun 同期を挟まない連続タップでも最後の選択に落ち着く() {
@@ -127,9 +131,6 @@ class TabNavigationTest {
         tap(note)
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText(NOTE_MARKER).assertIsDisplayed()
-        // 連打しても履歴は積み上がらない。
-        pressBackOnce()
         composeRule.onNodeWithText(NOTE_MARKER).assertIsDisplayed()
     }
 

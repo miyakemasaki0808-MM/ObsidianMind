@@ -63,13 +63,13 @@ class ActivityRecreationTest {
     @Test
     fun Activity再生成でオープニングを再生し直さない() {
         // 起動直後のOPは有限アニメなので、ルールが idle を待つ間に終わっている。
-        composeRule.onNodeWithText(VAULT_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithText(SCREEN_MARKER).assertIsDisplayed()
 
         composeRule.activityRule.scenario.recreate()
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText(OPENING_BRAND).assertDoesNotExist()
-        composeRule.onNodeWithText(VAULT_BUTTON).assertIsDisplayed()
+        composeRule.onNodeWithText(SCREEN_MARKER).assertIsDisplayed()
     }
 
     /**
@@ -83,7 +83,7 @@ class ActivityRecreationTest {
         repeat(3) {
             composeRule.activityRule.scenario.recreate()
             composeRule.waitForIdle()
-            composeRule.onNodeWithText(VAULT_BUTTON).assertIsDisplayed()
+            composeRule.onNodeWithText(SCREEN_MARKER).assertIsDisplayed()
         }
         composeRule.onNodeWithText(OPENING_BRAND).assertDoesNotExist()
     }
@@ -92,7 +92,16 @@ class ActivityRecreationTest {
         /** OP画面にだけ出るブランド表記。 */
         const val OPENING_BRAND = "Vigilith AI"
 
-        /** Vault未選択のときに必ず出るボタン。復元後も操作可能であることの目印。 */
-        const val VAULT_BUTTON = "Vaultを選択"
+        /**
+         * ノートタブの見出し。**Vault選択の有無に関わらず出る**ことが要点。
+         *
+         * 最初は「Vaultを選択」を使っていたが、あれは `if (!vaultSelected)` の中にあり
+         * **Vault未選択のときしか描画されない。** instrumentation は実機に入っている
+         * アプリの `SharedPreferences` をそのまま使うので、
+         * **端末でVaultを選んだ瞬間にテストが落ちる**状態だった（2026-08-08 に実際に落ちた）。
+         *
+         * **目印は端末の実データに依存しないものから選ぶ。**
+         */
+        const val SCREEN_MARKER = "Rediscover"
     }
 }
