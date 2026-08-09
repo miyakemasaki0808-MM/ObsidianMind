@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -42,6 +43,8 @@ import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.markdown.firstUnmeasuredImageIndex
+import com.example.newproject.ui.markdown.imageBlockRefs
 import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
@@ -79,7 +82,9 @@ internal fun ReadingProgressReporter(
     // 長寿命ブロックから外部のラムダを呼ぶので rememberUpdatedState を通す
     // （pointerInput/LaunchedEffect が初回のクロージャを固定する問題への定石）。
     val report by rememberUpdatedState(onReadingProgress)
-    LaunchedEffect(sectionModel) {
+    // 画像の位置はモデルが変わらない限り動かない。**毎フレーム本文を走査しない。**
+    val imageBlocks = remember(sectionModel) { imageBlockRefs(sectionModel?.blocks.orEmpty()) }
+    LaunchedEffect(sectionModel, imageBlocks) {
         val model = sectionModel ?: return@LaunchedEffect
         snapshotFlow {
             val layout = listState.layoutInfo
@@ -88,9 +93,13 @@ internal fun ReadingProgressReporter(
             // 未確定より後ろを弾くのは、確保した仮の高さが元画像の高さの上限では
             // ないため（縦長画像は画面2〜3枚ぶんになり得る）。ここを通すと、
             // まだ読んでいない位置が最深到達点として永続化される。
-            if (!shouldReportReadingProgress(last.index, imageMeasurements?.firstUnsettledBlockIndex())) {
-                return@snapshotFlow null
+            // **判定材料は本文の構造と測定キャッシュだけ。** 「いま描かれている画像」から
+            // 判定すると、画面外へ出て破棄された瞬間に未確定でなくなり、
+            // 測っていないのに後続が通ってしまう（実機で実際にそうなった）。
+            val firstUnmeasured = imageMeasurements?.let {
+                firstUnmeasuredImageIndex(imageBlocks, it.measuredReferences())
             }
+            if (!shouldReportReadingProgress(last.index, firstUnmeasured)) return@snapshotFlow null
             val fraction = visibleFractionOfBlock(
                 itemOffset = last.offset,
                 itemSize = last.size,

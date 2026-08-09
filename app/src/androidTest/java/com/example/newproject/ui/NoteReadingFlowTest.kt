@@ -228,8 +228,13 @@ class NoteReadingFlowTest {
         )
 
         // 測定が終われば報告は再開する（常に止めたままにはしない）。
+        // **先に画像へ戻す** — 画面外にある間は Composable ごと破棄されており、
+        // 測定コルーチンも動いていないので、settle() だけでは記録されない。
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(0) } }
+        composeRule.waitForIdle()
         composeRule.runOnIdle { loader.settle(width = 800, height = 600) }
         composeRule.waitForIdle()
+
         composeRule.runOnIdle { runBlocking { listState.scrollToItem(model.blocks.size - 1) } }
         composeRule.waitForIdle()
 
@@ -287,7 +292,10 @@ class NoteReadingFlowTest {
             measuredOnce,
             loader.measureCount
         )
-        assertTrue("寸法未確定のまま残っている", measurements.firstUnsettledBlockIndex() == null)
+        assertTrue(
+            "全画面で測り直している（寸法が共有されていない）",
+            measurements.measuredReferences().isNotEmpty()
+        )
     }
 
     /** 測定を保留したまま止められるローダ。**未計測の状態を作るために要る。** */

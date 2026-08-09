@@ -74,7 +74,7 @@ internal fun MarkdownNoteContent(
                 when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
-                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, i, imageMeasurements)
+                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()

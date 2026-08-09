@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -51,7 +50,6 @@ import com.example.newproject.ui.theme.OnSurfaceSubtle
 internal fun MarkdownImage(
     block: MarkdownBlock.Image,
     loader: NoteImageLoader?,
-    blockIndex: Int,
     measurements: NoteImageMeasurements?
 ) {
     if (loader == null) {
@@ -70,13 +68,6 @@ internal fun MarkdownImage(
         val measured = loader.measure(block)
         measurements?.record(block, measured)
         measurement = measured
-    }
-
-    // 高さが動きうる間だけ、進捗の報告を止めてもらう（→ shouldReportReadingProgress）。
-    // **失敗も確定として扱う** — 失敗パネルの高さは以後動かないため。
-    DisposableEffect(blockIndex, measurement) {
-        measurements?.setUnsettled(blockIndex, measurement == null)
-        onDispose { measurements?.setUnsettled(blockIndex, false) }
     }
 
     // 寸法が分かるまでは画面の高さを確保する。**誤るなら大きい側へ誤る** —
