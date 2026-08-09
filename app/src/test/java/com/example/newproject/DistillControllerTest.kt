@@ -10,7 +10,7 @@ import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
@@ -90,13 +90,13 @@ class DistillControllerTest {
     fun `save preserves whole-note AI states and clears raw markdown contexts`() = runTest {
         val summary = SummaryState.Success("既存要約")
         val related = RelatedNotesState.Success(emptyList(), emptyList())
-        val annotation = AnnotationState.Loading("対象ノート")
+        val remark = RemarkState.Loading("対象ノート")
         val quiz = QuizState.Success("ノート", listOf(QuizCard("Q", listOf("A", "B"), 0)))
         val state = NoteUiStateStore(
             stateWithNote().value.copy(
                 summaryState = summary,
                 relatedNotesState = related,
-                annotationState = annotation,
+                remarkState = remark,
                 quizState = quiz,
                 sectionChat = SectionChatState(
                     sectionTitle = "旧セクション",
@@ -137,7 +137,7 @@ class DistillControllerTest {
         assertEquals(1, reloadCalls)
         assertEquals(summary, state.value.summaryState)
         assertEquals(related, state.value.relatedNotesState)
-        assertEquals(annotation, state.value.annotationState)
+        assertEquals(remark, state.value.remarkState)
         assertTrue(state.value.quizState is QuizState.Idle)
         assertEquals(null, state.value.sectionChat)
         assertFalse(state.value.isSectionChatSheetVisible)

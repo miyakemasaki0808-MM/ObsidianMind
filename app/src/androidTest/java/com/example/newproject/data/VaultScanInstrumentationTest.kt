@@ -7,7 +7,6 @@ import com.example.newproject.testing.FakeVaultDocumentsProvider
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -156,47 +155,48 @@ class VaultScanInstrumentationTest {
         assertEquals("2回目の本文", readText(notes.single().ref))
     }
 
-    /** 補記は作成→一覧→削除まで実物のSAFで通る。 */
+    /**
+     * 旧補記ファイルの一覧と削除が実物のSAFで通る。
+     *
+     * **作成経路はもう無い。** 「AI補記メモ」は「ノートへのひとこと」へ作り直され、
+     * 保存先は読書痕跡サイドカーへ移った（→ design/reflect_remark.md）。
+     * 残っているのは、作り直す前に生成された `.md` を片付ける導線だけなので、
+     * ここもファイルを**直接置いて**から一覧・削除を確かめる形にしてある。
+     */
     @Test
-    fun 補記を保存して一覧に出し削除できる() = runBlocking<Unit> {
+    fun 旧補記ファイルを一覧に出して削除できる() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile(
+            "_AI補記/習慣について__補記_20260808_2015.md",
+            "# 補記\n\n本文です。"
+        )
         val handle = requireNotNull(browser().current())
 
-        val saved = handle.createAnnotationFile(
-            sanitizedTitle = "習慣について",
-            timestamp = "20260808_2015",
-            content = "# 補記\n\n本文です。"
-        )
-        assertNotNull(saved.ref)
-
         val listed = handle.listAnnotationFiles()
-        assertEquals(1, listed.size)
-        assertEquals(
-            "保存後の実名が一覧と一致しない",
-            saved.displayName,
-            listed.single().name
-        )
 
-        assertTrue("削除に失敗した", handle.deleteDocument(saved.ref))
+        assertEquals(1, listed.size)
+        assertEquals("習慣について__補記_20260808_2015.md", listed.single().name)
+        assertTrue("削除に失敗した", handle.deleteDocument(listed.single().ref))
         assertTrue("削除後も一覧に残っている", handle.listAnnotationFiles().isEmpty())
     }
 
-    /**
-     * 同じノートを同じ分に2回保存すると、**プロバイダが名前を変える**。
-     *
-     * `SavedAnnotation.displayName` が予測値ではなく保存後の実名を返す契約は、
-     * これが理由（→ NoteRepository の `SavedAnnotation`）。
-     */
+    /** 一覧はタイムスタンプの新しい順。ファイル名の辞書順ではない。 */
     @Test
-    fun 同名の補記は実名が変わり一覧と一致する() = runBlocking<Unit> {
+    fun 旧補記の一覧はタイムスタンプの新しい順に並ぶ() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("_AI補記/z__補記_20260101_0900.md", "古い")
+        FakeVaultDocumentsProvider.putFile("_AI補記/a__補記_20260808_2015.md", "新しい")
         val handle = requireNotNull(browser().current())
 
-        val first = handle.createAnnotationFile("習慣について", "20260808_2015", "1本目")
-        val second = handle.createAnnotationFile("習慣について", "20260808_2015", "2本目")
-
-        assertFalse("同じ名前で2件作られている", first.displayName == second.displayName)
         assertEquals(
-            listOf(first.displayName, second.displayName).sorted(),
-            handle.listAnnotationFiles().map { it.name }.sorted()
+            listOf("a__補記_20260808_2015.md", "z__補記_20260101_0900.md"),
+            handle.listAnnotationFiles().map { it.name }
         )
+    }
+
+    /** フォルダが無ければ空。作る経路が無くなったので、これが通常の状態になる。 */
+    @Test
+    fun 補記フォルダが無ければ一覧は空になる() = runBlocking<Unit> {
+        val handle = requireNotNull(browser().current())
+
+        assertTrue(handle.listAnnotationFiles().isEmpty())
     }
 }

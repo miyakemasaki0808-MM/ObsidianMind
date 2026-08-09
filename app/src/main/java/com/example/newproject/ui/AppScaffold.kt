@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.NavigationBar
@@ -33,12 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Aqua
-import com.example.newproject.ui.theme.ButtonSecondary
-import com.example.newproject.ui.theme.ErrorSurface
-import com.example.newproject.ui.theme.OnStatusBadge
 import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
 import com.example.newproject.ui.theme.OnVibrant
@@ -55,7 +51,7 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 /**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
- * タブ（note/related/ai）以外のルート（quiz/annotation）ではバー/レールを出さない。
+ * タブ（note/related/ai）以外のルート（quiz等）ではバー/レールを出さない。
  *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
@@ -66,7 +62,7 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
-    annotationState: AnnotationState,
+    remarkState: RemarkState,
     snackbarHostState: SnackbarHostState,
     vigilithPresentation: VigilithPresentation,
     vigilithNoteAction: VigilithNoteAction?,
@@ -81,7 +77,7 @@ internal fun AppScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             !isTabRoute -> {
-                // 全画面ルート（Q&A・補記メモ）はバーなしで表示。
+                // 全画面ルート（Q&A等）はバーなしで表示。
                 content(Modifier.fillMaxSize())
             }
             useRail -> {
@@ -91,7 +87,7 @@ internal fun AppScaffold(
                             NavigationRailItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, annotationState) },
+                                icon = { TabIcon(dest, remarkState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -114,7 +110,7 @@ internal fun AppScaffold(
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, annotationState) },
+                                icon = { TabIcon(dest, remarkState) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -147,18 +143,27 @@ internal fun AppScaffold(
     }
 }
 
-internal enum class AiTabBadgeState { None, Loading, Success, Error }
+internal enum class AiTabBadgeState { None, Loading }
 
 /**
- * AIタブのバッジ状態。対象は補記メモのみ
- * （Q&Aは読書画面の吹き出しへ移動し、AIタブから開けなくなったため）。
+ * AIタブのバッジ状態。**生成中だけを示す。**
+ *
+ * 旧補記は結果が専用画面にあったため「未確認」を `isViewed` で管理し、
+ * 完了（✓）と失敗（!）のバッジを出していた。ひとことは結果がAIタブの
+ * パネルに直接出るので未確認という概念が無くなり、
+ * **確認して消すバッジは対象ごと消えた**（→ design/reflect_remark.md §7.1）。
+ *
+ * 生成中だけ残すのは、押してから読書へ戻る導線が実在するため
+ * （Nano は1回数十秒かかる）。こちらは自動で消えるので確認管理を必要としない。
+ *
+ * 副産物として、**下部ナビ帯の上で判別できなかった塗りバッジ
+ * （Success 1.61 / Error 1.04）が無くなった。** 残る生成中表示は塗りではなく
+ * 線のインジケータなので、同じ問題を持たない。
  */
 internal fun resolveAiTabBadgeState(
-    annotationState: AnnotationState
-): AiTabBadgeState = when {
-    annotationState is AnnotationState.Error && !annotationState.isViewed -> AiTabBadgeState.Error
-    annotationState is AnnotationState.Success && !annotationState.isViewed -> AiTabBadgeState.Success
-    annotationState is AnnotationState.Loading -> AiTabBadgeState.Loading
+    remarkState: RemarkState
+): AiTabBadgeState = when (remarkState) {
+    is RemarkState.Loading -> AiTabBadgeState.Loading
     else -> AiTabBadgeState.None
 }
 
@@ -166,32 +171,21 @@ internal fun resolveAiTabBadgeState(
 @Composable
 private fun TabIcon(
     dest: AppDestination,
-    annotationState: AnnotationState
+    remarkState: RemarkState
 ) {
     if (dest != AppDestination.Ai) {
         Text(dest.emoji, fontSize = 20.sp)
         return
     }
 
-    val badgeState = resolveAiTabBadgeState(annotationState)
     BadgedBox(
         badge = {
-            when (badgeState) {
+            when (resolveAiTabBadgeState(remarkState)) {
                 AiTabBadgeState.Loading -> CircularProgressIndicator(
                     modifier = Modifier.size(10.dp),
                     color = Aqua,
                     strokeWidth = 1.5.dp
                 )
-                // バッジの中身は「読む文字」ではなく状態を示す記号なので、基準は
-                // WCAG 1.4.11 の 3:1（ボタンのラベルは 1.4.3 の 4.5:1）。
-                // 同じ塗りでも前景が別トークンになるのはこのため
-                // → docs/dev/design/ui_design_principles.md
-                AiTabBadgeState.Success -> Badge(containerColor = ButtonSecondary) {
-                    Text("✓", color = OnStatusBadge, fontSize = 9.sp)
-                }
-                AiTabBadgeState.Error -> Badge(containerColor = ErrorSurface) {
-                    Text("!", color = OnStatusBadge, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                }
                 AiTabBadgeState.None -> Unit
             }
         }

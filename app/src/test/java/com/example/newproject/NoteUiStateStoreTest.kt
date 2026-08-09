@@ -1,14 +1,13 @@
 package com.example.newproject
 
 import com.example.newproject.model.NoteFolder
-import com.example.newproject.model.AnnotationSlice
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SearchSlice
 import com.example.newproject.model.SectionChatSlice
 import com.example.newproject.model.state.AnnotationListState
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
@@ -41,15 +40,12 @@ class NoteUiStateStoreTest {
         expected = expected.copy(quizState = QuizState.Loading("クイズ対象"))
         assertEquals(expected, store.value)
 
-        val annotationSlice = AnnotationSlice(
-            annotationState = AnnotationState.Error("生成失敗"),
-            annotationListState = AnnotationListState.Error("一覧失敗")
-        )
-        store.annotationWriter.update { annotationSlice }
-        expected = expected.copy(
-            annotationState = annotationSlice.annotationState,
-            annotationListState = annotationSlice.annotationListState
-        )
+        store.remarkWriter.update { RemarkState.Error("生成失敗") }
+        expected = expected.copy(remarkState = RemarkState.Error("生成失敗"))
+        assertEquals(expected, store.value)
+
+        store.annotationListWriter.update { AnnotationListState.Error("一覧失敗") }
+        expected = expected.copy(annotationListState = AnnotationListState.Error("一覧失敗"))
         assertEquals(expected, store.value)
 
         val folder = NoteFolder("下書き", "folder-id")

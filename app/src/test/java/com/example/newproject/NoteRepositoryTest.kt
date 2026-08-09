@@ -2,7 +2,6 @@ package com.example.newproject
 
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.isMarkdownFile
-import com.example.newproject.data.sanitizeAnnotationFileTitle
 import com.example.newproject.domain.toNormalizedObsidianTitle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -51,13 +50,4 @@ class NoteRepositoryTest {
         assertEquals("plain note", "Plain Note.md".toNormalizedObsidianTitle())
     }
 
-    @Test
-    fun `annotation file titles are sanitized for saf file creation`() {
-        assertEquals(
-            "a_b_c_d_e_f_g_h_i",
-            sanitizeAnnotationFileTitle("a/b\\c:d*e?f\"g<h>i")
-        )
-        assertEquals("multi_line_title", sanitizeAnnotationFileTitle("multi\nline\ttitle"))
-        assertEquals("untitled", sanitizeAnnotationFileTitle("////"))
-    }
 }

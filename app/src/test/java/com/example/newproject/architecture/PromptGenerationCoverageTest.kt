@@ -67,11 +67,11 @@ class PromptGenerationCoverageTest {
 
     /** 数え違いを防ぐため、件数そのものも固定する（8と数えて誤った経緯がある）。 */
     @Test
-    fun `プロンプト builder は10個ある`() {
+    fun `プロンプト builder は11個ある`() {
         assertEquals(
             "builder の増減は分類の見直しを伴う。件数を更新する前に、覆うか未保証かを決めること。\n" +
                 productionBuilders().sorted().joinToString("\n"),
-            10,
+            11,
             productionBuilders().size
         )
     }

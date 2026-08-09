@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.ReadingTraceController
+import com.example.newproject.controller.ReplySaveOutcome
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceKeyListing
@@ -11,6 +12,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -29,6 +31,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -1086,6 +1089,622 @@ class ReadingTraceControllerTest {
         assertEquals(AI_SUMMARY, card.aiSummary)
     }
 
+    // ── ノートへのひとことの相乗り保存 ──────────────────────────────────────
+    //
+    // ひとことは単独では保存できない。痕跡ファイルは離脱・背面化でしか作られず、
+    // 検証は訪問が1件以上あることを要求するため、初読の最中に押されるこの機能で
+    // 「生成できたら保存」と書くと必ず黙って失われる（→ design/reflect_remark.md §2.1）。
+
+    @Test
+    fun `預けたひとことは離脱時の書き込みに相乗りする`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark(reflectionOf("この習慣を続けられた日は何が違っただろう？"))
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals("この習慣を続けられた日は何が違っただろう？", stored.reflection?.remark)
+        // 痕跡ファイルが無い状態から、訪問と一緒に1回で作られること
+        assertEquals(1, stored.visits.size)
+    }
+
+    /**
+     * **`dirty` を立てないと落ちるケース。** 直前の背面化で訪問を書き終えていると
+     * 「変化なし」で早期returnし、ひとことが書かれないままセッションが終わる。
+     */
+    @Test
+    fun `訪問を書いた後に預けたひとことも保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md")!!.reflection?.remark)
+
+        // 復帰せず（＝進捗も来ず）にひとことだけ預けて離脱する
+        controller.setPendingRemark(reflectionOf("続けられた日は何が違っただろう？"))
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("続けられた日は何が違っただろう？", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+        // 背面化ぶんの訪問を増やさない（1回の閲覧＝1訪問）
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // 過去のひとことを、以降の訪問で消さないこと。
+    @Test
+    fun `預けていない訪問は既存のひとことを保つ`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+        }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("前回のひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+    }
+
+    @Test
+    fun `新しいひとことは古いものを上書きする`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+        }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark(reflectionOf("今回のひとこと"))
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("今回のひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+    }
+
+    /**
+     * 保存に失敗したら次の契機で書き直す。訪問だけ戻してひとことを捨てると、
+     * 生成し直す導線がユーザーの再操作しか無いため恒久的に失われる。
+     */
+    @Test
+    fun `保存に失敗したひとことは次の契機で書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSaveOnAttempt = 1 }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark(reflectionOf("失敗しても残したいひとこと"))
+        controller.pause()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("失敗しても残したいひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+    }
+
+    /**
+     * 保存を待っている間に新しいひとことが預けられたら、**そちらを優先する。**
+     * 失敗した古い方を無条件に戻すと、新しい方を上書きして捨ててしまう。
+     * （訪問側の巻き戻しが「自分が書こうとした訪問がまだ最新なら」だけ戻すのと同じ形）
+     */
+    @Test
+    fun `保存中に預け直されたひとことは古い失敗で上書きされない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSaveOnAttempt = 1 }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark(reflectionOf("古いひとこと"))
+        controller.pause()
+        // 保存（失敗する）が走り切る前に、新しいひとことを預け直す
+        controller.setPendingRemark(reflectionOf("新しいひとこと"))
+        advanceUntilIdle()
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("新しいひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+    }
+
+    // ── 返事の即時保存 ──────────────────────────────────────────────────────
+    //
+    // ひとこと（AI生成）は離脱時の書き込みへ相乗りさせるが、返事は違う。
+    // **ユーザーが書いた言葉は作り直せない**ので、離脱を待たずに書く。
+
+    @Test
+    fun `返事は離脱を待たずに保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+
+        val saved = controller.saveReply("ideas/habit.md", "自分の返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Saved, saved)
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("自分の返事", stored.reply)
+        assertEquals(5_000L, stored.repliedAtEpochMillis)
+        // 元のひとことは保つ（組で持つのが要点）
+        assertEquals("前回のひとこと", stored.remark)
+    }
+
+    /**
+     * 痕跡ファイルがまだ無い＝この閲覧で訪問が確定していない状態。
+     * **それでも返事を失わない**ことが要点で、セッションへ預け直して離脱時に書く。
+     */
+    @Test
+    fun `痕跡が未作成でも返事は離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        val saved = controller.saveReply("ideas/habit.md", "その場で書いた返事", 5_000L)
+        advanceUntilIdle()
+
+        // 書けていないが預かった。**失った（Lost）とは区別する。**
+        assertEquals(ReplySaveOutcome.Held, saved)
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("その場で書いた返事", stored.reply)
+        assertEquals("いまのひとこと", stored.remark)
+    }
+
+    /**
+     * **保存に失敗したら必ず預ける。** ここを握り潰していたため、
+     * 画面には「保存済み」と出たまま返事が消える経路があった。
+     */
+    @Test
+    fun `保存に失敗した返事は預けられ離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+            failSave = true
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+
+        val outcome = controller.saveReply("ideas/habit.md", "失いたくない返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Held, outcome)
+
+        persistence.failSave = false
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("失いたくない返事", persistence.stored("ideas/habit.md")!!.reflection!!.reply)
+    }
+
+    /**
+     * **返事を書いてすぐ離れても消えない。**
+     *
+     * 10秒・1ブロックの門番は「一瞬引いてすぐ送った表示を訪問に数えない」ためのものだが、
+     * 返事を預かっているときに効かせると**画面に「保存中」と出たまま消える**。
+     * ユーザーが書いた事実はスクロールより強い関与なので、門番を通す。
+     */
+    @Test
+    fun `返事を書いてすぐ離れても保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "急いで書いた返事", 5_000L)
+        advanceUntilIdle()
+
+        // 10秒未満・進捗報告なしのまま離脱する
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")
+        assertEquals("急いで書いた返事", stored!!.reflection!!.reply)
+        assertEquals(0, stored.visits.single().progressPercent)
+    }
+
+    // 返事が無いときは門番をそのまま効かせる（一瞬の表示を訪問に数えない）。
+    @Test
+    fun `返事が無ければ短い滞在は記録しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(3_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md"))
+    }
+
+    /**
+     * **離脱時の保存が失敗しても、次の書き込み契機で書き直される。**
+     *
+     * `flush()` は保存を起動した直後にセッションを捨てるので、後から失敗しても
+     * 巻き戻し先のセッションがもう現役でない。返事はセッションの外へ退避しておく。
+     * ここが漏れていたぶん、長文ほど痛い実データ消失経路だった。
+     */
+    @Test
+    fun `離脱時の保存に失敗した返事は次の契機で書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "失いたくない返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        // 別のノートを読んで離脱する＝次の書き込み契機。
+        // **元ノートの痕跡はテスト側で作らない** — 作ってしまうと
+        // 「既存ファイルへ載せ直す」だけを検証することになり、
+        // 本当に確かめたい「新規作成の失敗を復旧できるか」が抜ける。
+        persistence.failSave = false
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "退避した返事が書き直されていない",
+            "失いたくない返事",
+            persistence.stored("ideas/habit.md")!!.reflection!!.reply
+        )
+    }
+
+    /**
+     * **退避は1件ではなくノート単位。** 単一スロットだと、Aが退避中にBで返事を
+     * 書いた瞬間にAが消える。
+     */
+    @Test
+    fun `別ノートの返事は退避を上書きしない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/a.md", "ノートA", "doc-a")
+        controller.setPendingRemark(reflectionOf("Aのひとこと"))
+        controller.saveReply("ideas/a.md", "Aの返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        controller.onNoteOpened("ideas/b.md", "ノートB", "doc-b")
+        controller.setPendingRemark(reflectionOf("Bのひとこと"))
+        controller.saveReply("ideas/b.md", "Bの返事", 6_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        // ここまで両方失敗している。書けるようにして次の契機を作る。
+        persistence.failSave = false
+        controller.onNoteOpened("ideas/c.md", "ノートC", "doc-c")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("Aの返事", persistence.stored("ideas/a.md")!!.reflection!!.reply)
+        assertEquals("Bの返事", persistence.stored("ideas/b.md")!!.reflection!!.reply)
+    }
+
+    /**
+     * 退避を消してよいのは**内容が一致したときだけ**。
+     * 返事の文字列だけで見ると、元の問いや映し返しが違っても同じ扱いになる。
+     */
+    @Test
+    fun `返事が同じでも問いが違えば書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("新しい問い"))
+        controller.saveReply("ideas/habit.md", "同じ返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        // 別経路で「返事は同じだが問いが違う」痕跡が既にある状態を作る
+        persistence.failSave = false
+        persistence.put(
+            storedTrace(count = 1).copy(
+                reflection = Reflection("古い問い", 1L, "同じ返事", 2L)
+            )
+        )
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "問いが違うのに書き直されていない",
+            "新しい問い",
+            persistence.stored("ideas/habit.md")!!.reflection!!.remark
+        )
+    }
+
+    /**
+     * **退避に積むのは返事付きだけ。** 訪問だけの失敗を積むと、普通の読書が
+     * 返事付きの退避を上限で押し出しかねない（訪問はセッション側の巻き戻しが持つ）。
+     */
+    @Test
+    fun `訪問だけの失敗は退避に積まれない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        // **返事付きを先に積む。** 後から積むと上限に当たっても押し出されないので、
+        // 「押し出される」ことを確かめられない（順序がそのまま検出力になる）。
+        controller.onNoteOpened("ideas/reply.md", "返事のノート", "doc-r")
+        controller.setPendingRemark(reflectionOf("ひとこと"))
+        controller.saveReply("ideas/reply.md", "押し出されたくない返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        // そのあと返事なしで10ノート分、保存に失敗させる（上限8を十分に超える）
+        repeat(10) { index ->
+            controller.onNoteOpened("ideas/n$index.md", "ノート$index", "doc-$index")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+            clock.advance(10_000L)
+            controller.flush()
+            advanceUntilIdle()
+        }
+
+        // 書けるようにして次の契機を作る
+        persistence.failSave = false
+        controller.onNoteOpened("ideas/last.md", "最後のノート", "doc-l")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "訪問だけの失敗に押し出されている",
+            "押し出されたくない返事",
+            persistence.stored("ideas/reply.md")!!.reflection!!.reply
+        )
+    }
+
+    /**
+     * **古い退避で新しい返事を潰さない。**
+     * 退避を積んだ後に直接保存が成功すると、ファイル側のほうが新しい。
+     */
+    @Test
+    fun `退避より新しい返事が保存済みなら上書きしない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("ひとこと")))
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("ひとこと"))
+
+        // 古い返事Aの保存が失敗して退避される
+        persistence.failSave = true
+        controller.saveReply("ideas/habit.md", "古い返事A", 5_000L)
+        advanceUntilIdle()
+
+        // 続けて新しい返事Bの保存は成功する
+        persistence.failSave = false
+        controller.saveReply("ideas/habit.md", "新しい返事B", 9_000L)
+        advanceUntilIdle()
+        assertEquals("新しい返事B", persistence.stored("ideas/habit.md")!!.reflection!!.reply)
+
+        // 次の書き込み契機で、退避したAがBを上書きしないこと
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "古い退避が新しい返事を上書きしている",
+            "新しい返事B",
+            persistence.stored("ideas/habit.md")!!.reflection!!.reply
+        )
+    }
+
+    /**
+     * **直接保存できたら退避は用済み。** 残すと次の契機で同じ内容を書き直す。
+     *
+     * 内容は日時の比較でも守られるので、ここで確かめているのは正しさではなく
+     * **無駄なSAF書き込みを出さないこと**。遠いプロバイダでは同期трафикにもなる。
+     */
+    @Test
+    fun `直接保存できたノートは次の契機で書き直さない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("ひとこと")))
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("ひとこと"))
+
+        persistence.failSave = true
+        controller.saveReply("ideas/habit.md", "一度失敗する返事", 5_000L)
+        advanceUntilIdle()
+
+        persistence.failSave = false
+        controller.saveReply("ideas/habit.md", "書けた返事", 6_000L)
+        advanceUntilIdle()
+        val afterDirectSave = persistence.saved.size
+
+        // 次の書き込み契機。退避が残っていると、ここで同じノートへもう1回書く。
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "退避が残っていて、同じノートへ書き直している",
+            afterDirectSave + 1, // 別ノートの訪問1件だけ
+            persistence.saved.size
+        )
+    }
+
+    /**
+     * **外から新しい返事が入っていたら退避で戻さない。**
+     *
+     * サイドカーはVault内にあるので、別端末が同期で新しい返事を書き込むことがある。
+     * その場合アプリは直接保存を経ていないため「保存できたら退避を捨てる」が効かず、
+     * **日時の比較だけが唯一の防波堤**になる。
+     */
+    @Test
+    fun `外部が書いた新しい返事を退避で巻き戻さない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("ひとこと")))
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("ひとこと"))
+
+        persistence.failSave = true
+        controller.saveReply("ideas/habit.md", "この端末の古い返事", 5_000L)
+        advanceUntilIdle()
+
+        // 別端末が同期で新しい返事を書き込んだ状態を作る（アプリの保存経路を通らない）
+        persistence.failSave = false
+        persistence.put(
+            storedTrace(count = 1).copy(
+                reflection = Reflection("ひとこと", 1L, "別端末の新しい返事", 9_000L)
+            )
+        )
+
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "古い退避が新しい返事を巻き戻している",
+            "別端末の新しい返事",
+            persistence.stored("ideas/habit.md")!!.reflection!!.reply
+        )
+    }
+
+    /** Vaultが切り替わったら退避も捨てる。旧Vaultの返事を新Vaultへ書かない。 */
+    @Test
+    fun `Vault切替で退避した返事は書かれない`() = runTest {
+        val clock = TestClock()
+        val vault = FakeVault()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock, vault = vault)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "旧Vaultの返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        persistence.failSave = false
+        vault.key = VAULT_B
+        controller.discard()
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md"))
+    }
+
+    /**
+     * 痕跡が未作成のまま映し返しまで届いた場合も落とさない。
+     * 画面には出ているのに保存だけ落ちると、次に開いたとき返事だけが残る。
+     */
+    @Test
+    fun `痕跡が未作成でも映し返しは離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "その場で書いた返事", 5_000L)
+        advanceUntilIdle()
+        controller.saveMirrored("ideas/habit.md", "受け取った応答")
+        advanceUntilIdle()
+
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("その場で書いた返事", stored.reply)
+        assertEquals("受け取った応答", stored.mirrored)
+    }
+
+    /** 預ける先も無ければ Lost。画面は未保存として見せる必要がある。 */
+    @Test
+    fun `セッションが無ければ返事は失われたと返す`() = runTest {
+        val persistence = FakePersistence()
+
+        val outcome = controller(persistence, TestClock())
+            .saveReply("ideas/habit.md", "行き先の無い返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Lost, outcome)
+    }
+
+    // セッションが無ければ保存先が無いので黙って捨てる（例外にしない）。
+    @Test
+    fun `セッションが無ければひとことは黙って捨てられる`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+
+        controller.setPendingRemark(reflectionOf("行き先の無いひとこと"))
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
     // 再会カードは「前回まで」を見せる。今回の読書は離脱時に足されるので混ざらない。
     @Test
     fun `card shows only visits recorded before this reading`() = runTest {
@@ -1174,6 +1793,10 @@ private class ControllableAiClient : AiClient {
 private const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 
 /** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
+/** テスト用のひとこと1組。日時は固定で構わない（検証は本文だけを見る）。 */
+private fun reflectionOf(remark: String) =
+    Reflection(remark = remark, remarkedAtEpochMillis = 1_000L)
+
 private fun storedTrace(
     count: Int,
     path: String = "ideas/habit.md",

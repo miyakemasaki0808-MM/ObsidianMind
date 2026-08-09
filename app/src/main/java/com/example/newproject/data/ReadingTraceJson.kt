@@ -3,6 +3,7 @@ package com.example.newproject.data
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.validateReadingTrace
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -51,6 +52,11 @@ internal object ReadingTraceJson {
             .put(KEY_AI_SUMMARY, trace.aiSummary ?: JSONObject.NULL)
             .put(KEY_AI_SUMMARY_VISIT_COUNT, trace.aiSummaryVisitCount ?: JSONObject.NULL)
             .put(KEY_TOTAL_VISIT_COUNT, trace.totalVisitCount)
+            .put(KEY_REMARK, trace.reflection?.remark ?: JSONObject.NULL)
+            .put(KEY_REMARKED_AT, trace.reflection?.remarkedAtEpochMillis ?: JSONObject.NULL)
+            .put(KEY_REPLY, trace.reflection?.reply ?: JSONObject.NULL)
+            .put(KEY_REPLIED_AT, trace.reflection?.repliedAtEpochMillis ?: JSONObject.NULL)
+            .put(KEY_MIRRORED, trace.reflection?.mirrored ?: JSONObject.NULL)
             .put(KEY_CHECKSUM, checksumOf(trace))
         // 人が読める体裁で書く（ユーザーが中身を確認・修復できることを優先）。
         return root.toString(2).toByteArray(Charsets.UTF_8)
@@ -82,6 +88,27 @@ internal object ReadingTraceJson {
                 // v1 のファイルにこの項目が書かれていても読まない。v1 の checksum は
                 // この値を含まないため、読むと改変し放題の入口になる。
                 totalVisitCount = if (version >= 2) root.getInt(KEY_TOTAL_VISIT_COUNT) else visits.size,
+                // v3 で追加。v1/v2 の checksum はこの値を含まないので、
+                // 旧版のファイルに書かれていても読まない（totalVisitCount と同じ理由）。
+                //
+                // **v3 は平坦な remark 1本だったので、返事なしの組として読む。**
+                // 日時も持っていないため 0 を入れる（「いつ書いたか不明」を
+                // null で表すと reply 側の対応関係と紛らわしくなる）。
+                reflection = if (version >= 3) {
+                    root.stringOrNull(KEY_REMARK)?.let { remark ->
+                        Reflection(
+                            remark = remark,
+                            remarkedAtEpochMillis =
+                                if (version >= 4) root.optLong(KEY_REMARKED_AT, 0L) else 0L,
+                            reply = if (version >= 4) root.stringOrNull(KEY_REPLY) else null,
+                            repliedAtEpochMillis =
+                                if (version >= 4) root.longOrNull(KEY_REPLIED_AT) else null,
+                            mirrored = if (version >= 5) root.stringOrNull(KEY_MIRRORED) else null
+                        )
+                    }
+                } else {
+                    null
+                },
                 schemaVersion = version
             )
             validateReadingTrace(trace)
@@ -131,6 +158,17 @@ internal object ReadingTraceJson {
             out.writeInt(trace.aiSummaryVisitCount ?: ABSENT_VISIT_COUNT)
             // v2 で追加。v1 には無いので書かない。
             if (trace.schemaVersion >= 2) out.writeInt(trace.totalVisitCount)
+            // v3 で追加。v1/v2 には無いので書かない。
+            if (trace.schemaVersion >= 3) out.writeSizedNullable(trace.reflection?.remark)
+            // v4 で追加。**v3 の正規形は remark 1本だけ**なので、
+            // 既存の v3 ファイルを破損扱いにしないよう版で分ける。
+            if (trace.schemaVersion >= 4) {
+                out.writeLong(trace.reflection?.remarkedAtEpochMillis ?: ABSENT_TIMESTAMP)
+                out.writeSizedNullable(trace.reflection?.reply)
+                out.writeLong(trace.reflection?.repliedAtEpochMillis ?: ABSENT_TIMESTAMP)
+            }
+            // v5 で追加。v4 の正規形には無いので、既存ファイルを破損扱いにしない。
+            if (trace.schemaVersion >= 5) out.writeSizedNullable(trace.reflection?.mirrored)
         }
         return buffer.toByteArray()
     }
@@ -159,7 +197,11 @@ internal object ReadingTraceJson {
     private fun JSONObject.intOrNull(key: String): Int? =
         if (isNull(key)) null else getInt(key)
 
+    private fun JSONObject.longOrNull(key: String): Long? =
+        if (isNull(key)) null else getLong(key)
+
     private const val ABSENT_VISIT_COUNT = -1
+    private const val ABSENT_TIMESTAMP = -1L
 
     private const val KEY_SCHEMA_VERSION = "schemaVersion"
     private const val KEY_RELATIVE_PATH = "vaultRelativePath"
@@ -169,6 +211,11 @@ internal object ReadingTraceJson {
     private const val KEY_AI_SUMMARY = "aiSummary"
     private const val KEY_AI_SUMMARY_VISIT_COUNT = "aiSummaryVisitCount"
     private const val KEY_TOTAL_VISIT_COUNT = "totalVisitCount"
+    private const val KEY_REMARK = "remark"
+    private const val KEY_REMARKED_AT = "remarkedAt"
+    private const val KEY_REPLY = "reply"
+    private const val KEY_REPLIED_AT = "repliedAt"
+    private const val KEY_MIRRORED = "mirrored"
     private const val KEY_CHECKSUM = "checksum"
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"

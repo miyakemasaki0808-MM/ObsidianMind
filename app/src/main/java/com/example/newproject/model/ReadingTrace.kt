@@ -20,11 +20,23 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * v2 で [ReadingTrace.totalVisitCount] を足した。v1 は保持件数（最大30）を累計回数として
  * 使っており、30回を超えると表示が「30回」で止まるだけでなく、AI俯瞰要約の再生成判定
  * （[needsAiSummary]）も止まって古い要約が「最新」として出続けていた。
+ *
+ * v3 で「ノートへのひとこと」を足した。旧「AI補記メモ」が Vaultへ `.md` を
+ * 作っていたのを、1文になったのに合わせてサイドカーへ移したもの。
+ *
+ * v4 で [ReadingTrace.reflection] へ畳み、**ユーザーの返事**を組にした。
+ * v3 の平坦な `remark` は「AIのひとことだけ」を保存していたが、
+ * **AIが問いを投げて会話が終わる**ため読後感が宙に浮いていた。
+ * v3 の値は `Reflection(remark = 旧remark, reply = null)` として読み込める。
+ *
+ * v5 で [Reflection.mirrored]（返事を受けてAIが返す1文）を足した。
+ * 返事を書いて終わりだと**受け取ってもらえた感触が無い**ため、1往復だけ閉じる。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 2
+internal const val READING_TRACE_SCHEMA_VERSION = 5
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
-internal val READING_TRACE_READABLE_SCHEMA_VERSIONS = setOf(1, READING_TRACE_SCHEMA_VERSION)
+internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
+    setOf(1, 2, 3, 4, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -40,8 +52,40 @@ internal object ReadingTraceLimits {
     const val MAX_DOCUMENT_ID_BYTES = 2048
     const val MAX_AI_SUMMARY_BYTES = 2048
 
-    /** サイドカー1ファイルの読み込み上限。上記×MAX_VISITS から十分な余裕を取った値。 */
-    const val MAX_FILE_BYTES = 64 * 1024
+    /**
+     * ひとことの上限。仕様は「原則1文・最大2文・80〜120文字程度」なので、
+     * 日本語1文字≒3バイトで360バイト。生成の揺れを吸収して512とする。
+     * **要約（2048）より意図的に小さい** — 枠を広げると長文が通り、
+     * 「1文だけ出す」という設計が保存側から緩む。
+     */
+    const val MAX_REMARK_BYTES = 512
+
+    /**
+     * 返事の上限。**8,000文字＝日本語で最大24,000バイト**に余裕を持たせた値。
+     *
+     * **以前は 1536（400文字）だった。これはAIへ渡せる長さから逆算した数字で、
+     * ユーザーの文章をローカルLLMの都合で縛っていた。**
+     * 本文は「保存は原文・AIへは抜粋」でやっているのに、返事だけ両方を
+     * 同じ数字で縛っていたのが誤り（→ design/reflect_remark.md §11）。
+     *
+     * 「汎用エディタにしない」という意図（→ feature_ideas N-6）は
+     * **壁ではなく合図**で守る — 2,000文字を超えたら静かに知らせるだけで、
+     * 切り詰めも拒否もしない。
+     */
+    const val MAX_REPLY_BYTES = 25_600
+
+    /** 映し返しの上限。ひとことと同じ「1文」なので同じ枠でよい。 */
+    const val MAX_MIRRORED_BYTES = 512
+
+    /**
+     * サイドカー1ファイルの読み込み上限。
+     *
+     * **上の各上限の最悪ケースを足しても収まること**が条件で、
+     * `ReadingTraceLimitsTest` が計算して固定している。返事の上限を上げたときに
+     * ここを忘れると、**正しく保存したファイルを次回読めなくなる**（保存側と
+     * 読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
+     */
+    const val MAX_FILE_BYTES = 128 * 1024
 }
 
 /**
@@ -57,6 +101,50 @@ internal data class ReadingVisit(
     val deepestSectionTitle: String?,
     val progressPercent: Int
 )
+
+/**
+ * AIのひとことと、それへのユーザーの返事の組。
+ *
+ * **別々の文字列ではなく1組として持つ。** 片方だけが残る状態
+ * （返事だけあって元の問いが分からない／問いを作り直したのに古い返事が残る）を
+ * 型で作れなくするため。読み返すときも必ず対で出す。
+ *
+ * **[reply] を書いてもAIへ再送しない。** 返事を書いた時点で対話は完了する。
+ * 往復させると「AIと会話するアプリ」になり、
+ * 「AIは相手役／本質はノートを読む」という北極星から外れる。
+ * ここに残るのは**ユーザー自身の言葉**であって、AIへの入力ではない。
+ */
+// `RemarkState`（public な sealed class）が保持するため public。
+// 痕跡の他の型は internal だが、これだけはUI状態として画面まで運ばれる
+// （`RelatedNote` が public なのと同じ理由）。
+data class Reflection(
+    val remark: String,
+    val remarkedAtEpochMillis: Long,
+    val reply: String? = null,
+    val repliedAtEpochMillis: Long? = null,
+    /**
+     * 返事を受けてAIが返す1文。**問いではない。**
+     *
+     * 返事を書いて終わりだと「受け取ってもらえた」感触が無く、対話が閉じない。
+     * ただし**1往復だけ**で、ここに問いを書かせると無限会話の入口になる
+     * （→ design/reflect_remark.md §10）。
+     *
+     * 生成に失敗しても null のまま。**返事は先に保存済み**なので、
+     * ここが空でもユーザーの言葉は失われない。
+     */
+    val mirrored: String? = null
+) {
+    /**
+     * 返事を残す。**同じ問いに対する返事は上書きする**（1組しか持たないため）。
+     * 返事を書き直したら映し返しも捨てる — 古い返事に対する応答が残ると噛み合わない。
+     */
+    fun withReply(reply: String, atEpochMillis: Long): Reflection =
+        copy(reply = reply, repliedAtEpochMillis = atEpochMillis, mirrored = null)
+
+    fun withMirrored(mirrored: String): Reflection = copy(mirrored = mirrored)
+
+    val hasReply: Boolean get() = reply != null
+}
 
 /**
  * 1ノート分の痕跡。
@@ -83,6 +171,16 @@ internal data class ReadingTrace(
      * 累計だけ取り残される）。
      */
     val totalVisitCount: Int = visits.size,
+    /**
+     * ノートへのひとこと と、それへのユーザーの返事の組。
+     *
+     * **[aiSummary] と違い、訪問数では無効化しない。** 俯瞰要約の入力は訪問履歴なので
+     * 訪問が増えれば作り直す必要があるが、ひとことの入力は本文であり、
+     * ユーザーが明示ボタンを押したときにだけ作られて上書きされる。
+     *
+     * **1ノート1組。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
+     */
+    val reflection: Reflection? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 )
 
@@ -172,6 +270,31 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
 
     trace.aiSummary?.let {
         requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "AI要約")
+    }
+    trace.reflection?.let { reflection ->
+        // 空白だけのひとことは「無い」と区別できないので受け付けない。
+        // 保存側で null へ倒すのが正で、ここは最後の砦。
+        require(reflection.remark.isNotBlank()) { "ひとことが空です。" }
+        requireWithinBytes(reflection.remark, ReadingTraceLimits.MAX_REMARK_BYTES, "ひとこと")
+        require(reflection.remarkedAtEpochMillis >= 0) { "ひとことの日時が不正です。" }
+        reflection.reply?.let { reply ->
+            require(reply.isNotBlank()) { "返事が空です。" }
+            requireWithinBytes(reply, ReadingTraceLimits.MAX_REPLY_BYTES, "返事")
+        }
+        // 返事と日時の一方だけが残っていると、次に開いたとき
+        // 「返事はあるがいつ書いたか分からない」状態になる。
+        require((reflection.reply == null) == (reflection.repliedAtEpochMillis == null)) {
+            "返事と日時の一方だけが記録されています。"
+        }
+        reflection.repliedAtEpochMillis?.let {
+            require(it >= 0) { "返事の日時が不正です。" }
+        }
+        reflection.mirrored?.let { mirrored ->
+            require(mirrored.isNotBlank()) { "映し返しが空です。" }
+            requireWithinBytes(mirrored, ReadingTraceLimits.MAX_MIRRORED_BYTES, "映し返し")
+            // 返事が無いのに映し返しだけあるのは、片方を消し忘れた実装ミスか改変。
+            require(reflection.reply != null) { "返事が無いのに映し返しだけが記録されています。" }
+        }
     }
     trace.aiSummaryVisitCount?.let {
         require(it in 0..trace.totalVisitCount) { "AI要約の訪問数が閲覧回数と矛盾しています。" }

@@ -1,6 +1,5 @@
 package com.example.newproject
 
-import com.example.newproject.data.SavedAnnotation
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.VaultImageScan
 import com.example.newproject.data.VaultHandle
@@ -93,19 +92,6 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return annotationFiles
-    }
-
-    override suspend fun createAnnotationFile(
-        sanitizedTitle: String,
-        timestamp: String,
-        content: String
-    ): SavedAnnotation {
-        beforeEachCall()
-        failure?.let { throw it }
-        return SavedAnnotation(
-            ref = DocumentRef("content://fake/$sanitizedTitle$timestamp"),
-            displayName = "$sanitizedTitle$timestamp.md"
-        )
     }
 
     override suspend fun deleteDocument(ref: DocumentRef): Boolean {

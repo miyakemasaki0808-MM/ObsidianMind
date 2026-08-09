@@ -283,7 +283,7 @@ class PromptTokenBudgetTest {
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
-     * 機能経路は8つ（要約・関連ノート・補記・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
+     * 機能経路は8つ（要約・関連ノート・ひとこと・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
      * ここではセクションを3種、クイズを3形式へ分解して**12ケース**として測る。
      * 同じ経路でも指示文の長さが違えばトークン数が変わるため、束ねると読み違える。
      */
@@ -306,15 +306,16 @@ class PromptTokenBudgetTest {
                 )
             )
 
+            // ひとことは候補を8件までしか渡さない（出力が1件なので多く見せる意味が無い）。
+            // 旧補記は関連・AI推薦・全wikilinkの3ブロックを無制限に載せていたので、
+            // ここの計測値は前回の基準線より小さく出るのが正しい。
             add(
-                "補記" to PromptBuilder.buildAnnotationPrompt(
+                "ひとこと" to PromptBuilder.buildRemarkPrompt(
                     title = TITLE,
                     excerpt = annotationExcerpt,
-                    summary = profile.content.take(200),
-                    relatedTitles = List(5) { "${profile.label}の関連ノート${it + 1}" },
-                    aiRecommendedTitles = List(5) { "${profile.label}のAI推薦${it + 1}" },
-                    wikilinkTitles = List(10) { "${profile.label}のwikilink${it + 1}" }.toSet(),
-                    createdAt = "2026-08-01 12:00"
+                    candidates = List(8) {
+                        RemarkCandidateLine("C0${it + 1}", "${profile.label}の候補ノート${it + 1}")
+                    }
                 )
             )
 

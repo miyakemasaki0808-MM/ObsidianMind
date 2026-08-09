@@ -4,6 +4,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 
@@ -17,6 +18,19 @@ private const val DISTILL_HEADING_LENGTH = 80
 data class RelatedCandidateLine(val id: String, val title: String, val detail: String? = null) {
     fun renderForPrompt(): String =
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
+}
+
+/**
+ * ひとことプロンプトに渡す候補ノート。
+ *
+ * **タイトルだけでは中身に踏み込んだ接続理由を作れない**（2026-08-09 の実機確認の指摘）。
+ * そこで件数を絞るかわりに本文冒頭の [snippet] を添える。件数×情報量の合計は増やさない。
+ * スニペットは関連ノートAIが再ランクのために既に読んだ値を通しているだけで、
+ * ここで新しいI/Oは発生しない。
+ */
+data class RemarkCandidateLine(val id: String, val title: String, val snippet: String? = null) {
+    fun renderForPrompt(): String =
+        if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
 }
 
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
@@ -216,64 +230,118 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    fun buildAnnotationPrompt(
+    /**
+     * ノートへのひとこと（旧「AI補記メモ」）。**出力枠のすべてを1文へ使う。**
+     *
+     * 旧プロンプトは4つの分類ラベルと3行の補記を同時に出させていたが、
+     * 出力枠（256トークン）はゼロサムなので、行動を変えないラベルが
+     * 価値のある側を圧迫していた（→ design/reflect_remark.md §0）。
+     *
+     * **候補ノートは「ID | タイトル」で提示し、本文中でもIDで参照させる。**
+     * 生のタイトルを書かせると言い換え・装飾で解決できなくなるため
+     * （蒸留・関連ノートと同じ契約。AIピッカーだけがこの契約から外れている）。
+     *
+     * **出力は日本語で固定する。** 当初は要約と同じ「ノート本文と同じ言語で」に
+     * していたが、**ソースコードだけのノートで英語の問いが返ってきた**（2026-08-09 実機）。
+     * 要約はノートの内容を写すものなので本文の言語に従うのが正しいが、
+     * ひとことは**アプリがユーザーへ話しかける文**なので、従うべきは読み手の言語である。
+     * [buildReadingTraceSummaryPrompt]（痕跡の俯瞰要約）が先に同じ判断をしており、
+     * こちらはその category を取り違えて旧補記の文言を引き継いでいた。
+     *
+     * **ただし「あなた」まで一緒に持ってきたのは行き過ぎだった**（2026-08-09 実機）。
+     * 俯瞰要約は「あなたは3回開いています」と**読み手自身の行動を述べる**文なので
+     * 二人称が要るが、ひとことは**ノートについて話す**文なので主語に読み手を置く必要がない。
+     * 日本語は主語を落とせるうえ、二人称を名指しすると採点者の口調になる。
+     */
+    fun buildRemarkPrompt(
         title: String,
         excerpt: NoteExcerpt,
-        summary: String?,
-        relatedTitles: List<String>,
-        aiRecommendedTitles: List<String>,
-        wikilinkTitles: Set<String>,
-        createdAt: String
+        candidates: List<RemarkCandidateLine>
     ): String {
-        val summaryText = summary?.takeIf { it.isNotBlank() } ?: "なし"
-        val relatedText = relatedTitles.asBulletList("関連ノートなし")
-        val aiRecommendedText = aiRecommendedTitles.asBulletList("AI推薦ノートなし")
-        val wikilinkText = wikilinkTitles.toList().asBulletList("wikilinkなし")
+        val candidateBlock = candidates
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n") { it.renderForPrompt() }
+            ?: "(none)"
 
-        return """
-            You are an editor and reader for a private Obsidian vault. You are not the author.
-            Create an annotation memo for the current note so the user can grow the note later.
-            Respect the source note. Do not rewrite or replace it. Write suggestions, not final truth.
-            Use the same language as the note content.
+        // **複数行の値をテンプレートへ補間しない。** `trimIndent()` は補間"後"の
+        // 文字列に効くため、埋めた値の2行目以降（インデント0）が混ざると共通インデントが
+        // 0と判定され、テンプレート側の字下げが全行に残る。本文抜粋も候補一覧も
+        // 複数行になり得るので、静的な部分だけを trimIndent して後から連結する。
+        val instructions = """
+            You are a reading companion for a private Obsidian vault. You are not the author, and not a reviewer.
+            Say ONE short thing that helps the user think further about the note below.
+            Write in Japanese, whatever language the note itself is written in.
+            Technical identifiers, code symbols, and proper nouns stay as they appear in the note.
 
-            Choose values only from these fixed choices:
-            種別: 概念メモ / 読書メモ / 日記・ログ / アイデア断片 / 技術メモ / タスク・計画 / 長文記事 / その他
-            粒度: 断片 / 原子メモ / 中粒度 / 長文
-            状態: 十分 / 書きかけ / 具体例不足 / 背景不足 / 自分の解釈不足 / 次アクション不足 / 論点過多
-            補記方針: 具体例を足す / 背景を補う / 自分の解釈を書く / 構成を整理する / 反論・別視点を足す
+            Write EITHER a question that opens up the user's own thinking,
+            OR a suggestion to connect this note with one of the candidate notes. Never both.
 
-            Output Markdown only. Include exactly these sections and headings:
-            ## 粒度評価
-            - 種別: <one fixed choice>
-            - 粒度: <one fixed choice>
-            - 状態: <one fixed choice>
-            - 補記方針: <one fixed choice>
-
-            ## 補記すべき内容
-            Exactly 3 bullets, one line each. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
-            Keep each bullet short: name the term, then state in one sentence what concrete information should be added.
-            - <exact term or claim from this note>: <what specific information should be added>
-
-            Keep the entire output compact. Do not add sections, preambles, or closing remarks beyond the format above.
-
-            Current note title: $title
-            Created at: $createdAt
-
-            AI summary:
-            $summaryText
-
-            Related notes:
-            $relatedText
-
-            AI recommended notes:
-            $aiRecommendedText
-
-            Existing wikilinks:
-            $wikilinkText
-
-            Current note content snippet:
-            ${excerpt.renderForPrompt()}
+            Rules:
+            - One sentence. Two at most. Around 80–120 characters.
+            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
+              talking about the reader in the second person sounds like a grader, not a companion.
+            - It MUST contain a word, term, or claim that literally appears in the note.
+            - Do NOT summarize, evaluate, praise, grade, or greet.
+            - Do NOT tell the user to add, write, fix, or complete anything.
+              Avoid 「不足」「必要」「べき」. Open the thought instead of assigning work.
+            - To refer to a candidate note, write its ID in double brackets, exactly like [[C03]].
+              Never write a note title in brackets. Only IDs from the candidate list are allowed.
+            - A sentence with a link must be a declarative suggestion, not a question.
+              Never append a link after a question.
+            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
+            - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\nNote content:\n").append(excerpt.renderForPrompt())
+            append("\n\nCandidate notes:\n").append(candidateBlock)
+        }
+    }
+
+    /**
+     * 返事を受けて返す1文（映し返し）。**問いを書かせない。**
+     *
+     * ひとことが問いを投げるのに対し、こちらは**受け取ったことを示して閉じる**役。
+     * ここに問いを書かせると次の返事を誘発し、無限会話の入口になる
+     * （「AIは相手役／本質はノートを読む」から外れる）。
+     * **1往復で終わる**という制約は、出力の内容ではなく**形**で守る。
+     *
+     * 助言・称賛・要約も禁じる。称賛は相手役ではなく採点者の口調になり、
+     * 要約は返事をなぞるだけで新しいものを返さない。
+     */
+    fun buildRemarkMirrorPrompt(
+        title: String,
+        excerpt: NoteExcerpt,
+        remark: String,
+        reply: String
+    ): String {
+        val instructions = """
+            You are a reading companion for a private Obsidian vault.
+            The user read a note, you asked them one thing, and they answered.
+            Reflect back what their answer adds to the note in ONE sentence.
+
+            Write in Japanese.
+
+            Rules:
+            - One sentence. Around 60–100 characters.
+            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
+              naming the reader in the second person sounds like a grader, not a companion.
+            - Name the new angle or the tension their answer brings to the note.
+            - Do NOT ask a question. This is the end of the exchange, not a turn in a chat.
+            - Do NOT give advice, praise, greet, or summarize what they wrote.
+            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
+            - If their answer adds nothing you can name, output exactly: $REMARK_NONE_TOKEN
+        """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\nNote content:\n").append(excerpt.renderForPrompt())
+            append("\n\nWhat you asked:\n").append(remark)
+            append("\n\nTheir answer:\n").append(reply)
+        }
     }
 
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
@@ -301,6 +369,15 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    /**
+     * **答える言語はセクションではなくユーザーの質問に従う。**
+     *
+     * 「セクションの言語で」にしていたため、日本語で質問しても
+     * コードや英語のセクションでは英語で返っていた。ノートの内容を写す要約と違い、
+     * **これはユーザーの問いに答える文**なので、従うべきは質問の言語である。
+     * [buildPickerPrompt] が先に「リクエストの言語で」と正しく書けており、
+     * こちらが category を取り違えていた（ひとことでの同じ取り違えと同時に発見）。
+     */
     fun buildSectionChatPrompt(
         sectionTitle: String,
         sectionExcerpt: NoteExcerpt,
@@ -314,7 +391,7 @@ object PromptBuilder {
         return """
             You are a note-taking assistant answering questions about ONE section of an Obsidian note.
             Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
-            Answer concisely in the same language as the section content. Do not invent facts.
+            Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
 
             Section heading: $sectionTitle
             Section content:
@@ -327,11 +404,6 @@ object PromptBuilder {
             $question
         """.trimIndent()
     }
-
-    private fun List<String>.asBulletList(emptyText: String): String =
-        takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { "- $it" }
-            ?: emptyText
 
     private fun NoteExcerpt.renderForPrompt(): String =
         if (isAbridged) {

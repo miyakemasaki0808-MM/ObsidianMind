@@ -1,6 +1,6 @@
 package com.example.newproject
 
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
@@ -15,7 +15,7 @@ class EventKeyTest {
     @Test
     fun `Idleはキーを持たない`() {
         assertNull(QuizState.Idle.toEventKey())
-        assertNull(AnnotationState.Idle.toEventKey())
+        assertNull(RemarkState.Idle.toEventKey())
     }
 
     @Test
@@ -38,8 +38,8 @@ class EventKeyTest {
     @Test
     fun `別ノートの生成中は別キーになる`() {
         assertNotEquals(
-            AnnotationState.Loading("ノートA").toEventKey(),
-            AnnotationState.Loading("ノートB").toEventKey()
+            RemarkState.Loading("ノートA").toEventKey(),
+            RemarkState.Loading("ノートB").toEventKey()
         )
     }
 

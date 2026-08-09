@@ -9,6 +9,7 @@ import org.json.JSONArray
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.needsAiSummary
 import com.example.newproject.model.withVisit
@@ -277,6 +278,238 @@ class ReadingTraceJsonTest {
 
         assertEquals(2, (decoded as ReadingTraceReadResult.Valid).trace.totalVisitCount)
     }
+
+    // ── schema v2 → v3 の移行（ひとこと） ────────────────────────────────
+    //
+    // **v2 は実際に端末へ書き出されている現行版だった。** v1 と違い「古い実験的な版」
+    // ではなく全ユーザーの手元にある形なので、ここが読めなくなると痕跡が全部消える。
+
+    @Test
+    fun `v2 の痕跡はひとこと無しで読める`() {
+        val visits = listOf(visit(at = 1L), visit(at = 2L))
+        val source = trace(visits = visits, aiSummary = "2回開いています", aiSummaryVisitCount = 2)
+
+        val decoded = ReadingTraceJson.decode(encodeAsV2(source))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertNull(loaded.reflection)
+        assertEquals(2, loaded.totalVisitCount)
+        assertEquals("2回開いています", loaded.aiSummary)
+    }
+
+    @Test
+    fun `v2 を読むと現行フォーマットへ移行される`() {
+        val decoded = ReadingTraceJson.decode(encodeAsV2(trace()))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = JSONObject(ReadingTraceJson.encode(loaded).toString(Charsets.UTF_8))
+        assertEquals(READING_TRACE_SCHEMA_VERSION, reencoded.getInt("schemaVersion"))
+    }
+
+    @Test
+    fun `改変された v2 は破損扱いのまま`() {
+        val root = JSONObject(encodeAsV2(trace()).toString(Charsets.UTF_8))
+        root.put("noteTitle", "すり替えたタイトル")
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+    // v2 の checksum はひとことを含まないため、書き足されていても信用しない
+    // （読むと checksum を通り抜けて任意の文言を名乗れる入口になる）。
+    @Test
+    fun `v2 に書き足されたひとことは無視される`() {
+        val root = JSONObject(encodeAsV2(trace()).toString(Charsets.UTF_8))
+        root.put("remark", "外から差し込んだひとこと")
+
+        val decoded = ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8))
+
+        assertNull((decoded as ReadingTraceReadResult.Valid).trace.reflection?.remark)
+    }
+
+    // ── 映し返し（v5） ──────────────────────────────────────────────────
+
+    @Test
+    fun `映し返しまで含めて往復する`() {
+        val source = trace(remark = "この考えの根拠は何だろう？").let {
+            it.copy(
+                reflection = it.reflection!!
+                    .withReply("実際に困った場面があった", 2_000L)
+                    .withMirrored("あなたは経験を根拠として持ち出している。")
+            )
+        }
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    // 返事を書き直したら映し返しは捨てる（古い返事への応答が残ると噛み合わない）。
+    @Test
+    fun `返事を書き直すと映し返しは消える`() {
+        val base = trace(remark = "ひとこと").reflection!!
+            .withReply("最初の返事", 2_000L)
+            .withMirrored("最初の応答")
+
+        val rewritten = base.withReply("書き直した返事", 3_000L)
+
+        assertNull(rewritten.mirrored)
+    }
+
+    // 返事が無いのに映し返しだけあるのは、片方を消し忘れた実装ミスか改変。
+    @Test
+    fun `返事が無い映し返しは保存できない`() {
+        val base = trace(remark = "ひとこと")
+
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(
+                base.copy(reflection = base.reflection!!.copy(mirrored = "宙に浮いた応答"))
+            )
+        }
+    }
+
+    // ── ひとこと（v3） ──────────────────────────────────────────────────
+
+    @Test
+    fun `ひとことが往復する`() {
+        val source = trace(remark = "この考えの根拠になった経験は何だろう？")
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    @Test
+    fun `ひとことの改変は破損扱いになる`() {
+        val corrupted = mutate(trace(remark = "元のひとこと")) { it.put("remark", "すり替えたひとこと") }
+
+        assertCorrupt(ReadingTraceJson.decode(corrupted))
+    }
+
+    // null と空文字を区別する存在フラグが、ひとことにも効いていること。
+    @Test
+    fun `ひとことの有無は checksum で区別される`() {
+        val withRemark = ReadingTraceJson.encode(trace(remark = "ひとこと"))
+        val withoutRemark = ReadingTraceJson.encode(trace(remark = null))
+
+        assertTrue(checksumOf(withRemark) != checksumOf(withoutRemark))
+    }
+
+    @Test
+    fun `空白だけのひとことは保存できない`() {
+        assertFailsWithMessage { ReadingTraceJson.encode(trace(remark = "   ")) }
+    }
+
+    // 要約と同じくバイト基準。1文しか入らない枠であることを保存側でも固定する。
+    // ── schema v3 → v4 の移行（返事） ────────────────────────────────────
+    //
+    // **v3 も実機へ書き出されている。** 平坦な remark 1本だったので、
+    // 「返事なしの組」として読めることを固定する。
+
+    @Test
+    fun `v3 のひとことは返事なしの組として読める`() {
+        val decoded = ReadingTraceJson.decode(encodeAsV3(trace(), remark = "前回のひとこと"))
+
+        val reflection = (decoded as ReadingTraceReadResult.Valid).trace.reflection!!
+        assertEquals("前回のひとこと", reflection.remark)
+        assertNull(reflection.reply)
+        assertNull(reflection.repliedAtEpochMillis)
+    }
+
+    @Test
+    fun `v3 を読むと現行フォーマットへ移行される`() {
+        val decoded = ReadingTraceJson.decode(encodeAsV3(trace(), remark = "前回のひとこと"))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = JSONObject(ReadingTraceJson.encode(loaded).toString(Charsets.UTF_8))
+        assertEquals("前回のひとこと", reencoded.getString("remark"))
+    }
+
+    // v3 の checksum は返事を含まないため、書き足されていても信用しない。
+    @Test
+    fun `v3 に書き足された返事は無視される`() {
+        val root = JSONObject(encodeAsV3(trace(), remark = "ひとこと").toString(Charsets.UTF_8))
+        root.put("reply", "外から差し込んだ返事")
+
+        val decoded = ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8))
+
+        assertNull((decoded as ReadingTraceReadResult.Valid).trace.reflection?.reply)
+    }
+
+    @Test
+    fun `改変された v3 は破損扱いのまま`() {
+        val root = JSONObject(encodeAsV3(trace(), remark = "ひとこと").toString(Charsets.UTF_8))
+        root.put("noteTitle", "すり替えたタイトル")
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+    // ── 返事（v4） ──────────────────────────────────────────────────────
+
+    @Test
+    fun `ひとことと返事の組が往復する`() {
+        val source = trace(remark = "この考えの根拠は何だろう？")
+            .let { it.copy(reflection = it.reflection!!.withReply("実際に困った場面があった", 2_000L)) }
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    @Test
+    fun `返事の改変は破損扱いになる`() {
+        val source = trace(remark = "ひとこと")
+            .let { it.copy(reflection = it.reflection!!.withReply("元の返事", 2_000L)) }
+        val corrupted = mutate(source) { it.put("reply", "すり替えた返事") }
+
+        assertCorrupt(ReadingTraceJson.decode(corrupted))
+    }
+
+    // 返事と日時の一方だけが残ると「いつ書いたか分からない返事」になる。
+    @Test
+    fun `返事と日時の一方だけは保存できない`() {
+        val remarkOnly = trace(remark = "ひとこと").reflection!!
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(
+                trace().copy(reflection = remarkOnly.copy(reply = "返事", repliedAtEpochMillis = null))
+            )
+        }
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(
+                trace().copy(reflection = remarkOnly.copy(reply = null, repliedAtEpochMillis = 1L))
+            )
+        }
+    }
+
+    @Test
+    fun `空白だけの返事は保存できない`() {
+        val source = trace(remark = "ひとこと")
+            .let { it.copy(reflection = it.reflection!!.withReply("   ", 2_000L)) }
+
+        assertFailsWithMessage { ReadingTraceJson.encode(source) }
+    }
+
+    @Test
+    fun `返事の上限はutf8バイトで測る`() {
+        val justOver = "あ".repeat(ReadingTraceLimits.MAX_REPLY_BYTES / 3 + 1)
+        val base = trace(remark = "ひとこと")
+
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(
+                base.copy(reflection = base.reflection!!.withReply(justOver, 2_000L))
+            )
+        }
+    }
+
+    @Test
+    fun `ひとことの上限はutf8バイトで測る`() {
+        val justOver = "あ".repeat(ReadingTraceLimits.MAX_REMARK_BYTES / 3 + 1)
+        val within = "あ".repeat(ReadingTraceLimits.MAX_REMARK_BYTES / 3)
+
+        assertFailsWithMessage { ReadingTraceJson.encode(trace(remark = justOver)) }
+        ReadingTraceJson.encode(trace(remark = within))
+    }
 }
 
 /**
@@ -333,6 +566,122 @@ private fun encodeAsV1(trace: ReadingTrace): ByteArray {
         .toByteArray(Charsets.UTF_8)
 }
 
+/**
+ * schema v2 のサイドカーを組み立てる。
+ *
+ * v1 と同じ理由でテスト側に正規形を写し取っている（production の canonicalPayload を
+ * 呼ぶと、実装を変えたときに一緒に壊れて互換の破れに気付けない）。
+ * **v2 は v1 と違って全ユーザーの端末に実在する形**なので、ここが仕様として固定される。
+ */
+private fun encodeAsV2(trace: ReadingTrace): ByteArray {
+    val visits = JSONArray()
+    trace.visits.forEach { v ->
+        visits.put(
+            JSONObject()
+                .put("at", v.atEpochMillis)
+                .put("deepestSection", v.deepestSectionTitle ?: JSONObject.NULL)
+                .put("progressPercent", v.progressPercent)
+        )
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(2)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            if (v.deepestSectionTitle == null) {
+                out.writeByte(0)
+            } else {
+                out.writeByte(1)
+                out.writeSizedForTest(v.deepestSectionTitle)
+            }
+        }
+        if (trace.aiSummary == null) {
+            out.writeByte(0)
+        } else {
+            out.writeByte(1)
+            out.writeSizedForTest(trace.aiSummary)
+        }
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+        out.writeInt(trace.totalVisitCount)
+    }
+    return JSONObject()
+        .put("schemaVersion", 2)
+        .put("vaultRelativePath", trace.vaultRelativePath)
+        .put("noteTitle", trace.noteTitle)
+        .put("documentId", trace.documentId ?: JSONObject.NULL)
+        .put("visits", visits)
+        .put("aiSummary", trace.aiSummary ?: JSONObject.NULL)
+        .put("aiSummaryVisitCount", trace.aiSummaryVisitCount ?: JSONObject.NULL)
+        .put("totalVisitCount", trace.totalVisitCount)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
+}
+
+/**
+ * schema v3 のサイドカーを組み立てる。**平坦な remark 1本**だった版。
+ * v2 と同じ理由でテスト側に正規形を写し取る（実機に実在する形なので仕様として固定）。
+ */
+private fun encodeAsV3(trace: ReadingTrace, remark: String?): ByteArray {
+    val visits = JSONArray()
+    trace.visits.forEach { v ->
+        visits.put(
+            JSONObject()
+                .put("at", v.atEpochMillis)
+                .put("deepestSection", v.deepestSectionTitle ?: JSONObject.NULL)
+                .put("progressPercent", v.progressPercent)
+        )
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(3)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            if (v.deepestSectionTitle == null) {
+                out.writeByte(0)
+            } else {
+                out.writeByte(1)
+                out.writeSizedForTest(v.deepestSectionTitle)
+            }
+        }
+        if (trace.aiSummary == null) {
+            out.writeByte(0)
+        } else {
+            out.writeByte(1)
+            out.writeSizedForTest(trace.aiSummary)
+        }
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+        out.writeInt(trace.totalVisitCount)
+        if (remark == null) {
+            out.writeByte(0)
+        } else {
+            out.writeByte(1)
+            out.writeSizedForTest(remark)
+        }
+    }
+    return JSONObject()
+        .put("schemaVersion", 3)
+        .put("vaultRelativePath", trace.vaultRelativePath)
+        .put("noteTitle", trace.noteTitle)
+        .put("documentId", trace.documentId ?: JSONObject.NULL)
+        .put("visits", visits)
+        .put("aiSummary", trace.aiSummary ?: JSONObject.NULL)
+        .put("aiSummaryVisitCount", trace.aiSummaryVisitCount ?: JSONObject.NULL)
+        .put("totalVisitCount", trace.totalVisitCount)
+        .put("remark", remark ?: JSONObject.NULL)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
+}
+
 private fun DataOutputStream.writeSizedForTest(value: String) {
     val encoded = value.toByteArray(Charsets.UTF_8)
     writeInt(encoded.size)
@@ -353,15 +702,20 @@ private fun trace(
     documentId: String? = "doc-1",
     visits: List<ReadingVisit> = listOf(visit()),
     aiSummary: String? = null,
-    aiSummaryVisitCount: Int? = null
+    aiSummaryVisitCount: Int? = null,
+    remark: String? = null
 ) = ReadingTrace(
     vaultRelativePath = path,
     noteTitle = title,
     documentId = documentId,
     visits = visits,
     aiSummary = aiSummary,
-    aiSummaryVisitCount = aiSummaryVisitCount
+    aiSummaryVisitCount = aiSummaryVisitCount,
+    reflection = remark?.let { Reflection(remark = it, remarkedAtEpochMillis = REMARKED_AT) }
 )
+
+/** ひとことの日時。往復と checksum の検証には固定値で足りる。 */
+private const val REMARKED_AT = 1_700_000_000_000L
 
 /** encode した JSON を書き換えて破損・改変を再現する。 */
 private fun mutate(trace: ReadingTrace, edit: (JSONObject) -> Unit): ByteArray {

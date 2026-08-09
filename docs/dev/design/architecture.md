@@ -20,7 +20,8 @@ NoteViewModel（Android境界の窓口）
       ├── NoteUiStateStore（機能別Writerを配る）
       ├── SectionChatController
       ├── QuizController
-      ├── AnnotationController
+      ├── AnnotationController        ← 旧補記ファイルの片付けのみ（**Vault単位**）
+      ├── RemarkController            ← 2026-08-09（ノートへのひとこと。旧補記の生成を置換）
       ├── SearchController
       ├── DistillController        ← PR #32 で追加
       ├── ReadingTraceController   ← ReadingTrace v1 で追加
@@ -29,7 +30,7 @@ NoteViewModel（Android境界の窓口）
       └── ReadingTraceCleanupController ← 2026-08-01（痕跡の孤児掃除。**Vault単位**）
 ```
 
-分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 9つで、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
+分割時点では 906行 → 348行・Controller 4つ。現在は機能追加を経て Controller 10個で、**窓口の肥大化は再発していない**（追加分はController側に載っている）。要約だけは分割時に取り残されて `NoteViewModel` 直書きのまま残り、そこだけ世代管理が抜けて実害になった（→ 下記「2026-07-26」の2節）。
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -254,3 +255,26 @@ Controller が 9つになった。2026-07-26 に更新した再検討条件は
 （ノートを開き直しただけで洗い出しが消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、
 すべてのControllerが従うものではない。
+
+### 2026-08-09 — 10件目（RemarkController）: 未確認管理を持つControllerは1件へ減った
+
+「AI補記メモ」を「ノートへのひとこと」へ作り直し、生成を `RemarkController` へ移した
+（→ [reflect_remark](reflect_remark.md)）。`AnnotationController` は旧補記ファイルの
+一覧・削除だけを持つ**Vault単位**のControllerとして残る。
+
+**共通化の再検討条件（`markViewed()` と Snackbar 通知を持つ Controller が3つ目）に対して、
+件数は増えるどころか減った。** ひとことは結果がAIタブのパネルへ直接出るので
+未確認という概念が無く、`isViewed` を持たない。**残るのはクイズ1件だけ**である。
+
+**「結果をどこへ置くか」が未確認管理の要否を決めている。** 補記が `markViewed()` を
+持っていたのは結果が専用画面にあったからで、AI生成の性質から来ていたわけではなかった。
+2026-07-25 に「共通性は生成処理ではなく**ユーザーへの見せ方**に宿る」と更新した判定軸が、
+ここでも同じ向きで効いている。**見せ方が変われば、同じ機能でも型が変わる。**
+
+**Vault単位のControllerが3つになった**（`AnnotationController`・
+`ReadingTraceCleanupController`・`SearchController` の一部）。
+いずれもノート単位の契約（`cancelNoteScopedJobs` / `withNoteScopedReset`）には登録しない。
+
+**ノート単位の状態を1つ足したので、契約2箇所へ登録した** — `remarkState` を
+`withNoteScopedReset()` へ、`remark.cancelAndClear()` を `cancelNoteScopedJobs()` へ。
+**あわせてこの系統図も更新した**（2026-08-01 に「定型から漏れる」と記録した箇所）。

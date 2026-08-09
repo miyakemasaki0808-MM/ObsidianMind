@@ -35,7 +35,7 @@
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
-| [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（914行・16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
+| [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
 | [review/](../review/) | 外部レビューの成果物（日付別に1本ずつ）と、指摘の受付簿 | **`2026-*.md` は書き換えない。** 次回レビューは新しい日付のファイルを足す |
 | [bugfix_reports.md](bugfix_reports.md) | AIが生成しがちで通常フローでは表面化しない潜在バグの記録 | 該当する型のバグを踏んだとき |
 | [lessons.md](lessons.md) | **§0＝diff完成後に当てる5問（日常の運用に出るのはここだけ）**＋ L1〜L29 の事例アーカイブ | 同じ形の失敗を2度した／構造上また起きると判断したとき |
@@ -84,6 +84,7 @@
 |---|---|---|
 | [reflect_distill.md](design/reflect_distill.md) | 蒸留（Distill） | v1 Phase 1〜6 実装済み・実機確認待ち |
 | [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） | **v1完了**（実機確認は2026-07-31にクローズ） |
+| [reflect_remark.md](design/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） | **実装済み・実機確認済み**（5巡） |
 | [section_ai_chat.md](design/section_ai_chat.md) | セクション単位AIチャット | 実装済み（PR #14） |
 | [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
