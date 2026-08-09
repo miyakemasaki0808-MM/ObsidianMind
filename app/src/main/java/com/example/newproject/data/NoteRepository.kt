@@ -22,56 +22,6 @@ import kotlinx.coroutines.withContext
 data class BoundedText(val text: String, val isTruncated: Boolean)
 
 /**
- * 保存できた補記メモ。[displayName] は予測値ではなく**保存後のメタデータから取った実名**。
- * 同じノートを同じ分に再生成するとプロバイダがファイル名を変えることがあるため。
- */
-data class SavedAnnotation(val ref: DocumentRef, val displayName: String)
-
-/** [AnnotationDocumentGateway] のSAF実装。参照は `Uri` の文字列表現をそのまま使う。 */
-private class SafAnnotationDocumentGateway(
-    private val contentResolver: ContentResolver,
-    private val folderUri: Uri
-) : AnnotationDocumentGateway {
-
-    override fun createFile(fileName: String): String? =
-        DocumentsContract.createDocument(contentResolver, folderUri, "text/markdown", fileName)
-            ?.toString()
-
-    override fun write(reference: String, bytes: ByteArray) {
-        contentResolver.openOutputStream(reference.toUri(), "wt")?.use { stream ->
-            stream.write(bytes)
-            stream.flush()
-        } ?: error("補記メモファイルを書き込めませんでした。")
-    }
-
-    override fun readBack(reference: String): ByteArray? = try {
-        contentResolver.openInputStream(reference.toUri())?.use { it.readBytes() }
-    } catch (e: Exception) {
-        null
-    }
-
-    override fun delete(reference: String): Boolean = try {
-        // 例外にしない代わりに、消せたかどうかは必ず呼び出し側へ返す。
-        // 握りつぶすと `_AI補記` に残った空ファイルを誰も知らせられない。
-        DocumentsContract.deleteDocument(contentResolver, reference.toUri())
-    } catch (e: Exception) {
-        false
-    }
-
-    override fun displayName(reference: String): String? = try {
-        contentResolver.query(
-            reference.toUri(),
-            arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
-            null,
-            null,
-            null
-        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
-    } catch (e: Exception) {
-        null
-    }
-}
-
-/**
  * 本文読込の予算。用途ごとに別の入口を持たせ、**呼び出し側にバイト数を選ばせない**。
  * 引数で受けると「とりあえず大きめ」を渡せてしまい、上限を置く意味が薄れる。
  */
@@ -85,14 +35,6 @@ internal object NoteReadLimits {
 
 internal fun isMarkdownFile(name: String?): Boolean =
     name?.lowercase()?.endsWith(".md") == true
-
-internal fun sanitizeAnnotationFileTitle(title: String): String {
-    val sanitized = title
-        .replace(Regex("[/\\\\:*?\"<>|\\n\\r\\t]+"), "_")
-        .replace(Regex("_+"), "_")
-        .trim('_', ' ')
-    return sanitized.ifBlank { "untitled" }
-}
 
 class NoteRepository {
 
@@ -299,31 +241,6 @@ class NoteRepository {
         } ?: error("書き出し先を開けませんでした。")
     }
 
-    /**
-     * 補記メモを1件書き出す。**手順（作成→書込→検証→失敗時の後始末）は
-     * [AnnotationFileWriter] が持ち、ここはSAFの実装だけを渡す。**
-     * 表示名は予測せず、保存後のメタデータから取った実名を返す。
-     */
-    suspend fun createAnnotationFile(
-        contentResolver: ContentResolver,
-        vaultUri: Uri,
-        sanitizedTitle: String,
-        timestamp: String,
-        content: String
-    ): SavedAnnotation = withContext(Dispatchers.IO) {
-        // 「探して、無ければ作る」を1回の探索で行う。`find(...) ?: create(...)` と分けて書くと、
-        // ルートを読めなかった場合まで「無い」に見えて2つ目の _AI補記 を作る。
-        val folderUri = resolveOrCreateAnnotationFolder(contentResolver, vaultUri)
-        val fileName = "${sanitizedTitle}${ANNOTATION_FILE_MARKER}$timestamp.md"
-        val writer = AnnotationFileWriter(SafAnnotationDocumentGateway(contentResolver, folderUri))
-
-        when (val result = writer.create(fileName, content)) {
-            is AnnotationWriteResult.Success ->
-                SavedAnnotation(DocumentRef(result.reference), result.displayName)
-            is AnnotationWriteResult.Failure -> error(result.message)
-        }
-    }
-
     // _AI補記/ フォルダ内の補記メモファイルを列挙する（1階層のみ）
     suspend fun listAnnotationFiles(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
         withContext(Dispatchers.IO) {
@@ -395,22 +312,10 @@ class NoteRepository {
 
     // Found 以外は null。Absent（本当に無い）と Unreadable（読めなかった）を
     // ここで潰してよいのは、この戻り値で作成判断をしないため
-    // （作成は createAnnotationFolder が別に呼ばれる経路になっている）。
+    // （フォルダを作る経路はもう無い。ひとことは痕跡サイドカーへ保存する）。
     private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? =
         (findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
             as? RootFolderLookup.Found)?.uri
-
-    // 既にあるなら作らない。**ルートを読めなかった場合も作らない** —
-    // 「無い」と誤認して2つ目の _AI補記 を作るのを防ぐ。
-    private fun resolveOrCreateAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri =
-        when (val lookup = findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)) {
-            is RootFolderLookup.Found -> lookup.uri
-            RootFolderLookup.Unreadable ->
-                error("Vaultルートを読めなかったため補記メモフォルダを作成できませんでした。")
-            RootFolderLookup.Absent ->
-                createRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
-                    ?: error("補記メモフォルダを作成できませんでした。")
-        }
 
     companion object {
         private const val ANNOTATION_FOLDER_NAME = "_AI補記"

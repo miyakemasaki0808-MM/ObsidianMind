@@ -1198,6 +1198,32 @@ class ReadingTraceControllerTest {
         assertEquals("失敗しても残したいひとこと", persistence.stored("ideas/habit.md")!!.remark)
     }
 
+    /**
+     * 保存を待っている間に新しいひとことが預けられたら、**そちらを優先する。**
+     * 失敗した古い方を無条件に戻すと、新しい方を上書きして捨ててしまう。
+     * （訪問側の巻き戻しが「自分が書こうとした訪問がまだ最新なら」だけ戻すのと同じ形）
+     */
+    @Test
+    fun `保存中に預け直されたひとことは古い失敗で上書きされない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSaveOnAttempt = 1 }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark("古いひとこと")
+        controller.pause()
+        // 保存（失敗する）が走り切る前に、新しいひとことを預け直す
+        controller.setPendingRemark("新しいひとこと")
+        advanceUntilIdle()
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("新しいひとこと", persistence.stored("ideas/habit.md")!!.remark)
+    }
+
     // セッションが無ければ保存先が無いので黙って捨てる（例外にしない）。
     @Test
     fun `セッションが無ければひとことは黙って捨てられる`() = runTest {

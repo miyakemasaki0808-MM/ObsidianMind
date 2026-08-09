@@ -79,15 +79,14 @@ interface VaultHandle {
      */
     suspend fun collectImages(): VaultImageScan
 
-    /** `_AI補記` 配下の一覧。フォルダが無ければ空。 */
+    /**
+     * `_AI補記` 配下の一覧。フォルダが無ければ空。
+     *
+     * **書き出す側はもう無い。** 「AI補記メモ」は「ノートへのひとこと」へ作り直され、
+     * 保存先は読書痕跡サイドカーへ移った。この一覧は、作り直す前に生成された
+     * `.md` をユーザーが片付けるためだけに残している。
+     */
     suspend fun listAnnotationFiles(): List<NoteFile>
-
-    /** `_AI補記` へ1件書き出す。失敗時は例外。 */
-    suspend fun createAnnotationFile(
-        sanitizedTitle: String,
-        timestamp: String,
-        content: String
-    ): SavedAnnotation
 
     /** 1件削除する。**SAFプロバイダの都合で失敗し得る**ので、結果を捨てないこと。 */
     suspend fun deleteDocument(ref: DocumentRef): Boolean
@@ -123,18 +122,6 @@ private class SafVaultHandle(
 
     override suspend fun listAnnotationFiles(): List<NoteFile> =
         repository.listAnnotationFiles(contentResolver, vaultUri)
-
-    override suspend fun createAnnotationFile(
-        sanitizedTitle: String,
-        timestamp: String,
-        content: String
-    ): SavedAnnotation = repository.createAnnotationFile(
-        contentResolver = contentResolver,
-        vaultUri = vaultUri,
-        sanitizedTitle = sanitizedTitle,
-        timestamp = timestamp,
-        content = content
-    )
 
     // 削除自体はVaultルートを要さないが、`ContentResolver` を呼び出し側から
     // 消すのが目的なので同じハンドルに置く。
