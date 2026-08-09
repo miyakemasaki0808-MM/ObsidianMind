@@ -242,6 +242,40 @@ class RemarkComposerTest {
         assertTrue(result is RemarkResult.Accepted)
     }
 
+    /**
+     * **「でしょう」「だろう」は推量であって疑問ではない。**
+     *
+     * 実機5巡目で誤拒否として報告された形。疑問になるのは末尾に「か」が付いたときだけで、
+     * 「〜するでしょう。」は宣言的な接続提案として正しい。
+     */
+    @Test
+    fun `推量で終わる接続は問い扱いしない`() {
+        listOf(
+            "[[C01]]とつなげると、読書は著者との対話であることの意味がはっきりするでしょう。",
+            "[[C01]]と並べると、読書は著者との対話であることの見え方が変わるだろう。"
+        ).forEach { response ->
+            assertTrue(
+                "推量が問いとして落ちている: $response",
+                compose(response) is RemarkResult.Accepted
+            )
+        }
+    }
+
+    // 同じ語尾でも「か」が付けば疑問。ここは落ちること。
+    @Test
+    fun `でしょうかとだろうかは問いとして落ちる`() {
+        listOf(
+            "[[C01]]は、読書は著者との対話であることとどう繋がるでしょうか。",
+            "[[C01]]は、読書は著者との対話であることとどう繋がるだろうか。"
+        ).forEach { response ->
+            assertEquals(
+                "問いが通っている: $response",
+                RemarkRejection.LinkedQuestion,
+                (compose(response) as RemarkResult.Rejected).reason
+            )
+        }
+    }
+
     // 再試行が効く側であること（Unusable として扱われる）。
     @Test
     fun `リンク付きの問いは再試行対象になる`() {
