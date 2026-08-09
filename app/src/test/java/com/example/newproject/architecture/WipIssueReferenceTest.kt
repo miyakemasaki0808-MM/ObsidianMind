@@ -39,6 +39,7 @@ class WipIssueReferenceTest {
         val violations = referencingFiles().flatMap { file ->
             val text = file.readText()
             ISSUE_ID_PATTERN.findAll(text)
+                .filterNot { REVIEW_FINDING_PREFIX.matches(it.groupValues[1]) }
                 .map { it.value }
                 .filterNot { it in known }
                 .distinct()
@@ -77,10 +78,22 @@ class WipIssueReferenceTest {
         val ISSUE_HEADING = Regex("""^## ([A-Z][A-Z0-9]*-\d+)\.""", RegexOption.MULTILINE)
 
         /**
-         * 課題IDらしき表記。**英字始まりに限る**のは、日付（`2026-08`）に当たらないため。
-         * 見出し用の `L-3` や `N-7` のような1文字カテゴリも拾わない
-         * （`_wip/` 内の節番号であって課題IDではない）。
+         * 課題IDらしき表記。カテゴリ部を group(1) で取る。
+         *
+         * **英字始まりに限る**のは日付（`2026-08`）に当たらないため。
+         * **2文字以上**に限るのは、節番号（`L-3` / `N-7` / `D-1`）を拾わないため。
+         *
+         * **当初 `{2,}`（3文字以上）にしていて `AI-3` のような2文字カテゴリを取りこぼしていた。**
+         * 検査そのものが、守りたい対象より狭い範囲しか数えていなかった（→ lessons L29）。
          */
-        val ISSUE_ID_PATTERN = Regex("""\b[A-Z][A-Z0-9]{2,}-\d+\b""")
+        val ISSUE_ID_PATTERN = Regex("""\b([A-Z][A-Z0-9]+)-\d+\b""")
+
+        /**
+         * レビューの指摘番号（`P2-5` など）は課題IDではないので除く。
+         *
+         * `_wip/` からレビューの指摘を引用することは正当で、
+         * これを課題IDと見なすと**正しい記述が落ちる**。
+         */
+        val REVIEW_FINDING_PREFIX = Regex("""P\d+""")
     }
 }

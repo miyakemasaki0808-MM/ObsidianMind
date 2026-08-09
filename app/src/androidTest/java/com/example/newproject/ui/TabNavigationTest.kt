@@ -1,14 +1,14 @@
 package com.example.newproject.ui
 
 import android.os.SystemClock
-import android.view.MotionEvent
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.MainActivity
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -21,22 +21,26 @@ import org.junit.runner.RunWith
  * `NavHost` のバックスタックと Compose の再コンポーズを実際に走らせないと出ない。
  * 画面遷移の状態は `NoteUiState` の外（`NavController`）にあるので、状態のテストでは触れない。
  *
- * ## 「連打」は Compose のAPIでは作れない
+ * ## 「連打」は**ここでは試していない**
  *
  * `onNodeWithText(...).performClick()` を続けて呼んでも**遷移は重ならない。**
  * `onNodeWithText` が毎回 `fetchSemanticsNode()` でUIと同期してからノードを取り直すため、
- * `waitForIdle()` を書かなくても1操作ずつ落ち着いてしまう
- * （2026-08-08 の外部レビュー指摘。当初の連打テストはこの形で、何も競合させていなかった）。
+ * `waitForIdle()` を書かなくても1操作ずつ落ち着いてしまう。
  *
- * そこで**座標を1度だけ取り、以降は生の `MotionEvent` を同期なしで投げる。**
- * `Instrumentation.sendPointerSync()` は Compose の待ち合わせを通らないので、
- * 遷移が処理される前に次の入力が届く。
+ * 生の `MotionEvent` を `Instrumentation.sendPointerSync()` で投げる形も試したが、
+ * **Android 17 では instrumentation のUIDからの入力注入が拒否される。**
+ * UiAutomator を足せば通る余地はあるが、**1つのテストのために依存を増やさない。**
  *
- * ## バックスタックは競合と分けて確かめる
+ * したがって**競合そのものは主張しない。** 連打で本当に困るのは
+ * 「履歴が積み上がって戻る回数が合わなくなる」ことなので、
+ * **その契約のほうを下の3件で直接観測する。**
  *
- * 最後に選んだ画面が出ていることは、**バックスタックが積み上がっていても成立する。**
- * `launchSingleTop` / `popUpTo` を外しても最終assertは通ってしまうので、
- * **「戻る1回で開始タブへ戻る」**を別の観測点として置く。
+ * ## バックスタックは「戻る」で観測する
+ *
+ * 最後に選んだ画面が出ていることは、**履歴が積み上がっていても成立する。**
+ * `launchSingleTop` / `popUpTo` を外しても最終assertは通ってしまうため、
+ * **戻ったときにどこへ着くか**を観測点にする。
+ * `popUpTo` は非開始タブから、`launchSingleTop` は**開始タブから**でないと観測できない。
  */
 @RunWith(AndroidJUnit4::class)
 class TabNavigationTest {
@@ -90,48 +94,32 @@ class TabNavigationTest {
     }
 
     /**
-     * **同じタブを続けて選んでも履歴は増えない。**
+     * **開始タブを選び直しても履歴は増えない。**
      *
-     * `launchSingleTop` が効いていることの観測点。外すと同じ行き先が2件積まれ、
-     * 戻る1回では「さがす」に留まる。
+     * `launchSingleTop` が効いていることの観測点。
+     *
+     * **開始タブ（ノート）でなければ観測できない。** 「さがす」で2回試しても、
+     * `popUpTo(start)` が毎回いまの「さがす」を取り除いてしまうため、
+     * `launchSingleTop` の有無で結果が変わらない
+     * （2026-08-08 の実機変異で、外しても緑のままだと分かった）。
+     *
+     * 開始タブなら話が別で、`launchSingleTop` を外すと `ノート` が2件積まれる。
+     * したがって**戻るがActivityの終了になるか**が判定になる —
+     * 履歴が1件なら終了し、2件なら1件目へ戻るだけで終了しない。
      */
     @Test
-    fun 同じタブを2回選んでも戻る1回で開始タブへ戻る() {
-        repeat(2) {
-            composeRule.onNodeWithText(TAB_SEARCH).performClick()
-            composeRule.waitForIdle()
-        }
-        composeRule.onNodeWithText(SEARCH_MARKER).assertIsDisplayed()
-
-        pressBackOnce()
-
+    fun 開始タブを選び直しても履歴は増えない() {
         composeRule.onNodeWithText(NOTE_MARKER).assertIsDisplayed()
-    }
-
-    /**
-     * **同期を挟まずに入力を投げ込んでも、最後の選択に落ち着く。**
-     *
-     * 座標は最初に1度だけ取り、以降は `sendPointerSync` で生のタップを送る。
-     * Compose の待ち合わせを通らないので、遷移の処理中に次の入力が届く。
-     *
-     * **ここで戻る操作は試さない。** 最後に開始タブへ着いた状態で back を送ると、
-     * `NavController` に戻す先が無いので**Activityの終了へ伝播する**
-     * （2026-08-08 に実際にこれで落とした）。履歴の主張は上の2件が持つ。
-     */
-    @Test
-    fun 同期を挟まない連続タップでも最後の選択に落ち着く() {
-        val search = centerOf(TAB_SEARCH)
-        val options = centerOf(TAB_OPTIONS)
-        val note = centerOf(TAB_NOTE)
-
-        repeat(4) {
-            tap(search)
-            tap(options)
-        }
-        tap(note)
+        composeRule.onNodeWithText(TAB_NOTE).performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText(NOTE_MARKER).assertIsDisplayed()
+        composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
+
+        assertTrue(
+            "戻るでActivityが終了しなかった。開始タブの履歴が積み上がっている" +
+                "（`launchSingleTop` を確認すること）。現在の状態: ${activityState()}",
+            waitUntilDestroyed()
+        )
     }
 
     /** 遷移した先で再生成しても、その画面のまま戻ってくる。 */
@@ -149,35 +137,22 @@ class TabNavigationTest {
 
     // --- 補助 -----------------------------------------------------------------
 
-    /** 画面座標での中心。**1度だけ取って使い回す**（取り直すと同期が入る）。 */
-    private fun centerOf(text: String): Pair<Float, Float> {
-        val node = composeRule.onNodeWithText(text).fetchSemanticsNode()
-        val position = node.positionOnScreen
-        return (position.x + node.size.width / 2f) to (position.y + node.size.height / 2f)
-    }
-
-    /** Compose の待ち合わせを通さずにタップを送る。 */
-    private fun tap(point: Pair<Float, Float>) {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val at = SystemClock.uptimeMillis()
-        listOf(MotionEvent.ACTION_DOWN to at, MotionEvent.ACTION_UP to at + 16).forEach { (action, time) ->
-            MotionEvent.obtain(at, time, action, point.first, point.second, 0).use { event ->
-                instrumentation.sendPointerSync(event)
-            }
-        }
-    }
-
     private fun pressBackOnce() {
         composeRule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
         composeRule.waitForIdle()
     }
 
-    private inline fun <T> MotionEvent.use(block: (MotionEvent) -> T): T =
-        try {
-            block(this)
-        } finally {
-            recycle()
+    private fun activityState() = composeRule.activityRule.scenario.state
+
+    /** 終了は非同期に反映されるので、少し待ってから判定する。 */
+    private fun waitUntilDestroyed(timeoutMillis: Long = 3_000): Boolean {
+        val deadline = SystemClock.uptimeMillis() + timeoutMillis
+        while (SystemClock.uptimeMillis() < deadline) {
+            if (activityState() == Lifecycle.State.DESTROYED) return true
+            Thread.sleep(50)
         }
+        return activityState() == Lifecycle.State.DESTROYED
+    }
 
     private companion object {
         const val TAB_NOTE = "ノート"
