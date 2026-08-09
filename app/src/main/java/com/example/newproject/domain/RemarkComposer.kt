@@ -73,6 +73,16 @@ internal enum class RemarkRejection {
     /** 候補集合に無いノートを [[...]] で参照した。 */
     UnknownLink,
 
+    /**
+     * 関連ノートへのリンクを含みながら、文が問い・勧誘で終わっている。
+     *
+     * プロンプトは「問い**か**関連ノート接続のどちらか一方」を求めているが、
+     * 実機では「…どのような役割を果たすのか、具体的に考えてみましょう。[[候補A]]」
+     * のように**問いの末尾へリンクを足しただけ**の出力が通っていた。
+     * 疑問符が無いので [AskedAQuestion] の検査では防げない。
+     */
+    LinkedQuestion,
+
     /** 映し返しで問いを返してきた（1往復で閉じる制約に反する）。 */
     AskedAQuestion;
 
@@ -99,6 +109,34 @@ internal fun remarkCandidateId(index: Int): String = relatedCandidateId(index)
 // 見出しや箇条書きを付けてくることがある。
 private val DECORATION_PREFIX = Regex("^\\s*(?:[-*•>]|\\d+[.)])\\s*")
 private val REMARK_LINK = Regex("\\[\\[([^\\[\\]]+)]]")
+
+/**
+ * 文末が問い・勧誘の形になっているか。
+ *
+ * **必ず文末で見る。** 中間の疑問詞（「どう」「どのような」）や助詞の「か」で判定すると、
+ * 「…どう始めるかまで考えられそうです。」のような**正しい宣言的接続まで落ちる**。
+ * 日本語の問い・勧誘は文末に現れるので、そこだけを見れば足りる。
+ *
+ * 「かもしれません」を弾かないために、`か` は**文末そのもの**の場合だけを見る
+ * （`かもしれません` は `ません` で終わるので当たらない）。
+ */
+private val INTERROGATIVE_ENDING = Regex("(?:か|ましょう|でしょう|だろう|ませんか|ですか|ますか)$")
+
+/** 文末の句点・感嘆符・疑問符と、その後ろに付けられたリンク・空白を落とす。 */
+private val TRAILING_NOISE = Regex("(?:\\s|。|．|\\.|！|!|？|\\?|\\[\\[[^\\[\\]]+]])+$")
+
+/**
+ * リンクを含む文が、問い・勧誘で終わっていないか。
+ *
+ * 実機で通っていたのは「…果たすのか、具体的に考えてみましょう。[[候補A]]」の形で、
+ * **リンクが最後の句点より後ろへ足されている**。末尾のリンクごと剥がしてから
+ * 文末を見ることで、この「取って付けた」形も同じ検査で捕まえられる。
+ */
+private fun endsAsQuestion(text: String): Boolean {
+    val core = TRAILING_NOISE.replace(text, "")
+    if (core.isEmpty()) return false
+    return INTERROGATIVE_ENDING.containsMatchIn(core)
+}
 
 /**
  * モデル応答をひとことへ変換する。
@@ -128,6 +166,7 @@ internal fun composeRemark(
     // リンクの差し戻しを先に行う。ID（C03）は原文に出てこないので、
     // 差し戻す前に根拠を測ると必ず不利になる。
     var unknownLink = false
+    var sawLink = false
     val resolved = REMARK_LINK.replace(cleaned) { match ->
         val raw = match.groupValues[1].trim()
         val title = candidateTitlesById[raw.uppercase()]
@@ -135,6 +174,7 @@ internal fun composeRemark(
             unknownLink = true
             match.value
         } else {
+            sawLink = true
             "[[$title]]"
         }
     }
@@ -159,6 +199,13 @@ internal fun composeRemark(
     // （wikilinkを本文に持つノートでは普通に起きる）。
     if (!isGroundedInSource(resolved.withoutLinks(), groundingSource)) {
         return RemarkResult.Rejected(RemarkRejection.NotGrounded)
+    }
+    // **リンクを含むなら宣言的な接続提案であること。** プロンプトは
+    // 「問いか関連ノート接続のどちらか一方」を求めているが、指示だけでは守られたか
+    // 分からない（一般論の禁止を検査で担保しているのと同じ考え方）。
+    // リンクが無い普通の問いはこれまでどおり許す。
+    if (sawLink && endsAsQuestion(resolved)) {
+        return RemarkResult.Rejected(RemarkRejection.LinkedQuestion)
     }
     return RemarkResult.Accepted(resolved.stripLeadingSecondPerson())
 }

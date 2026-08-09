@@ -286,6 +286,8 @@ object PromptBuilder {
               Avoid 「不足」「必要」「べき」. Open the thought instead of assigning work.
             - To refer to a candidate note, write its ID in double brackets, exactly like [[C03]].
               Never write a note title in brackets. Only IDs from the candidate list are allowed.
+            - A sentence with a link must be a declarative suggestion, not a question.
+              Never append a link after a question.
             - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
             - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()

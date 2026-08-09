@@ -168,6 +168,86 @@ class RemarkComposerTest {
         )
     }
 
+    // ── リンクと問いの排他 ──────────────────────────────────────────────
+    //
+    // プロンプトは「問いか関連ノート接続のどちらか一方」を求めているが、
+    // 実機では**問いの末尾へリンクを足しただけ**の出力が通っていた。
+    // 疑問符が無いので、疑問符だけの検査では防げない。
+
+    /** 実機で実際に通ってしまった形。これが本命の回帰テスト。 */
+    @Test
+    fun `質問の末尾にリンクを足した出力は拒否される`() {
+        val result = composeRemark(
+            response = "読書は著者との対話であることが、問いの持ち込みにおいて" +
+                "どのような役割を果たすのか、具体的に考えてみましょう。[[C01]]",
+            groundingSource = source,
+            candidateTitlesById = candidates
+        )
+
+        assertEquals(RemarkRejection.LinkedQuestion, (result as RemarkResult.Rejected).reason)
+    }
+
+    // 句点の前にリンクがあっても、文末が勧誘なら同じく落とす。
+    @Test
+    fun `リンクを含む勧誘文は拒否される`() {
+        val result = compose("[[C01]]と読書は著者との対話であることを並べて考えてみましょう。")
+
+        assertEquals(RemarkRejection.LinkedQuestion, (result as RemarkResult.Rejected).reason)
+    }
+
+    @Test
+    fun `リンクを含む疑問文は拒否される`() {
+        val result = compose("[[C01]]は、読書は著者との対話であるという考えとどう繋がるのだろうか。")
+
+        assertEquals(RemarkRejection.LinkedQuestion, (result as RemarkResult.Rejected).reason)
+    }
+
+    /**
+     * **宣言的な接続提案は通る。** ここが壊れると機能そのものが成立しない。
+     * 文中に「どう」「か」があっても、文末が宣言なら関係ない。
+     */
+    @Test
+    fun `宣言的なwikilink接続は通る`() {
+        val result = compose("[[C01]]とつなげると、読書は著者との対話であることの意味が整理できそうです。")
+
+        assertEquals(
+            "[[問いを立てる技術]]とつなげると、読書は著者との対話であることの意味が整理できそうです。",
+            (result as RemarkResult.Accepted).remark
+        )
+    }
+
+    /**
+     * **リンクの無い問いはこれまでどおり許す。** 問いを出すこと自体は仕様であり、
+     * 禁じているのは「問いとリンクを両方出す」ことだけ。
+     */
+    @Test
+    fun `リンクの無い問いは文末が疑問形でも通る`() {
+        listOf(
+            "「読書は著者との対話である」は、反対する相手にも当てはまるのだろうか。",
+            "「読書は著者との対話である」とき、対話の相手はいつも著者だろうか"
+        ).forEach { response ->
+            assertTrue(
+                "リンクの無い問いが落ちている: $response",
+                compose(response) is RemarkResult.Accepted
+            )
+        }
+    }
+
+    // 「かもしれません」は文末が「ません」なので問いではない。
+    // 「か」を含むかどうかで判定すると、ここと上の宣言的接続が両方落ちる。
+    @Test
+    fun `かもしれませんで終わる接続は問い扱いしない`() {
+        val result = compose("[[C01]]と並べると、読書は著者との対話であることの意味が変わるかもしれません。")
+
+        assertTrue(result is RemarkResult.Accepted)
+    }
+
+    // 再試行が効く側であること（Unusable として扱われる）。
+    @Test
+    fun `リンク付きの問いは再試行対象になる`() {
+        assertTrue(RemarkRejection.LinkedQuestion.isModelFailure)
+    }
+
     // ── 映し返し（返事を受けて返す1文） ────────────────────────────────
 
     @Test
