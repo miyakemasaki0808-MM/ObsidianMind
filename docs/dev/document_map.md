@@ -84,6 +84,7 @@
 |---|---|---|
 | [reflect_distill.md](design/reflect_distill.md) | 蒸留（Distill） | v1 Phase 1〜6 実装済み・実機確認待ち |
 | [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） | **v1完了**（実機確認は2026-07-31にクローズ） |
+| [reflect_remark.md](design/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） | **設計確定・実装未着手** |
 | [section_ai_chat.md](design/section_ai_chat.md) | セクション単位AIチャット | 実装済み（PR #14） |
 | [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
 | [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
