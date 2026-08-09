@@ -56,7 +56,7 @@ class NoteExcerptThreadingTest {
         private val EXPECTED_CALL_COUNTS = mapOf(
             "domain/SummarizeUseCase.kt" to 1,
             "domain/RelatedNotesUseCase.kt" to 1,
-            "controller/RemarkController.kt" to 1,
+            "controller/RemarkController.kt" to 2,
             "controller/QuizController.kt" to 1,
             "controller/SectionChatController.kt" to 3
         )

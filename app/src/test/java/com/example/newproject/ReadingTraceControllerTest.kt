@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.ReadingTraceController
+import com.example.newproject.controller.ReplySaveOutcome
 import com.example.newproject.data.ReadingTraceFolderStatus
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceKeyListing
@@ -1243,7 +1244,7 @@ class ReadingTraceControllerTest {
         val saved = controller.saveReply("ideas/habit.md", "自分の返事", 5_000L)
         advanceUntilIdle()
 
-        assertTrue("即時保存できていない", saved)
+        assertEquals(ReplySaveOutcome.Saved, saved)
         val stored = persistence.stored("ideas/habit.md")!!.reflection!!
         assertEquals("自分の返事", stored.reply)
         assertEquals(5_000L, stored.repliedAtEpochMillis)
@@ -1267,7 +1268,8 @@ class ReadingTraceControllerTest {
         val saved = controller.saveReply("ideas/habit.md", "その場で書いた返事", 5_000L)
         advanceUntilIdle()
 
-        assertFalse("痕跡が無いのに即時保存できたことになっている", saved)
+        // 書けていないが預かった。**失った（Lost）とは区別する。**
+        assertEquals(ReplySaveOutcome.Held, saved)
         assertNull(persistence.stored("ideas/habit.md"))
 
         clock.advance(10_000L)
@@ -1277,6 +1279,47 @@ class ReadingTraceControllerTest {
         val stored = persistence.stored("ideas/habit.md")!!.reflection!!
         assertEquals("その場で書いた返事", stored.reply)
         assertEquals("いまのひとこと", stored.remark)
+    }
+
+    /**
+     * **保存に失敗したら必ず預ける。** ここを握り潰していたため、
+     * 画面には「保存済み」と出たまま返事が消える経路があった。
+     */
+    @Test
+    fun `保存に失敗した返事は預けられ離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+            failSave = true
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+
+        val outcome = controller.saveReply("ideas/habit.md", "失いたくない返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Held, outcome)
+
+        persistence.failSave = false
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("失いたくない返事", persistence.stored("ideas/habit.md")!!.reflection!!.reply)
+    }
+
+    /** 預ける先も無ければ Lost。画面は未保存として見せる必要がある。 */
+    @Test
+    fun `セッションが無ければ返事は失われたと返す`() = runTest {
+        val persistence = FakePersistence()
+
+        val outcome = controller(persistence, TestClock())
+            .saveReply("ideas/habit.md", "行き先の無い返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Lost, outcome)
     }
 
     // セッションが無ければ保存先が無いので黙って捨てる（例外にしない）。

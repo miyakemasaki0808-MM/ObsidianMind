@@ -36,7 +36,8 @@ internal fun ReadingTraceCardPanel(
     card: ReadingTraceCard,
     modifier: Modifier = Modifier,
     nowMillis: Long = System.currentTimeMillis(),
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenReflection: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -82,6 +83,12 @@ internal fun ReadingTraceCardPanel(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // 返事の中身はここへ出さない。**在ることだけ**を示して画面へ渡す
+                // （3つ並べるとカードが重くなり、1文で伝える役目が壊れる）。
+                if (card.hasReflectionReply) {
+                    TextButton(onClick = onOpenReflection) { Text("前回の返事を見る") }
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 TextButton(onClick = onDismiss) { Text("読んだ") }
             }
         }

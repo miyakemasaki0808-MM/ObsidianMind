@@ -291,6 +291,48 @@ object PromptBuilder {
         }
     }
 
+    /**
+     * 返事を受けて返す1文（映し返し）。**問いを書かせない。**
+     *
+     * ひとことが問いを投げるのに対し、こちらは**受け取ったことを示して閉じる**役。
+     * ここに問いを書かせると次の返事を誘発し、無限会話の入口になる
+     * （「AIは相手役／本質はノートを読む」から外れる）。
+     * **1往復で終わる**という制約は、出力の内容ではなく**形**で守る。
+     *
+     * 助言・称賛・要約も禁じる。称賛は相手役ではなく採点者の口調になり、
+     * 要約は返事をなぞるだけで新しいものを返さない。
+     */
+    fun buildRemarkMirrorPrompt(
+        title: String,
+        excerpt: NoteExcerpt,
+        remark: String,
+        reply: String
+    ): String {
+        val instructions = """
+            You are a reading companion for a private Obsidian vault.
+            The user read a note, you asked them one thing, and they answered.
+            Reflect back what their answer adds to the note in ONE sentence.
+
+            Write in Japanese and address the user as 「あなた」.
+
+            Rules:
+            - One sentence. Around 60–100 characters.
+            - Name the new angle or the tension their answer brings to the note.
+            - Do NOT ask a question. This is the end of the exchange, not a turn in a chat.
+            - Do NOT give advice, praise, greet, or summarize what they wrote.
+            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
+            - If their answer adds nothing you can name, output exactly: $REMARK_NONE_TOKEN
+        """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\nNote content:\n").append(excerpt.renderForPrompt())
+            append("\n\nWhat you asked:\n").append(remark)
+            append("\n\nTheir answer:\n").append(reply)
+        }
+    }
+
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
 
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {

@@ -6,6 +6,7 @@ import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.RemarkCandidateLine
 import com.example.newproject.domain.RemarkResult
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.domain.composeMirroredRemark
 import com.example.newproject.domain.composeRemark
 import com.example.newproject.domain.remarkCandidateId
 import com.example.newproject.domain.toObsidianNoteTitle
@@ -51,13 +52,21 @@ internal class RemarkController(
      * 返事の即時保存。`ReadingTraceController.saveReply` を繋ぐ。
      * **生成物と違い、ユーザーが書いた言葉は作り直せない**ので離脱を待たない。
      */
-    private val persistReply: suspend (vaultRelativePath: String, reply: String, at: Long) -> Boolean,
+    private val persistReply: suspend (vaultRelativePath: String, reply: String, at: Long) -> ReplySaveOutcome,
     /** 保存済みの組の読み込み。専用画面を開いたときにだけ呼ぶ。 */
     private val loadReflection: suspend (vaultRelativePath: String) -> Reflection?,
+    /** 映し返しの保存。失敗しても状態は進める（無くても成立するため）。 */
+    private val persistMirrored: suspend (vaultRelativePath: String, mirrored: String) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var pending: PendingRemark? = null
+
+    /**
+     * 直近に生成対象とした本文。映し返しのプロンプトへ渡すために保持する。
+     * ノート切替では [cancelAndClear] が捨てる。
+     */
+    private var lastContent: String? = null
     private var createJob: Job? = null
     private var downloadJob: Job? = null
     private var replyJob: Job? = null
@@ -77,6 +86,7 @@ internal class RemarkController(
         val sourceTitle = title.toObsidianNoteTitle()
         val candidates = selectCandidates(sourceTitle, relatedNotes, aiNotes)
 
+        lastContent = content
         val request = PendingRemark(
             requestId = requestId,
             title = title,
@@ -169,11 +179,12 @@ internal class RemarkController(
     }
 
     /**
-     * 返事を残す。**書いた時点で対話は完了**するので、AIへ再送しない。
+     * 返事を残す。
      *
-     * 保存に失敗しても状態は更新する。痕跡側がセッションへ預け直しており、
-     * 離脱時に書かれるため（画面上「保存できなかった」と出すと、
-     * 実際には残っているのに失敗したように見える）。
+     * **保存結果を握り潰さない。** 預かった（[ReplySaveOutcome.Held]）なら
+     * 離脱時に書かれるので失敗として見せないが、
+     * [ReplySaveOutcome.Lost] は本当に消えるので画面へ出す。
+     * 以前はすべて「保存済み」と表示しており、**ユーザーの返事を黙って失う**経路があった。
      */
     fun saveReply(vaultRelativePath: String?, reply: String) {
         val current = state.current as? RemarkState.Ready ?: return
@@ -187,21 +198,73 @@ internal class RemarkController(
         replyJob?.cancel()
         replyJob = scope.launch {
             val at = clock()
-            try {
+            val outcome = try {
                 persistReply(path, trimmed, at)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // 痕跡側が預かっているので、ここでは握って表示だけ進める。
+                // 例外も「どこにも残っていない」として扱う。握り潰すと
+                // 画面だけ保存済みになり、返事が黙って消える。
+                ReplySaveOutcome.Lost
             }
             if (!isCurrent(requestId)) return@launch
             state.update { latest ->
                 val ready = latest as? RemarkState.Ready ?: return@update latest
                 ready.copy(
+                    // Lost でも本文は状態へ残す。消してしまうと書き直しもできない。
                     reflection = ready.reflection.withReply(trimmed, at),
-                    isSavingReply = false
+                    isSavingReply = false,
+                    isReplyUnsaved = outcome == ReplySaveOutcome.Lost
                 )
             }
+            // **返事を保存し終えてから映し返しを作る。** 先に生成すると、
+            // 生成の失敗やキャンセルでユーザーの言葉まで巻き込まれる。
+            // 保存できなかった（Lost）ときは作らない — 消える返事へ応じても仕方がない。
+            if (outcome != ReplySaveOutcome.Lost) {
+                generateMirror(requestId, path, trimmed)
+            }
+        }
+    }
+
+    /**
+     * 返事を受けて1文だけ返す（映し返し）。**問いは返させない。**
+     *
+     * 失敗しても何も出さない。**返事は既に保存済み**なので、
+     * ここが空でもユーザーの言葉は失われない。エラーを見せないのは、
+     * 対話の閉じ方が「うまくいけば添えられる」ものだからで、
+     * 失敗を通知すると返事を残したこと自体が失敗したように見える。
+     */
+    private suspend fun generateMirror(requestId: Long, vaultRelativePath: String, reply: String) {
+        val ready = state.current as? RemarkState.Ready ?: return
+        val content = lastContent ?: return
+        try {
+            if (aiClient.checkAvailability() != AiAvailability.Available) return
+            val excerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(content, NoteExcerptLimits.ANNOTATION)
+            }
+            val prompt = PromptBuilder.buildRemarkMirrorPrompt(
+                title = ready.sourceTitle,
+                excerpt = excerpt,
+                remark = ready.reflection.remark,
+                reply = reply
+            )
+            val generated = aiClient.generate(prompt)
+            if (!isCurrent(requestId)) return
+            val mirrored = composeMirroredRemark(generated) as? RemarkResult.Accepted ?: return
+
+            // 保存は「あれば添える」程度なので、失敗しても状態だけ進める。
+            persistMirrored(vaultRelativePath, mirrored.remark)
+            if (!isCurrent(requestId)) return
+            state.update { latest ->
+                val current = latest as? RemarkState.Ready ?: return@update latest
+                // 待っている間に返事が書き直されていたら、古い応答は載せない。
+                if (current.reflection.reply != reply) return@update latest
+                current.copy(reflection = current.reflection.withMirrored(mirrored.remark))
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 映し返しは無くても成立する。黙って諦める。
         }
     }
 
@@ -217,6 +280,7 @@ internal class RemarkController(
         replyJob = null
         restoreJob = null
         pending = null
+        lastContent = null
         state.update { RemarkState.Idle }
     }
 

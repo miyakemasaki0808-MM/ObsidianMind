@@ -168,6 +168,53 @@ class RemarkComposerTest {
         )
     }
 
+    // ── 映し返し（返事を受けて返す1文） ────────────────────────────────
+
+    @Test
+    fun `映し返しは受理される`() {
+        val result = composeMirroredRemark("あなたは「対話」を、同意ではなく反論まで含む応答として捉えている。")
+
+        assertEquals(
+            "あなたは「対話」を、同意ではなく反論まで含む応答として捉えている。",
+            (result as RemarkResult.Accepted).remark
+        )
+    }
+
+    /**
+     * **問いを返してきたら捨てる。** 1往復で閉じるという制約は出力の形で守るので、
+     * 疑問形が返ってきたら守られていない。禁じるだけでは確認できない。
+     */
+    @Test
+    fun `映し返しが問いを返したら拒否される`() {
+        listOf(
+            "あなたにとって「対話」とは何だろうか？",
+            "あなたは対話を反論まで含むものと捉えている。ではその先は?"
+        ).forEach { response ->
+            assertEquals(
+                "問いが通っている: $response",
+                RemarkRejection.AskedAQuestion,
+                (composeMirroredRemark(response) as RemarkResult.Rejected).reason
+            )
+        }
+    }
+
+    // 映し返しは返事に応じる文なので、原文一致は求めない
+    // （返事にしか出てこない語を拾うのが正しい応答になり得る）。
+    @Test
+    fun `映し返しは原文一致を求めない`() {
+        val result = composeMirroredRemark("あなたは自分の失敗談を根拠として持ち出している。")
+
+        assertTrue(result is RemarkResult.Accepted)
+    }
+
+    @Test
+    fun `映し返しのNONEは空振りとして扱われる`() {
+        assertEquals(
+            RemarkRejection.NothingToSay,
+            (composeMirroredRemark(REMARK_NONE_TOKEN) as RemarkResult.Rejected).reason
+        )
+    }
+
     // ── 保存側との整合 ──────────────────────────────────────────────────
 
     /**

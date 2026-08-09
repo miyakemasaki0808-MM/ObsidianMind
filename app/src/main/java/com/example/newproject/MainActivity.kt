@@ -275,6 +275,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
+                                onOpenReflection = openRemark,
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
                             )
                         }
@@ -328,7 +329,6 @@ class MainActivity : ComponentActivity() {
                         composable("ai") {
                             AiTab(
                                 uiState = uiState,
-                                onCreateRemark = startRemark,
                                 onOpenRemark = openRemark,
                                 onStartDistill = { viewModel.startDistill() },
                                 onDownloadDistillModel = { viewModel.downloadDistillModel() },

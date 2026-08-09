@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +38,7 @@ import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
+import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.OnButtonAi
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -44,6 +46,7 @@ import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.PanelBlue
 
 /** 返事の文字数上限。保存側のバイト上限（1536）の内側に必ず収まる値。 */
 private const val MAX_REPLY_CHARS = 400
@@ -79,11 +82,13 @@ fun RemarkScreen(
     onBack: () -> Unit
 ) {
     val ready = state as? RemarkState.Ready
-    // 保存済みの返事があれば初期値にする。ひとことが差し替わったら書き直す。
-    var draft by remember(ready?.reflection?.remark) {
+    // **下書きは rememberSaveable。** ユーザー自身が書いた言葉なので、
+    // 画面回転やActivity再生成で消してはいけない（保存前でも同じ）。
+    // キーにひとことを含めるのは、別の問いへ差し替わったら書き直すため。
+    var draft by rememberSaveable(ready?.reflection?.remark) {
         mutableStateOf(ready?.reflection?.reply.orEmpty())
     }
-    var confirmingRegenerate by remember { mutableStateOf(false) }
+    var confirmingRegenerate by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -112,7 +117,9 @@ fun RemarkScreen(
             is RemarkState.Unusable ->
                 RemarkBody("うまく言葉にできなかったようです。もう一度きいてみてください。")
             is RemarkState.Error -> RemarkBody("ひとことをもらえませんでした。\n${state.message}")
-            is RemarkState.Idle -> RemarkBody("まだひとことはありません。")
+            // 保存済みが無ければここが起点になる（AIタブは常にこの画面へ渡す）。
+            is RemarkState.Idle ->
+                RemarkBody("このノートへのひとことは、まだありません。")
         }
 
         if (ready != null) {
@@ -120,13 +127,20 @@ fun RemarkScreen(
             ReplyField(
                 draft = draft,
                 onDraftChange = { if (it.length <= MAX_REPLY_CHARS) draft = it },
-                savedAt = ready.reflection.repliedAtEpochMillis
+                savedAt = ready.reflection.repliedAtEpochMillis,
+                isUnsaved = ready.isReplyUnsaved
             )
+            // 映し返しは返事の**下**に置く。読む順序（問い→返事→応答）に合わせる。
+            ready.reflection.mirrored?.let { mirrored ->
+                Spacer(modifier = Modifier.height(12.dp))
+                MirroredBody(mirrored)
+            }
             Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = { onSaveReply(draft) },
                 enabled = !ready.isSavingReply && draft.isNotBlank() &&
-                    draft.trim() != ready.reflection.reply,
+                    // 未保存なら同じ本文でも押し直せる（保存の再試行）
+                    (ready.isReplyUnsaved || draft.trim() != ready.reflection.reply),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
@@ -136,7 +150,11 @@ fun RemarkScreen(
                 shape = RoundedCornerShape(24.dp)
             ) {
                 Text(
-                    if (ready.reflection.hasReply) "返事を書き直す" else "返事を残す",
+                    when {
+                        ready.isReplyUnsaved -> "もう一度保存する"
+                        ready.reflection.hasReply -> "返事を書き直す"
+                        else -> "返事を残す"
+                    },
                     color = OnButtonPrimary
                 )
             }
@@ -154,7 +172,12 @@ fun RemarkScreen(
             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
             border = BorderStroke(1.dp, ButtonOutlineOnGradient),
             shape = RoundedCornerShape(24.dp)
-        ) { Text("別のひとことをもらう", color = OnButtonAi) }
+        ) {
+            Text(
+                if (state is RemarkState.Idle) "ひとことをもらう" else "別のひとことをもらう",
+                color = OnButtonAi
+            )
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
         Button(
@@ -198,7 +221,12 @@ fun RemarkScreen(
  * 「読んでいる流れを止めずに一言だけ置く」用途へ絞る（→ feature_ideas N-6）。
  */
 @Composable
-private fun ReplyField(draft: String, onDraftChange: (String) -> Unit, savedAt: Long?) {
+private fun ReplyField(
+    draft: String,
+    onDraftChange: (String) -> Unit,
+    savedAt: Long?,
+    isUnsaved: Boolean
+) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Panel,
@@ -218,14 +246,36 @@ private fun ReplyField(draft: String, onDraftChange: (String) -> Unit, savedAt: 
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = if (savedAt != null) {
-                    "保存済み ・ ${draft.length} / $MAX_REPLY_CHARS"
-                } else {
-                    "${draft.length} / $MAX_REPLY_CHARS"
+                text = when {
+                    // 「保存できなかった」は必ず出す。黙って消えるのが最悪。
+                    isUnsaved -> "保存できませんでした ・ ${draft.length} / $MAX_REPLY_CHARS"
+                    savedAt != null -> "保存済み ・ ${draft.length} / $MAX_REPLY_CHARS"
+                    else -> "${draft.length} / $MAX_REPLY_CHARS"
                 },
-                color = OnSurfaceSubtle,
+                color = if (isUnsaved) ErrorText else OnSurfaceSubtle,
                 fontSize = 11.sp
             )
+        }
+    }
+}
+
+/**
+ * 返事を受けてAIが返した1文。**問いではなく、受け取ったことを示して閉じる文。**
+ *
+ * ひとことと同じ面を使いつつ見出しで区別する。別の色を当てないのは、
+ * どちらもAIの言葉であり、区別すべきは**役割**（問う／応じる）だから。
+ */
+@Composable
+private fun MirroredBody(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = PanelBlue,
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(20.dp)) {
+            Text("受け取りました", color = OnSurfaceMuted, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(text = text, color = OnSurface, fontSize = 15.sp, lineHeight = 26.sp)
         }
     }
 }

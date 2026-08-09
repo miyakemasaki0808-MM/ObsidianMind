@@ -67,7 +67,6 @@ import com.example.newproject.ui.theme.PanelBlue
 @Composable
 fun AiTab(
     uiState: NoteUiState,
-    onCreateRemark: () -> Unit,
     onOpenRemark: () -> Unit,
     onStartDistill: () -> Unit,
     onDownloadDistillModel: () -> Unit,
@@ -150,35 +149,35 @@ fun AiTab(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
-        RemarkPanel(
-            state = uiState.remarkState,
-            onCreate = onCreateRemark,
-            onOpen = onOpenRemark
-        )
+        RemarkPanel(state = uiState.remarkState, onOpen = onOpenRemark)
     }
 }
 
 /**
- * ノートへのひとことの入口。**ここには結果を出さない。**
+ * ノートへのひとことの入口。**ここには結果を出さない。常に専用画面へ渡す。**
  *
  * 当初は結果もこの場に出していたが、要約 → 蒸留 → ひとこと という長い
  * 同一スクロールの最下段になり、**いちばん短い結果がいちばん埋もれた**
- * （2026-08-09 の実機確認）。結果と再生成は [RemarkScreen] が引き受け、
- * ここはボタン1つに保つ。
+ * （2026-08-09 実機1巡目）。
+ *
+ * **Idle でも画面へ渡すのが要点**（2026-08-09 実機2巡目）。
+ * 以前は Idle のとき直接生成を始めていたため、ノートを開き直すと
+ * `RemarkState.Idle` に戻り、**保存済みの返事へ辿る導線が消えていた**。
+ * 生成の起点も画面側へ寄せることで、
+ * 「開く → 保存済みがあれば出る／無ければもらう」の1本になる。
+ *
+ * 保存済みがあるかどうかをここで出し分けないのは、そのために
+ * **ノートを開くたびサイドカーを1件読むことになる**ため。読みは画面を開いたときだけ。
  */
 @Composable
-private fun RemarkPanel(state: RemarkState, onCreate: () -> Unit, onOpen: () -> Unit) {
+private fun RemarkPanel(state: RemarkState, onOpen: () -> Unit) {
     val label = when (state) {
-        is RemarkState.Idle -> "✨ ひとことをもらう"
         is RemarkState.Loading -> "考えています…"
-        // 結果の中身（届いた／空振り／書式失敗）はここで出し分けない。
-        // 「見る」で画面へ渡し、そこで読ませる。
-        else -> "ひとことを見る"
+        else -> "✨ ノートへのひとこと"
     }
-    val action = if (state is RemarkState.Idle) onCreate else onOpen
 
     Button(
-        onClick = action,
+        onClick = onOpen,
         enabled = state !is RemarkState.Loading,
         modifier = Modifier.fillMaxWidth().height(48.dp),
         colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),

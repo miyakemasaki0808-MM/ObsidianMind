@@ -33,8 +33,8 @@ import org.junit.runner.RunWith
  * `generate()` が空でない応答を返すこと。SDK制約・API互換の破壊のような
  * **全経路に共通する故障**はここで落ちる。
  *
- * **主張しない（1）: 残り6経路の健全性。** `PromptBuilder` の builder は10個あり、
- * [UNCOVERED_BUILDERS] に挙げた6つは**実生成を通していない。**
+ * **主張しない（1）: 残り7経路の健全性。** `PromptBuilder` の builder は11個あり、
+ * [UNCOVERED_BUILDERS] に挙げた7つは**実生成を通していない。**
  * プロンプト長や引数の組み立てなど**その経路に固有の退行は、ここが緑でも検出されない。**
  * 分類の網羅は `PromptGenerationCoverageTest`（JVM）が固定しており、
  * **builder を足したら覆うか未保証として挙げるかを決めるまで落ちる。**
@@ -181,6 +181,7 @@ class OnDeviceGenerationTest {
             "buildDistillPrompt",
             "buildPickerPrompt",
             "buildRemarkPrompt",
+            "buildRemarkMirrorPrompt",
             "buildSectionSuggestionsPrompt",
             "buildSectionChatPrompt"
         )

@@ -28,12 +28,15 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * v3 の平坦な `remark` は「AIのひとことだけ」を保存していたが、
  * **AIが問いを投げて会話が終わる**ため読後感が宙に浮いていた。
  * v3 の値は `Reflection(remark = 旧remark, reply = null)` として読み込める。
+ *
+ * v5 で [Reflection.mirrored]（返事を受けてAIが返す1文）を足した。
+ * 返事を書いて終わりだと**受け取ってもらえた感触が無い**ため、1往復だけ閉じる。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 4
+internal const val READING_TRACE_SCHEMA_VERSION = 5
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
 internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
-    setOf(1, 2, 3, READING_TRACE_SCHEMA_VERSION)
+    setOf(1, 2, 3, 4, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -65,6 +68,9 @@ internal object ReadingTraceLimits {
      * 用途へ絞る（→ feature_ideas N-6 の懸念）。
      */
     const val MAX_REPLY_BYTES = 1536
+
+    /** 映し返しの上限。ひとことと同じ「1文」なので同じ枠でよい。 */
+    const val MAX_MIRRORED_BYTES = 512
 
     /** サイドカー1ファイルの読み込み上限。上記×MAX_VISITS から十分な余裕を取った値。 */
     const val MAX_FILE_BYTES = 64 * 1024
@@ -103,11 +109,27 @@ data class Reflection(
     val remark: String,
     val remarkedAtEpochMillis: Long,
     val reply: String? = null,
-    val repliedAtEpochMillis: Long? = null
+    val repliedAtEpochMillis: Long? = null,
+    /**
+     * 返事を受けてAIが返す1文。**問いではない。**
+     *
+     * 返事を書いて終わりだと「受け取ってもらえた」感触が無く、対話が閉じない。
+     * ただし**1往復だけ**で、ここに問いを書かせると無限会話の入口になる
+     * （→ design/reflect_remark.md §10）。
+     *
+     * 生成に失敗しても null のまま。**返事は先に保存済み**なので、
+     * ここが空でもユーザーの言葉は失われない。
+     */
+    val mirrored: String? = null
 ) {
-    /** 返事を残す。**同じ問いに対する返事は上書きする**（1組しか持たないため）。 */
+    /**
+     * 返事を残す。**同じ問いに対する返事は上書きする**（1組しか持たないため）。
+     * 返事を書き直したら映し返しも捨てる — 古い返事に対する応答が残ると噛み合わない。
+     */
     fun withReply(reply: String, atEpochMillis: Long): Reflection =
-        copy(reply = reply, repliedAtEpochMillis = atEpochMillis)
+        copy(reply = reply, repliedAtEpochMillis = atEpochMillis, mirrored = null)
+
+    fun withMirrored(mirrored: String): Reflection = copy(mirrored = mirrored)
 
     val hasReply: Boolean get() = reply != null
 }
@@ -254,6 +276,12 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
         }
         reflection.repliedAtEpochMillis?.let {
             require(it >= 0) { "返事の日時が不正です。" }
+        }
+        reflection.mirrored?.let { mirrored ->
+            require(mirrored.isNotBlank()) { "映し返しが空です。" }
+            requireWithinBytes(mirrored, ReadingTraceLimits.MAX_MIRRORED_BYTES, "映し返し")
+            // 返事が無いのに映し返しだけあるのは、片方を消し忘れた実装ミスか改変。
+            require(reflection.reply != null) { "返事が無いのに映し返しだけが記録されています。" }
         }
     }
     trace.aiSummaryVisitCount?.let {

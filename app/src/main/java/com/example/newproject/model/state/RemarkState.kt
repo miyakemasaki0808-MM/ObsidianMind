@@ -31,7 +31,15 @@ sealed class RemarkState {
         val sourceTitle: String,
         val reflection: Reflection,
         /** 返事の保存中。ボタンの二度押しを止めるためだけに持つ。 */
-        val isSavingReply: Boolean = false
+        val isSavingReply: Boolean = false,
+        /**
+         * 返事がどこにも保存できなかった。
+         *
+         * **「預かった」とは区別する。** 預かった場合は離脱時に書かれるので
+         * ユーザーへ失敗を見せる必要がないが、こちらは本当に消えるため、
+         * 画面へ出して書き直せる状態を保つ。
+         */
+        val isReplyUnsaved: Boolean = false
     ) : RemarkState()
 
     /** モデルが「出すものが無い」と表明した。正常な結果。 */
@@ -54,7 +62,10 @@ internal fun RemarkState.toEventKey(): String? = when (this) {
     is RemarkState.Idle -> null
     is RemarkState.Loading -> "loading:$sourceTitle"
     // 返事を残した瞬間にも通知したいので、返事まで含めて識別する。
-    is RemarkState.Ready -> "ready:$sourceTitle:${reflection.hashCode()}:$isSavingReply"
+    // **返事の保存では通知を出し直さない。** ここに reply や isSavingReply を含めると、
+    // 返事を書いた画面の上で「ひとことが届きました」が再度出る。
+    // 通知したいのは「ひとことが届いた」瞬間だけなので、ひとことだけで識別する。
+    is RemarkState.Ready -> "ready:$sourceTitle:${reflection.remark.hashCode()}"
     is RemarkState.Empty -> "empty:$sourceTitle"
     is RemarkState.Unusable -> "unusable:$sourceTitle"
     is RemarkState.Error -> "error:$sourceTitle:$message"

@@ -327,6 +327,47 @@ class ReadingTraceJsonTest {
         assertNull((decoded as ReadingTraceReadResult.Valid).trace.reflection?.remark)
     }
 
+    // ── 映し返し（v5） ──────────────────────────────────────────────────
+
+    @Test
+    fun `映し返しまで含めて往復する`() {
+        val source = trace(remark = "この考えの根拠は何だろう？").let {
+            it.copy(
+                reflection = it.reflection!!
+                    .withReply("実際に困った場面があった", 2_000L)
+                    .withMirrored("あなたは経験を根拠として持ち出している。")
+            )
+        }
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    // 返事を書き直したら映し返しは捨てる（古い返事への応答が残ると噛み合わない）。
+    @Test
+    fun `返事を書き直すと映し返しは消える`() {
+        val base = trace(remark = "ひとこと").reflection!!
+            .withReply("最初の返事", 2_000L)
+            .withMirrored("最初の応答")
+
+        val rewritten = base.withReply("書き直した返事", 3_000L)
+
+        assertNull(rewritten.mirrored)
+    }
+
+    // 返事が無いのに映し返しだけあるのは、片方を消し忘れた実装ミスか改変。
+    @Test
+    fun `返事が無い映し返しは保存できない`() {
+        val base = trace(remark = "ひとこと")
+
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(
+                base.copy(reflection = base.reflection!!.copy(mirrored = "宙に浮いた応答"))
+            )
+        }
+    }
+
     // ── ひとこと（v3） ──────────────────────────────────────────────────
 
     @Test

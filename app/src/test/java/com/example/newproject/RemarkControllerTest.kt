@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.RemarkController
+import com.example.newproject.controller.ReplySaveOutcome
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -240,7 +242,10 @@ class RemarkControllerTest {
         val controller = controller(
             state,
             ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
-            persistReply = { path, reply, at -> saved += Triple(path, reply, at); true }
+            persistReply = { path, reply, at ->
+                saved += Triple(path, reply, at)
+                ReplySaveOutcome.Saved
+            }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
@@ -260,7 +265,7 @@ class RemarkControllerTest {
         val controller = controller(
             state,
             ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
-            persistReply = { _, reply, _ -> saved += reply; true }
+            persistReply = { _, reply, _ -> saved += reply; ReplySaveOutcome.Saved }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
@@ -271,23 +276,61 @@ class RemarkControllerTest {
     }
 
     /**
-     * **保存に失敗しても状態は進める。** 痕跡側がセッションへ預け直しており、
-     * 離脱時に書かれる。ここで失敗を見せると、実際には残っているのに
-     * 「保存できなかった」と読まれる。
+     * **預かった（Held）は失敗として見せない。** 離脱時に書かれるため、
+     * 「保存できませんでした」と出すと実際には残っているのに失敗したと読まれる。
      */
     @Test
-    fun `保存に失敗しても返事は画面に残る`() = runTest {
+    fun `預かった返事は未保存として出さない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
             ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
-            persistReply = { _, _, _ -> false }
+            persistReply = { _, _, _ -> ReplySaveOutcome.Held }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
-        controller.saveReply("ideas/dialog.md", "それでも残したい")
+        controller.saveReply("ideas/dialog.md", "預かってもらう返事")
 
-        assertEquals("それでも残したい", (state.value.remarkState as RemarkState.Ready).reflection.reply)
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertEquals("預かってもらう返事", ready.reflection.reply)
+        assertFalse("預かったのに未保存として出ている", ready.isReplyUnsaved)
+    }
+
+    /**
+     * **失った（Lost）は必ず見せる。** 以前はすべて「保存済み」と表示しており、
+     * ユーザーの返事が黙って消える経路があった。
+     */
+    @Test
+    fun `保存できなかった返事は未保存として出す`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            state,
+            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            persistReply = { _, _, _ -> ReplySaveOutcome.Lost }
+        )
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        controller.saveReply("ideas/dialog.md", "消えたら困る返事")
+
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertTrue("未保存であることが伝わっていない", ready.isReplyUnsaved)
+        // 本文は状態へ残す。消すと書き直しもできない。
+        assertEquals("消えたら困る返事", ready.reflection.reply)
+    }
+
+    @Test
+    fun `例外も未保存として扱う`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            state,
+            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            persistReply = { _, _, _ -> error("書き込み失敗") }
+        )
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        controller.saveReply("ideas/dialog.md", "例外でも残したい")
+
+        assertTrue((state.value.remarkState as RemarkState.Ready).isReplyUnsaved)
     }
 
     // ── 保存済みの読み戻し ───────────────────────────────────────────────────
@@ -336,7 +379,9 @@ class RemarkControllerTest {
         aiClient: AiClient,
         onRemarkReady: (Reflection) -> Unit = {},
         saved: Reflection? = null,
-        persistReply: suspend (String, String, Long) -> Boolean = { _, _, _ -> true }
+        persistReply: suspend (String, String, Long) -> ReplySaveOutcome =
+            { _, _, _ -> ReplySaveOutcome.Saved },
+        persistMirrored: suspend (String, String) -> Unit = { _, _ -> }
     ) = RemarkController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         aiClient = aiClient,
@@ -344,6 +389,7 @@ class RemarkControllerTest {
         onRemarkReady = onRemarkReady,
         persistReply = persistReply,
         loadReflection = { saved },
+        persistMirrored = persistMirrored,
         clock = { FIXED_NOW },
         excerptDispatcher = Dispatchers.Unconfined
     )

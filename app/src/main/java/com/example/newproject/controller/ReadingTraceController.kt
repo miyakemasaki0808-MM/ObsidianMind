@@ -299,34 +299,84 @@ internal class ReadingTraceController(
      * **ユーザーが明示的に書いたものなので、アプリが落ちても失ってはいけない。**
      * 生成物は作り直せるが、書いた言葉は作り直せない。
      *
-     * 痕跡ファイルがまだ無い場合は、セッション側へ預けて次の書き込み契機に載せる
-     * （訪問が1件も無い痕跡は保存できないため）。**その場合でも返事は失われない。**
-     *
-     * @return 永続化できたら true。false でもセッションが生きていれば離脱時に書かれる。
+     * **戻り値を Boolean にしない。** 「書けた」「まだ書けていないが預かった」
+     * 「どこにも残っていない」で**呼び出し側の次の行動が違う**ため
+     * （→ lessons L28）。true/false に畳むと、預かっただけの状態と
+     * 完全に失った状態が同じ顔になり、実際そうなっていた。
      */
-    suspend fun saveReply(vaultRelativePath: String, reply: String, atEpochMillis: Long): Boolean {
-        val vaultKey = currentVaultKey() ?: return false
+    suspend fun saveReply(
+        vaultRelativePath: String,
+        reply: String,
+        atEpochMillis: Long
+    ): ReplySaveOutcome {
+        val vaultKey = currentVaultKey()
+            // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
+            ?: return holdOrLose(reply, atEpochMillis)
         return withContext(ioDispatcher) {
+            writeMutex.withLock {
+                val existing = try {
+                    (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
+                        ?.trace
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (existing == null) {
+                    // 痕跡がまだ無い（または読めない）＝この閲覧で訪問が確定していない。
+                    // セッションへ預け直して、離脱時の書き込みに載せる。
+                    return@withLock holdOrLose(reply, atEpochMillis)
+                }
+                val reflection = existing.reflection?.withReply(reply, atEpochMillis)
+                    // ひとこと無しに返事だけを保存する経路は作らない（組で持つため）。
+                    ?: return@withLock ReplySaveOutcome.Lost
+                val saved = try {
+                    persistence.save(existing.copy(reflection = reflection), vaultKey)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (saved is ReadingTraceSaveResult.Success) {
+                    ReplySaveOutcome.Saved
+                } else {
+                    // **書けなかったぶんを必ず預ける。** ここを握り潰すと、
+                    // 画面に「保存済み」と出たまま返事が消える。
+                    holdOrLose(reply, atEpochMillis)
+                }
+            }
+        }
+    }
+
+    /**
+     * 映し返しを添える。**無くても成立する**ので、書けなければ黙って諦める
+     * （返事と違い、これはAIの生成物なので作り直せる）。
+     */
+    suspend fun saveMirrored(vaultRelativePath: String, mirrored: String) {
+        val vaultKey = currentVaultKey() ?: return
+        withContext(ioDispatcher) {
             writeMutex.withLock {
                 val existing =
                     (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
-                        ?.trace
-                val reflection = existing?.reflection?.withReply(reply, atEpochMillis)
-                    ?: session?.pendingRemark?.withReply(reply, atEpochMillis)
-                    ?: return@withLock false
-                if (existing == null) {
-                    // 痕跡がまだ無い＝この閲覧で訪問が確定していない。
-                    // セッションへ預け直して、離脱時の書き込みに載せる。
-                    session?.let {
-                        it.pendingRemark = reflection
-                        it.dirty = true
-                    }
-                    return@withLock false
-                }
-                persistence.save(existing.copy(reflection = reflection), vaultKey) is
-                    ReadingTraceSaveResult.Success
+                        ?.trace ?: return@withLock
+                val reflection = existing.reflection?.takeIf { it.hasReply } ?: return@withLock
+                persistence.save(existing.copy(reflection = reflection.withMirrored(mirrored)), vaultKey)
             }
         }
+    }
+
+    /**
+     * 書けなかった返事をセッションへ預ける。預ける先が無ければ [ReplySaveOutcome.Lost]。
+     *
+     * 預けられるのは「この閲覧で作ったひとこと」がある場合だけ。
+     * ひとことが無ければ組にできないので、返事だけを持ち回っても保存できない。
+     */
+    private fun holdOrLose(reply: String, atEpochMillis: Long): ReplySaveOutcome {
+        val active = session ?: return ReplySaveOutcome.Lost
+        val base = active.pendingRemark ?: return ReplySaveOutcome.Lost
+        active.pendingRemark = base.withReply(reply, atEpochMillis)
+        active.dirty = true
+        return ReplySaveOutcome.Held
     }
 
     /**
@@ -504,6 +554,8 @@ internal class ReadingTraceController(
     ): ReadingTraceCard {
         val last = trace.visits.last()
         return ReadingTraceCard(
+            // 追加のI/Oは無い。この経路は既に痕跡を読んでいる。
+            hasReflectionReply = trace.reflection?.hasReply == true,
             visitCount = trace.totalVisitCount,
             lastVisitAtMillis = last.atEpochMillis,
             lastSectionTitle = last.deepestSectionTitle,
@@ -586,3 +638,12 @@ internal class ReadingTraceController(
         const val MIN_READING_MILLIS = 10_000L
     }
 }
+
+/**
+ * 返事の保存結果。**Boolean へ畳まない** — 呼び出し側の次の行動が3通りに分かれる。
+ *
+ * - [Saved]   … サイドカーへ書けた。画面は「保存済み」でよい
+ * - [Held]    … まだ書けていないが預かった。離脱時に書かれるので、失敗として見せない
+ * - [Lost]    … どこにも残っていない。**画面は未保存として見せ、書き直せる状態を保つ**
+ */
+internal enum class ReplySaveOutcome { Saved, Held, Lost }

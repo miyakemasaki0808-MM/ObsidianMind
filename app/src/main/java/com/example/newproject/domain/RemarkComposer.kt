@@ -45,7 +45,10 @@ internal enum class RemarkRejection {
     /** ノートに出てこない言葉だけで書かれている（一般論）。 */
     NotGrounded,
     /** 候補集合に無いノートを [[...]] で参照した。 */
-    UnknownLink;
+    UnknownLink,
+
+    /** 映し返しで問いを返してきた（1往復で閉じる制約に反する）。 */
+    AskedAQuestion;
 
     /**
      * モデルが指示に従えなかったか（＝もう一度きけば変わりうるか）。
@@ -133,6 +136,40 @@ internal fun composeRemark(
     }
     return RemarkResult.Accepted(resolved)
 }
+
+/**
+ * 映し返し（返事を受けて返す1文）を検証する。
+ *
+ * **問いを含むものは捨てる。** 1往復で閉じるという制約は出力の形で守るので、
+ * 疑問形が返ってきたら守られていない。プロンプトで禁じるだけでは確認できない
+ * （一般論の禁止を検査で担保しているのと同じ考え方）。
+ */
+internal fun composeMirroredRemark(response: String): RemarkResult {
+    val cleaned = response
+        .lineSequence()
+        .map { it.trim().trim('`').replace(DECORATION_PREFIX, "") }
+        .filter { it.isNotBlank() }
+        .joinToString(" ")
+        .trim()
+
+    if (cleaned.isBlank() || cleaned.equals(REMARK_NONE_TOKEN, ignoreCase = true)) {
+        return RemarkResult.Rejected(RemarkRejection.NothingToSay)
+    }
+    if (QUESTION_MARK.containsMatchIn(cleaned)) {
+        return RemarkResult.Rejected(RemarkRejection.AskedAQuestion)
+    }
+    if (cleaned.length < RemarkLimits.MIN_CHARS) {
+        return RemarkResult.Rejected(RemarkRejection.TooShort)
+    }
+    if (cleaned.length > RemarkLimits.MAX_CHARS) {
+        return RemarkResult.Rejected(RemarkRejection.TooLong)
+    }
+    // 映し返しはユーザーの返事に応じる文なので、原文一致は求めない
+    // （返事にしか出てこない語を拾うのが正しい応答になり得る）。
+    return RemarkResult.Accepted(cleaned)
+}
+
+private val QUESTION_MARK = Regex("[?？]")
 
 /** `[[...]]` を落とした地の文。根拠はここで測る（リンク先の名前を根拠に数えない）。 */
 private fun String.withoutLinks(): String = REMARK_LINK.replace(this, " ")

@@ -56,6 +56,7 @@ internal object ReadingTraceJson {
             .put(KEY_REMARKED_AT, trace.reflection?.remarkedAtEpochMillis ?: JSONObject.NULL)
             .put(KEY_REPLY, trace.reflection?.reply ?: JSONObject.NULL)
             .put(KEY_REPLIED_AT, trace.reflection?.repliedAtEpochMillis ?: JSONObject.NULL)
+            .put(KEY_MIRRORED, trace.reflection?.mirrored ?: JSONObject.NULL)
             .put(KEY_CHECKSUM, checksumOf(trace))
         // 人が読める体裁で書く（ユーザーが中身を確認・修復できることを優先）。
         return root.toString(2).toByteArray(Charsets.UTF_8)
@@ -101,7 +102,8 @@ internal object ReadingTraceJson {
                                 if (version >= 4) root.optLong(KEY_REMARKED_AT, 0L) else 0L,
                             reply = if (version >= 4) root.stringOrNull(KEY_REPLY) else null,
                             repliedAtEpochMillis =
-                                if (version >= 4) root.longOrNull(KEY_REPLIED_AT) else null
+                                if (version >= 4) root.longOrNull(KEY_REPLIED_AT) else null,
+                            mirrored = if (version >= 5) root.stringOrNull(KEY_MIRRORED) else null
                         )
                     }
                 } else {
@@ -165,6 +167,8 @@ internal object ReadingTraceJson {
                 out.writeSizedNullable(trace.reflection?.reply)
                 out.writeLong(trace.reflection?.repliedAtEpochMillis ?: ABSENT_TIMESTAMP)
             }
+            // v5 で追加。v4 の正規形には無いので、既存ファイルを破損扱いにしない。
+            if (trace.schemaVersion >= 5) out.writeSizedNullable(trace.reflection?.mirrored)
         }
         return buffer.toByteArray()
     }
@@ -211,6 +215,7 @@ internal object ReadingTraceJson {
     private const val KEY_REMARKED_AT = "remarkedAt"
     private const val KEY_REPLY = "reply"
     private const val KEY_REPLIED_AT = "repliedAt"
+    private const val KEY_MIRRORED = "mirrored"
     private const val KEY_CHECKSUM = "checksum"
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"
