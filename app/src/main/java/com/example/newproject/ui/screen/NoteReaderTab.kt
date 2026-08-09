@@ -12,6 +12,7 @@ import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
+import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.ui.vigilith.VigilithNoteAction
@@ -81,6 +82,8 @@ internal fun NoteReaderTab(
      */
     sectionModel: NoteSectionModel?,
     imageLoader: NoteImageLoader?,
+    /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
+    imageMeasurements: NoteImageMeasurements?,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onSuggestionTap: (String) -> Unit,
@@ -111,7 +114,7 @@ internal fun NoteReaderTab(
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
 
-    ReadingProgressReporter(sectionModel, listState, onReadingProgress)
+    ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
 
     // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
     // AnimatedContent だと新旧リストが1つの listState を共有してしまうため graphicsLayer で行う。
@@ -242,7 +245,8 @@ internal fun NoteReaderTab(
                     },
                 listState = listState,
                 precomputedBlocks = sectionModel?.blocks,
-                imageLoader = imageLoader
+                imageLoader = imageLoader,
+                imageMeasurements = imageMeasurements
             )
         }
 

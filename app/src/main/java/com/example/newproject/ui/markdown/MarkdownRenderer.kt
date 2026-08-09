@@ -56,7 +56,10 @@ internal fun MarkdownNoteContent(
     // セクションモデル側で既にパース済みなら渡して再パースを避ける
     precomputedBlocks: List<MarkdownBlock>? = null,
     // null なら画像を読み込まず原文のまま出す（画像を持たない文脈で使い回すため）
-    imageLoader: NoteImageLoader? = null
+    imageLoader: NoteImageLoader? = null,
+    // 画像の寸法を通常表示と全画面で共有する入れ物。null なら共有しない
+    // （画像を持たない文脈や、進捗を報告しない画面で使い回すため）。
+    imageMeasurements: NoteImageMeasurements? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -71,7 +74,7 @@ internal fun MarkdownNoteContent(
                 when (val block = blocks[i]) {
                     is MarkdownBlock.Heading       -> MarkdownHeading(block)
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
-                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader)
+                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, i, imageMeasurements)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                     is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                     is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()

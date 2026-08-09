@@ -25,6 +25,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import com.example.newproject.ui.markdown.NoteImageMeasurements
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -101,6 +102,11 @@ class MainActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
                 val noteListState = rememberLazyListState()
+                // 画像の寸法も同じスコープで持つ。**位置だけ引き継いで寸法を捨てると、
+                // 全画面へ入った瞬間に未計測へ戻り、後続ブロックが可視になって到達率が
+                // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
+                // ノートが変われば捨てる。
+                val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
                 // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
                 val currentRoute = navController
                     .currentBackStackEntryAsState().value?.destination?.route
@@ -233,6 +239,7 @@ class MainActivity : ComponentActivity() {
                                 uiState = uiState,
                                 sectionModel = sectionModel,
                                 imageLoader = viewModel.imageLoader,
+                                imageMeasurements = noteImageMeasurements,
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
@@ -266,6 +273,7 @@ class MainActivity : ComponentActivity() {
                                 uiState = uiState,
                                 sectionModel = sectionModel,
                                 imageLoader = viewModel.imageLoader,
+                                imageMeasurements = noteImageMeasurements,
                                 tabListState = noteListState,
                                 onExit = { navController.popBackStack() },
                                 // 要約シートは通常表示（noteルート）で描画されるため、

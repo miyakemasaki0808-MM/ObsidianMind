@@ -13,12 +13,19 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.model.NoteImageFailure
+import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.ui.markdown.NoteImageContent
+import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.markdown.NoteImageMeasurement
+import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -117,6 +124,7 @@ class NoteReadingFlowTest {
                         uiState = loadedNote(LONG_BODY),
                         sectionModel = model,
                         imageLoader = null,
+                        imageMeasurements = null,
                         tabListState = listState,
                         onExit = {},
                         onOpenSummary = {},
@@ -174,6 +182,135 @@ class NoteReadingFlowTest {
         }
     }
 
+
+    // --- 寸法未確定の画像より後ろを報告しない --------------------------------
+
+    /**
+     * **測定を待っている間は、画像より後ろの進捗を報告しない。**
+     *
+     * 画像は寸法が取れるまで画面1枚ぶんで確保するが、**それは元画像の高さの上限ではない。**
+     * 縦長画像なら実際は画面2〜3枚ぶんになり得るので、確保が足りない間に
+     * スクロールすると**まだ読んでいない後続ブロックが可視になる。**
+     * 最深到達点は後から下がらないため、この誤りはサイドカーへ永続化される。
+     *
+     * **JVMでは書けない** — 何が可視かは実測でしか決まらない。
+     */
+    @Test
+    fun 寸法未確定の画像より後ろは進捗を報告しない() {
+        val loader = PendingImageLoader()
+        val model = buildNoteSectionModel(IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val reports = mutableListOf<Int>()
+        lateinit var listState: LazyListState
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                listState = rememberLazyListState()
+                ReaderTab(
+                    state = loadedNote(IMAGE_BODY),
+                    model = model,
+                    listState = listState,
+                    loader = loader,
+                    measurements = measurements,
+                    onReadingProgress = { index, _, _, _ -> reports += index }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        // 測定を止めたまま、画像より後ろへスクロールする。
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(model.blocks.size - 1) } }
+        composeRule.waitForIdle()
+
+        assertTrue(
+            "寸法未確定の画像より後ろが報告された: $reports（画像は index $IMAGE_BLOCK_INDEX）",
+            reports.none { it > IMAGE_BLOCK_INDEX }
+        )
+
+        // 測定が終われば報告は再開する（常に止めたままにはしない）。
+        composeRule.runOnIdle { loader.settle(width = 800, height = 600) }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(model.blocks.size - 1) } }
+        composeRule.waitForIdle()
+
+        assertTrue("測定後も報告が再開しない: $reports", reports.any { it > IMAGE_BLOCK_INDEX })
+    }
+
+    /**
+     * **全画面へ入っても測り直さない。**
+     *
+     * 全画面は位置を引き継ぐのに新しいコンポジションなので、寸法を共有しないと
+     * **入った瞬間に未計測へ戻る**。その状態で引き継いだオフセットが仮の高さを超えると、
+     * 後続ブロックが可視になって到達率が水増しされる。
+     */
+    @Test
+    fun 全画面へ入っても画像の寸法を測り直さない() {
+        val loader = PendingImageLoader()
+        val model = buildNoteSectionModel(IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        var fullscreen by mutableStateOf(false)
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val listState = rememberLazyListState()
+                if (fullscreen) {
+                    FullscreenNoteScreen(
+                        uiState = loadedNote(IMAGE_BODY),
+                        sectionModel = model,
+                        imageLoader = loader,
+                        imageMeasurements = measurements,
+                        tabListState = listState,
+                        onExit = {},
+                        onOpenSummary = {},
+                        onReadingProgress = { _, _, _, _ -> }
+                    )
+                } else {
+                    ReaderTab(
+                        state = loadedNote(IMAGE_BODY),
+                        model = model,
+                        listState = listState,
+                        loader = loader,
+                        measurements = measurements
+                    )
+                }
+            }
+        }
+        composeRule.runOnIdle { loader.settle(width = 800, height = 600) }
+        composeRule.waitForIdle()
+        val measuredOnce = loader.measureCount
+
+        composeRule.runOnIdle { fullscreen = true }
+        composeRule.waitForIdle()
+
+        assertEquals(
+            "全画面で測り直している（寸法が共有されていない）",
+            measuredOnce,
+            loader.measureCount
+        )
+        assertTrue("寸法未確定のまま残っている", measurements.firstUnsettledBlockIndex() == null)
+    }
+
+    /** 測定を保留したまま止められるローダ。**未計測の状態を作るために要る。** */
+    private class PendingImageLoader : NoteImageLoader {
+        private val gate = CompletableDeferred<NoteImageMeasurement>()
+
+        @Volatile
+        var measureCount = 0
+            private set
+
+        fun settle(width: Int, height: Int) {
+            gate.complete(NoteImageMeasurement.Measured(width, height))
+        }
+
+        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement {
+            measureCount++
+            return gate.await()
+        }
+
+        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
+            NoteImageContent.Failed(NoteImageFailure.Broken)
+    }
+
     // --- 補助 -----------------------------------------------------------------
 
     @Composable
@@ -181,12 +318,15 @@ class NoteReadingFlowTest {
         state: NoteUiState,
         model: NoteSectionModel?,
         listState: LazyListState,
+        loader: NoteImageLoader? = null,
+        measurements: NoteImageMeasurements? = null,
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> }
     ) {
         NoteReaderTab(
             uiState = state,
             sectionModel = model,
-            imageLoader = null,
+            imageLoader = loader,
+            imageMeasurements = measurements,
             noteListState = listState,
             onSelectVault = {},
             onRandomNote = {},
@@ -218,6 +358,20 @@ class NoteReadingFlowTest {
         """.trimIndent()
 
         const val TARGET_BLOCK = 12
+
+        /** 画像を1枚挟んだ本文。画像の後ろにも十分なブロックを置く。 */
+        const val IMAGE_BLOCK_INDEX = 2
+        val IMAGE_BODY = buildString {
+            appendLine("段落0 の本文です。")
+            appendLine()
+            appendLine("段落1 の本文です。")
+            appendLine()
+            appendLine("![](assets/photo.png)")
+            (3 until 30).forEach {
+                appendLine()
+                appendLine("${markerAt(it)} の本文です。")
+            }
+        }
 
         /** 段落だけを並べた長文。ブロック番号を本文へ入れて可視位置を特定できるようにする。 */
         val LONG_BODY = (0 until 40).joinToString("\n\n") { "${markerAt(it)} の本文です。" }

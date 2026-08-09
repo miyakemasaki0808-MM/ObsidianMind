@@ -41,6 +41,8 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -69,6 +71,9 @@ import kotlinx.coroutines.flow.filterNotNull
 internal fun ReadingProgressReporter(
     sectionModel: NoteSectionModel?,
     listState: LazyListState,
+    // 寸法未確定の画像がある間は、その後ろを報告しない（→ shouldReportReadingProgress）。
+    // null なら抑止しない（画像を持たない文脈で使い回すため）。
+    imageMeasurements: NoteImageMeasurements?,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit
 ) {
     // 長寿命ブロックから外部のラムダを呼ぶので rememberUpdatedState を通す
@@ -79,6 +84,13 @@ internal fun ReadingProgressReporter(
         snapshotFlow {
             val layout = listState.layoutInfo
             val last = layout.visibleItemsInfo.lastOrNull() ?: return@snapshotFlow null
+            // **測れていないものの向こう側は「見えた」と言えない。**
+            // 未確定より後ろを弾くのは、確保した仮の高さが元画像の高さの上限では
+            // ないため（縦長画像は画面2〜3枚ぶんになり得る）。ここを通すと、
+            // まだ読んでいない位置が最深到達点として永続化される。
+            if (!shouldReportReadingProgress(last.index, imageMeasurements?.firstUnsettledBlockIndex())) {
+                return@snapshotFlow null
+            }
             val fraction = visibleFractionOfBlock(
                 itemOffset = last.offset,
                 itemSize = last.size,
@@ -148,7 +160,9 @@ internal fun NoteContentPanel(
     modifier: Modifier = Modifier,
     listState: LazyListState? = null,
     precomputedBlocks: List<MarkdownBlock>? = null,
-    imageLoader: NoteImageLoader? = null
+    imageLoader: NoteImageLoader? = null,
+    /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
+    imageMeasurements: NoteImageMeasurements? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -179,14 +193,16 @@ internal fun NoteContentPanel(
                         modifier = Modifier.padding(top = 12.dp).weight(1f),
                         listState = listState,
                         precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader
+                        imageLoader = imageLoader,
+                        imageMeasurements = imageMeasurements
                     )
                 } else {
                     MarkdownNoteContent(
                         content = noteContent,
                         modifier = Modifier.padding(top = 12.dp).weight(1f),
                         precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader
+                        imageLoader = imageLoader,
+                        imageMeasurements = imageMeasurements
                     )
                 }
             } else {
