@@ -339,6 +339,68 @@ class RemarkControllerTest {
         )
     }
 
+    // ── 映し返し ─────────────────────────────────────────────────────────────
+
+    /**
+     * **保存済みを読み戻した後でも映し返しが出る。**
+     *
+     * 以前は `create()` が受け取った本文をフィールドへ写しており、`restoreSaved` は
+     * そこを通らないため `lastContent ?: return` で黙って抜けていた。
+     * Rediscover の「前回の返事を見る」から入った場合がこの経路。
+     */
+    @Test
+    fun `保存済みを読み戻した後でも映し返しが出る`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val mirrored = mutableListOf<String>()
+        val controller = controller(
+            state,
+            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            saved = Reflection("前回のひとこと", 1L),
+            persistMirrored = { _, text -> mirrored += text }
+        )
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        controller.saveReply("ideas/dialog.md", "実際に困った場面があった")
+
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertEquals("「対話」を、反論まで含む応答として捉えている。", ready.reflection.mirrored)
+        assertEquals(listOf("「対話」を、反論まで含む応答として捉えている。"), mirrored)
+    }
+
+    // 本文が手元に無ければ映し返しは作らない（ノートを閉じた後など）。
+    @Test
+    fun `本文が無ければ映し返しは作らない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            state,
+            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            saved = Reflection("前回のひとこと", 1L),
+            currentContent = { null }
+        )
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        controller.saveReply("ideas/dialog.md", "実際に困った場面があった")
+
+        assertNull((state.value.remarkState as RemarkState.Ready).reflection.mirrored)
+    }
+
+    // 保存できなかった返事へは映し返しを作らない。消える返事へ応じても仕方がない。
+    @Test
+    fun `保存できなかった返事には映し返しを作らない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            state,
+            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            saved = Reflection("前回のひとこと", 1L),
+            persistReply = { _, _, _ -> ReplySaveOutcome.Lost }
+        )
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        controller.saveReply("ideas/dialog.md", "消えてしまう返事")
+
+        assertNull((state.value.remarkState as RemarkState.Ready).reflection.mirrored)
+    }
+
     // ── 保存済みの読み戻し ───────────────────────────────────────────────────
 
     @Test
@@ -387,7 +449,8 @@ class RemarkControllerTest {
         saved: Reflection? = null,
         persistReply: suspend (String, String, Long) -> ReplySaveOutcome =
             { _, _, _ -> ReplySaveOutcome.Saved },
-        persistMirrored: suspend (String, String) -> Unit = { _, _ -> }
+        persistMirrored: suspend (String, String) -> Unit = { _, _ -> },
+        currentContent: () -> String? = { body }
     ) = RemarkController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         aiClient = aiClient,
@@ -395,6 +458,7 @@ class RemarkControllerTest {
         onRemarkReady = onRemarkReady,
         persistReply = persistReply,
         loadReflection = { saved },
+        currentContent = currentContent,
         persistMirrored = persistMirrored,
         clock = { FIXED_NOW },
         excerptDispatcher = Dispatchers.Unconfined

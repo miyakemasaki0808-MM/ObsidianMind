@@ -167,6 +167,7 @@ internal class NoteSessionCoordinator(
         onRemarkReady = { readingTrace.setPendingRemark(it) },
         persistReply = { path, reply, at -> readingTrace.saveReply(path, reply, at) },
         loadReflection = { path -> readingTrace.loadReflection(path) },
+        currentContent = { stateStore.currentNote()?.content },
         persistMirrored = { path, mirrored -> readingTrace.saveMirrored(path, mirrored) },
         clock = clock
     )

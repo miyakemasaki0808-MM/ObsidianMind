@@ -57,6 +57,14 @@ internal class RemarkController(
     private val persistReply: suspend (vaultRelativePath: String, reply: String, at: Long) -> ReplySaveOutcome,
     /** 保存済みの組の読み込み。専用画面を開いたときにだけ呼ぶ。 */
     private val loadReflection: suspend (vaultRelativePath: String) -> Reflection?,
+    /**
+     * いま表示しているノートの本文。映し返しのプロンプトへ渡す。
+     *
+     * **`create()` が受け取った本文を持ち回らない。** 保存済みを読み戻した経路
+     * （`restoreSaved`）はそこを通らないため、フィールドに写す形だと
+     * 映し返しが片方の経路でだけ出なくなる。
+     */
+    private val currentContent: () -> String?,
     /** 映し返しの保存。失敗しても状態は進める（無くても成立するため）。 */
     private val persistMirrored: suspend (vaultRelativePath: String, mirrored: String) -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
@@ -64,11 +72,7 @@ internal class RemarkController(
 ) {
     private var pending: PendingRemark? = null
 
-    /**
-     * 直近に生成対象とした本文。映し返しのプロンプトへ渡すために保持する。
-     * ノート切替では [cancelAndClear] が捨てる。
-     */
-    private var lastContent: String? = null
+
     private var createJob: Job? = null
     private var downloadJob: Job? = null
     private var replyJob: Job? = null
@@ -88,7 +92,6 @@ internal class RemarkController(
         val sourceTitle = title.toObsidianNoteTitle()
         val candidates = selectCandidates(sourceTitle, relatedNotes, aiNotes)
 
-        lastContent = content
         val request = PendingRemark(
             requestId = requestId,
             title = title,
@@ -244,7 +247,12 @@ internal class RemarkController(
      */
     private suspend fun generateMirror(requestId: Long, vaultRelativePath: String, reply: String) {
         val ready = state.current as? RemarkState.Ready ?: return
-        val content = lastContent ?: return
+        // **表示中のノートから引く。** 以前は create() が受け取った本文を
+        // フィールドへ写していたが、`restoreSaved` は通らないので
+        // **保存済みのひとことに後から返事を書くと、映し返しが黙って出なかった**
+        // （Rediscover の「前回の返事を見る」から入った場合がこれ）。
+        // 単一の出所（表示中のノート）から引けば、どちらの経路でも同じになる。
+        val content = currentContent() ?: return
         try {
             if (aiClient.checkAvailability() != AiAvailability.Available) return
             val excerpt = withContext(excerptDispatcher) {
@@ -290,7 +298,6 @@ internal class RemarkController(
         replyJob = null
         restoreJob = null
         pending = null
-        lastContent = null
         state.update { RemarkState.Idle }
     }
 
