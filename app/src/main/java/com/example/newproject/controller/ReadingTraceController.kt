@@ -144,6 +144,17 @@ internal class ReadingTraceController(
      */
     private val pendingWrites = LinkedHashMap<String, PendingWrite>()
 
+    /**
+     * [pendingWrites] 専用のロック。
+     *
+     * このMapは Main（`persistScope` の土台）と IO の両方から触られる。
+     * [writeMutex] と兼用しないのは、退避の書き直しが
+     * 「スナップショットを取る → 1件ずつ writeMutex で保存する → 消す」という順で動き、
+     * **保存の間はこちらを離しておく**必要があるため。
+     * 取得順は常に `writeMutex → pendingMutex` の一方向に保つ（逆は作らない）。
+     */
+    private val pendingMutex = Mutex()
+
     /** 書けなかった痕跡。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
     private class PendingWrite(val vaultKey: String, val trace: ReadingTrace)
 
@@ -151,14 +162,28 @@ internal class ReadingTraceController(
 
     /**
      * 書けなかった痕跡を覚える。**同じノートは上書きしてよい**（新しいほうが正しい）。
-     * 上限を置くのは、失敗が続いたときに無制限に溜めないため。
+     *
+     * **返事を持つ痕跡だけを積む。** 訪問だけの失敗はセッション側の巻き戻し
+     * （`dirty` / `recordedVisit`）が同じ閲覧のうちに書き直すし、失っても
+     * もう一度読めば付き直る。**返事は作り直せない**ので扱いが違う。
+     *
+     * これで「普通の訪問痕跡が溜まって、返事付きの退避を押し出す」経路が消える —
+     * 上限に当たるのは**返事の保存が8ノートぶん失敗し続けたとき**だけになる。
      */
-    private fun rememberPendingWrite(vaultKey: String, trace: ReadingTrace) {
-        val key = pendingKey(vaultKey, trace.vaultRelativePath)
-        if (key !in pendingWrites && pendingWrites.size >= MAX_PENDING_WRITES) {
-            pendingWrites.remove(pendingWrites.keys.first())
+    private suspend fun rememberPendingWrite(vaultKey: String, trace: ReadingTrace) {
+        if (trace.reflection?.hasReply != true) return
+        pendingMutex.withLock {
+            val key = pendingKey(vaultKey, trace.vaultRelativePath)
+            if (key !in pendingWrites && pendingWrites.size >= MAX_PENDING_WRITES) {
+                pendingWrites.remove(pendingWrites.keys.first())
+            }
+            pendingWrites[key] = PendingWrite(vaultKey, trace)
         }
-        pendingWrites[key] = PendingWrite(vaultKey, trace)
+    }
+
+    /** 直接保存できたノートの退避を捨てる。残すと古い内容で上書きし直してしまう。 */
+    private suspend fun forgetPendingWrite(vaultKey: String, path: String) {
+        pendingMutex.withLock { pendingWrites.remove(pendingKey(vaultKey, path)) }
     }
 
     // サイドカーの read-modify-write を直列化する。訪問の追記と要約の書き戻しが
@@ -375,6 +400,11 @@ internal class ReadingTraceController(
                     null
                 }
                 if (saved is ReadingTraceSaveResult.Success) {
+                    // **ここで退避を捨てる必要は無い。** 一度書いてから消した —
+                    // 退避側が日時で新旧を見るため、古い退避は次の契機で
+                    // 書き戻されずにそのまま捨てられる（読み込み1回で済み、書き込みは出ない）。
+                    // 実際、外しても落ちるテストが1つも無かった
+                    // （→ lessons L11。冗長なガードは足さない）。
                     ReplySaveOutcome.Saved
                 } else {
                     // **書けなかったぶんを必ず退避する。** ここを握り潰すと、
@@ -395,16 +425,19 @@ internal class ReadingTraceController(
      * 待っている間に訪問が増えている可能性があるので、丸ごと上書きはしない。
      */
     private suspend fun flushPendingWrites(excludePath: String? = null) {
-        if (pendingWrites.isEmpty()) return
         // Vaultが切り替わっていたら書かない。旧Vaultの内容を新Vaultへ入れない。
         val current = currentVaultKey() ?: return
-        val targets = pendingWrites.entries
-            .filter { it.value.vaultKey == current }
-            // **これから書くノートは触らない。** 現セッションの巻き戻し（dirty）と
-            // 二重に走り、同じファイルへ2回書くことになる。
-            .filterNot { it.value.trace.vaultRelativePath == excludePath }
-            .map { it.key to it.value }
+        val targets = pendingMutex.withLock {
+            pendingWrites.entries
+                .filter { it.value.vaultKey == current }
+                // **これから書くノートは触らない。** 現セッションの巻き戻し（dirty）と
+                // 二重に走り、同じファイルへ2回書くことになる。
+                .filterNot { it.value.trace.vaultRelativePath == excludePath }
+                .map { it.key to it.value }
+        }
         targets.forEach { (key, pending) ->
+            // **保存中は pendingMutex を離す。** 握ったまま writeMutex を取ると
+            // ロック順が逆向きの経路（保存の中から退避を積む）と噛み合わない。
             val written = writeMutex.withLock {
                 val existing = (
                     persistence.load(pending.trace.vaultRelativePath, pending.vaultKey)
@@ -416,12 +449,34 @@ internal class ReadingTraceController(
                     // **文字列ではなく Reflection 全体で見る** — 返事が同じでも
                     // 元の問い・日時・映し返しが違えば別物である。
                     existing.reflection == pending.trace.reflection -> return@withLock true
+                    // **古い退避で新しい返事を潰さない。** 退避中に直接保存が成功して
+                    // いれば、ファイル側のほうが新しい。日時で見て退いた場合も
+                    // 「用済み」として true を返し、退避を捨てる。
+                    isStaleAgainst(existing, pending.trace) -> return@withLock true
                     else -> existing.copy(reflection = pending.trace.reflection)
                 }
                 persistence.save(next, pending.vaultKey) is ReadingTraceSaveResult.Success
             }
-            if (written) pendingWrites.remove(key)
+            if (written) {
+                pendingMutex.withLock {
+                    // スナップショットを取った後に同じキーへ新しい退避が入っていたら
+                    // 消さない（消すと、書けていない新しい返事まで捨てる）。
+                    if (pendingWrites[key] === pending) pendingWrites.remove(key)
+                }
+            }
         }
+    }
+
+    /**
+     * 退避してある内容が、ファイル側より古いか。
+     *
+     * 返事の日時で比べる。退避を積んでから直接保存が成功していると
+     * ファイル側が新しく、そのまま書き戻すと**新しい返事を古い返事で上書きする**。
+     */
+    private fun isStaleAgainst(existing: ReadingTrace, pending: ReadingTrace): Boolean {
+        val existingAt = existing.reflection?.repliedAtEpochMillis ?: return false
+        val pendingAt = pending.reflection?.repliedAtEpochMillis ?: return true
+        return existingAt > pendingAt
     }
 
     /**
@@ -588,7 +643,7 @@ internal class ReadingTraceController(
                     rememberPendingWrite(vaultKey, trace)
                 } else {
                     // 書けたので、同じノートの退避は用済み。
-                    pendingWrites.remove(pendingKey(vaultKey, trace.vaultRelativePath))
+                    forgetPendingWrite(vaultKey, trace.vaultRelativePath)
                 }
             }
         }
@@ -604,7 +659,11 @@ internal class ReadingTraceController(
     fun discard() {
         // 旧Vaultの内容を新Vaultへ書かない。現在のVault以外の退避は捨てる。
         val current = currentVaultKey()
-        pendingWrites.entries.removeAll { it.value.vaultKey != current }
+        // discard は Main から同期に呼ばれる契約なので、ここだけはロックを取らない。
+        // 取り違えを避けるため、参照ではなくキーで消す。
+        pendingWrites.keys.removeAll(
+            pendingWrites.filterValues { it.vaultKey != current }.keys.toSet()
+        )
         session = null
     }
 
