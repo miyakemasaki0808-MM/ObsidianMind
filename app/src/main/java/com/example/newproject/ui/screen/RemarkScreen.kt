@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -93,7 +94,8 @@ fun RemarkScreen(
     var confirmingRegenerate by rememberSaveable { mutableStateOf(false) }
     var confirmingDiscard by rememberSaveable { mutableStateOf<PendingExit?>(null) }
     // 上限で切ったことを覚えておく。黙って切ると「書いたのに保存されなかった」に見える。
-    var wasTruncated by rememberSaveable { mutableStateOf(false) }
+    // **ひとことに紐づける** — 別の問いへ移ったら古い「切り詰めました」を持ち越さない。
+    var wasTruncated by rememberSaveable(ready?.reflection?.remark) { mutableStateOf(false) }
     // **保存済みかどうかは savedAt だけで決めない。** 書き直している途中でも
     // 過去の日時があるだけで「保存済み」と出ていた。いま画面にある文字列と
     // 保存されている文字列が同じかを見る。
@@ -102,6 +104,10 @@ fun RemarkScreen(
     // **スクロールする本文と、常に見えるボタン列を分ける。**
     // 1本のスクロールにすると、返事が長いほど保存ボタンが下へ押し出され、
     // 未保存のまま戻れてしまう（2026-08-09 実機4巡目）。
+    // **端末の戻るジェスチャー／システムBackも確認を通す。**
+    // 画面内の「← 戻る」だけを守っても、実際にはシステムBackで戻る人のほうが多い。
+    BackHandler(enabled = isDirty) { confirmingDiscard = PendingExit.Back }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -126,24 +126,40 @@ internal class ReadingTraceController(
     private var session: Session? = null
 
     /**
-     * **セッションが終わった後も残す、書けなかった返事。**
+     * **書けなかった痕跡。セッションが終わった後も残す。**
      *
      * [flush] は保存コルーチンを起動した直後に `session = null` にするため、
      * 書き込みが後から失敗しても**戻す先のセッションがもう現役でない**。
      * `owner.pendingRemark` へ戻しても誰も読まず、ユーザーの返事がそこで消えていた。
      *
-     * セッションではなくこのControllerが持つことで、次の書き込み契機
-     * （別ノートの離脱・背面化、あるいは同じノートを開き直したとき）に書き直せる。
+     * **持つのは返事ではなく、保存しようとした [ReadingTrace] そのもの。**
+     * 返事だけを持つと「既存の痕跡へ載せ直す」ことしかできず、
+     * **痕跡の新規作成が失敗した場合に復旧できない**（初読で返事まで書いた回が
+     * まるごと落ちる）。完成済みの痕跡なら、ファイルが無くてもそのまま作れる。
+     *
+     * **1件ではなくノート単位で持つ。** 単一スロットだと、Aが退避中にBで返事を
+     * 書いた瞬間にAが消える。キーは Vault＋相対パス。
+     *
      * **プロセスが死ねば失われる**が、それは全ての未保存データと同じ条件になる。
      */
-    private var unsavedReply: UnsavedReply? = null
+    private val pendingWrites = LinkedHashMap<String, PendingWrite>()
 
-    /** 書けなかった返事。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
-    private class UnsavedReply(
-        val vaultRelativePath: String,
-        val vaultKey: String,
-        val reflection: Reflection
-    )
+    /** 書けなかった痕跡。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
+    private class PendingWrite(val vaultKey: String, val trace: ReadingTrace)
+
+    private fun pendingKey(vaultKey: String, path: String) = "$vaultKey\n$path"
+
+    /**
+     * 書けなかった痕跡を覚える。**同じノートは上書きしてよい**（新しいほうが正しい）。
+     * 上限を置くのは、失敗が続いたときに無制限に溜めないため。
+     */
+    private fun rememberPendingWrite(vaultKey: String, trace: ReadingTrace) {
+        val key = pendingKey(vaultKey, trace.vaultRelativePath)
+        if (key !in pendingWrites && pendingWrites.size >= MAX_PENDING_WRITES) {
+            pendingWrites.remove(pendingWrites.keys.first())
+        }
+        pendingWrites[key] = PendingWrite(vaultKey, trace)
+    }
 
     // サイドカーの read-modify-write を直列化する。訪問の追記と要約の書き戻しが
     // 交差すると、読み取りが古いまま上書きして訪問を取りこぼしうる。
@@ -333,7 +349,7 @@ internal class ReadingTraceController(
             // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
             ?: return holdOrLose(reply, atEpochMillis)
         return withContext(ioDispatcher) {
-            flushUnsavedReply()
+            flushPendingWrites()
             writeMutex.withLock {
                 val existing = try {
                     (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
@@ -361,36 +377,51 @@ internal class ReadingTraceController(
                 if (saved is ReadingTraceSaveResult.Success) {
                     ReplySaveOutcome.Saved
                 } else {
-                    // **書けなかったぶんを必ず預ける。** ここを握り潰すと、
+                    // **書けなかったぶんを必ず退避する。** ここを握り潰すと、
                     // 画面に「保存済み」と出たまま返事が消える。
+                    rememberPendingWrite(vaultKey, existing.copy(reflection = reflection))
                     holdOrLose(reply, atEpochMillis)
+                    ReplySaveOutcome.Held
                 }
             }
         }
     }
 
     /**
-     * 退避してある返事を書き直す。**書き込み契機のたびに先頭で試す。**
+     * 退避してある痕跡を書き直す。**書き込み契機のたびに先頭で試す。**
      *
-     * 痕跡が作られていれば載せられる。まだ無ければ次の契機へ持ち越す
-     * （訪問が1件も無い痕跡は保存できないため）。
+     * ファイルが無ければ退避した痕跡をそのまま作る（**新規作成の失敗を復旧できる**のが、
+     * 返事だけを持っていた頃との違い）。既にあれば、そこへ [Reflection] を載せ直す —
+     * 待っている間に訪問が増えている可能性があるので、丸ごと上書きはしない。
      */
-    private suspend fun flushUnsavedReply() {
-        val held = unsavedReply ?: return
-        // Vaultが切り替わっていたら書かない。旧Vaultの返事を新Vaultへ入れない。
-        if (currentVaultKey() != held.vaultKey) return
-        val written = writeMutex.withLock {
-            val existing =
-                (persistence.load(held.vaultRelativePath, held.vaultKey) as? ReadingTraceReadResult.Valid)
-                    ?.trace ?: return@withLock false
-            // 既に同じ返事が入っていれば書き直す必要はない。
-            if (existing.reflection?.reply == held.reflection.reply) return@withLock true
-            persistence.save(
-                existing.copy(reflection = held.reflection),
-                held.vaultKey
-            ) is ReadingTraceSaveResult.Success
+    private suspend fun flushPendingWrites(excludePath: String? = null) {
+        if (pendingWrites.isEmpty()) return
+        // Vaultが切り替わっていたら書かない。旧Vaultの内容を新Vaultへ入れない。
+        val current = currentVaultKey() ?: return
+        val targets = pendingWrites.entries
+            .filter { it.value.vaultKey == current }
+            // **これから書くノートは触らない。** 現セッションの巻き戻し（dirty）と
+            // 二重に走り、同じファイルへ2回書くことになる。
+            .filterNot { it.value.trace.vaultRelativePath == excludePath }
+            .map { it.key to it.value }
+        targets.forEach { (key, pending) ->
+            val written = writeMutex.withLock {
+                val existing = (
+                    persistence.load(pending.trace.vaultRelativePath, pending.vaultKey)
+                        as? ReadingTraceReadResult.Valid
+                    )?.trace
+                val next = when {
+                    existing == null -> pending.trace
+                    // 内容が既に反映されていれば書き直す必要はない。
+                    // **文字列ではなく Reflection 全体で見る** — 返事が同じでも
+                    // 元の問い・日時・映し返しが違えば別物である。
+                    existing.reflection == pending.trace.reflection -> return@withLock true
+                    else -> existing.copy(reflection = pending.trace.reflection)
+                }
+                persistence.save(next, pending.vaultKey) is ReadingTraceSaveResult.Success
+            }
+            if (written) pendingWrites.remove(key)
         }
-        if (written) unsavedReply = null
     }
 
     /**
@@ -409,10 +440,8 @@ internal class ReadingTraceController(
                     // 画面には映し返しが出ているのに保存だけ落ちると、
                     // 次に開いたとき返事だけが残って応答が消えている状態になる。
                     session?.pendingRemark?.takeIf { it.hasReply }?.let { held ->
-                        val next = held.withMirrored(mirrored)
-                        session?.pendingRemark = next
+                        session?.pendingRemark = held.withMirrored(mirrored)
                         session?.dirty = true
-                        unsavedReply = UnsavedReply(vaultRelativePath, vaultKey, next)
                     }
                     return@withLock
                 }
@@ -431,13 +460,10 @@ internal class ReadingTraceController(
     private fun holdOrLose(reply: String, atEpochMillis: Long): ReplySaveOutcome {
         val active = session ?: return ReplySaveOutcome.Lost
         val base = active.pendingRemark ?: return ReplySaveOutcome.Lost
-        val held = base.withReply(reply, atEpochMillis)
-        active.pendingRemark = held
+        active.pendingRemark = base.withReply(reply, atEpochMillis)
         active.dirty = true
-        // セッション側だけに置くと、離脱時の保存が失敗した瞬間に行き先が消える。
-        // 同じものを Controller 側へも退避しておく。
-        val path = active.vaultRelativePath
-        if (path != null) unsavedReply = UnsavedReply(path, active.vaultKey, held)
+        // ここでは完成した痕跡を作れない（訪問がまだ無い）ので、退避には積まない。
+        // 離脱時に痕跡ごと組み立てて保存を試み、そこで失敗したら丸ごと退避される。
         return ReplySaveOutcome.Held
     }
 
@@ -494,8 +520,11 @@ internal class ReadingTraceController(
         val owner = active
 
         persistScope.launch {
-            // 前回書けなかった返事があれば、まずそれを片付ける。
-            withContext(ioDispatcher) { flushUnsavedReply() }
+            // 前回書けなかったぶんがあれば、まずそれを片付ける。
+            // これから書くノートは除く（下の保存が同じファイルを扱う）。
+            withContext(ioDispatcher) { flushPendingWrites(excludePath = path) }
+            // 保存しようとした痕跡。失敗したときに丸ごと退避するために掴んでおく。
+            var attempted: ReadingTrace? = null
             val result = withContext(ioDispatcher) {
                 writeMutex.withLock {
                     val base = when (val existing = persistence.load(path, vaultKey)) {
@@ -529,6 +558,7 @@ internal class ReadingTraceController(
                     } else {
                         withVisit
                     }
+                    attempted = next
                     persistence.save(next, vaultKey)
                 }
             }
@@ -550,12 +580,17 @@ internal class ReadingTraceController(
                     owner.pendingRemark = pendingRemark
                 }
             }
-            // **ここに返事の退避は要らない。** 一度書いてから消した —
-            // 返事がセッションへ入る経路（holdOrLose / saveMirrored）は
-            // どちらも同時に [unsavedReply] を立てるので、この分岐に到達する時点で
-            // 既に退避済みになる。実際、外しても落ちるテストが1つも無かった
-            // （→ lessons L11。2026-07-31 に requestId ガードを消したのと同じ判断）。
-            // 再追加するなら、先に落ちるテストを書くこと。
+            // **書けなかった痕跡を丸ごと退避する。** ここが「痕跡の新規作成が
+            // 失敗した回」を救う唯一の場所 — 返事だけを持っていた頃は、
+            // ファイルが無いと載せる先が無く復旧できなかった。
+            attempted?.let { trace ->
+                if (result is ReadingTraceSaveResult.Failure) {
+                    rememberPendingWrite(vaultKey, trace)
+                } else {
+                    // 書けたので、同じノートの退避は用済み。
+                    pendingWrites.remove(pendingKey(vaultKey, trace.vaultRelativePath))
+                }
+            }
         }
     }
 
@@ -567,8 +602,9 @@ internal class ReadingTraceController(
      * 「切替後に新しく保存要求が生まれること」を止めるため。
      */
     fun discard() {
-        // 旧Vaultの返事を新Vaultへ書かない。
-        unsavedReply = null
+        // 旧Vaultの内容を新Vaultへ書かない。現在のVault以外の退避は捨てる。
+        val current = currentVaultKey()
+        pendingWrites.entries.removeAll { it.value.vaultKey != current }
         session = null
     }
 
@@ -717,6 +753,9 @@ internal class ReadingTraceController(
     }
 
     private companion object {
+        /** 退避の上限。失敗が続いても無制限に溜めない。 */
+        const val MAX_PENDING_WRITES = 8
+
         const val MIN_READING_MILLIS = 10_000L
     }
 }

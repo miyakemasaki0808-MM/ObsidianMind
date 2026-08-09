@@ -1374,9 +1374,11 @@ class ReadingTraceControllerTest {
         advanceUntilIdle()
         assertNull(persistence.stored("ideas/habit.md"))
 
-        // 別のノートを読んで離脱する＝次の書き込み契機
+        // 別のノートを読んで離脱する＝次の書き込み契機。
+        // **元ノートの痕跡はテスト側で作らない** — 作ってしまうと
+        // 「既存ファイルへ載せ直す」だけを検証することになり、
+        // 本当に確かめたい「新規作成の失敗を復旧できるか」が抜ける。
         persistence.failSave = false
-        persistence.put(storedTrace(count = 1))
         controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(10_000L)
@@ -1387,6 +1389,79 @@ class ReadingTraceControllerTest {
             "退避した返事が書き直されていない",
             "失いたくない返事",
             persistence.stored("ideas/habit.md")!!.reflection!!.reply
+        )
+    }
+
+    /**
+     * **退避は1件ではなくノート単位。** 単一スロットだと、Aが退避中にBで返事を
+     * 書いた瞬間にAが消える。
+     */
+    @Test
+    fun `別ノートの返事は退避を上書きしない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/a.md", "ノートA", "doc-a")
+        controller.setPendingRemark(reflectionOf("Aのひとこと"))
+        controller.saveReply("ideas/a.md", "Aの返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        controller.onNoteOpened("ideas/b.md", "ノートB", "doc-b")
+        controller.setPendingRemark(reflectionOf("Bのひとこと"))
+        controller.saveReply("ideas/b.md", "Bの返事", 6_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        // ここまで両方失敗している。書けるようにして次の契機を作る。
+        persistence.failSave = false
+        controller.onNoteOpened("ideas/c.md", "ノートC", "doc-c")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("Aの返事", persistence.stored("ideas/a.md")!!.reflection!!.reply)
+        assertEquals("Bの返事", persistence.stored("ideas/b.md")!!.reflection!!.reply)
+    }
+
+    /**
+     * 退避を消してよいのは**内容が一致したときだけ**。
+     * 返事の文字列だけで見ると、元の問いや映し返しが違っても同じ扱いになる。
+     */
+    @Test
+    fun `返事が同じでも問いが違えば書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("新しい問い"))
+        controller.saveReply("ideas/habit.md", "同じ返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        // 別経路で「返事は同じだが問いが違う」痕跡が既にある状態を作る
+        persistence.failSave = false
+        persistence.put(
+            storedTrace(count = 1).copy(
+                reflection = Reflection("古い問い", 1L, "同じ返事", 2L)
+            )
+        )
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "問いが違うのに書き直されていない",
+            "新しい問い",
+            persistence.stored("ideas/habit.md")!!.reflection!!.remark
         )
     }
 
