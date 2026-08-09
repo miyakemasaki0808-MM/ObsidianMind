@@ -97,6 +97,12 @@ class PromptBuilderExcerptRegressionTest {
         // ノートで英語の問いが返る（2026-08-09 実機）。ひとことはノートを写す文ではなく
         // アプリがユーザーへ話しかける文なので、従うべきは読み手の言語。
         assertTrue(prompt.contains("Write in Japanese"))
+        // 二人称で名指しさせない。指示を戻すと採点者の口調になる。
+        assertTrue(prompt.contains("Do NOT start with or use 「あなた」"))
+        assertFalse(
+            "二人称で呼ばせる指示が残っている",
+            prompt.contains("address the user as 「あなた」")
+        )
         assertFalse(
             "本文の言語に従わせる指示が残っている",
             prompt.contains("same language as the note content")

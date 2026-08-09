@@ -247,6 +247,11 @@ object PromptBuilder {
      * ひとことは**アプリがユーザーへ話しかける文**なので、従うべきは読み手の言語である。
      * [buildReadingTraceSummaryPrompt]（痕跡の俯瞰要約）が先に同じ判断をしており、
      * こちらはその category を取り違えて旧補記の文言を引き継いでいた。
+     *
+     * **ただし「あなた」まで一緒に持ってきたのは行き過ぎだった**（2026-08-09 実機）。
+     * 俯瞰要約は「あなたは3回開いています」と**読み手自身の行動を述べる**文なので
+     * 二人称が要るが、ひとことは**ノートについて話す**文なので主語に読み手を置く必要がない。
+     * 日本語は主語を落とせるうえ、二人称を名指しすると採点者の口調になる。
      */
     fun buildRemarkPrompt(
         title: String,
@@ -265,7 +270,7 @@ object PromptBuilder {
         val instructions = """
             You are a reading companion for a private Obsidian vault. You are not the author, and not a reviewer.
             Say ONE short thing that helps the user think further about the note below.
-            Write in Japanese and address the user as 「あなた」, whatever language the note itself is written in.
+            Write in Japanese, whatever language the note itself is written in.
             Technical identifiers, code symbols, and proper nouns stay as they appear in the note.
 
             Write EITHER a question that opens up the user's own thinking,
@@ -273,6 +278,8 @@ object PromptBuilder {
 
             Rules:
             - One sentence. Two at most. Around 80–120 characters.
+            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
+              talking about the reader in the second person sounds like a grader, not a companion.
             - It MUST contain a word, term, or claim that literally appears in the note.
             - Do NOT summarize, evaluate, praise, grade, or greet.
             - Do NOT tell the user to add, write, fix, or complete anything.
@@ -313,10 +320,12 @@ object PromptBuilder {
             The user read a note, you asked them one thing, and they answered.
             Reflect back what their answer adds to the note in ONE sentence.
 
-            Write in Japanese and address the user as 「あなた」.
+            Write in Japanese.
 
             Rules:
             - One sentence. Around 60–100 characters.
+            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
+              naming the reader in the second person sounds like a grader, not a companion.
             - Name the new angle or the tension their answer brings to the note.
             - Do NOT ask a question. This is the end of the exchange, not a turn in a chat.
             - Do NOT give advice, praise, greet, or summarize what they wrote.

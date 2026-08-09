@@ -160,7 +160,7 @@ internal fun composeRemark(
     if (!isGroundedInSource(resolved.withoutLinks(), groundingSource)) {
         return RemarkResult.Rejected(RemarkRejection.NotGrounded)
     }
-    return RemarkResult.Accepted(resolved)
+    return RemarkResult.Accepted(resolved.stripLeadingSecondPerson())
 }
 
 /**
@@ -192,10 +192,35 @@ internal fun composeMirroredRemark(response: String): RemarkResult {
     }
     // 映し返しはユーザーの返事に応じる文なので、原文一致は求めない
     // （返事にしか出てこない語を拾うのが正しい応答になり得る）。
-    return RemarkResult.Accepted(cleaned)
+    return RemarkResult.Accepted(cleaned.stripLeadingSecondPerson())
 }
 
 private val QUESTION_MARK = Regex("[?？]")
+
+/**
+ * 冒頭の二人称。**指示だけでは落ちないので、後処理でも剥がす。**
+ *
+ * 「あなた」は当初プロンプトで指示していたもので、痕跡の俯瞰要約から
+ * そのまま持ってきていた（あちらは読み手自身の行動を述べる文なので二人称が要る）。
+ * ひとことはノートについて話す文なので主語に読み手を置く必要がなく、
+ * 名指しすると採点者の口調になる。
+ *
+ * **捨てずに剥がす。** 文体の好みで文ごと捨てると空振りが増えるだけで、
+ * 中身は悪くないのに何も出ないという最悪の形になる
+ * （一般論や問いのように、中身が契約違反であるものとは扱いを変える）。
+ */
+private val LEADING_SECOND_PERSON = Regex("^あなた(?:は|が|の|に|も)?\\s*")
+
+/** 冒頭の「あなたは」等を落とし、残りの先頭が読点で始まらないよう整える。 */
+private fun String.stripLeadingSecondPerson(): String {
+    val stripped = LEADING_SECOND_PERSON.replace(this, "").trimStart()
+    // 「あなたが挙げた〜」→「挙げた〜」のように自然に繋がる場合だけ採る。
+    // 剥がした結果が短すぎる・句読点始まりになるなら、元のままにしておく
+    // （壊れた日本語を出すくらいなら二人称のほうがまし）。
+    if (stripped.length < RemarkLimits.MIN_CHARS) return this
+    if (stripped.firstOrNull() in setOf('、', '。', '，', '．')) return this
+    return stripped
+}
 
 /** 抜粋したことをモデルへ伝える印。落とした事実を隠すと、途中で切れた文と区別できない。 */
 private const val REPLY_ELLIPSIS = "\n（中略）\n"

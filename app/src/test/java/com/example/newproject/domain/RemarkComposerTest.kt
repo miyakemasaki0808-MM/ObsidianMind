@@ -172,10 +172,10 @@ class RemarkComposerTest {
 
     @Test
     fun `映し返しは受理される`() {
-        val result = composeMirroredRemark("あなたは「対話」を、同意ではなく反論まで含む応答として捉えている。")
+        val result = composeMirroredRemark("「対話」を、同意ではなく反論まで含む応答として捉えている。")
 
         assertEquals(
-            "あなたは「対話」を、同意ではなく反論まで含む応答として捉えている。",
+            "「対話」を、同意ではなく反論まで含む応答として捉えている。",
             (result as RemarkResult.Accepted).remark
         )
     }
@@ -212,6 +212,57 @@ class RemarkComposerTest {
         assertEquals(
             RemarkRejection.NothingToSay,
             (composeMirroredRemark(REMARK_NONE_TOKEN) as RemarkResult.Rejected).reason
+        )
+    }
+
+    // ── 冒頭の二人称 ────────────────────────────────────────────────────
+    //
+    // 「あなた」は当初プロンプトで指示していたもので、痕跡の俯瞰要約から持ってきていた。
+    // あちらは読み手自身の行動を述べる文なので二人称が要るが、
+    // ひとことはノートについて話す文なので、名指しすると採点者の口調になる。
+
+    @Test
+    fun `ひとことの冒頭のあなたは剥がされる`() {
+        val result = compose("あなたは「読書は著者との対話である」をどう捉えているだろう。")
+
+        assertEquals(
+            "「読書は著者との対話である」をどう捉えているだろう。",
+            (result as RemarkResult.Accepted).remark
+        )
+    }
+
+    @Test
+    fun `映し返しの冒頭のあなたも剥がされる`() {
+        val result = composeMirroredRemark("あなたは「対話」を、反論まで含む応答として捉えている。")
+
+        assertEquals(
+            "「対話」を、反論まで含む応答として捉えている。",
+            (result as RemarkResult.Accepted).remark
+        )
+    }
+
+    // 文中の「あなた」は触らない。剥がすのは冒頭の主語だけ。
+    @Test
+    fun `文中のあなたは残す`() {
+        val result = composeMirroredRemark("「対話」は、あなた自身の問いから始まると捉えている。")
+
+        assertEquals(
+            "「対話」は、あなた自身の問いから始まると捉えている。",
+            (result as RemarkResult.Accepted).remark
+        )
+    }
+
+    /**
+     * **剥がして壊れるなら剥がさない。** 文体の好みで壊れた日本語を出すくらいなら、
+     * 二人称が残っているほうがまし。
+     */
+    @Test
+    fun `剥がすと読点始まりになる場合は元のまま`() {
+        val result = composeMirroredRemark("あなた、「対話」を反論まで含むものとして捉えている。")
+
+        assertEquals(
+            "あなた、「対話」を反論まで含むものとして捉えている。",
+            (result as RemarkResult.Accepted).remark
         )
     }
 
