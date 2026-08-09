@@ -4,6 +4,7 @@ import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
+import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.vigilith.VigilithActionStatus
 import com.example.newproject.ui.vigilith.fullscreenAiStatus
@@ -84,6 +85,8 @@ internal fun FullscreenNoteScreen(
     /** タブ側と同じパース結果を受け取る。進入のたびに解析し直さないための共有（→ NoteSectionController）。 */
     sectionModel: NoteSectionModel?,
     imageLoader: NoteImageLoader?,
+    /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
+    imageMeasurements: NoteImageMeasurements?,
     tabListState: LazyListState,
     onExit: () -> Unit,
     onOpenSummary: () -> Unit,
@@ -129,7 +132,7 @@ internal fun FullscreenNoteScreen(
 
     // 全画面でも読んだ位置を報告する。全画面は専用の listState を持つため、
     // ここで報告しないと「全画面で読み進めてそのままアプリを離れた」分が記録から漏れる。
-    ReadingProgressReporter(sectionModel, listState, onReadingProgress)
+    ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
 
     // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
     val combinedStatus = fullscreenAiStatus(activeChat, uiState.quizState)
@@ -146,7 +149,8 @@ internal fun FullscreenNoteScreen(
                 .safeDrawingPadding(),
             listState = listState,
             precomputedBlocks = sectionModel?.blocks,
-            imageLoader = imageLoader
+            imageLoader = imageLoader,
+            imageMeasurements = imageMeasurements
         )
         IconPill(
             symbol = "✕",

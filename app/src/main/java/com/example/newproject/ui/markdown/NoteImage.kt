@@ -47,16 +47,28 @@ import com.example.newproject.ui.theme.OnSurfaceSubtle
  * （補記結果の画面など、画像を持たない文脈で使い回せるようにするため）。
  */
 @Composable
-internal fun MarkdownImage(block: MarkdownBlock.Image, loader: NoteImageLoader?) {
+internal fun MarkdownImage(
+    block: MarkdownBlock.Image,
+    loader: NoteImageLoader?,
+    measurements: NoteImageMeasurements?
+) {
     if (loader == null) {
         MarkdownParagraph(block.sourceText())
         return
     }
 
-    var measurement by remember(block) { mutableStateOf<NoteImageMeasurement?>(null) }
+    // **測定結果は共有の入れ物から先に引く。** 全画面は新しいコンポジションなので、
+    // ここで持ち回らないと入った瞬間に未計測へ戻り、位置だけ引き継いだ結果
+    // 後続ブロックが可視になって到達率が水増しされる（→ NoteImageMeasurements）。
+    var measurement by remember(block) { mutableStateOf(measurements?.measurementOf(block)) }
     var content by remember(block) { mutableStateOf<NoteImageContent?>(null) }
 
-    LaunchedEffect(block) { measurement = loader.measure(block) }
+    LaunchedEffect(block, measurement) {
+        if (measurement != null) return@LaunchedEffect
+        val measured = loader.measure(block)
+        measurements?.record(block, measured)
+        measurement = measured
+    }
 
     // 寸法が分かるまでは画面の高さを確保する。**誤るなら大きい側へ誤る** —
     // 小さすぎる確保は後続ブロックを一瞬だけ画面へ入れ、最深到達点は下がらないので

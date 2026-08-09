@@ -23,10 +23,26 @@ import org.junit.Test
  * 1. レビュー本文の指摘（`### P1-1.` 等）すべてに受付行がある
  * 2. 受付行の処遇が空でない
  * 3. 処遇は決めた5語のいずれか
- * 4. `起票` は**実在する課題IDを参照する**
+ * 4. `起票` は**実在する課題IDを参照する**（参照した**すべて**が実在すること）
  * 5. 受付簿に、存在しない指摘の行が無い（消したレビューの残骸を残さない）
+ * 6. 指摘IDにも受付行にも**重複が無い**
  *
  * **新しいレビューを足して受付簿を更新し忘れると、1 で落ちる。**
+ *
+ * ## 2026-08-05 — 「足す」形の変異を試していなかった
+ *
+ * 導入時の変異検証6件はすべて落ちたが、**いずれも既存データを壊す形だった**ため、
+ * **新しいデータを足したときに潰れる欠陥を2つ見逃していた。**
+ *
+ * - **受付IDが日付部分だけだった。** 同じ日に2本目のレビュー（`2026-08-03-other.md`）を
+ *   置くと、その `P1-1` が既存の `2026-08-03-image-n3/P1-1` と**同じIDへ潰れ**、
+ *   受付簿を更新しなくても 1 が通った。IDは**ファイルstem全体**にし、
+ *   さらに 6 で潰れ自体を検出する（潰れたことに気づけないのが根だった）。
+ * - **`起票` の参照先が1件でも実在すれば通っていた。** `none { it in known }` は
+ *   実在する課題IDと架空のIDが並んだ行（`実在ID / TYPO-999`）を成功にする。
+ *   **すべてを検証する。**
+ *
+ * **変異の型に「足す」を含める。** 既存行を壊す変異だけでは、この2つは永久に出ない。
  */
 class ReviewFindingsLedgerTest {
 
@@ -76,10 +92,13 @@ class ReviewFindingsLedgerTest {
             .filter { (_, disposition) -> disposition.startsWith("`起票`") }
             .mapNotNull { (id, disposition) ->
                 val referenced = ISSUE_ID_PATTERN.findAll(disposition).map { it.value }.toList()
+                // **1件でも実在すれば通る形にしない。** 実在する課題IDと架空のIDが
+                // 並んだ行を成功にしてしまい、取りこぼしを見逃す。
+                val unknown = referenced.filterNot { it in known }
                 when {
                     referenced.isEmpty() -> "$id: 起票と書いてあるが課題IDが無い"
-                    referenced.none { it in known } ->
-                        "$id: 参照している課題 ${referenced.joinToString("・")} が台帳に無い" +
+                    unknown.isNotEmpty() ->
+                        "$id: 参照している課題 ${unknown.joinToString("・")} が台帳に無い" +
                             "（台帳の課題: ${known.sorted().joinToString("・")}）"
                     else -> null
                 }
@@ -90,19 +109,56 @@ class ReviewFindingsLedgerTest {
         )
     }
 
+    /**
+     * 指摘IDが潰れていないこと。
+     *
+     * **同じIDへ潰れると、受付簿を更新しなくても「すべてに受付行がある」が通る。**
+     * 潰れたこと自体に気づけないのが 2026-08-05 の欠陥の根だったので、
+     * ID の作り方を直すだけでなく、潰れを**明示的に落とす**。
+     */
+    @Test
+    fun `レビュー本文の指摘IDに重複が無い`() {
+        val duplicates = duplicatesOf(reviewFindingIdList())
+        assertTrue(
+            "同じ指摘IDが複数あります（レビューのファイル名かP番号を見直してください）:\n" +
+                duplicates.joinToString("\n"),
+            duplicates.isEmpty()
+        )
+    }
+
+    @Test
+    fun `受付簿の受付IDに重複が無い`() {
+        val duplicates = duplicatesOf(ledgerRows().map { it.first })
+        assertTrue(
+            "同じ受付IDの行が複数あります:\n${duplicates.joinToString("\n")}",
+            duplicates.isEmpty()
+        )
+    }
+
     // --- 読み取り -------------------------------------------------------------
 
-    /** レビュー本文の指摘ID。`2026-08-01-no9.md` の `### P1-1.` → `2026-08-01/P1-1`。 */
-    private fun reviewFindingIds(): Set<String> =
+    /**
+     * レビュー本文の指摘ID。`2026-08-01-no9.md` の `### P1-1.` → `2026-08-01-no9/P1-1`。
+     *
+     * **日付部分ではなくファイルstem全体を使う。** 日付だけだと、同じ日に2本目の
+     * レビューを置いた瞬間に別々の指摘が同じIDへ潰れる。
+     */
+    private fun reviewFindingIdList(): List<String> =
         reviewDir().listFiles { f: File -> f.name.matches(REVIEW_FILE) }
             .orEmpty()
             .flatMap { file ->
-                val date = REVIEW_FILE.find(file.name)!!.groupValues[1]
-                FINDING_HEADING.findAll(file.readText()).map { "$date/${it.groupValues[1]}" }
+                val stem = REVIEW_FILE.find(file.name)!!.groupValues[1]
+                FINDING_HEADING.findAll(file.readText())
+                    .map { "$stem/${it.groupValues[1]}" }
+                    .toList()
             }
-            .toSet()
 
-    /** 受付簿の行。`| \`2026-08-01/P1-1\` | 指摘 | 処遇 |` を (ID, 処遇) に分解する。 */
+    private fun reviewFindingIds(): Set<String> = reviewFindingIdList().toSet()
+
+    private fun duplicatesOf(ids: List<String>): List<String> =
+        ids.groupingBy { it }.eachCount().filterValues { it > 1 }.keys.sorted()
+
+    /** 受付簿の行。`| \`2026-08-01-no9/P1-1\` | 指摘 | 処遇 |` を (ID, 処遇) に分解する。 */
     private fun ledgerRows(): List<Pair<String, String>> =
         LEDGER_ROW.findAll(reviewDir().resolve("findings.md").readText())
             .map { it.groupValues[1] to it.groupValues[3].trim() }
@@ -110,7 +166,7 @@ class ReviewFindingsLedgerTest {
 
     private fun ledgerIds(): Set<String> = ledgerRows().map { it.first }.toSet()
 
-    /** 課題台帳の見出しから課題IDを拾う（`## TRACE-1. ...` → `TRACE-1`）。 */
+    /** 課題台帳の見出しから課題IDを拾う（`## ABC-1. ...` → `ABC-1`）。 */
     private fun issueIds(): Set<String> =
         ISSUE_HEADING.findAll(docsRoot().resolve("_wip/current_issues.md").readText())
             .map { it.groupValues[1] }
@@ -131,11 +187,21 @@ class ReviewFindingsLedgerTest {
     }
 
     private companion object {
-        val REVIEW_FILE = Regex("""^(\d{4}-\d{2}-\d{2})-.+\.md$""")
+        /** 捕捉するのは**stem全体**（`2026-08-03-image-n3`）。日付だけだと同じ日で潰れる。 */
+        val REVIEW_FILE = Regex("""^(\d{4}-\d{2}-\d{2}-.+)\.md$""")
         val FINDING_HEADING = Regex("""^### (P\d+-\d+)\.""", RegexOption.MULTILINE)
-        val LEDGER_ROW = Regex("""^\| `(\d{4}-\d{2}-\d{2}/P\d+-\d+)` \|([^|]*)\|([^|]*)\|""", RegexOption.MULTILINE)
-        val ISSUE_HEADING = Regex("""^## ([A-Z0-9]+-\d+)\.""", RegexOption.MULTILINE)
-        val ISSUE_ID_PATTERN = Regex("""\b[A-Z0-9]+-\d+\b""")
+        val LEDGER_ROW =
+            Regex("""^\| `(\d{4}-\d{2}-\d{2}-[^`/]+/P\d+-\d+)` \|([^|]*)\|([^|]*)\|""", RegexOption.MULTILINE)
+        val ISSUE_HEADING = Regex("""^## ([A-Z][A-Z0-9]*-\d+)\.""", RegexOption.MULTILINE)
+
+        /**
+         * 課題ID。**先頭を英字に限る。**
+         *
+         * `[A-Z0-9]+-\d+` だと処遇欄の日付（`2026-08-05` の `2026-08` の部分）にも
+         * 当たる。参照を**すべて**検証する形にした以上、日付を書いただけの
+         * `起票` 行が落ちてしまうため、英字始まりに絞る（英数字混在のカテゴリも通る）。
+         */
+        val ISSUE_ID_PATTERN = Regex("""\b[A-Z][A-Z0-9]*-\d+\b""")
 
         /** 許す処遇。**これ以外を書いたら落とす**（曖昧な処遇で追跡が途切れるのを防ぐ）。 */
         val ALLOWED_DISPOSITIONS = listOf("`起票`", "`統合`", "`解消`", "`見送り`", "`誤検知`")

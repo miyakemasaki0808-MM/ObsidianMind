@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.domain.image.NoteImageLimits
 import com.example.newproject.domain.image.decodedPixels
+import com.example.newproject.domain.image.imageDecodeFailureFor
 import com.example.newproject.domain.image.isDecodableImageFileName
 import com.example.newproject.domain.image.rejectionForBounds
 import com.example.newproject.domain.image.sampleSizeFor
@@ -13,6 +14,34 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImageDecodePolicyTest {
+
+    // --- 失敗理由の切り分け ---------------------------------------------------
+    //
+    // BitmapFactory は打ち切られたストリームを「復号できなかった」としか言わない。
+    // したがって null を先に見ると、大きすぎる画像がすべて Broken になる。
+    // ユーザーに見せる次の行動が変わる（縮小すれば直る／ファイルが壊れている）ので、
+    // この順序は回帰させてはいけない。
+
+    @Test
+    fun `打ち切られたら大きすぎるとして扱う`() {
+        assertEquals(NoteImageFailure.TooLarge, imageDecodeFailureFor(truncated = true, decoded = false))
+    }
+
+    @Test
+    fun `打ち切りは復号できたかより優先される`() {
+        // 打ち切った上で部分的に絵が取れることがある。それでも理由は「大きすぎる」。
+        assertEquals(NoteImageFailure.TooLarge, imageDecodeFailureFor(truncated = true, decoded = true))
+    }
+
+    @Test
+    fun `打ち切っていないのに復号できないなら壊れている`() {
+        assertEquals(NoteImageFailure.Broken, imageDecodeFailureFor(truncated = false, decoded = false))
+    }
+
+    @Test
+    fun `打ち切らず復号できたら失敗ではない`() {
+        assertNull(imageDecodeFailureFor(truncated = false, decoded = true))
+    }
 
     // --- 復号可否 -----------------------------------------------------------
 

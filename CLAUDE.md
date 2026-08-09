@@ -20,6 +20,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 | `ui/theme/` ・色/テーマ | **[ui_design_principles](docs/dev/design/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](docs/dev/design/theme_and_ui_refactor.md) → [dark_mode](docs/dev/design/dark_mode.md) |
 | `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/dev/design/reflect_reading_trace.md) / [reflect_distill](docs/dev/design/reflect_distill.md) |
 | `ui/vigilith/` | [character_vigilith](docs/dev/design/character_vigilith.md) → [vigilith_in_app](docs/dev/design/vigilith_in_app.md) |
+| `androidTest/` | [instrumentation_testing](docs/dev/design/instrumentation_testing.md) |
 
 **繰り返し現れた構造的な教訓は [docs/dev/lessons.md](docs/dev/lessons.md)。**
 **着手前に全文を読まない。** 代わりに、**diffが出来上がった後**に

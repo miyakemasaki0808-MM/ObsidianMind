@@ -110,7 +110,7 @@ class PromptTokenBudgetTest {
      * - 両方成功 → 元の失敗はプロンプト固有（長さ・内容）なので段階的に切り分ける
      */
     @Test
-    fun トークンAPIの最小疎通を確かめる() = runBlocking {
+    fun トークンAPIの最小疎通を確かめる() = runBlocking<Unit> {
         requireNanoAvailable()
         log("── 最小疎通 ${"─".repeat(37)}")
         log("getTokenLimit()          : ${client.tokenLimit()}")
@@ -166,7 +166,7 @@ class PromptTokenBudgetTest {
     }
 
     @Test
-    fun 全計測ケースが入力と出力予約の合計を上限内に収める() = runBlocking {
+    fun 全計測ケースが入力と出力予約の合計を上限内に収める() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
@@ -200,7 +200,7 @@ class PromptTokenBudgetTest {
      * 予算600のうち注意書きへ払っている実コストになる。
      */
     @Test
-    fun 抜粋の注意書きが占めるトークン数を差分で測る() = runBlocking {
+    fun 抜粋の注意書きが占めるトークン数を差分で測る() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
@@ -236,7 +236,7 @@ class PromptTokenBudgetTest {
     /**
      * 関連ノートの抜粋予算（[NoteExcerptLimits.RELATED]）を動かしたときの余裕を、候補値ごとに測る。
      *
-     * **AI-1（予算600が実測より小さい）の値を決めるための掃引。** 1回の実行で候補を全部測るのは、
+     * **関連ノートの予算が実測より小さいのではないかを確かめるための掃引。** 1回の実行で候補を全部測るのは、
      * 「変えて回す」を繰り返すと実機実行が候補の数だけ要るため。
      *
      * 見るのは余裕だけではない。**100文字あたりの限界コスト**も出す。
@@ -247,7 +247,7 @@ class PromptTokenBudgetTest {
      * トークンの余裕は必要条件にすぎない（生成時間と推薦品質は別途見る）。
      */
     @Test
-    fun 関連ノートの予算候補ごとの余裕を測る() = runBlocking {
+    fun 関連ノートの予算候補ごとの余裕を測る() = runBlocking<Unit> {
         requireNanoAvailable()
         logHeader()
 
@@ -431,7 +431,7 @@ class PromptTokenBudgetTest {
         const val GENAI_PROMPT_VERSION = "1.0.0-beta2"
 
         /**
-         * AI-1 で検討する関連ノート予算の候補（先頭は現行値）。
+         * 関連ノート予算の候補（先頭は現行値）。
          *
          * 上限側を 2,000 まで見るのは、**採る気がなくても曲線の形を知るため**。
          * 現行値の周辺だけ測ると、限界費用が一定なのか逓減するのかが分からない。

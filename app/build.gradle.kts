@@ -91,6 +91,12 @@ tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir("docs"))
         .withPropertyName("docsForLedgerTest")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // androidTest のソースは JVM テストのコンパイル対象ではないため、
+    // 明示しないと **androidTest だけを直したときに UP-TO-DATE で飛ぶ**
+    // （InstrumentationTestShapeTest が一度も走らない）。docs と同じ理由。
+    inputs.dir(layout.projectDirectory.dir("src/androidTest"))
+        .withPropertyName("androidTestSourcesForShapeTest")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {

@@ -42,3 +42,25 @@ internal fun visibleFractionOfBlock(
  */
 internal fun quantizeReadingFraction(fraction: Float): Int =
     (fraction.coerceIn(0f, 1f) * READING_FRACTION_STEPS).toInt()
+
+/**
+ * 最終可視ブロックの進捗を報告してよいか。
+ *
+ * **寸法未確定の画像より後ろは報告しない。** 画像は寸法が取れるまで画面1枚ぶんの
+ * プレースホルダで確保するが、**これは元画像の高さの上限ではない。**
+ * 縦長画像なら実際は画面2〜3枚ぶんになり得るので、確保が足りない間は
+ * **まだ読んでいない後続ブロックが「可視」に見える。**
+ *
+ * 最深到達点は後から下がらないため、この誤りは**サイドカーへ永続化される** —
+ * 見た目が一瞬ずれるのとは重さが違う。したがって
+ * **「測れていないものの向こう側は、見えたと言えない」**として報告そのものを止める。
+ *
+ * 測定が終われば [firstUnsettledImageIndex] が後ろへ動くか null になるので、報告は再開する。
+ *
+ * @param lastVisibleBlockIndex 最終可視ブロックの index
+ * @param firstUnsettledImageIndex 寸法未確定の画像のうち最も手前の index。無ければ null
+ */
+internal fun shouldReportReadingProgress(
+    lastVisibleBlockIndex: Int,
+    firstUnsettledImageIndex: Int?
+): Boolean = firstUnsettledImageIndex == null || lastVisibleBlockIndex < firstUnsettledImageIndex

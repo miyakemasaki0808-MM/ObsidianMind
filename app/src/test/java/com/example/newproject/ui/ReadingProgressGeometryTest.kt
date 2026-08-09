@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReadingProgressGeometryTest {
@@ -54,5 +56,41 @@ class ReadingProgressGeometryTest {
     fun `quantization clamps out of range values`() {
         assertEquals(0, quantizeReadingFraction(-1f))
         assertEquals(READING_FRACTION_STEPS, quantizeReadingFraction(2f))
+    }
+
+    // --- 寸法未確定の画像より後ろを報告しない -------------------------------
+
+    @Test
+    fun `未確定の画像が無ければ報告する`() {
+        assertTrue(shouldReportReadingProgress(lastVisibleBlockIndex = 12, firstUnsettledImageIndex = null))
+    }
+
+    @Test
+    fun `未確定の画像より手前なら報告する`() {
+        assertTrue(shouldReportReadingProgress(lastVisibleBlockIndex = 4, firstUnsettledImageIndex = 5))
+    }
+
+    /** 画像そのものは「まだ高さが動く」ので、そこも報告しない。 */
+    @Test
+    fun `未確定の画像そのものは報告しない`() {
+        assertFalse(shouldReportReadingProgress(lastVisibleBlockIndex = 5, firstUnsettledImageIndex = 5))
+    }
+
+    /**
+     * **ここが本体。**
+     *
+     * 未確定の画像より後ろが報告されると、まだ読んでいない位置が
+     * 最深到達点としてサイドカーへ永続化される（最深到達点は後から下がらない）。
+     */
+    @Test
+    fun `未確定の画像より後ろは報告しない`() {
+        assertFalse(shouldReportReadingProgress(lastVisibleBlockIndex = 9, firstUnsettledImageIndex = 5))
+    }
+
+    /** 複数あっても最も手前で止める（手前が未確定なら、その先の可視判定は信用できない）。 */
+    @Test
+    fun `未確定が複数あれば最も手前で止まる`() {
+        assertFalse(shouldReportReadingProgress(lastVisibleBlockIndex = 8, firstUnsettledImageIndex = 2))
+        assertTrue(shouldReportReadingProgress(lastVisibleBlockIndex = 1, firstUnsettledImageIndex = 2))
     }
 }

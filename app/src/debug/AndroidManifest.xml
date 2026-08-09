@@ -1,0 +1,32 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!--
+          instrumentation 用の Vault（→ docs/dev/design/instrumentation_testing.md 段階2）。
+          debug ビルドにだけ入り、release には含まれない。
+
+          **この3つは DocumentsProvider の必須要件で、外すと起動時に落ちる。**
+          DocumentsProvider.attachInfo() が自分の宣言を検査し、
+          exported / grantUriPermissions / MANAGE_DOCUMENTS 保護のどれかが欠けると
+          SecurityException を投げる。プロバイダはアプリ起動時に生成されるので、
+          ここで落ちるとテストは1件も走らない（0 tests になる）。
+
+          exported="true" でも外部から触れるわけではない。MANAGE_DOCUMENTS は
+          システム（DocumentsUI）だけが持つ署名権限で、通常のアプリは取得できない。
+          自アプリからのアクセスは同一UIDなので権限検査を通らずに済む。
+
+          intent-filter は**あえて置かない**。DOCUMENTS_PROVIDER アクションを
+          宣言するとSAFのピッカーにこの偽Vaultが並んでしまうため
+          （テストは buildTreeDocumentUri で直接URIを組むので不要）。
+        -->
+        <provider
+            android:name="com.example.newproject.testing.FakeVaultDocumentsProvider"
+            android:authorities="com.example.newproject.debug.fakevault"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
+            tools:ignore="ExportedContentProvider" />
+    </application>
+
+</manifest>

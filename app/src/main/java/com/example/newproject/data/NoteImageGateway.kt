@@ -9,6 +9,7 @@ import com.example.newproject.domain.ByteBudgetCache
 import com.example.newproject.domain.image.ImageRequest
 import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageLimits
+import com.example.newproject.domain.image.imageDecodeFailureFor
 import com.example.newproject.domain.image.imageRequestOf
 import com.example.newproject.domain.image.isDecodableImageFileName
 import com.example.newproject.domain.image.rejectionForBounds
@@ -153,7 +154,8 @@ internal class NoteImageGateway(
             it.truncated
         } == true
         // 寸法すら読み切れないほど大きいなら「壊れている」ではなく「大きすぎる」。
-        if (truncated) throw ImageDecodeFailure(NoteImageFailure.TooLarge)
+        // 寸法読みでは Bitmap を作らないので、判定材料は打ち切りの有無だけ。
+        imageDecodeFailureFor(truncated, decoded = true)?.let { throw ImageDecodeFailure(it) }
         return bounds
     }
 
@@ -174,9 +176,11 @@ internal class NoteImageGateway(
                 truncated = it.truncated
                 decoded
             }
-            // 打ち切りは復号失敗として返ってくるので、理由を取り違えないよう先に見る。
-            if (truncated) throw ImageDecodeFailure(NoteImageFailure.TooLarge)
-            bitmap ?: throw ImageDecodeFailure(NoteImageFailure.Broken)
+            // 打ち切りは復号失敗として返ってくるので、理由の判定は純関数へ寄せる
+            // （TooLarge と Broken の取り違えは、この順序ひとつで起きる）。
+            imageDecodeFailureFor(truncated, decoded = bitmap != null)
+                ?.let { throw ImageDecodeFailure(it) }
+            checkNotNull(bitmap)
         }
 
     /**
