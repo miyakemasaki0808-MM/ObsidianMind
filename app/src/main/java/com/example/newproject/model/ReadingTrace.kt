@@ -20,11 +20,14 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * v2 で [ReadingTrace.totalVisitCount] を足した。v1 は保持件数（最大30）を累計回数として
  * 使っており、30回を超えると表示が「30回」で止まるだけでなく、AI俯瞰要約の再生成判定
  * （[needsAiSummary]）も止まって古い要約が「最新」として出続けていた。
+ *
+ * v3 で [ReadingTrace.remark]（ノートへのひとこと）を足した。旧「AI補記メモ」が
+ * Vaultへ `.md` を作っていたのを、1文になったのに合わせてサイドカーへ移したもの。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 2
+internal const val READING_TRACE_SCHEMA_VERSION = 3
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
-internal val READING_TRACE_READABLE_SCHEMA_VERSIONS = setOf(1, READING_TRACE_SCHEMA_VERSION)
+internal val READING_TRACE_READABLE_SCHEMA_VERSIONS = setOf(1, 2, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -39,6 +42,14 @@ internal object ReadingTraceLimits {
     const val MAX_SECTION_TITLE_BYTES = 512
     const val MAX_DOCUMENT_ID_BYTES = 2048
     const val MAX_AI_SUMMARY_BYTES = 2048
+
+    /**
+     * ひとことの上限。仕様は「原則1文・最大2文・80〜120文字程度」なので、
+     * 日本語1文字≒3バイトで360バイト。生成の揺れを吸収して512とする。
+     * **要約（2048）より意図的に小さい** — 枠を広げると長文が通り、
+     * 「1文だけ出す」という設計が保存側から緩む。
+     */
+    const val MAX_REMARK_BYTES = 512
 
     /** サイドカー1ファイルの読み込み上限。上記×MAX_VISITS から十分な余裕を取った値。 */
     const val MAX_FILE_BYTES = 64 * 1024
@@ -83,6 +94,17 @@ internal data class ReadingTrace(
      * 累計だけ取り残される）。
      */
     val totalVisitCount: Int = visits.size,
+    /**
+     * ノートへのひとこと（AIが返す1文）。旧「AI補記メモ」の置き換え。
+     *
+     * **[aiSummary] と違い、訪問数では無効化しない。** 俯瞰要約の入力は訪問履歴なので
+     * 訪問が増えれば作り直す必要があるが、ひとことの入力は本文であり、
+     * ユーザーが明示ボタンを押したときにだけ作られて上書きされる。
+     * したがって `remarkVisitCount` に相当するものは持たない。
+     *
+     * **1ノート1件。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
+     */
+    val remark: String? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 )
 
@@ -172,6 +194,12 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
 
     trace.aiSummary?.let {
         requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "AI要約")
+    }
+    trace.remark?.let {
+        // 空白だけのひとことは「無い」と区別できないので受け付けない。
+        // 保存側で null へ倒すのが正で、ここは最後の砦。
+        require(it.isNotBlank()) { "ひとことが空です。" }
+        requireWithinBytes(it, ReadingTraceLimits.MAX_REMARK_BYTES, "ひとこと")
     }
     trace.aiSummaryVisitCount?.let {
         require(it in 0..trace.totalVisitCount) { "AI要約の訪問数が閲覧回数と矛盾しています。" }

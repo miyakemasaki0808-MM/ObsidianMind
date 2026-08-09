@@ -277,6 +277,96 @@ class ReadingTraceJsonTest {
 
         assertEquals(2, (decoded as ReadingTraceReadResult.Valid).trace.totalVisitCount)
     }
+
+    // ── schema v2 → v3 の移行（ひとこと） ────────────────────────────────
+    //
+    // **v2 は実際に端末へ書き出されている現行版だった。** v1 と違い「古い実験的な版」
+    // ではなく全ユーザーの手元にある形なので、ここが読めなくなると痕跡が全部消える。
+
+    @Test
+    fun `v2 の痕跡はひとこと無しで読める`() {
+        val visits = listOf(visit(at = 1L), visit(at = 2L))
+        val source = trace(visits = visits, aiSummary = "2回開いています", aiSummaryVisitCount = 2)
+
+        val decoded = ReadingTraceJson.decode(encodeAsV2(source))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertNull(loaded.remark)
+        assertEquals(2, loaded.totalVisitCount)
+        assertEquals("2回開いています", loaded.aiSummary)
+    }
+
+    @Test
+    fun `v2 を読むと現行フォーマットへ移行される`() {
+        val decoded = ReadingTraceJson.decode(encodeAsV2(trace()))
+
+        val loaded = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = JSONObject(ReadingTraceJson.encode(loaded).toString(Charsets.UTF_8))
+        assertEquals(READING_TRACE_SCHEMA_VERSION, reencoded.getInt("schemaVersion"))
+    }
+
+    @Test
+    fun `改変された v2 は破損扱いのまま`() {
+        val root = JSONObject(encodeAsV2(trace()).toString(Charsets.UTF_8))
+        root.put("noteTitle", "すり替えたタイトル")
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+    // v2 の checksum はひとことを含まないため、書き足されていても信用しない
+    // （読むと checksum を通り抜けて任意の文言を名乗れる入口になる）。
+    @Test
+    fun `v2 に書き足されたひとことは無視される`() {
+        val root = JSONObject(encodeAsV2(trace()).toString(Charsets.UTF_8))
+        root.put("remark", "外から差し込んだひとこと")
+
+        val decoded = ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8))
+
+        assertNull((decoded as ReadingTraceReadResult.Valid).trace.remark)
+    }
+
+    // ── ひとこと（v3） ──────────────────────────────────────────────────
+
+    @Test
+    fun `ひとことが往復する`() {
+        val source = trace(remark = "この考えの根拠になった経験は何だろう？")
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    @Test
+    fun `ひとことの改変は破損扱いになる`() {
+        val corrupted = mutate(trace(remark = "元のひとこと")) { it.put("remark", "すり替えたひとこと") }
+
+        assertCorrupt(ReadingTraceJson.decode(corrupted))
+    }
+
+    // null と空文字を区別する存在フラグが、ひとことにも効いていること。
+    @Test
+    fun `ひとことの有無は checksum で区別される`() {
+        val withRemark = ReadingTraceJson.encode(trace(remark = "ひとこと"))
+        val withoutRemark = ReadingTraceJson.encode(trace(remark = null))
+
+        assertTrue(checksumOf(withRemark) != checksumOf(withoutRemark))
+    }
+
+    @Test
+    fun `空白だけのひとことは保存できない`() {
+        assertFailsWithMessage { ReadingTraceJson.encode(trace(remark = "   ")) }
+    }
+
+    // 要約と同じくバイト基準。1文しか入らない枠であることを保存側でも固定する。
+    @Test
+    fun `ひとことの上限はutf8バイトで測る`() {
+        val justOver = "あ".repeat(ReadingTraceLimits.MAX_REMARK_BYTES / 3 + 1)
+        val within = "あ".repeat(ReadingTraceLimits.MAX_REMARK_BYTES / 3)
+
+        assertFailsWithMessage { ReadingTraceJson.encode(trace(remark = justOver)) }
+        ReadingTraceJson.encode(trace(remark = within))
+    }
 }
 
 /**
@@ -333,6 +423,62 @@ private fun encodeAsV1(trace: ReadingTrace): ByteArray {
         .toByteArray(Charsets.UTF_8)
 }
 
+/**
+ * schema v2 のサイドカーを組み立てる。
+ *
+ * v1 と同じ理由でテスト側に正規形を写し取っている（production の canonicalPayload を
+ * 呼ぶと、実装を変えたときに一緒に壊れて互換の破れに気付けない）。
+ * **v2 は v1 と違って全ユーザーの端末に実在する形**なので、ここが仕様として固定される。
+ */
+private fun encodeAsV2(trace: ReadingTrace): ByteArray {
+    val visits = JSONArray()
+    trace.visits.forEach { v ->
+        visits.put(
+            JSONObject()
+                .put("at", v.atEpochMillis)
+                .put("deepestSection", v.deepestSectionTitle ?: JSONObject.NULL)
+                .put("progressPercent", v.progressPercent)
+        )
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(2)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            if (v.deepestSectionTitle == null) {
+                out.writeByte(0)
+            } else {
+                out.writeByte(1)
+                out.writeSizedForTest(v.deepestSectionTitle)
+            }
+        }
+        if (trace.aiSummary == null) {
+            out.writeByte(0)
+        } else {
+            out.writeByte(1)
+            out.writeSizedForTest(trace.aiSummary)
+        }
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+        out.writeInt(trace.totalVisitCount)
+    }
+    return JSONObject()
+        .put("schemaVersion", 2)
+        .put("vaultRelativePath", trace.vaultRelativePath)
+        .put("noteTitle", trace.noteTitle)
+        .put("documentId", trace.documentId ?: JSONObject.NULL)
+        .put("visits", visits)
+        .put("aiSummary", trace.aiSummary ?: JSONObject.NULL)
+        .put("aiSummaryVisitCount", trace.aiSummaryVisitCount ?: JSONObject.NULL)
+        .put("totalVisitCount", trace.totalVisitCount)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
+}
+
 private fun DataOutputStream.writeSizedForTest(value: String) {
     val encoded = value.toByteArray(Charsets.UTF_8)
     writeInt(encoded.size)
@@ -353,14 +499,16 @@ private fun trace(
     documentId: String? = "doc-1",
     visits: List<ReadingVisit> = listOf(visit()),
     aiSummary: String? = null,
-    aiSummaryVisitCount: Int? = null
+    aiSummaryVisitCount: Int? = null,
+    remark: String? = null
 ) = ReadingTrace(
     vaultRelativePath = path,
     noteTitle = title,
     documentId = documentId,
     visits = visits,
     aiSummary = aiSummary,
-    aiSummaryVisitCount = aiSummaryVisitCount
+    aiSummaryVisitCount = aiSummaryVisitCount,
+    remark = remark
 )
 
 /** encode した JSON を書き換えて破損・改変を再現する。 */

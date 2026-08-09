@@ -51,6 +51,7 @@ internal object ReadingTraceJson {
             .put(KEY_AI_SUMMARY, trace.aiSummary ?: JSONObject.NULL)
             .put(KEY_AI_SUMMARY_VISIT_COUNT, trace.aiSummaryVisitCount ?: JSONObject.NULL)
             .put(KEY_TOTAL_VISIT_COUNT, trace.totalVisitCount)
+            .put(KEY_REMARK, trace.remark ?: JSONObject.NULL)
             .put(KEY_CHECKSUM, checksumOf(trace))
         // 人が読める体裁で書く（ユーザーが中身を確認・修復できることを優先）。
         return root.toString(2).toByteArray(Charsets.UTF_8)
@@ -82,6 +83,9 @@ internal object ReadingTraceJson {
                 // v1 のファイルにこの項目が書かれていても読まない。v1 の checksum は
                 // この値を含まないため、読むと改変し放題の入口になる。
                 totalVisitCount = if (version >= 2) root.getInt(KEY_TOTAL_VISIT_COUNT) else visits.size,
+                // v3 で追加。v1/v2 の checksum はこの値を含まないので、
+                // 旧版のファイルに書かれていても読まない（totalVisitCount と同じ理由）。
+                remark = if (version >= 3) root.stringOrNull(KEY_REMARK) else null,
                 schemaVersion = version
             )
             validateReadingTrace(trace)
@@ -131,6 +135,8 @@ internal object ReadingTraceJson {
             out.writeInt(trace.aiSummaryVisitCount ?: ABSENT_VISIT_COUNT)
             // v2 で追加。v1 には無いので書かない。
             if (trace.schemaVersion >= 2) out.writeInt(trace.totalVisitCount)
+            // v3 で追加。v1/v2 には無いので書かない。
+            if (trace.schemaVersion >= 3) out.writeSizedNullable(trace.remark)
         }
         return buffer.toByteArray()
     }
@@ -169,6 +175,7 @@ internal object ReadingTraceJson {
     private const val KEY_AI_SUMMARY = "aiSummary"
     private const val KEY_AI_SUMMARY_VISIT_COUNT = "aiSummaryVisitCount"
     private const val KEY_TOTAL_VISIT_COUNT = "totalVisitCount"
+    private const val KEY_REMARK = "remark"
     private const val KEY_CHECKSUM = "checksum"
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"
