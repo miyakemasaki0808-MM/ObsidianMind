@@ -73,6 +73,9 @@ import com.example.newproject.ui.theme.PanelBlue
  * 主ボタンは「返事を残す」。**「もう一度きく」は脇へ下げる** —
  * 主役はAIの問いではなく、それを受けたユーザーの言葉のほうだから。
  */
+/** 未保存の下書きを抱えたまま離れようとしている行き先。 */
+private enum class PendingExit { Back, Regenerate }
+
 @Composable
 fun RemarkScreen(
     state: RemarkState,
@@ -88,6 +91,9 @@ fun RemarkScreen(
         mutableStateOf(ready?.reflection?.reply.orEmpty())
     }
     var confirmingRegenerate by rememberSaveable { mutableStateOf(false) }
+    var confirmingDiscard by rememberSaveable { mutableStateOf<PendingExit?>(null) }
+    // 上限で切ったことを覚えておく。黙って切ると「書いたのに保存されなかった」に見える。
+    var wasTruncated by rememberSaveable { mutableStateOf(false) }
     // **保存済みかどうかは savedAt だけで決めない。** 書き直している途中でも
     // 過去の日時があるだけで「保存済み」と出ていた。いま画面にある文字列と
     // 保存されている文字列が同じかを見る。
@@ -135,9 +141,13 @@ fun RemarkScreen(
                 // **上限超過を黙って捨てない。** 以前は入力変更ごと無視していたため、
                 // 長文を貼ると無反応になり「書いたのに保存されなかった」ように見えた。
                 // 受け取ってから切り、切ったことを下に出す。
-                onDraftChange = { draft = it.take(RemarkLimits.MAX_REPLY_CHARS) },
+                onDraftChange = {
+                    wasTruncated = it.length > RemarkLimits.MAX_REPLY_CHARS
+                    draft = it.take(RemarkLimits.MAX_REPLY_CHARS)
+                },
                 status = ready.replyStatus,
-                isDirty = isDirty
+                isDirty = isDirty,
+                wasTruncated = wasTruncated
             )
             // 映し返しは返事の**下**に置く。読む順序（問い→返事→応答）に合わせる。
             ready.reflection.mirrored?.let { mirrored ->
@@ -151,7 +161,10 @@ fun RemarkScreen(
       if (ready != null) {
         Button(
             onClick = { onSaveReply(draft) },
-            enabled = ready.replyStatus != ReplyStatus.Saving && draft.isNotBlank() && isDirty,
+            // **失敗後は同じ本文でも押せること。** 失敗時も本文は状態へ残すので
+            // isDirty が false になり、「もう一度保存する」が押せなくなっていた。
+            enabled = ready.replyStatus != ReplyStatus.Saving && draft.isNotBlank() &&
+                (isDirty || ready.replyStatus == ReplyStatus.Failed),
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ButtonPrimary,
@@ -175,7 +188,12 @@ fun RemarkScreen(
             // 返事を書いた後に作り直すと、その返事が宙に浮く（新しい問いへの返事ではない）。
             // 消える前に一度尋ねる。
             onClick = {
-                if (ready?.reflection?.hasReply == true) confirmingRegenerate = true else onRegenerate()
+                when {
+                    // 書きかけを黙って捨てない。書いた言葉は作り直せない。
+                    isDirty -> confirmingDiscard = PendingExit.Regenerate
+                    ready?.reflection?.hasReply == true -> confirmingRegenerate = true
+                    else -> onRegenerate()
+                }
             },
             enabled = state !is RemarkState.Loading,
             modifier = Modifier.fillMaxWidth().height(48.dp),
@@ -191,7 +209,7 @@ fun RemarkScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
         Button(
-            onClick = onBack,
+            onClick = { if (isDirty) confirmingDiscard = PendingExit.Back else onBack() },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ButtonSecondary,
@@ -201,6 +219,31 @@ fun RemarkScreen(
             shape = RoundedCornerShape(24.dp)
         ) { Text("← 戻る", color = OnButtonSecondary) }
         Spacer(modifier = Modifier.height(16.dp))
+    }
+
+    confirmingDiscard?.let { exit ->
+        AlertDialog(
+            onDismissRequest = { confirmingDiscard = null },
+            title = { Text("保存していない返事があります") },
+            text = { Text("書きかけの返事は保存されていません。このまま進むと消えます。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmingDiscard = null
+                    when (exit) {
+                        PendingExit.Back -> onBack()
+                        PendingExit.Regenerate ->
+                            if (ready?.reflection?.hasReply == true) {
+                                confirmingRegenerate = true
+                            } else {
+                                onRegenerate()
+                            }
+                    }
+                }) { Text("保存せずに進む") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmingDiscard = null }) { Text("戻って保存する") }
+            }
+        )
     }
 
     if (confirmingRegenerate) {
@@ -235,7 +278,8 @@ private fun ReplyField(
     draft: String,
     onDraftChange: (String) -> Unit,
     status: ReplyStatus,
-    isDirty: Boolean
+    isDirty: Boolean,
+    wasTruncated: Boolean
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -248,7 +292,9 @@ private fun ReplyField(
             OutlinedTextField(
                 value = draft,
                 onValueChange = onDraftChange,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
+                // **最大高を決めて欄内スクロールにする。** 上限が8,000文字なので、
+                // 高さを伸ばし放題にすると画面が入力欄だけで埋まる。
+                modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp, max = 220.dp),
                 placeholder = {
                     Text("いま浮かんだことを短く…", color = OnSurfaceSubtle, fontSize = 14.sp)
                 },
@@ -272,6 +318,17 @@ private fun ReplyField(
                 color = if (isProblem) ErrorText else OnSurfaceSubtle,
                 fontSize = 11.sp
             )
+            // 上限で切ったことは必ず出す。黙って切ると、貼り付けた末尾が
+            // どこへ行ったのか分からない。
+            if (wasTruncated) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "上限（${RemarkLimits.MAX_REPLY_CHARS}文字）を超えたぶんは入りませんでした。",
+                    color = ErrorText,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp
+                )
+            }
             // 上限で止めるのではなく、長くなったことを静かに知らせるだけ。
             // 壁にすると、長く書きたかった回にユーザーの言葉が消える。
             if (draft.length > RemarkLimits.SOFT_REPLY_CHARS) {

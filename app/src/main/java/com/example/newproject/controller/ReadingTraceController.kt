@@ -125,6 +125,26 @@ internal class ReadingTraceController(
 
     private var session: Session? = null
 
+    /**
+     * **セッションが終わった後も残す、書けなかった返事。**
+     *
+     * [flush] は保存コルーチンを起動した直後に `session = null` にするため、
+     * 書き込みが後から失敗しても**戻す先のセッションがもう現役でない**。
+     * `owner.pendingRemark` へ戻しても誰も読まず、ユーザーの返事がそこで消えていた。
+     *
+     * セッションではなくこのControllerが持つことで、次の書き込み契機
+     * （別ノートの離脱・背面化、あるいは同じノートを開き直したとき）に書き直せる。
+     * **プロセスが死ねば失われる**が、それは全ての未保存データと同じ条件になる。
+     */
+    private var unsavedReply: UnsavedReply? = null
+
+    /** 書けなかった返事。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
+    private class UnsavedReply(
+        val vaultRelativePath: String,
+        val vaultKey: String,
+        val reflection: Reflection
+    )
+
     // サイドカーの read-modify-write を直列化する。訪問の追記と要約の書き戻しが
     // 交差すると、読み取りが古いまま上書きして訪問を取りこぼしうる。
     // （AI生成の直列化は AiClient 側の責務で、こちらとは別の関心事）
@@ -313,6 +333,7 @@ internal class ReadingTraceController(
             // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
             ?: return holdOrLose(reply, atEpochMillis)
         return withContext(ioDispatcher) {
+            flushUnsavedReply()
             writeMutex.withLock {
                 val existing = try {
                     (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
@@ -349,6 +370,30 @@ internal class ReadingTraceController(
     }
 
     /**
+     * 退避してある返事を書き直す。**書き込み契機のたびに先頭で試す。**
+     *
+     * 痕跡が作られていれば載せられる。まだ無ければ次の契機へ持ち越す
+     * （訪問が1件も無い痕跡は保存できないため）。
+     */
+    private suspend fun flushUnsavedReply() {
+        val held = unsavedReply ?: return
+        // Vaultが切り替わっていたら書かない。旧Vaultの返事を新Vaultへ入れない。
+        if (currentVaultKey() != held.vaultKey) return
+        val written = writeMutex.withLock {
+            val existing =
+                (persistence.load(held.vaultRelativePath, held.vaultKey) as? ReadingTraceReadResult.Valid)
+                    ?.trace ?: return@withLock false
+            // 既に同じ返事が入っていれば書き直す必要はない。
+            if (existing.reflection?.reply == held.reflection.reply) return@withLock true
+            persistence.save(
+                existing.copy(reflection = held.reflection),
+                held.vaultKey
+            ) is ReadingTraceSaveResult.Success
+        }
+        if (written) unsavedReply = null
+    }
+
+    /**
      * 映し返しを添える。**無くても成立する**ので、書けなければ黙って諦める
      * （返事と違い、これはAIの生成物なので作り直せる）。
      */
@@ -358,7 +403,19 @@ internal class ReadingTraceController(
             writeMutex.withLock {
                 val existing =
                     (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
-                        ?.trace ?: return@withLock
+                        ?.trace
+                if (existing == null) {
+                    // 痕跡がまだ無い（初読で返事まで書いた場合）。捨てずに預ける —
+                    // 画面には映し返しが出ているのに保存だけ落ちると、
+                    // 次に開いたとき返事だけが残って応答が消えている状態になる。
+                    session?.pendingRemark?.takeIf { it.hasReply }?.let { held ->
+                        val next = held.withMirrored(mirrored)
+                        session?.pendingRemark = next
+                        session?.dirty = true
+                        unsavedReply = UnsavedReply(vaultRelativePath, vaultKey, next)
+                    }
+                    return@withLock
+                }
                 val reflection = existing.reflection?.takeIf { it.hasReply } ?: return@withLock
                 persistence.save(existing.copy(reflection = reflection.withMirrored(mirrored)), vaultKey)
             }
@@ -374,8 +431,13 @@ internal class ReadingTraceController(
     private fun holdOrLose(reply: String, atEpochMillis: Long): ReplySaveOutcome {
         val active = session ?: return ReplySaveOutcome.Lost
         val base = active.pendingRemark ?: return ReplySaveOutcome.Lost
-        active.pendingRemark = base.withReply(reply, atEpochMillis)
+        val held = base.withReply(reply, atEpochMillis)
+        active.pendingRemark = held
         active.dirty = true
+        // セッション側だけに置くと、離脱時の保存が失敗した瞬間に行き先が消える。
+        // 同じものを Controller 側へも退避しておく。
+        val path = active.vaultRelativePath
+        if (path != null) unsavedReply = UnsavedReply(path, active.vaultKey, held)
         return ReplySaveOutcome.Held
     }
 
@@ -432,6 +494,8 @@ internal class ReadingTraceController(
         val owner = active
 
         persistScope.launch {
+            // 前回書けなかった返事があれば、まずそれを片付ける。
+            withContext(ioDispatcher) { flushUnsavedReply() }
             val result = withContext(ioDispatcher) {
                 writeMutex.withLock {
                     val base = when (val existing = persistence.load(path, vaultKey)) {
@@ -486,6 +550,12 @@ internal class ReadingTraceController(
                     owner.pendingRemark = pendingRemark
                 }
             }
+            // **ここに返事の退避は要らない。** 一度書いてから消した —
+            // 返事がセッションへ入る経路（holdOrLose / saveMirrored）は
+            // どちらも同時に [unsavedReply] を立てるので、この分岐に到達する時点で
+            // 既に退避済みになる。実際、外しても落ちるテストが1つも無かった
+            // （→ lessons L11。2026-07-31 に requestId ガードを消したのと同じ判断）。
+            // 再追加するなら、先に落ちるテストを書くこと。
         }
     }
 
@@ -497,6 +567,8 @@ internal class ReadingTraceController(
      * 「切替後に新しく保存要求が生まれること」を止めるため。
      */
     fun discard() {
+        // 旧Vaultの返事を新Vaultへ書かない。
+        unsavedReply = null
         session = null
     }
 

@@ -1353,6 +1353,95 @@ class ReadingTraceControllerTest {
         assertNull(persistence.stored("ideas/habit.md"))
     }
 
+    /**
+     * **離脱時の保存が失敗しても、次の書き込み契機で書き直される。**
+     *
+     * `flush()` は保存を起動した直後にセッションを捨てるので、後から失敗しても
+     * 巻き戻し先のセッションがもう現役でない。返事はセッションの外へ退避しておく。
+     * ここが漏れていたぶん、長文ほど痛い実データ消失経路だった。
+     */
+    @Test
+    fun `離脱時の保存に失敗した返事は次の契機で書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "失いたくない返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        // 別のノートを読んで離脱する＝次の書き込み契機
+        persistence.failSave = false
+        persistence.put(storedTrace(count = 1))
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "退避した返事が書き直されていない",
+            "失いたくない返事",
+            persistence.stored("ideas/habit.md")!!.reflection!!.reply
+        )
+    }
+
+    /** Vaultが切り替わったら退避も捨てる。旧Vaultの返事を新Vaultへ書かない。 */
+    @Test
+    fun `Vault切替で退避した返事は書かれない`() = runTest {
+        val clock = TestClock()
+        val vault = FakeVault()
+        val persistence = FakePersistence().apply { failSave = true }
+        val controller = controller(persistence, clock, vault = vault)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "旧Vaultの返事", 5_000L)
+        advanceUntilIdle()
+        controller.flush()
+        advanceUntilIdle()
+
+        persistence.failSave = false
+        vault.key = VAULT_B
+        controller.discard()
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md"))
+    }
+
+    /**
+     * 痕跡が未作成のまま映し返しまで届いた場合も落とさない。
+     * 画面には出ているのに保存だけ落ちると、次に開いたとき返事だけが残る。
+     */
+    @Test
+    fun `痕跡が未作成でも映し返しは離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "その場で書いた返事", 5_000L)
+        advanceUntilIdle()
+        controller.saveMirrored("ideas/habit.md", "受け取った応答")
+        advanceUntilIdle()
+
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("その場で書いた返事", stored.reply)
+        assertEquals("受け取った応答", stored.mirrored)
+    }
+
     /** 預ける先も無ければ Lost。画面は未保存として見せる必要がある。 */
     @Test
     fun `セッションが無ければ返事は失われたと返す`() = runTest {
