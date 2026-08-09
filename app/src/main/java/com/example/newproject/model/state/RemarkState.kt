@@ -1,5 +1,7 @@
 package com.example.newproject.model.state
 
+import com.example.newproject.model.Reflection
+
 /**
  * ノートへのひとこと（旧「AI補記メモ」）の状態。
  *
@@ -18,7 +20,19 @@ package com.example.newproject.model.state
 sealed class RemarkState {
     object Idle : RemarkState()
     data class Loading(val sourceTitle: String) : RemarkState()
-    data class Ready(val sourceTitle: String, val remark: String) : RemarkState()
+    /**
+     * ひとことが届いた（返事があれば一緒に持つ）。
+     *
+     * **文字列2本ではなく [Reflection] の1組で持つ。** 片方だけが残る状態
+     * （返事だけあって元の問いが分からない／問いを作り直したのに古い返事が残る）を
+     * 型として作れなくするため。
+     */
+    data class Ready(
+        val sourceTitle: String,
+        val reflection: Reflection,
+        /** 返事の保存中。ボタンの二度押しを止めるためだけに持つ。 */
+        val isSavingReply: Boolean = false
+    ) : RemarkState()
 
     /** モデルが「出すものが無い」と表明した。正常な結果。 */
     data class Empty(val sourceTitle: String) : RemarkState()
@@ -39,7 +53,8 @@ sealed class RemarkState {
 internal fun RemarkState.toEventKey(): String? = when (this) {
     is RemarkState.Idle -> null
     is RemarkState.Loading -> "loading:$sourceTitle"
-    is RemarkState.Ready -> "ready:$sourceTitle:${remark.hashCode()}"
+    // 返事を残した瞬間にも通知したいので、返事まで含めて識別する。
+    is RemarkState.Ready -> "ready:$sourceTitle:${reflection.hashCode()}:$isSavingReply"
     is RemarkState.Empty -> "empty:$sourceTitle"
     is RemarkState.Unusable -> "unusable:$sourceTitle"
     is RemarkState.Error -> "error:$sourceTitle:$message"

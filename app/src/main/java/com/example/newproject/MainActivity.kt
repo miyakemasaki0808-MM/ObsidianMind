@@ -377,9 +377,16 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("remark") {
+                            // 画面を開いたときにだけ保存済みの組を読む。
+                            // ノート表示の経路には置かない（開くたびのSAF読みを増やさない）。
+                            val noteTitle = (uiState.noteState as? NoteState.Success)?.title.orEmpty()
+                            LaunchedEffect(noteTitle) {
+                                viewModel.restoreSavedRemark(noteTitle)
+                            }
                             RemarkScreen(
                                 state = uiState.remarkState,
                                 onRegenerate = startRemark,
+                                onSaveReply = { viewModel.saveRemarkReply(it) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

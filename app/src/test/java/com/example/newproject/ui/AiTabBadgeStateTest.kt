@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.state.RemarkState
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -33,7 +34,12 @@ class AiTabBadgeStateTest {
     fun `結果が出てもバッジは残らない`() {
         assertEquals(
             AiTabBadgeState.None,
-            resolveAiTabBadgeState(RemarkState.Ready("対象ノート", "この考えの根拠は何だろう？"))
+            resolveAiTabBadgeState(
+                RemarkState.Ready(
+                    "対象ノート",
+                    Reflection("この考えの根拠は何だろう？", remarkedAtEpochMillis = 1L)
+                )
+            )
         )
         assertEquals(
             AiTabBadgeState.None,

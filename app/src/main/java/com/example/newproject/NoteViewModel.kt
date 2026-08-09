@@ -376,6 +376,12 @@ class NoteViewModel internal constructor(
         aiNotes: List<RelatedNote>
     ) = session.createRemark(title, content, relatedNotes, aiNotes)
 
+    /** 専用画面を開いたときに、保存済みの「ひとこと＋返事」を読み戻す。 */
+    fun restoreSavedRemark(title: String) = session.restoreSavedRemark(title)
+
+    /** 返事を残す。書いた時点で対話は完了するので、AIへ再送しない。 */
+    fun saveRemarkReply(reply: String) = session.saveRemarkReply(reply)
+
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,
         title: String,

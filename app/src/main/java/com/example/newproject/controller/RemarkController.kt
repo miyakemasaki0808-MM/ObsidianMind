@@ -10,6 +10,7 @@ import com.example.newproject.domain.composeRemark
 import com.example.newproject.domain.remarkCandidateId
 import com.example.newproject.domain.toObsidianNoteTitle
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.RemarkStateWriter
 import com.example.newproject.model.state.RemarkState
@@ -45,12 +46,22 @@ internal class RemarkController(
      * 検証を通ったひとことの渡し先。`ReadingTraceController.setPendingRemark` を繋ぐ。
      * **保存の成否はここでは見ない** — 痕跡側が次の書き込み契機で面倒を見る。
      */
-    private val onRemarkReady: (String) -> Unit,
+    private val onRemarkReady: (Reflection) -> Unit,
+    /**
+     * 返事の即時保存。`ReadingTraceController.saveReply` を繋ぐ。
+     * **生成物と違い、ユーザーが書いた言葉は作り直せない**ので離脱を待たない。
+     */
+    private val persistReply: suspend (vaultRelativePath: String, reply: String, at: Long) -> Boolean,
+    /** 保存済みの組の読み込み。専用画面を開いたときにだけ呼ぶ。 */
+    private val loadReflection: suspend (vaultRelativePath: String) -> Reflection?,
+    private val clock: () -> Long = System::currentTimeMillis,
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var pending: PendingRemark? = null
     private var createJob: Job? = null
     private var downloadJob: Job? = null
+    private var replyJob: Job? = null
+    private var restoreJob: Job? = null
     private var activeRequestId = 0L
 
     fun create(
@@ -130,13 +141,81 @@ internal class RemarkController(
             }
     }
 
+    /**
+     * 専用画面を開いたときに、保存済みの組を読み込む。
+     *
+     * **生成中・生成済みなら何もしない。** 走行中の結果を古い保存値で上書きしないため。
+     * 読めなければ Idle のまま（「まだひとことはありません」が出る）。
+     */
+    fun restoreSaved(vaultRelativePath: String?, title: String) {
+        if (state.current !is RemarkState.Idle) return
+        val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
+        val requestId = ++activeRequestId
+        val sourceTitle = title.toObsidianNoteTitle()
+        restoreJob?.cancel()
+        restoreJob = scope.launch {
+            val saved = try {
+                loadReflection(path)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                null
+            } ?: return@launch
+            if (!isCurrent(requestId)) return@launch
+            // 待っている間に生成が始まっていたら割り込まない。
+            if (state.current !is RemarkState.Idle) return@launch
+            state.update { RemarkState.Ready(sourceTitle, saved) }
+        }
+    }
+
+    /**
+     * 返事を残す。**書いた時点で対話は完了**するので、AIへ再送しない。
+     *
+     * 保存に失敗しても状態は更新する。痕跡側がセッションへ預け直しており、
+     * 離脱時に書かれるため（画面上「保存できなかった」と出すと、
+     * 実際には残っているのに失敗したように見える）。
+     */
+    fun saveReply(vaultRelativePath: String?, reply: String) {
+        val current = state.current as? RemarkState.Ready ?: return
+        if (current.isSavingReply) return
+        val trimmed = reply.trim()
+        if (trimmed.isBlank()) return
+        val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
+
+        val requestId = ++activeRequestId
+        state.update { current.copy(isSavingReply = true) }
+        replyJob?.cancel()
+        replyJob = scope.launch {
+            val at = clock()
+            try {
+                persistReply(path, trimmed, at)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // 痕跡側が預かっているので、ここでは握って表示だけ進める。
+            }
+            if (!isCurrent(requestId)) return@launch
+            state.update { latest ->
+                val ready = latest as? RemarkState.Ready ?: return@update latest
+                ready.copy(
+                    reflection = ready.reflection.withReply(trimmed, at),
+                    isSavingReply = false
+                )
+            }
+        }
+    }
+
     /** ノート・Vault切替時に生成を止め、旧ノートの結果が後から混入するのを防ぐ。 */
     fun cancelAndClear() {
         activeRequestId++
         createJob?.cancel()
         downloadJob?.cancel()
+        replyJob?.cancel()
+        restoreJob?.cancel()
         createJob = null
         downloadJob = null
+        replyJob = null
+        restoreJob = null
         pending = null
         state.update { RemarkState.Idle }
     }
@@ -167,8 +246,13 @@ internal class RemarkController(
                 is RemarkResult.Accepted -> {
                     // 先に痕跡へ預ける。表示だけして預け忘れると、画面に出た
                     // ひとことがノートを離れた瞬間に消える。
-                    onRemarkReady(composed.remark)
-                    state.update { RemarkState.Ready(request.sourceTitle, composed.remark) }
+                    // **新しいひとことは返事を持たない**（前の返事は前の問いへのもの）。
+                    val reflection = Reflection(
+                        remark = composed.remark,
+                        remarkedAtEpochMillis = clock()
+                    )
+                    onRemarkReady(reflection)
+                    state.update { RemarkState.Ready(request.sourceTitle, reflection) }
                 }
                 // **理由の内訳は見せないが、2種類には分ける。**
                 // 「一般論だったので捨てた」を見せても次の行動は変わらないが、

@@ -21,13 +21,19 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * 使っており、30回を超えると表示が「30回」で止まるだけでなく、AI俯瞰要約の再生成判定
  * （[needsAiSummary]）も止まって古い要約が「最新」として出続けていた。
  *
- * v3 で [ReadingTrace.remark]（ノートへのひとこと）を足した。旧「AI補記メモ」が
- * Vaultへ `.md` を作っていたのを、1文になったのに合わせてサイドカーへ移したもの。
+ * v3 で「ノートへのひとこと」を足した。旧「AI補記メモ」が Vaultへ `.md` を
+ * 作っていたのを、1文になったのに合わせてサイドカーへ移したもの。
+ *
+ * v4 で [ReadingTrace.reflection] へ畳み、**ユーザーの返事**を組にした。
+ * v3 の平坦な `remark` は「AIのひとことだけ」を保存していたが、
+ * **AIが問いを投げて会話が終わる**ため読後感が宙に浮いていた。
+ * v3 の値は `Reflection(remark = 旧remark, reply = null)` として読み込める。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 3
+internal const val READING_TRACE_SCHEMA_VERSION = 4
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
-internal val READING_TRACE_READABLE_SCHEMA_VERSIONS = setOf(1, 2, READING_TRACE_SCHEMA_VERSION)
+internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
+    setOf(1, 2, 3, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -51,6 +57,15 @@ internal object ReadingTraceLimits {
      */
     const val MAX_REMARK_BYTES = 512
 
+    /**
+     * 返事の上限。400文字＝日本語で最大1200バイトに、余裕を持たせて 1536。
+     *
+     * **汎用エディタにしないための上限**でもある。長文を書ける口にすると
+     * Obsidian の劣化版になるので、「読んでいる流れを止めずに一言だけ置く」
+     * 用途へ絞る（→ feature_ideas N-6 の懸念）。
+     */
+    const val MAX_REPLY_BYTES = 1536
+
     /** サイドカー1ファイルの読み込み上限。上記×MAX_VISITS から十分な余裕を取った値。 */
     const val MAX_FILE_BYTES = 64 * 1024
 }
@@ -68,6 +83,34 @@ internal data class ReadingVisit(
     val deepestSectionTitle: String?,
     val progressPercent: Int
 )
+
+/**
+ * AIのひとことと、それへのユーザーの返事の組。
+ *
+ * **別々の文字列ではなく1組として持つ。** 片方だけが残る状態
+ * （返事だけあって元の問いが分からない／問いを作り直したのに古い返事が残る）を
+ * 型で作れなくするため。読み返すときも必ず対で出す。
+ *
+ * **[reply] を書いてもAIへ再送しない。** 返事を書いた時点で対話は完了する。
+ * 往復させると「AIと会話するアプリ」になり、
+ * 「AIは相手役／本質はノートを読む」という北極星から外れる。
+ * ここに残るのは**ユーザー自身の言葉**であって、AIへの入力ではない。
+ */
+// `RemarkState`（public な sealed class）が保持するため public。
+// 痕跡の他の型は internal だが、これだけはUI状態として画面まで運ばれる
+// （`RelatedNote` が public なのと同じ理由）。
+data class Reflection(
+    val remark: String,
+    val remarkedAtEpochMillis: Long,
+    val reply: String? = null,
+    val repliedAtEpochMillis: Long? = null
+) {
+    /** 返事を残す。**同じ問いに対する返事は上書きする**（1組しか持たないため）。 */
+    fun withReply(reply: String, atEpochMillis: Long): Reflection =
+        copy(reply = reply, repliedAtEpochMillis = atEpochMillis)
+
+    val hasReply: Boolean get() = reply != null
+}
 
 /**
  * 1ノート分の痕跡。
@@ -95,16 +138,15 @@ internal data class ReadingTrace(
      */
     val totalVisitCount: Int = visits.size,
     /**
-     * ノートへのひとこと（AIが返す1文）。旧「AI補記メモ」の置き換え。
+     * ノートへのひとこと と、それへのユーザーの返事の組。
      *
      * **[aiSummary] と違い、訪問数では無効化しない。** 俯瞰要約の入力は訪問履歴なので
      * 訪問が増えれば作り直す必要があるが、ひとことの入力は本文であり、
      * ユーザーが明示ボタンを押したときにだけ作られて上書きされる。
-     * したがって `remarkVisitCount` に相当するものは持たない。
      *
-     * **1ノート1件。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
+     * **1ノート1組。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
      */
-    val remark: String? = null,
+    val reflection: Reflection? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 )
 
@@ -195,11 +237,24 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
     trace.aiSummary?.let {
         requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "AI要約")
     }
-    trace.remark?.let {
+    trace.reflection?.let { reflection ->
         // 空白だけのひとことは「無い」と区別できないので受け付けない。
         // 保存側で null へ倒すのが正で、ここは最後の砦。
-        require(it.isNotBlank()) { "ひとことが空です。" }
-        requireWithinBytes(it, ReadingTraceLimits.MAX_REMARK_BYTES, "ひとこと")
+        require(reflection.remark.isNotBlank()) { "ひとことが空です。" }
+        requireWithinBytes(reflection.remark, ReadingTraceLimits.MAX_REMARK_BYTES, "ひとこと")
+        require(reflection.remarkedAtEpochMillis >= 0) { "ひとことの日時が不正です。" }
+        reflection.reply?.let { reply ->
+            require(reply.isNotBlank()) { "返事が空です。" }
+            requireWithinBytes(reply, ReadingTraceLimits.MAX_REPLY_BYTES, "返事")
+        }
+        // 返事と日時の一方だけが残っていると、次に開いたとき
+        // 「返事はあるがいつ書いたか分からない」状態になる。
+        require((reflection.reply == null) == (reflection.repliedAtEpochMillis == null)) {
+            "返事と日時の一方だけが記録されています。"
+        }
+        reflection.repliedAtEpochMillis?.let {
+            require(it >= 0) { "返事の日時が不正です。" }
+        }
     }
     trace.aiSummaryVisitCount?.let {
         require(it in 0..trace.totalVisitCount) { "AI要約の訪問数が閲覧回数と矛盾しています。" }

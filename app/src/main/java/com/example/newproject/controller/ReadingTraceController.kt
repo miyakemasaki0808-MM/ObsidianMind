@@ -8,6 +8,7 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.truncateToUtf8Bytes
 import com.example.newproject.model.needsAiSummary
 import com.example.newproject.model.withVisit
@@ -115,7 +116,7 @@ internal class ReadingTraceController(
          * 「生成できたら保存」と書くと初回のノートで必ず黙って失われる
          * （→ design/reflect_remark.md §2.1）。
          */
-        var pendingRemark: String? = null
+        var pendingRemark: Reflection? = null
 
         /** 背面にいた時間を除いた読書時間。10秒判定はこれで行う。 */
         fun elapsedMillis(now: Long): Long =
@@ -258,10 +259,74 @@ internal class ReadingTraceController(
      * セッションが無い（Vault未選択・追跡対象外）ときは黙って捨てる。
      * 保存先が無いので、ここで作れる置き場所は無い。
      */
-    fun setPendingRemark(remark: String) {
+    fun setPendingRemark(reflection: Reflection) {
         val active = session ?: return
-        active.pendingRemark = remark
+        active.pendingRemark = reflection
         active.dirty = true
+    }
+
+    /**
+     * 読書中のノートの相対パス。**ひとことの保存先を引くのに使う。**
+     *
+     * UI へ配らずここから引くのは、相対パスの出所を1つに保つため。
+     * 走査キャッシュが冷えていると表示後に [bindPath] で埋まるので、
+     * `NoteState` に持たせると「まだ null の瞬間」を画面側が扱うことになる。
+     */
+    fun currentPath(): String? = session?.vaultRelativePath
+
+    /**
+     * 保存済みの「ひとこと＋返事」を読む。**専用画面を開いたときにだけ呼ぶ。**
+     *
+     * ノート表示の経路には置かない。開くたびにサイドカーを1件読むことになり、
+     * 遠いプロバイダでは体感に乗る（→ 痕跡の索引コストと同じ問題圏）。
+     */
+    suspend fun loadReflection(vaultRelativePath: String): Reflection? {
+        if (vaultRelativePath.isBlank()) return null
+        val vaultKey = currentVaultKey() ?: return null
+        return withContext(ioDispatcher) {
+            writeMutex.withLock {
+                (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
+                    ?.trace
+                    ?.reflection
+            }
+        }
+    }
+
+    /**
+     * 返事を**即時に**書き出す。
+     *
+     * ひとこと（AI生成）は離脱時の書き込みへ相乗りさせるが、返事は違う。
+     * **ユーザーが明示的に書いたものなので、アプリが落ちても失ってはいけない。**
+     * 生成物は作り直せるが、書いた言葉は作り直せない。
+     *
+     * 痕跡ファイルがまだ無い場合は、セッション側へ預けて次の書き込み契機に載せる
+     * （訪問が1件も無い痕跡は保存できないため）。**その場合でも返事は失われない。**
+     *
+     * @return 永続化できたら true。false でもセッションが生きていれば離脱時に書かれる。
+     */
+    suspend fun saveReply(vaultRelativePath: String, reply: String, atEpochMillis: Long): Boolean {
+        val vaultKey = currentVaultKey() ?: return false
+        return withContext(ioDispatcher) {
+            writeMutex.withLock {
+                val existing =
+                    (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
+                        ?.trace
+                val reflection = existing?.reflection?.withReply(reply, atEpochMillis)
+                    ?: session?.pendingRemark?.withReply(reply, atEpochMillis)
+                    ?: return@withLock false
+                if (existing == null) {
+                    // 痕跡がまだ無い＝この閲覧で訪問が確定していない。
+                    // セッションへ預け直して、離脱時の書き込みに載せる。
+                    session?.let {
+                        it.pendingRemark = reflection
+                        it.dirty = true
+                    }
+                    return@withLock false
+                }
+                persistence.save(existing.copy(reflection = reflection), vaultKey) is
+                    ReadingTraceSaveResult.Success
+            }
+        }
     }
 
     /**
@@ -332,11 +397,11 @@ internal class ReadingTraceController(
                         )
                     }
                     // ひとことを預かっていなければ、読み込んだ値をそのまま残す。
-                    // ここで無条件に copy(remark = pendingRemark) にすると、
-                    // 過去に保存したひとことを訪問のたびに消してしまう。
+                    // ここで無条件に copy(reflection = pendingRemark) にすると、
+                    // 過去に保存した組を訪問のたびに消してしまう。
                     val withVisit = base.withVisit(visit)
                     val next = if (pendingRemark != null) {
-                        withVisit.copy(remark = pendingRemark)
+                        withVisit.copy(reflection = pendingRemark)
                     } else {
                         withVisit
                     }

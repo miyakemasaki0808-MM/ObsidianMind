@@ -93,6 +93,14 @@ class PromptBuilderExcerptRegressionTest {
             assertFalse("旧補記の項目が復活している: $removed", prompt.contains(removed))
         }
         assertTrue(prompt.contains("One sentence. Two at most."))
+        // **出力は日本語で固定する。** 本文の言語に従わせると、ソースコードだけの
+        // ノートで英語の問いが返る（2026-08-09 実機）。ひとことはノートを写す文ではなく
+        // アプリがユーザーへ話しかける文なので、従うべきは読み手の言語。
+        assertTrue(prompt.contains("Write in Japanese"))
+        assertFalse(
+            "本文の言語に従わせる指示が残っている",
+            prompt.contains("same language as the note content")
+        )
         // 生タイトルではなくIDを返させる契約（蒸留・関連ノートと同じ）。
         assertTrue(prompt.contains("[[C03]]"))
         assertTrue(prompt.contains("C01 | 候補ノート"))
@@ -139,7 +147,7 @@ class PromptBuilderExcerptRegressionTest {
             listOf(
                 "            You are a note-taking assistant answering questions about ONE section of an Obsidian note.",
                 "            Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section (\"このセクションには記載がありません\").",
-                "            Answer concisely in the same language as the section content. Do not invent facts.",
+                "            Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.",
                 "",
                 "            Section heading: 節",
                 "            Section content:",

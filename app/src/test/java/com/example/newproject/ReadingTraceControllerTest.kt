@@ -11,6 +11,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -29,6 +30,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -1101,12 +1103,12 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.setPendingRemark("この習慣を続けられた日は何が違っただろう？")
+        controller.setPendingRemark(reflectionOf("この習慣を続けられた日は何が違っただろう？"))
         controller.flush()
         advanceUntilIdle()
 
         val stored = persistence.stored("ideas/habit.md")!!
-        assertEquals("この習慣を続けられた日は何が違っただろう？", stored.remark)
+        assertEquals("この習慣を続けられた日は何が違っただろう？", stored.reflection?.remark)
         // 痕跡ファイルが無い状態から、訪問と一緒に1回で作られること
         assertEquals(1, stored.visits.size)
     }
@@ -1126,14 +1128,14 @@ class ReadingTraceControllerTest {
         clock.advance(10_000L)
         controller.pause()
         advanceUntilIdle()
-        assertNull(persistence.stored("ideas/habit.md")!!.remark)
+        assertNull(persistence.stored("ideas/habit.md")!!.reflection?.remark)
 
         // 復帰せず（＝進捗も来ず）にひとことだけ預けて離脱する
-        controller.setPendingRemark("続けられた日は何が違っただろう？")
+        controller.setPendingRemark(reflectionOf("続けられた日は何が違っただろう？"))
         controller.flush()
         advanceUntilIdle()
 
-        assertEquals("続けられた日は何が違っただろう？", persistence.stored("ideas/habit.md")!!.remark)
+        assertEquals("続けられた日は何が違っただろう？", persistence.stored("ideas/habit.md")!!.reflection?.remark)
         // 背面化ぶんの訪問を増やさない（1回の閲覧＝1訪問）
         assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
     }
@@ -1143,7 +1145,7 @@ class ReadingTraceControllerTest {
     fun `預けていない訪問は既存のひとことを保つ`() = runTest {
         val clock = TestClock()
         val persistence = FakePersistence().apply {
-            put(storedTrace(count = 1).copy(remark = "前回のひとこと"))
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
         }
         val controller = controller(persistence, clock)
 
@@ -1153,25 +1155,25 @@ class ReadingTraceControllerTest {
         controller.flush()
         advanceUntilIdle()
 
-        assertEquals("前回のひとこと", persistence.stored("ideas/habit.md")!!.remark)
+        assertEquals("前回のひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
     }
 
     @Test
     fun `新しいひとことは古いものを上書きする`() = runTest {
         val clock = TestClock()
         val persistence = FakePersistence().apply {
-            put(storedTrace(count = 1).copy(remark = "前回のひとこと"))
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
         }
         val controller = controller(persistence, clock)
 
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.setPendingRemark("今回のひとこと")
+        controller.setPendingRemark(reflectionOf("今回のひとこと"))
         controller.flush()
         advanceUntilIdle()
 
-        assertEquals("今回のひとこと", persistence.stored("ideas/habit.md")!!.remark)
+        assertEquals("今回のひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
     }
 
     /**
@@ -1187,7 +1189,7 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.setPendingRemark("失敗しても残したいひとこと")
+        controller.setPendingRemark(reflectionOf("失敗しても残したいひとこと"))
         controller.pause()
         advanceUntilIdle()
         assertNull(persistence.stored("ideas/habit.md"))
@@ -1195,7 +1197,7 @@ class ReadingTraceControllerTest {
         controller.flush()
         advanceUntilIdle()
 
-        assertEquals("失敗しても残したいひとこと", persistence.stored("ideas/habit.md")!!.remark)
+        assertEquals("失敗しても残したいひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
     }
 
     /**
@@ -1212,16 +1214,69 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.setPendingRemark("古いひとこと")
+        controller.setPendingRemark(reflectionOf("古いひとこと"))
         controller.pause()
         // 保存（失敗する）が走り切る前に、新しいひとことを預け直す
-        controller.setPendingRemark("新しいひとこと")
+        controller.setPendingRemark(reflectionOf("新しいひとこと"))
         advanceUntilIdle()
 
         controller.flush()
         advanceUntilIdle()
 
-        assertEquals("新しいひとこと", persistence.stored("ideas/habit.md")!!.remark)
+        assertEquals("新しいひとこと", persistence.stored("ideas/habit.md")!!.reflection?.remark)
+    }
+
+    // ── 返事の即時保存 ──────────────────────────────────────────────────────
+    //
+    // ひとこと（AI生成）は離脱時の書き込みへ相乗りさせるが、返事は違う。
+    // **ユーザーが書いた言葉は作り直せない**ので、離脱を待たずに書く。
+
+    @Test
+    fun `返事は離脱を待たずに保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(reflection = reflectionOf("前回のひとこと")))
+        }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+
+        val saved = controller.saveReply("ideas/habit.md", "自分の返事", 5_000L)
+        advanceUntilIdle()
+
+        assertTrue("即時保存できていない", saved)
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("自分の返事", stored.reply)
+        assertEquals(5_000L, stored.repliedAtEpochMillis)
+        // 元のひとことは保つ（組で持つのが要点）
+        assertEquals("前回のひとこと", stored.remark)
+    }
+
+    /**
+     * 痕跡ファイルがまだ無い＝この閲覧で訪問が確定していない状態。
+     * **それでも返事を失わない**ことが要点で、セッションへ預け直して離脱時に書く。
+     */
+    @Test
+    fun `痕跡が未作成でも返事は離脱時に書かれる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        val saved = controller.saveReply("ideas/habit.md", "その場で書いた返事", 5_000L)
+        advanceUntilIdle()
+
+        assertFalse("痕跡が無いのに即時保存できたことになっている", saved)
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!.reflection!!
+        assertEquals("その場で書いた返事", stored.reply)
+        assertEquals("いまのひとこと", stored.remark)
     }
 
     // セッションが無ければ保存先が無いので黙って捨てる（例外にしない）。
@@ -1230,7 +1285,7 @@ class ReadingTraceControllerTest {
         val persistence = FakePersistence()
         val controller = controller(persistence, TestClock())
 
-        controller.setPendingRemark("行き先の無いひとこと")
+        controller.setPendingRemark(reflectionOf("行き先の無いひとこと"))
         controller.flush()
         advanceUntilIdle()
 
@@ -1325,6 +1380,10 @@ private class ControllableAiClient : AiClient {
 private const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 
 /** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
+/** テスト用のひとこと1組。日時は固定で構わない（検証は本文だけを見る）。 */
+private fun reflectionOf(remark: String) =
+    Reflection(remark = remark, remarkedAtEpochMillis = 1_000L)
+
 private fun storedTrace(
     count: Int,
     path: String = "ideas/habit.md",

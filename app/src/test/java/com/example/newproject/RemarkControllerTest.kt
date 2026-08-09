@@ -6,6 +6,7 @@ import com.example.newproject.controller.RemarkController
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.Reflection
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RemarkState
 import com.google.mlkit.genai.common.DownloadStatus
@@ -31,6 +32,10 @@ class RemarkControllerTest {
 
     private val body = "読書は著者との対話である。問いを持ち込むことで、書かれていないことまで考えられる。"
 
+    private companion object {
+        const val FIXED_NOW = 1_700_000_000_000L
+    }
+
     @Test
     fun `受理されたひとことは表示され痕跡へ預けられる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
@@ -38,14 +43,14 @@ class RemarkControllerTest {
         val controller = controller(
             state,
             ImmediateAiClient("「読書は著者との対話である」という考えは、反対するときにも成り立つだろうか？"),
-            onRemarkReady = { handed += it }
+            onRemarkReady = { handed += it.remark }
         )
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
         val ready = state.value.remarkState as RemarkState.Ready
-        assertEquals("「読書は著者との対話である」という考えは、反対するときにも成り立つだろうか？", ready.remark)
-        assertEquals(listOf(ready.remark), handed)
+        assertEquals("「読書は著者との対話である」という考えは、反対するときにも成り立つだろうか？", ready.reflection.remark)
+        assertEquals(listOf(ready.reflection.remark), handed)
     }
 
     // 候補IDは実タイトルへ差し戻したうえで痕跡へ預ける。IDのまま保存すると
@@ -57,7 +62,7 @@ class RemarkControllerTest {
         val controller = controller(
             state,
             ImmediateAiClient("[[C01]]と並べると、「対話」の始め方まで考えられそうです。"),
-            onRemarkReady = { handed += it }
+            onRemarkReady = { handed += it.remark }
         )
 
         controller.create(
@@ -81,7 +86,7 @@ class RemarkControllerTest {
         val controller = controller(
             state,
             ImmediateAiClient("この内容をもっと掘り下げて整理すると、新しい発見があるかもしれませんね。"),
-            onRemarkReady = { handed += it }
+            onRemarkReady = { handed += it.remark }
         )
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
@@ -135,7 +140,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val ai = ControllableAiClient()
         val handed = mutableListOf<String>()
-        val controller = controller(state, ai, onRemarkReady = { handed += it })
+        val controller = controller(state, ai, onRemarkReady = { handed += it.remark })
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
         controller.cancelAndClear()
@@ -226,17 +231,120 @@ class RemarkControllerTest {
         )
     }
 
+    // ── 返事 ─────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `返事を残すと状態と保存の両方へ反映される`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val saved = mutableListOf<Triple<String, String, Long>>()
+        val controller = controller(
+            state,
+            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            persistReply = { path, reply, at -> saved += Triple(path, reply, at); true }
+        )
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        controller.saveReply("ideas/dialog.md", "  実際に困った場面があった  ")
+
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertEquals("実際に困った場面があった", ready.reflection.reply)
+        assertEquals(FIXED_NOW, ready.reflection.repliedAtEpochMillis)
+        // 前後の空白は落として保存する（画面の下書きをそのまま渡さない）
+        assertEquals(listOf(Triple("ideas/dialog.md", "実際に困った場面があった", FIXED_NOW)), saved)
+    }
+
+    @Test
+    fun `空白だけの返事は保存しない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val saved = mutableListOf<String>()
+        val controller = controller(
+            state,
+            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            persistReply = { _, reply, _ -> saved += reply; true }
+        )
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        controller.saveReply("ideas/dialog.md", "   ")
+
+        assertTrue(saved.isEmpty())
+        assertNull((state.value.remarkState as RemarkState.Ready).reflection.reply)
+    }
+
+    /**
+     * **保存に失敗しても状態は進める。** 痕跡側がセッションへ預け直しており、
+     * 離脱時に書かれる。ここで失敗を見せると、実際には残っているのに
+     * 「保存できなかった」と読まれる。
+     */
+    @Test
+    fun `保存に失敗しても返事は画面に残る`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            state,
+            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            persistReply = { _, _, _ -> false }
+        )
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        controller.saveReply("ideas/dialog.md", "それでも残したい")
+
+        assertEquals("それでも残したい", (state.value.remarkState as RemarkState.Ready).reflection.reply)
+    }
+
+    // ── 保存済みの読み戻し ───────────────────────────────────────────────────
+
+    @Test
+    fun `専用画面を開くと保存済みの組が復元される`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val stored = Reflection("前回のひとこと", 1L, "前回の返事", 2L)
+        val controller = controller(state, UnavailableAiClient, saved = stored)
+
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        assertEquals(stored, (state.value.remarkState as RemarkState.Ready).reflection)
+    }
+
+    /**
+     * 走行中・生成済みの結果を、古い保存値で上書きしない。
+     * 「見る」で画面へ入った直後に読み込みが返ってくる順序があるため。
+     */
+    @Test
+    fun `生成中なら保存済みで上書きしない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = ControllableAiClient()
+        val controller = controller(state, ai, saved = Reflection("古いひとこと", 1L))
+
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        assertTrue(state.value.remarkState is RemarkState.Loading)
+        ai.response.complete("NONE")
+    }
+
+    @Test
+    fun `保存済みが無ければIdleのまま`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, UnavailableAiClient, saved = null).restoreSaved("ideas/dialog.md", "対話について")
+
+        assertTrue(state.value.remarkState is RemarkState.Idle)
+    }
+
     // ── ヘルパ ───────────────────────────────────────────────────────────────
 
     private fun controller(
         state: NoteUiStateStore,
         aiClient: AiClient,
-        onRemarkReady: (String) -> Unit = {}
+        onRemarkReady: (Reflection) -> Unit = {},
+        saved: Reflection? = null,
+        persistReply: suspend (String, String, Long) -> Boolean = { _, _, _ -> true }
     ) = RemarkController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         aiClient = aiClient,
         state = state.remarkWriter,
         onRemarkReady = onRemarkReady,
+        persistReply = persistReply,
+        loadReflection = { saved },
+        clock = { FIXED_NOW },
         excerptDispatcher = Dispatchers.Unconfined
     )
 

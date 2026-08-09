@@ -240,6 +240,13 @@ object PromptBuilder {
      * **候補ノートは「ID | タイトル」で提示し、本文中でもIDで参照させる。**
      * 生のタイトルを書かせると言い換え・装飾で解決できなくなるため
      * （蒸留・関連ノートと同じ契約。AIピッカーだけがこの契約から外れている）。
+     *
+     * **出力は日本語で固定する。** 当初は要約と同じ「ノート本文と同じ言語で」に
+     * していたが、**ソースコードだけのノートで英語の問いが返ってきた**（2026-08-09 実機）。
+     * 要約はノートの内容を写すものなので本文の言語に従うのが正しいが、
+     * ひとことは**アプリがユーザーへ話しかける文**なので、従うべきは読み手の言語である。
+     * [buildReadingTraceSummaryPrompt]（痕跡の俯瞰要約）が先に同じ判断をしており、
+     * こちらはその category を取り違えて旧補記の文言を引き継いでいた。
      */
     fun buildRemarkPrompt(
         title: String,
@@ -258,7 +265,8 @@ object PromptBuilder {
         val instructions = """
             You are a reading companion for a private Obsidian vault. You are not the author, and not a reviewer.
             Say ONE short thing that helps the user think further about the note below.
-            Use the same language as the note content.
+            Write in Japanese and address the user as 「あなた」, whatever language the note itself is written in.
+            Technical identifiers, code symbols, and proper nouns stay as they appear in the note.
 
             Write EITHER a question that opens up the user's own thinking,
             OR a suggestion to connect this note with one of the candidate notes. Never both.
@@ -308,6 +316,15 @@ object PromptBuilder {
         """.trimIndent()
     }
 
+    /**
+     * **答える言語はセクションではなくユーザーの質問に従う。**
+     *
+     * 「セクションの言語で」にしていたため、日本語で質問しても
+     * コードや英語のセクションでは英語で返っていた。ノートの内容を写す要約と違い、
+     * **これはユーザーの問いに答える文**なので、従うべきは質問の言語である。
+     * [buildPickerPrompt] が先に「リクエストの言語で」と正しく書けており、
+     * こちらが category を取り違えていた（ひとことでの同じ取り違えと同時に発見）。
+     */
     fun buildSectionChatPrompt(
         sectionTitle: String,
         sectionExcerpt: NoteExcerpt,
@@ -321,7 +338,7 @@ object PromptBuilder {
         return """
             You are a note-taking assistant answering questions about ONE section of an Obsidian note.
             Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
-            Answer concisely in the same language as the section content. Do not invent facts.
+            Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
 
             Section heading: $sectionTitle
             Section content:

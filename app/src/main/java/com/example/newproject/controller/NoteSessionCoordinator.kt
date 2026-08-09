@@ -164,7 +164,10 @@ internal class NoteSessionCoordinator(
         state = stateStore.remarkWriter,
         // 保存は痕跡の書き込み契機（背面化・離脱）へ相乗りさせる。
         // ここで直接保存すると、痕跡ファイルが未作成の初読で黙って失われる。
-        onRemarkReady = { readingTrace.setPendingRemark(it) }
+        onRemarkReady = { readingTrace.setPendingRemark(it) },
+        persistReply = { path, reply, at -> readingTrace.saveReply(path, reply, at) },
+        loadReflection = { path -> readingTrace.loadReflection(path) },
+        clock = clock
     )
 
     /**
@@ -354,6 +357,13 @@ internal class NoteSessionCoordinator(
         relatedNotes: List<RelatedNote>,
         aiNotes: List<RelatedNote>
     ) = remark.create(title, content, relatedNotes, aiNotes)
+
+    /** 専用画面を開いたとき、保存済みの組を読み戻す。パスは読書セッションから引く。 */
+    fun restoreSavedRemark(title: String) =
+        remark.restoreSaved(readingTrace.currentPath(), title)
+
+    fun saveRemarkReply(reply: String) =
+        remark.saveReply(readingTrace.currentPath(), reply)
 
     // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
 
