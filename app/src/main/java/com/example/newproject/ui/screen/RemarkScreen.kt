@@ -100,13 +100,22 @@ fun RemarkScreen(
     // 過去の日時があるだけで「保存済み」と出ていた。いま画面にある文字列と
     // 保存されている文字列が同じかを見る。
     val isDirty = ready != null && draft.trim() != ready.reflection.reply.orEmpty()
+    /**
+     * **まだファイルに残っていない返事を抱えているか。**
+     *
+     * 保存に失敗すると本文は状態へ残すので `isDirty` は false になる。
+     * そのため「未保存だが下書きと一致している」状態が生まれ、
+     * 離脱の確認だけがすり抜けていた（再試行ボタンは直したのに）。
+     * **「書き換えたか」ではなく「残っているか」で見る。**
+     */
+    val hasUnpersistedReply = isDirty || ready?.replyStatus == ReplyStatus.Failed
 
     // **スクロールする本文と、常に見えるボタン列を分ける。**
     // 1本のスクロールにすると、返事が長いほど保存ボタンが下へ押し出され、
     // 未保存のまま戻れてしまう（2026-08-09 実機4巡目）。
     // **端末の戻るジェスチャー／システムBackも確認を通す。**
     // 画面内の「← 戻る」だけを守っても、実際にはシステムBackで戻る人のほうが多い。
-    BackHandler(enabled = isDirty) { confirmingDiscard = PendingExit.Back }
+    BackHandler(enabled = hasUnpersistedReply) { confirmingDiscard = PendingExit.Back }
 
     Column(
         modifier = Modifier
@@ -196,7 +205,7 @@ fun RemarkScreen(
             onClick = {
                 when {
                     // 書きかけを黙って捨てない。書いた言葉は作り直せない。
-                    isDirty -> confirmingDiscard = PendingExit.Regenerate
+                    hasUnpersistedReply -> confirmingDiscard = PendingExit.Regenerate
                     ready?.reflection?.hasReply == true -> confirmingRegenerate = true
                     else -> onRegenerate()
                 }
@@ -215,7 +224,9 @@ fun RemarkScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
         Button(
-            onClick = { if (isDirty) confirmingDiscard = PendingExit.Back else onBack() },
+            onClick = {
+                if (hasUnpersistedReply) confirmingDiscard = PendingExit.Back else onBack()
+            },
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(
                 containerColor = ButtonSecondary,
@@ -231,7 +242,15 @@ fun RemarkScreen(
         AlertDialog(
             onDismissRequest = { confirmingDiscard = null },
             title = { Text("保存していない返事があります") },
-            text = { Text("書きかけの返事は保存されていません。このまま進むと消えます。") },
+            text = {
+                Text(
+                    if (ready?.replyStatus == ReplyStatus.Failed) {
+                        "返事を保存できていません。このまま進むと消えます。"
+                    } else {
+                        "書きかけの返事は保存されていません。このまま進むと消えます。"
+                    }
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmingDiscard = null
