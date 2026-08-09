@@ -5,7 +5,7 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.ReadingTraceCleanupState
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
@@ -25,7 +25,7 @@ data class NoteUiState(
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,
     val wikilinkTitles: Set<String> = emptySet(),
-    val annotationState: AnnotationState = AnnotationState.Idle,
+    val remarkState: RemarkState = RemarkState.Idle,
     val distillState: DistillState = DistillState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
     // 読書痕跡の整理画面。補記一覧と同じくVault単位（ノート切替では消えない）。

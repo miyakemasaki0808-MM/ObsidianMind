@@ -5,7 +5,7 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.ReadingTraceCleanupState
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
@@ -29,14 +29,18 @@ interface QuizStateWriter {
     fun update(transform: (QuizState) -> QuizState)
 }
 
-data class AnnotationSlice(
-    val annotationState: AnnotationState,
-    val annotationListState: AnnotationListState
-)
+interface RemarkStateWriter {
+    val current: RemarkState
+    fun update(transform: (RemarkState) -> RemarkState)
+}
 
-interface AnnotationStateWriter {
-    val current: AnnotationSlice
-    fun update(transform: (AnnotationSlice) -> AnnotationSlice)
+/**
+ * 補記ファイル一覧（Vault単位）。生成側と寿命が違うので Writer を分ける
+ * — 一覧はノート切替で消してはいけない（補記管理画面はノートと無関係）。
+ */
+interface AnnotationListStateWriter {
+    val current: AnnotationListState
+    fun update(transform: (AnnotationListState) -> AnnotationListState)
 }
 
 data class SearchSlice(
@@ -99,22 +103,17 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         }
     }
 
-    val annotationWriter: AnnotationStateWriter = object : AnnotationStateWriter {
-        override val current: AnnotationSlice
-            get() = mutableState.value.let {
-                AnnotationSlice(it.annotationState, it.annotationListState)
-            }
+    val remarkWriter: RemarkStateWriter = object : RemarkStateWriter {
+        override val current: RemarkState get() = mutableState.value.remarkState
+        override fun update(transform: (RemarkState) -> RemarkState) {
+            mutableState.update { it.copy(remarkState = transform(it.remarkState)) }
+        }
+    }
 
-        override fun update(transform: (AnnotationSlice) -> AnnotationSlice) {
-            mutableState.update { state ->
-                val next = transform(
-                    AnnotationSlice(state.annotationState, state.annotationListState)
-                )
-                state.copy(
-                    annotationState = next.annotationState,
-                    annotationListState = next.annotationListState
-                )
-            }
+    val annotationListWriter: AnnotationListStateWriter = object : AnnotationListStateWriter {
+        override val current: AnnotationListState get() = mutableState.value.annotationListState
+        override fun update(transform: (AnnotationListState) -> AnnotationListState) {
+            mutableState.update { it.copy(annotationListState = transform(it.annotationListState)) }
         }
     }
 
@@ -259,7 +258,7 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
     quizState = QuizState.Idle,
-    annotationState = AnnotationState.Idle,
+    remarkState = RemarkState.Idle,
     sectionChat = null,
     isSectionChatSheetVisible = false,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。

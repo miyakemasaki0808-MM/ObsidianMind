@@ -332,12 +332,11 @@ class NoteViewModel internal constructor(
     fun generateQuiz(sourceLabel: String, context: String) = session.generateQuiz(sourceLabel, context)
     fun markQuizViewed() = session.markQuizViewed()
 
-    // ── AI補記メモ（実装は AnnotationController）───────────────────────────────
+    // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）─────────
 
     fun loadAnnotations() = session.loadAnnotations()
     fun deleteAnnotation(ref: DocumentRef) = session.deleteAnnotation(ref)
     fun deleteAllAnnotations() = session.deleteAllAnnotations()
-    fun markAnnotationViewed() = session.markAnnotationViewed()
 
     /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
     fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
@@ -368,14 +367,14 @@ class NoteViewModel internal constructor(
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
 
-    fun createAnnotation(
+    // ── ノートへのひとこと（実装は RemarkController）───────────────────────────
+
+    fun createRemark(
         title: String,
         content: String,
-        summary: String?,
         relatedNotes: List<RelatedNote>,
-        aiNotes: List<RelatedNote>,
-        wikilinkTitles: Set<String>
-    ) = session.createAnnotation(title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
+        aiNotes: List<RelatedNote>
+    ) = session.createRemark(title, content, relatedNotes, aiNotes)
 
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,

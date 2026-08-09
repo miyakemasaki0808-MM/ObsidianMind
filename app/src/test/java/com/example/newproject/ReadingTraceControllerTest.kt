@@ -1086,6 +1086,131 @@ class ReadingTraceControllerTest {
         assertEquals(AI_SUMMARY, card.aiSummary)
     }
 
+    // ── ノートへのひとことの相乗り保存 ──────────────────────────────────────
+    //
+    // ひとことは単独では保存できない。痕跡ファイルは離脱・背面化でしか作られず、
+    // 検証は訪問が1件以上あることを要求するため、初読の最中に押されるこの機能で
+    // 「生成できたら保存」と書くと必ず黙って失われる（→ design/reflect_remark.md §2.1）。
+
+    @Test
+    fun `預けたひとことは離脱時の書き込みに相乗りする`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark("この習慣を続けられた日は何が違っただろう？")
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals("この習慣を続けられた日は何が違っただろう？", stored.remark)
+        // 痕跡ファイルが無い状態から、訪問と一緒に1回で作られること
+        assertEquals(1, stored.visits.size)
+    }
+
+    /**
+     * **`dirty` を立てないと落ちるケース。** 直前の背面化で訪問を書き終えていると
+     * 「変化なし」で早期returnし、ひとことが書かれないままセッションが終わる。
+     */
+    @Test
+    fun `訪問を書いた後に預けたひとことも保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.pause()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md")!!.remark)
+
+        // 復帰せず（＝進捗も来ず）にひとことだけ預けて離脱する
+        controller.setPendingRemark("続けられた日は何が違っただろう？")
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("続けられた日は何が違っただろう？", persistence.stored("ideas/habit.md")!!.remark)
+        // 背面化ぶんの訪問を増やさない（1回の閲覧＝1訪問）
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    // 過去のひとことを、以降の訪問で消さないこと。
+    @Test
+    fun `預けていない訪問は既存のひとことを保つ`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(remark = "前回のひとこと"))
+        }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("前回のひとこと", persistence.stored("ideas/habit.md")!!.remark)
+    }
+
+    @Test
+    fun `新しいひとことは古いものを上書きする`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(remark = "前回のひとこと"))
+        }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark("今回のひとこと")
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("今回のひとこと", persistence.stored("ideas/habit.md")!!.remark)
+    }
+
+    /**
+     * 保存に失敗したら次の契機で書き直す。訪問だけ戻してひとことを捨てると、
+     * 生成し直す導線がユーザーの再操作しか無いため恒久的に失われる。
+     */
+    @Test
+    fun `保存に失敗したひとことは次の契機で書き直される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { failSaveOnAttempt = 1 }
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        controller.setPendingRemark("失敗しても残したいひとこと")
+        controller.pause()
+        advanceUntilIdle()
+        assertNull(persistence.stored("ideas/habit.md"))
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("失敗しても残したいひとこと", persistence.stored("ideas/habit.md")!!.remark)
+    }
+
+    // セッションが無ければ保存先が無いので黙って捨てる（例外にしない）。
+    @Test
+    fun `セッションが無ければひとことは黙って捨てられる`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+
+        controller.setPendingRemark("行き先の無いひとこと")
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(persistence.saved.isEmpty())
+    }
+
     // 再会カードは「前回まで」を見せる。今回の読書は離脱時に足されるので混ざらない。
     @Test
     fun `card shows only visits recorded before this reading`() = runTest {

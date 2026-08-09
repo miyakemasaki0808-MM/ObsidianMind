@@ -180,7 +180,7 @@ class OnDeviceGenerationTest {
             "buildReadingTraceSummaryPrompt",
             "buildDistillPrompt",
             "buildPickerPrompt",
-            "buildAnnotationPrompt",
+            "buildRemarkPrompt",
             "buildSectionSuggestionsPrompt",
             "buildSectionChatPrompt"
         )

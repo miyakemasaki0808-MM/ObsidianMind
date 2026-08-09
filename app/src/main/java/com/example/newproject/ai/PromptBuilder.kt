@@ -4,6 +4,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 
@@ -18,6 +19,15 @@ data class RelatedCandidateLine(val id: String, val title: String, val detail: S
     fun renderForPrompt(): String =
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
 }
+
+/**
+ * ひとことプロンプトに渡す候補ノート。
+ *
+ * [RelatedCandidateLine] と形は似ているが `detail` を持たない。ひとことの出力枠は
+ * 1文ぶんしかなく、候補の補助情報を読ませても出力へ出す先が無いため
+ * （旧補記が3ブロックを渡しながら出力で使わせていなかったのと同じ失敗を作らない）。
+ */
+data class RemarkCandidateLine(val id: String, val title: String)
 
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
 internal data class DistillPrompt(
@@ -216,64 +226,57 @@ object PromptBuilder {
         """.trimIndent()
     }
 
-    fun buildAnnotationPrompt(
+    /**
+     * ノートへのひとこと（旧「AI補記メモ」）。**出力枠のすべてを1文へ使う。**
+     *
+     * 旧プロンプトは4つの分類ラベルと3行の補記を同時に出させていたが、
+     * 出力枠（256トークン）はゼロサムなので、行動を変えないラベルが
+     * 価値のある側を圧迫していた（→ design/reflect_remark.md §0）。
+     *
+     * **候補ノートは「ID | タイトル」で提示し、本文中でもIDで参照させる。**
+     * 生のタイトルを書かせると言い換え・装飾で解決できなくなるため
+     * （蒸留・関連ノートと同じ契約。AIピッカーだけがこの契約から外れている）。
+     */
+    fun buildRemarkPrompt(
         title: String,
         excerpt: NoteExcerpt,
-        summary: String?,
-        relatedTitles: List<String>,
-        aiRecommendedTitles: List<String>,
-        wikilinkTitles: Set<String>,
-        createdAt: String
+        candidates: List<RemarkCandidateLine>
     ): String {
-        val summaryText = summary?.takeIf { it.isNotBlank() } ?: "なし"
-        val relatedText = relatedTitles.asBulletList("関連ノートなし")
-        val aiRecommendedText = aiRecommendedTitles.asBulletList("AI推薦ノートなし")
-        val wikilinkText = wikilinkTitles.toList().asBulletList("wikilinkなし")
+        val candidateBlock = candidates
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n") { "${it.id} | ${it.title}" }
+            ?: "(none)"
 
-        return """
-            You are an editor and reader for a private Obsidian vault. You are not the author.
-            Create an annotation memo for the current note so the user can grow the note later.
-            Respect the source note. Do not rewrite or replace it. Write suggestions, not final truth.
+        // **複数行の値をテンプレートへ補間しない。** `trimIndent()` は補間"後"の
+        // 文字列に効くため、埋めた値の2行目以降（インデント0）が混ざると共通インデントが
+        // 0と判定され、テンプレート側の字下げが全行に残る。本文抜粋も候補一覧も
+        // 複数行になり得るので、静的な部分だけを trimIndent して後から連結する。
+        val instructions = """
+            You are a reading companion for a private Obsidian vault. You are not the author, and not a reviewer.
+            Say ONE short thing that helps the user think further about the note below.
             Use the same language as the note content.
 
-            Choose values only from these fixed choices:
-            種別: 概念メモ / 読書メモ / 日記・ログ / アイデア断片 / 技術メモ / タスク・計画 / 長文記事 / その他
-            粒度: 断片 / 原子メモ / 中粒度 / 長文
-            状態: 十分 / 書きかけ / 具体例不足 / 背景不足 / 自分の解釈不足 / 次アクション不足 / 論点過多
-            補記方針: 具体例を足す / 背景を補う / 自分の解釈を書く / 構成を整理する / 反論・別視点を足す
+            Write EITHER a question that opens up the user's own thinking,
+            OR a suggestion to connect this note with one of the candidate notes. Never both.
 
-            Output Markdown only. Include exactly these sections and headings:
-            ## 粒度評価
-            - 種別: <one fixed choice>
-            - 粒度: <one fixed choice>
-            - 状態: <one fixed choice>
-            - 補記方針: <one fixed choice>
-
-            ## 補記すべき内容
-            Exactly 3 bullets, one line each. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
-            Keep each bullet short: name the term, then state in one sentence what concrete information should be added.
-            - <exact term or claim from this note>: <what specific information should be added>
-
-            Keep the entire output compact. Do not add sections, preambles, or closing remarks beyond the format above.
-
-            Current note title: $title
-            Created at: $createdAt
-
-            AI summary:
-            $summaryText
-
-            Related notes:
-            $relatedText
-
-            AI recommended notes:
-            $aiRecommendedText
-
-            Existing wikilinks:
-            $wikilinkText
-
-            Current note content snippet:
-            ${excerpt.renderForPrompt()}
+            Rules:
+            - One sentence. Two at most. Around 80–120 characters.
+            - It MUST contain a word, term, or claim that literally appears in the note.
+            - Do NOT summarize, evaluate, praise, grade, or greet.
+            - Do NOT tell the user to add, write, fix, or complete anything.
+              Avoid 「不足」「必要」「べき」. Open the thought instead of assigning work.
+            - To refer to a candidate note, write its ID in double brackets, exactly like [[C03]].
+              Never write a note title in brackets. Only IDs from the candidate list are allowed.
+            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
+            - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\nNote content:\n").append(excerpt.renderForPrompt())
+            append("\n\nCandidate notes:\n").append(candidateBlock)
+        }
     }
 
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
@@ -327,11 +330,6 @@ object PromptBuilder {
             $question
         """.trimIndent()
     }
-
-    private fun List<String>.asBulletList(emptyText: String): String =
-        takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { "- $it" }
-            ?: emptyText
 
     private fun NoteExcerpt.renderForPrompt(): String =
         if (isAbridged) {

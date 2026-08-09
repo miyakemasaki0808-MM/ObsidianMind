@@ -106,6 +106,17 @@ internal class ReadingTraceController(
         /** 前回の書き込み以降に、書き直す価値のある変化があったか。 */
         var dirty = false
 
+        /**
+         * まだサイドカーへ載せていないひとこと（→ [setPendingRemark]）。
+         *
+         * 生成した直後に単独で保存しないのは、**痕跡ファイルがまだ存在しない**ことが
+         * あるため。訪問は離脱・背面化でしか書かれず、`validateReadingTrace` は
+         * 訪問が1件以上あることを要求する。初読の最中にボタンを押すこの機能では
+         * 「生成できたら保存」と書くと初回のノートで必ず黙って失われる
+         * （→ design/reflect_remark.md §2.1）。
+         */
+        var pendingRemark: String? = null
+
         /** 背面にいた時間を除いた読書時間。10秒判定はこれで行う。 */
         fun elapsedMillis(now: Long): Long =
             activeMillis + (resumedAtMillis?.let { now - it } ?: 0L)
@@ -238,8 +249,29 @@ internal class ReadingTraceController(
     }
 
     /**
+     * ノートへのひとことを、次の書き込み契機（背面化・離脱）へ預ける。
+     *
+     * **`dirty` を立てるのが要点。** 立てないと、直前に訪問を書き終えていた場合に
+     * [recordVisit] が「変化なし」で早期returnし、ひとことが書かれないまま
+     * セッションが終わる。ひとことは「書き直す価値のある変化」そのものである。
+     *
+     * セッションが無い（Vault未選択・追跡対象外）ときは黙って捨てる。
+     * 保存先が無いので、ここで作れる置き場所は無い。
+     */
+    fun setPendingRemark(remark: String) {
+        val active = session ?: return
+        active.pendingRemark = remark
+        active.dirty = true
+    }
+
+    /**
      * 現在のセッションの訪問を書き出す。既にこの閲覧で書いた訪問があれば、
      * 増やさずにその1件を差し替える（1回の閲覧＝1訪問を保つ）。
+     *
+     * 預かっているひとこと（[Session.pendingRemark]）があれば、**同じ
+     * read-modify-write の中で**一緒に載せる。別のコルーチンで保存すると、
+     * 訪問より先に走った側が「痕跡が無い」で諦めるか、後から走った側が
+     * 古い読み取りで上書きするかのどちらかになる。
      */
     private fun recordVisit() {
         val active = session ?: return
@@ -265,6 +297,10 @@ internal class ReadingTraceController(
         val previous = active.recordedVisit
         active.recordedVisit = visit
         active.dirty = false
+        // 訪問と同じく、起動前に消費済みにして二重書き込みを防ぐ。
+        // 失敗時は下の分岐で戻し、次の契機で書き直させる。
+        val pendingRemark = active.pendingRemark
+        active.pendingRemark = null
         val title = active.noteTitle
         val documentId = active.documentId
         val vaultKey = active.vaultKey
@@ -295,7 +331,16 @@ internal class ReadingTraceController(
                             visits = emptyList()
                         )
                     }
-                    persistence.save(base.withVisit(visit), vaultKey)
+                    // ひとことを預かっていなければ、読み込んだ値をそのまま残す。
+                    // ここで無条件に copy(remark = pendingRemark) にすると、
+                    // 過去に保存したひとことを訪問のたびに消してしまう。
+                    val withVisit = base.withVisit(visit)
+                    val next = if (pendingRemark != null) {
+                        withVisit.copy(remark = pendingRemark)
+                    } else {
+                        withVisit
+                    }
+                    persistence.save(next, vaultKey)
                 }
             }
             // 書けていなければ「まだ書いていない」状態へ戻し、次の契機（背面化・離脱）で
@@ -309,6 +354,12 @@ internal class ReadingTraceController(
             if (result is ReadingTraceSaveResult.Failure && owner.recordedVisit === visit) {
                 owner.recordedVisit = previous
                 owner.dirty = true
+                // ひとことも戻す。戻さないと、訪問だけ次の契機で書き直されて
+                // ひとことは恒久的に失われる（生成し直す導線はユーザーの再操作しかない）。
+                // 待っている間に新しいひとことが預けられていたら、そちらを優先する。
+                if (pendingRemark != null && owner.pendingRemark == null) {
+                    owner.pendingRemark = pendingRemark
+                }
             }
         }
     }

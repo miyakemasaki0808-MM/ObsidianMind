@@ -38,7 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -60,15 +60,14 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelBlue
 
 // ---------------------------------------------------------------------------
-// タブ3: AI（要約・補記メモ）
+// タブ3: AI（要約・蒸留・ひとこと）
 // Q&Aは読書画面の吹き出し（フォーカスセクション周辺クイズ）へ移動した。
 // ---------------------------------------------------------------------------
 
 @Composable
 fun AiTab(
     uiState: NoteUiState,
-    onCreateAnnotation: () -> Unit,
-    onOpenAnnotation: () -> Unit,
+    onCreateRemark: () -> Unit,
     onStartDistill: () -> Unit,
     onDownloadDistillModel: () -> Unit,
     onToggleDistillCandidate: (String) -> Unit,
@@ -80,23 +79,6 @@ fun AiTab(
     onExportOriginal: () -> Unit
 ) {
     val hasNote = uiState.noteState is NoteState.Success
-    val annotationState = uiState.annotationState
-    val isAnnotationLoading = annotationState is AnnotationState.Loading
-    val annotationLabel = when (annotationState) {
-        is AnnotationState.Idle -> "✨ AI補記メモをつくる"
-        is AnnotationState.Loading -> "AI補記メモを作成中…"
-        is AnnotationState.Success -> "✓ AI補記メモを見る"
-        is AnnotationState.Error -> if (annotationState.isViewed) {
-            "↻ AI補記メモを再試行"
-        } else {
-            "! エラーを確認"
-        }
-    }
-    val annotationAction = when (annotationState) {
-        is AnnotationState.Success -> onOpenAnnotation
-        is AnnotationState.Error -> if (annotationState.isViewed) onCreateAnnotation else onOpenAnnotation
-        else -> onCreateAnnotation
-    }
 
     Column(
         modifier = Modifier
@@ -167,14 +149,66 @@ fun AiTab(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
-        Button(
-            onClick = annotationAction,
-            enabled = !isAnnotationLoading,
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
-            border = BorderStroke(1.dp, ButtonOutlineOnGradient),
-            shape = RoundedCornerShape(24.dp)
-        ) { Text(annotationLabel, color = OnButtonAi) }
+        RemarkPanel(state = uiState.remarkState, onCreate = onCreateRemark)
+    }
+}
+
+/**
+ * ノートへのひとこと。**結果は専用画面へ飛ばさず、この場に1文だけ出す。**
+ *
+ * 旧補記は生成物が `.md` ファイルだったため専用画面（AnnotationResultScreen）で
+ * 開いていたが、出力が1文になったので画面を跨ぐ理由が無くなった
+ * （→ design/reflect_remark.md §1・§7.1）。
+ */
+@Composable
+private fun RemarkPanel(state: RemarkState, onCreate: () -> Unit) {
+    val label = when (state) {
+        is RemarkState.Idle -> "✨ ひとことをもらう"
+        is RemarkState.Loading -> "考えています…"
+        is RemarkState.Ready -> "↻ もう一度きく"
+        is RemarkState.Empty -> "↻ もう一度きく"
+        is RemarkState.Error -> "↻ もう一度きく"
+    }
+
+    // 本文（1文）はボタンより先に置く。押した結果を読む順序に合わせる。
+    when (state) {
+        is RemarkState.Ready -> RemarkBubble(state.remark)
+        // 「補記不要です」をAIに言わせない。空振りはUI側の固定文で受ける（§5）。
+        // 生成に枠を使わせないので、ここは翻訳もされない素の日本語でよい。
+        is RemarkState.Empty -> RemarkBubble("今は新しい問いは見つかりませんでした。")
+        is RemarkState.Error -> RemarkBubble("ひとことをもらえませんでした: ${state.message}")
+        else -> Unit
+    }
+    if (state !is RemarkState.Idle && state !is RemarkState.Loading) {
+        Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    Button(
+        onClick = onCreate,
+        enabled = state !is RemarkState.Loading,
+        modifier = Modifier.fillMaxWidth().height(48.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
+        border = BorderStroke(1.dp, ButtonOutlineOnGradient),
+        shape = RoundedCornerShape(24.dp)
+    ) { Text(label, color = OnButtonAi) }
+}
+
+@Composable
+private fun RemarkBubble(text: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Panel,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "AIからのひとこと",
+                color = OnSurfaceMuted,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(text = text, color = OnSurface, fontSize = 15.sp, lineHeight = 24.sp)
+        }
     }
 }
 

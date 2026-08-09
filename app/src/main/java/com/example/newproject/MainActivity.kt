@@ -1,6 +1,6 @@
 package com.example.newproject
 
-import com.example.newproject.model.state.AnnotationState
+import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.state.toEventKey
 import com.example.newproject.ui.theme.Indigo
@@ -39,7 +39,6 @@ import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.AnnotationManagerScreen
 import com.example.newproject.ui.screen.ReadingTraceCleanupScreen
-import com.example.newproject.ui.screen.AnnotationResultScreen
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.screen.FullscreenNoteScreen
@@ -123,24 +122,20 @@ class MainActivity : ComponentActivity() {
                     viewModel.markQuizViewed()
                     navController.navigate("quiz") { launchSingleTop = true }
                 }
-                val openAnnotationResult = {
+                val openRemark = {
                     snackbarHostState.currentSnackbarData?.dismiss()
-                    viewModel.markAnnotationViewed()
-                    navController.navigate("annotation") { launchSingleTop = true }
+                    navController.navigateToTab(AppDestination.Ai)
                 }
-                val startAnnotation = {
+                val startRemark = {
                     val noteState = uiState.noteState
                     if (noteState is NoteState.Success) {
                         snackbarHostState.currentSnackbarData?.dismiss()
-                        val summary = (uiState.summaryState as? SummaryState.Success)?.summary
                         val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
-                        viewModel.createAnnotation(
+                        viewModel.createRemark(
                             title = noteState.title,
                             content = noteState.content,
-                            summary = summary,
                             relatedNotes = relatedState?.relatedNotes.orEmpty(),
-                            aiNotes = relatedState?.aiNotes.orEmpty(),
-                            wikilinkTitles = uiState.wikilinkTitles
+                            aiNotes = relatedState?.aiNotes.orEmpty()
                         )
                         // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
                         navController.navigateToTab(AppDestination.Note)
@@ -185,45 +180,50 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                val annotationEventKey = uiState.annotationState.toEventKey()
-                var lastShownAnnotationEvent by rememberSaveable { mutableStateOf<String?>(null) }
-                LaunchedEffect(annotationEventKey) {
-                    if (annotationEventKey == null) {
-                        lastShownAnnotationEvent = null
+                val remarkEventKey = uiState.remarkState.toEventKey()
+                var lastShownRemarkEvent by rememberSaveable { mutableStateOf<String?>(null) }
+                LaunchedEffect(remarkEventKey) {
+                    if (remarkEventKey == null) {
+                        lastShownRemarkEvent = null
                         return@LaunchedEffect
                     }
-                    if (annotationEventKey == lastShownAnnotationEvent) return@LaunchedEffect
-                    lastShownAnnotationEvent = annotationEventKey
+                    if (remarkEventKey == lastShownRemarkEvent) return@LaunchedEffect
+                    lastShownRemarkEvent = remarkEventKey
                     if (isFullscreenRoute) return@LaunchedEffect
-                    when (val state = uiState.annotationState) {
-                        is AnnotationState.Loading -> snackbarHostState.showSnackbar(
-                            message = "AI補記メモを作成中…",
+                    when (uiState.remarkState) {
+                        is RemarkState.Loading -> snackbarHostState.showSnackbar(
+                            message = "ひとことを考えています…",
                             duration = SnackbarDuration.Short
                         )
-                        is AnnotationState.Success -> if (!state.isViewed) {
+                        is RemarkState.Ready -> {
                             val result = snackbarHostState.showSnackbar(
-                                message = "AI補記メモを保存しました",
+                                message = "ひとことが届きました",
                                 actionLabel = "見る",
                                 duration = SnackbarDuration.Long
                             )
-                            if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                            if (result == SnackbarResult.ActionPerformed) openRemark()
                         }
-                        is AnnotationState.Error -> if (!state.isViewed) {
+                        // 空振りは失敗ではないので、行き先を示さず短く伝えるだけ。
+                        is RemarkState.Empty -> snackbarHostState.showSnackbar(
+                            message = "今は新しい問いは見つかりませんでした",
+                            duration = SnackbarDuration.Short
+                        )
+                        is RemarkState.Error -> {
                             val result = snackbarHostState.showSnackbar(
-                                message = "AI補記メモを作成できませんでした",
+                                message = "ひとことをもらえませんでした",
                                 actionLabel = "詳細",
                                 duration = SnackbarDuration.Long
                             )
-                            if (result == SnackbarResult.ActionPerformed) openAnnotationResult()
+                            if (result == SnackbarResult.ActionPerformed) openRemark()
                         }
-                        is AnnotationState.Idle -> Unit
+                        is RemarkState.Idle -> Unit
                     }
                 }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
-                    annotationState = uiState.annotationState,
+                    remarkState = uiState.remarkState,
                     snackbarHostState = snackbarHostState,
                     vigilithPresentation = vigilith.presentation,
                     vigilithNoteAction = vigilith.noteAction,
@@ -317,8 +317,7 @@ class MainActivity : ComponentActivity() {
                         composable("ai") {
                             AiTab(
                                 uiState = uiState,
-                                onCreateAnnotation = startAnnotation,
-                                onOpenAnnotation = openAnnotationResult,
+                                onCreateRemark = startRemark,
                                 onStartDistill = { viewModel.startDistill() },
                                 onDownloadDistillModel = { viewModel.downloadDistillModel() },
                                 onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
@@ -361,13 +360,6 @@ class MainActivity : ComponentActivity() {
                                 state = uiState.readingTraceCleanupState,
                                 onLoad = { viewModel.assessReadingTraceOrphans() },
                                 onDelete = { key -> viewModel.deleteReadingTrace(key) },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("annotation") {
-                            AnnotationResultScreen(
-                                annotationState = uiState.annotationState,
                                 onBack = { navController.popBackStack() }
                             )
                         }

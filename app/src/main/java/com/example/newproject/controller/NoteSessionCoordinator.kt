@@ -125,8 +125,7 @@ internal class NoteSessionCoordinator(
     private val annotation = AnnotationController(
         scope = scope,
         vault = vaultBrowser,
-        aiClient = aiClient,
-        state = stateStore.annotationWriter,
+        state = stateStore.annotationListWriter,
         vaultGeneration = { vaultGeneration }
     )
     private val search = SearchController(
@@ -153,6 +152,19 @@ internal class NoteSessionCoordinator(
         currentVaultKey = currentVaultKey,
         clock = clock,
         ioDispatcher = ioDispatcher
+    )
+
+    /**
+     * ノートへのひとこと。**[readingTrace] より後に宣言する** — 生成結果の預け先が
+     * 痕跡側のセッションなので、初期化順を逆にすると参照が未初期化になる。
+     */
+    private val remark = RemarkController(
+        scope = scope,
+        aiClient = aiClient,
+        state = stateStore.remarkWriter,
+        // 保存は痕跡の書き込み契機（背面化・離脱）へ相乗りさせる。
+        // ここで直接保存すると、痕跡ファイルが未作成の初読で黙って失われる。
+        onRemarkReady = { readingTrace.setPendingRemark(it) }
     )
 
     /**
@@ -190,7 +202,8 @@ internal class NoteSessionCoordinator(
         sections.cancelAndClear()
         summary.cancelAndClear()
         quiz.cancelAndClear()
-        annotation.cancelAndClear()
+        // 補記一覧（annotation）はVault単位なのでここには登録しない。
+        remark.cancelAndClear()
         sectionChat.cancelAndClear()
         distill.cancelForNoteChange()
     }
@@ -333,20 +346,20 @@ internal class NoteSessionCoordinator(
     fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
     fun markQuizViewed() = quiz.markViewed()
 
-    // ── AI補記メモ（実装は AnnotationController）────────────────────────────
+    // ── ノートへのひとこと（実装は RemarkController）─────────────────────────
+
+    fun createRemark(
+        title: String,
+        content: String,
+        relatedNotes: List<RelatedNote>,
+        aiNotes: List<RelatedNote>
+    ) = remark.create(title, content, relatedNotes, aiNotes)
+
+    // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
 
     fun loadAnnotations() = annotation.loadList()
     fun deleteAnnotation(ref: DocumentRef) = annotation.delete(ref)
     fun deleteAllAnnotations() = annotation.deleteAll()
-    fun markAnnotationViewed() = annotation.markViewed()
-    fun createAnnotation(
-        title: String,
-        content: String,
-        summary: String?,
-        relatedNotes: List<RelatedNote>,
-        aiNotes: List<RelatedNote>,
-        wikilinkTitles: Set<String>
-    ) = annotation.create(title, content, summary, relatedNotes, aiNotes, wikilinkTitles)
 
     // ── 蒸留（実装は DistillController）─────────────────────────────────────
 

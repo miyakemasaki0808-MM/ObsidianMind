@@ -1,6 +1,7 @@
 package com.example.newproject.ai
 
 import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.QuizFormat
 import org.junit.Assert.assertEquals
@@ -79,62 +80,26 @@ class PromptBuilderExcerptRegressionTest {
     }
 
     @Test
-    fun `補記プロンプトは移行前の文字列を保つ`() {
-        assertEquals(
-            """
-                You are an editor and reader for a private Obsidian vault. You are not the author.
-                Create an annotation memo for the current note so the user can grow the note later.
-                Respect the source note. Do not rewrite or replace it. Write suggestions, not final truth.
-                Use the same language as the note content.
-
-                Choose values only from these fixed choices:
-                種別: 概念メモ / 読書メモ / 日記・ログ / アイデア断片 / 技術メモ / タスク・計画 / 長文記事 / その他
-                粒度: 断片 / 原子メモ / 中粒度 / 長文
-                状態: 十分 / 書きかけ / 具体例不足 / 背景不足 / 自分の解釈不足 / 次アクション不足 / 論点過多
-                補記方針: 具体例を足す / 背景を補う / 自分の解釈を書く / 構成を整理する / 反論・別視点を足す
-
-                Output Markdown only. Include exactly these sections and headings:
-                ## 粒度評価
-                - 種別: <one fixed choice>
-                - 粒度: <one fixed choice>
-                - 状態: <one fixed choice>
-                - 補記方針: <one fixed choice>
-
-                ## 補記すべき内容
-                Exactly 3 bullets, one line each. Each MUST reference a specific concept, claim, or term that actually appears in this note — no generic advice.
-                Keep each bullet short: name the term, then state in one sentence what concrete information should be added.
-                - <exact term or claim from this note>: <what specific information should be added>
-
-                Keep the entire output compact. Do not add sections, preambles, or closing remarks beyond the format above.
-
-                Current note title: 題名
-                Created at: 2026-07-27
-
-                AI summary:
-                要約
-
-                Related notes:
-                - 関連
-
-                AI recommended notes:
-                - 推薦
-
-                Existing wikilinks:
-                - 既存
-
-                Current note content snippet:
-                本文
-            """.trimIndent(),
-            PromptBuilder.buildAnnotationPrompt(
-                title = "題名",
-                excerpt = excerpt,
-                summary = "要約",
-                relatedTitles = listOf("関連"),
-                aiRecommendedTitles = listOf("推薦"),
-                wikilinkTitles = linkedSetOf("既存"),
-                createdAt = "2026-07-27"
-            )
+    fun `ひとことプロンプトは1文だけを要求しIDで参照させる`() {
+        val prompt = PromptBuilder.buildRemarkPrompt(
+            title = "題名",
+            excerpt = excerpt,
+            candidates = listOf(RemarkCandidateLine("C01", "候補ノート"))
         )
+
+        // 出力枠はゼロサムなので、分類ラベルを1つでも足すと1文の余地が削られる。
+        // 旧補記の4項目が復活していないことを固定する。
+        listOf("粒度評価", "種別", "補記方針", "補記すべき内容").forEach { removed ->
+            assertFalse("旧補記の項目が復活している: $removed", prompt.contains(removed))
+        }
+        assertTrue(prompt.contains("One sentence. Two at most."))
+        // 生タイトルではなくIDを返させる契約（蒸留・関連ノートと同じ）。
+        assertTrue(prompt.contains("[[C03]]"))
+        assertTrue(prompt.contains("C01 | 候補ノート"))
+        // 「出すものが無い」の表明語は model の定数と一致していること
+        // （ずれると NONE を検査が拾えず、定型文がそのまま保存される）。
+        assertTrue(prompt.contains(REMARK_NONE_TOKEN))
+        assertTrue(prompt.contains("本文"))
     }
 
     @Test
@@ -219,14 +184,10 @@ class PromptBuilderExcerptRegressionTest {
             candidates = listOf(RelatedCandidateLine("C01", "候補"))
         ),
         PromptBuilder.buildQuizPrompt("題名", value, QuizFormat.TrueFalse),
-        PromptBuilder.buildAnnotationPrompt(
+        PromptBuilder.buildRemarkPrompt(
             title = "題名",
             excerpt = value,
-            summary = null,
-            relatedTitles = emptyList(),
-            aiRecommendedTitles = emptyList(),
-            wikilinkTitles = emptySet(),
-            createdAt = "2026-07-27"
+            candidates = listOf(RemarkCandidateLine("C01", "候補"))
         ),
         PromptBuilder.buildSectionSummaryPrompt("節", value),
         PromptBuilder.buildSectionSuggestionsPrompt("節", value),
