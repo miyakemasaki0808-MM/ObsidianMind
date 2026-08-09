@@ -394,13 +394,23 @@ internal class ReadingTraceController(
         if (!active.dirty) return
         // 相対パスが最後まで分からなかったノート（_AI補記 の一覧から開いた等）は記録しない。
         val path = active.vaultRelativePath ?: return
-        if (active.elapsedMillis(clock()) < MIN_READING_MILLIS) return
-        // 本文がまだ描画されていない（進捗報告が来ていない）場合は読んだと見なさない。
-        if (active.totalBlocks <= 0) return
+        // **返事を預かっているときは読書量の門番を通す。**
+        // 10秒・1ブロックは「一瞬引いてすぐ送った表示を訪問に数えない」ための条件だが、
+        // ユーザーが返事を書いたなら、それはスクロールより強い関与である。
+        // ここを通さないと、条件未達で離れた瞬間に**預かった返事が消える**
+        // （画面には「保存中」と出たまま）。
+        val holdsReply = active.pendingRemark?.hasReply == true
+        if (!holdsReply) {
+            if (active.elapsedMillis(clock()) < MIN_READING_MILLIS) return
+            // 本文がまだ描画されていない（進捗報告が来ていない）場合は読んだと見なさない。
+            if (active.totalBlocks <= 0) return
+        }
 
         val visit = ReadingVisit(
             atEpochMillis = clock(),
             deepestSectionTitle = active.deepestSectionTitle,
+            // totalBlocks が 0 のまま（返事だけ書いて離れた）なら到達率は 0。
+            // progressPercent は 0 除算を自分で防ぐので、そのまま渡してよい。
             progressPercent = progressPercent(
                 active.deepestBlockIndex,
                 active.deepestBlockFraction,

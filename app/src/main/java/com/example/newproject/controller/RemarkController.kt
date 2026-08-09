@@ -8,6 +8,7 @@ import com.example.newproject.domain.RemarkResult
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.composeMirroredRemark
 import com.example.newproject.domain.composeRemark
+import com.example.newproject.domain.excerptReplyForPrompt
 import com.example.newproject.domain.remarkCandidateId
 import com.example.newproject.domain.toObsidianNoteTitle
 import com.example.newproject.model.NoteExcerptLimits
@@ -15,6 +16,7 @@ import com.example.newproject.model.Reflection
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.RemarkStateWriter
 import com.example.newproject.model.state.RemarkState
+import com.example.newproject.model.state.ReplyStatus
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -174,7 +176,9 @@ internal class RemarkController(
             if (!isCurrent(requestId)) return@launch
             // 待っている間に生成が始まっていたら割り込まない。
             if (state.current !is RemarkState.Idle) return@launch
-            state.update { RemarkState.Ready(sourceTitle, saved) }
+            // 読み戻したものは既にファイルにある＝保存済み。
+            val status = if (saved.hasReply) ReplyStatus.Saved else ReplyStatus.None
+            state.update { RemarkState.Ready(sourceTitle, saved, status) }
         }
     }
 
@@ -188,13 +192,13 @@ internal class RemarkController(
      */
     fun saveReply(vaultRelativePath: String?, reply: String) {
         val current = state.current as? RemarkState.Ready ?: return
-        if (current.isSavingReply) return
+        if (current.replyStatus == ReplyStatus.Saving) return
         val trimmed = reply.trim()
         if (trimmed.isBlank()) return
         val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
 
         val requestId = ++activeRequestId
-        state.update { current.copy(isSavingReply = true) }
+        state.update { current.copy(replyStatus = ReplyStatus.Saving) }
         replyJob?.cancel()
         replyJob = scope.launch {
             val at = clock()
@@ -213,8 +217,12 @@ internal class RemarkController(
                 ready.copy(
                     // Lost でも本文は状態へ残す。消してしまうと書き直しもできない。
                     reflection = ready.reflection.withReply(trimmed, at),
-                    isSavingReply = false,
-                    isReplyUnsaved = outcome == ReplySaveOutcome.Lost
+                    replyStatus = when (outcome) {
+                        ReplySaveOutcome.Saved -> ReplyStatus.Saved
+                        // **保存済みとは呼ばない。** 離脱時の書き込みで確定する。
+                        ReplySaveOutcome.Held -> ReplyStatus.Held
+                        ReplySaveOutcome.Lost -> ReplyStatus.Failed
+                    }
                 )
             }
             // **返事を保存し終えてから映し返しを作る。** 先に生成すると、
@@ -246,7 +254,9 @@ internal class RemarkController(
                 title = ready.sourceTitle,
                 excerpt = excerpt,
                 remark = ready.reflection.remark,
-                reply = reply
+                // 保存した原文ではなく抜粋を渡す。出力枠は256トークン固定なので、
+                // 入力を長くしても返ってくる1文は変わらない。
+                reply = excerptReplyForPrompt(reply)
             )
             val generated = aiClient.generate(prompt)
             if (!isCurrent(requestId)) return

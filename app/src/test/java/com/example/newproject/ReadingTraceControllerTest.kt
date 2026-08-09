@@ -1310,6 +1310,49 @@ class ReadingTraceControllerTest {
         assertEquals("失いたくない返事", persistence.stored("ideas/habit.md")!!.reflection!!.reply)
     }
 
+    /**
+     * **返事を書いてすぐ離れても消えない。**
+     *
+     * 10秒・1ブロックの門番は「一瞬引いてすぐ送った表示を訪問に数えない」ためのものだが、
+     * 返事を預かっているときに効かせると**画面に「保存中」と出たまま消える**。
+     * ユーザーが書いた事実はスクロールより強い関与なので、門番を通す。
+     */
+    @Test
+    fun `返事を書いてすぐ離れても保存される`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.setPendingRemark(reflectionOf("いまのひとこと"))
+        controller.saveReply("ideas/habit.md", "急いで書いた返事", 5_000L)
+        advanceUntilIdle()
+
+        // 10秒未満・進捗報告なしのまま離脱する
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")
+        assertEquals("急いで書いた返事", stored!!.reflection!!.reply)
+        assertEquals(0, stored.visits.single().progressPercent)
+    }
+
+    // 返事が無いときは門番をそのまま効かせる（一瞬の表示を訪問に数えない）。
+    @Test
+    fun `返事が無ければ短い滞在は記録しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(3_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md"))
+    }
+
     /** 預ける先も無ければ Lost。画面は未保存として見せる必要がある。 */
     @Test
     fun `セッションが無ければ返事は失われたと返す`() = runTest {

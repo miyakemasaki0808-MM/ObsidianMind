@@ -30,16 +30,8 @@ sealed class RemarkState {
     data class Ready(
         val sourceTitle: String,
         val reflection: Reflection,
-        /** 返事の保存中。ボタンの二度押しを止めるためだけに持つ。 */
-        val isSavingReply: Boolean = false,
-        /**
-         * 返事がどこにも保存できなかった。
-         *
-         * **「預かった」とは区別する。** 預かった場合は離脱時に書かれるので
-         * ユーザーへ失敗を見せる必要がないが、こちらは本当に消えるため、
-         * 画面へ出して書き直せる状態を保つ。
-         */
-        val isReplyUnsaved: Boolean = false
+        /** 返事の保存の進み具合。**Boolean 2本に分けない**（→ [ReplyStatus]）。 */
+        val replyStatus: ReplyStatus = ReplyStatus.None
     ) : RemarkState()
 
     /** モデルが「出すものが無い」と表明した。正常な結果。 */
@@ -50,6 +42,30 @@ sealed class RemarkState {
 
     /** 生成そのものが失敗した（非対応端末・DL失敗・例外）。 */
     data class Error(val message: String, val sourceTitle: String? = null) : RemarkState()
+}
+
+/**
+ * 返事の保存がどこまで進んだか。
+ *
+ * **Boolean 2本（保存中／未保存）に分けない。** 分けると
+ * 「保存中かつ未保存」のような意味の無い組み合わせが型として作れてしまい、
+ * 実際に「預かっただけ」と「保存済み」を同じ顔で出す誤りをやった。
+ *
+ * [Held] を [Saved] と呼ばないのが要点 —
+ * **預かった時点ではまだファイルに書かれていない。**
+ * 離脱時の書き込みで確定するので、それまでは「保存中」と正直に出す。
+ */
+enum class ReplyStatus {
+    /** まだ保存操作をしていない。 */
+    None,
+    /** 書き込み中。 */
+    Saving,
+    /** 預かった。離脱時に確定する（＝まだ消えうる）。 */
+    Held,
+    /** サイドカーへ書けた。 */
+    Saved,
+    /** どこにも残っていない。書き直せる状態を保つ。 */
+    Failed
 }
 
 /**

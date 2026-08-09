@@ -10,6 +10,7 @@ import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RemarkState
+import com.example.newproject.model.state.ReplyStatus
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -252,6 +253,7 @@ class RemarkControllerTest {
         controller.saveReply("ideas/dialog.md", "  実際に困った場面があった  ")
 
         val ready = state.value.remarkState as RemarkState.Ready
+        assertEquals(ReplyStatus.Saved, ready.replyStatus)
         assertEquals("実際に困った場面があった", ready.reflection.reply)
         assertEquals(FIXED_NOW, ready.reflection.repliedAtEpochMillis)
         // 前後の空白は落として保存する（画面の下書きをそのまま渡さない）
@@ -293,7 +295,8 @@ class RemarkControllerTest {
 
         val ready = state.value.remarkState as RemarkState.Ready
         assertEquals("預かってもらう返事", ready.reflection.reply)
-        assertFalse("預かったのに未保存として出ている", ready.isReplyUnsaved)
+        // **「保存済み」とは呼ばない。** 離脱時の書き込みで確定するまでは保存中。
+        assertEquals(ReplyStatus.Held, ready.replyStatus)
     }
 
     /**
@@ -313,7 +316,7 @@ class RemarkControllerTest {
         controller.saveReply("ideas/dialog.md", "消えたら困る返事")
 
         val ready = state.value.remarkState as RemarkState.Ready
-        assertTrue("未保存であることが伝わっていない", ready.isReplyUnsaved)
+        assertEquals(ReplyStatus.Failed, ready.replyStatus)
         // 本文は状態へ残す。消すと書き直しもできない。
         assertEquals("消えたら困る返事", ready.reflection.reply)
     }
@@ -330,7 +333,10 @@ class RemarkControllerTest {
 
         controller.saveReply("ideas/dialog.md", "例外でも残したい")
 
-        assertTrue((state.value.remarkState as RemarkState.Ready).isReplyUnsaved)
+        assertEquals(
+            ReplyStatus.Failed,
+            (state.value.remarkState as RemarkState.Ready).replyStatus
+        )
     }
 
     // ── 保存済みの読み戻し ───────────────────────────────────────────────────

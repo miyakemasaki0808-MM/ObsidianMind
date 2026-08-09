@@ -215,6 +215,46 @@ class RemarkComposerTest {
         )
     }
 
+    // ── AIへ渡す返事の抜粋 ──────────────────────────────────────────────
+    //
+    // **保存とAI入力の予算は別。** 以前は同じ400文字で縛っており、
+    // ローカルLLMへ渡せる長さがそのままユーザーの文章の上限になっていた。
+
+    @Test
+    fun `短い返事はそのまま渡る`() {
+        val reply = "実際に困った場面があった。"
+
+        assertEquals(reply, excerptReplyForPrompt(reply))
+    }
+
+    @Test
+    fun `長い返事は先頭と末尾を残して中略される`() {
+        val head = "書き出しの主張。"
+        val tail = "最後にたどり着いた結論。"
+        val reply = head + "あ".repeat(RemarkLimits.REPLY_EXCERPT_CHARS * 2) + tail
+
+        val excerpt = excerptReplyForPrompt(reply)
+
+        assertTrue("先頭が残っていない", excerpt.startsWith(head))
+        assertTrue("末尾が残っていない", excerpt.endsWith(tail))
+        assertTrue("中略の印が無い", excerpt.contains("中略"))
+        assertTrue(
+            "予算を超えている: ${excerpt.length}",
+            excerpt.length <= RemarkLimits.REPLY_EXCERPT_CHARS
+        )
+    }
+
+    /**
+     * 保存できる長さがAI入力の予算より**十分大きい**こと。
+     * ここが同じ値だった頃、長文の返事は貼った時点で捨てられていた。
+     */
+    @Test
+    fun `保存の上限はAI入力の予算より大きい`() {
+        assertTrue(RemarkLimits.MAX_REPLY_CHARS > RemarkLimits.REPLY_EXCERPT_CHARS * 10)
+        // 静かに知らせる目安は、上限より内側にあること
+        assertTrue(RemarkLimits.SOFT_REPLY_CHARS < RemarkLimits.MAX_REPLY_CHARS)
+    }
+
     // ── 保存側との整合 ──────────────────────────────────────────────────
 
     /**
@@ -228,6 +268,17 @@ class RemarkComposerTest {
         assertTrue(
             "文字数上限($worstCase バイト)が保存上限(${ReadingTraceLimits.MAX_REMARK_BYTES})を超えている",
             worstCase <= ReadingTraceLimits.MAX_REMARK_BYTES
+        )
+    }
+
+    /** 返事も同じ。画面で受け付けた長さが、保存で弾かれてはいけない。 */
+    @Test
+    fun `返事の文字数上限は保存のバイト上限の内側にある`() {
+        val worstCase = "あ".repeat(RemarkLimits.MAX_REPLY_CHARS).toByteArray(Charsets.UTF_8).size
+
+        assertTrue(
+            "返事の文字数上限($worstCase バイト)が保存上限(${ReadingTraceLimits.MAX_REPLY_BYTES})を超えている",
+            worstCase <= ReadingTraceLimits.MAX_REPLY_BYTES
         )
     }
 }

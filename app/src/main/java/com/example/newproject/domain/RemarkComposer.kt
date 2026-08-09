@@ -13,6 +13,32 @@ import com.example.newproject.model.REMARK_NONE_TOKEN
 
 internal object RemarkLimits {
     /**
+     * 返事の文字数上限（保存側）。**AIへ渡せる長さとは別物。**
+     *
+     * 以前は 400 で、これは `MAX_REPLY_BYTES`（当時1536）から逆算した値だった。
+     * つまり**ローカルLLMへ渡せる長さが、そのままユーザーの文章の上限**になっていた。
+     * 本文は「保存は原文・AIへは抜粋」でやっているのに、返事だけ両方を同じ数字で
+     * 縛っていたのが誤り（→ design/reflect_remark.md §11）。
+     */
+    const val MAX_REPLY_CHARS = 8_000
+
+    /**
+     * ここを超えたら**静かに知らせるだけ**の目安。切り詰めも拒否もしない。
+     *
+     * 「汎用エディタにしない」という意図（→ feature_ideas N-6）は
+     * **壁ではなく合図**で守る。壁にすると、長く書きたかった回でユーザーの言葉が消える。
+     */
+    const val SOFT_REPLY_CHARS = 2_000
+
+    /**
+     * AIへ渡す返事の上限。**先頭と末尾を残して真ん中を落とす。**
+     *
+     * 出力枠が256トークンしかないので、入力を長くしても返ってくる1文は変わらない。
+     * 書き出しと締めが残れば「何を言ったか」は十分伝わる。
+     */
+    const val REPLY_EXCERPT_CHARS = 400
+
+    /**
      * 短すぎる応答の下限。「なるほど」「特にありません」のような相槌を弾く。
      * 仕様の下限（80文字程度）より緩いのは、**検査で落とすと画面には
      * 「見つかりませんでした」しか出ない**ため、長さの好みで機能を殺さないようにするもの。
@@ -170,6 +196,29 @@ internal fun composeMirroredRemark(response: String): RemarkResult {
 }
 
 private val QUESTION_MARK = Regex("[?？]")
+
+/** 抜粋したことをモデルへ伝える印。落とした事実を隠すと、途中で切れた文と区別できない。 */
+private const val REPLY_ELLIPSIS = "\n（中略）\n"
+
+/**
+ * AIへ渡す返事を [RemarkLimits.REPLY_EXCERPT_CHARS] へ収める。
+ *
+ * **保存する返事は切らない。** ここで切るのはプロンプトへ載せるぶんだけで、
+ * サイドカーには原文がそのまま入る（本文の抜粋と同じ考え方 → ai_input_excerpt）。
+ *
+ * 先頭を厚めに残すのは、返事は書き出しに主張が来ることが多いため。
+ * 末尾も残すのは、書きながら考えて最後に結論へ着く書き方を落とさないため。
+ */
+internal fun excerptReplyForPrompt(reply: String): String {
+    val budget = RemarkLimits.REPLY_EXCERPT_CHARS
+    if (reply.length <= budget) return reply
+    val usable = budget - REPLY_ELLIPSIS.length
+    // 予算が印より小さい極端な設定では、先頭だけを返す（印を入れる余地が無い）。
+    if (usable <= 0) return reply.take(budget)
+    val head = usable * 60 / 100
+    val tail = usable - head
+    return reply.take(head).trimEnd() + REPLY_ELLIPSIS + reply.takeLast(tail).trimStart()
+}
 
 /** `[[...]]` を落とした地の文。根拠はここで測る（リンク先の名前を根拠に数えない）。 */
 private fun String.withoutLinks(): String = REMARK_LINK.replace(this, " ")
