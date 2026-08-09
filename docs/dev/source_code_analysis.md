@@ -16,8 +16,8 @@ instrumentation の全段階**まで。文書のみのコミットは対象外
 **対象範囲:** `app/src/main`、`app/src/test`、**`app/src/androidTest`**、**`app/src/debug`**、Gradle設定
 
 **検証結果:** 2026-08-08 に `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` をCLI実行し、
-**JVM 748ケース全件グリーン・Lint Error 0 / Warning 0（更新系は12 hints）・Kotlinコンパイル警告 0** を確認済み。
-**instrumentation は 34/34 成功・0 skipped**（Pixel 10 Pro Fold / Android 17・実機）。
+**JVM 753ケース全件グリーン・Lint Error 0 / Warning 0（更新系は12 hints）・Kotlinコンパイル警告 0** を確認済み。
+**instrumentation は 37/37 成功・0 skipped**（Pixel 10 Pro Fold / Android 17・実機）。
 警告はLintとKotlinの両方でビルドを落とす設定になった（§13.3）。
 ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、
 その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。
@@ -25,7 +25,7 @@ instrumentation の全段階**まで。文書のみのコミットは対象外
 **ReadingTrace v1 は 2026-07-31 にクローズ済み**（→ [reflect_reading_trace](design/reflect_reading_trace.md) §12）。
 Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
 
-> **注意:** instrumentation が34件になったことは、**保護範囲が34件ぶん広がったことを意味しない。**
+> **注意:** instrumentation が37件になったことは、**保護範囲が37件ぶん広がったことを意味しない。**
 > 2026-08-08 の外部レビューで、**主張が実際に試していることより広い箇所が3件**指摘されている
 > （連打テストが操作間で同期している／`ActivityScenario.recreate()` はプロセス死亡ではない／
 > 端末AI生成は10経路中4経路）。→ §13.5・§13.6
@@ -58,7 +58,7 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 - ノート単位の Controller は requestId ＋ Job 追跡で古い結果の混入を防ぐ。Vault単位の要求（補記一覧・削除・フォルダ一覧・痕跡の整理）は寿命が違うため、共有の `vaultGeneration` を `update` 直前に照合する二層構成になっている。**痕跡の削除だけは世代照合に加えて、洗い出した時点の Vault識別子を保持して照合する**（キーが相対パスのハッシュのため、別Vaultの同名パスと衝突しうる）。
 - 状態は `NoteUiStateStore` だけが所有し、各Controllerへは機能別の `*StateWriter` を渡すため、担当外フィールドへの書き込みはコンパイル時に不可能である。ノート切替のジョブ停止と状態リセットは `onNoteChanged()` の1手に閉じている。
 - パッケージ依存は `model` を葉とする一方向に整理され、`PackageDependencyTest` がimportを走査してCIで固定している。循環は残っていない。
-- **SAF・画像復号・Compose描画・画面遷移・端末AI生成を実機で通す instrumentation が 34件そろい、2026-08-08 に 34/34 成功した**（→ §13.5）。土台は `src/debug` のテスト用 `DocumentsProvider` で、本番の `NoteRepository` / `SafVaultBrowser` をそのまま動かす。**ただし保証範囲は主張より狭い** — 連打テストは競合を作れておらず、`recreate()` はプロセス死亡を覆わず、端末AI生成は10経路中4経路だけである（→ §13.6）。**CIでは実行しない**判断を 2026-08-08 に確定した（→ §13.3）。
+- **SAF・画像復号・Compose描画・画面遷移・端末AI生成を実機で通す instrumentation が 37件そろい、2026-08-08 に 37/37 成功した**（→ §13.5）。土台は `src/debug` のテスト用 `DocumentsProvider` で、本番の `NoteRepository` / `SafVaultBrowser` をそのまま動かす。**ただし保証範囲は主張より狭い** — 連打の主張は撤回済み、`recreate()` はプロセス死亡を覆わず、端末AI生成は10経路中4経路だけである（→ §13.6）。**CIでは実行しない**判断を 2026-08-08 に確定した（→ §13.3）。
 - ReadingTraceは主要経路とJVMテストが揃い、レビューで見つかった高優先度4件（ブロック数基準の到達率、Activity停止・再開、Vault切替中の起動済み保存、検索フォールバックの文言差）も解消済みである。ただしSAF照合とActivity lifecycleの実挙動はJVMテストの範囲外なので、実端末確認が完了判定に要る。
 - 構造面の成長限界（依存の循環・ViewModelのテスト不能・状態の共有所有）は 2026-07-27 のB案で解消した。アクセシビリティとリリース構成は 2026-07-29〜30 のD案・E案で着手し、**ライトの文字トークンは実際に載る面すべてで4.5:1を満たす**ようになった。残る弱点は R8・署名が未設定であること、下部ナビ帯の上のバッジ塗りが基準未達であること、そして **instrumentation の実行がCIで担保されず「PR前に手で回す」運用のままであること**に移っている。
 
@@ -71,8 +71,8 @@ Q&AとAI補記はバックグラウンド生成方式で、生成中もノート
 | 区分 | ファイル数 | 行数・件数 |
 |---|---:|---:|
 | 本番 Kotlin | 118ファイル | 18,396行 |
-| ユニットテスト Kotlin | 69ファイル | 13,139行、748テスト（テストクラスは68。残り1つは共有フェイク `FakeVault.kt`） |
-| instrumentation テスト Kotlin | 9ファイル | 1,544行、34テスト（**2026-08-08 に実機で 34/34 成功・0 skipped**。内訳は §13.5） |
+| ユニットテスト Kotlin | 69ファイル | 13,139行、753テスト（テストクラスは68。残り1つは共有フェイク `FakeVault.kt`） |
+| instrumentation テスト Kotlin | 9ファイル | 37テスト（**2026-08-08 に実機で 37/37 成功・0 skipped**。内訳は §13.5） |
 | debug ソースセット Kotlin | 1ファイル | 301行（instrumentation 用の偽SAFプロバイダ。**release には入らない**） |
 | Androidモジュール | 1 | `:app` |
 
@@ -217,10 +217,10 @@ app/src/
 │   └── res/
 │       ├── values/                             # app_name、テーマ（システムバーは透明・色はCompose側）
 │       └── xml/                                # backup_rules / data_extraction_rules（バックアップ除外）
-├── test/java/com/example/newproject/           # 68ファイル・748テスト（内訳は §13.1）
+├── test/java/com/example/newproject/           # 68ファイル・753テスト（内訳は §13.1）
 │   ├── architecture/PackageDependencyTest.kt   # importを走査してパッケージ依存の向きを固定
 │   └── ui/theme/VibrantTextUsageTest.kt        # 画面からのonVibrant直接使用と文字色のcopy(alpha)を禁じる
-├── androidTest/java/com/example/newproject/    # 9ファイル・34テスト（内訳は §13.5）
+├── androidTest/java/com/example/newproject/    # 9ファイル・37テスト（内訳は §13.5）
 │   ├── InstrumentationSetupTest.kt             # Runner起動・対象Contextのみ（Composeルールを持たない）
 │   ├── ComposeRenderingSetupTest.kt            # Compose描画とEspressoのUI同期
 │   ├── ai/PromptTokenBudgetTest.kt             # 端末AIのトークン計測と能力診断
@@ -229,7 +229,7 @@ app/src/
 │   ├── data/NoteImageGatewayInstrumentationTest.kt # 実物BitmapFactoryでの復号と上限の境界
 │   ├── ui/NoteReadingFlowTest.kt               # 描画抑止・全画面への位置引き継ぎ・進捗報告
 │   ├── ui/ActivityRecreationTest.kt            # Activity再生成（プロセス死亡は覆わない → §13.6）
-│   └── ui/TabNavigationTest.kt                 # タブ遷移（連打は競合を作れていない → §13.6）
+│   └── ui/TabNavigationTest.kt                 # タブ履歴契約（連打の主張は撤回 → §13.6）
 └── debug/java/com/example/newproject/testing/
     └── FakeVaultDocumentsProvider.kt           # instrumentation 用の偽SAF。**release には入らない**
 
@@ -909,7 +909,7 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 | `domain/ReadingTraceOrphansTest.kt` | 27 | 孤児判定の遮断器（フォルダ単位・読取失敗の伝播・**ルートと別サブツリーの混在**）、削除直前の三値再走査 |
 | `architecture/ReviewFindingsLedgerTest.kt` | 6 | レビュー指摘が受付簿へ全件載ること、処遇の語彙、**起票の参照先が実在すること**、ID重複の拒否 |
 | `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ §13.5の脚注） |
-| **合計（68ファイル）** | **748** | |
+| **合計（68ファイル）** | **753** | |
 
 なお `NoteHistoryStore` は `Uri`・`org.json` がAndroid実装依存のため、素のローカルユニットテストでは検証していない（Robolectric等の導入が前提になる）。
 
@@ -925,7 +925,7 @@ BUILD SUCCESSFUL
 その後、テーマ基盤リファクタで状態導出11件とコントラスト15件、Vigilithの輝度差1件を追加。さらに改善活動A案（要約Controllerの世代管理・検索スコープ）、C案（用途別の読込予算・累計回数）、B案（切替の一斉停止と一斉初期化・状態Writer・パッケージ依存）で計46件を追加して49ファイル・425ケースとなった。2026-07-28のAI入力の抜粋化で25件を追加して450ケース。2026-07-29〜30のD案・E案でコントラスト検証を作り直し（面の総当たり・半透明の実効色・停止色との比・明暗の反転）、使用箇所の禁止テストを新設して9件増え53ファイル・459ケースとなった。2026-07-31 の F-1（表示用Markdownの非同期化）で12件、F-2（蒸留の復旧チェック・補記の後始末）で15件を追加して56ファイル・486ケース。2026-08-01 の N-7 段階1〜6（`DocumentRef` 化）で1件、同段階7（`VaultBrowser`）で**さがす／補記の世代照合・検索実行・走査キャッシュ・削除失敗の件数・ハンドル取得の契約を21件追加**し、**57ファイル・508ケースとなった**。2026-08-02 の Markdownリスト構造（入れ子・番号・タスク混在）で17件、バッジ記号の基準見直しで2件を追加し、59ファイル・583ケースとなった。
 その後 N-3（ノート内画像）で画像の参照解決・復号方針・索引・文言を追加し、
 **2026-08-05〜08 の外部レビュー対応**で上限つきストリームの境界13件・遮断器の混在ケース・
-受付漏れ検査6件・テスト形状の検査1件を足して、**現在は68ファイル・748ケース全件グリーン**。
+受付漏れ検査6件・テスト形状の検査1件を足して、**現在は68ファイル・753ケース全件グリーン**。
 
 **この期間に増えた分は、性質が2つに分かれる。** 片方は本番の欠陥を閉じるもの
 （`BoundedInputStreamTest` の境界、`ReadingTraceOrphansTest` のルート混在、
@@ -995,9 +995,9 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 
 ---
 
-### 13.5 instrumentation の内訳（34件）
+### 13.5 instrumentation の内訳（37件）
 
-2026-08-08 に段階1〜4cを実装し、**実機で 34/34 成功・0 skipped**（Pixel 10 Pro Fold / Android 17）。
+2026-08-08 に段階1〜4cを実装し、**実機で 37/37 成功・0 skipped**（Pixel 10 Pro Fold / Android 17）。
 段階の定義と判断は [instrumentation_testing](design/instrumentation_testing.md) が持つ。
 
 | テストクラス | 件数 | 対象 | JVMで書けない理由 |
@@ -1005,12 +1005,12 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 | `InstrumentationSetupTest` | 1 | 対象アプリのContext取得 | Runnerの疎通 |
 | `ComposeRenderingSetupTest` | 1 | Composeテストルールの描画 | Compose実行環境 |
 | `NoteReadingFlowTest` | 4 | 解析待ちの描画抑止、全画面への位置引き継ぎ、進捗報告の整合 | レイアウト実測・可視判定 |
-| `VaultScanInstrumentationTest` | 6 | 走査の相対パス、**読取失敗と不在の区別**、補記の作成/一覧/削除 | 実物の `ContentResolver`・`DocumentsContract` |
+| `VaultScanInstrumentationTest` | 8 | 走査の相対パス、**読取失敗と不在の区別**、補記の作成/一覧/削除、document同一性 | 実物の `ContentResolver`・`DocumentsContract` |
 | `NoteImageGatewayInstrumentationTest` | 7 | 復号・寸法読み、上限の内外、`TooLarge`/`Broken` の切り分け | 実物の `BitmapFactory` |
 | `PromptTokenBudgetTest` | 5 | トークン計測と能力診断 | 端末AI（AICore） |
 | `OnDeviceGenerationTest` | 4 | 本番プロンプトでの実生成 | 端末AI（AICore） |
 | `ActivityRecreationTest` | 2 | Activity再生成でOPを再生しない、繰り返し再生成（**プロセス死亡は覆わない**） | Activityライフサイクル |
-| `TabNavigationTest` | 4 | タブの往復・巡回・連打・遷移先での再生成 | `NavHost` のバックスタック |
+| `TabNavigationTest` | 5 | タブの往復・巡回・**戻る操作での履歴契約**・遷移先での再生成 | `NavHost` のバックスタック |
 
 **土台は `src/debug` の `FakeVaultDocumentsProvider`。** 実物のSAF経路を通すために
 テスト用 `DocumentsProvider` をアプリ側（debug ソースセット）へ置き、
@@ -1029,12 +1029,13 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 **件数の増加を保護範囲の拡大と読み替えない。** 2026-08-08 の外部レビューで、
 **主張が実際に試していることより広い箇所が3件**指摘されている（TEST-4〜6として起票済み）。
 
-- **タブ連打は競合を作れていない。** `onNodeWithText(...).performClick()` は毎回
-  semantics を取り直して同期するため、遷移が重ならない。
-  さらに最後に Note を選べば最終assertは通るので、**`launchSingleTop` / `popUpTo` を外しても落ちない。**
+- **タブ連打は試していない（主張を撤回した）。** `performClick` は毎回 semantics を取り直して同期し、
+  生の `MotionEvent` は **Android 17 が instrumentation のUIDからの注入を拒否する**。
+  代わりに**タブ履歴契約を「戻る」で観測する** — `popUpTo` を外す変異で落ちることは実機で確認済み。
+  ただし **`launchSingleTop` 単体の効果は識別できていない**（`restoreState` が肩代わりする）。
 - **`ActivityScenario.recreate()` はプロセス死亡ではない。** 同一プロセス内でActivityを作り直すだけで、
   Application・静的状態・プロセス内キャッシュは生き残る。
-  **34/34成功からプロセス死亡耐性は結論できない。**
+  **全件成功からプロセス死亡耐性は結論できない。**
   → 2026-08-08 に `ActivityRecreationTest` へ改名し、KDoc・設計書・解析書の主張を
   「同一プロセス内のActivity再生成」へ狭めた。**プロセス死亡の保証は未着手のまま。**
 - **端末AIの生成は10経路中4経路だけ。** Nano依存9件の内訳は生成4件・計測/診断5件で、
@@ -1120,7 +1121,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 16. （実装済み・2026-07-29〜30）ライト配色のAA未達を是正した。無彩色グレーを3段階へ統合し、基準面を `panelChip` に統一。見出し2色と更新日時は色相を保ったまま明度を下げ、グラデーション直上の文字は共通部品が背景ごと持ち、ボタンは輪郭線で境界を出す。検証は「トークン×実際に載る面」の総当たりへ移し、使用箇所の禁止をソース走査で強制した。
 17. （実装済み・2026-07-29）`applicationId` を `com.vigilith.ai` に確定した（`namespace` は据え置き）。
 18. R8を有効化して keep ルールを確認し、リリース署名の手順を決める。7つのAI経路を release ビルドで一巡する必要がある。
-19. （実装済み・2026-08-08）instrumentation の中身を34件書き、実機で 34/34 成功した（→ §13.5）。**残るのは、主張が観測より広い3件を狭めるか広げるか**（TEST-4〜6）と、実行がCIで担保されないこと。CIエミュレータは 2026-08-08 に見送りで確定した。
+19. （実装済み・2026-08-08）instrumentation の中身を37件書き、実機で 37/37 成功した（→ §13.5）。**外部レビューで「主張が観測より広い」と指摘された3件は、いずれも主張を狭める形で対応した**（プロセス死亡・全AI経路・入力競合）。実行がCIで担保されない点は、見送りで確定している。
 20. 依存を実際に上げる。単位と契機は確定済み（→ design/dependency_policy.md）で、まず ML Kit GenAI beta4 の変更点をAARで確認する。**Compose BOM は Lint の検出から漏れる**ので手で見る。
 21. 下部ナビ帯の上のバッジ塗りを、輪郭線か明度の見直しで3:1へ乗せる。
 

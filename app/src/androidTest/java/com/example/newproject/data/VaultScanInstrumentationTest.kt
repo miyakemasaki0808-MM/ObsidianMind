@@ -119,7 +119,7 @@ class VaultScanInstrumentationTest {
      * `a_b.md`（ID `root/a_b.md`）と `a/b.md`（ID `root/a/b.md`）が
      * **同じファイルへ潰れて後勝ちで上書き**されていた。
      * 現行のテストデータでは顕在化していなかったが、
-     * **実プロバイダには無い衝突を観測する**土台になっていた（TEST-7）。
+     * **実プロバイダには無い衝突を観測する**土台になっていた。
      */
     @Test
     fun 区切りだけが違うパスは別の実体として扱われる() = runBlocking<Unit> {

@@ -166,7 +166,7 @@ class ReviewFindingsLedgerTest {
 
     private fun ledgerIds(): Set<String> = ledgerRows().map { it.first }.toSet()
 
-    /** 課題台帳の見出しから課題IDを拾う（`## TRACE-1. ...` → `TRACE-1`）。 */
+    /** 課題台帳の見出しから課題IDを拾う（`## ABC-1. ...` → `ABC-1`）。 */
     private fun issueIds(): Set<String> =
         ISSUE_HEADING.findAll(docsRoot().resolve("_wip/current_issues.md").readText())
             .map { it.groupValues[1] }
@@ -199,7 +199,7 @@ class ReviewFindingsLedgerTest {
          *
          * `[A-Z0-9]+-\d+` だと処遇欄の日付（`2026-08-05` の `2026-08` の部分）にも
          * 当たる。参照を**すべて**検証する形にした以上、日付を書いただけの
-         * `起票` 行が落ちてしまうため、英字始まりに絞る（`A11Y-1` は通る）。
+         * `起票` 行が落ちてしまうため、英字始まりに絞る（英数字混在のカテゴリも通る）。
          */
         val ISSUE_ID_PATTERN = Regex("""\b[A-Z][A-Z0-9]*-\d+\b""")
 

@@ -513,7 +513,7 @@ internal class SafReadingTraceDocumentGateway(
         if (!children.isComplete) return null
         val files = indexFiles(vault, children)
         // 新鮮で完全な一覧が取れたので、索引キャッシュもここで更新しておく。
-        // 掃除の下見をした瞬間だけ SYNC-2 の陳腐化が解消する（副作用として害はない）。
+        // 掃除の下見をした瞬間だけ、外部同期による索引の陳腐化が解消する（副作用として害はない）。
         index = FolderIndex(vault, folder, files, isComplete = true)
         return files.keys.toSet()
     }

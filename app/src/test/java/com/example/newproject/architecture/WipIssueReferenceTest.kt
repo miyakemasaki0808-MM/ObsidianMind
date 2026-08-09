@@ -21,7 +21,7 @@ import org.junit.Test
  * ## 見ているもの
  *
  * `_wip/roadmap.md` と `_wip/feature_ideas.md` の本文に出てくる課題ID表記
- * （`TEST-2` のような形）が、すべて `_wip/current_issues.md` の見出しに実在すること。
+ * （`ABC-1` のような形）が、すべて `_wip/current_issues.md` の見出しに実在すること。
  *
  * ## 見ていないもの
  *
@@ -54,6 +54,50 @@ class WipIssueReferenceTest {
         )
     }
 
+    /**
+     * **コードから `_wip/` の課題IDを参照しない**（→ document_map §3）。
+     *
+     * `_wip/` はリリース時に丸ごと捨てるので、コードが番号に依存すると
+     * **捨てた瞬間に意味が消える。** 課題に触れるときは番号ではなく内容を書く。
+     *
+     * この規約は文書に2箇所書いてあったが**守られなかった** —
+     * 2026-08-08 に自分で「すべて直した」と報告した後、外部レビューが残り2件を見つけ、
+     * さらに調べると計6件あった。**記法（`current_issues TEST-`）で grep したためで、
+     * 性質で数えていなかった**（→ lessons L14）。
+     *
+     * **判定は台帳のカテゴリ接頭辞に限る。** `SHA-256` や `UTF-8`、テストデータの
+     * `HEADING-01` が同じ形をしているため、一般の `英字-数字` では誤検出する。
+     * カテゴリが台帳から1つ残らず消えるとその接頭辞は数えられなくなるが、
+     * **その状態なら参照も残っていないはず**なので実害は小さい。
+     */
+    @Test
+    fun `コードが課題IDを参照していない`() {
+        val categories = issueIds().map { it.substringBefore('-') }.toSet()
+        val violations = sourceFiles().flatMap { file ->
+            ISSUE_ID_PATTERN.findAll(file.readText())
+                .filter { it.groupValues[1] in categories }
+                .map { "${file.name}: ${it.value}（番号ではなく内容を書く）" }
+                .distinct()
+        }.sorted()
+
+        assertTrue(
+            "コードから `_wip/` の課題IDを参照しています:\n" + violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    private fun sourceFiles(): List<File> =
+        sourceRoot().walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+
+    private fun sourceRoot(): File {
+        val workingDirectory = File(
+            requireNotNull(System.getProperty("user.dir")) { "user.dir が設定されていません" }
+        )
+        return listOf(workingDirectory.resolve("src"), workingDirectory.resolve("app/src"))
+            .firstOrNull { it.isDirectory }
+            ?: error("app/src が見つかりません（作業ディレクトリ: $workingDirectory）")
+    }
+
     private fun referencingFiles(): List<File> =
         listOf("roadmap.md", "feature_ideas.md").map { wipRoot().resolve(it) }.filter { it.isFile }
 
@@ -83,7 +127,7 @@ class WipIssueReferenceTest {
          * **英字始まりに限る**のは日付（`2026-08`）に当たらないため。
          * **2文字以上**に限るのは、節番号（`L-3` / `N-7` / `D-1`）を拾わないため。
          *
-         * **当初 `{2,}`（3文字以上）にしていて `AI-3` のような2文字カテゴリを取りこぼしていた。**
+         * **当初 `{2,}`（3文字以上）にしていて2文字カテゴリを取りこぼしていた。**
          * 検査そのものが、守りたい対象より狭い範囲しか数えていなかった（→ lessons L29）。
          */
         val ISSUE_ID_PATTERN = Regex("""\b([A-Z][A-Z0-9]+)-\d+\b""")
