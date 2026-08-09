@@ -45,7 +45,17 @@ internal enum class RemarkRejection {
     /** ノートに出てこない言葉だけで書かれている（一般論）。 */
     NotGrounded,
     /** 候補集合に無いノートを [[...]] で参照した。 */
-    UnknownLink
+    UnknownLink;
+
+    /**
+     * モデルが指示に従えなかったか（＝もう一度きけば変わりうるか）。
+     *
+     * **[NothingToSay] だけが「本当に出すものが無い」。** 残りはすべて
+     * 「言おうとしたが形式を守れなかった」なので、**ユーザーの次の行動が違う** —
+     * 前者は再試行しても同じ、後者は再試行が効く。
+     * ここを畳むと、モデルの書式失敗が「問いが見つかりませんでした」に化ける。
+     */
+    val isModelFailure: Boolean get() = this != NothingToSay
 }
 
 internal sealed interface RemarkResult {
@@ -88,7 +98,6 @@ internal fun composeRemark(
 
     // リンクの差し戻しを先に行う。ID（C03）は原文に出てこないので、
     // 差し戻す前に根拠を測ると必ず不利になる。
-    var sawLink = false
     var unknownLink = false
     val resolved = REMARK_LINK.replace(cleaned) { match ->
         val raw = match.groupValues[1].trim()
@@ -97,7 +106,6 @@ internal fun composeRemark(
             unknownLink = true
             match.value
         } else {
-            sawLink = true
             "[[$title]]"
         }
     }
@@ -112,13 +120,22 @@ internal fun composeRemark(
     if (resolved.length > RemarkLimits.MAX_CHARS) {
         return RemarkResult.Rejected(RemarkRejection.TooLong)
     }
-    // 実在ノートへのリンクを含むなら、それ自体がノート固有の参照なので根拠として認める
-    // （候補集合は現ノートから作られており、モデルが勝手に作れる文字列ではない）。
-    if (!sawLink && !isGroundedInSource(resolved, groundingSource)) {
+    // **リンクの有無で免除しない。** 当初は「実在ノートへのリンク自体がノート固有の参照」
+    // として検査を飛ばしていたが、それだと
+    // 「[[問いを立てる技術]]と並べると、まったく別の角度から捉え直せるかもしれません」
+    // のような**残り全部が一般論の文**が通る。今回いちばん潰したかった形そのものだった。
+    //
+    // 根拠は `[[...]]` を除いた地の文で測る。リンクへ差し戻した実タイトルが
+    // たまたま原文に出てくると、それだけで検査を通ってしまうため
+    // （wikilinkを本文に持つノートでは普通に起きる）。
+    if (!isGroundedInSource(resolved.withoutLinks(), groundingSource)) {
         return RemarkResult.Rejected(RemarkRejection.NotGrounded)
     }
     return RemarkResult.Accepted(resolved)
 }
+
+/** `[[...]]` を落とした地の文。根拠はここで測る（リンク先の名前を根拠に数えない）。 */
+private fun String.withoutLinks(): String = REMARK_LINK.replace(this, " ")
 
 /**
  * ひとことが原文由来の言葉を含むかを、連続一致の有無で判定する。

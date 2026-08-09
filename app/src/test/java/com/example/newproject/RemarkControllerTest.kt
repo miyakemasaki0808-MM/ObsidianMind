@@ -71,7 +71,7 @@ class RemarkControllerTest {
     }
 
     /**
-     * 検証に落ちたものは Empty へ倒し、**痕跡へは何も預けない。**
+     * 検証に落ちたものは**痕跡へ何も預けない。**
      * 預けてしまうと、一般論や候補外リンクがサイドカーへ残る。
      */
     @Test
@@ -86,7 +86,8 @@ class RemarkControllerTest {
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
-        assertTrue(state.value.remarkState is RemarkState.Empty)
+        // 一般論は「出すものが無い」ではなくモデルの書式失敗として扱う（再試行が効く）
+        assertTrue(state.value.remarkState is RemarkState.Unusable)
         assertTrue(handed.isEmpty())
     }
 
@@ -153,10 +154,9 @@ class RemarkControllerTest {
         assertTrue(state.value.remarkState is RemarkState.Idle)
     }
 
-    // 出力は1件なので候補を多く見せる意味が無い。リンク集ノートで候補が
-    // 本文を押し出すのを構造的に防ぐ（旧補記は無制限に渡していた）。
+    // 出力は1件なので候補を多く見せる意味が無い。8件のタイトルより3件＋抜粋を選ぶ。
     @Test
-    fun `候補ノートは上限で切られ現ノート自身と重複は除かれる`() = runTest {
+    fun `候補ノートは3件で切られ現ノート自身と重複は除かれる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
         val ai = CapturingAiClient()
         val controller = controller(state, ai)
@@ -168,13 +168,62 @@ class RemarkControllerTest {
             aiNotes = listOf(relatedNote("対話について"), relatedNote("関連1"))
         )
 
-        val prompt = requireNotNull(ai.lastPrompt)
-        val candidateLines = prompt.lines().filter { it.matches(Regex("^C\\d\\d \\| .*")) }
-        assertEquals(8, candidateLines.size)
+        val candidateLines = candidateLinesOf(ai)
+        assertEquals(3, candidateLines.size)
         // 現ノート自身は候補にしない（自分自身へのリンクを提案させない）
         assertNull(candidateLines.firstOrNull { it.endsWith("| 対話について") })
         // 同じノートが2つのIDを持たない
-        assertEquals(candidateLines.size, candidateLines.map { it.substringAfter("| ") }.distinct().size)
+        assertEquals(
+            candidateLines.size,
+            candidateLines.map { it.substringAfter("| ").substringBefore(" — ") }.distinct().size
+        )
+    }
+
+    // タイトルだけでは中身に踏み込んだ接続理由を作れない。
+    // スニペットは関連ノートAIが再ランクで既に読んだ値なので追加I/Oは無い。
+    @Test
+    fun `候補に本文スニペットが添えられる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = CapturingAiClient()
+        val controller = controller(state, ai)
+
+        controller.create(
+            title = "対話について",
+            content = body,
+            relatedNotes = emptyList(),
+            aiNotes = listOf(relatedNote("問いを立てる技術", snippet = "良い問いは答えより長く残る。"))
+        )
+
+        assertEquals(
+            listOf("C01 | 問いを立てる技術 — 良い問いは答えより長く残る。"),
+            candidateLinesOf(ai)
+        )
+    }
+
+    /**
+     * AI推薦を先に置き、**既にwikilinkされた関連ノートは最後**へ回す。
+     * 既に繋がっているノートへ「つなげると」と提案しても新しくない。
+     */
+    @Test
+    fun `既にwikilinkされた候補は後回しになる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = CapturingAiClient()
+        val controller = controller(state, ai)
+
+        controller.create(
+            title = "対話について",
+            content = body,
+            relatedNotes = listOf(
+                relatedNote("既にリンク済み", isWikilinked = true),
+                relatedNote("まだ繋がっていない")
+            ),
+            aiNotes = listOf(relatedNote("AI推薦"))
+        )
+
+        assertEquals(
+            listOf("AI推薦", "まだ繋がっていない", "既にリンク済み"),
+            candidateLinesOf(ai).map { it.substringAfter("| ") }
+        )
     }
 
     // ── ヘルパ ───────────────────────────────────────────────────────────────
@@ -191,10 +240,18 @@ class RemarkControllerTest {
         excerptDispatcher = Dispatchers.Unconfined
     )
 
-    private fun relatedNote(title: String) = RelatedNote(
+    private fun candidateLinesOf(ai: CapturingAiClient): List<String> =
+        requireNotNull(ai.lastPrompt).lines().filter { it.matches(Regex("^C\\d\\d \\| .*")) }
+
+    private fun relatedNote(
+        title: String,
+        isWikilinked: Boolean = false,
+        snippet: String? = null
+    ) = RelatedNote(
         title = title,
         ref = DocumentRef("doc-$title"),
-        isWikilinked = false
+        isWikilinked = isWikilinked,
+        snippet = snippet
     )
 
     private class ImmediateAiClient(private val response: String) : AiClient {

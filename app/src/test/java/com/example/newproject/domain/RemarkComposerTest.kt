@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.ReadingTraceLimits
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,12 +57,44 @@ class RemarkComposerTest {
         assertTrue((result as RemarkResult.Accepted).remark.contains("[[積読の効用]]"))
     }
 
-    // 実在ノートへの参照そのものがノート固有なので、原文との一致が無くても根拠として認める。
+    /**
+     * **リンクがあっても根拠検査は免除しない。**
+     *
+     * 当初は「実在ノートへの参照自体がノート固有」として免除していたが、
+     * それだと地の文が丸ごと一般論の「[[X]]と並べると、まったく別の角度から
+     * 捉え直せるかもしれません」が通る。**今回いちばん潰したかった形そのもの**だった。
+     */
     @Test
-    fun `リンクを含むひとことは原文一致が無くても受理される`() {
+    fun `リンクがあっても地の文が一般論なら拒否される`() {
         val result = compose("[[C01]]と並べると、まったく別の角度から捉え直せるかもしれません。")
 
-        assertTrue(result is RemarkResult.Accepted)
+        assertEquals(RemarkRejection.NotGrounded, (result as RemarkResult.Rejected).reason)
+    }
+
+    // 根拠は [[...]] を除いた地の文で測る。リンク先のタイトルがたまたま原文に
+    // 出てくると、それだけで検査を通ってしまう（wikilinkを持つノートでは普通に起きる）。
+    @Test
+    fun `リンク先の名前は根拠に数えない`() {
+        // 「読書」は原文に出てくるが、地の文ではなくリンク内にしかない
+        val result = composeRemark(
+            response = "[[C03]]はどうでしょうか。",
+            groundingSource = source,
+            candidateTitlesById = candidates + ("C03" to "読書について")
+        )
+
+        assertEquals(RemarkRejection.NotGrounded, (result as RemarkResult.Rejected).reason)
+    }
+
+    // 空振りと書式失敗を分ける。次の行動（再試行が効くか）が違う。
+    @Test
+    fun `NONE だけがモデルの失敗ではない`() {
+        assertFalse(RemarkRejection.NothingToSay.isModelFailure)
+        listOf(
+            RemarkRejection.TooShort,
+            RemarkRejection.TooLong,
+            RemarkRejection.NotGrounded,
+            RemarkRejection.UnknownLink
+        ).forEach { assertTrue("$it は再試行が効く", it.isModelFailure) }
     }
 
     @Test

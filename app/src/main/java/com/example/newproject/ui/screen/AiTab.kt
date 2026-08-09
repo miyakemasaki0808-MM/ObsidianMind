@@ -68,6 +68,7 @@ import com.example.newproject.ui.theme.PanelBlue
 fun AiTab(
     uiState: NoteUiState,
     onCreateRemark: () -> Unit,
+    onOpenRemark: () -> Unit,
     onStartDistill: () -> Unit,
     onDownloadDistillModel: () -> Unit,
     onToggleDistillCandidate: (String) -> Unit,
@@ -149,67 +150,41 @@ fun AiTab(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
-        RemarkPanel(state = uiState.remarkState, onCreate = onCreateRemark)
+        RemarkPanel(
+            state = uiState.remarkState,
+            onCreate = onCreateRemark,
+            onOpen = onOpenRemark
+        )
     }
 }
 
 /**
- * ノートへのひとこと。**結果は専用画面へ飛ばさず、この場に1文だけ出す。**
+ * ノートへのひとことの入口。**ここには結果を出さない。**
  *
- * 旧補記は生成物が `.md` ファイルだったため専用画面（AnnotationResultScreen）で
- * 開いていたが、出力が1文になったので画面を跨ぐ理由が無くなった
- * （→ design/reflect_remark.md §1・§7.1）。
+ * 当初は結果もこの場に出していたが、要約 → 蒸留 → ひとこと という長い
+ * 同一スクロールの最下段になり、**いちばん短い結果がいちばん埋もれた**
+ * （2026-08-09 の実機確認）。結果と再生成は [RemarkScreen] が引き受け、
+ * ここはボタン1つに保つ。
  */
 @Composable
-private fun RemarkPanel(state: RemarkState, onCreate: () -> Unit) {
+private fun RemarkPanel(state: RemarkState, onCreate: () -> Unit, onOpen: () -> Unit) {
     val label = when (state) {
         is RemarkState.Idle -> "✨ ひとことをもらう"
         is RemarkState.Loading -> "考えています…"
-        is RemarkState.Ready -> "↻ もう一度きく"
-        is RemarkState.Empty -> "↻ もう一度きく"
-        is RemarkState.Error -> "↻ もう一度きく"
+        // 結果の中身（届いた／空振り／書式失敗）はここで出し分けない。
+        // 「見る」で画面へ渡し、そこで読ませる。
+        else -> "ひとことを見る"
     }
-
-    // 本文（1文）はボタンより先に置く。押した結果を読む順序に合わせる。
-    when (state) {
-        is RemarkState.Ready -> RemarkBubble(state.remark)
-        // 「補記不要です」をAIに言わせない。空振りはUI側の固定文で受ける（§5）。
-        // 生成に枠を使わせないので、ここは翻訳もされない素の日本語でよい。
-        is RemarkState.Empty -> RemarkBubble("今は新しい問いは見つかりませんでした。")
-        is RemarkState.Error -> RemarkBubble("ひとことをもらえませんでした: ${state.message}")
-        else -> Unit
-    }
-    if (state !is RemarkState.Idle && state !is RemarkState.Loading) {
-        Spacer(modifier = Modifier.height(12.dp))
-    }
+    val action = if (state is RemarkState.Idle) onCreate else onOpen
 
     Button(
-        onClick = onCreate,
+        onClick = action,
         enabled = state !is RemarkState.Loading,
         modifier = Modifier.fillMaxWidth().height(48.dp),
         colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
         border = BorderStroke(1.dp, ButtonOutlineOnGradient),
         shape = RoundedCornerShape(24.dp)
     ) { Text(label, color = OnButtonAi) }
-}
-
-@Composable
-private fun RemarkBubble(text: String) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Panel,
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "AIからのひとこと",
-                color = OnSurfaceMuted,
-                fontSize = 12.sp
-            )
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(text = text, color = OnSurface, fontSize = 15.sp, lineHeight = 24.sp)
-        }
-    }
 }
 
 @Composable

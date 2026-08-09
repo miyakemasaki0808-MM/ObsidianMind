@@ -23,11 +23,15 @@ data class RelatedCandidateLine(val id: String, val title: String, val detail: S
 /**
  * ひとことプロンプトに渡す候補ノート。
  *
- * [RelatedCandidateLine] と形は似ているが `detail` を持たない。ひとことの出力枠は
- * 1文ぶんしかなく、候補の補助情報を読ませても出力へ出す先が無いため
- * （旧補記が3ブロックを渡しながら出力で使わせていなかったのと同じ失敗を作らない）。
+ * **タイトルだけでは中身に踏み込んだ接続理由を作れない**（2026-08-09 の実機確認の指摘）。
+ * そこで件数を絞るかわりに本文冒頭の [snippet] を添える。件数×情報量の合計は増やさない。
+ * スニペットは関連ノートAIが再ランクのために既に読んだ値を通しているだけで、
+ * ここで新しいI/Oは発生しない。
  */
-data class RemarkCandidateLine(val id: String, val title: String)
+data class RemarkCandidateLine(val id: String, val title: String, val snippet: String? = null) {
+    fun renderForPrompt(): String =
+        if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
+}
 
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
 internal data class DistillPrompt(
@@ -244,7 +248,7 @@ object PromptBuilder {
     ): String {
         val candidateBlock = candidates
             .takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { "${it.id} | ${it.title}" }
+            ?.joinToString("\n") { it.renderForPrompt() }
             ?: "(none)"
 
         // **複数行の値をテンプレートへ補間しない。** `trimIndent()` は補間"後"の

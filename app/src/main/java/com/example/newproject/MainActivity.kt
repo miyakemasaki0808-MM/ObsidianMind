@@ -47,6 +47,7 @@ import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
 import com.example.newproject.ui.screen.QuizScreen
+import com.example.newproject.ui.screen.RemarkScreen
 import com.example.newproject.ui.screen.RelatedTab
 import com.example.newproject.ui.screen.SearchTab
 import com.example.newproject.ui.vigilith.rememberVigilithState
@@ -124,7 +125,7 @@ class MainActivity : ComponentActivity() {
                 }
                 val openRemark = {
                     snackbarHostState.currentSnackbarData?.dismiss()
-                    navController.navigateToTab(AppDestination.Ai)
+                    navController.navigate("remark") { launchSingleTop = true }
                 }
                 val startRemark = {
                     val noteState = uiState.noteState
@@ -204,10 +205,20 @@ class MainActivity : ComponentActivity() {
                             if (result == SnackbarResult.ActionPerformed) openRemark()
                         }
                         // 空振りは失敗ではないので、行き先を示さず短く伝えるだけ。
+                        // 再試行しても同じなので「見る」も出さない。
                         is RemarkState.Empty -> snackbarHostState.showSnackbar(
                             message = "今は新しい問いは見つかりませんでした",
                             duration = SnackbarDuration.Short
                         )
+                        // 書式失敗は空振りと分ける。もう一度きけば変わりうる。
+                        is RemarkState.Unusable -> {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "うまく言葉にできませんでした",
+                                actionLabel = "もう一度",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) startRemark()
+                        }
                         is RemarkState.Error -> {
                             val result = snackbarHostState.showSnackbar(
                                 message = "ひとことをもらえませんでした",
@@ -318,6 +329,7 @@ class MainActivity : ComponentActivity() {
                             AiTab(
                                 uiState = uiState,
                                 onCreateRemark = startRemark,
+                                onOpenRemark = openRemark,
                                 onStartDistill = { viewModel.startDistill() },
                                 onDownloadDistillModel = { viewModel.downloadDistillModel() },
                                 onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
@@ -360,6 +372,14 @@ class MainActivity : ComponentActivity() {
                                 state = uiState.readingTraceCleanupState,
                                 onLoad = { viewModel.assessReadingTraceOrphans() },
                                 onDelete = { key -> viewModel.deleteReadingTrace(key) },
+                                onBack = { navController.popBackStack() }
+                            )
+                        }
+
+                        composable("remark") {
+                            RemarkScreen(
+                                state = uiState.remarkState,
+                                onRegenerate = startRemark,
                                 onBack = { navController.popBackStack() }
                             )
                         }

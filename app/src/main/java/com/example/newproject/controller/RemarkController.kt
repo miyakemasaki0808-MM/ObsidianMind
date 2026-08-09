@@ -31,8 +31,8 @@ import kotlinx.coroutines.withContext
  *   同時に出させると価値のある側が圧迫される（§0・§1）
  * - **Vaultへファイルを作らない。** 保存は読書痕跡サイドカーへ委ね、
  *   ここは生成と検証だけを持つ（§2）。したがって [VaultBrowser] に依存しない
- * - **未確認管理を持たない。** 結果は読書画面へ直接出るので `markViewed()` に
- *   相当する概念が無い（§7.1）
+ * - **未確認管理を持たない。** 結果は専用の1文画面（`RemarkScreen`）で読むので、
+ *   AIタブのボタン自体が「見る」の導線になり `markViewed()` に相当する概念が要らない（§7.1）
  *
  * 保存を自分で行わず [onRemarkReady] へ渡すのは、痕跡ファイルが未作成のうちに
  * 単独保存すると初回のノートで黙って失われるため（§2.1）。
@@ -64,17 +64,7 @@ internal class RemarkController(
 
         val requestId = ++activeRequestId
         val sourceTitle = title.toObsidianNoteTitle()
-        // AI推薦を先に置く。候補数を絞るときに残す価値が高いのはこちら。
-        // 重複はタイトルで畳む（同じノートが2つのIDを持つと、モデルがどちらを
-        // 選んでも同じ結果になるだけで候補枠を無駄にする）。
-        val candidateTitles = (aiNotes + relatedNotes)
-            .map { it.title.toObsidianNoteTitle() }
-            .filter { it.isNotBlank() && it != sourceTitle }
-            .distinct()
-            .take(REMARK_CANDIDATE_LIMIT)
-        val candidates = candidateTitles.mapIndexed { index, candidateTitle ->
-            RemarkCandidateLine(id = remarkCandidateId(index), title = candidateTitle)
-        }
+        val candidates = selectCandidates(sourceTitle, relatedNotes, aiNotes)
 
         val request = PendingRemark(
             requestId = requestId,
@@ -105,6 +95,39 @@ internal class RemarkController(
                 updateError(requestId, sourceTitle, e.message ?: "Unknown error")
             }
         }
+    }
+
+    /**
+     * プロンプトへ載せる候補を選ぶ。
+     *
+     * **AI推薦を先に置く。** 本文まで見て選ばれており、かつ本文スニペットを
+     * 持っているのはこちらだけなので、枠を絞るときに残す価値が高い。
+     * 決定的な関連ノートのうち**既にwikilinkされているものは最後**へ回す —
+     * 既に繋がっているノートへ「つなげると」と提案しても新しくない。
+     *
+     * 重複はタイトルで畳む（同じノートが2つのIDを持つと、モデルがどちらを選んでも
+     * 同じ結果になるだけで候補枠を無駄にする）。
+     */
+    private fun selectCandidates(
+        sourceTitle: String,
+        relatedNotes: List<RelatedNote>,
+        aiNotes: List<RelatedNote>
+    ): List<RemarkCandidateLine> {
+        val ordered = aiNotes +
+            relatedNotes.filterNot { it.isWikilinked } +
+            relatedNotes.filter { it.isWikilinked }
+        return ordered
+            .map { it.title.toObsidianNoteTitle() to it.snippet }
+            .filter { (candidateTitle, _) -> candidateTitle.isNotBlank() && candidateTitle != sourceTitle }
+            .distinctBy { (candidateTitle, _) -> candidateTitle }
+            .take(REMARK_CANDIDATE_LIMIT)
+            .mapIndexed { index, (candidateTitle, snippet) ->
+                RemarkCandidateLine(
+                    id = remarkCandidateId(index),
+                    title = candidateTitle,
+                    snippet = snippet?.take(REMARK_SNIPPET_CHARS)
+                )
+            }
     }
 
     /** ノート・Vault切替時に生成を止め、旧ノートの結果が後から混入するのを防ぐ。 */
@@ -147,11 +170,17 @@ internal class RemarkController(
                     onRemarkReady(composed.remark)
                     state.update { RemarkState.Ready(request.sourceTitle, composed.remark) }
                 }
-                // 検証に落ちたものは**すべて Empty へ倒す。** 「一般論だったので捨てた」を
-                // ユーザーへ見せても次の行動が変わらないうえ、失敗として出すと
-                // 「壊れている」と読まれる（→ §5 空振りは固定文で受ける）。
+                // **理由の内訳は見せないが、2種類には分ける。**
+                // 「一般論だったので捨てた」を見せても次の行動は変わらないが、
+                // 「出すものが無い」と「書式を守れなかった」では**再試行が効くかが違う**。
+                // 畳むと、モデルの失敗が「問いが見つかりませんでした」に化ける。
                 is RemarkResult.Rejected -> {
-                    state.update { RemarkState.Empty(request.sourceTitle) }
+                    val next = if (composed.reason.isModelFailure) {
+                        RemarkState.Unusable(request.sourceTitle)
+                    } else {
+                        RemarkState.Empty(request.sourceTitle)
+                    }
+                    state.update { next }
                 }
             }
         } catch (e: CancellationException) {
@@ -222,10 +251,20 @@ internal class RemarkController(
          * プロンプトへ載せる候補ノートの上限。
          *
          * 旧補記は関連ノート・AI推薦・**無制限の全wikilink**の3ブロックを渡しながら
-         * 出力で使わせていなかった。ひとことは候補を
-         * 実際に使うが、出力は1件なので多く見せる意味が無い。
-         * リンク集ノートで候補が本文を押し出すのを、ここで構造的に防ぐ。
+         * 出力で使わせていなかった。リンク集ノートで候補が本文を押し出すのを防ぐため、
+         * ひとことでは件数を固定する。
+         *
+         * **8件のタイトルより3件＋抜粋を選ぶ**（2026-08-09 の実機確認の指摘）。
+         * タイトルだけでは中身に踏み込んだ接続理由を作れず、
+         * 「並べると別の角度から見えそう」のような当たり障りのない文になりやすい。
          */
-        const val REMARK_CANDIDATE_LIMIT = 8
+        const val REMARK_CANDIDATE_LIMIT = 3
+
+        /**
+         * 候補1件あたりの抜粋の長さ。関連ノートAIの上限（150）より短くするのは、
+         * あちらが候補を選ばせるために読ませるのに対し、こちらは
+         * **接続の手がかりが分かれば足りる**ため。3件で合計240文字に収まる。
+         */
+        const val REMARK_SNIPPET_CHARS = 80
     }
 }
