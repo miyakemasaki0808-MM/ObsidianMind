@@ -24,7 +24,7 @@ import org.junit.Test
  * 2. 受付行の処遇が空でない
  * 3. 処遇は決めた5語のいずれか
  * 4. `起票` は**実在する課題IDを参照する**（参照した**すべて**が実在すること）
- * 5. 受付簿に、存在しない指摘の行が無い（消したレビューの残骸を残さない）
+ * 5. 作業ツリーに置くレビュー本文は最新の1本だけ
  * 6. 指摘IDにも受付行にも**重複が無い**
  *
  * **新しいレビューを足して受付簿を更新し忘れると、1 で落ちる。**
@@ -57,11 +57,12 @@ class ReviewFindingsLedgerTest {
     }
 
     @Test
-    fun `受付簿に実在しない指摘の行が無い`() {
-        val stale = (ledgerIds() - reviewFindingIds()).sorted()
+    fun `作業ツリーに残すレビュー本文は最新の1本だけ`() {
+        val reviewFiles = reviewFiles()
         assertTrue(
-            "レビュー本文に対応する指摘が無い受付行があります:\n${stale.joinToString("\n")}",
-            stale.isEmpty()
+            "docs/review のレビュー本文は最新の1本だけ残してください（過去の原文はgit履歴に残ります）:\n" +
+                reviewFiles.joinToString("\n") { it.name },
+            reviewFiles.size == 1
         )
     }
 
@@ -138,14 +139,14 @@ class ReviewFindingsLedgerTest {
     // --- 読み取り -------------------------------------------------------------
 
     /**
-     * レビュー本文の指摘ID。`2026-08-01-no9.md` の `### P1-1.` → `2026-08-01-no9/P1-1`。
+     * レビュー本文の指摘ID。`2026-08-08-source-state.md` の `### P2-1.` →
+     * `2026-08-08-source-state/P2-1`。
      *
      * **日付部分ではなくファイルstem全体を使う。** 日付だけだと、同じ日に2本目の
      * レビューを置いた瞬間に別々の指摘が同じIDへ潰れる。
      */
     private fun reviewFindingIdList(): List<String> =
-        reviewDir().listFiles { f: File -> f.name.matches(REVIEW_FILE) }
-            .orEmpty()
+        reviewFiles()
             .flatMap { file ->
                 val stem = REVIEW_FILE.find(file.name)!!.groupValues[1]
                 FINDING_HEADING.findAll(file.readText())
@@ -165,6 +166,11 @@ class ReviewFindingsLedgerTest {
             .toList()
 
     private fun ledgerIds(): Set<String> = ledgerRows().map { it.first }.toSet()
+
+    private fun reviewFiles(): List<File> =
+        reviewDir().listFiles { f: File -> f.name.matches(REVIEW_FILE) }
+            .orEmpty()
+            .sortedBy { it.name }
 
     /** 課題台帳の見出しから課題IDを拾う（`## ABC-1. ...` → `ABC-1`）。 */
     private fun issueIds(): Set<String> =

@@ -22,16 +22,18 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 | `ui/vigilith/` | [character_vigilith](docs/dev/design/character_vigilith.md) → [vigilith_in_app](docs/dev/design/vigilith_in_app.md) |
 | `androidTest/` | [instrumentation_testing](docs/dev/design/instrumentation_testing.md) |
 
-**繰り返し現れた構造的な教訓は [docs/dev/lessons.md](docs/dev/lessons.md)。**
-**着手前に全文を読まない。** 代わりに、**diffが出来上がった後**に
-[§0 の5問](docs/dev/lessons.md#0-diffができたら自分の編集へ当てる5問)を自分の編集へ当て、
-**該当した行の出典だけ**を読む。L1〜L29 は事例アーカイブであって、日常の運用には出てこない。
+**繰り返し現れた構造的な教訓は [docs/dev/lessons.md](docs/dev/lessons.md)（索引）と [docs/dev/lessons/](docs/dev/lessons/)（カード）。**
+**着手前に全文を読まない。** 索引の「いつ当てるか」列を引き、**該当したカードだけ**を読む。
 
-（旧運用は「新しい仕組みを入れる前・テストを足す前・横展開する前に目を通す」だったが、
-発火が自己申告の分類に依存していて実際には読まれなかった。**知識の在処ではなく、
-当て直す瞬間が無いことが問題**だったため、着手前の通読から変更後の粗取りへ移した。）
+**索引の「検査」列が空の教訓は、規約ではなく参考である。**
+このリポジトリで規則が守られたのは検査に載せたときだけ、というのが実績
+（→ [L29](docs/dev/lessons/L29.md)）。**両者を同じ強さで扱わない。**
 
-`_wip/` は3本で役割が分かれている。**混ぜない。**
+（2026-08-10、旧 §0「diff後に当てる5問」を廃止した。自ら「3回で評価する」と宣言しながら
+17件の変更が走るあいだ一度も判定されず、**評価する規則自体が守られなかった**
+→ [L32](docs/dev/lessons/L32.md)。対策は文書ではなく検査側へ寄せる。）
+
+`_wip/` は役割で分かれている。**混ぜない。**（個別の実装計画など、下表以外のファイルが一時的に増えることはある）
 
 | 知りたいこと | 見る文書 |
 |---|---|
@@ -59,7 +61,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 
 - **類似コードを見つけても、設計文書の判断を無視して安易に共通化しない。** Controllerの相似形は 2026-07-24 と 07-25 の2度の検討を経て「**共通化しない**」で決着済み（→ [architecture.md](docs/dev/design/architecture.md) の追記2節）。再提案するなら、そこに書かれた再検討条件を満たすことを先に示す
 - **実装と設計文書が食い違う場合、勝手にどちらかへ寄せない。差分を報告して判断を仰ぐ**
-- 外から渡されたラムダを `pointerInput` / `LaunchedEffect` など長寿命ブロック内から呼ぶときは `rememberUpdatedState` を通す（stale closure で「押しても無反応」になる既知の型 → [bugfix_reports.md](docs/dev/bugfix_reports.md)）
+- 外から渡されたラムダを `pointerInput` / `LaunchedEffect` など長寿命ブロック内から呼ぶときは `rememberUpdatedState` を通す（stale closure で「押しても無反応」になる既知の型 → [L34](docs/dev/lessons/L34.md)）
 - SDKの制約は公式ドキュメントではなくバイナリで確認する（`maxOutputTokens` の 1〜256 制限で全AI生成が落ちた前例あり）
 - 依存ライブラリを一括更新しない。ML Kit GenAI を含め機能単位で上げ、実機確認を伴う
 
@@ -79,19 +81,15 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 **変更を終える前に:**
 
-**まず [lessons.md §0](docs/dev/lessons.md#0-diffができたら自分の編集へ当てる5問) の5問を自分のdiffへ当てる。**
-そして**適用結果を報告に1行残す**（例: `§0適用: 1・3が該当／確認済み`）。
-残さないと、**当てたのか、たまたま問題が出なかったのかを後から区別できない**
-（§0 自体の効き目を3回で評価するため、この1行が唯一の証拠になる）。
-
-1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する
+1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する。**「変更内容」は1文・100字以内** — 経緯・代償・変異確認の結果・教訓はここに書かない（行き先は 2. と 4.）
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/design/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
-4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) へ追記する（番号は振り直さず末尾へ足す）
+4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `design/` に決めて要約＋リンクにする
+5. **同じ事件を design・lessons・change_history へ3回とも長文で書かない。** 正本を1つ決め、他は要約＋リンクにする
 
 ## 文書の扱い
 
-- **`docs/review/` 配下の `2026-*.md` は書き換えない。** Codexが評価者として書く外部レビューで、当時のスナップショットとして保存する。様式（`review_template.md`）と受付簿（`findings.md`）はこちらが持つ
+- **`docs/review/` 配下の `2026-*.md` は最新の1本だけを置き、書き換えない。** 新しいレビューを受け付けたら前の本文は削除する（原文はgit履歴に残る）。様式（`review_template.md`）と全指摘の受付簿（`findings.md`）はこちらが持つ
 - **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
 - `design/` の各文書には `**状態:**` 行を置く
 

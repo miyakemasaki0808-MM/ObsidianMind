@@ -10,7 +10,7 @@
 > （実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。
 > **完了の経緯は残さない** — 経緯を引きたくなったら、それは下記の記録側が足りていないサインと考える。
 > 記録の行き先は別にある — 何をいつ変えたかは [change_history.md](../dev/change_history.md)、
-> 今どうなっているかは [source_code_analysis.md](../dev/source_code_analysis.md)、
+> 今どうなっているかは [source_code_analysis.md](../owner/source_code_analysis.md)、
 > なぜそうしたかは [design/](../dev/design/)、繰り返し現れた教訓は [lessons.md](../dev/lessons.md)。
 >
 > **順序と計画は [roadmap.md](roadmap.md) が持つ。** ここには「何が問題か」だけを書き、
