@@ -1,8 +1,12 @@
 # 設計思想 — Markdown解析（準拠先・リスト構造）
 
+**状態:** 実装済み・稼働中。クリック可能リンク・埋め込み・数式は未着手 — リストの入れ子・番号・タスク混在は実装済み・実機確認済み（2026-08-02）。画像は実装済み・実機確認済み（→ [note_image_rendering](../features/note_image_rendering.md)）。クリック可能リンク・埋め込み・数式は未着手
+**最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
+**関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
+**関連テスト:** `MarkdownParserTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `NoteSectionThreadingTest`
+**正本:** この文書
+
 **対象領域:** `domain/markdown/`（ブロック解析・LLM入力への再構成）と `ui/markdown/`（描画）
-**初版:** 2026-08-02（FEAT-1 のMarkdown部分）
-**状態:** リストの入れ子・番号・タスク混在は実装済み・実機確認済み（2026-08-02）。画像は実装済み・実機確認済み（→ [note_image_rendering](../features/note_image_rendering.md)）。クリック可能リンク・埋め込み・数式は未着手
 
 ---
 

@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
 /**
  * ノートへのひとこと（旧「AI補記メモ」）の生成。
  *
- * 旧補記との違いは3つで、いずれも design/reflect_remark.md の判断に対応する。
+ * 旧補記との違いは3つで、いずれも features/reflect_remark.md の判断に対応する。
  *
  * - **出力は1文だけ。** 出力枠（256トークン）はゼロサムなので、分類ラベルを
  *   同時に出させると価値のある側が圧迫される（§0・§1）

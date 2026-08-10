@@ -11,7 +11,7 @@ import org.junit.Test
  * ひとことの応答検証。
  *
  * 旧補記は出力を一切検証していなかったため、プロンプトが守られたかを誰も
- * 確認できなかった（→ design/reflect_remark.md §0・§6）。ここが唯一の門番になる。
+ * 確認できなかった（→ features/reflect_remark.md §0・§6）。ここが唯一の門番になる。
  */
 class RemarkComposerTest {
 

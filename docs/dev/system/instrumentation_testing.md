@@ -1,7 +1,12 @@
 # 設計思想 — instrumentation テスト
 
+**状態:** 実装済み・稼働中（androidTest 9ファイル） — 実装済み・稼働中（40件）。CIでは実行せず、PR前にAndroid Studioで回す運用。
+**最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
+**関連コード:** `app/src/androidTest/` / `app/src/debug/`（テスト用 `DocumentsProvider`）
+**関連テスト:** `InstrumentationTestShapeTest`（形をJVM側から固定）/ androidTest 一式
+**正本:** この文書
+
 **対象領域:** 実端末を通すテストの選定基準・実物SAFの作り方・実行の運用
-**状態:** 実装済み・稼働中（40件）。CIでは実行せず、PR前にAndroid Studioで回す運用。
 **関連:** [architecture](architecture.md)・[note_image_rendering](../features/note_image_rendering.md)・[ai_input_excerpt](ai_input_excerpt.md)
 **経緯:** [開発日誌 2026-08](../../owner/journal/2026-08.md#2026-08-08--instrumentation-を34件そろえて実機で回す)
 

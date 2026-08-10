@@ -28,7 +28,7 @@ import org.junit.Test
  * ノートへのひとことの生成。
  *
  * **保存を自分で行わないことが設計の要**なので、[onRemarkReady] へ渡ったかどうかを
- * 中心に押さえる（→ design/reflect_remark.md §2.1）。ここを渡し忘れると、
+ * 中心に押さえる（→ features/reflect_remark.md §2.1）。ここを渡し忘れると、
  * 画面に出たひとことがノートを離れた瞬間に消える。
  */
 class RemarkControllerTest {

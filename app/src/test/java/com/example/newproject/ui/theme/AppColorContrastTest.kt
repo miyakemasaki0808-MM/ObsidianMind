@@ -386,7 +386,7 @@ class AppColorContrastTest {
     /**
      * バッジの中の記号は**読む文字ではなく状態を示す記号**なので、基準は
      * WCAG 1.4.11（非テキスト）の 3:1。1.4.3 の 4.5:1 は当てない
-     * （→ [design/ui_design_principles.md]）。
+     * （→ [system/ui_design_principles.md]）。
      *
      * **同じ塗りに載るのに、ボタンのラベルとは別トークンになる。** `buttonSecondary` は
      * ボタンの塗りでもバッジの塗りでもあるが、ラベルは読む文字なので 4.5:1 が要り、

@@ -1,7 +1,12 @@
 # 設計思想 — AI入力の抜粋
 
+**状態:** 実装済み・稼働中。予算はトークン実測で調整済み — 実装済み・稼働中。予算調整は 2026-08-01 に打ち止め（効果が測れなかったため）。
+**最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
+**関連コード:** `domain/NoteExcerptBuilder.kt` / `model/NoteExcerpt.kt` / `model/NoteExcerptLimits.kt` / `ai/PromptBuilder.kt`
+**関連テスト:** `NoteExcerptBuilderTest` / `PromptBuilderExcerptRegressionTest` / `PromptGenerationCoverageTest` / `NoteExcerptThreadingTest` / androidTest: `PromptTokenBudgetTest`
+**正本:** この文書
+
 **対象領域:** 8プロンプトへ渡す本文の作り方（どこを捨て、どこを残すか）
-**状態:** 実装済み・稼働中。予算調整は 2026-08-01 に打ち止め（効果が測れなかったため）。
 **関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](../features/related_notes_ai.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-27--28--ai入力の切り出しを後ろ捨てから真ん中捨てへ)・[2026-08](../../owner/journal/2026-08.md)
 

@@ -23,7 +23,7 @@ data class ReadingTraceCard(
      *
      * **中身はカードへ載せない。** 問い・返事・映し返しの3つを並べるとカードが重くなり、
      * 「前回のあなた」を1文で伝えるという役目が壊れる。ここでは
-     * **在ることだけ**を示し、読むのは専用画面（→ design/reflect_remark.md §10.3）。
+     * **在ることだけ**を示し、読むのは専用画面（→ features/reflect_remark.md §10.3）。
      */
     val hasReflectionReply: Boolean = false,
     /** 「読んだ」で畳んだ状態。永続化しないので次回 Rediscover では再表示される。 */

@@ -114,7 +114,7 @@ internal class ReadingTraceController(
          * あるため。訪問は離脱・背面化でしか書かれず、`validateReadingTrace` は
          * 訪問が1件以上あることを要求する。初読の最中にボタンを押すこの機能では
          * 「生成できたら保存」と書くと初回のノートで必ず黙って失われる
-         * （→ design/reflect_remark.md §2.1）。
+         * （→ features/reflect_remark.md §2.1）。
          */
         var pendingRemark: Reflection? = null
 
