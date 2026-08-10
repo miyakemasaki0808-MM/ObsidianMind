@@ -1,9 +1,14 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
+**状態:** Implemented（コンセプト確定） — コンセプト確定・アプリアイコン／起動OP／アプリ内Phase 3実装済み
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `ui/vigilith/VigilithMascot.kt`
+**関連テスト:** VigilithModeTest / VigilithStatusDerivationTest
+**正本:** この文書
+
 **対象:** アプリ「Vigilith AI」のマスコット／AI相棒
 **作成日:** 2026-07-22
 **関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)・[opening_animation](opening_animation.md)
-**状態:** コンセプト確定・アプリアイコン／起動OP／アプリ内Phase 3実装済み
 
 > このシートは「Vigilithとは何か」を言語化した設計図。作画発注・実装・アイコン展開の基準に使う。
 

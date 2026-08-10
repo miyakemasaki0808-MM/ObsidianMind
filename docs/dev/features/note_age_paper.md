@@ -1,9 +1,14 @@
 # 設計思想 — ノートの年代を紙の地色で伝える
 
+**状態:** Implemented — **実装済み・実機確認済み**（2026-08-02）。強度は初期案（微か）のまま確定 — 実機で「控えめのほうがよい」と判断した。配線は診断用の色で別途確認済み（§10）
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `domain/NotePaperAge.kt / model/NotePaperTone.kt / ui/theme/AppTheme.kt`
+**関連テスト:** NotePaperAgeTest
+**正本:** この文書
+
 **対象:** 読書画面の本文面（`panel`）を、ノートの「最後に手を入れてからの経過」に応じて生成り色へ寄せる
 **初版:** 2026-08-02
 **関連:** [ui_design_principles](../system/ui_design_principles.md)（**着手前に読む**）・[theme_and_ui_refactor](../system/theme_and_ui_refactor.md)・[dark_mode](dark_mode.md)・[architecture](../system/architecture.md)
-**状態:** **実装済み・実機確認済み**（2026-08-02）。強度は初期案（微か）のまま確定 — 実機で「控えめのほうがよい」と判断した。配線は診断用の色で別途確認済み（§10）
 
 ---
 

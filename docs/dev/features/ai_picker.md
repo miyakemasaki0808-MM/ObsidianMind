@@ -1,8 +1,13 @@
 # 設計思想 — さがすタブ（AIピッカー・閲覧履歴）
 
+**状態:** Implemented — 実装済み。追記の閲覧履歴（2026-07-20）まで含めて稼働中。
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `controller/SearchController.kt / domain/SearchPickerUseCase.kt / domain/SearchKeywordMatching.kt / data/NoteHistoryStore.kt / ui/screen/SearchScreen.kt`
+**関連テスト:** SearchControllerTest / SearchKeywordMatchingTest
+**正本:** この文書
+
 **対象領域:** ノートを見つける導線（検索・ランダム・履歴）
 **初版:** 2026-07-18（PR #15）
-**状態:** 実装済み。追記の閲覧履歴（2026-07-20）まで含めて稼働中。
 **⚠️ 本文と実装の乖離1件:** **判断3のフォールバック仕様は PR #35 で変更済み**（候補数に依らずbigramスコア順へ統一し、一致0件は返さない）。本文が旧仕様「キーワードカット結果またはフォルダ先頭の3件」のまま。判断2（40件超のみ再現率カット）は現行どおり。
 **未解決:** なし。（検索の世代管理は 2026-07-26 に解消 → [change_history](../change_history.md)）
 

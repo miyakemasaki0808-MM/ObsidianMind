@@ -1,9 +1,14 @@
 # 設計思想 — ダークモード
 
+**状態:** Implemented — 実装済み・**実機確認済み**（2026-07-26 に実機で一巡し問題なし）。オプション画面のトグルで切り替わる。
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `ui/theme/AppTheme.kt / ui/theme/AppColors.kt / data/AppPreferences.kt / ui/screen/OptionsScreen.kt`
+**関連テスト:** AppColorContrastTest / VibrantTextUsageTest
+**正本:** この文書
+
 **対象:** バックログ「ダークモード」の再検討（2026-07-22死亡 → 2026-07-26再オープン）
 **初版:** 2026-07-26
 **関連:** [theme_and_ui_refactor](../system/theme_and_ui_refactor.md)（土台となるトークン整理 R-1〜R-4）・[architecture](../system/architecture.md)
-**状態:** 実装済み・**実機確認済み**（2026-07-26 に実機で一巡し問題なし）。オプション画面のトグルで切り替わる。
 
 ---
 

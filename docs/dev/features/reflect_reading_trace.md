@@ -1,7 +1,12 @@
 # 設計思想 — ReadingTrace（読書痕跡）
 
+**状態:** Implemented — v1 実装済み・稼働中。サイドカーは schema v5。孤児掃除は手動削除まで提供し、自動化は未着手。
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `controller/ReadingTraceController.kt / controller/ReadingTraceCleanupController.kt / data/ReadingTraceStore.kt / data/ReadingTraceJson.kt / domain/ReadingTraceOrphans.kt / ui/component/ReadingTraceCard.kt / ui/screen/ReadingTraceCleanupScreen.kt`
+**関連テスト:** ReadingTraceControllerTest / ReadingTraceStoreTest / ReadingTraceJsonTest / ReadingTraceOrphansTest / ReadingTraceCleanupControllerTest / ReadingTraceCleanupTextTest / ReadingTraceHeadlineTest / ReadingTraceLimitsTest / ReadingProgressGeometryTest
+**正本:** この文書
+
 **対象領域:** Rediscover連動・読書位置の記録・ノートメタデータ（サイドカー）
-**状態:** v1 実装済み・稼働中。サイドカーは schema v5。孤児掃除は手動削除まで提供し、自動化は未着手。
 **関連:** [reflect_distill](reflect_distill.md)・[reflect_remark](reflect_remark.md)・[architecture](../system/architecture.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md)・[2026-08](../../owner/journal/2026-08.md)
 

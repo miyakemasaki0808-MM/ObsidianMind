@@ -23,7 +23,7 @@ import com.example.newproject.model.NotePaperTone
  *
  * **上限は `panelChip` の相対輝度（0.8772）。** 弱い文字トークンの基準面が
  * 「文字が載る面のうち最も暗い `panelChip`」に置かれているため、ここがそれより暗くなると
- * 既存の全テキストトークンが一斉に基準を割る。→ `docs/dev/design/note_age_paper.md` §5
+ * 既存の全テキストトークンが一斉に基準を割る。→ `docs/dev/features/note_age_paper.md` §5
  *
  * [uniform] は全段階を同じ色にしたもので、**演出を無効化する形**にあたる
  * （ダーク時と、オプションでオフのとき）。
@@ -201,7 +201,7 @@ internal fun AppTheme(
     }
     // ダークでは常に無効。暗所配色は「明るい画面を暗くしたもの」ではなく別配色として
     // 設計されており、そこへ黄ばみ（光の当たった紙の比喩）を持ち込むと前提と衝突する。
-    // → docs/dev/design/note_age_paper.md 判断5
+    // → docs/dev/features/note_age_paper.md 判断5
     CompositionLocalProvider(
         LocalAppColors provides colors,
         LocalNotePaperAging provides (notePaperAging && !darkTheme)

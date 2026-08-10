@@ -1,8 +1,13 @@
 # 設計思想 — 全画面ノート（独立ルート化）
 
+**状態:** Implemented — 実装済み。ダークモード対応（PR #37）まで反映済み
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `ui/screen/FullscreenNoteScreen.kt / ui/screen/NoteReaderTab.kt / ui/AppScaffold.kt`
+**関連テスト:** androidTest: ActivityRecreationTest / TabNavigationTest
+**正本:** この文書
+
 **対象領域:** 全画面ノート閲覧・システムバー・スクロール継承
 **初版:** 2026-07-21（PR #30）
-**状態:** 実装済み。ダークモード対応（PR #37）まで反映済み
 **関連:** [tab_navigation](../system/tab_navigation.md)（全画面表示の前身＝オーバーレイ方式）
 
 ---

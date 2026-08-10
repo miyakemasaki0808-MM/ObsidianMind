@@ -1,8 +1,13 @@
 # 設計思想 — セクション単位AIチャット
 
+**状態:** Implemented — 実装済み。追記のフォーカス周辺クイズ統合（2026-07-20）まで含めて稼働中。会話履歴の永続化・横断チャットは見送り継続
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `controller/SectionChatController.kt / domain/markdown/NoteSections.kt / ui/screen/SectionChatSheet.kt`
+**関連テスト:** SectionChatControllerTest / SurroundingContextTest
+**正本:** この文書
+
 **対象領域:** ノート読書中のAI対話（浮遊吹き出し・ボトムシート）
 **初版:** 2026-07-17（PR #14）
-**状態:** 実装済み。追記のフォーカス周辺クイズ統合（2026-07-20）まで含めて稼働中。会話履歴の永続化・横断チャットは見送り継続
 
 ---
 

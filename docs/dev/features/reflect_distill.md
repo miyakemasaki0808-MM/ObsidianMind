@@ -1,8 +1,13 @@
 # 設計思想 — 蒸留（Distill）
 
+**状態:** Implemented — v1 Phase 1〜6 実装済み・自動テスト済み・実機確認待ち
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `controller/DistillController.kt / domain/Distill*.kt / data/DistillWriteRepository.kt / data/DistillRecoveryStore.kt / data/DistillHashing.kt`
+**関連テスト:** DistillControllerTest / DistillSourceModelTest / DistillTransformerTest / DistillResponseParserTest / DistillCandidateScoringTest / DistillWriteRepositoryTest / DistillRecoveryStoreTest / DistillPromptBuilderTest
+**正本:** この文書
+
 **対象領域:** Reflect（AIタブ）拡張・ノート編集・オンデバイスAI
 **初版（ドラフト）:** 2026-07-21
-**状態:** v1 Phase 1〜6 実装済み・自動テスト済み・実機確認待ち
 **関連:** [section_ai_chat](section_ai_chat.md)・[related_notes_ai](related_notes_ai.md)・[architecture](../system/architecture.md)・[background_ai_ux](../system/background_ai_ux.md)
 
 ---

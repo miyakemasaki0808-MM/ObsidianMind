@@ -37,7 +37,7 @@ private val LightPanel = Color(0xFFFDFEFF)
  * `AppColorContrastTest` が段階ごとの比と床の両方を強制する。
  *
  * **初期値は意図的に弱い。** 実機で見てから強めるかを決めるため、値をここ1箇所へ集約している。
- * 強める余地は `#F7F1E2`（0.8818）まで。→ `docs/dev/design/note_age_paper.md` §6
+ * 強める余地は `#F7F1E2`（0.8818）まで。→ `docs/dev/features/note_age_paper.md` §6
  */
 internal val LightNotePaperTones = NotePaperTones(
     fresh = LightPanel,

@@ -1,7 +1,12 @@
 # 設計思想 — ノート内画像の表示
 
+**状態:** Implemented — 実装済み・稼働中。EXIF回転・SVG・アニメーション・インライン画像は非対応。
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `data/NoteImageGateway.kt / data/VaultImageIndexStore.kt / domain/image/ / ui/markdown/NoteImage.kt`
+**関連テスト:** ImageLinkResolutionTest / ImageDecodePolicyTest / NoteImageMeasurementsTest / NoteImageTextTest / VaultImageIndexStoreTest / androidTest: NoteImageGatewayInstrumentationTest
+**正本:** この文書
+
 **対象領域:** `![alt](path)` と `![[image.png]]` の解決・復号・描画
-**状態:** 実装済み・稼働中。EXIF回転・SVG・アニメーション・インライン画像は非対応。
 **関連:** [markdown_rendering](../system/markdown_rendering.md)・[reflect_reading_trace](reflect_reading_trace.md)（到達率）・[ui_design_principles](../system/ui_design_principles.md)
 **経緯:** [開発日誌 2026-08](../../owner/journal/2026-08.md#2026-08-02--08-08--ノート内画像を出す)
 

@@ -278,7 +278,7 @@ private fun indentWidth(indent: String): Int {
  * インデント列幅から入れ子段数を決める。**CommonMark にも Obsidian にも準拠しない、
  * 意図的に寛容な規則**である（規格は親のマーカー直後の列位置で入れ子を定義するが、
  * ここでは幅の絶対値を見ず相対的な深浅だけで判定する）。理由は
- * [markdown_rendering](../../../../../../../../../docs/dev/design/markdown_rendering.md) にある。
+ * [markdown_rendering](../../../../../../../../../docs/dev/system/markdown_rendering.md) にある。
  *
  * 規則は5つ。
  * 1. 同じ幅は同じ段数

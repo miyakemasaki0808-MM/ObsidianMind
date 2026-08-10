@@ -1,9 +1,14 @@
 # 設計思想 — 起動OPアニメーション
 
+**状態:** Implemented — 実装済み。新規Activity起動時のみ再生（回転・Fold開閉・プロセス復元では再生しない）
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `ui/screen/OpeningScreen.kt / ui/vigilith/`
+**関連テスト:** VigilithOpeningMotionTest
+**正本:** この文書
+
 **対象領域:** アプリ起動時のブランド演出（システムスプラッシュ＋Compose OP）
 **初版:** 2026-07-20（PR #26）
 **改稿:** 2026-07-26（アプリ内Idle WebPへ統一）
-**状態:** 実装済み。新規Activity起動時のみ再生（回転・Fold開閉・プロセス復元では再生しない）
 **関連:** [character_vigilith](character_vigilith.md)・[vigilith_in_app](vigilith_in_app.md)
 
 ---

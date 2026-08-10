@@ -1,7 +1,12 @@
 # 関連ノートAI推薦の設計
 
+**状態:** Implemented — 実装済み。現ノート側の先頭600文字固定切り出しは、2026-07-27 に見出し骨格＋冒頭＋末尾の抜粋へ置換した（抜粋の設計は [ai_input_excerpt](../system/ai_input_excerpt.md)）。上限は 2026-08-01 に **600→800文字**へ引き上げ済み。
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `domain/RelatedNotesUseCase.kt / domain/RelatedCandidate*.kt / domain/RelatedContextScoring.kt / ui/screen/RelatedTab.kt`
+**関連テスト:** RelatedCandidateScoringTest / RelatedCandidateRankingTest / RelatedCandidateOrderingTest / RelatedCandidateContextTest / RelatedCandidateIdTest / RelatedContextScoringTest
+**正本:** この文書
+
 **対象領域:** ノートを開いたときの関連ノート推薦（候補ランキング＋Nano選定）
-**状態:** 実装済み。現ノート側の先頭600文字固定切り出しは、2026-07-27 に見出し骨格＋冒頭＋末尾の抜粋へ置換した（抜粋の設計は [ai_input_excerpt](../system/ai_input_excerpt.md)）。上限は 2026-08-01 に **600→800文字**へ引き上げ済み。
 **未解決:** Phase 1 で構想した「フォーカスセクション文脈での推薦」は未実装。自動起動とスクロール追従するフォーカスのどの時点を採るかが未決のため、現在の抜粋とは別の将来候補として残す。
 
 ノートを開いたとき、話題的に近い他ノートを提示する機能の設計と、その改修（Phase 1〜3）で得た知見をまとめる。

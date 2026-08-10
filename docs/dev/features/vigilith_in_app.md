@@ -1,9 +1,14 @@
 # 設計思想 — アプリ内Vigilith
 
+**状態:** Implemented — Phase 3実装済み（実機画面の目視確認のみ認証ロックで保留）
+**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
+**関連コード:** `ui/vigilith/VigilithMascot.kt / ui/AppScaffold.kt`
+**関連テスト:** VigilithMascotMotionTest / VigilithPlacementTest / VigilithAccessibilityTest / VigilithStatusDerivationTest / VigilithModeTest
+**正本:** この文書
+
 **対象:** N-1「マスコット＝読書相手の身体化」
 **初版:** 2026-07-25
 **関連:** [character_vigilith](character_vigilith.md)（キャラクターシート）
-**状態:** Phase 3実装済み（実機画面の目視確認のみ認証ロックで保留）
 
 ---
 
