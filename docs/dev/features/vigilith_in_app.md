@@ -6,7 +6,7 @@
 **関連テスト:** VigilithMascotMotionTest / VigilithPlacementTest / VigilithAccessibilityTest / VigilithStatusDerivationTest / VigilithModeTest
 **正本:** この文書
 
-**対象:** N-1「マスコット＝読書相手の身体化」
+**対象:** マスコット＝読書相手の身体化
 **初版:** 2026-07-25
 **関連:** [character_vigilith](character_vigilith.md)（キャラクターシート）
 

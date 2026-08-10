@@ -40,7 +40,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 
 **失ったもの:** 行動データなので「**何を考えていたか**」は回収できない。
 「前回は40%で止まった」は「前回は〇〇が引っかかった」ではない。
-→ 未解決の課題として [_wip/roadmap.md](../../_wip/roadmap.md) X-2 が持つ。
+→ 未解決の課題として [_wip/roadmap.md](../../_wip/roadmap.md) が持つ。
 
 ## 3. 設計原則: シンプル最優先
 
@@ -341,7 +341,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 **先頭1桁で16フォルダへ分割**すれば列挙件数が 1/16 になる。引く側はキーから所属フォルダを計算できる。
 **生きた痕跡を1つも消さずに性能だけ守れる**のが、孤児削除に対する決定的な優位点。
 
-**実測で問題化するまで着手しない**（既存ファイルの移行を伴うため）→ [_wip/current_issues.md](../../_wip/current_issues.md) PERF-1。
+**実測で問題化するまで着手しない**（既存ファイルの移行を伴うため）→ 未解決の課題として [_wip/current_issues.md](../../_wip/current_issues.md) が持つ。
 
 ### 自動化（限定自動削除）は未着手
 

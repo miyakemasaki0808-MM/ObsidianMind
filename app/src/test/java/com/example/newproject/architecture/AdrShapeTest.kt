@@ -59,22 +59,56 @@ class AdrShapeTest {
      * `_wip/` はリリース時に廃棄するので、カテゴリ記号つきの項目番号を残すと
      * **廃棄した瞬間に意味が消える**。課題に触れるときは番号ではなく内容そのものを書く。
      *
-     * ここで ADR だけを対象にするのは、ADRが**最も寿命の長い文書**だからである
-     * （`features/` `system/` へ広げるのは、既存の違反を片付けてから）。
+     * **正規表現でIDらしき形を弾かない。** それをやると `UTF-8`・`SHA-256` や、
+     * 設計書が内部で使う段階番号まで巻き込む。
+     * **`_wip/` の見出しから実在するIDだけを収穫し、その集合だけを禁じる。**
+     * 収穫元が消えれば検査も自然に消えるので、`_wip/` の廃棄で壊れない。
      */
     @Test
-    fun `ADR は _wip の項目IDを参照しない`() {
-        val violations = adrFiles().flatMap { file ->
-            WIP_ISSUE_ID.findAll(file.readText())
-                .map { "${file.name}: ${it.value}" }
-                .toList()
+    fun `恒久文書は _wip の項目IDを参照しない`() {
+        val ids = wipIssueIds()
+        require(ids.isNotEmpty()) { "_wip/ から項目IDを1つも収穫できませんでした" }
+
+        val violations = permanentDocs().flatMap { file ->
+            val text = file.readText()
+            ids.filter { Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(text) }
+                .map { "${file.parentFile?.name}/${file.name}: $it" }
         }
 
         assertTrue(
-            "ADRが _wip/ の項目IDを参照しています。_wip/ は廃棄されるので、" +
+            "恒久文書が _wip/ の項目IDを参照しています。_wip/ は廃棄されるので、" +
                 "番号ではなく内容そのものを書いてください:\n" + violations.joinToString("\n"),
             violations.isEmpty()
         )
+    }
+
+    /** `_wip/` の見出しに実在する項目ID。カテゴリ記号つき見出しとドット形式の両方を拾う。 */
+    private fun wipIssueIds(): Set<String> =
+        wipRoot().listFiles { f -> f.isFile && f.extension == "md" }.orEmpty()
+            .flatMap { file ->
+                val text = file.readText()
+                WIP_HEADING_ID.findAll(text).map { it.groupValues[1] } +
+                    WIP_HEADING_ID_DOTTED.findAll(text).map { it.groupValues[1] }
+            }
+            .toSet()
+
+    private fun permanentDocs(): List<File> =
+        listOf("features", "system", "decisions")
+            .map { devRoot().resolve(it) }
+            .filter { it.isDirectory }
+            .flatMap { it.listFiles { f -> f.isFile && f.extension == "md" }.orEmpty().toList() }
+
+    private fun wipRoot(): File = docsRoot().resolve("_wip")
+
+    private fun devRoot(): File = docsRoot().resolve("dev")
+
+    private fun docsRoot(): File {
+        val workingDirectory = File(
+            requireNotNull(System.getProperty("user.dir")) { "user.dir が設定されていません" }
+        )
+        return listOf(workingDirectory.resolve("../docs"), workingDirectory.resolve("docs"))
+            .firstOrNull { it.isDirectory }
+            ?: error("docs が見つかりません（作業ディレクトリ: $workingDirectory）")
     }
 
     private fun adrFiles(): List<File> =
@@ -83,26 +117,15 @@ class AdrShapeTest {
             ?.also { require(it.isNotEmpty()) { "ADRが1本も見つかりません" } }
             ?: error("docs/dev/decisions を読めません")
 
-    private fun decisionsRoot(): File {
-        val workingDirectory = File(
-            requireNotNull(System.getProperty("user.dir")) { "user.dir が設定されていません" }
-        )
-        return listOf(
-            workingDirectory.resolve("../docs/dev/decisions"),
-            workingDirectory.resolve("docs/dev/decisions")
-        ).firstOrNull { it.isDirectory }
-            ?: error("docs/dev/decisions が見つかりません（作業ディレクトリ: $workingDirectory）")
-    }
+    private fun decisionsRoot(): File = devRoot().resolve("decisions")
 
     private companion object {
         const val MAX_LINES = 30
 
-        /**
-         * `_wip/` の項目ID。英大文字のカテゴリ記号＋ハイフン＋数字の形。
-         *
-         * **ADR自身のID（`ADR-0001`）は除く** — ADR間の相互参照は恒久的で、
-         * `_wip/` の廃棄では意味を失わない。
-         */
-        val WIP_ISSUE_ID = Regex("""\b(?!ADR-)[A-Z][A-Z0-9]*-\d+\b""")
+        /** `## ABC-9 …` の形（カテゴリ記号つき見出し）。 */
+        val WIP_HEADING_ID = Regex("""^#+\s+\*{0,2}([A-Z][A-Z0-9]*-\d+)""", RegexOption.MULTILINE)
+
+        /** `#### Z-9. …` の形（1文字カテゴリ＋ドット。`feature_ideas.md`）。 */
+        val WIP_HEADING_ID_DOTTED = Regex("""^#+\s+([A-Z]-\d+)\.""", RegexOption.MULTILINE)
     }
 }
