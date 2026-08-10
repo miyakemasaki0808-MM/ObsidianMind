@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-10 | — | feature_ideas を圧縮し、冊子モードを設計書へ切り出してローカルDB案を起票した | **[booklet_mode](design/booklet_mode.md)**（新設） |
 | 2026-08-10 | — | 外部レビュー本文を最新1本だけ残す運用へ変え、過去4本を削除した | [review/README](../review/README.md)・[findings](../review/findings.md) |
 | 2026-08-09 | — | リンク付き文の問い判定から `でしょう` `だろう` を外した（誤拒否の修正） | **[reflect_remark](design/reflect_remark.md)** §11.8 |
 | 2026-08-09 | — | ひとことの「問いか接続かどちらか一方」を指示から検査へ移した | **[reflect_remark](design/reflect_remark.md)** §11.8 |
