@@ -95,7 +95,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 |---|---|---|
 | `dev/features/` | **ユーザーから見える機能**の仕様と実現方法。様式は [`_template.md`](docs/dev/features/_template.md) | 「何ができるか」をオーナーが読んで分かるか |
 | `dev/system/` | **横断的な基盤**（責務・保証・不変条件・利用者）。ユーザーフローは書かない | ユーザー機能ではなく、全機能に効くか |
-| `dev/decisions/` | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、20行以内） | 後から「なぜ？」となるか。機能追加ごとには作らない |
+| `dev/decisions/` | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、**30行以内＝`AdrShapeTest` が固定**） | 後から「なぜ？」となるか。機能追加ごとには作らない |
 
 - **ADRに設計の写しを置かない。** `decisions/` は「なぜ」の索引であって正本ではない。**詳細の正本は必ず `features/` か `system/` 側**で、ADRはそこへリンクする（正本が2つに割れると、どちらかが必ず古くなる）
 - **`docs/review/` 配下の `2026-*.md` は最新の1本だけを置き、書き換えない。** 新しいレビューを受け付けたら前の本文は削除する（原文はgit履歴に残る）。様式（`review_template.md`）と全指摘の受付簿（`findings.md`）はこちらが持つ

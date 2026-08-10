@@ -25,7 +25,7 @@
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md)（**1文100字以内の索引**） | 累積（消さない） |
 | **なぜそうしたか（現在有効な判断）** | [features/](features/)（機能）・[system/](system/)（基盤） | 判断ごとに1本。**現在形で書く** |
-| **なぜその重大判断をしたか** | [decisions/](decisions/)（ADR。20行以内） | 覆りにくいものだけ |
+| **なぜその重大判断をしたか** | [decisions/](decisions/)（ADR。**30行以内＝`AdrShapeTest` が固定**） | 覆りにくいものだけ |
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
 | **いまコードがどうなっているか** | [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |

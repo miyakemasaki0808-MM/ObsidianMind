@@ -10,7 +10,7 @@
 |---|---|
 | [features/](features/) | **ユーザーから見える機能**の仕様と実現方法。様式は [`_template.md`](features/_template.md) |
 | [system/](system/) | **横断的な基盤**（責務・保証・不変条件・利用者） |
-| [decisions/](decisions/) | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、20行以内） |
+| [decisions/](decisions/) | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、**30行以内＝`AdrShapeTest` が固定**） |
 | [lessons.md](lessons.md) ＋ [lessons/](lessons/) | 同じ失敗を繰り返さないための索引とカード。**IDは永久の住所** |
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順・1文100字以内） |
 
