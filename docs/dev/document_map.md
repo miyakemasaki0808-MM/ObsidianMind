@@ -86,6 +86,7 @@
 | [tab_navigation.md](design/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
 | [note_fullscreen.md](design/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [ai_picker.md](design/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
+| [booklet_mode.md](design/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**未実装・設計確定** |
 
 ### AIと考える（Reflect）
 
