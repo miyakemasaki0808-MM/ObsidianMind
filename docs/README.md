@@ -23,7 +23,7 @@
 | アプリの全体像を知る | [owner/README.md](owner/README.md) |
 | コード構成・技術を知る | [owner/source_code_analysis.md](owner/source_code_analysis.md) |
 | 開発の経緯を読み物として追う | [owner/journal/](owner/journal/) |
-| コードを触る前に背景を知る | [dev/document_map.md](dev/document_map.md) §5 の逆引き表 → 該当する `dev/design/` |
+| コードを触る前に背景を知る | [dev/document_map.md](dev/document_map.md) §5 の逆引き表 → 該当する `dev/features/` か `dev/system/` |
 | 次に何を作るか決める | [_wip/roadmap.md](_wip/roadmap.md) → [_wip/current_issues.md](_wip/current_issues.md) |
 
 ## owner/ と dev/ の線引き

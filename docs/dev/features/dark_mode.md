@@ -2,7 +2,7 @@
 
 **対象:** バックログ「ダークモード」の再検討（2026-07-22死亡 → 2026-07-26再オープン）
 **初版:** 2026-07-26
-**関連:** [theme_and_ui_refactor](theme_and_ui_refactor.md)（土台となるトークン整理 R-1〜R-4）・[architecture](architecture.md)
+**関連:** [theme_and_ui_refactor](../system/theme_and_ui_refactor.md)（土台となるトークン整理 R-1〜R-4）・[architecture](../system/architecture.md)
 **状態:** 実装済み・**実機確認済み**（2026-07-26 に実機で一巡し問題なし）。オプション画面のトグルで切り替わる。
 
 ---
@@ -91,7 +91,7 @@
 | 役割トークン | ライト（現行値そのまま） | ダーク（案） |
 |---|---|---|
 | `surface` | グラデーション | `#1A1C2E` ベース＋弱グラデーション（`QuizScreen` の既存背景色） |
-| `panel` | `Panel #FDFEFF` | `#2A2D45`（`QuizScreen` の既存値。§4の初版では `#101A2E` を提案したが取り下げ → [theme_and_ui_refactor](theme_and_ui_refactor.md) 発見1） |
+| `panel` | `Panel #FDFEFF` | `#2A2D45`（`QuizScreen` の既存値。§4の初版では `#101A2E` を提案したが取り下げ → [theme_and_ui_refactor](../system/theme_and_ui_refactor.md) 発見1） |
 | `panelTinted` / `panelBlue` | `#F7F3FF` / `#F0F4FF` | ベースに対し僅かに色相を振った面 |
 | `codePanel` | `#F1F4F8` | パネルより一段沈める |
 | `divider` | `PanelDivider #D6DDF5` | 低αの白 |
@@ -143,7 +143,7 @@
 > **2026-07-29 追記:** Secondary のライト面での塗り 2.46 は、当時「ライト側の配色を変えない」
 > という Non-Goal のため未修正で残した。D案でライト側だけ `#109384`（3.76）へ差し替えて解消し、
 > **`buttonSecondary` は明暗で別値になった**（ダークの `#16B8A6` は上表のまま据え置き）。
-> 経緯は [theme_and_ui_refactor](theme_and_ui_refactor.md) の 2026-07-29 追記・判断3。
+> 経緯は [theme_and_ui_refactor](../system/theme_and_ui_refactor.md) の 2026-07-29 追記・判断3。
 
 **読み取れること:**
 
@@ -236,6 +236,6 @@
 
 ## 8. 次フェーズの入力
 
-Phase 2（リファクタ R-1〜R-4）の設計は [theme_and_ui_refactor](theme_and_ui_refactor.md) に分離した。実コードを読んだ結果、**着手順は R-2 → R-1 → R-3 → R-4 に変更**（`SectionFabStatus` がタブと全画面の両方から使われており、先に分割すると消す予定の型を公開することになるため）。
+Phase 2（リファクタ R-1〜R-4）の設計は [theme_and_ui_refactor](../system/theme_and_ui_refactor.md) に分離した。実コードを読んだ結果、**着手順は R-2 → R-1 → R-3 → R-4 に変更**（`SectionFabStatus` がタブと全画面の両方から使われており、先に分割すると消す予定の型を公開することになるため）。
 
 本書の §4 で提案した暗面 `#101A2E` は、`QuizScreen` が既に独自のダークテーマ（`#1A1C2E` / `#2A2D45`）を持っていたことが判明したため取り下げた。詳細は同文書の「発見1」。

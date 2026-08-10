@@ -2,7 +2,7 @@
 
 **対象領域:** `![alt](path)` と `![[image.png]]` の解決・復号・描画
 **状態:** 実装済み・稼働中。EXIF回転・SVG・アニメーション・インライン画像は非対応。
-**関連:** [markdown_rendering](markdown_rendering.md)・[reflect_reading_trace](reflect_reading_trace.md)（到達率）・[ui_design_principles](ui_design_principles.md)
+**関連:** [markdown_rendering](../system/markdown_rendering.md)・[reflect_reading_trace](reflect_reading_trace.md)（到達率）・[ui_design_principles](../system/ui_design_principles.md)
 **経緯:** [開発日誌 2026-08](../../owner/journal/2026-08.md#2026-08-02--08-08--ノート内画像を出す)
 
 ---
@@ -89,7 +89,7 @@ BFSで最初に見つかったほうを黙って出すのは**誤った画像を
 
 **分離して得られるものを先に数えた。** 予算内のノートは `buildNoteExcerpt` が原文を無加工で返すので
 **何も変わらない**。利得は「予算超過のノートで画像1つあたり数十文字」に限られ、
-[ai_input_excerpt](ai_input_excerpt.md) は**予算を600→800へ増やしても品質は動かなかった**と記録している。
+[ai_input_excerpt](../system/ai_input_excerpt.md) は**予算を600→800へ増やしても品質は動かなかった**と記録している。
 **自分たちで測って「効かない」と結論した軸に、レンダラ2本と全経路のテストを払うのは筋が悪い。**
 
 > **ただし段落の切れ方は変わる。** 空行を挟まず本文の直後へ画像を置く書き方は従来1つの段落へ吸収されていたが、
@@ -218,7 +218,7 @@ BFSで最初に見つかったほうを黙って出すのは**誤った画像を
 葉である `model` に置くのは、`domain`（解決）・`data`（復号）・`ui`（表示）の3層が同じ語彙を使うため。
 
 - **失敗は必ず見える形にする。** 枠＋アイコン＋**ファイル名と理由の文字**
-- **色だけで伝えない**（WCAG 1.4.1 → [ui_design_principles](ui_design_principles.md) §1）
+- **色だけで伝えない**（WCAG 1.4.1 → [ui_design_principles](../system/ui_design_principles.md) §1）
 - **alt が空のときはファイル名を読む**（本アプリはビューアなので、ノートに置かれた画像は装飾ではなく内容である）
 
 ## 対応範囲

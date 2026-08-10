@@ -2,7 +2,7 @@
 
 **対象:** 見た目に関わる変更すべて（色・記号・装飾・寸法）
 **初版:** 2026-08-02
-**関連:** [theme_and_ui_refactor](theme_and_ui_refactor.md)（個々の判断の記録）・[dark_mode](dark_mode.md)
+**関連:** [theme_and_ui_refactor](theme_and_ui_refactor.md)（個々の判断の記録）・[dark_mode](../features/dark_mode.md)
 **状態:** 運用中。**着手前にここを読む。** 個別の判断は theme_and_ui_refactor の判断1〜8 が持つ
 
 ---

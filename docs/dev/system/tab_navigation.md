@@ -2,7 +2,7 @@
 
 **対象領域:** 画面構成・ナビゲーション・全画面表示
 **初版:** 2026-07-16（PR #12）
-**状態:** 実装済み。判断1〜3は現行。**全画面表示のみ方式を置換済み**（オーバーレイ → 独立ルート `note_fullscreen`。PR #30 → [note_fullscreen](note_fullscreen.md)）
+**状態:** 実装済み。判断1〜3は現行。**全画面表示のみ方式を置換済み**（オーバーレイ → 独立ルート `note_fullscreen`。PR #30 → [note_fullscreen](../features/note_fullscreen.md)）
 
 ---
 
@@ -49,4 +49,4 @@ Pixel Foldで操作ボタンが画面外に切れる不具合と、ダブルタ�
 
 ### 2026-07-21 — 全画面をオーバーレイから独立ルートへ（判断2の発展）
 
-判断2で採用した⛶/✕の明示操作はそのままに、その表示レイヤーを `content` 内オーバーレイから非タブの独立ルート `note_fullscreen` へ移した。オーバーレイでは構造的にバー/レールを覆えなかったため。詳細は [note_fullscreen](note_fullscreen.md) を参照。
+判断2で採用した⛶/✕の明示操作はそのままに、その表示レイヤーを `content` 内オーバーレイから非タブの独立ルート `note_fullscreen` へ移した。オーバーレイでは構造的にバー/レールを覆えなかったため。詳細は [note_fullscreen](../features/note_fullscreen.md) を参照。

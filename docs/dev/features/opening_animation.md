@@ -37,7 +37,7 @@
 
 ## 実装上の判断
 
-- **外部ラムダは `rememberUpdatedState` 経由で呼ぶ**。`OpeningScreen` の `onFinished` は `LaunchedEffect`（長寿命ブロック）から呼ぶため、PR #25で文書化した「stale closure」の教訓（[architecture](architecture.md) 参照）に従う。
+- **外部ラムダは `rememberUpdatedState` 経由で呼ぶ**。`OpeningScreen` の `onFinished` は `LaunchedEffect`（長寿命ブロック）から呼ぶため、PR #25で文書化した「stale closure」の教訓（[architecture](../system/architecture.md) 参照）に従う。
 - **タイムライン計算は純関数 `vigilithOpeningMotion` に集約**し、区間ごとの背景・本体・ハロー・名称の
   αとスケールを1フレーム分の値へ変換する。ComposeやAndroid型を含めないためJVMテストで演出順と終端を検証できる。
 - **目専用のCanvasレイヤーは置かない。** 完成WebPに描かれた目だけを使い、起動中の二重描画と

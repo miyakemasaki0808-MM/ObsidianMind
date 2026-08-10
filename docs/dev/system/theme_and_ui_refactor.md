@@ -2,7 +2,7 @@
 
 **対象領域:** 色トークンの設計・WCAG基準の当て方・テーマの通し方
 **状態:** 実装済み・稼働中。文字4.5:1／塗り3:1／記号3:1 を `AppColorContrastTest` が強制している。
-**関連:** **[ui_design_principles](ui_design_principles.md)（先に読む）**・[dark_mode](dark_mode.md)・[note_age_paper](note_age_paper.md)
+**関連:** **[ui_design_principles](ui_design_principles.md)（先に読む）**・[dark_mode](../features/dark_mode.md)・[note_age_paper](../features/note_age_paper.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-29--07-30--ライト配色のaa是正で2度差し戻される)
 
 ---

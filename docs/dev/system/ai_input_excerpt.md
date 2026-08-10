@@ -2,7 +2,7 @@
 
 **対象領域:** 8プロンプトへ渡す本文の作り方（どこを捨て、どこを残すか）
 **状態:** 実装済み・稼働中。予算調整は 2026-08-01 に打ち止め（効果が測れなかったため）。
-**関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](related_notes_ai.md)
+**関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](../features/related_notes_ai.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-27--28--ai入力の切り出しを後ろ捨てから真ん中捨てへ)・[2026-08](../../owner/journal/2026-08.md)
 
 ---
@@ -170,4 +170,4 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 - ~~関連ノートの予算のさらなる引き上げ~~ — **実機確認で落とした**（600→800 で体感が変わらない）
 - **予算調整という方向自体を打ち止めにする。** 関連ノートの品質に不満が出たら、
   **原因は予算ではなく候補の選び方・再ランク・指示文の側**を疑う
-- **フォーカスセクション文脈**は別機能として扱う（→ [related_notes_ai](related_notes_ai.md)）
+- **フォーカスセクション文脈**は別機能として扱う（→ [related_notes_ai](../features/related_notes_ai.md)）

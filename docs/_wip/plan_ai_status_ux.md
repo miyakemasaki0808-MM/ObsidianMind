@@ -6,7 +6,7 @@
 **状態:** **未着手。計画のみ。** 着手判断は保留中。
 
 > **この文書は使い捨て。** 着手して実機確認まで終わったら削除し、
-> 設計判断は [design/background_ai_ux.md](../dev/design/background_ai_ux.md) へ、
+> 設計判断は [system/background_ai_ux.md](../dev/system/background_ai_ux.md) へ、
 > 記録は [change_history.md](../dev/change_history.md) へ移す。
 > **`_wip/` の3本（課題・順序・アイデア）とは役割が違うので混ぜない** — これは特定項目の実装計画。
 
@@ -71,7 +71,7 @@ roadmap X-6 の列挙（要約・検索・クイズ・補記）は**ひとこと
 
 ### 方針3: Controllerは共通化しない。共通化するのは「見せ方」だけ
 
-[architecture.md](../dev/design/architecture.md) が4度（07-24 / 07-25 / 07-26 / 08-09）決着させたとおり、
+[architecture.md](../dev/system/architecture.md) が4度（07-24 / 07-25 / 07-26 / 08-09）決着させたとおり、
 Controller基底クラスは作らない。一方で同文書が確立した判定軸は
 「**共通性は生成処理ではなくユーザーへの見せ方に宿る**」であり、
 本件はまさに見せ方の統一なので、**純関数1本の共通化は同じ判断に沿う**（対立しない）。
@@ -277,7 +277,7 @@ fun aiStatusNotice(availability: AiAvailability, featureLabel: String): AiStatus
 ## 4. やらないこと（明示）
 
 - **モデルDLポリシーの統一。** 要約だけがノートを開くたび無断で自動DLし、蒸留は通信量を告知して明示タップを求める。
-  この不統一は [architecture.md](../dev/design/architecture.md) 2026-07-24 が**意図的な設計判断として記録している**ので、勝手に寄せない
+  この不統一は [architecture.md](../dev/system/architecture.md) 2026-07-24 が**意図的な設計判断として記録している**ので、勝手に寄せない
   （CLAUDE.md「実装と設計文書が食い違う場合、勝手にどちらかへ寄せない」）。触るなら別PR＋設計判断から。
 - **AIタブ／設定への「この端末は非対応」の一括表示。** 方針1で採らないと決めた。
 - **`AiStatusTone` と派生Boolean**（段階2の注記）。
@@ -323,7 +323,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 1. コミット前に**別のモデル／エージェントがdiffをレビューする**（恒久工程。自分の2回目のパスは数えない）
 2. [change_history.md](../dev/change_history.md) へ1行
-3. [background_ai_ux.md](../dev/design/background_ai_ux.md) を更新 — **冒頭の「未解決:」行が本件をそのまま指している**ので、
+3. [background_ai_ux.md](../dev/system/background_ai_ux.md) を更新 — **冒頭の「未解決:」行が本件をそのまま指している**ので、
    そこを解いた記録に差し替える。方針1（説明は操作に従う）は新しい設計判断なので追記する
 4. [current_issues.md](current_issues.md) の **AI-2 は実機確認が済むまで消さない**
 5. [roadmap.md](roadmap.md) の X-6 を削除（取り消し線を残さない）

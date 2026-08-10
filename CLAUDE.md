@@ -4,23 +4,23 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ネットワーク権限は持たない。ユーザーのVault（Obsidian の `.md` 群）を SAF 経由で読み書きする。
 
 > **この文書の位置づけ = 憲法。** 常時効かせる原則・参照先・禁止事項・完了条件だけを置く。
-> 背景と判断理由は `docs/dev/design/`（法律）、作業手順は Skill（作業標準書）が持つ。**ここに詳細を書き足さない。**
+> 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、作業手順は Skill（作業標準書）が持つ。**ここに詳細を書き足さない。**
 
 ## 最優先文書
 
-@docs/dev/design/architecture.md
+@docs/dev/system/architecture.md
 
 上記は全変更に効く横断規約なので常時読み込む。**機能固有の変更では、着手前に対応する設計書を必ず読むこと。**
 どれを読むかは [docs/dev/document_map.md](docs/dev/document_map.md) §5 の逆引き表で引く。主要なものだけ再掲する。
 
 | 触るところ | 先に読む |
 |---|---|
-| `NoteViewModel.kt` / `controller/` | [architecture](docs/dev/design/architecture.md) → 該当機能の設計書 |
-| `ai/` ・AI生成の通知/待ち時間 | [background_ai_ux](docs/dev/design/background_ai_ux.md) |
-| `ui/theme/` ・色/テーマ | **[ui_design_principles](docs/dev/design/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](docs/dev/design/theme_and_ui_refactor.md) → [dark_mode](docs/dev/design/dark_mode.md) |
-| `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/dev/design/reflect_reading_trace.md) / [reflect_distill](docs/dev/design/reflect_distill.md) |
-| `ui/vigilith/` | [character_vigilith](docs/dev/design/character_vigilith.md) → [vigilith_in_app](docs/dev/design/vigilith_in_app.md) |
-| `androidTest/` | [instrumentation_testing](docs/dev/design/instrumentation_testing.md) |
+| `NoteViewModel.kt` / `controller/` | [architecture](docs/dev/system/architecture.md) → 該当機能の設計書 |
+| `ai/` ・AI生成の通知/待ち時間 | [background_ai_ux](docs/dev/system/background_ai_ux.md) |
+| `ui/theme/` ・色/テーマ | **[ui_design_principles](docs/dev/system/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](docs/dev/system/theme_and_ui_refactor.md) → [dark_mode](docs/dev/features/dark_mode.md) |
+| `data/`（SAF・サイドカー・書き戻し） | [reflect_reading_trace](docs/dev/features/reflect_reading_trace.md) / [reflect_distill](docs/dev/features/reflect_distill.md) |
+| `ui/vigilith/` | [character_vigilith](docs/dev/features/character_vigilith.md) → [vigilith_in_app](docs/dev/features/vigilith_in_app.md) |
+| `androidTest/` | [instrumentation_testing](docs/dev/system/instrumentation_testing.md) |
 
 **繰り返し現れた構造的な教訓は [docs/dev/lessons.md](docs/dev/lessons.md)（索引）と [docs/dev/lessons/](docs/dev/lessons/)（カード）。**
 **着手前に全文を読まない。** 索引の「いつ当てるか」列を引き、**該当したカードだけ**を読む。
@@ -59,7 +59,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 
 **禁止事項**
 
-- **類似コードを見つけても、設計文書の判断を無視して安易に共通化しない。** Controllerの相似形は 2026-07-24 と 07-25 の2度の検討を経て「**共通化しない**」で決着済み（→ [architecture.md](docs/dev/design/architecture.md) の追記2節）。再提案するなら、そこに書かれた再検討条件を満たすことを先に示す
+- **類似コードを見つけても、設計文書の判断を無視して安易に共通化しない。** Controllerの相似形は 2026-07-24 と 07-25 の2度の検討を経て「**共通化しない**」で決着済み（→ [architecture.md](docs/dev/system/architecture.md) の追記2節）。再提案するなら、そこに書かれた再検討条件を満たすことを先に示す
 - **実装と設計文書が食い違う場合、勝手にどちらかへ寄せない。差分を報告して判断を仰ぐ**
 - 外から渡されたラムダを `pointerInput` / `LaunchedEffect` など長寿命ブロック内から呼ぶときは `rememberUpdatedState` を通す（stale closure で「押しても無反応」になる既知の型 → [L34](docs/dev/lessons/L34.md)）
 - SDKの制約は公式ドキュメントではなくバイナリで確認する（`maxOutputTokens` の 1〜256 制限で全AI生成が落ちた前例あり）
@@ -77,21 +77,30 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 - `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
 - **実機確認はユーザーがAndroid Studioで実施する。** Claudeは実行できない。**実機確認が済むまでPR本文に「確認完了」と書かない**
 - Lint は現在 Error 0 / Warning 0 / hint 12（hint は依存更新系の催促で、ゲートに載せない）。**警告を増やさない**
-- 端末AIを呼ぶ instrumentation テストは、Nano が使えない端末では `Assume` で skip する。**skip 判定は既知の `FeatureStatus` だけで行い、計測・生成呼び出しが投げた例外は skip せず失敗させる**（`checkAvailability()` は例外も畳むので判定に使わない）→ [ai_input_excerpt](docs/dev/design/ai_input_excerpt.md)
+- 端末AIを呼ぶ instrumentation テストは、Nano が使えない端末では `Assume` で skip する。**skip 判定は既知の `FeatureStatus` だけで行い、計測・生成呼び出しが投げた例外は skip せず失敗させる**（`checkAvailability()` は例外も畳むので判定に使わない）→ [ai_input_excerpt](docs/dev/system/ai_input_excerpt.md)
 
 **変更を終える前に:**
 
 1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する。**「変更内容」は1文・100字以内** — 経緯・代償・変異確認の結果・教訓はここに書かない（行き先は 2. と 4.）
-2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/design/*.md` に追記する（自明な変更は履歴1行のみ）
+2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/features/*.md` か `docs/dev/system/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
-4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `design/` に決めて要約＋リンクにする
+4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `features/` か `system/` に決めて要約＋リンクにする
 5. **同じ事件を design・lessons・change_history へ3回とも長文で書かない。** 正本を1つ決め、他は要約＋リンクにする
 
 ## 文書の扱い
 
+**設計文書は種別で分ける（2026-08-11）。旧 `dev/design/` は3つへ割った。** 種別が同じ場所に混ざると役割が曖昧になり、実際に24本中11本がADRの形（`## 判断N`）で機能仕様と同居していた。
+
+| 置き場 | 何を書くか | 判断の軸 |
+|---|---|---|
+| `dev/features/` | **ユーザーから見える機能**の仕様と実現方法。様式は [`_template.md`](docs/dev/features/_template.md) | 「何ができるか」をオーナーが読んで分かるか |
+| `dev/system/` | **横断的な基盤**（責務・保証・不変条件・利用者）。ユーザーフローは書かない | ユーザー機能ではなく、全機能に効くか |
+| `dev/decisions/` | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、20行以内） | 後から「なぜ？」となるか。機能追加ごとには作らない |
+
+- **ADRに設計の写しを置かない。** `decisions/` は「なぜ」の索引であって正本ではない。**詳細の正本は必ず `features/` か `system/` 側**で、ADRはそこへリンクする（正本が2つに割れると、どちらかが必ず古くなる）
 - **`docs/review/` 配下の `2026-*.md` は最新の1本だけを置き、書き換えない。** 新しいレビューを受け付けたら前の本文は削除する（原文はgit履歴に残る）。様式（`review_template.md`）と全指摘の受付簿（`findings.md`）はこちらが持つ
 - **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
-- `design/` の各文書には `**状態:**` 行を置く
+- `features/` `system/` の各文書には `**状態:**` 行を置く
 
 ## 作業の進め方
 

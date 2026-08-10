@@ -3,7 +3,7 @@
 **対象領域:** Reflect（AIタブ）拡張・ノート編集・オンデバイスAI
 **初版（ドラフト）:** 2026-07-21
 **状態:** v1 Phase 1〜6 実装済み・自動テスト済み・実機確認待ち
-**関連:** [section_ai_chat](section_ai_chat.md)・[related_notes_ai](related_notes_ai.md)・[architecture](architecture.md)・[background_ai_ux](background_ai_ux.md)
+**関連:** [section_ai_chat](section_ai_chat.md)・[related_notes_ai](related_notes_ai.md)・[architecture](../system/architecture.md)・[background_ai_ux](../system/background_ai_ux.md)
 
 ---
 

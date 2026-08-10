@@ -2,7 +2,7 @@
 
 **対象領域:** 実端末を通すテストの選定基準・実物SAFの作り方・実行の運用
 **状態:** 実装済み・稼働中（40件）。CIでは実行せず、PR前にAndroid Studioで回す運用。
-**関連:** [architecture](architecture.md)・[note_image_rendering](note_image_rendering.md)・[ai_input_excerpt](ai_input_excerpt.md)
+**関連:** [architecture](architecture.md)・[note_image_rendering](../features/note_image_rendering.md)・[ai_input_excerpt](ai_input_excerpt.md)
 **経緯:** [開発日誌 2026-08](../../owner/journal/2026-08.md#2026-08-08--instrumentation-を34件そろえて実機で回す)
 
 ---
@@ -47,7 +47,7 @@ debug ソースセットならアプリ本体と同じUIDになるので `Docume
 **release には入らない。**
 
 **読取失敗は「例外」ではなく「null カーソル」で作る。** 本番が守っているのは
-`query()` が `null` を返す経路（→ [reflect_reading_trace](reflect_reading_trace.md) 判断14）なので、
+`query()` が `null` を返す経路（→ [reflect_reading_trace](../features/reflect_reading_trace.md) 判断14）なので、
 例外を投げるプロバイダでは**別の経路を試していることになる。**
 
 ## 判断5: CIでは実行せず、実行を運用で担保する

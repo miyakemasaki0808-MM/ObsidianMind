@@ -10,7 +10,7 @@
 > | 知りたいこと | 正本 |
 > |---|---|
 > | 今どういうコード・技術構成か | [source_code_analysis.md](../source_code_analysis.md) |
-> | 今どういう設計判断が有効か | [dev/design/](../../dev/design/) |
+> | 今どういう設計判断が有効か | [dev/features/](../../dev/features/)・[dev/system/](../../dev/system/) |
 > | 今どこが壊れている・足りないか | [_wip/current_issues.md](../../_wip/current_issues.md) |
 > | 何をいつ変えたか（索引） | [dev/change_history.md](../../dev/change_history.md) |
 

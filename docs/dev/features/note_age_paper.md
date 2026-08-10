@@ -2,7 +2,7 @@
 
 **対象:** 読書画面の本文面（`panel`）を、ノートの「最後に手を入れてからの経過」に応じて生成り色へ寄せる
 **初版:** 2026-08-02
-**関連:** [ui_design_principles](ui_design_principles.md)（**着手前に読む**）・[theme_and_ui_refactor](theme_and_ui_refactor.md)・[dark_mode](dark_mode.md)・[architecture](architecture.md)
+**関連:** [ui_design_principles](../system/ui_design_principles.md)（**着手前に読む**）・[theme_and_ui_refactor](../system/theme_and_ui_refactor.md)・[dark_mode](dark_mode.md)・[architecture](../system/architecture.md)
 **状態:** **実装済み・実機確認済み**（2026-08-02）。強度は初期案（微か）のまま確定 — 実機で「控えめのほうがよい」と判断した。配線は診断用の色で別途確認済み（§10）
 
 ---
@@ -87,7 +87,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 ### §3 の失敗型には当たらない
 
-[ui_design_principles](ui_design_principles.md) §3 が記録している差し戻し3件は、いずれも
+[ui_design_principles](../system/ui_design_principles.md) §3 が記録している差し戻し3件は、いずれも
 **「大きい部品で成立した解き方を、小さい部品へそのまま移した」**失敗である
 （バッジへの輪郭線・バッジ内の濃い記号・グラデーション上の暗幕）。
 
@@ -102,7 +102,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 パーセンタイルをそのまま 0.0〜1.0 として色を補間する案を採らない。
 
 - **止まった値をテストで固定できない。** 既存の [`AppColorContrastTest`](../../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt) は
-  トークンの実値に対して比を強制する形になっている（[theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4）。
+  トークンの実値に対して比を強制する形になっている（[theme_and_ui_refactor](../system/theme_and_ui_refactor.md) 判断4）。
   連続値だと「この比が最悪ケースか」を実装から導けず、**記録ではなく強制**という既存の性質が崩れる
 - **実機で検証しづらい。** 「このノートはどの色になるべきか」を目視で確認できない
 - 段階に名前が付くので、既存の `AppColorScheme` のトークン設計にそのまま乗る
@@ -120,7 +120,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 これは「同じトークンが別の面へ載った瞬間に基準を割る」ことを防ぐための床であり、
 **紙の地色がこの床を下回ると、既存の全テキストトークンが一斉に基準を割る。**
 
-これは [theme_and_ui_refactor](theme_and_ui_refactor.md) の判断5・判断6 で**2度差し戻された「面の取り違え」そのもの**である。
+これは [theme_and_ui_refactor](../system/theme_and_ui_refactor.md) の判断5・判断6 で**2度差し戻された「面の取り違え」そのもの**である。
 新しい面を足すときは、その面が既存の床より暗くないかを最初に確認する。
 
 相対輝度（WCAG 2.1 の定義）:
@@ -159,7 +159,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 現行の床（`panelChip` 上）は `onSurfaceSubtle` 5.07 / `onSurfaceMuted` 6.58。
 **上限案でもこれを下回らない。** つまり強めても AA は割らず、
-判断は可読性ではなく**好みの側**（[ui_design_principles](ui_design_principles.md) §2・§3）で行う。
+判断は可読性ではなく**好みの側**（[ui_design_principles](../system/ui_design_principles.md) §2・§3）で行う。
 
 ---
 
@@ -169,7 +169,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 判断3 でグラデーションを背景からアクセントへ降格させている。
 そこへ「黄ばみ」という光の当たった紙の比喩を持ち込むと、**別配色として立てた前提と衝突する**。
 
-[ui_design_principles](ui_design_principles.md) §2 は「**明暗で解き方が反転してよい**」「**値をコピーしない**」と定めている。
+[ui_design_principles](../system/ui_design_principles.md) §2 は「**明暗で解き方が反転してよい**」「**値をコピーしない**」と定めている。
 ダークで年代差を出したくなったら、黄ばみではなく別軸（彩度・青みなど）を新規に設計すること。
 **本設計はその設計を含まない。**
 
@@ -219,7 +219,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 **世代IDも足していない。** 分布は非同期の結果ではなく同期的に読むキャッシュなので、
 「遅れて届いた旧Vaultの分布が後着する」経路が存在しない。
-[architecture](architecture.md) 2026-07-31 の
+[architecture](../system/architecture.md) 2026-07-31 の
 **「層を足す前に『無効化の契機がいくつあるか』を数える」**をそのまま当てると、
 契機は Vault切替の1つで、既存のキャッシュ破棄がそれを担っている。
 
@@ -236,8 +236,8 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 ### 段階の算出は純関数にする
 
 分布から段階を決める処理は Android 非依存の純関数として `domain` へ置き、JVMテストを同時に書く
-（[architecture](architecture.md) 判断3）。`model` は葉なので `android.*` を含めない
-（→ [saf_boundary_gateway](saf_boundary_gateway.md)）。
+（[architecture](../system/architecture.md) 判断3）。`model` は葉なので `android.*` を含めない
+（→ [saf_boundary_gateway](../system/saf_boundary_gateway.md)）。
 
 **純関数は2つある。** Rediscover 経路は走査結果を手元に持つので `notePaperTone` を直接呼べるが、
 さがす・関連ノート経由は**材料が2箇所に散る**（候補自身の `lastModified` と走査キャッシュ）ため、
@@ -251,7 +251,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 **「ViewModel に置いた小さな分岐」は、テストが無いことに気づきにくい形である。**
 
 入力サイズはノート数に比例するが、ソートのみで Markdown 解析のような重さは無い。
-[architecture](architecture.md) 2026-07-27 の「Mainから呼ぶ純関数は入力サイズに比例するなら境界を明示する」に照らし、
+[architecture](../system/architecture.md) 2026-07-27 の「Mainから呼ぶ純関数は入力サイズに比例するなら境界を明示する」に照らし、
 **実装時に実測してから** `Dispatchers.Default` へ逃がすかを決める（先回りしない）。
 
 ---
@@ -259,7 +259,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 ## 10. 検証
 
 - **`AppColorContrastTest` へ4段階すべての比を足す。** 記録ではなく強制とし、
-  旧値へ戻す変異でテストが落ちることを確認する（[theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4）
+  旧値へ戻す変異でテストが落ちることを確認する（[theme_and_ui_refactor](../system/theme_and_ui_refactor.md) 判断4）
 - **床の回帰を1本で守る。** 「最も古い段階の L が `panelChip` の L 以上」を直接テストする。
   個別の比だけを並べると、将来 `panelChip` が動いたときに気づけない
 - 段階算出の純関数に JVMテスト（空Vault・全ノート同一日時・1本だけのVault の3境界を含む）

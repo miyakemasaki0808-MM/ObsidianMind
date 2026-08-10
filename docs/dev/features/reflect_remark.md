@@ -2,7 +2,7 @@
 
 **対象領域:** 読んでいるノートに対してAIが1文だけ返し、ユーザーが返事を書ける機能
 **状態:** 実装済み・稼働中。保存先は読書痕跡サイドカー（schema v5）。
-**関連:** [reflect_reading_trace](reflect_reading_trace.md)（保存先）・[ai_input_excerpt](ai_input_excerpt.md)（入力予算）・[background_ai_ux](background_ai_ux.md)
+**関連:** [reflect_reading_trace](reflect_reading_trace.md)（保存先）・[ai_input_excerpt](../system/ai_input_excerpt.md)（入力予算）・[background_ai_ux](../system/background_ai_ux.md)
 **経緯:** [開発日誌 2026-08](../../owner/journal/2026-08.md#2026-08-09--ai補記メモをノートへのひとことへ作り直す)
 
 ---
@@ -22,7 +22,7 @@
 出力は構造上ラベル貼りへ近づく。
 
 **構造的な原因は、補記だけ設計書が無かったこと。** 他機能には設計書があったが補記には無く、
-[background_ai_ux](background_ai_ux.md) が持つのは通知層だけだった。
+[background_ai_ux](../system/background_ai_ux.md) が持つのは通知層だけだった。
 **「補記が何を出すべきか」を書いた文書が存在しなかった**ので、削減が
 「何を守るべきか」と突き合わされないまま2か月以上残った。**本文書はその穴を埋めるためにある。**
 

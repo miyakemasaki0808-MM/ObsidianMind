@@ -3,7 +3,7 @@
 **対象領域:** 全画面ノート閲覧・システムバー・スクロール継承
 **初版:** 2026-07-21（PR #30）
 **状態:** 実装済み。ダークモード対応（PR #37）まで反映済み
-**関連:** [tab_navigation](tab_navigation.md)（全画面表示の前身＝オーバーレイ方式）
+**関連:** [tab_navigation](../system/tab_navigation.md)（全画面表示の前身＝オーバーレイ方式）
 
 ---
 
@@ -20,7 +20,7 @@
 
 `note_fullscreen` を NavHost の非タブルートとして追加した。`AppScaffold` は既に「非タブルート（quiz/annotation 等）ではバー/レールを出さない」構造を持つため、ルート化するだけで**折り畳み前後どちらでもバー/レールが自動的に消える**。`isFullscreen` の `remember` フラグと違い、ルートは NavController の復元対象になるため、**Fold開閉によるActivity再生成でも全画面が維持される**。
 
-前身の [tab_navigation](tab_navigation.md) 判断2は「⛶で開く／✕で閉じる明示操作」を残しつつ、その表示レイヤーをオーバーレイからルートへ移した形になる。
+前身の [tab_navigation](../system/tab_navigation.md) 判断2は「⛶で開く／✕で閉じる明示操作」を残しつつ、その表示レイヤーをオーバーレイからルートへ移した形になる。
 
 ## 判断2: システムバーはルートの生存期間に紐づけて制御する
 
