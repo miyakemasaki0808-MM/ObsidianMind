@@ -18,12 +18,21 @@
 | 問い | 置き場 | 寿命 |
 |---|---|---|
 | **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
-| **今どうなっているか** | [source_code_analysis.md](source_code_analysis.md)／[review/](../review/README.md) | スナップショット（日付で更新） |
+| **今どうなっているか（オーナー向け）** | [owner/source_code_analysis.md](../owner/source_code_analysis.md)／[review/](../review/README.md) | スナップショット（日付で更新） |
 | **なぜそうしたか** | [design/](design/) | 判断ごとに1本。判断が覆っても改稿して残す |
 | **まだ決まっていない** | [_wip/](../_wip/) | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（番号を振り直さず末尾へ追加。**IDは永久の住所**） |
 
 補助として、出発点の記録 [project_origin.md](../owner/project_origin.md) がある。
+
+> **`source_code_analysis.md` は 2026-08-10 に `owner/` へ移した。** 「今どうなっているか」は
+> `dev/` の役割（作るための知識）に見えるが、**Claudeはコードを直接読んで現況を確認する**ため、
+> この文書を作業知識として参照していなかった（`CLAUDE.md` の自動読込にも「先に読む」表にも
+> 載っていない）。実質**オーナーがコードを読まずに把握するための読み物**だったので、
+> 「文書の役割」の軸はそのままに、**この文書の役割そのものを「作るための知識」から
+> 「オーナー向けの現況解説」へ捉え直した**。design/・lessons/ はコードを読むだけでは
+> 分からない判断・履歴を持つので `dev/` に残る — 区別は「読み手」ではなく
+> 「コードから再現できるかどうか」で引く。
 
 > **教訓は lessons.md へ一本化した（2026-08-10）。** かつて `bugfix_reports.md` が
 > 「再現手順のある個別のバグ」を分けて持っていたが、**その区別は運用で選ばれなかった** —
@@ -38,7 +47,7 @@
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
-| [source_code_analysis.md](source_code_analysis.md) | 現況の全体解析（16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める | 大きな実装の区切りで通しで書き直す |
+| [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 現況の全体解析（16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める。**`owner/` にある**（オーナー向け読み物） | 大きな実装の区切りで通しで書き直す |
 | [review/](../review/) | 最新の外部レビュー1本と、全指摘の受付簿 | 新しいレビューを受け付けたら前の本文を削除（原文はgit履歴） |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
 | [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書。Android開発の最初の記録としてのみ存在し、現状とは一致しない | 更新しない（起点の記録） |
@@ -150,7 +159,7 @@
 
 | したいこと | 読む順 |
 |---|---|
-| プロジェクトを初めて把握する | [source_code_analysis.md](source_code_analysis.md) §1〜§4 → [design/architecture.md](design/architecture.md) |
+| プロジェクトを初めて把握する | [owner/source_code_analysis.md](../owner/source_code_analysis.md) §1〜§4 → [design/architecture.md](design/architecture.md) |
 | 次に何を作るか決める | [_wip/roadmap.md](../_wip/roadmap.md) → [_wip/current_issues.md](../_wip/current_issues.md) → [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
 | 品質改善に着手する | [レビュー一覧](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
 | 既存コードを触る前に背景を知る | 下の逆引き表 → 該当する `design/` |

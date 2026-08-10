@@ -5,7 +5,7 @@
 
 > **この文書は2026-04-30時点の記録で、以後更新しない。** Android開発の第一歩の資料としてのみ存在する。
 > 当時の minSdk は API 23（現在は 26）、アプリ名も Random Note（現 Vigilith AI）で、記載内容は現状と一致しない。
-> 今どうなっているかは [source_code_analysis.md](../dev/source_code_analysis.md)、その後の変更は [change_history.md](../dev/change_history.md) を参照。
+> 今どうなっているかは [source_code_analysis.md](source_code_analysis.md)、その後の変更は [change_history.md](../dev/change_history.md) を参照。
 
 ---
 

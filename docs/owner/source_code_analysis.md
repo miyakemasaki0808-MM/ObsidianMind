@@ -24,9 +24,9 @@ instrumentation の全段階に加えて、
 ダークモードは 2026-07-26 に実機で一巡し問題なし。**D案は 2026-07-31 にエミュレータで5画面＋ダークモードを一巡済み**で、
 その過程で暗幕がカードに見える問題と操作ボタンの配置を是正した（ダーク側は据え置きのとおり変化なし）。
 **E案は 2026-07-31 に確認済み**（`applicationId` の変更どおり別アプリとしてインストールされる。旧パッケージは端末に残る）。
-**ReadingTrace v1 は 2026-07-31 にクローズ済み**（→ [reflect_reading_trace](design/reflect_reading_trace.md) §12）。
+**ReadingTrace v1 は 2026-07-31 にクローズ済み**（→ [reflect_reading_trace](../dev/design/reflect_reading_trace.md) §12）。
 **「ノートへのひとこと」は 2026-08-09 に実機5巡を終えてクローズ済み**
-（→ [reflect_remark](design/reflect_remark.md)。旧補記の課題 ANNOT-1〜3 と A11Y-1 も同時にクローズ）。
+（→ [reflect_remark](../dev/design/reflect_remark.md)。旧補記の課題 ANNOT-1〜3 と A11Y-1 も同時にクローズ）。
 Vigilith Phase 3・A案／B案／C案の実機一巡は未実施
 
 > **注意:** instrumentation が37件になったことは、**保護範囲が37件ぶん広がったことを意味しない。**
@@ -451,7 +451,7 @@ OpenDocumentTree
 
 次回起動時は SharedPreferences のURIを復元し、`vaultSelected = true` にする。起動直後にノートを自動読込する処理はなく、ユーザーがランダム表示するか検索結果を開くまで `noteState` は Idle のままである。
 
-なお `MainActivity` は `setContent` 直後に、コールド起動時のみ `OpeningScreen`（起動OP）を本体の代わりに表示する。新規起動の判定は `savedInstanceState == null`（回転・Fold開閉・プロセス復元では非nullのため再生しない）。OP終端の背景は着地（Noteタブ）と同じ `ReadingGradient` に揃え、継ぎ目なく本体へ入れ替える。詳細は [design/opening_animation](design/opening_animation.md) を参照。
+なお `MainActivity` は `setContent` 直後に、コールド起動時のみ `OpeningScreen`（起動OP）を本体の代わりに表示する。新規起動の判定は `savedInstanceState == null`（回転・Fold開閉・プロセス復元では非nullのため再生しない）。OP終端の背景は着地（Noteタブ）と同じ `ReadingGradient` に揃え、継ぎ目なく本体へ入れ替える。詳細は [design/opening_animation](../dev/design/opening_animation.md) を参照。
 
 ### 6.2 ランダムノート表示
 
@@ -498,7 +498,7 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 
 #### AI推薦
 
-候補の選定→肉付け→再ランク→ID応答の多段パイプラインである（設計と経緯は [related_notes_ai](design/related_notes_ai.md)）。
+候補の選定→肉付け→再ランク→ID応答の多段パイプラインである（設計と経緯は [related_notes_ai](../dev/design/related_notes_ai.md)）。
 
 1. **タイトル話題スコアで全Vaultをランク**し上位40候補に絞る（`rankRelatedCandidates`）。スコアはタイトルの文字bigram Dice係数（主）＋採番プレフィックス近接の加点（従）。決定的チャンネルに出したタイトルは上限適用の前に除外する。
 2. **候補本文を上限付き並列で読む**（`Semaphore(8)`）。各候補を本文冒頭スニペット・タグ・aliasesで肉付けし、`URI+lastModified` でキャッシュする（成功時のみ格納）。
@@ -550,20 +550,20 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 1. シートの「この部分でクイズ」タップで、シート対象セクションを `sectionModel` から同定し、`NoteSectionModel.surroundingContext()` が周辺テキスト（約1,200文字）を構築する。**これは目標値であり上限ではない**（ブロック単位で足すため超過し得る）ので、プロンプト直前で1,200文字の抜粋（§8.4）を通す。セクションを核に前後のブロックを交互に加えて広げる方式で、親セクションが子を内包する構造でも本文が重複しない。見出しなし・擬似セクションはノート先頭にフォールバックする。
 2. 生成開始時に `QuizState.Loading(sourceTitle=セクション名)` を立てる（待機画面なし）。
 3. `checkAvailability()` で分岐する。Unavailableはエラー、NeedsDownloadはモデルDL後に自動再開、Availableは即生成。
-4. 周辺テキストを**AI不使用で分類**し（`QuizInputProfile`）、素材量に応じて出題形式を切り替える：コード比率45%以上→3択2問、本文180字未満または文シグナル2以下→○×2問、本文700字以上かつ文シグナル6以上→4択1問、それ以外→3択2問。○×・3択は解説なし・4択のみ短い解説を1文とし、問題／選択肢に文字数上限を指示する。これは、常に4択2問＋解説を要求すると出力上限（256トークン程度、8.3参照）を超えて `MAX_TOKENS` で全結果が破棄され、クイズ生成エラーになっていた問題への対策（詳細は [design/section_ai_chat.md](design/section_ai_chat.md)）。
+4. 周辺テキストを**AI不使用で分類**し（`QuizInputProfile`）、素材量に応じて出題形式を切り替える：コード比率45%以上→3択2問、本文180字未満または文シグナル2以下→○×2問、本文700字以上かつ文シグナル6以上→4択1問、それ以外→3択2問。○×・3択は解説なし・4択のみ短い解説を1文とし、問題／選択肢に文字数上限を指示する。これは、常に4択2問＋解説を要求すると出力上限（256トークン程度、8.3参照）を超えて `MAX_TOKENS` で全結果が破棄され、クイズ生成エラーになっていた問題への対策（詳細は [design/section_ai_chat.md](../dev/design/section_ai_chat.md)）。
 5. `Q:` 行を問題開始として `parseQuizResponse(raw, format)` がフィールドを抽出する。○×は `TRUE`/`FALSE`/`○`/`×`/`正しい`/`誤り` 等を許容、多択は正解レターを**単語境界regex `\b[A-D]\b`** で抽出し `B.`・`(B)`・`B) 選択肢文`・`The answer is B` 等の崩れを救済する（単語内の文字は誤検出しない・範囲外の `D` 等は棄却）。選択肢数（3/4）は応答実体に合わせ、必須フィールド欠落や範囲外の正解記号は捨てる。
 6. パース結果が0件なら `QuizState.Error`、あれば `QuizState.Success(isViewed=false)` とし、Snackbarで通知する（AIタブバッジの対象外）。
 7. Q&A画面ではユーザー選択後に正誤、正解、解説を表示し、次の問題へ進む。
 
 生成中の再タップはLoadingガードで無視する。requestIdによる `isCurrent()` チェックで、ノート切替後の古い結果混入を防ぐ。クイズの寿命はセクションチャットセッションに従属する（6.6）。
 
-なお「もう2問」の追い生成（既出問題の除外リスト付き再生成）を一度実装したが、小型モデルには同一素材からの追加出題が難しく成功率が低かったため廃止した（経緯は [design/section_ai_chat.md](design/section_ai_chat.md)）。
+なお「もう2問」の追い生成（既出問題の除外リスト付き再生成）を一度実装したが、小型モデルには同一素材からの追加出題が難しく成功率が低かったため廃止した（経緯は [design/section_ai_chat.md](../dev/design/section_ai_chat.md)）。
 
 ### 6.8 ノートへのひとこと（旧「AI補記メモ」）
 
 **2026-08-09 に全面作り直した。** 旧補記は「4つの分類ラベル＋補記3行」をMarkdownファイルとして
 Vaultへ保存していたが、**出力枠（256トークン）がゼロサムなのに、行動を変えないラベルが
-価値のある側を圧迫していた**（→ [reflect_remark](design/reflect_remark.md) §0）。
+価値のある側を圧迫していた**（→ [reflect_remark](../dev/design/reflect_remark.md) §0）。
 枠を1文へ集中させ、保存先も痕跡サイドカーへ移した。
 
 **生成（`RemarkController`）**
@@ -631,7 +631,7 @@ Rediscover の再会カードには「前回の返事を見る」の1行だけ�
 
 ### 6.10 蒸留（Distill）
 
-Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、ユーザーが確認した文だけを元ノートで `**太字**` にする＝プログレッシブ要約支援。設計判断の全体は [design/reflect_distill.md](design/reflect_distill.md)。実装の骨格：
+Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、ユーザーが確認した文だけを元ノートで `**太字**` にする＝プログレッシブ要約支援。設計判断の全体は [design/reflect_distill.md](../dev/design/reflect_distill.md)。実装の骨格：
 
 1. `buildDistillSourceModel`（`DistillSourceModel`）が本文を、UTF-16オフセット保持＋Markdown構造認識（コードフェンス・テーブル・frontmatter・見出しを除外、インラインコードは太字内許容）で文分割する。表示用 `NoteSectionModel` は親子重複・見出しなし0件のため流用しない。
 2. 一段目（AI不使用）：`selectDistillCandidates` がサリエンス（タイトル別・直近見出し別のbigram Dice）＋構造的重み（段落先頭/末尾/見出し直下）でスコアし、チャンク網羅で候補を絞る。
@@ -642,7 +642,7 @@ Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、�
 
 ### 6.11 ReadingTrace（読書痕跡）
 
-全経路で読書位置を自動記録し、Rediscoverで同じノートを引いた時だけ過去の読み方を再会カードへ出す。設計判断は [design/reflect_reading_trace.md](design/reflect_reading_trace.md)。
+全経路で読書位置を自動記録し、Rediscoverで同じノートを引いた時だけ過去の読み方を再会カードへ出す。設計判断は [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md)。
 
 ```text
 ノート表示前
@@ -771,7 +771,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | セクション質問・Q&A | 1,500文字 | 質問候補最大3件 |
 | ReadingTrace俯瞰要約 | 本文なし | 直近10訪問、1〜2文 |
 
-上限はいずれも UTF-16 文字数で、トークン数や意味境界では切っていない。**ただし切り方は先頭固定長ではない**（2026-07-28 に変更。設計は [ai_input_excerpt](design/ai_input_excerpt.md)）。
+上限はいずれも UTF-16 文字数で、トークン数や意味境界では切っていない。**ただし切り方は先頭固定長ではない**（2026-07-28 に変更。設計は [ai_input_excerpt](../dev/design/ai_input_excerpt.md)）。
 
 - 上表の本文を持つ7経路は、`PromptBuilder` ではなく呼び出し側が `buildNoteExcerpt(content, 上限)` で `NoteExcerpt` を作って渡す。`PromptBuilder` に `take()` は残っていない。
 - **予算内のノートはMarkdownを解析せず原文をそのまま渡す**（移行前のプロンプトと文字列単位で同一）。
@@ -796,7 +796,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - 引用
 - パイプテーブル
 
-リスト項目は `ListItem(depth, marker, text, checked)` で、入れ子段数・番号（`1.` と `1)`、先頭ゼロを含む原文表記）・タスクのチェック状態を保持する。段数の算出はCommonMarkにもObsidianにも準拠しない独自の寛容規則で、設計は [design/markdown_rendering.md](design/markdown_rendering.md)。箇条書き記号 `-` / `*` / `+` の違いだけは意図的に落とす。コードフェンスの言語指定も保持しない。
+リスト項目は `ListItem(depth, marker, text, checked)` で、入れ子段数・番号（`1.` と `1)`、先頭ゼロを含む原文表記）・タスクのチェック状態を保持する。段数の算出はCommonMarkにもObsidianにも準拠しない独自の寛容規則で、設計は [design/markdown_rendering.md](../dev/design/markdown_rendering.md)。箇条書き記号 `-` / `*` / `+` の違いだけは意図的に落とす。コードフェンスの言語指定も保持しない。
 
 ### 9.2 対応インライン記法
 
@@ -1021,7 +1021,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 
 **CIは組み立てまでなので、instrumentation の失敗は今もCIを素通りする。**
 2026-08-08 にエミュレータジョブの追加を検討し、**見送りで確定した**
-（→ [instrumentation_testing](design/instrumentation_testing.md) 判断4）。
+（→ [instrumentation_testing](../dev/design/instrumentation_testing.md) 判断4）。
 最も実機固有な端末AI依存の9件はエミュレータでは `Assume` で skip されるため実機確認が残り、
 確認が二重になること、無料でも保守（不安定な赤・KVM・system image・除外クラス）が残ることによる。
 **再検討の条件は件数ではなく実害へ置いた** — 実行忘れで実害が出た／複数人になった／
@@ -1052,7 +1052,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 ### 13.5 instrumentation の内訳（37件）
 
 2026-08-08 に段階1〜4cを実装し、**実機で 37/37 成功・0 skipped**（Pixel 10 Pro Fold / Android 17）。
-段階の定義と判断は [instrumentation_testing](design/instrumentation_testing.md) が持つ。
+段階の定義と判断は [instrumentation_testing](../dev/design/instrumentation_testing.md) が持つ。
 
 | テストクラス | 件数 | 対象 | JVMで書けない理由 |
 |---|---:|---|---|
@@ -1076,7 +1076,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 > ブロック末尾の式の型が戻り値になるため、末尾が `Log.i()`（`Int`）だと JUnit4 の `void` 要求を
 > 満たさず、**そのクラスのテストが全件起動しない**。実際に4件が丸ごと止まった。
 > コンパイルは通り、失敗は赤ではなく**件数の減少**として現れる。
-> `InstrumentationTestShapeTest` が `runBlocking<Unit>` を強制する（→ [lessons L30](lessons.md)）。
+> `InstrumentationTestShapeTest` が `runBlocking<Unit>` を強制する（→ [lessons L30](../dev/lessons.md)）。
 
 ### 13.6 instrumentation が保証していない範囲
 
@@ -1184,8 +1184,8 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 ## 16. 解析時の確認事項
 
 - 本解析は現行ソースコードを基準にし、過去の設計書ではなく実装との突合を優先した。
-- 2026-07-20の更新はdocs再構成（変更履歴表・design/の新設）と同時に実施した。変更の経緯は [change_history.md](change_history.md)、設計判断は [design/](design/) を参照。
-- 2026-07-21の更新は関連ノートAI推薦のPhase 1〜3（PR #27/#28/#29）を反映した。多段パイプライン化（タイトル話題スコア→本文肉付け→本文再ランク→ID応答）、tags/aliasesの利用開始、同名曖昧性の解消を §6.4・§7.3・§8.4・§14・§15 に反映。設計と知見は [related_notes_ai](design/related_notes_ai.md) を参照。
+- 2026-07-20の更新はdocs再構成（変更履歴表・design/の新設）と同時に実施した。変更の経緯は [change_history.md](../dev/change_history.md)、設計判断は [design/](../dev/design/) を参照。
+- 2026-07-21の更新は関連ノートAI推薦のPhase 1〜3（PR #27/#28/#29）を反映した。多段パイプライン化（タイトル話題スコア→本文肉付け→本文再ランク→ID応答）、tags/aliasesの利用開始、同名曖昧性の解消を §6.4・§7.3・§8.4・§14・§15 に反映。設計と知見は [related_notes_ai](../dev/design/related_notes_ai.md) を参照。
 - 2026-07-22の更新（コミット `48a121b`）は §6.7 のクイズ適応出題と §6.10 の蒸留v1を本文へ追記したが、§2.1 コード規模・§3 ファイル構成・§13 テスト状況の数値を更新しておらず、実装と乖離した状態が残っていた。
 - 2026-07-24の更新は上記の乖離を実測値で解消した。本番Kotlin 33ファイル・約5,900行 → 50ファイル・9,377行、テスト 10ファイル・60（本文中は41と不整合）→ 29ファイル・192ケースへ訂正。あわせて §3 のファイル構成へ `Distill*` 8ファイル・`NoteSnapshot.kt`・`QuizInputProfile.kt` を追加し、§1・§4・§8.4・§12・§13・§14 に蒸留とクイズ適応出題を反映。アプリ名の `Obsidian Mind` → `Vigilith AI` 改称（コミット `be1c0e9`）も反映した。同日、Android Studio 側で `testDebugUnitTest` を実行し192ケース全グリーンを確認済み。
 - 2026-07-25の更新は未コミットのReadingTrace v1を反映した。本番Kotlin 57ファイル・10,630行、テスト34ファイル・282ケースへ再測定し、CLIで`testDebugUnitTest`全件成功を確認した。一方、JVMテスト成功を完成判定にはせず、実装レビューで見つかった到達率・Activity lifecycle・Vault切替の高優先度3件と、同期索引・累計回数の中優先度2件を明記した。
@@ -1220,7 +1220,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
   §1・§2.1・§3・§5・§6.8・§7・§8・§10・§11・§13・§14・§15 を書き換え、
   本番Kotlin 121ファイル・19,787行、テスト73ファイル・15,151行・844ケースへ再測定した。
   `testDebugUnitTest` / `lintDebug` / `assembleDebugAndroidTest` の成功を確認済み
-  （Lint 0 error / 0 warning、更新系は12 hints）。→ [reflect_remark](design/reflect_remark.md)
+  （Lint 0 error / 0 warning、更新系は12 hints）。→ [reflect_remark](../dev/design/reflect_remark.md)
 - 2026-08-02の更新は、Markdownのリスト構造とバッジ記号の基準見直しを反映した。`ListBlock` が `items: List<String>` の単一型だったため**入れ子段数・番号・種別の3つが同時に落ちて**おり、同じパーサが `buildNoteExcerpt` 経由でAI入力にも使われるため**手順書の順序がモデルへ届いていなかった**。`ListItem(depth, marker, text, checked)` と `ListMarker` を導入し、番号は原文表記のまま保持（`String` で持つのは区切り記号 `.`/`)` と先頭ゼロを失わないため）、箇条書き記号は正規化する非対称にした。段数は**CommonMarkにもObsidianにも準拠しない寛容規則**（幅の絶対値を見ず相対的な深浅だけで判定）で、規則5つを1規則1テストで固定した。`TaskListBlock` は項目の属性 `checked` へ統合（別ブロックのままだと混在ネストで段数の追跡が切れる）。あわせて**バッジの記号に当てる基準を 4.5:1 から 3:1 へ改めた** — WCAG は実装ではなく機能で分類するので、バッジの ✓ は読む文字（1.4.3）ではなく状態を示す記号（1.4.11）である。`onStatusBadge` を新設し、同じ塗りの上でラベル（黒・4.5:1）と記号（白・3:1）を分けた。本番Kotlin 103ファイル・16,373行、テスト59ファイル・583ケースへ再測定し、`testDebugUnitTest` と `lintDebug` の成功を確認した（Lint 0 error / 0 warning、更新系は12 hints）。**リスト構造は実機確認済み、バッジ記号は実機確認済み。**
 - 数値の再測定手順（次回更新時に同じ値を再現するため）:
 

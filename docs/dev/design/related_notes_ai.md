@@ -6,7 +6,7 @@
 
 ノートを開いたとき、話題的に近い他ノートを提示する機能の設計と、その改修（Phase 1〜3）で得た知見をまとめる。
 
-- **今どうなっているか**は [source_code_analysis.md](../source_code_analysis.md)、**いつ変えたか**は [change_history.md](../change_history.md) を参照。
+- **今どうなっているか**は [source_code_analysis.md](../../owner/source_code_analysis.md)、**いつ変えたか**は [change_history.md](../change_history.md) を参照。
 - 対象コード: `domain/RelatedNotesUseCase.kt` ほか `domain/RelatedCandidate*.kt` / `RelatedContextScoring.kt`。
 
 ---

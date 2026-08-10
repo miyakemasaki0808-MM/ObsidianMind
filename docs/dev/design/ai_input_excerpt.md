@@ -4,7 +4,7 @@
 **初版:** 2026-07-28（先頭固定長切り出しの解消）
 **状態:** 実装済み・**実機確認済み（2026-07-28・[PR #43](https://github.com/miyakemasaki0808-MM/ObsidianMind/pull/43)）**。予算値の見直しと、関連ノートのフォーカスセクション文脈は意図的に別作業として切り離した。2026-08-01 に、その予算見直しの前提だった**実トークン計測器**を instrumentation テストとして追加し、**実機で計測まで完了**（→ §13）、**関連ノートの予算を 600 → 800 へ1段だけ上げ、実機確認まで完了した**（→ §14）。計測により §9.3 の「注意書きが予算の38%」はトークンでは1.7%と判明し、短縮注意書き案は撤回。**800 でも体感は変わらなかったため、予算調整という方向自体をここで打ち止めにする。**
 
-- **今どうなっているか**は [source_code_analysis.md](../source_code_analysis.md) §8.4、**いつ変えたか**は [change_history.md](../change_history.md) を参照。
+- **今どうなっているか**は [source_code_analysis.md](../../owner/source_code_analysis.md) §8.4、**いつ変えたか**は [change_history.md](../change_history.md) を参照。
 - 対象コード: `model/NoteExcerpt.kt`・`model/NoteExcerptLimits.kt`・`domain/NoteExcerptBuilder.kt`・`ai/PromptBuilder.kt`。
 - 責務をどこへ置くかの横断判断は [architecture.md](architecture.md) の追記「AI本文の切り出し責務を呼び出し側へ置く」が持つ。本書は**抜粋の中身**を扱う。
 

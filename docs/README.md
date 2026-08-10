@@ -6,7 +6,7 @@
 
 | フォルダ | 役割 | 代表 |
 |---|---|---|
-| [owner/](owner/) | **プロダクトの説明** — 何ができるか・どこから来たか | [README](owner/README.md) |
+| [owner/](owner/) | **プロダクトの説明とオーナー向けの読み物** — 何ができるか・どこから来たか・今どうなっているか | [README](owner/README.md) |
 | [dev/](dev/) | **作るための知識** — 設計判断・現況解析・教訓・変更履歴 | [document_map](dev/document_map.md)（文書の地図と運用ルール） |
 | [review/](review/) | **評価とその追跡** — 外部レビュー・様式・指摘の受付簿 | [README](review/README.md) |
 | [_wip/](_wip/) | **未確定** — 課題台帳・ロードマップ・機能アイデア | [current_issues](_wip/current_issues.md) |

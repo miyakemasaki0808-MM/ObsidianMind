@@ -4,12 +4,17 @@
 **最終更新:** 2026-08-10
 
 **位置づけ:** **このアプリが何をするか**を一望する1枚。**継続的に同期する台帳ではない**ので、
-[source_code_analysis.md](../dev/source_code_analysis.md) と同じく**指示があったときに通しで見直す**。
+[source_code_analysis.md](source_code_analysis.md) と同じく**指示があったときに通しで見直す**。
 細部が実装より古いことは仕様の範囲で、正確な現況は解析書、未対応課題は [_wip/current_issues.md](../_wip/current_issues.md) を正とする。
 
 > **文書の地図・運用ルール・設計書の逆引き表は本書が持たない。**
 > [dev/document_map.md](../dev/document_map.md) へ分離した（2026-08-05）。
-> 本書はプロダクトの説明だけを持ち、作るための知識は `dev/` が持つ。
+> **判断（design/・lessons/）と作業の記録（change_history）は `dev/` が持つ。**
+> [source_code_analysis.md](source_code_analysis.md) が本フォルダにあるのは例外で、
+> 2026-08-10 に `dev/` から移した — Claudeはコードを直接読むので現況解析を作業知識として
+> 参照しておらず（`CLAUDE.md` にも「先に読む」表にも載っていない）、実質**オーナー向けの読み物**
+> だったため。design/・lessons/ は逆に「コードを読むだけでは分からない判断・履歴」を持つので
+> `dev/` に残す。
 
 ---
 
@@ -43,7 +48,7 @@
 > → [reflect_remark](../dev/design/reflect_remark.md)
 
 **ノート本文へ書き込むのは蒸留の太字化だけ。** ひとこと・返事・読書痕跡はすべてサイドカー（別ファイル）へ逃がしてある。
-機能ごとのデータフローは [source_code_analysis.md](../dev/source_code_analysis.md) §5〜§6、
+機能ごとのデータフローは [source_code_analysis.md](source_code_analysis.md) §5〜§6、
 なぜそう作ったかは [design/](../dev/design/) が持つ。
 
 ---
