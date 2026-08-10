@@ -16,6 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-11 | — | さがす・セクションAIをテンプレートへ移行し、クイズの入口の誤りを直した | **[ai_picker](features/ai_picker.md)**・**[section_ai_chat](features/section_ai_chat.md)**・[quiz](features/quiz.md) |
+| 2026-08-11 | — | Rediscover・ノート要約・クイズの機能仕様を実装から起こして新設した | **[rediscover](features/rediscover.md)（新規）**・**[note_summary](features/note_summary.md)（新規）** |
+| 2026-08-11 | — | 恒久文書の _wip 項目ID 13件を内容の記述へ直し、検査を features / system へ広げた | [decisions/README](decisions/README.md)・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | ADRの行数規則を `wc -l` 基準の30行へ直し、`AdrShapeTest` で検査に載せた | [decisions/README](decisions/README.md)・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | 「結果がAIタブへ直接出る」という誤りを文書2本とKDoc2箇所から潰した | **[background_ai_ux](system/background_ai_ux.md) §4**・[lessons](lessons.md) L37 |
 | 2026-08-11 | — | ひとことの復元・生成・通知の記述を実装から起こし直した | **[reflect_remark](features/reflect_remark.md) §4・§5** |

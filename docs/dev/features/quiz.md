@@ -1,9 +1,9 @@
 # クイズ（Q&A）
 
 **状態:** Implemented — 稼働中。**未確認管理（`isViewed`）を持つ唯一の機能**
-**最終検証:** 2026-08-11 / `2f4a1d0`（状態・出題形式の決定・未確認管理・DL再開を実装から起こした）
-**関連コード:** `controller/QuizController.kt` / `domain/QuizInputProfile.kt` / `domain/QuizResponseParser.kt` / `model/state/QuizState.kt` / `ui/screen/QuizScreen.kt`
-**関連テスト:** `QuizControllerTest` / `QuizResponseParserTest` / `QuizInputProfileTest` / `QuizPromptBuilderTest` / `AiTabBadgeStateTest`
+**最終検証:** 2026-08-11 / `9c2e0a1`（入口・通知先・`isViewed` の消費先を実装から起こし直した）
+**関連コード:** `controller/QuizController.kt` / `domain/QuizInputProfile.kt` / `domain/QuizResponseParser.kt` / `model/state/QuizState.kt` / `ui/screen/QuizScreen.kt` / `ui/screen/SectionChatSheet.kt`（**入口**）/ `ui/vigilith/VigilithMode.kt`
+**関連テスト:** `QuizControllerTest` / `QuizResponseParserTest` / `QuizInputProfileTest` / `QuizPromptBuilderTest` / `VigilithStatusDerivationTest`
 **正本:** この文書
 
 **対象領域:** 読んだノートから設問を作り、専用画面で解かせるまで
@@ -30,15 +30,16 @@
 
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
-| 設問生成 | AIが複数の設問を作る | AIタブでボタンを明示的に押す |
+| 設問生成 | AIが複数の設問を作る | **吹き出しシートの「📝 この部分でクイズ」**（AIタブに入口は無い） |
 | 出題形式の自動選択 | ○×／3択／4択のいずれかになる | 生成時（**AIではなく本文の構造で決める**） |
-| 解答画面 | 専用ルート `quiz` で解く | Snackbar の「見る」／AIタブのボタン |
-| 未確認バッジ | AIタブに完了✓・失敗! が出続ける | 結果を**まだ開いていない**あいだ |
+| 解答画面 | 専用ルート `quiz` で解く | Snackbar の「見る」／シートの「✓ クイズを開く」 |
+| 未確認の表現 | **シートのラベル**が `✓ クイズを開く` `! エラーを確認` になり、**Vigilith が反応する** | 結果を**まだ開いていない**あいだ |
 | モデルDL | 進捗を出し、完了後に**自動で再開** | Nano のモデルが未取得のとき |
 
 ## 4. 現在のユーザーフロー
 
-1. AIタブのボタンを押す → `QuizController.create(title, content)`
+1. 吹き出しシートの **「📝 この部分でクイズ」** を押す → `QuizController.create(title, content)`
+   - **対象は「いま読んでいるセクションの周辺」**（→ [section_ai_chat](section_ai_chat.md)）
    - **生成中の再タップは無視する**（同じ要求として扱い、Mutex の順番待ちを重複させない）
 2. **本文の構造から出題形式を決める**（AIを使わない → §8 判断1）
 3. `requestId` を採番して `Loading(sourceTitle, format)` にする
@@ -48,16 +49,16 @@
    - `Available` → 5へ
 5. 抜粋を作ってプロンプトを組み、`AiClient.generate()`
 6. 応答をパースして `QuizCard` の列にする（→ §8 判断3）
-7. `Success(cards, isViewed = false)` — **AIタブにバッジが出続ける**
-8. Snackbar の「見る」または AIタブのボタンで `quiz` ルートへ遷移する
-9. **遷移と同時に `markViewed()`** が走り、バッジが消える
+7. `Success(cards, isViewed = false)` — **未確認のあいだシートのラベルが変わり、Vigilith が反応する**
+8. Snackbar の「見る」またはシートの「✓ クイズを開く」で `quiz` ルートへ遷移する
+9. **遷移と同時に `markViewed()`** が走り、未確認の表示が消える
 
 **中断:** ノート・Vault切替、およびセクションチャットの開始・終了で `cancelAndClear()` が走る。
 
 ## 5. 機能仕様
 
 - **前提条件:** ノートが表示されていること
-- **入力:** ノートのタイトルと本文（**抜粋してから渡す**）
+- **入力:** ノートのタイトルと、**いま読んでいるセクションの周辺本文**（→ [section_ai_chat](section_ai_chat.md)）
 - **出力:** `QuizCard` の列（設問・選択肢・正解の位置・解説・形式）
 - **出題形式:** `○×問題` / `3択問題` / `4択問題` の3種
 - **上限:**
@@ -74,7 +75,7 @@
   `Error(message, sourceTitle, isViewed)`
 - **エラー／AI非対応／キャンセル時:**
   - AI非対応 → `Error`（**要約と違い、エラーとして見せる** — 明示操作への応答なので無反応にできない）
-  - 生成失敗・DL失敗 → `Error`。**`isViewed` を持つので、確認するまでバッジが残る**
+  - 生成失敗・DL失敗 → `Error`。**`isViewed` を持つので、確認するまで未確認の表示が残る**
   - ノート切替・セクション文脈の切替 → `cancelAndClear()`
 
 ## 6. 状態とデータ
@@ -84,6 +85,16 @@
 **`Success` と `Error` の両方が `isViewed` を持つ。** 失敗も「まだ見ていない」を持つのは、
 **失敗こそ気づかれないと再試行されない**ため。
 
+**`isViewed` の消費先は3つで、AIタブのバッジは含まれない。**
+
+| 消費先 | 未確認のときの振る舞い |
+|---|---|
+| Snackbar（`MainActivity`） | 未確認のときだけ出す |
+| 吹き出しシートのラベル | `✓ クイズを開く` / `! エラーを確認`（確認後は `↻ クイズを再試行`） |
+| **Vigilith（マスコット）** | 未確認のときだけ `Ready` / `Error` に反応する。**確認済みの結果では動かない** |
+
+`resolveAiTabBadgeState` は `remarkState` しか受け取らないので、**クイズはAIタブのバッジを持たない。**
+
 **契約2箇所への登録（ノート単位の状態）:**
 `cancelNoteScopedJobs()` → `quiz.cancelAndClear()`、
 `withNoteScopedReset()` → `quizState = QuizState.Idle`。**両方に登録済み。**
@@ -91,7 +102,7 @@
 ## 7. システム設計
 
 ```
-AiTab（ボタン）
+SectionChatSheet（📝 この部分でクイズ）
  └─ QuizController.create()
       ├─ profileQuizInput(content)     ← **非AI**。本文の構造だけで形式を決める
       ├─ AiClient.generate()  @generateMutex
@@ -135,6 +146,9 @@ quiz ルート（非タブ）
 **結果が専用画面にあり、しかも「同じノートを開いているあいだ」しか存在しない。**
 見逃すとノート切替で消えるので、**「まだ見ていない」を状態として持ち続ける必要がある。**
 
+**ただし表現の場所はAIタブではない。** 入口が吹き出しシートなので、未確認は
+**シートのラベルと Vigilith の反応**で伝える。**通知は入口の近くに置く**という形になっている。
+
 ひとことが `isViewed` を捨てられたのは結果をサイドカーへ永続化しているからで、
 クイズはそうではない。**判定軸は「後から結果へ辿り着けるか」**
 （→ [background_ai_ux](../system/background_ai_ux.md) §4）。
@@ -151,15 +165,15 @@ quiz ルート（非タブ）
 
 - **性能:** Mutex 直列で1回数十秒。**明示ボタンなので待つ前提に立てる**
 - **プライバシー:** 本文はプロンプトへ入るが端末外へ出ない（→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）
-- **アクセシビリティ:** バッジは下部ナビ帯の上に載るのでコントラストの制約を受ける
-  （→ [ui_design_principles](../system/ui_design_principles.md)）
+- **アクセシビリティ:** シートのラベルは記号（✓ / !）と文言の両方を持ち、色だけに頼らない
+  （→ [ui_design_principles](../system/ui_design_principles.md) の 1.4.1）
 - **端末制約:** Nano 非対応端末では `Error` として明示する
 
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `QuizControllerTest`（状態遷移・世代照合・再タップ無視）/
   `QuizResponseParserTest`（書式の揺れと構造契約）/ `QuizInputProfileTest`（形式の決定）/
-  `QuizPromptBuilderTest` / `AiTabBadgeStateTest`（未確認バッジの優先順位）
+  `QuizPromptBuilderTest` / `VigilithStatusDerivationTest`（未確認のときだけマスコットが反応する）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）
 - **保証していないこと:**
   - **設問の正しさを検証していない。** 正解が本当に正解かは確かめていない

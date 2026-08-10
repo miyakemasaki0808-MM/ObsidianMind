@@ -83,7 +83,7 @@
 | [note_summary.md](features/note_summary.md) | ノート要約（主軸のAI機能・自動起動） |
 | [ai_picker.md](features/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
-| [section_ai_chat.md](features/section_ai_chat.md) | セクション単位AIチャット |
+| [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
