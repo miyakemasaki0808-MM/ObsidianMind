@@ -227,7 +227,8 @@
 
 #### N-3. 画像レンダリング 🎯
 
-**2026-08-02 に設計を確定した → [note_image_rendering](../dev/design/note_image_rendering.md)。実装は未着手。**
+**実装済み・実機確認済み（2026-08-03）→ [note_image_rendering](../dev/design/note_image_rendering.md)。**
+**本項は候補としては閉じている**（残るのは埋め込み `![[note]]`・数式で、下記の但し書きが持つ）。
 以下は本資料に残す最小限の要点だけで、判断の中身は設計書が持つ。
 
 - **内容:** `![alt](path)` と `![[image.png]]` の表示。SAF経由でVault内画像を読み込む。

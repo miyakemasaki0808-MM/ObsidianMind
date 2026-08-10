@@ -2,7 +2,7 @@
 
 **対象領域:** `domain/markdown/`（ブロック解析・LLM入力への再構成）と `ui/markdown/`（描画）
 **初版:** 2026-08-02（FEAT-1 のMarkdown部分）
-**状態:** リストの入れ子・番号・タスク混在は実装済み・実機確認済み（2026-08-02）。画像は設計確定・実装未着手（→ [note_image_rendering](note_image_rendering.md)）。クリック可能リンク・埋め込み・数式は未着手
+**状態:** リストの入れ子・番号・タスク混在は実装済み・実機確認済み（2026-08-02）。画像は実装済み・実機確認済み（→ [note_image_rendering](note_image_rendering.md)）。クリック可能リンク・埋め込み・数式は未着手
 
 ---
 
@@ -130,7 +130,7 @@ AI入力にも使われている**ことだった（→ [ai_input_excerpt](ai_in
 | 項目 | 状態 |
 |---|---|
 | クリック可能リンク（`[[note]]` のノート遷移・外部URL） | 未着手。`SelectionContainer` 内でのクリック検証が要る |
-| 画像 `![alt](path)` / `![[image.png]]` | **設計確定・実装未着手** → [note_image_rendering](note_image_rendering.md) |
+| 画像 `![alt](path)` / `![[image.png]]` | **実装済み**（単独行のみ） → [note_image_rendering](note_image_rendering.md) |
 | 埋め込み `![[note]]`・数式 | 未着手。画像と同じ性質だが、循環参照とレンダラ依存が別問題として付く |
 | 段落の遅延継続・ネスト引用・setext見出し | 未着手。§1のとおり規格適合は目標にしていない |
 

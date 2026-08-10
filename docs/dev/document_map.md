@@ -1,44 +1,42 @@
 # 文書の地図と運用ルール
 
-**この文書は「作るための知識」の索引。** プロダクトの俯瞰は [owner/README.md](../owner/README.md)、
+**この文書は「作るための知識」の索引。** プロダクトの俯瞰・技術俯瞰・開発日誌は [owner/](../owner/)、
 フォルダ全体の入口は [docs/README.md](../README.md) が持つ。
 
-`docs/` は4つのフォルダへ分けている。**分類の軸は「文書の役割」**で、
-担当するAIが変わっても意味が変わらないようにしてある（`owner/` プロダクトの説明・
-`dev/` 作るための知識・`review/` 評価とその追跡・`_wip/` 未確定）。
-同じ機能の話が複数の文書に分かれるのは意図的で、「確定した判断」と「まだ決まっていないこと」を物理的に隔離するため。
+`docs/` は4つのフォルダへ分けている。**分類の軸は「その文書が答える問い」。**
 
-**`_wip/` だけは役割ではなく寿命で切ってある** — リリース時に3ファイルまとめて捨てる置き場なので、
-中身がどの役割であってもここに集める。
+| フォルダ | 答える問い |
+|---|---|
+| `owner/` | このアプリは何で、いまどうなっていて、どうやってここまで来たか |
+| `dev/` | いま何が有効な判断で、何を繰り返してはいけないか |
+| `review/` | 外から見てどう評価されたか、その指摘はどうなったか |
+| `_wip/` | まだ決まっていないこと（**寿命で切ってある**。リリース時にまとめて捨てる） |
+
+> **`owner/` と `dev/` は「コードを読めば再現できるか」で分ける。**
+> 現況の解析・規模・データフローは再現できるので `owner/`。
+> 「なぜその判断にしたか」「何を試して駄目だったか」はコードに書かれていないので `dev/`。
+> **難易度で分けていない** — `owner/` にも技術的な内容が入る。
 
 ---
 
-## 0. 4つの役割（この軸だけ覚えれば迷わない）
+## 0. どの問いをどこが持つか
 
 | 問い | 置き場 | 寿命 |
 |---|---|---|
-| **何をいつ変えたか** | [change_history.md](change_history.md) | 累積（消さない） |
-| **今どうなっているか（オーナー向け）** | [owner/source_code_analysis.md](../owner/source_code_analysis.md)／[review/](../review/README.md) | スナップショット（日付で更新） |
-| **なぜそうしたか** | [design/](design/) | 判断ごとに1本。判断が覆っても改稿して残す |
-| **まだ決まっていない** | [_wip/](../_wip/) | **実機検証まで終わったら削除する**（残すと未対応課題が埋もれる） |
-| **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（番号を振り直さず末尾へ追加。**IDは永久の住所**） |
+| **何をいつ変えたか** | [change_history.md](change_history.md)（**1文100字以内の索引**） | 累積（消さない） |
+| **なぜそうしたか（現在有効な判断）** | [design/](design/) | 判断ごとに1本。**現在形で書く** |
+| **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
+| **いまコードがどうなっているか** | [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 測定日つきスナップショット |
+| **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
+| **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋恒久の受付簿 |
+| **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
 
 補助として、出発点の記録 [project_origin.md](../owner/project_origin.md) がある。
 
-> **`source_code_analysis.md` は 2026-08-10 に `owner/` へ移した。** 「今どうなっているか」は
-> `dev/` の役割（作るための知識）に見えるが、**Claudeはコードを直接読んで現況を確認する**ため、
-> この文書を作業知識として参照していなかった（`CLAUDE.md` の自動読込にも「先に読む」表にも
-> 載っていない）。実質**オーナーがコードを読まずに把握するための読み物**だったので、
-> 「文書の役割」の軸はそのままに、**この文書の役割そのものを「作るための知識」から
-> 「オーナー向けの現況解説」へ捉え直した**。design/・lessons/ はコードを読むだけでは
-> 分からない判断・履歴を持つので `dev/` に残る — 区別は「読み手」ではなく
-> 「コードから再現できるかどうか」で引く。
-
-> **教訓は lessons.md へ一本化した（2026-08-10）。** かつて `bugfix_reports.md` が
-> 「再現手順のある個別のバグ」を分けて持っていたが、**その区別は運用で選ばれなかった** —
-> 直近3件の潜在バグはすべて lessons 側へ来ていた。
-> AI混入バグの類型と検証手順は [L34](lessons/L34.md) が持つ。
-> lessons 自体は 2026-07-31 に `_wip/current_issues.md` の横断テーマ節から移したもの。
+> **設計書と日誌の線引き（2026-08-10 に整理）。**
+> 設計書には**現在有効な判断とその理由・契約・受理条件・意図的にやらないこと**だけを置く。
+> 「実機確認1巡目・2巡目…」「段階1完了」「当時の未実装状況」は日誌へ移した。
+> **同じ事件を設計書・日誌・change_history へ3回とも長文で書かない。**
 
 ---
 
@@ -47,10 +45,9 @@
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
-| [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 現況の全体解析（16章）。§7 SAF層・§8 AI層・§9 Markdown層はパッケージ単位で読める。**`owner/` にある**（オーナー向け読み物） | 大きな実装の区切りで通しで書き直す |
 | [review/](../review/) | 最新の外部レビュー1本と、全指摘の受付簿 | 新しいレビューを受け付けたら前の本文を削除（原文はgit履歴） |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
-| [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書。Android開発の最初の記録としてのみ存在し、現状とは一致しない | 更新しない（起点の記録） |
+| [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
 
@@ -64,52 +61,53 @@
 > §5 の逆引き表を一斉に書き換えることになるため、**契機に達した事実だけを記録し、移動は保留する。**
 > 一覧が実際に読みにくくなったときに行う。
 
-> 状態列は**俯瞰のための要約**で、実装が入ったか・実機確認まで済んだかを1行で示す。
-> **正は各文書の冒頭（`**状態:**` 行）** で、こちらはスナップショットなので遅れることがある。
-> 未着手のPhaseや設計書と実装の乖離といった個別の話は各文書と [_wip/current_issues.md](../_wip/current_issues.md) が持ち、ここには書かない。
+> **状態はここに書かない（2026-08-10）。** かつて「実装済み／未着手」の列を持っていたが、
+> **正本（各文書の `**状態:**` 行）と二重管理になり、実際に古くなった**
+> （画像表示は実装・実機確認まで終わっているのに、ここだけ「実装未着手」が残っていた）。
+> **本書は索引に徹し、状態は各設計書の冒頭1行だけが持つ。**
 
 ### 基盤・横断
 
-| 文書 | 対象 | 状態 |
-|---|---|---|
-| [architecture.md](design/architecture.md) | ViewModel分割・状態管理・並行処理の規約 | 実装済み（PR #16〜#20） |
-| [ui_design_principles.md](design/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** | 運用中 |
-| [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 | 実装済み |
-| [dark_mode.md](design/dark_mode.md) | ダークモード | 実装済み・実機確認済み |
-| [note_age_paper.md](design/note_age_paper.md) | ノートの年代を紙の地色で伝える | 実装済み・実機確認済み |
-| [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い | 方針確定・更新の実行は未着手 |
-| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） | 全段階 実装済み・実機確認済み |
-| [instrumentation_testing.md](design/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 | 全段階 実装済み・実機確認済み（CI実行は見送り確定） |
+| 文書 | 対象 |
+|---|---|
+| [architecture.md](design/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
+| [ui_design_principles.md](design/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** |
+| [theme_and_ui_refactor.md](design/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 |
+| [dark_mode.md](design/dark_mode.md) | ダークモード |
+| [note_age_paper.md](design/note_age_paper.md) | ノートの年代を紙の地色で伝える |
+| [dependency_policy.md](design/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い |
+| [saf_boundary_gateway.md](design/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
+| [instrumentation_testing.md](design/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 |
 
 ### 読む導線
 
-| 文書 | 対象 | 状態 |
-|---|---|---|
-| [tab_navigation.md](design/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） | 実装済み（PR #12） |
-| [note_fullscreen.md](design/note_fullscreen.md) | 全画面ノート（独立ルート化） | 実装済み（PR #30） |
-| [ai_picker.md](design/ai_picker.md) | さがすタブ（検索・ランダム・履歴） | 実装済み（PR #15） |
+| 文書 | 対象 |
+|---|---|
+| [tab_navigation.md](design/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
+| [note_fullscreen.md](design/note_fullscreen.md) | 全画面ノート（独立ルート化） |
+| [ai_picker.md](design/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
 
 ### AIと考える（Reflect）
 
-| 文書 | 対象 | 状態 |
-|---|---|---|
-| [reflect_distill.md](design/reflect_distill.md) | 蒸留（Distill） | v1 Phase 1〜6 実装済み・実機確認待ち |
-| [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） | **v1完了**（実機確認は2026-07-31にクローズ） |
-| [reflect_remark.md](design/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） | **実装済み・実機確認済み**（5巡） |
-| [section_ai_chat.md](design/section_ai_chat.md) | セクション単位AIチャット | 実装済み（PR #14） |
-| [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 | 実装済み（一部Phase未着手） |
-| [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 | 実装済み（PR #22, #23） |
-| [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） | 実装済み・実機確認済み |
-| [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 | リストは実装済み・実機確認済み |
-| [note_image_rendering.md](design/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） | **設計確定・実装未着手** |
+| 文書 | 対象 |
+|---|---|
+| [reflect_distill.md](design/reflect_distill.md) | 蒸留（Distill） |
+| [reflect_reading_trace.md](design/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
+| [reflect_remark.md](design/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
+| [section_ai_chat.md](design/section_ai_chat.md) | セクション単位AIチャット |
+| [related_notes_ai.md](design/related_notes_ai.md) | 関連ノートAI推薦 |
+| [background_ai_ux.md](design/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
+| [ai_input_excerpt.md](design/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） |
+| [markdown_rendering.md](design/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
+| [note_image_rendering.md](design/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 
 ### Vigilith（人格と演出）
 
-| 文書 | 対象 | 状態 |
-|---|---|---|
-| [character_vigilith.md](design/character_vigilith.md) | キャラクターシート（黒曜の梟オートマトン） | コンセプト確定 |
-| [vigilith_in_app.md](design/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） | Phase 3 実装済み・実機確認待ち（認証ロックで保留） |
-| [opening_animation.md](design/opening_animation.md) | 起動OPアニメーション | 実装済み（PR #26・2026-07-26改稿） |
+| 文書 | 対象 |
+|---|---|
+| [character_vigilith.md](design/character_vigilith.md) | キャラクターシート（黒曜の梟オートマトン） |
+| [vigilith_in_app.md](design/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
+| [opening_animation.md](design/opening_animation.md) | 起動OPアニメーション |
 
 ---
 
@@ -117,7 +115,7 @@
 
 **ここにある内容は「まだ終わっていない」ことを意味する。** 解消した項目はこのフォルダから削除する（記録は §1 の恒久記録に残る）。
 
-> **`_wip/` はリリース時点で3ファイルとも廃棄する一時置き場。** そのため
+> **`_wip/` はリリース時点で中身をまとめて廃棄する一時置き場**（ファイル数は増減する）。そのため
 > **恒久文書から `_wip/` の項目IDへ依存しない** — `SYNC-2` のような番号を設計書や記録から参照すると、
 > 廃棄した瞬間に意味が消える。課題に触れるときは、リンクや項目番号ではなく**内容そのものを書く**
 > （例: `**未解決:** current_issues 3-14` ではなく `**未解決:** instrumentation テストの構成が未定義`）。
