@@ -129,7 +129,7 @@ internal fun rememberVigilithState(
 
 `vigilithNoteAction` の `mutableStateOf` も**この関数が所有する**。`MainActivity` は `rememberVigilithState(...)` を1回呼び、`AppScaffold` に `state` を、`NoteReaderTab` に `state.onNoteActionChanged` を渡すだけになる（Vigilith関連の記述が4箇所→2箇所）。
 
-### 注意（[bugfix_reports](../bugfix_reports.md) の型）
+### 注意（[lessons](../lessons.md) L34 の型）
 
 `onTap` は `uiState.sectionChat` の有無で分岐する。**`uiState` を `remember` のキーに含めずにラムダを固めると stale closure になり、「ボタンを押しても何も起きない」既知の型を踏む**。`onTap` は `remember` せず毎コンポジションで組み直すか、キーに `uiState.sectionChat != null` を明示的に含める。
 

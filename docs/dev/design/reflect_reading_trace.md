@@ -252,7 +252,7 @@ v1 は `visits.size` を「これまで開いた回数」として使ってい�
 - **read-modify-write は Mutex で直列化**: 訪問の追記と要約の書き戻しが交差すると、読み取りが古いまま上書きして訪問を取りこぼす
 - **本文の読込には用途別の予算がある（2026-07-26 追加）**: 痕跡そのものとは別だが、同じ「入口で量を決める」話。`readNoteForDisplay`（1MB）／`readNoteSnippet`（8KB）／`readNoteSnapshot`（256KB）に分かれており、バイト数は呼び出し側が選べない。上限で切ると多バイト文字が割れるので、復号前に `dropIncompleteUtf8Tail()` で末尾の不完全なシーケンスを落とす
 - **Vault分離は保存要求自身が運ぶ（2026-07-25 修正）**: 保存は非同期に起動されるため、書き込みが走る時点では利用者が別のVaultへ切り替えているかもしれない。保存先を書込時点の `vaultUri` から解決すると、旧ノートの相対パス・タイトルのまま保存先だけが新Vaultになる。当初は `saveVault()` の `discard()` でセッションを捨てて防ぐ設計だったが、**起動済みのコルーチンには効かない**ことがレビューで判明した。
-  **ノートを開いた時点のVault識別子をセッションへ写し取り、保存・照合要求に添えて運ぶ**方式へ変更した。Gateway が書き込み直前に現在のVaultと照合し、不一致なら書かずに捨てる。**照合と保存先の解決で `vaultUri()` を読むのは1回だけ**にしてある（読み直すと、その間の切替で別Vaultを掴む。`@Synchronized` はGateway自身の状態しか守らず、ViewModel側の `vaultUri` は保護しない → [bugfix_reports](../bugfix_reports.md) #4）。識別子を `Uri` ではなく `String` にしているのは、この境界より上（`ReadingTraceStore`）を Android 非依存に保ちJVMテスト可能にするため。`discard()` は「切替後に新しい保存要求が生まれること」を止める役割として残している
+  **ノートを開いた時点のVault識別子をセッションへ写し取り、保存・照合要求に添えて運ぶ**方式へ変更した。Gateway が書き込み直前に現在のVaultと照合し、不一致なら書かずに捨てる。**照合と保存先の解決で `vaultUri()` を読むのは1回だけ**にしてある（読み直すと、その間の切替で別Vaultを掴む。`@Synchronized` はGateway自身の状態しか守らず、ViewModel側の `vaultUri` は保護しない → [lessons/L26](../lessons/L26.md)）。識別子を `Uri` ではなく `String` にしているのは、この境界より上（`ReadingTraceStore`）を Android 非依存に保ちJVMテスト可能にするため。`discard()` は「切替後に新しい保存要求が生まれること」を止める役割として残している
 
 ---
 
@@ -833,7 +833,7 @@ CLAUDE.md が必須原則として明記しているものを踏んだ。しか�
 > 原因も次の行動も違う（前者は再試行、後者は同期の完了待ち）。
 > 同じ文言にすると、読み取れなかっただけの状態を「ファイルを消してしまった」と読み違える。
 >
-> これは [L28](../lessons.md#l28-boolean-は何が起きたかではなく呼び出し側が次に何をするかで決める) の
+> これは [L28](../lessons/L28.md) の
 > **5度目**である。`querySafChildren`・`RootFolderLookup`・`ReadingTraceKeyListing`・
 > `prepareIndexRebuild` に続き、**同じ機能の中で**また畳んでいた。
 
