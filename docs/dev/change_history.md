@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-11 | — | リポジトリ直下と dev / features / system に索引を新設し、README の規約を揃えた | [README](../../README.md)（新設）・[dev/README](README.md)（新設） |
 | 2026-08-11 | — | 設計書を features / system / decisions へ種別で分け、機能仕様テンプレートを標準化した | **[decisions/README](decisions/README.md)**（新設）・[document_map](document_map.md) §2 |
 | 2026-08-10 | — | feature_ideas を圧縮し、冊子モードを設計書へ切り出してローカルDB案を起票した | **[booklet_mode](features/booklet_mode.md)**（新設） |
 | 2026-08-10 | — | 外部レビュー本文を最新1本だけ残す運用へ変え、過去4本を削除した | [review/README](../review/README.md)・[findings](../review/findings.md) |
