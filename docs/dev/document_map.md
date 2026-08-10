@@ -87,7 +87,7 @@
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
-| [quiz.md](features/quiz.md) | クイズ（**正本が未整備**。判断が他文書へ散っている） |
+| [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
