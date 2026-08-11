@@ -1,18 +1,103 @@
-# 設計思想 — ReadingTrace（読書痕跡）
+# 読書痕跡（ReadingTrace）
 
-**状態:** Implemented — v1 実装済み・稼働中。サイドカーは schema v5。孤児掃除は手動削除まで提供し、自動化は未着手。
-**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
-**関連コード:** `controller/ReadingTraceController.kt / controller/ReadingTraceCleanupController.kt / data/ReadingTraceStore.kt / data/ReadingTraceJson.kt / domain/ReadingTraceOrphans.kt / ui/component/ReadingTraceCard.kt / ui/screen/ReadingTraceCleanupScreen.kt`
-**関連テスト:** ReadingTraceControllerTest / ReadingTraceStoreTest / ReadingTraceJsonTest / ReadingTraceOrphansTest / ReadingTraceCleanupControllerTest / ReadingTraceCleanupTextTest / ReadingTraceHeadlineTest / ReadingTraceLimitsTest / ReadingProgressGeometryTest
+**状態:** Implemented — 稼働中。サイドカーは **schema v5**。孤児掃除は手動削除まで提供し、自動化は未着手
+**最終検証:** 2026-08-11 / `b3d81c4`（**`ReadingTraceLimits` の主要定数と schema v5 を実装で確認。孤児掃除の判定は未突合**）
+**関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
+**関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
 
-**対象領域:** Rediscover連動・読書位置の記録・ノートメタデータ（サイドカー）
-**関連:** [reflect_distill](reflect_distill.md)・[reflect_remark](reflect_remark.md)・[architecture](../system/architecture.md)
-**経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md)・[2026-08](../../owner/journal/2026-08.md)
+**対象領域:** 読書位置の記録・再会カード・サイドカーの保管と掃除
 
 ---
 
-## 1. 解決したかった問題
+## 1. 概要
+
+**アプリの「記憶」の置き場所。** 読んだ位置・訪問履歴・AI俯瞰要約・ひとことと返事を、
+Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
+
+**AI自身には記憶を持たせない**という方針（ステートレス維持）の裏返しで、
+記憶はこことノートの太字（蒸留の痕跡）だけが持つ。
+
+**Rediscover で同じノートを引き当てたときだけ**「前回のあなた」を再会カードとして出す。
+
+## 2. ゴールと非ゴール
+
+### ゴール
+- 「前回どこまで、どう読んだか」を**引き当てたときに**思い出させる
+- **ノート本文を汚さずに**記録する
+
+### 非ゴール
+- **本文へ書かない**（→ [ADR-0004](../decisions/ADR-0004-do-not-rewrite-vault-body.md)）
+- **孤児の自動掃除をしない**（手動削除まで）
+- **端末間のマージをしない**（last-writer-wins）
+
+## 3. 詳細機能一覧
+
+| 詳細機能 | ユーザーから見える挙動 | 起動条件 |
+|---|---|---|
+| 読書位置の記録 | 自動。ユーザーには見えない | 離脱時・背面化時 |
+| 再会カード | 「前回のあなた」が本文上部に出る | **Rediscover 経路だけ**（→ [rediscover](rediscover.md) 判断4） |
+| AI俯瞰要約 | 訪問履歴からの1文 | 2回目の訪問以降 |
+| 孤児の整理 | 一覧と手動削除 | オプションから |
+
+## 4. 現在のユーザーフロー
+
+1. ノートを開く → **本文表示より前**に痕跡セッションが作られる（→ [rediscover](rediscover.md) 判断3）
+2. 読む（スクロール位置と到達率が追われる）
+3. ノートを離れる／アプリを背面化する → **`flush` / `pause` でファイルへ書く**
+   - 記録には門番がある（**10秒以上・1ブロック以上**）
+4. 次に同じノートを **Rediscover で引き当てる**と、再会カードが出る
+
+## 5. 機能仕様
+
+- **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**
+  （SAFでは隠しフォルダの扱いがプロバイダごとに違い、可搬性を損なうため）
+- **スキーマ:** **v5**。v1〜v4 も読める
+- **上限（`ReadingTraceLimits`）:**
+
+  | 対象 | 値 | 定数 |
+  |---|---|---|
+  | ファイル全体 | 128KB | `MAX_FILE_BYTES` |
+  | 訪問の保持件数 | 30 | `MAX_VISITS` |
+  | AI俯瞰要約の生成契機 | **2回目の訪問以降** | `MIN_VISITS_FOR_AI_SUMMARY` |
+  | AI俯瞰要約 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
+  | 相対パス | 1,024バイト | `MAX_RELATIVE_PATH_BYTES` |
+  | ひとこと | 512バイト | `MAX_REMARK_BYTES` |
+  | 返事 | 25,600バイト | `MAX_REPLY_BYTES` |
+  | 映し返し | 512バイト | `MAX_MIRRORED_BYTES` |
+
+- **書き込み:** `"wt"`（write-truncate）の直接上書きで**原子性はない**。
+  SAF の `renameDocument()` はプロバイダ非互換で古典的な atomic-rename が成立しないため
+- **破損の扱い:** `ReadingTraceJson` の checksum 検証で検知し、**孤立扱い**にする
+- **端末間:** **last-writer-wins**（マージも世代解決もしない）
+
+## 6. 状態とデータ
+
+**永続化:** 上記のサイドカー。**Vault と一緒に運べる**のが利点で、
+**Vault のフォルダが消えれば一緒に消える**のが代償（退避手段は未実装）。
+
+**契約2箇所への登録:** ノート単位の記録は登録済み。
+**ただし孤児掃除（`ReadingTraceCleanupController`）は Vault 単位**なので、
+ノート単位の契約には登録しない（→ [architecture](../system/architecture.md) 判断4）。
+
+## 7. システム設計
+
+```
+ノート表示
+ └─ ReadingTraceController        ← セッション・訪問記録・AI俯瞰要約
+      └─ ReadingTraceStore        ← flush/pause で writeMutex 直列・read-modify-write
+           └─ ReadingTraceJson    ← スキーマ版・バイト上限・checksum
+
+オプション
+ └─ ReadingTraceCleanupController（**Vault単位**）
+      └─ ReadingTraceOrphans      ← 純関数。痕跡は在るがノートが無い、を判定
+```
+
+## 8. 設計判断と代替案
+
+> 以下は既存の判断をそのまま保存したもの。**節番号は本文の12節体系とは独立**で、内容は現在も有効。
+
+### 1. 解決したかった問題
 
 このアプリの心臓は **Rediscover（ランダムに過去ノートを引く）**。しかし再発見は「たまたま出てくる」だけで、
 そこに**意図の糸**がない。ランダム再発見に「前回の自分」を重ねて、**偶然を"再会"へ変える**のが狙い。
@@ -23,7 +108,7 @@
 Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが俯瞰要約を追記
 ```
 
-## 2. 採らなかった案 — TimeCapsule（明示的に問いを残す）
+### 2. 採らなかった案 — TimeCapsule（明示的に問いを残す）
 
 **再提案する前にここを読むこと。** 「ユーザーが問いを1つ書き残す」案は、
 成立に3条件が要り**同時に3つは満たせない**ことが分かって棄却した。
@@ -42,7 +127,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 「前回は40%で止まった」は「前回は〇〇が引っかかった」ではない。
 → 未解決の課題として [_wip/roadmap.md](../../_wip/roadmap.md) が持つ。
 
-## 3. 設計原則: シンプル最優先
+### 3. 設計原則: シンプル最優先
 
 **本質はノートを見ること。痕跡は「あれば嬉しい」再会体験**であって、永久保存の記録装置ではない。
 
@@ -52,14 +137,14 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 
 ---
 
-## 4. 判断
+### 4. 判断
 
-### 判断1: 痕跡は「読んだ位置」のみ。訪問ごとに累積する
+#### 判断1: 痕跡は「読んだ位置」のみ。訪問ごとに累積する
 
 記録するのは**最深到達セクションと到達率**。累積すれば「3回開いていずれも前半で止まっている」という**俯瞰**が出せる。
 **滞在時間は採らない** — 離席で値が汚れ、テストもしづらい。
 
-### 判断2: 記録は全経路・表示は Rediscover 限定
+#### 判断2: 記録は全経路・表示は Rediscover 限定
 
 **ここが非対称**なので実装時に混同しやすい。
 
@@ -74,7 +159,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 `withNoteScopedReset()` がノートを開くたびカードを消す。つまり
 **「カードが存在する」こと自体が「Rediscover由来」を意味**しており、フラグは二つ目の真実になるだけ。
 
-### 判断3: 記録の条件は「能動読書10秒以上」だけ
+#### 判断3: 記録の条件は「能動読書10秒以上」だけ
 
 一瞬引いて送った分を数えると痕跡が濁り、表示のたびSAF書込が走る（クラウドVaultなら同期トラフィック）。
 「スクロールが発生した」は条件に入れない — **1画面に収まる短いノートが永久に記録されない**ため。
@@ -87,7 +172,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 差し替えは「保存済みの末尾が自分の書いた訪問と構造的に一致する場合」に限る
 （別端末が同期で追記していれば末尾が一致しないので、追記へフォールバックし他端末の記録を消さない）。
 
-### 判断4: 到達率は「最終可視ブロック＋そのブロックの可視割合」で測る
+#### 判断4: 到達率は「最終可視ブロック＋そのブロックの可視割合」で測る
 
 ```
 到達率 = (最深ブロックindex + そのブロックの可視割合) / 総ブロック数
@@ -105,7 +190,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 > **この「全可視扱い」は画像表示で牙を剥いた。** 高さ0のプレースホルダを置くと進捗が水増しされ、
 > 「最深到達点は下げない」規則で固着し永続化される → [note_image_rendering](note_image_rendering.md) 判断5。
 
-### 判断5: AI要約は再会時・裏で・失敗しても黙って劣化
+#### 判断5: AI要約は再会時・裏で・失敗しても黙って劣化
 
 `generate()` は Mutex で全機能直列＋60秒タイムアウトなので、待ってからカードを出すと**数十秒何も出ない**。
 
@@ -118,7 +203,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 **AIには新しい内容を作らせない。** 「データに無いことを書かせない・助言や問いを足させない」を明示する。
 これが「前回の自分」という体験を保つ肝。→ この「意識させない」作法は [lessons L4](../lessons.md#l4-意識させない機能は他の機能と作法が違う)。
 
-### 判断6: 保存はvault内の可視フォルダにサイドカー（本文は編集しない）
+#### 判断6: 保存はvault内の可視フォルダにサイドカー（本文は編集しない）
 
 - 本文(.md)に埋め込まず**別ファイル**に持つ（frontmatter埋め込み＝本文編集の truncate 窓リスクを避ける）
 - 置き場は **`_ReadingTraces/`**。`.` 始まりの隠しフォルダはSAFプロバイダによって作成が失敗するので使わない
@@ -126,7 +211,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 - **ノート収集の対象から3箇所で除外**（`collectNotes` / `collectNotesInScope` / `listTopLevelFolders`）。
   最後の1つを塞がないと、さがすタブのフォルダ選択に「中身ゼロのフォルダ」として現れる
 
-### 判断7: 可搬キーは vault相対パス。documentId は端末内の参考値
+#### 判断7: 可搬キーは vault相対パス。documentId は端末内の参考値
 
 **SAF documentId は端末／権限グラントごとに異なる**ため可搬キーにならない。
 
@@ -137,14 +222,14 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 **パス引き当ては既にO(1)**。逆に「見つからない」は**未読ノートで常時起きる**ので、
 ミス時にフォルダ全走査すると Rediscover が毎回重くなる。→ **move/rename で痕跡を失うことを受け入れる。**
 
-### 判断8: サイドカー書き込みはベストエフォート（原子性なし）
+#### 判断8: サイドカー書き込みはベストエフォート（原子性なし）
 
 **SAF OutputStream への `"wt"` 直接上書き**で更新する。**これは原子更新ではない** —
 書込中にプロセスが死ぬと部分破損したまま残る。SAF の `renameDocument()` はプロバイダ非互換で
 atomic-rename が成立せず、`DistillRecoveryStore` の原子パターンは内部ストレージ専用でSAFへ移植できない。
 設計原則どおり**堅牢化はここまで**とし、破損は checksum で検知して孤立扱いにする。端末間は **last-writer-wins**。
 
-### 判断9: 保持件数と延べ回数は別に持つ（schema v2）
+#### 判断9: 保持件数と延べ回数は別に持つ（schema v2）
 
 保持は30件で打ち切るので `visits.size` を「開いた回数」に使うと**31回目以降が30で止まる**。
 それだけなら見た目の問題だが、`needsAiSummary` の判定も同じ値を見ていたため
@@ -162,7 +247,7 @@ atomic-rename が成立せず、`DistillRecoveryStore` の原子パターンは�
 先にその版で照合してから現行版へ寄せる。順序を逆にすると既存の痕跡が全部「破損＝孤立」になる。
 v1 のファイルに `totalVisitCount` が書き足されていても読まない（任意の回数を名乗れる入口になる）。
 
-### 判断10: 保存はアプリ寿命のスコープで走らせる
+#### 判断10: 保存はアプリ寿命のスコープで走らせる
 
 判断8（ベストエフォート）は「壊れたら諦める」であって「書きにいく機会を失う」ことまでは許していない。
 `viewModelScope` に載せると、タスクスワイプや Activity finish で `onStop()` → `pause()` の直後に
@@ -175,7 +260,7 @@ v1 のファイルに `totalVisitCount` が書き足されていても読まな�
 書けなかったら巻き戻す。**巻き戻すのは自分が書こうとした訪問がまだ最新のときだけ**（後発の訪問を潰さない）。
 `persistSummary` は対象外 — 書けなくても次回の再会で `needsAiSummary` が真になり自己修復する。
 
-### 判断11: Vault分離は保存要求自身が運ぶ
+#### 判断11: Vault分離は保存要求自身が運ぶ
 
 保存は非同期に起動されるため、書き込み時点では別Vaultへ切り替わっているかもしれない。
 書込時点の `vaultUri` から保存先を解決すると、旧ノートの相対パスのまま保存先だけが新Vaultになる。
@@ -188,7 +273,7 @@ Gateway が書き込み直前に照合し、不一致なら書かずに捨てる
 
 ---
 
-## 5. データモデルと契約
+### 5. データモデルと契約
 
 ```
 ReadingTrace(
@@ -224,7 +309,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 **厳格検証（読込時）:** checksum不一致・パース失敗・空ファイル・不正UTF-8・未知の `schemaVersion` は
 **破損＝孤立扱い**（カードを出さず、ノートには触れない）。
 
-### 実装上の不変条件
+#### 実装上の不変条件
 
 - **セッションは表示前に作る。** `uiState` 更新とセッション開始の間でメインスレッドを譲ると、
   痕跡レポータの初回emitを取りこぼして**訪問がまるごと記録されない**。パス解決にI/Oを挟まない
@@ -237,9 +322,9 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 
 ---
 
-## 6. 索引の鮮度 — 「不在だった時」だけ作り直す
+### 6. 索引の鮮度 — 「不在だった時」だけ作り直す
 
-### 判断12: 再走査の契機は不在。TTLでもContentObserverでもない
+#### 判断12: 再走査の契機は不在。TTLでもContentObserverでもない
 
 置き場の子一覧を1回だけ読んで索引に持つため、外部同期（Google Drive等）で後から増えたファイルを
 読み直す契機が無く、**プロセス再起動まで認識しなかった**。実害は**索引にキーが載っていない**時に起きる。
@@ -261,7 +346,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 **60秒の窓に重複作成の余地が残るが、受容する。** 重複しても last-writer-wins で読め、
 削除は同じキーの複数実体をすべて消す作りになっている。**「重複作成も塞がる」とは書かない。**
 
-### 判断13: 戻り値は「捨てたか」ではなく「読み直す価値があるか」
+#### 判断13: 戻り値は「捨てたか」ではなく「読み直す価値があるか」
 
 `prepareIndexRebuild(vaultKey): Boolean` の判定基準は「**[vaultKey] が現在のVaultか**」だけ。
 索引の現在の状態で判定すると、**意味が違うのに値が同じ2つ**を区別できなくなる。
@@ -280,9 +365,9 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 
 ---
 
-## 7. 孤児掃除 — 判定の根拠から設計する
+### 7. 孤児掃除 — 判定の根拠から設計する
 
-### 判断14: 孤児判定の根拠は「不在」であり、不在は壊れやすい
+#### 判断14: 孤児判定の根拠は「不在」であり、不在は壊れやすい
 
 `querySafChildren` は `query()` が `null` を返すと**「読めなかった」と「本当に空」を区別できず**、
 あるサブフォルダの列挙が失敗すると配下のノートが**走査成功のまま静かに0件**になっていた。
@@ -301,7 +386,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 **既存機能は壊さない。** Rediscover・さがす・関連ノートは**不完全でも見つかった分で動き続ける**。
 完全性フラグを見るのは掃除だけ。**混ぜると、同期が遅いVaultでランダム表示が止まるという別の不具合を作る。**
 
-### 判断15: 「最終確認日時」は削除基準として価値と逆を向く
+#### 判断15: 「最終確認日時」は削除基準として価値と逆を向く
 
 **この判定は打ち切る。件数や実測を理由に再提案しない。**
 
@@ -312,7 +397,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 3つ目が本質。この機能は Rediscover と対で成立しており、狙いは**忘れていたノートに「前回の自分」を重ねること**。
 「最後に見てから長い」は削除の根拠ではなく、**この機能が最も効く条件そのもの**である。
 
-### 判断16: 遮断器の粒度を故障の粒度に合わせる
+#### 判断16: 遮断器の粒度を故障の粒度に合わせる
 
 `querySafChildren` の失敗は**フォルダ単位で起きる**ので、遮断器も**フォルダ単位**で置く。
 
@@ -334,7 +419,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 欠落が1件なのでフォルダ一括判定に掛からない。§3 の許容範囲として受け入れるが、
 **遮断器は完全ではない**ことを前提に置く。
 
-### 判断17: 性能はファイル数ではなく索引設計で解く
+#### 判断17: 性能はファイル数ではなく索引設計で解く
 
 容量は問題にならない（2,000ノートで約1.4MB）。**先に問題化するのは索引作成がファイル数に比例すること。**
 実測で問題になったときの解は**削除ではなく分割**にする — ファイル名が `sha256Hex(相対パス)` なので
@@ -343,7 +428,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 
 **実測で問題化するまで着手しない**（既存ファイルの移行を伴うため）→ 未解決の課題として [_wip/current_issues.md](../../_wip/current_issues.md) が持つ。
 
-### 自動化（限定自動削除）は未着手
+#### 自動化（限定自動削除）は未着手
 
 段階は「観測 → 手動 → 限定自動」で、**現在は手動削除まで**。
 **着手条件は「十分な実績」で、まだ満たしていない** — シャドーモードでは痕跡がまだ少なく保留がほとんど発生せず、
@@ -355,7 +440,7 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 
 ---
 
-## 8. 意図的にやらないこと
+### 8. 意図的にやらないこと
 
 | 項目 | 理由 |
 |---|---|
@@ -365,26 +450,31 @@ Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
 | 3段引き当て | 判断7 |
 | 閲覧時刻ベースの孤児判定 | 判断15（**打ち切り**） |
 
-## 9. 実装ファイル
+## 9. 品質要件
 
-| ファイル | 役割 |
+- **データ保護:** **失われるのは痕跡だけで、ユーザーのノート（`.md`）には一切触れない。**
+  本質（ノート閲覧）が損なわれないので、書き込みの原子性は割り切っている
+- **性能:** 書き込みは離脱時・背面化時にまとめる（開くたびに書かない）
+- **プライバシー:** Vault 内に平文で残る。Obsidian の同期経路に乗る
+
+## 10. 検証と受け入れ条件
+
+- **JVMテスト:** 9本（Controller・Store・JSON・孤児判定・掃除・文言・見出し・上限整合・進捗幾何）
+- **実機確認:** 実施済み
+- **保証していないこと:**
+  - **書き込みの原子性が無い。** truncate 後に書き直すため、書込中にプロセスが死ぬと部分破損が残り復旧元もない
+  - **端末間の同時編集は last-writer-wins**
+  - **痕跡の退避・復元手段が無い。** Vault のフォルダが消えれば記憶ごと消える
+  - **孤児の自動掃除をしない**
+
+## 11. 既知の制約・未解決事項
+
+| | |
 |---|---|
-| `VaultPathTraversal.kt` | BFS走査と相対パス連結の純関数（Android型ゼロ） |
-| `ReadingTrace.kt` | データモデル・上限・厳格検証・バイト境界での丸め |
-| `ReadingTraceJson.kt` | JSONコーデック・canonical payload・checksum |
-| `ReadingTraceStore.kt` | 永続化インターフェース＋SAF実装（索引キャッシュ・鮮度判定） |
-| `ReadingTraceController.kt` | 記録・再会照合・AI俯瞰要約・読書時間の積算 |
-| `ReadingTraceCleanupController.kt` | 孤児の洗い出しと手動削除（**Vault単位**） |
-| `domain/ReadingTraceOrphans.kt` | 孤児判定と遮断器（純関数） |
-| `ui/ReadingProgressGeometry.kt` | 最終可視ブロックの可視割合と量子化（Android型ゼロ） |
-| `ui/ReadingTraceCard.kt` | 再会カードと文面生成（純関数） |
+| **退避・復元手段が無い** | ひとことの返事が入ったことで、失われたときの損失が跳ね上がった。候補として [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
+| 孤児掃除は手動のみ | 自動化は未着手 |
+| 書き込みが原子的でない | SAF の制約。割り切りとして受け入れている |
 
-## 10. 保証していないこと
+## 12. 開発経緯
 
-JVMテストが覆うのは**Android依存を外した純粋ロジックとFake Persistence**まで。
-**Composeの実レイアウト・Activity lifecycle・SAFプロバイダ・外部同期の組み合わせは範囲外。**
-
-**再会カードの実機確認は構造的に不可能**（Rediscover限定なので、同じノートを 1/N で引き当てる必要がある）。
-確認のために引きを操作するのは守るべき性質のほうを壊す。
-これを許容できたのは①ロジックがJVMで覆えて②確認が構造的に不可能で③壊れても事後に気づける、の3つが揃ったから。
-**1つでも欠けるなら実機確認は省略できない** → [lessons L16](../lessons.md#l16-製品判断が別の経路の検証可能性を奪うことがある)。
+[開発日誌 2026-07](../../owner/journal/2026-07.md)・[2026-08](../../owner/journal/2026-08.md)

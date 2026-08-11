@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-11 | — | features の全16本を12節の新様式へ揃え、空欄の代わりに理由を書く規約を検査へ載せた | **[_template](features/_template.md)**・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | さがす・セクションAIをテンプレートへ移行し、クイズの入口の誤りを直した | **[ai_picker](features/ai_picker.md)**・**[section_ai_chat](features/section_ai_chat.md)**・[quiz](features/quiz.md) |
 | 2026-08-11 | — | Rediscover・ノート要約・クイズの機能仕様を実装から起こして新設した | **[rediscover](features/rediscover.md)（新規）**・**[note_summary](features/note_summary.md)（新規）** |
 | 2026-08-11 | — | 恒久文書の _wip 項目ID 13件を内容の記述へ直し、検査を features / system へ広げた | [decisions/README](decisions/README.md)・[lessons](lessons.md) L29 |

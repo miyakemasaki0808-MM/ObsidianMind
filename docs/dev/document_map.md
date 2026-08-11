@@ -77,6 +77,12 @@
 
 ### 機能（`features/`）
 
+**全16本が [`_template.md`](features/_template.md) の12節に揃っている**（`character_vigilith` を除く。
+造形の参照シートでフローも状態も持たないため、冒頭で役割を明示している）。
+**埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く**規約で、
+`AdrShapeTest` が空の節を禁じている。
+
+
 | 文書 | 対象 |
 |---|---|
 | [rediscover.md](features/rediscover.md) | **Rediscover（ランダム表示）。アプリの入口であり心臓** |
