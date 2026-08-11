@@ -1,7 +1,7 @@
 # ダークモード
 
 **状態:** Implemented — 稼働中・実機確認済み
-**最終検証:** 2026-08-11 / `6095d3d`（**`AppPreferences.darkTheme` と `AppTheme` の分岐だけ実装で確認。トークン値とコントラスト比は未突合**）
+**最終検証:** 2026-08-12 / `521768b`（テーマの伝播経路を実装と突合。トークン値とコントラスト比は `AppColorContrastTest` が固定しているため個別には数えていない）
 **関連コード:** `ui/theme/AppTheme.kt` / `ui/theme/AppColors.kt` / `data/AppPreferences.kt` / `ui/screen/OptionsScreen.kt`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`
 **正本:** この文書（トークン設計の土台は [theme_and_ui_refactor](../system/theme_and_ui_refactor.md)）
@@ -38,9 +38,10 @@
 3. `AppTheme` が `DarkAppColors` / `LightAppColors` を切り替える
 4. アプリ全体が即座に切り替わる
 
-> **未確認:** テーマ状態が `NoteUiState` の外の `StateFlow<Boolean>` にある理由
-> （再コンポーズ範囲を抑えるため → [architecture](../system/architecture.md)）と、
-> 実際の伝播経路の突合は未実施。
+**伝播経路:** `NoteViewModel` が `MutableStateFlow(preferences.darkTheme)` を持ち、
+`MainActivity` が `collectAsStateWithLifecycle()` で受けて `AppTheme(darkTheme = …)` へ渡す。
+**`NoteUiState` を経由しない** — 状態17項目の変更でアプリ最上位まで再評価されるのを避けるため
+（→ [architecture](../system/architecture.md)「状態が `NoteUiState` の外に出る例外」）。
 
 ## 5. 機能仕様
 
@@ -325,7 +326,10 @@ Phase 2（リファクタ R-1〜R-4）の設計は [theme_and_ui_refactor](../sy
 
 ## 11. 既知の制約・未解決事項
 
-> **未確認:** 本文と実装の突合が済んでいないため、未解決項目の有無を断定しない。
+| | |
+|---|---|
+| 実機での見え方を測っていない | 有機ELの黒つぶれ・屋外での視認性。コントラスト比は `AppColorContrastTest` が固定しているが、**比を満たすことと見やすいことは別** |
+| OS設定に追従しない | 判断1の帰結。システムのダークモードを切り替えてもアプリは変わらない |
 
 ## 12. 開発経緯
 

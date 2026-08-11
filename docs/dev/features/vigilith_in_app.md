@@ -1,7 +1,7 @@
 # アプリ内Vigilith（読書相手の身体化）
 
 **状態:** Implemented — 稼働中。**実機での目視・操作確認だけが端末の認証ロックにより未完了**
-**最終検証:** 2026-08-11 / `e7b9f18`（**`VigilithMode` の列挙と優先順位の導出だけ実装で確認。素材寸法と配置計算は未突合**）
+**最終検証:** 2026-08-12 / `521768b`（`VigilithMode` の導出・表示枠76×93dp・ラベル時の予約枠260×132dp を実装と突合。素材の実寸は未計測）
 **関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/vigilith/VigilithMode.kt` / `ui/AppScaffold.kt`（`VigilithHost`）
 **関連テスト:** `VigilithMascotMotionTest` / `VigilithPlacementTest` / `VigilithAccessibilityTest` / `VigilithStatusDerivationTest` / `VigilithModeTest`
 **正本:** この文書（キャラクター設定は [character_vigilith](character_vigilith.md)）
@@ -65,7 +65,8 @@ Vigilith を**ポイントを要求するペットではなく**、既存のAI�
 
   | 対象 | 値 |
   |---|---|
-  | タッチ領域 | **76×93dp** |
+  | 表示枠 | **76×93dp** |
+  | ラベル表示中の予約枠 | **260×132dp**（状態ラベルを出すときだけ広がる） |
   | Snackbar 表示中の退避 | **72dp 上方** |
   | IME 表示中の下限 | **キーボード上端＋16dp**（Snackbar より優先） |
 

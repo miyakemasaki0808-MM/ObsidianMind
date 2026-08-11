@@ -1,7 +1,7 @@
 # 関連ノートAI推薦
 
 **状態:** Implemented — 稼働中
-**最終検証:** 2026-08-11 / `6095d3d`（**重み `W_TAG=1.0` / `W_BODY=0.5` / `W_TITLE_SIM=0.5` と抜粋上限800を実装で確認。段階ごとの定数は未突合**）
+**最終検証:** 2026-08-12 / `521768b`（重み3種・抜粋上限800・AI非対応時の分岐を実装と突合。段階ごとの調整用定数は未突合）
 **関連コード:** `domain/RelatedNotesUseCase.kt` / `domain/RelatedCandidate*.kt` / `domain/RelatedContextScoring.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト:** `RelatedCandidateScoringTest` / `RelatedCandidateRankingTest` / `RelatedCandidateOrderingTest` / `RelatedCandidateContextTest` / `RelatedCandidateIdTest` / `RelatedContextScoringTest`
 **正本:** この文書
@@ -59,7 +59,10 @@
 - **抜粋上限:** **800文字**（`NoteExcerptLimits.RELATED`）
 - **エラー／AI非対応時:**
 
-  > **未確認:** AI非対応時に候補を出すか黙るかの分岐は、実装との突合が必要。
+  - **AI非対応・モデル未取得のどちらでも候補は出す。** `RelatedNotesResult.Success` を返し、
+    `aiStatus` に `Unavailable` / `NeedsDownload` を載せてUIが注記する。
+    **エラーにしない** — 非AIの二段ランクだけでも候補は成立するため
+  - `CancellationException` は再throwする
 
 ## 6. 状態とデータ
 

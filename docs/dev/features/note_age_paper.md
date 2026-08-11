@@ -1,7 +1,7 @@
 # ノートの年代を紙の地色で伝える
 
 **状態:** Implemented — 稼働中・実機確認済み。**既定オフ**
-**最終検証:** 2026-08-11 / `6095d3d`（**4段階が相対四分位で決まることを実装で確認。色値とコントラスト比は未突合**）
+**最終検証:** 2026-08-12 / `521768b`（相対四分位・4段階の実際の色値・床となる `panelChip` の輝度まで実装と突合）
 **関連コード:** `domain/NotePaperAge.kt` / `model/NotePaperTone.kt` / `ui/theme/AppTheme.kt` / `data/AppPreferences.kt`
 **関連テスト:** `NotePaperAgeTest` / `AppColorContrastTest`
 **正本:** この文書
@@ -51,6 +51,18 @@
   | `Settling` | 25%以上 50%未満 |
   | `Aged` | 50%以上 75%未満 |
   | `Weathered` | 75%以上（生成り色が最も強い） |
+
+  **ライトテーマの実際の色**（`LightNotePaperTones`。値を書くのはここ1箇所だけ）:
+
+  | 段階 | 色 |
+  |---|---|
+  | `Fresh` | `LightPanel`（既存のパネル色そのまま） |
+  | `Settling` | `#FDFDF9` |
+  | `Aged` | `#FCFAF3` |
+  | `Weathered` | `#FAF6EB` |
+
+  **初期値は意図的に弱い。** 強める余地は `#F7F1E2`（輝度0.8818）までで、
+  それを超えると `panelChip`（0.8772）を下回り**既存の全テキストトークンが基準を割る**。
 
 - **判定材料:** `lastModified`。ただし「作成日」ではなく**最後に手を入れてからの経過**として読む
 - **絶対年数ではなく相対順位で決める**（→ §8 判断2）
