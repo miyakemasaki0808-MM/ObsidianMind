@@ -324,13 +324,13 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
 - **現状:** `_ReadingTraces/` はフラットな1階層で、セッション中1回だけ子一覧を全列挙して
   key→参照の索引を作る。容量は問題にならない（1ファイル最大3.3KB・2,000ノートで約1.4MB）が、
   **列挙コストはファイル数に比例**する。孤児削除（手動）は入ったが**押されるとは限らない**ため、
-  ファイル数は単調増加**しうる**（→ [features/reflect_reading_trace.md](../dev/features/reflect_reading_trace.md) §14）。
+  ファイル数は単調増加**しうる**（→ [reflect_reading_trace](../dev/features/reflect_reading_trace.md) の「性能はファイル数ではなく索引設計で解く」）。
   遠いプロバイダ（Google Drive 等）ほど効く。
 - **対応候補:** 削除ではなく**分割**で解く。ファイル名が `sha256Hex(相対パス)` なので、
   **先頭1桁で16フォルダへ分ける**と1件の照合で列挙する件数が 1/16 になる。
   引く側はキーから所属フォルダを計算できるので探索は要らない。
   **生きた痕跡を1つも消さずに性能だけ守れる**のが孤児削除に対する優位点。
-  → [features/reflect_reading_trace.md](../dev/features/reflect_reading_trace.md) §13 判断14
+  → [reflect_reading_trace](../dev/features/reflect_reading_trace.md) の「性能はファイル数ではなく索引設計で解く」
 - **着手の契機:** 実機で列挙の遅さが体感できたとき。既存ファイルの移行を伴うので、それまで動かさない。
 - **規模感:** 中（移行と実機確認を伴う）。
 
