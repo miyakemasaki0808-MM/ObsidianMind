@@ -59,24 +59,24 @@
 | 2026-08-02 | — | N-3（ノート内画像の表示）の設計を確定した（実装は未着手） | **[note_image_rendering](features/note_image_rendering.md)（新規）**・[markdown_rendering](system/markdown_rendering.md) |
 | 2026-08-02 | — | ノートの放置期間に応じて本文の紙を生成り色へ寄せる演出を追加した（既定オフ） | **[note_age_paper](features/note_age_paper.md)（新規）**・[lessons](lessons.md) L25 |
 | 2026-08-02 | — | `lessons.md` の運用を「着手前の通読」から「diff完成後の5問」へ置き換えた（コード変更なし） | [lessons](lessons.md) §0・L28 |
-| 2026-08-02 | — | SYNC-2（`_ReadingTraces` 索引が外部同期の追加を認識しない）を解消した | **[reflect_reading_trace](features/reflect_reading_trace.md) §15 判断19**・[lessons](lessons.md) L28 |
+| 2026-08-02 | — | SYNC-2（`_ReadingTraces` 索引が外部同期の追加を認識しない）を解消した | **[reflect_reading_trace](features/reflect_reading_trace.md)（索引の鮮度）**・[lessons](lessons.md) L28 |
 | 2026-08-02 | — | バッジの記号に当てる基準を 4.5:1 から 3:1 へ改め、✓ を白へ戻した。あわせて UIデザインの指針を新設した | **[ui_design_principles](system/ui_design_principles.md)（新規）**・[theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断8 |
 | 2026-08-02 | — | FEAT-1 のMarkdown部分（リスト構造）を解消した | **[markdown_rendering](system/markdown_rendering.md)（新規）**・[ai_input_excerpt](system/ai_input_excerpt.md) §6 |
-| 2026-08-01 | — | N-1（読書痕跡の孤児削除）の完了を受け、SYNC-1 を課題台帳から削除し roadmap の Now を空けた | [roadmap](../_wip/roadmap.md)・[reflect_reading_trace](features/reflect_reading_trace.md) §14 |
-| 2026-08-01 | — | 外部レビューの指摘9件（高2・中3・軽微4）をすべて修正した | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 外部レビュー**・[lessons](lessons.md) L11・L13・L14・L24 |
+| 2026-08-01 | — | N-1（読書痕跡の孤児削除）の完了を受け、SYNC-1 を課題台帳から削除し roadmap の Now を空けた | [roadmap](../_wip/roadmap.md)・[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除） |
+| 2026-08-01 | — | 外部レビューの指摘9件（高2・中3・軽微4）をすべて修正した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除）**・[lessons](lessons.md) L11・L13・L14・L24 |
 | 2026-08-01 | — | N-1 完了に伴い恒久文書を追随させた（コード変更なし） | [architecture](system/architecture.md)・[lessons](lessons.md) L25・L26 |
-| 2026-08-01 | — | N-1 段階4「手動削除」を実装し、段階3 の実機確認を完了した（段階4 は実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 段階4**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | N-1 段階3「一覧画面（削除ボタンなし＝シャドーモード）」を実装した（実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 段階3**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | N-1 段階2「孤児判定の純関数」を実装した | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 段階2**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | N-1 段階1「痕跡の列挙API」を実装し、段階0 の実機確認完了で SCAN-1 を台帳から削除した | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 段階1**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | N-1 段階0「走査を正直にする」を実装した（SCAN-1・実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md) §14 段階0**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | SYNC-1 の着手対象を「孤児のみ削除」に確定し（オーナー判断）、段階0〜4 の計画を roadmap N-1 として起こした | **[reflect_reading_trace](features/reflect_reading_trace.md) §13〜§14**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | SYNC-1 の決着を同日中に更新した — 「手動で固定」ではなく「観測してから自動化へ昇格する段階案」を採る | **[reflect_reading_trace](features/reflect_reading_trace.md) §14**・[lessons](lessons.md) L17・L24 |
-| 2026-08-01 | — | SYNC-1（読書痕跡の孤児掃除）を「手動・自動を問わず採らない」で決着させ、性能懸念を PERF-1 として分離した | **[reflect_reading_trace](features/reflect_reading_trace.md) §13**・[lessons](lessons.md) L24 |
-| 2026-08-01 | — | AI-1 を実機確認まで終えてクローズし、MAINT-1 を優先度「超低」へ落とした | **[ai_input_excerpt](system/ai_input_excerpt.md) §14**・[lessons](lessons.md) L23 |
-| 2026-08-01 | — | 関連ノートの抜粋予算を 600 → 800 へ上げた（AI-1 の1歩目）。予算値の変更はこれ1件のみ | **[ai_input_excerpt](system/ai_input_excerpt.md) §14**・[dependency_policy](system/dependency_policy.md) §5 |
-| 2026-08-01 | — | 計測器を実機で緑にし、AI-1 の前提が誤りだったことを数字で確定した（実機確認完了） | **[ai_input_excerpt](system/ai_input_excerpt.md) §13**・[lessons](lessons.md) L20〜L22 |
-| 2026-08-01 | — | プロンプトの実トークン余裕を測る計測器を入れ、`genai-prompt` beta4 をAARで調査した（AI-1 の前提を解消・MAINT-1 の未確認を解消） | **[ai_input_excerpt](system/ai_input_excerpt.md) §13**・**[dependency_policy](system/dependency_policy.md) §5** |
+| 2026-08-01 | — | N-1 段階4「手動削除」を実装し、段階3 の実機確認を完了した（段階4 は実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階4）**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | N-1 段階3「一覧画面（削除ボタンなし＝シャドーモード）」を実装した（実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階3）**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | N-1 段階2「孤児判定の純関数」を実装した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階2）**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | N-1 段階1「痕跡の列挙API」を実装し、段階0 の実機確認完了で SCAN-1 を台帳から削除した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階1）**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | N-1 段階0「走査を正直にする」を実装した（SCAN-1・実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階0）**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | SYNC-1 の着手対象を「孤児のみ削除」に確定し（オーナー判断）、段階0〜4 の計画を roadmap N-1 として起こした | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の決着）〜§14**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | SYNC-1 の決着を同日中に更新した — 「手動で固定」ではなく「観測してから自動化へ昇格する段階案」を採る | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除）**・[lessons](lessons.md) L17・L24 |
+| 2026-08-01 | — | SYNC-1（読書痕跡の孤児掃除）を「手動・自動を問わず採らない」で決着させ、性能懸念を PERF-1 として分離した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の決着）**・[lessons](lessons.md) L24 |
+| 2026-08-01 | — | AI-1 を実機確認まで終えてクローズし、MAINT-1 を優先度「超低」へ落とした | **[ai_input_excerpt](system/ai_input_excerpt.md)（予算調整）**・[lessons](lessons.md) L23 |
+| 2026-08-01 | — | 関連ノートの抜粋予算を 600 → 800 へ上げた（AI-1 の1歩目）。予算値の変更はこれ1件のみ | **[ai_input_excerpt](system/ai_input_excerpt.md)（予算調整）**・[dependency_policy](system/dependency_policy.md) §5 |
+| 2026-08-01 | — | 計測器を実機で緑にし、AI-1 の前提が誤りだったことを数字で確定した（実機確認完了） | **[ai_input_excerpt](system/ai_input_excerpt.md)（トークン計測器）**・[lessons](lessons.md) L20〜L22 |
+| 2026-08-01 | — | プロンプトの実トークン余裕を測る計測器を入れ、`genai-prompt` beta4 をAARで調査した（AI-1 の前提を解消・MAINT-1 の未確認を解消） | **[ai_input_excerpt](system/ai_input_excerpt.md)（トークン計測器）**・**[dependency_policy](system/dependency_policy.md) §5** |
 | 2026-08-01 | — | VERIFY-2（C案の実機確認2件）を検証不要と判断し、課題台帳から削除した | — |
 | 2026-08-01 | — | `VaultBrowser` 移行（N-7 段階7）の実機確認が完了した（VERIFY-4クローズ） | **[saf_boundary_gateway](system/saf_boundary_gateway.md)** |
 | 2026-08-01 | — | さがす／補記の Vault と `ContentResolver` を `VaultBrowser` へ束ね、世代照合をJVMテストで固定した（N-7 段階7） | **[saf_boundary_gateway](system/saf_boundary_gateway.md)**・[architecture](system/architecture.md)・[lessons](lessons.md) L19 |

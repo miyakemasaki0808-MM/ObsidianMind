@@ -1,6 +1,6 @@
 # 設計思想 — Markdown解析（準拠先・リスト構造）
 
-**状態:** 実装済み・稼働中。クリック可能リンク・埋め込み・数式は未着手 — リストの入れ子・番号・タスク混在は実装済み・実機確認済み（2026-08-02）。画像は実装済み・実機確認済み（→ [note_image_rendering](../features/note_image_rendering.md)）。クリック可能リンク・埋め込み・数式は未着手
+**状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。**クリック可能リンク・埋め込み・数式は未着手**
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
 **関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
 **関連テスト:** `MarkdownParserTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `NoteSectionThreadingTest`
@@ -118,7 +118,7 @@ AI入力にも使われている**ことだった（→ [ai_input_excerpt](ai_in
 > **副作用を引き受けるかどうかは、損失の大小ではなく種類で決める。**
 > 「表記の揺れ」なら引き受けてよく、「書き手が込めた意味」なら引き受けてはいけない。
 
-**ただし品質が上がると期待しすぎない。** [ai_input_excerpt](ai_input_excerpt.md) §14 は
+**ただし品質が上がると期待しすぎない。** [ai_input_excerpt](ai_input_excerpt.md)（予算調整） は
 「予算を減らしても増やしても品質が動かなかった」と記録している。今回効くのは
 **番号自体に意味があるノートに限られる**ので、効果を一般化して測ると見えない。
 

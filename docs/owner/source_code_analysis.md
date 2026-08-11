@@ -585,7 +585,7 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 
 **2026-08-09 に全面作り直した。** 旧補記は「4つの分類ラベル＋補記3行」をMarkdownファイルとして
 Vaultへ保存していたが、**出力枠（256トークン）がゼロサムなのに、行動を変えないラベルが
-価値のある側を圧迫していた**（→ [reflect_remark](../dev/features/reflect_remark.md) §0）。
+価値のある側を圧迫していた**（→ [reflect_remark](../dev/features/reflect_remark.md)（作り直した理由））。
 枠を1文へ集中させ、保存先も痕跡サイドカーへ移した。
 
 **生成（`RemarkController`）**

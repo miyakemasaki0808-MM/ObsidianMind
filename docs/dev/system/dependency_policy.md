@@ -1,6 +1,6 @@
 # 設計思想 — 依存更新の方針（Lintの更新系チェックをどう扱うか）
 
-**状態:** 方針確定・運用中 — 方針確定・実装済み（Lint設定1箇所）。**更新の実行そのものは未着手**（初回棚卸しの結果は §4）。2026-08-01 に `genai-prompt` beta4 をAARで調査し、**ソース互換だが動作互換ではない**ことが分かった（§5）。今回は上げていない。
+**状態:** 方針確定・運用中。Lint設定は済み、**更新の実行そのものは未着手**（`genai-prompt` beta4 は調査済みで、ソース互換だが動作互換ではないため上げていない）
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
 **関連コード:** `app/build.gradle.kts` / `gradle/libs.versions.toml`
 **関連テスト:** `lintDebug`（`warningsAsErrors`）
@@ -209,6 +209,6 @@ AI 8経路の実機一巡を回せるタイミングにする。
 
 ### 計測の基準線が取れる状態になった
 
-同日入れた `PromptTokenBudgetTest`（→ [ai_input_excerpt](ai_input_excerpt.md) §13）は
+同日入れた `PromptTokenBudgetTest`（→ [ai_input_excerpt](ai_input_excerpt.md)（トークン計測器））は
 `maxOutputTokens` の実値をログへ出す。**beta2 で 256 と出ることを先に記録しておけば、
 beta4 へ上げた後に 4096 へ変わったことを数字で確認できる。** 上げる前に一度回しておく。

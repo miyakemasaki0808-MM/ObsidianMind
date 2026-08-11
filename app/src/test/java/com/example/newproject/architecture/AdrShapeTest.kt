@@ -164,6 +164,44 @@ class AdrShapeTest {
     }
 
     /**
+     * **文書間の `§N` 参照は、実在する節を指す。**
+     *
+     * この検査は**実際に25件壊れたから**ある。12節の様式へ移したとき、
+     * 旧 `§13`〜`§15` を指していた参照が一斉に無効になった
+     * （`change_history` だけで16件）。**リンク自体は生きているので、
+     * 既存のリンク切れ検査では捕まらない** — 開くと文書はあるが、その節が無い。
+     *
+     * **節番号は住所として不安定である。** 本来は番号ではなく見出し名で参照するべきで、
+     * この検査は「番号で参照するなら実在を保て」という最低限の歯止めにすぎない。
+     */
+    @Test
+    fun `文書間の節参照は実在する節を指す`() {
+        val sections = docsRoot().walkTopDown()
+            .filter { it.isFile && it.extension == "md" && it.parentFile?.parentFile?.name == "dev" }
+            .associate { file ->
+                file.nameWithoutExtension to
+                    SECTION_HEADING.findAll(file.readText()).map { it.groupValues[1] }.toSet()
+            }
+
+        val violations = docsRoot().walkTopDown()
+            .filter { it.isFile && it.extension == "md" }
+            .flatMap { file ->
+                SECTION_REFERENCE.findAll(file.readText()).mapNotNull { m ->
+                    val known = sections[m.groupValues[1]] ?: return@mapNotNull null
+                    if (known.isEmpty() || m.groupValues[2] in known) null
+                    else "${file.name}: ${m.groupValues[1]} §${m.groupValues[2]}"
+                }
+            }
+            .toList()
+
+        assertTrue(
+            "存在しない節を参照しています。**番号ではなく見出し名で参照してください** " +
+                "（節番号は再構成で動くため住所に向かない）:\n" + violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    /**
      * **`最終検証` が指すコミットは、実在しなければならない。**
      *
      * この検査は**実際に捏造が起きたから**ある。12本の文書に、Gitに存在しない
@@ -249,6 +287,12 @@ class AdrShapeTest {
 
         /** `#### Z-9. …` の形（1文字カテゴリ＋ドット。`feature_ideas.md`）。 */
         val WIP_HEADING_ID_DOTTED = Regex("""^#+\s+([A-Z]-\d+)\.""", RegexOption.MULTILINE)
+
+        /** `## 5. 機能仕様` の形から節番号を取る。 */
+        val SECTION_HEADING = Regex("""^## (\d+)\.""", RegexOption.MULTILINE)
+
+        /** `[doc_name](...) §5` の形から、参照先の文書名と節番号を取る。 */
+        val SECTION_REFERENCE = Regex("""\[([a-z_0-9]+)\]\([^)]*\)\s*§(\d+)""")
 
         /** `**最終検証:** YYYY-MM-DD / \`abc1234\`` の形からコミットを取る。 */
         val VERIFIED_AT = Regex("""\*\*最終検証:\*\*[^`\n]*`([0-9a-f]{7,40})`""")

@@ -113,7 +113,7 @@
 |---|---|
 | [architecture.md](system/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
 | [saf_boundary_gateway.md](system/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
-| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力の抜粋（7プロンプトへ渡す本文の作り方） |
+| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力の抜粋（**抜粋経路8本**へ渡す本文の作り方） |
 | [background_ai_ux.md](system/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
 | [tab_navigation.md](system/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |

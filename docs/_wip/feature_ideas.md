@@ -551,7 +551,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 
 - **内容:** AIへ実際に渡ったプロンプト全文と、その組み立て内訳をアプリ内で確認できるようにする。7経路（要約・関連・補記・クイズ・セクション要約/質問/チャット）それぞれについて、最終プロンプト・抜粋かどうか・実文字数・骨格に選ばれた見出し・切り落とされた区間が見えると足りる。
 - **位置づけ: あると便利な観測窓。** 予算判断という「これが無いと何も決められない」役割は
-  instrumentation テスト（`PromptTokenBudgetTest`）が引き取り済みで（→ [ai_input_excerpt](../dev/system/ai_input_excerpt.md) §13）、
+  instrumentation テスト（`PromptTokenBudgetTest`）が引き取り済みで（→ [ai_input_excerpt](../dev/system/ai_input_excerpt.md)（トークン計測器））、
   **D-1 に残る価値は「プロンプト全文と組み立て内訳を、開発中に何度でも目で見られる」こと。**
 - **これが解けること:**
   - **Nanoが抜粋レイアウトを誤読していないかが分かる。** `## Note outline` を要約対象と誤解して目次を返す、

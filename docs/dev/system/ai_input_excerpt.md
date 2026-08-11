@@ -1,12 +1,20 @@
 # 設計思想 — AI入力の抜粋
 
-**状態:** 実装済み・稼働中。予算はトークン実測で調整済み — 実装済み・稼働中。予算調整は 2026-08-01 に打ち止め（効果が測れなかったため）。
+**状態:** 実装済み・稼働中。**予算調整は打ち止め**（効果が測れなかったため）
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
 **関連コード:** `domain/NoteExcerptBuilder.kt` / `model/NoteExcerpt.kt` / `model/NoteExcerptLimits.kt` / `ai/PromptBuilder.kt`
 **関連テスト:** `NoteExcerptBuilderTest` / `PromptBuilderExcerptRegressionTest` / `PromptGenerationCoverageTest` / `NoteExcerptThreadingTest` / androidTest: `PromptTokenBudgetTest`
 **正本:** この文書
 
-**対象領域:** 8プロンプトへ渡す本文の作り方（どこを捨て、どこを残すか）
+**対象領域:** AIへ渡す本文の作り方（どこを捨て、どこを残すか）
+
+> **本数の呼び分け。** 混同しやすいので用語を固定する。
+>
+> | 呼び方 | 数 | 意味 |
+> |---|---|---|
+> | **プロンプト** | **11本** | `PromptBuilder` が持つ `build*Prompt` の総数 |
+> | **抜粋経路** | **8本** | そのうち `NoteExcerpt` を引数に取る＝本書の対象 |
+> | 抜粋を通さない3本 | 3本 | 痕跡要約（入力は訪問履歴）・関連ノート選定（タイトルのみ）・蒸留（候補文を直接渡す） |
 **関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](../features/related_notes_ai.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-27--28--ai入力の切り出しを後ろ捨てから真ん中捨てへ)・[2026-08](../../owner/journal/2026-08.md)
 
@@ -164,7 +172,7 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 - **品質改善は測定していない。** 上記の因果はコードから導いた説明であり、A/B比較は行っていない
 - **予算は文字数で切っており、トークン数では切っていない。**
   測る手段（`PromptTokenBudgetTest`）は入ったが、それで予算の切り方が変わったわけではない
-- **予算内のノートは1文字も変わっていない。** 7プロンプトすべてを回帰テストで固定している。
+- **予算内のノートは1文字も変わっていない。** 抜粋経路8本すべてを回帰テストで固定している。
   **短いノートで品質が変わったように見えるなら、それは Gemini Nano の出力揺らぎである**
 - **Nanoが抜粋レイアウトをどう解釈するかは未検証。** `## Note outline` を要約対象と誤解して
   目次を返す、足場の文字列が出力へ漏れる、といった失敗は実機でしか確認できない

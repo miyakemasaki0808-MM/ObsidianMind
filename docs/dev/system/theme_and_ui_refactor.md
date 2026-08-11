@@ -1,6 +1,6 @@
 # 設計思想 — テーマ基盤と配色コントラスト
 
-**状態:** 実装済み・稼働中 — 実装済み・稼働中。文字4.5:1／塗り3:1／記号3:1 を `AppColorContrastTest` が強制している。
+**状態:** 実装済み・稼働中。文字4.5:1／塗り3:1／記号3:1 を `AppColorContrastTest` が強制している
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
 **関連コード:** `ui/theme/AppColors.kt` / `ui/theme/AppTheme.kt` / `ui/component/`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`
