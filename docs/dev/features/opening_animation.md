@@ -1,78 +1,173 @@
-# 設計思想 — 起動OPアニメーション
+# 起動OPアニメーション
 
-**状態:** Implemented — 実装済み。新規Activity起動時のみ再生（回転・Fold開閉・プロセス復元では再生しない）
-**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
-**関連コード:** `ui/screen/OpeningScreen.kt / ui/vigilith/`
-**関連テスト:** VigilithOpeningMotionTest
+**状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）
+**最終検証:** 2026-08-11 / `9e4a2b7`（**`OpeningDurationMillis = 2_000` のみ実装で確認。演出の各区間は未突合**）
+**関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）
+**関連テスト:** `VigilithOpeningMotionTest`
 **正本:** この文書
 
 **対象領域:** アプリ起動時のブランド演出（システムスプラッシュ＋Compose OP）
-**初版:** 2026-07-20（PR #26）
-**改稿:** 2026-07-26（アプリ内Idle WebPへ統一）
-**関連:** [character_vigilith](character_vigilith.md)・[vigilith_in_app](vigilith_in_app.md)
 
 ---
 
-## なぜOPを入れるのか
+## 1. 概要
 
-コールド起動で `setContent` からいきなり本体（Noteタブ）が出る従来の体験に、ブランド提示の「間」を一枚挟む。狙いは (1) 起動の白フラッシュを消して連続感を出す、(2) アプリの世界観（濃紺＋ブランドグラデーション）を最初に印象づけること。
+コールド起動で `setContent` からいきなり本体（ノートタブ）が出る代わりに、
+ブランド提示の「間」を一枚挟む。
 
-## 「軽量C」方針 — 2層構成
+狙いは2つ — **起動の白フラッシュを消して連続感を出す**ことと、
+**世界観（濃紺＋ブランドグラデーション）を最初に印象づける**こと。
 
-起動演出には性質の異なる2つの層がある。両方を薄く使い、継ぎ目を消すことを優先した（凝ったOSアニメには踏み込まない）。
+## 2. ゴールと非ゴール
 
-| 層 | 役割 | 実装 |
-|----|------|------|
-| ① システムスプラッシュ | コールド起動の一瞬をブランド色で即座に埋める | `core-splashscreen`。月光スレート(`vigilith_slate`)背景＋アイコン。`installSplashScreen()` を `super.onCreate()` 前に呼ぶ |
-| ② Compose OP | Vigilith・製品名のアニメーション本体 | `OpeningScreen.kt`。`setContent` 直後に本体の代わりに表示 |
+### ゴール
+- 起動から本体まで**色の跳ねが無い**（継ぎ目を消す）
+- Vigilith を最初に見せる
 
-システムスプラッシュ側のシステムバー色も月光スレートに揃え、①→②で色が跳ねないようにしている。
+### 非ゴール
+- **凝ったOSアニメには踏み込まない**（「軽量C」方針）
+- **繰り返し起動で邪魔にならない**（タップで即スキップ）
+- **回転やFold開閉で再生しない**
 
-## 設計判断
+## 3. 詳細機能一覧
 
-| 論点 | 決定 | 理由 |
-|------|------|------|
-| 背景の受け渡し | OP終端を **`ReadingGradient`** で解決し、`VigilithSlate` をα制御で剥がす | 起動着地は `startDestination="note"` ＝ Noteタブで、その背景は `ReadingGradient`。OPを着地と同色で終えれば、真のクロスフェードなしの**ハードカットでも継ぎ目が見えない** |
-| 黒曜石と背景の分離 | 外周を月光スレート **`#314158`** にし、中央に **Aqua 16% → Indigo 14% → Purple 10%** の低強度ハロー | 背景自体の明度差でLogoNavyの頭部を読みやすくし、ハローは補助に留める。Adaptive Icon背景とCompose OPで同じ色・実効アルファを使う |
-| 本体の配置 | OP中は本体をコンポーズせず、完了時に入れ替え（`return@setContent`） | OP背面の誤タップ・TalkBack読み上げ・Snackbar表示を構造的に遮断。`NoteViewModel.init` の `restoreVault()` はcomposition非依存で走るため取りこぼしなし |
-| 進行の駆動 | 単一 `Animatable` を `tween` で 0→1 に進め、全要素をそこから導出 | 固定 `delay` を使わず、端末の Animator duration scale（0倍含む）にCompose標準挙動で追従。倍率0ならほぼ即時に本体へ |
-| Vigilithの登場 | **ハロー → 完成WebP全身 → 名称** | 目だけの別描画は完成イラストとの二重表現になり違和感を生むため削除。回転・バウンド・常時点滅も使わない |
-| 再生判定 | `savedInstanceState == null` のときだけ再生 | 新規起動＝null、回転/Fold開閉/バックグラウンド復帰/プロセス復元＝非null。`rememberSaveable` ではなく `remember` で保持し、config変更で再評価される点を利用 |
-| スキップ | 画面全体タップで即終了 | `finishOnce()` で完了コールバックの1回実行を保証（自然終了とスキップの競合対策） |
+| 詳細機能 | ユーザーから見える挙動 | 起動条件 |
+|---|---|---|
+| システムスプラッシュ | 起動の一瞬を月光スレートで埋める | コールド起動 |
+| Compose OP | ハロー → Vigilith 全身 → 名称 の2秒 | `savedInstanceState == null` のときだけ |
+| スキップ | 画面全体タップで即終了 | OP再生中 |
 
-## 実装上の判断
+## 4. 現在のユーザーフロー
 
-- **外部ラムダは `rememberUpdatedState` 経由で呼ぶ**。`OpeningScreen` の `onFinished` は `LaunchedEffect`（長寿命ブロック）から呼ぶため、PR #25で文書化した「stale closure」の教訓（[architecture](../system/architecture.md) 参照）に従う。
-- **タイムライン計算は純関数 `vigilithOpeningMotion` に集約**し、区間ごとの背景・本体・ハロー・名称の
-  αとスケールを1フレーム分の値へ変換する。ComposeやAndroid型を含めないためJVMテストで演出順と終端を検証できる。
-- **目専用のCanvasレイヤーは置かない。** 完成WebPに描かれた目だけを使い、起動中の二重描画と
-  退場時に目だけ残って見える現象を構造的に防ぐ。
-- **ハローの色側へ最終アルファを持たせ、モーション側は登退場だけを制御する。** Adaptive Icon背景と数値を比較しやすくし、二重のα乗算で意図より暗くなることを防ぐ。
+1. コールド起動 → **システムスプラッシュ**（月光スレート `vigilith_slate` 背景＋アイコン）
+   - `installSplashScreen()` は `super.onCreate()` **前**に呼ぶ
+2. `setContent` 直後、本体の代わりに `OpeningScreen` を表示する（**本体はコンポーズしない**）
+3. 2秒のタイムライン（→ §5）が進む
+4. 終端で `ReadingGradient` へ着地し、本体（ノートタブ）と入れ替わる
 
-## Vigilithへの移行（2026-07-25）
+**途中で画面をタップすると即終了する。** `finishOnce()` が完了コールバックの1回実行を保証する
+（自然終了とスキップの競合対策）。
 
-旧OPは開発元のM.M AI Solutionsロゴを表示しており、Vigilithへ差し替えたランチャーアイコンと不整合だった。
-Compose OPは2026-07-25に `ic_vigilith.xml` へ移行し、2026-07-26にアプリ内と同じ
-`vigilith_idle_rich.webp`へ統一した。演出は次の2秒タイムラインを維持する。
+## 5. 機能仕様
 
-1. 月光スレートの薄闇にAqua→Indigo→Purpleのハローが現れる
-2. 黒曜石の全身がわずかに浮上しながら現れる
-3. 完成WebPの目・嘴・コアを含む全身が一体として整う
-4. 「Vigilith AI」の名称が現れる
-5. キャラクターと月光スレートが消え、背面のReadingGradientへ着地する
+- **再生判定:** `savedInstanceState == null` のときだけ。
+  **新規起動＝null、回転／Fold開閉／バックグラウンド復帰／プロセス復元＝非null。**
+  `rememberSaveable` ではなく `remember` で保持し、config変更で再評価される点を利用する
+- **総時間:** **2,000ms**（`OpeningDurationMillis`）
+- **進行の駆動:** 単一 `Animatable` を `tween` で 0→1 に進め、**全要素をそこから導出**する。
+  固定 `delay` を使わないので、端末の **Animator duration scale（0倍を含む）に Compose 標準挙動で追従**する
+  （倍率0ならほぼ即時に本体へ）
+- **タイムライン:**
+  1. 月光スレートの薄闇に Aqua → Indigo → Purple のハローが現れる
+  2. 黒曜石の全身がわずかに浮上しながら現れる
+  3. 完成WebPの目・嘴・コアを含む全身が一体として整う
+  4. 「Vigilith AI」の名称が現れる
+  5. キャラクターと月光スレートが消え、背面の `ReadingGradient` へ着地する
+- **色:**
 
-途中タップによるスキップ、2秒という総時間、Animator duration scaleへの追従は維持する。
+  | 対象 | 値 |
+  |---|---|
+  | 外周 | 月光スレート `#314158` |
+  | 中央のハロー | Aqua 16% → Indigo 14% → Purple 10%（低強度） |
 
-## コードレビューで直した点（PR #26 レビュー）
+- **エラー／キャンセル時:**
 
-Codexの初版に対し、動作を変えない範囲で2件を修正した。
+  > **該当なし:** OPはI/OもAI生成も行わない。失敗しうる処理を持たない。
 
-1. **TalkBackの二重読み上げ回避** — 外側Boxの `contentDescription = "Obsidian Mind"` と可視 `Text("Obsidian Mind")` が重複源になっていた。外側は `semantics(mergeDescendants = true) {}` に留め、名称は可視Textが1回だけ供給する形にした。**マージノードに `contentDescription` を重ねると子の text と二重に読まれ得る**、が教訓。
-2. **発光色の定義位置** — OP背面発光の `LogoPurple` をローカル定義から `AppColors` へ集約し、Aqua/Indigo/LogoNavy/VigilithSlate と定義元を揃えた。
+## 6. 状態とデータ
 
-## 見送り（別タスク）
+**永続化しない。** OP完了の判定は Activity のライフサイクル（`savedInstanceState`）だけで行う。
 
-- **OP時間（2秒）**：繰り返し起動では長く感じ得るが、短縮はプロダクト判断（`OpeningDurationMillis` 1行で調整可）。
+> **該当なし:** `NoteUiState` にも contribute しない。OPは本体をコンポーズする前に完結する。
 
-旧ランチャー前景PNGの軽量化課題は、VigilithをVectorDrawableとして実装したことで解消した。旧PNGは
-現行コードから参照されず、移行確認後に削除可能。
+**`NoteViewModel.init` の `restoreVault()` は composition 非依存で走る**ので、
+OP中に本体をコンポーズしなくても取りこぼしは起きない。
+
+## 7. システム設計
+
+```
+MainActivity
+ ├─ installSplashScreen()      ← super.onCreate() より前
+ └─ setContent
+      └─ savedInstanceState == null なら OpeningScreen（本体は return@setContent で抑止）
+           └─ Animatable 0→1
+                └─ vigilithOpeningMotion(progress)   ← 純関数・JVMテスト
+                     └─ 背景 / 本体 / ハロー / 名称 の α とスケール
+```
+
+## 8. 設計判断と代替案
+
+### 判断1: 2層構成にして、継ぎ目を消すことを優先する
+
+| 層 | 役割 |
+|---|---|
+| ① システムスプラッシュ | コールド起動の一瞬をブランド色で即座に埋める |
+| ② Compose OP | Vigilith・製品名のアニメーション本体 |
+
+**システムスプラッシュ側のシステムバー色も月光スレートに揃え、①→② で色が跳ねないようにする。**
+
+### 判断2: OP終端を着地先と同色にして、クロスフェードを不要にする
+
+起動着地は `startDestination="note"` ＝ ノートタブで、その背景は `ReadingGradient`。
+**OPを着地と同色で終えれば、真のクロスフェードなしのハードカットでも継ぎ目が見えない。**
+
+### 判断3: OP中は本体をコンポーズしない
+
+完了時に入れ替える（`return@setContent`）。
+**OP背面の誤タップ・TalkBack読み上げ・Snackbar表示を構造的に遮断する。**
+
+### 判断4: 固定 `delay` を使わない
+
+単一 `Animatable` から全要素を導出することで、**端末の Animator duration scale に追従**する。
+アニメーションを切っている端末では、待たされずに本体へ着く。
+
+### 判断5: 目専用の描画レイヤーを置かない
+
+完成WebPに描かれた目だけを使う。目だけの別描画は完成イラストとの**二重表現**になり違和感を生む。
+**退場時に目だけ残って見える現象も構造的に防げる。**
+
+回転・バウンド・常時点滅も使わない。
+
+### 判断6: ハローの最終アルファは色側に持たせる
+
+モーション側は登退場だけを制御する。
+**Adaptive Icon 背景と数値を比較しやすくなり、二重のα乗算で意図より暗くなることを防ぐ。**
+
+### 実装上の注意
+
+- **外部ラムダは `rememberUpdatedState` 経由で呼ぶ。** `onFinished` は `LaunchedEffect`（長寿命ブロック）から
+  呼ぶため、stale closure の型に当たる（→ [lessons/L34](../lessons/L34.md)）
+- **タイムライン計算は純関数 `vigilithOpeningMotion` に集約する。** Compose や Android 型を含めないので
+  JVMテストで演出順と終端を検証できる
+- **マージノードに `contentDescription` を重ねない。** 外側 Box の `contentDescription` と可視 `Text` が
+  重複源になり、TalkBack が二重に読む。外側は `semantics(mergeDescendants = true) {}` に留める
+
+## 9. 品質要件
+
+- **アクセシビリティ:** 名称は可視 `Text` が1回だけ供給する（二重読み上げを避ける）
+- **性能:** Animator duration scale に追従するので、アニメーションを切った端末では待たされない
+- **プライバシー:**
+
+  > **該当なし:** ユーザーデータに触れない。
+
+## 10. 検証と受け入れ条件
+
+- **JVMテスト:** `VigilithOpeningMotionTest`（演出順と終端の値）
+- **instrumentation:**
+
+  > **該当なし:** 起動演出は実端末の目視が主で、自動化していない。
+
+- **保証していないこと:**
+  - **見た目の印象は自動検証していない。** 純関数が返す数値の順序だけを固定している
+  - **2秒という長さの妥当性は測っていない**（繰り返し起動では長く感じ得る）
+
+## 11. 既知の制約・未解決事項
+
+| | |
+|---|---|
+| OP時間（2秒）が繰り返し起動では長く感じ得る | 短縮は**プロダクト判断**。`OpeningDurationMillis` の1行で調整できる |
+| 旧ランチャー前景PNG | Vigilith を VectorDrawable として実装したことで参照されなくなった。削除可能 |
+
+## 12. 開発経緯
+
+[開発日誌 2026-07](../../owner/journal/2026-07.md)

@@ -1,16 +1,22 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
-**状態:** Implemented（コンセプト確定） — コンセプト確定・アプリアイコン／起動OP／アプリ内Phase 3実装済み
-**最終検証:** 2026-08-11 / `a99e524`（**ヘッダのみ確認。本文は未検証**）
-**関連コード:** `ui/vigilith/VigilithMascot.kt`
-**関連テスト:** VigilithModeTest / VigilithStatusDerivationTest
-**正本:** この文書
+**状態:** Implemented（コンセプト確定）— アプリアイコン／起動OP／アプリ内Phase 3 まで実装済み
+**最終検証:** 2026-08-11 / `9e4a2b7`（**参照シートとしての役割を明示しただけ。造形・色の記述は未突合**）
+**関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/theme/AppColors.kt`（パレット）
+**関連テスト:** `VigilithModeTest` / `VigilithStatusDerivationTest`
+**正本:** **造形・世界観・作画発注についてはこの文書**
 
-**対象:** アプリ「Vigilith AI」のマスコット／AI相棒
-**作成日:** 2026-07-22
-**関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)・[opening_animation](opening_animation.md)
+> **この文書だけ [`_template.md`](_template.md) の12節に従わない。**
+> 内容が**キャラクターの定義と作画の基準**であって、ユーザーフロー・状態遷移・受け入れ条件を持たないため。
+> 無理に当てはめると節の大半が「該当なし」になり、かえって読みにくくなる。
+>
+> | 知りたいこと | 見る文書 |
+> |---|---|
+> | Vigilith とは何か・どう描くか | **本書** |
+> | アプリ内でどう振る舞うか（表示状態・配置・操作） | [vigilith_in_app](vigilith_in_app.md) |
+> | 起動演出でどう出るか | [opening_animation](opening_animation.md) |
 
-> このシートは「Vigilithとは何か」を言語化した設計図。作画発注・実装・アイコン展開の基準に使う。
+**関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)
 
 ---
 
