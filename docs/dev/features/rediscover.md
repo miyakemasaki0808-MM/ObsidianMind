@@ -1,7 +1,7 @@
 # Rediscover（ランダム表示）
 
 **状態:** Implemented — 稼働中。**アプリの入口であり心臓**
-**最終検証:** 2026-08-11 / `1cbdf13`（`loadRandomNote` の全手順・走査キャッシュ・除外フォルダ・上限を実装から起こした）
+**最終検証:** 2026-08-11 / `c25bcea`（`loadRandomNote` の全手順・走査キャッシュ・除外フォルダ・上限を実装から起こした）
 **関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.collectAllNotesCached()` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）
 **関連テスト:** `NoteRepositoryTest` / `NoteSessionCoordinatorTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
 **正本:** この文書

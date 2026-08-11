@@ -77,10 +77,14 @@
 
 ### 機能（`features/`）
 
-**全16本が [`_template.md`](features/_template.md) の12節に揃っている**（`character_vigilith` を除く。
-造形の参照シートでフローも状態も持たないため、冒頭で役割を明示している）。
-**埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く**規約で、
-`AdrShapeTest` が空の節を禁じている。
+**内訳は機能仕様16本＋参照シート1本。**
+
+- **機能仕様16本**は [`_template.md`](features/_template.md) の12節に揃っている。
+  **節の存在と、空でないことの両方を `AdrShapeTest` が固定する** —
+  埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く
+- **参照シート1本**（[character_vigilith](features/character_vigilith.md)）は12節に従わない。
+  造形・世界観・作画基準であってフローも状態も持たないため、**検査の例外として明示的に列挙**してある。
+  同種の資料（ブランドガイド・文体規定など）が2〜3本に増えたら `reference/` へ独立させる合図
 
 
 | 文書 | 対象 |
@@ -99,7 +103,7 @@
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
 | [note_age_paper.md](features/note_age_paper.md) | ノートの年代を紙の地色で伝える |
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
-| [character_vigilith.md](features/character_vigilith.md) | キャラクターシート（黒曜の梟オートマトン） |
+| [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
 | [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**未実装・設計確定** |
 

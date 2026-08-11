@@ -1028,7 +1028,7 @@ Kotlinコンパイラ側も `allWarningsAsErrors = true` を設定した（**Lin
 （`GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`）だけは `informational`（hint）へ降格してある。
 素のまま有効化すると12件すべてが Error になり `lintDebug` タスクが失敗するが、`informational` なら
 **「0 errors, 0 warnings, 12 hints」で成功し、指摘はレポートに残る**。上流が新版を出すだけで生える
-指摘をゲートに載せず、かつ催促は消さないための設定である（→ design/dependency_policy.md）。
+指摘をゲートに載せず、かつ催促は消さないための設定である（→ [dependency_policy](../dev/system/dependency_policy.md)）。
 
 `assembleDebugAndroidTest` が保証するのは**テストAPKのコンパイルと組み立てまで**で、
 Runnerの起動もCompose描画も実行しない。instrumentation の実行には実端末かエミュレータが要る。
@@ -1198,7 +1198,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 17. （実装済み・2026-07-29）`applicationId` を `com.vigilith.ai` に確定した（`namespace` は据え置き）。
 18. R8を有効化して keep ルールを確認し、リリース署名の手順を決める。7つのAI経路を release ビルドで一巡する必要がある。
 19. （実装済み・2026-08-08）instrumentation の中身を37件書き、実機で 37/37 成功した（→ §13.5）。**外部レビューで「主張が観測より広い」と指摘された3件は、いずれも主張を狭める形で対応した**（プロセス死亡・全AI経路・入力競合）。実行がCIで担保されない点は、見送りで確定している。
-20. 依存を実際に上げる。単位と契機は確定済み（→ design/dependency_policy.md）で、まず ML Kit GenAI beta4 の変更点をAARで確認する。**Compose BOM は Lint の検出から漏れる**ので手で見る。
+20. 依存を実際に上げる。単位と契機は確定済み（→ [dependency_policy](../dev/system/dependency_policy.md)）で、まず ML Kit GenAI beta4 の変更点をAARで確認する。**Compose BOM は Lint の検出から漏れる**ので手で見る。
 21. 読書痕跡の退避・復元（書き出し／読み戻し）。ひとことの返事が入ったことで、失われたときの損失が跳ね上がっている。
 
 ---

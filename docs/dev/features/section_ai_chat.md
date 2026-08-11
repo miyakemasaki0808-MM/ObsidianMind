@@ -1,7 +1,7 @@
 # セクションAI（浮遊吹き出し・ボトムシート）
 
 **状態:** Implemented — 稼働中。会話履歴の永続化・横断チャットは見送り継続
-**最終検証:** 2026-08-11 / `9c2e0a1`（セッションの寿命・上限・AI非対応時の分岐を実装から起こし直した）
+**最終検証:** 2026-08-11 / `c25bcea`（セッションの寿命・上限・AI非対応時の分岐を実装から起こし直した）
 **関連コード:** `controller/SectionChatController.kt` / `domain/markdown/NoteSections.kt` / `ui/screen/SectionChatSheet.kt` / `controller/NoteSectionController.kt`
 **関連テスト:** `SectionChatControllerTest` / `SurroundingContextTest`
 **正本:** この文書

@@ -1,7 +1,7 @@
 # 起動OPアニメーション
 
 **状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）
-**最終検証:** 2026-08-11 / `9e4a2b7`（**`OpeningDurationMillis = 2_000` のみ実装で確認。演出の各区間は未突合**）
+**最終検証:** 2026-08-11 / `e7b9f18`（**`OpeningDurationMillis = 2_000` のみ実装で確認。演出の各区間は未突合**）
 **関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）
 **関連テスト:** `VigilithOpeningMotionTest`
 **正本:** この文書

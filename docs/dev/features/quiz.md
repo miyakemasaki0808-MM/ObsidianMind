@@ -1,7 +1,7 @@
 # クイズ（Q&A）
 
 **状態:** Implemented — 稼働中。**未確認管理（`isViewed`）を持つ唯一の機能**
-**最終検証:** 2026-08-11 / `9c2e0a1`（入口・通知先・`isViewed` の消費先を実装から起こし直した）
+**最終検証:** 2026-08-11 / `c25bcea`（入口・通知先・`isViewed` の消費先を実装から起こし直した）
 **関連コード:** `controller/QuizController.kt` / `domain/QuizInputProfile.kt` / `domain/QuizResponseParser.kt` / `model/state/QuizState.kt` / `ui/screen/QuizScreen.kt` / `ui/screen/SectionChatSheet.kt`（**入口**）/ `ui/vigilith/VigilithMode.kt`
 **関連テスト:** `QuizControllerTest` / `QuizResponseParserTest` / `QuizInputProfileTest` / `QuizPromptBuilderTest` / `VigilithStatusDerivationTest`
 **正本:** この文書

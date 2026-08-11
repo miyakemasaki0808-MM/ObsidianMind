@@ -1,7 +1,7 @@
 # ノート要約
 
 **状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）
-**最終検証:** 2026-08-11 / `1cbdf13`（状態遷移・抜粋上限・モデルDLの自動再開を実装から起こした）
+**最終検証:** 2026-08-11 / `c25bcea`（状態遷移・抜粋上限・モデルDLの自動再開を実装から起こした）
 **関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
 **関連テスト:** `SummaryControllerTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書

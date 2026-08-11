@@ -1,14 +1,20 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
-**状態:** Implemented（コンセプト確定）— アプリアイコン／起動OP／アプリ内Phase 3 まで実装済み
-**最終検証:** 2026-08-11 / `9e4a2b7`（**参照シートとしての役割を明示しただけ。造形・色の記述は未突合**）
-**関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/theme/AppColors.kt`（パレット）
+**種別:** Character Reference（**機能仕様ではない**）
+**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OP／アプリ内マスコットが従っている
+**最終検証:** 2026-08-11 / `e7b9f18`（**参照シートとしての役割を明示しただけ。造形・色の記述は未突合**）
+**関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
 **関連テスト:** `VigilithModeTest` / `VigilithStatusDerivationTest`
 **正本:** **造形・世界観・作画発注についてはこの文書**
 
-> **この文書だけ [`_template.md`](_template.md) の12節に従わない。**
+> **この文書は [`_template.md`](_template.md) の12節に従わない。**
 > 内容が**キャラクターの定義と作画の基準**であって、ユーザーフロー・状態遷移・受け入れ条件を持たないため。
 > 無理に当てはめると節の大半が「該当なし」になり、かえって読みにくくなる。
+> **`AdrShapeTest` の `TEMPLATE_EXEMPT` に明示的に列挙してある**ので、例外が増えれば気づける
+> （同種の資料が2〜3本に増えたら `reference/` へ独立させる合図）。
+>
+> **`状態:` が `Implemented` ではなく `Adopted` なのも同じ理由。**
+> この文書は「実装された機能」ではなく**規範**で、実装がこれに従う向きになる。
 >
 > | 知りたいこと | 見る文書 |
 > |---|---|

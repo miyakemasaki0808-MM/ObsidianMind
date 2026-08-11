@@ -1,7 +1,7 @@
 # さがす（AIピッカー・閲覧履歴）
 
 **状態:** Implemented — 稼働中
-**最終検証:** 2026-08-11 / `9c2e0a1`（フォールバック仕様・上限3種・世代照合を実装から起こし直した。**旧ヘッダにあった乖離1件は解消**）
+**最終検証:** 2026-08-11 / `c25bcea`（フォールバック仕様・上限3種・世代照合を実装から起こし直した。**旧ヘッダにあった乖離1件は解消**）
 **関連コード:** `controller/SearchController.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `data/NoteHistoryStore.kt` / `ui/screen/SearchScreen.kt`
 **関連テスト:** `SearchControllerTest` / `SearchKeywordMatchingTest`
 **正本:** この文書

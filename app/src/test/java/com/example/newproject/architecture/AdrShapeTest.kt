@@ -1,6 +1,7 @@
 package com.example.newproject.architecture
 
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -133,6 +134,80 @@ class AdrShapeTest {
         )
     }
 
+    /**
+     * **`features/` の文書は12節をすべて持つ。**
+     *
+     * 空の節を禁じるだけでは、**節ごと無い**文書が素通りする
+     * （書き忘れと「そもそも節が無い」は別の壊れ方）。見出しの存在自体を数える。
+     *
+     * **例外は `character_vigilith.md` の1本だけ。** 造形と作画の基準であって
+     * ユーザーフローも状態も持たず、12節を当てると大半が「該当なし」になる。
+     * **例外はここに列挙して、増えたら気づけるようにする** — 2〜3本に増えたら
+     * `reference/` へ独立させる合図。
+     */
+    @Test
+    fun `features の文書は12節をすべて持つ`() {
+        val violations = featureDocs()
+            .filterNot { it.name in TEMPLATE_EXEMPT }
+            .flatMap { file ->
+                val text = file.readText()
+                (1..12).filterNot { n -> Regex("""^## $n\. """, RegexOption.MULTILINE).containsMatchIn(text) }
+                    .map { n -> "${file.name}: §$n が無い" }
+            }
+
+        assertTrue(
+            "12節が欠けています（様式は features/_template.md）。" +
+                "該当しない節も見出しを置き、`> **該当なし:**` で理由を書いてください:\n" +
+                violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    /**
+     * **`最終検証` が指すコミットは、実在しなければならない。**
+     *
+     * この検査は**実際に捏造が起きたから**ある。12本の文書に、Gitに存在しない
+     * 7桁の英数字が `最終検証` として書かれていた。**存在しないコミットを指す検証日は、
+     * 検証していないことより悪い** — 読む側は「その時点では合っていた」と信じてしまう。
+     *
+     * `最終検証` は「この日付以降の変更を疑ってよい」という契約なので、
+     * **参照先が実在することがその契約の最低条件**である。
+     */
+    @Test
+    fun `最終検証が指すコミットは実在する`() {
+        assumeTrue("git が使えない環境では検証しない", gitAvailable())
+
+        val violations = permanentDocs().flatMap { file ->
+            VERIFIED_AT.findAll(file.readText())
+                .map { it.groupValues[1] }
+                .filterNot { commitExists(it) }
+                .map { "${file.parentFile?.name}/${file.name}: $it" }
+                .toList()
+        }
+
+        assertTrue(
+            "最終検証が実在しないコミットを指しています。実際に検証したコード状態の" +
+                "コミットを書いてください:\n" + violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    private fun gitAvailable(): Boolean = runCatching {
+        ProcessBuilder("git", "rev-parse", "--git-dir")
+            .directory(docsRoot().parentFile)
+            .redirectErrorStream(true)
+            .start()
+            .waitFor() == 0
+    }.getOrDefault(false)
+
+    private fun commitExists(hash: String): Boolean = runCatching {
+        ProcessBuilder("git", "cat-file", "-e", hash)
+            .directory(docsRoot().parentFile)
+            .redirectErrorStream(true)
+            .start()
+            .waitFor() == 0
+    }.getOrDefault(false)
+
     /** 見出しの直後に本文が1行も無い節を返す。 */
     private fun emptySections(text: String): List<String> {
         val lines = text.lines()
@@ -161,10 +236,21 @@ class AdrShapeTest {
     private companion object {
         const val MAX_LINES = 30
 
+        /**
+         * 12節の様式から外すことを認めた文書。
+         *
+         * **`character_vigilith.md` は機能仕様ではなく参照シート**（造形・世界観・作画基準）。
+         * 同種の資料が2〜3本に増えたら `reference/` などへ独立させる。
+         */
+        val TEMPLATE_EXEMPT = setOf("character_vigilith.md")
+
         /** `## ABC-9 …` の形（カテゴリ記号つき見出し）。 */
         val WIP_HEADING_ID = Regex("""^#+\s+\*{0,2}([A-Z][A-Z0-9]*-\d+)""", RegexOption.MULTILINE)
 
         /** `#### Z-9. …` の形（1文字カテゴリ＋ドット。`feature_ideas.md`）。 */
         val WIP_HEADING_ID_DOTTED = Regex("""^#+\s+([A-Z]-\d+)\.""", RegexOption.MULTILINE)
+
+        /** `**最終検証:** YYYY-MM-DD / \`abc1234\`` の形からコミットを取る。 */
+        val VERIFIED_AT = Regex("""\*\*最終検証:\*\*[^`\n]*`([0-9a-f]{7,40})`""")
     }
 }

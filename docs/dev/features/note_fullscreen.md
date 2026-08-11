@@ -1,7 +1,7 @@
 # 全画面ノート
 
 **状態:** Implemented — 稼働中。ダークモード対応まで反映済み
-**最終検証:** 2026-08-11 / `9e4a2b7`（**本文カラム720dp・FAB 48dp のみ実装で確認。フローと状態は未突合**）
+**最終検証:** 2026-08-11 / `e7b9f18`（**本文カラム720dp・FAB 48dp のみ実装で確認。フローと状態は未突合**）
 **関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/AppScaffold.kt`
 **関連テスト:** androidTest: `ActivityRecreationTest` / `TabNavigationTest`
 **正本:** この文書

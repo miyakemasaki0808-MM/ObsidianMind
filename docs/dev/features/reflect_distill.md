@@ -1,7 +1,7 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6 実装済み・自動テスト済み。**実機確認待ち**
-**最終検証:** 2026-08-11 / `b3d81c4`（**`DistillLimits` の8定数を実装で確認。書き込み手順と復旧は未突合**）
+**最終検証:** 2026-08-11 / `e7b9f18`（**`DistillLimits` の8定数を実装で確認。書き込み手順と復旧は未突合**）
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest`
 **正本:** この文書
