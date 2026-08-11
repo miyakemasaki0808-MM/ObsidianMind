@@ -111,6 +111,45 @@ class AdrShapeTest {
             ?: error("docs が見つかりません（作業ディレクトリ: $workingDirectory）")
     }
 
+    /**
+     * **`features/` の文書は、節を空のまま残さない。**
+     *
+     * 空欄は「未調査」「該当なし」「書き忘れ」の区別が付かない。
+     * 埋められないときは `> **未確認:**` か `> **該当なし:**` で理由を書く
+     * （様式は `features/_template.md`）。
+     *
+     * **問題はブランクではなく、未完成なのに完成済みに見えることである。**
+     */
+    @Test
+    fun `features の文書に空の節を残さない`() {
+        val violations = featureDocs().flatMap { file ->
+            emptySections(file.readText()).map { "${file.name}: $it が空" }
+        }
+
+        assertTrue(
+            "空の節があります。`> **未確認:**` か `> **該当なし:**` で理由を書いてください:\n" +
+                violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    /** 見出しの直後に本文が1行も無い節を返す。 */
+    private fun emptySections(text: String): List<String> {
+        val lines = text.lines()
+        val headings = lines.withIndex().filter { (_, l) -> l.startsWith("## ") }
+        return headings.filter { (index, _) ->
+            lines.drop(index + 1)
+                .takeWhile { !it.startsWith("## ") }
+                .none { it.isNotBlank() }
+        }.map { (_, heading) -> heading.removePrefix("## ") }
+    }
+
+    private fun featureDocs(): List<File> =
+        devRoot().resolve("features")
+            .listFiles { f -> f.isFile && f.extension == "md" && f.name != "README.md" }
+            .orEmpty()
+            .sorted()
+
     private fun adrFiles(): List<File> =
         decisionsRoot().listFiles { f -> f.isFile && f.name.startsWith("ADR-") }
             ?.sorted()
