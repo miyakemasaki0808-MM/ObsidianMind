@@ -4,7 +4,7 @@ package com.example.newproject.domain
 //
 // 旧補記は「4項目の固定選択肢＋3行」を出させながら、守られたかを誰も確認していなかった。
 // 蒸留が parseDistillResponseIds で validIds と照合しているのに対して非対称で、
-// 同じ製品内で検証の強さが揃っていなかった（→ design/reflect_remark.md §0）。
+// 同じ製品内で検証の強さが揃っていなかった（→ features/reflect_remark.md §0）。
 //
 // **一般論の禁止は指示ではなく検査で担保する。** プロンプトに "no generic advice" と
 // 書くだけでは守られたか分からないため、ノート由来の語を含むことを機械的に測る。
@@ -18,7 +18,7 @@ internal object RemarkLimits {
      * 以前は 400 で、これは `MAX_REPLY_BYTES`（当時1536）から逆算した値だった。
      * つまり**ローカルLLMへ渡せる長さが、そのままユーザーの文章の上限**になっていた。
      * 本文は「保存は原文・AIへは抜粋」でやっているのに、返事だけ両方を同じ数字で
-     * 縛っていたのが誤り（→ design/reflect_remark.md §11）。
+     * 縛っていたのが誤り（→ features/reflect_remark.md §11）。
      */
     const val MAX_REPLY_CHARS = 8_000
 

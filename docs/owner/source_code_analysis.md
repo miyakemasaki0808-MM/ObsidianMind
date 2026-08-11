@@ -3,7 +3,7 @@
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **この文書の位置づけ:** **コードを読まずに現状を把握するための技術俯瞰。**
 オーナー（エンジニアでもある）が構成・設計・規模の成長を追うために置く。
-**現在の設計判断そのものは [dev/design/](../dev/design/) が正本**で、本書はその結果としての現況を述べる。
+**現在の設計判断そのものは [dev/features/](../dev/features/)・[dev/system/](../dev/system/) が正本**で、本書はその結果としての現況を述べる。
 **そこへ至った経緯は [開発日誌](journal/) が持つ。**
 
 **測定日:** 2026-08-10（統計は同日に現行ソースから再測定）
@@ -473,7 +473,7 @@ OpenDocumentTree
 
 次回起動時は SharedPreferences のURIを復元し、`vaultSelected = true` にする。起動直後にノートを自動読込する処理はなく、ユーザーがランダム表示するか検索結果を開くまで `noteState` は Idle のままである。
 
-なお `MainActivity` は `setContent` 直後に、コールド起動時のみ `OpeningScreen`（起動OP）を本体の代わりに表示する。新規起動の判定は `savedInstanceState == null`（回転・Fold開閉・プロセス復元では非nullのため再生しない）。OP終端の背景は着地（Noteタブ）と同じ `ReadingGradient` に揃え、継ぎ目なく本体へ入れ替える。詳細は [design/opening_animation](../dev/design/opening_animation.md) を参照。
+なお `MainActivity` は `setContent` 直後に、コールド起動時のみ `OpeningScreen`（起動OP）を本体の代わりに表示する。新規起動の判定は `savedInstanceState == null`（回転・Fold開閉・プロセス復元では非nullのため再生しない）。OP終端の背景は着地（Noteタブ）と同じ `ReadingGradient` に揃え、継ぎ目なく本体へ入れ替える。詳細は [design/opening_animation](../dev/features/opening_animation.md) を参照。
 
 ### 6.2 ランダムノート表示
 
@@ -520,7 +520,7 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 
 #### AI推薦
 
-候補の選定→肉付け→再ランク→ID応答の多段パイプラインである（設計と経緯は [related_notes_ai](../dev/design/related_notes_ai.md)）。
+候補の選定→肉付け→再ランク→ID応答の多段パイプラインである（設計と経緯は [related_notes_ai](../dev/features/related_notes_ai.md)）。
 
 1. **タイトル話題スコアで全Vaultをランク**し上位40候補に絞る（`rankRelatedCandidates`）。スコアはタイトルの文字bigram Dice係数（主）＋採番プレフィックス近接の加点（従）。決定的チャンネルに出したタイトルは上限適用の前に除外する。
 2. **候補本文を上限付き並列で読む**（`Semaphore(8)`）。各候補を本文冒頭スニペット・タグ・aliasesで肉付けし、`URI+lastModified` でキャッシュする（成功時のみ格納）。
@@ -572,20 +572,20 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 1. シートの「この部分でクイズ」タップで、シート対象セクションを `sectionModel` から同定し、`NoteSectionModel.surroundingContext()` が周辺テキスト（約1,200文字）を構築する。**これは目標値であり上限ではない**（ブロック単位で足すため超過し得る）ので、プロンプト直前で1,200文字の抜粋（§8.4）を通す。セクションを核に前後のブロックを交互に加えて広げる方式で、親セクションが子を内包する構造でも本文が重複しない。見出しなし・擬似セクションはノート先頭にフォールバックする。
 2. 生成開始時に `QuizState.Loading(sourceTitle=セクション名)` を立てる（待機画面なし）。
 3. `checkAvailability()` で分岐する。Unavailableはエラー、NeedsDownloadはモデルDL後に自動再開、Availableは即生成。
-4. 周辺テキストを**AI不使用で分類**し（`QuizInputProfile`）、素材量に応じて出題形式を切り替える：コード比率45%以上→3択2問、本文180字未満または文シグナル2以下→○×2問、本文700字以上かつ文シグナル6以上→4択1問、それ以外→3択2問。○×・3択は解説なし・4択のみ短い解説を1文とし、問題／選択肢に文字数上限を指示する。これは、常に4択2問＋解説を要求すると出力上限（256トークン程度、8.3参照）を超えて `MAX_TOKENS` で全結果が破棄され、クイズ生成エラーになっていた問題への対策（詳細は [design/section_ai_chat.md](../dev/design/section_ai_chat.md)）。
+4. 周辺テキストを**AI不使用で分類**し（`QuizInputProfile`）、素材量に応じて出題形式を切り替える：コード比率45%以上→3択2問、本文180字未満または文シグナル2以下→○×2問、本文700字以上かつ文シグナル6以上→4択1問、それ以外→3択2問。○×・3択は解説なし・4択のみ短い解説を1文とし、問題／選択肢に文字数上限を指示する。これは、常に4択2問＋解説を要求すると出力上限（256トークン程度、8.3参照）を超えて `MAX_TOKENS` で全結果が破棄され、クイズ生成エラーになっていた問題への対策（詳細は [features/section_ai_chat.md](../dev/features/section_ai_chat.md)）。
 5. `Q:` 行を問題開始として `parseQuizResponse(raw, format)` がフィールドを抽出する。○×は `TRUE`/`FALSE`/`○`/`×`/`正しい`/`誤り` 等を許容、多択は正解レターを**単語境界regex `\b[A-D]\b`** で抽出し `B.`・`(B)`・`B) 選択肢文`・`The answer is B` 等の崩れを救済する（単語内の文字は誤検出しない・範囲外の `D` 等は棄却）。選択肢数（3/4）は応答実体に合わせ、必須フィールド欠落や範囲外の正解記号は捨てる。
 6. パース結果が0件なら `QuizState.Error`、あれば `QuizState.Success(isViewed=false)` とし、Snackbarで通知する（AIタブバッジの対象外）。
 7. Q&A画面ではユーザー選択後に正誤、正解、解説を表示し、次の問題へ進む。
 
 生成中の再タップはLoadingガードで無視する。requestIdによる `isCurrent()` チェックで、ノート切替後の古い結果混入を防ぐ。クイズの寿命はセクションチャットセッションに従属する（6.6）。
 
-なお「もう2問」の追い生成（既出問題の除外リスト付き再生成）を一度実装したが、小型モデルには同一素材からの追加出題が難しく成功率が低かったため廃止した（経緯は [design/section_ai_chat.md](../dev/design/section_ai_chat.md)）。
+なお「もう2問」の追い生成（既出問題の除外リスト付き再生成）を一度実装したが、小型モデルには同一素材からの追加出題が難しく成功率が低かったため廃止した（経緯は [features/section_ai_chat.md](../dev/features/section_ai_chat.md)）。
 
 ### 6.8 ノートへのひとこと（旧「AI補記メモ」）
 
 **2026-08-09 に全面作り直した。** 旧補記は「4つの分類ラベル＋補記3行」をMarkdownファイルとして
 Vaultへ保存していたが、**出力枠（256トークン）がゼロサムなのに、行動を変えないラベルが
-価値のある側を圧迫していた**（→ [reflect_remark](../dev/design/reflect_remark.md) §0）。
+価値のある側を圧迫していた**（→ [reflect_remark](../dev/features/reflect_remark.md)（作り直した理由））。
 枠を1文へ集中させ、保存先も痕跡サイドカーへ移した。
 
 **生成（`RemarkController`）**
@@ -653,7 +653,7 @@ Rediscover の再会カードには「前回の返事を見る」の1行だけ�
 
 ### 6.10 蒸留（Distill）
 
-Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、ユーザーが確認した文だけを元ノートで `**太字**` にする＝プログレッシブ要約支援。設計判断の全体は [design/reflect_distill.md](../dev/design/reflect_distill.md)。実装の骨格：
+Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、ユーザーが確認した文だけを元ノートで `**太字**` にする＝プログレッシブ要約支援。設計判断の全体は [features/reflect_distill.md](../dev/features/reflect_distill.md)。実装の骨格：
 
 1. `buildDistillSourceModel`（`DistillSourceModel`）が本文を、UTF-16オフセット保持＋Markdown構造認識（コードフェンス・テーブル・frontmatter・見出しを除外、インラインコードは太字内許容）で文分割する。表示用 `NoteSectionModel` は親子重複・見出しなし0件のため流用しない。
 2. 一段目（AI不使用）：`selectDistillCandidates` がサリエンス（タイトル別・直近見出し別のbigram Dice）＋構造的重み（段落先頭/末尾/見出し直下）でスコアし、チャンク網羅で候補を絞る。
@@ -664,7 +664,7 @@ Reflect（AIタブ）で、AIが重要文を**選び**（生成しない）、�
 
 ### 6.11 ReadingTrace（読書痕跡）
 
-全経路で読書位置を自動記録し、Rediscoverで同じノートを引いた時だけ過去の読み方を再会カードへ出す。設計判断は [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md)。
+全経路で読書位置を自動記録し、Rediscoverで同じノートを引いた時だけ過去の読み方を再会カードへ出す。設計判断は [features/reflect_reading_trace.md](../dev/features/reflect_reading_trace.md)。
 
 ```text
 ノート表示前
@@ -793,7 +793,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 | セクション質問・Q&A | 1,500文字 | 質問候補最大3件 |
 | ReadingTrace俯瞰要約 | 本文なし | 直近10訪問、1〜2文 |
 
-上限はいずれも UTF-16 文字数で、トークン数や意味境界では切っていない。**ただし切り方は先頭固定長ではない**（2026-07-28 に変更。設計は [ai_input_excerpt](../dev/design/ai_input_excerpt.md)）。
+上限はいずれも UTF-16 文字数で、トークン数や意味境界では切っていない。**ただし切り方は先頭固定長ではない**（2026-07-28 に変更。設計は [ai_input_excerpt](../dev/system/ai_input_excerpt.md)）。
 
 - 上表の本文を持つ7経路は、`PromptBuilder` ではなく呼び出し側が `buildNoteExcerpt(content, 上限)` で `NoteExcerpt` を作って渡す。`PromptBuilder` に `take()` は残っていない。
 - **予算内のノートはMarkdownを解析せず原文をそのまま渡す**（移行前のプロンプトと文字列単位で同一）。
@@ -818,7 +818,7 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 - 引用
 - パイプテーブル
 
-リスト項目は `ListItem(depth, marker, text, checked)` で、入れ子段数・番号（`1.` と `1)`、先頭ゼロを含む原文表記）・タスクのチェック状態を保持する。段数の算出はCommonMarkにもObsidianにも準拠しない独自の寛容規則で、設計は [design/markdown_rendering.md](../dev/design/markdown_rendering.md)。箇条書き記号 `-` / `*` / `+` の違いだけは意図的に落とす。コードフェンスの言語指定も保持しない。
+リスト項目は `ListItem(depth, marker, text, checked)` で、入れ子段数・番号（`1.` と `1)`、先頭ゼロを含む原文表記）・タスクのチェック状態を保持する。段数の算出はCommonMarkにもObsidianにも準拠しない独自の寛容規則で、設計は [system/markdown_rendering.md](../dev/system/markdown_rendering.md)。箇条書き記号 `-` / `*` / `+` の違いだけは意図的に落とす。コードフェンスの言語指定も保持しない。
 
 ### 9.2 対応インライン記法
 
@@ -1028,7 +1028,7 @@ Kotlinコンパイラ側も `allWarningsAsErrors = true` を設定した（**Lin
 （`GradleDependency` / `NewerVersionAvailable` / `AndroidGradlePluginVersion`）だけは `informational`（hint）へ降格してある。
 素のまま有効化すると12件すべてが Error になり `lintDebug` タスクが失敗するが、`informational` なら
 **「0 errors, 0 warnings, 12 hints」で成功し、指摘はレポートに残る**。上流が新版を出すだけで生える
-指摘をゲートに載せず、かつ催促は消さないための設定である（→ design/dependency_policy.md）。
+指摘をゲートに載せず、かつ催促は消さないための設定である（→ [dependency_policy](../dev/system/dependency_policy.md)）。
 
 `assembleDebugAndroidTest` が保証するのは**テストAPKのコンパイルと組み立てまで**で、
 Runnerの起動もCompose描画も実行しない。instrumentation の実行には実端末かエミュレータが要る。
@@ -1043,7 +1043,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 
 **CIは組み立てまでなので、instrumentation の失敗は今もCIを素通りする。**
 2026-08-08 にエミュレータジョブの追加を検討し、**見送りで確定した**
-（→ [instrumentation_testing](../dev/design/instrumentation_testing.md) 判断4）。
+（→ [instrumentation_testing](../dev/system/instrumentation_testing.md) 判断4）。
 最も実機固有な端末AI依存の9件はエミュレータでは `Assume` で skip されるため実機確認が残り、
 確認が二重になること、無料でも保守（不安定な赤・KVM・system image・除外クラス）が残ることによる。
 **再検討の条件は件数ではなく実害へ置いた** — 実行忘れで実害が出た／複数人になった／
@@ -1074,7 +1074,7 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 ### 13.5 instrumentation の内訳（37件）
 
 2026-08-08 に段階1〜4cを実装し、**実機で 37/37 成功・0 skipped**（Pixel 10 Pro Fold / Android 17）。
-段階の定義と判断は [instrumentation_testing](../dev/design/instrumentation_testing.md) が持つ。
+段階の定義と判断は [instrumentation_testing](../dev/system/instrumentation_testing.md) が持つ。
 
 | テストクラス | 件数 | 対象 | JVMで書けない理由 |
 |---|---:|---|---|
@@ -1157,51 +1157,41 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 
 ### 14.2 残る技術的注意点
 
-優先度は「現時点で確認できる影響範囲」に基づく。直ちに障害が起きることを意味しない。
+**2026-08-12 に実装から作り直した。** 優先度は「現時点で確認できる影響範囲」に基づき、
+直ちに障害が起きることを意味しない。**解消済みの項目はここに残さない**（記録は
+[change_history](../dev/change_history.md)、未対応の課題は [current_issues](../_wip/current_issues.md) が持つ）。
 
 | 優先度 | 項目 | 現状と影響 |
 |---|---|---|
-| 中 | 統合テスト不足 | SAF・端末AI・Navigationの不具合はローカルユニットテストで検出できない。土台（依存・Runner・スモークテスト・CIでのコンパイル）は整えたが、**一度も実行していない** |
-| 中 | 読書痕跡の孤児ファイル | ノートの削除・改名で対応する痕跡が残り続け、掃除する導線もない。長期運用でファイル数が単調増加する |
-| 中 | ReadingTrace同期索引 | 外部同期で追加されたサイドカーをプロセス再起動まで認識しない |
-| 中 | AI入力が先頭固定長 | 長文ノートの中心・結論が後半にある場合、要約・クイズ・補記の品質が落ちる |
-| 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時ID（`idToNote`）で解決するため、同名・別URIも別IDになり不定にならない（ID応答方式で解消済み）。決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |
-| 低 | YAML解析が簡易 | 複雑なYAML、引用、ネスト、複数行値には対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
-| 低 | Markdownが限定実装 | クリック可能リンク、画像、埋め込み、数式などは未対応（リストの番号・入れ子・タスク混在は 2026-08-02 に対応済み） |
-| 低 | 状態取得失敗と非対応の同一視 | AI状態確認の一時エラーも「利用不可」として扱われる |
-| 中 | ユーザーが書いた返事に退避手段が無い | ひとことの返事と映し返しは痕跡サイドカーに入るが、書き出し／読み戻しの経路が無い。Vaultのフォルダが消えれば**再生成できない文章**ごと失われる。保存失敗時の退避もプロセスメモリにしか無い |
-| 低 | R8・署名が未設定 | `release` は定義したが `isMinifyEnabled = false`・署名なし。R8を有効化すると ML Kit GenAI のリフレクション解決部分が縮小で消え、**全AI機能が release ビルドでだけ落ちる**可能性がある。JVMテストは縮小前のクラスを見るため検出できず、実機検証とセットになる |
-| 低 | 依存が12件古い | 更新の方針は 2026-08-01 に確定し（7グループ・棚卸しの契機・確認範囲）、3チェックは `informational` にして毎ビルド hint として見えるようにした。**残るのは更新そのもの** — ML Kit GenAI が beta2→beta4 で、SDK制約がバイナリを見ないと分からない前例がある |
+| 中 | **ユーザーが書いた返事に退避手段が無い** | ひとことの返事と映し返しは痕跡サイドカーに入るが、書き出し／読み戻しの経路が無い。Vaultのフォルダが消えれば**再生成できない文章**ごと失われる。保存失敗時の退避もプロセスメモリにしか無い |
+| 中 | **痕跡サイドカーの書き込みが原子的でない** | `"wt"` の直接上書きで、書込中にプロセスが死ぬと部分破損が残り復旧元もない。SAF の `renameDocument()` がプロバイダ非互換なため割り切っている。破損は checksum で検知して孤立扱い |
+| 中 | **蒸留の実機確認が未実施** | v1 Phase 1〜6 は自動テストまで完了。**本文を書き換える唯一の機能**なので、実機での書き戻し確認が残っている |
+| 中 | **instrumentation の最新件数での実行が未実施** | 2026-08-08 に 37/37 成功（Pixel 10 Pro Fold・Android 17）。その後3件増えて**40件での実行は未実施** |
+| 低 | 状態取得失敗と非対応の同一視 | `checkAvailability()` の一時エラーも `Unavailable` へ畳むため、**非対応端末と一時的な取得失敗を区別できない** |
+| 低 | YAML解析が簡易 | 複雑なYAML・引用・ネスト・複数行値に対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
+| 低 | Markdownの未対応項目 | クリック可能リンク・埋め込み（`![[note]]`）・数式。リスト構造と画像は実装・実機確認済み |
+| 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時IDで解決するため不定にならない。ただし決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |
+| 低 | R8・署名が未設定 | `release` は `isMinifyEnabled = false`・署名なし。R8を有効化すると ML Kit GenAI のリフレクション解決部分が縮小で消え、**全AI機能が release ビルドでだけ落ちる**可能性がある。JVMテストは縮小前のクラスを見るため検出できず、実機検証とセットになる |
+| 低 | 依存の更新そのものが未着手 | 方針は確定済みで、Lint の3チェックを `informational` にして毎ビルド hint として見えるようにしてある。**残るのは更新の実行** — `genai-prompt` は beta2→beta4 で**ソース互換だが動作互換ではない**ことが調査済み |
+
+> **解消済みとしてここから外した項目**（いずれも本書の他節と `change_history` に記録がある）:
+> instrumentation の未実行（→ 37/37 成功）・孤児掃除の導線なし（→ 手動削除を実装）・
+> 外部同期の索引（→ 不在を契機に作り直す方式で解消）・AI入力が先頭固定長（→ 骨格＋冒頭＋末尾の抜粋へ）・
+> 画像が未対応（→ 実装・実機確認済み）。
 
 ---
 
 ## 15. 今後の改善候補
 
-本節は現状解析から導かれる候補であり、今回の解析書更新では実装変更していない。
-
-1. （実装済み・2026-07-25）ReadingTraceの到達率をブロック内可視量まで考慮する方式へ変えた。最終ブロック末端を見ていなければ100%にならない。
-2. （実装済み・2026-07-25）Sessionの pause/resume を実装し、背面時間を10秒判定から除外した。背面化で書いた訪問は復帰後の読み進めで差し替え、閲覧回数が膨らまないようにした。
-3. （実装済み・2026-07-25）ReadingTraceの保存要求へVaultキーを持たせ、書込直前の照合で旧痕跡が新Vaultへ到達しないようにした。
-4. （実装済み・2026-07-25）`SearchPickerUseCase` のフォールバックを候補数に関係なくbigramスコア順にし、一致0件は返さないことでUI文言と一致させた。
-5. （実装済み・2026-07-26）`SearchController` に `activeRequestId` と `searchJob` を導入し、最後の要求だけが `searchState` を更新するようにした。検索とランダムはJobを共有する。
-6. （実装済み・2026-07-26）`SearchPickerUseCase` の `CancellationException` 握りつぶしを解消した。結果型でエラーを返すUseCaseは、キャンセルだけ例外のまま通さないと呼び出し側の `catch` では防げない。
-7. （実装済み・2026-07-26）補記一覧／削除とフォルダ一覧をVault世代で、要約側のモデルDLを `SummaryController` の requestId で保護した。要求単位で未追跡の経路は無くなった。
-8. （実装済み・2026-07-26）ノート本文の読込を用途別の予算（表示1MB／候補スニペット8KB／蒸留256KB）へ分け、`totalVisitCount` を追加して累計訪問数を保持件数30と分離した（サイドカー schema v2）。
-9. （実装済み・2026-07-27）`NoteViewModel` の依存生成を `NoteViewModelDependencies` へ出し、Controller間の調停を `NoteSessionCoordinator` へ分離してJVMテスト可能にした。状態は `NoteUiStateStore` の機能別Writerで所有権を型に落とし、パッケージ依存の向きを `PackageDependencyTest` でCI固定した。
-10. `PromptBuilder` の出力契約（要約・関連・ピッカー・補記・セクション）と `SearchPickerUseCase` のAI応答解釈のテストを追加する（`RelatedNotesUseCase` の候補選定・スコアリング・整形・ID解決・キャッシュの純ロジックは分離済み `RelatedCandidate*` / `RelatedContextScoring` / `KeyedMemoCache` で充足。残るは `findRelated` の結線）。
-11. （土台は実装済み・2026-07-29）`buildTypes { }`・`lint { }`・`androidTestImplementation` 一式・`testInstrumentationRunner` を用意し、土台スモークテストを置いてCIでコンパイルまで通した。**残るは実行**で、Vault走査・補記保存・削除、ReadingTraceのActivity lifecycle・Vault切替・外部同期を実端末で検証する。
-12. ReadingTrace索引にミス時再走査またはTTLを設ける。あわせて孤児サイドカーの手動一括削除をオプション画面へ置く。
-13. AI入力を単純な先頭切り出しから、見出し・冒頭・末尾・重要語を考慮した抽出へ発展させる。
-14. （実装済み）AI推薦の同名ノート解決に一意な候補ID（`C01..` / `idToNote`）を導入した。決定的チャンネル・除外判定の正規化タイトル集合は同名畳み込みが残るため、必要ならそちらも一意化する。
-15. AI非対応・モデル未準備・一時エラーのUXを要約・検索・クイズ・補記で統一する。
-16. （実装済み・2026-07-29〜30）ライト配色のAA未達を是正した。無彩色グレーを3段階へ統合し、基準面を `panelChip` に統一。見出し2色と更新日時は色相を保ったまま明度を下げ、グラデーション直上の文字は共通部品が背景ごと持ち、ボタンは輪郭線で境界を出す。検証は「トークン×実際に載る面」の総当たりへ移し、使用箇所の禁止をソース走査で強制した。
-17. （実装済み・2026-07-29）`applicationId` を `com.vigilith.ai` に確定した（`namespace` は据え置き）。
-18. R8を有効化して keep ルールを確認し、リリース署名の手順を決める。7つのAI経路を release ビルドで一巡する必要がある。
-19. （実装済み・2026-08-08）instrumentation の中身を37件書き、実機で 37/37 成功した（→ §13.5）。**外部レビューで「主張が観測より広い」と指摘された3件は、いずれも主張を狭める形で対応した**（プロセス死亡・全AI経路・入力競合）。実行がCIで担保されない点は、見送りで確定している。
-20. 依存を実際に上げる。単位と契機は確定済み（→ design/dependency_policy.md）で、まず ML Kit GenAI beta4 の変更点をAARで確認する。**Compose BOM は Lint の検出から漏れる**ので手で見る。
-21. 読書痕跡の退避・復元（書き出し／読み戻し）。ひとことの返事が入ったことで、失われたときの損失が跳ね上がっている。
-
----
+> **この節は 2026-08-12 に廃止した。** 実装済みの項目を大量に抱えたまま
+> `change_history`・`current_issues`・`roadmap` と競合していたため。
+>
+> | 知りたいこと | 見る文書 |
+> |---|---|
+> | いま何が未対応か | [_wip/current_issues.md](../_wip/current_issues.md) |
+> | 何をどの順でやるか | [_wip/roadmap.md](../_wip/roadmap.md) |
+> | まだ作っていない機能の候補 | [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
+> | 何をいつ変えたか | [dev/change_history.md](../dev/change_history.md) |
 
 ## 16. この文書の更新について
 

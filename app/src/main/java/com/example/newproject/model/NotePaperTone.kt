@@ -5,7 +5,7 @@ package com.example.newproject.model
  *
  * 表すのは**作成からの経過ではなく、最後に手を入れてからの経過**（＝放置期間）。
  * SAF は作成日を持たず `lastModified` しか返さないが、これは欠陥ではなく仕様として採った意味づけで、
- * 手を入れたノートの紙が白へ戻るのは手触りとして正しい。→ `docs/dev/design/note_age_paper.md`
+ * 手を入れたノートの紙が白へ戻るのは手触りとして正しい。→ `docs/dev/features/note_age_paper.md`
  *
  * 段階の割り当ては絶対年数ではなく **Vault 内の相対順位**で行う（→ [NotePaperTone] を返す
  * `com.example.newproject.domain.notePaperTone`）。絶対閾値だと、若いVaultは全部 [Fresh]、

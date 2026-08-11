@@ -1093,7 +1093,7 @@ class ReadingTraceControllerTest {
     //
     // ひとことは単独では保存できない。痕跡ファイルは離脱・背面化でしか作られず、
     // 検証は訪問が1件以上あることを要求するため、初読の最中に押されるこの機能で
-    // 「生成できたら保存」と書くと必ず黙って失われる（→ design/reflect_remark.md §2.1）。
+    // 「生成できたら保存」と書くと必ず黙って失われる（→ features/reflect_remark.md §2.1）。
 
     @Test
     fun `預けたひとことは離脱時の書き込みに相乗りする`() = runTest {

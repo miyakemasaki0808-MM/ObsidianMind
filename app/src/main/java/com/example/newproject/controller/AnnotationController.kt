@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
  *
  * **生成はもう持たない。** 「AI補記メモ」は「ノートへのひとこと」へ作り直され、
  * 出力が1文になったので保存先は読書痕跡サイドカーへ移った
- * （→ [RemarkController] / design/reflect_remark.md）。ここに残っているのは、
+ * （→ [RemarkController] / features/reflect_remark.md）。ここに残っているのは、
  * 作り直す前に生成された `.md` をユーザーが片付けるための導線だけである。
  *
  * したがってノート単位の契約（`cancelNoteScopedJobs` / `withNoteScopedReset`）には

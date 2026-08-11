@@ -7,7 +7,7 @@ import com.example.newproject.model.Reflection
  *
  * **`isViewed` を持たない。** 旧補記は結果が専用画面にあったので「見たかどうか」を
  * 管理してAIタブへバッジを出していたが、ひとことは読書画面へ直接1文が出るため
- * 未確認という概念そのものが無い（→ design/reflect_remark.md §7.1）。
+ * 未確認という概念そのものが無い（→ features/reflect_remark.md §7.1）。
  *
  * **[Empty] は失敗ではない。** 「出すものが無い」は正常な結果で、
  * ユーザーには固定文で伝える（AIに「補記不要です」と言わせない → §5）。

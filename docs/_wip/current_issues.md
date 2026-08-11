@@ -3,7 +3,7 @@
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **最終更新:** 2026-08-09（**ANNOT-1〜3 と A11Y-1 を実機確認済みでクローズ**。
 「AI補記メモ」は「ノートへのひとこと」へ作り直され、5巡の実機確認を終えた
-→ [design/reflect_remark.md](../dev/design/reflect_remark.md)）
+→ [features/reflect_remark.md](../dev/features/reflect_remark.md)）
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -11,7 +11,7 @@
 > **完了の経緯は残さない** — 経緯を引きたくなったら、それは下記の記録側が足りていないサインと考える。
 > 記録の行き先は別にある — 何をいつ変えたかは [change_history.md](../dev/change_history.md)、
 > 今どうなっているかは [source_code_analysis.md](../owner/source_code_analysis.md)、
-> なぜそうしたかは [design/](../dev/design/)、繰り返し現れた教訓は [lessons.md](../dev/lessons.md)。
+> なぜそうしたかは [features/](../dev/features/)・[system/](../dev/system/)、繰り返し現れた教訓は [lessons.md](../dev/lessons.md)。
 >
 > **順序と計画は [roadmap.md](roadmap.md) が持つ。** ここには「何が問題か」だけを書き、
 > 「いつ・どの順でやるか」は書かない。両方に書くと必ず片方が古くなる。
@@ -58,7 +58,7 @@
 - **IMG-2** は画像表示（N-3）の外部レビュー2巡目で見つかった。1巡目の指摘7件へ修正を入れたが、
   **3件は受理条件まで満たしていなかった**（1件は部分解消、2件は目的未達）。
   同時に見つかった IMG-1（寸法未確定の画像がある間の進捗水増し）は 2026-08-08 にクローズ済み
-  → [design/note_image_rendering.md](../dev/design/note_image_rendering.md) §6.1。
+  → [features/note_image_rendering.md](../dev/features/note_image_rendering.md) §6.1。
 - **TRACE-3・AI-3 は、2026-08-01 の総評（No.9）で指摘されながら起票されていなかった。**
   総評を文書へ追記した時点で台帳へ落とす運用（[README](../dev/document_map.md) §4 の2）が働かず、
   **2日間どこにも追跡されていなかった。** コードを当たって未対応であることを確認済み。
@@ -295,17 +295,17 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
 **「上げない」と判断した**（下記）。残っているのは「古い」という状態だけで、**現時点で実害は無い。**
 **着手の契機は「新版に必要な機能が入ったとき」であって、新版が出たことではない。**
 
-- **方針は 2026-08-01 に確定した** → [design/dependency_policy.md](../dev/design/dependency_policy.md)。
+- **方針は 2026-08-01 に確定した** → [system/dependency_policy.md](../dev/system/dependency_policy.md)。
   更新の単位（7グループ）・棚卸しの手順と契機・各グループの確認範囲を決めてある。
   3チェックは `disable` から **`informational`（hint）へ変えた** — 素のまま有効化すると12件が
   Error になり `lintDebug` タスクが失敗するが、`informational` なら
   **「0 errors, 0 warnings, 12 hints」で成功し、12件はレポートに残る**。
   ゲートに載せずに催促だけ残せる。
 - **残っている問題:** 方針ができても**依存は12件古いまま**で、1件も上げていない。距離の内訳は
-  [dependency_policy.md](../dev/design/dependency_policy.md) §4 のスナップショットにある。
+  [dependency_policy.md](../dev/system/dependency_policy.md) §4 のスナップショットにある。
   優先して見るべきは2つ。
   - **`com.google.mlkit:genai-prompt` 1.0.0-beta2 → beta4 は当面着手しない（2026-08-01 決定）**
-    → [design/dependency_policy.md](../dev/design/dependency_policy.md) §5。公開APIの削除はゼロでソース互換だが、
+    → [system/dependency_policy.md](../dev/system/dependency_policy.md) §5。公開APIの削除はゼロでソース互換だが、
     **`maxOutputTokens` の未指定時の既定値が 256 → 4096 へ変わる。**
     実測の `getTokenLimit()` が 4,352 なので入力に許されるのは256トークンだけになり、
     **最小の読書痕跡要約（349）すら通らない。** つまり**そのまま上げると8経路すべてが止まる。**
@@ -324,13 +324,13 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
 - **現状:** `_ReadingTraces/` はフラットな1階層で、セッション中1回だけ子一覧を全列挙して
   key→参照の索引を作る。容量は問題にならない（1ファイル最大3.3KB・2,000ノートで約1.4MB）が、
   **列挙コストはファイル数に比例**する。孤児削除（手動）は入ったが**押されるとは限らない**ため、
-  ファイル数は単調増加**しうる**（→ [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md) §14）。
+  ファイル数は単調増加**しうる**（→ [features/reflect_reading_trace.md](../dev/features/reflect_reading_trace.md) §14）。
   遠いプロバイダ（Google Drive 等）ほど効く。
 - **対応候補:** 削除ではなく**分割**で解く。ファイル名が `sha256Hex(相対パス)` なので、
   **先頭1桁で16フォルダへ分ける**と1件の照合で列挙する件数が 1/16 になる。
   引く側はキーから所属フォルダを計算できるので探索は要らない。
   **生きた痕跡を1つも消さずに性能だけ守れる**のが孤児削除に対する優位点。
-  → [design/reflect_reading_trace.md](../dev/design/reflect_reading_trace.md) §13 判断14
+  → [features/reflect_reading_trace.md](../dev/features/reflect_reading_trace.md) §13 判断14
 - **着手の契機:** 実機で列挙の遅さが体感できたとき。既存ファイルの移行を伴うので、それまで動かさない。
 - **規模感:** 中（移行と実機確認を伴う）。
 

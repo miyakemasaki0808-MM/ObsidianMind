@@ -15,7 +15,7 @@ import com.example.newproject.model.RelatedNote
  * [NotePaperTone.Weathered] になり、どちらも「地層が見えない」という同じ失敗になる。
  * 相対順位なら、**更新日時が複数種類あるVaultなら幅の広狭によらず段階が分かれる**。
  * （1本だけ・全ノート同時刻・全件不明の場合は段階が分かれず全て [NotePaperTone.Fresh] になる。
- * これは失敗ではなく、そもそも古い新しいの差が無いため。）→ `docs/dev/design/note_age_paper.md` 判断2
+ * これは失敗ではなく、そもそも古い新しいの差が無いため。）→ `docs/dev/features/note_age_paper.md` 判断2
  *
  * **判定できないときは [NotePaperTone.Fresh] を返す。** Fresh は現行のパネル色そのもので
  * 見た目が変わらないため、材料が揃わないときに「何も起きない」側へ倒せる。

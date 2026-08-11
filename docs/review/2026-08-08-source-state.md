@@ -82,7 +82,7 @@ Nano依存9件の実機確認も残る。まずテストの主張と観測を一
 ### P2-2. `ActivityScenario.recreate()` をプロセス再生成の検証として記録している
 
 - **該当箇所:** [`ProcessRecreationTest.kt`](../../app/src/androidTest/java/com/example/newproject/ui/ProcessRecreationTest.kt#L12)、
-  [`instrumentation_testing.md`](../dev/design/instrumentation_testing.md#L69)、
+  [`instrumentation_testing.md`](../dev/system/instrumentation_testing.md#L69)、
   [`change_history.md`](../dev/change_history.md#L16)
 - **成立する順序:** ① `scenario.recreate()` を呼ぶ
   ② AndroidX Test Core 1.6.1 は現在のActivityを `onSaveInstanceState()` 後に破棄し、
@@ -145,7 +145,7 @@ Nano依存9件の実機確認も残る。まずテストの主張と観測を一
 
 - **該当箇所:** [`current_issues.md`](../_wip/current_issues.md#L36) と同文書のTEST-2、
   [`roadmap.md`](../_wip/roadmap.md#L103)、[`document_map.md`](../dev/document_map.md#L71)、
-  [`instrumentation_testing.md`](../dev/design/instrumentation_testing.md#L5)、[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml#L6)
+  [`instrumentation_testing.md`](../dev/system/instrumentation_testing.md#L5)、[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml#L6)
 - **成立する順序:** ①全34件を実装し、実機34/34を確認し、CIエミュレータ見送りも確定する
   ② `current_issues` は本文末尾だけを「PR前の手動実行が残る」へ更新する
   ③一覧・見出し・roadmapは「統合テストの中身が無い」、document mapは「段階1完了」、

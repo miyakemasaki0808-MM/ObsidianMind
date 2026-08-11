@@ -234,7 +234,7 @@ class AppColorContrastTest {
      *
      * **同時に、これは「最も新しい四分位ではトグルが視覚的に無反応になる」ことを意味する。**
      * 仕様として正しいが、動作確認のときに「トグルが壊れている」と誤診する原因になるので
-     * 値として固定しておく。→ docs/dev/design/note_age_paper.md §6
+     * 値として固定しておく。→ docs/dev/features/note_age_paper.md §6
      */
     @Test
     fun `最も新しい段階はパネル色と完全に一致する`() {
@@ -246,7 +246,7 @@ class AppColorContrastTest {
      *
      * **個別の比だけを並べると、将来 `panelChip` が動いたときに気づけない。**
      * 基準面が「文字が載る面のうち最も暗い」ことが全テキストトークンの前提なので、
-     * その関係そのものをここで守る。→ docs/dev/design/note_age_paper.md §5
+     * その関係そのものをここで守る。→ docs/dev/features/note_age_paper.md §5
      */
     @Test
     fun `紙の地色は弱い文字の基準面より暗くならない`() {
@@ -386,7 +386,7 @@ class AppColorContrastTest {
     /**
      * バッジの中の記号は**読む文字ではなく状態を示す記号**なので、基準は
      * WCAG 1.4.11（非テキスト）の 3:1。1.4.3 の 4.5:1 は当てない
-     * （→ [design/ui_design_principles.md]）。
+     * （→ [system/ui_design_principles.md]）。
      *
      * **同じ塗りに載るのに、ボタンのラベルとは別トークンになる。** `buttonSecondary` は
      * ボタンの塗りでもバッジの塗りでもあるが、ラベルは読む文字なので 4.5:1 が要り、

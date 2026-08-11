@@ -37,7 +37,7 @@ import org.junit.runner.RunWith
  *
  * ## ここへ何を書くか
  *
- * 判断の基準は「JVMで書けないか」を先に問うこと（→ design/instrumentation_testing 判断1）。
+ * 判断の基準は「JVMで書けないか」を先に問うこと（→ system/instrumentation_testing 判断1）。
  * 純関数の値の伝播や分岐はJVM側が覆っているので、ここへ持ち込まない。
  * **残すのは Compose の実測（レイアウト・可視判定・再コンポーズ）が要るものだけ。**
  *
