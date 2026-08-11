@@ -19,7 +19,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # AdrShapeTest が `**最終検証:**` の参照コミットを `git cat-file -e` で検証するため、
+      # 浅いクローン（既定 depth=1）だと過去コミットが「存在しない」と誤判定される。
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # ローカルは Android Studio 同梱の JBR 21。CIも同じメジャーバージョンに揃える。
       - name: Set up JDK 21
