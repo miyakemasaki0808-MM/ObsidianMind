@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-12 | — | 技術俯瞰の §14.2 を実装から作り直し、§15 を廃止して行き先の表へ置き換えた | [source_code_analysis](../owner/source_code_analysis.md) §14.2 |
+| 2026-08-12 | — | 壊れた節参照25件を内容参照へ直し、番号依存を AdrShapeTest で止めた | [lessons](lessons.md) L29 |
 | 2026-08-12 | — | 最終検証の捏造コミット12件を実在する値へ直し、実在と12節の存在を検査へ載せた | **[lessons](lessons.md) L38**・[_template](features/_template.md) |
 | 2026-08-11 | — | features の全16本を12節の新様式へ揃え、空欄の代わりに理由を書く規約を検査へ載せた | **[_template](features/_template.md)**・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | さがす・セクションAIをテンプレートへ移行し、クイズの入口の誤りを直した | **[ai_picker](features/ai_picker.md)**・**[section_ai_chat](features/section_ai_chat.md)**・[quiz](features/quiz.md) |
