@@ -2,12 +2,23 @@
 
 **プロジェクト:** Vigilith AI
 **作成:** 2026-08-10（同日改訂 — 設計レビューを受けて段階1の判断を2つ変更）
-**対象:** [roadmap.md](roadmap.md) X-6 ／ [current_issues.md](current_issues.md) AI-2
-**状態:** **未着手。計画のみ。** 着手判断は保留中。
+**対象:** [current_issues.md](current_issues.md) AI-2
+**状態:** **実装済み・実機確認待ち（2026-08-12）。** 残っているのは実機確認だけ。
 
-> **この文書は使い捨て。** 着手して実機確認まで終わったら削除し、
-> 設計判断は [system/background_ai_ux.md](../dev/system/background_ai_ux.md) へ、
-> 記録は [change_history.md](../dev/change_history.md) へ移す。
+> **⚠ この本文はもう正本ではない。** 実装は2回の独立レビューで差し戻され、
+> **下記の設計判断は覆っている。** 現在の設計は
+> [system/background_ai_ux.md](../dev/system/background_ai_ux.md) §6 を読むこと。
+>
+> | 本文の記述 | 実際にどうなったか |
+> |---|---|
+> | `Downloading` は走行中のDLへ合流する | **合流しない。** `downloadModel()` を呼んでよいのは `DOWNLOADABLE` のときだけ（AARに状態の門番が無い） |
+> | `CheckFailed(cause)` | `TemporarilyUnavailable(cause)` へ改名。`UNAVAILABLE` は恒久と限らないため、`GenAiUtils.isAiCoreCompatible` で恒久判定する |
+> | さがすは `AiStatusNotice` を通す | 通さない。`isAiAssisted` の Boolean 1本 |
+> | 関連ノートは状態を持って注記する | 状態を持たない（自動起動なので黙る） |
+> | `AiStatusNotice(message, action)` | `canTryAgainLater` を加えた3項。CTAの有無と入口を閉じてよいかは別 |
+>
+> **この文書は使い捨て。** 実機確認が終わったら削除する
+> （設計判断は上記 §6、記録は [change_history.md](../dev/change_history.md) が持つ）。
 > **`_wip/` の3本（課題・順序・アイデア）とは役割が違うので混ぜない** — これは特定項目の実装計画。
 
 ---

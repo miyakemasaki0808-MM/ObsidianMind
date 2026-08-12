@@ -759,13 +759,19 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 ### 8.2 モデル設定
 
-`AICoreClient` は `ModelPreference.FULL` を指定して `Generation` クライアントを遅延生成する。FULLは「速度より精度を優先」の指定であり、実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める（Pixel 10系はnano-v3）。状態は次のようにアプリ内の3状態へ変換する。
+`AICoreClient` は `ModelPreference.FULL` を指定して `Generation` クライアントを遅延生成する。FULLは「速度より精度を優先」の指定であり、実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める（Pixel 10系はnano-v3）。状態は次のようにアプリ内の5状態へ変換する（2026-08-12。判断の正本は
+[background_ai_ux](../dev/system/background_ai_ux.md) §6）。
 
-| ML Kit状態 | アプリ状態 |
-|---|---|
-| AVAILABLE | Available |
-| DOWNLOADABLE / DOWNLOADING | NeedsDownload |
-| その他・状態確認例外 | Unavailable |
+| ML Kit状態 | アプリ状態 | 呼び出し側の次の行動 |
+|---|---|---|
+| AVAILABLE | `Ready` | 生成する |
+| DOWNLOADABLE | `NeedsDownload` | **`downloadModel()` を呼んでよい唯一の状態** |
+| DOWNLOADING | `Downloading` | 待つ。**`downloadModel()` は呼ばない**（合流できない） |
+| UNAVAILABLE かつ AICore無し | `Unsupported` | 諦める（恒久） |
+| UNAVAILABLE かつ AICore有り／未知の値／状態確認例外 | `TemporarilyUnavailable(cause)` | 時間をおいて再試行 |
+
+恒久非対応の判定は `FeatureStatus` ではなく `GenAiUtils.isAiCoreCompatible`（AICoreアプリの
+有無と最低バージョン）で行う。`UNAVAILABLE` は対応端末でも返るため、それだけでは恒久と断定できない。
 
 ### 8.3 直列化とタイムアウト
 

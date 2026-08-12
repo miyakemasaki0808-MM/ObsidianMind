@@ -70,8 +70,12 @@
   | 出力枠 | 256トークン | `genai-prompt` |
 
 - **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
-  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` / `error`
-- **エラー／AI非対応時:** `error` に文言を入れてシート内へ出す。**別画面へ飛ばさない**
+  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` / `error` / `aiNotice`
+- **生成の失敗:** `error` に文言を入れてシート内へ出す。**別画面へ飛ばさない**
+- **端末AIが使えないとき:** `aiNotice` に [`AiStatusNotice`](../system/background_ai_ux.md) を載せる。
+  **`error` へ文字列だけ入れない** — 導線が消えて再試行できず、赤いエラー表示になる
+- **再試行（`retryAi()`）:** 答えを返せていない質問があればそれを作り直す
+  （**ログへ積み直さない**）。無ければ要約を作り直す。要約が既にあるなら説明を畳むだけ
 - **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
 
 ## 6. 状態とデータ

@@ -129,7 +129,7 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
   しかも再試行が出ないので異常だと誰も気づけない。再試行可能側へ寄せる
 - **`cause` を画面へ出さない。** SDKの `message` は英語か null で次の行動を助けない。診断のためだけに運ぶ
 
-**`Available` → `Ready` の改名は、意味が変わったからではない。** `!= AiAvailability.Available` の3箇所は
+**`Available` → `Ready` の改名は、意味が変わったからではない。** 旧 `Available` との `!=` 比較3箇所は
 変種を足しただけでは素通りするので、**触れている識別子ごと改名して全10箇所をコンパイラに挙げさせた**。
 以後は `AiAvailabilityUsageTest` が等値比較とメンバーimportをソース走査で禁じる（許容リストなし）。
 **メンバーimportまで禁じるのは**、`import ...AiAvailability.Ready` を許すと `x == Ready` と書けて
