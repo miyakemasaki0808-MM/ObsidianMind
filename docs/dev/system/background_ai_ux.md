@@ -1,7 +1,7 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-12（§6 を新設。AI状態の分類と見せ方を統一した。**実機確認は未了**）
+**最終検証:** 2026-08-12（§6 を新設し、外部レビューのP1 2件を受けて判断5を追記した。**実機確認は未了**）
 **関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
 **関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest`
 **正本:** この文書
@@ -120,18 +120,20 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 
 ### 判断2: 割る基準は「呼び出し側の次の行動」
 
-`AiAvailability` は `Ready` / `NeedsDownload` / `Downloading` / `Unsupported` / `CheckFailed(cause)`。
+`AiAvailability` は `Ready` / `NeedsDownload` / `Downloading` / `Unsupported` / `TemporarilyUnavailable(cause)`。
 
-- **`Unsupported` と `CheckFailed` を畳まない** — 前者は再試行しても同じ、後者は次は取れるかもしれない
+- **`Unsupported` と `TemporarilyUnavailable` を畳まない** — 前者は再試行しても同じ、後者は次は変わりうる
 - **`NeedsDownload` と `Downloading` を畳まない** — 畳むと**DL実行中に「通信量を確認してから開始してください」**と出る。
-  実際に分岐が増えるのは蒸留1つだけで、自動DLの3機能（要約・クイズ・ひとこと）は同じ枝へ合流する
+  さらに重要なのは、**`downloadModel()` を呼んでよいのが `DOWNLOADABLE` のときだけ**である点（→ 判断5）
 - **未知の値を `Unsupported` にしない。** SDKが定数を増やしただけで全端末が「非対応」に化け、
-  しかも再試行が出ないので異常だと誰も気づけない。再試行可能側（`CheckFailed`）へ寄せる
-- **`CheckFailed.cause` を画面へ出さない。** SDKの `message` は英語か null で次の行動を助けない。診断のためだけに運ぶ
+  しかも再試行が出ないので異常だと誰も気づけない。再試行可能側へ寄せる
+- **`cause` を画面へ出さない。** SDKの `message` は英語か null で次の行動を助けない。診断のためだけに運ぶ
 
 **`Available` → `Ready` の改名は、意味が変わったからではない。** `!= AiAvailability.Available` の3箇所は
 変種を足しただけでは素通りするので、**触れている識別子ごと改名して全10箇所をコンパイラに挙げさせた**。
-以後は `AiAvailabilityUsageTest` が等値比較をソース走査で禁じる（許容リストなし）。
+以後は `AiAvailabilityUsageTest` が等値比較とメンバーimportをソース走査で禁じる（許容リストなし）。
+**メンバーimportまで禁じるのは**、`import ...AiAvailability.Ready` を許すと `x == Ready` と書けて
+等値比較の検査を素通りするため。
 
 ### 判断3: 共通化するのは Controller ではなく「見せ方」
 
@@ -150,6 +152,8 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 ### 判断4: 理由を割らない場所もある
 
 **「さがす」は `AiStatusNotice` を使わない。** `isAiAssisted` の Boolean 1本にしてある。
+**断り書きは0件のときにも出す** — 結果ありの枝に置くと「見つかりませんでした。」だけになり、
+AIを使わずに探した事実が消える。
 非対応でも未取得でも取得失敗でも、この画面に出るものは「キーワード一致の結果」で同じで、
 **ユーザーの次の行動が変わらない**。理由で割ると `AiStatusNotice` と重なる2つ目の方言になる。
 `AiStatusNotice` をそのまま通すと「通信量を確認してから開始してください」のように
@@ -158,6 +162,21 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 **関連ノートは状態そのものを持たない**（判断1により黙る）。AI推薦が無ければ見出しごと出さない。
 これに伴い旧 `AiRecommendationStatus`（4値enum）を削除した。**到達不能な variant が2件**
 （`SearchPickerUseCase` の `Error`・`RelatedNotesUseCase` の `Error`）まとめて消えている。
+
+### 判断5: SDKの契約はAARで確かめる（2026-08-12 の外部レビューで2件差し戻し）
+
+**最初の実装は `FeatureStatus` の各値の意味を推測で決めていて、2つとも誤っていた。**
+CLAUDE.md「SDKの制約は公式ドキュメントではなくバイナリで確認する」を、
+分類そのものにも当てるべきだった。
+
+| 誤り | AARで分かったこと | 直し方 |
+|---|---|---|
+| `UNAVAILABLE`＝恒久非対応 | `checkFeatureStatusInternal` は `isAiCoreCompatible` が false のとき AICore へ問い合わせず 0 を返す。**逆は成り立たず**、対応端末でも `UNAVAILABLE` は返る | 恒久判定を `GenAiUtils.isAiCoreCompatible`（AICoreアプリの版 >= 193575）へ移し、対応端末の `UNAVAILABLE` は再試行可能側へ |
+| `DOWNLOADING` なら `download()` で合流できる | `downloadFeatureInternal` に状態の門番が無い。SDK内の重複抑止は同一クライアント内のMapだけで、**AICore側が動かしているDLには届かない** | DL中は `downloadModel()` を呼ばず待つ。呼んでよいのは `DOWNLOADABLE` のときだけ |
+
+**2つ目は「テストが緑」をすり抜けた。** `FakeAiClient` が `downloadModel()` で
+Channel を返せることが、**実在しない「走行中のDLを購読できる」契約**をテスト内に作っていた。
+いまは `downloadCalls` を持たせ、**呼ばれないこと**を4経路すべてで固定している。
 
 ### キャンセルの再throw
 

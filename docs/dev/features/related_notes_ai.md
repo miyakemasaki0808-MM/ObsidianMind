@@ -112,8 +112,10 @@ tieBreak = titleDice
 
 ### エラー／AI非対応時
 
-- **AI非対応・モデル未取得のどちらでも候補は出す。** `RelatedNotesResult.Success` を返し、
-  `aiStatus` に `Unavailable` / `NeedsDownload` を載せてUIが注記する。
+- **AIが使えないときは黙って候補だけ出す。** `RelatedNotesResult.Success` を返す。
+  **理由を持たない** — 関連ノートはノートを開くと自動で走る機能なので、
+  押していない機能が理由を語り出すと読書中ずっと騒がしくなる。
+  AI推薦が無ければ見出しごと出さない（→ [background_ai_ux](../system/background_ai_ux.md) §6 判断1・判断4）。
   **エラーにしない** — 非AIの二段ランクだけでも候補は成立するため
 - 候補1件の本文読み取りに失敗しても、**その候補だけタイトルのみで続行**し、推薦全体を巻き添えにしない
 - `CancellationException` は再throwする

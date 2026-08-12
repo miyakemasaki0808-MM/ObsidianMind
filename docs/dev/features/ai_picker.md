@@ -72,13 +72,16 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
   | 当日履歴 | **10件** | `MAX_ENTRIES` |
   | 走査キャッシュの寿命 | 60秒 | `NOTES_CACHE_TTL_MS` |
 
-- **状態:** `SearchState`（`Idle` / `Loading` / `Success(results, aiStatus)` / `Error`）。
-  `aiStatus` は `Ready` / `Unavailable` / `NeedsDownload` の3値で、**UIの注記はこれで出し分ける**
+- **状態:** `SearchState`（`Idle` / `Loading` / `Success(results, isAiAssisted)` / `Error`）。
+  `isAiAssisted` は Boolean 1本で、**false のときだけ「AIを使えないため、キーワード一致で
+  表示しています。」を添える**（0件でも出す）。**理由では割らない** — 非対応・未取得・DL中・
+  一時的な不可のどれでも、この画面に出るものは同じだから
+  （→ [background_ai_ux](../system/background_ai_ux.md) §6 判断4）
 - **フォルダ階層は第一階層のみ**（ドリルダウンなし）。**中身は再帰収集する**ので、後方互換で拡張できる
 - **`_AI補記` フォルダはスコープに出す。** 除外ロジックを書かず実装を軽くする割り切り
   （**Rediscover は除外する** — あちらは「読むノート」を引くため）
 - **エラー／AI非対応／キャンセル時:**
-  - Nano が使えない → フォールバックし、`aiStatus` で注記する。**エラーにしない**
+  - Nano が使えない → フォールバックし、`isAiAssisted = false` で注記する。**エラーにしない**
   - 例外 → `Error`。`CancellationException` は**素通しする**（→ §8 判断4）
 
 ## 6. 状態とデータ

@@ -44,9 +44,12 @@
 2. **本文の構造から出題形式を決める**（AIを使わない → §8 判断1）
 3. `requestId` を採番して `Loading(sourceTitle, format)` にする
 4. `checkAvailability()` を見る
-   - `Unavailable` → `Error("Q&Aはこの端末では利用できません。")`
+   - `Ready` → 5へ
    - `NeedsDownload` → モデルDLを開始し、完了後に**自動で再開**
-   - `Available` → 5へ
+   - `Downloading` → **DLは始めない**（走行中のDLへ合流できない）。説明を出して待たせる
+   - `Unsupported` / `TemporarilyUnavailable` → `QuizState.AiNotice`。
+     **`Error` へ畳まない** — 非対応に再試行導線が付くのを避ける
+     （→ [background_ai_ux](../system/background_ai_ux.md) §6）
 5. 抜粋を作ってプロンプトを組み、`AiClient.generate()`
 6. 応答をパースして `QuizCard` の列にする（→ §8 判断3）
 7. `Success(cards, isViewed = false)` — **未確認のあいだシートのラベルが変わり、Vigilith が反応する**
