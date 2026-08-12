@@ -71,7 +71,7 @@ class RelatedNotesUseCase(
                 AiAvailability.Unsupported,
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
-                is AiAvailability.CheckFailed -> RelatedNotesResult.Success(
+                is AiAvailability.TemporarilyUnavailable -> RelatedNotesResult.Success(
                     relatedNotes = relatedNotes,
                     aiNotes = emptyList()
                 )

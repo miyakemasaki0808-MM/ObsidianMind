@@ -23,20 +23,23 @@ fun aiStatusNotice(availability: AiAvailability, featureLabel: String): AiStatus
                 "通信量を確認してから開始してください。",
             action = AiNoticeAction.Download
         )
-        // 走行中のDLへ新しいCTAを重ねない。押しても新しく始まるものが無い。
+        // **CTAを重ねない。** 走行中のDLへ合流する手段が無いので、押しても始まるものが無い
+        // （→ AiAvailability.Downloading）。完了後にもう一度押してもらう。
         AiAvailability.Downloading -> AiStatusNotice(
             message = "Gemini Nanoをダウンロード中です。完了すると${featureLabel}を使えます。",
             action = AiNoticeAction.None
         )
-        // 何度押しても同じ答えが返るので、再試行導線を出さない。
+        // AICoreが無い（古い）端末。何度押しても同じ答えが返るので再試行導線を出さない。
         AiAvailability.Unsupported -> AiStatusNotice(
             message = "この端末では${featureLabel}を利用できません。",
             action = AiNoticeAction.None
         )
-        // `cause` を文言へ混ぜない。SDKの message は英語か null で、
+        // **「できませんでした」と過去形で言わない。** 構成の取得待ちのこともあるので、
+        // 失敗ではなく「いまは使えない」と伝える。
+        // `cause` を文言へ混ぜない — SDKの message は英語か null で、
         // ユーザーの次の行動を1文字も助けない。原因は診断のために型が運ぶだけにする。
-        is AiAvailability.CheckFailed -> AiStatusNotice(
-            message = "${featureLabel}をいま開始できませんでした。時間をおいて試してください。",
+        is AiAvailability.TemporarilyUnavailable -> AiStatusNotice(
+            message = "${featureLabel}をいま利用できません。時間をおいて試してください。",
             action = AiNoticeAction.Retry
         )
     }

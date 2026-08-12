@@ -86,7 +86,7 @@ class SectionChatController(
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
                 AiAvailability.Unsupported,
-                is AiAvailability.CheckFailed -> updateChat {
+                is AiAvailability.TemporarilyUnavailable -> updateChat {
                     it.copy(
                         isSummaryLoading = false,
                         error = aiStatusNotice(availability, OPEN_FEATURE_LABEL)?.message
@@ -119,7 +119,7 @@ class SectionChatController(
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
                 AiAvailability.Unsupported,
-                is AiAvailability.CheckFailed -> {
+                is AiAvailability.TemporarilyUnavailable -> {
                     updateChat {
                         it.copy(
                             isGenerating = false,

@@ -154,6 +154,30 @@ class QuizControllerTest {
         assertFalse(state.value.quizState.isQuizActionEnabled())
     }
 
+    /**
+     * **DL実行中は自動DLを始めない。** `downloadModel()` を呼んでよいのは
+     * `DOWNLOADABLE` のときだけ（beta2 の `downloadFeatureInternal` に状態の門番が無い）。
+     */
+    @Test
+    fun `DL実行中は自動DLを始めず待つ`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient(AiAvailability.Downloading)
+        val controller = QuizController(
+            this,
+            ai,
+            state.quizWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
+        assertEquals(0, ai.generateCalls)
+        val notice = (state.value.quizState as QuizState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
+    }
+
     /** **取得失敗は押す意味がある。** 非対応と畳むとボタンごと死ぬ。 */
     @Test
     fun `状態を取得できなかっただけならクイズを押し直せる`() = runTest {
@@ -161,7 +185,7 @@ class QuizControllerTest {
         val controller = QuizController(
             this,
             FakeAiClient(
-                AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))
+                AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))
             ),
             state.quizWriter,
             StandardTestDispatcher(testScheduler)

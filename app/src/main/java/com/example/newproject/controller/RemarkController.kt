@@ -106,15 +106,17 @@ internal class RemarkController(
             try {
                 when (val availability = aiClient.checkAvailability()) {
                     AiAvailability.Ready -> generateWithAvailableModel(request)
-                    // 自動DL方式なので、未取得もDL中も同じDL枝へ合流する。
-                    AiAvailability.NeedsDownload,
-                    AiAvailability.Downloading -> {
+                    // 自動DL方式。**`downloadModel()` を呼んでよいのはここだけ**
+                    // （→ AiAvailability.Downloading）。
+                    AiAvailability.NeedsDownload -> {
                         pending = request
                         startModelDownload()
                     }
                     // **エラーへ畳まない。** 非対応に再試行導線が付くのを避ける。
+                    // DL中は待つだけ（合流できないので、完了後にもう一度押してもらう）。
+                    AiAvailability.Downloading,
                     AiAvailability.Unsupported,
-                    is AiAvailability.CheckFailed ->
+                    is AiAvailability.TemporarilyUnavailable ->
                         updateAiNotice(requestId, sourceTitle, availability)
                 }
             } catch (e: CancellationException) {
@@ -263,7 +265,7 @@ internal class RemarkController(
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
                 AiAvailability.Unsupported,
-                is AiAvailability.CheckFailed -> return
+                is AiAvailability.TemporarilyUnavailable -> return
             }
             val excerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(content, NoteExcerptLimits.ANNOTATION)

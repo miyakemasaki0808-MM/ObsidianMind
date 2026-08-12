@@ -110,15 +110,14 @@ internal class DistillController(
                         pendingDownload = input
                         updateAiNotice(availability)
                     }
-                    // **走行中のDLへ合流する。** ここで「確認してダウンロード」を出すと、
-                    // 押しても新しく始まるものが無いCTAになる。
-                    AiAvailability.Downloading -> ifCurrent(requestId) {
-                        pendingDownload = null
-                        collectDownload(requestId, input)
-                    }
-                    // 非対応は再試行を出さず、取得失敗は出す。畳むとどちらかが必ず誤る。
+                    // **DL中は待つだけ。** `downloadModel()` を呼んで合流はできない
+                    // （→ AiAvailability.Downloading）。CTAも出さないので、
+                    // ユーザーは完了後にもう一度押すことになる。
+                    // 非対応は再試行を出さず、一時的な不可は出す。畳むとどちらかが必ず誤る。
+                    AiAvailability.Downloading,
                     AiAvailability.Unsupported,
-                    is AiAvailability.CheckFailed -> ifCurrent(requestId) {
+                    is AiAvailability.TemporarilyUnavailable -> ifCurrent(requestId) {
+                        pendingDownload = null
                         updateAiNotice(availability)
                     }
                 }
@@ -142,8 +141,9 @@ internal class DistillController(
     /**
      * DLの進捗を購読し、完了したら分析へ進む。
      *
-     * **[start] からも呼ぶ**（既にDL中だった場合）。`downloadModel()` は走行中のDLがあれば
-     * その進捗を流してくるので、合流のために新しく何かを始める必要はない。
+     * **呼ぶのは [downloadModelAndResume] だけ**、つまり
+     * [AiAvailability.NeedsDownload]（＝`DOWNLOADABLE`）を見てユーザーが承諾した後に限る。
+     * 既にDL中の状態からここへ来てはいけない理由は [AiAvailability.Downloading] にある。
      */
     private suspend fun collectDownload(requestId: Long, input: AnalysisInput) {
         update(DistillState.Downloading(input.title, downloaded = -1L, total = 0L))

@@ -272,7 +272,7 @@ JVMテストが全件成功する状態で残っている。純関数の値伝�
   ノート切替のキャンセルを再throwし、見せ方を `AiStatusNotice` の1本へ寄せた。
   → [background_ai_ux](../dev/system/background_ai_ux.md) §6
 - **残っている確認:** 非対応状態は手元で再現できないので、`StubAiClient` を
-  `Unsupported` / `CheckFailed` / `Downloading` を返す形へ一時的に差し替えて見る。
+  `Unsupported` / `TemporarilyUnavailable` / `Downloading` を返す形へ一時的に差し替えて見る。
   1. 押した機能（蒸留・クイズ・ひとこと・セクションチャット・さがす）がその場で理由を説明する
   2. 非対応時に再試行導線が出ない／一時エラー時には出る
   3. 自動機能（要約・関連ノート）が黙る

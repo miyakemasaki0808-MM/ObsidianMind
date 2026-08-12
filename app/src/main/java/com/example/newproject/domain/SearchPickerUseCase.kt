@@ -49,7 +49,7 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                 AiAvailability.Unsupported,
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
-                is AiAvailability.CheckFailed ->
+                is AiAvailability.TemporarilyUnavailable ->
                     fallback(query, candidates, isAiAssisted = false)
                 AiAvailability.Ready -> {
                     val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })

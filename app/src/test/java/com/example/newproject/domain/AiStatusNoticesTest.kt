@@ -53,7 +53,7 @@ class AiStatusNoticesTest {
     @Test
     fun `取得失敗は再試行導線を持つ`() {
         val notice = requireNotNull(
-            aiStatusNotice(AiAvailability.CheckFailed(IllegalStateException("boom")), LABEL)
+            aiStatusNotice(AiAvailability.TemporarilyUnavailable(IllegalStateException("boom")), LABEL)
         )
         assertEquals(AiNoticeAction.Retry, notice.action)
         assertTrue(notice.message, notice.message.contains(LABEL))
@@ -66,7 +66,7 @@ class AiStatusNoticesTest {
     @Test
     fun `取得失敗の原因を文言へ混ぜない`() {
         val cause = IllegalStateException("AICore service not bound")
-        val notice = requireNotNull(aiStatusNotice(AiAvailability.CheckFailed(cause), LABEL))
+        val notice = requireNotNull(aiStatusNotice(AiAvailability.TemporarilyUnavailable(cause), LABEL))
         assertFalse(notice.message, notice.message.contains("AICore"))
         assertFalse(notice.message, notice.message.contains("not bound"))
     }
@@ -79,7 +79,7 @@ class AiStatusNoticesTest {
     fun `非対応と取得失敗は文言も導線も違う`() {
         val unsupported = requireNotNull(aiStatusNotice(AiAvailability.Unsupported, LABEL))
         val failed = requireNotNull(
-            aiStatusNotice(AiAvailability.CheckFailed(IllegalStateException()), LABEL)
+            aiStatusNotice(AiAvailability.TemporarilyUnavailable(IllegalStateException()), LABEL)
         )
         assertNotEquals(unsupported.message, failed.message)
         assertNotEquals(unsupported.action, failed.action)

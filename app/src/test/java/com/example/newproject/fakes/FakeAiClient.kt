@@ -35,7 +35,7 @@ class FakeAiClient(
      * [checkAvailability] から投げさせる例外。
      *
      * **これは `AiClient` 契約の違反側を突くための口である。** 修正後の `AICoreClient` は
-     * 投げない（例外は [AiAvailability.CheckFailed] という値になる）が、実装は他にもあり得るので、
+     * 投げない（例外は [AiAvailability.TemporarilyUnavailable] という値になる）が、実装は他にもあり得るので、
      * 呼び出し側が例外に耐えることと、`CancellationException` を素通しすることを固定する。
      */
     var availabilityFailure: (() -> Throwable)? = null
@@ -44,6 +44,16 @@ class FakeAiClient(
     val prompts = mutableListOf<String>()
     val generateCalls: Int get() = prompts.size
     val lastPrompt: String? get() = prompts.lastOrNull()
+
+    /**
+     * [downloadModel] が呼ばれた回数。
+     *
+     * **「呼ばれないこと」を確かめるために要る。** `downloadModel()` を呼んでよいのは
+     * `DOWNLOADABLE`（[AiAvailability.NeedsDownload]）のときだけで、DL実行中に呼ぶと
+     * 合流できたように見えて**モデルが揃う前に生成へ進む**恐れがある。
+     */
+    var downloadCalls = 0
+        private set
 
     /** 保留中の生成。[completeAll] で一斉に返す。 */
     private val pending = mutableListOf<CompletableDeferred<String>>()
@@ -58,8 +68,10 @@ class FakeAiClient(
         return onGenerate(prompt)
     }
 
-    override fun downloadModel(): Flow<DownloadStatus> =
-        downloads?.receiveAsFlow() ?: emptyFlow()
+    override fun downloadModel(): Flow<DownloadStatus> {
+        downloadCalls++
+        return downloads?.receiveAsFlow() ?: emptyFlow()
+    }
 
     /** 生成を保留し、[completeAll] を呼ぶまで返さないようにする。 */
     fun suspendGenerations() = apply {

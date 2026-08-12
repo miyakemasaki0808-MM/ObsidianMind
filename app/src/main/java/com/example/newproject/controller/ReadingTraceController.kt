@@ -750,7 +750,7 @@ internal class ReadingTraceController(
             AiAvailability.NeedsDownload,
             AiAvailability.Downloading,
             AiAvailability.Unsupported,
-            is AiAvailability.CheckFailed -> null
+            is AiAvailability.TemporarilyUnavailable -> null
             AiAvailability.Ready -> {
                 val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
                     noteTitle = trace.noteTitle,

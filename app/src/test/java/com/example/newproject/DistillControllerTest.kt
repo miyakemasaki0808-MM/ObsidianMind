@@ -174,7 +174,7 @@ class DistillControllerTest {
     /**
      * **`AiClient` が契約を破って投げても、呼び出し側が壊れない。**
      *
-     * 修正後の `AICoreClient` は投げない（例外は `CheckFailed` という値になる）が、
+     * 修正後の `AICoreClient` は投げない（例外は `TemporarilyUnavailable` という値になる）が、
      * 実装は他にもあり得る。**統一前はこの経路を突くテストダブルが1つも無かった。**
      */
     @Test
@@ -214,13 +214,16 @@ class DistillControllerTest {
     }
 
     /**
-     * **DL実行中に新しいCTAを出さない。**
+     * **DL実行中は `downloadModel()` を呼ばず、CTAも出さない。**
      *
-     * 未取得とDL中を1つへ畳んでいたころは、走行中のDLに対して
+     * 未取得とDL中を畳んでいたころは、走行中のDLに対して
      * 「通信量を確認してから開始してください」と出していた（押しても始まるものが無い）。
+     * 一度は「走行中のDLへ合流する」形にしたが、**beta2 の `downloadFeatureInternal` には
+     * 状態の門番が無く、合流できる保証がない**（逆アセンブルで確認）。
+     * 合流を装って即 `DownloadCompleted` が返ると、モデルが揃う前に生成が走る。
      */
     @Test
-    fun `an already running download is joined instead of asking to start one`() = runTest {
+    fun `a running download is waited out without calling download again`() = runTest {
         val state = stateWithNote()
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
         val ai = FakeAiClient(AiAvailability.Downloading, downloads) { "S001" }
@@ -229,15 +232,12 @@ class DistillControllerTest {
         controller.start()
         advanceUntilIdle()
 
-        assertTrue(
-            "DL中は進捗を出すこと: ${state.value.distillState}",
-            state.value.distillState is DistillState.Downloading
-        )
+        assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
         assertEquals(0, ai.generateCalls)
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
 
-        // 走行中のDLを購読したままだとテストスコープが終われない。
         downloads.close()
-        advanceUntilIdle()
     }
 
     /** **非対応には再試行導線を出さない。** 何度押しても同じ答えが返る。 */
@@ -260,7 +260,7 @@ class DistillControllerTest {
     @Test
     fun `a failed status read offers a retry and hides the SDK message`() = runTest {
         val state = stateWithNote()
-        val ai = FakeAiClient(AiAvailability.CheckFailed(IllegalStateException("AICore not bound")))
+        val ai = FakeAiClient(AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound")))
         val controller = controller(state, ai)
 
         controller.start()

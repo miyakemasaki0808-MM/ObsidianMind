@@ -167,6 +167,28 @@ class SummaryControllerTest {
         assertEquals("要約結果", (state.value.summaryState as SummaryState.Success).summary)
     }
 
+    /**
+     * **DL実行中は自動DLを始めない。**
+     *
+     * `downloadModel()` を呼んでよいのは `DOWNLOADABLE` のときだけで、
+     * beta2 の `downloadFeatureInternal` には状態の門番が無い（逆アセンブルで確認）。
+     * 走行中のDLへ合流したつもりで即完了が返ると、**モデルが揃う前に生成が走る**。
+     * 要約は自動起動なので、黙って諦めて次にノートを開いたときに取り直す。
+     */
+    @Test
+    fun `DL実行中は自動DLを始めず黙って諦める`() = runTest {
+        val ai = FakeAiClient(AiAvailability.Downloading, Channel()) { "要約結果" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.fetch("ノートA", "Aの本文")
+        advanceUntilIdle()
+
+        assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
+        assertEquals(0, ai.generateCalls)
+        assertTrue(state.value.summaryState is SummaryState.AiUnavailable)
+    }
+
     private fun kotlinx.coroutines.test.TestScope.controller(
         state: NoteUiStateStore,
         ai: FakeAiClient,

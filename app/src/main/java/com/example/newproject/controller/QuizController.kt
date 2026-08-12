@@ -60,16 +60,17 @@ class QuizController(
             try {
                 when (val availability = aiClient.checkAvailability()) {
                     AiAvailability.Ready -> generateWithAvailableModel(request)
-                    // 自動DL方式なので、未取得もDL中も同じDL枝へ合流する
-                    // （走行中のDLがあれば `downloadModel()` はその完了を流してくる）。
-                    AiAvailability.NeedsDownload,
-                    AiAvailability.Downloading -> {
+                    // 自動DL方式。**`downloadModel()` を呼んでよいのはここだけ**
+                    // （→ AiAvailability.Downloading）。
+                    AiAvailability.NeedsDownload -> {
                         pending = request
                         startModelDownload()
                     }
                     // **エラーへ畳まない。** 非対応に再試行導線が付くのを避ける。
+                    // DL中は待つだけ（合流できないので、完了後にもう一度押してもらう）。
+                    AiAvailability.Downloading,
                     AiAvailability.Unsupported,
-                    is AiAvailability.CheckFailed -> updateAiNotice(request, availability)
+                    is AiAvailability.TemporarilyUnavailable -> updateAiNotice(request, availability)
                 }
             } catch (e: CancellationException) {
                 throw e

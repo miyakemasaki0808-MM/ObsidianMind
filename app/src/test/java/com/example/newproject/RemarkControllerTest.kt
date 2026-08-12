@@ -126,11 +126,29 @@ class RemarkControllerTest {
         assertFalse(state.value.remarkState.canRequestRemark())
     }
 
+    /**
+     * **DL実行中は自動DLを始めない。** `downloadModel()` を呼んでよいのは
+     * `DOWNLOADABLE` のときだけ（beta2 の `downloadFeatureInternal` に状態の門番が無い）。
+     */
+    @Test
+    fun `DL実行中は自動DLを始めず待つ`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient(AiAvailability.Downloading)
+        val controller = controller(state, ai)
+
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
+        assertEquals(0, ai.generateCalls)
+        val notice = (state.value.remarkState as RemarkState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
+    }
+
     /** **取得失敗は押す意味がある。** 非対応と同じ枝へ畳むと導線ごと消えてしまう。 */
     @Test
     fun `状態を取得できなかっただけならもう一度きける`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(state, FakeAiClient(AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))))
+        val controller = controller(state, FakeAiClient(AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))))
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 

@@ -26,10 +26,12 @@ class SummarizeUseCase(
             AiAvailability.Unsupported -> SummaryResult.AiUnavailable
             // 要約は**ノートを開くと自動で走る**ので、状態を取れなかったことを見せない。
             // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
-            is AiAvailability.CheckFailed -> SummaryResult.AiUnavailable
-            // 自動DL方式。走行中のDLがあれば完了を待つだけなので、未取得と同じ枝でよい。
-            AiAvailability.NeedsDownload,
-            AiAvailability.Downloading -> SummaryResult.AiNeedsDownload
+            is AiAvailability.TemporarilyUnavailable -> SummaryResult.AiUnavailable
+            // **DL中はDLを始めない**（走行中のDLへ合流できないため → AiAvailability.Downloading）。
+            // 自動機能なので黙って諦め、次にノートを開いたときに取り直す。
+            AiAvailability.Downloading -> SummaryResult.AiUnavailable
+            // 自動DL方式。`downloadModel()` を呼んでよいのはここだけ。
+            AiAvailability.NeedsDownload -> SummaryResult.AiNeedsDownload
             AiAvailability.Ready -> try {
                 val excerpt = withContext(excerptDispatcher) {
                     buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
