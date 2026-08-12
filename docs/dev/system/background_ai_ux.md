@@ -1,14 +1,14 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-11 / `9af63ee`（Snackbar・バッジ・`RemarkPanel` を実装から起こし直し、§4 の判定軸を書き直した）
-**関連コード:** `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
-**関連テスト:** `AiTabBadgeStateTest` / `EventKeyTest`
+**最終検証:** 2026-08-12（§6 を新設。AI状態の分類と見せ方を統一した。**実機確認は未了**）
+**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
+**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest`
 **正本:** この文書
 
 **対象領域:** AI生成の待ち時間をどう見せ、結果をどう知らせるか（機能横断）
-**未解決:** AI非対応・モデル未準備・一時エラーの見せ方が機能ごとに不統一。
-`AICoreClient.checkAvailability()` 自体の例外も `Unavailable` へまとめるため、**非対応端末と一時的な取得失敗を区別できない**。
+**未解決:** 生成失敗・DL失敗の文言が4つのControllerに重複している（**状態の取得**は §6 で統一済み。
+こちらは**生成の失敗**なので別件。同じ `AiStatusNotice` の上へ足せる）。
 
 ---
 
@@ -97,6 +97,75 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 共通なのは `requestId` ガードの数行だけで、モデルDLポリシー（自動再開 vs 明示タップ）・通知の有無・状態数・責務の形がいずれも違う。
 比較表と再検討の条件は [architecture](architecture.md)「Controller共通化はしない（決着済み）」が持つ。
 
-## 6. 開発経緯
+## 6. AI状態の見せ方は起動契機で決まる（2026-08-12）
+
+`AICoreClient.checkAvailability()` は **4つの別々のこと**を `Unavailable` へ畳んでいた —
+端末非対応／未知の `FeatureStatus`／状態取得の例外／**ノート切替によるキャンセル**。
+下流はどれが起きたか区別できないまま各自で見せ方を作り、**5通りの状態モデル**と
+互いに矛盾する文言が並んでいた。
+
+### 判断1: 説明はユーザーの操作に従う
+
+**これがこの節の中心的な判断である。** 非対応端末で全機能が「使えません」と言い続けるのは騒がしく、
+全部黙ると押した機能が無反応になる。分けるのは機能名ではなく**起動契機**である。
+
+| 起動契機 | 機能 | 使えないとき |
+|---|---|---|
+| **ユーザーのタップ** | 蒸留・クイズ・ひとこと・セクションチャット・さがす | その場で理由を説明する |
+| **自動** | 要約・関連ノート・読書痕跡 | **黙って劣化する** |
+
+読書痕跡の [L4](../lessons.md)「意識させない機能は作法が違う」を**特例から一般則へ昇格**させた形になる。
+判定が機能名ではなく起動契機で引けるようになったので、新しい機能でも迷わない。
+**実機確認を通ってから lessons へ昇格を記録する。**
+
+### 判断2: 割る基準は「呼び出し側の次の行動」
+
+`AiAvailability` は `Ready` / `NeedsDownload` / `Downloading` / `Unsupported` / `CheckFailed(cause)`。
+
+- **`Unsupported` と `CheckFailed` を畳まない** — 前者は再試行しても同じ、後者は次は取れるかもしれない
+- **`NeedsDownload` と `Downloading` を畳まない** — 畳むと**DL実行中に「通信量を確認してから開始してください」**と出る。
+  実際に分岐が増えるのは蒸留1つだけで、自動DLの3機能（要約・クイズ・ひとこと）は同じ枝へ合流する
+- **未知の値を `Unsupported` にしない。** SDKが定数を増やしただけで全端末が「非対応」に化け、
+  しかも再試行が出ないので異常だと誰も気づけない。再試行可能側（`CheckFailed`）へ寄せる
+- **`CheckFailed.cause` を画面へ出さない。** SDKの `message` は英語か null で次の行動を助けない。診断のためだけに運ぶ
+
+**`Available` → `Ready` の改名は、意味が変わったからではない。** `!= AiAvailability.Available` の3箇所は
+変種を足しただけでは素通りするので、**触れている識別子ごと改名して全10箇所をコンパイラに挙げさせた**。
+以後は `AiAvailabilityUsageTest` が等値比較をソース走査で禁じる（許容リストなし）。
+
+### 判断3: 共通化するのは Controller ではなく「見せ方」
+
+[architecture](architecture.md) が4度決着させたとおり Controller 基底クラスは作らない。
+一方で同文書の判定軸は「**共通性は生成処理ではなくユーザーへの見せ方に宿る**」なので、
+見せ方の統一は同じ判断に沿う（対立しない）。
+
+- 表示用の型 `AiStatusNotice` は葉の `model`、変換 `aiStatusNotice()` は `domain`
+  （`ui` は `ai` を import できないため、UIへ `AiAvailability` を直接渡せない）
+- 導線は `AiNoticeAction` の sealed 3値。**Boolean 2本にしない** — 4通りのうち「両方true」が意味を持たない
+- **沈黙の判断を関数へ混ぜない。** 黙るかどうかは判断1の表が決め、関数は「言うとしたら何を言うか」だけを答える
+
+**トーン（色の出し分け）は持たない。** 説明行は一律 `OnSurface` で、手がかりは理由の文と
+再試行ボタンの有無である（[ui_design_principles](ui_design_principles.md) §1 の 1.4.1 を色を使わずに満たす）。
+
+### 判断4: 理由を割らない場所もある
+
+**「さがす」は `AiStatusNotice` を使わない。** `isAiAssisted` の Boolean 1本にしてある。
+非対応でも未取得でも取得失敗でも、この画面に出るものは「キーワード一致の結果」で同じで、
+**ユーザーの次の行動が変わらない**。理由で割ると `AiStatusNotice` と重なる2つ目の方言になる。
+`AiStatusNotice` をそのまま通すと「通信量を確認してから開始してください」のように
+**この画面から開始できない案内**が出てしまう点も、通さない理由になっている。
+
+**関連ノートは状態そのものを持たない**（判断1により黙る）。AI推薦が無ければ見出しごと出さない。
+これに伴い旧 `AiRecommendationStatus`（4値enum）を削除した。**到達不能な variant が2件**
+（`SearchPickerUseCase` の `Error`・`RelatedNotesUseCase` の `Error`）まとめて消えている。
+
+### キャンセルの再throw
+
+`CancellationException` は `Exception` の子なので、`catch (e: Exception)` が飲んで `Unavailable` を返していた。
+**症状は「ノートを切り替えた瞬間に『この端末では利用できません』が一瞬出る」。**
+分類を `ai/AiAvailabilityMapping.kt` へ出したのは、`AICoreClient` が `Generation.getClient()` を抱えていて
+素のJVMでは組み立てられず、**この7経路を1つも検証できなかった**ため。それがこの誤りが長く残った理由でもある。
+
+## 7. 開発経緯
 
 [開発日誌 2026-07](../../owner/journal/2026-07.md)・[2026-08](../../owner/journal/2026-08.md)
