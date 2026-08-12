@@ -1,7 +1,7 @@
 # 読書痕跡（ReadingTrace）
 
 **状態:** Implemented — 稼働中。サイドカーは **schema v5**。孤児掃除は手動削除まで提供し、自動化は未着手
-**最終検証:** 2026-08-12 / `f3fb353`（`ReadingTraceLimits` の全定数を実装と突合。**判断1〜17 は `bb764ce` 時点の突合結果を引き継いでおり、当て直していない**）
+**最終検証:** 2026-08-12 / `f3fb353`（突合したのは `ReadingTraceLimits` の全定数と記録の門番だけ。**§8 の判断1〜17 の本文は今回突合していない**）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
@@ -249,10 +249,16 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 `withNoteScopedReset()` がノートを開くたびカードを消す。つまり
 **「カードが存在する」こと自体が「Rediscover由来」を意味**しており、フラグは二つ目の真実になるだけ。
 
-#### 判断3: 記録の条件は能動読書の時間だけ
+#### 判断3: 門番は「能動読書の時間」と「本文が描かれたか」で決める
 
-一瞬引いて送った分を数えると痕跡が濁り、表示のたびSAF書込が走る（クラウドVaultなら同期トラフィック）。
-「スクロールが発生した」は条件に入れない — **1画面に収まる短いノートが永久に記録されない**ため。
+**スクロール量は条件に入れない。** 一瞬引いて送った分を数えると痕跡が濁り、
+表示のたびSAF書込が走る（クラウドVaultなら同期トラフィック）。
+かといって「スクロールが発生した」を条件にすると、
+**1画面に収まる短いノートが永久に記録されない**。
+
+そこで門番は**時間**と、**本文が実際に描かれたか**（進捗報告が来ているか）の2つにした。
+後者が要るのは、**本文を描く前に離れた場合も時間だけは経過している**ため。
+契約は §5 で、**返事を預かっているときの例外**もそこにある。
 
 **背面にいた時間を除いた「能動読書時間」だけを積算する。** `pause()`（`onStop`）で止め `resume()`（`onStart`）で再開。
 背面化の時点で訪問を**書き出す**が**セッションは残す**ので、復帰して読み進めたら同じ訪問を差し替える。
@@ -279,7 +285,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 
 #### 判断5: AI要約は再会時・裏で・失敗しても黙って劣化
 
-`generate()` は Mutex で全機能直列＋60秒タイムアウトなので、待ってからカードを出すと**数十秒何も出ない**。
+`generate()` は Mutex で全機能直列＋タイムアウトつきなので、待ってからカードを出すと**長く何も出ない**。
 
 - **まず生の痕跡でカードを出す**（AIなし・即時）
 - 訪問が増えていれば**裏で1回だけ**生成し、届いたら**生の痕跡の下に足す**（置き換えると失敗時に文面が消える）
