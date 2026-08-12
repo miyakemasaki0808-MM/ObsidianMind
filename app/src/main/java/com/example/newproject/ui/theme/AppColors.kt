@@ -211,8 +211,8 @@ internal val DarkAppColors = AppColorScheme(
     onGradientHeaderTitle = Color.White,
     onGradientHeaderSubtitle = Color(0xFFC6D3E6),
     buttonOutlineOnGradient = Color.Transparent,
-    // グラデーションは「背景」から降格させ、3色の色相だけを暗所へ残す。
-    // 明るい面のまま暗くすると濁るため、彩度ではなく明度で沈める。
+    // 3色の色相は捨てずに暗所へ残す。明るい面をそのまま暗くすると濁るので、
+    // 彩度ではなく明度で沈める（縁だけに残す案は見送り → features/dark_mode.md 判断3）。
     appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
     // 「読む」画面はさらに静かに。触る画面との性質の差はダークでも保つ。
     readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
