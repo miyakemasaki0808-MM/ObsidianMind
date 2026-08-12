@@ -5,6 +5,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.RemarkCandidateLine
 import com.example.newproject.domain.RemarkResult
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.composeMirroredRemark
 import com.example.newproject.domain.composeRemark
@@ -103,20 +104,18 @@ internal class RemarkController(
         state.update { RemarkState.Loading(sourceTitle) }
         createJob = scope.launch {
             try {
-                when (aiClient.checkAvailability()) {
-                    AiAvailability.Unsupported,
-                    is AiAvailability.CheckFailed -> updateError(
-                        requestId = requestId,
-                        sourceTitle = sourceTitle,
-                        message = "ひとことはこの端末では利用できません。"
-                    )
+                when (val availability = aiClient.checkAvailability()) {
+                    AiAvailability.Ready -> generateWithAvailableModel(request)
                     // 自動DL方式なので、未取得もDL中も同じDL枝へ合流する。
                     AiAvailability.NeedsDownload,
                     AiAvailability.Downloading -> {
                         pending = request
                         startModelDownload()
                     }
-                    AiAvailability.Ready -> generateWithAvailableModel(request)
+                    // **エラーへ畳まない。** 非対応に再試行導線が付くのを避ける。
+                    AiAvailability.Unsupported,
+                    is AiAvailability.CheckFailed ->
+                        updateAiNotice(requestId, sourceTitle, availability)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -414,6 +413,13 @@ internal class RemarkController(
         state.update { RemarkState.Error(message = message, sourceTitle = sourceTitle) }
     }
 
+    /** 端末AIの状態をそのまま説明へ移す。[AiAvailability.Ready] はここへ来ない。 */
+    private fun updateAiNotice(requestId: Long, sourceTitle: String, availability: AiAvailability) {
+        if (!isCurrent(requestId)) return
+        val notice = aiStatusNotice(availability, REMARK_FEATURE_LABEL) ?: return
+        state.update { RemarkState.AiNotice(notice, sourceTitle) }
+    }
+
     private data class PendingRemark(
         val requestId: Long,
         val title: String,
@@ -423,6 +429,9 @@ internal class RemarkController(
     )
 
     private companion object {
+        /** 説明文へ埋め込む機能名（「この端末では**ひとこと**を利用できません。」）。 */
+        const val REMARK_FEATURE_LABEL = "ひとこと"
+
         /**
          * プロンプトへ載せる候補ノートの上限。
          *

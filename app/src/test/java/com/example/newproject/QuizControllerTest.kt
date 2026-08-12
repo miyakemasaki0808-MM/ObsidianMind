@@ -2,9 +2,11 @@ package com.example.newproject
 
 import com.example.newproject.controller.QuizController
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus
@@ -130,6 +132,59 @@ class QuizControllerTest {
 
         val success = state.value.quizState as QuizState.Success
         assertTrue(success.isViewed)
+    }
+
+    /**
+     * **非対応をエラーへ畳まない。** 畳んでいたころは
+     * `エラー: Q&Aはこの端末では利用できません。` と出たうえ、シートのボタンが
+     * 「↻ クイズを再試行」になっていた（何度押しても同じ答えが返る）。
+     */
+    @Test
+    fun `AI非対応は失敗ではなく説明になり、クイズのボタンが無効になる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(
+            this,
+            FixedAvailabilityAiClient(AiAvailability.Unsupported),
+            state.quizWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        val notice = (state.value.quizState as QuizState.AiNotice).notice
+        assertEquals("この端末ではQ&Aを利用できません。", notice.message)
+        assertEquals(AiNoticeAction.None, notice.action)
+        assertFalse(state.value.quizState.isQuizActionEnabled())
+    }
+
+    /** **取得失敗は押す意味がある。** 非対応と畳むとボタンごと死ぬ。 */
+    @Test
+    fun `状態を取得できなかっただけならクイズを押し直せる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = QuizController(
+            this,
+            FixedAvailabilityAiClient(
+                AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))
+            ),
+            state.quizWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        val notice = (state.value.quizState as QuizState.AiNotice).notice
+        assertEquals(AiNoticeAction.Retry, notice.action)
+        assertTrue(state.value.quizState.isQuizActionEnabled())
+    }
+
+    private class FixedAvailabilityAiClient(
+        private val availability: AiAvailability
+    ) : AiClient {
+        override suspend fun checkAvailability(): AiAvailability = availability
+        override suspend fun generate(prompt: String): String = ""
+        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
 
     private class ControllableAiClient : AiClient {

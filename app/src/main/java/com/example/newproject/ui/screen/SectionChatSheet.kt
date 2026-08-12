@@ -44,6 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ui.theme.AccentSurface
@@ -152,16 +154,20 @@ fun SectionChatSheet(
             // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
             // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
             Spacer(modifier = Modifier.height(20.dp))
-            val isQuizBusy = quizState is QuizState.Loading
             val quizLabel = when (quizState) {
                 is QuizState.Idle -> "📝 この部分でクイズ"
                 is QuizState.Loading -> "クイズを作成中…"
                 is QuizState.Success -> "✓ クイズを開く"
                 is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
+                // 非対応なら押せないので、再試行を促すラベルにしない。
+                is QuizState.AiNotice -> when (quizState.notice.action) {
+                    AiNoticeAction.Retry -> "↻ クイズを再試行"
+                    else -> "クイズを使えません"
+                }
             }
             Button(
                 onClick = onQuizTap,
-                enabled = !isQuizBusy,
+                enabled = quizState.isQuizActionEnabled(),
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
                 shape = RoundedCornerShape(12.dp)

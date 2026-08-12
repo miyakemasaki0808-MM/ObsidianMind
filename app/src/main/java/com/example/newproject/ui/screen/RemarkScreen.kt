@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.RemarkLimits
+import com.example.newproject.model.state.canRequestRemark
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.ReplyStatus
 import com.example.newproject.ui.component.GradientHeader
@@ -144,6 +145,8 @@ fun RemarkScreen(
             is RemarkState.Unusable ->
                 RemarkBody("うまく言葉にできなかったようです。もう一度きいてみてください。")
             is RemarkState.Error -> RemarkBody("ひとことをもらえませんでした。\n${state.message}")
+            // **「もらえませんでした」を冠さない。** 端末が対応していないのは生成の失敗ではない。
+            is RemarkState.AiNotice -> RemarkBody(state.notice.message)
             // 保存済みが無ければここが起点になる（AIタブは常にこの画面へ渡す）。
             is RemarkState.Idle ->
                 RemarkBody("このノートへのひとことは、まだありません。")
@@ -210,7 +213,7 @@ fun RemarkScreen(
                     else -> onRegenerate()
                 }
             },
-            enabled = state !is RemarkState.Loading,
+            enabled = state.canRequestRemark(),
             modifier = Modifier.fillMaxWidth().height(48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
             border = BorderStroke(1.dp, ButtonOutlineOnGradient),
@@ -439,5 +442,6 @@ private fun sourceTitleOf(state: RemarkState): String? = when (state) {
     is RemarkState.Empty -> state.sourceTitle
     is RemarkState.Unusable -> state.sourceTitle
     is RemarkState.Error -> state.sourceTitle
+    is RemarkState.AiNotice -> state.sourceTitle
     is RemarkState.Idle -> null
 }

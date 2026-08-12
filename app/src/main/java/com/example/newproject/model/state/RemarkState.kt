@@ -40,8 +40,29 @@ sealed class RemarkState {
     /** 応答は来たが検査を通らなかった（短すぎる・長すぎる・一般論・候補外リンク）。 */
     data class Unusable(val sourceTitle: String) : RemarkState()
 
-    /** 生成そのものが失敗した（非対応端末・DL失敗・例外）。 */
+    /** 生成そのものが失敗した（DL失敗・例外）。 */
     data class Error(val message: String, val sourceTitle: String? = null) : RemarkState()
+
+    /**
+     * 端末AIの状態を説明している。
+     *
+     * **[Error] へ畳まない。** 畳んでいたころは非対応端末で「ひとことをもらえませんでした。
+     * ひとことはこの端末では利用できません。」と出たうえ、**再試行ボタンが押せたまま**だった。
+     * [Empty] と [Unusable] を分けたのと同じ理屈で、次の行動が違うものを1つにしない。
+     */
+    data class AiNotice(val notice: AiStatusNotice, val sourceTitle: String) : RemarkState()
+}
+
+/**
+ * 「ひとことをもらう」を押させてよいか。
+ *
+ * 生成中の二重起動を防ぐほか、**非対応端末では押しても同じ答えしか返らない**ので無効にする。
+ * 取得失敗だけは押す意味がある。
+ */
+internal fun RemarkState.canRequestRemark(): Boolean = when (this) {
+    is RemarkState.Loading -> false
+    is RemarkState.AiNotice -> notice.action != AiNoticeAction.None
+    else -> true
 }
 
 /**
@@ -85,4 +106,5 @@ internal fun RemarkState.toEventKey(): String? = when (this) {
     is RemarkState.Empty -> "empty:$sourceTitle"
     is RemarkState.Unusable -> "unusable:$sourceTitle"
     is RemarkState.Error -> "error:$sourceTitle:$message"
+    is RemarkState.AiNotice -> "notice:$sourceTitle:${notice.message}"
 }

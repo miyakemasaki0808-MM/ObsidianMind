@@ -9,8 +9,10 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.ReplyStatus
+import com.example.newproject.model.state.canRequestRemark
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -109,15 +111,35 @@ class RemarkControllerTest {
         assertTrue(state.value.remarkState is RemarkState.Empty)
     }
 
+    /**
+     * **非対応をエラーへ畳まない。** 畳んでいたころは「ひとことをもらえませんでした。」に
+     * 続けて理由が出たうえ、**「別のひとことをもらう」が押せたまま**だった。
+     * 何度押しても同じ答えが返るので、導線ごと消えていることまで固定する。
+     */
     @Test
-    fun `AI非対応ならエラーになる`() = runTest {
+    fun `AI非対応は失敗ではなく説明になり、もう一度きく導線が消える`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, UnavailableAiClient)
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
-        val error = state.value.remarkState as RemarkState.Error
-        assertEquals("ひとことはこの端末では利用できません。", error.message)
+        val notice = (state.value.remarkState as RemarkState.AiNotice).notice
+        assertEquals("この端末ではひとことを利用できません。", notice.message)
+        assertEquals(AiNoticeAction.None, notice.action)
+        assertFalse(state.value.remarkState.canRequestRemark())
+    }
+
+    /** **取得失敗は押す意味がある。** 非対応と同じ枝へ畳むと導線ごと消えてしまう。 */
+    @Test
+    fun `状態を取得できなかっただけならもう一度きける`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, CheckFailingAiClient)
+
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        val notice = (state.value.remarkState as RemarkState.AiNotice).notice
+        assertEquals(AiNoticeAction.Retry, notice.action)
+        assertTrue(state.value.remarkState.canRequestRemark())
     }
 
     @Test
@@ -511,6 +533,13 @@ class RemarkControllerTest {
 
     private object UnavailableAiClient : AiClient {
         override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unsupported
+        override suspend fun generate(prompt: String): String = ""
+        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
+    }
+
+    private object CheckFailingAiClient : AiClient {
+        override suspend fun checkAvailability(): AiAvailability =
+            AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))
         override suspend fun generate(prompt: String): String = ""
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
