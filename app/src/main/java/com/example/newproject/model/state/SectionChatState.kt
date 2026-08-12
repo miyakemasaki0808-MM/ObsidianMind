@@ -4,6 +4,20 @@ enum class ChatRole { User, Ai }
 
 data class ChatMessage(val role: ChatRole, val text: String)
 
+/**
+ * セクションチャットで「いま出せない」ことの説明。
+ *
+ * **失敗と状態を型で分ける。** 前者は実際に落ちたもの（赤で出す）、後者は端末AIの状態で
+ * まだ何も失敗していない（通常色で出す）。文字列1本で兼ねると、色も導線も選べない。
+ */
+sealed class SectionChatProblem {
+    /** 生成そのものが失敗した（タイムアウト・出力打ち切り・例外）。 */
+    data class GenerationFailed(val message: String) : SectionChatProblem()
+
+    /** 端末AIが使えない。文言と導線は [AiStatusNotice] が持つ。 */
+    data class AiStatus(val notice: AiStatusNotice) : SectionChatProblem()
+}
+
 // セクション単位のAIチャット。null のときシートは閉じている。
 data class SectionChatState(
     val sectionTitle: String,
@@ -14,26 +28,14 @@ data class SectionChatState(
     val messages: List<ChatMessage> = emptyList(),  // 質問タップによる Q&A ログ
     val isGenerating: Boolean = false,              // 質問の回答生成中
     /**
-     * **要約**の生成が失敗したときの文言。**端末AIの状態は [aiNotice] が持つ。**
+     * **要約**が出せなかった理由。要約エリアへ出す。
      *
-     * **回答側の失敗は [answerError] へ入れる。** 1つの欄で兼ねていたころは、
-     * 要約が出ている状態で回答が失敗すると**要約の表示が優先されて文言が出ず、
-     * 未回答の質問だけが残った**（タイムアウト・出力打ち切りがこれに当たる）。
+     * **回答側と別の欄にしてある。** 1つで兼ねていたころは
+     * ①要約があると回答の失敗が表示に負けて消え、
+     * ②2つが同時に起きたとき「再試行がどちらを指すか」を決められなかった。
+     * **欄が分かれていれば、押されたボタンの位置が対象を決める。**
      */
-    val error: String? = null,
-    /**
-     * **回答**の生成が失敗したときの文言。Q&Aログの直後に出す。
-     *
-     * 置き場所を [error] と分けているのは、要約エリアと回答エリアで**出す位置が違う**ため。
-     * どちらも再試行できる（`retryAi()` が未回答の質問を作り直す）。
-     */
-    val answerError: String? = null,
-    /**
-     * 端末AIが使えないことの説明。
-     *
-     * **[error] へ文字列だけ入れない。** 導線（[AiNoticeAction]）を捨てると
-     * 一時的に使えないだけの場合に再試行できず、赤いエラー表示にもなってしまう
-     * （状態の説明は失敗ではないので、色で区別しない）。
-     */
-    val aiNotice: AiStatusNotice? = null
+    val summaryProblem: SectionChatProblem? = null,
+    /** **回答**が出せなかった理由。Q&Aログの直後へ出す。 */
+    val answerProblem: SectionChatProblem? = null
 )

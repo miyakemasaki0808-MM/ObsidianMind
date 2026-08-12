@@ -5,6 +5,7 @@ import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 
@@ -29,7 +30,9 @@ internal enum class VigilithActionStatus {
  */
 internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = when {
     chat == null -> VigilithActionStatus.Idle
-    chat.error != null -> VigilithActionStatus.Error
+    // **状態の説明は失敗として数えない。** 端末AIが使えないだけならインジケータは光らせない。
+    chat.summaryProblem is SectionChatProblem.GenerationFailed ||
+        chat.answerProblem is SectionChatProblem.GenerationFailed -> VigilithActionStatus.Error
     chat.isSummaryLoading || chat.isGenerating -> VigilithActionStatus.Working
     chat.summary != null -> VigilithActionStatus.Ready
     else -> VigilithActionStatus.Working

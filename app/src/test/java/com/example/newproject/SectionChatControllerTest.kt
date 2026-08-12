@@ -4,6 +4,7 @@ import com.example.newproject.controller.SectionChatController
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.ChatRole
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiTimeoutException
 import com.example.newproject.domain.markdown.NoteSection
@@ -151,8 +152,9 @@ class SectionChatControllerTest {
         advanceUntilIdle()
 
         val chat = requireNotNull(state.value.sectionChat)
-        assertNull("エラー欄へ流し込まないこと", chat.error)
-        assertEquals(AiNoticeAction.Retry, requireNotNull(chat.aiNotice).action)
+        val problem = requireNotNull(chat.summaryProblem)
+        assertTrue("生成の失敗として扱わないこと", problem is SectionChatProblem.AiStatus)
+        assertEquals(AiNoticeAction.Retry, (problem as SectionChatProblem.AiStatus).notice.action)
         assertFalse(chat.isSummaryLoading)
     }
 
@@ -170,8 +172,11 @@ class SectionChatControllerTest {
         controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
         advanceUntilIdle()
 
-        val notice = requireNotNull(state.value.sectionChat?.aiNotice)
-        assertEquals(AiNoticeAction.None, notice.action)
+        val problem = requireNotNull(state.value.sectionChat?.summaryProblem)
+        assertEquals(
+            AiNoticeAction.None,
+            (problem as SectionChatProblem.AiStatus).notice.action
+        )
     }
 
     /** 再試行は開いているセクションのまま試し直す（別のセクションへは移らない）。 */
@@ -190,14 +195,14 @@ class SectionChatControllerTest {
 
         controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
         advanceUntilIdle()
-        assertNotNull(state.value.sectionChat?.aiNotice)
+        assertNotNull(state.value.sectionChat?.summaryProblem)
 
         ai.availability = AiAvailability.Ready
-        controller.retryAi()
+        controller.retrySummary()
         advanceUntilIdle()
 
         val chat = requireNotNull(state.value.sectionChat)
-        assertNull(chat.aiNotice)
+        assertNull(chat.summaryProblem)
         assertEquals("生成された要約", chat.summary)
         assertEquals("対象セクション", chat.sectionTitle)
     }
@@ -229,17 +234,20 @@ class SectionChatControllerTest {
         advanceUntilIdle()
 
         val afterFailure = requireNotNull(state.value.sectionChat)
-        assertEquals(AiNoticeAction.Retry, requireNotNull(afterFailure.aiNotice).action)
+        assertEquals(
+            AiNoticeAction.Retry,
+            (requireNotNull(afterFailure.answerProblem) as SectionChatProblem.AiStatus).notice.action
+        )
         assertEquals(1, afterFailure.messages.size)
         assertEquals(ChatRole.User, afterFailure.messages.single().role)
 
         ai.availability = AiAvailability.Ready
         ai.onGenerate = { "生成された回答" }
-        controller.retryAi()
+        controller.retryAnswer()
         advanceUntilIdle()
 
         val afterRetry = requireNotNull(state.value.sectionChat)
-        assertNull(afterRetry.aiNotice)
+        assertNull(afterRetry.answerProblem)
         // **質問は積み直さない。** 積み直すと再試行のたびに重複する。
         assertEquals(2, afterRetry.messages.size)
         assertEquals("これはどういう意味ですか", afterRetry.messages.first().text)
@@ -275,18 +283,21 @@ class SectionChatControllerTest {
 
         val afterFailure = requireNotNull(state.value.sectionChat)
         // **要約の欄へ入れない。** 入れると要約が優先されて画面から消える。
-        assertNull(afterFailure.error)
-        assertEquals("AI応答がタイムアウトしました（60秒）", afterFailure.answerError)
+        assertNull(afterFailure.summaryProblem)
+        assertEquals(
+            SectionChatProblem.GenerationFailed("AI応答がタイムアウトしました（60秒）"),
+            afterFailure.answerProblem
+        )
         assertEquals("セクションの要約", afterFailure.summary)
         assertEquals(1, afterFailure.messages.size)
         assertFalse(afterFailure.isGenerating)
 
         ai.onGenerate = { "生成された回答" }
-        controller.retryAi()
+        controller.retryAnswer()
         advanceUntilIdle()
 
         val afterRetry = requireNotNull(state.value.sectionChat)
-        assertNull(afterRetry.answerError)
+        assertNull(afterRetry.answerProblem)
         assertEquals(2, afterRetry.messages.size)
         assertEquals(ChatRole.Ai, afterRetry.messages.last().role)
         assertEquals("生成された回答", afterRetry.messages.last().text)
@@ -306,15 +317,70 @@ class SectionChatControllerTest {
 
         controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
         advanceUntilIdle()
-        assertEquals("タイムアウト", state.value.sectionChat?.error)
+        assertEquals(
+            SectionChatProblem.GenerationFailed("タイムアウト"),
+            state.value.sectionChat?.summaryProblem
+        )
 
         ai.onGenerate = { "生成された要約" }
-        controller.retryAi()
+        controller.retrySummary()
         advanceUntilIdle()
 
         val chat = requireNotNull(state.value.sectionChat)
-        assertNull(chat.error)
+        assertNull(chat.summaryProblem)
         assertEquals("生成された要約", chat.summary)
+    }
+
+    /**
+     * **要約と回答が同時に失敗しても、押した側だけが作り直される。**
+     *
+     * 再試行が1本だったころは「ログ末尾がユーザー発言なら常に回答を優先」していたので、
+     * **要約エリアの再試行を押しても回答が走り、要約は永久に作り直せなかった。**
+     * 押されたボタンの位置が対象を決めることを、両方が失敗した状態で固定する。
+     */
+    @Test
+    fun `要約と回答が同時に失敗しても押した側だけを作り直す`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        // 要約・候補質問・回答のすべてを落とす。候補質問の失敗は黙って捨てられる。
+        val ai = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+        controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        val bothFailed = requireNotNull(state.value.sectionChat)
+        assertNotNull("要約が失敗していること", bothFailed.summaryProblem)
+        assertNotNull("回答も失敗していること", bothFailed.answerProblem)
+        assertNull(bothFailed.summary)
+
+        // 要約側だけを押す。**回答は作り直さない。**
+        ai.onGenerate = { "生成された要約" }
+        controller.retrySummary()
+        advanceUntilIdle()
+
+        val afterSummaryRetry = requireNotNull(state.value.sectionChat)
+        assertEquals("生成された要約", afterSummaryRetry.summary)
+        assertNull(afterSummaryRetry.summaryProblem)
+        assertNotNull("回答側は手つかずのまま", afterSummaryRetry.answerProblem)
+        assertEquals(1, afterSummaryRetry.messages.size)
+
+        // 回答側を押すと、質問を積み直さずに答えだけが付く。
+        ai.onGenerate = { "生成された回答" }
+        controller.retryAnswer()
+        advanceUntilIdle()
+
+        val afterAnswerRetry = requireNotNull(state.value.sectionChat)
+        assertNull(afterAnswerRetry.answerProblem)
+        assertEquals(2, afterAnswerRetry.messages.size)
+        assertEquals(ChatRole.Ai, afterAnswerRetry.messages.last().role)
+        assertEquals("生成された要約", afterAnswerRetry.summary)
     }
 
     /**

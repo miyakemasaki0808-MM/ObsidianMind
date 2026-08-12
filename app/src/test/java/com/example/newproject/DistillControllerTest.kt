@@ -18,6 +18,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ai.AiAvailability
@@ -102,7 +103,7 @@ class DistillControllerTest {
                 sectionChat = SectionChatState(
                     sectionTitle = "旧セクション",
                     sectionContext = "太字化前の本文",
-                    error = "旧エラー"
+                    summaryProblem = SectionChatProblem.GenerationFailed("旧エラー")
                 ),
                 isSectionChatSheetVisible = true
             )

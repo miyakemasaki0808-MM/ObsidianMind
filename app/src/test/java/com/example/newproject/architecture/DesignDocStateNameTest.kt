@@ -15,11 +15,11 @@ import org.junit.Test
  *
  * 1. **修飾された参照** — `AiAvailability.<名前>` は実在する値だけ。
  *    実装から値名を読むので、名前を足しても検査側の更新は要らない。
- * 2. **裸の名前** — 文書は `` `Available` `` のように型名を付けずに書くことが多く、
- *    1だけでは素通りする（実際にそれで5箇所を見逃した）。
- *    消した名前は [RETIRED_NAMES] へ足し、**現役のように書いたら落とす。**
+ * 2. **裸の名前** — 文書は `` `Available` `` とも「Availableは即生成」とも書くので、
+ *    1だけでは素通りする（実際にそれで7箇所を見逃した）。
+ *    消した名前は [RETIRED_NAMES] へ足し、**バッククォートの有無に関わらず落とす。**
  *
- * **歴史的な言及は「旧」を前に置く**（例: 旧 `Available` を畳んでいた）。
+ * **歴史的な言及は直前に「旧 」を置く**（例: 旧 `Available` を畳んでいた）。
  * これが唯一の逃げ道で、**ファイル単位の許容リストは持たない** — 例外が増えるほど
  * 検査の力は落ちる（→ [lessons L29](../../../../../../../docs/dev/lessons.md)）。
  *
@@ -50,17 +50,47 @@ class DesignDocStateNameTest {
 
     @Test
     fun `設計文書は消した名前を現役のように書かない`() {
+        val declared = declaredStateNames()
+        // **どの型にも無い名前だけを禁じる。** 例えば `Unavailable` は `AiAvailability` からは
+        // 消えたが `DistillState` には現存するので、名前だけでは古さを決められない。
+        val retired = RETIRED_NAMES.filterNot { it in declared }
+        assertTrue("RETIRED_NAMES が全て現存しています。一覧が古い可能性があります", retired.isNotEmpty())
+
         val violations = scanDocs { line ->
-            RETIRED_NAMES.filter { name ->
-                Regex("""(?<!旧 )(?<!旧)`${Regex.escape(name)}`""").containsMatchIn(line)
+            // **バッククォートの有無で見逃さない。** 文書は `Available` とも
+            // 「Availableは即生成」とも書く。実際に後者を素通りさせた。
+            val plain = line.replace("`", "")
+            retired.filter { name ->
+                Regex("""(?<!旧 )(?<![A-Za-z])${Regex.escape(name)}(?![A-Za-z])""")
+                    .containsMatchIn(plain)
             }
         }
 
         assertTrue(
             "消した名前が現役として残っています" +
-                "（歴史的な言及なら「旧 `名前`」と書くこと）:\n" + violations.joinToString("\n"),
+                "（歴史的な言及なら「旧 名前」と書くこと）:\n" + violations.joinToString("\n"),
             violations.isEmpty()
         )
+    }
+
+    /**
+     * `model/state/` と `ai/` が今も宣言している型・値の名前。
+     *
+     * **これで [RETIRED_NAMES] から誤検出を自動的に外す。** 一覧へ足した名前が
+     * 別の型に現存していれば、その名前は禁じない。
+     */
+    private fun declaredStateNames(): Set<String> {
+        val roots = listOf(
+            "app/src/main/java/com/example/newproject/model/state",
+            "app/src/main/java/com/example/newproject/ai"
+        ).map(repositoryRoot()::resolve).filter(File::isDirectory)
+        assertTrue("状態の定義が見つかりません", roots.isNotEmpty())
+        return roots.asSequence()
+            .flatMap { it.walkTopDown() }
+            .filter { it.isFile && it.extension == "kt" }
+            .flatMap { STATE_NAME_PATTERN.findAll(it.readText()) }
+            .map { it.groupValues[1] }
+            .toSet()
     }
 
     /** 各行を [findViolations] にかけ、見つかった名前を「場所: 名前 — 行」へ整える。 */
@@ -118,13 +148,21 @@ class DesignDocStateNameTest {
         /** `object Ready : AiAvailability()` / `data class TemporarilyUnavailable(...)` を拾う。 */
         val DECLARATION_PATTERN =
             Regex("""(?:object|data class)\s+(\w+)\s*(?:\(|:)\s*[^\n]*AiAvailability""")
+
+        /** 状態の型・値・プロパティの名前。誤検出を外すためだけに使うので広めに拾う。 */
+        val STATE_NAME_PATTERN =
+            Regex("""(?:object|class|enum class|data class|val|var)\s+(\w+)""")
         val QUALIFIED_PATTERN = Regex("""AiAvailability\.(\w+)""")
 
         /**
          * 消した型・値・フィールドの名前。**現役のように書いたら落とす。**
          *
-         * `Unavailable` を挙げても現役の `AiUnavailable` は誤検出しない
-         * （バッククォートで囲まれた**完全一致**だけを見るため）。
+         * **現存する名前を挙げても構わない** — [declaredStateNames] が自動で外す。
+         * `Unavailable` がその例で、`AiAvailability` からは消えたが `DistillState` には残る。
+         *
+         * **限界:** 名前が別の型に現存すると禁じられないので、
+         * 「`DistillState` の一覧に消えた `NeedsDownload` が残っている」ような
+         * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
          */
         val RETIRED_NAMES = listOf(
             "Available",
@@ -132,7 +170,9 @@ class DesignDocStateNameTest {
             "CheckFailed",
             "AiRecommendationStatus",
             "aiStatus",
-            "aiErrorMessage"
+            "aiErrorMessage",
+            "aiNotice",
+            "answerError"
         )
     }
 }

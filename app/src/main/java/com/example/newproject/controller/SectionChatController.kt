@@ -3,6 +3,7 @@ package com.example.newproject.controller
 import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
 import com.example.newproject.model.SectionChatStateWriter
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -56,39 +57,46 @@ class SectionChatController(
     }
 
     /**
-     * いま使えなかった機能をもう一度試す。
+     * 要約をもう一度作る。
      *
      * **`open()` は再入できない**（`sectionChat != null` なら再表示するだけ）ので、
-     * 説明に添えた再試行導線はここへ来る。対象は開いているセッションの本文で、
+     * 要約エリアに添えた再試行導線はここへ来る。対象は開いているセッションの本文で、
      * 別のセクションへは移らない。
+     *
+     * **[retryAnswer] と分けてある。** 要約と回答が同時に失敗したとき、
+     * 1本のままだと押されたボタンがどちらを指すか決められなかった。
      */
-    fun retryAi() {
+    fun retrySummary() {
         val chat = state.current.sectionChat ?: return
-
-        // **答えを返せていない質問があるなら、それを再実行する。**
-        // ログの末尾がユーザー発言のままなのは「回答を作れなかった」場合だけで、
-        // 説明を畳むだけだと**未回答の発言だけが残り、同じ候補を押すと質問が重複する。**
-        val unanswered = chat.messages.lastOrNull()?.takeIf { it.role == ChatRole.User }
-        if (unanswered != null) {
-            answerJob?.cancel()
-            updateChat { it.copy(isGenerating = true, aiNotice = null, answerError = null) }
-            answerJob = scope.launch {
-                // 履歴は「その質問の直前まで」。再実行なのでログへは積み直さない。
-                runAnswer(chat, unanswered.text, historyOf(chat.messages.dropLast(1)))
-            }
-            return
-        }
-
         // 要約が既にあるなら作り直さない（説明を畳むだけでよい）。
         if (chat.summary != null) {
-            updateChat { it.copy(aiNotice = null, answerError = null) }
+            updateChat { it.copy(summaryProblem = null) }
             return
         }
         cancelJobs()
-        updateChat {
-            it.copy(isSummaryLoading = true, aiNotice = null, error = null, answerError = null)
-        }
+        updateChat { it.copy(isSummaryLoading = true, summaryProblem = null) }
         startSummary(chat.sectionTitle, chat.sectionContext)
+    }
+
+    /**
+     * 答えを返せていない質問を作り直す。
+     *
+     * ログの末尾がユーザー発言のままなのは「回答を作れなかった」場合だけ。
+     * 説明を畳むだけだと**未回答の発言だけが残り、同じ候補を押すと質問が重複する。**
+     */
+    fun retryAnswer() {
+        val chat = state.current.sectionChat ?: return
+        val unanswered = chat.messages.lastOrNull()?.takeIf { it.role == ChatRole.User }
+        if (unanswered == null) {
+            updateChat { it.copy(answerProblem = null) }
+            return
+        }
+        answerJob?.cancel()
+        updateChat { it.copy(isGenerating = true, answerProblem = null) }
+        answerJob = scope.launch {
+            // 履歴は「その質問の直前まで」。再実行なのでログへは積み直さない。
+            runAnswer(chat, unanswered.text, historyOf(chat.messages.dropLast(1)))
+        }
     }
 
     private fun startSummary(sectionTitle: String, sectionText: String) {
@@ -116,7 +124,14 @@ class SectionChatController(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
+                        updateChat {
+                            it.copy(
+                                isSummaryLoading = false,
+                                summaryProblem = SectionChatProblem.GenerationFailed(
+                                    e.message ?: "Unknown error"
+                                )
+                            )
+                        }
                     }
                     fetchSuggestions(sectionTitle, sectionText)
                 }
@@ -130,7 +145,8 @@ class SectionChatController(
                 is AiAvailability.TemporarilyUnavailable -> updateChat {
                     it.copy(
                         isSummaryLoading = false,
-                        aiNotice = aiStatusNotice(availability, OPEN_FEATURE_LABEL)
+                        summaryProblem = aiStatusNotice(availability, OPEN_FEATURE_LABEL)
+                            ?.let(SectionChatProblem::AiStatus)
                     )
                 }
             }
@@ -148,8 +164,7 @@ class SectionChatController(
                 messages = it.messages + ChatMessage(ChatRole.User, question),
                 isGenerating = true,
                 // 前回の説明・失敗は畳む。新しい試行が古い理由を上書きする。
-                answerError = null,
-                aiNotice = null
+                answerProblem = null
             )
         }
         answerJob = scope.launch { runAnswer(chat, question, history) }
@@ -176,7 +191,8 @@ class SectionChatController(
                 updateChat {
                     it.copy(
                         isGenerating = false,
-                        aiNotice = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
+                        answerProblem = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
+                            ?.let(SectionChatProblem::AiStatus)
                     )
                 }
                 return
@@ -206,8 +222,15 @@ class SectionChatController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // **要約側の `error` へ入れない。** 要約が出ていると表示が優先されて見えなくなる。
-            updateChat { it.copy(isGenerating = false, answerError = e.message ?: "Unknown error") }
+            // **要約側の欄へ入れない。** 要約が出ていると表示が優先されて見えなくなる。
+            updateChat {
+                it.copy(
+                    isGenerating = false,
+                    answerProblem = SectionChatProblem.GenerationFailed(
+                        e.message ?: "Unknown error"
+                    )
+                )
+            }
         }
     }
 

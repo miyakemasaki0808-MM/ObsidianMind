@@ -364,7 +364,8 @@ class NoteViewModel internal constructor(
     fun openSection(section: NoteSection) = session.openSection(section)
     fun showSectionChat() = session.showSectionChat()
     fun sendSectionMessage(text: String) = session.sendSectionMessage(text)
-    fun retrySectionAi() = session.retrySectionAi()
+    fun retrySectionSummary() = session.retrySectionSummary()
+    fun retrySectionAnswer() = session.retrySectionAnswer()
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
 

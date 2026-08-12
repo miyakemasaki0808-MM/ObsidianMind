@@ -48,6 +48,7 @@ import com.example.newproject.model.state.ChatRole
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.theme.AccentSurface
@@ -73,7 +74,8 @@ fun SectionChatSheet(
     quizState: QuizState,
     onSuggestionTap: (String) -> Unit,
     onQuizTap: () -> Unit,
-    onRetryAi: () -> Unit,
+    onRetrySummary: () -> Unit,
+    onRetryAnswer: () -> Unit,
     onDismiss: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -116,16 +118,11 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                // 要約を作れなかった。**再試行できる**ので導線を添える。
-                state.error != null -> SectionChatErrorRow(state.error, onRetryAi)
-                state.aiNotice == null -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
-            }
-
-            // **状態の説明はエラーと別に出す。** 色で区別せず、導線の有無で区別する。
-            // 要約の後に置くのは、質問への回答が出せなかった場合にも同じ場所へ出るため。
-            state.aiNotice?.let { notice ->
-                Spacer(modifier = Modifier.height(8.dp))
-                AiStatusNoticeRow(notice = notice, onRetry = onRetryAi)
+                // **要約が出せなかった理由はここだけに出す。** 押された導線の位置が
+                // 再試行の対象を決めるので、回答側の理由をここへ混ぜない。
+                state.summaryProblem != null ->
+                    SectionChatProblemRow(state.summaryProblem, onRetrySummary)
+                else -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
             }
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -161,11 +158,11 @@ fun SectionChatSheet(
                 }
             }
 
-            // **回答の失敗はログの直後に出す。** 要約エリアへ出すと、要約がある場合に
-            // 表示が優先されて見えず、未回答の質問だけが残る（タイムアウト・出力打ち切り）。
-            state.answerError?.let { message ->
+            // **回答が出せなかった理由はログの直後に出す。** 要約エリアへ出すと、
+            // 要約がある場合に表示が優先されて見えず、未回答の質問だけが残る。
+            state.answerProblem?.let { problem ->
                 Spacer(modifier = Modifier.height(8.dp))
-                SectionChatErrorRow(message, onRetryAi)
+                SectionChatProblemRow(problem, onRetryAnswer)
             }
 
             // ── この部分でクイズ ─────────────────────────
@@ -206,18 +203,22 @@ fun SectionChatSheet(
 }
 
 /**
- * 生成が失敗したことと、その再試行導線。
+ * 出せなかった理由と、その再試行導線。**[onRetry] が指す対象は呼び出し位置で決まる。**
  *
- * **状態の説明（`AiStatusNoticeRow`）とは別物なので色を分ける。** あちらは
- * 「まだ何も失敗していない」状態の説明で通常色、こちらは実際の失敗なので `ErrorText`。
+ * 生成の失敗と端末AIの状態で色を分ける — 前者は実際に落ちたので `ErrorText`、
+ * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
  * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
  */
 @Composable
-private fun SectionChatErrorRow(message: String, onRetry: () -> Unit) {
-    Column {
-        Text(message, fontSize = 13.sp, color = ErrorText)
-        Spacer(modifier = Modifier.height(6.dp))
-        TextButton(onClick = onRetry) { Text("再試行") }
+private fun SectionChatProblemRow(problem: SectionChatProblem, onRetry: () -> Unit) {
+    when (problem) {
+        is SectionChatProblem.GenerationFailed -> Column {
+            Text(problem.message, fontSize = 13.sp, color = ErrorText)
+            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(onClick = onRetry) { Text("再試行") }
+        }
+        is SectionChatProblem.AiStatus ->
+            AiStatusNoticeRow(notice = problem.notice, onRetry = onRetry)
     }
 }
 

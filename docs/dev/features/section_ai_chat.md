@@ -49,9 +49,9 @@
    - **既にセッションがあれば、それを再表示するだけ**（→ §8 判断2）
 3. `checkAvailability()` を見る
    - `Ready` → 4へ
-   - それ以外 → `aiStatusNotice()` の説明を `SectionChatState.aiNotice` へ載せる。
-     **文言も導線もこの型が持つ**（message だけ取り出すと再試行できず、赤いエラー表示になる）。
-     再試行導線は `retryAi()` が受ける。**ここではDLしない** → §8 判断4
+   - それ以外 → `aiStatusNotice()` の説明を `summaryProblem` へ載せる。
+     **文言も導線も `AiStatusNotice` が持つ**（message だけ取り出すと再試行できず、
+     赤いエラー表示になる）。再試行は `retrySummary()` が受ける。**ここではDLしない** → §8 判断4
 4. セクション要約と質問候補を生成する
 5. 質問候補をタップ → `sendMessage()` が回答を生成し、シート内のログへ積む
 6. 「📝 この部分でクイズ」→ 周辺本文（約1,200字）から設問を作る
@@ -70,12 +70,16 @@
   | 出力枠 | 256トークン | `genai-prompt` |
 
 - **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
-  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` / `error` / `aiNotice`
-- **生成の失敗:** `error` に文言を入れてシート内へ出す。**別画面へ飛ばさない**
-- **端末AIが使えないとき:** `aiNotice` に [`AiStatusNotice`](../system/background_ai_ux.md) を載せる。
-  **`error` へ文字列だけ入れない** — 導線が消えて再試行できず、赤いエラー表示になる
-- **再試行（`retryAi()`）:** 答えを返せていない質問があればそれを作り直す
-  （**ログへ積み直さない**）。無ければ要約を作り直す。要約が既にあるなら説明を畳むだけ
+  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` /
+  `summaryProblem` / `answerProblem`
+- **出せなかった理由は要約側と回答側で別の欄に持つ**（`SectionChatProblem`）。
+  **1つで兼ねない** — ①要約があると回答の失敗が表示に負けて消え、
+  ②同時に起きたとき「再試行がどちらを指すか」を決められない
+- **`GenerationFailed(message)`:** 生成が落ちた（タイムアウト・出力打ち切り）。赤で出す
+- **`AiStatus(notice)`:** 端末AIが使えない。通常色で出す
+  （→ [background_ai_ux](../system/background_ai_ux.md) §6）
+- **再試行は2本:** `retrySummary()` は要約を作り直し、`retryAnswer()` は答えを返せていない
+  質問を作り直す（**ログへ積み直さない**）。**押されたボタンの位置が対象を決める**
 - **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
 
 ## 6. 状態とデータ

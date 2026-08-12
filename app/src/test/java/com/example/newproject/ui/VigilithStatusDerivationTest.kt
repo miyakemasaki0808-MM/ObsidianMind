@@ -6,6 +6,7 @@ import com.example.newproject.ui.vigilith.fullscreenAiStatus
 import com.example.newproject.ui.vigilith.sectionChatStatus
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -29,7 +30,7 @@ class VigilithStatusDerivationTest {
         summary = summary,
         isSummaryLoading = isSummaryLoading,
         isGenerating = isGenerating,
-        error = error
+        summaryProblem = error?.let(SectionChatProblem::GenerationFailed)
     )
 
     private fun quizSuccess(isViewed: Boolean) = QuizState.Success(

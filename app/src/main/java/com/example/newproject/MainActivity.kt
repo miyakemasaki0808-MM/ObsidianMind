@@ -268,7 +268,8 @@ class MainActivity : ComponentActivity() {
                                     else openVault.launch(null)
                                 },
                                 onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
-                                onRetrySectionAi = { viewModel.retrySectionAi() },
+                                onRetrySectionSummary = { viewModel.retrySectionSummary() },
+                                onRetrySectionAnswer = { viewModel.retrySectionAnswer() },
                                 onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                                 onEndSectionChat = { viewModel.endSectionChat() },
                                 onGenerateQuiz = { sourceLabel, context ->

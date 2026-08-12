@@ -87,7 +87,8 @@ internal fun NoteReaderTab(
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onSuggestionTap: (String) -> Unit,
-    onRetrySectionAi: () -> Unit,
+    onRetrySectionSummary: () -> Unit,
+    onRetrySectionAnswer: () -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
     onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
@@ -282,7 +283,8 @@ internal fun NoteReaderTab(
                     is QuizState.Idle -> startQuizFromChat(chat)
                 }
             },
-            onRetryAi = onRetrySectionAi,
+            onRetrySummary = onRetrySectionSummary,
+            onRetryAnswer = onRetrySectionAnswer,
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )
