@@ -73,7 +73,10 @@ class SectionChatController(
             updateChat { it.copy(summaryProblem = null) }
             return
         }
-        cancelJobs()
+        // **要約のJobだけを止める。** `cancelJobs()` だと走行中の回答まで巻き添えにするが、
+        // 回答側はキャンセルで状態を戻さないので、`isGenerating` が真のまま固まり
+        // 「回答を生成中…」が永久に残る（質問候補も無効のまま）。
+        openJob?.cancel()
         updateChat { it.copy(isSummaryLoading = true, summaryProblem = null) }
         startSummary(chat.sectionTitle, chat.sectionContext)
     }
@@ -173,7 +176,7 @@ class SectionChatController(
     /**
      * 質問1件ぶんの回答を作る。**ログへ質問は積まない**（積むのは呼び出し側）。
      *
-     * [retryAi] からも呼ぶので、ここで積むと再実行のたびに質問が重複する。
+     * [retryAnswer] からも呼ぶので、ここで積むと再実行のたびに質問が重複する。
      */
     private suspend fun runAnswer(
         chat: SectionChatState,

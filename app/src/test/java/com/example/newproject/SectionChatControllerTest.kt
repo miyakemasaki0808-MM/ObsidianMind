@@ -384,6 +384,56 @@ class SectionChatControllerTest {
     }
 
     /**
+     * **要約の再試行が、走行中の回答を巻き添えにしない。**
+     *
+     * 共通の `cancelJobs()` を呼んでいたころは `answerJob` も止まったが、
+     * 回答側はキャンセルで状態を戻さないので **`isGenerating` が真のまま固まり、
+     * 「回答を生成中…」が永久に残った**（質問候補も無効のまま）。
+     * 追加済みのテストは「両方とも既に失敗済み」の場合しか通していなかった。
+     */
+    @Test
+    fun `要約の再試行は生成中の回答を巻き添えにしない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val answerResponse = CompletableDeferred<String>()
+        val ai = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        // 要約が落ちた状態を作る（`summary` が null なので再試行が作り直しへ進む）。
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+        assertNotNull(state.value.sectionChat?.summaryProblem)
+
+        // 回答は保留のまま走らせる。
+        ai.onGenerate = { answerResponse.await() }
+        controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+        assertTrue("回答が走っていること", state.value.sectionChat?.isGenerating == true)
+
+        ai.onGenerate = { "生成された要約" }
+        controller.retrySummary()
+        advanceUntilIdle()
+
+        val afterRetry = requireNotNull(state.value.sectionChat)
+        assertEquals("生成された要約", afterRetry.summary)
+        assertNull(afterRetry.summaryProblem)
+        // **回答は止まっていない。** 止めると isGenerating が真のまま残る。
+        assertTrue("走行中の回答を巻き添えにしないこと", afterRetry.isGenerating)
+
+        answerResponse.complete("生成された回答")
+        advanceUntilIdle()
+
+        val afterAnswer = requireNotNull(state.value.sectionChat)
+        assertFalse("回答が届けば生成中は解除されること", afterAnswer.isGenerating)
+        assertEquals(2, afterAnswer.messages.size)
+        assertEquals("生成された回答", afterAnswer.messages.last().text)
+    }
+
+    /**
      * 要約の生成だけを保留し、候補質問は即返すダブル。
      *
      * シートは「要約 → 候補質問」の順に2回生成するので、1回目だけ止めれば

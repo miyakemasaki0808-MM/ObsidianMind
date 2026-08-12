@@ -26,7 +26,8 @@ internal enum class VigilithActionStatus {
  * セクションチャット（要約・質問）の状態から [VigilithActionStatus] を導出する。
  *
  * 判定順に意味がある。エラーを最優先で拾い、次に生成中、最後に完了。
- * チャットが存在するのに要約もエラーも無い場合は「これから要約が始まる」= Working とする。
+ * チャットが存在するのに要約も理由も無い場合は「これから要約が始まる」= Working とする。
+ * **理由があるなら待っていない**ので Idle にする。
  */
 internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = when {
     chat == null -> VigilithActionStatus.Idle
@@ -35,6 +36,9 @@ internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = 
         chat.answerProblem is SectionChatProblem.GenerationFailed -> VigilithActionStatus.Error
     chat.isSummaryLoading || chat.isGenerating -> VigilithActionStatus.Working
     chat.summary != null -> VigilithActionStatus.Ready
+    // **走っていないのに Working にしない。** 端末AIが使えず要約も無いときに
+    // 「AI生成中」のスピナーが回り続けていた（上のコメントと実装が食い違っていた）。
+    chat.summaryProblem != null -> VigilithActionStatus.Idle
     else -> VigilithActionStatus.Working
 }
 

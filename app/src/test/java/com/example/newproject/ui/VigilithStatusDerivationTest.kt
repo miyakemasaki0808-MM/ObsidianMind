@@ -6,9 +6,12 @@ import com.example.newproject.ui.vigilith.fullscreenAiStatus
 import com.example.newproject.ui.vigilith.sectionChatStatus
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
@@ -23,15 +26,58 @@ class VigilithStatusDerivationTest {
         summary: String? = null,
         isSummaryLoading: Boolean = false,
         isGenerating: Boolean = false,
-        error: String? = null
+        error: String? = null,
+        summaryProblem: SectionChatProblem? = error?.let(SectionChatProblem::GenerationFailed)
     ) = SectionChatState(
         sectionTitle = "設計",
         sectionContext = "本文",
         summary = summary,
         isSummaryLoading = isSummaryLoading,
         isGenerating = isGenerating,
-        summaryProblem = error?.let(SectionChatProblem::GenerationFailed)
+        summaryProblem = summaryProblem
     )
+
+    private fun aiStatus(action: AiNoticeAction) = SectionChatProblem.AiStatus(
+        AiStatusNotice("いま使えません。", action, canTryAgainLater = action != AiNoticeAction.None)
+    )
+
+    /**
+     * **走っていないのに Working にしない。**
+     *
+     * 端末AIが使えず要約も無い状態で最後の `else` に落ち、
+     * 生成していないのに Vigilith と全画面FABが「AI生成中」を出し続けていた。
+     */
+    @Test
+    fun `端末AIが使えず要約も無いならIdle`() {
+        assertEquals(
+            VigilithActionStatus.Idle,
+            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
+        )
+        assertEquals(
+            VigilithActionStatus.Idle,
+            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.Retry)))
+        )
+    }
+
+    /** 状態の説明は失敗ではないので、Error にもしない。 */
+    @Test
+    fun `端末AIが使えないことをエラーとして扱わない`() {
+        assertNotEquals(
+            VigilithActionStatus.Error,
+            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
+        )
+    }
+
+    /** 説明が出ていても、生成が走っているならそちらが優先される。 */
+    @Test
+    fun `説明が出ていても生成中ならWorking`() {
+        assertEquals(
+            VigilithActionStatus.Working,
+            sectionChatStatus(
+                chat(isGenerating = true, summaryProblem = aiStatus(AiNoticeAction.Retry))
+            )
+        )
+    }
 
     private fun quizSuccess(isViewed: Boolean) = QuizState.Success(
         sourceTitle = "設計",
