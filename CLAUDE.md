@@ -79,6 +79,26 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 - Lint は現在 Error 0 / Warning 0 / hint 12（hint は依存更新系の催促で、ゲートに載せない）。**警告を増やさない**
 - 端末AIを呼ぶ instrumentation テストは、Nano が使えない端末では `Assume` で skip する。**skip 判定は既知の `FeatureStatus` だけで行い、計測・生成呼び出しが投げた例外は skip せず失敗させる**（`checkAvailability()` は例外も畳むので判定に使わない）→ [ai_input_excerpt](docs/dev/system/ai_input_excerpt.md)
 
+**構造を変えたら、変更箇所だけで終わらせない（影響面監査）。**
+
+下の引き金を踏んだら、**その行の「証拠」を出すまで完了報告しない。「確認した」は証拠にならない**
+（→ [L14](docs/dev/lessons.md#l14-横展開は最後の1本を取り残す)）。
+
+| 引き金 | 出す証拠 |
+|---|---|
+| 状態型に欄を足した／意味を変えた | その欄を**読む全箇所**（UI・派生状態・`toEventKey`）を性質で grep した結果 |
+| 非同期Jobやキャンセル・再試行を変えた | **両方向**のテスト（片方の実行中・失敗中にもう片方を操作する）＋走行フラグが残らないテスト |
+| 型・値・欄を改名／削除した | ソース走査テスト（`AiAvailabilityUsageTest` / `DesignDocStateNameTest`） |
+| 上記のいずれか | **正本文書**（`features/` `system/` `owner/`）の該当記述を直したこと |
+
+**共存しうる2つの処理は、片方ずつのテストでは面が永久に空く。** 実例と型は
+`SectionChatCombinationTest` が持つ（4巡のレビューで出た欠陥のうち2件がこの面にあった）。
+
+**レビューは受け取った経路を問わず、着手前に `docs/review/` へ本文を置く。** チャットで受けても同じ。
+置いた時点で `ReviewFindingsLedgerTest` が全指摘の受付を検査するので、
+**行番号まで名指しされた指摘の取りこぼしが落ちる。** 置かなければ検査そのものが起動しない
+（2026-08-12〜13 の5巡は、これを怠って16件が受付簿の外にあった）。
+
 **変更を終える前に:**
 
 1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する。**「変更内容」は1文・100字以内** — 経緯・代償・変異確認の結果・教訓はここに書かない（行き先は 2. と 4.）

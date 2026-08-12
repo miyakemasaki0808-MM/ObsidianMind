@@ -1,0 +1,252 @@
+package com.example.newproject
+
+import com.example.newproject.ai.AiAvailability
+import com.example.newproject.ai.AiTimeoutException
+import com.example.newproject.controller.SectionChatController
+import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.ui.vigilith.VigilithActionStatus
+import com.example.newproject.ui.vigilith.sectionChatStatus
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * **要約と回答が同時に動く／同時に壊れる組み合わせを、面で押さえる。**
+ *
+ * ## なぜ独立したクラスなのか
+ *
+ * `SectionChatController` は**独立した2つのJob**（要約・回答）を持ち、
+ * それぞれに「実行中／失敗／端末AIが使えない」の3状態がある。
+ * 機能ごとのテストは各Jobを単独で通すので、**片方が走っている最中にもう片方を
+ * 操作する経路が丸ごと空く**。実際にそこで2件の欠陥を出した。
+ *
+ * - 要約の再試行が共通の `cancelJobs()` を呼び、**走行中の回答を巻き添えにして
+ *   `isGenerating` を真のまま固めた**（「回答を生成中…」が永久に残る）
+ * - 端末AIが使えないだけの状態が派生状態で `Working` に落ち、
+ *   **生成していないのにスピナーが回り続けた**
+ *
+ * どちらも「直した場所の隣」で壊れている。**片方ずつのテストでは永久に出ない。**
+ *
+ * ## ここが守る不変条件
+ *
+ * 1. **一方の操作が、他方の走行中Jobを止めない**
+ * 2. **どの経路を通っても、走っていないのに `isSummaryLoading` / `isGenerating` が残らない**
+ * 3. **理由の欄（`summaryProblem` / `answerProblem`）は互いを消さない**
+ * 4. 派生状態（`sectionChatStatus`）が、走っていないのに `Working` にならない
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
+class SectionChatCombinationTest {
+
+    // ── 1. 実行中 × もう片方の操作（両方向）─────────────────────────
+
+    /** 回答の走行中に要約を再試行しても、回答は生き続ける。 */
+    @Test
+    fun `回答実行中に要約を再試行しても回答は止まらない`() = runTest {
+        val env = Env(this)
+        env.failSummaryThenOpen()
+
+        val answer = env.startAnswerAndHold("これはどういう意味ですか")
+        assertTrue(env.chat().isGenerating)
+
+        env.ai.onGenerate = { "生成された要約" }
+        env.controller.retrySummary()
+        advanceUntilIdle()
+
+        assertEquals("生成された要約", env.chat().summary)
+        assertTrue("走行中の回答を巻き添えにしない", env.chat().isGenerating)
+
+        answer.complete("生成された回答")
+        advanceUntilIdle()
+        assertFalse(env.chat().isGenerating)
+        assertEquals(2, env.chat().messages.size)
+    }
+
+    /** 要約の走行中に回答を再試行しても、要約は生き続ける。 */
+    @Test
+    fun `要約実行中に回答を再試行しても要約は止まらない`() = runTest {
+        val env = Env(this)
+        val gates = env.holdEveryGeneration()
+
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        assertTrue("要約が走っていること", env.chat().isSummaryLoading)
+        val summaryGate = gates.single()
+
+        // 要約を待っている間に質問し、その回答も保留させる。
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+        assertEquals(2, gates.size)
+
+        env.controller.retryAnswer()
+        advanceUntilIdle()
+
+        assertTrue("走行中の要約を巻き添えにしない", env.chat().isSummaryLoading)
+        summaryGate.complete("生成された要約")
+        advanceUntilIdle()
+        assertEquals("生成された要約", env.chat().summary)
+        assertFalse(env.chat().isSummaryLoading)
+
+        // 保留したままの生成があるとテストスコープが終われない。
+        env.controller.cancelAndClear()
+        advanceUntilIdle()
+    }
+
+    // ── 2. 失敗 × 失敗 ─────────────────────────────────────────
+
+    /** 両方の理由が並んでも、互いを消さない。 */
+    @Test
+    fun `要約と回答が同時に失敗しても理由が両方残る`() = runTest {
+        val env = Env(this)
+        env.ai.onGenerate = { throw AiTimeoutException("タイムアウト") }
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        assertNotNull(env.chat().summaryProblem)
+        assertNotNull(env.chat().answerProblem)
+        assertFalse(env.chat().isSummaryLoading)
+        assertFalse(env.chat().isGenerating)
+    }
+
+    // ── 3. 端末AIの状態 × 回答の成否 ───────────────────────────
+
+    /** 要約が端末AIの状態で止まっていても、回復後の回答は通り、理由は残る。 */
+    @Test
+    fun `要約が端末AI状態でも回復後の回答は成功する`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.Unsupported
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        assertTrue(env.chat().summaryProblem is SectionChatProblem.AiStatus)
+
+        env.ai.availability = AiAvailability.Ready
+        env.ai.onGenerate = { "生成された回答" }
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        assertEquals(2, env.chat().messages.size)
+        assertNull(env.chat().answerProblem)
+        assertTrue("要約側の理由を消さない", env.chat().summaryProblem is SectionChatProblem.AiStatus)
+        assertFalse(env.chat().isGenerating)
+    }
+
+    /** 要約が端末AIの状態のまま回答も失敗したら、2つの理由が別の欄に並ぶ。 */
+    @Test
+    fun `要約が端末AI状態で回答が失敗したら理由の種類が分かれる`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.Unsupported
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        env.ai.availability = AiAvailability.Ready
+        env.ai.onGenerate = { throw AiTimeoutException("タイムアウト") }
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        assertTrue(env.chat().summaryProblem is SectionChatProblem.AiStatus)
+        assertTrue(env.chat().answerProblem is SectionChatProblem.GenerationFailed)
+    }
+
+    // ── 4. 走っていないのにフラグ・派生状態が残らない ────────────
+
+    /**
+     * **どの終わり方をしても、走行フラグは残らない。**
+     *
+     * 走行中Jobを止める経路をすべて通し、`isSummaryLoading` / `isGenerating` が
+     * 真のまま固まらないことを確かめる。ここが今回の欠陥の本体だった。
+     */
+    @Test
+    fun `セッションを破棄すれば走行フラグごと消える`() = runTest {
+        val env = Env(this)
+        env.holdEveryGeneration()
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+        assertTrue(env.chat().isSummaryLoading)
+        assertTrue(env.chat().isGenerating)
+
+        env.controller.cancelAndClear()
+        advanceUntilIdle()
+
+        assertNull("セッションごと消えるので、残るフラグ自体が無い", env.state.value.sectionChat)
+    }
+
+    /** 端末AIが使えず要約も無いなら、派生状態は「生成中」にならない。 */
+    @Test
+    fun `端末AIが使えないだけなら派生状態はWorkingにならない`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.Unsupported
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        assertEquals(VigilithActionStatus.Idle, sectionChatStatus(env.chat()))
+    }
+
+    /** 生成が落ちたときはエラーとして見せる（状態の説明と混ぜない）。 */
+    @Test
+    fun `生成が落ちたときだけ派生状態はErrorになる`() = runTest {
+        val env = Env(this)
+        env.ai.onGenerate = { throw AiTimeoutException("タイムアウト") }
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        assertEquals(VigilithActionStatus.Error, sectionChatStatus(env.chat()))
+    }
+
+    // ── 組み立て ────────────────────────────────────────────
+
+    private class Env(private val scope: TestScope) {
+        val ai = FakeAiClient { "セクションの要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(
+            scope,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(scope.testScheduler)
+        )
+
+        fun chat() = requireNotNull(state.value.sectionChat)
+
+        /** 生成をすべて保留させ、保留中の口を返す。順に 要約 → 候補質問 → 回答。 */
+        fun holdEveryGeneration(): MutableList<CompletableDeferred<String>> {
+            val gates = mutableListOf<CompletableDeferred<String>>()
+            ai.onGenerate = { CompletableDeferred<String>().also { gates += it }.await() }
+            return gates
+        }
+
+        /** 要約が落ちた状態でセッションを開く（`summary` が null のまま残る）。 */
+        fun failSummaryThenOpen() {
+            ai.onGenerate = { throw AiTimeoutException("タイムアウト") }
+            controller.open(SECTION)
+            scope.advanceUntilIdle()
+        }
+
+        /** 質問を送り、その回答を保留したままにする。 */
+        fun startAnswerAndHold(question: String): CompletableDeferred<String> {
+            val gate = CompletableDeferred<String>()
+            ai.onGenerate = { gate.await() }
+            controller.sendMessage(question)
+            scope.advanceUntilIdle()
+            return gate
+        }
+    }
+
+    private companion object {
+        val SECTION = NoteSection("対象セクション", 2, "## 対象セクション\n本文")
+    }
+}
