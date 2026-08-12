@@ -17,6 +17,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.applyDistillBold
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.isWithinDistillBoldLimit
@@ -103,17 +104,23 @@ internal class DistillController(
         job?.cancel()
         job = scope.launch {
             try {
-                when (aiClient.checkAvailability()) {
+                when (val availability = aiClient.checkAvailability()) {
+                    AiAvailability.Ready -> analyze(requestId, input)
+                    AiAvailability.NeedsDownload -> ifCurrent(requestId) {
+                        pendingDownload = input
+                        updateAiNotice(availability)
+                    }
+                    // **走行中のDLへ合流する。** ここで「確認してダウンロード」を出すと、
+                    // 押しても新しく始まるものが無いCTAになる。
+                    AiAvailability.Downloading -> ifCurrent(requestId) {
+                        pendingDownload = null
+                        collectDownload(requestId, input)
+                    }
+                    // 非対応は再試行を出さず、取得失敗は出す。畳むとどちらかが必ず誤る。
                     AiAvailability.Unsupported,
                     is AiAvailability.CheckFailed -> ifCurrent(requestId) {
-                        update(DistillState.Unavailable("蒸留はこの端末のGemini Nanoでは利用できません。"))
+                        updateAiNotice(availability)
                     }
-                    AiAvailability.NeedsDownload,
-                    AiAvailability.Downloading -> ifCurrent(requestId) {
-                        pendingDownload = input
-                        update(DistillState.NeedsDownload(input.title))
-                    }
-                    AiAvailability.Ready -> analyze(requestId, input)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -129,36 +136,55 @@ internal class DistillController(
         val input = pendingDownload ?: return
         val requestId = activeRequestId
         job?.cancel()
-        job = scope.launch {
-            update(DistillState.Downloading(input.title, downloaded = -1L, total = 0L))
-            try {
-                aiClient.downloadModel().collect { status ->
-                    if (!isCurrent(requestId)) return@collect
-                    when (status) {
-                        is DownloadStatus.DownloadStarted -> update(
-                            DistillState.Downloading(input.title, 0L, status.bytesToDownload)
-                        )
-                        is DownloadStatus.DownloadProgress -> {
-                            val total = (state.current as? DistillState.Downloading)?.total ?: 0L
-                            update(DistillState.Downloading(input.title, status.totalBytesDownloaded, total))
-                        }
-                        is DownloadStatus.DownloadCompleted -> {
-                            pendingDownload = null
-                            analyze(requestId, input)
-                        }
-                        is DownloadStatus.DownloadFailed -> update(
-                            DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
-                        )
+        job = scope.launch { collectDownload(requestId, input) }
+    }
+
+    /**
+     * DLの進捗を購読し、完了したら分析へ進む。
+     *
+     * **[start] からも呼ぶ**（既にDL中だった場合）。`downloadModel()` は走行中のDLがあれば
+     * その進捗を流してくるので、合流のために新しく何かを始める必要はない。
+     */
+    private suspend fun collectDownload(requestId: Long, input: AnalysisInput) {
+        update(DistillState.Downloading(input.title, downloaded = -1L, total = 0L))
+        try {
+            aiClient.downloadModel().collect { status ->
+                if (!isCurrent(requestId)) return@collect
+                when (status) {
+                    is DownloadStatus.DownloadStarted -> update(
+                        DistillState.Downloading(input.title, 0L, status.bytesToDownload)
+                    )
+                    is DownloadStatus.DownloadProgress -> {
+                        val total = (state.current as? DistillState.Downloading)?.total ?: 0L
+                        update(DistillState.Downloading(input.title, status.totalBytesDownloaded, total))
                     }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                ifCurrent(requestId) {
-                    update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+                    is DownloadStatus.DownloadCompleted -> {
+                        pendingDownload = null
+                        analyze(requestId, input)
+                    }
+                    is DownloadStatus.DownloadFailed -> update(
+                        DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
+                    )
                 }
             }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            ifCurrent(requestId) {
+                update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+            }
         }
+    }
+
+    /**
+     * 端末AIの状態を、蒸留パネルが描ける形へ移す。
+     *
+     * `aiStatusNotice()` が全域関数なので、状態が増えても取りこぼしはここで起きない。
+     * [AiAvailability.Ready] だけが null を返すが、その枝はここへ来ない。
+     */
+    private fun updateAiNotice(availability: AiAvailability) {
+        val notice = aiStatusNotice(availability, DISTILL_FEATURE_LABEL) ?: return
+        update(DistillState.AiNotice(notice))
     }
 
     private suspend fun analyze(requestId: Long, input: AnalysisInput) {
@@ -514,5 +540,10 @@ internal class DistillController(
 
     private inline fun ifCurrent(requestId: Long, block: () -> Unit) {
         if (isCurrent(requestId)) block()
+    }
+
+    private companion object {
+        /** 説明文へ埋め込む機能名（「この端末では**蒸留**を利用できません。」）。 */
+        const val DISTILL_FEATURE_LABEL = "蒸留"
     }
 }

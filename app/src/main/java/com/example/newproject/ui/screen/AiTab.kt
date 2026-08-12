@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillCandidateItem
@@ -234,17 +235,12 @@ private fun DistillPanel(
                     }
                 }
                 is DistillState.Analyzing -> ProgressRow("AIを待っています／分析中…")
-                is DistillState.NeedsDownload -> {
-                    Text(
-                        "蒸留にはGemini Nanoのダウンロードが必要です。通信量を確認してから開始してください。",
-                        fontSize = 13.sp,
-                        color = OnSurface
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Button(onClick = onDownloadModel, modifier = Modifier.fillMaxWidth()) {
-                        Text("確認してダウンロード")
-                    }
-                }
+                is DistillState.AiNotice -> AiStatusNoticeRow(
+                    notice = state.notice,
+                    onDownload = onDownloadModel,
+                    onRetry = onRetry,
+                    onDismiss = onDismiss
+                )
                 is DistillState.Downloading -> {
                     val progress = if (state.total > 0) state.downloaded.toFloat() / state.total else -1f
                     Text("Gemini Nanoをダウンロード中…", fontSize = 13.sp, color = OnSurface)

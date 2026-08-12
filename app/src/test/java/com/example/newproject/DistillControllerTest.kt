@@ -10,6 +10,7 @@ import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -24,8 +25,10 @@ import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import com.example.newproject.model.NoteUiStateStore
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -165,8 +168,67 @@ class DistillControllerTest {
         controller.start()
         advanceUntilIdle()
 
-        assertTrue(state.value.distillState is DistillState.NeedsDownload)
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.Download, notice.action)
         assertEquals(0, ai.generateCalls)
+    }
+
+    /**
+     * **DL実行中に新しいCTAを出さない。**
+     *
+     * 未取得とDL中を1つへ畳んでいたころは、走行中のDLに対して
+     * 「通信量を確認してから開始してください」と出していた（押しても始まるものが無い）。
+     */
+    @Test
+    fun `an already running download is joined instead of asking to start one`() = runTest {
+        val state = stateWithNote()
+        val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
+        val ai = ImmediateAiClient(AiAvailability.Downloading, "S001", downloads)
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        assertTrue(
+            "DL中は進捗を出すこと: ${state.value.distillState}",
+            state.value.distillState is DistillState.Downloading
+        )
+        assertEquals(0, ai.generateCalls)
+
+        // 走行中のDLを購読したままだとテストスコープが終われない。
+        downloads.close()
+        advanceUntilIdle()
+    }
+
+    /** **非対応には再試行導線を出さない。** 何度押しても同じ答えが返る。 */
+    @Test
+    fun `an unsupported device is told so without a retry affordance`() = runTest {
+        val state = stateWithNote()
+        val controller = controller(state, ImmediateAiClient(AiAvailability.Unsupported))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
+    }
+
+    /**
+     * **状態を取れなかっただけなら再試行に意味がある。** 非対応と同じ枝へ畳むと、
+     * 一時的な失敗が「この端末では使えません」として永久に見えてしまう。
+     */
+    @Test
+    fun `a failed status read offers a retry and hides the SDK message`() = runTest {
+        val state = stateWithNote()
+        val ai = ImmediateAiClient(AiAvailability.CheckFailed(IllegalStateException("AICore not bound")))
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.Retry, notice.action)
+        assertFalse(notice.message, notice.message.contains("AICore"))
     }
 
     @Test
@@ -460,7 +522,8 @@ class DistillControllerTest {
 
     private class ImmediateAiClient(
         private val availability: AiAvailability = AiAvailability.Ready,
-        private val response: String = "S001"
+        private val response: String = "S001",
+        private val downloads: Channel<DownloadStatus>? = null
     ) : AiClient {
         var generateCalls = 0
         override suspend fun checkAvailability(): AiAvailability = availability
@@ -468,7 +531,8 @@ class DistillControllerTest {
             generateCalls++
             return response
         }
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
+        override fun downloadModel(): Flow<DownloadStatus> =
+            downloads?.receiveAsFlow() ?: emptyFlow()
     }
 
     private class ControllableAiClient : AiClient {
