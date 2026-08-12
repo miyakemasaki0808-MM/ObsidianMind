@@ -323,10 +323,6 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 
 ### 実装後に分かったこと
 
-**変異確認を5件通した** — 紙を `panelChip` より暗くする／段階の順序を逆転させる／
-契約（`withNoteScopedReset`）への登録を外す／不明値を分母から外すガードを消す／
-分布が空のときのガードを消す。いずれも落ちることを確認済み。
-
 **リフレクションの契約テストは、足場を直すまで効いていなかった。**
 `NoteSessionCoordinatorTest` は `NoteUiState` の全フィールドを走査するが、
 `fullyPopulatedState()` に `notePaperTone` を積むまでは**初期値どうしを突き合わせるだけ**で、

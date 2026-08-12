@@ -16,7 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
-| 2026-08-12 | — | 機能仕様3本の数値・データ契約を §5〜§7 へ一本化し、§8 を判断の理由だけに絞った | **[related_notes_ai](features/related_notes_ai.md)**・**[reflect_distill](features/reflect_distill.md)**・**[reflect_reading_trace](features/reflect_reading_trace.md)** |
+| 2026-08-12 | — | 機能仕様6本の数値・データ契約を §5〜§7 へ一本化し、§8 を判断の理由だけに絞った | **[related_notes_ai](features/related_notes_ai.md)**・**[reflect_distill](features/reflect_distill.md)**・**[reflect_reading_trace](features/reflect_reading_trace.md)**・[note_age_paper](features/note_age_paper.md)・[note_image_rendering](features/note_image_rendering.md)・[dark_mode](features/dark_mode.md) |
 | 2026-08-12 | — | 技術俯瞰の §14.2 を実装から作り直し、§15 を廃止して行き先の表へ置き換えた | [source_code_analysis](../owner/source_code_analysis.md) §14.2 |
 | 2026-08-12 | — | 壊れた節参照25件を内容参照へ直し、番号依存を AdrShapeTest で止めた | [lessons](lessons.md) L29 |
 | 2026-08-12 | — | 最終検証の捏造コミット12件を実在する値へ直し、実在と12節の存在を検査へ載せた | **[lessons](lessons.md) L38**・[_template](features/_template.md) |
