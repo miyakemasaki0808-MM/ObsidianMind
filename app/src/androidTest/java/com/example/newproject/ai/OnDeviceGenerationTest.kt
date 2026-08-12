@@ -64,9 +64,9 @@ class OnDeviceGenerationTest {
     /**
      * 端末AIが使えるときだけ生成する。
      *
-     * `checkAvailability()` は例外まで `Unavailable` へ畳むので判定に使わない
-     * （SDKの回帰が「非対応端末」に化けて見逃される）。生の [FeatureStatus] だけで判断し、
-     * **生成呼び出し自体が投げた例外は skip せずそのまま失敗させる。**
+     * `checkAvailability()` は例外を `CheckFailed` という**値**へ変えるので判定に使わない
+     * （SDKの回帰が「取得できなかったので skip」に化けて見逃される）。生の [FeatureStatus]
+     * だけで判断し、**生成呼び出し自体が投げた例外は skip せずそのまま失敗させる。**
      */
     private fun requireNanoAvailable() {
         val status = runBlocking { client.featureStatus() }

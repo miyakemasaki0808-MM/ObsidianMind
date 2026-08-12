@@ -38,9 +38,13 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
             val notesByTitle = candidates.associateBy { it.name.toNormalizedObsidianTitle() }
 
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable -> fallback(query, candidates, AiRecommendationStatus.Unavailable)
-                AiAvailability.NeedsDownload -> fallback(query, candidates, AiRecommendationStatus.NeedsDownload)
-                AiAvailability.Available -> {
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed ->
+                    fallback(query, candidates, AiRecommendationStatus.Unavailable)
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading ->
+                    fallback(query, candidates, AiRecommendationStatus.NeedsDownload)
+                AiAvailability.Ready -> {
                     val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })
                     val response = aiClient.generate(prompt)
                     val picked = response.lineSequence()

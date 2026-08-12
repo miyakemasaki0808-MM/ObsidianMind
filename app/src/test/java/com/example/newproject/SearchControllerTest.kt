@@ -247,7 +247,7 @@ class SearchControllerTest {
     )
 
     private object NoOpAiClient : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unavailable
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unsupported
         override suspend fun generate(prompt: String): String = ""
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }

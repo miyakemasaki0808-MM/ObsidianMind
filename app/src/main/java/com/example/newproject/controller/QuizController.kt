@@ -58,15 +58,19 @@ class QuizController(
         generateJob = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> updateError(
+                    AiAvailability.Unsupported,
+                    is AiAvailability.CheckFailed -> updateError(
                         request = request,
                         message = "Q&Aはこの端末では利用できません。"
                     )
-                    AiAvailability.NeedsDownload -> {
+                    // 自動DL方式なので、未取得もDL中も同じDL枝へ合流する
+                    // （走行中のDLがあれば `downloadModel()` はその完了を流してくる）。
+                    AiAvailability.NeedsDownload,
+                    AiAvailability.Downloading -> {
                         pending = request
                         startModelDownload()
                     }
-                    AiAvailability.Available -> generateWithAvailableModel(request)
+                    AiAvailability.Ready -> generateWithAvailableModel(request)
                 }
             } catch (e: CancellationException) {
                 throw e

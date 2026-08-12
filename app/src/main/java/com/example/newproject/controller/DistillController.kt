@@ -104,14 +104,16 @@ internal class DistillController(
         job = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> ifCurrent(requestId) {
+                    AiAvailability.Unsupported,
+                    is AiAvailability.CheckFailed -> ifCurrent(requestId) {
                         update(DistillState.Unavailable("蒸留はこの端末のGemini Nanoでは利用できません。"))
                     }
-                    AiAvailability.NeedsDownload -> ifCurrent(requestId) {
+                    AiAvailability.NeedsDownload,
+                    AiAvailability.Downloading -> ifCurrent(requestId) {
                         pendingDownload = input
                         update(DistillState.NeedsDownload(input.title))
                     }
-                    AiAvailability.Available -> analyze(requestId, input)
+                    AiAvailability.Ready -> analyze(requestId, input)
                 }
             } catch (error: CancellationException) {
                 throw error

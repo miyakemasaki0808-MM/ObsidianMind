@@ -51,7 +51,7 @@ class SummaryControllerTest {
         advanceUntilIdle()
 
         // 切替後にDLが完了しても、旧ノートの要約は走らない
-        ai.availability = AiAvailability.Available
+        ai.availability = AiAvailability.Ready
         downloads.send(DownloadStatus.DownloadCompleted)
         advanceUntilIdle()
 
@@ -80,7 +80,7 @@ class SummaryControllerTest {
         advanceUntilIdle()
 
         // DLジョブは止めずに次の要求だけを進める（cancelAndClear は呼ばない）
-        ai.availability = AiAvailability.Available
+        ai.availability = AiAvailability.Ready
         controller.fetch("ノートB", "Bの本文")
         advanceUntilIdle()
 
@@ -111,7 +111,7 @@ class SummaryControllerTest {
         controller.fetch("ノートA", "Aの本文")
         advanceUntilIdle()
 
-        ai.availability = AiAvailability.Available
+        ai.availability = AiAvailability.Ready
         controller.fetch("ノートB", "Bの本文")
         advanceUntilIdle()
         assertTrue(state.value.summaryState is SummaryState.Success)
@@ -133,7 +133,7 @@ class SummaryControllerTest {
         controller.fetch("ノートA", "Aの本文")
         advanceUntilIdle()
 
-        ai.availability = AiAvailability.Available
+        ai.availability = AiAvailability.Ready
         downloads.send(DownloadStatus.DownloadCompleted)
         advanceUntilIdle()
 
@@ -159,7 +159,7 @@ class SummaryControllerTest {
 
     @Test
     fun `モデルDL済みならそのまま要約が出る`() = runTest {
-        val ai = FakeAiClient(AiAvailability.Available, Channel())
+        val ai = FakeAiClient(AiAvailability.Ready, Channel())
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 

@@ -65,17 +65,20 @@ class RelatedNotesUseCase(
             )
 
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable -> RelatedNotesResult.Success(
+                // 関連ノートも自動起動なので、非対応も取得失敗も同じく決定的チャンネルだけを返す。
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed -> RelatedNotesResult.Success(
                     relatedNotes = relatedNotes,
                     aiNotes = emptyList(),
                     aiStatus = AiRecommendationStatus.Unavailable
                 )
-                AiAvailability.NeedsDownload -> RelatedNotesResult.Success(
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading -> RelatedNotesResult.Success(
                     relatedNotes = relatedNotes,
                     aiNotes = emptyList(),
                     aiStatus = AiRecommendationStatus.NeedsDownload
                 )
-                AiAvailability.Available -> {
+                AiAvailability.Ready -> {
                     // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
                     // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
                     val orderedCandidates = rankRelatedCandidates(

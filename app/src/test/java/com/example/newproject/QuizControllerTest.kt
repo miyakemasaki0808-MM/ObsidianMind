@@ -137,7 +137,7 @@ class QuizControllerTest {
         var generateCalls = 0
             private set
 
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
 
         override suspend fun generate(prompt: String): String {
             generateCalls++
@@ -148,7 +148,7 @@ class QuizControllerTest {
     }
 
     private class ImmediateAiClient(private val response: String) : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
         override suspend fun generate(prompt: String): String = response
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }

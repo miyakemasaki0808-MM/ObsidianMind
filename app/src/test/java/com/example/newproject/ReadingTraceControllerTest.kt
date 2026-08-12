@@ -1761,7 +1761,7 @@ private const val VAULT_A = "content://vault-a"
 private const val VAULT_B = "content://vault-b"
 
 private class ImmediateAiClient(
-    private val availability: AiAvailability = AiAvailability.Available,
+    private val availability: AiAvailability = AiAvailability.Ready,
     private val response: String = AI_SUMMARY
 ) : AiClient {
     var generateCalls = 0
@@ -1778,14 +1778,14 @@ private class ImmediateAiClient(
 }
 
 private class FailingAiClient : AiClient {
-    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
     override suspend fun generate(prompt: String): String = throw AiTimeoutException("タイムアウト")
     override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
 }
 
 private class ControllableAiClient : AiClient {
     val response = CompletableDeferred<String>()
-    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
     override suspend fun generate(prompt: String): String = response.await()
     override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
 }

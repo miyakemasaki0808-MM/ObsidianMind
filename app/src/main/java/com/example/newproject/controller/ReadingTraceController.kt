@@ -743,19 +743,25 @@ internal class ReadingTraceController(
     }
 
     private suspend fun generateSummary(trace: ReadingTrace): String? = try {
-        // 未ダウンロードでも自動DLしない（読むたびモデルDLを始めない）。黙って生のまま。
-        if (aiClient.checkAvailability() != AiAvailability.Available) {
-            null
-        } else {
-            val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
-                noteTitle = trace.noteTitle,
-                visits = trace.visits,
-                totalVisitCount = trace.totalVisitCount
-            )
-            aiClient.generate(prompt)
-                .trim()
-                .takeIf { it.isNotBlank() }
-                ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+        when (aiClient.checkAvailability()) {
+            // 未ダウンロードでも自動DLしない（読むたびモデルDLを始めない）。黙って生のまま。
+            // **非対応も取得失敗も同じ枝でよい**（意図的）— 読書痕跡はユーザーが意識しない
+            // 機能なので、理由を出し分けても見せる先が無い。
+            AiAvailability.NeedsDownload,
+            AiAvailability.Downloading,
+            AiAvailability.Unsupported,
+            is AiAvailability.CheckFailed -> null
+            AiAvailability.Ready -> {
+                val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
+                    noteTitle = trace.noteTitle,
+                    visits = trace.visits,
+                    totalVisitCount = trace.totalVisitCount
+                )
+                aiClient.generate(prompt)
+                    .trim()
+                    .takeIf { it.isNotBlank() }
+                    ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+            }
         }
     } catch (error: CancellationException) {
         throw error

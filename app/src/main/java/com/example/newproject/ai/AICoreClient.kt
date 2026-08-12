@@ -19,10 +19,30 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+/**
+ * 端末AIが「いま使えるか」。**各値は呼び出し側が次に何をするかで割ってある。**
+ *
+ * 旧版は3値で、[Unsupported]・[CheckFailed]・未知の `FeatureStatus`・
+ * **ノート切替によるキャンセル**の4つを `Unavailable` へ畳んでいた。
+ * 下流はどれが起きたのか区別できないまま各自で見せ方を作り、
+ * 同じ原因に対して互いに矛盾する文言が並んでいた。
+ */
 sealed class AiAvailability {
-    object Available : AiAvailability()
-    object Unavailable : AiAvailability()
+    /** 生成できる。 */
+    object Ready : AiAvailability()
+    /** モデル未取得。DLを提案する（自動DL方式なら黙って開始する）。 */
     object NeedsDownload : AiAvailability()
+    /** DL実行中。走行中のDLへ合流して待つ。**新しいCTAは出さない。** */
+    object Downloading : AiAvailability()
+    /** この端末では動かない。**再試行を出さない**（何度押しても同じ答えが返る）。 */
+    object Unsupported : AiAvailability()
+    /**
+     * 状態を取得できなかった。**再試行を出す**（次は取れるかもしれない）。
+     *
+     * [cause] は**画面へ出さない。** SDKの `message` は英語か null で
+     * ユーザーの次の行動を1文字も助けないため、診断のためだけに運ぶ。
+     */
+    data class CheckFailed(val cause: Throwable) : AiAvailability()
 }
 
 interface AiClient {
@@ -72,17 +92,10 @@ class AICoreClient : AiClient {
         Generation.getClient(config)
     }
 
+    // 分類そのものは [readAvailability] が持つ。このクラスは `Generation.getClient()` を
+    // 抱えていて素のJVMでは組み立てられず、ここに分類を書くとテストが1本も書けない。
     override suspend fun checkAvailability(): AiAvailability = withContext(Dispatchers.IO) {
-        try {
-            when (model.checkStatus()) {
-                FeatureStatus.AVAILABLE    -> AiAvailability.Available
-                FeatureStatus.DOWNLOADABLE,
-                FeatureStatus.DOWNLOADING  -> AiAvailability.NeedsDownload
-                else                       -> AiAvailability.Unavailable
-            }
-        } catch (e: Exception) {
-            AiAvailability.Unavailable
-        }
+        readAvailability { model.checkStatus() }
     }
 
     /**
@@ -189,8 +202,11 @@ class AICoreClient : AiClient {
     /**
      * skip 判定に使う生の [FeatureStatus]。
      *
-     * [checkAvailability] は例外まで `Unavailable` へ畳んでしまうため、計測テストの
-     * skip 判定に使うと**SDKの回帰が「非対応端末」に化けて見逃される**。ここでは畳まない。
+     * [checkAvailability] は例外を [AiAvailability.CheckFailed] という**値**へ変える。
+     * 本番の見せ方としてはそれが正しいが、計測テストの skip 判定に使うと
+     * **SDKの回帰が「取得できなかったので skip」に化けて見逃される**。
+     * skip 判定は既知の [FeatureStatus] だけで行い、例外は skip せず失敗させたいので、
+     * ここでは投げるまま渡す。
      */
     internal suspend fun featureStatus(): Int = withContext(Dispatchers.IO) {
         model.checkStatus()
@@ -210,7 +226,7 @@ class AICoreClient : AiClient {
 // ─────────────────────────────────────────────────────────────────────────────
 @Suppress("unused")
 class StubAiClient : AiClient {
-    override suspend fun checkAvailability() = AiAvailability.Available
+    override suspend fun checkAvailability() = AiAvailability.Ready
     override suspend fun generate(prompt: String) =
         "（スタブ）AICoreClient に差し替えると Gemini Nano 4 が要約を生成します。"
     override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()

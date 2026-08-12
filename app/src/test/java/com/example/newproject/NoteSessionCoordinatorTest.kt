@@ -640,7 +640,7 @@ class NoteSessionCoordinatorTest {
     private class FakeAi : AiClient {
         private val pending = mutableListOf<CompletableDeferred<String>>()
 
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
 
         override suspend fun generate(prompt: String): String {
             val deferred = CompletableDeferred<String>()

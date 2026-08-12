@@ -479,7 +479,7 @@ class RemarkControllerTest {
     )
 
     private class ImmediateAiClient(private val response: String) : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
         override suspend fun generate(prompt: String): String = response
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
@@ -488,7 +488,7 @@ class RemarkControllerTest {
         var lastPrompt: String? = null
             private set
 
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
         override suspend fun generate(prompt: String): String {
             lastPrompt = prompt
             return "NONE"
@@ -501,7 +501,7 @@ class RemarkControllerTest {
         var generateCalls = 0
             private set
 
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
         override suspend fun generate(prompt: String): String {
             generateCalls++
             return response.await()
@@ -510,7 +510,7 @@ class RemarkControllerTest {
     }
 
     private object UnavailableAiClient : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unavailable
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unsupported
         override suspend fun generate(prompt: String): String = ""
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }

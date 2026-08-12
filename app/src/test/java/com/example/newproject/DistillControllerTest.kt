@@ -459,7 +459,7 @@ class DistillControllerTest {
     }
 
     private class ImmediateAiClient(
-        private val availability: AiAvailability = AiAvailability.Available,
+        private val availability: AiAvailability = AiAvailability.Ready,
         private val response: String = "S001"
     ) : AiClient {
         var generateCalls = 0
@@ -473,7 +473,7 @@ class DistillControllerTest {
 
     private class ControllableAiClient : AiClient {
         val response = CompletableDeferred<String>()
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
         override suspend fun generate(prompt: String): String = response.await()
         override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }

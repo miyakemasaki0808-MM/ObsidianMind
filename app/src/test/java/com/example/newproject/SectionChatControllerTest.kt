@@ -134,7 +134,7 @@ class SectionChatControllerTest {
         var generateCalls = 0
             private set
 
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
+        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
 
         override suspend fun generate(prompt: String): String {
             generateCalls++

@@ -76,10 +76,10 @@ class PromptTokenBudgetTest {
     /**
      * 端末AIが使えるときだけ計測する。
      *
-     * skip 判定に [AICoreClient.checkAvailability] を使わないのは、あれが例外まで
-     * `Unavailable` へ畳むため、**SDKの回帰が「非対応端末」に化けて見逃される**から。
-     * ここでは生の [FeatureStatus] だけで判断し、計測呼び出し自体が投げた例外は
-     * skip せずそのまま失敗させる。
+     * skip 判定に [AICoreClient.checkAvailability] を使わないのは、あれが例外を
+     * `CheckFailed` という**値**へ変えるため、**SDKの回帰が「取得できなかったので skip」に
+     * 化けて見逃される**から。ここでは生の [FeatureStatus] だけで判断し、
+     * 計測呼び出し自体が投げた例外は skip せずそのまま失敗させる。
      */
     private fun requireNanoAvailable() {
         val status = runBlocking { client.featureStatus() }

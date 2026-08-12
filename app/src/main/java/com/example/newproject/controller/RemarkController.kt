@@ -104,16 +104,19 @@ internal class RemarkController(
         createJob = scope.launch {
             try {
                 when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> updateError(
+                    AiAvailability.Unsupported,
+                    is AiAvailability.CheckFailed -> updateError(
                         requestId = requestId,
                         sourceTitle = sourceTitle,
                         message = "ひとことはこの端末では利用できません。"
                     )
-                    AiAvailability.NeedsDownload -> {
+                    // 自動DL方式なので、未取得もDL中も同じDL枝へ合流する。
+                    AiAvailability.NeedsDownload,
+                    AiAvailability.Downloading -> {
                         pending = request
                         startModelDownload()
                     }
-                    AiAvailability.Available -> generateWithAvailableModel(request)
+                    AiAvailability.Ready -> generateWithAvailableModel(request)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -254,7 +257,15 @@ internal class RemarkController(
         // 単一の出所（表示中のノート）から引けば、どちらの経路でも同じになる。
         val content = currentContent() ?: return
         try {
-            if (aiClient.checkAvailability() != AiAvailability.Available) return
+            // **映し返しは黙る仕様なので、どの理由でも見せずに諦める**（意図的にすべて同じ枝）。
+            // 上の KDoc のとおり、返事そのものは既に保存済みで失われない。
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Ready -> Unit
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed -> return
+            }
             val excerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(content, NoteExcerptLimits.ANNOTATION)
             }

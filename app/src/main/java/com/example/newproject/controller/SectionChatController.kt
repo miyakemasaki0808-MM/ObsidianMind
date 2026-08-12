@@ -53,11 +53,13 @@ class SectionChatController(
         }
         openJob = scope.launch {
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable ->
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed ->
                     updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
-                AiAvailability.NeedsDownload ->
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading ->
                     updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
-                AiAvailability.Available -> {
+                AiAvailability.Ready -> {
                     try {
                         val sectionExcerpt = withContext(excerptDispatcher) {
                             buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
@@ -103,9 +105,15 @@ class SectionChatController(
             )
         }
         answerJob = scope.launch {
-            if (aiClient.checkAvailability() != AiAvailability.Available) {
-                updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
-                return@launch
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Ready -> Unit
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed -> {
+                    updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
+                    return@launch
+                }
             }
             try {
                 val sectionExcerpt = withContext(excerptDispatcher) {

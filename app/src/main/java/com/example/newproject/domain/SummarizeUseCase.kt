@@ -23,9 +23,14 @@ class SummarizeUseCase(
 
     suspend fun summarize(title: String, content: String): SummaryResult {
         return when (aiClient.checkAvailability()) {
-            AiAvailability.Unavailable   -> SummaryResult.AiUnavailable
-            AiAvailability.NeedsDownload -> SummaryResult.AiNeedsDownload
-            AiAvailability.Available     -> try {
+            AiAvailability.Unsupported -> SummaryResult.AiUnavailable
+            // 要約は**ノートを開くと自動で走る**ので、状態を取れなかったことを見せない。
+            // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
+            is AiAvailability.CheckFailed -> SummaryResult.AiUnavailable
+            // 自動DL方式。走行中のDLがあれば完了を待つだけなので、未取得と同じ枝でよい。
+            AiAvailability.NeedsDownload,
+            AiAvailability.Downloading -> SummaryResult.AiNeedsDownload
+            AiAvailability.Ready -> try {
                 val excerpt = withContext(excerptDispatcher) {
                     buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
                 }
