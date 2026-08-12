@@ -71,7 +71,7 @@ class SectionChatController(
         val unanswered = chat.messages.lastOrNull()?.takeIf { it.role == ChatRole.User }
         if (unanswered != null) {
             answerJob?.cancel()
-            updateChat { it.copy(isGenerating = true, aiNotice = null, error = null) }
+            updateChat { it.copy(isGenerating = true, aiNotice = null, answerError = null) }
             answerJob = scope.launch {
                 // 履歴は「その質問の直前まで」。再実行なのでログへは積み直さない。
                 runAnswer(chat, unanswered.text, historyOf(chat.messages.dropLast(1)))
@@ -81,11 +81,13 @@ class SectionChatController(
 
         // 要約が既にあるなら作り直さない（説明を畳むだけでよい）。
         if (chat.summary != null) {
-            updateChat { it.copy(aiNotice = null) }
+            updateChat { it.copy(aiNotice = null, answerError = null) }
             return
         }
         cancelJobs()
-        updateChat { it.copy(isSummaryLoading = true, aiNotice = null, error = null) }
+        updateChat {
+            it.copy(isSummaryLoading = true, aiNotice = null, error = null, answerError = null)
+        }
         startSummary(chat.sectionTitle, chat.sectionContext)
     }
 
@@ -145,8 +147,8 @@ class SectionChatController(
             it.copy(
                 messages = it.messages + ChatMessage(ChatRole.User, question),
                 isGenerating = true,
-                error = null,
-                // 前回の説明は畳む。新しい試行が古い理由を上書きする。
+                // 前回の説明・失敗は畳む。新しい試行が古い理由を上書きする。
+                answerError = null,
                 aiNotice = null
             )
         }
@@ -204,7 +206,8 @@ class SectionChatController(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
+            // **要約側の `error` へ入れない。** 要約が出ていると表示が優先されて見えなくなる。
+            updateChat { it.copy(isGenerating = false, answerError = e.message ?: "Unknown error") }
         }
     }
 

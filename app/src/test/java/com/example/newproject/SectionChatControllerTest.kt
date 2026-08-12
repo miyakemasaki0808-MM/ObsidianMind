@@ -5,6 +5,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.ChatRole
 import com.example.newproject.ai.AiAvailability
+import com.example.newproject.ai.AiTimeoutException
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -245,6 +246,75 @@ class SectionChatControllerTest {
         assertEquals(ChatRole.Ai, afterRetry.messages.last().role)
         assertEquals("生成された回答", afterRetry.messages.last().text)
         assertFalse(afterRetry.isGenerating)
+    }
+
+    /**
+     * **生成が例外で落ちたときも再試行できる。**
+     *
+     * 回答の失敗を要約と同じ `error` 欄へ入れていたころは、**要約の表示が優先されて
+     * 文言が出ず、未回答の質問だけが残った**（タイムアウト・出力打ち切りがこれ）。
+     * availability の失敗しか通していなかったため、テストもすり抜けていた。
+     */
+    @Test
+    fun `回答がタイムアウトしても文言が残り再試行で作り直される`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "セクションの要約" }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+
+        ai.onGenerate = { throw AiTimeoutException("AI応答がタイムアウトしました（60秒）") }
+        controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        val afterFailure = requireNotNull(state.value.sectionChat)
+        // **要約の欄へ入れない。** 入れると要約が優先されて画面から消える。
+        assertNull(afterFailure.error)
+        assertEquals("AI応答がタイムアウトしました（60秒）", afterFailure.answerError)
+        assertEquals("セクションの要約", afterFailure.summary)
+        assertEquals(1, afterFailure.messages.size)
+        assertFalse(afterFailure.isGenerating)
+
+        ai.onGenerate = { "生成された回答" }
+        controller.retryAi()
+        advanceUntilIdle()
+
+        val afterRetry = requireNotNull(state.value.sectionChat)
+        assertNull(afterRetry.answerError)
+        assertEquals(2, afterRetry.messages.size)
+        assertEquals(ChatRole.Ai, afterRetry.messages.last().role)
+        assertEquals("生成された回答", afterRetry.messages.last().text)
+    }
+
+    /** 要約の生成が落ちた場合も、同じ導線で作り直せる。 */
+    @Test
+    fun `要約の生成が落ちても再試行で作り直せる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+        assertEquals("タイムアウト", state.value.sectionChat?.error)
+
+        ai.onGenerate = { "生成された要約" }
+        controller.retryAi()
+        advanceUntilIdle()
+
+        val chat = requireNotNull(state.value.sectionChat)
+        assertNull(chat.error)
+        assertEquals("生成された要約", chat.summary)
     }
 
     /**

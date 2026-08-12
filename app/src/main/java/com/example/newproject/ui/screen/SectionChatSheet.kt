@@ -32,6 +32,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -115,7 +116,8 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorText)
+                // 要約を作れなかった。**再試行できる**ので導線を添える。
+                state.error != null -> SectionChatErrorRow(state.error, onRetryAi)
                 state.aiNotice == null -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
             }
 
@@ -159,6 +161,13 @@ fun SectionChatSheet(
                 }
             }
 
+            // **回答の失敗はログの直後に出す。** 要約エリアへ出すと、要約がある場合に
+            // 表示が優先されて見えず、未回答の質問だけが残る（タイムアウト・出力打ち切り）。
+            state.answerError?.let { message ->
+                Spacer(modifier = Modifier.height(8.dp))
+                SectionChatErrorRow(message, onRetryAi)
+            }
+
             // ── この部分でクイズ ─────────────────────────
             // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
             // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
@@ -193,6 +202,22 @@ fun SectionChatSheet(
                 )
             }
         }
+    }
+}
+
+/**
+ * 生成が失敗したことと、その再試行導線。
+ *
+ * **状態の説明（`AiStatusNoticeRow`）とは別物なので色を分ける。** あちらは
+ * 「まだ何も失敗していない」状態の説明で通常色、こちらは実際の失敗なので `ErrorText`。
+ * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
+ */
+@Composable
+private fun SectionChatErrorRow(message: String, onRetry: () -> Unit) {
+    Column {
+        Text(message, fontSize = 13.sp, color = ErrorText)
+        Spacer(modifier = Modifier.height(6.dp))
+        TextButton(onClick = onRetry) { Text("再試行") }
     }
 }
 

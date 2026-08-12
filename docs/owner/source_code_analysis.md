@@ -500,9 +500,10 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 
 | AI状態 | 動作 |
 |---|---|
-| Available | 1,200文字以内の本文抜粋を含むプロンプトで2〜4文を生成（予算内は原文、超過時は骨格＋冒頭＋末尾。§8.4） |
-| NeedsDownload | モデルダウンロードを開始し進捗を `SummaryState.Downloading` へ反映 |
-| Unavailable | `SummaryState.AiUnavailable`。現在のUIでは要約パネル自体を表示しない |
+| `Ready` | 1,200文字以内の本文抜粋を含むプロンプトで2〜4文を生成（予算内は原文、超過時は骨格＋冒頭＋末尾。§8.4） |
+| `NeedsDownload` | モデルダウンロードを開始し進捗を `SummaryState.Downloading` へ反映 |
+| `Downloading` | **何もしない。** 走行中のDLへ合流できないので、次にノートを開いたときに取り直す |
+| `Unsupported` / `TemporarilyUnavailable` | `SummaryState.AiUnavailable`。現在のUIでは要約パネル自体を表示しない |
 | 生成失敗 | `SummaryState.Error` |
 
 ダウンロード完了後は保持していたタイトル・本文で要約と関連ノート検索を再実行する。
@@ -905,7 +906,6 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 - フォルダ一覧取得失敗は握りつぶされ、ユーザーには通知されない。
 - 補記削除は `deleteDocument()` の `Boolean` を確認せず一覧を再読込する。失敗時は対象が残ることで間接的に分かるが、明示エラーは出ない。
 - 閲覧履歴のJSONパース失敗は空履歴として扱い、ユーザーには通知されない（実害は履歴消失のみ）。
-- `checkAvailability()` 自体の例外は `Unavailable` にまとめるため、非対応端末と一時的な状態取得失敗を区別できない。
 - `ContentResolver.openInputStream()` が `null` の場合は空文字を返し、読込失敗と空ノートを区別しない。
 
 ---
@@ -1173,7 +1173,6 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 | 中 | **痕跡サイドカーの書き込みが原子的でない** | `"wt"` の直接上書きで、書込中にプロセスが死ぬと部分破損が残り復旧元もない。SAF の `renameDocument()` がプロバイダ非互換なため割り切っている。破損は checksum で検知して孤立扱い |
 | 中 | **蒸留の実機確認が未実施** | v1 Phase 1〜6 は自動テストまで完了。**本文を書き換える唯一の機能**なので、実機での書き戻し確認が残っている |
 | 中 | **instrumentation の最新件数での実行が未実施** | 2026-08-08 に 37/37 成功（Pixel 10 Pro Fold・Android 17）。その後3件増えて**40件での実行は未実施** |
-| 低 | 状態取得失敗と非対応の同一視 | `checkAvailability()` の一時エラーも `Unavailable` へ畳むため、**非対応端末と一時的な取得失敗を区別できない** |
 | 低 | YAML解析が簡易 | 複雑なYAML・引用・ネスト・複数行値に対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
 | 低 | Markdownの未対応項目 | クリック可能リンク・埋め込み（`![[note]]`）・数式。リスト構造と画像は実装・実機確認済み |
 | 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時IDで解決するため不定にならない。ただし決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |

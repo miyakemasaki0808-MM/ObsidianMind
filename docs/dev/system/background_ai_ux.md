@@ -99,7 +99,7 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 
 ## 6. AI状態の見せ方は起動契機で決まる（2026-08-12）
 
-`AICoreClient.checkAvailability()` は **4つの別々のこと**を `Unavailable` へ畳んでいた —
+`AICoreClient.checkAvailability()` は **4つの別々のこと**を旧 `Unavailable` へ畳んでいた —
 端末非対応／未知の `FeatureStatus`／状態取得の例外／**ノート切替によるキャンセル**。
 下流はどれが起きたか区別できないまま各自で見せ方を作り、**5通りの状態モデル**と
 互いに矛盾する文言が並んでいた。
@@ -129,7 +129,7 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
   しかも再試行が出ないので異常だと誰も気づけない。再試行可能側へ寄せる
 - **`cause` を画面へ出さない。** SDKの `message` は英語か null で次の行動を助けない。診断のためだけに運ぶ
 
-**`Available` → `Ready` の改名は、意味が変わったからではない。** 旧 `Available` との `!=` 比較3箇所は
+**旧 `Available` を `Ready` へ改名したのは、意味が変わったからではない。** 旧 `Available` との `!=` 比較3箇所は
 変種を足しただけでは素通りするので、**触れている識別子ごと改名して全10箇所をコンパイラに挙げさせた**。
 以後は `AiAvailabilityUsageTest` が等値比較とメンバーimportをソース走査で禁じる（許容リストなし）。
 **メンバーimportまで禁じるのは**、`import ...AiAvailability.Ready` を許すと `x == Ready` と書けて
@@ -180,7 +180,7 @@ Channel を返せることが、**実在しない「走行中のDLを購読で�
 
 ### キャンセルの再throw
 
-`CancellationException` は `Exception` の子なので、`catch (e: Exception)` が飲んで `Unavailable` を返していた。
+`CancellationException` は `Exception` の子なので、`catch (e: Exception)` が飲んで旧 `Unavailable` を返していた。
 **症状は「ノートを切り替えた瞬間に『この端末では利用できません』が一瞬出る」。**
 分類を `ai/AiAvailabilityMapping.kt` へ出したのは、`AICoreClient` が `Generation.getClient()` を抱えていて
 素のJVMでは組み立てられず、**この7経路を1つも検証できなかった**ため。それがこの誤りが長く残った理由でもある。

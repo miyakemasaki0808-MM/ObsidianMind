@@ -100,7 +100,9 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
   **全画面ルート表示中は Snackbar を抑制する。**
 
 - **エラー／AI非対応／キャンセル時:**
-  - AI非対応端末 → `Unusable`（機能ごと出さない）
+  - 端末AIが使えない → `AiNotice`。**`Unusable` でも `Error` でもない**（状態の説明であって
+    生成の失敗ではない）。恒久非対応のときだけ「もらう」ボタンを無効にする
+    → [background_ai_ux](../system/background_ai_ux.md) §6
   - 生成失敗 → `Error`（メッセージを表示）
   - ノート切替 → `cancelAndClear()`。`CancellationException` は再throwする
   - 保存失敗 → `Failed`。**本文は状態に残し、再試行できる**
@@ -108,7 +110,8 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
 ## 6. 状態とデータ
 
 **UI状態 `RemarkState`（`NoteUiState.remarkState`）:**
-`Idle` / `Loading` / `Ready(reflection, replyStatus)` / `Empty` / `Unusable` / `Error`
+`Idle` / `Loading` / `Ready(reflection, replyStatus)` / `Empty` / `Unusable` / `Error` /
+`AiNotice(notice, sourceTitle)`
 
 **保存状態 `ReplyStatus`:** `None` / `Saving` / `Held` / `Saved` / `Failed`
 （**`Boolean` 2本にしない** — 「保存中かつ未保存」のような無意味な組み合わせが型として作れてしまう）
