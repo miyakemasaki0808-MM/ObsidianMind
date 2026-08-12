@@ -8,7 +8,17 @@ package com.example.newproject.model.state
  */
 data class AiStatusNotice(
     val message: String,
-    val action: AiNoticeAction
+    val action: AiNoticeAction,
+    /**
+     * **あとで状況が変わりうるか。** false は恒久非対応（AICoreが無い）だけ。
+     *
+     * **[action] と混同しない。** あちらは「この説明に添えるボタン」で、こちらは
+     * 「機能の入口そのものを閉じてよいか」である。DL実行中は**説明にCTAを出さない**
+     * （押しても始まるものが無い）が、**入口は開けておく必要がある** — 閉じると
+     * DL完了後に押し直せず、同じノートでその機能が二度と使えなくなる。
+     * 実際に両者を `action == None` の1つで判定して、その不具合を作った。
+     */
+    val canTryAgainLater: Boolean
 )
 
 /**

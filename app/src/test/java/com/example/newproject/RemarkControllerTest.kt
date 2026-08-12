@@ -142,6 +142,32 @@ class RemarkControllerTest {
         assertEquals(0, ai.generateCalls)
         val notice = (state.value.remarkState as RemarkState.AiNotice).notice
         assertEquals(AiNoticeAction.None, notice.action)
+        // **入口は閉じない。** 閉じるとDL完了後に押し直せなくなる。
+        assertTrue(
+            "DL中でも「ひとことをもらう」は押せること",
+            state.value.remarkState.canRequestRemark()
+        )
+    }
+
+    /** **DL完了後に押し直せる。** 入口を閉じると同じノートで二度ともらえなくなる。 */
+    @Test
+    fun `DL完了後に押し直すとひとことが届く`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient(AiAvailability.Downloading) {
+            "「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"
+        }
+        val controller = controller(state, ai)
+
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+        assertTrue(state.value.remarkState.canRequestRemark())
+
+        ai.availability = AiAvailability.Ready
+        controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
+
+        assertTrue(
+            "DL完了後の再操作で生成まで進むこと: ${state.value.remarkState}",
+            state.value.remarkState is RemarkState.Ready
+        )
     }
 
     /** **取得失敗は押す意味がある。** 非対応と同じ枝へ畳むと導線ごと消えてしまう。 */

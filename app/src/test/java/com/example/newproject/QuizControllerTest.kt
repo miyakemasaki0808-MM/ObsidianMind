@@ -176,6 +176,42 @@ class QuizControllerTest {
         assertEquals(0, ai.generateCalls)
         val notice = (state.value.quizState as QuizState.AiNotice).notice
         assertEquals(AiNoticeAction.None, notice.action)
+        // **入口は閉じない。** 閉じるとDL完了後に押し直せず、同じノートで二度と作れない。
+        assertTrue(
+            "DL中でもクイズのボタンは押せること",
+            state.value.quizState.isQuizActionEnabled()
+        )
+    }
+
+    /**
+     * **DL完了後に押し直せる。** 「通知にCTAが無い」と「入口を閉じる」を
+     * `action == None` の1つで判定していたため、要約などが始めたDLの最中に押すと
+     * **完了後も同じノートではクイズを作れなくなっていた。**
+     */
+    @Test
+    fun `DL完了後に押し直すとクイズが作られる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient(AiAvailability.Downloading) { trueFalseResponse() }
+        val controller = QuizController(
+            this,
+            ai,
+            state.quizWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+        assertTrue(state.value.quizState.isQuizActionEnabled())
+
+        // DLが完了した端末の状態になる。
+        ai.availability = AiAvailability.Ready
+        controller.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        assertTrue(
+            "DL完了後の再操作で生成まで進むこと: ${state.value.quizState}",
+            state.value.quizState is QuizState.Success
+        )
     }
 
     /** **取得失敗は押す意味がある。** 非対応と畳むとボタンごと死ぬ。 */

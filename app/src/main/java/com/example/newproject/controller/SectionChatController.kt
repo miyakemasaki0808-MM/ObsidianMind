@@ -64,8 +64,22 @@ class SectionChatController(
      */
     fun retryAi() {
         val chat = state.current.sectionChat ?: return
-        // **要約が既にあるなら作り直さない。** その場合の説明は質問への回答が
-        // 出せなかったものなので、説明を畳んで質問を押し直せる状態へ戻すだけでよい。
+
+        // **答えを返せていない質問があるなら、それを再実行する。**
+        // ログの末尾がユーザー発言のままなのは「回答を作れなかった」場合だけで、
+        // 説明を畳むだけだと**未回答の発言だけが残り、同じ候補を押すと質問が重複する。**
+        val unanswered = chat.messages.lastOrNull()?.takeIf { it.role == ChatRole.User }
+        if (unanswered != null) {
+            answerJob?.cancel()
+            updateChat { it.copy(isGenerating = true, aiNotice = null, error = null) }
+            answerJob = scope.launch {
+                // 履歴は「その質問の直前まで」。再実行なのでログへは積み直さない。
+                runAnswer(chat, unanswered.text, historyOf(chat.messages.dropLast(1)))
+            }
+            return
+        }
+
+        // 要約が既にあるなら作り直さない（説明を畳むだけでよい）。
         if (chat.summary != null) {
             updateChat { it.copy(aiNotice = null) }
             return
@@ -126,62 +140,76 @@ class SectionChatController(
         val question = text.trim()
         if (question.isBlank() || chat.isGenerating) return
 
-        val history = chat.messages.map {
-            (if (it.role == ChatRole.User) "User" else "AI") to it.text
-        }
+        val history = historyOf(chat.messages)
         updateChat {
             it.copy(
                 messages = it.messages + ChatMessage(ChatRole.User, question),
                 isGenerating = true,
-                error = null
+                error = null,
+                // 前回の説明は畳む。新しい試行が古い理由を上書きする。
+                aiNotice = null
             )
         }
-        answerJob = scope.launch {
-            // **未取得を非対応と同じ文言へ畳まない。** ここは `!= Available` の1行だったため、
-            // モデルが未取得なだけの端末にも「この端末ではAIを利用できません。」と出ていた。
-            when (val availability = aiClient.checkAvailability()) {
-                AiAvailability.Ready -> Unit
-                AiAvailability.NeedsDownload,
-                AiAvailability.Downloading,
-                AiAvailability.Unsupported,
-                is AiAvailability.TemporarilyUnavailable -> {
-                    updateChat {
-                        it.copy(
-                            isGenerating = false,
-                            aiNotice = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
-                        )
-                    }
-                    return@launch
-                }
-            }
-            try {
-                val sectionExcerpt = withContext(excerptDispatcher) {
-                    buildNoteExcerpt(chat.sectionContext, NoteExcerptLimits.SECTION)
-                }
-                val answer = aiClient.generate(
-                    PromptBuilder.buildSectionChatPrompt(
-                        sectionTitle = chat.sectionTitle,
-                        sectionExcerpt = sectionExcerpt,
-                        history = history,
-                        question = question
-                    )
-                ).trim()
+        answerJob = scope.launch { runAnswer(chat, question, history) }
+    }
+
+    /**
+     * 質問1件ぶんの回答を作る。**ログへ質問は積まない**（積むのは呼び出し側）。
+     *
+     * [retryAi] からも呼ぶので、ここで積むと再実行のたびに質問が重複する。
+     */
+    private suspend fun runAnswer(
+        chat: SectionChatState,
+        question: String,
+        history: List<Pair<String, String>>
+    ) {
+        // **未取得を非対応と同じ文言へ畳まない。** ここは `!= Available` の1行だったため、
+        // モデルが未取得なだけの端末にも「この端末ではAIを利用できません。」と出ていた。
+        when (val availability = aiClient.checkAvailability()) {
+            AiAvailability.Ready -> Unit
+            AiAvailability.NeedsDownload,
+            AiAvailability.Downloading,
+            AiAvailability.Unsupported,
+            is AiAvailability.TemporarilyUnavailable -> {
                 updateChat {
                     it.copy(
-                        messages = it.messages + ChatMessage(
-                            ChatRole.Ai,
-                            answer.ifBlank { "（回答を生成できませんでした）" }
-                        ),
-                        isGenerating = false
+                        isGenerating = false,
+                        aiNotice = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
                     )
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
+                return
             }
         }
+        try {
+            val sectionExcerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(chat.sectionContext, NoteExcerptLimits.SECTION)
+            }
+            val answer = aiClient.generate(
+                PromptBuilder.buildSectionChatPrompt(
+                    sectionTitle = chat.sectionTitle,
+                    sectionExcerpt = sectionExcerpt,
+                    history = history,
+                    question = question
+                )
+            ).trim()
+            updateChat {
+                it.copy(
+                    messages = it.messages + ChatMessage(
+                        ChatRole.Ai,
+                        answer.ifBlank { "（回答を生成できませんでした）" }
+                    ),
+                    isGenerating = false
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
+        }
     }
+
+    private fun historyOf(messages: List<ChatMessage>): List<Pair<String, String>> =
+        messages.map { (if (it.role == ChatRole.User) "User" else "AI") to it.text }
 
     /** 生成中・完了済みのセッションをシートに再表示する。 */
     fun showSheet() {

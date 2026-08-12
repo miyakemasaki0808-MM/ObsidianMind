@@ -85,6 +85,38 @@ class AiStatusNoticesTest {
         assertNotEquals(unsupported.action, failed.action)
     }
 
+    /**
+     * **入口を閉じてよいのは恒久非対応だけ。**
+     *
+     * DL実行中はCTAを持たないが「あとで変わる」ので、`action == None` を
+     * 恒久の代わりに使うと**DL完了後にクイズもひとことも押し直せなくなる**（実際にそうなった）。
+     */
+    @Test
+    fun `あとで変わりうるかは恒久非対応だけ false になる`() {
+        val laterByAvailability = listOf(
+            AiAvailability.NeedsDownload to true,
+            AiAvailability.Downloading to true,
+            AiAvailability.TemporarilyUnavailable(IllegalStateException()) to true,
+            AiAvailability.Unsupported to false
+        )
+        laterByAvailability.forEach { (availability, expected) ->
+            val notice = requireNotNull(aiStatusNotice(availability, LABEL))
+            assertEquals(
+                "$availability の canTryAgainLater",
+                expected,
+                notice.canTryAgainLater
+            )
+        }
+    }
+
+    /** **CTAの有無と「あとで変わりうるか」は別物。** DL中がその実例。 */
+    @Test
+    fun `DL中は導線を持たないが入口は閉じない`() {
+        val notice = requireNotNull(aiStatusNotice(AiAvailability.Downloading, LABEL))
+        assertEquals(AiNoticeAction.None, notice.action)
+        assertTrue(notice.canTryAgainLater)
+    }
+
     @Test
     fun `機能名は呼び出し側の指定がそのまま入る`() {
         val notice = requireNotNull(aiStatusNotice(AiAvailability.Unsupported, "蒸留"))

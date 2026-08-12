@@ -168,11 +168,10 @@ fun SectionChatSheet(
                 is QuizState.Loading -> "クイズを作成中…"
                 is QuizState.Success -> "✓ クイズを開く"
                 is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
-                // 非対応なら押せないので、再試行を促すラベルにしない。
-                is QuizState.AiNotice -> when (quizState.notice.action) {
-                    AiNoticeAction.Retry -> "↻ クイズを再試行"
-                    else -> "クイズを使えません"
-                }
+                // 恒久非対応なら押せないので、再試行を促すラベルにしない。
+                // **DL中は押せる**ので「使えません」と言い切らない（→ isQuizActionEnabled）。
+                is QuizState.AiNotice ->
+                    if (quizState.notice.canTryAgainLater) "↻ クイズを再試行" else "クイズを使えません"
             }
             Button(
                 onClick = onQuizTap,

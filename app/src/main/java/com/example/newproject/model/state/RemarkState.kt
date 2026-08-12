@@ -56,12 +56,15 @@ sealed class RemarkState {
 /**
  * 「ひとことをもらう」を押させてよいか。
  *
- * 生成中の二重起動を防ぐほか、**非対応端末では押しても同じ答えしか返らない**ので無効にする。
- * 取得失敗だけは押す意味がある。
+ * 生成中の二重起動を防ぐほか、**恒久非対応の端末では押しても同じ答えしか返らない**ので無効にする。
+ *
+ * **通知のCTA（[AiNoticeAction]）で判定しない。** DL実行中の説明はCTAを持たないが、
+ * 入口まで閉じると**DL完了後に押し直せなくなる**。閉じてよいのは
+ * [AiStatusNotice.canTryAgainLater] が false のときだけ。
  */
 internal fun RemarkState.canRequestRemark(): Boolean = when (this) {
     is RemarkState.Loading -> false
-    is RemarkState.AiNotice -> notice.action != AiNoticeAction.None
+    is RemarkState.AiNotice -> notice.canTryAgainLater
     else -> true
 }
 

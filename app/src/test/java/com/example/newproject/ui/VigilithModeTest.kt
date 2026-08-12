@@ -174,7 +174,7 @@ class VigilithModeTest {
             resolveVigilithPresentation(
                 "ai",
                 DistillState.AiNotice(
-                    AiStatusNotice("ダウンロードが必要です。", AiNoticeAction.Download)
+                    AiStatusNotice("ダウンロードが必要です。", AiNoticeAction.Download, canTryAgainLater = true)
                 ),
                 null
             ).mode

@@ -44,12 +44,16 @@ sealed class QuizState {
 /**
  * セクションチャットの「クイズ」ボタンを押させてよいか。
  *
- * 生成中は二重に走らせないため、非対応は押しても同じ答えしか返らないため無効にする。
- * 取得失敗だけは押す意味がある（次は状態を取れるかもしれない）。
+ * 生成中は二重に走らせないため無効。説明が出ているときは
+ * **[AiStatusNotice.canTryAgainLater] だけで決める。**
+ *
+ * **`action == Retry` で判定しない。** DL実行中の説明は「押しても始まるものが無い」ので
+ * CTAを持たないが、入口まで閉じると**DL完了後に押し直せず、同じノートでクイズが
+ * 二度と作れなくなる**（実際にその不具合を作った）。閉じてよいのは恒久非対応だけ。
  */
 internal fun QuizState.isQuizActionEnabled(): Boolean = when (this) {
     is QuizState.Loading -> false
-    is QuizState.AiNotice -> notice.action == AiNoticeAction.Retry
+    is QuizState.AiNotice -> notice.canTryAgainLater
     else -> true
 }
 

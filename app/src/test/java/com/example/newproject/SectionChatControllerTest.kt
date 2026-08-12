@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.ChatRole
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CompletableDeferred
@@ -198,6 +199,52 @@ class SectionChatControllerTest {
         assertNull(chat.aiNotice)
         assertEquals("生成された要約", chat.summary)
         assertEquals("対象セクション", chat.sectionTitle)
+    }
+
+    /**
+     * **回答が出せなかったときの再試行は、その質問を作り直す。**
+     *
+     * 説明を畳むだけだと**未回答の発言だけがログに残り**、同じ候補を押し直すと
+     * 質問が重複する。既存テストは要約側の再試行しか通していなかった。
+     */
+    @Test
+    fun `回答が出せなかった質問は再試行で作り直される`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "セクションの要約" }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+
+        // 質問を送った時点で端末AIが使えなくなる。
+        ai.availability =
+            AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))
+        controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        val afterFailure = requireNotNull(state.value.sectionChat)
+        assertEquals(AiNoticeAction.Retry, requireNotNull(afterFailure.aiNotice).action)
+        assertEquals(1, afterFailure.messages.size)
+        assertEquals(ChatRole.User, afterFailure.messages.single().role)
+
+        ai.availability = AiAvailability.Ready
+        ai.onGenerate = { "生成された回答" }
+        controller.retryAi()
+        advanceUntilIdle()
+
+        val afterRetry = requireNotNull(state.value.sectionChat)
+        assertNull(afterRetry.aiNotice)
+        // **質問は積み直さない。** 積み直すと再試行のたびに重複する。
+        assertEquals(2, afterRetry.messages.size)
+        assertEquals("これはどういう意味ですか", afterRetry.messages.first().text)
+        assertEquals(ChatRole.Ai, afterRetry.messages.last().role)
+        assertEquals("生成された回答", afterRetry.messages.last().text)
+        assertFalse(afterRetry.isGenerating)
     }
 
     /**
