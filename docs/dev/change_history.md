@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-12 | — | 機能仕様6本の数値・データ契約を §5〜§7 へ一本化し、§8 を判断の理由だけに絞った | **[related_notes_ai](features/related_notes_ai.md)**・**[reflect_distill](features/reflect_distill.md)**・**[reflect_reading_trace](features/reflect_reading_trace.md)**・[note_age_paper](features/note_age_paper.md)・[note_image_rendering](features/note_image_rendering.md)・[dark_mode](features/dark_mode.md) |
 | 2026-08-12 | — | 技術俯瞰の §14.2 を実装から作り直し、§15 を廃止して行き先の表へ置き換えた | [source_code_analysis](../owner/source_code_analysis.md) §14.2 |
 | 2026-08-12 | — | 壊れた節参照25件を内容参照へ直し、番号依存を AdrShapeTest で止めた | [lessons](lessons.md) L29 |
 | 2026-08-12 | — | 最終検証の捏造コミット12件を実在する値へ直し、実在と12節の存在を検査へ載せた | **[lessons](lessons.md) L38**・[_template](features/_template.md) |
@@ -72,7 +73,7 @@
 | 2026-08-01 | — | N-1 段階2「孤児判定の純関数」を実装した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階2）**・[roadmap](../_wip/roadmap.md) N-1 |
 | 2026-08-01 | — | N-1 段階1「痕跡の列挙API」を実装し、段階0 の実機確認完了で SCAN-1 を台帳から削除した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階1）**・[roadmap](../_wip/roadmap.md) N-1 |
 | 2026-08-01 | — | N-1 段階0「走査を正直にする」を実装した（SCAN-1・実機確認待ち） | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の段階0）**・[roadmap](../_wip/roadmap.md) N-1 |
-| 2026-08-01 | — | SYNC-1 の着手対象を「孤児のみ削除」に確定し（オーナー判断）、段階0〜4 の計画を roadmap N-1 として起こした | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の決着）〜§14**・[roadmap](../_wip/roadmap.md) N-1 |
+| 2026-08-01 | — | SYNC-1 の着手対象を「孤児のみ削除」に確定し（オーナー判断）、段階0〜4 の計画を roadmap N-1 として起こした | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の決着）**・[roadmap](../_wip/roadmap.md) N-1 |
 | 2026-08-01 | — | SYNC-1 の決着を同日中に更新した — 「手動で固定」ではなく「観測してから自動化へ昇格する段階案」を採る | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除）**・[lessons](lessons.md) L17・L24 |
 | 2026-08-01 | — | SYNC-1（読書痕跡の孤児掃除）を「手動・自動を問わず採らない」で決着させ、性能懸念を PERF-1 として分離した | **[reflect_reading_trace](features/reflect_reading_trace.md)（孤児掃除の決着）**・[lessons](lessons.md) L24 |
 | 2026-08-01 | — | AI-1 を実機確認まで終えてクローズし、MAINT-1 を優先度「超低」へ落とした | **[ai_input_excerpt](system/ai_input_excerpt.md)（予算調整）**・[lessons](lessons.md) L23 |
