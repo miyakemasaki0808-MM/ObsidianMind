@@ -1,7 +1,7 @@
 # 読書痕跡（ReadingTrace）
 
 **状態:** Implemented — 稼働中。サイドカーは **schema v5**。孤児掃除は手動削除まで提供し、自動化は未着手
-**最終検証:** 2026-08-12 / `f3fb353`（`ReadingTraceLimits` の全定数を実装と突合し、§8 の「ファイル読み込み 64KB」を `MAX_FILE_BYTES = 128KB` へ訂正。**判断1〜17 の突合は `bb764ce` 時点の結果を引き継いでおり、今回は当て直していない**）
+**最終検証:** 2026-08-12 / `f3fb353`（`ReadingTraceLimits` の全定数を実装と突合。**判断1〜17 は `bb764ce` 時点の突合結果を引き継いでおり、当て直していない**）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
@@ -54,8 +54,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 ### 保存先とスキーマ
 
-- **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**
-  （SAFでは隠しフォルダの扱いがプロバイダごとに違い、可搬性を損なうため）
+- **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**（理由は §8 判断6）
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
 - **スキーマ:** **v5**。v1〜v4 も読める（書き戻しは常に現行版）
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
@@ -122,8 +121,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 ### 書き込みと破損
 
-- **書き込み:** `"wt"`（write-truncate）の直接上書きで**原子性はない**。
-  SAF の `renameDocument()` はプロバイダ非互換で古典的な atomic-rename が成立しないため
+- **書き込み:** `"wt"`（write-truncate）の直接上書き。**原子性はない**（理由は §8 判断8）
 - **破損の扱い:** `ReadingTraceJson` の checksum 検証で検知し、**孤立扱い**にする
 - **厳格検証（読込時）:** checksum不一致・パース失敗・空ファイル・不正UTF-8・未知の `schemaVersion` は
   **破損＝孤立扱い**（カードを出さず、ノートには触れない）
@@ -295,7 +293,8 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 #### 判断6: 保存はvault内の可視フォルダにサイドカー（本文は編集しない）
 
 - 本文(.md)に埋め込まず**別ファイル**に持つ（frontmatter埋め込み＝本文編集の truncate 窓リスクを避ける）
-- 置き場に `.` 始まりの隠しフォルダを使わないのは、**SAFプロバイダによって作成が失敗する**ため
+- 置き場に `.` 始まりの隠しフォルダを使わないのは、**SAFプロバイダによって作成そのものが失敗することがあり、
+  隠しフォルダの扱い自体がプロバイダごとに違って可搬性を損なう**ため
 - **1痕跡=1ファイル**にしてファイル名をパスのハッシュにしたのは、相対パスが `/` を含み
   **そのままファイル名にできない**ため
 - 除外を3箇所に置いたのは、**最後の1つ（`listTopLevelFolders`）を塞がないと
