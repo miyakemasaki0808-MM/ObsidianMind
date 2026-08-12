@@ -45,7 +45,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 1. ノートを開く → **本文表示より前**に痕跡セッションが作られる（→ [rediscover](rediscover.md) 判断3）
 2. 読む（スクロール位置と到達率が追われる）
 3. ノートを離れる／アプリを背面化する → **`flush` / `pause` でファイルへ書く**
-   - 記録には門番がある（**10秒以上・1ブロック以上**）
+   - 記録には門番がある（条件は §5）
 4. 次に同じノートを **Rediscover で引き当てる**と、再会カードが出る
 
 ## 5. 機能仕様
@@ -83,14 +83,25 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 > ここを忘れて個別上限だけ上げると、**正しく保存したファイルを次回読めなくなる**
 > （保存側と読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
 
+### `ReadingTraceLimits` 以外の調整値
+
+| 対象 | 値 | 定数 | 定義 |
+|---|---|---|---|
+| 記録の門番（能動読書時間） | 10秒 | `MIN_READING_MILLIS` | `ReadingTraceController.kt` |
+| 索引の再走査間隔 | 60秒 | `DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS` | `ReadingTraceStore.kt` |
+| 到達率の量子化 | 20段階（＝5%刻み） | `READING_FRACTION_STEPS` | `ui/ReadingProgressGeometry.kt` |
+
 ### 記録の門番
 
 | | 条件 |
 |---|---|
-| **記録**（JSONに訪問を足す） | **能動読書10秒以上**。経路は問わない（Rediscover・さがす・関連のどれでも） |
+| **記録**（JSONに訪問を足す） | **能動読書が `MIN_READING_MILLIS` 以上**、かつ**本文が1ブロック以上描画されている**（`totalBlocks > 0`）。経路は問わない（Rediscover・さがす・関連のどれでも） |
 | **表示**（再会カード） | **Rediscover 経路のみ** |
 
 「スクロールが発生した」は条件に**入れない**（→ §8 判断3）。
+
+**門番には例外が1つある** — ひとことへの返事を預かっているときは門番を通さずに記録する。
+理由と契約は [reflect_remark](reflect_remark.md) が持つ。
 
 ### 到達率
 
@@ -100,13 +111,14 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 - 可視割合は座標（Int）だけを受ける純関数 `visibleFractionOfBlock`（`ui/ReadingProgressGeometry.kt`）で求める
 - **切り捨て**にする（丸めない）
-- **報告は5%刻みへ量子化**してから `distinctUntilChanged` に掛ける
+- **報告は `READING_FRACTION_STEPS` 段階へ量子化**してから `distinctUntilChanged` に掛ける
 - 最深判定は「index が深い、または同じ index でより深くまで見えた」。**巻き戻しでは下がらない**
 - 高さが測れていないブロック（`size <= 0`）は**全可視扱い**
 
 ### 索引の再走査
 
-**上限は60秒に1回。** 契機は「キーが索引に不在だったとき」だけで、TTL でも ContentObserver でもない（→ §8 判断12）。
+**上限は `DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS` に1回。**
+契機は「キーが索引に不在だったとき」だけで、TTL でも ContentObserver でもない（→ §8 判断12）。
 
 ### 書き込みと破損
 
@@ -239,7 +251,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 `withNoteScopedReset()` がノートを開くたびカードを消す。つまり
 **「カードが存在する」こと自体が「Rediscover由来」を意味**しており、フラグは二つ目の真実になるだけ。
 
-#### 判断3: 記録の条件は「能動読書10秒以上」だけ
+#### 判断3: 記録の条件は能動読書の時間だけ
 
 一瞬引いて送った分を数えると痕跡が濁り、表示のたびSAF書込が走る（クラウドVaultなら同期トラフィック）。
 「スクロールが発生した」は条件に入れない — **1画面に収まる短いノートが永久に記録されない**ため。
