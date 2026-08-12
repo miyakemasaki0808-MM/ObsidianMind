@@ -48,6 +48,7 @@ import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.theme.AccentSurface
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.OnButtonAi
@@ -71,6 +72,7 @@ fun SectionChatSheet(
     quizState: QuizState,
     onSuggestionTap: (String) -> Unit,
     onQuizTap: () -> Unit,
+    onRetryAi: () -> Unit,
     onDismiss: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -114,7 +116,14 @@ fun SectionChatSheet(
                     color = OnSurface
                 )
                 state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorText)
-                else -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
+                state.aiNotice == null -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
+            }
+
+            // **状態の説明はエラーと別に出す。** 色で区別せず、導線の有無で区別する。
+            // 要約の後に置くのは、質問への回答が出せなかった場合にも同じ場所へ出るため。
+            state.aiNotice?.let { notice ->
+                Spacer(modifier = Modifier.height(8.dp))
+                AiStatusNoticeRow(notice = notice, onRetry = onRetryAi)
             }
 
             Spacer(modifier = Modifier.height(20.dp))

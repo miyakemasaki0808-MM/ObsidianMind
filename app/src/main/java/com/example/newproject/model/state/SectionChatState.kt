@@ -13,5 +13,14 @@ data class SectionChatState(
     val suggestions: List<String> = emptyList(),
     val messages: List<ChatMessage> = emptyList(),  // 質問タップによる Q&A ログ
     val isGenerating: Boolean = false,              // 質問の回答生成中
-    val error: String? = null
+    /** 生成そのものが失敗したときの文言。**端末AIの状態は [aiNotice] が持つ。** */
+    val error: String? = null,
+    /**
+     * 端末AIが使えないことの説明。
+     *
+     * **[error] へ文字列だけ入れない。** 導線（[AiNoticeAction]）を捨てると
+     * 一時的に使えないだけの場合に再試行できず、赤いエラー表示にもなってしまう
+     * （状態の説明は失敗ではないので、色で区別しない）。
+     */
+    val aiNotice: AiStatusNotice? = null
 )

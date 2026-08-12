@@ -52,17 +52,41 @@ class SectionChatController(
                 isSectionChatSheetVisible = true
             )
         }
+        startSummary(section.title, section.text)
+    }
+
+    /**
+     * いま使えなかった機能をもう一度試す。
+     *
+     * **`open()` は再入できない**（`sectionChat != null` なら再表示するだけ）ので、
+     * 説明に添えた再試行導線はここへ来る。対象は開いているセッションの本文で、
+     * 別のセクションへは移らない。
+     */
+    fun retryAi() {
+        val chat = state.current.sectionChat ?: return
+        // **要約が既にあるなら作り直さない。** その場合の説明は質問への回答が
+        // 出せなかったものなので、説明を畳んで質問を押し直せる状態へ戻すだけでよい。
+        if (chat.summary != null) {
+            updateChat { it.copy(aiNotice = null) }
+            return
+        }
+        cancelJobs()
+        updateChat { it.copy(isSummaryLoading = true, aiNotice = null, error = null) }
+        startSummary(chat.sectionTitle, chat.sectionContext)
+    }
+
+    private fun startSummary(sectionTitle: String, sectionText: String) {
         openJob = scope.launch {
             when (val availability = aiClient.checkAvailability()) {
                 AiAvailability.Ready -> {
                     try {
                         val sectionExcerpt = withContext(excerptDispatcher) {
-                            buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                            buildNoteExcerpt(sectionText, NoteExcerptLimits.SECTION)
                         }
                         val summary = aiClient
                             .generate(
                                 PromptBuilder.buildSectionSummaryPrompt(
-                                    section.title,
+                                    sectionTitle,
                                     sectionExcerpt
                                 )
                             )
@@ -78,18 +102,19 @@ class SectionChatController(
                     } catch (e: Exception) {
                         updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
                     }
-                    fetchSuggestions(section)
+                    fetchSuggestions(sectionTitle, sectionText)
                 }
                 // **旧文言は存在しない機能を案内していた** —「先にAI要約や補記メモを実行して
                 // ダウンロードしてください」の補記メモは 2026-08-09 にひとことへ置き換わっている。
-                // 文言は aiStatusNotice に任せ、ここは沈黙しないことだけを決める。
+                // **`message` だけを取り出さない** — 導線を捨てると一時的な不可でも再試行できず、
+                // エラーと同じ赤で出てしまう（状態の説明は失敗ではない）。
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
                 AiAvailability.Unsupported,
                 is AiAvailability.TemporarilyUnavailable -> updateChat {
                     it.copy(
                         isSummaryLoading = false,
-                        error = aiStatusNotice(availability, OPEN_FEATURE_LABEL)?.message
+                        aiNotice = aiStatusNotice(availability, OPEN_FEATURE_LABEL)
                     )
                 }
             }
@@ -123,7 +148,7 @@ class SectionChatController(
                     updateChat {
                         it.copy(
                             isGenerating = false,
-                            error = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)?.message
+                            aiNotice = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
                         )
                     }
                     return@launch
@@ -191,14 +216,14 @@ class SectionChatController(
         answerJob = null
     }
 
-    private suspend fun fetchSuggestions(section: NoteSection) {
+    private suspend fun fetchSuggestions(sectionTitle: String, sectionText: String) {
         try {
             val sectionExcerpt = withContext(excerptDispatcher) {
-                buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                buildNoteExcerpt(sectionText, NoteExcerptLimits.SECTION)
             }
             val raw = aiClient.generate(
                 PromptBuilder.buildSectionSuggestionsPrompt(
-                    section.title,
+                    sectionTitle,
                     sectionExcerpt
                 )
             )

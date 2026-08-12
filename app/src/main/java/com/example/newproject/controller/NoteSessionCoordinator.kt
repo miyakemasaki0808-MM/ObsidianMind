@@ -400,6 +400,8 @@ internal class NoteSessionCoordinator(
 
     fun showSectionChat() = sectionChat.showSheet()
     fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
+    /** 説明に添えた再試行導線。開いているセクションのまま端末AIを試し直す。 */
+    fun retrySectionAi() = sectionChat.retryAi()
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
 
     /** セッションの明示終了。文脈が閉じるので、そのセッションで作ったクイズも破棄する。 */

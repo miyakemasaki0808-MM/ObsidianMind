@@ -253,19 +253,21 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                     Text("さがしています…", fontSize = 13.sp, color = OnSurfaceMuted)
                 }
                 is SearchState.Success -> {
+                    // AIが選定に関与しなかったことだけを添える。**理由は書かない** —
+                    // 非対応でも未取得でも取得失敗でも、ここに出ているものは同じだから。
+                    // **0件でも出す。** ここを結果ありの枝に入れていたため、
+                    // 「見つかりませんでした。」だけが出て、AIを使わずに探した事実が消えていた。
+                    if (!state.isAiAssisted) {
+                        Text(
+                            "AIを使えないため、キーワード一致で表示しています。",
+                            fontSize = 12.sp,
+                            color = OnSurfaceFaint
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
                     if (state.results.isEmpty()) {
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
-                        // AIが選定に関与しなかったことだけを添える。**理由は書かない** —
-                        // 非対応でも未取得でも取得失敗でも、ここに出ているものは同じだから。
-                        if (!state.isAiAssisted) {
-                            Text(
-                                "AIを使えないため、キーワード一致で表示しています。",
-                                fontSize = 12.sp,
-                                color = OnSurfaceFaint
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                        }
                         state.results.forEachIndexed { index, note ->
                             RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
                             if (index < state.results.lastIndex) {

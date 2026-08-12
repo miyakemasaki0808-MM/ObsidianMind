@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.domain.markdown.NoteSection
 import kotlinx.coroutines.CompletableDeferred
@@ -124,6 +125,79 @@ class SectionChatControllerTest {
         summaryResponse.complete("キャンセル後の結果")
         advanceUntilIdle()
         assertNull(state.value.sectionChat)
+    }
+
+    /**
+     * **状態の説明を `error` へ文字列で入れない。**
+     *
+     * 文字列だけにすると導線（[AiNoticeAction]）が消えて再試行できず、
+     * さらにシートが赤いエラー表示で描いてしまう（状態の説明は失敗ではない）。
+     */
+    @Test
+    fun `一時的に使えないときは再試行できる説明を持つ`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(
+            this,
+            FakeAiClient(
+                AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))
+            ),
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+
+        val chat = requireNotNull(state.value.sectionChat)
+        assertNull("エラー欄へ流し込まないこと", chat.error)
+        assertEquals(AiNoticeAction.Retry, requireNotNull(chat.aiNotice).action)
+        assertFalse(chat.isSummaryLoading)
+    }
+
+    /** **非対応には再試行導線を出さない。** 何度押しても同じ答えが返る。 */
+    @Test
+    fun `非対応の説明は再試行導線を持たない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = SectionChatController(
+            this,
+            FakeAiClient(AiAvailability.Unsupported),
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+
+        val notice = requireNotNull(state.value.sectionChat?.aiNotice)
+        assertEquals(AiNoticeAction.None, notice.action)
+    }
+
+    /** 再試行は開いているセクションのまま試し直す（別のセクションへは移らない）。 */
+    @Test
+    fun `再試行すると同じセクションで生成し直す`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient(
+            AiAvailability.TemporarilyUnavailable(IllegalStateException("boom"))
+        ) { "生成された要約" }
+        val controller = SectionChatController(
+            this,
+            ai,
+            state.sectionChatWriter,
+            StandardTestDispatcher(testScheduler)
+        )
+
+        controller.open(NoteSection("対象セクション", 2, "## 対象セクション\n本文"))
+        advanceUntilIdle()
+        assertNotNull(state.value.sectionChat?.aiNotice)
+
+        ai.availability = AiAvailability.Ready
+        controller.retryAi()
+        advanceUntilIdle()
+
+        val chat = requireNotNull(state.value.sectionChat)
+        assertNull(chat.aiNotice)
+        assertEquals("生成された要約", chat.summary)
+        assertEquals("対象セクション", chat.sectionTitle)
     }
 
     /**
