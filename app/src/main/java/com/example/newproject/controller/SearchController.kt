@@ -122,7 +122,10 @@ class SearchController(
                 val notes = collectInScopeCached(handle, folder)
                 when (val result = searchPickerUseCase.pick(q, notes)) {
                     is PickerResult.Success ->
-                        setStateIfCurrent(requestId, SearchState.Success(result.notes, result.aiStatus))
+                        setStateIfCurrent(
+                            requestId,
+                            SearchState.Success(result.notes, result.isAiAssisted)
+                        )
                     is PickerResult.Error ->
                         setStateIfCurrent(requestId, SearchState.Error(result.message))
                 }

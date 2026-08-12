@@ -450,6 +450,8 @@ private fun ProgressRow(label: String) {
 
 @Composable
 internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modifier) {
+    // **要約はノートを開くと自動で走る機能なので、使えないときは黙る。**
+    // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
     when (summaryState) {
         is SummaryState.Idle,
         is SummaryState.AiUnavailable -> return
@@ -511,9 +513,6 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                 }
                 is SummaryState.Success -> {
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
-                }
-                is SummaryState.AiUnavailable -> {
-                    Text("この端末はGemini Nanoに対応していません。", fontSize = 13.sp, color = OnSurfaceFaint)
                 }
                 is SummaryState.Error -> {
                     Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)

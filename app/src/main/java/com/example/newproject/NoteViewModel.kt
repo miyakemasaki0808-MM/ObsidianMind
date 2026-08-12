@@ -514,9 +514,7 @@ class NoteViewModel internal constructor(
                 is RelatedNotesResult.Success -> session.setRelatedNotesState(
                     RelatedNotesState.Success(
                         relatedNotes = result.relatedNotes,
-                        aiNotes = result.aiNotes,
-                        aiStatus = result.aiStatus,
-                        aiErrorMessage = result.aiErrorMessage
+                        aiNotes = result.aiNotes
                     )
                 )
                 is RelatedNotesResult.Error ->

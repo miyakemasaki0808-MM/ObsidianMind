@@ -40,7 +40,6 @@ import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState
-import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.theme.PanelChip
 import com.example.newproject.ui.theme.PanelDividerStrong
@@ -257,8 +256,14 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
                     if (state.results.isEmpty()) {
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
-                        fallbackNotice(state.aiStatus)?.let { notice ->
-                            Text(notice, fontSize = 12.sp, color = OnSurfaceFaint)
+                        // AIが選定に関与しなかったことだけを添える。**理由は書かない** —
+                        // 非対応でも未取得でも取得失敗でも、ここに出ているものは同じだから。
+                        if (!state.isAiAssisted) {
+                            Text(
+                                "AIを使えないため、キーワード一致で表示しています。",
+                                fontSize = 12.sp,
+                                color = OnSurfaceFaint
+                            )
                             Spacer(modifier = Modifier.height(6.dp))
                         }
                         state.results.forEachIndexed { index, note ->
@@ -277,12 +282,4 @@ private fun SearchResultPanel(state: SearchState, onNoteClick: (RelatedNote) -> 
             }
         }
     }
-}
-
-// AI が使えないときは素のキーワード一致で表示している旨を添える。
-private fun fallbackNotice(status: AiRecommendationStatus): String? = when (status) {
-    AiRecommendationStatus.Ready -> null
-    AiRecommendationStatus.Unavailable -> "AI非対応のため、キーワード一致で表示しています。"
-    AiRecommendationStatus.NeedsDownload -> "AI準備中のため、キーワード一致で表示しています。"
-    AiRecommendationStatus.Error -> "AIエラーのため、キーワード一致で表示しています。"
 }

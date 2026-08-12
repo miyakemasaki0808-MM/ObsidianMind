@@ -17,10 +17,3 @@ data class RelatedNote(
      */
     val snippet: String? = null
 )
-
-enum class AiRecommendationStatus {
-    Ready,
-    Unavailable,
-    NeedsDownload,
-    Error
-}
