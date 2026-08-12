@@ -7,6 +7,7 @@ import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.NoteExcerptLimits
@@ -52,13 +53,7 @@ class SectionChatController(
             )
         }
         openJob = scope.launch {
-            when (aiClient.checkAvailability()) {
-                AiAvailability.Unsupported,
-                is AiAvailability.CheckFailed ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
-                AiAvailability.NeedsDownload,
-                AiAvailability.Downloading ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
+            when (val availability = aiClient.checkAvailability()) {
                 AiAvailability.Ready -> {
                     try {
                         val sectionExcerpt = withContext(excerptDispatcher) {
@@ -85,6 +80,18 @@ class SectionChatController(
                     }
                     fetchSuggestions(section)
                 }
+                // **旧文言は存在しない機能を案内していた** —「先にAI要約や補記メモを実行して
+                // ダウンロードしてください」の補記メモは 2026-08-09 にひとことへ置き換わっている。
+                // 文言は aiStatusNotice に任せ、ここは沈黙しないことだけを決める。
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                AiAvailability.Unsupported,
+                is AiAvailability.CheckFailed -> updateChat {
+                    it.copy(
+                        isSummaryLoading = false,
+                        error = aiStatusNotice(availability, OPEN_FEATURE_LABEL)?.message
+                    )
+                }
             }
         }
     }
@@ -105,13 +112,20 @@ class SectionChatController(
             )
         }
         answerJob = scope.launch {
-            when (aiClient.checkAvailability()) {
+            // **未取得を非対応と同じ文言へ畳まない。** ここは `!= Available` の1行だったため、
+            // モデルが未取得なだけの端末にも「この端末ではAIを利用できません。」と出ていた。
+            when (val availability = aiClient.checkAvailability()) {
                 AiAvailability.Ready -> Unit
                 AiAvailability.NeedsDownload,
                 AiAvailability.Downloading,
                 AiAvailability.Unsupported,
                 is AiAvailability.CheckFailed -> {
-                    updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
+                    updateChat {
+                        it.copy(
+                            isGenerating = false,
+                            error = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)?.message
+                        )
+                    }
                     return@launch
                 }
             }
@@ -207,5 +221,12 @@ class SectionChatController(
             val current = state.sectionChat ?: return@update state
             state.copy(sectionChat = block(current))
         }
+    }
+
+    private companion object {
+        /** シートを開いたときの説明へ埋め込む機能名。 */
+        const val OPEN_FEATURE_LABEL = "この部分の要約と質問"
+        /** 質問を送ったときの説明へ埋め込む機能名。 */
+        const val ANSWER_FEATURE_LABEL = "質問への回答"
     }
 }
