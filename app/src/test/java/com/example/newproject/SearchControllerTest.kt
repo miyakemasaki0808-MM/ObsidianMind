@@ -7,12 +7,10 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState
-import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
 import com.example.newproject.model.NoteUiStateStore
-import kotlinx.coroutines.flow.emptyFlow
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -236,7 +234,7 @@ class SearchControllerTest {
         state: NoteUiStateStore,
         vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
         vaultGeneration: () -> Long = { 0L },
-        aiClient: AiClient = NoOpAiClient
+        aiClient: AiClient = FakeAiClient(AiAvailability.Unsupported)
     ) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         vault = vault,
@@ -245,9 +243,4 @@ class SearchControllerTest {
         vaultGeneration = vaultGeneration
     )
 
-    private object NoOpAiClient : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unsupported
-        override suspend fun generate(prompt: String): String = ""
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
 }

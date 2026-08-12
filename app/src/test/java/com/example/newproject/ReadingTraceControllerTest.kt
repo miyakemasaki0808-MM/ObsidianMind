@@ -17,14 +17,11 @@ import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.AiTimeoutException
-import com.google.mlkit.genai.common.DownloadStatus
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
 import com.example.newproject.model.NoteUiStateStore
-import kotlinx.coroutines.flow.emptyFlow
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -910,7 +907,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `single visit shows raw trace without calling ai`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 1)) }
-        val ai = ImmediateAiClient()
+        val ai = FakeAiClient.returning(AI_SUMMARY)
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
@@ -931,7 +928,7 @@ class ReadingTraceControllerTest {
     fun `raw trace is visible while the summary is still generating`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(persistence, TestClock(), ControllableAiClient(), state)
+        val controller = controller(persistence, TestClock(), FakeAiClient.deferred(), state)
 
         controller.revealTrace("ideas/habit.md")
         runCurrent()
@@ -948,7 +945,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `summary is generated once visits accumulated`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val ai = ImmediateAiClient()
+        val ai = FakeAiClient.returning(AI_SUMMARY)
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
@@ -980,7 +977,7 @@ class ReadingTraceControllerTest {
         val persistence = FakePersistence().apply {
             put(storedTrace(count = 2, aiSummary = "キャッシュ済み", aiSummaryVisitCount = 2))
         }
-        val ai = ImmediateAiClient()
+        val ai = FakeAiClient.returning(AI_SUMMARY)
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
@@ -996,7 +993,7 @@ class ReadingTraceControllerTest {
         val persistence = FakePersistence().apply {
             put(storedTrace(count = 3, aiSummary = "古い要約", aiSummaryVisitCount = 2))
         }
-        val ai = ImmediateAiClient()
+        val ai = FakeAiClient.returning(AI_SUMMARY)
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
@@ -1013,7 +1010,7 @@ class ReadingTraceControllerTest {
     fun `ai failure keeps the raw trace visible`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(persistence, TestClock(), FailingAiClient(), state)
+        val controller = controller(persistence, TestClock(), FakeAiClient.failingGeneration { AiTimeoutException("タイムアウト") }, state)
 
         controller.revealTrace("ideas/habit.md")
         advanceUntilIdle()
@@ -1028,7 +1025,7 @@ class ReadingTraceControllerTest {
     @Test
     fun `needs download does not generate and keeps the raw trace`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val ai = ImmediateAiClient(availability = AiAvailability.NeedsDownload)
+        val ai = FakeAiClient.returning(AI_SUMMARY, AiAvailability.NeedsDownload)
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
@@ -1044,14 +1041,14 @@ class ReadingTraceControllerTest {
     @Test
     fun `note change discards a late summary`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
         runCurrent()
         controller.cancelForNoteChange()
-        ai.response.complete("後から届いた要約")
+        ai.completeAll("後から届いた要約")
         advanceUntilIdle()
 
         assertNull(state.value.readingTraceCard?.aiSummary)
@@ -1074,14 +1071,14 @@ class ReadingTraceControllerTest {
     @Test
     fun `dismissed card stays folded when the summary arrives`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
         controller.revealTrace("ideas/habit.md")
         runCurrent()
         controller.dismissCard()
-        ai.response.complete(AI_SUMMARY)
+        ai.completeAll(AI_SUMMARY)
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -1733,7 +1730,7 @@ class ReadingTraceControllerTest {
 private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
-    aiClient: AiClient = ImmediateAiClient(),
+    aiClient: AiClient = FakeAiClient.returning(AI_SUMMARY),
     state: NoteUiStateStore = NoteUiStateStore(NoteUiState()),
     vault: FakeVault = FakeVault(),
     // 既定では UI 用と同じスコープ。両者を分ける必要があるのは
@@ -1759,36 +1756,6 @@ private class FakeVault(var key: String? = VAULT_A)
 
 private const val VAULT_A = "content://vault-a"
 private const val VAULT_B = "content://vault-b"
-
-private class ImmediateAiClient(
-    private val availability: AiAvailability = AiAvailability.Ready,
-    private val response: String = AI_SUMMARY
-) : AiClient {
-    var generateCalls = 0
-        private set
-
-    override suspend fun checkAvailability(): AiAvailability = availability
-
-    override suspend fun generate(prompt: String): String {
-        generateCalls++
-        return response
-    }
-
-    override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-}
-
-private class FailingAiClient : AiClient {
-    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-    override suspend fun generate(prompt: String): String = throw AiTimeoutException("タイムアウト")
-    override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-}
-
-private class ControllableAiClient : AiClient {
-    val response = CompletableDeferred<String>()
-    override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-    override suspend fun generate(prompt: String): String = response.await()
-    override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-}
 
 private const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 

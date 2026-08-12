@@ -13,12 +13,9 @@ import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.ReplyStatus
 import com.example.newproject.model.state.canRequestRemark
-import com.google.mlkit.genai.common.DownloadStatus
-import kotlinx.coroutines.CompletableDeferred
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -47,7 +44,7 @@ class RemarkControllerTest {
         val handed = mutableListOf<String>()
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」という考えは、反対するときにも成り立つだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」という考えは、反対するときにも成り立つだろうか？"),
             onRemarkReady = { handed += it.remark }
         )
 
@@ -66,7 +63,7 @@ class RemarkControllerTest {
         val handed = mutableListOf<String>()
         val controller = controller(
             state,
-            ImmediateAiClient("[[C01]]と並べると、「対話」の始め方まで考えられそうです。"),
+            FakeAiClient.returning("[[C01]]と並べると、「対話」の始め方まで考えられそうです。"),
             onRemarkReady = { handed += it.remark }
         )
 
@@ -90,7 +87,7 @@ class RemarkControllerTest {
         val handed = mutableListOf<String>()
         val controller = controller(
             state,
-            ImmediateAiClient("この内容をもっと掘り下げて整理すると、新しい発見があるかもしれませんね。"),
+            FakeAiClient.returning("この内容をもっと掘り下げて整理すると、新しい発見があるかもしれませんね。"),
             onRemarkReady = { handed += it.remark }
         )
 
@@ -104,7 +101,7 @@ class RemarkControllerTest {
     @Test
     fun `NONE は空振りとして扱われる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(state, ImmediateAiClient("NONE"))
+        val controller = controller(state, FakeAiClient.returning("NONE"))
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
@@ -119,7 +116,7 @@ class RemarkControllerTest {
     @Test
     fun `AI非対応は失敗ではなく説明になり、もう一度きく導線が消える`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(state, UnavailableAiClient)
+        val controller = controller(state, FakeAiClient(AiAvailability.Unsupported))
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
@@ -133,7 +130,7 @@ class RemarkControllerTest {
     @Test
     fun `状態を取得できなかっただけならもう一度きける`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val controller = controller(state, CheckFailingAiClient)
+        val controller = controller(state, FakeAiClient(AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))))
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
@@ -145,14 +142,14 @@ class RemarkControllerTest {
     @Test
     fun `生成中の連続タップでは二重に走らせない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val controller = controller(state, ai)
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
 
         assertEquals(1, ai.generateCalls)
-        ai.response.complete("NONE")
+        ai.completeAll("NONE")
     }
 
     /**
@@ -163,13 +160,13 @@ class RemarkControllerTest {
     @Test
     fun `ノート切替後に届いた結果は捨てられる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val handed = mutableListOf<String>()
         val controller = controller(state, ai, onRemarkReady = { handed += it.remark })
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
         controller.cancelAndClear()
-        ai.response.complete("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？")
+        ai.completeAll("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？")
 
         assertTrue(state.value.remarkState is RemarkState.Idle)
         assertTrue(handed.isEmpty())
@@ -179,7 +176,7 @@ class RemarkControllerTest {
     fun `ノート切替で状態がIdleへ戻る`() = runTest {
         val state = NoteUiStateStore(NoteUiState(remarkState = RemarkState.Loading("旧ノート")))
 
-        controller(state, UnavailableAiClient).cancelAndClear()
+        controller(state, FakeAiClient(AiAvailability.Unsupported)).cancelAndClear()
 
         assertTrue(state.value.remarkState is RemarkState.Idle)
     }
@@ -188,7 +185,7 @@ class RemarkControllerTest {
     @Test
     fun `候補ノートは3件で切られ現ノート自身と重複は除かれる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = CapturingAiClient()
+        val ai = FakeAiClient.returning("NONE")
         val controller = controller(state, ai)
 
         controller.create(
@@ -214,7 +211,7 @@ class RemarkControllerTest {
     @Test
     fun `候補に本文スニペットが添えられる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = CapturingAiClient()
+        val ai = FakeAiClient.returning("NONE")
         val controller = controller(state, ai)
 
         controller.create(
@@ -237,7 +234,7 @@ class RemarkControllerTest {
     @Test
     fun `既にwikilinkされた候補は後回しになる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = CapturingAiClient()
+        val ai = FakeAiClient.returning("NONE")
         val controller = controller(state, ai)
 
         controller.create(
@@ -264,7 +261,7 @@ class RemarkControllerTest {
         val saved = mutableListOf<Triple<String, String, Long>>()
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
             persistReply = { path, reply, at ->
                 saved += Triple(path, reply, at)
                 ReplySaveOutcome.Saved
@@ -288,7 +285,7 @@ class RemarkControllerTest {
         val saved = mutableListOf<String>()
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
             persistReply = { _, reply, _ -> saved += reply; ReplySaveOutcome.Saved }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
@@ -308,7 +305,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
             persistReply = { _, _, _ -> ReplySaveOutcome.Held }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
@@ -330,7 +327,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
             persistReply = { _, _, _ -> ReplySaveOutcome.Lost }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
@@ -348,7 +345,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
-            ImmediateAiClient("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
+            FakeAiClient.returning("「読書は著者との対話である」は、反対する相手にも当てはまるだろうか？"),
             persistReply = { _, _, _ -> error("書き込み失敗") }
         )
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
@@ -376,7 +373,7 @@ class RemarkControllerTest {
         val mirrored = mutableListOf<String>()
         val controller = controller(
             state,
-            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            FakeAiClient.returning("「対話」を、反論まで含む応答として捉えている。"),
             saved = Reflection("前回のひとこと", 1L),
             persistMirrored = { _, text -> mirrored += text }
         )
@@ -395,7 +392,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
-            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            FakeAiClient.returning("「対話」を、反論まで含む応答として捉えている。"),
             saved = Reflection("前回のひとこと", 1L),
             currentContent = { null }
         )
@@ -412,7 +409,7 @@ class RemarkControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(
             state,
-            ImmediateAiClient("「対話」を、反論まで含む応答として捉えている。"),
+            FakeAiClient.returning("「対話」を、反論まで含む応答として捉えている。"),
             saved = Reflection("前回のひとこと", 1L),
             persistReply = { _, _, _ -> ReplySaveOutcome.Lost }
         )
@@ -429,7 +426,7 @@ class RemarkControllerTest {
     fun `専用画面を開くと保存済みの組が復元される`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
         val stored = Reflection("前回のひとこと", 1L, "前回の返事", 2L)
-        val controller = controller(state, UnavailableAiClient, saved = stored)
+        val controller = controller(state, FakeAiClient(AiAvailability.Unsupported), saved = stored)
 
         controller.restoreSaved("ideas/dialog.md", "対話について")
 
@@ -443,21 +440,21 @@ class RemarkControllerTest {
     @Test
     fun `生成中なら保存済みで上書きしない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val controller = controller(state, ai, saved = Reflection("古いひとこと", 1L))
 
         controller.create("対話について", body, relatedNotes = emptyList(), aiNotes = emptyList())
         controller.restoreSaved("ideas/dialog.md", "対話について")
 
         assertTrue(state.value.remarkState is RemarkState.Loading)
-        ai.response.complete("NONE")
+        ai.completeAll("NONE")
     }
 
     @Test
     fun `保存済みが無ければIdleのまま`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
 
-        controller(state, UnavailableAiClient, saved = null).restoreSaved("ideas/dialog.md", "対話について")
+        controller(state, FakeAiClient(AiAvailability.Unsupported), saved = null).restoreSaved("ideas/dialog.md", "対話について")
 
         assertTrue(state.value.remarkState is RemarkState.Idle)
     }
@@ -486,7 +483,7 @@ class RemarkControllerTest {
         excerptDispatcher = Dispatchers.Unconfined
     )
 
-    private fun candidateLinesOf(ai: CapturingAiClient): List<String> =
+    private fun candidateLinesOf(ai: FakeAiClient): List<String> =
         requireNotNull(ai.lastPrompt).lines().filter { it.matches(Regex("^C\\d\\d \\| .*")) }
 
     private fun relatedNote(
@@ -500,47 +497,4 @@ class RemarkControllerTest {
         snippet = snippet
     )
 
-    private class ImmediateAiClient(private val response: String) : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-        override suspend fun generate(prompt: String): String = response
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private class CapturingAiClient : AiClient {
-        var lastPrompt: String? = null
-            private set
-
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-        override suspend fun generate(prompt: String): String {
-            lastPrompt = prompt
-            return "NONE"
-        }
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private class ControllableAiClient : AiClient {
-        val response = CompletableDeferred<String>()
-        var generateCalls = 0
-            private set
-
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-        override suspend fun generate(prompt: String): String {
-            generateCalls++
-            return response.await()
-        }
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private object UnavailableAiClient : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Unsupported
-        override suspend fun generate(prompt: String): String = ""
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private object CheckFailingAiClient : AiClient {
-        override suspend fun checkAvailability(): AiAvailability =
-            AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))
-        override suspend fun generate(prompt: String): String = ""
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
 }

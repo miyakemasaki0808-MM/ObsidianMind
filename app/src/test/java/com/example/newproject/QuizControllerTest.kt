@@ -8,13 +8,9 @@ import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.ai.AiAvailability
-import com.example.newproject.ai.AiClient
-import com.google.mlkit.genai.common.DownloadStatus
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -29,7 +25,7 @@ class QuizControllerTest {
 
     @Test
     fun `生成画面を開かなくてもQ&A生成が完了して保持される`() = runTest {
-        val aiClient = ControllableAiClient()
+        val aiClient = FakeAiClient.deferred()
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
@@ -43,7 +39,7 @@ class QuizControllerTest {
 
         val loading = state.value.quizState as QuizState.Loading
         assertEquals(QuizFormat.TrueFalse, loading.format)
-        aiClient.response.complete(trueFalseResponse())
+        aiClient.completeAll(trueFalseResponse())
         advanceUntilIdle()
 
         val success = state.value.quizState as QuizState.Success
@@ -56,7 +52,7 @@ class QuizControllerTest {
 
     @Test
     fun `生成中の再タップでは要求を重複させない`() = runTest {
-        val aiClient = ControllableAiClient()
+        val aiClient = FakeAiClient.deferred()
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
@@ -71,13 +67,13 @@ class QuizControllerTest {
         runCurrent()
 
         assertEquals(1, aiClient.generateCalls)
-        aiClient.response.complete(trueFalseResponse())
+        aiClient.completeAll(trueFalseResponse())
         advanceUntilIdle()
     }
 
     @Test
     fun `ノート切替時の破棄後に古い生成結果を反映しない`() = runTest {
-        val aiClient = ControllableAiClient()
+        val aiClient = FakeAiClient.deferred()
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
@@ -89,7 +85,7 @@ class QuizControllerTest {
         controller.create("古いノート", "本文")
         runCurrent()
         controller.cancelAndClear()
-        aiClient.response.complete(trueFalseResponse())
+        aiClient.completeAll(trueFalseResponse())
         advanceUntilIdle()
 
         assertTrue(state.value.quizState is QuizState.Idle)
@@ -100,7 +96,7 @@ class QuizControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
-            ImmediateAiClient("生成できませんでした"),
+            FakeAiClient.returning("生成できませんでした"),
             state.quizWriter,
             StandardTestDispatcher(testScheduler)
         )
@@ -123,7 +119,7 @@ class QuizControllerTest {
         )
         val controller = QuizController(
             this,
-            ImmediateAiClient(""),
+            FakeAiClient.returning(""),
             state.quizWriter,
             StandardTestDispatcher(testScheduler)
         )
@@ -144,7 +140,7 @@ class QuizControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
-            FixedAvailabilityAiClient(AiAvailability.Unsupported),
+            FakeAiClient(AiAvailability.Unsupported),
             state.quizWriter,
             StandardTestDispatcher(testScheduler)
         )
@@ -164,7 +160,7 @@ class QuizControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = QuizController(
             this,
-            FixedAvailabilityAiClient(
+            FakeAiClient(
                 AiAvailability.CheckFailed(IllegalStateException("AICore not bound"))
             ),
             state.quizWriter,
@@ -177,35 +173,6 @@ class QuizControllerTest {
         val notice = (state.value.quizState as QuizState.AiNotice).notice
         assertEquals(AiNoticeAction.Retry, notice.action)
         assertTrue(state.value.quizState.isQuizActionEnabled())
-    }
-
-    private class FixedAvailabilityAiClient(
-        private val availability: AiAvailability
-    ) : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = availability
-        override suspend fun generate(prompt: String): String = ""
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private class ControllableAiClient : AiClient {
-        val response = CompletableDeferred<String>()
-        var generateCalls = 0
-            private set
-
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-
-        override suspend fun generate(prompt: String): String {
-            generateCalls++
-            return response.await()
-        }
-
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private class ImmediateAiClient(private val response: String) : AiClient {
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-        override suspend fun generate(prompt: String): String = response
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
 
     private fun trueFalseResponse() = """

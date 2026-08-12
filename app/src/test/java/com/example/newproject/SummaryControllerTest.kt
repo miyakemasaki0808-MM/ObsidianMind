@@ -1,7 +1,6 @@
 package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
-import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SummaryController
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.model.NoteUiState
@@ -11,9 +10,8 @@ import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.Flow
 import com.example.newproject.model.NoteUiStateStore
-import kotlinx.coroutines.flow.receiveAsFlow
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -37,7 +35,7 @@ class SummaryControllerTest {
     @Test
     fun `DL中にノートを切り替えると完了後の要約が書き戻されない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
-        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
+        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         var modelReadyCalls = 0
         val controller = controller(state, ai) { _, _ -> modelReadyCalls++ }
@@ -57,7 +55,7 @@ class SummaryControllerTest {
 
         assertTrue(state.value.summaryState is SummaryState.Idle)
         assertEquals(0, modelReadyCalls)
-        assertEquals(0, ai.generateCount)
+        assertEquals(0, ai.generateCalls)
     }
 
     /**
@@ -71,7 +69,7 @@ class SummaryControllerTest {
     @Test
     fun `DL中に次の要約が始まると完了後に前の入力で走らない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
-        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
+        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         val readyWith = mutableListOf<Pair<String, String>>()
         val controller = controller(state, ai) { title, content -> readyWith += title to content }
@@ -104,7 +102,7 @@ class SummaryControllerTest {
     @Test
     fun `DL中に次の要約が始まると進捗で新しい要約が上書きされない`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
-        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
+        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
@@ -125,7 +123,7 @@ class SummaryControllerTest {
     @Test
     fun `DL完了で要約と関連ノートが再開される`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
-        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
+        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         val readyWith = mutableListOf<Pair<String, String>>()
         val controller = controller(state, ai) { title, content -> readyWith += title to content }
@@ -144,7 +142,7 @@ class SummaryControllerTest {
     @Test
     fun `DL失敗はエラーとして表示される`() = runTest {
         val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
-        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads)
+        val ai = FakeAiClient(AiAvailability.NeedsDownload, downloads) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
@@ -159,7 +157,7 @@ class SummaryControllerTest {
 
     @Test
     fun `モデルDL済みならそのまま要約が出る`() = runTest {
-        val ai = FakeAiClient(AiAvailability.Ready, Channel())
+        val ai = FakeAiClient(AiAvailability.Ready, Channel()) { "要約結果" }
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
 
@@ -184,21 +182,4 @@ class SummaryControllerTest {
         onModelReady = onModelReady
     )
 
-    private class FakeAiClient(
-        var availability: AiAvailability,
-        private val downloads: Channel<DownloadStatus>
-    ) : AiClient {
-        // どの本文で生成が走ったかを見るために、プロンプトをそのまま控える。
-        val prompts = mutableListOf<String>()
-        val generateCount: Int get() = prompts.size
-
-        override suspend fun checkAvailability(): AiAvailability = availability
-
-        override suspend fun generate(prompt: String): String {
-            prompts += prompt
-            return "要約結果"
-        }
-
-        override fun downloadModel(): Flow<DownloadStatus> = downloads.receiveAsFlow()
-    }
 }

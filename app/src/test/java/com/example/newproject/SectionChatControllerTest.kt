@@ -3,14 +3,11 @@ package com.example.newproject
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.ai.AiAvailability
-import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.markdown.NoteSection
-import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -27,7 +24,7 @@ class SectionChatControllerTest {
 
     @Test
     fun `シートを閉じても要約生成が継続して結果が保持される`() = runTest {
-        val aiClient = ControllableAiClient()
+        val (aiClient, summaryResponse) = sectionChatAi()
         val state = NoteUiStateStore(NoteUiState())
         val controller = SectionChatController(
             this,
@@ -46,7 +43,7 @@ class SectionChatControllerTest {
         assertFalse(state.value.isSectionChatSheetVisible)
         assertNotNull(state.value.sectionChat)
 
-        aiClient.summaryResponse.complete("生成された要約")
+        summaryResponse.complete("生成された要約")
         advanceUntilIdle()
 
         assertFalse(state.value.isSectionChatSheetVisible)
@@ -57,7 +54,7 @@ class SectionChatControllerTest {
 
     @Test
     fun `生成中に再度開いても二重生成せず元のセクションを再表示する`() = runTest {
-        val aiClient = ControllableAiClient()
+        val (aiClient, summaryResponse) = sectionChatAi()
         val state = NoteUiStateStore(NoteUiState())
         val controller = SectionChatController(
             this,
@@ -82,7 +79,7 @@ class SectionChatControllerTest {
 
     @Test
     fun `完了後に吹き出しを開くと再生成せず既存結果を表示する`() = runTest {
-        val aiClient = ControllableAiClient()
+        val (aiClient, summaryResponse) = sectionChatAi()
         val state = NoteUiStateStore(NoteUiState())
         val controller = SectionChatController(
             this,
@@ -93,7 +90,7 @@ class SectionChatControllerTest {
 
         controller.open(NoteSection("対象", 2, "本文"))
         runCurrent()
-        aiClient.summaryResponse.complete("完成した要約")
+        summaryResponse.complete("完成した要約")
         advanceUntilIdle()
         val callsAfterCompletion = aiClient.generateCalls
 
@@ -108,7 +105,7 @@ class SectionChatControllerTest {
 
     @Test
     fun `明示終了すると生成をキャンセルしてセッションを破棄する`() = runTest {
-        val aiClient = ControllableAiClient()
+        val (aiClient, summaryResponse) = sectionChatAi()
         val state = NoteUiStateStore(NoteUiState())
         val controller = SectionChatController(
             this,
@@ -124,23 +121,22 @@ class SectionChatControllerTest {
         assertNull(state.value.sectionChat)
         assertFalse(state.value.isSectionChatSheetVisible)
 
-        aiClient.summaryResponse.complete("キャンセル後の結果")
+        summaryResponse.complete("キャンセル後の結果")
         advanceUntilIdle()
         assertNull(state.value.sectionChat)
     }
 
-    private class ControllableAiClient : AiClient {
+    /**
+     * 要約の生成だけを保留し、候補質問は即返すダブル。
+     *
+     * シートは「要約 → 候補質問」の順に2回生成するので、1回目だけ止めれば
+     * 「要約待ちのあいだ何が起きるか」を作れる。
+     */
+    private fun sectionChatAi(): Pair<FakeAiClient, CompletableDeferred<String>> {
         val summaryResponse = CompletableDeferred<String>()
-        var generateCalls = 0
-            private set
-
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Ready
-
-        override suspend fun generate(prompt: String): String {
-            generateCalls++
-            return if (generateCalls == 1) summaryResponse.await() else "質問1\n質問2"
+        val client = FakeAiClient {
+            if (generateCalls == 1) summaryResponse.await() else "質問1\n質問2"
         }
-
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
+        return client to summaryResponse
     }
 }
