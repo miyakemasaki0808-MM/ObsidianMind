@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-14 | — | 机上再レビューのP2 3件・P3 1件を直し、状態確認例外の契約テストと旧主張の検査を足した | **[background_ai_ux](system/background_ai_ux.md)** §6・[review/findings](../review/findings.md) |
 | 2026-08-13 | — | 構造変更の影響面監査を完了条件へ入れ、共存する処理の両方向テストと受付簿の運用を検査に載せた | **[lessons](lessons.md) L14**・[review/findings](../review/findings.md) |
 | 2026-08-12 | — | `AiAvailability` を5値へ割り、キャンセルを再throwし、AI状態の見せ方を純関数1本へ統一した | **[background_ai_ux](system/background_ai_ux.md)** §6 |
 | 2026-08-12 | — | 機能仕様6本の数値・データ契約を §5〜§7 へ一本化し、§8 を判断の理由だけに絞った | **[related_notes_ai](features/related_notes_ai.md)**・**[reflect_distill](features/reflect_distill.md)**・**[reflect_reading_trace](features/reflect_reading_trace.md)**・[note_age_paper](features/note_age_paper.md)・[note_image_rendering](features/note_image_rendering.md)・[dark_mode](features/dark_mode.md) |
