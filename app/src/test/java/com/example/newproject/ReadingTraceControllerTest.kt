@@ -958,6 +958,29 @@ class ReadingTraceControllerTest {
         assertEquals(1, ai.generateCalls)
     }
 
+    /**
+     * **状態確認が契約違反で投げても、生の痕跡カードは出る。**
+     *
+     * この経路は `AiAvailabilityContractTest` の対応表の #10。無音の経路なので
+     * 観測点は「要約なしのカードが出ること」で、足場のあるここへ置いてある。
+     */
+    @Test
+    fun `状態確認が投げても生の痕跡カードは出る`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient.returning(AI_SUMMARY)
+        ai.availabilityFailure = { IllegalStateException("AICore not bound") }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), ai, state)
+
+        controller.revealTrace("ideas/habit.md")
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertNull("要約は出さない", card.aiSummary)
+        assertTrue("読み込み表示は下げる", !card.isSummaryLoading)
+        assertEquals("生の痕跡は残る", 2, card.visitCount)
+    }
+
     @Test
     fun `summary is written back to the sidecar`() = runTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }

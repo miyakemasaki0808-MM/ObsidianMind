@@ -447,6 +447,43 @@ class RemarkControllerTest {
         assertNull((state.value.remarkState as RemarkState.Ready).reflection.mirrored)
     }
 
+    /**
+     * **状態確認が契約違反で投げても、映し返しは黙って諦める。**
+     *
+     * この経路は `AiAvailabilityContractTest` の対応表の #4。無音の経路なので
+     * 観測点が状態ではなく「何も出さない」ことにあり、足場のあるここへ置いてある。
+     * 返事そのものは保存済みなので、失敗を見せないのが仕様（→ `generateMirror` のKDoc）。
+     */
+    @Test
+    fun `状態確認が投げても映し返しは黙って諦める`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient.returning("「対話」を、反論まで含む応答として捉えている。")
+        ai.availabilityFailure = { IllegalStateException("AICore not bound") }
+        val controller = controller(state, ai, saved = Reflection("前回のひとこと", 1L))
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        controller.saveReply("ideas/dialog.md", "実際に困った場面があった")
+
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertNull("映し返しは作らない", ready.reflection.mirrored)
+        assertEquals("返事は残る", "実際に困った場面があった", ready.reflection.reply)
+    }
+
+    /** キャンセルも同じく黙る（ノート切替でエラーを出さない）。 */
+    @Test
+    fun `状態確認がキャンセルでも映し返しは静かに終わる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient.returning("応答")
+        ai.availabilityFailure = { kotlinx.coroutines.CancellationException("note changed") }
+        val controller = controller(state, ai, saved = Reflection("前回のひとこと", 1L))
+        controller.restoreSaved("ideas/dialog.md", "対話について")
+
+        controller.saveReply("ideas/dialog.md", "実際に困った場面があった")
+
+        val ready = state.value.remarkState as RemarkState.Ready
+        assertNull(ready.reflection.mirrored)
+    }
+
     // 保存できなかった返事へは映し返しを作らない。消える返事へ応じても仕方がない。
     @Test
     fun `保存できなかった返事には映し返しを作らない`() = runTest {

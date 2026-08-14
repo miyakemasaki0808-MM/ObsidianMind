@@ -34,7 +34,10 @@ internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = 
     // **状態の説明は失敗として数えない。** 端末AIが使えないだけならインジケータは光らせない。
     chat.summaryProblem is SectionChatProblem.GenerationFailed ||
         chat.answerProblem is SectionChatProblem.GenerationFailed -> VigilithActionStatus.Error
-    chat.isSummaryLoading || chat.isGenerating -> VigilithActionStatus.Working
+    // **走行フラグは3つとも見る。** 候補生成を落とすと、シートが「質問候補を準備中…」を
+    // 出している最中に Vigilith と全画面FABが「完了」を示す（同じ処理が同時に2状態）。
+    chat.isSummaryLoading || chat.isGenerating || chat.isSuggestionsLoading ->
+        VigilithActionStatus.Working
     chat.summary != null -> VigilithActionStatus.Ready
     // **走っていないのに Working にしない。** 端末AIが使えず要約も無いときに
     // 「AI生成中」のスピナーが回り続けていた（上のコメントと実装が食い違っていた）。

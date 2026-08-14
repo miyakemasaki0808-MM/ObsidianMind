@@ -230,6 +230,8 @@ class SectionChatCombinationTest {
 
         assertEquals(SuggestionsDisplay.None, env.chat().suggestionsDisplay())
         // 受理条件: 派生状態が Idle のとき、シート内に処理中表示が同時成立しない。
+        // 候補Jobを始めていないので、走行判定へ足しても Idle のままであること。
+        assertFalse(env.chat().isSuggestionsLoading)
         assertEquals(VigilithActionStatus.Idle, sectionChatStatus(env.chat()))
     }
 
@@ -278,12 +280,16 @@ class SectionChatCombinationTest {
 
         assertTrue("候補が走っていること", env.chat().isSuggestionsLoading)
         assertEquals(SuggestionsDisplay.Loading, env.chat().suggestionsDisplay())
+        // **シートと派生表示を食い違わせない。** 候補生成中に「完了」を示すと、
+        // 全画面FABでは「AI生成完了。タップで開く」と読まれる。
+        assertEquals(VigilithActionStatus.Working, sectionChatStatus(env.chat()))
 
         gates[1].complete("質問1\n質問2")
         advanceUntilIdle()
 
         assertFalse(env.chat().isSuggestionsLoading)
         assertEquals(SuggestionsDisplay.Ready, env.chat().suggestionsDisplay())
+        assertEquals(VigilithActionStatus.Ready, sectionChatStatus(env.chat()))
     }
 
     // ── 6. 出せない案内は、実在する操作しか求めない ──────────────
