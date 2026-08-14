@@ -7,6 +7,7 @@ import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SuggestionsDisplay
 import com.example.newproject.model.state.suggestionsDisplay
@@ -20,6 +21,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -282,6 +284,51 @@ class SectionChatCombinationTest {
 
         assertFalse(env.chat().isSuggestionsLoading)
         assertEquals(SuggestionsDisplay.Ready, env.chat().suggestionsDisplay())
+    }
+
+    // ── 6. 出せない案内は、実在する操作しか求めない ──────────────
+
+    /**
+     * **セクションチャットは `Download` の導線を作らない。**
+     *
+     * 機能正本は「ここではモデルDLを始めない」と決めているのに、共通変換の
+     * `Download` action をそのまま運んでいた。終端UIは `onDownload` を渡さないので
+     * **ボタンは描かれず、「開始してください」という文言だけが残った** —
+     * 押す操作が存在しない案内になっていた。
+     */
+    @Test
+    fun `未取得の案内は開始を求めず、DLも始めない`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.NeedsDownload
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        val notice = (env.chat().summaryProblem as SectionChatProblem.AiStatus).notice
+        assertNotEquals(
+            "ここから開始できないので Download を運ばない",
+            AiNoticeAction.Download,
+            notice.action
+        )
+        assertFalse("存在しない操作を求めない: ${notice.message}", notice.message.contains("開始してください"))
+        assertEquals("シート操作でDLを始めない", 0, env.ai.downloadCalls)
+        // あとで使えるようになるので、入口は閉じない。
+        assertTrue(notice.canTryAgainLater)
+    }
+
+    /** 回答側の案内も同じ契約に従う。 */
+    @Test
+    fun `回答側の未取得の案内も開始を求めない`() = runTest {
+        val env = Env(this)
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        env.ai.availability = AiAvailability.NeedsDownload
+        env.controller.sendMessage("これはどういう意味ですか")
+        advanceUntilIdle()
+
+        val notice = (env.chat().answerProblem as SectionChatProblem.AiStatus).notice
+        assertNotEquals(AiNoticeAction.Download, notice.action)
+        assertEquals(0, env.ai.downloadCalls)
     }
 
     // ── 組み立て ────────────────────────────────────────────

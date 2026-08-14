@@ -168,8 +168,7 @@ class SectionChatController(
                 is AiAvailability.TemporarilyUnavailable -> updateChat {
                     it.copy(
                         isSummaryLoading = false,
-                        summaryProblem = aiStatusNotice(availability, OPEN_FEATURE_LABEL)
-                            ?.let(SectionChatProblem::AiStatus)
+                        summaryProblem = sectionChatNotice(availability, OPEN_FEATURE_LABEL)
                     )
                 }
             }
@@ -230,8 +229,7 @@ class SectionChatController(
                 updateChat {
                     it.copy(
                         isGenerating = false,
-                        answerProblem = aiStatusNotice(availability, ANSWER_FEATURE_LABEL)
-                            ?.let(SectionChatProblem::AiStatus)
+                        answerProblem = sectionChatNotice(availability, ANSWER_FEATURE_LABEL)
                     )
                 }
                 return
@@ -272,6 +270,20 @@ class SectionChatController(
             }
         }
     }
+
+    /**
+     * このシート用の説明を作る。
+     *
+     * **`canStartDownload = false`** — セクションチャットは設計上ここでモデルDLを
+     * 始めない（→ features/section_ai_chat.md 判断4）ので、`Download` の導線を持たせると
+     * **「開始してください」と言いながら開始操作が無い**案内になる。
+     */
+    private fun sectionChatNotice(
+        availability: AiAvailability,
+        featureLabel: String
+    ): SectionChatProblem? =
+        aiStatusNotice(availability, featureLabel, canStartDownload = false)
+            ?.let(SectionChatProblem::AiStatus)
 
     private fun historyOf(messages: List<ChatMessage>): List<Pair<String, String>> =
         messages.map { (if (it.role == ChatRole.User) "User" else "AI") to it.text }

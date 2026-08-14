@@ -139,6 +139,12 @@ NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> �
 `NeedsDownload` のときは**文言で案内するだけ**で、ダウンロードを開始しない
 （要約とクイズは自動で始める）。
 
+**したがって `AiNoticeAction.Download` を運ばない。** 共通変換へ
+`canStartDownload = false` を渡し、「Gemini Nanoの準備ができると〜を使えます。」という
+**待てば使えることだけを言う文**にする。運んでいたころは終端UIがコールバックを渡さず、
+**ボタンが描かれないまま「開始してください」だけが残っていた** —
+開始する操作が存在しない案内になり、判断4そのものとも食い違っていた。
+
 **読書中に開くシートなので、数分かかる処理をここから起こさない。**
 DLの起点は自動生成される要約側に寄せてある（→ [architecture](../system/architecture.md) の比較表）。
 

@@ -13,17 +13,34 @@ import com.example.newproject.model.state.AiStatusNotice
  * 同じ状態に対する文言が呼び出し側ごとにまた散らばる。
  *
  * @param featureLabel 「蒸留」「Q&A」など、文中へそのまま埋め込める機能名
+ * @param canStartDownload 呼び出し側がその場でモデルDLを開始できるか。
+ *   **false なら `NeedsDownload` に `Download` を添えない** — 添えると
+ *   「開始してください」と言いながら**開始する操作が存在しない**案内になる
+ *   （セクションチャットは設計上ここでDLを始めないので、実際にそうなっていた）。
  * @return [AiAvailability.Ready] のときだけ null（説明することが無い）
  */
-fun aiStatusNotice(availability: AiAvailability, featureLabel: String): AiStatusNotice? =
+fun aiStatusNotice(
+    availability: AiAvailability,
+    featureLabel: String,
+    canStartDownload: Boolean = true
+): AiStatusNotice? =
     when (availability) {
         AiAvailability.Ready -> null
-        AiAvailability.NeedsDownload -> AiStatusNotice(
-            message = "${featureLabel}にはGemini Nanoのダウンロードが必要です。" +
-                "通信量を確認してから開始してください。",
-            action = AiNoticeAction.Download,
-            canTryAgainLater = true
-        )
+        AiAvailability.NeedsDownload -> if (canStartDownload) {
+            AiStatusNotice(
+                message = "${featureLabel}にはGemini Nanoのダウンロードが必要です。" +
+                    "通信量を確認してから開始してください。",
+                action = AiNoticeAction.Download,
+                canTryAgainLater = true
+            )
+        } else {
+            // **開始を求めない。** ここから始められないので、待てば使えることだけを言う。
+            AiStatusNotice(
+                message = "Gemini Nanoの準備ができると${featureLabel}を使えます。",
+                action = AiNoticeAction.None,
+                canTryAgainLater = true
+            )
+        }
         // **CTAを重ねない。** 走行中のDLへ合流する手段が無いので、押しても始まるものが無い
         // （→ AiAvailability.Downloading）。完了後にもう一度押してもらう。
         AiAvailability.Downloading -> AiStatusNotice(
