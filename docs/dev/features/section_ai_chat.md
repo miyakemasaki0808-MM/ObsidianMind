@@ -71,7 +71,13 @@
 
 - **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
   `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` /
-  `summaryProblem` / `answerProblem`
+  `isSuggestionsLoading` / `summaryProblem` / `answerProblem`
+- **候補の進行は `isSuggestionsLoading` が持つ。`suggestions.isEmpty()` から推測しない** —
+  推測していたころは、候補生成を始めてすらいない場合や例外・正常な0件でも
+  「質問候補を準備中…」が永久に残った。表示の決定は `suggestionsDisplay()` の純関数で、
+  `Loading`（要約か候補が走行中）/ `Ready`（候補あり）/ `None`（走っていないのに空）の3値。
+  **走行フラグは派生状態（`sectionChatStatus`）も読む** — 片方だけに配線すると、
+  シートが「準備中」を出している最中にVigilith/FABが「完了」を示す
 - **出せなかった理由は要約側と回答側で別の欄に持つ**（`SectionChatProblem`）。
   **1つで兼ねない** — ①要約があると回答の失敗が表示に負けて消え、
   ②同時に起きたとき「再試行がどちらを指すか」を決められない

@@ -10,7 +10,7 @@ import com.example.newproject.model.Reflection
  * ひとことは**結果も生成の起点も専用画面 `RemarkScreen` にあり**、痕跡サイドカーへ
  * 永続化されて開くたび必ず復元されるので、見逃しても失われない。
  * だから「まだ見ていない」を状態として持ち続ける必要がない
- * （→ [background_ai_ux](../../../../../../../docs/dev/system/background_ai_ux.md) §4）。
+ * （→ [background_ai_ux](../../../../../../../../../docs/dev/system/background_ai_ux.md) §4）。
  *
  * **[Empty] は失敗ではない。** 「出すものが無い」は正常な結果で、
  * ユーザーには固定文で伝える（AIに「補記不要です」と言わせない → §5）。
