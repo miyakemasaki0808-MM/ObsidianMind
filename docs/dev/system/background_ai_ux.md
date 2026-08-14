@@ -160,8 +160,13 @@ AIを使わずに探した事実が消える。
 **この画面から開始できない案内**が出てしまう点も、通さない理由になっている。
 
 **関連ノートは状態そのものを持たない**（判断1により黙る）。AI推薦が無ければ見出しごと出さない。
-これに伴い旧 `AiRecommendationStatus`（4値enum）を削除した。**到達不能な variant が2件**
-（`SearchPickerUseCase` の `Error`・`RelatedNotesUseCase` の `Error`）まとめて消えている。
+これに伴い旧 `AiRecommendationStatus`（4値enum）を削除した。
+
+**残っている `Error` variant の到達可能性は2つで違う。**
+`PickerResult.Error` は**生成の例外から実際に構築される**（`SearchPickerUseCase` の
+広い catch）ので生きている。`RelatedNotesResult.Error` は**宣言だけが残っていて、
+構築する箇所が1つも無い** — 関連ノートは例外でも決定的チャンネルを返すため。
+読み手（`NoteViewModel`）だけが `when` で分岐している。
 
 ### 判断5: SDKの契約はAARで確かめる（2026-08-12 の外部レビューで2件差し戻し）
 

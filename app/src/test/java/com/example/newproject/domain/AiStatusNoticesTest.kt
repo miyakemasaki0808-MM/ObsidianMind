@@ -33,9 +33,10 @@ class AiStatusNoticesTest {
     /**
      * **DL中に新しいCTAを重ねない。** ここが `Download` に戻ると、走行中のDLに対して
      * 「通信量を確認してから開始してください」と出る（分離前の症状そのもの）。
+     * **走行中のDLへ合流はできない**（AARに状態の門番が無い）ので、待つ以外にできることが無い。
      */
     @Test
-    fun `DL中は合流するだけで導線を出さない`() {
+    fun `DL中は新しいDLを始めないので導線を出さない`() {
         val notice = requireNotNull(aiStatusNotice(AiAvailability.Downloading, LABEL))
         assertEquals(AiNoticeAction.None, notice.action)
         assertTrue(notice.message, notice.message.contains(LABEL))

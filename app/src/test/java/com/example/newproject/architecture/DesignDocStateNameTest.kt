@@ -74,6 +74,55 @@ class DesignDocStateNameTest {
     }
 
     /**
+     * **意味上の旧契約を、限定的な文言リストで止める。**
+     *
+     * 名前ベースの検査では拾えない — 使われている識別子はどれも現存するので、
+     * 「`Unusable` を非対応の意味で書く」「`DL中は合流する` と書く」は素通りする。
+     * **汎用化はできない**ので、**一度誤って直した主張だけ**を並べる。
+     *
+     * 対象はKDoc・テスト名も含む（正本だけでなく**コード内の説明**も次の実装者が読む）。
+     */
+    @Test
+    fun `一度直した旧い主張を書き戻さない`() {
+        val violations = scanAll { line ->
+            RETIRED_CLAIMS.filter { claim ->
+                line.contains(claim) && !line.contains("旧")
+            }
+        }
+
+        assertTrue(
+            "一度誤りとして直した主張が戻っています" +
+                "（歴史として書くなら同じ行に「旧」を含めること）:\n" + violations.joinToString("\n"),
+            violations.isEmpty()
+        )
+    }
+
+    /** 正本の文書に加えて、KDoc・テスト名も見る。 */
+    private fun scanAll(findViolations: (String) -> List<String>): List<String> =
+        (designDocs() + kotlinSources())
+            .flatMap { file ->
+                file.readText().lineSequence().mapIndexedNotNull { index, line ->
+                    val found = findViolations(line)
+                    if (found.isEmpty()) {
+                        null
+                    } else {
+                        "${file.name}:${index + 1}: ${found.joinToString()} — ${line.trim()}"
+                    }
+                }
+            }
+            .sorted()
+            .toList()
+
+    private fun kotlinSources(): Sequence<File> =
+        sequenceOf("app/src/main/java", "app/src/test/java", "app/src/androidTest/java")
+            .map(repositoryRoot()::resolve)
+            .filter(File::isDirectory)
+            .flatMap { it.walkTopDown() }
+            .filter { it.isFile && it.extension == "kt" }
+            // この検査自身が禁止語を持つので、対象から外す。
+            .filterNot { it.name == "DesignDocStateNameTest.kt" }
+
+    /**
      * `model/state/` と `ai/` が今も宣言している型・値の名前。
      *
      * **これで [RETIRED_NAMES] から誤検出を自動的に外す。** 一覧へ足した名前が
@@ -164,6 +213,21 @@ class DesignDocStateNameTest {
          * 「`DistillState` の一覧に消えた `NeedsDownload` が残っている」ような
          * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
          */
+        /**
+         * **一度誤りとして直した主張。** 書き戻したら落とす。
+         *
+         * どれも「識別子は現存するのに意味が逆」で、名前ベースの検査を通過した実例。
+         * 歴史として触れるなら同じ行に「旧」を含める。
+         */
+        val RETIRED_CLAIMS = listOf(
+            // ひとことの結果は専用画面にある。読書画面へ1文は出ない。
+            "読書画面へ直接1文",
+            // 走行中のDLへは合流できない（AARに状態の門番が無い）。
+            "DL中は合流するだけ",
+            // PickerResult.Error は生成例外から実際に構築される。
+            "到達不能な variant が2件"
+        )
+
         val RETIRED_NAMES = listOf(
             "Available",
             "Unavailable",
