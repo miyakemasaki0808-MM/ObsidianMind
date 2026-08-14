@@ -44,7 +44,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * **`checkAvailability()` が投げても、どの経路も走行状態を残さない。**
+ * **`checkAvailability()` が投げたとき、どの経路も宙吊りにならない。**
+ *
+ * 落とし所は**例外の種類で違う**ので、まとめて言わない。
+ *
+ * - **非キャンセルの例外** — 各経路の終端状態へ落とし、**走行フラグを下ろす**
+ * - **`CancellationException`** — 状態を触らず**そのまま伝播する**
+ *   （ノート切替なので、終端状態へ変換すると偽の理由が出る）
  *
  * ## なぜ経路を横断するのか
  *
@@ -60,29 +66,32 @@ import org.junit.Test
  * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**10件**。
  * **6件を「全経路」と名乗って4件を実行していなかった**ので、対応を明示する。
  *
- * | # | 本番の呼び出し | 起点 | 例外 | キャンセル |
+ * | # | 本番の呼び出し | 起点 | 例外の観測 | キャンセルの観測 |
  * |---|---|---|---|---|
- * | 1 | `DistillController:107` | `start()` | ここ | ここ |
- * | 2 | `QuizController:61` | `create()` | ここ | ここ |
- * | 3 | `RemarkController:107` | `create()` | ここ | ここ |
- * | 4 | `RemarkController:263` | `saveReply()`（映し返し） | `RemarkControllerTest` | 同左 |
- * | 5 | `SectionChatController:113` | `open()` | ここ | ここ |
- * | 6 | `SectionChatController:207` | `sendMessage()` | ここ | ここ |
- * | 7 | `SummarizeUseCase:29` | `summarize()` | ここ | ここ（**同一インスタンスの再throw**） |
- * | 8 | `SearchPickerUseCase:46` | `pick()` | ここ | ここ |
- * | 9 | `RelatedNotesUseCase:68` | `findRelated()` | ここ | ここ |
- * | 10 | `ReadingTraceController:746` | `revealTrace()` | `ReadingTraceControllerTest` | 同左 |
+ * | 1 | `DistillController:107` | `start()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 2 | `QuizController:61` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 3 | `RemarkController:107` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 4 | `RemarkController:263` | `saveReply()`（映し返し） | `RemarkControllerTest`（無音） | `RemarkControllerTest`（**Jobの完了原因**） |
+ * | 5 | `SectionChatController:113` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 6 | `SectionChatController:207` | `sendMessage()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 7 | `SummarizeUseCase:29` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 8 | `SearchPickerUseCase:46` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 9 | `RelatedNotesUseCase:68` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 10 | `ReadingTraceController:746` | `revealTrace()` | `ReadingTraceControllerTest`（生カード） | `ReadingTraceControllerTest`（**Jobの完了原因**） |
  *
  * 4と10だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
- * （映し返しは「何も出さない」、読書痕跡は「要約なしのカード」）。
- * どちらも足場が既存テストにあるので、そちらへ置いた。
+ * （映し返しは「何も出さない」、読書痕跡は「要約なしのカード」）。足場が既存テストにある。
  *
- * ## キャンセルは「変換されない」だけでは足りない
+ * ## 観測点は「変異を殺せるか」で選ぶ
  *
- * 旧版は `SummaryState.Error` でないことしか見ておらず、
- * **再throwを外して `AiUnavailable` へ畳ませても緑だった**（レビューが変異で確認）。
- * 純関数側は**投げたインスタンスがそのまま出ること**を、Controller側は
- * **走行状態のまま止まること**（＝Jobが落ちただけで状態を触っていない）を見る。
+ * この表は3度作り直している。**行を並べただけでは保証にならない。**
+ *
+ * - 旧版は `SummaryState.Error` でないことしか見ず、**再throwを外しても緑だった**
+ * - 次の版は4と10を「結果が空」で見ており、**握りつぶしても同じ空になるので緑だった**
+ *
+ * 無音の経路では**結果を見ても再throwを観測できない。** 起動Jobが
+ * `isCancelled` で終わったかを見る（再throwなら cancelled、握りつぶしなら正常終了）。
+ * 純関数の経路は投げたインスタンスがそのまま出ることを `assertSame` で見る。
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiAvailabilityContractTest {

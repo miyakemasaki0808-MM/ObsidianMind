@@ -14,8 +14,12 @@ import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.ReplyStatus
 import com.example.newproject.model.state.canRequestRemark
 import com.example.newproject.fakes.FakeAiClient
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -469,19 +473,46 @@ class RemarkControllerTest {
         assertEquals("返事は残る", "実際に困った場面があった", ready.reflection.reply)
     }
 
-    /** キャンセルも同じく黙る（ノート切替でエラーを出さない）。 */
+    /**
+     * **キャンセルは握りつぶさず伝播する。**
+     *
+     * この経路は `AiAvailabilityContractTest` の対応表の #4。
+     * **「映し返しが出ない」では再throwを観測できない** — 握りつぶしても同じ結果になるため、
+     * 実際に専用catchを外す変異を緑で通していた。
+     * 観測点を**起動Jobの完了原因**にする（再throwなら cancelled、握りつぶしなら正常終了）。
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
-    fun `状態確認がキャンセルでも映し返しは静かに終わる`() = runTest {
+    fun `状態確認のキャンセルは映し返しのJobごと伝播する`() = runTest {
+        val parent = SupervisorJob()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + parent)
         val state = NoteUiStateStore(NoteUiState())
         val ai = FakeAiClient.returning("応答")
-        ai.availabilityFailure = { kotlinx.coroutines.CancellationException("note changed") }
-        val controller = controller(state, ai, saved = Reflection("前回のひとこと", 1L))
+        ai.availabilityFailure = { CancellationException("note changed") }
+        val controller = RemarkController(
+            scope = scope,
+            aiClient = ai,
+            state = state.remarkWriter,
+            onRemarkReady = {},
+            persistReply = { _, _, _ -> ReplySaveOutcome.Saved },
+            loadReflection = { Reflection("前回のひとこと", 1L) },
+            persistMirrored = { _, _ -> },
+            currentContent = { body },
+            clock = { FIXED_NOW },
+            excerptDispatcher = StandardTestDispatcher(testScheduler)
+        )
         controller.restoreSaved("ideas/dialog.md", "対話について")
+        advanceUntilIdle()
 
         controller.saveReply("ideas/dialog.md", "実際に困った場面があった")
+        val replyJob = parent.children.first()
+        advanceUntilIdle()
 
-        val ready = state.value.remarkState as RemarkState.Ready
-        assertNull(ready.reflection.mirrored)
+        assertTrue(
+            "キャンセルを握りつぶすとJobが正常終了してしまう",
+            replyJob.isCancelled
+        )
+        assertNull((state.value.remarkState as RemarkState.Ready).reflection.mirrored)
     }
 
     // 保存できなかった返事へは映し返しを作らない。消える返事へ応じても仕方がない。

@@ -17,6 +17,8 @@ import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.AiTimeoutException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -956,6 +958,36 @@ class ReadingTraceControllerTest {
         assertEquals(AI_SUMMARY, card.aiSummary)
         assertTrue(!card.isSummaryLoading)
         assertEquals(1, ai.generateCalls)
+    }
+
+    /**
+     * **状態確認のキャンセルは握りつぶさず伝播する。**
+     *
+     * この経路は `AiAvailabilityContractTest` の対応表の #10。
+     * **「要約が null」では再throwを観測できない** — 握りつぶしても同じ結果になるため、
+     * 専用catchを `null` 返却へ変える変異を緑で通していた。
+     * しかも握りつぶすと、キャンセル後に**正常な劣化として後続処理へ進んでしまう。**
+     * 観測点を**起動Jobの完了原因**にする。
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun `状態確認のキャンセルは痕跡のJobごと伝播する`() = runTest {
+        val parent = SupervisorJob()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler) + parent)
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient.returning(AI_SUMMARY)
+        ai.availabilityFailure = { CancellationException("note changed") }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), ai, state, scope = scope)
+
+        controller.revealTrace("ideas/habit.md")
+        val revealJob = parent.children.first()
+        advanceUntilIdle()
+
+        assertTrue(
+            "キャンセルを握りつぶすとJobが正常終了し、劣化として後続へ進む",
+            revealJob.isCancelled
+        )
     }
 
     /**
