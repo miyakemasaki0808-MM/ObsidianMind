@@ -14,8 +14,11 @@ import org.junit.Test
  *
  * ここが見るのは2つだけ。
  *
- * 1. **状態型のフィールドが正本の一覧に載っている** — 意味の正しさは見ない（見られない）が、
- *    **欄が抜けていること**は確実に分かる
+ * 1. **状態型のフィールドが正本の「一覧」に載っている** — 意味の正しさは見ない（見られない）が、
+ *    **欄が抜けていること**は確実に分かる。
+ *    **文書全体の単語検索では足りない** — 一覧から欄を落としても、直後の設計説明に
+ *    同じ名前が1つ出てくるだけで満たされてしまい、実際にその変異を緑で通した。
+ *    範囲は `<!-- state-fields: 型名 -->` … `<!-- /state-fields -->` で区切る
  * 2. **KDocの相対リンクが実在するファイルを指す** — リンク切れは読み手が根拠へ辿れない
  */
 class SourceDocSyncTest {
@@ -42,9 +45,9 @@ class SourceDocSyncTest {
             assertTrue("状態の定義が見つかりません: $source", source.isFile)
             assertTrue("正本が見つかりません: $doc", doc.isFile)
 
-            val documented = doc.readText()
+            val listed = stateFieldRegion(doc.readText(), type.className, docPath)
             primaryConstructorFields(source.readText(), type.className)
-                .filterNot { documented.contains("`$it`") }
+                .filterNot { listed.contains("`$it`") }
                 .map { "$docPath: `$it` が状態一覧に無い（${source.name} は持っている）" }
         }.sorted()
 
@@ -75,6 +78,23 @@ class SourceDocSyncTest {
             "KDocの相対リンクが壊れています:\n${violations.joinToString("\n")}",
             violations.isEmpty()
         )
+    }
+
+    /**
+     * 正本のうち「状態一覧」として数える範囲。
+     *
+     * **範囲外の言及を一覧登録として数えない。** 区切りが無ければ落とす —
+     * 印を消すだけで検査を無効化できてはいけない。
+     */
+    private fun stateFieldRegion(doc: String, className: String, docPath: String): String {
+        val open = "<!-- state-fields: $className -->"
+        val close = "<!-- /state-fields -->"
+        val start = doc.indexOf(open)
+        val end = doc.indexOf(close, start + 1)
+        check(start >= 0 && end > start) {
+            "$docPath に $className の状態一覧の区切りがありません（$open … $close）"
+        }
+        return doc.substring(start + open.length, end)
     }
 
     /**

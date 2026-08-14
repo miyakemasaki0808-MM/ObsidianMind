@@ -69,9 +69,11 @@
   | クイズ用の周辺本文 | **約1200文字** | `SURROUNDING_CONTEXT_TARGET_LENGTH` |
   | 出力枠 | 256トークン | `genai-prompt` |
 
+<!-- state-fields: SectionChatState -->
 - **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
   `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` /
   `isSuggestionsLoading` / `summaryProblem` / `answerProblem`
+<!-- /state-fields -->
 - **候補の進行は `isSuggestionsLoading` が持つ。`suggestions.isEmpty()` から推測しない** —
   推測していたころは、候補生成を始めてすらいない場合や例外・正常な0件でも
   「質問候補を準備中…」が永久に残った。表示の決定は `suggestionsDisplay()` の純関数で、
