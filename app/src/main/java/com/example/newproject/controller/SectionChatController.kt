@@ -77,7 +77,9 @@ class SectionChatController(
         // 回答側はキャンセルで状態を戻さないので、`isGenerating` が真のまま固まり
         // 「回答を生成中…」が永久に残る（質問候補も無効のまま）。
         openJob?.cancel()
-        updateChat { it.copy(isSummaryLoading = true, summaryProblem = null) }
+        updateChat {
+            it.copy(isSummaryLoading = true, isSuggestionsLoading = false, summaryProblem = null)
+        }
         startSummary(chat.sectionTitle, chat.sectionContext)
     }
 
@@ -308,6 +310,7 @@ class SectionChatController(
     }
 
     private suspend fun fetchSuggestions(sectionTitle: String, sectionText: String) {
+        updateChat { it.copy(isSuggestionsLoading = true) }
         try {
             val sectionExcerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(sectionText, NoteExcerptLimits.SECTION)
@@ -323,11 +326,13 @@ class SectionChatController(
                 .filter { it.isNotBlank() }
                 .take(3)
                 .toList()
-            updateChat { it.copy(suggestions = questions) }
+            updateChat { it.copy(suggestions = questions, isSuggestionsLoading = false) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // サジェストは失敗しても本体機能に影響させない
+            // サジェストは失敗しても本体機能に影響させない。
+            // **ただし走行フラグは必ず下ろす** — 残すと「準備中」が永久に出る。
+            updateChat { it.copy(isSuggestionsLoading = false) }
         }
     }
 

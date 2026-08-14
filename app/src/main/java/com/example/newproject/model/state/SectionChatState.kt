@@ -28,6 +28,14 @@ data class SectionChatState(
     val messages: List<ChatMessage> = emptyList(),  // 質問タップによる Q&A ログ
     val isGenerating: Boolean = false,              // 質問の回答生成中
     /**
+     * 質問候補を生成中か。
+     *
+     * **`suggestions.isEmpty()` から推測しない。** 推測していたころは、端末AIが使えず
+     * 候補生成を**始めてすらいない**場合や、例外・正常な0件で終わった場合にも
+     * 「質問候補を準備中…」が永久に残った。**走行状態は走行フラグでしか分からない。**
+     */
+    val isSuggestionsLoading: Boolean = false,
+    /**
      * **要約**が出せなかった理由。要約エリアへ出す。
      *
      * **回答側と別の欄にしてある。** 1つで兼ねていたころは
@@ -39,3 +47,18 @@ data class SectionChatState(
     /** **回答**が出せなかった理由。Q&Aログの直後へ出す。 */
     val answerProblem: SectionChatProblem? = null
 )
+
+/** 質問候補の欄に何を出すか。 */
+enum class SuggestionsDisplay { Loading, Ready, None }
+
+/**
+ * 質問候補の表示を決める。
+ *
+ * 要約が走っている間は候補もこれから来るので「準備中」でよい。
+ * **終わったのに空**なら、それは終端であって進行中ではない。
+ */
+internal fun SectionChatState.suggestionsDisplay(): SuggestionsDisplay = when {
+    isSummaryLoading || isSuggestionsLoading -> SuggestionsDisplay.Loading
+    suggestions.isNotEmpty() -> SuggestionsDisplay.Ready
+    else -> SuggestionsDisplay.None
+}

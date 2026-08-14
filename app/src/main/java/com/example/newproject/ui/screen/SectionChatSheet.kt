@@ -50,6 +50,8 @@ import com.example.newproject.model.state.isQuizActionEnabled
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SuggestionsDisplay
+import com.example.newproject.model.state.suggestionsDisplay
 import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.theme.AccentSurface
 import com.example.newproject.ui.theme.OnAccentSurface
@@ -139,14 +141,18 @@ fun SectionChatSheet(
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (state.suggestions.isEmpty() && !state.isSummaryLoading) {
-                Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // **空リストから進行中を推測しない**（→ suggestionsDisplay）。
+            when (state.suggestionsDisplay()) {
+                SuggestionsDisplay.Loading ->
+                    Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
+                SuggestionsDisplay.Ready -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.suggestions.forEach { q ->
                         SuggestionRow(text = q, enabled = !state.isGenerating) { onSuggestionTap(q) }
                     }
                 }
+                // 走っていないのに空。**待たせない**ので、終わったことが分かる文にする。
+                SuggestionsDisplay.None ->
+                    Text("質問候補はありません。", fontSize = 13.sp, color = OnSurfaceFaint)
             }
 
             // Q&A ログ

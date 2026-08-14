@@ -8,6 +8,8 @@ import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.SuggestionsDisplay
+import com.example.newproject.model.state.suggestionsDisplay
 import com.example.newproject.ui.vigilith.VigilithActionStatus
 import com.example.newproject.ui.vigilith.sectionChatStatus
 import kotlinx.coroutines.CompletableDeferred
@@ -206,6 +208,80 @@ class SectionChatCombinationTest {
         advanceUntilIdle()
 
         assertEquals(VigilithActionStatus.Error, sectionChatStatus(env.chat()))
+    }
+
+    // ── 5. 質問候補の進行表示 ────────────────────────────────
+
+    /**
+     * **候補の進行を空リストから推測しない。**
+     *
+     * 推測していたころは、端末AIが使えず候補生成を**始めてすらいない**のに
+     * 「質問候補を準備中…」が永久に残った。派生状態が Idle なのにシート内だけ
+     * 処理中に見える、という食い違いも起きていた。
+     */
+    @Test
+    fun `端末AIが使えないなら質問候補は準備中にならない`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.Unsupported
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        assertEquals(SuggestionsDisplay.None, env.chat().suggestionsDisplay())
+        // 受理条件: 派生状態が Idle のとき、シート内に処理中表示が同時成立しない。
+        assertEquals(VigilithActionStatus.Idle, sectionChatStatus(env.chat()))
+    }
+
+    /** 候補生成が例外で落ちても、処理中表示は解除される。 */
+    @Test
+    fun `候補生成が落ちても準備中は解除される`() = runTest {
+        val env = Env(this)
+        var call = 0
+        env.ai.onGenerate = {
+            call++
+            if (call == 1) "セクションの要約" else throw AiTimeoutException("タイムアウト")
+        }
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        assertEquals("セクションの要約", env.chat().summary)
+        assertFalse(env.chat().isSuggestionsLoading)
+        assertEquals(SuggestionsDisplay.None, env.chat().suggestionsDisplay())
+    }
+
+    /** 正常に0件で終わった場合も終端として扱う。 */
+    @Test
+    fun `候補が0件で終わっても準備中は解除される`() = runTest {
+        val env = Env(this)
+        var call = 0
+        env.ai.onGenerate = { if (++call == 1) "セクションの要約" else "   " }
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        assertTrue(env.chat().suggestions.isEmpty())
+        assertEquals(SuggestionsDisplay.None, env.chat().suggestionsDisplay())
+    }
+
+    /** 走っている間だけ「準備中」を出す。 */
+    @Test
+    fun `候補生成を保留している間だけ準備中になる`() = runTest {
+        val env = Env(this)
+        val gates = env.holdEveryGeneration()
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+
+        // 要約待ちの時点でも「これから来る」ので準備中でよい。
+        assertEquals(SuggestionsDisplay.Loading, env.chat().suggestionsDisplay())
+        gates[0].complete("セクションの要約")
+        advanceUntilIdle()
+
+        assertTrue("候補が走っていること", env.chat().isSuggestionsLoading)
+        assertEquals(SuggestionsDisplay.Loading, env.chat().suggestionsDisplay())
+
+        gates[1].complete("質問1\n質問2")
+        advanceUntilIdle()
+
+        assertFalse(env.chat().isSuggestionsLoading)
+        assertEquals(SuggestionsDisplay.Ready, env.chat().suggestionsDisplay())
     }
 
     // ── 組み立て ────────────────────────────────────────────
