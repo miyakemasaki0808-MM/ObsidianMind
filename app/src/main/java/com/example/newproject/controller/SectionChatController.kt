@@ -104,7 +104,25 @@ class SectionChatController(
 
     private fun startSummary(sectionTitle: String, sectionText: String) {
         openJob = scope.launch {
-            when (val availability = aiClient.checkAvailability()) {
+            // **状態確認の例外も終端へ落とす。** `AiClient` は他実装を許す公開契約なので
+            // `checkAvailability()` は投げうる。投げたまま launch を抜けると
+            // **`isSummaryLoading` が真のまま残り、シートが永久に待つ。**
+            val availability = try {
+                aiClient.checkAvailability()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateChat {
+                    it.copy(
+                        isSummaryLoading = false,
+                        summaryProblem = SectionChatProblem.GenerationFailed(
+                            e.message ?: "Unknown error"
+                        )
+                    )
+                }
+                return@launch
+            }
+            when (availability) {
                 AiAvailability.Ready -> {
                     try {
                         val sectionExcerpt = withContext(excerptDispatcher) {
@@ -183,9 +201,25 @@ class SectionChatController(
         question: String,
         history: List<Pair<String, String>>
     ) {
+        // **状態確認の例外も終端へ落とす**（→ [startSummary]）。抜けると `isGenerating` が残る。
+        val availability = try {
+            aiClient.checkAvailability()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            updateChat {
+                it.copy(
+                    isGenerating = false,
+                    answerProblem = SectionChatProblem.GenerationFailed(
+                        e.message ?: "Unknown error"
+                    )
+                )
+            }
+            return
+        }
         // **未取得を非対応と同じ文言へ畳まない。** ここは `!= Available` の1行だったため、
         // モデルが未取得なだけの端末にも「この端末ではAIを利用できません。」と出ていた。
-        when (val availability = aiClient.checkAvailability()) {
+        when (availability) {
             AiAvailability.Ready -> Unit
             AiAvailability.NeedsDownload,
             AiAvailability.Downloading,
