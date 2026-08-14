@@ -43,9 +43,9 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-08-14-ai-status-ux-fix-review/P2-1` | 質問候補の生成中にシートは進行中、Vigilith/FABは `Ready` を同時に示す | `統合` AI-2。`isSuggestionsLoading` を派生状態へ反映する机上修正待ち |
-| `2026-08-14-ai-status-ux-fix-review/P2-2` | 横断契約テストが主張する全経路とキャンセル再throwを保証していない | `統合` AI-2。本番10呼び出しとの対応と再throwの直接検査を補う机上修正待ち |
-| `2026-08-14-ai-status-ux-fix-review/P3-1` | 新しい状態欄が機能正本から抜け、`RemarkState` のKDocリンクも切れている | `統合` AI-2。正本の状態一覧と相対リンクを直す机上修正待ち |
+| `2026-08-14-ai-status-ux-fix-review/P2-1` | 質問候補の生成中にシートは進行中、Vigilith/FABは `Ready` を同時に示す | `統合` AI-2。`sectionChatStatus()` の走行判定へ `isSuggestionsLoading` を入れた。机上修正済み・実機確認待ち |
+| `2026-08-14-ai-status-ux-fix-review/P2-2` | 横断契約テストが主張する全経路とキャンセル再throwを保証していない | `統合` AI-2。本番10呼び出しと1対1の対応表を作り、純関数は同一インスタンスの再throw、Controllerは走行状態の維持で見る。机上修正済み・実機確認待ち |
+| `2026-08-14-ai-status-ux-fix-review/P3-1` | 新しい状態欄が機能正本から抜け、`RemarkState` のKDocリンクも切れている | `統合` AI-2。両方を直し、`SourceDocSyncTest`（状態欄の同期＋KDocリンクの解決）で検査に載せた。机上修正済み・実機確認待ち |
 
 ### 2026-08-14（AI状態UX・机上再レビュー）
 
