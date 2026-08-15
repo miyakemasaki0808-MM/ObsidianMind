@@ -1,7 +1,7 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-12（§6 を新設し、外部レビューのP1 2件を受けて判断5を追記した。**実機確認は未了**）
+**最終検証:** 2026-08-15（Pixel 10 Pro Foldで実機7項目とクイズ追加2状態を確認。AI-2完了）
 **関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
 **関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest`
 **正本:** この文書
@@ -116,7 +116,7 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 
 読書痕跡の [L4](../lessons.md)「意識させない機能は作法が違う」を**特例から一般則へ昇格**させた形になる。
 判定が機能名ではなく起動契機で引けるようになったので、新しい機能でも迷わない。
-**実機確認を通ってから lessons へ昇格を記録する。**
+2026-08-15 に実機確認を通し、L4をこの一般則へ更新した。
 
 ### 判断2: 割る基準は「呼び出し側の次の行動」
 

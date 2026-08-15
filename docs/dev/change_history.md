@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-15 | — | AI状態UXの実機7項目とクイズ追加2状態を完了し、起動契機の一般則へ昇格した | **[background_ai_ux](system/background_ai_ux.md)** §6・[lessons](lessons.md) L4 |
 | 2026-08-15 | — | 実機レビューのP2 1件を直し、クイズが使えない理由をシートのクイズ欄自身に表示した | **[background_ai_ux](system/background_ai_ux.md)** §6・[review/findings](../review/findings.md) |
 | 2026-08-15 | — | 再修正確認レビューのP2 1件・P3 1件を直し、無音経路のキャンセルと状態一覧の観測点を絞った | **[background_ai_ux](system/background_ai_ux.md)** §6・[review/findings](../review/findings.md) |
 | 2026-08-14 | — | 修正確認レビューのP2 2件・P3 1件を直し、契約テストを本番10呼び出しと1対1にした | **[background_ai_ux](system/background_ai_ux.md)** §6・[review/findings](../review/findings.md) |
