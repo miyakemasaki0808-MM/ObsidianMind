@@ -2,13 +2,18 @@ package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiTimeoutException
+import com.example.newproject.controller.QuizController
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.isQuizActionEnabled
+import com.example.newproject.model.state.quizNotice
+import com.example.newproject.model.state.showsQuizAction
 import com.example.newproject.model.state.SuggestionsDisplay
 import com.example.newproject.model.state.suggestionsDisplay
 import com.example.newproject.ui.vigilith.VigilithActionStatus
@@ -50,6 +55,7 @@ import org.junit.Test
  * 2. **どの経路を通っても、走っていないのに `isSummaryLoading` / `isGenerating` が残らない**
  * 3. **理由の欄（`summaryProblem` / `answerProblem`）は互いを消さない**
  * 4. 派生状態（`sectionChatStatus`）が、走っていないのに `Working` にならない
+ * 5. **クイズが使えない理由は、要約側の失敗表示に相乗りしない**
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SectionChatCombinationTest {
@@ -337,6 +343,62 @@ class SectionChatCombinationTest {
         assertEquals(0, env.ai.downloadCalls)
     }
 
+    // ── 5. 要約が成功 × クイズだけ使えない ────────────────────────
+
+    /**
+     * **要約が成功していても、クイズが使えない理由はクイズの欄に出る。**
+     *
+     * 実機で見つかった欠陥の再現順序そのもの: 要約までは `Ready` で通り、
+     * そのあとクイズの状態確認だけが `Unsupported` を返す。
+     * このときシートは状態をボタンのラベルへ潰し、「クイズを使えません」とだけ出したうえで
+     * **ボタンを無効にした** — 理由を描く `QuizScreen` へ到達する手が無くなった。
+     *
+     * 要約側の表示は正常（`summaryProblem` は null）なので、
+     * **要約の失敗欄に相乗りする実装ではこの面が埋まらない。**
+     */
+    @Test
+    fun `要約が成功した後にクイズだけ恒久非対応なら理由が出て再試行は出ない`() = runTest {
+        val env = Env(this)
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        assertNotNull("要約は成功していること", env.chat().summary)
+        assertNull("要約側は失敗表示を持たないこと", env.chat().summaryProblem)
+
+        env.ai.availability = AiAvailability.Unsupported
+        env.quiz.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        val quizState = env.state.value.quizState
+        assertTrue("説明状態であること: $quizState", quizState is QuizState.AiNotice)
+        // 理由がクイズ欄から取れる。**QuizScreen を開けることを前提にしない。**
+        val notice = requireNotNull(quizState.quizNotice())
+        assertTrue("理由が非空であること", notice.message.isNotBlank())
+        assertFalse("恒久非対応では再試行を出さない", notice.canTryAgainLater)
+        assertFalse("押せないボタンを理由の隣に並べない", quizState.showsQuizAction())
+        assertFalse(quizState.isQuizActionEnabled())
+    }
+
+    /** 同じ順序で一時的な不可なら、理由と再試行の両方が同じ場所に出る。 */
+    @Test
+    fun `要約が成功した後にクイズだけ一時的に使えないなら理由と再試行が出る`() = runTest {
+        val env = Env(this)
+        env.controller.open(SECTION)
+        advanceUntilIdle()
+        assertNull(env.chat().summaryProblem)
+
+        env.ai.availability =
+            AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))
+        env.quiz.create("対象ノート.md", "本文")
+        advanceUntilIdle()
+
+        val quizState = env.state.value.quizState
+        val notice = requireNotNull(quizState.quizNotice())
+        assertTrue("時間をおけば変わることが読み取れること", notice.canTryAgainLater)
+        assertEquals(AiNoticeAction.Retry, notice.action)
+        assertTrue("押し直せること", quizState.showsQuizAction())
+        assertTrue(quizState.isQuizActionEnabled())
+    }
+
     // ── 組み立て ────────────────────────────────────────────
 
     private class Env(private val scope: TestScope) {
@@ -346,6 +408,14 @@ class SectionChatCombinationTest {
             scope,
             ai,
             state.sectionChatWriter,
+            StandardTestDispatcher(scope.testScheduler)
+        )
+
+        /** 同じ端末・同じ `AiClient` をクイズも見る（状態確認の結果は途中で変わりうる）。 */
+        val quiz = QuizController(
+            scope,
+            ai,
+            state.quizWriter,
             StandardTestDispatcher(scope.testScheduler)
         )
 

@@ -47,6 +47,8 @@ import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.isQuizActionEnabled
+import com.example.newproject.model.state.quizNotice
+import com.example.newproject.model.state.showsQuizAction
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
@@ -172,26 +174,8 @@ fun SectionChatSheet(
             }
 
             // ── この部分でクイズ ─────────────────────────
-            // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
-            // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
             Spacer(modifier = Modifier.height(20.dp))
-            val quizLabel = when (quizState) {
-                is QuizState.Idle -> "📝 この部分でクイズ"
-                is QuizState.Loading -> "クイズを作成中…"
-                is QuizState.Success -> "✓ クイズを開く"
-                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
-                // 恒久非対応なら押せないので、再試行を促すラベルにしない。
-                // **DL中は押せる**ので「使えません」と言い切らない（→ isQuizActionEnabled）。
-                is QuizState.AiNotice ->
-                    if (quizState.notice.canTryAgainLater) "↻ クイズを再試行" else "クイズを使えません"
-            }
-            Button(
-                onClick = onQuizTap,
-                enabled = quizState.isQuizActionEnabled(),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text(quizLabel, color = OnButtonAi) }
+            QuizActionSection(quizState = quizState, onQuizTap = onQuizTap)
 
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
@@ -215,6 +199,54 @@ fun SectionChatSheet(
  * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
  * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
  */
+/**
+ * シートのクイズ欄。**理由と導線を同じ場所へ置く。**
+ *
+ * かつては状態をボタンのラベルへ潰していた。恒久非対応では
+ * 「クイズを使えません」とだけ出てボタンが無効になり、**理由を描く `QuizScreen` へ
+ * 到達できなかった** — 押した本人に、使えない理由も次の行動も残らなかった
+ * （実機レビューで発見）。**到達できない画面の説明を、説明した根拠にしない。**
+ *
+ * シートから切り出してあるのは、`ModalBottomSheet` を開かずに描画を検査するため。
+ */
+@Composable
+internal fun QuizActionSection(
+    quizState: QuizState,
+    onQuizTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        // 理由は必ず出す。要約側の失敗表示が出ているかどうかに依存しない。
+        quizState.quizNotice()?.let { notice ->
+            AiStatusNoticeRow(notice = notice)
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        // 押せないボタンを理由の隣に並べない（→ showsQuizAction）。
+        // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
+        if (quizState.showsQuizAction()) {
+            val quizLabel = when (quizState) {
+                is QuizState.Idle -> "📝 この部分でクイズ"
+                is QuizState.Loading -> "クイズを作成中…"
+                is QuizState.Success -> "✓ クイズを開く"
+                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
+                // ここへ来るのは「あとで変わりうる」状態だけ（→ showsQuizAction）。
+                is QuizState.AiNotice -> "↻ クイズを再試行"
+            }
+            Button(
+                onClick = onQuizTap,
+                enabled = quizState.isQuizActionEnabled(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ButtonAi,
+                    contentColor = OnButtonAi
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text(quizLabel, color = OnButtonAi) }
+        }
+    }
+}
+
 @Composable
 private fun SectionChatProblemRow(problem: SectionChatProblem, onRetry: () -> Unit) {
     when (problem) {

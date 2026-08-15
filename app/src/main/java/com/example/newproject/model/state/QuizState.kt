@@ -42,6 +42,26 @@ sealed class QuizState {
 }
 
 /**
+ * シートのクイズ欄に出す説明。**理由をボタンラベルへ潰さない。**
+ *
+ * 潰していたころは、恒久非対応で「クイズを使えません」というラベルだけになり、
+ * **理由を描く `QuizScreen` はボタンが無効なので開けなかった** —
+ * ユーザーが明示的に押した機能なのに、使えない理由も次の行動も分からなかった。
+ * 一時的な不可でもラベルが「↻ クイズを再試行」になるだけで、理由文は出なかった。
+ */
+internal fun QuizState.quizNotice(): AiStatusNotice? = (this as? QuizState.AiNotice)?.notice
+
+/**
+ * クイズのボタンを描くか。
+ *
+ * **押せないボタンを理由の隣に並べない。** 恒久非対応では説明だけにする。
+ * あとで変わりうる状態（DL中・一時的な不可）では、押し直せるボタンを残す
+ * （→ [isQuizActionEnabled]）。
+ */
+internal fun QuizState.showsQuizAction(): Boolean =
+    this !is QuizState.AiNotice || notice.canTryAgainLater
+
+/**
  * セクションチャットの「クイズ」ボタンを押させてよいか。
  *
  * 生成中は二重に走らせないため無効。説明が出ているときは
