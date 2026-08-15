@@ -27,6 +27,54 @@ sealed class QuizState {
         val sourceTitle: String,
         val isViewed: Boolean = false
     ) : QuizState()
+
+    /**
+     * 端末AIの状態を説明している。
+     *
+     * **[Error] へ畳まない。** 畳んでいたころは非対応端末で
+     * `エラー: Q&Aはこの端末では利用できません。` と出たうえに再試行導線が付き、
+     * **何度押しても直らないものを押させていた。**
+     *
+     * **`isViewed` を持たない。** 押した直後に答えが確定するので、
+     * 「まだ見ていない結果」として追い続ける対象ではない。
+     */
+    data class AiNotice(val notice: AiStatusNotice, val sourceTitle: String) : QuizState()
+}
+
+/**
+ * シートのクイズ欄に出す説明。**理由をボタンラベルへ潰さない。**
+ *
+ * 潰していたころは、恒久非対応で「クイズを使えません」というラベルだけになり、
+ * **理由を描く `QuizScreen` はボタンが無効なので開けなかった** —
+ * ユーザーが明示的に押した機能なのに、使えない理由も次の行動も分からなかった。
+ * 一時的な不可でもラベルが「↻ クイズを再試行」になるだけで、理由文は出なかった。
+ */
+internal fun QuizState.quizNotice(): AiStatusNotice? = (this as? QuizState.AiNotice)?.notice
+
+/**
+ * クイズのボタンを描くか。
+ *
+ * **押せないボタンを理由の隣に並べない。** 恒久非対応では説明だけにする。
+ * あとで変わりうる状態（DL中・一時的な不可）では、押し直せるボタンを残す
+ * （→ [isQuizActionEnabled]）。
+ */
+internal fun QuizState.showsQuizAction(): Boolean =
+    this !is QuizState.AiNotice || notice.canTryAgainLater
+
+/**
+ * セクションチャットの「クイズ」ボタンを押させてよいか。
+ *
+ * 生成中は二重に走らせないため無効。説明が出ているときは
+ * **[AiStatusNotice.canTryAgainLater] だけで決める。**
+ *
+ * **`action == Retry` で判定しない。** DL実行中の説明は「押しても始まるものが無い」ので
+ * CTAを持たないが、入口まで閉じると**DL完了後に押し直せず、同じノートでクイズが
+ * 二度と作れなくなる**（実際にその不具合を作った）。閉じてよいのは恒久非対応だけ。
+ */
+internal fun QuizState.isQuizActionEnabled(): Boolean = when (this) {
+    is QuizState.Loading -> false
+    is QuizState.AiNotice -> notice.canTryAgainLater
+    else -> true
 }
 
 // Snackbar通知の発火判定キー。値が変わったときだけ通知を出し直す。
@@ -36,4 +84,5 @@ internal fun QuizState.toEventKey(): String? = when (this) {
     is QuizState.Loading -> "loading:$sourceTitle:$format"
     is QuizState.Success -> "success:$sourceTitle:${cards.hashCode()}:$isViewed"
     is QuizState.Error -> "error:$sourceTitle:$message:$isViewed"
+    is QuizState.AiNotice -> "notice:$sourceTitle:${notice.message}"
 }

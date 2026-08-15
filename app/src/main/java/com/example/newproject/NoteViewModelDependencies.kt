@@ -3,6 +3,7 @@ package com.example.newproject
 import android.app.Application
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
+import com.google.mlkit.genai.common.internal.GenAiUtils
 import com.example.newproject.data.AppPreferences
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
@@ -68,7 +69,11 @@ internal class NoteViewModelDependencies(
                 SharedAppPreferences.PREFS_NAME,
                 Application.MODE_PRIVATE
             )
-            val aiClient: AiClient = AICoreClient()
+            // 恒久非対応かどうかはAICoreアプリの有無とバージョンでしか決められない
+            // （`FeatureStatus.UNAVAILABLE` は対応端末でも返る）。
+            val aiClient: AiClient = AICoreClient(
+                isDeviceCapable = { GenAiUtils.isAiCoreCompatible(application) }
+            )
             val vaultLocation = VaultLocation()
             val repository = NoteRepository()
             return NoteViewModelDependencies(

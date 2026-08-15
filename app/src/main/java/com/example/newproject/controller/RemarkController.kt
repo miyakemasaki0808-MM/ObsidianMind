@@ -5,6 +5,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.RemarkCandidateLine
 import com.example.newproject.domain.RemarkResult
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.composeMirroredRemark
 import com.example.newproject.domain.composeRemark
@@ -103,17 +104,20 @@ internal class RemarkController(
         state.update { RemarkState.Loading(sourceTitle) }
         createJob = scope.launch {
             try {
-                when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> updateError(
-                        requestId = requestId,
-                        sourceTitle = sourceTitle,
-                        message = "ひとことはこの端末では利用できません。"
-                    )
+                when (val availability = aiClient.checkAvailability()) {
+                    AiAvailability.Ready -> generateWithAvailableModel(request)
+                    // 自動DL方式。**`downloadModel()` を呼んでよいのはここだけ**
+                    // （→ AiAvailability.Downloading）。
                     AiAvailability.NeedsDownload -> {
                         pending = request
                         startModelDownload()
                     }
-                    AiAvailability.Available -> generateWithAvailableModel(request)
+                    // **エラーへ畳まない。** 非対応に再試行導線が付くのを避ける。
+                    // DL中は待つだけ（合流できないので、完了後にもう一度押してもらう）。
+                    AiAvailability.Downloading,
+                    AiAvailability.Unsupported,
+                    is AiAvailability.TemporarilyUnavailable ->
+                        updateAiNotice(requestId, sourceTitle, availability)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -254,7 +258,15 @@ internal class RemarkController(
         // 単一の出所（表示中のノート）から引けば、どちらの経路でも同じになる。
         val content = currentContent() ?: return
         try {
-            if (aiClient.checkAvailability() != AiAvailability.Available) return
+            // **映し返しは黙る仕様なので、どの理由でも見せずに諦める**（意図的にすべて同じ枝）。
+            // 上の KDoc のとおり、返事そのものは既に保存済みで失われない。
+            when (aiClient.checkAvailability()) {
+                AiAvailability.Ready -> Unit
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                AiAvailability.Unsupported,
+                is AiAvailability.TemporarilyUnavailable -> return
+            }
             val excerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(content, NoteExcerptLimits.ANNOTATION)
             }
@@ -403,6 +415,13 @@ internal class RemarkController(
         state.update { RemarkState.Error(message = message, sourceTitle = sourceTitle) }
     }
 
+    /** 端末AIの状態をそのまま説明へ移す。[AiAvailability.Ready] はここへ来ない。 */
+    private fun updateAiNotice(requestId: Long, sourceTitle: String, availability: AiAvailability) {
+        if (!isCurrent(requestId)) return
+        val notice = aiStatusNotice(availability, REMARK_FEATURE_LABEL) ?: return
+        state.update { RemarkState.AiNotice(notice, sourceTitle) }
+    }
+
     private data class PendingRemark(
         val requestId: Long,
         val title: String,
@@ -412,6 +431,9 @@ internal class RemarkController(
     )
 
     private companion object {
+        /** 説明文へ埋め込む機能名（「この端末では**ひとこと**を利用できません。」）。 */
+        const val REMARK_FEATURE_LABEL = "ひとこと"
+
         /**
          * プロンプトへ載せる候補ノートの上限。
          *

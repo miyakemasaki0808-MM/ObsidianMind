@@ -357,7 +357,7 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 - `quizState`: Idle / Loading / Success / Error（Loading以降は `sourceTitle`、Success/Errorは `isViewed` を保持）
 - `annotationState`: Idle / Loading / Success / Error（同上）
 - `annotationListState`: Idle / Loading / Success / Error
-- `distillState`: Idle / Analyzing / NeedsDownload / Downloading / Unavailable / Candidates / Saving / Saved / Conflict / RecoveryRequired / RecoveryResolved / Error（他機能より状態数が多いのは、AI生成に加えVault書き戻しの競合・中断復旧まで表現するため）
+- `distillState`: Idle / Analyzing / AiNotice / Downloading / Unavailable / Candidates / Saving / Saved / Conflict / RecoveryRequired / RecoveryResolved / Error（他機能より状態数が多いのは、AI生成に加えVault書き戻しの競合・中断復旧まで表現するため）。`AiNotice` は端末AIの状態の説明、`Unavailable` は**ノート側の理由**（本文が大きすぎる等）で、別物である
 - `readingTraceCard`: Rediscoverで過去の痕跡が見つかった場合だけ入る「前回のあなた」カード。訪問回数・前回日時・最深セクション・到達率・AI俯瞰要約・読み込み中・現在表示中だけのdismiss状態を持つ
 - `sectionChat`: セクションAIのセッション。ノート内でセッションを持たない場合は `null`
 - `isSectionChatSheetVisible`: シートの表示有無。セッションの有無と分離しており、閉じても同じノート内なら生成結果を保持して吹き出しから再表示できる
@@ -500,9 +500,10 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 
 | AI状態 | 動作 |
 |---|---|
-| Available | 1,200文字以内の本文抜粋を含むプロンプトで2〜4文を生成（予算内は原文、超過時は骨格＋冒頭＋末尾。§8.4） |
-| NeedsDownload | モデルダウンロードを開始し進捗を `SummaryState.Downloading` へ反映 |
-| Unavailable | `SummaryState.AiUnavailable`。現在のUIでは要約パネル自体を表示しない |
+| `Ready` | 1,200文字以内の本文抜粋を含むプロンプトで2〜4文を生成（予算内は原文、超過時は骨格＋冒頭＋末尾。§8.4） |
+| `NeedsDownload` | モデルダウンロードを開始し進捗を `SummaryState.Downloading` へ反映 |
+| `Downloading` | **何もしない。** 走行中のDLへ合流できないので、次にノートを開いたときに取り直す |
+| `Unsupported` / `TemporarilyUnavailable` | `SummaryState.AiUnavailable`。現在のUIでは要約パネル自体を表示しない |
 | 生成失敗 | `SummaryState.Error` |
 
 ダウンロード完了後は保持していたタイトル・本文で要約と関連ノート検索を再実行する。
@@ -528,7 +529,7 @@ VaultにMarkdownがなければ `NoteState.Empty`、読み込み失敗は `NoteS
 4. 再ランク後の並びで一時ID（`C01..`）を採番し、候補を入力予算（3,500文字）内へ動的短縮して整形する。現在本文は600文字以内の抜粋（§8.4）にしてAIへ渡す。**現ノートのタグは抜粋とは別経路**で、`parseMeta()` から取って3の再ランクに使う（抜粋側では frontmatter が落ちるため）。
 5. **AIにはIDだけ返させ**、行頭付近のIDのみ抽出して実ノートへ解決する（`parseCandidateIds`）。決定的結果とのURI重複を除いて最大5件返す。
 
-AIが利用不可またはモデル未準備でも、規則ベース結果は表示できる。AI生成で例外が起きても `RelatedNotesResult.Error` にはせず、規則ベース結果と `AiRecommendationStatus.Error` を返す設計である。個別候補の本文読込失敗（キャンセル以外）は該当候補のみタイトルで続行し、推薦全体を巻き添えにしない。
+AIが利用不可またはモデル未準備でも、規則ベース結果は表示できる。AI生成で例外が起きても `RelatedNotesResult.Error` にはせず、規則ベース結果だけを返す設計である（自動起動の機能なので理由は見せない）。個別候補の本文読込失敗（キャンセル以外）は該当候補のみタイトルで続行し、推薦全体を巻き添えにしない。
 
 ### 6.5 さがす（AIピッカー）
 
@@ -571,7 +572,7 @@ AIが利用不可またはモデル未準備でも、規則ベース結果は表
 
 1. シートの「この部分でクイズ」タップで、シート対象セクションを `sectionModel` から同定し、`NoteSectionModel.surroundingContext()` が周辺テキスト（約1,200文字）を構築する。**これは目標値であり上限ではない**（ブロック単位で足すため超過し得る）ので、プロンプト直前で1,200文字の抜粋（§8.4）を通す。セクションを核に前後のブロックを交互に加えて広げる方式で、親セクションが子を内包する構造でも本文が重複しない。見出しなし・擬似セクションはノート先頭にフォールバックする。
 2. 生成開始時に `QuizState.Loading(sourceTitle=セクション名)` を立てる（待機画面なし）。
-3. `checkAvailability()` で分岐する。Unavailableはエラー、NeedsDownloadはモデルDL後に自動再開、Availableは即生成。
+3. `checkAvailability()` で分岐する。`Ready` は即生成、`NeedsDownload` はモデルDL後に自動再開、`Downloading` は**DLを始めずに待つ**、`Unsupported` と `TemporarilyUnavailable` は `QuizState.AiNotice`（**エラーにしない**）。
 4. 周辺テキストを**AI不使用で分類**し（`QuizInputProfile`）、素材量に応じて出題形式を切り替える：コード比率45%以上→3択2問、本文180字未満または文シグナル2以下→○×2問、本文700字以上かつ文シグナル6以上→4択1問、それ以外→3択2問。○×・3択は解説なし・4択のみ短い解説を1文とし、問題／選択肢に文字数上限を指示する。これは、常に4択2問＋解説を要求すると出力上限（256トークン程度、8.3参照）を超えて `MAX_TOKENS` で全結果が破棄され、クイズ生成エラーになっていた問題への対策（詳細は [features/section_ai_chat.md](../dev/features/section_ai_chat.md)）。
 5. `Q:` 行を問題開始として `parseQuizResponse(raw, format)` がフィールドを抽出する。○×は `TRUE`/`FALSE`/`○`/`×`/`正しい`/`誤り` 等を許容、多択は正解レターを**単語境界regex `\b[A-D]\b`** で抽出し `B.`・`(B)`・`B) 選択肢文`・`The answer is B` 等の崩れを救済する（単語内の文字は誤検出しない・範囲外の `D` 等は棄却）。選択肢数（3/4）は応答実体に合わせ、必須フィールド欠落や範囲外の正解記号は捨てる。
 6. パース結果が0件なら `QuizState.Error`、あれば `QuizState.Success(isViewed=false)` とし、Snackbarで通知する（AIタブバッジの対象外）。
@@ -759,13 +760,19 @@ AI利用側はこのインターフェースに依存する。実装は本番用
 
 ### 8.2 モデル設定
 
-`AICoreClient` は `ModelPreference.FULL` を指定して `Generation` クライアントを遅延生成する。FULLは「速度より精度を優先」の指定であり、実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める（Pixel 10系はnano-v3）。状態は次のようにアプリ内の3状態へ変換する。
+`AICoreClient` は `ModelPreference.FULL` を指定して `Generation` クライアントを遅延生成する。FULLは「速度より精度を優先」の指定であり、実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める（Pixel 10系はnano-v3）。状態は次のようにアプリ内の5状態へ変換する（2026-08-12。判断の正本は
+[background_ai_ux](../dev/system/background_ai_ux.md) §6）。
 
-| ML Kit状態 | アプリ状態 |
-|---|---|
-| AVAILABLE | Available |
-| DOWNLOADABLE / DOWNLOADING | NeedsDownload |
-| その他・状態確認例外 | Unavailable |
+| ML Kit状態 | アプリ状態 | 呼び出し側の次の行動 |
+|---|---|---|
+| AVAILABLE | `Ready` | 生成する |
+| DOWNLOADABLE | `NeedsDownload` | **`downloadModel()` を呼んでよい唯一の状態** |
+| DOWNLOADING | `Downloading` | 待つ。**`downloadModel()` は呼ばない**（合流できない） |
+| UNAVAILABLE かつ AICore無し | `Unsupported` | 諦める（恒久） |
+| UNAVAILABLE かつ AICore有り／未知の値／状態確認例外 | `TemporarilyUnavailable(cause)` | 時間をおいて再試行 |
+
+恒久非対応の判定は `FeatureStatus` ではなく `GenAiUtils.isAiCoreCompatible`（AICoreアプリの
+有無と最低バージョン）で行う。`UNAVAILABLE` は対応端末でも返るため、それだけでは恒久と断定できない。
 
 ### 8.3 直列化とタイムアウト
 
@@ -899,7 +906,6 @@ ReadingTrace索引はTTLを持たず、外部同期で後から追加された�
 - フォルダ一覧取得失敗は握りつぶされ、ユーザーには通知されない。
 - 補記削除は `deleteDocument()` の `Boolean` を確認せず一覧を再読込する。失敗時は対象が残ることで間接的に分かるが、明示エラーは出ない。
 - 閲覧履歴のJSONパース失敗は空履歴として扱い、ユーザーには通知されない（実害は履歴消失のみ）。
-- `checkAvailability()` 自体の例外は `Unavailable` にまとめるため、非対応端末と一時的な状態取得失敗を区別できない。
 - `ContentResolver.openInputStream()` が `null` の場合は空文字を返し、読込失敗と空ノートを区別しない。
 
 ---
@@ -1167,7 +1173,6 @@ Runnerの起動もCompose描画も実行しない。instrumentation の実行に
 | 中 | **痕跡サイドカーの書き込みが原子的でない** | `"wt"` の直接上書きで、書込中にプロセスが死ぬと部分破損が残り復旧元もない。SAF の `renameDocument()` がプロバイダ非互換なため割り切っている。破損は checksum で検知して孤立扱い |
 | 中 | **蒸留の実機確認が未実施** | v1 Phase 1〜6 は自動テストまで完了。**本文を書き換える唯一の機能**なので、実機での書き戻し確認が残っている |
 | 中 | **instrumentation の最新件数での実行が未実施** | 2026-08-08 に 37/37 成功（Pixel 10 Pro Fold・Android 17）。その後3件増えて**40件での実行は未実施** |
-| 低 | 状態取得失敗と非対応の同一視 | `checkAvailability()` の一時エラーも `Unavailable` へ畳むため、**非対応端末と一時的な取得失敗を区別できない** |
 | 低 | YAML解析が簡易 | 複雑なYAML・引用・ネスト・複数行値に対応しない。AI推薦で使う tags/aliases の取りこぼしにつながり得る |
 | 低 | Markdownの未対応項目 | クリック可能リンク・埋め込み（`![[note]]`）・数式。リスト構造と画像は実装・実機確認済み |
 | 低 | 同名ノートの曖昧性 | AI推薦は候補ごとの一時IDで解決するため不定にならない。ただし決定的チャンネルや除外判定で使う正規化タイトル集合には同名畳み込みが残る |

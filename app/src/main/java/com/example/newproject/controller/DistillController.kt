@@ -17,6 +17,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.applyDistillBold
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.isWithinDistillBoldLimit
@@ -103,15 +104,22 @@ internal class DistillController(
         job?.cancel()
         job = scope.launch {
             try {
-                when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> ifCurrent(requestId) {
-                        update(DistillState.Unavailable("蒸留はこの端末のGemini Nanoでは利用できません。"))
-                    }
+                when (val availability = aiClient.checkAvailability()) {
+                    AiAvailability.Ready -> analyze(requestId, input)
                     AiAvailability.NeedsDownload -> ifCurrent(requestId) {
                         pendingDownload = input
-                        update(DistillState.NeedsDownload(input.title))
+                        updateAiNotice(availability)
                     }
-                    AiAvailability.Available -> analyze(requestId, input)
+                    // **DL中は待つだけ。** `downloadModel()` を呼んで合流はできない
+                    // （→ AiAvailability.Downloading）。CTAも出さないので、
+                    // ユーザーは完了後にもう一度押すことになる。
+                    // 非対応は再試行を出さず、一時的な不可は出す。畳むとどちらかが必ず誤る。
+                    AiAvailability.Downloading,
+                    AiAvailability.Unsupported,
+                    is AiAvailability.TemporarilyUnavailable -> ifCurrent(requestId) {
+                        pendingDownload = null
+                        updateAiNotice(availability)
+                    }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -127,36 +135,56 @@ internal class DistillController(
         val input = pendingDownload ?: return
         val requestId = activeRequestId
         job?.cancel()
-        job = scope.launch {
-            update(DistillState.Downloading(input.title, downloaded = -1L, total = 0L))
-            try {
-                aiClient.downloadModel().collect { status ->
-                    if (!isCurrent(requestId)) return@collect
-                    when (status) {
-                        is DownloadStatus.DownloadStarted -> update(
-                            DistillState.Downloading(input.title, 0L, status.bytesToDownload)
-                        )
-                        is DownloadStatus.DownloadProgress -> {
-                            val total = (state.current as? DistillState.Downloading)?.total ?: 0L
-                            update(DistillState.Downloading(input.title, status.totalBytesDownloaded, total))
-                        }
-                        is DownloadStatus.DownloadCompleted -> {
-                            pendingDownload = null
-                            analyze(requestId, input)
-                        }
-                        is DownloadStatus.DownloadFailed -> update(
-                            DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
-                        )
+        job = scope.launch { collectDownload(requestId, input) }
+    }
+
+    /**
+     * DLの進捗を購読し、完了したら分析へ進む。
+     *
+     * **呼ぶのは [downloadModelAndResume] だけ**、つまり
+     * [AiAvailability.NeedsDownload]（＝`DOWNLOADABLE`）を見てユーザーが承諾した後に限る。
+     * 既にDL中の状態からここへ来てはいけない理由は [AiAvailability.Downloading] にある。
+     */
+    private suspend fun collectDownload(requestId: Long, input: AnalysisInput) {
+        update(DistillState.Downloading(input.title, downloaded = -1L, total = 0L))
+        try {
+            aiClient.downloadModel().collect { status ->
+                if (!isCurrent(requestId)) return@collect
+                when (status) {
+                    is DownloadStatus.DownloadStarted -> update(
+                        DistillState.Downloading(input.title, 0L, status.bytesToDownload)
+                    )
+                    is DownloadStatus.DownloadProgress -> {
+                        val total = (state.current as? DistillState.Downloading)?.total ?: 0L
+                        update(DistillState.Downloading(input.title, status.totalBytesDownloaded, total))
                     }
-                }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                ifCurrent(requestId) {
-                    update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+                    is DownloadStatus.DownloadCompleted -> {
+                        pendingDownload = null
+                        analyze(requestId, input)
+                    }
+                    is DownloadStatus.DownloadFailed -> update(
+                        DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
+                    )
                 }
             }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            ifCurrent(requestId) {
+                update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+            }
         }
+    }
+
+    /**
+     * 端末AIの状態を、蒸留パネルが描ける形へ移す。
+     *
+     * `aiStatusNotice()` が全域関数なので、状態が増えても取りこぼしはここで起きない。
+     * [AiAvailability.Ready] だけが null を返すが、その枝はここへ来ない。
+     */
+    private fun updateAiNotice(availability: AiAvailability) {
+        val notice = aiStatusNotice(availability, DISTILL_FEATURE_LABEL) ?: return
+        update(DistillState.AiNotice(notice))
     }
 
     private suspend fun analyze(requestId: Long, input: AnalysisInput) {
@@ -512,5 +540,10 @@ internal class DistillController(
 
     private inline fun ifCurrent(requestId: Long, block: () -> Unit) {
         if (isCurrent(requestId)) block()
+    }
+
+    private companion object {
+        /** 説明文へ埋め込む機能名（「この端末では**蒸留**を利用できません。」）。 */
+        const val DISTILL_FEATURE_LABEL = "蒸留"
     }
 }

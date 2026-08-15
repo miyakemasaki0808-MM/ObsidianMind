@@ -364,6 +364,8 @@ class NoteViewModel internal constructor(
     fun openSection(section: NoteSection) = session.openSection(section)
     fun showSectionChat() = session.showSectionChat()
     fun sendSectionMessage(text: String) = session.sendSectionMessage(text)
+    fun retrySectionSummary() = session.retrySectionSummary()
+    fun retrySectionAnswer() = session.retrySectionAnswer()
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
 
@@ -514,9 +516,7 @@ class NoteViewModel internal constructor(
                 is RelatedNotesResult.Success -> session.setRelatedNotesState(
                     RelatedNotesState.Success(
                         relatedNotes = result.relatedNotes,
-                        aiNotes = result.aiNotes,
-                        aiStatus = result.aiStatus,
-                        aiErrorMessage = result.aiErrorMessage
+                        aiNotes = result.aiNotes
                     )
                 )
                 is RelatedNotesResult.Error ->

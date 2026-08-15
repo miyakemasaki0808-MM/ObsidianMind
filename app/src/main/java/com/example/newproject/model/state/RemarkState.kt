@@ -5,9 +5,12 @@ import com.example.newproject.model.Reflection
 /**
  * ノートへのひとこと（旧「AI補記メモ」）の状態。
  *
- * **`isViewed` を持たない。** 旧補記は結果が専用画面にあったので「見たかどうか」を
- * 管理してAIタブへバッジを出していたが、ひとことは読書画面へ直接1文が出るため
- * 未確認という概念そのものが無い（→ features/reflect_remark.md §7.1）。
+ * **`isViewed` を持たない。** 判定軸は置き場所ではなく**「後から結果へ辿り着けるか」**である。
+ * 旧補記は結果がVault内の `.md` にあり、一覧を開くまで存在に気づけなかった。
+ * ひとことは**結果も生成の起点も専用画面 `RemarkScreen` にあり**、痕跡サイドカーへ
+ * 永続化されて開くたび必ず復元されるので、見逃しても失われない。
+ * だから「まだ見ていない」を状態として持ち続ける必要がない
+ * （→ [background_ai_ux](../../../../../../../../../docs/dev/system/background_ai_ux.md) §4）。
  *
  * **[Empty] は失敗ではない。** 「出すものが無い」は正常な結果で、
  * ユーザーには固定文で伝える（AIに「補記不要です」と言わせない → §5）。
@@ -40,8 +43,32 @@ sealed class RemarkState {
     /** 応答は来たが検査を通らなかった（短すぎる・長すぎる・一般論・候補外リンク）。 */
     data class Unusable(val sourceTitle: String) : RemarkState()
 
-    /** 生成そのものが失敗した（非対応端末・DL失敗・例外）。 */
+    /** 生成そのものが失敗した（DL失敗・例外）。 */
     data class Error(val message: String, val sourceTitle: String? = null) : RemarkState()
+
+    /**
+     * 端末AIの状態を説明している。
+     *
+     * **[Error] へ畳まない。** 畳んでいたころは非対応端末で「ひとことをもらえませんでした。
+     * ひとことはこの端末では利用できません。」と出たうえ、**再試行ボタンが押せたまま**だった。
+     * [Empty] と [Unusable] を分けたのと同じ理屈で、次の行動が違うものを1つにしない。
+     */
+    data class AiNotice(val notice: AiStatusNotice, val sourceTitle: String) : RemarkState()
+}
+
+/**
+ * 「ひとことをもらう」を押させてよいか。
+ *
+ * 生成中の二重起動を防ぐほか、**恒久非対応の端末では押しても同じ答えしか返らない**ので無効にする。
+ *
+ * **通知のCTA（[AiNoticeAction]）で判定しない。** DL実行中の説明はCTAを持たないが、
+ * 入口まで閉じると**DL完了後に押し直せなくなる**。閉じてよいのは
+ * [AiStatusNotice.canTryAgainLater] が false のときだけ。
+ */
+internal fun RemarkState.canRequestRemark(): Boolean = when (this) {
+    is RemarkState.Loading -> false
+    is RemarkState.AiNotice -> notice.canTryAgainLater
+    else -> true
 }
 
 /**
@@ -85,4 +112,5 @@ internal fun RemarkState.toEventKey(): String? = when (this) {
     is RemarkState.Empty -> "empty:$sourceTitle"
     is RemarkState.Unusable -> "unusable:$sourceTitle"
     is RemarkState.Error -> "error:$sourceTitle:$message"
+    is RemarkState.AiNotice -> "notice:$sourceTitle:${notice.message}"
 }

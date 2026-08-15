@@ -1,7 +1,6 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.NoteFile
-import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -11,7 +10,14 @@ import kotlinx.coroutines.CancellationException
 sealed class PickerResult {
     data class Success(
         val notes: List<RelatedNote>,
-        val aiStatus: AiRecommendationStatus = AiRecommendationStatus.Ready
+        /**
+         * AIが選定に関与したか。**理由までは持たない。**
+         *
+         * 非対応でも未取得でも取得失敗でも、この画面で起きることは同じ
+         * （キーワード一致の結果が出る）で、**ユーザーの次の行動が変わらない**。
+         * 理由で割ると、`AiStatusNotice` と重なる2つ目の方言になる。
+         */
+        val isAiAssisted: Boolean = true
     ) : PickerResult()
     data class Error(val message: String) : PickerResult()
 }
@@ -38,9 +44,14 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
             val notesByTitle = candidates.associateBy { it.name.toNormalizedObsidianTitle() }
 
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable -> fallback(query, candidates, AiRecommendationStatus.Unavailable)
-                AiAvailability.NeedsDownload -> fallback(query, candidates, AiRecommendationStatus.NeedsDownload)
-                AiAvailability.Available -> {
+                // AIが動かない理由は4通りあるが、**この画面での結果は1つ**
+                // （キーワード一致で出す）なので割らない。
+                AiAvailability.Unsupported,
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                is AiAvailability.TemporarilyUnavailable ->
+                    fallback(query, candidates, isAiAssisted = false)
+                AiAvailability.Ready -> {
                     val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })
                     val response = aiClient.generate(prompt)
                     val picked = response.lineSequence()
@@ -53,8 +64,9 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                         .toList()
 
                     // Nano が候補外/空を返したら、キーワード一致でフォールバック。
-                    if (picked.isEmpty()) fallback(query, candidates, AiRecommendationStatus.Ready)
-                    else PickerResult.Success(picked, AiRecommendationStatus.Ready)
+                    // **AIは動いている**ので、断り書きは出さない。
+                    if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = true)
+                    else PickerResult.Success(picked, isAiAssisted = true)
                 }
             }
         } catch (e: CancellationException) {
@@ -75,10 +87,10 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
     private fun fallback(
         query: String,
         candidates: List<NoteFile>,
-        status: AiRecommendationStatus
+        isAiAssisted: Boolean
     ): PickerResult = PickerResult.Success(
         notes = pickByKeyword(query, candidates, PICK_LIMIT) { it.name }.map { it.toRelatedNote() },
-        aiStatus = status
+        isAiAssisted = isAiAssisted
     )
 
     private fun NoteFile.toRelatedNote(): RelatedNote =

@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.Panel
@@ -133,7 +132,7 @@ internal fun RelatedNotesPanel(
                 is RelatedNotesState.Success -> {
                     val hasRelated = state.relatedNotes.isNotEmpty()
                     val hasAi = state.aiNotes.isNotEmpty()
-                    if (!hasRelated && !hasAi && state.aiStatus == AiRecommendationStatus.Ready) {
+                    if (!hasRelated && !hasAi) {
                         Text("関連ノートは見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
                         if (hasRelated) {
@@ -151,8 +150,9 @@ internal fun RelatedNotesPanel(
                                 }
                             }
                         }
-                        val showAiSection = hasAi || state.aiStatus != AiRecommendationStatus.Ready
-                        if (showAiSection) {
+                        // **AI推薦が無いなら見出しごと出さない。** 自動で走る機能なので、
+                        // 使えない理由も「見つかりませんでした」も画面に置かない。
+                        if (hasAi) {
                             if (hasRelated) {
                                 Spacer(modifier = Modifier.height(8.dp))
                                 HorizontalDivider(color = PanelDividerStrong, thickness = 1.dp)
@@ -165,18 +165,11 @@ internal fun RelatedNotesPanel(
                                 color = AiHeading
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            if (hasAi) {
-                                state.aiNotes.forEachIndexed { index, note ->
-                                    RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
-                                    if (index < state.aiNotes.lastIndex) {
-                                        HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
-                                    }
+                            state.aiNotes.forEachIndexed { index, note ->
+                                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                                if (index < state.aiNotes.lastIndex) {
+                                    HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
                                 }
-                            } else {
-                                AiRecommendationStatusText(
-                                    status = state.aiStatus,
-                                    errorMessage = state.aiErrorMessage
-                                )
                             }
                         }
                     }
@@ -188,26 +181,6 @@ internal fun RelatedNotesPanel(
             }
         }
     }
-}
-
-@Composable
-internal fun AiRecommendationStatusText(
-    status: AiRecommendationStatus,
-    errorMessage: String?,
-) {
-    val message = when (status) {
-        AiRecommendationStatus.Ready -> "AI推薦は見つかりませんでした。"
-        AiRecommendationStatus.Unavailable -> "この端末ではAI推薦を利用できません。"
-        AiRecommendationStatus.NeedsDownload -> "AI推薦に必要なモデルを準備中です。"
-        AiRecommendationStatus.Error -> "AI推薦の取得に失敗しました: ${errorMessage ?: "Unknown error"}"
-    }
-    val color = when (status) {
-        AiRecommendationStatus.Ready -> OnSurfaceFaint
-        AiRecommendationStatus.NeedsDownload -> OnSurfaceMuted
-        AiRecommendationStatus.Unavailable,
-        AiRecommendationStatus.Error -> ErrorText
-    }
-    Text(message, fontSize = 13.sp, color = color)
 }
 
 @Composable

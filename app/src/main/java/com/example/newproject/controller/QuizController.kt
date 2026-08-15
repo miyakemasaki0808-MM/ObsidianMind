@@ -1,6 +1,7 @@
 package com.example.newproject.controller
 
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.domain.profileQuizInput
@@ -57,16 +58,19 @@ class QuizController(
         }
         generateJob = scope.launch {
             try {
-                when (aiClient.checkAvailability()) {
-                    AiAvailability.Unavailable -> updateError(
-                        request = request,
-                        message = "Q&Aはこの端末では利用できません。"
-                    )
+                when (val availability = aiClient.checkAvailability()) {
+                    AiAvailability.Ready -> generateWithAvailableModel(request)
+                    // 自動DL方式。**`downloadModel()` を呼んでよいのはここだけ**
+                    // （→ AiAvailability.Downloading）。
                     AiAvailability.NeedsDownload -> {
                         pending = request
                         startModelDownload()
                     }
-                    AiAvailability.Available -> generateWithAvailableModel(request)
+                    // **エラーへ畳まない。** 非対応に再試行導線が付くのを避ける。
+                    // DL中は待つだけ（合流できないので、完了後にもう一度押してもらう）。
+                    AiAvailability.Downloading,
+                    AiAvailability.Unsupported,
+                    is AiAvailability.TemporarilyUnavailable -> updateAiNotice(request, availability)
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -177,10 +181,22 @@ class QuizController(
         }
     }
 
+    /** 端末AIの状態をそのまま説明へ移す。[AiAvailability.Ready] はここへ来ない。 */
+    private fun updateAiNotice(request: PendingQuiz, availability: AiAvailability) {
+        if (!isCurrent(request.requestId)) return
+        val notice = aiStatusNotice(availability, QUIZ_FEATURE_LABEL) ?: return
+        state.update { QuizState.AiNotice(notice, request.title.toObsidianNoteTitle()) }
+    }
+
     private data class PendingQuiz(
         val requestId: Long,
         val title: String,
         val content: String,
         val format: QuizFormat
     )
+
+    private companion object {
+        /** 説明文へ埋め込む機能名（「この端末では**Q&A**を利用できません。」）。 */
+        const val QUIZ_FEATURE_LABEL = "Q&A"
+    }
 }

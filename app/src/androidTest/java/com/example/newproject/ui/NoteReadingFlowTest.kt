@@ -339,6 +339,8 @@ class NoteReadingFlowTest {
             onSelectVault = {},
             onRandomNote = {},
             onSuggestionTap = {},
+            onRetrySectionSummary = {},
+            onRetrySectionAnswer = {},
             onDismissSectionChat = {},
             onEndSectionChat = {},
             onGenerateQuiz = { _, _ -> },

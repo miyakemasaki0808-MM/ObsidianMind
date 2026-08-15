@@ -48,9 +48,10 @@
 2. 浮遊吹き出しをタップ → `open(section)`
    - **既にセッションがあれば、それを再表示するだけ**（→ §8 判断2）
 3. `checkAvailability()` を見る
-   - `Unavailable` → 「この端末ではAIを利用できません。」
-   - `NeedsDownload` → 「先にAI要約や補記メモを実行してダウンロードしてください。」（**ここではDLしない** → §8 判断4）
-   - `Available` → 4へ
+   - `Ready` → 4へ
+   - それ以外 → `aiStatusNotice()` の説明を `summaryProblem` へ載せる。
+     **文言も導線も `AiStatusNotice` が持つ**（message だけ取り出すと再試行できず、
+     赤いエラー表示になる）。再試行は `retrySummary()` が受ける。**ここではDLしない** → §8 判断4
 4. セクション要約と質問候補を生成する
 5. 質問候補をタップ → `sendMessage()` が回答を生成し、シート内のログへ積む
 6. 「📝 この部分でクイズ」→ 周辺本文（約1,200字）から設問を作る
@@ -68,9 +69,25 @@
   | クイズ用の周辺本文 | **約1200文字** | `SURROUNDING_CONTEXT_TARGET_LENGTH` |
   | 出力枠 | 256トークン | `genai-prompt` |
 
+<!-- state-fields: SectionChatState -->
 - **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
-  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` / `error`
-- **エラー／AI非対応時:** `error` に文言を入れてシート内へ出す。**別画面へ飛ばさない**
+  `summary` / `isSummaryLoading` / `suggestions` / `messages` / `isGenerating` /
+  `isSuggestionsLoading` / `summaryProblem` / `answerProblem`
+<!-- /state-fields -->
+- **候補の進行は `isSuggestionsLoading` が持つ。`suggestions.isEmpty()` から推測しない** —
+  推測していたころは、候補生成を始めてすらいない場合や例外・正常な0件でも
+  「質問候補を準備中…」が永久に残った。表示の決定は `suggestionsDisplay()` の純関数で、
+  `Loading`（要約か候補が走行中）/ `Ready`（候補あり）/ `None`（走っていないのに空）の3値。
+  **走行フラグは派生状態（`sectionChatStatus`）も読む** — 片方だけに配線すると、
+  シートが「準備中」を出している最中にVigilith/FABが「完了」を示す
+- **出せなかった理由は要約側と回答側で別の欄に持つ**（`SectionChatProblem`）。
+  **1つで兼ねない** — ①要約があると回答の失敗が表示に負けて消え、
+  ②同時に起きたとき「再試行がどちらを指すか」を決められない
+- **`GenerationFailed(message)`:** 生成が落ちた（タイムアウト・出力打ち切り）。赤で出す
+- **`AiStatus(notice)`:** 端末AIが使えない。通常色で出す
+  （→ [background_ai_ux](../system/background_ai_ux.md) §6）
+- **再試行は2本:** `retrySummary()` は要約を作り直し、`retryAnswer()` は答えを返せていない
+  質問を作り直す（**ログへ積み直さない**）。**押されたボタンの位置が対象を決める**
 - **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
 
 ## 6. 状態とデータ
@@ -129,6 +146,12 @@ NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> �
 
 `NeedsDownload` のときは**文言で案内するだけ**で、ダウンロードを開始しない
 （要約とクイズは自動で始める）。
+
+**したがって `AiNoticeAction.Download` を運ばない。** 共通変換へ
+`canStartDownload = false` を渡し、「Gemini Nanoの準備ができると〜を使えます。」という
+**待てば使えることだけを言う文**にする。運んでいたころは終端UIがコールバックを渡さず、
+**ボタンが描かれないまま「開始してください」だけが残っていた** —
+開始する操作が存在しない案内になり、判断4そのものとも食い違っていた。
 
 **読書中に開くシートなので、数分かかる処理をここから起こさない。**
 DLの起点は自動生成される要約側に寄せてある（→ [architecture](../system/architecture.md) の比較表）。

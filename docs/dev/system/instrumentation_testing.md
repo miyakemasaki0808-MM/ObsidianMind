@@ -82,7 +82,7 @@ Nano の出力は揺らぐので、書式を assert すると**モデルの気�
 生成が返ること・例外が出ないこと・トークン予算に収まることまでを固定し、書式はログへ出して観測する。
 
 **skip 判定は既知の `FeatureStatus` だけで行う。**
-`checkAvailability()` は例外も `Unavailable` へ畳むので、判定に使うと
+`checkAvailability()` は例外も `TemporarilyUnavailable` という値へ変えるので、判定に使うと
 **SDKの回帰が「非対応端末」に化けて見逃される。**
 **計測・生成呼び出しが投げた例外は skip せず失敗させる。**
 

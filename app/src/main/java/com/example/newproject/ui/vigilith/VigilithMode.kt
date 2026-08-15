@@ -5,6 +5,7 @@ import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 
@@ -25,13 +26,22 @@ internal enum class VigilithActionStatus {
  * セクションチャット（要約・質問）の状態から [VigilithActionStatus] を導出する。
  *
  * 判定順に意味がある。エラーを最優先で拾い、次に生成中、最後に完了。
- * チャットが存在するのに要約もエラーも無い場合は「これから要約が始まる」= Working とする。
+ * チャットが存在するのに要約も理由も無い場合は「これから要約が始まる」= Working とする。
+ * **理由があるなら待っていない**ので Idle にする。
  */
 internal fun sectionChatStatus(chat: SectionChatState?): VigilithActionStatus = when {
     chat == null -> VigilithActionStatus.Idle
-    chat.error != null -> VigilithActionStatus.Error
-    chat.isSummaryLoading || chat.isGenerating -> VigilithActionStatus.Working
+    // **状態の説明は失敗として数えない。** 端末AIが使えないだけならインジケータは光らせない。
+    chat.summaryProblem is SectionChatProblem.GenerationFailed ||
+        chat.answerProblem is SectionChatProblem.GenerationFailed -> VigilithActionStatus.Error
+    // **走行フラグは3つとも見る。** 候補生成を落とすと、シートが「質問候補を準備中…」を
+    // 出している最中に Vigilith と全画面FABが「完了」を示す（同じ処理が同時に2状態）。
+    chat.isSummaryLoading || chat.isGenerating || chat.isSuggestionsLoading ->
+        VigilithActionStatus.Working
     chat.summary != null -> VigilithActionStatus.Ready
+    // **走っていないのに Working にしない。** 端末AIが使えず要約も無いときに
+    // 「AI生成中」のスピナーが回り続けていた（上のコメントと実装が食い違っていた）。
+    chat.summaryProblem != null -> VigilithActionStatus.Idle
     else -> VigilithActionStatus.Working
 }
 

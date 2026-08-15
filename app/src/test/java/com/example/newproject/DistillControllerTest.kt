@@ -10,6 +10,7 @@ import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -17,16 +18,17 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.google.mlkit.genai.common.DownloadStatus
-import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.channels.Channel
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.fakes.FakeAiClient
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -43,7 +45,7 @@ class DistillControllerTest {
     @Test
     fun `AI IDs become selected original candidate items`() = runTest {
         val state = stateWithNote()
-        val controller = controller(state, ImmediateAiClient(response = "選択: S001"))
+        val controller = controller(state, FakeAiClient.returning("選択: S001"))
 
         controller.start()
         advanceUntilIdle()
@@ -58,7 +60,7 @@ class DistillControllerTest {
     @Test
     fun `candidate toggle updates selection and projected ratio`() = runTest {
         val state = stateWithNote()
-        val controller = controller(state, ImmediateAiClient(response = "S001"))
+        val controller = controller(state, FakeAiClient.returning("S001"))
         controller.start()
         advanceUntilIdle()
         val before = state.value.distillState as DistillState.Candidates
@@ -73,14 +75,14 @@ class DistillControllerTest {
 
     @Test
     fun `note switch discards late AI response`() = runTest {
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val state = stateWithNote()
         val controller = controller(state, ai)
         controller.start()
         runCurrent()
 
         controller.cancelForNoteChange()
-        ai.response.complete("S001")
+        ai.completeAll("S001")
         advanceUntilIdle()
 
         assertTrue(state.value.distillState is DistillState.Idle)
@@ -101,7 +103,7 @@ class DistillControllerTest {
                 sectionChat = SectionChatState(
                     sectionTitle = "旧セクション",
                     sectionContext = "太字化前の本文",
-                    error = "旧エラー"
+                    summaryProblem = SectionChatProblem.GenerationFailed("旧エラー")
                 ),
                 isSectionChatSheetVisible = true
             )
@@ -111,7 +113,7 @@ class DistillControllerTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val controller = DistillController(
             scope = this,
-            aiClient = ImmediateAiClient(response = "S001"),
+            aiClient = FakeAiClient.returning("S001"),
             state = state.distillWriter,
             currentNote = state::currentNote,
             persistence = persistence,
@@ -148,7 +150,7 @@ class DistillControllerTest {
     @Test
     fun `invalid AI response is not presented as heuristic candidates`() = runTest {
         val state = stateWithNote()
-        val controller = controller(state, ImmediateAiClient(response = "候補を選べません"))
+        val controller = controller(state, FakeAiClient.returning("候補を選べません"))
 
         controller.start()
         advanceUntilIdle()
@@ -159,14 +161,115 @@ class DistillControllerTest {
     @Test
     fun `download requirement is explicit and does not start automatically`() = runTest {
         val state = stateWithNote()
-        val ai = ImmediateAiClient(AiAvailability.NeedsDownload, "S001")
+        val ai = FakeAiClient.returning("S001", AiAvailability.NeedsDownload)
         val controller = controller(state, ai)
 
         controller.start()
         advanceUntilIdle()
 
-        assertTrue(state.value.distillState is DistillState.NeedsDownload)
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.Download, notice.action)
         assertEquals(0, ai.generateCalls)
+    }
+
+    /**
+     * **`AiClient` が契約を破って投げても、呼び出し側が壊れない。**
+     *
+     * 修正後の `AICoreClient` は投げない（例外は `TemporarilyUnavailable` という値になる）が、
+     * 実装は他にもあり得る。**統一前はこの経路を突くテストダブルが1つも無かった。**
+     */
+    @Test
+    fun `a throwing availability check surfaces as an error, not a crash`() = runTest {
+        val state = stateWithNote()
+        val ai = FakeAiClient.returning("S001")
+        ai.availabilityFailure = { IllegalStateException("AICore not bound") }
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        assertTrue(
+            "投げられた例外はエラー状態になること: ${state.value.distillState}",
+            state.value.distillState is DistillState.Error
+        )
+    }
+
+    /**
+     * **キャンセルはエラーへ変換しない。** ノート切替のたびに偽のエラーが出る。
+     * `CancellationException` は `Exception` の子なので、広い catch があると素通りしない。
+     */
+    @Test
+    fun `a cancelled availability check does not become an error`() = runTest {
+        val state = stateWithNote()
+        val ai = FakeAiClient.returning("S001")
+        ai.availabilityFailure = { CancellationException("note changed") }
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        assertTrue(
+            "キャンセルがエラー表示に化けている: ${state.value.distillState}",
+            state.value.distillState is DistillState.Analyzing
+        )
+    }
+
+    /**
+     * **DL実行中は `downloadModel()` を呼ばず、CTAも出さない。**
+     *
+     * 未取得とDL中を畳んでいたころは、走行中のDLに対して
+     * 「通信量を確認してから開始してください」と出していた（押しても始まるものが無い）。
+     * 一度は「走行中のDLへ合流する」形にしたが、**beta2 の `downloadFeatureInternal` には
+     * 状態の門番が無く、合流できる保証がない**（逆アセンブルで確認）。
+     * 合流を装って即 `DownloadCompleted` が返ると、モデルが揃う前に生成が走る。
+     */
+    @Test
+    fun `a running download is waited out without calling download again`() = runTest {
+        val state = stateWithNote()
+        val downloads = Channel<DownloadStatus>(Channel.UNLIMITED)
+        val ai = FakeAiClient(AiAvailability.Downloading, downloads) { "S001" }
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
+        assertEquals(0, ai.generateCalls)
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
+
+        downloads.close()
+    }
+
+    /** **非対応には再試行導線を出さない。** 何度押しても同じ答えが返る。 */
+    @Test
+    fun `an unsupported device is told so without a retry affordance`() = runTest {
+        val state = stateWithNote()
+        val controller = controller(state, FakeAiClient(AiAvailability.Unsupported))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.None, notice.action)
+    }
+
+    /**
+     * **状態を取れなかっただけなら再試行に意味がある。** 非対応と同じ枝へ畳むと、
+     * 一時的な失敗が「この端末では使えません」として永久に見えてしまう。
+     */
+    @Test
+    fun `a failed status read offers a retry and hides the SDK message`() = runTest {
+        val state = stateWithNote()
+        val ai = FakeAiClient(AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound")))
+        val controller = controller(state, ai)
+
+        controller.start()
+        advanceUntilIdle()
+
+        val notice = (state.value.distillState as DistillState.AiNotice).notice
+        assertEquals(AiNoticeAction.Retry, notice.action)
+        assertFalse(notice.message, notice.message.contains("AICore"))
     }
 
     @Test
@@ -183,7 +286,7 @@ class DistillControllerTest {
             )
         )
         val persistence = FakePersistence()
-        val controller = controller(state, ImmediateAiClient(response = "S001"), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
         controller.start()
         advanceUntilIdle()
 
@@ -201,7 +304,7 @@ class DistillControllerTest {
         val state = stateWithNote()
         val controller = controller(
             state,
-            ImmediateAiClient(response = "S001 S002 S003 S004 S005 S006")
+            FakeAiClient.returning("S001 S002 S003 S004 S005 S006")
         )
 
         controller.start()
@@ -227,7 +330,7 @@ class DistillControllerTest {
                 )
             )
         )
-        val controller = controller(state, ImmediateAiClient(response = "S002 S001"))
+        val controller = controller(state, FakeAiClient.returning("S002 S001"))
         controller.start()
         advanceUntilIdle()
 
@@ -256,7 +359,7 @@ class DistillControllerTest {
                 )
             )
         )
-        val controller = controller(state, ImmediateAiClient(response = "S001"))
+        val controller = controller(state, FakeAiClient.returning("S001"))
         controller.start()
         advanceUntilIdle()
 
@@ -277,7 +380,7 @@ class DistillControllerTest {
         var reloadCalls = 0
         val controller = DistillController(
             scope = this,
-            aiClient = ImmediateAiClient(response = "S001"),
+            aiClient = FakeAiClient.returning("S001"),
             state = state.distillWriter,
             currentNote = state::currentNote,
             persistence = persistence,
@@ -314,7 +417,7 @@ class DistillControllerTest {
         val persistence = FakePersistence().apply {
             assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
         }
-        val controller = controller(state, ImmediateAiClient(), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
 
         controller.checkRecovery()
         advanceUntilIdle()
@@ -330,7 +433,7 @@ class DistillControllerTest {
         val persistence = FakePersistence().apply {
             assessment = DistillRecoveryAssessment.OriginalStillPresent(record())
         }
-        val controller = controller(state, ImmediateAiClient(), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
 
         controller.checkRecovery()
         advanceUntilIdle()
@@ -347,7 +450,7 @@ class DistillControllerTest {
     @Test
     fun `遅れて届いた復旧警告は走行中の分析に上書きされない`() = runTest {
         val state = stateWithNote()
-        val ai = ControllableAiClient()
+        val ai = FakeAiClient.deferred()
         val persistence = FakePersistence().apply {
             assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
         }
@@ -362,7 +465,7 @@ class DistillControllerTest {
         assertTrue(state.value.distillState is DistillState.RecoveryRequired)
 
         // その後に分析のAI応答が返ってきても、警告を消してはいけない
-        ai.response.complete("S001")
+        ai.completeAll("S001")
         advanceUntilIdle()
 
         assertTrue(state.value.distillState is DistillState.RecoveryRequired)
@@ -375,7 +478,7 @@ class DistillControllerTest {
         val persistence = FakePersistence().apply {
             assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
         }
-        val controller = controller(state, ImmediateAiClient(), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
 
         controller.checkRecovery()
         controller.checkRecovery()
@@ -395,7 +498,7 @@ class DistillControllerTest {
         val persistence = FakePersistence().apply {
             assessment = DistillRecoveryAssessment.Diverged(record(), sha256Hex("other".toByteArray()))
         }
-        val controller = controller(state, ImmediateAiClient(), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
 
         controller.checkRecovery()
         controller.cancelForNoteChange()
@@ -411,7 +514,7 @@ class DistillControllerTest {
         val persistence = FakePersistence().apply {
             pending = PendingDistillOriginal("content://note", original)
         }
-        val controller = controller(state, ImmediateAiClient(), persistence)
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
         var exported = byteArrayOf()
 
         controller.exportOriginal { exported = it.copyOf() }
@@ -456,26 +559,6 @@ class DistillControllerTest {
 
     private fun noteContent(): String = (1..12).joinToString("\n") { index ->
         "これは十分な長さを持つ重要な本文${index}です。"
-    }
-
-    private class ImmediateAiClient(
-        private val availability: AiAvailability = AiAvailability.Available,
-        private val response: String = "S001"
-    ) : AiClient {
-        var generateCalls = 0
-        override suspend fun checkAvailability(): AiAvailability = availability
-        override suspend fun generate(prompt: String): String {
-            generateCalls++
-            return response
-        }
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-    }
-
-    private class ControllableAiClient : AiClient {
-        val response = CompletableDeferred<String>()
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
-        override suspend fun generate(prompt: String): String = response.await()
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
     }
 
     private class FakePersistence : DistillPersistence {

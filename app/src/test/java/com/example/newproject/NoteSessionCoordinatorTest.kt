@@ -1,7 +1,6 @@
 package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
-import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
@@ -42,13 +41,10 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
+import com.example.newproject.fakes.FakeAiClient
 import android.net.Uri
-import com.google.mlkit.genai.common.DownloadStatus
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -592,7 +588,7 @@ class NoteSessionCoordinatorTest {
         private val scope: TestScope,
         private val clock: TestClock = TestClock()
     ) {
-        val ai = FakeAi()
+        val ai = FakeAiClient.deferred()
         val vault = FakeVaultBrowser(handle = null)
         val history = FakeHistoryStore()
         val distill = FakeDistillPersistence()
@@ -633,26 +629,6 @@ class NoteSessionCoordinatorTest {
         fun now(): Long = now
         fun advance(millis: Long) {
             now += millis
-        }
-    }
-
-    /** 生成を止めたまま保持し、[completeAll] で一斉に返す。切替後の後着を作るため。 */
-    private class FakeAi : AiClient {
-        private val pending = mutableListOf<CompletableDeferred<String>>()
-
-        override suspend fun checkAvailability(): AiAvailability = AiAvailability.Available
-
-        override suspend fun generate(prompt: String): String {
-            val deferred = CompletableDeferred<String>()
-            pending += deferred
-            return deferred.await()
-        }
-
-        override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()
-
-        fun completeAll(result: String) {
-            pending.forEach { it.complete(result) }
-            pending.clear()
         }
     }
 

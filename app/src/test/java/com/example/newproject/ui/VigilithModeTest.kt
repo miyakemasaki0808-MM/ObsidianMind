@@ -4,6 +4,8 @@ import com.example.newproject.domain.projectedBoldRatio
 import com.example.newproject.ui.vigilith.VigilithDistillPhase
 import com.example.newproject.ui.vigilith.VigilithMode
 import com.example.newproject.ui.vigilith.resolveVigilithPresentation
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.ReadingTraceCard
@@ -171,7 +173,9 @@ class VigilithModeTest {
             VigilithMode.Idle,
             resolveVigilithPresentation(
                 "ai",
-                DistillState.NeedsDownload("ノート"),
+                DistillState.AiNotice(
+                    AiStatusNotice("ダウンロードが必要です。", AiNoticeAction.Download, canTryAgainLater = true)
+                ),
                 null
             ).mode
         )

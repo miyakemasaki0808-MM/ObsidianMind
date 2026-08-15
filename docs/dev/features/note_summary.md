@@ -42,9 +42,11 @@
 1. ノートを開く → `fetchSummary(title, content)` が自動で走る（**ユーザー操作は不要**）
 2. `requestId` を採番し、`Loading` にする
 3. `AiClient.checkAvailability()` を見る
-   - `Unavailable` → `AiUnavailable`（**要約欄そのものを出さない**）
+   - `Ready` → 4へ
    - `NeedsDownload` → `Downloading` にしてモデルDLを開始する
-   - `Available` → 4へ
+   - それ以外（非対応・一時的な不可・**DL実行中**）→ `AiUnavailable`（**要約欄そのものを出さない**）。
+     DL中にDLを始めないのは、走行中のDLへ合流できないため
+     （→ [background_ai_ux](../system/background_ai_ux.md) §6 判断2）
 4. 本文から抜粋を作る（**`Dispatchers.Default`** — 最大1MBの解析でMainを塞がない）
 5. プロンプトを組み、`AiClient.generate()`（`generateMutex` で直列・60秒タイムアウト）
 6. `Success(summary)` を AIタブの `SummaryPanel` へ出す

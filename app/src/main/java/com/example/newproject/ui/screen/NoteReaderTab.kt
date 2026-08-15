@@ -87,6 +87,8 @@ internal fun NoteReaderTab(
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
     onSuggestionTap: (String) -> Unit,
+    onRetrySectionSummary: () -> Unit,
+    onRetrySectionAnswer: () -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
     onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
@@ -276,9 +278,13 @@ internal fun NoteReaderTab(
                     is QuizState.Success -> onOpenQuizResult()
                     is QuizState.Error ->
                         if (qs.isViewed) startQuizFromChat(chat) else onOpenQuizResult()
+                    // 非対応ならボタン自体が無効なので、ここへは取得失敗のときだけ来る。
+                    is QuizState.AiNotice -> startQuizFromChat(chat)
                     is QuizState.Idle -> startQuizFromChat(chat)
                 }
             },
+            onRetrySummary = onRetrySectionSummary,
+            onRetryAnswer = onRetrySectionAnswer,
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )

@@ -64,7 +64,9 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
 
 ## 5. 機能仕様
 
-- **前提条件:** Vault選択済み・ノート表示中。Nano が使えない端末では `Unusable`
+- **前提条件:** Vault選択済み・ノート表示中。端末AIが使えないときは `AiNotice`
+  （**`Unusable` でも `Error` でもない** — 生成の失敗と状態の説明を分ける
+  → [background_ai_ux](../system/background_ai_ux.md) §6）
 - **入力:** ノート本文の抜粋・関連ノート候補（`ID | タイトル`）・旧補記の有無
 - **出力:** 1件のひとこと（原則1文、最大2文、80〜120字程度）
 - **上限（すべて実装の定数）:**
@@ -98,7 +100,9 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
   **全画面ルート表示中は Snackbar を抑制する。**
 
 - **エラー／AI非対応／キャンセル時:**
-  - AI非対応端末 → `Unusable`（機能ごと出さない）
+  - 端末AIが使えない → `AiNotice`。**`Unusable` でも `Error` でもない**（状態の説明であって
+    生成の失敗ではない）。恒久非対応のときだけ「もらう」ボタンを無効にする
+    → [background_ai_ux](../system/background_ai_ux.md) §6
   - 生成失敗 → `Error`（メッセージを表示）
   - ノート切替 → `cancelAndClear()`。`CancellationException` は再throwする
   - 保存失敗 → `Failed`。**本文は状態に残し、再試行できる**
@@ -106,7 +110,8 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
 ## 6. 状態とデータ
 
 **UI状態 `RemarkState`（`NoteUiState.remarkState`）:**
-`Idle` / `Loading` / `Ready(reflection, replyStatus)` / `Empty` / `Unusable` / `Error`
+`Idle` / `Loading` / `Ready(reflection, replyStatus)` / `Empty` / `Unusable` / `Error` /
+`AiNotice(notice, sourceTitle)`
 
 **保存状態 `ReplyStatus`:** `None` / `Saving` / `Held` / `Saved` / `Failed`
 （**`Boolean` 2本にしない** — 「保存中かつ未保存」のような無意味な組み合わせが型として作れてしまう）
@@ -274,7 +279,8 @@ Nano は `generateMutex` で直列化され1回数十秒。ノートを開いた
 - **性能:** 生成は Mutex 直列で1回数十秒・60秒タイムアウト。**明示ボタンなので待つ前提に立てる**
 - **プライバシー:** ノート本文はプロンプトへ入るが**ネットワーク権限が無いので端末外へ出ない**（→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）
 - **データ保護:** ユーザーが書いた返事は作り直せない。§8 判断7・7.1 がこの一点のためにある
-- **端末制約:** Nano 非対応端末では `Unusable` で機能ごと出さない
+- **端末制約:** 端末AIが使えないときは `AiNotice` で理由を出す（→ §5）。
+  **恒久非対応のときだけ**「もらう」ボタンを無効にし、DL中・一時的な不可では押し直せる
 
 ## 10. 検証と受け入れ条件
 

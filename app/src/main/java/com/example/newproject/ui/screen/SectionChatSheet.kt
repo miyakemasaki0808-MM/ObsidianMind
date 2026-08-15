@@ -32,6 +32,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,8 +45,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.isQuizActionEnabled
+import com.example.newproject.model.state.quizNotice
+import com.example.newproject.model.state.showsQuizAction
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SuggestionsDisplay
+import com.example.newproject.model.state.suggestionsDisplay
+import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.theme.AccentSurface
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.OnButtonAi
@@ -69,6 +78,8 @@ fun SectionChatSheet(
     quizState: QuizState,
     onSuggestionTap: (String) -> Unit,
     onQuizTap: () -> Unit,
+    onRetrySummary: () -> Unit,
+    onRetryAnswer: () -> Unit,
     onDismiss: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -111,7 +122,10 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                state.error != null -> Text(state.error, fontSize = 13.sp, color = ErrorText)
+                // **要約が出せなかった理由はここだけに出す。** 押された導線の位置が
+                // 再試行の対象を決めるので、回答側の理由をここへ混ぜない。
+                state.summaryProblem != null ->
+                    SectionChatProblemRow(state.summaryProblem, onRetrySummary)
                 else -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
             }
 
@@ -129,14 +143,18 @@ fun SectionChatSheet(
             )
             Spacer(modifier = Modifier.height(10.dp))
 
-            if (state.suggestions.isEmpty() && !state.isSummaryLoading) {
-                Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // **空リストから進行中を推測しない**（→ suggestionsDisplay）。
+            when (state.suggestionsDisplay()) {
+                SuggestionsDisplay.Loading ->
+                    Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
+                SuggestionsDisplay.Ready -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     state.suggestions.forEach { q ->
                         SuggestionRow(text = q, enabled = !state.isGenerating) { onSuggestionTap(q) }
                     }
                 }
+                // 走っていないのに空。**待たせない**ので、終わったことが分かる文にする。
+                SuggestionsDisplay.None ->
+                    Text("質問候補はありません。", fontSize = 13.sp, color = OnSurfaceFaint)
             }
 
             // Q&A ログ
@@ -148,24 +166,16 @@ fun SectionChatSheet(
                 }
             }
 
-            // ── この部分でクイズ ─────────────────────────
-            // クイズはノート単位で1状態（別セクションの結果があればそれを開く）。
-            // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
-            Spacer(modifier = Modifier.height(20.dp))
-            val isQuizBusy = quizState is QuizState.Loading
-            val quizLabel = when (quizState) {
-                is QuizState.Idle -> "📝 この部分でクイズ"
-                is QuizState.Loading -> "クイズを作成中…"
-                is QuizState.Success -> "✓ クイズを開く"
-                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
+            // **回答が出せなかった理由はログの直後に出す。** 要約エリアへ出すと、
+            // 要約がある場合に表示が優先されて見えず、未回答の質問だけが残る。
+            state.answerProblem?.let { problem ->
+                Spacer(modifier = Modifier.height(8.dp))
+                SectionChatProblemRow(problem, onRetryAnswer)
             }
-            Button(
-                onClick = onQuizTap,
-                enabled = !isQuizBusy,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text(quizLabel, color = OnButtonAi) }
+
+            // ── この部分でクイズ ─────────────────────────
+            Spacer(modifier = Modifier.height(20.dp))
+            QuizActionSection(quizState = quizState, onQuizTap = onQuizTap)
 
             Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
@@ -179,6 +189,74 @@ fun SectionChatSheet(
                 )
             }
         }
+    }
+}
+
+/**
+ * 出せなかった理由と、その再試行導線。**[onRetry] が指す対象は呼び出し位置で決まる。**
+ *
+ * 生成の失敗と端末AIの状態で色を分ける — 前者は実際に落ちたので `ErrorText`、
+ * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
+ * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
+ */
+/**
+ * シートのクイズ欄。**理由と導線を同じ場所へ置く。**
+ *
+ * かつては状態をボタンのラベルへ潰していた。恒久非対応では
+ * 「クイズを使えません」とだけ出てボタンが無効になり、**理由を描く `QuizScreen` へ
+ * 到達できなかった** — 押した本人に、使えない理由も次の行動も残らなかった
+ * （実機レビューで発見）。**到達できない画面の説明を、説明した根拠にしない。**
+ *
+ * シートから切り出してあるのは、`ModalBottomSheet` を開かずに描画を検査するため。
+ */
+@Composable
+internal fun QuizActionSection(
+    quizState: QuizState,
+    onQuizTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        // 理由は必ず出す。要約側の失敗表示が出ているかどうかに依存しない。
+        quizState.quizNotice()?.let { notice ->
+            AiStatusNoticeRow(notice = notice)
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        // 押せないボタンを理由の隣に並べない（→ showsQuizAction）。
+        // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
+        if (quizState.showsQuizAction()) {
+            val quizLabel = when (quizState) {
+                is QuizState.Idle -> "📝 この部分でクイズ"
+                is QuizState.Loading -> "クイズを作成中…"
+                is QuizState.Success -> "✓ クイズを開く"
+                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
+                // ここへ来るのは「あとで変わりうる」状態だけ（→ showsQuizAction）。
+                is QuizState.AiNotice -> "↻ クイズを再試行"
+            }
+            Button(
+                onClick = onQuizTap,
+                enabled = quizState.isQuizActionEnabled(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ButtonAi,
+                    contentColor = OnButtonAi
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text(quizLabel, color = OnButtonAi) }
+        }
+    }
+}
+
+@Composable
+private fun SectionChatProblemRow(problem: SectionChatProblem, onRetry: () -> Unit) {
+    when (problem) {
+        is SectionChatProblem.GenerationFailed -> Column {
+            Text(problem.message, fontSize = 13.sp, color = ErrorText)
+            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(onClick = onRetry) { Text("再試行") }
+        }
+        is SectionChatProblem.AiStatus ->
+            AiStatusNoticeRow(notice = problem.notice, onRetry = onRetry)
     }
 }
 

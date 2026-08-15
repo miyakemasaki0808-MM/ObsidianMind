@@ -3,10 +3,12 @@ package com.example.newproject.controller
 import com.example.newproject.model.state.ChatMessage
 import com.example.newproject.model.state.ChatRole
 import com.example.newproject.model.SectionChatStateWriter
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.NoteExcerptLimits
@@ -51,21 +53,87 @@ class SectionChatController(
                 isSectionChatSheetVisible = true
             )
         }
+        startSummary(section.title, section.text)
+    }
+
+    /**
+     * 要約をもう一度作る。
+     *
+     * **`open()` は再入できない**（`sectionChat != null` なら再表示するだけ）ので、
+     * 要約エリアに添えた再試行導線はここへ来る。対象は開いているセッションの本文で、
+     * 別のセクションへは移らない。
+     *
+     * **[retryAnswer] と分けてある。** 要約と回答が同時に失敗したとき、
+     * 1本のままだと押されたボタンがどちらを指すか決められなかった。
+     */
+    fun retrySummary() {
+        val chat = state.current.sectionChat ?: return
+        // 要約が既にあるなら作り直さない（説明を畳むだけでよい）。
+        if (chat.summary != null) {
+            updateChat { it.copy(summaryProblem = null) }
+            return
+        }
+        // **要約のJobだけを止める。** `cancelJobs()` だと走行中の回答まで巻き添えにするが、
+        // 回答側はキャンセルで状態を戻さないので、`isGenerating` が真のまま固まり
+        // 「回答を生成中…」が永久に残る（質問候補も無効のまま）。
+        openJob?.cancel()
+        updateChat {
+            it.copy(isSummaryLoading = true, isSuggestionsLoading = false, summaryProblem = null)
+        }
+        startSummary(chat.sectionTitle, chat.sectionContext)
+    }
+
+    /**
+     * 答えを返せていない質問を作り直す。
+     *
+     * ログの末尾がユーザー発言のままなのは「回答を作れなかった」場合だけ。
+     * 説明を畳むだけだと**未回答の発言だけが残り、同じ候補を押すと質問が重複する。**
+     */
+    fun retryAnswer() {
+        val chat = state.current.sectionChat ?: return
+        val unanswered = chat.messages.lastOrNull()?.takeIf { it.role == ChatRole.User }
+        if (unanswered == null) {
+            updateChat { it.copy(answerProblem = null) }
+            return
+        }
+        answerJob?.cancel()
+        updateChat { it.copy(isGenerating = true, answerProblem = null) }
+        answerJob = scope.launch {
+            // 履歴は「その質問の直前まで」。再実行なのでログへは積み直さない。
+            runAnswer(chat, unanswered.text, historyOf(chat.messages.dropLast(1)))
+        }
+    }
+
+    private fun startSummary(sectionTitle: String, sectionText: String) {
         openJob = scope.launch {
-            when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "この端末ではAIを利用できません。") }
-                AiAvailability.NeedsDownload ->
-                    updateChat { it.copy(isSummaryLoading = false, error = "AIモデルの準備が必要です。先にAI要約や補記メモを実行してダウンロードしてください。") }
-                AiAvailability.Available -> {
+            // **状態確認の例外も終端へ落とす。** `AiClient` は他実装を許す公開契約なので
+            // `checkAvailability()` は投げうる。投げたまま launch を抜けると
+            // **`isSummaryLoading` が真のまま残り、シートが永久に待つ。**
+            val availability = try {
+                aiClient.checkAvailability()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateChat {
+                    it.copy(
+                        isSummaryLoading = false,
+                        summaryProblem = SectionChatProblem.GenerationFailed(
+                            e.message ?: "Unknown error"
+                        )
+                    )
+                }
+                return@launch
+            }
+            when (availability) {
+                AiAvailability.Ready -> {
                     try {
                         val sectionExcerpt = withContext(excerptDispatcher) {
-                            buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                            buildNoteExcerpt(sectionText, NoteExcerptLimits.SECTION)
                         }
                         val summary = aiClient
                             .generate(
                                 PromptBuilder.buildSectionSummaryPrompt(
-                                    section.title,
+                                    sectionTitle,
                                     sectionExcerpt
                                 )
                             )
@@ -79,9 +147,29 @@ class SectionChatController(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        updateChat { it.copy(isSummaryLoading = false, error = e.message ?: "Unknown error") }
+                        updateChat {
+                            it.copy(
+                                isSummaryLoading = false,
+                                summaryProblem = SectionChatProblem.GenerationFailed(
+                                    e.message ?: "Unknown error"
+                                )
+                            )
+                        }
                     }
-                    fetchSuggestions(section)
+                    fetchSuggestions(sectionTitle, sectionText)
+                }
+                // **旧文言は存在しない機能を案内していた** —「先にAI要約や補記メモを実行して
+                // ダウンロードしてください」の補記メモは 2026-08-09 にひとことへ置き換わっている。
+                // **`message` だけを取り出さない** — 導線を捨てると一時的な不可でも再試行できず、
+                // エラーと同じ赤で出てしまう（状態の説明は失敗ではない）。
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                AiAvailability.Unsupported,
+                is AiAvailability.TemporarilyUnavailable -> updateChat {
+                    it.copy(
+                        isSummaryLoading = false,
+                        summaryProblem = sectionChatNotice(availability, OPEN_FEATURE_LABEL)
+                    )
                 }
             }
         }
@@ -92,49 +180,113 @@ class SectionChatController(
         val question = text.trim()
         if (question.isBlank() || chat.isGenerating) return
 
-        val history = chat.messages.map {
-            (if (it.role == ChatRole.User) "User" else "AI") to it.text
-        }
+        val history = historyOf(chat.messages)
         updateChat {
             it.copy(
                 messages = it.messages + ChatMessage(ChatRole.User, question),
                 isGenerating = true,
-                error = null
+                // 前回の説明・失敗は畳む。新しい試行が古い理由を上書きする。
+                answerProblem = null
             )
         }
-        answerJob = scope.launch {
-            if (aiClient.checkAvailability() != AiAvailability.Available) {
-                updateChat { it.copy(isGenerating = false, error = "この端末ではAIを利用できません。") }
-                return@launch
-            }
-            try {
-                val sectionExcerpt = withContext(excerptDispatcher) {
-                    buildNoteExcerpt(chat.sectionContext, NoteExcerptLimits.SECTION)
-                }
-                val answer = aiClient.generate(
-                    PromptBuilder.buildSectionChatPrompt(
-                        sectionTitle = chat.sectionTitle,
-                        sectionExcerpt = sectionExcerpt,
-                        history = history,
-                        question = question
+        answerJob = scope.launch { runAnswer(chat, question, history) }
+    }
+
+    /**
+     * 質問1件ぶんの回答を作る。**ログへ質問は積まない**（積むのは呼び出し側）。
+     *
+     * [retryAnswer] からも呼ぶので、ここで積むと再実行のたびに質問が重複する。
+     */
+    private suspend fun runAnswer(
+        chat: SectionChatState,
+        question: String,
+        history: List<Pair<String, String>>
+    ) {
+        // **状態確認の例外も終端へ落とす**（→ [startSummary]）。抜けると `isGenerating` が残る。
+        val availability = try {
+            aiClient.checkAvailability()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            updateChat {
+                it.copy(
+                    isGenerating = false,
+                    answerProblem = SectionChatProblem.GenerationFailed(
+                        e.message ?: "Unknown error"
                     )
-                ).trim()
+                )
+            }
+            return
+        }
+        // **未取得を非対応と同じ文言へ畳まない。** ここは `!= Available` の1行だったため、
+        // モデルが未取得なだけの端末にも「この端末ではAIを利用できません。」と出ていた。
+        when (availability) {
+            AiAvailability.Ready -> Unit
+            AiAvailability.NeedsDownload,
+            AiAvailability.Downloading,
+            AiAvailability.Unsupported,
+            is AiAvailability.TemporarilyUnavailable -> {
                 updateChat {
                     it.copy(
-                        messages = it.messages + ChatMessage(
-                            ChatRole.Ai,
-                            answer.ifBlank { "（回答を生成できませんでした）" }
-                        ),
-                        isGenerating = false
+                        isGenerating = false,
+                        answerProblem = sectionChatNotice(availability, ANSWER_FEATURE_LABEL)
                     )
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                updateChat { it.copy(isGenerating = false, error = e.message ?: "Unknown error") }
+                return
+            }
+        }
+        try {
+            val sectionExcerpt = withContext(excerptDispatcher) {
+                buildNoteExcerpt(chat.sectionContext, NoteExcerptLimits.SECTION)
+            }
+            val answer = aiClient.generate(
+                PromptBuilder.buildSectionChatPrompt(
+                    sectionTitle = chat.sectionTitle,
+                    sectionExcerpt = sectionExcerpt,
+                    history = history,
+                    question = question
+                )
+            ).trim()
+            updateChat {
+                it.copy(
+                    messages = it.messages + ChatMessage(
+                        ChatRole.Ai,
+                        answer.ifBlank { "（回答を生成できませんでした）" }
+                    ),
+                    isGenerating = false
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // **要約側の欄へ入れない。** 要約が出ていると表示が優先されて見えなくなる。
+            updateChat {
+                it.copy(
+                    isGenerating = false,
+                    answerProblem = SectionChatProblem.GenerationFailed(
+                        e.message ?: "Unknown error"
+                    )
+                )
             }
         }
     }
+
+    /**
+     * このシート用の説明を作る。
+     *
+     * **`canStartDownload = false`** — セクションチャットは設計上ここでモデルDLを
+     * 始めない（→ features/section_ai_chat.md 判断4）ので、`Download` の導線を持たせると
+     * **「開始してください」と言いながら開始操作が無い**案内になる。
+     */
+    private fun sectionChatNotice(
+        availability: AiAvailability,
+        featureLabel: String
+    ): SectionChatProblem? =
+        aiStatusNotice(availability, featureLabel, canStartDownload = false)
+            ?.let(SectionChatProblem::AiStatus)
+
+    private fun historyOf(messages: List<ChatMessage>): List<Pair<String, String>> =
+        messages.map { (if (it.role == ChatRole.User) "User" else "AI") to it.text }
 
     /** 生成中・完了済みのセッションをシートに再表示する。 */
     fun showSheet() {
@@ -169,14 +321,15 @@ class SectionChatController(
         answerJob = null
     }
 
-    private suspend fun fetchSuggestions(section: NoteSection) {
+    private suspend fun fetchSuggestions(sectionTitle: String, sectionText: String) {
+        updateChat { it.copy(isSuggestionsLoading = true) }
         try {
             val sectionExcerpt = withContext(excerptDispatcher) {
-                buildNoteExcerpt(section.text, NoteExcerptLimits.SECTION)
+                buildNoteExcerpt(sectionText, NoteExcerptLimits.SECTION)
             }
             val raw = aiClient.generate(
                 PromptBuilder.buildSectionSuggestionsPrompt(
-                    section.title,
+                    sectionTitle,
                     sectionExcerpt
                 )
             )
@@ -185,11 +338,13 @@ class SectionChatController(
                 .filter { it.isNotBlank() }
                 .take(3)
                 .toList()
-            updateChat { it.copy(suggestions = questions) }
+            updateChat { it.copy(suggestions = questions, isSuggestionsLoading = false) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            // サジェストは失敗しても本体機能に影響させない
+            // サジェストは失敗しても本体機能に影響させない。
+            // **ただし走行フラグは必ず下ろす** — 残すと「準備中」が永久に出る。
+            updateChat { it.copy(isSuggestionsLoading = false) }
         }
     }
 
@@ -199,5 +354,12 @@ class SectionChatController(
             val current = state.sectionChat ?: return@update state
             state.copy(sectionChat = block(current))
         }
+    }
+
+    private companion object {
+        /** シートを開いたときの説明へ埋め込む機能名。 */
+        const val OPEN_FEATURE_LABEL = "この部分の要約と質問"
+        /** 質問を送ったときの説明へ埋め込む機能名。 */
+        const val ANSWER_FEATURE_LABEL = "質問への回答"
     }
 }

@@ -4,6 +4,7 @@ import android.os.Build
 import android.util.Log
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.MainActivity
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.buildDistillSourceModel
@@ -14,6 +15,7 @@ import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.common.internal.GenAiUtils
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -71,15 +73,26 @@ class PromptTokenBudgetTest {
     @get:Rule
     val activityRule = ActivityScenarioRule(MainActivity::class.java)
 
-    private val client = AICoreClient()
+    /**
+     * 恒久非対応の判定にだけ使う（→ [AiAvailability.Unsupported]）。
+     * この計測では skip 判定に生の [FeatureStatus] を使うので分類は通らないが、
+     * **本番と同じ組み立てにしておく**（差し替えると別物を測ることになる）。
+     */
+    private val client = AICoreClient(
+        isDeviceCapable = {
+            GenAiUtils.isAiCoreCompatible(
+                InstrumentationRegistry.getInstrumentation().targetContext
+            )
+        }
+    )
 
     /**
      * 端末AIが使えるときだけ計測する。
      *
-     * skip 判定に [AICoreClient.checkAvailability] を使わないのは、あれが例外まで
-     * `Unavailable` へ畳むため、**SDKの回帰が「非対応端末」に化けて見逃される**から。
-     * ここでは生の [FeatureStatus] だけで判断し、計測呼び出し自体が投げた例外は
-     * skip せずそのまま失敗させる。
+     * skip 判定に [AICoreClient.checkAvailability] を使わないのは、あれが例外を
+     * `TemporarilyUnavailable` という**値**へ変えるため、**SDKの回帰が「取得できなかったので skip」に
+     * 化けて見逃される**から。ここでは生の [FeatureStatus] だけで判断し、
+     * 計測呼び出し自体が投げた例外は skip せずそのまま失敗させる。
      */
     private fun requireNanoAvailable() {
         val status = runBlocking { client.featureStatus() }

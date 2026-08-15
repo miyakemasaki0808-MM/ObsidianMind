@@ -3,7 +3,6 @@ package com.example.newproject.domain
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
-import com.example.newproject.model.AiRecommendationStatus
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteMeta
@@ -20,11 +19,13 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 sealed class RelatedNotesResult {
+    /**
+     * **AIが使えたかどうかを持たない。** 自動起動の機能なので、使えないときは
+     * 決定的チャンネルだけを黙って返す（→ [RelatedNotesState]）。
+     */
     data class Success(
         val relatedNotes: List<RelatedNote>,
-        val aiNotes: List<RelatedNote>,
-        val aiStatus: AiRecommendationStatus = AiRecommendationStatus.Ready,
-        val aiErrorMessage: String? = null
+        val aiNotes: List<RelatedNote>
     ) : RelatedNotesResult()
     data class Error(val message: String) : RelatedNotesResult()
 }
@@ -65,17 +66,16 @@ class RelatedNotesUseCase(
             )
 
             when (aiClient.checkAvailability()) {
-                AiAvailability.Unavailable -> RelatedNotesResult.Success(
+                // **自動起動なので黙って劣化する。** 理由が4通りあっても、
+                // ここでの結果は「決定的チャンネルだけを返す」で同じ。
+                AiAvailability.Unsupported,
+                AiAvailability.NeedsDownload,
+                AiAvailability.Downloading,
+                is AiAvailability.TemporarilyUnavailable -> RelatedNotesResult.Success(
                     relatedNotes = relatedNotes,
-                    aiNotes = emptyList(),
-                    aiStatus = AiRecommendationStatus.Unavailable
+                    aiNotes = emptyList()
                 )
-                AiAvailability.NeedsDownload -> RelatedNotesResult.Success(
-                    relatedNotes = relatedNotes,
-                    aiNotes = emptyList(),
-                    aiStatus = AiRecommendationStatus.NeedsDownload
-                )
-                AiAvailability.Available -> {
+                AiAvailability.Ready -> {
                     // 決定的チャンネルに出したタイトルをAI候補から除外し（上限適用の前に落とす）、
                     // AIチャンネルを「未表示ノートの補完」に純化する。並べ替え・上限は純ロジックへ委譲。
                     val orderedCandidates = rankRelatedCandidates(
@@ -172,16 +172,15 @@ class RelatedNotesUseCase(
             }
         } catch (e: CancellationException) {
             throw e   // ジョブキャンセルはエラー扱いせず伝播させる
-        } catch (e: Exception) {
+        } catch (_: Exception) {
+            // 生成が失敗しても決定的チャンネルは返せる。**理由は見せない**（自動起動なので）。
             RelatedNotesResult.Success(
                 relatedNotes = buildDeterministicRelatedNotes(
                     currentTitle = currentTitle,
                     candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) },
                     wikilinkTitleSet = wikilinkTitles.map { it.toNormalizedObsidianTitle() }.toSet()
                 ),
-                aiNotes = emptyList(),
-                aiStatus = AiRecommendationStatus.Error,
-                aiErrorMessage = e.message ?: "Unknown error"
+                aiNotes = emptyList()
             )
         }
     }

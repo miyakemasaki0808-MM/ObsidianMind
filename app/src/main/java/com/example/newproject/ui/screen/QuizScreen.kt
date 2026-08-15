@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnQuizLoading
 import com.example.newproject.ui.theme.OnQuizError
@@ -94,6 +95,13 @@ fun QuizScreen(
                 is QuizState.Error -> {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Text("エラー: ${quizState.message}", color = OnQuizError)
+                    }
+                }
+                // **「エラー:」を冠さない。** 端末が対応していないのは失敗ではない。
+                // 再試行の起点はセクションチャットのボタン側にあるので、ここは説明だけ。
+                is QuizState.AiNotice -> {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        AiStatusNoticeRow(notice = quizState.notice)
                     }
                 }
                 is QuizState.Success -> {

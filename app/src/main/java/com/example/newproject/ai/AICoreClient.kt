@@ -19,10 +19,57 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+/**
+ * 端末AIが「いま使えるか」。**各値は呼び出し側が次に何をするかで割ってある。**
+ *
+ * 旧版は3値で、[Unsupported]・[TemporarilyUnavailable]・未知の `FeatureStatus`・
+ * **ノート切替によるキャンセル**の4つを `Unavailable` へ畳んでいた。
+ * 下流はどれが起きたのか区別できないまま各自で見せ方を作り、
+ * 同じ原因に対して互いに矛盾する文言が並んでいた。
+ */
 sealed class AiAvailability {
-    object Available : AiAvailability()
-    object Unavailable : AiAvailability()
+    /** 生成できる。 */
+    object Ready : AiAvailability()
+    /**
+     * モデル未取得。DLを提案する（自動DL方式なら黙って開始する）。
+     *
+     * **[AiClient.downloadModel] を呼んでよいのはこの状態だけ。** → [Downloading]
+     */
     object NeedsDownload : AiAvailability()
+    /**
+     * DL実行中。**待つ以外にできることが無い。**
+     *
+     * **`downloadModel()` を呼んではいけない。** beta2 では `downloadFeatureInternal` に
+     * 状態の門番が無く（逆アセンブルで確認）、走行中のDLへ合流できる保証がない。
+     * 合流を装って即 `DownloadCompleted` が返れば、**モデルが揃う前に生成を始めてしまう**。
+     * 公式サンプルが `download()` を呼ぶのも `DOWNLOADABLE` の枝だけである。
+     * SDK内の重複抑止（`zzpx` のMap）は同一クライアント内でしか効かず、
+     * AICore側が動かしているDLには届かない。
+     *
+     * **新しいCTAも出さない**（押しても始まるものが無い）。
+     */
+    object Downloading : AiAvailability()
+    /**
+     * この端末では動かない。**再試行を出さない**（何度押しても同じ答えが返る）。
+     *
+     * **判定の根拠は `FeatureStatus.UNAVAILABLE` ではなく、AICoreアプリの有無とバージョンである**
+     * （`GenAiUtils.isAiCoreCompatible`）。`UNAVAILABLE` は「AICore非対応端末」だけでなく
+     * 「対応端末だが構成をまだ取得していない」ときにも返るので、**それだけで恒久と断定できない**。
+     * beta2 の逆アセンブルで確認 — `checkFeatureStatusInternal` は
+     * `isAiCoreCompatible` が false のとき AICore へ問い合わせずに 0 を返す。
+     */
+    object Unsupported : AiAvailability()
+    /**
+     * いまは使えないが、あとで変わりうる。**再試行を出す。**
+     *
+     * 3つの経路が入る — ①AICore対応端末なのに `UNAVAILABLE`（構成の取得待ち）／
+     * ②状態の取得そのものが例外になった／③未知の `FeatureStatus`。
+     * **どれも「次は取れるかもしれない」で行動が同じ**なので割らない。
+     *
+     * [cause] は**画面へ出さない。** SDKの `message` は英語か null で
+     * ユーザーの次の行動を1文字も助けないため、診断のためだけに運ぶ。
+     */
+    data class TemporarilyUnavailable(val cause: Throwable) : AiAvailability()
 }
 
 interface AiClient {
@@ -60,7 +107,15 @@ internal data class PromptTokenMeasurement(
 // 実際に動くモデル世代（nano-v2 / v3）は端末のAICoreが決める。
 // ModelPreference.FULL は世代指定ではなく「速度より精度を優先」の指定。
 // ─────────────────────────────────────────────────────────────────────────────
-class AICoreClient : AiClient {
+class AICoreClient(
+    /**
+     * AICoreアプリが入っていて十分新しいか。**恒久非対応の唯一の根拠。**
+     *
+     * `Context` ではなくラムダで受けるのは、分類を素のJVMテストから作れる形に保つため。
+     * 本番は `GenAiUtils.isAiCoreCompatible(context)` を渡す。
+     */
+    private val isDeviceCapable: () -> Boolean
+) : AiClient {
 
     private val model by lazy {
         val modelConfig = ModelConfig.Builder().apply {
@@ -72,17 +127,10 @@ class AICoreClient : AiClient {
         Generation.getClient(config)
     }
 
+    // 分類そのものは [readAvailability] が持つ。このクラスは `Generation.getClient()` を
+    // 抱えていて素のJVMでは組み立てられず、ここに分類を書くとテストが1本も書けない。
     override suspend fun checkAvailability(): AiAvailability = withContext(Dispatchers.IO) {
-        try {
-            when (model.checkStatus()) {
-                FeatureStatus.AVAILABLE    -> AiAvailability.Available
-                FeatureStatus.DOWNLOADABLE,
-                FeatureStatus.DOWNLOADING  -> AiAvailability.NeedsDownload
-                else                       -> AiAvailability.Unavailable
-            }
-        } catch (e: Exception) {
-            AiAvailability.Unavailable
-        }
+        readAvailability(isDeviceCapable) { model.checkStatus() }
     }
 
     /**
@@ -189,8 +237,11 @@ class AICoreClient : AiClient {
     /**
      * skip 判定に使う生の [FeatureStatus]。
      *
-     * [checkAvailability] は例外まで `Unavailable` へ畳んでしまうため、計測テストの
-     * skip 判定に使うと**SDKの回帰が「非対応端末」に化けて見逃される**。ここでは畳まない。
+     * [checkAvailability] は例外を [AiAvailability.TemporarilyUnavailable] という**値**へ変える。
+     * 本番の見せ方としてはそれが正しいが、計測テストの skip 判定に使うと
+     * **SDKの回帰が「取得できなかったので skip」に化けて見逃される**。
+     * skip 判定は既知の [FeatureStatus] だけで行い、例外は skip せず失敗させたいので、
+     * ここでは投げるまま渡す。
      */
     internal suspend fun featureStatus(): Int = withContext(Dispatchers.IO) {
         model.checkStatus()
@@ -210,7 +261,7 @@ class AICoreClient : AiClient {
 // ─────────────────────────────────────────────────────────────────────────────
 @Suppress("unused")
 class StubAiClient : AiClient {
-    override suspend fun checkAvailability() = AiAvailability.Available
+    override suspend fun checkAvailability() = AiAvailability.Ready
     override suspend fun generate(prompt: String) =
         "（スタブ）AICoreClient に差し替えると Gemini Nano 4 が要約を生成します。"
     override fun downloadModel(): Flow<DownloadStatus> = emptyFlow()

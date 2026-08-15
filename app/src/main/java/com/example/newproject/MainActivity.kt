@@ -177,6 +177,12 @@ class MainActivity : ComponentActivity() {
                             )
                             if (result == SnackbarResult.ActionPerformed) openQuizResult()
                         }
+                        // 押した機能なので理由をその場で伝える。**行き先は示さない** —
+                        // 開いても同じ1文があるだけで、再試行の起点はチャットシート側にある。
+                        is QuizState.AiNotice -> snackbarHostState.showSnackbar(
+                            message = state.notice.message,
+                            duration = SnackbarDuration.Long
+                        )
                         is QuizState.Idle -> Unit
                     }
                 }
@@ -191,7 +197,7 @@ class MainActivity : ComponentActivity() {
                     if (remarkEventKey == lastShownRemarkEvent) return@LaunchedEffect
                     lastShownRemarkEvent = remarkEventKey
                     if (isFullscreenRoute) return@LaunchedEffect
-                    when (uiState.remarkState) {
+                    when (val remark = uiState.remarkState) {
                         is RemarkState.Loading -> snackbarHostState.showSnackbar(
                             message = "ひとことを考えています…",
                             duration = SnackbarDuration.Short
@@ -227,6 +233,11 @@ class MainActivity : ComponentActivity() {
                             )
                             if (result == SnackbarResult.ActionPerformed) openRemark()
                         }
+                        // 押した機能なので理由をその場で伝える。専用画面にも同じ1文が出る。
+                        is RemarkState.AiNotice -> snackbarHostState.showSnackbar(
+                            message = remark.notice.message,
+                            duration = SnackbarDuration.Long
+                        )
                         is RemarkState.Idle -> Unit
                     }
                 }
@@ -257,6 +268,8 @@ class MainActivity : ComponentActivity() {
                                     else openVault.launch(null)
                                 },
                                 onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
+                                onRetrySectionSummary = { viewModel.retrySectionSummary() },
+                                onRetrySectionAnswer = { viewModel.retrySectionAnswer() },
                                 onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                                 onEndSectionChat = { viewModel.endSectionChat() },
                                 onGenerateQuiz = { sourceLabel, context ->
@@ -396,6 +409,7 @@ class MainActivity : ComponentActivity() {
                                 is QuizState.Loading -> state.sourceTitle
                                 is QuizState.Success -> state.sourceTitle
                                 is QuizState.Error -> state.sourceTitle
+                                is QuizState.AiNotice -> state.sourceTitle
                                 is QuizState.Idle ->
                                     (uiState.noteState as? NoteState.Success)?.title.orEmpty()
                             }
