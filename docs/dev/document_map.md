@@ -9,7 +9,7 @@
 |---|---|
 | `owner/` | このアプリは何で、いまどうなっていて、どうやってここまで来たか |
 | `dev/` | いま何が有効な判断で、何を繰り返してはいけないか |
-| `review/` | 外から見てどう評価されたか、その指摘はどうなったか |
+| `review/` | 外から見てどう評価されたか、その指摘はどうなったか、Codexが実機でどう確かめるか |
 | `_wip/` | まだ決まっていないこと（**寿命で切ってある**。リリース時にまとめて捨てる） |
 
 > **`owner/` と `dev/` は「コードを読めば再現できるか」で分ける。**
@@ -29,7 +29,8 @@
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
 | **いまコードがどうなっているか** | [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
-| **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋恒久の受付簿 |
+| **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋未解決の受付簿 |
+| **Codexが実機でどう検証するか** | 作業ツリーの `review/device_validation/`（未追跡） | 共通手順＋機能別ケース。**リポジトリへは置かない** |
 | **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
 
 補助として、出発点の記録 [project_origin.md](../owner/project_origin.md) がある。
@@ -46,7 +47,7 @@
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
-| [review/](../review/) | 最新の外部レビュー1本と、全指摘の受付簿 | 新しいレビューを受け付けたら前の本文を削除（原文はgit履歴） |
+| [review/](../review/) | 最新の外部レビュー1本（未追跡）、未解決指摘の受付簿 | レビュー更新時。機能契約を変えたら実機手順も同時更新 |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
 | [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
@@ -146,7 +147,8 @@
 >
 > **例外は [`review/2026-*.md`](../review/README.md) の最新レビューのみ。**
 > レビュアーが書くスナップショットなので、残している間はこちらから手を入れない。
-> 新しいレビューを受け付けたら前の本文は削除し、原文はgit履歴から読む。
+> 新しいレビューを受け付けたら前の本文は削除する。**本文はコミットしない**ので履歴にも残らない。
+> 指摘の存在と処遇は [`review/findings.md`](../review/findings.md) が引き受ける。
 > `_wip/` 廃棄時にリンク切れが残るが、当時の記録なので許容する。
 > **`review/` の他のファイル（`README.md`・`review_template.md`・`findings.md`）は
 > こちらが持つので、通常どおり更新する。**
@@ -180,6 +182,7 @@
 | プロジェクトを初めて把握する | [owner/source_code_analysis.md](../owner/source_code_analysis.md) §1〜§4 → [system/architecture.md](system/architecture.md) |
 | 次に何を作るか決める | [_wip/roadmap.md](../_wip/roadmap.md) → [_wip/current_issues.md](../_wip/current_issues.md) → [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
 | 品質改善に着手する | [レビュー一覧](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
+| Codexが実機検証する | 作業ツリーの共通手順（未追跡）→ 対象機能のケース → 該当する `features/` / `system/` の正本 |
 | 既存コードを触る前に背景を知る | 下の逆引き表 → 該当する `features/` か `system/` |
 | バグを踏んだ | [lessons.md](lessons.md) の索引 →（AI混入バグなら）[L34](lessons/L34.md) で型を判定 |
 

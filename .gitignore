@@ -26,3 +26,10 @@ captures/
 
 # Claude Code
 .claude/
+
+# レビュー本文（日付つき）は作業ツリー限りで履歴へ残さない。
+# 端末の識別子や検証中のローカルパスが入るため。処遇は docs/review/findings.md が持つ。
+docs/review/[0-9][0-9][0-9][0-9]-*.md
+docs/review/device_validation/
+# 上の手順書だけを見る検査なので、手順書と寿命を合わせて作業ツリー限りにする。
+app/src/test/java/com/example/newproject/architecture/DeviceValidationDocsTest.kt
