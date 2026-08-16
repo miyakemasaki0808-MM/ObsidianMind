@@ -1,6 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.DistillChunk
+import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
@@ -25,10 +26,13 @@ private data class InlineSyntax(
 private data class SentenceDraft(
     val text: String,
     val range: DistillTextRange,
+    val contextRange: DistillTextRange,
     val heading: String?,
     val headingRegion: Int,
     val regionStart: Int,
-    val paragraphIndex: Int
+    val paragraphIndex: Int,
+    val isLinkOnly: Boolean,
+    val isTerm: Boolean = false
 )
 
 private val HEADING_PATTERN = Regex("^(#{1,6})\\s+(.+)$")
@@ -41,6 +45,20 @@ private val TABLE_SEPARATOR_CELL_PATTERN = Regex(":?-{3,}:?")
 private val ENGLISH_ABBREVIATIONS = setOf(
     "e.g", "i.e", "etc", "mr", "mrs", "ms", "dr", "prof", "vs", "fig", "no"
 )
+
+/**
+ * リンク列の隙間に現れる助詞・接続詞。**閉じた一覧にする。**
+ *
+ * 一般の語を足すと `[[A]]は核。` のような短いが意味のある主張まで落ちるので、
+ * **「リンクとリンクの間に置かれるもの」だけ**に絞る。長いものから剥がす（→ [stripLinkGlue]）。
+ *
+ * **一覧を絞るだけでは足りない。** 適用位置も両側がリンクの断片へ限らないと、
+ * 語中の文字を剥がして別種の誤判定を作る（→ [hasSubstance]）。
+ */
+private val LINK_GLUE_WORDS = listOf(
+    "ならびに", "および", "そして", "また", "など", "から", "まで", "かつ", "and", "or", "vs",
+    "は", "が", "を", "に", "へ", "と", "や", "の", "も", "で"
+).sortedByDescending(String::length)
 
 /**
  * 原文を変更せず、編集可能な本文文だけを UTF-16 offset 付きで抽出する。
@@ -136,21 +154,44 @@ internal fun buildDistillSourceModel(
                 start = editableSegment.start,
                 end = editableSegment.endExclusive,
                 syntax = syntax
-            ).forEach { range ->
+            ).forEach { sentenceRange ->
                 if ((syntax.codeSpans + syntax.linkSpans).any { span ->
-                        span.contains(range.start) || span.contains(range.endExclusive)
+                        span.contains(sentenceRange.start) || span.contains(sentenceRange.endExclusive)
                     }
                 ) return@forEach
-                val text = content.substring(range.start, range.endExclusive)
-                if (text.isBlank()) return@forEach
-                drafts += SentenceDraft(
-                    text = text,
-                    range = range,
-                    heading = currentHeading,
-                    headingRegion = headingRegion,
-                    regionStart = regionStart,
-                    paragraphIndex = thisParagraph
-                )
+                if (content.substring(sentenceRange.start, sentenceRange.endExclusive).isBlank()) {
+                    return@forEach
+                }
+                // 句へ割っても親文の範囲は保つ。候補カードの文脈表示に使う。
+                splitSentenceIntoClauses(content, sentenceRange, syntax).forEach { range ->
+                    val text = content.substring(range.start, range.endExclusive)
+                    if (text.isBlank()) return@forEach
+                    drafts += SentenceDraft(
+                        text = text,
+                        range = range,
+                        contextRange = sentenceRange,
+                        heading = currentHeading,
+                        headingRegion = headingRegion,
+                        regionStart = regionStart,
+                        paragraphIndex = thisParagraph,
+                        // リンク判定は句ごとに掛け直す。親文が通常文でも断片はリンクだけになり得る。
+                        isLinkOnly = isLinkOnlyRange(content, range, syntax.linkSpans)
+                    )
+                    // 語句候補は親の内側に重なる。文脈は親文のままにする。
+                    bracketedTermRanges(content, range, syntax).forEach { termRange ->
+                        drafts += SentenceDraft(
+                            text = content.substring(termRange.start, termRange.endExclusive),
+                            range = termRange,
+                            contextRange = sentenceRange,
+                            heading = currentHeading,
+                            headingRegion = headingRegion,
+                            regionStart = regionStart,
+                            paragraphIndex = thisParagraph,
+                            isLinkOnly = isLinkOnlyRange(content, termRange, syntax.linkSpans),
+                            isTerm = true
+                        )
+                    }
+                }
             }
         }
     }
@@ -165,21 +206,28 @@ internal fun buildDistillSourceModel(
     val keyToChunk = LinkedHashMap<Pair<Int, Int>, Int>()
     chunkKeys.forEach { key -> keyToChunk.getOrPut(key) { keyToChunk.size } }
     val chunkIndices = chunkKeys.map { keyToChunk.getValue(it) }
-    val firstByParagraph = drafts.indices.groupBy { drafts[it].paragraphIndex }.mapValues { it.value.first() }
-    val firstByRegion = drafts.indices.groupBy { drafts[it].headingRegion }.mapValues { it.value.first() }
-    val lastByChunk = drafts.indices.groupBy { chunkIndices[it] }.mapValues { it.value.last() }
+    // 位置の重みは本文の線形構造に対して数える。語句候補は親の内側に重なる存在なので、
+    // 段落先頭やノート末尾を横取りしないよう、この計算から外す。
+    val structural = drafts.indices.filterNot { drafts[it].isTerm }
+    val firstByParagraph = structural.groupBy { drafts[it].paragraphIndex }.mapValues { it.value.first() }
+    val firstByRegion = structural.groupBy { drafts[it].headingRegion }.mapValues { it.value.first() }
+    val lastByChunk = structural.groupBy { chunkIndices[it] }.mapValues { it.value.last() }
+    val lastStructural = structural.lastOrNull()
 
     val sentences = drafts.mapIndexed { index, draft ->
         DistillSentence(
             sourceIndex = index,
             text = draft.text,
             range = draft.range,
+            contextRange = draft.contextRange,
             heading = draft.heading,
             chunkIndex = chunkIndices[index],
             isParagraphFirst = firstByParagraph[draft.paragraphIndex] == index,
             isHeadingAdjacent = draft.heading != null && firstByRegion[draft.headingRegion] == index,
             isChunkLast = lastByChunk[chunkIndices[index]] == index,
-            isNoteLast = index == drafts.lastIndex
+            isNoteLast = index == lastStructural,
+            isLinkOnly = draft.isLinkOnly,
+            isTerm = draft.isTerm
         )
     }
     val chunks = sentences.groupBy { it.chunkIndex }.map { (index, chunkSentences) ->
@@ -422,6 +470,85 @@ private fun countRun(content: String, start: Int, char: Char, end: Int): Int {
     return i - start
 }
 
+/**
+ * リンクを除くと実質的な文字が残らない範囲かを判定する。
+ *
+ * **`DistillSentence` ではなく範囲とリンク範囲だけを受ける。** 候補の単位が文から句へ変わっても
+ * 同じ判定を候補ごとへ再適用できるようにするため（`詳細は[[A]]、実装は[[B]]。` は文としては
+ * 通常文だが、読点で割ると両断片ともリンクだけになる）。
+ *
+ * **代理判定を2度作ったので、いまは「何を」と「どこで」を分けて決める**
+ * → [蒸留の候補除外契約](../../../../../../../../docs/dev/features/reflect_distill.md)。
+ * 1度目は長さを意味の代理にして、区切り記号を実質文字として数えたため
+ * `[[A]]、[[B]]、[[C]]、[[D]]。`（4文字）が残り `[[A]]は核。`（3文字）が落ちた。
+ * 2度目は接続語一覧を入れたが適用位置を捨てたため、`[[A]]のもの。` の語中まで剥がして落とした。
+ * いまは**記号を全断片から除き、接続語はリンクに挟まれた断片でだけ除く**（→ [hasSubstance]）。
+ *
+ * **リンクを含まない範囲は対象にしない。** リンクの無い短文の扱いは従来どおりで、
+ * 短さは [selectDistillCandidates] 側の減点が引き受ける。
+ */
+internal fun isLinkOnlyRange(
+    content: String,
+    range: DistillTextRange,
+    linkSpans: List<DistillTextRange>
+): Boolean {
+    val links = linkSpans.filter { it.overlaps(range) }.sortedBy { it.start }
+    if (links.isEmpty()) return false
+
+    var cursor = range.start
+    links.forEachIndexed { index, link ->
+        val segmentEnd = link.start.coerceIn(range.start, range.endExclusive)
+        // 先頭断片（index == 0）はリンクに挟まれていないので、接続語の除去を許さない。
+        if (cursor < segmentEnd && hasSubstance(content, cursor, segmentEnd, betweenLinks = index > 0)) {
+            return false
+        }
+        cursor = maxOf(cursor, link.endExclusive.coerceAtMost(range.endExclusive))
+    }
+    // 末尾断片も片側しかリンクが無いので、接続語の除去を許さない。
+    return !(cursor < range.endExclusive &&
+        hasSubstance(content, cursor, range.endExclusive, betweenLinks = false))
+}
+
+/**
+ * 非リンク断片に実質的な文字が残るか。
+ *
+ * **接続語を剥がすのは両側がリンクの断片だけ。** 日本語は助詞と普通名詞の語境界が空白で分かれないため、
+ * 位置を問わず剥がすと語中の文字まで落ちる（`[[A]]のもの。` の `のもの` が `の`・`も` の除去で空になった）。
+ * **正規化の対象と、意味を捨ててよい位置は別々に決める。**
+ */
+private fun hasSubstance(
+    content: String,
+    start: Int,
+    endExclusive: Int,
+    betweenLinks: Boolean
+): Boolean {
+    val letters = buildString {
+        for (offset in start until endExclusive) {
+            // 空白・句読点・記号はここで落ちる。残るのは文字と数字だけ。
+            if (content[offset].isLetterOrDigit()) append(content[offset])
+        }
+    }
+    if (letters.isEmpty()) return false
+    return !betweenLinks || stripLinkGlue(letters.lowercase()).isNotEmpty()
+}
+
+/**
+ * 接続語を長いものから繰り返し剥がす。**剥がすたびに必ず短くなるので停止する。**
+ *
+ * 繰り返すのは、除去で新しい隣接ができるため（`のは` → `の` を剥がすと `は` が残る）。
+ * **呼ぶのはリンクに挟まれた断片だけ**（→ [hasSubstance]）。
+ */
+private fun stripLinkGlue(text: String): String {
+    var result = text
+    while (true) {
+        val reduced = LINK_GLUE_WORDS.fold(result) { accumulated, glue ->
+            accumulated.replace(glue, "")
+        }
+        if (reduced == result) return result
+        result = reduced
+    }
+}
+
 /** 既存の太字は編集不可領域として、その前後だけを候補区間に分割する。 */
 private fun subtractRanges(
     start: Int,
@@ -490,9 +617,103 @@ private fun addTrimmedRange(
     rawEnd: Int,
     output: MutableList<DistillTextRange>
 ) {
+    trimmedRange(content, rawStart, rawEnd)?.let { output += it }
+}
+
+/**
+ * 鉤括弧の中身を語句候補として取り出す。
+ *
+ * **入口を括弧に限るのは、アプリが原文範囲を決定的に取れるから。**
+ * 任意の名詞句を対象にすると形態素解析が要り、依存追加と候補爆発を招く。
+ * `〜とは` の定義対象は語の開始位置を決めるのに閉じた一覧が要るため、今回は採らない。
+ *
+ * コロン前・箇条書き先頭のラベルも入口の候補だったが、`- **ラベル**: 説明` の形で
+ * **既に手で太字にされていることが多く、既存強調として編集対象から外れる**ので採らない。
+ */
+private fun bracketedTermRanges(
+    content: String,
+    range: DistillTextRange,
+    syntax: InlineSyntax
+): List<DistillTextRange> {
+    val result = mutableListOf<DistillTextRange>()
+    var i = range.start
+    while (i < range.endExclusive) {
+        val close = when (content[i]) {
+            '「' -> '」'
+            '『' -> '』'
+            else -> null
+        }
+        if (close == null) {
+            i++
+            continue
+        }
+        val end = content.indexOf(close, i + 1).takeIf { it in (i + 1) until range.endExclusive }
+        if (end == null) {
+            i++
+            continue
+        }
+        val inner = trimmedRange(content, i + 1, end)
+        val protectedInner = inner != null &&
+            syntax.protectedForSentenceBreaks.any { it.overlaps(inner) }
+        if (inner != null && !protectedInner &&
+            inner.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
+        ) {
+            result += inner
+        }
+        i = end + 1
+    }
+    return result
+}
+
+/** 前後の空白を落とした範囲。空になるなら null。 */
+private fun trimmedRange(content: String, rawStart: Int, rawEnd: Int): DistillTextRange? {
     var start = rawStart
     var end = rawEnd
     while (start < end && content[start].isWhitespace()) start++
     while (end > start && content[end - 1].isWhitespace()) end--
-    if (start < end) output += DistillTextRange(start, end)
+    return if (start < end) DistillTextRange(start, end) else null
+}
+
+/**
+ * 長い文だけを読点で句へ割る。短い文と、割っても下限に届かない文はそのまま1つ返す。
+ *
+ * **読点そのものは句に含めない。** 含めると `**AAA、**BBB。` のように区切り記号まで太字になる。
+ *
+ * **前から貪欲に積み、下限へ届いた時点で閉じる。** 末尾に残った下限未満の余りは直前の句へ吸収する
+ * （下限未満の句を作らない）。下限だけ決めても結合の向きが決まらないため、ここで向きを固定する。
+ *
+ * **句の境界がコードスパンや既存強調をまたぐ心配は無い。** 境界は保護範囲の外にある読点だけで、
+ * 親文が既にまたぎ判定を通過しているため。**落ちるテストを書けないガードは置かない。**
+ */
+private fun splitSentenceIntoClauses(
+    content: String,
+    range: DistillTextRange,
+    syntax: InlineSyntax
+): List<DistillTextRange> {
+    if (range.length <= DistillLimits.CLAUSE_SPLIT_THRESHOLD) return listOf(range)
+
+    val clauses = mutableListOf<DistillTextRange>()
+    var clauseStart = range.start
+    for (offset in range.start until range.endExclusive) {
+        if (content[offset] != '、' && content[offset] != ',') continue
+        if (syntax.protectedForSentenceBreaks.any { offset >= it.start && offset < it.endExclusive }) continue
+        val clause = trimmedRange(content, clauseStart, offset) ?: continue
+        if (clause.length >= DistillLimits.MIN_CLAUSE_CHARACTERS) {
+            clauses += clause
+            clauseStart = offset + 1
+        }
+    }
+    if (clauses.isEmpty()) return listOf(range)
+
+    val tail = trimmedRange(content, clauseStart, range.endExclusive)
+    if (tail != null) {
+        if (tail.length >= DistillLimits.MIN_CLAUSE_CHARACTERS) {
+            clauses += tail
+        } else {
+            // 下限未満の余りは新しい句にせず、直前の句を末尾まで伸ばす。
+            val last = clauses.removeAt(clauses.lastIndex)
+            clauses += DistillTextRange(last.start, tail.endExclusive)
+        }
+    }
+    return if (clauses.size <= 1) listOf(range) else clauses
 }

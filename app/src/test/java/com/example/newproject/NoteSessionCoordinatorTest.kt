@@ -99,7 +99,7 @@ class NoteSessionCoordinatorTest {
         // AnnotationController.onVaultChanged() が走行中のJob停止と一緒に落とす。
         // ここで二重に落とすと、その判断が状態変換側にも分裂する。
         // 実際に Idle へ戻ることは下の結線テストで確かめている。
-        "distillState" to DistillState.Saved(sourceTitle = "旧ノート", sentenceCount = 3),
+        "distillState" to DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
         "annotationListState" to AnnotationListState.Success(emptyList())
     )
 
@@ -512,7 +512,7 @@ class NoteSessionCoordinatorTest {
         quizState = QuizState.Success(sourceTitle = "旧ノート", cards = emptyList()),
         wikilinkTitles = setOf("旧リンク"),
         remarkState = RemarkState.Error(message = "失敗", sourceTitle = "旧ノート"),
-        distillState = DistillState.Saved(sourceTitle = "旧ノート", sentenceCount = 3),
+        distillState = DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
         annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),

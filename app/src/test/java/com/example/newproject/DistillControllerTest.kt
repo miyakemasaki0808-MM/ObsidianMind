@@ -43,6 +43,89 @@ import org.junit.Test
 class DistillControllerTest {
 
     @Test
+    fun `split clauses are labelled by clause count and carry the parent sentence`() = runTest {
+        val sentence = "あ".repeat(40) + "、" + "い".repeat(40) + "。"
+        val state = stateWithNote(sentence)
+        val controller = controller(state, FakeAiClient.returning("S001"))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val item = (state.value.distillState as DistillState.Candidates).items.single()
+        // 分母は句数。分子の sourceIndex と同じ並びから採るので「3 / 2」のような矛盾が起きない。
+        assertEquals("1 / 2", item.positionLabel)
+        // 句だけでは何の断片か読めないので、文脈には親文を出す。
+        assertEquals(sentence, item.context)
+        assertTrue(item.text.length < sentence.length)
+    }
+
+    @Test
+    fun `the bold limit exception can be reached by a clause`() = runTest {
+        // 実機レビュー 2026-08-17 P2-1（DIST-02）。例外の説明が「1文」固定だった経路。
+        // 例外は文だけでなく句でも成立するので、文言も単位に依存できない。
+        val sentence = "あ".repeat(30) + "、" + "い".repeat(30) + "。"
+        val state = stateWithNote(sentence)
+        val controller = controller(state, FakeAiClient.returning("S001"))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val candidates = state.value.distillState as DistillState.Candidates
+        assertTrue(candidates.isSingleCandidateException)
+        assertFalse(candidates.isWithinBoldLimit)
+        // 選ばれているのは文全体ではなく句。
+        assertTrue(candidates.items.single().text.length < sentence.length)
+    }
+
+    @Test
+    fun `terms borrow the position of the sentence that contains them`() = runTest {
+        // 実機レビュー 2026-08-17 P2-1（DIST-18）。1文しか無いノートで `2 / 5` と出ていた。
+        val sentence = "「共通語」と「共通語」と「別語A」と「別語B」を含む本文です。"
+        val state = stateWithNote(sentence)
+        val controller = controller(state, FakeAiClient.returning("S001"))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val item = (state.value.distillState as DistillState.Candidates).items.single()
+        assertTrue(item.isTerm)
+        // 語句は線形位置を持たないので、含まれる文の位置を借りる。
+        assertEquals("1 / 1", item.positionLabel)
+        assertEquals(sentence, item.context)
+    }
+
+    @Test
+    fun `an unsplit sentence after a split one shows the whole previous sentence`() = runTest {
+        // 実機レビュー 2026-08-16 P2-1。直前の候補単位の text を使うと、最後の句だけが文脈になる。
+        val split = "あ".repeat(40) + "、" + "い".repeat(40) + "。"
+        val following = "短い結論です。"
+        val state = stateWithNote("$split\n$following")
+        val controller = controller(state, FakeAiClient.returning("S003"))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val item = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(following, item.text)
+        assertEquals(split, item.context)
+    }
+
+    @Test
+    fun `an unsplit sentence after another unsplit one still shows that sentence`() = runTest {
+        val first = "これは十分な長さを持つ最初の本文です。"
+        val second = "これは二番目の本文です。"
+        val state = stateWithNote("$first\n$second")
+        val controller = controller(state, FakeAiClient.returning("S002"))
+
+        controller.start()
+        advanceUntilIdle()
+
+        val item = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(second, item.text)
+        assertEquals(first, item.context)
+    }
+
+    @Test
     fun `AI IDs become selected original candidate items`() = runTest {
         val state = stateWithNote()
         val controller = controller(state, FakeAiClient.returning("選択: S001"))
@@ -292,7 +375,7 @@ class DistillControllerTest {
 
         val candidates = state.value.distillState as DistillState.Candidates
         assertFalse(candidates.isWithinBoldLimit)
-        assertTrue(candidates.isSingleSentenceException)
+        assertTrue(candidates.isSingleCandidateException)
         assertTrue(candidates.canSaveSelection)
         controller.saveSelection()
         advanceUntilIdle()
@@ -313,7 +396,7 @@ class DistillControllerTest {
         val candidates = state.value.distillState as DistillState.Candidates
         assertTrue(candidates.selectedCount in 1 until candidates.items.size)
         assertTrue(candidates.isWithinBoldLimit)
-        assertFalse(candidates.isSingleSentenceException)
+        assertFalse(candidates.isSingleCandidateException)
         assertTrue(candidates.projectedBoldRatio <= 0.30)
     }
 
@@ -336,13 +419,13 @@ class DistillControllerTest {
 
         val initial = state.value.distillState as DistillState.Candidates
         assertEquals("S002", initial.items.single { it.isSelected }.id)
-        assertTrue(initial.isSingleSentenceException)
+        assertTrue(initial.isSingleCandidateException)
 
         controller.toggleCandidate("S002")
         controller.toggleCandidate("S001")
 
         val changed = state.value.distillState as DistillState.Candidates
-        assertFalse(changed.isSingleSentenceException)
+        assertFalse(changed.isSingleCandidateException)
         assertFalse(changed.canSaveSelection)
     }
 
@@ -366,7 +449,7 @@ class DistillControllerTest {
         val candidates = state.value.distillState as DistillState.Candidates
         assertEquals(0, candidates.selectedCount)
         assertFalse(candidates.isWithinBoldLimit)
-        assertFalse(candidates.isSingleSentenceException)
+        assertFalse(candidates.isSingleCandidateException)
         assertFalse(candidates.canSaveSelection)
     }
 
@@ -543,8 +626,7 @@ class DistillControllerTest {
         )
     }
 
-    private fun stateWithNote(): NoteUiStateStore {
-        val content = noteContent()
+    private fun stateWithNote(content: String = noteContent()): NoteUiStateStore {
         return NoteUiStateStore(
             NoteUiState(
                 noteState = NoteState.Success(
