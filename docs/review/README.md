@@ -47,12 +47,19 @@
 | [review_template.md](review_template.md) | レビューに書く内容の様式 | こちらが持ち、レビュアーへ渡す |
 | [findings.md](findings.md) | **未解決指摘の受付簿** — レビューと課題台帳の対応 | こちらが書く |
 | `pending_device_validation.md` | **実機検証の依頼待ち** — 机上は通ったが実機で未確認のもの（着手順）。依頼が済めば消す | こちらが書く。**未追跡・使い捨て** |
-| `device_validation/` | **Codex実機検証の共通手順＋機能別ケース**。結果は持たない | こちらが持つ。**未追跡** |
+| [device_validation/](device_validation/) | **Codex実機検証の共通手順＋機能別ケース**。結果は持たない | こちらが持ち、機能契約と同時に更新する |
 
-**`device_validation/` とレビュー本文はリポジトリへ置かない**（`.gitignore`）。
-端末の識別子や一時領域のパスが入るためで、作業ツリーにだけ存在する。
-機能契約を変えたら実機ケースも同時に直す必要があるが、**その対応は検査で守られない**ので、
-`features/` `system/` の契約を変えるときに手で当て直す。
+**手順とケースは追跡し、端末を特定するものだけ履歴へ残さない**（`.gitignore`）。
+残さないのは日付つきレビュー本文・`device_validation/local_config.md`（実シリアルやVault URI）・
+`device_validation/evidence/`（スクリーンショット・UIダンプ・pullしたファイル）・使い捨ての依頼書。
+**再利用できる手順とケースはリポジトリに置く** — 実機依頼のたびに導出し直さないため。
+
+実機検証を依頼されたCodexは、まず [共通手順](device_validation/README.md) を読み、
+対象機能のケースIDを選ぶ。現在の機能別ケースは次の3本。
+
+- [蒸留](device_validation/reflect_distill.md)
+- [AI状態UX](device_validation/background_ai_ux.md)
+- [ノート内画像](device_validation/note_image_rendering.md)
 
 機能別ケースには**再現手順と期待だけ**を書く。端末・日付・成否は最新のレビュー本文、
 現在も残る問題は [findings.md](findings.md) が持つ。

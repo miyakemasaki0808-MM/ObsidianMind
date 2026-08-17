@@ -27,11 +27,14 @@ captures/
 # Claude Code
 .claude/
 
-# レビュー本文（日付つき）は作業ツリー限りで履歴へ残さない。
-# 端末の識別子や検証中のローカルパスが入るため。処遇は docs/review/findings.md が持つ。
+# 実機検証の記録のうち、端末を特定するものと使い捨てのものだけを履歴へ残さない。
+# 再利用できる手順とケースは追跡する（docs/review/device_validation/ の残り）。
+#
+# 日付つきレビュー本文（端末モデル・実測値・一時領域のパスが入る）。処遇は findings.md が持つ。
 docs/review/[0-9][0-9][0-9][0-9]-*.md
-docs/review/device_validation/
-# 上の手順書だけを見る検査なので、手順書と寿命を合わせて作業ツリー限りにする。
-app/src/test/java/com/example/newproject/architecture/DeviceValidationDocsTest.kt
-# 実機検証の依頼書は使い捨て。依頼が済めば消えるので履歴へ残さない。
+# 実シリアル・Vault URI・端末内パスを書く手元の設定。
+docs/review/device_validation/local_config.md
+# スクリーンショット・UIダンプ・pullした検証ファイル。
+docs/review/device_validation/evidence/
+# 実機検証の依頼書は使い捨て。依頼が済めば消える。
 docs/review/pending_device_validation.md

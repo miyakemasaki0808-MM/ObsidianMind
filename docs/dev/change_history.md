@@ -21,7 +21,7 @@
 | 2026-08-17 | — | 蒸留段階2の括弧内語句と非重複保存をPixel実機で確認し、表示不整合を起票した | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |
 | 2026-08-16 | — | 蒸留段階1の直前文脈修正をPixel実機3条件で確認し、段階1を完了した | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |
 | 2026-08-16 | — | 蒸留段階1の親文上限をPixel実機9境界で確認し、直前文脈の回帰を起票した | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |
-| 2026-08-16 | — | Codexの実機検証を共通手順と機能別ケースへ標準化した（手順はリポジトリへ置かない） | — |
+| 2026-08-16 | — | Codexの実機検証を共通手順と機能別ケースへ標準化し、個別承認と後処理漏れを防いだ | **[device_validation](../review/device_validation/)** |
 | 2026-08-16 | — | 蒸留段階0のリンク候補除外をPixel実機4ケースで確認し、未解決台帳から閉じた | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |
 | 2026-08-16 | — | レビュー受付簿を未解決指摘だけに絞り、解消済みの履歴はgitへ任せる運用にした | **[review/README](../review/README.md)**・[document_map](document_map.md) |
 | 2026-08-15 | — | 蒸留候補からリンクだけの文を外し、リンクしか無いセクションが代表を出さないようにした | **[reflect_distill](features/reflect_distill.md)** §5 |

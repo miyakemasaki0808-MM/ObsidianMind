@@ -8,7 +8,7 @@
 |---|---|---|
 | [owner/](owner/) | **このアプリは何で、いまどうなっていて、どうやってここまで来たか** | [README](owner/README.md)・[技術俯瞰](owner/source_code_analysis.md)・[開発日誌](owner/journal/) |
 | [dev/](dev/) | **いま何が有効な判断で、何を繰り返してはいけないか** | [document_map](dev/document_map.md)（文書の地図と運用ルール） |
-| [review/](review/) | **外から見てどう評価されたか、その指摘はどうなったか** | [README](review/README.md)・[受付簿](review/findings.md) |
+| [review/](review/) | **外から見てどう評価されたか、その指摘はどうなったか、Codexが実機でどう確かめるか** | [README](review/README.md)・[実機検証](review/device_validation/) |
 | [_wip/](_wip/) | **まだ決まっていないこと** | [current_issues](_wip/current_issues.md) |
 
 **`_wip/` だけは問いではなく寿命で切ってある。** リリース時に中身をまとめて捨てる置き場なので、
@@ -25,7 +25,7 @@
 | 開発の経緯を読み物として追う | [owner/journal/](owner/journal/) |
 | コードを触る前に背景を知る | [dev/document_map.md](dev/document_map.md) §5 の逆引き表 → 該当する `dev/features/` か `dev/system/` |
 | 次に何を作るか決める | [_wip/roadmap.md](_wip/roadmap.md) → [_wip/current_issues.md](_wip/current_issues.md) |
-| Codexに実機検証させる | 作業ツリーの `review/device_validation/`（未追跡）→ 対象機能のケース |
+| Codexに実機検証させる | [review/device_validation/](review/device_validation/) → 対象機能のケース |
 
 ## owner/ と dev/ の線引き
 
