@@ -33,3 +33,5 @@ docs/review/[0-9][0-9][0-9][0-9]-*.md
 docs/review/device_validation/
 # 上の手順書だけを見る検査なので、手順書と寿命を合わせて作業ツリー限りにする。
 app/src/test/java/com/example/newproject/architecture/DeviceValidationDocsTest.kt
+# 実機検証の依頼書は使い捨て。依頼が済めば消えるので履歴へ残さない。
+docs/review/pending_device_validation.md
