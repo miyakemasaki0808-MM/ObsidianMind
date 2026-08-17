@@ -1,7 +1,7 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句を実装済み。**段階2の位置・種別・通常件数・非重複保存は実機確認済み。短文例外の表示修正と競合／故障復旧の実機確認待ち**
-**最終検証:** 2026-08-17 / `e461aa2`＋未コミット差分（JVM 967件、Lint、Pixel 10 Pro Foldで文・句・除外句・語句・語句保存の5ケース。4件成功、句の短文例外が「1文」と表示されるP2 1件は[最新レビュー](../../review/README.md)）
+**最終検証:** 2026-08-17 / 未コミット差分（JVM 970件、Lint。Pixel 10 Pro Foldで文・句・除外句・語句・語句保存の5ケースを確認し、指摘された句の短文例外の文言も修正済み。**表示の実機再確認と、競合・故障復旧・最大サイズ計測が未消化** → [レビュー一覧](../../review/README.md)）
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest`
 **正本:** この文書
@@ -103,6 +103,8 @@
 - **前から貪欲に積み、`MIN_CLAUSE_CHARACTERS` へ届いた時点で閉じる。**
   末尾に残った下限未満の余りは直前の句へ吸収する（下限未満の句を作らない）。
   **下限だけでは結合の向きが決まらない**ので、向きまで決めてはじめて挙動が定まる
+- **鉤括弧の内側では割らない。** 割ると括弧が2つの句へまたがり、**語句候補が取れなくなる**
+  （`「設計、検証」` が `…「設計` と `検証」…` に割れた）。保護範囲はコードスパン・リンク・鉤括弧
 - **読点が無い長文は割れないまま残す。** 無理に割ると意味が壊れる
 - 割った文は**親文を候補にしない**（全文と句で枠を二重に食わないため）。1文から入れる句は `MAX_CLAUSES_PER_SENTENCE` まで
 - **リンクだけかの判定は句ごとに掛け直す**（親文が通常文でも断片はリンクだけになり得る）

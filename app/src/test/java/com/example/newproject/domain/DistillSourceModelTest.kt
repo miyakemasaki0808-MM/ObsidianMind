@@ -153,6 +153,18 @@ class DistillSourceModelTest {
     }
 
     @Test
+    fun `clause split does not cut inside brackets`() {
+        // 机上レビュー 2026-08-17 P2-1。括弧の中の読点で割ると、括弧が2句へまたがり語句が消える。
+        val content = "あ".repeat(30) + "「設計、検証」" + "い".repeat(30) + "。"
+        val model = buildDistillSourceModel(content)
+
+        assertTrue(content.length > DistillLimits.CLAUSE_SPLIT_THRESHOLD)
+        assertEquals("設計、検証", model.sentences.single { it.isTerm }.text)
+        // 句は括弧をまたがない。
+        assertTrue(model.sentences.none { !it.isTerm && it.text.endsWith("「設計") })
+    }
+
+    @Test
     fun `brackets outside the length range are not terms`() {
         // 1字は語句として短すぎ、上限超えは語句ではなく文の一部。
         val model = buildDistillSourceModel("「あ」と「" + "長".repeat(30) + "」を含む本文です。")

@@ -90,8 +90,8 @@ X-3は段階2の候補生成・非重複保存と主要な表示修正まで実�
   **実機の再確認だけが残っている** → [current_issues](current_issues.md) DISTILL-4。
 - **規模感:** 小。文・句・語句の対象・対照を実機で再確認すれば閉じる。
 
-> **X-3とは別に、蒸留v1の書き込み側が未検証のまま残っている**
-> → [current_issues](current_issues.md) DISTILL-5（台帳で唯一の「高」）。
+> **X-3とは別に、蒸留の競合検知・故障復旧・最大サイズ計測が未検証のまま残っている**
+> → [current_issues](current_issues.md) DISTILL-5（台帳で唯一の「高」）。通常の書き戻しは確認済み。
 > **粒度の話とは別の穴**で、**このアプリで唯一ノート本文を書き換える経路の保証**にあたる。
 > 段階3（太字範囲のユーザー調整 → [feature_ideas](feature_ideas.md) N-14）の着手条件はここが埋まること。
 > 実機の依頼内容は作業ツリーの `review/pending_device_validation.md`（未追跡・使い捨て）が持つ。

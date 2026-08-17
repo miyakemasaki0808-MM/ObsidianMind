@@ -634,7 +634,23 @@ private fun bracketedTermRanges(
     content: String,
     range: DistillTextRange,
     syntax: InlineSyntax
-): List<DistillTextRange> {
+): List<DistillTextRange> = bracketedSpans(content, range).mapNotNull { outer ->
+    val inner = trimmedRange(content, outer.start + 1, outer.endExclusive - 1)
+        ?: return@mapNotNull null
+    if (syntax.protectedForSentenceBreaks.any { it.overlaps(inner) }) return@mapNotNull null
+    inner.takeIf {
+        it.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
+    }
+}
+
+/**
+ * 鉤括弧の対を**外側の範囲**で返す。長さの上限下限は見ない。
+ *
+ * **句の境界をこの内側へ置かないために使う。** 括弧の中の読点で割ると
+ * 括弧が2つの句へまたがり、[bracketedTermRanges] が対を見つけられず語句候補が消える
+ * （`「設計、検証」` が `…「設計` と `検証」…` に割れた）。
+ */
+private fun bracketedSpans(content: String, range: DistillTextRange): List<DistillTextRange> {
     val result = mutableListOf<DistillTextRange>()
     var i = range.start
     while (i < range.endExclusive) {
@@ -652,14 +668,7 @@ private fun bracketedTermRanges(
             i++
             continue
         }
-        val inner = trimmedRange(content, i + 1, end)
-        val protectedInner = inner != null &&
-            syntax.protectedForSentenceBreaks.any { it.overlaps(inner) }
-        if (inner != null && !protectedInner &&
-            inner.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
-        ) {
-            result += inner
-        }
+        result += DistillTextRange(i, end + 1)
         i = end + 1
     }
     return result
@@ -682,7 +691,7 @@ private fun trimmedRange(content: String, rawStart: Int, rawEnd: Int): DistillTe
  * **前から貪欲に積み、下限へ届いた時点で閉じる。** 末尾に残った下限未満の余りは直前の句へ吸収する
  * （下限未満の句を作らない）。下限だけ決めても結合の向きが決まらないため、ここで向きを固定する。
  *
- * **句の境界がコードスパンや既存強調をまたぐ心配は無い。** 境界は保護範囲の外にある読点だけで、
+ * **保護範囲（コードスパン・リンク・鉤括弧）の中では割らない。** 境界はその外にある読点だけで、
  * 親文が既にまたぎ判定を通過しているため。**落ちるテストを書けないガードは置かない。**
  */
 private fun splitSentenceIntoClauses(
@@ -692,11 +701,13 @@ private fun splitSentenceIntoClauses(
 ): List<DistillTextRange> {
     if (range.length <= DistillLimits.CLAUSE_SPLIT_THRESHOLD) return listOf(range)
 
+    // 鉤括弧の内側では割らない。割ると括弧が2句へまたがり、語句候補が取れなくなる。
+    val protectedSpans = syntax.protectedForSentenceBreaks + bracketedSpans(content, range)
     val clauses = mutableListOf<DistillTextRange>()
     var clauseStart = range.start
     for (offset in range.start until range.endExclusive) {
         if (content[offset] != '、' && content[offset] != ',') continue
-        if (syntax.protectedForSentenceBreaks.any { offset >= it.start && offset < it.endExclusive }) continue
+        if (protectedSpans.any { offset >= it.start && offset < it.endExclusive }) continue
         val clause = trimmedRange(content, clauseStart, offset) ?: continue
         if (clause.length >= DistillLimits.MIN_CLAUSE_CHARACTERS) {
             clauses += clause
