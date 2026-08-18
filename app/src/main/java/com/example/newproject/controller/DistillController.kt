@@ -15,6 +15,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
 import com.example.newproject.domain.aiStatusNotice
@@ -56,7 +57,7 @@ internal class DistillController(
         val input: AnalysisInput,
         val model: DistillSourceModel,
         val candidatesById: Map<String, DistillCandidate>,
-        val singleSentenceExceptionId: String?
+        val singleCandidateExceptionId: String?
     )
 
     private var activeRequestId = 0L
@@ -227,12 +228,47 @@ internal class DistillController(
                 id = candidate.id,
                 text = sentence.text,
                 heading = sentence.heading,
-                positionLabel = "${sentence.sourceIndex + 1} / ${model.sentences.size}",
-                context = model.sentences.getOrNull(sentence.sourceIndex - 1)?.text,
+                positionLabel = positionLabel(model, sentence),
+                context = candidateContext(model, sentence),
+                isTerm = sentence.isTerm,
                 isSelected = candidate.id in initialSelectionIds
             )
         }
         updateCandidateState(input.title, items)
+    }
+
+    /**
+     * ノート内位置。**数えるのは本文の線形構造だけで、語句は親の位置を借りる。**
+     *
+     * 内部draft列には語句候補が親と重なって並ぶので、その番号をそのまま出すと
+     * 1文しか無いノートで `2 / 5` のような位置になる（実機で発生）。
+     * 語句は線形位置を持たない存在なので、自前の番号を与えず、含まれる文・句の位置を示す。
+     */
+    private fun positionLabel(model: DistillSourceModel, sentence: DistillSentence): String {
+        val linear = model.sentences.filterNot { it.isTerm }
+        val index = if (sentence.isTerm) {
+            linear.indexOfFirst { it.range.overlaps(sentence.range) }
+        } else {
+            linear.indexOfFirst { it.sourceIndex == sentence.sourceIndex }
+        }
+        return "${index.coerceAtLeast(0) + 1} / ${linear.size}"
+    }
+
+    /**
+     * 候補カードの文脈欄に出す原文。
+     *
+     * **句なら自分の親文、未分割文なら直前の候補単位の親文を出す。**
+     * どちらも `contextRange` から引く。**直前の候補単位の `text` を使ってはいけない** —
+     * 直前が分割された文だと、その最後の句だけが文脈になり「直前1文」の契約が縮む。
+     * 段階1で1文が複数候補へ割れるようになったとき、この読み手だけが子のまま取り残された。
+     */
+    private fun candidateContext(model: DistillSourceModel, sentence: DistillSentence): String? {
+        val source = if (sentence.contextRange != sentence.range) {
+            sentence.contextRange
+        } else {
+            model.sentences.getOrNull(sentence.sourceIndex - 1)?.contextRange ?: return null
+        }
+        return model.content.substring(source.start, source.endExclusive)
     }
 
     fun toggleCandidate(id: String) {
@@ -249,16 +285,16 @@ internal class DistillController(
         val selectedItems = items.filter { it.isSelected }
         val ranges = selectedItems.mapNotNull { active.candidatesById[it.id]?.sentence?.range }
         val isWithinLimit = isWithinDistillBoldLimit(active.model, ranges)
-        val isSingleSentenceException = !isWithinLimit &&
-            active.singleSentenceExceptionId != null &&
-            selectedItems.singleOrNull()?.id == active.singleSentenceExceptionId
+        val isSingleCandidateException = !isWithinLimit &&
+            active.singleCandidateExceptionId != null &&
+            selectedItems.singleOrNull()?.id == active.singleCandidateExceptionId
         update(
             DistillState.Candidates(
                 sourceTitle = title,
                 items = items,
                 projectedBoldRatio = projectedBoldRatio(active.model, ranges),
                 isWithinBoldLimit = isWithinLimit,
-                isSingleSentenceException = isSingleSentenceException
+                isSingleCandidateException = isSingleCandidateException
             )
         )
     }

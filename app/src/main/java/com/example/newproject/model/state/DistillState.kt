@@ -6,7 +6,13 @@ data class DistillCandidateItem(
     val heading: String?,
     val positionLabel: String,
     val context: String?,
-    val isSelected: Boolean = true
+    val isSelected: Boolean = true,
+    /**
+     * 括弧から取り出した語句候補。**太字になるのは文全体ではなく、この断片だけ。**
+     *
+     * 本文を書き換える直前の確認画面なので、変更単位が文なのか語句なのかを画面から読めるようにする。
+     */
+    val isTerm: Boolean = false
 )
 
 enum class DistillRecoveryKind { Diverged, Inaccessible, Corrupt }
@@ -29,14 +35,15 @@ sealed class DistillState {
         val items: List<DistillCandidateItem>,
         val projectedBoldRatio: Double,
         val isWithinBoldLimit: Boolean,
-        val isSingleSentenceException: Boolean = false
+        val isSingleCandidateException: Boolean = false
     ) : DistillState() {
         val selectedCount: Int get() = items.count { it.isSelected }
         val canSaveSelection: Boolean
-            get() = selectedCount > 0 && (isWithinBoldLimit || isSingleSentenceException)
+            get() = selectedCount > 0 && (isWithinBoldLimit || isSingleCandidateException)
     }
     data class Saving(val sourceTitle: String, val verifying: Boolean = false) : DistillState()
-    data class Saved(val sourceTitle: String, val sentenceCount: Int) : DistillState()
+    /** [changedCount] は太字にした箇所の数。文とは限らない（句・語句も数える）。 */
+    data class Saved(val sourceTitle: String, val changedCount: Int) : DistillState()
     data class Conflict(val message: String) : DistillState()
     data class RecoveryRequired(
         val kind: DistillRecoveryKind,

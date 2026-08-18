@@ -215,7 +215,7 @@ private fun DistillPanel(
             Text("✦ ノートを蒸留", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "AIが重要文を選び、確認した文だけをノート内で太字にします。",
+                "AIが重要な箇所を選び、確認した箇所だけをノート内で太字にします。",
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
                 color = OnSurface
@@ -231,7 +231,7 @@ private fun DistillPanel(
                             onClick = onStart,
                             modifier = Modifier.fillMaxWidth().height(48.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi)
-                        ) { Text("重要文を見つける", color = OnButtonAi) }
+                        ) { Text("重要な箇所を見つける", color = OnButtonAi) }
                     }
                 }
                 is DistillState.Analyzing -> ProgressRow("AIを待っています／分析中…")
@@ -263,17 +263,17 @@ private fun DistillPanel(
                     }
                     val ratioPercent = state.projectedBoldRatio * 100.0
                     Text(
-                        "選択 ${state.selectedCount}文・変更後の太字率 %.1f%%".format(ratioPercent),
+                        "選択 ${state.selectedCount}箇所・変更後の太字率 %.1f%%".format(ratioPercent),
                         fontSize = 12.sp,
                         color = when {
-                            state.isSingleSentenceException -> AccentText
+                            state.isSingleCandidateException -> AccentText
                             state.isWithinBoldLimit -> OnSurface
                             else -> ErrorText
                         }
                     )
                     when {
-                        state.isSingleSentenceException -> Text(
-                            "短いノートのため、最重要の1文だけを上限の例外として選択しています。保存前に太字率を確認してください。",
+                        state.isSingleCandidateException -> Text(
+                            "短いノートのため、最重要の1箇所だけを上限の例外として選択しています。保存前に太字率を確認してください。",
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
                             color = AccentText
@@ -302,7 +302,7 @@ private fun DistillPanel(
                 }
                 is DistillState.Saving -> ProgressRow("保存して内容を検証中…")
                 is DistillState.Saved -> {
-                    Text("${state.sentenceCount}文を太字にしました。", fontSize = 13.sp, color = AccentText)
+                    Text("${state.changedCount}箇所を太字にしました。", fontSize = 13.sp, color = AccentText)
                     TextButton(onClick = onDismiss) { Text("完了") }
                 }
                 is DistillState.Conflict -> {
@@ -353,7 +353,7 @@ private fun DistillPanel(
     if (showConfirmation && candidates != null) {
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
-            title = { Text("選択した${candidates.selectedCount}文を太字にします") },
+            title = { Text("選択した${candidates.selectedCount}箇所を太字にします") },
             text = {
                 Column(
                     modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
@@ -362,9 +362,9 @@ private fun DistillPanel(
                     candidates.items.filter { it.isSelected }.forEach { item ->
                         Text(item.text, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
                     }
-                    if (candidates.isSingleSentenceException) {
+                    if (candidates.isSingleCandidateException) {
                         Text(
-                            "短いノートのため、この1文で変更後の太字率は %.1f%% になります。通常の累積上限30%%を超えますが、この1文だけ保存できます。"
+                            "短いノートのため、この1箇所で変更後の太字率は %.1f%% になります。通常の累積上限30%%を超えますが、この1箇所だけ保存できます。"
                                 .format(candidates.projectedBoldRatio * 100.0),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
@@ -427,7 +427,12 @@ private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -
         Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
             Checkbox(checked = item.isSelected, onCheckedChange = { onToggle(item.id) })
             Column(modifier = Modifier.weight(1f).padding(top = 4.dp, end = 4.dp)) {
-                val meta = listOfNotNull(item.heading, item.positionLabel).joinToString(" · ")
+                // 語句は文の一部だけを太字にするので、既存のメタ行へ種別を1語だけ足して見分けられるようにする。
+                val meta = listOfNotNull(
+                    item.heading,
+                    item.positionLabel,
+                    "語句".takeIf { item.isTerm }
+                ).joinToString(" · ")
                 Text(meta, fontSize = 11.sp, color = OnSurfaceSubtle)
                 item.context?.takeIf { it.isNotBlank() }?.let { context ->
                     Text(context, fontSize = 11.sp, color = OnSurfaceFaint, maxLines = 2)

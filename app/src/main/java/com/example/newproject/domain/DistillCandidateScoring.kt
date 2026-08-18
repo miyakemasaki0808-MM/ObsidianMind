@@ -4,6 +4,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
+import com.example.newproject.model.DistillTextRange
 
 private const val TITLE_WEIGHT = 1.0
 private const val HEADING_WEIGHT = 0.7
@@ -19,8 +20,16 @@ internal fun selectDistillCandidates(
     limit: Int = DistillLimits.MAX_AI_CANDIDATES
 ): List<DistillCandidate> {
     if (limit <= 0) return emptyList()
+    // isLinkOnly をここで外すと、リンクだけのチャンクは以降の groupBy に現れないため
+    // チャンク代表も出ない。「リンクしか無いセクションは代表を持たない」は追加の分岐ではなく
+    // この除外の帰結である。
     val eligible = model.sentences.filter {
-        it.text.isNotBlank() && it.text.length <= DistillLimits.MAX_SENTENCE_CHARACTERS
+        it.text.isNotBlank() &&
+            // 上限は句ではなく親文へ掛ける。句長で見ると、読点のある超過文だけが
+            // 分割後に上限内の断片となって候補へ復活し、入力契約を迂回できる。
+            // 割っていない文は contextRange == range なので判定は変わらない。
+            it.contextRange.length <= DistillLimits.MAX_SENTENCE_CHARACTERS &&
+            !it.isLinkOnly
     }
     if (eligible.isEmpty()) return emptyList()
     val bounded = boundedSentencesPreservingChunks(eligible, DistillLimits.MAX_SENTENCES_FOR_SCORING)
@@ -34,14 +43,34 @@ internal fun selectDistillCandidates(
                 textBigrams(sentence.text),
                 textBigrams(sentence.heading.orEmpty())
             ) + structural +
-            if (sentence.text.length < 15) -SHORT_SENTENCE_PENALTY else 0.0
+            // 語句候補は短いのが当たり前なので、短文ペナルティの対象にしない。
+            if (!sentence.isTerm && sentence.text.length < 15) -SHORT_SENTENCE_PENALTY else 0.0
         Scored(sentence, score, structural)
     }
     val ordering = compareByDescending<Scored> { it.score }
         .thenByDescending { it.structural }
         .thenBy { it.sentence.sourceIndex }
 
-    val leaders = scored.groupBy { it.sentence.chunkIndex }.values.map { it.sortedWith(ordering).first() }
+    // 1文から入れる句は上限まで。同じ文の句が枠を埋め尽くすのを防ぐ。
+    // 割っていない文は contextRange が自分自身なので、この間引きに素通りする。
+    val (terms, structural) = scored.partition { it.sentence.isTerm }
+    val perSentence = structural
+        .groupBy { it.sentence.contextRange }
+        .values
+        .flatMap { it.sortedWith(ordering).take(DistillLimits.MAX_CLAUSES_PER_SENTENCE) }
+
+    // 同じ語が何度も出るノートで候補が同じ語句で埋まらないよう、表層文字列で1件へ落とす。
+    val distinctTerms = terms
+        .sortedWith(ordering)
+        .distinctBy { it.sentence.text }
+        .take(DistillLimits.MAX_TERM_CANDIDATES)
+
+    val available = nonOverlappingBy(
+        perSentence + distinctTerms,
+        range = { it.sentence.range },
+        order = { it.sentence.sourceIndex }
+    )
+    val leaders = available.groupBy { it.sentence.chunkIndex }.values.map { it.sortedWith(ordering).first() }
     val selected = LinkedHashMap<Int, Scored>()
     if (leaders.size > limit) {
         leaders.sortedWith(
@@ -51,7 +80,7 @@ internal fun selectDistillCandidates(
         ).take(limit).forEach { selected[it.sentence.sourceIndex] = it }
     } else {
         leaders.forEach { selected[it.sentence.sourceIndex] = it }
-        scored.sortedWith(ordering).forEach { candidate ->
+        available.sortedWith(ordering).forEach { candidate ->
             if (selected.size < limit) selected.putIfAbsent(candidate.sentence.sourceIndex, candidate)
         }
     }
@@ -64,6 +93,29 @@ internal fun selectDistillCandidates(
             structuralWeight = item.structural
         )
     }
+}
+
+/**
+ * 候補どうしが重ならない集合へ落とす。**重なったら細かいほうを残す。**
+ *
+ * 書き戻しは重なりを `require` で拒むため（`applyDistillBold`）、重なる候補を同時に選べる状態を
+ * UIへ出してはいけない。語句候補は親の内側に重なる初めての候補で、ここが唯一の防波堤になる。
+ * **細かいほうを残すのは、粒度を細かくすることが語句候補の目的だから。**
+ *
+ * 文と句だけのときは互いに重ならないので、この関数は何も落とさない。
+ */
+private fun <T> nonOverlappingBy(
+    candidates: List<T>,
+    range: (T) -> DistillTextRange,
+    order: (T) -> Int
+): List<T> {
+    val accepted = mutableListOf<T>()
+    candidates
+        .sortedWith(compareBy({ range(it).length }, { order(it) }))
+        .forEach { candidate ->
+            if (accepted.none { range(it).overlaps(range(candidate)) }) accepted += candidate
+        }
+    return accepted.sortedBy(order)
 }
 
 internal fun structuralWeight(sentence: DistillSentence): Double =

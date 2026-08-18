@@ -22,8 +22,8 @@ import org.junit.Test
  *
  * 1. レビュー本文の指摘（`### P1-1.` 等）すべてに受付行がある
  * 2. 受付行の処遇が空でない
- * 3. 処遇は決めた5語のいずれか
- * 4. `起票` は**実在する課題IDを参照する**（参照した**すべて**が実在すること）
+ * 3. 処遇は未解決を表す `起票`・`統合` のいずれか
+ * 4. 受付行は**実在する課題IDを参照する**（参照した**すべて**が実在すること）
  * 5. 作業ツリーに置くレビュー本文は最新の1本だけ
  * 6. 指摘IDにも受付行にも**重複が無い**
  *
@@ -56,13 +56,20 @@ class ReviewFindingsLedgerTest {
         )
     }
 
+    /**
+     * **0本を許すのは、レビュー本文を履歴へ残さないため**（`.gitignore`）。
+     *
+     * 本文には端末の識別子や検証中のローカルパスが入るので、作業ツリー限りで扱う。
+     * 新規チェックアウトでは0本になるが、**溜めない**という守りたい性質は `<= 1` で保たれる。
+     * **指摘の存在と処遇は受付簿が引き受ける**ので、本文が無くても追跡は切れない。
+     */
     @Test
-    fun `作業ツリーに残すレビュー本文は最新の1本だけ`() {
+    fun `作業ツリーに残すレビュー本文は多くても1本`() {
         val reviewFiles = reviewFiles()
         assertTrue(
-            "docs/review のレビュー本文は最新の1本だけ残してください（過去の原文はgit履歴に残ります）:\n" +
+            "docs/review のレビュー本文は最新の1本だけ残してください:\n" +
                 reviewFiles.joinToString("\n") { it.name },
-            reviewFiles.size == 1
+            reviewFiles.size <= 1
         )
     }
 
@@ -81,23 +88,22 @@ class ReviewFindingsLedgerTest {
     }
 
     /**
-     * `起票` と書いたら、その課題が課題台帳に実在すること。
+     * 受付行がある限り、その課題が課題台帳に実在すること。
      *
-     * **ここが受付簿の本体。** 「起票した」と書いてあるのに台帳へ無い、という
-     * 今回の失敗そのものを検出する。
+     * **ここが受付簿の本体。** 受付後の取りこぼしだけでなく、課題を閉じたのに
+     * 古い受付行だけを残すことも検出する。
      */
     @Test
-    fun `起票した指摘は実在する課題IDを参照する`() {
+    fun `受付中の指摘は実在する課題IDを参照する`() {
         val known = issueIds()
         val violations = ledgerRows()
-            .filter { (_, disposition) -> disposition.startsWith("`起票`") }
             .mapNotNull { (id, disposition) ->
                 val referenced = ISSUE_ID_PATTERN.findAll(disposition).map { it.value }.toList()
                 // **1件でも実在すれば通る形にしない。** 実在する課題IDと架空のIDが
                 // 並んだ行を成功にしてしまい、取りこぼしを見逃す。
                 val unknown = referenced.filterNot { it in known }
                 when {
-                    referenced.isEmpty() -> "$id: 起票と書いてあるが課題IDが無い"
+                    referenced.isEmpty() -> "$id: 受付中だが課題IDが無い"
                     unknown.isNotEmpty() ->
                         "$id: 参照している課題 ${unknown.joinToString("・")} が台帳に無い" +
                             "（台帳の課題: ${known.sorted().joinToString("・")}）"
@@ -105,7 +111,7 @@ class ReviewFindingsLedgerTest {
                 }
             }.sorted()
         assertTrue(
-            "起票の参照先が課題台帳と合っていません:\n${violations.joinToString("\n")}",
+            "受付中の指摘が課題台帳と合っていません:\n${violations.joinToString("\n")}",
             violations.isEmpty()
         )
     }
@@ -209,7 +215,7 @@ class ReviewFindingsLedgerTest {
          */
         val ISSUE_ID_PATTERN = Regex("""\b[A-Z][A-Z0-9]*-\d+\b""")
 
-        /** 許す処遇。**これ以外を書いたら落とす**（曖昧な処遇で追跡が途切れるのを防ぐ）。 */
-        val ALLOWED_DISPOSITIONS = listOf("`起票`", "`統合`", "`解消`", "`見送り`", "`誤検知`")
+        /** 解消済みの行は残さない。受付簿が許すのは、実在する未解決課題への2経路だけ。 */
+        val ALLOWED_DISPOSITIONS = listOf("`起票`", "`統合`")
     }
 }

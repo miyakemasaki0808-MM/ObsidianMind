@@ -4,7 +4,9 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ネットワーク権限は持たない。ユーザーのVault（Obsidian の `.md` 群）を SAF 経由で読み書きする。
 
 > **この文書の位置づけ = 憲法。** 常時効かせる原則・参照先・禁止事項・完了条件だけを置く。
-> 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、作業手順は Skill（作業標準書）が持つ。**ここに詳細を書き足さない。**
+> 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、作業手順は原則Skill（作業標準書）が持つ。
+> **例外として、Codexが端末とリポジトリを一体で扱う実機検証は [device_validation](docs/review/device_validation/README.md) が持つ。**
+> ここに詳細を書き足さない。
 
 ## 最優先文書
 
@@ -75,7 +77,10 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 - **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある
 - `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
-- **実機確認はユーザーがAndroid Studioで実施する。** Claudeは実行できない。**実機確認が済むまでPR本文に「確認完了」と書かない**
+- **実機確認はCodexが行う。** 着手前に [共通手順](docs/review/device_validation/README.md) と対象機能のケースを読み、
+  一時領域だけで検証して元Vaultへ戻す。共通手順の権限範囲は実機検証依頼に含まれるため、操作ごとに承認を取り直さない。
+  **端末を特定する値（シリアル・Vault URI・端末内パス）は文書へ残さない** — 検証開始時に `adb devices -l` で取得する。
+  **実機確認が済むまでPR本文に「確認完了」と書かない**
 - Lint は現在 Error 0 / Warning 0 / hint 12（hint は依存更新系の催促で、ゲートに載せない）。**警告を増やさない**
 - 端末AIを呼ぶ instrumentation テストは、Nano が使えない端末では `Assume` で skip する。**skip 判定は既知の `FeatureStatus` だけで行い、計測・生成呼び出しが投げた例外は skip せず失敗させる**（`checkAvailability()` は例外も畳むので判定に使わない）→ [ai_input_excerpt](docs/dev/system/ai_input_excerpt.md)
 
@@ -98,6 +103,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 置いた時点で `ReviewFindingsLedgerTest` が全指摘の受付を検査するので、
 **行番号まで名指しされた指摘の取りこぼしが落ちる。** 置かなければ検査そのものが起動しない
 （2026-08-12〜13 の5巡は、これを怠って16件が受付簿の外にあった）。
+受付簿は未解決事項だけを持つ。修正確認まで済んだ指摘は課題台帳と同時に削除し、完了履歴を残さない。
 
 **変更を終える前に:**
 
@@ -118,7 +124,11 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `dev/decisions/` | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、**30行以内＝`AdrShapeTest` が固定**） | 後から「なぜ？」となるか。機能追加ごとには作らない |
 
 - **ADRに設計の写しを置かない。** `decisions/` は「なぜ」の索引であって正本ではない。**詳細の正本は必ず `features/` か `system/` 側**で、ADRはそこへリンクする（正本が2つに割れると、どちらかが必ず古くなる）
-- **`docs/review/` 配下の `2026-*.md` は最新の1本だけを置き、書き換えない。** 新しいレビューを受け付けたら前の本文は削除する（原文はgit履歴に残る）。様式（`review_template.md`）と全指摘の受付簿（`findings.md`）はこちらが持つ
+- **`docs/review/` 配下の日付つきレビュー本文は最新の1本だけを置き、書き換えない。**
+  **本文はコミットしない**（`.gitignore`）— 端末の識別子や検証中のローカルパスが入るため。
+  新しいレビューを受け付けたら前の本文は削除する。**存在と処遇は `findings.md` が引き受ける**ので、本文が消えても追跡は切れない。
+  様式（`review_template.md`）・未解決指摘の受付簿（`findings.md`）・Codexの実機手順（`device_validation/`）はこちらが持ち、
+  解消済みの受付行は削除する。実機ケースは手順だけを持ち、日付つき結果を蓄積しない
 - **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
 - `features/` `system/` の各文書には `**状態:**` 行を置く
 
