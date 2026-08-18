@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-19 | — | 二度書き検出の粒度を段落・単位をノート対と決め、ノート全体のDice絞り込みが成立しないことを実測で確かめた | [lessons](lessons.md) L42 |
 | 2026-08-17 | — | 句の境界を鉤括弧の内側へ置かないようにし、括弧内読点で語句候補が消える欠陥を直した | **[reflect_distill](features/reflect_distill.md)** §5 |
 | 2026-08-17 | — | 蒸留の画面文言と状態名から候補の単位を外し、「文」固定が残らないことを走査検査に載せた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L41 |
 | 2026-08-17 | — | 蒸留段階2の位置・語句種別・「箇所」表示・語句保存をPixel実機で再確認し、短いノート例外に残る「文」固定を残件化した | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |
