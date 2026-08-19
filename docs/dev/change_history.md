@@ -17,6 +17,7 @@
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
 | 2026-08-19 | — | 痕跡の退避が余白メモ待ちでないことと、再会カードの枠を取り合うのが4件であることを資料とロードマップで揃えた | [lessons](lessons.md) L37 |
+| 2026-08-20 | — | 読書痕跡の退避と復元の設計を確定し、突き合わせ規則・書き出し先・契機・範囲を決めた | [reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-08-19 | — | 二度書き検出の粒度を段落・単位をノート対と決め、ノート全体のDice絞り込みが成立しないことを実測で確かめた | [lessons](lessons.md) L42 |
 | 2026-08-17 | — | 句の境界を鉤括弧の内側へ置かないようにし、括弧内読点で語句候補が消える欠陥を直した | **[reflect_distill](features/reflect_distill.md)** §5 |
 | 2026-08-17 | — | 蒸留の画面文言と状態名から候補の単位を外し、「文」固定が残らないことを走査検査に載せた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L41 |

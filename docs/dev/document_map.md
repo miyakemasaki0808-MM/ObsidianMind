@@ -107,6 +107,7 @@
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
 | [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**未実装・設計確定** |
+| [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 
 ### 基盤（`system/`）
 
