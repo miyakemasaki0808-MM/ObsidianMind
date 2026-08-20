@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import android.graphics.Bitmap
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -7,8 +8,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -282,15 +286,17 @@ class NoteReadingFlowTest {
         }
         composeRule.runOnIdle { loader.settle(width = 800, height = 600) }
         composeRule.waitForIdle()
-        val measuredOnce = loader.measureCount
+        val readOnce = loader.readCount
 
         composeRule.runOnIdle { fullscreen = true }
         composeRule.waitForIdle()
 
+        // **見るのは「読み直したか」であって「呼んだか」ではない。** 呼び出しは
+        // 世代が変わっていないことの確認に要る（→ 上書き後の縦横比のテスト）。
         assertEquals(
-            "全画面で測り直している（寸法が共有されていない）",
-            measuredOnce,
-            loader.measureCount
+            "全画面でヘッダを読み直している（寸法が共有されていない）",
+            readOnce,
+            loader.readCount
         )
         assertTrue(
             "全画面で測り直している（寸法が共有されていない）",
@@ -298,7 +304,55 @@ class NoteReadingFlowTest {
         )
     }
 
-    /** 測定を保留したまま止められるローダ。**未計測の状態を作るために要る。** */
+    /**
+     * **上書きで縦横比が変わったら、確保する高さも新しい比率になる。**
+     *
+     * 共有の入れ物は参照文字列だけを鍵にするので、旧測定が残っていると
+     * 新しいBitmapを**古い比率の枠へ**収めてしまう。Gateway単体のテストでは
+     * この面を通らない（表示側のキャッシュを経由しないため）。
+     */
+    @Test
+    fun 上書きで縦横比が変わったら確保高も新しい比率になる() {
+        val model = buildNoteSectionModel(IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val block = model.blocks.filterIsInstance<MarkdownBlock.Image>().first()
+        // 上書き前の測定（4:3）を共有済みにする。
+        measurements.record(block, NoteImageMeasurement.Measured(width = 400, height = 300))
+        // 上書き後は縦長（2:3）。
+        val loader = FixedImageLoader(NoteImageMeasurement.Measured(width = 400, height = 600))
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    state = loadedNote(IMAGE_BODY),
+                    model = model,
+                    listState = rememberLazyListState(),
+                    loader = loader,
+                    measurements = measurements
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        val bounds = composeRule
+            .onNodeWithContentDescription("photo.png", substring = true)
+            .getUnclippedBoundsInRoot()
+        val ratio = (bounds.bottom - bounds.top).value / (bounds.right - bounds.left).value
+
+        assertTrue(
+            "旧測定の比率のまま描いている（縦横比 $ratio、期待は約1.5）",
+            ratio in 1.3f..1.7f
+        )
+    }
+
+    /**
+     * 測定を保留したまま止められるローダ。**未計測の状態を作るために要る。**
+     *
+     * **本番の口と同じ契約にする** — 呼ばれること自体は安く、世代が変わったときだけ
+     * ヘッダを読み直す（`NoteImageGateway` は世代を鍵にした寸法キャッシュを持つ）。
+     * [measureCount]（呼ばれた回数）と [readCount]（実際に読んだ回数）を分けないと、
+     * 「呼ばない」を守っているのか「読まない」を守っているのかが混ざる。
+     */
     private class PendingImageLoader : NoteImageLoader {
         private val gate = CompletableDeferred<NoteImageMeasurement>()
 
@@ -306,17 +360,40 @@ class NoteReadingFlowTest {
         var measureCount = 0
             private set
 
+        @Volatile
+        var readCount = 0
+            private set
+
+        @Volatile
+        private var settled: NoteImageMeasurement? = null
+
         fun settle(width: Int, height: Int) {
             gate.complete(NoteImageMeasurement.Measured(width, height))
         }
 
         override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement {
             measureCount++
-            return gate.await()
+            settled?.let { return it }
+            val measured = gate.await()
+            readCount++
+            settled = measured
+            return measured
         }
 
         override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
             NoteImageContent.Failed(NoteImageFailure.Broken)
+    }
+
+    /** 測定結果を即座に返すローダ。**上書き後の世代を演じる。** */
+    private class FixedImageLoader(
+        private val measurement: NoteImageMeasurement
+    ) : NoteImageLoader {
+        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement = measurement
+
+        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
+            NoteImageContent.Loaded(
+                Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()
+            )
     }
 
     // --- 補助 -----------------------------------------------------------------

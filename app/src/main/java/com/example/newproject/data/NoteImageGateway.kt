@@ -57,6 +57,8 @@ private class ImageDecodeFailure(val reason: NoteImageFailure) : Exception()
  * （索引の再走査＝Vault全走査とは桁が違う）。逆に失敗を載せると、
  * 一時的な失敗が次のVault切替まで固定される。
  */
+private const val MEASURE_CACHE_MAX_ENTRIES = 128
+
 internal class NoteImageGateway(
     private val contentResolver: ContentResolver,
     private val indexStore: VaultImageIndexStore,
@@ -79,6 +81,32 @@ internal class NoteImageGateway(
         val contentVersion: Long?,
         val targetWidthPx: Int
     )
+
+    /**
+     * 寸法の鍵。**表示幅を含まない** — 元画像の寸法は表示幅で変わらない。
+     */
+    private data class MeasureKey(val ref: DocumentRef, val contentVersion: Long?)
+
+    /**
+     * 寸法のキャッシュ。**世代を鍵に含めるのが要点で、Bitmap側と同じ理由**である
+     * （上書きされたら別物として扱う）。表示側は「同じ参照なら測り直さない」を
+     * 参照文字列だけで判断していたため、**縦横比の違う画像へ上書きすると
+     * 新しいBitmapが古い比率の枠へ描かれていた**（→ note_image_rendering §6）。
+     *
+     * 中身は Int 2つなので、Bitmapのようなバイト予算は要らない。件数だけ抑える。
+     * **失敗は載せない** — 壊れた画像はヘッダ読みの段階で落ちるので安い。
+     */
+    private val measureCache = object : LinkedHashMap<MeasureKey, NoteImageMeasureResult.Measured>(
+        MEASURE_CACHE_MAX_ENTRIES, 0.75f, true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<MeasureKey, NoteImageMeasureResult.Measured>?
+        ): Boolean = size > MEASURE_CACHE_MAX_ENTRIES
+    }
+
+    /** ヘッダを実際に読んだ回数。**測り直しが起きていないことの検証にだけ使う。** */
+    internal var boundsReadCount = 0
+        private set
 
     /**
      * 画像ブロックを解決して復号する。
@@ -124,10 +152,13 @@ internal class NoteImageGateway(
         if (request is ImageRequest.Lookup && !isDecodableImageFileName(request.fileName)) {
             return NoteImageMeasureResult.Failed(NoteImageFailure.Unsupported)
         }
-        val ref = when (val resolution = indexStore.resolve(request)) {
-            is ImageResolution.Resolved -> resolution.ref
+        val resolved = when (val resolution = indexStore.resolve(request)) {
+            is ImageResolution.Resolved -> resolution
             is ImageResolution.Failed -> return NoteImageMeasureResult.Failed(resolution.reason)
         }
+        val ref = resolved.ref
+        val key = MeasureKey(ref, resolved.contentVersion)
+        measureCache[key]?.let { return it }
         return try {
             withContext(ioDispatcher) {
                 if (byteSizeOf(ref)?.let { it > NoteImageLimits.MAX_INPUT_BYTES } == true) {
@@ -137,6 +168,7 @@ internal class NoteImageGateway(
                 rejectionForBounds(bounds.outWidth, bounds.outHeight)
                     ?.let { NoteImageMeasureResult.Failed(it) }
                     ?: NoteImageMeasureResult.Measured(bounds.outWidth, bounds.outHeight)
+                        .also { measureCache[key] = it }
             }
         } catch (e: CancellationException) {
             throw e
@@ -148,6 +180,7 @@ internal class NoteImageGateway(
     }
 
     private fun readBounds(ref: DocumentRef): BitmapFactory.Options {
+        boundsReadCount++
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         val truncated = openStream(ref) {
             BitmapFactory.decodeStream(it, null, bounds)

@@ -210,9 +210,10 @@ class NoteImageGatewayInstrumentationTest {
         assertEquals(120, (before as NoteImageResult.Loaded).bitmap.width)
 
         // Obsidian側で同じ名前のまま差し替えた状況。参照は変わらない。
+        // **縦横比も変える** — 同じ比率だと、寸法が古いまま新しいBitmapを描く欠陥を通らない。
         FakeVaultDocumentsProvider.putBinaryFile(
             vaultRelativePath = "assets/zu.png",
-            bytes = pngBytes(60, 40),
+            bytes = pngBytes(90, 120),
             lastModified = 2_000L
         )
         clock += VaultImageIndexStore.INDEX_TTL_MS
@@ -221,9 +222,65 @@ class NoteImageGatewayInstrumentationTest {
 
         assertEquals(
             "古いBitmapが返っている（鍵の世代が更新されていない）",
-            60,
+            90,
             (after as NoteImageResult.Loaded).bitmap.width
         )
+        assertEquals(120, after.bitmap.height)
+    }
+
+    /**
+     * **上書き後の測定は新しい寸法を返す。**
+     *
+     * 表示側は測定結果から確保する高さを決めるので、ここが古いままだと
+     * 新しいBitmapが古い比率の枠へ収められる（→ 2026-08-21 レビュー P2-1）。
+     */
+    @Test
+    fun 上書き後の測定は新しい寸法を返す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+        assertEquals(
+            NoteImageMeasureResult.Measured(120, 80),
+            gateway.measure(imageBlock("assets/zu.png"))
+        )
+
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(90, 120),
+            lastModified = 2_000L
+        )
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+
+        assertEquals(
+            NoteImageMeasureResult.Measured(90, 120),
+            gateway.measure(imageBlock("assets/zu.png"))
+        )
+    }
+
+    /**
+     * **世代が変わらなければヘッダを読み直さない。**
+     *
+     * 表示側は「測ってあっても確かめ直す」ので、ここが素通しだと
+     * スクロールや全画面遷移のたびにSAFを開くことになる。
+     */
+    @Test
+    fun 世代が変わらなければ寸法を読み直さない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+
+        gateway.measure(imageBlock("assets/zu.png"))
+        val readOnce = gateway.boundsReadCount
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+        repeat(3) { gateway.measure(imageBlock("assets/zu.png")) }
+
+        assertEquals("同じ世代でヘッダを読み直している", readOnce, gateway.boundsReadCount)
     }
 
     /** 存在するドキュメントは、実物のSAFで更新日時を引ける。 */

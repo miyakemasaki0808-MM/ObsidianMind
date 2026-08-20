@@ -63,8 +63,15 @@ internal fun MarkdownImage(
     var measurement by remember(block) { mutableStateOf(measurements?.measurementOf(block)) }
     var content by remember(block) { mutableStateOf<NoteImageContent?>(null) }
 
-    LaunchedEffect(block, measurement) {
-        if (measurement != null) return@LaunchedEffect
+    // **測ってあっても確かめ直す。** 共有の入れ物は参照文字列だけを鍵にするので、
+    // 同じ参照へ縦横比の違う画像を上書きされると、旧寸法のまま新しいBitmapを
+    // 受け取り、**古い比率の枠へ収めて描いてしまう**（→ note_image_rendering §6）。
+    // 世代が変わっていなければ [NoteImageLoader.measure] はヘッダを読み直さないので、
+    // 全画面へ入り直したときの測り直しは従来どおり起きない。
+    LaunchedEffect(block) {
+        // 失敗は測り直さない。失敗パネルの高さは固定で、後から動かないため
+        // （→ [NoteImageMeasurements] の「測れた」の定義）。
+        if (measurement is NoteImageMeasurement.Failed) return@LaunchedEffect
         val measured = loader.measure(block)
         measurements?.record(block, measured)
         measurement = measured
