@@ -2,10 +2,14 @@ package com.example.newproject.data
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.provider.DocumentsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.newproject.domain.image.ImageRequest
+import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageLimits
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.testing.FakeVaultDocumentsProvider
 import java.io.ByteArrayOutputStream
@@ -49,23 +53,31 @@ class NoteImageGatewayInstrumentationTest {
     private val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private fun gateway(): NoteImageGateway {
-        val browser = SafVaultBrowser(
+    /** 索引の鮮度を試す用の時計。既定では動かさないので TTL には触れない。 */
+    private var clock = 1_000L
+
+    private fun browser() = SafVaultBrowser(
+        contentResolver = targetContext.contentResolver,
+        repository = NoteRepository(),
+        vaultUri = { FakeVaultDocumentsProvider.treeUri }
+    )
+
+    private fun gateway(): NoteImageGateway =
+        NoteImageGateway(
             contentResolver = targetContext.contentResolver,
-            repository = NoteRepository(),
-            vaultUri = { FakeVaultDocumentsProvider.treeUri }
-        )
-        return NoteImageGateway(
-            contentResolver = targetContext.contentResolver,
-            indexStore = VaultImageIndexStore(vault = browser, vaultGeneration = { 1L }),
+            indexStore = VaultImageIndexStore(
+                vault = browser(),
+                vaultGeneration = { 1L },
+                now = { clock }
+            ),
             loadScope = scope
         )
-    }
 
     @Before
     fun setUp() {
         FakeVaultDocumentsProvider.cacheRootHolder = targetContext.cacheDir
         FakeVaultDocumentsProvider.reset()
+        clock = 1_000L
     }
 
     @Test
@@ -178,7 +190,85 @@ class NoteImageGatewayInstrumentationTest {
         )
     }
 
+
+    /**
+     * **上書きした画像が古いBitmapへ固定されない。**
+     *
+     * 復号キャッシュの鍵は更新日時を含むが、索引が当たり続ける限りその値は
+     * 初回走査時のまま固定される。JVM側は索引が返す世代までしか見られないので、
+     * **鍵が実際に変わって復号し直されるか**はここでしか確かめられない。
+     */
+    @Test
+    fun 外部から上書きした画像はTTL後に復号し直す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+        val before = gateway.load(imageBlock("assets/zu.png"), targetWidthPx = 120)
+        assertEquals(120, (before as NoteImageResult.Loaded).bitmap.width)
+
+        // Obsidian側で同じ名前のまま差し替えた状況。参照は変わらない。
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(60, 40),
+            lastModified = 2_000L
+        )
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+
+        val after = gateway.load(imageBlock("assets/zu.png"), targetWidthPx = 120)
+
+        assertEquals(
+            "古いBitmapが返っている（鍵の世代が更新されていない）",
+            60,
+            (after as NoteImageResult.Loaded).bitmap.width
+        )
+    }
+
+    /** 存在するドキュメントは、実物のSAFで更新日時を引ける。 */
+    @Test
+    fun 更新日時の照会は存在するドキュメントで値を返す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(10, 10),
+            lastModified = 4_242L
+        )
+        val handle = checkNotNull(browser().current())
+        val ref = indexRefOf("assets/zu.png")
+
+        assertEquals(DocumentVersionLookup.Found(4_242L), handle.documentVersion(ref))
+    }
+
+    /**
+     * **消えたドキュメントの照会は「確かめられない」になる。**
+     *
+     * SAF は空のカーソルではなく例外で答えるので、「行が返らない＝消えている」を
+     * 分けても実際には来ない。索引を作り直す側へ倒す判断（→ [DocumentVersionLookup]）は
+     * この振る舞いに乗っているので、**実物のプロバイダで固定しておく。**
+     */
+    @Test
+    fun 消えたドキュメントの照会は確かめられない扱いになる() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(10, 10)
+        )
+        val handle = checkNotNull(browser().current())
+        val ref = indexRefOf("assets/zu.png")
+        DocumentsContract.deleteDocument(targetContext.contentResolver, ref.toUri())
+
+        assertEquals(DocumentVersionLookup.Unconfirmed, handle.documentVersion(ref))
+    }
+
     // --- 補助 -----------------------------------------------------------------
+
+    /** 索引を1回作って、そのパスの参照を取り出す。 */
+    private suspend fun indexRefOf(path: String): DocumentRef {
+        val store = VaultImageIndexStore(vault = browser(), vaultGeneration = { 1L }, now = { clock })
+        val resolution = store.resolve(ImageRequest.Lookup(path, path.substringAfterLast('/')))
+        return (resolution as ImageResolution.Resolved).ref
+    }
+
 
     private fun imageBlock(path: String) =
         MarkdownBlock.Image(alt = "", target = path, isEmbed = false)
