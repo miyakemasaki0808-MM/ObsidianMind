@@ -1,6 +1,6 @@
 # ノート内画像の表示
 
-**状態:** Implemented — 稼働中・実機確認済み。**ヒットの鮮度確認（下記）だけ実機確認待ち。** **EXIF回転・SVG・アニメーション・インライン画像は非対応**
+**状態:** Implemented — 稼働中・実機確認済み。**EXIF回転・SVG・アニメーション・インライン画像は非対応**
 **最終検証:** 2026-08-12 / `bb764ce`（判断1〜5を実装と突合。2段照合・同名複数は `Ambiguous`・走査不完全は `Unverifiable`・復号ポリシー5定数まで一致を確認）
 **関連コード:** `data/NoteImageGateway.kt` / `data/VaultImageIndexStore.kt` / `domain/image/` / `ui/markdown/NoteImage.kt`
 **関連テスト:** `ImageLinkResolutionTest` / `ImageDecodePolicyTest` / `NoteImageMeasurementsTest` / `NoteImageTextTest` / `VaultImageIndexStoreTest` / androidTest: `NoteImageGatewayInstrumentationTest`
@@ -400,7 +400,8 @@ BFSで最初に見つかったほうを黙って出すのは**誤った画像を
 - **JVMテスト:** `ImageLinkResolutionTest`（2段照合）/ `ImageDecodePolicyTest`（上限）/
   `NoteImageMeasurementsTest`・`NoteImageTextTest`（プレースホルダと代替文）/ `VaultImageIndexStoreTest`
 - **instrumentation:** `NoteImageGatewayInstrumentationTest`（実物SAF・実物 `BitmapFactory`）
-- **実機確認:** 実施済み
+- **実機確認:** 実施済み。2026-08-21に `IMAGE-11`・`IMAGE-12`・`IMAGE-14`・`IMAGE-15` と
+  画像関連instrumentation 22件をPixel 10 Pro Foldで確認し、全件成功
 - **保証していないこと:**
   - **EXIF回転を見ない。** 撮影方向のまま出る
   - **同名の画像が複数ある場合は解決しない**（誤った画像を出すより出さない）

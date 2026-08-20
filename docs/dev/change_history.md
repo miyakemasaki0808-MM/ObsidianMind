@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-21 | — | 実機ではconnectedタスクを使わず、adb installとam instrumentで検証する手順へ改めた | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L43 |
+| 2026-08-21 | — | X-4の実機確認を完了した（IMAGE-11/12/14/15、画像関連instrumentation 22/22成功） | **[note_image_rendering](features/note_image_rendering.md)** §10 |
 | 2026-08-21 | — | 寸法キャッシュをsingle-flightの入れ物へ移し、確かめ終えるまで復号を始めないようにした | **[note_image_rendering](features/note_image_rendering.md)** §8 |
 | 2026-08-21 | — | 寸法のキャッシュにも世代を入れ、鮮度確認の結果を参照ごとに控えて解決のたびの外部I/Oを止めた | **[note_image_rendering](features/note_image_rendering.md)** §8 |
 | 2026-08-21 | — | 索引がヒットし続けても、TTL超過後は当たった1件の更新日時を引き直して復号キャッシュの鍵へ載せるようにした | **[note_image_rendering](features/note_image_rendering.md)** §8 |

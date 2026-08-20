@@ -16,6 +16,8 @@
 - Android Studio同梱JBRを使うテスト、lint、Debug APKの組み立て
 - 接続端末の列挙、機種・シリアル・対象パッケージの確認
 - Debug APKの `adb install -r`（アプリデータを維持する上書き）
+- AndroidTest APKの `adb install -r` と、対象シリアル付き `am instrument` の直接実行
+- 今回新たに入れた `com.vigilith.ai.test` の後処理時アンインストール（対象アプリ本体には触れない）
 - 対象アプリの起動・停止、タップ、スワイプ、戻る操作
 - `uiautomator dump`、スクリーンショット、ログ・検証ファイルの取得
 - `VigilithDeviceReview_` で始まる一時領域の作成、push、移動、内容変更、削除
@@ -28,17 +30,23 @@
 次は実機検証の依頼へ含めず、必要になった時点で別途ユーザーへ確認する。
 
 - 元Vault内のノート、画像、サイドカーの変更・削除
-- `pm clear`、アンインストール、ダウングレード、リリースAPKのインストール
+- 対象アプリ本体の `pm clear`・アンインストール、ダウングレード、リリースAPKのインストール
 - `VigilithDeviceReview_` 以外の端末領域の削除
 - 端末設定、アカウント、ネットワーク、開発者向けオプションの変更
 - 複数端末が接続され、対象を既存情報から一意に決められない場合の端末選択
+
+> **実データを持つ端末で `connectedDebugAndroidTest` を使わない。** このプロジェクトの
+> connectedタスクはテスト後に**対象アプリ本体をアンインストールし、アプリデータを消した**。
+> 使ってよいのは破棄前提のエミュレータだけ。実機では `assembleDebugAndroidTest` までをGradleで行い、
+> 対象APKとtest APKを `adb install -r` したうえで `am instrument` を直接実行する。
 
 ## 実機検証前
 
 1. **正本とケースを読む。** 対象機能の正本で現在の定数・保証・未解決を確認し、
    本フォルダの機能別ケースから今回の差分に必要なIDを選ぶ。
 2. **机上ゲートを通す。** `testDebugUnitTest lintDebug --offline` を実行し、失敗状態のAPKを端末へ入れない。
-3. **APKを組み立てる。** `assembleDebug --offline` を通し、生成物の更新時刻を確認する。
+3. **APKを組み立てる。** `assembleDebug assembleDebugAndroidTest --offline` を通し、
+   対象APKとtest APKの更新時刻を確認する。
 4. **端末を特定する。** `adb devices -l` でシリアルとモデル名を取得し、以後のコマンドへ必ずシリアルを付ける。
    **シリアルは文書へ残さない**（本フォルダは追跡されるため）。複数台つながっているときだけ、どれを使うかユーザーへ確認する。
    端末の値を恒常的に固定したい事情があるときだけ、`local_config.md` を作る（`.gitignore` で除外済み。
@@ -48,7 +56,15 @@
    `/sdcard/Documents/VigilithDeviceReview_<feature>_<YYYYMMDD>` とし、同名があれば中身を確認してから作り直す。
 7. **ケースを分離する。** ランダム選択が検証を不安定にする場合は、1ケース1Vaultまたは一時退避で
    対象ノートを一意にする。元Vaultのファイルを移動してはならない。
-8. **APKとfixtureを配置する。** `adb install -r` と一時Vaultへのpushを行い、配置したファイル一覧を記録する。
+8. **APKとfixtureを配置する。** 対象APKとtest APKをそれぞれ `adb install -r` し、
+   一時Vaultへのpushを行って配置したファイル一覧を記録する。instrumentationは次の形で直接実行する。
+   `connectedDebugAndroidTest` へ置き換えてはならない。
+
+   ```text
+   adb -s <serial> shell am instrument -w -r \
+     -e class <test-class[,test-class...]> \
+     com.vigilith.ai.test/androidx.test.runner.AndroidJUnitRunner
+   ```
 9. **一時Vaultへ切り替える。** SAFでフォルダ利用を許可し、対象ノートが読めることを確認する。
 
 正本と実装が食い違う場合は、勝手に期待値を実装側へ寄せない。正本どおりの期待値でケースを実行し、
@@ -73,6 +89,8 @@
    読書痕跡を増やさない。
 3. **復帰を確認する。** 元Vaultが選択済みでアプリが正常表示できることを確認する。
 4. **端末の一時物だけを削除する。** 今回作った `VigilithDeviceReview_...`、一時退避、UIダンプを明示パスで削除する。
+   AndroidTest APKを今回新たに入れた場合は `com.vigilith.ai.test` だけをアンインストールし、
+   **対象の `com.vigilith.ai` はアンインストールしない。**
 5. **削除を確認する。** 対象が存在しないことと、元Vaultが残っていることを確認する。
 6. **結果を記録する。** 最新レビュー、未解決なら `findings.md` と `_wip/current_issues.md` を同じ作業で更新する。
 7. **台帳検査を強制再実行する。** 文書はGradleの入力追跡外になり得るため、レビュー受付検査は
@@ -98,4 +116,3 @@
 
 機能別ファイルは**結果を持たない**。ケースを追加するのは、機能の正本へ新しい保証が増えたとき、
 実機でしか見えない欠陥が見つかったとき、または既存ケースでは変更面を踏めないときだけにする。
-
