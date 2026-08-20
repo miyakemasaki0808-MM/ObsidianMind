@@ -5,6 +5,7 @@ import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageEntry
 import com.example.newproject.domain.image.NoteImageIndex
 import com.example.newproject.domain.image.resolveImage
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteImageFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -44,6 +45,17 @@ internal const val OBSIDIAN_CONFIG_FOLDER_NAME = ".obsidian"
  * 再走査してもなお見つからなければ読込時刻を更新するので、
  * 壊れたリンクが TTL 未満のあいだ再走査を誘発し続けることはない。
  *
+ * ## ヒットしても、載っている値は古くなりうる
+ *
+ * 上の3つは**索引を作り直す**契機で、**索引に載っている値の鮮度は別の問題**である。
+ * 当たっている限り作り直されないので、更新日時は初回走査時の値で固定され、
+ * 同じ参照を上書きされても復号キャッシュの鍵が変わらない。
+ * そこで **TTL を過ぎたヒットに限り、当たった1件だけ更新日時を引き直す**（[verified]）。
+ * Vault全体をもう一度歩くのに比べて桁違いに安く、同じ問いに答えられる。
+ *
+ * **TTL 未満では引き直さない。** 走査直後は索引の値が新しいと分かっているうえ、
+ * 1ノートは画像を何枚も持つので、ここを無条件にすると表示のたびに照会が積み上がる。
+ *
  * ## 不完全な索引もキャッシュする
  *
  * 設計書の初版は「不完全な索引はキャッシュしない」だったが、**段階2で
@@ -67,6 +79,10 @@ internal class VaultImageIndexStore(
     internal var scanCount = 0
         private set
 
+    /** 世代を引き直した回数。**走査の代わりに引いた回数**を数える（同じく検証専用）。 */
+    internal var probeCount = 0
+        private set
+
     /**
      * 要求を解決する。索引が無ければ作り、失敗して索引が古ければ1回だけ作り直す。
      *
@@ -84,10 +100,51 @@ internal class VaultImageIndexStore(
         val generation = vaultGeneration()
         val index = indexFor(handle, generation)
         val first = resolveImage(request, index)
-        if (!first.isMiss() || now() - loadedAt < ttlMillis) return first
+        // TTL 未満なら索引をそのまま信じる。**当たったときも外したときも照会しない**ので、
+        // 走査直後の連続表示（1ノートに画像が何枚もある）で照会が増えない。
+        if (now() - loadedAt < ttlMillis) return first
+        val checked = verified(handle, first)
+        if (!checked.isMiss()) return checked
         // 古い索引で外したときだけ作り直す。作り直した時刻を控えるので、
         // 壊れたリンクが TTL 未満のあいだ再走査を誘発し続けることはない。
         return resolveImage(request, rebuild(handle, generation))
+    }
+
+    /**
+     * 当たった参照の**中身の世代を引き直す**。
+     *
+     * 索引は当たっている限り作り直されないので、[NoteImageEntry.lastModified] は
+     * 初回走査時の値のまま固定される。それが復号キャッシュの鍵に入るため、
+     * **同じ参照を上書きされても古い Bitmap を返し続ける**（→ note_image_rendering §6）。
+     * ここで1件だけ引き直すことで、全走査を増やさずに鍵を正しくする。
+     *
+     * | 引き直した結果 | 扱い | なぜ |
+     * |---|---|---|
+     * | 値が取れた | 実測値を鍵へ載せる | 索引の値より新しい |
+     * | 列を返さない | 索引の値のまま | 世代で見分けられないと分かるだけ |
+     * | 参照先が無い | **miss へ落とす** | 索引が古い。作り直せば引き当て直せる |
+     * | 照会が失敗 | 索引の値のまま | 「無い」と言えない。ここで作り直すと失敗のたびに全走査が走る |
+     */
+    private suspend fun verified(handle: VaultHandle, resolution: ImageResolution): ImageResolution {
+        if (resolution !is ImageResolution.Resolved) return resolution
+        return when (val lookup = probe(handle, resolution.ref)) {
+            is DocumentVersionLookup.Found ->
+                lookup.lastModified?.let { resolution.copy(contentVersion = it) } ?: resolution
+            DocumentVersionLookup.Absent -> ImageResolution.Failed(NoteImageFailure.NotFound)
+            DocumentVersionLookup.Unreadable -> resolution
+        }
+    }
+
+    private suspend fun probe(handle: VaultHandle, ref: DocumentRef): DocumentVersionLookup {
+        probeCount++
+        return try {
+            handle.documentVersion(ref)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 照会が落ちても「消えた」とは言えない。走査し直す側へ倒さない。
+            DocumentVersionLookup.Unreadable
+        }
     }
 
     // 明示的な invalidate() は置かない。**世代照合が既に同じ仕事をしている**ため、
