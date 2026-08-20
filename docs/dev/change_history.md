@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-21 | — | 寸法のキャッシュにも世代を入れ、鮮度確認の結果を参照ごとに控えて解決のたびの外部I/Oを止めた | **[note_image_rendering](features/note_image_rendering.md)** §8 |
 | 2026-08-21 | — | 索引がヒットし続けても、TTL超過後は当たった1件の更新日時を引き直して復号キャッシュの鍵へ載せるようにした | **[note_image_rendering](features/note_image_rendering.md)** §8 |
 | 2026-08-20 | — | 蒸留v1完了後の見直しで、Nowへ画像の世代更新を置き、プロンプト上限をAI-6→AI-3の順でNextへ入れた | [roadmap](../_wip/roadmap.md) §0.5 |
 | 2026-08-20 | — | 蒸留v1の表示・候補・保存・競合・復旧・最大サイズをPixel実機で全件確認した | **[reflect_distill](features/reflect_distill.md)** §10・[review](../review/README.md) |
