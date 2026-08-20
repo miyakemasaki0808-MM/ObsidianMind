@@ -198,7 +198,7 @@ class VaultImageIndexStoreTest {
         store.resolve(lookup("a.png"))
         clock += ttl
         handle.documentVersions = { ref ->
-            if (ref == DocumentRef("doc-old")) DocumentVersionLookup.Absent
+            if (ref == DocumentRef("doc-old")) DocumentVersionLookup.Unconfirmed
             else DocumentVersionLookup.Found(9L)
         }
         handle.imageScan = scan("a.png" to "doc-new", lastModified = 9L)
@@ -211,36 +211,38 @@ class VaultImageIndexStoreTest {
     }
 
     @Test
-    fun `世代を確かめられないときは作り直さない`() = runTest {
-        // 照会の失敗を「消えた」と読むと、失敗のたびにVault全走査が走る。
-        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
-        handle.documentVersions = { DocumentVersionLookup.Unreadable }
+    fun `照会が例外を投げても存在を確かめられなかった扱いにする`() = runTest {
+        // 実プロバイダは消えたドキュメントの照会に例外で答える。ここで
+        // 索引を信じ続けると、削除して作り直した画像が古い参照へ固定される。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-old"))
         val store = store(FakeVaultBrowser(handle))
 
         store.resolve(lookup("a.png"))
         clock += ttl
+        handle.documentVersions = { throw IllegalStateException("document is gone") }
+        handle.imageScan = scan("a.png" to "doc-new", lastModified = 9L)
 
         assertEquals(
-            ImageResolution.Resolved(DocumentRef("doc-1"), 1L),
+            ImageResolution.Resolved(DocumentRef("doc-new"), 9L),
             store.resolve(lookup("a.png"))
         )
-        assertEquals(1, store.scanCount)
     }
 
     @Test
-    fun `照会が例外を投げても作り直さない`() = runTest {
-        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+    fun `確かめられなくても作り直しはTTLごとに1回に収まる`() = runTest {
+        // 照会が常に失敗するプロバイダでも、合流先の歯止めが効いている限り
+        // 全走査は TTL ごとに1回で済む。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1"))
+        handle.documentVersions = { DocumentVersionLookup.Unconfirmed }
         val store = store(FakeVaultBrowser(handle))
 
         store.resolve(lookup("a.png"))
         clock += ttl
-        handle.failure = IllegalStateException("provider is gone")
+        store.resolve(lookup("a.png"))
+        store.resolve(lookup("a.png"))
+        store.resolve(lookup("a.png"))
 
-        assertEquals(
-            ImageResolution.Resolved(DocumentRef("doc-1"), 1L),
-            store.resolve(lookup("a.png"))
-        )
-        assertEquals(1, store.scanCount)
+        assertEquals(2, store.scanCount)
     }
 
     @Test

@@ -121,17 +121,19 @@ internal class VaultImageIndexStore(
      * | 引き直した結果 | 扱い | なぜ |
      * |---|---|---|
      * | 値が取れた | 実測値を鍵へ載せる | 索引の値より新しい |
-     * | 列を返さない | 索引の値のまま | 世代で見分けられないと分かるだけ |
-     * | 参照先が無い | **miss へ落とす** | 索引が古い。作り直せば引き当て直せる |
-     * | 照会が失敗 | 索引の値のまま | 「無い」と言えない。ここで作り直すと失敗のたびに全走査が走る |
+     * | 存在するが列を返さない | 索引の値のまま | 世代で見分けられないと分かるだけ。**ここで作り直すと走査が永久に繰り返される** |
+     * | 存在を確かめられない | **miss へ落とす** | 索引が古い可能性がある。作り直せば引き当て直せる |
+     *
+     * miss へ落としても全走査が連発しないのは、合流先が
+     * 「miss かつ索引が [ttlMillis] より古いときだけ1回」だからである。
+     * **照会が失敗し続けても、作り直しは TTL ごとに1回**に抑えられる。
      */
     private suspend fun verified(handle: VaultHandle, resolution: ImageResolution): ImageResolution {
         if (resolution !is ImageResolution.Resolved) return resolution
         return when (val lookup = probe(handle, resolution.ref)) {
             is DocumentVersionLookup.Found ->
                 lookup.lastModified?.let { resolution.copy(contentVersion = it) } ?: resolution
-            DocumentVersionLookup.Absent -> ImageResolution.Failed(NoteImageFailure.NotFound)
-            DocumentVersionLookup.Unreadable -> resolution
+            DocumentVersionLookup.Unconfirmed -> ImageResolution.Failed(NoteImageFailure.NotFound)
         }
     }
 
@@ -142,8 +144,9 @@ internal class VaultImageIndexStore(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            // 照会が落ちても「消えた」とは言えない。走査し直す側へ倒さない。
-            DocumentVersionLookup.Unreadable
+            // 落ちたということは確かめられていない。索引を作り直す側へ倒す
+            // （消えたドキュメントの照会は、実プロバイダでは例外で返る）。
+            DocumentVersionLookup.Unconfirmed
         }
     }
 

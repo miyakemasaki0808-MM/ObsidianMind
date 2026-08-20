@@ -133,15 +133,11 @@ class NoteRepository {
     /**
      * 1件の更新日時を引き直す（画像索引の鮮度確認用）。
      *
-     * **3つに分けて返す。** 走査し直すかどうかの判断材料になるので、
-     * 「行が返らない＝消えている」と「照会自体が失敗した」を畳めない
+     * **「存在を確かめられたか」だけを返す。** 行が無い・カーソルが null・例外の3つは
+     * どれも確かめられなかったことを意味し、行き先も同じなので畳む
      * （→ [DocumentVersionLookup]）。列を返さないプロバイダでは
-     * [DocumentVersionLookup.Found] の値が null になり、**世代では見分けられない**
-     * ことがそのまま呼び出し側へ伝わる。
-     *
-     * `query()` が投げる例外は [DocumentVersionLookup.Unreadable] へ倒す。
-     * 参照先が消えているときに空カーソルを返すか例外を投げるかは
-     * プロバイダ次第なので、**動かないほうへ倒して実機で確かめる。**
+     * [DocumentVersionLookup.Found] の値が null になり、**存在は確かめられたが
+     * 世代では見分けられない**ことがそのまま呼び出し側へ伝わる。
      */
     suspend fun queryDocumentVersion(
         contentResolver: ContentResolver,
@@ -156,17 +152,17 @@ class NoteRepository {
                 null
             )?.use { cursor ->
                 if (!cursor.moveToFirst()) {
-                    DocumentVersionLookup.Absent
+                    DocumentVersionLookup.Unconfirmed
                 } else {
                     DocumentVersionLookup.Found(
                         if (cursor.isNull(0)) null else cursor.getLong(0)
                     )
                 }
-            } ?: DocumentVersionLookup.Unreadable
+            } ?: DocumentVersionLookup.Unconfirmed
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            DocumentVersionLookup.Unreadable
+            DocumentVersionLookup.Unconfirmed
         }
     }
 
