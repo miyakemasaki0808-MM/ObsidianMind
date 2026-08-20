@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-20 | — | 蒸留v1完了後の見直しで、Nowへ画像の世代更新を置き、プロンプト上限をAI-6→AI-3の順でNextへ入れた | [roadmap](../_wip/roadmap.md) §0.5 |
 | 2026-08-20 | — | 蒸留v1の表示・候補・保存・競合・復旧・最大サイズをPixel実機で全件確認した | **[reflect_distill](features/reflect_distill.md)** §10・[review](../review/README.md) |
 | 2026-08-20 | — | 読書痕跡の退避と復元の設計を確定し、突き合わせ規則・書き出し先・契機・範囲を決めた | [reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-08-19 | — | 痕跡の退避が余白メモ待ちでないことと、再会カードの枠を取り合うのが4件であることを資料とロードマップで揃えた | [lessons](lessons.md) L37 |
