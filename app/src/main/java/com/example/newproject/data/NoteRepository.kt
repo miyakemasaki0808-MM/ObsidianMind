@@ -15,6 +15,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -128,6 +129,46 @@ class NoteRepository {
                 isComplete = scan.unreadableFolderPaths.isEmpty()
             )
         }
+
+    /**
+     * 1件の更新日時を引き直す（画像索引の鮮度確認用）。
+     *
+     * **3つに分けて返す。** 走査し直すかどうかの判断材料になるので、
+     * 「行が返らない＝消えている」と「照会自体が失敗した」を畳めない
+     * （→ [DocumentVersionLookup]）。列を返さないプロバイダでは
+     * [DocumentVersionLookup.Found] の値が null になり、**世代では見分けられない**
+     * ことがそのまま呼び出し側へ伝わる。
+     *
+     * `query()` が投げる例外は [DocumentVersionLookup.Unreadable] へ倒す。
+     * 参照先が消えているときに空カーソルを返すか例外を投げるかは
+     * プロバイダ次第なので、**動かないほうへ倒して実機で確かめる。**
+     */
+    suspend fun queryDocumentVersion(
+        contentResolver: ContentResolver,
+        uri: Uri
+    ): DocumentVersionLookup = withContext(Dispatchers.IO) {
+        try {
+            contentResolver.query(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) {
+                    DocumentVersionLookup.Absent
+                } else {
+                    DocumentVersionLookup.Found(
+                        if (cursor.isNull(0)) null else cursor.getLong(0)
+                    )
+                }
+            } ?: DocumentVersionLookup.Unreadable
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DocumentVersionLookup.Unreadable
+        }
+    }
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
     // _ReadingTraces はユーザーのノートを含まない機能の内部データなので候補に出さない。

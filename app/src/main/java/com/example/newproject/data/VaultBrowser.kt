@@ -53,6 +53,29 @@ interface VaultBrowser {
  * 走行中に切り替わった場合は、呼び出し側が持つ Vault世代（`vaultGeneration`）で弾く。
  * これは [ReadingTraceStore] が既に採っている規約と同じ。
  */
+/**
+ * 1件のドキュメントの**中身の世代**を引き直した結果。
+ *
+ * **[Absent] と [Unreadable] を分けるのが要点。** 引き直す目的は
+ * 「索引が古いかどうか」を知ることなので、**「消えている」と「確かめられない」を畳むと
+ * 照会に失敗しただけでVault全走査を誘発する**。[RootFolderLookup] が
+ * 「ルートを読めなかった」と「同名フォルダが無い」を分けているのと同じ理由で、
+ * 判断材料が無いときに動くほうへ倒さない。
+ */
+sealed interface DocumentVersionLookup {
+    /**
+     * 参照先はある。[lastModified] が null なら**プロバイダが更新日時の列を返さない**。
+     * その場合は世代で見分けられないと分かるだけで、参照が死んだわけではない。
+     */
+    data class Found(val lastModified: Long?) : DocumentVersionLookup
+
+    /** 参照先が無い。**索引が古い**ので、引き直してよい。 */
+    object Absent : DocumentVersionLookup
+
+    /** 照会そのものが失敗した。**「無い」とは言えない**ので、引き直してはいけない。 */
+    object Unreadable : DocumentVersionLookup
+}
+
 interface VaultHandle {
     /** Vault 第一階層のフォルダ（名前昇順・`_ReadingTraces` を除く）。 */
     suspend fun listTopLevelFolders(): List<NoteFolder>
@@ -90,6 +113,16 @@ interface VaultHandle {
 
     /** 1件削除する。**SAFプロバイダの都合で失敗し得る**ので、結果を捨てないこと。 */
     suspend fun deleteDocument(ref: DocumentRef): Boolean
+
+    /**
+     * 1件の更新日時を引き直す。**走査の代わりに使う。**
+     *
+     * 走査結果をキャッシュする側は「当たった参照の中身が差し替わっていないか」を
+     * 知りたくなるが、そのためにVault全走査をやり直すのは高すぎる
+     * （画像索引の走査はVault全体を歩く）。当たった1件だけを照会すれば、
+     * **同じ問いに桁違いに安く答えられる。**
+     */
+    suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup
 }
 
 /** 本番実装。`ContentResolver` と [NoteRepository] を束ね、Vaultは呼ばれるたびに引き直す。 */
@@ -127,4 +160,7 @@ private class SafVaultHandle(
     // 消すのが目的なので同じハンドルに置く。
     override suspend fun deleteDocument(ref: DocumentRef): Boolean =
         repository.deleteDocument(contentResolver, ref.toUri())
+
+    override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup =
+        repository.queryDocumentVersion(contentResolver, ref.toUri())
 }
