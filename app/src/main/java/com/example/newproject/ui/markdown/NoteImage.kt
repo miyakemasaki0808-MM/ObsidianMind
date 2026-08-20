@@ -62,19 +62,24 @@ internal fun MarkdownImage(
     // 後続ブロックが可視になって到達率が水増しされる（→ NoteImageMeasurements）。
     var measurement by remember(block) { mutableStateOf(measurements?.measurementOf(block)) }
     var content by remember(block) { mutableStateOf<NoteImageContent?>(null) }
+    // **このコンポジションで確かめ終えたか。** 共有された寸法は高さの初期値としては
+    // 正しく使えるが、**世代が変わっていないことの根拠にはならない**。
+    var verified by remember(block) { mutableStateOf(false) }
 
     // **測ってあっても確かめ直す。** 共有の入れ物は参照文字列だけを鍵にするので、
     // 同じ参照へ縦横比の違う画像を上書きされると、旧寸法のまま新しいBitmapを
     // 受け取り、**古い比率の枠へ収めて描いてしまう**（→ note_image_rendering §6）。
     // 世代が変わっていなければ [NoteImageLoader.measure] はヘッダを読み直さないので、
     // 全画面へ入り直したときの測り直しは従来どおり起きない。
+    // **失敗していても確かめ直す。** 「高さが確定した」ことと「もう試さない」ことは別で、
+    // 畳むと**画像を足した・壊れた画像を直した・プロバイダが復旧した**のいずれでも
+    // 失敗表示がノート切替まで残る。再試行の頻度は索引のTTLとGatewayの
+    // 「失敗はキャッシュしない」方針が決める（→ note_image_rendering §8）。
     LaunchedEffect(block) {
-        // 失敗は測り直さない。失敗パネルの高さは固定で、後から動かないため
-        // （→ [NoteImageMeasurements] の「測れた」の定義）。
-        if (measurement is NoteImageMeasurement.Failed) return@LaunchedEffect
         val measured = loader.measure(block)
         measurements?.record(block, measured)
         measurement = measured
+        verified = true
     }
 
     // 寸法が分かるまでは画面の高さを確保する。**誤るなら大きい側へ誤る** —
@@ -93,8 +98,12 @@ internal fun MarkdownImage(
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
 
         // 寸法が取れてから中身を読む。先に読むと確保する高さが決まらない。
-        LaunchedEffect(block, measured, widthPx) {
-            if (measured != null && widthPx > 0) content = loader.load(block, widthPx)
+        // **確かめ終えるまで読み始めない。** 共有された旧寸法で先に復号すると、
+        // 新しいBitmapが**古い比率の枠へ収まった状態が見えている時間**ができる
+        // （遠いプロバイダほど長い）。世代が同じならヘッダは読み直されないので、
+        // この待ちがI/Oを増やすことはない。
+        LaunchedEffect(block, measured, widthPx, verified) {
+            if (verified && measured != null && widthPx > 0) content = loader.load(block, widthPx)
         }
 
         val failure = (content as? NoteImageContent.Failed)?.reason

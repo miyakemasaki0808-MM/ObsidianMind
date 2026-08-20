@@ -346,6 +346,77 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **確かめ終えるまでBitmapを読み始めない。**
+     *
+     * 共有された旧寸法で先に復号すると、新しいBitmapが古い比率の枠へ収まった状態が
+     * **見えている時間**になる。最終状態だけを見るテストでは通ってしまうので、
+     * 測定をゲートで止めて完了前後の両方を観測する。
+     */
+    @Test
+    fun 再確認が終わるまでBitmapを読み始めない() {
+        val model = buildNoteSectionModel(IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val block = model.blocks.filterIsInstance<MarkdownBlock.Image>().first()
+        // 上書き前の測定を共有済みにする（全画面へ入り直した状況）。
+        measurements.record(block, NoteImageMeasurement.Measured(width = 400, height = 300))
+        val loader = PendingImageLoader()
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    state = loadedNote(IMAGE_BODY),
+                    model = model,
+                    listState = rememberLazyListState(),
+                    loader = loader,
+                    measurements = measurements
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertEquals("再確認の完了前に読み込みを始めている", 0, loader.loadCount)
+
+        composeRule.runOnIdle { loader.settle(width = 400, height = 600) }
+        composeRule.waitForIdle()
+
+        assertTrue("再確認が終わっても読み込みが始まらない", loader.loadCount > 0)
+    }
+
+    /**
+     * **失敗した測定でも、新しいコンポジションでは確かめ直す。**
+     *
+     * 「高さが確定した」ことと「もう試さない」ことを畳むと、TTL後に画像を足しても
+     * プロバイダが復旧しても、失敗表示がノート切替まで残る。
+     */
+    @Test
+    fun 失敗した測定でも新しいコンポジションで確かめ直す() {
+        val model = buildNoteSectionModel(IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val block = model.blocks.filterIsInstance<MarkdownBlock.Image>().first()
+        // 前回は見つからなかった、という共有状態から始める。
+        measurements.record(block, NoteImageMeasurement.Failed(NoteImageFailure.NotFound))
+        val loader = FixedImageLoader(NoteImageMeasurement.Measured(width = 400, height = 300))
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    state = loadedNote(IMAGE_BODY),
+                    model = model,
+                    listState = rememberLazyListState(),
+                    loader = loader,
+                    measurements = measurements
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        assertTrue("失敗を共有していると測り直さない", loader.measureCount > 0)
+        composeRule
+            .onNodeWithContentDescription("photo.png", substring = true)
+            .assertIsDisplayed()
+    }
+
+    /**
      * 測定を保留したまま止められるローダ。**未計測の状態を作るために要る。**
      *
      * **本番の口と同じ契約にする** — 呼ばれること自体は安く、世代が変わったときだけ
@@ -380,15 +451,29 @@ class NoteReadingFlowTest {
             return measured
         }
 
-        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
-            NoteImageContent.Failed(NoteImageFailure.Broken)
+        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent {
+            loadCount++
+            return NoteImageContent.Failed(NoteImageFailure.Broken)
+        }
+
+        @Volatile
+        var loadCount = 0
+            private set
     }
 
     /** 測定結果を即座に返すローダ。**上書き後の世代を演じる。** */
     private class FixedImageLoader(
         private val measurement: NoteImageMeasurement
     ) : NoteImageLoader {
-        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement = measurement
+
+        @Volatile
+        var measureCount = 0
+            private set
+
+        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement {
+            measureCount++
+            return measurement
+        }
 
         override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
             NoteImageContent.Loaded(
