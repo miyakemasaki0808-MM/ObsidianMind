@@ -258,6 +258,91 @@ class VaultImageIndexStoreTest {
         assertEquals(0, handle.documentVersionCount)
     }
 
+
+    // --- 鮮度確認の歯止め -----------------------------------------------------
+
+    @Test
+    fun `TTL超過後に同じ画像を続けて解決しても照会は1回`() = runTest {
+        // 1枚の表示でも measure と load の二段があり、スクロールや全画面遷移で作り直される。
+        // 記帳しないと、その全部が外部I/Oになる。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        repeat(4) {
+            // **控えた値を返し続ける。** 記帳が古い索引の値へ戻ってはいけない。
+            assertEquals(
+                ImageResolution.Resolved(DocumentRef("doc-1"), 2L),
+                store.resolve(lookup("a.png"))
+            )
+        }
+
+        assertEquals(1, store.probeCount)
+    }
+
+    @Test
+    fun `ある画像の記帳が別の画像の初回照会を止めない`() = runTest {
+        val handle = FakeVaultHandle(
+            imageScan = scan("a.png" to "doc-a", "b.png" to "doc-b", lastModified = 1L)
+        )
+        handle.documentVersions = { ref -> DocumentVersionLookup.Found(if (ref == DocumentRef("doc-a")) 2L else 3L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-b"), 3L),
+            store.resolve(lookup("b.png"))
+        )
+        assertEquals(2, store.probeCount)
+    }
+
+    @Test
+    fun `記帳もTTLで切れる`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        var version = 2L
+        handle.documentVersions = { DocumentVersionLookup.Found(version) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        version = 5L
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 5L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(2, store.probeCount)
+    }
+
+    @Test
+    fun `Vault世代が進んだ後もTTLを過ぎれば引き直す`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+        generation++
+        handle.documentVersions = { DocumentVersionLookup.Found(7L) }
+        store.resolve(lookup("a.png"))
+        clock += ttl
+
+        // 作り直した直後の値ではなく、**引き直した最新の世代**を返す。
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 7L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(2, store.probeCount)
+    }
+
     @Test
     fun `外部URLと空は索引を作らずに返す`() = runTest {
         val store = store(FakeVaultBrowser(FakeVaultHandle(imageScan = scan())))

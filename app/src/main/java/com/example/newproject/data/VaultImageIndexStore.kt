@@ -55,6 +55,8 @@ internal const val OBSIDIAN_CONFIG_FOLDER_NAME = ".obsidian"
  *
  * **TTL 未満では引き直さない。** 走査直後は索引の値が新しいと分かっているうえ、
  * 1ノートは画像を何枚も持つので、ここを無条件にすると表示のたびに照会が積み上がる。
+ * **確かめた結果は参照ごとに控え**、次のTTLまで再利用する（[CheckedVersion]）。
+ * 控えないと、TTL を過ぎた後は解決のたびに外部I/Oが走る。
  *
  * ## 不完全な索引もキャッシュする
  *
@@ -74,6 +76,9 @@ internal class VaultImageIndexStore(
     private var cached: NoteImageIndex? = null
     private var cachedGeneration = Long.MIN_VALUE
     private var loadedAt = 0L
+
+    /** 参照ごとの鮮度確認の記帳。**索引を作り直したら捨てる**（走査した値のほうが新しい）。 */
+    private val checked = HashMap<DocumentRef, CheckedVersion>()
 
     /** 走査した回数。**歯止めが効いていることの検証にだけ使う。** */
     internal var scanCount = 0
@@ -130,11 +135,30 @@ internal class VaultImageIndexStore(
      */
     private suspend fun verified(handle: VaultHandle, resolution: ImageResolution): ImageResolution {
         if (resolution !is ImageResolution.Resolved) return resolution
-        return when (val lookup = probe(handle, resolution.ref)) {
+        val ref = resolution.ref
+        // **確かめた結果は参照ごとに控える。** 索引の [loadedAt] は作り直しでしか動かないので、
+        // これが無いと TTL 超過後は「解決するたびに外部I/O」になる
+        // （1枚の表示でも `measure` と `load` の二段があり、スクロールや全画面遷移で作り直される）。
+        checked[ref]?.takeIf { now() - it.at < ttlMillis }?.let { return it.applyTo(resolution) }
+        return when (val lookup = probe(handle, ref)) {
             is DocumentVersionLookup.Found ->
-                lookup.lastModified?.let { resolution.copy(contentVersion = it) } ?: resolution
+                CheckedVersion(lookup.lastModified, now())
+                    .also { checked[ref] = it }
+                    .applyTo(resolution)
+            // 確かめられなかったものは控えない。合流先で索引ごと作り直す。
             DocumentVersionLookup.Unconfirmed -> ImageResolution.Failed(NoteImageFailure.NotFound)
         }
+    }
+
+    /**
+     * 参照1件について「いつ・どの世代だと確かめたか」。
+     *
+     * **`loadedAt` を代わりに進める案は採らない。** 索引全体が新しくなったことにすると、
+     * **まだ確かめていない別の画像まで新鮮**と誤認し、その画像には古い世代を返してしまう。
+     */
+    private data class CheckedVersion(val version: Long?, val at: Long) {
+        fun applyTo(resolution: ImageResolution.Resolved): ImageResolution =
+            version?.let { resolution.copy(contentVersion = it) } ?: resolution
     }
 
     private suspend fun probe(handle: VaultHandle, ref: DocumentRef): DocumentVersionLookup {
@@ -181,6 +205,12 @@ internal class VaultImageIndexStore(
         cached = index
         cachedGeneration = generation
         loadedAt = now()
+        // **これは正しさの保証ではなく、記帳の上限である。** 作り直し前の記帳は、
+        // 読まれる時点で必ず期限切れになっている（記帳は最後の作り直し以降にしか
+        // 作られないので `at >= loadedAt`。読むのは索引が TTL より古いときだけなので
+        // `now - at >= now - loadedAt >= ttl`）。捨てるのは、Vaultを開いたまま
+        // 大量の画像を辿ったときに死んだ記帳が積み上がるのを防ぐため。
+        checked.clear()
         return index
     }
 
