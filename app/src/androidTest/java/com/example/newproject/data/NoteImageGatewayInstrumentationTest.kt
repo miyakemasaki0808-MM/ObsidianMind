@@ -14,6 +14,9 @@ import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.testing.FakeVaultDocumentsProvider
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
@@ -315,6 +318,33 @@ class NoteImageGatewayInstrumentationTest {
         DocumentsContract.deleteDocument(targetContext.contentResolver, ref.toUri())
 
         assertEquals(DocumentVersionLookup.Unconfirmed, handle.documentVersion(ref))
+    }
+
+    /**
+     * **同じ画像を並行に測ってもヘッダ読みは1回。**
+     *
+     * 1ノートに画像が複数あれば、それぞれの `LaunchedEffect` から同時に測定が始まる。
+     * 同じ画像が複数箇所にあれば同じ鍵で重なる。**Bitmap側と同じ single-flight** が
+     * 効いていないと、ヘッダ読みが重複し、キャッシュの内部状態も同期なしで壊れる。
+     */
+    @Test
+    fun 同じ画像を並行に測ってもヘッダ読みは1回() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+
+        val results = coroutineScope {
+            (1..8).map { async { gateway.measure(imageBlock("assets/zu.png")) } }.awaitAll()
+        }
+
+        assertTrue(
+            "並行測定の結果が揃っていない: $results",
+            results.all { it == NoteImageMeasureResult.Measured(120, 80) }
+        )
+        assertEquals("同じ鍵でヘッダを重複して読んでいる", 1, gateway.boundsReadCount)
     }
 
     // --- 補助 -----------------------------------------------------------------
