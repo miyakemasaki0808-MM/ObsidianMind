@@ -29,7 +29,8 @@ class DeviceValidationDocsTest {
         val expected = setOf(
             "reflect_distill.md",
             "background_ai_ux.md",
-            "note_image_rendering.md"
+            "note_image_rendering.md",
+            "ai_input_budget.md"
         )
         val actual = validationDir().listFiles { file -> file.extension == "md" && file.name != "README.md" }
             .orEmpty()
