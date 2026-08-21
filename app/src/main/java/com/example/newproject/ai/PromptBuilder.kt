@@ -4,6 +4,7 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
@@ -47,6 +48,7 @@ object PromptBuilder {
     private const val PICKER_TITLE_LIMIT = 40
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
+    private const val NO_CHAT_HISTORY = "（なし / none）"
 
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         val instructions = """
@@ -54,11 +56,13 @@ object PromptBuilder {
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\nNote content:\n").append(excerpt.renderForPrompt())
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+            }
+        )
     }
 
     /**
@@ -89,12 +93,14 @@ object PromptBuilder {
             Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(noteTitle)
-            append("\nTimes opened: ").append(totalVisitCount)
-            append("\nReading history:\n").append(history)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(noteTitle))
+                append("\nTimes opened: ").append(totalVisitCount)
+                append("\nReading history:\n").append(history)
+            }
+        )
     }
 
     // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる。ID→ノートの解決は
@@ -113,12 +119,14 @@ object PromptBuilder {
             Do not include the title, numbers, bullets, explanations, or any other text.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nCurrent note title: ").append(currentTitle)
-            append("\nCurrent note content snippet:\n").append(currentExcerpt.renderForPrompt())
-            append("\n\nCandidates:\n").append(candidateList)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nCurrent note title: ").append(label(currentTitle))
+                append("\nCurrent note content snippet:\n").append(currentExcerpt.renderForPrompt())
+                append("\n\nCandidates:\n").append(candidateList)
+            }
+        )
     }
 
     /**
@@ -155,20 +163,33 @@ object PromptBuilder {
             Return only candidate IDs in descending order of importance, one ID per line (for example: S001).
             Do not include bullets, explanations, titles, or IDs not present in the candidate list.
         """.trimIndent()
-        val prompt = buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\n\nCandidates:\n").append(candidateBlock)
-        }
+        val prompt = PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\n\nCandidates:\n").append(candidateBlock)
+            }
+        )
         return DistillPrompt(prompt, fitted, candidateBlock)
     }
 
     // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
     // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
     fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
-        val titleList = candidateTitles
-            .take(PICKER_TITLE_LIMIT)
-            .joinToString("\n") { "- $it" }
+        // **タイトルは途中で切らない。** 受け側はタイトルで照合するので、切ると
+        // `notesByTitle` が黙って落とし、「3件選ばせたのに1件しか出ない」になる。
+        // 予算を超えるぶんは行ごと落とす。
+        val titleList = buildString {
+            var used = 0
+            for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
+                val line = "- $title"
+                val cost = line.length + if (isEmpty()) 0 else 1
+                if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) break
+                if (isNotEmpty()) append('\n')
+                append(line)
+                used += cost
+            }
+        }
 
         val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
@@ -177,11 +198,13 @@ object PromptBuilder {
             Do not add numbers, bullets, explanations, or extra text.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nUser request: ").append(query)
-            append("\n\nCandidate note titles:\n").append(titleList)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nUser request: ").append(query.take(PromptLimits.QUERY_CHARACTERS))
+                append("\n\nCandidate note titles:\n").append(titleList)
+            }
+        )
     }
 
     // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
@@ -226,13 +249,15 @@ object PromptBuilder {
             Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\n").append(formatContract)
-            append("\n\nSource: ").append(sourceLabel)
-            append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
-            append("\n--- END EXCERPT ---")
-        }
+        return PromptBudget.assemble(
+            // 書式契約は指示文の一部。**削れる側に置かない** — 欠けると出力の形が崩れる。
+            instructions = instructions + "\n\n" + formatContract,
+            body = buildString {
+                append("\n\nSource: ").append(label(sourceLabel))
+                append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
+            },
+            closing = "\n--- END EXCERPT ---"
+        )
     }
 
     /**
@@ -297,12 +322,14 @@ object PromptBuilder {
             - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\nNote content:\n").append(excerpt.renderForPrompt())
-            append("\n\nCandidate notes:\n").append(candidateBlock)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+                append("\n\nCandidate notes:\n").append(candidateBlock)
+            }
+        )
     }
 
     /**
@@ -340,13 +367,18 @@ object PromptBuilder {
             - If their answer adds nothing you can name, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\nNote content:\n").append(excerpt.renderForPrompt())
-            append("\n\nWhat you asked:\n").append(remark)
-            append("\n\nTheir answer:\n").append(reply)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+                append("\n\nWhat you asked:\n").append(remark)
+            },
+            // **返事は削らない。** 映し返すべき当のものなので、欠けると答えるものが消える。
+            // 呼び出し側が `excerptReplyForPrompt` で先に切っているが、
+            // **上限は呼び出し側に委ねない**（ここが完成プロンプトを閉じる唯一の場所）。
+            closing = "\n\nTheir answer:\n" + reply.take(PromptLimits.REPLY_CHARACTERS)
+        )
     }
 
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
@@ -357,11 +389,13 @@ object PromptBuilder {
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nSection heading: ").append(sectionTitle)
-            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+            }
+        )
     }
 
     fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
@@ -371,11 +405,13 @@ object PromptBuilder {
             Return only the questions, one per line. Do not add numbers, bullets, or extra text.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nSection heading: ").append(sectionTitle)
-            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+            }
+        )
     }
 
     /**
@@ -393,24 +429,67 @@ object PromptBuilder {
         history: List<Pair<String, String>>,
         question: String
     ): String {
-        val historyText = history
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { (role, text) -> "$role: $text" }
-            ?: "（なし / none）"
+        val historyText = renderChatHistory(history)
         val instructions = """
             You are a note-taking assistant answering questions about ONE section of an Obsidian note.
             Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
             Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nSection heading: ").append(sectionTitle)
-            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
-            append("\n\nConversation so far:\n").append(historyText)
-            append("\n\nNew question:\n").append(question)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+                append("\n\nConversation so far:\n").append(historyText)
+            },
+            // **質問は削らない。** ここを欠くと答えるものが消える。
+            closing = "\n\nNew question:\n" + question.take(PromptLimits.QUESTION_CHARACTERS)
+        )
     }
+
+    /**
+     * 会話履歴を [PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS] へ収める。
+     *
+     * **落とすのは古い発言のほうである。** 往復のたびに伸びる一方だったので、
+     * 何もしないと会話が続くほど入力が上限へ近づく。直近ほど文脈として効くため、
+     * 新しい側から詰めて、入らなくなった時点で打ち切る。
+     *
+     * **直近の1件だけは必ず載せる**（入らなければ切って載せる）。
+     * 落とすと「直前に何を聞かれたか」が消え、会話として成立しなくなる。
+     */
+    private fun renderChatHistory(history: List<Pair<String, String>>): String {
+        if (history.isEmpty()) return NO_CHAT_HISTORY
+        val budget = PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
+        val newest = history.last().render()
+        val lines = ArrayDeque<String>()
+        var used: Int
+        if (newest.length <= budget) {
+            lines.addFirst(newest)
+            used = newest.length
+        } else {
+            val keep = (budget - PromptBudget.TRUNCATION_MARKER.length).coerceAtLeast(0)
+            lines.addFirst(newest.take(keep) + PromptBudget.TRUNCATION_MARKER)
+            used = budget
+        }
+        for (turn in history.dropLast(1).asReversed()) {
+            val line = turn.render()
+            if (used + 1 + line.length > budget) break
+            lines.addFirst(line)
+            used += 1 + line.length
+        }
+        return lines.joinToString("\n")
+    }
+
+    private fun Pair<String, String>.render(): String = "$first: $second"
+
+    /**
+     * タイトル・見出し・出典ラベルを [PromptLimits.LABEL_CHARACTERS] へ収める。
+     *
+     * ノート名はファイル名なので実質短いが、**セクション見出しはMarkdownの1行**で
+     * 長さの保証が無い。ラベル1つが抜粋を押し出すのを防ぐ。
+     */
+    private fun label(value: String): String = value.take(PromptLimits.LABEL_CHARACTERS)
 
     private fun NoteExcerpt.renderForPrompt(): String =
         if (isAbridged) {

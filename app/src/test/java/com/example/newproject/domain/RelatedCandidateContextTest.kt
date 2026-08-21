@@ -78,10 +78,39 @@ class RelatedCandidateContextTest {
     }
 
     @Test
-    fun `極小予算でもID・タイトルは残す（詳細はnull）`() {
-        val line = renderCandidatesWithinBudget(listOf(candidate()), charBudget = 1, maxSnippetLen = 50, minSnippetLen = 4).single()
+    fun `極小予算ではタイトルを切ってでも予算内に収める`() {
+        // ID・区切りまで含めてちょうど収まる予算なら、詳細を捨てて1件返す。
+        val line = renderCandidatesWithinBudget(listOf(candidate()), charBudget = 7, maxSnippetLen = 50, minSnippetLen = 4).single()
         assertNull(line.detail)
         assertEquals("C01 | T", line.renderForPrompt())
+
+        // タイトルぶんが無ければ切る。**予算を超えて返さない。**
+        val cut = renderCandidatesWithinBudget(listOf(candidate()), charBudget = 6, maxSnippetLen = 50, minSnippetLen = 4).single()
+        assertEquals("C01 | ", cut.renderForPrompt())
+
+        // IDの体裁すら入らないなら何も返さない。
+        assertTrue(
+            renderCandidatesWithinBudget(listOf(candidate()), charBudget = 1, maxSnippetLen = 50, minSnippetLen = 4).isEmpty()
+        )
+    }
+
+    /**
+     * **タイトルだけでも予算を超える場合が最後まで塞がっていなかった。**
+     * 旧実装は最終フォールバックで全件をそのまま返し、収まりを確かめ直していなかった。
+     */
+    @Test
+    fun `長いタイトルが並んでも返す前に必ず予算内へ収める`() {
+        val candidates = (1..8).map {
+            CandidateContext(id = "C0$it", title = "とても長いタイトル".repeat(12) + it, snippet = "")
+        }
+        val budget = 300
+        val lines = renderCandidatesWithinBudget(candidates, charBudget = budget, maxSnippetLen = 150, minSnippetLen = 10)
+
+        val total = lines.sumOf { it.renderForPrompt().length } + (lines.size - 1).coerceAtLeast(0)
+        assertTrue("total=$total budget=$budget", total <= budget)
+        assertTrue("候補が1件も残っていない", lines.isNotEmpty())
+        // 落とすのは末尾から。上位の候補（再ランク済みの良い順）は残す。
+        assertEquals("C01", lines.first().id)
     }
 
     @Test
