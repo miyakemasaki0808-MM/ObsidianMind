@@ -34,6 +34,15 @@ data class RemarkCandidateLine(val id: String, val title: String, val snippet: S
         if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
 }
 
+/**
+ * AIピッカーのプロンプトと、**実際に提示したタイトル**。
+ *
+ * ピッカーだけは応答を**タイトルそのもの**で照合するので（ID契約から外れている件は別課題）、
+ * 予算で提示から落ちた候補を許可集合に残すと、**見せていないノートをモデルが返しても
+ * 正規のAI結果として通ってしまう。** [DistillPrompt.validIds] と同じ契約をここでも持つ。
+ */
+data class PickerPrompt(val text: String, val presentedTitles: List<String>)
+
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
 internal data class DistillPrompt(
     val text: String,
@@ -78,15 +87,19 @@ object PromptBuilder {
         visits: List<ReadingVisit>,
         // 保持している訪問は直近30件まで。「何回開いたか」は延べ回数を渡す
         // （visits.size を使うと31回目以降ずっと「30回」と要約される）。
-        totalVisitCount: Int
+        totalVisitCount: Int,
+        historyCharacterBudget: Int = PromptLimits.READING_TRACE_HISTORY_CHARACTERS
     ): String {
-        val history = visits.takeLast(READING_TRACE_VISIT_LINES).joinToString("\n") { visit ->
+        // **セクション名は保存契約で512バイトまで許される。** 名前だけを [label] で切り、
+        // 行としては必ず完全なものを渡す（到達率が落ちると要約の意味が反転する）。
+        val historyLines = visits.takeLast(READING_TRACE_VISIT_LINES).map { visit ->
             val where = visit.deepestSectionTitle
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "section \"$it\"" }
+                ?.let { "section \"${label(it)}\"" }
                 ?: "no heading reached"
             "- stopped at $where (${visit.progressPercent}% of the note)"
         }
+        val history = packFromNewest(historyLines, historyCharacterBudget)
         val instructions = """
             The user has opened the following note several times. Below is where they stopped reading each time, oldest first.
             In 1–2 short sentences, in Japanese, describe the pattern in how they have been reading it: how many times they opened it, and where they tend to stop.
@@ -175,22 +188,21 @@ object PromptBuilder {
 
     // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
     // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
-    fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
+    fun buildPickerPrompt(query: String, candidateTitles: List<String>): PickerPrompt {
         // **タイトルは途中で切らない。** 受け側はタイトルで照合するので、切ると
         // `notesByTitle` が黙って落とし、「3件選ばせたのに1件しか出ない」になる。
         // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方。
         // 打ち切ると、長いタイトルが1つ紛れただけで以降の候補を全部失う）。
-        val titleList = buildString {
-            var used = 0
-            for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
-                val line = "- $title"
-                val cost = line.length + if (isEmpty()) 0 else 1
-                if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) continue
-                if (isNotEmpty()) append('\n')
-                append(line)
-                used += cost
-            }
+        val presented = mutableListOf<String>()
+        var used = 0
+        for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
+            val line = "- $title"
+            val cost = line.length + if (presented.isEmpty()) 0 else 1
+            if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) continue
+            presented += title
+            used += cost
         }
+        val titleList = presented.joinToString("\n") { "- $it" }
 
         val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
@@ -199,12 +211,15 @@ object PromptBuilder {
             Do not add numbers, bullets, explanations, or extra text.
         """.trimIndent()
 
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nUser request: ").append(query.take(PromptLimits.QUERY_CHARACTERS))
-                append("\n\nCandidate note titles:\n").append(titleList)
-            }
+        return PickerPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = buildString {
+                    append("\n\nUser request: ").append(query.take(PromptLimits.QUERY_CHARACTERS))
+                    append("\n\nCandidate note titles:\n").append(titleList)
+                }
+            ),
+            presentedTitles = presented
         )
     }
 
@@ -449,40 +464,46 @@ object PromptBuilder {
         )
     }
 
+    private fun renderChatHistory(history: List<Pair<String, String>>): String =
+        if (history.isEmpty()) {
+            NO_CHAT_HISTORY
+        } else {
+            packFromNewest(
+                history.map { (role, text) -> "$role: $text" },
+                PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
+            )
+        }
+
     /**
-     * 会話履歴を [PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS] へ収める。
+     * 時系列に並んだ [lines] を、**新しい側から** [budget] 内へ詰める。並び順は保つ。
      *
-     * **落とすのは古い発言のほうである。** 往復のたびに伸びる一方だったので、
-     * 何もしないと会話が続くほど入力が上限へ近づく。直近ほど文脈として効くため、
-     * 新しい側から詰めて、入らなくなった時点で打ち切る。
+     * **落とすのは古い側である。** 会話履歴も訪問履歴も直近ほど文脈として効くうえ、
+     * どちらも件数が伸びる一方なので、古い側から落とさないと入力が上限へ近づき続ける。
      *
-     * **直近の1件だけは必ず載せる**（入らなければ切って載せる）。
-     * 落とすと「直前に何を聞かれたか」が消え、会話として成立しなくなる。
+     * **末尾（最新）の1件だけは必ず載せる。** 落とすと「直前に何があったか」が消えて
+     * 履歴として成立しない。単独で予算を超えるときだけ、その行を切って印を残す
+     * （呼び出し側が1行の長さを閉じていれば、この経路には来ない）。
      */
-    private fun renderChatHistory(history: List<Pair<String, String>>): String {
-        if (history.isEmpty()) return NO_CHAT_HISTORY
-        val budget = PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
-        val newest = history.last().render()
-        val lines = ArrayDeque<String>()
+    private fun packFromNewest(lines: List<String>, budget: Int): String {
+        if (lines.isEmpty()) return ""
+        val kept = ArrayDeque<String>()
+        val newest = lines.last()
         var used: Int
         if (newest.length <= budget) {
-            lines.addFirst(newest)
+            kept.addFirst(newest)
             used = newest.length
         } else {
             val keep = (budget - PromptBudget.TRUNCATION_MARKER.length).coerceAtLeast(0)
-            lines.addFirst(newest.take(keep) + PromptBudget.TRUNCATION_MARKER)
+            kept.addFirst(newest.take(keep) + PromptBudget.TRUNCATION_MARKER)
             used = budget
         }
-        for (turn in history.dropLast(1).asReversed()) {
-            val line = turn.render()
+        for (line in lines.dropLast(1).asReversed()) {
             if (used + 1 + line.length > budget) break
-            lines.addFirst(line)
+            kept.addFirst(line)
             used += 1 + line.length
         }
-        return lines.joinToString("\n")
+        return kept.joinToString("\n")
     }
-
-    private fun Pair<String, String>.render(): String = "$first: $second"
 
     /**
      * タイトル・見出し・出典ラベルを [PromptLimits.LABEL_CHARACTERS] へ収める。
