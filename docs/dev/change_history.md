@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | 完成プロンプトの入力上限を1箇所で強制し、会話履歴・候補・ラベルを予算内へ収めるようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13 |
+| 2026-08-22 | — | 複数行の値を埋めるとテンプレートの字下げが全行に残る問題を9つのプロンプトで直した | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L44 |
 | 2026-08-21 | — | 再会カードの枠を排他1枠＋種別欄と決め、まだ考えたい＞問い＞古い前提＞俯瞰要約の順で確定した | **[reunion_card](features/reunion_card.md)（新規）**・[reflect_reading_trace](features/reflect_reading_trace.md) |
 | 2026-08-21 | — | X-4を閉じ、X-2の設計判断を待たずに動けるX-5（AI-6→AI-3）をNowへ繰り上げた | [roadmap](../_wip/roadmap.md) |
 | 2026-08-21 | — | 実機ではconnectedタスクを使わず、adb installとam instrumentで検証する手順へ改めた | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L43 |

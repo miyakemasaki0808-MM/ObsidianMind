@@ -65,7 +65,10 @@
 
 ## AI-3. 完成プロンプトにハード上限が無い
 
-- **現状:** 本文の抜粋には用途別の上限があるが、**完成プロンプト全体を閉じる制約が無い。**
+**実装済み・実機検証待ち（BUDGET-01〜09）。** 以下は着手時の記述で、対応内容は
+[ai_input_excerpt](../dev/system/ai_input_excerpt.md) §13 が持つ。
+
+- **着手時の状況:** 本文の抜粋には用途別の上限があるが、**完成プロンプト全体を閉じる制約が無い。**
   - [`SectionChatController.sendMessage()`](../../app/src/main/java/com/example/newproject/controller/SectionChatController.kt#L95) は
     会話履歴を**全件**渡し、ユーザーの質問にも長さ上限が無い
   - [`renderCandidatesWithinBudget()`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateContext.kt#L63) の
@@ -79,9 +82,12 @@
 
 ## AI-6. プロンプトの字下げが全行に残っている
 
-**2026-08-09、ひとことの実装中に実測で見つかった。** テストが緑のまま本番で起きている。
+**実装済み・実機検証待ち（BUDGET-03 で基準線を取り直すまで）。** 以下は着手時の記述で、
+対応内容は [ai_input_excerpt](../dev/system/ai_input_excerpt.md) §13 が持つ。
 
-- **現状:** `trimIndent()` は**補間後の文字列**に効く。複数行の値を埋めると
+**2026-08-09、ひとことの実装中に実測で見つかった。** テストが緑のまま本番で起きていた。
+
+- **着手時の状況:** `trimIndent()` は**補間後の文字列**に効く。複数行の値を埋めると
   その2行目以降がインデント0の行として混ざり、**共通インデントが0と判定されて
   テンプレート側の字下げ（12スペース）が全行に残る。**
 - **実測**（`buildRelatedNotesPrompt`・候補2件）:
