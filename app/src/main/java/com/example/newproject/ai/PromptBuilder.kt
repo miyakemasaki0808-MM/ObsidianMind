@@ -178,13 +178,14 @@ object PromptBuilder {
     fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
         // **タイトルは途中で切らない。** 受け側はタイトルで照合するので、切ると
         // `notesByTitle` が黙って落とし、「3件選ばせたのに1件しか出ない」になる。
-        // 予算を超えるぶんは行ごと落とす。
+        // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方。
+        // 打ち切ると、長いタイトルが1つ紛れただけで以降の候補を全部失う）。
         val titleList = buildString {
             var used = 0
             for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
                 val line = "- $title"
                 val cost = line.length + if (isEmpty()) 0 else 1
-                if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) break
+                if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) continue
                 if (isNotEmpty()) append('\n')
                 append(line)
                 used += cost
