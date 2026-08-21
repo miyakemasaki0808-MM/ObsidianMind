@@ -16,6 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | AI入力予算の実機ケースを実機検証の入口と存在検査へ登録した | [review](../review/README.md)・[device_validation](../review/device_validation/ai_input_budget.md) |
+| 2026-08-22 | — | ピッカーが予算で提示から落とした候補を応答で受理しないよう、照合表を提示済みタイトルから作るようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L14 |
+| 2026-08-22 | — | 読書痕跡の履歴に予算を置き、最新の訪問が共通クランプで途中から切れないようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L45 |
 | 2026-08-22 | — | 完成プロンプトの入力上限を1箇所で強制し、会話履歴・候補・ラベルを予算内へ収めるようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13 |
 | 2026-08-22 | — | 複数行の値を埋めるとテンプレートの字下げが全行に残る問題を9つのプロンプトで直した | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L44 |
 | 2026-08-21 | — | 再会カードの枠を排他1枠＋種別欄と決め、まだ考えたい＞問い＞古い前提＞俯瞰要約の順で確定した | **[reunion_card](features/reunion_card.md)（新規）**・[reflect_reading_trace](features/reflect_reading_trace.md) |
