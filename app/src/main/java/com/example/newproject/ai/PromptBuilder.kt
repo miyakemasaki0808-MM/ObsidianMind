@@ -49,14 +49,16 @@ object PromptBuilder {
     private const val READING_TRACE_VISIT_LINES = 10
 
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
-
-            Note title: $title
-            Note content:
-            ${excerpt.renderForPrompt()}
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\nNote content:\n").append(excerpt.renderForPrompt())
+        }
     }
 
     /**
@@ -81,16 +83,18 @@ object PromptBuilder {
                 ?: "no heading reached"
             "- stopped at $where (${visit.progressPercent}% of the note)"
         }
-        return """
+        val instructions = """
             The user has opened the following note several times. Below is where they stopped reading each time, oldest first.
             In 1–2 short sentences, in Japanese, describe the pattern in how they have been reading it: how many times they opened it, and where they tend to stop.
             Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
-
-            Note title: $noteTitle
-            Times opened: $totalVisitCount
-            Reading history:
-            $history
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(noteTitle)
+            append("\nTimes opened: ").append(totalVisitCount)
+            append("\nReading history:\n").append(history)
+        }
     }
 
     // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる。ID→ノートの解決は
@@ -102,20 +106,19 @@ object PromptBuilder {
         candidates: List<RelatedCandidateLine>
     ): String {
         val candidateList = candidates.joinToString("\n") { it.renderForPrompt() }
-
-        return """
+        val instructions = """
             You are a note-taking assistant. Find the notes most related to the current Obsidian note.
             Each candidate is listed as "ID | title", optionally followed by "— context".
             Return only the IDs of up to 5 related notes, one ID per line (for example: C01).
             Do not include the title, numbers, bullets, explanations, or any other text.
-
-            Current note title: $currentTitle
-            Current note content snippet:
-            ${currentExcerpt.renderForPrompt()}
-
-            Candidates:
-            $candidateList
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nCurrent note title: ").append(currentTitle)
+            append("\nCurrent note content snippet:\n").append(currentExcerpt.renderForPrompt())
+            append("\n\nCandidates:\n").append(candidateList)
+        }
     }
 
     /**
@@ -145,18 +148,18 @@ object PromptBuilder {
             }
         }
         val candidateBlock = rendered.joinToString("\n")
-        val prompt = """
+        val instructions = """
             You are a careful editor selecting the most important original sentences from an Obsidian note.
             Choose up to ${DistillLimits.FINAL_SELECTION_LIMIT} candidates that best preserve the note's central claims, conclusions, or uniquely useful details.
             Prefer specific conclusions over repeated general statements. Do not rewrite, summarize, or invent text.
             Return only candidate IDs in descending order of importance, one ID per line (for example: S001).
             Do not include bullets, explanations, titles, or IDs not present in the candidate list.
-
-            Note title: $title
-
-            Candidates:
-            $candidateBlock
         """.trimIndent()
+        val prompt = buildString {
+            append(instructions)
+            append("\n\nNote title: ").append(title)
+            append("\n\nCandidates:\n").append(candidateBlock)
+        }
         return DistillPrompt(prompt, fitted, candidateBlock)
     }
 
@@ -167,17 +170,18 @@ object PromptBuilder {
             .take(PICKER_TITLE_LIMIT)
             .joinToString("\n") { "- $it" }
 
-        return """
+        val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
             that best match the user's request. Answer in the same language as the request.
             Return only note titles from the candidate list, one title per line.
             Do not add numbers, bullets, explanations, or extra text.
-
-            User request: $query
-
-            Candidate note titles:
-            $titleList
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nUser request: ").append(query)
+            append("\n\nCandidate note titles:\n").append(titleList)
+        }
     }
 
     // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
@@ -216,18 +220,19 @@ object PromptBuilder {
                 EXPLANATION: <one short sentence>
             """.trimIndent()
         }
-        return """
+        val instructions = """
             You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
             Answer in the same language as the excerpt content.
             Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
-
-            $formatContract
-
-            Source: $sourceLabel
-            --- BEGIN EXCERPT ---
-            ${excerpt.renderForPrompt()}
-            --- END EXCERPT ---
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\n").append(formatContract)
+            append("\n\nSource: ").append(sourceLabel)
+            append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
+            append("\n--- END EXCERPT ---")
+        }
     }
 
     /**
@@ -347,26 +352,30 @@ object PromptBuilder {
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
 
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nSection heading: ").append(sectionTitle)
+            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+        }
     }
 
     fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
             Answer in the same language as the section content.
             Return only the questions, one per line. Do not add numbers, bullets, or extra text.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nSection heading: ").append(sectionTitle)
+            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+        }
     }
 
     /**
@@ -388,21 +397,19 @@ object PromptBuilder {
             .takeIf { it.isNotEmpty() }
             ?.joinToString("\n") { (role, text) -> "$role: $text" }
             ?: "（なし / none）"
-        return """
+        val instructions = """
             You are a note-taking assistant answering questions about ONE section of an Obsidian note.
             Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
             Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
-
-            Conversation so far:
-            $historyText
-
-            New question:
-            $question
         """.trimIndent()
+
+        return buildString {
+            append(instructions)
+            append("\n\nSection heading: ").append(sectionTitle)
+            append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+            append("\n\nConversation so far:\n").append(historyText)
+            append("\n\nNew question:\n").append(question)
+        }
     }
 
     private fun NoteExcerpt.renderForPrompt(): String =
