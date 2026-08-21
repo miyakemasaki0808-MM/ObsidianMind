@@ -41,8 +41,6 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
             } else {
                 scopeNotes
             }
-            val notesByTitle = candidates.associateBy { it.name.toNormalizedObsidianTitle() }
-
             when (aiClient.checkAvailability()) {
                 // AIが動かない理由は4通りあるが、**この画面での結果は1つ**
                 // （キーワード一致で出す）なので割らない。
@@ -53,7 +51,14 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                     fallback(query, candidates, isAiAssisted = false)
                 AiAvailability.Ready -> {
                     val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })
-                    val response = aiClient.generate(prompt)
+                    // **照合表はプロンプトへ実際に載せたタイトルだけで作る。**
+                    // 予算で落ちた候補を残すと、見せていないノートをモデルが返したときに
+                    // 「候補一覧からだけ選ぶ」という契約の外側を受理してしまう。
+                    val presented = prompt.presentedTitles.toSet()
+                    val notesByTitle = candidates
+                        .filter { it.name in presented }
+                        .associateBy { it.name.toNormalizedObsidianTitle() }
+                    val response = aiClient.generate(prompt.text)
                     val picked = response.lineSequence()
                         .map { it.cleanAiTitle() }
                         .filter { it.isNotBlank() }

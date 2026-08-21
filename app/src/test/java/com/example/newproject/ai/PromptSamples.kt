@@ -63,7 +63,7 @@ internal object PromptSamples {
                 ).text,
 
             "buildPickerPrompt" to
-                PromptBuilder.buildPickerPrompt(value, List(entries) { "$MARK$it" }),
+                PromptBuilder.buildPickerPrompt(value, List(entries) { "$MARK$it" }).text,
 
             "buildQuizPrompt" to
                 PromptBuilder.buildQuizPrompt(value, excerpt, QuizFormat.ThreeChoice),

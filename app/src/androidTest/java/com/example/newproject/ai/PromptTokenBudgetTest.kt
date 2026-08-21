@@ -387,7 +387,7 @@ class PromptTokenBudgetTest {
                 "検索ピッカー" to PromptBuilder.buildPickerPrompt(
                     query = "オンデバイスAIの制約について書いたノートを探して",
                     candidateTitles = List(PICKER_CANDIDATES) { "${profile.label}の候補ノート${it + 1}" }
-                )
+                ).text
             )
         }
     }
