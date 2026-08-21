@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.data.DocumentVersionLookup
 import com.example.newproject.data.VaultImageIndexStore
 import com.example.newproject.data.VaultImageScan
 import com.example.newproject.domain.image.ImageRequest
@@ -17,9 +18,13 @@ class VaultImageIndexStoreTest {
     private var clock = 1_000L
     private var generation = 0L
 
-    private fun scan(vararg paths: Pair<String, String>, isComplete: Boolean = true) =
+    private fun scan(
+        vararg paths: Pair<String, String>,
+        isComplete: Boolean = true,
+        lastModified: Long? = null
+    ) =
         VaultImageScan(
-            entries = paths.map { (path, id) -> NoteImageEntry(path, DocumentRef(id)) },
+            entries = paths.map { (path, id) -> NoteImageEntry(path, DocumentRef(id), lastModified) },
             isComplete = isComplete
         )
 
@@ -129,6 +134,213 @@ class VaultImageIndexStoreTest {
         store.resolve(lookup("a.png"))
 
         assertEquals(1, store.scanCount)
+    }
+
+
+    // --- ヒットの鮮度確認 -----------------------------------------------------
+
+    @Test
+    fun `索引が古ければヒットでも世代を引き直す`() = runTest {
+        // Obsidian側で同じ名前のまま画像を差し替えた状況。参照は変わらないので
+        // 索引の値のままだと復号キャッシュの鍵が動かず、古いBitmapが固定される。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 2L),
+            store.resolve(lookup("a.png"))
+        )
+        // **引き直しで全走査を増やさない。** ここが増えるなら索引ごと作り直している。
+        assertEquals(1, store.scanCount)
+    }
+
+    @Test
+    fun `索引が新しいうちは世代を引き直さない`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        store.resolve(lookup("a.png"))
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 1L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(0, handle.documentVersionCount)
+    }
+
+    @Test
+    fun `世代を返さないプロバイダでは索引の値を使う`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(null) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 1L),
+            store.resolve(lookup("a.png"))
+        )
+    }
+
+    @Test
+    fun `参照先が消えていたら索引を作り直して引き当て直す`() = runTest {
+        // 削除して同じ名前で作り直した状況。ヒットのままだと壊れた参照へ固定される。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-old"))
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        handle.documentVersions = { ref ->
+            if (ref == DocumentRef("doc-old")) DocumentVersionLookup.Unconfirmed
+            else DocumentVersionLookup.Found(9L)
+        }
+        handle.imageScan = scan("a.png" to "doc-new", lastModified = 9L)
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-new"), 9L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(2, store.scanCount)
+    }
+
+    @Test
+    fun `照会が例外を投げても存在を確かめられなかった扱いにする`() = runTest {
+        // 実プロバイダは消えたドキュメントの照会に例外で答える。ここで
+        // 索引を信じ続けると、削除して作り直した画像が古い参照へ固定される。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-old"))
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        handle.documentVersions = { throw IllegalStateException("document is gone") }
+        handle.imageScan = scan("a.png" to "doc-new", lastModified = 9L)
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-new"), 9L),
+            store.resolve(lookup("a.png"))
+        )
+    }
+
+    @Test
+    fun `確かめられなくても作り直しはTTLごとに1回に収まる`() = runTest {
+        // 照会が常に失敗するプロバイダでも、合流先の歯止めが効いている限り
+        // 全走査は TTL ごとに1回で済む。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1"))
+        handle.documentVersions = { DocumentVersionLookup.Unconfirmed }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+        store.resolve(lookup("a.png"))
+        store.resolve(lookup("a.png"))
+
+        assertEquals(2, store.scanCount)
+    }
+
+    @Test
+    fun `壊れたリンクは世代の照会も誘発しない`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1"))
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("missing.png"))
+        clock += ttl
+        store.resolve(lookup("missing.png"))
+
+        // 外した要求には引き直す相手がいない。**照会は当たったときだけ。**
+        assertEquals(0, handle.documentVersionCount)
+    }
+
+
+    // --- 鮮度確認の歯止め -----------------------------------------------------
+
+    @Test
+    fun `TTL超過後に同じ画像を続けて解決しても照会は1回`() = runTest {
+        // 1枚の表示でも measure と load の二段があり、スクロールや全画面遷移で作り直される。
+        // 記帳しないと、その全部が外部I/Oになる。
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        repeat(4) {
+            // **控えた値を返し続ける。** 記帳が古い索引の値へ戻ってはいけない。
+            assertEquals(
+                ImageResolution.Resolved(DocumentRef("doc-1"), 2L),
+                store.resolve(lookup("a.png"))
+            )
+        }
+
+        assertEquals(1, store.probeCount)
+    }
+
+    @Test
+    fun `ある画像の記帳が別の画像の初回照会を止めない`() = runTest {
+        val handle = FakeVaultHandle(
+            imageScan = scan("a.png" to "doc-a", "b.png" to "doc-b", lastModified = 1L)
+        )
+        handle.documentVersions = { ref -> DocumentVersionLookup.Found(if (ref == DocumentRef("doc-a")) 2L else 3L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-b"), 3L),
+            store.resolve(lookup("b.png"))
+        )
+        assertEquals(2, store.probeCount)
+    }
+
+    @Test
+    fun `記帳もTTLで切れる`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        var version = 2L
+        handle.documentVersions = { DocumentVersionLookup.Found(version) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        version = 5L
+
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 5L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(2, store.probeCount)
+    }
+
+    @Test
+    fun `Vault世代が進んだ後もTTLを過ぎれば引き直す`() = runTest {
+        val handle = FakeVaultHandle(imageScan = scan("a.png" to "doc-1", lastModified = 1L))
+        handle.documentVersions = { DocumentVersionLookup.Found(2L) }
+        val store = store(FakeVaultBrowser(handle))
+
+        store.resolve(lookup("a.png"))
+        clock += ttl
+        store.resolve(lookup("a.png"))
+        generation++
+        handle.documentVersions = { DocumentVersionLookup.Found(7L) }
+        store.resolve(lookup("a.png"))
+        clock += ttl
+
+        // 作り直した直後の値ではなく、**引き直した最新の世代**を返す。
+        assertEquals(
+            ImageResolution.Resolved(DocumentRef("doc-1"), 7L),
+            store.resolve(lookup("a.png"))
+        )
+        assertEquals(2, store.probeCount)
     }
 
     @Test

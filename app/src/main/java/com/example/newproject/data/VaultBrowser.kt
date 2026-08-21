@@ -53,6 +53,32 @@ interface VaultBrowser {
  * 走行中に切り替わった場合は、呼び出し側が持つ Vault世代（`vaultGeneration`）で弾く。
  * これは [ReadingTraceStore] が既に採っている規約と同じ。
  */
+/**
+ * 1件のドキュメントの**中身の世代**を引き直した結果。
+ *
+ * **境目は「参照先の存在を確かめられたか」に置く。** 引き直す目的は
+ * 索引が古いかどうかを知ることなので、確かめられた場合だけ索引を信じ続けてよい。
+ *
+ * **「消えている」と「照会が失敗した」は分けない。** [RootFolderLookup] が
+ * 両者を分けているのは、取り違えると**フォルダを二重に作る**という不可逆な副作用が
+ * あるからで、こちらの副作用は「索引を1回作り直す」だけである。しかも SAF は
+ * 消えたドキュメントの照会に**空のカーソルではなく例外**で答えるのが普通なので
+ * （`ExternalStorageProvider` も [com.example.newproject.testing.FakeVaultDocumentsProvider] も
+ * `FileNotFoundException` を投げる）、**分けても「消えている」側が実際には来ない。**
+ * 行き先が同じ枝を2つ置くと、テストで区別できない分岐が増えるだけになる。
+ */
+sealed interface DocumentVersionLookup {
+    /**
+     * 参照先はある。[lastModified] が null なら**プロバイダが更新日時の列を返さない**。
+     * **存在は確かめられている**ので、索引を作り直す理由にはならない
+     * （ここで作り直すと、世代を返さないプロバイダでは走査が永久に繰り返される）。
+     */
+    data class Found(val lastModified: Long?) : DocumentVersionLookup
+
+    /** 存在を確かめられなかった。索引が古い可能性があるので、**作り直してよい。** */
+    object Unconfirmed : DocumentVersionLookup
+}
+
 interface VaultHandle {
     /** Vault 第一階層のフォルダ（名前昇順・`_ReadingTraces` を除く）。 */
     suspend fun listTopLevelFolders(): List<NoteFolder>
@@ -90,6 +116,16 @@ interface VaultHandle {
 
     /** 1件削除する。**SAFプロバイダの都合で失敗し得る**ので、結果を捨てないこと。 */
     suspend fun deleteDocument(ref: DocumentRef): Boolean
+
+    /**
+     * 1件の更新日時を引き直す。**走査の代わりに使う。**
+     *
+     * 走査結果をキャッシュする側は「当たった参照の中身が差し替わっていないか」を
+     * 知りたくなるが、そのためにVault全走査をやり直すのは高すぎる
+     * （画像索引の走査はVault全体を歩く）。当たった1件だけを照会すれば、
+     * **同じ問いに桁違いに安く答えられる。**
+     */
+    suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup
 }
 
 /** 本番実装。`ContentResolver` と [NoteRepository] を束ね、Vaultは呼ばれるたびに引き直す。 */
@@ -127,4 +163,7 @@ private class SafVaultHandle(
     // 消すのが目的なので同じハンドルに置く。
     override suspend fun deleteDocument(ref: DocumentRef): Boolean =
         repository.deleteDocument(contentResolver, ref.toUri())
+
+    override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup =
+        repository.queryDocumentVersion(contentResolver, ref.toUri())
 }

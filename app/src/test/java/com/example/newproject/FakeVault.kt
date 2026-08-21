@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.data.DocumentVersionLookup
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.VaultImageScan
 import com.example.newproject.data.VaultHandle
@@ -44,6 +45,11 @@ class FakeVaultHandle(
     var failure: Exception? = null,
     /** [deleteDocument] の戻り値。false は「SAFプロバイダが消せなかった」を表す。 */
     var deleteSucceeds: Boolean = true,
+    /**
+     * [documentVersion] が返す値。既定は「列を返さないプロバイダ」＝世代で見分けられない状態で、
+     * **鮮度確認を入れる前と同じ挙動**にあたる。
+     */
+    var documentVersions: (DocumentRef) -> DocumentVersionLookup = { DocumentVersionLookup.Found(null) },
     var beforeEachCall: () -> Unit = {}
 ) : VaultHandle {
 
@@ -58,6 +64,10 @@ class FakeVaultHandle(
     var collectImagesCount = 0
         private set
     val deletedRefs = mutableListOf<DocumentRef>()
+
+    /** [documentVersion] を呼ばれた回数。**走査の代わりに何回引いたか**を数える。 */
+    var documentVersionCount = 0
+        private set
 
     override suspend fun listTopLevelFolders(): List<NoteFolder> {
         listFoldersCount++
@@ -99,6 +109,13 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return deleteSucceeds
+    }
+
+    override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup {
+        documentVersionCount++
+        beforeEachCall()
+        failure?.let { throw it }
+        return documentVersions(ref)
     }
 }
 

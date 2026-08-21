@@ -16,6 +16,18 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-21 | — | 再会カードの枠を排他1枠＋種別欄と決め、まだ考えたい＞問い＞古い前提＞俯瞰要約の順で確定した | **[reunion_card](features/reunion_card.md)（新規）**・[reflect_reading_trace](features/reflect_reading_trace.md) |
+| 2026-08-21 | — | X-4を閉じ、X-2の設計判断を待たずに動けるX-5（AI-6→AI-3）をNowへ繰り上げた | [roadmap](../_wip/roadmap.md) |
+| 2026-08-21 | — | 実機ではconnectedタスクを使わず、adb installとam instrumentで検証する手順へ改めた | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L43 |
+| 2026-08-21 | — | X-4の実機確認を完了した（IMAGE-11/12/14/15、画像関連instrumentation 22/22成功） | **[note_image_rendering](features/note_image_rendering.md)** §10 |
+| 2026-08-21 | — | 寸法キャッシュをsingle-flightの入れ物へ移し、確かめ終えるまで復号を始めないようにした | **[note_image_rendering](features/note_image_rendering.md)** §8 |
+| 2026-08-21 | — | 寸法のキャッシュにも世代を入れ、鮮度確認の結果を参照ごとに控えて解決のたびの外部I/Oを止めた | **[note_image_rendering](features/note_image_rendering.md)** §8 |
+| 2026-08-21 | — | 索引がヒットし続けても、TTL超過後は当たった1件の更新日時を引き直して復号キャッシュの鍵へ載せるようにした | **[note_image_rendering](features/note_image_rendering.md)** §8 |
+| 2026-08-20 | — | 蒸留v1完了後の見直しで、Nowへ画像の世代更新を置き、プロンプト上限をAI-6→AI-3の順でNextへ入れた | [roadmap](../_wip/roadmap.md) §0.5 |
+| 2026-08-20 | — | 蒸留v1の表示・候補・保存・競合・復旧・最大サイズをPixel実機で全件確認した | **[reflect_distill](features/reflect_distill.md)** §10・[review](../review/README.md) |
+| 2026-08-20 | — | 読書痕跡の退避と復元の設計を確定し、突き合わせ規則・書き出し先・契機・範囲を決めた | [reading_trace_backup](features/reading_trace_backup.md) |
+| 2026-08-19 | — | 痕跡の退避が余白メモ待ちでないことと、再会カードの枠を取り合うのが4件であることを資料とロードマップで揃えた | [lessons](lessons.md) L37 |
+| 2026-08-19 | — | 二度書き検出の粒度を段落・単位をノート対と決め、ノート全体のDice絞り込みが成立しないことを実測で確かめた | [lessons](lessons.md) L42 |
 | 2026-08-17 | — | 句の境界を鉤括弧の内側へ置かないようにし、括弧内読点で語句候補が消える欠陥を直した | **[reflect_distill](features/reflect_distill.md)** §5 |
 | 2026-08-17 | — | 蒸留の画面文言と状態名から候補の単位を外し、「文」固定が残らないことを走査検査に載せた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L41 |
 | 2026-08-17 | — | 蒸留段階2の位置・語句種別・「箇所」表示・語句保存をPixel実機で再確認し、短いノート例外に残る「文」固定を残件化した | **[reflect_distill](features/reflect_distill.md)** §5・[review](../review/README.md) |

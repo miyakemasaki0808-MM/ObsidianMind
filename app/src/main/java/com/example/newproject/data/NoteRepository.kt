@@ -15,6 +15,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -128,6 +129,42 @@ class NoteRepository {
                 isComplete = scan.unreadableFolderPaths.isEmpty()
             )
         }
+
+    /**
+     * 1件の更新日時を引き直す（画像索引の鮮度確認用）。
+     *
+     * **「存在を確かめられたか」だけを返す。** 行が無い・カーソルが null・例外の3つは
+     * どれも確かめられなかったことを意味し、行き先も同じなので畳む
+     * （→ [DocumentVersionLookup]）。列を返さないプロバイダでは
+     * [DocumentVersionLookup.Found] の値が null になり、**存在は確かめられたが
+     * 世代では見分けられない**ことがそのまま呼び出し側へ伝わる。
+     */
+    suspend fun queryDocumentVersion(
+        contentResolver: ContentResolver,
+        uri: Uri
+    ): DocumentVersionLookup = withContext(Dispatchers.IO) {
+        try {
+            contentResolver.query(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) {
+                    DocumentVersionLookup.Unconfirmed
+                } else {
+                    DocumentVersionLookup.Found(
+                        if (cursor.isNull(0)) null else cursor.getLong(0)
+                    )
+                }
+            } ?: DocumentVersionLookup.Unconfirmed
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            DocumentVersionLookup.Unconfirmed
+        }
+    }
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
     // _ReadingTraces はユーザーのノートを含まない機能の内部データなので候補に出さない。

@@ -2,14 +2,21 @@ package com.example.newproject.data
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.provider.DocumentsContract
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.newproject.domain.image.ImageRequest
+import com.example.newproject.domain.image.ImageResolution
 import com.example.newproject.domain.image.NoteImageLimits
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.testing.FakeVaultDocumentsProvider
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
@@ -49,23 +56,31 @@ class NoteImageGatewayInstrumentationTest {
     private val targetContext = InstrumentationRegistry.getInstrumentation().targetContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private fun gateway(): NoteImageGateway {
-        val browser = SafVaultBrowser(
+    /** 索引の鮮度を試す用の時計。既定では動かさないので TTL には触れない。 */
+    private var clock = 1_000L
+
+    private fun browser() = SafVaultBrowser(
+        contentResolver = targetContext.contentResolver,
+        repository = NoteRepository(),
+        vaultUri = { FakeVaultDocumentsProvider.treeUri }
+    )
+
+    private fun gateway(): NoteImageGateway =
+        NoteImageGateway(
             contentResolver = targetContext.contentResolver,
-            repository = NoteRepository(),
-            vaultUri = { FakeVaultDocumentsProvider.treeUri }
-        )
-        return NoteImageGateway(
-            contentResolver = targetContext.contentResolver,
-            indexStore = VaultImageIndexStore(vault = browser, vaultGeneration = { 1L }),
+            indexStore = VaultImageIndexStore(
+                vault = browser(),
+                vaultGeneration = { 1L },
+                now = { clock }
+            ),
             loadScope = scope
         )
-    }
 
     @Before
     fun setUp() {
         FakeVaultDocumentsProvider.cacheRootHolder = targetContext.cacheDir
         FakeVaultDocumentsProvider.reset()
+        clock = 1_000L
     }
 
     @Test
@@ -178,7 +193,169 @@ class NoteImageGatewayInstrumentationTest {
         )
     }
 
+
+    /**
+     * **上書きした画像が古いBitmapへ固定されない。**
+     *
+     * 復号キャッシュの鍵は更新日時を含むが、索引が当たり続ける限りその値は
+     * 初回走査時のまま固定される。JVM側は索引が返す世代までしか見られないので、
+     * **鍵が実際に変わって復号し直されるか**はここでしか確かめられない。
+     */
+    @Test
+    fun 外部から上書きした画像はTTL後に復号し直す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+        val before = gateway.load(imageBlock("assets/zu.png"), targetWidthPx = 120)
+        assertEquals(120, (before as NoteImageResult.Loaded).bitmap.width)
+
+        // Obsidian側で同じ名前のまま差し替えた状況。参照は変わらない。
+        // **縦横比も変える** — 同じ比率だと、寸法が古いまま新しいBitmapを描く欠陥を通らない。
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(90, 120),
+            lastModified = 2_000L
+        )
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+
+        val after = gateway.load(imageBlock("assets/zu.png"), targetWidthPx = 120)
+
+        assertEquals(
+            "古いBitmapが返っている（鍵の世代が更新されていない）",
+            90,
+            (after as NoteImageResult.Loaded).bitmap.width
+        )
+        assertEquals(120, after.bitmap.height)
+    }
+
+    /**
+     * **上書き後の測定は新しい寸法を返す。**
+     *
+     * 表示側は測定結果から確保する高さを決めるので、ここが古いままだと
+     * 新しいBitmapが古い比率の枠へ収められる（→ 2026-08-21 レビュー P2-1）。
+     */
+    @Test
+    fun 上書き後の測定は新しい寸法を返す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+        assertEquals(
+            NoteImageMeasureResult.Measured(120, 80),
+            gateway.measure(imageBlock("assets/zu.png"))
+        )
+
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(90, 120),
+            lastModified = 2_000L
+        )
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+
+        assertEquals(
+            NoteImageMeasureResult.Measured(90, 120),
+            gateway.measure(imageBlock("assets/zu.png"))
+        )
+    }
+
+    /**
+     * **世代が変わらなければヘッダを読み直さない。**
+     *
+     * 表示側は「測ってあっても確かめ直す」ので、ここが素通しだと
+     * スクロールや全画面遷移のたびにSAFを開くことになる。
+     */
+    @Test
+    fun 世代が変わらなければ寸法を読み直さない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+
+        gateway.measure(imageBlock("assets/zu.png"))
+        val readOnce = gateway.boundsReadCount
+        clock += VaultImageIndexStore.INDEX_TTL_MS
+        repeat(3) { gateway.measure(imageBlock("assets/zu.png")) }
+
+        assertEquals("同じ世代でヘッダを読み直している", readOnce, gateway.boundsReadCount)
+    }
+
+    /** 存在するドキュメントは、実物のSAFで更新日時を引ける。 */
+    @Test
+    fun 更新日時の照会は存在するドキュメントで値を返す() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(10, 10),
+            lastModified = 4_242L
+        )
+        val handle = checkNotNull(browser().current())
+        val ref = indexRefOf("assets/zu.png")
+
+        assertEquals(DocumentVersionLookup.Found(4_242L), handle.documentVersion(ref))
+    }
+
+    /**
+     * **消えたドキュメントの照会は「確かめられない」になる。**
+     *
+     * SAF は空のカーソルではなく例外で答えるので、「行が返らない＝消えている」を
+     * 分けても実際には来ない。索引を作り直す側へ倒す判断（→ [DocumentVersionLookup]）は
+     * この振る舞いに乗っているので、**実物のプロバイダで固定しておく。**
+     */
+    @Test
+    fun 消えたドキュメントの照会は確かめられない扱いになる() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(10, 10)
+        )
+        val handle = checkNotNull(browser().current())
+        val ref = indexRefOf("assets/zu.png")
+        DocumentsContract.deleteDocument(targetContext.contentResolver, ref.toUri())
+
+        assertEquals(DocumentVersionLookup.Unconfirmed, handle.documentVersion(ref))
+    }
+
+    /**
+     * **同じ画像を並行に測ってもヘッダ読みは1回。**
+     *
+     * 1ノートに画像が複数あれば、それぞれの `LaunchedEffect` から同時に測定が始まる。
+     * 同じ画像が複数箇所にあれば同じ鍵で重なる。**Bitmap側と同じ single-flight** が
+     * 効いていないと、ヘッダ読みが重複し、キャッシュの内部状態も同期なしで壊れる。
+     */
+    @Test
+    fun 同じ画像を並行に測ってもヘッダ読みは1回() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putBinaryFile(
+            vaultRelativePath = "assets/zu.png",
+            bytes = pngBytes(120, 80),
+            lastModified = 1_000L
+        )
+        val gateway = gateway()
+
+        val results = coroutineScope {
+            (1..8).map { async { gateway.measure(imageBlock("assets/zu.png")) } }.awaitAll()
+        }
+
+        assertTrue(
+            "並行測定の結果が揃っていない: $results",
+            results.all { it == NoteImageMeasureResult.Measured(120, 80) }
+        )
+        assertEquals("同じ鍵でヘッダを重複して読んでいる", 1, gateway.boundsReadCount)
+    }
+
     // --- 補助 -----------------------------------------------------------------
+
+    /** 索引を1回作って、そのパスの参照を取り出す。 */
+    private suspend fun indexRefOf(path: String): DocumentRef {
+        val store = VaultImageIndexStore(vault = browser(), vaultGeneration = { 1L }, now = { clock })
+        val resolution = store.resolve(ImageRequest.Lookup(path, path.substringAfterLast('/')))
+        return (resolution as ImageResolution.Resolved).ref
+    }
+
 
     private fun imageBlock(path: String) =
         MarkdownBlock.Image(alt = "", target = path, isEmbed = false)
