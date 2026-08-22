@@ -61,12 +61,20 @@ class SourceDocSyncTest {
      * KDocに書いた相対リンクが実在すること。
      *
      * **深さを数え間違えても何も起きない**ので、壊れたまま残る。実際に残した。
+     *
+     * **2026-08-22、対象を `main` だけにしていたことが表に出た。** instrumentation の KDoc へ
+     * 正本リンクを足したとき `..` を1階層数え違えたが、**検査の走査範囲の外だったので何も落ちなかった。**
+     * リンクが壊れる条件（深さを数える）はソースセットで変わらないのに、
+     * **数える対象だけが `main` に限られていた** — [lessons L14](../../../../../../../../docs/dev/lessons.md) の型。
+     * `test` と `androidTest` も同じ規則で数える。
      */
     @Test
     fun `KDocの相対リンクは実在するファイルを指す`() {
         val violations = kotlinSources()
             .flatMap { file ->
-                RELATIVE_LINK.findAll(file.readText())
+                // **バッククォート内は例示であって、リンクではない。**
+                // 書式そのものを説明したKDoc（この検査自身が持っている）を壊れたリンクと数えない。
+                RELATIVE_LINK.findAll(file.readText().withoutInlineCode())
                     .map { it.groupValues[1] }
                     .filterNot { File(file.parentFile, it).canonicalFile.exists() }
                     .map { "${file.name}: $it が解決できない" }
@@ -130,12 +138,20 @@ class SourceDocSyncTest {
         return fields
     }
 
+    private fun String.withoutInlineCode(): String = INLINE_CODE.replace(this, " ")
+
     private fun String.withoutComments(): String =
         BLOCK_COMMENT.replace(this, " ").let { LINE_COMMENT.replace(it, " ") }
 
+    /** リンクの深さはソースセットで変わらないので、3つとも同じ規則で数える。 */
     private fun kotlinSources(): Sequence<File> =
-        sourceRoot().walkTopDown().filter { it.isFile && it.extension == "kt" }
+        SOURCE_SETS.asSequence()
+            .map { repositoryRoot().resolve("app/src/$it/java/com/example/newproject") }
+            .filter { it.isDirectory }
+            .flatMap { it.walkTopDown() }
+            .filter { it.isFile && it.extension == "kt" }
 
+    /** 状態型の正本突合は本番コードだけが対象なので、こちらは `main` に固定する。 */
     private fun sourceRoot(): File =
         repositoryRoot().resolve("app/src/main/java/com/example/newproject")
 
@@ -152,9 +168,13 @@ class SourceDocSyncTest {
     }
 
     private companion object {
+        /** 走査するソースセット。**リンクの深さを数える条件はどこでも同じ。** */
+        val SOURCE_SETS = listOf("main", "test", "androidTest")
+
         val FIELD = Regex("""\b(?:val|var)\s+(\w+)""")
         val BLOCK_COMMENT = Regex("""/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
         val LINE_COMMENT = Regex("""//[^\n]*""")
+        val INLINE_CODE = Regex("""`[^`\n]*`""")
         /** `[表示](../path/to.md)` の相対リンクだけを見る（URLと絶対パスは対象外）。 */
         val RELATIVE_LINK = Regex("""]\((\.\.?/[^)]+\.md)\)""")
     }
