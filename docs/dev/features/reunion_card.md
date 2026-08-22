@@ -1,9 +1,10 @@
 # 再会カードに何を出すか
 
-**状態:** Draft — 設計確定・実装未着手。**枠の規則と優先順位まで決めてある**
-**最終検証:** 2026-08-21 / `4b0c3d7`（現行の再会カード・`ReadingTrace` スキーマ v5・生成契機と突合。**新規実装は無いので未確認節あり**）
-**関連コード:** `ui/component/ReadingTraceCard.kt` / `model/ReadingTrace.kt` / `controller/ReadingTraceController.kt`
-**関連テスト:** `ReadingTraceCardTest`（既存の見出し1文）。**本書の規則に対応するテストはまだ無い**
+**状態:** **実装済み・実機検証待ち**（→ [device_validation](../../review/device_validation/reunion_card.md) `REUNION-01`〜`11`）
+**最終検証:** 2026-08-22 / `67aa632`（**列挙規則・種別の決定・スキーマ v6・前置きを実装と突合。実機は未確認**）
+**関連コード:** `domain/ReunionCandidateScanner.kt` / `model/ReunionKind.kt` / `model/ReadingTrace.kt` /
+`ai/PromptBuilder.buildReunionSelectionPrompt` / `controller/ReadingTraceController.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest`
 **正本:** この文書（**枠の規則・優先順位・種別**）。痕跡そのものは [reflect_reading_trace](reflect_reading_trace.md)
 
 **対象領域:** Rediscover で再会したときにカードへ出す1件の選び方
@@ -196,8 +197,8 @@ Rediscover の本体は「古いノートとの再会」なので陳腐化を先
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** 候補の列挙（疑問文・陳腐化）・種別の決定・印がある場合の再掲・空振りの記録。
-  **いずれも純関数なので、実装と同時に書ける**
+- **JVMテスト（実装済み）:** 候補の列挙（疑問文・陳腐化）・種別の決定・印がある場合の再掲・
+  空振りの記録・前置きの文面。**印を無視する変異と、空振りを記録しない変異で落ちることを確認済み**
 - **instrumentation:** 種別ごとの前置きがカードに出ること
 - **実機確認:** 印を付けて次の再会で再掲されること。生成が1回に収まっていること
 - **保証していないこと:**
@@ -215,6 +216,8 @@ Rediscover の本体は「古いノートとの再会」なので陳腐化を先
 | | |
 |---|---|
 | 印の寿命を決めていない | 期限も上限件数も置いていない。増え続けたときの見え方は未検討 |
+| 印の保存は失敗しても知らせない | 画面を先に返して保存を待たせないので、書けなかった回は次の再会で印が消えている |
+| 候補が本文編集へ追随しない | 印だけでなく、`aiSummary` に入った原文も保存時点の文字列 |
 | 空振りの頻度が未測定 | 多ければ「候補があるのに何も出ない回」が目立つ |
 | 本文編集への追随なし | 印の内容は保存時点の文字列 |
 
