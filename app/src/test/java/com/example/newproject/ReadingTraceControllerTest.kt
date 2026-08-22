@@ -1901,7 +1901,7 @@ class ReadingTraceControllerTest {
         controller.revealTrace("ideas/habit.md", content = question)
         advanceUntilIdle()
 
-        controller.toggleMark("ideas/habit.md")
+        controller.toggleMark()
         advanceUntilIdle()
 
         assertTrue(state.value.readingTraceCard!!.isMarked)
@@ -1911,7 +1911,7 @@ class ReadingTraceControllerTest {
         controller.dismissCard()
         assertTrue(state.value.readingTraceCard!!.isMarked)
 
-        controller.toggleMark("ideas/habit.md")
+        controller.toggleMark()
         advanceUntilIdle()
 
         assertFalse(state.value.readingTraceCard!!.isMarked)
@@ -1932,7 +1932,7 @@ class ReadingTraceControllerTest {
         controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
         advanceUntilIdle()
 
-        controller.toggleMark("ideas/habit.md")
+        controller.toggleMark()
         advanceUntilIdle()
 
         assertFalse(state.value.readingTraceCard!!.isMarked)

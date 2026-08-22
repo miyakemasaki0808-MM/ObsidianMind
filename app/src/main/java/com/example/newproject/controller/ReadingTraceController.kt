@@ -205,6 +205,14 @@ internal class ReadingTraceController(
     private var revealJob: Job? = null
     private var activeRequestId = 0L
 
+    /**
+     * いま出ているカードがどの痕跡のものか。**印はここへ書く。**
+     *
+     * 押した瞬間の「現在のノート」を読み直さない。カードは特定の痕跡に対応しているので、
+     * 対象は**カードを出した時点で決まっている**（→ [lessons L26](../../../../../../../../docs/dev/lessons/L26.md)）。
+     */
+    private var revealedPath: String? = null
+
     private var sessionCounter = 0L
 
     /**
@@ -682,6 +690,8 @@ internal class ReadingTraceController(
     fun cancelForNoteChange() {
         revealJob?.cancel()
         activeRequestId++
+        // カードごと差し替わるので、印の宛先も捨てる（旧ノートへ書かない）。
+        revealedPath = null
     }
 
     /**
@@ -703,6 +713,7 @@ internal class ReadingTraceController(
         if (vaultRelativePath.isBlank()) return
         // どのVaultへの照合かは、サスペンドする前のこの時点で決める。
         val vaultKey = currentVaultKey() ?: return
+        revealedPath = vaultRelativePath
         revealJob = scope.launch {
             val trace = withContext(ioDispatcher) {
                 (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)?.trace
@@ -745,8 +756,9 @@ internal class ReadingTraceController(
      * 意図とずれるため（→ features/reunion_card.md §6）。
      * **もう一度押すと外れる。**「読んだ」で畳んでも外れない（閉じる操作と取り消しは別）。
      */
-    fun toggleMark(vaultRelativePath: String) {
+    fun toggleMark() {
         val card = state.current ?: return
+        val vaultRelativePath = revealedPath ?: return
         val vaultKey = currentVaultKey() ?: return
         val summary = card.aiSummary
         val kind = card.aiSummaryKind

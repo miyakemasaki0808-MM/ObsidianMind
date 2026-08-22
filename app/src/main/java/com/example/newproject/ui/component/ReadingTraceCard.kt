@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AccentText
@@ -37,7 +38,8 @@ internal fun ReadingTraceCardPanel(
     modifier: Modifier = Modifier,
     nowMillis: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
-    onOpenReflection: () -> Unit = {}
+    onOpenReflection: () -> Unit = {},
+    onToggleMark: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -62,6 +64,17 @@ internal fun ReadingTraceCardPanel(
             // 上の1文だけで意味が通る状態を保つ。
             card.aiSummary?.takeIf { it.isNotBlank() }?.let { summary ->
                 Spacer(modifier = Modifier.height(8.dp))
+                // **前置きは種別から決める。** 同じ枠に別種のものが出るので、
+                // 文言だけで見分けさせない（→ features/reunion_card.md 判断2）。
+                reunionLead(card)?.let { lead ->
+                    Text(
+                        text = lead,
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp,
+                        color = OnSurfaceFaint
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                }
                 Text(
                     text = summary,
                     fontSize = 13.sp,
@@ -87,12 +100,41 @@ internal fun ReadingTraceCardPanel(
                 // （3つ並べるとカードが重くなり、1文で伝える役目が壊れる）。
                 if (card.hasReflectionReply) {
                     TextButton(onClick = onOpenReflection) { Text("前回の返事を見る") }
-                    Spacer(modifier = Modifier.weight(1f))
                 }
+                // **枠に何も出ていなければ押せない。** 内容ごと控える印なので、
+                // 控えるものが無いまま押せると「中身の無い印」ができる。
+                if (!card.aiSummary.isNullOrBlank()) {
+                    TextButton(onClick = onToggleMark) {
+                        Text(
+                            text = if (card.isMarked) "✓ まだ考えたい" else "まだ考えたい",
+                            // **押した状態を色でも示す。** 同じ見た目のテキストボタンが
+                            // 並ぶと区別できない、というのは実機で出た指摘（→ AppColors の3役ルール）。
+                            color = if (card.isMarked) AccentText else OnSurface
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 TextButton(onClick = onDismiss) { Text("読んだ") }
             }
         }
     }
+}
+
+/**
+ * 枠の1件に添える前置き。**種別から決める。**
+ *
+ * 俯瞰要約には前置きを付けない（現行の見え方をそのまま保つ）。
+ * 印が付いていれば種別によらず印の前置きになる — 出しているのは
+ * **押した時点で保存した内容**であって、いま作ったものではないため。
+ *
+ * 純関数なのでJVMユニットテストで文面を固定できる。
+ */
+internal fun reunionLead(card: ReadingTraceCard): String? = when {
+    card.aiSummary.isNullOrBlank() -> null
+    card.isMarked -> "前回「まだ考えたい」と印を付けています"
+    card.aiSummaryKind == ReunionKind.Question -> "前回のあなたはこの問いで止まっていました"
+    card.aiSummaryKind == ReunionKind.Staleness -> "今も有効か確認したい箇所があります"
+    else -> null
 }
 
 /**
