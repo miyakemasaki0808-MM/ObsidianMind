@@ -133,6 +133,10 @@ class RelatedNotesUseCase(
                         maxSnippetLen = RELATED_SNIPPET_LEN,
                         minSnippetLen = RELATED_MIN_SNIPPET_LEN
                     )
+                    // **許可集合はプロンプトへ実際に載せたIDだけ**にする（蒸留の `validIds` と同じ契約）。
+                    // 予算超過で末尾の候補が落ちることがあり、`idToNote` のまま照合すると
+                    // **見せていない候補をモデルが当てずっぽうで指したときに通ってしまう。**
+                    val presentedIds = candidateLines.mapTo(linkedSetOf()) { it.id }
                     val currentExcerpt = withContext(excerptDispatcher) {
                         buildNoteExcerpt(currentContent, NoteExcerptLimits.RELATED)
                     }
@@ -149,7 +153,7 @@ class RelatedNotesUseCase(
                     // 再ランクで読んだ本文スニペットを参照ごとに引けるようにする。
                     // 捨てずに RelatedNote へ通すのが目的で、読み直しはしない。
                     val snippetByRef = readCandidates.associate { it.note.ref to it.data.snippet }
-                    val aiNotes = parseCandidateIds(response, idToNote.keys, AI_RECOMMENDATION_LIMIT)
+                    val aiNotes = parseCandidateIds(response, presentedIds, AI_RECOMMENDATION_LIMIT)
                         .mapNotNull { id -> idToNote[id] }
                         .filterNot { it.ref in relatedRefs }
                         .distinctBy { it.ref }

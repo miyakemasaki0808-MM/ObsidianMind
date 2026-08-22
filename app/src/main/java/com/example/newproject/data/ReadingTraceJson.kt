@@ -4,6 +4,7 @@ import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.Reflection
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.validateReadingTrace
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
@@ -51,6 +52,10 @@ internal object ReadingTraceJson {
             .put(KEY_VISITS, visits)
             .put(KEY_AI_SUMMARY, trace.aiSummary ?: JSONObject.NULL)
             .put(KEY_AI_SUMMARY_VISIT_COUNT, trace.aiSummaryVisitCount ?: JSONObject.NULL)
+            .put(KEY_AI_SUMMARY_KIND, trace.aiSummaryKind?.name ?: JSONObject.NULL)
+            .put(KEY_MARKED_AT, trace.markedAtEpochMillis ?: JSONObject.NULL)
+            .put(KEY_MARKED_SUMMARY, trace.markedSummary ?: JSONObject.NULL)
+            .put(KEY_MARKED_KIND, trace.markedKind?.name ?: JSONObject.NULL)
             .put(KEY_TOTAL_VISIT_COUNT, trace.totalVisitCount)
             .put(KEY_REMARK, trace.reflection?.remark ?: JSONObject.NULL)
             .put(KEY_REMARKED_AT, trace.reflection?.remarkedAtEpochMillis ?: JSONObject.NULL)
@@ -109,6 +114,20 @@ internal object ReadingTraceJson {
                 } else {
                     null
                 },
+                // v5 までの `aiSummary` はすべて俯瞰要約なので、種別を補って読む。
+                // **補わないと種別と訪問数の対の検証で既存ファイルが全部破損扱いになる。**
+                aiSummaryKind = if (version >= 6) {
+                    root.stringOrNull(KEY_AI_SUMMARY_KIND)?.toReunionKind()
+                } else if (root.intOrNull(KEY_AI_SUMMARY_VISIT_COUNT) != null) {
+                    ReunionKind.Overview
+                } else {
+                    null
+                },
+                // v6 で追加。旧版の checksum はこの値を含まないので、
+                // 書かれていても読まない（totalVisitCount と同じ理由）。
+                markedAtEpochMillis = if (version >= 6) root.longOrNull(KEY_MARKED_AT) else null,
+                markedSummary = if (version >= 6) root.stringOrNull(KEY_MARKED_SUMMARY) else null,
+                markedKind = if (version >= 6) root.stringOrNull(KEY_MARKED_KIND)?.toReunionKind() else null,
                 schemaVersion = version
             )
             validateReadingTrace(trace)
@@ -169,6 +188,14 @@ internal object ReadingTraceJson {
             }
             // v5 で追加。v4 の正規形には無いので、既存ファイルを破損扱いにしない。
             if (trace.schemaVersion >= 5) out.writeSizedNullable(trace.reflection?.mirrored)
+            // v6 で追加。種別と印を checksum の対象に入れる — **印はユーザーの意図**なので、
+            // 改変が検出できないと「押していない印」が出せてしまう。
+            if (trace.schemaVersion >= 6) {
+                out.writeSizedNullable(trace.aiSummaryKind?.name)
+                out.writeLong(trace.markedAtEpochMillis ?: ABSENT_TIMESTAMP)
+                out.writeSizedNullable(trace.markedSummary)
+                out.writeSizedNullable(trace.markedKind?.name)
+            }
         }
         return buffer.toByteArray()
     }
@@ -200,6 +227,17 @@ internal object ReadingTraceJson {
     private fun JSONObject.longOrNull(key: String): Long? =
         if (isNull(key)) null else getLong(key)
 
+    /**
+     * 種別名を厳格に解く。**知らない名前は破損として扱う。**
+     *
+     * 読める版は現行版までなので、未知の種別が入っているファイルは
+     * 手で書き換えられたか壊れたかのどちらか。黙って既定値へ倒すと、
+     * **改変した種別で前置きが変わる**（表示が内容と食い違う）。
+     */
+    private fun String.toReunionKind(): ReunionKind =
+        ReunionKind.entries.firstOrNull { it.name == this }
+            ?: error("未対応の再会カード種別です（$this）。")
+
     private const val ABSENT_VISIT_COUNT = -1
     private const val ABSENT_TIMESTAMP = -1L
 
@@ -210,6 +248,10 @@ internal object ReadingTraceJson {
     private const val KEY_VISITS = "visits"
     private const val KEY_AI_SUMMARY = "aiSummary"
     private const val KEY_AI_SUMMARY_VISIT_COUNT = "aiSummaryVisitCount"
+    private const val KEY_AI_SUMMARY_KIND = "aiSummaryKind"
+    private const val KEY_MARKED_AT = "markedAt"
+    private const val KEY_MARKED_SUMMARY = "markedSummary"
+    private const val KEY_MARKED_KIND = "markedKind"
     private const val KEY_TOTAL_VISIT_COUNT = "totalVisitCount"
     private const val KEY_REMARK = "remark"
     private const val KEY_REMARKED_AT = "remarkedAt"

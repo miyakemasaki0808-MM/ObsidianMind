@@ -12,6 +12,9 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.withMark
+import com.example.newproject.model.REUNION_NONE_TOKEN
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.withVisit
 import com.example.newproject.ai.AiAvailability
@@ -486,7 +489,7 @@ class ReadingTraceControllerTest {
         clock.advance(10_000L)
         controller.flush()
         advanceUntilIdle()
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -875,7 +878,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(FakePersistence(), TestClock(), state = state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         assertNull(state.value.readingTraceCard)
@@ -888,7 +891,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), state = state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         assertNull(state.value.readingTraceCard)
@@ -899,7 +902,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(FakePersistence(), TestClock(), state = state)
 
-        controller.revealTrace("")
+        controller.revealTrace("", content = "")
         advanceUntilIdle()
 
         assertNull(state.value.readingTraceCard)
@@ -913,7 +916,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -932,7 +935,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), FakeAiClient.deferred(), state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         runCurrent()
 
         val card = state.value.readingTraceCard!!
@@ -951,7 +954,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -980,7 +983,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state, scope = scope)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         val revealJob = parent.children.first()
         advanceUntilIdle()
 
@@ -1004,7 +1007,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -1018,7 +1021,7 @@ class ReadingTraceControllerTest {
         val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
         val controller = controller(persistence, TestClock())
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val stored = persistence.stored("ideas/habit.md")!!
@@ -1036,7 +1039,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         assertEquals("キャッシュ済み", state.value.readingTraceCard!!.aiSummary)
@@ -1052,7 +1055,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         assertEquals(AI_SUMMARY, state.value.readingTraceCard!!.aiSummary)
@@ -1067,7 +1070,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), FakeAiClient.failingGeneration { AiTimeoutException("タイムアウト") }, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -1084,7 +1087,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
 
         val card = state.value.readingTraceCard!!
@@ -1100,7 +1103,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         runCurrent()
         controller.cancelForNoteChange()
         ai.completeAll("後から届いた要約")
@@ -1115,7 +1118,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), state = state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
         controller.dismissCard()
 
@@ -1130,7 +1133,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, TestClock(), ai, state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         runCurrent()
         controller.dismissCard()
         ai.completeAll(AI_SUMMARY)
@@ -1765,7 +1768,7 @@ class ReadingTraceControllerTest {
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(persistence, clock, state = state)
 
-        controller.revealTrace("ideas/habit.md")
+        controller.revealTrace("ideas/habit.md", content = "")
         advanceUntilIdle()
         assertEquals(2, state.value.readingTraceCard!!.visitCount)
 
@@ -1778,6 +1781,358 @@ class ReadingTraceControllerTest {
         assertEquals(2, state.value.readingTraceCard!!.visitCount)
         assertEquals(3, persistence.stored("ideas/habit.md")!!.visits.size)
     }
+    // --- 再会カードの種別と印（→ features/reunion_card.md）-------------------
+
+    /** 本文に問いがあれば、俯瞰要約ではなく**原文の1文**が出る。AIは選ぶだけ。 */
+    @Test
+    fun `本文の問いが選ばれると原文がそのままカードへ出る`() = runTest {
+        val question = "この方式で本当に速くなるのだろうか。"
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 2))
+        }
+        val ai = FakeAiClient(onGenerate = { "R01" })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "$question\nこれは説明である。")
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(question, card.aiSummary)
+        assertEquals(ReunionKind.Question, card.aiSummaryKind)
+        // 原文をそのまま出す契約なので、渡した候補はプロンプトに載っている。
+        assertTrue(ai.lastPrompt!!.contains("R01 | $question"))
+    }
+
+    /** 問いが無ければ俯瞰要約へ倒れる。**新機能は何も見えない**（正本が認めた挙動）。 */
+    @Test
+    fun `候補が無ければ俯瞰要約になる`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "これは説明だけの本文である。")
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(AI_SUMMARY, card.aiSummary)
+        assertEquals(ReunionKind.Overview, card.aiSummaryKind)
+    }
+
+    /**
+     * **空振りを記録しないと、開くたびに同じ候補で生成し直す。**
+     * Nano は Mutex 直列なので、待ち時間だけが積み上がる。
+     */
+    @Test
+    fun `空振りは記録され、次に開いても生成し直さない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { REUNION_NONE_TOKEN })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+        advanceUntilIdle()
+
+        assertNull("空振りなのに枠が出ている", state.value.readingTraceCard!!.aiSummary)
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertNull(stored.aiSummary)
+        assertEquals(2, stored.aiSummaryVisitCount)
+
+        val callsAfterFirst = ai.generateCalls
+        controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+        advanceUntilIdle()
+
+        assertEquals("空振りの後に生成し直している", callsAfterFirst, ai.generateCalls)
+    }
+
+    /** 候補外のIDを返されても拾わない（提示した集合とだけ照合する）。 */
+    @Test
+    fun `候補外のIDは採らない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { "R99" })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+        advanceUntilIdle()
+
+        assertNull(state.value.readingTraceCard!!.aiSummary)
+    }
+
+    /** **印があれば生成しない。** 保存済みの内容をそのまま再掲する。 */
+    @Test
+    fun `印があるノートは生成せず保存済みの内容を再掲する`() = runTest {
+        val marked = "前回はこの問いで止まっていた。"
+        val persistence = FakePersistence().apply {
+            put(
+                storedTrace(count = 2).withMark(
+                    summary = marked,
+                    kind = ReunionKind.Question,
+                    atEpochMillis = 500L
+                )
+            )
+        }
+        val ai = FakeAiClient(onGenerate = { "R01" })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "別の問いはこれでよいのだろうか。")
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(marked, card.aiSummary)
+        assertEquals(ReunionKind.Question, card.aiSummaryKind)
+        assertTrue(card.isMarked)
+        assertEquals("印があるのに生成した", 0, ai.generateCalls)
+    }
+
+    /** 押すと保存され、もう一度押すと外れる。**「読んだ」では外れない。** */
+    @Test
+    fun `印は押すと保存され、もう一度押すと外れる`() = runTest {
+        val question = "この方式で本当に速くなるのだろうか。"
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            persistence,
+            TestClock(),
+            aiClient = FakeAiClient(onGenerate = { "R01" }),
+            state = state
+        )
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertTrue(state.value.readingTraceCard!!.isMarked)
+        assertEquals(question, persistence.stored("ideas/habit.md")!!.markedSummary)
+
+        // 「読んだ」で畳んでも印は外れない（閉じる操作と取り消しは別）。
+        controller.dismissCard()
+        assertTrue(state.value.readingTraceCard!!.isMarked)
+
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertFalse(state.value.readingTraceCard!!.isMarked)
+        assertNull(persistence.stored("ideas/habit.md")!!.markedSummary)
+    }
+
+    /** 出ているものが無ければ印は付かない（内容の無い印を作らない）。 */
+    @Test
+    fun `枠が空のときは印を付けない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            persistence,
+            TestClock(),
+            aiClient = FakeAiClient(onGenerate = { REUNION_NONE_TOKEN }),
+            state = state
+        )
+        controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+        advanceUntilIdle()
+
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertFalse(state.value.readingTraceCard!!.isMarked)
+        assertNull(persistence.stored("ideas/habit.md")!!.markedSummary)
+    }
+
+    /**
+     * **モデルが使えない回を「試した」に数えない。**
+     * 数えると、利用可能になっても訪問数が変わるまで枠が出ない。
+     */
+    @Test
+    fun `モデル未取得の回は試行として記録せず、使えるようになれば生成する`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(availability = AiAvailability.NeedsDownload, onGenerate = { AI_SUMMARY })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertEquals("呼んでいないのに生成した", 0, ai.generateCalls)
+        assertNull("試行として記録している", persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount)
+
+        // 訪問数はそのままでも、使えるようになれば次の再会で生成される。
+        ai.availability = AiAvailability.Ready
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertEquals(1, ai.generateCalls)
+        assertEquals(AI_SUMMARY, state.value.readingTraceCard!!.aiSummary)
+    }
+
+    /** 生成が例外になった回も記録しない（次に開いたとき素直に試し直す）。 */
+    @Test
+    fun `生成が失敗した回は試行として記録しない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { error("timeout") })
+        val controller = controller(persistence, TestClock(), aiClient = ai)
+
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount)
+    }
+
+    /**
+     * **候補外のIDと空応答は「該当が無い」ではない。** 約束違反なので記録せず試し直す。
+     * ここを空振りと同じ扱いにすると、モデルが一度おかしな返しをしただけで枠が止まる。
+     */
+    @Test
+    fun `候補外のIDや空応答は空振りとして記録しない`() = runTest {
+        listOf("R99", "", "   ").forEach { response ->
+            val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+            val ai = FakeAiClient(onGenerate = { response })
+            val controller = controller(persistence, TestClock(), aiClient = ai)
+
+            controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+            advanceUntilIdle()
+
+            assertNull(
+                "[$response] を空振りとして記録している",
+                persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount
+            )
+        }
+    }
+
+    /** 飾りを付けて返しても空振りとして読む（表明語だけ厳密一致だと約束違反に化ける）。 */
+    @Test
+    fun `飾り付きのNONEも空振りとして読む`() = runTest {
+        listOf("NONE", "- NONE", "`NONE`", "none.").forEach { response ->
+            val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+            val ai = FakeAiClient(onGenerate = { response })
+            val controller = controller(persistence, TestClock(), aiClient = ai)
+
+            controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+            advanceUntilIdle()
+
+            val stored = persistence.stored("ideas/habit.md")!!
+            assertEquals("[$response] が空振りとして読めていない", 2, stored.aiSummaryVisitCount)
+            assertNull(stored.aiSummary)
+        }
+    }
+
+    /**
+     * **空振りは種別 `Overview` として記録し、次の生成契機では俯瞰要約へ倒す。**
+     * 候補は本文から決まるので、倒さないと同じ候補が同じ理由で拒否され続ける。
+     */
+    @Test
+    fun `空振りの次の生成契機は俯瞰要約になる`() = runTest {
+        val question = "これは本当に正しいのだろうか。"
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { if (generateCalls == 1) REUNION_NONE_TOKEN else AI_SUMMARY })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+        assertEquals(ReunionKind.Overview, persistence.stored("ideas/habit.md")!!.aiSummaryKind)
+
+        // 訪問が増えて次の生成契機になる
+        persistence.put(persistence.stored("ideas/habit.md")!!.withVisit(ReadingVisit(9_000L, "導入", 50)))
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(ReunionKind.Overview, card.aiSummaryKind)
+        assertEquals(AI_SUMMARY, card.aiSummary)
+        // 候補選択ではなく俯瞰要約のプロンプトが使われている
+        assertTrue("候補選択のプロンプトが使われた", !ai.lastPrompt!!.contains("R01 | "))
+    }
+
+    /**
+     * **連打しても、最後に押した状態だけが保存される。**
+     *
+     * `writeMutex` は同時書き込みを防ぐが要求の到着順は保証しないので、
+     * 素早く2回押すと保存順が逆転し、**画面では外れているのにサイドカーには付いている**
+     * 状態が作れる。ユーザーの明示的な意図を逆に保存することになる。
+     */
+    @Test
+    fun `印を連打しても最後の状態だけが保存される`() = runTest {
+        val question = "この方式で本当に速くなるのだろうか。"
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            persistence,
+            TestClock(),
+            aiClient = FakeAiClient(onGenerate = { "R01" }),
+            state = state
+        )
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+
+        // 2回押す。IOへ流す前に両方の要求を出すので、1つ目は実行時点で既に古い。
+        val savesBefore = persistence.saved.size
+        controller.toggleMark()
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        // **古い要求は書かないこと自体を見る。** 最終状態だけを見ると、
+        // 順序が保たれた実行でも同じ結果になり、ガードを外しても落ちない。
+        assertEquals(
+            "古い要求が書き込んでいる（到着順が逆転すればUIと食い違う）",
+            1,
+            persistence.saved.size - savesBefore
+        )
+        assertFalse("画面が最後の操作を反映していない", state.value.readingTraceCard!!.isMarked)
+        assertNull(
+            "画面は外れているのにサイドカーに印が残っている",
+            persistence.stored("ideas/habit.md")!!.markedSummary
+        )
+
+        // 3連打も、書くのは最後の1回だけ。
+        val savesBeforeTriple = persistence.saved.size
+        controller.toggleMark()
+        controller.toggleMark()
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.saved.size - savesBeforeTriple)
+
+        assertTrue(state.value.readingTraceCard!!.isMarked)
+        assertEquals(question, persistence.stored("ideas/habit.md")!!.markedSummary)
+    }
+
+    /**
+     * **別ノートへの操作が、こちらの押下を捨てないこと。**
+     *
+     * 「最新の要求だけが保存する」を全体で1つの世代にすると、対象が違って競合していないのに
+     * 失効する。ノートAで押した直後にノートBで押しただけで、**Aの押下が黙って消える。**
+     *
+     * **並びが不自然に見えるのは、単一スレッドの試験機で交錯を再現するため。**
+     * Bのカードが描かれる前に押しているが、要求が別パスへ向かうことと、
+     * それがAの世代を進めてしまうかどうかという点は実機と同じである。
+     */
+    @Test
+    fun `別ノートで印を押しても、先に出した要求は捨てられない`() = runTest {
+        val markedA = storedTrace(count = 2, path = "ideas/a.md")
+            .withMark(summary = "Aの印", kind = ReunionKind.Question, atEpochMillis = 100L)
+        val persistence = FakePersistence().apply {
+            put(markedA)
+            put(storedTrace(count = 2, path = "ideas/b.md"))
+        }
+        val controller = controller(persistence, TestClock(), state = NoteUiStateStore(NoteUiState()))
+
+        controller.revealTrace("ideas/a.md", content = "")
+        advanceUntilIdle()
+
+        // Aの印を外す要求を出す。まだIOへ流れていない。
+        controller.toggleMark()
+        // 流れる前にBへ移り、Bでも押す。**Aの要求と競合していない。**
+        controller.revealTrace("ideas/b.md", content = "")
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertNull(
+            "別ノートの操作でAの要求が捨てられている（押下が黙って消える）",
+            persistence.stored("ideas/a.md")!!.markedSummary
+        )
+    }
+
 }
 
 // --- ヘルパ ---------------------------------------------------------------
@@ -1802,7 +2157,10 @@ private fun TestScope.controller(
         persistence = persistence,
         currentVaultKey = { vault.key },
         clock = clock::now,
-        ioDispatcher = dispatcher
+        ioDispatcher = dispatcher,
+        // 候補の列挙もテストスケジューラで回す。Dispatchers.Default のままだと
+        // runTest の進行と独立に走り、結果の到着順が固定できない。
+        scanDispatcher = dispatcher
     )
 }
 
@@ -1830,7 +2188,9 @@ private fun storedTrace(
     documentId = "doc-1",
     visits = (1..count).map { ReadingVisit(it * 1_000L, "導入", 10 * it) },
     aiSummary = aiSummary,
-    aiSummaryVisitCount = aiSummaryVisitCount
+    aiSummaryVisitCount = aiSummaryVisitCount,
+    // 種別は「最後に試みた生成」に付く（→ validateReadingTrace）。
+    aiSummaryKind = aiSummaryVisitCount?.let { ReunionKind.Overview }
 )
 
 private class TestClock(private var current: Long = 1_000_000L) {

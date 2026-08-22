@@ -97,6 +97,7 @@ internal fun NoteReaderTab(
     onEnterFullscreen: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
+    onToggleReadingTraceMark: () -> Unit,
     onOpenReflection: () -> Unit,
     onVigilithActionChanged: (VigilithNoteAction?) -> Unit
 ) {
@@ -232,7 +233,8 @@ internal fun NoteReaderTab(
                     card = visibleTraceCard,
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace,
-                    onOpenReflection = onOpenReflection
+                    onOpenReflection = onOpenReflection,
+                    onToggleMark = onToggleReadingTraceMark
                 )
             }
 

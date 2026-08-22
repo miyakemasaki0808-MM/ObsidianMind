@@ -510,6 +510,7 @@ class NoteReadingFlowTest {
             onEnterFullscreen = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
+            onToggleReadingTraceMark = {},
             onOpenReflection = {},
             onVigilithActionChanged = {}
         )

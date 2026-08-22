@@ -328,7 +328,10 @@ internal class NoteSessionCoordinator(
         )
 
     fun bindReadingTracePath(sessionId: Long, path: String) = readingTrace.bindPath(sessionId, path)
-    fun revealReadingTrace(vaultRelativePath: String) = readingTrace.revealTrace(vaultRelativePath)
+    fun revealReadingTrace(vaultRelativePath: String, content: String) =
+        readingTrace.revealTrace(vaultRelativePath, content)
+
+    fun toggleReadingTraceMark() = readingTrace.toggleMark()
     fun reportReadingProgress(
         blockIndex: Int,
         blockFraction: Float,

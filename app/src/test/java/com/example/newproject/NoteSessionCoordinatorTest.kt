@@ -447,7 +447,7 @@ class NoteSessionCoordinatorTest {
         val coordinator = env.coordinator()
 
         // 照合はIOディスパッチャへ渡った時点で待たされる（まだカードは出ていない）
-        coordinator.revealReadingTrace("ideas/habit.md")
+        coordinator.revealReadingTrace("ideas/habit.md", content = "")
         assertNull(coordinator.uiState.value.readingTraceCard)
 
         coordinator.onNoteChanged()

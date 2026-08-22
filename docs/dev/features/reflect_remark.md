@@ -1,6 +1,6 @@
 # ノートへのひとこと
 
-**状態:** Implemented — 稼働中。保存先は読書痕跡サイドカー（schema v5）
+**状態:** Implemented — 稼働中。保存先は読書痕跡サイドカー（schema v6）
 **最終検証:** 2026-08-11 / `9af63ee`（§4 の復元・生成タイミングと §5 の通知経路を実装から起こし直した）
 **関連コード:** `controller/RemarkController.kt` / `domain/RemarkComposer.kt` / `model/RemarkProtocol.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt`
 **関連テスト:** `RemarkControllerTest` / `RemarkComposerTest` / `ReadingTraceLimitsTest`
@@ -116,7 +116,7 @@ Reflect（省察）系の中で、**ユーザー自身の言葉を受け取る�
 **保存状態 `ReplyStatus`:** `None` / `Saving` / `Held` / `Saved` / `Failed`
 （**`Boolean` 2本にしない** — 「保存中かつ未保存」のような無意味な組み合わせが型として作れてしまう）
 
-**永続化:** 読書痕跡サイドカー `_ReadingTraces/*.json`（schema v5、v1〜v4も読める）。
+**永続化:** 読書痕跡サイドカー `_ReadingTraces/*.json`（schema v6、v1〜v5も読める）。
 `Reflection`（ひとこと＋返事＋映し返し）を**1組で持つ** — 別々の文字列にすると片方だけ残る状態を型で作れる。
 
 **破棄条件:** `vaultRelativePath` が主キーなので**新しいひとことが古いものを上書き**する。

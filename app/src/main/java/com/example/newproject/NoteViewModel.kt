@@ -219,7 +219,9 @@ class NoteViewModel internal constructor(
                 session.setNoteState(loaded)
                 session.recordHistory(note.name, note.ref)
                 // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
-                session.revealReadingTrace(note.vaultRelativePath)
+                // **抜粋ではなく原文を渡す。** 候補の列挙を抜粋へ当てると、
+                // 長文で切り落とされた区間の問いが永久に届かない。
+                session.revealReadingTrace(note.vaultRelativePath, loaded.content)
                 session.fetchSummary(note.name, loaded.content)
                 fetchRelatedNotes(note.name, loaded.content)
             } catch (e: CancellationException) {
@@ -274,6 +276,8 @@ class NoteViewModel internal constructor(
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = session.dismissReadingTraceCard()
+
+    fun toggleReadingTraceMark() = session.toggleReadingTraceMark()
 
     /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
     private fun startReadingTrace(title: String, ref: DocumentRef, vaultRelativePath: String?): Long =

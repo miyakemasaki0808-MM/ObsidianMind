@@ -10,6 +10,7 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.Reflection
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.needsAiSummary
 import com.example.newproject.model.withVisit
@@ -166,8 +167,77 @@ class ReadingTraceJsonTest {
         assertFailsWithMessage {
             ReadingTraceJson.encode(trace(aiSummary = "要約", aiSummaryVisitCount = null))
         }
+    }
+
+    /**
+     * **訪問数だけがある形は正しい。** 候補があってもAIが「どれも該当しない」と返す回（空振り）が
+     * これで、記録しないと [needsAiSummary] が真のまま残り、同じノートを開くたびに
+     * 同じ候補で生成し直す（→ features/reunion_card.md「空振りの扱い」）。
+     */
+    @Test
+    fun `空振りの記録は要約なしで往復する`() {
+        val missWithoutSummary = trace(aiSummary = null, aiSummaryVisitCount = 1, aiSummaryKind = ReunionKind.Overview)
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(missWithoutSummary))
+
+        assertEquals(ReadingTraceReadResult.Valid(missWithoutSummary), decoded)
+    }
+
+    /**
+     * **v6 より前の `aiSummary` はすべて俯瞰要約。** 種別を補わずに読むと、
+     * 「訪問数と種別は対で存在する」の検証に引っかかって**既存ファイルが全部破損扱いになる。**
+     */
+    @Test
+    fun `旧版の要約は俯瞰要約として読める`() {
+        val legacy = trace(aiSummary = "2回開いて前半で止まっています", aiSummaryVisitCount = 1)
+
+        val decoded = ReadingTraceJson.decode(encodeAsV3(legacy, remark = null))
+
+        val restored = (decoded as ReadingTraceReadResult.Valid).trace
+        assertEquals(ReunionKind.Overview, restored.aiSummaryKind)
+        assertEquals(READING_TRACE_SCHEMA_VERSION, restored.schemaVersion)
+    }
+
+    /**
+     * **旧版のファイルに v6 の欄が書かれていても読まない。**
+     * 旧版の checksum はこれらを含まないので、読むと**改変し放題の入口**になる
+     * （`totalVisitCount` を v1 で読まないのと同じ理由）。印はユーザーの意図なので、
+     * 押していない印を注入されるのが最も困る。
+     */
+    @Test
+    fun `旧版に後から書かれた印は読まない`() {
+        val forged = addKeysKeepingChecksum(encodeAsV3(trace(), remark = null)) {
+            it.put("markedAt", 1_700_000_500_000L)
+            it.put("markedSummary", "押していない印")
+            it.put("markedKind", ReunionKind.Question.name)
+        }
+
+        val restored = (ReadingTraceJson.decode(forged) as ReadingTraceReadResult.Valid).trace
+
+        assertNull("旧版に書かれた印を読んでいる", restored.markedSummary)
+        assertNull(restored.markedKind)
+        assertNull(restored.markedAtEpochMillis)
+    }
+
+    /** 種別は「最後に試みた生成」に付く。片方だけ残ると表示側が前置きを決められない。 */
+    @Test
+    fun `encode rejects visit count without kind`() {
         assertFailsWithMessage {
-            ReadingTraceJson.encode(trace(aiSummary = null, aiSummaryVisitCount = 1))
+            ReadingTraceJson.encode(trace(aiSummary = "要約", aiSummaryVisitCount = 1, aiSummaryKind = null))
+        }
+    }
+
+    @Test
+    fun `印は3つ揃って往復し、欠けると弾かれる`() {
+        val marked = trace(
+            markedAtEpochMillis = 1_700_000_500_000L,
+            markedSummary = "前回はこの問いで止まっていた",
+            markedKind = ReunionKind.Question
+        )
+
+        assertEquals(ReadingTraceReadResult.Valid(marked), ReadingTraceJson.decode(ReadingTraceJson.encode(marked)))
+        assertFailsWithMessage {
+            ReadingTraceJson.encode(trace(markedSummary = "内容だけ"))
         }
     }
 
@@ -703,6 +773,11 @@ private fun trace(
     visits: List<ReadingVisit> = listOf(visit()),
     aiSummary: String? = null,
     aiSummaryVisitCount: Int? = null,
+    // 種別は「最後に試みた生成」に付くので、訪問数と対で置く（→ validateReadingTrace）。
+    aiSummaryKind: ReunionKind? = aiSummaryVisitCount?.let { ReunionKind.Overview },
+    markedAtEpochMillis: Long? = null,
+    markedSummary: String? = null,
+    markedKind: ReunionKind? = null,
     remark: String? = null
 ) = ReadingTrace(
     vaultRelativePath = path,
@@ -711,8 +786,22 @@ private fun trace(
     visits = visits,
     aiSummary = aiSummary,
     aiSummaryVisitCount = aiSummaryVisitCount,
-    reflection = remark?.let { Reflection(remark = it, remarkedAtEpochMillis = REMARKED_AT) }
+    aiSummaryKind = aiSummaryKind,
+    reflection = remark?.let { Reflection(remark = it, remarkedAtEpochMillis = REMARKED_AT) },
+    markedAtEpochMillis = markedAtEpochMillis,
+    markedSummary = markedSummary,
+    markedKind = markedKind
 )
+
+/**
+ * checksum を触らずにキーだけ足す。**旧版の正規形に無い欄なので、足しても整合性検証は通る** —
+ * だからこそ「読まない」ことを本番側で保証する必要がある。
+ */
+private fun addKeysKeepingChecksum(bytes: ByteArray, block: (JSONObject) -> Unit): ByteArray {
+    val root = JSONObject(bytes.toString(Charsets.UTF_8))
+    block(root)
+    return root.toString(2).toByteArray(Charsets.UTF_8)
+}
 
 /** ひとことの日時。往復と checksum の検証には固定値で足りる。 */
 private const val REMARKED_AT = 1_700_000_000_000L

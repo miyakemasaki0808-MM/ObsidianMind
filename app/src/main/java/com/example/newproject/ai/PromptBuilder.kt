@@ -4,8 +4,11 @@ import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REMARK_NONE_TOKEN
+import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.QuizFormat
 
 private const val DISTILL_HEADING_LENGTH = 80
@@ -33,6 +36,33 @@ data class RemarkCandidateLine(val id: String, val title: String, val snippet: S
         if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
 }
 
+/**
+ * AIピッカーのプロンプトと、**実際に提示したタイトル**。
+ *
+ * ピッカーだけは応答を**タイトルそのもの**で照合するので（ID契約から外れている件は別課題）、
+ * 予算で提示から落ちた候補を許可集合に残すと、**見せていないノートをモデルが返しても
+ * 正規のAI結果として通ってしまう。** [DistillPrompt.validIds] と同じ契約をここでも持つ。
+ */
+data class PickerPrompt(val text: String, val presentedTitles: List<String>)
+
+/**
+ * 再会カードの候補行。**本文からそのまま取った1文**で、AIには手を入れさせない。
+ *
+ * カードには選ばれた原文をそのまま出すので、AIの仕事はIDを1つ返すことだけ
+ * （→ features/reunion_card.md「優先順位は非AI段で決まる」）。
+ */
+data class ReunionCandidateLine(val id: String, val text: String) {
+    fun renderForPrompt(): String = "$id | $text"
+}
+
+/** AIへ渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない（→ [DistillPrompt]）。 */
+internal data class ReunionSelectionPrompt(
+    val text: String,
+    val candidates: List<ReunionCandidateLine>
+) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+}
+
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
 internal data class DistillPrompt(
     val text: String,
@@ -47,16 +77,42 @@ object PromptBuilder {
     private const val PICKER_TITLE_LIMIT = 40
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
+    private const val NO_CHAT_HISTORY = "（なし / none）"
+
+    /** 未解決の問いを選ばせる基準。**引用された他人の問いを除く**のが要点（実測でそれが混ざった）。 */
+    private val QUESTION_CRITERION = """
+        Choose the ONE question the writer had most likely NOT resolved yet when they stopped.
+        Prefer an open question about the subject itself.
+        Ignore rhetorical questions, questions the note already answers, and questions quoted from someone else.
+    """.trimIndent()
+
+    /**
+     * 古びうる記述を選ばせる基準。
+     *
+     * **「出来事の記録は古びない」を明示する。** 規則側でも裸の西暦を落としているが、
+     * 取りこぼしはここで受ける（規則は取りこぼさない側へ、選別は落とす側へ寄せる）。
+     */
+    private val STALENESS_CRITERION = """
+        Choose the ONE statement whose premise is most likely to have expired since it was written,
+        such as a version, a price, or a description of how things currently are.
+        The reader should want to re-check it today.
+        Ignore records of past events. A record of what happened does not expire.
+    """.trimIndent()
+
 
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
-
-            Note title: $title
-            Note content:
-            ${excerpt.renderForPrompt()}
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+            }
+        )
     }
 
     /**
@@ -72,25 +128,33 @@ object PromptBuilder {
         visits: List<ReadingVisit>,
         // 保持している訪問は直近30件まで。「何回開いたか」は延べ回数を渡す
         // （visits.size を使うと31回目以降ずっと「30回」と要約される）。
-        totalVisitCount: Int
+        totalVisitCount: Int,
+        historyCharacterBudget: Int = PromptLimits.READING_TRACE_HISTORY_CHARACTERS
     ): String {
-        val history = visits.takeLast(READING_TRACE_VISIT_LINES).joinToString("\n") { visit ->
+        // **セクション名は保存契約で512バイトまで許される。** 名前だけを [label] で切り、
+        // 行としては必ず完全なものを渡す（到達率が落ちると要約の意味が反転する）。
+        val historyLines = visits.takeLast(READING_TRACE_VISIT_LINES).map { visit ->
             val where = visit.deepestSectionTitle
                 ?.takeIf { it.isNotBlank() }
-                ?.let { "section \"$it\"" }
+                ?.let { "section \"${label(it)}\"" }
                 ?: "no heading reached"
             "- stopped at $where (${visit.progressPercent}% of the note)"
         }
-        return """
+        val history = packFromNewest(historyLines, historyCharacterBudget)
+        val instructions = """
             The user has opened the following note several times. Below is where they stopped reading each time, oldest first.
             In 1–2 short sentences, in Japanese, describe the pattern in how they have been reading it: how many times they opened it, and where they tend to stop.
             Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
-
-            Note title: $noteTitle
-            Times opened: $totalVisitCount
-            Reading history:
-            $history
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(noteTitle))
+                append("\nTimes opened: ").append(totalVisitCount)
+                append("\nReading history:\n").append(history)
+            }
+        )
     }
 
     // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる。ID→ノートの解決は
@@ -102,20 +166,21 @@ object PromptBuilder {
         candidates: List<RelatedCandidateLine>
     ): String {
         val candidateList = candidates.joinToString("\n") { it.renderForPrompt() }
-
-        return """
+        val instructions = """
             You are a note-taking assistant. Find the notes most related to the current Obsidian note.
             Each candidate is listed as "ID | title", optionally followed by "— context".
             Return only the IDs of up to 5 related notes, one ID per line (for example: C01).
             Do not include the title, numbers, bullets, explanations, or any other text.
-
-            Current note title: $currentTitle
-            Current note content snippet:
-            ${currentExcerpt.renderForPrompt()}
-
-            Candidates:
-            $candidateList
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nCurrent note title: ").append(label(currentTitle))
+                append("\nCurrent note content snippet:\n").append(currentExcerpt.renderForPrompt())
+                append("\n\nCandidates:\n").append(candidateList)
+            }
+        )
     }
 
     /**
@@ -145,39 +210,58 @@ object PromptBuilder {
             }
         }
         val candidateBlock = rendered.joinToString("\n")
-        val prompt = """
+        val instructions = """
             You are a careful editor selecting the most important original sentences from an Obsidian note.
             Choose up to ${DistillLimits.FINAL_SELECTION_LIMIT} candidates that best preserve the note's central claims, conclusions, or uniquely useful details.
             Prefer specific conclusions over repeated general statements. Do not rewrite, summarize, or invent text.
             Return only candidate IDs in descending order of importance, one ID per line (for example: S001).
             Do not include bullets, explanations, titles, or IDs not present in the candidate list.
-
-            Note title: $title
-
-            Candidates:
-            $candidateBlock
         """.trimIndent()
+        val prompt = PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\n\nCandidates:\n").append(candidateBlock)
+            }
+        )
         return DistillPrompt(prompt, fitted, candidateBlock)
     }
 
     // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
     // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
-    fun buildPickerPrompt(query: String, candidateTitles: List<String>): String {
-        val titleList = candidateTitles
-            .take(PICKER_TITLE_LIMIT)
-            .joinToString("\n") { "- $it" }
+    fun buildPickerPrompt(query: String, candidateTitles: List<String>): PickerPrompt {
+        // **タイトルは途中で切らない。** 受け側はタイトルで照合するので、切ると
+        // `notesByTitle` が黙って落とし、「3件選ばせたのに1件しか出ない」になる。
+        // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方。
+        // 打ち切ると、長いタイトルが1つ紛れただけで以降の候補を全部失う）。
+        val presented = mutableListOf<String>()
+        var used = 0
+        for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
+            val line = "- $title"
+            val cost = line.length + if (presented.isEmpty()) 0 else 1
+            if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) continue
+            presented += title
+            used += cost
+        }
+        val titleList = presented.joinToString("\n") { "- $it" }
 
-        return """
+        val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
             that best match the user's request. Answer in the same language as the request.
             Return only note titles from the candidate list, one title per line.
             Do not add numbers, bullets, explanations, or extra text.
-
-            User request: $query
-
-            Candidate note titles:
-            $titleList
         """.trimIndent()
+
+        return PickerPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = buildString {
+                    append("\n\nUser request: ").append(query.take(PromptLimits.QUERY_CHARACTERS))
+                    append("\n\nCandidate note titles:\n").append(titleList)
+                }
+            ),
+            presentedTitles = presented
+        )
     }
 
     // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
@@ -216,18 +300,21 @@ object PromptBuilder {
                 EXPLANATION: <one short sentence>
             """.trimIndent()
         }
-        return """
+        val instructions = """
             You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
             Answer in the same language as the excerpt content.
             Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
-
-            $formatContract
-
-            Source: $sourceLabel
-            --- BEGIN EXCERPT ---
-            ${excerpt.renderForPrompt()}
-            --- END EXCERPT ---
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            // 書式契約は指示文の一部。**削れる側に置かない** — 欠けると出力の形が崩れる。
+            instructions = instructions + "\n\n" + formatContract,
+            body = buildString {
+                append("\n\nSource: ").append(label(sourceLabel))
+                append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
+            },
+            closing = "\n--- END EXCERPT ---"
+        )
     }
 
     /**
@@ -292,12 +379,14 @@ object PromptBuilder {
             - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\nNote content:\n").append(excerpt.renderForPrompt())
-            append("\n\nCandidate notes:\n").append(candidateBlock)
-        }
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+                append("\n\nCandidate notes:\n").append(candidateBlock)
+            }
+        )
     }
 
     /**
@@ -335,38 +424,99 @@ object PromptBuilder {
             - If their answer adds nothing you can name, output exactly: $REMARK_NONE_TOKEN
         """.trimIndent()
 
-        return buildString {
-            append(instructions)
-            append("\n\nNote title: ").append(title)
-            append("\nNote content:\n").append(excerpt.renderForPrompt())
-            append("\n\nWhat you asked:\n").append(remark)
-            append("\n\nTheir answer:\n").append(reply)
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+                append("\n\nWhat you asked:\n").append(remark)
+            },
+            // **返事は削らない。** 映し返すべき当のものなので、欠けると答えるものが消える。
+            // 呼び出し側が `excerptReplyForPrompt` で先に切っているが、
+            // **上限は呼び出し側に委ねない**（ここが完成プロンプトを閉じる唯一の場所）。
+            closing = "\n\nTheir answer:\n" + reply.take(PromptLimits.REPLY_CHARACTERS)
+        )
+    }
+
+    /**
+     * 再会カードへ出す1件を、**本文から拾った候補の中から選ばせる。**
+     *
+     * **生成させない。** 出すのは原文の1文そのもので、AIは選ぶだけ。
+     * 「選ぶAIを徐々に強化する／生成には賭けない」という方針の直系であり、
+     * 選んだ結果をそのまま表示するのでハルシネーションが入る余地が無い。
+     *
+     * **IDだけ返させる**（蒸留・関連ノートと同じ契約）。原文を返させると、
+     * 言い換え・装飾・翻訳が混ざった時点で「本文にある1文」でなくなる。
+     *
+     * 種別は呼ぶ前に確定している（→ features/reunion_card.md §5）。ここでは
+     * **種別ごとに「何を選ぶか」の基準だけ**を差し替える。
+     */
+    internal fun buildReunionSelectionPrompt(
+        noteTitle: String,
+        kind: ReunionKind,
+        candidates: List<ReunionCandidateLine>
+    ): ReunionSelectionPrompt {
+        require(kind != ReunionKind.Overview) {
+            "俯瞰要約は候補から選ぶ種別ではありません（buildReadingTraceSummaryPrompt を使うこと）。"
         }
+        val criterion = when (kind) {
+            ReunionKind.Question -> QUESTION_CRITERION
+            ReunionKind.Staleness -> STALENESS_CRITERION
+            ReunionKind.Overview -> error("unreachable")
+        }
+        val instructions = """
+            You are helping someone return to a note they wrote earlier.
+            Each candidate below is one sentence taken from that note, listed as "ID | sentence".
+        """.trimIndent() + "\n\n" + criterion + "\n\n" + """
+            Return only the ID of the sentence you chose, on one line (for example: R01).
+            Do not return the sentence, an explanation, or more than one ID.
+            If none of the candidates fit, return exactly: 
+        """.trimIndent().trimEnd() + " " + REUNION_NONE_TOKEN
+
+        return ReunionSelectionPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = buildString {
+                    append("\n\nNote title: ").append(label(noteTitle))
+                    append("\n\nCandidates:\n")
+                    append(candidates.joinToString("\n") { it.renderForPrompt() })
+                }
+            ),
+            candidates = candidates
+        )
     }
 
     // ── セクション単位のAIチャット ─────────────────────────────────────────────
 
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+            }
+        )
     }
 
     fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
-        return """
+        val instructions = """
             You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
             Answer in the same language as the section content.
             Return only the questions, one per line. Do not add numbers, bullets, or extra text.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+            }
+        )
     }
 
     /**
@@ -384,26 +534,73 @@ object PromptBuilder {
         history: List<Pair<String, String>>,
         question: String
     ): String {
-        val historyText = history
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { (role, text) -> "$role: $text" }
-            ?: "（なし / none）"
-        return """
+        val historyText = renderChatHistory(history)
+        val instructions = """
             You are a note-taking assistant answering questions about ONE section of an Obsidian note.
             Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
             Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
-
-            Section heading: $sectionTitle
-            Section content:
-            ${sectionExcerpt.renderForPrompt()}
-
-            Conversation so far:
-            $historyText
-
-            New question:
-            $question
         """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nSection heading: ").append(label(sectionTitle))
+                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
+                append("\n\nConversation so far:\n").append(historyText)
+            },
+            // **質問は削らない。** ここを欠くと答えるものが消える。
+            closing = "\n\nNew question:\n" + question.take(PromptLimits.QUESTION_CHARACTERS)
+        )
     }
+
+    private fun renderChatHistory(history: List<Pair<String, String>>): String =
+        if (history.isEmpty()) {
+            NO_CHAT_HISTORY
+        } else {
+            packFromNewest(
+                history.map { (role, text) -> "$role: $text" },
+                PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
+            )
+        }
+
+    /**
+     * 時系列に並んだ [lines] を、**新しい側から** [budget] 内へ詰める。並び順は保つ。
+     *
+     * **落とすのは古い側である。** 会話履歴も訪問履歴も直近ほど文脈として効くうえ、
+     * どちらも件数が伸びる一方なので、古い側から落とさないと入力が上限へ近づき続ける。
+     *
+     * **末尾（最新）の1件だけは必ず載せる。** 落とすと「直前に何があったか」が消えて
+     * 履歴として成立しない。単独で予算を超えるときだけ、その行を切って印を残す
+     * （呼び出し側が1行の長さを閉じていれば、この経路には来ない）。
+     */
+    private fun packFromNewest(lines: List<String>, budget: Int): String {
+        if (lines.isEmpty()) return ""
+        val kept = ArrayDeque<String>()
+        val newest = lines.last()
+        var used: Int
+        if (newest.length <= budget) {
+            kept.addFirst(newest)
+            used = newest.length
+        } else {
+            val keep = (budget - PromptBudget.TRUNCATION_MARKER.length).coerceAtLeast(0)
+            kept.addFirst(newest.take(keep) + PromptBudget.TRUNCATION_MARKER)
+            used = budget
+        }
+        for (line in lines.dropLast(1).asReversed()) {
+            if (used + 1 + line.length > budget) break
+            kept.addFirst(line)
+            used += 1 + line.length
+        }
+        return kept.joinToString("\n")
+    }
+
+    /**
+     * タイトル・見出し・出典ラベルを [PromptLimits.LABEL_CHARACTERS] へ収める。
+     *
+     * ノート名はファイル名なので実質短いが、**セクション見出しはMarkdownの1行**で
+     * 長さの保証が無い。ラベル1つが抜粋を押し出すのを防ぐ。
+     */
+    private fun label(value: String): String = value.take(PromptLimits.LABEL_CHARACTERS)
 
     private fun NoteExcerpt.renderForPrompt(): String =
         if (isAbridged) {

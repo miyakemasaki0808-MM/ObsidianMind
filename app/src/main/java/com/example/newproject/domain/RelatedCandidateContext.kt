@@ -58,7 +58,11 @@ internal fun stripFrontmatter(content: String): String {
  * 候補行を入力バジェット [charBudget] 内へ収めて整形する。
  * ID・タイトルは常に残し、超過時は **タグ → aliases → 本文スニペット** の順に削る
  * （本文スニペットが最も判断材料になるため最後まで残す）。
- * それでも収まらなければタイトルのみにする。
+ *
+ * **タイトルのみでも収まらない場合がある。** 長いタイトルが並ぶVaultでは、
+ * 最後のフォールバックが全件をそのまま返して予算を超えていた。**返す前に必ず収まりを確かめ、
+ * 超えるなら末尾の候補から落とす。** 関連ノートの照合キーはIDなので、
+ * 最後の1件だけはタイトルを切ってでも残す（切っても解決は壊れない）。
  */
 internal fun renderCandidatesWithinBudget(
     candidates: List<CandidateContext>,
@@ -66,6 +70,8 @@ internal fun renderCandidatesWithinBudget(
     maxSnippetLen: Int,
     minSnippetLen: Int
 ): List<RelatedCandidateLine> {
+    require(charBudget >= 0)
+
     fun render(snippetCap: Int, aliases: Boolean, tags: Boolean): List<RelatedCandidateLine> =
         candidates.map { RelatedCandidateLine(it.id, it.title, buildDetail(it, snippetCap, aliases, tags)) }
 
@@ -80,7 +86,19 @@ internal fun renderCandidatesWithinBudget(
         cap = (cap - SNIPPET_SHRINK_STEP).coerceAtLeast(minSnippetLen)
         render(cap, aliases = false, tags = false).let { if (fits(it)) return it }
     }
-    return candidates.map { RelatedCandidateLine(it.id, it.title, null) }
+
+    var titleOnly = candidates.map { RelatedCandidateLine(it.id, it.title, null) }
+    while (titleOnly.size > 1 && !fits(titleOnly)) {
+        titleOnly = titleOnly.dropLast(1)
+    }
+    if (fits(titleOnly)) return titleOnly
+
+    // ここへ来るのはタイトル1つで予算を使い切るノートだけ。切ってでも1件は渡す。
+    val only = titleOnly.first()
+    val overhead = RelatedCandidateLine(only.id, "", null).renderForPrompt().length
+    // IDの体裁だけでも入らないなら、何も返さない。**予算を超えて返すくらいなら渡さない。**
+    if (overhead > charBudget) return emptyList()
+    return listOf(only.copy(title = only.title.take(charBudget - overhead)))
 }
 
 // プロンプトへ実際に描画したときの総文字数（改行込み）。RelatedCandidateLine の整形と一致させる。

@@ -9,6 +9,7 @@ package com.example.newproject.domain
 // **一般論の禁止は指示ではなく検査で担保する。** プロンプトに "no generic advice" と
 // 書くだけでは守られたか分からないため、ノート由来の語を含むことを機械的に測る。
 
+import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REMARK_NONE_TOKEN
 
 internal object RemarkLimits {
@@ -35,8 +36,11 @@ internal object RemarkLimits {
      *
      * 出力枠が256トークンしかないので、入力を長くしても返ってくる1文は変わらない。
      * 書き出しと締めが残れば「何を言ったか」は十分伝わる。
+     *
+     * **数字の正本は [PromptLimits.REPLY_CHARACTERS]。** 完成プロンプト側も同じ上限で
+     * 閉じるので、ここに別の数字を置くと片方が黙って効かなくなる。
      */
-    const val REPLY_EXCERPT_CHARS = 400
+    const val REPLY_EXCERPT_CHARS = PromptLimits.REPLY_CHARACTERS
 
     /**
      * 短すぎる応答の下限。「なるほど」「特にありません」のような相槌を弾く。

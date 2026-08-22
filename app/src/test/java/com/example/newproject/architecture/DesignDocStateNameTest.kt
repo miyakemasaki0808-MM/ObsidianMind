@@ -21,7 +21,7 @@ import org.junit.Test
  *
  * **歴史的な言及は直前に「旧 」を置く**（例: 旧 `Available` を畳んでいた）。
  * これが唯一の逃げ道で、**ファイル単位の許容リストは持たない** — 例外が増えるほど
- * 検査の力は落ちる（→ [lessons L29](../../../../../../../docs/dev/lessons.md)）。
+ * 検査の力は落ちる（→ [lessons L29](../../../../../../../../docs/dev/lessons.md)）。
  *
  * **型や値を消したら [RETIRED_NAMES] へ足す。** 足し忘れは検査できないが、
  * 足しさえすれば以後は自動で守られる。
@@ -168,20 +168,22 @@ class DesignDocStateNameTest {
     }
 
     /**
-     * 対象は**正本だけ**。
+     * 対象は**判断の正本（`dev/`）だけ**。
      *
      * `lessons/` は経緯の置き場、`_wip/` は使い捨てなので入れない
      * （どちらも「昔こう書いた」を残すことに意味がある）。
-     * **`owner/` を入れるのは、技術俯瞰も実装の正本として読まれるため。**
+     *
+     * **`owner/` も入れない。** あちらはオーナーが読むための俯瞰で、
+     * **更新はオーナーが指示したときだけ**と決まっている（→ `docs/owner/README.md`）。
+     * 検査に載せると、古びてよいと決めた文書が無関係な変更を止めることになる。
+     * 改名が俯瞰へ届いていないことは、次の通し見直しで直る。
      */
     private fun designDocs(): Sequence<File> =
-        sequenceOf("docs/dev/features", "docs/dev/system", "docs/owner")
+        sequenceOf("docs/dev/features", "docs/dev/system")
             .map(repositoryRoot()::resolve)
             .filter(File::isDirectory)
             .flatMap { it.walkTopDown() }
             .filter { it.isFile && it.extension == "md" }
-            // 開発日誌はその日の記録なので、当時の名前のままでよい。
-            .filterNot { it.invariantSeparatorsPath.contains("/owner/journal/") }
 
     private fun repositoryRoot(): File {
         val workingDirectory = File(

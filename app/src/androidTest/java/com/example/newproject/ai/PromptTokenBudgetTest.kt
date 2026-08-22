@@ -12,6 +12,7 @@ import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
@@ -41,11 +42,22 @@ import org.junit.runner.RunWith
  *
  * ## このテストが保証しないこと
  *
- * **これは「定義済み計測プロファイルの回帰テスト」であって、入力長の上限保証ではない。**
- * 本番にはまだ上限の無い可変入力が複数ある — セクションチャットは会話履歴を全件そのまま渡し、
- * 関連候補はタイトルだけで文字数予算を超えた場合に収まらないまま返る。
- * 真の上限保証は本番側へ上限を入れる別作業であり、ここでは扱わない。
- * **緑であることを「どんな入力でも上限内」と読んではいけない。**
+ * **これは「定義済み計測プロファイルの回帰テスト」であって、トークン上限の保証ではない。**
+ * 本番側の入力は**文字数**で閉じてある（[PromptLimits] を `PromptBudget` が強制し、
+ * JVMの `PromptBudgetTest` が固定する）が、**文字数とトークン数の対応は端末とモデル世代に依存する。**
+ * ここが答えるのは「いま測った端末で、定義済みプロファイルにどれだけ余裕があったか」だけで、
+ * **緑であることを「どんな入力でもトークン上限内」と読んではいけない。**
+ *
+ * ## 基準線は 2026-08-22 に取り直した
+ *
+ * 複数行の値を埋めたときにテンプレートの字下げ（12スペース）が全行へ残る不具合を直して
+ * 入力が減ったため、**それ以前に採った数値と直接は比べられない。**
+ * 取り直した値は [ai_input_excerpt](../../../../../../../../docs/dev/system/ai_input_excerpt.md) が持つ
+ * （§11 に要点、§13 に実測）。**予算を判断するときはそちらを見る。**
+ *
+ * [PromptLimits.MAX_PROMPT_CHARACTERS] はこの計測から逆算した値ではなく
+ * 「現行設計が意図する最大構成」から決めてあるので、**この計測が示すのは、
+ * その構成が実トークンでどれだけ余裕を持っているか**である。
  *
  * 計測値は logcat のタグ [TAG] へ表として出す。予算値（特に関連ノートの
  * [NoteExcerptLimits.RELATED]）を動かしてよいかは、この出力を見てから判断する。
@@ -378,7 +390,7 @@ class PromptTokenBudgetTest {
                 "検索ピッカー" to PromptBuilder.buildPickerPrompt(
                     query = "オンデバイスAIの制約について書いたノートを探して",
                     candidateTitles = List(PICKER_CANDIDATES) { "${profile.label}の候補ノート${it + 1}" }
-                )
+                ).text
             )
         }
     }

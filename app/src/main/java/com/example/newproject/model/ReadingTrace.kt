@@ -31,12 +31,16 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  *
  * v5 で [Reflection.mirrored]（返事を受けてAIが返す1文）を足した。
  * 返事を書いて終わりだと**受け取ってもらえた感触が無い**ため、1往復だけ閉じる。
+ *
+ * v6 で再会カードの枠を4種別で取り合う形にし、[ReadingTrace.aiSummaryKind] と
+ * 「まだ考えたい」の印（[ReadingTrace.markedAtEpochMillis] ほか）を足した。
+ * v5 までの `aiSummary` はすべて俯瞰要約なので、[ReunionKind.Overview] として読み込む。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 5
+internal const val READING_TRACE_SCHEMA_VERSION = 6
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
 internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
-    setOf(1, 2, 3, 4, READING_TRACE_SCHEMA_VERSION)
+    setOf(1, 2, 3, 4, 5, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -159,8 +163,24 @@ internal data class ReadingTrace(
     val noteTitle: String,
     val documentId: String?,
     val visits: List<ReadingVisit>,
+    /**
+     * 再会カードの枠へ出す1件。**種別は [aiSummaryKind] が持つ。**
+     *
+     * **null は「まだ試していない」とは限らない。** 候補があってもAIが「どれも該当しない」と
+     * 返す回（空振り）があり、そのときは [aiSummaryVisitCount] と [aiSummaryKind] だけが
+     * 記録されてここは null のままになる（→ features/reunion_card.md「空振りの扱い」）。
+     */
     val aiSummary: String? = null,
+    /**
+     * **最後に生成を試みた時点の [totalVisitCount]。** null は未試行。
+     *
+     * 「要約が説明している訪問数」ではなく**試行の記録**である点が要点で、
+     * これにより空振りも記録できる。空振りを記録しないと [needsAiSummary] が真のまま残り、
+     * **同じノートを開くたびに同じ候補で生成し直す**（Mutex 直列なので待ち時間だけが増える）。
+     */
     val aiSummaryVisitCount: Int? = null,
+    /** [aiSummary] がどの種別か。空振りの回も種別だけは残る。 */
+    val aiSummaryKind: ReunionKind? = null,
     /**
      * これまで開いた**延べ回数**。[visits] は直近30件しか残さないので、
      * 保持件数とは別に数える。表示・AI要約の鮮度判定はすべてこちらを見る。
@@ -181,7 +201,47 @@ internal data class ReadingTrace(
      * **1ノート1組。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
      */
     val reflection: Reflection? = null,
+    /**
+     * 「まだ考えたい」の印。**3つで1組**（片方だけ残らないよう検証で固定する）。
+     *
+     * **内容ごと保存するのが要点。** 印は*その内容*への意図なので、次の再会で生成し直すと
+     * 別の文が出て意図とずれる（→ features/reunion_card.md §6）。
+     * 保存済みを再掲すれば生成もゼロで済む。
+     */
+    val markedAtEpochMillis: Long? = null,
+    val markedSummary: String? = null,
+    val markedKind: ReunionKind? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
+) {
+    /** 印があるか。**あるときは生成そのものを行わず、保存済みを再掲する。** */
+    val hasMark: Boolean get() = markedSummary != null
+}
+
+/**
+ * 直前の生成が**空振りだった**か（AIが「どれも該当しない」と答えた回）。
+ *
+ * 種別だけが残って内容が無い状態がそれで、**次の生成契機では俯瞰要約へ倒す**合図になる。
+ * 呼べなかった回・失敗した回は何も記録しないので、ここには現れない。
+ */
+internal val ReadingTrace.wasEmptyReunionAttempt: Boolean
+    get() = aiSummaryKind != null && aiSummary == null
+
+/** 「まだ考えたい」を押す。押した時点で枠に出ていた内容ごと控える。 */
+internal fun ReadingTrace.withMark(
+    summary: String,
+    kind: ReunionKind,
+    atEpochMillis: Long
+): ReadingTrace = copy(
+    markedAtEpochMillis = atEpochMillis,
+    markedSummary = summary,
+    markedKind = kind
+)
+
+/** 印を外す。**「読んだ」では外れない** — 閉じる操作と取り消しは別（→ features/reunion_card.md §4）。 */
+internal fun ReadingTrace.withoutMark(): ReadingTrace = copy(
+    markedAtEpochMillis = null,
+    markedSummary = null,
+    markedKind = null
 )
 
 /** 訪問を1件足す。保持は直近[ReadingTraceLimits.MAX_VISITS]件までだが、累計は積み上げる。 */
@@ -212,7 +272,7 @@ internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
  */
 internal val ReadingTrace.needsAiSummary: Boolean
     get() = visits.size >= ReadingTraceLimits.MIN_VISITS_FOR_AI_SUMMARY &&
-        (aiSummary == null || aiSummaryVisitCount != totalVisitCount)
+        aiSummaryVisitCount != totalVisitCount
 
 /**
  * UTF-8バイト上限で切る。マルチバイト文字の途中では切らない。
@@ -301,7 +361,27 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
     }
     // 要約だけがあって基準の訪問数が無い状態は、次回の再会で無効化できず古い要約を
     // 出し続けてしまうため受け付けない。
-    require((trace.aiSummary == null) == (trace.aiSummaryVisitCount == null)) {
-        "AI要約と訪問数の一方だけが記録されています。"
+    // **逆向き（訪問数だけがある）は許す** — それが空振りの記録そのものだから。
+    require(trace.aiSummary == null || trace.aiSummaryVisitCount != null) {
+        "AI要約に対応する訪問数が記録されていません。"
     }
+    // 種別は「最後に試みた生成」に付くので、試行の記録（訪問数）と対で存在する。
+    require((trace.aiSummaryVisitCount == null) == (trace.aiSummaryKind == null)) {
+        "AI要約の訪問数と種別の一方だけが記録されています。"
+    }
+
+    // 印は3つで1組。片方だけ残ると「内容の無い印」「いつ付けたか不明な印」になる。
+    val markedFields = listOf(
+        trace.markedAtEpochMillis != null,
+        trace.markedSummary != null,
+        trace.markedKind != null
+    )
+    require(markedFields.all { it } || markedFields.none { it }) {
+        "「まだ考えたい」の印が中途半端に記録されています。"
+    }
+    trace.markedSummary?.let {
+        require(it.isNotBlank()) { "印の内容が空です。" }
+        requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "印の内容")
+    }
+    trace.markedAtEpochMillis?.let { require(it >= 0) { "印の日時が不正です。" } }
 }

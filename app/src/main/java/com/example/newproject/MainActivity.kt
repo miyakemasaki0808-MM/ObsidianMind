@@ -288,6 +288,7 @@ class MainActivity : ComponentActivity() {
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
+                                onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
                                 onOpenReflection = openRemark,
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
                             )
