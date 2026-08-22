@@ -7,9 +7,15 @@ package com.example.newproject.domain
 internal fun relatedCandidateId(index: Int): String =
     "C" + (index + 1).toString().padStart(2, '0')
 
-// 行頭のIDのみを対象にする。C の後は1〜2桁で、直後に数字が続かないこと
+// 再会カード候補の一時ID（R01..）。関連ノートと接頭辞を分けるのは、
+// ログや実応答を読むときにどちらの経路のIDか一目で分かるようにするため。
+internal fun reunionCandidateId(index: Int): String =
+    "R" + (index + 1).toString().padStart(2, '0')
+
+// 行頭のIDのみを対象にする。接頭辞の後は1〜2桁で、直後に数字が続かないこと
 // （"C012" のようなタイトル断片を弾く）。桁落ち "C5" は後段でゼロ埋め補正する。
-private val CANDIDATE_ID_PATTERN = Regex("^C(\\d{1,2})(?![0-9])", RegexOption.IGNORE_CASE)
+private fun candidateIdPattern(prefix: Char): Regex =
+    Regex("^$prefix(\\d{1,2})(?![0-9])", RegexOption.IGNORE_CASE)
 
 /**
  * モデル応答から候補IDを抽出する。
@@ -22,9 +28,12 @@ private val CANDIDATE_ID_PATTERN = Regex("^C(\\d{1,2})(?![0-9])", RegexOption.IG
 internal fun parseCandidateIds(
     response: String,
     validIds: Set<String>,
-    limit: Int
+    limit: Int,
+    // 既定は関連ノートの接頭辞。**呼び出し側が増えても既存経路の挙動は変わらない。**
+    prefix: Char = 'C'
 ): List<String> {
     if (limit <= 0) return emptyList()
+    val pattern = candidateIdPattern(prefix)
     val seen = LinkedHashSet<String>()
     for (raw in response.lineSequence()) {
         var line = raw.trim()
@@ -32,8 +41,8 @@ internal fun parseCandidateIds(
         line = line.replace(Regex("^\\d+[.)]\\s*"), "")
         line = line.trim('`', '"', '\'', ' ')
 
-        val match = CANDIDATE_ID_PATTERN.find(line) ?: continue
-        val id = "C" + match.groupValues[1].padStart(2, '0')
+        val match = pattern.find(line) ?: continue
+        val id = prefix + match.groupValues[1].padStart(2, '0')
         if (id in validIds && seen.add(id) && seen.size >= limit) break
     }
     return seen.toList()

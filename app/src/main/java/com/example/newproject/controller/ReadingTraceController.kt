@@ -16,6 +16,15 @@ import com.example.newproject.model.withoutLastVisit
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.ai.ReunionCandidateLine
+import com.example.newproject.domain.decideReunionKind
+import com.example.newproject.domain.forKind
+import com.example.newproject.domain.parseCandidateIds
+import com.example.newproject.domain.reunionCandidateId
+import com.example.newproject.domain.scanReunionCandidates
+import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.withMark
+import com.example.newproject.model.withoutMark
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -62,7 +71,9 @@ internal class ReadingTraceController(
      */
     private val currentVaultKey: () -> String?,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** 候補の列挙は入力サイズに比例するので Main の外で回す（→ lessons L13）。 */
+    private val scanDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
     /**
@@ -680,7 +691,13 @@ internal class ReadingTraceController(
      * 痕跡が無い／破損しているときは何もしない。カードを出さないだけで、
      * ユーザーのノートには一切触れない。
      */
-    fun revealTrace(vaultRelativePath: String) {
+    /**
+     * Rediscover で再会したときのカードを出す。
+     *
+     * **[content] は原文全体を渡す。** 候補の列挙を抜粋へ当てると、長文で切り落とされた
+     * 区間の問いが永久に届かない（→ features/reunion_card.md「候補の列挙は原文全体へ当てる」）。
+     */
+    fun revealTrace(vaultRelativePath: String, content: String) {
         revealJob?.cancel()
         val requestId = ++activeRequestId
         if (vaultRelativePath.isBlank()) return
@@ -692,20 +709,71 @@ internal class ReadingTraceController(
             } ?: return@launch
             if (!isCurrent(requestId)) return@launch
 
+            // **印があれば、この時点で再掲が確定する。** 生成もしない。
+            // 印は*その内容*への意図なので、作り直すと別の文が出て意図とずれる。
+            if (trace.hasMark) {
+                setCard(cardOf(trace))
+                return@launch
+            }
+
             // まず生の痕跡でカードを出す。AIを待たせないのが要点。
             val needsSummary = trace.needsAiSummary
             setCard(cardOf(trace, isSummaryLoading = needsSummary))
             if (!needsSummary) return@launch
 
-            val summary = generateSummary(trace)
+            // 列挙は入力サイズに比例するので Main の外で回す（→ lessons L13）。
+            val candidates = withContext(scanDispatcher) { scanReunionCandidates(content) }
+            if (!isCurrent(requestId)) return@launch
+            val kind = decideReunionKind(candidates)
+
+            val summary = generateForKind(trace, kind, candidates.forKind(kind))
             if (!isCurrent(requestId)) return@launch
             if (summary == null) {
-                // 失敗しても生の痕跡は残す。読み込み表示だけ下げる。
-                setCard(cardOf(trace))
-                return@launch
+                // **空振りも失敗も、生の痕跡は残して読み込み表示だけ下げる。**
+                setCard(cardOf(trace, aiSummary = null))
+            } else {
+                setCard(cardOf(trace, aiSummary = summary, aiSummaryKind = kind))
             }
-            setCard(cardOf(trace, aiSummary = summary))
-            persistSummary(trace, summary, vaultKey)
+            persistSummary(trace, summary, kind, vaultKey)
+        }
+    }
+
+    /**
+     * 「まだ考えたい」を切り替える。
+     *
+     * **押した時点で枠に出ていた内容ごと控える。** 次の再会で作り直すと別の文が出て
+     * 意図とずれるため（→ features/reunion_card.md §6）。
+     * **もう一度押すと外れる。**「読んだ」で畳んでも外れない（閉じる操作と取り消しは別）。
+     */
+    fun toggleMark(vaultRelativePath: String) {
+        val card = state.current ?: return
+        val vaultKey = currentVaultKey() ?: return
+        val summary = card.aiSummary
+        val kind = card.aiSummaryKind
+        // 出ているものが無ければ印の付けようがない。
+        if (!card.isMarked && (summary == null || kind == null)) return
+
+        // 画面は先に返す。**保存の往復を待たせない**（失敗しても次の再会で作り直せる）。
+        val marking = !card.isMarked
+        state.update { it?.copy(isMarked = marking) }
+        persistScope.launch {
+            withContext(ioDispatcher) {
+                writeMutex.withLock {
+                    val latest = (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
+                        ?.trace
+                        ?: return@withLock
+                    val updated = if (marking) {
+                        latest.withMark(
+                            summary = requireNotNull(summary),
+                            kind = requireNotNull(kind),
+                            atEpochMillis = clock()
+                        )
+                    } else {
+                        latest.withoutMark()
+                    }
+                    persistence.save(updated, vaultKey)
+                }
+            }
         }
     }
 
@@ -727,9 +795,12 @@ internal class ReadingTraceController(
         // 訪問が増えていればキャッシュ済み要約は古いので出さない。
         // 保持件数ではなく累計で見る（30件で頭打ちになると古い要約が出続ける）。
         aiSummary: String? = trace.aiSummary?.takeIf { trace.aiSummaryVisitCount == trace.totalVisitCount },
+        aiSummaryKind: ReunionKind? = trace.aiSummaryKind?.takeIf { aiSummary != null },
         isSummaryLoading: Boolean = false
     ): ReadingTraceCard {
         val last = trace.visits.last()
+        // **印があれば、枠の中身は保存済みのものへ差し替える。** 生成は行わない。
+        val marked = trace.markedSummary
         return ReadingTraceCard(
             // 追加のI/Oは無い。この経路は既に痕跡を読んでいる。
             hasReflectionReply = trace.reflection?.hasReply == true,
@@ -737,12 +808,24 @@ internal class ReadingTraceController(
             lastVisitAtMillis = last.atEpochMillis,
             lastSectionTitle = last.deepestSectionTitle,
             lastProgressPercent = last.progressPercent,
-            aiSummary = aiSummary,
+            aiSummary = marked ?: aiSummary,
+            aiSummaryKind = if (marked != null) trace.markedKind else aiSummaryKind,
+            isMarked = marked != null,
             isSummaryLoading = isSummaryLoading
         )
     }
 
-    private suspend fun generateSummary(trace: ReadingTrace): String? = try {
+    /**
+     * 種別に応じて1回だけ生成する。**同じ契機の中で2回目を呼ばない。**
+     *
+     * Nano は Mutex 直列なので、空振りしたからといって別の種別で引き直すと待ち時間が倍になる
+     * （→ features/reunion_card.md「空振りの扱い」）。空振りは null を返し、記録は呼び出し側が行う。
+     */
+    private suspend fun generateForKind(
+        trace: ReadingTrace,
+        kind: ReunionKind,
+        candidates: List<String>
+    ): String? = try {
         when (aiClient.checkAvailability()) {
             // 未ダウンロードでも自動DLしない（読むたびモデルDLを始めない）。黙って生のまま。
             // **非対応も取得失敗も同じ枝でよい**（意図的）— 読書痕跡はユーザーが意識しない
@@ -751,16 +834,9 @@ internal class ReadingTraceController(
             AiAvailability.Downloading,
             AiAvailability.Unsupported,
             is AiAvailability.TemporarilyUnavailable -> null
-            AiAvailability.Ready -> {
-                val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
-                    noteTitle = trace.noteTitle,
-                    visits = trace.visits,
-                    totalVisitCount = trace.totalVisitCount
-                )
-                aiClient.generate(prompt)
-                    .trim()
-                    .takeIf { it.isNotBlank() }
-                    ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+            AiAvailability.Ready -> when (kind) {
+                ReunionKind.Overview -> generateOverview(trace)
+                ReunionKind.Question, ReunionKind.Staleness -> selectCandidate(trace, kind, candidates)
             }
         }
     } catch (error: CancellationException) {
@@ -771,26 +847,71 @@ internal class ReadingTraceController(
         null
     }
 
+    private suspend fun generateOverview(trace: ReadingTrace): String? {
+        val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
+            noteTitle = trace.noteTitle,
+            visits = trace.visits,
+            totalVisitCount = trace.totalVisitCount
+        )
+        return aiClient.generate(prompt)
+            .trim()
+            .takeIf { it.isNotBlank() }
+            ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+    }
+
     /**
-     * 生成した要約をサイドカーへ載せる。
+     * 候補から1件選ばせる。**返ってくるのはIDだけ**で、表示するのは手元の原文。
+     *
+     * 候補外のIDと [REUNION_NONE_TOKEN] は、どちらもここで null に落ちる
+     * （`validIds` と照合するので、存在しないIDを指されても拾わない）。
+     */
+    private suspend fun selectCandidate(
+        trace: ReadingTrace,
+        kind: ReunionKind,
+        candidates: List<String>
+    ): String? {
+        if (candidates.isEmpty()) return null
+        val lines = candidates.mapIndexed { index, text ->
+            ReunionCandidateLine(reunionCandidateId(index), text)
+        }
+        val prompt = PromptBuilder.buildReunionSelectionPrompt(trace.noteTitle, kind, lines)
+        val response = aiClient.generate(prompt.text)
+        val picked = parseCandidateIds(response, prompt.validIds, limit = 1, prefix = 'R')
+            .firstOrNull()
+            ?: return null
+        return lines.first { it.id == picked }.text
+            .let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+    }
+
+    /**
+     * 生成した1件をサイドカーへ載せる。**[summary] が null なら空振りの記録になる。**
      *
      * 訪問の保存（[recordVisit]）と違い、**保存結果を見ないし再試行もしない**。
-     * 書けなければ `aiSummaryVisitCount` が更新されないだけで、次回の再会で
-     * [needsAiSummary] が真になり自動的に作り直される（自己修復する）。
-     * 同じ理由でアプリ寿命のスコープにも載せない — 失っても取り返せるものを
-     * ノート切替後まで走らせ続ける必要はない。
+     * 書けなければ次回の再会で作り直される（自己修復する）。
+     *
+     * **空振りも書く。** 書かないと再生成の判定が真のまま残り、同じノートを開くたびに
+     * 同じ候補で生成し直す（Mutex 直列なので待ち時間だけが増える）。
      */
-    private suspend fun persistSummary(trace: ReadingTrace, summary: String, vaultKey: String) {
+    private suspend fun persistSummary(
+        trace: ReadingTrace,
+        summary: String?,
+        kind: ReunionKind,
+        vaultKey: String
+    ) {
         withContext(ioDispatcher) {
             writeMutex.withLock {
                 // 生成中に flush が訪問を足している可能性があるので、最新を読み直して
-                // 要約だけを載せる。件数は「要約が説明している訪問数」を記録するので、
+                // 要約だけを載せる。件数は「生成を試みた訪問数」を記録するので、
                 // 生成中に増えていれば次回の再会でちゃんと作り直される。
                 val latest = (persistence.load(trace.vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
                     ?.trace
                     ?: return@withLock
                 persistence.save(
-                    latest.copy(aiSummary = summary, aiSummaryVisitCount = trace.totalVisitCount),
+                    latest.copy(
+                        aiSummary = summary,
+                        aiSummaryVisitCount = trace.totalVisitCount,
+                        aiSummaryKind = kind
+                    ),
                     vaultKey
                 )
             }

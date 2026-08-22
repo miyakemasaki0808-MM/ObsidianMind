@@ -1,5 +1,7 @@
 package com.example.newproject.model.state
 
+import com.example.newproject.model.ReunionKind
+
 /**
  * 「前回のあなた」の再会カード。null のとき出さない。
  *
@@ -17,6 +19,15 @@ data class ReadingTraceCard(
     val lastSectionTitle: String?,
     val lastProgressPercent: Int,
     val aiSummary: String? = null,
+    /**
+     * [aiSummary] がどの種別か。**前置きの文言をここから決める。**
+     *
+     * 文言だけで見分けさせないのが要点で、種別が生成文の中にしか無いと
+     * 表示側が条件分岐できず検査も書けない（→ features/reunion_card.md 判断2）。
+     */
+    val aiSummaryKind: ReunionKind? = null,
+    /** 「まだ考えたい」の印が付いているか。**付いていれば [aiSummary] は保存済みの再掲。** */
+    val isMarked: Boolean = false,
     val isSummaryLoading: Boolean = false,
     /**
      * 前回このノートに返事を残しているか。

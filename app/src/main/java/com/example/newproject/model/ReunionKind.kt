@@ -22,3 +22,12 @@ enum class ReunionKind {
      */
     Overview
 }
+
+/**
+ * 候補のどれも当てはまらないとAIが判断したときの表明語。
+ *
+ * **空振りは失敗ではない。** 候補は規則で列挙しているので、形は合っていても
+ * 中身が該当しないことは普通に起きる。無理に1件選ばせると、
+ * **前置きと中身が食い違ったカード**が出る（→ features/reunion_card.md「空振りの扱い」）。
+ */
+const val REUNION_NONE_TOKEN = "NONE"

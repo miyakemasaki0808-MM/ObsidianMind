@@ -4,6 +4,7 @@ import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.QuizFormat
 import java.io.File
 
@@ -88,6 +89,13 @@ internal object PromptSamples {
 
             "buildSectionSuggestionsPrompt" to
                 PromptBuilder.buildSectionSuggestionsPrompt(value, excerpt),
+
+            "buildReunionSelectionPrompt" to
+                PromptBuilder.buildReunionSelectionPrompt(
+                    noteTitle = value,
+                    kind = ReunionKind.Question,
+                    candidates = List(entries) { ReunionCandidateLine("R0$it", "$MARK$it") }
+                ).text,
 
             "buildSectionChatPrompt" to
                 PromptBuilder.buildSectionChatPrompt(

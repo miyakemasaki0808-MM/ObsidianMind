@@ -6,7 +6,9 @@ import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REMARK_NONE_TOKEN
+import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.QuizFormat
 
 private const val DISTILL_HEADING_LENGTH = 80
@@ -43,6 +45,24 @@ data class RemarkCandidateLine(val id: String, val title: String, val snippet: S
  */
 data class PickerPrompt(val text: String, val presentedTitles: List<String>)
 
+/**
+ * 再会カードの候補行。**本文からそのまま取った1文**で、AIには手を入れさせない。
+ *
+ * カードには選ばれた原文をそのまま出すので、AIの仕事はIDを1つ返すことだけ
+ * （→ features/reunion_card.md「優先順位は非AI段で決まる」）。
+ */
+data class ReunionCandidateLine(val id: String, val text: String) {
+    fun renderForPrompt(): String = "$id | $text"
+}
+
+/** AIへ渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない（→ [DistillPrompt]）。 */
+internal data class ReunionSelectionPrompt(
+    val text: String,
+    val candidates: List<ReunionCandidateLine>
+) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+}
+
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
 internal data class DistillPrompt(
     val text: String,
@@ -58,6 +78,27 @@ object PromptBuilder {
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
     private const val NO_CHAT_HISTORY = "（なし / none）"
+
+    /** 未解決の問いを選ばせる基準。**引用された他人の問いを除く**のが要点（実測でそれが混ざった）。 */
+    private val QUESTION_CRITERION = """
+        Choose the ONE question the writer had most likely NOT resolved yet when they stopped.
+        Prefer an open question about the subject itself.
+        Ignore rhetorical questions, questions the note already answers, and questions quoted from someone else.
+    """.trimIndent()
+
+    /**
+     * 古びうる記述を選ばせる基準。
+     *
+     * **「出来事の記録は古びない」を明示する。** 規則側でも裸の西暦を落としているが、
+     * 取りこぼしはここで受ける（規則は取りこぼさない側へ、選別は落とす側へ寄せる）。
+     */
+    private val STALENESS_CRITERION = """
+        Choose the ONE statement whose premise is most likely to have expired since it was written,
+        such as a version, a price, or a description of how things currently are.
+        The reader should want to re-check it today.
+        Ignore records of past events. A record of what happened does not expire.
+    """.trimIndent()
+
 
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         val instructions = """
@@ -394,6 +435,54 @@ object PromptBuilder {
             // 呼び出し側が `excerptReplyForPrompt` で先に切っているが、
             // **上限は呼び出し側に委ねない**（ここが完成プロンプトを閉じる唯一の場所）。
             closing = "\n\nTheir answer:\n" + reply.take(PromptLimits.REPLY_CHARACTERS)
+        )
+    }
+
+    /**
+     * 再会カードへ出す1件を、**本文から拾った候補の中から選ばせる。**
+     *
+     * **生成させない。** 出すのは原文の1文そのもので、AIは選ぶだけ。
+     * 「選ぶAIを徐々に強化する／生成には賭けない」という方針の直系であり、
+     * 選んだ結果をそのまま表示するのでハルシネーションが入る余地が無い。
+     *
+     * **IDだけ返させる**（蒸留・関連ノートと同じ契約）。原文を返させると、
+     * 言い換え・装飾・翻訳が混ざった時点で「本文にある1文」でなくなる。
+     *
+     * 種別は呼ぶ前に確定している（→ features/reunion_card.md §5）。ここでは
+     * **種別ごとに「何を選ぶか」の基準だけ**を差し替える。
+     */
+    internal fun buildReunionSelectionPrompt(
+        noteTitle: String,
+        kind: ReunionKind,
+        candidates: List<ReunionCandidateLine>
+    ): ReunionSelectionPrompt {
+        require(kind != ReunionKind.Overview) {
+            "俯瞰要約は候補から選ぶ種別ではありません（buildReadingTraceSummaryPrompt を使うこと）。"
+        }
+        val criterion = when (kind) {
+            ReunionKind.Question -> QUESTION_CRITERION
+            ReunionKind.Staleness -> STALENESS_CRITERION
+            ReunionKind.Overview -> error("unreachable")
+        }
+        val instructions = """
+            You are helping someone return to a note they wrote earlier.
+            Each candidate below is one sentence taken from that note, listed as "ID | sentence".
+        """.trimIndent() + "\n\n" + criterion + "\n\n" + """
+            Return only the ID of the sentence you chose, on one line (for example: R01).
+            Do not return the sentence, an explanation, or more than one ID.
+            If none of the candidates fit, return exactly: 
+        """.trimIndent().trimEnd() + " " + REUNION_NONE_TOKEN
+
+        return ReunionSelectionPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = buildString {
+                    append("\n\nNote title: ").append(label(noteTitle))
+                    append("\n\nCandidates:\n")
+                    append(candidates.joinToString("\n") { it.renderForPrompt() })
+                }
+            ),
+            candidates = candidates
         )
     }
 
