@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | 技術俯瞰と開発日誌を X-5・X-2 まで同期し、テスト内訳89クラスを機械的に数え直した | [source_code_analysis](../owner/source_code_analysis.md)・[journal](../owner/journal/2026-08.md) |
 | 2026-08-22 | — | X-2の再会カードをPixel実機の全ケースと描画テストで確認し、X-9をNowへ繰り上げた | **[reunion_card](features/reunion_card.md)**・[review](../review/README.md) |
 | 2026-08-22 | — | 印の要求世代をノート単位にし、正本から実機ケース範囲の重複を外した | **[reunion_card](features/reunion_card.md)** |
 | 2026-08-22 | — | X-2のレビュー指摘6件を直し、生成結果の3分割・印の要求世代・描画instrumentation・版番号検査を入れた | **[reunion_card](features/reunion_card.md)**・[lessons](lessons.md) L14 |
