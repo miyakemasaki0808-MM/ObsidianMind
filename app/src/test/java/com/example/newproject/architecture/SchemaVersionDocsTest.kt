@@ -85,11 +85,16 @@ class SchemaVersionDocsTest {
         }.groupValues[1].toInt()
     }
 
-    /** 恒久文書だけを見る（`_wip/`・`review/` は古い版を意図して名指しするため）。 */
+    /**
+     * **判断の正本（`dev/`）だけを見る。**
+     *
+     * `_wip/`・`review/` は古い版を意図して名指しする（「v5 のまま残っている」）。
+     * `owner/` は**オーナーが指示したときだけ更新する俯瞰**なので、検査に載せない
+     * （→ `docs/owner/README.md`）。
+     */
     private fun documentFiles(): List<File> =
-        repositoryRoot().resolve("docs").walkTopDown()
+        repositoryRoot().resolve("docs/dev").walkTopDown()
             .filter { it.isFile && it.extension == "md" }
-            .filterNot { it.path.contains("/_wip/") || it.path.contains("/review/") }
             .toList()
 
     private fun repositoryRoot(): File {
@@ -109,8 +114,7 @@ class SchemaVersionDocsTest {
         val DOCS_STATING_CURRENT_VERSION = listOf(
             "dev/features/reflect_reading_trace.md",
             "dev/features/reflect_remark.md",
-            "dev/features/reading_trace_backup.md",
-            "owner/source_code_analysis.md"
+            "dev/features/reading_trace_backup.md"
         )
 
         /**
