@@ -2097,6 +2097,42 @@ class ReadingTraceControllerTest {
         assertEquals(question, persistence.stored("ideas/habit.md")!!.markedSummary)
     }
 
+    /**
+     * **別ノートへの操作が、こちらの押下を捨てないこと。**
+     *
+     * 「最新の要求だけが保存する」を全体で1つの世代にすると、対象が違って競合していないのに
+     * 失効する。ノートAで押した直後にノートBで押しただけで、**Aの押下が黙って消える。**
+     *
+     * **並びが不自然に見えるのは、単一スレッドの試験機で交錯を再現するため。**
+     * Bのカードが描かれる前に押しているが、要求が別パスへ向かうことと、
+     * それがAの世代を進めてしまうかどうかという点は実機と同じである。
+     */
+    @Test
+    fun `別ノートで印を押しても、先に出した要求は捨てられない`() = runTest {
+        val markedA = storedTrace(count = 2, path = "ideas/a.md")
+            .withMark(summary = "Aの印", kind = ReunionKind.Question, atEpochMillis = 100L)
+        val persistence = FakePersistence().apply {
+            put(markedA)
+            put(storedTrace(count = 2, path = "ideas/b.md"))
+        }
+        val controller = controller(persistence, TestClock(), state = NoteUiStateStore(NoteUiState()))
+
+        controller.revealTrace("ideas/a.md", content = "")
+        advanceUntilIdle()
+
+        // Aの印を外す要求を出す。まだIOへ流れていない。
+        controller.toggleMark()
+        // 流れる前にBへ移り、Bでも押す。**Aの要求と競合していない。**
+        controller.revealTrace("ideas/b.md", content = "")
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertNull(
+            "別ノートの操作でAの要求が捨てられている（押下が黙って消える）",
+            persistence.stored("ideas/a.md")!!.markedSummary
+        )
+    }
+
 }
 
 // --- ヘルパ ---------------------------------------------------------------

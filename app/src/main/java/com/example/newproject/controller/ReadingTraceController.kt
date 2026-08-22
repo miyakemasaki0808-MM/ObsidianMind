@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -216,14 +217,21 @@ internal class ReadingTraceController(
     private var revealedPath: String? = null
 
     /**
-     * 印の要求世代。**最新の要求だけが保存する。**
+     * 印の要求世代。**痕跡ごとに数える。**
      *
      * `writeMutex` は同時書き込みを防ぐが、**要求の到着順までは保証しない。**
-     * 素早く2回押すと、IOへディスパッチされた順が入れ替わり、
+     * 同じカードで素早く2回押すと、IOへディスパッチされた順が入れ替わり、
      * **画面では外れているのにサイドカーには付いている**状態が作れる。
      * ユーザーの明示的な意図を逆に保存することになるので、古い要求はロックの中で捨てる。
+     *
+     * **全体で1つの世代にしない。** 「最新」の単位は、操作対象＝保存先と一致していなければならない。
+     * 単一の世代だと、ノートAで印を押した直後にノートBで押しただけで、
+     * **競合していないAの保存まで「古い要求」として捨てられる**（Aの押下が黙って消える）。
+     *
+     * Main で採番し IO で読むので並行なマップを使う。エントリは操作したノートぶんだけで、
+     * **完了時に消さない** — 消すと、遅れて走る同じ要求が自分の世代を見失って捨てられる。
      */
-    private var markRequestId = 0L
+    private val markRequestIds = ConcurrentHashMap<String, Long>()
 
     private var sessionCounter = 0L
 
@@ -779,14 +787,16 @@ internal class ReadingTraceController(
 
         // 画面は先に返す。**保存の往復を待たせない**（失敗しても次の再会で作り直せる）。
         val marking = !card.isMarked
-        val requestId = ++markRequestId
+        val markKey = pendingKey(vaultKey, vaultRelativePath)
+        val requestId = markRequestIds.merge(markKey, 1L, Long::plus)!!
         state.update { it?.copy(isMarked = marking) }
         persistScope.launch {
             withContext(ioDispatcher) {
                 writeMutex.withLock {
                     // **ロックを取れた時点で最新かを見る。** 取る前に確かめても、
                     // 待っている間に次の要求が来れば同じ逆転が起きる。
-                    if (requestId != markRequestId) return@withLock
+                    // 見るのは**同じ痕跡への**最新要求だけ（別ノートの操作では失効しない）。
+                    if (requestId != markRequestIds[markKey]) return@withLock
                     val latest = (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
                         ?.trace
                         ?: return@withLock
