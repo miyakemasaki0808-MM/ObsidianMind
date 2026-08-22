@@ -1,7 +1,11 @@
 # 再会カードに何を出すか
 
-**状態:** **実装済み・実機検証待ち**（→ [device_validation](../../review/device_validation/reunion_card.md) `REUNION-01`〜`11`）
-**最終検証:** 2026-08-22 / `67aa632`（**列挙規則・種別の決定・スキーマ v6・前置きを実装と突合。実機は未確認**）
+**状態:** **実装済み・実機検証待ち**（→ [device_validation](../../review/device_validation/reunion_card.md)）
+**最終検証:** 2026-08-22 / `969bbc3`（**列挙規則・種別の決定・スキーマ v6・生成結果の3分割・
+空振り後の俯瞰化・印の要求世代・前置きの描画を実装と突合。実機は未確認**）
+
+> **ここへ実機ケースの範囲を書かない。** どのケースがあるかの正本はケース文書の側で、
+> 両方に書くとケースを足すたびに片方が古くなる（実際に一度古くなった）。
 **関連コード:** `domain/ReunionCandidateScanner.kt` / `model/ReunionKind.kt` / `model/ReadingTrace.kt` /
 `ai/PromptBuilder.buildReunionSelectionPrompt` / `controller/ReadingTraceController.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest` / androidTest: `ReadingTraceCardPanelTest`
