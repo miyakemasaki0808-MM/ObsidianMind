@@ -30,6 +30,8 @@ class ReadingTraceLimitsTest {
                 MAX_NOTE_TITLE_BYTES +
                 MAX_DOCUMENT_ID_BYTES +
                 MAX_AI_SUMMARY_BYTES +
+                // 印の内容は要約と同じ枠。**枠に出ていた文をそのまま控える**ので同居しうる。
+                MAX_AI_SUMMARY_BYTES +
                 MAX_REMARK_BYTES +
                 MAX_REPLY_BYTES +
                 MAX_MIRRORED_BYTES +

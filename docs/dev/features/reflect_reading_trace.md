@@ -134,25 +134,40 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 ### データモデル
 
-```
-ReadingTrace(
-  schemaVersion: Int,
-  vaultRelativePath: String,      // 可搬・主キー
-  noteTitle: String,
-  documentId: String?,            // 端末内の参考値（checksum対象外）
-  visits: List<Visit>,            // 保持は直近 MAX_VISITS 件
-  aiSummary: String?,
-  aiSummaryVisitCount: Int?,      // 要約が説明している延べ回数
-  totalVisitCount: Int,           // 延べ回数（表示・要約の鮮度判定はこちら）
-  reflection: Reflection?,        // ひとこと＋返事（schema v4〜 → reflect_remark）
-  checksum: String
-)
-Visit(atEpochMillis: Long, deepestSectionTitle: String?, progressPercent: Int)
-```
+<!-- state-fields: ReadingTrace -->
+| 欄 | 意味 |
+|---|---|
+| `schemaVersion` | 保存形式の版。書き戻しは常に現行版 |
+| `vaultRelativePath` | **可搬・主キー** |
+| `noteTitle` | 表示名 |
+| `documentId` | 端末内の引き当てキャッシュ（**checksum対象外**） |
+| `visits` | 訪問。保持は直近 `MAX_VISITS` 件 |
+| `totalVisitCount` | 延べ回数。**表示・要約の鮮度判定はこちら** |
+| `aiSummary` | 再会カードの枠へ出す1件。**空振りの回は null** |
+| `aiSummaryVisitCount` | **最後に生成を試みた**時点の延べ回数（null＝未試行） |
+| `aiSummaryKind` | その試行の種別（schema v6〜 → [reunion_card](reunion_card.md)） |
+| `reflection` | ひとこと＋返事（schema v4〜 → [reflect_remark](reflect_remark.md)） |
+| `markedAtEpochMillis` | 「まだ考えたい」を押した時刻（schema v6〜）。**下2つと3つで1組** |
+| `markedSummary` | 印を付けた時点の内容。**再生成できない** |
+| `markedKind` | 印を付けた時点の種別 |
+<!-- /state-fields -->
+
+`Visit(atEpochMillis, deepestSectionTitle, progressPercent)`。checksum は保存形式の関心事なので
+モデルには持たせず、`ReadingTraceJson` が付与・検証する。
+
+> **欄の追加はここが正本。** 上の区切りは
+> [`SourceDocSyncTest`](../../../app/src/test/java/com/example/newproject/architecture/SourceDocSyncTest.kt) が読み、
+> **主コンストラクタの欄がここに載っていなければ落ちる。**
+> 検査に載せたのは、v6 の欄を足したときに**退避・復元（[reading_trace_backup](reading_trace_backup.md)）の
+> 突き合わせ表へ行を足し忘れる**経路が実在したため。
 
 > **`aiSummary` に何を入れるかは本書が決めない。** 俯瞰要約のほかに「当時の問い」「古い前提」
 > 「まだ考えたい」が同じ枠へ乗るため、**種別と優先順位の正本は [reunion_card](reunion_card.md)**。
-> 本書は**欄と保存・寿命**を持つ（実装時に schema v6 の欄がここへ増える）。
+> 本書は**欄と保存・寿命**を持つ。
+
+> **`aiSummaryVisitCount` は「要約が説明している回数」ではなく「最後に試みた回数」である。**
+> 候補があってもAIが選ばない回（空振り）を記録するために v6 で意味を変えた。
+> 記録しないと再生成の判定が真のまま残り、**同じノートを開くたびに同じ候補で生成し直す**。
 
 `deepestSectionTitle` は**記録時点の見出し名をそのまま保持する歴史的記録**で、
 後で本文が編集されて消えても再解決しない（「前回は『X』の節で止まっていた」はXが改名されても真）。

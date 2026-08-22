@@ -32,7 +32,12 @@ class SourceDocSyncTest {
      */
     private val stateDocs = mapOf(
         StateType("model/state/SectionChatState.kt", "SectionChatState") to
-            "features/section_ai_chat.md"
+            "features/section_ai_chat.md",
+        // **欄を足したら、その欄を読む正本が全部追いつく必要がある。**
+        // `ReadingTrace` は v6 で4欄増えたが、退避・復元の突き合わせ表（reading_trace_backup §5）は
+        // 別文書・別タイミングで直すため、欄の登録漏れが最も起きやすい型だった。
+        StateType("model/ReadingTrace.kt", "ReadingTrace") to
+            "features/reflect_reading_trace.md"
     )
 
     private data class StateType(val path: String, val className: String)
