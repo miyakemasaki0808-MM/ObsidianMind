@@ -26,6 +26,34 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("この設計で本当に必要なものを満たせるだろうか。"), candidates.questions)
     }
 
+    /**
+     * 終助詞「か」で終わる形をひととおり通す。
+     * **`だろうか` や `のか` を別扱いにしない** — 末尾は「か。」なので同じ枝で足りる。
+     */
+    @Test
+    fun `終助詞かで終わる問いを形の違いによらず拾う`() {
+        listOf(
+            "これでよいのだろうか。",
+            "本当にそうなのか。",
+            "この案を採用すべきか。",
+            "先に測るほうがよいかな。"
+        ).forEach { line ->
+            assertEquals(line, 1, scanReunionCandidates(line).questions.size)
+        }
+    }
+
+    /** 「か」で終わっても問いでない文を拾わない。過去形の「〜かった。」が最も紛らわしい。 */
+    @Test
+    fun `かで終わらない断定文は問いにしない`() {
+        listOf(
+            "この方式のほうが速かった。",
+            "そうするしかなかった。",
+            "これは十分な説明である。"
+        ).forEach { line ->
+            assertTrue(line, scanReunionCandidates(line).questions.isEmpty())
+        }
+    }
+
     @Test
     fun `疑問符で終わる文も拾う`() {
         val candidates = scanReunionCandidates("この方式は本当に速いのだろうか？")
@@ -106,9 +134,11 @@ class ReunionCandidateScannerTest {
         assertEquals(1, candidates.questions.size)
     }
 
+    /** 下限は「単独で何も思い出せない断片」だけを切る位置に置く（→ MIN_CANDIDATE_CHARS）。 */
     @Test
     fun `短すぎる文と長すぎる文は候補にしない`() {
         assertTrue(scanReunionCandidates("そうか。").questions.isEmpty())
+        assertEquals(1, scanReunionCandidates("本当にそうなのか。").questions.size)
         assertTrue(scanReunionCandidates("あ".repeat(200) + "だろうか。").questions.isEmpty())
     }
 

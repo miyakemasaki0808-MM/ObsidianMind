@@ -17,8 +17,14 @@ import com.example.newproject.model.ReunionKind
 /** 種別ごとにAIへ渡す候補の上限。多く見せても選ばせる1件は増えない。 */
 internal const val REUNION_CANDIDATES_PER_KIND = 10
 
-/** カードは1文で伝える役目なので、長すぎる文は候補にしない。 */
-private const val MIN_CANDIDATE_CHARS = 10
+/**
+ * カードは1文で伝える役目なので、長すぎる文は候補にしない。
+ *
+ * **下限は 8。** 10 にしていたら「本当にそうなのか。」（9文字）が落ちた。
+ * 日本語の問いは短くなりやすく、短いこと自体は価値を下げない。
+ * 落としたいのは「そうか。」のような**それ単独では何も思い出せない断片**なので、そこだけを切る。
+ */
+private const val MIN_CANDIDATE_CHARS = 8
 private const val MAX_CANDIDATE_CHARS = 120
 
 internal data class ReunionCandidates(
@@ -173,8 +179,18 @@ private const val OPENING_BRACKETS = "「『（(【［[{"
 private const val CLOSING_BRACKETS = "」』）)】］]}"
 private const val SENTENCE_TERMINATORS = "。！？!?"
 
-/** 疑問文。**末尾の `?`／`？` だけを見る**（規則で列挙し、未解決かどうかの判断はAIへ渡す）。 */
-private val QUESTION_END = Regex("""(?:[?？]|(?:か|だろうか|のか|かな)[。．.])\s*$""")
+/**
+ * 疑問文の見つけ方。**「？」だけを見ない。**
+ *
+ * 日本語は疑問符を伴わずに終助詞「か」で問うことが多く、実測では
+ * 「？で終わる文」だけだと候補が2%しか出なかった（→ features/reunion_card.md §5）。
+ *
+ * **`だろうか` `のか` を並べても意味が無い** — 末尾は結局「か。」なので `か` の枝が先に食う。
+ * 別に要るのは `かな` だけ（`か` の直後が `な` で、句点が来ないため）。
+ *
+ * 未解決かどうかの判断はここでしない。**形が問いであることまでを規則で見て、選別はAIへ渡す。**
+ */
+private val QUESTION_END = Regex("""(?:[?？]|(?:か|かな)[。．.])\s*$""")
 
 /** 古びうる印。西暦・版番号風の並び・通貨記号。 */
 private val STALENESS_MARK = Regex(
