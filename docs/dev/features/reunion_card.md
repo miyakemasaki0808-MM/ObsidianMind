@@ -4,7 +4,7 @@
 **最終検証:** 2026-08-22 / `67aa632`（**列挙規則・種別の決定・スキーマ v6・前置きを実装と突合。実機は未確認**）
 **関連コード:** `domain/ReunionCandidateScanner.kt` / `model/ReunionKind.kt` / `model/ReadingTrace.kt` /
 `ai/PromptBuilder.buildReunionSelectionPrompt` / `controller/ReadingTraceController.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest`
+**関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest` / androidTest: `ReadingTraceCardPanelTest`
 **正本:** この文書（**枠の規則・優先順位・種別**）。痕跡そのものは [reflect_reading_trace](reflect_reading_trace.md)
 
 **対象領域:** Rediscover で再会したときにカードへ出す1件の選び方
@@ -199,7 +199,9 @@ Rediscover の本体は「古いノートとの再会」なので陳腐化を先
 
 - **JVMテスト（実装済み）:** 候補の列挙（疑問文・陳腐化）・種別の決定・印がある場合の再掲・
   空振りの記録・前置きの文面。**印を無視する変異と、空振りを記録しない変異で落ちることを確認済み**
-- **instrumentation:** 種別ごとの前置きがカードに出ること
+- **instrumentation（実装済み）:** `ReadingTraceCardPanelTest` が種別ごとの前置き・印の文言・
+  枠が空のときにボタンを出さないことを描画で確認する。**純関数だけでは配線を保証できない** —
+  種別の値が正しくても、Composable が前置きを描かない退行はそこを通り抜ける
 - **実機確認:** 印を付けて次の再会で再掲されること。生成が1回に収まっていること
 - **保証していないこと:**
   - **選ばれた問い・記述の妥当性**は測らない（機械的な受け入れ条件に落ちない）
