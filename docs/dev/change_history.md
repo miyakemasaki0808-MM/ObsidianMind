@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | KDocリンク切れ検査をtest・androidTestへ広げ、走査外だった既存の壊れたリンク1件を直した | [lessons](lessons.md) L14 |
+| 2026-08-22 | — | AI入力上限と字下げ修正をPixel実機のBUDGET-01〜09で確認し、X-5を完了した | **[ai_input_excerpt](system/ai_input_excerpt.md)** §11・§13・[review](../review/README.md) |
 | 2026-08-22 | — | AI入力予算の実機ケースを実機検証の入口と存在検査へ登録した | [review](../review/README.md)・[device_validation](../review/device_validation/ai_input_budget.md) |
 | 2026-08-22 | — | ピッカーが予算で提示から落とした候補を応答で受理しないよう、照合表を提示済みタイトルから作るようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L14 |
 | 2026-08-22 | — | 読書痕跡の履歴に予算を置き、最新の訪問が共通クランプで途中から切れないようにした | **[ai_input_excerpt](system/ai_input_excerpt.md)** §13・[lessons](lessons.md) L45 |
