@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | 痕跡の退避（X-9）とN-14の設計（X-10）をNextへ昇格し、X-2より先に置けない理由を書いた | [roadmap](../_wip/roadmap.md) §0.5 |
 | 2026-08-22 | — | KDocリンク切れ検査をtest・androidTestへ広げ、走査外だった既存の壊れたリンク1件を直した | [lessons](lessons.md) L14 |
 | 2026-08-22 | — | AI入力上限と字下げ修正をPixel実機のBUDGET-01〜09で確認し、X-5を完了した | **[ai_input_excerpt](system/ai_input_excerpt.md)** §11・§13・[review](../review/README.md) |
 | 2026-08-22 | — | AI入力予算の実機ケースを実機検証の入口と存在検査へ登録した | [review](../review/README.md)・[device_validation](../review/device_validation/ai_input_budget.md) |
