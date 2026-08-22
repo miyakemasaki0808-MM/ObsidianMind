@@ -16,7 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
-| 2026-08-22 | — | 解析書へ目次を足し、見出しとの一致を検査に載せた | [source_code_analysis](../owner/source_code_analysis.md) §16 |
+| 2026-08-22 | — | 解析書へ目次（63見出し・2階層）を足した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-08-22 | — | 技術俯瞰と開発日誌を X-5・X-2 まで同期し、テスト内訳89クラスを機械的に数え直した | [source_code_analysis](../owner/source_code_analysis.md)・[journal](../owner/journal/2026-08.md) |
 | 2026-08-22 | — | X-2の再会カードをPixel実機の全ケースと描画テストで確認し、X-9をNowへ繰り上げた | **[reunion_card](features/reunion_card.md)**・[review](../review/README.md) |
 | 2026-08-22 | — | 印の要求世代をノート単位にし、正本から実機ケース範囲の重複を外した | **[reunion_card](features/reunion_card.md)** |
