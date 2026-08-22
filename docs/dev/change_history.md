@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | X-2のレビュー指摘6件を直し、生成結果の3分割・印の要求世代・描画instrumentation・版番号検査を入れた | **[reunion_card](features/reunion_card.md)**・[lessons](lessons.md) L14 |
 | 2026-08-22 | — | 再会カードに種別と「まだ考えたい」を入れ、X-2・A-6・A-7 を1つの実装で閉じた | **[reunion_card](features/reunion_card.md)**・[reflect_reading_trace](features/reflect_reading_trace.md) §6 |
 | 2026-08-22 | — | 痕跡の退避（X-9）とN-14の設計（X-10）をNextへ昇格し、X-2より先に置けない理由を書いた | [roadmap](../_wip/roadmap.md) §0.5 |
 | 2026-08-22 | — | KDocリンク切れ検査をtest・androidTestへ広げ、走査外だった既存の壊れたリンク1件を直した | [lessons](lessons.md) L14 |

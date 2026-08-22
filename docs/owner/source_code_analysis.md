@@ -76,7 +76,7 @@ AI機能はクラウドAPIではなく、ML Kit GenAI Prompt API を通じて端
 
 Q&Aとひとことはバックグラウンド生成方式で、生成中もノート閲覧を継続でき、完了・エラーはSnackbarで通知される。**AIタブのバッジは「生成中」だけを示す** — ひとことの結果は専用画面で読むため、旧補記が持っていた「未確認」の概念（`isViewed`）ごと無くなった。ReadingTraceは対照的に、AI未準備・生成失敗を通知せず、生の痕跡だけを先に表示して黙って劣化する。AI以外の補助機能として、当日分のみの閲覧履歴（さがすタブ「今日読んだノート」）を持つ。
 
-アーキテクチャは「単一 Activity + Compose Navigation + 単一 ViewModel」を入口としつつ、肥大化を避けるため要約・検索・セクションチャット・クイズ・ひとこと・旧補記ファイルの片付け・蒸留・読書痕跡・本文セクション解析・痕跡の整理を機能別 Controller（**10個**）に分割している。`NoteViewModel` は `Uri`・`ContentResolver`・`SharedPreferences` を扱うAndroid境界だけを担い、Controller間の調停と状態所有は Android API を呼ばない `NoteSessionCoordinator` が持つ。依存の組み立ては `NoteViewModelDependencies` へ外出しされている。ファイルI/Oは `NoteRepository`、AI判定を含む主要ロジックは UseCase、AI接続は `AiClient`、Markdown生成・応答パースは純粋ロジックへ分離されている。蒸留のVault書き戻しは `DistillWriteRepository` が専用の安全書き込み経路（ハッシュ照合・復旧レコード）を持ち、ReadingTraceは `_ReadingTraces` へのベストエフォートなサイドカー保存を持つ。**ひとことと返事もこのサイドカー（schema v5）へ入る** — 出力が1文になったので `.md` ファイルを作る形をやめた。
+アーキテクチャは「単一 Activity + Compose Navigation + 単一 ViewModel」を入口としつつ、肥大化を避けるため要約・検索・セクションチャット・クイズ・ひとこと・旧補記ファイルの片付け・蒸留・読書痕跡・本文セクション解析・痕跡の整理を機能別 Controller（**10個**）に分割している。`NoteViewModel` は `Uri`・`ContentResolver`・`SharedPreferences` を扱うAndroid境界だけを担い、Controller間の調停と状態所有は Android API を呼ばない `NoteSessionCoordinator` が持つ。依存の組み立ては `NoteViewModelDependencies` へ外出しされている。ファイルI/Oは `NoteRepository`、AI判定を含む主要ロジックは UseCase、AI接続は `AiClient`、Markdown生成・応答パースは純粋ロジックへ分離されている。蒸留のVault書き戻しは `DistillWriteRepository` が専用の安全書き込み経路（ハッシュ照合・復旧レコード）を持ち、ReadingTraceは `_ReadingTraces` へのベストエフォートなサイドカー保存を持つ。**ひとことと返事もこのサイドカー（schema v6）へ入る** — 出力が1文になったので `.md` ファイルを作る形をやめた。
 
 現時点の総評は次のとおり。
 
@@ -208,7 +208,7 @@ app/src/
 │   │   │   ├── HistoryEntry.kt                 # 当日履歴の1件
 │   │   │   ├── RelatedNote.kt                  # 関連ノートと AI推薦ステータス
 │   │   │   ├── DistillModels.kt                # 蒸留の純データ（範囲・文・チャンク・候補・DistillLimits）
-│   │   │   ├── ReadingTrace.kt                 # 読書痕跡モデル・上限・検証・Reflection（schema v5）
+│   │   │   ├── ReadingTrace.kt                 # 読書痕跡モデル・上限・検証・Reflection（schema v6）
 │   │   │   ├── RemarkProtocol.kt               # ひとことの「出すものが無い」表明語（ai と domain の共有点）
 │   │   │   └── state/                          # 機能別の sealed state（Note/Summary/RelatedNotes/Search/
 │   │   │                                       #   Quiz/Remark/AnnotationList/Distill/SectionChat/ReadingTraceCard）
@@ -621,7 +621,7 @@ UIは前者を `Empty`、後者を `Unusable` として別の文言で出す。
 **保存（`ReadingTraceController`）**
 
 `Reflection(remark, remarkedAt, reply, repliedAt, mirrored)` の1組として
-`_ReadingTraces/*.json`（schema v5）へ入る。**Vaultに `.md` は作らない。**
+`_ReadingTraces/*.json`（schema v6）へ入る。**Vaultに `.md` は作らない。**
 
 - **ひとことは離脱時の書き込みへ相乗りさせる。** 痕跡ファイルは離脱・背面化でしか作られず、
   検証は訪問1件以上を要求するので、初読で「生成できたら保存」と書くと必ず黙って失われる。

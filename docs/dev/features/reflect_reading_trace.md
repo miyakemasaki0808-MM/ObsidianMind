@@ -1,7 +1,7 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** Implemented — 稼働中。サイドカーは **schema v5**。孤児掃除は手動削除まで提供し、自動化は未着手
-**最終検証:** 2026-08-12 / `f3fb353`（突合したのは `ReadingTraceLimits` の全定数と、記録の門番＝判断3 だけ。**§8 の残り16件の判断は今回突合していない**）
+**状態:** Implemented — 稼働中。サイドカーは **schema v6**。孤児掃除は手動削除まで提供し、自動化は未着手
+**最終検証:** 2026-08-22 / `43ba617`（**§6 のデータモデルと schema v6 の欄・移行を実装と突合。§8 の判断17件は今回突合していない**）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
@@ -56,7 +56,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 - **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**（理由は §8 判断6）
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
-- **スキーマ:** **v5**。v1〜v4 も読める（書き戻しは常に現行版）
+- **スキーマ:** **v6**。v1〜v5 も読める（書き戻しは常に現行版）
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
