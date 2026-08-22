@@ -1,7 +1,7 @@
 # 読書痕跡（ReadingTrace）
 
 **状態:** Implemented — 稼働中。サイドカーは **schema v6**。孤児掃除は手動削除まで提供し、自動化は未着手
-**最終検証:** 2026-08-22 / `43ba617`（**§6 のデータモデルと schema v6 の欄・移行を実装と突合。§8 の判断17件は今回突合していない**）
+**最終検証:** 2026-08-22 / `c9a48d2`（**§6 の schema v6・印の保存単位・旧版読込を実装と実機で突合。§8 の判断17件は今回突合していない**）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書

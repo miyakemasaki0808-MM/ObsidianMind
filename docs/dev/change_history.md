@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-22 | — | X-2の再会カードをPixel実機の全ケースと描画テストで確認し、X-9をNowへ繰り上げた | **[reunion_card](features/reunion_card.md)**・[review](../review/README.md) |
 | 2026-08-22 | — | 印の要求世代をノート単位にし、正本から実機ケース範囲の重複を外した | **[reunion_card](features/reunion_card.md)** |
 | 2026-08-22 | — | X-2のレビュー指摘6件を直し、生成結果の3分割・印の要求世代・描画instrumentation・版番号検査を入れた | **[reunion_card](features/reunion_card.md)**・[lessons](lessons.md) L14 |
 | 2026-08-22 | — | 再会カードに種別と「まだ考えたい」を入れ、X-2・A-6・A-7 を1つの実装で閉じた | **[reunion_card](features/reunion_card.md)**・[reflect_reading_trace](features/reflect_reading_trace.md) §6 |
