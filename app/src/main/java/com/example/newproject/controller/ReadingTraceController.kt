@@ -23,6 +23,8 @@ import com.example.newproject.domain.parseCandidateIds
 import com.example.newproject.domain.reunionCandidateId
 import com.example.newproject.domain.scanReunionCandidates
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.isReunionNone
+import com.example.newproject.model.wasEmptyReunionAttempt
 import com.example.newproject.model.withMark
 import com.example.newproject.model.withoutMark
 import kotlinx.coroutines.CancellationException
@@ -735,17 +737,17 @@ internal class ReadingTraceController(
             // 列挙は入力サイズに比例するので Main の外で回す（→ lessons L13）。
             val candidates = withContext(scanDispatcher) { scanReunionCandidates(content) }
             if (!isCurrent(requestId)) return@launch
-            val kind = decideReunionKind(candidates)
+            // **前回が空振りなら俯瞰要約へ倒す。** 候補は本文から決まるので、同じノートを
+            // 開き直すと同じ候補が同じ理由で拒否され続け、枠が見出しだけのまま止まる
+            // （→ features/reunion_card.md「空振りの扱い」）。
+            val kind = if (trace.wasEmptyReunionAttempt) ReunionKind.Overview else decideReunionKind(candidates)
 
-            val summary = generateForKind(trace, kind, candidates.forKind(kind))
+            val outcome = generateForKind(trace, kind, candidates.forKind(kind))
             if (!isCurrent(requestId)) return@launch
-            if (summary == null) {
-                // **空振りも失敗も、生の痕跡は残して読み込み表示だけ下げる。**
-                setCard(cardOf(trace, aiSummary = null))
-            } else {
-                setCard(cardOf(trace, aiSummary = summary, aiSummaryKind = kind))
-            }
-            persistSummary(trace, summary, kind, vaultKey)
+            // **空振りも失敗も、生の痕跡は残して読み込み表示だけ下げる。**
+            val generated = outcome as? ReunionOutcome.Generated
+            setCard(cardOf(trace, aiSummary = generated?.summary, aiSummaryKind = generated?.kind))
+            persistOutcome(trace, outcome, vaultKey)
         }
     }
 
@@ -828,24 +830,52 @@ internal class ReadingTraceController(
     }
 
     /**
+     * 生成の結果。**null へ畳まない。**
+     *
+     * 「呼べなかった」「AIがどれも選ばなかった」「1件決まった」は、**呼び出し側の次の行動が全部違う**。
+     * 畳むと、モデル未取得の回まで「試行済み」として記録され、**利用可能になっても
+     * 訪問数が変わるまで枠が出ない**（→ [lessons L28](../../../../../../../../docs/dev/lessons.md)）。
+     */
+    private sealed interface ReunionOutcome {
+        /** 1件決まった。保存して表示する。 */
+        data class Generated(val summary: String, val kind: ReunionKind) : ReunionOutcome
+
+        /**
+         * **AIが明示的に「どれも該当しない」と答えた。**
+         * 空振りとして記録し、次の生成契機では俯瞰要約へ倒す。
+         */
+        data object NoCandidate : ReunionOutcome
+
+        /**
+         * 呼べなかった・失敗した・約束の形で返ってこなかった。**何も記録しない。**
+         *
+         * 候補外のIDや空応答をここへ入れるのは、**モデルが約束を守らなかっただけで
+         * 「該当が無い」という判断ではない**ため。次に開いたときに素直に試し直す。
+         */
+        data object Unavailable : ReunionOutcome
+    }
+
+    /**
      * 種別に応じて1回だけ生成する。**同じ契機の中で2回目を呼ばない。**
      *
      * Nano は Mutex 直列なので、空振りしたからといって別の種別で引き直すと待ち時間が倍になる
-     * （→ features/reunion_card.md「空振りの扱い」）。空振りは null を返し、記録は呼び出し側が行う。
+     * （→ features/reunion_card.md「空振りの扱い」）。
      */
     private suspend fun generateForKind(
         trace: ReadingTrace,
         kind: ReunionKind,
         candidates: List<String>
-    ): String? = try {
+    ): ReunionOutcome = try {
         when (aiClient.checkAvailability()) {
             // 未ダウンロードでも自動DLしない（読むたびモデルDLを始めない）。黙って生のまま。
             // **非対応も取得失敗も同じ枝でよい**（意図的）— 読書痕跡はユーザーが意識しない
             // 機能なので、理由を出し分けても見せる先が無い。
+            // **ただし「記録しない」ことは重要** — 記録すると、モデルが使えるようになっても
+            // 訪問数が変わるまで枠が出なくなる。
             AiAvailability.NeedsDownload,
             AiAvailability.Downloading,
             AiAvailability.Unsupported,
-            is AiAvailability.TemporarilyUnavailable -> null
+            is AiAvailability.TemporarilyUnavailable -> ReunionOutcome.Unavailable
             AiAvailability.Ready -> when (kind) {
                 ReunionKind.Overview -> generateOverview(trace)
                 ReunionKind.Question, ReunionKind.Staleness -> selectCandidate(trace, kind, candidates)
@@ -856,60 +886,78 @@ internal class ReadingTraceController(
     } catch (_: Exception) {
         // タイムアウト・生成失敗も黙って劣化させる。ユーザーが意識しない機能なので
         // エラー表示は出さず、生の痕跡だけが見えている状態に留める。
-        null
+        ReunionOutcome.Unavailable
     }
 
-    private suspend fun generateOverview(trace: ReadingTrace): String? {
+    private suspend fun generateOverview(trace: ReadingTrace): ReunionOutcome {
         val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
             noteTitle = trace.noteTitle,
             visits = trace.visits,
             totalVisitCount = trace.totalVisitCount
         )
-        return aiClient.generate(prompt)
+        val summary = aiClient.generate(prompt)
             .trim()
             .takeIf { it.isNotBlank() }
-            ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+            // 空応答は「まとめるものが無い」ではなく生成の失敗。記録せず次回試し直す。
+            ?: return ReunionOutcome.Unavailable
+        return ReunionOutcome.Generated(
+            truncateToUtf8Bytes(summary, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
+            ReunionKind.Overview
+        )
     }
 
     /**
      * 候補から1件選ばせる。**返ってくるのはIDだけ**で、表示するのは手元の原文。
      *
-     * 候補外のIDと [REUNION_NONE_TOKEN] は、どちらもここで null に落ちる
-     * （`validIds` と照合するので、存在しないIDを指されても拾わない）。
+     * **明示的な `NONE` だけを空振りとして扱う。** 候補外のIDや空応答は
+     * 「該当が無い」ではなく約束違反なので、記録せず次回試し直す。
      */
     private suspend fun selectCandidate(
         trace: ReadingTrace,
         kind: ReunionKind,
         candidates: List<String>
-    ): String? {
-        if (candidates.isEmpty()) return null
+    ): ReunionOutcome {
+        if (candidates.isEmpty()) return ReunionOutcome.Unavailable
         val lines = candidates.mapIndexed { index, text ->
             ReunionCandidateLine(reunionCandidateId(index), text)
         }
         val prompt = PromptBuilder.buildReunionSelectionPrompt(trace.noteTitle, kind, lines)
-        val response = aiClient.generate(prompt.text)
+        val response = aiClient.generate(prompt.text).trim()
+        if (response.isBlank()) return ReunionOutcome.Unavailable
+        if (isReunionNone(response)) return ReunionOutcome.NoCandidate
+
         val picked = parseCandidateIds(response, prompt.validIds, limit = 1, prefix = 'R')
             .firstOrNull()
-            ?: return null
-        return lines.first { it.id == picked }.text
-            .let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
+            ?: return ReunionOutcome.Unavailable
+        val text = lines.first { it.id == picked }.text
+        return ReunionOutcome.Generated(
+            truncateToUtf8Bytes(text, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
+            kind
+        )
     }
 
     /**
-     * 生成した1件をサイドカーへ載せる。**[summary] が null なら空振りの記録になる。**
+     * 生成の結果をサイドカーへ載せる。**[ReunionOutcome.Unavailable] は何も書かない。**
      *
      * 訪問の保存（[recordVisit]）と違い、**保存結果を見ないし再試行もしない**。
      * 書けなければ次回の再会で作り直される（自己修復する）。
      *
-     * **空振りも書く。** 書かないと再生成の判定が真のまま残り、同じノートを開くたびに
+     * **空振りは書く。** 書かないと再生成の判定が真のまま残り、同じノートを開くたびに
      * 同じ候補で生成し直す（Mutex 直列なので待ち時間だけが増える）。
+     * **記録する種別は [ReunionKind.Overview]** — 次の生成契機で俯瞰要約へ倒すため
+     * （→ features/reunion_card.md「空振りの扱い」）。
      */
-    private suspend fun persistSummary(
+    private suspend fun persistOutcome(
         trace: ReadingTrace,
-        summary: String?,
-        kind: ReunionKind,
+        outcome: ReunionOutcome,
         vaultKey: String
     ) {
+        val (summary, kind) = when (outcome) {
+            is ReunionOutcome.Generated -> outcome.summary to outcome.kind
+            ReunionOutcome.NoCandidate -> null to ReunionKind.Overview
+            // 呼べていない・失敗した回は「試した」に数えない。次に開いたとき素直に試し直す。
+            ReunionOutcome.Unavailable -> return
+        }
         withContext(ioDispatcher) {
             writeMutex.withLock {
                 // 生成中に flush が訪問を足している可能性があるので、最新を読み直して

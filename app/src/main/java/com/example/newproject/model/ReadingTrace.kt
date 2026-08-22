@@ -217,6 +217,15 @@ internal data class ReadingTrace(
     val hasMark: Boolean get() = markedSummary != null
 }
 
+/**
+ * 直前の生成が**空振りだった**か（AIが「どれも該当しない」と答えた回）。
+ *
+ * 種別だけが残って内容が無い状態がそれで、**次の生成契機では俯瞰要約へ倒す**合図になる。
+ * 呼べなかった回・失敗した回は何も記録しないので、ここには現れない。
+ */
+internal val ReadingTrace.wasEmptyReunionAttempt: Boolean
+    get() = aiSummaryKind != null && aiSummary == null
+
 /** 「まだ考えたい」を押す。押した時点で枠に出ていた内容ごと控える。 */
 internal fun ReadingTrace.withMark(
     summary: String,

@@ -31,3 +31,14 @@ enum class ReunionKind {
  * **前置きと中身が食い違ったカード**が出る（→ features/reunion_card.md「空振りの扱い」）。
  */
 const val REUNION_NONE_TOKEN = "NONE"
+
+/**
+ * 応答が「どれも該当しない」の表明かどうか。
+ *
+ * **前後の飾りは許す。** 箇条書き記号や引用符を付けて返すモデルは実在するので、
+ * 表明語だけを厳密一致で求めると、**空振りが「約束違反」に化けて記録されなくなる**。
+ * 逆に部分一致にしないのは、本文中の候補文に `NONE` が含まれる場合と区別できなくなるため。
+ */
+fun isReunionNone(response: String): Boolean =
+    response.trim().trim('-', '*', '•', '`', '"', '\'', ' ', '.', '。')
+        .equals(REUNION_NONE_TOKEN, ignoreCase = true)

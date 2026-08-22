@@ -1939,6 +1939,111 @@ class ReadingTraceControllerTest {
         assertNull(persistence.stored("ideas/habit.md")!!.markedSummary)
     }
 
+    /**
+     * **モデルが使えない回を「試した」に数えない。**
+     * 数えると、利用可能になっても訪問数が変わるまで枠が出ない。
+     */
+    @Test
+    fun `モデル未取得の回は試行として記録せず、使えるようになれば生成する`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(availability = AiAvailability.NeedsDownload, onGenerate = { AI_SUMMARY })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertEquals("呼んでいないのに生成した", 0, ai.generateCalls)
+        assertNull("試行として記録している", persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount)
+
+        // 訪問数はそのままでも、使えるようになれば次の再会で生成される。
+        ai.availability = AiAvailability.Ready
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertEquals(1, ai.generateCalls)
+        assertEquals(AI_SUMMARY, state.value.readingTraceCard!!.aiSummary)
+    }
+
+    /** 生成が例外になった回も記録しない（次に開いたとき素直に試し直す）。 */
+    @Test
+    fun `生成が失敗した回は試行として記録しない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { error("timeout") })
+        val controller = controller(persistence, TestClock(), aiClient = ai)
+
+        controller.revealTrace("ideas/habit.md", content = "これは説明である。")
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount)
+    }
+
+    /**
+     * **候補外のIDと空応答は「該当が無い」ではない。** 約束違反なので記録せず試し直す。
+     * ここを空振りと同じ扱いにすると、モデルが一度おかしな返しをしただけで枠が止まる。
+     */
+    @Test
+    fun `候補外のIDや空応答は空振りとして記録しない`() = runTest {
+        listOf("R99", "", "   ").forEach { response ->
+            val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+            val ai = FakeAiClient(onGenerate = { response })
+            val controller = controller(persistence, TestClock(), aiClient = ai)
+
+            controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+            advanceUntilIdle()
+
+            assertNull(
+                "[$response] を空振りとして記録している",
+                persistence.stored("ideas/habit.md")!!.aiSummaryVisitCount
+            )
+        }
+    }
+
+    /** 飾りを付けて返しても空振りとして読む（表明語だけ厳密一致だと約束違反に化ける）。 */
+    @Test
+    fun `飾り付きのNONEも空振りとして読む`() = runTest {
+        listOf("NONE", "- NONE", "`NONE`", "none.").forEach { response ->
+            val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+            val ai = FakeAiClient(onGenerate = { response })
+            val controller = controller(persistence, TestClock(), aiClient = ai)
+
+            controller.revealTrace("ideas/habit.md", content = "これは本当に正しいのだろうか。")
+            advanceUntilIdle()
+
+            val stored = persistence.stored("ideas/habit.md")!!
+            assertEquals("[$response] が空振りとして読めていない", 2, stored.aiSummaryVisitCount)
+            assertNull(stored.aiSummary)
+        }
+    }
+
+    /**
+     * **空振りは種別 `Overview` として記録し、次の生成契機では俯瞰要約へ倒す。**
+     * 候補は本文から決まるので、倒さないと同じ候補が同じ理由で拒否され続ける。
+     */
+    @Test
+    fun `空振りの次の生成契機は俯瞰要約になる`() = runTest {
+        val question = "これは本当に正しいのだろうか。"
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val ai = FakeAiClient(onGenerate = { if (generateCalls == 1) REUNION_NONE_TOKEN else AI_SUMMARY })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), aiClient = ai, state = state)
+
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+        assertEquals(ReunionKind.Overview, persistence.stored("ideas/habit.md")!!.aiSummaryKind)
+
+        // 訪問が増えて次の生成契機になる
+        persistence.put(persistence.stored("ideas/habit.md")!!.withVisit(ReadingVisit(9_000L, "導入", 50)))
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertEquals(ReunionKind.Overview, card.aiSummaryKind)
+        assertEquals(AI_SUMMARY, card.aiSummary)
+        // 候補選択ではなく俯瞰要約のプロンプトが使われている
+        assertTrue("候補選択のプロンプトが使われた", !ai.lastPrompt!!.contains("R01 | "))
+    }
+
 }
 
 // --- ヘルパ ---------------------------------------------------------------
