@@ -2044,6 +2044,59 @@ class ReadingTraceControllerTest {
         assertTrue("候補選択のプロンプトが使われた", !ai.lastPrompt!!.contains("R01 | "))
     }
 
+    /**
+     * **連打しても、最後に押した状態だけが保存される。**
+     *
+     * `writeMutex` は同時書き込みを防ぐが要求の到着順は保証しないので、
+     * 素早く2回押すと保存順が逆転し、**画面では外れているのにサイドカーには付いている**
+     * 状態が作れる。ユーザーの明示的な意図を逆に保存することになる。
+     */
+    @Test
+    fun `印を連打しても最後の状態だけが保存される`() = runTest {
+        val question = "この方式で本当に速くなるのだろうか。"
+        val persistence = FakePersistence().apply { put(storedTrace(count = 2)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            persistence,
+            TestClock(),
+            aiClient = FakeAiClient(onGenerate = { "R01" }),
+            state = state
+        )
+        controller.revealTrace("ideas/habit.md", content = question)
+        advanceUntilIdle()
+
+        // 2回押す。IOへ流す前に両方の要求を出すので、1つ目は実行時点で既に古い。
+        val savesBefore = persistence.saved.size
+        controller.toggleMark()
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        // **古い要求は書かないこと自体を見る。** 最終状態だけを見ると、
+        // 順序が保たれた実行でも同じ結果になり、ガードを外しても落ちない。
+        assertEquals(
+            "古い要求が書き込んでいる（到着順が逆転すればUIと食い違う）",
+            1,
+            persistence.saved.size - savesBefore
+        )
+        assertFalse("画面が最後の操作を反映していない", state.value.readingTraceCard!!.isMarked)
+        assertNull(
+            "画面は外れているのにサイドカーに印が残っている",
+            persistence.stored("ideas/habit.md")!!.markedSummary
+        )
+
+        // 3連打も、書くのは最後の1回だけ。
+        val savesBeforeTriple = persistence.saved.size
+        controller.toggleMark()
+        controller.toggleMark()
+        controller.toggleMark()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.saved.size - savesBeforeTriple)
+
+        assertTrue(state.value.readingTraceCard!!.isMarked)
+        assertEquals(question, persistence.stored("ideas/habit.md")!!.markedSummary)
+    }
+
 }
 
 // --- ヘルパ ---------------------------------------------------------------

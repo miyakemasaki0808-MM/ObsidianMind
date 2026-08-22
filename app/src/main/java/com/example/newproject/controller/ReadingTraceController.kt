@@ -215,6 +215,16 @@ internal class ReadingTraceController(
      */
     private var revealedPath: String? = null
 
+    /**
+     * 印の要求世代。**最新の要求だけが保存する。**
+     *
+     * `writeMutex` は同時書き込みを防ぐが、**要求の到着順までは保証しない。**
+     * 素早く2回押すと、IOへディスパッチされた順が入れ替わり、
+     * **画面では外れているのにサイドカーには付いている**状態が作れる。
+     * ユーザーの明示的な意図を逆に保存することになるので、古い要求はロックの中で捨てる。
+     */
+    private var markRequestId = 0L
+
     private var sessionCounter = 0L
 
     /**
@@ -769,10 +779,14 @@ internal class ReadingTraceController(
 
         // 画面は先に返す。**保存の往復を待たせない**（失敗しても次の再会で作り直せる）。
         val marking = !card.isMarked
+        val requestId = ++markRequestId
         state.update { it?.copy(isMarked = marking) }
         persistScope.launch {
             withContext(ioDispatcher) {
                 writeMutex.withLock {
+                    // **ロックを取れた時点で最新かを見る。** 取る前に確かめても、
+                    // 待っている間に次の要求が来れば同じ逆転が起きる。
+                    if (requestId != markRequestId) return@withLock
                     val latest = (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
                         ?.trace
                         ?: return@withLock
