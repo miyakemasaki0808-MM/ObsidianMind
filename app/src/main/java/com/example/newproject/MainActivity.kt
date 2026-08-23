@@ -33,11 +33,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.newproject.domain.readingTraceBackupFileName
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.AnnotationManagerScreen
+import com.example.newproject.ui.screen.DataManagementScreen
 import com.example.newproject.ui.screen.ReadingTraceCleanupScreen
 import com.example.newproject.ui.AppDestination
 import com.example.newproject.ui.AppScaffold
@@ -72,6 +74,25 @@ class MainActivity : ComponentActivity() {
     ) { uri ->
         uri ?: return@registerForActivityResult
         viewModel.exportDistillOriginal(contentResolver, uri)
+    }
+
+    // 保存先は**都度ユーザーが選ぶ**。初期フォルダを指定しないので、SAF は既定で
+    // Vault の外（前回の保存先／ダウンロード）を開く（→ reading_trace_backup 判断2）。
+    private val exportReadingTraces = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.exportReadingTraces(contentResolver, uri)
+    }
+
+    // MIME で絞らない。退避ファイルは拡張子が `.json` でも、プロバイダによっては
+    // `application/octet-stream` を名乗る。**絞ると自分が書き出したファイルが
+    // 選べない端末が出る**ので、中身の `format` と版で受け付けるかを決める。
+    private val importReadingTraces = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri ?: return@registerForActivityResult
+        viewModel.prepareReadingTraceImport(contentResolver, uri)
     }
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
@@ -362,12 +383,33 @@ class MainActivity : ComponentActivity() {
                                 darkTheme = darkTheme,
                                 notePaperAging = notePaperAging,
                                 onSelectVault = { openVault.launch(null) },
-                                onManageAnnotations = { navController.navigate("annotation_manager") },
-                                onManageReadingTraces = { navController.navigate("reading_trace_cleanup") },
+                                onManageData = { navController.navigate("data_management") },
                                 onToggleDarkTheme = { enabled -> viewModel.setDarkTheme(enabled) },
                                 onToggleNotePaperAging = { enabled ->
                                     viewModel.setNotePaperAging(enabled)
                                 }
+                            )
+                        }
+
+                        composable("data_management") {
+                            DataManagementScreen(
+                                state = uiState.readingTraceBackupState,
+                                onExport = {
+                                    exportReadingTraces.launch(
+                                        readingTraceBackupFileName(System.currentTimeMillis())
+                                    )
+                                },
+                                onImport = { importReadingTraces.launch(arrayOf("*/*")) },
+                                onApplyImport = { viewModel.applyReadingTraceImport() },
+                                onCancel = { viewModel.cancelReadingTraceBackup() },
+                                onDismiss = { viewModel.dismissReadingTraceBackup() },
+                                onManageReadingTraces = {
+                                    navController.navigate("reading_trace_cleanup")
+                                },
+                                onManageAnnotations = {
+                                    navController.navigate("annotation_manager")
+                                },
+                                onBack = { navController.popBackStack() }
                             )
                         }
 
