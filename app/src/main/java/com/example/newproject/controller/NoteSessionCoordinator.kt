@@ -22,6 +22,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.sync.Mutex
 
 /**
  * 機能Controllerを束ね、**Controller間の調停**（ノート切替・Vault切替での
@@ -144,6 +145,15 @@ internal class NoteSessionCoordinator(
         persistence = distillPersistence,
         reloadBody = reloadBody
     )
+    /**
+     * 痕跡サイドカーの read-modify-write を直列化する錠。
+     *
+     * **同じ錠を read-modify-write する全経路へ配る。** 訪問の追記（[ReadingTraceController]）と
+     * 読み戻しの適用（[ReadingTraceBackupController]）はまったく同じ形で同じファイルを書くので、
+     * 錠をクラスごとに持つと「錠はあるのに守られていない」状態になる。
+     */
+    private val traceWriteMutex = Mutex()
+
     private val readingTrace = ReadingTraceController(
         scope = scope,
         persistScope = persistScope,
@@ -152,7 +162,8 @@ internal class NoteSessionCoordinator(
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
         clock = clock,
-        ioDispatcher = ioDispatcher
+        ioDispatcher = ioDispatcher,
+        writeMutex = traceWriteMutex
     )
 
     /**
@@ -196,7 +207,8 @@ internal class NoteSessionCoordinator(
         state = stateStore.readingTraceBackupWriter,
         currentVaultKey = currentVaultKey,
         vaultGeneration = { vaultGeneration },
-        clock = clock
+        clock = clock,
+        writeMutex = traceWriteMutex
     )
 
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()

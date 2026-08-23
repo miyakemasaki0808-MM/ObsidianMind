@@ -15,6 +15,7 @@ import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.state.ReadingTraceBackupState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -288,6 +289,32 @@ class ReadingTraceBackupControllerTest {
         assertNull(env.written)
     }
 
+    // ── 訪問の追記との直列化 ────────────────────────────────────────────────
+
+    /**
+     * **痕跡の read-modify-write は訪問の追記と同じ錠で直列化する。**
+     *
+     * 読み戻しは「端末側を読む → 突き合わせる → 書く」で、訪問の追記とまったく同じ形をしている。
+     * 錠を共有しないと、**保存先を選ぶあいだにアプリが背面へ回って訪問が書き出された**とき
+     * （実際に起こる順序）に読み取りが古いまま上書きし、そのノートの読み戻しが黙って効かなくなる。
+     */
+    @Test
+    fun `訪問の追記が錠を握っている間は書き込まない`() = runTest {
+        val env = Env(this)
+        val backup = ReadingTraceBackupJson.encode(listOf(trace("ideas/habit.md")), 1_000L)
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        env.writeMutex.lock()
+        env.controller.applyImport()
+        advanceUntilIdle()
+        assertEquals("錠を無視して書き込んだ", 0, env.persistence.saveCount)
+
+        env.writeMutex.unlock()
+        advanceUntilIdle()
+        assertEquals(1, env.persistence.saveCount)
+    }
+
     // ── 中断 ──────────────────────────────────────────────────────────────
 
     // 適用の途中で止めた分は**既に書かれている**。「やめました」だけでは足りない。
@@ -340,6 +367,10 @@ class ReadingTraceBackupControllerTest {
         var vaultKey: String? = VAULT
         var written: ByteArray? = null
         val state = RecordingWriter()
+
+        /** 本番では `ReadingTraceController` と共有する錠。訪問の追記が握っている状況を作る。 */
+        val writeMutex = Mutex()
+
         val controller = ReadingTraceBackupController(
             scope = scope,
             persistence = persistence,
@@ -348,7 +379,8 @@ class ReadingTraceBackupControllerTest {
             vaultGeneration = { generation },
             clock = { 1_000L },
             // Dispatchers.IO はテストスケジューラの管理外なので差し替える。
-            ioDispatcher = StandardTestDispatcher(scope.testScheduler)
+            ioDispatcher = StandardTestDispatcher(scope.testScheduler),
+            writeMutex = writeMutex
         )
     }
 

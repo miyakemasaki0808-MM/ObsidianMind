@@ -23,6 +23,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
@@ -63,7 +65,18 @@ internal class ReadingTraceBackupController(
      * `scope` は本番では `viewModelScope`（Main）なので、ここを通さないと
      * 遠いプロバイダで画面が止まる。既存の痕跡系Controllerと同じ規律。
      */
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * サイドカーの read-modify-write を直列化する錠。**[ReadingTraceController] と同じものを受け取る。**
+     *
+     * 読み戻しは「端末側を読む → 突き合わせる → 書く」で、訪問の追記とまったく同じ形をしている。
+     * 別々の錠を持つと、**適用の最中に背面化で訪問が書き出されたとき**（保存先を選ぶあいだに
+     * アプリが背面へ回るので、実際に起こりうる順序）に読み取りが古いまま上書きし、
+     * そのノートの読み戻しが黙って効かなくなる。
+     *
+     * **握るのは1件ぶんだけ。** まとまり全体で握ると、適用中は訪問の書き出しが止まる。
+     */
+    private val writeMutex: Mutex = Mutex()
 ) {
     private var job: Job? = null
 
@@ -360,7 +373,11 @@ internal class ReadingTraceBackupController(
      * 端末側が壊れていた（[ReadingTraceReadResult.Corrupt]）場合は「無い」と同じ扱いで
      * 退避側をそのまま採る。壊れた痕跡から救えるものは無く、読める痕跡へ置き換わる方がよい。
      */
-    private fun applyOne(imported: ReadingTrace, vaultKey: String, tally: ImportTally) {
+    private suspend fun applyOne(
+        imported: ReadingTrace,
+        vaultKey: String,
+        tally: ImportTally
+    ) = writeMutex.withLock {
         val local = (persistence.load(imported.vaultRelativePath, vaultKey)
             as? ReadingTraceReadResult.Valid)?.trace
         val next = if (local == null) adoptImportedTrace(imported) else mergeReadingTraces(local, imported)

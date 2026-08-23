@@ -200,6 +200,11 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 ## 並行処理の規約
 
 - AI生成は `AiClient` 側のMutexで直列化し、60秒タイムアウトを設ける
+- **同じファイルを read-modify-write する経路が2つ以上あるなら、錠は共有物として上から配る。**
+  痕跡サイドカーは訪問の追記（`ReadingTraceController`）と読み戻しの適用
+  （`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
+  1つの `Mutex` を作って両方へ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
+  という、最も気づきにくい形になる
 - ノート・Vault単位のジョブは追跡してキャンセルする
 - `CancellationException` は再throwし、一般エラーへ変換しない
 - 完了通知がキャンセルをすり抜ける経路には requestId＋`isCurrent()` ガードを併用する
