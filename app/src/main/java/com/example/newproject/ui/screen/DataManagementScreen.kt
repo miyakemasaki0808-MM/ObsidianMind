@@ -63,6 +63,7 @@ import com.example.newproject.ui.withheldImportText
 @Composable
 fun DataManagementScreen(
     state: ReadingTraceBackupState,
+    vaultSelected: Boolean,
     onExport: () -> Unit,
     onImport: () -> Unit,
     onApplyImport: () -> Unit,
@@ -113,11 +114,24 @@ fun DataManagementScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        // **Vault未選択のまま保存先を選ばせない。** SAF は保存先を確定した時点で
+        // ファイルを作るので、その後で「Vaultがありません」と失敗すると
+        // **0バイトの退避ファイルが残る** — 退避を守る機能が、退避に見える空ファイルを
+        // 置いていくことになる。押せる条件を先に閉じる。
         val busy = state is ReadingTraceBackupState.Working
+        val enabled = vaultSelected && !busy
+        if (!vaultSelected) {
+            Text(
+                text = "Vault が選択されていないため、書き出しも読み戻しもできません。",
+                color = OnSurfaceFaint,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
                 onClick = onExport,
-                enabled = !busy,
+                enabled = enabled,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
@@ -129,7 +143,7 @@ fun DataManagementScreen(
 
             Button(
                 onClick = onImport,
-                enabled = !busy,
+                enabled = enabled,
                 modifier = Modifier.weight(1f).height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonSecondary,

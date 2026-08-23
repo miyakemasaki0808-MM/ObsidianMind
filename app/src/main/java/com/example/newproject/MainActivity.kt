@@ -394,6 +394,7 @@ class MainActivity : ComponentActivity() {
                         composable("data_management") {
                             DataManagementScreen(
                                 state = uiState.readingTraceBackupState,
+                                vaultSelected = uiState.vaultSelected,
                                 onExport = {
                                     exportReadingTraces.launch(
                                         readingTraceBackupFileName(System.currentTimeMillis())
