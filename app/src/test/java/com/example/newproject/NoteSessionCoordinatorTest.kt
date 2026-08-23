@@ -104,6 +104,34 @@ class NoteSessionCoordinatorTest {
         "annotationListState" to AnnotationListState.Success(emptyList())
     )
 
+    /**
+     * **リセット検査の入力そのものを検査する。**
+     *
+     * [assertEachFieldReset] はリフレクションで全欄を見るが、**入力（[fullyPopulatedState]）は
+     * 手で書いている**。欄を足して入力へ登録し忘れると、その欄については
+     * 「初期値が初期値へ戻ったこと」しか見なくなり、**検査は緑のまま何も見ていない状態になる**
+     * （→ [lessons L46](../../../../../../../docs/dev/lessons.md)）。
+     *
+     * リセット漏れそのものは下の2件が見るので、ここが見るのは「入力が全欄を埋めているか」だけ。
+     */
+    @Test
+    fun `リセット検査の入力は全フィールドが初期値と異なる`() {
+        val populated = fullyPopulatedState()
+        val defaults = NoteUiState()
+        val unregistered = NoteUiState::class.java.declaredFields
+            .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
+            .onEach { it.isAccessible = true }
+            .filter { it.get(populated) == it.get(defaults) }
+            .map { it.name }
+
+        assertEquals(
+            "fullyPopulatedState() に登録されていない欄がある" +
+                "（この欄についてはリセット検査が何も見ていない）",
+            emptyList<String>(),
+            unregistered
+        )
+    }
+
     @Test
     fun `Vault切替の状態リセットに登録漏れが無い`() {
         val store = NoteUiStateStore(fullyPopulatedState())

@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-23 | — | 読書痕跡の書き出し・読み戻しを入れ、片付け系を「データ管理」1画面へ統合した | **[reading_trace_backup](features/reading_trace_backup.md)**・[architecture](system/architecture.md) |
 | 2026-08-22 | — | 解析書へ目次（63見出し・2階層）を足した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-08-22 | — | 技術俯瞰と開発日誌を X-5・X-2 まで同期し、テスト内訳89クラスを機械的に数え直した | [source_code_analysis](../owner/source_code_analysis.md)・[journal](../owner/journal/2026-08.md) |
 | 2026-08-22 | — | X-2の再会カードをPixel実機の全ケースと描画テストで確認し、X-9をNowへ繰り上げた | **[reunion_card](features/reunion_card.md)**・[review](../review/README.md) |
