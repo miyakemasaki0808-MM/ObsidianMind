@@ -267,6 +267,33 @@ class NoteRepository {
         )
     }
 
+    /**
+     * 任意のドキュメントを上限付きで読む。**上限を超えたら例外**（切り詰めない）。
+     *
+     * 痕跡の退避ファイルを読み戻す経路で使う。**アプリの管理外のファイル**を
+     * ユーザーが選ぶので、切り詰めて読むと「途中まで正しいJSON」が渡ることはなく、
+     * ただ理由の分からない解析失敗になる。大きすぎることを理由として伝えられる形にする。
+     */
+    internal suspend fun readDocumentBytes(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        maximumBytes: Int
+    ): ByteArray = withContext(Dispatchers.IO) {
+        val stream = contentResolver.openInputStream(uri) ?: error("ファイルを開けませんでした。")
+        stream.use {
+            try {
+                readBoundedBytes(it, maximumBytes)
+            } catch (error: NoteFileTooLargeException) {
+                // 既定の文言は蒸留のノート向けなので、ここで言い換える。
+                // そのまま流すと「ノートが蒸留の上限を超えています」が退避ファイルの
+                // 読み込みエラーとして出て、原因を取り違える。
+                throw IllegalArgumentException(
+                    "ファイルが大きすぎます（上限 ${maximumBytes / (1024 * 1024)}MB）。"
+                )
+            }
+        }
+    }
+
     internal suspend fun writeDocumentBytes(
         contentResolver: ContentResolver,
         uri: Uri,

@@ -24,8 +24,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * 7つの機能Controllerを束ね、**Controller間の調停**（ノート切替・Vault切替での
+ * 機能Controllerを束ね、**Controller間の調停**（ノート切替・Vault切替での
  * 一斉停止と一斉初期化）を担う。画面状態 [NoteUiState] の唯一の持ち主でもある。
+ * **件数は書かない** — 足すたびに直す羽目になり、実際に古いまま残っていた。
  *
  * ## なぜ ViewModel から分けたか
  *
@@ -185,9 +186,31 @@ internal class NoteSessionCoordinator(
         vaultGeneration = { vaultGeneration }
     )
 
+    /**
+     * 読書痕跡の退避。**整理と同じくVault単位**なのでノート単位の契約へは登録しない。
+     * 別のControllerにしているのは、片方の状態がもう片方の操作で消えないようにするため。
+     */
+    private val readingTraceBackup = ReadingTraceBackupController(
+        scope = scope,
+        persistence = readingTracePersistence,
+        state = stateStore.readingTraceBackupWriter,
+        currentVaultKey = currentVaultKey,
+        vaultGeneration = { vaultGeneration },
+        clock = clock
+    )
+
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
 
     fun deleteReadingTrace(key: String) = readingTraceCleanup.delete(key)
+
+    // ── 読書痕跡の退避（実装は ReadingTraceBackupController・Vault単位）──────
+
+    fun exportReadingTraces(write: suspend (ByteArray) -> Unit) = readingTraceBackup.export(write)
+    fun prepareReadingTraceImport(read: suspend () -> ByteArray) =
+        readingTraceBackup.prepareImport(read)
+    fun applyReadingTraceImport() = readingTraceBackup.applyImport()
+    fun cancelReadingTraceBackup() = readingTraceBackup.cancel()
+    fun dismissReadingTraceBackup() = readingTraceBackup.dismiss()
 
     // ── 契約: ノート単位の実行中ジョブの停止 ──────────────────────────────────
     // 対になる状態リセット側の契約は [NoteUiStateStore] 内の withNoteScopedReset。
@@ -239,6 +262,7 @@ internal class NoteSessionCoordinator(
         search.onVaultChanged()
         annotation.onVaultChanged()
         readingTraceCleanup.onVaultChanged()
+        readingTraceBackup.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()

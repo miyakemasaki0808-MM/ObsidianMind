@@ -28,6 +28,7 @@ import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.notePaperTone
 import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.ReadingTraceBackupLimits
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import kotlinx.coroutines.CancellationException
@@ -347,6 +348,36 @@ class NoteViewModel internal constructor(
 
     /** 洗い出した候補を1件削除する。ノート本文には触れない。 */
     fun deleteReadingTrace(key: String) = session.deleteReadingTrace(key)
+
+    // ── 読書痕跡の退避（実装は ReadingTraceBackupController・Vault単位）─────────
+    //
+    // 保存先・読み込み元の `Uri` はここで解決する。Controller は `Uri` を扱わない
+    // （Android 非依存を保つ規律。蒸留の元本文書き出しと同じ形）。
+
+    /** Vault内の全痕跡を1ファイルへ書き出す。書き込みは束ね終えた後の1回だけ。 */
+    fun exportReadingTraces(contentResolver: ContentResolver, destination: Uri) =
+        session.exportReadingTraces { bytes ->
+            repository.writeDocumentBytes(contentResolver, destination, bytes)
+        }
+
+    /** 退避ファイルを読んで下見する。**この時点では1件も書かない。** */
+    fun prepareReadingTraceImport(contentResolver: ContentResolver, source: Uri) =
+        session.prepareReadingTraceImport {
+            repository.readDocumentBytes(
+                contentResolver,
+                source,
+                ReadingTraceBackupLimits.MAX_FILE_BYTES
+            )
+        }
+
+    /** 下見の結果を確定させる。**ここから先は不可逆。** */
+    fun applyReadingTraceImport() = session.applyReadingTraceImport()
+
+    /** 走行中の書き出し・読み戻しを中断する。 */
+    fun cancelReadingTraceBackup() = session.cancelReadingTraceBackup()
+
+    /** 結果表示や下見を閉じる。 */
+    fun dismissReadingTraceBackup() = session.dismissReadingTraceBackup()
 
     // ── 蒸留（実装は DistillController）──────────────────────────────────────
 
