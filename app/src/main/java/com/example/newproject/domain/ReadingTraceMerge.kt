@@ -91,19 +91,32 @@ internal fun mergeReadingTraces(local: ReadingTrace, imported: ReadingTrace): Re
     )
 }
 
+/** マージで失われる返事がどちら側のものか。 */
+internal enum class DroppedReplySide { LOCAL, IMPORTED }
+
 /**
- * このマージで**ユーザーの返事が1つ失われる**か。
+ * このマージで**どちらの返事が失われるか**。両方に異なる返事があるときだけ答えが出る。
  *
  * 1ノート1組の [Reflection] は構造上マージできないので、両方に返事があれば必ず片方が消える。
  * 規則で決まるのは「どちらを残すか」までで、失われること自体は避けられない。
  * **だから確定前に件数で見せる**（→ reading_trace_backup §9）。
  *
- * 中身が同じなら失うものは無いので数えない。
+ * **方向を数えるのが要点。** 規則は「返事を持つ側／新しい側が残る」なので、
+ * 端末側が新しければ失われるのは**退避側**である。方向を見ずに1つの件数へまとめると、
+ * 通常の往復（書き出した後に返事を書き足す）で**実際と逆の告知**になる。
+ *
+ * **判定は [mergeReadingTraces] の結果から引く。** 同じ規則を2度書くと必ず片方が古くなる。
  */
-internal fun replacesReply(local: ReadingTrace, imported: ReadingTrace): Boolean {
-    val localReply = local.reflection?.reply ?: return false
-    val importedReply = imported.reflection?.reply ?: return false
-    return localReply != importedReply
+internal fun droppedReplySide(local: ReadingTrace, imported: ReadingTrace): DroppedReplySide? {
+    val localReply = local.reflection?.reply ?: return null
+    val importedReply = imported.reflection?.reply ?: return null
+    // 中身が同じなら、どちらが残っても失うものは無い。
+    if (localReply == importedReply) return null
+    return if (mergeReadingTraces(local, imported).reflection?.reply == localReply) {
+        DroppedReplySide.IMPORTED
+    } else {
+        DroppedReplySide.LOCAL
+    }
 }
 
 /**

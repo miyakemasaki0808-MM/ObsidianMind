@@ -2,7 +2,8 @@ package com.example.newproject
 
 import com.example.newproject.domain.adoptImportedTrace
 import com.example.newproject.domain.mergeReadingTraces
-import com.example.newproject.domain.replacesReply
+import com.example.newproject.domain.DroppedReplySide
+import com.example.newproject.domain.droppedReplySide
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -82,16 +83,52 @@ class ReadingTraceMergeTest {
         assertEquals("退避側の名前", mergeReadingTraces(local, imported).noteTitle)
     }
 
+    /**
+     * **失われるのは「新しい方」ではない側。方向を取り違えると告知が逆になる。**
+     *
+     * 書き出したあとに返事を書き足す往復では端末側が新しいので、
+     * 実際に失われるのは**退避ファイル側**である。方向を見ずに1つの件数へまとめると、
+     * その一番ありふれた場合に「端末側の返事が置き換わります」と嘘をつく。
+     */
     @Test
-    fun `置き換わる返事の件数は中身が違うときだけ数える`() {
+    fun `失われる返事は残らなかった側として方向つきで分かる`() {
+        val older = trace().copy(reflection = reflection("問い", 100L, "古い返事", 200L))
+        val newer = trace().copy(reflection = reflection("問い", 300L, "新しい返事", 400L))
+
+        // 端末側が新しい＝通常の往復。失われるのは退避側。
+        assertEquals(DroppedReplySide.IMPORTED, droppedReplySide(local = newer, imported = older))
+        // 退避側が新しい＝別端末で書き進めた場合。失われるのは端末側。
+        assertEquals(DroppedReplySide.LOCAL, droppedReplySide(local = older, imported = newer))
+    }
+
+    @Test
+    fun `失われる返事が無いときは方向も出ない`() {
         val withReply = trace().copy(reflection = reflection("問い", 100L, "同じ返事", 200L))
-        val other = trace().copy(reflection = reflection("問い", 300L, "違う返事", 400L))
+        val sameReplyLater = trace().copy(reflection = reflection("問い", 300L, "同じ返事", 400L))
         val withoutReply = trace().copy(reflection = reflection("問い", 100L))
 
-        assertTrue(replacesReply(withReply, other))
-        assertFalse("同じ文なら失うものは無い", replacesReply(withReply, withReply))
-        assertFalse(replacesReply(withReply, withoutReply))
-        assertFalse(replacesReply(withoutReply, withReply))
+        assertNull("同じ文なら失うものは無い", droppedReplySide(withReply, sameReplyLater))
+        assertNull(droppedReplySide(withReply, withoutReply))
+        assertNull(droppedReplySide(withoutReply, withReply))
+    }
+
+    // **方向の判定はマージ結果から引く。** 規則を2度書くと必ず片方が古くなるので、
+    // 「残らなかった側」がマージ結果と食い違わないことを直接見る。
+    @Test
+    fun `方向の判定はマージ結果と食い違わない`() {
+        val older = trace().copy(reflection = reflection("問い", 100L, "古い返事", 200L))
+        val newer = trace().copy(reflection = reflection("問い", 300L, "新しい返事", 400L))
+
+        listOf(older to newer, newer to older).forEach { (local, imported) ->
+            val survivor = mergeReadingTraces(local, imported).reflection?.reply
+            val dropped = droppedReplySide(local, imported)
+            val droppedReply = when (dropped) {
+                DroppedReplySide.LOCAL -> local.reflection?.reply
+                DroppedReplySide.IMPORTED -> imported.reflection?.reply
+                null -> null
+            }
+            assertEquals("残った返事と失われた返事が同じになっている", false, survivor == droppedReply)
+        }
     }
 
     // ── 訪問と累計 ──────────────────────────────────────────────────────

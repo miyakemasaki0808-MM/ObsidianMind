@@ -8,6 +8,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.ui.exportSummary
 import com.example.newproject.ui.importPlanSummary
 import com.example.newproject.ui.importResultSummary
+import com.example.newproject.ui.revisedPlanNotice
 import com.example.newproject.ui.unreadableTraceLocation
 import com.example.newproject.ui.withheldImportText
 import java.time.ZoneId
@@ -18,22 +19,75 @@ import org.junit.Test
 /** 退避画面の文面。**「自分の言葉が失われるか」に先に答えているか**を見る。 */
 class ReadingTraceBackupTextTest {
 
-    @Test
-    fun `返事が置き換わるときは件数より先にその事実を言う`() {
-        val text = importPlanSummary(ReadingTraceImportPlan(added = 3, merged = 2, replyReplaced = 1, withheld = emptyList()))
+    private fun plan(
+        added: Int = 3,
+        merged: Int = 2,
+        localReplyReplaced: Int = 0,
+        importedReplyDropped: Int = 0
+    ) = ReadingTraceImportPlan(
+        added = added,
+        merged = merged,
+        localReplyReplaced = localReplyReplaced,
+        importedReplyDropped = importedReplyDropped,
+        withheld = emptyList()
+    )
 
-        assertTrue("返事が置き換わることを言っていない: $text", text.contains("返事"))
+    @Test
+    fun `端末側の返事が消えるときは件数より先にその事実を言う`() {
+        val text = importPlanSummary(plan(localReplyReplaced = 1))
+
+        assertTrue("この端末の返事が置き換わることを言っていない: $text", text.contains("この端末に書いた返事"))
         assertTrue(
             "件数より先に損失を言っていない: $text",
             text.indexOf("返事") < text.indexOf("新しく増える")
         )
     }
 
+    /**
+     * **通常の往復（書き出したあとに返事を書き足す）では、失われるのは退避ファイル側。**
+     * 方向を取り違えると「あなたの返事が置き換わります」と逆の告知になる。
+     */
+    @Test
+    fun `退避側の返事が使われないときは端末側が消えると言わない`() {
+        val text = importPlanSummary(plan(importedReplyDropped = 1))
+
+        assertTrue("退避側が使われないことを言っていない: $text", text.contains("退避ファイル側の返事が使われません"))
+        assertTrue(
+            "端末側の返事が消えると誤告知している: $text",
+            !text.contains("この端末に書いた返事が退避ファイル側の返事に置き換わります")
+        )
+    }
+
+    @Test
+    fun `両方向あるときは両方を言う`() {
+        val text = importPlanSummary(plan(localReplyReplaced = 2, importedReplyDropped = 3))
+
+        assertTrue(text.contains("2件のノートで、この端末に書いた返事"))
+        assertTrue(text.contains("3件のノートでは"))
+    }
+
     @Test
     fun `失われる返事が無いことも明示する`() {
-        val text = importPlanSummary(ReadingTraceImportPlan(added = 3, merged = 2, replyReplaced = 0, withheld = emptyList()))
+        val text = importPlanSummary(plan())
 
         assertTrue(text.contains("失われる返事はありません"))
+    }
+
+    // 二度目の確認を求められた利用者が最初に知りたいのは「どこまで進んだか」。
+    @Test
+    fun `作り直した下見はまだ書いていないことを先に言う`() {
+        assertTrue(revisedPlanNotice().contains("まだ1件も書き戻していません"))
+    }
+
+    // **「無かった」と読ませない。** 読めなかっただけで、そこには痕跡がある。
+    @Test
+    fun `端末側を読めなかった保留は不在と言わない`() {
+        val text = withheldImportText(
+            WithheldImport("ideas/habit.md", ReadingTraceImportWithholdReason.LOCAL_UNREADABLE)
+        )
+
+        assertTrue(text.contains("読み取れませんでした"))
+        assertTrue("不在として説明している: $text", !text.contains("ありません"))
     }
 
     // 読めなかった分を隠すと、退避できていないものを「できた」と誤解する。

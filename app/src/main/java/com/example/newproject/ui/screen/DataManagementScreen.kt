@@ -36,6 +36,7 @@ import com.example.newproject.ui.component.OptionRow
 import com.example.newproject.ui.exportSummary
 import com.example.newproject.ui.importPlanSummary
 import com.example.newproject.ui.importResultSummary
+import com.example.newproject.ui.revisedPlanNotice
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
@@ -222,7 +223,14 @@ private fun BackupStatus(
         }
 
         is ReadingTraceBackupState.Planned -> Card {
-            CardTitle("読み戻す前に確認してください")
+            CardTitle(
+                if (state.revised) "端末側が変わったので確認し直してください"
+                else "読み戻す前に確認してください",
+                emphasis = state.revised
+            )
+            // **「まだ書いていない」を先に言う。** 二度目の確認を求められた利用者が
+            // 最初に知りたいのは、押した操作がどこまで進んだのかである。
+            if (state.revised) Body(revisedPlanNotice())
             Body(importPlanSummary(state.plan))
             state.plan.withheld.forEach { item ->
                 Spacer(modifier = Modifier.height(4.dp))
