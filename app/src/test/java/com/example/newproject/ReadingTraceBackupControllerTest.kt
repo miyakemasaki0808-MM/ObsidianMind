@@ -14,6 +14,8 @@ import com.example.newproject.model.ReadingTraceImportWithholdReason
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.state.ReadingTraceBackupState
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -490,6 +492,36 @@ class ReadingTraceBackupControllerTest {
         assertNull(env.written)
     }
 
+    // ── Main を占有しない ──────────────────────────────────────────────────
+
+    /**
+     * **退避ファイルの組み立てと解析は cpuDispatcher へ渡る。**
+     *
+     * 上限は8MB・5,000件で、JSONの組み立ても解析も入力サイズに比例する。
+     * `scope` は本番では `viewModelScope`（Main）なので、ここを外すと
+     * 上限近傍で進捗表示も中止ボタンも止まる。
+     *
+     * **何がその中で走るか**は `ReadingTraceBackupThreadingTest` がソース走査で見る。
+     * こちらは**差し替え口が本当に使われている**ことを見る。
+     */
+    @Test
+    fun `書き出しと読み戻しはcpuDispatcherを経由する`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/habit.md"))
+
+        env.controller.export { bytes -> env.written = bytes }
+        advanceUntilIdle()
+        assertTrue("書き出しが cpuDispatcher を経由していない", env.cpuDispatcher.dispatches > 0)
+
+        val before = env.cpuDispatcher.dispatches
+        env.controller.prepareImport { env.written!! }
+        advanceUntilIdle()
+        assertTrue(
+            "読み戻しの解析が cpuDispatcher を経由していない",
+            env.cpuDispatcher.dispatches > before
+        )
+    }
+
     // ── 訪問の追記との直列化 ────────────────────────────────────────────────
 
     /**
@@ -572,6 +604,9 @@ class ReadingTraceBackupControllerTest {
         /** 本番では `ReadingTraceController` と共有する錠。訪問の追記が握っている状況を作る。 */
         val writeMutex = Mutex()
 
+        /** 差し替え口が実際に使われていることを数える。 */
+        val cpuDispatcher = CountingDispatcher(StandardTestDispatcher(scope.testScheduler))
+
         val controller = ReadingTraceBackupController(
             scope = scope,
             persistence = persistence,
@@ -581,9 +616,22 @@ class ReadingTraceBackupControllerTest {
             clock = { 1_000L },
             // Dispatchers.IO / Default はテストスケジューラの管理外なので差し替える。
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
-            cpuDispatcher = StandardTestDispatcher(scope.testScheduler),
+            cpuDispatcher = cpuDispatcher,
             writeMutex = writeMutex
         )
+    }
+
+    /** 委譲しつつディスパッチ回数を数えるだけの入れ物。 */
+    private class CountingDispatcher(
+        private val delegate: CoroutineDispatcher
+    ) : CoroutineDispatcher() {
+        var dispatches = 0
+            private set
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            dispatches++
+            delegate.dispatch(context, block)
+        }
     }
 
     private class RecordingWriter : ReadingTraceBackupStateWriter {
