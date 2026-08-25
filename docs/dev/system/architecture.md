@@ -77,7 +77,8 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 `Dispatchers.Default` へ逃がす。**逃がしたら対で「元の同期経路が代わりに走らないか」を確認する**
 （`precomputedBlocks ?: parse(content)` のようなフォールバックが残っていると退避の意味が消える）
 → [lessons L13](../lessons.md#l13-純粋と軽いは別)。これは `NoteExcerptThreadingTest` /
-`NoteSectionThreadingTest` がソース走査で固定している。
+`NoteSectionThreadingTest` / `ReadingTraceBackupThreadingTest` がソース走査で固定している。
+**走査は届く範囲しか守らない** — 2026-08-26 に退避のJSON（最大8MB）が3本目としてこの穴を踏んだ。
 
 ---
 
