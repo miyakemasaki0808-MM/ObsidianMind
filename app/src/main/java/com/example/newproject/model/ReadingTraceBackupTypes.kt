@@ -55,10 +55,30 @@ enum class ReadingTraceBackupStep {
     IMPORT_APPLY
 }
 
-/** 読み戻しで適用できなかった1件の理由。 */
+/**
+ * 読み戻しで適用できなかった1件の理由。
+ *
+ * **「端末側に無い」はここに来ない** — それは適用できる（新規として受け入れる）。
+ * ここへ来るのは**適用してはいけない**ものだけである。
+ */
 enum class ReadingTraceImportWithholdReason {
     /** 退避ファイル内のその1件を読めなかった（版違い・checksum不一致・改変）。 */
     UNREADABLE_ENTRY,
+
+    /**
+     * 端末側に痕跡がある**はず**なのに読み出せなかった。
+     *
+     * **「無い」へ畳んではいけない。** 畳むと退避側を新規として丸ごと書き、
+     * 読めなかっただけの**端末側の返事を警告なしで消す**。SAF の一時的な読取失敗で成立する。
+     */
+    LOCAL_UNREADABLE,
+
+    /**
+     * 下見のあとに端末側が変わり、**見せた計画と食い違った**まま書き込み直前に達した。
+     *
+     * 不可逆な操作は、承認された内容だけを書く。
+     */
+    LOCAL_CHANGED,
 
     /** 突き合わせはできたが、端末側へ書き込めなかった。 */
     SAVE_FAILED
@@ -78,13 +98,17 @@ data class WithheldImport(
 /**
  * 読み戻しの下見。**適用前にこれを見せて確定させる**（→ reading_trace_backup §9）。
  *
- * [replyReplaced] は「両方に返事があり、片方が消える」件数。
- * **[merged] の内数**で、この機能で唯一「失う可能性がある」ものなので独立して数える
- * （→ reading_trace_backup §5 の突き合わせ表）。
+ * **返事の損失は方向ごとに数える。** 突き合わせ規則は「返事を持つ側／新しい側が残る」なので、
+ * 端末側が新しければ**退避側の返事が失われる**。1つの件数にまとめて
+ * 「退避ファイル側に置き換わる」と言うと、通常の往復（書き出した後に返事を書き足す）で
+ * **実際と逆の告知**になる。どちらも [merged] の内数。
  */
 data class ReadingTraceImportPlan(
     val added: Int,
     val merged: Int,
-    val replyReplaced: Int,
+    /** この端末に書いた返事が、退避ファイル側の返事に置き換わる件数。 */
+    val localReplyReplaced: Int,
+    /** 退避ファイル側の返事が使われない件数（この端末の返事のほうが新しい）。 */
+    val importedReplyDropped: Int,
     val withheld: List<WithheldImport>
 )

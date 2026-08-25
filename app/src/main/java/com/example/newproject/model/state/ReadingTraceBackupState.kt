@@ -40,8 +40,17 @@ sealed interface ReadingTraceBackupState {
         val unreadableKeys: List<String>
     ) : ReadingTraceBackupState
 
-    /** 下見が済み、確定を待っている。**まだ1件も書いていない。** */
-    data class Planned(val plan: ReadingTraceImportPlan) : ReadingTraceBackupState
+    /**
+     * 下見が済み、確定を待っている。**まだ1件も書いていない。**
+     *
+     * [revised] は「確定を押したが、端末側が下見の時点から変わっていたので作り直した」印。
+     * **不可逆な操作は、画面に出したものだけを書く** — 変わっていたら書かずに計画を出し直し、
+     * もう一度確定させる。この印が無いと、利用者は同じ画面をもう一度見せられた理由が分からない。
+     */
+    data class Planned(
+        val plan: ReadingTraceImportPlan,
+        val revised: Boolean = false
+    ) : ReadingTraceBackupState
 
     /**
      * 読み戻した。[interrupted] が真なら、途中で中断したので

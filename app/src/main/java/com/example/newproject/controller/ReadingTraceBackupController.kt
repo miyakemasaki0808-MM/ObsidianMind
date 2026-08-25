@@ -7,9 +7,11 @@ import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.domain.adoptImportedTrace
 import com.example.newproject.domain.mergeReadingTraces
-import com.example.newproject.domain.replacesReply
+import com.example.newproject.domain.DroppedReplySide
+import com.example.newproject.domain.droppedReplySide
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceBackupStateWriter
 import com.example.newproject.model.ReadingTraceBackupStep
@@ -47,9 +49,20 @@ import java.util.concurrent.atomic.AtomicInteger
  * ## 読み戻しは2段階
  *
  * **下見（[prepareImport]）と適用（[applyImport]）を分ける。** 読み戻しは不可逆なので、
- * 「何件が上書きされるか」「返事が何件置き換わるか」を見せてから確定させる。
- * 適用側は下見の結果を再利用せず**もう一度端末側を読み直す** — 下見と確定のあいだに
- * 背面化での訪問書き出しが走りうるので、確定の瞬間の中身へ対して突き合わせる。
+ * 「何件が増え、何件を合わせ、どちらの返事が失われるか」を見せてから確定させる。
+ *
+ * **確定は、見せた内容と端末側が一致していることを先に確かめてから書く。** 適用は
+ * ①端末側を全件読み直して下見時と突き合わせ（1件も書かない）②一致していたら
+ * 錠の中で1件ずつ読み直して書く、の2段構えになっている。①で差があれば
+ * **1件も書かずに計画を作り直して出し直す** — 画面に出していない損失を確定させないため。
+ *
+ * ## 「読めなかった」を「無い」へ畳まない
+ *
+ * 端末側の点読込は、SAF の一時的な失敗でも `ReadingTraceReadResult.None` を返す。
+ * これを「痕跡が無い」と読むと、**退避側を新規として丸ごと書き、端末側の返事が
+ * 警告も保留もなく消える**。そこで置き場の一覧を先に取り、
+ * **キーが一覧にあるのに読めない場合は「確かめられない」として書かない**。
+ * 一覧そのものが取れなければ不在を根拠にできないので、読み戻し自体を始めない。
  */
 internal class ReadingTraceBackupController(
     private val scope: CoroutineScope,
@@ -66,6 +79,16 @@ internal class ReadingTraceBackupController(
      * 遠いプロバイダで画面が止まる。既存の痕跡系Controllerと同じ規律。
      */
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /**
+     * 退避ファイルの組み立てと解析を載せる先。**I/O用とは分ける。**
+     *
+     * 退避ファイルは最大8MB・5,000件で、JSONの組み立て・整形文字列化・各痕跡のdecode・
+     * 重複の畳み込みはいずれも**入力サイズに比例する**。`scope` は本番では
+     * `viewModelScope`（Main）なので、ここを通さないと上限近傍で
+     * **進捗表示も中止ボタンも動かなくなる**（→ architecture 判断3・lessons L13）。
+     * 「純粋」は「軽い」を意味しない。
+     */
+    private val cpuDispatcher: CoroutineDispatcher = Dispatchers.Default,
     /**
      * サイドカーの read-modify-write を直列化する錠。**[ReadingTraceController] と同じものを受け取る。**
      *
@@ -93,8 +116,36 @@ internal class ReadingTraceBackupController(
         val vaultKey: String,
         val traces: List<ReadingTrace>,
         /** 退避ファイル側で既に読めなかった分。適用の結果へそのまま持ち越す。 */
-        val unreadable: List<WithheldImport>
+        val unreadable: List<WithheldImport>,
+        /**
+         * **下見した時点の端末側**。相対パス → その時の状態。
+         *
+         * 確定時にこれと突き合わせる。**計画（件数）ではなく中身で比べる** —
+         * 件数が同じでも別の痕跡が変わっていれば、承認された内容ではない。
+         */
+        val snapshots: Map<String, LocalTrace>
     )
+
+    /**
+     * 端末側1件の状態。**「無い」「壊れている」「読めない」を畳まない。**
+     *
+     * 3つは次の行動が全部違う — 無いなら新規として受け入れてよく、壊れているなら
+     * 救えるものが無いので退避側で置き換えてよく、**読めないなら何もしてはいけない**。
+     * [ReadingTrace] は `data class` なので、[Present] どうしの比較は中身の比較になる。
+     */
+    private sealed interface LocalTrace {
+        /** 置き場の一覧にキーが無い＝実在しない。 */
+        data object Absent : LocalTrace
+
+        /** 読めた。突き合わせの相手。 */
+        data class Present(val trace: ReadingTrace) : LocalTrace
+
+        /** 一覧にあるが中身が壊れている。**救えるものが無いので退避側で置き換える。** */
+        data object Corrupt : LocalTrace
+
+        /** 一覧にあるのに読み出せなかった。**確かめられないので書かない。** */
+        data object Unreadable : LocalTrace
+    }
 
     /**
      * 適用の集計。**書いたその場で数える。**
@@ -206,9 +257,88 @@ internal class ReadingTraceBackupController(
                 "${unreadable.size}件の読書痕跡をどれも読み取れなかったため、書き出しませんでした。"
             )
         }
-        val bytes = ReadingTraceBackupJson.encode(traces, clock())
+        // **束ねるのは Main の外で。** 全痕跡をJSONArrayへ積んで整形文字列にする作業は
+        // 件数に比例する（→ architecture 判断3）。
+        val bytes = withContext(cpuDispatcher) { ReadingTraceBackupJson.encode(traces, clock()) }
         withContext(ioDispatcher) { write(bytes) }
         return ReadingTraceBackupState.Exported(traces.size, unreadable)
+    }
+
+    // ── 端末側の読み取り ──────────────────────────────────────────────────
+
+    /**
+     * 端末側1件を読む。**「読めなかった」を「無い」へ畳まない。**
+     *
+     * 不在の根拠は**置き場の一覧**に置く。点読込が返す `None` は
+     * 「ファイルが無い」とも「開けなかった」とも読めるので、単独では不在の証明にならない。
+     * キーが一覧にあるのに読めなければ、それは読取失敗である。
+     */
+    private fun readLocal(
+        vaultRelativePath: String,
+        vaultKey: String,
+        existingKeys: Set<String>
+    ): LocalTrace {
+        if (ReadingTraceStore.keyFor(vaultRelativePath) !in existingKeys) return LocalTrace.Absent
+        return when (val result = persistence.load(vaultRelativePath, vaultKey)) {
+            is ReadingTraceReadResult.Valid -> LocalTrace.Present(result.trace)
+            is ReadingTraceReadResult.Corrupt -> LocalTrace.Corrupt
+            ReadingTraceReadResult.None -> LocalTrace.Unreadable
+        }
+    }
+
+    /** 端末側をまとめて読む。まとまりごとに世代を照合し、切り替わっていたら null。 */
+    private suspend fun readLocals(
+        traces: List<ReadingTrace>,
+        vaultKey: String,
+        existingKeys: Set<String>,
+        generation: Long,
+        step: ReadingTraceBackupStep
+    ): Map<String, LocalTrace>? {
+        val snapshots = LinkedHashMap<String, LocalTrace>(traces.size)
+        var done = 0
+        state.set(ReadingTraceBackupState.Working(step, 0, traces.size))
+        for (chunk in traces.chunked(IO_CHUNK_SIZE)) {
+            val read = withContext(ioDispatcher) {
+                chunk.map { it.vaultRelativePath to readLocal(it.vaultRelativePath, vaultKey, existingKeys) }
+            }
+            if (generation != vaultGeneration()) return null
+            snapshots.putAll(read)
+            done += chunk.size
+            state.set(ReadingTraceBackupState.Working(step, done, traces.size))
+        }
+        return snapshots
+    }
+
+    /** 下見の結果を数える。**書かないものは [ReadingTraceImportPlan.withheld] へ落とす。** */
+    private fun planFor(
+        traces: List<ReadingTrace>,
+        snapshots: Map<String, LocalTrace>,
+        carriedWithheld: List<WithheldImport>
+    ): ReadingTraceImportPlan {
+        var added = 0
+        var merged = 0
+        var localReplyReplaced = 0
+        var importedReplyDropped = 0
+        val withheld = carriedWithheld.toMutableList()
+        traces.forEach { imported ->
+            when (val local = snapshots[imported.vaultRelativePath]) {
+                // 壊れていた分は退避側で置き換える。読める痕跡になるので「増える」側で数える。
+                LocalTrace.Absent, LocalTrace.Corrupt, null -> added++
+                LocalTrace.Unreadable -> withheld += WithheldImport(
+                    imported.vaultRelativePath,
+                    ReadingTraceImportWithholdReason.LOCAL_UNREADABLE
+                )
+                is LocalTrace.Present -> {
+                    merged++
+                    when (droppedReplySide(local.trace, imported)) {
+                        DroppedReplySide.LOCAL -> localReplyReplaced++
+                        DroppedReplySide.IMPORTED -> importedReplyDropped++
+                        null -> Unit
+                    }
+                }
+            }
+        }
+        return ReadingTraceImportPlan(added, merged, localReplyReplaced, importedReplyDropped, withheld)
     }
 
     // ── 読み戻しの下見 ────────────────────────────────────────────────────
@@ -235,7 +365,10 @@ internal class ReadingTraceBackupController(
         read: suspend () -> ByteArray
     ): ReadingTraceBackupState? = try {
         val bytes = withContext(ioDispatcher) { read() }
-        when (val parsed = ReadingTraceBackupJson.decode(bytes)) {
+        // **解析は Main の外で行う。** 退避ファイルは最大8MBで、JSONの解析と
+        // 各痕跡のdecodeは入力サイズに比例する（→ architecture 判断3）。
+        val parsed = withContext(cpuDispatcher) { ReadingTraceBackupJson.decode(bytes) }
+        when (parsed) {
             // 読めない版・別形式はファイルごと中止する。部分適用は不可逆な操作を
             // 中途半端に残すので、読めた分だけ適用するという逃げ道を作らない。
             is ReadingTraceBackupReadResult.Unusable ->
@@ -260,11 +393,14 @@ internal class ReadingTraceBackupController(
         }
         // 同じノートの痕跡が退避ファイル内で重複していたら、**捨てずに畳む。**
         // 手で結合された退避ファイルがこの形になり、片方を落とすと返事を失う。
-        val traces = entries.filterIsInstance<ReadingTraceBackupEntry.Valid>()
-            .map { it.trace }
-            .groupBy { it.vaultRelativePath }
-            .map { (_, duplicates) -> duplicates.reduce(::mergeReadingTraces) }
-            .sortedBy { it.vaultRelativePath }
+        // 畳む作業も件数に比例するので Main の外へ置く。
+        val traces = withContext(cpuDispatcher) {
+            entries.filterIsInstance<ReadingTraceBackupEntry.Valid>()
+                .map { it.trace }
+                .groupBy { it.vaultRelativePath }
+                .map { (_, duplicates) -> duplicates.reduce(::mergeReadingTraces) }
+                .sortedBy { it.vaultRelativePath }
+        }
         if (traces.isEmpty()) {
             return ReadingTraceBackupState.Error(
                 if (unreadable.isEmpty()) "退避ファイルに読書痕跡が入っていません。"
@@ -272,41 +408,26 @@ internal class ReadingTraceBackupController(
             )
         }
 
-        var added = 0
-        var merged = 0
-        var replyReplaced = 0
-        var done = 0
-        state.set(
-            ReadingTraceBackupState.Working(ReadingTraceBackupStep.IMPORT_SCAN, 0, traces.size)
-        )
-        for (chunk in traces.chunked(IO_CHUNK_SIZE)) {
-            val locals = withContext(ioDispatcher) {
-                chunk.map { persistence.load(it.vaultRelativePath, vaultKey) }
-            }
-            if (generation != vaultGeneration()) return null
-            chunk.forEachIndexed { index, imported ->
-                val local = (locals[index] as? ReadingTraceReadResult.Valid)?.trace
-                if (local == null) {
-                    added++
-                } else {
-                    merged++
-                    if (replacesReply(local, imported)) replyReplaced++
-                }
-            }
-            done += chunk.size
-            state.set(
-                ReadingTraceBackupState.Working(
-                    ReadingTraceBackupStep.IMPORT_SCAN,
-                    done,
-                    traces.size
-                )
+        val existingKeys = existingKeys(vaultKey)
+            ?: return ReadingTraceBackupState.Error(
+                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
             )
-        }
-        pending = PendingImport(vaultKey, traces, unreadable)
-        return ReadingTraceBackupState.Planned(
-            ReadingTraceImportPlan(added, merged, replyReplaced, unreadable)
-        )
+        val snapshots =
+            readLocals(traces, vaultKey, existingKeys, generation, ReadingTraceBackupStep.IMPORT_SCAN)
+                ?: return null
+
+        pending = PendingImport(vaultKey, traces, unreadable, snapshots)
+        return ReadingTraceBackupState.Planned(planFor(traces, snapshots, unreadable))
     }
+
+    /**
+     * 置き場のキー一覧。**不在の唯一の根拠**なので、列挙できなければ null を返して読み戻さない。
+     */
+    private suspend fun existingKeys(vaultKey: String): Set<String>? =
+        when (val listing = withContext(ioDispatcher) { persistence.listKeys(vaultKey) }) {
+            is ReadingTraceKeyListing.Available -> listing.keys
+            is ReadingTraceKeyListing.Unavailable -> null
+        }
 
     // ── 読み戻しの適用 ────────────────────────────────────────────────────
 
@@ -332,7 +453,6 @@ internal class ReadingTraceBackupController(
         applied = tally
         job = scope.launch {
             val next = runApply(target, tally, generation)
-            pending = null
             if (next != null && generation == vaultGeneration()) state.set(next)
         }
     }
@@ -341,24 +461,69 @@ internal class ReadingTraceBackupController(
         target: PendingImport,
         tally: ImportTally,
         generation: Long
+    ): ReadingTraceBackupState? = try {
+        // ── 段階1: 見せた計画と端末側が一致しているか。**1件も書かない。** ──
+        val existingKeys = existingKeys(target.vaultKey)
+        if (existingKeys == null) {
+            ReadingTraceBackupState.Error(
+                "端末側の読書痕跡を確認できませんでした。同期の完了を待ってからお試しください。"
+            )
+        } else {
+            val fresh = readLocals(
+                target.traces,
+                target.vaultKey,
+                existingKeys,
+                generation,
+                ReadingTraceBackupStep.IMPORT_APPLY
+            )
+            when {
+                fresh == null -> null
+                // **下見のあとに端末側が変わった。書かずに計画を作り直す。**
+                // 画面に出していない損失を確定させないための1点。
+                fresh != target.snapshots -> {
+                    pending = PendingImport(
+                        target.vaultKey,
+                        target.traces,
+                        target.unreadable,
+                        fresh
+                    )
+                    applied = null
+                    ReadingTraceBackupState.Planned(
+                        plan = planFor(target.traces, fresh, target.unreadable),
+                        revised = true
+                    )
+                }
+                else -> {
+                    val result = writeAll(target, fresh, tally, generation)
+                    if (result != null) pending = null
+                    result
+                }
+            }
+        }
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        ReadingTraceBackupState.Error(error.message ?: "読書痕跡を読み戻せませんでした。")
+    }
+
+    /** ── 段階2: 書く。1件ずつ錠の中で読み直し、承認された状態のままのものだけ書く。 ── */
+    private suspend fun writeAll(
+        target: PendingImport,
+        approved: Map<String, LocalTrace>,
+        tally: ImportTally,
+        generation: Long
     ): ReadingTraceBackupState? {
         var done = 0
-        return try {
-            state.set(applyProgress(0, target.traces.size))
-            for (chunk in target.traces.chunked(IO_CHUNK_SIZE)) {
-                withContext(ioDispatcher) {
-                    chunk.forEach { applyOne(it, target.vaultKey, tally) }
-                }
-                if (generation != vaultGeneration()) return null
-                done += chunk.size
-                state.set(applyProgress(done, target.traces.size))
+        state.set(applyProgress(0, target.traces.size))
+        for (chunk in target.traces.chunked(IO_CHUNK_SIZE)) {
+            withContext(ioDispatcher) {
+                chunk.forEach { applyOne(it, target.vaultKey, approved, tally) }
             }
-            ReadingTraceBackupState.Imported(tally.added, tally.merged, tally.withheld)
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            ReadingTraceBackupState.Error(error.message ?: "読書痕跡を読み戻せませんでした。")
+            if (generation != vaultGeneration()) return null
+            done += chunk.size
+            state.set(applyProgress(done, target.traces.size))
         }
+        return ReadingTraceBackupState.Imported(tally.added, tally.merged, tally.withheld)
     }
 
     private fun applyProgress(done: Int, total: Int): ReadingTraceBackupState.Working =
@@ -367,32 +532,56 @@ internal class ReadingTraceBackupController(
     /**
      * 1件を突き合わせて書き、**その場で数える。**
      *
-     * **確定の瞬間に端末側を読み直す。** 下見と確定のあいだに背面化での訪問書き出しが
-     * 走りうるので、下見のときに読んだ中身へ対して突き合わせてはいけない。
+     * **錠の中で読み直してから書く。** 読みと書きが錠の外で割れていると、
+     * 錠を持っている意味が無い（訪問の追記が挟まると読み取りが古いまま上書きする）。
      *
-     * 端末側が壊れていた（[ReadingTraceReadResult.Corrupt]）場合は「無い」と同じ扱いで
-     * 退避側をそのまま採る。壊れた痕跡から救えるものは無く、読める痕跡へ置き換わる方がよい。
+     * **読み直した結果が承認された状態と違えば書かない。** 段階1で全件を確かめてから
+     * ここへ来るので通常は一致するが、その隙間に訪問が書き出されることはあり得る。
      */
     private suspend fun applyOne(
         imported: ReadingTrace,
         vaultKey: String,
+        approved: Map<String, LocalTrace>,
         tally: ImportTally
     ) = writeMutex.withLock {
-        val local = (persistence.load(imported.vaultRelativePath, vaultKey)
-            as? ReadingTraceReadResult.Valid)?.trace
-        val next = if (local == null) adoptImportedTrace(imported) else mergeReadingTraces(local, imported)
+        val path = imported.vaultRelativePath
+        val approvedLocal = approved[path]
+        // **錠の中では置き場を数え直さない。** 1件ごとにフォルダを全列挙すると、
+        // 遠いプロバイダで件数ぶんの列挙が走って現実的な時間で終わらない。
+        // 不在の根拠は段階1の列挙が持っているので、`None` の読み替えだけをそこへ委ねる。
+        val current = when (val result = persistence.load(path, vaultKey)) {
+            is ReadingTraceReadResult.Valid -> LocalTrace.Present(result.trace)
+            is ReadingTraceReadResult.Corrupt -> LocalTrace.Corrupt
+            // 段階1で「無い」と確かめた相手が今も読めないなら、無いままとみなす。
+            // **そうでなければ読取失敗**（消えた・開けなかった）なので、書かない。
+            ReadingTraceReadResult.None ->
+                if (approvedLocal == LocalTrace.Absent) LocalTrace.Absent else LocalTrace.Unreadable
+        }
         when {
-            persistence.save(next, vaultKey) !is ReadingTraceSaveResult.Success ->
-                // 書けなかった分は「適用できなかった」として残す。
-                // 追加・マージのどちらに数えても、実際には反映されていない。
-                tally.withhold(
-                    WithheldImport(
-                        imported.vaultRelativePath,
-                        ReadingTraceImportWithholdReason.SAVE_FAILED
-                    )
-                )
-            local == null -> tally.countAdded()
-            else -> tally.countMerged()
+            current is LocalTrace.Unreadable ->
+                tally.withhold(WithheldImport(path, ReadingTraceImportWithholdReason.LOCAL_UNREADABLE))
+
+            // 段階1のあとに端末側が変わった（訪問が着いた・痕跡が作られた）。
+            // 承認された内容ではないので書かない。
+            current != approvedLocal ->
+                tally.withhold(WithheldImport(path, ReadingTraceImportWithholdReason.LOCAL_CHANGED))
+
+            else -> {
+                val next = when (current) {
+                    is LocalTrace.Present -> mergeReadingTraces(current.trace, imported)
+                    else -> adoptImportedTrace(imported)
+                }
+                when {
+                    persistence.save(next, vaultKey) !is ReadingTraceSaveResult.Success ->
+                        // 書けなかった分は「適用できなかった」として残す。
+                        // 追加・マージのどちらに数えても、実際には反映されていない。
+                        tally.withhold(
+                            WithheldImport(path, ReadingTraceImportWithholdReason.SAVE_FAILED)
+                        )
+                    current is LocalTrace.Present -> tally.countMerged()
+                    else -> tally.countAdded()
+                }
+            }
         }
     }
 

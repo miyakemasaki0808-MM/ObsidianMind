@@ -132,7 +132,7 @@ class ReadingTraceBackupControllerTest {
 
     /** **失われる返事の件数を確定前に数える。** ここが「不可逆の予告」の実体。 */
     @Test
-    fun `返事が置き換わる件数を下見で数える`() = runTest {
+    fun `端末側の返事が置き換わる件数を下見で数える`() = runTest {
         val env = Env(this)
         env.persistence.put(
             trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
@@ -145,7 +145,208 @@ class ReadingTraceBackupControllerTest {
         env.controller.prepareImport { backup }
         advanceUntilIdle()
 
-        assertEquals(1, (env.state.value as ReadingTraceBackupState.Planned).plan.replyReplaced)
+        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
+        assertEquals(1, plan.localReplyReplaced)
+        assertEquals(0, plan.importedReplyDropped)
+    }
+
+    /**
+     * **通常の往復では失われるのは退避側。** 書き出したあとに返事を書き足すと
+     * 端末側が新しくなるので、規則どおり端末側が残る。ここを1つの件数へまとめると
+     * 「あなたの返事が置き換わります」という逆の告知になる。
+     */
+    @Test
+    fun `退避側の返事が使われない件数を下見で分けて数える`() = runTest {
+        val env = Env(this)
+        env.persistence.put(
+            trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "端末側の新しい返事", 1_000L))
+        )
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "退避側の古い返事", 200L))),
+            1_000L
+        )
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
+        assertEquals(0, plan.localReplyReplaced)
+        assertEquals(1, plan.importedReplyDropped)
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+        assertEquals(
+            "端末側の新しい返事",
+            env.persistence.stored("ideas/habit.md")?.reflection?.reply
+        )
+    }
+
+    // ── 端末側を読み取れないとき ────────────────────────────────────────────
+
+    /**
+     * **「読めなかった」を「無い」へ畳まない。**
+     *
+     * 畳むと退避側を新規として丸ごと書き、**読めなかっただけの端末側の返事が
+     * 警告も保留もなく消える**。SAF の一時的な読取失敗で成立し、書込み自体は成功するので
+     * 保留にも残らない — この機能で最も見つけにくい壊れ方。
+     */
+    @Test
+    fun `端末側を読み取れない痕跡は新規扱いにせず保留する`() = runTest {
+        val env = Env(this)
+        env.persistence.put(
+            trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
+        )
+        env.persistence.unreadableKeys += ReadingTraceStore.keyFor("ideas/habit.md")
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            1_000L
+        )
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
+        assertEquals("読めなかった痕跡を新規として数えた", 0, plan.added)
+        assertEquals(
+            listOf(ReadingTraceImportWithholdReason.LOCAL_UNREADABLE),
+            plan.withheld.map { it.reason }
+        )
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertEquals("読めなかった痕跡を上書きした", 0, env.persistence.saveCount)
+        assertEquals(
+            "端末側の返事",
+            env.persistence.stored("ideas/habit.md")?.reflection?.reply
+        )
+    }
+
+    // 実在しない痕跡は従来どおり新規として受け入れる（畳まない＝何も足せない、ではない）。
+    @Test
+    fun `実在しない痕跡は従来どおり新規として受け入れる`() = runTest {
+        val env = Env(this)
+        val backup = ReadingTraceBackupJson.encode(listOf(trace("new/note.md")), 1_000L)
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertEquals(1, (env.state.value as ReadingTraceBackupState.Imported).added)
+        assertEquals("new/note.md", env.persistence.stored("new/note.md")?.vaultRelativePath)
+    }
+
+    // 置き場を列挙できないなら不在を根拠にできない。読み戻しそのものを始めない。
+    @Test
+    fun `置き場を列挙できないときは読み戻さない`() = runTest {
+        val env = Env(this)
+        val backup = ReadingTraceBackupJson.encode(listOf(trace("ideas/habit.md")), 1_000L)
+        env.persistence.listingUnavailable = true
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        assertTrue(env.state.value is ReadingTraceBackupState.Error)
+        assertEquals(0, env.persistence.saveCount)
+    }
+
+    @Test
+    fun `下見の後に端末側が読めなくなったら書き込まない`() = runTest {
+        val env = Env(this)
+        env.persistence.put(
+            trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
+        )
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            1_000L
+        )
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        env.persistence.unreadableKeys += ReadingTraceStore.keyFor("ideas/habit.md")
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertEquals(0, env.persistence.saveCount)
+        val revised = env.state.value as ReadingTraceBackupState.Planned
+        assertEquals(
+            listOf(ReadingTraceImportWithholdReason.LOCAL_UNREADABLE),
+            revised.plan.withheld.map { it.reason }
+        )
+    }
+
+    // ── 下見と確定のあいだの変化 ────────────────────────────────────────────
+
+    /**
+     * **不可逆な操作は、画面に出した内容だけを書く。**
+     *
+     * 「失われる返事はありません」と見せた後に端末側へ返事が付いた場合、
+     * そのまま適用すると**利用者が承認していない損失**が起きる。
+     * 最初の確定では1件も書かず、計画を作り直して二度目の確定を求める。
+     */
+    @Test
+    fun `下見のあとに端末側へ返事が付いたら最初の確定では書かない`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/habit.md"))
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            1_000L
+        )
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+        assertEquals(
+            0,
+            (env.state.value as ReadingTraceBackupState.Planned).plan.localReplyReplaced
+        )
+
+        // 確定前に、同じノートへ返事が保存される。
+        env.persistence.put(
+            trace("ideas/habit.md").copy(reflection = reflection("問い", 50L, "後から書いた返事", 60L))
+        )
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        val revised = env.state.value as ReadingTraceBackupState.Planned
+        assertTrue("作り直したことが画面に出ていない", revised.revised)
+        assertEquals("承認していない損失を確定した", 0, env.persistence.saveCount)
+        assertEquals(1, revised.plan.localReplyReplaced)
+
+        // 作り直した計画を承認すれば、規則どおりマージする。
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertTrue(env.state.value is ReadingTraceBackupState.Imported)
+        assertEquals("退避側の返事", env.persistence.stored("ideas/habit.md")?.reflection?.reply)
+    }
+
+    // 返事だけでなく**訪問が増えただけ**でも作り直す。古い下見の値で上書きしないため。
+    @Test
+    fun `下見のあとに訪問が増えたら最初の確定では書かない`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/habit.md"))
+        val backup = ReadingTraceBackupJson.encode(listOf(trace("ideas/habit.md")), 1_000L)
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        env.persistence.put(
+            trace("ideas/habit.md").copy(
+                visits = listOf(ReadingVisit(1_000L, null, 50), ReadingVisit(2_000L, null, 80)),
+                totalVisitCount = 2
+            )
+        )
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+        assertEquals(0, env.persistence.saveCount)
+        assertTrue((env.state.value as ReadingTraceBackupState.Planned).revised)
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        // 後から着いた訪問を落とさずマージしている。
+        assertEquals(2, env.persistence.stored("ideas/habit.md")?.visits?.size)
     }
 
     @Test
@@ -378,8 +579,9 @@ class ReadingTraceBackupControllerTest {
             currentVaultKey = { vaultKey },
             vaultGeneration = { generation },
             clock = { 1_000L },
-            // Dispatchers.IO はテストスケジューラの管理外なので差し替える。
+            // Dispatchers.IO / Default はテストスケジューラの管理外なので差し替える。
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
+            cpuDispatcher = StandardTestDispatcher(scope.testScheduler),
             writeMutex = writeMutex
         )
     }
@@ -416,6 +618,9 @@ private fun reflection(
 private class FakeBackupPersistence : ReadingTracePersistence {
     private val traces = mutableMapOf<String, ReadingTrace>()
     val corruptKeys = mutableSetOf<String>()
+
+    /** 置き場の一覧には出るのに読み出せないキー。SAF の一時的な読取失敗を作る。 */
+    val unreadableKeys = mutableSetOf<String>()
     val unwritablePaths = mutableSetOf<String>()
     var listingUnavailable = false
     var saveCount = 0
@@ -458,6 +663,9 @@ private class FakeBackupPersistence : ReadingTracePersistence {
     override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult {
         beforeLoad?.invoke()
         if (key in corruptKeys) return ReadingTraceReadResult.Corrupt("壊れています")
+        // **一覧には出るのに読めない。** SAF の一時的な読取失敗はこの形になる
+        // （Gateway が例外を null へ畳み、Store が `None` を返す）。
+        if (key in unreadableKeys) return ReadingTraceReadResult.None
         return traces[key]?.let { ReadingTraceReadResult.Valid(it) } ?: ReadingTraceReadResult.None
     }
 
