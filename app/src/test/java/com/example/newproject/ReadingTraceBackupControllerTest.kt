@@ -551,8 +551,12 @@ class ReadingTraceBackupControllerTest {
     // ── 中断 ──────────────────────────────────────────────────────────────
 
     // 適用の途中で止めた分は**既に書かれている**。「やめました」だけでは足りない。
+    //
+    // **まとまりの境界ではなく途中で止める。** 25件ちょうどで中止するテストは、
+    // 「中止を受けてもまとまりを走り切る」欠陥をそのまま通してしまう
+    // （実機では表示55件に対し75件が保存された）。
     @Test
-    fun `適用の中断はどこまで適用したかを結果として残す`() = runTest {
+    fun `適用の中断はまとまりの途中でも報告と実保存が一致する`() = runTest {
         val env = Env(this)
         val backup = ReadingTraceBackupJson.encode(
             (1..60).map { trace("notes/$it.md") },
@@ -560,24 +564,68 @@ class ReadingTraceBackupControllerTest {
         )
         env.controller.prepareImport { backup }
         advanceUntilIdle()
-        // 25件（IOの1まとまり）を書き終えた時点で中止する。
-        env.persistence.afterSave = { if (env.persistence.saveCount == 25) env.controller.cancel() }
+        env.persistence.afterSave = { if (env.persistence.saveCount == 10) env.controller.cancel() }
 
         env.controller.applyImport()
         advanceUntilIdle()
 
         val imported = env.state.value as ReadingTraceBackupState.Imported
         assertTrue("中断したことが結果に出ていない", imported.interrupted)
-        assertEquals(25, env.persistence.saveCount)
-        // **書いた件数と報告が食い違わないこと。** まとまりを書き終えてから数えると
-        // ここが 0 になり、実際には25件書いたのに「何も適用されなかった」と誤解させる。
-        //
-        // 中断は非同期なので、ずれは**最大1件**（数えるのは書いた後なので、
-        // 書けていないものを「適用した」と言うことはない）。
-        assertTrue(
-            "書いた件数と報告が食い違う: 書き込み ${env.persistence.saveCount} / 報告 ${imported.added}",
-            imported.added in env.persistence.saveCount - 1..env.persistence.saveCount
+        assertEquals("中止を受けてもまとまりを走り切っている", 10, env.persistence.saveCount)
+        assertEquals("報告が実保存と食い違う", 10, imported.added)
+    }
+
+    // 結果を確定して見せた後は、**画面に出ていない書き込みが1件も起きない。**
+    @Test
+    fun `中断の結果を出した後は保存が増えない`() = runTest {
+        val env = Env(this)
+        val backup = ReadingTraceBackupJson.encode(
+            (1..60).map { trace("notes/$it.md") },
+            1_000L
         )
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+        env.persistence.afterSave = { if (env.persistence.saveCount == 10) env.controller.cancel() }
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        val reported = (env.state.value as ReadingTraceBackupState.Imported).added
+        val settled = env.persistence.saveCount
+        advanceUntilIdle()
+        assertEquals("結果を出した後も保存が続いている", settled, env.persistence.saveCount)
+        assertEquals("報告が実保存と食い違う", reported, env.persistence.saveCount)
+    }
+
+    // 追加だけでなく**既存痕跡との結合**でも同じ性質を保つ。
+    // 結合は端末側の返事を置き換え得るので、報告から漏れると損失に気づけない。
+    @Test
+    fun `結合を含む適用の中断も報告と実保存が一致する`() = runTest {
+        val env = Env(this)
+        val paths = (1..60).map { "notes/$it.md" }
+        paths.forEach { path ->
+            env.persistence.put(
+                trace(path).copy(reflection = reflection("ひとこと", 1_000L, "端末側の返事", 2_000L))
+            )
+        }
+        val backup = ReadingTraceBackupJson.encode(
+            paths.map {
+                trace(it).copy(reflection = reflection("ひとこと", 1_000L, "退避側の返事", 3_000L))
+            },
+            1_000L
+        )
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+        env.persistence.afterSave = { if (env.persistence.saveCount == 10) env.controller.cancel() }
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        val imported = env.state.value as ReadingTraceBackupState.Imported
+        assertTrue("中断したことが結果に出ていない", imported.interrupted)
+        assertEquals("中止を受けてもまとまりを走り切っている", 10, env.persistence.saveCount)
+        assertEquals("結合の報告が実保存と食い違う", 10, imported.merged)
+        assertEquals(0, imported.added)
     }
 
     // 書き出しは束ね終えた後にしか書かないので、中断しても保存先は汚れない。

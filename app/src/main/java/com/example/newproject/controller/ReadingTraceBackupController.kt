@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -517,7 +518,12 @@ internal class ReadingTraceBackupController(
         state.set(applyProgress(0, target.traces.size))
         for (chunk in target.traces.chunked(IO_CHUNK_SIZE)) {
             withContext(ioDispatcher) {
-                chunk.forEach { applyOne(it, target.vaultKey, approved, tally) }
+                chunk.forEach {
+                    // **1件ごとに中止を見る。** `applyOne` の錠は競合していなければ
+                    // 中断しないので、これが無いとまとまり（25件）を走り切ってしまう。
+                    ensureActive()
+                    applyOne(it, target.vaultKey, approved, tally)
+                }
             }
             if (generation != vaultGeneration()) return null
             done += chunk.size
@@ -593,25 +599,42 @@ internal class ReadingTraceBackupController(
      * **適用の途中だけは「やめました」では足りない。** そこまでに書いた分は
      * 既に端末側へ反映されているので、件数を添えて結果として見せる。
      * 書き出しと下見は1件も書いていないので、待機へ戻す。
+     *
+     * **中止は要求であって完了ではない。** `cancel()` はJobへ印を付けるだけで、
+     * 書き手が実際に止まるのはその後の中断点なので、**ここで途中経過を確定すると
+     * 走り切った分だけ少なく報告する**（実測でチャンク途中の中止が16件ずれた）。
+     * 件数は書き手を `join()` してから1度だけ数える。
      */
     fun cancel() {
         val running = state.current as? ReadingTraceBackupState.Working ?: return
-        job?.cancel()
+        val stopping = job
         job = null
-        if (running.step == ReadingTraceBackupStep.IMPORT_APPLY) {
-            val tally = applied ?: ImportTally()
+        pending = null
+        // **停止要求だけは同期で出す。** 数える側のコルーチンへ委ねると、
+        // そちらが先に捨てられたときに書き手が止まらないまま残る。
+        stopping?.cancel()
+        if (running.step != ReadingTraceBackupStep.IMPORT_APPLY) {
+            state.set(ReadingTraceBackupState.Idle)
+            return
+        }
+        val tally = applied
+        scope.launch {
+            stopping?.join()
+            // 待っているあいだに次の操作が始まっていたら、その結果を上書きしない。
+            // `applied` は書き出し・下見・確定・Vault切替のいずれでも差し替わるので、
+            // 同じ適用の続きであることは同一性で確かめられる。
+            if (applied !== tally) return@launch
+            if (state.current !is ReadingTraceBackupState.Working) return@launch
+            val counted = tally ?: ImportTally()
             state.set(
                 ReadingTraceBackupState.Imported(
-                    added = tally.added,
-                    merged = tally.merged,
-                    withheld = tally.withheld,
+                    added = counted.added,
+                    merged = counted.merged,
+                    withheld = counted.withheld,
                     interrupted = true
                 )
             )
-        } else {
-            state.set(ReadingTraceBackupState.Idle)
         }
-        pending = null
     }
 
     /** 結果表示や下見を閉じて待機へ戻す。**走行中には使わない**（そちらは [cancel]）。 */

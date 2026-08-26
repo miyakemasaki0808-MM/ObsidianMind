@@ -1,7 +1,7 @@
 # 読書痕跡の退避と復元（エクスポート／インポート）
 
 **状態:** **実装済み・実機検証待ち（2026-08-23）。** ケースは [reading_trace_backup](../../review/device_validation/reading_trace_backup.md)
-**最終検証:** 2026-08-26 / レビュー指摘4件を反映
+**最終検証:** 2026-08-27 / 実機検証P1-1（中止後の過剰適用）を反映
 **関連コード:** `controller/ReadingTraceBackupController.kt` / `domain/ReadingTraceMerge.kt` / `data/ReadingTraceBackupJson.kt` / `model/ReadingTraceBackupTypes.kt` / `model/state/ReadingTraceBackupState.kt` / `ui/screen/DataManagementScreen.kt`
 **関連テスト:** `ReadingTraceMergeTest` / `ReadingTraceBackupJsonTest` / `ReadingTraceBackupControllerTest` / `ReadingTraceBackupTextTest`
 **正本:** この文書
@@ -294,10 +294,13 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
   `ReadingTraceBackupJsonTest` が束ね方（別形式・新しすぎる版をファイルごと止める／
   壊れた1件を数える／`documentId` を書き出さない）を持つ。
   `ReadingTraceBackupControllerTest` が結線を持つ — 列挙失敗を空の退避ファイルへ畳まない／
-  下見が1件も書かない／下見後のVault切替で書かない／中断の報告が実際に書けた件数と揃う／
+  下見が1件も書かない／下見後のVault切替で書かない／**まとまりの途中で中止しても報告と実保存が一致する**
+  （追加・結合の両方／結果を出した後に保存が増えない）／
   **端末側を読めない痕跡を新規扱いにしない**／**下見のあとに端末側が変わったら最初の確定では書かない**／
   訪問の追記が錠を握っているあいだは書かない。
-  `ReadingTraceBackupThreadingTest` が組み立て・解析・重複集約のMain退避をソース走査で固定する。
+  `ReadingTraceBackupThreadingTest` が組み立て・解析・重複集約のMain退避と、
+  **中止の結果を書き手の停止後に確定すること**をソース走査で固定する
+  （別スレッドから止める交錯は単一スレッドのテストスケジューラでは作れないため）。
 - **変異確認（実施済み）:** 5件の変異がいずれも赤になることを確かめてある —
   `withVaultScopedReset()` の登録を外す／`applyOne` の錠を外す／
   読取不能を不在へ畳む／下見との照合を外す／返事損失の方向判定を潰す。
@@ -343,8 +346,12 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
   こちらから取り消せない。**予見できる失敗＝Vault未選択はボタンを押せなくして塞いである**が、
   残りは塞げない。作ったファイルを消す案は採らない — ピッカーで既存ファイルを
   選び直した場合に**ユーザーのファイルを消し得る**
-- **中断の報告は実際に書けた件数と最大1件ずれる。** 数えるのは書いた後なので、
-  **書けていないものを「適用した」と言うことはない**（少なく報告する側へ倒してある）
+- **中断の報告は実際に書けた件数と一致する。** 2026-08-27 の実機検証まで
+  「最大1件ずれる」と書いていたが**誤りだった** — 中止はJobへ印を付けるだけで、
+  まとまり（25件）の途中に中断点が無かったため、**表示55件に対し75件が保存された**。
+  中止要求と結果確定を分け（書き手を `join()` してから1度だけ数える）、
+  `applyOne` の手前に協調キャンセル点を置いて閉じた。
+  **止めた後に画面へ出ていない書き込みは起きない**
 
 ## 12. 開発経緯
 
