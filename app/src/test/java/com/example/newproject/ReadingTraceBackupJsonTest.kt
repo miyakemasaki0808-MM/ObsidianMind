@@ -82,18 +82,46 @@ class ReadingTraceBackupJsonTest {
         assertNull(restored.documentId)
     }
 
+    /**
+     * **「選んだファイルが違う」は1つの文言で断る。**
+     *
+     * JSONとして解けない `.md` と、解けたが別形式のJSONは、内部の失敗経路が違うだけで
+     * 利用者から見れば同じ事象である。2026-08-27 の実機検証（`BACKUP-13`）は、
+     * ここが入力形式で二通りに分かれることを突いた。
+     */
     @Test
-    fun `別形式のJSONは受け付けない`() {
-        val alien = JSONObject().put("hello", "world").toString().toByteArray(Charsets.UTF_8)
+    fun `退避ファイルでないものは形式によらず同じ文言で断る`() {
+        val alienJson = JSONObject().put("hello", "world").toString().toByteArray(Charsets.UTF_8)
+        val markdown = "# ただのMarkdown\n".toByteArray(Charsets.UTF_8)
 
-        assertTrue(ReadingTraceBackupJson.decode(alien) is ReadingTraceBackupReadResult.Unusable)
+        val fromJson = ReadingTraceBackupJson.decode(alienJson) as ReadingTraceBackupReadResult.Unusable
+        val fromMarkdown = ReadingTraceBackupJson.decode(markdown) as ReadingTraceBackupReadResult.Unusable
+
+        assertEquals(
+            "このファイルは読書痕跡の退避ファイルではありません。",
+            fromJson.reason
+        )
+        assertEquals("入力形式で拒否の文言が変わっている", fromJson.reason, fromMarkdown.reason)
     }
 
+    /**
+     * **意味の違う拒否まで畳まない。** 空・上限超過・将来の版は
+     * 「退避ファイルではあるが、いま受け付けられない」で、利用者が次にやることが違う。
+     */
     @Test
-    fun `JSONですらないファイルは受け付けない`() {
-        val alien = "# ただのMarkdown\n".toByteArray(Charsets.UTF_8)
+    fun `受け付けられない理由が違えば文言も分ける`() {
+        val empty = ReadingTraceBackupJson.decode(ByteArray(0)) as ReadingTraceBackupReadResult.Unusable
+        val future = JSONObject()
+            .put("format", ReadingTraceBackupLimits.FORMAT_ID)
+            .put("backupVersion", ReadingTraceBackupLimits.FORMAT_VERSION + 1)
+            .toString()
+            .toByteArray(Charsets.UTF_8)
+            .let { ReadingTraceBackupJson.decode(it) as ReadingTraceBackupReadResult.Unusable }
 
-        assertTrue(ReadingTraceBackupJson.decode(alien) is ReadingTraceBackupReadResult.Unusable)
+        val notABackup = "このファイルは読書痕跡の退避ファイルではありません。"
+        assertTrue("空のファイルが非退避と同じ文言になっている", empty.reason != notABackup)
+        assertTrue("将来の版が非退避と同じ文言になっている", future.reason != notABackup)
+        assertTrue(future.reason.contains("新しい版"))
     }
 
     /**

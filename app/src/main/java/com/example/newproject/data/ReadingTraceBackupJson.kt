@@ -98,12 +98,15 @@ internal object ReadingTraceBackupJson {
         val root = try {
             JSONObject(decodeUtf8Strict(bytes))
         } catch (error: Exception) {
-            return ReadingTraceBackupReadResult.Unusable("退避ファイルとして読み取れません。")
+            // **同じ「選んだファイルが違う」を、入力形式で二通りに言わない。**
+            // JSONとして解けない（`.md` など）のと、解けたが別形式なのは、
+            // 内部の失敗経路が違うだけで利用者から見れば同じ1つの事象である。
+            // 壊れた退避ファイルと非退避ファイルは原理的に区別できないので、
+            // 区別しているふりをした文言を出さない（→ 実機ケース BACKUP-13）。
+            return ReadingTraceBackupReadResult.Unusable(NOT_A_BACKUP)
         }
         if (root.optString(KEY_FORMAT) != ReadingTraceBackupLimits.FORMAT_ID) {
-            return ReadingTraceBackupReadResult.Unusable(
-                "このファイルは読書痕跡の退避ファイルではありません。"
-            )
+            return ReadingTraceBackupReadResult.Unusable(NOT_A_BACKUP)
         }
         val version = root.optInt(KEY_BACKUP_VERSION, 0)
         if (version < 1) {
@@ -133,6 +136,12 @@ internal object ReadingTraceBackupJson {
         }
         return ReadingTraceBackupReadResult.Valid(entries)
     }
+
+    /**
+     * 非退避ファイルの拒否文言。**空・上限超過・将来版とは分けたまま、ここだけ1本にする** —
+     * それらは「このファイルではあるが受け付けられない」で、次にやることが違う。
+     */
+    private const val NOT_A_BACKUP = "このファイルは読書痕跡の退避ファイルではありません。"
 
     private const val KEY_FORMAT = "format"
     private const val KEY_BACKUP_VERSION = "backupVersion"
