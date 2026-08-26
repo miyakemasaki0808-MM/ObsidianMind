@@ -244,7 +244,11 @@ internal object ReadingTraceJson {
     private const val KEY_SCHEMA_VERSION = "schemaVersion"
     private const val KEY_RELATIVE_PATH = "vaultRelativePath"
     private const val KEY_NOTE_TITLE = "noteTitle"
-    private const val KEY_DOCUMENT_ID = "documentId"
+    /**
+     * 退避側がキーごと落とすため、名前の持ち主をここに1つだけ置く
+     * （[ReadingTraceBackupJson] が文字列で持つと、改名したときに黙ってすれ違う）。
+     */
+    internal const val KEY_DOCUMENT_ID = "documentId"
     private const val KEY_VISITS = "visits"
     private const val KEY_AI_SUMMARY = "aiSummary"
     private const val KEY_AI_SUMMARY_VISIT_COUNT = "aiSummaryVisitCount"

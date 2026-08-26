@@ -42,7 +42,7 @@ internal object ReadingTraceBackupJson {
     /**
      * 痕跡を1ファイルへ束ねる。
      *
-     * **`documentId` はここで落とす。** 端末／権限グラントごとに変わる引き当てキャッシュで、
+     * **`documentId` はここでキーごと落とす。** 端末／権限グラントごとに変わる引き当てキャッシュで、
      * 別端末はもちろん同じ端末の再インストール後でも無効になる値である。しかも
      * SAF の documentId には端末内のパスが入るため、**平文で外へ出す退避ファイルへ
      * 載せる理由が1つも無い**。読み戻し側の規則（端末側を保つ）にも自動的に沿う。
@@ -60,7 +60,14 @@ internal object ReadingTraceBackupJson {
         val entries = JSONArray()
         traces.forEach { trace ->
             val encoded = ReadingTraceJson.encode(trace.copy(documentId = null))
-            entries.put(JSONObject(String(encoded, Charsets.UTF_8)))
+            // **値を null にするだけでは足りない。** 通常の痕跡形式は欄を必ず書くので
+            // `"documentId": null` というキーが残り、「退避ファイルのどこにも無い」という
+            // 可搬形式の契約（→ §5・実機ケース BACKUP-03）を満たさない。
+            // 値と形の両方で落とす — 片方が消えても端末内のパスは外へ出ない。
+            entries.put(
+                JSONObject(String(encoded, Charsets.UTF_8))
+                    .apply { remove(ReadingTraceJson.KEY_DOCUMENT_ID) }
+            )
         }
         val root = JSONObject()
             .put(KEY_FORMAT, ReadingTraceBackupLimits.FORMAT_ID)

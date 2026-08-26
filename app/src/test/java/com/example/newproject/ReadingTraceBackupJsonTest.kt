@@ -44,10 +44,15 @@ class ReadingTraceBackupJsonTest {
     }
 
     /**
-     * **`documentId` は外へ出さない。**
+     * **`documentId` は外へ出さない。値もキーも。**
      *
      * 別端末では無効な値であるうえ、SAF の documentId には端末内のパスが入る。
      * 退避ファイルは平文でアプリの管理外へ出るので、載せる理由が1つも無い。
+     *
+     * **decode した結果が null であることでは足りない。** 値を null にしただけだと
+     * 生のJSONには `"documentId": null` が残り、外へ出す形式の契約
+     * （実機ケース `BACKUP-03` の「どこにも無い」）を満たさない。2026-08-27 の
+     * 実機検証はここを突いた — 意味だけを見る検査は、形の欠落を通してしまう。
      */
     @Test
     fun `documentId は退避ファイルへ書かない`() {
@@ -55,12 +60,26 @@ class ReadingTraceBackupJsonTest {
 
         val bytes = ReadingTraceBackupJson.encode(traces, 1_000L)
 
-        assertTrue(
-            "端末内のパスが退避ファイルへ漏れている",
-            !String(bytes, Charsets.UTF_8).contains("content://device")
-        )
+        val raw = String(bytes, Charsets.UTF_8)
+        assertTrue("端末内のパスが退避ファイルへ漏れている", !raw.contains("content://device"))
+        assertTrue("退避ファイルに documentId のキーが残っている", !raw.contains("\"documentId\""))
         val entries = (ReadingTraceBackupJson.decode(bytes) as ReadingTraceBackupReadResult.Valid).entries
         assertNull((entries[0] as ReadingTraceBackupEntry.Valid).trace.documentId)
+    }
+
+    /** キーを落としても往復は壊れない（欠落と明示的な null を同じ扱いで読む）。 */
+    @Test
+    fun `documentId のない退避ファイルも読み戻せる`() {
+        val original = trace("ideas/habit.md").copy(documentId = "content://device/tree/doc")
+
+        val bytes = ReadingTraceBackupJson.encode(listOf(original), 1_000L)
+        val entries = (ReadingTraceBackupJson.decode(bytes) as ReadingTraceBackupReadResult.Valid).entries
+
+        val restored = (entries[0] as ReadingTraceBackupEntry.Valid).trace
+        assertEquals(original.vaultRelativePath, restored.vaultRelativePath)
+        assertEquals(original.noteTitle, restored.noteTitle)
+        assertEquals(original.visits, restored.visits)
+        assertNull(restored.documentId)
     }
 
     @Test
