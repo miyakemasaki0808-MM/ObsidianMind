@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-27 | — | 中止後の過剰適用を断ち、退避JSONのキーと拒否文言を正本の外部契約へ揃えた | **[reading_trace_backup](features/reading_trace_backup.md)** §5・§10・§11・[lessons](lessons.md) L49・L50 |
+| 2026-08-27 | — | X-9をPixel実機で検証し、応答性を確認、中止後の過剰適用と形式差異を残件化した | [review](../review/README.md)・[reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-08-26 | — | X-9レビューのP1 2件・P2 2件を直し、読取不能・下見との照合・損失の方向・Main占有を閉じた | **[reading_trace_backup](features/reading_trace_backup.md)** §5・§8・[lessons](lessons.md) L47・L48 |
 | 2026-08-23 | — | 読書痕跡の書き出し・読み戻しを入れ、片付け系を「データ管理」1画面へ統合した | **[reading_trace_backup](features/reading_trace_backup.md)**・[architecture](system/architecture.md) |
 | 2026-08-22 | — | 解析書へ目次（63見出し・2階層）を足した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
