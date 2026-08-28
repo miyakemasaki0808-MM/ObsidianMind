@@ -30,6 +30,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -159,6 +160,16 @@ internal class ReadingTraceBackupController(
         private val addedCount = AtomicInteger()
         private val mergedCount = AtomicInteger()
         private val withheldItems = CopyOnWriteArrayList<WithheldImport>()
+        private val stopClaimed = AtomicBoolean(false)
+
+        /**
+         * 停止の受け付けは**1回だけ**。2度目以降は false を返す。
+         *
+         * 集計と同じ寿命に置く — 適用のたびに作り直されるので、
+         * 「この適用はもう止め終わったか」を別のフィールドとして登録して回らずに済む
+         * （登録先が増えるほど、増やしたときの登録漏れが起きる）。
+         */
+        fun claimStop(): Boolean = stopClaimed.compareAndSet(false, true)
 
         val added: Int get() = addedCount.get()
         val merged: Int get() = mergedCount.get()
@@ -604,6 +615,10 @@ internal class ReadingTraceBackupController(
      * 書き手が実際に止まるのはその後の中断点なので、**ここで途中経過を確定すると
      * 走り切った分だけ少なく報告する**（実測でチャンク途中の中止が16件ずれた）。
      * 件数は書き手を `join()` してから1度だけ数える。
+     *
+     * **止め終わるまで、中止は何度押されても1回である。** 停止を待つあいだ画面は
+     * `Working` のままで中止ボタンも残るので、2度目が入り得る。待っていない側が
+     * 数えると同じ欠陥が戻るため、結果を確定できるのは最初の1回だけにする。
      */
     fun cancel() {
         val running = state.current as? ReadingTraceBackupState.Working ?: return
@@ -618,6 +633,11 @@ internal class ReadingTraceBackupController(
             return
         }
         val tally = applied
+        // **停止待ちの再入では、結果を作らない。** 1回目の中止は書き手の停止を待っているが、
+        // 画面は `Working` のままなので中止をもう一度押せる。2度目がここを通ると
+        // **待っていない側**が停止前の途中経過を最終結果にしてしまい、
+        // 処理中だった1件が表示に含まれないまま保存される（前回P1と同じ壊れ方）。
+        if (tally != null && !tally.claimStop()) return
         scope.launch {
             stopping?.join()
             // 待っているあいだに次の操作が始まっていたら、その結果を上書きしない。

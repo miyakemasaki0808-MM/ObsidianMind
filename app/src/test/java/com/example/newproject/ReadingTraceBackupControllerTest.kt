@@ -14,8 +14,15 @@ import com.example.newproject.model.ReadingTraceImportWithholdReason
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.Reflection
 import com.example.newproject.model.state.ReadingTraceBackupState
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -628,6 +635,100 @@ class ReadingTraceBackupControllerTest {
         assertEquals(0, imported.added)
     }
 
+    /**
+     * **停止待ちの再入。** 実機と同じ「別スレッドで走る同期I/Oを、Main から2回止める」順序を作る。
+     *
+     * 単一スレッドのテストスケジューラでは作れない — そちらの中止は書き手自身のスタックから
+     * 呼ばれるので、`cancel()` が戻った時点で書き手はもう進んでいない。実機では
+     * **1回目の停止を待つあいだ画面は `Working` のままで中止ボタンも残る**ため、
+     * 2度目の中止が入り得る。そこで結果を確定すると、処理中だった1件が
+     * **表示に含まれないまま保存される**（前回P1と同じ壊れ方）。
+     */
+    @Test
+    fun `停止待ち中の再タップは停止前の件数を確定しない`() = assertReentrantCancelKeepsCountsExact(merging = false)
+
+    /** 結合（端末側の返事が置き換わる側）でも同じ性質を保つ。 */
+    @Test
+    fun `停止待ち中の再タップは結合でも件数を確定しない`() = assertReentrantCancelKeepsCountsExact(merging = true)
+
+    private fun assertReentrantCancelKeepsCountsExact(merging: Boolean) {
+        val mainLike = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "main-like") }
+        val ioLike = Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "io-like") }
+        try {
+            val main = mainLike.asCoroutineDispatcher()
+            val env = Env(CoroutineScope(main), ioLike.asCoroutineDispatcher(), CountingDispatcher(main))
+            val paths = (1..60).map { "notes/$it.md" }
+            if (merging) {
+                paths.forEach { path ->
+                    env.persistence.put(
+                        trace(path).copy(reflection = reflection("ひとこと", 1_000L, "端末側の返事", 2_000L))
+                    )
+                }
+            }
+            val backup = ReadingTraceBackupJson.encode(
+                paths.map { path ->
+                    if (merging) {
+                        trace(path).copy(reflection = reflection("ひとこと", 1_000L, "退避側の返事", 3_000L))
+                    } else {
+                        trace(path)
+                    }
+                },
+                1_000L
+            )
+            runBlocking {
+                withContext(main) { env.controller.prepareImport { backup } }
+                awaitState(env) { it is ReadingTraceBackupState.Planned }
+
+                // 10件目の `save` の**内側**で書き手を止める。この時点で保存は済み、
+                // 集計はまだ増えていない — 実機で中止が刺さるのと同じ位置。
+                val reachedTenth = CountDownLatch(1)
+                val releaseSave = CountDownLatch(1)
+                env.persistence.afterSave = {
+                    if (env.persistence.saveCount == 10) {
+                        reachedTenth.countDown()
+                        releaseSave.await()
+                    }
+                }
+                withContext(main) { env.controller.applyImport() }
+                assertTrue("10件目まで進まなかった", reachedTenth.await(10, TimeUnit.SECONDS))
+
+                withContext(main) { env.controller.cancel() }
+                withContext(main) { env.controller.cancel() }
+                // 中止が積んだコルーチンを走らせ切ってから、止めていた save を解放する。
+                withContext(main) { }
+
+                assertTrue(
+                    "書き手が止まる前に結果を確定した: ${env.state.value}",
+                    env.state.value is ReadingTraceBackupState.Working
+                )
+                releaseSave.countDown()
+                awaitState(env) { it is ReadingTraceBackupState.Imported }
+
+                val imported = env.state.value as ReadingTraceBackupState.Imported
+                assertTrue("中断したことが結果に出ていない", imported.interrupted)
+                assertEquals("中止を受けてもまとまりを走り切っている", 10, env.persistence.saveCount)
+                assertEquals(
+                    "報告が実保存と食い違う",
+                    env.persistence.saveCount,
+                    if (merging) imported.merged else imported.added
+                )
+            }
+        } finally {
+            mainLike.shutdownNow()
+            ioLike.shutdownNow()
+        }
+    }
+
+    /** 実スレッドの完了を待つ。仮想時間が無いので、状態そのものを待つ。 */
+    private fun awaitState(env: Env, predicate: (ReadingTraceBackupState) -> Boolean) {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (System.nanoTime() < deadline) {
+            if (predicate(env.state.value)) return
+            Thread.sleep(2)
+        }
+        throw AssertionError("待っていた状態にならなかった: ${env.state.value}")
+    }
+
     // 書き出しは束ね終えた後にしか書かないので、中断しても保存先は汚れない。
     @Test
     fun `書き出しの中断は待機へ戻すだけ`() = runTest {
@@ -642,7 +743,23 @@ class ReadingTraceBackupControllerTest {
         assertNull(env.written)
     }
 
-    private class Env(scope: kotlinx.coroutines.test.TestScope) {
+    private class Env(
+        scope: CoroutineScope,
+        ioDispatcher: CoroutineDispatcher,
+        /** 差し替え口が実際に使われていることを数える。 */
+        val cpuDispatcher: CountingDispatcher
+    ) {
+        /**
+         * 既定は単一スレッドのテストスケジューラ。
+         * **実スレッドの交錯を作る中断テストだけ**が別のディスパッチャを渡す。
+         */
+        constructor(scope: kotlinx.coroutines.test.TestScope) : this(
+            scope,
+            // Dispatchers.IO / Default はテストスケジューラの管理外なので差し替える。
+            StandardTestDispatcher(scope.testScheduler),
+            CountingDispatcher(StandardTestDispatcher(scope.testScheduler))
+        )
+
         val persistence = FakeBackupPersistence()
         var generation = 0L
         var vaultKey: String? = VAULT
@@ -652,9 +769,6 @@ class ReadingTraceBackupControllerTest {
         /** 本番では `ReadingTraceController` と共有する錠。訪問の追記が握っている状況を作る。 */
         val writeMutex = Mutex()
 
-        /** 差し替え口が実際に使われていることを数える。 */
-        val cpuDispatcher = CountingDispatcher(StandardTestDispatcher(scope.testScheduler))
-
         val controller = ReadingTraceBackupController(
             scope = scope,
             persistence = persistence,
@@ -662,8 +776,7 @@ class ReadingTraceBackupControllerTest {
             currentVaultKey = { vaultKey },
             vaultGeneration = { generation },
             clock = { 1_000L },
-            // Dispatchers.IO / Default はテストスケジューラの管理外なので差し替える。
-            ioDispatcher = StandardTestDispatcher(scope.testScheduler),
+            ioDispatcher = ioDispatcher,
             cpuDispatcher = cpuDispatcher,
             writeMutex = writeMutex
         )
@@ -683,6 +796,8 @@ class ReadingTraceBackupControllerTest {
     }
 
     private class RecordingWriter : ReadingTraceBackupStateWriter {
+        /** 実スレッドの中断テストが別スレッドから読むので可視性を持たせる。 */
+        @Volatile
         var value: ReadingTraceBackupState = ReadingTraceBackupState.Idle
             private set
 
@@ -719,6 +834,7 @@ private class FakeBackupPersistence : ReadingTracePersistence {
     val unreadableKeys = mutableSetOf<String>()
     val unwritablePaths = mutableSetOf<String>()
     var listingUnavailable = false
+    @Volatile
     var saveCount = 0
         private set
 

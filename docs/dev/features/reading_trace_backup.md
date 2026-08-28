@@ -1,7 +1,7 @@
 # 読書痕跡の退避と復元（エクスポート／インポート）
 
 **状態:** **実装済み・実機検証待ち（2026-08-23）。** ケースは [reading_trace_backup](../../review/device_validation/reading_trace_backup.md)
-**最終検証:** 2026-08-27 / 実機検証P1-1（中止後の過剰適用）を反映
+**最終検証:** 2026-08-28 / 中止の再入（停止待ち中の再タップ）を反映
 **関連コード:** `controller/ReadingTraceBackupController.kt` / `domain/ReadingTraceMerge.kt` / `data/ReadingTraceBackupJson.kt` / `model/ReadingTraceBackupTypes.kt` / `model/state/ReadingTraceBackupState.kt` / `ui/screen/DataManagementScreen.kt`
 **関連テスト:** `ReadingTraceMergeTest` / `ReadingTraceBackupJsonTest` / `ReadingTraceBackupControllerTest` / `ReadingTraceBackupTextTest`
 **正本:** この文書
@@ -301,6 +301,8 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
   `ReadingTraceBackupControllerTest` が結線を持つ — 列挙失敗を空の退避ファイルへ畳まない／
   下見が1件も書かない／下見後のVault切替で書かない／**まとまりの途中で中止しても報告と実保存が一致する**
   （追加・結合の両方／結果を出した後に保存が増えない）／
+  **停止待ち中に中止をもう一度押しても、書き手が止まる前に結果を出さない**
+  （実スレッド2本と、`save` の内側で止まる fake で交錯を作る）／
   **端末側を読めない痕跡を新規扱いにしない**／**下見のあとに端末側が変わったら最初の確定では書かない**／
   訪問の追記が錠を握っているあいだは書かない。
   `ReadingTraceBackupThreadingTest` が組み立て・解析・重複集約のMain退避と、
@@ -357,6 +359,11 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
   中止要求と結果確定を分け（書き手を `join()` してから1度だけ数える）、
   `applyOne` の手前に協調キャンセル点を置いて閉じた。
   **止めた後に画面へ出ていない書き込みは起きない**
+- **停止を待つあいだ、画面は `Working` のままで中止ボタンも残る。** 押せてしまうこと自体は
+  そのままにし、**受理を1回に絞る**（集計と同じ寿命の要求フラグ）ことで結果の一意性を守る。
+  「停止中」を状態の欄として足すと、状態型を読む全箇所の監査を伴ううえ、
+  **止まるまでの間は1件ぶん**（進行中の `save` 1回）しかない。
+  書き出す／読み戻すは走行中は押せないので、走行中に押せる操作は中止だけである
 
 ## 12. 開発経緯
 
