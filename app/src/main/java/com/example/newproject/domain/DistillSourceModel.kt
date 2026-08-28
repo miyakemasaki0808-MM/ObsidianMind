@@ -17,10 +17,43 @@ private data class SourceLine(
 private data class InlineSyntax(
     val codeSpans: List<DistillTextRange>,
     val strongSpans: List<DistillTextRange>,
-    val linkSpans: List<DistillTextRange>
+    val linkSpans: List<DistillTextRange>,
+    val emphasisSpans: List<DistillTextRange>
 ) {
-    val protectedForSentenceBreaks: List<DistillTextRange>
-        get() = codeSpans + linkSpans
+    /**
+     * **候補の境界を内側へ置いてはいけない範囲。**
+     *
+     * 用途は2つある — 文・句の境界をここで切らないことと、**候補の端がここの内側に入ったら
+     * その候補を採らない**こと。同じ集合で両方を守る。片方だけに掛けると、
+     * 「割らないが端は入る」「端は入らないが割る」のどちらかが残る。
+     *
+     * **`emphasisSpans` を含むのは、書き込み側の保護集合を表示側の解釈集合から決めるため**
+     * （→ [lessons L51](../../../../../../../../docs/dev/lessons/L51.md)）。
+     * 既存 `**` は編集対象から差し引かれるのでここには要らない。
+     */
+    val protectedSpans: List<DistillTextRange>
+        get() = codeSpans + linkSpans + emphasisSpans
+}
+
+/**
+ * 段落（連続する本文行）を1つのテキストとして扱うための連結。**原文オフセットへ戻せる。**
+ *
+ * 行ごとに見ると、ソフト改行をまたぐ装飾の対を見落とす。一方で行頭のリスト記号（`* 項目`）を
+ * 含めて走査すると、箇条書きの `*` を斜体の開始と誤認する。**本文だけを連結して両方を避ける。**
+ */
+private class ParagraphText(
+    val text: String,
+    private val logicalStarts: IntArray,
+    private val sourceStarts: IntArray
+) {
+    fun sourceRange(startIndex: Int, endIndexExclusive: Int): DistillTextRange =
+        DistillTextRange(sourceOffset(startIndex), sourceOffset(endIndexExclusive - 1) + 1)
+
+    private fun sourceOffset(index: Int): Int {
+        var i = logicalStarts.size - 1
+        while (i > 0 && logicalStarts[i] > index) i--
+        return sourceStarts[i] + (index - logicalStarts[i])
+    }
 }
 
 private data class SentenceDraft(
@@ -85,6 +118,7 @@ internal fun buildDistillSourceModel(
         .mapTo(mutableSetOf()) { it.index }
     val excludedLines = baseExcludedLines + setextLines + thematicBreakLines
     val strongSpans = strongSpansAcrossLines(content, lines, excludedLines)
+    val emphasisSpans = paragraphTexts(content, lines, excludedLines).flatMap(::emphasisSpans)
 
     val drafts = mutableListOf<SentenceDraft>()
     var currentHeading: String? = null
@@ -140,7 +174,8 @@ internal fun buildDistillSourceModel(
             content = content,
             start = bodyStart,
             end = bodyEnd,
-            strongSpans = strongSpans.filter { it.overlaps(DistillTextRange(bodyStart, bodyEnd)) }
+            strongSpans = strongSpans.filter { it.overlaps(DistillTextRange(bodyStart, bodyEnd)) },
+            emphasisSpans = emphasisSpans.filter { it.overlaps(DistillTextRange(bodyStart, bodyEnd)) }
         )
         eligibleCharacters += (bodyStart until bodyEnd).count { !content[it].isWhitespace() }
 
@@ -155,7 +190,9 @@ internal fun buildDistillSourceModel(
                 end = editableSegment.endExclusive,
                 syntax = syntax
             ).forEach { sentenceRange ->
-                if ((syntax.codeSpans + syntax.linkSpans).any { span ->
+                // **端が保護範囲の内側に入る候補は採らない。** 装飾の対を片側だけ含む範囲へ
+                // `**` を挿すと、文字を1つも消さないまま記法の対応が変わる。
+                if (syntax.protectedSpans.any { span ->
                         span.contains(sentenceRange.start) || span.contains(sentenceRange.endExclusive)
                     }
                 ) return@forEach
@@ -361,7 +398,8 @@ private fun parseInlineSyntax(
     content: String,
     start: Int,
     end: Int,
-    strongSpans: List<DistillTextRange>
+    strongSpans: List<DistillTextRange>,
+    emphasisSpans: List<DistillTextRange>
 ): InlineSyntax {
     val code = mutableListOf<DistillTextRange>()
     val links = mutableListOf<DistillTextRange>()
@@ -396,7 +434,7 @@ private fun parseInlineSyntax(
             else -> i++
         }
     }
-    return InlineSyntax(code, strongSpans, links)
+    return InlineSyntax(code, strongSpans, links, emphasisSpans)
 }
 
 /** 通常本文のsoft line breakをまたぐ既存 ** 強調も、1つの保護範囲として認識する。 */
@@ -431,6 +469,117 @@ private fun strongSpansAcrossLines(
         }
     }
     return result
+}
+
+/**
+ * 段落ごとの本文連結を作る。見出し・空行・除外行（frontmatter・コードフェンス・表など）で切れる。
+ *
+ * **行頭のリスト記号は剥がさない。** 表示側が受け取るのは剥がした後の本文なので当初は揃えたが、
+ * 箇条書きの `*` は必ず空白が続き、次の行の記号との間には改行が入るので、
+ * [emphasisEnd] の空白規則が必ず退ける。**剥がす分岐を入れても落ちるテストを書けなかった**ため置かない。
+ */
+private fun paragraphTexts(
+    content: String,
+    lines: List<SourceLine>,
+    excludedLines: Set<Int>
+): List<ParagraphText> {
+    val result = mutableListOf<ParagraphText>()
+    val builder = StringBuilder()
+    val logicalStarts = mutableListOf<Int>()
+    val sourceStarts = mutableListOf<Int>()
+
+    fun flush() {
+        if (builder.isNotEmpty()) {
+            result += ParagraphText(
+                builder.toString(),
+                logicalStarts.toIntArray(),
+                sourceStarts.toIntArray()
+            )
+        }
+        builder.clear()
+        logicalStarts.clear()
+        sourceStarts.clear()
+    }
+
+    for (line in lines) {
+        val detectionText = line.text.removePrefix("\uFEFF")
+        val isHeading = line.index !in excludedLines && HEADING_PATTERN.matches(detectionText)
+        if (line.index in excludedLines || line.text.isBlank() || isHeading) {
+            flush()
+            continue
+        }
+        if (builder.isNotEmpty()) builder.append('\n')
+        logicalStarts += builder.length
+        sourceStarts += line.start
+        builder.append(content, line.start, line.contentEnd)
+    }
+    flush()
+    return result
+}
+
+/**
+ * 表示側が解釈するインライン装飾（`*斜体*` / `***太字斜体***` / `~~打ち消し~~`）の範囲。
+ *
+ * **判定は [inlineMarkdown][com.example.newproject.ui.markdown.inlineMarkdown] の分岐順と
+ * 空白規則をそのまま写す。** 別々に育てると、書き込み側が表示側を壊す（→ lessons L51）。
+ * `2 * 3 * 4` が斜体にならないのは、対の内側が空白で始まる／終わるものを退けるこの規則による。
+ *
+ * **既存 `**` はここで拾わない。** あちらは編集対象から差し引く用途で
+ * [strongSpansAcrossLines] が持ち、こちらは境界を置かせない用途である。
+ * `_..._` / `__..__` も対象外 — 表示側が解釈せず、`some_var_name` を装飾と誤認して
+ * 候補を不当に減らす（→ [蒸留](../../../../../../../../docs/dev/features/reflect_distill.md)）。
+ */
+private fun emphasisSpans(paragraph: ParagraphText): List<DistillTextRange> {
+    val text = paragraph.text
+    val codeSpans = inlineCodeSpans(text, 0, text.length)
+    val result = mutableListOf<DistillTextRange>()
+    var i = 0
+    while (i < text.length) {
+        val char = text[i]
+        if (char != '*' && char != '~') {
+            i++
+            continue
+        }
+        val code = codeSpans.firstOrNull { i >= it.start && i < it.endExclusive }
+        if (code != null) {
+            i = code.endExclusive
+            continue
+        }
+        if (isEscaped(text, i, 0)) {
+            i++
+            continue
+        }
+        val marker = when {
+            text.startsWith("***", i) -> "***"
+            // 太字は strongSpans が持つ。ここで斜体として読まないよう、まとめて越える。
+            text.startsWith("**", i) -> null
+            char == '*' -> "*"
+            text.startsWith("~~", i) -> "~~"
+            else -> null
+        }
+        if (marker == null) {
+            i += if (text.startsWith("**", i)) 2 else 1
+            continue
+        }
+        val close = emphasisEnd(text, marker, i)
+        if (close == null) {
+            i++
+        } else {
+            result += paragraph.sourceRange(i, close + marker.length)
+            i = close + marker.length
+        }
+    }
+    return result
+}
+
+/** 対の閉じ位置。`*` と `***` は内側が空白で始まる／終わるものを対と見なさない（表示側と同じ）。 */
+private fun emphasisEnd(text: String, marker: String, start: Int): Int? {
+    val from = start + marker.length
+    val close = text.indexOf(marker, from).takeIf { it >= from } ?: return null
+    if (marker == "~~") return close
+    val inner = text.substring(from, close)
+    if (inner.isEmpty() || inner.first().isWhitespace() || inner.last().isWhitespace()) return null
+    return close
 }
 
 private fun inlineCodeSpans(content: String, start: Int, end: Int): List<DistillTextRange> {
@@ -581,7 +730,7 @@ private fun splitLineIntoSentences(
     var sentenceStart = start
     var i = start
     while (i < end) {
-        val protected = syntax.protectedForSentenceBreaks.any { i >= it.start && i < it.endExclusive }
+        val protected = syntax.protectedSpans.any { i >= it.start && i < it.endExclusive }
         val isBoundary = !protected && when (content[i]) {
             '。', '！', '？', '!', '?' -> true
             '.' -> isEnglishPeriodBoundary(content, i, start, end)
@@ -637,7 +786,7 @@ private fun bracketedTermRanges(
 ): List<DistillTextRange> = bracketedSpans(content, range).mapNotNull { outer ->
     val inner = trimmedRange(content, outer.start + 1, outer.endExclusive - 1)
         ?: return@mapNotNull null
-    if (syntax.protectedForSentenceBreaks.any { it.overlaps(inner) }) return@mapNotNull null
+    if (syntax.protectedSpans.any { it.overlaps(inner) }) return@mapNotNull null
     inner.takeIf {
         it.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
     }
@@ -702,7 +851,7 @@ private fun splitSentenceIntoClauses(
     if (range.length <= DistillLimits.CLAUSE_SPLIT_THRESHOLD) return listOf(range)
 
     // 鉤括弧の内側では割らない。割ると括弧が2句へまたがり、語句候補が取れなくなる。
-    val protectedSpans = syntax.protectedForSentenceBreaks + bracketedSpans(content, range)
+    val protectedSpans = syntax.protectedSpans + bracketedSpans(content, range)
     val clauses = mutableListOf<DistillTextRange>()
     var clauseStart = range.start
     for (offset in range.start until range.endExclusive) {

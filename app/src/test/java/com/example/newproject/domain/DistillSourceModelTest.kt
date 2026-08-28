@@ -336,6 +336,103 @@ class DistillSourceModelTest {
         assertTrue("heap grew by $heapGrowth bytes", heapGrowth < 64L * 1024L * 1024L)
     }
 
+    /** 候補の単位（文・句）だけを取り出す。語句は親の内側に重なるので、境界の検査では数えない。 */
+    private fun linearTexts(model: DistillSourceModel): List<String> =
+        model.sentences.filterNot { it.isTerm }.map { it.text }
+
+    @Test
+    fun `italic pairs are not split at commas inside them`() {
+        // 保護していなかった頃は、先頭句だけが開始 `*` を含み終了 `*` を含まなかった。
+        // その句へ `**` を挿すと、文字を1つも消さないまま装飾の対応が変わる。
+        val content = "*" + clauseOf("前半", 30) + "、" + clauseOf("後半", 30) + "*。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf(content), linearTexts(model))
+    }
+
+    @Test
+    fun `strikethrough pairs are not split at commas inside them`() {
+        val content = "~~" + clauseOf("前半", 30) + "、" + clauseOf("後半", 30) + "~~。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf(content), linearTexts(model))
+    }
+
+    @Test
+    fun `sentence boundaries inside italic do not split`() {
+        // **句分割を使わない文単位の候補でも起きる。** 長文だけの問題ではない。
+        val content = "*斜体の中に句点がある。この二文目も同じ斜体の内側にあって閉じ記号は末尾にしかない*。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf(content), linearTexts(model))
+    }
+
+    @Test
+    fun `candidates whose edge falls inside an emphasis pair are dropped`() {
+        // ソフト改行をまたぐ対。候補は行をまたがないので、どちらの行も片側しか含めない。
+        val content = "*行をまたぐ斜体がここから始まり\nそして次の行で閉じる*ため、候補にしない。"
+        val model = buildDistillSourceModel(content)
+
+        assertTrue(linearTexts(model).toString(), model.sentences.isEmpty())
+    }
+
+    @Test
+    fun `emphasis fully inside a candidate keeps the candidate`() {
+        // 対を割らない限り候補にしてよい。`**` で囲んでも対はそのまま内側に残る。
+        val content = "これは*強調*を含む文である。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf(content), linearTexts(model))
+    }
+
+    // **過剰保護は「偽の対が文境界を飲み込む」形でしか観測できない。**
+    // 装飾が文の内側で閉じるだけのデータでは端が内側に入らず、候補が変わらないので検査が素通りする。
+
+    @Test
+    fun `asterisks surrounded by spaces are not emphasis`() {
+        // 表示側と同じ空白規則。これが無いと掛け算の `*` どうしが対になり、間の句点まで保護する。
+        val content = "計算は 2 * 3。次は 4 * 5 である。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("計算は 2 * 3。", "次は 4 * 5 である。"), linearTexts(model))
+    }
+
+    @Test
+    fun `strong markers do not open italic`() {
+        // `**` を斜体の開始として読むと、閉じていない強調が後ろの `*` と対になり、間の句点を飲み込む。
+        val content = "これは**未閉じの強調。次の文には*斜体*がある。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("これは**未閉じの強調。", "次の文には*斜体*がある。"), linearTexts(model))
+    }
+
+    @Test
+    fun `asterisks inside inline code are not emphasis`() {
+        // コード内の `*` が外の `*` と対になると、コードの外の句点まで保護してしまう。
+        val content = "書式は `a*b`のち。次に*強調*を置く。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("書式は `a*b`のち。", "次に*強調*を置く。"), linearTexts(model))
+    }
+
+    @Test
+    fun `escaped asterisks are not emphasis`() {
+        val content = "記号は \\*A。B\\* と書く。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("記号は \\*A。", "B\\* と書く。"), linearTexts(model))
+    }
+
+    @Test
+    fun `bracketed terms inside emphasis are not candidates`() {
+        // 保護範囲と重なる語句は採らない。安全側への縮小として受け入れる。
+        val emphasised = buildDistillSourceModel("*ここでは「重要な語」を扱う*。")
+        val plain = buildDistillSourceModel("ここでは「重要な語」を扱う。")
+
+        assertTrue(emphasised.sentences.none { it.isTerm })
+        assertEquals(listOf("重要な語"), plain.sentences.filter { it.isTerm }.map { it.text })
+    }
+
     private fun usedHeapBytes(): Long {
         val runtime = Runtime.getRuntime()
         return runtime.totalMemory() - runtime.freeMemory()
