@@ -1,7 +1,7 @@
 # 読書痕跡の退避と復元（エクスポート／インポート）
 
-**状態:** **実装済み・実機検証待ち（2026-08-23）。** ケースは [reading_trace_backup](../../review/device_validation/reading_trace_backup.md)
-**最終検証:** 2026-08-28 / 中止の再入（停止待ち中の再タップ）を反映
+**状態:** **実装済み・稼働中（実機検証完了 2026-08-28。環境が要る3ケースは未実施 → §10）。** ケースは [reading_trace_backup](../../review/device_validation/reading_trace_backup.md)
+**最終検証:** 2026-08-28 / Pixel実機で `BACKUP-03`・`13`・`15`（読み戻し）・`15b` 成功
 **関連コード:** `controller/ReadingTraceBackupController.kt` / `domain/ReadingTraceMerge.kt` / `data/ReadingTraceBackupJson.kt` / `model/ReadingTraceBackupTypes.kt` / `model/state/ReadingTraceBackupState.kt` / `ui/screen/DataManagementScreen.kt`
 **関連テスト:** `ReadingTraceMergeTest` / `ReadingTraceBackupJsonTest` / `ReadingTraceBackupControllerTest` / `ReadingTraceBackupTextTest`
 **正本:** この文書
@@ -318,6 +318,14 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
 - **実機確認:** 保存先の選択（Vault外／Vault内）、読めない痕跡がある状態での書き出し、
   衝突がある状態での読み戻し、走行中のVault切替で結果が捨てられること
   → [実機ケース](../../review/device_validation/reading_trace_backup.md)
+- **実機で確かめていない経路が3つ残る（環境が要る／破壊的で、今後も自動では埋まらない）。**
+  **完了は「全ケースを通した」という意味ではない。**
+  - **端末側の点読込だけが失敗する分岐（`Unreadable`）。** ローカル外部ストレージでは
+    symlink も権限剥奪も効かず、**1件の `openInputStream` だけを安全に失敗させる手段が作れなかった**。
+    JVMテストは通しているが、実プロバイダでこの分岐へ入ることは確かめていない。
+    **返事を警告なく失わないための最後の砦がここ**なので、遠いプロバイダを扱う機会に当てる
+  - **再インストール後の読み戻し。** アプリのデータ・権限を消す必要があり、別承認が要る
+  - **遠いプロバイダ（Google Drive 等）への書き出し。** 外部アカウントへの書込み権限が要る
 - **保証していないこと:**
   - **move/rename したノートの痕跡は引き当てない。** キーが相対パスのため別物として扱う
   - **退避ファイルの改竄は検出しない。** checksum は各痕跡の整合性だけを見る
@@ -358,7 +366,9 @@ JSONの組み立て・整形文字列化・各痕跡のdecode・重複の畳み�
   まとまり（25件）の途中に中断点が無かったため、**表示55件に対し75件が保存された**。
   中止要求と結果確定を分け（書き手を `join()` してから1度だけ数える）、
   `applyOne` の手前に協調キャンセル点を置いて閉じた。
-  **止めた後に画面へ出ていない書き込みは起きない**
+  **止めた後に画面へ出ていない書き込みは起きない。** 2026-08-28 の実機では、
+  単発中止が表示307件＝実保存307件、停止待ち中の再タップが表示329件＝実保存329件で、
+  結果表示後5秒・10秒の再計測でも増加しなかった
 - **停止を待つあいだ、画面は `Working` のままで中止ボタンも残る。** 押せてしまうこと自体は
   そのままにし、**受理を1回に絞る**（集計と同じ寿命の要求フラグ）ことで結果の一意性を守る。
   「停止中」を状態の欄として足すと、状態型を読む全箇所の監査を伴ううえ、
