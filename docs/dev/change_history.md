@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-29 | — | N-14設計レビューの5件を反映し、v1が斜体・打ち消し線をまたぐ欠陥を起票した | **[distill_range_adjust](features/distill_range_adjust.md)**・[reflect_distill](features/reflect_distill.md) §11・[lessons](lessons.md) L51 |
 | 2026-08-28 | — | 蒸留の太字範囲調整を設計し、確定範囲を親文の内側へ閉じてプリセット先行に切った | **[distill_range_adjust](features/distill_range_adjust.md)**・[roadmap](../_wip/roadmap.md) |
 | 2026-08-28 | — | X-9の禁止キー・拒否文言・単発中止・再タップをPixel実機で確認し完了した | **[reading_trace_backup](features/reading_trace_backup.md)**・[review](../review/README.md) |
 | 2026-08-28 | — | 停止待ち中の再タップが停止前の件数を確定できる穴を塞いだ | **[reading_trace_backup](features/reading_trace_backup.md)** §10・§11・[lessons](lessons.md) L49 |
