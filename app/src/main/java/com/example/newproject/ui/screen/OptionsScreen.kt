@@ -1,7 +1,6 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.OptionRow
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AppGradient
 import com.example.newproject.ui.theme.ButtonAi
@@ -42,8 +42,7 @@ fun OptionsScreen(
     darkTheme: Boolean,
     notePaperAging: Boolean,
     onSelectVault: () -> Unit,
-    onManageAnnotations: () -> Unit,
-    onManageReadingTraces: () -> Unit,
+    onManageData: () -> Unit,
     onToggleDarkTheme: (Boolean) -> Unit,
     onToggleNotePaperAging: (Boolean) -> Unit
 ) {
@@ -65,19 +64,14 @@ fun OptionsScreen(
         )
         Spacer(modifier = Modifier.height(10.dp))
 
+        // 痕跡の退避・整理と旧補記の片付けは「アプリが管理している非表示データを
+        // 人間が扱えるようにする」という同じ性質なので、1画面へまとめる。
+        // 個別に並べると、移行が済んだ後もオプション直下に無用な選択肢が残り続ける。
         OptionRow(
-            emoji = "🗂",
-            title = "AI補記メモを削除",
-            subtitle = "保存済みの補記メモを管理・削除",
-            onClick = onManageAnnotations
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OptionRow(
-            emoji = "🧹",
-            title = "読書痕跡を整理",
-            subtitle = "無くなったノートの読書痕跡を確認",
-            onClick = onManageReadingTraces
+            emoji = "🗄",
+            title = "データ管理",
+            subtitle = "読書痕跡の書き出し・読み戻し・整理",
+            onClick = onManageData
         )
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -155,34 +149,6 @@ private fun OptionSwitchRow(
                     uncheckedTrackColor = OnSurface.copy(alpha = 0.35f)
                 )
             )
-        }
-    }
-}
-
-@Composable
-private fun OptionRow(
-    emoji: String,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        color = Panel,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
-        ) {
-            Text(emoji, fontSize = 22.sp)
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Text(title, color = OnSurface, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = OnSurfaceFaint, fontSize = 12.sp)
-            }
         }
     }
 }

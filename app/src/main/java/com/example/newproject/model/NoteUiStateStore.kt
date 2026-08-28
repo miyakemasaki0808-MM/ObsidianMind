@@ -4,6 +4,7 @@ import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
@@ -78,6 +79,15 @@ interface ReadingTraceStateWriter {
 interface ReadingTraceCleanupStateWriter {
     val current: ReadingTraceCleanupState
     fun set(state: ReadingTraceCleanupState)
+}
+
+/**
+ * 痕跡の退避（Vault単位）。整理と別のWriterにするのは、**同じ画面から使われても
+ * 状態は独立している**ため（書き出しの結果表示が孤児の洗い出しで消えては困る）。
+ */
+interface ReadingTraceBackupStateWriter {
+    val current: ReadingTraceBackupState
+    fun set(state: ReadingTraceBackupState)
 }
 
 /**
@@ -186,6 +196,16 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
             }
         }
 
+    val readingTraceBackupWriter: ReadingTraceBackupStateWriter =
+        object : ReadingTraceBackupStateWriter {
+            override val current: ReadingTraceBackupState
+                get() = mutableState.value.readingTraceBackupState
+
+            override fun set(state: ReadingTraceBackupState) {
+                mutableState.update { it.copy(readingTraceBackupState = state) }
+            }
+        }
+
     fun restoreVault(todayHistory: List<HistoryEntry>) {
         mutableState.update { it.copy(vaultSelected = true, todayHistory = todayHistory) }
     }
@@ -275,5 +295,9 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     // 旧Vaultの候補を新Vaultの画面へ残さない。Controller 側ではなく状態変換で落とすのは、
     // 「別Vaultのノートを消しませんか」と尋ねる状態を作らないことを構造的に保証するため
     // （補記一覧は Controller が落とすが、あちらは誤って消す危険が無い）。
-    readingTraceCleanupState = ReadingTraceCleanupState.Idle
+    readingTraceCleanupState = ReadingTraceCleanupState.Idle,
+    // 退避も同じ理由で落とす。旧Vaultの下見を残すと、**確定を押した瞬間に
+    // 別Vaultの痕跡へ書き込む**ことになる（Controller側も下見した時点のVaultと
+    // 照合して弾くが、「確定できる状態」を画面に残さないことも状態変換で保証する）。
+    readingTraceBackupState = ReadingTraceBackupState.Idle
 )

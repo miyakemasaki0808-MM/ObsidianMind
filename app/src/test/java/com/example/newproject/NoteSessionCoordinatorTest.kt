@@ -33,6 +33,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.QuizState
+import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
@@ -103,6 +104,34 @@ class NoteSessionCoordinatorTest {
         "annotationListState" to AnnotationListState.Success(emptyList())
     )
 
+    /**
+     * **リセット検査の入力そのものを検査する。**
+     *
+     * [assertEachFieldReset] はリフレクションで全欄を見るが、**入力（[fullyPopulatedState]）は
+     * 手で書いている**。欄を足して入力へ登録し忘れると、その欄については
+     * 「初期値が初期値へ戻ったこと」しか見なくなり、**検査は緑のまま何も見ていない状態になる**
+     * （→ [lessons L46](../../../../../../../docs/dev/lessons.md)）。
+     *
+     * リセット漏れそのものは下の2件が見るので、ここが見るのは「入力が全欄を埋めているか」だけ。
+     */
+    @Test
+    fun `リセット検査の入力は全フィールドが初期値と異なる`() {
+        val populated = fullyPopulatedState()
+        val defaults = NoteUiState()
+        val unregistered = NoteUiState::class.java.declaredFields
+            .filterNot { it.isSynthetic || Modifier.isStatic(it.modifiers) }
+            .onEach { it.isAccessible = true }
+            .filter { it.get(populated) == it.get(defaults) }
+            .map { it.name }
+
+        assertEquals(
+            "fullyPopulatedState() に登録されていない欄がある" +
+                "（この欄についてはリセット検査が何も見ていない）",
+            emptyList<String>(),
+            unregistered
+        )
+    }
+
     @Test
     fun `Vault切替の状態リセットに登録漏れが無い`() {
         val store = NoteUiStateStore(fullyPopulatedState())
@@ -126,6 +155,10 @@ class NoteSessionCoordinatorTest {
         assertTrue(reset.searchState is SearchState.Success)
         assertEquals("列挙できませんでした", reset.foldersError)
         assertEquals(1, reset.todayHistory.size)
+        // 痕跡の整理・退避もVault単位。書き出しの結果がノートを開き直すたびに
+        // 消えると、何件書き出せたのかを確かめる前に流れてしまう。
+        assertTrue(reset.readingTraceCleanupState is ReadingTraceCleanupState.Success)
+        assertTrue(reset.readingTraceBackupState is ReadingTraceBackupState.Exported)
 
         // ノート単位はすべて消える
         assertTrue(reset.summaryState is SummaryState.Idle)
@@ -141,14 +174,14 @@ class NoteSessionCoordinatorTest {
     // ── 調停の結線 ─────────────────────────────────────────────────────────
 
     /**
-     * 7 Controller すべてを非初期状態にしてから Vault を切り替える。
+     * **全Controllerを非初期状態にしてから** Vault を切り替える。
      *
      * 状態変換だけでは落ちない `distillState`（DistillController）と
      * `annotationListState`（AnnotationController）を含めているので、
      * どちらかの後始末を [NoteSessionCoordinator.onVaultChanged] から消すと落ちる。
      */
     @Test
-    fun `Vault切替で7 Controller の状態が一斉に初期化される`() = runTest {
+    fun `Vault切替で全Controller の状態が一斉に初期化される`() = runTest {
         val env = Env(this)
         val coordinator = env.coordinator(initialState = fullyPopulatedState())
 
@@ -482,7 +515,7 @@ class NoteSessionCoordinatorTest {
 
     // ── ヘルパー ───────────────────────────────────────────────────────────
 
-    /** 切替前に7 Controller すべてが非初期状態であることを明示する。 */
+    /** 切替前に**全Controllerが非初期状態**であることを明示する。 */
     private fun assertAllControllersDirty(state: NoteUiState) {
         assertTrue("Summary", state.summaryState !is SummaryState.Idle)
         assertTrue("Quiz", state.quizState !is QuizState.Idle)
@@ -492,6 +525,8 @@ class NoteSessionCoordinatorTest {
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
         assertTrue("Search", state.searchState !is SearchState.Idle)
+        assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
+        assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
     }
 
     /**
@@ -515,6 +550,7 @@ class NoteSessionCoordinatorTest {
         distillState = DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
         annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
+        readingTraceBackupState = ReadingTraceBackupState.Exported(written = 2, unreadableKeys = emptyList()),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(

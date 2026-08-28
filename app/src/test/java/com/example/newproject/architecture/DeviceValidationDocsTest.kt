@@ -31,7 +31,8 @@ class DeviceValidationDocsTest {
             "background_ai_ux.md",
             "note_image_rendering.md",
             "ai_input_budget.md",
-            "reunion_card.md"
+            "reunion_card.md",
+            "reading_trace_backup.md"
         )
         val actual = validationDir().listFiles { file -> file.extension == "md" && file.name != "README.md" }
             .orEmpty()

@@ -76,7 +76,18 @@ internal class ReadingTraceController(
     private val clock: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** 候補の列挙は入力サイズに比例するので Main の外で回す（→ lessons L13）。 */
-    private val scanDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val scanDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * サイドカーの read-modify-write を直列化する錠。訪問の追記と要約の書き戻しが
+     * 交差すると、読み取りが古いまま上書きして訪問を取りこぼしうる。
+     * （AI生成の直列化は AiClient 側の責務で、こちらとは別の関心事）
+     *
+     * **外から受け取る。** 同じサイドカーを read-modify-write する経路は
+     * このクラスだけではない — [ReadingTraceBackupController] の読み戻しが同じ形で書く。
+     * 錠をクラスごとに持つと、**錠があるのに守られない**という最も気づきにくい形になる。
+     * 既定値は単独で使うテスト用。
+     */
+    private val writeMutex: Mutex = Mutex()
 ) {
 
     /**
@@ -200,10 +211,6 @@ internal class ReadingTraceController(
         pendingMutex.withLock { pendingWrites.remove(pendingKey(vaultKey, path)) }
     }
 
-    // サイドカーの read-modify-write を直列化する。訪問の追記と要約の書き戻しが
-    // 交差すると、読み取りが古いまま上書きして訪問を取りこぼしうる。
-    // （AI生成の直列化は AiClient 側の責務で、こちらとは別の関心事）
-    private val writeMutex = Mutex()
 
     private var revealJob: Job? = null
     private var activeRequestId = 0L

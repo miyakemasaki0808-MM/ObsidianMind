@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（10 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（11 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -34,10 +34,11 @@ NoteViewModel（Android境界の窓口）
       ├── ReadingTraceController
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
-      └── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
+      ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
+      └── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 10個で、**窓口の肥大化は再発していない**。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 11個で、**窓口の肥大化は再発していない**。
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -60,7 +61,8 @@ NoteViewModel（Android境界の窓口）
 「状態だけ消したが旧ジョブは生きている」という中間状態を作らない。
 
 **Vault単位のControllerはノート単位の契約に登録しない。** `AnnotationController`・
-`ReadingTraceCleanupController`・`SearchController` の一部は無効化の契機がVault切替だけなので、
+`ReadingTraceCleanupController`・`ReadingTraceBackupController`・`SearchController` の一部は
+無効化の契機がVault切替だけなので、
 どちらの契約にも載せない（ノートを開き直しただけで一覧が消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、すべてのControllerが従うものではない。
 
@@ -75,7 +77,8 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 `Dispatchers.Default` へ逃がす。**逃がしたら対で「元の同期経路が代わりに走らないか」を確認する**
 （`precomputedBlocks ?: parse(content)` のようなフォールバックが残っていると退避の意味が消える）
 → [lessons L13](../lessons.md#l13-純粋と軽いは別)。これは `NoteExcerptThreadingTest` /
-`NoteSectionThreadingTest` がソース走査で固定している。
+`NoteSectionThreadingTest` / `ReadingTraceBackupThreadingTest` がソース走査で固定している。
+**走査は届く範囲しか守らない** — 2026-08-26 に退避のJSON（最大8MB）が3本目としてこの穴を踏んだ。
 
 ---
 
@@ -84,7 +87,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 | スコープ | 対象 | 無効化の契機 | 持ち主 |
 |---|---|---|---|
 | ノート単位 | 要約・DL・クイズ・ひとこと・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`** |
-| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
+| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
 
 **混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
 逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**片方に寄せると必ずどちらかが壊れる。**
@@ -107,7 +110,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 **1. 依存生成と横断調停を分ける。** `NoteViewModelDependencies` が本番依存を組み立て、
 `NoteViewModel` の内部コンストラクタからテスト用依存と `CoroutineScope` を差し替えられる。
-10 Controllerの生成・状態所有・ノート/Vault切替は `NoteSessionCoordinator` が持ち、
+全 Controllerの生成・状態所有・ノート/Vault切替は `NoteSessionCoordinator` が持ち、
 ViewModelには `Uri`・`ContentResolver`・`SharedPreferences` を扱うAndroid境界だけを残す。
 DIライブラリは差し替え対象がこの1グラフだけなので導入しない。
 
@@ -198,6 +201,11 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 ## 並行処理の規約
 
 - AI生成は `AiClient` 側のMutexで直列化し、60秒タイムアウトを設ける
+- **同じファイルを read-modify-write する経路が2つ以上あるなら、錠は共有物として上から配る。**
+  痕跡サイドカーは訪問の追記（`ReadingTraceController`）と読み戻しの適用
+  （`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
+  1つの `Mutex` を作って両方へ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
+  という、最も気づきにくい形になる
 - ノート・Vault単位のジョブは追跡してキャンセルする
 - `CancellationException` は再throwし、一般エラーへ変換しない
 - 完了通知がキャンセルをすり抜ける経路には requestId＋`isCurrent()` ガードを併用する
