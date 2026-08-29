@@ -512,6 +512,41 @@ class DistillSourceModelTest {
         assertTrue("processing took ${elapsedMillis}ms", elapsedMillis < 3_000)
     }
 
+    @Test
+    fun `maximum sized source of unclosed markers stays bounded`() {
+        // **閉じ記号が無い開始記号は、見つからないことを覚えないと毎回末尾まで探し直す。**
+        // 実測 11ms／3ms／28ms。前方探索を戻す変異では `[` だけで 8,424ms まで落ちる。
+        // 表示側（`inlineMarkdown`）も同じ解釈器を通るので、これはMainを止める時間でもある。
+        listOf(
+            "[".repeat(250_000),
+            "[[".repeat(125_000),
+            "`x".repeat(125_000)
+        ).forEach { content ->
+            val elapsedMillis = measureTimeMillis { buildDistillSourceModel(content) }
+            assertTrue("${content.take(2)} took ${elapsedMillis}ms", elapsedMillis < 3_000)
+        }
+    }
+
+    @Test
+    fun `maximum sized source dense with decorated sentences stays bounded`() {
+        // **保護範囲と候補を同時に最大化する。** 既存の上限テストはどちらか片方しか最大にしておらず、
+        // リンク密は句点が無いので候補1件、太字密は保護範囲を1つも増やさない。
+        // この2形だけが「候補数×保護範囲数」を通る。上限は実測から決めてある。
+        //   短い装飾文: 実測 43ms。端点照合を毎回先頭から走らせる変異で 1,079ms
+        //   括弧＋装飾: 実測 61ms。語句除外を毎回先頭から走らせる変異で 483ms
+        listOf(
+            "*abc*。".repeat(32_000) to 500L,
+            "「a」*b*。".repeat(32_000) to 300L
+        ).forEach { (content, limitMillis) ->
+            lateinit var model: DistillSourceModel
+            val elapsedMillis = measureTimeMillis { model = buildDistillSourceModel(content) }
+
+            assertTrue("content is ${content.length} chars", content.length > 190_000)
+            assertTrue("candidates are ${model.sentences.size}", model.sentences.size > 10_000)
+            assertTrue("processing took ${elapsedMillis}ms (limit ${limitMillis}ms)", elapsedMillis < limitMillis)
+        }
+    }
+
     private fun usedHeapBytes(): Long {
         val runtime = Runtime.getRuntime()
         return runtime.totalMemory() - runtime.freeMemory()

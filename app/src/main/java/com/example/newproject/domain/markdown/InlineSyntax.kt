@@ -68,6 +68,7 @@ internal data class InlineSyntaxScan(
 internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
     val escapes = mutableListOf<InlineEscape>()
     val atomic = mutableListOf<InlineSpan>()
+    val search = ForwardSearch(text)
 
     var i = 0
     while (i < text.length) {
@@ -80,8 +81,7 @@ internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
         when {
             char == '`' -> {
                 val ticks = runLength(text, i, '`')
-                val marker = "`".repeat(ticks)
-                val close = text.indexOf(marker, i + ticks)
+                val close = search.indexOf("`".repeat(ticks), i + ticks)
                 if (close >= 0) {
                     atomic += InlineSpan(InlineSpanKind.Code, i, close + ticks, i + ticks, close)
                     i = close + ticks
@@ -90,7 +90,7 @@ internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
                 }
             }
             text.startsWith("[[", i) -> {
-                val close = text.indexOf("]]", i + 2)
+                val close = search.indexOf("]]", i + 2)
                 if (close >= 0) {
                     atomic += InlineSpan(InlineSpanKind.WikiLink, i, close + 2, i + 2, close)
                     i = close + 2
@@ -99,9 +99,9 @@ internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
                 }
             }
             char == '[' -> {
-                val closeBracket = text.indexOf(']', i + 1)
+                val closeBracket = search.indexOf("]", i + 1)
                 val isLink = closeBracket >= 0 && text.startsWith("](", closeBracket)
-                val closeUrl = if (isLink) text.indexOf(')', closeBracket + 2) else -1
+                val closeUrl = if (isLink) search.indexOf(")", closeBracket + 2) else -1
                 if (isLink && closeUrl >= 0) {
                     atomic += InlineSpan(InlineSpanKind.Link, i, closeUrl + 1, i + 1, closeBracket)
                     i = closeUrl + 1
@@ -134,6 +134,7 @@ private fun scanRegion(
     escapedStarts: Set<Int>
 ): List<InlineSpan> {
     val result = mutableListOf<InlineSpan>()
+    val search = ForwardSearch(text)
     var cursor = firstAtomicIndexEndingAfter(atomic, from)
     var i = from
     while (i < to) {
@@ -165,7 +166,7 @@ private fun scanRegion(
         var matchedClose = -1
         for (marker in markers) {
             if (i + marker.length > to) continue
-            val close = findEmphasisClose(text, marker, i, to, atomic, escapedChars)
+            val close = findEmphasisClose(text, search, marker, i, to, atomic, escapedChars)
             if (close != null) {
                 matchedMarker = marker
                 matchedClose = close
@@ -203,6 +204,7 @@ private fun scanRegion(
  */
 private fun findEmphasisClose(
     text: String,
+    search: ForwardSearch,
     marker: String,
     start: Int,
     limit: Int,
@@ -212,7 +214,7 @@ private fun findEmphasisClose(
     var from = start + marker.length
     var cursor = firstAtomicIndexEndingAfter(atomic, from)
     while (from <= limit - marker.length) {
-        val close = text.indexOf(marker, from)
+        val close = search.indexOf(marker, from)
         if (close < 0 || close + marker.length > limit) return null
         while (cursor < atomic.size && atomic[cursor].endExclusive <= close) cursor++
         val enclosing = atomic.getOrNull(cursor)?.takeIf { it.start <= close && close < it.endExclusive }
@@ -233,6 +235,26 @@ private fun findEmphasisClose(
         return close
     }
     return null
+}
+
+/**
+ * 前方だけへ進む文字列検索。**同じ記号を何度も末尾まで探し直さないための器。**
+ *
+ * 走査は左から右へ進むので、ある位置で見つけた閉じ記号は、それより手前から探しても同じ答えになる。
+ * **見つからなかったことも覚える** — 閉じ記号の無い `[` が並ぶ本文で、開始記号ごとに末尾まで
+ * 走査し直して二乗時間になっていた（250,000文字で8.4秒。表示側も同じ関数を通るのでMainが止まる）。
+ */
+private class ForwardSearch(private val text: String) {
+    private val found = HashMap<String, Int>()
+
+    fun indexOf(needle: String, from: Int): Int {
+        val cached = found[needle]
+        // -1（この先には無い）は、より後ろから探しても -1 のままなので再利用してよい。
+        if (cached != null && (cached < 0 || cached >= from)) return cached
+        val result = text.indexOf(needle, from)
+        found[needle] = result
+        return result
+    }
 }
 
 /** 開始順に並んだ atomic のうち、[offset] より後ろで終わる最初の要素の位置。 */

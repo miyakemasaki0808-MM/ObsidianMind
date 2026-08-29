@@ -32,13 +32,62 @@ private class InlineSyntax(
      */
     val protectedSpans: List<DistillTextRange>
 ) {
-    /** [offset] が保護範囲の内側か。**前から順に問う前提**でカーソルを進める。 */
-    fun protectedCursor(): (Int) -> Boolean {
-        var index = 0
-        return { offset ->
-            while (index < protectedSpans.size && protectedSpans[index].endExclusive <= offset) index++
-            protectedSpans.getOrNull(index)?.let { offset >= it.start && offset < it.endExclusive } == true
+    /**
+     * 保護範囲を**前から順に**問うためのカーソル。
+     *
+     * **候補ごとに一覧の先頭へ戻らない。** 文字ごとの判定だけをカーソルにしても、
+     * その外側で候補ごとに `any` を回せば候補数×保護範囲数のままになる
+     * （装飾された短文が32,000件並ぶ最大入力で段階1が5秒を超えた）。
+     *
+     * **用途ごとに別のカーソルを作る。** 文字ループが先に全域を舐めてから候補が頭から回るので、
+     * 1つを使い回すと戻れなくなる。
+     */
+    fun cursor(): ProtectedCursor = ProtectedCursor(protectedSpans)
+}
+
+/**
+ * 併合済み・開始順の保護範囲を、単調に進みながら問う。
+ *
+ * 問う位置が前へ戻らない限り、全体で入力サイズに比例する。
+ */
+private class ProtectedCursor(private val ranges: List<DistillTextRange>) {
+    private var index = 0
+
+    private fun advanceTo(offset: Int): DistillTextRange? {
+        while (index < ranges.size && ranges[index].endExclusive <= offset) index++
+        return ranges.getOrNull(index)
+    }
+
+    /** [offset] が範囲の内側（開始位置ちょうどを含む）か。文・句の境界を置いてよいかの判定。 */
+    fun covers(offset: Int): Boolean =
+        advanceTo(offset)?.let { offset >= it.start && offset < it.endExclusive } == true
+
+    /** [offset] が範囲の**内部**か（`DistillTextRange.contains` と同じ、両端を含まない）。 */
+    fun containsStrictly(offset: Int): Boolean =
+        advanceTo(offset)?.contains(offset) == true
+
+    /** [range] と重なる保護範囲があるか。**問う範囲は前へ戻らない前提。** */
+    fun overlaps(range: DistillTextRange): Boolean {
+        var probe = advanceTo(range.start) ?: return false
+        var probeIndex = index
+        while (probe.start < range.endExclusive) {
+            if (probe.overlaps(range)) return true
+            probeIndex++
+            probe = ranges.getOrNull(probeIndex) ?: return false
         }
+        return false
+    }
+
+    /** [range] と重なる保護範囲の一覧。句分割が自分の範囲ぶんだけを見るために使う。 */
+    fun slice(range: DistillTextRange): List<DistillTextRange> {
+        advanceTo(range.start) ?: return emptyList()
+        val result = mutableListOf<DistillTextRange>()
+        var probeIndex = index
+        while (probeIndex < ranges.size && ranges[probeIndex].start < range.endExclusive) {
+            if (ranges[probeIndex].overlaps(range)) result += ranges[probeIndex]
+            probeIndex++
+        }
+        return result
     }
 }
 
@@ -191,6 +240,11 @@ internal fun buildDistillSourceModel(
         val thisParagraph = paragraphIndex
         paragraphOpen = !isListOrQuote(line.text)
 
+        // **用途ごとにカーソルを分ける。** 端点照合は文の終わりまで進むので、
+        // そのまま句分割へ渡すと**必要なスパンを追い越して**保護が効かなくなる（実際に一度そうなった）。
+        // 文字ループ（`splitLineIntoSentences` の中）も先に全域を舐めるので、さらに別で持つ。
+        val boundaryCursor = syntax.cursor()
+        val contentCursor = syntax.cursor()
         subtractRanges(bodyStart, bodyEnd, syntax.strongSpans).forEach { editableSegment ->
             splitLineIntoSentences(
                 content = content,
@@ -200,15 +254,14 @@ internal fun buildDistillSourceModel(
             ).forEach { sentenceRange ->
                 // **端が保護範囲の内側に入る候補は採らない。** 装飾の対を片側だけ含む範囲へ
                 // `**` を挿すと、文字を1つも消さないまま記法の対応が変わる。
-                if (syntax.protectedSpans.any { span ->
-                        span.contains(sentenceRange.start) || span.contains(sentenceRange.endExclusive)
-                    }
+                if (boundaryCursor.containsStrictly(sentenceRange.start) ||
+                    boundaryCursor.containsStrictly(sentenceRange.endExclusive)
                 ) return@forEach
                 if (content.substring(sentenceRange.start, sentenceRange.endExclusive).isBlank()) {
                     return@forEach
                 }
                 // 句へ割っても親文の範囲は保つ。候補カードの文脈表示に使う。
-                splitSentenceIntoClauses(content, sentenceRange, syntax).forEach { range ->
+                splitSentenceIntoClauses(content, sentenceRange, contentCursor).forEach { range ->
                     val text = content.substring(range.start, range.endExclusive)
                     if (text.isBlank()) return@forEach
                     drafts += SentenceDraft(
@@ -223,7 +276,7 @@ internal fun buildDistillSourceModel(
                         isLinkOnly = isLinkOnlyRange(content, range, syntax.linkSpans)
                     )
                     // 語句候補は親の内側に重なる。文脈は親文のままにする。
-                    bracketedTermRanges(content, range, syntax).forEach { termRange ->
+                    bracketedTermRanges(content, range, contentCursor).forEach { termRange ->
                         drafts += SentenceDraft(
                             text = content.substring(termRange.start, termRange.endExclusive),
                             range = termRange,
@@ -680,11 +733,11 @@ private fun splitLineIntoSentences(
     syntax: InlineSyntax
 ): List<DistillTextRange> {
     val result = mutableListOf<DistillTextRange>()
-    val isProtected = syntax.protectedCursor()
+    val protectedCursor = syntax.cursor()
     var sentenceStart = start
     var i = start
     while (i < end) {
-        val isBoundary = !isProtected(i) && when (content[i]) {
+        val isBoundary = !protectedCursor.covers(i) && when (content[i]) {
             '。', '！', '？', '!', '?' -> true
             '.' -> isEnglishPeriodBoundary(content, i, start, end)
             else -> false
@@ -735,11 +788,11 @@ private fun addTrimmedRange(
 private fun bracketedTermRanges(
     content: String,
     range: DistillTextRange,
-    syntax: InlineSyntax
+    protectedCursor: ProtectedCursor
 ): List<DistillTextRange> = bracketedSpans(content, range).mapNotNull { outer ->
     val inner = trimmedRange(content, outer.start + 1, outer.endExclusive - 1)
         ?: return@mapNotNull null
-    if (syntax.protectedSpans.any { it.overlaps(inner) }) return@mapNotNull null
+    if (protectedCursor.overlaps(inner)) return@mapNotNull null
     inner.takeIf {
         it.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
     }
@@ -799,12 +852,14 @@ private fun trimmedRange(content: String, rawStart: Int, rawEnd: Int): DistillTe
 private fun splitSentenceIntoClauses(
     content: String,
     range: DistillTextRange,
-    syntax: InlineSyntax
+    protectedCursor: ProtectedCursor
 ): List<DistillTextRange> {
     if (range.length <= DistillLimits.CLAUSE_SPLIT_THRESHOLD) return listOf(range)
 
     // 鉤括弧の内側では割らない。割ると括弧が2句へまたがり、語句候補が取れなくなる。
-    val protectedSpans = mergeRanges(syntax.protectedSpans + bracketedSpans(content, range))
+    // **自分の範囲に重なる保護範囲だけを取る。** 行全体の一覧を文ごとに併合し直すと、
+    // 装飾の多い行で文数×保護範囲数になる。
+    val protectedSpans = mergeRanges(protectedCursor.slice(range) + bracketedSpans(content, range))
     var protectedIndex = 0
     val clauses = mutableListOf<DistillTextRange>()
     var clauseStart = range.start
