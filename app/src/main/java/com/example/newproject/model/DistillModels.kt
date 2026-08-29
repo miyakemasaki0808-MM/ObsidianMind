@@ -16,6 +16,29 @@ internal data class DistillTextRange(
         start < other.endExclusive && other.start < endExclusive
 
     fun contains(offset: Int): Boolean = offset > start && offset < endExclusive
+
+    /** [other] を余さず含むか。端の一致は含むものとして数える。 */
+    fun encloses(other: DistillTextRange): Boolean =
+        start <= other.start && other.endExclusive <= endExclusive
+}
+
+/**
+ * ユーザーが調整した末に `**` を挿す範囲。**必ず親文（文脈範囲）の内側に閉じる。**
+ *
+ * この外枠が、太字範囲調整と汎用ノート編集を分ける一線である。**UIの分岐で守らない。**
+ * 親文の内側に閉じてさえいれば、既存の `**` 強調・見出し・コードフェンス・表・frontmatter へは
+ * 規則を書かずに触れなくなる（親文がそれらを差し引いた区間からしか作られないため）。
+ */
+internal data class DistillConfirmedRange(
+    val contextRange: DistillTextRange,
+    val range: DistillTextRange
+) {
+    init {
+        require(contextRange.encloses(range)) {
+            "Confirmed range escapes its context: $range is not inside $contextRange"
+        }
+        require(range.length > 0) { "Confirmed range is empty: $range" }
+    }
 }
 
 /** AI候補になる前の、原文位置を保持した1文。 */
