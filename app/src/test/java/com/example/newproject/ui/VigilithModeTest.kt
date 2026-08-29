@@ -62,6 +62,23 @@ class VigilithModeTest {
     }
 
     @Test
+    fun `範囲調整シート表示中は常駐Vigilithを出さない`() {
+        // 放置すると HoldingCandidate の姿勢のままモーダルシートと重なる。
+        val candidates = DistillState.Candidates(
+            sourceTitle = "ノート",
+            items = listOf(DistillCandidateItem("1", "候補", null, "1", null)),
+            projectedBoldRatio = 0.1,
+            isWithinBoldLimit = true,
+            rangeSheetCandidateId = "1"
+        )
+
+        val result = resolveVigilithPresentation("ai", candidates, null)
+
+        assertFalse(result.isVisible)
+        assertEquals(VigilithMode.Idle, result.mode)
+    }
+
+    @Test
     fun `再会カード表示中のノート画面ではMessengerになる`() {
         val result = resolveVigilithPresentation(
             currentRoute = "note",

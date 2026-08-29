@@ -78,7 +78,8 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 - **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある
 - `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
 - **実機確認はCodexが行う。** 着手前に [共通手順](docs/review/device_validation/README.md) と対象機能のケースを読み、
-  一時領域だけで検証して元Vaultへ戻す。共通手順の権限範囲は実機検証依頼に含まれるため、操作ごとに承認を取り直さない。
+  一時領域だけで検証し、**元Vaultへは戻さず常設の検証用Vaultで終える**（戻す操作自体が読書痕跡を増やすため）。
+  共通手順の権限範囲は実機検証依頼に含まれるため、操作ごとに承認を取り直さない。
   **端末を特定する値（シリアル・Vault URI・端末内パス）は文書へ残さない** — 検証開始時に `adb devices -l` で取得する。
   **実機確認が済むまでPR本文に「確認完了」と書かない**
 - Lint は現在 Error 0 / Warning 0 / hint 12（hint は依存更新系の催促で、ゲートに載せない）。**警告を増やさない**

@@ -12,6 +12,7 @@ import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
+import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
@@ -607,6 +608,252 @@ class DistillControllerTest {
         assertTrue(persistence.discarded)
         assertTrue(state.value.distillState is DistillState.RecoveryResolved)
     }
+
+    // ── 太字範囲の調整（段階1: プリセット）─────────────────────────────────
+
+    @Test
+    fun `an untouched selection is saved exactly like before the adjustment feature`() = runTest {
+        val content = adjustableNote()
+        val state = stateWithNote(content)
+        val persistence = FakePersistence()
+        val controller = controller(state, FakeAiClient.returning("S005"), persistence)
+        controller.start()
+        advanceUntilIdle()
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        // 未調整なら確定範囲＝提案範囲。出力はv1と1文字も違わない。
+        val written = persistence.lastWrite!!.outputBytes.decodeToString()
+        assertEquals(withBoldAt(content, 128, 159), written)
+        assertEquals(content, written.replace("**", ""))
+    }
+
+    @Test
+    fun `a widened range moves the bold markers to the confirmed range`() = runTest {
+        val content = adjustableNote()
+        val state = stateWithNote(content)
+        val persistence = FakePersistence()
+        val controller = controller(state, FakeAiClient.returning("S005"), persistence)
+        controller.start()
+        advanceUntilIdle()
+
+        controller.applyRange("S005", DistillRangePreset.Sentence)
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        // **未調整の一致確認だけでは足りない。** 保存経路が提案範囲を読み続けていても、
+        // 未調整のときは同じ出力になって緑のまま通る。変えた範囲で入ることを直接見る。
+        val written = persistence.lastWrite!!.outputBytes.decodeToString()
+        assertEquals(withBoldAt(content, 128, 191), written)
+        assertEquals(content, written.replace("**", ""))
+    }
+
+    @Test
+    fun `widening a selected candidate deselects the overlapping one and reports it`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        assertEquals(2, (state.value.distillState as DistillState.Candidates).selectedCount)
+
+        // 同じ親文の2つの句。片方を `文全体` にすると、もう片方を必ず含む。
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertEquals(listOf("S005"), after.overlapDeselectedIds)
+        assertFalse(after.items.first { it.id == "S005" }.isSelected)
+        assertTrue(after.items.first { it.id == "S006" }.isSelected)
+    }
+
+    @Test
+    fun `re-checking a deselected candidate keeps the last explicit action`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        // 外された候補をチェックし直す経路。解消を範囲変更だけに置くとここが素通りする。
+        controller.toggleCandidate("S005")
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertTrue(after.items.first { it.id == "S005" }.isSelected)
+        assertFalse(after.items.first { it.id == "S006" }.isSelected)
+        assertEquals(listOf("S006"), after.overlapDeselectedIds)
+    }
+
+    @Test
+    fun `re-applying the same preset keeps the overlap notice`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+        val afterWiden = state.value.distillState as DistillState.Candidates
+
+        // 選択済みの段をもう一度押しても、確定範囲は変わっていない。
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertEquals("理由は選択集合か確定範囲が変わるまで残る", listOf("S005"), after.overlapDeselectedIds)
+        assertEquals(afterWiden.items, after.items)
+        // 最初の範囲へ戻す操作も、既に初期範囲なら告知を消さない。
+        controller.resetRange("S005")
+        assertEquals(
+            listOf("S005"),
+            (state.value.distillState as DistillState.Candidates).overlapDeselectedIds
+        )
+    }
+
+    @Test
+    fun `opening the sheet of a deselected candidate keeps the reason attached to it`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+        controller.closeRangeSheet()
+
+        // 外された候補自身のシートを開く。シートを開くことは選択集合も確定範囲も変えない。
+        controller.openRangeSheet("S005")
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertEquals("S005", after.rangeSheetCandidateId)
+        // **理由は対象候補に紐づいたまま残る。** 主語をUIが決められるよう、外したIDを保つ。
+        assertEquals(listOf("S005"), after.overlapDeselectedIds)
+        assertFalse(after.rangeSheetItem!!.isSelected)
+    }
+
+    @Test
+    fun `changing to a different preset clears the overlap notice`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        controller.applyRange("S006", DistillRangePreset.Clause)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertTrue("確定範囲が変われば契約どおり消える", after.overlapDeselectedIds.isEmpty())
+    }
+
+    @Test
+    fun `adjusting an unselected candidate does not move other selections`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.toggleCandidate("S005")
+
+        // 保存対象でないものの編集が取捨を動かしてはいけない。
+        controller.applyRange("S005", DistillRangePreset.Sentence)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertTrue(after.items.first { it.id == "S006" }.isSelected)
+        assertFalse(after.items.first { it.id == "S005" }.isSelected)
+        assertTrue(after.overlapDeselectedIds.isEmpty())
+    }
+
+    @Test
+    fun `widening past the cumulative limit blocks saving and narrowing releases it`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S001 S003 S005"))
+        controller.start()
+        advanceUntilIdle()
+        assertTrue((state.value.distillState as DistillState.Candidates).isWithinBoldLimit)
+
+        controller.applyRange("S005", DistillRangePreset.Sentence)
+
+        val widened = state.value.distillState as DistillState.Candidates
+        assertFalse(widened.isWithinBoldLimit)
+        assertFalse(widened.canSaveSelection)
+
+        controller.resetRange("S005")
+
+        val restored = state.value.distillState as DistillState.Candidates
+        assertTrue(restored.isWithinBoldLimit)
+        assertTrue(restored.canSaveSelection)
+        assertFalse(restored.items.first { it.id == "S005" }.isRangeAdjusted)
+    }
+
+    @Test
+    fun `narrowing removes the need for the short note exception`() = runTest {
+        val state = stateWithNote(exceptionNote())
+        val controller = controller(state, FakeAiClient.returning("S003"))
+        controller.start()
+        advanceUntilIdle()
+        val before = state.value.distillState as DistillState.Candidates
+        assertFalse(before.isWithinBoldLimit)
+        assertTrue(before.isSingleCandidateException)
+
+        // 例外の対象IDは固定したまま、判定に使う範囲だけが確定範囲へ差し替わる。
+        controller.applyRange("S003", DistillRangePreset.Term)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertTrue(after.isWithinBoldLimit)
+        assertFalse(after.isSingleCandidateException)
+        assertEquals("語三", after.items.single().text)
+    }
+
+    @Test
+    fun `closing the range sheet keeps the confirmed range`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005"))
+        controller.start()
+        advanceUntilIdle()
+
+        controller.openRangeSheet("S005")
+        controller.applyRange("S005", DistillRangePreset.Sentence)
+        assertEquals("S005", (state.value.distillState as DistillState.Candidates).rangeSheetCandidateId)
+        controller.closeRangeSheet()
+
+        // **閉じることが確定。** 破棄の契機はキャンセル・再解析・ノート切替・保存完了の4つだけ。
+        val closed = state.value.distillState as DistillState.Candidates
+        assertEquals(null, closed.rangeSheetCandidateId)
+        val item = closed.items.single()
+        assertTrue(item.isRangeAdjusted)
+        assertEquals(DistillRangePreset.Sentence, item.currentPreset)
+        assertEquals(item.parentText, item.text)
+    }
+
+    @Test
+    fun `saving is refused while the selection still overlaps`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val persistence = FakePersistence()
+        val controller = controller(state, FakeAiClient.returning("S005 S006"), persistence)
+        controller.start()
+        advanceUntilIdle()
+        controller.toggleCandidate("S006")
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+        // 操作からは作れない状態を、状態側から直接作って備えを確かめる。
+        // `applyDistillBold` は Main で try なしに呼ばれるので、抜けるとその場のクラッシュになる。
+        state.distillWriter.update { current ->
+            (current as DistillState.Candidates).copy(
+                items = current.items.map { it.copy(isSelected = true) }
+            )
+        }
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        assertTrue(state.value.distillState is DistillState.Candidates)
+        assertEquals(null, persistence.lastWrite)
+    }
+
+    /** 句へ割れる6文のノート。`S005` と `S006` は同じ親文（128..191）の2つの句。 */
+    private fun adjustableNote(): String = (1..6).joinToString("\n") { index ->
+        "${"あ".repeat(30)}$index、「重要語$index」${"い".repeat(24)}。"
+    }
+
+    /** 最重要候補ひとつで上限を超える短いノート。`S003` は語句を内側に持つ句。 */
+    private fun exceptionNote(): String =
+        "「語一」は短い文です。\n「語二」も短い文です。\n「語三」${"あ".repeat(50)}、${"い".repeat(30)}。"
+
+    private fun withBoldAt(content: String, start: Int, endExclusive: Int): String =
+        content.substring(0, start) + "**" + content.substring(start, endExclusive) + "**" +
+            content.substring(endExclusive)
 
     private fun TestScope.controller(
         state: NoteUiStateStore,

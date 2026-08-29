@@ -16,6 +16,7 @@ import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.RelatedNotesState
 import kotlinx.coroutines.CoroutineDispatcher
@@ -418,6 +419,10 @@ internal class NoteSessionCoordinator(
     fun startDistill() = distill.start()
     fun downloadDistillModel() = distill.downloadModelAndResume()
     fun toggleDistillCandidate(id: String) = distill.toggleCandidate(id)
+    fun openDistillRangeSheet(id: String) = distill.openRangeSheet(id)
+    fun closeDistillRangeSheet() = distill.closeRangeSheet()
+    fun applyDistillRange(id: String, preset: DistillRangePreset) = distill.applyRange(id, preset)
+    fun resetDistillRange(id: String) = distill.resetRange(id)
     fun saveDistillSelection() = distill.saveSelection()
     fun retryDistill() = distill.retry()
     fun dismissDistillResult() = distill.dismissResult()

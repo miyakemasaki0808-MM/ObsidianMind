@@ -6,6 +6,7 @@ import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillRecoveryKind
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -14,6 +15,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.DistillCandidate
+import com.example.newproject.model.DistillConfirmedRange
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
@@ -21,9 +23,12 @@ import com.example.newproject.model.DistillTextRange
 import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.applyDistillBold
 import com.example.newproject.domain.buildDistillSourceModel
+import com.example.newproject.domain.hasOverlappingDistillRanges
 import com.example.newproject.domain.isWithinDistillBoldLimit
 import com.example.newproject.domain.parseDistillResponseIds
+import com.example.newproject.domain.presetRangesFor
 import com.example.newproject.domain.projectedBoldRatio
+import com.example.newproject.domain.resolveOverlaps
 import com.example.newproject.domain.selectDistillCandidates
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
@@ -57,7 +62,17 @@ internal class DistillController(
         val input: AnalysisInput,
         val model: DistillSourceModel,
         val candidatesById: Map<String, DistillCandidate>,
-        val singleCandidateExceptionId: String?
+        val singleCandidateExceptionId: String?,
+        /**
+         * 候補ID → 実際に `**` を挿す範囲。**未調整なら提案範囲と同じ。**
+         *
+         * **提案範囲（`sentence.range`）を上書きしない。** 上書きすると
+         * 「最初の範囲に戻す」が実装できない。原文offsetを持つのでUI状態へは出さない。
+         *
+         * **シートを閉じても消えない。** 破棄の契機は候補セッションのキャンセル・再解析・
+         * ノート切替・保存完了の4つだけで、閉じることは破棄ではない。
+         */
+        val confirmedRanges: Map<String, DistillConfirmedRange>
     )
 
     private var activeRequestId = 0L
@@ -215,12 +230,16 @@ internal class DistillController(
             val range = byId.getValue(selectedId).sentence.range
             !isWithinDistillBoldLimit(model, listOf(range))
         }
+        val candidatesById = byId.filterKeys(selectedIds::contains)
         session = ActiveSession(
             requestId,
             input,
             model,
-            byId.filterKeys(selectedIds::contains),
-            exceptionId
+            candidatesById,
+            exceptionId,
+            confirmedRanges = candidatesById.mapValues { (_, candidate) ->
+                DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
+            }
         )
         val items = selectedCandidates.map { candidate ->
             val sentence = candidate.sentence
@@ -273,29 +292,148 @@ internal class DistillController(
 
     fun toggleCandidate(id: String) {
         val current = state.current as? DistillState.Candidates ?: return
+        val active = session ?: return
+        if (!active.candidatesById.containsKey(id)) return
+        val toggled = current.items.map { item ->
+            if (item.id == id) item.copy(isSelected = !item.isSelected) else item
+        }
+        // **チェックし直しただけで重なりが復活しないようにする。** 解消を範囲変更だけに置くと、
+        // 外された候補をもう一度チェックする経路が素通りする。最後の明示操作を残す。
+        val resolved = if (toggled.first { it.id == id }.isSelected) {
+            resolveSelectionOverlaps(active, toggled, priorityId = id)
+        } else {
+            toggled to emptyList()
+        }
+        updateCandidateState(current.sourceTitle, resolved.first, current.rangeSheetCandidateId, resolved.second)
+    }
+
+    /** 調整シートを開く。**確定範囲は触らない。** */
+    fun openRangeSheet(id: String) {
+        val current = state.current as? DistillState.Candidates ?: return
         if (session?.candidatesById?.containsKey(id) != true) return
-        updateCandidateState(
-            current.sourceTitle,
-            current.items.map { item -> if (item.id == id) item.copy(isSelected = !item.isSelected) else item }
+        updateCandidateState(current.sourceTitle, current.items, id, current.overlapDeselectedIds)
+    }
+
+    /**
+     * 調整シートを閉じる。**閉じることが確定。**
+     *
+     * 取り消しの口は「最初の範囲に戻す」1つに絞る。口が2つあるとどちらが効いたか読めなくなる。
+     */
+    fun closeRangeSheet() {
+        val current = state.current as? DistillState.Candidates ?: return
+        updateCandidateState(current.sourceTitle, current.items, null, current.overlapDeselectedIds)
+    }
+
+    /** 確定範囲を段へ合わせる。存在しない段は無視する（画面にも出ない）。 */
+    fun applyRange(id: String, preset: DistillRangePreset) {
+        val active = session ?: return
+        val candidate = active.candidatesById[id] ?: return
+        val option = presetRangesFor(active.model, candidate.sentence)
+            .firstOrNull { it.preset == preset } ?: return
+        changeConfirmedRange(id, option.range)
+    }
+
+    /** 最初の範囲（提案範囲）へ戻す。 */
+    fun resetRange(id: String) {
+        val active = session ?: return
+        val candidate = active.candidatesById[id] ?: return
+        changeConfirmedRange(
+            id,
+            DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
         )
     }
 
-    private fun updateCandidateState(title: String, items: List<DistillCandidateItem>) {
+    private fun changeConfirmedRange(id: String, range: DistillConfirmedRange) {
         val active = session ?: return
-        val selectedItems = items.filter { it.isSelected }
-        val ranges = selectedItems.mapNotNull { active.candidatesById[it.id]?.sentence?.range }
+        val current = state.current as? DistillState.Candidates ?: return
+        // **確定範囲が変わらないなら何もしない。** 告知は「次に選択集合か確定範囲が変わったとき」に
+        // 消える契約なので、選択済みの段をもう一度押しただけで
+        // 「なぜチェックが外れたか」の理由を失わせてはいけない。
+        // **UI側でボタンを無効化しても、ここは残す** — 別の呼び出し口から同じ形を作れる。
+        if (active.confirmedRanges[id] == range) return
+        session = active.copy(confirmedRanges = active.confirmedRanges + (id to range))
+        val updated = session ?: return
+        // **未選択の候補を調整しても、他候補の選択状態は変わらない。**
+        // 保存対象でないものの編集が取捨を動かしてはいけない、という契約は
+        // `resolveOverlaps` が持つ（選択集合に居ない候補は誰も押し出さない）。
+        // ここで `isSelected` を見て分岐すると、落ちるテストを書けない等価な分岐が増える。
+        val resolved = resolveSelectionOverlaps(updated, current.items, priorityId = id)
+        updateCandidateState(current.sourceTitle, resolved.first, current.rangeSheetCandidateId, resolved.second)
+    }
+
+    /** 重なる既選択候補の選択を外し、外した候補IDを返す。 */
+    private fun resolveSelectionOverlaps(
+        active: ActiveSession,
+        items: List<DistillCandidateItem>,
+        priorityId: String
+    ): Pair<List<DistillCandidateItem>, List<String>> {
+        val selectedIds = items.filter { it.isSelected }.map { it.id }
+        val rangesById = selectedIds.mapNotNull { id ->
+            confirmedRangeOf(active, id)?.let { id to it }
+        }.toMap()
+        val deselected = resolveOverlaps(selectedIds, rangesById, priorityId).deselectedIds
+        if (deselected.isEmpty()) return items to emptyList()
+        return items.map { item ->
+            if (item.id in deselected.toSet()) item.copy(isSelected = false) else item
+        } to deselected
+    }
+
+    private fun confirmedRangeOf(active: ActiveSession, id: String): DistillTextRange? =
+        active.confirmedRanges[id]?.range ?: active.candidatesById[id]?.sentence?.range
+
+    /**
+     * 候補状態を作り直す。**範囲に由来する表示は毎回ここで引き直す。**
+     *
+     * 太字率・短文例外の判定・カードの本文はすべて**確定範囲**から作る。
+     * 提案範囲を読む箇所がここに1つでも残ると、「表示は広がったが保存は元の範囲」になり、
+     * しかも未調整のときは同じ出力になるためテストが緑のまま通る。
+     */
+    private fun updateCandidateState(
+        title: String,
+        items: List<DistillCandidateItem>,
+        rangeSheetCandidateId: String? = null,
+        overlapDeselectedIds: List<String> = emptyList()
+    ) {
+        val active = session ?: return
+        val decorated = items.map { item -> withConfirmedRange(active, item) }
+        val selectedItems = decorated.filter { it.isSelected }
+        val ranges = selectedItems.mapNotNull { confirmedRangeOf(active, it.id) }
         val isWithinLimit = isWithinDistillBoldLimit(active.model, ranges)
+        // **短文例外は対象IDを固定したまま、判定に使う範囲だけを確定範囲へ差し替える。**
+        // 狭めれば例外が要らなくなり、広げれば説明に出す太字率が変わる。
         val isSingleCandidateException = !isWithinLimit &&
             active.singleCandidateExceptionId != null &&
             selectedItems.singleOrNull()?.id == active.singleCandidateExceptionId
         update(
             DistillState.Candidates(
                 sourceTitle = title,
-                items = items,
+                items = decorated,
                 projectedBoldRatio = projectedBoldRatio(active.model, ranges),
                 isWithinBoldLimit = isWithinLimit,
-                isSingleCandidateException = isSingleCandidateException
+                isSingleCandidateException = isSingleCandidateException,
+                rangeSheetCandidateId = rangeSheetCandidateId,
+                overlapDeselectedIds = overlapDeselectedIds
             )
+        )
+    }
+
+    /** 確定範囲から、カードと調整シートが読む表示欄を作り直す。 */
+    private fun withConfirmedRange(
+        active: ActiveSession,
+        item: DistillCandidateItem
+    ): DistillCandidateItem {
+        val sentence = active.candidatesById[item.id]?.sentence ?: return item
+        val confirmed = active.confirmedRanges[item.id]?.range ?: sentence.range
+        val context = sentence.contextRange
+        val options = presetRangesFor(active.model, sentence)
+        return item.copy(
+            text = active.model.content.substring(confirmed.start, confirmed.endExclusive),
+            parentText = active.model.content.substring(context.start, context.endExclusive),
+            boldStartInParent = confirmed.start - context.start,
+            boldEndInParent = confirmed.endExclusive - context.start,
+            availablePresets = options.map { it.preset },
+            currentPreset = options.firstOrNull { it.range.range == confirmed }?.preset,
+            isRangeAdjusted = confirmed != sentence.range
         )
     }
 
@@ -304,7 +442,13 @@ internal class DistillController(
         val current = state.current as? DistillState.Candidates ?: return
         val selected = current.items.filter { it.isSelected }
         if (!current.canSaveSelection) return
-        val ranges = selected.mapNotNull { active.candidatesById[it.id]?.sentence?.range }
+        val ranges = selected.mapNotNull { confirmedRangeOf(active, it.id) }
+        // **保存直前の検証は「念のため」ではない。** [applyDistillBold] はここから
+        // Main で `try` なしに同期呼び出しされるので、重なりは例外ではなくその場のクラッシュになる。
+        // 同一範囲なら `distinct()` に畳まれて落ちない代わりに、画面の選択件数と保存件数が食い違う。
+        // **`require` へユーザー操作から到達できない状態にする**のがこのガードの目的で、
+        // 通常の操作では重なりが操作時に解消済みなのでここへは来ない。
+        if (ranges.size != selected.size || hasOverlappingDistillRanges(ranges)) return
         val transformed = applyDistillBold(active.input.content, ranges).content
         val requestId = active.requestId
         update(DistillState.Saving(active.input.title, verifying = true))

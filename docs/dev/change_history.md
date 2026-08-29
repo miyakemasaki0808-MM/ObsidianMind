@@ -16,6 +16,10 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-30 | — | 実機検証の開始・終了を常設検証用Vaultへ固定し、元Vaultへ戻さない手順にした | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L54 |
+| 2026-08-30 | — | 太字範囲調整をPixel実機のDIST-21〜24とinstrumentation 6件で確認し、段階1を完了した | **[distill_range_adjust](features/distill_range_adjust.md)** §10・[review](../review/README.md) |
+| 2026-08-29 | — | X-11コードレビューの4件を直し、告知の寿命と主語、強調の観測点を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§10・[lessons](lessons.md) L53 |
+| 2026-08-29 | — | 蒸留の太字範囲を`語句`/`意味節`/`文全体`から選べるようにした（段階1・実機検証待ち） | **[distill_range_adjust](features/distill_range_adjust.md)** |
 | 2026-08-29 | — | 蒸留の装飾保護をPixel実機の DIST-19・DIST-20 で確認し、BOLD-1を完了した | **[reflect_distill](features/reflect_distill.md)** §10・[review](../review/README.md) |
 | 2026-08-29 | — | バッククォートを連なり単位で索引し、未閉じrunのOOMと部分一致をなくした | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
 | 2026-08-29 | — | 未閉じ記号の再探索と候補ごとの保護範囲走査をやめ、上限テストへ3系統目を足した | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
