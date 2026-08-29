@@ -1,7 +1,8 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句を実装済み。**表示・候補境界・保存・競合・故障復旧を実機確認済み**
-**最終検証:** 2026-08-20 / `6daf0f3`＋文書差分（JVM 970件、Lint、Pixel 10 Pro Foldで `DIST-01`〜`DIST-19`、括弧内読点、故障注入、最大サイズを確認 → [レビュー一覧](../../review/README.md)）
+**最終検証:** 2026-08-29 / `909fe8d`＋文書差分（JVM 1,147件、Lint、Pixel 10 Pro Foldで `DIST-19`・`DIST-20` を確認。
+`DIST-01`〜`DIST-18` は 2026-08-20 / `6daf0f3` の確認が最後 → [レビュー一覧](../../review/README.md)）
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest`
 **正本:** この文書
@@ -573,9 +574,11 @@ vault の `_AI補記` は用途が違うため使わない。
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** 8本（候補スコアリング・原文モデル・変換・応答パース・書き込み・復旧・プロンプト・Controller）
-- **実機確認:** `DIST-01`〜`DIST-19`、括弧内読点、実SAF経路の故障注入4地点と復旧4分岐、
+- **実機確認:** `DIST-01`〜`DIST-20`、括弧内読点、実SAF経路の故障注入4地点と復旧4分岐、
   外部編集競合、保存後状態、最大256KiBをPixel実機で確認済み。復旧UIは原ハッシュ一致・期待ハッシュ一致で
-  レコードを無言で解消し、不一致では自動復元せず3択、URIアクセス不能では別ファイル書き出しだけを提示した
+  レコードを無言で解消し、不一致では自動復元せず3択、URIアクセス不能では別ファイル書き出しだけを提示した。
+  **装飾の保護は 2026-08-29 に `DIST-20` で確認した** — 装飾の片側だけを含む候補は出ず、保存後も
+  斜体・コード・通常リンク・wikilinkの対象文字列と描画が維持され、Obsidian側の見え方も保存前と一致した
 - **最大サイズ実測:** 一段目685〜904ms、ヒープ増分26,263,552 bytes、キャッシュ262,144 bytes、
   復旧レコード262,422 bytes、管理対象ピーク524,566 bytes、事前空き容量見積851,968 bytes
 
@@ -602,7 +605,6 @@ vault の `_AI補記` は用途が違うため使わない。
 | | |
 |---|---|
 | TOCTOU が残る | 判断6で明示的に受け入れている |
-| **装飾の保護は実機未検証** | 契約と実装は入り、JVMテストが**24の変異**で落ちることまで確かめた。**`DIST-20` の実機確認が済んでいない**（課題台帳に残す） |
 
 ### v2以降へ送ったもの
 
