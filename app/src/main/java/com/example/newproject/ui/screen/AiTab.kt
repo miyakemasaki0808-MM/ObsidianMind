@@ -2,6 +2,7 @@ package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -41,6 +42,7 @@ import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
@@ -72,6 +74,10 @@ fun AiTab(
     onStartDistill: () -> Unit,
     onDownloadDistillModel: () -> Unit,
     onToggleDistillCandidate: (String) -> Unit,
+    onOpenDistillRangeSheet: (String) -> Unit,
+    onCloseDistillRangeSheet: () -> Unit,
+    onSelectDistillRange: (String, DistillRangePreset) -> Unit,
+    onResetDistillRange: (String) -> Unit,
     onSaveDistill: () -> Unit,
     onRetryDistill: () -> Unit,
     onDismissDistill: () -> Unit,
@@ -102,6 +108,10 @@ fun AiTab(
                 onStart = onStartDistill,
                 onDownloadModel = onDownloadDistillModel,
                 onToggleCandidate = onToggleDistillCandidate,
+                onOpenRangeSheet = onOpenDistillRangeSheet,
+                onCloseRangeSheet = onCloseDistillRangeSheet,
+                onSelectRange = onSelectDistillRange,
+                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -141,6 +151,10 @@ fun AiTab(
                 onStart = onStartDistill,
                 onDownloadModel = onDownloadDistillModel,
                 onToggleCandidate = onToggleDistillCandidate,
+                onOpenRangeSheet = onOpenDistillRangeSheet,
+                onCloseRangeSheet = onCloseDistillRangeSheet,
+                onSelectRange = onSelectDistillRange,
+                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -194,6 +208,10 @@ private fun DistillPanel(
     onStart: () -> Unit,
     onDownloadModel: () -> Unit,
     onToggleCandidate: (String) -> Unit,
+    onOpenRangeSheet: (String) -> Unit,
+    onCloseRangeSheet: () -> Unit,
+    onSelectRange: (String, DistillRangePreset) -> Unit,
+    onResetRange: (String) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
@@ -258,7 +276,14 @@ private fun DistillPanel(
                 }
                 is DistillState.Candidates -> {
                     state.items.forEach { item ->
-                        DistillCandidateRow(item, onToggleCandidate)
+                        DistillCandidateRow(
+                            item = item,
+                            // **チェックが外れた理由をカード側に残す。** 外れる候補は
+                            // シートの裏にいるので、シート内の1行だけでは届かない。
+                            isDeselectedByOverlap = item.id in state.overlapDeselectedIds,
+                            onToggle = onToggleCandidate,
+                            onOpenRangeSheet = onOpenRangeSheet
+                        )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
                     val ratioPercent = state.projectedBoldRatio * 100.0
@@ -350,6 +375,18 @@ private fun DistillPanel(
         }
     }
 
+    candidates?.rangeSheetItem?.let { item ->
+        DistillRangeSheet(
+            item = item,
+            projectedBoldRatio = candidates.projectedBoldRatio,
+            isWithinBoldLimit = candidates.isWithinBoldLimit,
+            overlapDeselectedCount = candidates.overlapDeselectedIds.size,
+            onSelectPreset = { preset -> onSelectRange(item.id, preset) },
+            onReset = { onResetRange(item.id) },
+            onDismiss = onCloseRangeSheet
+        )
+    }
+
     if (showConfirmation && candidates != null) {
         AlertDialog(
             onDismissRequest = { showConfirmation = false },
@@ -422,23 +459,45 @@ private fun DistillPanel(
 }
 
 @Composable
-private fun DistillCandidateRow(item: DistillCandidateItem, onToggle: (String) -> Unit) {
+private fun DistillCandidateRow(
+    item: DistillCandidateItem,
+    isDeselectedByOverlap: Boolean,
+    onToggle: (String) -> Unit,
+    onOpenRangeSheet: (String) -> Unit
+) {
     Surface(color = Panel.copy(alpha = 0.72f), shape = RoundedCornerShape(8.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
+            // **チェックと調整で押す場所を分ける。** Checkbox は自分でタップを受けるので、
+            // 行のクリックは範囲調整だけに割り当てられる。
             Checkbox(checked = item.isSelected, onCheckedChange = { onToggle(item.id) })
-            Column(modifier = Modifier.weight(1f).padding(top = 4.dp, end = 4.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClickLabel = "太字にする範囲を調整") { onOpenRangeSheet(item.id) }
+                    .padding(top = 4.dp, end = 4.dp)
+            ) {
                 // 語句は文の一部だけを太字にするので、既存のメタ行へ種別を1語だけ足して見分けられるようにする。
                 val meta = listOfNotNull(
                     item.heading,
                     item.positionLabel,
-                    "語句".takeIf { item.isTerm }
+                    "語句".takeIf { item.isTerm },
+                    item.currentPreset?.label()?.takeIf { item.availablePresets.size > 1 }
                 ).joinToString(" · ")
                 Text(meta, fontSize = 11.sp, color = OnSurfaceSubtle)
                 item.context?.takeIf { it.isNotBlank() }?.let { context ->
                     Text(context, fontSize = 11.sp, color = OnSurfaceFaint, maxLines = 2)
                     Spacer(modifier = Modifier.height(3.dp))
                 }
+                // カードに出ている文字列が、そのまま `**` で囲まれる文字列である。
                 Text(item.text, fontSize = 14.sp, lineHeight = 20.sp, color = OnSurface)
+                if (isDeselectedByOverlap) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        "! 範囲が重なるため選択を外しました",
+                        fontSize = 11.sp,
+                        color = ErrorText
+                    )
+                }
             }
         }
     }

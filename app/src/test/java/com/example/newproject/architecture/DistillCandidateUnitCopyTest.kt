@@ -60,7 +60,10 @@ class DistillCandidateUnitCopyTest {
     }
 
     private companion object {
-        val DISTILL_UI_SOURCES = listOf("main/java/com/example/newproject/ui/screen/AiTab.kt")
+        val DISTILL_UI_SOURCES = listOf(
+            "main/java/com/example/newproject/ui/screen/AiTab.kt",
+            "main/java/com/example/newproject/ui/screen/DistillRangeSheet.kt"
+        )
 
         /**
          * 候補の単位として「文」を使っている形。

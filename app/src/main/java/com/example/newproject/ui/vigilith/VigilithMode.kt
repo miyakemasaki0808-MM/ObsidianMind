@@ -104,7 +104,12 @@ internal fun resolveVigilithPresentation(
     isBlockingOverlayVisible: Boolean = false
 ): VigilithPresentation {
     val isTabRoute = AppDestination.entries.any { it.route == currentRoute }
-    if (!isTabRoute || isBlockingOverlayVisible) {
+    // **蒸留の調整シートも遮るオーバーレイである。** 第二の状態を足さず、
+    // 候補状態が持つシート情報から導出する（放置すると `HoldingCandidate` の姿勢のまま
+    // モーダルシートと重なる）。
+    val isDistillRangeSheetVisible =
+        (distillState as? DistillState.Candidates)?.rangeSheetCandidateId != null
+    if (!isTabRoute || isBlockingOverlayVisible || isDistillRangeSheetVisible) {
         return VigilithPresentation(isVisible = false, mode = VigilithMode.Idle)
     }
 
