@@ -4,16 +4,13 @@ import com.example.newproject.model.DistillConfirmedRange
 import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
+import com.example.newproject.model.state.DistillRangePreset
 
 /**
- * 太字にする範囲のプリセット。**狭い順に並べる。**
- *
  * **新しい境界規則を作らない。** 3段はすべて `buildDistillSourceModel` が出した要素
  * （語句・句・親文）を引き直すだけなので、v1で確立した境界
  * （記法をまたがない・リンクだけを避ける・鉤括弧の内側で割らない）がそのまま効く。
  */
-internal enum class DistillRangePreset { Term, Clause, Sentence }
-
 internal data class DistillRangeOption(
     val preset: DistillRangePreset,
     val range: DistillConfirmedRange

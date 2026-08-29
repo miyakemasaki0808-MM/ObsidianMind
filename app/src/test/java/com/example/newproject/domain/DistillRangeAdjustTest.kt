@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.model.DistillConfirmedRange
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillTextRange
+import com.example.newproject.model.state.DistillRangePreset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -169,6 +170,21 @@ class DistillRangeAdjustTest {
         val resolved = resolveOverlaps(listOf("S001", "S002", "S003"), ranges, priorityId = "S002")
 
         assertEquals(listOf("S001", "S002", "S003"), resolved.selectedIds)
+        assertTrue(resolved.deselectedIds.isEmpty())
+    }
+
+    @Test
+    fun `an unselected priority candidate pushes nobody out`() {
+        // 未選択の候補の範囲を変えても、選択集合は動かない。
+        // 保存対象でないものの編集が取捨を動かしてはいけない。
+        val ranges = mapOf(
+            "S001" to DistillTextRange(0, 10),
+            "S002" to DistillTextRange(0, 20)
+        )
+
+        val resolved = resolveOverlaps(listOf("S001"), ranges, priorityId = "S002")
+
+        assertEquals(listOf("S001"), resolved.selectedIds)
         assertTrue(resolved.deselectedIds.isEmpty())
     }
 
