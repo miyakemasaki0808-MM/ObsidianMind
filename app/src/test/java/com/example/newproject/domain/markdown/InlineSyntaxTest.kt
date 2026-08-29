@@ -38,6 +38,15 @@ class InlineSyntaxTest {
     }
 
     @Test
+    fun `長さの違う連なりは閉じにしない`() {
+        // **開いた連なりより長い連なりの一部を閉じに使わない**（CommonMark と同じ）。
+        // 部分一致を許すと、閉じていない連なりが「閉じている」ことになって範囲が変わる。
+        assertEquals(emptyList<String>(), spans("記法は ``a```b です"))
+        // 内側に短い連なりがあっても、同じ長さの連なりで閉じる。
+        assertEquals(listOf("Code:`a``b`"), spans("記法は `a``b` です"))
+    }
+
+    @Test
     fun `リンクは構文全体を消費し、内側の記号を装飾に使わない`() {
         assertEquals(listOf("Link:[a*b](url)"), spans("参照 [a*b](url)。"))
         assertEquals(listOf("Link:[label](a*b)"), spans("参照 [label](a*b)。"))

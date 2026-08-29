@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-29 | — | バッククォートを連なり単位で索引し、未閉じrunのOOMと部分一致をなくした | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
 | 2026-08-29 | — | 未閉じ記号の再探索と候補ごとの保護範囲走査をやめ、上限テストへ3系統目を足した | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
 | 2026-08-29 | — | インライン記法の入れ子を保持して描き、走査を入力サイズに比例させた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L51・L52 |
 | 2026-08-29 | — | インライン記法の解釈器を表示と蒸留で共有し、規則の食い違いで残っていた3件を閉じた | **[reflect_distill](features/reflect_distill.md)** §5・§11・[lessons](lessons.md) L51 |

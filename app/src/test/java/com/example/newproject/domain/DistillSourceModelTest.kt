@@ -515,15 +515,27 @@ class DistillSourceModelTest {
     @Test
     fun `maximum sized source of unclosed markers stays bounded`() {
         // **閉じ記号が無い開始記号は、見つからないことを覚えないと毎回末尾まで探し直す。**
-        // 実測 11ms／3ms／28ms。前方探索を戻す変異では `[` だけで 8,424ms まで落ちる。
+        // 実測 11ms／3ms／5ms。前方探索を戻す変異では `[` だけで 8,424ms まで落ちる。
         // 表示側（`inlineMarkdown`）も同じ解釈器を通るので、これはMainを止める時間でもある。
+        //
+        // **コードは「閉じない」を長さで作る。** `` "`x".repeat(n) `` は1個の連なりが次の1個で
+        // 閉じてしまい、未閉じ経路を通らない。長さの違う連なりを2つ置くと、
+        // 位置ごとに検索キーを作っていた頃は 96,002文字で OutOfMemoryError になった。
+        // 先頭の `x ` はコードフェンスとして除外されないようにするため。
+        // 上限は形ごとに実測から決める（通常は 11ms／3ms／10ms）。
+        // 括弧は前方探索を戻す変異で 8,424ms、コードは連なりごと越えるのをやめる変異で 12,557ms。
+        // **閉じ候補を短くしておく。** 長さが近いと途中で対応が見つかって走査量が落ち、
+        // 変異が閾値に届かない（64,000＋32,000では278msにしかならなかった）。
         listOf(
-            "[".repeat(250_000),
-            "[[".repeat(125_000),
-            "`x".repeat(125_000)
-        ).forEach { content ->
+            "[".repeat(250_000) to 3_000L,
+            "[[".repeat(125_000) to 3_000L,
+            ("x " + "`".repeat(120_000) + "x" + "`".repeat(2) + "x") to 1_000L
+        ).forEach { (content, limitMillis) ->
             val elapsedMillis = measureTimeMillis { buildDistillSourceModel(content) }
-            assertTrue("${content.take(2)} took ${elapsedMillis}ms", elapsedMillis < 3_000)
+            assertTrue(
+                "${content.take(3)} took ${elapsedMillis}ms (limit ${limitMillis}ms)",
+                elapsedMillis < limitMillis
+            )
         }
     }
 

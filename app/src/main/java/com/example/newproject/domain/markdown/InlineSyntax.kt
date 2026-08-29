@@ -54,7 +54,8 @@ internal data class InlineSyntaxScan(
  * 規則は次のとおりで、CommonMark（＝Obsidianの解釈）へ寄せてある。
  *
  * - **エスケープ** — `\` ＋ ASCII記号は記法を開かない。表示側は `\` を出さず記号だけを描く
- * - **コード** — 開いたバッククォートと**同じ数**で閉じる（`` ``a*b`` `` は1つのコード）
+ * - **コード** — 開いたバッククォートの連なりと**同じ長さの連なり**だけが閉じになる。
+ *   2個で開いて3個しか無ければコードにしない（CommonMark と同じ）
  * - **リンク** — `[[...]]` と `[ラベル](URL)` は構文全体を消費し、**内側の記号は装飾に使わない**。
  *   `[` は直後の `]` に `(` が続くときだけリンク（`arr[0]` の誤検出を防ぐ → M7）
  * - **強調** — `***` → `**` → `*` の順に試し、**長い記号で閉じられなければ同じ位置で短い記号を試す**。
@@ -69,6 +70,7 @@ internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
     val escapes = mutableListOf<InlineEscape>()
     val atomic = mutableListOf<InlineSpan>()
     val search = ForwardSearch(text)
+    val backticks = BacktickRuns(text)
 
     var i = 0
     while (i < text.length) {
@@ -81,12 +83,14 @@ internal fun scanInlineSyntax(text: String): InlineSyntaxScan {
         when {
             char == '`' -> {
                 val ticks = runLength(text, i, '`')
-                val close = search.indexOf("`".repeat(ticks), i + ticks)
+                val close = backticks.nextRunStart(ticks, i + ticks)
                 if (close >= 0) {
                     atomic += InlineSpan(InlineSpanKind.Code, i, close + ticks, i + ticks, close)
                     i = close + ticks
                 } else {
-                    i++
+                    // **閉じが無ければ連なりごと越える。** 1文字ずつ開始候補にすると、
+                    // 長さの違う検索キーを位置ごとに作って二乗時間と大量割り当てになる。
+                    i += ticks
                 }
             }
             text.startsWith("[[", i) -> {
@@ -235,6 +239,44 @@ private fun findEmphasisClose(
         return close
     }
     return null
+}
+
+/**
+ * バッククォートの連なりを長さごとに索引する。
+ *
+ * **開いた連なりと同じ長さの連なりだけが閉じになる**（CommonMark と同じ）。
+ * 位置ごとに `` "`".repeat(n) `` の検索キーを作っていた頃は、長さの違う未閉じの連なりが並ぶ本文で
+ * **キーが毎回変わってキャッシュが効かず、96,002文字で OutOfMemoryError になった**。
+ * 連なりを1単位として読み、閉じが無ければ連なりごと越える。
+ */
+private class BacktickRuns(text: String) {
+    private val startsByLength = HashMap<Int, MutableList<Int>>()
+
+    init {
+        var i = 0
+        while (i < text.length) {
+            if (text[i] != '`') {
+                i++
+                continue
+            }
+            var end = i
+            while (end < text.length && text[end] == '`') end++
+            startsByLength.getOrPut(end - i) { mutableListOf() } += i
+            i = end
+        }
+    }
+
+    /** 長さ [length] の連なりのうち、[from] 以降で最初のものの開始位置。無ければ -1。 */
+    fun nextRunStart(length: Int, from: Int): Int {
+        val starts = startsByLength[length] ?: return -1
+        var low = 0
+        var high = starts.size
+        while (low < high) {
+            val mid = (low + high) / 2
+            if (starts[mid] < from) low = mid + 1 else high = mid
+        }
+        return starts.getOrNull(low) ?: -1
+    }
 }
 
 /**
