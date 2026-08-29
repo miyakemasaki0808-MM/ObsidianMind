@@ -96,7 +96,7 @@
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
 | [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
-| [distill_range_adjust.md](features/distill_range_adjust.md) | 蒸留の太字範囲をユーザーが調整する。**未実装・設計確定**（実装後は reflect_distill へ畳む） |
+| [distill_range_adjust.md](features/distill_range_adjust.md) | 蒸留の太字範囲をユーザーが調整する。**段階1（プリセット）実装済み・段階2（自由範囲）未着手**（畳むのは段階2完了後） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
 | [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
