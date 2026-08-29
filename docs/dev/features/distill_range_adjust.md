@@ -1,11 +1,12 @@
 # 蒸留の太字範囲をユーザーが調整する
 
-**状態:** **Draft — 未実装・設計確定。** 段階1（プリセット）だけを実装対象とし、段階2（自由範囲）は §11 の条件を満たしてから着手する。
-**着手条件: v1の保護不足（斜体・打ち消し線）を先に直すこと**（→ §5・§11）
-**最終検証:** 2026-08-29 / `08cb5f7`（**未実装のため実装突合は存在しない。参照した既存実装の事実のみ確認**）
-**関連コード:** **未実装。** 参照する既存実装は `domain/DistillSourceModel.kt`（`splitSentenceIntoClauses` / `bracketedTermRanges` / `InlineSyntax`）・`domain/DistillTransformer.kt`（`applyDistillBold` / `projectedBoldRatio`）・`controller/DistillController.kt`（`ActiveSession` / `updateCandidateState` / `saveSelection`）・`ui/screen/AiTab.kt`・`ui/vigilith/VigilithState.kt`・`ui/markdown/InlineMarkdown.kt`（保護すべき記法の正）
-**関連テスト:** **未実装。** 着手時に §10 の9本（JVM）＋UIテスト3件＋`VigilithModeTest` の1件を置き、調整シートの文言を既存 `DistillCandidateUnitCopyTest` の走査範囲へ入れる
-**正本:** この文書。**ただし実装が終わった時点で [reflect_distill](reflect_distill.md) §5・§8 へ畳み、本書は削除する**（同じ機能の正本を2つ残さない）
+**状態:** **段階1（プリセット）実装済み・実機検証待ち。** 段階2（自由範囲）は未着手で、§11 の条件を満たしてから着手する。
+**着手条件は満たされた（2026-08-29）** — v1の保護不足（斜体・太字斜体・打ち消し線）は実機検証まで完了している（→ §5）
+**最終検証:** 2026-08-29 / `1591c73`（段階1の実装と突合。実機は未検証）
+**関連コード:** `model/DistillModels.kt`（`DistillConfirmedRange`）・`model/state/DistillState.kt`（`DistillRangePreset`）・`domain/DistillRangeAdjust.kt`（`presetRangesFor` / `resolveOverlaps` / `hasOverlappingDistillRanges`）・`controller/DistillController.kt`（`ActiveSession.confirmedRanges` / `applyRange` / `resetRange` / `openRangeSheet`）・`ui/screen/DistillRangeSheet.kt`・`ui/screen/AiTab.kt`・`ui/vigilith/VigilithMode.kt`
+**関連テスト:** `DistillRangeAdjustTest`（3段の導出・重なり解消・外枠）・`DistillControllerTest`（保存出力・太字率・短文例外・保存直前のガード）・`DistillRangeAdjustUiTest`（androidTest）・`VigilithModeTest` / `DistillCandidateUnitCopyTest`（走査範囲に調整シートを追加済み）
+**正本:** この文書。**段階2まで終わった時点で [reflect_distill](reflect_distill.md) §5・§8 へ畳み、本書は削除する**（同じ機能の正本を2つ残さない）。
+段階1の完了では畳まない — 段階2の設計（§11）がここにしか無いため
 
 **対象領域:** 蒸留候補の確定範囲・プリセット・調整シート
 **親機能:** [reflect_distill](reflect_distill.md)。**オフセット規約・書き戻し手順・競合検知・復旧・累積太字上限はすべて向こうが正本**で、本書はそれらを変えない
@@ -45,7 +46,7 @@
 
 ## 4. 現在のユーザーフロー
 
-> **未実装。** 以下は実装後の想定フロー。1〜4 と 6 は現行と同じで、**5 だけが増える**。
+1〜4 と 6 は v1 と同じで、**5 だけが増えた**。
 
 1. AIタブで蒸留を始める
 2. 非AIで候補を絞り、AIに1回だけIDを選ばせる
@@ -116,9 +117,14 @@
 | 候補をチェックした | 重なる既選択候補の選択を外す（**最後の明示操作を残す**） |
 | 保存直前 | 非重複を検証する。破れていたら保存へ進まない |
 
+**未選択かどうかで呼び出し側が分岐しない（実装時の変更）。** `resolveOverlaps` は
+選択集合に居ない候補を優先しても誰も押し出さないので、Controller側に
+`isSelected` の分岐を置いても**落ちるテストを書けなかった**（変異で確認）。
+契約は純関数側の検査で持ち、等価な分岐を増やさない（→ [architecture](../system/architecture.md) 判断4と同じ判定）。
+
 - 選択を外すだけなので、**本文へ書く内容は増えない**（安全側へ倒れる）
 - 既存の「選択件数・変更後の太字率」の表示がそのまま追随する
-- **保存直前の検証は「念のため」ではない。** [`saveSelection`](../../../app/src/main/java/com/example/newproject/controller/DistillController.kt#L308) は
+- **保存直前の検証は「念のため」ではない。** [`saveSelection`](../../../app/src/main/java/com/example/newproject/controller/DistillController.kt) は
   `applyDistillBold` を **Main で try なしに同期呼び出し**しているので、部分重複は例外ではなく**その場のクラッシュ**になる。
   同一範囲なら `distinct()` に畳まれて落ちない代わりに、**画面の選択件数と保存件数が食い違う**（`Saved.changedCount` は選択数を数える）。
   **`require` へユーザー操作から到達できない状態にする**のがこの契約の目的
@@ -148,17 +154,18 @@
 
 v1 は「箇所」へ統一し `DistillCandidateUnitCopyTest` が走査している。**調整シートの文言も同じ検査に載せる。** 検査の外に新しい文言を作らない（規則は検査に載せたときだけ守られた → [lessons](../lessons.md) L29）。
 
-### 既存のインライン装飾をまたがない（前提: v1の保護不足を先に直す）
+### 既存のインライン装飾をまたがない（前提は満たされた）
 
 **「既存の分割器の出力だから安全」は、いまは成り立たない。** 保護しているのはコードスパンとリンクだけで、
 表示側の `inlineMarkdown` が解釈する**斜体 `*…*`・太字斜体 `***…***`・打ち消し線 `~~…~~` は保護も除外もされていない**。
-装飾の内側で文・句が割れ、その候補を保存すると装飾の対応が変わる。**これは本設計が持ち込む欠陥ではなく、v1 に既にある**
-（再現と対応は課題台帳の「太字化が既存の斜体・打ち消し線をまたいで記法を壊す」）。
+装飾の内側で文・句が割れ、その候補を保存すると装飾の対応が変わっていた。**これは本設計が持ち込む欠陥ではなく、v1 に既にあった**
+（対応の経緯は [change_history](../change_history.md) が持つ）。
 
-**この機能の着手条件は、そこを先に直すことである。** 段階1の「新しい境界規則をゼロにする」という設計の根拠が、
+**この機能の着手条件は、そこを先に直すことだった。2026-08-29 に実機検証まで完了している。**
+段階1の「新しい境界規則をゼロにする」という設計の根拠が、
 分割器の出す範囲が安全であることに全面的に寄りかかっているため。
 
-修正後に成り立つ契約は次のとおり。
+いま成り立っている契約は次のとおり。
 
 - **太字挿入の端がまたいではいけないインライン構文**を明示する — コードスパン・リンク・既存 `**`・
   **斜体 `*…*`・太字斜体 `***…***`・打ち消し線 `~~…~~`**
@@ -276,6 +283,9 @@ DistillController
 
 ## 10. 検証と受け入れ条件
 
+**実装済み。** 内訳は次のとおりで、`DistillRangeAdjustTest`（3段・重なり・外枠）と
+`DistillControllerTest`（保存出力・太字率・例外・ガード）に分かれている。
+
 - **JVMテスト（9本）:**
   1. 3段の導出 — 括弧なし・割れない文（`意味節` と `文全体` が畳まれる）・語句候補の親句・語句が複数あるとき `語句` 段を出さない
   2. 重なり解決 — 同じ親文の2つの句を両方 `文全体` にしたとき、相手の選択が外れる
@@ -289,14 +299,19 @@ DistillController
      これが `sentence.range` を読む箇所の付け替え漏れを落とす唯一の検査である
   9. **保存直前のガード** — 重なる選択集合から `saveSelection()` を呼んでも `applyDistillBold` へ到達せず、
      状態が `Saving` へ進まない。**`require` へユーザー操作から到達できないことを、例外ではなく状態で確かめる**
-- **UIテスト（`androidTest/ui/`・3件）:** **「AI呼び出しが増えないから不要」は理由にならない。** 増えるのはUI操作のほうである。
-  1. 開く → 変更 → 閉じる → 再度開く で確定範囲が残る
-  2. チェック操作でシートを誤って開かない（行タップとチェックボックスの区別）
+- **UIテスト（`DistillRangeAdjustUiTest`）:** **「AI呼び出しが増えないから不要」は理由にならない。** 増えるのはUI操作のほうである。
+  1. 行タップとチェックボックスのタップが**別の操作へ届く**（シートを誤って開かない）
+  2. 確定範囲が**太字として描かれ**、存在する段だけが出て、未調整なら「最初の範囲に戻す」が押せない
   3. 重なり解消が**シート内の1行と、外れた候補カードの印の両方**に出る（読み上げも同じ1行から出る）
 
-  `VigilithModeTest` へ「調整シート表示中は常駐Vigilithを出さない」を足す。
+  **「開く→変更→閉じる→再度開くで確定範囲が残る」はJVM側へ置いた**
+  （`DistillControllerTest`）。確定範囲の寿命は Controller の性質で、
+  `ModalBottomSheet` の開閉アニメーションを待つ必要がある実機側へ置くと、
+  検査したいものと無関係に落ちる（→ `QuizActionSectionTest` と同じ判断）。
+  `VigilithModeTest` に「調整シート表示中は常駐Vigilithを出さない」を追加済み。
   **`androidTest` を触るので `assembleDebugAndroidTest` も通す。**
-- **実機確認:** **必須。** 本文書き換え経路を通る。`DIST` ケースへ「範囲を変えて保存 → 追加した `**` を除くと原文と完全一致」「CRLF・BOM・絵文字より後ろの候補で範囲を変える」「重なり解消の告知」「外部編集後の競合中断が従来どおり起きる」を足す。
+- **実機確認:** **必須・未実施。** 本文書き換え経路を通る。
+  `DIST-21`〜`DIST-24` として追加済み（→ [実機検証ケース](../../review/device_validation/reflect_distill.md)）。
   **タッチ精度とシート操作の最終確認に使い、UIテストの代わりにはしない。**
 - **保証していないこと:**
   - 選んだ範囲の**意味的な妥当性**
@@ -308,7 +323,7 @@ DistillController
 
 | | |
 |---|---|
-| **着手条件:** v1の保護不足を先に直す | 斜体・太字斜体・打ち消し線が保護されておらず、**段階1の安全性の根拠がそこに寄りかかっている**（→ §5） |
+| **実機検証が済んでいない** | 本文を書き換える唯一の経路を通る。`DIST-21`〜`DIST-24` が対象（→ [実機検証ケース](../../review/device_validation/reflect_distill.md)） |
 | 段階1では任意範囲を選べない | プリセット3段のみ。最終形は段階2 |
 | 保護範囲がモデルに残っていない | `InlineSyntax` は `buildDistillSourceModel` の中で行ごとに作られ、捨てられる。**効くのは段階2だけ**（段階1は濾された候補要素しか選べない → §5） |
 
