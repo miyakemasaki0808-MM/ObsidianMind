@@ -9,6 +9,9 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.DistillCandidateItem
@@ -101,8 +104,13 @@ class DistillRangeAdjustUiTest {
             }
         }
 
-        // 親文が原文のまま出る。太字になる部分はその内側にある。
+        // 親文が原文のまま出る。**確定範囲が実際に太字＋下線で描かれていることまで見る** —
+        // 存在の確認だけだと、強調を丸ごと外す変異が素通りする。
         composeRule.onNodeWithText(PARENT_TEXT).assertIsDisplayed()
+        val emphasized = emphasizedSpansOf(PARENT_TEXT)
+        assertEquals(1, emphasized.size)
+        assertEquals(0, emphasized.single().first)
+        assertEquals(BOLD_TEXT.length, emphasized.single().second)
         // 存在する段だけが出て、いまの段には印が付く。
         composeRule.onNodeWithText("✓ 意味節").assertIsDisplayed()
         composeRule.onNodeWithText("文全体").assertIsDisplayed()
@@ -218,6 +226,19 @@ class DistillRangeAdjustUiTest {
             .performScrollTo()
             .assertIsDisplayed()
     }
+
+    /** 描かれた文字列のうち、太字＋下線の両方が掛かった範囲。 */
+    private fun emphasizedSpansOf(text: String): List<Pair<Int, Int>> =
+        composeRule.onNodeWithText(text)
+            .fetchSemanticsNode()
+            .config[SemanticsProperties.Text]
+            .first()
+            .spanStyles
+            .filter {
+                it.item.fontWeight == FontWeight.Bold &&
+                    it.item.textDecoration == TextDecoration.Underline
+            }
+            .map { it.start to it.end }
 
     private fun candidates(
         items: List<DistillCandidateItem>,

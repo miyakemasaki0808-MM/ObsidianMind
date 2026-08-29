@@ -206,8 +206,13 @@ internal fun overlapNotice(isDeselectedByOverlap: Boolean, otherDeselectedCount:
     else -> null
 }
 
-/** 親文のうち、確定範囲だけを太字＋下線で示す。 */
-private fun highlightedParent(item: DistillCandidateItem) = buildAnnotatedString {
+/**
+ * 親文のうち、確定範囲だけを太字＋下線で示す。
+ *
+ * **色だけの手がかりにしない**（→ `docs/dev/system/ui_design_principles.md` §1）。
+ * 太字と下線の両方を掛けるのは、灰色にしても範囲が伝わるようにするためである。
+ */
+internal fun highlightedParent(item: DistillCandidateItem) = buildAnnotatedString {
     val parent = item.parentText
     val start = item.boldStartInParent.coerceIn(0, parent.length)
     val end = item.boldEndInParent.coerceIn(start, parent.length)

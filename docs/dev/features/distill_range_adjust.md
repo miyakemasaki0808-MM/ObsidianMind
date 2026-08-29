@@ -4,7 +4,7 @@
 **着手条件は満たされた（2026-08-29）** — v1の保護不足（斜体・太字斜体・打ち消し線）は実機検証まで完了している（→ §5）
 **最終検証:** 2026-08-29 / `1591c73`（段階1の実装と突合。実機は未検証）
 **関連コード:** `model/DistillModels.kt`（`DistillConfirmedRange`）・`model/state/DistillState.kt`（`DistillRangePreset`）・`domain/DistillRangeAdjust.kt`（`presetRangesFor` / `resolveOverlaps` / `hasOverlappingDistillRanges`）・`controller/DistillController.kt`（`ActiveSession.confirmedRanges` / `applyRange` / `resetRange` / `openRangeSheet`）・`ui/screen/DistillRangeSheet.kt`・`ui/screen/AiTab.kt`・`ui/vigilith/VigilithMode.kt`
-**関連テスト:** `DistillRangeAdjustTest`（3段の導出・重なり解消・外枠）・`DistillControllerTest`（保存出力・太字率・短文例外・保存直前のガード）・`DistillRangeAdjustUiTest`（androidTest）・`VigilithModeTest` / `DistillCandidateUnitCopyTest`（走査範囲に調整シートを追加済み）
+**関連テスト:** `DistillRangeAdjustTest`（3段の導出・重なり解消・外枠）・`DistillControllerTest`（保存出力・太字率・短文例外・保存直前のガード・告知の寿命）・`DistillRangeHighlightTest`（確定範囲の強調）・`DistillRangeNoticeTest`（告知の主語）・`DistillRangeAdjustUiTest`（androidTest）・`VigilithModeTest` / `DistillCandidateUnitCopyTest`（走査範囲に調整シートを追加済み）
 **正本:** この文書。**段階2まで終わった時点で [reflect_distill](reflect_distill.md) §5・§8 へ畳み、本書は削除する**（同じ機能の正本を2つ残さない）。
 段階1の完了では畳まない — 段階2の設計（§11）がここにしか無いため
 
@@ -300,10 +300,16 @@ DistillController
      これが `sentence.range` を読む箇所の付け替え漏れを落とす唯一の検査である
   9. **保存直前のガード** — 重なる選択集合から `saveSelection()` を呼んでも `applyDistillBold` へ到達せず、
      状態が `Saving` へ進まない。**`require` へユーザー操作から到達できないことを、例外ではなく状態で確かめる**
+  10. **同じ段の再適用では告知が消えず、別の段へ変えれば消える**（告知の寿命の両方向）
+  11. **確定範囲の強調**（`DistillRangeHighlightTest`）と**告知の主語**（`DistillRangeNoticeTest`）。
+      どちらもUI側の値なので、実機を待たずにJVMで観測できる形へ切り出してある
 - **UIテスト（`DistillRangeAdjustUiTest`）:** **「AI呼び出しが増えないから不要」は理由にならない。** 増えるのはUI操作のほうである。
   1. 行タップとチェックボックスのタップが**別の操作へ届く**（シートを誤って開かない）
-  2. 確定範囲が**太字として描かれ**、存在する段だけが出て、未調整なら「最初の範囲に戻す」が押せない
-  3. 重なり解消が**シート内の1行と、外れた候補カードの印の両方**に出る（読み上げも同じ1行から出る）
+  2. 確定範囲に**太字と下線の両方が掛かったspanが1つだけあり、範囲外には無い**。
+     存在する段だけが出て、未調整なら「最初の範囲に戻す」が押せない。
+     **「親文が表示されている」ことを強調の証拠にしない** — 強調を丸ごと外す変異が素通りする
+  3. 重なり解消が**シート内の1行と、外れた候補カードの印の両方**に出る。
+     外された候補自身のシートでは「ほか」と言わない（読み上げも同じ1行から出る）
 
   **「開く→変更→閉じる→再度開くで確定範囲が残る」はJVM側へ置いた**
   （`DistillControllerTest`）。確定範囲の寿命は Controller の性質で、
