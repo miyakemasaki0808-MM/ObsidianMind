@@ -684,6 +684,43 @@ class DistillControllerTest {
     }
 
     @Test
+    fun `re-applying the same preset keeps the overlap notice`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+        val afterWiden = state.value.distillState as DistillState.Candidates
+
+        // 選択済みの段をもう一度押しても、確定範囲は変わっていない。
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertEquals("理由は選択集合か確定範囲が変わるまで残る", listOf("S005"), after.overlapDeselectedIds)
+        assertEquals(afterWiden.items, after.items)
+        // 最初の範囲へ戻す操作も、既に初期範囲なら告知を消さない。
+        controller.resetRange("S005")
+        assertEquals(
+            listOf("S005"),
+            (state.value.distillState as DistillState.Candidates).overlapDeselectedIds
+        )
+    }
+
+    @Test
+    fun `changing to a different preset clears the overlap notice`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+
+        controller.applyRange("S006", DistillRangePreset.Clause)
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertTrue("確定範囲が変われば契約どおり消える", after.overlapDeselectedIds.isEmpty())
+    }
+
+    @Test
     fun `adjusting an unselected candidate does not move other selections`() = runTest {
         val state = stateWithNote(adjustableNote())
         val controller = controller(state, FakeAiClient.returning("S005 S006"))

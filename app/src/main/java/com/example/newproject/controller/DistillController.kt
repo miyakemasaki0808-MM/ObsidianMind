@@ -346,6 +346,11 @@ internal class DistillController(
     private fun changeConfirmedRange(id: String, range: DistillConfirmedRange) {
         val active = session ?: return
         val current = state.current as? DistillState.Candidates ?: return
+        // **確定範囲が変わらないなら何もしない。** 告知は「次に選択集合か確定範囲が変わったとき」に
+        // 消える契約なので、選択済みの段をもう一度押しただけで
+        // 「なぜチェックが外れたか」の理由を失わせてはいけない。
+        // **UI側でボタンを無効化しても、ここは残す** — 別の呼び出し口から同じ形を作れる。
+        if (active.confirmedRanges[id] == range) return
         session = active.copy(confirmedRanges = active.confirmedRanges + (id to range))
         val updated = session ?: return
         // **未選択の候補を調整しても、他候補の選択状態は変わらない。**
