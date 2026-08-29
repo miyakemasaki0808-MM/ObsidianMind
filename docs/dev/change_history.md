@@ -16,6 +16,15 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-29 | — | 蒸留の装飾保護をPixel実機の DIST-19・DIST-20 で確認し、BOLD-1を完了した | **[reflect_distill](features/reflect_distill.md)** §10・[review](../review/README.md) |
+| 2026-08-29 | — | バッククォートを連なり単位で索引し、未閉じrunのOOMと部分一致をなくした | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
+| 2026-08-29 | — | 未閉じ記号の再探索と候補ごとの保護範囲走査をやめ、上限テストへ3系統目を足した | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L52 |
+| 2026-08-29 | — | インライン記法の入れ子を保持して描き、走査を入力サイズに比例させた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L51・L52 |
+| 2026-08-29 | — | インライン記法の解釈器を表示と蒸留で共有し、規則の食い違いで残っていた3件を閉じた | **[reflect_distill](features/reflect_distill.md)** §5・§11・[lessons](lessons.md) L51 |
+| 2026-08-29 | — | 蒸留の保護範囲へ斜体・太字斜体・打ち消し線を入れ、装飾をまたぐ候補を採らないようにした | **[reflect_distill](features/reflect_distill.md)** §5・§11・[lessons](lessons.md) L51 |
+| 2026-08-29 | — | N-14設計レビューの追加5件を反映し、調整範囲が保存へ届くことと告知の寿命を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§7・§10 |
+| 2026-08-29 | — | N-14設計レビューの5件を反映し、v1が斜体・打ち消し線をまたぐ欠陥を起票した | **[distill_range_adjust](features/distill_range_adjust.md)**・[reflect_distill](features/reflect_distill.md) §11・[lessons](lessons.md) L51 |
+| 2026-08-28 | — | 蒸留の太字範囲調整を設計し、確定範囲を親文の内側へ閉じてプリセット先行に切った | **[distill_range_adjust](features/distill_range_adjust.md)**・[roadmap](../_wip/roadmap.md) |
 | 2026-08-28 | — | X-9の禁止キー・拒否文言・単発中止・再タップをPixel実機で確認し完了した | **[reading_trace_backup](features/reading_trace_backup.md)**・[review](../review/README.md) |
 | 2026-08-28 | — | 停止待ち中の再タップが停止前の件数を確定できる穴を塞いだ | **[reading_trace_backup](features/reading_trace_backup.md)** §10・§11・[lessons](lessons.md) L49 |
 | 2026-08-27 | — | 中止後の過剰適用を断ち、退避JSONのキーと拒否文言を正本の外部契約へ揃えた | **[reading_trace_backup](features/reading_trace_backup.md)** §5・§10・§11・[lessons](lessons.md) L49・L50 |

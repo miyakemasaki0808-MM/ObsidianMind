@@ -4,6 +4,8 @@ import com.example.newproject.model.DistillChunk
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSentence
 import com.example.newproject.model.DistillSourceModel
+import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.model.DistillTextRange
 
 private data class SourceLine(
@@ -14,13 +16,106 @@ private data class SourceLine(
     val text: String
 )
 
-private data class InlineSyntax(
+private class InlineSyntax(
     val codeSpans: List<DistillTextRange>,
     val strongSpans: List<DistillTextRange>,
-    val linkSpans: List<DistillTextRange>
+    val linkSpans: List<DistillTextRange>,
+    /**
+     * **候補の境界を内側へ置いてはいけない範囲**（コード・リンク・装飾を併合したもの）。
+     *
+     * 用途は2つある — 文・句の境界をここで切らないことと、**候補の端がここの内側に入ったら
+     * その候補を採らない**こと。同じ集合で両方を守る。
+     *
+     * **重なりを併合し、開始順に並べてある。** getterで毎回連結していた頃は、
+     * 文字ごとの判定がそのつど記法数ぶんのListを作り、リンクの多い最大サイズ入力で
+     * 段階1が10秒上限を超えた。
+     */
+    val protectedSpans: List<DistillTextRange>
 ) {
-    val protectedForSentenceBreaks: List<DistillTextRange>
-        get() = codeSpans + linkSpans
+    /**
+     * 保護範囲を**前から順に**問うためのカーソル。
+     *
+     * **候補ごとに一覧の先頭へ戻らない。** 文字ごとの判定だけをカーソルにしても、
+     * その外側で候補ごとに `any` を回せば候補数×保護範囲数のままになる
+     * （装飾された短文が32,000件並ぶ最大入力で段階1が5秒を超えた）。
+     *
+     * **用途ごとに別のカーソルを作る。** 文字ループが先に全域を舐めてから候補が頭から回るので、
+     * 1つを使い回すと戻れなくなる。
+     */
+    fun cursor(): ProtectedCursor = ProtectedCursor(protectedSpans)
+}
+
+/**
+ * 併合済み・開始順の保護範囲を、単調に進みながら問う。
+ *
+ * 問う位置が前へ戻らない限り、全体で入力サイズに比例する。
+ */
+private class ProtectedCursor(private val ranges: List<DistillTextRange>) {
+    private var index = 0
+
+    private fun advanceTo(offset: Int): DistillTextRange? {
+        while (index < ranges.size && ranges[index].endExclusive <= offset) index++
+        return ranges.getOrNull(index)
+    }
+
+    /** [offset] が範囲の内側（開始位置ちょうどを含む）か。文・句の境界を置いてよいかの判定。 */
+    fun covers(offset: Int): Boolean =
+        advanceTo(offset)?.let { offset >= it.start && offset < it.endExclusive } == true
+
+    /** [offset] が範囲の**内部**か（`DistillTextRange.contains` と同じ、両端を含まない）。 */
+    fun containsStrictly(offset: Int): Boolean =
+        advanceTo(offset)?.contains(offset) == true
+
+    /** [range] と重なる保護範囲があるか。**問う範囲は前へ戻らない前提。** */
+    fun overlaps(range: DistillTextRange): Boolean {
+        var probe = advanceTo(range.start) ?: return false
+        var probeIndex = index
+        while (probe.start < range.endExclusive) {
+            if (probe.overlaps(range)) return true
+            probeIndex++
+            probe = ranges.getOrNull(probeIndex) ?: return false
+        }
+        return false
+    }
+
+    /** [range] と重なる保護範囲の一覧。句分割が自分の範囲ぶんだけを見るために使う。 */
+    fun slice(range: DistillTextRange): List<DistillTextRange> {
+        advanceTo(range.start) ?: return emptyList()
+        val result = mutableListOf<DistillTextRange>()
+        var probeIndex = index
+        while (probeIndex < ranges.size && ranges[probeIndex].start < range.endExclusive) {
+            if (ranges[probeIndex].overlaps(range)) result += ranges[probeIndex]
+            probeIndex++
+        }
+        return result
+    }
+}
+
+/** 既存の太字。[range] は記号込み、[content] は内側（太字率の分子に数えるのはこちら）。 */
+private data class BoldSpan(val range: DistillTextRange, val content: DistillTextRange?)
+
+/**
+ * 表示側が**1つの文字列として受け取る単位**（段落・リスト項目・引用行）の連結。原文オフセットへ戻せる。
+ *
+ * 単位を表示側と合わせるのが要点である。行ごとに見るとソフト改行をまたぐ対を落とし、
+ * 逆に全行を連結すると**別々に描かれる行のあいだで偽の対**ができる
+ * （`- 項目に*未閉じ。` が2行並ぶと、表示上はどちらもリテラルなのに1つの斜体になってしまう）。
+ */
+private class BlockText(
+    val text: String,
+    private val logicalStarts: IntArray,
+    private val sourceStarts: IntArray
+) {
+    fun sourceRange(startIndex: Int, endIndexExclusive: Int): DistillTextRange? {
+        if (endIndexExclusive <= startIndex) return null
+        return DistillTextRange(sourceOffset(startIndex), sourceOffset(endIndexExclusive - 1) + 1)
+    }
+
+    private fun sourceOffset(index: Int): Int {
+        var i = logicalStarts.size - 1
+        while (i > 0 && logicalStarts[i] > index) i--
+        return sourceStarts[i] + (index - logicalStarts[i])
+    }
 }
 
 private data class SentenceDraft(
@@ -84,7 +179,8 @@ internal fun buildDistillSourceModel(
         .filter { it.index !in setextLines && THEMATIC_BREAK_PATTERN.matches(it.text) }
         .mapTo(mutableSetOf()) { it.index }
     val excludedLines = baseExcludedLines + setextLines + thematicBreakLines
-    val strongSpans = strongSpansAcrossLines(content, lines, excludedLines)
+    val scanned = scanBlocks(content, lines, excludedLines)
+    val strongSpans = scanned.bold.map { it.range }
 
     val drafts = mutableListOf<SentenceDraft>()
     var currentHeading: String? = null
@@ -129,25 +225,26 @@ internal fun buildDistillSourceModel(
         val bodyEnd = line.contentEnd
         // 分母と同じ編集対象本文だけで既存太字を数える。見出し等の対象外領域にある
         // **strong** が本文の蒸留枠を消費しないよう、行内の内側文字だけを加算する。
-        boldCharacters += strongSpans.sumOf { strong ->
-            val innerStart = (strong.start + 2).coerceAtLeast(bodyStart)
-            val innerEnd = (strong.endExclusive - 2).coerceAtMost(bodyEnd)
+        boldCharacters += scanned.boldByLine[line.index].orEmpty().sumOf { bold ->
+            val inner = bold.content ?: return@sumOf 0
+            val innerStart = inner.start.coerceAtLeast(bodyStart)
+            val innerEnd = inner.endExclusive.coerceAtMost(bodyEnd)
             if (innerStart >= innerEnd) 0 else {
                 (innerStart until innerEnd).count { !content[it].isWhitespace() }
             }
         }
-        val syntax = parseInlineSyntax(
-            content = content,
-            start = bodyStart,
-            end = bodyEnd,
-            strongSpans = strongSpans.filter { it.overlaps(DistillTextRange(bodyStart, bodyEnd)) }
-        )
+        val syntax = scanned.forLine(line.index)
         eligibleCharacters += (bodyStart until bodyEnd).count { !content[it].isWhitespace() }
 
         if (!paragraphOpen || isListOrQuote(line.text)) paragraphIndex++
         val thisParagraph = paragraphIndex
         paragraphOpen = !isListOrQuote(line.text)
 
+        // **用途ごとにカーソルを分ける。** 端点照合は文の終わりまで進むので、
+        // そのまま句分割へ渡すと**必要なスパンを追い越して**保護が効かなくなる（実際に一度そうなった）。
+        // 文字ループ（`splitLineIntoSentences` の中）も先に全域を舐めるので、さらに別で持つ。
+        val boundaryCursor = syntax.cursor()
+        val contentCursor = syntax.cursor()
         subtractRanges(bodyStart, bodyEnd, syntax.strongSpans).forEach { editableSegment ->
             splitLineIntoSentences(
                 content = content,
@@ -155,15 +252,16 @@ internal fun buildDistillSourceModel(
                 end = editableSegment.endExclusive,
                 syntax = syntax
             ).forEach { sentenceRange ->
-                if ((syntax.codeSpans + syntax.linkSpans).any { span ->
-                        span.contains(sentenceRange.start) || span.contains(sentenceRange.endExclusive)
-                    }
+                // **端が保護範囲の内側に入る候補は採らない。** 装飾の対を片側だけ含む範囲へ
+                // `**` を挿すと、文字を1つも消さないまま記法の対応が変わる。
+                if (boundaryCursor.containsStrictly(sentenceRange.start) ||
+                    boundaryCursor.containsStrictly(sentenceRange.endExclusive)
                 ) return@forEach
                 if (content.substring(sentenceRange.start, sentenceRange.endExclusive).isBlank()) {
                     return@forEach
                 }
                 // 句へ割っても親文の範囲は保つ。候補カードの文脈表示に使う。
-                splitSentenceIntoClauses(content, sentenceRange, syntax).forEach { range ->
+                splitSentenceIntoClauses(content, sentenceRange, contentCursor).forEach { range ->
                     val text = content.substring(range.start, range.endExclusive)
                     if (text.isBlank()) return@forEach
                     drafts += SentenceDraft(
@@ -178,7 +276,7 @@ internal fun buildDistillSourceModel(
                         isLinkOnly = isLinkOnlyRange(content, range, syntax.linkSpans)
                     )
                     // 語句候補は親の内側に重なる。文脈は親文のままにする。
-                    bracketedTermRanges(content, range, syntax).forEach { termRange ->
+                    bracketedTermRanges(content, range, contentCursor).forEach { termRange ->
                         drafts += SentenceDraft(
                             text = content.substring(termRange.start, termRange.endExclusive),
                             range = termRange,
@@ -357,111 +455,168 @@ private fun isListOrQuote(line: String): Boolean =
         UNORDERED_LIST_PREFIX.containsMatchIn(line) ||
         line.trimStart().startsWith('>')
 
-private fun parseInlineSyntax(
-    content: String,
-    start: Int,
-    end: Int,
-    strongSpans: List<DistillTextRange>
-): InlineSyntax {
-    val code = mutableListOf<DistillTextRange>()
-    val links = mutableListOf<DistillTextRange>()
-    var i = start
-    while (i < end) {
-        when {
-            content[i] == '`' -> {
-                val ticks = countRun(content, i, '`', end)
-                val marker = "`".repeat(ticks)
-                val close = content.indexOf(marker, i + ticks).takeIf { it in (i + ticks) until end }
-                if (close != null) {
-                    code += DistillTextRange(i, close + ticks)
-                    i = close + ticks
-                } else i++
-            }
-            i + 1 < end && content.startsWith("[[", i) -> {
-                val close = content.indexOf("]]", i + 2).takeIf { it in (i + 2) until end }
-                if (close != null) {
-                    links += DistillTextRange(i, close + 2)
-                    i = close + 2
-                } else i += 2
-            }
-            content[i] == '[' -> {
-                val labelEnd = content.indexOf(']', i + 1).takeIf { it in (i + 1) until end }
-                val urlStart = labelEnd?.plus(1)?.takeIf { it < end && content[it] == '(' }
-                val urlEnd = urlStart?.let { content.indexOf(')', it + 1) }?.takeIf { it in (urlStart + 1) until end }
-                if (urlEnd != null) {
-                    links += DistillTextRange(i, urlEnd + 1)
-                    i = urlEnd + 1
-                } else i++
-            }
-            else -> i++
-        }
+/**
+ * ブロック単位で1度だけ走査した結果を、**行ごとに振り分けて**配る。
+ *
+ * 行ごとに全記法をフィルタし直すと行数×記法数になる。索引ノートのようにリンクが密な入力では、
+ * それだけで最大サイズの段階1が秒単位になる。
+ */
+private class BlockScan(
+    private val byLine: Map<Int, InlineSyntax>,
+    val boldByLine: Map<Int, List<BoldSpan>>,
+    val bold: List<BoldSpan>
+) {
+    fun forLine(index: Int): InlineSyntax = byLine[index] ?: EMPTY
+
+    private companion object {
+        val EMPTY = InlineSyntax(emptyList(), emptyList(), emptyList(), emptyList())
     }
-    return InlineSyntax(code, strongSpans, links)
 }
 
-/** 通常本文のsoft line breakをまたぐ既存 ** 強調も、1つの保護範囲として認識する。 */
-private fun strongSpansAcrossLines(
+/** 重なりを併合して開始順に並べる。カーソルで前から問えるようにするため。 */
+private fun mergeRanges(ranges: List<DistillTextRange>): List<DistillTextRange> {
+    if (ranges.isEmpty()) return emptyList()
+    val sorted = ranges.sortedBy { it.start }
+    val result = mutableListOf(sorted.first())
+    sorted.drop(1).forEach { range ->
+        val last = result.last()
+        // **接しているだけの範囲は併合しない。** 併合すると境界の1点が「内側」に変わる。
+        if (range.start < last.endExclusive) {
+            result[result.lastIndex] = DistillTextRange(
+                last.start,
+                maxOf(last.endExclusive, range.endExclusive)
+            )
+        } else {
+            result += range
+        }
+    }
+    return result
+}
+
+/**
+ * 本文を表示側と同じ単位のブロックへ切り、[scanInlineSyntax] で1度だけ解釈する。
+ *
+ * **解釈器を2つ持たない。** 記法の一覧を揃えるだけでは、バッククォートの数え方や
+ * エスケープの扱いが食い違い、表示上は1つの装飾の内側へ蒸留が境界を置ける状態が残る
+ * （→ [lessons L51](../../../../../../../../docs/dev/lessons/L51.md)）。
+ */
+private fun scanBlocks(
     content: String,
     lines: List<SourceLine>,
     excludedLines: Set<Int>
-): List<DistillTextRange> {
-    val result = mutableListOf<DistillTextRange>()
-    var openStart: Int? = null
-    for (line in lines) {
-        if (line.index in excludedLines || line.text.isBlank()) {
-            openStart = null
-            continue
+): BlockScan {
+    val code = mutableMapOf<Int, MutableList<DistillTextRange>>()
+    val links = mutableMapOf<Int, MutableList<DistillTextRange>>()
+    val protectedByLine = mutableMapOf<Int, MutableList<DistillTextRange>>()
+    val boldByLine = mutableMapOf<Int, MutableList<BoldSpan>>()
+    val allBold = mutableListOf<BoldSpan>()
+    val lineStarts = IntArray(lines.size) { lines[it].start }
+
+    fun lineIndexAt(offset: Int): Int {
+        var low = 0
+        var high = lineStarts.size - 1
+        while (low < high) {
+            val mid = (low + high + 1) / 2
+            if (lineStarts[mid] <= offset) low = mid else high = mid - 1
         }
-        val codeSpans = inlineCodeSpans(content, line.start, line.contentEnd)
-        var i = line.start
-        while (i + 1 < line.contentEnd) {
-            val inCode = codeSpans.any { i >= it.start && i < it.endExclusive }
-            if (!inCode && content.startsWith("**", i) && !isEscaped(content, i, line.start)) {
-                val start = openStart
-                if (start == null) {
-                    openStart = i
-                } else {
-                    result += DistillTextRange(start, i + 2)
-                    openStart = null
+        return low
+    }
+
+    fun spread(range: DistillTextRange, into: MutableMap<Int, MutableList<DistillTextRange>>) {
+        for (index in lineIndexAt(range.start)..lineIndexAt(range.endExclusive - 1)) {
+            into.getOrPut(index) { mutableListOf() } += range
+        }
+    }
+
+    blockTexts(content, lines, excludedLines).forEach { block ->
+        scanInlineSyntax(block.text).flatten().forEach { span ->
+            val range = block.sourceRange(span.start, span.endExclusive) ?: return@forEach
+            when (span.kind) {
+                InlineSpanKind.Code -> {
+                    spread(range, code)
+                    spread(range, protectedByLine)
                 }
-                i += 2
-            } else {
-                i++
+                InlineSpanKind.Link, InlineSpanKind.WikiLink -> {
+                    spread(range, links)
+                    spread(range, protectedByLine)
+                }
+                InlineSpanKind.Italic, InlineSpanKind.Strikethrough -> spread(range, protectedByLine)
+                // 太字は「既に太字」なので編集対象から差し引く。境界の保護とは用途が違う。
+                InlineSpanKind.Bold, InlineSpanKind.BoldItalic -> {
+                    val bold = BoldSpan(range, block.sourceRange(span.contentStart, span.contentEnd))
+                    allBold += bold
+                    for (index in lineIndexAt(range.start)..lineIndexAt(range.endExclusive - 1)) {
+                        boldByLine.getOrPut(index) { mutableListOf() } += bold
+                    }
+                }
             }
         }
     }
-    return result
+
+    val byLine = (code.keys + links.keys + protectedByLine.keys + boldByLine.keys).associateWith { index ->
+        InlineSyntax(
+            codeSpans = code[index].orEmpty(),
+            strongSpans = boldByLine[index].orEmpty().map { it.range },
+            linkSpans = links[index].orEmpty(),
+            protectedSpans = mergeRanges(protectedByLine[index].orEmpty())
+        )
+    }
+    return BlockScan(byLine, boldByLine, allBold)
 }
 
-private fun inlineCodeSpans(content: String, start: Int, end: Int): List<DistillTextRange> {
-    val result = mutableListOf<DistillTextRange>()
-    var i = start
-    while (i < end) {
-        if (content[i] != '`' || isEscaped(content, i, start)) {
-            i++
+/**
+ * 表示側が1つの文字列として受け取る単位でブロックを切る。
+ *
+ * 段落は連続する本文行を連結し、**リスト項目と引用行は1行ずつ独立させる** —
+ * 表示側が `inlineMarkdown` へそう渡すためで、連結すると別々に描かれる行のあいだに偽の対ができる。
+ * 見出し・空行・除外行（frontmatter・コードフェンス・表など）でも切れる。
+ *
+ * **行頭のリスト記号は剥がさない。** 記号のあとには必ず空白が続くので、
+ * `scanInlineSyntax` の空白規則が対の開始として退ける。
+ */
+private fun blockTexts(
+    content: String,
+    lines: List<SourceLine>,
+    excludedLines: Set<Int>
+): List<BlockText> {
+    val result = mutableListOf<BlockText>()
+    val builder = StringBuilder()
+    val logicalStarts = mutableListOf<Int>()
+    val sourceStarts = mutableListOf<Int>()
+
+    fun flush() {
+        if (builder.isNotEmpty()) {
+            result += BlockText(builder.toString(), logicalStarts.toIntArray(), sourceStarts.toIntArray())
+        }
+        builder.clear()
+        logicalStarts.clear()
+        sourceStarts.clear()
+    }
+
+    fun append(line: SourceLine) {
+        if (builder.isNotEmpty()) builder.append('\n')
+        logicalStarts += builder.length
+        sourceStarts += line.start
+        builder.append(content, line.start, line.contentEnd)
+    }
+
+    for (line in lines) {
+        val detectionText = line.text.removePrefix("\uFEFF")
+        val isHeading = line.index !in excludedLines && HEADING_PATTERN.matches(detectionText)
+        if (line.index in excludedLines || line.text.isBlank() || isHeading) {
+            flush()
             continue
         }
-        val ticks = countRun(content, i, '`', end)
-        val marker = "`".repeat(ticks)
-        val close = content.indexOf(marker, i + ticks).takeIf { it in (i + ticks) until end }
-        if (close == null) {
-            i++
-        } else {
-            result += DistillTextRange(i, close + ticks)
-            i = close + ticks
+        if (isListOrQuote(line.text)) {
+            flush()
+            append(line)
+            flush()
+            continue
         }
+        append(line)
     }
+    flush()
     return result
-}
-
-private fun isEscaped(content: String, offset: Int, lowerBound: Int): Boolean {
-    var slashCount = 0
-    var i = offset - 1
-    while (i >= lowerBound && content[i] == '\\') {
-        slashCount++
-        i--
-    }
-    return slashCount % 2 == 1
 }
 
 private fun countRun(content: String, start: Int, char: Char, end: Int): Int {
@@ -578,11 +733,11 @@ private fun splitLineIntoSentences(
     syntax: InlineSyntax
 ): List<DistillTextRange> {
     val result = mutableListOf<DistillTextRange>()
+    val protectedCursor = syntax.cursor()
     var sentenceStart = start
     var i = start
     while (i < end) {
-        val protected = syntax.protectedForSentenceBreaks.any { i >= it.start && i < it.endExclusive }
-        val isBoundary = !protected && when (content[i]) {
+        val isBoundary = !protectedCursor.covers(i) && when (content[i]) {
             '。', '！', '？', '!', '?' -> true
             '.' -> isEnglishPeriodBoundary(content, i, start, end)
             else -> false
@@ -633,11 +788,11 @@ private fun addTrimmedRange(
 private fun bracketedTermRanges(
     content: String,
     range: DistillTextRange,
-    syntax: InlineSyntax
+    protectedCursor: ProtectedCursor
 ): List<DistillTextRange> = bracketedSpans(content, range).mapNotNull { outer ->
     val inner = trimmedRange(content, outer.start + 1, outer.endExclusive - 1)
         ?: return@mapNotNull null
-    if (syntax.protectedForSentenceBreaks.any { it.overlaps(inner) }) return@mapNotNull null
+    if (protectedCursor.overlaps(inner)) return@mapNotNull null
     inner.takeIf {
         it.length in DistillLimits.MIN_TERM_CHARACTERS..DistillLimits.MAX_TERM_CHARACTERS
     }
@@ -697,17 +852,24 @@ private fun trimmedRange(content: String, rawStart: Int, rawEnd: Int): DistillTe
 private fun splitSentenceIntoClauses(
     content: String,
     range: DistillTextRange,
-    syntax: InlineSyntax
+    protectedCursor: ProtectedCursor
 ): List<DistillTextRange> {
     if (range.length <= DistillLimits.CLAUSE_SPLIT_THRESHOLD) return listOf(range)
 
     // 鉤括弧の内側では割らない。割ると括弧が2句へまたがり、語句候補が取れなくなる。
-    val protectedSpans = syntax.protectedForSentenceBreaks + bracketedSpans(content, range)
+    // **自分の範囲に重なる保護範囲だけを取る。** 行全体の一覧を文ごとに併合し直すと、
+    // 装飾の多い行で文数×保護範囲数になる。
+    val protectedSpans = mergeRanges(protectedCursor.slice(range) + bracketedSpans(content, range))
+    var protectedIndex = 0
     val clauses = mutableListOf<DistillTextRange>()
     var clauseStart = range.start
     for (offset in range.start until range.endExclusive) {
         if (content[offset] != '、' && content[offset] != ',') continue
-        if (protectedSpans.any { offset >= it.start && offset < it.endExclusive }) continue
+        while (protectedIndex < protectedSpans.size &&
+            protectedSpans[protectedIndex].endExclusive <= offset
+        ) protectedIndex++
+        val enclosing = protectedSpans.getOrNull(protectedIndex)
+        if (enclosing != null && offset >= enclosing.start && offset < enclosing.endExclusive) continue
         val clause = trimmedRange(content, clauseStart, offset) ?: continue
         if (clause.length >= DistillLimits.MIN_CLAUSE_CHARACTERS) {
             clauses += clause

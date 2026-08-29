@@ -1,6 +1,7 @@
 package com.example.newproject.ui.markdown
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -8,6 +9,9 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import com.example.newproject.domain.markdown.InlineSpan
+import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.ui.theme.LightAppColors
 
 /**
@@ -31,105 +35,80 @@ internal data class InlineMarkdownColors(
     }
 }
 
+/**
+ * インラインMarkdownを [AnnotatedString] へ描く。
+ *
+ * **構文の解釈は自分で持たない。** どこからどこまでが1つの記法かは [scanInlineSyntax] が決め、
+ * ここは種別を色・太さ・下線へ写すだけを担う。
+ * **解釈を写し取って別に持つと、書き込み側（蒸留）が表示を壊す**（→ lessons L51）。
+ *
+ * **入れ子も描く。** `**A *B* C**` の内側の斜体を捨てると、蒸留が文を太字にした瞬間に
+ * ユーザーの装飾が表示から消える。
+ */
 internal fun inlineMarkdown(
     text: String,
     colors: InlineMarkdownColors = InlineMarkdownColors.Light
 ) = buildAnnotatedString {
-    var index = 0
+    val scan = scanInlineSyntax(text)
+    val escapedBackslashes = scan.escapes.mapTo(mutableSetOf()) { it.start }
+    appendSpans(text, scan.spans, 0, text.length, escapedBackslashes, colors)
+}
 
-    while (index < text.length) {
-        when {
-            // 太字イタリック ***text*** (** より先にチェック)
-            text.startsWith("***", index) -> {
-                val end = findEmphasisEnd(text, "***", index)
-                if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)) {
-                        append(text.substring(index + 3, end))
-                    }
-                    index = end + 3
-                } else { append(text[index]); index++ }
+/** [from]〜[to] を、[spans] の範囲だけ装飾しながら描く。範囲の内側は子で描き直す。 */
+private fun AnnotatedString.Builder.appendSpans(
+    text: String,
+    spans: List<InlineSpan>,
+    from: Int,
+    to: Int,
+    escapedBackslashes: Set<Int>,
+    colors: InlineMarkdownColors
+) {
+    var index = from
+    spans.forEach { span ->
+        appendPlain(text, index, span.start, escapedBackslashes)
+        withStyle(styleFor(span, colors)) {
+            when (span.kind) {
+                // `[[note|表示名]]` は表示名だけを出す。内側は解釈しない。
+                InlineSpanKind.WikiLink ->
+                    append(text.substring(span.contentStart, span.contentEnd).split("|").last())
+                InlineSpanKind.Code, InlineSpanKind.Link ->
+                    append(text.substring(span.contentStart, span.contentEnd))
+                else -> appendSpans(
+                    text, span.children, span.contentStart, span.contentEnd, escapedBackslashes, colors
+                )
             }
-            // 太字 **text**
-            text.startsWith("**", index) -> {
-                val end = findEmphasisEnd(text, "**", index)
-                if (end != -1) {
-                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                        append(text.substring(index + 2, end))
-                    }
-                    index = end + 2
-                } else { append(text[index]); index++ }
-            }
-            // イタリック *text*
-            text[index] == '*' -> {
-                val end = findEmphasisEnd(text, "*", index)
-                if (end != -1) {
-                    withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                        append(text.substring(index + 1, end))
-                    }
-                    index = end + 1
-                } else { append(text[index]); index++ }
-            }
-            // 打ち消し線 ~~text~~
-            text.startsWith("~~", index) -> {
-                val end = text.indexOf("~~", startIndex = index + 2)
-                if (end != -1) {
-                    withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = colors.strikethrough)) {
-                        append(text.substring(index + 2, end))
-                    }
-                    index = end + 2
-                } else { append(text[index]); index++ }
-            }
-            // インラインコード `code`
-            text[index] == '`' -> {
-                val end = text.indexOf('`', startIndex = index + 1)
-                if (end != -1) {
-                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = colors.codeBackground)) {
-                        append(text.substring(index + 1, end))
-                    }
-                    index = end + 1
-                } else { append(text[index]); index++ }
-            }
-            // Obsidianリンク [[note]]
-            text.startsWith("[[", index) -> {
-                val end = text.indexOf("]]", startIndex = index + 2)
-                if (end != -1) {
-                    val linkText = text.substring(index + 2, end).split("|").last()
-                    withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
-                        append(linkText)
-                    }
-                    index = end + 2
-                } else { append(text[index]); index++ }
-            }
-            // 通常リンク [label](url)
-            // 最初の ] の直後に ( が続く場合のみリンクとみなす。以前は後方の "](" を
-            // 無制限に探していたため、配列表記 arr[0] などの [ が離れたリンクと
-            // ペアリングされて間の本文を巻き込んでいた（M7）。
-            text[index] == '[' -> {
-                val closeBracket = text.indexOf(']', startIndex = index + 1)
-                val isLink = closeBracket != -1 && text.startsWith("](", closeBracket)
-                val closeUrl = if (isLink) text.indexOf(')', startIndex = closeBracket + 2) else -1
-                if (isLink && closeUrl != -1) {
-                    withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
-                        append(text.substring(index + 1, closeBracket))
-                    }
-                    index = closeUrl + 1
-                } else { append(text[index]); index++ }
-            }
-            else -> { append(text[index]); index++ }
         }
+        index = span.endExclusive
+    }
+    appendPlain(text, index, to, escapedBackslashes)
+}
+
+/** 装飾の外側。エスケープは記号だけを出す（`\*` → `*`）。Obsidianと同じ見え方にする。 */
+private fun AnnotatedString.Builder.appendPlain(
+    text: String,
+    from: Int,
+    to: Int,
+    escapedBackslashes: Set<Int>
+) {
+    var index = from
+    while (index < to) {
+        if (index in escapedBackslashes && index + 1 < to) {
+            append(text[index + 1])
+            index += 2
+            continue
+        }
+        append(text[index])
+        index++
     }
 }
 
-/**
- * 強調記号の閉じ位置を返す（見つからない・強調とみなせない場合は -1）。
- * 中身が空でなく、先頭・末尾が空白でない場合のみ強調とみなす。
- * 以前は次の記号と無条件にペアリングしていたため、「3 * 4 と 5 * 6」のような
- * スペース区切りの * が離れた * と結合し、間の本文を斜体に巻き込んでいた（M7）。
- */
-private fun findEmphasisEnd(text: String, marker: String, start: Int): Int {
-    val end = text.indexOf(marker, startIndex = start + marker.length)
-    if (end == -1) return -1
-    val content = text.substring(start + marker.length, end)
-    if (content.isEmpty() || content.first().isWhitespace() || content.last().isWhitespace()) return -1
-    return end
+private fun styleFor(span: InlineSpan, colors: InlineMarkdownColors): SpanStyle = when (span.kind) {
+    InlineSpanKind.BoldItalic -> SpanStyle(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic)
+    InlineSpanKind.Bold -> SpanStyle(fontWeight = FontWeight.Bold)
+    InlineSpanKind.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
+    InlineSpanKind.Strikethrough ->
+        SpanStyle(textDecoration = TextDecoration.LineThrough, color = colors.strikethrough)
+    InlineSpanKind.Code -> SpanStyle(fontFamily = FontFamily.Monospace, background = colors.codeBackground)
+    InlineSpanKind.WikiLink, InlineSpanKind.Link ->
+        SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)
 }

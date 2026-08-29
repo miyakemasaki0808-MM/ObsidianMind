@@ -1,7 +1,11 @@
 package com.example.newproject
 
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
+import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.ui.markdown.inlineMarkdown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,6 +20,77 @@ class InlineMarkdownTest {
 
     private fun hasBold(input: String) =
         inlineMarkdown(input).spanStyles.any { it.item.fontWeight == FontWeight.Bold }
+
+    /** 描かれたSpanStyleから記法の種別を読み取る。表示側が何を装飾したかを外から数えるため。 */
+    private fun renderedKinds(input: String): List<String> =
+        inlineMarkdown(input).spanStyles.map { style ->
+            val item = style.item
+            when {
+                item.fontWeight == FontWeight.Bold && item.fontStyle == FontStyle.Italic -> "BoldItalic"
+                item.fontWeight == FontWeight.Bold -> "Bold"
+                item.fontStyle == FontStyle.Italic -> "Italic"
+                item.textDecoration == TextDecoration.LineThrough -> "Strikethrough"
+                item.fontFamily == FontFamily.Monospace -> "Code"
+                item.textDecoration == TextDecoration.Underline -> "Link"
+                else -> "?"
+            }
+        }
+
+    /**
+     * **表示と蒸留が同じ解釈器を使っていることを、入力表で確かめる。**
+     *
+     * 記法の一覧を揃えるだけでは足りない。バッククォートの数え方とエスケープの扱いが
+     * 食い違っていたために、表示上の装飾の内側へ蒸留が候補境界を置けた（→ lessons L51）。
+     * ここが落ちるときは、表示側が [scanInlineSyntax] の答えを使わなくなっている。
+     */
+    @Test
+    fun `装飾する範囲は共有トークナイザーの答えと一致する`() {
+        listOf(
+            "これは*斜体*と**太字**と***両方***です",
+            "これは~~取消~~と`コード`です",
+            "記法は ``a*。B``。後に*文字*。",
+            "記号は \\*A。B\\* と書く。",
+            "参照 [a*b](url) と [[note|表示名]] と [[a*b]]。",
+            "計算は 2 * 3 * 4 である",
+            "これは**未閉じの強調。次の文には*斜体*がある。",
+            "*強調 [a*b](url) 続き*",
+            "**A *B* `c` [d](u) E**",
+            "***斜体*。**"
+        ).forEach { input ->
+            // wikilink と通常リンクは表示属性が同じなので、種別としては同一に畳む。
+            val expected = scanInlineSyntax(input).flatten().map {
+                if (it.kind == InlineSpanKind.WikiLink) "Link" else it.kind.name
+            }
+            assertEquals(input, expected, renderedKinds(input))
+        }
+    }
+
+    @Test
+    fun `入れ子の装飾は外側を足しても残る`() {
+        // **蒸留が文を太字にしても、ユーザーが書いた斜体・コード・リンクは表示から消えない。**
+        assertEquals(listOf("Bold", "Italic", "Code", "Link"), renderedKinds("**A *B* `c` [d](u) E**"))
+        assertEquals("A B c d E", plainText("**A *B* `c` [d](u) E**"))
+    }
+
+    @Test
+    fun `長い記号で閉じられないときは短い記号で開き直す`() {
+        // `*斜体*。` を保存した `***斜体*。**` に、余分な `*` が本文として出ないこと。
+        assertEquals("斜体。", plainText("***斜体*。**"))
+        assertEquals(listOf("Bold", "Italic"), renderedKinds("***斜体*。**"))
+    }
+
+    @Test
+    fun `エスケープした記号は装飾せず、記号だけを出す`() {
+        // Obsidian と同じ見え方にする。以前は `\*` を斜体の開始として読み、
+        // バックスラッシュもそのまま描いていた。
+        assertEquals("*強調*ではない", plainText("\\*強調\\*ではない"))
+        assertTrue(!hasItalic("\\*強調\\*ではない"))
+    }
+
+    @Test
+    fun `コードは開いた数と同じバッククォートで閉じる`() {
+        assertEquals("a*。B", plainText("``a*。B``"))
+    }
 
     // ── 正常系 ───────────────────────────────────────────────────────────
 
