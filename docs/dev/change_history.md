@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-30 | — | 実機検証の開始・終了を常設検証用Vaultへ固定し、元Vaultへ戻さない手順にした | **[device_validation](../review/device_validation/README.md)** |
 | 2026-08-30 | — | 太字範囲調整をPixel実機のDIST-21〜24とinstrumentation 6件で確認し、段階1を完了した | **[distill_range_adjust](features/distill_range_adjust.md)** §10・[review](../review/README.md) |
 | 2026-08-29 | — | X-11コードレビューの4件を直し、告知の寿命と主語、強調の観測点を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§10・[lessons](lessons.md) L53 |
 | 2026-08-29 | — | 蒸留の太字範囲を`語句`/`意味節`/`文全体`から選べるようにした（段階1・実機検証待ち） | **[distill_range_adjust](features/distill_range_adjust.md)** |
