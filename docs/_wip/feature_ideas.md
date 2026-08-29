@@ -388,7 +388,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 
 #### N-14. 蒸留の太字範囲をユーザーが調整する
 
-**段階1（プリセット）は実装済み → [distill_range_adjust](../dev/features/distill_range_adjust.md)。**
+**段階1（プリセット）は実装・実機検証済み → [distill_range_adjust](../dev/features/distill_range_adjust.md)。**
 残るのは段階2（自由範囲）で、判断の中身は設計書が持つ。
 
 - **内容:** 蒸留の候補について「**この候補は重要か**」と「**どこからどこまでを太字にするか**」を分離し、

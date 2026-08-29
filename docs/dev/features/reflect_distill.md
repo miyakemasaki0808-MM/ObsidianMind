@@ -1,8 +1,8 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句を実装済み。**表示・候補境界・保存・競合・故障復旧を実機確認済み**
-**最終検証:** 2026-08-29 / `909fe8d`＋文書差分（JVM 1,147件、Lint、Pixel 10 Pro Foldで `DIST-19`・`DIST-20` を確認。
-`DIST-01`〜`DIST-18` は 2026-08-20 / `6daf0f3` の確認が最後 → [レビュー一覧](../../review/README.md)）
+**最終検証:** 2026-08-30 / `8954b6e`＋文書差分（JVM 1,181件、Lint、Pixel 10 Pro Foldで `DIST-21`〜`DIST-24` 4/4、範囲調整instrumentation 6/6。
+`DIST-19`・`DIST-20` は 2026-08-29 / `909fe8d`、`DIST-01`〜`DIST-18` は 2026-08-20 / `6daf0f3` の確認が最後 → [レビュー一覧](../../review/README.md)）
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest`
 **正本:** この文書
@@ -582,6 +582,8 @@ vault の `_AI補記` は用途が違うため使わない。
   レコードを無言で解消し、不一致では自動復元せず3択、URIアクセス不能では別ファイル書き出しだけを提示した。
   **装飾の保護は 2026-08-29 に `DIST-20` で確認した** — 装飾の片側だけを含む候補は出ず、保存後も
   斜体・コード・通常リンク・wikilinkの対象文字列と描画が維持され、Obsidian側の見え方も保存前と一致した
+- **太字範囲調整:** 2026-08-30に `DIST-21`〜`DIST-24` を4/4確認した。3段の表示・確定範囲の保存・
+  重なり解消と告知・シート中のVigilith抑制・外部編集競合が契約どおりで、instrumentationも6/6成功した
 - **最大サイズ実測:** 一段目685〜904ms、ヒープ増分26,263,552 bytes、キャッシュ262,144 bytes、
   復旧レコード262,422 bytes、管理対象ピーク524,566 bytes、事前空き容量見積851,968 bytes
 
