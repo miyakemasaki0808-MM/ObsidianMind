@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-29 | — | インライン記法の入れ子を保持して描き、走査を入力サイズに比例させた | **[reflect_distill](features/reflect_distill.md)** §5・[lessons](lessons.md) L51・L52 |
 | 2026-08-29 | — | インライン記法の解釈器を表示と蒸留で共有し、規則の食い違いで残っていた3件を閉じた | **[reflect_distill](features/reflect_distill.md)** §5・§11・[lessons](lessons.md) L51 |
 | 2026-08-29 | — | 蒸留の保護範囲へ斜体・太字斜体・打ち消し線を入れ、装飾をまたぐ候補を採らないようにした | **[reflect_distill](features/reflect_distill.md)** §5・§11・[lessons](lessons.md) L51 |
 | 2026-08-29 | — | N-14設計レビューの追加5件を反映し、調整範囲が保存へ届くことと告知の寿命を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§7・§10 |

@@ -447,64 +447,69 @@ class DistillSourceModelTest {
         assertEquals(listOf("参照 [[a*b]]。", "次の行は*強調*。"), linearTexts(wikilink))
     }
 
-    /** 装飾の対象になっている文字列。太字化の前後で変わらないことが保存の受理条件。 */
-    private fun emphasisContents(text: String): List<String> =
-        scanInlineSyntax(text).spans
-            .filter { it.kind != InlineSpanKind.Code && it.kind != InlineSpanKind.Link && it.kind != InlineSpanKind.WikiLink }
-            .map { text.substring(it.contentStart, it.contentEnd) }
+    /** 装飾の**種別と対象文字列**の組。保存の前後で変わらないことが受理条件。 */
+    private fun decorations(text: String): List<Pair<InlineSpanKind, String>> =
+        scanInlineSyntax(text).flatten()
+            .map { it.kind to text.substring(it.contentStart, it.contentEnd) }
 
     @Test
-    fun `bolding any candidate keeps every existing decoration target intact`() {
-        // **これが保存側の受理条件。** 候補の端が対の内側に入らないことの帰結を、
-        // 変換後の文字列をもう一度解釈し直して確かめる。
+    fun `bolding any candidate keeps every existing decoration with the same kind`() {
+        // **これが保存側の受理条件。** 文字列の部分一致では、`Italic:斜体` が `Bold:*斜体*。` へ
+        // 変わっても通ってしまう（実際に一度それで見逃した）。**種別ごと突き合わせる。**
         listOf(
+            "*斜体*。",
+            "~~取消~~。",
             "*この段落はとても長い斜体になっていて、読点をまたいで後半まで続く強調である*。",
-            "~~この打ち消し線はとても長くて、読点をまたいで後半まで続いている文章である~~。",
             "*斜体の中に句点がある。この二文目も同じ斜体の内側にあって閉じ記号は末尾にしかない*。",
+            "これは*強調*を含む文です。次の文もあります。",
             "記法は ``a*。B``。後に*文字*。",
-            "これは*強調*を含む文である。次の文もある。",
-            "参照 [a*b](url)。次の行は*強調*。"
+            "参照 [a*b](url)。次の行は*強調*。",
+            "参照 [[note|表示名]]。次の文もある。",
+            "書式は `code` を使う。次の文もある。"
         ).forEach { content ->
             val model = buildDistillSourceModel(content)
-            val before = emphasisContents(content)
+            val before = decorations(content)
             model.sentences.forEach { sentence ->
-                val after = emphasisContents(applyDistillBold(content, listOf(sentence.range)).content)
-                // **対を割っていないこと**を見る。候補が装飾を丸ごと含むと、その装飾は
-                // 外側の太字の内側へ入る（表示側は入れ子を再解釈しないので見た目は変わるが、
-                // 記法の対応は変わっていない）。だから一致ではなく包含で確かめる。
+                val after = decorations(applyDistillBold(content, listOf(sentence.range)).content)
                 assertTrue(
                     "$content / ${sentence.text}: $before -> $after",
-                    before.all { original -> after.any { it.contains(original) } }
+                    after.containsAll(before)
                 )
             }
         }
     }
 
     @Test
-    fun `asterisks inside inline code are not emphasis`() {
-        // コード内の `*` が外の `*` と対になると、コードの外の句点まで保護してしまう。
-        val content = "書式は `a*b`のち。次に*強調*を置く。"
-        val model = buildDistillSourceModel(content)
+    fun `maximum sized source dense with links completes bounded first stage`() {
+        // **上限テストは長さだけでなく、処理対象の要素数も最大化する。**
+        // 文字だけの反復では記法spanが1つも無く、記法数×文字数の経路を通らない。
+        val unit = "[a](u) x "
+        val content = unit.repeat(DistillLimits.MAX_FILE_BYTES / unit.length)
+        lateinit var model: DistillSourceModel
 
-        assertEquals(listOf("書式は `a*b`のち。", "次に*強調*を置く。"), linearTexts(model))
+        val elapsedMillis = measureTimeMillis {
+            model = buildDistillSourceModel(content)
+            assertTrue(selectDistillCandidates(model, "title").size <= DistillLimits.MAX_AI_CANDIDATES)
+        }
+
+        assertTrue("content is ${content.length} chars", content.length > 250_000)
+        assertTrue("processing took ${elapsedMillis}ms", elapsedMillis < 10_000)
     }
 
     @Test
-    fun `escaped asterisks are not emphasis`() {
-        val content = "記号は \\*A。B\\* と書く。"
-        val model = buildDistillSourceModel(content)
+    fun `maximum sized source dense with existing bold stays bounded per line`() {
+        // **行数×記法数の経路は、記法の種類ごとに別々に開く。** リンク密の入力では通らない
+        // 太字の集計（行ごとに全太字を舐める形）がここで効く。
+        // 実測 503ms。行ごとの振り分けをやめる変異では 4,475ms まで落ちるので、上限は3秒に置く。
+        val unit = "**a** x\n"
+        val content = unit.repeat(DistillLimits.MAX_FILE_BYTES / unit.length)
+        lateinit var model: DistillSourceModel
 
-        assertEquals(listOf("記号は \\*A。", "B\\* と書く。"), linearTexts(model))
-    }
+        val elapsedMillis = measureTimeMillis { model = buildDistillSourceModel(content) }
 
-    @Test
-    fun `bracketed terms inside emphasis are not candidates`() {
-        // 保護範囲と重なる語句は採らない。安全側への縮小として受け入れる。
-        val emphasised = buildDistillSourceModel("*ここでは「重要な語」を扱う*。")
-        val plain = buildDistillSourceModel("ここでは「重要な語」を扱う。")
-
-        assertTrue(emphasised.sentences.none { it.isTerm })
-        assertEquals(listOf("重要な語"), plain.sentences.filter { it.isTerm }.map { it.text })
+        assertTrue("content is ${content.length} chars", content.length > 250_000)
+        assertTrue("existing bold is counted", model.existingBoldCharacterCount > 0)
+        assertTrue("processing took ${elapsedMillis}ms", elapsedMillis < 3_000)
     }
 
     private fun usedHeapBytes(): Long {

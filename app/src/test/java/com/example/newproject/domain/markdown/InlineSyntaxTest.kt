@@ -11,8 +11,9 @@ import org.junit.Test
  */
 class InlineSyntaxTest {
 
+    /** 入れ子を含めた全範囲。`spans` は最上位だけなので、判定には [InlineSyntaxScan.flatten] を使う。 */
     private fun spans(text: String) =
-        scanInlineSyntax(text).spans.map { "${it.kind}:${text.substring(it.start, it.endExclusive)}" }
+        scanInlineSyntax(text).flatten().map { "${it.kind}:${text.substring(it.start, it.endExclusive)}" }
 
     @Test
     fun `種別ごとに対を取る`() {
@@ -71,3 +72,4 @@ class InlineSyntaxTest {
         assertEquals(emptyList<String>(), spans("配列は arr[0] を使う"))
     }
 }
+
