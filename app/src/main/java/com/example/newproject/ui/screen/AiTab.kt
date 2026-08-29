@@ -380,7 +380,9 @@ private fun DistillPanel(
             item = item,
             projectedBoldRatio = candidates.projectedBoldRatio,
             isWithinBoldLimit = candidates.isWithinBoldLimit,
-            overlapDeselectedCount = candidates.overlapDeselectedIds.size,
+            // 開いている候補自身が外された側かどうかで、告知の主語が変わる。
+            isDeselectedByOverlap = item.id in candidates.overlapDeselectedIds,
+            otherDeselectedCount = candidates.overlapDeselectedIds.count { it != item.id },
             onSelectPreset = { preset -> onSelectRange(item.id, preset) },
             onReset = { onResetRange(item.id) },
             onDismiss = onCloseRangeSheet

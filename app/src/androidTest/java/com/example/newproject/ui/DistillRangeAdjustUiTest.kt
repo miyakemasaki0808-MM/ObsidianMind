@@ -93,7 +93,8 @@ class DistillRangeAdjustUiTest {
                     item = candidateItem(),
                     projectedBoldRatio = 0.12,
                     isWithinBoldLimit = true,
-                    overlapDeselectedCount = 0,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onReset = {}
                 )
@@ -125,7 +126,8 @@ class DistillRangeAdjustUiTest {
                     ),
                     projectedBoldRatio = 0.31,
                     isWithinBoldLimit = false,
-                    overlapDeselectedCount = 0,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onReset = { resets++ }
                 )
@@ -145,7 +147,8 @@ class DistillRangeAdjustUiTest {
                     item = candidateItem(),
                     projectedBoldRatio = 0.2,
                     isWithinBoldLimit = true,
-                    overlapDeselectedCount = 1,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 1,
                     onSelectPreset = {},
                     onReset = {}
                 )
@@ -154,6 +157,27 @@ class DistillRangeAdjustUiTest {
 
         // シート内の1行。読み上げも同じ1行から出る（live region）。
         composeRule.onNodeWithText("! 重なるため、ほかの1箇所の選択を外しました。").assertIsDisplayed()
+    }
+
+    @Test
+    fun 外された候補のシートは自分が外れたことを言う() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                DistillRangeSheetContent(
+                    item = candidateItem().copy(isSelected = false),
+                    projectedBoldRatio = 0.2,
+                    isWithinBoldLimit = true,
+                    isDeselectedByOverlap = true,
+                    otherDeselectedCount = 0,
+                    onSelectPreset = {},
+                    onReset = {}
+                )
+            }
+        }
+
+        // 目の前の候補を「ほか」と呼ばない。
+        composeRule.onNodeWithText("! この箇所は範囲が重なるため、選択が外れています。").assertIsDisplayed()
+        composeRule.onNodeWithText("! 重なるため、ほかの1箇所の選択を外しました。").assertDoesNotExist()
     }
 
     @Test

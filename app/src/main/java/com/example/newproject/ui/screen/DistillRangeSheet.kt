@@ -64,7 +64,8 @@ internal fun DistillRangeSheet(
     item: DistillCandidateItem,
     projectedBoldRatio: Double,
     isWithinBoldLimit: Boolean,
-    overlapDeselectedCount: Int,
+    isDeselectedByOverlap: Boolean,
+    otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
@@ -80,7 +81,8 @@ internal fun DistillRangeSheet(
             item = item,
             projectedBoldRatio = projectedBoldRatio,
             isWithinBoldLimit = isWithinBoldLimit,
-            overlapDeselectedCount = overlapDeselectedCount,
+            isDeselectedByOverlap = isDeselectedByOverlap,
+            otherDeselectedCount = otherDeselectedCount,
             onSelectPreset = onSelectPreset,
             onReset = onReset
         )
@@ -97,7 +99,8 @@ internal fun DistillRangeSheetContent(
     item: DistillCandidateItem,
     projectedBoldRatio: Double,
     isWithinBoldLimit: Boolean,
-    overlapDeselectedCount: Int,
+    isDeselectedByOverlap: Boolean,
+    otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
@@ -174,10 +177,14 @@ internal fun DistillRangeSheetContent(
 
         // **告知は状態として残す。** 一時的な通知にすると、見ていない場所の変化を
         // 見ていない間に流すことになる。次に選択集合か確定範囲が変わるまで消えない。
-        if (overlapDeselectedCount > 0) {
+        //
+        // **主語は開いている候補で決まる。** 理由を残して再訪できるようにした結果、
+        // 外された候補自身のシートも開けるようになった。そこで件数だけを言うと、
+        // 目の前の候補を「ほかの1箇所」と呼んで関係を逆に読ませる。
+        overlapNotice(isDeselectedByOverlap, otherDeselectedCount)?.let { notice ->
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "! 重なるため、ほかの${overlapDeselectedCount}箇所の選択を外しました。",
+                text = notice,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
                 color = ErrorText,
@@ -185,6 +192,18 @@ internal fun DistillRangeSheetContent(
             )
         }
     }
+}
+
+/**
+ * 重なり解消の告知。**開いている候補との関係で文言が変わる。**
+ *
+ * 自分が外された側なら「ほか」と呼ばない。両方に当てはまるときは、
+ * シートが説明すべき相手＝開いている候補自身を優先する。
+ */
+internal fun overlapNotice(isDeselectedByOverlap: Boolean, otherDeselectedCount: Int): String? = when {
+    isDeselectedByOverlap -> "! この箇所は範囲が重なるため、選択が外れています。"
+    otherDeselectedCount > 0 -> "! 重なるため、ほかの${otherDeselectedCount}箇所の選択を外しました。"
+    else -> null
 }
 
 /** 親文のうち、確定範囲だけを太字＋下線で示す。 */
