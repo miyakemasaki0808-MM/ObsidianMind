@@ -707,6 +707,25 @@ class DistillControllerTest {
     }
 
     @Test
+    fun `opening the sheet of a deselected candidate keeps the reason attached to it`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S006", DistillRangePreset.Sentence)
+        controller.closeRangeSheet()
+
+        // 外された候補自身のシートを開く。シートを開くことは選択集合も確定範囲も変えない。
+        controller.openRangeSheet("S005")
+
+        val after = state.value.distillState as DistillState.Candidates
+        assertEquals("S005", after.rangeSheetCandidateId)
+        // **理由は対象候補に紐づいたまま残る。** 主語をUIが決められるよう、外したIDを保つ。
+        assertEquals(listOf("S005"), after.overlapDeselectedIds)
+        assertFalse(after.rangeSheetItem!!.isSelected)
+    }
+
+    @Test
     fun `changing to a different preset clears the overlap notice`() = runTest {
         val state = stateWithNote(adjustableNote())
         val controller = controller(state, FakeAiClient.returning("S005 S006"))
