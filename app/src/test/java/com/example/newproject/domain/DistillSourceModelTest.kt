@@ -1,5 +1,7 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
@@ -398,12 +400,84 @@ class DistillSourceModelTest {
     }
 
     @Test
-    fun `strong markers do not open italic`() {
-        // `**` を斜体の開始として読むと、閉じていない強調が後ろの `*` と対になり、間の句点を飲み込む。
+    fun `unclosed strong markers are read as italic, like the renderer does`() {
+        // **表示側は閉じていない `**` の2つ目を斜体の開始として描く。** 保護側だけが2文字読み飛ばすと、
+        // 表示上は1つの斜体の内側に、蒸留だけが候補境界を置ける状態になる。
         val content = "これは**未閉じの強調。次の文には*斜体*がある。"
         val model = buildDistillSourceModel(content)
 
-        assertEquals(listOf("これは**未閉じの強調。", "次の文には*斜体*がある。"), linearTexts(model))
+        assertEquals(listOf(content), linearTexts(model))
+    }
+
+    @Test
+    fun `code spans close with the same number of backticks`() {
+        // 保護側だけが run を数えていた頃は、コード内の `*` が外の `*` と対になり、
+        // 表示上の斜体の内側へ候補境界が残った。
+        val content = "記法は ``a*。B``。後に*文字*。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("記法は ``a*。B``。", "後に*文字*。"), linearTexts(model))
+    }
+
+    @Test
+    fun `separately rendered list items do not pair across lines`() {
+        // 表示側はリスト項目を1つずつ描くので、行をまたぐ未閉じ記号は対にならない。
+        // 連結して走査していた頃は偽の対ができ、候補が全部消えた。
+        val content = "- 項目に*未閉じ。\n- 次項目に*未閉じ。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("項目に*未閉じ。", "次項目に*未閉じ。"), linearTexts(model))
+    }
+
+    @Test
+    fun `separately rendered quote lines do not pair across lines`() {
+        val content = "> 引用に*未閉じ。\n> 次の引用に*未閉じ。"
+        val model = buildDistillSourceModel(content)
+
+        assertEquals(listOf("引用に*未閉じ。", "次の引用に*未閉じ。"), linearTexts(model))
+    }
+
+    @Test
+    fun `symbols inside links do not pair with outside emphasis`() {
+        // 表示側はリンク構文全体を消費し、内側の記号を装飾に使わない。
+        val link = buildDistillSourceModel("参照 [a*b](url)。\n次の行は*強調*。")
+        val wikilink = buildDistillSourceModel("参照 [[a*b]]。\n次の行は*強調*。")
+
+        assertEquals(listOf("参照 [a*b](url)。", "次の行は*強調*。"), linearTexts(link))
+        assertEquals(listOf("参照 [[a*b]]。", "次の行は*強調*。"), linearTexts(wikilink))
+    }
+
+    /** 装飾の対象になっている文字列。太字化の前後で変わらないことが保存の受理条件。 */
+    private fun emphasisContents(text: String): List<String> =
+        scanInlineSyntax(text).spans
+            .filter { it.kind != InlineSpanKind.Code && it.kind != InlineSpanKind.Link && it.kind != InlineSpanKind.WikiLink }
+            .map { text.substring(it.contentStart, it.contentEnd) }
+
+    @Test
+    fun `bolding any candidate keeps every existing decoration target intact`() {
+        // **これが保存側の受理条件。** 候補の端が対の内側に入らないことの帰結を、
+        // 変換後の文字列をもう一度解釈し直して確かめる。
+        listOf(
+            "*この段落はとても長い斜体になっていて、読点をまたいで後半まで続く強調である*。",
+            "~~この打ち消し線はとても長くて、読点をまたいで後半まで続いている文章である~~。",
+            "*斜体の中に句点がある。この二文目も同じ斜体の内側にあって閉じ記号は末尾にしかない*。",
+            "記法は ``a*。B``。後に*文字*。",
+            "これは*強調*を含む文である。次の文もある。",
+            "参照 [a*b](url)。次の行は*強調*。"
+        ).forEach { content ->
+            val model = buildDistillSourceModel(content)
+            val before = emphasisContents(content)
+            model.sentences.forEach { sentence ->
+                val after = emphasisContents(applyDistillBold(content, listOf(sentence.range)).content)
+                // **対を割っていないこと**を見る。候補が装飾を丸ごと含むと、その装飾は
+                // 外側の太字の内側へ入る（表示側は入れ子を再解釈しないので見た目は変わるが、
+                // 記法の対応は変わっていない）。だから一致ではなく包含で確かめる。
+                assertTrue(
+                    "$content / ${sentence.text}: $before -> $after",
+                    before.all { original -> after.any { it.contains(original) } }
+                )
+            }
+        }
     }
 
     @Test
