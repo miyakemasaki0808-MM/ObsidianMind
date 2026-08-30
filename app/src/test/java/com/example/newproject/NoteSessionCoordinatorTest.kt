@@ -10,6 +10,7 @@ import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.NoteFolder
@@ -26,6 +27,7 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -159,6 +161,9 @@ class NoteSessionCoordinatorTest {
         // 消えると、何件書き出せたのかを確かめる前に流れてしまう。
         assertTrue(reset.readingTraceCleanupState is ReadingTraceCleanupState.Success)
         assertTrue(reset.readingTraceBackupState is ReadingTraceBackupState.Exported)
+        // 冊子もVault単位。**ここが消えると「これを読む」で渡って戻る道が切れる**
+        // （戻れば同じ10枚が残る、が冊子の目的そのもの）。
+        assertTrue(reset.bookletState is BookletState.Open)
 
         // ノート単位はすべて消える
         assertTrue(reset.summaryState is SummaryState.Idle)
@@ -551,6 +556,9 @@ class NoteSessionCoordinatorTest {
         annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         readingTraceBackupState = ReadingTraceBackupState.Exported(written = 2, unreadableKeys = emptyList()),
+        bookletState = BookletState.Open(
+            listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
+        ),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(

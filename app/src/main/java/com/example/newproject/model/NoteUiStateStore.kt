@@ -4,6 +4,7 @@ import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.RemarkState
@@ -42,6 +43,15 @@ interface RemarkStateWriter {
 interface AnnotationListStateWriter {
     val current: AnnotationListState
     fun update(transform: (AnnotationListState) -> AnnotationListState)
+}
+
+/**
+ * 冊子（Vault単位）。**ノート単位の Writer と分ける**のは寿命が違うから —
+ * ノートを開き直しただけで束が消えると、冊子から「これを読む」で渡って戻る道が切れる。
+ */
+interface BookletStateWriter {
+    val current: BookletState
+    fun update(transform: (BookletState) -> BookletState)
 }
 
 data class SearchSlice(
@@ -124,6 +134,13 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         override val current: AnnotationListState get() = mutableState.value.annotationListState
         override fun update(transform: (AnnotationListState) -> AnnotationListState) {
             mutableState.update { it.copy(annotationListState = transform(it.annotationListState)) }
+        }
+    }
+
+    val bookletWriter: BookletStateWriter = object : BookletStateWriter {
+        override val current: BookletState get() = mutableState.value.bookletState
+        override fun update(transform: (BookletState) -> BookletState) {
+            mutableState.update { it.copy(bookletState = transform(it.bookletState)) }
         }
     }
 
@@ -299,5 +316,8 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     // 退避も同じ理由で落とす。旧Vaultの下見を残すと、**確定を押した瞬間に
     // 別Vaultの痕跡へ書き込む**ことになる（Controller側も下見した時点のVaultと
     // 照合して弾くが、「確定できる状態」を画面に残さないことも状態変換で保証する）。
-    readingTraceBackupState = ReadingTraceBackupState.Idle
+    readingTraceBackupState = ReadingTraceBackupState.Idle,
+    // 旧Vaultのノートを指す束を新Vaultの画面へ残さない。「これを読む」で
+    // **別Vaultのノートを開く**ことになる（参照は Vault をまたいで有効に見える）。
+    bookletState = BookletState.Idle
 )

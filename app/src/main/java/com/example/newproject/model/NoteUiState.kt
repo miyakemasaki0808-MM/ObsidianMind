@@ -4,6 +4,7 @@ import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.RemarkState
@@ -33,6 +34,9 @@ data class NoteUiState(
     val readingTraceCleanupState: ReadingTraceCleanupState = ReadingTraceCleanupState.Idle,
     // 読書痕跡の退避（書き出し／読み戻し）。整理と同じくVault単位。
     val readingTraceBackupState: ReadingTraceBackupState = ReadingTraceBackupState.Idle,
+    // 冊子（10枚の束）。**ノート切替では消さない** — 戻れば同じ10枚が残るのが目的なので、
+    // Vault単位として扱う（→ features/booklet_mode.md 判断6）。
+    val bookletState: BookletState = BookletState.Idle,
     val sectionChat: SectionChatState? = null,
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
     // AI生成と結果を保持し、吹き出しから再表示できる。

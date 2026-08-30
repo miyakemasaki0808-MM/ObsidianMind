@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteRepository
@@ -212,6 +213,23 @@ internal class NoteSessionCoordinator(
         writeMutex = traceWriteMutex
     )
 
+    /**
+     * 冊子。**Vault単位**なのでノート単位の契約へは登録しない
+     * （ノートを開き直しただけで束が消えると、戻る道が切れる → features/booklet_mode.md 判断6）。
+     */
+    private val booklet = BookletController(
+        scope = scope,
+        vault = vaultBrowser,
+        state = stateStore.bookletWriter,
+        vaultGeneration = { vaultGeneration }
+    )
+
+    // ── 冊子 ───────────────────────────────────────────────────────────────
+
+    fun drawBooklet(loadNotes: suspend () -> List<NoteFile>) = booklet.draw(loadNotes)
+
+    fun ensureBookletCovers(page: Int) = booklet.ensureCovers(page)
+
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
 
     fun deleteReadingTrace(key: String) = readingTraceCleanup.delete(key)
@@ -276,6 +294,7 @@ internal class NoteSessionCoordinator(
         annotation.onVaultChanged()
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
+        booklet.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
