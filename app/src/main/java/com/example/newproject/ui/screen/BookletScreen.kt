@@ -161,7 +161,7 @@ private fun ColumnScope.BookletPager(
         if (page < entries.size) {
             BookletPage(entry = entries[page], onRead = onRead)
         } else {
-            DrawAgainPage(onDrawAgain = onDrawAgain)
+            DrawAgainPage(drawnCount = entries.size, onDrawAgain = onDrawAgain)
         }
     }
 
@@ -209,7 +209,10 @@ private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
             Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = { onRead(entry) },
-                enabled = entry.cover != BookletCover.Failed,
+                // **読めた扉のときだけ押せる。** Loading のまま押せると、
+                // まだ開けるか分からないノートへ先に遷移し、ページ内に留めるはずの
+                // 失敗が通常表示側の読込エラーに化ける。
+                enabled = entry.cover is BookletCover.Ready,
                 modifier = Modifier.height(48.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
@@ -228,7 +231,7 @@ private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
  * 「次々飛ばす使い方」そのものになる。明示の1タップが唯一の歯止め（→ 判断6）。
  */
 @Composable
-private fun DrawAgainPage(onDrawAgain: () -> Unit) {
+private fun DrawAgainPage(drawnCount: Int, onDrawAgain: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
         color = Panel,
@@ -240,7 +243,9 @@ private fun DrawAgainPage(onDrawAgain: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "ここまでの10枚でした。",
+                // **10枚と決め打たない。** 束は `min(10, 利用可能数)` なので、
+                // ノートが9本以下のVaultでは画面と実際の枚数が食い違う。
+                text = "ここまでの${drawnCount}枚でした。",
                 color = OnSurface,
                 fontSize = 17.sp,
                 textAlign = TextAlign.Center

@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.model.BookletCover
@@ -65,6 +67,61 @@ class BookletScreenTest {
         show(BookletState.Open(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
 
         composeRule.onNodeWithText("これを読む").assertIsEnabled()
+    }
+
+    /**
+     * **まだ読めていない扉は開けない。** 押せると、開けるか分からないノートへ先に遷移し、
+     * ページ内に留めるはずの失敗が通常表示側の読込エラーに化ける。
+     */
+    @Test
+    fun 読み込み中の扉は開けない() {
+        val opened = mutableListOf<BookletEntry>()
+        show(
+            BookletState.Open(listOf(entry("ノートA", BookletCover.Loading))),
+            onRead = { opened += it }
+        )
+
+        composeRule.onNodeWithText("これを読む").assertIsNotEnabled()
+        composeRule.onNodeWithText("これを読む").performClick()
+        assertEquals(emptyList<BookletEntry>(), opened)
+    }
+
+    /**
+     * 束は `min(10, 利用可能数)` なので、終端の文言を10枚と決め打たない。
+     *
+     * **ページ送りにセマンティック操作を使う。** スワイプより決定的で、
+     * 同時に「読み上げ操作でめくれる」契約そのものも押さえられる。
+     */
+    @Test
+    fun 終端は実際の枚数を出す() {
+        val entries = (1..3).map { entry("ノート$it", BookletCover.Ready("$it 枚目。")) }
+        show(BookletState.Open(entries))
+
+        repeat(entries.size) { turnPage("次のページへ") }
+
+        composeRule.onNodeWithText("ここまでの3枚でした。").assertIsDisplayed()
+    }
+
+    @Test
+    fun 前のページへ戻れる() {
+        val entries = (1..2).map { entry("ノート$it", BookletCover.Ready("$it 枚目。")) }
+        show(BookletState.Open(entries))
+
+        turnPage("次のページへ")
+        composeRule.onNodeWithContentDescription("2/2ページ").assertIsDisplayed()
+
+        turnPage("前のページへ")
+        composeRule.onNodeWithContentDescription("1/2ページ").assertIsDisplayed()
+    }
+
+    /** 読み上げ操作（スイッチアクセス等）から1ページ動かす。 */
+    private fun turnPage(label: String) {
+        val actions = composeRule
+            .onNode(SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions))
+            .fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions]
+        composeRule.runOnUiThread { actions.first { it.label == label }.action() }
+        composeRule.waitForIdle()
     }
 
     /** 位置がスワイプでしか分からない画面なので、読み上げにも同じことを言わせる。 */
