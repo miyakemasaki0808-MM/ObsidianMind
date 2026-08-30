@@ -314,6 +314,58 @@ class ReadingTraceControllerTest {
         assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
     }
 
+    /**
+     * **冊子を眺めた時間は読書時間に入らない。**
+     *
+     * 冊子はルート遷移なので Activity は `onStop` しない。冊子側で明示的に止めないと、
+     * 眺めていた時間が直前のノートの読書時間として積まれ、**訪問条件を満たさないはずの
+     * 短い閲覧が訪問になる**（→ features/booklet_mode.md 判断3）。
+     */
+    @Test
+    fun `冊子を眺めた時間は読書時間へ積まれない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+
+        // 冊子へ入る → 20秒眺める → 冊子を出る
+        controller.pause()
+        advanceUntilIdle()
+        clock.advance(20_000L)
+        controller.resume()
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("5秒しか読んでいないのに訪問が記録された", persistence.stored("ideas/habit.md"))
+    }
+
+    /** 冊子から戻って読み進めれば、**冊子の20秒を除いた合計**で条件を満たす。 */
+    @Test
+    fun `冊子から戻って読み進めれば冊子の時間を除いた合計で訪問になる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause()
+        advanceUntilIdle()
+        clock.advance(20_000L)
+        controller.resume()
+
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+    }
+
     // ── 保存の寿命と失敗の扱い ──────────────────────────────────────────────
 
     // タスクスワイプでは onStop() → pause() の直後に onCleared() が走る。

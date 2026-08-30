@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -334,11 +335,25 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(hasBundle) {
                                 if (!hasBundle) navController.popBackStack()
                             }
+                            DisposableEffect(Unit) {
+                                // **冊子を眺めている時間は読書時間に入れない。** ルート遷移では
+                                // Activity が onStop しないので、ここで止めないと直前のノートの
+                                // 読書時間が冊子の滞在分だけ伸びる（→ booklet_mode 判断3）。
+                                viewModel.pauseReadingTrace()
+                                // 読込中にバックで戻ってきた場合、その要求をここで捨てる。
+                                // 冊子が前面のまま痕跡・履歴・AIが始まるのを防ぐ。
+                                viewModel.cancelBookletRead()
+                                onDispose { viewModel.resumeReadingTrace() }
+                            }
                             BookletScreen(
                                 state = uiState.bookletState,
                                 onPageSettled = { page -> viewModel.ensureBookletCovers(page) },
                                 onRead = { entry ->
                                     viewModel.openBookletEntry(contentResolver, entry)
+                                    // **本文は先頭から開く。** noteListState は Activity 生存で
+                                    // 共有され、ノート切替でリセットされないので、ここで戻さないと
+                                    // 前のノートの位置を引き継ぐ（→ booklet_mode §10）。
+                                    noteListState.requestScrollToItem(0)
                                     // **navigateToTab を使わない。** popUpTo(startDestination) が
                                     // 冊子ルートごと畳んでしまい、戻れなくなる
                                     // （→ features/booklet_mode.md 判断8）。

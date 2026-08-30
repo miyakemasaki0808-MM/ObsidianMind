@@ -132,6 +132,8 @@ class NoteViewModel internal constructor(
     // 実行中ジョブを保持して新規要求時にキャンセルする
     // （要約・セクションチャット等のジョブは各Controllerが保持）
     private var noteLoadJob: Job? = null
+    /** 冊子の「これを読む」で始めた読込。**冊子へ戻ったときだけ取り消す**（→ [cancelBookletRead]）。 */
+    private var bookletReadJob: Job? = null
     private var relatedNotesJob: Job? = null
 
     /** 選択中Vault。痕跡のSAFゲートウェイと同じ実体を見る（[vaultLocation]）。 */
@@ -231,7 +233,7 @@ class NoteViewModel internal constructor(
     fun openBookletEntry(contentResolver: ContentResolver, entry: BookletEntry) {
         val uri = vaultLocation.uri ?: return
         session.onNoteChanged()
-        noteLoadJob = scope.launch {
+        val job = scope.launch {
             try {
                 val notes = collectAllNotesCached(contentResolver, uri)
                 // 走査に居れば相対パスと更新日時が揃う。束を作った後に消えていた場合は
@@ -245,6 +247,28 @@ class NoteViewModel internal constructor(
                 session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
+        noteLoadJob = job
+        // **冊子から始めた要求だけを別に持つ。** 冊子へ戻ったときに取り消すのはこれで、
+        // ランダムやさがすから始めた読込は巻き込まない。
+        bookletReadJob = job
+    }
+
+    /**
+     * 冊子から始めた「これを読む」を取り消す。**冊子へ戻ってきた時点で呼ぶ。**
+     *
+     * 取り消さないと、利用者が読込中にバックで冊子へ戻った後に
+     * [presentDrawnNote] が完走し、**冊子が前面のまま**痕跡セッション・履歴・AIが始まる。
+     * 「これを読む」で通常表示へ渡ってから記録が始まる、という画面の境界が崩れる
+     * （→ features/booklet_mode.md 判断3・判断8）。
+     *
+     * 待ち表示のまま残さないため、走行中だった場合だけ `Idle` へ戻す。
+     */
+    fun cancelBookletRead() {
+        val job = bookletReadJob ?: return
+        bookletReadJob = null
+        if (!job.isActive) return
+        job.cancel()
+        session.setNoteState(NoteState.Idle)
     }
 
     /**
