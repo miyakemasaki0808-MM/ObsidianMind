@@ -12,21 +12,52 @@ package com.example.newproject.domain
 // へ逃がすこと（→ lessons L13）。
 // ---------------------------------------------------------------------------
 
-/** 閉じられていないフェンスは、開いた行以降を全部コードとみなす（未閉じの本文へ落とさない）。 */
+/**
+ * コードフェンスの中を落とす。
+ *
+ * **開始記号の種類と長さを覚える。** 「``` で始まる行のたびに真偽を反転する」形だと、
+ * 4本のバッククォートで開いたフェンスの中にある3本の行を閉じと誤読し、
+ * **コードの中身が本文として出てくる**。チルダのフェンスも同じ理由で見落とす。
+ *
+ * 閉じとみなすのは**同じ記号で、開始と同じ長さ以上**の行だけ（CommonMark と同じ規則）。
+ * 閉じられていないフェンスは、開いた行以降を全部コードとみなす（未閉じの本文へ落とさない）。
+ */
 internal fun withoutFencedCode(content: String): String {
-    if (!content.contains("```")) return content
-    var inside = false
+    if (!content.contains(BACKTICK_FENCE) && !content.contains(TILDE_FENCE)) return content
+    var opened: FenceMarker? = null
     return content.lineSequence()
         .filter { line ->
-            if (line.trimStart().startsWith("```")) {
-                inside = !inside
-                false
-            } else {
-                !inside
+            val marker = fenceMarkerOf(line)
+            val open = opened
+            when {
+                open == null -> {
+                    if (marker == null) true else { opened = marker; false }
+                }
+                marker != null && marker.char == open.char && marker.length >= open.length -> {
+                    opened = null
+                    false
+                }
+                // フェンスの中身。短いフェンス行もここへ落ちる（閉じにならない）。
+                else -> false
             }
         }
         .joinToString("\n")
 }
+
+/** フェンスの開始・終了記号。`char` は `` ` `` か `~`、`length` は連なりの長さ。 */
+private data class FenceMarker(val char: Char, val length: Int)
+
+private fun fenceMarkerOf(line: String): FenceMarker? {
+    val trimmed = line.trimStart()
+    val char = trimmed.firstOrNull() ?: return null
+    if (char != '`' && char != '~') return null
+    val length = trimmed.takeWhile { it == char }.length
+    return if (length >= MIN_FENCE_LENGTH) FenceMarker(char, length) else null
+}
+
+private const val MIN_FENCE_LENGTH = 3
+private const val BACKTICK_FENCE = "```"
+private const val TILDE_FENCE = "~~~"
 
 /**
  * 見出し・引用・箇条書きの印と、インラインの記法を落とす。

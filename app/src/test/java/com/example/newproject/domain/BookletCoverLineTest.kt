@@ -48,6 +48,60 @@ class BookletCoverLineTest {
         assertEquals("コードの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
     }
 
+    /**
+     * **4本で開いたフェンスの中の3本行を閉じと読まない。**
+     * 反転だけで判定すると、ここでコードの中身が扉へ出てくる。
+     */
+    @Test
+    fun `長いフェンスの中の短いフェンス行は閉じにならない`() {
+        val content = """
+            ````
+            ```
+            コードの中身である。
+            ````
+            フェンスの外の文を選ぶ。
+        """.trimIndent()
+
+        assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `短いフェンスの中の長いフェンス行は閉じになる`() {
+        val content = """
+            ```
+            コードの中身である。
+            ````
+            フェンスの外の文を選ぶ。
+        """.trimIndent()
+
+        assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `チルダのフェンスも落とす`() {
+        val content = """
+            ~~~
+            コードの中身である。
+            ~~~
+            フェンスの外の文を選ぶ。
+        """.trimIndent()
+
+        assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
+    /** 記号が違えば閉じにならない（`~~~` は ``` を閉じない）。 */
+    @Test
+    fun `別の記号のフェンス行では閉じない`() {
+        val content = """
+            ```
+            コードの中身である。
+            ~~~
+            これもコードの続きとみなす。
+        """.trimIndent()
+
+        assertEquals("タイトル", selectCoverLine(content, "タイトル"))
+    }
+
     @Test
     fun `閉じていないフェンス以降は本文とみなさない`() {
         val content = """

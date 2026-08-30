@@ -141,6 +141,34 @@ class BookletControllerTest {
         assertTrue(entry(state, 1).cover is BookletCover.Ready)
     }
 
+    /**
+     * **「開けない」と「空の本文」を分ける。** 畳むと、消えたノートのページが
+     * タイトル表示のまま「読めた」ように見え、「これを読む」も押せてしまう。
+     */
+    @Test
+    fun `ストリームを開けなかったページは失敗になる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val handle = FakeVaultHandle(snippets = { null })
+        val controller = controller(state, FakeVaultBrowser(handle))
+
+        controller.draw { listOf(noteFile("開けないノート.md")) }
+        controller.ensureCovers(page = 0)
+
+        assertEquals(BookletCover.Failed, entry(state, 0).cover)
+    }
+
+    @Test
+    fun `中身が空のノートはタイトルを扉にする`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val handle = FakeVaultHandle(snippets = { "" })
+        val controller = controller(state, FakeVaultBrowser(handle))
+
+        controller.draw { listOf(noteFile("空のノート.md")) }
+        controller.ensureCovers(page = 0)
+
+        assertEquals(BookletCover.Ready("空のノート.md"), entry(state, 0).cover)
+    }
+
     /** 消えたノートに対して、めくるたびにSAFを叩き続けない。 */
     @Test
     fun `失敗した扉は読み直さない`() = runTest {

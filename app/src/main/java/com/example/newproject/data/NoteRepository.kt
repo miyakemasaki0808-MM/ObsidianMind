@@ -22,6 +22,9 @@ import kotlinx.coroutines.withContext
 /** 上限付きで読んだ本文。[isTruncated] が真なら、ノートにはまだ続きがある。 */
 data class BoundedText(val text: String, val isTruncated: Boolean)
 
+/** 読めなかったときに表示系が使う空の本文。**「読めるところまで見せる」経路だけで使う。** */
+private val EMPTY_TEXT = BoundedText("", isTruncated = false)
+
 /**
  * 本文読込の予算。用途ごとに別の入口を持たせ、**呼び出し側にバイト数を選ばせない**。
  * 引数で受けると「とりあえず大きめ」を渡せてしまい、上限を置く意味が薄れる。
@@ -217,7 +220,7 @@ class NoteRepository {
      * 「蒸留は256KBで止めたのに表示は無制限」という抜け道になる。
      */
     suspend fun readNoteForDisplay(contentResolver: ContentResolver, uri: Uri): BoundedText =
-        readBoundedText(contentResolver, uri, NoteReadLimits.DISPLAY_MAX_BYTES)
+        readBoundedText(contentResolver, uri, NoteReadLimits.DISPLAY_MAX_BYTES) ?: EMPTY_TEXT
 
     /**
      * 関連ノート候補のスニペットとfront matterを取るために、**先頭だけ**読む。
@@ -227,7 +230,18 @@ class NoteRepository {
      * front matter の tags / aliases だけなので、先頭数KBあれば足りる。
      */
     suspend fun readNoteSnippet(contentResolver: ContentResolver, uri: Uri): String =
-        readBoundedText(contentResolver, uri, NoteReadLimits.SNIPPET_MAX_BYTES).text
+        readNoteSnippetOrNull(contentResolver, uri) ?: ""
+
+    /**
+     * 冊子の扉用。**「開けなかった」と「中身が空」を分ける。**
+     *
+     * [readNoteSnippet] は開けなかった場合も空文字を返す（読めるところまで見せる経路なので
+     * それでよい）。冊子は**そのページだけを失敗として見せる**必要があり、空文字へ畳むと
+     * タイトルへフォールバックして「読めた」ように振る舞ってしまう
+     * （→ features/booklet_mode.md §10 の境界条件）。
+     */
+    suspend fun readNoteSnippetOrNull(contentResolver: ContentResolver, uri: Uri): String? =
+        readBoundedText(contentResolver, uri, NoteReadLimits.SNIPPET_MAX_BYTES)?.text
 
     /**
      * 上限付きでテキストを読む。上限で切ると多バイト文字が割れるため、
@@ -240,10 +254,12 @@ class NoteRepository {
         contentResolver: ContentResolver,
         uri: Uri,
         maximumBytes: Int
-    ): BoundedText = withContext(Dispatchers.IO) {
+    ): BoundedText? = withContext(Dispatchers.IO) {
+        // **null は「ストリームを開けなかった」。** 空の本文と同じ値へ畳まない
+        // （呼び出し側が畳むかどうかを決める → [readNoteSnippetOrNull]）。
         val bounded = contentResolver.openInputStream(uri)?.use { stream ->
             readAtMostBytes(stream, maximumBytes)
-        } ?: return@withContext BoundedText("", isTruncated = false)
+        } ?: return@withContext null
         BoundedText(
             text = String(dropIncompleteUtf8Tail(bounded.bytes), Charsets.UTF_8),
             isTruncated = bounded.isTruncated

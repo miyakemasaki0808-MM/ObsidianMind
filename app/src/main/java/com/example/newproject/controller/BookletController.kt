@@ -138,8 +138,14 @@ internal class BookletController(
         generation: Long
     ) {
         val cover = try {
+            // **null は「開けなかった」。** 空の本文（タイトルへフォールバックしてよい）と
+            // 区別しないと、消えたノートのページが読めたように見える。
             val snippet = handle.readNoteSnippet(entry.ref)
-            BookletCover.Ready(withContext(coverDispatcher) { selectCoverLine(snippet, entry.title) })
+            if (snippet == null) {
+                BookletCover.Failed
+            } else {
+                BookletCover.Ready(withContext(coverDispatcher) { selectCoverLine(snippet, entry.title) })
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
