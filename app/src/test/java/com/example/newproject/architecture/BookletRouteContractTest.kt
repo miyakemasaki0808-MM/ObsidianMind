@@ -8,21 +8,21 @@ import org.junit.Test
 /**
  * 冊子ルートの**配線**を固定する。
  *
- * ## なぜソース走査なのか
+ * ## この検査が保証すること・しないこと
  *
- * 束の作り方は `BookletControllerTest`、扉の描画は `BookletScreenTest`、
- * 読書時間の積み方は `ReadingTraceControllerTest` が押さえている。
- * **しかし「冊子ルートがそれらを正しい順で呼ぶ」ことは、どれからも観測できない。**
- * `NoteViewModel` は `AndroidViewModel` なので素のJVMでは組み立てられず、
- * この配線だけが検査の外に残る。
+ * **見るのは「ルートがその境界を通っているか」だけである。** 呼び出し先が何をするかは
+ * ここでは分からないので、**振る舞いは別のテストが持つ**。
  *
- * ここで見る3つは、いずれも**外したときに静かに壊れる**ものである。
+ * | 契約 | 振る舞いを見ているところ |
+ * |---|---|
+ * | 冊子の間は読書時間を積まない | `ReadingTraceControllerTest`（停止理由つきの fake clock） |
+ * | 取り消した読込は記録もAIも始めない | `NoteSessionCoordinatorTest`（履歴・状態・要約を観測） |
+ * | 渡した本文は先頭から始まる | `BookletScreenTest`（実際の `LazyListState` の位置） |
  *
- * - 読書時間の停止 — ルート遷移では Activity が `onStop` しないので、
- *   止めないと冊子を眺めた時間が直前のノートの読書時間になる
- * - 読込中の要求の取り消し — 取り消さないと、冊子が前面のまま痕跡・履歴・AIが始まる
- * - スクロール位置の先頭戻し — `noteListState` は Activity 生存で共有され、
- *   ノート切替でリセットされない
+ * **ここが残っている理由は、`MainActivity` のルート定義だけが素のJVMから触れないため。**
+ * `NoteViewModel` は `AndroidViewModel` で組み立てられず、ルートの配線を差し替えても
+ * 上の3つはどれも落ちない。したがって**構造だけ**を見る — 呼び出し先の中身を空にする
+ * 変異は上の3つが落とす。
  *
  * 正本は [features/booklet_mode.md](../../../../../../../../docs/dev/features/booklet_mode.md)。
  */
@@ -32,8 +32,17 @@ class BookletRouteContractTest {
     fun `冊子ルートは読書時間を止めて戻す`() {
         val route = bookletRoute()
 
-        assertTrue("冊子へ入るときに読書時間を止めていません", "pauseReadingTrace()" in route)
-        assertTrue("冊子から出るときに読書時間を戻していません", "resumeReadingTrace()" in route)
+        // **止める理由と戻す理由は同じでなければならない。** 食い違うと停止理由が
+        // 消えないまま残り、ノートへ戻っても計測が再開しない（逆に取り違えると、
+        // 背面復帰が冊子の停止まで解く）。
+        assertTrue(
+            "冊子へ入るときに ReadingPauseReason.Booklet で止めていません",
+            "pauseReadingTrace(ReadingPauseReason.Booklet)" in route
+        )
+        assertTrue(
+            "冊子から出るときに ReadingPauseReason.Booklet で戻していません",
+            "resumeReadingTrace(ReadingPauseReason.Booklet)" in route
+        )
     }
 
     @Test
@@ -56,11 +65,15 @@ class BookletRouteContractTest {
         assertFalse("冊子から navigateToTab を使うと冊子ルートが畳まれます", "navigateToTab" in route)
     }
 
+    /**
+     * **先頭から開く境界を通っているか。** 何をするかは `openFromBooklet` 側の
+     * 描画テストが見る（実際の `LazyListState` の位置で確かめている）。
+     */
     @Test
-    fun `これを読むは本文を先頭から開く`() {
+    fun `これを読むは先頭から開く境界を通る`() {
         assertTrue(
-            "冊子から渡すときにスクロール位置を先頭へ戻していません",
-            "requestScrollToItem(0)" in bookletRoute()
+            "冊子から渡すときに openFromBooklet を通っていません",
+            "openFromBooklet(" in bookletRoute()
         )
     }
 

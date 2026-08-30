@@ -6,6 +6,14 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performClick
@@ -15,6 +23,7 @@ import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
+import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -163,6 +172,54 @@ class BookletScreenTest {
         )
 
         assertEquals(listOf(0), settled)
+    }
+
+    // ── 冊子から本文へ渡す境界 ───────────────────────────────────────────────
+
+    /**
+     * **渡した先は必ず本文の先頭から始まる。**
+     *
+     * `noteListState` は Activity 生存で共有され、ノート切替ではリセットされない。
+     * 呼び出しの有無ではなく、**実際のスクロール位置**で確かめる。
+     */
+    @Test
+    fun 冊子から渡すと本文は先頭から始まる() {
+        lateinit var listState: LazyListState
+        composeRule.setContent {
+            listState = rememberLazyListState(initialFirstVisibleItemIndex = 3)
+            LazyColumn(state = listState, modifier = Modifier.height(120.dp)) {
+                items(30) { index -> Text("行$index", modifier = Modifier.height(40.dp)) }
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(3, listState.firstVisibleItemIndex)
+
+        composeRule.runOnUiThread { openFromBooklet(listState, open = {}, navigateToNote = {}) }
+        composeRule.waitForIdle()
+
+        assertEquals(0, listState.firstVisibleItemIndex)
+        assertEquals(0, listState.firstVisibleItemScrollOffset)
+    }
+
+    /** 渡す順序も固定する。**読込を始めてから遷移する**（逆だと表示が先に切り替わる）。 */
+    @Test
+    fun 冊子から渡すと読込を始めてから遷移する() {
+        val calls = mutableListOf<String>()
+        lateinit var listState: LazyListState
+        composeRule.setContent {
+            listState = rememberLazyListState()
+            LazyColumn(state = listState) { items(3) { Text("行$it") } }
+        }
+
+        composeRule.runOnUiThread {
+            openFromBooklet(
+                listState,
+                open = { calls += "open" },
+                navigateToNote = { calls += "navigate" }
+            )
+        }
+
+        assertEquals(listOf("open", "navigate"), calls)
     }
 
     private fun entry(title: String, cover: BookletCover) = BookletEntry(

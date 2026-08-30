@@ -1,7 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
+import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.state.toEventKey
@@ -339,25 +341,25 @@ class MainActivity : ComponentActivity() {
                                 // **冊子を眺めている時間は読書時間に入れない。** ルート遷移では
                                 // Activity が onStop しないので、ここで止めないと直前のノートの
                                 // 読書時間が冊子の滞在分だけ伸びる（→ booklet_mode 判断3）。
-                                viewModel.pauseReadingTrace()
+                                viewModel.pauseReadingTrace(ReadingPauseReason.Booklet)
                                 // 読込中にバックで戻ってきた場合、その要求をここで捨てる。
                                 // 冊子が前面のまま痕跡・履歴・AIが始まるのを防ぐ。
                                 viewModel.cancelBookletRead()
-                                onDispose { viewModel.resumeReadingTrace() }
+                                onDispose { viewModel.resumeReadingTrace(ReadingPauseReason.Booklet) }
                             }
                             BookletScreen(
                                 state = uiState.bookletState,
                                 onPageSettled = { page -> viewModel.ensureBookletCovers(page) },
                                 onRead = { entry ->
-                                    viewModel.openBookletEntry(contentResolver, entry)
-                                    // **本文は先頭から開く。** noteListState は Activity 生存で
-                                    // 共有され、ノート切替でリセットされないので、ここで戻さないと
-                                    // 前のノートの位置を引き継ぐ（→ booklet_mode §10）。
-                                    noteListState.requestScrollToItem(0)
-                                    // **navigateToTab を使わない。** popUpTo(startDestination) が
+                                    // 先頭から開くことは openFromBooklet が保証する。
+                                    // **navigateToTab を使わない** — popUpTo(startDestination) が
                                     // 冊子ルートごと畳んでしまい、戻れなくなる
                                     // （→ features/booklet_mode.md 判断8）。
-                                    navController.navigate("note")
+                                    openFromBooklet(
+                                        noteListState = noteListState,
+                                        open = { viewModel.openBookletEntry(contentResolver, entry) },
+                                        navigateToNote = { navController.navigate("note") }
+                                    )
                                 },
                                 onDrawAgain = { viewModel.openBooklet(contentResolver) },
                                 onExit = { navController.popBackStack() }
@@ -531,7 +533,7 @@ class MainActivity : ComponentActivity() {
     // 「少し読んで放置し、戻ってすぐ離れた」が訪問条件（10秒）を満たさないようにする。
     override fun onStart() {
         super.onStart()
-        viewModel.resumeReadingTrace()
+        viewModel.resumeReadingTrace(ReadingPauseReason.AppBackground)
     }
 
     // ノートを表示したままホームへ戻った読書を取りこぼさないため、背面に回る時点で
@@ -540,7 +542,7 @@ class MainActivity : ComponentActivity() {
     // ノート切替時の確定は ViewModel 側（cancelNoteScopedJobs）が担う。
     override fun onStop() {
         super.onStop()
-        viewModel.pauseReadingTrace()
+        viewModel.pauseReadingTrace(ReadingPauseReason.AppBackground)
     }
 
     private fun hideStatusBar() {

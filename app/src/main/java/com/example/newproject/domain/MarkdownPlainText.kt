@@ -19,7 +19,11 @@ package com.example.newproject.domain
  * 4本のバッククォートで開いたフェンスの中にある3本の行を閉じと誤読し、
  * **コードの中身が本文として出てくる**。チルダのフェンスも同じ理由で見落とす。
  *
- * 閉じとみなすのは**同じ記号で、開始と同じ長さ以上**の行だけ（CommonMark と同じ規則）。
+ * 閉じとみなすのは**同じ記号・開始と同じ長さ以上・記号の後ろが空白だけ**の行に限る
+ * （CommonMark と同じ規則）。後ろの検査を落とすと、コードの中に書いた
+ * ```` ```` not-close ```` のような行が閉じになり、**続きの本文が外へ出てくる**。
+ * 字下げは3空白までをフェンスとみなす（4空白以上はコードブロックの字下げ）。
+ *
  * 閉じられていないフェンスは、開いた行以降を全部コードとみなす（未閉じの本文へ落とさない）。
  */
 internal fun withoutFencedCode(content: String): String {
@@ -33,7 +37,11 @@ internal fun withoutFencedCode(content: String): String {
                 open == null -> {
                     if (marker == null) true else { opened = marker; false }
                 }
-                marker != null && marker.char == open.char && marker.length >= open.length -> {
+                marker != null &&
+                    marker.char == open.char &&
+                    marker.length >= open.length &&
+                    // **閉じ行は記号だけ。** 情報文字列を書けるのは開始行だけである。
+                    !marker.hasTrailingText -> {
                     opened = null
                     false
                 }
@@ -44,18 +52,28 @@ internal fun withoutFencedCode(content: String): String {
         .joinToString("\n")
 }
 
-/** フェンスの開始・終了記号。`char` は `` ` `` か `~`、`length` は連なりの長さ。 */
-private data class FenceMarker(val char: Char, val length: Int)
+/**
+ * フェンスの開始・終了記号。
+ *
+ * `char` は `` ` `` か `~`、`length` は連なりの長さ、[hasTrailingText] は記号の後ろに
+ * 空白以外があるか（開始行の情報文字列。**閉じ行には許されない**）。
+ */
+private data class FenceMarker(val char: Char, val length: Int, val hasTrailingText: Boolean)
 
 private fun fenceMarkerOf(line: String): FenceMarker? {
-    val trimmed = line.trimStart()
-    val char = trimmed.firstOrNull() ?: return null
+    val indent = line.takeWhile { it == ' ' }.length
+    // 4空白以上はフェンスではなく、字下げコードブロックの中身。
+    if (indent > MAX_FENCE_INDENT) return null
+    val rest = line.substring(indent)
+    val char = rest.firstOrNull() ?: return null
     if (char != '`' && char != '~') return null
-    val length = trimmed.takeWhile { it == char }.length
-    return if (length >= MIN_FENCE_LENGTH) FenceMarker(char, length) else null
+    val length = rest.takeWhile { it == char }.length
+    if (length < MIN_FENCE_LENGTH) return null
+    return FenceMarker(char, length, hasTrailingText = rest.drop(length).isNotBlank())
 }
 
 private const val MIN_FENCE_LENGTH = 3
+private const val MAX_FENCE_INDENT = 3
 private const val BACKTICK_FENCE = "```"
 private const val TILDE_FENCE = "~~~"
 

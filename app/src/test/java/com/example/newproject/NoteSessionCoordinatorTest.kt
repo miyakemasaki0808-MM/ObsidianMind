@@ -51,6 +51,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -618,6 +620,74 @@ class NoteSessionCoordinatorTest {
         field.set(owner, value)
     }
 
+    // ── 冊子から始めた読込の取消 ─────────────────────────────────────────────
+
+    /**
+     * **読込中にバックで冊子へ戻ったら、その後の記録もAIも始まらない。**
+     *
+     * 呼び出しの有無ではなく**結果**を見る。配線のソース走査だけだと
+     * `cancelBookletRead()` の中身を空にしても緑のままになる。
+     */
+    @Test
+    fun `冊子から始めた読込を取り消すと履歴も要約も始まらない`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+        val gate = CompletableDeferred<Unit>()
+
+        // 「これを読む」相当。読込が終わってから記録とAIを始める形をなぞる。
+        val job = launch {
+            gate.await()
+            session.recordHistory("後着したノート", DocumentRef(TARGET_URI))
+            session.setNoteState(successNote("本文"))
+            session.fetchSummary("後着したノート", "本文")
+        }
+        session.trackBookletRead(job)
+
+        session.cancelBookletRead()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), env.history.recorded)
+        assertTrue(session.uiState.value.noteState is NoteState.Idle)
+        assertTrue(session.uiState.value.summaryState is SummaryState.Idle)
+    }
+
+    /** 取り消さなければ、同じ要求が1回だけ最後まで走る。 */
+    @Test
+    fun `取り消さなければ冊子から始めた読込は完走する`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+        val gate = CompletableDeferred<Unit>()
+
+        val job = launch {
+            gate.await()
+            session.recordHistory("読んだノート", DocumentRef(TARGET_URI))
+            session.setNoteState(successNote("本文"))
+        }
+        session.trackBookletRead(job)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf("読んだノート"), env.history.recorded)
+        assertTrue(session.uiState.value.noteState is NoteState.Success)
+    }
+
+    /** 既に終わっている要求へ取消が来ても、開いたノートを消さない。 */
+    @Test
+    fun `完了済みの読込を取り消しても表示は消えない`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+
+        val job = launch { session.setNoteState(successNote("本文")) }
+        session.trackBookletRead(job)
+        advanceUntilIdle()
+
+        session.cancelBookletRead()
+
+        assertTrue(session.uiState.value.noteState is NoteState.Success)
+    }
+
     private fun successNote(content: String) = NoteState.Success(
         title = "ノート",
         content = content,
@@ -680,8 +750,14 @@ class NoteSessionCoordinatorTest {
         var clearCount = 0
             private set
 
+        /** 記録されたタイトル。**冊子の取消で「記録が始まらない」ことを見るのに使う。** */
+        val recorded = mutableListOf<String>()
+
         override fun load(): List<HistoryEntry> = emptyList()
-        override fun record(title: String, ref: DocumentRef): List<HistoryEntry> = emptyList()
+        override fun record(title: String, ref: DocumentRef): List<HistoryEntry> {
+            recorded += title
+            return emptyList()
+        }
         override fun clear() {
             clearCount++
         }

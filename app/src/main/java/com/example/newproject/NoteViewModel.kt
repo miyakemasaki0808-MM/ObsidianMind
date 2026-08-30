@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.data.NoteImageGateway
 import com.example.newproject.data.VaultImageIndexStore
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -132,8 +133,6 @@ class NoteViewModel internal constructor(
     // 実行中ジョブを保持して新規要求時にキャンセルする
     // （要約・セクションチャット等のジョブは各Controllerが保持）
     private var noteLoadJob: Job? = null
-    /** 冊子の「これを読む」で始めた読込。**冊子へ戻ったときだけ取り消す**（→ [cancelBookletRead]）。 */
-    private var bookletReadJob: Job? = null
     private var relatedNotesJob: Job? = null
 
     /** 選択中Vault。痕跡のSAFゲートウェイと同じ実体を見る（[vaultLocation]）。 */
@@ -249,27 +248,13 @@ class NoteViewModel internal constructor(
         }
         noteLoadJob = job
         // **冊子から始めた要求だけを別に持つ。** 冊子へ戻ったときに取り消すのはこれで、
-        // ランダムやさがすから始めた読込は巻き込まない。
-        bookletReadJob = job
+        // ランダムやさがすから始めた読込は巻き込まない。取り消しの本体は
+        // Coordinator 側にあり、素のJVMで「取り消すと何も始まらない」を検証できる。
+        session.trackBookletRead(job)
     }
 
-    /**
-     * 冊子から始めた「これを読む」を取り消す。**冊子へ戻ってきた時点で呼ぶ。**
-     *
-     * 取り消さないと、利用者が読込中にバックで冊子へ戻った後に
-     * [presentDrawnNote] が完走し、**冊子が前面のまま**痕跡セッション・履歴・AIが始まる。
-     * 「これを読む」で通常表示へ渡ってから記録が始まる、という画面の境界が崩れる
-     * （→ features/booklet_mode.md 判断3・判断8）。
-     *
-     * 待ち表示のまま残さないため、走行中だった場合だけ `Idle` へ戻す。
-     */
-    fun cancelBookletRead() {
-        val job = bookletReadJob ?: return
-        bookletReadJob = null
-        if (!job.isActive) return
-        job.cancel()
-        session.setNoteState(NoteState.Idle)
-    }
+    /** 冊子へ戻ったときに、走行中の「これを読む」を取り消す（→ [NoteSessionCoordinator.cancelBookletRead]）。 */
+    fun cancelBookletRead() = session.cancelBookletRead()
 
     /**
      * 引いた1枚を画面へ出す。**Rediscover と冊子で共有する。**
@@ -352,10 +337,10 @@ class NoteViewModel internal constructor(
     ) = session.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
-    fun pauseReadingTrace() = session.pauseReadingTrace()
+    internal fun pauseReadingTrace(reason: ReadingPauseReason) = session.pauseReadingTrace(reason)
 
     /** 背面から復帰したときに呼ぶ（背面にいた時間を読書時間に含めないため）。 */
-    fun resumeReadingTrace() = session.resumeReadingTrace()
+    internal fun resumeReadingTrace(reason: ReadingPauseReason) = session.resumeReadingTrace(reason)
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = session.dismissReadingTraceCard()

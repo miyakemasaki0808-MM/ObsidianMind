@@ -23,6 +23,7 @@ import com.example.newproject.model.state.RelatedNotesState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 
@@ -112,6 +113,9 @@ internal class NoteSessionCoordinator(
      * 補記一覧はノート切替では無効化してはいけない）。
      */
     var vaultGeneration = 0L
+
+    /** 冊子の「これを読む」で始めた読込（→ [cancelBookletRead]）。 */
+    private var bookletReadJob: Job? = null
         private set
 
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
@@ -227,6 +231,32 @@ internal class NoteSessionCoordinator(
     // ── 冊子 ───────────────────────────────────────────────────────────────
 
     fun drawBooklet(loadNotes: suspend () -> List<NoteFile>) = booklet.draw(loadNotes)
+
+    /**
+     * 冊子の「これを読む」で始めた読込を追う。**ノート単位の契約には載せない** —
+     * ノート切替で止めるものではなく、**冊子へ戻ったときだけ**取り消すため。
+     */
+    fun trackBookletRead(job: Job) {
+        bookletReadJob = job
+    }
+
+    /**
+     * 冊子から始めた読込を取り消す。**冊子へ戻ってきた時点で呼ぶ。**
+     *
+     * 取り消さないと、利用者が読込中にバックで冊子へ戻った後に読込が完走し、
+     * **冊子が前面のまま**痕跡セッション・履歴・要約・関連ノートが始まる。
+     * 「これを読む」で通常表示へ渡ってから記録が始まる、という画面の境界が崩れる
+     * （→ features/booklet_mode.md 判断3・判断8）。
+     *
+     * 走行中だった場合だけ `Idle` へ戻すのは、待ち表示を残さないため。
+     */
+    fun cancelBookletRead() {
+        val job = bookletReadJob ?: return
+        bookletReadJob = null
+        if (!job.isActive) return
+        job.cancel()
+        stateStore.setNoteState(NoteState.Idle)
+    }
 
     fun ensureBookletCovers(page: Int) = booklet.ensureCovers(page)
 
@@ -394,8 +424,8 @@ internal class NoteSessionCoordinator(
         totalBlocks: Int,
         sectionTitle: String?
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-    fun pauseReadingTrace() = readingTrace.pause()
-    fun resumeReadingTrace() = readingTrace.resume()
+    fun pauseReadingTrace(reason: ReadingPauseReason) = readingTrace.pause(reason)
+    fun resumeReadingTrace(reason: ReadingPauseReason) = readingTrace.resume(reason)
     fun dismissReadingTraceCard() = readingTrace.dismissCard()
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────

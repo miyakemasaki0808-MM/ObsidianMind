@@ -77,6 +77,44 @@ class BookletCoverLineTest {
         assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
     }
 
+    /**
+     * **閉じ行に情報文字列は書けない。** 記号の後ろを見ないと、コードの中の
+     * ```` ```` not-close ```` が閉じになり、続きの本文が扉へ出てくる。
+     */
+    @Test
+    fun `記号の後ろに文字がある行は閉じにならない`() {
+        val content = """
+            ````
+            ```` not-close
+            コードの中身である。
+            ````
+            フェンスの外の文を選ぶ。
+        """.trimIndent()
+
+        assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
+    /** 4空白以上の字下げはフェンスではなく、字下げコードブロックの中身。 */
+    @Test
+    fun `4空白字下げの記号列はフェンスにしない`() {
+        val content = "    ```" + "\n" + "本文の文である。"
+
+        assertEquals("本文の文である。", selectCoverLine(content, "タイトル"))
+    }
+
+    /** 3空白までの字下げはフェンスとして扱う。 */
+    @Test
+    fun `3空白字下げのフェンスは効く`() {
+        val content = """
+            &nbsp;&nbsp;&nbsp;```
+            コードの中身である。
+            &nbsp;&nbsp;&nbsp;```
+            フェンスの外の文を選ぶ。
+        """.trimIndent().replace("&nbsp;", " ")
+
+        assertEquals("フェンスの外の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
     @Test
     fun `チルダのフェンスも落とす`() {
         val content = """

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,6 +53,26 @@ import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
+
+/**
+ * 冊子から本文へ渡す境界。**先頭から開くことをここで保証する。**
+ *
+ * `noteListState` は Activity 生存で共有され、**ノート切替ではリセットされない**ので、
+ * 何もしないと選んだ本文が前のノートの途中から開く（→ features/booklet_mode.md §10）。
+ *
+ * 関数として切り出しているのは、`MainActivity` のラムダの中にあると
+ * **描画テストからも素のJVMからも観測できない**ため。ここに置けば
+ * 「渡すと先頭から始まる」ことをそのまま確かめられる。
+ */
+internal fun openFromBooklet(
+    noteListState: LazyListState,
+    open: () -> Unit,
+    navigateToNote: () -> Unit
+) {
+    open()
+    noteListState.requestScrollToItem(0)
+    navigateToNote()
+}
 
 /**
  * 冊子（10枚の束をめくる面）。
