@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-30 | — | 冊子モード（N-12）を実装した。10枚を引いてめくり、扉から通常表示へ渡す（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)**・[architecture](system/architecture.md) |
 | 2026-08-30 | — | 冊子モードの設計レビュー7件を反映し、解析の共有をやめてナビと扉の受け入れ条件を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断7・判断8・§10 |
 | 2026-08-30 | — | 文書のソース参照31本から行番号を落として名前で指す形へ揃え、実在を検査に載せた | **[CLAUDE.md](../../CLAUDE.md)**「文書の扱い」・[lessons](lessons.md) L29 |
 | 2026-08-30 | — | 冊子モードの位置づけをオーナー判断で確定し、束の寿命・めくる向き・使い切り後を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断6 |

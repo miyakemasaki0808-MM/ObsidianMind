@@ -82,7 +82,7 @@
 **再利用できる手順とケースはリポジトリに置く** — 実機依頼のたびに導出し直さないため。
 
 実機検証を依頼されたCodexは、まず [共通手順](device_validation/README.md) を読み、
-対象機能のケースIDを選ぶ。現在の機能別ケースは次の6本。
+対象機能のケースIDを選ぶ。現在の機能別ケースは次の7本。
 
 - [蒸留](device_validation/reflect_distill.md)
 - [AI状態UX](device_validation/background_ai_ux.md)
@@ -90,6 +90,7 @@
 - [AI入力予算](device_validation/ai_input_budget.md)
 - [再会カード](device_validation/reunion_card.md)
 - [読書痕跡の退避](device_validation/reading_trace_backup.md)
+- [冊子モード](device_validation/booklet_mode.md)
 
 機能別ケースには**再現手順と期待だけ**を書く。端末・日付・成否は最新のレビュー本文、
 現在も残る問題は [findings.md](findings.md) が持つ。
