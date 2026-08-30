@@ -1,7 +1,7 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
-**状態:** **実装済み・実機検証待ち（2026-08-30）。** 設計7件＋実装9件＋修正確認4件＋再修正確認4件を反映済み。**実機ケースは未実施**
-**最終検証:** 2026-08-30 / `d714341`（JVM・Lint・androidTest組み立ては通過。**実機とinstrumentationは未実施**）
+**状態:** **実装済み・机上再確認済み・実機検証待ち（2026-08-31）。** 設計7件＋実装9件＋修正確認4件＋再修正確認4件を反映し、再々修正確認は指摘なし。**実機ケースは未実施**
+**最終検証:** 2026-08-31 / `fe0f05a`（JVM 1,244件・Lint・androidTest組み立ては通過。**実機とinstrumentationは未実施**）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
