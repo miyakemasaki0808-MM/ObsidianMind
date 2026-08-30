@@ -18,6 +18,11 @@ import org.junit.Test
  * | 冊子の間は読書時間を積まない | `ReadingTraceControllerTest`（停止理由つきの fake clock） |
  * | 取り消した読込は記録もAIも始めない | `NoteSessionCoordinatorTest`（履歴・状態・要約を観測） |
  * | 渡した本文は先頭から始まる | `BookletScreenTest`（実際の `LazyListState` の位置） |
+ * | 戻ると同じページが開く | `BookletNavigationTest`（実際の NavHost を往復する） |
+ *
+ * **走査を足しても往復は見えない。** `navigate("note")` が書いてあることと、戻ったときに
+ * 同じ状態が復元されることは別で、実際に**ページ位置だけが失われた**（2026-08-31 の実機検証）。
+ * 往復そのものは `BookletNavigationTest` が NavHost を通して見る。
  *
  * **ここが残っている理由は、`MainActivity` のルート定義だけが素のJVMから触れないため。**
  * `NoteViewModel` は `AndroidViewModel` で組み立てられず、ルートの配線を差し替えても

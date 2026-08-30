@@ -112,6 +112,9 @@ internal fun BookletScreen(
                 } else {
                     BookletPager(
                         entries = state.entries,
+                        // **束が覚えているページから開く。** 画面ローカルに持つと、
+                        // 通常表示へ渡って戻る往復でここだけ1枚目へ戻る。
+                        initialPage = state.page,
                         onPageSettled = onPageSettled,
                         onRead = onRead,
                         onDrawAgain = onDrawAgain
@@ -128,21 +131,40 @@ internal fun BookletScreen(
 /**
  * ページャ本体。
  *
- * **ページ位置は `rememberPagerState` に持たせる。** 冊子ルートはバックスタックに残るので、
- * 「これを読む」でノートへ渡って戻ってきても同じページが開く（→ 判断6）。
- * 状態を `NoteUiState` へ持ち上げると、この当たり前の復元を自前で書くことになる。
+ * **ページ位置は束が持つ（[initialPage]）。** 冊子ルートはバックスタックに残るが、
+ * `rememberPagerState` だけに置いた実装は**実機の往復で1枚目へ戻った**（2026-08-31）。
+ * 「戻れば同じ10枚が同じページ位置」は束とページ位置の2つで1つの条件なので、
+ * 寿命の同じ場所へ揃える（→ 判断6・[BookletState.Open]）。
+ *
+ * ここから先の操作は [onPageSettled] で束へ返す。**状態から毎フレーム駆動はしない** —
+ * 指で送っている最中に外から位置を当てると、めくりと競合する。
  */
 @Composable
 private fun ColumnScope.BookletPager(
     entries: List<BookletEntry>,
+    initialPage: Int,
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
     onDrawAgain: () -> Unit
 ) {
     // 末尾の1ページは「もう10枚引く」。**自動では継ぎ足さない**（→ 判断6）。
     val pageCount = entries.size + 1
-    val pagerState = rememberPagerState(pageCount = { pageCount })
+    val pagerState = rememberPagerState(
+        // 束が覚えている位置が範囲外になることは無いが、束の作り直しと
+        // すれ違った場合に備えて丸める。
+        initialPage = initialPage.coerceIn(0, pageCount - 1),
+        pageCount = { pageCount }
+    )
     val scope = rememberCoroutineScope()
+
+    // **束が覚えている位置へ、入るたびに合わせ直す。**
+    // `rememberPagerState` は `rememberSaveable` なので、復元された値が
+    // `initialPage` に優先する。実機の往復で1枚目へ戻ったのはこの層なので、
+    // **保存・復元の挙動に依存せず**、束の値を唯一の正として当て直す。
+    LaunchedEffect(Unit) {
+        val target = initialPage.coerceIn(0, pageCount - 1)
+        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+    }
 
     // LaunchedEffect は長寿命なので、外から来たラムダは必ず現在値を通す（→ lessons L34）。
     val settled by rememberUpdatedState(onPageSettled)

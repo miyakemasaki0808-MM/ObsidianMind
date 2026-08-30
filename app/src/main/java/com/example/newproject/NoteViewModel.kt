@@ -293,8 +293,8 @@ class NoteViewModel internal constructor(
         session.drawBooklet { collectAllNotesCached(contentResolver, uri) }
     }
 
-    /** 表示中のページとその前後1ページの扉を用意する。めくるたびに呼ぶ。 */
-    fun ensureBookletCovers(page: Int) = session.ensureBookletCovers(page)
+    /** ページが決まったときに呼ぶ。現在ページを覚え、前後1ページの扉を用意する。 */
+    fun onBookletPageSettled(page: Int) = session.onBookletPageSettled(page)
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
         session.onNoteChanged()

@@ -100,7 +100,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { notes }
-        controller.ensureCovers(page = 4)
+        controller.onPageSettled(page = 4)
 
         assertEquals(
             listOf("ノート4.md", "ノート5.md", "ノート6.md"),
@@ -115,7 +115,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("ノート.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         val cover = entry(state, 0).cover as BookletCover.Ready
         assertEquals("最初の文である。", cover.line)
@@ -135,7 +135,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(missing, alive) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(BookletCover.Failed, entry(state, 0).cover)
         assertTrue(entry(state, 1).cover is BookletCover.Ready)
@@ -152,7 +152,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("開けないノート.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(BookletCover.Failed, entry(state, 0).cover)
     }
@@ -164,7 +164,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("空のノート.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(BookletCover.Ready("空のノート.md"), entry(state, 0).cover)
     }
@@ -177,8 +177,8 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("消えたノート.md")) }
-        controller.ensureCovers(page = 0)
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(1, handle.readSnippetRefs.size)
     }
@@ -190,8 +190,8 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("ノート.md")) }
-        controller.ensureCovers(page = 0)
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(1, handle.readSnippetRefs.size)
     }
@@ -219,11 +219,58 @@ class BookletControllerTest {
 
         controller.draw { listOf(noteFile("ノート.md")) }
         advanceUntilIdle()
-        controller.ensureCovers(page = 0)
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
+        controller.onPageSettled(page = 0)
         advanceUntilIdle()
 
         assertEquals(1, handle.readSnippetRefs.size)
+    }
+
+    // ── ページ位置 ───────────────────────────────────────────────────────────
+
+    /**
+     * **ページ位置は束と同じ場所に残る。**
+     *
+     * 画面ローカルに置いていた実装は、実機の `冊子 → ノート → 戻る` で1枚目へ戻った
+     * （2026-08-31）。束が残っているのにページ位置だけ消えるのは、
+     * 「戻れば同じ10枚が同じページ位置」という1つの条件を2つの寿命で持っていたため。
+     */
+    @Test
+    fun `決まったページを束が覚える`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state)
+        controller.draw { (1..10).map { noteFile("ノート$it.md") } }
+
+        controller.onPageSettled(page = 3)
+
+        assertEquals(3, (state.value.bookletState as BookletState.Open).page)
+    }
+
+    @Test
+    fun `引き直すとページ位置は1枚目へ戻る`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state)
+        controller.draw { (1..10).map { noteFile("ノート$it.md") } }
+        controller.onPageSettled(page = 5)
+
+        controller.draw { (1..10).map { noteFile("別のノート$it.md") } }
+
+        assertEquals(0, (state.value.bookletState as BookletState.Open).page)
+    }
+
+    /** 扉が後から届いてもページ位置は動かない（`copy` で消さない）。 */
+    @Test
+    fun `扉の読み込みでページ位置が消えない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val handle = FakeVaultHandle(snippets = { "本文である。" })
+        val controller = controller(state, FakeVaultBrowser(handle))
+        controller.draw { (1..10).map { noteFile("ノート$it.md") } }
+
+        controller.onPageSettled(page = 4)
+
+        val open = state.value.bookletState as BookletState.Open
+        assertEquals(4, open.page)
+        assertTrue(open.entries[4].cover is BookletCover.Ready)
     }
 
     // ── 世代照合 ─────────────────────────────────────────────────────────────
@@ -250,7 +297,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle), vaultGeneration = { generation })
 
         controller.draw { listOf(noteFile("ノート.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(BookletCover.Loading, entry(state, 0).cover)
     }
@@ -270,7 +317,7 @@ class BookletControllerTest {
         controller = controller(state, FakeVaultBrowser(handle))
 
         controller.draw { listOf(noteFile("一冊目.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         val entry = entry(state, 0)
         assertEquals("二冊目.md", entry.title)
@@ -297,7 +344,7 @@ class BookletControllerTest {
         val controller = controller(state, FakeVaultBrowser(handle = null))
 
         controller.draw { listOf(noteFile("ノート.md")) }
-        controller.ensureCovers(page = 0)
+        controller.onPageSettled(page = 0)
 
         assertEquals(BookletCover.Loading, entry(state, 0).cover)
     }

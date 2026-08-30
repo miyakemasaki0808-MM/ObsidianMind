@@ -269,7 +269,7 @@ internal class NoteSessionCoordinator(
         stateStore.setNoteState(NoteState.Idle)
     }
 
-    fun ensureBookletCovers(page: Int) = booklet.ensureCovers(page)
+    fun onBookletPageSettled(page: Int) = booklet.onPageSettled(page)
 
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
 

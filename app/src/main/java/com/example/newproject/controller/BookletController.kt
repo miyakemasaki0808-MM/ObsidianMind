@@ -102,12 +102,29 @@ internal class BookletController(
     }
 
     /**
-     * [page] とその前後1ページの扉を用意する。**めくるたびに呼ぶ。**
+     * ページが決まったときに呼ぶ。**現在ページを覚え、前後1ページの扉を用意する。**
+     *
+     * **覚える先を束と同じ場所にする。** 画面ローカルに置くと、通常表示へ渡って戻る往復で
+     * ページ位置だけが失われる（2026-08-31 の実機検証で再現）。
+     * 「戻れば同じ10枚が同じページ位置」は束とページ位置の2つで1つの条件なので、寿命を揃える。
+     */
+    fun onPageSettled(page: Int) {
+        val open = state.current as? BookletState.Open ?: return
+        if (open.page != page) {
+            state.update { current ->
+                if (current is BookletState.Open) current.copy(page = page) else current
+            }
+        }
+        ensureCovers(page)
+    }
+
+    /**
+     * [page] とその前後1ページの扉を用意する。
      *
      * 既に読めているページ・失敗したページ・読み込み中のページは二度読まない。
      * 失敗を読み直さないのは、消えたノートに対して**めくるたびにSAFを叩き続ける**のを防ぐため。
      */
-    fun ensureCovers(page: Int) {
+    private fun ensureCovers(page: Int) {
         val entries = (state.current as? BookletState.Open)?.entries ?: return
         val handle = vault.current() ?: return
         val drawId = activeDrawId

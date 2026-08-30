@@ -349,7 +349,7 @@ class MainActivity : ComponentActivity() {
                             }
                             BookletScreen(
                                 state = uiState.bookletState,
-                                onPageSettled = { page -> viewModel.ensureBookletCovers(page) },
+                                onPageSettled = { page -> viewModel.onBookletPageSettled(page) },
                                 onRead = { entry ->
                                     // 先頭から開くことは openFromBooklet が保証する。
                                     // **navigateToTab を使わない** — popUpTo(startDestination) が
