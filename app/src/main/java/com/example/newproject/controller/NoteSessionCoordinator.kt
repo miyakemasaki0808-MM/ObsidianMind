@@ -24,6 +24,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 
@@ -52,7 +53,7 @@ import kotlinx.coroutines.sync.Mutex
  * 残っている。本クラスはその結果を受け取って状態へ反映する。
  */
 internal class NoteSessionCoordinator(
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     persistScope: CoroutineScope,
     repository: NoteRepository,
     vaultBrowser: VaultBrowser,
@@ -233,11 +234,21 @@ internal class NoteSessionCoordinator(
     fun drawBooklet(loadNotes: suspend () -> List<NoteFile>) = booklet.draw(loadNotes)
 
     /**
-     * 冊子の「これを読む」で始めた読込を追う。**ノート単位の契約には載せない** —
-     * ノート切替で止めるものではなく、**冊子へ戻ったときだけ**取り消すため。
+     * 冊子の「これを読む」を始める。**開始と追跡を1手で行う。**
+     *
+     * 2手に分けて呼び出し側へ公開すると、**追跡の1行を落としても本番だけが壊れる** —
+     * テストは自前のJobを渡せてしまうので、落としたことに気づけない。
+     * `onNoteChanged()` を含めてここに閉じるのは、同じ理由で
+     * [onNoteChanged] と [cancelNoteScopedJobs] を1手にした判断と同じ形。
+     *
+     * 追跡はノート単位の契約には載せない — ノート切替で止めるものではなく、
+     * **冊子へ戻ったときだけ**取り消すため（→ [cancelBookletRead]）。
      */
-    fun trackBookletRead(job: Job) {
+    fun openBookletRead(load: suspend () -> Unit): Job {
+        onNoteChanged()
+        val job = scope.launch { load() }
         bookletReadJob = job
+        return job
     }
 
     /**

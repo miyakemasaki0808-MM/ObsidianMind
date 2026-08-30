@@ -623,54 +623,70 @@ class NoteSessionCoordinatorTest {
     // ── 冊子から始めた読込の取消 ─────────────────────────────────────────────
 
     /**
-     * **読込中にバックで冊子へ戻ったら、その後の記録もAIも始まらない。**
+     * **読込中にバックで冊子へ戻ったら、副作用は1つも始まらない。**
      *
-     * 呼び出しの有無ではなく**結果**を見る。配線のソース走査だけだと
-     * `cancelBookletRead()` の中身を空にしても緑のままになる。
+     * 呼び出しの有無ではなく**結果**を見る。かつ、本番と同じ入口
+     * （[NoteSessionCoordinator.openBookletRead]）を通す — 開始と追跡が1手なので、
+     * 追跡の1行を落とすとこのテストが落ちる。
      */
     @Test
-    fun `冊子から始めた読込を取り消すと履歴も要約も始まらない`() = runTest {
+    fun `冊子から始めた読込を取り消すと副作用が1つも始まらない`() = runTest {
         val env = Env(this)
         val session = env.coordinator()
         val gate = CompletableDeferred<Unit>()
+        val started = mutableListOf<String>()
 
-        // 「これを読む」相当。読込が終わってから記録とAIを始める形をなぞる。
-        val job = launch {
+        session.openBookletRead {
             gate.await()
+            started += "痕跡"
+            session.startReadingTrace("後着したノート", "notes/after.md", null)
+            started += "履歴"
             session.recordHistory("後着したノート", DocumentRef(TARGET_URI))
             session.setNoteState(successNote("本文"))
+            started += "要約"
             session.fetchSummary("後着したノート", "本文")
+            started += "関連ノート"
+            session.setRelatedNotesState(RelatedNotesState.Loading)
         }
-        session.trackBookletRead(job)
 
         session.cancelBookletRead()
         gate.complete(Unit)
         advanceUntilIdle()
 
+        assertEquals(emptyList<String>(), started)
         assertEquals(emptyList<String>(), env.history.recorded)
         assertTrue(session.uiState.value.noteState is NoteState.Idle)
         assertTrue(session.uiState.value.summaryState is SummaryState.Idle)
+        assertTrue(session.uiState.value.relatedNotesState is RelatedNotesState.Idle)
     }
 
-    /** 取り消さなければ、同じ要求が1回だけ最後まで走る。 */
+    /** 取り消さなければ、同じ入口から**各副作用が1回だけ**始まる。 */
     @Test
-    fun `取り消さなければ冊子から始めた読込は完走する`() = runTest {
+    fun `取り消さなければ冊子から始めた読込は副作用を1回ずつ始める`() = runTest {
         val env = Env(this)
         val session = env.coordinator()
-        val gate = CompletableDeferred<Unit>()
+        val started = mutableListOf<String>()
 
-        val job = launch {
-            gate.await()
+        session.openBookletRead {
+            started += "痕跡"
+            session.startReadingTrace("読んだノート", "notes/read.md", null)
+            started += "履歴"
             session.recordHistory("読んだノート", DocumentRef(TARGET_URI))
             session.setNoteState(successNote("本文"))
+            started += "要約"
+            session.fetchSummary("読んだノート", "本文")
+            started += "関連ノート"
+            session.setRelatedNotesState(RelatedNotesState.Loading)
         }
-        session.trackBookletRead(job)
-
-        gate.complete(Unit)
+        advanceUntilIdle()
+        // 生成を返しておかないと要約のJobが走ったまま残る（対照なので結果は問わない）。
+        env.ai.completeAll("要約")
         advanceUntilIdle()
 
+        assertEquals(listOf("痕跡", "履歴", "要約", "関連ノート"), started)
         assertEquals(listOf("読んだノート"), env.history.recorded)
         assertTrue(session.uiState.value.noteState is NoteState.Success)
+        assertTrue(session.uiState.value.summaryState is SummaryState.Success)
     }
 
     /** 既に終わっている要求へ取消が来ても、開いたノートを消さない。 */
@@ -679,8 +695,7 @@ class NoteSessionCoordinatorTest {
         val env = Env(this)
         val session = env.coordinator()
 
-        val job = launch { session.setNoteState(successNote("本文")) }
-        session.trackBookletRead(job)
+        session.openBookletRead { session.setNoteState(successNote("本文")) }
         advanceUntilIdle()
 
         session.cancelBookletRead()

@@ -374,6 +374,75 @@ class ReadingTraceControllerTest {
         assertNull("冊子を見ている間の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
     }
 
+    /**
+     * **停止中に始まったセッションは、その時点から計測しない。**
+     *
+     * 遅いSAFで「これを読む」を押し、本文が出る前にホームへ出ると、
+     * **セッションは背面で作られる**。作った時刻から数えると、本文が一度も前景に
+     * 出ていないノートが訪問条件を満たす。
+     */
+    @Test
+    fun `背面で始まったセッションは背面時間を計測しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("背面の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
+    /** 復帰してから読み進めれば、**復帰後の時間だけ**で条件を満たす。 */
+    @Test
+    fun `復帰後に読んだ時間だけで訪問になる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    /** 冊子が前面のまま読込が終わった場合も同じ。 */
+    @Test
+    fun `冊子表示中に始まったセッションも冊子の時間を計測しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.Booklet)
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("冊子を見ている間の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
     /** 背面のまま冊子を閉じても、背面の時間は積まない。 */
     @Test
     fun `背面のまま冊子を閉じても背面時間は積まない`() = runTest {

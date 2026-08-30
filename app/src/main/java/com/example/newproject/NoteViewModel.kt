@@ -231,8 +231,9 @@ class NoteViewModel internal constructor(
      */
     fun openBookletEntry(contentResolver: ContentResolver, entry: BookletEntry) {
         val uri = vaultLocation.uri ?: return
-        session.onNoteChanged()
-        val job = scope.launch {
+        // **開始と追跡は Coordinator の1手に閉じている。** ここで2手に分けると、
+        // 追跡の1行を落としたときに本番だけが壊れる（→ [NoteSessionCoordinator.openBookletRead]）。
+        noteLoadJob = session.openBookletRead {
             try {
                 val notes = collectAllNotesCached(contentResolver, uri)
                 // 走査に居れば相対パスと更新日時が揃う。束を作った後に消えていた場合は
@@ -246,11 +247,6 @@ class NoteViewModel internal constructor(
                 session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
-        noteLoadJob = job
-        // **冊子から始めた要求だけを別に持つ。** 冊子へ戻ったときに取り消すのはこれで、
-        // ランダムやさがすから始めた読込は巻き込まない。取り消しの本体は
-        // Coordinator 側にあり、素のJVMで「取り消すと何も始まらない」を検証できる。
-        session.trackBookletRead(job)
     }
 
     /** 冊子へ戻ったときに、走行中の「これを読む」を取り消す（→ [NoteSessionCoordinator.cancelBookletRead]）。 */

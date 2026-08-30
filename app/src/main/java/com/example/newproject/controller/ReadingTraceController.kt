@@ -105,7 +105,15 @@ internal class ReadingTraceController(
         val documentId: String?,
         /** このノートを開いた時点のVault。保存はここへ向けてしか行わない。 */
         val vaultKey: String,
-        openedAtMillis: Long
+        /**
+         * 読書区間の開始時刻。**停止中に開いたセッションでは null。**
+         *
+         * 背面や冊子のまま読込が終わってセッションができることがあり
+         * （遅いSAFで「これを読む」→ホームへ出る、など）、そこで時刻を入れると
+         * **本文が一度も前景に出ていないのに読書時間が積まれる**。
+         * 停止理由が全部消えた時点（[resume]）を最初の区間の開始にする。
+         */
+        startedAtMillis: Long?
     ) {
         var deepestBlockIndex = 0
 
@@ -120,8 +128,8 @@ internal class ReadingTraceController(
         /** 背面にいた分を除いた、これまでの能動読書時間。 */
         var activeMillis = 0L
 
-        /** 現在の読書区間の開始時刻。背面化中は null。 */
-        var resumedAtMillis: Long? = openedAtMillis
+        /** 現在の読書区間の開始時刻。背面化中・停止中は null。 */
+        var resumedAtMillis: Long? = startedAtMillis
 
         /**
          * この閲覧で書き込み済みの訪問。背面化のたびに訪問を増やさず、同じ1件を
@@ -268,7 +276,9 @@ internal class ReadingTraceController(
                 noteTitle = noteTitle,
                 documentId = documentId,
                 vaultKey = it,
-                openedAtMillis = clock()
+                // **停止中に始まったセッションは計測しない。** 理由が残っている間は
+                // まだ本文が前景に出ていない。
+                startedAtMillis = clock().takeIf { pauseReasons.isEmpty() }
             )
         }
         return id
