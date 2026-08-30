@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-30 | — | 冊子の再修正確認4件を直し、停止中に始まるセッションと取消の観測点を閉じた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
 | 2026-08-30 | — | 冊子の修正確認4件を直し、読書時間の停止を理由ごとに数える形へ変えた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
 | 2026-08-30 | — | 冊子の実装レビュー9件を直し、冊子滞在中の読書時間と読込中Backの後着を止めた | **[booklet_mode](features/booklet_mode.md)** §10・[architecture](system/architecture.md) |
 | 2026-08-30 | — | 冊子モード（N-12）を実装した。10枚を引いてめくり、扉から通常表示へ渡す（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)**・[architecture](system/architecture.md) |
