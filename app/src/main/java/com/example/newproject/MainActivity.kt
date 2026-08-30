@@ -1,5 +1,7 @@
 package com.example.newproject
 
+import com.example.newproject.model.state.BookletState
+import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.state.toEventKey
@@ -299,6 +301,16 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenQuizResult = openQuizResult,
                                 noteListState = noteListState,
+                                onOpenBooklet = {
+                                    // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
+                                    viewModel.openBooklet(contentResolver)
+                                    navController.navigate("booklet") {
+                                        // 冊子から開いたノートで押し直した場合に冊子が二重に積まれる
+                                        // のを防ぐ。スタックに無ければ何も起きない。
+                                        popUpTo("booklet") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
                                 onEnterFullscreen = {
                                     // 進入前から表示中のSnackbarはHostが全画面でも描画し続けるため消す。
                                     snackbarHostState.currentSnackbarData?.dismiss()
@@ -312,6 +324,28 @@ class MainActivity : ComponentActivity() {
                                 onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
                                 onOpenReflection = openRemark,
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
+                            )
+                        }
+
+                        composable("booklet") {
+                            // プロセス復元で冊子ルートだけ戻り、束（メモリ上）が消えている場合は
+                            // 空の冊子を見せずにノートタブへ返す（→ booklet_mode §10 の境界条件）。
+                            val hasBundle = uiState.bookletState !is BookletState.Idle
+                            LaunchedEffect(hasBundle) {
+                                if (!hasBundle) navController.popBackStack()
+                            }
+                            BookletScreen(
+                                state = uiState.bookletState,
+                                onPageSettled = { page -> viewModel.ensureBookletCovers(page) },
+                                onRead = { entry ->
+                                    viewModel.openBookletEntry(contentResolver, entry)
+                                    // **navigateToTab を使わない。** popUpTo(startDestination) が
+                                    // 冊子ルートごと畳んでしまい、戻れなくなる
+                                    // （→ features/booklet_mode.md 判断8）。
+                                    navController.navigate("note")
+                                },
+                                onDrawAgain = { viewModel.openBooklet(contentResolver) },
+                                onExit = { navController.popBackStack() }
                             )
                         }
 
