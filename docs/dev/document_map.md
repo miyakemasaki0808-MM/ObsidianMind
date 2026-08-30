@@ -107,7 +107,7 @@
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
 | [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
-| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**未実装・設計確定** |
+| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証待ち** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位）。**未実装・設計確定** |
 

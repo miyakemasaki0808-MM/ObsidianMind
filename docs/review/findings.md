@@ -28,12 +28,14 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-08-30-booklet-design-review/P1-1` | 冊子が `NoteSectionController` の共有モデルを受け取る前提は Pager と両立しない | `起票` BOOK-1 |
-| `2026-08-30-booklet-design-review/P1-2` | 「参照だけ保持」と「代表文を即時表示」が両立していない | `統合` BOOK-1 |
-| `2026-08-30-booklet-design-review/P1-3` | 「これを読む」後の期待スタックと旧ノートAIの扱いが未定義 | `統合` BOOK-1 |
-| `2026-08-30-booklet-design-review/P2-1` | 代表文の選び方に受け入れ条件が無い | `統合` BOOK-1 |
-| `2026-08-30-booklet-design-review/P2-2` | スクロールの継承＋書き戻しは冊子には不要 | `統合` BOOK-1 |
-| `2026-08-30-booklet-design-review/P2-3` | 境界条件6件が未定義 | `統合` BOOK-1 |
-| `2026-08-30-booklet-design-review/P3-1` | めくる向きの表記が指の動きになっておらず、読み上げの受け入れ条件が無い | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P1-1` | 冊子を眺めた時間が直前ノートの読書痕跡へ混入する | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P1-2` | 「これを読む」が前ノートのスクロール位置を継承する | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P1-3` | 読込中Back後も冊子の背後で履歴・痕跡・AIを開始する | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P2-1` | 長いコードフェンス内の本文が扉へ漏れる | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P2-2` | nullストリームを空ノートへ畳み読めないページをReadyにする | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P2-3` | 扉がLoading中でも「これを読む」を押せる | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P2-4` | 1〜9件の束でも終端を「10枚」と表示する | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P3-1` | 0件時の正本と実装・実機ケースが一致しない | `統合` BOOK-1 |
+| `2026-08-30-booklet-implementation-review/P3-2` | 実装済みの冊子を索引と機能候補が未実装と案内する | `統合` BOOK-1 |
 | `2026-08-01-no9/P2-2` | 連続削除が同じJobを奪い合い、物理削除と画面状態がずれ得る | `起票` TRACE-3 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
