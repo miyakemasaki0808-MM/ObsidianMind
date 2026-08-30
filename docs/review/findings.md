@@ -28,5 +28,12 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-08-30-booklet-design-review/P1-1` | 冊子が `NoteSectionController` の共有モデルを受け取る前提は Pager と両立しない | `起票` BOOK-1 |
+| `2026-08-30-booklet-design-review/P1-2` | 「参照だけ保持」と「代表文を即時表示」が両立していない | `統合` BOOK-1 |
+| `2026-08-30-booklet-design-review/P1-3` | 「これを読む」後の期待スタックと旧ノートAIの扱いが未定義 | `統合` BOOK-1 |
+| `2026-08-30-booklet-design-review/P2-1` | 代表文の選び方に受け入れ条件が無い | `統合` BOOK-1 |
+| `2026-08-30-booklet-design-review/P2-2` | スクロールの継承＋書き戻しは冊子には不要 | `統合` BOOK-1 |
+| `2026-08-30-booklet-design-review/P2-3` | 境界条件6件が未定義 | `統合` BOOK-1 |
+| `2026-08-30-booklet-design-review/P3-1` | めくる向きの表記が指の動きになっておらず、読み上げの受け入れ条件が無い | `統合` BOOK-1 |
 | `2026-08-01-no9/P2-2` | 連続削除が同じJobを奪い合い、物理削除と画面状態がずれ得る | `起票` TRACE-3 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |

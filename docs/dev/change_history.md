@@ -16,6 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-30 | — | 冊子モードの設計レビュー7件を反映し、解析の共有をやめてナビと扉の受け入れ条件を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断7・判断8・§10 |
+| 2026-08-30 | — | 文書のソース参照31本から行番号を落として名前で指す形へ揃え、実在を検査に載せた | **[CLAUDE.md](../../CLAUDE.md)**「文書の扱い」・[lessons](lessons.md) L29 |
+| 2026-08-30 | — | 冊子モードの位置づけをオーナー判断で確定し、束の寿命・めくる向き・使い切り後を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断6 |
 | 2026-08-30 | — | 実機検証の開始・終了を常設検証用Vaultへ固定し、元Vaultへ戻さない手順にした | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L54 |
 | 2026-08-30 | — | 太字範囲調整をPixel実機のDIST-21〜24とinstrumentation 6件で確認し、段階1を完了した | **[distill_range_adjust](features/distill_range_adjust.md)** §10・[review](../review/README.md) |
 | 2026-08-29 | — | X-11コードレビューの4件を直し、告知の寿命と主語、強調の観測点を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§10・[lessons](lessons.md) L53 |

@@ -73,7 +73,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **内容:** 長いノートを開いた時、見出しごとに1行要約を並べた「目次＋要約」を生成する。全体の地図として先に俯瞰できる。
 - **適合理由:** 主軸=要約の直系拡張。**抜粋が既に作っている見出し骨格の各行に1行要約を足す**形になる（[ai_input_excerpt](../dev/system/ai_input_excerpt.md)）。骨格は現在ただの見出し列なので、そこに中身が乗れば「地図」が「読める地図」になる。
 - **Nano制約:** セクションごとに1回ずつ生成＝Mutex直列で時間はかかるが、各出力は短く256トークンに収まりやすい。バックグラウンド生成（Quiz/補記と同じ型）に乗せる。
-- **足場:** `PromptBuilder.buildSectionSummaryPrompt()` が単一セクションの要約を作り、[`SectionChatController`](../../app/src/main/java/com/example/newproject/controller/SectionChatController.kt#L67) がそれを呼ぶ経路まで動いている（入口は吹き出しシート）。**新規に要るのは「全見出しへ一括適用する制御」と「地図としてのUI」だけで、AI配管そのものは既存**。
+- **足場:** `PromptBuilder.buildSectionSummaryPrompt()` が単一セクションの要約を作り、[`SectionChatController`](../../app/src/main/java/com/example/newproject/controller/SectionChatController.kt) がそれを呼ぶ経路まで動いている（入口は吹き出しシート）。**新規に要るのは「全見出しへ一括適用する制御」と「地図としてのUI」だけで、AI配管そのものは既存**。
 - **懸念:** セクション数が多いノートで生成回数が膨らむ。上限（先頭N見出しまで等）が要る。**既存経路がユーザーの明示操作なのに対し、A-1 は一括自動になる**ため、Mutex直列の占有時間と中断（ノート切替）の扱いは新しい判断になる。
 - **規模感:** 小〜中。
 
@@ -110,13 +110,13 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
   - **レコードはノート対**にし、根拠として段落を数件添える。見送り記録も、対がノート対でないと
     断片が少し変わるたびに同じ発見を再提案する。
 - **処理の段構え — ②から入り、①へ逆流させる:**
-  1. **段落の高類似ペアを抽出（非AI）** — [`buildDistillSourceModel`](../../app/src/main/java/com/example/newproject/domain/DistillSourceModel.kt#L66) が文分割と frontmatter・コードフェンス・表・見出しの除外を持つ。**段落という単位は無い**ので `DistillSentence.isParagraphFirst` で束ね直す
+  1. **段落の高類似ペアを抽出（非AI）** — [`buildDistillSourceModel`](../../app/src/main/java/com/example/newproject/domain/DistillSourceModel.kt) が文分割と frontmatter・コードフェンス・表・見出しの除外を持つ。**段落という単位は無い**ので `DistillSentence.isParagraphFirst` で束ね直す
   2. **ノート対へ集約（非AI）** — bigramの逆引き索引で候補を絞るため、**ノート数の2乗にならない**
   3. **「意図的な写しか、二度書きか」だけAIに判別させる（v1には入れない）** — 「同じことを言っているか」は②の時点でほぼ確定しているので、AIの仕事はそこではない（→ 型1）
 - **ノイズは定型文ではなくテンプレート様式。** `**状態:** 実装済み・稼働中。` のような様式行が上位を占める。
   **文書頻度では落とせない** — 本物の二度書きも定義上ちょうど2本のノートに出るため。効くのは**実質文字数**で、
   リンク・ラベル・強調記号を剥いだ残りを数える判定は
-  [`isLinkOnlyRange` / `hasSubstance`](../../app/src/main/java/com/example/newproject/domain/DistillSourceModel.kt#L490) が既に持っている。
+  [`isLinkOnlyRange` / `hasSubstance`](../../app/src/main/java/com/example/newproject/domain/DistillSourceModel.kt) が既に持っている。
 - **書き込み:** 本文は触らず、新規の1ファイルだけを作る。**ただし既存サイドカー（`_ReadingTraces/*.json`）とは性格が違う。**
   あれは**アプリが読む**機械可読データだが、これは**ユーザーがObsidianで読んで作業する成果物**なので Markdown の表にする。
   サイドカー方針の2種類目として、用途（機械向け／人間向け）で位置づけを分ける。
@@ -124,16 +124,16 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
   同じ `.md` へ追記すると走査のたびに read-modify-write が必要になり、直列化と競合検知を新規に作ることになる。
   **結果は毎回全書き換え・見送りはJSONへ追記**に分ければ、その経路を作らずに済む
   （→ [reflect_distill](../dev/features/reflect_distill.md) の書き戻し）。
-- **足場:** Vault全走査は [`collectAllNotes()`](../../app/src/main/java/com/example/newproject/data/VaultBrowser.kt#L71)、
+- **足場:** Vault全走査は [`collectAllNotes()`](../../app/src/main/java/com/example/newproject/data/VaultBrowser.kt)、
   Vault単位の実行制御（世代・キャンセル・SAF I/O の退避）は
-  [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt#L36) の骨格、
+  [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt) の骨格、
   Vault内へのフォルダ＋ファイル作成は `createRootChildFolder` と `ReadingTraceStore` が持つ。
 - **足りないのは本文の一括読み出し（新規で一番重い）。** `VaultScan.notes` は
   `NoteFile(name, ref, lastModified, vaultRelativePath)` のメタデータだけで本文を持たない。
-  本文を読む3経路（表示1MB／[スニペット**8KB**](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L192)／蒸留256KB）は
+  本文を読む3経路（表示1MB／[スニペット**8KB**](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt)／蒸留256KB）は
   **すべて単一ノート向け**で、関連ノートが最大40件を並列で読むときに使っているのは8KBのスニペットである。
   全ノートの全文を読む形には前例が無い。
-- **ノート全体のDiceは使えない。** [`textBigrams` / `diceCoefficient`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateScoring.kt#L19) は
+- **ノート全体のDiceは使えない。** [`textBigrams` / `diceCoefficient`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateScoring.kt) は
   段落・文の比較には効くが、**ノート全体には効かない** — 80本3,160対の分布が0.2〜0.4に山を作り最高0.511で、分離帯が無い。
   KDocが用途を「本文スニペット同士」と書いているとおり設計範囲外で、日本語の文書は助詞と共通語彙だけで2〜4割一致する。
   **「①でノート対を粗く絞ってから中を見る」段構えは成立しない。**
@@ -152,7 +152,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **内容:** `#タグ` を持たないノートについて、本文から特徴的な概念・名詞を数個だけAIに**選ばせて**サイドカーへ保存する。
   本文には書かない。保存したタグは関連ノート・検索の内部シグナルとして使う。
 - **出所:** 2026-08-02 の外部壁打ち（Antigravity）。**ただし採用理由は向こうの挙げた「検索精度が上がる」ではなく、下記の実装事実による。**
-- **適合理由・足場:** [`RelatedContextScoring`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt#L9) は
+- **適合理由・足場:** [`RelatedContextScoring`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt) は
   **`W_TAG = 1.0` でタグ一致を主シグナル**に据え、本文スニペット・タイトル類似は `0.5` の従シグナル。
   KDoc が明記するとおり「tags が無い候補は本文・タイトルへフォールバックする」ので、
   **タグの無いノートは関連ノートの再ランクが構造的に弱い**。新機能というより**既存機能の入力を補う**位置づけ。
@@ -240,12 +240,12 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **出所:** 2026-08-02 の外部壁打ち（Antigravity）。
 - **適合理由:** 「Vault書き込みはサイドカーに逃がす」の直系。
   **ただし「ユーザーの言葉を受け取る唯一の口」ではない** — ひとことの返事
-  （[`Reflection.reply`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L123)）が既に受け取っている。
+  （[`Reflection.reply`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt)）が既に受け取っている。
   **残る差は書ける契機と数である:** 返事は**明示ボタン起点・AIのひとことに紐づく・1ノート1組**で、
   余白メモは**読んでいる最中に、何にも紐づかず、何度でも**置ける。
   **この差を言語化できるかが採否の分かれ目**で、できないなら既存機能と重なる。
 - **足場と、足りないもの:** サイドカーの読み書き・スキーマ版管理・サイズ上限は
-  [`ReadingTrace`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt#L69) が既に持っている
+  [`ReadingTrace`](../../app/src/main/java/com/example/newproject/model/ReadingTrace.kt) が既に持っている
   （現行 `schemaVersion = 6`、v1〜v5 も読める互換あり）。**ユーザーが書いた文を持つ経路も既にある**（`reflection`）。
   **ただし紐づかないメモを複数持つ欄は無い**ので、拡張するなら **v6**。
   バイト上限・保持件数の定数群と、版を上げて移行する形が既にあるので、置き場所と作法自体は決まっている。
@@ -281,7 +281,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **内容:** 見出し単位の折りたたみと、読んでいるセクション以外を薄くする集中表示。
 - **出所:** 2026-08-02 の外部壁打ち（Antigravity）。
 - **適合理由:** 読書体験の素の質を上げる読み取り専用の拡張で、N-13 と同じ性質。長文ノートで効く。
-- **足場:** [`NoteSection` / `surroundingContext()` / `buildNoteSectionModel()`](../../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt#L40) が既にあり、
+- **足場:** [`NoteSection` / `surroundingContext()` / `buildNoteSectionModel()`](../../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt) が既にあり、
   2026-07-31 に解析はMainの外へ出て `NoteSectionController` が結果を配っている。
   **つまりセクション構造は既に手元にあって、使っていないのは描画側だけ。**
 - **懸念:**
@@ -325,7 +325,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **足場:** **フォルダが無料で使える** — `NoteFile.vaultRelativePath` は走査時に組み立て済みで、
   さがすタブにフォルダチップのUI（`NoteFolder` / `selectedFolder`）もある。Obsidian利用者はフォルダで分野を
   分けていることが多く、**追加の判定を作らずに済む最有力候補**。
-  一方 [`NoteRepository.parseMeta`](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt#L316) は
+  一方 [`NoteRepository.parseMeta`](../../app/src/main/java/com/example/newproject/data/NoteRepository.kt) は
   frontmatter の `tags:` しか読まないので、**タグを使うなら先にインラインタグの抽出が要る**（新規実装）。
 
 - **着手前に決める4点:**
@@ -362,6 +362,12 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 
 - **規模感:** 小〜中。フォルダ判定と描画だけなら小。インラインタグの抽出・分類軸の共通土台化・2階層目まで含めると中。
 
+> **N-11 は欠番。** 読書痕跡の退避と復元（エクスポート／インポート）。
+> 2026-08-28 に実装・実機検証済み（環境が要る3ケースを除く）
+> → [reading_trace_backup](../dev/features/reading_trace_backup.md)。
+>
+> **番号は再利用しない** — 旧 N-3・N-4・A-6・A-7 と同じ規則。
+
 #### N-12. 冊子モード — 引いたら10枚束ね、ZINEのようにめくる 🎯
 
 **設計は確定済み → [booklet_mode](../dev/features/booklet_mode.md)（未実装）。** 判断の中身は設計書が持つ。
@@ -370,9 +376,9 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **出所:** 2026-08-05、オーナー。**「毎回ボタンを押すのが面倒」という実際の摩擦**が起点。
 - **§0 の純粋ランダムは壊れない。** `notes.random()` は10回引いても偏らず、引きに条件を足すわけでもない。
   **変わるのは引く回数ではなく、引く行為の摩擦だけ。**
-- **ただし北極星に対しては中立でない。** めくるコストが下がると、気に入らないノートを次々飛ばす使い方を
-  誘発しうる（N-5 を非優先にしたのと同じ軸）。**「10枚は捲るためではなく、戻ってこられるようにするため」**
-  と位置づけられるかが分かれ目。**この一点だけは設計書ではなくオーナーの判断に属する。**
+- **北極星に対して中立でないという懸念は決着した（2026-08-30、オーナー）。**
+  **「10枚は捲るためではなく、戻ってこられるようにするため」**と位置づけると決め、
+  束の寿命・使い切った後・めくる向きをそこから導いた（→ [booklet_mode](../dev/features/booklet_mode.md) 判断6）。
 - **既存構造への影響が候補中で最大。** ページャは「1ノート＝1状態」の前提に触る。
 - **規模感:** 中。
 
@@ -424,11 +430,11 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
   入力が同じなら再実行しない。プロンプトを変えたときだけ確実に失効させる。
 - **出所:** 2026-08-05 の外部壁打ち（Codex）。
 - **現状— 本文を入力にする経路にキャッシュは1つも無い。**
-  [`SummaryController`](../../app/src/main/java/com/example/newproject/controller/SummaryController.kt#L43) は
+  [`SummaryController`](../../app/src/main/java/com/example/newproject/controller/SummaryController.kt) は
   ノートを開くたびに `generate` を呼ぶ。関連ノート・クイズ・補記も同じで、
   **同じノートを開き直すたびに Nano が数十秒走り、その間 `generateMutex` を占有する。**
 - **例外が1つだけあり、そこは既に正しい。** 読書痕跡の俯瞰要約
-  （[`ReadingTraceController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt#L400)）は
+  （[`ReadingTraceController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt)）は
   `aiSummary` / `aiSummaryVisitCount` を持つ**実質的な入力指紋キャッシュ**になっている。
   **入力が本文ではなく訪問履歴**（`buildReadingTraceSummaryPrompt(noteTitle, visits, totalVisitCount)`）なので、
   累計訪問数が入力を過不足なく表す。保持件数（30件で頭打ち）ではなく累計を使う理由もKDocに書かれている。
@@ -453,7 +459,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **内容:** ①ユーザーが今押した処理 ②画面表示に必要な処理 ③自動生成 を別優先度で直列化する。
   あわせて機能ごとのキュー待ち時間・生成時間・キャンセル率・タイムアウト率を端末内に記録する。
 - **出所:** 2026-08-05 の外部壁打ち（Codex）。
-- **足場 — 指摘は正しい。** [`AICoreClient`](../../app/src/main/java/com/example/newproject/ai/AICoreClient.kt#L107) の
+- **足場 — 指摘は正しい。** [`AICoreClient`](../../app/src/main/java/com/example/newproject/ai/AICoreClient.kt) の
   `generate` は `generateMutex.withLock` の1本で、**優先度は無い**。
   自動生成（ノートを開いた時の要約・痕跡要約）が先に入ると、その後にユーザーが押した操作は待つ。
   **待ち行列の論点自体は一度考えられている** — `measurePrompt` は
@@ -588,7 +594,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **A-8（但し書き保全要約）の効果測定にそのまま使える**（→ 型2）。**A-8 に着手するなら D-3 が前提になる。**
 - **懸念:**
   - **照合そのものをAIにやらせると、検査が被検査と同じ弱点を持つ。** 語の重なり（Dice係数など、
-    [`textBigrams`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateScoring.kt#L19) が既にある）で
+    [`textBigrams`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateScoring.kt) が既にある）で
     まず機械的に測り、**AIは使わない**ほうが計測器として筋がよい。
   - 「重要セクション」を機械が決められない。**見出し骨格の全セクションを対象にして
     「触れられていない」だけを出す**なら重要度判定が要らない。
@@ -637,8 +643,7 @@ grillの回答（称号を選びポイントを避けた）は**安全な方向�
 ### 単独で判断してよいもの
 
 - **D-1** は症状駆動でよい（着手契機は「抜粋レイアウトの誤読を疑う症状が出たとき」）。順序の議論から外してよい。
-- **N-12** は設計が確定済みで、残る判断は「めくるコストを下げてよいか」という**オーナーの意思1点**
-  （→ [booklet_mode](../dev/features/booklet_mode.md)）。
+- **N-12** は設計・オーナー判断とも決着し、**順序の議論から外れた**（→ [roadmap](roadmap.md) Now）。
 
 ### 着手前に実装を当て直す（この資料の運用規則）
 

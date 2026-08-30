@@ -23,6 +23,7 @@
 
 | ID | 課題 | 優先度 | 影響 |
 |---|---|:--:|---|
+| [BOOK-1](#book-1-冊子モードの設計に着手前の穴が残っている) | 冊子モードの設計に着手前の穴が残っている | 中 | このまま着手すると戻れない・毎ページ本文I/O |
 | [TRACE-3](#trace-3-連続削除が同じjobを奪い合う) | 連続削除が同じJobを奪い合う | 中 | 消えたのに画面へ残る |
 | [AI-4](#ai-4-aiピッカーだけid契約から外れている) | AIピッカーだけID契約から外れている | 中 | 候補が黙って消え、検索結果が減る |
 | [AI-5](#ai-5-関連ノートが算出した根拠を捨てている) | 関連ノートが算出した根拠を捨てている | 低 | なぜ関連なのかが画面から分からない |
@@ -46,9 +47,20 @@
 ---
 
 
+## BOOK-1. 冊子モードの設計に着手前の穴が残っている
+
+- **出どころ:** 2026-08-30 の設計レビュー（受付簿 `2026-08-30-booklet-design-review/*`）。**総評は「実装へ進めてよい」**で、
+  芯（眺めると読むを遷移で分ける・冊子へAIと痕跡を持ち込まない）は妥当と判定された。**残るのは着手前の詰め7件。**
+- **効いている順:** ①`NoteSectionController` の共有前提が Pager と両立しない（単一 `parseJob` で前の解析を捨てる構造）
+  ②「参照だけ保持」だとページ表示ごとに本文I/Oが要る ③「これを読む」に `navigateToTab` を使うと
+  `popUpTo(startDestination)` が冊子ルートごと畳んで戻れない。
+- **7件とも 2026-08-30 に [booklet_mode](../dev/features/booklet_mode.md) へ反映済み（取り下を0件）。**
+  残るのは**修正確認レビューだけ**で、それが済んだらこの項目と受付簿を同時に削る。
+- **規模感:** 設計反映は完了。実装はロードマップ Now の N-12 が持つ。
+
 ## TRACE-3. 連続削除が同じJobを奪い合う
 
-- **現状:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt#L54) は
+- **現状:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt) は
   洗い出しと削除に**同じ `job`** を使い、削除のたびに前のJobをキャンセルする。
 - **問題:** SAFの `deleteDocument()` は同期的な外部I/Oなので、**キャンセル時点で物理削除だけ完了し、
   その後の状態更新が落ちる**ことがある。さらに各削除は開始時の `current` を捕捉するため、
@@ -62,16 +74,16 @@
 ## AI-4. AIピッカーだけID契約から外れている
 
 **同じファイルの中に、なぜIDが良いかまで書いてある。**
-[`PromptBuilder.kt:82`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L82) のコメント —
+[`buildRelatedNotesPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt) の直前のコメント —
 「候補は『ID | タイトル』で提示し、モデルにはIDだけ返させる。ID→ノートの解決は UseCase側で確実に行うため、
 **言い換え・翻訳・装飾・同名衝突に強い**」。
 
 - **3経路のうち2経路はこの契約で守られている。** 蒸留は `S001` 形式を `validIds` と照合、
-  関連ノートは `C01` 形式を [`parseCandidateIds`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt#L22) で照合し、
+  関連ノートは `C01` 形式を [`parseCandidateIds`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt) で照合し、
   **候補外のIDを破棄する。**
 - **ピッカーだけ生のタイトル文字列を返させている。**
-  [`buildPickerPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L151) は "Return only note titles"、
-  受け側は [`notesByTitle[title.toNormalizedObsidianTitle()]`](../../app/src/main/java/com/example/newproject/domain/SearchPickerUseCase.kt#L49) で照合する。
+  [`buildPickerPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt) は "Return only note titles"、
+  受け側は [`notesByTitle[title.toNormalizedObsidianTitle()]`](../../app/src/main/java/com/example/newproject/domain/SearchPickerUseCase.kt) で照合する。
 - **影響:** AIがタイトルを言い換える・記号を足す・翻訳すると、`mapNotNull` が**黙って落とす**。
   エラーにならないので、**「3件選ばせたのに1件しか出ない」が原因不明のまま起きる。**
   正規化が吸収する範囲を超えた瞬間に結果が減る。
@@ -89,10 +101,10 @@
 
 ## AI-5. 関連ノートが算出した根拠を捨てている
 
-- **現状:** [`relatedContextScore`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt#L44) は
+- **現状:** [`relatedContextScore`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt) は
   **タグ一致・本文スニペット類似・タイトル類似を個別に計算**しているが、
   `CandidateScore(score, tieBreak)` という **Double 2つへ畳んで**返す。
-  畳んだ後は並べ替えにしか使われず、[`RelatedTab`](../../app/src/main/java/com/example/newproject/ui/screen/RelatedTab.kt#L240) が
+  畳んだ後は並べ替えにしか使われず、[`RelatedTab`](../../app/src/main/java/com/example/newproject/ui/screen/RelatedTab.kt) が
   表示するのは `isWikilinked` だけ。
 - **影響:** 「なぜこのノートが関連なのか」が画面から分からない。
   **根拠は計算済みなのに捨てているので、表示するのに新しい計算もAI生成も要らない。**
@@ -167,7 +179,7 @@
 
 **単独では着手しない。** 該当ファイルを別の理由で触るときに、ついでに直す。
 
-- [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt#L50) の
+- [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt) の
   `horizontalBleed = 20.dp` は、呼び出し側の水平余白と一致している前提で成立する。現在の画面では
   合っているが、**余白を変えた瞬間に見出しだけがずれる**。レイアウトテストは無い。
   配色は「テストで強制する」ところまで持っていったのに対し、寸法の対応関係は約束のままである。
