@@ -187,7 +187,7 @@ v1 は「箇所」へ統一し `DistillCandidateUnitCopyTest` が走査してい
 - **確定範囲は `DistillController.ActiveSession` が持つ**（候補ID → 確定範囲）。v1 が `candidatesById` を Controller 側に置いているのと同じ形で、**原文オフセットをUI状態へ出さない**
 - `DistillCandidateItem` に足すのは**表示用の文字列と現在の段**まで（太字になる原文・選べる段の一覧・いま何段か）。`DistillState` に新しい variant を足さない
 - **調整シートの開閉は `DistillState.Candidates` の中に持つ。** `NoteUiState` へ新しい欄を足さないので、契約2箇所への登録は不要（既存の `distillState` が既に登録済み）
-- **常駐Vigilithは調整シート表示中も隠す。** 現在 [`rememberVigilithState`](../../../app/src/main/java/com/example/newproject/ui/vigilith/VigilithState.kt#L49) は
+- **常駐Vigilithは調整シート表示中も隠す。** 現在 [`rememberVigilithState`](../../../app/src/main/java/com/example/newproject/ui/vigilith/VigilithState.kt) は
   `isBlockingOverlayVisible = uiState.isSectionChatSheetVisible` の1本しか見ておらず、
   放置すると `HoldingCandidate` の姿勢のままモーダルシートと重なる。
   **第二の状態を足さず、`DistillState.Candidates` が持つシート情報から導出する**（判断は純関数 `resolveVigilithPresentation` 側に残す）

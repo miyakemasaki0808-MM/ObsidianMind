@@ -94,6 +94,68 @@ class SourceDocSyncTest {
     }
 
     /**
+     * **文書からソースを指すときは、行番号ではなく名前で指す。**
+     *
+     * 2026-08-30 に棚卸ししたところ、文書中の行番号アンカーは31本あり、
+     * **確かめた5本のうち4本が別のコードを指していた**（`setNoteState` は55行ずれ、
+     * `SummaryPanel` は367行ずれ）。参照先ファイルは月に十数回変わるので、
+     * 行番号は書いた直後から外れていく。
+     *
+     * **害はずれることではなく、ずれても気づけないことにある。** リンク切れと違い、
+     * 行番号のずれは**もっともらしい別のコード**を指し、読み手はそれを根拠として読む。
+     *
+     * 行番号を落とすと、代わりに**機械で確かめられる形**になる —
+     * ラベルのバッククォート内に書いた識別子が、リンク先のファイルに実在すること。
+     * 改名・削除はここで落ちる。**行番号では原理的にこの検査を書けなかった。**
+     *
+     * ファイル名そのもの（`AppColors.kt` のような表記）は数えない。
+     * リンクのパスが同じことを既に言っており、**中身に名前を持たないファイル**
+     * （トップレベル関数だけの `RelatedContextScoring.kt` など）を偽陽性にするだけのため。
+     */
+    @Test
+    fun `文書からソースへのリンクは行番号を持たず、名前で指す`() {
+        val violations = markdownDocs()
+            .flatMap { doc ->
+                SOURCE_LINK.findAll(doc.readText()).mapNotNull { match ->
+                    val (label, path, anchor) = match.destructured
+                    val target = File(doc.parentFile, path).canonicalFile
+                    val name = doc.toRelativeString(docsRoot())
+                    when {
+                        anchor.isNotEmpty() ->
+                            "$name: 行番号で指している（$path$anchor）。名前で指すこと"
+                        !target.isFile -> "$name: リンク先が無い（$path）"
+                        else -> missingSymbol(label, target)?.let { "$name: `$it` が ${target.name} に無い" }
+                    }
+                }
+            }
+            .sorted()
+            .toList()
+
+        assertTrue(
+            "文書のソース参照が古くなっています:\n${violations.joinToString("\n")}",
+            violations.isEmpty()
+        )
+    }
+
+    /**
+     * ラベルが名指しした識別子のうち、リンク先に無い最初の1つ。
+     *
+     * **バッククォート内だけを見る。** 地の文（「〜を除外済み」など）は名前ではないので数えない。
+     */
+    private fun missingSymbol(label: String, target: File): String? {
+        val source = target.readText()
+        val fileName = target.nameWithoutExtension
+        return INLINE_CODE_BODY.findAll(label)
+            .flatMap { IDENTIFIER.findAll(it.groupValues[1]) }
+            .map { it.value }
+            .filterNot { it == fileName || it == "kt" || it.length < MIN_SYMBOL_LENGTH }
+            .firstOrNull { !Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(source) }
+    }
+
+    private fun markdownDocs(): Sequence<File> =
+        docsRoot().walkTopDown().filter { it.isFile && it.extension == "md" }
+
+    /**
      * 正本のうち「状態一覧」として数える範囲。
      *
      * **範囲外の言及を一覧登録として数えない。** 区切りが無ければ落とす —
@@ -182,5 +244,13 @@ class SourceDocSyncTest {
         val INLINE_CODE = Regex("""`[^`\n]*`""")
         /** `[表示](../path/to.md)` の相対リンクだけを見る（URLと絶対パスは対象外）。 */
         val RELATIVE_LINK = Regex("""]\((\.\.?/[^)]+\.md)\)""")
+
+        /** 文書 → `.kt` のリンク。行番号アンカーは**捕まえてから落とす**（見逃すと検査が空振りする）。 */
+        val SOURCE_LINK = Regex("""\[([^\]]+)]\(([^)\s]+\.kt)(#L\d+)?\)""")
+        val INLINE_CODE_BODY = Regex("""`([^`]+)`""")
+        val IDENTIFIER = Regex("""[A-Za-z_][A-Za-z0-9_]*""")
+
+        /** `id` のような短い語は地の文にも現れるので、名前として数えない。 */
+        const val MIN_SYMBOL_LENGTH = 3
     }
 }

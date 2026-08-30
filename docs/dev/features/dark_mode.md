@@ -109,7 +109,7 @@ OptionsScreen（トグル）
 | `AppColors.kt` のトークン | 約20個。すべて**色名ベース**（`Indigo` `Panel` `Coral`）で、明暗2値を持てない構造 |
 | トークン参照 | 163箇所 |
 | `Color(0x…)` の直書き | **61箇所／9ファイル**（QuizScreen 25、SectionChatSheet 9、RelatedTab 8、MarkdownRenderer 7 ほか） |
-| グラデーションの重複定義 | `OptionsScreen.kt:40` が `AppGradient` と同一内容をローカル再定義（集約漏れ） |
+| グラデーションの重複定義 | `OptionsScreen.kt` が `AppGradient` と同一内容をローカル再定義（集約漏れ） |
 | XML側 | `Theme.Material.Light` 固定、statusBar/navBar に `@color/indigo` 直指定、`values-night/` なし |
 
 「色名トークン＋直書き61箇所」は、**ダークモードをやらない場合でも**配色ルール（AppColors.kt 冒頭の「ボタン3役ルール」）を強制できない状態を意味する。したがって問うべきは「ダークモードは不要か」ではなく、**「色設計を直した上でなお不要か」**である。
