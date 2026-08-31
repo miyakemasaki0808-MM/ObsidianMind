@@ -30,6 +30,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -86,6 +91,8 @@ internal fun NoteReaderTab(
     imageMeasurements: NoteImageMeasurements?,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
+    /** 10枚を引いて冊子ルートへ入る。**ここでは記録もAIも始まらない**（→ booklet_mode 判断3）。 */
+    onOpenBooklet: () -> Unit,
     onSuggestionTap: (String) -> Unit,
     onRetrySectionSummary: () -> Unit,
     onRetrySectionAnswer: () -> Unit,
@@ -173,6 +180,7 @@ internal fun NoteReaderTab(
                 isLoading = isLoading,
                 onSelectVault = onSelectVault,
                 onRandomNote = onRandomNote,
+                onOpenBooklet = onOpenBooklet,
                 modifier = Modifier.padding(top = 16.dp)
             )
 
@@ -309,6 +317,7 @@ private fun NoteActionButtons(
     isLoading: Boolean,
     onSelectVault: () -> Unit,
     onRandomNote: () -> Unit,
+    onOpenBooklet: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val outline = BorderStroke(1.dp, ButtonOutlineOnGradient)
@@ -348,6 +357,28 @@ private fun NoteActionButtons(
                 "別のノートをひらく",
                 color = if (vaultSelected) OnButtonPrimary else OnSurfaceFaint
             )
+        }
+        // 副。**幅を weight で分けない** — 3つ並ぶ初回セットアップ時に主が痩せる。
+        // 同格（どちらもピンク）に並べないのは、「同色ボタンが並ぶと区別できない」という
+        // 実機フィードバックの形そのものになるため（→ features/booklet_mode.md §8 の落とし穴）。
+        Button(
+            onClick = onOpenBooklet,
+            enabled = !isLoading && vaultSelected,
+            modifier = Modifier
+                .width(64.dp)
+                .height(48.dp)
+                .semantics { contentDescription = "冊子をひらく" },
+            contentPadding = PaddingValues(0.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = ButtonSecondary,
+                contentColor = OnButtonSecondary,
+                disabledContainerColor = PanelChip,
+                disabledContentColor = OnSurfaceFaint
+            ),
+            border = outline,
+            shape = RoundedCornerShape(24.dp)
+        ) {
+            Text("📖", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
         }
     }
 }

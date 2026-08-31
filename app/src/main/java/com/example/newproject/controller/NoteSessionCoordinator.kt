@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteRepository
@@ -22,6 +23,8 @@ import com.example.newproject.model.state.RelatedNotesState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 
@@ -50,7 +53,7 @@ import kotlinx.coroutines.sync.Mutex
  * 残っている。本クラスはその結果を受け取って状態へ反映する。
  */
 internal class NoteSessionCoordinator(
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
     persistScope: CoroutineScope,
     repository: NoteRepository,
     vaultBrowser: VaultBrowser,
@@ -111,6 +114,9 @@ internal class NoteSessionCoordinator(
      * 補記一覧はノート切替では無効化してはいけない）。
      */
     var vaultGeneration = 0L
+
+    /** 冊子の「これを読む」で始めた読込（→ [cancelBookletRead]）。 */
+    private var bookletReadJob: Job? = null
         private set
 
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
@@ -212,6 +218,59 @@ internal class NoteSessionCoordinator(
         writeMutex = traceWriteMutex
     )
 
+    /**
+     * 冊子。**Vault単位**なのでノート単位の契約へは登録しない
+     * （ノートを開き直しただけで束が消えると、戻る道が切れる → features/booklet_mode.md 判断6）。
+     */
+    private val booklet = BookletController(
+        scope = scope,
+        vault = vaultBrowser,
+        state = stateStore.bookletWriter,
+        vaultGeneration = { vaultGeneration }
+    )
+
+    // ── 冊子 ───────────────────────────────────────────────────────────────
+
+    fun drawBooklet(loadNotes: suspend () -> List<NoteFile>) = booklet.draw(loadNotes)
+
+    /**
+     * 冊子の「これを読む」を始める。**開始と追跡を1手で行う。**
+     *
+     * 2手に分けて呼び出し側へ公開すると、**追跡の1行を落としても本番だけが壊れる** —
+     * テストは自前のJobを渡せてしまうので、落としたことに気づけない。
+     * `onNoteChanged()` を含めてここに閉じるのは、同じ理由で
+     * [onNoteChanged] と [cancelNoteScopedJobs] を1手にした判断と同じ形。
+     *
+     * 追跡はノート単位の契約には載せない — ノート切替で止めるものではなく、
+     * **冊子へ戻ったときだけ**取り消すため（→ [cancelBookletRead]）。
+     */
+    fun openBookletRead(load: suspend () -> Unit): Job {
+        onNoteChanged()
+        val job = scope.launch { load() }
+        bookletReadJob = job
+        return job
+    }
+
+    /**
+     * 冊子から始めた読込を取り消す。**冊子へ戻ってきた時点で呼ぶ。**
+     *
+     * 取り消さないと、利用者が読込中にバックで冊子へ戻った後に読込が完走し、
+     * **冊子が前面のまま**痕跡セッション・履歴・要約・関連ノートが始まる。
+     * 「これを読む」で通常表示へ渡ってから記録が始まる、という画面の境界が崩れる
+     * （→ features/booklet_mode.md 判断3・判断8）。
+     *
+     * 走行中だった場合だけ `Idle` へ戻すのは、待ち表示を残さないため。
+     */
+    fun cancelBookletRead() {
+        val job = bookletReadJob ?: return
+        bookletReadJob = null
+        if (!job.isActive) return
+        job.cancel()
+        stateStore.setNoteState(NoteState.Idle)
+    }
+
+    fun onBookletPageSettled(page: Int) = booklet.onPageSettled(page)
+
     fun assessReadingTraceOrphans() = readingTraceCleanup.assess()
 
     fun deleteReadingTrace(key: String) = readingTraceCleanup.delete(key)
@@ -276,6 +335,7 @@ internal class NoteSessionCoordinator(
         annotation.onVaultChanged()
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
+        booklet.onVaultChanged()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
@@ -375,8 +435,8 @@ internal class NoteSessionCoordinator(
         totalBlocks: Int,
         sectionTitle: String?
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-    fun pauseReadingTrace() = readingTrace.pause()
-    fun resumeReadingTrace() = readingTrace.resume()
+    fun pauseReadingTrace(reason: ReadingPauseReason) = readingTrace.pause(reason)
+    fun resumeReadingTrace(reason: ReadingPauseReason) = readingTrace.resume(reason)
     fun dismissReadingTraceCard() = readingTrace.dismissCard()
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────

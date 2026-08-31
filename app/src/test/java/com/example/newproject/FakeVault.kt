@@ -50,8 +50,16 @@ class FakeVaultHandle(
      * **鮮度確認を入れる前と同じ挙動**にあたる。
      */
     var documentVersions: (DocumentRef) -> DocumentVersionLookup = { DocumentVersionLookup.Found(null) },
+    /**
+     * [readNoteSnippet] が返す本文。**参照ごとに変えられる。**
+     * 消えたノートは throw させるか、**null（＝ストリームを開けない）**を返させる。
+     */
+    var snippets: (DocumentRef) -> String? = { "" },
     var beforeEachCall: () -> Unit = {}
 ) : VaultHandle {
+
+    /** [readNoteSnippet] を呼ばれた参照。**先読みの範囲**（現在ページ±1）の検証に使う。 */
+    val readSnippetRefs = mutableListOf<DocumentRef>()
 
     var listFoldersCount = 0
         private set
@@ -102,6 +110,13 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return annotationFiles
+    }
+
+    override suspend fun readNoteSnippet(ref: DocumentRef): String? {
+        readSnippetRefs += ref
+        beforeEachCall()
+        failure?.let { throw it }
+        return snippets(ref)
     }
 
     override suspend fun deleteDocument(ref: DocumentRef): Boolean {

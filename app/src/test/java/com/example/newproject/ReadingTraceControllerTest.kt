@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.ReplySaveOutcome
 import com.example.newproject.data.ReadingTraceFolderStatus
@@ -278,7 +279,7 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
@@ -295,10 +296,10 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
-        controller.resume()
+        controller.resume(ReadingPauseReason.AppBackground)
         controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
         clock.advance(10_000L)
         controller.flush()
@@ -312,6 +313,183 @@ class ReadingTraceControllerTest {
         // 復帰後に読み進めた最深が残っていること
         assertEquals(90, stored.visits.single().progressPercent)
         assertEquals("まとめ", stored.visits.single().deepestSectionTitle)
+    }
+
+    /**
+     * **冊子を眺めた時間は読書時間に入らない。**
+     *
+     * 冊子はルート遷移なので Activity は `onStop` しない。冊子側で明示的に止めないと、
+     * 眺めていた時間が直前のノートの読書時間として積まれ、**訪問条件を満たさないはずの
+     * 短い閲覧が訪問になる**（→ features/booklet_mode.md 判断3）。
+     */
+    @Test
+    fun `冊子を眺めた時間は読書時間へ積まれない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+
+        // 冊子へ入る → 20秒眺める → 冊子を出る
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.Booklet)
+
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("5秒しか読んでいないのに訪問が記録された", persistence.stored("ideas/habit.md"))
+    }
+
+    /**
+     * **冊子を開いたまま背面へ回って戻っても、計測は再開しない。**
+     *
+     * `onStart()` はどのルートが前面かを知らないので、真偽1つで停止を持つと
+     * 背面復帰が冊子の停止理由まで解いてしまう。停止理由を数える形にした理由がこれ。
+     */
+    @Test
+    fun `冊子表示中に背面復帰しても読書時間は再開しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        // 冊子のままホームへ出て、戻る。
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.resume(ReadingPauseReason.AppBackground)
+
+        clock.advance(20_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("冊子を見ている間の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
+    /**
+     * **停止中に始まったセッションは、その時点から計測しない。**
+     *
+     * 遅いSAFで「これを読む」を押し、本文が出る前にホームへ出ると、
+     * **セッションは背面で作られる**。作った時刻から数えると、本文が一度も前景に
+     * 出ていないノートが訪問条件を満たす。
+     */
+    @Test
+    fun `背面で始まったセッションは背面時間を計測しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("背面の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
+    /** 復帰してから読み進めれば、**復帰後の時間だけ**で条件を満たす。 */
+    @Test
+    fun `復帰後に読んだ時間だけで訪問になる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+    }
+
+    /** 冊子が前面のまま読込が終わった場合も同じ。 */
+    @Test
+    fun `冊子表示中に始まったセッションも冊子の時間を計測しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.Booklet)
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("冊子を見ている間の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
+    /** 背面のまま冊子を閉じても、背面の時間は積まない。 */
+    @Test
+    fun `背面のまま冊子を閉じても背面時間は積まない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        // 背面にいる間に冊子ルートが破棄される（effect の onDispose）。
+        controller.resume(ReadingPauseReason.Booklet)
+
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull("背面の20秒が読書時間へ入った", persistence.stored("ideas/habit.md"))
+    }
+
+    /** 冊子から戻って読み進めれば、**冊子の20秒を除いた合計**で条件を満たす。 */
+    @Test
+    fun `冊子から戻って読み進めれば冊子の時間を除いた合計で訪問になる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(5_000L)
+        controller.pause(ReadingPauseReason.Booklet)
+        advanceUntilIdle()
+        clock.advance(20_000L)
+        controller.resume(ReadingPauseReason.Booklet)
+
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
     }
 
     // ── 保存の寿命と失敗の扱い ──────────────────────────────────────────────
@@ -329,7 +507,7 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         // 書き出しがIOへ渡る前に ViewModel が畳まれる
         uiScope.cancel()
         advanceUntilIdle()
@@ -352,7 +530,7 @@ class ReadingTraceControllerTest {
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(10_000L)
         persistence.failSave = true
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
         assertTrue(persistence.saved.isEmpty())
 
@@ -376,16 +554,16 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
         assertEquals(20, persistence.stored("ideas/habit.md")!!.visits.single().progressPercent)
 
         // 復帰して読み進めるが、その保存は失敗する
         persistence.failSave = true
-        controller.resume()
+        controller.resume(ReadingPauseReason.AppBackground)
         controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(1_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         // さらに次の契機で書き直される。訪問は増えず、最深だけが進む。
@@ -415,11 +593,11 @@ class ReadingTraceControllerTest {
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(10_000L)
         // 1件目の保存を起動したまま（advanceUntilIdle を挟まない）読み進めて2件目を起動する
-        controller.pause()
-        controller.resume()
+        controller.pause(ReadingPauseReason.AppBackground)
+        controller.resume(ReadingPauseReason.AppBackground)
         controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
         clock.advance(1_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         // 2件目は成功しているので、離脱時に書き直すものは無い
@@ -509,9 +687,9 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(5_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         clock.advance(600_000L) // 10分放置
-        controller.resume()
+        controller.resume(ReadingPauseReason.AppBackground)
         clock.advance(3_000L)
         controller.flush()
         advanceUntilIdle()
@@ -529,9 +707,9 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(5_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         clock.advance(600_000L)
-        controller.resume()
+        controller.resume(ReadingPauseReason.AppBackground)
         clock.advance(6_000L)
         controller.flush()
         advanceUntilIdle()
@@ -549,11 +727,11 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
         val afterFirstPause = persistence.saveAttempts
 
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         assertEquals(afterFirstPause, persistence.saveAttempts)
@@ -569,14 +747,14 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", null)
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         // 同期で別端末の訪問が末尾に足された
         val synced = persistence.stored("ideas/habit.md")!!
         persistence.put(synced.withVisit(ReadingVisit(9_999_999L, "別端末", 50)))
 
-        controller.resume()
+        controller.resume(ReadingPauseReason.AppBackground)
         controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
         clock.advance(10_000L)
         controller.flush()
@@ -593,8 +771,8 @@ class ReadingTraceControllerTest {
         val persistence = FakePersistence()
         val controller = controller(persistence, clock)
 
-        controller.resume()
-        controller.pause()
+        controller.resume(ReadingPauseReason.AppBackground)
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
 
         assertTrue(persistence.saved.isEmpty())
@@ -1182,7 +1360,7 @@ class ReadingTraceControllerTest {
         controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
         assertNull(persistence.stored("ideas/habit.md")!!.reflection?.remark)
 
@@ -1246,7 +1424,7 @@ class ReadingTraceControllerTest {
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.setPendingRemark(reflectionOf("失敗しても残したいひとこと"))
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         advanceUntilIdle()
         assertNull(persistence.stored("ideas/habit.md"))
 
@@ -1271,7 +1449,7 @@ class ReadingTraceControllerTest {
         controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
         clock.advance(10_000L)
         controller.setPendingRemark(reflectionOf("古いひとこと"))
-        controller.pause()
+        controller.pause(ReadingPauseReason.AppBackground)
         // 保存（失敗する）が走り切る前に、新しいひとことを預け直す
         controller.setPendingRemark(reflectionOf("新しいひとこと"))
         advanceUntilIdle()

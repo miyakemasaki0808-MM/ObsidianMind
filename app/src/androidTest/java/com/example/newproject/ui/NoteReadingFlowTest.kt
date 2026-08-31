@@ -507,6 +507,7 @@ class NoteReadingFlowTest {
             onEndSectionChat = {},
             onGenerateQuiz = { _, _ -> },
             onOpenQuizResult = {},
+            onOpenBooklet = {},
             onEnterFullscreen = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},

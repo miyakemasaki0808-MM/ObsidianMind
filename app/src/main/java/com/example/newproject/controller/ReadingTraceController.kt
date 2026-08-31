@@ -105,7 +105,15 @@ internal class ReadingTraceController(
         val documentId: String?,
         /** このノートを開いた時点のVault。保存はここへ向けてしか行わない。 */
         val vaultKey: String,
-        openedAtMillis: Long
+        /**
+         * 読書区間の開始時刻。**停止中に開いたセッションでは null。**
+         *
+         * 背面や冊子のまま読込が終わってセッションができることがあり
+         * （遅いSAFで「これを読む」→ホームへ出る、など）、そこで時刻を入れると
+         * **本文が一度も前景に出ていないのに読書時間が積まれる**。
+         * 停止理由が全部消えた時点（[resume]）を最初の区間の開始にする。
+         */
+        startedAtMillis: Long?
     ) {
         var deepestBlockIndex = 0
 
@@ -120,8 +128,8 @@ internal class ReadingTraceController(
         /** 背面にいた分を除いた、これまでの能動読書時間。 */
         var activeMillis = 0L
 
-        /** 現在の読書区間の開始時刻。背面化中は null。 */
-        var resumedAtMillis: Long? = openedAtMillis
+        /** 現在の読書区間の開始時刻。背面化中・停止中は null。 */
+        var resumedAtMillis: Long? = startedAtMillis
 
         /**
          * この閲覧で書き込み済みの訪問。背面化のたびに訪問を増やさず、同じ1件を
@@ -149,6 +157,13 @@ internal class ReadingTraceController(
     }
 
     private var session: Session? = null
+
+    /**
+     * いま計測を止めている理由。**空になったときだけ計測を再開する。**
+     * セッションをまたいで残す — 冊子を見たまま次のノートへ渡ることはできないが、
+     * 背面のままノートが切り替わる経路（通知からの復帰など）はあり得る。
+     */
+    private val pauseReasons = mutableSetOf<ReadingPauseReason>()
 
     /**
      * **書けなかった痕跡。セッションが終わった後も残す。**
@@ -261,7 +276,9 @@ internal class ReadingTraceController(
                 noteTitle = noteTitle,
                 documentId = documentId,
                 vaultKey = it,
-                openedAtMillis = clock()
+                // **停止中に始まったセッションは計測しない。** 理由が残っている間は
+                // まだ本文が前景に出ていない。
+                startedAtMillis = clock().takeIf { pauseReasons.isEmpty() }
             )
         }
         return id
@@ -326,13 +343,19 @@ internal class ReadingTraceController(
     }
 
     /**
-     * アプリが背面へ回るときに呼ぶ。読書時間の計測を止め、条件を満たしていれば訪問を記録する。
+     * 読書時間の計測を止め、条件を満たしていれば訪問を記録する。
      *
      * ここで記録するのは、背面のままプロセスが終了しても読書が失われないようにするため。
      * ただしセッションは**残す**ので、[resume] 後に読み進めれば同じ訪問が更新される
      * （ホームボタンを押すたび「これまで◯回開いています」が増えるのを防ぐ）。
+     *
+     * **理由ごとに数える。** 停止の要求は独立に重なる — 冊子を開いたまま背面へ回れば
+     * 「冊子を見ている」と「アプリが背面」の2つが同時に成り立つ。
+     * 真偽1つで持つと、**片方が解けた時点でもう片方の停止理由が消える**
+     * （実際に背面復帰が冊子表示中の計測を再開していた）。
      */
-    fun pause() {
+    fun pause(reason: ReadingPauseReason) {
+        pauseReasons += reason
         val active = session ?: return
         val resumedAt = active.resumedAtMillis
         if (resumedAt != null) {
@@ -343,12 +366,15 @@ internal class ReadingTraceController(
     }
 
     /**
-     * 背面から復帰したときに呼ぶ。読書時間の計測を再開する。
+     * 読書時間の計測を再開する。**停止理由が1つも残っていないときだけ動く。**
      *
      * 背面にいた時間は積算しないので、「5秒読んで放置し、戻ってすぐ離れた」が
-     * 10秒の訪問条件を満たしてしまうことはない。
+     * 10秒の訪問条件を満たしてしまうことはない。冊子も同じ扱いで、
+     * 冊子を眺めていた時間は読書時間へ入らない。
      */
-    fun resume() {
+    fun resume(reason: ReadingPauseReason) {
+        pauseReasons -= reason
+        if (pauseReasons.isNotEmpty()) return
         val active = session ?: return
         if (active.resumedAtMillis != null) return
         active.resumedAtMillis = clock()

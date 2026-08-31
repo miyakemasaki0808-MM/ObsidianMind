@@ -10,6 +10,7 @@ import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.NoteFolder
@@ -26,6 +27,7 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -49,6 +51,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -159,6 +163,9 @@ class NoteSessionCoordinatorTest {
         // 消えると、何件書き出せたのかを確かめる前に流れてしまう。
         assertTrue(reset.readingTraceCleanupState is ReadingTraceCleanupState.Success)
         assertTrue(reset.readingTraceBackupState is ReadingTraceBackupState.Exported)
+        // 冊子もVault単位。**ここが消えると「これを読む」で渡って戻る道が切れる**
+        // （戻れば同じ10枚が残る、が冊子の目的そのもの）。
+        assertTrue(reset.bookletState is BookletState.Open)
 
         // ノート単位はすべて消える
         assertTrue(reset.summaryState is SummaryState.Idle)
@@ -551,6 +558,9 @@ class NoteSessionCoordinatorTest {
         annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         readingTraceBackupState = ReadingTraceBackupState.Exported(written = 2, unreadableKeys = emptyList()),
+        bookletState = BookletState.Open(
+            listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
+        ),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(
@@ -608,6 +618,89 @@ class NoteSessionCoordinatorTest {
         val field = owner.javaClass.getDeclaredField(name)
         field.isAccessible = true
         field.set(owner, value)
+    }
+
+    // ── 冊子から始めた読込の取消 ─────────────────────────────────────────────
+
+    /**
+     * **読込中にバックで冊子へ戻ったら、副作用は1つも始まらない。**
+     *
+     * 呼び出しの有無ではなく**結果**を見る。かつ、本番と同じ入口
+     * （[NoteSessionCoordinator.openBookletRead]）を通す — 開始と追跡が1手なので、
+     * 追跡の1行を落とすとこのテストが落ちる。
+     */
+    @Test
+    fun `冊子から始めた読込を取り消すと副作用が1つも始まらない`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+        val gate = CompletableDeferred<Unit>()
+        val started = mutableListOf<String>()
+
+        session.openBookletRead {
+            gate.await()
+            started += "痕跡"
+            session.startReadingTrace("後着したノート", "notes/after.md", null)
+            started += "履歴"
+            session.recordHistory("後着したノート", DocumentRef(TARGET_URI))
+            session.setNoteState(successNote("本文"))
+            started += "要約"
+            session.fetchSummary("後着したノート", "本文")
+            started += "関連ノート"
+            session.setRelatedNotesState(RelatedNotesState.Loading)
+        }
+
+        session.cancelBookletRead()
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), started)
+        assertEquals(emptyList<String>(), env.history.recorded)
+        assertTrue(session.uiState.value.noteState is NoteState.Idle)
+        assertTrue(session.uiState.value.summaryState is SummaryState.Idle)
+        assertTrue(session.uiState.value.relatedNotesState is RelatedNotesState.Idle)
+    }
+
+    /** 取り消さなければ、同じ入口から**各副作用が1回だけ**始まる。 */
+    @Test
+    fun `取り消さなければ冊子から始めた読込は副作用を1回ずつ始める`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+        val started = mutableListOf<String>()
+
+        session.openBookletRead {
+            started += "痕跡"
+            session.startReadingTrace("読んだノート", "notes/read.md", null)
+            started += "履歴"
+            session.recordHistory("読んだノート", DocumentRef(TARGET_URI))
+            session.setNoteState(successNote("本文"))
+            started += "要約"
+            session.fetchSummary("読んだノート", "本文")
+            started += "関連ノート"
+            session.setRelatedNotesState(RelatedNotesState.Loading)
+        }
+        advanceUntilIdle()
+        // 生成を返しておかないと要約のJobが走ったまま残る（対照なので結果は問わない）。
+        env.ai.completeAll("要約")
+        advanceUntilIdle()
+
+        assertEquals(listOf("痕跡", "履歴", "要約", "関連ノート"), started)
+        assertEquals(listOf("読んだノート"), env.history.recorded)
+        assertTrue(session.uiState.value.noteState is NoteState.Success)
+        assertTrue(session.uiState.value.summaryState is SummaryState.Success)
+    }
+
+    /** 既に終わっている要求へ取消が来ても、開いたノートを消さない。 */
+    @Test
+    fun `完了済みの読込を取り消しても表示は消えない`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+
+        session.openBookletRead { session.setNoteState(successNote("本文")) }
+        advanceUntilIdle()
+
+        session.cancelBookletRead()
+
+        assertTrue(session.uiState.value.noteState is NoteState.Success)
     }
 
     private fun successNote(content: String) = NoteState.Success(
@@ -672,8 +765,14 @@ class NoteSessionCoordinatorTest {
         var clearCount = 0
             private set
 
+        /** 記録されたタイトル。**冊子の取消で「記録が始まらない」ことを見るのに使う。** */
+        val recorded = mutableListOf<String>()
+
         override fun load(): List<HistoryEntry> = emptyList()
-        override fun record(title: String, ref: DocumentRef): List<HistoryEntry> = emptyList()
+        override fun record(title: String, ref: DocumentRef): List<HistoryEntry> {
+            recorded += title
+            return emptyList()
+        }
         override fun clear() {
             clearCount++
         }

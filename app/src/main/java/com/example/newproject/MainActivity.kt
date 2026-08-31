@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.controller.ReadingPauseReason
+import com.example.newproject.model.state.BookletState
+import com.example.newproject.ui.screen.BookletScreen
+import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.state.toEventKey
@@ -21,6 +25,7 @@ import androidx.compose.material3.SnackbarResult
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -299,6 +304,16 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onOpenQuizResult = openQuizResult,
                                 noteListState = noteListState,
+                                onOpenBooklet = {
+                                    // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
+                                    viewModel.openBooklet(contentResolver)
+                                    navController.navigate("booklet") {
+                                        // 冊子から開いたノートで押し直した場合に冊子が二重に積まれる
+                                        // のを防ぐ。スタックに無ければ何も起きない。
+                                        popUpTo("booklet") { inclusive = true }
+                                        launchSingleTop = true
+                                    }
+                                },
                                 onEnterFullscreen = {
                                     // 進入前から表示中のSnackbarはHostが全画面でも描画し続けるため消す。
                                     snackbarHostState.currentSnackbarData?.dismiss()
@@ -312,6 +327,42 @@ class MainActivity : ComponentActivity() {
                                 onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
                                 onOpenReflection = openRemark,
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
+                            )
+                        }
+
+                        composable("booklet") {
+                            // プロセス復元で冊子ルートだけ戻り、束（メモリ上）が消えている場合は
+                            // 空の冊子を見せずにノートタブへ返す（→ booklet_mode §10 の境界条件）。
+                            val hasBundle = uiState.bookletState !is BookletState.Idle
+                            LaunchedEffect(hasBundle) {
+                                if (!hasBundle) navController.popBackStack()
+                            }
+                            DisposableEffect(Unit) {
+                                // **冊子を眺めている時間は読書時間に入れない。** ルート遷移では
+                                // Activity が onStop しないので、ここで止めないと直前のノートの
+                                // 読書時間が冊子の滞在分だけ伸びる（→ booklet_mode 判断3）。
+                                viewModel.pauseReadingTrace(ReadingPauseReason.Booklet)
+                                // 読込中にバックで戻ってきた場合、その要求をここで捨てる。
+                                // 冊子が前面のまま痕跡・履歴・AIが始まるのを防ぐ。
+                                viewModel.cancelBookletRead()
+                                onDispose { viewModel.resumeReadingTrace(ReadingPauseReason.Booklet) }
+                            }
+                            BookletScreen(
+                                state = uiState.bookletState,
+                                onPageSettled = { page -> viewModel.onBookletPageSettled(page) },
+                                onRead = { entry ->
+                                    // 先頭から開くことは openFromBooklet が保証する。
+                                    // **navigateToTab を使わない** — popUpTo(startDestination) が
+                                    // 冊子ルートごと畳んでしまい、戻れなくなる
+                                    // （→ features/booklet_mode.md 判断8）。
+                                    openFromBooklet(
+                                        noteListState = noteListState,
+                                        open = { viewModel.openBookletEntry(contentResolver, entry) },
+                                        navigateToNote = { navController.navigate("note") }
+                                    )
+                                },
+                                onDrawAgain = { viewModel.openBooklet(contentResolver) },
+                                onExit = { navController.popBackStack() }
                             )
                         }
 
@@ -482,7 +533,7 @@ class MainActivity : ComponentActivity() {
     // 「少し読んで放置し、戻ってすぐ離れた」が訪問条件（10秒）を満たさないようにする。
     override fun onStart() {
         super.onStart()
-        viewModel.resumeReadingTrace()
+        viewModel.resumeReadingTrace(ReadingPauseReason.AppBackground)
     }
 
     // ノートを表示したままホームへ戻った読書を取りこぼさないため、背面に回る時点で
@@ -491,7 +542,7 @@ class MainActivity : ComponentActivity() {
     // ノート切替時の確定は ViewModel 側（cancelNoteScopedJobs）が担う。
     override fun onStop() {
         super.onStop()
-        viewModel.pauseReadingTrace()
+        viewModel.pauseReadingTrace(ReadingPauseReason.AppBackground)
     }
 
     private fun hideStatusBar() {

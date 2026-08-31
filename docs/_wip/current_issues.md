@@ -1,7 +1,7 @@
 # 未対応課題の台帳
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-08-30
+**最終更新:** 2026-09-01
 **この文書が答える問い:** **いま何が壊れている／足りないのか。**
 
 > **ここには未対応のものだけを置く。** **実機検証まで終わったら、その場で削除する**
@@ -23,6 +23,8 @@
 
 | ID | 課題 | 優先度 | 影響 |
 |---|---|:--:|---|
+| [BOOK-2](#book-2-冊子が通常のノート表示と見分けられず固有の佇まいが無い) | 冊子が通常のノート表示と見分けられず、固有の佇まいが無い | 中 | 「眺める」と「読む」を画面で分けた設計が、見た目に出ていない |
+| [BOOK-4](#book-4-冊子の10枚に脈絡が無く既に計算済みのai推薦が使われていない) | 冊子の10枚に脈絡が無く、既に計算済みのAI推薦が使われていない | 中 | 追加のAI呼び出しゼロで編めるのに、束が偶然の10枚どまりになっている |
 | [TRACE-3](#trace-3-連続削除が同じjobを奪い合う) | 連続削除が同じJobを奪い合う | 中 | 消えたのに画面へ残る |
 | [AI-4](#ai-4-aiピッカーだけid契約から外れている) | AIピッカーだけID契約から外れている | 中 | 候補が黙って消え、検索結果が減る |
 | [AI-5](#ai-5-関連ノートが算出した根拠を捨てている) | 関連ノートが算出した根拠を捨てている | 低 | なぜ関連なのかが画面から分からない |
@@ -31,9 +33,16 @@
 | [PERF-1](#perf-1-読書痕跡の索引作成がファイル数に比例する) | 読書痕跡の索引作成がファイル数に比例する | 低 | 遠いプロバイダで列挙が重くなる（実測待ち） |
 | [MAINT-2](#maint-2-gradientheader-の全幅化が呼び出し側との手動契約になっている) | `GradientHeader` の全幅化が呼び出し側との手動契約になっている | 低 | 余白変更で見出しが崩れる |
 
-**高は0件・中が2件・低が4件。ほかに超低が1件。**
+**高は0件・中が4件・低が4件。ほかに超低が1件。**
 
-**残る課題が増えた理由は2つあり、性質が違う。**
+**残る課題が増えた理由は4つあり、性質が違う。**
+
+- **BOOK-2 は、実機検証の最中にオーナーが画面を見て気づいた。**
+  机上のレビューは4巡すべて振る舞いを見ており、**佇まいは一度も判定されていない。**
+
+- **BOOK-4 は、実機でZINEを触ったオーナーの体感から出た。**
+  BOOK-2 と同じ経路だが指すものが違う — BOOK-2 は**面の見え方**、BOOK-4 は**束の中身**である。
+  机上のレビューは4巡とも1枚1枚の振る舞いを見ており、**10枚が並んだときの手触りは判定されていない。**
 
 - **AI-4・AI-5 は、既存機能の強化点を洗う目的でコードを読んで見つけた。**
   外部レビューでも総評でもなく、オーナーの体感から実装を当てた結果、
@@ -46,9 +55,78 @@
 ---
 
 
+## BOOK-2. 冊子が通常のノート表示と見分けられず、固有の佇まいが無い
+
+- **出どころ:** 2026-08-30、実機検証中のオーナーの体感。最初は「画面が白くて寂しい」、
+  続けて「**ZINEと普通のノートを視覚的に区別させたい**」。
+  **後者が診断で、前者は症状である。** 寂しく見えるのは装飾が足りないからではなく、
+  冊子の面が**通常表示の"中身が薄い版"**になっているため。
+- **現状:** [`BookletScreen`](../../app/src/main/java/com/example/newproject/ui/screen/BookletScreen.kt) は
+  通常表示と同じ `Panel`・同じ角丸・同じボタン形で、違うのは**文字の量と下部ナビの不在**だけ。
+  下部ナビが出ないのは非タブルートの副産物（→ [booklet_mode](../dev/features/booklet_mode.md) 判断2）で、
+  **意図して作った区別ではない。**
+- **なぜ効くか:** 判断3は「"眺める"と"読む"の境界を、判定ではなく遷移にした」ことを設計の要にしている。
+  **構造では分かれているのに、画面がその分離を見せていない。**
+  冊子の狙い（小冊子を繰る手触り）も佇まいでしか伝わらない。
+- **この一言で選択肢が1つ落ちる。** 紙の地色（`notePaperTone`）の流用は
+  **通常表示と同じ見た目へ寄せる方向**なので、区別を目的にするなら採らない。
+  年代の色符号を2本目として持ち込む懸念（→ [N-10](feature_ideas.md) の色チャネル競合）も同時に消える。
+- **決めること:**
+  - **何で区別するか。主役の候補は3軸に絞った（2026-08-30、オーナー）** —
+    **紙面の形**（縁・影・地との対比）／**字組み**（書体・行間・揃え）／**動き**（めくり・遷移）。
+    **地色・質感は候補から外した**（年代の色符号と2本目になるため）。
+    複数を同時に動かすと戻せなくなるので、**この3つから主役を1つ決めてから**足す。
+    決めた軸は N-9・N-10 も従う（→ [roadmap](roadmap.md) の「佇まいの見直し（静）」）
+  - **区別の強さ** — 「別のアプリに見える」まで振るのか、「同じ本の別の綴じ」程度に留めるのか
+  - 動く演出で解くのか、静止した佇まいだけで解くのか（§0 は「驚きはオーバーレイから」だが、
+    **繰る行為そのものは静かなもの**でもある）
+- **やらないこと:** 本文の抜粋を増やして情報量で埋めるのは**冊子を小さなリーダーにする**方向で、
+  設計が明確に否定している（→ booklet_mode 判断3）。区別のために情報量を増やさない。
+- **規模感:** 小〜中。描画だけで閉じるが、**主軸を1つ決めるところが本体**。
+
+## BOOK-4. 冊子の10枚に脈絡が無く、既に計算済みのAI推薦が使われていない
+
+- **出どころ:** 2026-08-31、実機でZINEを触ったオーナーの体感。
+  「**完全にランダムなので、AI推薦した関連ノートも出せるようにしたい**」。
+- **現状:** [`BookletController`](../../app/src/main/java/com/example/newproject/controller/BookletController.kt) が
+  束を作る手段は `shuffled()` だけである。一方 `NoteUiState` の `relatedNotesState` は
+  ノートを開いた時点で `Success(relatedNotes, aiNotes)` を**既に持っている**。
+  **AI推薦の結果が手元にあるのに、冊子は一度もそれを見ていない。**
+- **なぜ「足りない」なのか:** [booklet_mode](../dev/features/booklet_mode.md) 判断8 の契約文は
+  「**冊子候補について新しい**AI・痕跡・履歴を**開始しない**」であって、済んだ結果を読むことは禁じていない。
+  つまり**追加のNano呼び出しゼロ・追加I/Oゼロで編める**のに、その経路が存在しないだけである。
+  [`RelatedNote.snippet`](../../app/src/main/java/com/example/newproject/model/RelatedNote.kt) には
+  AI経路の本文スニペットまで載っており、扉すら追加の読み出し無しで出せる見込みがある。
+- **§0 の一線には触れない。** 「編む」は*引く*行為ではないので、
+  [feature_ideas](feature_ideas.md) §0 の「Rediscoverは純粋ランダム死守」に抵触しない。
+  **引く冊子（📖）は純粋ランダムのまま無傷で残る。**
+- **決めること**（2026-08-31 の壁打ちで方向は出たが、確定は着手時に行う）:
+  - **入口はトグルで、冊子ルートの中に置く。ノートタブにボタンを足さない**（オーナー: ボタンまみれの回避）。
+    **判断2 が捨てたのは「入る前のトグル」**で、押す前に行き先を決めさせるため「今どちらのモードか」を
+    覚える対象になった。**これは「中のトグル」**で、結果を見ながら切り替えるので覚える対象が無い
+  - **種（何から編むか）は「冊子へ入る直前に開いていたノート」。** 表示中ページのノートを種にすると
+    推薦が未計算なのでNanoを新規に回すことになり、判断3② をやり直すことになる。
+    種はトグルのラベルへ出し（`〈ノート名〉から編む`）、**束と同じ寿命で固定する**
+  - **種が無いとき（起動直後など）はトグルを出さない。** 行き先が1つしか無いのに選択肢を見せない。
+    現在 📖 は開いているノート無しでも押せる（`vaultSelected` のみで有効）
+  - **中身は `relatedNotesState` の Success をコピーする。未リンクを先・wikilink済みを後ろ**
+    （[`RemarkController`](../../app/src/main/java/com/example/newproject/controller/RemarkController.kt) に同じ並べ方の前例）
+  - **ランダムで水増ししない。薄ければ薄いまま実際の枚数を出す** — 後半を乱数で埋めると
+    「関係ないノイズ」ではなく「関係あると思って読むノイズ」になり、何枚目で関連が切れたか分からなくなる。
+    `min(10, 利用可能数)` と終端の枚数表示は booklet_mode §10 に既にある
+  - **束は2つ持ち、行き来しても両方残る。** 切り替えるたび引き直すと引く側が毎回別の10枚になり、
+    判断6 の「戻ってこられる」が壊れる。作り直す契機は「もう10枚引く」だけに保つ
+  - **編む側の終端に「もう10枚編む」は置かない** — 編みは決定的なので同じ10枚が出る
+- **実装上の注意:** `relatedNotesState` は**ノート単位**で `withNoteScopedReset()` に消されるのに対し、
+  束は**Vault単位**である。**冊子を開くときに値をコピーする**こと。観測し続ける形にすると、
+  ノートを切り替えた瞬間に束が消える。
+- **やらないこと:** 冊子から新しくNanoを回さない。扉は今のまま抽出のままにする。
+- **確定したら判断として [booklet_mode](../dev/features/booklet_mode.md) へ移し、ここには残さない。**
+- **規模感:** 小。扉・往復・寿命・「記録もAIも始めない」契約は既存のまま使える。
+
 ## TRACE-3. 連続削除が同じJobを奪い合う
 
-- **現状:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt#L54) は
+- **現状:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt) は
   洗い出しと削除に**同じ `job`** を使い、削除のたびに前のJobをキャンセルする。
 - **問題:** SAFの `deleteDocument()` は同期的な外部I/Oなので、**キャンセル時点で物理削除だけ完了し、
   その後の状態更新が落ちる**ことがある。さらに各削除は開始時の `current` を捕捉するため、
@@ -62,16 +140,16 @@
 ## AI-4. AIピッカーだけID契約から外れている
 
 **同じファイルの中に、なぜIDが良いかまで書いてある。**
-[`PromptBuilder.kt:82`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L82) のコメント —
+[`buildRelatedNotesPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt) の直前のコメント —
 「候補は『ID | タイトル』で提示し、モデルにはIDだけ返させる。ID→ノートの解決は UseCase側で確実に行うため、
 **言い換え・翻訳・装飾・同名衝突に強い**」。
 
 - **3経路のうち2経路はこの契約で守られている。** 蒸留は `S001` 形式を `validIds` と照合、
-  関連ノートは `C01` 形式を [`parseCandidateIds`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt#L22) で照合し、
+  関連ノートは `C01` 形式を [`parseCandidateIds`](../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt) で照合し、
   **候補外のIDを破棄する。**
 - **ピッカーだけ生のタイトル文字列を返させている。**
-  [`buildPickerPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt#L151) は "Return only note titles"、
-  受け側は [`notesByTitle[title.toNormalizedObsidianTitle()]`](../../app/src/main/java/com/example/newproject/domain/SearchPickerUseCase.kt#L49) で照合する。
+  [`buildPickerPrompt`](../../app/src/main/java/com/example/newproject/ai/PromptBuilder.kt) は "Return only note titles"、
+  受け側は [`notesByTitle[title.toNormalizedObsidianTitle()]`](../../app/src/main/java/com/example/newproject/domain/SearchPickerUseCase.kt) で照合する。
 - **影響:** AIがタイトルを言い換える・記号を足す・翻訳すると、`mapNotNull` が**黙って落とす**。
   エラーにならないので、**「3件選ばせたのに1件しか出ない」が原因不明のまま起きる。**
   正規化が吸収する範囲を超えた瞬間に結果が減る。
@@ -89,10 +167,10 @@
 
 ## AI-5. 関連ノートが算出した根拠を捨てている
 
-- **現状:** [`relatedContextScore`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt#L44) は
+- **現状:** [`relatedContextScore`](../../app/src/main/java/com/example/newproject/domain/RelatedContextScoring.kt) は
   **タグ一致・本文スニペット類似・タイトル類似を個別に計算**しているが、
   `CandidateScore(score, tieBreak)` という **Double 2つへ畳んで**返す。
-  畳んだ後は並べ替えにしか使われず、[`RelatedTab`](../../app/src/main/java/com/example/newproject/ui/screen/RelatedTab.kt#L240) が
+  畳んだ後は並べ替えにしか使われず、[`RelatedTab`](../../app/src/main/java/com/example/newproject/ui/screen/RelatedTab.kt) が
   表示するのは `isWikilinked` だけ。
 - **影響:** 「なぜこのノートが関連なのか」が画面から分からない。
   **根拠は計算済みなのに捨てているので、表示するのに新しい計算もAI生成も要らない。**
@@ -167,7 +245,7 @@
 
 **単独では着手しない。** 該当ファイルを別の理由で触るときに、ついでに直す。
 
-- [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt#L50) の
+- [`GradientHeader`](../../app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt) の
   `horizontalBleed = 20.dp` は、呼び出し側の水平余白と一致している前提で成立する。現在の画面では
   合っているが、**余白を変えた瞬間に見出しだけがずれる**。レイアウトテストは無い。
   配色は「テストで強制する」ところまで持っていったのに対し、寸法の対応関係は約束のままである。

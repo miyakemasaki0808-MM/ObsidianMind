@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（11 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（12 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -35,10 +35,11 @@ NoteViewModel（Android境界の窓口）
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
-      └── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
+      ├── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
+      └── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 11個で、**窓口の肥大化は再発していない**。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 12個で、**窓口の肥大化は再発していない**。
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -61,7 +62,7 @@ NoteViewModel（Android境界の窓口）
 「状態だけ消したが旧ジョブは生きている」という中間状態を作らない。
 
 **Vault単位のControllerはノート単位の契約に登録しない。** `AnnotationController`・
-`ReadingTraceCleanupController`・`ReadingTraceBackupController`・`SearchController` の一部は
+`ReadingTraceCleanupController`・`ReadingTraceBackupController`・`BookletController`・`SearchController` の一部は
 無効化の契機がVault切替だけなので、
 どちらの契約にも載せない（ノートを開き直しただけで一覧が消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、すべてのControllerが従うものではない。
@@ -87,7 +88,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 | スコープ | 対象 | 無効化の契機 | 持ち主 |
 |---|---|---|---|
 | ノート単位 | 要約・DL・クイズ・ひとこと・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`** |
-| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
+| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
 
 **混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
 逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**片方に寄せると必ずどちらかが壊れる。**

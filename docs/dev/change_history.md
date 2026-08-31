@@ -16,6 +16,18 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-01 | — | 冊子の往復・描画・読み上げ文言・回転／FoldをPixel実機で確認し、N-12を完了した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
+| 2026-08-31 | — | 冊子のページ復帰をPixel実機で確認し、NavHostテストの同名ノード選択を残件化した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
+| 2026-08-31 | — | 冊子をPixel実機で検証し、通常ノートから戻るとページ位置を失う欠陥を残件化した | **[booklet_mode](features/booklet_mode.md)** §6・§10・§11・[review](../review/README.md) |
+| 2026-08-31 | — | 冊子の読書ボタンにノート名を名乗らせ、読み上げと往復テストで表示中の1件を選べるようにした | **[booklet_mode](features/booklet_mode.md)** §9・§10 |
+| 2026-08-31 | — | 冊子のページ位置を束と同じ場所へ移し、ノートから戻ると同じページが開くようにした | **[booklet_mode](features/booklet_mode.md)** §6・§10・[lessons](lessons.md) L56 |
+| 2026-08-30 | — | 冊子の再修正確認4件を直し、停止中に始まるセッションと取消の観測点を閉じた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
+| 2026-08-30 | — | 冊子の修正確認4件を直し、読書時間の停止を理由ごとに数える形へ変えた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
+| 2026-08-30 | — | 冊子の実装レビュー9件を直し、冊子滞在中の読書時間と読込中Backの後着を止めた | **[booklet_mode](features/booklet_mode.md)** §10・[architecture](system/architecture.md) |
+| 2026-08-30 | — | 冊子モード（N-12）を実装した。10枚を引いてめくり、扉から通常表示へ渡す（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)**・[architecture](system/architecture.md) |
+| 2026-08-30 | — | 冊子モードの設計レビュー7件を反映し、解析の共有をやめてナビと扉の受け入れ条件を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断7・判断8・§10 |
+| 2026-08-30 | — | 文書のソース参照31本から行番号を落として名前で指す形へ揃え、実在を検査に載せた | **[CLAUDE.md](../../CLAUDE.md)**「文書の扱い」・[lessons](lessons.md) L29 |
+| 2026-08-30 | — | 冊子モードの位置づけをオーナー判断で確定し、束の寿命・めくる向き・使い切り後を決めた | **[booklet_mode](features/booklet_mode.md)** §8 判断6 |
 | 2026-08-30 | — | 実機検証の開始・終了を常設検証用Vaultへ固定し、元Vaultへ戻さない手順にした | **[device_validation](../review/device_validation/README.md)**・[lessons](lessons.md) L54 |
 | 2026-08-30 | — | 太字範囲調整をPixel実機のDIST-21〜24とinstrumentation 6件で確認し、段階1を完了した | **[distill_range_adjust](features/distill_range_adjust.md)** §10・[review](../review/README.md) |
 | 2026-08-29 | — | X-11コードレビューの4件を直し、告知の寿命と主語、強調の観測点を契約にした | **[distill_range_adjust](features/distill_range_adjust.md)** §5・§10・[lessons](lessons.md) L53 |

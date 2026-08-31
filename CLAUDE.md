@@ -131,6 +131,9 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
   様式（`review_template.md`）・未解決指摘の受付簿（`findings.md`）・Codexの実機手順（`device_validation/`）はこちらが持ち、
   解消済みの受付行は削除する。実機ケースは手順だけを持ち、日付つき結果を蓄積しない
 - **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
+- **文書からソースを指すときは行番号を書かない。** `` [`setNoteState`](.../NoteSessionCoordinator.kt) `` のように**名前で指す**。
+  参照先は月に十数回変わるので行番号は書いた直後から別のコードを指し、**リンク切れと違ってずれても気づけない**
+  （2026-08-30 の棚卸しで、確かめた5本のうち4本が別の場所を指していた）。名前で指せば実在を検査できる → `SourceDocSyncTest`
 - `features/` `system/` の各文書には `**状態:**` 行を置く
 
 ## 作業の進め方

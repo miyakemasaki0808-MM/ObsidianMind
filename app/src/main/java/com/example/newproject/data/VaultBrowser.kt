@@ -114,6 +114,20 @@ interface VaultHandle {
      */
     suspend fun listAnnotationFiles(): List<NoteFile>
 
+    /**
+     * 1件の**先頭だけ**読む。冊子の扉（代表文1行）が使う。
+     *
+     * **全文を読まない。** 表示は最大1MBまで許容しているが、扉に要るのは1文で、
+     * それは本文の先頭側にある。関連ノートが最大40件を並列で読むのに使っている
+     * 8KBの境界読み出し（`NoteReadLimits.SNIPPET_MAX_BYTES`）をそのまま使う。
+     *
+     * **読めなかったら null。** 束を作った後に削除・改名されると、プロバイダによって
+     * 例外が飛ぶ場合と `openInputStream()` が null を返す場合があり、**後者を空の本文へ畳むと
+     * タイトルへフォールバックして「読めた」ように振る舞う**。呼び出し側はどちらも
+     * 「そのページだけ失敗」として扱うこと（→ features/booklet_mode.md §10）。
+     */
+    suspend fun readNoteSnippet(ref: DocumentRef): String?
+
     /** 1件削除する。**SAFプロバイダの都合で失敗し得る**ので、結果を捨てないこと。 */
     suspend fun deleteDocument(ref: DocumentRef): Boolean
 
@@ -158,6 +172,9 @@ private class SafVaultHandle(
 
     override suspend fun listAnnotationFiles(): List<NoteFile> =
         repository.listAnnotationFiles(contentResolver, vaultUri)
+
+    override suspend fun readNoteSnippet(ref: DocumentRef): String? =
+        repository.readNoteSnippetOrNull(contentResolver, ref.toUri())
 
     // 削除自体はVaultルートを要さないが、`ContentResolver` を呼び出し側から
     // 消すのが目的なので同じハンドルに置く。

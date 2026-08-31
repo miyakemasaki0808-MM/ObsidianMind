@@ -2,10 +2,12 @@ package com.example.newproject
 
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.data.NoteImageGateway
 import com.example.newproject.data.VaultImageIndexStore
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.data.InvalidNoteEncodingException
+import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteFileTooLargeException
@@ -209,23 +211,7 @@ class NoteViewModel internal constructor(
                     session.setNoteState(NoteState.Empty)
                     return@launch
                 }
-                val note = notes.random()
-                val loaded = loadNoteForDistill(contentResolver, note.name, note.ref)
-                // 本文を出す前にセッションを作る。表示後だと、痕跡レポータの初回emitが
-                // セッションより先に届いて訪問を取りこぼしうる。
-                // 走査で得た NoteFile なので相対パスは常に揃っている。
-                startReadingTrace(note.name, note.ref, note.vaultRelativePath)
-                // 紙の地色は本文より先に決める（後だと現行色で1フレーム描かれる）。
-                // この経路は走査結果を手元に持つので、常に段階が確定する。
-                session.setNotePaperTone(notePaperTone(note.lastModified, notes.map { it.lastModified }))
-                session.setNoteState(loaded)
-                session.recordHistory(note.name, note.ref)
-                // 「前回のあなた」カードは Rediscover 経路だけで出す。openNote では呼ばない。
-                // **抜粋ではなく原文を渡す。** 候補の列挙を抜粋へ当てると、
-                // 長文で切り落とされた区間の問いが永久に届かない。
-                session.revealReadingTrace(note.vaultRelativePath, loaded.content)
-                session.fetchSummary(note.name, loaded.content)
-                fetchRelatedNotes(note.name, loaded.content)
+                presentDrawnNote(contentResolver, notes.random(), notes)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -233,6 +219,82 @@ class NoteViewModel internal constructor(
             }
         }
     }
+
+    /**
+     * 冊子の1枚を通常のノート表示へ渡す（「これを読む」）。
+     *
+     * **ここで初めて記録とAIが始まる。** 冊子側は扉のための8KBしか読んでおらず、
+     * 訪問・要約・関連ノートには触れていない（→ features/booklet_mode.md 判断3・判断8）。
+     *
+     * 通す経路は Rediscover と同じ [presentDrawnNote] で、**再会カードも同じように出す** —
+     * 冊子で引いた1枚も、ランダムに引いた1枚であることに変わりはない。
+     */
+    fun openBookletEntry(contentResolver: ContentResolver, entry: BookletEntry) {
+        val uri = vaultLocation.uri ?: return
+        // **開始と追跡は Coordinator の1手に閉じている。** ここで2手に分けると、
+        // 追跡の1行を落としたときに本番だけが壊れる（→ [NoteSessionCoordinator.openBookletRead]）。
+        noteLoadJob = session.openBookletRead {
+            try {
+                val notes = collectAllNotesCached(contentResolver, uri)
+                // 走査に居れば相対パスと更新日時が揃う。束を作った後に消えていた場合は
+                // 参照だけで開きにいき、読めなければ下の catch がエラー状態にする。
+                val note = notes.firstOrNull { it.ref == entry.ref }
+                    ?: NoteFile(name = entry.title, ref = entry.ref)
+                presentDrawnNote(contentResolver, note, notes)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
+            }
+        }
+    }
+
+    /** 冊子へ戻ったときに、走行中の「これを読む」を取り消す（→ [NoteSessionCoordinator.cancelBookletRead]）。 */
+    fun cancelBookletRead() = session.cancelBookletRead()
+
+    /**
+     * 引いた1枚を画面へ出す。**Rediscover と冊子で共有する。**
+     *
+     * 分けて書くと、片方にだけ記録や再会カードが足されて**同じ「引く」体験が枝分かれする**。
+     * 呼び出し順（セッション → 地色 → 本文）には理由があるので、各行のコメントを参照。
+     */
+    private suspend fun presentDrawnNote(
+        contentResolver: ContentResolver,
+        note: NoteFile,
+        notes: List<NoteFile>
+    ) {
+        val loaded = loadNoteForDistill(contentResolver, note.name, note.ref)
+        // 本文を出す前にセッションを作る。表示後だと、痕跡レポータの初回emitが
+        // セッションより先に届いて訪問を取りこぼしうる。
+        // 走査で得た NoteFile なので相対パスは常に揃っている。
+        startReadingTrace(note.name, note.ref, note.vaultRelativePath)
+        // 紙の地色は本文より先に決める（後だと現行色で1フレーム描かれる）。
+        // この経路は走査結果を手元に持つので、常に段階が確定する。
+        session.setNotePaperTone(notePaperTone(note.lastModified, notes.map { it.lastModified }))
+        session.setNoteState(loaded)
+        session.recordHistory(note.name, note.ref)
+        // 「前回のあなた」カードは引いた経路だけで出す。openNote では呼ばない。
+        // **抜粋ではなく原文を渡す。** 候補の列挙を抜粋へ当てると、
+        // 長文で切り落とされた区間の問いが永久に届かない。
+        session.revealReadingTrace(note.vaultRelativePath, loaded.content)
+        session.fetchSummary(note.name, loaded.content)
+        fetchRelatedNotes(note.name, loaded.content)
+    }
+
+    // ── 冊子（実装は BookletController）─────────────────────────────────────
+
+    /**
+     * 10枚を引いて冊子を開く。**押すたびに新しい束**（→ features/booklet_mode.md 判断6）。
+     *
+     * 走査はTTLキャッシュ経由なので、連続で押してもVault全走査は繰り返さない。
+     */
+    fun openBooklet(contentResolver: ContentResolver) {
+        val uri = vaultLocation.uri ?: return
+        session.drawBooklet { collectAllNotesCached(contentResolver, uri) }
+    }
+
+    /** ページが決まったときに呼ぶ。現在ページを覚え、前後1ページの扉を用意する。 */
+    fun onBookletPageSettled(page: Int) = session.onBookletPageSettled(page)
 
     fun openNote(contentResolver: ContentResolver, note: RelatedNote) {
         session.onNoteChanged()
@@ -271,10 +333,10 @@ class NoteViewModel internal constructor(
     ) = session.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
 
     /** アプリが背面へ回るときに呼ぶ（ノート表示中のまま離れた訪問を取りこぼさないため）。 */
-    fun pauseReadingTrace() = session.pauseReadingTrace()
+    internal fun pauseReadingTrace(reason: ReadingPauseReason) = session.pauseReadingTrace(reason)
 
     /** 背面から復帰したときに呼ぶ（背面にいた時間を読書時間に含めないため）。 */
-    fun resumeReadingTrace() = session.resumeReadingTrace()
+    internal fun resumeReadingTrace(reason: ReadingPauseReason) = session.resumeReadingTrace(reason)
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = session.dismissReadingTraceCard()
