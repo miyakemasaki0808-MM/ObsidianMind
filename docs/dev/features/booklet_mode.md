@@ -1,8 +1,7 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
-**状態:** **実装済み・実機再検証待ち（2026-08-31）。** 製品のページ復帰は実機で2/10・3/10とも成功。
-往復テストが画面外の同名ボタンも拾っていた件は、**読書ボタンがノート名を名乗る**形にして解消（再実行待ち）
-**最終検証:** 2026-08-31 / `967e8bc`＋本コミット（JVM・Lint・両APK成功。実機のページ復帰は成功、instrumentationは再実行待ち）
+**状態:** **実装済み・実機検証完了（2026-09-01）。** ページ復帰、回転／Fold、読み上げ用のノート名、NavHost往復と描画instrumentationを実機で確認済み
+**最終検証:** 2026-09-01 / `a2a11d1`（JVM 1,247件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、実機ケース5件成功）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
@@ -340,7 +339,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 | 取消の結果 | 取り消した読込が**痕跡・履歴・要約・関連ノートを1つも始めない**（本番と同じ `openBookletRead` を通す） | `NoteSessionCoordinatorTest` |
 | 先頭表示 | 冊子から渡した本文が実際に先頭から始まる | `BookletScreenTest`（`openFromBooklet`） |
 | 往復 | ノートへ渡して戻ると**同じページが開く** | `BookletNavigationTest`（実際の NavHost を往復する） |
-| 実機 | ナビのスタック・回転／Fold・痕跡が増えないこと・削除との競合 | [booklet_mode ケース](../../review/device_validation/booklet_mode.md)。ページ位置の復帰は2枚目・3枚目とも成功済み |
+| 実機 | ナビのスタック・回転／Fold・痕跡が増えないこと・削除との競合 | [booklet_mode ケース](../../review/device_validation/booklet_mode.md)。ページ復帰・回転／Fold・読み上げ文言・instrumentationを2026-09-01に確認済み |
 
 > **走査は構造しか見ない。** `MainActivity` のルート定義だけが素のJVMから触れないので
 > 「境界を通っているか」までを走査で見て、**何が起きるかは表の下3行が観測する**。
@@ -396,11 +395,11 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 取り下げ0件。うち2件は指摘より深刻だった — `navigateToTab` は「戻れなくなる可能性」ではなく**必ず冊子を畳む**、
 「本文先頭から開く」は**放っておくと成立しない**（`noteListState` にリセット経路が無い）。
 
-**往復テストの観測点も直した（2026-08-31）。** 製品のページ復帰は2枚目・3枚目とも実機で解消し、
-残っていたのは**テストが表示中の「これを読む」を選べない**ことだった。
-読書ボタンがノート名を名乗る形にして一意にした（→ §9）。読み上げでも各ページを区別できるようになる。
+**往復テストの観測点も閉じた（2026-09-01）。** 製品のページ復帰は2枚目・3枚目とも実機で解消し、
+読書ボタンがノート名を名乗る形で `BookletNavigationTest` 2/2、`BookletScreenTest` 14/14を実機で確認した。
+横回転とFoldのCLOSED／OPENED切替でも冊子の3枚目を維持した。
 
-**残る未確認（実機で見る）:** 遅い外部SAFでのLoading中Back／ホーム、回転／Fold、実TalkBack、
+**残る未確認（実機で見る）:** 遅い外部SAFでのLoading中Back／ホーム、実TalkBack音声、
 初回セットアップ時にボタンが3つ並んだときの見分けやすさ。8KB読み出しと前後1ページ先読みは
 ローカルプロバイダでは待ちを観測できず、速度上限までは保証していない。
 
