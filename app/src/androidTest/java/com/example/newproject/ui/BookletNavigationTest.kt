@@ -54,7 +54,10 @@ class BookletNavigationTest {
         turnPage("次のページへ")
         composeRule.onNodeWithContentDescription("3/10ページ").assertIsDisplayed()
 
-        composeRule.onNodeWithText("これを読む").performClick()
+        // **ページャは隣のページも同時に持つ**ので、「これを読む」だけでは一意にならない。
+        // どのノートを開くボタンかを名前で指す（実機で `performClick()` が
+        // 単一ノードを選べず往復の手前で止まった → 2026-08-31）。
+        composeRule.onNodeWithContentDescription("「ノート3」を読む").performClick()
         composeRule.waitForIdle()
         composeRule.onNodeWithText(NOTE_LABEL).assertIsDisplayed()
 
@@ -70,7 +73,7 @@ class BookletNavigationTest {
     fun 先頭から渡せば先頭へ戻る() {
         val nav = showBookletAndNote()
 
-        composeRule.onNodeWithText("これを読む").performClick()
+        composeRule.onNodeWithContentDescription("「ノート1」を読む").performClick()
         composeRule.waitForIdle()
         composeRule.runOnUiThread { nav.popBackStack() }
         composeRule.waitForIdle()

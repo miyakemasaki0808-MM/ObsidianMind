@@ -256,7 +256,13 @@ private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
                 // まだ開けるか分からないノートへ先に遷移し、ページ内に留めるはずの
                 // 失敗が通常表示側の読込エラーに化ける。
                 enabled = entry.cover is BookletCover.Ready,
-                modifier = Modifier.height(48.dp),
+                modifier = Modifier
+                    .height(48.dp)
+                    // **どのノートを開くボタンかを名前で言う。**
+                    // 読み上げでは全ページが「これを読む」になり、めくっても区別が付かない。
+                    // ページャは隣のページも同時に持つので、**同名のボタンが複数存在する**
+                    // （テストが表示中の1件を選べなかったのもこれ）。
+                    .semantics { contentDescription = "「${entry.title}」を読む" },
                 colors = ButtonDefaults.buttonColors(
                     containerColor = ButtonPrimary,
                     contentColor = OnButtonPrimary

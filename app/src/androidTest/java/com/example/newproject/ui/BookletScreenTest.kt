@@ -62,6 +62,20 @@ class BookletScreenTest {
         assertEquals(listOf(target), opened)
     }
 
+    /**
+     * **読書ボタンはどのノートを開くかを名前で言う。**
+     *
+     * 読み上げでは全ページが「これを読む」になり、めくっても区別が付かない。
+     * ページャは隣のページも同時に持つので、**同名のボタンが複数存在する**
+     * （実機で往復テストが表示中の1件を選べなかったのもこれ → 2026-08-31）。
+     */
+    @Test
+    fun 読書ボタンはどのノートを開くかを名乗る() {
+        show(BookletState.Open(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
+
+        composeRule.onNodeWithContentDescription("「ノートA」を読む").assertIsDisplayed()
+    }
+
     /** 束を作った後に消えたノート。**そのページだけ**開けなくする。 */
     @Test
     fun 読めなかったページは開けない() {
