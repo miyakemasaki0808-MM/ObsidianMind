@@ -16,7 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-08-31 | — | 冊子のページ復帰をPixel実機で確認し、NavHostテストの同名ノード選択を残件化した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子をPixel実機で検証し、通常ノートから戻るとページ位置を失う欠陥を残件化した | **[booklet_mode](features/booklet_mode.md)** §6・§10・§11・[review](../review/README.md) |
+| 2026-08-31 | — | 冊子の読書ボタンにノート名を名乗らせ、読み上げと往復テストで表示中の1件を選べるようにした | **[booklet_mode](features/booklet_mode.md)** §9・§10 |
 | 2026-08-31 | — | 冊子のページ位置を束と同じ場所へ移し、ノートから戻ると同じページが開くようにした | **[booklet_mode](features/booklet_mode.md)** §6・§10・[lessons](lessons.md) L56 |
 | 2026-08-30 | — | 冊子の再修正確認4件を直し、停止中に始まるセッションと取消の観測点を閉じた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
 | 2026-08-30 | — | 冊子の修正確認4件を直し、読書時間の停止を理由ごとに数える形へ変えた | **[booklet_mode](features/booklet_mode.md)** §10・[lessons](lessons.md) L55 |
