@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-01 | — | 解析書を通しで見直し、冊子と範囲調整を反映して測定日を2026-09-01へ揃えた | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-09-01 | — | 冊子の往復・描画・読み上げ文言・回転／FoldをPixel実機で確認し、N-12を完了した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子のページ復帰をPixel実機で確認し、NavHostテストの同名ノード選択を残件化した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子をPixel実機で検証し、通常ノートから戻るとページ位置を失う欠陥を残件化した | **[booklet_mode](features/booklet_mode.md)** §6・§10・§11・[review](../review/README.md) |
