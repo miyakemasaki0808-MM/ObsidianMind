@@ -2,7 +2,7 @@
 
 **状態:** **実装済み・実機検証完了（2026-09-01）。** ページ復帰、回転／Fold、読み上げ用のノート名、NavHost往復と描画instrumentationを実機で確認済み。
 **紙面の佇まい（判断9）は実装済み・実機検証待ち**（`BOOK-26`〜`BOOK-30`）
-**最終検証:** 2026-09-01 / `a2a11d1`（JVM 1,247件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、実機ケース5件成功）
+**最終検証:** 2026-09-02 / `fc87c58`＋修正確認2巡の反映（JVM 1,255件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、実機ケース5件成功。**紙面の佇まいは実機未検証**）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
@@ -286,7 +286,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 | 紙の大きさ | 四辺の余白を広げ、**下に地を残す**（画面を満たさない） | 「続く面」ではなく「手に持った1枚」にする |
 | 束の縁 | 背後に**最大2枚**。ライトは沈む＝暗い面、ダークも沈む＝暗い面 | 明暗で値をコピーしない（→ [ui_design_principles](../system/ui_design_principles.md) §2） |
 | 縁の意味 | **「この紙は束の1枚である」だけ。** 束の10枚には**位置によらず同じ縁**が出る | 最後の1枚で縁が消えると、残数を形で数え始めたことになる |
-| 残り枚数 | **縁では数えない。** 数はページインジケータの文字が持ち続ける | 縁に情報を持たせると 1.4.1 の対象になる |
+| 残り枚数 | **縁では数えない。** 数はページインジケータの文字が持ち続ける | 形は面の役割を運ぶチャネルで、残数を兼ねさせると割り当てが崩れる |
 
 **束の縁は装飾ではなく、機能の定義そのもの。** 冊子とは「10枚の束」で、現状の画面は
 **そのうち9枚を一切見せていない。** 増やしているのは本文の情報量ではなく、

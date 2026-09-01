@@ -43,6 +43,12 @@ class BearingChannelTest {
     /** 本文パネルを描く関数の本体。 */
     private val notePanelBody = noteComponents.bodyOf("internal fun NoteContentPanel(")
 
+    /** 束の紙1枚を描く関数の本体。 */
+    private val bundlePageBody = bookletScreen.bodyOf("private fun BookletPage(")
+
+    /** 束の紙ではないページ（もう10枚引く）を描く関数の本体。 */
+    private val drawAgainBody = bookletScreen.bodyOf("private fun DrawAgainPage(")
+
     /**
      * **これが本体の受け入れ条件。** 走査ではなく値で見る。
      *
@@ -172,19 +178,19 @@ class BearingChannelTest {
      * **縁の有無はページ位置から決めない。**
      *
      * 束の紙かどうか（種別）で決める。最後の1枚で縁が消えると、
-     * それは**残数を形で数え始めた**ことになり、判断9 が避けた 1.4.1 の側へ入る。
-     * 外部レビュー `P2-1` は位置で決める形を提案したが、**判断9 と衝突するため採らない。**
+     * 形が残数という**別の意味**も運び始め、**形＝面の役割という割り当てが崩れる**。
+     * 外部レビュー `P2-1` は位置で決める形を提案したが、この理由で採らない。
      */
     @Test
     fun `縁の有無はページ位置ではなく種別で決まる`() {
         assertTrue(
             "束の紙が `isBundleSheet = true` を定数で渡していません。" +
-                "ページ位置から導出すると、残数を形で数えることになります。",
-            bookletScreen.contains("BookletSheet(isBundleSheet = true)")
+                "ページ位置から導出すると、束の10枚のうち一部だけ縁が消えます。",
+            bundlePageBody.contains("BookletSheet(isBundleSheet = true)")
         )
         assertTrue(
             "束の紙でないページが `isBundleSheet = false` を渡していません。",
-            bookletScreen.contains("BookletSheet(isBundleSheet = false)")
+            drawAgainBody.contains("BookletSheet(isBundleSheet = false)")
         )
     }
 
