@@ -1,8 +1,7 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
-**状態:** **実装済み・実機検証完了（2026-09-01）。** ページ復帰、回転／Fold、読み上げ用のノート名、NavHost往復と描画instrumentationを実機で確認済み。
-**紙面の佇まい（判断9）は実装済み・実機検証待ち**（`BOOK-26`〜`BOOK-30`）
-**最終検証:** 2026-09-02 / `fc87c58`＋修正確認2巡の反映（JVM 1,255件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、実機ケース5件成功。**紙面の佇まいは実機未検証**）
+**状態:** **実装済み・実機検証完了（2026-09-02）。** ページ復帰、回転／Fold、読み上げ、NavHost往復に加え、紙面の佇まい（判断9）を明暗・全10枚／3枚境界・終端・狭幅で確認済み。
+**最終検証:** 2026-09-02 / `03f732d`（製品コード `e46cd65`。JVM 1,255件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、`BOOK-26`〜`BOOK-30` 5/5成功）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
@@ -456,9 +455,15 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 読書ボタンがノート名を名乗る形で `BookletNavigationTest` 2/2、`BookletScreenTest` 14/14を実機で確認した。
 横回転とFoldのCLOSED／OPENED切替でも冊子の3枚目を維持した。
 
+**紙面の佇まい（判断9）も実機で閉じた（2026-09-02）。** 明暗それぞれで通常表示との違い、
+束の全10枚と3枚Vaultの3枚すべてで縁が消えないこと、終端だけ縁が無いこと、
+狭幅で扉・ノート名・ボタンが紙面に収まることを確認した。
+
 **残る未確認（実機で見る）:** 遅い外部SAFでのLoading中Back／ホーム、実TalkBack音声、
 初回セットアップ時にボタンが3つ並んだときの見分けやすさ。8KB読み出しと前後1ページ先読みは
 ローカルプロバイダでは待ちを観測できず、速度上限までは保証していない。
+**紙面の佇まいでは分割画面が未実施** — 狭幅は物理端末の1080×2364で判定しており、
+分割画面の高さがさらに縮んだときに扉・ノート名・ボタンが収まるかは見ていない。
 
 ## 12. 開発経緯
 

@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |
+| 2026-09-02 | — | 冊子の紙面をPixel実機で明暗・10枚／3枚境界・終端・狭幅まで確認し、佇まいの実機ゲートを閉じた | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md)・[review](../review/README.md) |
 | 2026-09-02 | — | 冊子の「繰る手触り」に持ち主がいないことを起票し、割り当ての穴を正本へ残した | **[bearing_channels](system/bearing_channels.md)** §6・[current_issues](../_wip/current_issues.md) |
 | 2026-09-02 | — | 修正確認3件を直し、縁の根拠から誤用したWCAG項番を外して検証実績を実測へ揃えた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L57 |
 | 2026-09-02 | — | 佇まいのコードレビュー2件を直し、走査の受理条件を代入と呼び出しの形へ狭めた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L55 |
