@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |
 | 2026-09-02 | — | 冊子の紙面をPixel実機で明暗・10枚／3枚境界・終端・狭幅まで確認し、佇まいの実機ゲートを閉じた | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md)・[review](../review/README.md) |
 | 2026-09-02 | — | 冊子の「繰る手触り」に持ち主がいないことを起票し、割り当ての穴を正本へ残した | **[bearing_channels](system/bearing_channels.md)** §6・[current_issues](../_wip/current_issues.md) |
