@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-02 | — | 冊子の「繰る手触り」に持ち主がいないことを起票し、割り当ての穴を正本へ残した | **[bearing_channels](system/bearing_channels.md)** §6・[current_issues](../_wip/current_issues.md) |
 | 2026-09-02 | — | 修正確認3件を直し、縁の根拠から誤用したWCAG項番を外して検証実績を実測へ揃えた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L57 |
 | 2026-09-02 | — | 佇まいのコードレビュー2件を直し、走査の受理条件を代入と呼び出しの形へ狭めた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L55 |
 | 2026-09-01 | — | 冊子の紙面を「束の一番上の1枚」にし、面の形を役割トークンへ移した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md) §7 |
