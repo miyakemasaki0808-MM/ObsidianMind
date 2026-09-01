@@ -1,10 +1,10 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
 **状態:** **実装済み・実機検証完了（2026-09-01）。** ページ復帰、回転／Fold、読み上げ用のノート名、NavHost往復と描画instrumentationを実機で確認済み。
-**ただし紙面の佇まい（判断9）は決定済み・未実装** — 冊子が通常表示と見分けられない点は残っている
+**紙面の佇まい（判断9）は実装済み・実機検証待ち**（`BOOK-26`〜`BOOK-30`）
 **最終検証:** 2026-09-01 / `a2a11d1`（JVM 1,247件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、実機ケース5件成功）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
-**関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
+**関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
 
 **対象領域:** ランダム提示の入口・冊子ルート・扉（1行の代表文）
@@ -266,7 +266,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 **契約はこう書く — 「冊子候補について新しいAI・痕跡・履歴を開始しない」。**
 「冊子ではAIを走らせない」だと、入る前から走っている処理まで止める意味に読めてしまう。
 
-### 判断9: 紙面は「束の一番上の1枚」の形にする（2026-09-01決定・**未実装**）
+### 判断9: 紙面は「束の一番上の1枚」の形にする（2026-09-01）
 
 **実機検証中のオーナーの体感が起点。** 「画面が白くて寂しい」に続けて
 「ZINEと普通のノートを視覚的に区別させたい」。**後者が診断で、前者は症状である。**
@@ -285,6 +285,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 | 紙の面 | `Panel` のまま**変更しない** | 地色チャネルは年代が持つ |
 | 紙の大きさ | 四辺の余白を広げ、**下に地を残す**（画面を満たさない） | 「続く面」ではなく「手に持った1枚」にする |
 | 束の縁 | 背後に**最大2枚**。ライトは沈む＝暗い面、ダークも沈む＝暗い面 | 明暗で値をコピーしない（→ [ui_design_principles](../system/ui_design_principles.md) §2） |
+| 縁の意味 | **「この紙は束の1枚である」だけ。** 束の10枚には**位置によらず同じ縁**が出る | 最後の1枚で縁が消えると、残数を形で数え始めたことになる |
 | 残り枚数 | **縁では数えない。** 数はページインジケータの文字が持ち続ける | 縁に情報を持たせると 1.4.1 の対象になる |
 
 **束の縁は装飾ではなく、機能の定義そのもの。** 冊子とは「10枚の束」で、現状の画面は
@@ -302,6 +303,24 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 
 **モック（2026-09-01、オーナー合意済み）:** 見た目に触る変更は実装前にモックで合意する
 （→ [ui_design_principles](../system/ui_design_principles.md) §4-4）。3案を並べて中の強さを採った。
+
+**実装で決まった3つ（2026-09-01）。**
+
+- **形は役割で引く。** 紙は「眺める面」、本文パネルは「読む面」の役割
+  （[`BrowsingSheetShape`](../../../app/src/main/java/com/example/newproject/ui/theme/AppShapes.kt) /
+  [`ReadingSurfaceShape`](../../../app/src/main/java/com/example/newproject/ui/theme/AppShapes.kt)）。
+  **値を直に書かない** — 両方が同じ値を書いていたから区別が消えていた。
+- **縁は `panelRow` 1つで足りた。** 明暗どちらでも `panel` より暗い唯一の既存の面トークンなので、
+  **明暗の分岐を書かずに「沈む」を表せる**（新しい色トークンは作っていない）。
+- **縁の幅は紙の余白を超えられない。** 縁は紙の右下へずれて描かれるので、
+  [`STACK_EDGE_MAX`](../../../app/src/main/java/com/example/newproject/ui/screen/BookletScreen.kt) を上げるなら
+  右と下の余白も一緒に上げる。**下げ忘れると隣のページに重なる。**
+
+**「もう10枚引く」ページには縁を付けない。** 束の10枚に含まれない**別種のページ**だからで、
+**「後ろに何も無いから」ではない。** 後者の理由で分けると最後の1枚も縁を失い、
+**残数を形で数えることになる**（外部レビュー `P2-1` はこの形を提案したが、上記の理由で採らなかった）。
+判定の引数名も種別を指す `isBundleSheet` にしてある — 位置を指す名前にしていたことが、
+レビューで食い違いとして現れた。
 
 ### 着手時の決めごと（4〜6は決定済み）
 
