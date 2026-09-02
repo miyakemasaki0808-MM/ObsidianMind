@@ -87,6 +87,39 @@ internal fun openFromBooklet(
 }
 
 /**
+ * 積み直りを再生するかどうかだけを決める。**見るのは束の世代だけ。**
+ *
+ * ## なぜ「`Loading` を観測できたか」で決めないのか
+ *
+ * 📖 は**束を作り始めてから**冊子ルートへ遷移する。ノート一覧が60秒キャッシュから
+ * 同期で返ると、`Loading` は次の `Open` に上書きされて**画面には一度も届かない**。
+ * 初回だけの問題でもない — 終端の「もう10枚引く」も同じ経路を通るので、
+ * **キャッシュが効いている間の引き直しでは演出が出ない**（2026-09-03 のレビュー `P2-1`）。
+ * **中間状態は届かないことがある。最終状態だけで判定する。**
+ *
+ * ## なぜ中身の比較にしないのか
+ *
+ * 引き直した結果が**同じ並びになることがある**（3本しかないVaultでは必ず起きる）。
+ * 束が入れ替わったことは、中身ではなく世代でしか分からない。
+ *
+ * ## 初回と往復で再生しないこと
+ *
+ * 最初に見た束は「届いた」ではなく「もう在った」なので再生しない。
+ * ノートから戻る往復では composition ごと作り直されるため、このオブジェクトも作り直され、
+ * **戻ってきた束が「最初に見た束」になる。** 同じ理由で静かに出る。
+ */
+internal class BookletRestackRule {
+    private var seenDrawId: Long? = null
+
+    /** 束が画面へ届くたびに呼ぶ。**true を返したときだけ**積み直りを1回再生する。 */
+    fun onBundle(drawId: Long): Boolean {
+        val previous = seenDrawId
+        seenDrawId = drawId
+        return previous != null && previous != drawId
+    }
+}
+
+/**
  * 冊子（10枚の束をめくる面）。
  *
  * **小さな通常リーダーにしない。** ここに出るのは扉（代表文1行）だけで、
@@ -107,33 +140,19 @@ internal fun BookletScreen(
     // **束が届いた瞬間だけ、紙が一度浮いて置き直される**（→ features/booklet_mode.md 判断10）。
     // 1 が「積み終わった」。
     val restack = remember { Animatable(1f) }
-    // **再生するのは「この画面で束を見たあと、もう一度束が作られたとき」だけ。**
+    // **再生するのは「この画面で束を見たあと、別の束が届いたとき」だけ。**
     // 冊子ルートへの入りは「出来事の強度」の側で、手触りの担当ではない
-    // （→ system/bearing_channels.md §8）。
-    //
-    // **「`Loading` を通ったか」だけでは決められない。** 📖 は束を作り始めてから遷移するので、
-    // **最初の束が composition より先に届くことがある** — その条件だけだと
-    // 初回に再生されたりされなかったりする。ノートから戻る往復も、composition が作り直されるので
-    // 同じ入口を通る。**どちらも「まだ束を見ていない」側に倒して、常に静かに出す。**
+    // （→ system/bearing_channels.md §8）。判定そのものは [BookletRestackRule] が持つ。
     val currentState by rememberUpdatedState(state)
     // **状態を鍵にしたLaunchedEffectにしない。** ページを送るたびに `state` は別インスタンスになるので、
     // 鍵にすると**送った瞬間に効果が作り直され、アニメーションが打ち切られて紙が浮いたまま止まる。**
     // 効果は張りっぱなしにして、中で状態の移り変わりを見る。
     LaunchedEffect(Unit) {
-        var seenBundle = false
-        var awaitingBundle = false
+        val rule = BookletRestackRule()
         snapshotFlow { currentState }.collect { current ->
-            when (current) {
-                is BookletState.Loading -> awaitingBundle = seenBundle
-                is BookletState.Open -> {
-                    if (awaitingBundle) {
-                        awaitingBundle = false
-                        restack.snapTo(0f)
-                        restack.animateTo(1f, animationSpec = tween(RESTACK_MILLIS))
-                    }
-                    seenBundle = true
-                }
-                else -> Unit
+            if (current is BookletState.Open && rule.onBundle(current.drawId)) {
+                restack.snapTo(0f)
+                restack.animateTo(1f, animationSpec = tween(RESTACK_MILLIS))
             }
         }
     }
@@ -370,8 +389,14 @@ private const val SHEET_LIFTED_SCALE = 0.98f
 private val SHEET_RESTING_SHADOW = 3.dp
 private val SHEET_LIFTED_SHADOW = 6.dp
 
-/** 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。** */
-private const val RESTACK_MILLIS = 320
+/**
+ * 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。**
+ *
+ * **これは時間で進む唯一の経路**なので、OSの「アニメーションを無効」設定に従って潰れる
+ * （→ features/booklet_mode.md 判断10・`BookletRestackTest`）。`internal` なのは、
+ * その契約を検査が同じ値で確かめるため。
+ */
+internal const val RESTACK_MILLIS = 320
 
 /**
  * 背後の紙が覗く幅。**紙の余白より大きくしない。**

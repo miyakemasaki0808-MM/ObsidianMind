@@ -24,8 +24,18 @@ sealed interface BookletState {
      * 束をVault単位・ページ位置を画面ローカルに置いていたため、
      * **実機の `冊子 → ノート → 戻る` でページ位置だけが失われた**（2026-08-31）。
      * 引き直し・Vault切替・プロセス復元では束ごと消えるので、ページ位置も一緒に消える。
+     *
+     * [drawId] は**束の世代**で、引き直すたびに必ず進む。
+     * **「新しい束が届いた」を状態だけで見分けるために要る** — 画面は `Loading` を
+     * 観測できるとは限らない（ノート一覧がキャッシュから同期で返ると、
+     * `Loading` は次の `Open` に上書きされて誰にも届かない）。
+     * **中身の比較では代わりにならない** — 引き直した結果が同じ並びになることがある。
      */
-    data class Open(val entries: List<BookletEntry>, val page: Int = 0) : BookletState
+    data class Open(
+        val entries: List<BookletEntry>,
+        val page: Int = 0,
+        val drawId: Long = 0L
+    ) : BookletState
 
     /** 束そのものが作れなかった（走査の失敗）。ページ単位の失敗は [com.example.newproject.model.BookletCover.Failed]。 */
     data class Failed(val message: String) : BookletState
