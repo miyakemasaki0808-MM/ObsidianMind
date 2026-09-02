@@ -1,5 +1,7 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +28,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -38,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.BookletCover
 import com.example.newproject.model.BookletEntry
@@ -58,6 +64,7 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 /**
  * 冊子から本文へ渡す境界。**先頭から開くことをここで保証する。**
@@ -97,6 +104,40 @@ internal fun BookletScreen(
     onDrawAgain: () -> Unit,
     onExit: () -> Unit
 ) {
+    // **束が届いた瞬間だけ、紙が一度浮いて置き直される**（→ features/booklet_mode.md 判断10）。
+    // 1 が「積み終わった」。
+    val restack = remember { Animatable(1f) }
+    // **再生するのは「この画面で束を見たあと、もう一度束が作られたとき」だけ。**
+    // 冊子ルートへの入りは「出来事の強度」の側で、手触りの担当ではない
+    // （→ system/bearing_channels.md §8）。
+    //
+    // **「`Loading` を通ったか」だけでは決められない。** 📖 は束を作り始めてから遷移するので、
+    // **最初の束が composition より先に届くことがある** — その条件だけだと
+    // 初回に再生されたりされなかったりする。ノートから戻る往復も、composition が作り直されるので
+    // 同じ入口を通る。**どちらも「まだ束を見ていない」側に倒して、常に静かに出す。**
+    val currentState by rememberUpdatedState(state)
+    // **状態を鍵にしたLaunchedEffectにしない。** ページを送るたびに `state` は別インスタンスになるので、
+    // 鍵にすると**送った瞬間に効果が作り直され、アニメーションが打ち切られて紙が浮いたまま止まる。**
+    // 効果は張りっぱなしにして、中で状態の移り変わりを見る。
+    LaunchedEffect(Unit) {
+        var seenBundle = false
+        var awaitingBundle = false
+        snapshotFlow { currentState }.collect { current ->
+            when (current) {
+                is BookletState.Loading -> awaitingBundle = seenBundle
+                is BookletState.Open -> {
+                    if (awaitingBundle) {
+                        awaitingBundle = false
+                        restack.snapTo(0f)
+                        restack.animateTo(1f, animationSpec = tween(RESTACK_MILLIS))
+                    }
+                    seenBundle = true
+                }
+                else -> Unit
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -120,6 +161,9 @@ internal fun BookletScreen(
                         // **束が覚えているページから開く。** 画面ローカルに持つと、
                         // 通常表示へ渡って戻る往復でここだけ1枚目へ戻る。
                         initialPage = state.page,
+                        // **値ではなく読み方を渡す。** ここで `restack.value` を読むと
+                        // アニメーションの毎フレームで画面全体が再コンポーズになる。
+                        restack = { restack.value },
                         onPageSettled = onPageSettled,
                         onRead = onRead,
                         onDrawAgain = onDrawAgain
@@ -148,6 +192,7 @@ internal fun BookletScreen(
 private fun ColumnScope.BookletPager(
     entries: List<BookletEntry>,
     initialPage: Int,
+    restack: () -> Float,
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
     onDrawAgain: () -> Unit
@@ -206,10 +251,19 @@ private fun ColumnScope.BookletPager(
                 )
             }
     ) { page ->
+        // **手触りの入力はこれ1つ。** その紙が定位置からどれだけ離れているか。
+        // 指のドラッグでも読み上げのカスタム操作（`animateScrollToPage`）でも同じ値が動くので、
+        // **スワイプできない利用者にも同じ手触りが出る**（→ 判断10・§9）。
+        // 束を作り直した直後は、まだ積み終わっていないぶんを同じ値として混ぜる。
+        val lift: () -> Float = {
+            val distance = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                .absoluteValue
+            maxOf(distance, 1f - restack()).coerceIn(0f, 1f)
+        }
         if (page < entries.size) {
-            BookletPage(entry = entries[page], onRead = onRead)
+            BookletPage(entry = entries[page], lift = lift, onRead = onRead)
         } else {
-            DrawAgainPage(drawnCount = entries.size, onDrawAgain = onDrawAgain)
+            DrawAgainPage(drawnCount = entries.size, lift = lift, onDrawAgain = onDrawAgain)
         }
     }
 
@@ -238,9 +292,27 @@ private fun ColumnScope.BookletPager(
  * （→ docs/dev/system/bearing_channels.md）。残数はページインジケータの文字が持つ。
  *
  * **地色は触らない。** 紙の面は現行のまま、縁だけ一段沈む面を使う。
+ *
+ * ## 繰る手触り（[lift]）
+ *
+ * **判断9で置いたこの形を、そのまま時間方向へ延ばす**（→ features/booklet_mode.md 判断10）。
+ * 新しい形も色も足さない。送っている最中だけ**紙が浮いて（影）わずかに縮み（大きさ）**、
+ * 定まると戻る。**縮むぶん背後の縁が広く覗く**ので、束がほどけて見える。
+ *
+ * **縁そのものは動かさない。** 縁は紙の右下へずれて描かれ、その幅は
+ * [STACK_EDGE_MAX] のぶんだけ余白で確保してある。開く向きへ動かすには余白を広げるしかなく、
+ * **広げると静止時の紙の幅と中央合わせが変わる** — 実機で確認済みの佇まい（判断9）が動く。
+ * **止まっている絵は1ピクセルも変えない**方を採った。
+ *
+ * **手触りは意味を運ばない。** 「これは冊子だ」と言うのは形の役目で、動きは何も名乗らない
+ * （→ system/bearing_channels.md §8）。
  */
 @Composable
-private fun BookletSheet(isBundleSheet: Boolean, content: @Composable () -> Unit) {
+private fun BookletSheet(
+    isBundleSheet: Boolean,
+    lift: () -> Float,
+    content: @Composable () -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -261,14 +333,45 @@ private fun BookletSheet(isBundleSheet: Boolean, content: @Composable () -> Unit
             StackEdge(offset = STACK_EDGE_MAX / 2)
         }
         Surface(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                // **読むのはこのラムダの中だけ。** 関数の本体で [lift] を呼ぶと、
+                // 指を動かしている間ずっと再コンポーズが走る（ここなら描画の直前に読まれる）。
+                // 影もここが持つ。Surface の `shadowElevation` は組み立て時に決まるので、
+                // **送りに追従させるにはこちら側へ移す必要がある**（静止時の値は 3dp のまま）。
+                .graphicsLayer {
+                    val motion = lift()
+                    val scale = 1f - (1f - SHEET_LIFTED_SCALE) * motion
+                    scaleX = scale
+                    scaleY = scale
+                    shadowElevation = lerp(SHEET_RESTING_SHADOW, SHEET_LIFTED_SHADOW, motion).toPx()
+                    shape = BrowsingSheetShape
+                },
             color = Panel,
             shape = BrowsingSheetShape,
-            shadowElevation = 3.dp,
             content = content
         )
     }
 }
+
+/**
+ * 繰る手触りの寸法。**1箇所に集める**（→ features/booklet_mode.md 判断10）。
+ *
+ * **これは検査の代わりではない。** 手触りは時間の中にしかなく、値を1つ取り出しても手触りにならないので、
+ * **判定は実機検証のケース表が持つ**（→ system/bearing_channels.md §7）。
+ * したがって**この値を直書きへ戻す後退は、実機で触るまで誰も気づけない。**
+ * 集めてあるのは、次に触る人がここだけを見れば済むようにするためである。
+ *
+ * **総量を上げるときは判断3（冊子で深く作業させない）に当てる。** めくりが重くなると、
+ * 眺めて捨てる速さが失われる。**指への追従は 1:1 のまま**にし、
+ * `flingBehavior`（送りの速さそのもの）には触らない。
+ */
+private const val SHEET_LIFTED_SCALE = 0.98f
+private val SHEET_RESTING_SHADOW = 3.dp
+private val SHEET_LIFTED_SHADOW = 6.dp
+
+/** 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。** */
+private const val RESTACK_MILLIS = 320
 
 /**
  * 背後の紙が覗く幅。**紙の余白より大きくしない。**
@@ -301,8 +404,8 @@ private fun BoxScope.StackEdge(offset: Dp) {
 
 /** 1枚の扉。**代表文と、これを読むボタンだけ。** */
 @Composable
-private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
-    BookletSheet(isBundleSheet = true) {
+private fun BookletPage(entry: BookletEntry, lift: () -> Float, onRead: (BookletEntry) -> Unit) {
+    BookletSheet(isBundleSheet = true, lift = lift) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -364,11 +467,11 @@ private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
  * 「次々飛ばす使い方」そのものになる。明示の1タップが唯一の歯止め（→ 判断6）。
  */
 @Composable
-private fun DrawAgainPage(drawnCount: Int, onDrawAgain: () -> Unit) {
+private fun DrawAgainPage(drawnCount: Int, lift: () -> Float, onDrawAgain: () -> Unit) {
     // **これは束の紙ではない。** 10枚のどれでもない別種のページなので縁を持たない。
     // **「後ろに何も無いから」ではない** — その理由で分けると、最後の1枚も縁を失い、
     // 残数を形で数えることになる（→ features/booklet_mode.md 判断9）。
-    BookletSheet(isBundleSheet = false) {
+    BookletSheet(isBundleSheet = false, lift = lift) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,

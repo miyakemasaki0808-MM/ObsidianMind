@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-03 | — | 冊子のページ送りに繰る手触りを与え、束が届いた瞬間だけ紙が積み直るようにした（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断10・[device_validation](../review/device_validation/booklet_mode.md) |
 | 2026-09-03 | — | 動きのチャネルを「誰が動きを起こすか」で二分し、冊子の繰る手触りに持ち主を与えた | **[bearing_channels](system/bearing_channels.md)** §8・[booklet_mode](features/booklet_mode.md) 判断10 |
 | 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |

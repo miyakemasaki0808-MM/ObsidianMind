@@ -183,14 +183,18 @@ class BearingChannelTest {
      */
     @Test
     fun `縁の有無はページ位置ではなく種別で決まる`() {
+        // **閉じ括弧まで見ない。** 紙は種別のほかに手触りの入力も受け取るので
+        // （→ docs/dev/features/booklet_mode.md 判断10）、引数が増えるたびに
+        // この検査が落ちると、受理条件が「引数の数」を見ていることになる。
+        // 見たいのは**種別を定数で渡していること**だけである。
         assertTrue(
             "束の紙が `isBundleSheet = true` を定数で渡していません。" +
                 "ページ位置から導出すると、束の10枚のうち一部だけ縁が消えます。",
-            bundlePageBody.contains("BookletSheet(isBundleSheet = true)")
+            bundlePageBody.contains("BookletSheet(isBundleSheet = true")
         )
         assertTrue(
             "束の紙でないページが `isBundleSheet = false` を渡していません。",
-            drawAgainBody.contains("BookletSheet(isBundleSheet = false)")
+            drawAgainBody.contains("BookletSheet(isBundleSheet = false")
         )
     }
 
