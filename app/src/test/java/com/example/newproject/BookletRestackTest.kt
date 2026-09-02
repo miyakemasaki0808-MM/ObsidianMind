@@ -119,6 +119,63 @@ class BookletRestackTest {
         assertFalse("同じ束へ戻っただけで置き直された", BookletRestackRule().onBundle(open.drawId))
     }
 
+    /**
+     * **束を作る経路は本番に1つしかなく、そこが必ず世代を渡す。**
+     *
+     * [BookletState.Open] の `drawId` に既定値があるのは、世代に関心の無いフィクスチャのためである。
+     * **製品コードが既定値を受け取ってよいという意味ではない** — 世代を渡し忘れた束は 0 になり、
+     * 直前が 0 以外なら「別の束が届いた」と誤って読める。
+     *
+     * **見るのは生成箇所の数と世代の受け渡しまで**で、再生の可否は上の4件が結果で見る（→ L55）。
+     */
+    @Test
+    fun `束を作る経路は本番に1つしかなく必ず世代を渡す`() {
+        val producers = File("src/main/java/com/example/newproject")
+            .walkTopDown()
+            .filter { it.extension == "kt" && it.readText().contains("BookletState.Open(") }
+            .map { it.name }
+            .sorted()
+            .toList()
+
+        assertEquals(
+            "束を作る経路が増えています。増やすなら、そこも世代を進めてください" +
+                "（→ docs/dev/features/booklet_mode.md 判断10）。",
+            listOf("BookletController.kt"),
+            producers
+        )
+        assertTrue(
+            "束を作るのに世代を渡していません。既定値の 0 が入ると、積み直りが誤って再生されます。",
+            File("src/main/java/com/example/newproject/controller/BookletController.kt")
+                .readText()
+                .contains("drawId = drawId")
+        )
+    }
+
+    /**
+     * **積み直りの効果は状態を鍵にしない。**
+     *
+     * 鍵にすると、ページを送るたびに `state` が別インスタンスになるので効果が作り直され、
+     * **再生中の1回送りで演出が打ち切られ、紙が浮いたまま止まる。**
+     * 走査で見るのは鍵だけで、止まらないことそのものは実機検証のケース表が見る（→ L55）。
+     */
+    @Test
+    fun `積み直りの効果はページ送りで作り直されない`() {
+        val effect = File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt")
+            .readText()
+            .substringAfter("val rule = BookletRestackRule()", "")
+
+        assertTrue("積み直りの効果が見つかりません。", effect.isNotEmpty())
+        assertTrue(
+            "積み直りの効果が `LaunchedEffect(Unit)` の中にありません。状態を鍵にすると、" +
+                "ページを送った瞬間に演出が打ち切られます。",
+            File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt")
+                .readText()
+                .substringBefore("val rule = BookletRestackRule()")
+                .trimEnd()
+                .endsWith("LaunchedEffect(Unit) {")
+        )
+    }
+
     // ── OSのアニメーション設定 ─────────────────────────────────────────────
 
     /**

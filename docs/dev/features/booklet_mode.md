@@ -1,6 +1,6 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
-**状態:** 実装済み。ページ復帰・回転／Fold・読み上げ・NavHost往復・紙面の佇まい（判断9）は実機検証完了（2026-09-02）。**繰る手触り（判断10）は実装のみで、実機検証待ち**（`BOOK-31`〜`BOOK-39`）。
+**状態:** 実装済み。ページ復帰・回転／Fold・読み上げ・NavHost往復・紙面の佇まい（判断9）は実機検証完了（2026-09-02）。**繰る手触り（判断10）は実装のみで、実機検証待ち**（`BOOK-31`〜`BOOK-40`）。
 **最終検証:** 2026-09-02 / `03f732d`（製品コード `e46cd65`。JVM 1,255件・Lint・両APK成功。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14、`BOOK-26`〜`BOOK-30` 5/5成功）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
@@ -481,7 +481,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 | 先頭表示 | 冊子から渡した本文が実際に先頭から始まる | `BookletScreenTest`（`openFromBooklet`） |
 | 往復 | ノートへ渡して戻ると**同じページが開く** | `BookletNavigationTest`（実際の NavHost を往復する） |
 | 実機 | ナビのスタック・回転／Fold・痕跡が増えないこと・削除との競合 | [booklet_mode ケース](../../review/device_validation/booklet_mode.md)。ページ復帰・回転／Fold・読み上げ文言・instrumentationを2026-09-01に確認済み |
-| 実機（**見え方の唯一の判定**） | **繰る手触り**（追従・重さ・読み上げ操作でも出ること） | 同ケース表 `BOOK-31`〜`BOOK-39`。手触りは時間の中にしかなく、値を1つ取り出しても手触りにならない（→ 判断10・[bearing_channels](../system/bearing_channels.md) §7） |
+| 実機（**見え方の唯一の判定**） | **繰る手触り**（追従・重さ・読み上げ操作でも出ること） | 同ケース表 `BOOK-31`〜`BOOK-40`。手触りは時間の中にしかなく、値を1つ取り出しても手触りにならない（→ 判断10・[bearing_channels](../system/bearing_channels.md) §7） |
 | JVM（契機） | 積み直りを**いつ再生するか** — 同期／遅延の引き直し・初回・往復・扉の更新 | `BookletRestackTest`。**見え方ではなく状態の話**なので実機任せにしない |
 | JVM（OS設定） | 倍率0で積み直りが潰れること・こちらが倍率を上書きしていないこと | `BookletRestackTest` |
 
@@ -547,7 +547,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 束の全10枚と3枚Vaultの3枚すべてで縁が消えないこと、終端だけ縁が無いこと、
 狭幅で扉・ノート名・ボタンが紙面に収まることを確認した。
 
-**繰る手触り（判断10）は実装のみで実機未確認。** `BOOK-31`〜`BOOK-39` が唯一の判定で、
+**繰る手触り（判断10）は実装のみで実機未確認。** `BOOK-31`〜`BOOK-40` が唯一の判定で、
 **特に「重く感じないか」（判断3との緊張）と「TalkBackのカスタム操作でも動きが出るか」**を見る。
 
 **残る未確認（実機で見る）:** 遅い外部SAFでのLoading中Back／ホーム、実TalkBack音声、
