@@ -29,6 +29,7 @@
 | [ADR-0002](ADR-0002-on-device-ai-only.md) | AIはオンデバイスのみ。ネットワーク権限を持たない | **本ADRが正本**（他に記録が無い） |
 | [ADR-0003](ADR-0003-opaque-saf-references.md) | SAF参照を不透明化し `model` を葉に保つ | [system/saf_boundary_gateway.md](../system/saf_boundary_gateway.md) |
 | [ADR-0004](ADR-0004-do-not-rewrite-vault-body.md) | Vault本文を書き換えない（例外は蒸留の太字化のみ） | [features/reflect_distill.md](../features/reflect_distill.md) |
+| [ADR-0005](ADR-0005-bearing-channel-allocation.md) | 佇まいのチャネルは1つの意味だけに割り当てる | [system/bearing_channels.md](../system/bearing_channels.md) |
 
 ## 様式
 

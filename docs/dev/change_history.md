@@ -16,6 +16,15 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
+| 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |
+| 2026-09-02 | — | 冊子の紙面をPixel実機で明暗・10枚／3枚境界・終端・狭幅まで確認し、佇まいの実機ゲートを閉じた | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md)・[review](../review/README.md) |
+| 2026-09-02 | — | 冊子の「繰る手触り」に持ち主がいないことを起票し、割り当ての穴を正本へ残した | **[bearing_channels](system/bearing_channels.md)** §6・[current_issues](../_wip/current_issues.md) |
+| 2026-09-02 | — | 修正確認3件を直し、縁の根拠から誤用したWCAG項番を外して検証実績を実測へ揃えた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L57 |
+| 2026-09-02 | — | 佇まいのコードレビュー2件を直し、走査の受理条件を代入と呼び出しの形へ狭めた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L55 |
+| 2026-09-01 | — | 冊子の紙面を「束の一番上の1枚」にし、面の形を役割トークンへ移した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md) §7 |
+| 2026-09-01 | — | 佇まいの主役軸を「紙面の形」に決め、チャネルと意味の1対1割り当てを正本化した | **[bearing_channels](system/bearing_channels.md)**・[ADR-0005](decisions/ADR-0005-bearing-channel-allocation.md)・[booklet_mode](features/booklet_mode.md) 判断9 |
+| 2026-09-01 | — | 解析書を通しで見直し、冊子と範囲調整を反映して測定日を2026-09-01へ揃えた | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-09-01 | — | 冊子の往復・描画・読み上げ文言・回転／FoldをPixel実機で確認し、N-12を完了した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子のページ復帰をPixel実機で確認し、NavHostテストの同名ノード選択を残件化した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子をPixel実機で検証し、通常ノートから戻るとページ位置を失う欠陥を残件化した | **[booklet_mode](features/booklet_mode.md)** §6・§10・§11・[review](../review/README.md) |

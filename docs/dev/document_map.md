@@ -122,6 +122,7 @@
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
 | [tab_navigation.md](system/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
 | [ui_design_principles.md](system/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** |
+| [bearing_channels.md](system/bearing_channels.md) | **佇まいのチャネル割り当て**（色＝年代／形＝面の役割／位置＝分類…）。装飾を足す前に読む |
 | [theme_and_ui_refactor.md](system/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 |
 | [instrumentation_testing.md](system/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 |
 | [dependency_policy.md](system/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い |
@@ -208,6 +209,7 @@
 | `model/NoteUiState.kt` / `model/state/` | [architecture](system/architecture.md) / [tab_navigation](system/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](system/architecture.md) → 該当機能の設計書 |
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](system/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](system/theme_and_ui_refactor.md) → [dark_mode](features/dark_mode.md) |
+| **情報を色・形・動きで伝える変更**（装飾を足す・分類を見せる・演出を足す） | **[bearing_channels](system/bearing_channels.md)（どのチャネルが何を意味するか）** → [ui_design_principles](system/ui_design_principles.md) |
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [vigilith_in_app](features/vigilith_in_app.md) → [opening_animation](features/opening_animation.md) |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |

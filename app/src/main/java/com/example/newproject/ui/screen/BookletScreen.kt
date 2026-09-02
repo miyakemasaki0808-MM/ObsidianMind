@@ -4,8 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +36,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.BookletCover
@@ -42,6 +45,7 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.theme.AccentText
+import com.example.newproject.ui.theme.BrowsingSheetShape
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
@@ -51,6 +55,7 @@ import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
 
@@ -211,14 +216,93 @@ private fun ColumnScope.BookletPager(
     BookletPageIndicator(page = pagerState.currentPage, total = entries.size)
 }
 
+/**
+ * 冊子の紙1枚。**「眺める面」の形はここだけが決める。**
+ *
+ * ## なぜ通常表示と形を変えるのか
+ *
+ * 構造では「眺める」と「読む」を分けてあるのに、画面がその分離を見せていなかった
+ * （通常表示と同じ角丸・同じ面・同じボタン形で、違うのは文字の量と下部ナビの有無だけ）。
+ * **区別を担うチャネルは形**と決めてある（色は年代が持ち切る）
+ * → docs/dev/system/bearing_channels.md。
+ *
+ * ## 3つで1つの形
+ *
+ * - **ほぼ直角の角** — 断ち切った紙。UIカードは丸い
+ * - **四辺の余白と、下に残す地** — 画面を満たさないので「続く面」ではなく「手に持った1枚」になる
+ * - **背後に控える紙の縁** — 冊子とは10枚の束で、いままで9枚を一切見せていなかった
+ *
+ * **縁が言うのは「この紙は束の1枚である」ことだけで、残りが何枚あるかではない**（[isBundleSheet]）。
+ * だから**束の10枚には位置によらず同じ縁が出る**。最後の1枚で縁が消えると、
+ * 形が残数という**別の意味**も運び始め、**形＝面の役割というチャネル割り当てが崩れる**
+ * （→ docs/dev/system/bearing_channels.md）。残数はページインジケータの文字が持つ。
+ *
+ * **地色は触らない。** 紙の面は現行のまま、縁だけ一段沈む面を使う。
+ */
+@Composable
+private fun BookletSheet(isBundleSheet: Boolean, content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            // 四辺を見せる。下を厚くして、紙の下に地を残す。
+            // **右と下は縁のぶんだけ余分に空ける** — 縁は紙より右下へ出るので、
+            // ここが足りないとページの外へはみ出して隣の紙と重なる。
+            // 右を `STACK_EDGE_MAX + 10dp` にすることで、紙と縁を合わせた塊が画面の中央に来る。
+            .padding(
+                start = 10.dp,
+                end = 10.dp + STACK_EDGE_MAX,
+                top = 4.dp,
+                bottom = 22.dp
+            )
+    ) {
+        if (isBundleSheet) {
+            // 奥から手前へ。**最大2枚**で頭打ちにする（枚数は数えない）。
+            StackEdge(offset = STACK_EDGE_MAX)
+            StackEdge(offset = STACK_EDGE_MAX / 2)
+        }
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Panel,
+            shape = BrowsingSheetShape,
+            shadowElevation = 3.dp,
+            content = content
+        )
+    }
+}
+
+/**
+ * 背後の紙が覗く幅。**紙の余白より大きくしない。**
+ *
+ * 縁は紙の右下へずれて描かれるので、[BookletSheet] の右と下の余白がこれを下回ると
+ * ページの外へ出て隣の紙と重なる。**値を上げるなら余白も一緒に上げる。**
+ */
+private val STACK_EDGE_MAX = 8.dp
+
+/**
+ * 束の背後に覗く1枚の縁。**右下へずらして、重なりがあることだけを見せる。**
+ *
+ * 文字を載せないので、この面はコントラスト検査の対象にならない
+ * （情報を持たない装飾。枚数はインジケータの文字が持つ）。
+ *
+ * **明暗で分岐しない。** ここで引く面トークンは、明暗どちらでも紙の面より暗い側にある。
+ */
+@Composable
+private fun BoxScope.StackEdge(offset: Dp) {
+    Surface(
+        modifier = Modifier
+            .matchParentSize()
+            .padding(start = offset, top = offset)
+            .offset(x = offset, y = offset),
+        color = PanelRow,
+        shape = BrowsingSheetShape,
+        shadowElevation = 1.dp
+    ) {}
+}
+
 /** 1枚の扉。**代表文と、これを読むボタンだけ。** */
 @Composable
 private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
-        color = Panel,
-        shape = RoundedCornerShape(12.dp)
-    ) {
+    BookletSheet(isBundleSheet = true) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -281,11 +365,10 @@ private fun BookletPage(entry: BookletEntry, onRead: (BookletEntry) -> Unit) {
  */
 @Composable
 private fun DrawAgainPage(drawnCount: Int, onDrawAgain: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
-        color = Panel,
-        shape = RoundedCornerShape(12.dp)
-    ) {
+    // **これは束の紙ではない。** 10枚のどれでもない別種のページなので縁を持たない。
+    // **「後ろに何も無いから」ではない** — その理由で分けると、最後の1枚も縁を失い、
+    // 残数を形で数えることになる（→ features/booklet_mode.md 判断9）。
+    BookletSheet(isBundleSheet = false) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +48,7 @@ import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
+import com.example.newproject.ui.theme.ReadingSurfaceShape
 import com.example.newproject.ui.theme.notePaperColor
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
@@ -177,7 +177,9 @@ internal fun NoteContentPanel(
         modifier = modifier.fillMaxWidth(),
         // 紙の地色は放置期間で決まる。演出が無効なら現行の `Panel` と同値が返る。
         color = notePaperColor(uiState.notePaperTone),
-        shape = RoundedCornerShape(8.dp)
+        // **形は「読む面」の役割から引く。** 値を直に書くと、冊子との区別が
+        // 「揃えたほうが綺麗」の一言で消える（→ system/bearing_channels.md §6）。
+        shape = ReadingSurfaceShape
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             val (noteTitle, noteContent) = when (val state = uiState.noteState) {
