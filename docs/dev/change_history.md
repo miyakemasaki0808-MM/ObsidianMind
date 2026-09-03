@@ -16,7 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
-| 2026-09-03 | — | 冊子のページ送りに繰る手触りと積み直しを加えた（レビュー指摘対応・実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L58・[L55](lessons/L55.md)・[device_validation](../review/device_validation/booklet_mode.md) |
+| 2026-09-03 | — | 引き直したページャを束の世代で先頭へ付け替え、キャッシュ経由でも終端が残らないようにした | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons/L58.md) L58 |
+| 2026-09-03 | — | OS設定に従う経路を3つに数え直し、読み上げ操作の送りを仕様と実機ケースへ加えた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md#l14-横展開は最後の1本を取り残す) L14 |
+| 2026-09-03 | — | 冊子の手触りを加え、積み直しを束の世代で判定した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md)・[lessons](lessons.md) L58・[L55](lessons/L55.md)・[device_validation](../review/device_validation/booklet_mode.md) |
 | 2026-09-03 | — | 動きのチャネルを「誰が動きを起こすか」で二分し、冊子の繰る手触りに持ち主を与えた | **[bearing_channels](system/bearing_channels.md)** §8・[booklet_mode](features/booklet_mode.md) 判断10 |
 | 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
 | 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |

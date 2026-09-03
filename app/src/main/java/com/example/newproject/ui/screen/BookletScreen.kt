@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -84,6 +85,22 @@ internal fun openFromBooklet(
     open()
     noteListState.requestScrollToItem(0)
     navigateToNote()
+}
+
+/**
+ * ページャを指定の位置へ合わせ直す。**送りではなく、位置の付け替えである。**
+ *
+ * `scrollToPage` ではなく `requestScrollToPage` を使う。理由は2つ。
+ *
+ * - **まだ測っていないページャにも効く。** 復元直後は寸法が決まっておらず、
+ *   測ってから動かす経路は待たされる。要求として置けば次の測定で適用される
+ *   （本文へ渡すときの [openFromBooklet] が `requestScrollToItem` を使うのと同じ理由）。
+ * - **積み直りと競合しない。** 時間で進まないので、演出を打ち切らないし打ち切られもしない。
+ *
+ * **画面の外に置いてあるのは、そうしないと素のJVMから観測できないため**（→ [openFromBooklet] と同じ）。
+ */
+internal fun alignPager(pagerState: PagerState, target: Int) {
+    if (pagerState.currentPage != target) pagerState.requestScrollToPage(target)
 }
 
 /**
@@ -180,6 +197,8 @@ internal fun BookletScreen(
                         // **束が覚えているページから開く。** 画面ローカルに持つと、
                         // 通常表示へ渡って戻る往復でここだけ1枚目へ戻る。
                         initialPage = state.page,
+                        // **束の世代。** 位置を合わせ直す契機がこれ（→ [alignPager]）。
+                        drawId = state.drawId,
                         // **値ではなく読み方を渡す。** ここで `restack.value` を読むと
                         // アニメーションの毎フレームで画面全体が再コンポーズになる。
                         restack = { restack.value },
@@ -211,6 +230,7 @@ internal fun BookletScreen(
 private fun ColumnScope.BookletPager(
     entries: List<BookletEntry>,
     initialPage: Int,
+    drawId: Long,
     restack: () -> Float,
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
@@ -226,13 +246,17 @@ private fun ColumnScope.BookletPager(
     )
     val scope = rememberCoroutineScope()
 
-    // **束が覚えている位置へ、入るたびに合わせ直す。**
+    // **束が覚えている位置へ、入るたび・束が変わるたびに合わせ直す。**
     // `rememberPagerState` は `rememberSaveable` なので、復元された値が
     // `initialPage` に優先する。実機の往復で1枚目へ戻ったのはこの層なので、
     // **保存・復元の挙動に依存せず**、束の値を唯一の正として当て直す。
-    LaunchedEffect(Unit) {
-        val target = initialPage.coerceIn(0, pageCount - 1)
-        if (pagerState.currentPage != target) pagerState.scrollToPage(target)
+    //
+    // **鍵は束の世代。** `Unit` にすると、引き直しで画面が `Loading` を挟まなかったとき
+    // （ノート一覧がキャッシュから同期で返る通常経路）に **ページャが旧い束の終端に残る** —
+    // 束は新しいのに「もうN枚引く」が出たままになる（2026-09-03 のレビュー）。
+    // **同じ束の中のページ送りと扉の読込では世代が変わらない**ので、位置は維持される。
+    LaunchedEffect(drawId) {
+        alignPager(pagerState, initialPage.coerceIn(0, pageCount - 1))
     }
 
     // LaunchedEffect は長寿命なので、外から来たラムダは必ず現在値を通す（→ lessons L34）。
@@ -392,9 +416,12 @@ private val SHEET_LIFTED_SHADOW = 6.dp
 /**
  * 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。**
  *
- * **これは時間で進む唯一の経路**なので、OSの「アニメーションを無効」設定に従って潰れる
+ * **時間で進むので、OSの「アニメーションを無効」設定に従って潰れる**
  * （→ features/booklet_mode.md 判断10・`BookletRestackTest`）。`internal` なのは、
  * その契約を検査が同じ値で確かめるため。
+ *
+ * **時間で進むのはここだけではない。** 読み上げのカスタム操作は `animateScrollToPage` で送るので、
+ * 同じく倍率0では途中が省かれる。指が進める変化だけが設定の対象外である。
  */
 internal const val RESTACK_MILLIS = 320
 
