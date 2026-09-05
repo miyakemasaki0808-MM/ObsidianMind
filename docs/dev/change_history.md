@@ -16,7 +16,15 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-05 | — | 冊子の実機継続検証で狭幅・回転・全枚数・履歴不増を確認し、残る受理条件を整理した | [review](../review/README.md) |
+| 2026-09-05 | — | カメラ距離の単位を直して遠近を実際に効かせ、読み上げ操作の送りを指と同じ進み方に揃えた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L60 |
+| 2026-09-05 | — | 指を離したあとの倒れ切りを柔らかくし、回した紙の遠近を強めた | **[booklet_mode](features/booklet_mode.md)** 判断10 |
+| 2026-09-05 | — | 繰りと積み直りの合成を大きい側を採る形にし、指を止めた紙が起き直らないようにした | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md) |
+| 2026-09-05 | — | めくられる紙が束の縁を置いていくようにし、繰りと積み直りの角度を1つへ合成した | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md) |
+| 2026-09-04 | — | 冊子のめくりを天綴じの半回転にし、紙の下端が持ち上がって上へ抜けるようにした | **[booklet_mode](features/booklet_mode.md)** 判断6・判断10・[lessons](lessons.md) L59 |
+| 2026-09-04 | — | 冊子の手触りをPixel実機で明暗・狭幅・TalkBack・倍率0まで確認し、判断10とBOOK-5を完了した | **[booklet_mode](features/booklet_mode.md)** 判断10・[bearing_channels](system/bearing_channels.md)・[review](../review/README.md) |
 | 2026-09-04 | — | OS設定の経路数を見出しと表で揃え、読み上げ操作を数え落とせない書き方にした | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md#l14-横展開は最後の1本を取り残す) L14 |
+| 2026-09-05 | — | 検証費用の所在を測り、`owner/` を影響面監査の正本から外して教訓カード8枚を索引へ畳んだ | [lessons](lessons.md)・[current_issues](../_wip/current_issues.md)・[CLAUDE.md](../../CLAUDE.md) |
 | 2026-09-03 | — | 引き直したページャを束の世代で先頭へ付け替え、キャッシュ経由でも終端が残らないようにした | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons/L58.md) L58 |
 | 2026-09-03 | — | OS設定に従う経路を3つに数え直し、読み上げ操作の送りを仕様と実機ケースへ加えた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md#l14-横展開は最後の1本を取り残す) L14 |
 | 2026-09-03 | — | 冊子の手触りを加え、積み直しと先頭表示の修正確認を完了した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md)・[lessons](lessons.md) L58・[L55](lessons/L55.md)・[device_validation](../review/device_validation/booklet_mode.md) |
