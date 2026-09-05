@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.DefaultCameraDistance
 import androidx.compose.ui.graphics.Matrix
 import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
 import com.example.newproject.ui.screen.sheetCameraDistance
+import com.example.newproject.ui.screen.sheetFitScale
 import com.example.newproject.ui.screen.sheetAngleDegrees
 import com.example.newproject.ui.screen.sheetShowsFace
 import com.example.newproject.ui.screen.sheetShowsStack
@@ -343,6 +344,98 @@ class BookletTurnGeometryTest {
         )
     }
 
+    // ── 枠の中に収まる ────────────────────────────────────────────────────
+
+    /**
+     * **静止時は1ピクセルも縮まない。** 判断9 で実機確認した佇まいは、縮小の外にある。
+     *
+     * 抜け切った紙（半回転）も同じ — そこは平らに戻っているので奥行きが無い。
+     */
+    @Test
+    fun `静止時と抜け切りでは縮まない`() {
+        assertEquals("定位置の紙が縮んでいます。", 1f, fitAt(0f), TOLERANCE)
+        assertEquals("抜け切った紙が縮んでいます。", 1f, fitAt(180f), TOLERANCE)
+    }
+
+    /**
+     * **これが枠へ収める受け入れ条件。** どの角度でも、投影された紙は静止時の幅を超えない。
+     *
+     * 倒した紙は `d / (d - z)` 倍に広がるので、**遠近を効かせた時点で必ず画面から出る** —
+     * 10%送っただけで 1.26 倍、真横で 3 倍に対し、左右の余白は 1.05 倍ぶんしかない。
+     * 実機では紙が画面端で切れ、**25/50%保持では拡大した紙面が表示域を覆って
+     * 次の紙が現れることを確認できなかった**（2026-09-05）。
+     *
+     * **等号で押さえる。** 「収まる」だけを見ると、縮めすぎて紙が豆粒になっても通る。
+     */
+    @Test
+    fun `倒れた紙の投影は静止時の幅にちょうど収まる`() {
+        val widths = (0..180).map { it.toFloat() }.map { it to projectedWidthAt(it) }
+
+        val outside = widths.filter { (_, width) -> width > 1f + TOLERANCE }
+        assertTrue(
+            "倒れた紙が静止時の幅より広がっています（枠の外へ出ます）: " +
+                outside.take(3).joinToString { (angle, width) -> "%.0f度→%.3f倍".format(angle, width) },
+            outside.isEmpty()
+        )
+
+        val shrunken = widths.filter { (_, width) -> width < 1f - TOLERANCE }
+        assertTrue(
+            "縮めすぎて紙が枠より小さくなっています: " +
+                shrunken.take(3).joinToString { (angle, width) -> "%.0f度→%.3f倍".format(angle, width) },
+            shrunken.isEmpty()
+        )
+    }
+
+    /**
+     * **縮小は倒れ量だけで決まり、消えるほどは縮まない。**
+     *
+     * 単調でないと、送っている途中で紙が伸び縮みして脈打つ。
+     */
+    @Test
+    fun `倒れるほど強く縮み、消えるほどは縮まない`() {
+        val scales = (0..90).map { fitAt(it.toFloat()) }
+
+        assertTrue(
+            "倒すほど縮む形になっていません（送りの途中で紙が脈打ちます）: $scales",
+            scales.zipWithNext().all { (before, after) -> after <= before + TOLERANCE }
+        )
+        assertTrue("真横で紙が消えています。", fitAt(90f) > 0.2f)
+    }
+
+    /**
+     * **台形の比は縮小で変わらない。** 縮めるのは投影された絵で、紙の奥行きではない。
+     *
+     * 回転より内側で縮めると奥行きまで縮み、**遠近が浅くなる**（真横で 3.0 → 1.67）。
+     * それは L60 で直したばかりの「遠近が静かに消える」側と同じ後退なので、ここで落とす。
+     */
+    @Test
+    fun `縮めても遠近は浅くならない`() {
+        val depth = sheetStanding(45f)
+        val trapezoid = CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth)
+
+        assertEquals(
+            "45度での台形の比が遠近だけで決まっていません。縮小が奥行きへ効いています。",
+            1.89f,
+            trapezoid,
+            0.01f
+        )
+        assertEquals(
+            "縮小率が奥行きから直に出ていません。",
+            (CAMERA_DISTANCE_FACTOR - depth) / CAMERA_DISTANCE_FACTOR,
+            fitAt(45f),
+            TOLERANCE
+        )
+    }
+
+    /** その角度での縮小率。**本番と同じ経路で導く。** */
+    private fun fitAt(angleDegrees: Float): Float = sheetFitScale(sheetStanding(angleDegrees))
+
+    /** 縮小まで含めた、投影後の紙の最大幅（静止時を1とする）。 */
+    private fun projectedWidthAt(angleDegrees: Float): Float {
+        val depth = sheetStanding(angleDegrees)
+        return fitAt(angleDegrees) * (CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth))
+    }
+
     // ── 本番がその値を使っていること（走査） ──────────────────────────────
 
     /**
@@ -395,6 +488,32 @@ class BookletTurnGeometryTest {
             "表裏が合成後の角度から決まっていません。送りの進み具合だけで判定すると、" +
                 "積み直りが重なった分だけ表の文字が真横を越えて残ります。",
             sheet.contains("alpha = if (sheetShowsFace(angle)) 1f else 0f")
+        )
+    }
+
+    /**
+     * **紙が枠の中へ収まる縮小が、本番へ配線されていること。**
+     *
+     * **外しても値の検査は1つも落ちない** — 縮小率は純関数として正しいまま、
+     * 画面でだけ紙が横へはみ出す。**実機で3件の判定を同時に塞いでいた形**なので、代入で見る。
+     *
+     * **回転より外側（紙の枠）にあることも見る。** 内側へ移すと奥行きまで縮み、
+     * 台形が浅くなって遠近が弱まる。
+     */
+    @Test
+    fun `枠へ収める縮小が紙の外側で配線されている`() {
+        val sheet = screen.bodyOf("private fun BookletSheet(")
+        val fit = "val fit = sheetFitScale(sheetStanding(sheetAngleDegrees(turn(), restack())))"
+
+        assertTrue(
+            "紙が枠へ収める縮小（`sheetFitScale`）を掛けていません。" +
+                "遠近を効かせた紙は 10%送っただけで 1.26 倍に広がり、画面の外へ出ます。",
+            sheet.contains(fit) && sheet.contains("scaleX = fit") && sheet.contains("scaleY = fit")
+        )
+        assertTrue(
+            "縮小が紙の面（回転する側）に置かれています。回転より内側で縮めると奥行きまで縮み、" +
+                "台形が浅くなって遠近が弱まります。縮めるのは投影された絵の側です。",
+            sheet.indexOf(fit) < sheet.indexOf("rotationX = angle")
         )
     }
 
