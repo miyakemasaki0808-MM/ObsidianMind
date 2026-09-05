@@ -2,7 +2,7 @@
 
 **状態:** 方針確定・運用中。Lint設定は済み、**更新の実行そのものは未着手**（`genai-prompt` beta4 は調査済みで、ソース互換だが動作互換ではないため上げていない）
 **最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
-**関連コード:** `app/build.gradle.kts` / `gradle/libs.versions.toml`
+**関連コード:** `app/build.gradle.kts`（**バージョンカタログは使っていない。依存はここに直書きする**）
 **関連テスト:** `lintDebug`（`warningsAsErrors`）
 **正本:** この文書
 
