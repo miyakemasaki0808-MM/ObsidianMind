@@ -1,6 +1,7 @@
 package com.example.newproject.ui
 
 import androidx.compose.ui.graphics.DefaultCameraDistance
+import androidx.compose.ui.graphics.Matrix
 import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
 import com.example.newproject.ui.screen.sheetCameraDistance
 import com.example.newproject.ui.screen.sheetAngleDegrees
@@ -36,6 +37,10 @@ import org.junit.Test
  *
  * **見え方そのものは実機ケースが持つ** — 重さ・速さ・気持ちよさは時間の中にしかない
  * （→ docs/dev/system/bearing_channels.md §7）。
+ *
+ * **ここで固定できるのは符号の一貫性までで、符号の*意味*は固定できない。**
+ * 「どちらの符号が手前か」は描いた画素にしか現れず、前の版はそこを取り違えたまま全件を通した
+ * （→ `BookletSheetPerspectiveTest`・docs/dev/lessons.md L61）。
  */
 class BookletTurnGeometryTest {
 
@@ -55,7 +60,7 @@ class BookletTurnGeometryTest {
      */
     @Test
     fun `倒れるのは送り出される側だけで、これから出る紙は寝たまま`() {
-        assertTrue("送り出される紙が倒れていません。", sheetAngleDegrees(0.5f, restack = 1f) < 0f)
+        assertTrue("送り出される紙が倒れていません。", sheetAngleDegrees(0.5f, restack = 1f) > 0f)
 
         assertEquals(
             "これから出てくる紙まで倒れています。符号を捨てていないか確認してください。",
@@ -67,24 +72,46 @@ class BookletTurnGeometryTest {
     }
 
     /**
-     * **下端は手前へ出る。** 角度が負であることがそれを意味する。
+     * **下端は手前へ出る。** 角度が正であることがそれを意味する（2026-09-05 に反転した）。
      *
-     * Compose の回転は蝶番より下の点を +Z（奥）へ送るので、
-     * **正の角度を与えると下端が奥へ引っ込み、天綴じの逆さまになる。**
+     * 前の版は逆で、**実機では下端が細くなって奥へ倒れていた** — 天綴じの紙が束の中へ沈む向きである
+     * （実機レビュー `P2-1`）。**この検査だけでは向きは守れない** — 下2つと合わせて初めて閉じる。
      */
     @Test
-    fun `角度は常に負で、下端が手前へ持ち上がる`() {
+    fun `角度は常に正で、下端が手前へ倒れる`() {
         assertTrue(
-            "角度に正の値が混じっています。下端が奥へ引っ込み、天綴じが裏返ります。",
-            allCombinations().all { (turn, restack) -> sheetAngleDegrees(turn, restack) <= 0f }
+            "角度に負の値が混じっています。下端が奥へ引っ込み、天綴じが裏返ります。",
+            allCombinations().all { (turn, restack) -> sheetAngleDegrees(turn, restack) >= 0f }
+        )
+    }
+
+    /**
+     * **正の角度が、蝶番より下の点を +Z へ送ること。** 符号の意味をここで固定する。
+     *
+     * 上の検査は「符号が揃っている」しか言わない。**どちらの符号が手前かは別の事実**で、
+     * 前の版はそこを取り違えたまま全27件を通した。だから
+     * **`rotateX` が実際に何をするかを Compose の実装から観測する** —
+     * `Matrix` の索引は `out[column] = Σ m[row, column]·in[row]` なので、
+     * `m[1, 2]` が「入力の y が出力の z へ渡る係数」そのものである。
+     *
+     * **残る片方（+Z が画面の手前であること）は値では確かめられない。**
+     * そこは実機の投影が持つ（`BookletSheetPerspectiveTest`）。
+     */
+    @Test
+    fun `倒れた紙は蝶番より下がZの手前側へ出る`() {
+        val yToZ = Matrix().apply { rotateX(sheetAngleDegrees(turn = 0.25f, restack = 1f)) }[1, 2]
+
+        assertTrue(
+            "蝶番より下の点が -Z（奥）へ送られています。天綴じの紙が束へ沈む向きです。",
+            yToZ > 0f
         )
     }
 
     /** 送り切ると真上へ抜ける。**半分でちょうど真横。** */
     @Test
     fun `送り切ると半回転して上へ抜ける`() {
-        assertEquals(-180f, sheetAngleDegrees(1f, restack = 1f), TOLERANCE)
-        assertEquals(-90f, sheetAngleDegrees(0.5f, restack = 1f), TOLERANCE)
+        assertEquals(180f, sheetAngleDegrees(1f, restack = 1f), TOLERANCE)
+        assertEquals(90f, sheetAngleDegrees(0.5f, restack = 1f), TOLERANCE)
     }
 
     /** ずれが1ページを超えても倒れ続けない。**抜けた紙はそれ以上動かない。** */
@@ -104,7 +131,7 @@ class BookletTurnGeometryTest {
     fun `積み直りは傾くだけで繰り切らない`() {
         assertTrue(
             "積み直りが半分以上めくれています。「めくった」と嘘をつく強さです。",
-            sheetAngleDegrees(turn = 0f, restack = 0f) > -90f
+            sheetAngleDegrees(turn = 0f, restack = 0f) < 90f
         )
     }
 
@@ -112,12 +139,12 @@ class BookletTurnGeometryTest {
      * **これが `P2-2` の受け入れ条件。** どの組合せでも半回転を越えない。
      *
      * 越えると紙が裏から表へ戻り始め、**抜けたはずの紙がもう一度現れる。**
-     * 繰りと積み直りを別々に持って足していたときは、送り切りで `-202°` まで進んでいた。
+     * 繰りと積み直りを別々に持って足していたときは、送り切りで `202°` まで進んでいた。
      */
     @Test
     fun `繰りと積み直りが重なっても半回転を越えない`() {
         val overshoot = allCombinations()
-            .filter { (turn, restack) -> sheetAngleDegrees(turn, restack) < -180f - TOLERANCE }
+            .filter { (turn, restack) -> sheetAngleDegrees(turn, restack) > 180f + TOLERANCE }
 
         assertTrue(
             "合成した角度が半回転を越えています: " +
@@ -138,7 +165,7 @@ class BookletTurnGeometryTest {
     fun `表裏は合成後の角度と食い違わない`() {
         val inconsistent = allCombinations().filter { (turn, restack) ->
             val angle = sheetAngleDegrees(turn, restack)
-            sheetShowsFace(angle) != (angle >= -90f)
+            sheetShowsFace(angle) != (angle <= 90f)
         }
 
         assertTrue(
@@ -154,7 +181,7 @@ class BookletTurnGeometryTest {
      * **これが再レビュー `P2-1` の受け入れ条件。指を止めたまま積み直りが終わっても紙は起き直らない。**
      *
      * 足し算にしていたときは、`turn=0.40` で指を止めたまま積み直りが終わるだけで
-     * **角度が `-94°` から `-72°` へ22度*起き直り*（指と逆へ動き）、`-90°` を逆向きに横切って
+     * **角度が `94°` から `72°` へ22度*起き直り*（指と逆へ動き）、`90°` を逆向きに横切って
      * 表裏まで切り替わった。** すべての引き直し直後に成立していた。
      *
      * **送りが傾きを上回った区間では、指が角度を所有する。**
@@ -201,14 +228,14 @@ class BookletTurnGeometryTest {
     fun `定位置では積み直りが最後まで進む`() {
         val tilted = sheetAngleDegrees(turn = 0f, restack = 0f)
 
-        assertTrue("積み直りで紙が傾いていません。", tilted < 0f)
+        assertTrue("積み直りで紙が傾いていません。", tilted > 0f)
         assertEquals("積み終わっても傾きが残っています。", 0f, sheetAngleDegrees(0f, 1f), TOLERANCE)
 
         // 送りが傾きに満たないうちは、傾きのほうが深い（指はまだ角度を所有しない）。
         assertEquals(tilted, sheetAngleDegrees(turn = 0.05f, restack = 0f), TOLERANCE)
         assertTrue(
             "浅い送りで積み直りが終わったのに、紙が置き直されていません。",
-            sheetAngleDegrees(0.05f, restack = 1f) > tilted
+            sheetAngleDegrees(0.05f, restack = 1f) < tilted
         )
     }
 
@@ -224,9 +251,9 @@ class BookletTurnGeometryTest {
 
         assertTrue(
             "送っている途中で紙が起き直っています: $angles",
-            angles.zipWithNext().all { (before, after) -> after <= before + TOLERANCE }
+            angles.zipWithNext().all { (before, after) -> after >= before - TOLERANCE }
         )
-        assertEquals("送り切りが半回転になっていません。", -180f, angles.last(), TOLERANCE)
+        assertEquals("送り切りが半回転になっていません。", 180f, angles.last(), TOLERANCE)
     }
 
     // ── 表と裏 ────────────────────────────────────────────────────────────
@@ -240,11 +267,11 @@ class BookletTurnGeometryTest {
     @Test
     fun `裏返るのは真横を過ぎてから`() {
         assertTrue("定位置の紙が裏を向いています。", sheetShowsFace(0f))
-        assertTrue("真横の手前で裏返っています。", sheetShowsFace(-89f))
-        assertTrue("真横のちょうどで裏返っています。", sheetShowsFace(-90f))
+        assertTrue("真横の手前で裏返っています。", sheetShowsFace(89f))
+        assertTrue("真横のちょうどで裏返っています。", sheetShowsFace(90f))
 
-        assertFalse("真横を過ぎても表のままです。文字が鏡像になります。", sheetShowsFace(-91f))
-        assertFalse(sheetShowsFace(-180f))
+        assertFalse("真横を過ぎても表のままです。文字が鏡像になります。", sheetShowsFace(91f))
+        assertFalse(sheetShowsFace(180f))
     }
 
     // ── 束の縁 ────────────────────────────────────────────────────────────
@@ -307,8 +334,8 @@ class BookletTurnGeometryTest {
     @Test
     fun `影は紙が立っているあいだだけ深い`() {
         assertEquals("定位置で影が深くなっています。", 0f, sheetStanding(0f), TOLERANCE)
-        assertEquals("真横で影が最大になっていません。", 1f, sheetStanding(-90f), TOLERANCE)
-        assertEquals("抜け切った紙の影が残っています。", 0f, sheetStanding(-180f), TOLERANCE)
+        assertEquals("真横で影が最大になっていません。", 1f, sheetStanding(90f), TOLERANCE)
+        assertEquals("抜け切った紙の影が残っています。", 0f, sheetStanding(180f), TOLERANCE)
 
         assertTrue(
             "積み直りの最中に影が深くなっていません。",
@@ -354,6 +381,11 @@ class BookletTurnGeometryTest {
             "紙が合成後の角度で回っていません（`rotationX = angle` が本番にありません）。",
             sheet.contains("val angle = sheetAngleDegrees(turn(), restack())") &&
                 sheet.contains("rotationX = angle")
+        )
+        assertTrue(
+            "紙が天綴じの蝶番で回っていません（`transformOrigin = SHEET_HINGE` が本番にありません）。" +
+                "軸が中央へ落ちると、角度の符号が正しくても下端は手前へ出ません。",
+            sheet.contains("transformOrigin = SHEET_HINGE")
         )
         assertTrue(
             "影が合成後の角度から決まっていません（`sheetStanding(angle)` が本番にありません）。",

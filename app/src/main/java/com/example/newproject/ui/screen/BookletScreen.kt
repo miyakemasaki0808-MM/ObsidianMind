@@ -130,8 +130,13 @@ private const val FLIP_DEGREES = 180f
 /** 紙が真横を向く角度。**ここで表と裏が入れ替わり、同時に次の紙が出揃う。** */
 private const val EDGE_ON_DEGREES = FLIP_DEGREES / 2f
 
-/** 蝶番。紙の上端の中央で、天綴じの綴じ位置そのもの。 */
-private val SHEET_HINGE = TransformOrigin(0.5f, 0f)
+/**
+ * 蝶番。紙の上端の中央で、天綴じの綴じ位置そのもの。
+ *
+ * `internal` なのは、**倒れる向きの検査が本番と同じ蝶番で回す**ため
+ * （→ `BookletSheetPerspectiveTest`）。写しを持つと、蝶番だけ動いたときに検査が付いてこない。
+ */
+internal val SHEET_HINGE = TransformOrigin(0.5f, 0f)
 
 /**
  * 遠近の強さ。**紙の高さの何倍だけカメラを離すか。**
@@ -242,7 +247,7 @@ private val SHEET_LIFTED_SHADOW = 6.dp
  * （2026-09-05 のレビュー。**共存しうる2つは合成してから使う**）。
  *
  * **足さずに、倒れ量の大きい側を採る。** 足すと、指を止めたまま積み直りが終わるだけで
- * **紙が最大22度*起き直る* — 指と逆へ動く**。しかも `-90°` を逆向きに横切れば表裏まで切り替わる
+ * **紙が最大22度*起き直る* — 指と逆へ動く**。しかも `90°` を逆向きに横切れば表裏まで切り替わる
  * （2026-09-05 の再レビュー）。大きい側を採れば、**送りが傾きを上回った時点で指が角度を所有する**。
  * 傾きのほうが大きい区間（送りが 22 度ぶんに満たないうち）では積み直りが所有し、
  * **そこは「積み直りが終わる」ことそのもの**なので起き直ってよい。
@@ -251,13 +256,27 @@ private val SHEET_LIFTED_SHADOW = 6.dp
  * **半回転を越えない。** 越えると紙が裏から表へ戻り始め、抜けたはずの紙がもう一度現れる。
  * 大きい側を採る形では、どちらも半回転以下なので構造的に越えない。
  *
- * 返す角度が負なのは、**負の `rotationX` が下端を手前に持ち上げる**ため
- * （Compose の回転は蝶番より下の点を +Z＝奥へ送るので、下端を手前に出すには負を与える）。
+ * ## 返す角度は正である（2026-09-05 に符号を反転した）
+ *
+ * **正の `rotationX` が下端を手前に持ち上げる。** 当初は逆に書いていて、
+ * 実機では**下端が細くなって奥へ倒れていた** — 天綴じで紙が束の中へ沈む向きである
+ * （2026-09-05 の実機レビュー `P2-1`、明暗とも約10%・25%保持で再現）。
+ *
+ * **向きは2つの根拠で確かめた。どちらか片方では決まらない。**
+ *
+ * | 何を | どこで確かめたか |
+ * |---|---|
+ * | 正の角度が蝶番より下の点を +Z へ送る | Compose の `Matrix.rotateX` の実装（`y' = y·cos θ` / `z' = y·sin θ`）→ `BookletTurnGeometryTest` |
+ * | +Z が画面の手前である | **実機の投影**（下端幅が上端幅より広くなる）→ `BookletSheetPerspectiveTest` |
+ *
+ * **後者は値からは決して出てこない。** 前の版は「負なら手前」という前提を KDoc と検査へ同じ形で書き、
+ * **27件の検査を全部通したまま向きだけが逆**だった。**符号の検査は前提を固定するだけで、前提そのものは
+ * 実画面でしか確かめられない**（→ docs/dev/lessons.md L61）。
  */
 internal fun sheetAngleDegrees(turn: Float, restack: Float): Float {
     val flip = FLIP_DEGREES * turn.coerceIn(0f, 1f)
     val tilt = RESTACK_TILT_DEGREES * (1f - restack.coerceIn(0f, 1f))
-    return -maxOf(flip, tilt)
+    return maxOf(flip, tilt)
 }
 
 /**
@@ -268,7 +287,7 @@ internal fun sheetAngleDegrees(turn: Float, restack: Float): Float {
  *
  * **入力は合成後の角度**であって送りの進み具合ではない（→ [sheetAngleDegrees]）。
  */
-internal fun sheetShowsFace(angleDegrees: Float): Boolean = angleDegrees >= -EDGE_ON_DEGREES
+internal fun sheetShowsFace(angleDegrees: Float): Boolean = angleDegrees <= EDGE_ON_DEGREES
 
 /**
  * 束の縁を見せるか。**持ち上げられた紙は、束を置いていく。**
