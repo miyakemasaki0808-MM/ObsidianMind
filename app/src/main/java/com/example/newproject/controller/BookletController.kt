@@ -90,7 +90,11 @@ internal class BookletController(
             val next = try {
                 // **重複させない。** `random()` の10回呼びではなく、並べ替えてから先頭を取る。
                 BookletState.Open(
-                    shuffle(loadNotes()).take(size).map { BookletEntry(it.ref, it.name) }
+                    entries = shuffle(loadNotes()).take(size).map { BookletEntry(it.ref, it.name) },
+                    // **束の世代を状態へ載せる。** 画面は `Loading` を観測できるとは限らないので、
+                    // 「新しい束が届いた」を状態だけで見分けられるようにする
+                    // （→ features/booklet_mode.md 判断10）。
+                    drawId = drawId
                 )
             } catch (e: CancellationException) {
                 throw e

@@ -69,7 +69,7 @@ NoteViewModel（Android境界の窓口）
 
 ## 判断3: 壊れやすいロジックは純関数に切り出す
 
-`QuizResponseParser`・`MarkdownParser`・タイトル正規化などの文字列処理はAndroid I/Oから分離し、
+`QuizResponseParser`・`parseMarkdownBlocks`・タイトル正規化などの文字列処理はAndroid I/Oから分離し、
 素のJVMユニットテストで回帰を防ぐ。テスト設計の過程で実バグも発見された。
 **テストは検証だけでなく発見の道具になる。**
 
