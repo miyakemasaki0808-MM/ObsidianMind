@@ -73,6 +73,35 @@ class ReviewFindingsLedgerTest {
         )
     }
 
+    /**
+     * **本文を差し替える前に、一覧へ転記されていること。**
+     *
+     * 本文はgit管理外なので、削除した瞬間に**基準HEAD・件数・実測・実機へ進めたかの判定が
+     * どこにも残らない。** 受付簿は未解決の指摘名しか持たない（持たせると薄さが失われる）。
+     * 2026-09-05、冊子の繰りについての初回レビューがそのまま失われかけた。
+     *
+     * **照合はファイルstemで行う。日付だけでは足りない** — 同じ日に2本目のレビューを置くと、
+     * **1本目の行が身代わりになって通る**（受付簿のIDが日付ではなくstemなのと同じ理由）。
+     * だから一覧行には本文のstemを併記する。**実際にこの変異で一度素通りした。**
+     *
+     * **見るのはstemの一致までで、要点が書けているかは見ない**（→ docs/dev/lessons/L55.md）。
+     * **本文が無い状態では何も言わない** — 新規チェックアウトでは0本になるので、
+     * これは「差し替える前に気づく」ための検査である。
+     */
+    @Test
+    fun `作業ツリーにあるレビュー本文は一覧へ転記されている`() {
+        val listed = reviewDir().resolve("README.md").readText()
+        val missing = reviewFiles()
+            .map { REVIEW_FILE.find(it.name)!!.groupValues[1] }
+            .filterNot { stem -> listed.contains(stem) }
+
+        assertTrue(
+            "レビュー本文が README のレビュー一覧に載っていません。**本文を消すと結果が失われます**" +
+                "（基準HEAD・件数・実測・実機へ進めたかの判定）:\n" + missing.joinToString("\n"),
+            missing.isEmpty()
+        )
+    }
+
     @Test
     fun `処遇は空でなく、決めた語のいずれかである`() {
         val violations = ledgerRows().mapNotNull { (id, disposition) ->

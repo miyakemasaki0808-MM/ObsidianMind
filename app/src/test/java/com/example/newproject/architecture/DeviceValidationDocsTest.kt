@@ -61,6 +61,47 @@ class DeviceValidationDocsTest {
      * **どちらを実施したのか記録から復元できない**。実際に冊子のケースで、
      * 同じ内容の行が同じIDで2つ並んだ。手で追記する限り再発するので、機械で数える。
      */
+    /**
+     * **「いまどこまで実機で見るか」の上限を、正本・課題台帳・ケース表で揃える。**
+     *
+     * ケースを1つ足したとき、**ケース表と台帳だけが追いついて正本が旧い上限のまま残った**
+     * （2026-09-05 の再レビュー）。そのまま実機担当へ渡すと、
+     * **足したばかりのケースを実行せずに完了扱いにできる。**
+     *
+     * **見るのは上限の一致だけ。** 過去版の実績として書かれた範囲は上限より小さいので素通りする
+     * （歴史は歴史として残す）。**中身が正しいかは見ない**（→ docs/dev/lessons/L55.md）。
+     */
+    @Test
+    fun `冊子の実機ケースの上限は正本と課題台帳で一致する`() {
+        val cases = repositoryRoot().resolve("docs/review/device_validation/booklet_mode.md")
+        val sources = mapOf(
+            "実機ケース" to cases,
+            "正本（features/booklet_mode.md）" to repositoryRoot().resolve("docs/dev/features/booklet_mode.md"),
+            "課題台帳（_wip/current_issues.md）" to repositoryRoot().resolve("docs/_wip/current_issues.md")
+        )
+
+        val highest = sources.mapValues { (name, file) ->
+            requireNotNull(highestCaseNumber(file)) { "冊子のケース番号が見つかりません: $name" }
+        }
+        val expected = highest.getValue("実機ケース")
+        val stale = highest.filterValues { it != expected }
+
+        assertTrue(
+            "冊子の実機ケースの上限がずれています。ケースを足したら、参照している側も揃えてください" +
+                "（ケース表: $expected）:\n" +
+                stale.entries.joinToString("\n") { (name, value) -> "$name: $value" },
+            stale.isEmpty()
+        )
+    }
+
+    /** その文書が触れている冊子ケース番号の最大値。**現在有効な上限**を表す。 */
+    private fun highestCaseNumber(file: File): Int? {
+        require(file.isFile) { "文書が見つかりません: $file" }
+        return BOOKLET_CASE.findAll(file.readText())
+            .map { it.groupValues[1].toInt() }
+            .maxOrNull()
+    }
+
     @Test
     fun `機能別ケースのIDは重複しない`() {
         val duplicates = caseFiles().flatMap { file ->
@@ -129,6 +170,9 @@ class DeviceValidationDocsTest {
     }
 
     private companion object {
+        /** 冊子の実機ケースID。**番号だけを取り、文字列としては組み立てない**（課題IDの走査に当たるため）。 */
+        val BOOKLET_CASE = Regex("""BOOK-(\d{2})""")
+
         /** `| \`CASE-01\` | … |` の形のケース行。**表の行だけを数える**（本文中の参照は数えない）。 */
         val CASE_ROW = Regex("""^\| `([A-Z][A-Z0-9]*-\d+)` \|""", RegexOption.MULTILINE)
 
