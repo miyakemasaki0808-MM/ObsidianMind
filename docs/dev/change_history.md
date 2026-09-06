@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-06 | — | 年代の色は「読む面」だけに載ると決め、チャネルが面を選ぶことを割り当ての正本へ書いた | **[bearing_channels](system/bearing_channels.md)** §9・[note_age_paper](features/note_age_paper.md) |
 | 2026-09-06 | — | めくりを折り目が斜めに走る形へ作り替え、右下の角から左上へめくれるようにした | **[booklet_mode](features/booklet_mode.md)** 判断11 |
 | 2026-09-06 | — | 指を離したあとのめくりを、ばねから時間を決めた620ミリ秒へ変えてゆっくりにした | **[booklet_mode](features/booklet_mode.md)** 判断10 |
 | 2026-09-06 | — | 紙を8枚の帯に切って入れ子に積み、倒れている最中だけ弓なりに曲げた（同日に折り目へ作り替え） | **[booklet_mode](features/booklet_mode.md)** 判断11 |
