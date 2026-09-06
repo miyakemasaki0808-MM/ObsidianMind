@@ -96,9 +96,14 @@ class BearingChannelTest {
     @Test
     fun `冊子の紙は眺める面の役割を引く`() {
         assertTrue(
-            "冊子の紙が `shape = BrowsingSheetShape` を代入していません。" +
+            "冊子の紙が折り目の形（`PeelShape`）を代入していません。",
+            sheetBody.contains("shape = PeelShape(")
+        )
+        assertTrue(
+            "折り目の形が、静止時に眺める面の役割（`BrowsingSheetShape`）へ戻していません。" +
                 "紙の形を直に書くと、区別が値の一致で消えます。",
-            sheetBody.contains("shape = BrowsingSheetShape")
+            bookletScreen.substringAfter("internal class PeelShape(")
+                .contains("BrowsingSheetShape.createOutline(size, layoutDirection, density)")
         )
     }
 

@@ -16,7 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
-| 2026-09-06 | — | 紙を8枚の帯に切って入れ子に積み、倒れている最中だけ弓なりに曲げた | **[booklet_mode](features/booklet_mode.md)** 判断11 |
+| 2026-09-06 | — | めくりを折り目が斜めに走る形へ作り替え、右下の角から左上へめくれるようにした | **[booklet_mode](features/booklet_mode.md)** 判断11 |
+| 2026-09-06 | — | 指を離したあとのめくりを、ばねから時間を決めた620ミリ秒へ変えてゆっくりにした | **[booklet_mode](features/booklet_mode.md)** 判断10 |
+| 2026-09-06 | — | 紙を8枚の帯に切って入れ子に積み、倒れている最中だけ弓なりに曲げた（同日に折り目へ作り替え） | **[booklet_mode](features/booklet_mode.md)** 判断11 |
 | 2026-09-06 | — | カメラ距離の単位を画素の実測で決め直し、実効距離を紙の高さの1.5倍へ戻した | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L60 |
 | 2026-09-05 | — | 倒れた紙が画面の外へ出ないよう、倒れ量から出した縮小を回転の外側へ掛けた | **[booklet_mode](features/booklet_mode.md)** 判断10 |
 | 2026-09-05 | — | 投影検査の基準点判定を絶対値にし、下端が細くなる側も落とすことを判定自身の検査で固定した | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md) |

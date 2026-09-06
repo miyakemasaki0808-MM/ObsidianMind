@@ -4,11 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
@@ -16,16 +16,16 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.absoluteValue
-import kotlin.math.sin
 import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
-import com.example.newproject.ui.screen.CurledFace
+import com.example.newproject.ui.screen.PeelShape
 import com.example.newproject.ui.screen.SHEET_HINGE
-import com.example.newproject.ui.screen.sheetAngleDegrees
 import com.example.newproject.ui.screen.sheetCameraDistance
 import com.example.newproject.ui.screen.sheetFitScale
+import com.example.newproject.ui.screen.sheetTiltDegrees
+import kotlin.math.PI
+import kotlin.math.absoluteValue
+import kotlin.math.cos
+import kotlin.math.sin
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -34,32 +34,24 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * **倒れた紙の下端が、実際に手前へ出ていること。**
+ * **描いた画素でしか確かめられないことだけを、ここで見る。**
  *
  * ## なぜ値の検査では足りないのか
  *
- * `BookletTurnGeometryTest` は「角度が正であること」と「正の角度が蝶番より下の点を +Z へ送ること」まで
- * 固定できる。**しかし「+Z が画面の手前である」は値のどこにも現れない。**
- *
+ * `BookletTurnGeometryTest` は「角度が正であること」まで固定できる。
+ * **しかし「+Z が画面の手前である」は値のどこにも現れない。**
  * 前の版はそこを逆に思い込み、KDocと検査へ同じ形で書いた。**27件は全部通り、実機でだけ紙が奥へ倒れていた**
- * （2026-09-05 の実機レビュー `P2-1`）。**前提を共有した検査は、前提ごと間違える。**
- * だから、ここでだけは**描いた画素を数える**（→ docs/dev/lessons.md L61）。
+ * （2026-09-05 の実機レビュー `P2-1`）。**前提を共有した検査は、前提ごと間違える**
+ * （→ docs/dev/lessons.md L61）。
  *
  * ## 何を見るか
  *
- * 本番と同じ角度・同じ蝶番・同じカメラ距離・同じ縮小で面を回し、**投影された幅を数える。**
- *
- * - **向き:** 天綴じの紙は下端が手前へ出るので、**下端のほうが広い。** 符号を戻すと下端が細くなる
+ * - **向き:** 傾いた紙は下端が手前へ出るので、**下端のほうが広い**
  * - **枠:** 手前へ出た紙は広がるので、**縮小を掛けないと静止時の幅を越えて画面の外へ出る。**
- *   こちらも値には現れない — 縮小率が正しくても、掛かっていなければ画面でだけはみ出す
- * - **カメラ距離の単位:** `cameraDistance` に渡した値が何画素の遠さになるかは、
- *   **KDocにも他所の実装にも書いていない**（2度取り違えた → docs/dev/lessons.md L60）。
- *   倒した面の投影された縦の長さから逆算する
- * - **曲がり:** 真横でも紙が消えないこと・帯の継ぎ目が裂けていないこと。
- *   **記録した絵が空でも値の検査は全部通る**ので、ここでだけ分かる
- *
- * **面は角丸にしない。** 見るのは投影の向きだけで、隅の形は幅の計測を濁らせるだけである
- * （静止時の佇まいは判断9・`BookletScreenTest` が持つ）。
+ *   縮小率が正しくても、掛かっていなければ画面でだけはみ出す
+ * - **カメラ距離の単位:** 渡した値が何画素の遠さになるかは、**KDocにも他所の実装にも書いていない**
+ *   （2度取り違えた → L60）。倒した面の投影された縦の長さから逆算する
+ * - **めくり:** 折り目の向こうが本当に切り落とされ、**めくれた角が空いて裏が現れる**こと
  */
 @RunWith(AndroidJUnit4::class)
 class BookletSheetPerspectiveTest {
@@ -67,19 +59,23 @@ class BookletSheetPerspectiveTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    // ── 傾きの向きと、枠へ収まること ──────────────────────────────────────
+
     /**
-     * **これが `P2-1` の受け入れ条件。** 実機レビューが再現した約10%保持と同じ送り位置で見る。
+     * **これが `P2-1` の受け入れ条件。** 積み直りで傾いた紙は、下端が手前へ出る。
+     *
+     * 逆にすると下端が細くなり、**天綴じの紙が束の中へ沈む**向きになる。
      */
     @Test
-    fun 送り出される紙は下端が手前へ広がる() {
-        showSheet(turn = 0.1f)
+    fun 傾いた紙は下端が手前へ広がる() {
+        showSheet(restack = 0f)
 
         val (top, bottom) = sheetWidthsAtEnds()
 
         assertTrue(
-            "倒れた紙の下端（$bottom px）が上端（$top px）より広がっていません。" +
+            "傾いた紙の下端（$bottom px）が上端（$top px）より広がっていません。" +
                 "下端が奥へ退いており、天綴じの紙が束の中へ沈む向きになっています。",
-            bottom > top * 1.05f
+            bottom > top * 1.02f
         )
     }
 
@@ -87,16 +83,15 @@ class BookletSheetPerspectiveTest {
      * **計測そのものが正しいことを、寝た紙で確かめる。**
      *
      * 上の検査は「下端が広い」としか言わないので、**幅の数え方が壊れていても偶然通りうる。**
-     * 倒れていない紙なら上端と下端は同じ幅なので、そこを基準点にする。
      */
     @Test
     fun 寝ている紙は上端と下端が同じ幅() {
-        showSheet(turn = 0f)
+        showSheet(restack = 1f)
 
         val (top, bottom) = sheetWidthsAtEnds()
 
         assertTrue(
-            "倒れていない紙の幅が上端（$top px）と下端（$bottom px）で違います。幅の計測が壊れています。",
+            "傾いていない紙の幅が上端（$top px）と下端（$bottom px）で違います。幅の計測が壊れています。",
             isSameWidth(top, bottom)
         )
     }
@@ -104,9 +99,8 @@ class BookletSheetPerspectiveTest {
     /**
      * **基準点の判定そのものを確かめる。**
      *
-     * 当初は相対差を**符号つき**で見ていたので、**下端が細くなる側を素通ししていた** —
-     * 上端100px・下端80pxでも成功し、下端が1pxでも通った（外部レビュー `P3-1`）。
-     * **片側しか落とさない判定は、片側の誤描画を永久に見逃す。**
+     * 当初は相対差を**符号つき**で見ていたので、**下端が細くなる側を素通ししていた**
+     * （外部レビュー `P3-1`）。**片側しか落とさない判定は、片側の誤描画を永久に見逃す。**
      */
     @Test
     fun 幅一致の判定は縮む側も広がる側も落とす() {
@@ -116,20 +110,41 @@ class BookletSheetPerspectiveTest {
     }
 
     /**
+     * **傾いた紙が、静止時の紙より横へ広がらないこと。**
+     *
+     * 縮小率そのものは値の検査が押さえている。**しかし「掛かっているか」「掛ける場所が正しいか」は
+     * 描いた画素にしか出ない。** 縮小が無かった版では紙が画面端で切れ、
+     * **拡大した紙面が表示域を覆って次の紙を確認できなかった**（2026-09-05 の実機）。
+     */
+    @Test
+    fun 傾いた紙は静止時の幅を越えない() {
+        showSheet(restack = 1f)
+        val resting = widestRow()
+
+        val outside = RESTACKS.map { restack ->
+            showSheet(restack = restack)
+            restack to widestRow()
+        }.filterNot { (_, width) -> isWithinResting(resting, width) }
+
+        assertTrue(
+            "傾いた紙の幅が静止時（$resting px）と違います: " +
+                outside.joinToString { (restack, width) -> "積み直り$restack→$width px" } +
+                "。広い側は画面の外へ出ており、狭い側は縮めすぎです。",
+            outside.isEmpty()
+        )
+    }
+
+    // ── カメラ距離の単位 ──────────────────────────────────────────────────
+
+    /**
      * **`cameraDistance` に渡した値が、画面で何画素ぶんの遠さになるか。**
      *
-     * ## なぜ画素で測るしかないのか
+     * この値の単位は**KDocにも実装にも素直には書いていない。** 2026-09-05 に一度
+     * 「インチ相当」と結論したが、それは `View` 側の換算を読んだもので、
+     * **Compose の `ViewLayer` はその換算を打ち消している**（→ docs/dev/lessons.md L60）。
      *
-     * この値の単位は**KDocにも実装にも素直には書いていない。** Compose は `RenderNode` へ素通しし、
-     * `RenderNode` はさらに内部で換算する。**2026-09-05 に一度直したときは、
-     * `View` 側の換算（`densityDpi` で割る）を読んで「インチ相当」と結論したが、
-     * Compose の `ViewLayer` はその換算を打ち消している**（渡す前に `densityDpi` を掛ける）ので、
-     * `View` の実装から Compose の単位は決まらない（→ docs/dev/lessons.md L60）。
-     *
-     * **だから、倒した面の幅から実効距離を逆算する。**
-     * 上端は蝶番（深さ0）なので等倍、下端は `d / (d - z)` 倍。この比から `d` が出る。
-     *
-     * **ここが落ちたら、紙の遠近は設計した強さで効いていない。**
+     * **だから、倒した面の投影された縦の長さから実効距離を逆算する。**
+     * 縦の長さは行数なので、幅と違って端の補間にほとんど影響されない。
      */
     @Test
     fun カメラ距離は紙の高さの指定倍になっている() {
@@ -156,88 +171,55 @@ class BookletSheetPerspectiveTest {
         )
     }
 
+    // ── めくり ────────────────────────────────────────────────────────────
+
     /**
-     * **倒れた紙が、静止時の紙より横へ広がらないこと。**
-     *
-     * ## なぜ値では足りないのか
-     *
-     * 縮小率そのものは `BookletTurnGeometryTest` が値で押さえている。
-     * **しかし「掛かっているか」「掛ける場所が正しいか」は描いた画素にしか出ない。**
-     * 実際、縮小が無かった版では 10%送っただけで紙が 1.26 倍に広がり、
-     * **25/50%保持では拡大した紙面が表示域を覆って次の紙を確認できなかった**
-     * （2026-09-05 の実機レビュー）。**それでも値の検査は1つも落ちなかった。**
-     *
-     * ## 何を見るか
-     *
-     * 送りを進めながら、**紙が写っている行のうち最も広い行**を数える。
-     * 静止時の幅を超えたら枠の外へ出ている。**下回りすぎてもいけない** —
-     * 縮めすぎれば「収まる」は満たすが、紙が豆粒になる。
+     * **静止時の紙は欠けない。** 判断9 で実機確認した佇まいは、めくりの外にある。
      */
     @Test
-    fun 倒れた紙は静止時の幅を越えない() {
+    fun 静止時の紙は欠けない() {
         showSheet(turn = 0f)
-        val resting = widestRow()
 
-        val outside = TURNS.map { turn ->
-            showSheet(turn)
-            turn to widestRow()
-        }.filterNot { (_, width) -> isWithinResting(resting, width) }
-
-        assertTrue(
-            "倒れた紙の幅が静止時（$resting px）と違います: " +
-                outside.joinToString { (turn, width) -> "送り$turn→$width px" } +
-                "。広い側は画面の外へ出ており、狭い側は縮めすぎです。",
-            outside.isEmpty()
-        )
+        assertTrue("静止時にめくれた角が出ています。", backPixels() == 0)
+        assertTrue("静止時の紙が欠けています。", groundInsideSheet() == 0)
     }
 
     /**
-     * **真横まで送っても紙が消えないこと。これが「紙が曲がっている」ことの現れである。**
+     * **これがめくりの受け入れ条件。右下の角が空き、そこに次の紙（ここでは地）が見える。**
      *
-     * 平らな1枚の面は真横でちょうど高さを失う。**曲がった紙は帯ごとに向きが違うので、
-     * 全部が同時に真横になることがない** — 弓なりの形が残る。
-     *
-     * **この検査は同時に、記録した絵が実際に描かれていることも見ている。**
-     * 帯は本物の面ではなく記録した絵を描くので、記録が空なら**紙は1画素も出ない。**
-     * 値の検査では決して分からない側面である。
+     * 折り目で切っていなければ角は空かない。**形は値として正しくても、
+     * `clip` を落とせば画面では紙が丸ごと残る** — そこは画素でしか分からない。
      */
     @Test
-    fun 真横まで送っても紙は消えない() {
-        showSheet(turn = 0.5f)
-
-        val rows = sheetRowWidths()
-
-        assertTrue(
-            "真横で紙が${rows.size}行しか描かれていません。帯が全部同じ向きなら平らな板と同じで、" +
-                "真横で高さを失います。記録した絵が空のときも同じ結果になります。",
-            rows.size > 4
-        )
-    }
-
-    /**
-     * **帯の継ぎ目が裂けていないこと。**
-     *
-     * 帯は入れ子で積むので隣どうしは端を共有するが、**積み方を間違えると帯の間に地が覗く。**
-     * 継ぎ目そのものは補間で1行ぶん薄くなりうるので、**2行以上続けて空くことだけ**を落とす。
-     */
-    @Test
-    fun 曲がった紙の帯に隙間が空かない() {
+    fun めくると右下の角が空く() {
         showSheet(turn = 0.3f)
 
-        val gaps = drawnRowRange().windowed(2).count { (upper, lower) -> upper == 0 && lower == 0 }
-
         assertTrue(
-            "帯の間に地が覗いています（空の行が2行以上続きます）。帯の積み方が裂けています。",
-            gaps == 0
+            "めくったのに右下の角が空いていません。折り目で切れていないか、" +
+                "折り返した紙が角を塞いでいます。",
+            groundAtBottomRight() > 0
         )
     }
+
+    /**
+     * **めくれた角は裏返って現れる。** 文字の載らない紙の面が、折り目の向こうへ倒れる。
+     *
+     * 出ていなければ、紙は消えただけで**めくれていない。**
+     */
+    @Test
+    fun めくれた角は裏返って現れる() {
+        showSheet(turn = 0.3f)
+
+        assertTrue("めくれた角（裏）が1画素も描かれていません。", backPixels() > 0)
+    }
+
+    // ── 補助 ──────────────────────────────────────────────────────────────
 
     /**
      * 静止時の幅から外れていないか。**広い側だけを厳しく見る。**
      *
-     * 広がる側は**そのまま画面の外**なので許さない。狭い側は、倒れた紙の下端の行が
-     * 補間で数え落とされるぶんだけ必ず細く出る（紙が寝ているほど1行に潰れる）ので、
-     * **測り方の誤差として許す。** 縮めすぎの後退はここではなく値の検査が落とす。
+     * 広がる側は**そのまま画面の外**なので許さない。狭い側は、傾いた紙の下端の行が
+     * 補間で数え落とされるぶんだけ細く出るので、**測り方の誤差として許す。**
      */
     private fun isWithinResting(resting: Int, width: Int): Boolean =
         width <= resting * (1f + SAME_WIDTH_TOLERANCE) && width >= resting * (1f - FIT_SHRINK_TOLERANCE)
@@ -247,70 +229,91 @@ class BookletSheetPerspectiveTest {
         ((bottom - top).toFloat() / top).absoluteValue < SAME_WIDTH_TOLERANCE
 
     /**
-     * **本番の紙の面（`CurledFace`）をそのまま回す。**
+     * 本番と同じ傾き・蝶番・カメラ距離・縮小・折り目で紙を出す。
      *
-     * 写しを作らない — 帯の積み方が変わったときに検査が付いてこないため。
-     * 外側の縮小だけは本番の [BookletSheet] と同じ順序でここに置く（枠が持つ層なので）。
-     *
-     * **`setContent` は1度だけ。** 1つの検査で送りを何度も動かすので、
-     * 送り位置は状態で持つ（2度目の `setContent` は落ちる）。
+     * **`setContent` は1度だけ。** 1つの検査で送りを何度も動かすので、状態で持つ。
      */
-    private fun showSheet(turn: Float) {
-        if (!composed) {
-            composed = true
-            composeRule.setContent {
-                Box(
-                    modifier = Modifier
-                        .testTag(FRAME)
-                        .size(width = FRAME_WIDTH.dp, height = FRAME_HEIGHT.dp)
-                        .background(GROUND),
-                    contentAlignment = Alignment.TopCenter
-                ) {
-                    if (plainState.floatValue > 0f) {
-                        // **素の面。** 縮小も曲がりも通さない — 見るのはカメラ距離の効き方だけ。
-                        Box(
-                            modifier = Modifier
-                                .size(width = PROBE_WIDTH.dp, height = PROBE_HEIGHT.dp)
-                                .graphicsLayer {
-                                    rotationX = plainState.floatValue
-                                    transformOrigin = SHEET_HINGE
-                                    cameraDistance = sheetCameraDistance(size.height)
-                                }
-                                .background(SHEET)
-                        )
-                        return@Box
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(width = 120.dp, height = SHEET_HEIGHT.dp)
-                            // **枠へ収める縮小は帯より外側**（→ 本番の `BookletSheet` と同じ順序）。
-                            .graphicsLayer {
-                                val fit = sheetFitScale(
-                                    sheetAngleDegrees(turnState.floatValue, restack = 1f)
-                                )
-                                scaleX = fit
-                                scaleY = fit
-                                transformOrigin = SHEET_HINGE
-                            }
-                    ) {
-                        CurledFace(
-                            turn = { turnState.floatValue },
-                            restack = { 1f }
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize().background(SHEET))
-                        }
-                    }
-                }
-            }
+    private fun showSheet(turn: Float = 0f, restack: Float = 1f) {
+        compose()
+        composeRule.runOnUiThread {
+            plainState.floatValue = 0f
+            turnState.floatValue = turn
+            restackState.floatValue = restack
         }
-        composeRule.runOnUiThread { turnState.floatValue = turn }
         composeRule.waitForIdle()
     }
 
-    /** 素の面をその角度だけ倒す。**縮小も曲がりも通さない。** */
+    /** 素の面をその角度だけ倒す。**縮小も折り目も通さない。** */
     private fun showPlainSheet(rotationDegrees: Float) {
+        compose()
         composeRule.runOnUiThread { plainState.floatValue = rotationDegrees }
-        showSheet(turn = 0f)
+        composeRule.waitForIdle()
+    }
+
+    private fun compose() {
+        if (composed) return
+        composed = true
+        composeRule.setContent {
+            Box(
+                modifier = Modifier
+                    .testTag(FRAME)
+                    .size(width = FRAME_WIDTH.dp, height = FRAME_HEIGHT.dp)
+                    .background(GROUND),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (plainState.floatValue > 0f) {
+                    // **素の面。** 見るのはカメラ距離の効き方だけ。
+                    Box(
+                        modifier = Modifier
+                            .size(width = PROBE_WIDTH.dp, height = PROBE_HEIGHT.dp)
+                            .graphicsLayer {
+                                rotationX = plainState.floatValue
+                                transformOrigin = SHEET_HINGE
+                                cameraDistance = sheetCameraDistance(size.height)
+                            }
+                            .background(SHEET)
+                    )
+                    return@Box
+                }
+                Box(
+                    modifier = Modifier
+                        .size(width = SHEET_WIDTH.dp, height = SHEET_HEIGHT.dp)
+                        // **枠へ収める縮小は回転より外側**（→ 本番の `BookletSheet` と同じ順序）。
+                        .graphicsLayer {
+                            val fit = sheetFitScale(sheetTiltDegrees(restackState.floatValue))
+                            scaleX = fit
+                            scaleY = fit
+                            transformOrigin = SHEET_HINGE
+                        }
+                        .graphicsLayer {
+                            rotationX = sheetTiltDegrees(restackState.floatValue)
+                            transformOrigin = SHEET_HINGE
+                            cameraDistance = sheetCameraDistance(size.height)
+                        }
+                ) {
+                    // **紙の表。** 本番と同じ形で切る。
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                shape = PeelShape(peel = turnState.floatValue, flap = false)
+                                clip = true
+                            }
+                            .background(SHEET)
+                    )
+                    // **めくれて裏返った角。** 表とは別の色にして、画素で見分ける。
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                shape = PeelShape(peel = turnState.floatValue, flap = true)
+                                clip = true
+                            }
+                            .background(BACK)
+                    )
+                }
+            }
+        }
     }
 
     /** 紙が写っている行のうち、**最も広い行**の幅（画素数）。 */
@@ -350,57 +353,86 @@ class BookletSheetPerspectiveTest {
     /**
      * 枠の全行について、**地ではない画素**を数える。
      *
-     * **紙の色では数えない。** 裏を向いた帯は紙の面の色で描かれるので、
-     * 表の色だけを数えると**いちばん手前（いちばん広い）帯が抜け落ちる。**
-     * 地だけを別の色にしておけば、表も裏も同じ「紙の影」として数えられる。
+     * **紙の色では数えない。** 裏を向いた角は別の面として描かれるので、
+     * 表の色だけを数えると**いちばん手前の部分が抜け落ちる。**
      */
-    private fun rowWidths(): List<Int> {
-        val pixels = composeRule.onNodeWithTag(FRAME).captureToImage().toPixelMap()
-
-        return (0 until pixels.height).map { y ->
-            (0 until pixels.width).count { x -> pixels[x, y] != GROUND }
+    private fun rowWidths(): List<Int> = pixels().let { map ->
+        (0 until map.height).map { y ->
+            (0 until map.width).count { x -> map[x, y] != GROUND }
         }
     }
 
+    /** めくれて裏返った角の画素数。 */
+    private fun backPixels(): Int = pixels().let { map ->
+        var count = 0
+        (0 until map.height).forEach { y ->
+            (0 until map.width).forEach { x -> if (map[x, y] == BACK) count++ }
+        }
+        count
+    }
+
+    /** 紙が置かれているはずの矩形の中に、地が見えている画素数。 */
+    private fun groundInsideSheet(): Int = countGround(fromFraction = 0.05f, toFraction = 0.95f)
+
+    /** 紙の**右下**に地が見えている画素数（めくれて空いたところ）。 */
+    private fun groundAtBottomRight(): Int = countGround(fromFraction = 0.75f, toFraction = 0.95f)
+
+    private fun countGround(fromFraction: Float, toFraction: Float): Int {
+        val map = pixels()
+        val scale = composeRule.density.density
+        val left = ((FRAME_WIDTH - SHEET_WIDTH) / 2f * scale).toInt()
+        val width = (SHEET_WIDTH * scale).toInt()
+        val height = (SHEET_HEIGHT * scale).toInt()
+
+        var count = 0
+        ((height * fromFraction).toInt() until (height * toFraction).toInt()).forEach { y ->
+            ((width * fromFraction).toInt() until (width * toFraction).toInt()).forEach { x ->
+                if (map[left + x, y] == GROUND) count++
+            }
+        }
+        return count
+    }
+
+    private fun pixels() = composeRule.onNodeWithTag(FRAME).captureToImage().toPixelMap()
+
     private var composed = false
     private val turnState = mutableFloatStateOf(0f)
+    private val restackState = mutableFloatStateOf(1f)
 
-    /** 0 なら本番の紙、正なら「素の面をその角度だけ倒す」（カメラ距離の実測用）。 */
+    /** 0 なら紙、正なら「素の面をその角度だけ倒す」（カメラ距離の実測用）。 */
     private val plainState = mutableFloatStateOf(0f)
 
     private companion object {
         const val FRAME = "perspective-frame"
         const val SAME_WIDTH_TOLERANCE = 0.02f
 
-        /** 倒れた紙の下端が補間で数え落とされるぶん。**広がる側には使わない。** */
+        /** 傾いた紙の下端の行が補間で数え落とされるぶん。**広がる側には使わない。** */
         const val FIT_SHRINK_TOLERANCE = 0.10f
 
-        /** 枠の幅と高さ（dp）。 */
+        /** 枠と紙の寸法（dp）。 */
         const val FRAME_WIDTH = 300
         const val FRAME_HEIGHT = 400
-
-        /** 逆算に使う傾き。**枠で切れない範囲で、幅の差がはっきり出る角度。** */
-        const val PROBE_DEGREES = 10f
-
-        /**
-         * 幅を見る送り位置。**真横（0.5）より先は見ない。**
-         *
-         * 幅を決めるのは奥行き（傾きの正弦）で、**真横を挟んで左右対称**なので前半で足りる。
-         * そのうえ後半の紙は蝶番より上へ抜けるので、**枠の中では捕まえられない。**
-         */
-        val TURNS = listOf(0.05f, 0.1f, 0.2f, 0.3f, 0.4f, 0.45f)
-
-        /** 紙の高さ（dp）。 */
+        const val SHEET_WIDTH = 120
         const val SHEET_HEIGHT = 260
+
+        /** 幅を見る積み直りの位置。**0 が傾き最大、1 が水平。** */
+        val RESTACKS = listOf(0f, 0.2f, 0.4f, 0.6f, 0.8f)
 
         /**
          * カメラ距離を逆算する素の面（dp）。**枠に対して十分小さく取る** —
-         * 倒した面が枠の端で切れると幅の測定が頭打ちになり、**逆算が静かに狂う。**
+         * 倒した面が枠の端で切れると測定が頭打ちになり、**逆算が静かに狂う。**
          */
         const val PROBE_WIDTH = 40
         const val PROBE_HEIGHT = 160
-        /** 地。**紙の表とも裏とも似ない色にする**（裏は紙の面の色で、ほぼ白である）。 */
+
+        /** 逆算に使う傾き。**枠で切れない範囲で、差がはっきり出る角度。** */
+        const val PROBE_DEGREES = 10f
+
+        /** 地。**紙の表とも裏とも似ない色にする。** */
         val GROUND = Color(0xFF00FF00)
         val SHEET = Color(0xFF0000FF)
+
+        /** めくれて裏返った角。**表と見分けるために別の色**（本番では紙の面の色）。 */
+        val BACK = Color(0xFFFF0000)
     }
 }
