@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-06 | — | 画素の検査を本番の紙そのものへ通し、切り抜きを表と裏それぞれで見るようにした | **[booklet_mode](features/booklet_mode.md)** 判断11・[review](../review/README.md) |
+| 2026-09-06 | — | 実機ケースとロードマップに残っていた半回転・旧速度・帯の記述を折り目へ同期した | [review](../review/README.md) |
 | 2026-09-06 | — | 年代の色は「読む面」だけに載ると決め、チャネルが面を選ぶことを割り当ての正本へ書いた | **[bearing_channels](system/bearing_channels.md)** §9・[note_age_paper](features/note_age_paper.md) |
 | 2026-09-06 | — | めくりを折り目が斜めに走る形へ作り替え、右下の角から左上へめくれるようにした | **[booklet_mode](features/booklet_mode.md)** 判断11 |
 | 2026-09-06 | — | 指を離したあとのめくりを、ばねから時間を決めた620ミリ秒へ変えてゆっくりにした | **[booklet_mode](features/booklet_mode.md)** 判断10 |

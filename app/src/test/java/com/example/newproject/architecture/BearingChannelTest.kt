@@ -35,7 +35,7 @@ class BearingChannelTest {
     private val noteComponents = source("main", "ui/component/NoteComponents.kt")
 
     /** 紙そのものを描く関数の本体。**縁の代入と混ざらないよう、ここへ絞る。** */
-    private val sheetBody = bookletScreen.bodyOf("private fun BookletSheet(")
+    private val sheetBody = bookletScreen.bodyOf("internal fun BookletSheet(")
 
     /** 縁を描く関数の本体。 */
     private val edgeBody = bookletScreen.bodyOf("private fun BoxScope.StackEdge(")

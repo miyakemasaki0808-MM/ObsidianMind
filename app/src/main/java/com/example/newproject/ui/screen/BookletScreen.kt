@@ -739,8 +739,16 @@ private fun ColumnScope.BookletPager(
  * **手触りは意味を運ばない。** 「これは冊子だ」と言うのは形の役目で、動きは何も名乗らない
  * （→ system/bearing_channels.md §8）。
  */
+/**
+ * **`internal` なのは、画素を数える検査が本番の紙をそのまま描くため**
+ * （→ `BookletSheetPerspectiveTest`）。
+ *
+ * **写しを描く検査は、本番のレイヤーが壊れても通る。** 実際、表と裏の切り抜きを
+ * 片側ずつ落とす変異が、JVM走査でも描画テストでも素通りした
+ * （2026-09-06 のレビュー `P2-1`）。**検査が触れるのは本番の層でなければならない。**
+ */
 @Composable
-private fun BookletSheet(
+internal fun BookletSheet(
     isBundleSheet: Boolean,
     turn: () -> Float,
     restack: () -> Float,
@@ -794,6 +802,13 @@ private fun BookletSheet(
         // **紙の表。折り目の向こう側だけを残す**（→ [peelFlatPolygon]）。
         // 形で切るので、**文字はページの中で切れたところで途切れる** — 折り返した紙の裏へ
         // 文字が回り込まないのはそのためである。
+        //
+        // **`clip` は影が消えたときのための保険である**（2026-09-06 に実測）。
+        // Compose は `clip` が false でも**影のために輪郭を要求する**ので
+        // （`outlineNeeded = outline != null && (clipToOutline || elevation > 0f)`）、
+        // **影が出ている限り `clip` を落としても画素は1つも変わらない。**
+        // だが `shadowElevation` を 0 にした瞬間に切り抜きごと消え、紙が丸ごと残る
+        // （両方落として実測した）。**影は見え方の都合で動かしうるので、切り抜きをそこへ預けない。**
         Box(
             modifier = Modifier
                 .fillMaxSize()

@@ -217,7 +217,7 @@ class BookletPeelGeometryTest {
      */
     @Test
     fun `表と裏の形が本番へ配線されている`() {
-        val sheet = screen.bodyOf("private fun BookletSheet(")
+        val sheet = screen.bodyOf("internal fun BookletSheet(")
 
         assertTrue(
             "紙の表が折り目で切られていません（`PeelShape(peel = sheetPeel(turn()), flap = false)` が本番にありません）。",
@@ -228,8 +228,13 @@ class BookletPeelGeometryTest {
             sheet.contains("shape = PeelShape(peel = peel, flap = true)")
         )
         assertTrue(
-            "形で切っていません（`clip = true` が無いと、折り目の向こうまで描かれます）。",
-            sheet.contains("clip = true")
+            "紙の表を形で切っていません。`clip` が無いと、**折り目の向こうまで元の矩形が残り、" +
+                "めくった角が空きません。**",
+            sheet.clipsWithin("shape = PeelShape(peel = sheetPeel(turn()), flap = false)")
+        )
+        assertTrue(
+            "めくれた角を形で切っていません。`clip` が無いと、**無地の面が紙面を丸ごと覆います。**",
+            sheet.clipsWithin("shape = PeelShape(peel = peel, flap = true)")
         )
         assertTrue(
             "めくれた角の影が持ち上がりから決まっていません。影だけが「角が浮いている」ことを言います。",
@@ -252,6 +257,21 @@ class BookletPeelGeometryTest {
     }
 
     // ── 補助 ──────────────────────────────────────────────────────────────
+
+    /**
+     * その形を代入した層が、**同じ層の中で切り抜きも設定している**か。
+     *
+     * **関数全体に `clip = true` が1つあれば通る形にしない。** 表と裏は別の層なので、
+     * **片側だけ落とす変異が素通りする**（2026-09-06 のレビュー `P2-1`）。
+     * `}` の手前までを見ることで「同じ `graphicsLayer` ブロックの中か」を判定する。
+     *
+     * **画素の側では落ちない。** 実測すると、`clip` を false にしても影が出ている限り
+     * 画素は1つも変わらない（Compose は影のために輪郭を要求するため）。
+     * **`clip` は「影を 0 にしても切り抜きが残る」ための保険**なので、
+     * **その保険が外れたことを検出できるのは、この走査だけである。**
+     */
+    private fun String.clipsWithin(assignment: String): Boolean =
+        Regex(Regex.escape(assignment) + "[^}]*?clip = true").containsMatchIn(this)
 
     /** 多角形の面積（靴紐公式）。 */
     private fun area(polygon: List<Offset>): Float {

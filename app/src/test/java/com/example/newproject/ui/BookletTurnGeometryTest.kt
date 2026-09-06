@@ -271,7 +271,7 @@ class BookletTurnGeometryTest {
      */
     @Test
     fun `積み直りの傾きと遠近が本番へ配線されている`() {
-        val sheet = screen.bodyOf("private fun BookletSheet(")
+        val sheet = screen.bodyOf("internal fun BookletSheet(")
 
         assertTrue(
             "紙が積み直りの傾きで回っていません（`rotationX = sheetTiltDegrees(restack())` が本番にありません）。",
@@ -298,7 +298,7 @@ class BookletTurnGeometryTest {
      */
     @Test
     fun `枠へ収める縮小が回転より外側で配線されている`() {
-        val sheet = screen.bodyOf("private fun BookletSheet(")
+        val sheet = screen.bodyOf("internal fun BookletSheet(")
         val fit = "val fit = sheetFitScale(sheetTiltDegrees(restack()))"
 
         assertTrue(
@@ -318,7 +318,7 @@ class BookletTurnGeometryTest {
         assertTrue(
             "束の縁が `sheetShowsStack` で切られていません。めくられる紙が縁を連れて行き、" +
                 "回らない面が定位置に残って次の紙を覆います。",
-            screen.bodyOf("private fun BookletSheet(")
+            screen.bodyOf("internal fun BookletSheet(")
                 .contains("alpha = if (sheetShowsStack(turn())) 1f else 0f")
         )
     }
