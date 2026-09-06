@@ -1,12 +1,13 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -52,7 +53,7 @@ class BookletNavigationTest {
 
         turnPage("次のページへ")
         turnPage("次のページへ")
-        composeRule.onNodeWithContentDescription("3/10ページ").assertIsDisplayed()
+        assertPagePosition("3/10ページ")
 
         // **ページャは隣のページも同時に持つ**ので、「これを読む」だけでは一意にならない。
         // どのノートを開くボタンかを名前で指す（実機で `performClick()` が
@@ -65,7 +66,7 @@ class BookletNavigationTest {
         composeRule.waitForIdle()
 
         // 修正前はここが「1/10ページ」だった。
-        composeRule.onNodeWithContentDescription("3/10ページ").assertIsDisplayed()
+        assertPagePosition("3/10ページ")
     }
 
     /** 1枚目のまま渡した場合は、戻っても1枚目のまま（覚える側が余計なことをしない）。 */
@@ -78,7 +79,7 @@ class BookletNavigationTest {
         composeRule.runOnUiThread { nav.popBackStack() }
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithContentDescription("1/10ページ").assertIsDisplayed()
+        assertPagePosition("1/10ページ")
     }
 
     /**
@@ -138,4 +139,18 @@ class BookletNavigationTest {
     private companion object {
         const val NOTE_LABEL = "通常のノート表示"
     }
+
+    /**
+     * いま何枚目かを、**読み上げの状態説明**で確かめる。
+     *
+     * **画面には出ない**（2026-09-06 にページ表示を外した）。位置はスワイプでしか分からないので、
+     * **読み上げにだけ残してある**（→ `bookletPagePosition`）。
+     */
+    private fun assertPagePosition(spoken: String) {
+        composeRule.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, spoken),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+    }
+
 }

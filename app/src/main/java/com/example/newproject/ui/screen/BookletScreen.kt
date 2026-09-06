@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
@@ -118,16 +119,13 @@ internal fun alignPager(pagerState: PagerState, target: Int) {
     if (pagerState.currentPage != target) pagerState.requestScrollToPage(target)
 }
 
-/**
- * 天綴じのめくりの寸法と向き。**1箇所に集める**（→ features/booklet_mode.md 判断10・判断11）。
- *
- * **綴じは上。** 紙は置かれたまま、**右下の角が折り返り、折り目が左上へ走って**めくれていく。
- * レポート用紙（リーガルパッド）の束を、右手で角からめくる向きである。
- *
- * **手触りそのものの判定は実機検証のケース表が持つ**（→ system/bearing_channels.md §7）。
- * 集めてあるのは、次に触る人がここだけを見れば済むようにするためである。
- * **ただし折り目の走り方は値で観測できる** — 下の純関数がそこを引き受ける。
- */
+// ── 天綴じのめくり（→ features/booklet_mode.md 判断10・判断11）─────────────
+//
+// **綴じは上。** 紙は置かれたまま、**右下の角が折り返り、折り目が左上へ走って**めくれていく。
+// レポート用紙（リーガルパッド）の束を、右手で角からめくる向きである。
+// **手触りそのものの判定は実機検証のケース表が持つ**（→ system/bearing_channels.md §7）。
+// 寸法をここへ集めてあるのは、次に触る人がここだけを見れば済むようにするためである。
+
 /**
  * 蝶番。紙の上端の中央で、天綴じの綴じ位置そのもの。
  *
@@ -537,7 +535,7 @@ internal fun BookletScreen(
     ) {
         GradientHeader(
             title = "冊子",
-            subtitle = "めくって、読みたい1枚を選ぶ。",
+            subtitle = "めくって、読みたい1枚",
             trailing = { IconPill(symbol = "✕", contentDescription = "冊子を閉じる") { onExit() } }
         )
 
@@ -636,6 +634,10 @@ private fun ColumnScope.BookletPager(
             // スワイプ以外でもめくれるようにする。スイッチアクセスや読み上げ操作では
             // スワイプがページ送りにならないため、これが無いと最初の1枚から動けない。
             .semantics {
+                // **ページ位置は読み上げにだけ残す**（→ [bookletPagePosition]）。
+                // 画面には出さないが、**送ったあとに「いま何枚目か」を言えないと、
+                // スワイプできない利用者は自分がどこにいるか分からない。**
+                stateDescription = bookletPagePosition(pagerState.currentPage, entries.size)
                 customActions = listOf(
                     CustomAccessibilityAction("次のページへ") {
                         val next = pagerState.currentPage + 1
@@ -696,7 +698,6 @@ private fun ColumnScope.BookletPager(
         }
     }
 
-    BookletPageIndicator(page = pagerState.currentPage, total = entries.size)
 }
 
 /**
@@ -1031,36 +1032,25 @@ private fun DrawAgainPage(
 }
 
 /**
- * いま何枚目か。
+ * いま何枚目か。**読み上げにだけ出す文言。**
  *
- * **読み上げにも出す。** 位置がスワイプでしか分からない画面なので、
- * 見えている「3 / 10」と同じことを音声でも言えるようにする（→ §9）。
+ * ## 画面からは外した（2026-09-06、オーナー判断）
+ *
+ * 「5 / 10」の表示は**冊子には要らない**。冊子は**選ぶ前の前動作**であって
+ * 眺めて捨てる場なので、**途中で数えさせない**（→ features/booklet_mode.md 判断9）。
+ * **数は最後に1回だけ言う** — 終端の「ここまでの N 枚でした。」がそれである。
+ *
+ * ## それでも読み上げには残す
+ *
+ * **位置がスワイプでしか分からない画面**なので、消すと
+ * **スワイプできない利用者は自分がどこにいるか分からなくなる。**
+ * 見た目を外すことと、位置を伝えないことは別である。
+ * ページャの `stateDescription` に載せるので、**送ったあとに読み上げられる。**
+ *
+ * **純関数にしてあるのは、文言を素のJVMから確かめられるようにするため。**
  */
-@Composable
-private fun BookletPageIndicator(page: Int, total: Int) {
-    val isDrawAgain = page >= total
-    val label = if (isDrawAgain) "おわり" else "${page + 1} / $total"
-    val spoken = if (isDrawAgain) "最後のページ" else "${page + 1}/${total}ページ"
-    // **グラデーション直上に裸の文字を置かない。** 停止色で明るさが動くので、
-    // 自前の面（Panel）を持たせてからその上の色を使う（→ VibrantTextUsageTest）。
-    Box(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Surface(color = Panel, shape = RoundedCornerShape(12.dp)) {
-            Text(
-                text = label,
-                color = OnSurfaceMuted,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 4.dp)
-                    .semantics { contentDescription = spoken },
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
+internal fun bookletPagePosition(page: Int, total: Int): String =
+    if (page >= total) "最後のページ" else "${page + 1}/${total}ページ"
 
 @Composable
 private fun BookletLoading() {
