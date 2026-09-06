@@ -1,9 +1,12 @@
 package com.example.newproject.ui
 
-import androidx.compose.ui.graphics.DefaultCameraDistance
 import androidx.compose.ui.graphics.Matrix
 import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
+import com.example.newproject.ui.screen.CAMERA_UNIT_PX
 import com.example.newproject.ui.screen.sheetCameraDistance
+import com.example.newproject.ui.screen.CURL_BANDS
+import com.example.newproject.ui.screen.sheetBandAngle
+import com.example.newproject.ui.screen.sheetCurlSpread
 import com.example.newproject.ui.screen.sheetFitScale
 import com.example.newproject.ui.screen.sheetAngleDegrees
 import com.example.newproject.ui.screen.sheetShowsFace
@@ -353,12 +356,12 @@ class BookletTurnGeometryTest {
      */
     @Test
     fun `静止時と抜け切りでは縮まない`() {
-        assertEquals("定位置の紙が縮んでいます。", 1f, fitAt(0f), TOLERANCE)
-        assertEquals("抜け切った紙が縮んでいます。", 1f, fitAt(180f), TOLERANCE)
+        assertEquals("定位置の紙が縮んでいます。", 1f, sheetFitScale(0f), TOLERANCE)
+        assertEquals("抜け切った紙が縮んでいます。", 1f, sheetFitScale(180f), TOLERANCE)
     }
 
     /**
-     * **これが枠へ収める受け入れ条件。** どの角度でも、投影された紙は静止時の幅を超えない。
+     * **これが枠へ収める受け入れ条件。** 縮小は、広がった倍率をちょうど打ち消す。
      *
      * 倒した紙は `d / (d - z)` 倍に広がるので、**遠近を効かせた時点で必ず画面から出る** —
      * 10%送っただけで 1.26 倍、真横で 3 倍に対し、左右の余白は 1.05 倍ぶんしかない。
@@ -366,74 +369,64 @@ class BookletTurnGeometryTest {
      * 次の紙が現れることを確認できなかった**（2026-09-05）。
      *
      * **等号で押さえる。** 「収まる」だけを見ると、縮めすぎて紙が豆粒になっても通る。
+     * **ただし、掛かっていることと掛ける場所が正しいことは画素でしか分からない**
+     * （→ `BookletSheetPerspectiveTest`）。
      */
     @Test
-    fun `倒れた紙の投影は静止時の幅にちょうど収まる`() {
-        val widths = (0..180).map { it.toFloat() }.map { it to projectedWidthAt(it) }
+    fun `縮小は広がりをちょうど打ち消す`() {
+        val leftovers = (0..180).map { it.toFloat() }
+            .map { it to sheetFitScale(it) * sheetCurlSpread(it) }
+            .filter { (_, width) -> (width - 1f).absoluteValue > TOLERANCE }
 
-        val outside = widths.filter { (_, width) -> width > 1f + TOLERANCE }
         assertTrue(
-            "倒れた紙が静止時の幅より広がっています（枠の外へ出ます）: " +
-                outside.take(3).joinToString { (angle, width) -> "%.0f度→%.3f倍".format(angle, width) },
-            outside.isEmpty()
-        )
-
-        val shrunken = widths.filter { (_, width) -> width < 1f - TOLERANCE }
-        assertTrue(
-            "縮めすぎて紙が枠より小さくなっています: " +
-                shrunken.take(3).joinToString { (angle, width) -> "%.0f度→%.3f倍".format(angle, width) },
-            shrunken.isEmpty()
+            "縮小したあとの幅が静止時と違います: " +
+                leftovers.take(3).joinToString { (angle, width) -> "%.0f度→%.3f倍".format(angle, width) },
+            leftovers.isEmpty()
         )
     }
 
     /**
-     * **縮小は倒れ量だけで決まり、消えるほどは縮まない。**
+     * **倒れるほど広がり、倒れるほど強く縮む。** 単調でないと、送っている途中で紙が脈打つ。
      *
-     * 単調でないと、送っている途中で紙が伸び縮みして脈打つ。
+     * **消えるほどは縮まない。**
      */
     @Test
     fun `倒れるほど強く縮み、消えるほどは縮まない`() {
-        val scales = (0..90).map { fitAt(it.toFloat()) }
+        val scales = (0..90).map { sheetFitScale(it.toFloat()) }
 
         assertTrue(
             "倒すほど縮む形になっていません（送りの途中で紙が脈打ちます）: $scales",
             scales.zipWithNext().all { (before, after) -> after <= before + TOLERANCE }
         )
-        assertTrue("真横で紙が消えています。", fitAt(90f) > 0.2f)
+        assertTrue("真横で紙が消えています。", sheetFitScale(90f) > 0.1f)
     }
 
     /**
-     * **台形の比は縮小で変わらない。** 縮めるのは投影された絵で、紙の奥行きではない。
+     * **積み上げた広がりは、カメラ1つで見積もった値より大きい。**
      *
-     * 回転より内側で縮めると奥行きまで縮み、**遠近が浅くなる**（真横で 3.0 → 1.67）。
-     * それは L60 で直したばかりの「遠近が静かに消える」側と同じ後退なので、ここで落とす。
+     * 帯は入れ子なので**段ごとに遠近が掛かる**。1回の割り算で見積もると足りず、
+     * **足りないぶんはそのまま画面の外へ出る**（実測で 54 度・約7%、真横では 5 倍対 3 倍）。
+     * **ここが逆転したら、積み上げをやめて割り算1回へ戻した合図。**
      */
     @Test
-    fun `縮めても遠近は浅くならない`() {
-        val depth = sheetStanding(45f)
-        val trapezoid = CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth)
+    fun `積み上げた広がりは割り算1回の見積もりを下回らない`() {
+        val short = (5..175 step 5).map { it.toFloat() }
+            .filter { angle -> sheetCurlSpread(angle) < singleCameraSpread(angle) * 0.99f }
 
-        assertEquals(
-            "45度での台形の比が遠近だけで決まっていません。縮小が奥行きへ効いています。",
-            1.89f,
-            trapezoid,
-            0.01f
-        )
-        assertEquals(
-            "縮小率が奥行きから直に出ていません。",
-            (CAMERA_DISTANCE_FACTOR - depth) / CAMERA_DISTANCE_FACTOR,
-            fitAt(45f),
-            TOLERANCE
+        assertTrue("積み上げた広がりが割り算1回を下回っています: ${short.take(3)}", short.isEmpty())
+        assertTrue(
+            "倒した紙で、積み上げと割り算1回の差が出ていません。段ごとの遠近が掛かっていない可能性があります。",
+            sheetCurlSpread(54f) > singleCameraSpread(54f) * 1.03f
         )
     }
 
-    /** その角度での縮小率。**本番と同じ経路で導く。** */
-    private fun fitAt(angleDegrees: Float): Float = sheetFitScale(sheetStanding(angleDegrees))
-
-    /** 縮小まで含めた、投影後の紙の最大幅（静止時を1とする）。 */
-    private fun projectedWidthAt(angleDegrees: Float): Float {
-        val depth = sheetStanding(angleDegrees)
-        return fitAt(angleDegrees) * (CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth))
+    /** カメラ1つで見積もった広がり。**帯の深さの平均から1回だけ割る。** */
+    private fun singleCameraSpread(angleDegrees: Float): Float {
+        val depth = (0 until CURL_BANDS)
+            .map { sheetStanding(sheetBandAngle(angleDegrees, it)) }
+            .average()
+            .toFloat()
+        return CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth)
     }
 
     // ── 本番がその値を使っていること（走査） ──────────────────────────────
@@ -463,31 +456,27 @@ class BookletTurnGeometryTest {
      * だから受理条件を**代入の形**で書く。名前がどこかに在ることでは満たされない —
      * コメントと import は落としてあり、未使用の関数を残しても代入の文字列は戻らない。
      *
-     * **どの層のどの代入かまで見る。** 紙の面（回転・影・表裏）と束の縁（在不在）と
-     * ページの枠（定位置への付け替え）は別の層で、混ぜると「誰かが使っている」に緩む。
+     * **紙の面が持つのは影だけになった（2026-09-05）。** 回転と表裏は帯へ移ったので、
+     * そちらは `BookletCurlGeometryTest` が同じ形で見る（→ 判断11）。
+     * **ここでは「面が回っていないこと」まで見る** — 面と帯の両方が回すと、角度が二重に掛かる。
      */
     @Test
-    fun `紙の面が合成後の角度で回り、影と表裏もそこから決まる`() {
+    fun `紙の面は合成後の角度で影を深くし、面そのものは回らない`() {
         val sheet = screen.bodyOf("private fun BookletSheet(")
 
         assertTrue(
-            "紙が合成後の角度で回っていません（`rotationX = angle` が本番にありません）。",
-            sheet.contains("val angle = sheetAngleDegrees(turn(), restack())") &&
-                sheet.contains("rotationX = angle")
-        )
-        assertTrue(
-            "紙が天綴じの蝶番で回っていません（`transformOrigin = SHEET_HINGE` が本番にありません）。" +
-                "軸が中央へ落ちると、角度の符号が正しくても下端は手前へ出ません。",
-            sheet.contains("transformOrigin = SHEET_HINGE")
-        )
-        assertTrue(
             "影が合成後の角度から決まっていません（`sheetStanding(angle)` が本番にありません）。",
-            sheet.contains("sheetStanding(angle)")
+            sheet.contains("val angle = sheetAngleDegrees(turn(), restack())") &&
+                sheet.contains("sheetStanding(angle)")
+        )
+        assertFalse(
+            "紙の面が自分で回っています。倒れるのは帯の積み重ねなので、" +
+                "面まで回すと角度が二重に掛かります（→ 判断11）。",
+            sheet.contains("rotationX")
         )
         assertTrue(
-            "表裏が合成後の角度から決まっていません。送りの進み具合だけで判定すると、" +
-                "積み直りが重なった分だけ表の文字が真横を越えて残ります。",
-            sheet.contains("alpha = if (sheetShowsFace(angle)) 1f else 0f")
+            "紙の面が帯の経路（`CurledFace`）を通っていません。1枚の面のままでは曲がりません。",
+            sheet.contains("CurledFace(turn = turn, restack = restack)")
         )
     }
 
@@ -503,7 +492,7 @@ class BookletTurnGeometryTest {
     @Test
     fun `枠へ収める縮小が紙の外側で配線されている`() {
         val sheet = screen.bodyOf("private fun BookletSheet(")
-        val fit = "val fit = sheetFitScale(sheetStanding(sheetAngleDegrees(turn(), restack())))"
+        val fit = "val fit = sheetFitScale(sheetAngleDegrees(turn(), restack()))"
 
         assertTrue(
             "紙が枠へ収める縮小（`sheetFitScale`）を掛けていません。" +
@@ -511,9 +500,9 @@ class BookletTurnGeometryTest {
             sheet.contains(fit) && sheet.contains("scaleX = fit") && sheet.contains("scaleY = fit")
         )
         assertTrue(
-            "縮小が紙の面（回転する側）に置かれています。回転より内側で縮めると奥行きまで縮み、" +
+            "縮小が帯より内側に置かれています。回転より内側で縮めると奥行きまで縮み、" +
                 "台形が浅くなって遠近が弱まります。縮めるのは投影された絵の側です。",
-            sheet.indexOf(fit) < sheet.indexOf("rotationX = angle")
+            sheet.indexOf(fit) < sheet.indexOf("CurledFace(")
         )
     }
 
@@ -558,57 +547,51 @@ class BookletTurnGeometryTest {
     }
 
     /**
-     * **カメラ距離は紙の高さより遠く、しかし遠すぎない。**
+     * **カメラ距離は紙の高さの指定倍になる。**
      *
-     * **上限がこの検査の本体である。** 下限（高さより遠く）は公式の指示だが、
-     * **遠すぎる側には指示が無く、超えても何も起きない** — 遠近が静かに消えて、
-     * 倒れた紙がただ縦に潰れる板になるだけである。**実際にそうなっていた**（→ `sheetCameraDistance`）。
+     * **単位はここでは決まらない。** `cameraDistance` は渡した値の [CAMERA_UNIT_PX] 倍が画素になるが、
+     * それは**画素を数えて初めて分かった**ことである（→ `BookletSheetPerspectiveTest`）。
+     * ここで固定できるのは「実効距離が高さに比例し、指定した倍率になる」という**式の形**までで、
+     * **その 72 が正しいかは値の側からは永久に分からない。**
      *
-     * **単位はピクセルではない。** `cameraDistance` に紙の高さ（ピクセル）を渡すと、
-     * 既定の数百倍遠い値になり実質無限遠になる。**上限を既定の桁で押さえて、その後退を落とす。**
+     * **2度取り違えている。** 遠すぎた版（高さを画素のまま渡し、実効は約350倍で遠近が消えた）と、
+     * 近すぎた版（画面のインチ相当と読み、実効は約0.28倍で**紙の下端がカメラの裏へ回った**）。
      */
     @Test
-    fun `カメラ距離は紙の高さより遠く、しかし遠近が消えるほど遠くない`() {
-        // 1080×2364・390dpi の実機で、紙が画面の高さいっぱいに近い場合。
-        val density = 390f / 160f
+    fun `カメラ距離は紙の高さに比例し、指定した倍率になる`() {
         val sheetHeightPx = 1900f
-        val distance = sheetCameraDistance(sheetHeightPx, density)
 
-        assertTrue(
-            "カメラ距離（$distance）が紙の高さより近くなっています。回した像に破綻が出ます。",
-            distance * density * 160f >= sheetHeightPx
+        assertEquals(
+            "実効カメラ距離が紙の高さの $CAMERA_DISTANCE_FACTOR 倍になっていません。",
+            sheetHeightPx * CAMERA_DISTANCE_FACTOR,
+            sheetCameraDistance(sheetHeightPx) * CAMERA_UNIT_PX,
+            1f
         )
-        assertTrue(
-            "カメラ距離（$distance）が既定（$DefaultCameraDistance）とかけ離れて遠いです。" +
-                "単位はピクセルではないので、ピクセル値を渡すと遠近が丸ごと消えます。",
-            distance <= DefaultCameraDistance * 3f
+        assertEquals(
+            "紙が小さくなってもカメラが近づいていません。寸法を直に書くと、" +
+                "端末の解像度と分割画面で遠近の出方が変わります。",
+            sheetCameraDistance(2000f) / 2f,
+            sheetCameraDistance(1000f),
+            TOLERANCE
         )
         assertTrue(
             "遠近の倍率が 1 を下回っています。公式の指示（面の高さより遠く）の外です。",
             CAMERA_DISTANCE_FACTOR >= 1f
         )
-    }
-
-    /** 紙が小さくなればカメラも近づく。**寸法を直に書いていないこと。** */
-    @Test
-    fun `カメラ距離は紙の高さに比例する`() {
-        val density = 2.75f
-
-        assertEquals(
-            sheetCameraDistance(2000f, density) / 2f,
-            sheetCameraDistance(1000f, density),
-            TOLERANCE
+        assertTrue(
+            "遠近の倍率が大きすぎます。**遠すぎる側はエラーも警告も出ず、遠近が静かに消えるだけ**です。",
+            CAMERA_DISTANCE_FACTOR <= 4f
         )
     }
 
-    /** 走査。**本番が高さと密度からカメラ距離を導いていること。** */
+    /** 走査。**本番が紙の高さからカメラ距離を導いていること。** */
     @Test
-    fun `カメラ距離は本番で紙の高さと密度から導かれる`() {
+    fun `カメラ距離は本番で紙の高さから導かれる`() {
         assertTrue(
-            "`cameraDistance` を紙の高さと密度から導いていません。" +
+            "`cameraDistance` を紙の高さから導いていません。" +
                 "寸法を直に書くと、端末の解像度と分割画面で遠近の出方が変わります。",
-            screen.bodyOf("private fun BookletSheet(")
-                .contains("cameraDistance = sheetCameraDistance(size.height, density)")
+            screen.bodyOf("private fun BoxScope.CurlBand(")
+                .contains("cameraDistance = sheetCameraDistance(size.height)")
         )
     }
 

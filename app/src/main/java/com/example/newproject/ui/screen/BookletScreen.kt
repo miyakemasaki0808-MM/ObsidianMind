@@ -39,8 +39,17 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -72,6 +81,7 @@ import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.absoluteValue
 import kotlin.math.sin
 
@@ -151,32 +161,42 @@ internal val SHEET_HINGE = TransformOrigin(0.5f, 0f)
 internal const val CAMERA_DISTANCE_FACTOR = 1.5f
 
 /**
- * `cameraDistance` の単位はピクセルではない。**画面の物理的な長さ（インチ相当）である。**
+ * `cameraDistance` の単位は**画素でも画面のインチでもない。渡した値の 72 倍が画素になる。**
  *
- * ## 単位を取り違えて、遠近が丸ごと消えていた（2026-09-05）
+ * ## 2度取り違えた（2026-09-05）
  *
- * Compose も `RenderNode` も KDoc には「expressed in pixels」と書いてある。**どちらも実装と違う。**
- * `View.setCameraDistance` は **`densityDpi` で割ってから** `RenderNode` へ渡す
- * （Android の実装で確認）。`View` の既定は「mdpi で 1280」で、1280 ÷ 160 = **8** —
- * Compose の `DefaultCameraDistance = 8.0f` と一致する。**つまり単位はインチ相当。**
+ * | 版 | 渡していた値 | 実効距離（紙の高さ比） |
+ * |---|---|---|
+ * | 当初 | 紙の高さ（画素） | **約 350 倍**（実質無限遠。遠近が丸ごと消えていた） |
+ * | 1度目の訂正 | 高さをインチへ直した値 | **約 0.28 倍**（近すぎて、23度を越えると紙の下端がカメラの裏へ回る） |
+ * | 現在 | 高さ × [CAMERA_DISTANCE_FACTOR] ÷ 72 | **1.5 倍**（設計どおり） |
  *
- * 当初は「ピクセルなら紙の高さより大きく」と読んで `size.height * 1.5`（≒2850）を渡していた。
- * **既定の約350倍遠い＝実質無限遠**で、**遠近は最初から効いていなかった。**
- * 倒れた紙はただ縦に潰れるだけの板で、**実機の「紙が曲がる感じが足りない」はここから来ていた。**
+ * **1度目の訂正は、`View.setCameraDistance` が `densityDpi` で割ってから `RenderNode` へ渡すことを
+ * 根拠にしていた。** そこまでは正しいが、**Compose の `ViewLayer` はその割り算を打ち消すために
+ * 渡す前に `densityDpi` を掛けている** ので、`View` の実装から Compose の単位は決まらない。
+ * 素通しする `RenderNodeLayer` のほうが本筋で、そこから先は `RenderNode` の中である。
  *
- * **KDocではなく実装で確かめる**（→ CLAUDE.md 禁止事項・docs/dev/lessons.md L60）。
+ * **だから実測した**（`BookletSheetPerspectiveTest`）。倒した面の投影された高さから実効距離を逆算すると、
+ * **渡した値の 72 倍が画素**になる。**画面の密度を 390 から 320 へ変えても実効距離は同じ画素数**だったので、
+ * 密度には依らない（Compose の既定 8 が 576 画素にあたる）。
+ *
+ * **KDocも他所の実装も根拠にならない。画素を数えるまで単位は決まらない**
+ * （→ docs/dev/lessons.md L60）。
  *
  * ## 何を返すか
  *
- * **紙の高さをインチへ直し、その [CAMERA_DISTANCE_FACTOR] 倍。** 高さより遠く（指示を満たす）、
- * かつ既定と同じ桁に収まる。`density` は 1dp あたりのピクセル数なので、
- * 1インチ＝[DPI_PER_DENSITY] dp から画面の dpi が出る。
+ * **紙の高さの [CAMERA_DISTANCE_FACTOR] 倍が実効距離になる値。** 密度を受け取らないのは、
+ * **受け取ると「密度で変わる」と読めてしまう**ためである（1度目の訂正はそう書いてあった）。
  */
-internal fun sheetCameraDistance(sheetHeightPx: Float, density: Float): Float =
-    sheetHeightPx / (density * DPI_PER_DENSITY) * CAMERA_DISTANCE_FACTOR
+internal fun sheetCameraDistance(sheetHeightPx: Float): Float =
+    sheetHeightPx * CAMERA_DISTANCE_FACTOR / CAMERA_UNIT_PX
 
-/** 1インチあたりの dp。Android の密度の定義そのもの（mdpi ＝ 160dpi ＝ 等倍）。 */
-private const val DPI_PER_DENSITY = 160f
+/**
+ * `cameraDistance` の 1 が何画素になるか。**実測値**（→ [sheetCameraDistance]）。
+ *
+ * `internal` なのは、**検査が同じ値で「実効距離が高さの指定倍になる」ことを確かめる**ため。
+ */
+internal const val CAMERA_UNIT_PX = 72f
 
 /**
  * 指を離したあと、紙が残りを倒れ切るまでの硬さ。**既定（400）より柔らかい 200。**
@@ -345,19 +365,116 @@ internal fun sheetStanding(angleDegrees: Float): Float =
  *
  * ## 何を返すか — 「投影したあとの絵」を引く
  *
+ * **広がった倍率の逆数**（→ [sheetCurlSpread]）。掛けると**投影後の最大幅がちょうど静止時の幅になる**ので、
+ * 紙の影は静止時の footprint を横へ出ない。**端末の幅も分割画面も見ないので、狭い画面でも成立する。**
+ *
  * **縮小は回転より外側に置く**（[BookletSheet] の枠）。投影された絵をそのまま縮めるので、
  * **台形の比（下端幅 ÷ 上端幅）は1ミリも変わらない** — 遠近の見え方は今のままで、大きさだけが枠に入る。
  * 回転より内側で縮めると紙の奥行きまで縮み、**台形が浅くなって遠近が弱まる**（真横で 3.0 → 1.67）。
  *
- * [depthRatio] は**紙の長さのうちどれだけが奥行きになったか**。平らな紙なら傾きの正弦そのもので、
- * これは [sheetStanding]（影の深さ）と同じ量である — **どちらも「どれだけ立っているか」だから**。
- *
- * 返す値は `(d - z) / d`。これを掛けると投影後の最大幅がちょうど静止時の幅になるので、
- * **紙の影は静止時の footprint を横へ出ない**（端末の幅も分割画面も見ない。だから狭い画面でも成立する）。
- * **静止時（`depthRatio = 0`）は 1** — 判断9 で実機確認した絵を1ピクセルも変えない。
+ * **静止時は 1** — 判断9 で実機確認した絵を1ピクセルも変えない。
  */
-internal fun sheetFitScale(depthRatio: Float): Float =
-    (CAMERA_DISTANCE_FACTOR - depthRatio.coerceIn(0f, 1f)) / CAMERA_DISTANCE_FACTOR
+internal fun sheetFitScale(angleDegrees: Float): Float = 1f / sheetCurlSpread(angleDegrees)
+
+/**
+ * 曲がりの総量（度）。**紙の上端と下端で、接線の角度がどれだけ違うか。**
+ *
+ * `graphicsLayer` の回転は平面のアフィン変換なので、**1枚の面はどうやっても曲がらない。**
+ * 紙を横帯に切り、**帯ごとに少しずつ角度を変えて積む**ことでだけ曲面になる（→ [CURL_BANDS]）。
+ *
+ * **向きは「自由端が先行する」。** レポート用紙の下端を指で押し上げると、綴じの近くはまだ平らで、
+ * 指のある側だけが起きている。だから**蝶番側が浅く、下端が深い。**
+ * 曲線の凹面が手前を向く — 紙を持ち上げたときの見え方そのものである。
+ *
+ * **114度を越えない。** 越えると蝶番側の帯が負の角度（束の中へ沈む向き）になり、
+ * 反対の端では半回転を越えて**抜けたはずの紙がもう一度表を見せる**（→ `BookletCurlGeometryTest`）。
+ */
+internal const val CURL_SPAN_DEGREES = 60f
+
+/**
+ * 帯の枚数。**曲線に見えるだけの数**（→ features/booklet_mode.md 判断11）。
+ *
+ * 2枚では折り目になる（曲線ではなく折れ線）。8枚なら帯どうしの差は
+ * [CURL_SPAN_DEGREES] ÷ 8 ＝ 7.5度で、**継ぎ目が角として読めない。**
+ * **上げると1フレームあたりの描画が枚数だけ増える** — 判断3（冊子で深く作業させない）に当てる。
+ */
+internal const val CURL_BANDS = 8
+
+/**
+ * その倒れ具合での曲がり量。**静止でも抜け切りでもゼロ、真横で最大。**
+ *
+ * 尺度は影と同じ [sheetStanding]（どれだけ立っているか）である。**同じ量から出すのは偶然ではない** —
+ * 影が深くなるのも紙が曲がるのも「持ち上がっている」ことの現れで、別々に持つと食い違う。
+ *
+ * **静止時にゼロであることが効いている。** 判断9 で実機確認した佇まいは曲がりの外にあり、
+ * **止まっている絵は1ピクセルも変わらない**（→ [sheetLiesFlat]）。
+ */
+internal fun sheetCurlDegrees(angleDegrees: Float): Float =
+    CURL_SPAN_DEGREES * sheetStanding(angleDegrees)
+
+/**
+ * [band] 番目の帯が向いている角度。**帯の真ん中の接線**で、0 が蝶番側。
+ *
+ * 曲がりの中心が合成後の角度に一致するよう、**上下へ半分ずつ振り分ける。**
+ * こうすると「曲げても紙全体としては同じだけ倒れている」ので、
+ * 送りの進み具合と紙の見え方がずれない。
+ */
+internal fun sheetBandAngle(angleDegrees: Float, band: Int, bands: Int = CURL_BANDS): Float =
+    angleDegrees + sheetCurlDegrees(angleDegrees) * ((band + 0.5f) / bands - 0.5f)
+
+/**
+ * [band] 番目の帯を、**1つ上の帯からどれだけ折るか。**
+ *
+ * 帯は入れ子で積む（それぞれが1つ上の帯の下端を蝶番にして折れる）ので、
+ * **渡すのは絶対角ではなく差分**である。先頭の帯だけは紙そのものの蝶番から折れるので絶対角になる。
+ */
+internal fun sheetBandTilt(angleDegrees: Float, band: Int, bands: Int = CURL_BANDS): Float =
+    if (band == 0) sheetBandAngle(angleDegrees, 0, bands)
+    else sheetCurlDegrees(angleDegrees) / bands
+
+/**
+ * 曲がった紙が、投影で横へどれだけ広がるか。**入れ子の段ごとに掛かる遠近を積み上げる。**
+ *
+ * ## なぜ1回の割り算では出ないのか
+ *
+ * カメラが1つなら広がりは `d / (d - z)` の1回で出る。**帯は入れ子なので、段ごとに
+ * 自分の原点から見た遠近が掛かる**（→ [CurledFace]）。掛かる回数だけ倍率が積み上がり、
+ * **1回の割り算で見積もると数%足りない** — 実測では 54 度で約7%広く出た。
+ * **足りないぶんはそのまま画面の外へ出る**ので、ここは近似ではなく積み上げで持つ。
+ *
+ * 自由端の点を、**内側の帯から蝶番へ向かって**運ぶ。各段で「その段の原点からの距離」に
+ * 倒れ角の正弦を掛けたものが深さで、`d / (d - 深さ)` がその段の倍率になる。
+ *
+ * **曲げるほうが広がる。** 帯に分けると深さの合計そのものは浅くなるが（正弦は上に凸）、
+ * **段ごとに遠近が掛かるぶんが上回る** — 実測で 45 度までは1回の割り算とほぼ同じ、
+ * 54 度で約7%、真横では 5 倍対 3 倍まで開く。**入れ子の代償はここに出る。**
+ */
+internal fun sheetCurlSpread(angleDegrees: Float, bands: Int = CURL_BANDS): Float {
+    var reach = 1f
+    var spread = 1f
+    for (band in bands - 1 downTo 0) {
+        val origin = band.toFloat() / bands
+        val distance = reach - origin
+        val tilt = sheetBandTilt(angleDegrees, band, bands) * PI / 180.0
+        val depth = distance * sin(tilt).toFloat()
+        val step = CAMERA_DISTANCE_FACTOR / (CAMERA_DISTANCE_FACTOR - depth)
+        spread *= step
+        reach = origin + distance * cos(tilt).toFloat() * step
+    }
+    return spread
+}
+
+/**
+ * 紙が平らか。**平らなときは、記録した絵を経由せず本物をそのまま描く**（→ [BookletSheet]）。
+ *
+ * 曲げるには紙を一度絵として記録して帯で描き直すことになるが、
+ * **記録を経由すると文字の描かれ方が変わりうる。** 判断9 で実機確認した佇まいは
+ * 「1ピクセルも変えない」と決めてあるので、**静止時はその経路へ入らない。**
+ */
+internal fun sheetLiesFlat(angleDegrees: Float): Boolean = angleDegrees < FLAT_DEGREES
+
+/** 平らと見なす角度。**指を置いただけのずれを曲げの経路へ入れない。** */
+private const val FLAT_DEGREES = 0.05f
 
 /**
  * 積み直りを再生するかどうかだけを決める。**見るのは束の世代だけ。**
@@ -662,10 +779,12 @@ private fun BookletSheet(
                 bottom = 22.dp
             )
             // **遠近で広がったぶんだけ、絵ごと引く**（→ [sheetFitScale]）。
+            // 広がりは帯の積み上げから出す（→ [sheetCurlSpread]） —
+            // **1回の割り算で見積もると数%足りず、そのぶんが画面の外へ出る。**
             // **回転より外側**なので台形の比は変わらない — 見え方は今のままで、枠に入るだけである。
             // 束の縁も同じ枠の中にあるので一緒に引かれ、**紙と縁がずれない**。
             .graphicsLayer {
-                val fit = sheetFitScale(sheetStanding(sheetAngleDegrees(turn(), restack())))
+                val fit = sheetFitScale(sheetAngleDegrees(turn(), restack()))
                 scaleX = fit
                 scaleY = fit
                 // 綴じ位置は動かない。**縮むのは綴じから下だけ**（→ [SHEET_HINGE]）。
@@ -685,46 +804,162 @@ private fun BookletSheet(
                 StackEdge(offset = STACK_EDGE_MAX / 2)
             }
         }
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                // **読むのはこのラムダの中だけ。** 関数の本体で [turn] を呼ぶと、
-                // 指を動かしている間ずっと再コンポーズが走る（ここなら描画の直前に読まれる）。
-                // 影もここが持つ。Surface の `shadowElevation` は組み立て時に決まるので、
-                // **送りに追従させるにはこちら側へ移す必要がある**（静止時の値は 3dp のまま）。
-                .graphicsLayer {
-                    // **繰りと積み直りはここで1つの角度になる**（→ [sheetAngleDegrees]）。
-                    // 影もこの角度から決める。別々に持つと、同時に起きたときだけ食い違う。
-                    val angle = sheetAngleDegrees(turn(), restack())
-                    rotationX = angle
-                    transformOrigin = SHEET_HINGE
-                    // **紙は画面の半分より大きい。** 既定のカメラ距離では回した像が破綻するので、
-                    // 紙の高さから導く（→ [CAMERA_DISTANCE_FACTOR]）。
-                    cameraDistance = sheetCameraDistance(size.height, density)
-                    shadowElevation = lerp(
-                        SHEET_RESTING_SHADOW,
-                        SHEET_LIFTED_SHADOW,
-                        sheetStanding(angle)
-                    ).toPx()
-                    shape = BrowsingSheetShape
-                },
-            color = Panel,
-            shape = BrowsingSheetShape
-        ) {
-            // **裏返った紙には文字を載せない。** 面の色（`Panel`）だけが残り、それが紙の裏になる。
-            // 切り替えは真横（高さ0）の一点で起きるので、**中間の値を取らない** —
-            // 濃度で何かを言い始めた瞬間に、年代が持つ地色のチャネルへ手を出すことになる
-            // （→ system/bearing_channels.md・判断10「色とアルファを動かさない」）。
-            Box(
+        // **紙の面は帯に切って積む**（→ [CurledFace]）。曲がりの角度・表裏・継ぎ目はそちらが持つ。
+        CurledFace(turn = turn, restack = restack) {
+            Surface(
                 modifier = Modifier
                     .fillMaxSize()
+                    // **読むのはこのラムダの中だけ。** 関数の本体で [turn] を呼ぶと、
+                    // 指を動かしている間ずっと再コンポーズが走る（ここなら描画の直前に読まれる）。
+                    // 影もここが持つ。Surface の `shadowElevation` は組み立て時に決まるので、
+                    // **送りに追従させるにはこちら側へ移す必要がある**（静止時の値は 3dp のまま）。
+                    //
+                    // **回転はここには無い。** 紙は1枚の面としてではなく帯の積み重ねとして倒れる
+                    // （平面のアフィン変換では曲がらないため → 判断11）。
                     .graphicsLayer {
-                        // **判定は合成後の角度で行う。** 送りの進み具合だけを見ると、
-                        // 積み直りが重なった分だけ表の文字が真横を越えて残る。
+                        // **繰りと積み直りはここで1つの角度になる**（→ [sheetAngleDegrees]）。
+                        // 影もこの角度から決める。別々に持つと、同時に起きたときだけ食い違う。
                         val angle = sheetAngleDegrees(turn(), restack())
-                        alpha = if (sheetShowsFace(angle)) 1f else 0f
-                    }
+                        shadowElevation = lerp(
+                            SHEET_RESTING_SHADOW,
+                            SHEET_LIFTED_SHADOW,
+                            sheetStanding(angle)
+                        ).toPx()
+                        shape = BrowsingSheetShape
+                    },
+                color = Panel,
+                shape = BrowsingSheetShape
             ) { content() }
+        }
+    }
+}
+
+/**
+ * 曲がりながら倒れる紙の面。**1枚の面は原理的に曲がらないので、帯に切って積む。**
+ *
+ * ## なぜ帯なのか
+ *
+ * `graphicsLayer` の回転は**平面のアフィン変換**なので、どれだけ角度と遠近を作り込んでも
+ * 紙は真っ平らなまま倒れる。実機で返ってきた「紙が曲がる感じが足りない」は、
+ * 遠近の効き（→ [CAMERA_DISTANCE_FACTOR]）とは別に、**面が1枚である**ことそのものから来ていた。
+ *
+ * **紙を一度絵として記録し、横帯に切って帯ごとに角度を変えて描く。**
+ * 記録した1枚を切って描くので、**文字は帯をまたいでも途切れない**（継ぎ目は幾何であって内容ではない）。
+ *
+ * ## 帯の積み方 — 入れ子にする
+ *
+ * 帯は**入れ子**で、それぞれが「1つ上の帯の下端」を蝶番にして少しだけ折れる（→ [sheetBandTilt]）。
+ * こうすると各帯の位置は親の変換の中で決まるので、**折れ線がつながることが構造から保証される** —
+ * 帯を並列に置いて各自の位置を計算する形では、遠近の割り算が帯ごとに独立にかかり、
+ * **帯どうしが数百ピクセル単位でずれる。**
+ *
+ * 蝶番は帯の番号ぶんだけ下がる（`TransformOrigin(0.5f, band / bands)`）。
+ * **回す角度は絶対角ではなく差分**で、絶対角のほうは表裏の判定が使う。
+ *
+ * ## 描く順は蝶番から自由端へ
+ *
+ * 深さ（手前への出方）は蝶番から自由端へ**単調に増える**ので、この順に描けば
+ * **奥から手前**になる（→ `BookletCurlGeometryTest`）。入れ子の子は親より後に描かれるため、
+ * 順序は構造がそのまま与える。
+ *
+ * ## 表裏は帯ごとに決まる
+ *
+ * 曲がった紙では、**同じ瞬間に表を向いている帯と裏を向いている帯が同居する。**
+ * 帯ごとの角度で判定し（→ [sheetShowsFace]）、裏の帯は記録した絵ではなく紙の面の色だけを置く。
+ * **入れ替わる瞬間のその帯は真横（高さ0）**なので、切り替わりは帯ごとに見えない —
+ * 1枚の面だったときと同じ理屈が、帯の数だけ成り立つ。
+ *
+ * ## 平らなときはこの経路へ入らない
+ *
+ * 記録を経由すると文字の描かれ方が変わりうるので、**静止時は本物をそのまま描く**
+ * （→ [sheetLiesFlat]）。判断9 で実機確認した佇まいは「1ピクセルも変えない」と決めてある。
+ *
+ * **`internal` なのは、画素を数える検査が本番と同じ帯で回すため**（→ `BookletSheetPerspectiveTest`）。
+ * 写しを持つと、帯の積み方だけ変わったときに検査が付いてこない。
+ */
+@Composable
+internal fun BoxScope.CurledFace(
+    turn: () -> Float,
+    restack: () -> Float,
+    content: @Composable () -> Unit
+) {
+    val face = rememberGraphicsLayer()
+
+    // **裏の面の色は組み立て時に読む。** `Panel` は @Composable なので描画のラムダからは読めない。
+    val back = Panel
+
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .drawWithCache {
+                // **記録は絵の写しではなく、描画命令の記録である。** 中の面が描き直されれば
+                // そのまま反映されるので、扉が届いてもここを取り直す必要はない。
+                face.record { drawContent() }
+                onDrawWithContent {
+                    if (sheetLiesFlat(sheetAngleDegrees(turn(), restack()))) drawContent()
+                }
+            }
+    ) { content() }
+
+    CurlBand(band = 0, face = face, back = back, turn = turn, restack = restack)
+}
+
+/**
+ * 帯1枚と、その下に続く帯すべて。**再帰で積む。**
+ *
+ * 描くのは**自分の帯の行だけ**で、残りは切り抜く。上端と下端の帯だけは紙の外へ切り口を広げる —
+ * そこには影が出ており、帯の境で切ると**紙の縁の影が消える。**
+ * 横は常に広げておく（左右の影は全部の帯に出る）。
+ */
+@Composable
+private fun BoxScope.CurlBand(
+    band: Int,
+    face: GraphicsLayer,
+    back: Color,
+    turn: () -> Float,
+    restack: () -> Float
+) {
+    Box(
+        modifier = Modifier
+            .matchParentSize()
+            .graphicsLayer {
+                val angle = sheetAngleDegrees(turn(), restack())
+                // **渡すのは1つ上の帯との差分**（→ [sheetBandTilt]）。先頭だけが紙の蝶番から折れる。
+                rotationX = sheetBandTilt(angle, band)
+                // 蝶番は帯の番号ぶんだけ下がる。先頭は [SHEET_HINGE] と同じ点になる。
+                transformOrigin = TransformOrigin(0.5f, band.toFloat() / CURL_BANDS)
+                // **紙は画面の半分より大きい。** 既定のカメラ距離では回した像が破綻するので、
+                // 紙の高さから導く（→ [CAMERA_DISTANCE_FACTOR]）。
+                cameraDistance = sheetCameraDistance(size.height)
+            }
+            .drawBehind {
+                val angle = sheetAngleDegrees(turn(), restack())
+                if (sheetLiesFlat(angle)) return@drawBehind
+
+                val bandHeight = size.height / CURL_BANDS
+                val top = bandHeight * band
+                val bottom = top + bandHeight
+                clipRect(
+                    left = -size.width,
+                    top = if (band == 0) -size.height else top,
+                    right = size.width * 2f,
+                    bottom = if (band == CURL_BANDS - 1) size.height * 2f else bottom
+                ) {
+                    if (sheetShowsFace(sheetBandAngle(angle, band))) {
+                        drawLayer(face)
+                    } else {
+                        // **裏は文字を載せない紙の面。** 色だけを置く（→ 判断10「色を動かさない」）。
+                        drawRect(
+                            color = back,
+                            topLeft = Offset(0f, top),
+                            size = Size(size.width, bandHeight)
+                        )
+                    }
+                }
+            }
+    ) {
+        if (band + 1 < CURL_BANDS) {
+            CurlBand(band = band + 1, face = face, back = back, turn = turn, restack = restack)
         }
     }
 }
