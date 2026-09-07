@@ -456,6 +456,33 @@ internal fun peelLift(peel: Float): Float {
 }
 
 /**
+ * 紙が影を落としてよいか。**3D で回っている間は落とさない。**
+ *
+ * ## なぜ切るのか（2026-09-07 の実機レビュー `P2-1`）
+ *
+ * **積み直りの最中にめくると、折り返しから離れた大きな灰色の影が数フレーム出る。**
+ * 実機で 0.80〜0.90 秒付近に再現し、同じ操作で2回とも出た。
+ *
+ * 材料は2つあり、**両方が揃ったときだけ**壊れる。
+ *
+ * | 材料 | いつ揃うか |
+ * |---|---|
+ * | 親が**遠近つきで3Dに回っている** | 積み直りの 320ms のあいだだけ |
+ * | 子の輪郭が**多角形（`Outline.Generic`）で、影を出している** | めくっている最中だけ |
+ *
+ * Android の影は輪郭を親の空間へ変換して作るが、**遠近の入った変換は射影**なので、
+ * パスから作る影はそこで崩れる。**束の縁は角丸矩形（`Outline.Rounded`）なので同じ形にならない** —
+ * だから切るのは**めくりの2層だけ**でよい。
+ *
+ * **切っても切り抜きは残る。** `clip = true` を別に置いてあるので、影を 0 にしても形は効く
+ * （2026-09-06 に「影が消えたときの保険」として入れた。**その保険が翌日効いた**）。
+ *
+ * **失うものは小さい。** 回っている間は**傾きと遠近**が「持ち上がっている」ことを言っており、
+ * 影はもともと*置かれている*ことを言う道具である。
+ */
+internal fun sheetCastsShadow(restack: Float): Boolean = sheetTiltDegrees(restack) <= 0f
+
+/**
  * 積み直りを再生するかどうかだけを決める。**見るのは束の世代だけ。**
  *
  * ## なぜ「`Loading` を観測できたか」で決めないのか
@@ -804,7 +831,7 @@ internal fun BookletSheet(
         // 形で切るので、**文字はページの中で切れたところで途切れる** — 折り返した紙の裏へ
         // 文字が回り込まないのはそのためである。
         //
-        // **`clip` は影が消えたときのための保険である**（2026-09-06 に実測）。
+        // **`clip` は影が消えたときのための保険である**（2026-09-06 に実測、**2026-09-07 に効いた**）。
         // Compose は `clip` が false でも**影のために輪郭を要求する**ので
         // （`outlineNeeded = outline != null && (clipToOutline || elevation > 0f)`）、
         // **影が出ている限り `clip` を落としても画素は1つも変わらない。**
@@ -818,7 +845,9 @@ internal fun BookletSheet(
                 .graphicsLayer {
                     shape = PeelShape(peel = sheetPeel(turn()), flap = false)
                     clip = true
-                    shadowElevation = SHEET_RESTING_SHADOW.toPx()
+                    // **回っている間は影を出さない**（→ [sheetCastsShadow]）。
+                    shadowElevation =
+                        if (sheetCastsShadow(restack())) SHEET_RESTING_SHADOW.toPx() else 0f
                 }
                 .background(Panel)
         ) { content() }
@@ -832,11 +861,12 @@ internal fun BookletSheet(
                     val peel = sheetPeel(turn())
                     shape = PeelShape(peel = peel, flap = true)
                     clip = true
-                    shadowElevation = lerp(
-                        SHEET_RESTING_SHADOW,
-                        SHEET_LIFTED_SHADOW,
-                        peelLift(peel)
-                    ).toPx()
+                    // **回っている間は影を出さない**（→ [sheetCastsShadow]）。
+                    shadowElevation = if (sheetCastsShadow(restack())) {
+                        lerp(SHEET_RESTING_SHADOW, SHEET_LIFTED_SHADOW, peelLift(peel)).toPx()
+                    } else {
+                        0f
+                    }
                 }
                 .background(Panel)
         )

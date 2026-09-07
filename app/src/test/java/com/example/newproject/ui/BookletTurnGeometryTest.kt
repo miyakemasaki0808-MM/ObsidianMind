@@ -5,6 +5,7 @@ import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
 import com.example.newproject.ui.screen.CAMERA_UNIT_PX
 import com.example.newproject.ui.screen.SHEET_SETTLE_MILLIS
 import com.example.newproject.ui.screen.sheetCameraDistance
+import com.example.newproject.ui.screen.sheetCastsShadow
 import com.example.newproject.ui.screen.sheetFitScale
 import com.example.newproject.ui.screen.sheetShowsStack
 import com.example.newproject.ui.screen.sheetSlotShift
@@ -151,6 +152,25 @@ class BookletTurnGeometryTest {
             "積み直りの最中に影が深くなっていません。",
             sheetStanding(sheetTiltDegrees(restack = 0f)) > 0f
         )
+    }
+
+    /**
+     * **回っている間は影を出さない**（2026-09-07 の実機レビュー `P2-1`）。
+     *
+     * 積み直りの最中にめくると、**折り返しから離れた大きな灰色の影**が数フレーム出た。
+     * 材料は「親が遠近つきで3Dに回っている」×「子の輪郭が多角形で影を出している」の2つで、
+     * **両方揃ったときだけ**壊れる。Android の影は輪郭を親の空間へ変換して作るが、
+     * **遠近の入った射影変換の中ではパスの影が崩れる。**
+     *
+     * **束の縁（角丸矩形）は同じ形にならない**ので、切るのはめくりの2層だけでよい。
+     */
+    @Test
+    fun `回っている間は影を出さない`() {
+        assertFalse("傾いている紙が影を出しています。", sheetCastsShadow(restack = 0f))
+        assertFalse(sheetCastsShadow(restack = 0.5f))
+        assertFalse("積み終わる直前に影が戻っています。", sheetCastsShadow(restack = 0.99f))
+
+        assertTrue("積み終わった紙が影を出していません。", sheetCastsShadow(restack = 1f))
     }
 
     // ── 枠の中に収まる ────────────────────────────────────────────────────

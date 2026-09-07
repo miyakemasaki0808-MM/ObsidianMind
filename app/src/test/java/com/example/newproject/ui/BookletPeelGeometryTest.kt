@@ -240,6 +240,13 @@ class BookletPeelGeometryTest {
             "めくれた角の影が持ち上がりから決まっていません。影だけが「角が浮いている」ことを言います。",
             sheet.contains("peelLift(peel)")
         )
+        assertEquals(
+            "めくりの2層が、回っている間の影を切っていません。**遠近つきで回る親の中で" +
+                "多角形の輪郭から影を作らせると、折り返しから離れた大きな影が出る**" +
+                "（2026-09-07 の実機レビュー）。表と裏の両方で切ります。",
+            2,
+            Regex("sheetCastsShadow\\(restack\\(\\)\\)").findAll(sheet).count()
+        )
     }
 
     /**
