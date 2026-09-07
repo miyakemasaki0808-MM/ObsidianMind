@@ -1,9 +1,10 @@
 # 冊子モード（引いたら10枚束ね、ZINEのようにめくる）
 
-**状態:** 実装済み。ページ復帰・回転／Fold・読み上げ・NavHost往復・紙面の佇まい（判断9）は実機検証済み。
-**繰る手触り（判断10・判断11）は 2026-09-04 に天綴じの半回転へ作り直し、2026-09-05 に枠へ収める縮小と
-紙の曲がり（帯）を足した。実機未確認**（`BOOK-31`〜`BOOK-50`）。
-**最終検証:** 2026-09-05 / 曲がり（JVM 緑・Lint Error 0／Warning 0。`BookletNavigationTest` 2/2、`BookletScreenTest` 14/14 は前版で確認済み。**繰る手触りの実機は未実施**）
+**状態:** 実装済み・**完了（2026-09-07）**。ページ復帰・回転／Fold・読み上げ・NavHost往復・紙面の佇まい（判断9）に加え、
+**めくる手触り（判断10・判断11）も実機で確認した**（`BOOK-31`〜`BOOK-50`。天綴じの角めくり・620msの送り・枠へ収める縮小）。
+**残る未確認は TalkBack の実メニュー操作と音声、分割画面**で、**オーナー判断でこれ以上の実機確認は求めない**。
+**最終検証:** 2026-09-07 / 影の抑止（JVM 1,301件・Lint Error 0／Warning 0／Hint 4。実機は 2026-09-07 に24件成功、
+最後の影修正は机上レビューで受理し、実機再実行はオーナー判断で省略）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）/ `BookletTurnGeometryTest`（繰りの向き）/ `BookletCurlGeometryTest`（曲がりの幾何）/ `BookletSheetPerspectiveTest`（画素）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
@@ -874,7 +875,9 @@ Android の影は輪郭を親の空間へ変換して作るが、**遠近の入�
 `BOOK-41`〜`BOOK-46` を足した（表裏・重なり・戻す向き・**重さの判定**・**積み直り後に紙が水平へ戻って縁が出ていること**）。
 → [lessons](../lessons.md) L59
 
-**残る未確認（実機で見る）:** **天綴じのめくる手触り一式（`BOOK-31`〜`BOOK-50`）**、
+**残る未確認（2026-09-07 時点）:** **TalkBack の実メニュー操作と音声・分割画面**だけ。
+めくる手触り一式（`BOOK-31`〜`BOOK-50`）は実機で確認済みで、**最後の影修正だけは机上レビューで受理した**
+（オーナー判断で実機再実行を求めない）。以下は当時の未確認一覧である — 
 遅い外部SAFでのLoading中Back／ホーム、
 初回セットアップ時にボタンが3つ並んだときの見分けやすさ。8KB読み出しと前後1ページ先読みは
 ローカルプロバイダでは待ちを観測できず、速度上限までは保証していない。
