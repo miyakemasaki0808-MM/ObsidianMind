@@ -80,7 +80,7 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 >
 > **めくる手触りの2件は 2026-09-07 に完了し、台帳から落とした** —
 > 天綴じの角めくり・620msの送り・枠へ収める縮小まで入り、
-> **実機確認はオーナー判断で不要とした**（→ [change_history](../dev/change_history.md)）。
+> **オーナー判断で問題なし**（→ [change_history](../dev/change_history.md)）。
 
 ### 佇まいの見直し（静）— 紙面の形を起点に、N-9・N-10 へ広げる
 
