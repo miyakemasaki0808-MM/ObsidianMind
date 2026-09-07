@@ -16,6 +16,22 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-06 | — | ロードマップの実機ケースの写しを外し、欠けていた Next の段を置き、Later 4件を昇格基準で当て直した | — |
+| 2026-09-07 | — | めくる手触りの2件を、机上レビューとオーナー判断で問題なしとして完了させた | **[booklet_mode](features/booklet_mode.md)** 判断10・判断11 |
+| 2026-09-07 | — | 紙が3Dで回っている間はめくりの影を切り、積み直りと重ねたときの影の破綻を塞いだ | **[booklet_mode](features/booklet_mode.md)** 判断11・[review](../review/README.md) |
+| 2026-09-06 | — | 冊子下部のページ表示を外し、位置は読み上げにだけ残した。サブタイトルも短くした | **[booklet_mode](features/booklet_mode.md)** 判断9・§9 |
+| 2026-09-06 | — | 画素の検査を本番の紙そのものへ通し、切り抜きを表と裏それぞれで見るようにした | **[booklet_mode](features/booklet_mode.md)** 判断11・[review](../review/README.md) |
+| 2026-09-06 | — | 実機ケースとロードマップに残っていた半回転・旧速度・帯の記述を折り目へ同期した | [review](../review/README.md) |
+| 2026-09-06 | — | 年代の色は「読む面」だけに載ると決め、チャネルが面を選ぶことを割り当ての正本へ書いた | **[bearing_channels](system/bearing_channels.md)** §9・[note_age_paper](features/note_age_paper.md) |
+| 2026-09-06 | — | めくりを折り目が斜めに走る形へ作り替え、右下の角から左上へめくれるようにした | **[booklet_mode](features/booklet_mode.md)** 判断11 |
+| 2026-09-06 | — | 指を離したあとのめくりを、ばねから時間を決めた620ミリ秒へ変えてゆっくりにした | **[booklet_mode](features/booklet_mode.md)** 判断10 |
+| 2026-09-06 | — | 紙を8枚の帯に切って入れ子に積み、倒れている最中だけ弓なりに曲げた（同日に折り目へ作り替え） | **[booklet_mode](features/booklet_mode.md)** 判断11 |
+| 2026-09-06 | — | カメラ距離の単位を画素の実測で決め直し、実効距離を紙の高さの1.5倍へ戻した | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L60 |
+| 2026-09-05 | — | 倒れた紙が画面の外へ出ないよう、倒れ量から出した縮小を回転の外側へ掛けた | **[booklet_mode](features/booklet_mode.md)** 判断10 |
+| 2026-09-05 | — | 投影検査の基準点判定を絶対値にし、下端が細くなる側も落とすことを判定自身の検査で固定した | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md) |
+| 2026-09-05 | — | 冊子の符号修正を独立レビューと実機で確認し、逆方向の解消と静止幅検査の不足を記録した。 | [レビュー](../review/README.md) |
+| 2026-09-05 | — | 冊子の紙が奥へ倒れていた回転方向を反転し、投影された下端幅を画素で見る検査を置いた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L61 |
+| 2026-09-05 | — | 冊子のレビュー対応を実機で確認し、可視条件の不一致を解消、遠近の回転方向不一致を記録した | [review](../review/README.md) |
 | 2026-09-05 | — | 冊子の実機継続検証で狭幅・回転・全枚数・履歴不増を確認し、残る受理条件を整理した | [review](../review/README.md) |
 | 2026-09-05 | — | カメラ距離の単位を直して遠近を実際に効かせ、読み上げ操作の送りを指と同じ進み方に揃えた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md) L60 |
 | 2026-09-05 | — | 指を離したあとの倒れ切りを柔らかくし、回した紙の遠近を強めた | **[booklet_mode](features/booklet_mode.md)** 判断10 |

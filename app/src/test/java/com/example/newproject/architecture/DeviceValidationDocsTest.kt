@@ -80,9 +80,19 @@ class DeviceValidationDocsTest {
             "課題台帳（_wip/current_issues.md）" to repositoryRoot().resolve("docs/_wip/current_issues.md")
         )
 
-        val highest = sources.mapValues { (name, file) ->
-            requireNotNull(highestCaseNumber(file)) { "冊子のケース番号が見つかりません: $name" }
-        }
+        // **課題台帳は、冊子の課題が開いている間だけ数える。**
+        // 課題が閉じれば台帳は冊子ケースに触れなくなる（2026-09-07 にめくりの2件が閉じた）。
+        // **触れていない台帳を「ずれている」と数えると、閉じた瞬間に落ちる検査になる。**
+        // 触れている限りは今までどおり一致を要求する。
+        val ledger = "課題台帳（_wip/current_issues.md）"
+        val highest = sources.mapNotNull { (name, file) ->
+            val number = highestCaseNumber(file)
+            when {
+                number != null -> name to number
+                name == ledger -> null
+                else -> error("冊子のケース番号が見つかりません: $name")
+            }
+        }.toMap()
         val expected = highest.getValue("実機ケース")
         val stale = highest.filterValues { it != expected }
 

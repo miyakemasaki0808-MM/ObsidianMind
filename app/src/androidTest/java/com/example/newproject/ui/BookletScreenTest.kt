@@ -1,5 +1,7 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -15,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.model.BookletCover
@@ -131,10 +132,10 @@ class BookletScreenTest {
         show(BookletState.Open(entries))
 
         turnPage("次のページへ")
-        composeRule.onNodeWithContentDescription("2/2ページ").assertIsDisplayed()
+        assertPagePosition("2/2ページ")
 
         turnPage("前のページへ")
-        composeRule.onNodeWithContentDescription("1/2ページ").assertIsDisplayed()
+        assertPagePosition("1/2ページ")
     }
 
     /** 読み上げ操作（スイッチアクセス等）から1ページ動かす。 */
@@ -159,8 +160,7 @@ class BookletScreenTest {
             )
         )
 
-        composeRule.onNodeWithText("1 / 2").assertIsDisplayed()
-        composeRule.onNodeWithContentDescription("1/2ページ").assertIsDisplayed()
+        assertPagePosition("1/2ページ")
     }
 
     @Test
@@ -261,4 +261,18 @@ class BookletScreenTest {
             }
         }
     }
+
+    /**
+     * いま何枚目かを、**読み上げの状態説明**で確かめる。
+     *
+     * **画面には出ない**（2026-09-06 にページ表示を外した）。位置はスワイプでしか分からないので、
+     * **読み上げにだけ残してある**（→ `bookletPagePosition`）。
+     */
+    private fun assertPagePosition(spoken: String) {
+        composeRule.onNode(
+            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, spoken),
+            useUnmergedTree = true
+        ).assertIsDisplayed()
+    }
+
 }
