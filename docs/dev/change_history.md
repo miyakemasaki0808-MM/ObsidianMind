@@ -17,6 +17,7 @@
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
 | 2026-09-09 | — | 冊子の分野色を設計レビューし、保存・分類・表示の契約に関する7件を受付と課題台帳へ記録した | [review](../review/README.md) |
+| 2026-09-09 | — | 分野色に外部提案4件を取り込んだ（走査時の一括ヒント・語彙の入れ替え・自己修復・パレット規則） | [note_field_color](features/note_field_color.md) 判断14・15 |
 | 2026-09-09 | — | 分野色の設計レビュー7件を全件閉じ、設計書を完成させた（判断8〜13） | [note_field_color](features/note_field_color.md) 判断8〜13 |
 | 2026-09-09 | — | 冊子の分野色の設計書を起こし、Vault実測とAI段を作る判断を記録した | [note_field_color](features/note_field_color.md) 判断4 |
 | 2026-09-09 | — | 色チャネルの持ち主を面ごとに割り直し、冊子の面を分野へ渡した（N-9 取り下げ・N-18 新設） | [bearing_channels](system/bearing_channels.md) 判断6 |
