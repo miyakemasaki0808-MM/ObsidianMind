@@ -35,9 +35,7 @@ class DeviceValidationDocsTest {
             "reading_trace_backup.md",
             "booklet_mode.md"
         )
-        val actual = validationDir().listFiles { file -> file.extension == "md" && file.name != "README.md" }
-            .orEmpty()
-            .associateBy { it.name }
+        val actual = caseFiles().associateBy { it.name }
         val missingFiles = expected - actual.keys
         val requiredHeadings = listOf("## 正本", "## 適用条件", "## 検証前", "## ケース", "## 後処理", "## 記録")
         val malformed = actual.values.mapNotNull { file ->
@@ -157,10 +155,80 @@ class DeviceValidationDocsTest {
             .firstOrNull { it.isFile && it.name == "$className.kt" }
             ?.let { TEST_ANNOTATION.findAll(it.readText()).count() }
 
+    /**
+     * 機能別ケースだけを返す。**手順書は含めない。**
+     *
+     * `README.md`（共通手順）と `quick_check.md`（簡易版）は再現手順の表を持たないので、
+     * 「正本・適用条件・検証前・ケース・後処理・記録」の形を要求すると通らない。
+     * **形の検査はそれぞれの役割ごとに別の @Test が持つ。**
+     */
     private fun caseFiles(): List<File> =
-        validationDir().listFiles { file -> file.extension == "md" && file.name != "README.md" }
+        validationDir().listFiles { file -> file.extension == "md" && file.name !in PROCEDURE_DOCS }
             .orEmpty()
             .sortedBy { it.name }
+
+    /**
+     * **簡易版のスモークセットが、実在するケースだけを指していることを固定する。**
+     *
+     * ## なぜ要るか
+     *
+     * 簡易版は「通すケースを絞る」ことで成り立つので、**絞った先が実在しなければ
+     * 何も通さないまま緑になる。** ケースIDは後から足されもすれば消えもするが、
+     * **文書側には何も起きない**（番号をここへ書くと課題IDの走査に当たるので、例は挙げない）。
+     *
+     * 機能別ケースを1本足したときにスモークを決め忘れる形も同じで、
+     * **決め忘れは「簡易版の射程外」と区別できない**ので、表への登録を強制する。
+     *
+     * ## 見ているもの
+     *
+     * 1. 簡易版の手順書が、選抜と観測手段の節を持つ
+     * 2. スモーク表のIDが、そのケース表に**行として実在する**
+     * 3. **すべての機能別ケースがスモーク表に1行ある**
+     *
+     * ## 見ていないもの
+     *
+     * **選んだIDが妥当かは見ない。** 妥当さは選抜規則を人が当てて決める（→ quick_check.md §選抜規則）。
+     */
+    @Test
+    fun `簡易版のスモークセットは実在するケースを指す`() {
+        val quick = validationDir().resolve("quick_check.md")
+        assertTrue("簡易版の手順書がありません: $quick", quick.isFile)
+        val text = quick.readText()
+
+        val requiredHeadings = listOf(
+            "## 使う場面",
+            "## 選抜規則",
+            "## スモークセット",
+            "## 観測手段",
+            "## 後処理",
+            "## 記録"
+        )
+        val missingHeadings = requiredHeadings.filterNot(text::contains)
+        assertTrue("簡易版の手順書に必須の節がありません: ${missingHeadings.joinToString()}", missingHeadings.isEmpty())
+
+        val rows = SMOKE_ROW.findAll(text).associate { match ->
+            val (fileName, ids) = match.destructured
+            fileName to CASE_ID.findAll(ids).map { it.groupValues[1] }.toList()
+        }
+
+        val unknownIds = rows.flatMap { (fileName, ids) ->
+            val caseFile = validationDir().resolve(fileName)
+            if (!caseFile.isFile) return@flatMap listOf("$fileName: ケース表が見つかりません")
+            val defined = CASE_ROW.findAll(caseFile.readText()).map { it.groupValues[1] }.toSet()
+            ids.filterNot(defined::contains).map { "$fileName: `$it` は表に無い" }
+        }.sorted()
+        assertTrue("簡易版が実在しないケースを指しています:\n${unknownIds.joinToString("\n")}", unknownIds.isEmpty())
+
+        val emptyRows = rows.filterValues { it.isEmpty() }.keys.sorted()
+        assertTrue("スモークIDが1件も無い行があります: ${emptyRows.joinToString()}", emptyRows.isEmpty())
+
+        val unlisted = (caseFiles().map { it.name }.toSet() - rows.keys).sorted()
+        assertTrue(
+            "スモークセットに載っていない機能別ケースがあります（射程外なら、そう書いた行を足すこと）: " +
+                unlisted.joinToString(),
+            unlisted.isEmpty()
+        )
+    }
 
     @Test
     fun `Codex実機検証の入口が旧運用へ戻っていない`() {
@@ -180,11 +248,20 @@ class DeviceValidationDocsTest {
     }
 
     private companion object {
+        /** 手順を書く文書。**機能別ケースの形を当てない。** */
+        val PROCEDURE_DOCS = setOf("README.md", "quick_check.md")
+
+        /** 簡易版のスモーク行。`| 機能 | [file.md](file.md) | \`ID\` \`ID\` |` の3列目からIDを拾う。 */
+        val SMOKE_ROW = Regex("""^\| [^|]+ \| \[([a-z_]+\.md)\]\([^)]+\) \|([^|]+)\|""", RegexOption.MULTILINE)
+
         /** 冊子の実機ケースID。**番号だけを取り、文字列としては組み立てない**（課題IDの走査に当たるため）。 */
         val BOOKLET_CASE = Regex("""BOOK-(\d{2})""")
 
+        /** バッククォートで囲まれたケースID。スモーク行の3列目から拾う。 */
+        val CASE_ID = Regex("""`([A-Z][A-Z0-9]*-\d+[a-z]?)`""")
+
         /** `| \`CASE-01\` | … |` の形のケース行。**表の行だけを数える**（本文中の参照は数えない）。 */
-        val CASE_ROW = Regex("""^\| `([A-Z][A-Z0-9]*-\d+)` \|""", RegexOption.MULTILINE)
+        val CASE_ROW = Regex("""^\| `([A-Z][A-Z0-9]*-\d+[a-z]?)` \|""", RegexOption.MULTILINE)
 
         /** `` `XxxTest` `` … `N件` を書いた行。 */
         val INSTRUMENTATION_ROW = Regex("""`(\w+Test)`[^|]*\|[^|]*?(\d+)件""")
