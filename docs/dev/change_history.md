@@ -17,6 +17,7 @@
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
 | 2026-09-09 | — | 冊子の分野色を設計レビューし、保存・分類・表示の契約に関する7件を受付と課題台帳へ記録した | [review](../review/README.md) |
+| 2026-09-09 | — | 分野色の設計レビュー7件のうち5件を閉じた（3値・保存キー・索引の分離・束への反映） | [note_field_color](features/note_field_color.md) 判断8〜11 |
 | 2026-09-09 | — | 冊子の分野色の設計書を起こし、Vault実測とAI段を作る判断を記録した | [note_field_color](features/note_field_color.md) 判断4 |
 | 2026-09-09 | — | 色チャネルの持ち主を面ごとに割り直し、冊子の面を分野へ渡した（N-9 取り下げ・N-18 新設） | [bearing_channels](system/bearing_channels.md) 判断6 |
 | 2026-09-09 | — | ランチャー再タップで積まれた MainActivity を onCreate で畳み、起動の実機ケースを新設した | [opening_animation](features/opening_animation.md) 判断7 / [L65](lessons.md#l65-検証側の回避は不具合の起票を止める) |
