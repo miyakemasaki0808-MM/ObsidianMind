@@ -1,9 +1,10 @@
 # 起動OPアニメーション
 
-**状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）
+**状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）。
+**ランチャー再タップの重複起動を畳むガードは実装済み・実機検証待ち**（→ 判断7）
 **最終検証:** 2026-08-12 / `521768b`（総時間2,000ms と `vigilithOpeningMotion` の全区間境界を実装と突合）
-**関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）
-**関連テスト:** `VigilithOpeningMotionTest`
+**関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）/ `MainActivity.kt` / `domain/LauncherEntry.kt`
+**関連テスト:** `VigilithOpeningMotionTest` / `LauncherEntryTest` / `ActivityRecreationTest`（instrumentation）
 **正本:** この文書
 
 **対象領域:** アプリ起動時のブランド演出（システムスプラッシュ＋Compose OP）
@@ -146,6 +147,42 @@ MainActivity
 モーション側は登退場だけを制御する。
 **Adaptive Icon 背景と数値を比較しやすくなり、二重のα乗算で意図より暗くなることを防ぐ。**
 
+### 判断7: ランチャーの重複起動は畳む。`launchMode` は変えない
+
+**再生条件（§5）は書いたとおりに効いていた。足りなかったのは前提のほうである。**
+`savedInstanceState == null` は「新規Activityか」を正しく見ている。想定していなかったのは、
+**ランチャーのアイコンが新しい `MainActivity` を積むことがある**という経路だった。
+
+`MainActivity` は `launchMode` を持たない（＝`standard`）。**タスクの基点Intentが
+`MAIN`＋`LAUNCHER` 以外で作られていると**、ランチャーのアイコンが投げるIntentは既存タスクと
+一致しないと判定され、新しい Activity が上へ積まれる。積まれるたびに `onCreate(null)` が走る。
+
+| タスクを作った起動のしかた | ランチャー再タップ |
+|---|---|
+| `MAIN`＋`LAUNCHER` 付き（通常のランチャー／Android Studio の Run） | 既存タスクへ復帰し、**OPは出ない** |
+| 素のコンポーネント指定（`am start -n …`） | **タップのたびに1枚増える。**毎回OPが走る |
+
+**重いのは二次症状のほうである。** 積み重なった状態では**戻るボタンでアプリを抜けられない** —
+同じ画面が1枚ずつ剥がれるだけになる。OPの再生は目印であって、実害はこちらにある。
+
+**`onCreate` の先頭で畳む。** 「タスクの最初の1枚ではない、かつ受け取ったIntentがランチャーのもの」なら
+`finish()` して既存タスクへ委ねる →
+[`isDuplicateLauncherLaunch`](../../../app/src/main/java/com/example/newproject/domain/LauncherEntry.kt)。
+`installSplashScreen()` **より前**に判定する — すぐ閉じるActivityにスプラッシュを掛けると、
+畳むまでの一瞬だけ起動画面が見える。
+
+**`launchMode` は変えない。** `singleTask` はタスク親和性ごと挙動が変わり、この1点に対して代償が大きい。
+そのうえ `launchMode` を付けるとランチャー再タップは `onNewIntent` へ回るので、
+**ガードは呼ばれないまま残って死ぬ**（アプリもテストも緑のまま）。`LauncherEntryTest` が
+マニフェストを見てこの前提を固定する。
+
+**ランチャー以外の入口は畳まない。** 通知・ディープリンクまで畳むと、
+「アプリが既に開いているときだけリンクが効かない」という別の欠陥になる。
+現在 intent-filter はランチャー用の1本だけなので**出荷面では潜在**だが、入口を足した時点で表に出る。
+
+**この経路は実機検証が先に踏んでいた**（2026-08-26）。回避して先へ進んだため起票されず、
+表に出たのは9日後だった → [lessons L65](../lessons.md#l65-検証側の回避は不具合の起票を止める)。
+
 ### 実装上の注意
 
 - **外部ラムダは `rememberUpdatedState` 経由で呼ぶ。** `onFinished` は `LaunchedEffect`（長寿命ブロック）から
@@ -165,10 +202,12 @@ MainActivity
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** `VigilithOpeningMotionTest`（演出順と終端の値）
-- **instrumentation:**
-
-  > **該当なし:** 起動演出は実端末の目視が主で、自動化していない。
+- **JVMテスト:** `VigilithOpeningMotionTest`（演出順と終端の値）／
+  `LauncherEntryTest`（重複起動の判定の真理値表と、`launchMode` を持たない前提）
+- **instrumentation:** `ActivityRecreationTest`（同一プロセス内の再生成でOPを再生し直さない）。
+  **演出そのものは自動化していない** — 実端末の目視が主である。
+- **実機:** [app_launch](../../review/device_validation/app_launch.md) の `LAUNCH-01`〜`LAUNCH-05`。
+  **タスクの基点Intentが食い違う経路は `ActivityRecreationTest` の射程外**なので、ここでしか見られない。
 
 - **保証していないこと:**
   - **見た目の印象は自動検証していない。** 純関数が返す数値の順序だけを固定している

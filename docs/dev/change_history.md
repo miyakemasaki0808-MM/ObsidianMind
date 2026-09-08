@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-09 | — | ランチャー再タップで積まれた MainActivity を onCreate で畳み、起動の実機ケースを新設した | [opening_animation](features/opening_animation.md) 判断7 / [L65](lessons.md#l65-検証側の回避は不具合の起票を止める) |
 | 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/readme_map.md) |
 | 2026-09-08 | — | 開発日誌に8月23〜31日の欠落を書き足し、9月分を新設した | [journal](../owner/journal/) |
 | 2026-09-08 | — | owner文書6本を実測へ直した（教訓の処遇・規模統計・冊子の機能追記・検証状態） | [lessons_summary](../owner/lessons_summary.md) |
