@@ -38,3 +38,6 @@ docs/review/device_validation/local_config.md
 docs/review/device_validation/evidence/
 # 実機検証の依頼書は使い捨て。依頼が済めば消える。
 docs/review/pending_device_validation.md
+
+# オーナーの実Vault。分析のため一時的に置くことがあるが、**絶対にコミットしない**
+MyVault/
