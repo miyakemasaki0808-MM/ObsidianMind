@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-09 | — | 色チャネルの持ち主を面ごとに割り直し、冊子の面を分野へ渡した（N-9 取り下げ・N-18 新設） | [bearing_channels](system/bearing_channels.md) 判断6 |
 | 2026-09-09 | — | ランチャー再タップで積まれた MainActivity を onCreate で畳み、起動の実機ケースを新設した | [opening_animation](features/opening_animation.md) 判断7 / [L65](lessons.md#l65-検証側の回避は不具合の起票を止める) |
 | 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/readme_map.md) |
 | 2026-09-08 | — | 開発日誌に8月23〜31日の欠落を書き足し、9月分を新設した | [journal](../owner/journal/) |
