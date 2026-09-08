@@ -16,6 +16,15 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/readme_map.md) |
+| 2026-09-08 | — | 開発日誌に8月23〜31日の欠落を書き足し、9月分を新設した | [journal](../owner/journal/) |
+| 2026-09-08 | — | owner文書6本を実測へ直した（教訓の処遇・規模統計・冊子の機能追記・検証状態） | [lessons_summary](../owner/lessons_summary.md) |
+| 2026-09-08 | — | L7・L9・L10 は統合せず相似のまま維持と決め、骨格と再検討条件を L7 へ書いた | [lessons](lessons.md) |
+| 2026-09-08 | — | 役目を終えた教訓2件（L12・L15）を転送へ畳み、生きた参照2箇所を引き継ぎ先へ付け替えた | [lessons](lessons.md) |
+| 2026-09-07 | — | 実機検証に簡易版を足した。スモークセットへ絞りスクショを撮らない運用と、一時テストの残留検査 | [quick_check](../review/device_validation/quick_check.md) |
+| 2026-09-08 | — | 編む冊子で関連ノート待ちのときの文言に「冊子を開き直すと編めます。」を足し、後追い更新は入れないと決めた | **[booklet_mode](features/booklet_mode.md)** 判断12 |
+| 2026-09-07 | — | BOOK-4のレビュー指摘3件を修正した（引き直し失敗が編む束を巻き添えにする・引き直し後に扉が読まれない・切替でめくり量が残る） | **[booklet_mode](features/booklet_mode.md)** 判断12・[findings](../review/findings.md) |
+| 2026-09-07 | — | 冊子に「編む」束を足した。済んだAI推薦から2つ目の束を作り、中のトグルで引く束と行き来する | **[booklet_mode](features/booklet_mode.md)** 判断12・[bearing_channels](system/bearing_channels.md) §6・§8 |
 | 2026-09-07 | — | 編む冊子をロードマップの先頭へ動かし、待ち条件が解けていることを書いた | — |
 | 2026-09-06 | — | ロードマップの実機ケースの写しを外し、欠けていた Next の段を置き、Later 4件を昇格基準で当て直した | — |
 | 2026-09-07 | — | めくる手触りの2件を、机上レビューとオーナー判断で問題なしとして完了させた | **[booklet_mode](features/booklet_mode.md)** 判断10・判断11 |
