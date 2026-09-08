@@ -76,10 +76,17 @@
    `connectedDebugAndroidTest` へ置き換えてはならない。
 
    ```text
+   adb -s <serial> shell am force-stop com.vigilith.ai
    adb -s <serial> shell am instrument -w -r \
      -e class <test-class[,test-class...]> \
      com.vigilith.ai.test/androidx.test.runner.AndroidJUnitRunner
    ```
+
+   **`am instrument` の前に `am force-stop` する。** `ActivityScenario` は
+   `MAIN`＋`LAUNCHER` 付きのIntentで `MainActivity` を起動するので、
+   **素のコンポーネント指定で作ったタスクが残っていると、その上へ積まれた1枚として
+   [重複起動のガード](../../dev/features/opening_animation.md)に畳まれ得る**
+   （テストがActivityの起動待ちでタイムアウトする）。タスクを捨ててから走らせれば起きない。
 10. **ケース別一時Vaultへ切り替える。** SAFでフォルダ利用を許可し、対象ノートが読めることを確認する。
 
 > **アプリの起動は、素のコンポーネント指定で行う。**

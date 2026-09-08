@@ -180,6 +180,13 @@ MainActivity
 「アプリが既に開いているときだけリンクが効かない」という別の欠陥になる。
 現在 intent-filter はランチャー用の1本だけなので**出荷面では潜在**だが、入口を足した時点で表に出る。
 
+**ガードは instrumentation の起動経路にも当たる。** `ActivityScenario` は
+`Intent.makeMainActivity()` を使うので **`MAIN`＋`LAUNCHER` 付き**で `MainActivity` を起動する。
+素のコンポーネント指定で作ったタスクが残っていると、その上へ積まれた1枚として畳まれ得る
+（Activityの起動待ちでタイムアウトする）。**実機検証は `am instrument` の前に `am force-stop` する**
+→ [共通手順](../../review/device_validation/README.md)。**ガードの副作用ではなく、
+2つの起動経路が同じタスクを共有していることが原因**なので、ガード側では直さない。
+
 **この経路は実機検証が先に踏んでいた**（2026-08-26）。回避して先へ進んだため起票されず、
 表に出たのは9日後だった → [lessons L65](../lessons.md#l65-検証側の回避は不具合の起票を止める)。
 
