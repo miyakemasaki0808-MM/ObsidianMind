@@ -30,3 +30,10 @@
 |---|---|---|
 | `2026-08-01-no9/P2-2` | 連続削除が同じJobを奪い合い、物理削除と画面状態がずれ得る | `起票` TRACE-3 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
+| `2026-09-09-note-field-color-design-review/P2-1` | 縮退結果が永久確定し、一時的なAI障害から回復できない | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P2-2` | 保存キーがヒント・Vault別語彙の違いを表現していない | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P2-3` | 本文なしで引く索引と永続結果の寿命が未定義 | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P2-4` | Vault別語彙の分類粒度と6色の対応が未定義 | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P2-5` | フォルダ対応表の生成元がなく縮退保証が条件不足 | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P2-6` | 保持中の引く／編む束へ色を反映する契機が未定義 | `起票` FIELD-1 |
+| `2026-09-09-note-field-color-design-review/P3-1` | システム図と検証条件に判断6以前の分岐が残る | `起票` FIELD-1 |
