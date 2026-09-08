@@ -22,6 +22,7 @@
 | 2026-09-08 | — | L7・L9・L10 は統合せず相似のまま維持と決め、骨格と再検討条件を L7 へ書いた | [lessons](lessons.md) |
 | 2026-09-08 | — | 役目を終えた教訓2件（L12・L15）を転送へ畳み、生きた参照2箇所を引き継ぎ先へ付け替えた | [lessons](lessons.md) |
 | 2026-09-07 | — | 実機検証に簡易版を足した。スモークセットへ絞りスクショを撮らない運用と、一時テストの残留検査 | [quick_check](../review/device_validation/quick_check.md) |
+| 2026-09-08 | — | 編む冊子をオーナー判断で受理し、残る実機確認範囲を完了条件から外して冊子の課題を閉じた | **[booklet_mode](features/booklet_mode.md)** 判断12「受理の範囲」・[L64](lessons.md) |
 | 2026-09-08 | — | 編む冊子で関連ノート待ちのときの文言に「冊子を開き直すと編めます。」を足し、後追い更新は入れないと決めた | **[booklet_mode](features/booklet_mode.md)** 判断12 |
 | 2026-09-07 | — | BOOK-4のレビュー指摘3件を修正した（引き直し失敗が編む束を巻き添えにする・引き直し後に扉が読まれない・切替でめくり量が残る） | **[booklet_mode](features/booklet_mode.md)** 判断12・[findings](../review/findings.md) |
 | 2026-09-07 | — | 冊子に「編む」束を足した。済んだAI推薦から2つ目の束を作り、中のトグルで引く束と行き来する | **[booklet_mode](features/booklet_mode.md)** 判断12・[bearing_channels](system/bearing_channels.md) §6・§8 |
