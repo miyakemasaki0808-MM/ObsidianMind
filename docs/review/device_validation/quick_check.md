@@ -46,6 +46,7 @@
 
 | 機能 | ケース表 | スモークID |
 |---|---|---|
+| アプリ起動（**入口**） | [app_launch.md](app_launch.md) | `LAUNCH-01` `LAUNCH-02` `LAUNCH-04` |
 | 冊子モード | [booklet_mode.md](booklet_mode.md) | `BOOK-01` `BOOK-06` `BOOK-11` `BOOK-13` `BOOK-51` `BOOK-53` `BOOK-64` |
 | 蒸留 | [reflect_distill.md](reflect_distill.md) | `DIST-01` `DIST-11` `DIST-12` `DIST-13` `DIST-15` |
 | 読書痕跡の退避 | [reading_trace_backup.md](reading_trace_backup.md) | `BACKUP-01` `BACKUP-02` `BACKUP-06` `BACKUP-09` `BACKUP-16` |
@@ -55,6 +56,8 @@
 | AI入力予算 | [ai_input_budget.md](ai_input_budget.md) | `BUDGET-01` `BUDGET-03` |
 
 **1回の簡易版で通すのは、対象機能の行＋変更面から引いた分だけ。** 他機能の行は通さない。
+**例外はアプリ起動の行で、対象機能に関わらず毎回最初に通す** — 入口が壊れていれば残りの結果に意味が無く、
+落ちた時点で打ち切れる。
 
 **`am instrument` で走るケース（`BOOK-18`・`BOOK-25`・`BOOK-47`・`REUNION-12`・`BUDGET-01`〜`05` など）は、
 スモークに入っていなくても対象機能のものは全部走らせる。** 1コマンドで合否が1行返るので、絞る対象にしない。
