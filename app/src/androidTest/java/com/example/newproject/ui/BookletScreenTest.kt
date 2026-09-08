@@ -22,7 +22,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.model.BookletCover
 import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.state.BookletBundle
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.WeaveBlockedReason
+import com.example.newproject.model.state.WeaveState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.ui.theme.AppTheme
@@ -46,7 +50,7 @@ class BookletScreenTest {
 
     @Test
     fun 扉の代表文とタイトルが出る() {
-        show(BookletState.Open(listOf(entry("ノートA", BookletCover.Ready("最初の文である。")))))
+        show(openState(listOf(entry("ノートA", BookletCover.Ready("最初の文である。")))))
 
         composeRule.onNodeWithText("最初の文である。").assertIsDisplayed()
         composeRule.onNodeWithText("ノートA").assertIsDisplayed()
@@ -56,7 +60,7 @@ class BookletScreenTest {
     fun これを読むでその1枚が渡る() {
         val opened = mutableListOf<BookletEntry>()
         val target = entry("ノートA", BookletCover.Ready("最初の文である。"))
-        show(BookletState.Open(listOf(target)), onRead = { opened += it })
+        show(openState(listOf(target)), onRead = { opened += it })
 
         composeRule.onNodeWithText("これを読む").performClick()
 
@@ -72,7 +76,7 @@ class BookletScreenTest {
      */
     @Test
     fun 読書ボタンはどのノートを開くかを名乗る() {
-        show(BookletState.Open(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
+        show(openState(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
 
         composeRule.onNodeWithContentDescription("「ノートA」を読む").assertIsDisplayed()
     }
@@ -80,7 +84,7 @@ class BookletScreenTest {
     /** 束を作った後に消えたノート。**そのページだけ**開けなくする。 */
     @Test
     fun 読めなかったページは開けない() {
-        show(BookletState.Open(listOf(entry("消えたノート", BookletCover.Failed))))
+        show(openState(listOf(entry("消えたノート", BookletCover.Failed))))
 
         composeRule.onNodeWithText("このノートは開けませんでした。").assertIsDisplayed()
         composeRule.onNodeWithText("これを読む").assertIsNotEnabled()
@@ -88,7 +92,7 @@ class BookletScreenTest {
 
     @Test
     fun 読める扉なら開ける() {
-        show(BookletState.Open(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
+        show(openState(listOf(entry("ノートA", BookletCover.Ready("本文である。")))))
 
         composeRule.onNodeWithText("これを読む").assertIsEnabled()
     }
@@ -101,7 +105,7 @@ class BookletScreenTest {
     fun 読み込み中の扉は開けない() {
         val opened = mutableListOf<BookletEntry>()
         show(
-            BookletState.Open(listOf(entry("ノートA", BookletCover.Loading))),
+            openState(listOf(entry("ノートA", BookletCover.Loading))),
             onRead = { opened += it }
         )
 
@@ -119,7 +123,7 @@ class BookletScreenTest {
     @Test
     fun 終端は実際の枚数を出す() {
         val entries = (1..3).map { entry("ノート$it", BookletCover.Ready("$it 枚目。")) }
-        show(BookletState.Open(entries))
+        show(openState(entries))
 
         repeat(entries.size) { turnPage("次のページへ") }
 
@@ -129,7 +133,7 @@ class BookletScreenTest {
     @Test
     fun 前のページへ戻れる() {
         val entries = (1..2).map { entry("ノート$it", BookletCover.Ready("$it 枚目。")) }
-        show(BookletState.Open(entries))
+        show(openState(entries))
 
         turnPage("次のページへ")
         assertPagePosition("2/2ページ")
@@ -152,7 +156,7 @@ class BookletScreenTest {
     @Test
     fun ページ位置は読み上げにも出る() {
         show(
-            BookletState.Open(
+            openState(
                 listOf(
                     entry("ノートA", BookletCover.Ready("一枚目。")),
                     entry("ノートB", BookletCover.Ready("二枚目。"))
@@ -165,7 +169,7 @@ class BookletScreenTest {
 
     @Test
     fun ノートが無ければ引けないと伝える() {
-        show(BookletState.Open(emptyList()))
+        show(openState(emptyList()))
 
         composeRule.onNodeWithText("引けるノートがありません。").assertIsDisplayed()
     }
@@ -181,7 +185,7 @@ class BookletScreenTest {
     fun 表示したページは先読みを要求する() {
         val settled = mutableListOf<Int>()
         show(
-            BookletState.Open(listOf(entry("ノートA", BookletCover.Loading))),
+            openState(listOf(entry("ノートA", BookletCover.Loading))),
             onPageSettled = { settled += it }
         )
 
@@ -236,10 +240,148 @@ class BookletScreenTest {
         assertEquals(listOf("open", "navigate"), calls)
     }
 
+    /**
+     * **引き直しの失敗は、終端で理由と再試行を同時に見せる。**
+     *
+     * 冊子ごとエラー画面へ落とすと、押してすらいない編む束と種まで消える
+     * （2026-09-07 のレビュー `P2-1`）。
+     */
+    @Test
+    fun 引き直しに失敗すると終端に理由が出て再試行できる() {
+        val entries = listOf(entry("ノートA", BookletCover.Ready("本文。")))
+        show(openState(entries, redrawError = "走査に失敗しました。"))
+
+        turnPage("次のページへ")
+
+        composeRule.onNodeWithText("走査に失敗しました。").assertIsDisplayed()
+        composeRule.onNodeWithText("もう10枚引く").assertIsEnabled()
+    }
+
+    // ── 引く⇄編むのトグル（判断12）──────────────────────────────────────────
+
+    /** **行き先が1つしか無いのに選択肢を見せない。** */
+    @Test
+    fun 種が無ければトグルを出さない() {
+        show(openState(listOf(entry("ノートA", BookletCover.Ready("本文。")))))
+
+        composeRule.onNodeWithText("引く").assertDoesNotExist()
+    }
+
+    /** **トグルは種のノート名を名乗る。** 何から編むのかが画面から分からないと選べない。 */
+    @Test
+    fun 編めるならトグルが種の名前を出す() {
+        show(weavableState())
+
+        composeRule.onNodeWithText("引く").assertIsEnabled()
+        composeRule.onNodeWithText("読書について.mdから編む").assertIsEnabled()
+    }
+
+    /**
+     * **出すが押せない。** 押せない理由を添えるのは、
+     * 出さないと「なぜ押せないのか」が画面のどこにも無いため。
+     */
+    @Test
+    fun 編めないときは押せず理由が出る() {
+        show(
+            openState(
+                entries = listOf(entry("ノートA", BookletCover.Ready("本文。"))),
+                weave = WeaveState.Blocked("読書について.md", WeaveBlockedReason.Pending)
+            )
+        )
+
+        composeRule.onNodeWithText("読書について.mdから編む").assertIsNotEnabled()
+        // **待てば編める、と読ませない。** 種は📖を押した一瞬のコピーなので、
+        // 開いたまま待っても編めるようにはならない（→ booklet_mode 判断12）。
+        composeRule.onNodeWithText("関連ノートをまだ探しています。冊子を開き直すと編めます。").assertIsDisplayed()
+    }
+
+    /** **「探している最中」と「見つからなかった」を同じ文にしない。** */
+    @Test
+    fun 候補が無かったときは探し終えたと分かる文言を出す() {
+        show(
+            openState(
+                entries = listOf(entry("ノートA", BookletCover.Ready("本文。"))),
+                weave = WeaveState.Blocked("読書について.md", WeaveBlockedReason.Empty)
+            )
+        )
+
+        composeRule.onNodeWithText("関連するノートが見つかりませんでした。").assertIsDisplayed()
+    }
+
+    @Test
+    fun 編む側へ切り替えると呼び出し側へ伝える() {
+        val modes = mutableListOf<BookletMode>()
+        show(weavableState(), onModeChange = { modes += it })
+
+        composeRule.onNodeWithText("読書について.mdから編む").performClick()
+
+        assertEquals(listOf(BookletMode.Weave), modes)
+    }
+
+    /**
+     * **編む側の終端に「もう10枚編む」は無い。**
+     * 編みは決定的なので、押しても同じ10枚が出る。数だけを最後に1回言う。
+     */
+    @Test
+    fun 編む側の終端は枚数だけを出す() {
+        val woven = (1..2).map { entry("関連$it", BookletCover.Ready("$it 枚目。")) }
+        show(
+            openState(
+                entries = listOf(entry("ノートA", BookletCover.Ready("本文。"))),
+                weave = WeaveState.Ready("読書について.md", BookletBundle(woven, bundleId = 2L)),
+                mode = BookletMode.Weave
+            )
+        )
+
+        repeat(woven.size) { turnPage("次のページへ") }
+
+        composeRule.onNodeWithText("「読書について.md」から編んだ2枚でした。").assertIsDisplayed()
+        composeRule.onNodeWithText("もう10枚引く").assertDoesNotExist()
+    }
+
+    /** 編む側を見ているときは、編む束の紙が出る（引く束ではない）。 */
+    @Test
+    fun 編む側では編んだ束が出る() {
+        show(
+            openState(
+                entries = listOf(entry("引いた1枚", BookletCover.Ready("引いた本文。"))),
+                weave = WeaveState.Ready(
+                    "読書について.md",
+                    BookletBundle(listOf(entry("編んだ1枚", BookletCover.Ready("編んだ本文。"))), bundleId = 2L)
+                ),
+                mode = BookletMode.Weave
+            )
+        )
+
+        composeRule.onNodeWithText("編んだ本文。").assertIsDisplayed()
+        composeRule.onNodeWithText("引いた本文。").assertDoesNotExist()
+    }
+
+    private fun weavableState() = openState(
+        entries = listOf(entry("ノートA", BookletCover.Ready("本文。"))),
+        weave = WeaveState.Ready(
+            "読書について.md",
+            BookletBundle(listOf(entry("関連ノート", BookletCover.Ready("関連の本文。"))), bundleId = 2L)
+        )
+    )
+
     private fun entry(title: String, cover: BookletCover) = BookletEntry(
         ref = DocumentRef("content://fake/$title"),
         title = title,
         cover = cover
+    )
+
+    /** 既定は引く束だけの冊子（編む束は持たない）。 */
+    private fun openState(
+        entries: List<BookletEntry>,
+        weave: WeaveState = WeaveState.NoSeed,
+        mode: BookletMode = BookletMode.Draw,
+        redrawError: String? = null
+    ) = BookletState.Open(
+        drawn = BookletBundle(entries),
+        weave = weave,
+        mode = mode,
+        redrawError = redrawError
     )
 
     private fun show(
@@ -247,6 +389,7 @@ class BookletScreenTest {
         onPageSettled: (Int) -> Unit = {},
         onRead: (BookletEntry) -> Unit = {},
         onDrawAgain: () -> Unit = {},
+        onModeChange: (BookletMode) -> Unit = {},
         onExit: () -> Unit = {}
     ) {
         composeRule.setContent {
@@ -256,6 +399,7 @@ class BookletScreenTest {
                     onPageSettled = onPageSettled,
                     onRead = onRead,
                     onDrawAgain = onDrawAgain,
+                    onModeChange = onModeChange,
                     onExit = onExit
                 )
             }

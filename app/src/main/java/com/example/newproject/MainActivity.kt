@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.ReadingPauseReason
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
@@ -361,7 +362,10 @@ class MainActivity : ComponentActivity() {
                                         navigateToNote = { navController.navigate("note") }
                                     )
                                 },
-                                onDrawAgain = { viewModel.openBooklet(contentResolver) },
+                                // **引く束だけを作り直す。** `openBooklet` を使うと種を取り直し、
+                                // 冊子の中で読んだノートへ黙ってすり替わる（→ 判断12）。
+                                onDrawAgain = { viewModel.drawBookletAgain(contentResolver) },
+                                onModeChange = { mode -> viewModel.setBookletMode(mode) },
                                 onExit = { navController.popBackStack() }
                             )
                         }

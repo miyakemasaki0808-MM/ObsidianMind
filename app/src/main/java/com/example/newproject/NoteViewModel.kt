@@ -12,6 +12,7 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
@@ -290,8 +291,22 @@ class NoteViewModel internal constructor(
      */
     fun openBooklet(contentResolver: ContentResolver) {
         val uri = vaultLocation.uri ?: return
-        session.drawBooklet { collectAllNotesCached(contentResolver, uri) }
+        session.openBooklet { collectAllNotesCached(contentResolver, uri) }
     }
+
+    /**
+     * 「もう10枚引く」。**引く束だけを作り直す**（→ features/booklet_mode.md 判断12）。
+     *
+     * [openBooklet] を使い回さないのは、あちらが種を取り直してしまうため —
+     * 冊子の中で別のノートを読んで戻った後だと、種が黙ってすり替わる。
+     */
+    fun drawBookletAgain(contentResolver: ContentResolver) {
+        val uri = vaultLocation.uri ?: return
+        session.drawBookletAgain { collectAllNotesCached(contentResolver, uri) }
+    }
+
+    /** 引く⇄編むの切り替え。 */
+    fun setBookletMode(mode: BookletMode) = session.setBookletMode(mode)
 
     /** ページが決まったときに呼ぶ。現在ページを覚え、前後1ページの扉を用意する。 */
     fun onBookletPageSettled(page: Int) = session.onBookletPageSettled(page)

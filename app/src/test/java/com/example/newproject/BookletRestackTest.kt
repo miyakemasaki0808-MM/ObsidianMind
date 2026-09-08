@@ -5,11 +5,17 @@ import androidx.compose.animation.core.tween
 import androidx.compose.runtime.BroadcastFrameClock
 import androidx.compose.ui.MotionDurationScale
 import com.example.newproject.controller.BookletController
+import com.example.newproject.model.BookletSeed
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.BookletBundle
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.visibleBundle
 import com.example.newproject.ui.screen.BookletRestackRule
 import com.example.newproject.ui.screen.RESTACK_MILLIS
 import kotlinx.coroutines.CompletableDeferred
@@ -59,11 +65,11 @@ class BookletRestackTest {
         // 中身の比較で代用できないことをここで固定する。
         val notes = listOf(noteFile("ノート1.md"), noteFile("ノート2.md"))
 
-        controller.draw { notes }
-        assertFalse("最初の束は「届いた」ではなく「もう在った」", rule.onBundle(observe(store).drawId))
+        controller.openPlain { notes }
+        assertFalse("最初の束は「届いた」ではなく「もう在った」", rule.onBundle(observe(store).visibleBundle.bundleId))
 
-        controller.draw { notes }
-        assertTrue("キャッシュ経由の引き直しで再生されない", rule.onBundle(observe(store).drawId))
+        controller.openPlain { notes }
+        assertTrue("キャッシュ経由の引き直しで再生されない", rule.onBundle(observe(store).visibleBundle.bundleId))
     }
 
     /** 待ちを挟む引き直しでも、**成功した引き直しにつき1回だけ**。 */
@@ -72,17 +78,53 @@ class BookletRestackTest {
         val store = NoteUiStateStore(NoteUiState())
         val controller = controller(store)
         val rule = BookletRestackRule()
-        controller.draw { listOf(noteFile("一冊目.md")) }
-        rule.onBundle(observe(store).drawId)
+        controller.openPlain { listOf(noteFile("一冊目.md")) }
+        rule.onBundle(observe(store).visibleBundle.bundleId)
 
         val waiting = CompletableDeferred<List<NoteFile>>()
-        controller.draw { waiting.await() }
+        controller.openPlain { waiting.await() }
         assertTrue("待っている間は束ではない", store.value.bookletState is BookletState.Loading)
         waiting.complete(listOf(noteFile("二冊目.md")))
 
-        val drawId = observe(store).drawId
-        assertTrue(rule.onBundle(drawId))
-        assertFalse("同じ束で二度目が始まる", rule.onBundle(drawId))
+        val bundleId = observe(store).visibleBundle.bundleId
+        assertTrue(rule.onBundle(bundleId))
+        assertFalse("同じ束で二度目が始まる", rule.onBundle(bundleId))
+    }
+
+    /**
+     * **「もう10枚引く」でも再生される。**
+     *
+     * 上の2件は `open`（📖）を通っており、**分離された `drawAgain` の経路は通らない**
+     * （2026-09-07 のレビュー §3 が指摘）。`drawAgain` は `Loading` を挟まないので、
+     * 「束が届いた」を見分けられるのは世代だけである。
+     */
+    @Test
+    fun `もう10枚引くでも積み直りが再生される`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val controller = controller(store)
+        val rule = BookletRestackRule()
+        // **同じ並びを返す。** 中身の比較では代用できないことをここでも固定する。
+        val notes = listOf(noteFile("ノート1.md"), noteFile("ノート2.md"))
+        controller.openPlain { notes }
+        rule.onBundle(observe(store).visibleBundle.bundleId)
+
+        controller.drawAgain { notes }
+
+        assertTrue("引き直しで置き直されない", rule.onBundle(observe(store).visibleBundle.bundleId))
+    }
+
+    /** 引き直しが**失敗**したときは再生しない。**束は入れ替わっていない。** */
+    @Test
+    fun `引き直しに失敗したら再生しない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val controller = controller(store)
+        val rule = BookletRestackRule()
+        controller.openPlain { listOf(noteFile("ノート1.md")) }
+        rule.onBundle(observe(store).visibleBundle.bundleId)
+
+        controller.drawAgain { throw IllegalStateException("走査失敗") }
+
+        assertFalse(rule.onBundle(observe(store).visibleBundle.bundleId))
     }
 
     /** 扉が読めた・ページが動いたでは再生しない。**束は入れ替わっていない。** */
@@ -91,15 +133,15 @@ class BookletRestackTest {
         val store = NoteUiStateStore(NoteUiState())
         val controller = controller(store, FakeVaultBrowser(FakeVaultHandle(snippets = { "本文である。" })))
         val rule = BookletRestackRule()
-        controller.draw { listOf(noteFile("ノート1.md"), noteFile("ノート2.md")) }
-        rule.onBundle(observe(store).drawId)
+        controller.openPlain { listOf(noteFile("ノート1.md"), noteFile("ノート2.md")) }
+        rule.onBundle(observe(store).visibleBundle.bundleId)
 
         controller.onPageSettled(page = 1)
 
         val open = observe(store)
-        assertNotEquals("扉が読めていない（前提が崩れている）", BookletState.Open(emptyList()), open)
-        assertEquals(1, open.page)
-        assertFalse(rule.onBundle(open.drawId))
+        assertNotEquals("扉が読めていない（前提が崩れている）", BookletState.Open(BookletBundle(emptyList())), open)
+        assertEquals(1, open.visibleBundle.page)
+        assertFalse(rule.onBundle(open.visibleBundle.bundleId))
     }
 
     /**
@@ -112,42 +154,81 @@ class BookletRestackTest {
     @Test
     fun `ノートから戻っても再生しない`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
-        controller(store).draw { listOf(noteFile("ノート.md")) }
+        controller(store).openPlain { listOf(noteFile("ノート.md")) }
         val open = observe(store)
-        BookletRestackRule().onBundle(open.drawId)
+        BookletRestackRule().onBundle(open.visibleBundle.bundleId)
 
-        assertFalse("同じ束へ戻っただけで置き直された", BookletRestackRule().onBundle(open.drawId))
+        assertFalse("同じ束へ戻っただけで置き直された", BookletRestackRule().onBundle(open.visibleBundle.bundleId))
     }
 
     /**
-     * **束を作る経路は本番に1つしかなく、そこが必ず世代を渡す。**
+     * **引く⇄編むの切り替えでも積み直りが再生される。**
      *
-     * [BookletState.Open] の `drawId` に既定値があるのは、世代に関心の無いフィクスチャのためである。
-     * **製品コードが既定値を受け取ってよいという意味ではない** — 世代を渡し忘れた束は 0 になり、
-     * 直前が 0 以外なら「別の束が届いた」と誤って読める。
-     *
-     * **見るのは生成箇所の数と世代の受け渡しまで**で、再生の可否は上の4件が結果で見る（→ L55）。
+     * 束が2つになったので、「新しい束が届いた」は引き直しだけではなくなった。
+     * **両者の紙面は同じ形**なので、無音で入れ替わると切り替わったこと自体を見落とす
+     * （→ features/booklet_mode.md 判断12）。
      */
     @Test
-    fun `束を作る経路は本番に1つしかなく必ず世代を渡す`() {
+    fun `引く編むの切り替えでも積み直りが再生される`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val controller = controller(store)
+        val rule = BookletRestackRule()
+        controller.open(
+            seed = BookletSeed(DocumentRef("content://fake/種.md"), "種"),
+            related = RelatedNotesState.Success(
+                relatedNotes = emptyList(),
+                aiNotes = listOf(relatedNote("編む1.md"))
+            )
+        ) { listOf(noteFile("引く1.md")) }
+        rule.onBundle(observe(store).visibleBundle.bundleId)
+
+        controller.setMode(BookletMode.Weave)
+        assertTrue("編む束へ切り替えても置き直されない", rule.onBundle(observe(store).visibleBundle.bundleId))
+
+        controller.setMode(BookletMode.Draw)
+        assertTrue("引く束へ戻しても置き直されない", rule.onBundle(observe(store).visibleBundle.bundleId))
+    }
+
+    /**
+     * **束を作る経路と、そこが必ず世代を渡すこと。**
+     *
+     * [BookletBundle] の `bundleId` に既定値があるのは、世代に関心の無いフィクスチャのためである。
+     * **製品コードが既定値を受け取ってよいという意味ではない** — 世代を渡し忘れた束は 0 になり、
+     * 直前が 0 以外なら「別の束が届いた」と誤って読める。
+     * **束が2つになってからは逆も起きる** — 両方が 0 だと、切り替えても再生されない。
+     *
+     * **見るのは生成箇所の数と世代の受け渡しまで**で、再生の可否は上の5件が結果で見る（→ L55）。
+     */
+    @Test
+    fun `束を作る経路は本番に2つだけで必ず世代を渡す`() {
         val producers = File("src/main/java/com/example/newproject")
             .walkTopDown()
-            .filter { it.extension == "kt" && it.readText().contains("BookletState.Open(") }
+            // **宣言そのものは生成箇所ではない。** 除かないと `BookletState.kt` が常に混ざる。
+            .filter {
+                it.extension == "kt" &&
+                    it.readText().replace("data class BookletBundle(", "").contains("BookletBundle(")
+            }
             .map { it.name }
             .sorted()
             .toList()
 
         assertEquals(
             "束を作る経路が増えています。増やすなら、そこも世代を進めてください" +
-                "（→ docs/dev/features/booklet_mode.md 判断10）。",
-            listOf("BookletController.kt"),
+                "（→ docs/dev/features/booklet_mode.md 判断10・判断12）。",
+            listOf("BookletController.kt", "BookletWeave.kt"),
             producers
         )
         assertTrue(
-            "束を作るのに世代を渡していません。既定値の 0 が入ると、積み直りが誤って再生されます。",
+            "引く束が世代を渡していません。既定値の 0 が入ると、積み直りが誤って再生されます。",
             File("src/main/java/com/example/newproject/controller/BookletController.kt")
                 .readText()
-                .contains("drawId = drawId")
+                .contains("bundleId = drawBundleId")
+        )
+        assertTrue(
+            "編む束が世代を渡していません。引く束と同じ 0 になると、切り替えても再生されません。",
+            File("src/main/java/com/example/newproject/model/BookletWeave.kt")
+                .readText()
+                .contains("bundleId = bundleId")
         )
     }
 
@@ -249,4 +330,11 @@ class BookletRestackTest {
 
     private fun noteFile(name: String): NoteFile =
         NoteFile(name = name, ref = DocumentRef("content://fake/$name"))
+
+    private fun relatedNote(name: String): RelatedNote =
+        RelatedNote(title = name, ref = DocumentRef("content://fake/$name"), isWikilinked = false)
+
+    /** 種の無い経路で冊子をひらく。 */
+    private fun BookletController.openPlain(loadNotes: suspend () -> List<NoteFile>) =
+        open(seed = null, related = RelatedNotesState.Idle, loadNotes = loadNotes)
 }

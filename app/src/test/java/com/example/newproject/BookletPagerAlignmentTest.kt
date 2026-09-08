@@ -51,14 +51,42 @@ class BookletPagerAlignmentTest {
         assertEquals(0, pager.currentPage)
     }
 
-    /** 同じ束の中では動かさない。**ページ送りと扉の読込では世代が変わらない。** */
+    /**
+     * 合わせ先が今の位置でも、**ページ番号は動かさない**。
+     *
+     * 同じ束の中のページ送りと扉の読込では世代が変わらないので、そもそも呼ばれない。
+     */
     @Test
-    fun `合わせ先が今の位置なら動かさない`() {
+    fun `合わせ先が今の位置ならページ番号は動かない`() {
         val pager = pagerAt(page = 2, sheets = 10)
 
         alignPager(pager, target = 2)
 
         assertEquals(2, pager.currentPage)
+    }
+
+    /**
+     * **ページ番号は位置の一部でしかない。**
+     *
+     * めくり途中の紙は同じ `currentPage` のまま `currentPageOffsetFraction` を持つ。
+     * 以前は番号が一致すると何もしなかったので、**束を切り替えても前の束のめくり量が残った**
+     * （2026-09-07 のレビュー `P2-3`）。引き直しは必ず終端→先頭で番号が変わるため露呈せず、
+     * **任意の時点で押せるモード切替**で初めて成立した。
+     *
+     * ここで見るのは番号ではなく**めくり量**である。番号だけを見ていたことが見落としの原因だった。
+     */
+    @Test
+    fun `合わせ先が今の位置でもめくり量は戻る`() {
+        val pager = pagerAt(page = 0, sheets = 3, offset = 0.4f)
+
+        alignPager(pager, target = 0)
+
+        assertEquals(
+            "束が変わってもめくり途中の量が残っています。新しい束が前の束のめくりを引き継ぎます。",
+            0f,
+            pager.currentPageOffsetFraction,
+            0f
+        )
     }
 
     /** ノートから戻ったときは、束が覚えている位置へ戻す（1枚目ではない）。 */
@@ -82,15 +110,16 @@ class BookletPagerAlignmentTest {
         val screen = File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt").readText()
 
         assertTrue(
-            "位置合わせが `LaunchedEffect(drawId)` の中にありません。`Unit` を鍵にすると、" +
-                "キャッシュ経由の引き直しでページャが旧い束の終端に残ります。",
+            "位置合わせが `LaunchedEffect(bundleId)` の中にありません。`Unit` を鍵にすると、" +
+                "キャッシュ経由の引き直しでページャが旧い束の終端に残り、" +
+                "引く⇄編むを切り替えても位置が合いません。",
             // **定義と呼び出しを引数の書き方で見分ける**（定義は `alignPager(pagerState: PagerState`）。
             // 見分けないと、先に現れる定義の手前を見てしまう。
-            screen.substringBefore("alignPager(pagerState, ").trimEnd().endsWith("LaunchedEffect(drawId) {")
+            screen.substringBefore("alignPager(pagerState, ").trimEnd().endsWith("LaunchedEffect(bundleId) {")
         )
     }
 
     /** [sheets] 枚の束（終端ページを含めて `sheets + 1` ページ）の、[page] にいるページャ。 */
-    private fun pagerAt(page: Int, sheets: Int): PagerState =
-        PagerState(currentPage = page, currentPageOffsetFraction = 0f, pageCount = { sheets + 1 })
+    private fun pagerAt(page: Int, sheets: Int, offset: Float = 0f): PagerState =
+        PagerState(currentPage = page, currentPageOffsetFraction = offset, pageCount = { sheets + 1 })
 }
