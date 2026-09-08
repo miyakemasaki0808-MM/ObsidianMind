@@ -15,7 +15,7 @@
 
 Lint警告を0にする活動で、`NewerVersionAvailable`・`GradleDependency`・`AndroidGradlePluginVersion` の3チェックを
 `lint { disable }` へ入れた。理由は「いつ・どこまで上げるかの方針が無いまま毎ビルド出しても行動につながらない」で、
-これ自体は正しい。ただし**黙らせた瞬間から更新の判断を誰も催促しなくなった**（→ [lessons.md](../lessons.md) L15）。
+これ自体は正しい。ただし**黙らせた瞬間から更新の判断を誰も催促しなくなった**（→ [lessons.md](../lessons.md) L17）。
 
 そこへ期限が付いた。instrumentationスモークテストが Android 16 で起動前に失敗した原因が
 `espresso-core` の反射呼び出し（`InputManager.getInstance`）で、**テスト依存の互換性がそのまま実害になった**。
