@@ -11,6 +11,8 @@ import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.BookletEntry
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.NoteFolder
@@ -27,6 +29,8 @@ import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.state.AnnotationListState
+import com.example.newproject.model.state.BookletBundle
+import com.example.newproject.model.state.WeaveState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
@@ -559,7 +563,9 @@ class NoteSessionCoordinatorTest {
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         readingTraceBackupState = ReadingTraceBackupState.Exported(written = 2, unreadableKeys = emptyList()),
         bookletState = BookletState.Open(
-            listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
+            BookletBundle(
+                listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
+            )
         ),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
@@ -618,6 +624,60 @@ class NoteSessionCoordinatorTest {
         val field = owner.javaClass.getDeclaredField(name)
         field.isAccessible = true
         field.set(owner, value)
+    }
+
+    // ── 編む冊子の種（判断12）────────────────────────────────────────────────
+
+    /**
+     * **種と済んだAI推薦は、冊子をひらいた一瞬の値をコピーする。**
+     *
+     * 観測し続ける形にすると、`relatedNotesState` は**ノート単位**で消える
+     * （`withNoteScopedReset()`）のに束は**Vault単位**なので、
+     * 冊子から「これを読む」で渡った瞬間に編む束が消える。
+     * ここは寿命の違う2つを繋ぐ唯一の場所なので、**結果で固定する。**
+     */
+    @Test
+    fun `ノートを切り替えても編む束は残る`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+        session.setNoteState(successNote("本文"))
+        session.setRelatedNotesState(
+            RelatedNotesState.Success(
+                relatedNotes = emptyList(),
+                aiNotes = listOf(
+                    RelatedNote(
+                        title = "関連ノート.md",
+                        ref = DocumentRef("content://vault/related.md"),
+                        isWikilinked = false
+                    )
+                )
+            )
+        )
+
+        session.openBooklet { listOf(NoteFile(name = "引く.md", ref = DocumentRef("content://vault/draw.md"))) }
+        advanceUntilIdle()
+        // 「これを読む」で通常表示へ渡ると、関連ノートはノート単位でリセットされる。
+        session.onNoteChanged()
+        advanceUntilIdle()
+
+        val weave = (session.uiState.value.bookletState as BookletState.Open).weave
+        assertEquals(RelatedNotesState.Idle, session.uiState.value.relatedNotesState)
+        assertEquals(
+            listOf("関連ノート.md"),
+            (weave as WeaveState.Ready).bundle.entries.map { it.title }
+        )
+    }
+
+    /** ノートを開いていなければ種は無い。**トグルそのものが出ない。** */
+    @Test
+    fun `ノートを開いていなければ種を持たない`() = runTest {
+        val env = Env(this)
+        val session = env.coordinator()
+
+        session.openBooklet { listOf(NoteFile(name = "引く.md", ref = DocumentRef("content://vault/draw.md"))) }
+        advanceUntilIdle()
+
+        assertEquals(WeaveState.NoSeed, (session.uiState.value.bookletState as BookletState.Open).weave)
     }
 
     // ── 冊子から始めた読込の取消 ─────────────────────────────────────────────

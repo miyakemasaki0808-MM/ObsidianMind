@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.PagerDefaults
@@ -52,6 +53,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
@@ -61,7 +63,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.newproject.model.BookletCover
 import com.example.newproject.model.BookletEntry
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.WeaveBlockedReason
+import com.example.newproject.model.state.WeaveState
+import com.example.newproject.model.state.canWeave
+import com.example.newproject.model.state.showsModeToggle
+import com.example.newproject.model.state.visibleBundle
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.theme.AccentText
@@ -73,8 +81,10 @@ import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.OnSurface
+import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.Panel
+import com.example.newproject.ui.theme.PanelChip
 import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
@@ -113,10 +123,18 @@ internal fun openFromBooklet(
  *   （本文へ渡すときの [openFromBooklet] が `requestScrollToItem` を使うのと同じ理由）。
  * - **積み直りと競合しない。** 時間で進まないので、演出を打ち切らないし打ち切られもしない。
  *
+ * **ページ番号が合っていても必ず要求する。** 以前は `currentPage != target` のときだけ
+ * 動かしていたが、**ページ番号は位置の一部でしかない** — めくり途中の紙は
+ * 同じ `currentPage` のまま `currentPageOffsetFraction` を持ち、指を離した後の送りも走っている。
+ * 引き直しは必ず終端→先頭でページ番号が変わるので露呈しなかったが、
+ * **モード切替は任意の時点で起こせる**ので、同じ番号のまま前の束のめくり量と走行中の送りを
+ * 引き継いでしまう（2026-09-07 のレビュー `P2-3`）。
+ * 呼び出し元は `LaunchedEffect(bundleId)` だけなので、**要求が起きるのは束が変わったときだけ**である。
+ *
  * **画面の外に置いてあるのは、そうしないと素のJVMから観測できないため**（→ [openFromBooklet] と同じ）。
  */
 internal fun alignPager(pagerState: PagerState, target: Int) {
-    if (pagerState.currentPage != target) pagerState.requestScrollToPage(target)
+    pagerState.requestScrollToPage(target)
 }
 
 // ── 天綴じのめくり（→ features/booklet_mode.md 判断10・判断11）─────────────
@@ -505,13 +523,19 @@ internal fun sheetCastsShadow(restack: Float): Boolean = sheetTiltDegrees(restac
  * **戻ってきた束が「最初に見た束」になる。** 同じ理由で静かに出る。
  */
 internal class BookletRestackRule {
-    private var seenDrawId: Long? = null
+    private var seenBundleId: Long? = null
 
-    /** 束が画面へ届くたびに呼ぶ。**true を返したときだけ**積み直りを1回再生する。 */
-    fun onBundle(drawId: Long): Boolean {
-        val previous = seenDrawId
-        seenDrawId = drawId
-        return previous != null && previous != drawId
+    /**
+     * 束が画面へ届くたびに呼ぶ。**true を返したときだけ**積み直りを1回再生する。
+     *
+     * **入力は「表示中の束の世代」**なので、引き直しだけでなく
+     * **引く⇄編むの切り替えでも再生される**（→ features/booklet_mode.md 判断12）。
+     * 両者の紙面は同じ形なので、無音で入れ替わると切り替わったことを見落とす。
+     */
+    fun onBundle(bundleId: Long): Boolean {
+        val previous = seenBundleId
+        seenBundleId = bundleId
+        return previous != null && previous != bundleId
     }
 }
 
@@ -531,6 +555,7 @@ internal fun BookletScreen(
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
     onDrawAgain: () -> Unit,
+    onModeChange: (BookletMode) -> Unit,
     onExit: () -> Unit
 ) {
     // **束が届いた瞬間だけ、紙が一度浮いて置き直される**（→ features/booklet_mode.md 判断10）。
@@ -546,7 +571,7 @@ internal fun BookletScreen(
     LaunchedEffect(Unit) {
         val rule = BookletRestackRule()
         snapshotFlow { currentState }.collect { current ->
-            if (current is BookletState.Open && rule.onBundle(current.drawId)) {
+            if (current is BookletState.Open && rule.onBundle(current.visibleBundle.bundleId)) {
                 restack.snapTo(0f)
                 restack.animateTo(1f, animationSpec = tween(RESTACK_MILLIS))
             }
@@ -567,17 +592,24 @@ internal fun BookletScreen(
         )
 
         when (state) {
-            is BookletState.Open ->
-                if (state.entries.isEmpty()) {
+            is BookletState.Open -> {
+                // **種が無いときだけ出さない。** 行き先が1つしか無いのに選択肢を見せない。
+                if (state.showsModeToggle) BookletModeToggle(state = state, onModeChange = onModeChange)
+                val bundle = state.visibleBundle
+                if (bundle.entries.isEmpty()) {
                     BookletNotice("引けるノートがありません。")
                 } else {
                     BookletPager(
-                        entries = state.entries,
+                        entries = bundle.entries,
                         // **束が覚えているページから開く。** 画面ローカルに持つと、
                         // 通常表示へ渡って戻る往復でここだけ1枚目へ戻る。
-                        initialPage = state.page,
+                        // **束ごとに別々**なので、引く⇄編むを行き来しても双方の位置が残る。
+                        initialPage = bundle.page,
                         // **束の世代。** 位置を合わせ直す契機がこれ（→ [alignPager]）。
-                        drawId = state.drawId,
+                        bundleId = bundle.bundleId,
+                        mode = state.mode,
+                        weaveSeedTitle = (state.weave as? WeaveState.Ready)?.seedTitle,
+                    redrawError = state.redrawError,
                         // **値ではなく読み方を渡す。** ここで `restack.value` を読むと
                         // アニメーションの毎フレームで画面全体が再コンポーズになる。
                         restack = { restack.value },
@@ -586,6 +618,7 @@ internal fun BookletScreen(
                         onDrawAgain = onDrawAgain
                     )
                 }
+            }
             is BookletState.Failed -> BookletNotice(state.message, isError = true)
             // Idle は「開いたが束がまだ無い」＝プロセス復元で束だけ消えた場合を含む。
             // 呼び出し側がノートタブへ戻すので、ここでは待ち表示のままでよい。
@@ -609,7 +642,10 @@ internal fun BookletScreen(
 private fun ColumnScope.BookletPager(
     entries: List<BookletEntry>,
     initialPage: Int,
-    drawId: Long,
+    bundleId: Long,
+    mode: BookletMode,
+    weaveSeedTitle: String?,
+    redrawError: String?,
     restack: () -> Float,
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
@@ -634,7 +670,9 @@ private fun ColumnScope.BookletPager(
     // （ノート一覧がキャッシュから同期で返る通常経路）に **ページャが旧い束の終端に残る** —
     // 束は新しいのに「もうN枚引く」が出たままになる（2026-09-03 のレビュー）。
     // **同じ束の中のページ送りと扉の読込では世代が変わらない**ので、位置は維持される。
-    LaunchedEffect(drawId) {
+    // **引く⇄編むの切り替えもここを通る** — 世代は束ごとに別なので、
+    // 切り替えた先が覚えている位置へ合う（→ 判断12）。
+    LaunchedEffect(bundleId) {
         alignPager(pagerState, initialPage.coerceIn(0, pageCount - 1))
     }
 
@@ -714,9 +752,19 @@ private fun ColumnScope.BookletPager(
         ) {
             if (page < entries.size) {
                 BookletPage(entry = entries[page], turn = turn, restack = restack, onRead = onRead)
+            } else if (mode == BookletMode.Weave) {
+                // **編む側に「もう10枚編む」は無い。** 編みは決定的なので同じ10枚が出る
+                // （→ features/booklet_mode.md 判断12）。数だけを最後に1回言う。
+                WeaveEndPage(
+                    seedTitle = weaveSeedTitle,
+                    wovenCount = entries.size,
+                    turn = turn,
+                    restack = restack
+                )
             } else {
                 DrawAgainPage(
                     drawnCount = entries.size,
+                    redrawError = redrawError,
                     turn = turn,
                     restack = restack,
                     onDrawAgain = onDrawAgain
@@ -725,6 +773,116 @@ private fun ColumnScope.BookletPager(
         }
     }
 
+}
+
+/**
+ * 引く⇄編むのトグル。**ヘッダの直下・紙の上に置く。**
+ *
+ * ## なぜここなのか
+ *
+ * 紙の面の中へ入れると、[booklet_mode 判断9] で決めた「眺める面の形」へ操作子を足すことになり、
+ * **区別を担うチャネル（面の形）を取り合う**（→ system/bearing_channels.md）。
+ * ヘッダの ✕ の隣も採らない — 閉じるボタンと並ぶと誤タップの形になり、
+ * **種のノート名を出す幅が無い**。名前が出ないと「何から編むのか」が画面から消える。
+ *
+ * ## 3通りの見せ方
+ *
+ * 種が無ければ**そもそも呼ばれない**（[BookletState.Open.showsModeToggle]）。
+ * 種はあるが編めないときは**出すが押せない**うえで、理由を1行添える —
+ * 出さないと「なぜ押せないのか」がどこにも無い。
+ *
+ * **グラデーション直上なので輪郭線を必ず描く**（→ NoteActionButtons と同じ理由）。
+ * **塗りに `ButtonPrimary` を使わない** — 紙の上の「これを読む」が主なので、
+ * ここが同じ色を取ると主役が2つになる。
+ */
+@Composable
+private fun BookletModeToggle(
+    state: BookletState.Open,
+    onModeChange: (BookletMode) -> Unit
+) {
+    val weave = state.weave
+    val seedTitle = when (weave) {
+        is WeaveState.Blocked -> weave.seedTitle
+        is WeaveState.Ready -> weave.seedTitle
+        WeaveState.NoSeed -> return
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            BookletModeChip(
+                label = "引く",
+                selected = state.mode == BookletMode.Draw,
+                enabled = true,
+                modifier = Modifier.weight(1f)
+            ) { onModeChange(BookletMode.Draw) }
+            BookletModeChip(
+                label = "${seedTitle}から編む",
+                selected = state.mode == BookletMode.Weave,
+                enabled = state.canWeave,
+                modifier = Modifier.weight(1f)
+            ) { onModeChange(BookletMode.Weave) }
+        }
+        if (weave is WeaveState.Blocked) {
+            Text(
+                text = weaveBlockedMessage(weave.reason),
+                color = OnSurfaceMuted,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 6.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun BookletModeChip(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .height(40.dp)
+            // **選ばれているかを読み上げにも出す。** 色と塗りだけだと、
+            // 見えない利用者にはどちらを見ているのか分からない。
+            .semantics { stateDescription = if (selected) "選択中" else "未選択" },
+        colors = ButtonDefaults.buttonColors(
+            containerColor = if (selected) ButtonSecondary else PanelChip,
+            contentColor = if (selected) OnButtonSecondary else OnSurfaceMuted,
+            // 無効時の既定はテーマ由来のαなので、明示して不透明に保つ。
+            disabledContainerColor = PanelChip,
+            disabledContentColor = OnSurfaceFaint
+        ),
+        border = BorderStroke(1.dp, ButtonOutlineOnGradient),
+        shape = RoundedCornerShape(20.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            maxLines = 1,
+            // 長いノート名でもトグルの高さを変えない。名前の頭は残る。
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * 編めない理由。**「探している最中」と「見つからなかった」を同じ文にしない** —
+ * 待てば変わるかどうかで、利用者の次の行動が違う。
+ *
+ * **走行中だけは、次の行動まで書く。** 種は📖を押した一瞬のコピーなので、
+ * **この冊子を開いたまま待っても編めるようにはならない**（→ 判断12）。
+ * 「探しています」だけだと待てば編めると読めるので、**開き直す**ところまで言う。
+ */
+private fun weaveBlockedMessage(reason: WeaveBlockedReason): String = when (reason) {
+    WeaveBlockedReason.Pending -> "関連ノートをまだ探しています。冊子を開き直すと編めます。"
+    WeaveBlockedReason.Empty -> "関連するノートが見つかりませんでした。"
+    WeaveBlockedReason.Failed -> "関連ノートを取れませんでした。"
 }
 
 /**
@@ -1025,6 +1183,7 @@ private fun BookletPage(
 @Composable
 private fun DrawAgainPage(
     drawnCount: Int,
+    redrawError: String?,
     turn: () -> Float,
     restack: () -> Float,
     onDrawAgain: () -> Unit
@@ -1046,6 +1205,17 @@ private fun DrawAgainPage(
                 fontSize = 17.sp,
                 textAlign = TextAlign.Center
             )
+            if (redrawError != null) {
+                // **理由と再試行を同じ紙に置く。** 引き直しを押したのはこのページなので、
+                // 失敗もここで受け取るのが最短である（→ features/booklet_mode.md 判断12）。
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = redrawError,
+                    color = ErrorText,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = onDrawAgain,
@@ -1057,6 +1227,43 @@ private fun DrawAgainPage(
                 border = BorderStroke(1.dp, ButtonOutlineOnGradient),
                 shape = RoundedCornerShape(24.dp)
             ) { Text("もう10枚引く") }
+        }
+    }
+}
+
+/**
+ * 編む束の最後に置く1ページ。**ボタンは無い。**
+ *
+ * **「もう10枚編む」を置かない**のは、編みが決定的だからである — 押しても同じ10枚が出る
+ * （→ features/booklet_mode.md 判断12）。置くのは数だけで、引く側の
+ * 「ここまでの N 枚でした。」と対になる。
+ *
+ * **数を出すこと自体には意味がある。** 水増ししない設計なので束は10枚未満になり得るが、
+ * 終端で数を言わないと「ここで関連が切れた」のか「まだ読み込んでいる」のかが分からない。
+ */
+@Composable
+private fun WeaveEndPage(
+    seedTitle: String?,
+    wovenCount: Int,
+    turn: () -> Float,
+    restack: () -> Float
+) {
+    // **これは束の紙ではない。** 10枚のどれでもない別種のページなので縁を持たない
+    // （→ [DrawAgainPage] と同じ理由）。
+    BookletSheet(isBundleSheet = false, turn = turn, restack = restack) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                // 種の名前が取れない経路は無いが、**文が壊れるより数を優先する。**
+                text = if (seedTitle.isNullOrBlank()) "編めたのは${wovenCount}枚でした。"
+                else "「${seedTitle}」から編んだ${wovenCount}枚でした。",
+                color = OnSurface,
+                fontSize = 17.sp,
+                textAlign = TextAlign.Center
+            )
         }
     }
 }

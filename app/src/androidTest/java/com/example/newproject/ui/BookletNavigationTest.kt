@@ -21,6 +21,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.model.BookletCover
 import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.state.BookletBundle
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.theme.AppTheme
@@ -95,13 +96,15 @@ class BookletNavigationTest {
             var booklet by remember {
                 mutableStateOf(
                     BookletState.Open(
-                        (1..10).map { index ->
-                            BookletEntry(
-                                ref = DocumentRef("content://fake/ノート$index"),
-                                title = "ノート$index",
-                                cover = BookletCover.Ready("$index 枚目の代表文である。")
-                            )
-                        }
+                        BookletBundle(
+                            (1..10).map { index ->
+                                BookletEntry(
+                                    ref = DocumentRef("content://fake/ノート$index"),
+                                    title = "ノート$index",
+                                    cover = BookletCover.Ready("$index 枚目の代表文である。")
+                                )
+                            }
+                        )
                     )
                 )
             }
@@ -110,11 +113,12 @@ class BookletNavigationTest {
                     composable("booklet") {
                         BookletScreen(
                             state = booklet,
-                            onPageSettled = { page -> booklet = booklet.copy(page = page) },
+                            onPageSettled = { page -> booklet = booklet.copy(drawn = booklet.drawn.copy(page = page)) },
                             // スクロール位置の先頭戻しは openFromBooklet 側の責務なので、
                             // ここでは遷移だけを本番と同じ形で行う。
                             onRead = { navController.navigate("note") },
                             onDrawAgain = {},
+                            onModeChange = {},
                             onExit = {}
                         )
                     }

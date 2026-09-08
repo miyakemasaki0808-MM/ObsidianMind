@@ -3,6 +3,7 @@ package com.example.newproject.controller
 import com.example.newproject.ai.AiClient
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
+import com.example.newproject.model.BookletSeed
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
@@ -17,6 +18,7 @@ import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.RelatedNotesState
@@ -231,7 +233,28 @@ internal class NoteSessionCoordinator(
 
     // ── 冊子 ───────────────────────────────────────────────────────────────
 
-    fun drawBooklet(loadNotes: suspend () -> List<NoteFile>) = booklet.draw(loadNotes)
+    /**
+     * 冊子をひらく。**種と済んだAI推薦をここで確定させる。**
+     *
+     * 種は「冊子へ入る直前に開いていたノート」で、`relatedNotesState` はそのノートの結果である。
+     * **どちらも読むのはこの一瞬だけ** — Controllerへ観測させると、ノート単位で消える値を
+     * Vault単位の束が握り続けることになり、「これを読む」で渡った瞬間に編む束が消える
+     * （→ features/booklet_mode.md 判断12）。
+     *
+     * 束の中身の並べ方そのものは葉の純関数（`buildWeaveState`）が持つので、
+     * ここは**どの時点の値を渡すか**だけを決める。
+     */
+    fun openBooklet(loadNotes: suspend () -> List<NoteFile>) {
+        val note = stateStore.currentNote()
+        val seed = note?.let { BookletSeed(ref = DocumentRef(it.targetUri), title = it.title) }
+        booklet.open(seed, stateStore.uiState.value.relatedNotesState, loadNotes)
+    }
+
+    /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */
+    fun drawBookletAgain(loadNotes: suspend () -> List<NoteFile>) = booklet.drawAgain(loadNotes)
+
+    /** 引く⇄編むの切り替え。 */
+    fun setBookletMode(mode: BookletMode) = booklet.setMode(mode)
 
     /**
      * 冊子の「これを読む」を始める。**開始と追跡を1手で行う。**
