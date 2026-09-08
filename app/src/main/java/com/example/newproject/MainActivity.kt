@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.ReadingPauseReason
+import com.example.newproject.domain.isDuplicateLauncherLaunch
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
@@ -103,6 +104,24 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        // ランチャーの再タップで既存タスクの上へ積まれた1枚なら、何も組み立てずに畳んで
+        // 既存タスクへ委ねる（→ domain/LauncherEntry.kt）。`launchMode` は変えない —
+        // `singleTask` はタスク親和性ごと挙動が変わり、この1点に対して代償が大きい。
+        //
+        // installSplashScreen() より**前**に判定する。すぐ閉じるActivityにスプラッシュを
+        // 掛けると、畳むまでの一瞬だけ起動画面が見える。
+        val duplicateLaunch = isDuplicateLauncherLaunch(
+            isTaskRoot = isTaskRoot,
+            action = intent?.action,
+            categories = intent?.categories,
+            launcherAction = Intent.ACTION_MAIN,
+            launcherCategory = Intent.CATEGORY_LAUNCHER
+        )
+        if (duplicateLaunch) {
+            super.onCreate(savedInstanceState)
+            finish()
+            return
+        }
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
