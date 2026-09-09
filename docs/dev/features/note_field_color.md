@@ -4,8 +4,9 @@
 **最終検証:** 2026-09-10 / `3ecf8c7`（**実装が無いので突合していない。**Vault実測645本・オーナー判断17件・
 設計レビュー3巡（7件＋5件＋1件）と外部提案4件の反映まで。`BookletEntry` / `RelatedNote` の `ref`・
 `featureStatusToAvailability` の縮退・`collectAllNotesCached` のTTL・`openBooklet` の走査経路はソースで確認）
-**関連コード:** 未実装（`model/BookletTypes.kt` / `ui/screen/BookletScreen.kt` / `data/NoteRepository.kt` に触れる見込み）
-**関連テスト:** 未実装
+**関連コード:** `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
+`ui/theme/AppColors.kt`（パレット）/ `ui/screen/BookletScreen.kt`（紙とラベル）。**AI経路と永続は未実装**
+**関連テスト:** `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest`
 **正本:** この文書。**割り当て（どのチャネルが何を表すか）は [bearing_channels](../system/bearing_channels.md) 判断6**
 
 **対象領域:** 冊子の紙の地色と、その元になる**分野の判定**

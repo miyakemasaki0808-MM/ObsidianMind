@@ -112,6 +112,8 @@ class BookletNavigationTest {
                 NavHost(navController = navController, startDestination = "booklet") {
                     composable("booklet") {
                         BookletScreen(
+                            // 分野の索引。**この検査は色を見ない**ので空で渡す（見え方は実機のケース表が持つ）。
+                            noteFields = emptyMap(),
                             state = booklet,
                             onPageSettled = { page -> booklet = booklet.copy(drawn = booklet.drawn.copy(page = page)) },
                             // スクロール位置の先頭戻しは openFromBooklet 側の責務なので、

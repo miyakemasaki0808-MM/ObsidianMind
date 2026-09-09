@@ -12,6 +12,7 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
@@ -248,6 +249,20 @@ internal class NoteSessionCoordinator(
         val note = stateStore.currentNote()
         val seed = note?.let { BookletSeed(ref = DocumentRef(it.targetUri), title = it.title) }
         booklet.open(seed, stateStore.uiState.value.relatedNotesState, loadNotes)
+    }
+
+    /**
+     * Vault走査の結果から、分野のヒントを索引Aへ一括で載せる（→ features/note_field_color.md 判断14）。
+     *
+     * **判定ではない。** ヒントは辞書照合の純関数なのでI/OもAIも要らず、
+     * **走査のついでに全ノート分を作れる**。これをやらないと「開いた本数ぶんしか色が付かない」まま、
+     * 起点の不満（冊子が真っ白）が最後まで解けない。
+     *
+     * **走査のたびに呼ばれてよい。** 確定を暫定で上書きしない規則は
+     * [indexNoteFieldHints] が持つ（→ 判断16）。
+     */
+    fun indexNoteFields(notes: List<NoteFile>) {
+        stateStore.updateNoteFields { indexNoteFieldHints(it, notes) }
     }
 
     /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */

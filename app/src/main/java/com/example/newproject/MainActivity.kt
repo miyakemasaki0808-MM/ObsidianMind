@@ -369,6 +369,9 @@ class MainActivity : ComponentActivity() {
                             }
                             BookletScreen(
                                 state = uiState.bookletState,
+                                // 索引Aは状態から**そのまま**渡す。冊子側で引くのは `ref` だけで、
+                                // 走査も保存ストアの読み出しも起こさない（→ 判断17）。
+                                noteFields = uiState.noteFields,
                                 onPageSettled = { page -> viewModel.onBookletPageSettled(page) },
                                 onRead = { entry ->
                                     // 先頭から開くことは openFromBooklet が保証する。

@@ -37,6 +37,10 @@ data class NoteUiState(
     // 冊子（10枚の束）。**ノート切替では消さない** — 戻れば同じ10枚が残るのが目的なので、
     // Vault単位として扱う（→ features/booklet_mode.md 判断6）。
     val bookletState: BookletState = BookletState.Idle,
+    // 索引A（ノート → 分野の分類）。**冊子の紙の地色がこれを引く。**
+    // 冊子と同じくVault単位で、ノート切替では消さない（→ features/note_field_color.md 判断10）。
+    // **暫定は永続しない**ので、ここは走査のたびに作り直される導出値である（判断14）。
+    val noteFields: Map<DocumentRef, NoteFieldClassification> = emptyMap(),
     val sectionChat: SectionChatState? = null,
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
     // AI生成と結果を保持し、吹き出しから再表示できる。

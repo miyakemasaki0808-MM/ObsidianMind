@@ -15,6 +15,8 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
+import com.example.newproject.model.NoteField
+import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
@@ -566,6 +568,9 @@ class NoteSessionCoordinatorTest {
             BookletBundle(
                 listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
             )
+        ),
+        noteFields = mapOf(
+            DocumentRef("content://old/booklet") to NoteFieldClassification.Provisional(NoteField.Living)
         ),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,

@@ -199,6 +199,10 @@ class NoteViewModel internal constructor(
         val notes = repository.collectNotes(contentResolver, vaultUri).notes
         cachedNotes = notes
         cachedNotesLoadedAt = now
+        // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
+        // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
+        // 索引Aが同じ材料で揃う。
+        session.indexNoteFields(notes)
         return notes
     }
 

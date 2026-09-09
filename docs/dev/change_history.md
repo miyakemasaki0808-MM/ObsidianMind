@@ -16,6 +16,9 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-10 | — | 冊子の紙に分野の色とラベルを出した（ヒント→索引A→描画。AI経路はまだ無い） | [note_field_color](features/note_field_color.md) 判断14・16 |
+| 2026-09-10 | — | 冊子の紙の分野色パレットをOKLchの規則で作り、明暗それぞれの帯を実測で決めた | [note_field_color](features/note_field_color.md) 判断15 |
+| 2026-09-10 | — | 分野の型とパスからのヒント生成を足した（辞書照合・英字は完全一致） | [note_field_color](features/note_field_color.md) 判断12・13 |
 | 2026-09-10 | — | 分野色の確定同士の優先規則を確認し、設計レビューの残指摘と対応する設計課題を閉じた | [review](../review/README.md) |
 | 2026-09-10 | — | 分野色の確定同士の優先規則を足し、更新元で新旧を決める形にした | [note_field_color](features/note_field_color.md) 判断16 |
 | 2026-09-10 | — | 分野色の指摘対応4件を設計上解消とし、新旧の確定結果の合成規則だけを未解決として残した | [review](../review/README.md) |
