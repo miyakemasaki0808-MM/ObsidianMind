@@ -10,6 +10,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.example.newproject.model.NoteField
 import com.example.newproject.model.NotePaperTone
 
 /**
@@ -46,11 +47,51 @@ internal class NotePaperTones(
     }
 }
 
+/**
+ * 冊子の紙の地色（分野 → 色）。**色を持つのは一般語彙の6つだけ。**
+ *
+ * 追加語彙は色を持たず親の色を継ぐので（→ `docs/dev/features/note_field_color.md` 判断13）、
+ * **この型が持つ色数が増えることは、色枠が増えることを意味する。**
+ *
+ * **値は規則で作る。** OKLch で明度と彩度を固定し、色相だけを等間隔にずらす（判断15）。
+ * 手で1色ずつ調整すると、**色ごとに紙の明るさが変わって文字のコントラストがばらつく**。
+ * 実行時に色空間の計算は持ち込まず、規則で作った結果をここへ書く。
+ * **検査は値ではなく関係を見る**（明度が揃っていること・床を割らないこと）→ `AppColorContrastTest`。
+ *
+ * [neutral] は**未判定と「該当なし」の紙**。`panel` と同値にして、分野色が付く前の見た目を変えない。
+ */
+internal class NoteFieldTones(
+    val neutral: Color,
+    val technical: Color,
+    val learning: Color,
+    val business: Color,
+    val creative: Color,
+    val living: Color,
+    val reflection: Color
+) {
+    /** null は未判定または「該当なし」。**どちらも [neutral]** で、区別は見た目に出さない。 */
+    fun color(field: NoteField?): Color = when (field) {
+        null -> neutral
+        NoteField.Technical -> technical
+        NoteField.Learning -> learning
+        NoteField.Business -> business
+        NoteField.Creative -> creative
+        NoteField.Living -> living
+        NoteField.Reflection -> reflection
+    }
+
+    /** 検査が「関係」を見るための一覧。**宣言順を [NoteField] と揃える。** */
+    val fieldColors: List<Color>
+        get() = listOf(technical, learning, business, creative, living, reflection)
+}
+
 internal class AppColorScheme(
     // 面
     val panel: Color,
     // 紙の地色。Fresh は panel と同値にする（既定オフのときと見た目を一致させるため）。
     val notePaper: NotePaperTones,
+    // 冊子の紙の地色（分野）。**読む面には載せない**（→ bearing_channels 判断6）。
+    val noteField: NoteFieldTones,
     val codePanel: Color,
     val panelTinted: Color,
     val panelBlue: Color,
