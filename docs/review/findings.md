@@ -31,9 +31,10 @@
 | `2026-08-01-no9/P2-2` | 連続削除が同じJobを奪い合い、物理削除と画面状態がずれ得る | `起票` TRACE-3 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-09-note-field-color-design-review/P2-1` | 縮退結果が永久確定し、一時的なAI障害から回復できない | `起票` FIELD-1 |
-| `2026-09-09-note-field-color-design-review/P2-2` | 保存キーがヒント・Vault別語彙の違いを表現していない | `起票` FIELD-1 |
 | `2026-09-09-note-field-color-design-review/P2-3` | 本文なしで引く索引と永続結果の寿命が未定義 | `起票` FIELD-1 |
-| `2026-09-09-note-field-color-design-review/P2-4` | Vault別語彙の分類粒度と6色の対応が未定義 | `起票` FIELD-1 |
-| `2026-09-09-note-field-color-design-review/P2-5` | フォルダ対応表の生成元がなく縮退保証が条件不足 | `起票` FIELD-1 |
-| `2026-09-09-note-field-color-design-review/P2-6` | 保持中の引く／編む束へ色を反映する契機が未定義 | `起票` FIELD-1 |
 | `2026-09-09-note-field-color-design-review/P3-1` | システム図と検証条件に判断6以前の分岐が残る | `起票` FIELD-1 |
+| `2026-09-10-note-field-color-design-rereview/P2-1` | 一時的な連続失敗の停止に解除条件がなく、非対応判定の根拠も既存契約と異なる | `統合` FIELD-1 |
+| `2026-09-10-note-field-color-design-rereview/P2-2` | 走査による暫定結果とAI確定結果の索引Aへの合成規則が未定義 | `統合` FIELD-1 |
+| `2026-09-10-note-field-color-design-rereview/P2-3` | 正常な該当分野なしを確定結果として保存する契約がない | `統合` FIELD-1 |
+| `2026-09-10-note-field-color-design-rereview/P2-4` | 索引未準備から冊子を開くと走査時の保存ストアI/Oが性能契約に反する | `統合` FIELD-1 |
+| `2026-09-10-note-field-color-design-rereview/P3-1` | 概要と図が暫定非永続・キャンセル破棄・入力版照合と矛盾する | `統合` FIELD-1 |
