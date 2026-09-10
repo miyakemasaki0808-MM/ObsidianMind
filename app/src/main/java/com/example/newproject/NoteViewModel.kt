@@ -283,6 +283,8 @@ class NoteViewModel internal constructor(
         // 長文で切り落とされた区間の問いが永久に届かない。
         session.revealReadingTrace(note.vaultRelativePath, loaded.content)
         session.fetchSummary(note.name, loaded.content)
+        // 分野の判定。**走査経路なので相対パスが揃っており、ヒントを添えられる。**
+        session.classifyNoteField(note.ref, loaded.content, note.vaultRelativePath)
         fetchRelatedNotes(note.name, loaded.content)
     }
 
@@ -332,6 +334,9 @@ class NoteViewModel internal constructor(
                 // 「さがす経由の最初の1件」が記録から漏れる。
                 bindReadingTracePath(contentResolver, note.ref, sessionId)
                 session.fetchSummary(note.title, loaded.content)
+                // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、さがす経由のノートだけ
+                // ヒント無しで判定され、同じノートでも入口によって入力版が変わってしまう。
+                session.classifyNoteField(note.ref, loaded.content, cachedRelativePath(note.ref).orEmpty())
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e

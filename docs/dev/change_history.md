@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-10 | — | ノートを開いたときにAIが分野を判定するようにした（3値・索引B・抑制の解除条件つき） | [note_field_color](features/note_field_color.md) 判断8・16 |
 | 2026-09-10 | — | 分野判定のプロンプト・応答パース・入力指紋を足した（IDで返させ、1つに定まらなければ保存しない） | [note_field_color](features/note_field_color.md) 判断9・13 |
 | 2026-09-10 | — | 冊子の紙に分野の色とラベルを出した（ヒント→索引A→描画。AI経路はまだ無い） | [note_field_color](features/note_field_color.md) 判断14・16 |
 | 2026-09-10 | — | 冊子の紙の分野色パレットをOKLchの規則で作り、明暗それぞれの帯を実測で決めた | [note_field_color](features/note_field_color.md) 判断15 |

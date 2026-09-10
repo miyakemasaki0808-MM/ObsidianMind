@@ -1,15 +1,15 @@
 # ノートの分野を冊子の紙の色で伝える
 
-**状態:** 実装中 — **非AIの縦切り（ヒント→索引A→冊子の色とラベル）と、AI段の純粋部分
-（プロンプト・応答パース・入力指紋）まで実装済み。**Controller・索引B・永続はまだ無い。
+**状態:** 実装中 — **AI経路まで通っている**（ヒント→索引A→冊子の色／ノートを開くとAIが判定して確定へ昇格）。
+**索引Bはメモリのみで、永続はまだ無い。**
 設計レビュー3巡（7件＋5件＋1件）を反映済み
 **最終検証:** 2026-09-10 / `3ecf8c7`（**実装が無いので突合していない。**Vault実測645本・オーナー判断17件・
 設計レビュー3巡（7件＋5件＋1件）と外部提案4件の反映まで。`BookletEntry` / `RelatedNote` の `ref`・
 `featureStatusToAvailability` の縮退・`collectAllNotesCached` のTTL・`openBooklet` の走査経路はソースで確認）
-**関連コード:** `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
+**関連コード:** `controller/NoteFieldController.kt` / `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
 `domain/NoteFieldAnswer.kt` / `domain/NoteFieldInputVersion.kt` / `ai/PromptBuilder.kt` /
 `ui/theme/AppColors.kt`（パレット）/ `ui/screen/BookletScreen.kt`（紙とラベル）。**AI経路と永続は未実装**
-**関連テスト:** `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest` /
+**関連テスト:** `NoteFieldControllerTest` / `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest` /
 `NoteFieldAnswerTest` / `NoteFieldInputVersionTest` / `OnDeviceGenerationTest`（応答がIDとして読めること）
 **正本:** この文書。**割り当て（どのチャネルが何を表すか）は [bearing_channels](../system/bearing_channels.md) 判断6**
 
@@ -103,11 +103,16 @@ AIピッカーが同じ穴を踏んでいる既知の型である。**1つに定
 |---|---|---|---|
 | **索引A（表示用）** | ノート → 最新の分類レコード（分野・確からしさ・入力版） | 永続は `sha256Hex(相対パス)`、メモリは `DocumentRef` | **永続するのは確定だけ**（暫定は走査のたびに作り直す → 判断14）。Vault切替で捨てるのは**メモリ側だけ** |
 | **索引B（再利用用）** | 入力指紋 → AIが返した分野 | 判断9 の指紋 | 永続。件数上限で古い順に捨てる |
-| ノート単位の状態 | 判定中フラグ | — | **契約2箇所へ登録する** |
+| 索引B（メモリ） | 入力指紋 → AIの答え | 入力指紋 | Vault切替で捨てる。**永続はまだ無い** |
+| 連続失敗の記録 | 入力指紋 → 回数 | 入力指紋 | **アプリの起動単位**。永続しない（→ 判断8） |
 
 - **`BookletEntry` に欄は増えない。** 索引Aをメモリ上で `DocumentRef` から引ける形にすれば、
   既にある `ref` で足りる。**`RelatedNote` も `ref` を持つので、編む束も同じ経路で引ける**（→ §8 判断11）
 - **`vaultRelativePath` が要るのはヒントを作るときだけ**で、そこはノートを開く経路なので走査結果から引ける
+- **「判定中」の状態は持たない（2026-09-10）。** §6 の初版は持つ想定だったが、
+  **誰も見ないものを状態にしても、落ちるテストが書けない**（→ [architecture](../system/architecture.md) の
+  並行処理の規約・[lessons](../lessons.md) L11）。進捗も失敗も画面に出さない機能なので、
+  同時実行は requestId ＋ Job で足りる。**ノート単位の契約へ登録するのはジョブの停止だけ**である。
 - **索引Aは `NoteUiStateStore` が所有し、Vault単位のスライスとして公開する。**
   独立した可変ストアをUIへ直接公開すると、[architecture](../system/architecture.md) の
   「状態が `NoteUiState` の外に出る例外は2つだけ」に**3つ目を作る**ことになる —
@@ -256,6 +261,11 @@ Vault選択・起動時（走査とは別経路 → 判断17）
 **未準備とキャンセルは連続失敗に数えない。** `NeedsDownload` / `Downloading` は
 まだ失敗していないし、キャンセルは失敗ではない（下記）。数えると、
 **モデルの初回DL中にノートを数本送っただけで抑制へ入る。**
+
+**可用性の確認は、抑制の判定より先に置く（2026-09-10、実装して分かった）。**
+逆にすると、**一度抑制へ入った時点で可用性を二度と観測できず、解除条件が到達不能になる** —
+「永久確定」を「永久停止」へ置き換えただけになる。**規則を書いただけでは足りず、
+判定の順序がそれを実現しているかは別に確かめる必要があった**（テストで落ちて気づいた）。
 
 > **抑制をアプリの起動単位にする代償は受け入れる。** 再起動のたびに1回は試すので、
 > 端末が本当に駄目なときは毎起動1回だけ無駄が出る。**永続させると回復の契機が消える**ほうが重い。

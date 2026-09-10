@@ -134,6 +134,11 @@ internal class NoteSessionCoordinator(
         state = stateStore.summaryWriter,
         onModelReady = onModelReady
     )
+    private val noteField = NoteFieldController(
+        scope = scope,
+        aiClient = aiClient,
+        state = stateStore.noteFieldWriter
+    )
     private val annotation = AnnotationController(
         scope = scope,
         vault = vaultBrowser,
@@ -262,7 +267,7 @@ internal class NoteSessionCoordinator(
      * [indexNoteFieldHints] が持つ（→ 判断16）。
      */
     fun indexNoteFields(notes: List<NoteFile>) {
-        stateStore.updateNoteFields { indexNoteFieldHints(it, notes) }
+        stateStore.noteFieldWriter.update { indexNoteFieldHints(it, notes) }
     }
 
     /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */
@@ -339,6 +344,9 @@ internal class NoteSessionCoordinator(
         cancelHostJobs()
         sections.cancelAndClear()
         summary.cancelAndClear()
+        // **索引Aには触らない。** ジョブだけ止める — 索引AはVault単位なので、
+        // ノートを開き直しただけで冊子の色が消えるのは誤りである。
+        noteField.cancelAndClear()
         quiz.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
         remark.cancelAndClear()
@@ -374,6 +382,8 @@ internal class NoteSessionCoordinator(
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
         booklet.onVaultChanged()
+        // 索引Bと連続失敗の記録を捨てる。**別Vaultの結果と失敗回数を持ち越さない。**
+        noteField.clearVaultScoped()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
@@ -443,6 +453,15 @@ internal class NoteSessionCoordinator(
     // ── 要約・関連ノート ────────────────────────────────────────────────────
 
     fun fetchSummary(title: String, content: String) = summary.fetch(title, content)
+
+    /**
+     * 分野を判定する（→ features/note_field_color.md 判断6）。
+     *
+     * **要約と並べて呼ぶ。** どちらもノートを表示した契機で走り、Nano の Mutex で直列化される。
+     * 分野判定は**失敗しても何も見せない**ので、要約の後ろへ回してよい。
+     */
+    fun classifyNoteField(ref: DocumentRef, content: String, vaultRelativePath: String) =
+        noteField.classify(ref, content, vaultRelativePath)
 
     fun setRelatedNotesState(state: RelatedNotesState) {
         stateStore.setRelatedNotesState(state)
