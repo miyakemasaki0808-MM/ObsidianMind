@@ -1515,6 +1515,75 @@ class ReadingTraceControllerTest {
     }
 
     /**
+     * **取消した旧ノートの返事が、新ノートの痕跡へ入らない。**
+     *
+     * `saveReply` の読込は同期I/Oなので、戻る頃には別のノートを開いていることがある。
+     * 保存先の `vaultKey` は開始時に固定していたが、**失敗側の預け先だけが「いまのセッション」を
+     * 読み直していた** — その結果、Aへ書いた返事がBのひとことと組になって、Bのサイドカーへ保存された。
+     *
+     * **預けられないことは失敗ではなく、正直な結果である。** 別のノートへ混ぜて
+     * 「保存できた」ことにするより、保存できなかったと言うほうがよい。
+     */
+    @Test
+    fun `読込中にノートが変わったら返事を新しいノートへ預けない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/a.md", "Aのノート", "doc-a")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("Aのひとこと"))
+
+        // 読込の最中にBへ移る。**この順序が本体である。**
+        persistence.onLoad = {
+            persistence.onLoad = null
+            controller.onNoteOpened("ideas/b.md", "Bのノート", "doc-b")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+            controller.setPendingRemark(reflectionOf("Bのひとこと"))
+        }
+
+        val outcome = controller.saveReply("ideas/a.md", "Aだけに書いた返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals("Aを離れているので預けられない", ReplySaveOutcome.Lost, outcome)
+
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val storedB = persistence.stored("ideas/b.md")?.reflection
+        assertEquals("Bのひとことは変わらない", "Bのひとこと", storedB?.remark)
+        assertNull("Aの返事がBへ混ざらない", storedB?.reply)
+    }
+
+    /**
+     * **切替が無ければ、これまでどおり預かって離脱時に書く。**
+     *
+     * 上の修正で「常に Lost」になっていないことを、同じ形で確かめる対照である。
+     */
+    @Test
+    fun `切替が無ければ読込中でも返事は預かられる`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/a.md", "Aのノート", "doc-a")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.setPendingRemark(reflectionOf("Aのひとこと"))
+
+        val outcome = controller.saveReply("ideas/a.md", "Aの返事", 5_000L)
+        advanceUntilIdle()
+
+        assertEquals(ReplySaveOutcome.Held, outcome)
+
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals("Aの返事", persistence.stored("ideas/a.md")!!.reflection!!.reply)
+    }
+
+    /**
      * **保存に失敗したら必ず預ける。** ここを握り潰していたため、
      * 画面には「保存済み」と出たまま返事が消える経路があった。
      */
@@ -2399,7 +2468,20 @@ private class FakePersistence : ReadingTracePersistence {
 
     override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
 
-    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = when {
+    /**
+     * 読込の**最中**に割り込むための口。
+     *
+     * `saveReply` の読込は同期I/Oで、**戻る頃には別のノートを開いている**ことがある。
+     * その順序をテストで作るには、読込そのものの中で切り替えるのが最も確実である。
+     */
+    var onLoad: (() -> Unit)? = null
+
+    override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult = run {
+        onLoad?.invoke()
+        loadInternal(vaultRelativePath)
+    }
+
+    private fun loadInternal(vaultRelativePath: String): ReadingTraceReadResult = when {
         vaultRelativePath in corruptPaths -> ReadingTraceReadResult.Corrupt("壊れています")
         else -> files[vaultRelativePath]
             ?.let { ReadingTraceReadResult.Valid(it) }
