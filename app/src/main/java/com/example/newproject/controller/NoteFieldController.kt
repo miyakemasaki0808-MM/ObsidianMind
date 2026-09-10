@@ -4,12 +4,15 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.domain.NoteFieldAnswer
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.noteFieldPathKey
 import com.example.newproject.domain.noteFieldHint
 import com.example.newproject.domain.noteFieldInputVersion
 import com.example.newproject.domain.parseNoteFieldAnswer
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.NoteField
 import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.NoteFieldStateWriter
 import kotlinx.coroutines.CancellationException
@@ -47,7 +50,11 @@ class NoteFieldController(
      * Main で走らせるとノートを開いた瞬間に固まる（→ `docs/dev/lessons.md` L13）。
      * `NoteExcerptThreadingTest` がこの形を走査で固定している。
      */
-    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** 確定の永続。**保存はこの機能の前提条件である**（→ 判断3）。 */
+    private val store: NoteFieldStore? = null,
+    /** いまのVaultの名前空間。**別Vaultの結果と混ざらないため**（→ 判断9）。 */
+    private val vaultKey: () -> String? = { null }
 ) {
     private var job: Job? = null
     private var activeRequestId = 0L
@@ -57,8 +64,10 @@ class NoteFieldController(
      *
      * 当たれば **Nano を呼ばずに確定を復元できる** — 同じ本文を別の場所で開き直したとき、
      * 改名したときなど、**入力が同じなら結果も同じ**だからである。
+     *
+     * **値の null は「該当なし」**（正常な確定）。読めなかった応答はそもそもここへ入らない。
      */
-    private val answersByInputVersion = LinkedHashMap<String, NoteFieldAnswer>()
+    private val answersByInputVersion = LinkedHashMap<String, NoteField?>()
 
     /**
      * 連続失敗の抑制（→ 判断8）。**アプリの起動単位で、永続しない。**
@@ -95,8 +104,11 @@ class NoteFieldController(
             }
 
             // 索引Bに当たれば Nano を呼ばない。**改名や複製で同じ入力になったときの自己修復**でもある。
-            answersByInputVersion[inputVersion]?.let { cached ->
-                if (isCurrent(requestId)) apply(ref, inputVersion, cached)
+            // **`containsKey` で見る** — 値の null は「該当なし」という正常な確定であって、不在ではない。
+            if (answersByInputVersion.containsKey(inputVersion)) {
+                if (isCurrent(requestId)) {
+                    apply(ref, inputVersion, answersByInputVersion[inputVersion], vaultRelativePath)
+                }
                 return@launch
             }
 
@@ -141,16 +153,20 @@ class NoteFieldController(
                 return@launch
             }
             if (!isCurrent(requestId)) return@launch
-            when (answer) {
-                // 読めなかったものは保存しない。**次に開いたときやり直せるよう、失敗として数える**
-                // （数えないと、散文しか返さないモデルで毎回呼び続けることになる）。
-                NoteFieldAnswer.Invalid -> recordFailure(inputVersion)
-                else -> {
-                    answersByInputVersion[inputVersion] = answer
-                    failuresByInputVersion.remove(inputVersion)
-                    apply(ref, inputVersion, answer)
+            // 読めなかったものは保存しない。**次に開いたときやり直せるよう、失敗として数える**
+            // （数えないと、散文しか返さないモデルで毎回呼び続けることになる）。
+            val field = when (answer) {
+                NoteFieldAnswer.Invalid -> {
+                    recordFailure(inputVersion)
+                    return@launch
                 }
+                // **「該当なし」は正常な確定。** 無彩色にするが、未判定とは違って再判定しない。
+                NoteFieldAnswer.NoneOfThem -> null
+                is NoteFieldAnswer.Chosen -> answer.field
             }
+            answersByInputVersion[inputVersion] = field
+            failuresByInputVersion.remove(inputVersion)
+            apply(ref, inputVersion, field, vaultRelativePath)
         }
     }
 
@@ -178,14 +194,21 @@ class NoteFieldController(
      * **個別の確定は常に置き換える**（→ 判断16）。一括復元だけが「補完のみ」で、
      * こちらは今まさに得た最新の結果なので、古い確定が載っていても上書きしてよい。
      */
-    private fun apply(ref: DocumentRef, inputVersion: String, answer: NoteFieldAnswer) {
-        val field = when (answer) {
-            is NoteFieldAnswer.Chosen -> answer.field
-            // **「該当なし」は正常な確定。** 無彩色にするが、未判定とは違って再判定しない。
-            NoteFieldAnswer.NoneOfThem -> null
-            NoteFieldAnswer.Invalid -> return
-        }
-        state.update { it + (ref to NoteFieldClassification.Confirmed(field, inputVersion)) }
+    private fun apply(
+        ref: DocumentRef,
+        inputVersion: String,
+        /** null は「該当なし」。**読めなかった応答はここへ来ない** — 呼び出し側で既に分岐している。 */
+        field: NoteField?,
+        vaultRelativePath: String?
+    ) {
+        val confirmed = NoteFieldClassification.Confirmed(field, inputVersion)
+        state.update { it + (ref to confirmed) }
+        // **永続するのは確定だけ**（暫定は走査で作り直せる → 判断14）。
+        // パスが無い経路（さがす経由で相対パスが取れなかった場合）は永続しない —
+        // 鍵が作れないものを無理に保存すると、次回どのノートの結果か分からなくなる。
+        val key = vaultKey() ?: return
+        val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
+        store?.save(key, noteFieldPathKey(path), confirmed)
     }
 
     private fun recordFailure(inputVersion: String) {

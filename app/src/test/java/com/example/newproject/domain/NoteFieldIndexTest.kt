@@ -96,6 +96,42 @@ class NoteFieldIndexTest {
         assertEquals(1, index.size)
     }
 
+    /**
+     * **一括復元は補完だけ**（→ 判断16）。
+     *
+     * メモリに確定があるなら、それは今回の個別経路が書いたもの＝必ず新しい。
+     * ここが落ちると、**古い永続の確定が新しいAI確定を上書きする**。
+     */
+    @Test
+    fun `永続からの復元はメモリの確定を上書きしない`() {
+        val ref = DocumentRef("料理/カレー.md")
+        val fresh = NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion = "new")
+        val stale = NoteFieldClassification.Confirmed(NoteField.Business, inputVersion = "old")
+
+        val index = indexNoteFieldHints(
+            current = mapOf(ref to fresh),
+            notes = listOf(note("料理/カレー.md")),
+            restored = mapOf(noteFieldPathKey("料理/カレー.md") to stale)
+        )
+
+        assertEquals(fresh, index[ref])
+    }
+
+    /** 確定が無いノートには届く。**補完は効く。** */
+    @Test
+    fun `確定が無いノートには永続の復元が届く`() {
+        val ref = DocumentRef("料理/カレー.md")
+        val stored = NoteFieldClassification.Confirmed(NoteField.Business, inputVersion = "v1")
+
+        val index = indexNoteFieldHints(
+            current = emptyMap(),
+            notes = listOf(note("料理/カレー.md")),
+            restored = mapOf(noteFieldPathKey("料理/カレー.md") to stored)
+        )
+
+        assertEquals("ヒントは Living だが、復元した確定が勝つ", stored, index[ref])
+    }
+
     @Test
     fun `空の走査は索引を空にする`() {
         val current = mapOf(DocumentRef("n") to NoteFieldClassification.Provisional(NoteField.Living))

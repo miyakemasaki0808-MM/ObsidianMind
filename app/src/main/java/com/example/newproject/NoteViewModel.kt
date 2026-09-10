@@ -86,6 +86,7 @@ class NoteViewModel internal constructor(
         readingTracePersistence = dependencies.readingTracePersistence,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
+        noteFieldStore = dependencies.noteFieldStore,
         // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },

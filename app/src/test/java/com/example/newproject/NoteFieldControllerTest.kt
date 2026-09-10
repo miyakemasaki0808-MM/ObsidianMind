@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
+import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.controller.NoteFieldController
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.DocumentRef
@@ -37,13 +38,80 @@ class NoteFieldControllerTest {
         }
     }
 
-    private fun controller(scope: TestScope, client: FakeAiClient, writer: RecordingWriter) =
-        NoteFieldController(
-            scope = scope,
-            aiClient = client,
-            state = writer,
-            excerptDispatcher = StandardTestDispatcher(scope.testScheduler)
-        )
+    /** 永続の代わり。**中身を数えたいだけ**なので、素の地図で足りる。 */
+    private class RecordingStore : NoteFieldStore {
+        val saved = LinkedHashMap<String, NoteFieldClassification.Confirmed>()
+        var cleared = 0
+        override fun load(vaultKey: String) = saved.toMap()
+        override fun save(vaultKey: String, pathKey: String, confirmed: NoteFieldClassification.Confirmed) {
+            saved[pathKey] = confirmed
+        }
+        override fun clear(vaultKey: String) {
+            saved.clear()
+            cleared++
+        }
+    }
+
+    private fun controller(
+        scope: TestScope,
+        client: FakeAiClient,
+        writer: RecordingWriter,
+        store: NoteFieldStore? = null
+    ) = NoteFieldController(
+        scope = scope,
+        aiClient = client,
+        state = writer,
+        excerptDispatcher = StandardTestDispatcher(scope.testScheduler),
+        store = store,
+        vaultKey = { "vault" }
+    )
+
+    /** 確定は永続する。**保存はこの機能の前提条件**（→ 判断3）。 */
+    @Test
+    fun `確定は永続される`() = runTest {
+        val store = RecordingStore()
+        val writer = RecordingWriter()
+
+        controller(this, FakeAiClient(onGenerate = { "F1" }), writer, store)
+            .classify(ref, "本文", "技術/Flow.md")
+        advanceUntilIdle()
+
+        assertEquals(1, store.saved.size)
+        assertEquals(NoteField.Technical, store.saved.values.single().field)
+    }
+
+    /** **暫定は永続しない。** 走査で作り直せる導出値である（→ 判断14）。 */
+    @Test
+    fun `読めなかったときは永続しない`() = runTest {
+        val store = RecordingStore()
+        val writer = RecordingWriter()
+        writer.value = mapOf(ref to NoteFieldClassification.Provisional(NoteField.Living))
+
+        controller(this, FakeAiClient(onGenerate = { "散文" }), writer, store)
+            .classify(ref, "本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        assertTrue(store.saved.isEmpty())
+    }
+
+    /**
+     * **鍵が作れないものは永続しない。**
+     *
+     * さがす経由で相対パスが取れないことがある。無理に保存すると、
+     * 次回どのノートの結果か分からなくなる（表示はメモリで効く）。
+     */
+    @Test
+    fun `相対パスが無ければ永続しない`() = runTest {
+        val store = RecordingStore()
+        val writer = RecordingWriter()
+
+        controller(this, FakeAiClient(onGenerate = { "F1" }), writer, store)
+            .classify(ref, "本文", "")
+        advanceUntilIdle()
+
+        assertTrue("メモリには載る", writer.value.containsKey(ref))
+        assertTrue("永続はしない", store.saved.isEmpty())
+    }
 
     @Test
     fun `選ばれたIDが確定として索引へ入る`() = runTest {
@@ -148,6 +216,30 @@ class NoteFieldControllerTest {
             NoteField.Learning,
             (writer.value[other] as NoteFieldClassification.Confirmed).field
         )
+    }
+
+    /**
+     * **「該当なし」も索引Bへ載る。**
+     *
+     * 値の null を「不在」と読むと、`NONE` を返したノートだけ毎回 Nano を呼び直すことになる。
+     * 該当なしは正常な確定であって、判定していないことではない。
+     */
+    @Test
+    fun `該当なしの結果も索引Bから復元する`() = runTest {
+        var calls = 0
+        val client = FakeAiClient(onGenerate = { calls++; "NONE" })
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+        val other = DocumentRef("content://note/2")
+
+        target.classify(ref, "同じ本文", "雑記/A.md")
+        advanceUntilIdle()
+        target.classify(other, "同じ本文", "雑記/B.md")
+        advanceUntilIdle()
+
+        assertEquals("2件目は索引Bで足りる", 1, calls)
+        val stored = writer.value[other] as NoteFieldClassification.Confirmed
+        assertNull("該当なしとして復元される", stored.field)
     }
 
     /** 恒久非対応の端末では**呼ばない**。ヒント由来の暫定がそのまま残る。 */

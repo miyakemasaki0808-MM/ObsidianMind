@@ -1,12 +1,12 @@
 # ノートの分野を冊子の紙の色で伝える
 
-**状態:** 実装中 — **AI経路まで通っている**（ヒント→索引A→冊子の色／ノートを開くとAIが判定して確定へ昇格）。
-**索引Bはメモリのみで、永続はまだ無い。**
+**状態:** 実装済み（実機未検証） — 走査のヒント→索引A→冊子の色／ノートを開くとAIが判定して確定へ昇格し、
+確定は端末へ永続する。**残るのは実機で色を見ることと、Vault別の追加語彙**（→ §11）
 設計レビュー3巡（7件＋5件＋1件）を反映済み
 **最終検証:** 2026-09-10 / `3ecf8c7`（**実装が無いので突合していない。**Vault実測645本・オーナー判断17件・
 設計レビュー3巡（7件＋5件＋1件）と外部提案4件の反映まで。`BookletEntry` / `RelatedNote` の `ref`・
 `featureStatusToAvailability` の縮退・`collectAllNotesCached` のTTL・`openBooklet` の走査経路はソースで確認）
-**関連コード:** `controller/NoteFieldController.kt` / `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
+**関連コード:** `controller/NoteFieldController.kt` / `data/NoteFieldStore.kt` / `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
 `domain/NoteFieldAnswer.kt` / `domain/NoteFieldInputVersion.kt` / `ai/PromptBuilder.kt` /
 `ui/theme/AppColors.kt`（パレット）/ `ui/screen/BookletScreen.kt`（紙とラベル）。**AI経路と永続は未実装**
 **関連テスト:** `NoteFieldControllerTest` / `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest` /
@@ -103,12 +103,16 @@ AIピッカーが同じ穴を踏んでいる既知の型である。**1つに定
 |---|---|---|---|
 | **索引A（表示用）** | ノート → 最新の分類レコード（分野・確からしさ・入力版） | 永続は `sha256Hex(相対パス)`、メモリは `DocumentRef` | **永続するのは確定だけ**（暫定は走査のたびに作り直す → 判断14）。Vault切替で捨てるのは**メモリ側だけ** |
 | **索引B（再利用用）** | 入力指紋 → AIが返した分野 | 判断9 の指紋 | 永続。件数上限で古い順に捨てる |
-| 索引B（メモリ） | 入力指紋 → AIの答え | 入力指紋 | Vault切替で捨てる。**永続はまだ無い** |
+| 索引B（メモリ） | 入力指紋 → 分野（null は「該当なし」） | 入力指紋 | Vault切替で捨てる。**永続しない** → 下記 |
 | 連続失敗の記録 | 入力指紋 → 回数 | 入力指紋 | **アプリの起動単位**。永続しない（→ 判断8） |
 
 - **`BookletEntry` に欄は増えない。** 索引Aをメモリ上で `DocumentRef` から引ける形にすれば、
   既にある `ref` で足りる。**`RelatedNote` も `ref` を持つので、編む束も同じ経路で引ける**（→ §8 判断11）
 - **`vaultRelativePath` が要るのはヒントを作るときだけ**で、そこはノートを開く経路なので走査結果から引ける
+- **索引Bは永続しない（2026-09-10、実装で決めた）。** 判断10 は「永続。件数上限で古い順に捨てる」と
+  書いていたが、**永続の索引Aから起動時に作り直せる** — 確定は入力版を持つので、
+  読み込んだ時点で「入力指紋 → 分野」が揃う。失うのは**本文を書き換えて元へ戻したとき**の
+  取りこぼしだけで、そのときは1回生成し直せばよい。**上限も追い出しも要らなくなる。**
 - **「判定中」の状態は持たない（2026-09-10）。** §6 の初版は持つ想定だったが、
   **誰も見ないものを状態にしても、落ちるテストが書けない**（→ [architecture](../system/architecture.md) の
   並行処理の規約・[lessons](../lessons.md) L11）。進捗も失敗も画面に出さない機能なので、

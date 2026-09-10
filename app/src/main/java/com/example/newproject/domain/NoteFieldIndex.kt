@@ -29,7 +29,14 @@ import com.example.newproject.model.NoteFile
  */
 fun indexNoteFieldHints(
     current: Map<DocumentRef, NoteFieldClassification>,
-    notes: List<NoteFile>
+    notes: List<NoteFile>,
+    /**
+     * 永続層から読んだ確定（鍵は `noteFieldPathKey`）。**補完にだけ使う**（→ 判断16）。
+     *
+     * メモリに確定があるなら、それは**今回の個別経路が書いたもの＝必ず新しい**ので、
+     * 復元で置き換えてはならない。ここが「一括復元は補完だけ」の実体である。
+     */
+    restored: Map<String, NoteFieldClassification.Confirmed> = emptyMap()
 ): Map<DocumentRef, NoteFieldClassification> {
     val next = LinkedHashMap<DocumentRef, NoteFieldClassification>(notes.size)
     for (note in notes) {
@@ -39,6 +46,12 @@ fun indexNoteFieldHints(
             // 本文ハッシュを持たないので判定できず、判定できないものを捨てると
             // 「走査のたびにAIをやり直す」になる。失効はAIを呼ぶ側が入力版で見る。
             next[note.ref] = existing
+            continue
+        }
+        // メモリに確定が無いノートだけ、永続層から補う。
+        val recovered = restored[noteFieldPathKey(note.vaultRelativePath)]
+        if (recovered != null) {
+            next[note.ref] = recovered
             continue
         }
         val hint = noteFieldHint(note.vaultRelativePath) ?: continue

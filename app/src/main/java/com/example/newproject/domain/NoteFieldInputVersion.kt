@@ -60,6 +60,17 @@ fun noteFieldInputVersion(excerpt: NoteExcerpt, hint: NoteField?): String {
 const val NOTE_FIELD_PROMPT_VERSION = 1
 
 /**
+ * 永続の索引Aの鍵。**相対パスのハッシュ**（→ 判断10）。
+ *
+ * 参照（`DocumentRef`）ではなくパスを使うのは、**参照が端末やセッションをまたいで
+ * 安定するとは限らない**ため。`docs/dev/features/reflect_reading_trace.md` の痕跡サイドカーが
+ * 同じ形で、**改名・移動で見失うのも同じ**である。
+ * ただし痕跡と違い、こちらは**作り直せる導出値**なので、見失っても次に開けば戻る。
+ */
+fun noteFieldPathKey(vaultRelativePath: String): String =
+    sha256Hex(vaultRelativePath.toByteArray(Charsets.UTF_8))
+
+/**
  * `data` の同名関数と重複しているが、**`domain` は `data` を import できない**
  * （→ `docs/dev/system/architecture.md` 判断5）。`MessageDigest` は素のJVMなので、
  * 層の規約には触れない。**共有したくなったら `model` へ降ろす**のが筋である。

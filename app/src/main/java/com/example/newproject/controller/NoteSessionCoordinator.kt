@@ -12,6 +12,8 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -66,7 +68,9 @@ internal class NoteSessionCoordinator(
     distillPersistence: DistillPersistence,
     readingTracePersistence: ReadingTracePersistence,
     private val history: HistoryStore,
-    currentVaultKey: () -> String?,
+    private val currentVaultKey: () -> String?,
+    /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
+    private val noteFieldStore: NoteFieldStore? = null,
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,
     /** 蒸留保存後の本文読み直し（SAF I/O を伴うため実装は ViewModel）。 */
@@ -137,8 +141,19 @@ internal class NoteSessionCoordinator(
     private val noteField = NoteFieldController(
         scope = scope,
         aiClient = aiClient,
-        state = stateStore.noteFieldWriter
+        state = stateStore.noteFieldWriter,
+        store = noteFieldStore,
+        vaultKey = currentVaultKey
     )
+
+    /**
+     * 永続層から読んだ確定（→ 判断17）。**走査とは別経路で、Vault選択時に読む。**
+     *
+     * 走査へ読込を相乗りさせると、冊子を開く経路に保存ストアI/Oが増える
+     * （`openBooklet` は `collectAllNotesCached` を呼ぶ）。
+     * **未準備なら空のまま** — 冊子は無彩色で開き、待たせない。
+     */
+    private var restoredNoteFields: Map<String, NoteFieldClassification.Confirmed> = emptyMap()
     private val annotation = AnnotationController(
         scope = scope,
         vault = vaultBrowser,
@@ -267,7 +282,7 @@ internal class NoteSessionCoordinator(
      * [indexNoteFieldHints] が持つ（→ 判断16）。
      */
     fun indexNoteFields(notes: List<NoteFile>) {
-        stateStore.noteFieldWriter.update { indexNoteFieldHints(it, notes) }
+        stateStore.noteFieldWriter.update { indexNoteFieldHints(it, notes, restoredNoteFields) }
     }
 
     /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */
@@ -384,6 +399,10 @@ internal class NoteSessionCoordinator(
         booklet.onVaultChanged()
         // 索引Bと連続失敗の記録を捨てる。**別Vaultの結果と失敗回数を持ち越さない。**
         noteField.clearVaultScoped()
+        // **走査より先に読む。** 走査のときには揃っている状態にしておく（→ 判断17）。
+        restoredNoteFields = currentVaultKey()
+            ?.let { key -> noteFieldStore?.load(key) }
+            .orEmpty()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
