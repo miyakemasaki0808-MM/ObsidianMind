@@ -32,6 +32,20 @@ object NoteExcerptLimits {
     const val SECTION = 1500
     const val QUIZ = 1200
 
+    /**
+     * 分野の判定。**他より小さい。**
+     *
+     * 要約と違って本文全体を把握する必要がなく、**何について書かれたノートかが分かれば足りる**。
+     * 抜粋は見出し骨格＋冒頭＋末尾なので、この予算でも主題は載る。
+     *
+     * **小さくする理由は、この経路がノートを開くたびに全ノートで走ること**にある
+     * （→ `docs/dev/features/note_field_color.md` 判断6）。Nano は Mutex 直列なので、
+     * 要約・読書痕跡に続く3本目として待ち行列を伸ばす。**予算はそのまま待ち時間になる。**
+     *
+     * **実機で測っていない。** 動かすときは `PromptTokenBudgetTest` の掃引と体感で決める。
+     */
+    const val FIELD = 600
+
     const val ABRIDGED_NOTICE =
         "The following content has been compacted and may combine a note outline with excerpts " +
             "from the beginning and ending. A (omitted) marker denotes a skipped span when present. " +

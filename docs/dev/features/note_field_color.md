@@ -1,12 +1,16 @@
 # ノートの分野を冊子の紙の色で伝える
 
-**状態:** Draft — **設計は完成。実装は未着手。**設計レビュー2巡（7件＋5件）を反映済み
+**状態:** 実装中 — **非AIの縦切り（ヒント→索引A→冊子の色とラベル）と、AI段の純粋部分
+（プロンプト・応答パース・入力指紋）まで実装済み。**Controller・索引B・永続はまだ無い。
+設計レビュー3巡（7件＋5件＋1件）を反映済み
 **最終検証:** 2026-09-10 / `3ecf8c7`（**実装が無いので突合していない。**Vault実測645本・オーナー判断17件・
 設計レビュー3巡（7件＋5件＋1件）と外部提案4件の反映まで。`BookletEntry` / `RelatedNote` の `ref`・
 `featureStatusToAvailability` の縮退・`collectAllNotesCached` のTTL・`openBooklet` の走査経路はソースで確認）
 **関連コード:** `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
+`domain/NoteFieldAnswer.kt` / `domain/NoteFieldInputVersion.kt` / `ai/PromptBuilder.kt` /
 `ui/theme/AppColors.kt`（パレット）/ `ui/screen/BookletScreen.kt`（紙とラベル）。**AI経路と永続は未実装**
-**関連テスト:** `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest`
+**関連テスト:** `NoteFieldHintTest` / `NoteFieldIndexTest` / `NoteFieldPaletteTest` /
+`NoteFieldAnswerTest` / `NoteFieldInputVersionTest` / `OnDeviceGenerationTest`（応答がIDとして読めること）
 **正本:** この文書。**割り当て（どのチャネルが何を表すか）は [bearing_channels](../system/bearing_channels.md) 判断6**
 
 **対象領域:** 冊子の紙の地色と、その元になる**分野の判定**
@@ -84,8 +88,12 @@
 - **キャンセル時:** **何も書かない。**索引A・Bとも触らず、状態も動かさない。
   ノート切替では requestId ＋ `isCurrent()` で旧要求の保存とUI更新を止める（→ §8 判断8）
 
-> **未確認:** 抜粋の文字数上限と、プロンプトの具体形。
-> 用途別上限は [ai_input_excerpt](../system/ai_input_excerpt.md) に1つ足す必要がある。
+**抜粋の上限は `NoteExcerptLimits.FIELD = 600`**（2026-09-10）。要約（1200）より小さいのは、
+本文全体の把握が要らないことと、**この経路が全ノートで走るので予算がそのまま待ち時間になる**ため。
+**実機で測っていない** — 動かすときは `PromptTokenBudgetTest` の掃引と体感で決める。
+
+**応答はIDで受ける**（`F1`..`F6` と `NONE`）。ラベルを返させると、AIが整えた瞬間に照合が落ちる —
+AIピッカーが同じ穴を踏んでいる既知の型である。**1つに定まらなければ保存しない**（多数決も先頭優先もしない）。
 
 ## 6. 状態とデータ
 

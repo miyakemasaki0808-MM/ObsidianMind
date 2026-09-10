@@ -2,6 +2,9 @@ package com.example.newproject.ai
 
 import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
+import com.example.newproject.model.NOTE_FIELD_NONE_ID
+import com.example.newproject.model.NoteField
+import com.example.newproject.model.promptId
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
@@ -99,6 +102,60 @@ object PromptBuilder {
         Ignore records of past events. A record of what happened does not expire.
     """.trimIndent()
 
+
+    /**
+     * 分野の判定。**候補から1つ選ばせるだけで、文章は書かせない。**
+     *
+     * **IDで返させる**（→ `NoteField.promptId`）。ラベルを返させると、AIが
+     * 「技術開発」「技術・開発分野」のように整えた瞬間に照合が落ちる。
+     *
+     * **`NONE` を正常な選択肢として提示する。** 入れないと、
+     * どれにも当たらないノートで**6つのうちどれかを無理に選ばせる**か、
+     * 生成失敗として再試行し続けるかのどちらかになる（→ features/note_field_color.md 判断13）。
+     *
+     * **[hint] は候補であって答えではない。** 添えるのは、パスに手がかりがあるときに
+     * 精度が上がるからで、**AIがこれを否定してよい**ことを明示する — 否定できないと、
+     * 採番体系が崩れて誤ったヒントが出たときに直せない（判断6）。
+     *
+     * **読書は形式であって分野ではない**ことを定義文へ入れる。入れないと、
+     * 読書由来のノートが1つの分野へ集中して**冊子がほぼ1色で埋まる**（判断13）。
+     */
+    fun buildNoteFieldPrompt(title: String, excerpt: NoteExcerpt, hint: NoteField?): String {
+        val options = NoteField.entries.joinToString("\n") { "${it.promptId} | ${it.label} — ${fieldCriterion(it)}" }
+        val instructions = """
+            You are a note-taking assistant. Classify the following Obsidian note into exactly ONE field.
+            Each option is listed as "ID | name — what it covers".
+            Answer with a single ID and nothing else (for example: F1).
+            If none of the options fit, answer $NOTE_FIELD_NONE_ID.
+            A note about a book belongs to the field of its subject, not to a "reading" field.
+            Do not explain, do not repeat the name, do not output more than one ID.
+        """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nOptions:\n").append(options)
+                if (hint != null) {
+                    // **候補であることを言い切る。** 「参考」程度の書き方だと、Nano は
+                    // ほぼそのまま返してきて、ヒントを補正するというAI段の役目が消える。
+                    append("\n\nA folder-name guess for this note is ").append(hint.promptId)
+                    append(". It is only a guess and may be wrong. Judge from the content.")
+                }
+                append("\n\nNote title: ").append(label(title))
+                append("\nNote content:\n").append(excerpt.renderForPrompt())
+            }
+        )
+    }
+
+    /** 分野の境目は規則ではなく定義文が持つ（→ features/note_field_color.md 判断13）。 */
+    private fun fieldCriterion(field: NoteField): String = when (field) {
+        NoteField.Technical -> "code, system design, tools, development environments"
+        NoteField.Learning -> "exam preparation and study material being worked through"
+        NoteField.Business -> "work, organizations, meetings, procedures"
+        NoteField.Creative -> "things being made, and ongoing personal interests"
+        NoteField.Living -> "chores, food, health, shopping, plans"
+        NoteField.Reflection -> "diaries, retrospectives, loose ideas, thinking out loud"
+    }
 
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         val instructions = """

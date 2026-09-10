@@ -5,6 +5,8 @@ import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.MainActivity
+import com.example.newproject.domain.NoteFieldAnswer
+import com.example.newproject.domain.parseNoteFieldAnswer
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.model.NoteExcerptLimits
@@ -15,6 +17,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
+import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -86,6 +89,38 @@ class OnDeviceGenerationTest {
         assumeTrue(
             "端末AIが利用可能ではないため生成を飛ばす（FeatureStatus=$status）。",
             status == FeatureStatus.AVAILABLE
+        )
+    }
+
+    /**
+     * 分野の判定は、**応答をそのまま本番のパーサへ通す**数少ない経路である。
+     *
+     * 返るのはIDひとつなので、**「生成が返った」だけでは合否にならない** —
+     * `F1`..`F6` か `NONE` として読めなければ、本番では確定として保存されず
+     * 暫定のまま据え置かれる（→ features/note_field_color.md 判断13）。
+     * **ここで読めることを確かめておかないと、その失敗は無彩色として黙って現れる。**
+     *
+     * **ヒントを添えた側で通す。** 添えない側と経路が分かれないことは判断6 の要点だが、
+     * 添えたときに**ヒントをそのまま返すだけになっていない**ことは、この1件では判定できない
+     * （→ §保証していないこと）。
+     */
+    @Test
+    fun 分野判定プロンプトがIDとして読める応答を返す() = runBlocking<Unit> {
+        requireNanoAvailable()
+
+        val prompt = PromptBuilder.buildNoteFieldPrompt(
+            title = NOTE_TITLE,
+            excerpt = buildNoteExcerpt(NOTE_BODY, NoteExcerptLimits.FIELD),
+            hint = null
+        )
+        val response = client.generate(prompt)
+
+        log("分野判定", response)
+        assertGenerated("分野判定", response)
+        assertNotEquals(
+            "分野判定の応答をIDとして読めなかった: $response",
+            NoteFieldAnswer.Invalid,
+            parseNoteFieldAnswer(response)
         )
     }
 
