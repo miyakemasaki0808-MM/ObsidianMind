@@ -17,6 +17,7 @@
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
 | 2026-09-10 | — | 全体レビューで返事の別ノート保存と分野判定5件を再現し、未解決指摘として登録した | [review](../review/README.md) |
+| 2026-09-11 | — | 分野の指紋へタイトルを足し、応答は行全体を見て、失効した確定をヒントへ落とすようにした | [note_field_color](features/note_field_color.md) §5 |
 | 2026-09-11 | — | 起動復元でも分野の永続を読み、復元した確定から索引Bを作り直すようにした（P2-1・P2-5） | [note_field_color](features/note_field_color.md) 判断10・17 |
 | 2026-09-10 | — | 取消後の旧ノートの返事が新ノートの痕跡へ保存される不具合を直した（P1-1） | [reflect_reading_trace](features/reflect_reading_trace.md) |
 | 2026-09-10 | — | 分野の確定を端末へ永続し、Vault選択時に読んで走査で補完するようにした | [note_field_color](features/note_field_color.md) 判断10・17 |

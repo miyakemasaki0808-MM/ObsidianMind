@@ -94,13 +94,21 @@ class NoteFieldController(
             val excerpt = withContext(excerptDispatcher) {
                 buildNoteExcerpt(content, NoteExcerptLimits.FIELD)
             }
-            val inputVersion = noteFieldInputVersion(excerpt, hint)
+            // **プロンプトへ載せるタイトルと同じ値を指紋へ渡す。**
+            // ここが食い違うと、指紋が「実際にAIへ渡したもの」を表さなくなる。
+            val title = vaultRelativePath.substringAfterLast('/')
+            val inputVersion = noteFieldInputVersion(title, excerpt, hint)
 
             // **「判定済み」ではなく「現在の入力版の確定」で見る。**
             // 本文・ヒント・語彙のどれかが変われば版が変わり、その確定はもう有効でない。
             val existing = state.current[ref]
-            if (existing is NoteFieldClassification.Confirmed && existing.inputVersion == inputVersion) {
-                return@launch
+            if (existing is NoteFieldClassification.Confirmed) {
+                if (existing.inputVersion == inputVersion) return@launch
+                // **失効を見つけた時点で落とす**（→ 判断8・レビュー P2-4）。
+                // ここを飛ばすと、この後 AI が使えなかったときに**古い色とラベルが残る** —
+                // 「失敗したらヒントへ縮退する」と書いた仕様と食い違う。
+                // **落とす先はいまのヒント**で、ヒントが無ければ未判定（無彩色）にする。
+                if (isCurrent(requestId)) demote(ref, hint)
             }
 
             // 索引Bに当たれば Nano を呼ばない。**改名や複製で同じ入力になったときの自己修復**でもある。
@@ -139,7 +147,7 @@ class NoteFieldController(
             }
 
             val prompt = PromptBuilder.buildNoteFieldPrompt(
-                title = vaultRelativePath.substringAfterLast('/'),
+                title = title,
                 excerpt = excerpt,
                 hint = hint
             )
@@ -227,6 +235,20 @@ class NoteFieldController(
         val key = vaultKey() ?: return
         val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
         store?.save(key, noteFieldPathKey(path), confirmed)
+    }
+
+    /**
+     * 失効した確定を、いまのヒントの暫定へ落とす（無ければ未判定＝索引から外す）。
+     *
+     * **永続には触らない。** 永続の確定は「その入力版での答え」として正しく、
+     * 消すと**入力を元へ戻したときに再利用できなくなる**。
+     * 走査による復元も入力版を見ないので復活し得るが、**それはノートを開いた時点で再び落とされる** —
+     * 表示の鮮度を保証するのは「開いたとき」までである（→ 判断10）。
+     */
+    private fun demote(ref: DocumentRef, hint: NoteField?) {
+        state.update { current ->
+            if (hint == null) current - ref else current + (ref to NoteFieldClassification.Provisional(hint))
+        }
     }
 
     private fun recordFailure(inputVersion: String) {

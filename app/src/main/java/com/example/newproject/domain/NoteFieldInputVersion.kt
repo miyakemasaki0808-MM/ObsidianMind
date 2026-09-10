@@ -18,6 +18,7 @@ import java.security.MessageDigest
  *
  * | 含めるもの | 落とすと起きること |
  * |---|---|
+ * | タイトル | **同じ本文の異題ノートが同じ結果になる**（プロンプトには載っているのに） |
  * | 本文（の抜粋そのもの） | 本文を書き換えても古い結果が出続ける |
  * | 抜粋の予算・省略の有無 | 予算を変えても再判定されない |
  * | ヒント | 移動して別のヒントが付いても再判定されない |
@@ -38,13 +39,16 @@ import java.security.MessageDigest
  * そのとき再判定しないのは正しい（AIへ渡るものが変わっていない）。
  * 本文ハッシュにすると、**AIの入力が同じなのに再判定する**ことになる。
  */
-fun noteFieldInputVersion(excerpt: NoteExcerpt, hint: NoteField?): String {
+fun noteFieldInputVersion(title: String, excerpt: NoteExcerpt, hint: NoteField?): String {
     val material = buildString {
         append("p").append(NOTE_FIELD_PROMPT_VERSION)
         append(":v").append(NOTE_FIELD_VOCABULARY_VERSION)
         append(":b").append(NoteExcerptLimits.FIELD)
         append(":a").append(if (excerpt.isAbridged) 1 else 0)
         append(":h").append(hint?.promptId ?: "-")
+        // **タイトルもプロンプトへ載る**ので入力の一部である。落とすと、同じテンプレート本文を持つ
+        // 異題ノートが同じ鍵へ畳まれ、**先に開いたノートの分類が両方へ効く**（→ レビュー P2-2）。
+        append(":t").append(title)
         append(":x").append(excerpt.text)
     }
     return sha256Hex(material.toByteArray(Charsets.UTF_8))

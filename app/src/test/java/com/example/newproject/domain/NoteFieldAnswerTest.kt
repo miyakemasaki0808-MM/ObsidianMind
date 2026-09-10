@@ -66,6 +66,20 @@ class NoteFieldAnswerTest {
         assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("The answer is F1."))
     }
 
+    /**
+     * **同じ行の併記・否定文は落とす（P2-3）。**
+     *
+     * 先頭だけを見ると、曖昧な応答と**明示的に否定された分野**が確定として保存され、
+     * 同じ入力版では再試行されない。
+     */
+    @Test
+    fun `同じ行の複数候補と否定文は読めなかった扱いになる`() {
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1 / F3"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1 ではなく F3 が適切です"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("NONE / F1"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1 (技術・開発)"))
+    }
+
     /** `F12` や `Field` を `F1` と読まない。 */
     @Test
     fun `IDに続きがあるものは弾く`() {

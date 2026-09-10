@@ -52,7 +52,10 @@ fun parseNoteFieldAnswer(response: String): NoteFieldAnswer {
             .removeSurrounding("'")
             .trim()
         if (line.isEmpty()) continue
-        val token = ANSWER_TOKEN.find(line)?.value?.uppercase() ?: continue
+        // **行全体がIDの形であることを要求する。** 先頭だけを見ると、
+        // `F1 / F3`（同じ行の併記）や `F1 ではなく F3 が適切です`（否定）から
+        // 先頭のIDを取って確定してしまう（→ レビュー P2-3）。
+        val token = ANSWER_LINE.matchEntire(line)?.groupValues?.get(1)?.uppercase() ?: continue
         found += token
         // **2つ見つかった時点で打ち切ってよい。** それ以上数えても結論は変わらない。
         if (found.size > 1) return NoteFieldAnswer.Invalid
@@ -63,9 +66,14 @@ fun parseNoteFieldAnswer(response: String): NoteFieldAnswer {
 }
 
 /**
- * 行頭のIDだけを拾う。
+ * **行の全体**がIDであること。
  *
- * `F` の後は1桁で、**直後に数字や英字が続かないこと** — `F12` や `Field` を弾く。
- * 続きの記号（`.` `:` など）は許す。整形の癖であって別のIDではない。
+ * `F` の後は1桁で、`F12` や `Field` は弾く。**末尾の句読点だけは許す** —
+ * 整形の癖であって別の答えではない。
+ *
+ * **「先頭がIDなら通す」にはしない。** それだと `F1 / F3` も `F1 ではなく F3` も
+ * 先頭のF1として確定し、**曖昧な応答と明示的に否定された分野が保存される。**
+ * 指示に従っていない応答は落として、次に開いたときやり直せばよい。
  */
-private val ANSWER_TOKEN = Regex("""^(?:F\d|NONE)(?![0-9A-Za-z])""", RegexOption.IGNORE_CASE)
+private val ANSWER_LINE =
+    Regex("""(F\d|NONE)(?![0-9A-Za-z])[.,:;。、]?""", RegexOption.IGNORE_CASE)

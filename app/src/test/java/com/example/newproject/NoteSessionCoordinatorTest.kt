@@ -163,7 +163,7 @@ class NoteSessionCoordinatorTest {
         val env = Env(this)
         val content = "Kotlin の Flow について"
         val hint = noteFieldHint("技術/A.md")
-        val inputVersion = noteFieldInputVersion(NoteExcerpt(content, isAbridged = false), hint)
+        val inputVersion = noteFieldInputVersion("A.md", NoteExcerpt(content, isAbridged = false), hint)
         env.noteFields.save(
             "vault-a",
             noteFieldPathKey("技術/A.md"),
@@ -172,8 +172,8 @@ class NoteSessionCoordinatorTest {
         val coordinator = env.coordinator()
         coordinator.onVaultRestored()
 
-        // **保存されているのとは別のパス**（移動先）を開く。本文とヒントは同じ。
-        coordinator.classifyNoteField(DocumentRef("content://note/2"), content, "技術/B.md")
+        // **保存されているのとは別のパス**（移動先）を開く。**ファイル名・本文・ヒントは同じ。**
+        coordinator.classifyNoteField(DocumentRef("content://note/2"), content, "技術/古い/A.md")
         advanceUntilIdle()
 
         assertEquals("索引Bから復元できるので生成しない", 0, env.ai.generateCalls)

@@ -30,10 +30,14 @@ class NoteFieldControllerTest {
 
     private class RecordingWriter : NoteFieldStateWriter {
         var value: Map<DocumentRef, NoteFieldClassification> = emptyMap()
+
+        /** **書き込み回数。** 結果が同じでも、書けば画面は再描画される（色が点滅する）。 */
+        var updates = 0
         override val current get() = value
         override fun update(
             transform: (Map<DocumentRef, NoteFieldClassification>) -> Map<DocumentRef, NoteFieldClassification>
         ) {
+            updates++
             value = transform(value)
         }
     }
@@ -196,7 +200,8 @@ class NoteFieldControllerTest {
     /**
      * **索引Bに当たれば AI を呼ばない。**
      *
-     * 同じ入力が別のノートで現れたとき（複製・改名）に効く自己修復でもある。
+     * 同じ入力が別のノートで現れたとき（複製、**同名のままの移動**）に効く自己修復でもある。
+     * 改名は入力が変わるので当たらない — タイトルはプロンプトへ載るためである。
      */
     @Test
     fun `同じ入力の別ノートは索引Bから復元する`() = runTest {
@@ -208,7 +213,7 @@ class NoteFieldControllerTest {
 
         target.classify(ref, "同じ本文", "試験/A.md")
         advanceUntilIdle()
-        target.classify(other, "同じ本文", "試験/B.md")
+        target.classify(other, "同じ本文", "試験/過去問/A.md")
         advanceUntilIdle()
 
         assertEquals("入力が同じなら結果も同じ。生成は1回でよい", 1, calls)
@@ -234,7 +239,7 @@ class NoteFieldControllerTest {
 
         target.classify(ref, "同じ本文", "雑記/A.md")
         advanceUntilIdle()
-        target.classify(other, "同じ本文", "雑記/B.md")
+        target.classify(other, "同じ本文", "雑記/古い/A.md")
         advanceUntilIdle()
 
         assertEquals("2件目は索引Bで足りる", 1, calls)
@@ -266,8 +271,9 @@ class NoteFieldControllerTest {
         writer.value = emptyMap()
         target.restoreAnswers(listOf(confirmed))
 
-        // 移動先（パスは違うがヒントは同じ）を開く。
-        target.classify(DocumentRef("content://note/2"), "同じ本文", "技術/B.md")
+        // 移動先を開く。**ファイル名は同じ**（タイトルは入力の一部なので、
+        // 改名していたら入力が変わり、再判定になるのが正しい）。
+        target.classify(DocumentRef("content://note/2"), "同じ本文", "技術/古い/A.md")
         advanceUntilIdle()
 
         assertEquals("索引Bから復元できるので生成しない", 1, calls)
@@ -288,11 +294,79 @@ class NoteFieldControllerTest {
         target.clearVaultScoped()
         writer.value = emptyMap()
         target.restoreAnswers(listOf(confirmed))
-        target.classify(DocumentRef("content://note/2"), "同じ本文", "雑記/B.md")
+        target.classify(DocumentRef("content://note/2"), "同じ本文", "雑記/古い/A.md")
         advanceUntilIdle()
 
         assertEquals(1, calls)
         assertNull((writer.value[DocumentRef("content://note/2")] as NoteFieldClassification.Confirmed).field)
+    }
+
+    /**
+     * **失効を見つけたら、AIが使えなくても古い確定を残さない（P2-4）。**
+     *
+     * 本文が変わって版が失効したのに、AI未取得・失敗のときに古い色とラベルが残っていた。
+     * 「失敗したらヒントへ縮退する」という仕様（判断8）と食い違う。
+     */
+    @Test
+    fun `失効した確定はAIが使えなくてもヒントへ落ちる`() = runTest {
+        val client = FakeAiClient(onGenerate = { "F1" })
+        client.availability = AiAvailability.NeedsDownload
+        val writer = RecordingWriter()
+        writer.value = mapOf(
+            ref to NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion = "旧い版")
+        )
+
+        controller(this, client, writer).classify(ref, "料理の本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        assertEquals(
+            "ヒント由来の暫定へ落ちる",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            writer.value[ref]
+        )
+    }
+
+    /** ヒントが無ければ未判定（無彩色）へ落とす。**古い色を残さない。** */
+    @Test
+    fun `失効した確定はヒントが無ければ未判定へ落ちる`() = runTest {
+        val client = FakeAiClient(onGenerate = { "F1" })
+        client.availability = AiAvailability.Unsupported
+        val writer = RecordingWriter()
+        writer.value = mapOf(
+            ref to NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion = "旧い版")
+        )
+
+        controller(this, client, writer).classify(ref, "本文", "0500_000F/0500_000F_B006.md")
+        advanceUntilIdle()
+
+        assertNull("索引から外れる", writer.value[ref])
+    }
+
+    /**
+     * **有効な確定のときは索引Aへ書かない。**
+     *
+     * 落として索引Bから戻すと**結果は同じ**だが、書けば画面は再描画される —
+     * ノートを開くたびに**色が一度ヒントへ点滅する。**
+     * だから「値が変わらないこと」ではなく**「書かないこと」で見る。**
+     */
+    @Test
+    fun `有効な確定のときは索引へ書かない`() = runTest {
+        val client = FakeAiClient(onGenerate = { "F1" })
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+
+        target.classify(ref, "本文", "技術/Flow.md")
+        advanceUntilIdle()
+        val confirmed = writer.value[ref]
+
+        val updatesAfterFirst = writer.updates
+
+        client.availability = AiAvailability.Unsupported
+        target.classify(ref, "本文", "技術/Flow.md")
+        advanceUntilIdle()
+
+        assertEquals("値は変わらない", confirmed, writer.value[ref])
+        assertEquals("そもそも書かない", updatesAfterFirst, writer.updates)
     }
 
     /** 恒久非対応の端末では**呼ばない**。ヒント由来の暫定がそのまま残る。 */
