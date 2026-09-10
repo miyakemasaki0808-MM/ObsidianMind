@@ -242,6 +242,59 @@ class NoteFieldControllerTest {
         assertNull("該当なしとして復元される", stored.field)
     }
 
+    /**
+     * **永続の確定から索引Bを作り直せる（P2-5）。**
+     *
+     * 索引Bを永続しないという判断は、これがあって初めて成立する。呼ばないと、
+     * **移動・複製した先で保存済みの結果を再利用できず、再起動のたびに生成し直す。**
+     */
+    @Test
+    fun `永続の確定から索引Bを作り直すと生成しない`() = runTest {
+        var calls = 0
+        val client = FakeAiClient(onGenerate = { calls++; "F1" })
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+
+        // 1回目のセッションで確定し、その入力版を控える。
+        target.classify(ref, "同じ本文", "技術/A.md")
+        advanceUntilIdle()
+        val confirmed = writer.value[ref] as NoteFieldClassification.Confirmed
+        assertEquals(1, calls)
+
+        // 新しいセッション相当。索引Bは空だが、永続の確定から作り直す。
+        target.clearVaultScoped()
+        writer.value = emptyMap()
+        target.restoreAnswers(listOf(confirmed))
+
+        // 移動先（パスは違うがヒントは同じ）を開く。
+        target.classify(DocumentRef("content://note/2"), "同じ本文", "技術/B.md")
+        advanceUntilIdle()
+
+        assertEquals("索引Bから復元できるので生成しない", 1, calls)
+    }
+
+    /** **「該当なし」も作り直せる。** 値の null を不在と読むと、ここだけ毎回生成し直す。 */
+    @Test
+    fun `該当なしの確定からも索引Bを作り直せる`() = runTest {
+        var calls = 0
+        val client = FakeAiClient(onGenerate = { calls++; "NONE" })
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+
+        target.classify(ref, "同じ本文", "雑記/A.md")
+        advanceUntilIdle()
+        val confirmed = writer.value[ref] as NoteFieldClassification.Confirmed
+
+        target.clearVaultScoped()
+        writer.value = emptyMap()
+        target.restoreAnswers(listOf(confirmed))
+        target.classify(DocumentRef("content://note/2"), "同じ本文", "雑記/B.md")
+        advanceUntilIdle()
+
+        assertEquals(1, calls)
+        assertNull((writer.value[DocumentRef("content://note/2")] as NoteFieldClassification.Confirmed).field)
+    }
+
     /** 恒久非対応の端末では**呼ばない**。ヒント由来の暫定がそのまま残る。 */
     @Test
     fun `恒久非対応なら生成しない`() = runTest {

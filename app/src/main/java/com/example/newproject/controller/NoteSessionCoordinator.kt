@@ -142,6 +142,9 @@ internal class NoteSessionCoordinator(
         scope = scope,
         aiClient = aiClient,
         state = stateStore.noteFieldWriter,
+        // 抜粋の組み立ては本文サイズに比例するので Main の外へ。**解析と同じ口を使う** —
+        // テストがテストスケジューラへ差し替えられないと、判定の完了を待てない。
+        excerptDispatcher = parseDispatcher,
         store = noteFieldStore,
         vaultKey = currentVaultKey
     )
@@ -374,6 +377,27 @@ internal class NoteSessionCoordinator(
     /** 起動時に保存済みVaultを復元したときに呼ぶ。 */
     fun onVaultRestored() {
         stateStore.restoreVault(history.load())
+        // **起動復元からも読む。** ここを落としていたため、保存が効くのは
+        // 「Vaultを選び直した」経路だけだった（→ features/note_field_color.md 判断17）。
+        // **入口が2つある機能は、後から足したほうを取り残す**（→ lessons.md L14）。
+        loadPersistedNoteFields()
+    }
+
+    /**
+     * 永続の確定を読み、索引Aの補完材料と索引Bの両方へ渡す（→ 判断10・判断17）。
+     *
+     * **走査とは別経路である。** 走査へ相乗りさせると、冊子を開く経路に保存ストアI/Oが増える
+     * （`openBooklet` が `collectAllNotesCached` を呼ぶため）。
+     *
+     * **同期で読む。** 後から届く経路が無いので、Vault世代の照合は要らない —
+     * 非同期にしたときに初めて必要になる。
+     */
+    private fun loadPersistedNoteFields() {
+        restoredNoteFields = currentVaultKey()
+            ?.let { key -> noteFieldStore?.load(key) }
+            .orEmpty()
+        // **索引Bも作り直す。** これを呼ばないと、索引Bを永続しないという判断が成立しない。
+        noteField.restoreAnswers(restoredNoteFields.values)
     }
 
     /**
@@ -400,9 +424,7 @@ internal class NoteSessionCoordinator(
         // 索引Bと連続失敗の記録を捨てる。**別Vaultの結果と失敗回数を持ち越さない。**
         noteField.clearVaultScoped()
         // **走査より先に読む。** 走査のときには揃っている状態にしておく（→ 判断17）。
-        restoredNoteFields = currentVaultKey()
-            ?.let { key -> noteFieldStore?.load(key) }
-            .orEmpty()
+        loadPersistedNoteFields()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()

@@ -181,6 +181,24 @@ class NoteFieldController(
         job = null
     }
 
+    /**
+     * 永続の確定から索引Bを作り直す（→ 判断10）。
+     *
+     * **索引Bを永続しない判断は、これがあって初めて成立する。** 確定は入力版を持つので、
+     * 読み込んだ時点で「入力指紋 → 分野」が揃う。**これを呼ばないと、移動・複製した先で
+     * 保存済みの結果を再利用できず、再起動のたびに生成し直す。**
+     *
+     * **呼ぶのはVaultを読み込む時点だけ**（起動復元と明示選択）で、そのとき索引Bは空である
+     * （[clearVaultScoped] の直後、あるいは生成前）。**「既にある要素を守る」ガードは置かない** —
+     * 空に対して復元するので発火せず、**落ちるテストが書けないガードは足さない**
+     * （→ `docs/dev/lessons.md` L11）。セッションの途中で呼ぶようになったら、そのとき考える。
+     */
+    fun restoreAnswers(confirmed: Collection<NoteFieldClassification.Confirmed>) {
+        for (entry in confirmed) {
+            answersByInputVersion[entry.inputVersion] = entry.field
+        }
+    }
+
     /** Vault切替。**索引Bと抑制を捨てる** — 別Vaultの結果と失敗回数を持ち越さない。 */
     fun clearVaultScoped() {
         cancelAndClear()
