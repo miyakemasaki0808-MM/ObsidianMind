@@ -99,6 +99,30 @@ class NoteFieldControllerTest {
     }
 
     /**
+     * **正常な行のあとに否定文が続く応答も、確定にしない（P2-2）。**
+     *
+     * 純関数側の検査だけでは「Controllerが同じ判定を通っているか」が分からない。
+     * ここが落ちると、**否定されたほうの分野が永続され、同じ入力版では二度と直らない。**
+     */
+    @Test
+    fun `否定文が続く応答は確定も永続もしない`() = runTest {
+        val store = RecordingStore()
+        val writer = RecordingWriter()
+        writer.value = mapOf(ref to NoteFieldClassification.Provisional(NoteField.Living))
+
+        controller(this, FakeAiClient(onGenerate = { "F1\nF1 ではなく F3 が適切です" }), writer, store)
+            .classify(ref, "本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        assertTrue("永続しない", store.saved.isEmpty())
+        assertEquals(
+            "暫定のまま動かさない",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            writer.value[ref]
+        )
+    }
+
+    /**
      * **鍵が作れないものは永続しない。**
      *
      * さがす経由で相対パスが取れないことがある。無理に保存すると、

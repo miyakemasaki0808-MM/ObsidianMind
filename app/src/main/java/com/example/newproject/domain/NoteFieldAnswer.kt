@@ -28,9 +28,8 @@ sealed interface NoteFieldAnswer {
  *
  * ## 受け付ける形
  *
- * 行頭のIDだけを見る（`F1`..`F6` と `NONE`）。箇条書き記号・引用符・コードフェンスは剥がす。
- * **説明文の中に紛れたIDは拾わない** — 拾うと「F1 ではなく F3 が適切です」のような応答から
- * 誤ったIDを取り出す。
+ * **応答全体がID行だけでできていること。** 見るのは `F1`..`F6` と `NONE` で、
+ * 空行・箇条書き記号・引用符・コードフェンスは装飾として読み飛ばす。
  *
  * ## 落とす形
  *
@@ -39,31 +38,41 @@ sealed interface NoteFieldAnswer {
  * AIが迷った応答を、こちらが勝手に決めて確定として永続すると、
  * **入力版が同じあいだ二度と直らない。** 落とせば次に開いたときやり直せる。
  *
+ * **ID以外の行が1つでもあれば、拾えた候補ごと落とす**（→ レビュー P2-2）。
+ * 読めない行を読み飛ばすと、`F1` の次行に `F1 ではなく F3 が適切です` を返す応答から
+ * **否定されたほうのF1を確定する。** 装飾と「選択を無効にする内容」は同じ扱いにできない。
+ *
  * **同じIDの繰り返しは1つと数える。** `F1\nF1` は迷いではなく、単に整形が崩れただけである。
  */
 fun parseNoteFieldAnswer(response: String): NoteFieldAnswer {
     val byId = NoteField.entries.associateBy { it.promptId }
     val found = LinkedHashSet<String>()
     for (raw in response.lineSequence()) {
-        val line = raw.trim()
-            .removePrefix("```").removePrefix("-").removePrefix("*").removePrefix("•")
+        val trimmed = raw.trim()
+        // コードフェンスの行は丸ごと装飾。**情報文字列（```text）が付いても同じ** —
+        // 剥がした残りを答えとして読むと、フェンスの書き方ひとつで応答全体が落ちる。
+        if (trimmed.startsWith(CODE_FENCE)) continue
+        val line = trimmed
+            .removePrefix("-").removePrefix("*").removePrefix("•")
             .trim()
             .removeSurrounding("\"")
             .removeSurrounding("'")
             .trim()
         if (line.isEmpty()) continue
-        // **行全体がIDの形であることを要求する。** 先頭だけを見ると、
-        // `F1 / F3`（同じ行の併記）や `F1 ではなく F3 が適切です`（否定）から
-        // 先頭のIDを取って確定してしまう（→ レビュー P2-3）。
-        val token = ANSWER_LINE.matchEntire(line)?.groupValues?.get(1)?.uppercase() ?: continue
+        // **行全体がIDの形であることを要求し、外れた行は応答ごと落とす。**
+        // 先頭だけを見ると `F1 / F3`（併記）や `F1 ではなく F3 が適切です`（否定）から
+        // 先頭のIDを取って確定し（→ レビュー P2-3）、読み飛ばすと同じ文が次の行に来たときに
+        // 素通りする（→ レビュー P2-2）。
+        val token = ANSWER_LINE.matchEntire(line)?.groupValues?.get(1)?.uppercase()
+            ?: return NoteFieldAnswer.Invalid
         found += token
-        // **2つ見つかった時点で打ち切ってよい。** それ以上数えても結論は変わらない。
-        if (found.size > 1) return NoteFieldAnswer.Invalid
     }
     val only = found.singleOrNull() ?: return NoteFieldAnswer.Invalid
     if (only == NOTE_FIELD_NONE_ID) return NoteFieldAnswer.NoneOfThem
     return byId[only]?.let(NoteFieldAnswer::Chosen) ?: NoteFieldAnswer.Invalid
 }
+
+private const val CODE_FENCE = "```"
 
 /**
  * **行の全体**がIDであること。

@@ -86,4 +86,34 @@ class NoteFieldAnswerTest {
         assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F12"))
         assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("Field"))
     }
+
+    /**
+     * **正常な行とID以外の行が混ざったら、応答ごと落とす（P2-2）。**
+     *
+     * 行単位で読み飛ばすと `F1` の次行の否定文が消え、**否定されたほうを確定する。**
+     * 同じ入力版では以後AIを呼ばないので、そこで誤分類が固定される。
+     */
+    @Test
+    fun `ID行に続く否定文や併記は応答ごと落とす`() {
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1\nF1 ではなく F3 が適切です"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1\nF1 / F3"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F2\n分野は技術です。"))
+    }
+
+    /** **順序に依存しない。** 不正行が先に来る場合だけ落ちる実装にしない。 */
+    @Test
+    fun `不正な行が先でも応答ごと落とす`() {
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1 ではなく F3 が適切です\nF1"))
+        assertEquals(NoteFieldAnswer.Invalid, parseNoteFieldAnswer("F1 / F3\nF1"))
+    }
+
+    /**
+     * フェンスに情報文字列が付いても装飾として読み飛ばす。
+     *
+     * **剥がした残りを答えとして読むと、フェンスの書き方ひとつで応答全体が落ちる。**
+     */
+    @Test
+    fun `情報文字列つきのコードフェンスも装飾である`() {
+        assertEquals(NoteFieldAnswer.Chosen(NoteField.Learning), parseNoteFieldAnswer("```text\nF2\n```"))
+    }
 }
