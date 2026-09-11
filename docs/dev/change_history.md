@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-11 | — | 分野色の正本から索引Bの永続・改名再利用・未実装の旧記載を落とし、現行の契約へ揃えた | [note_field_color](features/note_field_color.md) §4・§6・§7・判断10 |
 | 2026-09-11 | — | 失効を確認した分野の確定が、次のVault走査で復活しないようにした | [note_field_color](features/note_field_color.md) 判断18 |
 | 2026-09-11 | — | 分野判定の応答は全体がID行のときだけ受け付けるようにした | [note_field_color](features/note_field_color.md) §5 |
 | 2026-09-11 | — | レビュー修正の再現確認を行い、コードの継続2件・正本同期・実機待ちを台帳へ反映した | [review](../review/README.md) |
