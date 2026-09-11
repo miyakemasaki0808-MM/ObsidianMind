@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-11 | — | 索引Bを永続しない代償の説明を、実際に再生成が要る3条件へ限定した | [note_field_color](features/note_field_color.md) §6 |
 | 2026-09-11 | — | 継続指摘を再確認し、コード2件の解消・正本の残る説明1箇所・実機待ちを台帳へ反映した | [review](../review/README.md) |
 | 2026-09-11 | — | 分野色の正本から索引Bの永続・改名再利用・未実装の旧記載を落とし、現行の契約へ揃えた | [note_field_color](features/note_field_color.md) §4・§6・§7・判断10 |
 | 2026-09-11 | — | 失効を確認した分野の確定が、次のVault走査で復活しないようにした | [note_field_color](features/note_field_color.md) 判断18 |

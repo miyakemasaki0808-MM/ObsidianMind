@@ -373,6 +373,39 @@ class NoteFieldControllerTest {
     }
 
     /**
+     * **索引Bを失った後に古い入力へ戻すと、生成し直す。**
+     *
+     * これが索引Bを永続しない判断の**唯一の代償**である（→ 判断10・§6）。
+     * 永続の索引Aは1ノート1レコードなので、H2で確定した時点でH1の答えは残らない。
+     * **同じセッションのあいだは索引BにH1が残る**（上の検査）ので、ここと混同しない。
+     */
+    @Test
+    fun `索引Bを失った後に古い入力へ戻すと生成し直す`() = runTest {
+        var calls = 0
+        val client = FakeAiClient(onGenerate = { calls++; "F1" })
+        val writer = RecordingWriter()
+        val store = RecordingStore()
+        val target = controller(this, client, writer, store)
+
+        target.classify(ref, "元の本文", "技術/Flow.md")
+        advanceUntilIdle()
+        // H2 で確定すると、**永続の索引Aは H2 で上書きされる。**
+        target.classify(ref, "新しい本文", "技術/Flow.md")
+        advanceUntilIdle()
+        assertEquals(2, calls)
+
+        // 再起動相当。メモリの索引Bを失い、永続から作り直す。
+        target.clearVaultScoped()
+        writer.value = emptyMap()
+        target.restorePersisted(store.saved.toMap())
+
+        target.classify(ref, "元の本文", "技術/Flow.md")
+        advanceUntilIdle()
+
+        assertEquals("作り直した索引BにはH2しか無い", 3, calls)
+    }
+
+    /**
      * **降格したノートは、次の走査でも旧確定へ戻らない（P2-1）。**
      *
      * 索引Aを暫定へ落としても、走査の補完材料に旧確定が残っていると
