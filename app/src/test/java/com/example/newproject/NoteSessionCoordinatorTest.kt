@@ -210,6 +210,44 @@ class NoteSessionCoordinatorTest {
         )
     }
 
+    /**
+     * **開いて失効を確認したノートは、次の走査でも旧確定へ戻らない（P2-1 の配線）。**
+     *
+     * Controller が復元材料から外しても、**Coordinator が走査へ永続をそのまま渡していれば戻る。**
+     * 索引Aへ書くのは Coordinator なので、ここを通さないと配線が検査されない。
+     */
+    @Test
+    fun `失効を確認したノートは再走査で旧確定へ戻らない`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.NeedsDownload
+        env.noteFields.save(
+            "vault-a",
+            noteFieldPathKey("料理/カレー.md"),
+            NoteFieldClassification.Confirmed(NoteField.Creative, inputVersion = "旧い版")
+        )
+        val coordinator = env.coordinator()
+        val note = NoteFile(
+            name = "カレー.md",
+            ref = DocumentRef("content://note/1"),
+            vaultRelativePath = "料理/カレー.md"
+        )
+        coordinator.onVaultRestored()
+        coordinator.indexNoteFields(listOf(note))
+
+        // 本文が変わっているので降格する（モデルが無いので生成はしない）。
+        coordinator.classifyNoteField(note.ref, "新しい本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        // TTL失効後の再走査。
+        coordinator.indexNoteFields(listOf(note))
+
+        assertEquals(
+            "失効を確認済みなので、ヒントの暫定のまま",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            coordinator.uiState.value.noteFields[note.ref]
+        )
+    }
+
     @Test
     fun `リセット検査の入力は全フィールドが初期値と異なる`() {
         val populated = fullyPopulatedState()

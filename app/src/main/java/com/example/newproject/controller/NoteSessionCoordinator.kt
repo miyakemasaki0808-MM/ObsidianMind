@@ -13,7 +13,6 @@ import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
-import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -149,14 +148,6 @@ internal class NoteSessionCoordinator(
         vaultKey = currentVaultKey
     )
 
-    /**
-     * 永続層から読んだ確定（→ 判断17）。**走査とは別経路で、Vault選択時に読む。**
-     *
-     * 走査へ読込を相乗りさせると、冊子を開く経路に保存ストアI/Oが増える
-     * （`openBooklet` は `collectAllNotesCached` を呼ぶ）。
-     * **未準備なら空のまま** — 冊子は無彩色で開き、待たせない。
-     */
-    private var restoredNoteFields: Map<String, NoteFieldClassification.Confirmed> = emptyMap()
     private val annotation = AnnotationController(
         scope = scope,
         vault = vaultBrowser,
@@ -285,7 +276,11 @@ internal class NoteSessionCoordinator(
      * [indexNoteFieldHints] が持つ（→ 判断16）。
      */
     fun indexNoteFields(notes: List<NoteFile>) {
-        stateStore.noteFieldWriter.update { indexNoteFieldHints(it, notes, restoredNoteFields) }
+        // **補完材料は Controller が持つ写しである**（→ 判断18）。永続をそのまま渡すと、
+        // 開いて失効を確認した確定まで走査が戻す。
+        stateStore.noteFieldWriter.update {
+            indexNoteFieldHints(it, notes, noteField.restorableFields())
+        }
     }
 
     /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */
@@ -393,11 +388,12 @@ internal class NoteSessionCoordinator(
      * 非同期にしたときに初めて必要になる。
      */
     private fun loadPersistedNoteFields() {
-        restoredNoteFields = currentVaultKey()
+        val restored = currentVaultKey()
             ?.let { key -> noteFieldStore?.load(key) }
             .orEmpty()
-        // **索引Bも作り直す。** これを呼ばないと、索引Bを永続しないという判断が成立しない。
-        noteField.restoreAnswers(restoredNoteFields.values)
+        // **索引Bと索引Aの補完材料を、まとめて Controller へ渡す。**
+        // 索引Bを作り直さないと、索引Bを永続しないという判断が成立しない（→ 判断10）。
+        noteField.restorePersisted(restored)
     }
 
     /**

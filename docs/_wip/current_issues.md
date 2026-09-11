@@ -356,6 +356,7 @@
 
 ## FIELD-5. 入力版の失効後も古い分野の確定が残る
 
+- **2026-09-11、修正済み（確認待ち）。** 永続から読んだ確定の写しを走査の補完材料とし、索引Bが外れた時点でそのパスを写しから外す。永続は消さないので、本文を元へ戻せば索引Bが当てて確定へ戻る（→ [note_field_color](../dev/features/note_field_color.md) 判断18）。
 - **現在の状態:** 2026-09-11の外部確認で部分解消。AIが使えないときの降格は成功したが、前回受理条件にあった再走査後の維持が未達。
 - **現状:** [`demote`](../../app/src/main/java/com/example/newproject/controller/NoteFieldController.kt) は索引Aだけを暫定／未判定へ変える。次の [`indexNoteFieldHints`](../../app/src/main/java/com/example/newproject/domain/NoteFieldIndex.kt) は確定不在として、復元スナップショットの旧確定を補完する。
 - **実測:** 保存済みH1のCreative→H2を開く→AI未取得→Provisional(Living)→再走査で、Confirmed(Creative, H1)が復活。一時JVMで再現した。

@@ -3,11 +3,17 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.controller.NoteFieldController
+import com.example.newproject.domain.indexNoteFieldHints
+import com.example.newproject.domain.noteFieldHint
+import com.example.newproject.domain.noteFieldInputVersion
+import com.example.newproject.domain.noteFieldPathKey
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteField
 import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.NoteFieldStateWriter
+import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -293,7 +299,7 @@ class NoteFieldControllerTest {
         // 新しいセッション相当。索引Bは空だが、永続の確定から作り直す。
         target.clearVaultScoped()
         writer.value = emptyMap()
-        target.restoreAnswers(listOf(confirmed))
+        target.restorePersisted(mapOf(noteFieldPathKey("技術/A.md") to confirmed))
 
         // 移動先を開く。**ファイル名は同じ**（タイトルは入力の一部なので、
         // 改名していたら入力が変わり、再判定になるのが正しい）。
@@ -317,7 +323,7 @@ class NoteFieldControllerTest {
 
         target.clearVaultScoped()
         writer.value = emptyMap()
-        target.restoreAnswers(listOf(confirmed))
+        target.restorePersisted(mapOf(noteFieldPathKey("雑記/A.md") to confirmed))
         target.classify(DocumentRef("content://note/2"), "同じ本文", "雑記/古い/A.md")
         advanceUntilIdle()
 
@@ -364,6 +370,81 @@ class NoteFieldControllerTest {
         advanceUntilIdle()
 
         assertNull("索引から外れる", writer.value[ref])
+    }
+
+    /**
+     * **降格したノートは、次の走査でも旧確定へ戻らない（P2-1）。**
+     *
+     * 索引Aを暫定へ落としても、走査の補完材料に旧確定が残っていると
+     * **「メモリに確定が無いノート」として補完され、失効を確認済みの色が戻る。**
+     * ストアの再読込もAIの追加生成も要らずに起きるので、**降格単体の検査では捕まらない。**
+     */
+    @Test
+    fun `降格したノートは再走査でも旧確定へ戻らない`() = runTest {
+        val client = FakeAiClient(onGenerate = { "F1" })
+        client.availability = AiAvailability.NeedsDownload
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+        val stale = NoteFieldClassification.Confirmed(NoteField.Creative, inputVersion = "旧い版")
+        val note = NoteFile(
+            name = "カレー.md",
+            ref = ref,
+            vaultRelativePath = "料理/カレー.md"
+        )
+        // 起動復元→走査で、保存済みの確定が索引Aへ載っている状態を作る。
+        target.restorePersisted(mapOf(noteFieldPathKey("料理/カレー.md") to stale))
+        writer.value = indexNoteFieldHints(writer.value, listOf(note), target.restorableFields())
+        assertEquals(stale, writer.value[ref])
+
+        // 本文が変わっているのでAIを呼びたいが、モデルが無いので降格だけが起きる。
+        target.classify(ref, "新しい本文", "料理/カレー.md")
+        advanceUntilIdle()
+        assertEquals(NoteFieldClassification.Provisional(NoteField.Living), writer.value[ref])
+
+        // TTL失効後の再走査。**ここで戻らないこと。**
+        writer.value = indexNoteFieldHints(writer.value, listOf(note), target.restorableFields())
+
+        assertEquals(
+            "失効を確認済みなので、ヒントの暫定のまま",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            writer.value[ref]
+        )
+    }
+
+    /**
+     * **復元材料から外しても、永続の答えは索引Bに残る。**
+     *
+     * 失効した確定を「表示してよいもの」から外すことと、「その入力版での答え」を捨てることは別である。
+     * ここが落ちると、**本文を元へ戻したときに生成し直す。**
+     */
+    @Test
+    fun `本文を元へ戻せば生成せずに確定へ戻る`() = runTest {
+        var calls = 0
+        val client = FakeAiClient(onGenerate = { calls++; "F1" })
+        client.availability = AiAvailability.NeedsDownload
+        val writer = RecordingWriter()
+        val target = controller(this, client, writer)
+        val hint = noteFieldHint("料理/カレー.md")
+        val original = noteFieldInputVersion(
+            "カレー.md",
+            NoteExcerpt("元の本文", isAbridged = false),
+            hint
+        )
+        val stored = NoteFieldClassification.Confirmed(NoteField.Creative, original)
+        target.restorePersisted(mapOf(noteFieldPathKey("料理/カレー.md") to stored))
+        writer.value = mapOf(ref to stored)
+
+        // 別の本文で開いて降格させる（AIは使えない）。
+        target.classify(ref, "別の本文", "料理/カレー.md")
+        advanceUntilIdle()
+        assertEquals(NoteFieldClassification.Provisional(NoteField.Living), writer.value[ref])
+
+        // 本文を元へ戻す。**索引Bが当たるので生成しない。**
+        target.classify(ref, "元の本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        assertEquals("索引Bから戻すので生成しない", 0, calls)
+        assertEquals(stored, writer.value[ref])
     }
 
     /**
@@ -450,6 +531,35 @@ class NoteFieldControllerTest {
         advanceUntilIdle()
 
         assertEquals("回復したので、また試せる", 3, calls)
+    }
+
+    /**
+     * Vault切替で**復元材料も**捨てる。
+     *
+     * 残すと、**別Vaultの同名パスへ旧Vaultの確定が当たる**（鍵は相対パスのハッシュなので衝突する）。
+     */
+    @Test
+    fun `Vault切替で復元材料も捨てる`() = runTest {
+        val target = controller(this, FakeAiClient(onGenerate = { "F1" }), RecordingWriter())
+        val note = NoteFile(
+            name = "カレー.md",
+            ref = ref,
+            vaultRelativePath = "料理/カレー.md"
+        )
+        target.restorePersisted(
+            mapOf(
+                noteFieldPathKey("料理/カレー.md") to
+                    NoteFieldClassification.Confirmed(NoteField.Creative, inputVersion = "旧Vault")
+            )
+        )
+
+        target.clearVaultScoped()
+
+        assertEquals(
+            "旧Vaultの確定は補完に使わない",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            indexNoteFieldHints(emptyMap(), listOf(note), target.restorableFields())[ref]
+        )
     }
 
     /** Vault切替で索引Bと抑制を捨てる。**別Vaultの結果と失敗回数を持ち越さない。** */

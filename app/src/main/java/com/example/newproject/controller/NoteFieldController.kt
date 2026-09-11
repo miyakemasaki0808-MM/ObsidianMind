@@ -70,6 +70,15 @@ class NoteFieldController(
     private val answersByInputVersion = LinkedHashMap<String, NoteField?>()
 
     /**
+     * 索引Aの**復元材料**（鍵は `noteFieldPathKey`）。永続から読んだ確定の写しである。
+     *
+     * **永続そのものとは別物である**（→ 判断18）。走査は本文を読まないので入力版を照合できず、
+     * 永続をそのまま補完材料にすると、**開いて失効を確認した確定まで走査が戻してしまう。**
+     * ここから外せば戻らず、永続には残るので**入力を元へ戻したときは索引Bが当てる。**
+     */
+    private val restorableByPath = LinkedHashMap<String, NoteFieldClassification.Confirmed>()
+
+    /**
      * 連続失敗の抑制（→ 判断8）。**アプリの起動単位で、永続しない。**
      *
      * 永続させると回復の契機が消え、前回の「永久確定」を**「永久停止」という別の形で残す**。
@@ -98,27 +107,42 @@ class NoteFieldController(
             // ここが食い違うと、指紋が「実際にAIへ渡したもの」を表さなくなる。
             val title = vaultRelativePath.substringAfterLast('/')
             val inputVersion = noteFieldInputVersion(title, excerpt, hint)
+            // 永続と復元材料の鍵。**作れないことがある**（さがす経由で相対パスが取れない場合）。
+            val pathKey = vaultRelativePath.takeIf { it.isNotBlank() }?.let(::noteFieldPathKey)
 
             // **「判定済み」ではなく「現在の入力版の確定」で見る。**
             // 本文・ヒント・語彙のどれかが変われば版が変わり、その確定はもう有効でない。
             val existing = state.current[ref]
-            if (existing is NoteFieldClassification.Confirmed) {
-                if (existing.inputVersion == inputVersion) return@launch
-                // **失効を見つけた時点で落とす**（→ 判断8・レビュー P2-4）。
-                // ここを飛ばすと、この後 AI が使えなかったときに**古い色とラベルが残る** —
-                // 「失敗したらヒントへ縮退する」と書いた仕様と食い違う。
-                // **落とす先はいまのヒント**で、ヒントが無ければ未判定（無彩色）にする。
-                if (isCurrent(requestId)) demote(ref, hint)
+            if (existing is NoteFieldClassification.Confirmed && existing.inputVersion == inputVersion) {
+                // **有効な確定。索引Aへは書かない** — 落として索引Bから戻すと結果は同じだが、
+                // 書けば画面は再描画され、ノートを開くたびに色が一度ヒントへ点滅する。
+                return@launch
+            }
+            // **失効を見つけた時点で落とす**（→ 判断8・レビュー P2-4）。
+            // ここを飛ばすと、この後 AI が使えなかったときに**古い色とラベルが残る** —
+            // 「失敗したらヒントへ縮退する」と書いた仕様と食い違う。
+            // **落とす先はいまのヒント**で、ヒントが無ければ未判定（無彩色）にする。
+            if (existing is NoteFieldClassification.Confirmed && isCurrent(requestId)) {
+                demote(ref, hint)
             }
 
             // 索引Bに当たれば Nano を呼ばない。**改名や複製で同じ入力になったときの自己修復**でもある。
             // **`containsKey` で見る** — 値の null は「該当なし」という正常な確定であって、不在ではない。
             if (answersByInputVersion.containsKey(inputVersion)) {
                 if (isCurrent(requestId)) {
-                    apply(ref, inputVersion, answersByInputVersion[inputVersion], vaultRelativePath)
+                    apply(ref, inputVersion, answersByInputVersion[inputVersion], pathKey)
                 }
                 return@launch
             }
+            // **索引Bが外れた ＝ このノートの保存済みの答えは、いまの入力のものではない。**
+            // 復元材料は読み込んだ時点で索引Bへも入れている（[restorePersisted]）ので、
+            // 当たらないなら別の入力版の答えだと分かる。**索引Aを降格させるだけでは足りない** —
+            // 次の走査が復元材料から同じ確定を補完し、**失効を確認済みの色が戻る**
+            // （→ 判断18・レビュー P2-1）。
+            //
+            // **要求が最新かは見ない。** 落としているのは「このパスの保存済みの答えは
+            // いまの本文のものではない」という事実で、**どのノートを表示しているかに依らない。**
+            dropRestorable(pathKey)
 
             // **可用性の確認を抑制の判定より先に置く。**
             // 逆にすると、一度抑制へ入った時点で可用性を二度と観測できなくなり、
@@ -174,7 +198,7 @@ class NoteFieldController(
             }
             answersByInputVersion[inputVersion] = field
             failuresByInputVersion.remove(inputVersion)
-            apply(ref, inputVersion, field, vaultRelativePath)
+            apply(ref, inputVersion, field, pathKey)
         }
     }
 
@@ -190,27 +214,42 @@ class NoteFieldController(
     }
 
     /**
-     * 永続の確定から索引Bを作り直す（→ 判断10）。
+     * 永続から読んだ確定を受け取る（→ 判断10・判断17・判断18）。
      *
-     * **索引Bを永続しない判断は、これがあって初めて成立する。** 確定は入力版を持つので、
-     * 読み込んだ時点で「入力指紋 → 分野」が揃う。**これを呼ばないと、移動・複製した先で
-     * 保存済みの結果を再利用できず、再起動のたびに生成し直す。**
+     * **役目は2つある。**
      *
-     * **呼ぶのはVaultを読み込む時点だけ**（起動復元と明示選択）で、そのとき索引Bは空である
+     * 1. **索引Bを作り直す。** 確定は入力版を持つので、読み込んだ時点で「入力指紋 → 分野」が揃う。
+     *    **索引Bを永続しない判断は、これがあって初めて成立する** — 呼ばないと、移動・複製した先で
+     *    保存済みの結果を再利用できず、再起動のたびに生成し直す。
+     * 2. **索引Aの復元材料として持つ**（[restorableFields]）。走査は本文を読まないので、
+     *    補完してよいかを判断できるのはこちらだけである。
+     *
+     * **呼ぶのはVaultを読み込む時点だけ**（起動復元と明示選択）で、そのとき両方とも空である
      * （[clearVaultScoped] の直後、あるいは生成前）。**「既にある要素を守る」ガードは置かない** —
      * 空に対して復元するので発火せず、**落ちるテストが書けないガードは足さない**
      * （→ `docs/dev/lessons.md` L11）。セッションの途中で呼ぶようになったら、そのとき考える。
+     *
+     * @param confirmed 鍵は `noteFieldPathKey`。
      */
-    fun restoreAnswers(confirmed: Collection<NoteFieldClassification.Confirmed>) {
-        for (entry in confirmed) {
+    fun restorePersisted(confirmed: Map<String, NoteFieldClassification.Confirmed>) {
+        restorableByPath.putAll(confirmed)
+        for (entry in confirmed.values) {
             answersByInputVersion[entry.inputVersion] = entry.field
         }
     }
 
-    /** Vault切替。**索引Bと抑制を捨てる** — 別Vaultの結果と失敗回数を持ち越さない。 */
+    /**
+     * 走査が索引Aを補完するときの材料（→ 判断18）。
+     *
+     * **永続そのものを渡さない。** 開いて失効を確認した確定はここから外れている。
+     */
+    fun restorableFields(): Map<String, NoteFieldClassification.Confirmed> = restorableByPath
+
+    /** Vault切替。**索引B・復元材料・抑制を捨てる** — 別Vaultの結果と失敗回数を持ち越さない。 */
     fun clearVaultScoped() {
         cancelAndClear()
         answersByInputVersion.clear()
+        restorableByPath.clear()
         failuresByInputVersion.clear()
     }
 
@@ -225,16 +264,16 @@ class NoteFieldController(
         inputVersion: String,
         /** null は「該当なし」。**読めなかった応答はここへ来ない** — 呼び出し側で既に分岐している。 */
         field: NoteField?,
-        vaultRelativePath: String?
+        pathKey: String?
     ) {
         val confirmed = NoteFieldClassification.Confirmed(field, inputVersion)
         state.update { it + (ref to confirmed) }
         // **永続するのは確定だけ**（暫定は走査で作り直せる → 判断14）。
-        // パスが無い経路（さがす経由で相対パスが取れなかった場合）は永続しない —
-        // 鍵が作れないものを無理に保存すると、次回どのノートの結果か分からなくなる。
+        // 鍵が作れない経路（さがす経由で相対パスが取れなかった場合）は永続しない —
+        // 無理に保存すると、次回どのノートの結果か分からなくなる。
         val key = vaultKey() ?: return
-        val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
-        store?.save(key, noteFieldPathKey(path), confirmed)
+        if (pathKey == null) return
+        store?.save(key, pathKey, confirmed)
     }
 
     /**
@@ -242,13 +281,29 @@ class NoteFieldController(
      *
      * **永続には触らない。** 永続の確定は「その入力版での答え」として正しく、
      * 消すと**入力を元へ戻したときに再利用できなくなる**。
-     * 走査による復元も入力版を見ないので復活し得るが、**それはノートを開いた時点で再び落とされる** —
-     * 表示の鮮度を保証するのは「開いたとき」までである（→ 判断10）。
+     * 走査から戻ってこないようにするのは [dropRestorable] の役目である。
      */
     private fun demote(ref: DocumentRef, hint: NoteField?) {
         state.update { current ->
             if (hint == null) current - ref else current + (ref to NoteFieldClassification.Provisional(hint))
         }
+    }
+
+    /**
+     * 失効を確認した確定を、索引Aの**復元材料**から外す（→ 判断18・レビュー P2-1）。
+     *
+     * **永続は消さない。** 消すと入力を元へ戻したときに再利用できなくなる。
+     * ここで落とすのは「**いまの本文に対して表示してよい確定ではない**」という事実だけで、
+     * 「その入力版での答え」としての正しさは索引Bが引き継いでいる。
+     *
+     * **入力版の再照合はしない。** 呼ぶのは索引Bが外れた後だけで、
+     * 復元材料は必ず索引Bにも入っているのだから、外れた時点で版が違うと決まっている。
+     * ここで版を比べ直しても**落ちるテストが書けない**（実際に変異させて確かめた
+     * → `docs/dev/lessons.md` L11）。
+     */
+    private fun dropRestorable(pathKey: String?) {
+        if (pathKey == null) return
+        restorableByPath.remove(pathKey)
     }
 
     private fun recordFailure(inputVersion: String) {
