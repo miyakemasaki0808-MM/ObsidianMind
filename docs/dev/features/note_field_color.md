@@ -155,9 +155,8 @@ AIピッカーが同じ穴を踏んでいる既知の型である。**1つに定
   並行処理の規約・[lessons](../lessons.md) L11）。進捗も失敗も画面に出さない機能なので、
   同時実行は requestId ＋ Job で足りる。**ノート単位の契約へ登録するのはジョブの停止だけ**である。
 - **索引Aは `NoteUiStateStore` が所有し、Vault単位のスライスとして公開する。**
-  独立した可変ストアをUIへ直接公開すると、[architecture](../system/architecture.md) の
-  「状態が `NoteUiState` の外に出る例外は2つだけ」に**3つ目を作る**ことになる —
-  そこには「`model` を葉に保つ判断自体を見直す合図」と書いてあるので、合図を鳴らさずに済ませる。
+  独立した可変ストアをUIへ直接公開すると、状態の単一ソースから**もう1つ外へ出す**ことになる
+  （→ [architecture](../system/architecture.md)「状態が `NoteUiState` の外に出るもの」）。
   **ノート単位の契約2箇所には登録しない**（Vault単位なので `vaultGeneration` 側 → 判断16）
 
 ## 7. システム設計
