@@ -102,7 +102,7 @@ class BackupExclusionTest {
                 val argument = match.groupValues[1].trim()
                 val literal = when {
                     argument.startsWith("\"") && argument.endsWith("\"") -> argument.trim('"')
-                    else -> constantValue(argument.substringAfterLast('.'), sources.values)
+                    else -> constantValue(argument, sources)
                 }
                 if (literal == null) unresolved += "${file.name}: $argument"
                 literal
@@ -110,19 +110,41 @@ class BackupExclusionTest {
         }.toSet()
 
         assertTrue(
-            "prefs 名を解決できませんでした。文字列リテラルか `const val` で書いてください " +
-                "（解決できないと、この検査はその置き場を見ないまま緑になります）:\n" +
+            "prefs 名を解決できませんでした。文字列リテラルで書くか、`const val` の名前を" +
+                "一意にしてください（同名の定数が複数あると、どちらを指しているか決まりません）。" +
+                "**解決できないまま通すと、この検査はその置き場を見ないまま緑になります**:\n" +
                 unresolved.joinToString("\n"),
             unresolved.isEmpty()
         )
         return names
     }
 
-    private fun constantValue(simpleName: String, sources: Collection<String>): String? {
+    /**
+     * `NewStore.PREFS_NAME` のような参照を実際の文字列へ解く。
+     *
+     * **最初に見つかった同名の定数を採るのは誤り**だった。修飾部分を捨てていたため、
+     * 別の保存先が同じ `PREFS_NAME` という名前を使うと**既存の除外済み prefs と誤認**し、
+     * 除外を書かなくても緑になる（2026-09-12 のレビュー）。しかも**どちらが当たるかは
+     * ファイル走査の順で変わる**ので、再現したりしなかったりする。
+     *
+     * 修飾名があるときは**その型を宣言しているファイルの中だけ**から解く。
+     * 修飾名が無く同名の定数が複数あるときは、**曖昧なので解かずに失敗させる**
+     * （黙って片方を選ぶと、選ばれなかった保存先が検査の外に出る）。
+     */
+    private fun constantValue(argument: String, sources: Map<File, String>): String? {
+        val simpleName = argument.substringAfterLast('.')
+        val qualifier = argument.substringBeforeLast('.', "").substringAfterLast('.')
         val declaration = Regex("const val\\s+" + Regex.escape(simpleName) + "\\s*=\\s*\"([^\"]+)\"")
-        return sources.firstNotNullOfOrNull { text ->
-            declaration.find(text)?.groupValues?.get(1)
+
+        val candidates = sources.mapNotNull { (file, text) ->
+            declaration.find(text)?.groupValues?.get(1)?.let { file to it }
         }
+        if (qualifier.isNotEmpty()) {
+            val owner = Regex("(object|class)\\s+" + Regex.escape(qualifier) + "\\b")
+            val scoped = candidates.filter { (file, _) -> owner.containsMatchIn(sources.getValue(file)) }
+            if (scoped.size == 1) return scoped.single().second
+        }
+        return candidates.map { it.second }.distinct().singleOrNull()
     }
 
     /**
