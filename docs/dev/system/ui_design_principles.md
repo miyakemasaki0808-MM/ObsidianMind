@@ -1,7 +1,7 @@
 # 設計思想 — UIデザインの指針（国際規約 ＋ このアプリの好み）
 
 **状態:** 運用中。**着手前にここを読む**
-**最終検証:** 2026-08-11 / `9af63ee`（本文未突合）
+**最終検証:** 2026-09-12 / `4a1a9fc`
 **関連コード:** `ui/theme/AppColors.kt` / `ui/theme/AppTheme.kt`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`
 **正本:** この文書
@@ -48,7 +48,7 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 |---|---|
 | 画像が出せなかった | **理由の文** ＋ 枠 ＋ 記号（色は手がかりに留める） |
 | 状態バッジ | 記号（✓ / !）そのもの |
-| 分野の色帯（未実装の候補） | ラベルか位置。**色数を増やして識別させない** |
+| 冊子の紙の分野色（実装済み） | **紙に分野名を添える**（→ [note_field_color](../features/note_field_color.md)）。色数を増やして識別させない |
 
 **判定は「その色を灰色にしても伝わるか」で行う。** 伝わらないなら手がかりが1つ足りない。
 
@@ -118,7 +118,12 @@ WCAG 2.1 AA を土台にする。**重要なのは「文字か記号か」で基
 数値はすべて
 [`AppColorContrastTest`](../../../app/src/test/java/com/example/newproject/ui/theme/AppColorContrastTest.kt)
 が強制する。**記録ではなく強制**（旧値へ戻す変異でテストが落ちることを確認する）
-→ [theme_and_ui_refactor](theme_and_ui_refactor.md) 判断4。
+→ [theme_and_ui_refactor](theme_and_ui_refactor.md) 判断7。
+
+**例外が1件ある。** 下部ナビ帯の上のバッジ塗りは3:1に届いておらず、
+**未達であること自体を固定する**形で残してある（直したら落ちるので気づける）。
+理由と据え置きの判断は [theme_and_ui_refactor](theme_and_ui_refactor.md) の不変条件の節。
+**「全部が強制されている」と読まない。**
 
 [`VibrantTextUsageTest`](../../../app/src/test/java/com/example/newproject/ui/theme/VibrantTextUsageTest.kt)
 が、表に載らない書き方（画面からの `onVibrant` 直接使用・文字色への任意の `copy(alpha)`）を
