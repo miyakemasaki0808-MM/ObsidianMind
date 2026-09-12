@@ -43,15 +43,18 @@ class BackupExclusionTest {
         require(prefsNames.isNotEmpty()) { "prefs の宣言を1つも見つけられませんでした" }
 
         val targets = mapOf(
-            "backup_rules.xml" to excludedPrefs("backup_rules.xml", null),
+            "backup_rules.xml" to excludedPrefsFiles("backup_rules.xml", null),
             "data_extraction_rules.xml の <cloud-backup>" to
-                excludedPrefs("data_extraction_rules.xml", "cloud-backup"),
+                excludedPrefsFiles("data_extraction_rules.xml", "cloud-backup"),
             "data_extraction_rules.xml の <device-transfer>" to
-                excludedPrefs("data_extraction_rules.xml", "device-transfer")
+                excludedPrefsFiles("data_extraction_rules.xml", "device-transfer")
         )
 
         val violations = prefsNames.flatMap { name ->
-            targets.filterValues { name !in it }.keys.map { "$name: $it に除外が無い" }
+            // **保存されるファイル名そのもので照合する。** prefs 名へ寄せて比べると、
+            // `path="random_note_prefs"`（拡張子なし＝実在しないファイル）を
+            // 正しい除外として受け取ってしまう（2026-09-13 のレビューで再現）。
+            targets.filterValues { "$name.xml" !in it }.keys.map { "$name: $it に除外が無い" }
         }.sorted()
 
         assertTrue(
@@ -148,7 +151,7 @@ class BackupExclusionTest {
     }
 
     /**
-     * 除外されている prefs 名を、**XMLとして解析して**集める。
+     * 除外されている prefs の**ファイル名**を、**XMLとして解析して**集める。
      *
      * **文字列検索では足りなかった。** `<exclude .../>` をコメントで囲んでも
      * `contains` は一致するので、**3経路すべてをコメントアウトしても緑になる**
@@ -157,7 +160,7 @@ class BackupExclusionTest {
      * [sectionTag] が null なら文書要素の直下（`backup_rules.xml`）、
      * 指定があればその節の中（`cloud-backup` / `device-transfer`）だけを見る。
      */
-    private fun excludedPrefs(fileName: String, sectionTag: String?): Set<String> {
+    private fun excludedPrefsFiles(fileName: String, sectionTag: String?): Set<String> {
         val file = repositoryRoot().resolve("app/src/main/res/xml/$fileName")
         assertTrue("バックアップ規則が見つかりません: $file", file.isFile)
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
@@ -170,9 +173,10 @@ class BackupExclusionTest {
         return scope.getElementsByTagName("exclude").let { nodes ->
             (0 until nodes.length).mapNotNull { index ->
                 val element = nodes.item(index) as? Element ?: return@mapNotNull null
+                // **`path` は加工せずそのまま返す。** `removeSuffix(".xml")` で prefs 名へ
+                // 寄せると、拡張子の有無を区別できなくなる。
                 element.takeIf { it.getAttribute("domain") == "sharedpref" }
                     ?.getAttribute("path")
-                    ?.removeSuffix(".xml")
                     ?.takeIf { it.isNotEmpty() }
             }.toSet()
         }
