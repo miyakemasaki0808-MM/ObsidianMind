@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -86,6 +87,117 @@ android {
         // 増やせないようにするほうが確実（baselineは「見なかったことにする」側なので使わない）。
         warningsAsErrors = true
         abortOnError = true
+    }
+}
+
+/**
+ * **マージ後マニフェストの `uses-permission` を数え、期待と違えばビルドを落とす。**
+ *
+ * ## なぜ要るか
+ *
+ * このアプリはネットワーク権限を宣言しない（→ docs/dev/decisions/ADR-0002-on-device-ai-only.md）。
+ * だが **推移依存はマニフェストを持っている**。実際 ML Kit GenAI が引く
+ * `transport-backend-cct` が `INTERNET` と `ACCESS_NETWORK_STATE` を持ち込み、
+ * **ソースには無いのに成果物には入っている**状態が続いていた。
+ * `INTERNET` は通常権限なのでインストール時に黙って付与され、誰も気づかない。
+ *
+ * **危ないのは今回混ざった2件そのものより、混ざったことに気づく手段が無かったこと**である。
+ * 依存を1つ足すだけで同じことが起きるので、**人の注意ではなくビルドで数える**。
+ *
+ * ## なぜ JVM テストではなく Gradle タスクか
+ *
+ * 見たいのは**ビルド出力**（マージ後マニフェスト）であって、ソースではない。
+ * JVM テストからは `app/build/intermediates/...` を入力として宣言できず、
+ * `testDebugUnitTest` 単独ではそのファイルが生成すらされない。
+ *
+ * ## 増減の両方を見る
+ *
+ * 「`INTERNET` が無いこと」だけを見ると、**次に別の権限を持ち込む依存**を素通しする。
+ * 逆に期待側が消えたこと（AICore への接続に要る権限を `tools:node="remove"` で
+ * 巻き込む事故）も落としたいので、**集合として双方向で突き合わせる**。
+ *
+ * 対象はアプリ本体のマージ後マニフェストだけで、`androidTest` 側は見ない。
+ * 端末に入るのはこちらであり、テスト依存の権限は成果物に影響しない。
+ */
+abstract class VerifyManifestPermissions : DefaultTask() {
+
+    @get:InputFile
+    abstract val mergedManifest: RegularFileProperty
+
+    @get:Input
+    abstract val expected: SetProperty<String>
+
+    @TaskAction
+    fun verify() {
+        val manifestFile = mergedManifest.get().asFile
+        val declared = USES_PERMISSION.findAll(manifestFile.readText())
+            .map { it.groupValues[1] }
+            .toSet()
+        val expectedPermissions = expected.get()
+        val unexpected = (declared - expectedPermissions).sorted()
+        val missing = (expectedPermissions - declared).sorted()
+        if (unexpected.isEmpty() && missing.isEmpty()) return
+
+        throw GradleException(
+            buildString {
+                appendLine("マージ後マニフェストの権限が期待と違います: $manifestFile")
+                if (unexpected.isNotEmpty()) {
+                    appendLine("  増えた: ${unexpected.joinToString()}")
+                    appendLine(
+                        "  出どころは app/build/outputs/logs/manifest-merger-*-report.txt の " +
+                            "`ADDED from` 行で分かります。意図しない持ち込みなら " +
+                            "app/src/main/AndroidManifest.xml へ tools:node=\"remove\" を足してください。"
+                    )
+                }
+                if (missing.isNotEmpty()) {
+                    appendLine("  消えた: ${missing.joinToString()}")
+                    appendLine("  AICore への接続に要る権限まで除いていないか確認してください。")
+                }
+                append(
+                    "期待値そのものを動かすなら、app/build.gradle.kts の expected と " +
+                        "docs/dev/system/dependency_policy.md（判断5）を同時に直すこと。"
+                )
+            }
+        )
+    }
+
+    private companion object {
+        val USES_PERMISSION = Regex("<uses-permission[^>]*android:name=\"([^\"]+)\"")
+    }
+}
+
+// **`processXMainManifest` の後始末として走らせる。** こうしておくと
+// マニフェストをマージするビルドは必ず検査を通る — `lintDebug` も `assembleDebug*` も
+// その途中で `processDebugMainManifest` を実行するので、debug 側は素通りできない。
+//
+// **release はこれだけでは守れない。** CIが release をビルドしないので、
+// 後始末の契機そのものが来ない。ci.yml が `verifyReleaseManifestPermissions` を
+// 名指しで呼ぶのはそのためである（**未署名で実機に入れられない release 成果物の権限を、
+// 実機に入れずに保証する**ための唯一の経路）。
+androidComponents {
+    onVariants { variant ->
+        val variantName = variant.name.replaceFirstChar { it.uppercase() }
+        val verify = tasks.register<VerifyManifestPermissions>(
+            "verify${variantName}ManifestPermissions"
+        ) {
+            description = "マージ後マニフェストに想定外の権限が無いことを確かめる"
+            mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST))
+            // AICore への接続と、Compose/AndroidX が使う自己定義の受信権限だけ。
+            // applicationId から組み立てるのは、後者が `<applicationId>.` で始まるため。
+            expected.set(
+                variant.applicationId.map { applicationId ->
+                    setOf(
+                        "com.google.android.apps.aicore.service.BIND_SERVICE",
+                        "$applicationId.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+                    )
+                }
+            )
+        }
+        // **`named` は使えない。** `onVariants` はマニフェストのマージタスクが
+        // 登録されるより前に走るので、名前で引くと「タスクが無い」で構成に失敗する。
+        // `matching` なら後から登録されたものにも当たる。
+        tasks.matching { it.name == "process${variantName}MainManifest" }
+            .configureEach { finalizedBy(verify) }
     }
 }
 
