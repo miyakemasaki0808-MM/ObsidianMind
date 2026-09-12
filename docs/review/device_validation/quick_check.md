@@ -46,6 +46,8 @@
 
 | 機能 | ケース表 | スモークID |
 |---|---|---|
+| 分野色（外観・初回確認は通し版） | [note_field_color.md](note_field_color.md) | `FIELDDEV-03` `FIELDDEV-04` `FIELDDEV-05` |
+| 返事の保存先分離 | [reading_trace_reply.md](reading_trace_reply.md) | `REPLYDEV-01` `REPLYDEV-02` `REPLYDEV-03` |
 | アプリ起動（**入口**） | [app_launch.md](app_launch.md) | `LAUNCH-01` `LAUNCH-02` `LAUNCH-04` |
 | 冊子モード | [booklet_mode.md](booklet_mode.md) | `BOOK-01` `BOOK-06` `BOOK-11` `BOOK-13` `BOOK-51` `BOOK-53` `BOOK-64` |
 | 蒸留 | [reflect_distill.md](reflect_distill.md) | `DIST-01` `DIST-11` `DIST-12` `DIST-13` `DIST-15` |
