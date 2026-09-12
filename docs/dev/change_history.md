@@ -23,6 +23,8 @@
 | 2026-09-12 | — | オーナー／Claude／Codex の分担表を CLAUDE.md へ置き、正本を1枚にした | [CLAUDE.md](../../CLAUDE.md) |
 | 2026-09-12 | — | 系統図へ13個目のControllerを足し、分野判定を二層の例外として書いた | [architecture](system/architecture.md) 判断4 |
 | 2026-09-12 | — | architecture.md を全文突合し、窓口の行数と共通化しない表を実装へ揃えた | [architecture](system/architecture.md) |
+| 2026-09-12 | — | Lintの依存催促が `--offline` では出ないことを実測し、誤った記述を3箇所直した | [dependency_policy](system/dependency_policy.md) 判断1 |
+| 2026-09-12 | — | dependency_policy.md を全文突合し、AI経路を9へ直して再測定を記録した | [dependency_policy](system/dependency_policy.md) |
 | 2026-09-11 | — | 本文差し戻しの再利用条件を再確認し、残る文書指摘と受付3行を閉じて実機待ちを保持した | [review](../review/README.md) |
 | 2026-09-11 | — | 索引Bを永続しない代償の説明を、実際に再生成が要る3条件へ限定した | [note_field_color](features/note_field_color.md) §6 |
 | 2026-09-11 | — | 継続指摘を再確認し、コード2件の解消・正本の残る説明1箇所・実機待ちを台帳へ反映した | [review](../review/README.md) |
