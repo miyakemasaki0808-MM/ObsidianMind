@@ -130,24 +130,38 @@ class BackupExclusionTest {
      * 除外を書かなくても緑になる（2026-09-12 のレビュー）。しかも**どちらが当たるかは
      * ファイル走査の順で変わる**ので、再現したりしなかったりする。
      *
-     * 修飾名があるときは**その型を宣言しているファイルの中だけ**から解く。
-     * 修飾名が無く同名の定数が複数あるときは、**曖昧なので解かずに失敗させる**
-     * （黙って片方を選ぶと、選ばれなかった保存先が検査の外に出る）。
+     * **ファイル単位の絞り込みでは足りなかった。** 各ファイルの**先頭の1件**しか候補にせず、
+     * 所有者も「そのファイルに型名があるか」でしか見ていなかったため、
+     * **同じファイルに `Existing.PREFS_NAME` と `NewStore.PREFS_NAME` を置くと両方が
+     * 先頭の値へ解決され**、未除外の保存先を見逃した（2026-09-13 のレビューで再現）。
+     *
+     * いまは**全宣言を候補に数え、所有する型まで見て**解く。修飾名で1つに決まらなければ
+     * **黙って片方を選ばず失敗させる**（選ばれなかった保存先が検査の外に出るため）。
      */
     private fun constantValue(argument: String, sources: Map<File, String>): String? {
         val simpleName = argument.substringAfterLast('.')
         val qualifier = argument.substringBeforeLast('.', "").substringAfterLast('.')
-        val declaration = Regex("const val\\s+" + Regex.escape(simpleName) + "\\s*=\\s*\"([^\"]+)\"")
+        val declarations = sources.values.flatMap { text -> declarationsOf(simpleName, text) }
+        val candidates = when {
+            qualifier.isEmpty() -> declarations
+            else -> declarations.filter { it.owner == qualifier }
+        }
+        return candidates.map { it.value }.distinct().singleOrNull()
+    }
 
-        val candidates = sources.mapNotNull { (file, text) ->
-            declaration.find(text)?.groupValues?.get(1)?.let { file to it }
-        }
-        if (qualifier.isNotEmpty()) {
-            val owner = Regex("(object|class)\\s+" + Regex.escape(qualifier) + "\\b")
-            val scoped = candidates.filter { (file, _) -> owner.containsMatchIn(sources.getValue(file)) }
-            if (scoped.size == 1) return scoped.single().second
-        }
-        return candidates.map { it.second }.distinct().singleOrNull()
+    /**
+     * ファイル内の `const val <simpleName> = "..."` を**全部**拾い、所有者を添える。
+     *
+     * 所有者は**直前に現れた名前つきの `object` / `class`** とする。`companion object` は
+     * 名前を持たないので飛ばされ、それを囲む `class` が所有者になる（`SharedAppPreferences` が実例）。
+     */
+    private fun declarationsOf(simpleName: String, text: String): List<Declaration> {
+        val owners = OWNER.findAll(text).toList()
+        val declaration = Regex("const val\\s+" + Regex.escape(simpleName) + "\\s*=\\s*\"([^\"]+)\"")
+        return declaration.findAll(text).map { match ->
+            val owner = owners.lastOrNull { it.range.last < match.range.first }?.groupValues?.get(1)
+            Declaration(owner, match.groupValues[1])
+        }.toList()
     }
 
     /**
@@ -202,7 +216,13 @@ class BackupExclusionTest {
 
     private data class EntryPoint(val label: String, val pattern: Regex)
 
+    /** `const val` 1件と、それを囲む名前つきの型。 */
+    private data class Declaration(val owner: String?, val value: String)
+
     private companion object {
+        /** 名前つきの型の宣言。`companion object` は名前が無いので当たらない。 */
+        val OWNER = Regex("""\b(?:object|class)\s+(\w+)""")
+
         val PREFS_CALL = Regex("""getSharedPreferences\(\s*([^,)]+)""")
 
         /**
