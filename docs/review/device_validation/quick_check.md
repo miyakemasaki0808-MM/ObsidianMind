@@ -56,6 +56,12 @@
 | 再会カード | [reunion_card.md](reunion_card.md) | `REUNION-01` `REUNION-04` `REUNION-05` `REUNION-11` |
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |
 | AI入力予算 | [ai_input_budget.md](ai_input_budget.md) | `BUDGET-01` `BUDGET-03` |
+| ネットワーク権限 | [network_permission.md](network_permission.md) | `PERM-01` |
+
+**ネットワーク権限の行は `PERM-01` だけを置く。** 1コマンドで終わり、
+**いま端末に入っているのがどのAPKか**という他の全ケースの前提を確かめられる。
+残りは簡易版の射程外である — `PERM-02` はモデル未DLの端末が要り、
+`PERM-04` は10分の放置そのものが観測手段なので、絞る対象ではなく通し版で見る。
 
 **1回の簡易版で通すのは、対象機能の行＋変更面から引いた分だけ。** 他機能の行は通さない。
 **例外はアプリ起動の行で、対象機能に関わらず毎回最初に通す** — 入口が壊れていれば残りの結果に意味が無く、
