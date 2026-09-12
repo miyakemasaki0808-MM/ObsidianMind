@@ -1,7 +1,7 @@
 # 設計思想 — 依存更新の方針（Lintの更新系チェックをどう扱うか）
 
 **状態:** 方針確定・運用中。Lint設定は済み、**更新の実行そのものは未着手**（`genai-prompt` beta4 は調査済みで、ソース互換だが動作互換ではないため上げていない）
-**最終検証:** 2026-08-11 / `9af63ee`（本文未突合）
+**最終検証:** 2026-09-12 / `2da4909`
 **関連コード:** `app/build.gradle.kts`（**バージョンカタログは使っていない。依存はここに直書きする**）
 **関連テスト:** `lintDebug`（`warningsAsErrors`）
 **正本:** この文書
@@ -50,11 +50,19 @@ gradle/wrapper/gradle-wrapper.properties:5: Error: A newer version of Gradle tha
 |---|---|---|---|
 | 素のまま有効化 | **FAILED** | 12 errors | 見える（ただしCIが赤） |
 | `disable`（当初） | SUCCESSFUL | 0 errors, 0 warnings | **見えない** |
-| **`informational`（採用）** | **SUCCESSFUL** | **0 errors, 0 warnings, 12 hints** | **見える** |
+| **`informational`（採用）** | **SUCCESSFUL** | **0 errors, 0 warnings, 12 hints** | **見える（ネットワークありのときだけ。下記）** |
 
-`--offline` でも同じく12 hints が出る。**「警告0」の主張も保ったまま、催促だけを残せる**ので、
-`disable` より厳密に良い。当初案（`disable` を維持し、棚卸しのたびに一時有効化して戻す）は
-手順が増えるうえ、戻し忘れればCIが赤になる。**採らない。**
+**「警告0」の主張も保ったまま、催促だけを残せる**ので、`disable` より厳密に良い。
+当初案（`disable` を維持し、棚卸しのたびに一時有効化して戻す）は手順が増えるうえ、
+戻し忘れればCIが赤になる。**採らない。**
+
+> **`--offline` では12件とも出ない（2026-09-12 実測。以前ここには「`--offline` でも同じく
+> 12 hints が出る」と書いてあったが誤りだった）。** 3チェックはいずれも Maven や Gradle の
+> 配布元へ問い合わせて初めて「新版がある」と分かるので、オフラインでは静かに0件になる。
+> **CLAUDE.md が定めた日常のゲートは `--offline` なので、この催促は普段は誰の目にも入らない。**
+> `disable` より良いことは変わらないが、**良さが出るのは判断2 の棚卸しをネットワークありで
+> 回したときだけ**である。レビュー記録に並ぶ「hint 0」「hint 4」も同じ理由で、
+> **依存が新しくなったわけではない。**
 
 > **表現の注意:** ここで失敗するのは `lintDebug` タスクと、それを実行するCIジョブである。
 > **APKのコンパイルが必ず失敗するという意味ではない。** また `disable` を外すこと自体は
@@ -82,7 +90,7 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 
 | グループ | 対象 | 上げ方 | 確認 |
 |---|---|---|---|
-| **ML Kit GenAI** | `genai-prompt` | **必ず単独**。最もリスクが高い | AI 8経路（要約・補記・クイズ・関連ノート・セクションチャット・蒸留・読書痕跡・**検索ピッカー**）を実機で一巡。**上げる前にAARを展開してAPIの制約を確認する**（`maxOutputTokens` の 1〜256 で全AI生成が落ちた前例） |
+| **ML Kit GenAI** | `genai-prompt` | **必ず単独**。最もリスクが高い | AI 9経路（要約・補記・クイズ・関連ノート・セクションチャット・蒸留・読書痕跡・検索ピッカー・**分野判定**）を実機で一巡。**上げる前にAARを展開してAPIの制約を確認する**（`maxOutputTokens` の 1〜256 で全AI生成が落ちた前例） |
 | **Compose BOM** | `compose-bom` とその管理下 | **BOMごと1PR**。個別に上げない（BOMの意味が消える） | 全画面の描画・テーマ切替・OPアニメーション |
 | **AndroidX Test** | `espresso-core`・`ext:junit` | 単独。**本番依存に影響しない唯一の枠** | `connectedDebugAndroidTest` が緑になること |
 | **AndroidX 本体** | `core-ktx`・`activity-compose`・`lifecycle-*`・`navigation-compose`・`window` | 機能ごとに分ける（navigationは遷移、windowはサイズクラス） | 該当する導線の実機確認 |
@@ -122,14 +130,22 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 
 内訳は Gradle 本体1件＋ライブラリ11件。
 
+> **2026-09-12 に測り直した（ネットワークあり）。上げたものは引き続き1件も無い。**
+> **件数は12件のまま**で、動いたのは上流の「最新」側だけである —
+> Gradle 9.6.1 → 9.7.1、`navigation-compose` 2.9.8 → 2.10.1、`org.json` 20260719 → 20260814。
+> **この表は 2026-08-01 時点の距離感の記録なので書き換えない**（判断4）。
+> 内訳は `AndroidGradlePluginVersion` 1件・`GradleDependency` 8件・`NewerVersionAvailable` 3件。
+
 **Compose BOM（2024.09.03）は指摘に出てこない。** `platform()` 宣言をLintが更新対象として見ていないためで、
 「最新である」という意味ではない。**BOMだけは棚卸しの自動検出から漏れる**ので、手で確認する必要がある。
 
 **AndroidX Test 枠は既に1回動かした。** `espresso-core` 3.6.1 → 3.7.0、`ext:junit` 1.2.1 → 1.3.0。
 この枠が「本番に影響せず、テスト実行だけで検証が閉じる」ことを示した先例になっている。
 
-**`NewerVersionAvailable` は毎回ネットワークへ問い合わせる**ぶん Lint が遅くなる
-（実測で概ね2倍）。それでも hint を残す価値のほうが大きいと判断した。
+**`NewerVersionAvailable` は毎回ネットワークへ問い合わせる。**
+初回の実測では概ね2倍遅くなったが、**2026-09-12 に測り直すと差は出なかった**
+（`--rerun-tasks` 付きで オフライン 12秒／ネットワークあり 12秒）。
+**費用を理由にこのチェックを外す根拠は、現時点では無い。**
 
 ---
 
@@ -158,7 +174,7 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 - 生成Mutexの占有時間 → 他機能の待ち時間
 
 つまり**「コンパイルが通る」は安全の根拠にならない**枠である。上げるなら
-`maxOutputTokens` を明示するかどうかを先に決め、AI 8経路の実機一巡とセットにする。
+`maxOutputTokens` を明示するかどうかを先に決め、AI 9経路の実機一巡とセットにする。
 
 ### 実測により「非互換」ではなく「そのままでは採用不可」と分かった（2026-08-01 追記）
 
@@ -173,7 +189,11 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 | **最小の読書痕跡要約** | **349** | 3,747 | **−93** |
 
 **最も小さいプロンプトすら入らない。** つまり beta4 をそのまま上げると
-**8経路すべてが動かなくなる**可能性が高い。これは「挙動が変わる」ではなく「使えない」である。
+**9経路すべてが動かなくなる**可能性が高い。これは「挙動が変わる」ではなく「使えない」である。
+
+> **上の実測は 2026-08-01 の8経路時点のものである**（表は書き換えない）。
+> その後 分野判定 が9本目として増えたが、**結論は動かない** —
+> 最小の経路が既に入らない以上、経路が増えて有利になることはない。
 
 **したがって beta4 更新は `maxOutputTokens` の明示設定とセットでしか成立しない。**
 `buildRequest()` で明示する値を決める（現状維持なら256）ことが、更新の**前提条件**になる。
@@ -205,7 +225,7 @@ javap -c -p -cp out/classes.jar 'com.google.mlkit.genai.prompt.GenerateContentRe
 **「上げない」と判断した理由（今回時点）:** 上記の価値はいずれも**それ自体が独立した作業**であり、
 依存を上げるだけでは回収できない。一方で既定値の変化は上げた瞬間に効くので、
 **リスクだけ先に引き受ける形になる。** 上げるのは、`maxOutputTokens` をどう扱うかを決め、
-AI 8経路の実機一巡を回せるタイミングにする。
+AI 9経路の実機一巡を回せるタイミングにする。
 
 ### 計測の基準線が取れる状態になった
 
