@@ -214,5 +214,5 @@
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [vigilith_in_app](features/vigilith_in_app.md) → [opening_animation](features/opening_animation.md) |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md) |
-| `app/build.gradle.kts` の依存宣言・`gradle/wrapper` | [dependency_policy](system/dependency_policy.md) |
+| `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・`AndroidManifest.xml` の権限 | [dependency_policy](system/dependency_policy.md) |
 | `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](system/saf_boundary_gateway.md) → [architecture](system/architecture.md) |

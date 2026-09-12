@@ -41,6 +41,13 @@ jobs:
       - name: Lint
         run: ./gradlew lintDebug --stacktrace
 
+      # マージ後マニフェストの権限を数える（→ docs/dev/system/dependency_policy.md 判断5）。
+      # debug 側は lintDebug の途中で `processDebugMainManifest` が走るため既に検査されるが、
+      # **release はCIでビルドしないので、名指ししないと一度も見られない**。
+      # 推移依存が権限を持ち込む事故は release 成果物でこそ困るので、こちらを明示する。
+      - name: Manifest permissions
+        run: ./gradlew verifyDebugManifestPermissions verifyReleaseManifestPermissions --stacktrace
+
       # instrumentation テストは実端末／エミュレータが要るのでCIでは実行しない。
       # ただしコンパイルは通しておく。ここが無いと、androidTest 側だけ壊れたまま
       # 誰も気付かない（ユニットテストとLintはどちらも androidTest を見ない）。

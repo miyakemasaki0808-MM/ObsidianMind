@@ -1,4 +1,26 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+      **推移依存が持ち込むネットワーク権限を、成果物から除く。**
+
+      このアプリはネットワーク権限を宣言しない（→ docs/dev/decisions/ADR-0002-on-device-ai-only.md）。
+      だが ML Kit GenAI が引く `transport-backend-cct`（Googleの計測転送）が
+      INTERNET と ACCESS_NETWORK_STATE を持っており、**マージ後のマニフェストには入っていた**。
+      INTERNET は通常権限なのでインストール時に黙って付与され、端末の設定画面には
+      「インターネット」と表示される。**保証がソースにだけあり、成果物に無い状態**だった。
+
+      モデルのダウンロードと生成は AICore アプリ（別プロセス）が行うので、
+      こちら側にネットワーク権限は要らない。計測の送信経路は権限を失うと失敗するが、
+      `Uploader` は `SafeLoggingExecutor` 上で走りログに落ちるだけである。
+
+      **除いたことは `verify<Variant>ManifestPermissions`（app/build.gradle.kts）が見張る。**
+      権限の増減はこの2行を消しただけでは起きないので、人が気づける形にならない。
+      詳細の正本は docs/dev/system/dependency_policy.md（判断5）。
+    -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
