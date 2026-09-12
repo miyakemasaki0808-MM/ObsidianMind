@@ -111,7 +111,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 1. [docs/dev/change_history.md](docs/dev/change_history.md) へPR単位で1行追記する。**「変更内容」は1文・100字以内** — 経緯・代償・変異確認の結果・教訓はここに書かない（行き先は 2. と 4.）
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/features/*.md` か `docs/dev/system/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
-4. **同じ形の失敗を2度した、または1度でも構造上また起きる**と判断したら [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `features/` か `system/` に決めて要約＋リンクにする
+4. **同じ形の失敗を2度したら** [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `features/` か `system/` に決めて要約＋リンクにする。**1度目は [開発日誌](docs/owner/journal/) に書き、ここへは足さない**（2026-09-12 に引き締めた。旧「1度でも構造上また起きる」は広すぎ、9月だけで9件増えて翌日取り下げも出た）。**例外は検査を同時に置けるとき**
 5. **同じ事件を design・lessons・change_history へ3回とも長文で書かない。** 正本を1つ決め、他は要約＋リンクにする
 
 ## 文書の扱い
