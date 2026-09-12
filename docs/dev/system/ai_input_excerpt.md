@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。**抜粋の予算調整は打ち止め**（効果が測れなかったため）。
 完成プロンプトの上限は 2026-08-22 に入り、**同日の実機検証でトークン基準線を取得済み**
-**最終検証:** 2026-08-22 / `85b9e70`＋文書差分（BUDGET-01〜09、Pixel 10 Pro Fold / `nano-v3`）
+**最終検証:** 2026-08-22 / `85b9e70`
 **関連コード:** `domain/NoteExcerptBuilder.kt` / `model/NoteExcerpt.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` / `ai/PromptBuilder.kt`
 **関連テスト:** `NoteExcerptBuilderTest` / `PromptBuilderExcerptRegressionTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / `NoteExcerptThreadingTest` / androidTest: `PromptTokenBudgetTest`
 **正本:** この文書

@@ -1,7 +1,7 @@
 # ダークモード
 
 **状態:** Implemented — 稼働中・実機確認済み
-**最終検証:** 2026-08-12 / `521768b`（テーマの伝播経路を実装と突合。トークン値とコントラスト比は `AppColorContrastTest` が固定しているため個別には数えていない）
+**最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `ui/theme/AppTheme.kt` / `ui/theme/AppColors.kt` / `data/AppPreferences.kt` / `ui/screen/OptionsScreen.kt`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`
 **正本:** この文書（トークン設計の土台は [theme_and_ui_refactor](../system/theme_and_ui_refactor.md)）

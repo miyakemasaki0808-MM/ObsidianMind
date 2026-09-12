@@ -1,7 +1,7 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-15（Pixel 10 Pro Foldで実機7項目とクイズ追加2状態を確認。AI-2完了）
+**最終検証:** 2026-08-15
 **関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
 **関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest`
 **正本:** この文書

@@ -3,8 +3,7 @@
 **状態:** 実装済み・**完了（2026-09-08）**。紙面の佇まい（判断9）・めくる手触り（判断10・判断11）・
 **編む冊子（判断12）**まで、いずれも**実機で確認しオーナー判断で受理**した。
 **2026-09-07 のコードレビューで受けた3件（`P2-1`〜`P2-3`）は修正し、実機でも解消を確認した。**
-**最終検証:** 2026-09-08 / 編む冊子（JVM 1,340件・Lint Error 0／Warning 0・instrumentation 33/33。
-実機は主要経路 `BOOK-51`〜`BOOK-67`。**未確認範囲を残したまま受理している** → 判断12「受理の範囲」）
+**最終検証:** 2026-09-08（未確認範囲を残して受理 → 判断12）
 **関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `model/BookletWeave.kt` / `model/state/BookletState.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletWeaveTest`（編む束の中身）/ `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）/ `BookletTurnGeometryTest`（繰りの向き）/ `BookletCurlGeometryTest`（曲がりの幾何）/ `BookletSheetPerspectiveTest`（画素）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書

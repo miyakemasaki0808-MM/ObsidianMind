@@ -1,7 +1,7 @@
 # ノートへのひとこと
 
 **状態:** Implemented — 稼働中。保存先は読書痕跡サイドカー（schema v6）
-**最終検証:** 2026-08-11 / `9af63ee`（§4 の復元・生成タイミングと §5 の通知経路を実装から起こし直した）
+**最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `controller/RemarkController.kt` / `domain/RemarkComposer.kt` / `model/RemarkProtocol.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt`
 **関連テスト:** `RemarkControllerTest` / `RemarkComposerTest` / `ReadingTraceLimitsTest`
 **正本:** この文書

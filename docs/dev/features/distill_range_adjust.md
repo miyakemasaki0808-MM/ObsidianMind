@@ -2,7 +2,7 @@
 
 **状態:** **段階1（プリセット）実装・実機検証済み。** 段階2（自由範囲）は未着手で、§11 の条件を満たしてから着手する。
 **着手条件は満たされた（2026-08-29）** — v1の保護不足（斜体・太字斜体・打ち消し線）は実機検証まで完了している（→ §5）
-**最終検証:** 2026-08-30 / `8954b6e`＋文書差分（JVM 1,181件、Lint、Pixel 10 Pro Foldで `DIST-21`〜`DIST-24` 4/4、instrumentation 6/6）
+**最終検証:** 2026-08-30 / `8954b6e`
 **関連コード:** `model/DistillModels.kt`（`DistillConfirmedRange`）・`model/state/DistillState.kt`（`DistillRangePreset`）・`domain/DistillRangeAdjust.kt`（`presetRangesFor` / `resolveOverlaps` / `hasOverlappingDistillRanges`）・`controller/DistillController.kt`（`ActiveSession.confirmedRanges` / `applyRange` / `resetRange` / `openRangeSheet`）・`ui/screen/DistillRangeSheet.kt`・`ui/screen/AiTab.kt`・`ui/vigilith/VigilithMode.kt`
 **関連テスト:** `DistillRangeAdjustTest`（3段の導出・重なり解消・外枠）・`DistillControllerTest`（保存出力・太字率・短文例外・保存直前のガード・告知の寿命）・`DistillRangeHighlightTest`（確定範囲の強調）・`DistillRangeNoticeTest`（告知の主語）・`DistillRangeAdjustUiTest`（androidTest）・`VigilithModeTest` / `DistillCandidateUnitCopyTest`（走査範囲に調整シートを追加済み）
 **正本:** この文書。**段階2まで終わった時点で [reflect_distill](reflect_distill.md) §5・§8 へ畳み、本書は削除する**（同じ機能の正本を2つ残さない）。

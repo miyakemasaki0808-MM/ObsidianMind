@@ -1,7 +1,7 @@
 # 関連ノートAI推薦
 
 **状態:** Implemented — 稼働中
-**最終検証:** 2026-08-12 / `f3fb353`（§5 のパラメータ表を全定数まで実装と突合。決定的チャンネルの条件と件数、prefixTier の段階値も確認）
+**最終検証:** 2026-08-12 / `f3fb353`
 **関連コード:** `domain/RelatedNotesUseCase.kt` / `domain/RelatedCandidate*.kt` / `domain/RelatedContextScoring.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト:** `RelatedCandidateScoringTest` / `RelatedCandidateRankingTest` / `RelatedCandidateOrderingTest` / `RelatedCandidateContextTest` / `RelatedCandidateIdTest` / `RelatedContextScoringTest`
 **正本:** この文書

@@ -1,7 +1,7 @@
 # 設計思想 — UIデザインの指針（国際規約 ＋ このアプリの好み）
 
 **状態:** 運用中。**着手前にここを読む**
-**最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
+**最終検証:** 2026-08-11 / `9af63ee`（本文未突合）
 **関連コード:** `ui/theme/AppColors.kt` / `ui/theme/AppTheme.kt`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`
 **正本:** この文書

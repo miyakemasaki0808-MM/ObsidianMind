@@ -3,7 +3,7 @@
 **状態:** 決定済み。**形の割り当てと、2行へ割った動きの手触り側は実装・実機検証完了**（冊子の紙面・判断10）。
 **色は面ごとに持ち主が分かれた（判断6・2026-09-09）** — 読む面＝年代は実装済み、冊子の面＝分野は未実装。
 位置は未使用のまま予約、書体は持ち主なし
-**最終検証:** 2026-09-04 / `d05585b`（JVM 1,267件・Lint Error 0／Warning 0／Hint 4・両APK成功。`BearingChannelTest` 8件、Pixel実機の `BOOK-31`〜`BOOK-40` 10/10成功。明暗・狭幅・TalkBack・倍率0を確認）
+**最終検証:** 2026-09-04 / `d05585b`
 **関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/component/NoteComponents.kt`
 **関連テスト:** `BearingChannelTest` / `AppColorContrastTest` / `NotePaperAgeTest`
 **正本:** この文書。**個々の見え方の仕様は各機能の設計書**が持ち、ここは割り当てだけを持つ
