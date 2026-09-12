@@ -275,6 +275,9 @@ javap -c -p -cp out/classes.jar 'com.google.mlkit.genai.prompt.GenerateContentRe
 依存を上げるだけでは回収できない。一方で既定値の変化は上げた瞬間に効くので、
 **リスクだけ先に引き受ける形になる。** 上げるのは、`maxOutputTokens` をどう扱うかを決め、
 AI 9経路の実機一巡を回せるタイミングにする。
+**契機の候補は構造化出力である** — 上の表のうち、自前の壊れやすいパーサ3本
+（`QuizResponseParser`・`DistillResponseParser`・`parseNoteFieldAnswer`）を**置き換えうる**のはこれだけで、
+ほかは新しい作業を足す側にある。
 
 ### 計測の基準線が取れる状態になった
 
