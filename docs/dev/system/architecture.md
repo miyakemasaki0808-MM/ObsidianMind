@@ -1,7 +1,7 @@
 # 設計思想 — アーキテクチャ（ViewModel分割・状態管理）
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
-**最終検証:** 2026-08-11 / `9af63ee`（本文未突合）
+**最終検証:** 2026-09-12 / `23dce6b`
 **関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（13 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
@@ -40,7 +40,12 @@ NoteViewModel（Android境界の窓口）
       └── NoteFieldController           ← ノートの分野判定（**例外。判断4 を見る**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 13個で、**窓口の肥大化は再発していない**。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 13個・`NoteViewModel` は674行である。
+
+**行数は倍になったが、窓口の性質は変わっていない。** 53ある関数のうち**40は1行の委譲**で、
+本体を持つ8つは**すべて Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）である。
+**測るべきは行数ではなく「業務ロジックが戻ってきていないか」**で、そちらは戻っていない。
+（分割の動機だった906行と比べる意味は薄い — あのときは業務ロジックが同居していた。）
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -200,13 +205,17 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Quiz | Distill | ReadingTrace | Summary |
-|---|---|---|---|---|
-| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ |
-| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ |
-| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ |
-| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ |
-| 起動契機 | 明示操作 | 明示操作 | **ノート表示・離脱** | ノート表示 |
+| 要素 | Quiz | Distill | ReadingTrace | Summary | NoteField |
+|---|---|---|---|---|---|
+| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ |
+| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** |
+| 起動契機 | 明示操作 | 明示操作 | **ノート表示・離脱** | ノート表示 | ノート表示 |
+
+**5本目（分野判定）は結論を補強した。** 起動契機は Summary と同じ「ノート表示」なのに、
+**見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
+**起動契機が同じでも共通化できない**ことの実例である。
 
 **判定軸は「ユーザーへの見せ方」である。** バックグラウンドAI機能の共通性は生成処理そのものではなく
 通知と失敗の見せ方に宿るため、そこが違えば処理が似ていても共通化できない。
