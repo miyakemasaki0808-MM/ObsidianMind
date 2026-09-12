@@ -1,8 +1,10 @@
 package com.example.newproject.architecture
 
 import java.io.File
+import javax.xml.parsers.DocumentBuilderFactory
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.w3c.dom.Element
 
 /**
  * **端末に残す置き場を足したら、自動バックアップから除外されていることを数える。**
@@ -40,17 +42,16 @@ class BackupExclusionTest {
         val prefsNames = declaredPrefsNames()
         require(prefsNames.isNotEmpty()) { "prefs の宣言を1つも見つけられませんでした" }
 
-        val fullBackup = readRes("backup_rules.xml")
-        val extraction = readRes("data_extraction_rules.xml")
         val targets = mapOf(
-            "backup_rules.xml" to fullBackup,
-            "data_extraction_rules.xml の <cloud-backup>" to section(extraction, "cloud-backup"),
-            "data_extraction_rules.xml の <device-transfer>" to section(extraction, "device-transfer")
+            "backup_rules.xml" to excludedPrefs("backup_rules.xml", null),
+            "data_extraction_rules.xml の <cloud-backup>" to
+                excludedPrefs("data_extraction_rules.xml", "cloud-backup"),
+            "data_extraction_rules.xml の <device-transfer>" to
+                excludedPrefs("data_extraction_rules.xml", "device-transfer")
         )
 
         val violations = prefsNames.flatMap { name ->
-            val exclude = """<exclude domain="sharedpref" path="$name.xml" />"""
-            targets.filterValues { !it.contains(exclude) }.keys.map { "$name: $it に除外が無い" }
+            targets.filterValues { name !in it }.keys.map { "$name: $it に除外が無い" }
         }.sorted()
 
         assertTrue(
@@ -124,13 +125,39 @@ class BackupExclusionTest {
         }
     }
 
-    private fun section(xml: String, tag: String): String =
-        xml.substringAfter("<$tag>", "").substringBefore("</$tag>", "")
+    /**
+     * 除外されている prefs 名を、**XMLとして解析して**集める。
+     *
+     * **文字列検索では足りなかった。** `<exclude .../>` をコメントで囲んでも
+     * `contains` は一致するので、**3経路すべてをコメントアウトしても緑になる**
+     * （2026-09-12 のレビューで再現）。コメントは要素にならないので、解析すれば消える。
+     *
+     * [sectionTag] が null なら文書要素の直下（`backup_rules.xml`）、
+     * 指定があればその節の中（`cloud-backup` / `device-transfer`）だけを見る。
+     */
+    private fun excludedPrefs(fileName: String, sectionTag: String?): Set<String> {
+        val file = repositoryRoot().resolve("app/src/main/res/xml/$fileName")
+        assertTrue("バックアップ規則が見つかりません: $file", file.isFile)
+        val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
+        val scope: Element = when (sectionTag) {
+            null -> document.documentElement
+            else -> document.documentElement.childElements()
+                .firstOrNull { it.tagName == sectionTag }
+                ?: return emptySet()
+        }
+        return scope.getElementsByTagName("exclude").let { nodes ->
+            (0 until nodes.length).mapNotNull { index ->
+                val element = nodes.item(index) as? Element ?: return@mapNotNull null
+                element.takeIf { it.getAttribute("domain") == "sharedpref" }
+                    ?.getAttribute("path")
+                    ?.removeSuffix(".xml")
+                    ?.takeIf { it.isNotEmpty() }
+            }.toSet()
+        }
+    }
 
-    private fun readRes(fileName: String): String =
-        repositoryRoot().resolve("app/src/main/res/xml/$fileName").also {
-            assertTrue("バックアップ規則が見つかりません: $it", it.isFile)
-        }.readText()
+    private fun Element.childElements(): List<Element> =
+        (0 until childNodes.length).mapNotNull { childNodes.item(it) as? Element }
 
     private fun mainSources(): List<File> =
         repositoryRoot().resolve("app/src/main/java").walkTopDown()
