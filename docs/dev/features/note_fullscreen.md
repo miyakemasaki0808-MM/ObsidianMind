@@ -1,7 +1,7 @@
 # 全画面ノート
 
 **状態:** Implemented — 稼働中。ダークモード対応まで反映済み
-**最終検証:** 2026-08-12 / `521768b`（判断1〜5を実装と突合。独立ルート化・`DisposableEffect` でのシステムバー制御・非suspendの `requestScrollToItem` による書き戻しまで一致を確認）
+**最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/AppScaffold.kt`
 **関連テスト:** androidTest: `ActivityRecreationTest` / `TabNavigationTest`
 **正本:** この文書

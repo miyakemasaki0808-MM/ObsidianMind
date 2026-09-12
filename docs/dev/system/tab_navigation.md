@@ -1,7 +1,7 @@
 # タブ・ナビゲーション
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-11 / `9af63ee`（タブ定義・レール判定・`IconPill` を実装と突合）
+**最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替・バッジ）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
 **関連テスト:** `AiTabBadgeStateTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest`
 **正本:** この文書

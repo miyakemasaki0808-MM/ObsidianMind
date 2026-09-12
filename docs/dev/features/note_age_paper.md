@@ -1,7 +1,7 @@
 # ノートの年代を紙の地色で伝える
 
 **状態:** Implemented — 稼働中・実機確認済み。**既定オフ**
-**最終検証:** 2026-08-12 / `521768b`（相対四分位・4段階の実際の色値・床となる `panelChip` の輝度まで実装と突合）
+**最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `domain/NotePaperAge.kt` / `model/NotePaperTone.kt` / `ui/theme/AppTheme.kt` / `data/AppPreferences.kt`
 **関連テスト:** `NotePaperAgeTest` / `AppColorContrastTest`
 **正本:** この文書

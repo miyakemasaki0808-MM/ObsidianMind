@@ -1,7 +1,7 @@
 # アプリ内Vigilith（読書相手の身体化）
 
 **状態:** Implemented — 稼働中。**実機での目視・操作確認だけが端末の認証ロックにより未完了**
-**最終検証:** 2026-08-12 / `521768b`（`VigilithMode` の導出・表示枠76×93dp・ラベル時の予約枠260×132dp を実装と突合。素材の実寸は未計測）
+**最終検証:** 2026-08-12 / `521768b`（素材の実寸は未計測）
 **関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/vigilith/VigilithMode.kt` / `ui/AppScaffold.kt`（`VigilithHost`）
 **関連テスト:** `VigilithMascotMotionTest` / `VigilithPlacementTest` / `VigilithAccessibilityTest` / `VigilithStatusDerivationTest` / `VigilithModeTest`
 **正本:** この文書（キャラクター設定は [character_vigilith](character_vigilith.md)）

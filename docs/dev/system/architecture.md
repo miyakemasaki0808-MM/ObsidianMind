@@ -1,8 +1,8 @@
 # 設計思想 — アーキテクチャ（ViewModel分割・状態管理）
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
-**最終検証:** 2026-08-11 / `9af63ee`（**ヘッダと参照先の実在のみ確認。本文は未突合**）
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（12 Controller）
+**最終検証:** 2026-09-12 / `23dce6b`
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（13 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -36,10 +36,16 @@ NoteViewModel（Android境界の窓口）
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
       ├── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
-      └── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
+      ├── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
+      └── NoteFieldController           ← ノートの分野判定（**例外。判断4 を見る**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 12個で、**窓口の肥大化は再発していない**。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 13個・`NoteViewModel` は674行である。
+
+**行数は倍になったが、窓口の性質は変わっていない。** 53ある関数のうち**40は1行の委譲**で、
+本体を持つ8つは**すべて Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）である。
+**測るべきは行数ではなく「業務ロジックが戻ってきていないか」**で、そちらは戻っていない。
+（分割の動機だった906行と比べる意味は薄い — あのときは業務ロジックが同居していた。）
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
@@ -66,6 +72,7 @@ NoteViewModel（Android境界の窓口）
 無効化の契機がVault切替だけなので、
 どちらの契約にも載せない（ノートを開き直しただけで一覧が消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、すべてのControllerが従うものではない。
+**片方だけに載る例外もある**（分野判定 → 判断4）。
 
 ## 判断3: 壊れやすいロジックは純関数に切り出す
 
@@ -103,6 +110,25 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 **三層目は作らない。** 蒸留の復旧チェックはノートにもVaultにも紐づかないが、
 **世代を増やさず専用の追跡Job1本**で足りた。取り下げの契機が「次の `checkRecovery()`」しかないため。
 **層を足す前に「無効化の契機がいくつあるか」を数える。**
+
+### 例外は分野判定だけ — 上の表に行を足さない（2026-09-12、オーナー判断）
+
+[`NoteFieldController`](../../../app/src/main/java/com/example/newproject/controller/NoteFieldController.kt) は
+**二層を両方使う唯一のController**である。
+
+| | どちらか | なぜ |
+|---|---|---|
+| ジョブ | **ノート単位**（`cancelNoteScopedJobs()` に登録し、`activeRequestId` で照合） | ノートを開いた契機で走るので、切り替えたら止めるのが正しい |
+| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。`vaultGeneration` で照合） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
+
+**これを二層の表の3行目にしない。** 基本のControllerは司令塔の契約に素直に繋がっているはずで、
+**その姿を表が示していることに価値がある。** 3行目を足すと「どちらでもよい」と読めてしまい、
+**次に足すControllerが契約への登録を考えなくなる。**
+分野判定は**AI結果をVault単位の索引へ溜める**という形がこれまで無かったための例外であって、
+規則の緩和ではない。
+
+**同じ形が2件目に現れたら、そのとき表を組み直す。** 件数ではなく**形の再来**が引き金である
+（→ [lessons L31](../lessons/L31.md)）。
 
 **世代照合は片方向にしか効かない。** 優先順位が状況で入れ替わる2つの非同期処理では、
 「遅れて届いた側が勝つべき場合」に**その時点で相手を無効化する**ことを書いた側が明示する。
@@ -157,14 +183,15 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 同一Gradleモジュール内の生成箇所を封じるものではない。
 抜粋の中身は [ai_input_excerpt](ai_input_excerpt.md) が持つ。
 
-## 状態が `NoteUiState` の外に出る例外は2つだけ
+## 状態が `NoteUiState` の外に出るもの
 
-| 例外 | 理由 |
+| 外に出ているもの | 理由 |
 |---|---|
-| テーマ（`StateFlow<Boolean>`） | 状態17項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
-| `NoteSectionModel`（`StateFlow<NoteSectionModel?>`） | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
+| 設定（`darkTheme`・`notePaperAging`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
+| `NoteSectionModel` | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
 
-**3つ目を作るときは、`model` を葉に保つ判断自体を見直す合図と考える。**
+**本数は数えない**（設定が増えるだけなので危険と相関しない）。危ないのは
+**ノート単位の状態が外へ出ること**で、そこは CLAUDE.md の必須原則が直接見ている。
 
 `NoteSectionModel` の解析開始は Coordinator の2箇所（`setNoteState()` と `applyReloadedBody()`）へ集約する。
 片方を落とすと「本文は新しいのにブロックは旧い」状態になる。
@@ -179,13 +206,17 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Quiz | Distill | ReadingTrace | Summary |
-|---|---|---|---|---|
-| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ |
-| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ |
-| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ |
-| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ |
-| 起動契機 | 明示操作 | 明示操作 | **ノート表示・離脱** | ノート表示 |
+| 要素 | Quiz | Distill | ReadingTrace | Summary | NoteField |
+|---|---|---|---|---|---|
+| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ |
+| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** |
+| 起動契機 | 明示操作 | 明示操作 | **ノート表示・離脱** | ノート表示 | ノート表示 |
+
+**5本目（分野判定）は結論を補強した。** 起動契機は Summary と同じ「ノート表示」なのに、
+**見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
+**起動契機が同じでも共通化できない**ことの実例である。
 
 **判定軸は「ユーザーへの見せ方」である。** バックグラウンドAI機能の共通性は生成処理そのものではなく
 通知と失敗の見せ方に宿るため、そこが違えば処理が似ていても共通化できない。

@@ -2,7 +2,7 @@
 
 **種別:** Character Reference（**機能仕様ではない**）
 **状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OP／アプリ内マスコットが従っている
-**最終検証:** 2026-08-11 / `e7b9f18`（**参照シートとしての役割を明示しただけ。造形・色の記述は未突合**）
+**最終検証:** 2026-08-11 / `e7b9f18`（造形・色の記述は未突合）
 **関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
 **関連テスト:** `VigilithModeTest` / `VigilithStatusDerivationTest`
 **正本:** **造形・世界観・作画発注についてはこの文書**

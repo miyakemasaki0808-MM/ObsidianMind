@@ -2,7 +2,7 @@
 
 **状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）。
 **ランチャー再タップの重複起動を畳むガードは実装済み・実機検証待ち**（→ 判断7）
-**最終検証:** 2026-08-12 / `521768b`（総時間2,000ms と `vigilithOpeningMotion` の全区間境界を実装と突合）
+**最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）/ `MainActivity.kt` / `domain/LauncherEntry.kt`
 **関連テスト:** `VigilithOpeningMotionTest` / `LauncherEntryTest` / `ActivityRecreationTest`（instrumentation）
 **正本:** この文書

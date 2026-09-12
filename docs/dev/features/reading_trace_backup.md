@@ -1,7 +1,7 @@
 # 読書痕跡の退避と復元（エクスポート／インポート）
 
 **状態:** **実装済み・稼働中（実機検証完了 2026-08-28。環境が要る3ケースは未実施 → §10）。** ケースは [reading_trace_backup](../../review/device_validation/reading_trace_backup.md)
-**最終検証:** 2026-08-28 / Pixel実機で `BACKUP-03`・`13`・`15`（読み戻し）・`15b` 成功
+**最終検証:** 2026-08-28
 **関連コード:** `controller/ReadingTraceBackupController.kt` / `domain/ReadingTraceMerge.kt` / `data/ReadingTraceBackupJson.kt` / `model/ReadingTraceBackupTypes.kt` / `model/state/ReadingTraceBackupState.kt` / `ui/screen/DataManagementScreen.kt`
 **関連テスト:** `ReadingTraceMergeTest` / `ReadingTraceBackupJsonTest` / `ReadingTraceBackupControllerTest` / `ReadingTraceBackupTextTest`
 **正本:** この文書

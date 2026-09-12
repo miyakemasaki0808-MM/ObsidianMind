@@ -1,7 +1,7 @@
 # SAF境界を gateway の裏へ入れる（`Uri` の不透明化）
 
 **状態:** 実装済み・実機確認済み・稼働中
-**最終検証:** 2026-08-11 / `9af63ee`（層ごとの `import android.net.Uri` を再計測し、`PackageDependencyTest` の対象と突合）
+**最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `model/DocumentRef.kt` / `data/SafDocuments.kt`（唯一の変換点）/ `data/VaultBrowser.kt`・`VaultLocation.kt`
 **関連テスト:** `PackageDependencyTest`（CIで固定）/ `SearchControllerTest` / `AnnotationControllerTest` / `NoteSessionCoordinatorTest`
 **正本:** この文書

@@ -1,8 +1,7 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句を実装済み。**表示・候補境界・保存・競合・故障復旧を実機確認済み**
-**最終検証:** 2026-08-30 / `8954b6e`＋文書差分（JVM 1,181件、Lint、Pixel 10 Pro Foldで `DIST-21`〜`DIST-24` 4/4、範囲調整instrumentation 6/6。
-`DIST-19`・`DIST-20` は 2026-08-29 / `909fe8d`、`DIST-01`〜`DIST-18` は 2026-08-20 / `6daf0f3` の確認が最後 → [レビュー一覧](../../review/README.md)）
+**最終検証:** 2026-08-30 / `8954b6e`
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest`
 **正本:** この文書
