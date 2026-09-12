@@ -1,7 +1,7 @@
 # 設計思想 — Markdown解析（準拠先・リスト構造）
 
 **状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。**クリック可能リンク・埋め込み・数式は未着手**
-**最終検証:** 2026-08-11 / `9af63ee`（本文未突合）
+**最終検証:** 2026-09-12 / `825f054`
 **関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
 **関連テスト:** `MarkdownParserTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `NoteSectionThreadingTest`
 **正本:** この文書
