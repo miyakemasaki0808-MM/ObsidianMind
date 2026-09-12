@@ -28,7 +28,9 @@ release 成果物の権限は `verifyReleaseManifestPermissions` が静的に見
   これは端末が無いときの妥協ではなく方針である（2026-09-12・オーナー判断）。
   [background_ai_ux](background_ai_ux.md) の「ダウンロード済みモデルは検証のために削除しない」と同じ線で、
   **未DL状態は作りにいかず、契機（端末初期化・2台目の入手）が来たときに消化する。**
-- 上書きインストールの前に、旧版の権限を数えておく。**除去前は2件多いはず**である。
+- 上書きインストールの前に、旧版の権限を数えておく。**差は2件とは限らない** —
+  マニフェストで除いたのは2件だが、**端末の要求権限では3件減ることがある**
+  （OSが足す分。→ `PERM-01`）。**合否に使うのは差ではなく、新版が2件になること。**
 
   ```text
   adb -s <serial> shell dumpsys package com.vigilith.ai | grep -A20 "requested permissions"
