@@ -21,6 +21,7 @@
 | 2026-09-12 | — | `_wip` 3本が実装・実機記録と食い違っていた9箇所を現状へ揃えた | [roadmap](../_wip/roadmap.md) |
 | 2026-09-12 | — | 文書費用を減らす3手（ヘッダ縮約・設計書の経緯移送・教訓の閾値）を当てた | [_template](features/_template.md) |
 | 2026-09-12 | — | オーナー／Claude／Codex の分担表を CLAUDE.md へ置き、正本を1枚にした | [CLAUDE.md](../../CLAUDE.md) |
+| 2026-09-12 | — | 系統図へ13個目のControllerを足し、分野判定を二層の例外として書いた | [architecture](system/architecture.md) 判断4 |
 | 2026-09-11 | — | 本文差し戻しの再利用条件を再確認し、残る文書指摘と受付3行を閉じて実機待ちを保持した | [review](../review/README.md) |
 | 2026-09-11 | — | 索引Bを永続しない代償の説明を、実際に再生成が要る3条件へ限定した | [note_field_color](features/note_field_color.md) §6 |
 | 2026-09-11 | — | 継続指摘を再確認し、コード2件の解消・正本の残る説明1箇所・実機待ちを台帳へ反映した | [review](../review/README.md) |
