@@ -38,6 +38,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -63,6 +64,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.newproject.model.BookletCover
 import com.example.newproject.model.BookletEntry
+import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteFieldClassification
+import com.example.newproject.model.NoteField
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.WeaveBlockedReason
@@ -80,6 +84,7 @@ import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
+import com.example.newproject.ui.theme.noteFieldPaper
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
@@ -552,6 +557,10 @@ internal class BookletRestackRule {
 @Composable
 internal fun BookletScreen(
     state: BookletState,
+    // 索引A（ノート → 分野）。**冊子は `ref` で引くだけ**で、走査もAI生成も起こさない
+    // （→ features/note_field_color.md 判断10・判断17）。未準備なら空の地図が来て、
+    // 全ページが無彩色で開く。**待たせない。**
+    noteFields: Map<DocumentRef, NoteFieldClassification>,
     onPageSettled: (Int) -> Unit,
     onRead: (BookletEntry) -> Unit,
     onDrawAgain: () -> Unit,
@@ -600,6 +609,7 @@ internal fun BookletScreen(
                     BookletNotice("引けるノートがありません。")
                 } else {
                     BookletPager(
+                        noteFields = noteFields,
                         entries = bundle.entries,
                         // **束が覚えているページから開く。** 画面ローカルに持つと、
                         // 通常表示へ渡って戻る往復でここだけ1枚目へ戻る。
@@ -641,6 +651,7 @@ internal fun BookletScreen(
 @Composable
 private fun ColumnScope.BookletPager(
     entries: List<BookletEntry>,
+    noteFields: Map<DocumentRef, NoteFieldClassification>,
     initialPage: Int,
     bundleId: Long,
     mode: BookletMode,
@@ -751,7 +762,13 @@ private fun ColumnScope.BookletPager(
                 .graphicsLayer { translationY = size.height * sheetSlotShift(turn()) }
         ) {
             if (page < entries.size) {
-                BookletPage(entry = entries[page], turn = turn, restack = restack, onRead = onRead)
+                BookletPage(
+                    entry = entries[page],
+                    field = noteFields[entries[page].ref]?.field,
+                    turn = turn,
+                    restack = restack,
+                    onRead = onRead
+                )
             } else if (mode == BookletMode.Weave) {
                 // **編む側に「もう10枚編む」は無い。** 編みは決定的なので同じ10枚が出る
                 // （→ features/booklet_mode.md 判断12）。数だけを最後に1回言う。
@@ -938,6 +955,10 @@ internal fun BookletSheet(
     isBundleSheet: Boolean,
     turn: () -> Float,
     restack: () -> Float,
+    // 紙の地色。**分野が決まっていないページは `Panel`**（既定値）で、いままでと同じ見た目になる。
+    // 表と裏（めくれた折り返し）の両方へ同じ色を塗る — 片方だけだと、めくる途中に
+    // 別の色が覗いて「別の紙をめくっている」ように見える。
+    paper: Color = Panel,
     content: @Composable () -> Unit
 ) {
     Box(
@@ -1007,7 +1028,7 @@ internal fun BookletSheet(
                     shadowElevation =
                         if (sheetCastsShadow(restack())) SHEET_RESTING_SHADOW.toPx() else 0f
                 }
-                .background(Panel)
+                .background(paper)
         ) { content() }
         // **めくれて裏返った角**（→ [peelFlapPolygon]）。文字は載らない。
         // **影が「持ち上がっている」ことを言う** — 折り目に沿って落ちる影が、
@@ -1026,7 +1047,7 @@ internal fun BookletSheet(
                         0f
                     }
                 }
-                .background(Panel)
+                .background(paper)
         )
     }
 }
@@ -1115,11 +1136,17 @@ private fun BoxScope.StackEdge(offset: Dp) {
 @Composable
 private fun BookletPage(
     entry: BookletEntry,
+    field: NoteField?,
     turn: () -> Float,
     restack: () -> Float,
     onRead: (BookletEntry) -> Unit
 ) {
-    BookletSheet(isBundleSheet = true, turn = turn, restack = restack) {
+    BookletSheet(
+        isBundleSheet = true,
+        turn = turn,
+        restack = restack,
+        paper = noteFieldPaper(field)
+    ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -1150,6 +1177,19 @@ private fun BookletPage(
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
             )
+            // **色以外の手がかり（WCAG 1.4.1）。** 紙の色だけで分野を伝えると、
+            // 色を灰色にした瞬間に情報が消える（→ ui_design_principles §1）。
+            // **分野が無いページには何も出さない** — 「未分類」と書くと、
+            // 判定がまだなのか該当なしなのかを内部状態として見せることになる。
+            if (field != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = field.label,
+                    color = OnSurfaceMuted,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
             Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = { onRead(entry) },

@@ -9,6 +9,8 @@ import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
 import com.example.newproject.data.DistillWriteRepository
 import com.example.newproject.data.HistoryStore
+import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.data.SharedNoteFieldStore
 import com.example.newproject.data.NoteHistoryStore
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.ReadingTracePersistence
@@ -38,6 +40,8 @@ import java.io.File
 internal class NoteViewModelDependencies(
     val preferences: AppPreferences,
     val history: HistoryStore,
+    /** 分野の確定の永続。**テストでは注入しない**（保存しなくても機能は動く）。 */
+    val noteFieldStore: NoteFieldStore? = null,
     val repository: NoteRepository,
     /**
      * さがす／補記が使う Vault スコープの操作。`ContentResolver` と Vault ルートを束ねてあるので、
@@ -79,6 +83,7 @@ internal class NoteViewModelDependencies(
             return NoteViewModelDependencies(
                 preferences = SharedAppPreferences(prefs),
                 history = NoteHistoryStore(prefs),
+                noteFieldStore = SharedNoteFieldStore(prefs),
                 repository = repository,
                 vaultBrowser = SafVaultBrowser(
                     contentResolver = application.contentResolver,

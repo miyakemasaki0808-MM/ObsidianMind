@@ -16,6 +16,35 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-12 | — | 分野色と返事保存を実機確認し、実機待ち3件を閉じて再利用可能な検証ケースを追加した | [review](../review/README.md) |
+| 2026-09-11 | — | 本文差し戻しの再利用条件を再確認し、残る文書指摘と受付3行を閉じて実機待ちを保持した | [review](../review/README.md) |
+| 2026-09-11 | — | 索引Bを永続しない代償の説明を、実際に再生成が要る3条件へ限定した | [note_field_color](features/note_field_color.md) §6 |
+| 2026-09-11 | — | 継続指摘を再確認し、コード2件の解消・正本の残る説明1箇所・実機待ちを台帳へ反映した | [review](../review/README.md) |
+| 2026-09-11 | — | 分野色の正本から索引Bの永続・改名再利用・未実装の旧記載を落とし、現行の契約へ揃えた | [note_field_color](features/note_field_color.md) §4・§6・§7・判断10 |
+| 2026-09-11 | — | 失効を確認した分野の確定が、次のVault走査で復活しないようにした | [note_field_color](features/note_field_color.md) 判断18 |
+| 2026-09-11 | — | 分野判定の応答は全体がID行のときだけ受け付けるようにした | [note_field_color](features/note_field_color.md) §5 |
+| 2026-09-11 | — | レビュー修正の再現確認を行い、コードの継続2件・正本同期・実機待ちを台帳へ反映した | [review](../review/README.md) |
+| 2026-09-10 | — | 全体レビューで返事の別ノート保存と分野判定5件を再現し、未解決指摘として登録した | [review](../review/README.md) |
+| 2026-09-11 | — | 分野の指紋へタイトルを足し、応答は行全体を見て、失効した確定をヒントへ落とすようにした | [note_field_color](features/note_field_color.md) §5 |
+| 2026-09-11 | — | 起動復元でも分野の永続を読み、復元した確定から索引Bを作り直すようにした（P2-1・P2-5） | [note_field_color](features/note_field_color.md) 判断10・17 |
+| 2026-09-10 | — | 取消後の旧ノートの返事が新ノートの痕跡へ保存される不具合を直した（P1-1） | [reflect_reading_trace](features/reflect_reading_trace.md) |
+| 2026-09-10 | — | 分野の確定を端末へ永続し、Vault選択時に読んで走査で補完するようにした | [note_field_color](features/note_field_color.md) 判断10・17 |
+| 2026-09-10 | — | ノートを開いたときにAIが分野を判定するようにした（3値・索引B・抑制の解除条件つき） | [note_field_color](features/note_field_color.md) 判断8・16 |
+| 2026-09-10 | — | 分野判定のプロンプト・応答パース・入力指紋を足した（IDで返させ、1つに定まらなければ保存しない） | [note_field_color](features/note_field_color.md) 判断9・13 |
+| 2026-09-10 | — | 冊子の紙に分野の色とラベルを出した（ヒント→索引A→描画。AI経路はまだ無い） | [note_field_color](features/note_field_color.md) 判断14・16 |
+| 2026-09-10 | — | 冊子の紙の分野色パレットをOKLchの規則で作り、明暗それぞれの帯を実測で決めた | [note_field_color](features/note_field_color.md) 判断15 |
+| 2026-09-10 | — | 分野の型とパスからのヒント生成を足した（辞書照合・英字は完全一致） | [note_field_color](features/note_field_color.md) 判断12・13 |
+| 2026-09-10 | — | 分野色の確定同士の優先規則を確認し、設計レビューの残指摘と対応する設計課題を閉じた | [review](../review/README.md) |
+| 2026-09-10 | — | 分野色の確定同士の優先規則を足し、更新元で新旧を決める形にした | [note_field_color](features/note_field_color.md) 判断16 |
+| 2026-09-10 | — | 分野色の指摘対応4件を設計上解消とし、新旧の確定結果の合成規則だけを未解決として残した | [review](../review/README.md) |
+| 2026-09-10 | — | 分野色の再レビュー5件を設計で閉じた（抑制の解除条件・索引の合成規則・該当なしの保存・読込境界） | [note_field_color](features/note_field_color.md) 判断16・17 |
+| 2026-09-10 | — | 分野色の設計を再レビューし、前回4件の解消と残る5件の契約不足を受付・課題台帳へ反映した | [review](../review/README.md) |
+| 2026-09-09 | — | 冊子の分野色を設計レビューし、保存・分類・表示の契約に関する7件を受付と課題台帳へ記録した | [review](../review/README.md) |
+| 2026-09-09 | — | 分野色に外部提案4件を取り込んだ（走査時の一括ヒント・語彙の入れ替え・自己修復・パレット規則） | [note_field_color](features/note_field_color.md) 判断14・15 |
+| 2026-09-09 | — | 分野色の設計レビュー7件を全件閉じ、設計書を完成させた（判断8〜13） | [note_field_color](features/note_field_color.md) 判断8〜13 |
+| 2026-09-09 | — | 冊子の分野色の設計書を起こし、Vault実測とAI段を作る判断を記録した | [note_field_color](features/note_field_color.md) 判断4 |
+| 2026-09-09 | — | 色チャネルの持ち主を面ごとに割り直し、冊子の面を分野へ渡した（N-9 取り下げ・N-18 新設） | [bearing_channels](system/bearing_channels.md) 判断6 |
+| 2026-09-09 | — | ランチャー再タップで積まれた MainActivity を onCreate で畳み、起動の実機ケースを新設した | [opening_animation](features/opening_animation.md) 判断7 / [L65](lessons.md#l65-検証側の回避は不具合の起票を止める) |
 | 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/readme_map.md) |
 | 2026-09-08 | — | 開発日誌に8月23〜31日の欠落を書き足し、9月分を新設した | [journal](../owner/journal/) |
 | 2026-09-08 | — | owner文書6本を実測へ直した（教訓の処遇・規模統計・冊子の機能追記・検証状態） | [lessons_summary](../owner/lessons_summary.md) |

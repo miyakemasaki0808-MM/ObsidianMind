@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.ReadingPauseReason
+import com.example.newproject.domain.isDuplicateLauncherLaunch
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
@@ -103,6 +104,24 @@ class MainActivity : ComponentActivity() {
 
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
+        // ランチャーの再タップで既存タスクの上へ積まれた1枚なら、何も組み立てずに畳んで
+        // 既存タスクへ委ねる（→ domain/LauncherEntry.kt）。`launchMode` は変えない —
+        // `singleTask` はタスク親和性ごと挙動が変わり、この1点に対して代償が大きい。
+        //
+        // installSplashScreen() より**前**に判定する。すぐ閉じるActivityにスプラッシュを
+        // 掛けると、畳むまでの一瞬だけ起動画面が見える。
+        val duplicateLaunch = isDuplicateLauncherLaunch(
+            isTaskRoot = isTaskRoot,
+            action = intent?.action,
+            categories = intent?.categories,
+            launcherAction = Intent.ACTION_MAIN,
+            launcherCategory = Intent.CATEGORY_LAUNCHER
+        )
+        if (duplicateLaunch) {
+            super.onCreate(savedInstanceState)
+            finish()
+            return
+        }
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -350,6 +369,9 @@ class MainActivity : ComponentActivity() {
                             }
                             BookletScreen(
                                 state = uiState.bookletState,
+                                // 索引Aは状態から**そのまま**渡す。冊子側で引くのは `ref` だけで、
+                                // 走査も保存ストアの読み出しも起こさない（→ 判断17）。
+                                noteFields = uiState.noteFields,
                                 onPageSettled = { page -> viewModel.onBookletPageSettled(page) },
                                 onRead = { entry ->
                                     // 先頭から開くことは openFromBooklet が保証する。

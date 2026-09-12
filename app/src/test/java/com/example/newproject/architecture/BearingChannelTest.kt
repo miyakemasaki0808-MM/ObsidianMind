@@ -211,8 +211,14 @@ class BearingChannelTest {
      *
      * **見るのは「定数の直後が引数の区切りか」。** 続きの式が生えていれば区切りにならない。
      */
-    private fun String.passesConstantArgument(call: String): Boolean =
-        Regex(Regex.escape(call) + "\\s*[,)]").containsMatchIn(this)
+    private fun String.passesConstantArgument(call: String): Boolean {
+        // **開き括弧の直後の改行は許す**（2026-09-10）。紙が受け取る引数が増えて呼び出しが
+        // 複数行になったが、**見たいのは「定数か、導出した式か」**であって行の折り方ではない。
+        // 定数の直後が引数の区切りであることは、これまでどおり見る。
+        val (function, argument) = call.split("(", limit = 2)
+        return Regex(Regex.escape("$function(") + "\\s*" + Regex.escape(argument) + "\\s*[,)]")
+            .containsMatchIn(this)
+    }
 
     /** 密度1で解決して比べる。**値そのものではなく順序を見る**（→ docs/dev/lessons/L44.md）。 */
     private fun cornerPx(shape: RoundedCornerShape): Float =

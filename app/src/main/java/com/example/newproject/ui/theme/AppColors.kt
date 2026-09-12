@@ -6,6 +6,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import com.example.newproject.model.NoteField
 
 // ---------------------------------------------------------------------------
 // 1. ブランドパレット（色そのもの）
@@ -46,6 +47,56 @@ internal val LightNotePaperTones = NotePaperTones(
     weathered = Color(0xFFFAF6EB)
 )
 
+/**
+ * 冊子の紙の地色（分野）。**ライト。**
+ *
+ * **OKLch の L=0.93・C=0.032 を固定し、色相を 25°から60°刻み**で6つ置いた結果である
+ * （→ `docs/dev/features/note_field_color.md` 判断15）。手で1色ずつ選んでいない。
+ *
+ * **床は本文の紙より低い。** 本文の紙は最も弱い文字トークンまで載せるので `panelChip`（0.8772）を
+ * 下回れないが、**冊子の紙に載るのは `onSurface`・`onSurfaceMuted`・`errorText` だけ**である。
+ * 最も厳しいのは `errorText`（0xFFCC0000）で、面の輝度の下限は **0.7527**。
+ * 実値は 0.7941〜0.8155 で、いずれもこれを上回る。
+ * **本文の紙の床をここへ流用しない** — 流用すると彩度が取れず、色相が sRGB の外へ出て潰れる
+ * （L=0.965 では実際に2色が振り切れ、色相が最大7°ずれた）。
+ *
+ * **彩度は床の中で最大化してある。** これ以上上げると `errorText` が基準を割る。
+ * 弱めたくなったら C だけを下げる — L を動かすと明度の揃いが崩れる。
+ */
+internal val LightNoteFieldTones = NoteFieldTones(
+    neutral = LightPanel,
+    technical = Color(0xFFFDE0DD),
+    learning = Color(0xFFF2E7D0),
+    business = Color(0xFFDBEEDB),
+    creative = Color(0xFFD0EFF2),
+    living = Color(0xFFDDE8FE),
+    reflection = Color(0xFFF3E1F4)
+)
+
+/**
+ * 冊子の紙の地色（分野）。**ダーク。**
+ *
+ * **ダークでも色相差で出す。** 年代の紙はダークで段差を作らないが（`note_age_paper` 判断5）、
+ * あちらは**明度の段階**なので暗い側では床に当たる。分野は**順序を持たない色相の差**なので、
+ * 明度を揃えたまま出せる。
+ *
+ * OKLch の L=0.314・C=0.042、色相はライトと同じ 25°から60°刻み。
+ *
+ * **ダークの帯は狭い。** 下は `panel`（0.0280）— これを割ると紙が背景へ沈む。
+ * 上は `errorText`（0xFFFF6B6B）が 4.5:1 を保てる **0.0341** — 開けなかったページの文が読めなくなる。
+ * 実値は 0.0295〜0.0323 で、**幅 0.006 の帯の中**にある。
+ * **ライトと同じ L を使えない**のはこのためで、L=0.36 では6色すべてが `errorText` を割った（実測 3.84〜3.99）。
+ */
+internal val DarkNoteFieldTones = NoteFieldTones(
+    neutral = Color(0xFF2A2D45),
+    technical = Color(0xFF442926),
+    learning = Color(0xFF3B3017),
+    business = Color(0xFF243724),
+    creative = Color(0xFF13373B),
+    living = Color(0xFF273147),
+    reflection = Color(0xFF3C2A3D)
+)
+
 // ---------------------------------------------------------------------------
 // 2. 明暗それぞれの実体
 //    値を書くのはここだけ。§3のトークンは、現在のテーマからこれを引くだけの窓口。
@@ -54,6 +105,7 @@ internal val LightNotePaperTones = NotePaperTones(
 internal val LightAppColors = AppColorScheme(
     panel = LightPanel,
     notePaper = LightNotePaperTones,
+    noteField = LightNoteFieldTones,
     codePanel = Color(0xFFF1F4F8),
     panelTinted = Color(0xFFF7F3FF),
     panelBlue = Color(0xFFF0F4FF),
@@ -146,6 +198,7 @@ internal val DarkAppColors = AppColorScheme(
     panel = Color(0xFF2A2D45),
     // ダークでは段階を作らない（判断5）。全段階を panel と同値にして演出を殺す。
     notePaper = NotePaperTones.uniform(Color(0xFF2A2D45)),
+    noteField = DarkNoteFieldTones,
     codePanel = Color(0xFF202234),
     panelTinted = Color(0xFF2B2740),
     panelBlue = Color(0xFF22273F),
@@ -229,6 +282,11 @@ private inline val current: AppColorScheme
 
 // -- 面 --
 internal val Panel: Color @Composable @ReadOnlyComposable get() = current.panel
+
+/** 冊子の紙の地色を分野から引く。**未判定と「該当なし」は `panel` と同値。** */
+@Composable
+@ReadOnlyComposable
+internal fun noteFieldPaper(field: NoteField?): Color = current.noteField.color(field)
 internal val CodePanel: Color @Composable @ReadOnlyComposable get() = current.codePanel
 internal val PanelTinted: Color @Composable @ReadOnlyComposable get() = current.panelTinted
 internal val PanelBlue: Color @Composable @ReadOnlyComposable get() = current.panelBlue

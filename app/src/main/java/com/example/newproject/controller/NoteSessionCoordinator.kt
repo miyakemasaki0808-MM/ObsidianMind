@@ -12,6 +12,8 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
@@ -65,7 +67,9 @@ internal class NoteSessionCoordinator(
     distillPersistence: DistillPersistence,
     readingTracePersistence: ReadingTracePersistence,
     private val history: HistoryStore,
-    currentVaultKey: () -> String?,
+    private val currentVaultKey: () -> String?,
+    /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
+    private val noteFieldStore: NoteFieldStore? = null,
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,
     /** 蒸留保存後の本文読み直し（SAF I/O を伴うため実装は ViewModel）。 */
@@ -133,6 +137,17 @@ internal class NoteSessionCoordinator(
         state = stateStore.summaryWriter,
         onModelReady = onModelReady
     )
+    private val noteField = NoteFieldController(
+        scope = scope,
+        aiClient = aiClient,
+        state = stateStore.noteFieldWriter,
+        // 抜粋の組み立ては本文サイズに比例するので Main の外へ。**解析と同じ口を使う** —
+        // テストがテストスケジューラへ差し替えられないと、判定の完了を待てない。
+        excerptDispatcher = parseDispatcher,
+        store = noteFieldStore,
+        vaultKey = currentVaultKey
+    )
+
     private val annotation = AnnotationController(
         scope = scope,
         vault = vaultBrowser,
@@ -250,6 +265,24 @@ internal class NoteSessionCoordinator(
         booklet.open(seed, stateStore.uiState.value.relatedNotesState, loadNotes)
     }
 
+    /**
+     * Vault走査の結果から、分野のヒントを索引Aへ一括で載せる（→ features/note_field_color.md 判断14）。
+     *
+     * **判定ではない。** ヒントは辞書照合の純関数なのでI/OもAIも要らず、
+     * **走査のついでに全ノート分を作れる**。これをやらないと「開いた本数ぶんしか色が付かない」まま、
+     * 起点の不満（冊子が真っ白）が最後まで解けない。
+     *
+     * **走査のたびに呼ばれてよい。** 確定を暫定で上書きしない規則は
+     * [indexNoteFieldHints] が持つ（→ 判断16）。
+     */
+    fun indexNoteFields(notes: List<NoteFile>) {
+        // **補完材料は Controller が持つ写しである**（→ 判断18）。永続をそのまま渡すと、
+        // 開いて失効を確認した確定まで走査が戻す。
+        stateStore.noteFieldWriter.update {
+            indexNoteFieldHints(it, notes, noteField.restorableFields())
+        }
+    }
+
     /** 「もう10枚引く」。**引く束だけを作り直す**（種と編む束は動かさない）。 */
     fun drawBookletAgain(loadNotes: suspend () -> List<NoteFile>) = booklet.drawAgain(loadNotes)
 
@@ -324,6 +357,9 @@ internal class NoteSessionCoordinator(
         cancelHostJobs()
         sections.cancelAndClear()
         summary.cancelAndClear()
+        // **索引Aには触らない。** ジョブだけ止める — 索引AはVault単位なので、
+        // ノートを開き直しただけで冊子の色が消えるのは誤りである。
+        noteField.cancelAndClear()
         quiz.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
         remark.cancelAndClear()
@@ -336,6 +372,28 @@ internal class NoteSessionCoordinator(
     /** 起動時に保存済みVaultを復元したときに呼ぶ。 */
     fun onVaultRestored() {
         stateStore.restoreVault(history.load())
+        // **起動復元からも読む。** ここを落としていたため、保存が効くのは
+        // 「Vaultを選び直した」経路だけだった（→ features/note_field_color.md 判断17）。
+        // **入口が2つある機能は、後から足したほうを取り残す**（→ lessons.md L14）。
+        loadPersistedNoteFields()
+    }
+
+    /**
+     * 永続の確定を読み、索引Aの補完材料と索引Bの両方へ渡す（→ 判断10・判断17）。
+     *
+     * **走査とは別経路である。** 走査へ相乗りさせると、冊子を開く経路に保存ストアI/Oが増える
+     * （`openBooklet` が `collectAllNotesCached` を呼ぶため）。
+     *
+     * **同期で読む。** 後から届く経路が無いので、Vault世代の照合は要らない —
+     * 非同期にしたときに初めて必要になる。
+     */
+    private fun loadPersistedNoteFields() {
+        val restored = currentVaultKey()
+            ?.let { key -> noteFieldStore?.load(key) }
+            .orEmpty()
+        // **索引Bと索引Aの補完材料を、まとめて Controller へ渡す。**
+        // 索引Bを作り直さないと、索引Bを永続しないという判断が成立しない（→ 判断10）。
+        noteField.restorePersisted(restored)
     }
 
     /**
@@ -359,6 +417,10 @@ internal class NoteSessionCoordinator(
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
         booklet.onVaultChanged()
+        // 索引Bと連続失敗の記録を捨てる。**別Vaultの結果と失敗回数を持ち越さない。**
+        noteField.clearVaultScoped()
+        // **走査より先に読む。** 走査のときには揃っている状態にしておく（→ 判断17）。
+        loadPersistedNoteFields()
         cancelNoteScopedJobs()
         // 旧VaultのURIは新Vaultでは開けないため、閲覧履歴も破棄する
         history.clear()
@@ -428,6 +490,15 @@ internal class NoteSessionCoordinator(
     // ── 要約・関連ノート ────────────────────────────────────────────────────
 
     fun fetchSummary(title: String, content: String) = summary.fetch(title, content)
+
+    /**
+     * 分野を判定する（→ features/note_field_color.md 判断6）。
+     *
+     * **要約と並べて呼ぶ。** どちらもノートを表示した契機で走り、Nano の Mutex で直列化される。
+     * 分野判定は**失敗しても何も見せない**ので、要約の後ろへ回してよい。
+     */
+    fun classifyNoteField(ref: DocumentRef, content: String, vaultRelativePath: String) =
+        noteField.classify(ref, content, vaultRelativePath)
 
     fun setRelatedNotesState(state: RelatedNotesState) {
         stateStore.setRelatedNotesState(state)

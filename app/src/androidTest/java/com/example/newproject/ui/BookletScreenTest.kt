@@ -395,6 +395,8 @@ class BookletScreenTest {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 BookletScreen(
+                    // 分野の索引。**この検査は色を見ない**ので空で渡す（見え方は実機のケース表が持つ）。
+                    noteFields = emptyMap(),
                     state = state,
                     onPageSettled = onPageSettled,
                     onRead = onRead,

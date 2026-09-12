@@ -26,7 +26,8 @@
 - AndroidTest APKの `adb install -r` と、対象シリアル付き `am instrument` の直接実行
 - 今回新たに入れた `com.vigilith.ai.test` の後処理時アンインストール（対象アプリ本体には触れない）
 - 対象アプリの起動・停止、タップ、スワイプ、戻る操作
-- `uiautomator dump`、スクリーンショット、ログ・検証ファイルの取得
+- `uiautomator dump`、`dumpsys activity activities`、スクリーンショット、ログ・検証ファイルの取得
+- 対象アプリの `am force-stop`（タスクを捨てて起動経路を作り直す。アプリデータには触れない）
 - 常設検証用Vault `/sdcard/Documents/VigilithDeviceReview_Home` の初回作成・選択・維持
 - `VigilithDeviceReview_<feature>_<YYYYMMDD>` で始まるケース別一時領域の作成、push、移動、内容変更、削除
 - SAFによるケース別一時Vaultと常設検証用Vaultへの切替
@@ -75,11 +76,32 @@
    `connectedDebugAndroidTest` へ置き換えてはならない。
 
    ```text
+   adb -s <serial> shell am force-stop com.vigilith.ai
    adb -s <serial> shell am instrument -w -r \
      -e class <test-class[,test-class...]> \
      com.vigilith.ai.test/androidx.test.runner.AndroidJUnitRunner
    ```
+
+   **`am instrument` の前に `am force-stop` する。** `ActivityScenario` は
+   `MAIN`＋`LAUNCHER` 付きのIntentで `MainActivity` を起動するので、
+   **素のコンポーネント指定で作ったタスクが残っていると、その上へ積まれた1枚として
+   [重複起動のガード](../../dev/features/opening_animation.md)に畳まれ得る**
+   （テストがActivityの起動待ちでタイムアウトする）。タスクを捨ててから走らせれば起きない。
 10. **ケース別一時Vaultへ切り替える。** SAFでフォルダ利用を許可し、対象ノートが読めることを確認する。
+
+> **アプリの起動は、素のコンポーネント指定で行う。**
+>
+> ```text
+> adb -s <serial> shell am start -n com.vigilith.ai/com.example.newproject.MainActivity
+> ```
+>
+> **`MAIN`＋`LAUNCHER` 付きへ揃えない。** 揃えるとタスクの基点Intentがランチャーのものと一致するので、
+> ランチャー再タップは既存タスクへ復帰し、**重複起動を畳むガードが一度も呼ばれない**
+> （＝ [`LAUNCH-01`・`LAUNCH-02`](app_launch.md) の回帰を検知できない）。
+> **この起動でしか作れない状態を見るために、意図してこちらを使う。**
+>
+> ガードが入る前は、この起動が原因でランチャー再タップのたびに `MainActivity` が積み重なり、
+> 2026-08-26 の検証は1試行を判定対象から外している。**いまは積み重ならないので、この起動のままでよい。**
 
 正本と実装が食い違う場合は、勝手に期待値を実装側へ寄せない。正本どおりの期待値でケースを実行し、
 差を指摘として記録する。

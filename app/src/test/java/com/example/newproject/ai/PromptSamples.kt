@@ -3,6 +3,7 @@ package com.example.newproject.ai
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.model.NoteField
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.QuizFormat
@@ -35,6 +36,11 @@ internal object PromptSamples {
         return listOf(
             "buildSummarizePrompt" to
                 PromptBuilder.buildSummarizePrompt(value, excerpt),
+
+            // ヒントを添えた側で組む。**添えたときだけ増える行**があるので、
+            // 添えない側で通すと、その行の字下げが検査から漏れる。
+            "buildNoteFieldPrompt" to
+                PromptBuilder.buildNoteFieldPrompt(value, excerpt, NoteField.Technical),
 
             "buildReadingTraceSummaryPrompt" to
                 PromptBuilder.buildReadingTraceSummaryPrompt(

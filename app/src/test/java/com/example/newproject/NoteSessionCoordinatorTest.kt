@@ -15,6 +15,13 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
+import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.noteFieldHint
+import com.example.newproject.domain.noteFieldInputVersion
+import com.example.newproject.model.NoteExcerpt
+import com.example.newproject.domain.noteFieldPathKey
+import com.example.newproject.model.NoteField
+import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
@@ -122,6 +129,125 @@ class NoteSessionCoordinatorTest {
      *
      * リセット漏れそのものは下の2件が見るので、ここが見るのは「入力が全欄を埋めているか」だけ。
      */
+    /**
+     * **起動復元でも保存済みの分野を読む（P2-1）。**
+     *
+     * 読込は `onVaultChanged` にしかなく、**保存が効くのはVaultを選び直した経路だけ**だった。
+     * 通常の再起動では確定の色が戻らず、本文を開くたびに生成し直していた。
+     * **入口が2つある機能は、後から足したほうを取り残す**（→ lessons.md L14）。
+     */
+    @Test
+    fun `起動復元でも保存済みの分野を読む`() = runTest {
+        val env = Env(this)
+        env.noteFields.save(
+            "vault-a",
+            noteFieldPathKey("技術/Flow.md"),
+            NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion = "v1")
+        )
+        val coordinator = env.coordinator()
+
+        coordinator.onVaultRestored()
+
+        assertEquals("起動復元でも1回読む", 1, env.noteFields.loads)
+    }
+
+    /**
+     * **復元した確定が索引Bへも届く（P2-5 の配線）。**
+     *
+     * 索引Bを永続しないという判断は、復元時に作り直すことで成立している。
+     * **Controller に作り直す口があっても、Coordinator が呼ばなければ意味が無い** —
+     * ここが落ちると、移動先を開いたときに保存済みの結果を使わず生成し直す。
+     */
+    @Test
+    fun `起動復元で読んだ確定は索引Bへも届く`() = runTest {
+        val env = Env(this)
+        val content = "Kotlin の Flow について"
+        val hint = noteFieldHint("技術/A.md")
+        val inputVersion = noteFieldInputVersion("A.md", NoteExcerpt(content, isAbridged = false), hint)
+        env.noteFields.save(
+            "vault-a",
+            noteFieldPathKey("技術/A.md"),
+            NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion)
+        )
+        val coordinator = env.coordinator()
+        coordinator.onVaultRestored()
+
+        // **保存されているのとは別のパス**（移動先）を開く。**ファイル名・本文・ヒントは同じ。**
+        coordinator.classifyNoteField(DocumentRef("content://note/2"), content, "技術/古い/A.md")
+        advanceUntilIdle()
+
+        assertEquals("索引Bから復元できるので生成しない", 0, env.ai.generateCalls)
+        assertEquals(
+            NoteField.Technical,
+            (coordinator.uiState.value.noteFields[DocumentRef("content://note/2")]
+                as NoteFieldClassification.Confirmed).field
+        )
+    }
+
+    /** 走査へ復元が届く。**読んだだけで索引Aへ入らなければ、色は出ない。** */
+    @Test
+    fun `起動復元で読んだ確定が走査で索引へ入る`() = runTest {
+        val env = Env(this)
+        val stored = NoteFieldClassification.Confirmed(NoteField.Technical, inputVersion = "v1")
+        env.noteFields.save("vault-a", noteFieldPathKey("料理/カレー.md"), stored)
+        val coordinator = env.coordinator()
+
+        coordinator.onVaultRestored()
+        coordinator.indexNoteFields(
+            listOf(
+                NoteFile(
+                    name = "カレー.md",
+                    ref = DocumentRef("content://note/1"),
+                    vaultRelativePath = "料理/カレー.md"
+                )
+            )
+        )
+
+        assertEquals(
+            "ヒントは Living だが、復元した確定が勝つ",
+            stored,
+            coordinator.uiState.value.noteFields[DocumentRef("content://note/1")]
+        )
+    }
+
+    /**
+     * **開いて失効を確認したノートは、次の走査でも旧確定へ戻らない（P2-1 の配線）。**
+     *
+     * Controller が復元材料から外しても、**Coordinator が走査へ永続をそのまま渡していれば戻る。**
+     * 索引Aへ書くのは Coordinator なので、ここを通さないと配線が検査されない。
+     */
+    @Test
+    fun `失効を確認したノートは再走査で旧確定へ戻らない`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.NeedsDownload
+        env.noteFields.save(
+            "vault-a",
+            noteFieldPathKey("料理/カレー.md"),
+            NoteFieldClassification.Confirmed(NoteField.Creative, inputVersion = "旧い版")
+        )
+        val coordinator = env.coordinator()
+        val note = NoteFile(
+            name = "カレー.md",
+            ref = DocumentRef("content://note/1"),
+            vaultRelativePath = "料理/カレー.md"
+        )
+        coordinator.onVaultRestored()
+        coordinator.indexNoteFields(listOf(note))
+
+        // 本文が変わっているので降格する（モデルが無いので生成はしない）。
+        coordinator.classifyNoteField(note.ref, "新しい本文", "料理/カレー.md")
+        advanceUntilIdle()
+
+        // TTL失効後の再走査。
+        coordinator.indexNoteFields(listOf(note))
+
+        assertEquals(
+            "失効を確認済みなので、ヒントの暫定のまま",
+            NoteFieldClassification.Provisional(NoteField.Living),
+            coordinator.uiState.value.noteFields[note.ref]
+        )
+    }
+
     @Test
     fun `リセット検査の入力は全フィールドが初期値と異なる`() {
         val populated = fullyPopulatedState()
@@ -567,6 +693,9 @@ class NoteSessionCoordinatorTest {
                 listOf(BookletEntry(ref = DocumentRef("content://old/booklet"), title = "旧Vaultの1枚"))
             )
         ),
+        noteFields = mapOf(
+            DocumentRef("content://old/booklet") to NoteFieldClassification.Provisional(NoteField.Living)
+        ),
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(
@@ -783,6 +912,9 @@ class NoteSessionCoordinatorTest {
         val distill = FakeDistillPersistence()
         val trace = FakeTracePersistence()
 
+        /** 分野の確定の永続。**読込回数を数える**（起動復元から読むかを見るため）。 */
+        val noteFields = CountingNoteFieldStore()
+
         fun coordinator(
             cancelHostJobs: () -> Unit = {},
             initialState: NoteUiState = NoteUiState()
@@ -801,6 +933,7 @@ class NoteSessionCoordinatorTest {
             readingTracePersistence = trace,
             history = history,
             currentVaultKey = { "vault-a" },
+            noteFieldStore = noteFields,
             onModelReady = { _, _ -> },
             reloadBody = { _, _ -> false },
             cancelHostJobs = cancelHostJobs,
@@ -821,7 +954,24 @@ class NoteSessionCoordinatorTest {
         }
     }
 
-    private class FakeHistoryStore : HistoryStore {
+    /** 分野の確定の永続の代わり。**読込回数**と中身だけを見る。 */
+private class CountingNoteFieldStore : NoteFieldStore {
+    val entries = LinkedHashMap<String, NoteFieldClassification.Confirmed>()
+    var loads = 0
+
+    override fun load(vaultKey: String): Map<String, NoteFieldClassification.Confirmed> {
+        loads++
+        return entries.toMap()
+    }
+
+    override fun save(vaultKey: String, pathKey: String, confirmed: NoteFieldClassification.Confirmed) {
+        entries[pathKey] = confirmed
+    }
+
+    override fun clear(vaultKey: String) = entries.clear()
+}
+
+private class FakeHistoryStore : HistoryStore {
         var clearCount = 0
             private set
 

@@ -104,6 +104,19 @@ interface ReadingTraceBackupStateWriter {
  * 画面全体の [NoteUiState] を所有し、各 Controller には担当スライスだけを書ける
  * Writer を渡す。Controller が担当外フィールドを更新する経路を型で閉じる。
  */
+/**
+ * 索引A（ノート → 分野）の書き手。**Vault単位のスライス**なので、ノート単位の契約には載らない。
+ *
+ * 合成の規則そのものは `domain` が持つ（`model` は `domain` を import できない）。
+ * ここが型として保証するのは**書き込み口が1つであること**である（→ 判断16）。
+ */
+interface NoteFieldStateWriter {
+    val current: Map<DocumentRef, NoteFieldClassification>
+    fun update(
+        transform: (Map<DocumentRef, NoteFieldClassification>) -> Map<DocumentRef, NoteFieldClassification>
+    )
+}
+
 internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     private val mutableState = MutableStateFlow(initialState)
     val uiState: StateFlow<NoteUiState> = mutableState.asStateFlow()
@@ -239,6 +252,24 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         mutableState.update { it.withNoteScopedReset().withVaultScopedReset() }
     }
 
+    /**
+     * 索引A（ノート → 分野）の唯一の書き込み口（→ 判断16）。
+     *
+     * **合成の規則は渡された `transform` が持つ。** `model` は `domain` を import できないので
+     * 規則そのものはここに置けないが、**書き込み口を1つにすること**は型で守れる —
+     * 呼び出し側がそれぞれ `update` すると、確定を残す規則が経路ごとに散る。
+     */
+    val noteFieldWriter: NoteFieldStateWriter = object : NoteFieldStateWriter {
+        override val current: Map<DocumentRef, NoteFieldClassification>
+            get() = mutableState.value.noteFields
+
+        override fun update(
+            transform: (Map<DocumentRef, NoteFieldClassification>) -> Map<DocumentRef, NoteFieldClassification>
+        ) {
+            mutableState.update { it.copy(noteFields = transform(it.noteFields)) }
+        }
+    }
+
     fun setNoteState(state: NoteState) {
         mutableState.update { it.copy(noteState = state) }
     }
@@ -319,5 +350,8 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     readingTraceBackupState = ReadingTraceBackupState.Idle,
     // 旧Vaultのノートを指す束を新Vaultの画面へ残さない。「これを読む」で
     // **別Vaultのノートを開く**ことになる（参照は Vault をまたいで有効に見える）。
-    bookletState = BookletState.Idle
+    bookletState = BookletState.Idle,
+    // 旧Vaultのノートを指す分類を新Vaultへ持ち越さない。参照はVaultをまたいで有効に見えるので、
+    // 残すと**別Vaultのノートの色が新しい束に出る**。走査すれば作り直せるので捨ててよい。
+    noteFields = emptyMap()
 )

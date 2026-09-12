@@ -86,6 +86,7 @@ class NoteViewModel internal constructor(
         readingTracePersistence = dependencies.readingTracePersistence,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
+        noteFieldStore = dependencies.noteFieldStore,
         // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },
@@ -199,6 +200,10 @@ class NoteViewModel internal constructor(
         val notes = repository.collectNotes(contentResolver, vaultUri).notes
         cachedNotes = notes
         cachedNotesLoadedAt = now
+        // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
+        // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
+        // 索引Aが同じ材料で揃う。
+        session.indexNoteFields(notes)
         return notes
     }
 
@@ -279,6 +284,8 @@ class NoteViewModel internal constructor(
         // 長文で切り落とされた区間の問いが永久に届かない。
         session.revealReadingTrace(note.vaultRelativePath, loaded.content)
         session.fetchSummary(note.name, loaded.content)
+        // 分野の判定。**走査経路なので相対パスが揃っており、ヒントを添えられる。**
+        session.classifyNoteField(note.ref, loaded.content, note.vaultRelativePath)
         fetchRelatedNotes(note.name, loaded.content)
     }
 
@@ -328,6 +335,9 @@ class NoteViewModel internal constructor(
                 // 「さがす経由の最初の1件」が記録から漏れる。
                 bindReadingTracePath(contentResolver, note.ref, sessionId)
                 session.fetchSummary(note.title, loaded.content)
+                // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、さがす経由のノートだけ
+                // ヒント無しで判定され、同じノートでも入口によって入力版が変わってしまう。
+                session.classifyNoteField(note.ref, loaded.content, cachedRelativePath(note.ref).orEmpty())
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e

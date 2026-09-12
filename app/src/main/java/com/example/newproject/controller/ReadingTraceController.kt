@@ -442,9 +442,14 @@ internal class ReadingTraceController(
         reply: String,
         atEpochMillis: Long
     ): ReplySaveOutcome {
+        // **要求の所有者を、非同期へ入る前に固定する**（→ docs/dev/lessons.md L26）。
+        // この後の `persistence.load` は同期I/Oで、戻る頃には別のノートを開いている場合がある。
+        // 所有者を見ずに「いまのセッション」へ預け直すと、**Aへ書いた返事がBの痕跡へ保存される**。
+        // 保存先の `vaultKey` は既に固定していたが、**失敗側の預け先だけが現在値を読んでいた。**
+        val ownerSessionId = session?.id
         val vaultKey = currentVaultKey()
             // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
-            ?: return holdOrLose(reply, atEpochMillis)
+            ?: return holdOrLose(ownerSessionId, reply, atEpochMillis)
         return withContext(ioDispatcher) {
             flushPendingWrites()
             writeMutex.withLock {
@@ -459,7 +464,7 @@ internal class ReadingTraceController(
                 if (existing == null) {
                     // 痕跡がまだ無い（または読めない）＝この閲覧で訪問が確定していない。
                     // セッションへ預け直して、離脱時の書き込みに載せる。
-                    return@withLock holdOrLose(reply, atEpochMillis)
+                    return@withLock holdOrLose(ownerSessionId, reply, atEpochMillis)
                 }
                 val reflection = existing.reflection?.withReply(reply, atEpochMillis)
                     // ひとこと無しに返事だけを保存する経路は作らない（組で持つため）。
@@ -482,7 +487,7 @@ internal class ReadingTraceController(
                     // **書けなかったぶんを必ず退避する。** ここを握り潰すと、
                     // 画面に「保存済み」と出たまま返事が消える。
                     rememberPendingWrite(vaultKey, existing.copy(reflection = reflection))
-                    holdOrLose(reply, atEpochMillis)
+                    holdOrLose(ownerSessionId, reply, atEpochMillis)
                     ReplySaveOutcome.Held
                 }
             }
@@ -579,13 +584,23 @@ internal class ReadingTraceController(
     }
 
     /**
-     * 書けなかった返事をセッションへ預ける。預ける先が無ければ [ReplySaveOutcome.Lost]。
+     * 書けなかった返事を**要求を出したセッションへ**預ける。預ける先が無ければ [ReplySaveOutcome.Lost]。
      *
      * 預けられるのは「この閲覧で作ったひとこと」がある場合だけ。
      * ひとことが無ければ組にできないので、返事だけを持ち回っても保存できない。
+     *
+     * **[ownerSessionId] が現在のセッションと違えば預けない。**
+     * 返事を書いたノートを既に離れているので、預けても行き先は別のノートの痕跡になる。
+     * **[ReplySaveOutcome.Lost] を返すのは、そのほうが正直だから** —
+     * 別のノートへ混ぜて「保存できた」ことにするより、保存できなかったと言うほうがよい。
      */
-    private fun holdOrLose(reply: String, atEpochMillis: Long): ReplySaveOutcome {
+    private fun holdOrLose(
+        ownerSessionId: Long?,
+        reply: String,
+        atEpochMillis: Long
+    ): ReplySaveOutcome {
         val active = session ?: return ReplySaveOutcome.Lost
+        if (active.id != ownerSessionId) return ReplySaveOutcome.Lost
         val base = active.pendingRemark ?: return ReplySaveOutcome.Lost
         active.pendingRemark = base.withReply(reply, atEpochMillis)
         active.dirty = true
