@@ -183,14 +183,15 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 同一Gradleモジュール内の生成箇所を封じるものではない。
 抜粋の中身は [ai_input_excerpt](ai_input_excerpt.md) が持つ。
 
-## 状態が `NoteUiState` の外に出る例外は2つだけ
+## 状態が `NoteUiState` の外に出るもの
 
-| 例外 | 理由 |
+| 外に出ているもの | 理由 |
 |---|---|
-| テーマ（`StateFlow<Boolean>`） | 状態17項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
-| `NoteSectionModel`（`StateFlow<NoteSectionModel?>`） | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
+| 設定（`darkTheme`・`notePaperAging`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
+| `NoteSectionModel` | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
 
-**3つ目を作るときは、`model` を葉に保つ判断自体を見直す合図と考える。**
+**本数は数えない**（設定が増えるだけなので危険と相関しない）。危ないのは
+**ノート単位の状態が外へ出ること**で、そこは CLAUDE.md の必須原則が直接見ている。
 
 `NoteSectionModel` の解析開始は Coordinator の2箇所（`setNoteState()` と `applyReloadedBody()`）へ集約する。
 片方を落とすと「本文は新しいのにブロックは旧い」状態になる。
