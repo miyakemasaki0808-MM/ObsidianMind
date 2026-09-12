@@ -111,7 +111,6 @@
 
 | 出どころ | 指摘 | 処遇 |
 |---|---|---|
-| [06](../owner/Fable5.1_report/06_privacy_security_release.md) §2 | 「端末に残す新しい置き場を足したらバックアップ除外を確かめる」を影響面監査へ1行 | **保留** — CLAUDE.md へ1行足すのではなく、**JVMテストにする案**（prefs名と `filesDir` の使用をソース走査し、`backup_rules.xml`・`data_extraction_rules.xml` の除外と突き合わせる）を提示済み。**オーナーの判断待ち**（検査に載せない行は守られない実績があるため） |
 | [03](../owner/Fable5.1_report/03_ai_design.md) §5 | 空応答・`MAX_TOKENS` がどの経路でどれだけ起きているか未計測 | **保留** — 単独の課題にしない。報告書自身が確かめ方を「端末内の数値計測」と書いており、それは [feature_ideas](feature_ideas.md) の P-2 が持つ。**P-2 に着手したときの計測項目として拾う**（F-19 と同じ束） |
 | [06](../owner/Fable5.1_report/06_privacy_security_release.md) §4 | 蒸留・ひとこと画面の TalkBack が未確認 | 未検討（F-27 のダークモード視認性とは別物。実機の束に乗せるか判断が要る） |
 

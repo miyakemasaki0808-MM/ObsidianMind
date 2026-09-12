@@ -214,6 +214,12 @@ tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/androidTest"))
         .withPropertyName("androidTestSourcesForShapeTest")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // `res/xml` のバックアップ規則も同じ穴を持つ。**XMLの中身はRクラスを変えない**ので、
+    // 除外を1行消しても `BackupExclusionTest` が UP-TO-DATE で飛ぶ。実測で確認した
+    // （XMLだけ変異させてもタスクが走らず、緑のまま通った）。
+    inputs.dir(layout.projectDirectory.dir("src/main/res"))
+        .withPropertyName("resourcesForBackupExclusionTest")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {
