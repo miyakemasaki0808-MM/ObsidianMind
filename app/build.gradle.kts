@@ -67,8 +67,15 @@ android {
         //
         // かといって `disable` にすると指摘ごと消え、更新を誰も催促しなくなる。
         // `informational` は両方を避ける — 実測で「0 errors, 0 warnings, 12 hints」／
-        // BUILD SUCCESSFUL となり、12件はレポートに残る（`--offline` でも同じ）。
-        // 棚卸しの手順は docs/dev/design/dependency_policy.md
+        // BUILD SUCCESSFUL となり、12件はレポートに残る。
+        //
+        // **ただし `--offline` では12件とも出ない**（2026-09-12 に実測。以前ここには
+        // 「`--offline` でも同じ」と書いてあったが誤り）。これらは Maven や
+        // Gradle の配布元へ問い合わせて初めて「新版がある」と分かる検査なので、
+        // オフラインでは静かに0件になる。**日常のゲートは `--offline` なので、
+        // この催促は普段は誰の目にも入らない。** 棚卸しのときはネットワークありで
+        // `./gradlew lintDebug` を回すこと（端末は要らない。13秒で終わる）。
+        // 棚卸しの手順は docs/dev/system/dependency_policy.md
         informational += setOf("NewerVersionAvailable", "AndroidGradlePluginVersion", "GradleDependency")
         // `OldTargetApi` はコードではなく実行環境（Lintが把握する「最新API」の定義）に
         // 依存する。ローカルでは compileSdk 36.1 / targetSdk 36 で警告ゼロだったが、
