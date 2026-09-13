@@ -1,7 +1,7 @@
 # 設計思想 — instrumentation テスト
 
-**状態:** 実装済み・稼働中（androidTest 15ファイル・97件）。CIでは実行せず、PR前に Android Studio で回す運用
-**最終検証:** 2026-09-12 / `825f054`
+**状態:** 実装済み・稼働中（androidTest 16ファイル・99件）。CIでは実行せず、PR前に Android Studio で回す運用
+**最終検証:** 2026-09-13
 **関連コード:** `app/src/androidTest/` / `app/src/debug/`（テスト用 `DocumentsProvider`）
 **関連テスト:** `InstrumentationTestShapeTest`（形をJVM側から固定）/ androidTest 一式
 **正本:** この文書

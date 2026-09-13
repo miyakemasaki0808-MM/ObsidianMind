@@ -34,7 +34,8 @@ class DeviceValidationDocsTest {
             "ai_input_budget.md",
             "reunion_card.md",
             "reading_trace_backup.md",
-            "booklet_mode.md"
+            "booklet_mode.md",
+            "summary_coverage.md"
         )
         val actual = caseFiles().associateBy { it.name }
         val missingFiles = expected - actual.keys
