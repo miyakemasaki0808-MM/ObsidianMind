@@ -37,6 +37,7 @@
 | [journal/](journal/) | **どうやってここまで来たか**（読み物としての開発日誌） |
 | [project_chronology.md](project_chronology.md) | **どう歩んできたか**（Git履歴から辿る開発年表と覚醒の軌跡） |
 | [project_origin.md](project_origin.md) | **どこから始まったか**（2026-04-30 の記録。更新しない） |
+| [comments_and_history_practices.md](comments_and_history_practices.md) | **コメント・設計書・経緯をどこに置くか**（外部の指針と、経緯をコミットから取り出す方法） |
 
 **ここは非エンジニア向けの平易版ではない。** オーナーはコード構成や設計を読んで学ぶので、
 技術的な内容を薄めない。分けているのは難易度ではなく**答える問い**である。
