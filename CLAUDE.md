@@ -59,6 +59,11 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 - キャンセルがすり抜ける経路（モデルDLコールバック等）には requestId ＋ `isCurrent()` ガードを併用する。**`cancel()` だけでは足りない**
 - 非同期の結果を `uiState.update` する直前に、必ず「まだ最新の要求か」を確認する
 
+**コメント**
+
+- **コードコメントには「今のコードを変える人が知らないと壊すこと」だけを書く。** 契約・不変条件と、直観に反する実装の理由を現在形で短く書き、全体の判断は正本（`features/` `system/`）へリンクする
+- **経緯（日付・レビューの指摘番号・「以前は」・何度直したか）はコメントに書かない。** 経緯はコミットメッセージが持つ。本番コードの日付と指摘番号、2つ続いた KDoc は `SourceCommentShapeTest` が落とす（背景 → [owner/comments_and_history_practices](docs/owner/comments_and_history_practices.md)）
+
 **禁止事項**
 
 - **類似コードを見つけても、設計文書の判断を無視して安易に共通化しない。** Controllerの相似形は 2026-07-24 と 07-25 の2度の検討を経て「**共通化しない**」で決着済み（→ [architecture.md](docs/dev/system/architecture.md) の追記2節）。再提案するなら、そこに書かれた再検討条件を満たすことを先に示す
@@ -113,7 +118,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 2. 設計判断や試行錯誤があった変更だけ、対応する `docs/dev/features/*.md` か `docs/dev/system/*.md` に追記する（自明な変更は履歴1行のみ）
 3. 解析書・総評で「問題」と書いたものは [docs/_wip/current_issues.md](docs/_wip/current_issues.md) に起票する。**実機検証まで終わったら即座に削除する**（実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。完了の経緯は残さない — 記録は 1. が持ち、教訓は 4. が持つ
 4. **同じ形の失敗を2度したら** [docs/dev/lessons.md](docs/dev/lessons.md) の索引へ1行足し、長ければ [lessons/](docs/dev/lessons/) にカードを作る。**番号は振り直さず末尾へ足す**（既存IDの意味を変えない — 外部参照が壊れる）。カードは20行を目安にし、超えたら詳細の正本を `features/` か `system/` に決めて要約＋リンクにする。**1度目はどこにも書かない**（2026-09-12 に引き締めた。旧「1度でも構造上また起きる」は広すぎ、9月だけで9件増えて翌日取り下げも出た。記録先を `owner/` へ置くと、同じ表の「`owner/` は依頼されたときだけ」と衝突する）。**例外は検査を同時に置けるとき**
-5. **同じ事件を design・lessons・change_history へ3回とも長文で書かない。** 正本を1つ決め、他は要約＋リンクにする
+5. **同じ事件を design・lessons・change_history・コードコメントへ長文で重ねて書かない。** 正本を1つ決め、他は要約＋リンクにする
 
 ## 文書の扱い
 
@@ -148,7 +153,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | **Claude** | 実装・文書・机上ゲート（JVM／Lint／`assembleDebugAndroidTest`）・レビュー指摘への対応 | **自分のdiffを自分でレビューしたことにしない。サブエージェントも起こさない**（下記）／**実機検証**／`owner/` の更新（依頼されたときだけ → [owner/README](docs/owner/README.md)） |
 | **Codex** | **別の目のdiffレビュー**・**実機検証**（→ [device_validation](docs/review/device_validation/README.md)） | 製品コードの変更 |
 
-- **修正1件＝1コミット。** コミットメッセージは日本語で「何を・なぜ」
+- **修正1件＝1コミット。** コミットメッセージは日本語で「何を・なぜ」。`_wip/` の項目番号ではなく内容で書く（`_wip/` を廃棄すると番号の意味が消え、経緯を辿れなくなる）
 - PR本文も日本語で、修正表＋「見た目・挙動の変更点」＋「実機確認ポイント」を載せる
 - ブランチはユーザーがGitHub側で作成する。「フェッチして」と言われたら、main を ff-only で pull → マージ済み旧ブランチをローカル削除 → 新ブランチを checkout
 - **修正が効いていることの主張は、修正コードを別の目で読むまで確定させない。** 方針が正しいと、実装が効いていなくても文書とコミットメッセージだけ通ってしまう

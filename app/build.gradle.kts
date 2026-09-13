@@ -220,6 +220,12 @@ tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/main/res"))
         .withPropertyName("resourcesForBackupExclusionTest")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // 本番ソースの**コメントだけ**を同じ行の中で直すと、クラスファイルが1バイトも変わらず
+    // コメントを走査する検査（`SourceCommentShapeTest` ほか）が UP-TO-DATE で飛ぶ。
+    // 行が増減すれば行番号表が変わって走るので、**同じ行の書き換えだけが穴になる**。実測で確認した。
+    inputs.dir(layout.projectDirectory.dir("src/main/java"))
+        .withPropertyName("mainSourcesForSourceScanTests")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {
