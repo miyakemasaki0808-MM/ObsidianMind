@@ -207,6 +207,20 @@ Channel を返せることが、**実在しない「走行中のDLを購読で�
 描画結果は `QuizActionSectionTest`（androidTest）が見る。
 `ModalBottomSheet` の開閉に巻き込まれないよう、クイズ欄を独立したComposableへ切り出してある。
 
+### AICore は短い時間窓の回数で要求を断る（2026-09-13 観測）
+
+同じアプリから推論を連続で投げると、**12回成功した直後の13回目が `ErrorCode 9 / BUSY` で拒否された**
+（要約の品質計測の実機テストで2回再現。→ [ai_quality_measurement](ai_quality_measurement.md) 判断8）。
+拒否は直前の成功の32ms後に返り、**モデルは動いていない** — 性能の限界ではなく受付の制限である。
+SDK（`genai-common`）には長期利用枠の超過（`PER_APP_BATTERY_USE_QUOTA_EXCEEDED = 27`）と
+バックグラウンド利用の拒否（`BACKGROUND_USE_BLOCKED = 30`）に別のコードがあり、返ったのはそのどちらでもない。
+**時間窓の長さは AICore の内部にあり、アプリから変えられないので特定しない**（オーナー判断 2026-09-13）。
+
+**この文書の方針との関係は未確認である。** 自動機能は黙って劣化させ、例外本文をユーザーへ出さない（判断1・判断4）が、
+要約は生成の例外を `SummaryState.Error` の文言へそのまま流すので、この拒否に当たれば英文が出る。
+**アプリ本体でノートを素早く開き続けたときの冊数・秒数は測らない**（オーナー判断 2026-09-14）。
+計測テストで知れた上限（連続12回）で足り、窓の長さと同じくアプリから変えられないため。
+
 ### キャンセルの再throw
 
 `CancellationException` は `Exception` の子なので、`catch (e: Exception)` が飲んで旧 `Unavailable` を返していた。

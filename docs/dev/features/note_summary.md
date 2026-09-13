@@ -150,11 +150,14 @@ DL完了は数分後に届きうるので、**`cancel()` だけでは足りな�
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `SummaryControllerTest`（状態遷移・世代照合・DL再開）/ `NoteExcerptBuilderTest`（抜粋）/
-  `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）
+  `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）/
+  `SummaryCoverageTest`・`SummaryCoverageCalibrationTest`（出力を採点する物差しと、その閾値）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）/ `PromptTokenBudgetTest`（トークン余裕）
 - **保証していないこと:**
-  - **要約の品質を機械的に測っていない。** 原文の何を落としたかを見る道具が無い
-    （→ [_wip/feature_ideas.md](../../_wip/feature_ideas.md) のカバレッジ検査の候補）
+  - **品質の正しさは保証していない。** [ai_quality_measurement](../system/ai_quality_measurement.md) に
+    全27組を分割取得した探索用の基準線がある。語彙指標では正誤を分離できず、
+    計測の完走を要約の正しさや方式の優劣の保証とはしない
+  - **語の重なりで測る以上、意味は見ていない。** 言い換えた正しい要約は低く出る
   - **同じ入力で同じ出力にならない。** Nano の出力は揺らぐ
   - 抜粋で切り落とされた区間の内容は要約に現れない
 
@@ -164,7 +167,7 @@ DL完了は数分後に届きうるので、**`cancel()` だけでは足りな�
 |---|---|
 | **キャッシュが無い** | 同じノートを開き直すたび Nano が数十秒走り、その間 Mutex を占有する。入力指紋キャッシュの候補が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
 | 優先度が無い | 自動生成が先に入ると、ユーザーが押した操作が後ろで待つ |
-| 品質の測定手段が無い | 上記「保証していないこと」参照 |
+| 品質の正しさを判定できない | [探索用の実機基準線](../system/ai_quality_measurement.md) は取得済みだが、語彙指標だけでは正誤や方式の優劣を判定できない |
 
 ## 12. 開発経緯
 
