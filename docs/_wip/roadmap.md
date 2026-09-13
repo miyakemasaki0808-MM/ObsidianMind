@@ -132,7 +132,7 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **保存層はローカルDB（[feature_ideas](feature_ideas.md) P-3）と切り離す。** 端末内の軽い保存＋件数上限で足り、
   DB導入の理由にしない。
 - **着手すると、端末に残す置き場が設定ファイル1つから増える。** バックアップ除外の確認がそこで初めて実適用になる
-  （→ [fable51_triage](fable51_triage.md) の「IDが無い指摘」）。
+  （`BackupExclusionTest` が prefs 名と `filesDir` の使用を走査して除外と突き合わせる）。
 - **N-10 より先に置くのはオーナー判断（2026-09-12）。** 出どころは Fable 5.1 の評価
   （→ [fable51_triage](fable51_triage.md) F-09）。
 

@@ -57,6 +57,7 @@
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |
 | AI入力予算 | [ai_input_budget.md](ai_input_budget.md) | `BUDGET-01` `BUDGET-03` |
 | ネットワーク権限 | [network_permission.md](network_permission.md) | `PERM-01` |
+| 要約カバレッジの基準線 | [summary_coverage.md](summary_coverage.md) | `COVER-01` `COVER-02` |
 
 **ネットワーク権限の行は `PERM-01` だけを置く。** 1コマンドで終わり、
 **いま端末に入っているのがどのAPKか**という他の全ケースの前提を確かめられる。
@@ -64,6 +65,10 @@
 OSがインストール時に足す分を見ていない。
 残りは簡易版の射程外である — `PERM-02` はモデル未DLの端末が要り、
 `PERM-04` は10分の放置そのものが観測手段なので、絞る対象ではなく通し版で見る。
+
+**要約カバレッジの行は2つとも `am instrument` で終わる。** `COVER-01` は Nano を使わないので
+**assetsの同梱が壊れていれば生成を1件も走らせないうちに落ちる**。残る `COVER-03`〜`COVER-09` は
+logcat の行を人が読む手順と、途中で止まったときの再開なので、**絞る対象ではなく通し版で行う**。
 
 **1回の簡易版で通すのは、対象機能の行＋変更面から引いた分だけ。** 他機能の行は通さない。
 **例外はアプリ起動の行で、対象機能に関わらず毎回最初に通す** — 入口が壊れていれば残りの結果に意味が無く、

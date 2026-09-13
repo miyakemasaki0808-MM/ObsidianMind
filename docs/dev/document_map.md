@@ -118,6 +118,7 @@
 | [architecture.md](system/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
 | [saf_boundary_gateway.md](system/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
 | [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路8本**へ渡す本文の作り方＋**完成プロンプト11本**を閉じる上限） |
+| [ai_quality_measurement.md](system/ai_quality_measurement.md) | AI出力の採点（要約が原文のどこを落としたか）。**測っていないものが多いので、使う前に読む** |
 | [background_ai_ux.md](system/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
 | [tab_navigation.md](system/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
@@ -201,6 +202,7 @@
 | `ai/PromptBuilder.kt` | [ai_input_excerpt](system/ai_input_excerpt.md) → 該当機能の設計書 |
 | `ai/` | [background_ai_ux](system/background_ai_ux.md) → [reflect_distill](features/reflect_distill.md) / [related_notes_ai](features/related_notes_ai.md) |
 | `domain/NoteExcerptBuilder.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` | [ai_input_excerpt](system/ai_input_excerpt.md) |
+| `debug/testing/`（要約の採点器・抜粋の変種・実機の計画）/ `androidTest/assets/ai_corpus/` | [ai_quality_measurement](system/ai_quality_measurement.md) |
 | `domain/markdown/` / `ui/markdown/` | [markdown_rendering](system/markdown_rendering.md) → [ai_input_excerpt](system/ai_input_excerpt.md)（同じパーサがAI入力にも効くため） |
 | `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](features/note_image_rendering.md) → [markdown_rendering](system/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](features/related_notes_ai.md) / [reflect_distill](features/reflect_distill.md) |

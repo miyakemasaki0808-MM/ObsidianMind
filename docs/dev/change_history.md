@@ -16,6 +16,21 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-13 | — | AI品質の全27組を時間を空けて分割取得し、計測の未完了と再開手順の指摘を閉じた | [review](../review/README.md) |
+| 2026-09-13 | — | AI品質の修正後を簡易実機検証し、再利用の動作と13回目のBUSY再発を記録した | [review](../review/README.md) |
+| 2026-09-13 | — | AI品質の机上4指摘の解消を確認し、実機再開手順の残る2件をBUSYの課題へ統合した | [review](../review/README.md) |
+| 2026-09-13 | — | AI品質の簡易実機検証で起動とコーパス読込を確認し、連続生成のBUSY中断を未解決として記録した | [review](../review/README.md) |
+| 2026-09-14 | — | オフラインLintのhintがキャッシュ次第で4件に減ることを書き、アプリ本体でのBUSY計測をやめる判断を反映した | [dependency_policy](system/dependency_policy.md) |
+| 2026-09-13 | — | AICoreの短期回数制限を基盤の正本に書き、ノート連続表示で要約が英文エラーになる懸念を起票した | [background_ai_ux](system/background_ai_ux.md) |
+| 2026-09-13 | — | 実機計測の再開に失敗した組を含め、待ち時間の引数と切り分けのケースを削った | [ai_quality_measurement](system/ai_quality_measurement.md) 判断8 |
+| 2026-09-13 | — | 実機の計画を純関数に切り出し、同じプロンプトの再生成を省いて続きから採れるようにした | [ai_quality_measurement](system/ai_quality_measurement.md) 判断8 |
+| 2026-09-13 | — | 実機出力のラベルで較正し、正誤を閾値で分離できないことを検査で固定した | [ai_quality_measurement](system/ai_quality_measurement.md) 判断7 |
+| 2026-09-13 | — | 要約採点器の誤判定3件（無根拠の割り当て・親の語の消失・見出し前の欠落）を直した | [ai_quality_measurement](system/ai_quality_measurement.md) 判断3 |
+| 2026-09-13 | — | 実機のNanoが返した要約10本を固定コーパスへ取り込み、文ごとに忠実さのラベルを付けた | [ai_quality_measurement](system/ai_quality_measurement.md) |
+| 2026-09-13 | — | 抜粋の作り方を比べる3変種と長文2本を足し、机上で形を固定した | [ai_quality_measurement](system/ai_quality_measurement.md) 判断6 |
+| 2026-09-13 | — | 実機で要約の基準線を採る導線と実機ケースを置き、固定コーパスのファイル名をASCIIへ揃えた | [summary_coverage](../review/device_validation/summary_coverage.md) |
+| 2026-09-13 | — | 要約が原文のどこを落としたかを測る物差しと固定コーパスを置き、閾値を実測で決めた | [ai_quality_measurement](system/ai_quality_measurement.md) |
+| 2026-09-13 | — | Fable 5.1 の検討枠を実装と突合し、対応済みと追跡先が定まった8件を落とした | [fable51_triage](../_wip/fable51_triage.md) |
 | 2026-09-13 | — | バックアップ除外検査の再修正を確認し、同名定数と拡張子欠落のレビュー指摘を解消した | [review](../review/README.md) |
 | 2026-09-13 | — | バックアップ検査の見逃し2件（同一ファイルの同名定数・拡張子を欠く除外パス）を直した | — |
 | 2026-09-13 | — | バックアップ検査の修正をレビューし、文書とXMLコメントの指摘を閉じ、残る見逃し2件を課題へ反映した | [review](../review/README.md) |

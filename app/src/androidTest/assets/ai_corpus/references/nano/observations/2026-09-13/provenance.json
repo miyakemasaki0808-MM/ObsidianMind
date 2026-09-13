@@ -1,0 +1,26 @@
+{
+  "head": "dc0a19f",
+  "working_tree": "uncommitted AI quality fixes",
+  "device_model": "Pixel 10 Pro Fold",
+  "android": "17",
+  "aicore_package": "0.release.prod_aicore_20260723.00_RC11.964081323",
+  "model_revision": null,
+  "debug_apk_sha256": "2f70cf88308b5e5505ed04e2100a106bcc46a71988db1c8668a5b619baa1f9a2",
+  "test_apk_sha256": "c9909df2e8272b3f21ba13f6c2f3b221e15114c721965db15d324eda8955eb24",
+  "gap_seconds": 210.51922988891602,
+  "source_sha256": {
+    "app/src/androidTest/assets/ai_corpus/0400_tiny_memo.md": "6e9c028543679d94f8c0db2064f482a4d61657569378b3fbfb381380e835ef25",
+    "app/src/androidTest/assets/ai_corpus/0300_bullet_list.md": "466fb54b7b8345b761b924ad5bc3c21bac2f0dbd21f0b5f6b013b4398cd0dc7f",
+    "app/src/androidTest/assets/ai_corpus/0600_frontmatter_table.md": "1496d9b8d0ad5571612420c67d183631044e363ca448f85566a175cacd8bf484",
+    "app/src/androidTest/assets/ai_corpus/0500_code_fence.md": "6e60726dbec3faecff8508614ce89624422d8f1be0c009d3288edf79f13a5ceb",
+    "app/src/androidTest/assets/ai_corpus/README.md": "f125f14c7e842f7fbd9846b8dd8ed3beb259aa387ff19f3190a6277e32e1bf14",
+    "app/src/androidTest/assets/ai_corpus/0800_tail_conclusion.md": "4a3966e9b076fbeead7febde51644c6e4ffa4bed68e85f193bd586af947113bb",
+    "app/src/androidTest/assets/ai_corpus/0700_no_heading.md": "55d8dfae3fa9b703207c0ea82292a352e0c93c8d19932c775682595bc4a79e1e",
+    "app/src/androidTest/assets/ai_corpus/0900_middle_key.md": "9818991a545b97ce82f5e222ac8e30ecdeeaf170417160344bca53bc837de571",
+    "app/src/androidTest/assets/ai_corpus/0200_long_nested.md": "a3040c76d3521ab00ecfbb9e0b889a242e8d082f281c9294295e95138bb35712",
+    "app/src/androidTest/assets/ai_corpus/0100_constraints_heavy.md": "5dcdc5bf3c7bd55fa77d6f53e456ccfc475f3cc8f47f41bf68cdd19a116ca2ea",
+    "app/src/debug/java/com/example/newproject/testing/SummaryCoverage.kt": "5f253e7573041d3380a247f00de3f47bf91f0bbd1843863af88438ffaf64490b",
+    "app/src/debug/java/com/example/newproject/testing/SummaryExcerptVariants.kt": "866465604a01275c41a1c7216f29f2c061cb385ae230c04c0d04467289ec6aad",
+    "app/src/debug/java/com/example/newproject/testing/SummaryBaselinePlan.kt": "825ee126cc0f54eda93dabec0eb466f4ac98a7ef77b37a4636deea4a3af495b2"
+  }
+}
