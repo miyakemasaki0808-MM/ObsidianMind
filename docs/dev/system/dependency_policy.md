@@ -52,7 +52,7 @@ gradle/wrapper/gradle-wrapper.properties:5: Error: A newer version of Gradle tha
 | `disable`（当初） | SUCCESSFUL | 0 errors, 0 warnings | **見えない** |
 | **`informational`（採用）** | **SUCCESSFUL** | **0 errors, 0 warnings, 12 hints** | **見える** |
 
-`--offline` でも同じく12 hints が出る。**「警告0」の主張も保ったまま、催促だけを残せる**ので、
+`--offline` の件数は **Lint の最新版情報のキャッシュ次第**で、キャッシュが古いと Google Maven 側（AndroidX・ML Kit）の8件が出ず **4 hints に減る**。一度オンラインで解析すれば `--offline` でも12件に戻る（2026-09-14 実測）。**4件を「依存が減った」と読まない。** **「警告0」の主張も保ったまま、催促だけを残せる**ので、
 `disable` より厳密に良い。当初案（`disable` を維持し、棚卸しのたびに一時有効化して戻す）は
 手順が増えるうえ、戻し忘れればCIが赤になる。**採らない。**
 

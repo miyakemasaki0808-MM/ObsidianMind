@@ -83,7 +83,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
   **端末を特定する値（シリアル・Vault URI・端末内パス）は文書へ残さない** — 検証開始時に `adb devices -l` で取得する。
   **実機確認が済むまでPR本文に「確認完了」と書かない**
 - Lint は現在 Error 0 / Warning 0 / hint 12（hint は依存更新系の催促で、ゲートに載せない）。**警告を増やさない**
-- **hint の件数はレポートを開くだけでは確かめられない。** `lintAnalyzeDebug` が UP-TO-DATE だと前回のXMLが残るので、数えるときは `--rerun-tasks` を付けてタスクの実行を確認する（2026-09-12、解析を走らせずに読んで0件と誤認した。`--offline` でも12件出る）
+- **hint の件数はレポートを開くだけでは確かめられない。** `lintAnalyzeDebug` が UP-TO-DATE だと前回のXMLが残るので、数えるときは `--rerun-tasks` を付けてタスクの実行を確認する（2026-09-12、解析を走らせずに読んで0件と誤認した）。**`--offline` の件数は Lint の最新版情報のキャッシュ次第で変わる** — キャッシュが古いと Google Maven 側（AndroidX・ML Kit）の8件が出ず4件になり、一度オンラインで解析すれば12件に戻る（2026-09-14 実測。依存が12件古いこと自体は変わっていない）
 - 端末AIを呼ぶ instrumentation テストは、Nano が使えない端末では `Assume` で skip する。**skip 判定は既知の `FeatureStatus` だけで行い、計測・生成呼び出しが投げた例外は skip せず失敗させる**（`checkAvailability()` は例外も畳むので判定に使わない）→ [ai_input_excerpt](docs/dev/system/ai_input_excerpt.md)
 
 **構造を変えたら、変更箇所だけで終わらせない（影響面監査）。**
