@@ -899,7 +899,6 @@ private fun BookletModeChip(
 private fun weaveBlockedMessage(reason: WeaveBlockedReason): String = when (reason) {
     WeaveBlockedReason.Pending -> "関連ノートをまだ探しています。冊子を開き直すと編めます。"
     WeaveBlockedReason.Empty -> "関連するノートが見つかりませんでした。"
-    WeaveBlockedReason.Failed -> "関連ノートを取れませんでした。"
 }
 
 /**

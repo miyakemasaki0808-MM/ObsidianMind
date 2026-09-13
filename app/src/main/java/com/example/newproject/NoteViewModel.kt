@@ -648,8 +648,6 @@ class NoteViewModel internal constructor(
                         aiNotes = result.aiNotes
                     )
                 )
-                is RelatedNotesResult.Error ->
-                    session.setRelatedNotesState(RelatedNotesState.Error(result.message))
             }
         }
     }

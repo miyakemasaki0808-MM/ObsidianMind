@@ -16,5 +16,4 @@ sealed class RelatedNotesState {
         val relatedNotes: List<RelatedNote>,
         val aiNotes: List<RelatedNote>
     ) : RelatedNotesState()
-    data class Error(val message: String) : RelatedNotesState()
 }
