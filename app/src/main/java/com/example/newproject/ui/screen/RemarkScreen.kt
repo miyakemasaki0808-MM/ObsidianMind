@@ -52,6 +52,9 @@ import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelBlue
 
+/** 未保存の下書きを抱えたまま離れようとしている行き先。 */
+private enum class PendingExit { Back, Regenerate }
+
 /**
  * ノートへのひとことと、それへの返事の画面。**非タブルート。**
  *
@@ -75,9 +78,6 @@ import com.example.newproject.ui.theme.PanelBlue
  * 主ボタンは「返事を残す」。**「もう一度きく」は脇へ下げる** —
  * 主役はAIの問いではなく、それを受けたユーザーの言葉のほうだから。
  */
-/** 未保存の下書きを抱えたまま離れようとしている行き先。 */
-private enum class PendingExit { Back, Regenerate }
-
 @Composable
 fun RemarkScreen(
     state: RemarkState,

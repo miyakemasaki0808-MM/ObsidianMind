@@ -42,16 +42,6 @@ internal sealed interface ReadingTraceSaveResult {
 }
 
 /**
- * [vaultKey] は「どのVaultへの要求か」を表す不透明な識別子。
- *
- * 保存は非同期に起動されるため、書き込みが実際に走る時点では利用者が別のVaultへ
- * 切り替えているかもしれない。保存先を書込時点の現在Vaultから解決すると、旧Vaultの
- * ノートの痕跡が新Vaultへ書き込まれてしまう。要求を出した時点のVaultを要求自身に
- * 持たせ、書き込み直前に照合することでこれを防ぐ。
- *
- * Uri ではなく String にしているのは、この境界より上を Android 非依存に保つため。
- */
-/**
  * 保存済み痕跡のキー一覧。
  *
  * **[Unavailable] を空集合で代用しない。** 「列挙できなかった」を「1件も無い」に
@@ -66,6 +56,16 @@ internal sealed interface ReadingTraceKeyListing {
     data class Unavailable(val reason: String) : ReadingTraceKeyListing
 }
 
+/**
+ * [vaultKey] は「どのVaultへの要求か」を表す不透明な識別子。
+ *
+ * 保存は非同期に起動されるため、書き込みが実際に走る時点では利用者が別のVaultへ
+ * 切り替えているかもしれない。保存先を書込時点の現在Vaultから解決すると、旧Vaultの
+ * ノートの痕跡が新Vaultへ書き込まれてしまう。要求を出した時点のVaultを要求自身に
+ * 持たせ、書き込み直前に照合することでこれを防ぐ。
+ *
+ * Uri ではなく String にしているのは、この境界より上を Android 非依存に保つため。
+ */
 internal interface ReadingTracePersistence {
     fun folderStatus(): ReadingTraceFolderStatus
     fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult

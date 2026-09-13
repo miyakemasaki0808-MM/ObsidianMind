@@ -14,12 +14,6 @@ import com.example.newproject.model.NoteField
 import com.example.newproject.model.NotePaperTone
 
 /**
- * 画面が参照する色の一式。明暗で差し替わるのはこの型の中身だけ。
- *
- * ブランドパレット（Indigo/Aqua/Coral など「その色であること」に意味がある値）は
- * 含めない。明暗で置き換える対象ではないため。
- */
-/**
  * ノート本文を載せる紙の地色。放置期間の段階（[NotePaperTone]）から引く。
  *
  * **上限は `panelChip` の相対輝度（0.8772）。** 弱い文字トークンの基準面が
@@ -85,6 +79,12 @@ internal class NoteFieldTones(
         get() = listOf(technical, learning, business, creative, living, reflection)
 }
 
+/**
+ * 画面が参照する色の一式。明暗で差し替わるのはこの型の中身だけ。
+ *
+ * ブランドパレット（Indigo/Aqua/Coral など「その色であること」に意味がある値）は
+ * 含めない。明暗で置き換える対象ではないため。
+ */
 internal class AppColorScheme(
     // 面
     val panel: Color,

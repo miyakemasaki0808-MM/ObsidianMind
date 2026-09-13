@@ -2419,11 +2419,11 @@ private const val VAULT_B = "content://vault-b"
 
 private const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 
-/** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
 /** テスト用のひとこと1組。日時は固定で構わない（検証は本文だけを見る）。 */
 private fun reflectionOf(remark: String) =
     Reflection(remark = remark, remarkedAtEpochMillis = 1_000L)
 
+/** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
 private fun storedTrace(
     count: Int,
     path: String = "ideas/habit.md",

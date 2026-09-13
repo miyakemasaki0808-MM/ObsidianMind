@@ -941,8 +941,7 @@ private fun weaveBlockedMessage(reason: WeaveBlockedReason): String = when (reas
  *
  * **手触りは意味を運ばない。** 「これは冊子だ」と言うのは形の役目で、動きは何も名乗らない
  * （→ system/bearing_channels.md §8）。
- */
-/**
+ *
  * **`internal` なのは、画素を数える検査が本番の紙をそのまま描くため**
  * （→ `BookletSheetPerspectiveTest`）。
  *

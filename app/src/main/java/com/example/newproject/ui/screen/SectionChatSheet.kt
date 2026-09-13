@@ -193,13 +193,6 @@ fun SectionChatSheet(
 }
 
 /**
- * 出せなかった理由と、その再試行導線。**[onRetry] が指す対象は呼び出し位置で決まる。**
- *
- * 生成の失敗と端末AIの状態で色を分ける — 前者は実際に落ちたので `ErrorText`、
- * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
- * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
- */
-/**
  * シートのクイズ欄。**理由と導線を同じ場所へ置く。**
  *
  * かつては状態をボタンのラベルへ潰していた。恒久非対応では
@@ -247,6 +240,13 @@ internal fun QuizActionSection(
     }
 }
 
+/**
+ * 出せなかった理由と、その再試行導線。**[onRetry] が指す対象は呼び出し位置で決まる。**
+ *
+ * 生成の失敗と端末AIの状態で色を分ける — 前者は実際に落ちたので `ErrorText`、
+ * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
+ * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
+ */
 @Composable
 private fun SectionChatProblemRow(problem: SectionChatProblem, onRetry: () -> Unit) {
     when (problem) {

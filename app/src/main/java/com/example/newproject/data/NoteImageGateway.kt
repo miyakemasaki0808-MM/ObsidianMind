@@ -37,6 +37,9 @@ internal sealed interface NoteImageMeasureResult {
 /** 復号を打ち切る内部例外。理由を [ByteBudgetCache] 越しに運ぶためだけに使う。 */
 private class ImageDecodeFailure(val reason: NoteImageFailure) : Exception()
 
+/** 寸法キャッシュの件数上限（1件を1と数える）。値は Int 2つなので大きさは効かない。 */
+private const val MEASURE_CACHE_MAX_ENTRIES = 128L
+
 /**
  * ノート内画像の解決と復号。
  *
@@ -57,9 +60,6 @@ private class ImageDecodeFailure(val reason: NoteImageFailure) : Exception()
  * （索引の再走査＝Vault全走査とは桁が違う）。逆に失敗を載せると、
  * 一時的な失敗が次のVault切替まで固定される。
  */
-/** 寸法キャッシュの件数上限（1件を1と数える）。値は Int 2つなので大きさは効かない。 */
-private const val MEASURE_CACHE_MAX_ENTRIES = 128L
-
 internal class NoteImageGateway(
     private val contentResolver: ContentResolver,
     private val indexStore: VaultImageIndexStore,
