@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
 import com.example.newproject.data.DistillPersistence
@@ -57,7 +58,9 @@ import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.fakes.FakeAiClient
 import android.net.Uri
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -571,6 +574,36 @@ class NoteSessionCoordinatorTest {
     }
 
     /**
+     * **画面側のスコープがキャンセルされても、訪問は書き出される。**
+     *
+     * タスクスワイプでは `onStop()` → 背面化の直後に `onCleared()` が走る。訪問の書き出しが
+     * 画面側のスコープに載っていると、IOへディスパッチされる前にキャンセルされて確定済みの訪問が消える。
+     * 見るのは配線で、[ReadingTraceController] へ渡すのが `persistScope` であること。
+     */
+    @Test
+    fun `画面側のスコープがキャンセルされても訪問は書き出される`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val uiScope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        val coordinator = env.coordinator(uiScope = uiScope)
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.reportReadingProgress(
+            blockIndex = 1,
+            blockFraction = 1f,
+            totalBlocks = 10,
+            sectionTitle = null
+        )
+        clock.advance(10_000L)
+        coordinator.pauseReadingTrace(ReadingPauseReason.AppBackground)
+        // 書き出しがIOへ渡る前に ViewModel が畳まれる
+        uiScope.cancel()
+        advanceUntilIdle()
+
+        assertEquals(1, env.trace.saved.size)
+    }
+
+    /**
      * 通常のノート切替では、離れるノートの読書セッションを捨てずに確定保存する。
      * Vault切替の [ReadingTraceController.discard] とは逆の契約なので別々に固定する。
      */
@@ -917,9 +950,11 @@ class NoteSessionCoordinatorTest {
 
         fun coordinator(
             cancelHostJobs: () -> Unit = {},
-            initialState: NoteUiState = NoteUiState()
+            initialState: NoteUiState = NoteUiState(),
+            // 画面側のスコープ。**痕跡の書き出しだけはこちらに載らない**ことを確かめるときに分ける。
+            uiScope: CoroutineScope = scope
         ) = NoteSessionCoordinator(
-            scope = scope,
+            scope = uiScope,
             persistScope = scope,
             repository = NoteRepository(),
             vaultBrowser = vault,

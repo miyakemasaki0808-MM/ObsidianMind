@@ -2,8 +2,8 @@
 
 **状態:** Implemented — 稼働中。サイドカーは **schema v6**。孤児掃除は手動削除まで提供し、自動化は未着手
 **最終検証:** 2026-08-22 / `c9a48d2`（§8 の判断17件は未突合）
-**関連コード:** `controller/ReadingTraceController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
-**関連テスト:** `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
+**関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
+**関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
 
 **対象領域:** 読書位置の記録・再会カード・サイドカーの保管と掃除
@@ -202,8 +202,10 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 ```
 ノート表示
- └─ ReadingTraceController        ← セッション・訪問記録・AI俯瞰要約
-      └─ ReadingTraceStore        ← flush/pause で writeMutex 直列・read-modify-write
+ ├─ ReadingTraceController        ← セッション・訪問記録
+ │    └─ ReadingTraceStore        ← flush/pause で writeMutex 直列・read-modify-write
+ └─ ReunionCardController         ← Rediscover の再会カード・AI俯瞰要約・印（同じ writeMutex）
+      └─ ReadingTraceStore
            └─ ReadingTraceJson    ← スキーマ版・バイト上限・checksum
 
 オプション

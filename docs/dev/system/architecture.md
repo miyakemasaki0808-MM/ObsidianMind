@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（13 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（14 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -31,7 +31,8 @@ NoteViewModel（Android境界の窓口）
       ├── RemarkController            ← ノートへのひとこと
       ├── SearchController
       ├── DistillController
-      ├── ReadingTraceController
+      ├── ReadingTraceController      ← 訪問の記録・ひとことと返事の保存
+      ├── ReunionCardController       ← 再会カード（照合・要約・印）
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
@@ -40,7 +41,7 @@ NoteViewModel（Android境界の窓口）
       └── NoteFieldController           ← ノートの分野判定（**例外。判断4 を見る**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 13個・`NoteViewModel` は674行である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個・`NoteViewModel` は674行である。
 
 **行数は倍になったが、窓口の性質は変わっていない。** 53ある関数のうち**40は1行の委譲**で、
 本体を持つ8つは**すべて Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）である。
@@ -206,13 +207,13 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Quiz | Distill | ReadingTrace | Summary | NoteField |
+| 要素 | Quiz | Distill | ReunionCard | Summary | NoteField |
 |---|---|---|---|---|---|
 | requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** |
 | Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ |
 | 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** |
-| 起動契機 | 明示操作 | 明示操作 | **ノート表示・離脱** | ノート表示 | ノート表示 |
+| 起動契機 | 明示操作 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 |
 
 **5本目（分野判定）は結論を補強した。** 起動契機は Summary と同じ「ノート表示」なのに、
 **見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
@@ -234,9 +235,9 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 
 - AI生成は `AiClient` 側のMutexで直列化し、60秒タイムアウトを設ける
 - **同じファイルを read-modify-write する経路が2つ以上あるなら、錠は共有物として上から配る。**
-  痕跡サイドカーは訪問の追記（`ReadingTraceController`）と読み戻しの適用
-  （`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
-  1つの `Mutex` を作って両方へ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
+  痕跡サイドカーは訪問の追記（`ReadingTraceController`）・要約と印の書き戻し（`ReunionCardController`）・
+  読み戻しの適用（`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
+  1つの `Mutex` を作って3つへ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
   という、最も気づきにくい形になる
 - ノート・Vault単位のジョブは追跡してキャンセルする
 - `CancellationException` は再throwし、一般エラーへ変換しない

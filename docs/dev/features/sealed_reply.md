@@ -2,8 +2,8 @@
 
 **状態:** Draft — 未実装。Fable 5.1 のアイデア帳からオーナー判断で深掘りした設計の下書き（2026-09-14）
 **最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
-**関連コード:** 予定 — `controller/RemarkController.kt` / `controller/ReadingTraceController.kt` / `model/ReadingTrace.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** 予定 — `RemarkControllerTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest`
+**関連コード:** 予定 — `controller/RemarkController.kt` / `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `model/ReadingTrace.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** 予定 — `RemarkControllerTest` / `ReunionCardControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest`
 **正本:** この文書
 
 **関連:** [reflect_remark](reflect_remark.md)（返事の保存先と契約）・[reflect_reading_trace](reflect_reading_trace.md)（痕跡サイドカー）・[reunion_card](reunion_card.md)（再会カードの枠）・[reading_trace_backup](reading_trace_backup.md)（退避と復元）
@@ -102,7 +102,7 @@ Reflect 系の中で、書いた言葉を**未来の自分へ宛てる**唯一�
                         ・痕跡がまだ無ければ、返事と同じ預かりへ相乗り（Held）
 
 Rediscover で引き当て
-  └─ ReadingTraceController.revealTrace（既存の Rediscover 限定経路）
+  └─ ReunionCardController.revealTrace（既存の Rediscover 限定経路）
        └─ Reflection に封があり未開封なら、カードの行を「封を切る」にする
             └─ タップ ──► RemarkController.unseal()
                             └─ 開封の日時を書く（同じ錠）。画面は前置きつきで返事を出す
@@ -163,7 +163,7 @@ Rediscover で引き当て
 - **JVMテスト:**
   - `ReadingTraceJsonTest` — 新版の往復、旧版からの読み込みで2欄が null、封なしの互換
   - `RemarkControllerTest` — 封で表示が封筒になる、書き直しで封が消える、`Held` からの封が離脱時に確定する、破ると開封の日時が書かれる、失敗した返事には封を付けられない
-  - `ReadingTraceControllerTest` — Rediscover の再会でだけ「封を切る」が出る、さがす由来では出ない、開封の書き込みは1回だけ、ノート切替で旧ノートの開封が後着しない
+  - `ReunionCardControllerTest` — Rediscover の再会でだけ「封を切る」が出る、さがす由来では出ない、開封の書き込みは1回だけ、ノート切替で旧ノートの開封が後着しない
   - `ReadingTraceMergeTest` — 併合で封が消えない、端末に無い封を受け入れる
   - 文言テスト — 封筒・封を切る・封を破る・前置きの出し分け
 - **instrumentation:** ひとこと画面の封筒表示と読み上げ名。再会カードの「封を切る」の行
