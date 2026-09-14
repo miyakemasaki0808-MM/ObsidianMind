@@ -339,7 +339,7 @@ private fun ColumnScope.BookletPager(
     // `VerticalPager` の既定（上スワイプで次へ）が手の動きとそのまま一致するので、反転させない。
     VerticalPager(
         state = pagerState,
-        // **指を離したあとの倒れ切りだけを柔らかくする**（→ [SNAP_STIFFNESS]）。
+        // **指を離したあとのめくりの進み方だけを、時間で決める**（→ [SHEET_SETTLE_SPEC]）。
         // 送り先の枚数と勢いの減衰は既定のまま。
         flingBehavior = PagerDefaults.flingBehavior(
             state = pagerState,
@@ -386,7 +386,7 @@ private fun ColumnScope.BookletPager(
         // **スワイプできない利用者にも同じ手触りが出る**（→ 判断10・§9）。
         //
         // **正は「送り出される側」、負は「これから出てくる側」。** 絶対値にすると向きが消え、
-        // 戻す操作でも次の紙が倒れる（→ [sheetAngleDegrees]）。
+        // 戻す操作でも次の紙がめくれる（→ [sheetPeel]）。
         val turn: () -> Float = {
             (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
         }
@@ -394,12 +394,12 @@ private fun ColumnScope.BookletPager(
             modifier = Modifier
                 .fillMaxSize()
                 // **めくられる紙が上に来る。** ページャは紙を番号順に置くので、既定のままだと
-                // *手前の紙が次の紙の下*に描かれ、倒しても何も起きていないように見える。
+                // *手前の紙が次の紙の下*に描かれ、めくっても何も起きていないように見える。
                 // 番号が小さいほど上へ持ち上げると、送りでも戻しでも常に正しい重なりになる。
                 // （`Modifier.zIndex` はページャの子でも効く — ノードのzは
                 //  内側と全modifierのzの和で決まるため。ここが効かなければ天綴じは成立しない）
                 .zIndex(-page.toFloat())
-                // **紙は動かない。倒れるだけ。** ページャが送るために与えた変位を打ち消して、
+                // **紙は動かない。** ページャが送るために与えた変位を打ち消して、
                 // 定位置へ置き直す（→ [sheetSlotShift]）。
                 .graphicsLayer { translationY = size.height * sheetSlotShift(turn()) }
         ) {

@@ -29,30 +29,19 @@ internal val SHEET_HINGE = TransformOrigin(0.5f, 0f)
  * **寸法を直に書かず紙の高さから導く**（端末の解像度と分割画面で高さが変わる）。
  * **1 を下回らない** — 下回ると指示の外へ出て、回した像に破綻が出る。
  *
- * **上限も要る。** 遠すぎると遠近が消え、**倒れた紙がただ縦に潰れる板になる**。
- * 実際にそうなっていた（→ [sheetCameraDistance]）。
+ * **上限も要る。** 遠すぎると遠近が消え、**倒れた紙がただ縦に潰れる板になる**（→ [sheetCameraDistance]）。
  */
 internal const val CAMERA_DISTANCE_FACTOR = 1.5f
 
 /**
- * `cameraDistance` の単位は**画素でも画面のインチでもない。渡した値の 72 倍が画素になる。**
+ * `cameraDistance` へ渡す値。**紙の高さの [CAMERA_DISTANCE_FACTOR] 倍が実効距離になる。**
  *
- * `View.setCameraDistance` は `densityDpi` で割ってから `RenderNode` へ渡すが、
- * **Compose の `ViewLayer` はその割り算を打ち消すために
- * 渡す前に `densityDpi` を掛けている** ので、`View` の実装から Compose の単位は決まらない。
- * 素通しする `RenderNodeLayer` のほうが本筋で、そこから先は `RenderNode` の中である。
+ * `cameraDistance` の単位は**画素でも画面のインチでもない。渡した値の [CAMERA_UNIT_PX] 倍が画素**で、
+ * 画面密度に依らない。Compose の `ViewLayer` は `View.setCameraDistance` の密度の割り算を打ち消すので、
+ * `View` の実装からは単位が決まらない。倒した面の投影された高さから逆算して実測した
+ * （`BookletSheetPerspectiveTest`・→ docs/dev/lessons.md L60）。
  *
- * **だから実測した**（`BookletSheetPerspectiveTest`）。倒した面の投影された高さから実効距離を逆算すると、
- * **渡した値の 72 倍が画素**になる。**画面の密度を 390 から 320 へ変えても実効距離は同じ画素数**だったので、
- * 密度には依らない（Compose の既定 8 が 576 画素にあたる）。
- *
- * **KDocも他所の実装も根拠にならない。画素を数えるまで単位は決まらない**
- * （→ docs/dev/lessons.md L60）。
- *
- * ## 何を返すか
- *
- * **紙の高さの [CAMERA_DISTANCE_FACTOR] 倍が実効距離になる値。** 密度を受け取らないのは、
- * **受け取ると「密度で変わる」と読めてしまう**ためである。
+ * 密度を受け取らないのは、受け取ると「密度で変わる」と読めてしまうためである。
  */
 internal fun sheetCameraDistance(sheetHeightPx: Float): Float =
     sheetHeightPx * CAMERA_DISTANCE_FACTOR / CAMERA_UNIT_PX
@@ -67,16 +56,7 @@ internal const val CAMERA_UNIT_PX = 72f
 /**
  * 指を離したあと、めくりが残りを走り切るまでの時間。**ゆっくり、紙をめくる速さ。**
  *
- * ## 3度直している
- *
- * | 版 | 進み方 | 実機で言われたこと |
- * |---|---|---|
- * | 横送り | ページャ既定（硬さ 400） | — |
- * | 天綴じ・半回転 | 同じ既定のまま | **「捲れる速さが早すぎる」**（運ぶ変位だけ増やしたため） |
- * | 柔らかいばね | 硬さ 200 | まだ速い |
- * | 現在 | **時間を決めた [SHEET_SETTLE_MILLIS] ミリ秒** | 「**ゆっくりにしたい。紙を捲るイメージ**」 |
- *
- * **ばねから時間へ変えた。** ばねは「どれだけ残っているか」で速さが決まるので、
+ * **ばねではなく時間で決める。** ばねは「どれだけ残っているか」で速さが決まるので、
  * **少しだけ送って離したときと、半分送って離したときで、かかる時間が変わる。**
  * めくりは*紙をめくる動作*なので、**どこで離しても同じ速さで走り切るほうが紙らしい。**
  *
@@ -108,9 +88,7 @@ private const val RESTACK_TILT_DEGREES = 22f
  * **積み直りとめくりは別のチャネル（角度と折り目）を使う**ので、同時に起きても食い違わない。
  * 同じチャネルを2つが取り合うと、合成の規則（足すか、大きい側を採るか）をどう決めても破綻する。
  *
- * `restack` は積み直りで、**1 が積み終わり**（水平）。**繰り切らない** —
- * 束が届いたのは*めくった*からではないので、**浮いて置き直される以上のことをしない**
- * （[RESTACK_TILT_DEGREES]）。
+ * `restack` は積み直りで、**1 が積み終わり**（水平）。傾きの上限は [RESTACK_TILT_DEGREES]。
  *
  * **正の角度が下端を手前に持ち上げる**（Compose の回転は蝶番より下の点を +Z ＝手前へ送る）。
  * 負にすると紙が束の中へ沈む向きになる。
@@ -134,21 +112,21 @@ internal fun sheetShowsStack(turn: Float): Boolean = turn <= 0f
 /**
  * 紙を画面の定位置へ留め置くための付け替え量（ページ数）。
  *
- * ページャは紙を送るために動かすが、**天綴じでは紙は動かない。倒れるだけである。**
+ * ページャは紙を送るために動かすが、**天綴じでは紙は動かない。**
  * だからページャが与えた変位を打ち消して、定位置に置き直す。
  *
  * **打ち消すのは前後1枚まで。** それより遠い紙はページャが置いた場所に残し、
  * 主軸の切り抜きに任せる。**頭打ち（`coerceIn`）にはしない** — 半端に引き寄せると、
- * 1.5枚離れた紙が画面の下半分へ顔を出す。**切り替わる点の紙は、真上へ抜け切っているか、
+ * 1.5枚離れた紙が画面の下半分へ顔を出す。**切り替わる点の紙は、めくり切って見えないか、
  * 手前の紙に完全に覆われているかのどちらか**なので、段差は見えない。
  */
 internal fun sheetSlotShift(turn: Float): Float = if (turn in -1f..1f) turn else 0f
 
 /**
- * 紙がどれだけ立っているか（影の深さ）。**真横で最大、寝ていればゼロ。**
+ * 紙がどれだけ立っているか。**真横で最大、寝ていればゼロ。**
  *
- * **入力は合成後の角度**なので、繰りでも積み直りでも同じ尺度で深くなる。
- * どちらも紙が持ち上がっている状態なので、**影のチャネルを2つに割らない。**
+ * 入力は紙の傾き（いま紙を倒すのは積み直りだけ → [sheetTiltDegrees]）。
+ * [sheetFitScale] が、遠近で広がる量をここから出す。
  */
 internal fun sheetStanding(angleDegrees: Float): Float =
     sin(angleDegrees * PI / 180.0).toFloat().absoluteValue
@@ -164,7 +142,7 @@ internal fun sheetStanding(angleDegrees: Float): Float =
  * 手前へ出た点は `d / (d - z)` 倍に広がる。紙の高さを 1 とすると `d` は
  * [CAMERA_DISTANCE_FACTOR]（1.5）で、紙の左右に空いている余白は合わせて 1.05 倍ぶんしかない。
  * **定数の調整では出口が無い** — 収めるには [CAMERA_DISTANCE_FACTOR] を 15 前後まで上げることになり、
- * それは docs/dev/lessons.md L60 で直したばかりの「遠すぎて遠近が消える」側へ戻るだけである。
+ * それは「遠すぎて遠近が消える」側へ戻るだけである（→ docs/dev/lessons.md L60）。
  *
  * ## 何を返すか
  *
@@ -173,7 +151,7 @@ internal fun sheetStanding(angleDegrees: Float): Float =
  *
  * **縮小は回転より外側に置く**（[BookletSheet] の枠）。投影された絵をそのまま縮めるので、
  * **台形の比は変わらない** — 遠近の見え方は変わらず、大きさだけが枠に入る。
- * **静止時は 1** — 判断9 で実機確認した絵を1ピクセルも変えない。
+ * **静止時は 1** — 判断9 の絵を1ピクセルも変えない。
  */
 internal fun sheetFitScale(angleDegrees: Float): Float =
     (CAMERA_DISTANCE_FACTOR - sheetStanding(angleDegrees)) / CAMERA_DISTANCE_FACTOR
