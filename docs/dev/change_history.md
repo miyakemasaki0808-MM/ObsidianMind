@@ -18,6 +18,7 @@
 |---|---|---|---|
 | 2026-09-14 | — | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
 | 2026-09-14 | — | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/idea_catalog.md) |
+| 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [wip_analysis](../owner/wip_analysis.md)・[roadmap](../_wip/roadmap.md) |
 | 2026-09-14 | — | 宙に浮いたKDocと関連ノートの死んだ失敗枝を消し、キャンセルの再throwとコメントに経緯を書かない規約を検査つきで置いた | [owner/comments_and_history_practices](../owner/comments_and_history_practices.md) |
 | 2026-09-13 | — | AI品質の全27組を時間を空けて分割取得し、計測の未完了と再開手順の指摘を閉じた | [review](../review/README.md) |
 | 2026-09-13 | — | AI品質の修正後を簡易実機検証し、再利用の動作と13回目のBUSY再発を記録した | [review](../review/README.md) |
