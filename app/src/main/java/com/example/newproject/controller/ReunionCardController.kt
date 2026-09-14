@@ -350,7 +350,7 @@ internal class ReunionCardController(
     /**
      * 生成の結果をサイドカーへ載せる。**[ReunionOutcome.Unavailable] は何も書かない。**
      *
-     * 訪問の保存（[recordVisit]）と違い、**保存結果を見ないし再試行もしない**。
+     * 訪問の保存（[ReadingTraceController]）と違い、**保存結果を見ないし再試行もしない**。
      * 書けなければ次回の再会で作り直される（自己修復する）。
      *
      * **空振りは書く。** 書かないと再生成の判定が真のまま残り、同じノートを開くたびに
@@ -371,7 +371,7 @@ internal class ReunionCardController(
         }
         withContext(ioDispatcher) {
             writeMutex.withLock {
-                // 生成中に flush が訪問を足している可能性があるので、最新を読み直して
+                // 生成中に訪問の書き出し（[ReadingTraceController]）が訪問を足している可能性があるので、最新を読み直して
                 // 要約だけを載せる。件数は「生成を試みた訪問数」を記録するので、
                 // 生成中に増えていれば次回の再会でちゃんと作り直される。
                 val latest = (persistence.load(trace.vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)

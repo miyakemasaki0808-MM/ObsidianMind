@@ -34,8 +34,7 @@ internal class ReadingTraceController(
      *
      * `viewModelScope` に載せてはいけない。タスクスワイプや Activity finish では
      * `onStop()` → [pause] の直後に `onCleared()` が走るため、IOへディスパッチされる
-     * 前のコルーチンがキャンセルされ、確定させたはずの訪問が失われる
-     * （背面化だけなら失われないので、KDocの意図が終了経路でだけ破れていた）。
+     * 前のコルーチンがキャンセルされ、確定させたはずの訪問が失われる。
      *
      * 土台は Main.immediate であることも前提。[Session] の各フィールドはメインスレッド
      * からのみ触る規律で書かれており、保存失敗時の巻き戻しもそこへ戻ってくる。
@@ -142,19 +141,14 @@ internal class ReadingTraceController(
     /**
      * **書けなかった痕跡。セッションが終わった後も残す。**
      *
-     * [flush] は保存コルーチンを起動した直後に `session = null` にするため、
-     * 書き込みが後から失敗しても**戻す先のセッションがもう現役でない**。
-     * `owner.pendingRemark` へ戻しても誰も読まず、ユーザーの返事がそこで消えていた。
+     * [flush] は保存コルーチンを起動した直後に `session = null` にするので、
+     * 書き込みが後から失敗しても**戻す先のセッションはもう現役でない**。
      *
-     * **持つのは返事ではなく、保存しようとした [ReadingTrace] そのもの。**
-     * 返事だけを持つと「既存の痕跡へ載せ直す」ことしかできず、
-     * **痕跡の新規作成が失敗した場合に復旧できない**（初読で返事まで書いた回が
-     * まるごと落ちる）。完成済みの痕跡なら、ファイルが無くてもそのまま作れる。
+     * **持つのは返事ではなく、保存しようとした [ReadingTrace] そのもの。** 返事だけでは
+     * 既存の痕跡へ載せ直すことしかできず、初読で痕跡の新規作成が失敗した回を復旧できない。
      *
-     * **1件ではなくノート単位で持つ。** 単一スロットだと、Aが退避中にBで返事を
-     * 書いた瞬間にAが消える。キーは Vault＋相対パス。
-     *
-     * **プロセスが死ねば失われる**が、それは全ての未保存データと同じ条件になる。
+     * **ノート単位で持つ**（キーは Vault＋相対パス）。単一スロットだと、Aが退避中にBで返事を
+     * 書いた瞬間にAが消える。プロセスが死ねば失われるが、それは全ての未保存データと同じ条件である。
      */
     private val pendingWrites = LinkedHashMap<String, PendingWrite>()
 
@@ -178,11 +172,8 @@ internal class ReadingTraceController(
      * 書けなかった痕跡を覚える。**同じノートは上書きしてよい**（新しいほうが正しい）。
      *
      * **返事を持つ痕跡だけを積む。** 訪問だけの失敗はセッション側の巻き戻し
-     * （`dirty` / `recordedVisit`）が同じ閲覧のうちに書き直すし、失っても
-     * もう一度読めば付き直る。**返事は作り直せない**ので扱いが違う。
-     *
-     * これで「普通の訪問痕跡が溜まって、返事付きの退避を押し出す」経路が消える —
-     * 上限に当たるのは**返事の保存が8ノートぶん失敗し続けたとき**だけになる。
+     * （`dirty` / `recordedVisit`）が同じ閲覧のうちに書き直し、失ってももう一度読めば付き直る。
+     * **返事は作り直せない。** 訪問だけの退避で上限を埋めて、返事付きの退避を押し出さないためでもある。
      */
     private suspend fun rememberPendingWrite(vaultKey: String, trace: ReadingTrace) {
         if (trace.reflection?.hasReply != true) return
@@ -297,7 +288,7 @@ internal class ReadingTraceController(
      * **理由ごとに数える。** 停止の要求は独立に重なる — 冊子を開いたまま背面へ回れば
      * 「冊子を見ている」と「アプリが背面」の2つが同時に成り立つ。
      * 真偽1つで持つと、**片方が解けた時点でもう片方の停止理由が消える**
-     * （実際に背面復帰が冊子表示中の計測を再開していた）。
+     * （背面から戻っただけで、冊子を見ている間の計測が再開する）。
      */
     fun pause(reason: ReadingPauseReason) {
         pauseReasons += reason
@@ -380,7 +371,7 @@ internal class ReadingTraceController(
      * **戻り値を Boolean にしない。** 「書けた」「まだ書けていないが預かった」
      * 「どこにも残っていない」で**呼び出し側の次の行動が違う**ため
      * （→ lessons L28）。true/false に畳むと、預かっただけの状態と
-     * 完全に失った状態が同じ顔になり、実際そうなっていた。
+     * 完全に失った状態が同じ顔になる。
      */
     suspend fun saveReply(
         vaultRelativePath: String,
@@ -390,7 +381,6 @@ internal class ReadingTraceController(
         // **要求の所有者を、非同期へ入る前に固定する**（→ docs/dev/lessons.md L26）。
         // この後の `persistence.load` は同期I/Oで、戻る頃には別のノートを開いている場合がある。
         // 所有者を見ずに「いまのセッション」へ預け直すと、**Aへ書いた返事がBの痕跡へ保存される**。
-        // 保存先の `vaultKey` は既に固定していたが、**失敗側の預け先だけが現在値を読んでいた。**
         val ownerSessionId = session?.id
         val vaultKey = currentVaultKey()
             // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
@@ -422,11 +412,8 @@ internal class ReadingTraceController(
                     null
                 }
                 if (saved is ReadingTraceSaveResult.Success) {
-                    // **ここで退避を捨てる必要は無い。** 一度書いてから消した —
-                    // 退避側が日時で新旧を見るため、古い退避は次の契機で
-                    // 書き戻されずにそのまま捨てられる（読み込み1回で済み、書き込みは出ない）。
-                    // 実際、外しても落ちるテストが1つも無かった
-                    // （→ lessons L11。冗長なガードは足さない）。
+                    // **ここで退避を捨てる必要は無い。** 退避側が日時で新旧を見るので、
+                    // 古い退避は次の契機で書き戻されずに捨てられる（→ lessons L11。冗長なガードは足さない）。
                     ReplySaveOutcome.Saved
                 } else {
                     // **書けなかったぶんを必ず退避する。** ここを握り潰すと、
@@ -442,8 +429,8 @@ internal class ReadingTraceController(
     /**
      * 退避してある痕跡を書き直す。**書き込み契機のたびに先頭で試す。**
      *
-     * ファイルが無ければ退避した痕跡をそのまま作る（**新規作成の失敗を復旧できる**のが、
-     * 返事だけを持っていた頃との違い）。既にあれば、そこへ [Reflection] を載せ直す —
+     * ファイルが無ければ退避した痕跡をそのまま作る（**新規作成の失敗も復旧できる**）。
+     * 既にあれば、そこへ [Reflection] を載せ直す —
      * 待っている間に訪問が増えている可能性があるので、丸ごと上書きはしない。
      */
     private suspend fun flushPendingWrites(excludePath: String? = null) {
@@ -667,9 +654,8 @@ internal class ReadingTraceController(
                     owner.pendingRemark = pendingRemark
                 }
             }
-            // **書けなかった痕跡を丸ごと退避する。** ここが「痕跡の新規作成が
-            // 失敗した回」を救う唯一の場所 — 返事だけを持っていた頃は、
-            // ファイルが無いと載せる先が無く復旧できなかった。
+            // **書けなかった痕跡を丸ごと退避する。** 痕跡の新規作成が失敗した回を救えるのはここだけ
+            // （ファイルが無いと、返事だけでは載せる先が無い）。
             attempted?.let { trace ->
                 if (result is ReadingTraceSaveResult.Failure) {
                     rememberPendingWrite(vaultKey, trace)
