@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-14 | — | 読書痕跡から再会カードを、冊子の画面から紙1枚の描画とめくりの幾何を分け、分けたファイルのコメントを整理した | [architecture](system/architecture.md) 判断1 |
 | 2026-09-14 | — | 保守の足場の修正確認レビューを受け、指摘3件の台帳・受付行と検討枠の失敗枝の行を閉じた | [review](../review/README.md) |
 | 2026-09-14 | — | 保守の足場のレビュー3件に対応し、コメント検査の文字列誤認・テスト側の入力漏れ・冊子設計の旧理由を直した | [review](../review/README.md)・[booklet_mode](features/booklet_mode.md) 判断12 |
 | 2026-09-14 | — | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
