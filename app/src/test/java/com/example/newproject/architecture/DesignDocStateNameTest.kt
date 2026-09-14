@@ -206,16 +206,6 @@ class DesignDocStateNameTest {
         val QUALIFIED_PATTERN = Regex("""AiAvailability\.(\w+)""")
 
         /**
-         * 消した型・値・フィールドの名前。**現役のように書いたら落とす。**
-         *
-         * **現存する名前を挙げても構わない** — [declaredStateNames] が自動で外す。
-         * `Unavailable` がその例で、`AiAvailability` からは消えたが `DistillState` には残る。
-         *
-         * **限界:** 名前が別の型に現存すると禁じられないので、
-         * 「`DistillState` の一覧に消えた `NeedsDownload` が残っている」ような
-         * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
-         */
-        /**
          * **一度誤りとして直した主張。** 書き戻したら落とす。
          *
          * どれも「識別子は現存するのに意味が逆」で、名前ベースの検査を通過した実例。
@@ -230,6 +220,16 @@ class DesignDocStateNameTest {
             "到達不能な variant が2件"
         )
 
+        /**
+         * 消した型・値・フィールドの名前。**現役のように書いたら落とす。**
+         *
+         * **現存する名前を挙げても構わない** — [declaredStateNames] が自動で外す。
+         * `Unavailable` がその例で、`AiAvailability` からは消えたが `DistillState` には残る。
+         *
+         * **限界:** 名前が別の型に現存すると禁じられないので、
+         * 「`DistillState` の一覧に消えた `NeedsDownload` が残っている」ような
+         * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
+         */
         val RETIRED_NAMES = listOf(
             "Available",
             "Unavailable",

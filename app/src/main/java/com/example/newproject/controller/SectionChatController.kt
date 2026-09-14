@@ -158,8 +158,6 @@ class SectionChatController(
                     }
                     fetchSuggestions(sectionTitle, sectionText)
                 }
-                // **旧文言は存在しない機能を案内していた** —「先にAI要約や補記メモを実行して
-                // ダウンロードしてください」の補記メモは 2026-08-09 にひとことへ置き換わっている。
                 // **`message` だけを取り出さない** — 導線を捨てると一時的な不可でも再試行できず、
                 // エラーと同じ赤で出てしまう（状態の説明は失敗ではない）。
                 AiAvailability.NeedsDownload,

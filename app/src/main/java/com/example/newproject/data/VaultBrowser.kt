@@ -45,15 +45,6 @@ interface VaultBrowser {
 }
 
 /**
- * 選択中Vaultに束縛された操作。
- *
- * **ハンドルは処理の開始時に1回だけ取り、その1つを最後まで使う。**
- * 途中で [VaultBrowser.current] を引き直すと、Vault切替をまたいだときに
- * 「照合は旧Vault・書き込みは新Vault」という食い違いが起こり得る。
- * 走行中に切り替わった場合は、呼び出し側が持つ Vault世代（`vaultGeneration`）で弾く。
- * これは [ReadingTraceStore] が既に採っている規約と同じ。
- */
-/**
  * 1件のドキュメントの**中身の世代**を引き直した結果。
  *
  * **境目は「参照先の存在を確かめられたか」に置く。** 引き直す目的は
@@ -79,6 +70,15 @@ sealed interface DocumentVersionLookup {
     object Unconfirmed : DocumentVersionLookup
 }
 
+/**
+ * 選択中Vaultに束縛された操作。
+ *
+ * **ハンドルは処理の開始時に1回だけ取り、その1つを最後まで使う。**
+ * 途中で [VaultBrowser.current] を引き直すと、Vault切替をまたいだときに
+ * 「照合は旧Vault・書き込みは新Vault」という食い違いが起こり得る。
+ * 走行中に切り替わった場合は、呼び出し側が持つ Vault世代（`vaultGeneration`）で弾く。
+ * これは [ReadingTraceStore] が既に採っている規約と同じ。
+ */
 interface VaultHandle {
     /** Vault 第一階層のフォルダ（名前昇順・`_ReadingTraces` を除く）。 */
     suspend fun listTopLevelFolders(): List<NoteFolder>

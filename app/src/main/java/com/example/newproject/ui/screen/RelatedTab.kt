@@ -40,7 +40,6 @@ import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.PanelDividerStrong
 import com.example.newproject.ui.theme.RelatedHeading
 import com.example.newproject.ui.theme.AppGradient
-import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
@@ -100,8 +99,7 @@ internal fun RelatedNotesPanel(
     when (state) {
         is RelatedNotesState.Idle -> return
         is RelatedNotesState.Loading,
-        is RelatedNotesState.Success,
-        is RelatedNotesState.Error -> Unit
+        is RelatedNotesState.Success -> Unit
     }
 
     Surface(
@@ -173,9 +171,6 @@ internal fun RelatedNotesPanel(
                             }
                         }
                     }
-                }
-                is RelatedNotesState.Error -> {
-                    Text("関連ノートの取得に失敗しました: ${state.message}", fontSize = 13.sp, color = ErrorText)
                 }
                 else -> {}
             }

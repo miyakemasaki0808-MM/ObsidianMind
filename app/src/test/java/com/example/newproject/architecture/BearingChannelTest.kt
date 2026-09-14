@@ -225,19 +225,6 @@ class BearingChannelTest {
         shape.topStart.toPx(Size(100f, 100f), Density(1f))
 
     /**
-     * **コメントと import を落としてから走査する。**
-     *
-     * 落とさない版は、変異確認で2度素通りした。
-     * 1度目はコメント — 冊子の `shape` を読む面の役割へすり替えても、
-     * KDocに名前が残っていたので緑のままだった。
-     * 2度目は import — **代入を直書きへ戻しても import 行だけで名前は残る**。
-     * しかも Kotlin も Android Lint も未使用 import を報告しないので、
-     * **その変異はビルドを通したうえで検査も通る**（外部レビュー `P2-2` が指摘）。
-     *
-     * **走査テストは文字列しか見ないので、名前の在処が実装の証拠に化ける。**
-     * だから受理条件は「名前があること」ではなく**代入と呼び出しの形**で書く。
-     */
-    /**
      * 関数1つ分の本体を切り出す。**同じ役割を複数の面が引くので、ファイル単位では足りない。**
      *
      * 紙の `shape` を直書きへ戻す変異は、**縁が同じ役割を引いているせいで
@@ -256,6 +243,19 @@ class BearingChannelTest {
         return if (next < 0) substring(start) else substring(start, next)
     }
 
+    /**
+     * **コメントと import を落としてから走査する。**
+     *
+     * 落とさない版は、変異確認で2度素通りした。
+     * 1度目はコメント — 冊子の `shape` を読む面の役割へすり替えても、
+     * KDocに名前が残っていたので緑のままだった。
+     * 2度目は import — **代入を直書きへ戻しても import 行だけで名前は残る**。
+     * しかも Kotlin も Android Lint も未使用 import を報告しないので、
+     * **その変異はビルドを通したうえで検査も通る**（外部レビュー `P2-2` が指摘）。
+     *
+     * **走査テストは文字列しか見ないので、名前の在処が実装の証拠に化ける。**
+     * だから受理条件は「名前があること」ではなく**代入と呼び出しの形**で書く。
+     */
     private fun source(sourceSet: String, path: String): String {
         val file = File("src/$sourceSet/java/com/example/newproject/$path")
         require(file.exists()) { "走査対象が見つかりません: ${file.path}" }

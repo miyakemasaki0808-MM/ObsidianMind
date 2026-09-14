@@ -38,7 +38,7 @@ sealed interface NoteFieldAnswer {
  * AIが迷った応答を、こちらが勝手に決めて確定として永続すると、
  * **入力版が同じあいだ二度と直らない。** 落とせば次に開いたときやり直せる。
  *
- * **ID以外の行が1つでもあれば、拾えた候補ごと落とす**（→ レビュー P2-2）。
+ * **ID以外の行が1つでもあれば、拾えた候補ごと落とす。**
  * 読めない行を読み飛ばすと、`F1` の次行に `F1 ではなく F3 が適切です` を返す応答から
  * **否定されたほうのF1を確定する。** 装飾と「選択を無効にする内容」は同じ扱いにできない。
  *
@@ -61,8 +61,7 @@ fun parseNoteFieldAnswer(response: String): NoteFieldAnswer {
         if (line.isEmpty()) continue
         // **行全体がIDの形であることを要求し、外れた行は応答ごと落とす。**
         // 先頭だけを見ると `F1 / F3`（併記）や `F1 ではなく F3 が適切です`（否定）から
-        // 先頭のIDを取って確定し（→ レビュー P2-3）、読み飛ばすと同じ文が次の行に来たときに
-        // 素通りする（→ レビュー P2-2）。
+        // 先頭のIDを取って確定し、読み飛ばすと同じ文が次の行に来たときに素通りする。
         val token = ANSWER_LINE.matchEntire(line)?.groupValues?.get(1)?.uppercase()
             ?: return NoteFieldAnswer.Invalid
         found += token

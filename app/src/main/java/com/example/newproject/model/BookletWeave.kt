@@ -47,8 +47,6 @@ fun buildWeaveState(
         // 関連ノートは必ず走っているので、Idle は取り違えではなく開始直後の一瞬である。
         RelatedNotesState.Idle, RelatedNotesState.Loading ->
             WeaveState.Blocked(seed.title, WeaveBlockedReason.Pending)
-        is RelatedNotesState.Error ->
-            WeaveState.Blocked(seed.title, WeaveBlockedReason.Failed)
         is RelatedNotesState.Success -> {
             val entries = weaveEntries(seed, related, size)
             if (entries.isEmpty()) WeaveState.Blocked(seed.title, WeaveBlockedReason.Empty)

@@ -596,6 +596,8 @@ class NoteViewModel internal constructor(
             cachedNotesLoadedAt = 0L
             relatedNotesUseCase.clearCache()
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Exception) {
             false
         }
@@ -646,8 +648,6 @@ class NoteViewModel internal constructor(
                         aiNotes = result.aiNotes
                     )
                 )
-                is RelatedNotesResult.Error ->
-                    session.setRelatedNotesState(RelatedNotesState.Error(result.message))
             }
         }
     }

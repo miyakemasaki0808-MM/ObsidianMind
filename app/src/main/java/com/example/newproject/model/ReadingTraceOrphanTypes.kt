@@ -7,7 +7,7 @@ package com.example.newproject.model
 // `controller` と `ui` の両方が触るためここへ置く。`model` は葉なので何も import せず、
 // これにより `ui` は `domain` を経由せずに結果を描ける。
 // **`NoteExcerpt`（model）と `buildNoteExcerpt`（domain）と同じ切り分け**
-// → architecture.md 2026-07-27。
+// → architecture.md 判断6。
 // ---------------------------------------------------------------------------
 
 /** 判定の上限。既定値は「安全側」に寄せてある。 */

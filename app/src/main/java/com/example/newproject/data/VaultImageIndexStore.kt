@@ -174,11 +174,9 @@ internal class VaultImageIndexStore(
         }
     }
 
-    // 明示的な invalidate() は置かない。**世代照合が既に同じ仕事をしている**ため、
-    // Vault切替で呼ぶ相手が存在しなかった（書いてはみたが呼び出し側が現れず、
-    // テストのためだけに残る形になった）。2026-07-31 に requestId ガードを
-    // 変異検証で冗長と判断して削除したのと同じ判断。再追加するなら、
-    // 世代照合では消せない無効化の契機を先に示すこと。
+    // 明示的な invalidate() は置かない。**世代照合が既に同じ仕事をしている**ので、
+    // Vault切替で呼ぶ相手がおらず、テストのためだけに残る形になる（→ lessons L11）。
+    // 再追加するなら、世代照合では消せない無効化の契機を先に示すこと。
 
     private suspend fun indexFor(handle: VaultHandle, generation: Long): NoteImageIndex {
         val current = cached

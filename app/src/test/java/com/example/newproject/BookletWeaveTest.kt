@@ -62,14 +62,6 @@ class BookletWeaveTest {
     }
 
     @Test
-    fun `関連ノートが失敗していたら押せない理由は取れなかった`() {
-        assertEquals(
-            WeaveState.Blocked("種", WeaveBlockedReason.Failed),
-            weave(related = RelatedNotesState.Error("失敗"))
-        )
-    }
-
-    @Test
     fun `候補が1件も無ければ押せない理由は見つからなかった`() {
         assertEquals(
             WeaveState.Blocked("種", WeaveBlockedReason.Empty),

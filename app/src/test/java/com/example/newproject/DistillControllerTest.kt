@@ -609,6 +609,29 @@ class DistillControllerTest {
         assertTrue(state.value.distillState is DistillState.RecoveryResolved)
     }
 
+    /**
+     * **書き出し中のキャンセルはエラーへ変換しない。**
+     *
+     * 書き出しは画面の寿命で打ち切られうる。広い catch に畳むと、何も失敗していないのに
+     * 「元本文を書き出せませんでした」が出る。**復旧レコードは消さずに残す** — 書き出しが
+     * 終わっていないので、ここで消すと保存前の本文へ戻る手段が無くなる。
+     */
+    @Test
+    fun `a cancelled export does not become an error and keeps the recovery record`() = runTest {
+        val state = stateWithNote()
+        val before = state.value.distillState
+        val persistence = FakePersistence().apply {
+            pending = PendingDistillOriginal("content://note", "保存前".toByteArray())
+        }
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
+
+        controller.exportOriginal { throw CancellationException("screen closed") }
+        advanceUntilIdle()
+
+        assertEquals("キャンセルがエラー表示に化けている", before, state.value.distillState)
+        assertFalse("書き出していないのに復旧レコードを消した", persistence.discarded)
+    }
+
     // ── 太字範囲の調整（段階1: プリセット）─────────────────────────────────
 
     @Test

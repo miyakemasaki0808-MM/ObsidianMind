@@ -47,7 +47,7 @@ fun noteFieldInputVersion(title: String, excerpt: NoteExcerpt, hint: NoteField?)
         append(":a").append(if (excerpt.isAbridged) 1 else 0)
         append(":h").append(hint?.promptId ?: "-")
         // **タイトルもプロンプトへ載る**ので入力の一部である。落とすと、同じテンプレート本文を持つ
-        // 異題ノートが同じ鍵へ畳まれ、**先に開いたノートの分類が両方へ効く**（→ レビュー P2-2）。
+        // 異題ノートが同じ鍵へ畳まれ、**先に開いたノートの分類が両方へ効く。**
         append(":t").append(title)
         append(":x").append(excerpt.text)
     }

@@ -697,6 +697,8 @@ internal class DistillController(
                     if (deleted) DistillState.RecoveryResolved("保存前の本文を書き出しました。")
                     else DistillState.Error("書き出し後に復旧情報を削除できませんでした。", canRetry = false)
                 )
+            } catch (error: CancellationException) {
+                throw error
             } catch (error: Exception) {
                 update(DistillState.Error(error.message ?: "元本文を書き出せませんでした。", canRetry = false))
             }

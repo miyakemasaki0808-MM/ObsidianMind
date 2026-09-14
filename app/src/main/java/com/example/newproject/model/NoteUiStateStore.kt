@@ -101,10 +101,6 @@ interface ReadingTraceBackupStateWriter {
 }
 
 /**
- * 画面全体の [NoteUiState] を所有し、各 Controller には担当スライスだけを書ける
- * Writer を渡す。Controller が担当外フィールドを更新する経路を型で閉じる。
- */
-/**
  * 索引A（ノート → 分野）の書き手。**Vault単位のスライス**なので、ノート単位の契約には載らない。
  *
  * 合成の規則そのものは `domain` が持つ（`model` は `domain` を import できない）。
@@ -117,6 +113,10 @@ interface NoteFieldStateWriter {
     )
 }
 
+/**
+ * 画面全体の [NoteUiState] を所有し、各 Controller には担当スライスだけを書ける
+ * Writer を渡す。Controller が担当外フィールドを更新する経路を型で閉じる。
+ */
 internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     private val mutableState = MutableStateFlow(initialState)
     val uiState: StateFlow<NoteUiState> = mutableState.asStateFlow()

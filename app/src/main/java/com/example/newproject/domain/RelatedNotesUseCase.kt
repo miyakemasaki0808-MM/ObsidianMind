@@ -27,7 +27,6 @@ sealed class RelatedNotesResult {
         val relatedNotes: List<RelatedNote>,
         val aiNotes: List<RelatedNote>
     ) : RelatedNotesResult()
-    data class Error(val message: String) : RelatedNotesResult()
 }
 
 class RelatedNotesUseCase(
