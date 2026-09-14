@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-14 | — | 保守の足場のレビュー3件に対応し、コメント検査の文字列誤認・テスト側の入力漏れ・冊子設計の旧理由を直した | [review](../review/README.md)・[booklet_mode](features/booklet_mode.md) 判断12 |
 | 2026-09-14 | — | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
 | 2026-09-14 | — | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/idea_catalog.md) |
 | 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [wip_analysis](../owner/wip_analysis.md)・[roadmap](../_wip/roadmap.md) |
