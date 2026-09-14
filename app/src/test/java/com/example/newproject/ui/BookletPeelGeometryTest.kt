@@ -1,12 +1,12 @@
 package com.example.newproject.ui
 
+import com.example.newproject.bookletSources
 import androidx.compose.ui.geometry.Offset
 import com.example.newproject.ui.screen.peelFlapPolygon
 import com.example.newproject.ui.screen.peelFlatPolygon
 import com.example.newproject.ui.screen.peelFoldDistance
 import com.example.newproject.ui.screen.peelLift
 import com.example.newproject.ui.screen.sheetPeel
-import java.io.File
 import kotlin.math.absoluteValue
 import kotlin.math.hypot
 import org.junit.Assert.assertEquals
@@ -307,9 +307,11 @@ class BookletPeelGeometryTest {
         return true
     }
 
-    private val screen: String by lazy {
-        File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt").readText()
-    }
+    /**
+     * 冊子のソース一式（`ui/screen/Booklet*.kt`）。**1ファイルだけを読まない** —
+     * 「無いこと」を確かめる走査は、コードが別ファイルへ移ると黙って通るようになる。
+     */
+    private val screen: String by lazy { bookletSources().joinToString("\n") { it.readText() } }
 
     /** その宣言の本体。**コメントは落とす**（走査が文章で緩まないように）。 */
     private fun String.bodyOf(signature: String): String {

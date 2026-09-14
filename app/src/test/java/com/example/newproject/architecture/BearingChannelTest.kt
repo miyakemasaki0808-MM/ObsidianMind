@@ -1,5 +1,6 @@
 package com.example.newproject.architecture
 
+import com.example.newproject.bookletSources
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
@@ -31,23 +32,28 @@ import java.io.File
  */
 class BearingChannelTest {
 
-    private val bookletScreen = source("main", "ui/screen/BookletScreen.kt")
+    /**
+     * 冊子のソース一式（`ui/screen/Booklet*.kt`）を**ファイルごとに**持つ。
+     * 本体の切り出しは宣言のあるファイルの中で行い、「無いこと」の走査は全ファイルへ当てる
+     * （1ファイルだけ見ると、別ファイルへ移ったコードが黙って素通りする）。
+     */
+    private val bookletFiles = bookletSources().map { source("main", "ui/screen/${it.name}") }
     private val noteComponents = source("main", "ui/component/NoteComponents.kt")
 
     /** 紙そのものを描く関数の本体。**縁の代入と混ざらないよう、ここへ絞る。** */
-    private val sheetBody = bookletScreen.bodyOf("internal fun BookletSheet(")
+    private val sheetBody = bookletFiles.bodyOf("internal fun BookletSheet(")
 
     /** 縁を描く関数の本体。 */
-    private val edgeBody = bookletScreen.bodyOf("private fun BoxScope.StackEdge(")
+    private val edgeBody = bookletFiles.bodyOf("private fun BoxScope.StackEdge(")
 
     /** 本文パネルを描く関数の本体。 */
     private val notePanelBody = noteComponents.bodyOf("internal fun NoteContentPanel(")
 
     /** 束の紙1枚を描く関数の本体。 */
-    private val bundlePageBody = bookletScreen.bodyOf("private fun BookletPage(")
+    private val bundlePageBody = bookletFiles.bodyOf("private fun BookletPage(")
 
     /** 束の紙ではないページ（もう10枚引く）を描く関数の本体。 */
-    private val drawAgainBody = bookletScreen.bodyOf("private fun DrawAgainPage(")
+    private val drawAgainBody = bookletFiles.bodyOf("private fun DrawAgainPage(")
 
     /**
      * **これが本体の受け入れ条件。** 走査ではなく値で見る。
@@ -102,7 +108,8 @@ class BearingChannelTest {
         assertTrue(
             "折り目の形が、静止時に眺める面の役割（`BrowsingSheetShape`）へ戻していません。" +
                 "紙の形を直に書くと、区別が値の一致で消えます。",
-            bookletScreen.substringAfter("internal class PeelShape(")
+            bookletFiles.single { it.contains("internal class PeelShape(") }
+                .substringAfter("internal class PeelShape(")
                 .contains("BrowsingSheetShape.createOutline(size, layoutDirection, density)")
         )
     }
@@ -125,9 +132,9 @@ class BearingChannelTest {
     @Test
     fun `2つの面は互いの役割を引かない`() {
         assertTrue(
-            "BookletScreen が読む面の役割（ReadingSurfaceShape）を参照しています。" +
+            "冊子のソースが読む面の役割（ReadingSurfaceShape）を参照しています。" +
                 "冊子は眺める面です。",
-            !bookletScreen.contains("ReadingSurfaceShape")
+            bookletFiles.none { it.contains("ReadingSurfaceShape") }
         )
         assertTrue(
             "NoteComponents が眺める面の役割（BrowsingSheetShape）を参照しています。" +
@@ -153,7 +160,7 @@ class BearingChannelTest {
         )
         assertTrue(
             "束の縁に明暗の分岐が入っています。役割トークン1つで表せるはずです。",
-            !bookletScreen.contains("DarkAppColors") && !bookletScreen.contains("LightAppColors")
+            bookletFiles.none { it.contains("DarkAppColors") || it.contains("LightAppColors") }
         )
         // **縁も紙と同じ形を引く。** 同じ束の紙なので、角だけ丸いと背後だけ別素材に見える。
         assertTrue(
@@ -242,6 +249,9 @@ class BearingChannelTest {
         val next = indexOf("\n@Composable", start + signature.length)
         return if (next < 0) substring(start) else substring(start, next)
     }
+
+    /** 宣言を含む1ファイルの中で本体を切り出す。**ファイルをまたいで次の宣言まで伸ばさない。** */
+    private fun List<String>.bodyOf(signature: String): String = single { it.contains(signature) }.bodyOf(signature)
 
     /**
      * **コメントと import を落としてから走査する。**

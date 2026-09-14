@@ -241,16 +241,14 @@ class BookletRestackTest {
      */
     @Test
     fun `積み直りの効果はページ送りで作り直されない`() {
-        val effect = File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt")
-            .readText()
+        val effect = bookletSources().joinToString("\n") { it.readText() }
             .substringAfter("val rule = BookletRestackRule()", "")
 
         assertTrue("積み直りの効果が見つかりません。", effect.isNotEmpty())
         assertTrue(
             "積み直りの効果が `LaunchedEffect(Unit)` の中にありません。状態を鍵にすると、" +
                 "ページを送った瞬間に演出が打ち切られます。",
-            File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt")
-                .readText()
+            bookletSources().joinToString("\n") { it.readText() }
                 .substringBefore("val rule = BookletRestackRule()")
                 .trimEnd()
                 .endsWith("LaunchedEffect(Unit) {")
@@ -284,9 +282,7 @@ class BookletRestackTest {
         // 倍率を上書きすると、設定を切っている利用者にだけ演出が戻る。
         assertFalse(
             "冊子の画面がアニメーション倍率を上書きしています（→ features/booklet_mode.md 判断10）。",
-            File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt")
-                .readText()
-                .contains("MotionDurationScale")
+            bookletSources().any { it.readText().contains("MotionDurationScale") }
         )
     }
 

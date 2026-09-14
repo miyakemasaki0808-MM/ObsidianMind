@@ -2,7 +2,6 @@ package com.example.newproject
 
 import androidx.compose.foundation.pager.PagerState
 import com.example.newproject.ui.screen.alignPager
-import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,7 +106,7 @@ class BookletPagerAlignmentTest {
      */
     @Test
     fun `位置合わせは束の世代を鍵にする`() {
-        val screen = File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt").readText()
+        val screen = bookletSources().joinToString("\n") { it.readText() }
 
         assertTrue(
             "位置合わせが `LaunchedEffect(bundleId)` の中にありません。`Unit` を鍵にすると、" +

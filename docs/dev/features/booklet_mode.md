@@ -4,7 +4,7 @@
 **編む冊子（判断12）**まで、いずれも**実機で確認しオーナー判断で受理**した。
 **2026-09-07 のコードレビューで受けた3件（`P2-1`〜`P2-3`）は修正し、実機でも解消を確認した。**
 **最終検証:** 2026-09-08（未確認範囲を残して受理 → 判断12）
-**関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `model/BookletWeave.kt` / `model/state/BookletState.kt` / `ui/screen/BookletScreen.kt` / `MainActivity.kt`（`booklet` ルート）
+**関連コード:** `domain/BookletCoverLine.kt` / `controller/BookletController.kt` / `model/BookletTypes.kt` / `model/BookletWeave.kt` / `model/state/BookletState.kt` / `ui/screen/BookletScreen.kt` / `ui/screen/BookletSheet.kt` / `ui/screen/BookletSheetGeometry.kt` / `MainActivity.kt`（`booklet` ルート）
 **関連テスト:** `BookletCoverLineTest` / `BookletControllerTest` / `BookletWeaveTest`（編む束の中身）/ `BookletScreenTest`（描画）/ `BookletNavigationTest`（実NavHost往復）/ `BearingChannelTest`（形の役割）/ `BookletTurnGeometryTest`（繰りの向き）/ `BookletCurlGeometryTest`（曲がりの幾何）/ `BookletSheetPerspectiveTest`（画素）／実機は [booklet_mode ケース](../../review/device_validation/booklet_mode.md)
 **正本:** この文書
 
@@ -334,7 +334,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 - **縁は `panelRow` 1つで足りた。** 明暗どちらでも `panel` より暗い唯一の既存の面トークンなので、
   **明暗の分岐を書かずに「沈む」を表せる**（新しい色トークンは作っていない）。
 - **縁の幅は紙の余白を超えられない。** 縁は紙の右下へずれて描かれるので、
-  [`STACK_EDGE_MAX`](../../../app/src/main/java/com/example/newproject/ui/screen/BookletScreen.kt) を上げるなら
+  [`STACK_EDGE_MAX`](../../../app/src/main/java/com/example/newproject/ui/screen/BookletSheet.kt) を上げるなら
   右と下の余白も一緒に上げる。**下げ忘れると隣のページに重なる。**
 
 **「もう10枚引く」ページには縁を付けない。** 束の10枚に含まれない**別種のページ**だからで、
@@ -390,7 +390,7 @@ ZINEは眺めるためのもので、深く作業する場所ではない。**�
 **遠すぎる側・近すぎる側の両方を挟む** — 遠近はエラーも警告も出さずに静かに消える。
 
 **紙が回るのは積み直りのあいだだけである。** 角度は
-[`sheetTiltDegrees`](../../../app/src/main/java/com/example/newproject/ui/screen/BookletScreen.kt) が
+[`sheetTiltDegrees`](../../../app/src/main/java/com/example/newproject/ui/screen/BookletSheetGeometry.kt) が
 `restack` だけから決め、**0〜22度**（`RESTACK_TILT_DEGREES`）に収まる。
 **めくり量は回転にも遠近にも効かない** — めくりは折り目の幾何で表すので角度を持たない（→ 判断11）。
 

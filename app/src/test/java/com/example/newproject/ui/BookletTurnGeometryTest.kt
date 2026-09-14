@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import com.example.newproject.bookletSources
 import androidx.compose.ui.graphics.Matrix
 import com.example.newproject.ui.screen.CAMERA_DISTANCE_FACTOR
 import com.example.newproject.ui.screen.CAMERA_UNIT_PX
@@ -11,7 +12,6 @@ import com.example.newproject.ui.screen.sheetShowsStack
 import com.example.newproject.ui.screen.sheetSlotShift
 import com.example.newproject.ui.screen.sheetStanding
 import com.example.newproject.ui.screen.sheetTiltDegrees
-import java.io.File
 import kotlin.math.absoluteValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -406,9 +406,11 @@ class BookletTurnGeometryTest {
         )
     }
 
-    private val screen: String by lazy {
-        File("src/main/java/com/example/newproject/ui/screen/BookletScreen.kt").readText()
-    }
+    /**
+     * 冊子のソース一式（`ui/screen/Booklet*.kt`）。**1ファイルだけを読まない** —
+     * 「無いこと」を確かめる走査は、コードが別ファイルへ移ると黙って通るようになる。
+     */
+    private val screen: String by lazy { bookletSources().joinToString("\n") { it.readText() } }
 
     /** その関数の本体。**コメントは落とす**（走査が文章で緩まないように）。 */
     private fun String.bodyOf(signature: String): String {
