@@ -29,10 +29,8 @@ class SourceCommentShapeTest {
         val violations = kotlinSources()
             .flatMap { file ->
                 val text = file.readText()
-                KDOC.findAll(text)
-                    .zipWithNext()
-                    .filter { (first, second) -> text.substring(first.range.last + 1, second.range.first).isBlank() }
-                    .map { (first, _) -> "${file.relativeTo(sourceSetsRoot())}:${lineOf(text, first.range.first)}" }
+                KotlinCommentScanner.detachedKDocOffsets(text)
+                    .map { offset -> "${file.relativeTo(sourceSetsRoot())}:${KotlinCommentScanner.lineOf(text, offset)}" }
             }
             .sorted()
             .toList()
@@ -58,23 +56,14 @@ class SourceCommentShapeTest {
      * **見るのは本番コードだけ。** テストは「どの変異が素通りしたか」を固定する場所で、
      * 経緯そのものが検査の根拠になっていることがある。
      *
-     * 「」と "" の中の日付は**書式の例**として数えない（`最終検証: 2026-08-12` のような行を扱う解析器がある）。
+     * 引用された書式の例と、文字列リテラルの中は数えない（→ [KotlinCommentScanner]）。
      */
     @Test
     fun `本番コードのコメントに日付とレビューの指摘番号を書かない`() {
         val violations = kotlinSources(listOf("main"))
             .flatMap { file ->
-                val text = file.readText()
-                COMMENT.findAll(text).flatMap { comment ->
-                    comment.value.lineSequence()
-                        .mapIndexedNotNull { index, line ->
-                            val unquoted = QUOTED.replace(line, " ")
-                            HISTORY_MARK.find(unquoted)?.let {
-                                val lineNumber = lineOf(text, comment.range.first) + index
-                                "${file.relativeTo(sourceSetsRoot())}:$lineNumber: ${line.trim()}"
-                            }
-                        }
-                }
+                KotlinCommentScanner.historyMarkLines(file.readText())
+                    .map { (line, content) -> "${file.relativeTo(sourceSetsRoot())}:$line: $content" }
             }
             .sorted()
             .toList()
@@ -85,8 +74,6 @@ class SourceCommentShapeTest {
             violations.isEmpty()
         )
     }
-
-    private fun lineOf(text: String, offset: Int): Int = text.substring(0, offset).count { it == '\n' } + 1
 
     /** 付け忘れの起き方はソースセットで変わらないので、既定では3つとも同じ規則で数える。 */
     private fun kotlinSources(sourceSets: List<String> = SOURCE_SETS): Sequence<File> =
@@ -110,16 +97,5 @@ class SourceCommentShapeTest {
 
     private companion object {
         val SOURCE_SETS = listOf("main", "test", "androidTest")
-
-        val KDOC = Regex("""/\*\*.*?\*/""", RegexOption.DOT_MATCHES_ALL)
-
-        /** ブロックコメントと行コメント。行コメントは `://`（URL）を拾わない。 */
-        val COMMENT = Regex("""/\*.*?\*/|(?<!:)//[^\n]*""", RegexOption.DOT_MATCHES_ALL)
-
-        /** 経緯の目印。日付（`2026-09-07`）とレビューの指摘番号（`P2-1`）。 */
-        val HISTORY_MARK = Regex("""\b20\d{2}-\d{2}-\d{2}\b|\bP[0-3]-\d+\b""")
-
-        /** 書式の例として引用された部分。 */
-        val QUOTED = Regex("""「[^」]*」|"[^"]*"""")
     }
 }
