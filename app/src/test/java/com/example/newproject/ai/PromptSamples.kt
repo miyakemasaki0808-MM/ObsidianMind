@@ -70,7 +70,7 @@ internal object PromptSamples {
                 ).text,
 
             "buildPickerPrompt" to
-                PromptBuilder.buildPickerPrompt(value, List(entries) { "$MARK$it" }).text,
+                PromptBuilder.buildPickerPrompt(value, List(entries) { PickerCandidateLine("P0$it", "$MARK$it") }).text,
 
             "buildQuizPrompt" to
                 PromptBuilder.buildQuizPrompt(value, excerpt, QuizFormat.ThreeChoice),

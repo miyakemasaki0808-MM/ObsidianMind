@@ -39,14 +39,18 @@ data class RemarkCandidateLine(val id: String, val title: String, val snippet: S
         if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
 }
 
+/** AIピッカーに渡す候補行。ID→ノートの解決は UseCase 側で行う（関連ノートと同じ契約）。 */
+data class PickerCandidateLine(val id: String, val title: String)
+
 /**
- * AIピッカーのプロンプトと、**実際に提示したタイトル**。
+ * AIピッカーのプロンプトと、**実際に提示した候補**。
  *
- * ピッカーだけは応答を**タイトルそのもの**で照合するので（ID契約から外れている件は別課題）、
- * 予算で提示から落ちた候補を許可集合に残すと、**見せていないノートをモデルが返しても
+ * 予算で提示から落ちた候補を許可集合に残すと、**見せていないノートをモデルが指しても
  * 正規のAI結果として通ってしまう。** [DistillPrompt.validIds] と同じ契約をここでも持つ。
  */
-data class PickerPrompt(val text: String, val presentedTitles: List<String>)
+data class PickerPrompt(val text: String, val candidates: List<PickerCandidateLine>) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+}
 
 /**
  * 再会カードの候補行。**本文からそのまま取った1文**で、AIには手を入れさせない。
@@ -77,7 +81,7 @@ internal data class DistillPrompt(
 
 object PromptBuilder {
 
-    private const val PICKER_TITLE_LIMIT = 40
+    private const val PICKER_CANDIDATE_LIMIT = 40
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
     private const val NO_CHAT_HISTORY = "（なし / none）"
@@ -284,29 +288,28 @@ object PromptBuilder {
         return DistillPrompt(prompt, fitted, candidateBlock)
     }
 
-    // AIピッカー: 自然文クエリに合うノートを候補タイトルから3件選ばせる。
-    // 出力は関連ノートと同型（タイトルのみ・1行1件・説明なし）で、既存パーサを流用できる。
-    fun buildPickerPrompt(query: String, candidateTitles: List<String>): PickerPrompt {
-        // **タイトルは途中で切らない。** 受け側はタイトルで照合するので、切ると
-        // `notesByTitle` が黙って落とし、「3件選ばせたのに1件しか出ない」になる。
-        // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方。
-        // 打ち切ると、長いタイトルが1つ紛れただけで以降の候補を全部失う）。
-        val presented = mutableListOf<String>()
+    // AIピッカー: 自然文クエリに合うノートを候補から3件選ばせる。
+    // 候補は「ID | タイトル」で提示し、モデルにはIDだけ返させる（関連ノートと同じ契約）。
+    fun buildPickerPrompt(query: String, candidates: List<PickerCandidateLine>): PickerPrompt {
+        // 照合キーはIDなので、タイトルは切ってよい（→ system/ai_input_excerpt.md 判断10）。
+        // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方）。
+        val presented = mutableListOf<PickerCandidateLine>()
+        val rendered = mutableListOf<String>()
         var used = 0
-        for (title in candidateTitles.take(PICKER_TITLE_LIMIT)) {
-            val line = "- $title"
-            val cost = line.length + if (presented.isEmpty()) 0 else 1
+        for (candidate in candidates.take(PICKER_CANDIDATE_LIMIT)) {
+            val line = "${candidate.id} | ${label(candidate.title)}"
+            val cost = line.length + if (rendered.isEmpty()) 0 else 1
             if (used + cost > PromptLimits.PICKER_CANDIDATES_CHARACTERS) continue
-            presented += title
+            presented += candidate
+            rendered += line
             used += cost
         }
-        val titleList = presented.joinToString("\n") { "- $it" }
 
         val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
-            that best match the user's request. Answer in the same language as the request.
-            Return only note titles from the candidate list, one title per line.
-            Do not add numbers, bullets, explanations, or extra text.
+            that best match the user's request. Each candidate is listed as "ID | title".
+            Return only the IDs of the notes you picked, one ID per line (for example: P01).
+            Do not include the title, numbers, bullets, explanations, or any other text.
         """.trimIndent()
 
         return PickerPrompt(
@@ -314,10 +317,10 @@ object PromptBuilder {
                 instructions = instructions,
                 body = buildString {
                     append("\n\nUser request: ").append(query.take(PromptLimits.QUERY_CHARACTERS))
-                    append("\n\nCandidate note titles:\n").append(titleList)
+                    append("\n\nCandidates:\n").append(rendered.joinToString("\n"))
                 }
             ),
-            presentedTitles = presented
+            candidates = presented
         )
     }
 
@@ -576,7 +579,7 @@ object PromptBuilder {
      *
      * ノートの内容を写す要約と違い、**これはユーザーの問いに答える文**なので、
      * 従うべきは質問の言語である。セクションの言語に従わせると、コードや英語のセクションでは
-     * 日本語の質問に英語で返る。[buildPickerPrompt] の「リクエストの言語で」と同じ判断。
+     * 日本語の質問に英語で返る。
      */
     fun buildSectionChatPrompt(
         sectionTitle: String,

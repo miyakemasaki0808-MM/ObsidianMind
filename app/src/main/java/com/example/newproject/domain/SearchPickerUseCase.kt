@@ -4,6 +4,7 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
+import com.example.newproject.ai.PickerCandidateLine
 import com.example.newproject.ai.PromptBuilder
 import kotlinx.coroutines.CancellationException
 
@@ -24,7 +25,7 @@ sealed class PickerResult {
 
 /**
  * AIピッカー（さがすタブ）のキーワードモード。
- * RelatedNotesUseCase と同じ「候補を絞る → Nano に選ばせる → タイトルをノートに戻す」骨格。
+ * RelatedNotesUseCase と同じ「候補を絞る → Nano にIDで選ばせる → IDをノートに戻す」骨格。
  * 起点が「現在ノート」ではなく「自然文クエリ」で、絞り込みはプレフィックスではなく
  * キーワード再現率カット（候補が上限を超えるときのみ発火）に差し替えている。
  */
@@ -50,23 +51,21 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
                 is AiAvailability.TemporarilyUnavailable ->
                     fallback(query, candidates, isAiAssisted = false)
                 AiAvailability.Ready -> {
-                    val prompt = PromptBuilder.buildPickerPrompt(query, candidates.map { it.name })
-                    // **照合表はプロンプトへ実際に載せたタイトルだけで作る。**
-                    // 予算で落ちた候補を残すと、見せていないノートをモデルが返したときに
-                    // 「候補一覧からだけ選ぶ」という契約の外側を受理してしまう。
-                    val presented = prompt.presentedTitles.toSet()
-                    val notesByTitle = candidates
-                        .filter { it.name in presented }
-                        .associateBy { it.name.toNormalizedObsidianTitle() }
+                    // ID＝候補の並び順。同名・別参照も別IDになり、タイトルの言い換えや翻訳に左右されない。
+                    val idToNote = candidates
+                        .mapIndexed { index, note -> pickerCandidateId(index) to note }
+                        .toMap()
+                    val prompt = PromptBuilder.buildPickerPrompt(
+                        query,
+                        idToNote.map { (id, note) -> PickerCandidateLine(id, note.name) }
+                    )
                     val response = aiClient.generate(prompt.text)
-                    val picked = response.lineSequence()
-                        .map { it.cleanAiTitle() }
-                        .filter { it.isNotBlank() }
-                        .mapNotNull { title -> notesByTitle[title.toNormalizedObsidianTitle()] }
+                    // **許可集合はプロンプトへ実際に載せたIDだけ。** 予算で落ちた候補を残すと、
+                    // 見せていないノートをモデルが指したときに契約の外側を受理してしまう。
+                    val picked = parseCandidateIds(response, prompt.validIds, PICK_LIMIT, prefix = 'P')
+                        .mapNotNull { id -> idToNote[id] }
                         .distinctBy { it.ref }
-                        .take(PICK_LIMIT)
                         .map { it.toRelatedNote() }
-                        .toList()
 
                     // Nano が候補外/空を返したら、キーワード一致でフォールバック。
                     // **AIは動いている**ので、断り書きは出さない。

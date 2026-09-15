@@ -86,10 +86,9 @@ object PromptLimits {
     const val QUERY_CHARACTERS = 200
 
     /**
-     * AIピッカーの候補タイトル一覧の取り分。
+     * AIピッカーの候補一覧（`ID | タイトル`）の取り分。
      *
-     * **タイトルは途中で切らない**（受け側がタイトルで照合するため、切ると黙って落ちる）。
-     * 予算を超えるぶんは行ごと落とす。
+     * 照合キーはIDなので、タイトルは [LABEL_CHARACTERS] で切ってよい。予算を超えるぶんは行ごと落とす。
      */
     const val PICKER_CANDIDATES_CHARACTERS = 2_000
 }
