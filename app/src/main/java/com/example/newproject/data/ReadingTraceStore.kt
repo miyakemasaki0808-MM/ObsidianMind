@@ -12,18 +12,13 @@ import java.io.IOException
 // ReadingTrace のサイドカー永続化。
 //
 // 置き場は Vault内の `_ReadingTraces/`（アンダースコア始まりの可視フォルダ）。
-// SAFでは `.` 始まりの隠しフォルダはプロバイダ（Google Drive・OneDrive・一部の
-// ローカルファイラー）によって作成が失敗したり不可視化の挙動が違うため、
-// `_AI補記` と同じくアンダースコア始まりにして可搬性を優先する。
+// `.` 始まりの隠しフォルダは、SAFプロバイダによって作成そのものが失敗する。
 //
-// 書き込みは "wt"（write-truncate）の直接上書きで、原子性はない。truncate 後に
-// 書き直すため書込中にプロセスが死ぬと部分破損が残り復旧元もない。SAF の
-// renameDocument() はプロバイダ非互換で古典的な atomic-rename が成立せず、
-// DistillRecoveryStore の原子パターンは内部ストレージ専用でSAFへ移植できない。
-// 「シンプル最優先」の設計原則どおり、ここは割り切る。失われるのは痕跡だけで
-// ユーザーのノート(.md)には一切触れないため、本質（ノート閲覧）は損なわれない。
-// 破損は ReadingTraceJson の checksum 検証で検知し、孤立扱いにする。
+// 書き込みは "wt"（write-truncate）の直接上書きで、原子性はない。書込中にプロセスが死ぬと
+// 部分破損が残り、ReadingTraceJson の checksum 検証で孤立扱いになる。SAF では atomic-rename が
+// 成立しないので割り切っている。失われるのは痕跡だけで、ノート(.md)には触れない。
 // 端末間の同時編集は last-writer-wins（マージや世代解決はしない）。
+// 理由の正本は features/reflect_reading_trace.md 判断6・判断8。
 // ---------------------------------------------------------------------------
 
 internal sealed interface ReadingTraceFolderStatus {
@@ -369,7 +364,8 @@ internal class SafReadingTraceDocumentGateway(
             ?: throw IOException("痕跡の保存先を用意できませんでした（Vault切替またはフォルダ作成失敗）。")
         // 索引が不完全なら、キーが載っていなくても「まだ無い」とは言えない。
         // ここで作ると同じキーのファイルが2つでき、次回どちらを採るかが列挙順依存になる。
-        // 書けなかった訪問は消費済みの印が巻き戻されて次の契機で書き直される（判断10）。
+        // 書けなかった訪問は消費済みの印が巻き戻されて次の契機で書き直される
+        // （→ features/reflect_reading_trace.md 判断10）。
         val target = current.files[key]?.firstOrNull()
             ?: if (current.isComplete) {
                 createFile(current, key)
@@ -426,8 +422,7 @@ internal class SafReadingTraceDocumentGateway(
     private fun folderIndexOf(vault: Uri): FolderIndex? {
         index?.let { if (it.vault == vault) return it }
         // 「探して、無ければ作る」を1回の探索で行う。**ルートを読めなかった場合は作らない** —
-        // 以前は find の失敗と不在が同じ null だったため、ルート列挙に失敗しただけで
-        // 2つ目の _ReadingTraces を作りうる状態だった。
+        // 読めなかったことを不在とみなすと、ルート列挙に失敗しただけで2つ目の _ReadingTraces を作る。
         val folder = when (val lookup =
             findRootChildFolder(contentResolver, vault, READING_TRACE_FOLDER_NAME)) {
             is RootFolderLookup.Found -> lookup.uri
