@@ -180,6 +180,9 @@ Nano に渡せる候補数に上限があるため、40件を超えるときだ�
   照合を2つ持つと、どちらの契約で受理されたのかが割れる
 - **タイトルは200字で切って提示する。** 照合キーではないので切ってよい
   （→ [ai_input_excerpt](../system/ai_input_excerpt.md) 判断10）。行ごと落とすと、長いタイトルのノートは選ばれなくなる
+- **IDに似たタイトルをIDと読まない。** AIが `P2P通信` とタイトルで返したとき、先頭の `P2` を `P02` と読むと
+  **モデルが返していない2番目の候補がAIの選択として出る。** IDの直後に文字や数字が続くものは捨てる
+  （パーサの規則は [related_notes_ai](related_notes_ai.md) 判断3）
 - **同名の別ノートも別IDになる。** 旧方式ではタイトルが同じノートを区別できなかった
 - **接頭辞を `P` にするのは、ログや実応答でどの経路のIDか見分けるため**（関連ノートは `C`、再会カードは `R`）
 
@@ -201,7 +204,7 @@ Nano に渡せる候補数に上限があるため、40件を超えるときだ�
 
 - **JVMテスト:** `SearchControllerTest`（世代照合3種・検索とランダムの実行・走査キャッシュのヒットと破棄）/
   `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）/
-  `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・同名・記号入りタイトル）/
+  `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
   `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）
 - **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）
 - **保証していないこと:**

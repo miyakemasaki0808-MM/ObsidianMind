@@ -71,6 +71,29 @@ class SearchPickerIdContractTest {
         )
     }
 
+    @Test
+    fun `IDに似たタイトル断片をIDと読まない`() = runBlocking {
+        // `P2P通信` の先頭 `P2` を `P02` と読むと、モデルが返していない別の候補がAIの選択として出る。
+        val notes = listOf(note("P2P通信"), note("料理の献立"), note("音楽理論"))
+
+        assertEquals(emptyList<String>(), pick(notes, "P2P通信").notes.map { it.title })
+        assertEquals(emptyList<String>(), pick(notes, "P01通信").notes.map { it.title })
+        assertEquals(emptyList<String>(), pick(notes, "P012").notes.map { it.title })
+        assertEquals(emptyList<String>(), pick(notes, "P99\nC01").notes.map { it.title })
+    }
+
+    @Test
+    fun `IDに似たタイトルが候補にあっても正常なIDは解決する`() = runBlocking {
+        val notes = listOf(note("P2P通信"), note("料理の献立"), note("音楽理論"))
+
+        assertEquals(listOf("P2P通信"), pick(notes, "P01").notes.map { it.title })
+        assertEquals(listOf("P2P通信"), pick(notes, "p1").notes.map { it.title })
+        assertEquals(
+            listOf("料理の献立", "音楽理論", "P2P通信"),
+            pick(notes, "1. P02\n- P03 | 音楽理論\n`P01`").notes.map { it.title }
+        )
+    }
+
     private suspend fun pick(notes: List<NoteFile>, response: String): PickerResult.Success =
         SearchPickerUseCase(FakeAiClient(onGenerate = { response })).pick(query, notes) as PickerResult.Success
 

@@ -49,6 +49,17 @@ class RelatedCandidateIdTest {
     }
 
     @Test
+    fun `IDの直後に文字が続くタイトル断片は拾わない`() {
+        assertEquals(emptyList<String>(), parseCandidateIds("C3PO\nC01タイトル\nC2x", valid, 5))
+    }
+
+    @Test
+    fun `IDの直後の区切りは許容する`() {
+        val response = "C01: 理由\nC02 — 補足\nC03.\nC04（関連）"
+        assertEquals(listOf("C01", "C02", "C03", "C04"), parseCandidateIds(response, valid, 5))
+    }
+
+    @Test
     fun `大文字小文字と桁落ちを吸収する`() {
         assertEquals(listOf("C05", "C01"), parseCandidateIds("c05\nC1", valid, 5))
     }
