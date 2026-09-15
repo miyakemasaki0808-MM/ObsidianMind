@@ -8,10 +8,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -38,28 +36,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.newproject.model.BookletCover
@@ -77,7 +63,6 @@ import com.example.newproject.model.state.visibleBundle
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.theme.AccentText
-import com.example.newproject.ui.theme.BrowsingSheetShape
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
@@ -90,13 +75,8 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelChip
-import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
-import kotlin.math.PI
-import kotlin.math.hypot
-import kotlin.math.absoluteValue
-import kotlin.math.sin
 
 /**
  * 冊子から本文へ渡す境界。**先頭から開くことをここで保証する。**
@@ -140,89 +120,6 @@ internal fun alignPager(pagerState: PagerState, target: Int) {
     pagerState.requestScrollToPage(target)
 }
 
-// ── 天綴じのめくり（→ features/booklet_mode.md 判断10・判断11）─────────────
-//
-// **綴じは上。** 紙は置かれたまま、**右下の角が折り返り、折り目が左上へ走って**めくれていく。
-// レポート用紙（リーガルパッド）の束を、右手で角からめくる向きである。
-// **手触りそのものの判定は実機検証のケース表が持つ**（→ system/bearing_channels.md §7）。
-// 寸法をここへ集めてあるのは、次に触る人がここだけを見れば済むようにするためである。
-
-/**
- * 蝶番。紙の上端の中央で、天綴じの綴じ位置そのもの。
- *
- * `internal` なのは、**倒れる向きの検査が本番と同じ蝶番で回す**ため
- * （→ `BookletSheetPerspectiveTest`）。写しを持つと、蝶番だけ動いたときに検査が付いてこない。
- */
-internal val SHEET_HINGE = TransformOrigin(0.5f, 0f)
-
-/**
- * 遠近の強さ。**紙の高さの何倍だけカメラを離すか。**
- *
- * 公式の指示は「画面の半分より大きい面を回すなら、カメラ距離は面の高さより遠くする」。
- * **寸法を直に書かず紙の高さから導く**（端末の解像度と分割画面で高さが変わる）。
- * **1 を下回らない** — 下回ると指示の外へ出て、回した像に破綻が出る。
- *
- * **上限も要る。** 遠すぎると遠近が消え、**倒れた紙がただ縦に潰れる板になる**。
- * 実際にそうなっていた（→ [sheetCameraDistance]）。
- */
-internal const val CAMERA_DISTANCE_FACTOR = 1.5f
-
-/**
- * `cameraDistance` の単位は**画素でも画面のインチでもない。渡した値の 72 倍が画素になる。**
- *
- * `View.setCameraDistance` は `densityDpi` で割ってから `RenderNode` へ渡すが、
- * **Compose の `ViewLayer` はその割り算を打ち消すために
- * 渡す前に `densityDpi` を掛けている** ので、`View` の実装から Compose の単位は決まらない。
- * 素通しする `RenderNodeLayer` のほうが本筋で、そこから先は `RenderNode` の中である。
- *
- * **だから実測した**（`BookletSheetPerspectiveTest`）。倒した面の投影された高さから実効距離を逆算すると、
- * **渡した値の 72 倍が画素**になる。**画面の密度を 390 から 320 へ変えても実効距離は同じ画素数**だったので、
- * 密度には依らない（Compose の既定 8 が 576 画素にあたる）。
- *
- * **KDocも他所の実装も根拠にならない。画素を数えるまで単位は決まらない**
- * （→ docs/dev/lessons.md L60）。
- *
- * ## 何を返すか
- *
- * **紙の高さの [CAMERA_DISTANCE_FACTOR] 倍が実効距離になる値。** 密度を受け取らないのは、
- * **受け取ると「密度で変わる」と読めてしまう**ためである。
- */
-internal fun sheetCameraDistance(sheetHeightPx: Float): Float =
-    sheetHeightPx * CAMERA_DISTANCE_FACTOR / CAMERA_UNIT_PX
-
-/**
- * `cameraDistance` の 1 が何画素になるか。**実測値**（→ [sheetCameraDistance]）。
- *
- * `internal` なのは、**検査が同じ値で「実効距離が高さの指定倍になる」ことを確かめる**ため。
- */
-internal const val CAMERA_UNIT_PX = 72f
-
-/**
- * 指を離したあと、めくりが残りを走り切るまでの時間。**ゆっくり、紙をめくる速さ。**
- *
- * ## 3度直している
- *
- * | 版 | 進み方 | 実機で言われたこと |
- * |---|---|---|
- * | 横送り | ページャ既定（硬さ 400） | — |
- * | 天綴じ・半回転 | 同じ既定のまま | **「捲れる速さが早すぎる」**（運ぶ変位だけ増やしたため） |
- * | 柔らかいばね | 硬さ 200 | まだ速い |
- * | 現在 | **時間を決めた [SHEET_SETTLE_MILLIS] ミリ秒** | 「**ゆっくりにしたい。紙を捲るイメージ**」 |
- *
- * **ばねから時間へ変えた。** ばねは「どれだけ残っているか」で速さが決まるので、
- * **少しだけ送って離したときと、半分送って離したときで、かかる時間が変わる。**
- * めくりは*紙をめくる動作*なので、**どこで離しても同じ速さで走り切るほうが紙らしい。**
- *
- * **減速して終わる**（`FastOutSlowInEasing`）。紙が置かれるときは止まり際が遅い。
- *
- * **触るのはスナップの進み方だけ。** 送り先の枚数（`PagerSnapDistance.atMost(1)`）と
- * 勢いの減衰は既定のまま — 変えると「1回のフリックで1枚」という送りの性質そのものが動く。
- *
- * **判断3（冊子で深く作業させない）との緊張は消えていない。** 遅くするほど1枚あたりの
- * 待ちが増え、眺めて捨てる速さが削られる。**判定は実機ケースが持つ。**
- */
-internal const val SHEET_SETTLE_MILLIS = 620
-
 /**
  * めくりが残りを走り切るときの進み方。**指で送っても読み上げ操作で送っても、これ1つ。**
  *
@@ -237,254 +134,6 @@ private val SHEET_SETTLE_SPEC: AnimationSpec<Float> = tween(
     durationMillis = SHEET_SETTLE_MILLIS,
     easing = FastOutSlowInEasing
 )
-
-/**
- * 積み直りの傾き。**繰り切らない。**
- *
- * 半回転まで倒すと「めくった」と言ってしまう。
- * 束が届いたのは*めくった*からではないので、**浮いて置き直される以上のことをしない**
- * （→ features/booklet_mode.md 判断10）。
- */
-private const val RESTACK_TILT_DEGREES = 22f
-
-private val SHEET_RESTING_SHADOW = 3.dp
-private val SHEET_LIFTED_SHADOW = 6.dp
-
-/**
- * 紙が倒れている角度。**いま倒すのは積み直りだけである。**
- *
- * **送りの進み具合は紙を倒さない。** めくりは**折り目が斜めに走る**形で表すので（→ [peelFlatPolygon]）、
- * 紙は置かれたまま、角だけが折り返る。
- *
- * **積み直りとめくりは別のチャネル（角度と折り目）を使う**ので、同時に起きても食い違わない。
- * 同じチャネルを2つが取り合うと、合成の規則（足すか、大きい側を採るか）をどう決めても破綻する。
- *
- * `restack` は積み直りで、**1 が積み終わり**（水平）。**繰り切らない** —
- * 束が届いたのは*めくった*からではないので、**浮いて置き直される以上のことをしない**
- * （[RESTACK_TILT_DEGREES]）。
- *
- * **正の角度が下端を手前に持ち上げる**（Compose の回転は蝶番より下の点を +Z ＝手前へ送る）。
- * 負にすると紙が束の中へ沈む向きになる。
- * **向きは値に現れない**ので `BookletSheetPerspectiveTest` が画素で見る（→ docs/dev/lessons.md L61）。
- */
-internal fun sheetTiltDegrees(restack: Float): Float =
-    RESTACK_TILT_DEGREES * (1f - restack.coerceIn(0f, 1f))
-
-/**
- * 束の縁を見せるか。**持ち上げられた紙は、束を置いていく。**
- *
- * 縁は「まだ積まれている残り」であって、手に取られた1枚の一部ではない。
- * **縁は回らない**ので、めくられる紙に付けたままにすると、
- * **不透明な面が定位置に残って次の紙を覆う。**
- *
- * **消えて見えることはない。** 送り始めた瞬間には下の紙が同じ位置に composed されていて、
- * **同じ形の縁を同じ場所に描いている。** 束の縁は紙ではなく束のものなので、これで辻褄が合う。
- */
-internal fun sheetShowsStack(turn: Float): Boolean = turn <= 0f
-
-/**
- * 紙を画面の定位置へ留め置くための付け替え量（ページ数）。
- *
- * ページャは紙を送るために動かすが、**天綴じでは紙は動かない。倒れるだけである。**
- * だからページャが与えた変位を打ち消して、定位置に置き直す。
- *
- * **打ち消すのは前後1枚まで。** それより遠い紙はページャが置いた場所に残し、
- * 主軸の切り抜きに任せる。**頭打ち（`coerceIn`）にはしない** — 半端に引き寄せると、
- * 1.5枚離れた紙が画面の下半分へ顔を出す。**切り替わる点の紙は、真上へ抜け切っているか、
- * 手前の紙に完全に覆われているかのどちらか**なので、段差は見えない。
- */
-internal fun sheetSlotShift(turn: Float): Float = if (turn in -1f..1f) turn else 0f
-
-/**
- * 紙がどれだけ立っているか（影の深さ）。**真横で最大、寝ていればゼロ。**
- *
- * **入力は合成後の角度**なので、繰りでも積み直りでも同じ尺度で深くなる。
- * どちらも紙が持ち上がっている状態なので、**影のチャネルを2つに割らない。**
- */
-internal fun sheetStanding(angleDegrees: Float): Float =
-    sin(angleDegrees * PI / 180.0).toFloat().absoluteValue
-
-/**
- * 倒れた紙が枠から出ないための縮小率。**遠近で広がったぶんだけ、絵ごと引く。**
- *
- * ## 何に効くのか
- *
- * **めくりは回転ではない**（折り目が走る → [peelFlatPolygon]）ので、紙が倒れるのは
- * **積み直りの傾きだけ**である。それでも 22 度で 1.33 倍に広がり、画面の外へ出る。
- *
- * 手前へ出た点は `d / (d - z)` 倍に広がる。紙の高さを 1 とすると `d` は
- * [CAMERA_DISTANCE_FACTOR]（1.5）で、紙の左右に空いている余白は合わせて 1.05 倍ぶんしかない。
- * **定数の調整では出口が無い** — 収めるには [CAMERA_DISTANCE_FACTOR] を 15 前後まで上げることになり、
- * それは docs/dev/lessons.md L60 で直したばかりの「遠すぎて遠近が消える」側へ戻るだけである。
- *
- * ## 何を返すか
- *
- * `(d - z) / d`。掛けると**投影後の最大幅がちょうど静止時の幅になる**ので、
- * 紙の影は静止時の footprint を横へ出ない。**端末の幅も分割画面も見ない。**
- *
- * **縮小は回転より外側に置く**（[BookletSheet] の枠）。投影された絵をそのまま縮めるので、
- * **台形の比は変わらない** — 遠近の見え方は変わらず、大きさだけが枠に入る。
- * **静止時は 1** — 判断9 で実機確認した絵を1ピクセルも変えない。
- */
-internal fun sheetFitScale(angleDegrees: Float): Float =
-    (CAMERA_DISTANCE_FACTOR - sheetStanding(angleDegrees)) / CAMERA_DISTANCE_FACTOR
-
-/**
- * めくりの進み具合。**0 で角に触れておらず、1 で紙が渡り切る。**
- *
- * 送り出される側だけがめくれる（負は「これから出てくる紙」で、平らに置かれたまま待つ）。
- */
-internal fun sheetPeel(turn: Float): Float = turn.coerceIn(0f, 1f)
-
-/**
- * 折り目より手前 — **まだめくれていない側の紙の形。**
- *
- * ## めくりは回転ではなく折り目である
- *
- * **紙全体を曲げても「めくった」にはならない**（→ features/booklet_mode.md 判断11）。
- *
- * **本のページをめくるとき、紙は全体としては曲がらない。** 角を持ち上げると
- * **そこだけが折り返り、折り目が紙を斜めに横切って走っていく。**
- * 折り目より向こうは机に置かれたまま動かない。
- *
- * だから、めくりは**折り目1本の位置**で表せる。
- * 折り目は**右下の角から左上の角へ**、対角線に沿って進む（[peelFoldDistance]）。
- *
- * ## 返すもの
- *
- * 折り目の向こう側（まだめくれていない側）に残る紙の形を、**多角形の頂点**で返す。
- * ここに紙の表（文字）を描く。**角丸は形の側が持つ**ので、ここでは扱わない。
- *
- * `peel` が 0 なら紙全体、1 なら空になる。
- */
-internal fun peelFlatPolygon(width: Float, height: Float, peel: Float): List<Offset> {
-    val fold = peelFoldDistance(width, height, peel) ?: return sheetCorners(width, height)
-    return clipToHalfPlane(sheetCorners(width, height)) { point ->
-        foldOffset(point, width, height) - fold
-    }
-}
-
-/**
- * 折り目の手前 — **めくれて裏返った角の形。**
- *
- * **折り返した紙は、折り目を鏡にした像である。** めくれた領域を折り目で反転させると、
- * それがそのまま「持ち上がって裏を見せている紙」になる。
- * **裏なので文字は載らない**（→ features/booklet_mode.md 判断10「色を動かさない」）。
- *
- * **紙の枠から出た分は落とす。** 実際の本ならページは外へはみ出すが、
- * 冊子の紙は画面の中に置かれた1枚なので、**はみ出しはそのまま画面外への流出になる**
- * （→ [sheetFitScale] と同じ理由）。落としても、そこはもう次の紙が見えている。
- */
-internal fun peelFlapPolygon(width: Float, height: Float, peel: Float): List<Offset> {
-    val fold = peelFoldDistance(width, height, peel) ?: return emptyList()
-    val peeled = clipToHalfPlane(sheetCorners(width, height)) { point ->
-        fold - foldOffset(point, width, height)
-    }
-    if (peeled.size < 3) return emptyList()
-
-    val (ux, uy) = peelDirection(width, height)
-    val mirrored = peeled.map { point ->
-        val over = fold - foldOffset(point, width, height)
-        Offset(point.x + 2f * over * ux, point.y + 2f * over * uy)
-    }
-    return clipToSheet(mirrored, width, height)
-}
-
-/**
- * 折り目がどれだけ進んだか（右下の角からの距離、画素）。
- *
- * **対角線の長さを 1 として進む。** 紙の縦横比が変わっても「角から角へ」は保たれる。
- * 紙に面積が無いとき（測る前）は `null` で、そのときは何もめくれていないものとして扱う。
- */
-internal fun peelFoldDistance(width: Float, height: Float, peel: Float): Float? {
-    val diagonal = hypot(width, height)
-    if (diagonal <= 0f) return null
-    return sheetPeel(peel) * diagonal
-}
-
-/** 折り目が進む向き。**右下の角から左上の角へ**（単位ベクトル）。 */
-private fun peelDirection(width: Float, height: Float): Pair<Float, Float> {
-    val diagonal = hypot(width, height)
-    return -width / diagonal to -height / diagonal
-}
-
-/** その点が、右下の角から見て折り目の進む向きにどれだけ離れているか。 */
-private fun foldOffset(point: Offset, width: Float, height: Float): Float {
-    val (ux, uy) = peelDirection(width, height)
-    return (point.x - width) * ux + (point.y - height) * uy
-}
-
-/** 紙の4隅。左上から時計回り。 */
-private fun sheetCorners(width: Float, height: Float): List<Offset> =
-    listOf(Offset(0f, 0f), Offset(width, 0f), Offset(width, height), Offset(0f, height))
-
-/**
- * 多角形を半平面で切る（`inside` が 0 以上の側を残す）。
- *
- * **凸多角形しか出てこない**ので、切った結果も凸である
- * （影の輪郭は凸でなければ描けない → `PeelShape`）。
- */
-private fun clipToHalfPlane(polygon: List<Offset>, inside: (Offset) -> Float): List<Offset> {
-    if (polygon.isEmpty()) return polygon
-    val clipped = mutableListOf<Offset>()
-    polygon.forEachIndexed { index, current ->
-        val next = polygon[(index + 1) % polygon.size]
-        val currentSide = inside(current)
-        val nextSide = inside(next)
-        if (currentSide >= 0f) clipped += current
-        if ((currentSide >= 0f) != (nextSide >= 0f)) {
-            val ratio = currentSide / (currentSide - nextSide)
-            clipped += Offset(
-                current.x + (next.x - current.x) * ratio,
-                current.y + (next.y - current.y) * ratio
-            )
-        }
-    }
-    return clipped
-}
-
-/** 紙の枠で切る。4辺ぶんの半平面を順に当てる。 */
-private fun clipToSheet(polygon: List<Offset>, width: Float, height: Float): List<Offset> =
-    clipToHalfPlane(polygon) { it.x }
-        .let { clipToHalfPlane(it) { point -> width - point.x } }
-        .let { clipToHalfPlane(it) { point -> point.y } }
-        .let { clipToHalfPlane(it) { point -> height - point.y } }
-
-/**
- * めくれた角がどれだけ持ち上がっているか（影の深さ）。**折り目が長いほど深い。**
- *
- * 折り目の長さは角から対角線の半分で最大になり、そこから短くなる。
- * **持ち上がっている紙の量そのもの**なので、影もそれに従う。
- */
-internal fun peelLift(peel: Float): Float {
-    val progress = sheetPeel(peel)
-    return sin(progress * PI).toFloat()
-}
-
-/**
- * 紙が影を落としてよいか。**3D で回っている間は落とさない。**
- *
- * ## なぜ切るのか
- *
- * **積み直りの最中にめくると、折り返しから離れた大きな灰色の影が数フレーム出る。**
- *
- * 材料は2つあり、**両方が揃ったときだけ**壊れる。
- *
- * | 材料 | いつ揃うか |
- * |---|---|
- * | 親が**遠近つきで3Dに回っている** | 積み直りの 320ms のあいだだけ |
- * | 子の輪郭が**多角形（`Outline.Generic`）で、影を出している** | めくっている最中だけ |
- *
- * Android の影は輪郭を親の空間へ変換して作るが、**遠近の入った変換は射影**なので、
- * パスから作る影はそこで崩れる。**束の縁は角丸矩形（`Outline.Rounded`）なので同じ形にならない** —
- * だから切るのは**めくりの2層だけ**でよい。
- *
- * **切っても切り抜きは残る。** `clip = true` を別に置いてあるので、影を 0 にしても形は効く。
- *
- * **失うものは小さい。** 回っている間は**傾きと遠近**が「持ち上がっている」ことを言っており、
- * 影はもともと*置かれている*ことを言う道具である。
- */
-internal fun sheetCastsShadow(restack: Float): Boolean = sheetTiltDegrees(restack) <= 0f
 
 /**
  * 積み直りを再生するかどうかだけを決める。**見るのは束の世代だけ。**
@@ -524,6 +173,18 @@ internal class BookletRestackRule {
         return previous != null && previous != bundleId
     }
 }
+
+/**
+ * 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。**
+ *
+ * **時間で進むので、OSの「アニメーションを無効」設定に従って潰れる**
+ * （→ features/booklet_mode.md 判断10・`BookletRestackTest`）。`internal` なのは、
+ * その契約を検査が同じ値で確かめるため。
+ *
+ * **時間で進むのはここだけではない。** 読み上げのカスタム操作は `animateScrollToPage` で送るので、
+ * 同じく倍率0では途中が省かれる。指が進める変化だけが設定の対象外である。
+ */
+internal const val RESTACK_MILLIS = 320
 
 /**
  * 冊子（10枚の束をめくる面）。
@@ -678,7 +339,7 @@ private fun ColumnScope.BookletPager(
     // `VerticalPager` の既定（上スワイプで次へ）が手の動きとそのまま一致するので、反転させない。
     VerticalPager(
         state = pagerState,
-        // **指を離したあとの倒れ切りだけを柔らかくする**（→ [SNAP_STIFFNESS]）。
+        // **指を離したあとのめくりの進み方だけを、時間で決める**（→ [SHEET_SETTLE_SPEC]）。
         // 送り先の枚数と勢いの減衰は既定のまま。
         flingBehavior = PagerDefaults.flingBehavior(
             state = pagerState,
@@ -725,7 +386,7 @@ private fun ColumnScope.BookletPager(
         // **スワイプできない利用者にも同じ手触りが出る**（→ 判断10・§9）。
         //
         // **正は「送り出される側」、負は「これから出てくる側」。** 絶対値にすると向きが消え、
-        // 戻す操作でも次の紙が倒れる（→ [sheetAngleDegrees]）。
+        // 戻す操作でも次の紙がめくれる（→ [sheetPeel]）。
         val turn: () -> Float = {
             (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
         }
@@ -733,12 +394,12 @@ private fun ColumnScope.BookletPager(
             modifier = Modifier
                 .fillMaxSize()
                 // **めくられる紙が上に来る。** ページャは紙を番号順に置くので、既定のままだと
-                // *手前の紙が次の紙の下*に描かれ、倒しても何も起きていないように見える。
+                // *手前の紙が次の紙の下*に描かれ、めくっても何も起きていないように見える。
                 // 番号が小さいほど上へ持ち上げると、送りでも戻しでも常に正しい重なりになる。
                 // （`Modifier.zIndex` はページャの子でも効く — ノードのzは
                 //  内側と全modifierのzの和で決まるため。ここが効かなければ天綴じは成立しない）
                 .zIndex(-page.toFloat())
-                // **紙は動かない。倒れるだけ。** ページャが送るために与えた変位を打ち消して、
+                // **紙は動かない。** ページャが送るために与えた変位を打ち消して、
                 // 定位置へ置き直す（→ [sheetSlotShift]）。
                 .graphicsLayer { translationY = size.height * sheetSlotShift(turn()) }
         ) {
@@ -880,234 +541,6 @@ private fun BookletModeChip(
 private fun weaveBlockedMessage(reason: WeaveBlockedReason): String = when (reason) {
     WeaveBlockedReason.Pending -> "関連ノートをまだ探しています。冊子を開き直すと編めます。"
     WeaveBlockedReason.Empty -> "関連するノートが見つかりませんでした。"
-}
-
-/**
- * 冊子の紙1枚。**「眺める面」の形はここだけが決める。**
- *
- * ## なぜ通常表示と形を変えるのか
- *
- * 構造では「眺める」と「読む」を分けてあるのに、画面がその分離を見せていなかった
- * （通常表示と同じ角丸・同じ面・同じボタン形で、違うのは文字の量と下部ナビの有無だけ）。
- * **区別を担うチャネルは形**と決めてある（色は年代が持ち切る）
- * → docs/dev/system/bearing_channels.md。
- *
- * ## 3つで1つの形
- *
- * - **ほぼ直角の角** — 断ち切った紙。UIカードは丸い
- * - **四辺の余白と、下に残す地** — 画面を満たさないので「続く面」ではなく「手に持った1枚」になる
- * - **背後に控える紙の縁** — 冊子とは10枚の束で、いままで9枚を一切見せていなかった
- *
- * **縁が言うのは「この紙は束の1枚である」ことだけで、残りが何枚あるかではない**（[isBundleSheet]）。
- * だから**束の10枚には位置によらず同じ縁が出る**。最後の1枚で縁が消えると、
- * 形が残数という**別の意味**も運び始め、**形＝面の役割というチャネル割り当てが崩れる**
- * （→ docs/dev/system/bearing_channels.md）。残数はページインジケータの文字が持つ。
- *
- * **地色は触らない。** 紙の面は現行のまま、縁だけ一段沈む面を使う。
- *
- * ## 繰る手触り（[turn]）
- *
- * **天綴じ。紙は上端を蝶番に、下端が持ち上がって上へ抜ける**（→ features/booklet_mode.md 判断10）。
- * レポート用紙の束をめくる向きで、[SHEET_HINGE] がその綴じ位置である。
- * 送り出される紙だけが倒れ、下から現れる紙は平らに置かれたまま待つ。
- *
- * **縁そのものは動かさない。** 縁は紙の右下へずれて描かれ、その幅は
- * [STACK_EDGE_MAX] のぶんだけ余白で確保してある。天綴じでは**めくった紙が上へ抜ける**ので、
- * 縁は下と右に覗いたままでよく、**止まっている絵は1ピクセルも変えずに済む**
- * （判断9で実機確認した佇まいがそのまま残る）。
- *
- * **倒れるのは紙だけで、束の縁は倒れない。** 縁は「まだ積まれている残り」であって、
- * 手に取られた1枚ではない。だから回転は縁を含む [Box] ではなく紙の面へ掛ける。
- *
- * **手触りは意味を運ばない。** 「これは冊子だ」と言うのは形の役目で、動きは何も名乗らない
- * （→ system/bearing_channels.md §8）。
- *
- * **`internal` なのは、画素を数える検査が本番の紙をそのまま描くため**
- * （→ `BookletSheetPerspectiveTest`）。
- *
- * **写しを描く検査は、本番のレイヤーが壊れても通る**（表と裏の切り抜きを片側ずつ落とす変異が素通りする）。
- * **検査が触れるのは本番の層でなければならない。**
- */
-@Composable
-internal fun BookletSheet(
-    isBundleSheet: Boolean,
-    turn: () -> Float,
-    restack: () -> Float,
-    // 紙の地色。**分野が決まっていないページは `Panel`**（既定値）で、いままでと同じ見た目になる。
-    // 表と裏（めくれた折り返し）の両方へ同じ色を塗る — 片方だけだと、めくる途中に
-    // 別の色が覗いて「別の紙をめくっている」ように見える。
-    paper: Color = Panel,
-    content: @Composable () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            // 四辺を見せる。下を厚くして、紙の下に地を残す。
-            // **右と下は縁のぶんだけ余分に空ける** — 縁は紙より右下へ出るので、
-            // ここが足りないとページの外へはみ出して隣の紙と重なる。
-            // 右を `STACK_EDGE_MAX + 10dp` にすることで、紙と縁を合わせた塊が画面の中央に来る。
-            .padding(
-                start = 10.dp,
-                end = 10.dp + STACK_EDGE_MAX,
-                top = 4.dp,
-                bottom = 22.dp
-            )
-            // **積み直りで倒れたぶんだけ、絵ごと引く**（→ [sheetFitScale]）。
-            // **回転より外側**なので台形の比は変わらない — 見え方は変わらず、枠に入るだけである。
-            // 束の縁も同じ枠の中にあるので一緒に引かれ、**紙と縁がずれない**。
-            .graphicsLayer {
-                val fit = sheetFitScale(sheetTiltDegrees(restack()))
-                scaleX = fit
-                scaleY = fit
-                // 綴じ位置は動かない。**縮むのは綴じから下だけ**（→ [SHEET_HINGE]）。
-                transformOrigin = SHEET_HINGE
-            }
-            // **積み直りの傾きはここが持つ。** めくりは倒さないので、回るのはこの1つだけ。
-            .graphicsLayer {
-                rotationX = sheetTiltDegrees(restack())
-                transformOrigin = SHEET_HINGE
-                // **紙は画面の半分より大きい。** 既定のカメラ距離では回した像が破綻するので、
-                // 紙の高さから導く（→ [CAMERA_DISTANCE_FACTOR]）。
-                cameraDistance = sheetCameraDistance(size.height)
-            }
-    ) {
-        if (isBundleSheet) {
-            // **束は持ち上がらない。置いていかれる。** 縁は回らないので、めくられる紙に
-            // 付けたままにすると**不透明な面が定位置に残って次の紙を覆う**（→ [sheetShowsStack]）。
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer { alpha = if (sheetShowsStack(turn())) 1f else 0f }
-            ) {
-                // 奥から手前へ。**最大2枚**で頭打ちにする（枚数は数えない）。
-                StackEdge(offset = STACK_EDGE_MAX)
-                StackEdge(offset = STACK_EDGE_MAX / 2)
-            }
-        }
-        // **紙の表。折り目の向こう側だけを残す**（→ [peelFlatPolygon]）。
-        // 形で切るので、**文字はページの中で切れたところで途切れる** — 折り返した紙の裏へ
-        // 文字が回り込まないのはそのためである。
-        //
-        // **`clip` は影が消えたときのための保険である。**
-        // Compose は `clip` が false でも**影のために輪郭を要求する**ので
-        // （`outlineNeeded = outline != null && (clipToOutline || elevation > 0f)`）、
-        // **影が出ている限り `clip` を落としても画素は1つも変わらない。**
-        // だが `shadowElevation` を 0 にした瞬間に切り抜きごと消え、紙が丸ごと残る
-        // （両方落として実測した）。**影は見え方の都合で動かしうるので、切り抜きをそこへ預けない。**
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                // **読むのはこのラムダの中だけ。** 関数の本体で [turn] を呼ぶと、
-                // 指を動かしている間ずっと再コンポーズが走る（ここなら描画の直前に読まれる）。
-                .graphicsLayer {
-                    shape = PeelShape(peel = sheetPeel(turn()), flap = false)
-                    clip = true
-                    // **回っている間は影を出さない**（→ [sheetCastsShadow]）。
-                    shadowElevation =
-                        if (sheetCastsShadow(restack())) SHEET_RESTING_SHADOW.toPx() else 0f
-                }
-                .background(paper)
-        ) { content() }
-        // **めくれて裏返った角**（→ [peelFlapPolygon]）。文字は載らない。
-        // **影が「持ち上がっている」ことを言う** — 折り目に沿って落ちる影が、
-        // 角が浮いていることそのものになる（→ 判断11）。
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    val peel = sheetPeel(turn())
-                    shape = PeelShape(peel = peel, flap = true)
-                    clip = true
-                    // **回っている間は影を出さない**（→ [sheetCastsShadow]）。
-                    shadowElevation = if (sheetCastsShadow(restack())) {
-                        lerp(SHEET_RESTING_SHADOW, SHEET_LIFTED_SHADOW, peelLift(peel)).toPx()
-                    } else {
-                        0f
-                    }
-                }
-                .background(paper)
-        )
-    }
-}
-
-/**
- * 折り目で切った紙の形。**表の側と、めくれて裏返った側の2つを作る。**
- *
- * 幾何は純関数が持つ（→ [peelFlatPolygon]・[peelFlapPolygon]）。ここがやるのは
- * **多角形を輪郭へ移すことと、静止時に紙の形をそのまま返すこと**だけである。
- *
- * **静止時は [BrowsingSheetShape] をそのまま返す。** 多角形にすると角丸が失われ、
- * 判断9 で実機確認した佇まいが変わる。**止まっている絵は1ピクセルも変えない。**
- *
- * **凸のまま保つ。** 影の輪郭は凸でなければ描けない（Android の制約）。
- * 紙の矩形を半平面で切った形も、それを折り目で鏡にした形も凸である。
- */
-internal class PeelShape(private val peel: Float, private val flap: Boolean) : Shape {
-
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        if (sheetPeel(peel) <= 0f) {
-            return if (flap) Outline.Generic(Path())
-            else BrowsingSheetShape.createOutline(size, layoutDirection, density)
-        }
-
-        val points = if (flap) peelFlapPolygon(size.width, size.height, peel)
-        else peelFlatPolygon(size.width, size.height, peel)
-
-        return Outline.Generic(points.toPath())
-    }
-
-    private fun List<Offset>.toPath(): Path = Path().apply {
-        if (size < 3) return@apply
-        moveTo(first().x, first().y)
-        drop(1).forEach { lineTo(it.x, it.y) }
-        close()
-    }
-
-    override fun equals(other: Any?): Boolean =
-        other is PeelShape && other.peel == peel && other.flap == flap
-
-    override fun hashCode(): Int = peel.hashCode() * 31 + flap.hashCode()
-}
-
-/**
- * 新しい束が積み上がるまで。**指が起こす動きではないので、送りより気持ち長い。**
- *
- * **時間で進むので、OSの「アニメーションを無効」設定に従って潰れる**
- * （→ features/booklet_mode.md 判断10・`BookletRestackTest`）。`internal` なのは、
- * その契約を検査が同じ値で確かめるため。
- *
- * **時間で進むのはここだけではない。** 読み上げのカスタム操作は `animateScrollToPage` で送るので、
- * 同じく倍率0では途中が省かれる。指が進める変化だけが設定の対象外である。
- */
-internal const val RESTACK_MILLIS = 320
-
-/**
- * 背後の紙が覗く幅。**紙の余白より大きくしない。**
- *
- * 縁は紙の右下へずれて描かれるので、[BookletSheet] の右と下の余白がこれを下回ると
- * ページの外へ出て隣の紙と重なる。**値を上げるなら余白も一緒に上げる。**
- */
-private val STACK_EDGE_MAX = 8.dp
-
-/**
- * 束の背後に覗く1枚の縁。**右下へずらして、重なりがあることだけを見せる。**
- *
- * 文字を載せないので、この面はコントラスト検査の対象にならない
- * （情報を持たない装飾。枚数はインジケータの文字が持つ）。
- *
- * **明暗で分岐しない。** ここで引く面トークンは、明暗どちらでも紙の面より暗い側にある。
- */
-@Composable
-private fun BoxScope.StackEdge(offset: Dp) {
-    Surface(
-        modifier = Modifier
-            .matchParentSize()
-            .padding(start = offset, top = offset)
-            .offset(x = offset, y = offset),
-        color = PanelRow,
-        shape = BrowsingSheetShape,
-        shadowElevation = 1.dp
-    ) {}
 }
 
 /** 1枚の扉。**代表文と、これを読むボタンだけ。** */

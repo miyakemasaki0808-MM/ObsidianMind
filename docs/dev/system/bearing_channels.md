@@ -4,7 +4,7 @@
 **色は面ごとに持ち主が分かれた（判断6・2026-09-09）** — 読む面＝年代は実装済み、冊子の面＝分野は未実装。
 位置は未使用のまま予約、書体は持ち主なし
 **最終検証:** 2026-09-04 / `d05585b`
-**関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/component/NoteComponents.kt`
+**関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/screen/BookletSheet.kt` / `ui/component/NoteComponents.kt`
 **関連テスト:** `BearingChannelTest` / `AppColorContrastTest` / `NotePaperAgeTest`
 **正本:** この文書。**個々の見え方の仕様は各機能の設計書**が持ち、ここは割り当てだけを持つ
 

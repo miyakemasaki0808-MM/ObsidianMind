@@ -525,7 +525,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
   ヒント・語彙の版・プロンプト版。**どれを落とすと何が古いまま出続けるかまでKDocに表がある。**
   **したがって本案に残るのは鍵の発明ではなく、この形を本文入力の経路へ広げることと、保存層の上限設計である。**
 - **もう1つの先例。** 読書痕跡の俯瞰要約
-  （[`ReadingTraceController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceController.kt)）は
+  （[`ReunionCardController`](../../app/src/main/java/com/example/newproject/controller/ReunionCardController.kt)）は
   `aiSummary` / `aiSummaryVisitCount` を持つ**実質的な入力指紋キャッシュ**になっている。
   **入力が本文ではなく訪問履歴**（`buildReadingTraceSummaryPrompt(noteTitle, visits, totalVisitCount)`）なので、
   累計訪問数が入力を過不足なく表す。保持件数（30件で頭打ち）ではなく累計を使う理由もKDocに書かれている。

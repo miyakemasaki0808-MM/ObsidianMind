@@ -6,8 +6,8 @@
 > **ここへ実機ケースの範囲を書かない。** どのケースがあるかの正本はケース文書の側で、
 > 両方に書くとケースを足すたびに片方が古くなる（実際に一度古くなった）。
 **関連コード:** `domain/ReunionCandidateScanner.kt` / `model/ReunionKind.kt` / `model/ReadingTrace.kt` /
-`ai/PromptBuilder.buildReunionSelectionPrompt` / `controller/ReadingTraceController.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReadingTraceControllerTest` / `ReadingTraceJsonTest` / androidTest: `ReadingTraceCardPanelTest`
+`ai/PromptBuilder.buildReunionSelectionPrompt` / `controller/ReunionCardController.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `ReunionCandidateScannerTest` / `ReunionLeadTest` / `ReunionCardControllerTest` / `ReadingTraceJsonTest` / androidTest: `ReadingTraceCardPanelTest`
 **正本:** この文書（**枠の規則・優先順位・種別**）。痕跡そのものは [reflect_reading_trace](reflect_reading_trace.md)
 
 **対象領域:** Rediscover で再会したときにカードへ出す1件の選び方
@@ -142,14 +142,15 @@ AI へ渡す本文は抜粋なので、長文では**切り落とされた区間
 **印は内容ごと保存する。** 「まだ考えたい」は*その内容*への意図なので、次の再会で
 生成し直すと**別の文が出て意図とずれる**。保存済みを再掲すれば生成もゼロで済む。
 
-**契約2箇所への登録は不要。** 再会カードの状態はノート単位だが、既存の痕跡読み込みに載っており、
+**契約2箇所へは `ReunionCardController` として登録済み。** 照合と生成のジョブはノート切替で止め
+（`cancelForNoteChange`）、カードの状態はノート単位でリセットする。種別と印は既存の痕跡読み込みに載っており、
 新しい実行中ジョブも新しいUI状態も増やさない（→ [architecture](../system/architecture.md)）。
 
 ## 7. システム設計
 
 ```
 Rediscover でノートを引く
- └─ ReadingTraceController
+ └─ ReunionCardController
       ├─ 痕跡を読む（印があれば、この時点で再掲が確定＝生成しない）
       ├─ ReunionCandidateScanner（純関数・Dispatchers.Default）
       │    ├─ 疑問文候補

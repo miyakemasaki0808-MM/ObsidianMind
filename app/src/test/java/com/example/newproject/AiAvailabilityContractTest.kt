@@ -77,7 +77,7 @@ import org.junit.Test
  * | 7 | `SummarizeUseCase:29` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 8 | `SearchPickerUseCase:46` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 9 | `RelatedNotesUseCase:68` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 10 | `ReadingTraceController:746` | `revealTrace()` | `ReadingTraceControllerTest`（生カード） | `ReadingTraceControllerTest`（**Jobの完了原因**） |
+ * | 10 | `ReunionCardController:280` | `revealTrace()` | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
  *
  * 4と10だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
  * （映し返しは「何も出さない」、読書痕跡は「要約なしのカード」）。足場が既存テストにある。

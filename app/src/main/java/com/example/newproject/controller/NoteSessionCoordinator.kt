@@ -172,13 +172,22 @@ internal class NoteSessionCoordinator(
     /**
      * 痕跡サイドカーの read-modify-write を直列化する錠。
      *
-     * **同じ錠を read-modify-write する全経路へ配る。** 訪問の追記（[ReadingTraceController]）と
-     * 読み戻しの適用（[ReadingTraceBackupController]）はまったく同じ形で同じファイルを書くので、
-     * 錠をクラスごとに持つと「錠はあるのに守られていない」状態になる。
+     * **同じ錠を read-modify-write する全経路へ配る。** 訪問の追記（[ReadingTraceController]）・
+     * 要約と印の書き戻し（[ReunionCardController]）・読み戻しの適用（[ReadingTraceBackupController]）は
+     * まったく同じ形で同じファイルを書くので、錠をクラスごとに持つと「錠はあるのに守られていない」状態になる。
      */
     private val traceWriteMutex = Mutex()
 
     private val readingTrace = ReadingTraceController(
+        persistScope = persistScope,
+        persistence = readingTracePersistence,
+        currentVaultKey = currentVaultKey,
+        clock = clock,
+        ioDispatcher = ioDispatcher,
+        writeMutex = traceWriteMutex
+    )
+
+    private val reunionCard = ReunionCardController(
         scope = scope,
         persistScope = persistScope,
         aiClient = aiClient,
@@ -353,7 +362,7 @@ internal class NoteSessionCoordinator(
         // 読書痕跡の確定もここで行う。
         // flush は自前のスナップショットで書くため、以降のキャンセルに影響されない。
         readingTrace.flush()
-        readingTrace.cancelForNoteChange()
+        reunionCard.cancelForNoteChange()
         cancelHostJobs()
         sections.cancelAndClear()
         summary.cancelAndClear()
@@ -508,7 +517,7 @@ internal class NoteSessionCoordinator(
         stateStore.setWikilinkTitles(titles)
     }
 
-    // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────
+    // ── 読書痕跡（実装は ReadingTraceController と ReunionCardController）──────
 
     /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
     fun startReadingTrace(title: String, vaultRelativePath: String?, documentId: String?): Long =
@@ -520,9 +529,9 @@ internal class NoteSessionCoordinator(
 
     fun bindReadingTracePath(sessionId: Long, path: String) = readingTrace.bindPath(sessionId, path)
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
-        readingTrace.revealTrace(vaultRelativePath, content)
+        reunionCard.revealTrace(vaultRelativePath, content)
 
-    fun toggleReadingTraceMark() = readingTrace.toggleMark()
+    fun toggleReadingTraceMark() = reunionCard.toggleMark()
     fun reportReadingProgress(
         blockIndex: Int,
         blockFraction: Float,
@@ -531,7 +540,7 @@ internal class NoteSessionCoordinator(
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
     fun pauseReadingTrace(reason: ReadingPauseReason) = readingTrace.pause(reason)
     fun resumeReadingTrace(reason: ReadingPauseReason) = readingTrace.resume(reason)
-    fun dismissReadingTraceCard() = readingTrace.dismissCard()
+    fun dismissReadingTraceCard() = reunionCard.dismissCard()
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────
 
