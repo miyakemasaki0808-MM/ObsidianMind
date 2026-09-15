@@ -49,6 +49,36 @@ class KotlinCommentScannerTest {
     }
 
     @Test
+    fun `レビューの文脈と並んだ枝番の無い指摘番号は数える`() {
+        listOf(
+            "// （前回P1と同じ壊れ方）",
+            "// 今回のP3で見つかった",
+            "// レビューのP2で直した",
+            "/** 指摘 P0 への対応 */",
+            "// P1指摘の対応",
+            "// P2 の指摘を受けた",
+            "// 前回P1-1と同じ"
+        ).forEach { comment ->
+            assertEquals(comment, 1, KotlinCommentScanner.historyMarkLines("$comment\nval x = 1").size)
+        }
+    }
+
+    @Test
+    fun `文脈の無い枝番の無い番号は数えない`() {
+        listOf(
+            "// 始点P1と終点P2を結ぶ",
+            "// P1 は左上の角",
+            "// 前回の位置 P1 を覚えておく",
+            "// AP1 と P10 は別の名前",
+            "// 指摘の要点をP4へ移す",
+            "// 「前回P1」の行を読む"
+        ).forEach { comment ->
+            assertEquals(comment, emptyList<Pair<Int, String>>(), KotlinCommentScanner.historyMarkLines("$comment\nval x = 1"))
+        }
+        assertNoFindings("val text = \"前回P1と同じ\"")
+    }
+
+    @Test
     fun `実際に続けて置いたKDocは前の1つを数える`() {
         val source = "/** first */\n/** second */\nval x = 1"
 
