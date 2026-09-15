@@ -41,30 +41,19 @@ import java.util.concurrent.atomic.AtomicInteger
  * （→ [architecture](../../../../../../../../docs/dev/system/architecture.md) 判断2・4）。
  * 整理（[ReadingTraceCleanupController]）と同じ寿命である。
  *
- * ## 新しく作っているものは3つだけ
+ * 列挙・読み出し・版管理・checksum は `ReadingTraceStore` / `ReadingTraceJson` が、
+ * 突き合わせ規則は `domain` の純関数（`mergeReadingTraces`）が持つ。ここは結線・進捗・中断だけを持つ。
  *
- * 列挙・読み出し・版管理・checksum は既存部品（`ReadingTraceStore` / `ReadingTraceJson`）が
- * そのまま担う。ここが持つのは束ね方の呼び出し・突き合わせの結線・進捗と中断だけ。
- * 突き合わせ規則そのものは `domain` の純関数（`mergeReadingTraces`）にあり、
- * JVMテストで固定されている。
- *
- * ## 読み戻しは2段階
- *
- * **下見（[prepareImport]）と適用（[applyImport]）を分ける。** 読み戻しは不可逆なので、
+ * **読み戻しは下見（[prepareImport]）と適用（[applyImport]）に分ける。** 不可逆なので、
  * 「何件が増え、何件を合わせ、どちらの返事が失われるか」を見せてから確定させる。
+ * 適用は ①端末側を全件読み直して下見時と突き合わせ（1件も書かない）②一致していたら
+ * 錠の中で1件ずつ読み直して書く。①で差があれば**計画を作り直して出し直す** —
+ * 画面に出していない損失を確定させないため。
  *
- * **確定は、見せた内容と端末側が一致していることを先に確かめてから書く。** 適用は
- * ①端末側を全件読み直して下見時と突き合わせ（1件も書かない）②一致していたら
- * 錠の中で1件ずつ読み直して書く、の2段構えになっている。①で差があれば
- * **1件も書かずに計画を作り直して出し直す** — 画面に出していない損失を確定させないため。
- *
- * ## 「読めなかった」を「無い」へ畳まない
- *
- * 端末側の点読込は、SAF の一時的な失敗でも `ReadingTraceReadResult.None` を返す。
- * これを「痕跡が無い」と読むと、**退避側を新規として丸ごと書き、端末側の返事が
- * 警告も保留もなく消える**。そこで置き場の一覧を先に取り、
- * **キーが一覧にあるのに読めない場合は「確かめられない」として書かない**。
- * 一覧そのものが取れなければ不在を根拠にできないので、読み戻し自体を始めない。
+ * **「読めなかった」を「無い」へ畳まない。** 端末側の点読込は SAF の一時的な失敗でも
+ * `ReadingTraceReadResult.None` を返すので、無いと読むと退避側を新規として書き、端末側の返事が黙って消える。
+ * 不在の根拠は置き場の一覧に置き、一覧にあるのに読めないキーは書かない。
+ * 一覧そのものが取れなければ、読み戻し自体を始めない（→ features/reading_trace_backup.md）。
  */
 internal class ReadingTraceBackupController(
     private val scope: CoroutineScope,
@@ -247,9 +236,8 @@ internal class ReadingTraceBackupController(
         val unreadable = mutableListOf<String>()
         var done = 0
         state.set(ReadingTraceBackupState.Working(ReadingTraceBackupStep.EXPORT_READ, 0, keys.size))
-        // **まとめてI/Oへ渡し、進捗と世代照合は呼び出し側の文脈で行う。**
-        // 1件ずつ withContext すると遠いプロバイダで切替コストが件数分載り、
-        // 逆にI/Oの中から状態を書くと世代照合をI/Oスレッドから行うことになる。
+        // **まとめてI/Oへ渡し（→ [IO_CHUNK_SIZE]）、進捗と世代照合は呼び出し側の文脈で行う。**
+        // I/Oの中から状態を書くと、世代照合をI/Oスレッドから行うことになる。
         for (chunk in keys.chunked(IO_CHUNK_SIZE)) {
             val read = withContext(ioDispatcher) {
                 chunk.map { key -> key to persistence.loadByKey(key, vaultKey) }
@@ -613,12 +601,11 @@ internal class ReadingTraceBackupController(
      *
      * **中止は要求であって完了ではない。** `cancel()` はJobへ印を付けるだけで、
      * 書き手が実際に止まるのはその後の中断点なので、**ここで途中経過を確定すると
-     * 走り切った分だけ少なく報告する**（実測でチャンク途中の中止が16件ずれた）。
-     * 件数は書き手を `join()` してから1度だけ数える。
+     * 走り切った分だけ少なく報告する**。件数は書き手を `join()` してから1度だけ数える。
      *
      * **止め終わるまで、中止は何度押されても1回である。** 停止を待つあいだ画面は
      * `Working` のままで中止ボタンも残るので、2度目が入り得る。待っていない側が
-     * 数えると同じ欠陥が戻るため、結果を確定できるのは最初の1回だけにする。
+     * 数えると停止前の途中経過が最終結果になるため、結果を確定できるのは最初の1回だけにする。
      */
     fun cancel() {
         val running = state.current as? ReadingTraceBackupState.Working ?: return
@@ -633,10 +620,7 @@ internal class ReadingTraceBackupController(
             return
         }
         val tally = applied
-        // **停止待ちの再入では、結果を作らない。** 1回目の中止は書き手の停止を待っているが、
-        // 画面は `Working` のままなので中止をもう一度押せる。2度目がここを通ると
-        // **待っていない側**が停止前の途中経過を最終結果にしてしまい、
-        // 処理中だった1件が表示に含まれないまま保存される（前回P1と同じ壊れ方）。
+        // **停止待ちの再入では、結果を作らない**（理由は KDoc）。
         if (tally != null && !tally.claimStop()) return
         scope.launch {
             stopping?.join()
