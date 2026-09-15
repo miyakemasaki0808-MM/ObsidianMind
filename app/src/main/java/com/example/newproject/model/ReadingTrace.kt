@@ -15,26 +15,11 @@ package com.example.newproject.model
 internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
 
 /**
- * 現行の保存形式。**書き込むのは常にこの版**。
+ * 現行の保存形式。**書き込むのは常にこの版**で、旧版は `ReadingTraceJson` の decode が読むときに移行する。
  *
- * v2 で [ReadingTrace.totalVisitCount] を足した。v1 は保持件数（最大30）を累計回数として
- * 使っており、30回を超えると表示が「30回」で止まるだけでなく、AI俯瞰要約の再生成判定
- * （[needsAiSummary]）も止まって古い要約が「最新」として出続けていた。
- *
- * v3 で「ノートへのひとこと」を足した。旧「AI補記メモ」が Vaultへ `.md` を
- * 作っていたのを、1文になったのに合わせてサイドカーへ移したもの。
- *
- * v4 で [ReadingTrace.reflection] へ畳み、**ユーザーの返事**を組にした。
- * v3 の平坦な `remark` は「AIのひとことだけ」を保存していたが、
- * **AIが問いを投げて会話が終わる**ため読後感が宙に浮いていた。
- * v3 の値は `Reflection(remark = 旧remark, reply = null)` として読み込める。
- *
- * v5 で [Reflection.mirrored]（返事を受けてAIが返す1文）を足した。
- * 返事を書いて終わりだと**受け取ってもらえた感触が無い**ため、1往復だけ閉じる。
- *
- * v6 で再会カードの枠を4種別で取り合う形にし、[ReadingTrace.aiSummaryKind] と
- * 「まだ考えたい」の印（[ReadingTrace.markedAtEpochMillis] ほか）を足した。
- * v5 までの `aiSummary` はすべて俯瞰要約なので、[ReunionKind.Overview] として読み込む。
+ * **版を上げたら、decode の移行と checksum の正規形の両方へ版の分岐を足す。**
+ * 正規形は書かれた版で計算するので、片方だけだと既存のファイルが破損扱いになる。
+ * 各版で足した欄とその理由は features/reflect_reading_trace.md が持つ。
  */
 internal const val READING_TRACE_SCHEMA_VERSION = 6
 
@@ -67,14 +52,10 @@ internal object ReadingTraceLimits {
     /**
      * 返事の上限。**8,000文字＝日本語で最大24,000バイト**に余裕を持たせた値。
      *
-     * **以前は 1536（400文字）だった。これはAIへ渡せる長さから逆算した数字で、
-     * ユーザーの文章をローカルLLMの都合で縛っていた。**
-     * 本文は「保存は原文・AIへは抜粋」でやっているのに、返事だけ両方を
-     * 同じ数字で縛っていたのが誤り（→ features/reflect_remark.md §11）。
-     *
-     * 「汎用エディタにしない」という意図（→ feature_ideas N-6）は
-     * **壁ではなく合図**で守る — 2,000文字を超えたら静かに知らせるだけで、
-     * 切り詰めも拒否もしない。
+     * **AIへ渡せる長さから決めない。** 返事は「保存は原文・AIへは抜粋」で分けるので、
+     * ここはユーザーの文章を保存する枠である（→ features/reflect_remark.md 判断6）。
+     * 「汎用エディタにしない」という意図は**壁ではなく合図**で守る —
+     * 2,000文字を超えたら静かに知らせるだけで、切り詰めも拒否もしない。
      */
     const val MAX_REPLY_BYTES = 25_600
 
@@ -131,7 +112,7 @@ data class Reflection(
      *
      * 返事を書いて終わりだと「受け取ってもらえた」感触が無く、対話が閉じない。
      * ただし**1往復だけ**で、ここに問いを書かせると無限会話の入口になる
-     * （→ features/reflect_remark.md §10）。
+     * （→ features/reflect_remark.md §2 非ゴール）。
      *
      * 生成に失敗しても null のまま。**返事は先に保存済み**なので、
      * ここが空でもユーザーの言葉は失われない。
@@ -185,8 +166,8 @@ internal data class ReadingTrace(
      * これまで開いた**延べ回数**。[visits] は直近30件しか残さないので、
      * 保持件数とは別に数える。表示・AI要約の鮮度判定はすべてこちらを見る。
      *
-     * 既定値が `visits.size` なのは、v1 から移行した痕跡と、既存の構築箇所の
-     * 素直な初期値がどちらもそれになるため。**`copy()` は既定値を再評価しない**ので、
+     * 既定値が `visits.size` なのは、v1 から移行した痕跡と新しく作る痕跡の
+     * 初期値がどちらもそれになるため。**`copy()` は既定値を再評価しない**ので、
      * 訪問を外すときは [withoutLastVisit] を使うこと（手で `copy(visits = ...)` すると
      * 累計だけ取り残される）。
      */
@@ -198,7 +179,7 @@ internal data class ReadingTrace(
      * 訪問が増えれば作り直す必要があるが、ひとことの入力は本文であり、
      * ユーザーが明示ボタンを押したときにだけ作られて上書きされる。
      *
-     * **1ノート1組。** 生成のたびに上書きする（旧補記はファイルが増え続けていた）。
+     * **1ノート1組。** 生成のたびに上書きする。
      */
     val reflection: Reflection? = null,
     /**
@@ -253,9 +234,8 @@ internal fun ReadingTrace.withVisit(visit: ReadingVisit): ReadingTrace = copy(
 /**
  * 末尾の訪問を外す。**この閲覧で自分が書いた訪問を差し替えるためだけに使う。**
  *
- * 累計も一緒に戻すのが要点。戻さずに [withVisit] で書き直すと、背面化のたびに
- * 累計が増えて「ホームボタンを押すたび回数が膨らむ」に逆戻りする
- * （保持件数は30で頭打ちになるので、v1ではこの誤りが見えなかった）。
+ * 累計も一緒に戻すのが要点。戻さずに [withVisit] で書き直すと、
+ * 背面化のたびに累計が増える（保持件数は30で頭打ちになるので、件数だけ見ていると気づけない）。
  */
 internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
     visits = visits.dropLast(1),
