@@ -87,7 +87,7 @@ class NoteViewModel internal constructor(
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
-        // 関連ノートは走査キャッシュ（Uriを持つ NoteFile）に依存するためViewModel側に残す。
+        // 関連ノートは ViewModel が持つ走査キャッシュ（cachedNotes）に依存するので、ViewModel 側に置く。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },
         reloadBody = ::reloadNoteBody,
@@ -325,7 +325,7 @@ class NoteViewModel internal constructor(
                 val loaded = loadNoteForDistill(contentResolver, note.title, note.ref)
                 // RelatedNote は相対パスを持たない。キャッシュにあれば即使い、無ければ
                 // パス未確定でセッションだけ作る（表示前にVault走査を挟まないため）。
-                // 本文を出す前に呼ぶ理由は loadRandomNote 側のコメント参照。
+                // 本文を出す前に呼ぶ理由は presentDrawnNote 側のコメント参照。
                 val sessionId = startReadingTrace(note.title, note.ref, cachedRelativePath(note.ref))
                 session.setNotePaperTone(notePaperToneForCandidate(note, cachedNotes))
                 session.setNoteState(loaded)
@@ -555,7 +555,7 @@ class NoteViewModel internal constructor(
      *
      * ここへ落ちてくるのは一番大きいノートなので読込にも上限がある。切り詰めたときは
      * 黙って先頭だけ見せるのではなく、蒸留できない理由と一緒にその旨を伝える
-     * （この経路は元々理由を表示しているので、新しいUIの受け皿は要らない）。
+     * （この経路は理由を表示するので、別のUIの受け皿は要らない）。
      */
     private suspend fun displayFallback(
         contentResolver: ContentResolver,
@@ -617,7 +617,7 @@ class NoteViewModel internal constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
-                        // 収集に失敗した場合は従来どおり候補なしとして扱う
+                        // 収集に失敗したら候補なしとして扱う（直後の空判定へ落ちる）
                     }
                 }
             }
@@ -659,12 +659,11 @@ class NoteViewModel internal constructor(
          * `viewModelScope` に載せると、タスクスワイプや Activity finish で
          * `onStop()` → `pauseReadingTrace()` の直後に `onCleared()` が走り、
          * IOへディスパッチされる前の保存がキャンセルされて訪問が失われる。
+         * Activity も ViewModel も参照しないので、明示的なキャンセル契機は持たない。
          *
-         * `ProcessLifecycleOwner` を使わないのは、`lifecycle-process` の依存追加に対して
-         * 必要なのが「`onCleared()` で死なないスコープ」1つだけだから。Activity も
-         * ViewModel も参照しないので、明示的なキャンセル契機は持たない。
          * `Main.immediate` を土台にするのは `ReadingTraceController` の
-         * スレッド規律（セッション状態はメインスレッドのみ）に合わせるため。
+         * スレッド規律（セッション状態はメインスレッドのみ）に合わせるため
+         * （→ features/reflect_reading_trace.md 判断10）。
          */
         private val readingTraceWriteScope =
             CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)

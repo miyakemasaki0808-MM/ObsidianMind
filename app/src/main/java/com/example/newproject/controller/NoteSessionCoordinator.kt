@@ -35,26 +35,14 @@ import kotlinx.coroutines.sync.Mutex
 /**
  * 機能Controllerを束ね、**Controller間の調停**（ノート切替・Vault切替での
  * 一斉停止と一斉初期化）を担う。画面状態 [NoteUiState] の唯一の持ち主でもある。
- * **件数は書かない** — 足すたびに直す羽目になり、実際に古いまま残っていた。
+ * 束ねる Controller の**件数は書かない**（足すたびに古くなる。系統図は architecture.md が持つ）。
  *
- * ## なぜ ViewModel から分けたか
- *
- * この調停こそが最も壊れやすく（状態リセット漏れによる旧状態の残留は過去に何度も
- * 出ている）、同時に最も検証が要る部分である。ところが
- * [com.example.newproject.NoteViewModel] は `Uri`・`SharedPreferences`・
- * `ContentResolver` に依存するため、素のJVMテストでは**インスタンスを1つも作れない**。
- * Robolectric やモックライブラリを足せば直接テストできるが、依存を増やさずに済む形と
- * して「Android APIを呼ばない調停クラス」を分離した。
- *
- * したがって本クラスの規律は次の1点に尽きる。
- *
- * > **Android API を呼ばない。** `Uri` や `ContentResolver` を引数として受け取り
- * > 下位へ素通しするのは構わないが、`Uri.parse` / `DocumentsContract` /
- * > `SharedPreferences` などをこのクラスの中で呼んではいけない。呼んだ瞬間に
- * > [com.example.newproject.NoteSessionCoordinatorTest] が動かなくなる。
- *
- * Uri を解決する処理（Vault走査キャッシュ・ノート読込・関連ノート）は ViewModel 側に
- * 残っている。本クラスはその結果を受け取って状態へ反映する。
+ * **Android の型に触れない。** この調停は最も壊れやすく最も検証が要る部分で、
+ * `NoteSessionCoordinatorTest` が素のJVMで組み立てて確かめる。`Uri` や `ContentResolver` は
+ * 引数として素通しすることもできない — 型が残るとテストがそれを作れなくなるため、
+ * `PackageDependencyTest` が `android.*` の出現を落とす（→ architecture.md 判断5）。
+ * Uri を解決する処理（Vault走査キャッシュ・ノート読込・関連ノート）は
+ * [com.example.newproject.NoteViewModel] が持ち、本クラスはその結果を受け取って状態へ反映する。
  */
 internal class NoteSessionCoordinator(
     private val scope: CoroutineScope,
@@ -82,8 +70,7 @@ internal class NoteSessionCoordinator(
     private val cancelHostJobs: () -> Unit = {},
     /**
      * 状態の初期値。本番は既定の [NoteUiState] のまま使う。
-     * テストが「切替前にすべてのControllerが非初期値」の状況を作るための差し込み口で、
-     * `Uri` を要する状態（補記の保存先など）を外から与えられるようにしている。
+     * テストが「切替前にすべてのControllerが非初期値」の状況を作るための差し込み口。
      */
     initialState: NoteUiState = NoteUiState(),
     /**
@@ -381,9 +368,8 @@ internal class NoteSessionCoordinator(
     /** 起動時に保存済みVaultを復元したときに呼ぶ。 */
     fun onVaultRestored() {
         stateStore.restoreVault(history.load())
-        // **起動復元からも読む。** ここを落としていたため、保存が効くのは
-        // 「Vaultを選び直した」経路だけだった（→ features/note_field_color.md 判断17）。
-        // **入口が2つある機能は、後から足したほうを取り残す**（→ lessons.md L14）。
+        // **起動復元からも読む。** 読まないと、保存が効くのは「Vaultを選び直した」経路だけになる
+        // （→ features/note_field_color.md 判断17）。入口は [onVaultChanged] とここの2つある（→ lessons.md L14）。
         loadPersistedNoteFields()
     }
 
@@ -443,8 +429,7 @@ internal class NoteSessionCoordinator(
      * ノートを離れて次のノートの読込を始める。**ジョブ停止と状態リセットは必ずここで対になる。**
      *
      * 呼び出し側で2手に分けると、片方だけを消しても動いてしまい
-     * 「旧ノートのAI結果が新しいノートの画面へ後着する」型のバグが復活する。
-     * 実際この対を崩したことが過去の不具合の原因になっている。
+     * 「旧ノートのAI結果が新しいノートの画面へ後着する」型のバグになる。
      */
     fun onNoteChanged() {
         cancelNoteScopedJobs()
