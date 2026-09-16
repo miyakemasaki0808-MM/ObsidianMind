@@ -165,6 +165,7 @@
 - [読書痕跡の退避](device_validation/reading_trace_backup.md)
 - [冊子モード](device_validation/booklet_mode.md)
 - [起動](device_validation/app_launch.md)
+- [起動の再生成（回転・Fold）](device_validation/app_launch_recreation.md)
 - [分野色と復元](device_validation/note_field_color.md)
 - [返事の保存先分離](device_validation/reading_trace_reply.md)
 

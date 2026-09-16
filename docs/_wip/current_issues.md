@@ -199,7 +199,7 @@
 **実装済み・実機は `LAUNCH-05` だけ残る。** 対応候補のとおり `onCreate` の先頭で畳んだ。
 [app_launch](../review/device_validation/app_launch.md) の5ケースのうち `LAUNCH-01`〜`04` は
 同一製品APKでの成功が 2026-09-12 のレビュー行に記録されており（→ [レビュー一覧](../review/README.md)）、
-**未実施は `LAUNCH-05`（回転・Fold）だけ**である。
+**未実施は `LAUNCH-05`（回転・Fold）だけ**である。手順は [app_launch_recreation](../review/device_validation/app_launch_recreation.md)。
 **残りが済むまで消さない** — 起動経路そのものを触っており、机上では受理条件を満たせない。
 判断の正本は [opening_animation](../dev/features/opening_animation.md) 判断7。
 
