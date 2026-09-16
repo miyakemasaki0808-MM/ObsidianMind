@@ -1,7 +1,7 @@
 # さがす（AIピッカー・閲覧履歴）
 
 **状態:** Implemented — 稼働中
-**最終検証:** 2026-08-11 / `c25bcea`
+**最終検証:** 2026-09-17 / `1433179`
 **関連コード:** `controller/SearchController.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `ui/screen/SearchScreen.kt`
 **関連テスト:** `SearchControllerTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest`
 **正本:** この文書
@@ -210,13 +210,14 @@ Nano に渡せる候補数に上限があるため、40件を超えるときだ�
 - **保証していないこと:**
   - **Nano の選定精度を測っていない。** 「狙いのノートが3件に入るか」の指標が無い
   - **bigram カットの再現率も測っていない。** 40件という上限は見積もり
+  - **Nano がIDだけを返す遵守率を測っていない。** 実機では長いタイトルと英語での問い合わせを各1回通し、候補が返ることまでを確かめた（生の応答は取っていない）
   - フォルダが第一階層しか出ないので、深い階層のノートは親フォルダ経由でしか絞れない
 
 ## 11. 既知の制約・未解決事項
 
 | | |
 |---|---|
-| 候補にタイトルしか渡していない | `buildPickerPrompt` はタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
+| 候補にタイトルしか渡していない | `buildPickerPrompt` はIDとタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
 | 選定精度の指標が無い | 上記「保証していないこと」参照 |
 | 走査キャッシュ中は外部の追加が見えない | 最大60秒 |
 
