@@ -215,7 +215,8 @@ MainActivity
   **演出そのものは自動化していない** — 実端末の目視が主である。
 - **実機:** [app_launch](../../review/device_validation/app_launch.md) の `LAUNCH-01`〜`LAUNCH-05`。
   回転・Fold開閉（`LAUNCH-05`）は [app_launch_recreation](../../review/device_validation/app_launch_recreation.md) で、
-  OPを倍率10で約20秒に伸ばして観測する（2秒のままでは画面の取得が間に合わず、出ていても見逃す）。
+  操作はユーザーの手で行い、アプリと同じプロセスの一時テストが画面の文字を100msおきに採取して観測する
+  （2秒のOPは画面の取得では間に合わず、出ていても見逃す）。
   **タスクの基点Intentが食い違う経路は `ActivityRecreationTest` の射程外**なので、ここでしか見られない。
 
 - **保証していないこと:**

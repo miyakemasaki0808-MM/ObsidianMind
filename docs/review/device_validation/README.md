@@ -31,7 +31,6 @@
 - 常設検証用Vault `/sdcard/Documents/VigilithDeviceReview_Home` の初回作成・選択・維持
 - `VigilithDeviceReview_<feature>_<YYYYMMDD>` で始まるケース別一時領域の作成、push、移動、内容変更、削除
 - SAFによるケース別一時Vaultと常設検証用Vaultへの切替
-- [回転・Fold開閉のケース](app_launch_recreation.md) に限り、そこに書いた再生倍率・画面の向き・折りたたみ状態の一時変更（変更前の値を記録し、後処理で戻す）
 - **一時Vault内だけ**での保存・復旧・競合確認
 
 実行環境が権限確認を必須にする場合は、`./gradlew` と対象シリアル付き `adb` の狭い接頭辞で
