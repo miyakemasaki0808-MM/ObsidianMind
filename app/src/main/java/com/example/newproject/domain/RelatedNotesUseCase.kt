@@ -52,7 +52,9 @@ class RelatedNotesUseCase(
         allNotes: List<NoteFile>,
         wikilinkTitles: Set<String>,
         readContent: suspend (DocumentRef) -> String,
-        parseMeta: (String) -> NoteMeta
+        parseMeta: (String) -> NoteMeta,
+        /** 生成を呼ぶ直前に待つもの（ノートに留まったか → background_ai_ux.md §7）。 */
+        awaitDwell: suspend () -> Unit
     ): RelatedNotesResult {
         return try {
             val candidateNotes = allNotes.filterNot { it.name.isSameTitleAs(currentTitle) }
@@ -144,6 +146,7 @@ class RelatedNotesUseCase(
                         currentExcerpt = currentExcerpt,
                         candidates = candidateLines
                     )
+                    awaitDwell()
                     val response = aiClient.generate(prompt)
 
                     // 応答からIDを抽出→ノートへ解決。候補は既に決定的枠を除外済みだが、

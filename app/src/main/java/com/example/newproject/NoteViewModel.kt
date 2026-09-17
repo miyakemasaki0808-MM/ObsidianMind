@@ -639,7 +639,8 @@ class NoteViewModel internal constructor(
                     wikilinkTitles = wikilinkTitles,
                     // 候補はスニペットとfront matterしか使わないので、先頭だけ読む
                     readContent = { ref -> repository.readNoteSnippet(contentResolver, ref.toDocumentUri()) },
-                    parseMeta = { repository.parseMeta(it) }
+                    parseMeta = { repository.parseMeta(it) },
+                    awaitDwell = session::awaitNoteDwell
                 )
             ) {
                 is RelatedNotesResult.Success -> session.setRelatedNotesState(

@@ -2,8 +2,8 @@
 
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-08-15
-**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）
-**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest`
+**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）/ `controller/NoteDwellGate.kt`（自動生成の門番）
+**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
 **正本:** この文書
 
 **対象領域:** AI生成の待ち時間をどう見せ、結果をどう知らせるか（機能横断）
@@ -233,6 +233,62 @@ SDK（`genai-common`）には長期利用枠の超過（`PER_APP_BATTERY_USE_QUO
 分類を `ai/AiAvailabilityMapping.kt` へ出したのは、`AICoreClient` が `Generation.getClient()` を抱えていて
 素のJVMでは組み立てられず、**この7経路を1つも検証できなかった**ため。それがこの誤りが長く残った理由でもある。
 
-## 7. 開発経緯
+## 7. 自動で走る生成は、ノートに留まってから始める（2026-09-18、オーナー判断）
+
+**ノートを開いた瞬間に、自動の生成が Nano を呼んでいた。** 要約・分野判定・再会カードの要約・関連ノートのAI推薦の4本である。
+冊子から「これを読む」で開いてすぐ戻るノートにも生成が走り、`AiClient` の錠を占有して押した操作を待たせ、
+AICore の短い時間窓の回数制限（→ §6）も使っていた。
+
+**本文を出してから続けて3秒表示されるまで、自動の生成は Nano を呼ばない。**
+読書痕跡の訪問条件（10秒）と同じ発想だが、読んだかどうかの判定ではなく
+**すぐ離れるノートに Nano を使わない**ための線なので短くする。
+代償は、初めて開いたノートの要約が3秒遅れること（オーナーが受け入れた）。
+
+### 判断1: 待たせるのは生成の呼び出しだけ
+
+**起動契機（`fetchSummary` などを呼ぶ時点）はずらさない。** 調停側で呼び出しごと遅らせると、
+AIを呼ばずに出せるものまで遅れる。
+
+| 機能 | 門番の手前で出るもの | 門番の後ろ |
+|---|---|---|
+| 要約 | 保存済みの要約（→ [note_summary](../features/note_summary.md) 判断6） | 生成 |
+| 再会カード | 生の痕跡のカード（要約の欄は読み込み中） | 要約・候補の選別 |
+| 分野判定 | 索引Bの照合・失効の降格 | 生成 |
+| 関連ノート | **無い。** 決定的チャンネルもAI推薦と一緒に返るので、関連タブの表示は3秒遅れる | 生成 |
+
+**門番を待つのは `Ready` と分かってから。** 非対応端末・モデル未取得・DL中は、これまでどおり待たずに黙る。
+**要約のモデルDLの開始も待たせない。** DLは端末に1回だけで、ノートごとに Nano を使うものではない。
+
+### 判断2: 「留まる」は、続けて表示されていること
+
+- **数え始めは本文を出した時点**（`setNoteState` の `Success`）。読込を始めた時点ではない。
+  蒸留の差し替え（`applyReloadedBody`）では数え直さない — 同じノートに居続けている
+- **冊子が前面・アプリが背面のあいだは数えず、戻ったら最初から数える。**
+  足し算にすると、冊子をめくって戻った直後に生成が始まる。止める合図は読書痕跡と同じ
+  `ReadingPauseReason` の入口から受ける（読書時間は足し算で、こちらは数え直し — 測っているものが違う）
+- **一度開いたら閉じない。** 開いた後に冊子や背面へ回っても、走り始めた生成は止めない。止めるのはノート切替だけ
+- **ノートを離れたら、門番を待っている生成は取り消し、次のノートは最初から数える。**
+  開いた門を次のノートへ持ち越さない
+
+### 判断3: 門番は調停側が1つ持ち、自動起動の機能にだけ配る
+
+`NoteSessionCoordinator` が門番を1つ持ち、本文を出したら数え始め、ノート単位のジョブ停止の契約
+（`cancelNoteScopedJobs()`）で止める。**`NoteUiState` に状態を持たないので、状態リセットの契約には載せない。**
+
+各機能へは「待つ関数」だけを渡す。痕跡の錠を上から配るのと同じ形で、
+**Controller の共通化ではない**（→ [architecture](architecture.md)「Controller共通化はしない」）。
+関連ノートのジョブは ViewModel にあるので、`awaitNoteDwell()` から同じ門番を引く。
+
+- **押して使う機能には配らない。** 押した直後の生成が、理由もなく数秒待たされる
+- **待つ関数は省略できない引数にしてある。** 既定値を置くと、配線を落としても素通りする
+
+**検証:** 門番の規則は `NoteDwellGateTest`、4本すべてに配られていることと切替の両方向
+（留まる前に離れる／留まった後に離れる）・保存済みの要約・冊子は `NoteSessionCoordinatorTest` が
+本番と同じ入口から見る。関連ノートは ViewModel を素のJVMで組み立てられないので `RelatedNotesDwellTest` が見る。
+
+**保証していないこと:** 3秒が体感として妥当か（実機で見る）。門番を通った後の待ちは変えていない —
+4本は同じ時点で門を抜け、これまでどおり錠を取り合う。
+
+## 8. 開発経緯
 
 [開発日誌 2026-07](../../owner/journal/2026-07.md)・[2026-08](../../owner/journal/2026-08.md)

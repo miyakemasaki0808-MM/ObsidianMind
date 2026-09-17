@@ -8,6 +8,7 @@ import com.example.newproject.domain.noteFieldHint
 import com.example.newproject.domain.noteFieldInputVersion
 import com.example.newproject.domain.noteFieldPathKey
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteField
 import com.example.newproject.model.NoteFieldClassification
@@ -66,10 +67,12 @@ class NoteFieldControllerTest {
         scope: TestScope,
         client: FakeAiClient,
         writer: RecordingWriter,
-        store: NoteFieldStore? = null
+        store: NoteFieldStore? = null,
+        awaitDwell: suspend () -> Unit = passDwell
     ) = NoteFieldController(
         scope = scope,
         aiClient = client,
+        awaitDwell = awaitDwell,
         state = writer,
         excerptDispatcher = StandardTestDispatcher(scope.testScheduler),
         store = store,

@@ -2,7 +2,7 @@
 
 **状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。混雑時の文言（判断9）は実機で未観測のまま受理（→ §10）
 **最終検証:** 2026-09-18 / `8754208`
-**関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
+**関連コード:** `controller/SummaryController.kt` / `controller/NoteDwellGate.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
 **関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書
 
@@ -50,7 +50,8 @@
    - `Ready`・DL実行中・一時的な不可 → 4へ
 4. 本文から抜粋を作り（**`Dispatchers.Default`** — 最大1MBの解析でMainを塞がない）、プロンプトを組む
 5. **保存済みの要約を引く。** 当たれば `Success(summary)`（**生成しない。`Ready` でなくても出す** → 判断6）
-6. 当たらなければ、`Ready` のときだけ `AiClient.generate()`（`generateMutex` で直列・60秒タイムアウト）。
+6. 当たらなければ、`Ready` のときだけ**ノートに続けて3秒留まってから**（→ [background_ai_ux](../system/background_ai_ux.md) §7）
+   `AiClient.generate()`（`generateMutex` で直列・60秒タイムアウト）。
    それ以外（DL実行中・一時的な不可）は `AiUnavailable`。
    DL中にDLを始めないのは、走行中のDLへ合流できないため
    （→ [background_ai_ux](../system/background_ai_ux.md) §6 判断2）
@@ -122,7 +123,8 @@
            │    ├─ buildNoteExcerpt()  @Dispatchers.Default   ← 1200字
            │    ├─ PromptBuilder.buildSummarizePrompt()
            │    ├─ SummaryCache.find(prompt)                  ← 当たれば生成しない
-           │    ├─ AiClient.generate()  @generateMutex        ← Ready のときだけ・60秒
+           │    ├─ awaitDwell()                               ← Ready のときだけ・ノートに3秒留まるまで
+           │    ├─ AiClient.generate()  @generateMutex        ← 60秒
            │    └─ SummaryCache.save(prompt, summary)         ← 空でない成功だけ
            └─ startModelDownload()                  ← NeedsDownload のとき
                 └─ 完了で fetch() を自動再開（isCurrent のときだけ）
@@ -141,7 +143,8 @@
 これは他のAI機能（蒸留・クイズ・ひとこと＝いずれも明示操作）と**意図的に違う**。
 
 代償は **Mutex の占有**で、開くたびに1本の生成が待ち行列へ入る。
-開き直したノートではこの代償を払わない（→ 判断6）。
+開き直したノートではこの代償を払わない（→ 判断6）。すぐ離れたノートでも払わない
+（→ [background_ai_ux](../system/background_ai_ux.md) §7）。
 
 ### 判断2: 待機画面へ遷移しない
 

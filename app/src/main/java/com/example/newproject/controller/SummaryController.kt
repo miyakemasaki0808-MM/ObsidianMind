@@ -29,7 +29,9 @@ class SummaryController(
     private val summarizeUseCase: SummarizeUseCase,
     private val aiClient: AiClient,
     private val state: SummaryStateWriter,
-    private val onModelReady: (title: String, content: String) -> Unit
+    private val onModelReady: (title: String, content: String) -> Unit,
+    /** 生成の直前に通す門番（→ [SummarizeUseCase.summarize]）。保存済みの要約は待たせない。 */
+    private val awaitDwell: suspend () -> Unit
 ) {
     // モデルDL完了後に要約を再開するために保持
     private var pending: PendingSummary? = null
@@ -42,7 +44,7 @@ class SummaryController(
         summaryJob?.cancel()
         summaryJob = scope.launch {
             setStateIfCurrent(requestId, SummaryState.Loading)
-            when (val result = summarizeUseCase.summarize(title, content)) {
+            when (val result = summarizeUseCase.summarize(title, content, awaitDwell)) {
                 is SummaryResult.Success ->
                     setStateIfCurrent(requestId, SummaryState.Success(result.summary))
                 is SummaryResult.AiUnavailable ->

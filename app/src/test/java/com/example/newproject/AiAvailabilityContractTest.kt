@@ -24,6 +24,7 @@ import com.example.newproject.model.NoteMeta
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import com.example.newproject.fakes.InMemorySummaryCache
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
@@ -190,7 +191,7 @@ class AiAvailabilityContractTest {
         )
 
         val thrown = try {
-            useCase.summarize("ノートA", "Aの本文")
+            useCase.summarize("ノートA", "Aの本文", passDwell)
             null
         } catch (e: CancellationException) {
             e
@@ -219,7 +220,8 @@ class AiAvailabilityContractTest {
                 allNotes = listOf(noteFile()),
                 wikilinkTitles = emptySet(),
                 readContent = { "" },
-                parseMeta = { NoteMeta(emptyList(), emptyList()) }
+                parseMeta = { NoteMeta(emptyList(), emptyList()) },
+                awaitDwell = passDwell
             )
             null
         } catch (e: CancellationException) {
@@ -303,7 +305,8 @@ class AiAvailabilityContractTest {
                 allNotes = listOf(noteFile()),
                 wikilinkTitles = emptySet(),
                 readContent = { "" },
-                parseMeta = { NoteMeta(emptyList(), emptyList()) }
+                parseMeta = { NoteMeta(emptyList(), emptyList()) },
+                awaitDwell = passDwell
             )
         // 自動起動なので黙って劣化する（例外を見せない）。
         assertTrue("成功として返ること: $result", result is RelatedNotesResult.Success)
@@ -332,7 +335,8 @@ class AiAvailabilityContractTest {
             summarizeUseCase = SummarizeUseCase(ai, InMemorySummaryCache(), excerptDispatcher = dispatcher()),
             aiClient = ai,
             state = state.summaryWriter,
-            onModelReady = { _, _ -> }
+            onModelReady = { _, _ -> },
+            awaitDwell = passDwell
         )
 
     private fun TestScope.remarkController(state: NoteUiStateStore, ai: AiClient) =

@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import com.example.newproject.fakes.InMemorySummaryCache
 import com.example.newproject.model.NoteExcerptLimits
 import com.google.mlkit.genai.common.GenAiException
@@ -27,8 +28,8 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val useCase = useCase(ai)
 
-        val first = useCase.summarize("ノートA", "Aの本文")
-        val second = useCase.summarize("ノートA", "Aの本文")
+        val first = useCase.summarize("ノートA", "Aの本文", passDwell)
+        val second = useCase.summarize("ノートA", "Aの本文", passDwell)
 
         assertEquals(SummaryResult.Success("要約結果"), first)
         assertEquals(SummaryResult.Success("要約結果"), second)
@@ -44,7 +45,7 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val cache = InMemorySummaryCache()
 
-        useCase(ai, cache).summarize("ノートA", "Aの本文")
+        useCase(ai, cache).summarize("ノートA", "Aの本文", passDwell)
 
         assertEquals(listOf(ai.lastPrompt), cache.entries.keys.toList())
     }
@@ -54,8 +55,8 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val useCase = useCase(ai)
 
-        useCase.summarize("ノートA", "同じ本文")
-        useCase.summarize("ノートB", "同じ本文")
+        useCase.summarize("ノートA", "同じ本文", passDwell)
+        useCase.summarize("ノートB", "同じ本文", passDwell)
 
         assertEquals(2, ai.generateCalls)
     }
@@ -65,8 +66,8 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val useCase = useCase(ai)
 
-        useCase.summarize("ノートA", "Aの本文")
-        useCase.summarize("ノートA", "Aの本文を書き直した")
+        useCase.summarize("ノートA", "Aの本文", passDwell)
+        useCase.summarize("ノートA", "Aの本文を書き直した", passDwell)
 
         assertEquals(2, ai.generateCalls)
     }
@@ -87,8 +88,8 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val useCase = useCase(ai)
 
-        useCase.summarize("ノートA", before)
-        useCase.summarize("ノートA", after)
+        useCase.summarize("ノートA", before, passDwell)
+        useCase.summarize("ノートA", after, passDwell)
 
         assertEquals(1, ai.generateCalls)
     }
@@ -103,9 +104,9 @@ class SummarizeUseCaseTest {
         val cache = InMemorySummaryCache()
         val useCase = useCase(ai, cache)
 
-        assertTrue(useCase.summarize("ノートA", "Aの本文") is SummaryResult.Error)
+        assertTrue(useCase.summarize("ノートA", "Aの本文", passDwell) is SummaryResult.Error)
         assertTrue(cache.entries.isEmpty())
-        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文", passDwell))
         assertEquals(2, ai.generateCalls)
     }
 
@@ -115,8 +116,8 @@ class SummarizeUseCaseTest {
         val cache = InMemorySummaryCache()
         val useCase = useCase(ai, cache)
 
-        useCase.summarize("ノートA", "Aの本文")
-        useCase.summarize("ノートA", "Aの本文")
+        useCase.summarize("ノートA", "Aの本文", passDwell)
+        useCase.summarize("ノートA", "Aの本文", passDwell)
 
         assertTrue(cache.entries.isEmpty())
         assertEquals(2, ai.generateCalls)
@@ -127,13 +128,13 @@ class SummarizeUseCaseTest {
     fun `DL中や一時的に使えないときも保存済みの要約を出す`() = runTest {
         val ai = FakeAiClient.returning("要約結果")
         val useCase = useCase(ai)
-        useCase.summarize("ノートA", "Aの本文")
+        useCase.summarize("ノートA", "Aの本文", passDwell)
 
         ai.availability = AiAvailability.Downloading
-        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文", passDwell))
 
         ai.availability = AiAvailability.TemporarilyUnavailable(IllegalStateException("構成の取得待ち"))
-        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.Success("要約結果"), useCase.summarize("ノートA", "Aの本文", passDwell))
 
         assertEquals(1, ai.generateCalls)
         assertEquals("DL中に download() を呼ばないこと", 0, ai.downloadCalls)
@@ -146,7 +147,7 @@ class SummarizeUseCaseTest {
             availability = AiAvailability.TemporarilyUnavailable(IllegalStateException("構成の取得待ち"))
         )
 
-        assertEquals(SummaryResult.AiUnavailable, useCase(ai).summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.AiUnavailable, useCase(ai).summarize("ノートA", "Aの本文", passDwell))
         assertEquals(0, ai.generateCalls)
     }
 
@@ -159,13 +160,13 @@ class SummarizeUseCaseTest {
         val ai = FakeAiClient.returning("要約結果")
         val cache = InMemorySummaryCache()
         val useCase = useCase(ai, cache)
-        useCase.summarize("ノートA", "Aの本文")
+        useCase.summarize("ノートA", "Aの本文", passDwell)
         val findsBefore = cache.findCalls
 
         ai.availability = AiAvailability.Unsupported
-        assertEquals(SummaryResult.AiUnavailable, useCase.summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.AiUnavailable, useCase.summarize("ノートA", "Aの本文", passDwell))
         ai.availability = AiAvailability.NeedsDownload
-        assertEquals(SummaryResult.AiNeedsDownload, useCase.summarize("ノートA", "Aの本文"))
+        assertEquals(SummaryResult.AiNeedsDownload, useCase.summarize("ノートA", "Aの本文", passDwell))
 
         assertEquals(findsBefore, cache.findCalls)
     }
@@ -179,7 +180,7 @@ class SummarizeUseCaseTest {
             )
         }
 
-        val result = useCase(ai).summarize("ノートA", "Aの本文")
+        val result = useCase(ai).summarize("ノートA", "Aの本文", passDwell)
 
         assertEquals(SummaryResult.Error(SummarizeUseCase.BUSY_MESSAGE), result)
     }
@@ -192,7 +193,7 @@ class SummarizeUseCaseTest {
         )
         val ai = FakeAiClient.failingGeneration { error }
 
-        val result = useCase(ai).summarize("ノートA", "Aの本文")
+        val result = useCase(ai).summarize("ノートA", "Aの本文", passDwell)
 
         assertEquals(SummaryResult.Error(requireNotNull(error.message)), result)
     }

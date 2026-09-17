@@ -44,6 +44,8 @@ import kotlinx.coroutines.launch
 class NoteFieldController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
+    /** 生成の直前に通す門番。ノートを離れたら `CancellationException` で抜ける。 */
+    private val awaitDwell: suspend () -> Unit,
     private val state: NoteFieldStateWriter,
     /**
      * 抜粋の組み立てを逃がす先。**純粋だが軽くない** — 最大1MBの本文に比例するので、
@@ -169,6 +171,10 @@ class NoteFieldController(
             if (failuresByInputVersion.getOrDefault(inputVersion, 0) >= MAX_CONSECUTIVE_FAILURES) {
                 return@launch
             }
+
+            // **生成へ進む手前で、ノートに留まるのを待つ**（→ background_ai_ux.md §7）。
+            // 索引Bの照合と失効の降格は、AIを呼ばないので待たせない。
+            awaitDwell()
 
             val prompt = PromptBuilder.buildNoteFieldPrompt(
                 title = title,
