@@ -1,9 +1,9 @@
 # ノート要約
 
-**状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。要約の保存（判断6〜8）は実機未確認
-**最終検証:** 2026-08-11 / `c25bcea`（判断6〜8 は未突合）
-**関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
-**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
+**状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。要約の保存（判断6〜8）と混雑時の文言（判断9）は実機未確認
+**最終検証:** 2026-08-11 / `c25bcea`（判断6〜9 は未突合）
+**関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
+**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書
 
 **対象領域:** 開いたノートの要約を自動生成し、AIタブへ出すまで
@@ -38,6 +38,7 @@
 | モデルDL | 進捗（ダウンロード済/全体）を出す | Nano のモデルが未取得のとき |
 | DL後の自動再開 | **完了すると自動で要約を作り直す** | ダウンロード完了時 |
 | AI非対応 | 要約欄を出さない | 端末が Nano 非対応 |
+| 混雑 | 「端末のAIが混み合っています。少し待ってからノートを開き直してください。」 | AICore が回数制限で要求を断ったとき（→ 判断9） |
 
 ## 4. 現在のユーザーフロー
 
@@ -81,7 +82,8 @@
 - **エラー／AI非対応／キャンセル時:**
   - AI非対応 → `AiUnavailable`。**エラーとして見せない**（端末の性質であって失敗ではない）
   - DL失敗 → `Error("モデルのダウンロードに失敗しました: …")`
-  - 生成失敗 → `Error`
+  - 生成が回数制限で断られた → `Error("端末のAIが混み合っています。…")`（→ 判断9）
+  - それ以外の生成失敗 → `Error`（例外の文言のまま）
   - **失敗と空の要約は保存しない**
   - ノート切替 → `cancelAndClear()`。`CancellationException` は再throwする
 
@@ -225,6 +227,21 @@ DL完了は数分後に届きうるので、**`cancel()` だけでは足りな�
 「作り直す」ボタンは、AIを相手役に留める北極星に対して操作を1つ増やすだけになる。
 **本文かタイトルを直せば鍵が変わり、要約も作り直される。**
 
+### 判断9: AICore に回数制限で断られたら、英文を出さず開き直しを促す（2026-09-17、オーナー判断）
+
+AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](../system/background_ai_ux.md) §6）。
+要約は生成の例外文をそのまま出していたので、断られると SDK の英文が要約欄に出た。
+
+**黙らせず、日本語の案内に差し替える。** 黙って `AiUnavailable` にすると要約欄ごと消え、
+次に何をすればよいかが残らない。断られたときモデルは動いておらず、**少し待てば同じ要求が通りうる**ので、
+「少し待ってからノートを開き直してください」と出す。**失敗は保存しないので、開き直せば生成し直す。**
+
+- **判定は `GenAiException.getErrorCode()` が `BUSY`（9）のときだけ。** SDK は内部コード28も
+  `getErrorCode()` で9へ読み替えて返す（genai-common 1.0.0-beta3 の逆アセンブルで確認。
+  `AiGenerationFailureTest` が本物の例外で固定している）
+- **長期の利用枠の超過（27）は含めない。** 少し待っても通らないので、同じ案内は誤りになる
+- **それ以外の失敗の文言は変えていない**（→ §11）
+
 ## 9. 品質要件
 
 - **性能:** 抜粋の生成は `Dispatchers.Default`。**最大1MBの本文解析はMainで走らせない**
@@ -237,9 +254,9 @@ DL完了は数分後に届きうるので、**`cancel()` だけでは足りな�
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `SummaryControllerTest`（状態遷移・世代照合・DL再開）/
-  `SummarizeUseCaseTest`（保存の鍵・保存してよい結果・引いてよい状態）/
+  `SummarizeUseCaseTest`（保存の鍵・保存してよい結果・引いてよい状態・混雑時の文言）/
   `FileSummaryCacheTest`（1件1ファイル・古い順の削除・大きさの上限・書きかけの片付け・置き場を作れないとき）/
-  `NoteExcerptBuilderTest`（抜粋）/
+  `AiGenerationFailureTest`（回数制限の判定）/ `NoteExcerptBuilderTest`（抜粋）/
   `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）/
   `SummaryCoverageTest`・`SummaryCoverageCalibrationTest`（出力を採点する物差しと、その閾値）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）/ `PromptTokenBudgetTest`（トークン余裕）
@@ -258,7 +275,7 @@ DL完了は数分後に届きうるので、**`cancel()` だけでは足りな�
 | | |
 |---|---|
 | 優先度が無い | 自動生成が先に入ると、ユーザーが押した操作が後ろで待つ。**開き直したノートでは生成しないので、待つのは初めて開いたノートだけになった** |
-| 生成失敗は例外の文言のまま | SDK の英文が出うる。自動機能は例外本文を出さない方針（[background_ai_ux](../system/background_ai_ux.md) §6）とずれている |
+| 回数制限以外の生成失敗は例外の文言のまま | SDK の英文が出うる。自動機能は例外本文を出さない方針（[background_ai_ux](../system/background_ai_ux.md) §6）とずれている |
 | 品質の正しさを判定できない | [探索用の実機基準線](../system/ai_quality_measurement.md) は取得済みだが、語彙指標だけでは正誤や方式の優劣を判定できない |
 
 ## 12. 開発経緯

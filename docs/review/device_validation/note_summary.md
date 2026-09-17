@@ -1,14 +1,15 @@
-# ノート要約の保存の実機検証ケース
+# ノート要約の保存と混雑時の実機検証ケース
 
 ## 正本
 
-- 保存の鍵・置き場・上限・作り直さない判断: [note_summary](../../dev/features/note_summary.md) 判断6〜判断8
+- 保存の鍵・置き場・上限・作り直さない判断・混雑時の文言: [note_summary](../../dev/features/note_summary.md) 判断6〜判断9
 - 自動AI機能の見せ方: [background_ai_ux](../../dev/system/background_ai_ux.md) §6
 - 共通の準備と後処理: [Codex実機検証手順](README.md)
 
 ## 適用条件
 
-要約の保存（`SummaryCache`・`FileSummaryCache`）、要約のプロンプト・抜粋、`SummarizeUseCase` の状態分岐を変えたときに使う。
+要約の保存（`SummaryCache`・`FileSummaryCache`）、要約のプロンプト・抜粋、`SummarizeUseCase` の状態分岐、
+回数制限の判定（`isAiCoreBusy`）を変えたときに使う。
 初回は新しい保証を足した変更なので通し版とする。
 
 **「生成しなかった」は画面の速さで判定しない。** 保存はファイル1件ずつなので、
@@ -42,6 +43,7 @@ adb -s <serial> shell run-as com.vigilith.ai ls -l --full-time no_backup/summary
 | `SUMCACHE-05` | `am force-stop` してから起動し、ノートAを開く | 生成し直さず要約が出る（再起動をまたいで残る） |
 | `SUMCACHE-06` | ノートAの要約の生成中に別ノートへ切り替え、生成が止まってから戻る | 切り替え先へAの要約が出ない。途中の要約は保存されず、戻ったときに生成し直す |
 | `SUMCACHE-07` | 検証の前後で一時Vaultのファイル一覧を比べる | 要約の保存のためにVault内へファイルが増えていない |
+| `SUMCACHE-08` | 要約の生成が AICore に `ErrorCode 9 / BUSY` で断られた場面を観測できたときだけ、要約欄の文言を読む | 「端末のAIが混み合っています。少し待ってからノートを開き直してください。」が出て、SDKの英文が出ない。**BUSY を起こすために短時間に生成を投げ続けない**（窓の長さは特定しない判断 → 正本）。観測できなければ未実施とし、`SummarizeUseCaseTest` で代える |
 
 ## 後処理
 
@@ -51,4 +53,5 @@ adb -s <serial> shell run-as com.vigilith.ai ls -l --full-time no_backup/summary
 ## 記録
 
 - 各ケースの前後の `summary_cache` のファイル名と更新時刻（**要約の本文は記録しない** — 元Vaultの要約が混ざりうる）
-- 実行できなかったケースと、その理由
+- 要約欄に出た文言（`SUMCACHE-08` を観測できた場合）
+- 実行できなかったケースと、その理由（AIの状態・BUSY を観測できなかった等）

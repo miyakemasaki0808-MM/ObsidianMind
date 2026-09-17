@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.fakes.InMemorySummaryCache
 import com.example.newproject.model.NoteExcerptLimits
+import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -13,7 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * 要約の保存を固定する（→ `docs/dev/features/note_summary.md` 判断6〜判断8）。
+ * 要約の保存と、生成失敗の文言を固定する（→ `docs/dev/features/note_summary.md` 判断6〜判断9）。
  *
  * 見ているのは3つ — **鍵がAIへ渡した完成プロンプトであること**、**保存してよい結果**、
  * **保存済みを引いてよい状態**。
@@ -167,6 +168,33 @@ class SummarizeUseCaseTest {
         assertEquals(SummaryResult.AiNeedsDownload, useCase.summarize("ノートA", "Aの本文"))
 
         assertEquals(findsBefore, cache.findCalls)
+    }
+
+    @Test
+    fun `AICoreに回数制限で断られたらSDKの英文ではなく開き直しを促す`() = runTest {
+        val ai = FakeAiClient.failingGeneration {
+            GenAiException(
+                RuntimeException("Request cannot be processed. Either your app is out of usage quota"),
+                GenAiException.ErrorCode.BUSY
+            )
+        }
+
+        val result = useCase(ai).summarize("ノートA", "Aの本文")
+
+        assertEquals(SummaryResult.Error(SummarizeUseCase.BUSY_MESSAGE), result)
+    }
+
+    @Test
+    fun `回数制限以外の失敗は例外の文言のまま出す`() = runTest {
+        val error = GenAiException(
+            RuntimeException("別の失敗"),
+            GenAiException.ErrorCode.REQUEST_PROCESSING_ERROR
+        )
+        val ai = FakeAiClient.failingGeneration { error }
+
+        val result = useCase(ai).summarize("ノートA", "Aの本文")
+
+        assertEquals(SummaryResult.Error(requireNotNull(error.message)), result)
     }
 
     private fun TestScope.useCase(

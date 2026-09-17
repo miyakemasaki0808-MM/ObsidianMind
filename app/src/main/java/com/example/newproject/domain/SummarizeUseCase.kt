@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.ai.isAiCoreBusy
 import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -63,7 +64,7 @@ class SummarizeUseCase(
             } catch (e: CancellationException) {
                 throw e   // ジョブキャンセルはエラー扱いせず伝播させる
             } catch (e: Exception) {
-                SummaryResult.Error(e.message ?: "Unknown error")
+                SummaryResult.Error(failureMessage(e))
             }
         }
     }
@@ -73,5 +74,16 @@ class SummarizeUseCase(
         // 空は保存しない。保存すると、次に開いても空の要約が出続ける
         if (summary.isNotEmpty()) cache.save(prompt, summary)
         return SummaryResult.Success(summary)
+    }
+
+    /**
+     * 回数制限はSDKの英文を出さず、開き直しを促す（→ `docs/dev/features/note_summary.md` 判断9）。
+     * 失敗は保存しないので、開き直せば生成し直す。
+     */
+    private fun failureMessage(error: Exception): String =
+        if (isAiCoreBusy(error)) BUSY_MESSAGE else error.message ?: "Unknown error"
+
+    companion object {
+        const val BUSY_MESSAGE = "端末のAIが混み合っています。少し待ってからノートを開き直してください。"
     }
 }
