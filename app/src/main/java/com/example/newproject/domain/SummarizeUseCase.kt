@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.ai.isAiCoreBusy
 import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -18,6 +19,7 @@ sealed class SummaryResult {
 
 class SummarizeUseCase(
     private val aiClient: AiClient,
+    private val cache: SummaryCache,
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
@@ -33,16 +35,14 @@ class SummarizeUseCase(
             return SummaryResult.AiUnavailable
         }
         return when (availability) {
+            // 保存済みも引かない。非対応端末でノートを開くたびに抜粋を作らないため
             AiAvailability.Unsupported -> SummaryResult.AiUnavailable
-            // 要約は**ノートを開くと自動で走る**ので、状態を取れなかったことを見せない。
-            // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
-            is AiAvailability.TemporarilyUnavailable -> SummaryResult.AiUnavailable
-            // **DL中はDLを始めない**（走行中のDLへ合流できないため → AiAvailability.Downloading）。
-            // 自動機能なので黙って諦め、次にノートを開いたときに取り直す。
-            AiAvailability.Downloading -> SummaryResult.AiUnavailable
             // 自動DL方式。`downloadModel()` を呼んでよいのはここだけ。
+            // DL完了後の再開で保存済みを引くので、ここで引いてDLの契機を変えない。
             AiAvailability.NeedsDownload -> SummaryResult.AiNeedsDownload
-            AiAvailability.Ready -> try {
+            AiAvailability.Ready,
+            AiAvailability.Downloading,
+            is AiAvailability.TemporarilyUnavailable -> try {
                 val excerpt = withContext(excerptDispatcher) {
                     buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
                 }
@@ -50,13 +50,40 @@ class SummarizeUseCase(
                     title,
                     excerpt
                 )
-                val summary = aiClient.generate(prompt)
-                SummaryResult.Success(summary.trim())
+                // 生成は決定的なので、保存済みは同じモデルで生成し直した結果と同じである
+                // （→ note_summary.md 判断6）。だから生成できない状態でも出してよい
+                cache.find(prompt)?.let { return SummaryResult.Success(it) }
+                when (availability) {
+                    AiAvailability.Ready -> generate(prompt)
+                    // 要約は**ノートを開くと自動で走る**ので、状態を取れなかったことを見せない。
+                    // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
+                    // **DL中はDLを始めない**（走行中のDLへ合流できないため → AiAvailability.Downloading）。
+                    // 自動機能なので黙って諦め、次にノートを開いたときに取り直す。
+                    else -> SummaryResult.AiUnavailable
+                }
             } catch (e: CancellationException) {
                 throw e   // ジョブキャンセルはエラー扱いせず伝播させる
             } catch (e: Exception) {
-                SummaryResult.Error(e.message ?: "Unknown error")
+                SummaryResult.Error(failureMessage(e))
             }
         }
+    }
+
+    private suspend fun generate(prompt: String): SummaryResult {
+        val summary = aiClient.generate(prompt).trim()
+        // 空は保存しない。保存すると、次に開いても空の要約が出続ける
+        if (summary.isNotEmpty()) cache.save(prompt, summary)
+        return SummaryResult.Success(summary)
+    }
+
+    /**
+     * 回数制限はSDKの英文を出さず、開き直しを促す（→ `docs/dev/features/note_summary.md` 判断9）。
+     * 失敗は保存しないので、開き直せば生成し直す。
+     */
+    private fun failureMessage(error: Exception): String =
+        if (isAiCoreBusy(error)) BUSY_MESSAGE else error.message ?: "Unknown error"
+
+    companion object {
+        const val BUSY_MESSAGE = "端末のAIが混み合っています。少し待ってからノートを開き直してください。"
     }
 }
