@@ -76,19 +76,6 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 
 > **Now の中の順序は上から。**
 
-### P-1. 要約への入力指紋キャッシュ（→ [feature_ideas](feature_ideas.md) P-1）
-
-- **インパクト（2026-09-12）:** 頻度＝**強い**（ノートを開くたびに走る唯一のAI）／
-  重さ＝生成のあいだ錠を占有するので、**その間はユーザーが押した操作まで待たされる**。**両軸とも立つ。**
-- **残るのは保存層と上限だけ。** 鍵（本文ハッシュ・抜粋方式・予算・ヒント・語彙版・プロンプト版）は
-  [`noteFieldInputVersion`](../../app/src/main/java/com/example/newproject/domain/NoteFieldInputVersion.kt) を使う。
-- **保存層はローカルDB（[feature_ideas](feature_ideas.md) P-3）と切り離す。** 端末内の軽い保存＋件数上限で足り、
-  DB導入の理由にしない。
-- **着手すると、端末に残す置き場が設定ファイル1つから増える。** バックアップ除外の確認がそこで初めて実適用になる
-  （`BackupExclusionTest` が prefs 名と `filesDir` の使用を走査して除外と突き合わせる）。
-- **N-10 より先に置くのはオーナー判断（2026-09-12）。** 出どころは Fable 5.1 の評価
-  （→ [fable51_triage](fable51_triage.md) F-09）。
-
 ## 🟡 Next — 次に上がる段
 
 ### N-10. 読む面の分野の栞（→ [feature_ideas](feature_ideas.md) N-10）
@@ -117,7 +104,7 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **内容:** ノートを開いた瞬間に走る自動生成（要約・分野判定・痕跡の要約）を、数秒留まってから始める。
   読書痕跡が10秒の門番を持つのと同じ発想で、冊子から「これを読む」で開いてすぐ捨てるノートに Nano を使わない。
 - **インパクト:** 頻度＝**強い**（ノートを開くたび）／重さ＝錠の占有で操作が待たされ、AICore の短期回数制限にも当たる
-  （→ [current_issues](current_issues.md) AI-7）。**両軸とも立つ。** 要約キャッシュ（P-1）とは重ならない。
+  （→ [background_ai_ux](../dev/system/background_ai_ux.md) §6）。**両軸とも立つ。** 要約キャッシュ（P-1）とは重ならない。
 - **前提:** 自動生成の見せ方は [background_ai_ux](../dev/system/background_ai_ux.md) が正本なので、判断を1つ足してから実装する。
   調停側の起動契機を1箇所ずらし、**両方向のテスト**（留まる前に切り替える／留まった後に切り替える）を置く。
   待ち時間の体感は実機で見る。

@@ -1,7 +1,7 @@
 # ノート要約
 
-**状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。要約の保存（判断6〜8）と混雑時の文言（判断9）は実機未確認
-**最終検証:** 2026-08-11 / `c25bcea`（判断6〜9 は未突合）
+**状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。混雑時の文言（判断9）は実機で未観測のまま受理（→ §10）
+**最終検証:** 2026-09-18 / `8754208`
 **関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
 **関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書
@@ -286,6 +286,14 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
   - **モデルが変わっても保存済みの要約を出し続ける。** 同じ入力で同じ出力になるのは同じモデルのあいだだけで、
     端末のモデルが更新されても、本文かタイトルを変えるか古い順に消えるまで前のモデルの要約が出る（判断6）
   - 抜粋で切り落とされた区間の内容は要約に現れない
+
+**受理した未確認の範囲（2026-09-18、オーナー判断）:** 保存（判断6〜8）は実機ケース `SUMCACHE-01`〜`07` で確認した。
+次の2つは実機で見ていないまま受理した。**BUSY は生成を投げ続けないと起こせず、それはしないと決めてある**（判断9）。
+
+| 見ていないもの | 代わりの根拠 |
+|---|---|
+| BUSY を受けたときの要約欄の表示（`SUMCACHE-08`） | `SummarizeUseCaseTest`・`AiGenerationFailureTest`（本物の `GenAiException` で組み立てる） |
+| 実際の生成経路で、`GenAiException` が別の例外に包まれずに届くか | 包まれていれば SDK の英文が出るだけで、判断9 より前の表示に戻る。データや操作は失わない |
 
 ## 11. 既知の制約・未解決事項
 
