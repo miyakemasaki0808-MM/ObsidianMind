@@ -75,7 +75,7 @@ import org.junit.Test
  * | 5 | `SectionChatController:113` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
  * | 6 | `SectionChatController:207` | `sendMessage()` | ここ（終端状態） | ここ（走行状態のまま） |
  * | 7 | `SummarizeUseCase:29` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 8 | `SearchPickerUseCase:46` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 8 | `SearchPickerUseCase:45` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 9 | `RelatedNotesUseCase:68` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 10 | `ReunionCardController:280` | `revealTrace()` | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
  *

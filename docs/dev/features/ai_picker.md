@@ -1,9 +1,9 @@
 # さがす（AIピッカー・閲覧履歴）
 
 **状態:** Implemented — 稼働中
-**最終検証:** 2026-08-11 / `c25bcea`
-**関連コード:** `controller/SearchController.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `data/NoteHistoryStore.kt` / `ui/screen/SearchScreen.kt`
-**関連テスト:** `SearchControllerTest` / `SearchKeywordMatchingTest`
+**最終検証:** 2026-09-17 / `1433179`
+**関連コード:** `controller/SearchController.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `ui/screen/SearchScreen.kt`
+**関連テスト:** `SearchControllerTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest`
 **正本:** この文書
 
 **対象領域:** ノートを見つける導線（フォルダ選択・キーワード検索・スコープ内ランダム・当日履歴）
@@ -51,7 +51,7 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
    - スコープ内のノートを集める（**スコープ単位の走査キャッシュ**あり → §5）
    - 候補が**40件超のときだけ**、文字bigramの重なりで40件へ粗く絞る
    - `checkAvailability()` を見る
-     - `Ready` → プロンプトを組んで Nano に選ばせ、**タイトルの正規化照合**で実在ノートへ戻し、先頭3件
+     - `Ready` → 候補を「ID | タイトル」で提示して Nano に**IDで**選ばせ、提示したIDだけを受理して実在ノートへ戻し、先頭3件（→ §8 判断6）
      - それ以外 → **フォールバック**（§8 判断3）。理由では割らない（`isAiAssisted = false` のみ）
    - Nano が**候補外や空を返した場合もフォールバック**
 4. **🎰ランダム** なら `shuffled().take(3)`（AI を通さない）
@@ -112,7 +112,7 @@ SearchScreen
       ├─ searchByKeyword() ─┐
       │                     └─ SearchPickerUseCase.pick()
       │                          ├─ recallCutByKeyword()  ← 40件超のときだけ
-      │                          ├─ AiClient.generate()   ← Nano が3件選ぶ
+      │                          ├─ AiClient.generate()   ← Nano がIDで3件選ぶ（P01..）
       │                          └─ fallback()            ← スコア順・0件なら空
       ├─ pickRandomInScope()  ← shuffled().take(3)。AI を通さない
       └─ スコープ走査キャッシュ（Main単一スレッド前提）
@@ -165,6 +165,27 @@ Nano に渡せる候補数に上限があるため、40件を超えるときだ�
 **この割り切りが実装を1行に縮めている** — 日付キー付きで保存し、読み出し時に日付を見るだけ。
 明示的な削除バッチも期限管理も不要。
 
+### 判断6: 候補はIDで受ける（関連ノート・再会カード・蒸留と同じ契約）
+
+候補を `P01 | タイトル` の形で提示し、モデルには**IDだけ**を返させる。
+受け側は [`parseCandidateIds`](../../../app/src/main/java/com/example/newproject/domain/RelatedCandidateId.kt) で
+**プロンプトへ実際に載せたIDだけ**を受理し、IDから候補ノートへ戻す。
+
+**タイトルで照合すると、候補が黙って落ちる。** AIが記号を足す・言い換える・翻訳した瞬間に照合から外れ、
+エラーにならないので「3件選ばせたのに1件しか出ない」が原因不明のまま起きる。
+全件が外れるとキーワード一致へ回るが、AIは動いているので注記も出ず、**AIの選択に見えて中身はキーワード一致**になる。
+英語で問い合わせて日本語のタイトルが英訳されて返る、が最も起きやすい形だった。
+
+- **タイトルでの照合は残さない。** AIがIDでなくタイトルを返したら、IDが取れなかった応答として判断3のフォールバックへ回す。
+  照合を2つ持つと、どちらの契約で受理されたのかが割れる
+- **タイトルは200字で切って提示する。** 照合キーではないので切ってよい
+  （→ [ai_input_excerpt](../system/ai_input_excerpt.md) 判断10）。行ごと落とすと、長いタイトルのノートは選ばれなくなる
+- **IDに似たタイトルをIDと読まない。** AIが `P2P通信` とタイトルで返したとき、先頭の `P2` を `P02` と読むと
+  **モデルが返していない2番目の候補がAIの選択として出る。** IDの直後に文字や数字が続くものは捨てる
+  （パーサの規則は [related_notes_ai](related_notes_ai.md) 判断3）
+- **同名の別ノートも別IDになる。** 旧方式ではタイトルが同じノートを区別できなかった
+- **接頭辞を `P` にするのは、ログや実応答でどの経路のIDか見分けるため**（関連ノートは `C`、再会カードは `R`）
+
 ### v1で見送ったもの
 
 サブフォルダ選択（ドリルダウン）・リファインループ・音声入力・時間クエリ・
@@ -182,18 +203,21 @@ Nano に渡せる候補数に上限があるため、40件を超えるときだ�
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `SearchControllerTest`（世代照合3種・検索とランダムの実行・走査キャッシュのヒットと破棄）/
-  `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）
+  `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）/
+  `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
+  `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）
 - **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）
 - **保証していないこと:**
   - **Nano の選定精度を測っていない。** 「狙いのノートが3件に入るか」の指標が無い
   - **bigram カットの再現率も測っていない。** 40件という上限は見積もり
+  - **Nano がIDだけを返す遵守率を測っていない。** 実機では長いタイトルと英語での問い合わせを各1回通し、候補が返ることまでを確かめた（生の応答は取っていない）
   - フォルダが第一階層しか出ないので、深い階層のノートは親フォルダ経由でしか絞れない
 
 ## 11. 既知の制約・未解決事項
 
 | | |
 |---|---|
-| 候補にタイトルしか渡していない | `buildPickerPrompt` はタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
+| 候補にタイトルしか渡していない | `buildPickerPrompt` はIDとタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
 | 選定精度の指標が無い | 上記「保証していないこと」参照 |
 | 走査キャッシュ中は外部の追加が見えない | 最大60秒 |
 

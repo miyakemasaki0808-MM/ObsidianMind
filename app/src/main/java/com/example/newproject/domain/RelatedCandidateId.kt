@@ -12,10 +12,16 @@ internal fun relatedCandidateId(index: Int): String =
 internal fun reunionCandidateId(index: Int): String =
     "R" + (index + 1).toString().padStart(2, '0')
 
-// 行頭のIDのみを対象にする。接頭辞の後は1〜2桁で、直後に数字が続かないこと
-// （"C012" のようなタイトル断片を弾く）。桁落ち "C5" は後段でゼロ埋め補正する。
+// AIピッカー候補の一時ID（P01..）。接頭辞を分ける理由は再会カードと同じ。
+internal fun pickerCandidateId(index: Int): String =
+    "P" + (index + 1).toString().padStart(2, '0')
+
+// 行頭のIDのみを対象にする。接頭辞の後は1〜2桁で、直後に文字も数字も続かないこと。
+// "C012"・"P2P通信"・"P01通信" のようなタイトル断片をIDと読むと、モデルが返していない
+// 別の候補を受理してしまう。記号や空白（"C01: 理由"・"P03 | タイトル"）は区切りとして許す。
+// 桁落ち "C5" は後段でゼロ埋め補正する。
 private fun candidateIdPattern(prefix: Char): Regex =
-    Regex("^$prefix(\\d{1,2})(?![0-9])", RegexOption.IGNORE_CASE)
+    Regex("^$prefix(\\d{1,2})(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
 
 /**
  * モデル応答から候補IDを抽出する。

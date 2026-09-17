@@ -135,7 +135,7 @@ class RemarkComposerTest {
         assertEquals(RemarkRejection.NotGrounded, (result as RemarkResult.Rejected).reason)
     }
 
-    // 候補外を黙って落とすと文が宙に浮く（AIピッカーが mapNotNull で件数を減らすのと同じ轍）。
+    // 候補外を黙って落とすと文が宙に浮く。
     @Test
     fun `候補外のリンクは丸ごと拒否される`() {
         val result = compose("[[C09]]とつなげると、「読書は著者との対話である」が別の意味を持ちそうです。")

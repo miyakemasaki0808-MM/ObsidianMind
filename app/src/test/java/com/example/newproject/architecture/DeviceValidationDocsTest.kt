@@ -28,6 +28,7 @@ class DeviceValidationDocsTest {
     fun `機能別ケースは正本と前後処理を持つ`() {
         val expected = setOf(
             "app_launch.md",
+            "app_launch_recreation.md",
             "reflect_distill.md",
             "background_ai_ux.md",
             "note_image_rendering.md",

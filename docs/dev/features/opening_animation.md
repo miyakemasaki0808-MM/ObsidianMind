@@ -1,8 +1,8 @@
 # 起動OPアニメーション
 
 **状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）。
-**ランチャー再タップの重複起動を畳むガードは実装済み・実機検証待ち**（→ 判断7）
-**最終検証:** 2026-08-12 / `521768b`
+**ランチャー再タップの重複起動を畳むガードも稼働中**（→ 判断7）
+**最終検証:** 2026-09-17 / `f2d1f18`
 **関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）/ `MainActivity.kt` / `domain/LauncherEntry.kt`
 **関連テスト:** `VigilithOpeningMotionTest` / `LauncherEntryTest` / `ActivityRecreationTest`（instrumentation）
 **正本:** この文書
@@ -214,6 +214,9 @@ MainActivity
 - **instrumentation:** `ActivityRecreationTest`（同一プロセス内の再生成でOPを再生し直さない）。
   **演出そのものは自動化していない** — 実端末の目視が主である。
 - **実機:** [app_launch](../../review/device_validation/app_launch.md) の `LAUNCH-01`〜`LAUNCH-05`。
+  回転・Fold開閉（`LAUNCH-05`）は [app_launch_recreation](../../review/device_validation/app_launch_recreation.md) で、
+  操作はユーザーの手で行い、アプリと同じプロセスの一時テストが画面の文字を100msおきに採取して観測する
+  （2秒のOPは画面の取得では間に合わず、出ていても見逃す）。
   **タスクの基点Intentが食い違う経路は `ActivityRecreationTest` の射程外**なので、ここでしか見られない。
 
 - **保証していないこと:**

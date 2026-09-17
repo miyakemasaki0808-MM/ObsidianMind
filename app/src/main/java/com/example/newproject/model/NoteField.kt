@@ -38,7 +38,7 @@ enum class NoteField(val label: String) {
  *
  * **ラベルではなくIDを返させる。** この方針とその理由は `PromptBuilder` に既に書かれている —
  * 「言い換え・翻訳・装飾・同名衝突に強い」。**分野名を返させると、AIが「技術開発」「技術・開発分野」
- * のように整えた瞬間に照合が落ちる**（AIピッカーが同じ穴を踏んでいる）。
+ * のように整えた瞬間に照合が落ちる**。
  */
 val NoteField.promptId: String get() = "F" + (ordinal + 1)
 
