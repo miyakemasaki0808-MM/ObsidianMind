@@ -8,6 +8,7 @@ import com.example.newproject.data.AppPreferences
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
 import com.example.newproject.data.DistillWriteRepository
+import com.example.newproject.data.FileSummaryCache
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.data.SharedNoteFieldStore
@@ -91,7 +92,12 @@ internal class NoteViewModelDependencies(
                     vaultUri = { vaultLocation.uri }
                 ),
                 aiClient = aiClient,
-                summarizeUseCase = SummarizeUseCase(aiClient),
+                summarizeUseCase = SummarizeUseCase(
+                    aiClient,
+                    cache = FileSummaryCache(
+                        File(application.noBackupFilesDir, FileSummaryCache.DIRECTORY_NAME)
+                    )
+                ),
                 relatedNotesUseCase = RelatedNotesUseCase(aiClient),
                 searchPickerUseCase = SearchPickerUseCase(aiClient),
                 distillPersistence = DistillWriteRepository(

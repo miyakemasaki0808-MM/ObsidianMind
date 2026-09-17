@@ -17,7 +17,7 @@ import org.w3c.dom.Element
  * 当日の閲覧履歴がクラウドへ出ている。**このリポジトリで最も守られにくい型の規則**なので、
  * 人の注意ではなく走査で数える（→ docs/dev/lessons.md L29）。
  *
- * 今は `random_note_prefs` 1本に寄せてあり、蒸留の復旧レコードは `noBackupFilesDir`、
+ * 今は `random_note_prefs` 1本に寄せてあり、蒸留の復旧レコードと要約の保存は `noBackupFilesDir`、
  * stagingは `cacheDir` にあるので守れている。**危ないのは次に置き場を足すときである。**
  *
  * ## この検査が見ていないもの

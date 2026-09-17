@@ -24,6 +24,7 @@ import com.example.newproject.model.NoteMeta
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.InMemorySummaryCache
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.DistillState
@@ -184,6 +185,7 @@ class AiAvailabilityContractTest {
         val cancel = CancellationException("note changed")
         val useCase = SummarizeUseCase(
             FakeAiClient().apply { availabilityFailure = { cancel } },
+            InMemorySummaryCache(),
             excerptDispatcher = dispatcher()
         )
 
@@ -327,7 +329,7 @@ class AiAvailabilityContractTest {
     private fun TestScope.summaryController(state: NoteUiStateStore, ai: AiClient) =
         SummaryController(
             scope = CoroutineScope(dispatcher()),
-            summarizeUseCase = SummarizeUseCase(ai, excerptDispatcher = dispatcher()),
+            summarizeUseCase = SummarizeUseCase(ai, InMemorySummaryCache(), excerptDispatcher = dispatcher()),
             aiClient = ai,
             state = state.summaryWriter,
             onModelReady = { _, _ -> }

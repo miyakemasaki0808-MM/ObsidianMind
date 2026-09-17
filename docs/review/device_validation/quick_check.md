@@ -56,6 +56,7 @@
 | ノート内画像 | [note_image_rendering.md](note_image_rendering.md) | `IMAGE-01` `IMAGE-04` `IMAGE-09` `IMAGE-11` |
 | 再会カード | [reunion_card.md](reunion_card.md) | `REUNION-01` `REUNION-04` `REUNION-05` `REUNION-11` |
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |
+| 要約の保存（初回は通し版） | [note_summary.md](note_summary.md) | `SUMCACHE-01` `SUMCACHE-05` `SUMCACHE-06` |
 | AI入力予算 | [ai_input_budget.md](ai_input_budget.md) | `BUDGET-01` `BUDGET-03` |
 | ネットワーク権限 | [network_permission.md](network_permission.md) | `PERM-01` |
 | 要約カバレッジの基準線 | [summary_coverage.md](summary_coverage.md) | `COVER-01` `COVER-02` |

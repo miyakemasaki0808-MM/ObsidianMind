@@ -208,6 +208,7 @@
 | `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](features/note_image_rendering.md) → [markdown_rendering](system/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](features/related_notes_ai.md) / [reflect_distill](features/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](features/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](features/reflect_distill.md)（原子性・復旧） |
+| `data/FileSummaryCache.kt` / `domain/SummaryCache.kt` | [note_summary](features/note_summary.md) 判断6・判断7（鍵・置き場・上限） |
 | `androidTest/` | [instrumentation_testing](system/instrumentation_testing.md)（何をここへ置くかの基準） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](system/architecture.md) / [tab_navigation](system/tab_navigation.md) |
 | `model/` の共有データ型 | [architecture](system/architecture.md) → 該当機能の設計書 |

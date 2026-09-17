@@ -57,6 +57,7 @@ import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.InMemorySummaryCache
 import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -961,6 +962,7 @@ class NoteSessionCoordinatorTest {
             aiClient = ai,
             summarizeUseCase = SummarizeUseCase(
                 ai,
+                InMemorySummaryCache(),
                 excerptDispatcher = StandardTestDispatcher(scope.testScheduler)
             ),
             searchPickerUseCase = SearchPickerUseCase(ai),
