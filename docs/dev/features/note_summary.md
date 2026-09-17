@@ -2,8 +2,8 @@
 
 **状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。要約の保存（判断6〜8）と混雑時の文言（判断9）は実機未確認
 **最終検証:** 2026-08-11 / `c25bcea`（判断6〜9 は未突合）
-**関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
-**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
+**関連コード:** `controller/SummaryController.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
+**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書
 
 **対象領域:** 開いたノートの要約を自動生成し、AIタブへ出すまで
@@ -130,7 +130,8 @@
 
 `SummaryCache` は `domain` のインターフェースで、実装の `FileSummaryCache` は `data` にある
 （`domain` は `data` を import できない → [architecture](../system/architecture.md) 判断5）。
-組み立ては `NoteViewModelDependencies` の1箇所。
+組み立ては `NoteViewModelDependencies` の1箇所。**Debug APK では、要約に渡す `AiClient` だけを
+`GenerationRecordingAiClient` で包み、生成を呼ぶたびに logcat へ1行出す**（→ §10）。
 
 ## 8. 設計判断と代替案
 
@@ -256,16 +257,32 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
 - **JVMテスト:** `SummaryControllerTest`（状態遷移・世代照合・DL再開）/
   `SummarizeUseCaseTest`（保存の鍵・保存してよい結果・引いてよい状態・混雑時の文言）/
   `FileSummaryCacheTest`（1件1ファイル・古い順の削除・大きさの上限・書きかけの片付け・置き場を作れないとき）/
+  `SummaryGenerationObservationTest`（生成の記録が、保存済みの当たりと同じ入力の再生成を区別できること）/
   `AiGenerationFailureTest`（回数制限の判定）/ `NoteExcerptBuilderTest`（抜粋）/
   `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）/
   `SummaryCoverageTest`・`SummaryCoverageCalibrationTest`（出力を採点する物差しと、その閾値）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）/ `PromptTokenBudgetTest`（トークン余裕）
-- **実機:** [要約の実機検証ケース](../../review/device_validation/note_summary.md)
+- **実機:** [要約の実機検証ケース](../../review/device_validation/note_summary.md)。
+  **当たったかは保存のファイルではなく、要約の生成の記録の行数で判定する。**
+  同じプロンプトで生成し直しても同じ名前のファイルが置き換わって更新時刻が進むので、
+  ファイルを見る判定では**毎回生成する回帰を合格にしてしまう。** そこで Debug APK だけ、
+  要約に渡す `AiClient` を `GenerationRecordingAiClient` で包み、生成を呼ぶたびに
+  `VigilithSummaryGen: generate` を1行出す（本文もタイトルも載せない）。
+  - **要約に渡すクライアントだけを包む。** 全機能で共有する `AiClient` を包むと、分野判定などの生成まで数え込む
+  - **呼んだ時点で数える。** 失敗した生成も1行になるので、生成の途中で切り替えた試行も数えられる
+  - **0行は、同じ回に初めて開いたノートの1行と組にしてだけ合格にする。** 記録が出ていないことと当たったことを区別するため
+  - **再起動の試行は、全ノートを保存済みにしてから強制停止し、起動の前から数える。** 起動直後に出たノートの要約の後から数えると、
+    失われた保存をその生成が補った後になり、開き直したノートが当たって0行で合格してしまう。
+    全ノートを保存済みにしてあるので、起動から数えた行は**どのノートのものでも**保存が再起動をまたがなかった証拠として不合格にする
+  - 区別できることは `SummaryGenerationObservationTest` が、**保存を書くが引かない経路**（毎回生成する回帰の代わり）と並べて固定する。
+    その経路でもファイル名・更新時刻・出る要約は当たりの経路と同じになる。
+    再起動の数え方も同じテストが、保存を失わせた対照と、起動直後の要約の後から数え始めた場合の見逃しと並べて固定する
 - **保証していないこと:**
   - **品質の正しさは保証していない。** [ai_quality_measurement](../system/ai_quality_measurement.md) に
     全27組を分割取得した探索用の基準線がある。語彙指標では正誤を分離できず、
     計測の完走を要約の正しさや方式の優劣の保証とはしない
   - **語の重なりで測る以上、意味は見ていない。** 言い換えた正しい要約は低く出る
+  - **JVMの生成回数を、実機で生成しなかった証拠にはしない。** 実機の判定は上の記録の行数で行う
   - **モデルが変わっても保存済みの要約を出し続ける。** 同じ入力で同じ出力になるのは同じモデルのあいだだけで、
     端末のモデルが更新されても、本文かタイトルを変えるか古い順に消えるまで前のモデルの要約が出る（判断6）
   - 抜粋で切り落とされた区間の内容は要約に現れない

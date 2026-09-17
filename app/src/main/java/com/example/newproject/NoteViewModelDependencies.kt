@@ -1,8 +1,11 @@
 package com.example.newproject
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
+import android.util.Log
 import com.example.newproject.ai.AICoreClient
 import com.example.newproject.ai.AiClient
+import com.example.newproject.ai.GenerationRecordingAiClient
 import com.google.mlkit.genai.common.internal.GenAiUtils
 import com.example.newproject.data.AppPreferences
 import com.example.newproject.data.DistillPersistence
@@ -93,7 +96,7 @@ internal class NoteViewModelDependencies(
                 ),
                 aiClient = aiClient,
                 summarizeUseCase = SummarizeUseCase(
-                    aiClient,
+                    summaryAiClient(application, aiClient),
                     cache = FileSummaryCache(
                         File(application.noBackupFilesDir, FileSummaryCache.DIRECTORY_NAME)
                     )
@@ -111,5 +114,22 @@ internal class NoteViewModelDependencies(
                 vaultLocation = vaultLocation
             )
         }
+
+        /**
+         * 要約に渡す [AiClient]。**Debug APK でだけ、要約の生成を呼ぶたびに logcat へ1行出す。**
+         * 実機ケースは保存済みの要約が当たったかをこの行数で判定する（→ note_summary.md §10）。
+         * 行には本文もタイトルも載せない。
+         */
+        private fun summaryAiClient(application: Application, aiClient: AiClient): AiClient {
+            val debuggable = (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+            if (!debuggable) return aiClient
+            return GenerationRecordingAiClient(aiClient) {
+                Log.i(SUMMARY_GENERATION_LOG_TAG, SUMMARY_GENERATION_LOG_MESSAGE)
+            }
+        }
+
+        /** 実機ケース `docs/review/device_validation/note_summary.md` が数えるタグと本文。 */
+        const val SUMMARY_GENERATION_LOG_TAG = "VigilithSummaryGen"
+        const val SUMMARY_GENERATION_LOG_MESSAGE = "generate"
     }
 }
