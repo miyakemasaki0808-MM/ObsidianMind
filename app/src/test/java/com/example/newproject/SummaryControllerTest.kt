@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.channels.Channel
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import com.example.newproject.fakes.InMemorySummaryCache
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -193,6 +194,7 @@ class SummaryControllerTest {
     private fun kotlinx.coroutines.test.TestScope.controller(
         state: NoteUiStateStore,
         ai: FakeAiClient,
+        awaitDwell: suspend () -> Unit = passDwell,
         onModelReady: (String, String) -> Unit = { _, _ -> }
     ) = SummaryController(
         scope = CoroutineScope(StandardTestDispatcher(testScheduler)),
@@ -203,7 +205,8 @@ class SummaryControllerTest {
         ),
         aiClient = ai,
         state = state.summaryWriter,
-        onModelReady = onModelReady
+        onModelReady = onModelReady,
+        awaitDwell = awaitDwell
     )
 
 }

@@ -200,6 +200,7 @@
 |---|---|
 | `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` | [architecture](system/architecture.md) → 該当機能の設計書 |
 | `controller/` | [architecture](system/architecture.md) → 該当機能の設計書 |
+| `controller/NoteDwellGate.kt`・自動で走るAI生成を始める時点 | [background_ai_ux](system/background_ai_ux.md) §7（留まってから生成する規則・待たせないもの） |
 | `ai/PromptBuilder.kt` | [ai_input_excerpt](system/ai_input_excerpt.md) → 該当機能の設計書 |
 | `ai/` | [background_ai_ux](system/background_ai_ux.md) → [reflect_distill](features/reflect_distill.md) / [related_notes_ai](features/related_notes_ai.md) |
 | `domain/NoteExcerptBuilder.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` | [ai_input_excerpt](system/ai_input_excerpt.md) |

@@ -48,6 +48,8 @@ internal class ReunionCardController(
      */
     private val persistScope: CoroutineScope,
     private val aiClient: AiClient,
+    /** 生成の直前に通す門番。ノートを離れたら `CancellationException` で抜ける。 */
+    private val awaitDwell: suspend () -> Unit,
     private val state: ReadingTraceStateWriter,
     private val persistence: ReadingTracePersistence,
     /** 現在のVaultの識別子。照合と印の保存は、要求を出した時点の値へ向けてだけ行う。 */
@@ -287,9 +289,13 @@ internal class ReunionCardController(
             AiAvailability.Downloading,
             AiAvailability.Unsupported,
             is AiAvailability.TemporarilyUnavailable -> ReunionOutcome.Unavailable
-            AiAvailability.Ready -> when (kind) {
-                ReunionKind.Overview -> generateOverview(trace)
-                ReunionKind.Question, ReunionKind.Staleness -> selectCandidate(trace, kind, candidates)
+            AiAvailability.Ready -> {
+                // **生の痕跡は出し終えている。** 待たせるのは要約の生成だけ（→ background_ai_ux.md §7）。
+                awaitDwell()
+                when (kind) {
+                    ReunionKind.Overview -> generateOverview(trace)
+                    ReunionKind.Question, ReunionKind.Staleness -> selectCandidate(trace, kind, candidates)
+                }
             }
         }
     } catch (error: CancellationException) {

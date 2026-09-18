@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-14（基準 `da0c414`）
+**作成:** 2026-09-08 / **更新:** 2026-09-18（基準 `03cc839`）
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,15 +14,15 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 122本・約20,400行。** `CLAUDE.md`・`README.md` と `docs/` 配下の120本を数えた。本書と同じ日に足した3本を含む。
-作業ツリーにはこの他に追跡しないものが12本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ2本。
+**追跡対象の Markdown は 125本・約21,400行。** `CLAUDE.md`・`README.md` と `docs/` 配下の123本を数えた。
+作業ツリーにはこの他に追跡しないものが8本ある。レビュー本文1本、Fable 5.1 の報告書5本、実機検証の証跡フォルダの引き継ぎメモ2本。
 
 ```
 CLAUDE.md                  開発規約（憲法）
 README.md                  リポジトリの入口
 docs/
 ├── README.md              文書の入口
-├── owner/     (15本)      オーナーが読む俯瞰。検査に載せない
+├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (4本)    開発日誌。README＋月別3本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
 ├── dev/       (83本)      判断の正本。ここが古くなると実害が出る
@@ -31,12 +31,12 @@ docs/
 │   ├── decisions/  (6本)  ADR。README＋5本
 │   └── lessons/   (36本)  教訓65件のうち、カードを持つ36本
 ├── _wip/       (4本)      進行中。リリース時に廃棄する
-└── review/    (17本)      レビューと実機検証。ほかに追跡しない本文1本
-    └── device_validation/ (14本)  共通手順・簡易版・機能別ケース12本
+└── review/    (19本)      レビューと実機検証。ほかに追跡しない本文1本
+    └── device_validation/ (16本)  共通手順・簡易版・機能別ケース14本
 ```
 
-2026-09-08 の前回目録から10本増えた。新しい設計書2本（冊子の分野色・AI品質計測）、実機ケース5本、
-`owner/` の3本（コメントの置き場所・進行中文書の分析・アイデア帳）、`_wip/` の検討枠1本である。
+2026-09-14 の前回目録から3本増えた。実機ケース2本（要約の保存・起動の再生成）と、
+`owner/` の実装設計の下書き1本（反証の一文）である。
 
 ## 2. 場所ごとの役割
 
@@ -63,7 +63,7 @@ docs/
 | [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口 |
 | [reflect_reading_trace](../dev/features/reflect_reading_trace.md) | 読書痕跡 | 稼働中。サイドカーは schema v6 |
 | [reunion_card](../dev/features/reunion_card.md) | 再会カードに何を出すか | 実装済み・実機検証済み |
-| [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI |
+| [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI。**同じ入力の要約は端末に保存する** |
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中 |
 | [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
@@ -141,7 +141,7 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在11件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在10件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
 | [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。758行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残21件 |
@@ -149,20 +149,20 @@ docs/
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 外から読んだ分析は [wip_analysis](wip_analysis.md) が持つ。
 
-## 8. `docs/review/` — レビューと実機検証。17本＋追跡しない本文1本
+## 8. `docs/review/` — レビューと実機検証。19本＋追跡しない本文1本
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
 | [README](../review/README.md) | レビューの入口と運用。一覧は 96行。7月2・8月47・9月47 | ✅ |
-| [findings](../review/findings.md) | 未解決指摘の受付簿。現在2件 | ✅ |
+| [findings](../review/findings.md) | 未解決指摘の受付簿。現在3件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
-| device_validation の機能別ケース12本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・分野色・返事の保存・ネットワーク権限・要約の基準線。結果は持たない | ✅ |
+| device_validation の機能別ケース14本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・返事の保存・ネットワーク権限・要約の基準線・要約の保存。結果は持たない | ✅ |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ | ❌ 未追跡 |
 
-## 9. `docs/owner/` — オーナーが読む俯瞰。15本
+## 9. `docs/owner/` — オーナーが読む俯瞰。16本
 
 | 文書 | 答える問い |
 |---|---|
@@ -173,13 +173,14 @@ docs/
 | [readme_map](readme_map.md) | 16本ある README がそれぞれ何をしているか |
 | [wip_analysis](wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
 | [idea_catalog](idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
+| [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**引き渡しの粒度の下書き。実装後も更新しない** |
 | [comments_and_history_practices](comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
 | [project_chronology](project_chronology.md) | どう歩んできたか。年表 |
 | **本書** | どんな文書があるか |
 | [project_origin](project_origin.md) | どこから始まったか。2026-04-30。更新しない |
 | [journal/](journal/) | どうやってここまで来たか。2026-07・08・09 |
 
-`Fable5.1_report/` は git 管理外。入口 README と章4本、`完了/` に章3本と計測値がある。本書の数には入れない。
+`Fable5.1_report/` は git 管理外。入口 README と章3本・課題一覧、`完了/` に計測値がある。本書の数には入れない。
 
 ---
 

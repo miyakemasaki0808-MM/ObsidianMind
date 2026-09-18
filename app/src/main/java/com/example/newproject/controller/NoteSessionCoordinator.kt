@@ -112,6 +112,15 @@ internal class NoteSessionCoordinator(
     private var bookletReadJob: Job? = null
         private set
 
+    /**
+     * 自動で走る生成の門番（→ background_ai_ux.md §7）。**Controller より先に宣言する** —
+     * 自動起動の Controller へ [NoteDwellGate.await] を配るため。
+     *
+     * **自動起動の機能にだけ配る。** 押して使う機能（クイズ・ひとこと・チャット・蒸留）に配ると、
+     * 押した直後の生成が理由もなく数秒待たされる。
+     */
+    private val dwell = NoteDwellGate(scope)
+
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
     // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
     private val sections = NoteSectionController(scope, parseDispatcher)
@@ -122,11 +131,13 @@ internal class NoteSessionCoordinator(
         summarizeUseCase = summarizeUseCase,
         aiClient = aiClient,
         state = stateStore.summaryWriter,
-        onModelReady = onModelReady
+        onModelReady = onModelReady,
+        awaitDwell = dwell::await
     )
     private val noteField = NoteFieldController(
         scope = scope,
         aiClient = aiClient,
+        awaitDwell = dwell::await,
         state = stateStore.noteFieldWriter,
         // 抜粋の組み立ては本文サイズに比例するので Main の外へ。**解析と同じ口を使う** —
         // テストがテストスケジューラへ差し替えられないと、判定の完了を待てない。
@@ -178,11 +189,15 @@ internal class NoteSessionCoordinator(
         scope = scope,
         persistScope = persistScope,
         aiClient = aiClient,
+        awaitDwell = dwell::await,
         state = stateStore.readingTraceWriter,
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
         clock = clock,
         ioDispatcher = ioDispatcher,
+        // 候補の列挙も**解析と同じ口**に載せる。テストがテストスケジューラへ差し替えられないと、
+        // 生のカードが出たところで止めて門番の手前を観測できない。
+        scanDispatcher = parseDispatcher,
         writeMutex = traceWriteMutex
     )
 
@@ -349,6 +364,9 @@ internal class NoteSessionCoordinator(
         // 読書痕跡の確定もここで行う。
         // flush は自前のスナップショットで書くため、以降のキャンセルに影響されない。
         readingTrace.flush()
+        // 門を待っている生成は、下の各 Job の停止と同じ手で取り消す。
+        // **次のノートは最初から数える**（通った門を持ち越さない）。
+        dwell.stop()
         reunionCard.cancelForNoteChange()
         cancelHostJobs()
         sections.cancelAndClear()
@@ -443,10 +461,18 @@ internal class NoteSessionCoordinator(
      * 呼び出し側へ配らずこの2つへ集約するのは、片方を足し忘れると
      * 「本文は新しいのにブロックが旧いまま」になるため。Success 以外では
      * ブロックを持たないので破棄する（プレースホルダ本文はここでは解析しない）。
+     *
+     * **自動生成の待ち時間もここから数える。** 本文が出た時点が「開いた」であって、
+     * 読込を始めた時点ではない。[applyReloadedBody] では数え直さない（同じノートに居続けている）。
      */
     fun setNoteState(state: NoteState) {
         stateStore.setNoteState(state)
-        if (state is NoteState.Success) sections.parse(state.content) else sections.cancelAndClear()
+        if (state is NoteState.Success) {
+            sections.parse(state.content)
+            dwell.start()
+        } else {
+            sections.cancelAndClear()
+        }
     }
 
     /**
@@ -494,6 +520,12 @@ internal class NoteSessionCoordinator(
     fun classifyNoteField(ref: DocumentRef, content: String, vaultRelativePath: String) =
         noteField.classify(ref, content, vaultRelativePath)
 
+    /**
+     * 自動で走る生成の門番を待つ。**関連ノートのAI推薦のため**（ジョブが ViewModel 側にある）。
+     * Controller の中の自動生成には、組み立て時に同じ門番を配ってある。
+     */
+    suspend fun awaitNoteDwell() = dwell.await()
+
     fun setRelatedNotesState(state: RelatedNotesState) {
         stateStore.setRelatedNotesState(state)
     }
@@ -523,8 +555,20 @@ internal class NoteSessionCoordinator(
         totalBlocks: Int,
         sectionTitle: String?
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-    fun pauseReadingTrace(reason: ReadingPauseReason) = readingTrace.pause(reason)
-    fun resumeReadingTrace(reason: ReadingPauseReason) = readingTrace.resume(reason)
+    /**
+     * 冊子が前面に来た・アプリが背面へ回った。**読書時間と、自動生成の待ち時間の両方を止める。**
+     * 片方にだけ伝えると、冊子をめくっている間に開いたノートの生成が始まる。
+     */
+    fun pauseReadingTrace(reason: ReadingPauseReason) {
+        readingTrace.pause(reason)
+        dwell.pause(reason)
+    }
+
+    fun resumeReadingTrace(reason: ReadingPauseReason) {
+        readingTrace.resume(reason)
+        dwell.resume(reason)
+    }
+
     fun dismissReadingTraceCard() = reunionCard.dismissCard()
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────

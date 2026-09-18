@@ -23,7 +23,15 @@ class SummarizeUseCase(
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 
-    suspend fun summarize(title: String, content: String): SummaryResult {
+    /**
+     * @param awaitDwell 生成を呼ぶ直前に待つもの（ノートに留まったか → background_ai_ux.md §7）。
+     *   **保存済みの要約を引く前には置かない** — 開き直したノートの要約まで数秒遅れる。
+     */
+    suspend fun summarize(
+        title: String,
+        content: String,
+        awaitDwell: suspend () -> Unit
+    ): SummaryResult {
         // **状態確認の例外も終端へ落とす。** `AiClient` は他実装を許す公開契約なので
         // `checkAvailability()` は投げうる。投げたまま抜けると `SummaryState.Loading` が
         // 残り、要約パネルが永久に回る。自動起動なので黙る側へ倒す。
@@ -54,7 +62,10 @@ class SummarizeUseCase(
                 // （→ note_summary.md 判断6）。だから生成できない状態でも出してよい
                 cache.find(prompt)?.let { return SummaryResult.Success(it) }
                 when (availability) {
-                    AiAvailability.Ready -> generate(prompt)
+                    AiAvailability.Ready -> {
+                        awaitDwell()
+                        generate(prompt)
+                    }
                     // 要約は**ノートを開くと自動で走る**ので、状態を取れなかったことを見せない。
                     // 押していない機能が理由を語り出すと、読書中ずっと騒がしくなる。
                     // **DL中はDLを始めない**（走行中のDLへ合流できないため → AiAvailability.Downloading）。

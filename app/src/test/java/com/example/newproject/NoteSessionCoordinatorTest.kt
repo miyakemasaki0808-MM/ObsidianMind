@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
+import com.example.newproject.controller.NoteDwellGate
 import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
@@ -66,10 +67,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -473,12 +477,16 @@ class NoteSessionCoordinatorTest {
         val env = Env(this)
         val coordinator = env.coordinator()
 
+        // 本文を出してから要約を始める。**出さないと要約は門番の手前で待ったまま**で、
+        // 生成が走行中の状態を作れない（→ 下の「自動生成の門番」）。
+        coordinator.setNoteState(successNote("Aの本文"))
         coordinator.fetchSummary("ノートA", "Aの本文")
         coordinator.openSection(NoteSection(title = "導入", level = 2, text = "セクション本文"))
         coordinator.generateQuiz("セクション", "十分な長さの本文をここに置く。".repeat(20))
         advanceUntilIdle()
 
         // まだ生成は返っていない
+        assertTrue("要約の生成が走っていない", env.ai.prompts.any { "Aの本文" in it })
         assertTrue(coordinator.uiState.value.summaryState is SummaryState.Loading)
         assertNotNull(coordinator.uiState.value.sectionChat)
 
@@ -628,6 +636,140 @@ class NoteSessionCoordinatorTest {
 
         assertEquals(1, env.trace.saved.size)
         assertEquals("ideas/habit.md", env.trace.saved.single().vaultRelativePath)
+    }
+
+    // ── 自動生成の門番（→ background_ai_ux.md §7）──────────────────────────
+    // 門番そのものの規則は NoteDwellGateTest が見る。ここは**本番と同じ入口から**、
+    // 自動で走る生成すべてに門番が配られていることと、切替の両方向を見る。
+
+    /**
+     * **留まる前に離れる。** 開いた瞬間に始まる自動の生成（要約・分野判定・再会カードの要約・
+     * 関連ノートのAI推薦）が、1本も Nano を呼ばない。AIを呼ばずに出せるものは出ている。
+     *
+     * どれか1つに門番を配り忘れると、生成回数が0でなくなって落ちる。
+     */
+    @Test
+    fun `留まる前にノートを切り替えると自動の生成は1回も呼ばれない`() = runTest {
+        val env = Env(this)
+        env.trace.put(traceNeedingSummary())
+        val coordinator = env.coordinator()
+        var relatedPassed = false
+
+        coordinator.setNoteState(successNote("Kotlin の Flow について"))
+        coordinator.revealReadingTrace("ideas/habit.md", content = "")
+        coordinator.fetchSummary("ノートA", "Kotlin の Flow について")
+        coordinator.classifyNoteField(DocumentRef(TARGET_URI), "Kotlin の Flow について", "技術/A.md")
+        backgroundScope.launch {
+            coordinator.awaitNoteDwell()
+            relatedPassed = true
+        }
+        advance(NoteDwellGate.DWELL_MILLIS - 1)
+
+        assertEquals("留まる前に Nano を呼んでいる", 0, env.ai.generateCalls)
+        assertTrue(coordinator.uiState.value.summaryState is SummaryState.Loading)
+        assertTrue(
+            "生の再会カードまで門番で待たされている",
+            coordinator.uiState.value.readingTraceCard?.isSummaryLoading == true
+        )
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+
+        assertEquals("離れたノートのために Nano を呼んでいる", 0, env.ai.generateCalls)
+        assertFalse("関連ノートの門番が離れた後に開いている", relatedPassed)
+    }
+
+    /**
+     * **留まった後に離れる。** 走り始めた生成の結果は次のノートへ書かず、
+     * 次のノートは**開いた門を引き継がずに**留まり直すまで待つ。
+     */
+    @Test
+    fun `留まった後に切り替えると次のノートは留まり直すまで生成しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote("Aの本文"))
+        coordinator.fetchSummary("ノートA", "Aの本文")
+        advance(NoteDwellGate.DWELL_MILLIS)
+        assertEquals("留まったのに生成が始まらない", 1, env.ai.generateCalls)
+
+        coordinator.onNoteChanged()
+        coordinator.setNoteState(successNote("Bの本文"))
+        coordinator.fetchSummary("ノートB", "Bの本文")
+        advance(NoteDwellGate.DWELL_MILLIS - 1)
+        assertEquals("前のノートで開いた門を引き継いでいる", 1, env.ai.generateCalls)
+
+        // 旧ノートの生成が遅れて返っても、Bの要約欄には書かない。
+        env.ai.completeAll("Aの要約")
+        runCurrent()
+        assertTrue(coordinator.uiState.value.summaryState is SummaryState.Loading)
+
+        advance(1)
+        assertEquals(2, env.ai.generateCalls)
+        assertTrue("Bの本文で生成していない", "Bの本文" in env.ai.lastPrompt.orEmpty())
+        // 保留した生成を返して、テストの終わりに走行中のジョブを残さない。
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+    }
+
+    /** **保存済みの要約は門番の手前で出る。** 待たせると、開き直したノートの要約まで数秒遅れる。 */
+    @Test
+    fun `保存済みの要約は留まるのを待たずに出る`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("本文"))
+        coordinator.fetchSummary("ノート", "本文")
+        advanceUntilIdle()
+        env.ai.completeAll("保存される要約")
+        advanceUntilIdle()
+
+        coordinator.onNoteChanged()
+        coordinator.setNoteState(successNote("本文"))
+        coordinator.fetchSummary("ノート", "本文")
+        runCurrent()
+
+        assertEquals(SummaryState.Success("保存される要約"), coordinator.uiState.value.summaryState)
+        assertEquals(1, env.ai.generateCalls)
+    }
+
+    /**
+     * **冊子を見ている間は数えない。** 冊子から開いてすぐ戻ったノートに、
+     * 冊子をめくっている間に Nano を使わない。止める合図は読書痕跡と同じ入口から来る。
+     */
+    @Test
+    fun `冊子を見ている間は自動の生成を始めない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("本文"))
+        coordinator.fetchSummary("ノート", "本文")
+
+        coordinator.pauseReadingTrace(ReadingPauseReason.Booklet)
+        advance(NoteDwellGate.DWELL_MILLIS * 10)
+        assertEquals("冊子を見ている間に生成している", 0, env.ai.generateCalls)
+
+        coordinator.resumeReadingTrace(ReadingPauseReason.Booklet)
+        advance(NoteDwellGate.DWELL_MILLIS)
+        assertEquals(1, env.ai.generateCalls)
+        env.ai.completeAll("要約")
+        advanceUntilIdle()
+    }
+
+    /** 再会カードの要約が要る痕跡（2回目の訪問・未要約）。 */
+    private fun traceNeedingSummary() = ReadingTrace(
+        vaultRelativePath = "ideas/habit.md",
+        noteTitle = "習慣について",
+        documentId = "doc-1",
+        visits = listOf(
+            ReadingVisit(atEpochMillis = 1L, progressPercent = 40, deepestSectionTitle = "導入"),
+            ReadingVisit(atEpochMillis = 2L, progressPercent = 80, deepestSectionTitle = "結論")
+        ),
+        totalVisitCount = 2
+    )
+
+    /** 指定時間ちょうどに予定された処理まで流す。 */
+    private fun TestScope.advance(millis: Long) {
+        advanceTimeBy(millis)
+        runCurrent()
     }
 
     /**

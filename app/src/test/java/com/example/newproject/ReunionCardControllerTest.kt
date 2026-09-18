@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -730,13 +731,15 @@ private fun TestScope.controller(
     state: NoteUiStateStore = NoteUiStateStore(NoteUiState()),
     vault: FakeVault = FakeVault(),
     scope: CoroutineScope = this,
-    persistScope: CoroutineScope = this
+    persistScope: CoroutineScope = this,
+    awaitDwell: suspend () -> Unit = passDwell
 ): ReunionCardController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReunionCardController(
         scope = scope,
         persistScope = persistScope,
         aiClient = aiClient,
+        awaitDwell = awaitDwell,
         state = state.readingTraceWriter,
         persistence = persistence,
         currentVaultKey = { vault.key },

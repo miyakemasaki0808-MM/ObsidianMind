@@ -8,6 +8,7 @@ import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryCache
 import com.example.newproject.domain.SummaryResult
 import com.example.newproject.fakes.FakeAiClient
+import com.example.newproject.fakes.passDwell
 import java.io.File
 import java.nio.file.Files
 import kotlinx.coroutines.Dispatchers
@@ -104,10 +105,10 @@ class SummaryGenerationObservationTest {
         val useCase = SummarizeUseCase(client, wrap(fileCache(directory)), Dispatchers.Unconfined)
 
         now = 1_000_000L
-        val first = useCase.summarize(TITLE, CONTENT)
+        val first = useCase.summarize(TITLE, CONTENT, passDwell)
         val firstGenerations = generations
         now = 2_000_000L
-        val second = useCase.summarize(TITLE, CONTENT)
+        val second = useCase.summarize(TITLE, CONTENT, passDwell)
 
         val files = directory.listFiles().orEmpty().sortedBy { it.name }
         return Observation(
@@ -136,7 +137,7 @@ class SummaryGenerationObservationTest {
         val beforeRestart = FakeAiClient.returning("要約結果")
         val prompts = listOf(NOTE_A, NOTE_B).associateWith { note ->
             SummarizeUseCase(beforeRestart, fileCache(directory), Dispatchers.Unconfined)
-                .summarize(note.title, note.content)
+                .summarize(note.title, note.content, passDwell)
             requireNotNull(beforeRestart.lastPrompt)
         }
         lost.forEach { note ->
@@ -146,9 +147,9 @@ class SummaryGenerationObservationTest {
         var generations = 0
         val client = GenerationRecordingAiClient(FakeAiClient.returning("要約結果")) { generations++ }
         val useCase = SummarizeUseCase(client, fileCache(directory), Dispatchers.Unconfined)
-        startup?.let { useCase.summarize(it.title, it.content) }
+        startup?.let { useCase.summarize(it.title, it.content, passDwell) }
         val countedFrom = if (countFromBeforeLaunch) 0 else generations
-        useCase.summarize(NOTE_A.title, NOTE_A.content)
+        useCase.summarize(NOTE_A.title, NOTE_A.content, passDwell)
         return generations - countedFrom
     }
 

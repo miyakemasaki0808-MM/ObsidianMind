@@ -239,6 +239,8 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
   読み戻しの適用（`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
   1つの `Mutex` を作って3つへ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
   という、最も気づきにくい形になる
+- **自動で走る生成は、生成の直前に調停側の門番（`NoteDwellGate`）を待つ。** 痕跡の錠と同じく
+  `NoteSessionCoordinator` が1つ作って自動起動の機能にだけ配る（→ [background_ai_ux](background_ai_ux.md) §7）
 - ノート・Vault単位のジョブは追跡してキャンセルする
 - `CancellationException` は再throwし、一般エラーへ変換しない
 - 完了通知がキャンセルをすり抜ける経路には requestId＋`isCurrent()` ガードを併用する
