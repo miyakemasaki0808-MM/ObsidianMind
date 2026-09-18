@@ -1,7 +1,7 @@
 # ノート要約
 
 **状態:** Implemented — 稼働中。**主軸のAI機能**（毎回使う唯一の「Nano税ペイ」機能）。混雑時の文言（判断9）は実機で未観測のまま受理（→ §10）
-**最終検証:** 2026-09-18 / `8754208`
+**最終検証:** 2026-09-18 / `e407dbd`
 **関連コード:** `controller/SummaryController.kt` / `controller/NoteDwellGate.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
 **関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
 **正本:** この文書

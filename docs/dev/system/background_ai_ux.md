@@ -1,7 +1,7 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-15
+**最終検証:** 2026-09-18 / `e407dbd`（§7 の門番。§1〜§6 は 2026-08-15）
 **関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）/ `controller/NoteDwellGate.kt`（自動生成の門番）
 **関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
 **正本:** この文書
@@ -286,8 +286,14 @@ AIを呼ばずに出せるものまで遅れる。
 （留まる前に離れる／留まった後に離れる）・保存済みの要約・冊子は `NoteSessionCoordinatorTest` が
 本番と同じ入口から見る。関連ノートは ViewModel を素のJVMで組み立てられないので `RelatedNotesDwellTest` が見る。
 
-**保証していないこと:** 3秒が体感として妥当か（実機で見る）。門番を通った後の待ちは変えていない —
-4本は同じ時点で門を抜け、これまでどおり錠を取り合う。
+**実機で確かめたこと（2026-09-18）:** 本文が出てから生成が始まるまで約3.0秒、初回の要約が出るまで10.7秒。
+**この実測のまま3秒を確定とした**（オーナー判断）。
+245ms で切り替えたノートは生成せず、冊子で10.1秒めくる間も生成せず、戻ってから数え直して生成した。
+保存済みの要約は42msで出た。生成中の切替・手動操作との共存・再起動をまたぐ保存も従来どおり。
+
+**保証していないこと:** 門番を通った後の待ちは変えていない — 4本は同じ時点で門を抜け、これまでどおり錠を取り合う。
+**実機で数えたのは要約の生成だけ**で（記録が要約にしか出ない）、分野判定・再会カードの要約・関連ノートの
+実生成回数は個別に数えていない。4本への配線はJVMの検査が見ている。
 
 ## 8. 開発経緯
 
