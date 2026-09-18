@@ -173,6 +173,7 @@
 - [再会カード](device_validation/reunion_card.md)
 - [読書痕跡の退避](device_validation/reading_trace_backup.md)
 - [読書痕跡の整理（孤児掃除）](device_validation/reading_trace_cleanup.md)
+- [別のひとことが別の一文か](device_validation/remark_regenerate.md)
 - [冊子モード](device_validation/booklet_mode.md)
 - [起動](device_validation/app_launch.md)
 - [起動の再生成（回転・Fold）](device_validation/app_launch_recreation.md)
