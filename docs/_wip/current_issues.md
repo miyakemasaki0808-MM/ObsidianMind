@@ -70,7 +70,11 @@
 
 ## TRACE-3. 連続削除が同じJobを奪い合う
 
-- **現状:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt) は
+- **実装は済み、実機検証待ち。** 直し方は
+  [reflect_reading_trace](../dev/features/reflect_reading_trace.md) 判断18 が持ち、
+  実機の手順は [reading_trace_cleanup](../review/device_validation/reading_trace_cleanup.md) の
+  `CLEAN-03` `CLEAN-04`。**検証が済むまでこの行は消さない。**
+- **直す前の状況:** [`ReadingTraceCleanupController`](../../app/src/main/java/com/example/newproject/controller/ReadingTraceCleanupController.kt) は
   洗い出しと削除に**同じ `job`** を使い、削除のたびに前のJobをキャンセルする。
 - **問題:** SAFの `deleteDocument()` は同期的な外部I/Oなので、**キャンセル時点で物理削除だけ完了し、
   その後の状態更新が落ちる**ことがある。さらに各削除は開始時の `current` を捕捉するため、

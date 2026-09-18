@@ -21,6 +21,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -52,7 +54,23 @@ internal class ReadingTraceCleanupController(
      */
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
-    private var job: Job? = null
+    private var assessJob: Job? = null
+
+    /**
+     * 走行中の削除。**洗い出しからキャンセルしない** — 削除は外部I/Oで、
+     * キャンセルしても物理削除は巻き戻らず、**状態更新だけが落ちる**。
+     * 止めてよいのはVault切替のときだけで、そこでは状態ごと捨てる。
+     */
+    private val deleteJobs = mutableSetOf<Job>()
+
+    /**
+     * 洗い出しと削除を1列に並べる錠。
+     *
+     * **削除どうしを「後から来たら前を捨てる」で捌けない。** SAFの削除は同期I/Oなので
+     * キャンセルが届いてもファイルは消え、画面だけが古いまま残る。
+     * 洗い出しも同じ列に入れるのは、両方が**同じ状態の read-modify-write** だからである。
+     */
+    private val operations = Mutex()
 
     /**
      * 候補を洗い出した時点のVault識別子。**削除はこの値に対して行う。**
@@ -84,14 +102,16 @@ internal class ReadingTraceCleanupController(
             return
         }
         val generation = vaultGeneration()
-        job?.cancel()
-        job = scope.launch {
+        assessJob?.cancel()
+        assessJob = scope.launch {
             state.set(ReadingTraceCleanupState.Loading)
-            val next = runAssessment(handle, vaultKey)
-            assessedVaultKey = vaultKey
-            // 走行中にVaultが切り替わっていたら、旧Vaultの候補を新Vaultの画面へ出さない。
-            // ここを落とすと、切替直後に「別Vaultのノートを消しませんか」と尋ねることになる。
-            if (generation == vaultGeneration()) state.set(next)
+            operations.withLock {
+                val next = runAssessment(handle, vaultKey)
+                assessedVaultKey = vaultKey
+                // 走行中にVaultが切り替わっていたら、旧Vaultの候補を新Vaultの画面へ出さない。
+                // ここを落とすと、切替直後に「別Vaultのノートを消しませんか」と尋ねることになる。
+                if (generation == vaultGeneration()) state.set(next)
+            }
         }
     }
 
@@ -155,48 +175,54 @@ internal class ReadingTraceCleanupController(
      * 拾い直した新Vaultのファイルを消さないため（[AnnotationController.deleteAll] と同じ規律）。
      *
      * **失敗した候補は一覧に残す** — 消えると再試行できなくなる。
+     *
+     * **結果は「押した時点の一覧」ではなく最新の状態へ当てる。** 押した時点を捕まえて
+     * 上書きすると、**先に終わった削除の結果を後から終わった削除が取り消す**。
      */
     fun delete(key: String) {
         val current = state.current as? ReadingTraceCleanupState.Success ?: return
         val target = current.orphans.firstOrNull { it.key == key } ?: return
+        // 同じ候補を二重に走らせない。外部I/Oは始まると取り消せないので、
+        // 「走っている最中は押せない」を状態として持つ（画面はこれを見てボタンを止める）。
+        if (key in current.deletingKeys) return
         // 洗い出した時点のVaultへ削除する。現在のVaultと違っていれば何もしない
         // （キーが衝突して別Vaultの生きた痕跡を消すのを防ぐ）。
         val vaultKey = assessedVaultKey ?: return
         if (vaultKey != currentVaultKey()) return
         val handle = vault.current() ?: return
         val generation = vaultGeneration()
-        job?.cancel()
+        state.set(current.copy(deletingKeys = current.deletingKeys + key))
+        lateinit var job: Job
         job = scope.launch {
-            val outcome = runDelete(handle, target, vaultKey)
-            if (generation != vaultGeneration()) return@launch
-            state.set(
-                when (outcome) {
-                    DeleteOutcome.DELETED -> current.copy(
-                        orphans = current.orphans.filterNot { it.key == key },
-                        deleteFailureCount = 0,
-                        unverifiedCount = 0
-                    )
-                    // 生き返っていた。消さずに候補からも外す（もう孤児ではない）。
-                    DeleteOutcome.NOT_ORPHAN_ANYMORE -> current.copy(
-                        orphans = current.orphans.filterNot { it.key == key },
-                        deleteFailureCount = 0,
-                        unverifiedCount = 0
-                    )
-                    // 確かめられなかった。**候補は残す** — 消すと再試行できない。
-                    DeleteOutcome.UNVERIFIED ->
-                        current.copy(deleteFailureCount = 0, unverifiedCount = 1)
-                    DeleteOutcome.FAILED ->
-                        current.copy(deleteFailureCount = 1, unverifiedCount = 0)
+            try {
+                operations.withLock {
+                    val outcome = runDelete(handle, target, vaultKey)
+                    if (generation != vaultGeneration()) return@withLock
+                    val latest = state.current as? ReadingTraceCleanupState.Success
+                        ?: return@withLock
+                    state.set(latest.afterDelete(key, outcome))
                 }
-            )
+            } finally {
+                // キャンセルされても走行の印は残さない。残すとボタンが二度と押せなくなる。
+                // `set` は suspend しないので、キャンセル後のここでも書ける。
+                clearDeleting(key)
+            }
         }
+        deleteJobs += job
+        job.invokeOnCompletion { deleteJobs -= job }
+    }
+
+    private fun clearDeleting(key: String) {
+        val latest = state.current as? ReadingTraceCleanupState.Success ?: return
+        if (key !in latest.deletingKeys) return
+        state.set(latest.copy(deletingKeys = latest.deletingKeys - key))
     }
 
     /**
      * 削除の結果。**[UNVERIFIED] を [FAILED] や [NOT_ORPHAN_ANYMORE] へ畳まない** —
      * 「消せなかった」「生き返っていた」「確かめられなかった」は次の行動が全部違う。
      */
-    private enum class DeleteOutcome { DELETED, NOT_ORPHAN_ANYMORE, UNVERIFIED, FAILED }
+    internal enum class DeleteOutcome { DELETED, NOT_ORPHAN_ANYMORE, UNVERIFIED, FAILED }
 
     private suspend fun runDelete(
         handle: com.example.newproject.data.VaultHandle,
@@ -228,12 +254,47 @@ internal class ReadingTraceCleanupController(
         DeleteOutcome.FAILED
     }
 
-    /** Vault切替。走行中の洗い出しを止める（状態のリセットは状態変換側が行う）。 */
+    /**
+     * Vault切替。走行中の洗い出しと削除を止める（状態のリセットは状態変換側が行う）。
+     *
+     * **削除を止めてよいのはここだけ。** 物理削除は巻き戻らないが、
+     * 旧Vaultの一覧ごと捨てるので、更新が落ちても画面に矛盾は残らない。
+     */
     fun onVaultChanged() {
-        job?.cancel()
-        job = null
+        assessJob?.cancel()
+        assessJob = null
+        deleteJobs.toList().forEach { it.cancel() }
+        deleteJobs.clear()
         assessedVaultKey = null
     }
+}
+
+/**
+ * 削除1件の結果を最新の状態へ当てる。
+ *
+ * **失敗と未確認はキーで持つ**（→ [ReadingTraceCleanupState.Success]）。件数だと、
+ * 別の候補を消せたときに前の失敗の報せまで消える。
+ */
+private fun ReadingTraceCleanupState.Success.afterDelete(
+    key: String,
+    outcome: ReadingTraceCleanupController.DeleteOutcome
+): ReadingTraceCleanupState.Success = when (outcome) {
+    // 消えた／生き返っていた。どちらも候補ではなくなるので一覧から外す。
+    ReadingTraceCleanupController.DeleteOutcome.DELETED,
+    ReadingTraceCleanupController.DeleteOutcome.NOT_ORPHAN_ANYMORE -> copy(
+        orphans = orphans.filterNot { it.key == key },
+        deleteFailedKeys = deleteFailedKeys - key,
+        unverifiedKeys = unverifiedKeys - key
+    )
+    // 確かめられなかった。**候補は残す** — 消すと再試行できない。
+    ReadingTraceCleanupController.DeleteOutcome.UNVERIFIED -> copy(
+        deleteFailedKeys = deleteFailedKeys - key,
+        unverifiedKeys = unverifiedKeys + key
+    )
+    ReadingTraceCleanupController.DeleteOutcome.FAILED -> copy(
+        deleteFailedKeys = deleteFailedKeys + key,
+        unverifiedKeys = unverifiedKeys - key
+    )
 }
 
 /** 洗い出しの結果を画面の状態へ移す。**判定できなかったことを空リストへ畳まない。** */

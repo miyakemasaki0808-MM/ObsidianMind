@@ -138,6 +138,12 @@ internal fun IconPill(
     modifier: Modifier = Modifier,
     containerColor: Color = AccentGlass,
     symbolSize: TextUnit = 18.sp,
+    /**
+     * false のあいだは押せない。**色は変えない** — 40dp の円に減光を足すと
+     * 小さい部品に濃い装飾を移す失敗型に当たる（→ ui_design_principles §3）。
+     * 止まっていることは記号と読み上げ文が伝える。
+     */
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     // contentDescription を実際にSemanticsへ設定し、絵文字記号は読み上げ対象から外す。
@@ -145,7 +151,7 @@ internal fun IconPill(
     Surface(
         modifier = modifier
             .size(40.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 this.contentDescription = description
                 role = Role.Button

@@ -170,6 +170,7 @@
 - [AI入力予算](device_validation/ai_input_budget.md)
 - [再会カード](device_validation/reunion_card.md)
 - [読書痕跡の退避](device_validation/reading_trace_backup.md)
+- [読書痕跡の整理（孤児掃除）](device_validation/reading_trace_cleanup.md)
 - [冊子モード](device_validation/booklet_mode.md)
 - [起動](device_validation/app_launch.md)
 - [起動の再生成（回転・Fold）](device_validation/app_launch_recreation.md)
