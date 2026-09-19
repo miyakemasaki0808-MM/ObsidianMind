@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-19 | — | 自由範囲のレビュー3件を直した。バックスラッシュ直後の禁止・引く向きの決め方・つまみ座標の分離 | [reflect_distill](features/reflect_distill.md) §5 |
 | 2026-09-19 | — | dev に通読ルートを置き、廃止した design/ を指していたマニフェストのコメントを直した | [document_map](document_map.md) §5 |
 | 2026-09-19 | — | owner文書10本のファイル名へ読む順の番号を付け、参照28ファイルを張り替えた | [owner/README](../owner/README.md) |
 | 2026-09-19 | — | 蒸留の太字範囲を端のつまみと微調整で自由に決められるようにした（実機未確認） | [reflect_distill](features/reflect_distill.md) §5・判断15〜19 |
