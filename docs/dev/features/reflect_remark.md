@@ -1,6 +1,8 @@
 # ノートへのひとこと
 
-**状態:** Implemented — 稼働中。保存先は読書痕跡サイドカー（schema v6）
+**状態:** **廃止が決定（2026-09-19、オーナー判断）。実装はまだ稼働中。**
+置き換えは [roadmap](../../_wip/roadmap.md) の Reflect リニューアル 柱2（余白メモ）で、
+**この機能を足す方向の変更はもう入れない。** 保存先は読書痕跡サイドカー（schema v6）
 **最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `controller/RemarkController.kt` / `domain/RemarkComposer.kt` / `model/RemarkProtocol.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt`
 **関連テスト:** `RemarkControllerTest` / `RemarkComposerTest` / `ReadingTraceLimitsTest`

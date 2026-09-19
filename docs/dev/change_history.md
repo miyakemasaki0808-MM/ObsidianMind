@@ -16,6 +16,14 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-19 | — | ノートへのひとことの廃止を決め、AI-8 を直さない扱いにして Now から落とした | [reflect_remark](features/reflect_remark.md) |
+| 2026-09-19 | — | Reflect リニューアルの範囲を3本柱（蒸留の自由範囲・余白メモ・結晶）へ確定した | — |
+| 2026-09-19 | — | Reflect 機能リニューアルを Now の先頭へ置き、最初の作業を範囲決めと明記した | — |
+| 2026-09-19 | — | ひとことの同文再生成と返事消失を実機で確認し、全文・実保存・連打の観測手順を補強した | [remark_regenerate](../review/device_validation/remark_regenerate.md) |
+| 2026-09-18 | — | 「別のひとこと」が同じ一文を返すかを実機で確かめるケースを書き、スモーク表と索引へ登録した | — |
+| 2026-09-18 | — | 孤児削除の実機検証（CLEAN-01〜04）の成功を記録し、Vault切替中の削除をケースへ足した | [reading_trace_cleanup](../review/device_validation/reading_trace_cleanup.md) |
+| 2026-09-18 | — | 痕跡の孤児削除を1列に直列化し、結果を最新の一覧へ当てて走行中のボタンを止めた | [reflect_reading_trace](features/reflect_reading_trace.md) 判断18 |
+| 2026-09-18 | — | 読む面の分野の栞（N-10）を取り下げ、Nowと資料から削除して位置・本数の行を持ち主なしへ戻した | [bearing_channels](system/bearing_channels.md) §5 |
 | 2026-09-18 | — | 「Nanoの出力は揺らぐ」と書いていた5文書を、同じプロンプト・同じモデルなら出力は決定的という実測に合わせて直した | [ai_quality_measurement](system/ai_quality_measurement.md) 判断8 |
 | 2026-09-18 | — | 門番の実機検証（AIUX-12〜15・切替・冊子・背面・保存維持）の成功と、実機で数えたのが要約だけであることを記録した | [background_ai_ux](system/background_ai_ux.md) §7 |
 | 2026-09-18 | — | 自動で走るAI生成（要約・分野判定・再会カード・関連ノート）を、ノートに続けて3秒留まってから始めるようにした | [background_ai_ux](system/background_ai_ux.md) §7 |

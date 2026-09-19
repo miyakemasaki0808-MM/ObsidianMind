@@ -363,9 +363,165 @@ class ReadingTraceCleanupControllerTest {
         assertEquals(before, env.state.value)
     }
 
+    // --- 共存する操作（連続削除・洗い出しとの重なり）-----------------------------
+    //
+    // ここから下は**2つの操作が同時に走る面**を見る。単発の削除は上で19本固めてあるが、
+    // 削除は外部I/Oで取り消せないので、片方ずつのテストでは
+    // 「後から来たほうが前の結果を消す」型の欠陥が永久に残る。
+
+    @Test
+    fun `deletes both candidates when two are tapped in a row`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        env.controller.delete(ReadingTraceStore.keyFor("journal/b.md"))
+        advanceUntilIdle()
+
+        // 後から終わった削除が、先に終わった削除の結果を取り消さない。
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(emptyList<String>(), success.orphans.map { it.vaultRelativePath })
+        assertTrue(!env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md")))
+        assertTrue(!env.persistence.stored(ReadingTraceStore.keyFor("journal/b.md")))
+    }
+
+    // 洗い出しから削除をキャンセルすると、物理削除だけ済んで状態更新が落ちる。
+    @Test
+    fun `an assessment does not cancel a delete that is already running`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        env.controller.assess()
+        advanceUntilIdle()
+
+        assertTrue(
+            "洗い出しに割り込まれて削除が消えた",
+            !env.persistence.stored(ReadingTraceStore.keyFor("ideas/a.md"))
+        )
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(listOf("journal/b.md"), success.orphans.map { it.vaultRelativePath })
+    }
+
+    // 走行の印が残るとボタンが二度と押せなくなる。失敗した後こそ押し直したい。
+    @Test
+    fun `clears the running mark after a delete fails`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        env.persistence.undeletableKeys += ReadingTraceStore.keyFor("ideas/a.md")
+
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(emptySet<String>(), success.deletingKeys)
+    }
+
+    // 走行中は二重に走らせない。始まった削除は取り消せないので、後追いで止められない。
+    @Test
+    fun `ignores a second tap on a candidate that is already being deleted`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        val key = ReadingTraceStore.keyFor("ideas/a.md")
+        env.controller.delete(key)
+        env.controller.delete(key)
+        advanceUntilIdle()
+
+        assertEquals(1, env.persistence.deleteCallCount)
+    }
+
+    /**
+     * 成功が失敗の報せを消さない。
+     *
+     * 件数を「直近の削除」で持つと、**まだ一覧に残っている候補について
+     * 「削除できませんでした」だけが消える**。失敗はキーで持つ。
+     */
+    @Test
+    fun `a later success does not clear an earlier failure`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        env.persistence.undeletableKeys += ReadingTraceStore.keyFor("ideas/a.md")
+
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        env.controller.delete(ReadingTraceStore.keyFor("journal/b.md"))
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(listOf("ideas/a.md"), success.orphans.map { it.vaultRelativePath })
+        assertEquals(1, success.deleteFailureCount)
+    }
+
+    // 逆に、消し直せたときは報せが消える。件数を足し上げるだけだと消えない。
+    @Test
+    fun `clears the failure once the same candidate is deleted on retry`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+        val key = ReadingTraceStore.keyFor("ideas/a.md")
+        env.persistence.undeletableKeys += key
+        env.controller.delete(key)
+        advanceUntilIdle()
+
+        env.persistence.undeletableKeys -= key
+        env.controller.delete(key)
+        advanceUntilIdle()
+
+        val success = env.state.value as ReadingTraceCleanupState.Success
+        assertEquals(0, success.deleteFailureCount)
+        assertEquals(emptyList<String>(), success.orphans.map { it.vaultRelativePath })
+    }
+
+    /**
+     * 削除が重なっても**1本ずつ流れる**。
+     *
+     * 錠を外しても結果は合う（完了時に最新の状態へ当てているため）が、
+     * **Vault全走査が同時に何本も出る** — 遠いプロバイダではそれ自体が体感になる。
+     * 守っているのは結果ではなく**外部I/Oの本数**なので、順序で固定する。
+     */
+    @Test
+    fun `runs overlapping deletes one at a time`() = runTest {
+        val env = Env(this)
+        env.persistence.put(trace("ideas/a.md"))
+        env.persistence.put(trace("journal/b.md"))
+        env.vault.handle!!.vaultScan = VaultScan(emptyList())
+        env.controller.assess()
+        advanceUntilIdle()
+
+        env.events.clear()
+        env.vault.handle!!.beforeEachCall = { env.events += "scan" }
+        env.controller.delete(ReadingTraceStore.keyFor("ideas/a.md"))
+        env.controller.delete(ReadingTraceStore.keyFor("journal/b.md"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("scan", "delete", "scan", "delete"), env.events)
+    }
+
     private class Env(scope: kotlinx.coroutines.test.TestScope) {
+        /** 走査と削除が起きた順。**重なりは順序でしか見えない。** */
+        val events = mutableListOf<String>()
         val vault = FakeVaultBrowser()
-        val persistence = FakeCleanupPersistence()
+        val persistence = FakeCleanupPersistence(events)
         var generation = 0L
         var vaultKey: String? = VAULT
         val state = RecordingWriter()
@@ -410,7 +566,9 @@ private fun note(path: String) = NoteFile(
     vaultRelativePath = path
 )
 
-private class FakeCleanupPersistence : ReadingTracePersistence {
+private class FakeCleanupPersistence(
+    private val events: MutableList<String> = mutableListOf()
+) : ReadingTracePersistence {
     private val traces = mutableMapOf<String, ReadingTrace>()
     val corruptKeys = mutableSetOf<String>()
     var listingUnavailable = false
@@ -448,7 +606,13 @@ private class FakeCleanupPersistence : ReadingTracePersistence {
 
     fun stored(key: String): Boolean = traces.containsKey(key)
 
+    /** 削除が何回走ったか。二重タップで2回走らないことを見る。 */
+    var deleteCallCount = 0
+        private set
+
     override fun deleteByKey(key: String, vaultKey: String): Boolean {
+        deleteCallCount++
+        events += "delete"
         if (vaultKey != VAULT) return false
         if (key in undeletableKeys) return false
         return traces.remove(key) != null

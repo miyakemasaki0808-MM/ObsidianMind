@@ -22,6 +22,9 @@
 
 | 日付 | 対象 | 基準 | 結果 |
 |---|---|---|---|
+| 2026-09-19 ひとこと再生成実機検証<br>`2026-09-19-remark-regenerate-device-review` | REMARK-01〜05、全文比較・返事保存・再起動・連打 | `5e94240`、Pixel 10 Pro Fold / Android 17、Debug APK SHA先頭 `69cc72fe` | **同入力4回で全文一致、保存済み返事の消失を実JSONで再現。AI-8へ統合、新規起票なし。** 候補4件、初回5.28秒／2回目5.39秒（完了表示の検出まで）。別ノートは別文、連打は待ちを注入した本番Controller・Composeで生成1回、instrumentation 1/1成功。既存訪問のみの痕跡では返事保存に失敗し、背面保存後の再試行で成功する条件も観測、JVMプローブ2/2で再現。全JVM1,532・Lint再解析0/0/hint0・両APK成功。最終台帳17/17成功、元Vault928ファイルのパス・SHA一致。本文全文とfixtureは最新レビュー。製品変更なし、一時ソース・端末一時物削除、既存test APKを標準構成へ復元、Home待機ノートで終了。画像0枚 |
+| 2026-09-18 TRACE-3最小実機検証<br>`2026-09-18-trace3-device-review` | 簡易版CLEAN-01・03・04＋通常単発02・起動スモーク | `7686ee6`、Pixel 10 Pro Fold / Android 17、Debug APK SHA先頭 `69cc72fe` | **選抜01〜04成功、新規製品指摘なし。** 通常画面で候補3→2・JSON4→3、実SAF削除後の戻りを一時ハーネスで止めて連続削除2→0・JSON3→1、再洗い出し0。両行「…」、クリック親enabled=false、途中の実削除1回→最終2回。instrumentation3起動中1成功（3.870秒）・2回は同期／子ノード判定の手順不成立、対象fixture再利用。JVM1,532・強制Lint0/0/hint4の直前結果再利用、準備ゲート・両APK成功。起動Activity1・1・1枚、戻る1回、背面復帰、権限2件・APK一致。元Vault927ファイルとHome待機本文不変。一時Vault・ダンプ・ソース削除、既存test APK標準復元、Home表示で終了、画像0枚。CLEAN-05〜07・自然な連打・OP回数・回転Fold・release・CI未保証。TRACE-3は最小実機済み・完了判断待ちで保持。最終の台帳・文書・残留物検査18件を強制再実行して成功 |
+| 2026-09-18 TRACE-3孤児削除レビュー<br>`2026-09-18-trace3-review` | 連続削除・洗い出しとの直列化・失敗／未確認保持・Vault切替・走行表示 | `be7133a..7686ee6` の1コミット、開始時clean | **新規指摘なし、机上レビュー通過。前回P2-2は机上解消・実機待ち。** 実体削除後を止める実スレッド3ケースと通知保持・再試行1ケースの独立4件成功。連続2件は実削除2回・候補0、再要求抑止、開き直しの直列化、Vault切替で待機取消・旧反映なしを確認。JVM1,532成功・Lint強制再解析0/0/hint4（オフライン、23秒・34タスク全実行）。CLEAN-01〜07・APK・instrumentation・CI未実施。TRACE-3と前回受付保持。製品・既存テスト・設計正本変更なし、一時プローブ削除・ローカルevidence保全 |
 | 2026-09-18 自動生成の門番の実機検証<br>`2026-09-18-note-dwell-device-review` | AIUX-12〜15通し版・背面復帰・生成中切替・手動共存・要約保存 | `e407dbd`、Pixel 10 Pro Fold / Android 17、Debug APK SHA先頭 `ef26ee1d` | **新規指摘なし。AIUX-12〜14成功、15観測完了。** 245msで切替は移動先1回、冊子10.1秒0回→復帰1回、保存済み42ms・0回。初回要約10.672秒、背面・手動共存・途中切替2回・再起動前後0回も確認。JVM1,525成功・Lint既存強制解析0/0/hint4再利用・両APK成功。実機プローブ7起動中5成功／2回は検証手順の不成立（冊子の成功観測は保持し後半のみ再試験）。起動のActivity・復帰を確認、OP未計測。元Vault925ファイル・fixture12本文不変。Home待機本文で終了、一時Vault・ダンプ・ソース削除、既存test APK標準復元。画像0枚・製品変更なし。体感の採否・BUSY・品質・回転Fold・release・CI未保証 |
 | 2026-09-18 自動生成の門番レビュー<br>`2026-09-18-note-dwell-review` | 3秒の連続滞在・自動4経路・切替・冊子／背面・手動操作・要約保存・実機ケース | `fcb9d64..e407dbd` の2コミット、開始時clean | **新規指摘なし、机上レビュー通過。** 独立3ケースで4経路0→4回、背面復帰から3秒の数え直し、手動チャットの即時開始を確認。JVM1,525成功・Lint強制再解析0/0/hint4（オフライン、13秒・34タスク全実行）。実機AIUX-12〜15・体感・APK・instrumentation・CI未実施。製品・既存テスト・設計正本変更なし、一時プローブ削除。受付簿・課題台帳保持 |
 | 2026-09-18 P-1要約キャッシュ実機検証<br>`2026-09-18-summary-cache-device-review` | SUMCACHE-01〜08通し版・起動スモーク・要約実生成 | `69f36c8`＋未コミットP-1実装、Pixel 10 Pro Fold / Android 17、Debug APK SHA先頭 `7f10ccf8` | **SUMCACHE-01〜07成功、08はBUSY未観測で未実施、新規指摘なし。** A初回1回／再表示0回、同文別名1回、B中央変更0回／冒頭変更1回。生成中D→A→Dは合計2回で途中保存・混入なし。全4ノートを0回で確認後、起動前から数えて再起動後も0回。要約5件はアプリ専用保存、Vault増分は通常の痕跡4件のみ。JVM1,509成功・準備Lintは既存0/0/hint4を再利用、両APK成功、実生成instrumentation 1/1（skip0）。起動3ケースのActivity・復帰を確認（OP回数は未計測）、要求権限2件。元Vault924ファイルのパス・SHA全一致、Home待機本文不変。一時Vault・ダンプ削除、既存test APK保持、Homeで終了。画像0枚・製品変更なし。文書・残留物・参照・BUSYの既存33テストを強制再実行して成功。AI-7保持、BUSY・release・品質・回転Foldは未保証 |
@@ -170,6 +173,8 @@
 - [AI入力予算](device_validation/ai_input_budget.md)
 - [再会カード](device_validation/reunion_card.md)
 - [読書痕跡の退避](device_validation/reading_trace_backup.md)
+- [読書痕跡の整理（孤児掃除）](device_validation/reading_trace_cleanup.md)
+- [別のひとことが別の一文か](device_validation/remark_regenerate.md)
 - [冊子モード](device_validation/booklet_mode.md)
 - [起動](device_validation/app_launch.md)
 - [起動の再生成（回転・Fold）](device_validation/app_launch_recreation.md)

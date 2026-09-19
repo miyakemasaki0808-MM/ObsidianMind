@@ -26,20 +26,36 @@ sealed interface ReadingTraceCleanupState {
         val orphans: List<OrphanCandidate>,
         val withheld: List<WithheldOrphans>,
         /**
-         * 直近の削除で失敗した件数。**失敗した候補は一覧に残す** —
+         * 削除できなかった候補のキー。**失敗した候補は一覧に残す** —
          * 消えると再試行できなくなる（SAFプロバイダは削除に失敗し得る）。
-         */
-        val deleteFailureCount: Int = 0,
-        /**
-         * 直近の削除で**不在を確かめられなかった**件数。
          *
-         * **[deleteFailureCount] と畳まない。** 「消せなかった」と
+         * **件数ではなくキーで持つ。** 削除は1件ずつでも結果は溜まるので、
+         * 件数だと後から成功した1件が前の失敗を消してしまい、
+         * **まだ残っている候補について「失敗した」という報せだけが消える。**
+         * キーなら、その候補を消し直せたときにだけ報せが消える。
+         */
+        val deleteFailedKeys: Set<String> = emptySet(),
+        /**
+         * **不在を確かめられなかった**候補のキー。
+         *
+         * **[deleteFailedKeys] と畳まない。** 「消せなかった」と
          * 「消してよいか確かめられなかった」は原因も次の行動も違う
          * （前者は再試行、後者は同期の完了待ち）。
-         * この件数の候補も一覧に残す — 消えると再試行できなくなる。
+         * こちらの候補も一覧に残す — 消えると再試行できなくなる。
          */
-        val unverifiedCount: Int = 0
-    ) : ReadingTraceCleanupState
+        val unverifiedKeys: Set<String> = emptySet(),
+        /**
+         * 削除が走っている候補のキー。**この候補のボタンは押せない。**
+         *
+         * 削除は外部I/Oで、**始まってしまうとキャンセルしても巻き戻らない**。
+         * 二重に走らせないことを画面側で防ぐ（→ reflect_reading_trace §14）。
+         */
+        val deletingKeys: Set<String> = emptySet()
+    ) : ReadingTraceCleanupState {
+        val deleteFailureCount: Int get() = deleteFailedKeys.size
+
+        val unverifiedCount: Int get() = unverifiedKeys.size
+    }
 
     /**
      * 判定そのものを見送った。**「孤児は無かった」ではない。**

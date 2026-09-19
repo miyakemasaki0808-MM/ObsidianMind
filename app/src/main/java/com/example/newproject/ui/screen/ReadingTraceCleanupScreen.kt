@@ -203,7 +203,11 @@ private fun SuccessBody(
         } else {
             state.orphans.forEach { candidate ->
                 Spacer(modifier = Modifier.height(8.dp))
-                CandidateRow(candidate, onDelete = { onRequestDelete(candidate) })
+                CandidateRow(
+                    candidate = candidate,
+                    deleting = candidate.key in state.deletingKeys,
+                    onDelete = { onRequestDelete(candidate) }
+                )
             }
         }
 
@@ -232,7 +236,11 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun CandidateRow(candidate: OrphanCandidate, onDelete: () -> Unit) {
+private fun CandidateRow(
+    candidate: OrphanCandidate,
+    deleting: Boolean,
+    onDelete: () -> Unit
+) {
     Surface(modifier = Modifier.fillMaxWidth(), color = Panel, shape = RoundedCornerShape(8.dp)) {
         Row(
             modifier = Modifier.padding(14.dp),
@@ -254,10 +262,16 @@ private fun CandidateRow(candidate: OrphanCandidate, onDelete: () -> Unit) {
                 fontSize = 12.sp
             )
         }
+            // 削除中は押せない。**始まった削除は取り消せない**ので、二度押しを画面側で止める。
             IconPill(
-                symbol = "×",
-                contentDescription = "${candidate.noteTitle} の読書痕跡を削除",
+                symbol = if (deleting) "…" else "×",
+                contentDescription = if (deleting) {
+                    "${candidate.noteTitle} の読書痕跡を削除しています"
+                } else {
+                    "${candidate.noteTitle} の読書痕跡を削除"
+                },
                 symbolSize = 18.sp,
+                enabled = !deleting,
                 onClick = onDelete
             )
         }
