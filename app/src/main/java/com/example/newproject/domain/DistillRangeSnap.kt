@@ -12,15 +12,15 @@ import com.example.newproject.model.state.DistillRangeEdgeMove
  * 2つ目の禁止域へ落とす形が残り、何度当て直せば収まるかが読めなくなる。
  * **親文は最大160文字**（`MAX_SENTENCE_CHARACTERS`）なので、全列挙して選ぶほうが安く、正しさも読める。
  *
- * 置けない位置は次のとおりで、[distill_range_adjust §11 の5種](
- * ../../../../../../../../docs/dev/features/distill_range_adjust.md) に対応する。
+ * 置けない位置は次のとおりで、正本は [reflect_distill §5](
+ * ../../../../../../../../docs/dev/features/reflect_distill.md) の「端を置いてよい位置」である。
  *
  * - **書記素の内側** — サロゲートペア・結合文字・異体字セレクタ・ZWJ 連結・肌色修飾・国旗の対
  * - **保護範囲の内部** — コードスパン・リンク・斜体・打ち消し線。
  *   **内部かどうかではなく対を割るかどうかで数える**ので、端の一致は置いてよい
  *
  * **既存の `**` 強調は数えない。** 親文が `subtractRanges` で既存強調を差し引いた区間から
- * 作られる限り到達しないので、落ちるテストを書けない（→ 同書 §8 判断4）。
+ * 作られる限り到達しないので、落ちるテストを書けない（→ 同書 §8 判断18）。
  */
 internal fun distillBoundaryOffsets(
     content: String,
