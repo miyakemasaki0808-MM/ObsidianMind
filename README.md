@@ -23,7 +23,7 @@ Kotlin / Jetpack Compose / ML Kit GenAI Prompt API（Gemini Nano）。minSdk 26�
 Vaultへの書き込みは原則サイドカーに逃がし、**本文は書き換えない**
 （例外は蒸留の太字化のみ → [ADR-0004](docs/dev/decisions/ADR-0004-do-not-rewrite-vault-body.md)）。
 
-コード構成・規模の推移は [docs/owner/source_code_analysis.md](docs/owner/source_code_analysis.md)。
+コード構成・規模の推移は [docs/owner/01_source_code_analysis.md](docs/owner/01_source_code_analysis.md)。
 
 ## ビルドと検証
 

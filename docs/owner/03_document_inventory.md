@@ -117,7 +117,7 @@ docs/
 ## 6. `docs/dev/lessons/` — 教訓。65件
 
 **[索引](../dev/lessons.md) が本体で、カードは詳細。** 索引の「いつ当てるか」列を引き、該当したカードだけを読む。
-中身の棚卸しは [lessons_summary](lessons_summary.md) が持つ。
+中身の棚卸しは [lessons_summary](06_lessons_summary.md) が持つ。
 
 | 数え方 | 件数 |
 |---|---|
@@ -146,7 +146,7 @@ docs/
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残21件 |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
-外から読んだ分析は [wip_analysis](wip_analysis.md) が持つ。
+外から読んだ分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
 ## 8. `docs/review/` — レビューと実機検証。21本＋追跡しない本文1本
 
@@ -163,21 +163,25 @@ docs/
 
 ## 9. `docs/owner/` — オーナーが読む俯瞰。16本
 
-| 文書 | 答える問い |
-|---|---|
-| [README](README.md) | 何ができるアプリか |
-| [source_code_analysis](source_code_analysis.md) | いまコードがどうなっているか。最大の文書 |
-| [jvm_test_report](jvm_test_report.md) | どういう観点でテストしているか |
-| [lessons_summary](lessons_summary.md) | 教訓65件に何が書かれているか |
-| [readme_map](readme_map.md) | 16本ある README がそれぞれ何をしているか |
-| [wip_analysis](wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
-| [idea_catalog](idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
-| [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**引き渡しの粒度の下書き。実装後も更新しない** |
-| [comments_and_history_practices](comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
-| [project_chronology](project_chronology.md) | どう歩んできたか。年表 |
-| **本書** | どんな文書があるか |
-| [project_origin](project_origin.md) | どこから始まったか。2026-04-30。更新しない |
-| [journal/](journal/) | どうやってここまで来たか。2026-07・08・09 |
+**ファイル名の番号が読む順である**（2026-09-19）。「いま何があるか → どう書くか → 何を学んだか → どう歩んできたか」で並ぶ。
+`README.md` と `journal/` は名前で指されている先が多いので改名せず、順路の両端に置くだけにした。
+**欠番は詰めない** — 詰め直すと既存の参照が別の文書を指す。
+
+| No. | 文書 | 答える問い |
+|---|---|---|
+| — | [README](README.md) | 何ができるアプリか。フォルダの入口 |
+| 01 | [source_code_analysis](01_source_code_analysis.md) | いまコードがどうなっているか。最大の文書 |
+| 02 | [jvm_test_report](02_jvm_test_report.md) | どういう観点でテストしているか |
+| 03 | **本書** | どんな文書があるか |
+| 04 | [readme_map](04_readme_map.md) | 16本ある README がそれぞれ何をしているか |
+| 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
+| 06 | [lessons_summary](06_lessons_summary.md) | 教訓65件に何が書かれているか |
+| 07 | [wip_analysis](07_wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
+| 08 | [idea_catalog](08_idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
+| 09 | [project_origin](09_project_origin.md) | どこから始まったか。2026-04-30。更新しない |
+| 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |
+| — | [journal/](journal/) | どんな日々だったか。2026-07・08・09 |
+| — | [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**実装したら役目が終わる下書きなので、番号列に入れない** |
 
 `Fable5.1_report/` は git 管理外。入口 README と章3本・課題一覧、`完了/` に計測値がある。本書の数には入れない。
 

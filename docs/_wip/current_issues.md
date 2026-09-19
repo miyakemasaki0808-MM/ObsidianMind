@@ -8,7 +8,7 @@
 > （実装完了では消さない。検証待ちが台帳から消えると誰も確認しなくなる）。
 > **完了の経緯は残さない** — 経緯を引きたくなったら、それは下記の記録側が足りていないサインと考える。
 > 記録の行き先は別にある — 何をいつ変えたかは [change_history.md](../dev/change_history.md)、
-> 今どうなっているかは [source_code_analysis.md](../owner/source_code_analysis.md)、
+> 今どうなっているかは [01_source_code_analysis.md](../owner/01_source_code_analysis.md)、
 > なぜそうしたかは [features/](../dev/features/)・[system/](../dev/system/)、繰り返し現れた教訓は [lessons.md](../dev/lessons.md)。
 >
 > **順序と計画は [roadmap.md](roadmap.md) が持つ。** ここには「何が問題か」だけを書き、
@@ -218,7 +218,7 @@
 ### 残っている面
 
 - **`owner/` の同伴更新は止まった（2026-09-12 に確認）。** 元の症状は、
-  [`source_code_analysis.md`](../owner/source_code_analysis.md) が docs churn の19%（1,170行）を占め、
+  [`01_source_code_analysis.md`](../owner/01_source_code_analysis.md) が docs churn の19%（1,170行）を占め、
   直近99コミット中**7件（259行）がコード変更に同伴していた**こと — `owner/` は
   「オーナーが指示したときだけ更新する」と決めてあり、検査からも意図して外してある文書である。
   原因だった `CLAUDE.md` の影響面監査の行（正本として `owner/` を名指ししていた）を外した。

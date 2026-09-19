@@ -27,13 +27,13 @@
 | **なぜそうしたか（現在有効な判断）** | [features/](features/)（機能）・[system/](system/)（基盤） | 判断ごとに1本。**現在形で書く** |
 | **なぜその重大判断をしたか** | [decisions/](decisions/)（ADR。**30行以内＝`AdrShapeTest` が固定**） | 覆りにくいものだけ |
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
-| **いまコードがどうなっているか** | [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 測定日つきスナップショット |
+| **いまコードがどうなっているか** | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
 | **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋未解決の受付簿 |
 | **Codexが実機でどう検証するか** | [review/device_validation/](../review/device_validation/) | 共通手順＋機能別ケース（結果は持たない） |
 | **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
 
-補助として、出発点の記録 [project_origin.md](../owner/project_origin.md) がある。
+補助として、出発点の記録 [09_project_origin.md](../owner/09_project_origin.md) がある。
 
 > **設計書と日誌の線引き（2026-08-10 に整理）。**
 > 設計書には**現在有効な判断とその理由・契約・受理条件・意図的にやらないこと**だけを置く。
@@ -49,7 +49,7 @@
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
 | [review/](../review/) | 最新の外部レビュー1本（未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
-| [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
+| [09_project_origin.md](../owner/09_project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
 
@@ -184,7 +184,7 @@
 
 | したいこと | 読む順 |
 |---|---|
-| プロジェクトを初めて把握する | [owner/source_code_analysis.md](../owner/source_code_analysis.md) §1〜§4 → [system/architecture.md](system/architecture.md) |
+| プロジェクトを初めて把握する | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) §1〜§4 → [system/architecture.md](system/architecture.md) |
 | 次に何を作るか決める | [_wip/roadmap.md](../_wip/roadmap.md) → [_wip/current_issues.md](../_wip/current_issues.md) → [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
 | 品質改善に着手する | [レビュー一覧](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
 | Codexが実機検証する | [共通手順](../review/device_validation/README.md) → 対象機能のケース → 該当する `features/` / `system/` の正本 |

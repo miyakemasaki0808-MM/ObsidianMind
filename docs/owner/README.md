@@ -1,14 +1,14 @@
 # アプリ俯瞰
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**最終更新:** 2026-09-18
+**最終更新:** 2026-09-19
 
 **位置づけ:** この文書は2つの役割を兼ねている。**`owner/` フォルダの入口**が前半の一覧、
 **このアプリが何をするかを一望する1枚**が後半の機能表である。
 継続的に同期する台帳ではない。指示があったときに通しで見直す。細部が実装より古いことは仕様の範囲。
 
 > 他のフォルダの README は案内に徹しているが、ここだけ内容も持っている。
-> 分けるかどうかは保留にしてある → [readme_map](readme_map.md) §4。
+> 分けるかどうかは保留にしてある → [readme_map](04_readme_map.md) §4。
 > 入口を探して開いた人が、そのまま機能を読めることを優先している。
 
 > ## `owner/` の更新はオーナーが指示したときだけ（不変）
@@ -25,20 +25,33 @@
 
 ## この `owner/` フォルダが持つもの
 
-| 文書 | 答える問い |
+**番号が読む順である。** 上から順に「いま何があるか → どう書くか → 何を学んだか → どう歩んできたか」と並ぶ。
+通しで読む必要は無い。**知りたい問いの行だけを開く**のが普段の使い方で、番号は迷ったときの順路である。
+
+| No. | 文書 | 答える問い |
+|---|---|---|
+| — | **本書** | `owner/` の入口と、**何ができるアプリか** |
+| 01 | [source_code_analysis](01_source_code_analysis.md) | **いまコードがどうなっているか。** 構成・技術・規模の推移 |
+| 02 | [jvm_test_report](02_jvm_test_report.md) | **どういう観点でテストしているか。** JVMテストの俯瞰 |
+| 03 | [document_inventory](03_document_inventory.md) | **どんな文書があるか。** 目録と、検査で守られている範囲 |
+| 04 | [readme_map](04_readme_map.md) | **16本ある README がそれぞれ何をしているか。** 入口そのものの構造 |
+| 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | **コメント・設計書・経緯をどこに置くか。** 外部の指針と、経緯をコミットから取り出す方法 |
+| 06 | [lessons_summary](06_lessons_summary.md) | **教訓65件に何が書かれているか。** 棚卸し用の作業台 |
+| 07 | [wip_analysis](07_wip_analysis.md) | **`_wip/` の4本は何を抱え、どこに歪みがあるか。** 観察と提案 |
+| 08 | [idea_catalog](08_idea_catalog.md) | **Fable は何を足せると考えるか。** AI活用・非活用 × 北極星に沿う・沿わない、各10件 |
+| 09 | [project_origin](09_project_origin.md) | **どこから始まったか。** 2026-04-30 の記録。更新しない |
+| 10 | [project_chronology](10_project_chronology.md) | **どう歩んできたか。** Git 履歴から辿る開発年表 |
+| — | [journal/](journal/) | **どんな日々だったか。** 読み物としての開発日誌 |
+
+**番号を持たないものが3つある。**
+
+| | なぜ |
 |---|---|
-| **本書** | `owner/` の入口と、**何ができるアプリか** |
-| [source_code_analysis.md](source_code_analysis.md) | **いまコードがどうなっているか。** 構成・技術・規模の推移 |
-| [jvm_test_report.md](jvm_test_report.md) | **どういう観点でテストしているか。** JVMテストの俯瞰 |
-| [document_inventory.md](document_inventory.md) | **どんな文書があるか。** 目録と、検査で守られている範囲 |
-| [lessons_summary.md](lessons_summary.md) | **教訓65件に何が書かれているか。** 棚卸し用の作業台 |
-| [readme_map.md](readme_map.md) | **16本ある README がそれぞれ何をしているか。** 入口そのものの構造 |
-| [wip_analysis.md](wip_analysis.md) | **`_wip/` の4本は何を抱え、どこに歪みがあるか。** 観察と提案 |
-| [idea_catalog.md](idea_catalog.md) | **Fable は何を足せると考えるか。** AI活用・非活用 × 北極星に沿う・沿わない、各10件 |
-| [comments_and_history_practices.md](comments_and_history_practices.md) | **コメント・設計書・経緯をどこに置くか。** 外部の指針と、経緯をコミットから取り出す方法 |
-| [project_chronology.md](project_chronology.md) | **どう歩んできたか。** Git 履歴から辿る開発年表 |
-| [journal/](journal/) | **どうやってここまで来たか。** 読み物としての開発日誌 |
-| [project_origin.md](project_origin.md) | **どこから始まったか。** 2026-04-30 の記録。更新しない |
+| 本書（`README.md`） | フォルダの入口。GitHub が自動で開き、`CLAUDE.md` とテストのKDocが名前で指している |
+| [journal/](journal/) | フォルダで、約20ファイルが名前で指している。順路の末尾に置くが、読み物なので列には入れない |
+| [rebuttal_sentence_design](rebuttal_sentence_design.md) | **実装したら役目が終わる下書き。** 反証の一文をどう作るかを引き渡しの粒度で書いてある。恒久文書の列に混ぜない |
+
+**欠番は詰めない。** 文書が消えたらその番号を空けたままにする。詰め直すと、既存の参照が別の文書を指す。
 
 `Fable5.1_report/` は 2026-09-11 の評価報告書で、git 管理外の特別枠である。本書の一覧には入れない。
 課題候補の処遇は `_wip/` の検討枠が持ち、報告書本体は更新しない。
@@ -95,7 +108,7 @@
 
 **ノート本文へ書き込むのは蒸留の太字化だけ。** ひとこと・返事・読書痕跡はすべてサイドカーへ逃がしてある。
 分野の確定と閲覧履歴は端末内に置き、バックアップからは除外している。
-機能ごとのデータフローは [source_code_analysis.md](source_code_analysis.md) §5〜§6、
+機能ごとのデータフローは [01_source_code_analysis.md](01_source_code_analysis.md) §5〜§6、
 なぜそう作ったかは [features/](../dev/features/)・[system/](../dev/system/) が持つ。
 
 ---
@@ -106,9 +119,9 @@
 
 | 知りたいこと | 見る先 |
 |---|---|
-| いまコードがどうなっているか。構成・規模・検証状態 | [source_code_analysis.md](source_code_analysis.md) |
+| いまコードがどうなっているか。構成・規模・検証状態 | [01_source_code_analysis.md](01_source_code_analysis.md) |
 | なぜそう作ったか、何を試して駄目だったか | [dev/features/](../dev/features/)・[dev/system/](../dev/system/)・[dev/lessons/](../dev/lessons/) |
-| いま何が壊れている・足りないか | [_wip/current_issues.md](../_wip/current_issues.md)。`owner/` は課題を持たない。外から見た分析だけを [wip_analysis](wip_analysis.md) が持つ |
+| いま何が壊れている・足りないか | [_wip/current_issues.md](../_wip/current_issues.md)。`owner/` は課題を持たない。外から見た分析だけを [wip_analysis](07_wip_analysis.md) が持つ |
 
 **実装が進んでも本書は自動では追いつかない。** 検査に載せていないので、ずれていることを CI は教えない。
 それは意図した設計である。通しの見直しはオーナーの依頼があったときだけ行い、そのつど最終更新日を入れ替える。

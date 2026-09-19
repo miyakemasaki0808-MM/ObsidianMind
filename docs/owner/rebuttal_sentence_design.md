@@ -2,7 +2,7 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **作成:** 2026-09-17 / 基準 `f2d1f18`
-**状態:** Draft — 未実装。[idea_catalog](idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの
+**状態:** Draft — 未実装。[idea_catalog](08_idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの
 **最終検証:** —（未実装。器を整えただけで日付を進めない）
 **関連コード（予定）:** `domain/RebuttalClaimScanner.kt` / `domain/RebuttalCandidateRanking.kt` / `domain/RelatedCandidateId.kt` / `model/state/RebuttalSentence.kt` / `model/RebuttalProtocol.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBuilder.kt` / `controller/RebuttalController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト（予定）:** `RebuttalClaimScannerTest` / `RebuttalCandidateRankingTest` / `RebuttalControllerTest` / 既存の走査・契約テスト群（→ §0.4）
@@ -17,7 +17,7 @@
 
 ### 0.1 何を選んだか、なぜか
 
-[idea_catalog](idea_catalog.md) §5 の本命3件のうち、**「封をした返事」は既にオーナー判断で
+[idea_catalog](08_idea_catalog.md) §5 の本命3件のうち、**「封をした返事」は既にオーナー判断で
 [sealed_reply](../dev/features/sealed_reply.md) として設計の下書きが起きている**。残る2件（反証の一文・外画面の扉）から
 **反証の一文**を選んだ。理由は3つ。
 
@@ -91,7 +91,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 **同じ Vault の中の、過去の自分が書いた反対意見**を1文だけ差し出す。生成はしない。AIは選ぶだけ。
 候補が無ければ何も出さず、AIが「食い違うものは無い」と答えても何も出さない。
 
-出どころは [idea_catalog](idea_catalog.md) §1 の AI◯1。北極星（[roadmap](../_wip/roadmap.md) §0）の
+出どころは [idea_catalog](08_idea_catalog.md) §1 の AI◯1。北極星（[roadmap](../_wip/roadmap.md) §0）の
 「Rediscover→Reflect のループを濃くするか」に対して、**関連タブの既存の経路に選択を1回足すだけ**で応える。
 
 ## 2. ゴールと非ゴール
@@ -550,4 +550,4 @@ LRU 300件のキャッシュが最大で数百KBに膨らむ。使うのは最�
 
 ## 13. 開発経緯
 
-出どころは [idea_catalog](idea_catalog.md) §1 AI◯1 と §5。着手後の経緯は [journal/](journal/) が持つ。
+出どころは [idea_catalog](08_idea_catalog.md) §1 AI◯1 と §5。着手後の経緯は [journal/](journal/) が持つ。

@@ -4,7 +4,7 @@
 
 このファイルはPR単位の変更履歴を新しい順に記録する累積文書である。
 
-- **何を**いつ変えたかはこの表、**今どうなって**いるかは [owner/source_code_analysis.md](../owner/source_code_analysis.md)、**なぜそう**したかは [features/](features/)・[system/](system/) を参照する。
+- **何を**いつ変えたかはこの表、**今どうなって**いるかは [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md)、**なぜそう**したかは [features/](features/)・[system/](system/) を参照する。
 - 運用ルール: PRごとに1行追記する。設計判断・試行錯誤があった変更のみ `features/` か `system/` に対応ファイルを作成または追記し、この表からリンクする。
 - **「変更内容」は1文・100字以内。** 経緯・代償・変異確認の結果・教訓は**ここに書かない**（行き先は `features/`・`system/` と lessons.md）。
   2026-08-10 に中央値1,846字まで肥大していたのを圧縮した。**「1行」に長さの上限が無かったことが原因**なので、
@@ -39,9 +39,9 @@
 | 2026-09-14 | — | 保守の足場の修正確認レビューを受け、指摘3件の台帳・受付行と検討枠の失敗枝の行を閉じた | [review](../review/README.md) |
 | 2026-09-14 | — | 保守の足場のレビュー3件に対応し、コメント検査の文字列誤認・テスト側の入力漏れ・冊子設計の旧理由を直した | [review](../review/README.md)・[booklet_mode](features/booklet_mode.md) 判断12 |
 | 2026-09-14 | — | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
-| 2026-09-14 | — | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/idea_catalog.md) |
-| 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [wip_analysis](../owner/wip_analysis.md)・[roadmap](../_wip/roadmap.md) |
-| 2026-09-14 | — | 宙に浮いたKDocと関連ノートの死んだ失敗枝を消し、キャンセルの再throwとコメントに経緯を書かない規約を検査つきで置いた | [owner/comments_and_history_practices](../owner/comments_and_history_practices.md) |
+| 2026-09-14 | — | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/08_idea_catalog.md) |
+| 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [wip_analysis](../owner/07_wip_analysis.md)・[roadmap](../_wip/roadmap.md) |
+| 2026-09-14 | — | 宙に浮いたKDocと関連ノートの死んだ失敗枝を消し、キャンセルの再throwとコメントに経緯を書かない規約を検査つきで置いた | [owner/comments_and_history_practices](../owner/05_comments_and_history_practices.md) |
 | 2026-09-13 | — | AI品質の全27組を時間を空けて分割取得し、計測の未完了と再開手順の指摘を閉じた | [review](../review/README.md) |
 | 2026-09-13 | — | AI品質の修正後を簡易実機検証し、再利用の動作と13回目のBUSY再発を記録した | [review](../review/README.md) |
 | 2026-09-13 | — | AI品質の机上4指摘の解消を確認し、実機再開手順の残る2件をBUSYの課題へ統合した | [review](../review/README.md) |
@@ -108,9 +108,9 @@
 | 2026-09-09 | — | 冊子の分野色の設計書を起こし、Vault実測とAI段を作る判断を記録した | [note_field_color](features/note_field_color.md) 判断4 |
 | 2026-09-09 | — | 色チャネルの持ち主を面ごとに割り直し、冊子の面を分野へ渡した（N-9 取り下げ・N-18 新設） | [bearing_channels](system/bearing_channels.md) 判断6 |
 | 2026-09-09 | — | ランチャー再タップで積まれた MainActivity を onCreate で畳み、起動の実機ケースを新設した | [opening_animation](features/opening_animation.md) 判断7 / [L65](lessons.md#l65-検証側の回避は不具合の起票を止める) |
-| 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/readme_map.md) |
+| 2026-09-08 | — | README 11本の役割を1枚に起こし、owner の入口へ二重役割と参照先を明記した | [readme_map](../owner/04_readme_map.md) |
 | 2026-09-08 | — | 開発日誌に8月23〜31日の欠落を書き足し、9月分を新設した | [journal](../owner/journal/) |
-| 2026-09-08 | — | owner文書6本を実測へ直した（教訓の処遇・規模統計・冊子の機能追記・検証状態） | [lessons_summary](../owner/lessons_summary.md) |
+| 2026-09-08 | — | owner文書6本を実測へ直した（教訓の処遇・規模統計・冊子の機能追記・検証状態） | [lessons_summary](../owner/06_lessons_summary.md) |
 | 2026-09-08 | — | L7・L9・L10 は統合せず相似のまま維持と決め、骨格と再検討条件を L7 へ書いた | [lessons](lessons.md) |
 | 2026-09-08 | — | 役目を終えた教訓2件（L12・L15）を転送へ畳み、生きた参照2箇所を引き継ぎ先へ付け替えた | [lessons](lessons.md) |
 | 2026-09-07 | — | 実機検証に簡易版を足した。スモークセットへ絞りスクショを撮らない運用と、一時テストの残留検査 | [quick_check](../review/device_validation/quick_check.md) |
@@ -148,7 +148,7 @@
 | 2026-09-03 | — | OS設定に従う経路を3つに数え直し、読み上げ操作の送りを仕様と実機ケースへ加えた | **[booklet_mode](features/booklet_mode.md)** 判断10・[lessons](lessons.md#l14-横展開は最後の1本を取り残す) L14 |
 | 2026-09-03 | — | 冊子の手触りを加え、積み直しと先頭表示の修正確認を完了した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断10・[review](../review/README.md)・[lessons](lessons.md) L58・[L55](lessons/L55.md)・[device_validation](../review/device_validation/booklet_mode.md) |
 | 2026-09-03 | — | 動きのチャネルを「誰が動きを起こすか」で二分し、冊子の繰る手触りに持ち主を与えた | **[bearing_channels](system/bearing_channels.md)** §8・[booklet_mode](features/booklet_mode.md) 判断10 |
-| 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
+| 2026-09-02 | — | 解析書を通しで見直し、佇まいのチャネル割り当てと形の役割を反映した | [source_code_analysis](../owner/01_source_code_analysis.md) §16 |
 | 2026-09-02 | — | 佇まいの完了を各正本へ反映し、動きの行に主張が2つ立ったことを残した | **[bearing_channels](system/bearing_channels.md)** §6・[booklet_mode](features/booklet_mode.md) §11・[roadmap](../_wip/roadmap.md) |
 | 2026-09-02 | — | 冊子の紙面をPixel実機で明暗・10枚／3枚境界・終端・狭幅まで確認し、佇まいの実機ゲートを閉じた | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md)・[review](../review/README.md) |
 | 2026-09-02 | — | 冊子の「繰る手触り」に持ち主がいないことを起票し、割り当ての穴を正本へ残した | **[bearing_channels](system/bearing_channels.md)** §6・[current_issues](../_wip/current_issues.md) |
@@ -156,7 +156,7 @@
 | 2026-09-02 | — | 佇まいのコードレビュー2件を直し、走査の受理条件を代入と呼び出しの形へ狭めた | **[bearing_channels](system/bearing_channels.md)** §7・[booklet_mode](features/booklet_mode.md) 判断9・[lessons](lessons.md) L55 |
 | 2026-09-01 | — | 冊子の紙面を「束の一番上の1枚」にし、面の形を役割トークンへ移した（実機検証待ち） | **[booklet_mode](features/booklet_mode.md)** 判断9・[bearing_channels](system/bearing_channels.md) §7 |
 | 2026-09-01 | — | 佇まいの主役軸を「紙面の形」に決め、チャネルと意味の1対1割り当てを正本化した | **[bearing_channels](system/bearing_channels.md)**・[ADR-0005](decisions/ADR-0005-bearing-channel-allocation.md)・[booklet_mode](features/booklet_mode.md) 判断9 |
-| 2026-09-01 | — | 解析書を通しで見直し、冊子と範囲調整を反映して測定日を2026-09-01へ揃えた | [source_code_analysis](../owner/source_code_analysis.md) §16 |
+| 2026-09-01 | — | 解析書を通しで見直し、冊子と範囲調整を反映して測定日を2026-09-01へ揃えた | [source_code_analysis](../owner/01_source_code_analysis.md) §16 |
 | 2026-09-01 | — | 冊子の往復・描画・読み上げ文言・回転／FoldをPixel実機で確認し、N-12を完了した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子のページ復帰をPixel実機で確認し、NavHostテストの同名ノード選択を残件化した | **[booklet_mode](features/booklet_mode.md)** §10・§11・[review](../review/README.md) |
 | 2026-08-31 | — | 冊子をPixel実機で検証し、通常ノートから戻るとページ位置を失う欠陥を残件化した | **[booklet_mode](features/booklet_mode.md)** §6・§10・§11・[review](../review/README.md) |
@@ -188,8 +188,8 @@
 | 2026-08-27 | — | X-9をPixel実機で検証し、応答性を確認、中止後の過剰適用と形式差異を残件化した | [review](../review/README.md)・[reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-08-26 | — | X-9レビューのP1 2件・P2 2件を直し、読取不能・下見との照合・損失の方向・Main占有を閉じた | **[reading_trace_backup](features/reading_trace_backup.md)** §5・§8・[lessons](lessons.md) L47・L48 |
 | 2026-08-23 | — | 読書痕跡の書き出し・読み戻しを入れ、片付け系を「データ管理」1画面へ統合した | **[reading_trace_backup](features/reading_trace_backup.md)**・[architecture](system/architecture.md) |
-| 2026-08-22 | — | 解析書へ目次（63見出し・2階層）を足した | [source_code_analysis](../owner/source_code_analysis.md) §16 |
-| 2026-08-22 | — | 技術俯瞰と開発日誌を X-5・X-2 まで同期し、テスト内訳89クラスを機械的に数え直した | [source_code_analysis](../owner/source_code_analysis.md)・[journal](../owner/journal/2026-08.md) |
+| 2026-08-22 | — | 解析書へ目次（63見出し・2階層）を足した | [source_code_analysis](../owner/01_source_code_analysis.md) §16 |
+| 2026-08-22 | — | 技術俯瞰と開発日誌を X-5・X-2 まで同期し、テスト内訳89クラスを機械的に数え直した | [source_code_analysis](../owner/01_source_code_analysis.md)・[journal](../owner/journal/2026-08.md) |
 | 2026-08-22 | — | X-2の再会カードをPixel実機の全ケースと描画テストで確認し、X-9をNowへ繰り上げた | **[reunion_card](features/reunion_card.md)**・[review](../review/README.md) |
 | 2026-08-22 | — | 印の要求世代をノート単位にし、正本から実機ケース範囲の重複を外した | **[reunion_card](features/reunion_card.md)** |
 | 2026-08-22 | — | X-2のレビュー指摘6件を直し、生成結果の3分割・印の要求世代・描画instrumentation・版番号検査を入れた | **[reunion_card](features/reunion_card.md)**・[lessons](lessons.md) L14 |
@@ -232,7 +232,7 @@
 | 2026-08-13 | — | 構造変更の影響面監査を完了条件へ入れ、共存する処理の両方向テストと受付簿の運用を検査に載せた | **[lessons](lessons.md)** L14 |
 | 2026-08-12 | — | `AiAvailability` を5値へ割り、キャンセルを再throwし、AI状態の見せ方を純関数1本へ統一した | **[background_ai_ux](system/background_ai_ux.md)** §6 |
 | 2026-08-12 | — | 機能仕様6本の数値・データ契約を §5〜§7 へ一本化し、§8 を判断の理由だけに絞った | **[related_notes_ai](features/related_notes_ai.md)**・**[reflect_distill](features/reflect_distill.md)**・**[reflect_reading_trace](features/reflect_reading_trace.md)**・[note_age_paper](features/note_age_paper.md)・[note_image_rendering](features/note_image_rendering.md)・[dark_mode](features/dark_mode.md) |
-| 2026-08-12 | — | 技術俯瞰の §14.2 を実装から作り直し、§15 を廃止して行き先の表へ置き換えた | [source_code_analysis](../owner/source_code_analysis.md) §14.2 |
+| 2026-08-12 | — | 技術俯瞰の §14.2 を実装から作り直し、§15 を廃止して行き先の表へ置き換えた | [source_code_analysis](../owner/01_source_code_analysis.md) §14.2 |
 | 2026-08-12 | — | 壊れた節参照25件を内容参照へ直し、番号依存を AdrShapeTest で止めた | [lessons](lessons.md) L29 |
 | 2026-08-12 | — | 最終検証の捏造コミット12件を実在する値へ直し、実在と12節の存在を検査へ載せた | **[lessons](lessons.md) L38**・[_template](features/_template.md) |
 | 2026-08-11 | — | features の全16本を12節の新様式へ揃え、空欄の代わりに理由を書く規約を検査へ載せた | **[_template](features/_template.md)**・[lessons](lessons.md) L29 |
@@ -345,4 +345,4 @@
 | 2026-05-30 | #4 | Markdownレンダリング強化（見出し・リスト・コード・引用・テーブル等） | — |
 | 2026-05-11 | #2, #3 | アプリ名を「Obsidian Mind」へ変更、旧View系リソース整理、ソースコード解析書の整備 | — |
 | 2026-05-10 | #1 | Jetpack Compose移行 | — |
-| 2026-04-30〜05-10 | — | プロジェクト開始 | [project_origin.md](../owner/project_origin.md) |
+| 2026-04-30〜05-10 | — | プロジェクト開始 | [09_project_origin.md](../owner/09_project_origin.md) |

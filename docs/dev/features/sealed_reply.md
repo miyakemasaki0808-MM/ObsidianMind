@@ -18,7 +18,7 @@
 Reflect 系の中で、書いた言葉を**未来の自分へ宛てる**唯一の仕掛けである。AIは使わない。
 返事の保存先と契約は [reflect_remark](reflect_remark.md) がそのまま持ち、本書はその上に「封」という状態を1つ足す。
 
-出どころは [owner/idea_catalog](../../owner/idea_catalog.md) の「封をした返事」で、
+出どころは [owner/idea_catalog](../../owner/08_idea_catalog.md) の「封をした返事」で、
 北極星の「過去の自分と再会する」を、AIを1回も呼ばずに最も直接に作る案として選ばれた。
 
 ## 2. ゴールと非ゴール
@@ -178,4 +178,4 @@ Rediscover で引き当て
 
 ## 12. 開発経緯
 
-出どころは [owner/idea_catalog](../../owner/idea_catalog.md)。着手後の経緯は [owner/journal/](../../owner/journal/) が持つ。
+出どころは [owner/idea_catalog](../../owner/08_idea_catalog.md)。着手後の経緯は [owner/journal/](../../owner/journal/) が持つ。

@@ -9,7 +9,7 @@
 >
 > | 知りたいこと | 正本 |
 > |---|---|
-> | 今どういうコード・技術構成か | [source_code_analysis.md](../source_code_analysis.md) |
+> | 今どういうコード・技術構成か | [01_source_code_analysis.md](../01_source_code_analysis.md) |
 > | 今どういう設計判断が有効か | [dev/features/](../../dev/features/)・[dev/system/](../../dev/system/) |
 > | 今どこが壊れている・足りないか | [_wip/current_issues.md](../../_wip/current_issues.md) |
 > | 何をいつ変えたか（索引） | [dev/change_history.md](../../dev/change_history.md) |
@@ -49,4 +49,4 @@
 
 **2026-04〜06 は日誌を持たない。** 当時の詳しい経緯は残っておらず、
 [change_history.md](../../dev/change_history.md) の1行要約と
-[project_origin.md](../project_origin.md)（第一歩の報告書）が記録のすべてである。
+[09_project_origin.md](../09_project_origin.md)（第一歩の報告書）が記録のすべてである。

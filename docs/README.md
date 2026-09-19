@@ -6,7 +6,7 @@
 
 | フォルダ | 答える問い | 代表 |
 |---|---|---|
-| [owner/](owner/) | **このアプリは何で、いまどうなっていて、どうやってここまで来たか** | [README](owner/README.md)・[技術俯瞰](owner/source_code_analysis.md)・[開発日誌](owner/journal/) |
+| [owner/](owner/) | **このアプリは何で、いまどうなっていて、どうやってここまで来たか** | [README](owner/README.md)・[技術俯瞰](owner/01_source_code_analysis.md)・[開発日誌](owner/journal/) |
 | [dev/](dev/) | **いま何が有効な判断で、何を繰り返してはいけないか** | [document_map](dev/document_map.md)（文書の地図と運用ルール） |
 | [review/](review/) | **外から見てどう評価されたか、その指摘はどうなったか、Codexが実機でどう確かめるか** | [README](review/README.md)・[実機検証](review/device_validation/) |
 | [_wip/](_wip/) | **まだ決まっていないこと** | [current_issues](_wip/current_issues.md) |
@@ -21,7 +21,7 @@
 | したいこと | 読む順 |
 |---|---|
 | アプリの全体像を知る | [owner/README.md](owner/README.md) |
-| コード構成・技術を知る | [owner/source_code_analysis.md](owner/source_code_analysis.md) |
+| コード構成・技術を知る | [owner/01_source_code_analysis.md](owner/01_source_code_analysis.md) |
 | 開発の経緯を読み物として追う | [owner/journal/](owner/journal/) |
 | コードを触る前に背景を知る | [dev/document_map.md](dev/document_map.md) §5 の逆引き表 → 該当する `dev/features/` か `dev/system/` |
 | 次に何を作るか決める | [_wip/roadmap.md](_wip/roadmap.md) → [_wip/current_issues.md](_wip/current_issues.md) |

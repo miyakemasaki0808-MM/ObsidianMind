@@ -177,5 +177,5 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 
 ## 12. 開発経緯
 
-[project_origin.md](../../owner/project_origin.md)（2026-04-30 の第一歩がこの機能だった）・
+[09_project_origin.md](../../owner/09_project_origin.md)（2026-04-30 の第一歩がこの機能だった）・
 [開発日誌 2026-07](../../owner/journal/2026-07.md)
