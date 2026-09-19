@@ -165,7 +165,7 @@ internal fun buildDistillSourceModel(
 ): DistillSourceModel {
     require(chunkCharacterLimit > 0)
     val lines = sourceLines(content)
-    if (lines.isEmpty()) return DistillSourceModel(content, emptyList(), emptyList(), 0, 0)
+    if (lines.isEmpty()) return DistillSourceModel(content, emptyList(), emptyList(), 0, 0, emptyList())
 
     val frontmatterLines = frontmatterLineIndices(lines)
     val fencedCodeLines = fencedCodeLineIndices(lines)
@@ -181,6 +181,8 @@ internal fun buildDistillSourceModel(
     val excludedLines = baseExcludedLines + setextLines + thematicBreakLines
     val scanned = scanBlocks(content, lines, excludedLines)
     val strongSpans = scanned.bold.map { it.range }
+    // **文書全体の一覧はここで1度だけ受け取る。** 候補ごとに読み直す形を新しく作らない。
+    val documentProtectedSpans = scanned.documentProtectedSpans
 
     val drafts = mutableListOf<SentenceDraft>()
     var currentHeading: String? = null
@@ -295,7 +297,14 @@ internal fun buildDistillSourceModel(
     }
 
     if (drafts.isEmpty()) {
-        return DistillSourceModel(content, emptyList(), emptyList(), eligibleCharacters, boldCharacters)
+        return DistillSourceModel(
+            content,
+            emptyList(),
+            emptyList(),
+            eligibleCharacters,
+            boldCharacters,
+            documentProtectedSpans
+        )
     }
 
     val chunkKeys = drafts.map { draft ->
@@ -331,7 +340,14 @@ internal fun buildDistillSourceModel(
     val chunks = sentences.groupBy { it.chunkIndex }.map { (index, chunkSentences) ->
         DistillChunk(index, chunkSentences.firstOrNull()?.heading, chunkSentences.map { it.sourceIndex })
     }
-    return DistillSourceModel(content, sentences, chunks, eligibleCharacters, boldCharacters)
+    return DistillSourceModel(
+        content,
+        sentences,
+        chunks,
+        eligibleCharacters,
+        boldCharacters,
+        documentProtectedSpans
+    )
 }
 
 private fun sourceLines(content: String): List<SourceLine> {
@@ -464,7 +480,14 @@ private fun isListOrQuote(line: String): Boolean =
 private class BlockScan(
     private val byLine: Map<Int, InlineSyntax>,
     val boldByLine: Map<Int, List<BoldSpan>>,
-    val bold: List<BoldSpan>
+    val bold: List<BoldSpan>,
+    /**
+     * 文書全体の保護範囲（併合済み・開始順）。**モデルへ渡すために1度だけ読む。**
+     *
+     * 行ごとの `InlineSyntax` と違い、こちらは候補生成では使わない。
+     * 自由範囲の調整が候補にならなかった位置も問えるようにするための持ち出し口である。
+     */
+    val documentProtectedSpans: List<DistillTextRange>
 ) {
     fun forLine(index: Int): InlineSyntax = byLine[index] ?: EMPTY
 
@@ -508,6 +531,7 @@ private fun scanBlocks(
     val code = mutableMapOf<Int, MutableList<DistillTextRange>>()
     val links = mutableMapOf<Int, MutableList<DistillTextRange>>()
     val protectedByLine = mutableMapOf<Int, MutableList<DistillTextRange>>()
+    val documentProtected = mutableListOf<DistillTextRange>()
     val boldByLine = mutableMapOf<Int, MutableList<BoldSpan>>()
     val allBold = mutableListOf<BoldSpan>()
     val lineStarts = IntArray(lines.size) { lines[it].start }
@@ -528,19 +552,26 @@ private fun scanBlocks(
         }
     }
 
+    // 保護範囲は行ごとの索引と文書全体の一覧の両方へ入れる。**入口を1つにする** —
+    // 別々に書くと、記法を1種類足したときに片方だけ漏れる（表示と蒸留の食い違いと同じ形）。
+    fun protect(range: DistillTextRange) {
+        spread(range, protectedByLine)
+        documentProtected += range
+    }
+
     blockTexts(content, lines, excludedLines).forEach { block ->
         scanInlineSyntax(block.text).flatten().forEach { span ->
             val range = block.sourceRange(span.start, span.endExclusive) ?: return@forEach
             when (span.kind) {
                 InlineSpanKind.Code -> {
                     spread(range, code)
-                    spread(range, protectedByLine)
+                    protect(range)
                 }
                 InlineSpanKind.Link, InlineSpanKind.WikiLink -> {
                     spread(range, links)
-                    spread(range, protectedByLine)
+                    protect(range)
                 }
-                InlineSpanKind.Italic, InlineSpanKind.Strikethrough -> spread(range, protectedByLine)
+                InlineSpanKind.Italic, InlineSpanKind.Strikethrough -> protect(range)
                 // 太字は「既に太字」なので編集対象から差し引く。境界の保護とは用途が違う。
                 InlineSpanKind.Bold, InlineSpanKind.BoldItalic -> {
                     val bold = BoldSpan(range, block.sourceRange(span.contentStart, span.contentEnd))
@@ -561,7 +592,7 @@ private fun scanBlocks(
             protectedSpans = mergeRanges(protectedByLine[index].orEmpty())
         )
     }
-    return BlockScan(byLine, boldByLine, allBold)
+    return BlockScan(byLine, boldByLine, allBold, mergeRanges(documentProtected))
 }
 
 /**

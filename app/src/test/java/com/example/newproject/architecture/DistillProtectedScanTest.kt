@@ -1,6 +1,7 @@
 package com.example.newproject.architecture
 
 import java.io.File
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,8 +35,29 @@ class DistillProtectedScanTest {
         )
     }
 
+    /**
+     * 文書全体の保護範囲は**1度だけ受け取ってモデルへ渡す**。
+     *
+     * この一覧は行ごとの索引と違いカーソルを持たないので、候補ごとに読むと
+     * そのまま候補数×記法数になる。持ち出し口を1つに保つ。
+     */
+    @Test
+    fun `文書全体の保護範囲はモデルへ渡す1箇所でしか読まない`() {
+        val reads = sourceFile().readText().lines().withIndex()
+            .filter { (_, line) -> DOCUMENT_READ.containsMatchIn(line) }
+            .map { (index, line) -> "${index + 1}: ${line.trim()}" }
+
+        assertEquals(
+            "文書全体の保護範囲を複数箇所で読んでいます。1度だけ受け取ってモデルへ渡してください:\n" +
+                reads.joinToString("\n"),
+            1,
+            reads.size
+        )
+    }
+
     private companion object {
         val QUALIFIED_READ = Regex("""[A-Za-z_]\w*\.protectedSpans""")
+        val DOCUMENT_READ = Regex("""[A-Za-z_]\w*\.documentProtectedSpans""")
     }
 
     private fun sourceFile(): File {

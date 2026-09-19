@@ -93,6 +93,33 @@ private fun soleTermInside(
         .distinct()
         .singleOrNull()
 
+/**
+ * [context]（＝親文）に掛かる保護範囲だけを引く。**併合済み・開始順を前提に二分探索する。**
+ *
+ * **候補生成時のカーソルでは足りない。** カーソルは前へ戻れないのに対し、調整は同じ親文を
+ * 何度でも問い直すし、**候補にならなかった位置も指せる**。親文は最大160文字なので、
+ * ここで引いた数本を見れば端の可否が決まる。
+ */
+internal fun distillProtectedSpansWithin(
+    model: DistillSourceModel,
+    context: DistillTextRange
+): List<DistillTextRange> {
+    val spans = model.protectedSpans
+    var low = 0
+    var high = spans.size
+    while (low < high) {
+        val mid = (low + high) / 2
+        if (spans[mid].endExclusive <= context.start) low = mid + 1 else high = mid
+    }
+    val result = mutableListOf<DistillTextRange>()
+    var index = low
+    while (index < spans.size && spans[index].start < context.endExclusive) {
+        result += spans[index]
+        index++
+    }
+    return result
+}
+
 internal data class DistillOverlapResolution(
     val selectedIds: List<String>,
     val deselectedIds: List<String>

@@ -331,9 +331,12 @@ DistillController
 | | |
 |---|---|
 | 段階1では任意範囲を選べない | プリセット3段のみ。最終形は段階2 |
-| 保護範囲がモデルに残っていない | `InlineSyntax` は `buildDistillSourceModel` の中で行ごとに作られ、捨てられる。**効くのは段階2だけ**（段階1は濾された候補要素しか選べない → §5） |
+| 保護範囲がモデルに残っていない | **解消済み。** [`DistillSourceModel.protectedSpans`](../../../app/src/main/java/com/example/newproject/model/DistillModels.kt) が文書全体ぶんを併合済み・開始順で持ち、[`distillProtectedSpansWithin`](../../../app/src/main/java/com/example/newproject/domain/DistillRangeAdjust.kt) が親文に掛かるぶんだけを二分探索で引く |
 
-**段階2（自由範囲）の着手条件は、保護範囲を候補と一緒に持ち回れることである。** 段階1では要らないが、**ここが解けないと段階2は成立しない**ので先に書いておく。段階2でスナップの対象になるのは次の5つ。
+**段階2（自由範囲）の着手条件は、保護範囲を候補と一緒に持ち回れることであった。**
+**候補ごとには持たせない** — 親文は最大160文字なので、文書全体の一覧から親文ぶんを引けば足りる。
+候補生成時の `ProtectedCursor` は前へ戻れないので調整には使えず、**持ち出し口を別に1つ置く**。
+段階2でスナップの対象になるのは次の5つ。
 
 1. サロゲートペアの内側
 2. 結合文字・異体字セレクタ・ZWJ による絵文字連結の内側
