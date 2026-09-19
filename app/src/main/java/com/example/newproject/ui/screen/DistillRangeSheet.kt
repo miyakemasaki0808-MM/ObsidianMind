@@ -1,15 +1,21 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -24,11 +30,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -36,6 +54,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonAi
@@ -52,6 +72,17 @@ internal fun DistillRangePreset.label(): String = when (this) {
     DistillRangePreset.Sentence -> "文全体"
 }
 
+/** 微調整ボタンの読み上げ名。**矢印だけでは何が動くか読めない。** */
+internal fun DistillRangeEdgeMove.label(): String = when (this) {
+    DistillRangeEdgeMove.ExpandStart -> "始点を前へ広げる"
+    DistillRangeEdgeMove.ShrinkStart -> "始点を後ろへ狭める"
+    DistillRangeEdgeMove.ShrinkEnd -> "終点を前へ狭める"
+    DistillRangeEdgeMove.ExpandEnd -> "終点を後ろへ広げる"
+}
+
+private fun DistillRangeEdgeMove.arrow(): String =
+    if (this == DistillRangeEdgeMove.ExpandStart || this == DistillRangeEdgeMove.ShrinkEnd) "◀" else "▶"
+
 /**
  * 太字にする範囲を調整するシート。
  *
@@ -67,6 +98,8 @@ internal fun DistillRangeSheet(
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
+    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -84,6 +117,8 @@ internal fun DistillRangeSheet(
             isDeselectedByOverlap = isDeselectedByOverlap,
             otherDeselectedCount = otherDeselectedCount,
             onSelectPreset = onSelectPreset,
+            onDragEdge = onDragEdge,
+            onNudgeEdge = onNudgeEdge,
             onReset = onReset
         )
     }
@@ -102,6 +137,8 @@ internal fun DistillRangeSheetContent(
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
+    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -123,16 +160,11 @@ internal fun DistillRangeSheetContent(
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // **色だけで範囲を示さない。** 実際の太字と下線を併用する（→ ui_design_principles §1）。
+        AdjustableParentText(item = item, onDragEdge = onDragEdge)
+        // つまみは行の下辺に重ねて描くので、次の行と重ならないだけの間を空ける。
+        Spacer(modifier = Modifier.height(12.dp))
         Text(
-            text = highlightedParent(item),
-            fontSize = 15.sp,
-            lineHeight = 24.sp,
-            color = OnSurface
-        )
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-            "太字にできるのは、この文の内側だけです。",
+            "端のつまみを引くと、好きな範囲にできます。太字にできるのは、この文の内側だけです。",
             fontSize = 11.sp,
             color = OnSurfaceSubtle
         )
@@ -159,7 +191,10 @@ internal fun DistillRangeSheetContent(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(4.dp))
+
+        EdgeNudgeRow(item = item, onNudgeEdge = onNudgeEdge)
+        Spacer(modifier = Modifier.height(4.dp))
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(
@@ -192,6 +227,147 @@ internal fun DistillRangeSheetContent(
             )
         }
     }
+}
+
+/**
+ * 親文と、その上の2つのつまみ。**引いた先を寄せるのは Controller 側**で、ここは位置しか送らない。
+ *
+ * **[item] と [onDragEdge] は [rememberUpdatedState] を通す。** `pointerInput` は
+ * キーが変わるまで同じブロックを走らせ続けるので、素で捉えると範囲を1回動かした後
+ * 古い `item` を見続け、2回目以降の引きが効かなくなる（→ lessons L34）。
+ */
+@Composable
+private fun AdjustableParentText(
+    item: DistillCandidateItem,
+    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentItem by rememberUpdatedState(item)
+    val currentOnDragEdge by rememberUpdatedState(onDragEdge)
+    var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val handleColor = AccentText
+    val density = LocalDensity.current
+    val handleRadius = with(density) { 7.dp.toPx() }
+    val grabSlop = with(density) { 24.dp.toPx() }
+
+    Text(
+        text = highlightedParent(item),
+        fontSize = 15.sp,
+        lineHeight = 26.sp,
+        color = OnSurface,
+        onTextLayout = { layout = it },
+        modifier = modifier
+            .fillMaxWidth()
+            .drawWithContent {
+                drawContent()
+                val centers = layout?.let { distillHandleCenters(it, currentItem) } ?: return@drawWithContent
+                listOf(centers.first, centers.second).forEach { center ->
+                    // 端では半分が描画域の外へ出るので、内側へ寄せて描く。
+                    drawCircle(
+                        color = handleColor,
+                        radius = handleRadius,
+                        center = center.copy(
+                            x = center.x.coerceIn(handleRadius, size.width - handleRadius)
+                        )
+                    )
+                }
+            }
+            .pointerInput(item.id) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val centers = layout?.let { distillHandleCenters(it, currentItem) }
+                        ?: return@awaitEachGesture
+                    val edge = grabbedDistillEdge(down.position, centers.first, centers.second)
+                    val handle = if (edge == DistillRangeEdge.Start) centers.first else centers.second
+                    // **つまみの近くで始まった押下だけを掴む。** 本文のどこでも掴むと、
+                    // シートを縦に送ろうとした指が範囲を動かしてしまう。
+                    if ((down.position - handle).getDistance() > grabSlop) return@awaitEachGesture
+                    down.consume()
+                    drag(down.id) { change ->
+                        change.consume()
+                        layout?.let { currentOnDragEdge(edge, it.getOffsetForPosition(change.position)) }
+                    }
+                }
+            }
+    )
+}
+
+/**
+ * 端を1つぶんずつ動かす矢印。**指で狙った1文字には止まれないので置いている。**
+ *
+ * 動かせない向きは出さずに無効化する — 4つの位置が固定されているほうが、
+ * 端に着くたびにボタンが消えて並びがずれるより読める。
+ */
+@Composable
+private fun EdgeNudgeRow(
+    item: DistillCandidateItem,
+    onNudgeEdge: (DistillRangeEdgeMove) -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text("始点", fontSize = 12.sp, color = OnSurfaceSubtle)
+        NudgeButton(DistillRangeEdgeMove.ExpandStart, item, onNudgeEdge)
+        NudgeButton(DistillRangeEdgeMove.ShrinkStart, item, onNudgeEdge)
+        Spacer(modifier = Modifier.width(12.dp))
+        Text("終点", fontSize = 12.sp, color = OnSurfaceSubtle)
+        NudgeButton(DistillRangeEdgeMove.ShrinkEnd, item, onNudgeEdge)
+        NudgeButton(DistillRangeEdgeMove.ExpandEnd, item, onNudgeEdge)
+    }
+}
+
+@Composable
+private fun NudgeButton(
+    move: DistillRangeEdgeMove,
+    item: DistillCandidateItem,
+    onNudgeEdge: (DistillRangeEdgeMove) -> Unit
+) {
+    TextButton(
+        onClick = { onNudgeEdge(move) },
+        enabled = move in item.availableEdgeMoves,
+        contentPadding = PaddingValues(horizontal = 4.dp),
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
+            .semantics { contentDescription = move.label() }
+    ) { Text(move.arrow(), fontSize = 16.sp) }
+}
+
+/**
+ * 掴む端を**1回だけ決める。**
+ *
+ * 引いている途中で近いほうを選び直すと、範囲が潰れる手前で反対の端へ乗り換わり、
+ * 指を動かしていないのに別の端が動き出す。同距離なら始点を採る（左から読むため）。
+ */
+internal fun grabbedDistillEdge(
+    touch: Offset,
+    startHandle: Offset,
+    endHandle: Offset
+): DistillRangeEdge =
+    if ((touch - startHandle).getDistanceSquared() <= (touch - endHandle).getDistanceSquared()) {
+        DistillRangeEdge.Start
+    } else {
+        DistillRangeEdge.End
+    }
+
+/**
+ * つまみの中心。**始点は確定範囲の左端、終点は右端**の、行の下辺に置く。
+ *
+ * 範囲が空なら `null`（つまみを出さない）。確定範囲は必ず1文字以上あるので通常は起きないが、
+ * 親文が空の入力で `getBoundingBox` が落ちるのを避ける。
+ */
+internal fun distillHandleCenters(
+    layout: TextLayoutResult,
+    item: DistillCandidateItem
+): Pair<Offset, Offset>? {
+    val parentLength = item.parentText.length
+    val start = item.boldStartInParent.coerceIn(0, parentLength)
+    val end = item.boldEndInParent.coerceIn(start, parentLength)
+    if (end <= start) return null
+    val startBox = layout.getBoundingBox(start)
+    val endBox = layout.getBoundingBox(end - 1)
+    return Offset(startBox.left, startBox.bottom) to Offset(endBox.right, endBox.bottom)
 }
 
 /**

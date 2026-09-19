@@ -448,6 +448,10 @@ class MainActivity : ComponentActivity() {
                                 onOpenDistillRangeSheet = { id -> viewModel.openDistillRangeSheet(id) },
                                 onCloseDistillRangeSheet = { viewModel.closeDistillRangeSheet() },
                                 onSelectDistillRange = { id, preset -> viewModel.applyDistillRange(id, preset) },
+                                onDragDistillRangeEdge = { id, edge, offset ->
+                                    viewModel.dragDistillRangeEdge(id, edge, offset)
+                                },
+                                onNudgeDistillRangeEdge = { id, move -> viewModel.nudgeDistillRangeEdge(id, move) },
                                 onResetDistillRange = { id -> viewModel.resetDistillRange(id) },
                                 onSaveDistill = { viewModel.saveDistillSelection() },
                                 onRetryDistill = { viewModel.retryDistill() },

@@ -13,6 +13,8 @@ import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.state.BookletMode
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
@@ -475,6 +477,10 @@ class NoteViewModel internal constructor(
     fun openDistillRangeSheet(id: String) = session.openDistillRangeSheet(id)
     fun closeDistillRangeSheet() = session.closeDistillRangeSheet()
     fun applyDistillRange(id: String, preset: DistillRangePreset) = session.applyDistillRange(id, preset)
+    fun dragDistillRangeEdge(id: String, edge: DistillRangeEdge, offsetInParent: Int) =
+        session.dragDistillRangeEdge(id, edge, offsetInParent)
+    fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
+        session.nudgeDistillRangeEdge(id, move)
     fun resetDistillRange(id: String) = session.resetDistillRange(id)
     fun saveDistillSelection() = session.saveDistillSelection()
     fun retryDistill() = session.retryDistill()

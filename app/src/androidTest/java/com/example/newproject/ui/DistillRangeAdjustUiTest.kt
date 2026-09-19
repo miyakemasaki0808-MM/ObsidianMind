@@ -7,19 +7,25 @@ import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.geometry.Offset
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.DistillRangeSheetContent
+import com.example.newproject.ui.screen.label
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -38,6 +44,7 @@ import org.junit.runner.RunWith
  * - 行タップとチェックボックスのタップが**別の操作へ届く**こと
  * - 確定範囲が**太字として描かれ**、いまの段が押した形で出ること
  * - 重なり解消の告知が**シート内の1行とカードの印の両方**に出ること
+ * - 自由範囲のつまみと微調整が**入力として届く**こと（寄せ先は `DistillRangeSnapTest` が持つ）
  *
  * ## `ModalBottomSheet` ごと開かない理由
  *
@@ -67,6 +74,8 @@ class DistillRangeAdjustUiTest {
                     onOpenDistillRangeSheet = { opened += it },
                     onCloseDistillRangeSheet = {},
                     onSelectDistillRange = { _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _ -> },
+                    onNudgeDistillRangeEdge = { _, _ -> },
                     onResetDistillRange = {},
                     onSaveDistill = {},
                     onRetryDistill = {},
@@ -99,6 +108,8 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
+                    onDragEdge = { _, _ -> },
+                    onNudgeEdge = {},
                     onReset = {}
                 )
             }
@@ -137,6 +148,8 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
+                    onDragEdge = { _, _ -> },
+                    onNudgeEdge = {},
                     onReset = { resets++ }
                 )
             }
@@ -158,6 +171,8 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 1,
                     onSelectPreset = {},
+                    onDragEdge = { _, _ -> },
+                    onNudgeEdge = {},
                     onReset = {}
                 )
             }
@@ -178,6 +193,8 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = true,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
+                    onDragEdge = { _, _ -> },
+                    onNudgeEdge = {},
                     onReset = {}
                 )
             }
@@ -209,6 +226,8 @@ class DistillRangeAdjustUiTest {
                     onOpenDistillRangeSheet = {},
                     onCloseDistillRangeSheet = {},
                     onSelectDistillRange = { _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _ -> },
+                    onNudgeDistillRangeEdge = { _, _ -> },
                     onResetDistillRange = {},
                     onSaveDistill = {},
                     onRetryDistill = {},
@@ -225,6 +244,79 @@ class DistillRangeAdjustUiTest {
         composeRule.onNodeWithText("! 範囲が重なるため選択を外しました")
             .performScrollTo()
             .assertIsDisplayed()
+    }
+
+    @Test
+    fun 微調整は動かせる向きだけが押せて押した向きが届く() {
+        val moves = mutableListOf<DistillRangeEdgeMove>()
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                DistillRangeSheetContent(
+                    item = candidateItem(),
+                    projectedBoldRatio = 0.12,
+                    isWithinBoldLimit = true,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
+                    onSelectPreset = {},
+                    onDragEdge = { _, _ -> },
+                    onNudgeEdge = { moves += it },
+                    onReset = {}
+                )
+            }
+        }
+
+        // 矢印そのものは読み上げにならないので、向きは読み上げ名で引く。
+        composeRule.onNodeWithContentDescription(DistillRangeEdgeMove.ExpandStart.label())
+            .performScrollTo()
+            .assertIsNotEnabled()
+        composeRule.onNodeWithContentDescription(DistillRangeEdgeMove.ShrinkEnd.label())
+            .performScrollTo()
+            .assertIsEnabled()
+            .performClick()
+
+        assertEquals(listOf(DistillRangeEdgeMove.ShrinkEnd), moves)
+    }
+
+    @Test
+    fun つまみを引くと端の移動として届く() {
+        // **寄せ先は見ない。** どこへ止まるかは `DistillRangeSnapTest` と Controller が持つ。
+        // ここが見るのは、引いた操作が端の移動として Controller まで届くことだけ。
+        val drags = mutableListOf<Pair<DistillRangeEdge, Int>>()
+        val short = "短い親文です"
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                DistillRangeSheetContent(
+                    item = candidateItem().copy(
+                        text = short,
+                        parentText = short,
+                        boldStartInParent = 0,
+                        boldEndInParent = short.length
+                    ),
+                    projectedBoldRatio = 0.12,
+                    isWithinBoldLimit = true,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
+                    onSelectPreset = {},
+                    onDragEdge = { edge, offset -> drags += edge to offset },
+                    onNudgeEdge = {},
+                    onReset = {}
+                )
+            }
+        }
+
+        // **つまみの近くから掴む。** 本文のどこでも掴めるようにすると、
+        // シートを縦に送ろうとした指が範囲を動かしてしまう。始点のつまみは親文の左端にある。
+        composeRule.onNodeWithText(short).performScrollTo().performTouchInput {
+            down(Offset(2f, height * 0.6f))
+            moveTo(Offset(width * 0.1f, height * 0.6f))
+            moveTo(Offset(width * 0.2f, height * 0.6f))
+            up()
+        }
+
+        assertEquals("引きが届いていません", true, drags.isNotEmpty())
+        assertEquals(DistillRangeEdge.Start, drags.last().first)
     }
 
     /** 描かれた文字列のうち、太字＋下線の両方が掛かった範囲。 */
@@ -261,7 +353,8 @@ class DistillRangeAdjustUiTest {
         boldStartInParent = 0,
         boldEndInParent = BOLD_TEXT.length,
         availablePresets = listOf(DistillRangePreset.Clause, DistillRangePreset.Sentence),
-        currentPreset = DistillRangePreset.Clause
+        currentPreset = DistillRangePreset.Clause,
+        availableEdgeMoves = setOf(DistillRangeEdgeMove.ExpandEnd, DistillRangeEdgeMove.ShrinkEnd)
     )
 
     private fun uiStateWith(distillState: DistillState) = NoteUiState(
