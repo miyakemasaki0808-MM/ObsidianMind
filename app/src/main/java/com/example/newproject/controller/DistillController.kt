@@ -6,6 +6,8 @@ import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillRecoveryKind
 import com.example.newproject.model.state.DistillState
@@ -22,14 +24,18 @@ import com.example.newproject.model.DistillSourceModel
 import com.example.newproject.model.DistillTextRange
 import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.applyDistillBold
+import com.example.newproject.domain.availableDistillEdgeMoves
 import com.example.newproject.domain.buildDistillSourceModel
+import com.example.newproject.domain.distillProtectedSpansWithin
 import com.example.newproject.domain.hasOverlappingDistillRanges
 import com.example.newproject.domain.isWithinDistillBoldLimit
+import com.example.newproject.domain.nudgeDistillRangeEdge
 import com.example.newproject.domain.parseDistillResponseIds
 import com.example.newproject.domain.presetRangesFor
 import com.example.newproject.domain.projectedBoldRatio
 import com.example.newproject.domain.resolveOverlaps
 import com.example.newproject.domain.selectDistillCandidates
+import com.example.newproject.domain.snapDistillRangeEdge
 import com.google.mlkit.genai.common.DownloadStatus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -333,6 +339,56 @@ internal class DistillController(
         changeConfirmedRange(id, option.range)
     }
 
+    /**
+     * 自由範囲 — ハンドルを引いた先へ端を寄せる。
+     *
+     * **受けるのは親文の中の位置で、原文offsetではない。** UI状態へ原文offsetを出さない契約
+     * （`ActiveSession` が確定範囲を持つ理由）をドラッグでも崩さない。
+     * 置ける位置へ寄せるのは [snapDistillRangeEdge] の仕事で、**UIは寄せ先を知らない。**
+     */
+    fun dragRangeEdge(id: String, edge: DistillRangeEdge, offsetInParent: Int) {
+        adjustRange(id) { content, context, current, protectedSpans ->
+            snapDistillRangeEdge(
+                content, context, current, edge, context.start + offsetInParent, protectedSpans
+            )
+        }
+    }
+
+    /** 自由範囲 — 端を置ける位置ひとつぶん動かす。**指で狙えない1文字はこちらが受ける。** */
+    fun nudgeRangeEdge(id: String, move: DistillRangeEdgeMove) {
+        adjustRange(id) { content, context, current, protectedSpans ->
+            nudgeDistillRangeEdge(content, context, current, move, protectedSpans)
+        }
+    }
+
+    /**
+     * 自由範囲の共通経路。**プリセットと同じ [changeConfirmedRange] へ合流させる。**
+     *
+     * 重なりの解消・告知の寿命・太字率の引き直しは入口ごとに書かない。
+     * 自由範囲だけ別経路にすると、**調整の口が増えるたびに同じ契約を数え直す**ことになる。
+     */
+    private fun adjustRange(
+        id: String,
+        next: (
+            content: String,
+            context: DistillTextRange,
+            current: DistillTextRange,
+            protectedSpans: List<DistillTextRange>
+        ) -> DistillTextRange?
+    ) {
+        val active = session ?: return
+        val candidate = active.candidatesById[id] ?: return
+        val context = candidate.sentence.contextRange
+        val current = active.confirmedRanges[id]?.range ?: candidate.sentence.range
+        val range = next(
+            active.model.content,
+            context,
+            current,
+            distillProtectedSpansWithin(active.model, context)
+        ) ?: return
+        changeConfirmedRange(id, DistillConfirmedRange(context, range))
+    }
+
     /** 最初の範囲（提案範囲）へ戻す。 */
     fun resetRange(id: String) {
         val active = session ?: return
@@ -432,7 +488,15 @@ internal class DistillController(
             boldStartInParent = confirmed.start - context.start,
             boldEndInParent = confirmed.endExclusive - context.start,
             availablePresets = options.map { it.preset },
+            // **自由範囲へ動かすと、どの段にも一致しなくなって null になる。**
+            // 段のボタンは残す（1タップで済む一番多い操作なので、自由範囲は足す口であって置き換えではない）。
             currentPreset = options.firstOrNull { it.range.range == confirmed }?.preset,
+            availableEdgeMoves = availableDistillEdgeMoves(
+                active.model.content,
+                context,
+                confirmed,
+                distillProtectedSpansWithin(active.model, context)
+            ),
             isRangeAdjusted = confirmed != sentence.range
         )
     }
