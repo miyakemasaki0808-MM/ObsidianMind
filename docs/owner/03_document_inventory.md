@@ -69,7 +69,7 @@ docs/
 | [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
 | [quiz](../dev/features/quiz.md) | クイズ | 稼働中。未確認管理を持つ唯一の機能 |
 | [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | 稼働中 |
-| [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲は実機未確認 |
+| [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。920行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。**2026-09-09〜12 に新設** |
 | [note_image_rendering](../dev/features/note_image_rendering.md) | ノート内画像の表示 | 稼働中・実機確認済み |

@@ -31,6 +31,3 @@
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
 | `2026-09-19-remark-regenerate-device-review/P2-1` | 同じひとことの再生成で保存済みの返事だけが失われることを実機で確認 | `統合` AI-8 |
-| `2026-09-19-distill-free-range-review/P1-1` | バックスラッシュ直後の太字境界で保存後の記法が崩れる | `起票` BOLD-2 |
-| `2026-09-19-distill-free-range-review/P2-1` | 保護範囲内への連続ドラッグで選択端が往復する | `起票` BOLD-3 |
-| `2026-09-19-distill-free-range-review/P2-2` | 折り返し行のつまみ座標が次行の文字位置へ変換される | `起票` BOLD-4 |

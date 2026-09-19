@@ -1,8 +1,8 @@
 # 蒸留（Distill）
 
 **状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句＋太字範囲の調整（プリセット・自由範囲）を実装済み。
-**表示・候補境界・保存・競合・故障復旧とプリセットは実機確認済み。自由範囲は実機未確認**
-**最終検証:** 2026-08-30 / `8954b6e`
+**表示・候補境界・保存・競合・故障復旧・プリセット・自由範囲まで実機確認済み**
+**最終検証:** 2026-09-20 / `b2bed77`
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt` / `model/DistillModels.kt` / `model/state/DistillRangeEdit.kt` / `ui/screen/DistillRangeSheet.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest` / `DistillRangeAdjustTest` / `DistillRangeSnapTest` / `DistillRangeHighlightTest` / `DistillRangeHandleTest` / `DistillRangeNoticeTest` / `DistillProtectedScanTest` / `DistillCandidateUnitCopyTest` / `DistillRangeAdjustUiTest`（androidTest）
 **正本:** この文書
@@ -834,8 +834,12 @@ IDパーサーが桁落ちを自動補正せず破棄するのと同じ「入口
   斜体・コード・通常リンク・wikilinkの対象文字列と描画が維持され、Obsidian側の見え方も保存前と一致した
 - **太字範囲調整（プリセット）:** 2026-08-30に `DIST-21`〜`DIST-24` を4/4確認した。3段の表示・確定範囲の保存・
   重なり解消と告知・シート中のVigilith抑制・外部編集競合が契約どおりで、instrumentationも6/6成功した
-- **太字範囲調整（自由範囲）:** **実機未確認。** つまみの掴みやすさ・縦送りとの取り合い・微調整の効き方は
-  タッチ精度の問題なので、JVMとinstrumentationでは代替できない
+- **太字範囲調整（自由範囲）:** 2026-09-20に `DIST-25`〜`DIST-31` を確認した。段に一致しない範囲の保存、
+  装飾・絵文字の境界で安全側へ倒れること、バックスラッシュ直後に止まらないこと、指を止めたときに端が動かないこと、
+  折り返し行で水平ドラッグが行をまたがないこと、微調整が端で無効化されることが契約どおりだった。
+  **実保存22ファイルは、追加した `**` を除いて原文とバイト一致**し、元Vault 927ファイルのハッシュも不変だった
+- **保証していない体感:** 指で狙ったときの掴みやすさ・縦送りの手触り・実TalkBackの音声は測っていない。
+  実機検証の入力は座標指定なので、**人の指の成功率とは別物**として数える
 - **最大サイズ実測:** 一段目685〜904ms、ヒープ増分26,263,552 bytes、キャッシュ262,144 bytes、
   復旧レコード262,422 bytes、管理対象ピーク524,566 bytes、事前空き容量見積851,968 bytes
 
