@@ -45,6 +45,7 @@ import org.junit.runner.RunWith
  * - 確定範囲が**太字として描かれ**、いまの段が押した形で出ること
  * - 重なり解消の告知が**シート内の1行とカードの印の両方**に出ること
  * - 自由範囲のつまみと微調整が**入力として届く**こと（寄せ先は `DistillRangeSnapTest` が持つ）
+ * - 折り返した親文で、つまみの座標が**次の行の文字として解決されない**こと
  *
  * ## `ModalBottomSheet` ごと開かない理由
  *
@@ -317,6 +318,49 @@ class DistillRangeAdjustUiTest {
 
         assertEquals("引きが届いていません", true, drags.isNotEmpty())
         assertEquals(DistillRangeEdge.Start, drags.last().first)
+    }
+
+    @Test
+    fun 折り返した親文のつまみを横に引いても行が変わらない() {
+        // **つまみの見た目は行の下辺にある。** 行の下辺は次の行の上辺でもあるので、
+        // その座標をそのまま文字へ当てると次の行として解決される。
+        val drags = mutableListOf<Int>()
+        val wrapped = "この親文は画面の幅では収まりきらず、少なくとも2行へ折り返されるだけの長さを持たせてあります。"
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                DistillRangeSheetContent(
+                    item = candidateItem().copy(
+                        text = wrapped.take(8),
+                        parentText = wrapped,
+                        boldStartInParent = 0,
+                        boldEndInParent = 8
+                    ),
+                    projectedBoldRatio = 0.12,
+                    isWithinBoldLimit = true,
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
+                    onSelectPreset = {},
+                    onDragEdge = { _, offset, _ -> drags += offset },
+                    onNudgeEdge = {},
+                    onReset = {}
+                )
+            }
+        }
+
+        // 始点のつまみは1行目の左端にある。そこから水平にだけ引く。
+        composeRule.onNodeWithText(wrapped).performScrollTo().performTouchInput {
+            val handleY = height * 0.5f
+            down(Offset(2f, handleY))
+            moveTo(Offset(20f, handleY))
+            moveTo(Offset(40f, handleY))
+            up()
+        }
+
+        // **2行目へ飛んでいたら、1行に収まる文字数ぶん先の値が届く。**
+        // 折り返し幅は端末で変わるので、隣接数文字に収まることだけを見る。
+        assertEquals("引きが届いていません", true, drags.isNotEmpty())
+        assertEquals("次の行の文字位置へ飛びました: $drags", true, drags.all { it < 8 })
     }
 
     /** 描かれた文字列のうち、太字＋下線の両方が掛かった範囲。 */

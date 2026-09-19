@@ -260,8 +260,8 @@ private fun AdjustableParentText(
             .fillMaxWidth()
             .drawWithContent {
                 drawContent()
-                val centers = layout?.let { distillHandleCenters(it, currentItem) } ?: return@drawWithContent
-                listOf(centers.first, centers.second).forEach { center ->
+                val anchors = layout?.let { distillHandleAnchors(it, currentItem) } ?: return@drawWithContent
+                listOf(anchors.first.visual, anchors.second.visual).forEach { center ->
                     // 端では半分が描画域の外へ出るので、内側へ寄せて描く。
                     drawCircle(
                         color = handleColor,
@@ -275,13 +275,17 @@ private fun AdjustableParentText(
             .pointerInput(item.id) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
-                    val centers = layout?.let { distillHandleCenters(it, currentItem) }
+                    val anchors = layout?.let { distillHandleAnchors(it, currentItem) }
                         ?: return@awaitEachGesture
-                    val edge = grabbedDistillEdge(down.position, centers.first, centers.second)
-                    val handle = if (edge == DistillRangeEdge.Start) centers.first else centers.second
+                    val edge = grabbedDistillEdge(
+                        down.position, anchors.first.visual, anchors.second.visual
+                    )
+                    val anchor = if (edge == DistillRangeEdge.Start) anchors.first else anchors.second
                     // **つまみの近くで始まった押下だけを掴む。** 本文のどこでも掴むと、
                     // シートを縦に送ろうとした指が範囲を動かしてしまう。
-                    if ((down.position - handle).getDistance() > grabSlop) return@awaitEachGesture
+                    if ((down.position - anchor.visual).getDistance() > grabSlop) {
+                        return@awaitEachGesture
+                    }
                     down.consume()
                     // **指が直前に指していた位置をジェスチャの間だけ覚える。**
                     // 渡さないと、寄せた結果から向きが推測されて端が往復する。
@@ -289,7 +293,8 @@ private fun AdjustableParentText(
                     drag(down.id) { change ->
                         change.consume()
                         val result = layout ?: return@drag
-                        val offset = result.getOffsetForPosition(change.position)
+                        val hit = distillDragHitPoint(anchor.reference, down.position, change.position)
+                        val offset = result.getOffsetForPosition(hit)
                         if (offset != lastOffset) {
                             currentOnDragEdge(edge, offset, lastOffset)
                             lastOffset = offset
@@ -366,23 +371,48 @@ internal fun DistillCandidateItem.edgeOffsetInParent(edge: DistillRangeEdge): In
 }
 
 /**
- * つまみの中心。**始点は確定範囲の左端、終点は右端**の、行の下辺に置く。
+ * つまみ1つ分の座標。**描く点と、文字へ当てる点を分ける。**
+ *
+ * [visual] は行の下辺。つまみらしく見えるのはここだが、**行の下辺は次の行の上辺でもある**ので、
+ * この座標をそのまま `getOffsetForPosition` へ渡すと**次の行の文字として解決される**。
+ * 折り返した親文でつまみを横へ引いただけで範囲が次行へ飛ぶのはこれが原因だった。
+ * [reference] は文字の縦中央で、当て先の計算にはこちらを使う。
+ */
+internal data class DistillHandleAnchor(val visual: Offset, val reference: Offset)
+
+/**
+ * 両端のつまみ。**始点は確定範囲の左端、終点は右端。**
  *
  * 範囲が空なら `null`（つまみを出さない）。確定範囲は必ず1文字以上あるので通常は起きないが、
  * 親文が空の入力で `getBoundingBox` が落ちるのを避ける。
  */
-internal fun distillHandleCenters(
+internal fun distillHandleAnchors(
     layout: TextLayoutResult,
     item: DistillCandidateItem
-): Pair<Offset, Offset>? {
+): Pair<DistillHandleAnchor, DistillHandleAnchor>? {
     val parentLength = item.parentText.length
     val start = item.boldStartInParent.coerceIn(0, parentLength)
     val end = item.boldEndInParent.coerceIn(start, parentLength)
     if (end <= start) return null
     val startBox = layout.getBoundingBox(start)
     val endBox = layout.getBoundingBox(end - 1)
-    return Offset(startBox.left, startBox.bottom) to Offset(endBox.right, endBox.bottom)
+    return DistillHandleAnchor(
+        visual = Offset(startBox.left, startBox.bottom),
+        reference = Offset(startBox.left, startBox.center.y)
+    ) to DistillHandleAnchor(
+        visual = Offset(endBox.right, endBox.bottom),
+        reference = Offset(endBox.right, endBox.center.y)
+    )
 }
+
+/**
+ * 引いている間の当て先。**掴んだ点と文字上の参照点の差を保つ。**
+ *
+ * 指がつまみのどこを掴んだかに関わらず、**当て先は文字の上から動き始める**。
+ * 横へ引けば同じ行の隣の文字へ、行の高さぶん縦へ引けば次の行へ移る。
+ */
+internal fun distillDragHitPoint(reference: Offset, grabbedAt: Offset, current: Offset): Offset =
+    reference + (current - grabbedAt)
 
 /**
  * 重なり解消の告知。**開いている候補との関係で文言が変わる。**
