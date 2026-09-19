@@ -81,23 +81,48 @@ internal fun nudgeDistillRangeEdge(
     current: DistillTextRange,
     move: DistillRangeEdgeMove,
     protectedSpans: List<DistillTextRange>
-): DistillTextRange? {
-    val offsets = edgeOffsets(content, context, current, move.edge, protectedSpans)
-    val from = currentOffset(current, move.edge)
-    // 外側は Start では小さい側、End では大きい側。
-    val movesLower = (move.edge == DistillRangeEdge.Start) == move.isOutward
-    val next = if (movesLower) offsets.lastOrNull { it < from } else offsets.firstOrNull { it > from }
-    return next?.let { rangeWithEdge(current, move.edge, it) }
-}
+): DistillTextRange? = nextEdgeRange(
+    content,
+    distillBoundaryOffsets(content, context, protectedSpans),
+    current,
+    move
+)
 
-/** 微調整で動かせる向き。**押せない矢印を出さないために引く。** */
+/**
+ * 微調整で動かせる向き。**押せない矢印を出さないために引く。**
+ *
+ * **置ける位置は1度だけ引く。** 自由範囲のドラッグは指の動きに合わせて候補状態を作り直すので、
+ * 向きごとに列挙し直すと同じ一覧をフレームあたり4本作ることになる。
+ */
 internal fun availableDistillEdgeMoves(
     content: String,
     context: DistillTextRange,
     current: DistillTextRange,
     protectedSpans: List<DistillTextRange>
-): Set<DistillRangeEdgeMove> = DistillRangeEdgeMove.entries
-    .filterTo(mutableSetOf()) { nudgeDistillRangeEdge(content, context, current, it, protectedSpans) != null }
+): Set<DistillRangeEdgeMove> {
+    val offsets = distillBoundaryOffsets(content, context, protectedSpans)
+    return DistillRangeEdgeMove.entries
+        .filterTo(mutableSetOf()) { nextEdgeRange(content, offsets, current, it) != null }
+}
+
+/** [move] の向きへ1つぶん動かした範囲。動かせなければ `null`。 */
+private fun nextEdgeRange(
+    content: String,
+    offsets: List<Int>,
+    current: DistillTextRange,
+    move: DistillRangeEdgeMove
+): DistillTextRange? {
+    val placeable = offsets.filter { placeableForEdge(content, it, current, move.edge) }
+    val from = currentOffset(current, move.edge)
+    // 外側は Start では小さい側、End では大きい側。
+    val movesLower = (move.edge == DistillRangeEdge.Start) == move.isOutward
+    val next = if (movesLower) {
+        placeable.lastOrNull { it < from }
+    } else {
+        placeable.firstOrNull { it > from }
+    }
+    return next?.let { rangeWithEdge(current, move.edge, it) }
+}
 
 /**
  * その端に置ける位置。**反対の端を越えるものと、空白を巻き込むものを落としてある。**
@@ -111,13 +136,17 @@ private fun edgeOffsets(
     current: DistillTextRange,
     edge: DistillRangeEdge,
     protectedSpans: List<DistillTextRange>
-): List<Int> = distillBoundaryOffsets(content, context, protectedSpans).filter { offset ->
-    when (edge) {
-        DistillRangeEdge.Start ->
-            offset < current.endExclusive && !content[offset].isWhitespace()
-        DistillRangeEdge.End ->
-            offset > current.start && !content[offset - 1].isWhitespace()
-    }
+): List<Int> = distillBoundaryOffsets(content, context, protectedSpans)
+    .filter { placeableForEdge(content, it, current, edge) }
+
+private fun placeableForEdge(
+    content: String,
+    offset: Int,
+    current: DistillTextRange,
+    edge: DistillRangeEdge
+): Boolean = when (edge) {
+    DistillRangeEdge.Start -> offset < current.endExclusive && !content[offset].isWhitespace()
+    DistillRangeEdge.End -> offset > current.start && !content[offset - 1].isWhitespace()
 }
 
 private fun currentOffset(current: DistillTextRange, edge: DistillRangeEdge): Int = when (edge) {

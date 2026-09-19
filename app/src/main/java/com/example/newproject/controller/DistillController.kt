@@ -31,6 +31,7 @@ import com.example.newproject.domain.hasOverlappingDistillRanges
 import com.example.newproject.domain.isWithinDistillBoldLimit
 import com.example.newproject.domain.nudgeDistillRangeEdge
 import com.example.newproject.domain.parseDistillResponseIds
+import com.example.newproject.domain.DistillRangeOption
 import com.example.newproject.domain.presetRangesFor
 import com.example.newproject.domain.projectedBoldRatio
 import com.example.newproject.domain.resolveOverlaps
@@ -78,7 +79,15 @@ internal class DistillController(
          * **シートを閉じても消えない。** 破棄の契機は候補セッションのキャンセル・再解析・
          * ノート切替・保存完了の4つだけで、閉じることは破棄ではない。
          */
-        val confirmedRanges: Map<String, DistillConfirmedRange>
+        val confirmedRanges: Map<String, DistillConfirmedRange>,
+        /**
+         * 候補ID → 選べる段。**セッション中は変わらないので1度だけ引く。**
+         *
+         * 段の導出は `model.sentences` を舐めるので入力サイズに比例する。
+         * **自由範囲のドラッグは指の動きに合わせて候補状態を作り直す**ので、
+         * ここで毎回引くと大きなノートでフレームごとに候補数×文数が走る。
+         */
+        val presetOptionsById: Map<String, List<DistillRangeOption>>
     )
 
     private var activeRequestId = 0L
@@ -245,6 +254,9 @@ internal class DistillController(
             exceptionId,
             confirmedRanges = candidatesById.mapValues { (_, candidate) ->
                 DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
+            },
+            presetOptionsById = candidatesById.mapValues { (_, candidate) ->
+                presetRangesFor(model, candidate.sentence)
             }
         )
         val items = selectedCandidates.map { candidate ->
@@ -333,9 +345,9 @@ internal class DistillController(
     /** 確定範囲を段へ合わせる。存在しない段は無視する（画面にも出ない）。 */
     fun applyRange(id: String, preset: DistillRangePreset) {
         val active = session ?: return
-        val candidate = active.candidatesById[id] ?: return
-        val option = presetRangesFor(active.model, candidate.sentence)
-            .firstOrNull { it.preset == preset } ?: return
+        if (!active.candidatesById.containsKey(id)) return
+        val option = active.presetOptionsById[id]
+            ?.firstOrNull { it.preset == preset } ?: return
         changeConfirmedRange(id, option.range)
     }
 
@@ -481,7 +493,7 @@ internal class DistillController(
         val sentence = active.candidatesById[item.id]?.sentence ?: return item
         val confirmed = active.confirmedRanges[item.id]?.range ?: sentence.range
         val context = sentence.contextRange
-        val options = presetRangesFor(active.model, sentence)
+        val options = active.presetOptionsById[item.id].orEmpty()
         return item.copy(
             text = active.model.content.substring(confirmed.start, confirmed.endExclusive),
             parentText = active.model.content.substring(context.start, context.endExclusive),
