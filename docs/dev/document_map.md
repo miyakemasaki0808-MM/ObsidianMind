@@ -191,6 +191,35 @@
 | 既存コードを触る前に背景を知る | 下の逆引き表 → 該当する `features/` か `system/` |
 | バグを踏んだ | [lessons.md](lessons.md) の索引 →（AI混入バグなら）[L34](lessons/L34.md) で型を判定 |
 
+### 通しで読む — 設計思想を掴む順
+
+**`features/` `system/` に読む順は無い。** 普段はコードから下の逆引き表で引く。
+**ここは例外で、「どんな考え方で作られたアプリか」を通しで掴みたいときの順路**である。
+
+**11本・約3,600行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
+必要になったとき逆引きで引けば読める。
+
+| | 文書 | なぜこの位置か | 行数 |
+|---:|---|---|---:|
+| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 256 |
+| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** | 116 |
+| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する | 311 |
+| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** | 300 |
+| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget | 133 |
+| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** | 291 |
+| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 181 |
+| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 593 |
+| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 234 |
+| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 311 |
+| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 869 |
+
+**1〜6が先なのは、7以降がそこで決めた規約を前提に書かれているから。** 逆順で読むと、
+機能ごとに同じ規約の説明を読み直すことになる。
+
+**`decisions/` は通読しない。** 覆りにくい重大判断だけを置いた「なぜ」の索引で、
+上の11本から `→ ADR-000N` で辿り着く。**`lessons/` も通読しない** —
+[索引](lessons.md)の「いつ当てるか」列を引き、該当したカードだけを読む（→ CLAUDE.md）。
+
 ### パッケージ → 先に読む設計書（逆引き）
 
 `features/` `system/` はパッケージ単位に分かれていないので、コードから引くときはこの表を使う。
