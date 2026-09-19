@@ -18,6 +18,7 @@ import com.example.newproject.model.state.DistillRangeEdgeMove
  * - **書記素の内側** — サロゲートペア・結合文字・異体字セレクタ・ZWJ 連結・肌色修飾・国旗の対
  * - **保護範囲の内部** — コードスパン・リンク・斜体・打ち消し線。
  *   **内部かどうかではなく対を割るかどうかで数える**ので、端の一致は置いてよい
+ * - **バックスラッシュの直後** — 挿した `**` が `\*` になり、エスケープとして消える
  *
  * **既存の `**` 強調は数えない。** 親文が `subtractRanges` で既存強調を差し引いた区間から
  * 作られる限り到達しないので、落ちるテストを書けない（→ 同書 §8 判断18）。
@@ -27,8 +28,24 @@ internal fun distillBoundaryOffsets(
     context: DistillTextRange,
     protectedSpans: List<DistillTextRange>
 ): List<Int> = (context.start..context.endExclusive).filter { offset ->
-    isGraphemeBoundary(content, offset) && protectedSpans.none { it.contains(offset) }
+    isGraphemeBoundary(content, offset) &&
+        !followsBackslash(content, offset) &&
+        protectedSpans.none { it.contains(offset) }
 }
+
+/**
+ * 直前がバックスラッシュか。**`**` を挿した瞬間に `\*` がエスケープへ変わる。**
+ *
+ * **元の本文がエスケープ構文でなくても起きる。** `C:\Users` の `\U` は記法ではないが、
+ * `U` の前へ `**` を挿すと `\**` になり、表示側は先頭の `*` を文字として消して
+ * 残る `*` を斜体の開始として読む。**既存の `InlineEscape` を保護範囲へ足しても防げない** —
+ * 守るべきなのは元の本文ではなく、挿入後に生まれる並びだからである。
+ *
+ * エスケープ済みのバックスラッシュ（`\\`）の直後は実際には安全だが、数え分けない。
+ * 置ける位置を1つ失うだけで、判定を単純に保てる。
+ */
+private fun followsBackslash(content: String, offset: Int): Boolean =
+    offset > 0 && content[offset - 1] == '\\'
 
 /**
  * 端を置ける位置へ寄せる。**倒す先は向きで変わる。**
@@ -36,6 +53,7 @@ internal fun distillBoundaryOffsets(
  * 広げているときは外側の安全境界へ、狭めているときは内側の安全境界へ倒す
  * （句分割が「下限未満の余りは直前の句へ吸収する」と向きを固定したのと同じ型の決めごと）。
  * **どちらの向きにも置ける位置が無いときだけ**反対側を探す。
+
  *
  * 端の空白は落とす。開始位置に空白そのものを置かない・終了位置の直前に空白を残さない、
  * という形で列挙の段で落としてあるので、寄せた結果が空白で始まったり終わったりしない。

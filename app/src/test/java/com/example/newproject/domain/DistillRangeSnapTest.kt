@@ -1,5 +1,7 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.model.DistillTextRange
 import com.example.newproject.model.state.DistillRangeEdge
 import com.example.newproject.model.state.DistillRangeEdgeMove
@@ -182,6 +184,7 @@ class DistillRangeSnapTest {
         assertEquals(context.start, widened?.start)
     }
 
+
     // ---- 微調整 ----
 
     @Test
@@ -235,4 +238,103 @@ class DistillRangeSnapTest {
             nudgeDistillRangeEdge(content, context, single, DistillRangeEdgeMove.ShrinkStart, emptyList())
         )
     }
+
+    // ---- レビュー再現（未修正なら落ちる） ----
+
+    @Test
+    fun `an edge never lands right after a backslash`() {
+        // `**` を挿した瞬間に `\*` がエスケープになり、太字が成立しなくなる。
+        // 元の `\U` はエスケープ構文ではないので、既存の保護範囲では守れない。
+        val content = "ファイルの場所は C:\\Users です。"
+        val context = wholeText(content)
+        val afterBackslash = content.indexOf("Users")
+
+        val offsets = distillBoundaryOffsets(content, context, emptyList())
+
+        assertFalse("バックスラッシュ直後に端を置けています", offsets.contains(afterBackslash))
+    }
+
+
+
+    /**
+     * 保存後を**再解析して**、狙った文字列が太字として読めることまで見る。
+     *
+     * **「追加した `**` を除けば原文一致」では足りない。** 記法が壊れてもその比較は通る
+     * （P1-1 はまさにその形で、出力は原文一致のまま太字が消えていた）。
+     */
+    private fun assertBoldSurvives(content: String, range: DistillTextRange) {
+        val output = applyDistillBold(content, listOf(range)).content
+        assertEquals("原文が変わりました", content, output.replace("**", ""))
+
+        val expected = content.substring(range.start, range.endExclusive)
+        val bold = scanInlineSyntax(output).flatten()
+            .filter { it.kind == InlineSpanKind.Bold }
+            .map { output.substring(it.contentStart, it.contentEnd) }
+
+        assertEquals("太字が成立していません（出力: $output）", listOf(expected), bold)
+    }
+
+    @Test
+    fun `a windows path keeps its bold after a round trip`() {
+        val content = "ファイルの場所は C:\\Users です。手元の控えもそこへ置いてあります。"
+        val model = buildDistillSourceModel(content)
+        val sentence = model.sentences.first { !it.isTerm }
+        val context = sentence.contextRange
+        val spans = distillProtectedSpansWithin(model, context)
+
+        // バックスラッシュ直後（`U` の前）を狙う。置けないので手前か先へ倒れる。
+        val target = content.indexOf("Users")
+        val start = snapDistillRangeEdge(
+            content, context, sentence.range, DistillRangeEdge.Start,
+            desiredOffset = target, protectedSpans = spans
+        )!!
+        assertBoldSurvives(content, start)
+
+        // 終点側も同じ位置を狙う。
+        val end = snapDistillRangeEdge(
+            content, context, sentence.range, DistillRangeEdge.End,
+            desiredOffset = target, protectedSpans = spans
+        )!!
+        assertBoldSurvives(content, end)
+    }
+
+    @Test
+    fun `escaped markers and doubled backslashes keep their bold`() {
+        val content = "式は a \\* b で、退避先は D:\\\\share です。読み返すときの手がかりにします。"
+        val model = buildDistillSourceModel(content)
+        val sentence = model.sentences.first { !it.isTerm }
+        val context = sentence.contextRange
+        val spans = distillProtectedSpansWithin(model, context)
+
+        // 置ける位置すべてを端にしても、太字が壊れないこと。
+        val offsets = distillBoundaryOffsets(content, context, spans)
+        offsets.filter { it < sentence.range.endExclusive }.forEach { start ->
+            if (content[start].isWhitespace()) return@forEach
+            assertBoldSurvives(content, DistillTextRange(start, sentence.range.endExclusive))
+        }
+        offsets.filter { it > sentence.range.start }.forEach { end ->
+            if (content[end - 1].isWhitespace()) return@forEach
+            assertBoldSurvives(content, DistillTextRange(sentence.range.start, end))
+        }
+    }
+
+    @Test
+    fun `nudging across a backslash keeps its bold`() {
+        val content = "ファイルの場所は C:\\Users です。手元の控えもそこへ置いてあります。"
+        val model = buildDistillSourceModel(content)
+        val sentence = model.sentences.first { !it.isTerm }
+        val context = sentence.contextRange
+        val spans = distillProtectedSpansWithin(model, context)
+
+        // バックスラッシュをまたぐまで内側へ詰め続ける。どの段階でも壊れない。
+        var current = sentence.range
+        repeat(content.indexOf("Users") - sentence.range.start + 2) {
+            current = nudgeDistillRangeEdge(
+                content, context, current, DistillRangeEdgeMove.ShrinkStart, spans
+            ) ?: return@repeat
+            assertBoldSurvives(content, current)
+        }
+        assertTrue("バックスラッシュを越えていません", current.start > content.indexOf('\\'))
+    }
 }
+
