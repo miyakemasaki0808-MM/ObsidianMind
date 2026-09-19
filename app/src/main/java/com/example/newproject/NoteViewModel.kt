@@ -477,8 +477,13 @@ class NoteViewModel internal constructor(
     fun openDistillRangeSheet(id: String) = session.openDistillRangeSheet(id)
     fun closeDistillRangeSheet() = session.closeDistillRangeSheet()
     fun applyDistillRange(id: String, preset: DistillRangePreset) = session.applyDistillRange(id, preset)
-    fun dragDistillRangeEdge(id: String, edge: DistillRangeEdge, offsetInParent: Int) =
-        session.dragDistillRangeEdge(id, edge, offsetInParent)
+    fun dragDistillRangeEdge(
+        id: String,
+        edge: DistillRangeEdge,
+        offsetInParent: Int,
+        fromOffsetInParent: Int
+    ) =
+        session.dragDistillRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
     fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
         session.nudgeDistillRangeEdge(id, move)
     fun resetDistillRange(id: String) = session.resetDistillRange(id)

@@ -357,11 +357,27 @@ internal class DistillController(
      * **受けるのは親文の中の位置で、原文offsetではない。** UI状態へ原文offsetを出さない契約
      * （`ActiveSession` が確定範囲を持つ理由）をドラッグでも崩さない。
      * 置ける位置へ寄せるのは [snapDistillRangeEdge] の仕事で、**UIは寄せ先を知らない。**
+     *
+     * **[fromOffsetInParent] は指が直前に指していた位置**で、UIがジェスチャの間だけ覚える。
+     * 向きの判定に使う（→ [snapDistillRangeEdge]）。
      */
-    fun dragRangeEdge(id: String, edge: DistillRangeEdge, offsetInParent: Int) {
+    fun dragRangeEdge(
+        id: String,
+        edge: DistillRangeEdge,
+        offsetInParent: Int,
+        fromOffsetInParent: Int
+    ) {
         adjustRange(id) { content, context, current, protectedSpans ->
             snapDistillRangeEdge(
-                content, context, current, edge, context.start + offsetInParent, protectedSpans
+                content = content,
+                context = context,
+                current = current,
+                edge = edge,
+                desiredOffset = context.start + offsetInParent,
+                // **指が直前に指していた位置を渡す。** 寄せた結果から向きを推測すると、
+                // 指が止まっていても端が同じ2点を往復する。
+                fromOffset = context.start + fromOffsetInParent,
+                protectedSpans = protectedSpans
             )
         }
     }

@@ -877,7 +877,7 @@ class DistillControllerTest {
         advanceUntilIdle()
 
         // **プリセットでは取れない端。** 受けるのは親文（128..191）の中の相対位置で、原文offsetではない。
-        controller.dragRangeEdge("S005", DistillRangeEdge.End, offsetInParent = 20)
+        controller.dragRangeEdge("S005", DistillRangeEdge.End, offsetInParent = 20, fromOffsetInParent = 31)
 
         val adjusted = (state.value.distillState as DistillState.Candidates).items.single()
         assertEquals(null, adjusted.currentPreset)
@@ -900,7 +900,7 @@ class DistillControllerTest {
         advanceUntilIdle()
 
         // S006（160..191）の始点を親文の先頭側へ引くと、S005（128..159）へ食い込む。
-        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = 10)
+        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = 10, fromOffsetInParent = 32)
 
         val widened = state.value.distillState as DistillState.Candidates
         assertEquals(listOf("S005"), widened.overlapDeselectedIds)
@@ -952,12 +952,40 @@ class DistillControllerTest {
         advanceUntilIdle()
 
         // 親文の外（前の行）を指しても、外枠は親文のまま。
-        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = -50)
+        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = -50, fromOffsetInParent = 32)
 
         val item = (state.value.distillState as DistillState.Candidates).items.single()
         assertEquals(0, item.boldStartInParent)
         assertEquals(item.parentText, item.text)
     }
+
+    @Test
+    fun `dragging to the same place twice does not flip the edge back`() = runTest {
+        val content = decoratedNote()
+        val state = stateWithNote(content)
+        val controller = controller(state, FakeAiClient.returning("S001"))
+        controller.start()
+        advanceUntilIdle()
+
+        val italicStart = content.indexOf("*強調語句*")
+        val italicEnd = italicStart + "*強調語句*".length
+        val inside = italicStart + 3
+
+        // 始点を右へ動かして装飾の内側を指す。狭めているので装飾の向こう側へ倒れる。
+        controller.dragRangeEdge("S001", DistillRangeEdge.Start, inside, fromOffsetInParent = 0)
+        val first = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(italicEnd, first.boldStartInParent)
+
+        // **指が止まったまま同じ位置が届いても動かない。**
+        // 寄せた結果から向きを推測すると、ここで装飾の手前へ引き返す。
+        controller.dragRangeEdge("S001", DistillRangeEdge.Start, inside, fromOffsetInParent = inside)
+        val second = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(italicEnd, second.boldStartInParent)
+    }
+
+    /** 斜体を句の内側に持つ1文のノート。`S001` が斜体をまたぐ句になる。 */
+    private fun decoratedNote(): String =
+        "${"あ".repeat(20)}*強調語句*${"あ".repeat(20)}、${"い".repeat(20)}。"
 
     /** 句へ割れる6文のノート。`S005` と `S006` は同じ親文（128..191）の2つの句。 */
     private fun adjustableNote(): String = (1..6).joinToString("\n") { index ->

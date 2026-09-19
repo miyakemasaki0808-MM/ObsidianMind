@@ -98,7 +98,7 @@ internal fun DistillRangeSheet(
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
-    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    onDragEdge: (DistillRangeEdge, Int, Int) -> Unit,
     onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
     onReset: () -> Unit,
     onDismiss: () -> Unit
@@ -137,7 +137,7 @@ internal fun DistillRangeSheetContent(
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
-    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    onDragEdge: (DistillRangeEdge, Int, Int) -> Unit,
     onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
     onReset: () -> Unit,
     modifier: Modifier = Modifier
@@ -239,7 +239,7 @@ internal fun DistillRangeSheetContent(
 @Composable
 private fun AdjustableParentText(
     item: DistillCandidateItem,
-    onDragEdge: (DistillRangeEdge, Int) -> Unit,
+    onDragEdge: (DistillRangeEdge, Int, Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val currentItem by rememberUpdatedState(item)
@@ -283,9 +283,17 @@ private fun AdjustableParentText(
                     // シートを縦に送ろうとした指が範囲を動かしてしまう。
                     if ((down.position - handle).getDistance() > grabSlop) return@awaitEachGesture
                     down.consume()
+                    // **指が直前に指していた位置をジェスチャの間だけ覚える。**
+                    // 渡さないと、寄せた結果から向きが推測されて端が往復する。
+                    var lastOffset = currentItem.edgeOffsetInParent(edge)
                     drag(down.id) { change ->
                         change.consume()
-                        layout?.let { currentOnDragEdge(edge, it.getOffsetForPosition(change.position)) }
+                        val result = layout ?: return@drag
+                        val offset = result.getOffsetForPosition(change.position)
+                        if (offset != lastOffset) {
+                            currentOnDragEdge(edge, offset, lastOffset)
+                            lastOffset = offset
+                        }
                     }
                 }
             }
@@ -350,6 +358,12 @@ internal fun grabbedDistillEdge(
     } else {
         DistillRangeEdge.End
     }
+
+/** 親文の中でのこの端の位置。ドラッグの起点に使う。 */
+internal fun DistillCandidateItem.edgeOffsetInParent(edge: DistillRangeEdge): Int = when (edge) {
+    DistillRangeEdge.Start -> boldStartInParent
+    DistillRangeEdge.End -> boldEndInParent
+}
 
 /**
  * つまみの中心。**始点は確定範囲の左端、終点は右端**の、行の下辺に置く。

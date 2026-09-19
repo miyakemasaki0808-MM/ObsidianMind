@@ -53,7 +53,14 @@ private fun followsBackslash(content: String, offset: Int): Boolean =
  * 広げているときは外側の安全境界へ、狭めているときは内側の安全境界へ倒す
  * （句分割が「下限未満の余りは直前の句へ吸収する」と向きを固定したのと同じ型の決めごと）。
  * **どちらの向きにも置ける位置が無いときだけ**反対側を探す。
-
+ *
+ * **向きは [fromOffset]（指が直前に指していた位置）から決める。[current] から推測しない。**
+ * スナップは端を指より先へ送ることがあり、送った結果を次の向き判定に使うと、
+ * **指が止まっていても広げると狭めるが交互に立ち**、端が同じ2点を往復する。
+ * `current` が示すのは直前に寄せた結果であって、指が進んだ向きではない。
+ *
+ * **同じ位置を指し直したときは動かさない**（`null` を返す）。指が文字の内側で動いただけでも
+ * 同じ整数offsetが続けて届くので、ここが動くと往復の入口になる。
  *
  * 端の空白は落とす。開始位置に空白そのものを置かない・終了位置の直前に空白を残さない、
  * という形で列挙の段で落としてあるので、寄せた結果が空白で始まったり終わったりしない。
@@ -67,14 +74,17 @@ internal fun snapDistillRangeEdge(
     current: DistillTextRange,
     edge: DistillRangeEdge,
     desiredOffset: Int,
+    fromOffset: Int,
     protectedSpans: List<DistillTextRange>
 ): DistillTextRange? {
     val offsets = edgeOffsets(content, context, current, edge, protectedSpans)
     if (offsets.isEmpty()) return null
     val desired = desiredOffset.coerceIn(context.start, context.endExclusive)
+    val origin = fromOffset.coerceIn(context.start, context.endExclusive)
+    if (desired == origin) return null
     val isWidening = when (edge) {
-        DistillRangeEdge.Start -> desired < current.start
-        DistillRangeEdge.End -> desired > current.endExclusive
+        DistillRangeEdge.Start -> desired < origin
+        DistillRangeEdge.End -> desired > origin
     }
     // 外側は Start では小さい側、End では大きい側。広げているなら外側を優先する。
     val prefersLower = (edge == DistillRangeEdge.Start) == isWidening

@@ -98,7 +98,7 @@ class DistillRangeSnapTest {
 
         val snapped = snapDistillRangeEdge(
             content, context, current, DistillRangeEdge.Start,
-            desiredOffset = italic.start + 3, protectedSpans = spans
+            desiredOffset = italic.start + 3, fromOffset = current.start, protectedSpans = spans
         )
 
         assertEquals(italic.start, snapped?.start)
@@ -112,7 +112,7 @@ class DistillRangeSnapTest {
 
         val snapped = snapDistillRangeEdge(
             content, context, current, DistillRangeEdge.Start,
-            desiredOffset = italic.start + 3, protectedSpans = spans
+            desiredOffset = italic.start + 3, fromOffset = current.start, protectedSpans = spans
         )
 
         assertEquals(italic.endExclusive, snapped?.start)
@@ -141,11 +141,11 @@ class DistillRangeSnapTest {
 
         val start = snapDistillRangeEdge(
             content, context, context, DistillRangeEdge.Start,
-            desiredOffset = space, protectedSpans = emptyList()
+            desiredOffset = space, fromOffset = context.start, protectedSpans = emptyList()
         )
         val end = snapDistillRangeEdge(
             content, context, context, DistillRangeEdge.End,
-            desiredOffset = space + 1, protectedSpans = emptyList()
+            desiredOffset = space + 1, fromOffset = context.endExclusive, protectedSpans = emptyList()
         )
 
         assertFalse(content[start!!.start].isWhitespace())
@@ -160,11 +160,11 @@ class DistillRangeSnapTest {
 
         val start = snapDistillRangeEdge(
             content, context, current, DistillRangeEdge.Start,
-            desiredOffset = context.endExclusive, protectedSpans = emptyList()
+            desiredOffset = context.endExclusive, fromOffset = current.start, protectedSpans = emptyList()
         )
         val end = snapDistillRangeEdge(
             content, context, current, DistillRangeEdge.End,
-            desiredOffset = context.start, protectedSpans = emptyList()
+            desiredOffset = context.start, fromOffset = current.endExclusive, protectedSpans = emptyList()
         )
 
         assertTrue(start!!.length > 0)
@@ -175,15 +175,31 @@ class DistillRangeSnapTest {
     fun `an edge stays inside the parent sentence`() {
         val content = "前の文です。この文が親になります。後の文です。"
         val context = DistillTextRange(content.indexOf("この文"), content.indexOf("後の文"))
+        // 親文の内側から、前の文まで引き抜こうとする。
+        val current = DistillTextRange(context.start + 3, context.endExclusive)
 
         val widened = snapDistillRangeEdge(
-            content, context, context, DistillRangeEdge.Start,
-            desiredOffset = 0, protectedSpans = emptyList()
+            content, context, current, DistillRangeEdge.Start,
+            desiredOffset = 0, fromOffset = current.start, protectedSpans = emptyList()
         )
 
         assertEquals(context.start, widened?.start)
     }
 
+    @Test
+    fun `an edge that is already where the finger points does not move`() {
+        val content = "この文はちょうどよい長さの本文です。"
+        val context = wholeText(content)
+        val current = DistillTextRange(4, 8)
+
+        val unmoved = snapDistillRangeEdge(
+            content, context, current, DistillRangeEdge.Start,
+            desiredOffset = 4, fromOffset = 4, protectedSpans = emptyList()
+        )
+
+        // **動かさないことが往復を止める。** 指が文字の内側で動くだけでも同じoffsetが続けて届く。
+        assertNull(unmoved)
+    }
 
     // ---- 微調整 ----
 
@@ -254,7 +270,49 @@ class DistillRangeSnapTest {
         assertFalse("バックスラッシュ直後に端を置けています", offsets.contains(afterBackslash))
     }
 
+    @Test
+    fun `the same requested offset does not flip the edge back and forth`() {
+        val (content, context, spans) = italicCase()
+        val italic = spans.single()
+        var current = DistillTextRange(italic.endExclusive, context.endExclusive)
+        val desired = italic.start + 3
+        var from = current.start
 
+        val seen = mutableListOf<Int>()
+        repeat(4) {
+            val next = snapDistillRangeEdge(
+                content, context, current, DistillRangeEdge.Start,
+                desiredOffset = desired, fromOffset = from, protectedSpans = spans
+            )
+            if (next != null) current = next
+            from = desired
+            seen += current.start
+        }
+
+        // 2回目以降は動かない。指が止まっているのに端が往復してはいけない。
+        assertEquals(listOf(italic.start, italic.start, italic.start, italic.start), seen)
+    }
+
+    @Test
+    fun `a run held in one direction never reverses`() {
+        val (content, context, spans) = italicCase()
+        val italic = spans.single()
+        var current = DistillTextRange(italic.endExclusive, context.endExclusive)
+        var from = current.start
+
+        // 装飾の内側を左へ進み続ける列。
+        val starts = mutableListOf<Int>()
+        for (desired in (italic.endExclusive - 1) downTo italic.start) {
+            snapDistillRangeEdge(
+                content, context, current, DistillRangeEdge.Start,
+                desiredOffset = desired, fromOffset = from, protectedSpans = spans
+            )?.let { current = it }
+            from = desired
+            starts += current.start
+        }
+
+        assertTrue("端が右へ戻りました: $starts", starts.zipWithNext().all { (a, b) -> b <= a })
+    }
 
     /**
      * 保存後を**再解析して**、狙った文字列が太字として読めることまで見る。
@@ -286,14 +344,14 @@ class DistillRangeSnapTest {
         val target = content.indexOf("Users")
         val start = snapDistillRangeEdge(
             content, context, sentence.range, DistillRangeEdge.Start,
-            desiredOffset = target, protectedSpans = spans
+            desiredOffset = target, fromOffset = sentence.range.start, protectedSpans = spans
         )!!
         assertBoldSurvives(content, start)
 
         // 終点側も同じ位置を狙う。
         val end = snapDistillRangeEdge(
             content, context, sentence.range, DistillRangeEdge.End,
-            desiredOffset = target, protectedSpans = spans
+            desiredOffset = target, fromOffset = sentence.range.endExclusive, protectedSpans = spans
         )!!
         assertBoldSurvives(content, end)
     }

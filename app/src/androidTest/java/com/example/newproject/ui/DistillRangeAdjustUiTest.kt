@@ -74,7 +74,7 @@ class DistillRangeAdjustUiTest {
                     onOpenDistillRangeSheet = { opened += it },
                     onCloseDistillRangeSheet = {},
                     onSelectDistillRange = { _, _ -> },
-                    onDragDistillRangeEdge = { _, _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _, _ -> },
                     onNudgeDistillRangeEdge = { _, _ -> },
                     onResetDistillRange = {},
                     onSaveDistill = {},
@@ -108,7 +108,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
-                    onDragEdge = { _, _ -> },
+                    onDragEdge = { _, _, _ -> },
                     onNudgeEdge = {},
                     onReset = {}
                 )
@@ -148,7 +148,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
-                    onDragEdge = { _, _ -> },
+                    onDragEdge = { _, _, _ -> },
                     onNudgeEdge = {},
                     onReset = { resets++ }
                 )
@@ -171,7 +171,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 1,
                     onSelectPreset = {},
-                    onDragEdge = { _, _ -> },
+                    onDragEdge = { _, _, _ -> },
                     onNudgeEdge = {},
                     onReset = {}
                 )
@@ -193,7 +193,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = true,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
-                    onDragEdge = { _, _ -> },
+                    onDragEdge = { _, _, _ -> },
                     onNudgeEdge = {},
                     onReset = {}
                 )
@@ -226,7 +226,7 @@ class DistillRangeAdjustUiTest {
                     onOpenDistillRangeSheet = {},
                     onCloseDistillRangeSheet = {},
                     onSelectDistillRange = { _, _ -> },
-                    onDragDistillRangeEdge = { _, _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _, _ -> },
                     onNudgeDistillRangeEdge = { _, _ -> },
                     onResetDistillRange = {},
                     onSaveDistill = {},
@@ -259,7 +259,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
-                    onDragEdge = { _, _ -> },
+                    onDragEdge = { _, _, _ -> },
                     onNudgeEdge = { moves += it },
                     onReset = {}
                 )
@@ -299,7 +299,7 @@ class DistillRangeAdjustUiTest {
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
-                    onDragEdge = { edge, offset -> drags += edge to offset },
+                    onDragEdge = { edge, offset, _ -> drags += edge to offset },
                     onNudgeEdge = {},
                     onReset = {}
                 )
