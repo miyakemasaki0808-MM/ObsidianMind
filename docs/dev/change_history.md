@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-19 | — | Reflect 機能リニューアルを Now の先頭へ置き、最初の作業を範囲決めと明記した | — |
+| 2026-09-19 | — | ひとことの同文再生成と返事消失を実機で確認し、全文・実保存・連打の観測手順を補強した | [remark_regenerate](../review/device_validation/remark_regenerate.md) |
 | 2026-09-18 | — | 「別のひとこと」が同じ一文を返すかを実機で確かめるケースを書き、スモーク表と索引へ登録した | — |
 | 2026-09-18 | — | 孤児削除の実機検証（CLEAN-01〜04）の成功を記録し、Vault切替中の削除をケースへ足した | [reading_trace_cleanup](../review/device_validation/reading_trace_cleanup.md) |
 | 2026-09-18 | — | 痕跡の孤児削除を1列に直列化し、結果を最新の一覧へ当てて走行中のボタンを止めた | [reflect_reading_trace](features/reflect_reading_trace.md) 判断18 |
