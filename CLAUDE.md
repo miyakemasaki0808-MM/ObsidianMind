@@ -62,7 +62,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 **コメント**
 
 - **コードコメントには「今のコードを変える人が知らないと壊すこと」だけを書く。** 契約・不変条件と、直観に反する実装の理由を現在形で短く書き、全体の判断は正本（`features/` `system/`）へリンクする
-- **経緯（日付・レビューの指摘番号・「以前は」・何度直したか）はコメントに書かない。** 経緯はコミットメッセージが持つ。本番コードの日付と指摘番号、2つ続いた KDoc は `SourceCommentShapeTest` が落とす（背景 → [owner/comments_and_history_practices](docs/owner/comments_and_history_practices.md)）
+- **経緯（日付・レビューの指摘番号・「以前は」・何度直したか）はコメントに書かない。** 経緯はコミットメッセージが持つ。本番コードの日付と指摘番号、2つ続いた KDoc は `SourceCommentShapeTest` が落とす（背景 → [owner/comments_and_history_practices](docs/owner/05_comments_and_history_practices.md)）
 
 **禁止事項**
 

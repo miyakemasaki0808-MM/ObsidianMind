@@ -39,8 +39,10 @@ data class DistillCandidateItem(
     val boldEndInParent: Int = text.length,
     /** 選べる段。**存在する段だけが入る**（押せない選択肢を出さない）。 */
     val availablePresets: List<DistillRangePreset> = emptyList(),
-    /** いまどの段か。 */
+    /** いまどの段か。**自由範囲へ動かすとどの段にも一致せず null になる。** */
     val currentPreset: DistillRangePreset? = null,
+    /** 微調整で動かせる向き。**押せない矢印を出さないために引く。** */
+    val availableEdgeMoves: Set<DistillRangeEdgeMove> = emptySet(),
     /** 最初の範囲から動いているか。「最初の範囲に戻す」の可否。 */
     val isRangeAdjusted: Boolean = false
 )

@@ -198,4 +198,35 @@ class DistillRangeAdjustTest {
         assertTrue(hasOverlappingDistillRanges(listOf(DistillTextRange(0, 5), DistillTextRange(3, 8))))
         assertFalse(hasOverlappingDistillRanges(listOf(DistillTextRange(0, 3), DistillTextRange(3, 6))))
     }
+
+    @Test
+    fun `the model carries the document wide protected spans, merged and ordered`() {
+        val content = "本文に`コード`と*強調*と[[リンク]]と~~取消~~と**既存太字**があります。"
+        val model = buildDistillSourceModel(content)
+
+        val spans = model.protectedSpans
+        assertEquals(
+            listOf("`コード`", "*強調*", "[[リンク]]", "~~取消~~"),
+            spans.map { content.substring(it.start, it.endExclusive) }
+        )
+        // 既存の `**` 強調は入らない。親文が差し引いた区間から作られるので端が到達しない。
+        assertTrue(spans.none { content.substring(it.start, it.endExclusive).startsWith("**") })
+        assertEquals(spans.sortedBy { it.start }, spans)
+        assertFalse(hasOverlappingDistillRanges(spans))
+    }
+
+    @Test
+    fun `only the spans touching the parent sentence are drawn`() {
+        val content = "前の行に`コード`があります。\n\n後の行に*強調*があります。"
+        val model = buildDistillSourceModel(content)
+        val second = model.sentences.first { it.range.start > content.indexOf("後の行") - 1 }
+
+        val spans = distillProtectedSpansWithin(model, second.contextRange)
+
+        assertEquals(
+            listOf("*強調*"),
+            spans.map { content.substring(it.start, it.endExclusive) }
+        )
+    }
 }
+

@@ -21,6 +21,8 @@ import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.BookletMode
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.RelatedNotesState
@@ -614,6 +616,15 @@ internal class NoteSessionCoordinator(
     fun openDistillRangeSheet(id: String) = distill.openRangeSheet(id)
     fun closeDistillRangeSheet() = distill.closeRangeSheet()
     fun applyDistillRange(id: String, preset: DistillRangePreset) = distill.applyRange(id, preset)
+    fun dragDistillRangeEdge(
+        id: String,
+        edge: DistillRangeEdge,
+        offsetInParent: Int,
+        fromOffsetInParent: Int
+    ) =
+        distill.dragRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
+    fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
+        distill.nudgeRangeEdge(id, move)
     fun resetDistillRange(id: String) = distill.resetRange(id)
     fun saveDistillSelection() = distill.saveSelection()
     fun retryDistill() = distill.retry()

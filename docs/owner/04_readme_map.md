@@ -4,7 +4,7 @@
 **作成:** 2026-09-08 / **更新:** 2026-09-14
 
 **位置づけ:** 16本ある `README.md` がそれぞれ何をしているかを一望する1枚。
-「どこに何が書いてあるか」は [document_inventory](document_inventory.md) が持ち、
+「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
 本書は入口そのものの構造だけを扱う。`owner/` の他文書と同じく検査に載せない。
 
 ---
@@ -40,7 +40,7 @@
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 15 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 51 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 103 | `owner/` の索引＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 127 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 52 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は

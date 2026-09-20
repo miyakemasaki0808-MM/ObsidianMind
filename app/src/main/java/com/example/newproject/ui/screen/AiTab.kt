@@ -42,6 +42,8 @@ import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillCandidateItem
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -77,6 +79,8 @@ fun AiTab(
     onOpenDistillRangeSheet: (String) -> Unit,
     onCloseDistillRangeSheet: () -> Unit,
     onSelectDistillRange: (String, DistillRangePreset) -> Unit,
+    onDragDistillRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
+    onNudgeDistillRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
     onResetDistillRange: (String) -> Unit,
     onSaveDistill: () -> Unit,
     onRetryDistill: () -> Unit,
@@ -111,6 +115,8 @@ fun AiTab(
                 onOpenRangeSheet = onOpenDistillRangeSheet,
                 onCloseRangeSheet = onCloseDistillRangeSheet,
                 onSelectRange = onSelectDistillRange,
+                onDragRangeEdge = onDragDistillRangeEdge,
+                onNudgeRangeEdge = onNudgeDistillRangeEdge,
                 onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
@@ -154,6 +160,8 @@ fun AiTab(
                 onOpenRangeSheet = onOpenDistillRangeSheet,
                 onCloseRangeSheet = onCloseDistillRangeSheet,
                 onSelectRange = onSelectDistillRange,
+                onDragRangeEdge = onDragDistillRangeEdge,
+                onNudgeRangeEdge = onNudgeDistillRangeEdge,
                 onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
@@ -209,6 +217,8 @@ private fun DistillPanel(
     onOpenRangeSheet: (String) -> Unit,
     onCloseRangeSheet: () -> Unit,
     onSelectRange: (String, DistillRangePreset) -> Unit,
+    onDragRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
+    onNudgeRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
     onResetRange: (String) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
@@ -382,6 +392,8 @@ private fun DistillPanel(
             isDeselectedByOverlap = item.id in candidates.overlapDeselectedIds,
             otherDeselectedCount = candidates.overlapDeselectedIds.count { it != item.id },
             onSelectPreset = { preset -> onSelectRange(item.id, preset) },
+            onDragEdge = { edge, offset, from -> onDragRangeEdge(item.id, edge, offset, from) },
+            onNudgeEdge = { move -> onNudgeRangeEdge(item.id, move) },
             onReset = { onResetRange(item.id) },
             onDismiss = onCloseRangeSheet
         )

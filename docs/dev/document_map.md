@@ -27,13 +27,13 @@
 | **なぜそうしたか（現在有効な判断）** | [features/](features/)（機能）・[system/](system/)（基盤） | 判断ごとに1本。**現在形で書く** |
 | **なぜその重大判断をしたか** | [decisions/](decisions/)（ADR。**30行以内＝`AdrShapeTest` が固定**） | 覆りにくいものだけ |
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
-| **いまコードがどうなっているか** | [owner/source_code_analysis.md](../owner/source_code_analysis.md) | 測定日つきスナップショット |
+| **いまコードがどうなっているか** | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
 | **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋未解決の受付簿 |
 | **Codexが実機でどう検証するか** | [review/device_validation/](../review/device_validation/) | 共通手順＋機能別ケース（結果は持たない） |
 | **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
 
-補助として、出発点の記録 [project_origin.md](../owner/project_origin.md) がある。
+補助として、出発点の記録 [09_project_origin.md](../owner/09_project_origin.md) がある。
 
 > **設計書と日誌の線引き（2026-08-10 に整理）。**
 > 設計書には**現在有効な判断とその理由・契約・受理条件・意図的にやらないこと**だけを置く。
@@ -49,7 +49,7 @@
 | [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
 | [review/](../review/) | 最新の外部レビュー1本（未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
-| [project_origin.md](../owner/project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
+| [09_project_origin.md](../owner/09_project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
 
@@ -96,7 +96,6 @@
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
 | [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
-| [distill_range_adjust.md](features/distill_range_adjust.md) | 蒸留の太字範囲をユーザーが調整する。**段階1（プリセット）実装済み・段階2（自由範囲）未着手**（畳むのは段階2完了後） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
 | [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
@@ -185,12 +184,41 @@
 
 | したいこと | 読む順 |
 |---|---|
-| プロジェクトを初めて把握する | [owner/source_code_analysis.md](../owner/source_code_analysis.md) §1〜§4 → [system/architecture.md](system/architecture.md) |
+| プロジェクトを初めて把握する | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) §1〜§4 → [system/architecture.md](system/architecture.md) |
 | 次に何を作るか決める | [_wip/roadmap.md](../_wip/roadmap.md) → [_wip/current_issues.md](../_wip/current_issues.md) → [_wip/feature_ideas.md](../_wip/feature_ideas.md) |
 | 品質改善に着手する | [レビュー一覧](../review/README.md) → [_wip/current_issues.md](../_wip/current_issues.md) |
 | Codexが実機検証する | [共通手順](../review/device_validation/README.md) → 対象機能のケース → 該当する `features/` / `system/` の正本 |
 | 既存コードを触る前に背景を知る | 下の逆引き表 → 該当する `features/` か `system/` |
 | バグを踏んだ | [lessons.md](lessons.md) の索引 →（AI混入バグなら）[L34](lessons/L34.md) で型を判定 |
+
+### 通しで読む — 設計思想を掴む順
+
+**`features/` `system/` に読む順は無い。** 普段はコードから下の逆引き表で引く。
+**ここは例外で、「どんな考え方で作られたアプリか」を通しで掴みたいときの順路**である。
+
+**11本・約3,600行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
+必要になったとき逆引きで引けば読める。
+
+| | 文書 | なぜこの位置か | 行数 |
+|---:|---|---|---:|
+| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 256 |
+| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** | 116 |
+| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する | 311 |
+| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** | 300 |
+| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget | 133 |
+| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** | 291 |
+| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 181 |
+| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 593 |
+| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 234 |
+| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 311 |
+| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 869 |
+
+**1〜6が先なのは、7以降がそこで決めた規約を前提に書かれているから。** 逆順で読むと、
+機能ごとに同じ規約の説明を読み直すことになる。
+
+**`decisions/` は通読しない。** 覆りにくい重大判断だけを置いた「なぜ」の索引で、
+上の11本から `→ ADR-000N` で辿り着く。**`lessons/` も通読しない** —
+[索引](lessons.md)の「いつ当てるか」列を引き、該当したカードだけを読む（→ CLAUDE.md）。
 
 ### パッケージ → 先に読む設計書（逆引き）
 

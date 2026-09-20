@@ -3,8 +3,8 @@
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **作成日:** 2026-09-08 / **更新:** 2026-09-18
 **位置づけ:** オーナーの依頼に基づき、Git のコミットと PR 履歴から編纂した開発年代記。
-**原点記録:** [project_origin.md](project_origin.md)
-**現状解析:** [source_code_analysis.md](source_code_analysis.md)
+**原点記録:** [09_project_origin.md](09_project_origin.md)
+**現状解析:** [01_source_code_analysis.md](01_source_code_analysis.md)
 
 ---
 
@@ -65,7 +65,7 @@ timeline
 
 | 日付 | 出来事 | 詳細 |
 |---|---|---|
-| **2026-04-30** | **プロジェクト原点** | [project_origin.md](project_origin.md) に記録。Java で Obsidian Vault を選んでランダム表示する最小プロトタイプを作成 |
+| **2026-04-30** | **プロジェクト原点** | [09_project_origin.md](09_project_origin.md) に記録。Java で Obsidian Vault を選んでランダム表示する最小プロトタイプを作成 |
 | **2026-05-10** | **Initial Commit** | Git リポジトリ開設 |
 | **2026-05-10** | **PR #1: Jetpack Compose 移行** | Java 実装から Kotlin＋Jetpack Compose へ全面マイグレーション |
 | **2026-05-11** | **PR #2・#3: リネーム** | パッケージ構造を刷新し、正式名称を「Obsidian Mind」へ |

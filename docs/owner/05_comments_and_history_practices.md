@@ -151,7 +151,7 @@ Stack Overflow Blog はもう1点指摘している。ファイルを移動す�
 4. **コミットハッシュを添えて**まとめる（あとから原文で確かめられるように）
 
 関数や定数1つ分なら数分で済む。「冊子機能の変遷全体」のように広い問いでも作れるが、読むコミットが増えるぶん時間がかかる。
-[project_chronology](project_chronology.md) は、この方法で Git 履歴から編んだ年表である。
+[project_chronology](10_project_chronology.md) は、この方法で Git 履歴から編んだ年表である。
 
 ### 3.3 成り立つ条件と弱点
 

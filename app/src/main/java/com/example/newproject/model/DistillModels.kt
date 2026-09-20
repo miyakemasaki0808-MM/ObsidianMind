@@ -81,7 +81,19 @@ internal data class DistillSourceModel(
     val sentences: List<DistillSentence>,
     val chunks: List<DistillChunk>,
     val eligibleBodyCharacterCount: Int,
-    val existingBoldCharacterCount: Int
+    val existingBoldCharacterCount: Int,
+    /**
+     * `**` の端を内側へ置いてはいけない範囲（コードスパン・リンク・斜体・打ち消し線）。
+     * **文書全体ぶん・併合済み・開始順。**
+     *
+     * 候補生成は同じ集合を行ごとのカーソル越しに使って端を濾すが、**自由範囲は候補にならなかった
+     * 位置も指せる**ので、調整の時点でもう一度問える形が要る。親文は最大160文字なので、
+     * ここから親文に掛かるぶんだけを引けば足りる（→ [distillProtectedSpansWithin]）。
+     *
+     * 既存の `**` 強調は入らない。親文が `subtractRanges` で既存強調を差し引いた区間から
+     * 作られる限り、確定範囲はそこへ到達しない。
+     */
+    val protectedSpans: List<DistillTextRange>
 )
 
 internal data class DistillCandidate(

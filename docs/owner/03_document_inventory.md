@@ -14,7 +14,7 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 125本・約21,400行。** `CLAUDE.md`・`README.md` と `docs/` 配下の123本を数えた。
+**追跡対象の Markdown は 126本・約21,600行。** `CLAUDE.md`・`README.md` と `docs/` 配下の124本を数えた。
 作業ツリーにはこの他に追跡しないものが8本ある。レビュー本文1本、Fable 5.1 の報告書5本、実機検証の証跡フォルダの引き継ぎメモ2本。
 
 ```
@@ -25,18 +25,18 @@ docs/
 ├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (4本)    開発日誌。README＋月別3本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
-├── dev/       (83本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (24本)  ユーザーから見える機能。README・様式＋仕様22本
+├── dev/       (82本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (23本)  ユーザーから見える機能。README・様式＋仕様21本
 │   ├── system/    (13本)  横断的な基盤。README＋12本
 │   ├── decisions/  (6本)  ADR。README＋5本
 │   └── lessons/   (36本)  教訓65件のうち、カードを持つ36本
 ├── _wip/       (4本)      進行中。リリース時に廃棄する
-└── review/    (19本)      レビューと実機検証。ほかに追跡しない本文1本
-    └── device_validation/ (16本)  共通手順・簡易版・機能別ケース14本
+└── review/    (21本)      レビューと実機検証。ほかに追跡しない本文1本
+    └── device_validation/ (18本)  共通手順・簡易版・機能別ケース16本
 ```
 
-2026-09-14 の前回目録から3本増えた。実機ケース2本（要約の保存・起動の再生成）と、
-`owner/` の実装設計の下書き1本（反証の一文）である。
+前回の数え直しから2本増えて1本減った。増えたのは実機ケースの痕跡の孤児削除とひとことの再生成、
+減ったのは蒸留の太字範囲調整で、こちらは段階2まで終わったので [reflect_distill](../dev/features/reflect_distill.md) へ畳んで削除した。
 
 ## 2. 場所ごとの役割
 
@@ -56,7 +56,7 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。22本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。21本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
@@ -69,8 +69,7 @@ docs/
 | [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
 | [quiz](../dev/features/quiz.md) | クイズ | 稼働中。未確認管理を持つ唯一の機能 |
 | [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | 稼働中 |
-| [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句 |
-| [distill_range_adjust](../dev/features/distill_range_adjust.md) | 蒸留の太字範囲の調整 | 段階1のプリセットまで実装・実機済み |
+| [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。920行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。**2026-09-09〜12 に新設** |
 | [note_image_rendering](../dev/features/note_image_rendering.md) | ノート内画像の表示 | 稼働中・実機確認済み |
@@ -118,7 +117,7 @@ docs/
 ## 6. `docs/dev/lessons/` — 教訓。65件
 
 **[索引](../dev/lessons.md) が本体で、カードは詳細。** 索引の「いつ当てるか」列を引き、該当したカードだけを読む。
-中身の棚卸しは [lessons_summary](lessons_summary.md) が持つ。
+中身の棚卸しは [lessons_summary](06_lessons_summary.md) が持つ。
 
 | 数え方 | 件数 |
 |---|---|
@@ -147,9 +146,9 @@ docs/
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残21件 |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
-外から読んだ分析は [wip_analysis](wip_analysis.md) が持つ。
+外から読んだ分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
-## 8. `docs/review/` — レビューと実機検証。19本＋追跡しない本文1本
+## 8. `docs/review/` — レビューと実機検証。21本＋追跡しない本文1本
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
@@ -159,26 +158,30 @@ docs/
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
-| device_validation の機能別ケース14本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・返事の保存・ネットワーク権限・要約の基準線・要約の保存。結果は持たない | ✅ |
+| device_validation の機能別ケース16本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・返事の保存・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・ひとことの再生成。結果は持たない | ✅ |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ | ❌ 未追跡 |
 
 ## 9. `docs/owner/` — オーナーが読む俯瞰。16本
 
-| 文書 | 答える問い |
-|---|---|
-| [README](README.md) | 何ができるアプリか |
-| [source_code_analysis](source_code_analysis.md) | いまコードがどうなっているか。最大の文書 |
-| [jvm_test_report](jvm_test_report.md) | どういう観点でテストしているか |
-| [lessons_summary](lessons_summary.md) | 教訓65件に何が書かれているか |
-| [readme_map](readme_map.md) | 16本ある README がそれぞれ何をしているか |
-| [wip_analysis](wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
-| [idea_catalog](idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
-| [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**引き渡しの粒度の下書き。実装後も更新しない** |
-| [comments_and_history_practices](comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
-| [project_chronology](project_chronology.md) | どう歩んできたか。年表 |
-| **本書** | どんな文書があるか |
-| [project_origin](project_origin.md) | どこから始まったか。2026-04-30。更新しない |
-| [journal/](journal/) | どうやってここまで来たか。2026-07・08・09 |
+**ファイル名の番号が読む順である**（2026-09-19）。「いま何があるか → どう書くか → 何を学んだか → どう歩んできたか」で並ぶ。
+`README.md` と `journal/` は名前で指されている先が多いので改名せず、順路の両端に置くだけにした。
+**欠番は詰めない** — 詰め直すと既存の参照が別の文書を指す。
+
+| No. | 文書 | 答える問い |
+|---|---|---|
+| — | [README](README.md) | 何ができるアプリか。フォルダの入口 |
+| 01 | [source_code_analysis](01_source_code_analysis.md) | いまコードがどうなっているか。最大の文書 |
+| 02 | [jvm_test_report](02_jvm_test_report.md) | どういう観点でテストしているか |
+| 03 | **本書** | どんな文書があるか |
+| 04 | [readme_map](04_readme_map.md) | 16本ある README がそれぞれ何をしているか |
+| 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
+| 06 | [lessons_summary](06_lessons_summary.md) | 教訓65件に何が書かれているか |
+| 07 | [wip_analysis](07_wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
+| 08 | [idea_catalog](08_idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
+| 09 | [project_origin](09_project_origin.md) | どこから始まったか。2026-04-30。更新しない |
+| 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |
+| — | [journal/](journal/) | どんな日々だったか。2026-07・08・09 |
+| — | [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**実装したら役目が終わる下書きなので、番号列に入れない** |
 
 `Fable5.1_report/` は git 管理外。入口 README と章3本・課題一覧、`完了/` に計測値がある。本書の数には入れない。
 

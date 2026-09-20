@@ -3,7 +3,7 @@
 
     <application>
         <!--
-          instrumentation 用の Vault（→ docs/dev/design/instrumentation_testing.md 段階2）。
+          instrumentation 用の Vault（→ docs/dev/system/instrumentation_testing.md 段階2）。
           debug ビルドにだけ入り、release には含まれない。
 
           **この3つは DocumentsProvider の必須要件で、外すと起動時に落ちる。**

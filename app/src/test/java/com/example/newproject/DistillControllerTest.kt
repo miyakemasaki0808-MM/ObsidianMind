@@ -12,6 +12,8 @@ import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.RemarkState
+import com.example.newproject.model.state.DistillRangeEdge
+import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
@@ -864,6 +866,126 @@ class DistillControllerTest {
         assertTrue(state.value.distillState is DistillState.Candidates)
         assertEquals(null, persistence.lastWrite)
     }
+
+    @Test
+    fun `a freely dragged edge moves the bold markers with it`() = runTest {
+        val content = adjustableNote()
+        val state = stateWithNote(content)
+        val persistence = FakePersistence()
+        val controller = controller(state, FakeAiClient.returning("S005"), persistence)
+        controller.start()
+        advanceUntilIdle()
+
+        // **プリセットでは取れない端。** 受けるのは親文（128..191）の中の相対位置で、原文offsetではない。
+        controller.dragRangeEdge("S005", DistillRangeEdge.End, offsetInParent = 20, fromOffsetInParent = 31)
+
+        val adjusted = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(null, adjusted.currentPreset)
+        assertTrue(adjusted.isRangeAdjusted)
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        // 段のときと同じく、**保存経路が提案範囲を読み続けていたらここで落ちる。**
+        val written = persistence.lastWrite!!.outputBytes.decodeToString()
+        assertEquals(withBoldAt(content, 128, 148), written)
+        assertEquals(content, written.replace("**", ""))
+    }
+
+    @Test
+    fun `a freely widened range deselects the overlap and re-checking reverses it`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005 S006"))
+        controller.start()
+        advanceUntilIdle()
+
+        // S006（160..191）の始点を親文の先頭側へ引くと、S005（128..159）へ食い込む。
+        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = 10, fromOffsetInParent = 32)
+
+        val widened = state.value.distillState as DistillState.Candidates
+        assertEquals(listOf("S005"), widened.overlapDeselectedIds)
+        assertFalse(widened.items.first { it.id == "S005" }.isSelected)
+
+        // **両方向を見る。** 外された側をチェックし直すと、最後の明示操作が残って今度は S006 が外れる。
+        controller.toggleCandidate("S005")
+
+        val rechecked = state.value.distillState as DistillState.Candidates
+        assertTrue(rechecked.items.first { it.id == "S005" }.isSelected)
+        assertFalse(rechecked.items.first { it.id == "S006" }.isSelected)
+        assertEquals(listOf("S006"), rechecked.overlapDeselectedIds)
+    }
+
+    @Test
+    fun `a nudge moves one offset and reports the directions left`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005"))
+        controller.start()
+        advanceUntilIdle()
+        controller.applyRange("S005", DistillRangePreset.Sentence)
+
+        val full = (state.value.distillState as DistillState.Candidates).items.single()
+        // 親文いっぱいなので、外向きの矢印は押せない。
+        assertEquals(
+            setOf(DistillRangeEdgeMove.ShrinkStart, DistillRangeEdgeMove.ShrinkEnd),
+            full.availableEdgeMoves
+        )
+
+        controller.nudgeRangeEdge("S005", DistillRangeEdgeMove.ShrinkStart)
+
+        val nudged = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(full.parentText.substring(1), nudged.text)
+        assertEquals(
+            setOf(
+                DistillRangeEdgeMove.ExpandStart,
+                DistillRangeEdgeMove.ShrinkStart,
+                DistillRangeEdgeMove.ShrinkEnd
+            ),
+            nudged.availableEdgeMoves
+        )
+    }
+
+    @Test
+    fun `a drag cannot take the range out of its parent sentence`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S006"))
+        controller.start()
+        advanceUntilIdle()
+
+        // 親文の外（前の行）を指しても、外枠は親文のまま。
+        controller.dragRangeEdge("S006", DistillRangeEdge.Start, offsetInParent = -50, fromOffsetInParent = 32)
+
+        val item = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(0, item.boldStartInParent)
+        assertEquals(item.parentText, item.text)
+    }
+
+    @Test
+    fun `dragging to the same place twice does not flip the edge back`() = runTest {
+        val content = decoratedNote()
+        val state = stateWithNote(content)
+        val controller = controller(state, FakeAiClient.returning("S001"))
+        controller.start()
+        advanceUntilIdle()
+
+        val italicStart = content.indexOf("*強調語句*")
+        val italicEnd = italicStart + "*強調語句*".length
+        val inside = italicStart + 3
+
+        // 始点を右へ動かして装飾の内側を指す。狭めているので装飾の向こう側へ倒れる。
+        controller.dragRangeEdge("S001", DistillRangeEdge.Start, inside, fromOffsetInParent = 0)
+        val first = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(italicEnd, first.boldStartInParent)
+
+        // **指が止まったまま同じ位置が届いても動かない。**
+        // 寄せた結果から向きを推測すると、ここで装飾の手前へ引き返す。
+        controller.dragRangeEdge("S001", DistillRangeEdge.Start, inside, fromOffsetInParent = inside)
+        val second = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(italicEnd, second.boldStartInParent)
+    }
+
+    /** 斜体を句の内側に持つ1文のノート。`S001` が斜体をまたぐ句になる。 */
+    private fun decoratedNote(): String =
+        "${"あ".repeat(20)}*強調語句*${"あ".repeat(20)}、${"い".repeat(20)}。"
 
     /** 句へ割れる6文のノート。`S005` と `S006` は同じ親文（128..191）の2つの句。 */
     private fun adjustableNote(): String = (1..6).joinToString("\n") { index ->
