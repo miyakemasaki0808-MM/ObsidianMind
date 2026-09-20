@@ -18,7 +18,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -239,31 +238,51 @@ class MarginMemoControllerTest {
         assertEquals(listOf("あとから置くメモ"), ready(store).memos.map { it.text })
     }
 
-    /** **置けなかった入力を画面へ返す。** シートは押した瞬間に入力欄を空にするため。 */
+    /**
+     * **受け取れた回だけ数える。** これが画面の「入力欄を空にしてよい」合図で、
+     * 置けなかった回に増やすと、原文が手元から消える。
+     */
     @Test
-    fun `置けなかった入力を書き直せるよう返す`() = runTest {
-        val store = NoteUiStateStore(NoteUiState())
-        val controller = controller(store, outcome = MemoSaveOutcome.Full)
-        controller.open(path)
-        advanceUntilIdle()
-
-        controller.save(path, "あふれた断片", sectionTitle = null)
-        advanceUntilIdle()
-
-        assertEquals("あふれた断片", ready(store).rejectedText)
-    }
-
-    @Test
-    fun `置けたときは入力を返さない`() = runTest {
+    fun `置けた回だけ受理の件数が増える`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val controller = controller(store, outcome = MemoSaveOutcome.Saved)
         controller.open(path)
         advanceUntilIdle()
+        assertEquals(0L, ready(store).acceptedCount)
 
         controller.save(path, "置けた断片", sectionTitle = null)
         advanceUntilIdle()
 
-        assertNull(ready(store).rejectedText)
+        assertEquals(1L, ready(store).acceptedCount)
+    }
+
+    @Test
+    fun `満杯や失敗では受理の件数を増やさない`() = runTest {
+        listOf(MemoSaveOutcome.Full, MemoSaveOutcome.Lost).forEach { outcome ->
+            val store = NoteUiStateStore(NoteUiState())
+            val controller = controller(store, outcome = outcome)
+            controller.open(path)
+            advanceUntilIdle()
+
+            controller.save(path, "置けない断片", sectionTitle = null)
+            advanceUntilIdle()
+
+            assertEquals("$outcome で受理を数えた", 0L, ready(store).acceptedCount)
+        }
+    }
+
+    /** 預かりも「受け取れた」側。離脱時に書かれるので、入力欄は空にしてよい。 */
+    @Test
+    fun `預かったときも受理の件数が増える`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val controller = controller(store, outcome = MemoSaveOutcome.Held)
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.save(path, "預けた断片", sectionTitle = null)
+        advanceUntilIdle()
+
+        assertEquals(1L, ready(store).acceptedCount)
     }
 
     /**

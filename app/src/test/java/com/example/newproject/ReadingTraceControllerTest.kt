@@ -1358,6 +1358,106 @@ class ReadingTraceControllerTest {
         assertEquals(MemoDeleteOutcome.Failed, outcome)
     }
 
+    /**
+     * **読めなかったファイルを新規扱いしない。**
+     *
+     * `None` は不在と読み取り失敗の両方で返る。畳むと、訪問の保存が
+     * **読めていないだけの保存済みメモを上書きして消す。**
+     * 削除側だけ直しても、保存側に同じ規則を当てなければ残る。
+     */
+    @Test
+    fun `痕跡を読めないときは訪問保存で上書きしない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1).copy(memos = listOf(memoOf("保存済み", at = 100L))))
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+
+        // 読み取りだけが失敗する状態にしてから、新しいメモを預ける。
+        persistence.unreadablePaths += "ideas/habit.md"
+        controller.appendMemo("ideas/habit.md", memoOf("預けた", at = 200L))
+        advanceUntilIdle()
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            "読めないファイルを新規で上書きした",
+            listOf("保存済み"),
+            persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
+
+        // 読めるようになれば、預かりは次の契機で載る。
+        persistence.unreadablePaths.clear()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("保存済み", "預けた"),
+            persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
+    }
+
+    /** 未作成なら、これまでどおり新規として作れる。 */
+    @Test
+    fun `本当に未作成なら訪問保存で新規に作る`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+
+        controller.appendMemo("ideas/habit.md", memoOf("初読のメモ", at = 200L))
+        advanceUntilIdle()
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("初読のメモ"),
+            persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
+    }
+
+    /**
+     * **削除が失敗したら、預かりも退避も元のまま残す。**
+     *
+     * 先にメモリ側を消していたころは、永続側が `Failed` を返しても預かりが戻らず、
+     * **画面の一覧だけが復旧して、次に開くと消えていた。**
+     */
+    @Test
+    fun `削除に失敗したメモは預かりから消えない`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        val target = memoOf("預けたメモ", at = 1_000L)
+        controller.appendMemo("ideas/habit.md", target)
+        advanceUntilIdle()
+
+        // 置き場を列挙できない＝不在を確かめられない。
+        persistence.listable = false
+        val outcome = controller.deleteMemo("ideas/habit.md", target)
+        advanceUntilIdle()
+
+        assertEquals(MemoDeleteOutcome.Failed, outcome)
+        assertEquals(
+            "失敗したのに預かりから消えた",
+            listOf("預けたメモ"),
+            controller.loadMemos("ideas/habit.md").map { it.text }
+        )
+
+        // 回復すれば消せる。
+        persistence.listable = true
+        assertEquals(
+            MemoDeleteOutcome.Deleted,
+            controller.deleteMemo("ideas/habit.md", target)
+        )
+    }
+
     /** Vault切替で退避したメモは新しいVaultへ書かない。 */
     @Test
     fun `Vault切替で退避したメモは書かれない`() = runTest {

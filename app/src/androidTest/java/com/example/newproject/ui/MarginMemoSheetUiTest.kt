@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -59,7 +60,8 @@ class MarginMemoSheetUiTest {
                         val ready = state as MarginMemoState.Ready
                         state = ready.copy(
                             memos = listOf(MarginMemo(text, saved.size.toLong())) + ready.memos,
-                            status = MemoSaveStatus.Saved
+                            status = MemoSaveStatus.Saved,
+                            acceptedCount = ready.acceptedCount + 1
                         )
                     },
                     onDelete = {}
@@ -76,9 +78,15 @@ class MarginMemoSheetUiTest {
         assertEquals(listOf("1件目", "2件目"), saved)
     }
 
-    /** 置けなかった入力は**書き直せるよう戻す**（押した瞬間に空にしているため）。 */
+    /**
+     * 置けなかった入力は**原文のまま手元に残る。**
+     *
+     * 受理の件数が増えたときだけ消すので、失敗は何もしなくても残る。
+     * 押した瞬間に空にしていたころは、上限で切り詰めた後の文字列しか戻せなかった。
+     */
     @Test
-    fun 満杯で置けなかった入力は入力欄へ戻る() {
+    fun 満杯で置けなかった入力は原文のまま残る() {
+        val long = "あ".repeat(400)
         composeRule.setContent {
             var state by remember {
                 mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
@@ -86,21 +94,37 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
-                    onSave = { text ->
-                        state = (state as MarginMemoState.Ready).copy(
-                            status = MemoSaveStatus.Full,
-                            rejectedText = text
-                        )
+                    onSave = {
+                        // 受理していないので acceptedCount は増やさない。
+                        state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Full)
                     },
                     onDelete = {}
                 )
             }
         }
 
-        composeRule.onNodeWithText(placeholder).performTextInput("あふれた断片")
+        composeRule.onNodeWithText(placeholder).performTextInput(long)
         composeRule.onNodeWithText("置く").performClick()
 
-        composeRule.onNodeWithText("あふれた断片").assertExists()
+        composeRule.onNodeWithText(long).assertExists()
+    }
+
+    /** 読み込み中・失敗中は押させない。押せると、入力だけが宙に浮く。 */
+    @Test
+    fun 読み込み中は置くを押せない() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                MarginMemoSheetContent(
+                    state = MarginMemoState.Loading,
+                    onSave = { error("読み込み中に保存を要求した") },
+                    onDelete = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(placeholder).performTextInput("読み込み中に書いた")
+        composeRule.onNodeWithText("置く").assertIsNotEnabled()
+        composeRule.onNodeWithText("読み込み中に書いた").assertExists()
     }
 
     /**
@@ -109,16 +133,27 @@ class MarginMemoSheetUiTest {
      * 戻す条件を「入力欄が空のときだけ」にしてあるのがその担保。
      */
     @Test
-    fun 保存待ちに書いた下書きは置けなかった入力で上書きされない() {
+    fun 保存待ちに書いた下書きは前の要求の完了で消えない() {
+        lateinit var finish: (MemoSaveStatus) -> Unit
         composeRule.setContent {
             var state by remember {
                 mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
+            }
+            finish = { status ->
+                val ready = state as MarginMemoState.Ready
+                state = ready.copy(
+                    status = status,
+                    acceptedCount = if (status == MemoSaveStatus.Saved) {
+                        ready.acceptedCount + 1
+                    } else {
+                        ready.acceptedCount
+                    }
+                )
             }
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
                     onSave = { _ ->
-                        // 結果が返る前に次を書き始めた、という順序を作る。
                         state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Saving)
                     },
                     onDelete = {}
@@ -128,8 +163,15 @@ class MarginMemoSheetUiTest {
 
         composeRule.onNodeWithText(placeholder).performTextInput("1件目")
         composeRule.onNodeWithText("置く").performClick()
+        // 結果が返る前に次を書き始める。
         composeRule.onNodeWithText(placeholder).performTextReplacement("待っているあいだに書いた")
 
+        // 1件目が受理されても、書き直した下書きは消えない。
+        composeRule.runOnIdle { finish(MemoSaveStatus.Saved) }
+        composeRule.onNodeWithText("待っているあいだに書いた").assertExists()
+
+        // 1件目が失敗した場合も同じ（下書きは触られない）。
+        composeRule.runOnIdle { finish(MemoSaveStatus.Full) }
         composeRule.onNodeWithText("待っているあいだに書いた").assertExists()
     }
 }

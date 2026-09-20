@@ -480,12 +480,52 @@ internal class ReadingTraceController(
         memo: MarginMemo
     ): MemoDeleteOutcome {
         val vaultKey = currentVaultKey() ?: return MemoDeleteOutcome.Failed
-        val ownerSessionId = session?.id
         return withContext(ioDispatcher) {
             writeMutex.withLock {
-                // 1. 預かり
+                // **消えたことを確かめてから、預かりと退避を捨てる。**
+                //
+                // 先にメモリ側を消していたころは、永続側が `Failed` を返しても
+                // 預かりが戻らず、**画面の一覧だけが復旧して、次に開くと消えていた。**
+                // 失敗したメモは「どこかに残っている」ことまで保証する。
+                val loaded = try {
+                    persistence.load(vaultRelativePath, vaultKey)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@withLock MemoDeleteOutcome.Failed
+                }
+                val confirmed = when (loaded) {
+                    is ReadingTraceReadResult.Valid -> {
+                        val trace = loaded.trace
+                        if (trace.memos.none { it == memo }) {
+                            // ファイルには元から無い。預かりと退避を消せば消え切る。
+                            true
+                        } else {
+                            val saved = try {
+                                persistence.save(
+                                    trace.copy(memos = trace.memos.filterNot { it == memo }),
+                                    vaultKey
+                                )
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                null
+                            }
+                            saved is ReadingTraceSaveResult.Success
+                        }
+                    }
+                    // **「無い」と「読めなかった」を索引で突き合わせて区別する。**
+                    // `None` だけでは足りない — 置き場にファイルが在っても、
+                    // 読み取りに失敗すれば同じ `None` が返る。
+                    ReadingTraceReadResult.None -> isConfirmedAbsent(vaultKey, vaultRelativePath)
+                    // 壊れている痕跡は中身を判断できない。消せたと言わない。
+                    is ReadingTraceReadResult.Corrupt -> false
+                }
+                if (!confirmed) return@withLock MemoDeleteOutcome.Failed
+
+                // ここまで来て初めて、預かりと退避から外す（→ §7 の契約5）。
+                // 1箇所でも残すと、次の書き込み契機で合流して復活する。
                 removeHeldMemo(vaultKey, vaultRelativePath, memo)
-                // 2. 退避
                 pendingMutex.withLock {
                     val key = pendingKey(vaultKey, vaultRelativePath)
                     pendingWrites[key]?.let { pending ->
@@ -496,42 +536,7 @@ internal class ReadingTraceController(
                         )
                     }
                 }
-                // 3. 永続ファイル
-                //
-                // **「読めなかった」を「無い」へ畳まない。** `None` はファイルが無いときだけでなく
-                // **読み取りに失敗したとき**にも返る（gateway が null を返す経路が両方にある）。
-                // 畳むと、ディスクに残っているメモを画面から消したまま確定し、
-                // 次に開いたとき戻ってくる。
-                val loaded = try {
-                    persistence.load(vaultRelativePath, vaultKey)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    return@withLock MemoDeleteOutcome.Failed
-                }
-                val existing = when (loaded) {
-                    is ReadingTraceReadResult.Valid -> loaded.trace
-                    // **「無い」と「読めなかった」を索引で突き合わせて区別する。**
-                    // `None` だけでは足りない — 置き場にファイルが在っても、
-                    // 読み取りに失敗すれば同じ `None` が返る。
-                    ReadingTraceReadResult.None ->
-                        return@withLock deleteOutcomeWithoutFile(vaultKey, vaultRelativePath)
-                    // 壊れている痕跡は中身を判断できない。消せたと言わない。
-                    is ReadingTraceReadResult.Corrupt -> return@withLock MemoDeleteOutcome.Failed
-                }
-                if (existing.memos.none { it == memo }) return@withLock MemoDeleteOutcome.Deleted
-                val saved = try {
-                    persistence.save(existing.copy(memos = existing.memos.filterNot { it == memo }), vaultKey)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    null
-                }
-                if (saved is ReadingTraceSaveResult.Success) {
-                    MemoDeleteOutcome.Deleted
-                } else {
-                    MemoDeleteOutcome.Failed
-                }
+                MemoDeleteOutcome.Deleted
             }
         }
     }
@@ -572,6 +577,12 @@ internal class ReadingTraceController(
                         as? ReadingTraceReadResult.Valid
                     )?.trace
                 val next = if (existing == null) {
+                    // **不在を確かめられたときだけ新規として作る**（→ 保存側と同じ規則）。
+                    // 読めなかっただけのファイルへ退避を丸ごと書くと、
+                    // 読めていない保存済みメモを上書きして消す。
+                    if (!isConfirmedAbsent(pending.vaultKey, pending.trace.vaultRelativePath)) {
+                        return@withLock false
+                    }
                     pending.trace
                 } else {
                     existing.copy(memos = mergeMarginMemos(existing.memos, pending.trace.memos))
@@ -627,33 +638,25 @@ internal class ReadingTraceController(
     }
 
     /**
-     * 読み込みが `None` だったときの削除結果。
+     * 読み込みが `None` だったとき、**本当にファイルが無いと言えるか。**
      *
-     * **`None` は不在の証明にならない。** 置き場の列挙と突き合わせて、
-     * 「ファイルが本当に無い」ときだけ成功と言う。
-     * 在るのに読めなかった場合に成功と言うと、**ディスクに残ったメモを
-     * 画面から消したまま確定**し、次に開いたとき戻ってくる。
+     * **`None` は不在の証明にならない。** 置き場にファイルが在っても、
+     * 読み取りに失敗すれば同じ `None` が返る。置き場の列挙と突き合わせて初めて
+     * 「無い」と言える。列挙そのものができないときも**無いとは言わない。**
      *
-     * 列挙そのものができないときも成功と言わない（**無いことを意味しない**）。
+     * **読む経路と書く経路の両方がここを通る。** 削除だけ直して保存側に当てないと、
+     * 読めなかっただけの保存済みメモを訪問の保存が上書きして消す。
      */
-    private fun deleteOutcomeWithoutFile(
-        vaultKey: String,
-        vaultRelativePath: String
-    ): MemoDeleteOutcome {
+    private fun isConfirmedAbsent(vaultKey: String, vaultRelativePath: String): Boolean {
         val listing = try {
             persistence.listKeys(vaultKey)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return MemoDeleteOutcome.Failed
+            return false
         }
-        if (listing !is ReadingTraceKeyListing.Available) return MemoDeleteOutcome.Failed
-        // 在るのに読めなかった＝消せたと言えない。無ければ、預かりと退避から消した時点で消え切っている。
-        return if (ReadingTraceStore.keyFor(vaultRelativePath) in listing.keys) {
-            MemoDeleteOutcome.Failed
-        } else {
-            MemoDeleteOutcome.Deleted
-        }
+        if (listing !is ReadingTraceKeyListing.Available) return false
+        return ReadingTraceStore.keyFor(vaultRelativePath) !in listing.keys
     }
 
     /**
@@ -744,8 +747,6 @@ internal class ReadingTraceController(
             // 前回書けなかったぶんがあれば、まずそれを片付ける。
             // これから書くノートは除く（下の保存が同じファイルを扱う）。
             withContext(ioDispatcher) { flushPendingWrites(excludePath = path) }
-            // 保存しようとした痕跡。失敗したときに丸ごと退避するために掴んでおく。
-            var attempted: ReadingTrace? = null
             // 合流が上限を超えたか。**超えたらメモを書かない**（訪問だけ書く）。
             var overCapacity = false
             val result = withContext(ioDispatcher) {
@@ -763,14 +764,28 @@ internal class ReadingTraceController(
                                 trace
                             }
                         }
-                        // 未作成も破損も新規として作り直す。壊れたファイルは上書きで直す
-                        // （過去の痕跡は失うが、ユーザーのノートには一切触れない）。
-                        else -> ReadingTrace(
-                            vaultRelativePath = path,
-                            noteTitle = title,
-                            documentId = documentId,
-                            visits = emptyList()
-                        )
+                        // **不在を確かめられたときだけ新規として作る。**
+                        //
+                        // かつては破損も含めて上書きで作り直していた。サイドカーが
+                        // 作り直せるものだけを持っていた頃は正しかったが、**v7 からは
+                        // ユーザーが書いた言葉が入っている。** `None` は不在と
+                        // 読み取り失敗の両方で返るので、畳むと**読めなかっただけの
+                        // 保存済みメモを訪問の保存で上書きして消す。**
+                        else -> {
+                            if (!isConfirmedAbsent(vaultKey, path)) {
+                                // 在るのに読めない／確かめられない。**書かずに諦める。**
+                                // 預かりと退避は手つかずなので、読めるようになれば次の契機で載る。
+                                return@withLock ReadingTraceSaveResult.Failure(
+                                    "痕跡を読み取れないため上書きしませんでした。"
+                                )
+                            }
+                            ReadingTrace(
+                                vaultRelativePath = path,
+                                noteTitle = title,
+                                documentId = documentId,
+                                visits = emptyList()
+                            )
+                        }
                     }
                     // **3箇所を合流させる**（→ §7 の契約2・3）。退避を載せずに書いて
                     // 成功扱いにすると、書けていないメモを持ったまま退避を捨てることになる。
@@ -785,8 +800,21 @@ internal class ReadingTraceController(
                     // 入りきらない分は預かりと退避に残るので、どこへも消えない。
                     overCapacity = merged.size > ReadingTraceLimits.MAX_MEMOS
                     val next = if (overCapacity) withVisit else withVisit.copy(memos = merged)
-                    attempted = next
-                    persistence.save(next, vaultKey)
+                    val saved = persistence.save(next, vaultKey)
+                    // **退避の更新を錠の内側で確定する**（→ §7 の契約4）。
+                    // 錠の外へ出すと、保存が失敗して錠を離した隙に完了した削除を、
+                    // 遅れて走る退避が**巻き戻して復活させる。**
+                    if (saved is ReadingTraceSaveResult.Failure) {
+                        // 痕跡の新規作成が失敗した回を救えるのはここだけ
+                        // （ファイルが無いと、メモだけでは載せる先が無い）。
+                        rememberPendingWrite(vaultKey, next)
+                    } else if (!overCapacity) {
+                        // 書けた痕跡には預かりも退避も合流済みなので、どちらも用済み（→ 契約3）。
+                        // **上限超過で書けなかったときは、どちらも残す。**
+                        forgetHeldMemos(vaultKey, path, next.memos)
+                        forgetPendingWrite(vaultKey, path)
+                    }
+                    saved
                 }
             }
             // 書けていなければ「まだ書いていない」状態へ戻し、次の契機（背面化・離脱）で
@@ -803,18 +831,7 @@ internal class ReadingTraceController(
                 // **メモは戻さなくてよい。** 預かりはセッションの外にあり、
                 // 起動前に取り出してもいないので、失敗しても手つかずで残っている。
             }
-            // **書けなかった痕跡を丸ごと退避する。** 痕跡の新規作成が失敗した回を救えるのはここだけ
-            // （ファイルが無いと、メモだけでは載せる先が無い）。
-            attempted?.let { trace ->
-                if (result is ReadingTraceSaveResult.Failure) {
-                    rememberPendingWrite(vaultKey, trace)
-                } else if (!overCapacity) {
-                    // 書けた痕跡には預かりも退避も合流済みなので、どちらも用済み（→ 契約3）。
-                    // **上限超過で書けなかったときは、どちらも残す。**
-                    forgetHeldMemos(vaultKey, trace.vaultRelativePath, trace.memos)
-                    forgetPendingWrite(vaultKey, trace.vaultRelativePath)
-                }
-            }
+
         }
     }
 

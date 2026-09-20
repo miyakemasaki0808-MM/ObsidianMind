@@ -39,3 +39,7 @@
 | `2026-09-20-margin-memo-implementation-review/P2-3` | 再会カードへhasMemosを渡さず、メモの入口が常に隠れる | `起票` MEMO-10 |
 | `2026-09-20-margin-memo-implementation-review/P2-4` | 長い見出しを含むメモが永続不能なHeldになり、後続保存も妨げる | `起票` MEMO-11 |
 | `2026-09-20-margin-memo-implementation-review/P2-5` | 既存痕跡の読み取り不能を削除成功として返す | `起票` MEMO-12 |
+| `2026-09-20-margin-memo-implementation-fix-review/P1-1` | 読み取れない既存痕跡を訪問保存で上書きし、保存済みメモを失う | `起票` MEMO-13 |
+| `2026-09-20-margin-memo-implementation-fix-review/P2-1` | 保存失敗時の元入力が切り詰められ、新しい下書きがあると回収もできない | `統合` MEMO-5 |
+| `2026-09-20-margin-memo-implementation-fix-review/P2-2` | 訪問保存の失敗後処理が、完了した削除を退避への再追加で巻き戻す | `統合` MEMO-8 |
+| `2026-09-20-margin-memo-implementation-fix-review/P2-3` | 削除失敗でも預かりと退避から先に消し、一覧だけを復旧する | `統合` MEMO-12 |

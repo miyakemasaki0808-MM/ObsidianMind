@@ -106,8 +106,7 @@ internal class MarginMemoController(
             it.copy(
                 marginMemoState = current.copy(
                     status = MemoSaveStatus.Saving,
-                    wasTruncated = false,
-                    rejectedText = null
+                    wasTruncated = false
                 )
             )
         }
@@ -151,11 +150,12 @@ internal class MarginMemoController(
                     wasTruncated = draft.wasTruncated &&
                         outcome != MemoSaveOutcome.Full &&
                         outcome != MemoSaveOutcome.Lost,
-                    // **置けなかった入力を画面へ返す。** シートは置いた瞬間に入力欄を空にするので、
-                    // ここで返さないと書いた言葉が消える（→ features/reflect_margin_memo.md §5）。
-                    rejectedText = when (outcome) {
-                        MemoSaveOutcome.Full, MemoSaveOutcome.Lost -> draft.text
-                        MemoSaveOutcome.Saved, MemoSaveOutcome.Held -> null
+                    // **受け取れた回だけ数える。** これが画面の「入力欄を空にしてよい」合図で、
+                    // 置けなかった回は増えないので**原文が手元に残る**
+                    // （→ features/reflect_margin_memo.md §5）。
+                    acceptedCount = when (outcome) {
+                        MemoSaveOutcome.Saved, MemoSaveOutcome.Held -> ready.acceptedCount + 1
+                        MemoSaveOutcome.Full, MemoSaveOutcome.Lost -> ready.acceptedCount
                     }
                 ))
             }

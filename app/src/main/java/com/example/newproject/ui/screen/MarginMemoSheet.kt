@@ -99,15 +99,26 @@ internal fun MarginMemoSheetContent(
 
     val ready = state as? MarginMemoState.Ready
 
-    // **置けなかった入力だけを、一度だけ書き戻す。**
+    // **入力欄を楽観的に空にしない。** 受け取れたと分かってから、
+    // **その要求で出した文字列そのもの**のときだけ空にする。
     //
-    // 入力欄は「置く」を押した瞬間に空にする（状態から毎回空にする形だと、
-    // status が Saved のまま残るので**再コンポーズのたびに2件目が消える**）。
-    // 空にしたぶん、置けなかったときはここで返す。
-    // **待っているあいだに書き始めていたら返さない** — 新しい下書きを上書きしないため。
-    LaunchedEffect(ready?.rejectedText) {
-        val rejected = ready?.rejectedText
-        if (rejected != null && draft.isEmpty()) draft = rejected
+    // - 状態から「置けたら空にする」を導くと、`status` が残るので
+    //   **再コンポーズのたびに2件目が消える**
+    // - 押した瞬間に空にすると、置けなかったときに**原文を戻せない**
+    //   （上限で切り詰めた後の文字列しか手元に無い）
+    //
+    // 受理の件数が増えたときだけ消すので、**置けなかった入力は何もしなくても残る。**
+    var submitted by remember { mutableStateOf<String?>(null) }
+    var seenAccepted by remember { mutableStateOf(ready?.acceptedCount ?: 0L) }
+    LaunchedEffect(ready?.acceptedCount) {
+        val accepted = ready?.acceptedCount ?: 0L
+        // 開き直しで件数が戻ることがあるので、**増えたときだけ**消費する。
+        if (accepted > seenAccepted) {
+            // 待っているあいだに書き直していたら消さない。
+            if (draft == submitted) draft = ""
+            submitted = null
+        }
+        seenAccepted = accepted
     }
 
     Column(
@@ -153,14 +164,15 @@ internal fun MarginMemoSheetContent(
                 StatusText(state)
                 Spacer(modifier = Modifier.height(0.dp))
                 Button(
-                    // **押した瞬間に空にする。** 保存の完了を待つと、
-                    // 待っているあいだに書いた2件目まで巻き込んで消える。
                     onClick = {
-                        val text = draft
-                        draft = ""
-                        onSave(text)
+                        submitted = draft
+                        onSave(draft)
                     },
-                    enabled = draft.isNotBlank() && ready?.status != MemoSaveStatus.Saving,
+                    // **受け付けられない状態では押させない。** 押せてしまうと、
+                    // Controller が何もしないまま入力だけが宙に浮く。
+                    enabled = ready != null &&
+                        ready.status != MemoSaveStatus.Saving &&
+                        draft.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary,
                         contentColor = OnButtonPrimary
