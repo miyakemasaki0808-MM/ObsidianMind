@@ -38,6 +38,8 @@ docs/review/device_validation/local_config.md
 docs/review/device_validation/evidence/
 # 実機検証の依頼書は使い捨て。依頼が済めば消える。
 docs/review/pending_device_validation.md
+# 実機検証の進行チェックリスト。検証中だけ存在し、レビュー本文へ転記したら消える。
+docs/review/device_validation/progress.md
 
 # Fable 5.1 の評価報告書。**特別枠として履歴に残さない**（オーナー判断・2026-09-12）。
 # 課題候補29件の処遇は docs/_wip/fable51_triage.md が持つので、本文が消えても追跡は切れない。

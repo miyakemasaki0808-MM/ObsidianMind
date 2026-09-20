@@ -4,7 +4,7 @@
 
 - OPの再生条件と、重複起動を畳む判断: [opening_animation](../../dev/features/opening_animation.md) §5・判断7
 - 起動ケースの全体と `LAUNCH-01`〜`04`: [app_launch](app_launch.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 > **このファイルは [app_launch](app_launch.md) の `LAUNCH-05` を、手順として実行できる粒度へ分けたもの。**
 > `LAUNCH-05a`〜`LAUNCH-05e` の**全件が合格したときだけ** `LAUNCH-05` を合格と記録する。

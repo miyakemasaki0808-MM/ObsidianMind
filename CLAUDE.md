@@ -5,7 +5,7 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 
 > **この文書の位置づけ = 憲法。** 常時効かせる原則・参照先・禁止事項・完了条件だけを置く。
 > 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、作業手順は原則Skill（作業標準書）が持つ。
-> **例外として、Codexが端末とリポジトリを一体で扱う実機検証は [device_validation](docs/review/device_validation/README.md) が持つ。**
+> **例外として、端末とリポジトリを一体で扱う実機検証は [device_validation](docs/review/device_validation/README.md) が持つ。**
 > ここに詳細を書き足さない。
 
 ## 最優先文書
@@ -82,7 +82,8 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 - **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある
 - `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
-- **実機確認はCodexが行う。** 着手前に [共通手順](docs/review/device_validation/README.md) と対象機能のケースを読み、
+- **実機ケースの判定はCodexが行い、組み立てと片付けはClaudeが行う**（区間の割りは [共通手順](docs/review/device_validation/README.md) が持つ）。
+  **どちらの担い手も**着手前に共通手順と対象機能のケースを読み、
   一時領域だけで検証し、**元Vaultへは戻さず常設の検証用Vaultで終える**（戻す操作自体が読書痕跡を増やすため）。
   共通手順の権限範囲は実機検証依頼に含まれるため、操作ごとに承認を取り直さない。
   **端末を特定する値（シリアル・Vault URI・端末内パス）は文書へ残さない** — 検証開始時に `adb devices -l` で取得する。
@@ -134,7 +135,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 - **`docs/review/` 配下の日付つきレビュー本文は最新の1本だけを置き、書き換えない。**
   **本文はコミットしない**（`.gitignore`）— 端末の識別子や検証中のローカルパスが入るため。
   新しいレビューを受け付けたら前の本文は削除する。**存在と処遇は `findings.md` が引き受ける**ので、本文が消えても追跡は切れない。
-  様式（`review_template.md`）・未解決指摘の受付簿（`findings.md`）・Codexの実機手順（`device_validation/`）はこちらが持ち、
+  様式（`review_template.md`）・未解決指摘の受付簿（`findings.md`）・実機検証の手順（`device_validation/`）はこちらが持ち、
   解消済みの受付行は削除する。実機ケースは手順だけを持ち、日付つき結果を蓄積しない
 - **恒久文書から `_wip/` の項目IDへ依存しない。** `_wip/` はリリース時に廃棄するので、`SYNC-2` のような項目番号を設計書や記録から参照すると、廃棄した瞬間に意味が消える。**課題に触れるときは番号ではなく内容そのものを書く。** ただし**入口・索引（`docs/README.md`・`dev/document_map.md`・`review/README.md`）はフォルダとして案内してよい** — 廃棄時に索引ごと直せばよいため
 - **文書からソースを指すときは行番号を書かない。** `` [`setNoteState`](.../NoteSessionCoordinator.kt) `` のように**名前で指す**。
@@ -150,8 +151,8 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | 担い手 | やる | **やらない** |
 |---|---|---|
 | **オーナー** | 判断・優先順位・実機の体感・GitHub側のブランチ作成とPRマージ・**完了の線を引くこと**（→ [L64](docs/dev/lessons.md#l64-検証の限界をそのまま完了条件にしない)） | 実装・文書の執筆 |
-| **Claude** | 実装・文書・机上ゲート（JVM／Lint／`assembleDebugAndroidTest`）・レビュー指摘への対応 | **自分のdiffを自分でレビューしたことにしない。サブエージェントも起こさない**（下記）／**実機検証**／`owner/` の更新（依頼されたときだけ → [owner/README](docs/owner/README.md)） |
-| **Codex** | **別の目のdiffレビュー**・**実機検証**（→ [device_validation](docs/review/device_validation/README.md)） | 製品コードの変更 |
+| **Claude** | 実装・文書・机上ゲート（JVM／Lint／`assembleDebugAndroidTest`）・レビュー指摘への対応・**実機検証の組み立てと片付け**（→ [device_validation](docs/review/device_validation/README.md) の「誰が行うか」） | **自分のdiffを自分でレビューしたことにしない。サブエージェントも起こさない**（下記）／**実機ケースの期待値の決定と合否の判定**／`owner/` の更新（依頼されたときだけ → [owner/README](docs/owner/README.md)） |
+| **Codex** | **別の目のdiffレビュー**・**実機ケースの実行と判定**（→ [device_validation](docs/review/device_validation/README.md)） | 製品コードの変更 |
 
 - **修正1件＝1コミット。** コミットメッセージは日本語で「何を・なぜ」。`_wip/` の項目番号ではなく内容で書く（`_wip/` を廃棄すると番号の意味が消え、経緯を辿れなくなる）
 - PR本文も日本語で、修正表＋「見た目・挙動の変更点」＋「実機確認ポイント」を載せる

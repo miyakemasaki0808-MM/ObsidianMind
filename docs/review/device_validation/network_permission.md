@@ -4,7 +4,7 @@
 
 - 権限を持たない判断: [ADR-0002](../../dev/decisions/ADR-0002-on-device-ai-only.md)
 - 除去の方法・検査・安全と見た根拠: [dependency_policy](../../dev/system/dependency_policy.md) 判断5
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

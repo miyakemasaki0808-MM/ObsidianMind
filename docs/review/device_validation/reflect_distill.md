@@ -3,7 +3,7 @@
 ## 正本
 
 - 機能契約・定数・書き込み・復旧: [reflect_distill](../../dev/features/reflect_distill.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 数値は実行時に正本と `DistillLimits` を読み直す。本書のケース名だけを見て、以前の値を固定値として使わない。
 
