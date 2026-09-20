@@ -81,7 +81,16 @@ enum class ReadingTraceImportWithholdReason {
     LOCAL_CHANGED,
 
     /** 突き合わせはできたが、端末側へ書き込めなかった。 */
-    SAVE_FAILED
+    SAVE_FAILED,
+
+    /**
+     * 合流すると余白メモが保持上限を超えるので、**そのノートを無変更のまま保留した。**
+     *
+     * **失敗ではない。** 端末側も退避ファイル側も無傷で残る。
+     * 切れば「古いものから捨てない」に反し、全部持てば検証と容量に反するので、
+     * どちらも選ばずに報告する（→ features/reflect_margin_memo.md 判断5）。
+     */
+    MEMOS_OVER_CAPACITY
 }
 
 /**
@@ -98,17 +107,13 @@ data class WithheldImport(
 /**
  * 読み戻しの下見。**適用前にこれを見せて確定させる**（→ reading_trace_backup §9）。
  *
- * **返事の損失は方向ごとに数える。** 突き合わせ規則は「返事を持つ側／新しい側が残る」なので、
- * 端末側が新しければ**退避側の返事が失われる**。1つの件数にまとめて
- * 「退避ファイル側に置き換わる」と言うと、通常の往復（書き出した後に返事を書き足す）で
- * **実際と逆の告知**になる。どちらも [merged] の内数。
+ * **失われる言葉の件数を持たない。** 余白メモは配列なので両方を残せる
+ * （1ノート1組だった旧ひとことは、両方に返事があれば必ず片方が消えていた）。
+ * 代わりに、入りきらないノートは [withheld] へ
+ * `MEMOS_OVER_CAPACITY` として現れる。
  */
 data class ReadingTraceImportPlan(
     val added: Int,
     val merged: Int,
-    /** この端末に書いた返事が、退避ファイル側の返事に置き換わる件数。 */
-    val localReplyReplaced: Int,
-    /** 退避ファイル側の返事が使われない件数（この端末の返事のほうが新しい）。 */
-    val importedReplyDropped: Int,
     val withheld: List<WithheldImport>
 )

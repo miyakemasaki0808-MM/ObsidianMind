@@ -1,15 +1,18 @@
-# ノートへのひとこと
+# ノートへのひとこと（廃止済み）
 
-**状態:** **廃止が決定（2026-09-19、オーナー判断）。実装はまだ稼働中。**
-置き換えは [余白メモ](reflect_margin_memo.md)（設計済み・実装は未着手）で、
-**この機能を足す方向の変更はもう入れない。** 保存先は読書痕跡サイドカー（schema v6）。
-**ひとこと・返事・映し返しの3欄は、置き換えのときに読み捨てる**（→ [余白メモ](reflect_margin_memo.md) 判断6）
-**最終検証:** 2026-08-11 / `9af63ee`
-**関連コード:** `controller/RemarkController.kt` / `domain/RemarkComposer.kt` / `model/RemarkProtocol.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt`
-**関連テスト:** `RemarkControllerTest` / `RemarkComposerTest` / `ReadingTraceLimitsTest`
-**正本:** この文書
+**状態:** **Deprecated — 実装は撤去済み（2026-09-20）。** 置き換えは [余白メモ](reflect_margin_memo.md)。
+**この文書は判断の記録であって、現在の仕様ではない。** 保存していた3欄（ひとこと・返事・映し返し）は
+schema v7 で読み捨てる（→ [余白メモ](reflect_margin_memo.md) 判断6）
+**最終検証:** 2026-08-11 / `9af63ee`（撤去前の最後の突合）
+**関連コード:** なし（撤去済み）
+**関連テスト:** なし（撤去済み）
+**正本:** この文書（**廃止された設計の記録として**）
 
-**関連:** [reflect_reading_trace](reflect_reading_trace.md)（保存先）・[ai_input_excerpt](../system/ai_input_excerpt.md)（入力予算）・[background_ai_ux](../system/background_ai_ux.md)（通知層）
+**関連:** [余白メモ](reflect_margin_memo.md)（置き換え先）・[reflect_reading_trace](reflect_reading_trace.md)（保存先だったサイドカー）
+
+> **なぜ残すか。** 「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という
+> 判断は、**次にAI機能を足すときにまた要る**。機能は消えても、その教訓は消えない。
+> 以下は**撤去時点の仕様**であり、現在のアプリの説明ではない。
 
 ---
 

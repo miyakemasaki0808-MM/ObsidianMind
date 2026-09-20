@@ -21,11 +21,11 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * 正規形は書かれた版で計算するので、片方だけだと既存のファイルが破損扱いになる。
  * 各版で足した欄とその理由は features/reflect_reading_trace.md が持つ。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 6
+internal const val READING_TRACE_SCHEMA_VERSION = 7
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
 internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
-    setOf(1, 2, 3, 4, 5, READING_TRACE_SCHEMA_VERSION)
+    setOf(1, 2, 3, 4, 5, 6, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -42,32 +42,35 @@ internal object ReadingTraceLimits {
     const val MAX_AI_SUMMARY_BYTES = 2048
 
     /**
-     * ひとことの上限。仕様は「原則1文・最大2文・80〜120文字程度」なので、
-     * 日本語1文字≒3バイトで360バイト。生成の揺れを吸収して512とする。
-     * **要約（2048）より意図的に小さい** — 枠を広げると長文が通り、
-     * 「1文だけ出す」という設計が保存側から緩む。
+     * 余白メモ1件の上限。日本語で約340字。
+     *
+     * **壁だが、超えた入力を無かったことにはしない** — 受け取ってから切り、切ったら示す
+     * （→ features/reflect_margin_memo.md §5）。静かに知らせる目安は入力側が持つ。
      */
-    const val MAX_REMARK_BYTES = 512
+    const val MAX_MEMO_BYTES = 1_024
 
     /**
-     * 返事の上限。**8,000文字＝日本語で最大24,000バイト**に余裕を持たせた値。
+     * 1ノートに置ける余白メモの件数。
      *
-     * **AIへ渡せる長さから決めない。** 返事は「保存は原文・AIへは抜粋」で分けるので、
-     * ここはユーザーの文章を保存する枠である（→ features/reflect_remark.md 判断6）。
-     * 「汎用エディタにしない」という意図は**壁ではなく合図**で守る —
-     * 2,000文字を超えたら静かに知らせるだけで、切り詰めも拒否もしない。
+     * **訪問と違い、超えても古いものから捨てない。** 訪問は読み直せば付き直るが、
+     * メモは作り直せない（→ features/reflect_margin_memo.md 判断4）。
+     *
+     * **値は容量から逆算した暫定値である。** JSONは `"` と `\` を2バイトへ広げるので、
+     * 全欄を上限まで詰めた実物が [MAX_FILE_BYTES] に収まる範囲でしか増やせない。
+     * `ReadingTraceLimitsTest` が**実シリアライザで測って**固定する。
      */
-    const val MAX_REPLY_BYTES = 25_600
-
-    /** 映し返しの上限。ひとことと同じ「1文」なので同じ枠でよい。 */
-    const val MAX_MIRRORED_BYTES = 512
+    const val MAX_MEMOS = 20
 
     /**
      * サイドカー1ファイルの読み込み上限。
      *
-     * **上の各上限の最悪ケースを足しても収まること**が条件で、
-     * `ReadingTraceLimitsTest` が計算して固定している。返事の上限を上げたときに
-     * ここを忘れると、**正しく保存したファイルを次回読めなくなる**（保存側と
+     * **全欄を上限まで詰めた実物が収まること**が条件で、`ReadingTraceLimitsTest` が
+     * **本物の `ReadingTraceJson.encode` に通して測り**固定する。
+     *
+     * **生の文字列長を足す形では保証にならない。** JSONは `"` と `\` を2バイトへ、
+     * 制御文字を `\u00XX` の6バイトへ広げるので、各欄の上限を満たしたまま
+     * ここを超えられる（→ features/reflect_margin_memo.md 判断11）。
+     * 超えると**正しく保存したファイルを次回読めなくなる**（保存側と
      * 読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
      */
     const val MAX_FILE_BYTES = 128 * 1024
@@ -88,48 +91,40 @@ internal data class ReadingVisit(
 )
 
 /**
- * AIのひとことと、それへのユーザーの返事の組。
+ * 読んでいる最中に置いた短い断片。
  *
- * **別々の文字列ではなく1組として持つ。** 片方だけが残る状態
- * （返事だけあって元の問いが分からない／問いを作り直したのに古い返事が残る）を
- * 型で作れなくするため。読み返すときも必ず対で出す。
+ * **何にも紐づかない。** AIの生成物にも、ユーザーが選んだ本文の範囲にも結び付けない。
+ * 紐づけると「どこに付けるか」という判断が増え、本文が編集されれば紐づけ先も壊れる。
  *
- * **[reply] を書いてもAIへ再送しない。** 返事を書いた時点で対話は完了する。
- * 往復させると「AIと会話するアプリ」になり、
- * 「AIは相手役／本質はノートを読む」という北極星から外れる。
- * ここに残るのは**ユーザー自身の言葉**であって、AIへの入力ではない。
+ * [sectionTitle] は置いたときに見ていた見出し。**紐づけではなく歴史的記録**で、
+ * 後から本文が編集されて見出しが消えても再解決しない（訪問の最深セクション名と同じ扱い）。
+ * ユーザーの操作は1つも増えないのに、数か月後に読み返したとき断片が読める文になる。
  */
-// `RemarkState`（public な sealed class）が保持するため public。
-// 痕跡の他の型は internal だが、これだけはUI状態として画面まで運ばれる
-// （`RelatedNote` が public なのと同じ理由）。
-data class Reflection(
-    val remark: String,
-    val remarkedAtEpochMillis: Long,
-    val reply: String? = null,
-    val repliedAtEpochMillis: Long? = null,
-    /**
-     * 返事を受けてAIが返す1文。**問いではない。**
-     *
-     * 返事を書いて終わりだと「受け取ってもらえた」感触が無く、対話が閉じない。
-     * ただし**1往復だけ**で、ここに問いを書かせると無限会話の入口になる
-     * （→ features/reflect_remark.md §2 非ゴール）。
-     *
-     * 生成に失敗しても null のまま。**返事は先に保存済み**なので、
-     * ここが空でもユーザーの言葉は失われない。
-     */
-    val mirrored: String? = null
-) {
-    /**
-     * 返事を残す。**同じ問いに対する返事は上書きする**（1組しか持たないため）。
-     * 返事を書き直したら映し返しも捨てる — 古い返事に対する応答が残ると噛み合わない。
-     */
-    fun withReply(reply: String, atEpochMillis: Long): Reflection =
-        copy(reply = reply, repliedAtEpochMillis = atEpochMillis, mirrored = null)
+// UI状態として画面まで運ばれるため public（`RelatedNote` と同じ理由）。
+data class MarginMemo(
+    val text: String,
+    val writtenAtEpochMillis: Long,
+    val sectionTitle: String? = null
+)
 
-    fun withMirrored(mirrored: String): Reflection = copy(mirrored = mirrored)
-
-    val hasReply: Boolean get() = reply != null
-}
+/**
+ * 2つの並びを合流させる。**どちらも捨てない。**
+ *
+ * 配列なので「両方を残す」ができる。1ノート1組だった旧ひとことは構造上マージできず、
+ * 読み戻しのたびにどちらかの言葉が必ず消えていた（→ features/reflect_margin_memo.md 判断5）。
+ *
+ * 同じ断片は `(日時, 本文)` で畳む。**見出しは畳む鍵に入れない** —
+ * 同じ瞬間に同じ文を2度置くことはできないので、見出しだけが違うのは同一の断片である。
+ *
+ * **件数の上限はここで当てない。** 上限を超えたときに切るのか保留するのかは
+ * 呼び出し側の契約で、ここで黙って切ると「捨てない」が破れる。
+ */
+internal fun mergeMarginMemos(
+    first: List<MarginMemo>,
+    second: List<MarginMemo>
+): List<MarginMemo> = (first + second)
+    .distinctBy { it.writtenAtEpochMillis to it.text }
+    .sortedBy { it.writtenAtEpochMillis }
 
 /**
  * 1ノート分の痕跡。
@@ -173,15 +168,17 @@ internal data class ReadingTrace(
      */
     val totalVisitCount: Int = visits.size,
     /**
-     * ノートへのひとこと と、それへのユーザーの返事の組。
+     * 読んでいる最中に置いた余白メモ。**追記であって上書きではない。**
      *
-     * **[aiSummary] と違い、訪問数では無効化しない。** 俯瞰要約の入力は訪問履歴なので
-     * 訪問が増えれば作り直す必要があるが、ひとことの入力は本文であり、
-     * ユーザーが明示ボタンを押したときにだけ作られて上書きされる。
+     * **[aiSummary] と違い、作り直せない。** 俯瞰要約は訪問履歴からいつでも生成し直せるが、
+     * メモはユーザーが書いた言葉なので、失えば戻らない。
+     * 突き合わせ・退避・容量の扱いがすべてこの一点から決まる
+     * （→ features/reflect_margin_memo.md）。
      *
-     * **1ノート1組。** 生成のたびに上書きする。
+     * **並びは追記順（古い順）。** 表示側が新しい順へ並べ替える。
+     * 別端末との合流で前後しうるので、**検証は順序を要求しない。**
      */
-    val reflection: Reflection? = null,
+    val memos: List<MarginMemo> = emptyList(),
     /**
      * 「まだ考えたい」の印。**3つで1組**（片方だけ残らないよう検証で固定する）。
      *
@@ -311,31 +308,21 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
     trace.aiSummary?.let {
         requireWithinBytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES, "AI要約")
     }
-    trace.reflection?.let { reflection ->
-        // 空白だけのひとことは「無い」と区別できないので受け付けない。
-        // 保存側で null へ倒すのが正で、ここは最後の砦。
-        require(reflection.remark.isNotBlank()) { "ひとことが空です。" }
-        requireWithinBytes(reflection.remark, ReadingTraceLimits.MAX_REMARK_BYTES, "ひとこと")
-        require(reflection.remarkedAtEpochMillis >= 0) { "ひとことの日時が不正です。" }
-        reflection.reply?.let { reply ->
-            require(reply.isNotBlank()) { "返事が空です。" }
-            requireWithinBytes(reply, ReadingTraceLimits.MAX_REPLY_BYTES, "返事")
-        }
-        // 返事と日時の一方だけが残っていると、次に開いたとき
-        // 「返事はあるがいつ書いたか分からない」状態になる。
-        require((reflection.reply == null) == (reflection.repliedAtEpochMillis == null)) {
-            "返事と日時の一方だけが記録されています。"
-        }
-        reflection.repliedAtEpochMillis?.let {
-            require(it >= 0) { "返事の日時が不正です。" }
-        }
-        reflection.mirrored?.let { mirrored ->
-            require(mirrored.isNotBlank()) { "映し返しが空です。" }
-            requireWithinBytes(mirrored, ReadingTraceLimits.MAX_MIRRORED_BYTES, "映し返し")
-            // 返事が無いのに映し返しだけあるのは、片方を消し忘れた実装ミスか改変。
-            require(reflection.reply != null) { "返事が無いのに映し返しだけが記録されています。" }
+    // **件数は超えたら弾く。古いものから捨てない**（→ features/reflect_margin_memo.md 判断4）。
+    // 訪問と逆なのは、訪問は読み直せば付き直るがメモは作り直せないため。
+    require(trace.memos.size <= ReadingTraceLimits.MAX_MEMOS) {
+        "余白メモが上限（${ReadingTraceLimits.MAX_MEMOS}件）を超えています。"
+    }
+    trace.memos.forEach { memo ->
+        // 空白だけのメモは「無い」と区別できないので受け付けない。
+        require(memo.text.isNotBlank()) { "余白メモが空です。" }
+        requireWithinBytes(memo.text, ReadingTraceLimits.MAX_MEMO_BYTES, "余白メモ")
+        require(memo.writtenAtEpochMillis >= 0) { "余白メモの日時が不正です。" }
+        memo.sectionTitle?.let {
+            requireWithinBytes(it, ReadingTraceLimits.MAX_SECTION_TITLE_BYTES, "余白メモのセクション名")
         }
     }
+    // **並び順は要求しない。** 別端末との合流で前後しうる。
     trace.aiSummaryVisitCount?.let {
         require(it in 0..trace.totalVisitCount) { "AI要約の訪問数が閲覧回数と矛盾しています。" }
     }

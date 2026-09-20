@@ -22,58 +22,36 @@ class ReadingTraceBackupTextTest {
     private fun plan(
         added: Int = 3,
         merged: Int = 2,
-        localReplyReplaced: Int = 0,
-        importedReplyDropped: Int = 0
-    ) = ReadingTraceImportPlan(
-        added = added,
-        merged = merged,
-        localReplyReplaced = localReplyReplaced,
-        importedReplyDropped = importedReplyDropped,
-        withheld = emptyList()
-    )
+        withheld: List<WithheldImport> = emptyList()
+    ) = ReadingTraceImportPlan(added = added, merged = merged, withheld = withheld)
 
-    @Test
-    fun `端末側の返事が消えるときは件数より先にその事実を言う`() {
-        val text = importPlanSummary(plan(localReplyReplaced = 1))
-
-        assertTrue("この端末の返事が置き換わることを言っていない: $text", text.contains("この端末に書いた返事"))
-        assertTrue(
-            "件数より先に損失を言っていない: $text",
-            text.indexOf("返事") < text.indexOf("新しく増える")
-        )
-    }
+    private fun overCapacity(path: String) =
+        WithheldImport(path, ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY)
 
     /**
-     * **通常の往復（書き出したあとに返事を書き足す）では、失われるのは退避ファイル側。**
-     * 方向を取り違えると「あなたの返事が置き換わります」と逆の告知になる。
+     * **保留は損失ではない。** 「消えません」まで言い切らないと、
+     * 上限に当たったユーザーは自分のメモが捨てられたと読む。
      */
     @Test
-    fun `退避側の返事が使われないときは端末側が消えると言わない`() {
-        val text = importPlanSummary(plan(importedReplyDropped = 1))
+    fun `上限で保留したノートは件数より先に、どちらも消えないと言う`() {
+        val text = importPlanSummary(plan(withheld = listOf(overCapacity("ideas/habit.md"))))
 
-        assertTrue("退避側が使われないことを言っていない: $text", text.contains("退避ファイル側の返事が使われません"))
+        assertTrue("保留を言っていない: $text", text.contains("そのままにします"))
+        assertTrue("消えないと言っていない: $text", text.contains("どちらのメモも消えません"))
         assertTrue(
-            "端末側の返事が消えると誤告知している: $text",
-            !text.contains("この端末に書いた返事が退避ファイル側の返事に置き換わります")
+            "件数より先に保留を言っていない: $text",
+            text.indexOf("そのままにします") < text.indexOf("新しく増える")
         )
     }
 
+    /** 保留が無ければ、失われるものは1つも無い。 */
     @Test
-    fun `両方向あるときは両方を言う`() {
-        val text = importPlanSummary(plan(localReplyReplaced = 2, importedReplyDropped = 3))
-
-        assertTrue(text.contains("2件のノートで、この端末に書いた返事"))
-        assertTrue(text.contains("3件のノートでは"))
-    }
-
-    @Test
-    fun `失われる返事が無いことも明示する`() {
+    fun `保留が無ければ失われるメモは無いと言う`() {
         val text = importPlanSummary(plan())
 
-        assertTrue(text.contains("失われる返事はありません"))
+        assertTrue("失われないことを言っていない: $text", text.contains("失われるメモはありません"))
     }
 
-    // 二度目の確認を求められた利用者が最初に知りたいのは「どこまで進んだか」。
     @Test
     fun `作り直した下見はまだ書いていないことを先に言う`() {
         assertTrue(revisedPlanNotice().contains("まだ1件も書き戻していません"))

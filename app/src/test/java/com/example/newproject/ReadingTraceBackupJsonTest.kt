@@ -8,7 +8,7 @@ import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceBackupLimits
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -28,7 +28,10 @@ class ReadingTraceBackupJsonTest {
     fun `書き出して読み戻すと中身が保たれる`() {
         val traces = listOf(
             trace("ideas/habit.md").copy(
-                reflection = Reflection("問い", 100L, "返事", 200L, "映し返し")
+                memos = listOf(
+                    MarginMemo("ここが引っかかる", 100L, "導入"),
+                    MarginMemo("あとで読み直す", 200L)
+                )
             ),
             trace("journal/2026.md")
         )
@@ -39,8 +42,10 @@ class ReadingTraceBackupJsonTest {
         assertEquals(2, entries.size)
         val first = (entries[0] as ReadingTraceBackupEntry.Valid).trace
         assertEquals("ideas/habit.md", first.vaultRelativePath)
-        assertEquals("返事", first.reflection?.reply)
-        assertEquals("映し返し", first.reflection?.mirrored)
+        assertEquals(2, first.memos.size)
+        assertEquals("ここが引っかかる", first.memos[0].text)
+        assertEquals("導入", first.memos[0].sectionTitle)
+        assertEquals("あとで読み直す", first.memos[1].text)
     }
 
     /**

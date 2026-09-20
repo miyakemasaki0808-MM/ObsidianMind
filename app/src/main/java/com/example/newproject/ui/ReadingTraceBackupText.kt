@@ -13,11 +13,11 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 // **文面の設計方針:** この機能でユーザーが本当に知りたいのは1つだけ —
 // **自分が書いた言葉が失われるのか。** 件数を並べるより先にそこへ答える。
 // 「上書き」「マージ」という語は内部の処理を指しているので、
-// 「返事が置き換わる」という**失われるものの名前**で言い直す。
+// ユーザーから見た言葉で言い直す。
 //
-// **どちら側が失われるかを言い分ける。** 突き合わせ規則は「返事を持つ側／新しい側が残る」なので、
-// 書き出した後に返事を書き足した通常の往復では**退避ファイル側**が失われる。
-// 1つの件数へまとめて「退避ファイル側へ置き換わる」と言うと、その場合に嘘になる。
+// **余白メモは両方が残る。** 配列なので合流でき、どちらかを選ぶ必要が無い
+// （1ノート1組だった旧ひとことは、両方に返事があれば必ず片方が消えていた）。
+// 残るのは「入りきらなかった」という境界だけで、それは損失ではなく**保留**である。
 // ---------------------------------------------------------------------------
 
 /** 実行中の見出し。**適用だけは「途中で止めると戻せない」段階**なので言い方を変える。 */
@@ -49,23 +49,13 @@ fun unreadableTraceLocation(key: String): String = "_ReadingTraces/$key.json"
 /** 下見の結果。**先に「失われるもの」を言う。** */
 fun importPlanSummary(plan: ReadingTraceImportPlan): String {
     val counts = "新しく増えるのが${plan.added}件、既にある痕跡と合わせるのが${plan.merged}件です。"
-    val losses = buildList {
-        if (plan.localReplyReplaced > 0) {
-            add(
-                "${plan.localReplyReplaced}件のノートで、" +
-                    "この端末に書いた返事が退避ファイル側の返事に置き換わります。"
-            )
-        }
-        if (plan.importedReplyDropped > 0) {
-            add(
-                "${plan.importedReplyDropped}件のノートでは、この端末の返事のほうが新しいため、" +
-                    "退避ファイル側の返事が使われません。"
-            )
-        }
+    val held = plan.withheld.count {
+        it.reason == ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY
     }
-    if (losses.isEmpty()) return "失われる返事はありません。\n" + counts
-    return losses.joinToString("") +
-        "1つのノートに残せる返事は1つだけなので、残らなかった方は戻せません。\n" + counts
+    if (held == 0) return "失われるメモはありません。\n" + counts
+    // **保留は損失ではない。** 端末側も退避ファイル側も無傷で残ると明示する。
+    return "${held}件のノートは、合わせるとメモが上限を超えるのでそのままにします。" +
+        "どちらのメモも消えません。\n" + counts
 }
 
 /**
@@ -112,5 +102,11 @@ fun withheldImportText(item: WithheldImport): String {
 
         ReadingTraceImportWithholdReason.SAVE_FAILED ->
             "$note の痕跡を書き込めませんでした。"
+
+        // **失敗として書かない。** どちらのメモも無傷で残っているので、
+        // ユーザーが次にするのは「1件消してもう一度」であって再試行ではない。
+        ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY ->
+            "$note は、合わせるとメモが上限を超えるのでそのままにしました。" +
+                "どちらのメモも消えていません。"
     }
 }

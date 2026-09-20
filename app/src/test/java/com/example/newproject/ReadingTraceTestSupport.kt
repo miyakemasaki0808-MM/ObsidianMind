@@ -8,7 +8,7 @@ import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReunionKind
 
 // 読書痕跡の2つの Controller（訪問と再会カード）のテストが共有する足場。
@@ -20,9 +20,9 @@ internal const val VAULT_B = "content://vault-b"
 
 internal const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 
-/** テスト用のひとこと1組。日時は固定で構わない（検証は本文だけを見る）。 */
-internal fun reflectionOf(remark: String) =
-    Reflection(remark = remark, remarkedAtEpochMillis = 1_000L)
+/** テスト用の余白メモ。日時は明示できる（合流の重複排除が日時を見るため）。 */
+internal fun memoOf(text: String, at: Long = 1_000L, section: String? = null) =
+    MarginMemo(text = text, writtenAtEpochMillis = at, sectionTitle = section)
 
 /** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
 internal fun storedTrace(
@@ -72,7 +72,7 @@ internal class FakePersistence : ReadingTracePersistence {
     /**
      * 読込の**最中**に割り込むための口。
      *
-     * `saveReply` の読込は同期I/Oで、**戻る頃には別のノートを開いている**ことがある。
+     * `appendMemo` の読込は同期I/Oで、**戻る頃には別のノートを開いている**ことがある。
      * その順序をテストで作るには、読込そのものの中で切り替えるのが最も確実である。
      */
     var onLoad: (() -> Unit)? = null

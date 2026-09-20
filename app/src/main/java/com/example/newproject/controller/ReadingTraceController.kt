@@ -5,7 +5,9 @@ import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.ReadingTraceLimits
+import com.example.newproject.model.mergeMarginMemos
 import com.example.newproject.model.withVisit
 import com.example.newproject.model.withoutLastVisit
 import kotlinx.coroutines.CancellationException
@@ -114,15 +116,17 @@ internal class ReadingTraceController(
         var dirty = false
 
         /**
-         * まだサイドカーへ載せていないひとこと（→ [setPendingRemark]）。
+         * **まだサイドカーへ載せていない余白メモ。**
          *
-         * 生成した直後に単独で保存しないのは、**痕跡ファイルがまだ存在しない**ことが
-         * あるため。訪問は離脱・背面化でしか書かれず、`validateReadingTrace` は
-         * 訪問が1件以上あることを要求する。初読の最中にボタンを押すこの機能では
-         * 「生成できたら保存」と書くと初回のノートで必ず黙って失われる
-         * （→ features/reflect_remark.md §2.1）。
+         * 置いた直後に単独で保存できないことがある。訪問は離脱・背面化でしか書かれず、
+         * `validateReadingTrace` は訪問が1件以上あることを要求するので、
+         * **初読の最中に置いた1件目には載せる先のファイルがまだ無い。**
+         *
+         * **保存できる条件を「生成物があるか」に結び付けない**のがこの機能の契約で、
+         * ここは純粋に「置き場所がまだ無い」だけを表す
+         * （→ features/reflect_margin_memo.md 判断3）。
          */
-        var pendingRemark: Reflection? = null
+        var pendingMemos: List<MarginMemo> = emptyList()
 
         /** 背面にいた時間を除いた読書時間。10秒判定はこれで行う。 */
         fun elapsedMillis(now: Long): Long =
@@ -169,24 +173,47 @@ internal class ReadingTraceController(
     private fun pendingKey(vaultKey: String, path: String) = "$vaultKey\n$path"
 
     /**
-     * 書けなかった痕跡を覚える。**同じノートは上書きしてよい**（新しいほうが正しい）。
+     * 書けなかった痕跡を覚える。
      *
-     * **返事を持つ痕跡だけを積む。** 訪問だけの失敗はセッション側の巻き戻し
+     * **メモを持つ痕跡だけを積む。** 訪問だけの失敗はセッション側の巻き戻し
      * （`dirty` / `recordedVisit`）が同じ閲覧のうちに書き直し、失ってももう一度読めば付き直る。
-     * **返事は作り直せない。** 訪問だけの退避で上限を埋めて、返事付きの退避を押し出さないためでもある。
+     * **メモは作り直せない。** 訪問だけの退避で上限を埋めて、メモ付きの退避を押し出さないためでもある。
+     *
+     * **同じノートの既存の退避を置換せず、メモを合流させる。** 置換すると、
+     * 「Aの保存に失敗 → 退避 → Bを置いて保存に失敗」でAが消える
+     * （返事は1ノート1組の上書きだったので置換でよかったが、メモは独立に並ぶ
+     * → features/reflect_margin_memo.md §7）。
      */
     private suspend fun rememberPendingWrite(vaultKey: String, trace: ReadingTrace) {
-        if (trace.reflection?.hasReply != true) return
+        if (trace.memos.isEmpty()) return
         pendingMutex.withLock {
             val key = pendingKey(vaultKey, trace.vaultRelativePath)
-            if (key !in pendingWrites && pendingWrites.size >= MAX_PENDING_WRITES) {
+            val existing = pendingWrites[key]
+            if (existing == null && pendingWrites.size >= MAX_PENDING_WRITES) {
                 pendingWrites.remove(pendingWrites.keys.first())
             }
-            pendingWrites[key] = PendingWrite(vaultKey, trace)
+            val merged = if (existing == null) {
+                trace
+            } else {
+                trace.copy(memos = mergeMarginMemos(existing.trace.memos, trace.memos))
+            }
+            pendingWrites[key] = PendingWrite(vaultKey, merged)
         }
     }
 
-    /** 直接保存できたノートの退避を捨てる。残すと古い内容で上書きし直してしまう。 */
+    /**
+     * 退避しているメモ。**書き込みの直前に合流させるために引く。**
+     *
+     * 真実は永続ファイル・セッションの預かり・退避の3箇所に分かれて存在しうるので、
+     * **どれか1つを真実と見なさない**（→ features/reflect_margin_memo.md §7 の契約1・2）。
+     */
+    private suspend fun pendingWriteMemos(vaultKey: String, path: String): List<MarginMemo> =
+        pendingMutex.withLock { pendingWrites[pendingKey(vaultKey, path)]?.trace?.memos }.orEmpty()
+
+    /**
+     * 退避を捨てる。**中身がファイルに在ることを確かめた呼び出し側だけが呼ぶ**
+     * （→ 契約3）。ノート単位で無条件に捨てると、書けていないメモを道連れにする。
+     */
     private suspend fun forgetPendingWrite(vaultKey: String, path: String) {
         pendingMutex.withLock { pendingWrites.remove(pendingKey(vaultKey, path)) }
     }
@@ -319,23 +346,7 @@ internal class ReadingTraceController(
     }
 
     /**
-     * ノートへのひとことを、次の書き込み契機（背面化・離脱）へ預ける。
-     *
-     * **`dirty` を立てるのが要点。** 立てないと、直前に訪問を書き終えていた場合に
-     * [recordVisit] が「変化なし」で早期returnし、ひとことが書かれないまま
-     * セッションが終わる。ひとことは「書き直す価値のある変化」そのものである。
-     *
-     * セッションが無い（Vault未選択・追跡対象外）ときは黙って捨てる。
-     * 保存先が無いので、ここで作れる置き場所は無い。
-     */
-    fun setPendingRemark(reflection: Reflection) {
-        val active = session ?: return
-        active.pendingRemark = reflection
-        active.dirty = true
-    }
-
-    /**
-     * 読書中のノートの相対パス。**ひとことの保存先を引くのに使う。**
+     * 読書中のノートの相対パス。**余白メモの保存先を引くのに使う。**
      *
      * UI へ配らずここから引くのは、相対パスの出所を1つに保つため。
      * 走査キャッシュが冷えていると表示後に [bindPath] で埋まるので、
@@ -344,49 +355,65 @@ internal class ReadingTraceController(
     fun currentPath(): String? = session?.vaultRelativePath
 
     /**
-     * 保存済みの「ひとこと＋返事」を読む。**専用画面を開いたときにだけ呼ぶ。**
+     * このノートの余白メモを読む。**シートを開いたときにだけ呼ぶ。**
      *
      * ノート表示の経路には置かない。開くたびにサイドカーを1件読むことになり、
      * 遠いプロバイダでは体感に乗る（→ 痕跡の索引コストと同じ問題圏）。
+     *
+     * **3箇所を合流して返す**（→ features/reflect_margin_memo.md §7 の契約1・2）。
+     * ファイルだけを見せると、**まだ書けていないメモが画面から消える。**
      */
-    suspend fun loadReflection(vaultRelativePath: String): Reflection? {
-        if (vaultRelativePath.isBlank()) return null
-        val vaultKey = currentVaultKey() ?: return null
+    suspend fun loadMemos(vaultRelativePath: String): List<MarginMemo> {
+        if (vaultRelativePath.isBlank()) return emptyList()
+        val vaultKey = currentVaultKey() ?: return emptyList()
+        val held = heldMemosFor(vaultRelativePath)
         return withContext(ioDispatcher) {
-            writeMutex.withLock {
+            val stored = writeMutex.withLock {
                 (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
                     ?.trace
-                    ?.reflection
+                    ?.memos
+                    .orEmpty()
             }
+            val pending = pendingWriteMemos(vaultKey, vaultRelativePath)
+            mergeMarginMemos(mergeMarginMemos(stored, pending), held)
         }
     }
 
+    /** 現在のセッションが預かっているメモ。**別ノートのものは渡さない。** */
+    private fun heldMemosFor(vaultRelativePath: String): List<MarginMemo> {
+        val active = session ?: return emptyList()
+        if (active.vaultRelativePath != vaultRelativePath) return emptyList()
+        return active.pendingMemos
+    }
+
     /**
-     * 返事を**即時に**書き出す。
+     * 余白メモを**即時に**書き足す。
      *
-     * ひとこと（AI生成）は離脱時の書き込みへ相乗りさせるが、返事は違う。
-     * **ユーザーが明示的に書いたものなので、アプリが落ちても失ってはいけない。**
+     * **ユーザーが書いた言葉なので、アプリが落ちても失ってはいけない。**
      * 生成物は作り直せるが、書いた言葉は作り直せない。
      *
      * **戻り値を Boolean にしない。** 「書けた」「まだ書けていないが預かった」
-     * 「どこにも残っていない」で**呼び出し側の次の行動が違う**ため
-     * （→ lessons L28）。true/false に畳むと、預かっただけの状態と
-     * 完全に失った状態が同じ顔になる。
+     * 「置けない」「どこにも残っていない」で**呼び出し側の次の行動が違う**ため
+     * （→ lessons L28）。とくに [MemoSaveOutcome.Full] を
+     * [MemoSaveOutcome.Lost] へ畳まない — 再試行で直るものと、
+     * 1件消さなければ直らないものは別である。
+     *
+     * **保存の可否を「生成物があるか」で決めない**（→ features/reflect_margin_memo.md 判断3）。
+     * ここには組の相手を確かめる分岐が無い。
      */
-    suspend fun saveReply(
+    suspend fun appendMemo(
         vaultRelativePath: String,
-        reply: String,
-        atEpochMillis: Long
-    ): ReplySaveOutcome {
+        memo: MarginMemo
+    ): MemoSaveOutcome {
         // **要求の所有者を、非同期へ入る前に固定する**（→ docs/dev/lessons.md L26）。
         // この後の `persistence.load` は同期I/Oで、戻る頃には別のノートを開いている場合がある。
-        // 所有者を見ずに「いまのセッション」へ預け直すと、**Aへ書いた返事がBの痕跡へ保存される**。
         val ownerSessionId = session?.id
         val vaultKey = currentVaultKey()
             // Vault未選択では保存先が無く、セッションも無いので預ける先も無い。
-            ?: return holdOrLose(ownerSessionId, reply, atEpochMillis)
+            ?: return holdOrLose(ownerSessionId, vaultRelativePath, memo)
         return withContext(ioDispatcher) {
-            flushPendingWrites()
+            // **これから書くノートは触らない。** 下の保存が同じファイルを扱う。
+            flushPendingWrites(excludePath = vaultRelativePath)
             writeMutex.withLock {
                 val existing = try {
                     (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
@@ -396,31 +423,95 @@ internal class ReadingTraceController(
                 } catch (e: Exception) {
                     null
                 }
+                // **3箇所を合流してから足す**（→ §7 の契約2）。
+                // ファイルだけを基準にすると、退避中のメモが次の保存で消える。
+                val base = mergeMarginMemos(
+                    mergeMarginMemos(
+                        existing?.memos.orEmpty(),
+                        pendingWriteMemos(vaultKey, vaultRelativePath)
+                    ),
+                    heldMemosFor(vaultRelativePath)
+                )
+                val next = mergeMarginMemos(base, listOf(memo))
+                // **古いものから捨てない。** 置けないと伝えて、入力は呼び出し側が保つ。
+                if (next.size > ReadingTraceLimits.MAX_MEMOS) return@withLock MemoSaveOutcome.Full
                 if (existing == null) {
                     // 痕跡がまだ無い（または読めない）＝この閲覧で訪問が確定していない。
                     // セッションへ預け直して、離脱時の書き込みに載せる。
-                    return@withLock holdOrLose(ownerSessionId, reply, atEpochMillis)
+                    return@withLock holdOrLose(ownerSessionId, vaultRelativePath, memo)
                 }
-                val reflection = existing.reflection?.withReply(reply, atEpochMillis)
-                    // ひとこと無しに返事だけを保存する経路は作らない（組で持つため）。
-                    ?: return@withLock ReplySaveOutcome.Lost
+                val attempted = existing.copy(memos = next)
                 val saved = try {
-                    persistence.save(existing.copy(reflection = reflection), vaultKey)
+                    persistence.save(attempted, vaultKey)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     null
                 }
                 if (saved is ReadingTraceSaveResult.Success) {
-                    // **ここで退避を捨てる必要は無い。** 退避側が日時で新旧を見るので、
-                    // 古い退避は次の契機で書き戻されずに捨てられる（→ lessons L11。冗長なガードは足さない）。
-                    ReplySaveOutcome.Saved
+                    // **ファイルに在ることを確かめたので、預かりと退避から外してよい**（→ 契約3）。
+                    // `next` は両方を合流した結果なので、取りこぼしは無い。
+                    clearHeldMemos(ownerSessionId, vaultRelativePath)
+                    forgetPendingWrite(vaultKey, vaultRelativePath)
+                    MemoSaveOutcome.Saved
                 } else {
                     // **書けなかったぶんを必ず退避する。** ここを握り潰すと、
-                    // 画面に「保存済み」と出たまま返事が消える。
-                    rememberPendingWrite(vaultKey, existing.copy(reflection = reflection))
-                    holdOrLose(ownerSessionId, reply, atEpochMillis)
-                    ReplySaveOutcome.Held
+                    // 画面に「保存済み」と出たままメモが消える。
+                    rememberPendingWrite(vaultKey, attempted)
+                    holdOrLose(ownerSessionId, vaultRelativePath, memo)
+                    MemoSaveOutcome.Held
+                }
+            }
+        }
+    }
+
+    /**
+     * 余白メモを1件消す。**3箇所すべてから、書き込みの錠の内側で外す**（→ §7 の契約5）。
+     *
+     * 1箇所でも残すと、次の書き込み契機で合流して**消したはずのメモが復活する。**
+     */
+    suspend fun deleteMemo(
+        vaultRelativePath: String,
+        memo: MarginMemo
+    ): MemoDeleteOutcome {
+        val vaultKey = currentVaultKey() ?: return MemoDeleteOutcome.Failed
+        val ownerSessionId = session?.id
+        return withContext(ioDispatcher) {
+            writeMutex.withLock {
+                // 1. セッションの預かり
+                removeHeldMemo(ownerSessionId, vaultRelativePath, memo)
+                // 2. 退避
+                pendingMutex.withLock {
+                    val key = pendingKey(vaultKey, vaultRelativePath)
+                    pendingWrites[key]?.let { pending ->
+                        val remaining = pending.trace.memos.filterNot { it == memo }
+                        pendingWrites[key] = PendingWrite(
+                            pending.vaultKey,
+                            pending.trace.copy(memos = remaining)
+                        )
+                    }
+                }
+                // 3. 永続ファイル
+                val existing = try {
+                    (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
+                        ?.trace
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    return@withLock MemoDeleteOutcome.Failed
+                } ?: return@withLock MemoDeleteOutcome.Deleted
+                if (existing.memos.none { it == memo }) return@withLock MemoDeleteOutcome.Deleted
+                val saved = try {
+                    persistence.save(existing.copy(memos = existing.memos.filterNot { it == memo }), vaultKey)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (saved is ReadingTraceSaveResult.Success) {
+                    MemoDeleteOutcome.Deleted
+                } else {
+                    MemoDeleteOutcome.Failed
                 }
             }
         }
@@ -430,8 +521,11 @@ internal class ReadingTraceController(
      * 退避してある痕跡を書き直す。**書き込み契機のたびに先頭で試す。**
      *
      * ファイルが無ければ退避した痕跡をそのまま作る（**新規作成の失敗も復旧できる**）。
-     * 既にあれば、そこへ [Reflection] を載せ直す —
-     * 待っている間に訪問が増えている可能性があるので、丸ごと上書きはしない。
+     * 既にあれば、そこへメモを**合流**させる — 待っている間に訪問が増えている可能性が
+     * あるので丸ごと上書きはせず、メモは配列なのでどちらも残せる。
+     *
+     * **日時で新旧を決めない。** 1ノート1組だった返事は「どちらを残すか」を決める必要が
+     * あったが、メモは両方を残せる（→ features/reflect_margin_memo.md 判断5）。
      */
     private suspend fun flushPendingWrites(excludePath: String? = null) {
         // Vaultが切り替わっていたら書かない。旧Vaultの内容を新Vaultへ入れない。
@@ -442,113 +536,103 @@ internal class ReadingTraceController(
                 // **これから書くノートは触らない。** 現セッションの巻き戻し（dirty）と
                 // 二重に走り、同じファイルへ2回書くことになる。
                 .filterNot { it.value.trace.vaultRelativePath == excludePath }
-                .map { it.key to it.value }
+                .map { it.key }
         }
-        targets.forEach { (key, pending) ->
+        targets.forEach { key ->
             // **保存中は pendingMutex を離す。** 握ったまま writeMutex を取ると
             // ロック順が逆向きの経路（保存の中から退避を積む）と噛み合わない。
             val written = writeMutex.withLock {
+                // **錠の内側で退避を読み直す**（→ §7 の契約4）。
+                // 先に取ったスナップショットで書くと、待っている間に消されたメモを
+                // **書き戻して復活させる。**
+                val pending = pendingMutex.withLock { pendingWrites[key] }
+                    ?: return@withLock false
+                if (pending.trace.memos.isEmpty()) return@withLock true
                 val existing = (
                     persistence.load(pending.trace.vaultRelativePath, pending.vaultKey)
                         as? ReadingTraceReadResult.Valid
                     )?.trace
-                val next = when {
-                    existing == null -> pending.trace
-                    // 内容が既に反映されていれば書き直す必要はない。
-                    // **文字列ではなく Reflection 全体で見る** — 返事が同じでも
-                    // 元の問い・日時・映し返しが違えば別物である。
-                    existing.reflection == pending.trace.reflection -> return@withLock true
-                    // **古い退避で新しい返事を潰さない。** 退避中に直接保存が成功して
-                    // いれば、ファイル側のほうが新しい。日時で見て退いた場合も
-                    // 「用済み」として true を返し、退避を捨てる。
-                    isStaleAgainst(existing, pending.trace) -> return@withLock true
-                    else -> existing.copy(reflection = pending.trace.reflection)
+                val next = if (existing == null) {
+                    pending.trace
+                } else {
+                    existing.copy(memos = mergeMarginMemos(existing.memos, pending.trace.memos))
                 }
+                // 合流が上限を超えるなら書かない。**退避は残す** — 捨てるとメモが消える。
+                if (next.memos.size > ReadingTraceLimits.MAX_MEMOS) return@withLock false
+                // 内容が既に反映されていれば書き直す必要はない。
+                if (existing != null && existing.memos == next.memos) return@withLock true
                 persistence.save(next, pending.vaultKey) is ReadingTraceSaveResult.Success
             }
             if (written) {
                 pendingMutex.withLock {
-                    // スナップショットを取った後に同じキーへ新しい退避が入っていたら
-                    // 消さない（消すと、書けていない新しい返事まで捨てる）。
-                    if (pendingWrites[key] === pending) pendingWrites.remove(key)
+                    // 書いた後に同じキーへ新しいメモが積まれていたら消さない
+                    // （消すと、書けていない新しいメモまで捨てる）。
+                    val latest = pendingWrites[key]
+                    if (latest != null && latest.trace.memos.isEmpty()) pendingWrites.remove(key)
                 }
             }
         }
     }
 
     /**
-     * 退避してある内容が、ファイル側より古いか。
-     *
-     * 返事の日時で比べる。退避を積んでから直接保存が成功していると
-     * ファイル側が新しく、そのまま書き戻すと**新しい返事を古い返事で上書きする**。
-     */
-    private fun isStaleAgainst(existing: ReadingTrace, pending: ReadingTrace): Boolean {
-        val existingAt = existing.reflection?.repliedAtEpochMillis ?: return false
-        val pendingAt = pending.reflection?.repliedAtEpochMillis ?: return true
-        return existingAt > pendingAt
-    }
-
-    /**
-     * 映し返しを添える。**無くても成立する**ので、書けなければ黙って諦める
-     * （返事と違い、これはAIの生成物なので作り直せる）。
-     */
-    suspend fun saveMirrored(vaultRelativePath: String, mirrored: String) {
-        val vaultKey = currentVaultKey() ?: return
-        withContext(ioDispatcher) {
-            writeMutex.withLock {
-                val existing =
-                    (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
-                        ?.trace
-                if (existing == null) {
-                    // 痕跡がまだ無い（初読で返事まで書いた場合）。捨てずに預ける —
-                    // 画面には映し返しが出ているのに保存だけ落ちると、
-                    // 次に開いたとき返事だけが残って応答が消えている状態になる。
-                    session?.pendingRemark?.takeIf { it.hasReply }?.let { held ->
-                        session?.pendingRemark = held.withMirrored(mirrored)
-                        session?.dirty = true
-                    }
-                    return@withLock
-                }
-                val reflection = existing.reflection?.takeIf { it.hasReply } ?: return@withLock
-                persistence.save(existing.copy(reflection = reflection.withMirrored(mirrored)), vaultKey)
-            }
-        }
-    }
-
-    /**
-     * 書けなかった返事を**要求を出したセッションへ**預ける。預ける先が無ければ [ReplySaveOutcome.Lost]。
-     *
-     * 預けられるのは「この閲覧で作ったひとこと」がある場合だけ。
-     * ひとことが無ければ組にできないので、返事だけを持ち回っても保存できない。
+     * 書けなかったメモを**要求を出したセッションへ**預ける。預ける先が無ければ
+     * [MemoSaveOutcome.Lost]。
      *
      * **[ownerSessionId] が現在のセッションと違えば預けない。**
-     * 返事を書いたノートを既に離れているので、預けても行き先は別のノートの痕跡になる。
-     * **[ReplySaveOutcome.Lost] を返すのは、そのほうが正直だから** —
+     * メモを置いたノートを既に離れているので、預けても行き先は別のノートの痕跡になる。
+     * **[MemoSaveOutcome.Lost] を返すのは、そのほうが正直だから** —
      * 別のノートへ混ぜて「保存できた」ことにするより、保存できなかったと言うほうがよい。
+     *
+     * **`dirty` を立てるのが要点。** 立てないと、直前に訪問を書き終えていた場合に
+     * [recordVisit] が「変化なし」で早期returnし、メモが書かれないままセッションが終わる。
      */
     private fun holdOrLose(
         ownerSessionId: Long?,
-        reply: String,
-        atEpochMillis: Long
-    ): ReplySaveOutcome {
-        val active = session ?: return ReplySaveOutcome.Lost
-        if (active.id != ownerSessionId) return ReplySaveOutcome.Lost
-        val base = active.pendingRemark ?: return ReplySaveOutcome.Lost
-        active.pendingRemark = base.withReply(reply, atEpochMillis)
+        vaultRelativePath: String,
+        memo: MarginMemo
+    ): MemoSaveOutcome {
+        val active = session ?: return MemoSaveOutcome.Lost
+        if (active.id != ownerSessionId) return MemoSaveOutcome.Lost
+        if (active.vaultRelativePath != vaultRelativePath) return MemoSaveOutcome.Lost
+        active.pendingMemos = mergeMarginMemos(active.pendingMemos, listOf(memo))
         active.dirty = true
         // ここでは完成した痕跡を作れない（訪問がまだ無い）ので、退避には積まない。
         // 離脱時に痕跡ごと組み立てて保存を試み、そこで失敗したら丸ごと退避される。
-        return ReplySaveOutcome.Held
+        return MemoSaveOutcome.Held
+    }
+
+    /** ファイルに在ることを確かめたメモを預かりから外す（→ §7 の契約3）。 */
+    private fun clearHeldMemos(ownerSessionId: Long?, vaultRelativePath: String) {
+        val active = session ?: return
+        if (active.id != ownerSessionId) return
+        if (active.vaultRelativePath != vaultRelativePath) return
+        active.pendingMemos = emptyList()
+    }
+
+    /** 消されたメモを預かりから外す（→ §7 の契約5）。 */
+    private fun removeHeldMemo(
+        ownerSessionId: Long?,
+        vaultRelativePath: String,
+        memo: MarginMemo
+    ) {
+        val active = session ?: return
+        if (active.id != ownerSessionId) return
+        if (active.vaultRelativePath != vaultRelativePath) return
+        active.pendingMemos = active.pendingMemos.filterNot { it == memo }
     }
 
     /**
      * 現在のセッションの訪問を書き出す。既にこの閲覧で書いた訪問があれば、
      * 増やさずにその1件を差し替える（1回の閲覧＝1訪問を保つ）。
      *
-     * 預かっているひとこと（[Session.pendingRemark]）があれば、**同じ
-     * read-modify-write の中で**一緒に載せる。別のコルーチンで保存すると、
+     * 預かっているメモ（[Session.pendingMemos]）と**退避しているメモ**があれば、
+     * **同じ read-modify-write の中で**一緒に載せる。別のコルーチンで保存すると、
      * 訪問より先に走った側が「痕跡が無い」で諦めるか、後から走った側が
      * 古い読み取りで上書きするかのどちらかになる。
+     *
+     * **退避も合流させるのが要点**（→ §7 の契約3）。
+     * 退避を載せずに訪問だけ書いて成功扱いにすると、
+     * **書けていないメモを持ったまま退避を捨てる**ことになる。
      */
     private fun recordVisit() {
         val active = session ?: return
@@ -556,13 +640,13 @@ internal class ReadingTraceController(
         if (!active.dirty) return
         // 相対パスが最後まで分からなかったノート（_AI補記 の一覧から開いた等）は記録しない。
         val path = active.vaultRelativePath ?: return
-        // **返事を預かっているときは読書量の門番を通す。**
+        // **メモを預かっているときは読書量の門番を通す。**
         // 10秒・1ブロックは「一瞬引いてすぐ送った表示を訪問に数えない」ための条件だが、
-        // ユーザーが返事を書いたなら、それはスクロールより強い関与である。
-        // ここを通さないと、条件未達で離れた瞬間に**預かった返事が消える**
+        // ユーザーがメモを置いたなら、それはスクロールより強い関与である。
+        // ここを通さないと、条件未達で離れた瞬間に**預かったメモが消える**
         // （画面には「保存中」と出たまま）。
-        val holdsReply = active.pendingRemark?.hasReply == true
-        if (!holdsReply) {
+        val holdsMemos = active.pendingMemos.isNotEmpty()
+        if (!holdsMemos) {
             if (active.elapsedMillis(clock()) < MIN_READING_MILLIS) return
             // 本文がまだ描画されていない（進捗報告が来ていない）場合は読んだと見なさない。
             if (active.totalBlocks <= 0) return
@@ -571,7 +655,7 @@ internal class ReadingTraceController(
         val visit = ReadingVisit(
             atEpochMillis = clock(),
             deepestSectionTitle = active.deepestSectionTitle,
-            // totalBlocks が 0 のまま（返事だけ書いて離れた）なら到達率は 0。
+            // totalBlocks が 0 のまま（メモだけ置いて離れた）なら到達率は 0。
             // progressPercent は 0 除算を自分で防ぐので、そのまま渡してよい。
             progressPercent = progressPercent(
                 active.deepestBlockIndex,
@@ -586,8 +670,8 @@ internal class ReadingTraceController(
         active.dirty = false
         // 訪問と同じく、起動前に消費済みにして二重書き込みを防ぐ。
         // 失敗時は下の分岐で戻し、次の契機で書き直させる。
-        val pendingRemark = active.pendingRemark
-        active.pendingRemark = null
+        val pendingMemos = active.pendingMemos
+        active.pendingMemos = emptyList()
         val title = active.noteTitle
         val documentId = active.documentId
         val vaultKey = active.vaultKey
@@ -599,6 +683,8 @@ internal class ReadingTraceController(
             withContext(ioDispatcher) { flushPendingWrites(excludePath = path) }
             // 保存しようとした痕跡。失敗したときに丸ごと退避するために掴んでおく。
             var attempted: ReadingTrace? = null
+            // 上限に入りきらなかったメモ。**捨てずに預かりへ戻す。**
+            var overflow: List<MarginMemo> = emptyList()
             val result = withContext(ioDispatcher) {
                 writeMutex.withLock {
                     val base = when (val existing = persistence.load(path, vaultKey)) {
@@ -623,15 +709,18 @@ internal class ReadingTraceController(
                             visits = emptyList()
                         )
                     }
-                    // ひとことを預かっていなければ、読み込んだ値をそのまま残す。
-                    // ここで無条件に copy(reflection = pendingRemark) にすると、
-                    // 過去に保存した組を訪問のたびに消してしまう。
+                    // **3箇所を合流させる**（→ §7 の契約2・3）。退避を載せずに書いて
+                    // 成功扱いにすると、書けていないメモを持ったまま退避を捨てることになる。
                     val withVisit = base.withVisit(visit)
-                    val next = if (pendingRemark != null) {
-                        withVisit.copy(reflection = pendingRemark)
-                    } else {
-                        withVisit
-                    }
+                    val merged = mergeMarginMemos(
+                        mergeMarginMemos(withVisit.memos, pendingWriteMemos(vaultKey, path)),
+                        pendingMemos
+                    )
+                    // 上限を超える分は**捨てずに預かりへ戻す。** 古い側から書けるだけ書く。
+                    // ここへ来るのは別端末が同じノートへ書いた場合だけで、
+                    // 自分の追記は appendMemo が先に Full で止める。
+                    overflow = merged.drop(ReadingTraceLimits.MAX_MEMOS)
+                    val next = withVisit.copy(memos = merged.take(ReadingTraceLimits.MAX_MEMOS))
                     attempted = next
                     persistence.save(next, vaultKey)
                 }
@@ -647,20 +736,24 @@ internal class ReadingTraceController(
             if (result is ReadingTraceSaveResult.Failure && owner.recordedVisit === visit) {
                 owner.recordedVisit = previous
                 owner.dirty = true
-                // ひとことも戻す。戻さないと、訪問だけ次の契機で書き直されて
-                // ひとことは恒久的に失われる（生成し直す導線はユーザーの再操作しかない）。
-                // 待っている間に新しいひとことが預けられていたら、そちらを優先する。
-                if (pendingRemark != null && owner.pendingRemark == null) {
-                    owner.pendingRemark = pendingRemark
-                }
+                // メモも戻す。戻さないと、訪問だけ次の契機で書き直されて
+                // **メモは恒久的に失われる**（ユーザーが書いた言葉は作り直せない）。
+                // 待っている間に新しいメモが預けられていたら、合流させる。
+                owner.pendingMemos = mergeMarginMemos(owner.pendingMemos, pendingMemos)
+            }
+            // 入りきらなかったぶんを預かりへ戻す。**成否に関わらず捨てない。**
+            if (overflow.isNotEmpty()) {
+                owner.pendingMemos = mergeMarginMemos(owner.pendingMemos, overflow)
+                owner.dirty = true
             }
             // **書けなかった痕跡を丸ごと退避する。** 痕跡の新規作成が失敗した回を救えるのはここだけ
-            // （ファイルが無いと、返事だけでは載せる先が無い）。
+            // （ファイルが無いと、メモだけでは載せる先が無い）。
             attempted?.let { trace ->
                 if (result is ReadingTraceSaveResult.Failure) {
                     rememberPendingWrite(vaultKey, trace)
-                } else {
-                    // 書けたので、同じノートの退避は用済み。
+                } else if (overflow.isEmpty()) {
+                    // 書けた痕跡には退避のメモも合流済みなので、退避は用済み（→ 契約3）。
+                    // **入りきらなかったぶんがあるときは捨てない。**
                     forgetPendingWrite(vaultKey, trace.vaultRelativePath)
                 }
             }
@@ -712,10 +805,22 @@ internal class ReadingTraceController(
 }
 
 /**
- * 返事の保存結果。**Boolean へ畳まない** — 呼び出し側の次の行動が3通りに分かれる。
+ * 余白メモの保存結果。**Boolean へ畳まない** — 呼び出し側の次の行動が4通りに分かれる。
  *
- * - [Saved]   … サイドカーへ書けた。画面は「保存済み」でよい
- * - [Held]    … まだ書けていないが預かった。離脱時に書かれるので、失敗として見せない
- * - [Lost]    … どこにも残っていない。**画面は未保存として見せ、書き直せる状態を保つ**
+ * - [Saved] … サイドカーへ書けた。画面は「保存済み」でよい
+ * - [Held]  … まだ書けていないが預かった。離脱時に書かれるので、失敗として見せない
+ * - [Full]  … 上限に達して置けない。**入力欄の文字は消さない** — 1件消せばそのまま置ける
+ * - [Lost]  … どこにも残っていない。**画面は未保存として見せ、書き直せる状態を保つ**
+ *
+ * **[Full] を [Lost] へ畳まない。** 再試行で直るものと、
+ * 1件消さなければ直らないものは、ユーザーの次の行動が違う。
  */
-internal enum class ReplySaveOutcome { Saved, Held, Lost }
+internal enum class MemoSaveOutcome { Saved, Held, Full, Lost }
+
+/**
+ * 余白メモの削除結果。
+ *
+ * **[Deleted] は「3箇所のどこにも残っていない」ことを意味する**（→ §7 の契約5）。
+ * 1箇所でも残っていれば、次の書き込み契機で合流して復活してしまう。
+ */
+internal enum class MemoDeleteOutcome { Deleted, Failed }

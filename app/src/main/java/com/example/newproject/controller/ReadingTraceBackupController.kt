@@ -10,8 +10,7 @@ import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.domain.adoptImportedTrace
 import com.example.newproject.domain.mergeReadingTraces
-import com.example.newproject.domain.DroppedReplySide
-import com.example.newproject.domain.droppedReplySide
+import com.example.newproject.domain.ReadingTraceMergeResult
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceBackupStateWriter
 import com.example.newproject.model.ReadingTraceBackupStep
@@ -317,8 +316,6 @@ internal class ReadingTraceBackupController(
     ): ReadingTraceImportPlan {
         var added = 0
         var merged = 0
-        var localReplyReplaced = 0
-        var importedReplyDropped = 0
         val withheld = carriedWithheld.toMutableList()
         traces.forEach { imported ->
             when (val local = snapshots[imported.vaultRelativePath]) {
@@ -328,17 +325,19 @@ internal class ReadingTraceBackupController(
                     imported.vaultRelativePath,
                     ReadingTraceImportWithholdReason.LOCAL_UNREADABLE
                 )
-                is LocalTrace.Present -> {
-                    merged++
-                    when (droppedReplySide(local.trace, imported)) {
-                        DroppedReplySide.LOCAL -> localReplyReplaced++
-                        DroppedReplySide.IMPORTED -> importedReplyDropped++
-                        null -> Unit
+                // **下見でも合流の可否まで当てる。** 「合わせる」と見せてから
+                // 保留するのでは、承認した内容と結果が食い違う。
+                is LocalTrace.Present ->
+                    when (mergeReadingTraces(local.trace, imported)) {
+                        is ReadingTraceMergeResult.Merged -> merged++
+                        ReadingTraceMergeResult.HeldOverCapacity -> withheld += WithheldImport(
+                            imported.vaultRelativePath,
+                            ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY
+                        )
                     }
-                }
             }
         }
-        return ReadingTraceImportPlan(added, merged, localReplyReplaced, importedReplyDropped, withheld)
+        return ReadingTraceImportPlan(added, merged, withheld)
     }
 
     // ── 読み戻しの下見 ────────────────────────────────────────────────────
@@ -392,13 +391,24 @@ internal class ReadingTraceBackupController(
             WithheldImport(null, ReadingTraceImportWithholdReason.UNREADABLE_ENTRY)
         }
         // 同じノートの痕跡が退避ファイル内で重複していたら、**捨てずに畳む。**
-        // 手で結合された退避ファイルがこの形になり、片方を落とすと返事を失う。
+        // 手で結合された退避ファイルがこの形になり、片方を落とすとメモを失う。
         // 畳む作業も件数に比例するので Main の外へ置く。
+        //
+        // **畳めないものは先頭の1件だけを残す。** 上限を超える重複をここで切ると
+        // 「捨てない」が破れるので、残りは端末側との突き合わせで
+        // `MEMOS_OVER_CAPACITY` として報告させる（→ 判断5 の規則を重複にも当てる）。
         val traces = withContext(cpuDispatcher) {
             entries.filterIsInstance<ReadingTraceBackupEntry.Valid>()
                 .map { it.trace }
                 .groupBy { it.vaultRelativePath }
-                .map { (_, duplicates) -> duplicates.reduce(::mergeReadingTraces) }
+                .map { (_, duplicates) ->
+                    duplicates.reduce { left, right ->
+                        when (val folded = mergeReadingTraces(left, right)) {
+                            is ReadingTraceMergeResult.Merged -> folded.trace
+                            ReadingTraceMergeResult.HeldOverCapacity -> left
+                        }
+                    }
+                }
                 .sortedBy { it.vaultRelativePath }
         }
         if (traces.isEmpty()) {
@@ -573,10 +583,18 @@ internal class ReadingTraceBackupController(
 
             else -> {
                 val next = when (current) {
-                    is LocalTrace.Present -> mergeReadingTraces(current.trace, imported)
+                    is LocalTrace.Present ->
+                        when (val merged = mergeReadingTraces(current.trace, imported)) {
+                            is ReadingTraceMergeResult.Merged -> merged.trace
+                            // **端末側を書き換えない。** 下見で見せたとおり無変更で残す。
+                            ReadingTraceMergeResult.HeldOverCapacity -> null
+                        }
                     else -> adoptImportedTrace(imported)
                 }
                 when {
+                    next == null -> tally.withhold(
+                        WithheldImport(path, ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY)
+                    )
                     persistence.save(next, vaultKey) !is ReadingTraceSaveResult.Success ->
                         // 書けなかった分は「適用できなかった」として残す。
                         // 追加・マージのどちらに数えても、実際には反映されていない。

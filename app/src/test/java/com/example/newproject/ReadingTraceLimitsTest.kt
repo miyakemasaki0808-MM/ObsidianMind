@@ -1,6 +1,12 @@
 package com.example.newproject
 
+import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -12,65 +18,95 @@ import org.junit.Test
  * ファイル全体の読み込み上限を超えて**次回読めなくなる**。
  * 保存は成功し、テストも緑で、実機で「痕跡が消えた」としてだけ現れる。
  *
- * 返事の上限を 1536 → 25,600 バイトへ上げたときに実際に危なかったので、
- * 数えるのをやめて計算で固定する。
+ * ## 計算をやめて実測で固定する
+ *
+ * かつてここは**生のバイト上限を足し**、JSONの器を定数で見込んでいた。
+ * **それは保証になっていなかった** — JSONは `"` と `\` を2バイトへ、
+ * 制御文字を `\u00XX` の6バイトへ広げるので、
+ * **全欄が上限内なのに128KBを超えたファイルを書ける。**
+ *
+ * そこで推定値を置くのをやめ、**本物の [ReadingTraceJson.encode] に通して数える。**
+ * 欄が増えても計算式を直し忘れられない（→ features/reflect_margin_memo.md 判断11）。
+ *
+ * **詰めるのはエスケープで膨らむ文字。** 日本語で埋めると3バイト文字が
+ * そのまま3バイトで出るので、**最悪ケースを測ったことにならない。**
  */
 class ReadingTraceLimitsTest {
 
-    /**
-     * 全フィールドを上限まで詰めた痕跡の、おおよそのバイト数。
-     *
-     * JSON のキー名・区切り・整形の空白ぶんは [JSON_OVERHEAD] でまとめて見込む。
-     * 正確な値を求めるのが目的ではなく、**上限を上げたときに気づくこと**が目的。
-     */
-    private val worstCaseBytes: Int
-        get() = with(ReadingTraceLimits) {
-            val perVisit = VISIT_NUMERIC_BYTES + MAX_SECTION_TITLE_BYTES
-            MAX_RELATIVE_PATH_BYTES +
-                MAX_NOTE_TITLE_BYTES +
-                MAX_DOCUMENT_ID_BYTES +
-                MAX_AI_SUMMARY_BYTES +
-                // 印の内容は要約と同じ枠。**枠に出ていた文をそのまま控える**ので同居しうる。
-                MAX_AI_SUMMARY_BYTES +
-                MAX_REMARK_BYTES +
-                MAX_REPLY_BYTES +
-                MAX_MIRRORED_BYTES +
-                perVisit * MAX_VISITS +
-                JSON_OVERHEAD
-        }
-
     @Test
-    fun `全フィールドを上限まで詰めてもファイル上限に収まる`() {
+    fun `全欄を上限まで詰めた痕跡が、実際にencodeしてもファイル上限に収まる`() {
+        val encoded = ReadingTraceJson.encode(worstCaseTrace())
+
         assertTrue(
             "上限どうしが食い違っている。保存できたファイルを次回読めなくなる" +
-                "（最悪ケース $worstCaseBytes バイト > 上限 ${ReadingTraceLimits.MAX_FILE_BYTES}）。" +
-                "どれかの上限を上げたなら MAX_FILE_BYTES も見直すこと。",
-            worstCaseBytes <= ReadingTraceLimits.MAX_FILE_BYTES
+                "（実測 ${encoded.size} バイト > 上限 ${ReadingTraceLimits.MAX_FILE_BYTES}）。" +
+                "どれかの上限を上げたなら MAX_FILE_BYTES か MAX_MEMOS を見直すこと。",
+            encoded.size <= ReadingTraceLimits.MAX_FILE_BYTES
         )
     }
 
     /**
-     * 返事の上限は、**AIへ渡す抜粋の上限より十分大きい**こと。
-     *
-     * 2つが同じ値だった頃は、ローカルLLMへ渡せる長さがそのまま
-     * ユーザーの文章の上限になっていた。分離したことを固定する。
+     * **書けたものは読めること。** 上の測定は「書けるか」しか見ておらず、
+     * 読み戻しが同じ上限で弾かないことまでは言えない。
      */
     @Test
-    fun `保存の上限はAI入力の上限より大きい`() {
+    fun `上限まで詰めた痕跡は同じ上限で読み戻せる`() {
+        val encoded = ReadingTraceJson.encode(worstCaseTrace())
+
+        val decoded = ReadingTraceJson.decode(encoded)
+
         assertTrue(
-            "保存とAI入力の予算が分かれていない",
-            ReadingTraceLimits.MAX_REPLY_BYTES > REPLY_EXCERPT_BYTES_ESTIMATE
+            "上限まで詰めた痕跡を読み戻せない: $decoded",
+            decoded is ReadingTraceReadResult.Valid
         )
     }
 
+    /**
+     * 全欄を上限まで詰めた痕跡。
+     *
+     * **印とAI要約は同居しうる**（印は枠に出ていた文をそのまま控えるため）ので、
+     * どちらも上限まで入れる。
+     */
+    private fun worstCaseTrace(): ReadingTrace = with(ReadingTraceLimits) {
+        ReadingTrace(
+            vaultRelativePath = escaping(MAX_RELATIVE_PATH_BYTES),
+            noteTitle = escaping(MAX_NOTE_TITLE_BYTES),
+            documentId = escaping(MAX_DOCUMENT_ID_BYTES),
+            visits = List(MAX_VISITS) { index ->
+                ReadingVisit(
+                    atEpochMillis = Long.MAX_VALUE - index,
+                    deepestSectionTitle = escaping(MAX_SECTION_TITLE_BYTES),
+                    progressPercent = 100
+                )
+            },
+            aiSummary = escaping(MAX_AI_SUMMARY_BYTES),
+            aiSummaryVisitCount = Int.MAX_VALUE,
+            aiSummaryKind = ReunionKind.Overview,
+            totalVisitCount = Int.MAX_VALUE,
+            memos = List(MAX_MEMOS) { index ->
+                MarginMemo(
+                    text = escaping(MAX_MEMO_BYTES),
+                    writtenAtEpochMillis = Long.MAX_VALUE - index,
+                    sectionTitle = escaping(MAX_SECTION_TITLE_BYTES)
+                )
+            },
+            markedAtEpochMillis = Long.MAX_VALUE,
+            markedSummary = escaping(MAX_AI_SUMMARY_BYTES),
+            markedKind = ReunionKind.Overview
+        )
+    }
+
+    /**
+     * JSON化で**2倍に膨らむ**文字だけで [bytes] バイトを埋める。
+     *
+     * 引用符・バックスラッシュ・改行はいずれも1バイトの入力が2バイトの出力になる。
+     * 入力側で制御文字（改行・タブを除く）を落とす契約があるので、
+     * **2倍がこのアプリで到達しうる最悪の膨張率**である。
+     */
+    private fun escaping(bytes: Int): String =
+        generateSequence(0) { it + 1 }.take(bytes).map { ESCAPING[it % ESCAPING.size] }.joinToString("")
+
     private companion object {
-        /** 訪問1件の数値フィールド（日時・到達率）とJSONの器のぶん。 */
-        const val VISIT_NUMERIC_BYTES = 96
-
-        /** キー名・引用符・カンマ・整形の空白。フィールド数から見た概算。 */
-        const val JSON_OVERHEAD = 4 * 1024
-
-        /** AIへ渡す返事の抜粋（400文字≒1200バイト）の概算。 */
-        const val REPLY_EXCERPT_BYTES_ESTIMATE = 1_200
+        private val ESCAPING = listOf("\"", "\\", "\n")
     }
 }

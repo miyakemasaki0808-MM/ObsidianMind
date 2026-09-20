@@ -12,7 +12,8 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceBackupStateWriter
 import com.example.newproject.model.ReadingTraceImportWithholdReason
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.state.ReadingTraceBackupState
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -139,54 +140,66 @@ class ReadingTraceBackupControllerTest {
         assertEquals(0, env.persistence.saveCount)
     }
 
-    /** **失われる返事の件数を確定前に数える。** ここが「不可逆の予告」の実体。 */
+    /** **両方のメモが残る。** 1ノート1組だった頃と違い、どちらかを選ぶ必要が無い。 */
     @Test
-    fun `端末側の返事が置き換わる件数を下見で数える`() = runTest {
+    fun `端末側と退避側のメモは合流して両方残る`() = runTest {
         val env = Env(this)
         env.persistence.put(
-            trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
+            trace("ideas/habit.md").copy(memos = listOf(memo("端末側のメモ", 200L)))
         )
         val backup = ReadingTraceBackupJson.encode(
-            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 300L, "退避側の返事", 400L))),
+            listOf(trace("ideas/habit.md").copy(memos = listOf(memo("退避側のメモ", 400L)))),
             1_000L
         )
 
         env.controller.prepareImport { backup }
         advanceUntilIdle()
-
-        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
-        assertEquals(1, plan.localReplyReplaced)
-        assertEquals(0, plan.importedReplyDropped)
-    }
-
-    /**
-     * **通常の往復では失われるのは退避側。** 書き出したあとに返事を書き足すと
-     * 端末側が新しくなるので、規則どおり端末側が残る。ここを1つの件数へまとめると
-     * 「あなたの返事が置き換わります」という逆の告知になる。
-     */
-    @Test
-    fun `退避側の返事が使われない件数を下見で分けて数える`() = runTest {
-        val env = Env(this)
-        env.persistence.put(
-            trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "端末側の新しい返事", 1_000L))
-        )
-        val backup = ReadingTraceBackupJson.encode(
-            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "退避側の古い返事", 200L))),
-            1_000L
-        )
-
-        env.controller.prepareImport { backup }
-        advanceUntilIdle()
-
-        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
-        assertEquals(0, plan.localReplyReplaced)
-        assertEquals(1, plan.importedReplyDropped)
+        assertEquals(1, (env.state.value as ReadingTraceBackupState.Planned).plan.merged)
 
         env.controller.applyImport()
         advanceUntilIdle()
+
         assertEquals(
-            "端末側の新しい返事",
-            env.persistence.stored("ideas/habit.md")?.reflection?.reply
+            listOf("端末側のメモ", "退避側のメモ"),
+            env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
+    }
+
+    /**
+     * **合流が上限を超えるノートは、下見の段階で保留として数える。**
+     *
+     * 「合わせます」と見せてから保留すると、承認した内容と結果が食い違う。
+     */
+    @Test
+    fun `合流が上限を超えるノートは下見で保留として数える`() = runTest {
+        val env = Env(this)
+        val local = trace("ideas/habit.md").copy(
+            memos = (1..ReadingTraceLimits.MAX_MEMOS).map { memo("端末側$it", it * 10L) }
+        )
+        env.persistence.put(local)
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(trace("ideas/habit.md").copy(memos = listOf(memo("退避側の1件", 99_000L)))),
+            1_000L
+        )
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
+        assertEquals("保留を合流として数えた", 0, plan.merged)
+        assertEquals(
+            listOf(ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY),
+            plan.withheld.map { it.reason }
+        )
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertEquals("保留したノートを書き換えた", 0, env.persistence.saveCount)
+        assertEquals(
+            "端末側のメモが変わった",
+            local.memos.map { it.text },
+            env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
         )
     }
 
@@ -203,11 +216,11 @@ class ReadingTraceBackupControllerTest {
     fun `端末側を読み取れない痕跡は新規扱いにせず保留する`() = runTest {
         val env = Env(this)
         env.persistence.put(
-            trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
+            trace("ideas/habit.md").copy(memos = listOf(memo("端末側の返事", 200L)))
         )
         env.persistence.unreadableKeys += ReadingTraceStore.keyFor("ideas/habit.md")
         val backup = ReadingTraceBackupJson.encode(
-            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            listOf(trace("ideas/habit.md").copy(memos = listOf(memo("退避側の返事", 1_000L)))),
             1_000L
         )
 
@@ -226,8 +239,8 @@ class ReadingTraceBackupControllerTest {
 
         assertEquals("読めなかった痕跡を上書きした", 0, env.persistence.saveCount)
         assertEquals(
-            "端末側の返事",
-            env.persistence.stored("ideas/habit.md")?.reflection?.reply
+            listOf("端末側の返事"),
+            env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
         )
     }
 
@@ -264,10 +277,10 @@ class ReadingTraceBackupControllerTest {
     fun `下見の後に端末側が読めなくなったら書き込まない`() = runTest {
         val env = Env(this)
         env.persistence.put(
-            trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "端末側の返事", 200L))
+            trace("ideas/habit.md").copy(memos = listOf(memo("端末側の返事", 200L)))
         )
         val backup = ReadingTraceBackupJson.encode(
-            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            listOf(trace("ideas/habit.md").copy(memos = listOf(memo("退避側の返事", 1_000L)))),
             1_000L
         )
         env.controller.prepareImport { backup }
@@ -290,28 +303,25 @@ class ReadingTraceBackupControllerTest {
     /**
      * **不可逆な操作は、画面に出した内容だけを書く。**
      *
-     * 「失われる返事はありません」と見せた後に端末側へ返事が付いた場合、
-     * そのまま適用すると**利用者が承認していない損失**が起きる。
+     * 下見のあとに端末側へメモが付いた場合、そのまま適用すると
+     * **利用者が承認していない内容**を書くことになる。
      * 最初の確定では1件も書かず、計画を作り直して二度目の確定を求める。
      */
     @Test
-    fun `下見のあとに端末側へ返事が付いたら最初の確定では書かない`() = runTest {
+    fun `下見のあとに端末側へメモが付いたら最初の確定では書かない`() = runTest {
         val env = Env(this)
         env.persistence.put(trace("ideas/habit.md"))
         val backup = ReadingTraceBackupJson.encode(
-            listOf(trace("ideas/habit.md").copy(reflection = reflection("問い", 900L, "退避側の返事", 1_000L))),
+            listOf(trace("ideas/habit.md").copy(memos = listOf(memo("退避側の返事", 1_000L)))),
             1_000L
         )
         env.controller.prepareImport { backup }
         advanceUntilIdle()
-        assertEquals(
-            0,
-            (env.state.value as ReadingTraceBackupState.Planned).plan.localReplyReplaced
-        )
+        assertEquals(1, (env.state.value as ReadingTraceBackupState.Planned).plan.merged)
 
-        // 確定前に、同じノートへ返事が保存される。
+        // 確定前に、同じノートへメモが保存される。
         env.persistence.put(
-            trace("ideas/habit.md").copy(reflection = reflection("問い", 50L, "後から書いた返事", 60L))
+            trace("ideas/habit.md").copy(memos = listOf(memo("後から書いた返事", 60L)))
         )
 
         env.controller.applyImport()
@@ -319,15 +329,18 @@ class ReadingTraceBackupControllerTest {
 
         val revised = env.state.value as ReadingTraceBackupState.Planned
         assertTrue("作り直したことが画面に出ていない", revised.revised)
-        assertEquals("承認していない損失を確定した", 0, env.persistence.saveCount)
-        assertEquals(1, revised.plan.localReplyReplaced)
+        assertEquals("承認していない内容を確定した", 0, env.persistence.saveCount)
+        assertEquals(1, revised.plan.merged)
 
         // 作り直した計画を承認すれば、規則どおりマージする。
         env.controller.applyImport()
         advanceUntilIdle()
 
         assertTrue(env.state.value is ReadingTraceBackupState.Imported)
-        assertEquals("退避側の返事", env.persistence.stored("ideas/habit.md")?.reflection?.reply)
+        assertEquals(
+            listOf("後から書いた返事", "退避側の返事"),
+            env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
     }
 
     // 返事だけでなく**訪問が増えただけ**でも作り直す。古い下見の値で上書きしないため。
@@ -372,14 +385,14 @@ class ReadingTraceBackupControllerTest {
         assertEquals(0, env.persistence.saveCount)
     }
 
-    // 手で結合された退避ファイルは同じノートを2件持ちうる。片方を落とすと返事を失う。
+    // 手で結合された退避ファイルは同じノートを2件持ちうる。片方を落とすとメモを失う。
     @Test
     fun `退避ファイル内の重複は畳んで1件にする`() = runTest {
         val env = Env(this)
         val backup = ReadingTraceBackupJson.encode(
             listOf(
-                trace("ideas/habit.md").copy(reflection = reflection("問い", 100L)),
-                trace("ideas/habit.md").copy(reflection = reflection("問い", 100L, "返事", 200L))
+                trace("ideas/habit.md").copy(memos = listOf(memo("問い", 100L))),
+                trace("ideas/habit.md").copy(memos = listOf(memo("返事", 200L)))
             ),
             1_000L
         )
@@ -392,8 +405,8 @@ class ReadingTraceBackupControllerTest {
         val imported = env.state.value as ReadingTraceBackupState.Imported
         assertEquals(1, imported.added)
         assertEquals(
-            "返事",
-            env.persistence.stored("ideas/habit.md")?.reflection?.reply
+            listOf("問い", "返事"),
+            env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
         )
     }
 
@@ -612,12 +625,12 @@ class ReadingTraceBackupControllerTest {
         val paths = (1..60).map { "notes/$it.md" }
         paths.forEach { path ->
             env.persistence.put(
-                trace(path).copy(reflection = reflection("ひとこと", 1_000L, "端末側の返事", 2_000L))
+                trace(path).copy(memos = listOf(memo("端末側の返事", 2_000L)))
             )
         }
         val backup = ReadingTraceBackupJson.encode(
             paths.map {
-                trace(it).copy(reflection = reflection("ひとこと", 1_000L, "退避側の返事", 3_000L))
+                trace(it).copy(memos = listOf(memo("退避側の返事", 3_000L)))
             },
             1_000L
         )
@@ -661,14 +674,14 @@ class ReadingTraceBackupControllerTest {
             if (merging) {
                 paths.forEach { path ->
                     env.persistence.put(
-                        trace(path).copy(reflection = reflection("ひとこと", 1_000L, "端末側の返事", 2_000L))
+                        trace(path).copy(memos = listOf(memo("端末側の返事", 2_000L)))
                     )
                 }
             }
             val backup = ReadingTraceBackupJson.encode(
                 paths.map { path ->
                     if (merging) {
-                        trace(path).copy(reflection = reflection("ひとこと", 1_000L, "退避側の返事", 3_000L))
+                        trace(path).copy(memos = listOf(memo("退避側の返事", 3_000L)))
                     } else {
                         trace(path)
                     }
@@ -819,12 +832,7 @@ private fun trace(path: String) = ReadingTrace(
     totalVisitCount = 1
 )
 
-private fun reflection(
-    remark: String,
-    remarkedAt: Long,
-    reply: String? = null,
-    repliedAt: Long? = null
-) = Reflection(remark, remarkedAt, reply, repliedAt)
+private fun memo(text: String, at: Long) = MarginMemo(text = text, writtenAtEpochMillis = at)
 
 private class FakeBackupPersistence : ReadingTracePersistence {
     private val traces = mutableMapOf<String, ReadingTrace>()

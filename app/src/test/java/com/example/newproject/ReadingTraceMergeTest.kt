@@ -2,12 +2,11 @@ package com.example.newproject
 
 import com.example.newproject.domain.adoptImportedTrace
 import com.example.newproject.domain.mergeReadingTraces
-import com.example.newproject.domain.DroppedReplySide
-import com.example.newproject.domain.droppedReplySide
+import com.example.newproject.domain.ReadingTraceMergeResult
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.validateReadingTrace
 import org.junit.Assert.assertEquals
@@ -24,111 +23,89 @@ import org.junit.Test
  */
 class ReadingTraceMergeTest {
 
-    // ── 返事（再生成できないもの）────────────────────────────────────────
+    // ── 余白メモ（再生成できないもの）────────────────────────────────────
+    //
+    // **配列なので「どちらを選ぶか」が要らない。** 1ノート1組だった旧ひとことは
+    // 両方に返事があれば必ず片方が消えていた。代わりに、合流が保持上限を超えるという
+    // 新しい境界ができる（→ features/reflect_margin_memo.md 判断5）。
 
     @Test
-    fun `両方に返事があるときは新しい返事が残る`() {
-        val local = trace().copy(reflection = reflection("古い問い", 100L, "古い返事", 200L))
-        val imported = trace().copy(reflection = reflection("新しい問い", 300L, "新しい返事", 400L))
+    fun `両方のメモが残る`() {
+        val local = trace().copy(memos = listOf(memo("端末側", 100L)))
+        val imported = trace().copy(memos = listOf(memo("退避側", 200L)))
 
-        assertEquals("新しい返事", mergeReadingTraces(local, imported).reflection?.reply)
-    }
-
-    // **これが直感とずれる側。** 「新しい方が残る」と期待されるが、
-    // ひとことは本文から作り直せるのに対し返事は二度と作れない。
-    @Test
-    fun `片方だけ返事があるなら古くてもそちらが残る`() {
-        val local = trace().copy(reflection = reflection("古い問い", 100L, "消してはいけない返事", 150L))
-        val imported = trace().copy(reflection = reflection("新しい問い", 9_000L))
-
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals("消してはいけない返事", merged.reflection?.reply)
-        assertEquals("古い問い", merged.reflection?.remark)
-    }
-
-    @Test
-    fun `退避側にだけ返事があるならそちらを採る`() {
-        val local = trace().copy(reflection = reflection("問い", 9_000L))
-        val imported = trace().copy(reflection = reflection("問い", 100L, "退避側の返事", 150L))
-
-        assertEquals("退避側の返事", mergeReadingTraces(local, imported).reflection?.reply)
-    }
-
-    // 返事がどちらにも無ければ、新しいひとことを採る（作り直せるので損失が無い）。
-    @Test
-    fun `返事が無い者どうしはひとことの新しい方を採る`() {
-        val local = trace().copy(reflection = reflection("古い問い", 100L))
-        val imported = trace().copy(reflection = reflection("新しい問い", 500L))
-
-        assertEquals("新しい問い", mergeReadingTraces(local, imported).reflection?.remark)
-    }
-
-    // 同点は端末側。**いま使っている側を理由なく動かさない。**
-    @Test
-    fun `同じ日時なら端末側の対話を保つ`() {
-        val local = trace().copy(reflection = reflection("端末側", 500L))
-        val imported = trace().copy(reflection = reflection("退避側", 500L))
-
-        assertEquals("端末側", mergeReadingTraces(local, imported).reflection?.remark)
-    }
-
-    @Test
-    fun `表示名は採用した対話の側に揃う`() {
-        val local = trace().copy(noteTitle = "端末側の名前", reflection = reflection("問い", 100L))
-        val imported = trace().copy(
-            noteTitle = "退避側の名前",
-            reflection = reflection("問い", 100L, "返事", 200L)
+        assertEquals(
+            listOf("端末側", "退避側"),
+            merged(local, imported).memos.map { it.text }
         )
+    }
 
-        assertEquals("退避側の名前", mergeReadingTraces(local, imported).noteTitle)
+    /** 同じ断片は畳む。**見出しは畳む鍵に入れない**（同じ瞬間の同じ文は同一のもの）。 */
+    @Test
+    fun `同じ日時と本文のメモは畳まれる`() {
+        val local = trace().copy(memos = listOf(memo("同じ文", 100L, "導入")))
+        val imported = trace().copy(memos = listOf(memo("同じ文", 100L, null)))
+
+        assertEquals(1, merged(local, imported).memos.size)
+    }
+
+    @Test
+    fun `合流したメモは日時の順に並ぶ`() {
+        val local = trace().copy(memos = listOf(memo("あと", 300L), memo("さき", 100L)))
+        val imported = trace().copy(memos = listOf(memo("あいだ", 200L)))
+
+        assertEquals(
+            listOf("さき", "あいだ", "あと"),
+            merged(local, imported).memos.map { it.text }
+        )
     }
 
     /**
-     * **失われるのは「新しい方」ではない側。方向を取り違えると告知が逆になる。**
-     *
-     * 書き出したあとに返事を書き足す往復では端末側が新しいので、
-     * 実際に失われるのは**退避ファイル側**である。方向を見ずに1つの件数へまとめると、
-     * その一番ありふれた場合に「端末側の返事が置き換わります」と嘘をつく。
+     * **上限を超える合流は切らずに保留する。**
+     * 切れば「古いものから捨てない」に反し、全部持てば検証と容量に反する。
      */
     @Test
-    fun `失われる返事は残らなかった側として方向つきで分かる`() {
-        val older = trace().copy(reflection = reflection("問い", 100L, "古い返事", 200L))
-        val newer = trace().copy(reflection = reflection("問い", 300L, "新しい返事", 400L))
+    fun `上限を超える合流は保留になる`() {
+        val local = trace().copy(
+            memos = (1..ReadingTraceLimits.MAX_MEMOS).map { memo("端末側$it", it * 10L) }
+        )
+        val imported = trace().copy(memos = listOf(memo("あふれる1件", 99_000L)))
 
-        // 端末側が新しい＝通常の往復。失われるのは退避側。
-        assertEquals(DroppedReplySide.IMPORTED, droppedReplySide(local = newer, imported = older))
-        // 退避側が新しい＝別端末で書き進めた場合。失われるのは端末側。
-        assertEquals(DroppedReplySide.LOCAL, droppedReplySide(local = older, imported = newer))
+        assertEquals(
+            ReadingTraceMergeResult.HeldOverCapacity,
+            mergeReadingTraces(local, imported)
+        )
     }
 
+    /** ちょうど上限なら合流できる。境界を1つずらすと片側が静かに落ちる。 */
     @Test
-    fun `失われる返事が無いときは方向も出ない`() {
-        val withReply = trace().copy(reflection = reflection("問い", 100L, "同じ返事", 200L))
-        val sameReplyLater = trace().copy(reflection = reflection("問い", 300L, "同じ返事", 400L))
-        val withoutReply = trace().copy(reflection = reflection("問い", 100L))
+    fun `ちょうど上限までは合流できる`() {
+        val half = ReadingTraceLimits.MAX_MEMOS / 2
+        val local = trace().copy(memos = (1..half).map { memo("端末側$it", it * 10L) })
+        val imported = trace().copy(
+            memos = (1..(ReadingTraceLimits.MAX_MEMOS - half)).map { memo("退避側$it", 1_000L + it * 10L) }
+        )
 
-        assertNull("同じ文なら失うものは無い", droppedReplySide(withReply, sameReplyLater))
-        assertNull(droppedReplySide(withReply, withoutReply))
-        assertNull(droppedReplySide(withoutReply, withReply))
+        assertEquals(ReadingTraceLimits.MAX_MEMOS, merged(local, imported).memos.size)
     }
 
-    // **方向の判定はマージ結果から引く。** 規則を2度書くと必ず片方が古くなるので、
-    // 「残らなかった側」がマージ結果と食い違わないことを直接見る。
+    /** 重複を除いた結果が上限内なら、見かけの合計が超えていても合流できる。 */
     @Test
-    fun `方向の判定はマージ結果と食い違わない`() {
-        val older = trace().copy(reflection = reflection("問い", 100L, "古い返事", 200L))
-        val newer = trace().copy(reflection = reflection("問い", 300L, "新しい返事", 400L))
+    fun `重複を除けば上限内なら合流できる`() {
+        val shared = (1..ReadingTraceLimits.MAX_MEMOS).map { memo("共有$it", it * 10L) }
+        val local = trace().copy(memos = shared)
+        val imported = trace().copy(memos = shared)
 
-        listOf(older to newer, newer to older).forEach { (local, imported) ->
-            val survivor = mergeReadingTraces(local, imported).reflection?.reply
-            val dropped = droppedReplySide(local, imported)
-            val droppedReply = when (dropped) {
-                DroppedReplySide.LOCAL -> local.reflection?.reply
-                DroppedReplySide.IMPORTED -> imported.reflection?.reply
-                null -> null
-            }
-            assertEquals("残った返事と失われた返事が同じになっている", false, survivor == droppedReply)
-        }
+        assertEquals(ReadingTraceLimits.MAX_MEMOS, merged(local, imported).memos.size)
+    }
+
+    /** **表示名は端末側を保つ。** メモは両方残るので「採用した側」が存在しない。 */
+    @Test
+    fun `表示名は端末側のまま保たれる`() {
+        val local = trace(title = "端末側の名前").copy(memos = listOf(memo("端末側", 100L)))
+        val imported = trace(title = "退避側の名前").copy(memos = listOf(memo("退避側", 200L)))
+
+        assertEquals("端末側の名前", merged(local, imported).noteTitle)
     }
 
     // ── 訪問と累計 ──────────────────────────────────────────────────────
@@ -138,8 +115,8 @@ class ReadingTraceMergeTest {
         val local = trace().copy(visits = listOf(visit(100L), visit(200L)), totalVisitCount = 2)
         val imported = trace().copy(visits = listOf(visit(200L), visit(300L)), totalVisitCount = 2)
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals(listOf(100L, 200L, 300L), merged.visits.map { it.atEpochMillis })
+        val result = merged(local, imported)
+        assertEquals(listOf(100L, 200L, 300L), result.visits.map { it.atEpochMillis })
     }
 
     @Test
@@ -153,10 +130,10 @@ class ReadingTraceMergeTest {
             totalVisitCount = 25
         )
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals(ReadingTraceLimits.MAX_VISITS, merged.visits.size)
+        val result = merged(local, imported)
+        assertEquals(ReadingTraceLimits.MAX_VISITS, result.visits.size)
         // 直近を残す。古い側から捨てる。
-        assertEquals(500L, merged.visits.last().atEpochMillis)
+        assertEquals(500L, result.visits.last().atEpochMillis)
     }
 
     @Test
@@ -164,7 +141,7 @@ class ReadingTraceMergeTest {
         val local = trace().copy(totalVisitCount = 40)
         val imported = trace().copy(totalVisitCount = 7)
 
-        assertEquals(40, mergeReadingTraces(local, imported).totalVisitCount)
+        assertEquals(40, merged(local, imported).totalVisitCount)
     }
 
     // 累計が保持件数を下回ると検証で弾かれる。両方の累計が小さくても結合で件数が増えうる。
@@ -173,9 +150,9 @@ class ReadingTraceMergeTest {
         val local = trace().copy(visits = listOf(visit(100L)), totalVisitCount = 1)
         val imported = trace().copy(visits = listOf(visit(200L)), totalVisitCount = 1)
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals(2, merged.totalVisitCount)
-        validateReadingTrace(merged)
+        val result = merged(local, imported)
+        assertEquals(2, result.totalVisitCount)
+        validateReadingTrace(result)
     }
 
     // ── AI要約（作り直せるもの）─────────────────────────────────────────
@@ -195,12 +172,12 @@ class ReadingTraceMergeTest {
             aiSummaryKind = ReunionKind.Overview
         )
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals(9, merged.totalVisitCount)
-        assertNull(merged.aiSummary)
-        assertNull(merged.aiSummaryVisitCount)
+        val result = merged(local, imported)
+        assertEquals(9, result.totalVisitCount)
+        assertNull(result.aiSummary)
+        assertNull(result.aiSummaryVisitCount)
         // **種別だけ残さない。** 残すと内容の無い前置きが出る。
-        assertNull(merged.aiSummaryKind)
+        assertNull(result.aiSummaryKind)
     }
 
     @Test
@@ -213,9 +190,9 @@ class ReadingTraceMergeTest {
             aiSummaryKind = ReunionKind.Overview
         )
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals("退避側の要約", merged.aiSummary)
-        assertEquals(ReunionKind.Overview, merged.aiSummaryKind)
+        val result = merged(local, imported)
+        assertEquals("退避側の要約", result.aiSummary)
+        assertEquals(ReunionKind.Overview, result.aiSummaryKind)
     }
 
     // ── 印（作り直せないもの）───────────────────────────────────────────
@@ -229,9 +206,9 @@ class ReadingTraceMergeTest {
             markedKind = ReunionKind.Overview
         )
 
-        val merged = mergeReadingTraces(local, imported)
-        assertEquals("まだ考えたい内容", merged.markedSummary)
-        assertEquals(500L, merged.markedAtEpochMillis)
+        val result = merged(local, imported)
+        assertEquals("まだ考えたい内容", result.markedSummary)
+        assertEquals(500L, result.markedAtEpochMillis)
     }
 
     @Test
@@ -247,7 +224,7 @@ class ReadingTraceMergeTest {
             markedKind = ReunionKind.Overview
         )
 
-        assertEquals("新しい印", mergeReadingTraces(local, imported).markedSummary)
+        assertEquals("新しい印", merged(local, imported).markedSummary)
     }
 
     // ── 端末に紐づく値 ──────────────────────────────────────────────────
@@ -259,7 +236,7 @@ class ReadingTraceMergeTest {
 
         assertEquals(
             "content://this-device/doc",
-            mergeReadingTraces(local, imported).documentId
+            merged(local, imported).documentId
         )
     }
 
@@ -280,7 +257,7 @@ class ReadingTraceMergeTest {
             aiSummary = "要約",
             aiSummaryVisitCount = 30,
             aiSummaryKind = ReunionKind.Overview,
-            reflection = reflection("問い", 100L, "返事", 200L),
+            memos = listOf(memo("端末側のメモ", 100L)),
             documentId = "content://this-device/doc"
         )
         val imported = trace().copy(
@@ -291,28 +268,24 @@ class ReadingTraceMergeTest {
             markedKind = ReunionKind.Overview
         )
 
-        validateReadingTrace(mergeReadingTraces(local, imported))
+        validateReadingTrace(merged(local, imported))
     }
 }
 
-private fun trace() = ReadingTrace(
+private fun trace(title: String = "habit") = ReadingTrace(
     vaultRelativePath = "ideas/habit.md",
-    noteTitle = "habit",
+    noteTitle = title,
     documentId = null,
     visits = listOf(ReadingVisit(1_000L, null, 50)),
     totalVisitCount = 1
 )
 
+/** 合流できる前提のケースで、結果から痕跡を取り出す。 */
+private fun merged(local: ReadingTrace, imported: ReadingTrace): ReadingTrace =
+    (mergeReadingTraces(local, imported) as ReadingTraceMergeResult.Merged).trace
+
+private fun memo(text: String, at: Long, section: String? = null) =
+    MarginMemo(text = text, writtenAtEpochMillis = at, sectionTitle = section)
+
 private fun visit(at: Long) = ReadingVisit(at, null, 50)
 
-private fun reflection(
-    remark: String,
-    remarkedAt: Long,
-    reply: String? = null,
-    repliedAt: Long? = null
-) = Reflection(
-    remark = remark,
-    remarkedAtEpochMillis = remarkedAt,
-    reply = reply,
-    repliedAtEpochMillis = repliedAt
-)
