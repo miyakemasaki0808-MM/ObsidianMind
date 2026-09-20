@@ -1,8 +1,9 @@
 # ノートへのひとこと
 
 **状態:** **廃止が決定（2026-09-19、オーナー判断）。実装はまだ稼働中。**
-置き換えは [roadmap](../../_wip/roadmap.md) の Reflect リニューアル 柱2（余白メモ）で、
-**この機能を足す方向の変更はもう入れない。** 保存先は読書痕跡サイドカー（schema v6）
+置き換えは [余白メモ](reflect_margin_memo.md)（設計済み・実装は未着手）で、
+**この機能を足す方向の変更はもう入れない。** 保存先は読書痕跡サイドカー（schema v6）。
+**ひとこと・返事・映し返しの3欄は、置き換えのときに読み捨てる**（→ [余白メモ](reflect_margin_memo.md) 判断6）
 **最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `controller/RemarkController.kt` / `domain/RemarkComposer.kt` / `model/RemarkProtocol.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt`
 **関連テスト:** `RemarkControllerTest` / `RemarkComposerTest` / `ReadingTraceLimitsTest`
