@@ -43,3 +43,4 @@
 | `2026-09-20-margin-memo-implementation-fix-review/P2-1` | 保存失敗時の元入力が切り詰められ、新しい下書きがあると回収もできない | `統合` MEMO-5 |
 | `2026-09-20-margin-memo-implementation-fix-review/P2-2` | 訪問保存の失敗後処理が、完了した削除を退避への再追加で巻き戻す | `統合` MEMO-8 |
 | `2026-09-20-margin-memo-implementation-fix-review/P2-3` | 削除失敗でも預かりと退避から先に消し、一覧だけを復旧する | `統合` MEMO-12 |
+| `2026-09-20-margin-memo-implementation-recheck-review/P2-1` | 保存待ちのUIテストが消えたplaceholderを探し、下書き保持を検証できない | `起票` MEMO-14 |
