@@ -8,7 +8,6 @@ import com.example.newproject.model.promptId
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
-import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
@@ -24,19 +23,6 @@ private const val DISTILL_HEADING_LENGTH = 80
 data class RelatedCandidateLine(val id: String, val title: String, val detail: String? = null) {
     fun renderForPrompt(): String =
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
-}
-
-/**
- * ひとことプロンプトに渡す候補ノート。
- *
- * **タイトルだけでは中身に踏み込んだ接続理由を作れない。**
- * そこで件数を絞るかわりに本文冒頭の [snippet] を添える。件数×情報量の合計は増やさない。
- * スニペットは関連ノートAIが再ランクのために既に読んだ値を通しているだけで、
- * ここで新しいI/Oは発生しない。
- */
-data class RemarkCandidateLine(val id: String, val title: String, val snippet: String? = null) {
-    fun renderForPrompt(): String =
-        if (snippet.isNullOrBlank()) "$id | $title" else "$id | $title — $snippet"
 }
 
 /** AIピッカーに渡す候補行。ID→ノートの解決は UseCase 側で行う（関連ノートと同じ契約）。 */
@@ -374,122 +360,6 @@ object PromptBuilder {
                 append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
             },
             closing = "\n--- END EXCERPT ---"
-        )
-    }
-
-    /**
-     * ノートへのひとこと（旧「AI補記メモ」）。**出力枠のすべてを1文へ使う。**
-     *
-     * 出力枠（256トークン）はゼロサムなので、分類ラベルや複数の行を同時に求めない —
-     * 枠を割った時点で1文が薄くなる（→ features/reflect_remark.md 判断1）。
-     *
-     * **候補ノートは「ID | タイトル」で提示し、本文中でもIDで参照させる。**
-     * 生のタイトルを書かせると言い換え・装飾で解決できなくなるため（蒸留・関連ノートと同じ契約）。
-     *
-     * **出力は日本語で固定する。** 要約はノートの内容を写すものなので本文の言語に従うが、
-     * ひとことは**アプリがユーザーへ話しかける文**なので、従うべきは読み手の言語である
-     * （本文の言語に従わせると、ソースコードだけのノートで英語の問いが返る）。
-     * [buildReadingTraceSummaryPrompt]（痕跡の俯瞰要約）と同じ判断。
-     *
-     * **ただし二人称は俯瞰要約から持ち込まない。** 俯瞰要約は「あなたは3回開いています」と**読み手自身の行動を述べる**文なので
-     * 二人称が要るが、ひとことは**ノートについて話す**文なので主語に読み手を置く必要がない。
-     * 日本語は主語を落とせるうえ、二人称を名指しすると採点者の口調になる。
-     */
-    fun buildRemarkPrompt(
-        title: String,
-        excerpt: NoteExcerpt,
-        candidates: List<RemarkCandidateLine>
-    ): String {
-        val candidateBlock = candidates
-            .takeIf { it.isNotEmpty() }
-            ?.joinToString("\n") { it.renderForPrompt() }
-            ?: "(none)"
-
-        // **複数行の値をテンプレートへ補間しない。** `trimIndent()` は補間"後"の
-        // 文字列に効くため、埋めた値の2行目以降（インデント0）が混ざると共通インデントが
-        // 0と判定され、テンプレート側の字下げが全行に残る。本文抜粋も候補一覧も
-        // 複数行になり得るので、静的な部分だけを trimIndent して後から連結する。
-        val instructions = """
-            You are a reading companion for a private Obsidian vault. You are not the author, and not a reviewer.
-            Say ONE short thing that helps the user think further about the note below.
-            Write in Japanese, whatever language the note itself is written in.
-            Technical identifiers, code symbols, and proper nouns stay as they appear in the note.
-
-            Write EITHER a question that opens up the user's own thinking,
-            OR a suggestion to connect this note with one of the candidate notes. Never both.
-
-            Rules:
-            - One sentence. Two at most. Around 80–120 characters.
-            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
-              talking about the reader in the second person sounds like a grader, not a companion.
-            - It MUST contain a word, term, or claim that literally appears in the note.
-            - Do NOT summarize, evaluate, praise, grade, or greet.
-            - Do NOT tell the user to add, write, fix, or complete anything.
-              Avoid 「不足」「必要」「べき」. Open the thought instead of assigning work.
-            - To refer to a candidate note, write its ID in double brackets, exactly like [[C03]].
-              Never write a note title in brackets. Only IDs from the candidate list are allowed.
-            - A sentence with a link must be a declarative suggestion, not a question.
-              Never append a link after a question.
-            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
-            - If you have nothing worth saying, output exactly: $REMARK_NONE_TOKEN
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nNote title: ").append(label(title))
-                append("\nNote content:\n").append(excerpt.renderForPrompt())
-                append("\n\nCandidate notes:\n").append(candidateBlock)
-            }
-        )
-    }
-
-    /**
-     * 返事を受けて返す1文（映し返し）。**問いを書かせない。**
-     *
-     * ひとことが問いを投げるのに対し、こちらは**受け取ったことを示して閉じる**役。
-     * ここに問いを書かせると次の返事を誘発し、無限会話の入口になる
-     * （「AIは相手役／本質はノートを読む」から外れる）。
-     * **1往復で終わる**という制約は、出力の内容ではなく**形**で守る。
-     *
-     * 助言・称賛・要約も禁じる。称賛は相手役ではなく採点者の口調になり、
-     * 要約は返事をなぞるだけで新しいものを返さない。
-     */
-    fun buildRemarkMirrorPrompt(
-        title: String,
-        excerpt: NoteExcerpt,
-        remark: String,
-        reply: String
-    ): String {
-        val instructions = """
-            You are a reading companion for a private Obsidian vault.
-            The user read a note, you asked them one thing, and they answered.
-            Reflect back what their answer adds to the note in ONE sentence.
-
-            Write in Japanese.
-
-            Rules:
-            - One sentence. Around 60–100 characters.
-            - Do NOT start with or use 「あなた」 as the subject. Japanese drops the subject naturally;
-              naming the reader in the second person sounds like a grader, not a companion.
-            - Name the new angle or the tension their answer brings to the note.
-            - Do NOT ask a question. This is the end of the exchange, not a turn in a chat.
-            - Do NOT give advice, praise, greet, or summarize what they wrote.
-            - Output the sentence alone. No heading, no bullet, no quotes, no preamble.
-            - If their answer adds nothing you can name, output exactly: $REMARK_NONE_TOKEN
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nNote title: ").append(label(title))
-                append("\nNote content:\n").append(excerpt.renderForPrompt())
-                append("\n\nWhat you asked:\n").append(remark)
-            },
-            // **返事は削らない。** 映し返すべき当のものなので、欠けると答えるものが消える。
-            // 呼び出し側が `excerptReplyForPrompt` で先に切っているが、
-            // **上限は呼び出し側に委ねない**（ここが完成プロンプトを閉じる唯一の場所）。
-            closing = "\n\nTheir answer:\n" + reply.take(PromptLimits.REPLY_CHARACTERS)
         )
     }
 

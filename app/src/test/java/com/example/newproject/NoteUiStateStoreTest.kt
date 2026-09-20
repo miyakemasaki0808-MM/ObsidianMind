@@ -7,7 +7,6 @@ import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SearchSlice
 import com.example.newproject.model.SectionChatSlice
 import com.example.newproject.model.state.AnnotationListState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
@@ -38,10 +37,6 @@ class NoteUiStateStoreTest {
 
         store.quizWriter.update { QuizState.Loading("クイズ対象") }
         expected = expected.copy(quizState = QuizState.Loading("クイズ対象"))
-        assertEquals(expected, store.value)
-
-        store.remarkWriter.update { RemarkState.Error("生成失敗") }
-        expected = expected.copy(remarkState = RemarkState.Error("生成失敗"))
         assertEquals(expected, store.value)
 
         store.annotationListWriter.update { AnnotationListState.Error("一覧失敗") }

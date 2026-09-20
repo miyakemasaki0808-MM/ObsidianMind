@@ -105,7 +105,6 @@ internal fun NoteReaderTab(
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
     onToggleReadingTraceMark: () -> Unit,
-    onOpenReflection: () -> Unit,
     onVigilithActionChanged: (VigilithNoteAction?) -> Unit
 ) {
     val context = LocalContext.current
@@ -241,7 +240,6 @@ internal fun NoteReaderTab(
                     card = visibleTraceCard,
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace,
-                    onOpenReflection = onOpenReflection,
                     onToggleMark = onToggleReadingTraceMark
                 )
             }

@@ -10,7 +10,7 @@ import org.junit.Test
 class NoteExcerptThreadingTest {
 
     @Test
-    fun `本番の7経路はDefaultディスパッチャへ切り替えてから抜粋を作る`() {
+    fun `本番の5経路はDefaultディスパッチャへ切り替えてから抜粋を作る`() {
         val sourceRoot = mainSourceRoot()
         val callCounts = sourceRoot.walkTopDown()
             .filter { it.isFile && it.extension == "kt" && it.name != "NoteExcerptBuilder.kt" }
@@ -56,7 +56,6 @@ class NoteExcerptThreadingTest {
         private val EXPECTED_CALL_COUNTS = mapOf(
             "domain/SummarizeUseCase.kt" to 1,
             "domain/RelatedNotesUseCase.kt" to 1,
-            "controller/RemarkController.kt" to 2,
             "controller/QuizController.kt" to 1,
             "controller/NoteFieldController.kt" to 1,
             "controller/SectionChatController.kt" to 3

@@ -1,6 +1,5 @@
 package com.example.newproject
 
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.QuizCard
 import com.example.newproject.model.state.QuizFormat
 import com.example.newproject.model.state.QuizState
@@ -15,7 +14,6 @@ class EventKeyTest {
     @Test
     fun `Idleはキーを持たない`() {
         assertNull(QuizState.Idle.toEventKey())
-        assertNull(RemarkState.Idle.toEventKey())
     }
 
     @Test
@@ -33,14 +31,6 @@ class EventKeyTest {
         val second = QuizState.Success("対象ノート", cards)
 
         assertEquals(first.toEventKey(), second.toEventKey())
-    }
-
-    @Test
-    fun `別ノートの生成中は別キーになる`() {
-        assertNotEquals(
-            RemarkState.Loading("ノートA").toEventKey(),
-            RemarkState.Loading("ノートB").toEventKey()
-        )
     }
 
     @Test

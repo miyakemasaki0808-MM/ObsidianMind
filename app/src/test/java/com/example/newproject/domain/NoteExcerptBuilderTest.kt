@@ -229,7 +229,6 @@ class NoteExcerptBuilderTest {
         // 「もう使われていない値だけを通すテスト」が残って気づけない。
         listOf(
             NoteExcerptLimits.SUMMARY,
-            NoteExcerptLimits.ANNOTATION,
             NoteExcerptLimits.RELATED,
             NoteExcerptLimits.SECTION,
             NoteExcerptLimits.QUIZ

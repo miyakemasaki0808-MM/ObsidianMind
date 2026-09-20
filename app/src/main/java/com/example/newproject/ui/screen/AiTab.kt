@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.AiStatusNoticeRow
 import com.example.newproject.ui.component.GradientHeader
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillCandidateItem
 import com.example.newproject.model.state.DistillRangeEdge
 import com.example.newproject.model.state.DistillRangeEdgeMove
@@ -65,14 +64,13 @@ import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelBlue
 
 // ---------------------------------------------------------------------------
-// タブ3: AI（要約・蒸留・ひとこと）
+// タブ3: AI（要約・蒸留）
 // Q&Aは読書画面の吹き出し（フォーカスセクション周辺クイズ）へ移動した。
 // ---------------------------------------------------------------------------
 
 @Composable
 fun AiTab(
     uiState: NoteUiState,
-    onOpenRemark: () -> Unit,
     onStartDistill: () -> Unit,
     onDownloadDistillModel: () -> Unit,
     onToggleDistillCandidate: (String) -> Unit,
@@ -172,39 +170,7 @@ fun AiTab(
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
-        RemarkPanel(state = uiState.remarkState, onOpen = onOpenRemark)
     }
-}
-
-/**
- * ノートへのひとことの入口。**ここには結果を出さない。常に専用画面へ渡す。**
- *
- * 結果をここに出すと、要約 → 蒸留 → ひとこと という長い同一スクロールの最下段になり、
- * **いちばん短い結果がいちばん埋もれる。**
- *
- * **Idle でも画面へ渡すのが要点。** Idle のときここで生成を始めると、ノートを開き直して
- * `RemarkState.Idle` に戻ったときに**保存済みの返事へ辿る導線が消える**。
- * 生成の起点も画面側へ寄せることで、
- * 「開く → 保存済みがあれば出る／無ければもらう」の1本になる。
- *
- * 保存済みがあるかどうかをここで出し分けないのは、そのために
- * **ノートを開くたびサイドカーを1件読むことになる**ため。読みは画面を開いたときだけ。
- */
-@Composable
-private fun RemarkPanel(state: RemarkState, onOpen: () -> Unit) {
-    val label = when (state) {
-        is RemarkState.Loading -> "考えています…"
-        else -> "✨ ノートへのひとこと"
-    }
-
-    Button(
-        onClick = onOpen,
-        enabled = state !is RemarkState.Loading,
-        modifier = Modifier.fillMaxWidth().height(48.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = ButtonAi, contentColor = OnButtonAi),
-        border = BorderStroke(1.dp, ButtonOutlineOnGradient),
-        shape = RoundedCornerShape(24.dp)
-    ) { Text(label, color = OnButtonAi) }
 }
 
 @Composable

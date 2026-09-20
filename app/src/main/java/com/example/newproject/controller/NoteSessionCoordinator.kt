@@ -204,24 +204,6 @@ internal class NoteSessionCoordinator(
     )
 
     /**
-     * ノートへのひとこと。**[readingTrace] より後に宣言する** — 生成結果の預け先が
-     * 痕跡側のセッションなので、初期化順を逆にすると参照が未初期化になる。
-     */
-    private val remark = RemarkController(
-        scope = scope,
-        aiClient = aiClient,
-        state = stateStore.remarkWriter,
-        // 保存は痕跡の書き込み契機（背面化・離脱）へ相乗りさせる。
-        // ここで直接保存すると、痕跡ファイルが未作成の初読で黙って失われる。
-        onRemarkReady = { readingTrace.setPendingRemark(it) },
-        persistReply = { path, reply, at -> readingTrace.saveReply(path, reply, at) },
-        loadReflection = { path -> readingTrace.loadReflection(path) },
-        currentContent = { stateStore.currentNote()?.content },
-        persistMirrored = { path, mirrored -> readingTrace.saveMirrored(path, mirrored) },
-        clock = clock
-    )
-
-    /**
      * 読書痕跡の整理。**Vault単位**なのでノート単位の契約へは登録しない
      * （ノートを開き直しただけで洗い出しが消えるのは誤り）。
      */
@@ -378,7 +360,6 @@ internal class NoteSessionCoordinator(
         noteField.cancelAndClear()
         quiz.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
-        remark.cancelAndClear()
         sectionChat.cancelAndClear()
         distill.cancelForNoteChange()
     }
@@ -584,22 +565,6 @@ internal class NoteSessionCoordinator(
 
     fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
     fun markQuizViewed() = quiz.markViewed()
-
-    // ── ノートへのひとこと（実装は RemarkController）─────────────────────────
-
-    fun createRemark(
-        title: String,
-        content: String,
-        relatedNotes: List<RelatedNote>,
-        aiNotes: List<RelatedNote>
-    ) = remark.create(title, content, relatedNotes, aiNotes)
-
-    /** 専用画面を開いたとき、保存済みの組を読み戻す。パスは読書セッションから引く。 */
-    fun restoreSavedRemark(title: String) =
-        remark.restoreSaved(readingTrace.currentPath(), title)
-
-    fun saveRemarkReply(reply: String) =
-        remark.saveReply(readingTrace.currentPath(), reply)
 
     // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
 

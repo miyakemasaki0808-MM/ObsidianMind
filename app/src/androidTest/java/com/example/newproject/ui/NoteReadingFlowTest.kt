@@ -512,7 +512,6 @@ class NoteReadingFlowTest {
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
             onToggleReadingTraceMark = {},
-            onOpenReflection = {},
             onVigilithActionChanged = {}
         )
     }

@@ -308,14 +308,13 @@ class PromptTokenBudgetTest {
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
-     * 機能経路は8つ（要約・関連ノート・ひとこと・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
-     * ここではセクションを3種、クイズを3形式へ分解して**12ケース**として測る。
+     * 機能経路は7つ（要約・関連ノート・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
+     * ここではセクションを3種、クイズを3形式へ分解して**11ケース**として測る。
      * 同じ経路でも指示文の長さが違えばトークン数が変わるため、束ねると読み違える。
      */
     private fun measurementCases(profile: Profile): List<Pair<String, String>> {
         val content = profile.content
         val summaryExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
-        val annotationExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.ANNOTATION)
         val relatedExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.RELATED)
         val sectionExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.SECTION)
         val quizExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.QUIZ)
@@ -328,19 +327,6 @@ class PromptTokenBudgetTest {
                     currentTitle = TITLE,
                     currentExcerpt = relatedExcerpt,
                     candidates = relatedCandidates(profile)
-                )
-            )
-
-            // ひとことは候補を8件までしか渡さない（出力が1件なので多く見せる意味が無い）。
-            // 旧補記は関連・AI推薦・全wikilinkの3ブロックを無制限に載せていたので、
-            // ここの計測値は前回の基準線より小さく出るのが正しい。
-            add(
-                "ひとこと" to PromptBuilder.buildRemarkPrompt(
-                    title = TITLE,
-                    excerpt = annotationExcerpt,
-                    candidates = List(8) {
-                        RemarkCandidateLine("C0${it + 1}", "${profile.label}の候補ノート${it + 1}")
-                    }
                 )
             )
 

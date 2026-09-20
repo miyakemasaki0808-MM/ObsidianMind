@@ -1,7 +1,6 @@
 package com.example.newproject.ai
 
 import com.example.newproject.model.NoteExcerpt
-import com.example.newproject.model.REMARK_NONE_TOKEN
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.QuizFormat
 import org.junit.Assert.assertEquals
@@ -10,7 +9,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * NoteExcerpt 導入時点の7プロンプトを文字列単位で固定する。
+ * NoteExcerpt を渡す6プロンプトを文字列単位で固定する。
  * 抜粋アルゴリズムを差し替えても、PromptBuilder 自体の既存文面を意図せず変えないための安全網。
  */
 class PromptBuilderExcerptRegressionTest {
@@ -86,43 +85,6 @@ class PromptBuilderExcerptRegressionTest {
     }
 
     @Test
-    fun `ひとことプロンプトは1文だけを要求しIDで参照させる`() {
-        val prompt = PromptBuilder.buildRemarkPrompt(
-            title = "題名",
-            excerpt = excerpt,
-            candidates = listOf(RemarkCandidateLine("C01", "候補ノート"))
-        )
-
-        // 出力枠はゼロサムなので、分類ラベルを1つでも足すと1文の余地が削られる。
-        // 旧補記の4項目が復活していないことを固定する。
-        listOf("粒度評価", "種別", "補記方針", "補記すべき内容").forEach { removed ->
-            assertFalse("旧補記の項目が復活している: $removed", prompt.contains(removed))
-        }
-        assertTrue(prompt.contains("One sentence. Two at most."))
-        // **出力は日本語で固定する。** 本文の言語に従わせると、ソースコードだけの
-        // ノートで英語の問いが返る（2026-08-09 実機）。ひとことはノートを写す文ではなく
-        // アプリがユーザーへ話しかける文なので、従うべきは読み手の言語。
-        assertTrue(prompt.contains("Write in Japanese"))
-        // 二人称で名指しさせない。指示を戻すと採点者の口調になる。
-        assertTrue(prompt.contains("Do NOT start with or use 「あなた」"))
-        assertFalse(
-            "二人称で呼ばせる指示が残っている",
-            prompt.contains("address the user as 「あなた」")
-        )
-        assertFalse(
-            "本文の言語に従わせる指示が残っている",
-            prompt.contains("same language as the note content")
-        )
-        // 生タイトルではなくIDを返させる契約（蒸留・関連ノートと同じ）。
-        assertTrue(prompt.contains("[[C03]]"))
-        assertTrue(prompt.contains("C01 | 候補ノート"))
-        // 「出すものが無い」の表明語は model の定数と一致していること
-        // （ずれると NONE を検査が拾えず、定型文がそのまま保存される）。
-        assertTrue(prompt.contains(REMARK_NONE_TOKEN))
-        assertTrue(prompt.contains("本文"))
-    }
-
-    @Test
     fun `セクション要約プロンプトは移行前の文字列を保つ`() {
         assertEquals(
             """
@@ -183,12 +145,12 @@ class PromptBuilderExcerptRegressionTest {
     }
 
     @Test
-    fun `7プロンプトは抜粋時だけ注意書きを出す`() {
+    fun `6プロンプトは抜粋時だけ注意書きを出す`() {
         assertTrue(NoteExcerptLimits.ABRIDGED_NOTICE.contains("when present"))
         val abridgedPrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = true))
         val completePrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = false))
 
-        assertEquals(7, abridgedPrompts.size)
+        assertEquals(6, abridgedPrompts.size)
         abridgedPrompts.forEach { prompt ->
             assertTrue(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX + "本文"))
         }
@@ -205,11 +167,6 @@ class PromptBuilderExcerptRegressionTest {
             candidates = listOf(RelatedCandidateLine("C01", "候補"))
         ),
         PromptBuilder.buildQuizPrompt("題名", value, QuizFormat.TrueFalse),
-        PromptBuilder.buildRemarkPrompt(
-            title = "題名",
-            excerpt = value,
-            candidates = listOf(RemarkCandidateLine("C01", "候補"))
-        ),
         PromptBuilder.buildSectionSummaryPrompt("節", value),
         PromptBuilder.buildSectionSuggestionsPrompt("節", value),
         PromptBuilder.buildSectionChatPrompt(

@@ -7,7 +7,6 @@ import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
@@ -29,11 +28,6 @@ interface SummaryStateWriter {
 interface QuizStateWriter {
     val current: QuizState
     fun update(transform: (QuizState) -> QuizState)
-}
-
-interface RemarkStateWriter {
-    val current: RemarkState
-    fun update(transform: (RemarkState) -> RemarkState)
 }
 
 /**
@@ -133,13 +127,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         override val current: QuizState get() = mutableState.value.quizState
         override fun update(transform: (QuizState) -> QuizState) {
             mutableState.update { it.copy(quizState = transform(it.quizState)) }
-        }
-    }
-
-    val remarkWriter: RemarkStateWriter = object : RemarkStateWriter {
-        override val current: RemarkState get() = mutableState.value.remarkState
-        override fun update(transform: (RemarkState) -> RemarkState) {
-            mutableState.update { it.copy(remarkState = transform(it.remarkState)) }
         }
     }
 
@@ -326,7 +313,6 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
     quizState = QuizState.Idle,
-    remarkState = RemarkState.Idle,
     sectionChat = null,
     isSectionChatSheetVisible = false,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。

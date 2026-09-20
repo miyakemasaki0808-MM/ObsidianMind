@@ -6,7 +6,6 @@ import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.state.toEventKey
 import com.example.newproject.ui.theme.Indigo
@@ -56,7 +55,6 @@ import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
 import com.example.newproject.ui.screen.QuizScreen
-import com.example.newproject.ui.screen.RemarkScreen
 import com.example.newproject.ui.screen.RelatedTab
 import com.example.newproject.ui.screen.SearchTab
 import com.example.newproject.ui.vigilith.rememberVigilithState
@@ -169,26 +167,6 @@ class MainActivity : ComponentActivity() {
                     viewModel.markQuizViewed()
                     navController.navigate("quiz") { launchSingleTop = true }
                 }
-                val openRemark = {
-                    snackbarHostState.currentSnackbarData?.dismiss()
-                    navController.navigate("remark") { launchSingleTop = true }
-                }
-                val startRemark = {
-                    val noteState = uiState.noteState
-                    if (noteState is NoteState.Success) {
-                        snackbarHostState.currentSnackbarData?.dismiss()
-                        val relatedState = uiState.relatedNotesState as? RelatedNotesState.Success
-                        viewModel.createRemark(
-                            title = noteState.title,
-                            content = noteState.content,
-                            relatedNotes = relatedState?.relatedNotes.orEmpty(),
-                            aiNotes = relatedState?.aiNotes.orEmpty()
-                        )
-                        // 待機画面へ遷移せず、同じノートを読みながら生成を待てるようにする。
-                        navController.navigateToTab(AppDestination.Note)
-                    }
-                }
-
                 val quizEventKey = uiState.quizState.toEventKey()
                 // 画面回転でActivityが再生成されてもSnackbarを再表示しないよう、
                 // 表示済みキーをrememberSaveableで保持する。Idleでリセットし、
@@ -233,65 +211,9 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                val remarkEventKey = uiState.remarkState.toEventKey()
-                var lastShownRemarkEvent by rememberSaveable { mutableStateOf<String?>(null) }
-                LaunchedEffect(remarkEventKey) {
-                    if (remarkEventKey == null) {
-                        lastShownRemarkEvent = null
-                        return@LaunchedEffect
-                    }
-                    if (remarkEventKey == lastShownRemarkEvent) return@LaunchedEffect
-                    lastShownRemarkEvent = remarkEventKey
-                    if (isFullscreenRoute) return@LaunchedEffect
-                    when (val remark = uiState.remarkState) {
-                        is RemarkState.Loading -> snackbarHostState.showSnackbar(
-                            message = "ひとことを考えています…",
-                            duration = SnackbarDuration.Short
-                        )
-                        is RemarkState.Ready -> {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "ひとことが届きました",
-                                actionLabel = "見る",
-                                duration = SnackbarDuration.Long
-                            )
-                            if (result == SnackbarResult.ActionPerformed) openRemark()
-                        }
-                        // 空振りは失敗ではないので、行き先を示さず短く伝えるだけ。
-                        // 再試行しても同じなので「見る」も出さない。
-                        is RemarkState.Empty -> snackbarHostState.showSnackbar(
-                            message = "今は新しい問いは見つかりませんでした",
-                            duration = SnackbarDuration.Short
-                        )
-                        // 書式失敗は空振りと分ける。もう一度きけば変わりうる。
-                        is RemarkState.Unusable -> {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "うまく言葉にできませんでした",
-                                actionLabel = "もう一度",
-                                duration = SnackbarDuration.Long
-                            )
-                            if (result == SnackbarResult.ActionPerformed) startRemark()
-                        }
-                        is RemarkState.Error -> {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "ひとことをもらえませんでした",
-                                actionLabel = "詳細",
-                                duration = SnackbarDuration.Long
-                            )
-                            if (result == SnackbarResult.ActionPerformed) openRemark()
-                        }
-                        // 押した機能なので理由をその場で伝える。専用画面にも同じ1文が出る。
-                        is RemarkState.AiNotice -> snackbarHostState.showSnackbar(
-                            message = remark.notice.message,
-                            duration = SnackbarDuration.Long
-                        )
-                        is RemarkState.Idle -> Unit
-                    }
-                }
-
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
-                    remarkState = uiState.remarkState,
                     snackbarHostState = snackbarHostState,
                     vigilithPresentation = vigilith.presentation,
                     vigilithNoteAction = vigilith.noteAction,
@@ -345,7 +267,6 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
                                 onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
-                                onOpenReflection = openRemark,
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
                             )
                         }
@@ -441,7 +362,6 @@ class MainActivity : ComponentActivity() {
                         composable("ai") {
                             AiTab(
                                 uiState = uiState,
-                                onOpenRemark = openRemark,
                                 onStartDistill = { viewModel.startDistill() },
                                 onDownloadDistillModel = { viewModel.downloadDistillModel() },
                                 onToggleDistillCandidate = { id -> viewModel.toggleDistillCandidate(id) },
@@ -514,21 +434,6 @@ class MainActivity : ComponentActivity() {
                                 state = uiState.readingTraceCleanupState,
                                 onLoad = { viewModel.assessReadingTraceOrphans() },
                                 onDelete = { key -> viewModel.deleteReadingTrace(key) },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("remark") {
-                            // 画面を開いたときにだけ保存済みの組を読む。
-                            // ノート表示の経路には置かない（開くたびのSAF読みを増やさない）。
-                            val noteTitle = (uiState.noteState as? NoteState.Success)?.title.orEmpty()
-                            LaunchedEffect(noteTitle) {
-                                viewModel.restoreSavedRemark(noteTitle)
-                            }
-                            RemarkScreen(
-                                state = uiState.remarkState,
-                                onRegenerate = startRemark,
-                                onSaveReply = { viewModel.saveRemarkReply(it) },
                                 onBack = { navController.popBackStack() }
                             )
                         }

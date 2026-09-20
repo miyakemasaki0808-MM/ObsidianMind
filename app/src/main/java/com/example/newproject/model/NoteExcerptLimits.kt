@@ -8,7 +8,6 @@ package com.example.newproject.model
  */
 object NoteExcerptLimits {
     const val SUMMARY = 1200
-    const val ANNOTATION = 1500
 
     /**
      * 関連ノートの現ノート側。他より小さいのは、このプロンプトだけが候補ブロック

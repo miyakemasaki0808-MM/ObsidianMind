@@ -75,21 +75,6 @@ internal object PromptSamples {
             "buildQuizPrompt" to
                 PromptBuilder.buildQuizPrompt(value, excerpt, QuizFormat.ThreeChoice),
 
-            "buildRemarkPrompt" to
-                PromptBuilder.buildRemarkPrompt(
-                    title = value,
-                    excerpt = excerpt,
-                    candidates = List(entries) { RemarkCandidateLine("C0$it", "$MARK$it", "$MARK$it") }
-                ),
-
-            "buildRemarkMirrorPrompt" to
-                PromptBuilder.buildRemarkMirrorPrompt(
-                    title = value,
-                    excerpt = excerpt,
-                    remark = value,
-                    reply = value
-                ),
-
             "buildSectionSummaryPrompt" to
                 PromptBuilder.buildSectionSummaryPrompt(value, excerpt),
 

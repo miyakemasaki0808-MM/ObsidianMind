@@ -230,7 +230,6 @@ internal class ReunionCardController(
         val marked = trace.markedSummary
         return ReadingTraceCard(
             // 追加のI/Oは無い。この経路は既に痕跡を読んでいる。
-            hasReflectionReply = trace.reflection?.hasReply == true,
             visitCount = trace.totalVisitCount,
             lastVisitAtMillis = last.atEpochMillis,
             lastSectionTitle = last.deepestSectionTitle,
