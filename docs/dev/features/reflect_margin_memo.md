@@ -1,9 +1,9 @@
 # 余白メモ
 
-**状態:** Draft — 未実装。**[ノートへのひとこと](reflect_remark.md) を畳んで置き換える**（オーナー判断）
-**最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
-**関連コード:** 予定 — `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** 予定 — `MarginMemoComposerTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest`
+**状態:** Implemented — 実装済み・**実機検証待ち**。[ノートへのひとこと](reflect_remark.md) は撤去済み
+**最終検証:** —（**机上ゲートのみ。実機と突き合わせた日はまだ無い**）
+**関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `MarginMemoComposerTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書
 
 **関連:** [reflect_reading_trace](reflect_reading_trace.md)（保存先のサイドカー）・[reading_trace_backup](reading_trace_backup.md)（退避と突き合わせ）・[reunion_card](reunion_card.md)（再会カードの枠）・[reflect_remark](reflect_remark.md)（畳む対象）
@@ -46,13 +46,11 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 |---|---|---|
 | メモを置く | ヘッダの `✎` でシートが上がり、書いて置ける。**シートは開いたまま**で続けて書ける | ノート表示中（Vault選択済み） |
 | このノートのメモ一覧 | シートの中に、置いた順の**新しい順**で並ぶ | シートを開いたとき |
-| メモを消す | 各行の `✕` → 確認 → 消える | 一覧に1件以上あるとき |
+| メモを消す | 各行の `消す` → 確認ダイアログ → 消える | 一覧に1件以上あるとき |
 | 上限の知らせ | 長いときは静かに知らせ、満杯のときは置けない理由を出す | §5 の上限に触れたとき |
 | 再会で気づく | 再会カードの行が **`前回のメモを見る`** になり、押すとシートが開く | Rediscover で引き当て、メモが1件以上あるとき |
 
 ## 4. 現在のユーザーフロー
-
-> **未実装のため、以下は設計した想定フローである。** 実装後に実機と突き合わせて `最終検証` を進める。
 
 1. ノートを開いて読む
 2. ヘッダ右の **`✎`**（全画面ボタン `⛶` の隣）を押す → ボトムシートが上がる。**本文はスクロール位置ごと背後に残る**
@@ -123,13 +121,13 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 ### UI状態
 
 `MarginMemoState`（`NoteUiState.marginMemoState`）:
-`Idle` / `Loading` / `Ready(memos, saveStatus)` / `Error(message)`
+`Idle` / `Loading` / `Ready(memos, status, wasTruncated)` / `Error(message)`
 
 `MemoSaveStatus`: `None` / `Saving` / `Held` / `Saved` / `Failed` / `Full`
 
-> **`Boolean` の束にしない。** 「保存中かつ未保存」のような無意味な組み合わせを型として作れてしまう
-> （→ [reflect_remark](reflect_remark.md) の `ReplyStatus` と同じ理由）。
+> **`Boolean` の束にしない。** 「保存中かつ未保存」のような無意味な組み合わせを型として作れてしまう。
 > **`Full` を `Failed` に畳まない** — 再試行して直るものと、消さなければ直らないものは、次の行動が違う。
+> `wasTruncated` を `status` へ混ぜないのも同じ理由で、**切り詰めたうえで保存は成功しうる。**
 
 シートの開閉は `NoteUiState.isMarginMemoSheetVisible`（セクションチャットのシートと同じ形）。
 
@@ -180,7 +178,7 @@ NoteReaderTab（ヘッダの ✎）／ReadingTraceCard（前回のメモを見�
    └─ NoteSessionCoordinator
         └─ MarginMemoController      open() / save() / delete() / cancelAndClear()
              ├─ MarginMemoComposer（純関数：正規化・切り詰め・合図）  ← JVMテスト
-             └─ ReadingTraceController  loadMemos() / appendMemo() / deleteMemo() / setPendingMemos()
+             └─ ReadingTraceController  loadMemos() / appendMemo() / deleteMemo()
                   └─ ReadingTraceStore（writeMutex で直列化・退避スロット）
 ```
 
@@ -461,8 +459,8 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 - **instrumentation:** 蒸留の範囲調整と同じく、**タッチで書いて置く経路**は
   `androidTest` のUIテストを1本持つ（`✎` → 入力 → 置く → 一覧に出る）。
   端末AIを通さないので `Assume` による skip は要らない
-- **実機確認:** 新規ケースを [device_validation](../../review/device_validation/README.md) へ起こす。
-  見るのは5つ — **初読の最中に置いて離脱し、次に開いて残っていること**（`Held` 経路）／
+- **実機確認:** **未実施。** ケースは [margin_memo](../../review/device_validation/margin_memo.md)（MEMO-01〜14）。
+  とくに見るのは5つ — **初読の最中に置いて離脱し、次に開いて残っていること**（`Held` 経路）／
   **満杯で入力欄の文字が消えないこと**／**旧版の痕跡を持つVaultで訪問履歴が消えないこと**
   （**v6 だけでなく、手元に v3 の痕跡があれば必ずそれで見る**）／
   **合流が上限を超えるノートが無変更で保留され、件数が下見と結果に出ること**／
