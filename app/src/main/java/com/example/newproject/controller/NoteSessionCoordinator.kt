@@ -11,6 +11,7 @@ import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.domain.indexNoteFieldHints
@@ -204,6 +205,19 @@ internal class NoteSessionCoordinator(
     )
 
     /**
+     * 余白メモ。**[readingTrace] より後に宣言する** — 保存の合流先が痕跡側なので、
+     * 初期化順を逆にすると参照が未初期化になる。
+     */
+    private val marginMemo = MarginMemoController(
+        scope = scope,
+        state = stateStore.marginMemoWriter,
+        loadMemos = { path -> readingTrace.loadMemos(path) },
+        appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
+        deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
+        clock = clock
+    )
+
+    /**
      * 読書痕跡の整理。**Vault単位**なのでノート単位の契約へは登録しない
      * （ノートを開き直しただけで洗い出しが消えるのは誤り）。
      */
@@ -359,6 +373,7 @@ internal class NoteSessionCoordinator(
         // ノートを開き直しただけで冊子の色が消えるのは誤りである。
         noteField.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
         sectionChat.cancelAndClear()
         distill.cancelForNoteChange()
@@ -483,6 +498,7 @@ internal class NoteSessionCoordinator(
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
         val applied = stateStore.applyReloadedBody(targetUri, loaded)
         // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
         // 旧いブロックが描かれ続ける（[setNoteState] と対になる2つ目の経路）。
@@ -566,6 +582,25 @@ internal class NoteSessionCoordinator(
     fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
     fun markQuizViewed() = quiz.markViewed()
 
+    // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
+
+    /** シートを開く。**ここでだけサイドカーを1件読む。** */
+    fun openMarginMemoSheet() {
+        marginMemo.setSheetVisible(true)
+        marginMemo.open(readingTrace.currentPath())
+    }
+
+    fun dismissMarginMemoSheet() {
+        marginMemo.setSheetVisible(false)
+    }
+
+    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
+    fun saveMarginMemo(text: String, sectionTitle: String?) =
+        marginMemo.save(readingTrace.currentPath(), text, sectionTitle)
+
+    fun deleteMarginMemo(memo: MarginMemo) =
+        marginMemo.delete(readingTrace.currentPath(), memo)
+
     // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
 
     fun loadAnnotations() = annotation.loadList()
@@ -622,5 +657,6 @@ internal class NoteSessionCoordinator(
     fun endSectionChat() {
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
     }
 }

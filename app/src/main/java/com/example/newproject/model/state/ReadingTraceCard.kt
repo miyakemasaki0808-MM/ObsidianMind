@@ -26,6 +26,13 @@ data class ReadingTraceCard(
      * 表示側が条件分岐できず検査も書けない（→ features/reunion_card.md 判断2）。
      */
     val aiSummaryKind: ReunionKind? = null,
+    /**
+     * このノートに余白メモが残っているか。
+     *
+     * **中身はカードへ載せない。** 並べるとカードが重くなり、「前回のあなた」を
+     * 1文で伝えるという役目が壊れる。ここでは**在ることだけ**を示し、読むのはシート。
+     */
+    val hasMemos: Boolean = false,
     /** 「まだ考えたい」の印が付いているか。**付いていれば [aiSummary] は保存済みの再掲。** */
     val isMarked: Boolean = false,
     val isSummaryLoading: Boolean = false,

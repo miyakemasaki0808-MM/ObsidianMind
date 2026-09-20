@@ -9,6 +9,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
@@ -25,6 +26,9 @@ data class NoteUiState(
     val summaryState: SummaryState = SummaryState.Idle,
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,
+    val marginMemoState: MarginMemoState = MarginMemoState.Idle,
+    /** 余白メモのシートが出ているか。セクションチャットのシートと同じ形。 */
+    val isMarginMemoSheetVisible: Boolean = false,
     val wikilinkTitles: Set<String> = emptySet(),
     val distillState: DistillState = DistillState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,

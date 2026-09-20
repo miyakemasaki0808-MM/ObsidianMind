@@ -265,6 +265,12 @@ class MainActivity : ComponentActivity() {
                                 onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 },
+                                onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
+                                onSaveMarginMemo = { text, section ->
+                                    viewModel.saveMarginMemo(text, section)
+                                },
+                                onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
+                                onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
                                 onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
                                 onVigilithActionChanged = vigilith.onNoteActionChanged

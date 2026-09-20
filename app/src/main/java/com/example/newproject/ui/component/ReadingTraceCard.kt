@@ -38,7 +38,8 @@ internal fun ReadingTraceCardPanel(
     modifier: Modifier = Modifier,
     nowMillis: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
-    onToggleMark: () -> Unit = {}
+    onToggleMark: () -> Unit = {},
+    onOpenMemos: () -> Unit = {}
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -95,6 +96,11 @@ internal fun ReadingTraceCardPanel(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // メモの中身はここへ出さない。**在ることだけ**を示してシートへ渡す
+                // （並べるとカードが重くなり、1文で伝える役目が壊れる）。
+                if (card.hasMemos) {
+                    TextButton(onClick = onOpenMemos) { Text("前回のメモを見る") }
+                }
                 // **枠に何も出ていなければ押せない。** 内容ごと控える印なので、
                 // 控えるものが無いまま押せると「中身の無い印」ができる。
                 if (!card.aiSummary.isNullOrBlank()) {

@@ -29,6 +29,7 @@ import com.example.newproject.data.toUri as toDocumentUri
 import com.example.newproject.model.DocumentRef
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.notePaperTone
@@ -506,6 +507,19 @@ class NoteViewModel internal constructor(
     fun retrySectionAnswer() = session.retrySectionAnswer()
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
+
+    // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
+
+    /** シートを開く。**ここでだけ**サイドカーを1件読む。 */
+    fun openMarginMemoSheet() = session.openMarginMemoSheet()
+
+    fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
+
+    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
+    fun saveMarginMemo(text: String, sectionTitle: String?) =
+        session.saveMarginMemo(text, sectionTitle)
+
+    fun deleteMarginMemo(memo: MarginMemo) = session.deleteMarginMemo(memo)
 
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,

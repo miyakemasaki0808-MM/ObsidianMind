@@ -9,6 +9,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
@@ -28,6 +29,22 @@ interface SummaryStateWriter {
 interface QuizStateWriter {
     val current: QuizState
     fun update(transform: (QuizState) -> QuizState)
+}
+
+/**
+ * メモの中身とシートの可視を**1つのスライスで持つ**（セクションチャットと同じ形）。
+ *
+ * 分けると「シートは開いているが中身は Idle」のような中間状態を作れてしまい、
+ * ノート切替で片方だけ落とす取りこぼしが起きる。
+ */
+data class MarginMemoSlice(
+    val marginMemoState: MarginMemoState,
+    val isMarginMemoSheetVisible: Boolean
+)
+
+interface MarginMemoStateWriter {
+    val current: MarginMemoSlice
+    fun update(transform: (MarginMemoSlice) -> MarginMemoSlice)
 }
 
 /**
@@ -120,6 +137,25 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         override val current: SummaryState get() = mutableState.value.summaryState
         override fun update(transform: (SummaryState) -> SummaryState) {
             mutableState.update { it.copy(summaryState = transform(it.summaryState)) }
+        }
+    }
+
+    val marginMemoWriter: MarginMemoStateWriter = object : MarginMemoStateWriter {
+        override val current: MarginMemoSlice
+            get() = mutableState.value.let {
+                MarginMemoSlice(it.marginMemoState, it.isMarginMemoSheetVisible)
+            }
+
+        override fun update(transform: (MarginMemoSlice) -> MarginMemoSlice) {
+            mutableState.update { state ->
+                val next = transform(
+                    MarginMemoSlice(state.marginMemoState, state.isMarginMemoSheetVisible)
+                )
+                state.copy(
+                    marginMemoState = next.marginMemoState,
+                    isMarginMemoSheetVisible = next.isMarginMemoSheetVisible
+                )
+            }
         }
     }
 
@@ -313,6 +349,10 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
     quizState = QuizState.Idle,
+    marginMemoState = MarginMemoState.Idle,
+    // **シートの可視も必ず落とす。** 落とさないと、切替後に
+    // 前のノートのメモを載せたシートが開いたまま残る。
+    isMarginMemoSheetVisible = false,
     sectionChat = null,
     isSectionChatSheetVisible = false,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。
