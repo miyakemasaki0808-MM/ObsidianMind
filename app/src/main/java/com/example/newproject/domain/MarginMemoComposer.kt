@@ -45,5 +45,24 @@ internal fun composeMarginMemo(raw: String): MarginMemoDraft {
     return MarginMemoDraft(text = truncated, wasTruncated = truncated != normalized)
 }
 
+/**
+ * 置いたときの見出しを、保存できる形へ整える。
+ *
+ * **本文と同じ扱いをする。** 見出しは本文（Markdown）から来るので、上限を超える長さも
+ * 制御文字も入りうる。整えずに渡すと**検証で弾かれ続け、短いメモまで永久に保存できなくなる**
+ * — しかもそれは再試行で直らないのに、I/O失敗と同じ顔で預かられてしまう。
+ *
+ * **紐づけではなく当時の記録**なので、切っても意味は壊れない。
+ */
+internal fun composeMemoSectionTitle(raw: String?): String? {
+    val normalized = raw
+        ?.filter { !it.isISOControl() }
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+        ?: return null
+    return truncateToUtf8Bytes(normalized, ReadingTraceLimits.MAX_SECTION_TITLE_BYTES)
+        .takeIf { it.isNotEmpty() }
+}
+
 /** 静かに知らせる目安を超えたか。**切る前に出す合図**なので、正規化前の見た目で数える。 */
 internal fun isMemoOverSoftLimit(raw: String): Boolean = raw.trim().length > SOFT_MEMO_CHARS

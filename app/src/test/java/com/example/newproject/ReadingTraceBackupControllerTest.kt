@@ -385,6 +385,41 @@ class ReadingTraceBackupControllerTest {
         assertEquals(0, env.persistence.saveCount)
     }
 
+    /**
+     * **重複を畳めないノートは、そのパスごと保留する。**
+     *
+     * 片側だけ採って先へ進めると、**復元されなかった分を「成功」として見せる**
+     * （計画も結果も `added=1, withheld=[]` になり、欠落が画面のどこにも出ない）。
+     */
+    @Test
+    fun `退避ファイル内の重複が上限を超えたらそのノートを保留する`() = runTest {
+        val env = Env(this)
+        val backup = ReadingTraceBackupJson.encode(
+            listOf(
+                trace("ideas/habit.md").copy(
+                    memos = (1..ReadingTraceLimits.MAX_MEMOS).map { memo("A$it", it * 10L) }
+                ),
+                trace("ideas/habit.md").copy(memos = listOf(memo("B", 99_000L)))
+            ),
+            1_000L
+        )
+
+        env.controller.prepareImport { backup }
+        advanceUntilIdle()
+
+        val plan = (env.state.value as ReadingTraceBackupState.Planned).plan
+        assertEquals("畳めないノートを増える側で数えた", 0, plan.added)
+        assertEquals(
+            listOf(ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY),
+            plan.withheld.map { it.reason }
+        )
+
+        env.controller.applyImport()
+        advanceUntilIdle()
+
+        assertEquals("保留したノートを書き込んだ", 0, env.persistence.saveCount)
+    }
+
     // 手で結合された退避ファイルは同じノートを2件持ちうる。片方を落とすとメモを失う。
     @Test
     fun `退避ファイル内の重複は畳んで1件にする`() = runTest {

@@ -382,6 +382,25 @@ internal class ReadingTraceBackupController(
         ReadingTraceBackupState.Error(error.message ?: "退避ファイルを読み取れませんでした。")
     }
 
+    /**
+     * 退避ファイル内の同じノートの重複を畳む。
+     *
+     * **畳めなければ null を返す。** 片側を採って先へ進めると、
+     * 復元されなかった分を「成功」として見せることになる（→ 判断5）。
+     * 3件以上あるときも、**1組でも超えたらそのノート全体を保留する** —
+     * 途中まで合流した中途半端な集合を端末側へ渡さない。
+     */
+    private fun foldDuplicates(duplicates: List<ReadingTrace>): ReadingTrace? {
+        var accumulated = duplicates.firstOrNull() ?: return null
+        duplicates.drop(1).forEach { next ->
+            accumulated = when (val merged = mergeReadingTraces(accumulated, next)) {
+                is ReadingTraceMergeResult.Merged -> merged.trace
+                ReadingTraceMergeResult.HeldOverCapacity -> return null
+            }
+        }
+        return accumulated
+    }
+
     private suspend fun scanEntries(
         entries: List<ReadingTraceBackupEntry>,
         vaultKey: String,
@@ -394,24 +413,21 @@ internal class ReadingTraceBackupController(
         // 手で結合された退避ファイルがこの形になり、片方を落とすとメモを失う。
         // 畳む作業も件数に比例するので Main の外へ置く。
         //
-        // **畳めないものは先頭の1件だけを残す。** 上限を超える重複をここで切ると
-        // 「捨てない」が破れるので、残りは端末側との突き合わせで
-        // `MEMOS_OVER_CAPACITY` として報告させる（→ 判断5 の規則を重複にも当てる）。
-        val traces = withContext(cpuDispatcher) {
+        // **畳めないノートは、そのパスごと保留する**（→ 判断5 の規則を重複にも当てる）。
+        // 片側だけ採って先へ進めると、**復元されなかった分を「成功」として見せる。**
+        val folded = withContext(cpuDispatcher) {
             entries.filterIsInstance<ReadingTraceBackupEntry.Valid>()
                 .map { it.trace }
                 .groupBy { it.vaultRelativePath }
-                .map { (_, duplicates) ->
-                    duplicates.reduce { left, right ->
-                        when (val folded = mergeReadingTraces(left, right)) {
-                            is ReadingTraceMergeResult.Merged -> folded.trace
-                            ReadingTraceMergeResult.HeldOverCapacity -> left
-                        }
-                    }
-                }
-                .sortedBy { it.vaultRelativePath }
+                .map { (path, duplicates) -> path to foldDuplicates(duplicates) }
+                .sortedBy { it.first }
         }
-        if (traces.isEmpty()) {
+        val overCapacityPaths = folded.filter { it.second == null }.map { it.first }
+        val traces = folded.mapNotNull { it.second }
+        val duplicateWithheld = overCapacityPaths.map {
+            WithheldImport(it, ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY)
+        }
+        if (traces.isEmpty() && duplicateWithheld.isEmpty()) {
             return ReadingTraceBackupState.Error(
                 if (unreadable.isEmpty()) "退避ファイルに読書痕跡が入っていません。"
                 else "退避ファイルの${unreadable.size}件をどれも読み取れませんでした。"
@@ -426,8 +442,10 @@ internal class ReadingTraceBackupController(
             readLocals(traces, vaultKey, existingKeys, generation, ReadingTraceBackupStep.IMPORT_SCAN)
                 ?: return null
 
-        pending = PendingImport(vaultKey, traces, unreadable, snapshots)
-        return ReadingTraceBackupState.Planned(planFor(traces, snapshots, unreadable))
+        // **保留したパスは適用の対象にしない。** 計画にも結果にも同じ理由で現れる。
+        val carried = unreadable + duplicateWithheld
+        pending = PendingImport(vaultKey, traces, carried, snapshots)
+        return ReadingTraceBackupState.Planned(planFor(traces, snapshots, carried))
     }
 
     /**

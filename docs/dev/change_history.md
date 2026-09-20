@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-20 | — | 柱2・余白メモの実装をレビューし、入力消失・保存欠落・削除競合・復元漏れなど8件を課題台帳と受付へ登録した | [review](../review/README.md) |
 | 2026-09-20 | — | 柱2・余白メモの設計をレビューし、合流上限・退避・旧版移行・保存容量の4指摘の設計上の解消を確認した | [review](../review/README.md) |
 | 2026-09-20 | — | 実機検証の分担を割り、組み立て・片付け・記録の確定をClaudeへ移し、再開条件つきの進行チェックリストを置いた | [device_validation](../review/device_validation/README.md) |
 | 2026-09-20 | — | 蒸留の自由範囲を DIST-21〜31 と実保存22ファイルで実機確認し、柱1を完了にした | [reflect_distill](features/reflect_distill.md) §10・[review](../review/README.md) |

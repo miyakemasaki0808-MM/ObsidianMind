@@ -52,6 +52,14 @@ internal class FakePersistence : ReadingTracePersistence {
     val saved = mutableListOf<ReadingTrace>()
     val savedVaultKeys = mutableListOf<String>()
     val corruptPaths = mutableSetOf<String>()
+
+    /**
+     * 実体はあるのに読み取りだけ失敗する経路。
+     *
+     * **実Storeの `None` は不在と読み取り失敗の両方で返る**（gateway が null を返す
+     * 経路が2つある）ので、「無い」と区別できないことをテストでも再現する。
+     */
+    val unreadablePaths = mutableSetOf<String>()
     var failSave = false
 
     /** この回数目の保存だけを失敗させる（1始まり）。先行・後続の順序が要る検証用。 */
@@ -84,6 +92,7 @@ internal class FakePersistence : ReadingTracePersistence {
 
     private fun loadInternal(vaultRelativePath: String): ReadingTraceReadResult = when {
         vaultRelativePath in corruptPaths -> ReadingTraceReadResult.Corrupt("壊れています")
+        vaultRelativePath in unreadablePaths -> ReadingTraceReadResult.None
         else -> files[vaultRelativePath]
             ?.let { ReadingTraceReadResult.Valid(it) }
             ?: ReadingTraceReadResult.None

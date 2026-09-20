@@ -236,6 +236,10 @@ internal class ReunionCardController(
             lastProgressPercent = last.progressPercent,
             aiSummary = marked ?: aiSummary,
             aiSummaryKind = if (marked != null) trace.markedKind else aiSummaryKind,
+            // **欄を足したら、値を供給する側まで監査する。**
+            // 読む側（UIの入口）だけ直して既定値 false のまま出荷すると、
+            // 行が一度も出ないまま緑になる。
+            hasMemos = trace.memos.isNotEmpty(),
             isMarked = marked != null,
             isSummaryLoading = isSummaryLoading
         )

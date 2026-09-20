@@ -12,6 +12,7 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.withVisit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -1237,6 +1238,126 @@ class ReadingTraceControllerTest {
         assertEquals(listOf("保存済み", "まだ書けていない"), memos.map { it.text })
     }
 
+    /**
+     * **上限を超えても、保存済みのメモを切り落とさない。**
+     *
+     * 切り詰めて書いていたころは、別端末や読み戻しで入った20件のうち末尾が消えた。
+     * しかも超過分は終了済みセッションへ戻していたので、離脱すると回収できなかった。
+     */
+    @Test
+    fun `合流が上限を超えたら訪問だけ書き、保存済みのメモを削らない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+
+        // 痕跡が無いうちに1件預ける（古い時刻）。
+        controller.appendMemo("ideas/habit.md", memoOf("預けた古いメモ", at = 1L))
+        advanceUntilIdle()
+        // その間に別の書き手が上限ぶんを保存する。
+        persistence.put(
+            storedTrace(count = 1).copy(
+                memos = (1..ReadingTraceLimits.MAX_MEMOS).map { memoOf("既存$it", at = 100L + it) }
+            )
+        )
+
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(
+            "保存済みのメモを削った",
+            (1..ReadingTraceLimits.MAX_MEMOS).map { "既存$it" },
+            stored.memos.map { it.text }
+        )
+        // 預けた分は消えていない。上限が空けば次の契機で書かれる。
+        assertTrue(
+            "預けたメモを失った",
+            controller.loadMemos("ideas/habit.md").any { it.text == "預けた古いメモ" }
+        )
+    }
+
+    /**
+     * **起動して待っている訪問保存より先に削除しても、メモは戻らない**（→ §7 の契約4）。
+     *
+     * 起動前に預かりをローカルへ取り出していたころは、それが削除の届かない第4の写しになり、
+     * 錠を共有していても書き戻された。
+     */
+    @Test
+    fun `待機中の訪問保存より先に削除してもメモは復活しない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val sharedMutex = Mutex()
+        val controller = controller(persistence, clock, writeMutex = sharedMutex)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        val target = memoOf("消すメモ", at = 1_000L)
+        controller.appendMemo("ideas/habit.md", target)
+        advanceUntilIdle()
+
+        // 訪問保存を起動し、錠の手前で待たせる。
+        sharedMutex.lock()
+        clock.advance(10_000L)
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+
+        // 待っているあいだに削除を完了させる（削除も同じ錠を待つので、順に入る）。
+        sharedMutex.unlock()
+        controller.deleteMemo("ideas/habit.md", target)
+        advanceUntilIdle()
+
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertTrue(
+            "消したメモが訪問保存で戻った",
+            persistence.stored("ideas/habit.md")?.memos.orEmpty().none { it.text == "消すメモ" }
+        )
+    }
+
+    /**
+     * **読めなかったファイルを「無い」と扱わない。**
+     *
+     * `None` はファイルが無いときだけでなく読み取りに失敗したときにも返る。
+     * 成功と言うと、ディスクに残ったメモを画面から消したまま確定してしまう。
+     */
+    @Test
+    fun `痕跡を読めないときの削除は成功と言わない`() = runTest {
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1).copy(memos = listOf(memoOf("ディスクに残る", at = 100L))))
+        val controller = controller(persistence, TestClock())
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        persistence.unreadablePaths += "ideas/habit.md"
+
+        val outcome = controller.deleteMemo("ideas/habit.md", memoOf("ディスクに残る", at = 100L))
+        advanceUntilIdle()
+
+        assertEquals(MemoDeleteOutcome.Failed, outcome)
+        assertEquals(
+            listOf("ディスクに残る"),
+            persistence.stored("ideas/habit.md")?.memos?.map { it.text }
+        )
+    }
+
+    /** 壊れている痕跡でも同じ — 中身を判断できないので消せたと言わない。 */
+    @Test
+    fun `壊れた痕跡への削除は成功と言わない`() = runTest {
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1).copy(memos = listOf(memoOf("残る", at = 100L))))
+        persistence.corruptPaths += "ideas/habit.md"
+        val controller = controller(persistence, TestClock())
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+
+        val outcome = controller.deleteMemo("ideas/habit.md", memoOf("残る", at = 100L))
+        advanceUntilIdle()
+
+        assertEquals(MemoDeleteOutcome.Failed, outcome)
+    }
+
     /** Vault切替で退避したメモは新しいVaultへ書かない。 */
     @Test
     fun `Vault切替で退避したメモは書かれない`() = runTest {
@@ -1274,7 +1395,8 @@ private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
     vault: FakeVault = FakeVault(),
-    persistScope: CoroutineScope = this
+    persistScope: CoroutineScope = this,
+    writeMutex: Mutex = Mutex()
 ): ReadingTraceController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReadingTraceController(
@@ -1282,6 +1404,7 @@ private fun TestScope.controller(
         persistence = persistence,
         currentVaultKey = { vault.key },
         clock = clock::now,
-        ioDispatcher = dispatcher
+        ioDispatcher = dispatcher,
+        writeMutex = writeMutex
     )
 }

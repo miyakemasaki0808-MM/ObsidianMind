@@ -130,6 +130,38 @@ class ReunionCardControllerTest {
         assertEquals(0, ai.generateCalls)
     }
 
+    /**
+     * **欄を足したら、値を供給する側まで監査する**（→ 影響面監査）。
+     *
+     * 読む側（UIの入口）と欄だけ足して供給を忘れると、既定値 false のまま出荷され、
+     * **「前回のメモを見る」が一度も出ない。** 型もテストも緑のまま通る形である。
+     */
+    @Test
+    fun `メモがある痕跡のカードは入口を出す`() = runTest {
+        val persistence = FakePersistence().apply {
+            put(storedTrace(count = 1).copy(memos = listOf(memoOf("残したメモ", at = 100L))))
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), FakeAiClient.returning(AI_SUMMARY), state)
+
+        controller.revealTrace("ideas/habit.md", content = "")
+        advanceUntilIdle()
+
+        assertTrue("メモがあるのに入口が出ない", state.value.readingTraceCard!!.hasMemos)
+    }
+
+    @Test
+    fun `メモが無い痕跡のカードは入口を出さない`() = runTest {
+        val persistence = FakePersistence().apply { put(storedTrace(count = 1)) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), FakeAiClient.returning(AI_SUMMARY), state)
+
+        controller.revealTrace("ideas/habit.md", content = "")
+        advanceUntilIdle()
+
+        assertTrue("メモが無いのに入口が出た", !state.value.readingTraceCard!!.hasMemos)
+    }
+
     // AIを待たせないのが要点。生成中でも生の痕跡は先に見えている。
     @Test
     fun `raw trace is visible while the summary is still generating`() = runTest {

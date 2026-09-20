@@ -27,7 +27,14 @@ sealed class MarginMemoState {
          * **切ったら必ず示す**ための欄で、[status] とは独立に立つ
          * （切り詰めたうえで保存は成功する）。
          */
-        val wasTruncated: Boolean = false
+        val wasTruncated: Boolean = false,
+        /**
+         * 置けなかった入力。**シートへ返して書き直せるようにするためだけに持つ。**
+         *
+         * シートは「置く」を押した瞬間に入力欄を空にする（そうしないと続けて書けない）。
+         * 置けなかったときにここへ返さないと、**書いた言葉がそのまま消える。**
+         */
+        val rejectedText: String? = null
     ) : MarginMemoState()
 
     /** 読み込みに失敗した。書くことはできるので、入口は閉じない。 */

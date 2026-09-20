@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,28 +72,51 @@ internal fun MarginMemoSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // **下書きは回転やプロセス復元をまたいで保つ。** 書きかけを警告なく消さない。
-    var draft by rememberSaveable { mutableStateOf("") }
-    var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
-
-    val ready = state as? MarginMemoState.Ready
-    // **置けたときだけ入力欄を空にする。** Full・Failed で消すと、
-    // 「置けなかった」と「消された」が同じ顔になる。
-    val justStored = ready?.status == MemoSaveStatus.Saved || ready?.status == MemoSaveStatus.Held
-    if (justStored && draft.isNotBlank()) draft = ""
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         scrimColor = BottomSheetDefaults.ScrimColor.copy(alpha = 0.5f)
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 360.dp)
-                .verticalScroll(rememberScrollState())
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
-        ) {
+        MarginMemoSheetContent(state = state, onSave = onSave, onDelete = onDelete)
+    }
+}
+
+/**
+ * シートの中身。**`ModalBottomSheet` から切り出してあるのは、シートを開かずに
+ * 入力の振る舞いを検査するため**（調整シートと同じ切り分け）。
+ *
+ * 連続して置けること自体がこの機能の要点なので、**下書きの扱いはUIテストで固定する。**
+ */
+@Composable
+internal fun MarginMemoSheetContent(
+    state: MarginMemoState,
+    onSave: (String) -> Unit,
+    onDelete: (MarginMemo) -> Unit
+) {
+    // **下書きは回転やプロセス復元をまたいで保つ。** 書きかけを警告なく消さない。
+    var draft by rememberSaveable { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
+
+    val ready = state as? MarginMemoState.Ready
+
+    // **置けなかった入力だけを、一度だけ書き戻す。**
+    //
+    // 入力欄は「置く」を押した瞬間に空にする（状態から毎回空にする形だと、
+    // status が Saved のまま残るので**再コンポーズのたびに2件目が消える**）。
+    // 空にしたぶん、置けなかったときはここで返す。
+    // **待っているあいだに書き始めていたら返さない** — 新しい下書きを上書きしないため。
+    LaunchedEffect(ready?.rejectedText) {
+        val rejected = ready?.rejectedText
+        if (rejected != null && draft.isEmpty()) draft = rejected
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 360.dp)
+            .verticalScroll(rememberScrollState())
+            .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
+    ) {
             Text("このノートのメモ", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
                 text = "思いついたことを短く。ノート本体は変わりません。",
@@ -129,7 +153,13 @@ internal fun MarginMemoSheet(
                 StatusText(state)
                 Spacer(modifier = Modifier.height(0.dp))
                 Button(
-                    onClick = { onSave(draft) },
+                    // **押した瞬間に空にする。** 保存の完了を待つと、
+                    // 待っているあいだに書いた2件目まで巻き込んで消える。
+                    onClick = {
+                        val text = draft
+                        draft = ""
+                        onSave(text)
+                    },
                     enabled = draft.isNotBlank() && ready?.status != MemoSaveStatus.Saving,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary,
@@ -171,7 +201,6 @@ internal fun MarginMemoSheet(
 
                 MarginMemoState.Idle -> Unit
             }
-        }
     }
 
     // **消すのは不可逆なので確認を挟む。** 置くのは何度でもやり直せるが、消したものは戻らない。

@@ -31,3 +31,11 @@
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
 | `2026-09-19-remark-regenerate-device-review/P2-1` | 同じひとことの再生成で保存済みの返事だけが失われることを実機で確認 | `統合` AI-8 |
+| `2026-09-20-margin-memo-implementation-review/P1-1` | 保存完了状態が残り、同じシートで次に入力したメモが消える | `起票` MEMO-5 |
+| `2026-09-20-margin-memo-implementation-review/P1-2` | 訪問保存の合流超過で保存済みメモを切り落とし、離脱後に失う | `起票` MEMO-6 |
+| `2026-09-20-margin-memo-implementation-review/P1-3` | バックアップ内の重複合流超過を捨て、一部だけ復元して成功扱いする | `起票` MEMO-7 |
+| `2026-09-20-margin-memo-implementation-review/P2-1` | 削除前に起動した訪問保存が削除済みメモを復活させる | `起票` MEMO-8 |
+| `2026-09-20-margin-memo-implementation-review/P2-2` | 保存と削除が互いを取り消し、Saving残留と楽観削除の不整合を起こす | `起票` MEMO-9 |
+| `2026-09-20-margin-memo-implementation-review/P2-3` | 再会カードへhasMemosを渡さず、メモの入口が常に隠れる | `起票` MEMO-10 |
+| `2026-09-20-margin-memo-implementation-review/P2-4` | 長い見出しを含むメモが永続不能なHeldになり、後続保存も妨げる | `起票` MEMO-11 |
+| `2026-09-20-margin-memo-implementation-review/P2-5` | 既存痕跡の読み取り不能を削除成功として返す | `起票` MEMO-12 |
