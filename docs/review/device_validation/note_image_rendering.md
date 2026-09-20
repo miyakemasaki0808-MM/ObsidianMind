@@ -3,7 +3,7 @@
 ## 正本
 
 - 解決・復号・表示・制約: [note_image_rendering](../../dev/features/note_image_rendering.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

@@ -4,7 +4,7 @@
 
 - 測り方と限界: [ai_quality_measurement](../../dev/system/ai_quality_measurement.md)
 - 測られる側: [note_summary](../../dev/features/note_summary.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

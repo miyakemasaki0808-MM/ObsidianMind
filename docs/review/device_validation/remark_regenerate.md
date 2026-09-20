@@ -6,7 +6,7 @@
 - ひとことと返事の保存: [reflect_reading_trace](../../dev/features/reflect_reading_trace.md)
 - 同じ入力なら出力は決定的であること: [ai_quality_measurement](../../dev/system/ai_quality_measurement.md) 判断8
 - 自動生成が3秒留まってから始まること: [background_ai_ux](../../dev/system/background_ai_ux.md) §7
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

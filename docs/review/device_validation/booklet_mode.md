@@ -4,7 +4,7 @@
 
 - 冊子の判断・受け入れ条件: [booklet_mode](../../dev/features/booklet_mode.md)
 - 全画面ルートとスクロールの前例: [note_fullscreen](../../dev/features/note_fullscreen.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 > **冊子は 2026-09-08 に完了した。** このケース表は**将来の回帰確認用**に残してある —
 > 冊子に触るときはここから引く。**受理時に見ていなかった範囲**（`BOOK-52`・`BOOK-61`・

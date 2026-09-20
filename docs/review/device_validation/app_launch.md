@@ -3,7 +3,7 @@
 ## 正本
 
 - OPの再生条件と、重複起動を畳む判断: [opening_animation](../../dev/features/opening_animation.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 > **ここは入口である。** 落ちたら他の全ケースが無意味になるので、
 > 簡易版でも最初に通す（→ [quick_check](quick_check.md) の選抜規則「入口」）。

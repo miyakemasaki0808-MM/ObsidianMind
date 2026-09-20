@@ -4,7 +4,7 @@
 
 - 起動契機・状態・表示契約: [background_ai_ux](../../dev/system/background_ai_ux.md)
 - 自動の生成をノートに留まってから始める規則: [background_ai_ux](../../dev/system/background_ai_ux.md) §7
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

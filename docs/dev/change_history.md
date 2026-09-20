@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-20 | — | 実機検証の分担を割り、組み立て・片付け・記録の確定をClaudeへ移し、再開条件つきの進行チェックリストを置いた | [device_validation](../review/device_validation/README.md) |
 | 2026-09-20 | — | 蒸留の自由範囲を DIST-21〜31 と実保存22ファイルで実機確認し、柱1を完了にした | [reflect_distill](features/reflect_distill.md) §10・[review](../review/README.md) |
 | 2026-09-19 | — | 自由範囲のレビュー3件を直した。バックスラッシュ直後の禁止・引く向きの決め方・つまみ座標の分離 | [reflect_distill](features/reflect_distill.md) §5 |
 | 2026-09-19 | — | dev に通読ルートを置き、廃止した design/ を指していたマニフェストのコメントを直した | [document_map](document_map.md) §5 |

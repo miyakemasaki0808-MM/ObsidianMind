@@ -5,7 +5,7 @@
 - 保存の鍵・置き場・上限・作り直さない判断・混雑時の文言: [note_summary](../../dev/features/note_summary.md) 判断6〜判断9
 - 当たりを生成の記録で判定する理由: [note_summary](../../dev/features/note_summary.md) §10
 - 自動AI機能の見せ方: [background_ai_ux](../../dev/system/background_ai_ux.md) §6
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

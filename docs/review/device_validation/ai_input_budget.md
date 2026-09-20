@@ -4,7 +4,7 @@
 
 - 本文の切り出し方: [ai_input_excerpt](../../dev/system/ai_input_excerpt.md)
 - 完成プロンプトの上限: `model/PromptLimits.kt` と `ai/PromptBudget.kt`
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 

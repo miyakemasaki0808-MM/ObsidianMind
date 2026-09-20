@@ -4,7 +4,7 @@
 
 - 判定の根拠・遮断器・削除の直列化: [reflect_reading_trace](../../dev/features/reflect_reading_trace.md) 判断14〜18
 - 痕跡そのもの（欄・保存・寿命）: [reflect_reading_trace](../../dev/features/reflect_reading_trace.md)
-- 共通の準備と後処理: [Codex実機検証手順](README.md)
+- 共通の準備と後処理: [実機検証手順](README.md)
 
 ## 適用条件
 
