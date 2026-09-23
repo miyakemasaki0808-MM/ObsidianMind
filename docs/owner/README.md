@@ -32,7 +32,7 @@
 |---|---|---|
 | — | **本書** | `owner/` の入口と、**何ができるアプリか** |
 | 01 | [source_code_analysis](01_source_code_analysis.md) | **いまコードがどうなっているか。** 構成・技術・規模の推移 |
-| 02 | [jvm_test_report](02_jvm_test_report.md) | **どういう観点でテストしているか。** JVMテストの俯瞰 |
+| 02 | [jvm_test_report](02_jvm_test_report.md) | **どういう観点でテストしているか。** JVMテストの俯瞰と、全クラスの一覧 |
 | 03 | [document_inventory](03_document_inventory.md) | **どんな文書があるか。** 目録と、検査で守られている範囲 |
 | 04 | [readme_map](04_readme_map.md) | **16本ある README がそれぞれ何をしているか。** 入口そのものの構造 |
 | 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | **コメント・設計書・経緯をどこに置くか。** 外部の指針と、経緯をコミットから取り出す方法 |
