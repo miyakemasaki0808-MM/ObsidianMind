@@ -1,8 +1,9 @@
 # 反証の一文 — 実装設計書
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-17 / 基準 `f2d1f18`
-**状態:** Draft — 未実装。[idea_catalog](08_idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの
+**作成:** 2026-09-17 / **更新:** 2026-09-20（基準 `77b29d0`）
+**状態:** Draft — 未実装。[idea_catalog](08_idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの。
+**2026-09-20 に足場を当て直した** — ひとことの撤去で消えた型を指していた2箇所を差し替えてある
 **最終検証:** —（未実装。器を整えただけで日付を進めない）
 **関連コード（予定）:** `domain/RebuttalClaimScanner.kt` / `domain/RebuttalCandidateRanking.kt` / `domain/RelatedCandidateId.kt` / `model/state/RebuttalSentence.kt` / `model/RebuttalProtocol.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBuilder.kt` / `controller/RebuttalController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト（予定）:** `RebuttalClaimScannerTest` / `RebuttalCandidateRankingTest` / `RebuttalControllerTest` / 既存の走査・契約テスト群（→ §0.4）
@@ -20,6 +21,10 @@
 [idea_catalog](08_idea_catalog.md) §5 の本命3件のうち、**「封をした返事」は既にオーナー判断で
 [sealed_reply](../dev/features/sealed_reply.md) として設計の下書きが起きている**。残る2件（反証の一文・外画面の扉）から
 **反証の一文**を選んだ。理由は3つ。
+
+> **2026-09-20 の追記。** 封をした返事は、封をする対象だった「ひとことへの返事」が機能ごと無くなり、
+> **前提を失って止まっている。** 本書の選定そのものは変わらない — 選ばなかった理由は「下書きが既にある」であって、
+> 「そちらが先に実装される」ではなかった。
 
 | 観点 | 反証の一文 | 外画面の扉 |
 |---|---|---|
@@ -186,7 +191,7 @@ score(claim) = diceCoefficient(textBigrams(現ノートの抜粋.text), textBigr
 ```
 
 1. ノートごとに score 降順で上位 `REBUTTAL_CLAIMS_PER_NOTE` 件。同点は原文順
-2. 全ノートを混ぜて score 降順。同点は**関連ノートの並び順**（AI推薦 → 未リンクの決定的 → wikilink 済み。`RemarkController.selectCandidates` と同じ順）、次に原文順
+2. 全ノートを混ぜて score 降順。同点は**関連ノートの並び順**（AI推薦 → 未リンクの決定的 → wikilink 済み。編む冊子の `buildWeaveState` と同じ順）、次に原文順
 3. 先頭 `REBUTTAL_CANDIDATE_LIMIT` 件。この順で `X01..` を採番する
 
 **score が 0 でも捨てない。** 文字 bigram の Dice は日本語の短文で 0 になりやすく、閾値は測ってから決める（→ §11）。
@@ -276,8 +281,9 @@ X01 | ...
 Controller 内部の結果型は `Selected` / `NoneChosen` / `Skipped` の3値にする。
 
 **影響面監査の証拠（新しい欄を読む箇所）。** 読むのは `RelatedTab` の1箇所だけ。`MainActivity` は `uiState` を
-そのまま渡す。`relatedNotesState` を読む既存3箇所（`RelatedTab`・`startRemark`・`openBooklet`）は**変えない** —
-`RelatedNotesState` に欄を足さないので、編む冊子とひとことは無傷である。
+そのまま渡す。`relatedNotesState` を読む既存2箇所（`RelatedTab`・`openBooklet`）は**変えない** —
+`RelatedNotesState` に欄を足さないので、編む冊子は無傷である。
+（**2026-09-20 に3箇所から2箇所へ減った。** ひとことの生成が読んでいた経路が機能ごと無くなったため。）
 
 ## 7. システム設計
 
@@ -398,7 +404,8 @@ class RebuttalController(
 
 関連ノートのプロンプトへ「ついでに反証のIDも返せ」と足す案は、呼び出しを増やさない。採らないのは、
 **候補文は関連ノートが選ばれた後でないと8件に絞れない**（40候補ぶんの文を載せると入力予算 3,500 字が破綻する）ことと、
-1つの出力枠（256トークン）に2種類の答えを求めると**両方が薄くなる**（ひとことが分類ラベルを同時に求めない判断と同じ）ため。
+1つの出力枠（256トークン）に2種類の答えを求めると**両方が薄くなる**。旧「AI補記メモ」が分類ラベルを同時に出させて
+本命の側を痩せさせた前例と同じ形である（→ [reflect_remark](../dev/features/reflect_remark.md)）。
 
 ### 判断2: 起動契機は「関連ノートの完了」に鎖でつなぐ
 
@@ -467,7 +474,7 @@ LRU 300件のキャッシュが最大で数百KBに膨らむ。使うのは最�
 | `RebuttalCandidateRankingTest` | ノート内上位3件／総数12件／同点の順（並び順→原文順）／score 0 を捨てない／空入力 |
 | `RelatedCandidateIdTest`（追記） | `X` 接頭辞で `C01` を受理しない／`X3` の桁落ち補正／`X01通信` を捨てる |
 | `RebuttalControllerTest` | `Ready` で1回だけ生成し状態へ書く／`NONE`・空・候補外で書かない／候補ゼロで `generateCalls == 0`／**`Ready` 以外の4値で生成せず `downloadCalls == 0`**／読み直し失敗の候補だけ落として続行／生成中にノート切替（`cancelAndClear`）→ 後着で書かない／`CancellationException` を握らない／例外で書かない・状態は null のまま／`buildNoteExcerpt` が `excerptDispatcher` で走る（テストスケジューラで完了を待てる） |
-| `NoteSessionCoordinatorTest`（追記） | `fullyPopulatedState()` へ登録／ノート切替で null／実物 Controller の Job が `onNoteChanged()` で止まる（ひとことの検査と同形）／**関連ノートの完了から反証が始まる**（`completeRelatedNotes` が1手であること） |
+| `NoteSessionCoordinatorTest`（追記） | `fullyPopulatedState()` へ登録／ノート切替で null／実物 Controller の Job が `onNoteChanged()` で止まる（クイズ・余白メモの検査と同形）／**関連ノートの完了から反証が始まる**（`completeRelatedNotes` が1手であること） |
 | `NoteUiStateStoreTest`（追記） | Writer が担当スライスだけを更新する |
 | `PromptSamples` / `PromptIndentationTest` / `PromptBudgetTest`（追記） | builder を列挙に足す。字下げと上限は自動で乗る |
 | `PromptGenerationCoverageTest`（更新） | 件数 14。`OnDeviceGenerationTest.UNCOVERED_BUILDERS` へ列挙 |

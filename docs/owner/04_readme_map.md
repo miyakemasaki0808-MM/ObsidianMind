@@ -1,7 +1,7 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-14
+**作成:** 2026-09-08 / **更新:** 2026-09-20
 
 **位置づけ:** 16本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
@@ -36,11 +36,11 @@
 |---|---|---:|---|:--:|---|
 | [`README.md`](../../README.md) | Vigilith AI | 48 | リポジトリの入口。何ができるアプリか＋`docs/` の4フォルダ | ✅ | — |
 | [`docs/README.md`](../README.md) | ドキュメントの入口 | 37 | 分類の軸は「その文書が答える問い」。4フォルダへ振り分ける | ✅ | — |
-| [`docs/dev/README.md`](../dev/README.md) | 開発知識 | 19 | features・system・decisions・lessons への道標 | ✅ | — |
+| [`docs/dev/README.md`](../dev/README.md) | 開発知識 | 23 | features・system・decisions・lessons への道標 | ✅ | — |
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 15 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 51 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 127 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 130 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 52 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
@@ -54,8 +54,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 172 | レビュー運用の正本＋レビュー一覧96行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
-| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 185 | 権限範囲・準備・検証中・後処理・記録。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 207 | レビュー運用の正本＋レビュー一覧136行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 282 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 
 この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
 だから検査も中身を見ている。
@@ -66,6 +66,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 分担そのものは `CLAUDE.md` の「作業の進め方」が正本で、`review/README.md` は Codex の手順だけを持つ。
 2026-09-12 にそう分けた。2箇所に書くと必ず片方が古くなる。
+**2026-09-19 に、実機検証の区間そのものを割り直した** — 組み立てと片付けはこちら、ケースの判定は Codex。
+`device_validation/README.md` が185行から282行へ伸びたのは、その割りを「誰が行うか」の節として書いたためである。
 
 > スクリーンショットの扱いもここにある。実機検証で何をどの道具で見るかは「実機検証中」節が持ち、
 > 「画面上の文字はUI階層、見た目はスクリーンショット、永続化は端末上の実ファイル。どれか1つで他を代用しない」
@@ -120,10 +122,10 @@ app/src/androidTest/assets/ai_corpus/README.md ─── references/nano/README.
 
 ### `owner/README.md` だけ、名前と中身がずれている
 
-他の入口が案内に徹しているのに対し、これは索引でありながらアプリの機能一覧そのもの、103行を持つ。
+他の入口が案内に徹しているのに対し、これは索引でありながらアプリの機能一覧そのもの、64行を持つ。
 見出しも「アプリ俯瞰」で、README という名前と一致していない。
 
-実害はまだ出ていないが、`owner/` は 2026-09-08 に6本から9本へ、09-14 に14本へ増えた。
+実害はまだ出ていないが、`owner/` は 2026-09-08 に6本から9本へ、09-14 に14本へ、09-17 に16本へ増えた。
 入口としての案内が、機能一覧の上に30行ほど乗っている状態である。
 分けるなら「`README.md`（入口）」と「`app_overview.md`（アプリ俯瞰）」になるが、
 分けると今度は「README を開いても機能が分からない」ので、どちらが良いかは読み方次第。
