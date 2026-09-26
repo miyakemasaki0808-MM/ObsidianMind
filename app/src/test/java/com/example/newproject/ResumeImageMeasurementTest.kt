@@ -11,14 +11,19 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.firstUnmeasuredImageIndex
 import com.example.newproject.ui.markdown.imageBlockRefs
 import com.example.newproject.ui.markdown.imagesSkippedBy
+import com.example.newproject.ui.markdown.measureRequestedSkips
 import com.example.newproject.ui.markdown.measureSkippedImages
 import com.example.newproject.ui.shouldReportReadingProgress
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -79,6 +84,59 @@ class ResumeImageMeasurementTest {
         assertEquals(20, env.leave())
     }
 
+    /**
+     * **測定待ちの間に画面が破棄されても、依頼は残り、移った先の画面が測り終える**（修正レビューで固定した受理条件）。
+     *
+     * 通常画面のスコープで測っていたころは、全画面へ移っただけで測定がキャンセルされ、
+     * 飛び越した画像は画面外なので二度と測られず、報告が止まり続けた。
+     */
+    @Test
+    fun `測定待ちで画面が破棄されても、移った先の画面が測り終える`() = runTest {
+        val env = Env(this)
+        env.open()
+        env.measurements.requestSkippedMeasurement(88)
+        val loader = GatedLoader()
+
+        // 通常画面が測り始め、待っている間に破棄される。
+        val tab = launch { measureRequestedSkips(env.blocks, loader, env.measurements) }
+        runCurrent()
+        tab.cancel()
+        loader.open()
+        runCurrent()
+        env.read(88..95)
+        assertEquals("破棄された測定が記録されている", setOf<String>(), env.measurements.measuredReferences())
+
+        // 全画面が同じ依頼を拾う。
+        launch { measureRequestedSkips(env.blocks, loader, env.measurements) }
+        advanceUntilIdle()
+        env.read(88..99)
+
+        assertEquals(100, env.leave())
+    }
+
+    /** 依頼はノート単位の入れ物にある。**別のノートの入れ物へは持ち越さない。** */
+    @Test
+    fun `別のノートの入れ物には依頼を持ち越さない`() = runTest {
+        val env = Env(this)
+        env.measurements.requestSkippedMeasurement(88)
+        val next = NoteImageMeasurements()
+        val loader = GatedLoader().apply { open() }
+
+        measureRequestedSkips(env.blocks, loader, next)
+
+        assertNull(next.skipTarget)
+        assertEquals(0, loader.calls)
+    }
+
+    @Test
+    fun `依頼は一番先の位置を残す`() {
+        val measurements = NoteImageMeasurements()
+        measurements.requestSkippedMeasurement(88)
+        measurements.requestSkippedMeasurement(40)
+
+        assertEquals(88, measurements.skipTarget)
+    }
+
     private class Env(private val scope: TestScope) {
         val blocks = buildNoteSectionModel(IMAGE_BODY).blocks
         val measurements = NoteImageMeasurements()
@@ -114,6 +172,26 @@ class ResumeImageMeasurementTest {
             scope.advanceUntilIdle()
             return persistence.stored(TRACE_PATH)!!.visits.last().progressPercent
         }
+    }
+
+    /** 開けるまで測定を返さないローダ。 */
+    private class GatedLoader : NoteImageLoader {
+        private val gate = CompletableDeferred<Unit>()
+        var calls = 0
+            private set
+
+        fun open() {
+            gate.complete(Unit)
+        }
+
+        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement {
+            calls++
+            gate.await()
+            return NoteImageMeasurement.Measured(width = 800, height = 2_400)
+        }
+
+        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent =
+            NoteImageContent.Failed(NoteImageFailure.Broken)
     }
 
     private object MeasuredLoader : NoteImageLoader {

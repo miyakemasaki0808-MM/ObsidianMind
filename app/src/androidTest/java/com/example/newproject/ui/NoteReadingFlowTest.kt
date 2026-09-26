@@ -281,20 +281,104 @@ class NoteReadingFlowTest {
         )
     }
 
+    /**
+     * **測定待ちの間に全画面へ移っても、全画面が測り終えて報告を再開する**（修正レビューで固定した受理条件）。
+     *
+     * 通常画面のスコープで測っていたころは、画面が破棄された時点で測定がキャンセルされ、
+     * 飛び越した画像は全画面でも画面外なので二度と測られなかった。
+     * **実 NavHost ではなく、同じ位置を共有する2つの画面を切り替えて通常画面を破棄する。**
+     */
+    @Test
+    fun 続きから読むの測定待ちで全画面へ移っても全画面で測り終えて進捗を報告する() {
+        val loader = PendingImageLoader()
+        val (reports, fullscreen) = showResumableNoteWithFullscreen(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = true }
+        composeRule.waitForIdle()
+        assertTrue("測り終える前に報告された: $reports", reports.none { it > RESUME_IMAGE_INDEX })
+
+        composeRule.runOnIdle { loader.settle(width = 800, height = 2_400) }
+        composeRule.waitForIdle()
+
+        assertTrue("全画面で報告が再開しない: $reports", reports.any { it >= RESUME_TARGET })
+    }
+
+    /** 全画面から通常画面へ戻った場合も、同じ依頼を拾って回復する。カードの再押下も画像へ戻る操作も要らない。 */
+    @Test
+    fun 続きから読むの測定待ちで全画面から戻っても通常画面で測り終えて進捗を報告する() {
+        val loader = PendingImageLoader()
+        val (reports, fullscreen) = showResumableNoteWithFullscreen(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = true }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = false }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { loader.settle(width = 800, height = 2_400) }
+        composeRule.waitForIdle()
+
+        assertTrue("通常画面で報告が再開しない: $reports", reports.any { it >= RESUME_TARGET })
+    }
+
+    /** 通常画面と全画面を、同じ一覧の位置と同じ測定の入れ物で切り替えられるように出す。 */
+    private fun showResumableNoteWithFullscreen(
+        loader: NoteImageLoader
+    ): Pair<MutableList<Int>, androidx.compose.runtime.MutableState<Boolean>> {
+        val model = buildNoteSectionModel(RESUME_IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val reports = mutableListOf<Int>()
+        val fullscreen = mutableStateOf(false)
+        val state = resumableState()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val listState = rememberLazyListState()
+                if (fullscreen.value) {
+                    FullscreenNoteScreen(
+                        uiState = state,
+                        sectionModel = model,
+                        imageLoader = loader,
+                        imageMeasurements = measurements,
+                        tabListState = listState,
+                        onExit = {},
+                        onOpenSummary = {},
+                        onReadingProgress = { index, _, _, _ -> reports += index }
+                    )
+                } else {
+                    ReaderTab(
+                        state = state,
+                        model = model,
+                        listState = listState,
+                        loader = loader,
+                        measurements = measurements,
+                        onReadingProgress = { index, _, _, _ -> reports += index }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        return reports to fullscreen
+    }
+
+    private fun resumableState() = loadedNote(RESUME_IMAGE_BODY).copy(
+        readingTraceCard = ReadingTraceCard(
+            visitCount = 2,
+            lastVisitAtMillis = 0L,
+            lastSectionTitle = null,
+            lastProgressPercent = 90,
+            resumeBlockIndex = RESUME_TARGET
+        )
+    )
+
     /** 画像を第[RESUME_IMAGE_INDEX]ブロックに持つ長い本文を、送り先つきの再会カードと一緒に出す。 */
     private fun showResumableNote(loader: NoteImageLoader): MutableList<Int> {
         val model = buildNoteSectionModel(RESUME_IMAGE_BODY)
         val measurements = NoteImageMeasurements()
         val reports = mutableListOf<Int>()
-        val state = loadedNote(RESUME_IMAGE_BODY).copy(
-            readingTraceCard = ReadingTraceCard(
-                visitCount = 2,
-                lastVisitAtMillis = 0L,
-                lastSectionTitle = null,
-                lastProgressPercent = 90,
-                resumeBlockIndex = RESUME_TARGET
-            )
-        )
+        val state = resumableState()
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 ReaderTab(

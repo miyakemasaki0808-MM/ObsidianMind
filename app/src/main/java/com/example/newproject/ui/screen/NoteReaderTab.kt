@@ -13,7 +13,7 @@ import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
-import com.example.newproject.ui.markdown.measureSkippedImages
+import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.ui.vigilith.VigilithNoteAction
@@ -135,6 +135,7 @@ internal fun NoteReaderTab(
     }
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
+    SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
     // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
     // AnimatedContent だと新旧リストが1つの listState を共有してしまうため graphicsLayer で行う。
@@ -275,11 +276,9 @@ internal fun NoteReaderTab(
                             coroutineScope.launch { listState.scrollToItem(clamped) }
                             // **飛び越した画像は描画されないので測られない。** 測らないと、その先の読書の
                             // 報告が止まり続ける。止める検査は緩めず、測り終えれば報告が再開する。
-                            if (imageLoader != null && imageMeasurements != null) {
-                                coroutineScope.launch {
-                                    measureSkippedImages(blocks, clamped, imageLoader, imageMeasurements)
-                                }
-                            }
+                            // **ここで測らず、ノート単位の入れ物へ依頼する** — この画面のスコープで測ると、
+                            // 測定待ちの間に全画面へ移っただけでキャンセルされる。
+                            imageMeasurements?.requestSkippedMeasurement(clamped)
                         }
                     }
                 )
