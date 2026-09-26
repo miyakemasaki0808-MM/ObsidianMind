@@ -28,6 +28,7 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-09-26-reunion-card-implementation-fix-review/P2-1` | 飛び越した画像の測定待ちで全画面へ移ると測定が途切れ進捗を記録できない | `統合` REUN-4 |
 | `2026-09-26-reunion-card-implementation-review/P2-1` | 続きから読むで未測定画像を飛び越すと後方の進捗を記録できない | `起票` REUN-4 |
 | `2026-09-26-reunion-card-implementation-review/P2-2` | 解析待ち中の印解除がモデル到着で画面上だけ戻る | `起票` REUN-5 |
 | `2026-09-26-reunion-card-implementation-review/P2-3` | 長大ブロックの未読末尾を既読側へ渡しブロック内の進捗も失う | `起票` REUN-6 |
