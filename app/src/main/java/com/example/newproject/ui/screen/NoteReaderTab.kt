@@ -48,6 +48,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,8 @@ import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.reunionSlot
+import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
@@ -125,6 +128,7 @@ internal fun NoteReaderTab(
     val hasNote = successState != null
 
     val listState = noteListState
+    val coroutineScope = rememberCoroutineScope()
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
@@ -253,10 +257,22 @@ internal fun NoteReaderTab(
             if (visibleTraceCard != null) {
                 ReadingTraceCardPanel(
                     card = visibleTraceCard,
+                    // 枠の中身は「まだ考えたい」と同じ純関数で決める（→ features/reunion_card.md 判断6）。
+                    slot = reunionSlot(visibleTraceCard, uiState.summaryState),
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace,
                     onToggleMark = onToggleReadingTraceMark,
-                    onOpenMemos = onOpenMarginMemo
+                    onOpenMemos = onOpenMarginMemo,
+                    onResume = {
+                        // **畳むのは即時、送るのは別に走らせる。** 送りは suspend で完了の保証が無いので、
+                        // その後ろに畳む操作を置かない（→ lessons L35）。
+                        onDismissReadingTrace()
+                        val target = visibleTraceCard.resumeBlockIndex
+                        val lastIndex = sectionModel?.blocks?.lastIndex
+                        if (target != null && lastIndex != null && lastIndex >= 0) {
+                            coroutineScope.launch { listState.scrollToItem(target.coerceAtMost(lastIndex)) }
+                        }
+                    }
                 )
             }
 
