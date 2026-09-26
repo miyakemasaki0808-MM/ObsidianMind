@@ -28,5 +28,8 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-09-26-reunion-card-design-review/P2-1` | 最深到達点では最後に止まった場所を復元できない | `起票` REUN-1 |
+| `2026-09-26-reunion-card-design-review/P2-2` | 途中の旧問い・空振りキャッシュを前後要約へ移す条件が無い | `起票` REUN-2 |
+| `2026-09-26-reunion-card-design-review/P2-3` | 訪問ごとの再生成と2回目の即時表示が両立しない | `起票` REUN-3 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
