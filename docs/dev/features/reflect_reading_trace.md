@@ -12,7 +12,7 @@
 
 ## 1. 概要
 
-**アプリの「記憶」の置き場所。** 読んだ位置・訪問履歴・AI俯瞰要約・余白メモを、
+**アプリの「記憶」の置き場所。** 読んだ位置・訪問履歴・再会カードの枠の1件・余白メモを、
 Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 **AI自身には記憶を持たせない**という方針（ステートレス維持）の裏返しで、
@@ -37,7 +37,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 |---|---|---|
 | 読書位置の記録 | 自動。ユーザーには見えない | 離脱時・背面化時 |
 | 再会カード | 「前回のあなた」が本文上部に出る | **Rediscover 経路だけ**（→ [rediscover](rediscover.md) 判断4） |
-| AI俯瞰要約 | 訪問履歴からの1文 | 2回目の訪問以降 |
+| 再会カードの枠 | 途中までなら読み進めたところの前後の要約、読了なら当時の問い・古い前提かノートの要約（→ [reunion_card](reunion_card.md) 判断6） | 再会したとき（1回目から） |
 | 孤児の整理 | 一覧と手動削除 | オプションから |
 
 ## 4. 現在のユーザーフロー
@@ -67,8 +67,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 |---|---|---|
 | ファイル全体 | 128KB | `MAX_FILE_BYTES` |
 | 訪問の保持件数 | 30（超過時は古いものから捨てる） | `MAX_VISITS` |
-| AI俯瞰要約の生成契機 | **2回目の訪問以降** | `MIN_VISITS_FOR_AI_SUMMARY` |
-| AI俯瞰要約 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
+| 枠の1件・印の内容 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
 | 相対パス | 1,024バイト | `MAX_RELATIVE_PATH_BYTES` |
 | ノートタイトル | 512バイト | `MAX_NOTE_TITLE_BYTES` |
 | セクション名 | 512バイト | `MAX_SECTION_TITLE_BYTES` |
@@ -169,9 +168,9 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 > 検査に載せたのは、v6 の欄を足したときに**退避・復元（[reading_trace_backup](reading_trace_backup.md)）の
 > 突き合わせ表へ行を足し忘れる**経路が実在したため。
 
-> **`aiSummary` に何を入れるかは本書が決めない。** 俯瞰要約のほかに「当時の問い」「古い前提」
-> 「まだ考えたい」が同じ枠へ乗るため、**種別と優先順位の正本は [reunion_card](reunion_card.md)**。
-> 本書は**欄と保存・寿命**を持つ。
+> **`aiSummary` に何を入れるかは本書が決めない。** いまは最後まで読んだノートで選んだ「当時の問い」「古い前提」が入り、
+> 旧仕様の俯瞰要約が残っていても表示しない。前後の要約はここへ書かない。
+> **種別と優先順位の正本は [reunion_card](reunion_card.md)**。本書は**欄と保存・寿命**を持つ。
 
 > **`aiSummaryVisitCount` は「要約が説明している回数」ではなく「最後に試みた回数」である。**
 > 候補があってもAIが選ばない回（空振り）を記録するために v6 で意味を変えた。
@@ -212,7 +211,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 ノート表示
  ├─ ReadingTraceController        ← セッション・訪問記録
  │    └─ ReadingTraceStore        ← flush/pause で writeMutex 直列・read-modify-write
- └─ ReunionCardController         ← Rediscover の再会カード・AI俯瞰要約・印（同じ writeMutex）
+ └─ ReunionCardController         ← Rediscover の再会カード・前後の要約・問いの選別・印（同じ writeMutex）
       └─ ReadingTraceStore
            └─ ReadingTraceJson    ← スキーマ版・バイト上限・checksum
 
@@ -245,7 +244,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 ```
 普通に読む ──> 読んだ位置が裏で溜まる（AI呼び出しゼロ）
                        │（時間が経つ）
-Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが俯瞰要約を追記
+Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが枠の1件を用意（→ reunion_card 判断6）
 ```
 
 ### 採らなかった案 — TimeCapsule（明示的に問いを残す）
@@ -332,6 +331,10 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 
 #### 判断5: AI要約は再会時・裏で・失敗しても黙って劣化
 
+> **俯瞰要約は 2026-09-26 に撤去した。** 枠の1件は [reunion_card](reunion_card.md) 判断6 が決める。
+> 下の「まず生の痕跡を出す・裏で1回だけ・自動DLしない・黙って劣化」は、前後の要約と問いの選別へそのまま引き継いだ。
+> 「新しい内容を作らせない」も同じで、前後の要約は本文に無いことを書かせない。
+
 `generate()` は Mutex で全機能直列＋タイムアウトつきなので、待ってからカードを出すと**長く何も出ない**。
 
 - **まず生の痕跡でカードを出す**（AIなし・即時）
@@ -372,8 +375,8 @@ SAF の `renameDocument()` はプロバイダ非互換で atomic-rename が成�
 #### 判断9: 保持件数と延べ回数は別に持つ（schema v2）
 
 保持を打ち切るので `visits.size` を「開いた回数」に使うと**上限で止まる**。
-それだけなら見た目の問題だが、`needsAiSummary` の判定も同じ値を見ていたため
-**どれだけ読んでもAI俯瞰要約が二度と更新されなくなる**。
+それだけなら見た目の問題だが、旧 `needsAiSummary` の判定も同じ値を見ていたため
+**どれだけ読んでもAI俯瞰要約が二度と更新されなくなる**（いまは選別の試行を累計と比べる）。
 
 `totalVisitCount` を別フィールドとして積み上げ、表示・要約の鮮度判定・プロンプトをすべて累計基準にした。
 `visits` は「どこで止まったかの傾向」を見る直近分として維持する（AIへ渡すのもこちら）。
@@ -398,7 +401,7 @@ v1 のファイルに `totalVisitCount` が書き足されていても読まな�
 
 消費済みの印（`dirty=false` / `recordedVisit`）は保存の起動**前**に立てているので、
 書けなかったら巻き戻す。**巻き戻すのは自分が書こうとした訪問がまだ最新のときだけ**（後発の訪問を潰さない）。
-`persistSummary` は対象外 — 書けなくても次回の再会で `needsAiSummary` が真になり自己修復する。
+`persistSummary` は対象外 — 書けなくても次回の再会で選び直され、自己修復する。
 
 #### 判断11: Vault分離は保存要求自身が運ぶ
 

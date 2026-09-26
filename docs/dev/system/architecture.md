@@ -32,7 +32,7 @@ NoteViewModel（Android境界の窓口）
       ├── SearchController
       ├── DistillController
       ├── ReadingTraceController      ← 訪問の記録・余白メモの保存（3箇所の合流）
-      ├── ReunionCardController       ← 再会カード（照合・要約・印）
+      ├── ReunionCardController       ← 再会カード（照合・前後の要約・問いの選別・印）
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
