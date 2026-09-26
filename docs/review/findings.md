@@ -28,5 +28,8 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-09-26-reunion-card-implementation-review/P2-1` | 続きから読むで未測定画像を飛び越すと後方の進捗を記録できない | `起票` REUN-4 |
+| `2026-09-26-reunion-card-implementation-review/P2-2` | 解析待ち中の印解除がモデル到着で画面上だけ戻る | `起票` REUN-5 |
+| `2026-09-26-reunion-card-implementation-review/P2-3` | 長大ブロックの未読末尾を既読側へ渡しブロック内の進捗も失う | `起票` REUN-6 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
