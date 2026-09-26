@@ -28,10 +28,10 @@ NoteViewModel（Android境界の窓口）
       ├── SectionChatController
       ├── QuizController
       ├── AnnotationController        ← 旧補記ファイルの片付けのみ（**Vault単位**）
-      ├── RemarkController            ← ノートへのひとこと
+      ├── MarginMemoController        ← 余白メモ（**AIを呼ばない唯一のController**）
       ├── SearchController
       ├── DistillController
-      ├── ReadingTraceController      ← 訪問の記録・ひとことと返事の保存
+      ├── ReadingTraceController      ← 訪問の記録・余白メモの保存（3箇所の合流）
       ├── ReunionCardController       ← 再会カード（照合・要約・印）
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
@@ -41,10 +41,10 @@ NoteViewModel（Android境界の窓口）
       └── NoteFieldController           ← ノートの分野判定（**例外。判断4 を見る**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個・`NoteViewModel` は674行である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個である。
 
-**行数は倍になったが、窓口の性質は変わっていない。** 53ある関数のうち**40は1行の委譲**で、
-本体を持つ8つは**すべて Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）である。
+**行数は倍になったが、窓口の性質は変わっていない。** 68ある関数のうち**43は1行の委譲**で、
+本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
 **測るべきは行数ではなく「業務ロジックが戻ってきていないか」**で、そちらは戻っていない。
 （分割の動機だった906行と比べる意味は薄い — あのときは業務ロジックが同居していた。）
 
@@ -95,7 +95,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | スコープ | 対象 | 無効化の契機 | 持ち主 |
 |---|---|---|---|
-| ノート単位 | 要約・DL・クイズ・ひとこと・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`** |
+| ノート単位 | 要約・DL・クイズ・余白メモ・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`** |
 | Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
 
 **混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
@@ -224,8 +224,9 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 
 **「後から結果へ辿り着けるか」が未確認管理の要否を決めている。** 旧補記が `markViewed()` を持っていたのは
 結果が Vault 内の `.md` にあり、一覧を開くまで存在に気づけなかったからで、AI生成の性質から来ていたわけではなかった。
-ひとことは結果を痕跡サイドカーへ永続化し、専用画面を開くたび必ず復元するので `isViewed` を持たない
-（→ [background_ai_ux](background_ai_ux.md) §4）。**どちらも結果は専用画面にある** — 分けているのは置き場所ではなく辿り着きやすさ。
+**辿り着ける結果に未確認管理は要らない** — 痕跡サイドカーへ永続化して専用の面を開くたび復元するものは、
+見逃しても失われない（→ [background_ai_ux](background_ai_ux.md) §4）。
+分けているのは置き場所ではなく辿り着きやすさである。
 
 **再検討の条件:** **`markViewed()` と Snackbar 通知を持つ Controller が3つ目に現れたとき**、
 「AI結果の未確認管理」だけを共通化する候補として再検討する（現状はクイズ1件のみ）。

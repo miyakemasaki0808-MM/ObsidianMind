@@ -16,6 +16,14 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-26 | — | 退避画面の説明を現行の保護対象へ直し、文面を検査できる場所へ移した（オーナーが実機の画面で確認） | [reading_trace_backup](features/reading_trace_backup.md) §9 |
+| 2026-09-26 | — | 余白メモの課題9件にオーナーが完了の線を引き、台帳と受付簿から閉じた | [review](../review/README.md) |
+| 2026-09-26 | — | 柱2・余白メモを実機検証した。通し版14ケースと instrumentation 6件が成功し、退避画面の旧文言1件を起票した | [reflect_margin_memo](features/reflect_margin_memo.md) §10・[review](../review/README.md) |
+| 2026-09-24 | — | 解析書を現況だけに絞り、判断と経緯を正本へのリンクに替え、テストのクラス一覧を02の付録へ移した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) §15 |
+| 2026-09-20 | — | 余白メモの残件4件を机上解消・実機待ちへ更新し、保存待ちの入力欄を特定できないUIテスト1件を起票した | [review](../review/README.md) |
+| 2026-09-20 | — | 余白メモの実装修正を再レビューし、5件を机上解消・実機待ちとし、失敗時の残件3件と既存痕跡の上書き1件を記録した | [review](../review/README.md) |
+| 2026-09-20 | — | 柱2・余白メモの実装をレビューし、入力消失・保存欠落・削除競合・復元漏れなど8件を課題台帳と受付へ登録した | [review](../review/README.md) |
+| 2026-09-20 | — | 柱2・余白メモの設計をレビューし、合流上限・退避・旧版移行・保存容量の4指摘の設計上の解消を確認した | [review](../review/README.md) |
 | 2026-09-20 | — | 実機検証の分担を割り、組み立て・片付け・記録の確定をClaudeへ移し、再開条件つきの進行チェックリストを置いた | [device_validation](../review/device_validation/README.md) |
 | 2026-09-20 | — | 蒸留の自由範囲を DIST-21〜31 と実保存22ファイルで実機確認し、柱1を完了にした | [reflect_distill](features/reflect_distill.md) §10・[review](../review/README.md) |
 | 2026-09-19 | — | 自由範囲のレビュー3件を直した。バックスラッシュ直後の禁止・引く向きの決め方・つまみ座標の分離 | [reflect_distill](features/reflect_distill.md) §5 |

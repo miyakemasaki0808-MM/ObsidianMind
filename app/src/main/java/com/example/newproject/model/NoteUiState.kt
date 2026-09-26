@@ -7,9 +7,9 @@ import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
@@ -26,8 +26,10 @@ data class NoteUiState(
     val summaryState: SummaryState = SummaryState.Idle,
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val quizState: QuizState = QuizState.Idle,
+    val marginMemoState: MarginMemoState = MarginMemoState.Idle,
+    /** 余白メモのシートが出ているか。セクションチャットのシートと同じ形。 */
+    val isMarginMemoSheetVisible: Boolean = false,
     val wikilinkTitles: Set<String> = emptySet(),
-    val remarkState: RemarkState = RemarkState.Idle,
     val distillState: DistillState = DistillState.Idle,
     val annotationListState: AnnotationListState = AnnotationListState.Idle,
     // 読書痕跡の整理画面。補記一覧と同じくVault単位（ノート切替では消えない）。

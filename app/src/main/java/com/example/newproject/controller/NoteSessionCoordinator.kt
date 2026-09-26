@@ -11,6 +11,7 @@ import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.domain.indexNoteFieldHints
@@ -204,20 +205,15 @@ internal class NoteSessionCoordinator(
     )
 
     /**
-     * ノートへのひとこと。**[readingTrace] より後に宣言する** — 生成結果の預け先が
-     * 痕跡側のセッションなので、初期化順を逆にすると参照が未初期化になる。
+     * 余白メモ。**[readingTrace] より後に宣言する** — 保存の合流先が痕跡側なので、
+     * 初期化順を逆にすると参照が未初期化になる。
      */
-    private val remark = RemarkController(
+    private val marginMemo = MarginMemoController(
         scope = scope,
-        aiClient = aiClient,
-        state = stateStore.remarkWriter,
-        // 保存は痕跡の書き込み契機（背面化・離脱）へ相乗りさせる。
-        // ここで直接保存すると、痕跡ファイルが未作成の初読で黙って失われる。
-        onRemarkReady = { readingTrace.setPendingRemark(it) },
-        persistReply = { path, reply, at -> readingTrace.saveReply(path, reply, at) },
-        loadReflection = { path -> readingTrace.loadReflection(path) },
-        currentContent = { stateStore.currentNote()?.content },
-        persistMirrored = { path, mirrored -> readingTrace.saveMirrored(path, mirrored) },
+        state = stateStore.marginMemoWriter,
+        loadMemos = { path -> readingTrace.loadMemos(path) },
+        appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
+        deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
         clock = clock
     )
 
@@ -377,8 +373,8 @@ internal class NoteSessionCoordinator(
         // ノートを開き直しただけで冊子の色が消えるのは誤りである。
         noteField.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
-        remark.cancelAndClear()
         sectionChat.cancelAndClear()
         distill.cancelForNoteChange()
     }
@@ -502,6 +498,7 @@ internal class NoteSessionCoordinator(
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
         val applied = stateStore.applyReloadedBody(targetUri, loaded)
         // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
         // 旧いブロックが描かれ続ける（[setNoteState] と対になる2つ目の経路）。
@@ -585,21 +582,24 @@ internal class NoteSessionCoordinator(
     fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
     fun markQuizViewed() = quiz.markViewed()
 
-    // ── ノートへのひとこと（実装は RemarkController）─────────────────────────
+    // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    fun createRemark(
-        title: String,
-        content: String,
-        relatedNotes: List<RelatedNote>,
-        aiNotes: List<RelatedNote>
-    ) = remark.create(title, content, relatedNotes, aiNotes)
+    /** シートを開く。**ここでだけサイドカーを1件読む。** */
+    fun openMarginMemoSheet() {
+        marginMemo.setSheetVisible(true)
+        marginMemo.open(readingTrace.currentPath())
+    }
 
-    /** 専用画面を開いたとき、保存済みの組を読み戻す。パスは読書セッションから引く。 */
-    fun restoreSavedRemark(title: String) =
-        remark.restoreSaved(readingTrace.currentPath(), title)
+    fun dismissMarginMemoSheet() {
+        marginMemo.setSheetVisible(false)
+    }
 
-    fun saveRemarkReply(reply: String) =
-        remark.saveReply(readingTrace.currentPath(), reply)
+    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
+    fun saveMarginMemo(text: String, sectionTitle: String?) =
+        marginMemo.save(readingTrace.currentPath(), text, sectionTitle)
+
+    fun deleteMarginMemo(memo: MarginMemo) =
+        marginMemo.delete(readingTrace.currentPath(), memo)
 
     // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
 
@@ -657,5 +657,6 @@ internal class NoteSessionCoordinator(
     fun endSectionChat() {
         sectionChat.cancelAndClear()
         quiz.cancelAndClear()
+        marginMemo.cancelAndClear()
     }
 }

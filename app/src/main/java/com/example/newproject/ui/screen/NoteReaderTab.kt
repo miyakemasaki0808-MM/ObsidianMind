@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
@@ -102,10 +103,13 @@ internal fun NoteReaderTab(
     onOpenQuizResult: () -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
+    onOpenMarginMemo: () -> Unit,
+    onSaveMarginMemo: (text: String, sectionTitle: String?) -> Unit,
+    onDeleteMarginMemo: (MarginMemo) -> Unit,
+    onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
     onToggleReadingTraceMark: () -> Unit,
-    onOpenReflection: () -> Unit,
     onVigilithActionChanged: (VigilithNoteAction?) -> Unit
 ) {
     val context = LocalContext.current
@@ -168,8 +172,18 @@ internal fun NoteReaderTab(
                 title = "Rediscover",
                 subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
                 else "過去のノートから、思考をひとつ。",
+                // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
+                // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
+                // （→ features/reflect_margin_memo.md 判断7）。
                 trailing = if (hasNote) {
-                    { IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() } }
+                    {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
+                                onOpenMarginMemo()
+                            }
+                            IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
+                        }
+                    }
                 } else null
             )
 
@@ -241,8 +255,8 @@ internal fun NoteReaderTab(
                     card = visibleTraceCard,
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace,
-                    onOpenReflection = onOpenReflection,
-                    onToggleMark = onToggleReadingTraceMark
+                    onToggleMark = onToggleReadingTraceMark,
+                    onOpenMemos = onOpenMarginMemo
                 )
             }
 
@@ -264,6 +278,17 @@ internal fun NoteReaderTab(
             )
         }
 
+    }
+
+    // 余白メモのボトムシート。**書いた場所は開いた時点の可視セクションから引く**
+    // （紐づけではなく当時の記録 → 判断2）。
+    if (uiState.isMarginMemoSheetVisible) {
+        MarginMemoSheet(
+            state = uiState.marginMemoState,
+            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
+            onDelete = onDeleteMarginMemo,
+            onDismiss = onDismissMarginMemo
+        )
     }
 
     // セクションチャットのボトムシート

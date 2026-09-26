@@ -68,7 +68,6 @@ class DistillRangeAdjustUiTest {
             AppTheme(darkTheme = false) {
                 AiTab(
                     uiState = uiStateWith(candidates(items = listOf(candidateItem()))),
-                    onOpenRemark = {},
                     onStartDistill = {},
                     onDownloadDistillModel = {},
                     onToggleDistillCandidate = { toggled += it },
@@ -220,7 +219,6 @@ class DistillRangeAdjustUiTest {
                             overlapDeselectedIds = listOf("S001")
                         )
                     ),
-                    onOpenRemark = {},
                     onStartDistill = {},
                     onDownloadDistillModel = {},
                     onToggleDistillCandidate = {},

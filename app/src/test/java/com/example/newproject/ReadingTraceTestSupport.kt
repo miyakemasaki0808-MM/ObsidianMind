@@ -8,7 +8,7 @@ import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReunionKind
 
 // 読書痕跡の2つの Controller（訪問と再会カード）のテストが共有する足場。
@@ -20,9 +20,9 @@ internal const val VAULT_B = "content://vault-b"
 
 internal const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
 
-/** テスト用のひとこと1組。日時は固定で構わない（検証は本文だけを見る）。 */
-internal fun reflectionOf(remark: String) =
-    Reflection(remark = remark, remarkedAtEpochMillis = 1_000L)
+/** テスト用の余白メモ。日時は明示できる（合流の重複排除が日時を見るため）。 */
+internal fun memoOf(text: String, at: Long = 1_000L, section: String? = null) =
+    MarginMemo(text = text, writtenAtEpochMillis = at, sectionTitle = section)
 
 /** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
 internal fun storedTrace(
@@ -52,6 +52,17 @@ internal class FakePersistence : ReadingTracePersistence {
     val saved = mutableListOf<ReadingTrace>()
     val savedVaultKeys = mutableListOf<String>()
     val corruptPaths = mutableSetOf<String>()
+
+    /**
+     * 実体はあるのに読み取りだけ失敗する経路。
+     *
+     * **実Storeの `None` は不在と読み取り失敗の両方で返る**（gateway が null を返す
+     * 経路が2つある）ので、「無い」と区別できないことをテストでも再現する。
+     */
+    val unreadablePaths = mutableSetOf<String>()
+
+    /** 置き場を列挙できない状態。**痕跡が無いことを意味しない。** */
+    var listable = true
     var failSave = false
 
     /** この回数目の保存だけを失敗させる（1始まり）。先行・後続の順序が要る検証用。 */
@@ -72,7 +83,7 @@ internal class FakePersistence : ReadingTracePersistence {
     /**
      * 読込の**最中**に割り込むための口。
      *
-     * `saveReply` の読込は同期I/Oで、**戻る頃には別のノートを開いている**ことがある。
+     * `appendMemo` の読込は同期I/Oで、**戻る頃には別のノートを開いている**ことがある。
      * その順序をテストで作るには、読込そのものの中で切り替えるのが最も確実である。
      */
     var onLoad: (() -> Unit)? = null
@@ -84,13 +95,18 @@ internal class FakePersistence : ReadingTracePersistence {
 
     private fun loadInternal(vaultRelativePath: String): ReadingTraceReadResult = when {
         vaultRelativePath in corruptPaths -> ReadingTraceReadResult.Corrupt("壊れています")
+        vaultRelativePath in unreadablePaths -> ReadingTraceReadResult.None
         else -> files[vaultRelativePath]
             ?.let { ReadingTraceReadResult.Valid(it) }
             ?: ReadingTraceReadResult.None
     }
 
     override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
-        ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
+        if (!listable) {
+            ReadingTraceKeyListing.Unavailable("列挙できませんでした")
+        } else {
+            ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
+        }
 
     override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
         files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }

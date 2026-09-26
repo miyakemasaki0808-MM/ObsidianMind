@@ -32,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.ui.theme.OnVibrantMuted
 import com.example.newproject.ui.theme.Aqua
 import com.example.newproject.ui.theme.NavBar
@@ -62,7 +61,6 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
-    remarkState: RemarkState,
     snackbarHostState: SnackbarHostState,
     vigilithPresentation: VigilithPresentation,
     vigilithNoteAction: VigilithNoteAction?,
@@ -87,7 +85,7 @@ internal fun AppScaffold(
                             NavigationRailItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, remarkState) },
+                                icon = { TabIcon(dest) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationRailItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -110,7 +108,7 @@ internal fun AppScaffold(
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest, remarkState) },
+                                icon = { TabIcon(dest) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -143,59 +141,10 @@ internal fun AppScaffold(
     }
 }
 
-internal enum class AiTabBadgeState { None, Loading }
-
-/**
- * AIタブのバッジ状態。**生成中だけを示す。**
- *
- * 旧補記は結果が Vault 内の `.md` にあり、一覧を開くまで存在に気づけなかったため
- * 「未確認」を `isViewed` で管理し、完了（✓）と失敗（!）のバッジを出していた。
- *
- * ひとことは結果を痕跡サイドカーへ永続化し、`RemarkScreen` を開くたび必ず復元する。
- * **見逃しても失われないので「まだ見ていない」を状態として持つ必要がない**（完了の通知は
- * 一度きりの Snackbar で足りる）。したがって**確認して消すバッジは対象ごと消えた**。
- * 判定軸は「結果がどこに出るか」ではなく**「後から結果へ辿り着けるか」**である
- * （→ system/background_ai_ux.md §4）。
- *
- * 生成中だけ残すのは、押してから読書へ戻る導線が実在するため
- * （Nano は1回数十秒かかる）。こちらは自動で消えるので確認管理を必要としない。
- *
- * 副産物として、**下部ナビ帯の上で判別できなかった塗りバッジ
- * （Success 1.61 / Error 1.04）が無くなった。** 残る生成中表示は塗りではなく
- * 線のインジケータなので、同じ問題を持たない。
- */
-internal fun resolveAiTabBadgeState(
-    remarkState: RemarkState
-): AiTabBadgeState = when (remarkState) {
-    is RemarkState.Loading -> AiTabBadgeState.Loading
-    else -> AiTabBadgeState.None
-}
-
-/** AIタブの意味は常に✨のまま保ち、右上の小さなバッジだけでAIの状態を知らせる。 */
+/** AIタブの意味は常に✨のまま保つ。 */
 @Composable
-private fun TabIcon(
-    dest: AppDestination,
-    remarkState: RemarkState
-) {
-    if (dest != AppDestination.Ai) {
-        Text(dest.emoji, fontSize = 20.sp)
-        return
-    }
-
-    BadgedBox(
-        badge = {
-            when (resolveAiTabBadgeState(remarkState)) {
-                AiTabBadgeState.Loading -> CircularProgressIndicator(
-                    modifier = Modifier.size(10.dp),
-                    color = Aqua,
-                    strokeWidth = 1.5.dp
-                )
-                AiTabBadgeState.None -> Unit
-            }
-        }
-    ) {
-        Text(dest.emoji, fontSize = 20.sp)
-    }
+private fun TabIcon(dest: AppDestination) {
+    Text(dest.emoji, fontSize = 20.sp)
 }
 
 @Composable

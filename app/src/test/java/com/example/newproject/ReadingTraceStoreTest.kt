@@ -8,8 +8,11 @@ import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.withVisit
 import java.io.IOException
 import org.junit.Assert.assertEquals
@@ -88,6 +91,58 @@ class ReadingTraceStoreTest {
         val result = ReadingTraceStore(gateway).save(trace(), VAULT)
 
         assertEquals("書き込めませんでした", (result as ReadingTraceSaveResult.Failure).message)
+    }
+
+    /**
+     * **上限を超える痕跡は書かずに断る。**
+     *
+     * 各欄の上限を満たしていても、JSONのエスケープで読込上限を超えられる。
+     * 書いてしまうと**保存は成功し、次に開いたとき痕跡が消える**
+     * （→ features/reflect_margin_memo.md 判断11）。
+     *
+     * **これは机上の心配ではない。** `ReadingTraceLimitsTest` が測る最悪ケースは
+     * 「エスケープで2倍」を前提にしており、それが成り立つのは
+     * **入力時に制御文字を落とす余白メモの本文だけ**である。
+     * AI要約や見出し名は正規化を通らないので、制御文字（`\u00XX` で6倍）が入れば
+     * 全欄が上限内のまま128KBを超えうる。ここがその最後の砦になる。
+     */
+    @Test
+    fun `encode後に上限を超える痕跡は書かずに失敗を返す`() {
+        val gateway = FakeGateway()
+        val store = ReadingTraceStore(gateway)
+        store.save(trace(), VAULT)
+        val writesBefore = gateway.writeCount
+        // 制御文字は1バイトが `\u0001` の6バイトへ広がる。正規化を通らない欄で再現する。
+        val control = "\u0001"
+        val huge = trace(
+            visits = List(ReadingTraceLimits.MAX_VISITS) { index ->
+                ReadingVisit(
+                    atEpochMillis = index.toLong(),
+                    deepestSectionTitle = control.repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES),
+                    progressPercent = 50
+                )
+            }
+        ).copy(
+            aiSummary = control.repeat(ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
+            aiSummaryVisitCount = ReadingTraceLimits.MAX_VISITS,
+            aiSummaryKind = ReunionKind.Overview,
+            markedAtEpochMillis = 1L,
+            markedSummary = control.repeat(ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
+            markedKind = ReunionKind.Overview,
+            // メモの**本文**は入力時に正規化されるが、**見出し名は本文から来る**ので通らない。
+            memos = List(ReadingTraceLimits.MAX_MEMOS) { index ->
+                MarginMemo(
+                    text = "普通の断片",
+                    writtenAtEpochMillis = index.toLong(),
+                    sectionTitle = control.repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES)
+                )
+            }
+        )
+
+        val result = store.save(huge, VAULT)
+
+        assertTrue("上限超過を書き込んだ", result is ReadingTraceSaveResult.Failure)
+        assertEquals("既存のファイルへ触れた", writesBefore, gateway.writeCount)
     }
 
     @Test

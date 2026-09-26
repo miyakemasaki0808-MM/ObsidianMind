@@ -45,7 +45,7 @@ class PromptBudgetTest {
     }
 
     @Test
-    fun `削られても質問と返事は残る`() {
+    fun `削られても質問は残る`() {
         val chat = PromptBuilder.buildSectionChatPrompt(
             sectionTitle = HUGE_VALUE,
             sectionExcerpt = NoteExcerpt(HUGE_VALUE, isAbridged = true),
@@ -53,14 +53,6 @@ class PromptBudgetTest {
             question = QUESTION
         )
         assertTrue("質問が削られている", chat.endsWith("New question:\n$QUESTION"))
-
-        val mirror = PromptBuilder.buildRemarkMirrorPrompt(
-            title = HUGE_VALUE,
-            excerpt = NoteExcerpt(HUGE_VALUE, isAbridged = true),
-            remark = HUGE_VALUE,
-            reply = REPLY
-        )
-        assertTrue("返事が削られている", mirror.endsWith("Their answer:\n$REPLY"))
     }
 
     @Test
@@ -196,7 +188,6 @@ class PromptBudgetTest {
         val HUGE_VALUE = "${PromptSamples.MARK}長い値".repeat(4_000)
         const val HUGE_ENTRIES = 200
         const val QUESTION = "このセクションの結論は何ですか？"
-        const val REPLY = "自分の言葉で書いた返事。"
 
         /** 最新の訪問は、閉じ引用符と到達率まで揃った1行で終わること。 */
         val NEWEST_VISIT_LINE = Regex("""- stopped at section ".+" \(90% of the note\)""")

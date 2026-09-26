@@ -249,10 +249,27 @@ internal class ReadingTraceStore(
         ReadingTraceKeyListing.Unavailable(error.message ?: error::class.java.simpleName)
     }
 
+    /**
+     * **書く前にencode後のサイズを測る。**
+     *
+     * 各欄の上限を満たしていても、JSONのエスケープ（`"` と `\` が2バイト、制御文字が6バイト）で
+     * [ReadingTraceLimits.MAX_FILE_BYTES] を超えられる。超えたまま書くと
+     * **保存は成功し、次に開いたとき読込上限で弾かれて痕跡が消える**
+     * （→ features/reflect_margin_memo.md 判断11）。
+     *
+     * 上限超過は書かずに失敗を返す。`"wt"` の truncate へ入る前に止めるので
+     * **既存のファイルは無傷のまま残り**、呼び出し側の預かりと退避がユーザーの言葉を保つ。
+     */
     override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult = try {
         val bytes = ReadingTraceJson.encode(trace)
-        gateway.write(keyFor(trace.vaultRelativePath), bytes, vaultKey)
-        ReadingTraceSaveResult.Success
+        if (bytes.size > ReadingTraceLimits.MAX_FILE_BYTES) {
+            ReadingTraceSaveResult.Failure(
+                "痕跡が上限（${ReadingTraceLimits.MAX_FILE_BYTES}バイト）を超えます。"
+            )
+        } else {
+            gateway.write(keyFor(trace.vaultRelativePath), bytes, vaultKey)
+            ReadingTraceSaveResult.Success
+        }
     } catch (error: Exception) {
         ReadingTraceSaveResult.Failure(error.message ?: error::class.java.simpleName)
     }

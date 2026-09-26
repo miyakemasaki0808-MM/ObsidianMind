@@ -97,7 +97,8 @@
 | [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
-| [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」） |
+| [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」）。**廃止済み・記録として残す** |
+| [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（ひとことの置き換え。**AIを呼ばない唯一のReflect機能**）。実装済み・実機検証待ち |
 | [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
@@ -237,6 +238,7 @@
 | `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](features/note_image_rendering.md) → [markdown_rendering](system/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](features/related_notes_ai.md) / [reflect_distill](features/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](features/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](features/reflect_distill.md)（原子性・復旧） |
+| `data/ReadingTraceJson.kt`・スキーマ版と checksum の正規形 | [reflect_reading_trace](features/reflect_reading_trace.md) → **[reflect_margin_memo](features/reflect_margin_memo.md) 判断6（欄を落とすときの作法）** |
 | `data/FileSummaryCache.kt` / `domain/SummaryCache.kt` | [note_summary](features/note_summary.md) 判断6・判断7（鍵・置き場・上限） |
 | `androidTest/` | [instrumentation_testing](system/instrumentation_testing.md)（何をここへ置くかの基準） |
 | `model/NoteUiState.kt` / `model/state/` | [architecture](system/architecture.md) / [tab_navigation](system/tab_navigation.md) |

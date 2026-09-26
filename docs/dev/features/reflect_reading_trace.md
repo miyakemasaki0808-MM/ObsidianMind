@@ -1,6 +1,6 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** Implemented — 稼働中。サイドカーは **schema v6**。孤児掃除は手動削除まで提供し、自動化は未着手
+**状態:** Implemented — 稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで提供し、自動化は未着手
 **最終検証:** 2026-08-22 / `c9a48d2`（§8 の判断17件は未突合）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
@@ -12,7 +12,7 @@
 
 ## 1. 概要
 
-**アプリの「記憶」の置き場所。** 読んだ位置・訪問履歴・AI俯瞰要約・ひとことと返事を、
+**アプリの「記憶」の置き場所。** 読んだ位置・訪問履歴・AI俯瞰要約・余白メモを、
 Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 **AI自身には記憶を持たせない**という方針（ステートレス維持）の裏返しで、
@@ -56,7 +56,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 - **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**（理由は §8 判断6）
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
-- **スキーマ:** **v6**。v1〜v5 も読める（書き戻しは常に現行版）
+- **スキーマ:** **v7**。v1〜v6 も読める（書き戻しは常に現行版）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
@@ -73,12 +73,13 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | ノートタイトル | 512バイト | `MAX_NOTE_TITLE_BYTES` |
 | セクション名 | 512バイト | `MAX_SECTION_TITLE_BYTES` |
 | documentId | 2,048バイト | `MAX_DOCUMENT_ID_BYTES` |
-| ひとこと | 512バイト | `MAX_REMARK_BYTES` |
-| 返事 | 25,600バイト | `MAX_REPLY_BYTES` |
-| 映し返し | 512バイト | `MAX_MIRRORED_BYTES` |
+| 余白メモ1件 | 1,024バイト | `MAX_MEMO_BYTES` |
+| 余白メモの件数 | **20件（超えたら弾く。古いものから捨てない）** | `MAX_MEMOS` |
 
-> **不変条件:** `MAX_FILE_BYTES` は**他の全上限の最悪ケースを足しても収まること**。
-> `ReadingTraceLimitsTest` が計算して固定している。
+> **不変条件:** `MAX_FILE_BYTES` は**全欄を上限まで詰めた実物が収まること**。
+> `ReadingTraceLimitsTest` が**本物の `ReadingTraceJson.encode` に通して測り**固定する。
+> **生の文字列長を足す形では保証にならない** — JSONは `"` と `\` を2バイトへ広げるので、
+> 各欄の上限を満たしたまま超えられる（→ [余白メモ](reflect_margin_memo.md) 判断11）。
 > ここを忘れて個別上限だけ上げると、**正しく保存したファイルを次回読めなくなる**
 > （保存側と読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
 
@@ -99,8 +100,8 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 「スクロールが発生した」は条件に**入れない**（→ §8 判断3）。
 
-**門番には例外が1つある** — ひとことへの返事を預かっているときは門番を通さずに記録する。
-理由と契約は [reflect_remark](reflect_remark.md) が持つ。
+**門番には例外が1つある** — 余白メモを預かっているときは門番を通さずに記録する。
+理由と契約は [余白メモ](reflect_margin_memo.md) が持つ。
 
 ### 到達率
 
@@ -125,6 +126,13 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 - **破損の扱い:** `ReadingTraceJson` の checksum 検証で検知し、**孤立扱い**にする
 - **厳格検証（読込時）:** checksum不一致・パース失敗・空ファイル・不正UTF-8・未知の `schemaVersion` は
   **破損＝孤立扱い**（カードを出さず、ノートには触れない）
+- **破損した痕跡を上書きで作り直さない（v7〜）。** かつては次の訪問が新規として上書きし、
+  壊れたファイルが自然に直っていた。**v7 からはユーザーが書いた余白メモが入っている**ので、
+  読めないファイルへ書くと**読めなかっただけの保存済みメモを消す。**
+  読み込みの `None` は不在と読み取り失敗の両方で返るため、
+  **置き場の列挙と突き合わせて不在を確かめたときだけ新規として作る**
+  （→ [余白メモ](reflect_margin_memo.md) §7）。
+  代償として、壊れた痕跡はそのノートの記録を止める。整理画面から手で消す
 - **端末間:** **last-writer-wins**（マージも世代解決もしない）
 
 ## 6. 状態とデータ
@@ -146,7 +154,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | `aiSummary` | 再会カードの枠へ出す1件。**空振りの回は null** |
 | `aiSummaryVisitCount` | **最後に生成を試みた**時点の延べ回数（null＝未試行） |
 | `aiSummaryKind` | その試行の種別（schema v6〜 → [reunion_card](reunion_card.md)） |
-| `reflection` | ひとこと＋返事（schema v4〜 → [reflect_remark](reflect_remark.md)） |
+| `memos` | 余白メモ（schema v7〜 → [reflect_margin_memo](reflect_margin_memo.md)）。**追記で溜まる・上書きしない** |
 | `markedAtEpochMillis` | 「まだ考えたい」を押した時刻（schema v6〜）。**下2つと3つで1組** |
 | `markedSummary` | 印を付けた時点の内容。**再生成できない** |
 | `markedKind` | 印を付けた時点の種別 |

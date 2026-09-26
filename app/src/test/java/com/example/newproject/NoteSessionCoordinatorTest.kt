@@ -41,12 +41,12 @@ import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletBundle
 import com.example.newproject.model.state.WeaveState
 import com.example.newproject.model.state.BookletState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
@@ -309,7 +309,10 @@ class NoteSessionCoordinatorTest {
         assertTrue(reset.summaryState is SummaryState.Idle)
         assertTrue(reset.relatedNotesState is RelatedNotesState.Idle)
         assertTrue(reset.quizState is QuizState.Idle)
-        assertTrue(reset.remarkState is RemarkState.Idle)
+        assertTrue(reset.marginMemoState is MarginMemoState.Idle)
+        // **シートの可視も落ちること。** 落とさないと、切替後に
+        // 前のノートのメモを載せたシートが開いたまま残る。
+        assertEquals(false, reset.isMarginMemoSheetVisible)
         assertNull(reset.sectionChat)
         assertEquals(false, reset.isSectionChatSheetVisible)
         assertNull(reset.readingTraceCard)
@@ -374,7 +377,8 @@ class NoteSessionCoordinatorTest {
         assertTrue(state.summaryState is SummaryState.Idle)
         assertTrue(state.relatedNotesState is RelatedNotesState.Idle)
         assertTrue(state.quizState is QuizState.Idle)
-        assertTrue(state.remarkState is RemarkState.Idle)
+        assertTrue(state.marginMemoState is MarginMemoState.Idle)
+        assertEquals(false, state.isMarginMemoSheetVisible)
         assertTrue(state.distillState is DistillState.Idle)
         assertNull(state.sectionChat)
         assertEquals(false, state.isSectionChatSheetVisible)
@@ -440,28 +444,6 @@ class NoteSessionCoordinatorTest {
         assertNull(privateField<Job?>(search, "foldersJob"))
     }
 
-    /**
-     * `remarkState` は一括リセットでも Idle になるため、状態だけでは
-     * `RemarkController.cancelAndClear` の呼び忘れを検出できない。
-     * 実物Controllerへ生成Jobを積み、Coordinatorのノート切替から停止されることを確認する。
-     */
-    @Test
-    fun `ノート切替でひとことの生成Jobが停止される`() {
-        val coordinator = Env(TestScope()).coordinator()
-        val remark: Any = privateField(coordinator, "remark")
-        val createJob = Job()
-        val downloadJob = Job()
-        setPrivateField(remark, "createJob", createJob)
-        setPrivateField(remark, "downloadJob", downloadJob)
-
-        coordinator.onNoteChanged()
-
-        assertTrue(createJob.isCancelled)
-        assertTrue(downloadJob.isCancelled)
-        assertNull(privateField<Job?>(remark, "createJob"))
-        assertNull(privateField<Job?>(remark, "downloadJob"))
-    }
-
     // ── ジョブ停止（状態リセットだけでは防げない後着）────────────────────────
 
     /**
@@ -500,6 +482,8 @@ class NoteSessionCoordinatorTest {
         val state = coordinator.uiState.value
         assertTrue(state.summaryState is SummaryState.Idle)
         assertTrue(state.quizState is QuizState.Idle)
+        assertTrue(state.marginMemoState is MarginMemoState.Idle)
+        assertEquals(false, state.isMarginMemoSheetVisible)
         assertNull(state.sectionChat)
     }
 
@@ -832,8 +816,8 @@ class NoteSessionCoordinatorTest {
     private fun assertAllControllersDirty(state: NoteUiState) {
         assertTrue("Summary", state.summaryState !is SummaryState.Idle)
         assertTrue("Quiz", state.quizState !is QuizState.Idle)
+        assertTrue("MarginMemo(余白メモ)", state.marginMemoState !is MarginMemoState.Idle)
         assertTrue("SectionChat", state.sectionChat != null)
-        assertTrue("Remark(ひとこと)", state.remarkState !is RemarkState.Idle)
         assertTrue("Annotation(一覧)", state.annotationListState !is AnnotationListState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
@@ -858,8 +842,9 @@ class NoteSessionCoordinatorTest {
         summaryState = SummaryState.Success("要約"),
         relatedNotesState = RelatedNotesState.Success(emptyList(), emptyList()),
         quizState = QuizState.Success(sourceTitle = "旧ノート", cards = emptyList()),
+        marginMemoState = MarginMemoState.Ready(memos = emptyList()),
+        isMarginMemoSheetVisible = true,
         wikilinkTitles = setOf("旧リンク"),
-        remarkState = RemarkState.Error(message = "失敗", sourceTitle = "旧ノート"),
         distillState = DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
         annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),

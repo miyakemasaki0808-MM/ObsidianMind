@@ -1,9 +1,9 @@
 package com.example.newproject.data
 
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
-import com.example.newproject.model.Reflection
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.validateReadingTrace
 import java.io.ByteArrayOutputStream
@@ -44,6 +44,15 @@ internal object ReadingTraceJson {
                     .put(KEY_VISIT_PROGRESS, visit.progressPercent)
             )
         }
+        val memos = JSONArray()
+        trace.memos.forEach { memo ->
+            memos.put(
+                JSONObject()
+                    .put(KEY_MEMO_TEXT, memo.text)
+                    .put(KEY_MEMO_WRITTEN_AT, memo.writtenAtEpochMillis)
+                    .put(KEY_MEMO_SECTION, memo.sectionTitle ?: JSONObject.NULL)
+            )
+        }
         val root = JSONObject()
             .put(KEY_SCHEMA_VERSION, trace.schemaVersion)
             .put(KEY_RELATIVE_PATH, trace.vaultRelativePath)
@@ -57,12 +66,10 @@ internal object ReadingTraceJson {
             .put(KEY_MARKED_SUMMARY, trace.markedSummary ?: JSONObject.NULL)
             .put(KEY_MARKED_KIND, trace.markedKind?.name ?: JSONObject.NULL)
             .put(KEY_TOTAL_VISIT_COUNT, trace.totalVisitCount)
-            .put(KEY_REMARK, trace.reflection?.remark ?: JSONObject.NULL)
-            .put(KEY_REMARKED_AT, trace.reflection?.remarkedAtEpochMillis ?: JSONObject.NULL)
-            .put(KEY_REPLY, trace.reflection?.reply ?: JSONObject.NULL)
-            .put(KEY_REPLIED_AT, trace.reflection?.repliedAtEpochMillis ?: JSONObject.NULL)
-            .put(KEY_MIRRORED, trace.reflection?.mirrored ?: JSONObject.NULL)
-            .put(KEY_CHECKSUM, checksumOf(trace))
+            .put(KEY_MEMOS, memos)
+            // **ひとことの3欄は書かない。** v7 で読み捨てた欄なので、
+            // 書き戻すと消したはずのものが復活する。
+            .put(KEY_CHECKSUM, checksumOf(trace, legacy = null))
         // 人が読める体裁で書く（ユーザーが中身を確認・修復できることを優先）。
         return root.toString(2).toByteArray(Charsets.UTF_8)
     }
@@ -81,6 +88,27 @@ internal object ReadingTraceJson {
                 )
             }
             val version = root.getInt(KEY_SCHEMA_VERSION)
+            // **ひとことの3欄は v7 で読み捨てるが、checksum のためだけに読む。**
+            // v3〜v6 の正規形はこれらを含むので、読まずに照合すると
+            // **正しい旧ファイルが全部破損扱いになり、訪問履歴まで失う**
+            // （→ features/reflect_margin_memo.md 判断6）。モデルへは載せない。
+            val legacy = if (version in 3..6) {
+                root.stringOrNull(KEY_REMARK)?.let { remark ->
+                    LegacyReflection(
+                        remark = remark,
+                        // v3 は平坦な remark 1本で日時を持たない。正規形も書いていない。
+                        remarkedAtEpochMillis =
+                            if (version >= 4) root.optLong(KEY_REMARKED_AT, 0L) else 0L,
+                        reply = if (version >= 4) root.stringOrNull(KEY_REPLY) else null,
+                        repliedAtEpochMillis =
+                            if (version >= 4) root.longOrNull(KEY_REPLIED_AT) else null,
+                        mirrored = if (version >= 5) root.stringOrNull(KEY_MIRRORED) else null
+                    )
+                }
+            } else {
+                null
+            }
+            val memosJson = if (version >= 7) root.getJSONArray(KEY_MEMOS) else JSONArray()
             val trace = ReadingTrace(
                 vaultRelativePath = root.getString(KEY_RELATIVE_PATH),
                 noteTitle = root.getString(KEY_NOTE_TITLE),
@@ -93,26 +121,15 @@ internal object ReadingTraceJson {
                 // v1 のファイルにこの項目が書かれていても読まない。v1 の checksum は
                 // この値を含まないため、読むと改変し放題の入口になる。
                 totalVisitCount = if (version >= 2) root.getInt(KEY_TOTAL_VISIT_COUNT) else visits.size,
-                // v3 で追加。v1/v2 の checksum はこの値を含まないので、
-                // 旧版のファイルに書かれていても読まない（totalVisitCount と同じ理由）。
-                //
-                // **v3 は平坦な remark 1本だったので、返事なしの組として読む。**
-                // 日時も持っていないため 0 を入れる（「いつ書いたか不明」を
-                // null で表すと reply 側の対応関係と紛らわしくなる）。
-                reflection = if (version >= 3) {
-                    root.stringOrNull(KEY_REMARK)?.let { remark ->
-                        Reflection(
-                            remark = remark,
-                            remarkedAtEpochMillis =
-                                if (version >= 4) root.optLong(KEY_REMARKED_AT, 0L) else 0L,
-                            reply = if (version >= 4) root.stringOrNull(KEY_REPLY) else null,
-                            repliedAtEpochMillis =
-                                if (version >= 4) root.longOrNull(KEY_REPLIED_AT) else null,
-                            mirrored = if (version >= 5) root.stringOrNull(KEY_MIRRORED) else null
-                        )
-                    }
-                } else {
-                    null
+                // v7 で追加。旧版の checksum はこの値を含まないので、
+                // 書かれていても読まない（totalVisitCount と同じ理由）。
+                memos = (0 until memosJson.length()).map { index ->
+                    val memo = memosJson.getJSONObject(index)
+                    MarginMemo(
+                        text = memo.getString(KEY_MEMO_TEXT),
+                        writtenAtEpochMillis = memo.getLong(KEY_MEMO_WRITTEN_AT),
+                        sectionTitle = memo.stringOrNull(KEY_MEMO_SECTION)
+                    )
                 },
                 // v5 までの `aiSummary` はすべて俯瞰要約なので、種別を補って読む。
                 // **補わないと種別と訪問数の対の検証で既存ファイルが全部破損扱いになる。**
@@ -133,7 +150,7 @@ internal object ReadingTraceJson {
             validateReadingTrace(trace)
             // checksum は**書かれた版の正規形**で照合する。現行版の正規形で計算すると、
             // 既存の v1 ファイルが軒並み不一致＝破損扱いになる。
-            require(root.getString(KEY_CHECKSUM) == checksumOf(trace)) {
+            require(root.getString(KEY_CHECKSUM) == checksumOf(trace, legacy)) {
                 "痕跡ファイルの整合性を確認できません。"
             }
             // ここから先はメモリ上では常に現行版。encode が旧版を書き戻すことはない。
@@ -143,7 +160,22 @@ internal object ReadingTraceJson {
         }
     }
 
-    private fun checksumOf(trace: ReadingTrace): String = sha256Hex(canonicalPayload(trace))
+    /**
+     * v7 で読み捨てたひとことの3欄。**モデルではなくデコーダの中だけで持つ。**
+     *
+     * checksum を**書かれた版の正規形**で照合するために要る。移行の知識が
+     * 置かれるべき場所はここしかない（モデルへ戻すと欄を消した意味が無くなる）。
+     */
+    private class LegacyReflection(
+        val remark: String,
+        val remarkedAtEpochMillis: Long,
+        val reply: String?,
+        val repliedAtEpochMillis: Long?,
+        val mirrored: String?
+    )
+
+    private fun checksumOf(trace: ReadingTrace, legacy: LegacyReflection?): String =
+        sha256Hex(canonicalPayload(trace, legacy))
 
     /**
      * checksum 計算用の正規形。
@@ -160,8 +192,15 @@ internal object ReadingTraceJson {
      * **版ごとに形が違う。** v1 のファイルは v1 の正規形で checksum が計算されている
      * ため、現行版の形で照合すると既存の痕跡が全部「破損」になる。追加した項目は
      * 末尾に足すだけにして、旧版の並びはそのまま残す。
+     *
+     * **窓は欄ごとに違う。ここを一律にすると訪問履歴まで失う。** ひとことの3欄は
+     * 同時に入ったのではなく、`remark` が v3、日時と返事が v4、映し返しが v5 と
+     * **1つずつ足されている**。null も存在フラグを1バイト書くので、
+     * 「その版にまだ無かった欄」を足すだけでハッシュが変わり、正しい旧ファイルが
+     * 破損扱いになる（→ features/reflect_margin_memo.md 判断6）。
+     * v7 では3欄とも書かないので、上端も閉じた窓で囲む。
      */
-    private fun canonicalPayload(trace: ReadingTrace): ByteArray {
+    private fun canonicalPayload(trace: ReadingTrace, legacy: LegacyReflection?): ByteArray {
         val buffer = ByteArrayOutputStream()
         DataOutputStream(buffer).use { out ->
             out.writeInt(trace.schemaVersion)
@@ -177,17 +216,17 @@ internal object ReadingTraceJson {
             out.writeInt(trace.aiSummaryVisitCount ?: ABSENT_VISIT_COUNT)
             // v2 で追加。v1 には無いので書かない。
             if (trace.schemaVersion >= 2) out.writeInt(trace.totalVisitCount)
-            // v3 で追加。v1/v2 には無いので書かない。
-            if (trace.schemaVersion >= 3) out.writeSizedNullable(trace.reflection?.remark)
-            // v4 で追加。**v3 の正規形は remark 1本だけ**なので、
+            // ひとことは v3 で追加、v7 で読み捨て。v1/v2 には無いので書かない。
+            if (trace.schemaVersion in 3..6) out.writeSizedNullable(legacy?.remark)
+            // 返事は v4 で追加。**v3 の正規形は remark 1本だけ**なので、
             // 既存の v3 ファイルを破損扱いにしないよう版で分ける。
-            if (trace.schemaVersion >= 4) {
-                out.writeLong(trace.reflection?.remarkedAtEpochMillis ?: ABSENT_TIMESTAMP)
-                out.writeSizedNullable(trace.reflection?.reply)
-                out.writeLong(trace.reflection?.repliedAtEpochMillis ?: ABSENT_TIMESTAMP)
+            if (trace.schemaVersion in 4..6) {
+                out.writeLong(legacy?.remarkedAtEpochMillis ?: ABSENT_TIMESTAMP)
+                out.writeSizedNullable(legacy?.reply)
+                out.writeLong(legacy?.repliedAtEpochMillis ?: ABSENT_TIMESTAMP)
             }
-            // v5 で追加。v4 の正規形には無いので、既存ファイルを破損扱いにしない。
-            if (trace.schemaVersion >= 5) out.writeSizedNullable(trace.reflection?.mirrored)
+            // 映し返しは v5 で追加。v4 の正規形には無いので、既存ファイルを破損扱いにしない。
+            if (trace.schemaVersion in 5..6) out.writeSizedNullable(legacy?.mirrored)
             // v6 で追加。種別と印を checksum の対象に入れる — **印はユーザーの意図**なので、
             // 改変が検出できないと「押していない印」が出せてしまう。
             if (trace.schemaVersion >= 6) {
@@ -195,6 +234,15 @@ internal object ReadingTraceJson {
                 out.writeLong(trace.markedAtEpochMillis ?: ABSENT_TIMESTAMP)
                 out.writeSizedNullable(trace.markedSummary)
                 out.writeSizedNullable(trace.markedKind?.name)
+            }
+            // v7 で追加。旧版の正規形には無いので、既存ファイルを破損扱いにしない。
+            if (trace.schemaVersion >= 7) {
+                out.writeInt(trace.memos.size)
+                trace.memos.forEach { memo ->
+                    out.writeSized(memo.text)
+                    out.writeLong(memo.writtenAtEpochMillis)
+                    out.writeSizedNullable(memo.sectionTitle)
+                }
             }
         }
         return buffer.toByteArray()
@@ -262,6 +310,10 @@ internal object ReadingTraceJson {
     private const val KEY_REPLY = "reply"
     private const val KEY_REPLIED_AT = "repliedAt"
     private const val KEY_MIRRORED = "mirrored"
+    private const val KEY_MEMOS = "memos"
+    private const val KEY_MEMO_TEXT = "text"
+    private const val KEY_MEMO_WRITTEN_AT = "writtenAt"
+    private const val KEY_MEMO_SECTION = "section"
     private const val KEY_CHECKSUM = "checksum"
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"

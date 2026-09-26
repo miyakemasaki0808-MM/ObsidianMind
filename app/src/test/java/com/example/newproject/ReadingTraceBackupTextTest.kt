@@ -6,6 +6,7 @@ import com.example.newproject.model.ReadingTraceImportWithholdReason
 import com.example.newproject.model.WithheldImport
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.ui.exportSummary
+import com.example.newproject.ui.backupProtectedDataText
 import com.example.newproject.ui.importPlanSummary
 import com.example.newproject.ui.importResultSummary
 import com.example.newproject.ui.revisedPlanNotice
@@ -19,61 +20,76 @@ import org.junit.Test
 /** 退避画面の文面。**「自分の言葉が失われるか」に先に答えているか**を見る。 */
 class ReadingTraceBackupTextTest {
 
-    private fun plan(
-        added: Int = 3,
-        merged: Int = 2,
-        localReplyReplaced: Int = 0,
-        importedReplyDropped: Int = 0
-    ) = ReadingTraceImportPlan(
-        added = added,
-        merged = merged,
-        localReplyReplaced = localReplyReplaced,
-        importedReplyDropped = importedReplyDropped,
-        withheld = emptyList()
-    )
-
+    /**
+     * **退避が守るものの名前が、いま保護している欄と一致していること。**
+     *
+     * これが無かったので、v7 で廃止した「ひとことと返事」を書き出すと案内する文が
+     * **実機検証まで残った**。文言の検査は補助的に見えるが、
+     * ここは**ユーザーが「自分の言葉は守られるのか」を判断する唯一の説明**である。
+     */
     @Test
-    fun `端末側の返事が消えるときは件数より先にその事実を言う`() {
-        val text = importPlanSummary(plan(localReplyReplaced = 1))
+    fun `退避の説明はいま守っているものを名前で挙げる`() {
+        val text = backupProtectedDataText()
 
-        assertTrue("この端末の返事が置き換わることを言っていない: $text", text.contains("この端末に書いた返事"))
-        assertTrue(
-            "件数より先に損失を言っていない: $text",
-            text.indexOf("返事") < text.indexOf("新しく増える")
-        )
+        listOf("訪問", "要約", "まだ考えたい", "余白メモ").forEach { name ->
+            assertTrue("守っているのに名前が出ていない: $name", text.contains(name))
+        }
     }
 
     /**
-     * **通常の往復（書き出したあとに返事を書き足す）では、失われるのは退避ファイル側。**
-     * 方向を取り違えると「あなたの返事が置き換わります」と逆の告知になる。
+     * **廃止した欄を「復元できる」と案内しない。**
+     *
+     * 守られないものを守ると言うのは、守られるものを言い忘れるより悪い
+     * （ユーザーが退避を信じて元を消しうる）。
+     * **欄を落としたら、その名前をここへ足す。**
      */
     @Test
-    fun `退避側の返事が使われないときは端末側が消えると言わない`() {
-        val text = importPlanSummary(plan(importedReplyDropped = 1))
+    fun `退避の説明は廃止した欄を案内しない`() {
+        val text = backupProtectedDataText()
 
-        assertTrue("退避側が使われないことを言っていない: $text", text.contains("退避ファイル側の返事が使われません"))
+        RETIRED_FIELD_NAMES.forEach { name ->
+            assertTrue("廃止した欄を書き出せると案内している: $name", !text.contains(name))
+        }
+    }
+
+    private fun plan(
+        added: Int = 3,
+        merged: Int = 2,
+        withheld: List<WithheldImport> = emptyList()
+    ) = ReadingTraceImportPlan(added = added, merged = merged, withheld = withheld)
+
+    private fun overCapacity(path: String) =
+        WithheldImport(path, ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY)
+
+    private companion object {
+        /** schema v7 で読み捨てた欄。**画面の説明へ二度と出さない。** */
+        val RETIRED_FIELD_NAMES = listOf("ひとこと", "返事", "映し返し")
+    }
+
+    /**
+     * **保留は損失ではない。** 「消えません」まで言い切らないと、
+     * 上限に当たったユーザーは自分のメモが捨てられたと読む。
+     */
+    @Test
+    fun `上限で保留したノートは件数より先に、どちらも消えないと言う`() {
+        val text = importPlanSummary(plan(withheld = listOf(overCapacity("ideas/habit.md"))))
+
+        assertTrue("保留を言っていない: $text", text.contains("そのままにします"))
+        assertTrue("消えないと言っていない: $text", text.contains("どちらのメモも消えません"))
         assertTrue(
-            "端末側の返事が消えると誤告知している: $text",
-            !text.contains("この端末に書いた返事が退避ファイル側の返事に置き換わります")
+            "件数より先に保留を言っていない: $text",
+            text.indexOf("そのままにします") < text.indexOf("新しく増える")
         )
     }
 
+    /** 保留が無ければ、失われるものは1つも無い。 */
     @Test
-    fun `両方向あるときは両方を言う`() {
-        val text = importPlanSummary(plan(localReplyReplaced = 2, importedReplyDropped = 3))
-
-        assertTrue(text.contains("2件のノートで、この端末に書いた返事"))
-        assertTrue(text.contains("3件のノートでは"))
-    }
-
-    @Test
-    fun `失われる返事が無いことも明示する`() {
+    fun `保留が無ければ失われるメモは無いと言う`() {
         val text = importPlanSummary(plan())
 
-        assertTrue(text.contains("失われる返事はありません"))
+        assertTrue("失われないことを言っていない: $text", text.contains("失われるメモはありません"))
     }
 
-    // 二度目の確認を求められた利用者が最初に知りたいのは「どこまで進んだか」。
     @Test
     fun `作り直した下見はまだ書いていないことを先に言う`() {
         assertTrue(revisedPlanNotice().contains("まだ1件も書き戻していません"))

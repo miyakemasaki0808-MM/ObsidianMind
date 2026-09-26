@@ -509,10 +509,13 @@ class NoteReadingFlowTest {
             onOpenQuizResult = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
+            onOpenMarginMemo = {},
+            onSaveMarginMemo = { _, _ -> },
+            onDeleteMarginMemo = {},
+            onDismissMarginMemo = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
             onToggleReadingTraceMark = {},
-            onOpenReflection = {},
             onVigilithActionChanged = {}
         )
     }

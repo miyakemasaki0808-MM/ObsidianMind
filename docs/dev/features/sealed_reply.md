@@ -1,6 +1,10 @@
 # 封をした返事
 
-**状態:** Draft — 未実装。Fable 5.1 のアイデア帳からオーナー判断で深掘りした設計の下書き（2026-09-14）
+**状態:** **前提を失った（2026-09-20）。** 本書は「ひとことへの返事に封をする」設計だが、
+**ひとことは廃止され、返事という欄がもう無い**（→ [余白メモ](reflect_margin_memo.md)）。
+**このままでは実装できない。**
+**2026-09-20、オーナー判断で据え置きとした** — 余白メモへ向け直すことも取り下げることもせず、
+前提を失ったまま残す。決めるのは開発が再開してから。以下は 2026-09-14 時点の下書きのまま
 **最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
 **関連コード:** 予定 — `controller/RemarkController.kt` / `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `model/ReadingTrace.kt` / `model/state/RemarkState.kt` / `ui/screen/RemarkScreen.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** 予定 — `RemarkControllerTest` / `ReunionCardControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest`

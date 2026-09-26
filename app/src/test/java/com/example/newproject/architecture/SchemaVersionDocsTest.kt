@@ -113,7 +113,7 @@ class SchemaVersionDocsTest {
         /** 現行版に触れる義務がある文書。**版を上げたら、ここへ挙がっているものは全部直す。** */
         val DOCS_STATING_CURRENT_VERSION = listOf(
             "dev/features/reflect_reading_trace.md",
-            "dev/features/reflect_remark.md",
+            "dev/features/reflect_margin_memo.md",
             "dev/features/reading_trace_backup.md"
         )
 

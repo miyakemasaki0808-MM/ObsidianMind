@@ -3,9 +3,7 @@ package com.example.newproject
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.DistillController
 import com.example.newproject.controller.QuizController
-import com.example.newproject.controller.RemarkController
 import com.example.newproject.controller.SectionChatController
-import com.example.newproject.controller.ReplySaveOutcome
 import com.example.newproject.controller.SummaryController
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryAssessment
@@ -31,7 +29,6 @@ import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
-import com.example.newproject.model.state.RemarkState
 import com.example.newproject.model.state.SummaryState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -65,24 +62,28 @@ import org.junit.Test
  *
  * ## 本番の呼び出し式との対応（1対1）
  *
- * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**10件**。
- * **6件を「全経路」と名乗って4件を実行していなかった**ので、対応を明示する。
+ * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**9件**。
+ * **1件でも表から漏れると、母数の主張そのものが嘘になる**ので、grep の結果と1対1で並べる。
  *
  * | # | 本番の呼び出し | 起点 | 例外の観測 | キャンセルの観測 |
  * |---|---|---|---|---|
- * | 1 | `DistillController:107` | `start()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 2 | `QuizController:61` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 3 | `RemarkController:107` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 4 | `RemarkController:263` | `saveReply()`（映し返し） | `RemarkControllerTest`（無音） | `RemarkControllerTest`（**Jobの完了原因**） |
- * | 5 | `SectionChatController:113` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 6 | `SectionChatController:207` | `sendMessage()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 7 | `SummarizeUseCase:29` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 8 | `SearchPickerUseCase:45` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 9 | `RelatedNotesUseCase:68` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 10 | `ReunionCardController:280` | `revealTrace()` | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 1 | `DistillController` | `start()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 2 | `QuizController` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 3 | `SectionChatController` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 4 | `SectionChatController` | `sendMessage()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 5 | `SummarizeUseCase` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 6 | `SearchPickerUseCase` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 7 | `RelatedNotesUseCase` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 8 | `ReunionCardController` | `revealTrace()` | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 9 | `NoteFieldController` | `classify()` | **観測点が無い**（下記） | `NoteFieldControllerTest`（再throw） |
  *
- * 4と10だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
- * （映し返しは「何も出さない」、読書痕跡は「要約なしのカード」）。足場が既存テストにある。
+ * 8だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
+ * （読書痕跡は「要約なしのカード」）。足場が既存テストにある。
+ *
+ * **9には観測点が無い。** 分野判定は進捗も失敗も画面へ出さず、**走行状態そのものを持たない**
+ * （→ system/architecture.md 判断4 の例外）。残りうるフラグが無いので、
+ * ここで見る「走行状態を残さない」に対応する観測対象が存在しない。
+ * **観測を省いたのではなく、観測すべきものが無い。**
  *
  * ## 観測点は「変異を殺せるか」で選ぶ
  *
@@ -120,17 +121,6 @@ class AiAvailabilityContractTest {
 
         assertNotRunning("クイズ", state.value.quizState !is QuizState.Loading)
         assertTrue(state.value.quizState is QuizState.Error)
-    }
-
-    @Test
-    fun `ひとことは状態確認の例外で走行状態を残さない`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        remarkController(state, throwingClient())
-            .create("対話について", BODY, relatedNotes = emptyList(), aiNotes = emptyList())
-        advanceUntilIdle()
-
-        assertNotRunning("ひとこと", state.value.remarkState !is RemarkState.Loading)
-        assertTrue(state.value.remarkState is RemarkState.Error)
     }
 
     @Test
@@ -251,12 +241,6 @@ class AiAvailabilityContractTest {
         advanceUntilIdle()
         assertTrue("クイズは生成中のまま", quiz.value.quizState is QuizState.Loading)
 
-        val remark = NoteUiStateStore(NoteUiState())
-        remarkController(remark, cancellingClient(cancel))
-            .create("対話について", BODY, relatedNotes = emptyList(), aiNotes = emptyList())
-        advanceUntilIdle()
-        assertTrue("ひとことは生成中のまま", remark.value.remarkState is RemarkState.Loading)
-
         val summary = NoteUiStateStore(NoteUiState())
         summaryController(summary, cancellingClient(cancel)).fetch("ノートA", "Aの本文")
         advanceUntilIdle()
@@ -337,19 +321,6 @@ class AiAvailabilityContractTest {
             state = state.summaryWriter,
             onModelReady = { _, _ -> },
             awaitDwell = passDwell
-        )
-
-    private fun TestScope.remarkController(state: NoteUiStateStore, ai: AiClient) =
-        RemarkController(
-            scope = this,
-            aiClient = ai,
-            state = state.remarkWriter,
-            onRemarkReady = {},
-            persistReply = { _, _, _ -> ReplySaveOutcome.Saved },
-            loadReflection = { null },
-            persistMirrored = { _, _ -> },
-            currentContent = { BODY },
-            excerptDispatcher = dispatcher()
         )
 
     private fun TestScope.distillController(state: NoteUiStateStore, ai: AiClient) =

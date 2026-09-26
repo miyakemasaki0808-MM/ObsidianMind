@@ -29,6 +29,7 @@ import com.example.newproject.data.toUri as toDocumentUri
 import com.example.newproject.model.DocumentRef
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.notePaperTone
@@ -507,20 +508,18 @@ class NoteViewModel internal constructor(
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
 
-    // ── ノートへのひとこと（実装は RemarkController）───────────────────────────
+    // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    fun createRemark(
-        title: String,
-        content: String,
-        relatedNotes: List<RelatedNote>,
-        aiNotes: List<RelatedNote>
-    ) = session.createRemark(title, content, relatedNotes, aiNotes)
+    /** シートを開く。**ここでだけ**サイドカーを1件読む。 */
+    fun openMarginMemoSheet() = session.openMarginMemoSheet()
 
-    /** 専用画面を開いたときに、保存済みの「ひとこと＋返事」を読み戻す。 */
-    fun restoreSavedRemark(title: String) = session.restoreSavedRemark(title)
+    fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
 
-    /** 返事を残す。書いた時点で対話は完了するので、AIへ再送しない。 */
-    fun saveRemarkReply(reply: String) = session.saveRemarkReply(reply)
+    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
+    fun saveMarginMemo(text: String, sectionTitle: String?) =
+        session.saveMarginMemo(text, sectionTitle)
+
+    fun deleteMarginMemo(memo: MarginMemo) = session.deleteMarginMemo(memo)
 
     private suspend fun loadNoteForDistill(
         contentResolver: ContentResolver,

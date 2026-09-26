@@ -47,14 +47,13 @@
 | 機能 | ケース表 | スモークID |
 |---|---|---|
 | 分野色（外観・初回確認は通し版） | [note_field_color.md](note_field_color.md) | `FIELDDEV-03` `FIELDDEV-04` `FIELDDEV-05` |
-| 返事の保存先分離 | [reading_trace_reply.md](reading_trace_reply.md) | `REPLYDEV-01` `REPLYDEV-02` `REPLYDEV-03` |
 | アプリ起動（**入口**） | [app_launch.md](app_launch.md) | `LAUNCH-01` `LAUNCH-02` `LAUNCH-04` |
 | アプリ起動の再生成（回転・Fold） | [app_launch_recreation.md](app_launch_recreation.md) | `LAUNCH-05a` `LAUNCH-05b` |
 | 冊子モード | [booklet_mode.md](booklet_mode.md) | `BOOK-01` `BOOK-06` `BOOK-11` `BOOK-13` `BOOK-51` `BOOK-53` `BOOK-64` |
 | 蒸留 | [reflect_distill.md](reflect_distill.md) | `DIST-01` `DIST-11` `DIST-12` `DIST-13` `DIST-15` |
 | 読書痕跡の退避 | [reading_trace_backup.md](reading_trace_backup.md) | `BACKUP-01` `BACKUP-02` `BACKUP-06` `BACKUP-09` `BACKUP-16` |
 | 読書痕跡の整理 | [reading_trace_cleanup.md](reading_trace_cleanup.md) | `CLEAN-01` `CLEAN-03` `CLEAN-04` |
-| 別のひとこと | [remark_regenerate.md](remark_regenerate.md) | `REMARK-01` `REMARK-04` |
+| 余白メモ | [margin_memo.md](margin_memo.md) | `MEMO-02` `MEMO-03` `MEMO-04` `MEMO-08` `MEMO-10` |
 | ノート内画像 | [note_image_rendering.md](note_image_rendering.md) | `IMAGE-01` `IMAGE-04` `IMAGE-09` `IMAGE-11` |
 | 再会カード | [reunion_card.md](reunion_card.md) | `REUNION-01` `REUNION-04` `REUNION-05` `REUNION-11` |
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |

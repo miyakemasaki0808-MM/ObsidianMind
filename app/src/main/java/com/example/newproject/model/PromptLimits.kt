@@ -72,16 +72,6 @@ object PromptLimits {
      */
     const val QUESTION_CHARACTERS = 400
 
-    /**
-     * ひとことへの返事のうち、**AIへ渡すぶん**の上限。**保存する返事は切らない。**
-     *
-     * 出力枠が256トークンしかないので、入力を長くしても返ってくる1文は変わらない。
-     * 実際の切り出し（先頭と末尾を残して真ん中を落とす）は `excerptReplyForPrompt` が持つ。
-     * **数字はここが正本**。`ai` と `domain` の両方から見えるのは葉の `model` だけなので、
-     * ここに置かないと同じ意味の数字が2つに割れる。
-     */
-    const val REPLY_CHARACTERS = 400
-
     /** AIピッカーの自然文クエリの上限。**ユーザーが直接打つ唯一の入力**なので長さの保証が無い。 */
     const val QUERY_CHARACTERS = 200
 
