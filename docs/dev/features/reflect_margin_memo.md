@@ -1,7 +1,7 @@
 # 余白メモ
 
-**状態:** Implemented — 実装済み・**実機検証待ち**。[ノートへのひとこと](reflect_remark.md) は撤去済み
-**最終検証:** —（**机上ゲートのみ。実機と突き合わせた日はまだ無い**）
+**状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。[ノートへのひとこと](reflect_remark.md) は撤去済み
+**最終検証:** 2026-09-26 / `01d48b6`（通し版14ケース。**実SAFの障害・遅延・競合は未突合**）
 **関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** `MarginMemoComposerTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書
@@ -503,8 +503,12 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 - **instrumentation:** `MarginMemoSheetUiTest`。シートの中身を `ModalBottomSheet` から
   切り出してあるので、シートを開かずに入力の振る舞いを検査できる（調整シートと同じ切り分け）。
   端末AIを通さないので `Assume` による skip は要らない
-- **実機確認:** **未実施。** ケースは [margin_memo](../../review/device_validation/margin_memo.md)（MEMO-01〜14）。
-  とくに見るのは5つ — **初読の最中に置いて離脱し、次に開いて残っていること**（`Held` 経路）／
+- **実機確認:** **通し版14ケース全件成功**（2026-09-26・Pixel 10 Pro Fold）。
+  ケースは [margin_memo](../../review/device_validation/margin_memo.md)（MEMO-01〜14）。
+  **v3・v6 の両方で旧訪問を全件保持したまま v7 へ移行**し、旧5欄が消えて checksum も一致した。
+  退避の合流は保留1件で、20件側のファイルが全バイト不変。
+  `MarginMemoSheetUiTest` も端末で4件成功（+ 使い捨て2件）。
+  とくに見たのは5つ — **初読の最中に置いて離脱し、次に開いて残っていること**（`Held` 経路）／
   **満杯で入力欄の文字が消えないこと**／**旧版の痕跡を持つVaultで訪問履歴が消えないこと**
   （**v6 だけでなく、手元に v3 の痕跡があれば必ずそれで見る**）／
   **合流が上限を超えるノートが無変更で保留され、件数が下見と結果に出ること**／

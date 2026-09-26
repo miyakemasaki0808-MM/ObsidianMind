@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-26 | — | 柱2・余白メモを実機検証した。通し版14ケースと instrumentation 6件が成功し、退避画面の旧文言1件を起票した | [reflect_margin_memo](features/reflect_margin_memo.md) §10・[review](../review/README.md) |
 | 2026-09-24 | — | 解析書を現況だけに絞り、判断と経緯を正本へのリンクに替え、テストのクラス一覧を02の付録へ移した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) §15 |
 | 2026-09-20 | — | 余白メモの残件4件を机上解消・実機待ちへ更新し、保存待ちの入力欄を特定できないUIテスト1件を起票した | [review](../review/README.md) |
 | 2026-09-20 | — | 余白メモの実装修正を再レビューし、5件を机上解消・実機待ちとし、失敗時の残件3件と既存痕跡の上書き1件を記録した | [review](../review/README.md) |

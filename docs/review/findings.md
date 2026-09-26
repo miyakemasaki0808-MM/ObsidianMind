@@ -30,7 +30,6 @@
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
-| `2026-09-19-remark-regenerate-device-review/P2-1` | 同じひとことの再生成で保存済みの返事だけが失われることを実機で確認 | `統合` AI-8 |
 | `2026-09-20-margin-memo-implementation-review/P1-1` | 保存完了状態が残り、同じシートで次に入力したメモが消える | `起票` MEMO-5 |
 | `2026-09-20-margin-memo-implementation-review/P1-2` | 訪問保存の合流超過で保存済みメモを切り落とし、離脱後に失う | `起票` MEMO-6 |
 | `2026-09-20-margin-memo-implementation-review/P1-3` | バックアップ内の重複合流超過を捨て、一部だけ復元して成功扱いする | `起票` MEMO-7 |
@@ -43,4 +42,4 @@
 | `2026-09-20-margin-memo-implementation-fix-review/P2-1` | 保存失敗時の元入力が切り詰められ、新しい下書きがあると回収もできない | `統合` MEMO-5 |
 | `2026-09-20-margin-memo-implementation-fix-review/P2-2` | 訪問保存の失敗後処理が、完了した削除を退避への再追加で巻き戻す | `統合` MEMO-8 |
 | `2026-09-20-margin-memo-implementation-fix-review/P2-3` | 削除失敗でも預かりと退避から先に消し、一覧だけを復旧する | `統合` MEMO-12 |
-| `2026-09-20-margin-memo-implementation-recheck-review/P2-1` | 保存待ちのUIテストが消えたplaceholderを探し、下書き保持を検証できない | `起票` MEMO-14 |
+| `2026-09-26-margin-memo-device-review/P2-1` | 退避画面の説明が、廃止した「ひとことと返事」を書き出すと案内している | `起票` MEMO-15 |

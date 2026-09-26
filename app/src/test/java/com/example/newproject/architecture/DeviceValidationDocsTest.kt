@@ -251,8 +251,16 @@ class DeviceValidationDocsTest {
     }
 
     private companion object {
-        /** 手順を書く文書。**機能別ケースの形を当てない。** */
-        val PROCEDURE_DOCS = setOf("README.md", "quick_check.md")
+        /**
+         * 手順を書く文書。**機能別ケースの形を当てない。**
+         *
+         * **`progress.md` を含める。** 検証中だけ存在する使い捨ての進行記録で、
+         * ケース表ではない。除外し忘れていたため、**進行記録が在るあいだは
+         * この検査が通らず、共通手順の後処理7（検査）を後処理8（progress.md の削除）より
+         * 先に実行できなかった** — 手順が「順序を入れ替えない」と書いている側の順序を、
+         * 検査が禁じていた（2026-09-26 の実機検証で判明）。
+         */
+        val PROCEDURE_DOCS = setOf("README.md", "quick_check.md", "progress.md")
 
         /** 簡易版のスモーク行。`| 機能 | [file.md](file.md) | \`ID\` \`ID\` |` の3列目からIDを拾う。 */
         val SMOKE_ROW = Regex("""^\| [^|]+ \| \[([a-z_]+\.md)\]\([^)]+\) \|([^|]+)\|""", RegexOption.MULTILINE)
