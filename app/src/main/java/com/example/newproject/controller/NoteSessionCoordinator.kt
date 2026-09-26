@@ -209,6 +209,7 @@ internal class NoteSessionCoordinator(
         // ノート切替で解析は捨てられ、照合のJobも止まるので、旧ノートの結果を掴まない。
         awaitSectionModel = { sections.model.filterNotNull().first() },
         passageCache = reunionPassageCache,
+        awaitVisitSaves = readingTrace::awaitVisitSaves,
         clock = clock,
         ioDispatcher = ioDispatcher,
         // 候補の列挙も**解析と同じ口**に載せる。テストがテストスケジューラへ差し替えられないと、

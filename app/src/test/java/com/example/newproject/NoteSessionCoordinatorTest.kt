@@ -625,6 +625,36 @@ class NoteSessionCoordinatorTest {
         assertEquals("ideas/habit.md", env.trace.saved.single().vaultRelativePath)
     }
 
+    /**
+     * **初めて読んだノートを離れてすぐ同じノートを引くと、1回目の再会でカードが出る。**
+     *
+     * 離れた訪問の保存は `persistScope` で後から走る。再会の照合がそれより先に痕跡を読むと
+     * 「痕跡なし」で終わり、その再会ではカードが出ない（実機では2回目に引いたときに出た）。
+     * 並びは本番の Rediscover と同じ — 切替（離れた訪問の保存が始まる）→ 本文 → 照合。
+     */
+    @Test
+    fun `初読直後に同じノートを引くと、1回目の再会でカードが出る`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", "doc-1")
+        coordinator.reportReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+
+        coordinator.onNoteChanged()
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
+        runCurrent()
+        advanceTimeBy(NoteDwellGate.DWELL_MILLIS - 1)
+        runCurrent()
+
+        val card = coordinator.uiState.value.readingTraceCard
+        assertTrue("保存前の痕跡を読んで、1回目の再会でカードが出ていない", card != null)
+        assertEquals(1, card!!.visitCount)
+        coordinator.onNoteChanged()
+    }
+
     // ── 自動生成の門番（→ background_ai_ux.md §7）──────────────────────────
     // 門番そのものの規則は NoteDwellGateTest が見る。ここは**本番と同じ入口から**、
     // 自動で走る生成すべてに門番が配られていることと、切替の両方向を見る。

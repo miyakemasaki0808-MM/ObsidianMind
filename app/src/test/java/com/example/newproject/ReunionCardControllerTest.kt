@@ -150,6 +150,68 @@ class ReunionCardControllerTest {
         assertEquals(3, persistence.stored(PATH)!!.visits.size)
     }
 
+    // ── 離れた訪問の保存との順序（→ features/reunion_card.md「1回目の再会から枠を出す」）──
+
+    /** 離れた訪問の保存は後から走る。**照合がそれより先に読むと、初めて読んだ直後の再会でカードが出ない。** */
+    @Test
+    fun `離れた訪問の保存を待ってから照合する`() = runTest {
+        val persistence = FakePersistence()
+        val clock = TestClock()
+        val visits = leaveAfterReading(persistence, clock)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, clock, state = state, awaitVisitSaves = visits::awaitVisitSaves)
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        advanceUntilIdle()
+
+        assertEquals(1, state.value.readingTraceCard?.visitCount)
+    }
+
+    /** 逆向き — 保存を待っている間にノートを替えたら照合は止まり、**保存は止めない。** */
+    @Test
+    fun `保存待ちの間にノートを替えると照合は止まり、訪問は保存される`() = runTest {
+        val persistence = FakePersistence()
+        val clock = TestClock()
+        val visits = leaveAfterReading(persistence, clock)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, clock, state = state, awaitVisitSaves = visits::awaitVisitSaves)
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        controller.cancelForNoteChange()
+        advanceUntilIdle()
+
+        assertNull(state.value.readingTraceCard)
+        assertEquals(1, persistence.stored(PATH)!!.visits.size)
+    }
+
+    /** 保存が失敗しても照合は止まらず、手元の痕跡でカードを出す。**待ちも残らない。** */
+    @Test
+    fun `保存が失敗しても照合は進み、待つ保存は残らない`() = runTest {
+        val persistence = FakePersistence().apply {
+            put(traceAt(progress = 20))
+            failSave = true
+        }
+        val clock = TestClock()
+        val visits = leaveAfterReading(persistence, clock)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, clock, state = state, awaitVisitSaves = visits::awaitVisitSaves)
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        advanceUntilIdle()
+
+        assertEquals(2, state.value.readingTraceCard?.visitCount)
+        assertNoVisitSaveLeft(visits)
+    }
+
+    @Test
+    fun `保存が終われば、待つ保存は残らない`() = runTest {
+        val visits = leaveAfterReading(FakePersistence(), TestClock())
+        assertEquals("保存を待てる形になっていない", 1, visits.runningVisitSaveCount())
+        advanceUntilIdle()
+
+        assertNoVisitSaveLeft(visits)
+    }
+
     // ── 途中まで — 前後の要約と続きから読む ───────────────────────────────
 
     @Test
@@ -1109,6 +1171,21 @@ private fun TestScope.readOnce(persistence: FakePersistence, clock: TestClock, b
     advanceUntilIdle()
 }
 
+/** 初めて読んで離れる。**保存は起動しただけで、まだ流していない。** */
+private fun TestScope.leaveAfterReading(persistence: FakePersistence, clock: TestClock): ReadingTraceController {
+    val visits = visitController(persistence, clock)
+    visits.onNoteOpened(PATH, "習慣について", "doc-1")
+    visits.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+    clock.advance(10_000L)
+    visits.flush()
+    return visits
+}
+
+/** 終わった保存が1本も残っていない。 */
+private fun assertNoVisitSaveLeft(visits: ReadingTraceController) {
+    assertEquals("終わった保存が待ちに残っている", 0, visits.runningVisitSaveCount())
+}
+
 private fun TestScope.controller(
     persistence: ReadingTracePersistence,
     clock: TestClock,
@@ -1120,7 +1197,8 @@ private fun TestScope.controller(
     awaitDwell: suspend () -> Unit = passDwell,
     body: String = HEADED_BODY,
     passageCache: SummaryCache = InMemorySummaryCache(),
-    awaitSectionModel: suspend () -> NoteSectionModel = { buildNoteSectionModel(body) }
+    awaitSectionModel: suspend () -> NoteSectionModel = { buildNoteSectionModel(body) },
+    awaitVisitSaves: suspend () -> Unit = {}
 ): ReunionCardController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReunionCardController(
@@ -1133,6 +1211,7 @@ private fun TestScope.controller(
         currentVaultKey = { vault.key },
         awaitSectionModel = awaitSectionModel,
         passageCache = passageCache,
+        awaitVisitSaves = awaitVisitSaves,
         clock = clock::now,
         ioDispatcher = dispatcher,
         // 候補の列挙もテストスケジューラで回す。Dispatchers.Default のままだと

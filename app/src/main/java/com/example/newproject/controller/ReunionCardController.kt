@@ -71,6 +71,11 @@ internal class ReunionCardController(
      * （→ features/reunion_card.md 判断6「途中までのとき — 前後の要約」）。
      */
     private val passageCache: SummaryCache,
+    /**
+     * 離れたノートの訪問の保存が終わるまで待つ。**照合は痕跡を読む前にこれを通す**
+     * （保存前の痕跡を読むと、初めて読んだ直後の再会でカードが出ない）。
+     */
+    private val awaitVisitSaves: suspend () -> Unit,
     private val clock: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** 候補の列挙と前後の切り出しは入力サイズに比例するので Main の外で回す（→ lessons L13）。 */
@@ -141,6 +146,10 @@ internal class ReunionCardController(
         val vaultKey = currentVaultKey() ?: return
         revealedPath = vaultRelativePath
         revealJob = scope.launch {
+            // **離れた訪問の保存を待ってから読む。** 切替の直後に同じノートを引くと、
+            // 保存前の痕跡を読んでその再会ではカードが出ない。
+            // 待っている間の切替は、この Job の取消で抜ける（世代照合は重ねない）。
+            awaitVisitSaves()
             val trace = withContext(ioDispatcher) {
                 (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)?.trace
             } ?: return@launch
