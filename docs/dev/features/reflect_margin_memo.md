@@ -1,7 +1,7 @@
 # 余白メモ
 
 **状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。[ノートへのひとこと](reflect_remark.md) は撤去済み
-**最終検証:** 2026-09-26 / `01d48b6`（通し版14ケース。**実SAFの障害・遅延・競合は未突合**）
+**最終検証:** 2026-09-26 / `01d48b6`（通し版14ケース。**障害・競合・長い見出しの境界は未突合** → §10）
 **関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** `MarginMemoComposerTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書
@@ -514,9 +514,14 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
   **合流が上限を超えるノートが無変更で保留され、件数が下見と結果に出ること**／
   **再会カードの行からシートが開くこと**
 - **保証していないこと:**
-  - **保存が失敗した直後に削除が挟まる順序は、テストで再現できていない。**
+  - **実機で踏んでいないのは、障害と競合の側である。** 通した14ケースは操作面で、
+    **実SAFの書込障害・読取障害・遅延・競合は発生させていない**（失敗経路は実Composeへの
+    状態注入で見た）。長い見出しの境界、回転・Fold、TalkBack、
+    プロセス終了をまたぐ保持も未実施。外観の判定に画像を使ったのはAIタブの1枚だけ
+  - **保存が失敗した直後に削除が挟まる順序は、こちらのテストでは再現できていない。**
     退避の更新は保存と同じ錠の内側に置いたので**構造としては挟まれないが、
-    その順序を作る失敗するテストを書けていない。** 外部レビューの再現が唯一の確認である
+    その順序を作る失敗するテストを書けていない。**
+    外部レビューが Main と IO のキューを個別に進めて再現し、閉じたことを確認している
   - **破損した痕跡は上書きで直さなくなった。** v7 からはユーザーが書いた言葉が入っているので、
     読めないファイルへ書くと保存済みのメモを消す。**壊れた痕跡はそのノートの記録を止める**ので、
     整理画面から手で消してもらう
