@@ -834,31 +834,6 @@ class NoteSessionCoordinatorTest {
     // ── 再会カードの枠（→ features/reunion_card.md 判断6）──────────────────────
 
     /**
-     * **最後まで読んだノートの枠はノートの要約で、それは再会カードの状態に無い。**
-     * 画面と同じ純関数で中身を求めて渡さないと、見えていない文に印が付く。本番と同じ入口から通す。
-     */
-    @Test
-    fun `読了のノートでは、ノートの要約の先頭1文に印が付く`() = runTest {
-        val env = Env(this)
-        env.trace.put(finishedTrace())
-        val coordinator = env.coordinator()
-
-        coordinator.setNoteState(successNote(PLAIN))
-        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
-        coordinator.fetchSummary("ノート", PLAIN)
-        advance(NoteDwellGate.DWELL_MILLIS)
-        env.ai.completeAll("要約の1文。次の文。")
-        advanceUntilIdle()
-
-        coordinator.toggleReadingTraceMark()
-        advanceUntilIdle()
-
-        val saved = env.trace.saved.last()
-        assertEquals("要約の1文。", saved.markedSummary)
-        assertEquals(ReunionKind.Overview, saved.markedKind)
-    }
-
-    /**
      * **要約が後から届く方向。** 枠はカードと要約の2つから決まる（→ lessons L56）。
      * 前のノートの要約が次のノートの要約の欄へ入ると、次のノートのカードに前のノートの1文が出る。
      */
@@ -888,7 +863,7 @@ class NoteSessionCoordinatorTest {
 
         val after = coordinator.uiState.value
         assertEquals(
-            ReunionSlot.Shown("Bの要約。", ReunionKind.Overview, isMarked = false),
+            ReunionSlot.Shown("Bの要約。", ReunionKind.Overview),
             reunionSlot(after.readingTraceCard!!, after.summaryState)
         )
     }

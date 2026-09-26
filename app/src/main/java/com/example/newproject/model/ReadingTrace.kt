@@ -182,36 +182,18 @@ internal data class ReadingTrace(
     /**
      * 「まだ考えたい」の印。**3つで1組**（片方だけ残らないよう検証で固定する）。
      *
-     * **内容ごと保存するのが要点。** 印は*その内容*への意図なので、次の再会で生成し直すと
-     * 別の文が出て意図とずれる（→ features/reunion_card.md §6）。
-     * 保存済みを再掲すれば生成もゼロで済む。
+     * **画面にはもう出さず、付ける操作も無い。それでも読み書き・合流・退避では落とさない** —
+     * 欄を捨てると schema を上げることになり、checksum と旧版の退避の互換を抱える割に得るものが無い
+     * （→ features/reunion_card.md「『まだ考えたい』は撤去した」）。
      */
     val markedAtEpochMillis: Long? = null,
     val markedSummary: String? = null,
     val markedKind: ReunionKind? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 ) {
-    /** 印があるか。**あるときは生成そのものを行わず、保存済みを再掲する。** */
+    /** 印があるか。合流でどちらの印を残すかにだけ使う。 */
     val hasMark: Boolean get() = markedSummary != null
 }
-
-/** 「まだ考えたい」を押す。押した時点で枠に出ていた内容ごと控える。 */
-internal fun ReadingTrace.withMark(
-    summary: String,
-    kind: ReunionKind,
-    atEpochMillis: Long
-): ReadingTrace = copy(
-    markedAtEpochMillis = atEpochMillis,
-    markedSummary = summary,
-    markedKind = kind
-)
-
-/** 印を外す。**「読んだ」では外れない** — 閉じる操作と取り消しは別（→ features/reunion_card.md §4）。 */
-internal fun ReadingTrace.withoutMark(): ReadingTrace = copy(
-    markedAtEpochMillis = null,
-    markedSummary = null,
-    markedKind = null
-)
 
 /** 訪問を1件足す。保持は直近[ReadingTraceLimits.MAX_VISITS]件までだが、累計は積み上げる。 */
 internal fun ReadingTrace.withVisit(visit: ReadingVisit): ReadingTrace = copy(

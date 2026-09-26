@@ -34,8 +34,7 @@ import com.example.newproject.ui.theme.PanelBlue
 // ---------------------------------------------------------------------------
 
 /**
- * @param slot 枠に出すもの。**`reunionSlot` で求めたものを渡す** — 「まだ考えたい」も同じ関数を読むので、
- *   ここで別に中身を決めると、見えていない文に印が付く。
+ * @param slot 枠に出すもの。**`reunionSlot` で求めたものを渡す**（枠の分岐を画面へ書かない）。
  * @param onResume 続きから読む。カードを畳み、本文を読み進めたところの少し手前へ送る。
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -46,7 +45,6 @@ internal fun ReadingTraceCardPanel(
     modifier: Modifier = Modifier,
     nowMillis: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
-    onToggleMark: () -> Unit = {},
     onOpenMemos: () -> Unit = {},
     onResume: () -> Unit = {}
 ) {
@@ -103,7 +101,7 @@ internal fun ReadingTraceCardPanel(
                 ReunionSlot.Hidden -> Unit
             }
             Spacer(modifier = Modifier.height(4.dp))
-            // **入りきらなければ折り返す。** ボタンは最大4つ並び、1行では狭い画面からはみ出す。
+            // **入りきらなければ折り返す。** ボタンは最大3つ並び、1行では狭い画面からはみ出す。
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
@@ -117,18 +115,6 @@ internal fun ReadingTraceCardPanel(
                 if (card.hasMemos) {
                     TextButton(onClick = onOpenMemos) { Text("前回のメモを見る") }
                 }
-                // **枠に何も出ていなければ押せない。** 内容ごと控える印なので、
-                // 控えるものが無いまま押せると「中身の無い印」ができる。
-                if (slot is ReunionSlot.Shown) {
-                    TextButton(onClick = onToggleMark) {
-                        Text(
-                            text = if (slot.isMarked) "✓ まだ考えたい" else "まだ考えたい",
-                            // **押した状態を色でも示す。** 同じ見た目のテキストボタンが
-                            // 並ぶと区別できない、というのは実機で出た指摘（→ AppColors の3役ルール）。
-                            color = if (slot.isMarked) AccentText else OnSurface
-                        )
-                    }
-                }
                 TextButton(onClick = onDismiss) { Text("読んだ") }
             }
         }
@@ -139,19 +125,16 @@ internal fun ReadingTraceCardPanel(
  * 枠の1件に添える前置き。**種別から決める。**
  *
  * 前後の要約とノートの要約には前置きを付けない — 見出しの1文がどこまで読んだかを既に言っている。
- * 印が付いていれば種別によらず印の前置きになる — 出しているのは
- * **押した時点で保存した内容**であって、いま作ったものではないため。
  *
  * 当時の問いの前置きの「止まっていました」は、読む位置ではなく考えが止まった問いを指す
  * （→ features/reunion_card.md 判断6）。
  *
  * 純関数なのでJVMユニットテストで文面を固定できる。
  */
-internal fun reunionLead(slot: ReunionSlot.Shown): String? = when {
-    slot.isMarked -> "前回「まだ考えたい」と印を付けています"
-    slot.kind == ReunionKind.Question -> "前回のあなたはこの問いで止まっていました"
-    slot.kind == ReunionKind.Staleness -> "今も有効か確認したい箇所があります"
-    else -> null
+internal fun reunionLead(slot: ReunionSlot.Shown): String? = when (slot.kind) {
+    ReunionKind.Question -> "前回のあなたはこの問いで止まっていました"
+    ReunionKind.Staleness -> "今も有効か確認したい箇所があります"
+    ReunionKind.Overview, ReunionKind.Passage -> null
 }
 
 /**

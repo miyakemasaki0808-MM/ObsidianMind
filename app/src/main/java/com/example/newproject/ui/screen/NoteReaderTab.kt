@@ -113,7 +113,6 @@ internal fun NoteReaderTab(
     onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
-    onToggleReadingTraceMark: () -> Unit,
     onVigilithActionChanged: (VigilithNoteAction?) -> Unit
 ) {
     val context = LocalContext.current
@@ -259,11 +258,10 @@ internal fun NoteReaderTab(
             if (visibleTraceCard != null) {
                 ReadingTraceCardPanel(
                     card = visibleTraceCard,
-                    // 枠の中身は「まだ考えたい」と同じ純関数で決める（→ features/reunion_card.md 判断6）。
+                    // 枠の中身は純関数で決める（→ features/reunion_card.md 判断6）。
                     slot = reunionSlot(visibleTraceCard, uiState.summaryState),
                     modifier = Modifier.padding(top = 20.dp),
                     onDismiss = onDismissReadingTrace,
-                    onToggleMark = onToggleReadingTraceMark,
                     onOpenMemos = onOpenMarginMemo,
                     onResume = {
                         // **畳むのは即時、送るのは別に走らせる。** 送りは suspend で完了の保証が無いので、

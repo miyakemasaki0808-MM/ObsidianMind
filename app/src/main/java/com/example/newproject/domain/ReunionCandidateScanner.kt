@@ -39,9 +39,6 @@ internal data class ReunionCandidates(
 /**
  * 種別を決める。**AIに順位を決めさせない** — どの種別で生成するかを呼ぶ前に確定させることで、
  * 生成は常に1回で済み、判定は純関数としてJVMで固定できる（→ features/reunion_card.md §5）。
- *
- * 印（「まだ考えたい」）はここに入れない。印がある回は**生成そのものを行わない**ので、
- * 種別の決定より手前で分岐する。
  */
 internal fun decideReunionKind(candidates: ReunionCandidates): ReunionKind = when {
     candidates.questions.isNotEmpty() -> ReunionKind.Question

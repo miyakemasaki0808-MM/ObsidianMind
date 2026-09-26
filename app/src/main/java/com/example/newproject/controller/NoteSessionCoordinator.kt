@@ -18,7 +18,6 @@ import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryCache
-import com.example.newproject.domain.reunionSlot
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
@@ -183,7 +182,7 @@ internal class NoteSessionCoordinator(
      * 痕跡サイドカーの read-modify-write を直列化する錠。
      *
      * **同じ錠を read-modify-write する全経路へ配る。** 訪問の追記（[ReadingTraceController]）・
-     * 要約と印の書き戻し（[ReunionCardController]）・読み戻しの適用（[ReadingTraceBackupController]）は
+     * 選別結果の書き戻し（[ReunionCardController]）・読み戻しの適用（[ReadingTraceBackupController]）は
      * まったく同じ形で同じファイルを書くので、錠をクラスごとに持つと「錠はあるのに守られていない」状態になる。
      */
     private val traceWriteMutex = Mutex()
@@ -199,7 +198,6 @@ internal class NoteSessionCoordinator(
 
     private val reunionCard = ReunionCardController(
         scope = scope,
-        persistScope = persistScope,
         aiClient = aiClient,
         awaitDwell = dwell::await,
         state = stateStore.readingTraceWriter,
@@ -210,7 +208,6 @@ internal class NoteSessionCoordinator(
         awaitSectionModel = { sections.model.filterNotNull().first() },
         passageCache = reunionPassageCache,
         awaitVisitSaves = readingTrace::awaitVisitSaves,
-        clock = clock,
         ioDispatcher = ioDispatcher,
         // 候補の列挙も**解析と同じ口**に載せる。テストがテストスケジューラへ差し替えられないと、
         // 生のカードが出たところで止めて門番の手前を観測できない。
@@ -560,16 +557,6 @@ internal class NoteSessionCoordinator(
     fun bindReadingTracePath(sessionId: Long, path: String) = readingTrace.bindPath(sessionId, path)
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
         reunionCard.revealTrace(vaultRelativePath, content)
-
-    /**
-     * 「まだ考えたい」。**印を付けるのは、いま枠に出ているもの** — 画面と同じ純関数で求めて渡す。
-     * 最後まで読んだノートの枠はノートの要約で、それは再会カードの状態ではなく要約の状態にある。
-     */
-    fun toggleReadingTraceMark() {
-        val current = stateStore.uiState.value
-        val card = current.readingTraceCard ?: return
-        reunionCard.toggleMark(reunionSlot(card, current.summaryState))
-    }
     fun reportReadingProgress(
         blockIndex: Int,
         blockFraction: Float,

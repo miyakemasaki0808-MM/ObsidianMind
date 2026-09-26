@@ -88,9 +88,8 @@ internal fun mergeReadingTraces(
         else -> null
     }
 
-    // **印は `aiSummary` の一族に見えるが、捨ててはいけない側。** 印は*その内容*への
-    // 意図なので、生成し直すと別の文が出て意図とずれる（→ reunion_card §6）。
-    // 性質としてはメモと同じ「守る側」なので、持っている側を優先する。
+    // **印は `aiSummary` の一族に見えるが、捨ててはいけない側。** 画面には出さないが、
+    // ユーザーが付けた意図なので、メモと同じ「守る側」として持っている側を優先する。
     val markSource = when {
         local.hasMark && imported.hasMark ->
             if (markedAt(imported) > markedAt(local)) imported else local

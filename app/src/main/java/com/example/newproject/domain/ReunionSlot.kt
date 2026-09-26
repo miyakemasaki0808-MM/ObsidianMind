@@ -4,12 +4,7 @@ import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.SummaryState
 
-/**
- * 再会カードの枠に出すもの（→ features/reunion_card.md 判断6「枠の中身は1つの純関数が決める」）。
- *
- * **表示と「まだ考えたい」が同じ [reunionSlot] を読む。** 印は押した時点で枠に出ていた内容を保存するので、
- * 別々に中身を決めると、見えていない文に印が付く（→ lessons L51）。
- */
+/** 再会カードの枠に出すもの（→ features/reunion_card.md 判断6「枠の中身は1つの純関数が決める」）。 */
 internal sealed interface ReunionSlot {
     /** 枠を出さない。カードは見出しの1文だけになる。 */
     data object Hidden : ReunionSlot
@@ -17,7 +12,7 @@ internal sealed interface ReunionSlot {
     /** 枠の中身をまだ作っている。 */
     data object Waiting : ReunionSlot
 
-    data class Shown(val text: String, val kind: ReunionKind, val isMarked: Boolean) : ReunionSlot
+    data class Shown(val text: String, val kind: ReunionKind) : ReunionSlot
 }
 
 /**
@@ -30,8 +25,7 @@ internal fun reunionSlot(card: ReadingTraceCard, summary: SummaryState): Reunion
     val item = card.aiSummary?.takeIf { it.isNotBlank() }
     val kind = card.aiSummaryKind
     return when {
-        item != null && card.isMarked -> ReunionSlot.Shown(item, kind ?: ReunionKind.Overview, isMarked = true)
-        item != null && kind != null -> ReunionSlot.Shown(item, kind, isMarked = false)
+        item != null && kind != null -> ReunionSlot.Shown(item, kind)
         // **選別や前後の要約が決まるまで、ノートの要約を先に出さない。**
         // 先に出して後から差し替えると、読み始めた枠の中身が入れ替わる。
         card.isSummaryLoading -> ReunionSlot.Waiting
@@ -43,7 +37,7 @@ internal fun reunionSlot(card: ReadingTraceCard, summary: SummaryState): Reunion
 private fun noteSummarySlot(summary: SummaryState): ReunionSlot = when (summary) {
     is SummaryState.Success ->
         firstSentenceOf(summary.summary)
-            ?.let { ReunionSlot.Shown(it, ReunionKind.Overview, isMarked = false) }
+            ?.let { ReunionSlot.Shown(it, ReunionKind.Overview) }
             ?: ReunionSlot.Hidden
     // 要約はノートを開いた契機で必ず走るので、始まる前（Idle）も待ちとして扱う。
     SummaryState.Idle, SummaryState.Loading, is SummaryState.Downloading -> ReunionSlot.Waiting

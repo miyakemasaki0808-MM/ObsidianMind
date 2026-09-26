@@ -39,6 +39,16 @@ internal fun storedTrace(
     aiSummaryKind = aiSummaryVisitCount?.let { ReunionKind.Overview }
 )
 
+/**
+ * 「まだ考えたい」の印が付いた痕跡。**画面からは付けられないが、既存のファイルには残っている**ので、
+ * 読み書き・合流・退避が欄を落とさないことを確かめるときに使う。
+ */
+internal fun ReadingTrace.withMark(summary: String, kind: ReunionKind, atEpochMillis: Long): ReadingTrace = copy(
+    markedAtEpochMillis = atEpochMillis,
+    markedSummary = summary,
+    markedKind = kind
+)
+
 internal class TestClock(private var current: Long = 1_000_000L) {
     fun now(): Long = current
     fun advance(millis: Long) {

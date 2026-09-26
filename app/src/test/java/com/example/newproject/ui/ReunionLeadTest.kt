@@ -29,17 +29,5 @@ class ReunionLeadTest {
         assertNull(reunionLead(shown(ReunionKind.Overview)))
     }
 
-    /**
-     * 印が付いていれば種別によらず印の前置きになる。
-     * 出しているのは**押した時点で保存した内容**であって、いま作ったものではない。
-     */
-    @Test
-    fun `印が付いていれば種別によらず印の前置きになる`() {
-        ReunionKind.entries.forEach { kind ->
-            assertEquals(kind.name, "前回「まだ考えたい」と印を付けています", reunionLead(shown(kind, isMarked = true)))
-        }
-    }
-
-    private fun shown(kind: ReunionKind, isMarked: Boolean = false) =
-        ReunionSlot.Shown(text = "枠に出ている1件", kind = kind, isMarked = isMarked)
+    private fun shown(kind: ReunionKind) = ReunionSlot.Shown(text = "枠に出ている1件", kind = kind)
 }

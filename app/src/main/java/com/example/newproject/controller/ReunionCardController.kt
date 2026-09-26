@@ -6,7 +6,6 @@ import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.ai.ReunionCandidateLine
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
-import com.example.newproject.domain.ReunionSlot
 import com.example.newproject.domain.SummaryCache
 import com.example.newproject.domain.cleanReunionPassageOutput
 import com.example.newproject.domain.decideReunionKind
@@ -24,9 +23,6 @@ import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.isReunionNone
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.truncateToUtf8Bytes
-import com.example.newproject.model.withMark
-import com.example.newproject.model.withoutMark
-import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -38,7 +34,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Rediscover で再会したときに「前回のあなた」カードを出し、「まだ考えたい」の印を保存する。
+ * Rediscover で再会したときに「前回のあなた」カードを出す。
  *
  * 訪問の記録（[ReadingTraceController]）とは別に持つ。**UI 状態を書くのはこちらだけ**で、
  * 訪問と返事の側は痕跡サイドカーへ書くだけで画面の状態を持たない。
@@ -49,17 +45,12 @@ import kotlinx.coroutines.withContext
  */
 internal class ReunionCardController(
     private val scope: CoroutineScope,
-    /**
-     * 印の書き出し専用スコープ。**アプリ寿命であること**が前提。
-     * 押した直後に画面が畳まれても、押した印を失わないため（訪問の書き出しと同じ理由）。
-     */
-    private val persistScope: CoroutineScope,
     private val aiClient: AiClient,
     /** 生成の直前に通す門番。ノートを離れたら `CancellationException` で抜ける。 */
     private val awaitDwell: suspend () -> Unit,
     private val state: ReadingTraceStateWriter,
     private val persistence: ReadingTracePersistence,
-    /** 現在のVaultの識別子。照合と印の保存は、要求を出した時点の値へ向けてだけ行う。 */
+    /** 現在のVaultの識別子。照合と選別結果の保存は、要求を出した時点の値へ向けてだけ行う。 */
     private val currentVaultKey: () -> String?,
     /**
      * いま表示しているノートの解析結果を待つ。**自前で解析し直さない**（最大1MBで数百ミリ秒かかる
@@ -76,7 +67,6 @@ internal class ReunionCardController(
      * （保存前の痕跡を読むと、初めて読んだ直後の再会でカードが出ない）。
      */
     private val awaitVisitSaves: suspend () -> Unit,
-    private val clock: () -> Long = System::currentTimeMillis,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** 候補の列挙と前後の切り出しは入力サイズに比例するので Main の外で回す（→ lessons L13）。 */
     private val scanDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -84,7 +74,7 @@ internal class ReunionCardController(
      * サイドカーの read-modify-write を直列化する錠。**外から受け取る。**
      *
      * 同じサイドカーを訪問の追記（[ReadingTraceController]）と読み戻しの適用
-     * （[ReadingTraceBackupController]）も書く。選別結果と印の書き戻しが別の錠で走ると、
+     * （[ReadingTraceBackupController]）も書く。選別結果の書き戻しが別の錠で走ると、
      * 読み取りが古いまま上書きして訪問を取りこぼしうる。既定値は単独で使うテスト用。
      */
     private val writeMutex: Mutex = Mutex()
@@ -93,39 +83,10 @@ internal class ReunionCardController(
     private var revealJob: Job? = null
     private var activeRequestId = 0L
 
-    /**
-     * いま出ているカードがどの痕跡のものか。**印はここへ書く。**
-     *
-     * 押した瞬間の「現在のノート」を読み直さない。カードは特定の痕跡に対応しているので、
-     * 対象は**カードを出した時点で決まっている**（→ [lessons L26](../../../../../../../../docs/dev/lessons/L26.md)）。
-     */
-    private var revealedPath: String? = null
-
-    /**
-     * 印の要求世代。**痕跡ごとに数える。**
-     *
-     * `writeMutex` は同時書き込みを防ぐが、**要求の到着順までは保証しない。**
-     * 同じカードで素早く2回押すと、IOへディスパッチされた順が入れ替わり、
-     * **画面では外れているのにサイドカーには付いている**状態が作れる。
-     * ユーザーの明示的な意図を逆に保存することになるので、古い要求はロックの中で捨てる。
-     *
-     * **全体で1つの世代にしない。** 「最新」の単位は、操作対象＝保存先と一致していなければならない。
-     * 単一の世代だと、ノートAで印を押した直後にノートBで押しただけで、
-     * **競合していないAの保存まで「古い要求」として捨てられる**（Aの押下が黙って消える）。
-     *
-     * Main で採番し IO で読むので並行なマップを使う。エントリは操作したノートぶんだけで、
-     * **完了時に消さない** — 消すと、遅れて走る同じ要求が自分の世代を見失って捨てられる。
-     */
-    private val markRequestIds = ConcurrentHashMap<String, Long>()
-
-    private fun markKey(vaultKey: String, path: String) = "$vaultKey\n$path"
-
     /** ノート切替時に、進行中の照合・生成を捨てる（後着で別ノートのカードを出さない）。 */
     fun cancelForNoteChange() {
         revealJob?.cancel()
         activeRequestId++
-        // カードごと差し替わるので、印の宛先も捨てる（旧ノートへ書かない）。
-        revealedPath = null
     }
 
     /**
@@ -144,7 +105,6 @@ internal class ReunionCardController(
         if (vaultRelativePath.isBlank()) return
         // どのVaultへの照合かは、サスペンドする前のこの時点で決める。
         val vaultKey = currentVaultKey() ?: return
-        revealedPath = vaultRelativePath
         revealJob = scope.launch {
             // **離れた訪問の保存を待ってから読む。** 切替の直後に同じノートを引くと、
             // 保存前の痕跡を読んでその再会ではカードが出ない。
@@ -164,15 +124,15 @@ internal class ReunionCardController(
     }
 
     /**
-     * 途中まで読んだノート。**痕跡の `aiSummary` は読まない**（印を除く）。
+     * 途中まで読んだノート。**痕跡の `aiSummary` は読まない。**
      *
      * 旧仕様は途中・読了を分けずに問いを選別していたので、途中までのノートにも
      * 問い・空振り・俯瞰要約が「訪問数の合った試行済み」として残っている。それを使うと
      * 前後の要約を作らないまま枠が空になる（→ features/reunion_card.md 判断6「保存済みの種別を、今回の分岐で使えるか」）。
      */
     private suspend fun revealMidway(trace: ReadingTrace, requestId: Long) {
-        // まず見出しの1文を出す。**印があれば枠は保存済みの再掲で確定し、生成しない。**
-        setCard(cardOf(trace, isSlotLoading = !trace.hasMark))
+        // まず見出しの1文を出す。
+        setCard(cardOf(trace, isSlotLoading = true))
 
         val model = awaitSectionModel()
         if (!isCurrent(requestId)) return
@@ -191,9 +151,6 @@ internal class ReunionCardController(
         }
         if (!isCurrent(requestId)) return
         mergeIntoCard { copy(resumeBlockIndex = located.resumeBlockIndex) }
-        // 照合した時点で印があれば、枠は再掲で確定している。**待っている間に外されていても作らない**
-        // — 外したあとは押した文がそのまま残る（印を外したときの見え方と同じ）。
-        if (trace.hasMark) return
 
         val passage = passageSummary(trace.noteTitle, located.passage)
         if (!isCurrent(requestId)) return
@@ -220,11 +177,9 @@ internal class ReunionCardController(
             AiAvailability.Ready -> {
                 // **見出しの1文は出し終えている。** 待たせるのは生成だけ（→ background_ai_ux.md §7）。
                 awaitDwell()
-                // 印の復唱は表示・保存の前に落とす（残すとカードにも印の保存にも記号が載る）。
+                // 境目の印の復唱は表示・保存の前に落とす（残すとカードにも保存にも記号が載る）。
                 cleanReunionPassageOutput(aiClient.generate(prompt), passage)
                     .takeIf { it.isNotBlank() }
-                    // 印の内容として保存できる長さへ先に切る（切らないと印が検証で弾かれる）。
-                    ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }
                     ?.also { passageCache.save(prompt, it) }
             }
         }
@@ -241,10 +196,6 @@ internal class ReunionCardController(
      * （要約は `SummaryState` から画面が読む。ここでは何も生成しない）。
      */
     private suspend fun revealFinished(trace: ReadingTrace, content: String, vaultKey: String, requestId: Long) {
-        if (trace.hasMark) {
-            setCard(cardOf(trace))
-            return
-        }
         when (val stored = storedFinishedItem(trace)) {
             is Stored.Found -> {
                 setCard(cardOf(trace, item = stored.item))
@@ -303,59 +254,6 @@ internal class ReunionCardController(
         }
     }
 
-    /**
-     * 「まだ考えたい」を切り替える。[slot] は**いま枠に出ているもの**で、表示と同じ純関数から求めたもの。
-     *
-     * **押した時点で枠に出ていた内容ごと控える。** 次の再会で作り直すと別の文が出て
-     * 意図とずれるため（→ features/reunion_card.md §6）。ノートの要約はカードの状態に無いので、
-     * 表示と同じ関数で求めた中身を受け取らないと、見えていない文に印が付く。
-     * **もう一度押すと外れる。**「読んだ」で畳んでも外れない（閉じる操作と取り消しは別）。
-     */
-    fun toggleMark(slot: ReunionSlot) {
-        val card = state.current ?: return
-        val vaultRelativePath = revealedPath ?: return
-        val vaultKey = currentVaultKey() ?: return
-        val shown = slot as? ReunionSlot.Shown
-        // 出ているものが無ければ印の付けようがない。
-        if (!card.isMarked && shown == null) return
-
-        // 画面は先に返す。**保存の往復を待たせない**（失敗しても次の再会で作り直せる）。
-        val marking = !card.isMarked
-        val markKey = markKey(vaultKey, vaultRelativePath)
-        val requestId = markRequestIds.merge(markKey, 1L, Long::plus)!!
-        state.update { current ->
-            if (marking) {
-                // 印の付いた枠は、押した時点の文をそのまま出し続ける。
-                current?.copy(isMarked = true, aiSummary = shown?.text, aiSummaryKind = shown?.kind)
-            } else {
-                current?.copy(isMarked = false)
-            }
-        }
-        persistScope.launch {
-            withContext(ioDispatcher) {
-                writeMutex.withLock {
-                    // **ロックを取れた時点で最新かを見る。** 取る前に確かめても、
-                    // 待っている間に次の要求が来れば同じ逆転が起きる。
-                    // 見るのは**同じ痕跡への**最新要求だけ（別ノートの操作では失効しない）。
-                    if (requestId != markRequestIds[markKey]) return@withLock
-                    val latest = (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
-                        ?.trace
-                        ?: return@withLock
-                    val updated = if (marking) {
-                        latest.withMark(
-                            summary = requireNotNull(shown).text,
-                            kind = shown.kind,
-                            atEpochMillis = clock()
-                        )
-                    } else {
-                        latest.withoutMark()
-                    }
-                    persistence.save(updated, vaultKey)
-                }
-            }
-        }
-    }
-
     /** 「読んだ」で畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissCard() {
         state.update { it?.copy(isDismissed = true) }
@@ -373,20 +271,16 @@ internal class ReunionCardController(
     /**
      * 後から届いた結果を**いまのカードへ合流する。** カードを組み直さない。
      *
-     * 組み直すと、待っている間にユーザーが「まだ考えたい」を押した結果や畳んだ状態が、
+     * 組み直すと、待っている間にユーザーが畳んだ状態や先に届いた送り先が、
      * 照合した時点の痕跡で上書きされる。同じノートのままなので、要求の世代では見分けられない。
      */
     private fun mergeIntoCard(transform: ReadingTraceCard.() -> ReadingTraceCard) {
         state.update { it?.transform() }
     }
 
-    /** 枠の1件が届いた。**印が付いていれば枠は印の内容のまま**にし、読み込み表示だけ下げる。 */
+    /** 枠の1件が届いた。読み込み表示も下げる。 */
     private fun ReadingTraceCard.withSlotResult(item: Item?): ReadingTraceCard =
-        if (isMarked) {
-            copy(isSummaryLoading = false)
-        } else {
-            copy(aiSummary = item?.text, aiSummaryKind = item?.kind, isSummaryLoading = false)
-        }
+        copy(aiSummary = item?.text, aiSummaryKind = item?.kind, isSummaryLoading = false)
 
     /**
      * カードを組み立てる。**枠の1件は呼び出し側が決めて渡す** — 痕跡の `aiSummary` を既定で拾わない。
@@ -398,21 +292,18 @@ internal class ReunionCardController(
         isSlotLoading: Boolean = false
     ): ReadingTraceCard {
         val last = trace.visits.last()
-        // **印があれば、枠の中身は保存済みのものへ差し替える。** 生成は行わない。
-        val marked = trace.markedSummary
         return ReadingTraceCard(
             // 追加のI/Oは無い。この経路は既に痕跡を読んでいる。
             visitCount = trace.totalVisitCount,
             lastVisitAtMillis = last.atEpochMillis,
             lastSectionTitle = last.deepestSectionTitle,
             lastProgressPercent = last.progressPercent,
-            aiSummary = marked ?: item?.text,
-            aiSummaryKind = if (marked != null) trace.markedKind else item?.kind,
+            aiSummary = item?.text,
+            aiSummaryKind = item?.kind,
             // **欄を足したら、値を供給する側まで監査する。**
             // 読む側（UIの入口）だけ直して既定値 false のまま出荷すると、
             // 行が一度も出ないまま緑になる。
             hasMemos = trace.memos.isNotEmpty(),
-            isMarked = marked != null,
             isSummaryLoading = isSlotLoading
         )
     }

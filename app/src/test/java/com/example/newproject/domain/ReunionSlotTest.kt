@@ -17,7 +17,7 @@ class ReunionSlotTest {
     @Test
     fun `途中までで前後の要約があればそれを出す`() {
         val slot = reunionSlot(midway(item = "直前は導入。この先は例。", kind = ReunionKind.Passage), summary)
-        assertEquals(ReunionSlot.Shown("直前は導入。この先は例。", ReunionKind.Passage, isMarked = false), slot)
+        assertEquals(ReunionSlot.Shown("直前は導入。この先は例。", ReunionKind.Passage), slot)
     }
 
     @Test
@@ -36,7 +36,7 @@ class ReunionSlotTest {
     @Test
     fun `読了で問いが決まっていればその原文を出す`() {
         val slot = reunionSlot(finished(item = "これでいいのか。", kind = ReunionKind.Question), summary)
-        assertEquals(ReunionSlot.Shown("これでいいのか。", ReunionKind.Question, isMarked = false), slot)
+        assertEquals(ReunionSlot.Shown("これでいいのか。", ReunionKind.Question), slot)
     }
 
     @Test
@@ -47,7 +47,7 @@ class ReunionSlotTest {
     @Test
     fun `読了で1件が無ければ、ノートの要約の先頭1文を出す`() {
         val slot = reunionSlot(finished(), summary)
-        assertEquals(ReunionSlot.Shown("Kotlin の Flow の使い方をまとめたノート。", ReunionKind.Overview, isMarked = false), slot)
+        assertEquals(ReunionSlot.Shown("Kotlin の Flow の使い方をまとめたノート。", ReunionKind.Overview), slot)
     }
 
     @Test
@@ -61,16 +61,6 @@ class ReunionSlotTest {
     fun `読了で要約が出ないなら枠を出さない`() {
         assertEquals(ReunionSlot.Hidden, reunionSlot(finished(), SummaryState.AiUnavailable))
         assertEquals(ReunionSlot.Hidden, reunionSlot(finished(), SummaryState.Error("失敗")))
-    }
-
-    // ── 印 ─────────────────────────────────────────────────────────────
-
-    /** 印は最優先。作っている最中でも、途中でも読了でも、保存した内容を出す。 */
-    @Test
-    fun `印があれば保存した内容を出す`() {
-        val marked = ReunionSlot.Shown("前回の文。", ReunionKind.Overview, isMarked = true)
-        assertEquals(marked, reunionSlot(midway(item = "前回の文。", kind = ReunionKind.Overview, marked = true, loading = true), summary))
-        assertEquals(marked, reunionSlot(finished(item = "前回の文。", kind = ReunionKind.Overview, marked = true), summary))
     }
 
     // ── 先頭1文 ─────────────────────────────────────────────────────────
@@ -89,18 +79,16 @@ class ReunionSlotTest {
     private fun midway(
         item: String? = null,
         kind: ReunionKind? = null,
-        marked: Boolean = false,
         loading: Boolean = false
-    ) = card(progress = 40, item = item, kind = kind, marked = marked, loading = loading)
+    ) = card(progress = 40, item = item, kind = kind, loading = loading)
 
     private fun finished(
         item: String? = null,
         kind: ReunionKind? = null,
-        marked: Boolean = false,
         loading: Boolean = false
-    ) = card(progress = 100, item = item, kind = kind, marked = marked, loading = loading)
+    ) = card(progress = 100, item = item, kind = kind, loading = loading)
 
-    private fun card(progress: Int, item: String?, kind: ReunionKind?, marked: Boolean, loading: Boolean) =
+    private fun card(progress: Int, item: String?, kind: ReunionKind?, loading: Boolean) =
         ReadingTraceCard(
             visitCount = 2,
             lastVisitAtMillis = 0L,
@@ -108,7 +96,6 @@ class ReunionSlotTest {
             lastProgressPercent = progress,
             aiSummary = item,
             aiSummaryKind = kind,
-            isMarked = marked,
             isSummaryLoading = loading
         )
 }

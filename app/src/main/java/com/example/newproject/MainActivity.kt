@@ -272,7 +272,6 @@ class MainActivity : ComponentActivity() {
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
-                                onToggleReadingTraceMark = { viewModel.toggleReadingTraceMark() },
                                 onVigilithActionChanged = vigilith.onNoteActionChanged
                             )
                         }

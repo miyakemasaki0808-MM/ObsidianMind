@@ -236,7 +236,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 
 - AI生成は `AiClient` 側のMutexで直列化し、60秒タイムアウトを設ける
 - **同じファイルを read-modify-write する経路が2つ以上あるなら、錠は共有物として上から配る。**
-  痕跡サイドカーは訪問の追記（`ReadingTraceController`）・要約と印の書き戻し（`ReunionCardController`）・
+  痕跡サイドカーは訪問の追記（`ReadingTraceController`）・選別結果の書き戻し（`ReunionCardController`）・
   読み戻しの適用（`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
   1つの `Mutex` を作って3つへ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
   という、最も気づきにくい形になる

@@ -30,7 +30,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
  * **欄を増やしたり落としたりしたら、ここと `ReadingTraceBackupTextTest` を同時に直す。**
  */
 fun backupProtectedDataText(): String =
-    "訪問の記録・AIの要約・「まだ考えたい」の印・あなたが置いた余白メモを" +
+    "訪問の記録・AIの要約・あなたが置いた余白メモを" +
         "1つのファイルへ書き出します。Vault のフォルダが消えたり端末を移したりしても、" +
         "そこから読み戻せます。"
 

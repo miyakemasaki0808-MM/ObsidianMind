@@ -666,7 +666,6 @@ class NoteReadingFlowTest {
             onDismissMarginMemo = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
-            onToggleReadingTraceMark = {},
             onVigilithActionChanged = {}
         )
     }

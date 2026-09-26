@@ -20,8 +20,8 @@ data class ReadingTraceCard(
     val lastSectionTitle: String?,
     val lastProgressPercent: Int,
     /**
-     * この Controller が枠へ出す1件 — 印の内容・当時の問い・古い前提・前後の要約。
-     * **ノートの要約はここへ入れない**（`SummaryState` から読む）。印を付けたときだけ、押した時点の文が入る。
+     * この Controller が枠へ出す1件 — 当時の問い・古い前提・前後の要約。
+     * **ノートの要約はここへ入れない**（`SummaryState` から読む）。
      */
     val aiSummary: String? = null,
     /**
@@ -38,8 +38,6 @@ data class ReadingTraceCard(
      * 1文で伝えるという役目が壊れる。ここでは**在ることだけ**を示し、読むのはシート。
      */
     val hasMemos: Boolean = false,
-    /** 「まだ考えたい」の印が付いているか。**付いていれば [aiSummary] は保存済みの再掲。** */
-    val isMarked: Boolean = false,
     /** この Controller が枠の中身（前後の要約・問いの選別）を作っている最中。ノートの要約の進行は含まない。 */
     val isSummaryLoading: Boolean = false,
     /**

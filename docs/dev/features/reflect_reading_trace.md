@@ -154,7 +154,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | `aiSummaryVisitCount` | **最後に生成を試みた**時点の延べ回数（null＝未試行） |
 | `aiSummaryKind` | その試行の種別（schema v6〜 → [reunion_card](reunion_card.md)） |
 | `memos` | 余白メモ（schema v7〜 → [reflect_margin_memo](reflect_margin_memo.md)）。**追記で溜まる・上書きしない** |
-| `markedAtEpochMillis` | 「まだ考えたい」を押した時刻（schema v6〜）。**下2つと3つで1組** |
+| `markedAtEpochMillis` | 「まだ考えたい」を押した時刻（schema v6〜）。**下2つと3つで1組。** 画面には出さず、付ける操作も無い。読み書き・合流・退避で保つだけ（→ [reunion_card](reunion_card.md)「『まだ考えたい』は撤去した」） |
 | `markedSummary` | 印を付けた時点の内容。**再生成できない** |
 | `markedKind` | 印を付けた時点の種別 |
 <!-- /state-fields -->
@@ -269,6 +269,8 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 **意図だけを再会の瞬間に宿す**（カードの「まだ考えたい」）。上表の (c) を守ったまま
 (a) を取り戻す形で、**読書中の操作は増やさない。** 規則と優先順位の正本は
 [reunion_card](reunion_card.md)。
+**2026-09-27、その「まだ考えたい」は撤去した**（使われていなかった）。何を考えていたかを残す手段は、
+読んでいる最中に書ける余白メモ（[reflect_margin_memo](reflect_margin_memo.md)）が担う。
 
 ### 設計原則: シンプル最優先
 
