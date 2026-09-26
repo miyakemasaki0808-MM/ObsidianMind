@@ -8,6 +8,7 @@ import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.domain.ReunionSlot
 import com.example.newproject.domain.SummaryCache
+import com.example.newproject.domain.cleanReunionPassageOutput
 import com.example.newproject.domain.decideReunionKind
 import com.example.newproject.domain.forKind
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -210,7 +211,8 @@ internal class ReunionCardController(
             AiAvailability.Ready -> {
                 // **見出しの1文は出し終えている。** 待たせるのは生成だけ（→ background_ai_ux.md §7）。
                 awaitDwell()
-                aiClient.generate(prompt).trim()
+                // 印の復唱は表示・保存の前に落とす（残すとカードにも印の保存にも記号が載る）。
+                cleanReunionPassageOutput(aiClient.generate(prompt), passage)
                     .takeIf { it.isNotBlank() }
                     // 印の内容として保存できる長さへ先に切る（切らないと印が検証で弾かれる）。
                     ?.let { truncateToUtf8Bytes(it, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES) }

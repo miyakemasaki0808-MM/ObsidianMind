@@ -385,6 +385,7 @@ object PromptBuilder {
             In Japanese, write two short sentences: the first says what the text just before the marker is about, and the second says what comes right after it.
             If nothing comes after the marker, write only the first sentence.
             Base every statement only on the text below. Do not add advice, questions, or encouragement, and do not describe the reader.
+            The marker only shows the position. Never write the marker itself.
         """.trimIndent()
 
         return PromptBudget.assemble(

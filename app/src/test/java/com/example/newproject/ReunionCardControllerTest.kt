@@ -201,6 +201,30 @@ class ReunionCardControllerTest {
         assertEquals(listOf(PASSAGE), cache.entries.values.toList())
     }
 
+    /**
+     * 境目の印は入力の区切りで、本文には無い。**モデルが復唱しても、カード・端末内の保存・印の保存の
+     * どこにも残さない**（→ features/reunion_card.md 判断6「前後の要約」）。
+     */
+    @Test
+    fun `生成が境目の印を復唱しても、カードにも保存にも印にも残さない`() = runTest {
+        val persistence = FakePersistence().apply { put(traceAt(progress = 20)) }
+        val cache = InMemorySummaryCache()
+        val echoed = "直前は導入の説明を読んでいた。${PromptBuilder.REUNION_READ_MARKER} この先は具体例に入る。"
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(
+            persistence, TestClock(), FakeAiClient.returning(echoed), state, passageCache = cache
+        )
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        advanceUntilIdle()
+        controller.toggleMark(state.slot())
+        advanceUntilIdle()
+
+        assertEquals(PASSAGE, state.value.readingTraceCard!!.aiSummary)
+        assertEquals(listOf(PASSAGE), cache.entries.values.toList())
+        assertEquals(PASSAGE, persistence.stored(PATH)!!.markedSummary)
+    }
+
     // AIを待たせないのが要点。生成中でも見出しの1文は先に見えている。
     @Test
     fun `raw trace is visible while the passage is still generating`() = runTest {
