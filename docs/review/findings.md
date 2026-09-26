@@ -28,6 +28,7 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-09-27-reunion-card-followup-review/P2-1` | 別ノートの訪問保存を全件待つため保存済み再会カードまで表示が止まる | `起票` REUN-9 |
 | `2026-09-27-reunion-card-device-review/P2-1` | 初読直後の同一ノート再会で初回訪問が保存済みでもカードが1回目に出ない | `起票` REUN-8 |
 | `2026-09-27-reunion-card-device-review/P3-1` | 前後の要約へ入力用の `[READ UP TO HERE]` が露出する | `起票` REUN-7 |
 | `2026-09-27-reunion-card-device-review/P3-2` | 横画面の4ボタンで本文が隠れ「読んだ」もマスコットと重なる | `統合` APP-2 |
