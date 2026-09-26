@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-26 | — | 退避画面の説明を現行の保護対象へ直し、文面を検査できる場所へ移した | [reading_trace_backup](features/reading_trace_backup.md) §9 |
 | 2026-09-26 | — | 余白メモの課題9件にオーナーが完了の線を引き、台帳と受付簿から閉じた | [review](../review/README.md) |
 | 2026-09-26 | — | 柱2・余白メモを実機検証した。通し版14ケースと instrumentation 6件が成功し、退避画面の旧文言1件を起票した | [reflect_margin_memo](features/reflect_margin_memo.md) §10・[review](../review/README.md) |
 | 2026-09-24 | — | 解析書を現況だけに絞り、判断と経緯を正本へのリンクに替え、テストのクラス一覧を02の付録へ移した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) §15 |

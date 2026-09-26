@@ -20,6 +20,20 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 // 残るのは「入りきらなかった」という境界だけで、それは損失ではなく**保留**である。
 // ---------------------------------------------------------------------------
 
+/**
+ * 退避が何を守るのか。**中身の名前で言う。**
+ *
+ * 「痕跡」だけでは、自分の言葉がそこに入っていることが伝わらない。
+ *
+ * **画面へ直書きせずここへ置くのは、保護対象と食い違ったときに検査で落とすため。**
+ * 直書きした文は誰も検査しないので、欄を落としても案内だけが残る。
+ * **欄を増やしたり落としたりしたら、ここと `ReadingTraceBackupTextTest` を同時に直す。**
+ */
+fun backupProtectedDataText(): String =
+    "訪問の記録・AIの要約・「まだ考えたい」の印・あなたが置いた余白メモを" +
+        "1つのファイルへ書き出します。Vault のフォルダが消えたり端末を移したりしても、" +
+        "そこから読み戻せます。"
+
 /** 実行中の見出し。**適用だけは「途中で止めると戻せない」段階**なので言い方を変える。 */
 fun backupStepLabel(step: ReadingTraceBackupStep): String = when (step) {
     ReadingTraceBackupStep.EXPORT_READ -> "読書痕跡を集めています…"

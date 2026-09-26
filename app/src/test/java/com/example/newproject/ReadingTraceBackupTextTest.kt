@@ -6,6 +6,7 @@ import com.example.newproject.model.ReadingTraceImportWithholdReason
 import com.example.newproject.model.WithheldImport
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.ui.exportSummary
+import com.example.newproject.ui.backupProtectedDataText
 import com.example.newproject.ui.importPlanSummary
 import com.example.newproject.ui.importResultSummary
 import com.example.newproject.ui.revisedPlanNotice
@@ -19,6 +20,38 @@ import org.junit.Test
 /** 退避画面の文面。**「自分の言葉が失われるか」に先に答えているか**を見る。 */
 class ReadingTraceBackupTextTest {
 
+    /**
+     * **退避が守るものの名前が、いま保護している欄と一致していること。**
+     *
+     * これが無かったので、v7 で廃止した「ひとことと返事」を書き出すと案内する文が
+     * **実機検証まで残った**。文言の検査は補助的に見えるが、
+     * ここは**ユーザーが「自分の言葉は守られるのか」を判断する唯一の説明**である。
+     */
+    @Test
+    fun `退避の説明はいま守っているものを名前で挙げる`() {
+        val text = backupProtectedDataText()
+
+        listOf("訪問", "要約", "まだ考えたい", "余白メモ").forEach { name ->
+            assertTrue("守っているのに名前が出ていない: $name", text.contains(name))
+        }
+    }
+
+    /**
+     * **廃止した欄を「復元できる」と案内しない。**
+     *
+     * 守られないものを守ると言うのは、守られるものを言い忘れるより悪い
+     * （ユーザーが退避を信じて元を消しうる）。
+     * **欄を落としたら、その名前をここへ足す。**
+     */
+    @Test
+    fun `退避の説明は廃止した欄を案内しない`() {
+        val text = backupProtectedDataText()
+
+        RETIRED_FIELD_NAMES.forEach { name ->
+            assertTrue("廃止した欄を書き出せると案内している: $name", !text.contains(name))
+        }
+    }
+
     private fun plan(
         added: Int = 3,
         merged: Int = 2,
@@ -27,6 +60,11 @@ class ReadingTraceBackupTextTest {
 
     private fun overCapacity(path: String) =
         WithheldImport(path, ReadingTraceImportWithholdReason.MEMOS_OVER_CAPACITY)
+
+    private companion object {
+        /** schema v7 で読み捨てた欄。**画面の説明へ二度と出さない。** */
+        val RETIRED_FIELD_NAMES = listOf("ひとこと", "返事", "映し返し")
+    }
 
     /**
      * **保留は損失ではない。** 「消えません」まで言い切らないと、

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.ui.backupProgressText
+import com.example.newproject.ui.backupProtectedDataText
 import com.example.newproject.ui.backupStepLabel
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.IconPill
@@ -95,11 +96,9 @@ fun DataManagementScreen(
         SectionTitle("読書痕跡の退避")
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-            // **何が守られるのかを名前で言う。**「痕跡」だけでは、自分の言葉が
-            // そこに入っていることが伝わらない。
-            text = "訪問の記録・AIの要約・ノートへのひとことと、あなたが書いた返事を" +
-                "1つのファイルへ書き出します。Vault のフォルダが消えたり端末を移したりしても、" +
-                "そこから読み戻せます。",
+            // **文面は `ReadingTraceBackupText` が持つ。** 画面へ直書きすると、
+            // 保護対象が変わったときに食い違いを検査できない。
+            text = backupProtectedDataText(),
             color = OnSurfaceFaint,
             fontSize = 13.sp
         )
