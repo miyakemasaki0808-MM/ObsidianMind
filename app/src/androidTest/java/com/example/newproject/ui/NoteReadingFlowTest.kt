@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -8,30 +10,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.NoteImageFailure
-import com.example.newproject.domain.markdown.MarkdownBlock
-import com.example.newproject.ui.markdown.NoteImageContent
-import com.example.newproject.ui.markdown.NoteImageMeasurements
-import com.example.newproject.ui.markdown.NoteImageMeasurement
-import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.ui.markdown.NoteImageContent
+import com.example.newproject.ui.markdown.NoteImageLoader
+import com.example.newproject.ui.markdown.NoteImageMeasurement
+import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.theme.AppTheme
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -633,6 +639,42 @@ class NoteReadingFlowTest {
     }
 
     // --- 補助 -----------------------------------------------------------------
+
+    /**
+     * **低い横長の画面でも、再会カードがノート名と本文を隠さない**（→ features/rediscover.md 判断6）。
+     *
+     * 縦に積むと、見出し・操作ボタン・カードが先に高さを取り、本文は残りだけになる。
+     * 左右2列なら本文は高さをまるごと使う。**カードは左列でスクロールして届く**ことも見る。
+     * 枠は多くの端末の縦幅に収まる大きさで、低い横長の条件（高さ480dp未満・幅＞高さ）を作る。
+     */
+    @Test
+    fun 低い横長の画面では再会カードがあってもノート名と本文が見える() {
+        val state = loadedNote(BODY).copy(
+            readingTraceCard = ReadingTraceCard(
+                visitCount = 3,
+                lastVisitAtMillis = 0L,
+                lastSectionTitle = "見出し",
+                lastProgressPercent = 50,
+                aiSummary = "直前は見出しの下の導入を読んでいた。この先は最初の段落の説明が続き、例が3つ並ぶ。",
+                aiSummaryKind = ReunionKind.Passage,
+                hasMemos = true,
+                resumeBlockIndex = 0
+            )
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 300.dp)) {
+                    ReaderTab(state, buildNoteSectionModel(BODY), rememberLazyListState())
+                }
+            }
+        }
+
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("読んだ").performScrollTo().assertIsDisplayed()
+        // スクロールしても本文は隠れない（左列だけが動く）。
+        composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
+    }
 
     @Composable
     private fun ReaderTab(

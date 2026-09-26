@@ -25,6 +25,11 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -164,142 +169,176 @@ internal fun NoteReaderTab(
         onDispose { currentVigilithActionChanged(null) }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(ReadingGradient)
-                .safeDrawingPadding()
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
-        ) {
-            // 未選択時はVault案内、通常時はコンセプト文を出す。
-            GradientHeader(
-                title = "Rediscover",
-                subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
-                else "過去のノートから、思考をひとつ。",
-                // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
-                // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
-                // （→ features/reflect_margin_memo.md 判断7）。
-                trailing = if (hasNote) {
-                    {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
-                                onOpenMarginMemo()
-                            }
-                            IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
+    // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みで食い違わせない）。
+    val controls: @Composable ColumnScope.() -> Unit = {
+        // 未選択時はVault案内、通常時はコンセプト文を出す。
+        GradientHeader(
+            title = "Rediscover",
+            subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
+            else "過去のノートから、思考をひとつ。",
+            // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
+            // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
+            // （→ features/reflect_margin_memo.md 判断7）。
+            trailing = if (hasNote) {
+                {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
+                            onOpenMarginMemo()
                         }
+                        IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
                     }
-                } else null
-            )
+                }
+            } else null
+        )
 
-            // ボタンは画面の操作であってノートの操作ではないので、**状態によらず常にここ**。
-            // ノートの有無で位置が動くと、同じボタンを毎回探し直すことになる。
-            NoteActionButtons(
-                vaultSelected = uiState.vaultSelected,
-                isLoading = isLoading,
-                onSelectVault = onSelectVault,
-                onRandomNote = onRandomNote,
-                onOpenBooklet = onOpenBooklet,
-                modifier = Modifier.padding(top = 16.dp)
-            )
+        // ボタンは画面の操作であってノートの操作ではないので、**状態によらず常にここ**。
+        // ノートの有無で位置が動くと、同じボタンを毎回探し直すことになる。
+        NoteActionButtons(
+            vaultSelected = uiState.vaultSelected,
+            isLoading = isLoading,
+            onSelectVault = onSelectVault,
+            onRandomNote = onRandomNote,
+            onOpenBooklet = onOpenBooklet,
+            modifier = Modifier.padding(top = 16.dp)
+        )
 
-            if (isLoading) {
-                Surface(
-                    color = Panel,
-                    shape = CircleShape,
-                    modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
-                ) {
-                    CircularProgressIndicator(
-                        color = AccentText,
-                        modifier = Modifier.padding(12.dp)
+        if (isLoading) {
+            Surface(
+                color = Panel,
+                shape = CircleShape,
+                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp)
+            ) {
+                CircularProgressIndicator(
+                    color = AccentText,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+    }
+    // ノートが出ていないときの案内。**内容なりの高さに留める** — 本文パネルと同じく `weight(1f)` で伸ばすと、
+    // 中身の無い白が画面の大半を占める。
+    val emptyNote: @Composable () -> Unit = {
+        Surface(
+            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+            color = Panel,
+            shape = RoundedCornerShape(8.dp)
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Text(
+                    text = "ノート未表示",
+                    color = OnSurface,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = when (uiState.noteState) {
+                        is NoteState.Empty -> "このVaultにMarkdownノートが見つかりませんでした。"
+                        is NoteState.Error -> "Vaultを読み込めませんでした。"
+                        else -> "Vaultフォルダを選択して「別のノートをひらく」をタップしてください。"
+                    },
+                    color = OnSurfaceFaint,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+    // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
+    // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
+    //  セクション判定とスクロール継承を壊さない）。
+    val visibleTraceCard = uiState.readingTraceCard?.takeIf { hasNote && !it.isDismissed }
+    val traceCard: @Composable (Modifier) -> Unit = { modifier ->
+        if (visibleTraceCard != null) {
+            ReadingTraceCardPanel(
+                card = visibleTraceCard,
+                // 枠の中身は純関数で決める（→ features/reunion_card.md 判断6）。
+                slot = reunionSlot(visibleTraceCard, uiState.summaryState),
+                modifier = modifier,
+                onDismiss = onDismissReadingTrace,
+                onOpenMemos = onOpenMarginMemo,
+                onResume = {
+                    // **畳むのは即時、送るのは別に走らせる。** 送りは suspend で完了の保証が無いので、
+                    // その後ろに畳む操作を置かない（→ lessons L35）。
+                    onDismissReadingTrace()
+                    val target = visibleTraceCard.resumeBlockIndex
+                    val blocks = sectionModel?.blocks
+                    if (target != null && !blocks.isNullOrEmpty()) {
+                        val clamped = target.coerceAtMost(blocks.lastIndex)
+                        coroutineScope.launch { listState.scrollToItem(clamped) }
+                        // **飛び越した画像は描画されないので測られない。** 測らないと、その先の読書の
+                        // 報告が止まり続ける。止める検査は緩めず、測り終えれば報告が再開する。
+                        // **ここで測らず、ノート単位の入れ物へ依頼する** — この画面のスコープで測ると、
+                        // 測定待ちの間に全画面へ移っただけでキャンセルされる。
+                        imageMeasurements?.requestSkippedMeasurement(clamped)
+                    }
+                }
+            )
+        }
+    }
+    val notePanel: @Composable (Modifier) -> Unit = { modifier ->
+        NoteContentPanel(
+            uiState = uiState,
+            modifier = modifier
+                .graphicsLayer {
+                    alpha = noteAppear.value
+                    val scale = 0.95f + 0.05f * noteAppear.value
+                    scaleX = scale
+                    scaleY = scale
+                },
+            listState = listState,
+            precomputedBlocks = sectionModel?.blocks,
+            imageLoader = imageLoader,
+            imageMeasurements = imageMeasurements
+        )
+    }
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ReadingGradient)
+            .safeDrawingPadding()
+            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+    ) {
+        val sideColumnWidth = sideColumnWidthDp(maxWidth.value).dp
+        when (readerLayoutFor(maxWidth.value, maxHeight.value)) {
+            ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
+                controls()
+                if (!hasNote) {
+                    emptyNote()
+                    // 余りをカードではなく余白へ逃がす。
+                    Spacer(modifier = Modifier.weight(1f))
+                } else {
+                    traceCard(Modifier.padding(top = 20.dp))
+                    notePanel(
+                        Modifier
+                            .weight(1f)
+                            .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
                     )
                 }
             }
-
-            // ノートが出ていないときは、案内カードを内容なりの高さに留める。
-            // 本文パネルと同じく `weight(1f)` で伸ばすと、中身の無い白が画面の大半を占める。
-            if (!hasNote) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-                    color = Panel,
-                    shape = RoundedCornerShape(8.dp)
+            // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
+            ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .width(sideColumnWidth)
+                        .fillMaxHeight()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
-                        Text(
-                            text = "ノート未表示",
-                            color = OnSurface,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = when (uiState.noteState) {
-                                is NoteState.Empty -> "このVaultにMarkdownノートが見つかりませんでした。"
-                                is NoteState.Error -> "Vaultを読み込めませんでした。"
-                                else -> "Vaultフォルダを選択して「別のノートをひらく」をタップしてください。"
-                            },
-                            color = OnSurfaceFaint,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                    controls()
+                    traceCard(Modifier.padding(top = 16.dp))
+                }
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    if (!hasNote) {
+                        emptyNote()
+                        Spacer(modifier = Modifier.weight(1f))
+                    } else {
+                        notePanel(Modifier.weight(1f))
                     }
                 }
-                // 余りをカードではなく余白へ逃がす。
-                Spacer(modifier = Modifier.weight(1f))
-                return@Column
             }
-
-            // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
-            // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
-            //  セクション判定とスクロール継承を壊さない）。
-            // ここへ来る時点で hasNote は true。
-            val visibleTraceCard = uiState.readingTraceCard?.takeIf { !it.isDismissed }
-            val showTraceCard = visibleTraceCard != null
-            if (visibleTraceCard != null) {
-                ReadingTraceCardPanel(
-                    card = visibleTraceCard,
-                    // 枠の中身は純関数で決める（→ features/reunion_card.md 判断6）。
-                    slot = reunionSlot(visibleTraceCard, uiState.summaryState),
-                    modifier = Modifier.padding(top = 20.dp),
-                    onDismiss = onDismissReadingTrace,
-                    onOpenMemos = onOpenMarginMemo,
-                    onResume = {
-                        // **畳むのは即時、送るのは別に走らせる。** 送りは suspend で完了の保証が無いので、
-                        // その後ろに畳む操作を置かない（→ lessons L35）。
-                        onDismissReadingTrace()
-                        val target = visibleTraceCard.resumeBlockIndex
-                        val blocks = sectionModel?.blocks
-                        if (target != null && !blocks.isNullOrEmpty()) {
-                            val clamped = target.coerceAtMost(blocks.lastIndex)
-                            coroutineScope.launch { listState.scrollToItem(clamped) }
-                            // **飛び越した画像は描画されないので測られない。** 測らないと、その先の読書の
-                            // 報告が止まり続ける。止める検査は緩めず、測り終えれば報告が再開する。
-                            // **ここで測らず、ノート単位の入れ物へ依頼する** — この画面のスコープで測ると、
-                            // 測定待ちの間に全画面へ移っただけでキャンセルされる。
-                            imageMeasurements?.requestSkippedMeasurement(clamped)
-                        }
-                    }
-                )
-            }
-
-            NoteContentPanel(
-                uiState = uiState,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = if (isLoading || showTraceCard) 8.dp else 20.dp)
-                    .graphicsLayer {
-                        alpha = noteAppear.value
-                        val scale = 0.95f + 0.05f * noteAppear.value
-                        scaleX = scale
-                        scaleY = scale
-                    },
-                listState = listState,
-                precomputedBlocks = sectionModel?.blocks,
-                imageLoader = imageLoader,
-                imageMeasurements = imageMeasurements
-            )
         }
-
     }
 
     // 余白メモのボトムシート。**書いた場所は開いた時点の可視セクションから引く**
