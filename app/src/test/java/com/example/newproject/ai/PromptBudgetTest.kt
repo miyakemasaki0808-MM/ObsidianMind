@@ -4,7 +4,6 @@ import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionPassage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -125,56 +124,6 @@ class PromptBudgetTest {
     }
 
     /**
-     * **有効な入力を共通クランプに切らせない。**
-     *
-     * セクション名は保存契約で512バイトまで許されるので、10件そろうと完成長が上限を超え、
-     * **最後（＝最新）の訪問の行が途中で切れて到達率が消えていた。**
-     * 「どこで止まりがちか」を答えるプロンプトで、最新の到達率を落とすのは意味の逆転になる。
-     */
-    @Test
-    fun `読書痕跡は保存上限いっぱいの見出しでも最新行を壊さない`() {
-        val visits = List(10) { index ->
-            ReadingVisit(
-                atEpochMillis = 1_770_000_000_000L + index,
-                // 保存契約の上限（512バイト）いっぱいのASCII見出し。
-                deepestSectionTitle = "S".repeat(512),
-                progressPercent = index * 10
-            )
-        }
-
-        val prompt = PromptBuilder.buildReadingTraceSummaryPrompt("題名", visits, totalVisitCount = 42)
-
-        assertTrue("上限を超えている: ${prompt.length}", prompt.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
-        assertFalse("履歴が共通クランプに切られている", prompt.contains(PromptBudget.TRUNCATION_MARKER))
-        assertTrue(
-            "最新の訪問が完全な1行として残っていない: [${prompt.lines().last()}]",
-            prompt.lines().last().matches(NEWEST_VISIT_LINE)
-        )
-    }
-
-    /** 予算を超えるときに落ちるのは**古い側**。直近の読み方が消えては要約にならない。 */
-    @Test
-    fun `読書痕跡の履歴は古い側から落ちる`() {
-        val visits = List(5) { index ->
-            ReadingVisit(
-                atEpochMillis = 1_770_000_000_000L + index,
-                deepestSectionTitle = "節$index",
-                progressPercent = index
-            )
-        }
-
-        val prompt = PromptBuilder.buildReadingTraceSummaryPrompt(
-            noteTitle = "題名",
-            visits = visits,
-            totalVisitCount = 5,
-            historyCharacterBudget = 120
-        )
-
-        assertTrue("直近の訪問が落ちている", prompt.contains("節4"))
-        assertFalse("古い訪問が残っている", prompt.contains("節0"))
-    }
-
-    /**
      * 前後の要約は、切り出しの上限いっぱいの前後と、上限いっぱいのノート名でも切り詰められない。
      * 切り詰めは材料の末尾（＝この先の側）から削るので、起きると「この先にあること」が黙って欠ける。
      */
@@ -205,8 +154,5 @@ class PromptBudgetTest {
         val HUGE_VALUE = "${PromptSamples.MARK}長い値".repeat(4_000)
         const val HUGE_ENTRIES = 200
         const val QUESTION = "このセクションの結論は何ですか？"
-
-        /** 最新の訪問は、閉じ引用符と到達率まで揃った1行で終わること。 */
-        val NEWEST_VISIT_LINE = Regex("""- stopped at section ".+" \(90% of the note\)""")
     }
 }

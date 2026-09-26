@@ -14,7 +14,6 @@ import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.internal.GenAiUtils
@@ -358,20 +357,6 @@ class PromptTokenBudgetTest {
                 ).text
             )
 
-            add(
-                "読書痕跡要約" to PromptBuilder.buildReadingTraceSummaryPrompt(
-                    noteTitle = TITLE,
-                    visits = List(READING_TRACE_VISITS) { index ->
-                        ReadingVisit(
-                            atEpochMillis = 1_770_000_000_000L + index * 86_400_000L,
-                            deepestSectionTitle = "$SECTION $index",
-                            progressPercent = (index * 7) % 100
-                        )
-                    },
-                    totalVisitCount = 42
-                )
-            )
-
             add("再会カードの前後" to reunionPassagePrompt(content))
 
             add(
@@ -469,7 +454,6 @@ class PromptTokenBudgetTest {
         const val SECTION = "予算配分の考え方"
         const val RELATED_SNIPPET_LEN = 150
         const val CHAT_HISTORY_TURNS = 6
-        const val READING_TRACE_VISITS = 10
         const val PICKER_CANDIDATES = 40
 
         /** 全用途の文字数予算を確実に超える長さにする（＝抜粋と注意書きが必ず働く）。 */

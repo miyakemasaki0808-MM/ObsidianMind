@@ -9,7 +9,6 @@ import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REUNION_NONE_TOKEN
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.state.QuizFormat
@@ -70,7 +69,6 @@ object PromptBuilder {
 
     private const val PICKER_CANDIDATE_LIMIT = 40
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
-    private const val READING_TRACE_VISIT_LINES = 10
     private const val NO_CHAT_HISTORY = "（なし / none）"
 
     /** 前後の要約で、前回いちばん先まで読んだところに置く印。 */
@@ -162,48 +160,6 @@ object PromptBuilder {
             body = buildString {
                 append("\n\nNote title: ").append(label(title))
                 append("\nNote content:\n").append(excerpt.renderForPrompt())
-            }
-        )
-    }
-
-    /**
-     * 読書痕跡の俯瞰要約。
-     *
-     * AIに新しい内容を作らせるのではなく、**ユーザー自身の読み方を要約させるだけ**。
-     * これが「前回の自分からの申し送り」という体験を保つ肝なので、データに無いことを
-     * 書かせない・助言や問いを足させない、を明示する。
-     * 出力は Nano の256トークン上限に収まるよう1〜2文に絞る。
-     */
-    internal fun buildReadingTraceSummaryPrompt(
-        noteTitle: String,
-        visits: List<ReadingVisit>,
-        // 保持している訪問は直近30件まで。「何回開いたか」は延べ回数を渡す
-        // （visits.size を使うと31回目以降ずっと「30回」と要約される）。
-        totalVisitCount: Int,
-        historyCharacterBudget: Int = PromptLimits.READING_TRACE_HISTORY_CHARACTERS
-    ): String {
-        // **セクション名は保存契約で512バイトまで許される。** 名前だけを [label] で切り、
-        // 行としては必ず完全なものを渡す（到達率が落ちると要約の意味が反転する）。
-        val historyLines = visits.takeLast(READING_TRACE_VISIT_LINES).map { visit ->
-            val where = visit.deepestSectionTitle
-                ?.takeIf { it.isNotBlank() }
-                ?.let { "section \"${label(it)}\"" }
-                ?: "no heading reached"
-            "- stopped at $where (${visit.progressPercent}% of the note)"
-        }
-        val history = packFromNewest(historyLines, historyCharacterBudget)
-        val instructions = """
-            The user has opened the following note several times. Below is where they stopped reading each time, oldest first.
-            In 1–2 short sentences, in Japanese, describe the pattern in how they have been reading it: how many times they opened it, and where they tend to stop.
-            Address the user as 「あなた」. Base every statement only on the data below — do not invent note content. Do not add advice, questions, or encouragement.
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nNote title: ").append(label(noteTitle))
-                append("\nTimes opened: ").append(totalVisitCount)
-                append("\nReading history:\n").append(history)
             }
         )
     }

@@ -28,6 +28,7 @@ import com.example.newproject.data.VaultLocation
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
+import com.example.newproject.domain.SummaryCache
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
 
@@ -54,6 +55,11 @@ internal class NoteViewModelDependencies(
     val vaultBrowser: VaultBrowser,
     val aiClient: AiClient,
     val summarizeUseCase: SummarizeUseCase,
+    /**
+     * 再会カードの前後の要約の保存。要約と同じ仕組みを**別の置き場**で持つ —
+     * 同じ置き場にすると件数の上限を取り合い、要約の保存を追い出す（→ features/reunion_card.md 判断6）。
+     */
+    val reunionPassageCache: SummaryCache,
     val relatedNotesUseCase: RelatedNotesUseCase,
     val searchPickerUseCase: SearchPickerUseCase,
     val distillPersistence: DistillPersistence,
@@ -100,6 +106,9 @@ internal class NoteViewModelDependencies(
                     cache = FileSummaryCache(
                         File(application.noBackupFilesDir, FileSummaryCache.DIRECTORY_NAME)
                     )
+                ),
+                reunionPassageCache = FileSummaryCache(
+                    File(application.noBackupFilesDir, FileSummaryCache.REUNION_PASSAGE_DIRECTORY_NAME)
                 ),
                 relatedNotesUseCase = RelatedNotesUseCase(aiClient),
                 searchPickerUseCase = SearchPickerUseCase(aiClient),

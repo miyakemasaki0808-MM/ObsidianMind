@@ -87,6 +87,7 @@ class NoteViewModel internal constructor(
         searchPickerUseCase = dependencies.searchPickerUseCase,
         distillPersistence = dependencies.distillPersistence,
         readingTracePersistence = dependencies.readingTracePersistence,
+        reunionPassageCache = dependencies.reunionPassageCache,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,

@@ -246,7 +246,6 @@ class OnDeviceGenerationTest {
          * 「覆われている」か「ここに挙がっている」かのどちらかであることを固定する。
          */
         val UNCOVERED_BUILDERS = setOf(
-            "buildReadingTraceSummaryPrompt",
             "buildReunionSelectionPrompt",
             "buildDistillPrompt",
             "buildPickerPrompt",

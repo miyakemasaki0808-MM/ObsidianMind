@@ -93,6 +93,9 @@ internal class FileSummaryCache(
         /** `noBackupFilesDir` の下に切る置き場の名前。 */
         const val DIRECTORY_NAME = "summary_cache"
 
+        /** 再会カードの前後の要約の置き場。**要約とは分ける**（件数の上限を取り合わない）。 */
+        const val REUNION_PASSAGE_DIRECTORY_NAME = "reunion_passage_cache"
+
         /** 保存する要約の件数上限（数の根拠は判断7）。上限いっぱいでも数MBに収まる。 */
         const val MAX_ENTRIES = 1000
 

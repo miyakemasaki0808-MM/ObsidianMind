@@ -17,6 +17,8 @@ import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
+import com.example.newproject.domain.SummaryCache
+import com.example.newproject.domain.reunionSlot
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
@@ -33,6 +35,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 
 /**
@@ -57,6 +61,11 @@ internal class NoteSessionCoordinator(
     searchPickerUseCase: SearchPickerUseCase,
     distillPersistence: DistillPersistence,
     readingTracePersistence: ReadingTracePersistence,
+    /**
+     * 再会カードの前後の要約の保存（→ features/reunion_card.md 判断6）。
+     * **既定値を置かない** — 配線を落とすと、前後の要約が再会のたびに作り直されるだけで何も落ちない。
+     */
+    reunionPassageCache: SummaryCache,
     private val history: HistoryStore,
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
@@ -196,6 +205,10 @@ internal class NoteSessionCoordinator(
         state = stateStore.readingTraceWriter,
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
+        // **表示と同じ解析結果を待つ。** 番号が到達率と同じ並びになり、解析も1回で済む。
+        // ノート切替で解析は捨てられ、照合のJobも止まるので、旧ノートの結果を掴まない。
+        awaitSectionModel = { sections.model.filterNotNull().first() },
+        passageCache = reunionPassageCache,
         clock = clock,
         ioDispatcher = ioDispatcher,
         // 候補の列挙も**解析と同じ口**に載せる。テストがテストスケジューラへ差し替えられないと、
@@ -547,7 +560,15 @@ internal class NoteSessionCoordinator(
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
         reunionCard.revealTrace(vaultRelativePath, content)
 
-    fun toggleReadingTraceMark() = reunionCard.toggleMark()
+    /**
+     * 「まだ考えたい」。**印を付けるのは、いま枠に出ているもの** — 画面と同じ純関数で求めて渡す。
+     * 最後まで読んだノートの枠はノートの要約で、それは再会カードの状態ではなく要約の状態にある。
+     */
+    fun toggleReadingTraceMark() {
+        val current = stateStore.uiState.value
+        val card = current.readingTraceCard ?: return
+        reunionCard.toggleMark(reunionSlot(card, current.summaryState))
+    }
     fun reportReadingProgress(
         blockIndex: Int,
         blockFraction: Float,
