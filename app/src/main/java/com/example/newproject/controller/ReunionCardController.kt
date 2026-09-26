@@ -168,9 +168,9 @@ internal class ReunionCardController(
         if (!isCurrent(requestId)) return
         val last = trace.visits.last()
         val located = withContext(scanDispatcher) {
-            model.readFrontierBlock(last.deepestSectionTitle, last.progressPercent)?.let { frontier ->
+            model.readFrontier(last.deepestSectionTitle, last.progressPercent)?.let { frontier ->
                 Located(
-                    resumeBlockIndex = model.resumeBlockFor(frontier),
+                    resumeBlockIndex = model.resumeBlockFor(frontier.block),
                     passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
                 )
             }

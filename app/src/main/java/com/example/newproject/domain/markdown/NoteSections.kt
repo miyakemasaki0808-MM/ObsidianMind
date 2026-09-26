@@ -78,63 +78,102 @@ class NoteSectionModel internal constructor(
     }
 
     /**
-     * 前回いちばん先まで読んだブロック（→ features/reunion_card.md 判断6「読み進めたところの求め方」）。
+     * 前回いちばん先まで読んだところ（→ features/reunion_card.md 判断6「読み進めたところの求め方」）。
      * 引数は痕跡の最後の訪問の値。ブロックが無ければ null。
      *
-     * 到達率は整数の百分率なので、長いノートではそれだけだと数ブロックずれる。
+     * 到達率は「最深ブロックの番号＋そのブロックの見えている割合」を総ブロック数で割った整数の百分率なので、
+     * **100分の1ブロック単位で割り戻し、ブロック番号とブロック内の割合の両方を返す。**
+     * 割合を捨てると、長い1ブロックの途中まで読んだ回と末尾まで読んだ回が区別できない。
+     * 長いノートでは数ブロック単位でしか戻せないので、
      * **節が今の本文にあれば、その節の範囲へ収める** — 節の外を編集しても、読み進めた節の中には留まる。
      * 節の範囲は [sectionForBlockIndex] と同じく「その見出しから次の見出しの直前まで」で数える。
      * 痕跡の節の名前はその関数で記録されているので、別の区切り方をすると食い違う。
      *
-     * 到達率からの見積もりは**手前へ寄せる**。最深ブロックが画面に全部入った回
+     * ブロック番号の見積もりは**手前へ寄せる**。最深ブロックが画面に全部入った回
      * （割合1.0）は、素直に割り戻すと1つ先の未表示のブロックを指してしまう。
      */
-    fun readFrontierBlock(sectionTitle: String?, progressPercent: Int): Int? {
+    fun readFrontier(sectionTitle: String?, progressPercent: Int): ReadFrontier? {
         if (blocks.isEmpty()) return null
         val lastIndex = blocks.lastIndex
-        val reached = progressPercent.coerceIn(0, 100).toLong() * blocks.size
-        val estimate = ((reached + 99) / 100 - 1).toInt().coerceIn(0, lastIndex)
-        val title = sectionTitle?.takeIf { it.isNotBlank() } ?: return estimate
+        val reachedHundredths = progressPercent.coerceIn(0, 100).toLong() * blocks.size
+        val estimate = ((reachedHundredths + 99) / 100 - 1).toInt().coerceIn(0, lastIndex)
+        val fraction = ((reachedHundredths - estimate * 100L) / 100f).coerceIn(0f, 1f)
+        val title = sectionTitle?.takeIf { it.isNotBlank() } ?: return ReadFrontier(estimate, fraction)
         val nearest = headingBlockIndices.indices
             .filter { sections[it].title == title }
             .map { k -> headingBlockIndices[k]..((headingBlockIndices.getOrNull(k + 1) ?: blocks.size) - 1) }
             // **同名の見出しが複数あれば、見積もりに最も近いもの。** 先頭固定にすると、
             // 後ろの「まとめ」を読んでいたのに前の「まとめ」へ戻される。
             .minByOrNull { range -> distanceTo(estimate, range) }
-            ?: return estimate
-        return estimate.coerceIn(nearest)
+            ?: return ReadFrontier(estimate, fraction)
+        return when {
+            estimate < nearest.first -> ReadFrontier(nearest.first, 0f)
+            estimate > nearest.last -> ReadFrontier(nearest.last, 1f)
+            else -> ReadFrontier(estimate, fraction)
+        }
     }
 
     /**
-     * 読み進めたブロックを境に、前後を合わせて [targetLength] 文字まで切り出す。
+     * 読み進めたところを境に、前後を合わせて [targetLength] 文字まで切り出す。
      *
+     * **読み進めたブロックは、読んだ割合で前後へ割る**（[splitRead]）。丸ごと読んだ側へ入れると、
+     * 長い1ブロックの途中までしか読んでいないのに、未読の末尾を「ここまで読んだ」と渡してしまう。
      * 前後はおおむね半分ずつにし、**片側が短ければ余りをもう片側へ回す。**
      * 境目から遠い側を削るので、どれだけ長いブロックがあっても境目の近くは残る。
      */
-    fun passageAround(frontierBlock: Int, targetLength: Int): ReunionPassage {
+    fun passageAround(frontier: ReadFrontier, targetLength: Int): ReunionPassage {
         if (blocks.isEmpty() || targetLength <= 0) return ReunionPassage(before = "", after = "")
-        val frontier = frontierBlock.coerceIn(0, blocks.lastIndex)
+        val index = frontier.block.coerceIn(0, blocks.lastIndex)
+        val (head, tail) = splitRead(blocks[index], frontier.fraction)
 
         // 窓は各側 targetLength ぶんあれば足りる。本文全体を文字列にしない（最大1MB）。
-        var start = frontier
-        var beforeLength = blockLength(frontier)
+        var start = index
+        var beforeLength = head.length
         while (start > 0 && beforeLength < targetLength) {
             start--
             beforeLength += blockLength(start)
         }
-        var end = frontier + 1
-        var afterLength = 0
+        var end = index + 1
+        var afterLength = tail.length
         while (end < blocks.size && afterLength < targetLength) {
             afterLength += blockLength(end)
             end++
         }
 
-        val before = blocksToMarkdown(blocks.subList(start, frontier + 1))
-        val after = blocksToMarkdown(blocks.subList(frontier + 1, end))
+        val before = joinPassageParts(blocksToMarkdown(blocks.subList(start, index)), head)
+        val after = joinPassageParts(tail, blocksToMarkdown(blocks.subList(index + 1, end)))
         val afterText = after.take(targetLength - minOf(before.length, targetLength / 2))
         val beforeText = before.takeLast(targetLength - afterText.length)
         return ReunionPassage(before = beforeText, after = afterText)
     }
+
+    /**
+     * 読み進めたブロックを、読んだ側と読んでいない側に割る。
+     *
+     * **近似である。** 見えていた高さの割合を文字数の割合へ読み替え、**文や行の区切りまで手前へ寄せる**
+     * （読んでいない文を読んだ側へ入れない）。文字数と高さが比例しないブロックではずれる。
+     * 画像・見出し・区切り線は割れないので、全部見えたときだけ読んだ側へ入れる。
+     */
+    private fun splitRead(block: MarkdownBlock, fraction: Float): Pair<String, String> {
+        val text = blocksToMarkdown(listOf(block))
+        if (fraction >= 1f) return text to ""
+        val splittable = block is MarkdownBlock.Paragraph || block is MarkdownBlock.ListBlock ||
+            block is MarkdownBlock.CodeBlock || block is MarkdownBlock.Blockquote || block is MarkdownBlock.Table
+        if (!splittable || fraction <= 0f) return "" to text
+        val cut = snapBackToBoundary(text, (text.length * fraction).toInt().coerceIn(0, text.length))
+        return text.substring(0, cut).trimEnd() to text.substring(cut).trimStart()
+    }
+
+    private fun snapBackToBoundary(text: String, index: Int): Int {
+        val floor = (index - SPLIT_SNAP_REACH).coerceAtLeast(0)
+        for (i in index downTo floor + 1) {
+            if (text[i - 1] in SPLIT_BOUNDARIES) return i
+        }
+        return index
+    }
+
+    private fun joinPassageParts(first: String, second: String): String =
+        listOf(first, second).filter { it.isNotEmpty() }.joinToString("\n\n")
 
     /**
      * 続きから読むの送り先。**読み進めたところの少し手前**を画面の先頭に置く。
@@ -167,8 +206,20 @@ class NoteSectionModel internal constructor(
 
         /** 続きから読むで、節の見出しまで戻してよい距離（ブロック数）。 */
         const val RESUME_HEADING_REACH = 3
+
+        /** 読み進めたブロックを割るとき、区切りを探して手前へ寄せる距離（文字数）。 */
+        private const val SPLIT_SNAP_REACH = 120
+
+        /** 割るときの区切り。行と文の終わり。 */
+        private const val SPLIT_BOUNDARIES = "\n。！？!?"
     }
 }
+
+/**
+ * 前回いちばん先まで読んだところ。[block] は本文のブロック番号、[fraction] はそのブロックの中で読んだ割合（0〜1）。
+ * 割合は見えていた高さから来るので、文字数との対応は近似である。
+ */
+data class ReadFrontier(val block: Int, val fraction: Float)
 
 /**
  * 本文を見出しごとのセクションに分割する。

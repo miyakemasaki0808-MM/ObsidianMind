@@ -206,7 +206,7 @@ class OnDeviceGenerationTest {
         requireNanoAvailable()
 
         val model = buildNoteSectionModel(NOTE_BODY)
-        val frontier = requireNotNull(model.readFrontierBlock(sectionTitle = null, progressPercent = 50))
+        val frontier = requireNotNull(model.readFrontier(sectionTitle = null, progressPercent = 50))
         val prompt = PromptBuilder.buildReunionPassagePrompt(
             noteTitle = NOTE_TITLE,
             passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)

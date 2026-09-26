@@ -373,7 +373,7 @@ class PromptTokenBudgetTest {
     /** 本文の中ほどまで読んだとして、本番と同じ切り出しで前後を渡す。 */
     private fun reunionPassagePrompt(content: String): String {
         val model = buildNoteSectionModel(content)
-        val frontier = requireNotNull(model.readFrontierBlock(sectionTitle = null, progressPercent = 50))
+        val frontier = requireNotNull(model.readFrontier(sectionTitle = null, progressPercent = 50))
         return PromptBuilder.buildReunionPassagePrompt(
             noteTitle = TITLE,
             passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
