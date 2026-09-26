@@ -11,6 +11,7 @@ import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.state.QuizFormat
 
 private const val DISTILL_HEADING_LENGTH = 80
@@ -71,6 +72,9 @@ object PromptBuilder {
     // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
     private const val READING_TRACE_VISIT_LINES = 10
     private const val NO_CHAT_HISTORY = "（なし / none）"
+
+    /** 前後の要約で、前回いちばん先まで読んだところに置く印。 */
+    internal const val REUNION_READ_MARKER = "[READ UP TO HERE]"
 
     /** 未解決の問いを選ばせる基準。**引用された他人の問いを除く**のが要点（書かないと混ざる）。 */
     private val QUESTION_CRITERION = """
@@ -408,6 +412,33 @@ object PromptBuilder {
                 }
             ),
             candidates = candidates
+        )
+    }
+
+    /**
+     * 再会カードの前後の要約（→ features/reunion_card.md 判断6）。
+     *
+     * **境目を印で示して渡す。** 前後を1本にすると、直前に読んでいたことと、この先にあることを書き分けられない。
+     * **「止まった」とは言わせない。** 印の位置は前回いちばん先まで読んだところで、
+     * 最後に見ていた場所ではない（巻き戻して離れても、記録はいちばん先のまま）。
+     * 要約と同じく、本文に無いこと・助言・問いは足させない。
+     */
+    internal fun buildReunionPassagePrompt(noteTitle: String, passage: ReunionPassage): String {
+        val instructions = """
+            Below is part of an Obsidian note. Last time, the reader read this note as far as the marker $REUNION_READ_MARKER.
+            In Japanese, write two short sentences: the first says what the text just before the marker is about, and the second says what comes right after it.
+            If nothing comes after the marker, write only the first sentence.
+            Base every statement only on the text below. Do not add advice, questions, or encouragement, and do not describe the reader.
+        """.trimIndent()
+
+        return PromptBudget.assemble(
+            instructions = instructions,
+            body = buildString {
+                append("\n\nNote title: ").append(label(noteTitle))
+                append("\n\n").append(passage.before)
+                append("\n").append(REUNION_READ_MARKER).append("\n")
+                append(passage.after)
+            }
         )
     }
 

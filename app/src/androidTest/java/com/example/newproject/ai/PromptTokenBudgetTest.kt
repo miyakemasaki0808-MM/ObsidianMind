@@ -9,6 +9,7 @@ import com.example.newproject.MainActivity
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
@@ -308,8 +309,7 @@ class PromptTokenBudgetTest {
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
-     * 機能経路は7つ（要約・関連ノート・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
-     * ここではセクションを3種、クイズを3形式へ分解して**11ケース**として測る。
+     * 機能経路ごとに1ケースを基本とし、セクションは3種、クイズは3形式へ分解して測る。
      * 同じ経路でも指示文の長さが違えばトークン数が変わるため、束ねると読み違える。
      */
     private fun measurementCases(profile: Profile): List<Pair<String, String>> {
@@ -372,6 +372,8 @@ class PromptTokenBudgetTest {
                 )
             )
 
+            add("再会カードの前後" to reunionPassagePrompt(content))
+
             add(
                 "検索ピッカー" to PromptBuilder.buildPickerPrompt(
                     query = "オンデバイスAIの制約について書いたノートを探して",
@@ -381,6 +383,16 @@ class PromptTokenBudgetTest {
                 ).text
             )
         }
+    }
+
+    /** 本文の中ほどまで読んだとして、本番と同じ切り出しで前後を渡す。 */
+    private fun reunionPassagePrompt(content: String): String {
+        val model = buildNoteSectionModel(content)
+        val frontier = requireNotNull(model.readFrontierBlock(sectionTitle = null, progressPercent = 50))
+        return PromptBuilder.buildReunionPassagePrompt(
+            noteTitle = TITLE,
+            passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
+        )
     }
 
     /** 候補ブロックを本番と同じ文字数予算いっぱいまで埋める。 */

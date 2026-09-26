@@ -6,6 +6,7 @@ import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteField
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.state.QuizFormat
 import java.io.File
 
@@ -87,6 +88,12 @@ internal object PromptSamples {
                     kind = ReunionKind.Question,
                     candidates = List(entries) { ReunionCandidateLine("R0$it", "$MARK$it") }
                 ).text,
+
+            "buildReunionPassagePrompt" to
+                PromptBuilder.buildReunionPassagePrompt(
+                    noteTitle = value,
+                    passage = ReunionPassage(before = value, after = value)
+                ),
 
             "buildSectionChatPrompt" to
                 PromptBuilder.buildSectionChatPrompt(

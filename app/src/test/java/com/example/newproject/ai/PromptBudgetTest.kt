@@ -5,6 +5,7 @@ import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionPassage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -171,6 +172,22 @@ class PromptBudgetTest {
 
         assertTrue("直近の訪問が落ちている", prompt.contains("節4"))
         assertFalse("古い訪問が残っている", prompt.contains("節0"))
+    }
+
+    /**
+     * 前後の要約は、切り出しの上限いっぱいの前後と、上限いっぱいのノート名でも切り詰められない。
+     * 切り詰めは材料の末尾（＝この先の側）から削るので、起きると「この先にあること」が黙って欠ける。
+     */
+    @Test
+    fun `前後の要約は切り出しの上限いっぱいでも切り詰めが起きない`() {
+        val half = NoteExcerptLimits.REUNION_PASSAGE / 2
+        val prompt = PromptBuilder.buildReunionPassagePrompt(
+            noteTitle = "題".repeat(PromptLimits.LABEL_CHARACTERS),
+            passage = ReunionPassage(before = "前".repeat(half), after = "後".repeat(NoteExcerptLimits.REUNION_PASSAGE - half))
+        )
+
+        assertFalse("前後の要約が切り詰められている（${prompt.length}字）", prompt.contains(PromptBudget.TRUNCATION_MARKER))
+        assertTrue(prompt.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
     }
 
     /** 切り詰めたら黙らず印を残す。印が無いと、途中で切れた文と区別できない。 */
