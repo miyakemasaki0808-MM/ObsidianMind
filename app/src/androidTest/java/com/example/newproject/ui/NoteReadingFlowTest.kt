@@ -14,6 +14,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
@@ -25,6 +26,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.theme.AppTheme
@@ -243,6 +245,71 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
 
         assertTrue("測定後も報告が再開しない: $reports", reports.any { it > IMAGE_BLOCK_INDEX })
+    }
+
+    /**
+     * **続きから読むで画像を飛び越しても、その後の進捗は報告される**（→ features/reunion_card.md 判断6）。
+     *
+     * 飛び越した画像は描画されないので、描画の中の測定では測られない。未測定の画像より後ろは報告しない契約なので、
+     * 送るときに飛び越した画像を測らないと、再開した後に読んだところが痕跡へ残らない。
+     */
+    @Test
+    fun 続きから読むで画像を飛び越しても測り終えれば進捗を報告する() {
+        val loader = FixedImageLoader(NoteImageMeasurement.Measured(width = 800, height = 2_400))
+        val reports = showResumableNote(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue("送った先の進捗が報告されない: $reports", reports.any { it >= RESUME_TARGET })
+        assertTrue("飛び越した画像を測っていない", loader.measureCount >= 1)
+    }
+
+    /** **測り終えるまでは、飛んだ先も報告しない。** 止める検査そのものは緩めていない。 */
+    @Test
+    fun 続きから読むで飛び越した画像を測り終えるまでは飛んだ先を報告しない() {
+        val loader = PendingImageLoader()
+        val reports = showResumableNote(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue("飛び越した画像を測りに行っていない", loader.measureCount >= 1)
+        assertTrue(
+            "測り終える前に画像より後ろが報告された: $reports（画像は index $RESUME_IMAGE_INDEX）",
+            reports.none { it > RESUME_IMAGE_INDEX }
+        )
+    }
+
+    /** 画像を第[RESUME_IMAGE_INDEX]ブロックに持つ長い本文を、送り先つきの再会カードと一緒に出す。 */
+    private fun showResumableNote(loader: NoteImageLoader): MutableList<Int> {
+        val model = buildNoteSectionModel(RESUME_IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val reports = mutableListOf<Int>()
+        val state = loadedNote(RESUME_IMAGE_BODY).copy(
+            readingTraceCard = ReadingTraceCard(
+                visitCount = 2,
+                lastVisitAtMillis = 0L,
+                lastSectionTitle = null,
+                lastProgressPercent = 90,
+                resumeBlockIndex = RESUME_TARGET
+            )
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    state = state,
+                    model = model,
+                    listState = rememberLazyListState(),
+                    loader = loader,
+                    measurements = measurements,
+                    onReadingProgress = { index, _, _, _ -> reports += index }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertTrue("最初の画面に画像が入っている（飛び越しにならない）: $reports", reports.none { it >= RESUME_IMAGE_INDEX })
+        return reports
     }
 
     /**
@@ -549,6 +616,15 @@ class NoteReadingFlowTest {
                 appendLine()
                 appendLine("${markerAt(it)} の本文です。")
             }
+        }
+
+        /** 続きから読むの送り先と、その手前で飛び越す画像の位置。 */
+        const val RESUME_TARGET = 88
+        const val RESUME_IMAGE_INDEX = 20
+
+        /** 100ブロック。第[RESUME_IMAGE_INDEX]ブロックだけが画像で、最初の画面には入らない。 */
+        val RESUME_IMAGE_BODY = (0 until 100).joinToString("\n\n") { index ->
+            if (index == RESUME_IMAGE_INDEX) "![](assets/tall.png)" else "${markerAt(index)} の本文です。"
         }
 
         /** 段落だけを並べた長文。ブロック番号を本文へ入れて可視位置を特定できるようにする。 */

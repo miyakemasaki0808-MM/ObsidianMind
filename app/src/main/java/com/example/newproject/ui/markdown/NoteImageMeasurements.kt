@@ -30,6 +30,40 @@ internal fun firstUnmeasuredImageIndex(
 ): Int? = imageBlocks.firstOrNull { it.reference !in measuredReferences }?.blockIndex
 
 /**
+ * 続きから読むで飛び越す画像のうち、まだ測っていないもの（→ features/reunion_card.md 判断6）。
+ * 同じ参照は1つだけ返す。
+ *
+ * **飛び越した画像は描画されないので、測られない。** 測られないまま残ると、その先の報告が
+ * [firstUnmeasuredImageIndex] で止まり続け、再開した後に読んだところが痕跡へ残らない。
+ */
+internal fun imagesSkippedBy(
+    blocks: List<MarkdownBlock>,
+    target: Int,
+    measuredReferences: Set<String>
+): List<MarkdownBlock.Image> =
+    blocks.take(target.coerceIn(0, blocks.size))
+        .filterIsInstance<MarkdownBlock.Image>()
+        .filter { it.target !in measuredReferences }
+        .distinctBy { it.target }
+
+/**
+ * 飛び越す画像を、描画を待たずに測って記録する。
+ *
+ * **未測定より後ろを報告しない検査は緩めない。** 仮の高さで後続が可視に見える水増しを防ぐ契約はそのままで、
+ * 測り終えれば判定が動いて報告が再開する。失敗も「測れた」として記録する（→ [NoteImageMeasurements]）。
+ */
+internal suspend fun measureSkippedImages(
+    blocks: List<MarkdownBlock>,
+    target: Int,
+    loader: NoteImageLoader,
+    measurements: NoteImageMeasurements
+) {
+    imagesSkippedBy(blocks, target, measurements.measuredReferences()).forEach { image ->
+        measurements.record(image, loader.measure(image))
+    }
+}
+
+/**
  * ノート内画像の寸法を**通常表示と全画面で共有する**入れ物。
  *
  * ## なぜ hoist するのか

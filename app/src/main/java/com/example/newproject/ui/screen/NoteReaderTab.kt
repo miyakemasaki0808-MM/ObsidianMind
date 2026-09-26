@@ -13,6 +13,7 @@ import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.markdown.measureSkippedImages
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.ui.vigilith.VigilithNoteAction
@@ -268,9 +269,17 @@ internal fun NoteReaderTab(
                         // その後ろに畳む操作を置かない（→ lessons L35）。
                         onDismissReadingTrace()
                         val target = visibleTraceCard.resumeBlockIndex
-                        val lastIndex = sectionModel?.blocks?.lastIndex
-                        if (target != null && lastIndex != null && lastIndex >= 0) {
-                            coroutineScope.launch { listState.scrollToItem(target.coerceAtMost(lastIndex)) }
+                        val blocks = sectionModel?.blocks
+                        if (target != null && !blocks.isNullOrEmpty()) {
+                            val clamped = target.coerceAtMost(blocks.lastIndex)
+                            coroutineScope.launch { listState.scrollToItem(clamped) }
+                            // **飛び越した画像は描画されないので測られない。** 測らないと、その先の読書の
+                            // 報告が止まり続ける。止める検査は緩めず、測り終えれば報告が再開する。
+                            if (imageLoader != null && imageMeasurements != null) {
+                                coroutineScope.launch {
+                                    measureSkippedImages(blocks, clamped, imageLoader, imageMeasurements)
+                                }
+                            }
                         }
                     }
                 )
