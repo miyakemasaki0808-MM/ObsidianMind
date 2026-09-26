@@ -26,6 +26,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -197,6 +198,49 @@ class ReunionCardControllerTest {
         advanceUntilIdle()
 
         assertEquals(2, state.value.readingTraceCard?.visitCount)
+        assertNoVisitSaveLeft(visits)
+    }
+
+    /**
+     * **待つのは同じ痕跡への保存だけ。** 別のノートの保存（遅いSAF・止まった書き込み）まで待つと、
+     * 関係の無い保存済みのカードが出なくなる。保存は錠を握って止め、止まっている間に照合する。
+     */
+    @Test
+    fun `別のノートの保存が止まっていても、保存済みの痕跡のカードは出る`() = runTest {
+        val persistence = FakePersistence().apply { put(traceAt(progress = 20)) }
+        val clock = TestClock()
+        val stalled = Mutex().apply { lock() }
+        val visits = leaveAfterReading(persistence, clock, path = OTHER_PATH, writeMutex = stalled)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, state = state, awaitVisitSaves = visits::awaitVisitSaves)
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        advanceUntilIdle()
+
+        assertEquals("別のノートの保存を待って、カードが出ていない", 2, state.value.readingTraceCard?.visitCount)
+        stalled.unlock()
+        advanceUntilIdle()
+        assertEquals(1, persistence.stored(OTHER_PATH)!!.visits.size)
+        assertNoVisitSaveLeft(visits)
+    }
+
+    /** 同じ痕跡への保存が止まっている間は待ち、**終わったら初回の訪問を取り込んだカードを出す。** */
+    @Test
+    fun `同じノートの保存が止まっている間は待ち、終われば初回の訪問でカードを出す`() = runTest {
+        val persistence = FakePersistence()
+        val clock = TestClock()
+        val stalled = Mutex().apply { lock() }
+        val visits = leaveAfterReading(persistence, clock, writeMutex = stalled)
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, state = state, awaitVisitSaves = visits::awaitVisitSaves)
+
+        controller.revealTrace(PATH, content = HEADED_BODY)
+        advanceUntilIdle()
+        assertNull("保存の前に痕跡を読んでいる", state.value.readingTraceCard)
+
+        stalled.unlock()
+        advanceUntilIdle()
+        assertEquals(1, state.value.readingTraceCard?.visitCount)
         assertNoVisitSaveLeft(visits)
     }
 
@@ -890,6 +934,9 @@ class ReunionCardControllerTest {
 
 private const val PATH = "ideas/habit.md"
 
+/** [PATH] とは別のノート。保存が止まっても [PATH] の照合を待たせてはいけない側。 */
+private const val OTHER_PATH = "ideas/other.md"
+
 /** 前後の要約として AI が返す文。 */
 private const val PASSAGE = "直前は導入の説明を読んでいた。この先は具体例に入る。"
 
@@ -951,9 +998,14 @@ private fun TestScope.readOnce(persistence: FakePersistence, clock: TestClock, b
 }
 
 /** 初めて読んで離れる。**保存は起動しただけで、まだ流していない。** */
-private fun TestScope.leaveAfterReading(persistence: FakePersistence, clock: TestClock): ReadingTraceController {
-    val visits = visitController(persistence, clock)
-    visits.onNoteOpened(PATH, "習慣について", "doc-1")
+private fun TestScope.leaveAfterReading(
+    persistence: FakePersistence,
+    clock: TestClock,
+    path: String = PATH,
+    writeMutex: Mutex = Mutex()
+): ReadingTraceController {
+    val visits = visitController(persistence, clock, writeMutex)
+    visits.onNoteOpened(path, "習慣について", "doc-1")
     visits.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
     clock.advance(10_000L)
     visits.flush()
@@ -975,7 +1027,7 @@ private fun TestScope.controller(
     body: String = HEADED_BODY,
     passageCache: SummaryCache = InMemorySummaryCache(),
     awaitSectionModel: suspend () -> NoteSectionModel = { buildNoteSectionModel(body) },
-    awaitVisitSaves: suspend () -> Unit = {}
+    awaitVisitSaves: suspend (String, String) -> Unit = { _, _ -> }
 ): ReunionCardController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReunionCardController(
@@ -998,11 +1050,13 @@ private fun TestScope.controller(
 /** 訪問を記録する側。再会カードが「前回まで」の訪問を映すことを確かめるときだけ使う。 */
 private fun TestScope.visitController(
     persistence: ReadingTracePersistence,
-    clock: TestClock
+    clock: TestClock,
+    writeMutex: Mutex = Mutex()
 ): ReadingTraceController = ReadingTraceController(
     persistScope = this,
     persistence = persistence,
     currentVaultKey = { FakeVault().key },
     clock = clock::now,
-    ioDispatcher = StandardTestDispatcher(testScheduler)
+    ioDispatcher = StandardTestDispatcher(testScheduler),
+    writeMutex = writeMutex
 )

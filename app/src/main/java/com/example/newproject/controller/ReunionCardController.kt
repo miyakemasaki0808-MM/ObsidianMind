@@ -63,10 +63,10 @@ internal class ReunionCardController(
      */
     private val passageCache: SummaryCache,
     /**
-     * 離れたノートの訪問の保存が終わるまで待つ。**照合は痕跡を読む前にこれを通す**
-     * （保存前の痕跡を読むと、初めて読んだ直後の再会でカードが出ない）。
+     * 同じ痕跡（Vaultキーと相対パス）への訪問の保存が終わるまで待つ。**照合は痕跡を読む前にこれを通す**
+     * （保存前の痕跡を読むと、初めて読んだ直後の再会でカードが出ない）。別の痕跡への保存は待たない。
      */
-    private val awaitVisitSaves: suspend () -> Unit,
+    private val awaitVisitSaves: suspend (vaultKey: String, vaultRelativePath: String) -> Unit,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /** 候補の列挙と前後の切り出しは入力サイズに比例するので Main の外で回す（→ lessons L13）。 */
     private val scanDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -106,10 +106,10 @@ internal class ReunionCardController(
         // どのVaultへの照合かは、サスペンドする前のこの時点で決める。
         val vaultKey = currentVaultKey() ?: return
         revealJob = scope.launch {
-            // **離れた訪問の保存を待ってから読む。** 切替の直後に同じノートを引くと、
+            // **同じ痕跡への訪問の保存を待ってから読む。** 切替の直後に同じノートを引くと、
             // 保存前の痕跡を読んでその再会ではカードが出ない。
             // 待っている間の切替は、この Job の取消で抜ける（世代照合は重ねない）。
-            awaitVisitSaves()
+            awaitVisitSaves(vaultKey, vaultRelativePath)
             val trace = withContext(ioDispatcher) {
                 (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)?.trace
             } ?: return@launch
