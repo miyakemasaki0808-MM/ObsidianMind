@@ -9,6 +9,7 @@ import com.example.newproject.controller.ReunionCardController
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.domain.ReunionSlot
 import com.example.newproject.domain.SummaryCache
+import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.reunionSlot
 import com.example.newproject.fakes.FakeAiClient
@@ -24,6 +25,7 @@ import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.withMark
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -326,7 +328,7 @@ class ReunionCardControllerTest {
         assertEquals(0, ai.generateCalls)
     }
 
-    // ── 位置は「前回いちばん先まで読んだところ」（REUN-1 の受理条件）──────────
+    // ── 位置は「前回いちばん先まで読んだところ」（設計レビューで固定した受理条件）──────────
 
     /**
      * **第9ブロックまで読み、第2ブロックへ戻って離れた。** 記録は巻き戻しで下がらないので、
@@ -372,7 +374,7 @@ class ReunionCardControllerTest {
         assertEquals("読了なのに前後の要約を作った", 0, ai.generateCalls)
     }
 
-    // ── 途中までは旧仕様の保存を使わない（REUN-2 の受理条件）────────────────
+    // ── 途中までは旧仕様の保存を使わない（設計レビューで固定した受理条件）────────────────
 
     /**
      * 旧仕様は途中・読了を分けずに選別していたので、途中までのノートにも
@@ -430,7 +432,7 @@ class ReunionCardControllerTest {
         assertEquals("印があるのに生成した", 0, ai.generateCalls)
     }
 
-    // ── 通常の読書を挟む一巡（REUN-3 の受理条件）──────────────────────────
+    // ── 通常の読書を挟む一巡（設計レビューで固定した受理条件）──────────────────────────
 
     /**
      * **前後の要約を作る → 同じ位置を10秒以上読む → 離れて訪問を保存 → 再会。**
@@ -602,7 +604,7 @@ class ReunionCardControllerTest {
         assertEquals("空振りの後に選び直している", 1, ai.generateCalls)
     }
 
-    /** 保存済みの問いは、訪問数が合えば再利用する（REUN-2 の対照）。 */
+    /** 保存済みの問いは、訪問数が合えば再利用する（途中までと読了の対照）。 */
     @Test
     fun `読了で訪問数の合った問いは再利用する`() = runTest {
         val persistence = FakePersistence().apply {
@@ -921,6 +923,64 @@ class ReunionCardControllerTest {
     }
 
     /**
+     * **解析を待っている間に印を外しても、解析結果が届いて印が戻らない**（実装レビューで固定した受理条件）。
+     *
+     * 照合した時点の痕跡には印がある。解析の後にその痕跡からカードを組み直すと、
+     * 外した印が画面の上だけ戻り、保存先と食い違う。同じノートのままなので要求の世代では防げない。
+     * 通常の本文とブロックの無い本文の両方で見る。畳んだ状態も開き直さない。
+     */
+    @Test
+    fun `解析待ちの間に外した印は、解析結果が届いても戻らない`() = runTest {
+        listOf(HEADED_BODY, "").forEach { body ->
+            val persistence = FakePersistence().apply {
+                put(traceAt(progress = 50).withMark(summary = "前回の文。", kind = ReunionKind.Question, atEpochMillis = 500L))
+            }
+            val model = CompletableDeferred<NoteSectionModel>()
+            val state = NoteUiStateStore(NoteUiState())
+            val controller = controller(persistence, TestClock(), state = state, awaitSectionModel = { model.await() })
+
+            controller.revealTrace(PATH, content = "")
+            advanceUntilIdle()
+            assertTrue("[$body] 印つきのカードが出ていない", state.value.readingTraceCard!!.isMarked)
+
+            controller.toggleMark(state.slot())
+            controller.dismissCard()
+            advanceUntilIdle()
+            model.complete(buildNoteSectionModel(body))
+            advanceUntilIdle()
+
+            val card = state.value.readingTraceCard!!
+            assertFalse("[${body.take(4)}] 外した印が画面に戻った", card.isMarked)
+            assertTrue("[${body.take(4)}] 畳んだカードが開き直った", card.isDismissed)
+            assertNull("[${body.take(4)}] 保存先に印が残っている", persistence.stored(PATH)!!.markedSummary)
+        }
+    }
+
+    @Test
+    fun `解析待ちの間に外して付け直すと、最後の印を保持する`() = runTest {
+        val persistence = FakePersistence().apply {
+            put(traceAt(progress = 50).withMark(summary = "前回の文。", kind = ReunionKind.Question, atEpochMillis = 500L))
+        }
+        val model = CompletableDeferred<NoteSectionModel>()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, TestClock(), state = state, awaitSectionModel = { model.await() })
+
+        controller.revealTrace(PATH, content = "")
+        advanceUntilIdle()
+        controller.toggleMark(state.slot())
+        controller.toggleMark(state.slot())
+        advanceUntilIdle()
+        model.complete(buildNoteSectionModel(HEADED_BODY))
+        advanceUntilIdle()
+
+        val card = state.value.readingTraceCard!!
+        assertTrue(card.isMarked)
+        assertEquals("前回の文。", card.aiSummary)
+        assertTrue("送り先が合流していない", card.resumeBlockIndex != null)
+        assertEquals("前回の文。", persistence.stored(PATH)!!.markedSummary)
+    }
+
+    /**
      * **別ノートへの操作が、こちらの押下を捨てないこと。**
      *
      * 「最新の要求だけが保存する」を全体で1つの世代にすると、対象が違って競合していないのに
@@ -1035,7 +1095,8 @@ private fun TestScope.controller(
     persistScope: CoroutineScope = this,
     awaitDwell: suspend () -> Unit = passDwell,
     body: String = HEADED_BODY,
-    passageCache: SummaryCache = InMemorySummaryCache()
+    passageCache: SummaryCache = InMemorySummaryCache(),
+    awaitSectionModel: suspend () -> NoteSectionModel = { buildNoteSectionModel(body) }
 ): ReunionCardController {
     val dispatcher = StandardTestDispatcher(testScheduler)
     return ReunionCardController(
@@ -1046,7 +1107,7 @@ private fun TestScope.controller(
         state = state.readingTraceWriter,
         persistence = persistence,
         currentVaultKey = { vault.key },
-        awaitSectionModel = { buildNoteSectionModel(body) },
+        awaitSectionModel = awaitSectionModel,
         passageCache = passageCache,
         clock = clock::now,
         ioDispatcher = dispatcher,

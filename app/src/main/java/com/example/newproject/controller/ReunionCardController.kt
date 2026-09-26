@@ -176,25 +176,18 @@ internal class ReunionCardController(
             }
         } ?: run {
             // 本文にブロックが無い。送る先も要約する前後も無い。
-            if (isCurrent(requestId)) setCard(cardOf(trace))
+            if (isCurrent(requestId)) mergeIntoCard { copy(isSummaryLoading = false) }
             return
         }
         if (!isCurrent(requestId)) return
-        if (trace.hasMark) {
-            setCard(cardOf(trace, resumeBlockIndex = located.resumeBlockIndex))
-            return
-        }
+        mergeIntoCard { copy(resumeBlockIndex = located.resumeBlockIndex) }
+        // 照合した時点で印があれば、枠は再掲で確定している。**待っている間に外されていても作らない**
+        // — 外したあとは押した文がそのまま残る（印を外したときの見え方と同じ）。
+        if (trace.hasMark) return
 
-        setCard(cardOf(trace, resumeBlockIndex = located.resumeBlockIndex, isSlotLoading = true))
         val passage = passageSummary(trace.noteTitle, located.passage)
         if (!isCurrent(requestId)) return
-        setCard(
-            cardOf(
-                trace,
-                item = passage?.let { Item(it, ReunionKind.Passage) },
-                resumeBlockIndex = located.resumeBlockIndex
-            )
-        )
+        mergeIntoCard { withSlotResult(passage?.let { Item(it, ReunionKind.Passage) }) }
     }
 
     private class Located(val resumeBlockIndex: Int, val passage: ReunionPassage)
@@ -262,7 +255,7 @@ internal class ReunionCardController(
         val kind = decideReunionKind(candidates)
         if (kind == ReunionKind.Overview) {
             // 候補が無い。**Nano を呼ばず、痕跡にも書かない。** 列挙は非AIなので次の再会でやり直せる。
-            setCard(cardOf(trace))
+            mergeIntoCard { withSlotResult(null) }
             return
         }
 
@@ -270,7 +263,7 @@ internal class ReunionCardController(
         if (!isCurrent(requestId)) return
         // **空振りも失敗も、見出しの1文は残して読み込み表示だけ下げる。**
         val generated = outcome as? ReunionOutcome.Generated
-        setCard(cardOf(trace, item = generated?.let { Item(it.summary, it.kind) }))
+        mergeIntoCard { withSlotResult(generated?.let { Item(it.summary, it.kind) }) }
         persistOutcome(trace, outcome, vaultKey)
     }
 
@@ -357,6 +350,7 @@ internal class ReunionCardController(
         state.update { it?.copy(isDismissed = true) }
     }
 
+    /** 照合した痕跡から最初のカードを出す。**後から届く結果には使わない**（→ [mergeIntoCard]）。 */
     private fun setCard(card: ReadingTraceCard) {
         state.update { current ->
             // 畳んだ状態は、後から届いた結果で開き直さない。
@@ -366,13 +360,30 @@ internal class ReunionCardController(
     }
 
     /**
+     * 後から届いた結果を**いまのカードへ合流する。** カードを組み直さない。
+     *
+     * 組み直すと、待っている間にユーザーが「まだ考えたい」を押した結果や畳んだ状態が、
+     * 照合した時点の痕跡で上書きされる。同じノートのままなので、要求の世代では見分けられない。
+     */
+    private fun mergeIntoCard(transform: ReadingTraceCard.() -> ReadingTraceCard) {
+        state.update { it?.transform() }
+    }
+
+    /** 枠の1件が届いた。**印が付いていれば枠は印の内容のまま**にし、読み込み表示だけ下げる。 */
+    private fun ReadingTraceCard.withSlotResult(item: Item?): ReadingTraceCard =
+        if (isMarked) {
+            copy(isSummaryLoading = false)
+        } else {
+            copy(aiSummary = item?.text, aiSummaryKind = item?.kind, isSummaryLoading = false)
+        }
+
+    /**
      * カードを組み立てる。**枠の1件は呼び出し側が決めて渡す** — 痕跡の `aiSummary` を既定で拾わない。
      * 拾うと、旧仕様の俯瞰要約や途中のノートに残った問いが、今回の分岐と無関係に出る。
      */
     private fun cardOf(
         trace: ReadingTrace,
         item: Item? = null,
-        resumeBlockIndex: Int? = null,
         isSlotLoading: Boolean = false
     ): ReadingTraceCard {
         val last = trace.visits.last()
@@ -391,8 +402,7 @@ internal class ReunionCardController(
             // 行が一度も出ないまま緑になる。
             hasMemos = trace.memos.isNotEmpty(),
             isMarked = marked != null,
-            isSummaryLoading = isSlotLoading,
-            resumeBlockIndex = resumeBlockIndex
+            isSummaryLoading = isSlotLoading
         )
     }
 
