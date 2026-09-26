@@ -298,6 +298,8 @@ internal class ReunionCardController(
                 when (kind) {
                     ReunionKind.Overview -> generateOverview(trace)
                     ReunionKind.Question, ReunionKind.Staleness -> selectCandidate(trace, kind, candidates)
+                    // 前後の要約はこの選別の経路を通らない。
+                    ReunionKind.Passage -> ReunionOutcome.Unavailable
                 }
             }
         }

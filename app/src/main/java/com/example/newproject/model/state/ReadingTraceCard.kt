@@ -10,14 +10,19 @@ import com.example.newproject.model.ReunionKind
  * `loadRandomNote` だけで、ノートを開くたびノート単位の状態リセットが
  * 消すため。二重の真実を作らない。
  *
- * [aiSummary] は俯瞰要約。生成前・生成失敗時は null で、その場合カードは
- * 生の痕跡（[lastSectionTitle] / [lastProgressPercent]）だけを見せる。
+ * **枠に何を出すかはこの型だけでは決まらない。** 最後まで読んだノートの既定はノートの要約で、
+ * それは `SummaryState` にある。両方から決める純関数は `domain.reunionSlot`
+ * （→ features/reunion_card.md 判断6「枠の中身は1つの純関数が決める」）。
  */
 data class ReadingTraceCard(
     val visitCount: Int,
     val lastVisitAtMillis: Long,
     val lastSectionTitle: String?,
     val lastProgressPercent: Int,
+    /**
+     * この Controller が枠へ出す1件 — 印の内容・当時の問い・古い前提・前後の要約。
+     * **ノートの要約はここへ入れない**（`SummaryState` から読む）。印を付けたときだけ、押した時点の文が入る。
+     */
     val aiSummary: String? = null,
     /**
      * [aiSummary] がどの種別か。**前置きの文言をここから決める。**
@@ -35,7 +40,13 @@ data class ReadingTraceCard(
     val hasMemos: Boolean = false,
     /** 「まだ考えたい」の印が付いているか。**付いていれば [aiSummary] は保存済みの再掲。** */
     val isMarked: Boolean = false,
+    /** この Controller が枠の中身（前後の要約・問いの選別）を作っている最中。ノートの要約の進行は含まない。 */
     val isSummaryLoading: Boolean = false,
+    /**
+     * 続きから読むの送り先（本文のブロック番号）。**途中まで読んだノートで、読み進めたところが求まったときだけ。**
+     * 番号は到達率を測っているのと同じ並び（`NoteSectionModel.blocks`）で数える。
+     */
+    val resumeBlockIndex: Int? = null,
     /** 「読んだ」で畳んだ状態。永続化しないので次回 Rediscover では再表示される。 */
     val isDismissed: Boolean = false
 )

@@ -53,7 +53,7 @@ internal fun decideReunionKind(candidates: ReunionCandidates): ReunionKind = whe
 internal fun ReunionCandidates.forKind(kind: ReunionKind): List<String> = when (kind) {
     ReunionKind.Question -> questions
     ReunionKind.Staleness -> stalenessMarks
-    ReunionKind.Overview -> emptyList()
+    ReunionKind.Overview, ReunionKind.Passage -> emptyList()
 }
 
 /**

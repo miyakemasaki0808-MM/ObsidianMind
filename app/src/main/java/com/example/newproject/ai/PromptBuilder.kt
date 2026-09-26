@@ -381,13 +381,13 @@ object PromptBuilder {
         kind: ReunionKind,
         candidates: List<ReunionCandidateLine>
     ): ReunionSelectionPrompt {
-        require(kind != ReunionKind.Overview) {
-            "俯瞰要約は候補から選ぶ種別ではありません（buildReadingTraceSummaryPrompt を使うこと）。"
+        require(kind == ReunionKind.Question || kind == ReunionKind.Staleness) {
+            "候補から選ぶのは問いと古い前提だけです（kind=$kind）。"
         }
         val criterion = when (kind) {
             ReunionKind.Question -> QUESTION_CRITERION
             ReunionKind.Staleness -> STALENESS_CRITERION
-            ReunionKind.Overview -> error("unreachable")
+            ReunionKind.Overview, ReunionKind.Passage -> error("unreachable")
         }
         val instructions = """
             You are helping someone return to a note they wrote earlier.
