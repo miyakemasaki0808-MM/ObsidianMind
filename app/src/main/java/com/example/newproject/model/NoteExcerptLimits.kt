@@ -29,6 +29,13 @@ object NoteExcerptLimits {
     const val QUIZ = 1200
 
     /**
+     * 再会カードの前後の要約。**前後を合わせた**文字数で、クイズの周辺本文と同じ量にしてある。
+     *
+     * 前後の片側が短ければ、余りをもう片側へ回す（→ `NoteSectionModel.passageAround`）。
+     */
+    const val REUNION_PASSAGE = 1200
+
+    /**
      * 分野の判定。**他より小さい。**
      *
      * 要約と違って本文全体を把握する必要がなく、**何について書かれたノートかが分かれば足りる**。

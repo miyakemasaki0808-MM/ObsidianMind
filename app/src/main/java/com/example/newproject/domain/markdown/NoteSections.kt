@@ -1,5 +1,7 @@
 package com.example.newproject.domain.markdown
 
+import com.example.newproject.model.ReunionPassage
+
 /**
  * ノート本文のセクション（見出し＋その配下）。
  * text は LLM に渡すための再構成済み Markdown。
@@ -75,8 +77,96 @@ class NoteSectionModel internal constructor(
         return blocksToMarkdown(blocks.subList(start, end))
     }
 
+    /**
+     * 前回いちばん先まで読んだブロック（→ features/reunion_card.md 判断6「読み進めたところの求め方」）。
+     * 引数は痕跡の最後の訪問の値。ブロックが無ければ null。
+     *
+     * 到達率は整数の百分率なので、長いノートではそれだけだと数ブロックずれる。
+     * **節が今の本文にあれば、その節の範囲へ収める** — 節の外を編集しても、読み進めた節の中には留まる。
+     * 節の範囲は [sectionForBlockIndex] と同じく「その見出しから次の見出しの直前まで」で数える。
+     * 痕跡の節の名前はその関数で記録されているので、別の区切り方をすると食い違う。
+     *
+     * 到達率からの見積もりは**手前へ寄せる**。最深ブロックが画面に全部入った回
+     * （割合1.0）は、素直に割り戻すと1つ先の未表示のブロックを指してしまう。
+     */
+    fun readFrontierBlock(sectionTitle: String?, progressPercent: Int): Int? {
+        if (blocks.isEmpty()) return null
+        val lastIndex = blocks.lastIndex
+        val reached = progressPercent.coerceIn(0, 100).toLong() * blocks.size
+        val estimate = ((reached + 99) / 100 - 1).toInt().coerceIn(0, lastIndex)
+        val title = sectionTitle?.takeIf { it.isNotBlank() } ?: return estimate
+        val nearest = headingBlockIndices.indices
+            .filter { sections[it].title == title }
+            .map { k -> headingBlockIndices[k]..((headingBlockIndices.getOrNull(k + 1) ?: blocks.size) - 1) }
+            // **同名の見出しが複数あれば、見積もりに最も近いもの。** 先頭固定にすると、
+            // 後ろの「まとめ」を読んでいたのに前の「まとめ」へ戻される。
+            .minByOrNull { range -> distanceTo(estimate, range) }
+            ?: return estimate
+        return estimate.coerceIn(nearest)
+    }
+
+    /**
+     * 読み進めたブロックを境に、前後を合わせて [targetLength] 文字まで切り出す。
+     *
+     * 前後はおおむね半分ずつにし、**片側が短ければ余りをもう片側へ回す。**
+     * 境目から遠い側を削るので、どれだけ長いブロックがあっても境目の近くは残る。
+     */
+    fun passageAround(frontierBlock: Int, targetLength: Int): ReunionPassage {
+        if (blocks.isEmpty() || targetLength <= 0) return ReunionPassage(before = "", after = "")
+        val frontier = frontierBlock.coerceIn(0, blocks.lastIndex)
+
+        // 窓は各側 targetLength ぶんあれば足りる。本文全体を文字列にしない（最大1MB）。
+        var start = frontier
+        var beforeLength = blockLength(frontier)
+        while (start > 0 && beforeLength < targetLength) {
+            start--
+            beforeLength += blockLength(start)
+        }
+        var end = frontier + 1
+        var afterLength = 0
+        while (end < blocks.size && afterLength < targetLength) {
+            afterLength += blockLength(end)
+            end++
+        }
+
+        val before = blocksToMarkdown(blocks.subList(start, frontier + 1))
+        val after = blocksToMarkdown(blocks.subList(frontier + 1, end))
+        val afterText = after.take(targetLength - minOf(before.length, targetLength / 2))
+        val beforeText = before.takeLast(targetLength - afterText.length)
+        return ReunionPassage(before = beforeText, after = afterText)
+    }
+
+    /**
+     * 続きから読むの送り先。**読み進めたところの少し手前**を画面の先頭に置く。
+     *
+     * 読み進めたブロックは当時の画面の最下端なので、そこを先頭にすると直前の文脈が見えない。
+     * 節の見出しが近ければ見出しへ、遠ければ1ブロック手前へ送る。長い節で見出しへ戻すと、
+     * 読み進めたところが何画面も下になる。
+     */
+    fun resumeBlockFor(frontierBlock: Int): Int {
+        if (blocks.isEmpty()) return 0
+        val frontier = frontierBlock.coerceIn(0, blocks.lastIndex)
+        val heading = headingBlockIndices.lastOrNull { it <= frontier }
+        return if (heading != null && frontier - heading <= RESUME_HEADING_REACH) {
+            heading
+        } else {
+            (frontier - 1).coerceAtLeast(0)
+        }
+    }
+
+    private fun blockLength(index: Int): Int = blocksToMarkdown(listOf(blocks[index])).length + 2
+
+    private fun distanceTo(index: Int, range: IntRange): Int = when {
+        index < range.first -> range.first - index
+        index > range.last -> index - range.last
+        else -> 0
+    }
+
     companion object {
         const val SURROUNDING_CONTEXT_TARGET_LENGTH = 1200
+
+        /** 続きから読むで、節の見出しまで戻してよい距離（ブロック数）。 */
+        const val RESUME_HEADING_REACH = 3
     }
 }
 
