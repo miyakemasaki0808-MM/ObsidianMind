@@ -397,25 +397,6 @@ Rediscover の本体は「古いノートとの再会」なので陳腐化を先
 | 俯瞰要約のプロンプトに本文の抜粋を足す | 同じノートを2回要約することになり、生成が減らない |
 | 要約の全文を出す | 判断1と §9 に反し、横画面の件を悪化させる |
 
-#### 旧仕様を固定していた箇所（着手前に数え、実装で当てた → [L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）
-
-- **製品コード:** `ReunionCardController`（`generateOverview`・空振り後の分岐・印の中身の出どころ・カードの組み立て・再利用の判定）／
-  `NoteViewModelDependencies`（前後の要約の保存を組み立てる）／`FileSummaryCache`（別の置き場で使う）／
-  `PromptBuilder`（旧 `buildReadingTraceSummaryPrompt`）／`PromptLimits`（旧 `READING_TRACE_HISTORY_CHARACTERS`）／
-  `ReunionCandidateScanner`（`decideReunionKind` の既定）／`ReunionKind`／
-  `ReadingTrace`（旧 `needsAiSummary`・旧 `wasEmptyReunionAttempt`・旧 `MIN_VISITS_FOR_AI_SUMMARY`）／
-  `ReadingTraceCard`（読み進めたところの番号を足す）／`ui/component/ReadingTraceCard.kt`（前置き・待ち表示・ボタン）／
-  `NoteReaderTab`（送り）／`NoteSectionModel`（境目を持った切り出しを足す）／
-  `readingTraceHeadline`（「止まっています」の文言）。
-  `ReadingTraceJson` が v5 以前の要約を `Overview` と読む箇所は**変えない**
-- **テスト:** `ReunionCardControllerTest`／`ReunionLeadTest`／`ReadingTraceHeadlineTest`／`ReunionCandidateScannerTest`／`PromptBudgetTest`／`PromptSamples`／
-  `ReadingTraceLimitsTest`（上限の説明）。androidTest は `ReadingTraceCardPanelTest`／`PromptTokenBudgetTest`／`OnDeviceGenerationTest`。
-  痕跡の JSON・合流・保存のテストは `Overview` を値として使うだけなので変えない
-- **文書:** 本書の §1・§3・§4・§5・§7・§9・§10／[reflect_reading_trace](reflect_reading_trace.md) の §3・§5（旧 `MIN_VISITS_FOR_AI_SUMMARY` の行）・§6・判断5／
-  [background_ai_ux](../system/background_ai_ux.md) §7 の表／[booklet_mode](booklet_mode.md) の「要約らしきもの」の注意／
-  実機ケース [reunion_card](../../review/device_validation/reunion_card.md) の前提と REUNION-03・REUNION-10。
-  プロンプトの本数（`PromptGenerationCoverageTest`）と、可否確認の呼び出しの本数（`AiAvailabilityContractTest` の対応表）も数え直した
-
 #### 受け入れ条件
 
 **狙いから書く**（→ [L59](../lessons/L59.md)）: **再会カードを見れば、前回どこまで読んだか、その前後に何が書いてあったかが分かり、
