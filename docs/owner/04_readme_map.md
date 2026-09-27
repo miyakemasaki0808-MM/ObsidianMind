@@ -1,7 +1,7 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-20
+**作成:** 2026-09-08 / **更新:** 2026-09-27
 
 **位置づけ:** 16本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
@@ -54,7 +54,7 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 207 | レビュー運用の正本＋レビュー一覧136行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 218 | レビュー運用の正本＋レビュー一覧139行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
 | [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 282 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 
 この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
