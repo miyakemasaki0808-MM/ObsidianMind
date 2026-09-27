@@ -655,7 +655,9 @@ class NoteReadingFlowTest {
                 lastVisitAtMillis = 0L,
                 lastSectionTitle = "見出し",
                 lastProgressPercent = 50,
-                aiSummary = "直前は見出しの下の導入を読んでいた。この先は最初の段落の説明が続き、例が3つ並ぶ。",
+                // **本文の文言（[FIRST_PARAGRAPH]・[TITLE]）をカードの文へ入れない。** 部分一致の検索が
+                // カードにも当たり、本文が見えているかを判定できなくなる。
+                aiSummary = "直前は導入を読んでいた。この先は説明が続き、例が3つ並ぶ。",
                 aiSummaryKind = ReunionKind.Passage,
                 hasMemos = true,
                 resumeBlockIndex = 0
