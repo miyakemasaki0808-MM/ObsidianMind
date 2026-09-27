@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-09-27 | — | 柱3・結晶を実装し、architecture 判断4 の表に「ジョブはノート単位・結果はVault単位」を3行目として並べた（実機検証待ち） | [reflect_crystal](features/reflect_crystal.md)・[architecture](system/architecture.md) 判断4 |
 | 2026-09-27 | — | 結晶の試行判定・送信・記録が同じ候補を使う設計を再確認し、残っていた設計指摘を解消とした | [レビュー一覧](../review/README.md) |
 | 2026-09-27 | — | 結晶の試す条件を、控え全体ではなく実際にAIへ渡す候補の中で数えるよう設計を直した（再確認待ち） | [reflect_crystal](features/reflect_crystal.md) 判断5 |
 | 2026-09-27 | — | 結晶の再設計で保存と生成順序の指摘を設計上解消と確認し、試行判定と送信候補の範囲の不一致を既存課題へ統合した | [レビュー一覧](../review/README.md) |

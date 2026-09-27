@@ -1,9 +1,9 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** **Draft — 未実装。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）。外部レビュー前
-**最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
-**関連コード:** 予定 — `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（照合の終わりを待つ関数） / `model/state/CrystalLogState.kt` / `ai/PromptBuilder.kt` / `ui/screen/AiTab.kt` / `ui/screen/CrystalListScreen.kt`
-**関連テスト:** 予定 — `CrystalControllerTest` / `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalJsonTest` / `CrystalMaterialStoreTest` / `NoteSessionCoordinatorTest` / `ReunionCardControllerTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `PromptTokenBudgetTest`
+**状態:** **実装済み・実機検証待ち。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）。実装は外部レビュー前
+**最終検証:** 2026-09-27 / `d559e33`
+**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/CrystalText.kt`
+**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest`
 **正本:** この文書
 
 **関連:** [note_summary](note_summary.md)（材料の出どころ）・[reflect_reading_trace](reflect_reading_trace.md)（置き場を共有する）・
@@ -53,7 +53,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 | 結晶の一覧 | 新しい順に、日付・1文・根拠。根拠のノート名を押すとそのノートを開く | 入口を押したとき |
 | AI非対応 | 何も出ない。入口も、結晶が1件も無ければ出ない | 端末が Nano 非対応 |
 
-文言（見出し・入口・「から」）は候補で、実機で見て決め直してよい。
+文言は候補で、実機で見て決め直してよい。いまの実装は、見出し「💎 結晶」・入口「結晶の一覧（N件） ›」・根拠「A・B から ▾」・一覧が空のときの説明1文（`ui/CrystalText.kt`）。
 
 ## 4. 現在のユーザーフロー
 
@@ -128,7 +128,9 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
 ### 表示
 
 - ✨タブ: 要約（`SummaryPanel`）の直下。**このノートを根拠に含む結晶**を新しい順に最大3件、その下に一覧への入口
-- 絞り込みは純関数 `crystalsForNote(path, crystals)` が決める。**UIに条件を書かない**
+- 絞り込みは純関数 `crystalsForNote(crystals, path)` が決める。**UIに条件を書かない**
+- **今のノートの相対パスは `NoteState` が持たない**ので、結晶を試す契機（`crystallize`）で `crystalNotePath` に置く。
+  相対パスが確定しないノートでは置かないので、そのノートの✨タブには結晶が出ない（入口は出る）
 - 根拠のノート名は、結晶を作った時点のものを出す。改名・移動には追従しない
 - 一覧: 新しい順。根拠のノート名は、**今の走査結果に同じ相対パスがあれば押せる**。無ければ押せない表示にする
 - 見た目は [ui_design_principles](../system/ui_design_principles.md) と [bearing_channels](../system/bearing_channels.md) に従い、
@@ -136,15 +138,21 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
 
 ## 6. 状態とデータ
 
-**UI状態:** `CrystalLogState`（`NoteUiState.crystalLog`）— `NotLoaded` / `Loading` / `Loaded(crystals)`。**Vault単位。**
-ノート単位の状態は持たない。✨タブの表示は、一覧と今のノートの相対パスから純関数で導く。
+**UI状態:** 書き手は結晶の Controller だけで、寿命の違う2欄を1つのスライス（`CrystalSlice`）で持つ。
+
+| 欄 | 中身 | 寿命 |
+|---|---|---|
+| `crystalLog` | `CrystalLogState` — `NotLoaded` / `Loading` / `Loaded(crystals)`。`crystals` は新しい順 | **Vault単位** |
+| `crystalNotePath` | ✨タブの絞り込みに使う今のノートの相対パス。`NoteState` が相対パスを持たないため、ここに置く | **ノート単位** |
+
+✨タブの表示は、この2欄から純関数で導く。
 
 **契約への登録（→ 判断8）:**
 
 | 契約 | 登録 | 理由 |
 |---|---|---|
 | `cancelNoteScopedJobs()` | **載せる** — `crystal.cancelAndClear()` は生成ジョブだけを止め、requestId を進める。**保存に入った結晶と一覧には触らない**（→ 判断9） | 試行はノートを開いた契機で走る |
-| `withNoteScopedReset()` | **載せない** | 一覧は Vault 全体のもの。ノートを切り替えただけで一覧が消えるのは誤り |
+| `withNoteScopedReset()` | **`crystalNotePath` だけ載せる。一覧は載せない** | 一覧は Vault 全体のもの。ノートを切り替えただけで一覧が消えるのは誤り。パスを残すと次のノートの✨タブに前のノートの結晶が出る |
 | `withVaultScopedReset()` | **載せる** — `crystalLog = NotLoaded`。`clearVaultScoped()` が読み込みと生成を止めて requestId を進める。**保存は止めないが、その完了を新しい Vault の一覧へ足さない**（→ 判断9） | 別 Vault の結晶を出さない |
 
 **結晶（Vault 内・1件1ファイル）:** `_ReadingTraces/crystals/<作成時刻のエポックミリ秒>.json`
@@ -193,7 +201,7 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
       ├─ crystal.ensureLogLoaded()                 ← Vault単位・未読込なら1回・AIを呼ばない
       │    ├─ awaitCrystalSaves(vaultKey)          ← その Vault への保存が終わるのを待つ
       │    └─ CrystalStore.readAll(vaultKey)  @Dispatchers.IO
-      └─ crystal.onNoteShown(path, title)          ← requestId を採番し、vaultKey をこの時点で決める
+      └─ crystal.onNoteShown(path, title)          ← requestId を採番し、crystalNotePath を置き、vaultKey をこの時点で決める
            │ ── 生成（ノート単位。切り替えたら取り消す）──
            ├─ awaitDwell()                          ← 3秒（→ background_ai_ux §7）
            ├─ 要約が Success になるのを待つ          ← Error・AiUnavailable なら終わる
@@ -214,6 +222,8 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
                 └─ 成功し、vaultGeneration が依頼時と同じなら一覧へ1回だけ足す
 ```
 
+- **呼ぶのは窓口（`NoteViewModel`）で、再会カードの照合より後。** Rediscover・冊子は `presentDrawnNote`、
+  関連・さがす・結晶の一覧は `openNote` から、相対パスが確定した後に `crystallize` を呼ぶ（順序は `CrystalWiringOrderTest`）
 - **要約と再会カードの結果は待つだけ。** Coordinator が「このノートの要約の終わりを待つ関数」と「再会カードの照合の終わりを待つ関数」を渡し、
   Controller どうしは呼び合わない
 - **照合は2つあり、守るものが違う。** requestId は「この生成を保存へ渡してよいか」、`vaultGeneration` は「この保存を今の一覧へ足してよいか」。
@@ -297,8 +307,8 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 - **新しいルートフォルダを作らない。** アプリの記憶は `_ReadingTraces` に集まっているので、その下のフォルダにする。
   ノート収集の3箇所の除外（→ [reflect_reading_trace](reflect_reading_trace.md) §5）をそのまま受け継ぐ
 - **痕跡の索引に載らないことを検査で固定する。** 索引は `_ReadingTraces` の子の名前の先頭64文字をキーとして読み、
-  64文字未満は載せない。`crystals` はこれで外れるが、**この前提に頼る経路（索引・孤児掃除・退避・読み戻しの下見）の全部で
-  フォルダと短い名前を無視することを、実装時にテストで固定する**（→ [L14](../lessons.md#l14-横展開は最後の1本を取り残す)）
+  64文字未満は載せない。`crystals` はこれで外れる。**この前提に頼る経路（索引・孤児掃除・退避・読み戻しの下見）はすべて
+  同じ索引を通るので、判定を `readingTraceKeyOf` に出してテストで固定した**（`ReadingTraceKeyTest` → [L14](../lessons.md#l14-横展開は最後の1本を取り残す)）
 - **控えは Vault に書かない。** 書くとノートを開くたびに Vault への書き込みが1回増える。控えは失っても読めば溜まり直すので、
   端末内で足りる
 
@@ -308,7 +318,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   結晶は Vault に残って一覧からいつでも辿れるので、**未確認管理も要らない**（→ [background_ai_ux](../system/background_ai_ux.md) §4）
 - **生成のジョブはノート単位、結果は Vault 単位**（保存を Vault 単位に分ける理由は判断9）。これは分野判定と同じ形で、architecture が「例外は分野判定だけ」と書き、
   **「同じ形が2件目に現れたら、そのとき表を組み直す」**と決めている形の2件目にあたる。
-  **実装するときに [architecture](../system/architecture.md) の判断4の二層の表を組み直す**（→ §11）
+  **[architecture](../system/architecture.md) 判断4 の表の3行目「ジョブはノート単位・結果はVault単位」として並べた**
 - **Controller を共通化しない。** 見せ方は分野判定と同じ（進捗も失敗も出さない）だが、材料・保存・表示がすべて違う。
   共通化の再検討の条件（未確認管理と Snackbar を持つ Controller の3つ目）にも当たらない
 
@@ -388,15 +398,16 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     Vault を A→B、A→B→A と切り替えてから解放すると、B へは書かず B の一覧にも出ない。A へ戻った後の一覧は A の実ファイルと一致する／
     保存が失敗したら一覧に足さない／保存を依頼する前の取消（生成中を含む）では保存0件／
     一覧の読込中に保存が終わっても、読み込みの完了後に1回だけ出る
-  - `NoteSessionCoordinator` — 契約の2箇所に載り、`withNoteScopedReset()` に載っていないこと
+  - `NoteSessionCoordinator` — ノート切替で一覧は残り、絞り込みのパスは消えること。Vault切替では両方消えること
   - **再会カードとの順序**（→ 判断10）。要約を保存済みにして、再会カードの訪問の保存待ちか解析を3秒より後まで止める。
     結晶の試す条件を満たしていても先に錠を取らず、止めを解くとカードの生成が先に走る／
     逆向き（カードの生成中に結晶が待つ）／カードの無い経路・保存済みで済んだカード・生成が失敗したカードの後では結晶が進む／
     待っている間にノートを切り替えると、両方の旧い要求が残らない／照合は結晶が待ち始める前に要求されていること
   - 痕跡の索引・孤児掃除・退避・読み戻しの下見が `crystals/` を無視すること（→ 判断7）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
-- **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足し、実トークンの余裕を測る
-- **実機確認:** Codex の実機ケースは実装時に書く。観点は、3件読んだ後に結晶が要約の下に出るか、同じ日に2つ目ができないか、
+- **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した（実機では未計測）。
+  `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）
+- **実機確認:** 未実施。実機ケースは Codex が次の観点から書く。観点は、3件読んだ後に結晶が要約の下に出るか、同じ日に2つ目ができないか、
   根拠が開くか、一覧から根拠のノートが開くか、Snackbar とバッジが出ないか、非対応端末で何も出ないか、Vault を切り替えたときに混ざらないか
 - **保証していないこと:**
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
@@ -414,8 +425,6 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   結晶は Vault に置くので、Vault が残る限り失われない
 - **一覧の読み込みは件数に比例する。** 1日1件なら年に約365件。遅さが体感できたら、端末内に索引を持つ
 - **結晶を消す・直す導線が無い。** 実機で困ったら足す
-- **architecture の二層の表を、実装時に組み直す。** 分野判定と同じ形の2件目なので、例外として脇に置く書き方をやめ、
-  「ジョブはノート単位・結果は Vault 単位」を表の形として並べる（→ 判断8）。系統図に Controller を足すのも同じ時点
 - **文言は実機で見て決め直す。** 見出し・入口・「〇〇・△△ から」・一覧の見出し
 
 ## 12. 開発経緯

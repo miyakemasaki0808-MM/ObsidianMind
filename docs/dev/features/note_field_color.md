@@ -532,7 +532,7 @@ OKLab の L とは別物である（相関はするが一致せず、彩度が�
 AIの結果は requestId で照合し、Vault切替では `clearVaultScoped()` がジョブを止めて同じ requestId を進める。
 走査の結果は、走査を呼ぶ処理がどれも Vault切替で取り消される Job の中で動く（ノートの読込・関連ノート・冊子）ので、
 走査から戻った時点で取り消されていれば合成まで進まない。**`vaultGeneration` は持たない** —
-取り消しと requestId で足りている（→ [architecture](../system/architecture.md) 判断4 の例外）。
+取り消しと requestId で足りている（→ [architecture](../system/architecture.md) 判断4 の3行目「ジョブはノート単位・結果はVault単位」）。
 **走査を取り消されない場所から呼ぶようになったら、そのとき照合を足す。**
 
 **「有効な確定」は入力版で決まる。** 本文・ヒント・語彙のどれかが変われば入力版が変わり、

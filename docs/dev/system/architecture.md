@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（14 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -38,10 +38,11 @@ NoteViewModel（Android境界の窓口）
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
       ├── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
       ├── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
-      └── NoteFieldController           ← ノートの分野判定（**例外。判断4 を見る**）
+      ├── NoteFieldController           ← ノートの分野判定（**ジョブはノート単位・結果はVault単位 → 判断4**）
+      └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 15個である。
 
 **行数は倍になったが、窓口の性質は変わっていない。** 68ある関数のうち**43は1行の委譲**で、
 本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
@@ -73,7 +74,7 @@ NoteViewModel（Android境界の窓口）
 無効化の契機がVault切替だけなので、
 どちらの契約にも載せない（ノートを開き直しただけで一覧が消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、すべてのControllerが従うものではない。
-**片方だけに載る例外もある**（分野判定 → 判断4）。
+**ジョブと結果で寿命が分かれる形もある**（分野判定・結晶 → 判断4 の3行目）。
 
 ## 判断3: 壊れやすいロジックは純関数に切り出す
 
@@ -93,13 +94,27 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 ## 判断4: 非同期の世代IDは二層（Vault単位／ノート単位）
 
-| スコープ | 対象 | 無効化の契機 | 持ち主 |
-|---|---|---|---|
-| ノート単位 | 要約・DL・クイズ・余白メモ・チャット・蒸留 | ノート切替（`cancelNoteScopedJobs()`） | **各Controllerの `activeRequestId`** |
-| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（`saveVault()`） | **`NoteSessionCoordinator.vaultGeneration`** |
+世代IDは二層で、Controller の形はその組み合わせで3つある。**新しい Controller はどれか1行を選び、その行の登録をすべて行う。**
 
-**混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
+| 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
+|---|---|---|---|---|
+| ノート単位 | 要約・DL・クイズ・余白メモ・チャット・蒸留 | ノート切替（**各Controllerの `activeRequestId`**） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
+| ジョブはノート単位・結果はVault単位 | 分野判定・結晶 | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
+
+**1行目と2行目は混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
 逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**片方に寄せると必ずどちらかが壊れる。**
+
+**3行目は「どちらでもよい」ではない。** 起動の契機がノートを開くことなのでジョブはノート単位で止め、
+結果はVault全体の索引なので**ノートを切り替えただけで消してはいけない**。
+分野判定（索引A）と結晶（一覧）が同じ形で、**AIの結果をVault単位の索引へ溜める**機能がこの行に入る。
+登録の列を省けないようにしてあるのは、行が増えると次の Controller が契約への登録を考えなくなるため。
+
+- **分野判定**は照合を requestId だけで行う（Vault切替でも `clearVaultScoped()` が同じ requestId を進めるので、旧Vaultの結果は書かれない）
+  → [note_field_color](../features/note_field_color.md)
+- **結晶**は生成と保存の寿命を分ける。生成はこの行どおりノート単位で止め、**保存に入った結晶はノート切替で止めない**。
+  一覧へ足すかは **`vaultGeneration`** で照合する（→ [reflect_crystal](../features/reflect_crystal.md) 判断9）。
+  絞り込みに使う今のノートの相対パスだけはノート単位の状態で、`withNoteScopedReset()` に載せる
 
 **Vault世代を `vaultUri` の比較で代用しない。** Vault を A→B→A と選び直すと `cachedNotes` も破棄されるため
 無効化したいが、Uri比較では同じ値になって素通りする。単調増加する `Long` なら選び直しも1回の切替として数えられ、
@@ -111,25 +126,6 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 **三層目は作らない。** 蒸留の復旧チェックはノートにもVaultにも紐づかないが、
 **世代を増やさず専用の追跡Job1本**で足りた。取り下げの契機が「次の `checkRecovery()`」しかないため。
 **層を足す前に「無効化の契機がいくつあるか」を数える。**
-
-### 例外は分野判定だけ — 上の表に行を足さない（2026-09-12、オーナー判断）
-
-[`NoteFieldController`](../../../app/src/main/java/com/example/newproject/controller/NoteFieldController.kt) は
-**二層を両方使う唯一のController**である。
-
-| | どちらか | なぜ |
-|---|---|---|
-| ジョブ | **ノート単位**（`cancelNoteScopedJobs()` に登録し、`activeRequestId` で照合） | ノートを開いた契機で走るので、切り替えたら止めるのが正しい |
-| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。**照合は `vaultGeneration` ではなく requestId** — Vault切替でも `clearVaultScoped()` がジョブを止めて同じ requestId を進めるので、旧Vaultの結果は書かれない） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
-
-**これを二層の表の3行目にしない。** 基本のControllerは司令塔の契約に素直に繋がっているはずで、
-**その姿を表が示していることに価値がある。** 3行目を足すと「どちらでもよい」と読めてしまい、
-**次に足すControllerが契約への登録を考えなくなる。**
-分野判定は**AI結果をVault単位の索引へ溜める**という形がこれまで無かったための例外であって、
-規則の緩和ではない。
-
-**同じ形が2件目に現れたら、そのとき表を組み直す。** 件数ではなく**形の再来**が引き金である
-（→ [lessons L31](../lessons/L31.md)）。
 
 **世代照合は片方向にしか効かない。** 優先順位が状況で入れ替わる2つの非同期処理では、
 「遅れて届いた側が勝つべき場合」に**その時点で相手を無効化する**ことを書いた側が明示する。
@@ -207,17 +203,19 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Quiz | Distill | ReunionCard | Summary | NoteField |
-|---|---|---|---|---|---|
-| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** |
-| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ |
-| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** |
-| 起動契機 | 明示操作 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 |
+| 要素 | Quiz | Distill | ReunionCard | Summary | NoteField | Crystal |
+|---|---|---|---|---|---|---|
+| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** | **✗（黙って諦める）** |
+| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** | **✗（一覧だけを持つ）** |
+| 起動契機 | 明示操作 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 | ノート表示（**要約と再会カードの後**） |
 
 **5本目（分野判定）は結論を補強した。** 起動契機は Summary と同じ「ノート表示」なのに、
 **見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
 **起動契機が同じでも共通化できない**ことの実例である。
+6本目（結晶）も見せ方は分野判定と同じ（進捗も失敗も出さない）だが、材料・保存・表示がすべて違い、
+再検討の条件にも当たらない。
 
 **判定軸は「ユーザーへの見せ方」である。** バックグラウンドAI機能の共通性は生成処理そのものではなく
 通知と失敗の見せ方に宿るため、そこが違えば処理が似ていても共通化できない。
