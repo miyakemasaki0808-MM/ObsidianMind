@@ -94,6 +94,7 @@ import com.example.newproject.model.CrystalMaterial
 import com.example.newproject.model.CrystalMaterialLog
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlin.coroutines.CoroutineContext
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 
 /**
  * Vault切替・ノート切替の一斉初期化を固定する。
@@ -1244,6 +1245,57 @@ class NoteSessionCoordinatorTest {
         assertEquals("切り替えた後にカードか結晶が生成した", 0, env.ai.generateCalls)
         assertEquals(0, env.crystals.appendCalls)
         assertNull("取り消した試行を数えた", env.crystalMaterials.load("vault-a").lastAttemptAt)
+    }
+
+    @Test
+    fun `前後の要約が保存済みで済んだカードの後は、結晶が進む`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+        env.passageCache.entries[passagePromptAfterFirstRead()] = "前は導入の話、後は結論の話。"
+
+        env.leaveAfterFirstRead(coordinator, clock)
+        env.openRediscovered(coordinator)
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advanceUntilIdle()
+
+        assertEquals("カードは保存済みで済み、生成したのは結晶だけ", 1, env.ai.generateCalls)
+        assertTrue(env.ai.lastPrompt!!.contains("Candidates:"))
+        assertEquals("前は導入の話、後は結論の話。", coordinator.uiState.value.readingTraceCard?.aiSummary)
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+    }
+
+    @Test
+    fun `カードの生成が失敗した後は、結晶が進む`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        env.ai.onGenerate = { prompt ->
+            if (prompt.contains(PromptBuilder.REUNION_READ_MARKER)) throw IllegalStateException("生成に失敗")
+            CRYSTAL_ANSWER
+        }
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+
+        env.leaveAfterFirstRead(coordinator, clock)
+        env.openRediscovered(coordinator)
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advanceUntilIdle()
+
+        assertEquals(2, env.ai.generateCalls)
+        assertTrue("カードが先に生成した", env.ai.prompts[0].contains(PromptBuilder.REUNION_READ_MARKER))
+        assertEquals(1, env.crystals.stored("vault-a").size)
+    }
+
+    /** [leaveAfterFirstRead] の訪問（導入まで・40%）で、再会カードが作る前後の要約のプロンプト。 */
+    private fun passagePromptAfterFirstRead(): String {
+        val model = buildNoteSectionModel(CRYSTAL_NOTE_BODY)
+        val frontier = requireNotNull(model.readFrontier(sectionTitle = "導入", progressPercent = 40))
+        return PromptBuilder.buildReunionPassagePrompt(
+            noteTitle = CRYSTAL_NOTE_TITLE,
+            passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
+        )
     }
 
     @Test
