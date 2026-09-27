@@ -29,3 +29,5 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
+| `2026-09-28-crystal-implementation-review/P2-1` | 結晶一覧の旧Vault走査が切替後のノートキャッシュを上書きする | `起票` CRYS-5 |
+| `2026-09-28-crystal-implementation-review/P3-1` | 小文字・全角小文字・空白付きの候補IDが結晶本文の検査を通過する | `起票` CRYS-6 |
