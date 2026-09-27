@@ -344,7 +344,8 @@
 
 ## CRYS-5. 結晶一覧の旧Vault走査が切替後のキャッシュへ戻る
 
-- **状態:** 未着手（2026-09-28、実装レビュー P2-1）。
+- **状態:** **修正した（2026-09-28）。別の目の再確認待ち。** 一覧の走査を Vault 単位の Job として持って Vault 切替で取り消し、
+  走査キャッシュを `NoteScanCache` へ出して、公開の直前に Vault の世代を照合するようにした（`NoteScanCacheTest`）。
 - **現状:** [`openCrystalList`](../../app/src/main/java/com/example/newproject/NoteViewModel.kt) が始める走査は
   `scope.launch` の Job を保持せず、Vault切替でも止まらない。`collectAllNotesCached` は復帰時にVaultの世代を照合せず、
   ノートキャッシュ・`knownNotePaths`・分野索引を上書きする。

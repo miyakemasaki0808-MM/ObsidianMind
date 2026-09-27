@@ -134,15 +134,27 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
-    private var cachedNotes: List<NoteFile> = emptyList()
-    private var cachedNotesLoadedAt = 0L
+    /**
+     * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
+     * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
+     */
+    private val noteScan = NoteScanCache(
+        ttlMillis = NOTES_CACHE_TTL_MS,
+        vaultGeneration = { session.vaultGeneration }
+    )
+    private val cachedNotes: List<NoteFile> get() = noteScan.notes
 
     /**
      * 今の走査結果にあるノートの相対パス。**結晶の一覧で、根拠のノート名を押せるかを決める**
      * （改名・移動・削除したノートは押せない表示にする → features/reflect_crystal.md §5）。
      */
-    private val mutableKnownNotePaths = MutableStateFlow<Set<String>>(emptySet())
-    val knownNotePaths: StateFlow<Set<String>> = mutableKnownNotePaths.asStateFlow()
+    val knownNotePaths: StateFlow<Set<String>> = noteScan.knownPaths
+
+    /**
+     * 結晶の一覧を開いたときの走査。**Vault単位**で、Vault切替で取り消す（ノート切替では止めない —
+     * 一覧から根拠のノートを開いた後も、押せるかの判定は続けて使う）。
+     */
+    private var crystalListScanJob: Job? = null
 
     // ノート切替時に前のノートの読込・関連ノートが後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
@@ -191,38 +203,28 @@ class NoteViewModel internal constructor(
         session.onVaultChanged {
             vaultLocation.uri = uri
             preferences.vaultUri = uri.toString()
-            cachedNotes = emptyList()
-            cachedNotesLoadedAt = 0L
-            mutableKnownNotePaths.value = emptySet()
+            crystalListScanJob?.cancel()
+            noteScan.clear()
             relatedNotesUseCase.clearCache()
         }
     }
 
-    // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
+    // Vault全体のノート一覧をTTL付きで取得する。期限内はキャッシュを再利用し、
     // ランダム表示の連打や関連ノートの補填で毎回の全走査を避ける。
+    // 走査の間にVaultが切り替わったら、結果を捨てて CancellationException で止まる（→ NoteScanCache）。
     private suspend fun collectAllNotesCached(
         contentResolver: ContentResolver,
         vaultUri: Uri
-    ): List<NoteFile> {
-        val now = System.currentTimeMillis()
-        if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
-            return cachedNotes
-        }
+    ): List<NoteFile> = noteScan.get(
         // 走査が部分的に失敗していても、読めた分でランダム表示・関連ノートを続ける
         // （止めるほうが体験として悪い）。完全性を要求するのは、不在を根拠に
         // 何かを消す処理だけ。→ VaultScan のKDoc
-        val notes = repository.collectNotes(contentResolver, vaultUri).notes
-        cachedNotes = notes
-        cachedNotesLoadedAt = now
-        mutableKnownNotePaths.value = notes.mapNotNullTo(HashSet()) { note ->
-            note.vaultRelativePath.takeIf { it.isNotEmpty() }
-        }
+        scan = { repository.collectNotes(contentResolver, vaultUri).notes },
         // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
         // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
         // 索引Aが同じ材料で揃う。
-        session.indexNoteFields(notes)
-        return notes
-    }
+        onPublished = session::indexNoteFields
+    )
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultLocation.uri ?: return
@@ -380,7 +382,8 @@ class NoteViewModel internal constructor(
     fun openCrystalList(contentResolver: ContentResolver) {
         session.loadCrystals()
         val uri = vaultLocation.uri ?: return
-        scope.launch {
+        crystalListScanJob?.cancel()
+        crystalListScanJob = scope.launch {
             try {
                 collectAllNotesCached(contentResolver, uri)
             } catch (e: CancellationException) {
@@ -653,8 +656,7 @@ class NoteViewModel internal constructor(
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
-            cachedNotes = emptyList()
-            cachedNotesLoadedAt = 0L
+            noteScan.clear()
             relatedNotesUseCase.clearCache()
             true
         } catch (e: CancellationException) {

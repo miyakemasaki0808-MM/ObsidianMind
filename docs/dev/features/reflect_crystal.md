@@ -2,8 +2,8 @@
 
 **状態:** **実装済み・実機検証待ち。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）。実装は外部レビュー前
 **最終検証:** 2026-09-27 / `d559e33`
-**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/CrystalText.kt`
-**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest`
+**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/CrystalText.kt`
+**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest`
 **正本:** この文書
 
 **関連:** [note_summary](note_summary.md)（材料の出どころ）・[reflect_reading_trace](reflect_reading_trace.md)（置き場を共有する）・
@@ -133,6 +133,9 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
   相対パスが確定しないノートでは置かないので、そのノートの✨タブには結晶が出ない（入口は出る）
 - 根拠のノート名は、結晶を作った時点のものを出す。改名・移動には追従しない
 - 一覧: 新しい順。根拠のノート名は、**今の走査結果に同じ相対パスがあれば押せる**。無ければ押せない表示にする
+- 一覧を開いたときの走査は **Vault単位の Job** として持ち、Vault切替で取り消す。取り消しに加えて、走査キャッシュが
+  公開の直前に Vault の世代を照合するので、切替の前に始まった走査が後から返っても**切替後のキャッシュ・開けるパス・分野の索引へ戻らない**
+  （→ [note_field_color](note_field_color.md) の「別Vaultの遅れて届いた結果を現Vaultへ合成しない」）
 - 見た目は [ui_design_principles](../system/ui_design_principles.md) と [bearing_channels](../system/bearing_channels.md) に従い、
   **新しい色・形の意味を足さない**。面は要約と同じパネルを使う
 
@@ -404,6 +407,8 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     逆向き（カードの生成中に結晶が待つ）／カードの無い経路・保存済みで済んだカード・生成が失敗したカードの後では結晶が進む／
     待っている間にノートを切り替えると、両方の旧い要求が残らない／照合は結晶が待ち始める前に要求されていること
   - 痕跡の索引・孤児掃除・退避・読み戻しの下見が `crystals/` を無視すること（→ 判断7）
+  - 走査キャッシュ — Aの走査を止めたままBへ切り替え、Bの後にAが返っても、キャッシュ・開けるパス・分野の索引はBのまま。
+    A→B→A でも最初のAの走査が今の走査を上書きしない（`NoteScanCacheTest`）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
 - **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した（実機では未計測）。
   `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）
