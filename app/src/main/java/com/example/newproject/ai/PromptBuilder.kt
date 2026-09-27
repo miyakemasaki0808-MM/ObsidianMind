@@ -1,5 +1,11 @@
 package com.example.newproject.ai
 
+import com.example.newproject.model.CRYSTAL_CURRENT_ID
+import com.example.newproject.model.CRYSTAL_NONE_TOKEN
+import com.example.newproject.model.CRYSTAL_SELECTION_LABEL
+import com.example.newproject.model.CRYSTAL_SENTENCE_LABEL
+import com.example.newproject.model.CrystalLimits
+import com.example.newproject.model.CrystalMaterial
 import com.example.newproject.model.DistillCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.NOTE_FIELD_NONE_ID
@@ -54,6 +60,20 @@ internal data class ReunionSelectionPrompt(
     val candidates: List<ReunionCandidateLine>
 ) {
     val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+}
+
+/** 結晶の候補1件。IDは `N1` から振り、`N1` が今のノート。 */
+internal data class CrystalCandidateLine(val id: String, val material: CrystalMaterial)
+
+/**
+ * 結晶のプロンプトと、**予算で落とした後の実際に渡す候補**（→ features/reflect_crystal.md 判断5）。
+ *
+ * 試す条件の判定・応答の許可ID・渡した材料の記録は、すべて [candidates] で行う。
+ * 途中で選び直すと、判定した集合と送った集合がずれる。
+ */
+internal data class CrystalPrompt(val text: String, val candidates: List<CrystalCandidateLine>) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+    val sentMaterials: List<CrystalMaterial> get() = candidates.map { it.material }
 }
 
 /** AIへ実際に渡した候補集合も保持し、応答IDの許可集合とプロンプトをずらさない。 */
@@ -396,6 +416,58 @@ object PromptBuilder {
                 append("\n").append(REUNION_READ_MARKER).append("\n")
                 append(passage.after)
             }
+        )
+    }
+
+    /**
+     * 結晶（→ features/reflect_crystal.md §5「プロンプト」）。
+     *
+     * **材料は読んだノートの要約で、読み手自身の考えではない**と指示文で明示する。
+     * 総括の対象は「読んできたもの」であって「あなたの思考」ではない（判断1）。
+     *
+     * 候補の先頭が今のノートで `N1` になる。予算を超えたら**古い候補から行ごと落とし、
+     * `N1` は落とさない**。[candidateBudget] を差し替えられるのは、落とした後の集合で
+     * 判定することをテストで確かめるため。
+     */
+    internal fun buildCrystalPrompt(
+        candidates: List<CrystalMaterial>,
+        candidateBudget: Int = PromptLimits.CRYSTAL_CANDIDATES_CHARACTERS
+    ): CrystalPrompt {
+        val lines = candidates.take(CrystalLimits.CANDIDATES)
+            .mapIndexed { index, material -> CrystalCandidateLine("N${index + 1}", material) }
+        val presented = mutableListOf<CrystalCandidateLine>()
+        val rendered = mutableListOf<String>()
+        var used = 0
+        for (line in lines) {
+            val text = "${line.id} | ${label(line.material.noteTitle)} — ${line.material.fragment}"
+            val cost = text.length + if (rendered.isEmpty()) 0 else 1
+            if (rendered.isNotEmpty() && used + cost > candidateBudget) break
+            presented += line
+            rendered += text
+            used += cost
+        }
+
+        val instructions = """
+            You are summarizing what a reader has been reading.
+            Each candidate below is a short summary of one note the reader read recently, listed as "ID | note title — summary".
+            These summaries describe what the notes say. They are NOT the reader's own thoughts.
+            $CRYSTAL_CURRENT_ID is the note the reader is reading now.
+            Choose 1 to 3 other candidates that share a common thread with $CRYSTAL_CURRENT_ID.
+            Then, in Japanese, write ONE sentence that states that common thread, using only the summaries of $CRYSTAL_CURRENT_ID and the notes you chose.
+            Do not add anything that is not in those summaries. Do not add advice, questions, or evaluation. Do not describe the reader's thoughts or feelings.
+            Do not write any ID inside the sentence.
+            Answer in exactly two lines:
+            $CRYSTAL_SELECTION_LABEL: $CRYSTAL_CURRENT_ID, <the IDs you chose>
+            $CRYSTAL_SENTENCE_LABEL: <one Japanese sentence>
+            If no candidate shares a common thread with $CRYSTAL_CURRENT_ID, answer exactly: $CRYSTAL_NONE_TOKEN
+        """.trimIndent()
+
+        return CrystalPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = "\n\nCandidates:\n" + rendered.joinToString("\n")
+            ),
+            candidates = presented
         )
     }
 

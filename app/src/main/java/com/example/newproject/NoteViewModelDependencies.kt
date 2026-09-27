@@ -8,6 +8,11 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.GenerationRecordingAiClient
 import com.google.mlkit.genai.common.internal.GenAiUtils
 import com.example.newproject.data.AppPreferences
+import com.example.newproject.data.CrystalMaterialPersistence
+import com.example.newproject.data.CrystalPersistence
+import com.example.newproject.data.CrystalStore
+import com.example.newproject.data.FileCrystalMaterialStore
+import com.example.newproject.data.SafCrystalDocumentGateway
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
 import com.example.newproject.data.DistillWriteRepository
@@ -64,6 +69,10 @@ internal class NoteViewModelDependencies(
     val searchPickerUseCase: SearchPickerUseCase,
     val distillPersistence: DistillPersistence,
     val readingTracePersistence: ReadingTracePersistence,
+    /** 結晶の置き場（Vault 内 `_ReadingTraces/crystals/`）。 */
+    val crystalPersistence: CrystalPersistence,
+    /** 結晶の材料の控え（端末内 `noBackupFilesDir`）。Vault には書かない。 */
+    val crystalMaterials: CrystalMaterialPersistence,
     /**
      * Vaultの現在地。ViewModel と痕跡のSAFゲートウェイが**同じ実体**を見る必要がある
      * （書き込み時点のVaultを引き直すため）。共有先をここで固定する。
@@ -119,6 +128,12 @@ internal class NoteViewModelDependencies(
                 ),
                 readingTracePersistence = ReadingTraceStore(
                     SafReadingTraceDocumentGateway(application.contentResolver) { vaultLocation.uri }
+                ),
+                crystalPersistence = CrystalStore(
+                    SafCrystalDocumentGateway(application.contentResolver) { vaultLocation.uri }
+                ),
+                crystalMaterials = FileCrystalMaterialStore(
+                    File(application.noBackupFilesDir, FileCrystalMaterialStore.DIRECTORY_NAME)
                 ),
                 vaultLocation = vaultLocation
             )

@@ -3,6 +3,8 @@ package com.example.newproject.ai
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.model.CrystalLimits
+import com.example.newproject.model.CrystalMaterial
 import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.ReunionPassage
 import org.junit.Assert.assertEquals
@@ -137,6 +139,38 @@ class PromptBudgetTest {
 
         assertFalse("前後の要約が切り詰められている（${prompt.length}字）", prompt.contains(PromptBudget.TRUNCATION_MARKER))
         assertTrue(prompt.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
+    }
+
+    /**
+     * 結晶は、候補6件・ノート名200字・断片240字の最大構成でも候補を落とさず、切り詰めも起きない。
+     * 落ちると**判定した集合と送った集合がずれる**（→ features/reflect_crystal.md 判断5）。
+     */
+    @Test
+    fun `結晶は最大構成でも候補を落とさず切り詰めが起きない`() {
+        val candidates = List(CrystalLimits.CANDIDATES) { index ->
+            CrystalMaterial(
+                vaultRelativePath = "n$index.md",
+                noteTitle = "題".repeat(PromptLimits.LABEL_CHARACTERS),
+                fragment = "断".repeat(CrystalLimits.FRAGMENT_CHARACTERS),
+                lastSeenAt = 0
+            )
+        }
+        val prompt = PromptBuilder.buildCrystalPrompt(candidates)
+
+        assertEquals(CrystalLimits.CANDIDATES, prompt.candidates.size)
+        assertFalse("結晶が切り詰められている（${prompt.text.length}字）", prompt.text.contains(PromptBudget.TRUNCATION_MARKER))
+        assertTrue(prompt.text.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
+    }
+
+    /** 予算を超えたら古い候補から落とし、今のノート（N1）は落とさない。 */
+    @Test
+    fun `結晶の候補は古い側から落ち、今のノートは残る`() {
+        val candidates = List(4) { CrystalMaterial("n$it.md", "題$it", "断片$it", lastSeenAt = 0) }
+        val oneLine = PromptBuilder.buildCrystalPrompt(candidates, candidateBudget = 1)
+        assertEquals(listOf("N1"), oneLine.candidates.map { it.id })
+        val threeLines = PromptBuilder.buildCrystalPrompt(candidates, candidateBudget = 41)
+        assertEquals(listOf("n0.md", "n1.md", "n2.md"), threeLines.sentMaterials.map { it.vaultRelativePath })
+        assertEquals(setOf("N1", "N2", "N3"), threeLines.validIds)
     }
 
     /** 切り詰めたら黙らず印を残す。印が無いと、途中で切れた文と区別できない。 */

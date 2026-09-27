@@ -29,6 +29,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -85,9 +86,13 @@ fun AiTab(
     onDismissDistill: () -> Unit,
     onKeepCurrentRecovery: () -> Unit,
     onRestoreOriginal: () -> Unit,
-    onExportOriginal: () -> Unit
+    onExportOriginal: () -> Unit,
+    onLoadCrystals: () -> Unit,
+    onOpenCrystalList: () -> Unit
 ) {
     val hasNote = uiState.noteState is NoteState.Success
+    // 結晶の一覧は Vault 単位。読込済みなら何もしない。
+    LaunchedEffect(Unit) { onLoadCrystals() }
 
     Column(
         modifier = Modifier
@@ -146,6 +151,14 @@ fun AiTab(
         }
 
         SummaryPanel(summaryState = uiState.summaryState)
+
+        // 結晶は要約の下（→ features/reflect_crystal.md）。出すものが無ければ何も描かない。
+        CrystalPanel(
+            crystalLog = uiState.crystalLog,
+            notePath = uiState.crystalNotePath,
+            onOpenList = onOpenCrystalList,
+            modifier = Modifier.padding(top = 12.dp)
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
         if (!recoveryVisible) {

@@ -82,7 +82,9 @@ class DistillRangeAdjustUiTest {
                     onDismissDistill = {},
                     onKeepCurrentRecovery = {},
                     onRestoreOriginal = {},
-                    onExportOriginal = {}
+                    onExportOriginal = {},
+                    onLoadCrystals = {},
+                    onOpenCrystalList = {}
                 )
             }
         }
@@ -233,7 +235,9 @@ class DistillRangeAdjustUiTest {
                     onDismissDistill = {},
                     onKeepCurrentRecovery = {},
                     onRestoreOriginal = {},
-                    onExportOriginal = {}
+                    onExportOriginal = {},
+                    onLoadCrystals = {},
+                    onOpenCrystalList = {}
                 )
             }
         }

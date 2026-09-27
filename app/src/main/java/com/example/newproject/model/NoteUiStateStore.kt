@@ -5,6 +5,7 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
@@ -122,6 +123,22 @@ interface NoteFieldStateWriter {
     fun update(
         transform: (Map<DocumentRef, NoteFieldClassification>) -> Map<DocumentRef, NoteFieldClassification>
     )
+}
+
+/**
+ * 結晶の一覧（Vault単位）と、絞り込みに使う今のノートの相対パス（ノート単位）。
+ *
+ * **寿命の違う2つを1つのスライスで持つ**のは、書き手が結晶の Controller だけだから。
+ * リセットは寿命ごとに分かれ、一覧は Vault 切替で、パスはノート切替で落ちる。
+ */
+data class CrystalSlice(
+    val log: CrystalLogState,
+    val notePath: String?
+)
+
+interface CrystalStateWriter {
+    val current: CrystalSlice
+    fun update(transform: (CrystalSlice) -> CrystalSlice)
 }
 
 /**
@@ -259,6 +276,18 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
             }
         }
 
+    val crystalWriter: CrystalStateWriter = object : CrystalStateWriter {
+        override val current: CrystalSlice
+            get() = mutableState.value.let { CrystalSlice(it.crystalLog, it.crystalNotePath) }
+
+        override fun update(transform: (CrystalSlice) -> CrystalSlice) {
+            mutableState.update { state ->
+                val next = transform(CrystalSlice(state.crystalLog, state.crystalNotePath))
+                state.copy(crystalLog = next.log, crystalNotePath = next.notePath)
+            }
+        }
+    }
+
     fun restoreVault(todayHistory: List<HistoryEntry>) {
         mutableState.update { it.copy(vaultSelected = true, todayHistory = todayHistory) }
     }
@@ -356,7 +385,10 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     sectionChat = null,
     isSectionChatSheetVisible = false,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。
-    readingTraceCard = null
+    readingTraceCard = null,
+    // **結晶の一覧は落とさない**（Vault単位）。落とすのは絞り込みのパスだけで、
+    // 残すと次のノートの✨タブに前のノートの結晶が出る。
+    crystalNotePath = null
 )
 
 private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
@@ -379,5 +411,7 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     bookletState = BookletState.Idle,
     // 旧Vaultのノートを指す分類を新Vaultへ持ち越さない。参照はVaultをまたいで有効に見えるので、
     // 残すと**別Vaultのノートの色が新しい束に出る**。走査すれば作り直せるので捨ててよい。
-    noteFields = emptyMap()
+    noteFields = emptyMap(),
+    // 旧Vaultの結晶を新Vaultの✨タブへ出さない。次に必要になったとき読み直す。
+    crystalLog = CrystalLogState.NotLoaded
 )

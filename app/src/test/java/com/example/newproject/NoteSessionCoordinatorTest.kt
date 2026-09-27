@@ -60,8 +60,13 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SummaryState
+import com.example.newproject.model.Crystal
+import com.example.newproject.model.CrystalSource
+import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.fakes.InMemorySummaryCache
+import com.example.newproject.fakes.InMemoryCrystalMaterials
+import com.example.newproject.fakes.InMemoryCrystalStore
 import android.net.Uri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -82,6 +87,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.lang.reflect.Modifier
+import com.example.newproject.model.NoteExcerptLimits
+import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.ai.PromptBuilder
+import com.example.newproject.model.CrystalMaterial
+import com.example.newproject.model.CrystalMaterialLog
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Vault切替・ノート切替の一斉初期化を固定する。
@@ -307,8 +319,12 @@ class NoteSessionCoordinatorTest {
         // 冊子もVault単位。**ここが消えると「これを読む」で渡って戻る道が切れる**
         // （戻れば同じ10枚が残る、が冊子の目的そのもの）。
         assertTrue(reset.bookletState is BookletState.Open)
+        // 結晶の一覧もVault単位。ノートを切り替えただけで一覧が消えるのは誤り。
+        assertTrue(reset.crystalLog is CrystalLogState.Loaded)
 
         // ノート単位はすべて消える
+        // 結晶の絞り込みのパス。残すと次のノートの✨タブに前のノートの結晶が出る。
+        assertNull(reset.crystalNotePath)
         assertTrue(reset.summaryState is SummaryState.Idle)
         assertTrue(reset.relatedNotesState is RelatedNotesState.Idle)
         assertTrue(reset.quizState is QuizState.Idle)
@@ -386,6 +402,7 @@ class NoteSessionCoordinatorTest {
         assertNull(state.sectionChat)
         assertEquals(false, state.isSectionChatSheetVisible)
         assertNull(state.readingTraceCard)
+        assertNull(state.crystalNotePath)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
         assertEquals(1, hostCancelCount)
 
@@ -395,6 +412,7 @@ class NoteSessionCoordinatorTest {
         assertEquals("下書き", state.selectedFolder?.name)
         assertTrue(state.searchState is SearchState.Success)
         assertEquals(1, state.todayHistory.size)
+        assertTrue(state.crystalLog is CrystalLogState.Loaded)
     }
 
     /**
@@ -929,6 +947,8 @@ class NoteSessionCoordinatorTest {
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
+        assertTrue("Crystal(一覧)", state.crystalLog !is CrystalLogState.NotLoaded)
+        assertTrue("Crystal(絞り込み)", state.crystalNotePath != null)
     }
 
     /**
@@ -962,6 +982,17 @@ class NoteSessionCoordinatorTest {
         noteFields = mapOf(
             DocumentRef("content://old/booklet") to NoteFieldClassification.Provisional(NoteField.Living)
         ),
+        crystalLog = CrystalLogState.Loaded(
+            listOf(
+                Crystal(
+                    createdAt = 1L,
+                    sentence = "旧Vaultの結晶の一文。",
+                    sources = listOf(CrystalSource("a.md", "A", "断片"), CrystalSource("b.md", "B", "断片")),
+                    fileName = "1.json"
+                )
+            )
+        ),
+        crystalNotePath = "旧ノート.md",
         sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
         isSectionChatSheetVisible = true,
         readingTraceCard = ReadingTraceCard(
@@ -1158,6 +1189,143 @@ class NoteSessionCoordinatorTest {
         assertTrue(session.uiState.value.noteState is NoteState.Success)
     }
 
+    // ── 結晶と再会カードの順序（→ features/reflect_crystal.md 判断10）──────────────
+    // 要約が保存済みで即座に出ても、結晶は再会カードの照合が終わるまで生成の錠を取らない。
+    // 照合の前処理（訪問の保存待ち）は、訪問の保存を別のスケジューラに載せて止める。
+
+    @Test
+    fun `要約が保存済みでも、再会カードの照合が終わるまで結晶は錠を取らない`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val persist = HeldDispatcher(StandardTestDispatcher(testScheduler))
+        val coordinator = env.coordinator(persistScope = CoroutineScope(persist))
+        env.readyForCrystal()
+
+        env.leaveAfterFirstRead(coordinator, clock)
+        env.openRediscovered(coordinator)
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+
+        assertTrue(coordinator.uiState.value.summaryState is SummaryState.Success)
+        assertEquals("照合の前処理を待たずに結晶が錠を取った", 0, env.ai.generateCalls)
+
+        // 前処理が終わると、カードの生成が先に走る。
+        releasePersist(persist)
+        assertEquals("訪問の保存が済んでいない（照合を待たせる前提が崩れている）", 1, env.trace.saved.size)
+        assertEquals(1, env.ai.generateCalls)
+        assertTrue(env.ai.lastPrompt!!.contains(PromptBuilder.REUNION_READ_MARKER))
+
+        // 逆向き — カードの生成中も結晶は待ち、カードが終わってから走る。
+        env.ai.completeAll("前は導入の話、後は結論の話。")
+        advanceUntilIdle()
+        assertEquals(2, env.ai.generateCalls)
+        assertTrue(env.ai.lastPrompt!!.contains("Candidates:"))
+
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+        assertEquals(1, env.crystals.stored("vault-a").size)
+    }
+
+    @Test
+    fun `照合を待っている間にノートを切り替えると、カードも結晶も旧い要求が残らない`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val persist = HeldDispatcher(StandardTestDispatcher(testScheduler))
+        val coordinator = env.coordinator(persistScope = CoroutineScope(persist))
+        env.readyForCrystal()
+
+        env.leaveAfterFirstRead(coordinator, clock)
+        env.openRediscovered(coordinator)
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        assertEquals(0, env.ai.generateCalls)
+
+        coordinator.onNoteChanged()
+        releasePersist(persist)
+
+        assertEquals("切り替えた後にカードか結晶が生成した", 0, env.ai.generateCalls)
+        assertEquals(0, env.crystals.appendCalls)
+        assertNull("取り消した試行を数えた", env.crystalMaterials.load("vault-a").lastAttemptAt)
+    }
+
+    @Test
+    fun `再会カードの無い経路では待たずに結晶を試す`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+
+        coordinator.setNoteState(successNote(CRYSTAL_NOTE_BODY))
+        coordinator.fetchSummary(CRYSTAL_NOTE_TITLE, CRYSTAL_NOTE_BODY)
+        coordinator.crystallize(CRYSTAL_NOTE_PATH, CRYSTAL_NOTE_TITLE)
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+
+        assertEquals(1, env.ai.generateCalls)
+        assertTrue(env.ai.lastPrompt!!.contains("Candidates:"))
+        assertEquals(CRYSTAL_NOTE_PATH, coordinator.uiState.value.crystalNotePath)
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+    }
+
+    /** 止めていた訪問の保存を流し、走り切らせる。 */
+    private fun TestScope.releasePersist(persist: HeldDispatcher) {
+        persist.release()
+        advanceUntilIdle()
+    }
+
+    /**
+     * 解くまで仕事を溜めておくディスパッチャ。**訪問の保存を止めたまま、照合を待たせる**ために使う。
+     *
+     * 別のテストスケジューラを使うと、I/O のディスパッチャ（同じスケジューラ）へ移るところで
+     * スケジューラの混在として止まってしまう。同じスケジューラへ流す前に溜めるだけにする。
+     */
+    private class HeldDispatcher(private val delegate: CoroutineDispatcher) : CoroutineDispatcher() {
+        private val held = mutableListOf<Pair<CoroutineContext, Runnable>>()
+        private var released = false
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            if (released) delegate.dispatch(context, block) else held += context to block
+        }
+
+        fun release() {
+            released = true
+            val pending = held.toList()
+            held.clear()
+            pending.forEach { (context, block) -> delegate.dispatch(context, block) }
+        }
+    }
+
+    /** 他のノートを2件控え、今のノートの要約を保存済みにする。今のノートで3件そろう。 */
+    private fun Env.readyForCrystal() {
+        crystalMaterials.save(
+            "vault-a",
+            CrystalMaterialLog(
+                entries = listOf(
+                    CrystalMaterial("ideas/b.md", "B", "Bの要約。", lastSeenAt = 1),
+                    CrystalMaterial("ideas/c.md", "C", "Cの要約。", lastSeenAt = 2)
+                )
+            )
+        )
+        val prompt = PromptBuilder.buildSummarizePrompt(
+            CRYSTAL_NOTE_TITLE,
+            buildNoteExcerpt(CRYSTAL_NOTE_BODY, NoteExcerptLimits.SUMMARY)
+        )
+        summaryCache.entries[prompt] = "習慣を小さく始める話。"
+    }
+
+    /** 初めて途中まで読んで離れる。**訪問の保存は persistScope に積まれたまま走らない。** */
+    private fun Env.leaveAfterFirstRead(coordinator: NoteSessionCoordinator, clock: TestClock) {
+        coordinator.startReadingTrace(CRYSTAL_NOTE_TITLE, CRYSTAL_NOTE_PATH, "doc-1")
+        coordinator.reportReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+        coordinator.onNoteChanged()
+    }
+
+    /** Rediscover と同じ並び — 本文 → 照合 → 要約 → 結晶。 */
+    private fun Env.openRediscovered(coordinator: NoteSessionCoordinator) {
+        coordinator.setNoteState(successNote(CRYSTAL_NOTE_BODY))
+        coordinator.revealReadingTrace(CRYSTAL_NOTE_PATH, CRYSTAL_NOTE_BODY)
+        coordinator.fetchSummary(CRYSTAL_NOTE_TITLE, CRYSTAL_NOTE_BODY)
+        coordinator.crystallize(CRYSTAL_NOTE_PATH, CRYSTAL_NOTE_TITLE)
+    }
+
     private fun successNote(content: String) = NoteState.Success(
         title = "ノート",
         content = content,
@@ -1169,6 +1337,18 @@ class NoteSessionCoordinatorTest {
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"
+
+        const val CRYSTAL_NOTE_PATH = "ideas/habit.md"
+        const val CRYSTAL_NOTE_TITLE = "習慣について"
+        const val CRYSTAL_ANSWER = "選択: N1, N2\n結晶: どれも習慣を小さく始める工夫を扱っている。"
+
+        /** 途中まで読んだ位置を求められるだけのブロックを持つ本文。 */
+        val CRYSTAL_NOTE_BODY = buildString {
+            append("# 導入\n\n")
+            (1..5).forEach { append("導入の段落${it}。習慣は小さく始めると続く。\n\n") }
+            append("# 結論\n\n")
+            (1..5).forEach { append("結論の段落${it}。毎日同じ時刻に行う。\n\n") }
+        }
     }
 
     private class Env(
@@ -1187,26 +1367,37 @@ class NoteSessionCoordinatorTest {
         /** 分野の確定の永続。**読込回数を数える**（起動復元から読むかを見るため）。 */
         val noteFields = CountingNoteFieldStore()
 
+        /** 結晶の置き場と材料の控え。 */
+        val crystals = InMemoryCrystalStore()
+        val crystalMaterials = InMemoryCrystalMaterials()
+
+        /** 要約の保存。**結晶の順序を見るテストが保存済みの要約を仕込む**ために外へ出す。 */
+        val summaryCache = InMemorySummaryCache()
+
         fun coordinator(
             cancelHostJobs: () -> Unit = {},
             initialState: NoteUiState = NoteUiState(),
             // 画面側のスコープ。**痕跡の書き出しだけはこちらに載らない**ことを確かめるときに分ける。
-            uiScope: CoroutineScope = scope
+            uiScope: CoroutineScope = scope,
+            // 訪問の保存を載せるスコープ。**別のスケジューラにすると、保存を止めたまま照合を待たせられる。**
+            persistScope: CoroutineScope = scope
         ) = NoteSessionCoordinator(
             scope = uiScope,
-            persistScope = scope,
+            persistScope = persistScope,
             repository = NoteRepository(),
             vaultBrowser = vault,
             aiClient = ai,
             summarizeUseCase = SummarizeUseCase(
                 ai,
-                InMemorySummaryCache(),
+                summaryCache,
                 excerptDispatcher = StandardTestDispatcher(scope.testScheduler)
             ),
             searchPickerUseCase = SearchPickerUseCase(ai),
             distillPersistence = distill,
             readingTracePersistence = trace,
             reunionPassageCache = passageCache,
+            crystalPersistence = crystals,
+            crystalMaterials = crystalMaterials,
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,

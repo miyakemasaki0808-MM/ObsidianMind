@@ -88,6 +88,8 @@ class NoteViewModel internal constructor(
         distillPersistence = dependencies.distillPersistence,
         readingTracePersistence = dependencies.readingTracePersistence,
         reunionPassageCache = dependencies.reunionPassageCache,
+        crystalPersistence = dependencies.crystalPersistence,
+        crystalMaterials = dependencies.crystalMaterials,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
@@ -134,6 +136,13 @@ class NoteViewModel internal constructor(
 
     private var cachedNotes: List<NoteFile> = emptyList()
     private var cachedNotesLoadedAt = 0L
+
+    /**
+     * 今の走査結果にあるノートの相対パス。**結晶の一覧で、根拠のノート名を押せるかを決める**
+     * （改名・移動・削除したノートは押せない表示にする → features/reflect_crystal.md §5）。
+     */
+    private val mutableKnownNotePaths = MutableStateFlow<Set<String>>(emptySet())
+    val knownNotePaths: StateFlow<Set<String>> = mutableKnownNotePaths.asStateFlow()
 
     // ノート切替時に前のノートの読込・関連ノートが後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
@@ -184,6 +193,7 @@ class NoteViewModel internal constructor(
             preferences.vaultUri = uri.toString()
             cachedNotes = emptyList()
             cachedNotesLoadedAt = 0L
+            mutableKnownNotePaths.value = emptySet()
             relatedNotesUseCase.clearCache()
         }
     }
@@ -204,6 +214,9 @@ class NoteViewModel internal constructor(
         val notes = repository.collectNotes(contentResolver, vaultUri).notes
         cachedNotes = notes
         cachedNotesLoadedAt = now
+        mutableKnownNotePaths.value = notes.mapNotNullTo(HashSet()) { note ->
+            note.vaultRelativePath.takeIf { it.isNotEmpty() }
+        }
         // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
         // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
         // 索引Aが同じ材料で揃う。
@@ -290,6 +303,8 @@ class NoteViewModel internal constructor(
         session.fetchSummary(note.name, loaded.content)
         // 分野の判定。**走査経路なので相対パスが揃っており、ヒントを添えられる。**
         session.classifyNoteField(note.ref, loaded.content, note.vaultRelativePath)
+        // 結晶。**再会カードの照合より後に呼ぶ** — 結晶はその照合が終わるのを待ってから錠を取る。
+        session.crystallize(note.vaultRelativePath, note.name)
         fetchRelatedNotes(note.name, loaded.content)
     }
 
@@ -342,6 +357,8 @@ class NoteViewModel internal constructor(
                 // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、さがす経由のノートだけ
                 // ヒント無しで判定され、同じノートでも入口によって入力版が変わってしまう。
                 session.classifyNoteField(note.ref, loaded.content, cachedRelativePath(note.ref).orEmpty())
+                // 結晶は根拠をパスで持つので、パスが確定しなかったノートでは試さない。
+                cachedRelativePath(note.ref)?.let { path -> session.crystallize(path, note.title) }
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -349,6 +366,41 @@ class NoteViewModel internal constructor(
                 session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
+    }
+
+    // ── 結晶（実装は CrystalController）──────────────────────────────────────────
+
+    /** ✨タブを開いた。この Vault の結晶をまだ読んでいなければ読む。 */
+    fun loadCrystals() = session.loadCrystals()
+
+    /**
+     * 結晶の一覧を開いた。一覧を読み、**根拠のノートが今の走査にあるか**を確かめる
+     * （走査はTTLキャッシュ付きなので、通常は追加I/Oなし）。
+     */
+    fun openCrystalList(contentResolver: ContentResolver) {
+        session.loadCrystals()
+        val uri = vaultLocation.uri ?: return
+        scope.launch {
+            try {
+                collectAllNotesCached(contentResolver, uri)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 走査に失敗したら、根拠のノート名は押せない表示のまま残る。
+            }
+        }
+    }
+
+    /**
+     * 結晶の根拠のノートを開く。**今の走査結果に無ければ何もしない**（画面側も押せない表示にしている）。
+     * 開き方は関連・さがすと同じで、Rediscover 経路ではないので再会カードは出ない。
+     */
+    fun openCrystalSource(contentResolver: ContentResolver, vaultRelativePath: String) {
+        val note = cachedNotes.firstOrNull { it.vaultRelativePath == vaultRelativePath } ?: return
+        openNote(
+            contentResolver,
+            RelatedNote(title = note.name, ref = note.ref, isWikilinked = false, lastModified = note.lastModified)
+        )
     }
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────

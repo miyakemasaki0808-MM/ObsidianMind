@@ -21,6 +21,8 @@ import org.junit.Rule
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.example.newproject.model.CrystalMaterial
+import com.example.newproject.domain.parseCrystalResponse
 
 /**
  * **本番のプロンプトで実際に生成させる**（→ instrumentation_testing 段階4a）。
@@ -215,6 +217,34 @@ class OnDeviceGenerationTest {
 
         log("前後の要約", response)
         assertGenerated("前後の要約", response)
+    }
+
+    /**
+     * 結晶は**自動で**走り、応答を本番のパーサへ通して2行の形を読む経路である。
+     * 形が読めなければ結晶は1件も書かれず、失敗も見せないので黙って何も起きない
+     * （→ features/reflect_crystal.md §5「応答の検証」）。
+     *
+     * 書式の一致は assert しない（非決定的。筋が無ければ `NONE` も正しい）。
+     * パースの結果は logcat へ出し、実機検証で読む材料にする。
+     */
+    @Test
+    fun 結晶プロンプトで生成が返りパーサが実出力を処理できる() = runBlocking<Unit> {
+        requireNanoAvailable()
+
+        val prompt = PromptBuilder.buildCrystalPrompt(
+            listOf(
+                CrystalMaterial("habit.md", "習慣について", "習慣は小さく始めるほど続く。毎日同じ時刻に行うと定着しやすい。", 0),
+                CrystalMaterial("reading.md", "読書メモの残し方", "読んだ直後に一行だけ書く。短い記録を毎日続けることが再読を助ける。", 0),
+                CrystalMaterial("recipe.md", "献立の記録", "週末に一週間分の献立を決め、買い物の手間を減らす。", 0)
+            )
+        )
+        val response = client.generate(prompt.text)
+        log("結晶", response)
+        assertGenerated("結晶", response)
+
+        // 例外を投げないことだけを assert する。結果は観測値として残す。
+        val answer = parseCrystalResponse(response, prompt.validIds)
+        Log.i(TAG, "結晶のパース結果: $answer")
     }
 
     // --- 補助 -----------------------------------------------------------------

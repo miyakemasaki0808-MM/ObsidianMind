@@ -45,6 +45,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.AnnotationManagerScreen
+import com.example.newproject.ui.screen.CrystalListScreen
 import com.example.newproject.ui.screen.DataManagementScreen
 import com.example.newproject.ui.screen.ReadingTraceCleanupScreen
 import com.example.newproject.ui.AppDestination
@@ -383,7 +384,23 @@ class MainActivity : ComponentActivity() {
                                 onDismissDistill = { viewModel.dismissDistillResult() },
                                 onKeepCurrentRecovery = { viewModel.keepCurrentAfterDistillRecovery() },
                                 onRestoreOriginal = { viewModel.restoreDistillOriginal() },
-                                onExportOriginal = { exportDistillOriginal.launch("distill_original.md") }
+                                onExportOriginal = { exportDistillOriginal.launch("distill_original.md") },
+                                onLoadCrystals = { viewModel.loadCrystals() },
+                                onOpenCrystalList = { navController.navigate("crystal_list") }
+                            )
+                        }
+
+                        composable("crystal_list") {
+                            val knownNotePaths by viewModel.knownNotePaths.collectAsStateWithLifecycle()
+                            CrystalListScreen(
+                                state = uiState.crystalLog,
+                                knownNotePaths = knownNotePaths,
+                                onLoad = { viewModel.openCrystalList(contentResolver) },
+                                onOpenSource = { path ->
+                                    viewModel.openCrystalSource(contentResolver, path)
+                                    navController.navigateToTab(AppDestination.Note)
+                                },
+                                onBack = { navController.popBackStack() }
                             )
                         }
 
