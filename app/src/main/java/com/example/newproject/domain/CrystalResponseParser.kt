@@ -63,7 +63,9 @@ private fun cleanCrystalSentence(raw: String): String? {
     QUOTE_PAIRS.firstOrNull { (open, close) -> sentence.startsWith(open) && sentence.endsWith(close) }
         ?.let { (open, close) -> sentence = sentence.removePrefix(open).removeSuffix(close).trim() }
     if (sentence.isEmpty()) return null
-    if (LEAKED_ID.containsMatchIn(sentence)) return null
+    // **選択欄と同じ表記の集合で見る。** 選択欄は小文字・全角・空白付きのIDも読むので、
+    // 本文の検査が大文字だけを見ると、その表記のIDが結晶の文へ残る。保存する文そのものは均さない。
+    if (ID.containsMatchIn(normalizeWidth(sentence))) return null
     if (sentence.last() !in SENTENCE_ENDS) sentence += "。"
     if (sentence.last() in QUESTION_ENDS || sentence.endsWith("か。")) return null
     if (sentence.dropLast(1).any { it in SENTENCE_ENDS }) return null
@@ -72,13 +74,14 @@ private fun cleanCrystalSentence(raw: String): String? {
     return sentence
 }
 
-/** 全角の数字と `Ｎ` を半角へ寄せる。IDの照合にだけ使う。 */
+/** 全角の数字・`Ｎ`・空白を半角へ寄せる。**IDの照合にだけ使う**（選択欄と本文の検査で共有する）。 */
 private fun normalizeWidth(value: String): String = buildString(value.length) {
     for (char in value) {
         append(
             when (char) {
                 in '０'..'９' -> '0' + (char - '０')
                 'Ｎ', 'ｎ' -> 'N'
+                '　' -> ' '
                 else -> char
             }
         )
@@ -90,8 +93,8 @@ private val SELECTION_LINE =
     Regex("""^(?:$CRYSTAL_SELECTION_LABEL|IDs?)\s*[:：]\s*(.*)$""", RegexOption.IGNORE_CASE)
 private val SENTENCE_LINE =
     Regex("""^(?:$CRYSTAL_SENTENCE_LABEL|Sentence)\s*[:：]\s*(.+)$""", RegexOption.IGNORE_CASE)
-private val ID = Regex("""[Nn]\s*(\d+)""")
-private val LEAKED_ID = Regex("""(?<![A-Za-z])[NＮ][0-9０-９]+""")
+/** 候補ID。英字の続きに現れる `N` は拾わない（`DNN1` のような語をIDと読まない）。 */
+private val ID = Regex("""(?<![A-Za-z])[Nn]\s*(\d+)""")
 private val QUOTE_PAIRS = listOf("「" to "」", "\"" to "\"", "“" to "”", "『" to "』")
 private const val SENTENCE_ENDS = "。！？!?"
 private const val QUESTION_ENDS = "？?"

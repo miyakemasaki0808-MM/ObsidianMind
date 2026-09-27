@@ -364,7 +364,8 @@
 
 ## CRYS-6. 候補IDの表記揺れが結晶本文へ残る
 
-- **状態:** 未着手（2026-09-28、実装レビュー P3-1）。
+- **状態:** **修正した（2026-09-28）。別の目の再確認待ち。** 本文の漏出検査を、選択欄と同じ正規化（大小文字・全角・空白）と
+  同じIDの形で行うようにした（`CrystalResponseParserTest`）。
 - **現状:** [`parseCrystalResponse`](../../app/src/main/java/com/example/newproject/domain/CrystalResponseParser.kt) は
   選択欄の小文字・全角・空白付きIDを採るが、本文の `LEAKED_ID` は大文字かつ空白なししか検出しない。
 - **成立する順序:** `選択: n1, n2` と `結晶: n1とn2はどちらも習慣を扱っている。` を返すと、

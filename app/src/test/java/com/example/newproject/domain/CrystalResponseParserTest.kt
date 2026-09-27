@@ -83,8 +83,33 @@ class CrystalResponseParserTest {
     }
 
     @Test
-    fun `本文へ漏れた候補IDは不正`() {
-        assertEquals(CrystalAnswer.Invalid, parse("選択: N1, N2\n結晶: N1とN2はどちらも習慣を扱っている。"))
+    fun `本文へ漏れた候補IDは、選択欄が読むどの表記でも不正`() {
+        listOf("N1", "n1", "Ｎ１", "ｎ１", "N 1", "N　1").forEach { id ->
+            assertEquals(
+                id,
+                CrystalAnswer.Invalid,
+                parse("選択: n1, ｎ２\n結晶: ${id}はどちらも習慣を小さく始める工夫を扱っている。")
+            )
+        }
+    }
+
+    @Test
+    fun `選択欄だけが揺れた表記で、本文にIDが無ければ採る`() {
+        listOf("n1, n2", "ｎ１、Ｎ２", "N 1, N 2", "N　1，N　2").forEach { selection ->
+            assertEquals(
+                selection,
+                CrystalAnswer.Chosen(listOf("N1", "N2"), "どちらも習慣を小さく始める工夫を扱っている。"),
+                parse("選択: $selection\n結晶: どちらも習慣を小さく始める工夫を扱っている。")
+            )
+        }
+    }
+
+    @Test
+    fun `英字の続きに現れるNと数字はIDと読まない`() {
+        assertEquals(
+            CrystalAnswer.Chosen(listOf("N1", "N2"), "どちらもDNN1のような構造の図を扱っている。"),
+            parse("選択: N1, N2\n結晶: どちらもDNN1のような構造の図を扱っている。")
+        )
     }
 
     @Test
