@@ -88,7 +88,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 |---|---|---|---|
 | 記録の門番（能動読書時間） | 10秒 | `MIN_READING_MILLIS` | `ReadingTraceController.kt` |
 | 索引の再走査間隔 | 60秒 | `DEFAULT_INDEX_REFRESH_INTERVAL_MILLIS` | `ReadingTraceStore.kt` |
-| 到達率の量子化 | 20段階（＝5%刻み） | `READING_FRACTION_STEPS` | `ui/ReadingProgressGeometry.kt` |
+| 最深ブロックの見えている割合の量子化（到達率そのものは整数の百分率） | 20段階（＝5%刻み） | `READING_FRACTION_STEPS` | `ui/ReadingProgressGeometry.kt` |
 
 ### 記録の門番
 

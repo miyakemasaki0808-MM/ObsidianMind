@@ -109,7 +109,7 @@
 | [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
-| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位）。**未実装・設計確定** |
+| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
 
 ### 基盤（`system/`）
@@ -248,6 +248,6 @@
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [vigilith_in_app](features/vigilith_in_app.md) → [opening_animation](features/opening_animation.md) |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
-| `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md) |
+| `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・`AndroidManifest.xml` の権限 | [dependency_policy](system/dependency_policy.md) |
 | `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](system/saf_boundary_gateway.md) → [architecture](system/architecture.md) |
