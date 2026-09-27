@@ -2,8 +2,8 @@
 
 **状態:** **Draft — 未実装。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）。外部レビュー前
 **最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
-**関連コード:** 予定 — `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `ai/PromptBuilder.kt` / `ui/screen/AiTab.kt` / `ui/screen/CrystalListScreen.kt`
-**関連テスト:** 予定 — `CrystalControllerTest` / `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalJsonTest` / `CrystalMaterialStoreTest` / `NoteSessionCoordinatorTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `PromptTokenBudgetTest`
+**関連コード:** 予定 — `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（照合の終わりを待つ関数） / `model/state/CrystalLogState.kt` / `ai/PromptBuilder.kt` / `ui/screen/AiTab.kt` / `ui/screen/CrystalListScreen.kt`
+**関連テスト:** 予定 — `CrystalControllerTest` / `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalJsonTest` / `CrystalMaterialStoreTest` / `NoteSessionCoordinatorTest` / `ReunionCardControllerTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `PromptTokenBudgetTest`
 **正本:** この文書
 
 **関連:** [note_summary](note_summary.md)（材料の出どころ）・[reflect_reading_trace](reflect_reading_trace.md)（置き場を共有する）・
@@ -46,7 +46,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
 | 材料を控える | 見えない | 要約が出ているノートに3秒留まったとき（→ 判断4） |
-| 結晶を作る | 見えない。条件がそろうと裏で1文ができる | 控えた直後に、試す条件（→ 判断5）を満たし、Nano が `Ready` のとき |
+| 結晶を作る | 見えない。条件がそろうと裏で1文ができる | 控えた直後に、試す条件（→ 判断5）を満たし、**このノートの再会カードの照合が終わり**（→ 判断10）、Nano が `Ready` のとき |
 | ✨タブの結晶 | 要約の下に、このノートを根拠に含む結晶が新しい順に最大3件。各結晶の下に「〇〇・△△ から」 | ✨タブを開いたとき。該当が無ければ出さない |
 | 根拠を開く | 「〇〇・△△ から」を押すと、根拠のノート名と、AIへ渡した要約がその場で開く | 押したとき |
 | 一覧への入口 | 「結晶の一覧（N件）」の1行 | Vault に結晶が1件以上あるとき。このノートが根拠に入っていなくても出す |
@@ -59,7 +59,8 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 
 1. ノートを開き、本文が出る。この Vault の結晶をまだ読み込んでいなければ、読み込みを始める（AIを呼ばない）
 2. ノートに3秒留まり、要約が出ている → そのノートの要約を、材料として端末に控える
-3. 試す条件（→ 判断5）を満たせば、**今のノートと、最近見た他のノート最大5件**を候補にして、生成を1回だけ呼ぶ
+3. 試す条件（→ 判断5）を満たせば、このノートの再会カードの照合が終わるのを待ち（→ 判断10）、
+   **今のノートと、最近見た他のノート最大5件**を候補にして、生成を1回だけ呼ぶ
 4. AI は、今のノートと筋を共有するノートを他の候補から1〜3件選び、選んだ要約だけを材料に1文で総括する。
    Vault に1ファイルとして書き、一覧へ足す。**筋が無ければ何も書かない**
 5. ✨タブを開くと、要約の下に、今のノートを根拠に含む結晶が出る
@@ -198,6 +199,7 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
            ├─ fragmentOf(summary)                   ← 純関数・240字
            ├─ CrystalMaterialStore.record()         ← 端末内
            ├─ shouldAttemptCrystal(...)             ← 純関数（→ 判断5）
+           ├─ awaitReunionSettled()                 ← このノートの再会カードの照合が終わるまで（→ 判断10）
            ├─ checkAvailability()                   ← Ready 以外は終わる。DLは始めない
            ├─ selectCrystalCandidates(...)          ← 純関数・今のノート＋直近5件
            ├─ PromptBuilder.buildCrystalPrompt()
@@ -210,7 +212,8 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
                 └─ 成功し、vaultGeneration が依頼時と同じなら一覧へ1回だけ足す
 ```
 
-- **要約の結果は読むだけ。** Coordinator が「このノートの要約の終わりを待つ関数」を渡し、Controller どうしは呼び合わない
+- **要約と再会カードの結果は待つだけ。** Coordinator が「このノートの要約の終わりを待つ関数」と「再会カードの照合の終わりを待つ関数」を渡し、
+  Controller どうしは呼び合わない
 - **照合は2つあり、守るものが違う。** requestId は「この生成を保存へ渡してよいか」、`vaultGeneration` は「この保存を今の一覧へ足してよいか」。
   どちらも使う直前の1箇所で行う（→ [architecture](../system/architecture.md) 判断4）
 - `controller` は Android 非依存のまま保つ。2つの保存は `data` 側の実装を注入する
@@ -316,6 +319,25 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 - **採らなかった案:** 保存を止めて書きかけを消す — SAF の削除は失敗しうるので、消せなかったファイルが黙って残る。
   取消を無視して一覧へ足す — Vault を切り替えた後の一覧に混ざる
 
+### 判断10: 結晶は、再会カードの生成より先に錠を取らない
+
+**要約の完了を待つだけでは、再会カードより先に走りうる。** 再会カードは Rediscover で本文を出した直後に照合を始めるが、
+訪問の保存待ち・痕跡の読み込み・本文の解析を経てから生成を呼ぶ。要約が保存済みで即座に出れば、
+3秒の門番を抜けた結晶のほうが先に `generateMutex` を取る。**錠は先に並んだ順で、後から来た要求は追い越せない。**
+60秒の計測も錠を取った後に始まるので、カードの枠は結晶の生成時間だけ遅れる。
+
+- **結晶は、生成を呼ぶ直前に、このノートの再会カードの照合が終わるのを待つ。** 照合の Job が無ければすぐ進む。
+  待つのは試す条件を満たしたときだけで、材料を控えるのは待たない
+- **照合は結晶より先に要求されている。** Rediscover では本文を出した直後に照合を要求し、結晶はその後で門番を待ち始めるので、
+  待つ時点で照合の Job は既に走っている。**この順序を `NoteSessionCoordinatorTest` で固定する**。
+  照合が入れ替わったら新しいほうも待つ
+- **永久には待たない。** 照合の Job はどの枝でも終わる — Rediscover 以外の経路（Job が無い）、痕跡が無い・読めない、
+  保存済みの前後の要約や選別結果で済んだ、生成が成功・失敗・空振りした、AIが使えない。ノートを切り替えれば両方とも取り消される。
+  照合が保存待ちで止まり続けたら、結晶はそのノートでは試さない（試行として数えない）
+- **関連ノートのAI推薦と分野判定は待たない。** どちらも既存の自動生成どうしで錠を取り合っている
+  （→ [background_ai_ux](../system/background_ai_ux.md) §7）。結晶は1日に多くて1回なので、それらを遅らせるのは多くて1日1回である。
+  **本文と同じ画面に出る再会カードだけを、結晶より先にする**
+
 ### 採らなかった案
 
 | 案 | 採らない理由 |
@@ -329,7 +351,8 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 
 ## 9. 品質要件
 
-- **性能:** 生成はノート表示あたり多くて1回、1日多くて1回。門番と要約の後ろで走るので、要約・再会カードの表示を遅らせない。
+- **性能:** 生成はノート表示あたり多くて1回、1日多くて1回。要約と再会カードの照合が終わってから錠を取るので、その2つの表示を遅らせない
+  （→ 判断10）。関連ノートのAI推薦と分野判定とは錠を取り合う。
   一覧の読み込みは `Dispatchers.IO` で、件数に比例する
 - **プライバシー:** 結晶ファイルには読んだノートの名前と要約が入り、Vault の同期先へそのまま出る。読書痕跡が要約を持つのと同じ扱いである。
   控えは `noBackupFilesDir` に置き、端末の外へ出ない
@@ -357,6 +380,10 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     保存が失敗したら一覧に足さない／保存を依頼する前の取消（生成中を含む）では保存0件／
     一覧の読込中に保存が終わっても、読み込みの完了後に1回だけ出る
   - `NoteSessionCoordinator` — 契約の2箇所に載り、`withNoteScopedReset()` に載っていないこと
+  - **再会カードとの順序**（→ 判断10）。要約を保存済みにして、再会カードの訪問の保存待ちか解析を3秒より後まで止める。
+    結晶の試す条件を満たしていても先に錠を取らず、止めを解くとカードの生成が先に走る／
+    逆向き（カードの生成中に結晶が待つ）／カードの無い経路・保存済みで済んだカード・生成が失敗したカードの後では結晶が進む／
+    待っている間にノートを切り替えると、両方の旧い要求が残らない／照合は結晶が待ち始める前に要求されていること
   - 痕跡の索引・孤児掃除・退避・読み戻しの下見が `crystals/` を無視すること（→ 判断7）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
 - **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足し、実トークンの余裕を測る
@@ -366,6 +393,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
     根拠の断片を並べて、読む人が検算できるようにしている
   - 3秒だけ見たノートも材料に入る（→ 判断4）
+  - 関連ノートのAI推薦と分野判定より先に錠を取ることはある（→ 判断10）
   - 他の端末が作った結晶は、次に Vault を選んだときかアプリを起動し直したときに見える。その場では届かない
   - 根拠のノート名は作った時点のもの。改名・移動したノートは一覧から押せなくなる
 
