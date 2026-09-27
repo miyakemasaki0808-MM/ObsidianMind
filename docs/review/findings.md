@@ -28,13 +28,11 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-09-27-reunion-card-device-rerun-review/P3-1` | 低い横画面の計測テストが本文とカードの同じ語で2か所に当たって落ちる | `統合` APP-2 |
 | `2026-09-27-reunion-card-followup-review/P2-1` | 別ノートの訪問保存を全件待つため保存済み再会カードまで表示が止まる | `起票` REUN-9 |
-| `2026-09-27-reunion-card-device-review/P2-1` | 初読直後の同一ノート再会で初回訪問が保存済みでもカードが1回目に出ない | `起票` REUN-8 |
-| `2026-09-27-reunion-card-device-review/P3-1` | 前後の要約へ入力用の `[READ UP TO HERE]` が露出する | `起票` REUN-7 |
 | `2026-09-27-reunion-card-device-review/P3-2` | 横画面の4ボタンで本文が隠れ「読んだ」もマスコットと重なる | `統合` APP-2 |
 | `2026-09-26-reunion-card-implementation-fix-review/P2-1` | 飛び越した画像の測定待ちで全画面へ移ると測定が途切れ進捗を記録できない | `統合` REUN-4 |
 | `2026-09-26-reunion-card-implementation-review/P2-1` | 続きから読むで未測定画像を飛び越すと後方の進捗を記録できない | `起票` REUN-4 |
-| `2026-09-26-reunion-card-implementation-review/P2-2` | 解析待ち中の印解除がモデル到着で画面上だけ戻る | `起票` REUN-5 |
 | `2026-09-26-reunion-card-implementation-review/P2-3` | 長大ブロックの未読末尾を既読側へ渡しブロック内の進捗も失う | `起票` REUN-6 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-09-17-app-launch-device-review/P2-1` | 横画面で再会カードがノート本文の表示領域を占有する | `起票` APP-2 |
