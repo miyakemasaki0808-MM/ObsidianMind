@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
@@ -8,28 +10,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.NoteImageFailure
-import com.example.newproject.domain.markdown.MarkdownBlock
-import com.example.newproject.ui.markdown.NoteImageContent
-import com.example.newproject.ui.markdown.NoteImageMeasurements
-import com.example.newproject.ui.markdown.NoteImageMeasurement
-import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.ui.markdown.NoteImageContent
+import com.example.newproject.ui.markdown.NoteImageLoader
+import com.example.newproject.ui.markdown.NoteImageMeasurement
+import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.theme.AppTheme
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -243,6 +251,155 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
 
         assertTrue("測定後も報告が再開しない: $reports", reports.any { it > IMAGE_BLOCK_INDEX })
+    }
+
+    /**
+     * **続きから読むで画像を飛び越しても、その後の進捗は報告される**（→ features/reunion_card.md 判断6）。
+     *
+     * 飛び越した画像は描画されないので、描画の中の測定では測られない。未測定の画像より後ろは報告しない契約なので、
+     * 送るときに飛び越した画像を測らないと、再開した後に読んだところが痕跡へ残らない。
+     */
+    @Test
+    fun 続きから読むで画像を飛び越しても測り終えれば進捗を報告する() {
+        val loader = FixedImageLoader(NoteImageMeasurement.Measured(width = 800, height = 2_400))
+        val reports = showResumableNote(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue("送った先の進捗が報告されない: $reports", reports.any { it >= RESUME_TARGET })
+        assertTrue("飛び越した画像を測っていない", loader.measureCount >= 1)
+    }
+
+    /** **測り終えるまでは、飛んだ先も報告しない。** 止める検査そのものは緩めていない。 */
+    @Test
+    fun 続きから読むで飛び越した画像を測り終えるまでは飛んだ先を報告しない() {
+        val loader = PendingImageLoader()
+        val reports = showResumableNote(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+
+        assertTrue("飛び越した画像を測りに行っていない", loader.measureCount >= 1)
+        assertTrue(
+            "測り終える前に画像より後ろが報告された: $reports（画像は index $RESUME_IMAGE_INDEX）",
+            reports.none { it > RESUME_IMAGE_INDEX }
+        )
+    }
+
+    /**
+     * **測定待ちの間に全画面へ移っても、全画面が測り終えて報告を再開する**（修正レビューで固定した受理条件）。
+     *
+     * 通常画面のスコープで測っていたころは、画面が破棄された時点で測定がキャンセルされ、
+     * 飛び越した画像は全画面でも画面外なので二度と測られなかった。
+     * **実 NavHost ではなく、同じ位置を共有する2つの画面を切り替えて通常画面を破棄する。**
+     */
+    @Test
+    fun 続きから読むの測定待ちで全画面へ移っても全画面で測り終えて進捗を報告する() {
+        val loader = PendingImageLoader()
+        val (reports, fullscreen) = showResumableNoteWithFullscreen(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = true }
+        composeRule.waitForIdle()
+        assertTrue("測り終える前に報告された: $reports", reports.none { it > RESUME_IMAGE_INDEX })
+
+        composeRule.runOnIdle { loader.settle(width = 800, height = 2_400) }
+        composeRule.waitForIdle()
+
+        assertTrue("全画面で報告が再開しない: $reports", reports.any { it >= RESUME_TARGET })
+    }
+
+    /** 全画面から通常画面へ戻った場合も、同じ依頼を拾って回復する。カードの再押下も画像へ戻る操作も要らない。 */
+    @Test
+    fun 続きから読むの測定待ちで全画面から戻っても通常画面で測り終えて進捗を報告する() {
+        val loader = PendingImageLoader()
+        val (reports, fullscreen) = showResumableNoteWithFullscreen(loader)
+
+        composeRule.onNodeWithText("続きから読む").performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = true }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { fullscreen.value = false }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { loader.settle(width = 800, height = 2_400) }
+        composeRule.waitForIdle()
+
+        assertTrue("通常画面で報告が再開しない: $reports", reports.any { it >= RESUME_TARGET })
+    }
+
+    /** 通常画面と全画面を、同じ一覧の位置と同じ測定の入れ物で切り替えられるように出す。 */
+    private fun showResumableNoteWithFullscreen(
+        loader: NoteImageLoader
+    ): Pair<MutableList<Int>, androidx.compose.runtime.MutableState<Boolean>> {
+        val model = buildNoteSectionModel(RESUME_IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val reports = mutableListOf<Int>()
+        val fullscreen = mutableStateOf(false)
+        val state = resumableState()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val listState = rememberLazyListState()
+                if (fullscreen.value) {
+                    FullscreenNoteScreen(
+                        uiState = state,
+                        sectionModel = model,
+                        imageLoader = loader,
+                        imageMeasurements = measurements,
+                        tabListState = listState,
+                        onExit = {},
+                        onOpenSummary = {},
+                        onReadingProgress = { index, _, _, _ -> reports += index }
+                    )
+                } else {
+                    ReaderTab(
+                        state = state,
+                        model = model,
+                        listState = listState,
+                        loader = loader,
+                        measurements = measurements,
+                        onReadingProgress = { index, _, _, _ -> reports += index }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        return reports to fullscreen
+    }
+
+    private fun resumableState() = loadedNote(RESUME_IMAGE_BODY).copy(
+        readingTraceCard = ReadingTraceCard(
+            visitCount = 2,
+            lastVisitAtMillis = 0L,
+            lastSectionTitle = null,
+            lastProgressPercent = 90,
+            resumeBlockIndex = RESUME_TARGET
+        )
+    )
+
+    /** 画像を第[RESUME_IMAGE_INDEX]ブロックに持つ長い本文を、送り先つきの再会カードと一緒に出す。 */
+    private fun showResumableNote(loader: NoteImageLoader): MutableList<Int> {
+        val model = buildNoteSectionModel(RESUME_IMAGE_BODY)
+        val measurements = NoteImageMeasurements()
+        val reports = mutableListOf<Int>()
+        val state = resumableState()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    state = state,
+                    model = model,
+                    listState = rememberLazyListState(),
+                    loader = loader,
+                    measurements = measurements,
+                    onReadingProgress = { index, _, _, _ -> reports += index }
+                )
+            }
+        }
+        composeRule.waitForIdle()
+        assertTrue("最初の画面に画像が入っている（飛び越しにならない）: $reports", reports.none { it >= RESUME_IMAGE_INDEX })
+        return reports
     }
 
     /**
@@ -483,6 +640,44 @@ class NoteReadingFlowTest {
 
     // --- 補助 -----------------------------------------------------------------
 
+    /**
+     * **低い横長の画面でも、再会カードがノート名と本文を隠さない**（→ features/rediscover.md 判断6）。
+     *
+     * 縦に積むと、見出し・操作ボタン・カードが先に高さを取り、本文は残りだけになる。
+     * 左右2列なら本文は高さをまるごと使う。**カードは左列でスクロールして届く**ことも見る。
+     * 枠は多くの端末の縦幅に収まる大きさで、低い横長の条件（高さ480dp未満・幅＞高さ）を作る。
+     */
+    @Test
+    fun 低い横長の画面では再会カードがあってもノート名と本文が見える() {
+        val state = loadedNote(BODY).copy(
+            readingTraceCard = ReadingTraceCard(
+                visitCount = 3,
+                lastVisitAtMillis = 0L,
+                lastSectionTitle = "見出し",
+                lastProgressPercent = 50,
+                // **本文の文言（[FIRST_PARAGRAPH]・[TITLE]）をカードの文へ入れない。** 部分一致の検索が
+                // カードにも当たり、本文が見えているかを判定できなくなる。
+                aiSummary = "直前は導入を読んでいた。この先は説明が続き、例が3つ並ぶ。",
+                aiSummaryKind = ReunionKind.Passage,
+                hasMemos = true,
+                resumeBlockIndex = 0
+            )
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 300.dp)) {
+                    ReaderTab(state, buildNoteSectionModel(BODY), rememberLazyListState())
+                }
+            }
+        }
+
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("読んだ").performScrollTo().assertIsDisplayed()
+        // スクロールしても本文は隠れない（左列だけが動く）。
+        composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
+    }
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -515,7 +710,6 @@ class NoteReadingFlowTest {
             onDismissMarginMemo = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
-            onToggleReadingTraceMark = {},
             onVigilithActionChanged = {}
         )
     }
@@ -549,6 +743,15 @@ class NoteReadingFlowTest {
                 appendLine()
                 appendLine("${markerAt(it)} の本文です。")
             }
+        }
+
+        /** 続きから読むの送り先と、その手前で飛び越す画像の位置。 */
+        const val RESUME_TARGET = 88
+        const val RESUME_IMAGE_INDEX = 20
+
+        /** 100ブロック。第[RESUME_IMAGE_INDEX]ブロックだけが画像で、最初の画面には入らない。 */
+        val RESUME_IMAGE_BODY = (0 until 100).joinToString("\n\n") { index ->
+            if (index == RESUME_IMAGE_INDEX) "![](assets/tall.png)" else "${markerAt(index)} の本文です。"
         }
 
         /** 段落だけを並べた長文。ブロック番号を本文へ入れて可視位置を特定できるようにする。 */

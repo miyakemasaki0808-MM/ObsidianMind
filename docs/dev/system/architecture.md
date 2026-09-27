@@ -32,7 +32,7 @@ NoteViewModel（Android境界の窓口）
       ├── SearchController
       ├── DistillController
       ├── ReadingTraceController      ← 訪問の記録・余白メモの保存（3箇所の合流）
-      ├── ReunionCardController       ← 再会カード（照合・要約・印）
+      ├── ReunionCardController       ← 再会カード（照合・前後の要約・問いの選別）
       ├── SummaryController
       ├── NoteSectionController       ← 表示用Markdown解析をMainの外へ
       ├── ReadingTraceCleanupController ← 痕跡の孤児掃除（**Vault単位**）
@@ -120,7 +120,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 | | どちらか | なぜ |
 |---|---|---|
 | ジョブ | **ノート単位**（`cancelNoteScopedJobs()` に登録し、`activeRequestId` で照合） | ノートを開いた契機で走るので、切り替えたら止めるのが正しい |
-| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。`vaultGeneration` で照合） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
+| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。**照合は `vaultGeneration` ではなく requestId** — Vault切替でも `clearVaultScoped()` がジョブを止めて同じ requestId を進めるので、旧Vaultの結果は書かれない） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
 
 **これを二層の表の3行目にしない。** 基本のControllerは司令塔の契約に素直に繋がっているはずで、
 **その姿を表が示していることに価値がある。** 3行目を足すと「どちらでもよい」と読めてしまい、
@@ -236,7 +236,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 
 - AI生成は `AiClient` 側のMutexで直列化し、60秒タイムアウトを設ける
 - **同じファイルを read-modify-write する経路が2つ以上あるなら、錠は共有物として上から配る。**
-  痕跡サイドカーは訪問の追記（`ReadingTraceController`）・要約と印の書き戻し（`ReunionCardController`）・
+  痕跡サイドカーは訪問の追記（`ReadingTraceController`）・選別結果の書き戻し（`ReunionCardController`）・
   読み戻しの適用（`ReadingTraceBackupController`）が同じ形で書くので、`NoteSessionCoordinator` が
   1つの `Mutex` を作って3つへ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
   という、最も気づきにくい形になる

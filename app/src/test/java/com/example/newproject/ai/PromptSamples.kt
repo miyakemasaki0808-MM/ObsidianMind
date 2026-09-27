@@ -4,8 +4,8 @@ import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteField
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.state.QuizFormat
 import java.io.File
 
@@ -42,19 +42,6 @@ internal object PromptSamples {
             "buildNoteFieldPrompt" to
                 PromptBuilder.buildNoteFieldPrompt(value, excerpt, NoteField.Technical),
 
-            "buildReadingTraceSummaryPrompt" to
-                PromptBuilder.buildReadingTraceSummaryPrompt(
-                    noteTitle = value,
-                    visits = List(entries) { index ->
-                        ReadingVisit(
-                            atEpochMillis = 1_770_000_000_000L + index,
-                            deepestSectionTitle = "$MARK$index",
-                            progressPercent = 40
-                        )
-                    },
-                    totalVisitCount = 3
-                ),
-
             "buildRelatedNotesPrompt" to
                 PromptBuilder.buildRelatedNotesPrompt(
                     currentTitle = value,
@@ -87,6 +74,12 @@ internal object PromptSamples {
                     kind = ReunionKind.Question,
                     candidates = List(entries) { ReunionCandidateLine("R0$it", "$MARK$it") }
                 ).text,
+
+            "buildReunionPassagePrompt" to
+                PromptBuilder.buildReunionPassagePrompt(
+                    noteTitle = value,
+                    passage = ReunionPassage(before = value, after = value)
+                ),
 
             "buildSectionChatPrompt" to
                 PromptBuilder.buildSectionChatPrompt(

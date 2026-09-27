@@ -31,9 +31,6 @@ internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
     const val MAX_VISITS = 30
 
-    /** AI俯瞰要約を出すのに必要な訪問数。1回では「俯瞰」にならない。 */
-    const val MIN_VISITS_FOR_AI_SUMMARY = 2
-
     // 上限はいずれもUTF-8バイト基準（日本語は1文字≒3バイトなので文字数とは別に予算を持つ）。
     const val MAX_RELATIVE_PATH_BYTES = 1024
     const val MAX_NOTE_TITLE_BYTES = 512
@@ -140,19 +137,22 @@ internal data class ReadingTrace(
     val documentId: String?,
     val visits: List<ReadingVisit>,
     /**
-     * 再会カードの枠へ出す1件。**種別は [aiSummaryKind] が持つ。**
+     * 最後まで読んだノートで選別した1件（当時の問い・古い前提）。**種別は [aiSummaryKind] が持つ。**
      *
      * **null は「まだ試していない」とは限らない。** 候補があってもAIが「どれも該当しない」と
      * 返す回（空振り）があり、そのときは [aiSummaryVisitCount] と [aiSummaryKind] だけが
      * 記録されてここは null のままになる（→ features/reunion_card.md「空振りの扱い」）。
+     * 種別が `Overview` で文を持つものは旧仕様の俯瞰要約で、表示しない（→ 同 判断6）。
+     * 前後の要約はここへ書かない。
      */
     val aiSummary: String? = null,
     /**
      * **最後に生成を試みた時点の [totalVisitCount]。** null は未試行。
      *
      * 「要約が説明している訪問数」ではなく**試行の記録**である点が要点で、
-     * これにより空振りも記録できる。空振りを記録しないと [needsAiSummary] が真のまま残り、
-     * **同じノートを開くたびに同じ候補で生成し直す**（Mutex 直列なので待ち時間だけが増える）。
+     * これにより空振りも記録できる。空振りを記録しないと、
+     * **同じノートを開くたびに同じ候補で選び直す**（Mutex 直列なので待ち時間だけが増える）。
+     * 累計と一致しないときは選び直す（保持件数で比べると30件で頭打ちになり、二度と選び直さない）。
      */
     val aiSummaryVisitCount: Int? = null,
     /** [aiSummary] がどの種別か。空振りの回も種別だけは残る。 */
@@ -182,45 +182,18 @@ internal data class ReadingTrace(
     /**
      * 「まだ考えたい」の印。**3つで1組**（片方だけ残らないよう検証で固定する）。
      *
-     * **内容ごと保存するのが要点。** 印は*その内容*への意図なので、次の再会で生成し直すと
-     * 別の文が出て意図とずれる（→ features/reunion_card.md §6）。
-     * 保存済みを再掲すれば生成もゼロで済む。
+     * **画面にはもう出さず、付ける操作も無い。それでも読み書き・合流・退避では落とさない** —
+     * 欄を捨てると schema を上げることになり、checksum と旧版の退避の互換を抱える割に得るものが無い
+     * （→ features/reunion_card.md「『まだ考えたい』は撤去した」）。
      */
     val markedAtEpochMillis: Long? = null,
     val markedSummary: String? = null,
     val markedKind: ReunionKind? = null,
     val schemaVersion: Int = READING_TRACE_SCHEMA_VERSION
 ) {
-    /** 印があるか。**あるときは生成そのものを行わず、保存済みを再掲する。** */
+    /** 印があるか。合流でどちらの印を残すかにだけ使う。 */
     val hasMark: Boolean get() = markedSummary != null
 }
-
-/**
- * 直前の生成が**空振りだった**か（AIが「どれも該当しない」と答えた回）。
- *
- * 種別だけが残って内容が無い状態がそれで、**次の生成契機では俯瞰要約へ倒す**合図になる。
- * 呼べなかった回・失敗した回は何も記録しないので、ここには現れない。
- */
-internal val ReadingTrace.wasEmptyReunionAttempt: Boolean
-    get() = aiSummaryKind != null && aiSummary == null
-
-/** 「まだ考えたい」を押す。押した時点で枠に出ていた内容ごと控える。 */
-internal fun ReadingTrace.withMark(
-    summary: String,
-    kind: ReunionKind,
-    atEpochMillis: Long
-): ReadingTrace = copy(
-    markedAtEpochMillis = atEpochMillis,
-    markedSummary = summary,
-    markedKind = kind
-)
-
-/** 印を外す。**「読んだ」では外れない** — 閉じる操作と取り消しは別（→ features/reunion_card.md §4）。 */
-internal fun ReadingTrace.withoutMark(): ReadingTrace = copy(
-    markedAtEpochMillis = null,
-    markedSummary = null,
-    markedKind = null
-)
 
 /** 訪問を1件足す。保持は直近[ReadingTraceLimits.MAX_VISITS]件までだが、累計は積み上げる。 */
 internal fun ReadingTrace.withVisit(visit: ReadingVisit): ReadingTrace = copy(
@@ -238,18 +211,6 @@ internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
     visits = visits.dropLast(1),
     totalVisitCount = (totalVisitCount - 1).coerceAtLeast(0)
 )
-
-/**
- * AI俯瞰要約を作り直す必要があるか。
- * 訪問が増えていなければキャッシュ済みの要約をそのまま使えるので、
- * 2回目以降の再会は生成を待たずに即表示できる。
- *
- * 判定に累計を使う。保持件数で見ると30件で頭打ちになり、31回目以降は
- * どれだけ読んでも「増えていない」と判定されて要約が二度と更新されない。
- */
-internal val ReadingTrace.needsAiSummary: Boolean
-    get() = visits.size >= ReadingTraceLimits.MIN_VISITS_FOR_AI_SUMMARY &&
-        aiSummaryVisitCount != totalVisitCount
 
 /**
  * UTF-8バイト上限で切る。マルチバイト文字の途中では切らない。

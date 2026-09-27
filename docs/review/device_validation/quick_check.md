@@ -55,7 +55,7 @@
 | 読書痕跡の整理 | [reading_trace_cleanup.md](reading_trace_cleanup.md) | `CLEAN-01` `CLEAN-03` `CLEAN-04` |
 | 余白メモ | [margin_memo.md](margin_memo.md) | `MEMO-02` `MEMO-03` `MEMO-04` `MEMO-08` `MEMO-10` |
 | ノート内画像 | [note_image_rendering.md](note_image_rendering.md) | `IMAGE-01` `IMAGE-04` `IMAGE-09` `IMAGE-11` |
-| 再会カード | [reunion_card.md](reunion_card.md) | `REUNION-01` `REUNION-04` `REUNION-05` `REUNION-11` |
+| 再会カード | [reunion_card.md](reunion_card.md) | `J6-01` `REUNION-01` `J7-01` `REUNION-11` |
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |
 | 要約の保存（初回は通し版） | [note_summary.md](note_summary.md) | `SUMCACHE-01` `SUMCACHE-05` `SUMCACHE-06` |
 | AI入力予算 | [ai_input_budget.md](ai_input_budget.md) | `BUDGET-01` `BUDGET-03` |

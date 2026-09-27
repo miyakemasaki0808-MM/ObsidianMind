@@ -5,6 +5,7 @@ import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.vigilith.VigilithActionStatus
 import com.example.newproject.ui.vigilith.fullscreenAiStatus
@@ -133,6 +134,8 @@ internal fun FullscreenNoteScreen(
     // 全画面でも読んだ位置を報告する。全画面は専用の listState を持つため、
     // ここで報告しないと「全画面で読み進めてそのままアプリを離れた」分が記録から漏れる。
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
+    // 通常表示で依頼された「飛び越した画像」の測定を、全画面でも引き継いで測る（→ NoteImageMeasurements）。
+    SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
     // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
     val combinedStatus = fullscreenAiStatus(activeChat, uiState.quizState)

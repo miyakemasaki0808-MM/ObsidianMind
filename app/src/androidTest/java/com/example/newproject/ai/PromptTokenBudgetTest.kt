@@ -9,11 +9,11 @@ import com.example.newproject.MainActivity
 import com.example.newproject.domain.RelatedNotesUseCase
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
-import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.internal.GenAiUtils
@@ -308,8 +308,7 @@ class PromptTokenBudgetTest {
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
-     * 機能経路は7つ（要約・関連ノート・クイズ・セクション・蒸留・読書痕跡要約・検索ピッカー）。
-     * ここではセクションを3種、クイズを3形式へ分解して**11ケース**として測る。
+     * 機能経路ごとに1ケースを基本とし、セクションは3種、クイズは3形式へ分解して測る。
      * 同じ経路でも指示文の長さが違えばトークン数が変わるため、束ねると読み違える。
      */
     private fun measurementCases(profile: Profile): List<Pair<String, String>> {
@@ -358,19 +357,7 @@ class PromptTokenBudgetTest {
                 ).text
             )
 
-            add(
-                "読書痕跡要約" to PromptBuilder.buildReadingTraceSummaryPrompt(
-                    noteTitle = TITLE,
-                    visits = List(READING_TRACE_VISITS) { index ->
-                        ReadingVisit(
-                            atEpochMillis = 1_770_000_000_000L + index * 86_400_000L,
-                            deepestSectionTitle = "$SECTION $index",
-                            progressPercent = (index * 7) % 100
-                        )
-                    },
-                    totalVisitCount = 42
-                )
-            )
+            add("再会カードの前後" to reunionPassagePrompt(content))
 
             add(
                 "検索ピッカー" to PromptBuilder.buildPickerPrompt(
@@ -381,6 +368,16 @@ class PromptTokenBudgetTest {
                 ).text
             )
         }
+    }
+
+    /** 本文の中ほどまで読んだとして、本番と同じ切り出しで前後を渡す。 */
+    private fun reunionPassagePrompt(content: String): String {
+        val model = buildNoteSectionModel(content)
+        val frontier = requireNotNull(model.readFrontier(sectionTitle = null, progressPercent = 50))
+        return PromptBuilder.buildReunionPassagePrompt(
+            noteTitle = TITLE,
+            passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
+        )
     }
 
     /** 候補ブロックを本番と同じ文字数予算いっぱいまで埋める。 */
@@ -457,7 +454,6 @@ class PromptTokenBudgetTest {
         const val SECTION = "予算配分の考え方"
         const val RELATED_SNIPPET_LEN = 150
         const val CHAT_HISTORY_TURNS = 6
-        const val READING_TRACE_VISITS = 10
         const val PICKER_CANDIDATES = 40
 
         /** 全用途の文字数予算を確実に超える長さにする（＝抜粋と注意書きが必ず働く）。 */

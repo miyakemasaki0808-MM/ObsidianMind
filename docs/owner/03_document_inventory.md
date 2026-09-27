@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-20（基準 `77b29d0`）
+**作成:** 2026-09-08 / **更新:** 2026-09-27（基準 `415aff7`）
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,8 +14,9 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 126本・約22,500行。** `CLAUDE.md`・`README.md` と `docs/` 配下の124本を数えた。
+**追跡対象の Markdown は 126本・約22,600行。** `CLAUDE.md`・`README.md` と `docs/` 配下の124本を数えた。
 作業ツリーにはこの他に追跡しないものが12本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ2本。
+証跡フォルダには再会カードの実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
 
 ```
@@ -36,8 +37,7 @@ docs/
     └── device_validation/ (17本)  共通手順・簡易版・機能別ケース15本
 ```
 
-**前回の数え直しから、差し引き1本増えた。** 機能仕様に [reflect_margin_memo](../dev/features/reflect_margin_memo.md) が入り、
-実機ケースは `margin_memo` が入って `reading_trace_reply` が消えた。
+**前回の数え直しから本数は変わらない。** 行数もほぼ同じで、再会カードの作り直しは既存の文書の書き換えで済んだ。
 **廃止した機能の文書は消さない** — [reflect_remark](../dev/features/reflect_remark.md) は
 「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という判断の記録として残す。
 機能は消えてもその教訓は次にAI機能を足すときにまた要る。
@@ -64,18 +64,18 @@ docs/
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
-| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口 |
+| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口。低い横長の画面だけノート画面を左右2列にする |
 | [reflect_reading_trace](../dev/features/reflect_reading_trace.md) | 読書痕跡 | 稼働中。サイドカーは schema v7 |
-| [reunion_card](../dev/features/reunion_card.md) | 再会カードに何を出すか | 実装済み・実機検証済み |
+| [reunion_card](../dev/features/reunion_card.md) | 再会カードに何を出すか | 実装済み・実機検証済み。途中までは前後の要約と続きから読む、読了は問いか要約の先頭1文。「まだ考えたい」は撤去した |
 | [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI。**同じ入力の要約は端末に保存する** |
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中 |
 | [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
 | [quiz](../dev/features/quiz.md) | クイズ | 稼働中。未確認管理を持つ唯一の機能 |
-| [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | **実装済み・実機検証待ち。** ひとことの置き換え。AIを呼ばない唯一のReflect |
+| [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
 | [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | **Deprecated。実装は撤去済み。** 判断の記録として残す |
 | [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
-| [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。920行で最大の文書 |
+| [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。931行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。**2026-09-09〜12 に新設** |
 | [note_image_rendering](../dev/features/note_image_rendering.md) | ノート内画像の表示 | 稼働中・実機確認済み |
 | [note_fullscreen](../dev/features/note_fullscreen.md) | 全画面ノート | 稼働中 |
@@ -145,10 +145,10 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在19件。うち11件は余白メモの実機検証待ちで、検証が済めば消える。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在8件で、中2件・低5件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
-| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。758行・使い捨て |
-| [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残21件 |
+| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。649行・使い捨て |
+| [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留4件 |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 外から読んだ分析は [wip_analysis](07_wip_analysis.md) が持つ。
@@ -157,14 +157,14 @@ docs/
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
-| [README](../review/README.md) | レビューの入口と運用。一覧は 128行 | ✅ |
-| [findings](../review/findings.md) | 未解決指摘の受付簿。現在16件 | ✅ |
+| [README](../review/README.md) | レビューの入口と運用。全体で218行 | ✅ |
+| [findings](../review/findings.md) | 未解決指摘の受付簿。現在1件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
 | device_validation の機能別ケース15本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・**余白メモ**。結果は持たない | ✅ |
-| `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ | ❌ 未追跡 |
+| `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
 ## 9. `docs/owner/` — オーナーが読む俯瞰。16本
 

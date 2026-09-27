@@ -18,13 +18,11 @@ internal class FakeVault(var key: String? = VAULT_A)
 internal const val VAULT_A = "content://vault-a"
 internal const val VAULT_B = "content://vault-b"
 
-internal const val AI_SUMMARY = "これまで2回開いて、いずれも前半で止まっています。"
-
 /** テスト用の余白メモ。日時は明示できる（合流の重複排除が日時を見るため）。 */
 internal fun memoOf(text: String, at: Long = 1_000L, section: String? = null) =
     MarginMemo(text = text, writtenAtEpochMillis = at, sectionTitle = section)
 
-/** 訪問 [count] 件を持つ痕跡。件数が2以上だとAI俯瞰要約の対象になる。 */
+/** 訪問 [count] 件を持つ痕跡。到達率は 10×件数% で、最後の訪問は途中まで（件数が10未満のとき）。 */
 internal fun storedTrace(
     count: Int,
     path: String = "ideas/habit.md",
@@ -39,6 +37,16 @@ internal fun storedTrace(
     aiSummaryVisitCount = aiSummaryVisitCount,
     // 種別は「最後に試みた生成」に付く（→ validateReadingTrace）。
     aiSummaryKind = aiSummaryVisitCount?.let { ReunionKind.Overview }
+)
+
+/**
+ * 「まだ考えたい」の印が付いた痕跡。**画面からは付けられないが、既存のファイルには残っている**ので、
+ * 読み書き・合流・退避が欄を落とさないことを確かめるときに使う。
+ */
+internal fun ReadingTrace.withMark(summary: String, kind: ReunionKind, atEpochMillis: Long): ReadingTrace = copy(
+    markedAtEpochMillis = atEpochMillis,
+    markedSummary = summary,
+    markedKind = kind
 )
 
 internal class TestClock(private var current: Long = 1_000_000L) {

@@ -87,6 +87,7 @@ class NoteViewModel internal constructor(
         searchPickerUseCase = dependencies.searchPickerUseCase,
         distillPersistence = dependencies.distillPersistence,
         readingTracePersistence = dependencies.readingTracePersistence,
+        reunionPassageCache = dependencies.reunionPassageCache,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
@@ -368,8 +369,6 @@ class NoteViewModel internal constructor(
 
     /** 「読んだ」でカードを畳む。永続化しないので次回 Rediscover では再表示される。 */
     fun dismissReadingTraceCard() = session.dismissReadingTraceCard()
-
-    fun toggleReadingTraceMark() = session.toggleReadingTraceMark()
 
     /** @return 読書セッションの識別子（[bindReadingTracePath] に渡す）。 */
     private fun startReadingTrace(title: String, ref: DocumentRef, vaultRelativePath: String?): Long =

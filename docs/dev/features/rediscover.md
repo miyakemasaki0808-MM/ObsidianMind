@@ -2,8 +2,8 @@
 
 **状態:** Implemented — 稼働中。**アプリの入口であり心臓**
 **最終検証:** 2026-08-11 / `c25bcea`
-**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.collectAllNotesCached()` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）
-**関連テスト:** `NoteRepositoryTest` / `NoteSessionCoordinatorTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
+**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.collectAllNotesCached()` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）/ `ui/screen/ReaderLayout.kt`（並べ方）
+**関連テスト:** `NoteRepositoryTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **対象領域:** Vault からノートを1件無作為に引き、読める状態にするまで
@@ -151,6 +151,21 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 読書痕跡の孤児掃除がそれで、そちらは不完全な走査では動かさない
 （→ [reflect_reading_trace](reflect_reading_trace.md)）。
 
+### 判断6: 低い横長の画面だけ左右2列にする（2026-09-27、**実装済み・実機確認済み**）
+
+縦に積むと、見出し・操作ボタン・再会カードが先に高さを取り、本文は残りだけになる。
+カバー画面を横にした高さ443dpでは、カードだけで本文の高さが尽き、**ノート名も本文も見えなくなった**。
+さらにカードのボタン列が右下のマスコットと重なり、「読んだ」がほとんど押せなかった。
+
+- **高さ480dp未満で横長のときだけ**、左に見出し・操作ボタン・再会カード、右に本文を置く
+  （[`readerLayoutFor`](../../../app/src/main/java/com/example/newproject/ui/screen/ReaderLayout.kt)）。
+  縦長の画面と、横でも十分に高い画面（開いた折りたたみ・タブレット）は今までどおり縦に積む
+- **左列だけをスクロールさせる。** カードが長くても本文の高さは削らない。左列の幅は画面の4割か360dpの小さいほう
+- **カードのボタンは左列に入るので、右下のマスコットから離れる。** マスコットは本文の上に来る（縦画面と同じ）
+- **中身は1か所で組み立て、置き場所だけを変える。** 2列と縦積みで見出し・ボタン・カードの中身が食い違わない
+- **採らなかった案 — カードの高さに上限を設ける。** 縦積みのままでは見出しと操作ボタンも高さを取るので、
+  443dpでは上限を付けても本文に残る高さが小さい。横長なら幅は余っているので、高さではなく幅で分け合う
+
 ## 9. 品質要件
 
 - **性能:** 走査は `Dispatchers.IO`、本文の Markdown 解析は `Dispatchers.Default`。
@@ -161,7 +176,9 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `NoteRepositoryTest`（走査と除外）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
-- **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）/ `NoteReadingFlowTest`（読書画面）
+- **JVMテスト:** `ReaderLayoutTest`（どの画面で2列にするか。縦の見た目を変えないことも同じ表で見る）
+- **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）/ `NoteReadingFlowTest`（読書画面。
+  低い横長の枠で再会カードがあってもノート名と本文が見え、「読んだ」へ届くこと）
 - **保証していないこと:**
   - **抽選の分布は検証していない。** `notes.random()` に委ねており、偏りのテストは無い
   - **走査キャッシュのTTL境界は実測していない。** 60秒は見積もり

@@ -12,7 +12,6 @@ import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
-import com.example.newproject.model.needsAiSummary
 import com.example.newproject.model.withVisit
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -171,8 +170,8 @@ class ReadingTraceJsonTest {
 
     /**
      * **訪問数だけがある形は正しい。** 候補があってもAIが「どれも該当しない」と返す回（空振り）が
-     * これで、記録しないと [needsAiSummary] が真のまま残り、同じノートを開くたびに
-     * 同じ候補で生成し直す（→ features/reunion_card.md「空振りの扱い」）。
+     * これで、記録しないと同じノートを開くたびに
+     * 同じ候補で選び直す（→ features/reunion_card.md「空振りの扱い」）。
      */
     @Test
     fun `空振りの記録は要約なしで往復する`() {
@@ -241,6 +240,21 @@ class ReadingTraceJsonTest {
         }
     }
 
+    /**
+     * 前後の要約の種別 `Passage` が痕跡に現れるのは印だけ（→ features/reunion_card.md 判断6）。
+     * 種別は名前で保存・照合するので、**schema を上げずに往復できる**ことを固定する。
+     */
+    @Test
+    fun `前後の要約に付けた印も往復する`() {
+        val marked = trace(
+            markedAtEpochMillis = 1_700_000_500_000L,
+            markedSummary = "直前は導入。この先は具体例。",
+            markedKind = ReunionKind.Passage
+        )
+
+        assertEquals(ReadingTraceReadResult.Valid(marked), ReadingTraceJson.decode(ReadingTraceJson.encode(marked)))
+    }
+
     @Test
     fun `encode rejects visit count greater than visits`() {
         assertFailsWithMessage {
@@ -268,33 +282,6 @@ class ReadingTraceJsonTest {
         (1..ReadingTraceLimits.MAX_VISITS + 5).forEach { subject = subject.withVisit(visit(at = it.toLong())) }
 
         assertTrue(ReadingTraceJson.decode(ReadingTraceJson.encode(subject)) is ReadingTraceReadResult.Valid)
-    }
-
-    @Test
-    fun `ai summary is not needed for a single visit`() {
-        assertTrue(!trace(visits = listOf(visit())).needsAiSummary)
-    }
-
-    @Test
-    fun `ai summary is needed when visits grew past the cached count`() {
-        val subject = trace(
-            visits = listOf(visit(at = 1L), visit(at = 2L), visit(at = 3L)),
-            aiSummary = "古い要約",
-            aiSummaryVisitCount = 2
-        )
-
-        assertTrue(subject.needsAiSummary)
-    }
-
-    @Test
-    fun `ai summary is reused when visit count matches`() {
-        val subject = trace(
-            visits = listOf(visit(at = 1L), visit(at = 2L)),
-            aiSummary = "要約",
-            aiSummaryVisitCount = 2
-        )
-
-        assertTrue(!subject.needsAiSummary)
     }
 
     // ── schema v1 → v2 の移行 ────────────────────────────────────────────

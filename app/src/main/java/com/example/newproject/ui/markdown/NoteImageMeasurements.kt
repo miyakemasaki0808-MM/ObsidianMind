@@ -1,8 +1,14 @@
 package com.example.newproject.ui.markdown
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.NoteSectionModel
 
 /** ノート内の画像ブロックの位置と参照先。**判定を純関数へ渡すための最小の材料。** */
 internal data class NoteImageBlockRef(val blockIndex: Int, val reference: String)
@@ -28,6 +34,68 @@ internal fun firstUnmeasuredImageIndex(
     imageBlocks: List<NoteImageBlockRef>,
     measuredReferences: Set<String>
 ): Int? = imageBlocks.firstOrNull { it.reference !in measuredReferences }?.blockIndex
+
+/**
+ * 続きから読むで飛び越す画像のうち、まだ測っていないもの（→ features/reunion_card.md 判断6）。
+ * 同じ参照は1つだけ返す。
+ *
+ * **飛び越した画像は描画されないので、測られない。** 測られないまま残ると、その先の報告が
+ * [firstUnmeasuredImageIndex] で止まり続け、再開した後に読んだところが痕跡へ残らない。
+ */
+internal fun imagesSkippedBy(
+    blocks: List<MarkdownBlock>,
+    target: Int,
+    measuredReferences: Set<String>
+): List<MarkdownBlock.Image> =
+    blocks.take(target.coerceIn(0, blocks.size))
+        .filterIsInstance<MarkdownBlock.Image>()
+        .filter { it.target !in measuredReferences }
+        .distinctBy { it.target }
+
+/**
+ * 飛び越す画像を、描画を待たずに測って記録する。
+ *
+ * **未測定より後ろを報告しない検査は緩めない。** 仮の高さで後続が可視に見える水増しを防ぐ契約はそのままで、
+ * 測り終えれば判定が動いて報告が再開する。失敗も「測れた」として記録する（→ [NoteImageMeasurements]）。
+ */
+internal suspend fun measureSkippedImages(
+    blocks: List<MarkdownBlock>,
+    target: Int,
+    loader: NoteImageLoader,
+    measurements: NoteImageMeasurements
+) {
+    imagesSkippedBy(blocks, target, measurements.measuredReferences()).forEach { image ->
+        measurements.record(image, loader.measure(image))
+    }
+}
+
+/**
+ * 飛び越すと決まった画像を測る（→ [NoteImageMeasurements.requestSkippedMeasurement]）。
+ * **通常表示と全画面の両方に置く。** 依頼はノート単位の入れ物に残るので、測っている途中で画面が
+ * 破棄されても、移った先の画面が同じ依頼を拾って測り終える。測り終えた画像は選び直さない。
+ */
+@Composable
+internal fun SkippedImageMeasurement(
+    sectionModel: NoteSectionModel?,
+    loader: NoteImageLoader?,
+    measurements: NoteImageMeasurements?
+) {
+    val target = measurements?.skipTarget
+    LaunchedEffect(sectionModel, loader, measurements, target) {
+        if (sectionModel == null || loader == null || measurements == null) return@LaunchedEffect
+        measureRequestedSkips(sectionModel.blocks, loader, measurements)
+    }
+}
+
+/** 依頼があれば、飛び越す画像のうち未測定のものを測る。依頼が無ければ何もしない。 */
+internal suspend fun measureRequestedSkips(
+    blocks: List<MarkdownBlock>,
+    loader: NoteImageLoader,
+    measurements: NoteImageMeasurements
+) {
+    val target = measurements.skipTarget ?: return
+    measureSkippedImages(blocks, target, loader, measurements)
+}
 
 /**
  * ノート内画像の寸法を**通常表示と全画面で共有する**入れ物。
@@ -78,4 +146,19 @@ internal class NoteImageMeasurements {
 
     /** 測定済みの参照。**読むと購読になる**ので、記録されれば報告側の判定が動く。 */
     fun measuredReferences(): Set<String> = byReference.keys.toSet()
+
+    /**
+     * 続きから読むで飛び越すと決まった位置。**ここに置くのは、測る処理を画面の寿命から切り離すため。**
+     *
+     * 画面のスコープで測ると、測定待ちの間に全画面へ移っただけでキャンセルされ、飛び越した画像は
+     * 画面外なので二度と測られない。依頼をノート単位のこの入れ物に残し、
+     * いま出ている画面が拾って測る（[SkippedImageMeasurement]）。
+     */
+    var skipTarget by mutableStateOf<Int?>(null)
+        private set
+
+    /** 飛び越す位置を依頼する。**一番先の位置を残す**（手前の画像はその中に含まれる）。 */
+    fun requestSkippedMeasurement(target: Int) {
+        skipTarget = maxOf(skipTarget ?: target, target)
+    }
 }

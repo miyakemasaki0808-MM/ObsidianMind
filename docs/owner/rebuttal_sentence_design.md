@@ -1,9 +1,10 @@
 # 反証の一文 — 実装設計書
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-17 / **更新:** 2026-09-20（基準 `77b29d0`）
+**作成:** 2026-09-17 / **更新:** 2026-09-27（基準 `415aff7`）
 **状態:** Draft — 未実装。[idea_catalog](08_idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの。
-**2026-09-20 に足場を当て直した** — ひとことの撤去で消えた型を指していた2箇所を差し替えてある
+**2026-09-20 に足場を当て直した** — ひとことの撤去で消えた型を指していた2箇所を差し替えてある。
+**2026-09-27 に再会カードの作り直しを反映した** — 呼び出し回数の検算だけが変わり、候補の規則と設計は変わらない
 **最終検証:** —（未実装。器を整えただけで日付を進めない）
 **関連コード（予定）:** `domain/RebuttalClaimScanner.kt` / `domain/RebuttalCandidateRanking.kt` / `domain/RelatedCandidateId.kt` / `model/state/RebuttalSentence.kt` / `model/RebuttalProtocol.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBuilder.kt` / `controller/RebuttalController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト（予定）:** `RebuttalClaimScannerTest` / `RebuttalCandidateRankingTest` / `RebuttalControllerTest` / 既存の走査・契約テスト群（→ §0.4）
@@ -160,8 +161,9 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 `PromptBudgetTest` の「意図する最大構成」は動かない。
 
 **検算（Nano の呼び出し回数）。** ノートを開くたびの自動呼び出しは 要約・分野判定・関連ノート の3回が
-**4回**になる。Rediscover の2回目以降は再会カードが加わって4回が**5回**。**すべて Mutex 直列**なので、
-反証は最後尾に並ぶ（→ §8 判断5・§11）。
+**4回**になる。Rediscover で痕跡のあるノートを引いたときは再会カードが加わって**多くて5回**。
+再会カードは1回目の再会から枠を出すが、途中までのノートの前後の要約は端末に保存したものを使えれば生成せず、
+読了のノートは候補があるときだけ選別する。**すべて Mutex 直列**なので、反証は最後尾に並ぶ（→ §8 判断5・§11）。
 
 ### 5.2 候補の列挙（非AI・`scanRebuttalClaims`）
 

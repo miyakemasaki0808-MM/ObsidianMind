@@ -53,6 +53,9 @@ import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReunionKind
+import com.example.newproject.domain.ReunionSlot
+import com.example.newproject.domain.reunionSlot
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
@@ -622,6 +625,36 @@ class NoteSessionCoordinatorTest {
         assertEquals("ideas/habit.md", env.trace.saved.single().vaultRelativePath)
     }
 
+    /**
+     * **初めて読んだノートを離れてすぐ同じノートを引くと、1回目の再会でカードが出る。**
+     *
+     * 離れた訪問の保存は `persistScope` で後から走る。再会の照合がそれより先に痕跡を読むと
+     * 「痕跡なし」で終わり、その再会ではカードが出ない（実機では2回目に引いたときに出た）。
+     * 並びは本番の Rediscover と同じ — 切替（離れた訪問の保存が始まる）→ 本文 → 照合。
+     */
+    @Test
+    fun `初読直後に同じノートを引くと、1回目の再会でカードが出る`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", "doc-1")
+        coordinator.reportReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(10_000L)
+
+        coordinator.onNoteChanged()
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
+        runCurrent()
+        advanceTimeBy(NoteDwellGate.DWELL_MILLIS - 1)
+        runCurrent()
+
+        val card = coordinator.uiState.value.readingTraceCard
+        assertTrue("保存前の痕跡を読んで、1回目の再会でカードが出ていない", card != null)
+        assertEquals(1, card!!.visitCount)
+        coordinator.onNoteChanged()
+    }
+
     // ── 自動生成の門番（→ background_ai_ux.md §7）──────────────────────────
     // 門番そのものの規則は NoteDwellGateTest が見る。ここは**本番と同じ入口から**、
     // 自動で走る生成すべてに門番が配られていることと、切替の両方向を見る。
@@ -738,7 +771,19 @@ class NoteSessionCoordinatorTest {
         advanceUntilIdle()
     }
 
-    /** 再会カードの要約が要る痕跡（2回目の訪問・未要約）。 */
+    /** 最後の訪問で末尾まで読んだ痕跡。枠は問いか、ノートの要約になる。 */
+    private fun finishedTrace() = ReadingTrace(
+        vaultRelativePath = "ideas/habit.md",
+        noteTitle = "習慣について",
+        documentId = "doc-1",
+        visits = listOf(
+            ReadingVisit(atEpochMillis = 1L, progressPercent = 40, deepestSectionTitle = "導入"),
+            ReadingVisit(atEpochMillis = 2L, progressPercent = 100, deepestSectionTitle = "結論")
+        ),
+        totalVisitCount = 2
+    )
+
+    /** 再会カードが前後の要約を作る痕跡（最後の訪問が途中まで）。 */
     private fun traceNeedingSummary() = ReadingTrace(
         vaultRelativePath = "ideas/habit.md",
         noteTitle = "習慣について",
@@ -784,6 +829,66 @@ class NoteSessionCoordinatorTest {
         advanceUntilIdle()
 
         assertNull(coordinator.uiState.value.readingTraceCard)
+    }
+
+    // ── 再会カードの枠（→ features/reunion_card.md 判断6）──────────────────────
+
+    /**
+     * **要約が後から届く方向。** 枠はカードと要約の2つから決まる（→ lessons L56）。
+     * 前のノートの要約が次のノートの要約の欄へ入ると、次のノートのカードに前のノートの1文が出る。
+     */
+    @Test
+    fun `前のノートの要約が後から届いても、次のノートのカードには出ない`() = runTest {
+        val env = Env(this)
+        env.trace.put(finishedTrace())
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
+        coordinator.fetchSummary("ノートA", PLAIN)
+        advance(NoteDwellGate.DWELL_MILLIS)
+        coordinator.onNoteChanged()
+
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
+        coordinator.fetchSummary("ノートB", PLAIN)
+        env.ai.completeAll("Aの要約。")
+        advanceUntilIdle()
+
+        val state = coordinator.uiState.value
+        assertEquals(ReunionSlot.Waiting, reunionSlot(state.readingTraceCard!!, state.summaryState))
+
+        env.ai.completeAll("Bの要約。")
+        advanceUntilIdle()
+
+        val after = coordinator.uiState.value
+        assertEquals(
+            ReunionSlot.Shown("Bの要約。", ReunionKind.Overview),
+            reunionSlot(after.readingTraceCard!!, after.summaryState)
+        )
+    }
+
+    /** **カードが後から届く方向。** 前のノートの照合が終わる前に離れたら、次のノートの要約の横に出ない。 */
+    @Test
+    fun `前のノートのカードが後から届いても、次のノートには出ない`() = runTest {
+        val env = Env(this)
+        env.trace.put(finishedTrace())
+        val coordinator = env.coordinator()
+
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.revealReadingTrace("ideas/habit.md", content = PLAIN)
+        coordinator.fetchSummary("ノートA", PLAIN)
+        coordinator.onNoteChanged()
+
+        // 次のノートは「さがす」から開いた（再会カードは出ない経路）。
+        coordinator.setNoteState(successNote(PLAIN))
+        coordinator.fetchSummary("ノートB", PLAIN)
+        advanceUntilIdle()
+        env.ai.completeAll("Bの要約。")
+        advanceUntilIdle()
+
+        assertNull(coordinator.uiState.value.readingTraceCard)
+        assertEquals(SummaryState.Success("Bの要約。"), coordinator.uiState.value.summaryState)
     }
 
     // ── Vault世代 ──────────────────────────────────────────────────────────
@@ -1061,6 +1166,9 @@ class NoteSessionCoordinatorTest {
 
     private companion object {
         const val TARGET_URI = "content://vault/note.md"
+
+        /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
+        const val PLAIN = "これは説明だけの本文である。"
     }
 
     private class Env(
@@ -1072,6 +1180,9 @@ class NoteSessionCoordinatorTest {
         val history = FakeHistoryStore()
         val distill = FakeDistillPersistence()
         val trace = FakeTracePersistence()
+
+        /** 再会カードの前後の要約の保存。 */
+        val passageCache = InMemorySummaryCache()
 
         /** 分野の確定の永続。**読込回数を数える**（起動復元から読むかを見るため）。 */
         val noteFields = CountingNoteFieldStore()
@@ -1095,6 +1206,7 @@ class NoteSessionCoordinatorTest {
             searchPickerUseCase = SearchPickerUseCase(ai),
             distillPersistence = distill,
             readingTracePersistence = trace,
+            reunionPassageCache = passageCache,
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,

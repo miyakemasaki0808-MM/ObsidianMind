@@ -62,7 +62,7 @@ import org.junit.Test
  *
  * ## 本番の呼び出し式との対応（1対1）
  *
- * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**9件**。
+ * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**10件**。
  * **1件でも表から漏れると、母数の主張そのものが嘘になる**ので、grep の結果と1対1で並べる。
  *
  * | # | 本番の呼び出し | 起点 | 例外の観測 | キャンセルの観測 |
@@ -74,13 +74,14 @@ import org.junit.Test
  * | 5 | `SummarizeUseCase` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 6 | `SearchPickerUseCase` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 7 | `RelatedNotesUseCase` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 8 | `ReunionCardController` | `revealTrace()` | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
- * | 9 | `NoteFieldController` | `classify()` | **観測点が無い**（下記） | `NoteFieldControllerTest`（再throw） |
+ * | 8 | `ReunionCardController` | `revealTrace()` 途中まで（前後の要約） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 9 | `ReunionCardController` | `revealTrace()` 読了（問いの選別） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 10 | `NoteFieldController` | `classify()` | **観測点が無い**（下記） | `NoteFieldControllerTest`（再throw） |
  *
- * 8だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
+ * 8・9だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
  * （読書痕跡は「要約なしのカード」）。足場が既存テストにある。
  *
- * **9には観測点が無い。** 分野判定は進捗も失敗も画面へ出さず、**走行状態そのものを持たない**
+ * **10には観測点が無い。** 分野判定は進捗も失敗も画面へ出さず、**走行状態そのものを持たない**
  * （→ system/architecture.md 判断4 の例外）。残りうるフラグが無いので、
  * ここで見る「走行状態を残さない」に対応する観測対象が存在しない。
  * **観測を省いたのではなく、観測すべきものが無い。**

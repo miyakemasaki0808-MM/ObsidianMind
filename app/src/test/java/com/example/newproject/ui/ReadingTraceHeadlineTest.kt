@@ -18,7 +18,7 @@ class ReadingTraceHeadlineTest {
         val text = readingTraceHeadline(card(visitCount = 1, section = "導入", progress = 40), NOW)
 
         assertTrue("回数が出ている: $text", !text.contains("回開いています"))
-        assertTrue(text.contains("「導入」の節で止まっています"))
+        assertTrue(text.contains("「導入」の節まで読んでいます"))
         assertTrue(text.contains("40%"))
     }
 
@@ -55,7 +55,23 @@ class ReadingTraceHeadlineTest {
     fun `note without headings falls back to the percentage`() {
         val text = readingTraceHeadline(card(visitCount = 1, section = null, progress = 30), NOW)
 
-        assertEquals("今日読んで、全体の30%のあたりで止まっています。", text)
+        assertEquals("今日読んで、全体の30%のあたりまで読んでいます。", text)
+    }
+
+    /**
+     * **「止まった」と言わない。** 記録は前回いちばん先まで読んだところで、巻き戻して離れても下がらない。
+     * 最後に見ていた場所だと読める文言は、事実と違う案内になる（→ features/reunion_card.md 判断6）。
+     */
+    @Test
+    fun `見出しの1文は止まったと言わない`() {
+        listOf(
+            card(visitCount = 2, section = "導入", progress = 40),
+            card(visitCount = 2, section = null, progress = 40),
+            card(visitCount = 2, section = "まとめ", progress = 100)
+        ).forEach { card ->
+            val text = readingTraceHeadline(card, NOW)
+            assertTrue("止まったと案内している: $text", !text.contains("止ま"))
+        }
     }
 
     @Test

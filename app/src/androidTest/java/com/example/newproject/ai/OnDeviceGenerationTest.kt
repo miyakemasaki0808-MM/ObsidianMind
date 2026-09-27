@@ -8,6 +8,7 @@ import com.example.newproject.MainActivity
 import com.example.newproject.domain.NoteFieldAnswer
 import com.example.newproject.domain.parseNoteFieldAnswer
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.state.QuizFormat
@@ -34,12 +35,12 @@ import org.junit.runner.RunWith
  *
  * ## 何を主張し、何を主張しないか
  *
- * **主張する:** **代表4経路**（要約・クイズ・関連ノート・セクション要約）で
- * `generate()` が空でない応答を返すこと。SDK制約・API互換の破壊のような
- * **全経路に共通する故障**はここで落ちる。
+ * **主張する:** 下のテストで実生成を通した経路（分野判定・要約・クイズ・関連ノート・
+ * セクション要約・再会カードの前後の要約）で `generate()` が空でない応答を返すこと。
+ * SDK制約・API互換の破壊のような**全経路に共通する故障**はここで落ちる。
  *
- * **主張しない（1）: 残り7経路の健全性。** `PromptBuilder` の builder は11個あり、
- * [UNCOVERED_BUILDERS] に挙げた6つは**実生成を通していない。**
+ * **主張しない（1）: 残りの経路の健全性。**
+ * [UNCOVERED_BUILDERS] に挙げた builder は**実生成を通していない。**
  * プロンプト長や引数の組み立てなど**その経路に固有の退行は、ここが緑でも検出されない。**
  * 分類の網羅は `PromptGenerationCoverageTest`（JVM）が固定しており、
  * **builder を足したら覆うか未保証として挙げるかを決めるまで落ちる。**
@@ -196,6 +197,26 @@ class OnDeviceGenerationTest {
         assertGenerated("セクション要約", response)
     }
 
+    /**
+     * 再会カードの前後の要約は、途中まで読んだノートと再会するたびに**自動で**走る。
+     * 境目の印を挟んだ入力で、他の経路と組み立て方が違う。
+     */
+    @Test
+    fun 前後の要約プロンプトで生成が返る() = runBlocking<Unit> {
+        requireNanoAvailable()
+
+        val model = buildNoteSectionModel(NOTE_BODY)
+        val frontier = requireNotNull(model.readFrontier(sectionTitle = null, progressPercent = 50))
+        val prompt = PromptBuilder.buildReunionPassagePrompt(
+            noteTitle = NOTE_TITLE,
+            passage = model.passageAround(frontier, NoteExcerptLimits.REUNION_PASSAGE)
+        )
+        val response = client.generate(prompt)
+
+        log("前後の要約", response)
+        assertGenerated("前後の要約", response)
+    }
+
     // --- 補助 -----------------------------------------------------------------
 
     private fun assertGenerated(label: String, response: String) {
@@ -218,14 +239,13 @@ class OnDeviceGenerationTest {
          * **実生成を通していないプロンプト。** ここに挙がっているものは、
          * 本テストが緑でも**その経路固有の退行を検出しない。**
          *
-         * 代表4経路に留めているのは、生成が `AiClient` の Mutex で直列化され
+         * 代表の経路に留めているのは、生成が `AiClient` の Mutex で直列化され
          * 1件あたり最大60秒かかるため。**全経路へ広げるなら実行時間の設計から要る。**
          *
-         * `PromptGenerationCoverageTest` が、10個の builder すべてが
+         * `PromptGenerationCoverageTest` が、builder すべてが
          * 「覆われている」か「ここに挙がっている」かのどちらかであることを固定する。
          */
         val UNCOVERED_BUILDERS = setOf(
-            "buildReadingTraceSummaryPrompt",
             "buildReunionSelectionPrompt",
             "buildDistillPrompt",
             "buildPickerPrompt",

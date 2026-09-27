@@ -109,7 +109,7 @@
 | [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
-| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位）。**未実装・設計確定** |
+| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
 
 ### 基盤（`system/`）
@@ -197,22 +197,22 @@
 **`features/` `system/` に読む順は無い。** 普段はコードから下の逆引き表で引く。
 **ここは例外で、「どんな考え方で作られたアプリか」を通しで掴みたいときの順路**である。
 
-**11本・約3,600行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
+**11本・約3,900行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
 必要になったとき逆引きで引けば読める。
 
 | | 文書 | なぜこの位置か | 行数 |
 |---:|---|---|---:|
-| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 256 |
+| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 257 |
 | 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** | 116 |
 | 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する | 311 |
 | 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** | 300 |
 | 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget | 133 |
 | 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** | 291 |
-| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 181 |
-| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 593 |
-| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 234 |
-| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 311 |
-| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 869 |
+| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 198 |
+| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 606 |
+| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 499 |
+| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 312 |
+| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 889 |
 
 **1〜6が先なのは、7以降がそこで決めた規約を前提に書かれているから。** 逆順で読むと、
 機能ごとに同じ規約の説明を読み直すことになる。
@@ -248,6 +248,6 @@
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [vigilith_in_app](features/vigilith_in_app.md) → [opening_animation](features/opening_animation.md) |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
-| `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md) |
+| `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・`AndroidManifest.xml` の権限 | [dependency_policy](system/dependency_policy.md) |
 | `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](system/saf_boundary_gateway.md) → [architecture](system/architecture.md) |

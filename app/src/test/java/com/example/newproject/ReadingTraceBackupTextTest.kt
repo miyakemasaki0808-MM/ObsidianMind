@@ -31,7 +31,8 @@ class ReadingTraceBackupTextTest {
     fun `退避の説明はいま守っているものを名前で挙げる`() {
         val text = backupProtectedDataText()
 
-        listOf("訪問", "要約", "まだ考えたい", "余白メモ").forEach { name ->
+        // 「まだ考えたい」の印も書き出すが、画面から付けられず見る場所も無いので名前は挙げない。
+        listOf("訪問", "要約", "余白メモ").forEach { name ->
             assertTrue("守っているのに名前が出ていない: $name", text.contains(name))
         }
     }

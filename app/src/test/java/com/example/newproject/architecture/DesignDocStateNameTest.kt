@@ -238,7 +238,20 @@ class DesignDocStateNameTest {
             "aiStatus",
             "aiErrorMessage",
             "aiNotice",
-            "answerError"
+            "answerError",
+            // 再会カードの俯瞰要約（features/reunion_card.md 判断6 で撤去）
+            "buildReadingTraceSummaryPrompt",
+            "READING_TRACE_HISTORY_CHARACTERS",
+            "needsAiSummary",
+            "wasEmptyReunionAttempt",
+            "MIN_VISITS_FOR_AI_SUMMARY",
+            // 再会カードの「まだ考えたい」（features/reunion_card.md で撤去。痕跡の欄は残す）
+            "toggleReadingTraceMark",
+            "onToggleReadingTraceMark",
+            "toggleMark",
+            "onToggleMark",
+            "isMarked",
+            "withoutMark"
         )
     }
 }

@@ -17,6 +17,7 @@ import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
+import com.example.newproject.domain.SummaryCache
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
@@ -33,6 +34,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 
 /**
@@ -57,6 +60,11 @@ internal class NoteSessionCoordinator(
     searchPickerUseCase: SearchPickerUseCase,
     distillPersistence: DistillPersistence,
     readingTracePersistence: ReadingTracePersistence,
+    /**
+     * 再会カードの前後の要約の保存（→ features/reunion_card.md 判断6）。
+     * **既定値を置かない** — 配線を落とすと、前後の要約が再会のたびに作り直されるだけで何も落ちない。
+     */
+    reunionPassageCache: SummaryCache,
     private val history: HistoryStore,
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
@@ -174,7 +182,7 @@ internal class NoteSessionCoordinator(
      * 痕跡サイドカーの read-modify-write を直列化する錠。
      *
      * **同じ錠を read-modify-write する全経路へ配る。** 訪問の追記（[ReadingTraceController]）・
-     * 要約と印の書き戻し（[ReunionCardController]）・読み戻しの適用（[ReadingTraceBackupController]）は
+     * 選別結果の書き戻し（[ReunionCardController]）・読み戻しの適用（[ReadingTraceBackupController]）は
      * まったく同じ形で同じファイルを書くので、錠をクラスごとに持つと「錠はあるのに守られていない」状態になる。
      */
     private val traceWriteMutex = Mutex()
@@ -190,13 +198,16 @@ internal class NoteSessionCoordinator(
 
     private val reunionCard = ReunionCardController(
         scope = scope,
-        persistScope = persistScope,
         aiClient = aiClient,
         awaitDwell = dwell::await,
         state = stateStore.readingTraceWriter,
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
-        clock = clock,
+        // **表示と同じ解析結果を待つ。** 番号が到達率と同じ並びになり、解析も1回で済む。
+        // ノート切替で解析は捨てられ、照合のJobも止まるので、旧ノートの結果を掴まない。
+        awaitSectionModel = { sections.model.filterNotNull().first() },
+        passageCache = reunionPassageCache,
+        awaitVisitSaves = readingTrace::awaitVisitSaves,
         ioDispatcher = ioDispatcher,
         // 候補の列挙も**解析と同じ口**に載せる。テストがテストスケジューラへ差し替えられないと、
         // 生のカードが出たところで止めて門番の手前を観測できない。
@@ -546,8 +557,6 @@ internal class NoteSessionCoordinator(
     fun bindReadingTracePath(sessionId: Long, path: String) = readingTrace.bindPath(sessionId, path)
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
         reunionCard.revealTrace(vaultRelativePath, content)
-
-    fun toggleReadingTraceMark() = reunionCard.toggleMark()
     fun reportReadingProgress(
         blockIndex: Int,
         blockFraction: Float,

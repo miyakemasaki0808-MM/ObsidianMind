@@ -15,7 +15,10 @@ import com.example.newproject.model.withoutLastVisit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -174,6 +177,12 @@ internal class ReadingTraceController(
      * 取得順は常に `writeMutex → pendingMutex` の一方向に保つ（逆は作らない）。
      */
     private val pendingMutex = Mutex()
+
+    /**
+     * 走っている訪問の保存と、その保存先（Vaultキーと相対パス → [pendingKey]）。→ [awaitVisitSaves]
+     * Main と完了通知の両方から触るので並行なマップで持つ。
+     */
+    private val visitSaves = ConcurrentHashMap<Job, String>()
 
     /** 書けなかった痕跡。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
     private class PendingWrite(val vaultKey: String, val trace: ReadingTrace)
@@ -743,7 +752,8 @@ internal class ReadingTraceController(
         val vaultKey = active.vaultKey
         val owner = active
 
-        persistScope.launch {
+        // **起動前に登録する。** 先に起動すると、登録より先に終わった保存が集合に残る。
+        val save = persistScope.launch(start = CoroutineStart.LAZY) {
             // 前回書けなかったぶんがあれば、まずそれを片付ける。
             // これから書くノートは除く（下の保存が同じファイルを扱う）。
             withContext(ioDispatcher) { flushPendingWrites(excludePath = path) }
@@ -833,7 +843,31 @@ internal class ReadingTraceController(
             }
 
         }
+        visitSaves[save] = pendingKey(vaultKey, path)
+        save.invokeOnCompletion { visitSaves.remove(save) }
+        save.start()
     }
+
+    /**
+     * [vaultKey] の [vaultRelativePath] へ走っている訪問の保存が終わるまで待つ。保存の失敗・取消でも返る。
+     *
+     * 離れたノートの訪問は後から保存されるので、切替の直後に同じノートを照合すると
+     * 保存前の痕跡（初めて読んだノートなら不在）を読み、**その再会ではカードが出ない。**
+     * 再会の照合は痕跡を読む前にこれを待つ（→ features/reunion_card.md「1回目の再会から枠を出す」）。
+     *
+     * **別の痕跡への保存は待たない。** 遅いSAFや止まった書き込みが1件あるだけで、
+     * 関係の無い保存済みのカードまで出なくなる。
+     */
+    suspend fun awaitVisitSaves(vaultKey: String, vaultRelativePath: String) {
+        val key = pendingKey(vaultKey, vaultRelativePath)
+        visitSaves.filterValues { it == key }.keys.joinAll()
+    }
+
+    /**
+     * 走っている訪問の保存の本数。**終わった保存を外し忘れても待ちは即座に返る**ので、
+     * 振る舞いからは見えずに溜まり続ける。外していることはこの本数でしか確かめられない。
+     */
+    internal fun runningVisitSaveCount(): Int = visitSaves.size
 
     /**
      * 記録せずにセッションを捨てる。Vault切替時に使う。

@@ -156,7 +156,7 @@ AIピッカーがタイトルで照合していたときに踏んでいた既知
 - **索引Aは `NoteUiStateStore` が所有し、Vault単位のスライスとして公開する。**
   独立した可変ストアをUIへ直接公開すると、状態の単一ソースから**もう1つ外へ出す**ことになる
   （→ [architecture](../system/architecture.md)「状態が `NoteUiState` の外に出るもの」）。
-  **ノート単位の契約2箇所には登録しない**（Vault単位なので `vaultGeneration` 側 → 判断16）
+  **ノート単位の契約2箇所には登録しない**（Vault単位の状態である。照合は requestId で、Vault切替では `clearVaultScoped()` が同じ requestId を進める → 判断16）
 
 ## 7. システム設計
 
@@ -528,8 +528,12 @@ OKLab の L とは別物である（相関はするが一致せず、彩度が�
 （→ [architecture](../system/architecture.md) の並行処理の規約・[lessons](../lessons.md) L11）。
 **落ちるテストを書けるガードを1つだけ置く。**
 
-**Vault世代を照合する。** 別Vaultの遅れて届いた走査結果を現Vaultへ合成しない
-（→ [architecture](../system/architecture.md) 判断4 の `vaultGeneration`）。
+**別Vaultの遅れて届いた結果を現Vaultへ合成しない。担うのは世代の照合ではなく取り消しである。**
+AIの結果は requestId で照合し、Vault切替では `clearVaultScoped()` がジョブを止めて同じ requestId を進める。
+走査の結果は、走査を呼ぶ処理がどれも Vault切替で取り消される Job の中で動く（ノートの読込・関連ノート・冊子）ので、
+走査から戻った時点で取り消されていれば合成まで進まない。**`vaultGeneration` は持たない** —
+取り消しと requestId で足りている（→ [architecture](../system/architecture.md) 判断4 の例外）。
+**走査を取り消されない場所から呼ぶようになったら、そのとき照合を足す。**
 
 **「有効な確定」は入力版で決まる。** 本文・ヒント・語彙のどれかが変われば入力版が変わり、
 その確定は有効でなくなるので、暫定で置き換えてよい。**語彙版は本文を読まずに変化を検知できる**ので、
