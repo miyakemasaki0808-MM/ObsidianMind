@@ -120,7 +120,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 | | どちらか | なぜ |
 |---|---|---|
 | ジョブ | **ノート単位**（`cancelNoteScopedJobs()` に登録し、`activeRequestId` で照合） | ノートを開いた契機で走るので、切り替えたら止めるのが正しい |
-| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。`vaultGeneration` で照合） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
+| 状態（`noteFields`） | **Vault単位**（`withNoteScopedReset()` に**載せず**、`withVaultScopedReset()` にだけ載せる。**照合は `vaultGeneration` ではなく requestId** — Vault切替でも `clearVaultScoped()` がジョブを止めて同じ requestId を進めるので、旧Vaultの結果は書かれない） | 索引はVault全体のもの。**ノートを切り替えただけで冊子の色が消えるのは誤り** |
 
 **これを二層の表の3行目にしない。** 基本のControllerは司令塔の契約に素直に繋がっているはずで、
 **その姿を表が示していることに価値がある。** 3行目を足すと「どちらでもよい」と読めてしまい、
