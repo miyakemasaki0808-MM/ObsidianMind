@@ -466,15 +466,11 @@ internal class SafReadingTraceDocumentGateway(
      */
     private fun indexFiles(vault: Uri, children: SafChildren): MutableMap<String, MutableList<Uri>> {
         val files = mutableMapOf<String, MutableList<Uri>>()
-        children.items
-            .filter { !it.isDirectory }
-            .forEach { child ->
-                val key = child.name.take(KEY_LENGTH)
-                if (key.length == KEY_LENGTH) {
-                    files.getOrPut(key) { mutableListOf() } +=
-                        DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
-                }
-            }
+        children.items.forEach { child ->
+            val key = readingTraceKeyOf(child.name, child.isDirectory) ?: return@forEach
+            files.getOrPut(key) { mutableListOf() } +=
+                DocumentsContract.buildDocumentUriUsingTree(vault, child.documentId)
+        }
         return files
     }
 
@@ -532,7 +528,22 @@ internal class SafReadingTraceDocumentGateway(
 
     private companion object {
         const val MIME_TYPE_JSON = "application/json"
-        /** SHA-256 の16進表記の長さ。ファイル名の先頭がこの長さのキーになる。 */
-        const val KEY_LENGTH = 64
     }
 }
+
+/**
+ * 痕跡の置き場の子1件を、索引のキーへ読む。**キーにならなければ null。**
+ *
+ * **フォルダと、先頭64文字に満たない名前は載せない。** 置き場には痕跡のほかに結晶のフォルダ
+ * （`crystals/`）と、既定名のまま保存された退避ファイルが置かれうる。載せると孤児掃除の削除候補や
+ * 退避の件数に紛れ込む（→ features/reflect_crystal.md 判断7・`readingTraceBackupFileName`）。
+ * 完全一致で引かないのは、プロバイダが `hash (1).json` のように改名しうるため。
+ */
+internal fun readingTraceKeyOf(name: String, isDirectory: Boolean): String? {
+    if (isDirectory) return null
+    val key = name.take(READING_TRACE_KEY_LENGTH)
+    return key.takeIf { it.length == READING_TRACE_KEY_LENGTH }
+}
+
+/** SHA-256 の16進表記の長さ。ファイル名の先頭がこの長さのキーになる。 */
+private const val READING_TRACE_KEY_LENGTH = 64

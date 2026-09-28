@@ -1,7 +1,7 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-27
+**作成:** 2026-09-08 / **更新:** 2026-09-29
 
 **位置づけ:** 16本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
@@ -40,7 +40,7 @@
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 15 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 51 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 130 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 131 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 52 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
@@ -54,7 +54,7 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 218 | レビュー運用の正本＋レビュー一覧139行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 224 | レビュー運用の正本＋レビュー一覧145行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
 | [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 282 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 
 この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。

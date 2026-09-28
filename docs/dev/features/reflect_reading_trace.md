@@ -56,6 +56,8 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 - **保存先:** Vault 内 `_ReadingTraces/*.json`。**`.` ではなく `_` 始まり**（理由は §8 判断6）
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
+- **置き場には痕跡のほかに結晶のフォルダ `crystals/` がある**（→ [reflect_crystal](reflect_crystal.md) 判断7）。
+  索引はフォルダと先頭64文字に満たない名前を載せない（`readingTraceKeyOf`）ので、孤児掃除・退避・読み戻しの下見には現れない
 - **スキーマ:** **v7**。v1〜v6 も読める（書き戻しは常に現行版）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
 

@@ -1,6 +1,8 @@
 package com.example.newproject.controller
 
 import com.example.newproject.ai.AiClient
+import com.example.newproject.data.CrystalMaterialPersistence
+import com.example.newproject.data.CrystalPersistence
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.HistoryStore
 import com.example.newproject.model.BookletSeed
@@ -28,6 +30,7 @@ import com.example.newproject.model.state.DistillRangeEdgeMove
 import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SummaryState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 
 /**
@@ -65,6 +69,12 @@ internal class NoteSessionCoordinator(
      * **既定値を置かない** — 配線を落とすと、前後の要約が再会のたびに作り直されるだけで何も落ちない。
      */
     reunionPassageCache: SummaryCache,
+    /**
+     * 結晶の置き場（Vault 内）と材料の控え（端末内）。**既定値を置かない** —
+     * 配線を落とすと、結晶が黙って1件もできなくなるだけで何も落ちない。
+     */
+    crystalPersistence: CrystalPersistence,
+    crystalMaterials: CrystalMaterialPersistence,
     private val history: HistoryStore,
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
@@ -213,6 +223,26 @@ internal class NoteSessionCoordinator(
         // 生のカードが出たところで止めて門番の手前を観測できない。
         scanDispatcher = parseDispatcher,
         writeMutex = traceWriteMutex
+    )
+
+    /**
+     * 結晶。**[reunionCard] より後に宣言する** — 再会カードの照合が終わるのを待ってから錠を取るため。
+     *
+     * 生成のジョブはノート単位、一覧は Vault 単位（→ features/reflect_crystal.md 判断8）。
+     */
+    private val crystal = CrystalController(
+        scope = scope,
+        aiClient = aiClient,
+        awaitDwell = dwell::await,
+        awaitSummary = ::awaitSummaryText,
+        awaitReunionSettled = reunionCard::awaitSettled,
+        state = stateStore.crystalWriter,
+        store = crystalPersistence,
+        materials = crystalMaterials,
+        currentVaultKey = currentVaultKey,
+        vaultGeneration = { vaultGeneration },
+        clock = clock,
+        ioDispatcher = ioDispatcher
     )
 
     /**
@@ -383,6 +413,8 @@ internal class NoteSessionCoordinator(
         // **索引Aには触らない。** ジョブだけ止める — 索引AはVault単位なので、
         // ノートを開き直しただけで冊子の色が消えるのは誤りである。
         noteField.cancelAndClear()
+        // **生成だけを止める。** 保存に入った結晶と一覧（Vault単位）には触らない。
+        crystal.cancelAndClear()
         quiz.cancelAndClear()
         marginMemo.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
@@ -441,6 +473,8 @@ internal class NoteSessionCoordinator(
         booklet.onVaultChanged()
         // 索引Bと連続失敗の記録を捨てる。**別Vaultの結果と失敗回数を持ち越さない。**
         noteField.clearVaultScoped()
+        // 読み込みと生成を止める。保存は止めないが、世代の照合で新しいVaultの一覧へは足さない。
+        crystal.clearVaultScoped()
         // **走査より先に読む。** 走査のときには揃っている状態にしておく（→ 判断17）。
         loadPersistedNoteFields()
         cancelNoteScopedJobs()
@@ -529,6 +563,31 @@ internal class NoteSessionCoordinator(
      */
     fun classifyNoteField(ref: DocumentRef, content: String, vaultRelativePath: String) =
         noteField.classify(ref, content, vaultRelativePath)
+
+    /**
+     * 結晶を試す（→ features/reflect_crystal.md）。**相対パスが確定してから呼ぶ** —
+     * 根拠をパスで持つので、確定しないノートは控えない。
+     *
+     * 一覧の読み込みもここから始める（AIを呼ばないので門番を待たない）。
+     */
+    fun crystallize(vaultRelativePath: String, title: String) {
+        crystal.ensureLogLoaded()
+        crystal.onNoteShown(vaultRelativePath, title)
+    }
+
+    /** 結晶の一覧を開いたときに呼ぶ。読込済みなら何もしない。 */
+    fun loadCrystals() = crystal.ensureLogLoaded()
+
+    /**
+     * このノートの要約の終わりを待つ。**要約の生成・保存・表示は変えない**（結果を読むだけ）。
+     * `beginNoteLoad()` が要約を `Idle` へ戻すので、前のノートの要約を掴まない。
+     */
+    private suspend fun awaitSummaryText(): String? {
+        val settled = stateStore.uiState
+            .map { it.summaryState }
+            .first { it is SummaryState.Success || it is SummaryState.Error || it is SummaryState.AiUnavailable }
+        return (settled as? SummaryState.Success)?.summary
+    }
 
     /**
      * 自動で走る生成の門番を待つ。**関連ノートのAI推薦のため**（ジョブが ViewModel 側にある）。

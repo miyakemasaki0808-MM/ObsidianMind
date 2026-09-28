@@ -13,9 +13,9 @@
 >
 > | 呼び方 | 数 | 意味 |
 > |---|---|---|
-> | **プロンプト** | **11本** | `PromptBuilder` が持つ `build*Prompt` の総数 |
+> | **プロンプト** | **12本** | `PromptBuilder` が持つ `build*Prompt` の総数 |
 > | **抜粋経路** | **8本** | そのうち `NoteExcerpt` を引数に取る＝本書の対象 |
-> | 抜粋を通さない3本 | 3本 | 再会カードの前後の要約（本文を境目つきで切り出す → [reunion_card](../features/reunion_card.md) 判断6）・関連ノート選定（タイトルのみ）・蒸留（候補文を直接渡す） |
+> | 抜粋を通さない4本 | 4本 | 再会カードの前後の要約（本文を境目つきで切り出す → [reunion_card](../features/reunion_card.md) 判断6）・関連ノート選定（タイトルのみ）・蒸留（候補文を直接渡す）・結晶（保存済みの要約から作った断片を渡す → [reflect_crystal](../features/reflect_crystal.md)） |
 **関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](../features/related_notes_ai.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-27--28--ai入力の切り出しを後ろ捨てから真ん中捨てへ)・[2026-08](../../owner/journal/2026-08.md)
 
@@ -180,6 +180,9 @@ AI出力を別のAI入力へ流す箇所は、いま関連ノートが要約を�
   `nano-v3` で上限4,352、出力予約256を確認した。12用途×2プロファイルの全24ケースが収まり、
   最小余裕は日本語の関連ノートで1,575トークンだった。端末・モデル世代が変われば再計測する
   （→ [device_validation](../../review/device_validation/ai_input_budget.md)）
+- **結晶のプロンプトはこの基準線に含まれない。** `PromptTokenBudgetTest` に最大構成
+  （候補6件・ノート名200字・断片240字）を足し、2026-09-29 に同じ端末で2プロファイルの余裕 1,894・1,972 トークンを確認した
+  （→ [reflect_crystal](../features/reflect_crystal.md) §5）
 - **予算内のノートは1文字も変わっていない。** 抜粋経路8本すべてを回帰テストで固定している。
   予算内のノートは抜粋もプロンプトも変わっていないので、同じモデルなら要約も変わらない。
   **変わって見えるなら、端末のモデルが更新された可能性が高い**（→ [ai_quality_measurement](ai_quality_measurement.md) 判断8）
@@ -206,7 +209,7 @@ AI出力を別のAI入力へ流す箇所は、いま関連ノートが要約を�
 ### 判断8: 強制は1箇所、削るのは材料だけ
 
 `PromptBudget.assemble(instructions, body, closing)` が最後に1回だけ上限を当てる。
-11本すべての builder がここを通る。
+12本すべての builder がここを通る。
 
 | 部位 | 例 | 上限を超えたとき |
 |---|---|---|

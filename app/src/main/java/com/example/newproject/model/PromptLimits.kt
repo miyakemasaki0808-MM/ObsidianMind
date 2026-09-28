@@ -68,4 +68,13 @@ object PromptLimits {
      * 照合キーはIDなので、タイトルは [LABEL_CHARACTERS] で切ってよい。予算を超えるぶんは行ごと落とす。
      */
     const val PICKER_CANDIDATES_CHARACTERS = 2_000
+
+    /**
+     * 結晶の候補一覧（`ID | ノート名 — 断片`）の取り分。
+     *
+     * **最大構成がちょうど収まる値にしてある** — 6件 ×（ID・区切り・ノート名 [LABEL_CHARACTERS]・
+     * 断片 [CrystalLimits.FRAGMENT_CHARACTERS]）。どちらも上流で閉じているので、通常この予算では落ちない。
+     * 超えたら古い候補から行ごと落とし、今のノート（`N1`）は落とさない。
+     */
+    const val CRYSTAL_CANDIDATES_CHARACTERS = 2_700
 }

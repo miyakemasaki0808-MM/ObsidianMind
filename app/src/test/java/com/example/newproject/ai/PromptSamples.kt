@@ -2,6 +2,7 @@ package com.example.newproject.ai
 
 import com.example.newproject.domain.buildDistillSourceModel
 import com.example.newproject.domain.selectDistillCandidates
+import com.example.newproject.model.CrystalMaterial
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteField
 import com.example.newproject.model.ReunionKind
@@ -80,6 +81,11 @@ internal object PromptSamples {
                     noteTitle = value,
                     passage = ReunionPassage(before = value, after = value)
                 ),
+
+            "buildCrystalPrompt" to
+                PromptBuilder.buildCrystalPrompt(
+                    List(entries) { CrystalMaterial("$MARK$it.md", value, "$MARK$it", lastSeenAt = 0) }
+                ).text,
 
             "buildSectionChatPrompt" to
                 PromptBuilder.buildSectionChatPrompt(

@@ -5,6 +5,7 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
@@ -43,6 +44,11 @@ data class NoteUiState(
     // 冊子と同じくVault単位で、ノート切替では消さない（→ features/note_field_color.md 判断10）。
     // **暫定は永続しない**ので、ここは走査のたびに作り直される導出値である（判断14）。
     val noteFields: Map<DocumentRef, NoteFieldClassification> = emptyMap(),
+    // この Vault の結晶の一覧。**Vault単位**で、ノートを切り替えても消さない
+    // （→ features/reflect_crystal.md §6）。
+    val crystalLog: CrystalLogState = CrystalLogState.NotLoaded,
+    // ✨タブで結晶を絞り込む、今のノートの相対パス。**ノート単位**（一覧とは寿命が違う）。
+    val crystalNotePath: String? = null,
     val sectionChat: SectionChatState? = null,
     // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
     // AI生成と結果を保持し、吹き出しから再表示できる。

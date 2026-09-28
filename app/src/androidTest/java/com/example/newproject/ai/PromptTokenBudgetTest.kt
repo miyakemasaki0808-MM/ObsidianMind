@@ -23,6 +23,8 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import com.example.newproject.model.CrystalLimits
+import com.example.newproject.model.CrystalMaterial
 
 /**
  * 完成プロンプトが端末AIのトークン上限に対してどれだけ余裕を持っているかを実測する。
@@ -358,6 +360,20 @@ class PromptTokenBudgetTest {
             )
 
             add("再会カードの前後" to reunionPassagePrompt(content))
+
+            // 結晶は最大構成（候補6件・ノート名は上限いっぱい・断片240字）で測る（→ features/reflect_crystal.md §5）。
+            add(
+                "結晶" to PromptBuilder.buildCrystalPrompt(
+                    List(CrystalLimits.CANDIDATES) { index ->
+                        CrystalMaterial(
+                            vaultRelativePath = "n$index.md",
+                            noteTitle = "${profile.label}の読んだノート${index + 1}".padEnd(PromptLimits.LABEL_CHARACTERS, '題'),
+                            fragment = profile.content.replace(Regex("\\s+"), " ").take(CrystalLimits.FRAGMENT_CHARACTERS),
+                            lastSeenAt = 0
+                        )
+                    }
+                ).text
+            )
 
             add(
                 "検索ピッカー" to PromptBuilder.buildPickerPrompt(

@@ -83,6 +83,21 @@ internal class ReunionCardController(
     private var revealJob: Job? = null
     private var activeRequestId = 0L
 
+    /**
+     * いま走っている照合が終わるまで待つ。照合が無ければすぐ返る。
+     *
+     * **結晶がこれを待ってから生成の錠を取る**（→ features/reflect_crystal.md 判断10）。
+     * 照合は本文を出した直後に要求されるので、結晶が待ち始める時点では既に走っている。
+     * 照合が入れ替わったら新しいほうも待つ。ノートを切り替えると照合は取り消され、ここも返る。
+     */
+    suspend fun awaitSettled() {
+        while (true) {
+            val job = revealJob ?: return
+            if (!job.isActive) return
+            job.join()
+        }
+    }
+
     /** ノート切替時に、進行中の照合・生成を捨てる（後着で別ノートのカードを出さない）。 */
     fun cancelForNoteChange() {
         revealJob?.cancel()

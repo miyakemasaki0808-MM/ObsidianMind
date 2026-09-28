@@ -88,6 +88,8 @@ class NoteViewModel internal constructor(
         distillPersistence = dependencies.distillPersistence,
         readingTracePersistence = dependencies.readingTracePersistence,
         reunionPassageCache = dependencies.reunionPassageCache,
+        crystalPersistence = dependencies.crystalPersistence,
+        crystalMaterials = dependencies.crystalMaterials,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
@@ -132,8 +134,27 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
-    private var cachedNotes: List<NoteFile> = emptyList()
-    private var cachedNotesLoadedAt = 0L
+    /**
+     * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
+     * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
+     */
+    private val noteScan = NoteScanCache(
+        ttlMillis = NOTES_CACHE_TTL_MS,
+        vaultGeneration = { session.vaultGeneration }
+    )
+    private val cachedNotes: List<NoteFile> get() = noteScan.notes
+
+    /**
+     * 今の走査結果にあるノートの相対パス。**結晶の一覧で、根拠のノート名を押せるかを決める**
+     * （改名・移動・削除したノートは押せない表示にする → features/reflect_crystal.md §5）。
+     */
+    val knownNotePaths: StateFlow<Set<String>> = noteScan.knownPaths
+
+    /**
+     * 結晶の一覧を開いたときの走査。**Vault単位**で、Vault切替で取り消す（ノート切替では止めない —
+     * 一覧から根拠のノートを開いた後も、押せるかの判定は続けて使う）。
+     */
+    private var crystalListScanJob: Job? = null
 
     // ノート切替時に前のノートの読込・関連ノートが後から届いて上書きしないよう、
     // 実行中ジョブを保持して新規要求時にキャンセルする
@@ -182,34 +203,28 @@ class NoteViewModel internal constructor(
         session.onVaultChanged {
             vaultLocation.uri = uri
             preferences.vaultUri = uri.toString()
-            cachedNotes = emptyList()
-            cachedNotesLoadedAt = 0L
+            crystalListScanJob?.cancel()
+            noteScan.clear()
             relatedNotesUseCase.clearCache()
         }
     }
 
-    // Vault全体のノート一覧をTTL付きで取得する。期限内は cachedNotes を再利用し、
+    // Vault全体のノート一覧をTTL付きで取得する。期限内はキャッシュを再利用し、
     // ランダム表示の連打や関連ノートの補填で毎回の全走査を避ける。
+    // 走査の間にVaultが切り替わったら、結果を捨てて CancellationException で止まる（→ NoteScanCache）。
     private suspend fun collectAllNotesCached(
         contentResolver: ContentResolver,
         vaultUri: Uri
-    ): List<NoteFile> {
-        val now = System.currentTimeMillis()
-        if (cachedNotes.isNotEmpty() && now - cachedNotesLoadedAt < NOTES_CACHE_TTL_MS) {
-            return cachedNotes
-        }
+    ): List<NoteFile> = noteScan.get(
         // 走査が部分的に失敗していても、読めた分でランダム表示・関連ノートを続ける
         // （止めるほうが体験として悪い）。完全性を要求するのは、不在を根拠に
         // 何かを消す処理だけ。→ VaultScan のKDoc
-        val notes = repository.collectNotes(contentResolver, vaultUri).notes
-        cachedNotes = notes
-        cachedNotesLoadedAt = now
+        scan = { repository.collectNotes(contentResolver, vaultUri).notes },
         // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
         // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
         // 索引Aが同じ材料で揃う。
-        session.indexNoteFields(notes)
-        return notes
-    }
+        onPublished = session::indexNoteFields
+    )
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultLocation.uri ?: return
@@ -290,6 +305,8 @@ class NoteViewModel internal constructor(
         session.fetchSummary(note.name, loaded.content)
         // 分野の判定。**走査経路なので相対パスが揃っており、ヒントを添えられる。**
         session.classifyNoteField(note.ref, loaded.content, note.vaultRelativePath)
+        // 結晶。**再会カードの照合より後に呼ぶ** — 結晶はその照合が終わるのを待ってから錠を取る。
+        session.crystallize(note.vaultRelativePath, note.name)
         fetchRelatedNotes(note.name, loaded.content)
     }
 
@@ -342,6 +359,8 @@ class NoteViewModel internal constructor(
                 // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、さがす経由のノートだけ
                 // ヒント無しで判定され、同じノートでも入口によって入力版が変わってしまう。
                 session.classifyNoteField(note.ref, loaded.content, cachedRelativePath(note.ref).orEmpty())
+                // 結晶は根拠をパスで持つので、パスが確定しなかったノートでは試さない。
+                cachedRelativePath(note.ref)?.let { path -> session.crystallize(path, note.title) }
                 fetchRelatedNotes(note.title, loaded.content)
             } catch (e: CancellationException) {
                 throw e
@@ -349,6 +368,42 @@ class NoteViewModel internal constructor(
                 session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
             }
         }
+    }
+
+    // ── 結晶（実装は CrystalController）──────────────────────────────────────────
+
+    /** ✨タブを開いた。この Vault の結晶をまだ読んでいなければ読む。 */
+    fun loadCrystals() = session.loadCrystals()
+
+    /**
+     * 結晶の一覧を開いた。一覧を読み、**根拠のノートが今の走査にあるか**を確かめる
+     * （走査はTTLキャッシュ付きなので、通常は追加I/Oなし）。
+     */
+    fun openCrystalList(contentResolver: ContentResolver) {
+        session.loadCrystals()
+        val uri = vaultLocation.uri ?: return
+        crystalListScanJob?.cancel()
+        crystalListScanJob = scope.launch {
+            try {
+                collectAllNotesCached(contentResolver, uri)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // 走査に失敗したら、根拠のノート名は押せない表示のまま残る。
+            }
+        }
+    }
+
+    /**
+     * 結晶の根拠のノートを開く。**今の走査結果に無ければ何もしない**（画面側も押せない表示にしている）。
+     * 開き方は関連・さがすと同じで、Rediscover 経路ではないので再会カードは出ない。
+     */
+    fun openCrystalSource(contentResolver: ContentResolver, vaultRelativePath: String) {
+        val note = cachedNotes.firstOrNull { it.vaultRelativePath == vaultRelativePath } ?: return
+        openNote(
+            contentResolver,
+            RelatedNote(title = note.name, ref = note.ref, isWikilinked = false, lastModified = note.lastModified)
+        )
     }
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
@@ -601,8 +656,7 @@ class NoteViewModel internal constructor(
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
-            cachedNotes = emptyList()
-            cachedNotesLoadedAt = 0L
+            noteScan.clear()
             relatedNotesUseCase.clearCache()
             true
         } catch (e: CancellationException) {
