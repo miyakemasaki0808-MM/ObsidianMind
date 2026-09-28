@@ -99,7 +99,7 @@
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」）。**廃止済み・記録として残す** |
 | [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（ひとことの置き換え。**AIを呼ばない唯一のReflect機能**）。実装済み・実機検証待ち |
-| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機検証待ち |
+| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
 | [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |

@@ -1,6 +1,6 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** **実装済み・実機検証待ち。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）。実装は外部レビュー前
+**状態:** **実装済み・実機確認済み（2026-09-29）。** 総括の対象と材料は 2026-09-27 のオーナー判断（→ 判断1・判断2）
 **最終検証:** 2026-09-27 / `d559e33`
 **関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/CrystalText.kt`
 **関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest`
@@ -410,10 +410,11 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - 走査キャッシュ — Aの走査を止めたままBへ切り替え、Bの後にAが返っても、キャッシュ・開けるパス・分野の索引はBのまま。
     A→B→A でも最初のAの走査が今の走査を上書きしない（`NoteScanCacheTest`）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
-- **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した（実機では未計測）。
+- **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した。
+  実機（Pixel 10 Pro Fold）の余裕は日本語・英語の2プロファイルで 1,894／1,972 トークン（上限4,352・出力予約256）。
   `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）
-- **実機確認:** 未実施。実機ケースは Codex が次の観点から書く。観点は、3件読んだ後に結晶が要約の下に出るか、同じ日に2つ目ができないか、
-  根拠が開くか、一覧から根拠のノートが開くか、Snackbar とバッジが出ないか、非対応端末で何も出ないか、Vault を切り替えたときに混ざらないか
+- **実機確認:** ケースは [結晶の実機ケース](../../review/device_validation/reflect_crystal.md)（`CRYSTAL-01`〜`07`）。
+  初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた
 - **保証していないこと:**
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
     根拠の断片を並べて、読む人が検算できるようにしている
@@ -421,6 +422,9 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - 関連ノートのAI推薦と分野判定より先に錠を取ることはある（→ 判断10）
   - 他の端末が作った結晶は、次に Vault を選んだときかアプリを起動し直したときに見える。その場では届かない
   - 根拠のノート名は作った時点のもの。改名・移動したノートは一覧から押せなくなる
+  - **切替前に始まった走査が遅れて返る瞬間は、実機で観測していない。** アプリはローカルの Vault を読む前提で走査が速く、
+    遅い置き場（Google ドライブ等）は前提の外なので、実機での再現は求めない（2026-09-29、オーナー判断）。判定は `NoteScanCacheTest` が固定する
+  - Nano 非対応端末で何も出ないこと・保存の途中での切替は、実機で確かめていない（JVMの `CrystalControllerTest`・`CrystalSaveInterleavingTest` が見る）
 
 ## 11. 既知の制約・未解決事項
 
