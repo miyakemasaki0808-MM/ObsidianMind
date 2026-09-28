@@ -99,7 +99,7 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
 
 **完成プロンプトは最大でも約3,400字**（指示文 約700字＋6件 ×（ノート名200＋断片240））で、
 `MAX_PROMPT_CHARACTERS` の6,000字を変えずに収まる（→ [ai_input_excerpt](../system/ai_input_excerpt.md) §13）。
-**実トークンの余裕は `PromptTokenBudgetTest` に用途を1つ足して実機で測ってから確定する。**
+**実トークンの余裕は `PromptTokenBudgetTest` で実機で測った**（2026-09-29、Pixel 10 Pro Fold で 1,894・1,972 トークン → §10）。
 
 ### プロンプト
 
@@ -411,7 +411,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     A→B→A でも最初のAの走査が今の走査を上書きしない（`NoteScanCacheTest`）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
 - **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した。
-  実機（Pixel 10 Pro Fold）の余裕は日本語・英語の2プロファイルで 1,894／1,972 トークン（上限4,352・出力予約256）。
+  実機（Pixel 10 Pro Fold）の余裕は2プロファイルで 1,894・1,972 トークン（上限4,352・出力予約256）。
   `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）
 - **実機確認:** ケースは [結晶の実機ケース](../../review/device_validation/reflect_crystal.md)（`CRYSTAL-01`〜`07`）。
   初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた

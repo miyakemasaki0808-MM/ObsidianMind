@@ -181,7 +181,8 @@ AI出力を別のAI入力へ流す箇所は、いま関連ノートが要約を�
   最小余裕は日本語の関連ノートで1,575トークンだった。端末・モデル世代が変われば再計測する
   （→ [device_validation](../../review/device_validation/ai_input_budget.md)）
 - **結晶のプロンプトはこの基準線に含まれない。** `PromptTokenBudgetTest` に最大構成
-  （候補6件・ノート名200字・断片240字）を足したが、実機ではまだ測っていない（→ [reflect_crystal](../features/reflect_crystal.md) §5）
+  （候補6件・ノート名200字・断片240字）を足し、2026-09-29 に同じ端末で2プロファイルの余裕 1,894・1,972 トークンを確認した
+  （→ [reflect_crystal](../features/reflect_crystal.md) §5）
 - **予算内のノートは1文字も変わっていない。** 抜粋経路8本すべてを回帰テストで固定している。
   予算内のノートは抜粋もプロンプトも変わっていないので、同じモデルなら要約も変わらない。
   **変わって見えるなら、端末のモデルが更新された可能性が高い**（→ [ai_quality_measurement](ai_quality_measurement.md) 判断8）
