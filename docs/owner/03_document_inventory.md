@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-27（基準 `415aff7`）
+**作成:** 2026-09-08 / **更新:** 2026-09-29（基準 `36fe88f`）
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,9 +14,9 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 126本・約22,600行。** `CLAUDE.md`・`README.md` と `docs/` 配下の124本を数えた。
+**追跡対象の Markdown は 128本・約23,500行。** `CLAUDE.md`・`README.md` と `docs/` 配下の126本を数えた。
 作業ツリーにはこの他に追跡しないものが12本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ2本。
-証跡フォルダには再会カードの実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
+証跡フォルダには再会カードと結晶の実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
 
 ```
@@ -27,17 +27,17 @@ docs/
 ├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (4本)    開発日誌。README＋月別3本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
-├── dev/       (83本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (24本)  ユーザーから見える機能。README・様式＋仕様22本
+├── dev/       (84本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (25本)  ユーザーから見える機能。README・様式＋仕様23本
 │   ├── system/    (13本)  横断的な基盤。README＋12本
 │   ├── decisions/  (6本)  ADR。README＋5本
 │   └── lessons/   (36本)  教訓65件のうち、カードを持つ36本
 ├── _wip/       (4本)      進行中。リリース時に廃棄する
-└── review/    (20本)      レビューと実機検証。ほかに追跡しない本文1本
-    └── device_validation/ (17本)  共通手順・簡易版・機能別ケース15本
+└── review/    (21本)      レビューと実機検証。ほかに追跡しない本文1本
+    └── device_validation/ (18本)  共通手順・簡易版・機能別ケース16本
 ```
 
-**前回の数え直しから本数は変わらない。** 行数もほぼ同じで、再会カードの作り直しは既存の文書の書き換えで済んだ。
+**前回の数え直しから2本増えた。** 結晶の設計書と、その実機ケースである。
 **廃止した機能の文書は消さない** — [reflect_remark](../dev/features/reflect_remark.md) は
 「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という判断の記録として残す。
 機能は消えてもその教訓は次にAI機能を足すときにまた要る。
@@ -60,7 +60,7 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。22本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。23本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
@@ -73,6 +73,7 @@ docs/
 | [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
 | [quiz](../dev/features/quiz.md) | クイズ | 稼働中。未確認管理を持つ唯一の機能 |
 | [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
+| [reflect_crystal](../dev/features/reflect_crystal.md) | 結晶 | 実装済み・実機確認済み。読んできたノートの要約から共通する筋を1文にして Vault に溜める。Reflect の3本目 |
 | [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | **Deprecated。実装は撤去済み。** 判断の記録として残す |
 | [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。931行で最大の文書 |
@@ -145,7 +146,7 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在8件で、中2件・低5件・超低1件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在15件で、中4件・低10件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
 | [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。649行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留4件 |
@@ -153,17 +154,17 @@ docs/
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 外から読んだ分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
-## 8. `docs/review/` — レビューと実機検証。20本＋追跡しない本文1本
+## 8. `docs/review/` — レビューと実機検証。21本＋追跡しない本文1本
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
-| [README](../review/README.md) | レビューの入口と運用。全体で218行 | ✅ |
+| [README](../review/README.md) | レビューの入口と運用。全体で224行 | ✅ |
 | [findings](../review/findings.md) | 未解決指摘の受付簿。現在1件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
-| device_validation の機能別ケース15本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・**余白メモ**。結果は持たない | ✅ |
+| device_validation の機能別ケース16本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・**結晶**。結果は持たない | ✅ |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
 ## 9. `docs/owner/` — オーナーが読む俯瞰。16本
