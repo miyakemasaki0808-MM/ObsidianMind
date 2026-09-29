@@ -90,7 +90,7 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **[FOLD-1](current_issues.md#fold-1-開いたfoldで読書画面が本文を横に広げただけになっている)（Fold のペイン）もオーナー判断（2026-09-29）で束に入れた。**
   削る側ではないが、AI-9 の「この部分」の Fold での置き場所である。中身を決めてから Fold で置き直すと作り直しになるので、
   **AI-9・MEMO-16 の仕様を起こすときに Fold の並べ方も一緒に決める。**
-  設計ドラフトは [owner/fold_margin_pane_design](../owner/fold_margin_pane_design.md)（2026-09-29、grill で範囲を決めた）。
+  正本は [margin_pane](../dev/features/margin_pane.md)。段1〜5に分け、段ごとに1本のPRにする。
   **順序は AI-9 の質問とクイズの撤去が先** — FOLD-1 は2枚のシートを1枚にまとめ、部分要約だけを引き継ぐため。
 - **MAINT-7 は独立している。** Vault 単位の Controller が1つ減るので、判断4の表と系統図の手直しが伴う。
 

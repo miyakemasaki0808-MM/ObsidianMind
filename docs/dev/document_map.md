@@ -78,9 +78,9 @@
 
 ### 機能（`features/`）
 
-**内訳は機能仕様22本＋参照シート1本。**
+**内訳は機能仕様23本＋参照シート1本。**
 
-- **機能仕様22本**は [`_template.md`](features/_template.md) の12節に揃っている。
+- **機能仕様23本**は [`_template.md`](features/_template.md) の12節に揃っている。
   **節の存在と、空でないことの両方を `AdrShapeTest` が固定する** —
   埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く
 - **参照シート1本**（[character_vigilith](features/character_vigilith.md)）は12節に従わない。
@@ -112,6 +112,7 @@
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
+| [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置く。**Draft・未実装** |
 
 ### 基盤（`system/`）
 
