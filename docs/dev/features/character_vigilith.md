@@ -1,10 +1,10 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
 **種別:** Character Reference（**機能仕様ではない**）
-**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OP／アプリ内マスコットが従っている
+**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OPが従っている。アプリ内の常駐マスコットは 2026-09-30 に撤去した
 **最終検証:** 2026-08-11 / `e7b9f18`（造形・色の記述は未突合）
-**関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
-**関連テスト:** `VigilithModeTest` / `VigilithStatusDerivationTest`
+**関連コード:** `ui/vigilith/VigilithOpeningMotion.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
+**関連テスト:** `VigilithOpeningMotionTest`
 **正本:** **造形・世界観・作画発注についてはこの文書**
 
 > **この文書は [`_template.md`](_template.md) の12節に従わない。**
@@ -105,9 +105,7 @@ Vigilithは Reflect/Rediscover ループの**一貫した見守り手／配達�
 
 - **アプリアイコン:** 実装済み（下記 §9）。
 - **起動OP:** 実装済み。暗闇で読書レンズが先に灯り、黒曜石の輪郭が現れる（下記 §9・[opening_animation](opening_animation.md)）。
-- **アプリ内マスコット:** Phase 3実装済み。5タブ共通Hostで3基本姿勢・4状態のVigilithを常駐させ、
-  状態別に動作し、画面内clampとNavigation UI／Snackbar／IME回避を行う
-  （[vigilith_in_app](vigilith_in_app.md)）。
+- **アプリ内マスコット:** 常駐させていたが、読書の邪魔になるため 2026-09-30 に撤去した（[vigilith_in_app](vigilith_in_app.md)）。
 - **将来の作画:** 本シート＋§10の発注プロンプトを、外部作画やイラスト依頼の**発注資料**として使う。
 
 ---

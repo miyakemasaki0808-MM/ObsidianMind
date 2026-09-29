@@ -33,7 +33,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.newproject.domain.readingTraceBackupFileName
 import com.example.newproject.model.state.RelatedNotesState
@@ -51,7 +50,6 @@ import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
 import com.example.newproject.ui.screen.RelatedTab
 import com.example.newproject.ui.screen.SearchTab
-import com.example.newproject.ui.vigilith.rememberVigilithState
 import com.example.newproject.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -145,22 +143,11 @@ class MainActivity : ComponentActivity() {
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
                 // ノートが変われば捨てる。
                 val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
-                val currentRoute = navController
-                    .currentBackStackEntryAsState().value?.destination?.route
-                val vigilith = rememberVigilithState(
-                    uiState = uiState,
-                    currentRoute = currentRoute,
-                    onOpenSection = { section -> viewModel.openSection(section) },
-                    onShowSectionChat = { viewModel.showSectionChat() }
-                )
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
-                    snackbarHostState = snackbarHostState,
-                    vigilithPresentation = vigilith.presentation,
-                    vigilithNoteAction = vigilith.noteAction,
-                    onVigilithTap = vigilith.onTap
+                    snackbarHostState = snackbarHostState
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -208,7 +195,7 @@ class MainActivity : ComponentActivity() {
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
-                                onVigilithActionChanged = vigilith.onNoteActionChanged
+                                onOpenSection = { section -> viewModel.openSection(section) }
                             )
                         }
 

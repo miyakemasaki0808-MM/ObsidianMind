@@ -1,8 +1,5 @@
 package com.example.newproject.ui
 
-import com.example.newproject.ui.vigilith.VigilithNoteAction
-import com.example.newproject.ui.vigilith.VigilithPresentation
-import com.example.newproject.ui.vigilith.VigilithHost
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -62,9 +59,6 @@ internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
     snackbarHostState: SnackbarHostState,
-    vigilithPresentation: VigilithPresentation,
-    vigilithNoteAction: VigilithNoteAction?,
-    onVigilithTap: (() -> Unit)?,
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -123,14 +117,6 @@ internal fun AppScaffold(
                 }
             }
         }
-
-        VigilithHost(
-            presentation = vigilithPresentation,
-            useNavigationRail = useRail,
-            isSnackbarVisible = snackbarHostState.currentSnackbarData != null,
-            noteAction = vigilithNoteAction,
-            onTap = onVigilithTap
-        )
 
         SnackbarHost(
             hostState = snackbarHostState,

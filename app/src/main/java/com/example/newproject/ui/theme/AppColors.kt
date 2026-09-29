@@ -155,7 +155,6 @@ internal val LightAppColors = AppColorScheme(
     accentGlass = Indigo,
     navBar = Indigo,
     navIndicator = Aqua,
-    vigilithHalo = Color.Transparent,
     buttonPrimary = Color(0xFFFF3D71),
     // 旧 #16B8A6 は白面で 2.46 しかなく、輪郭が見つからなかった（非文字基準は3:1）。
     // 色相173を保ったまま明度を下げて 3.76 へ。塗りは暗くするほど白面で見つけやすくなるが、
@@ -242,7 +241,6 @@ internal val DarkAppColors = AppColorScheme(
     accentGlass = Color(0xFF4A4480),
     navBar = Color(0xFF232640),
     navIndicator = Aqua,
-    vigilithHalo = LogoPurple.copy(alpha = 0.22f),
     // ピンクと緑は暗面でも基準を満たすため据え置き。IndigoだけAAを割る（2.83）ので
     // 色相245・彩度100を保ったまま明度を62%→75%へ上げた明るい版を使う。
     buttonPrimary = Color(0xFFFF3D71),
@@ -330,7 +328,6 @@ internal val AccentGlass: Color @Composable @ReadOnlyComposable get() = current.
 // -- ナビゲーション --
 internal val NavBar: Color @Composable @ReadOnlyComposable get() = current.navBar
 internal val NavIndicator: Color @Composable @ReadOnlyComposable get() = current.navIndicator
-internal val VigilithHalo: Color @Composable @ReadOnlyComposable get() = current.vigilithHalo
 
 // -- ボタン --
 // ボタン配色の3役ルール（これ以外の色をボタンに使わない）:

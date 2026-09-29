@@ -27,3 +27,22 @@ internal fun sectionSummaryStatus(chat: SectionChatState?): SectionSummaryStatus
     chat.summaryProblem != null -> SectionSummaryStatus.Idle
     else -> SectionSummaryStatus.Working
 }
+
+/** 見出しの要約ボタンの記号。状態はボタンの上で静かに示し、浮く通知は作らない。 */
+internal fun sectionSummaryEntrySymbol(status: SectionSummaryStatus): String = when (status) {
+    SectionSummaryStatus.Idle -> "💬"
+    SectionSummaryStatus.Working -> "⏳"
+    SectionSummaryStatus.Ready -> "✓"
+    SectionSummaryStatus.Error -> "!"
+}
+
+/**
+ * 見出しの要約ボタンの読み上げ名。**「この節を要約」を核にする** —
+ * 自由に質問できる入口だと受け取られると、押しても答えが返らない。
+ */
+internal fun sectionSummaryEntryDescription(status: SectionSummaryStatus): String = when (status) {
+    SectionSummaryStatus.Idle -> "この節を要約"
+    SectionSummaryStatus.Working -> "この節を要約中。タップで開く"
+    SectionSummaryStatus.Ready -> "この節の要約あり。タップで開く"
+    SectionSummaryStatus.Error -> "この節の要約でエラー。タップで確認"
+}

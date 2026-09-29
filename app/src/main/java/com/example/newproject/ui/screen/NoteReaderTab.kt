@@ -16,7 +16,8 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
-import com.example.newproject.ui.vigilith.VigilithNoteAction
+import com.example.newproject.domain.sectionSummaryEntryDescription
+import com.example.newproject.domain.sectionSummaryEntrySymbol
 import com.example.newproject.domain.sectionSummaryStatus
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
@@ -49,13 +50,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -112,7 +111,8 @@ internal fun NoteReaderTab(
     onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
-    onVigilithActionChanged: (VigilithNoteAction?) -> Unit
+    /** 見出しの要約ボタン。今の節（見出しが無ければノート全体）の部分要約を開く。既にあれば再表示する。 */
+    onOpenSection: (NoteSection) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -145,22 +145,7 @@ internal fun NoteReaderTab(
         }
     }
 
-    val activeChat = uiState.sectionChat
-    val fabSectionLabel = activeChat?.sectionTitle ?: currentSection?.title ?: "ノート全体"
-    val vigilithAction = successState?.let { note ->
-        VigilithNoteAction(
-            section = currentSection ?: NoteSection(note.title, 0, note.content),
-            sectionLabel = fabSectionLabel,
-            status = sectionSummaryStatus(activeChat)
-        )
-    }
-    val currentVigilithActionChanged by rememberUpdatedState(onVigilithActionChanged)
-    LaunchedEffect(vigilithAction) {
-        currentVigilithActionChanged(vigilithAction)
-    }
-    DisposableEffect(Unit) {
-        onDispose { currentVigilithActionChanged(null) }
-    }
+    val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みで食い違わせない）。
     val controls: @Composable ColumnScope.() -> Unit = {
@@ -175,6 +160,16 @@ internal fun NoteReaderTab(
             trailing = if (hasNote) {
                 {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // **要約の入口は ✎ と分ける。** ✎ は書く入口、💬 は AI の入口。
+                        // 状態は記号で静かに示し、浮く通知は作らない（→ features/section_ai_chat.md）。
+                        IconPill(
+                            symbol = sectionSummaryEntrySymbol(summaryStatus),
+                            contentDescription = sectionSummaryEntryDescription(summaryStatus)
+                        ) {
+                            successState?.let { note ->
+                                onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
+                            }
+                        }
                         IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
                             onOpenMarginMemo()
                         }

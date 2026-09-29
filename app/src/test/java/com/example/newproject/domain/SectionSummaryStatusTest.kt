@@ -5,6 +5,8 @@ import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
@@ -94,5 +96,24 @@ class SectionSummaryStatusTest {
     @Test
     fun `チャットはあるが要約もエラーも無い状態はこれから始まるWorking`() {
         assertEquals(SectionSummaryStatus.Working, sectionSummaryStatus(chat()))
+    }
+
+    /** 入口の読み上げ名は「この節を要約」を核にし、撤去した自由な質問を期待させない。 */
+    @Test
+    fun `要約ボタンの読み上げ名はどの状態でもこの節の要約を指す`() {
+        assertEquals("この節を要約", sectionSummaryEntryDescription(SectionSummaryStatus.Idle))
+        SectionSummaryStatus.entries.forEach { status ->
+            val description = sectionSummaryEntryDescription(status)
+            assertTrue("$status: $description", description.startsWith("この節"))
+            assertFalse("$status: 質問を期待させない", description.contains("質問"))
+        }
+    }
+
+    /** 状態は記号で見分けられる。4状態が同じ記号へ潰れると、生成中と完了の区別が消える。 */
+    @Test
+    fun `要約ボタンの記号は4状態で異なる`() {
+        val symbols = SectionSummaryStatus.entries.map(::sectionSummaryEntrySymbol)
+        assertEquals(symbols.size, symbols.toSet().size)
+        assertEquals("💬", sectionSummaryEntrySymbol(SectionSummaryStatus.Idle))
     }
 }
