@@ -1,8 +1,5 @@
-package com.example.newproject.ui
+package com.example.newproject.domain
 
-import com.example.newproject.ui.screen.NoteReaderTab
-import com.example.newproject.ui.vigilith.VigilithActionStatus
-import com.example.newproject.ui.vigilith.sectionChatStatus
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
@@ -12,9 +9,9 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * AI操作4状態の導出（[sectionChatStatus]）を固定する。通常画面と全画面が同じ導出を使う。
+ * 部分要約の4状態の導出（[sectionSummaryStatus]）を固定する。入口の表示と全画面が同じ導出を使う。
  */
-class VigilithStatusDerivationTest {
+class SectionSummaryStatusTest {
 
     private fun chat(
         summary: String? = null,
@@ -42,12 +39,12 @@ class VigilithStatusDerivationTest {
     @Test
     fun `端末AIが使えず要約も無いならIdle`() {
         assertEquals(
-            VigilithActionStatus.Idle,
-            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
+            SectionSummaryStatus.Idle,
+            sectionSummaryStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
         )
         assertEquals(
-            VigilithActionStatus.Idle,
-            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.Retry)))
+            SectionSummaryStatus.Idle,
+            sectionSummaryStatus(chat(summaryProblem = aiStatus(AiNoticeAction.Retry)))
         )
     }
 
@@ -55,8 +52,8 @@ class VigilithStatusDerivationTest {
     @Test
     fun `端末AIが使えないことをエラーとして扱わない`() {
         assertNotEquals(
-            VigilithActionStatus.Error,
-            sectionChatStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
+            SectionSummaryStatus.Error,
+            sectionSummaryStatus(chat(summaryProblem = aiStatus(AiNoticeAction.None)))
         )
     }
 
@@ -64,8 +61,8 @@ class VigilithStatusDerivationTest {
     @Test
     fun `説明が出ていても生成中ならWorking`() {
         assertEquals(
-            VigilithActionStatus.Working,
-            sectionChatStatus(
+            SectionSummaryStatus.Working,
+            sectionSummaryStatus(
                 chat(isSummaryLoading = true, summaryProblem = aiStatus(AiNoticeAction.Retry))
             )
         )
@@ -73,29 +70,29 @@ class VigilithStatusDerivationTest {
 
     @Test
     fun `チャットが無ければIdle`() {
-        assertEquals(VigilithActionStatus.Idle, sectionChatStatus(null))
+        assertEquals(SectionSummaryStatus.Idle, sectionSummaryStatus(null))
     }
 
     @Test
     fun `エラーは生成中や要約済みより優先される`() {
         assertEquals(
-            VigilithActionStatus.Error,
-            sectionChatStatus(chat(summary = "要約", isSummaryLoading = true, error = "失敗"))
+            SectionSummaryStatus.Error,
+            sectionSummaryStatus(chat(summary = "要約", isSummaryLoading = true, error = "失敗"))
         )
     }
 
     @Test
     fun `要約生成中はWorking`() {
-        assertEquals(VigilithActionStatus.Working, sectionChatStatus(chat(isSummaryLoading = true)))
+        assertEquals(SectionSummaryStatus.Working, sectionSummaryStatus(chat(isSummaryLoading = true)))
     }
 
     @Test
     fun `要約済みで停止していればReady`() {
-        assertEquals(VigilithActionStatus.Ready, sectionChatStatus(chat(summary = "要約")))
+        assertEquals(SectionSummaryStatus.Ready, sectionSummaryStatus(chat(summary = "要約")))
     }
 
     @Test
     fun `チャットはあるが要約もエラーも無い状態はこれから始まるWorking`() {
-        assertEquals(VigilithActionStatus.Working, sectionChatStatus(chat()))
+        assertEquals(SectionSummaryStatus.Working, sectionSummaryStatus(chat()))
     }
 }

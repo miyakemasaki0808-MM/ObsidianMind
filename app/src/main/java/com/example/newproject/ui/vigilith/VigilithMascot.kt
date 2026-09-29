@@ -1,5 +1,6 @@
 package com.example.newproject.ui.vigilith
 
+import com.example.newproject.domain.SectionSummaryStatus
 import com.example.newproject.ui.theme.VigilithSlate
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.Crossfade
@@ -47,7 +48,6 @@ import com.example.newproject.ui.theme.OnErrorSurface
 import com.example.newproject.ui.theme.Indigo
 import androidx.compose.foundation.shape.CircleShape
 
-// VigilithActionStatus は全画面読書側とも共用するため VigilithMode.kt へ移動した。
 
 /**
  * アプリ内Vigilithの描画本体。
@@ -58,7 +58,7 @@ import androidx.compose.foundation.shape.CircleShape
 @Composable
 internal fun VigilithMascot(
     presentation: VigilithPresentation,
-    actionStatus: VigilithActionStatus,
+    actionStatus: SectionSummaryStatus,
     modifier: Modifier = Modifier
 ) {
     val mode = presentation.mode
@@ -140,7 +140,7 @@ internal fun VigilithMascot(
         }
 
         when (actionStatus) {
-            VigilithActionStatus.Working -> CircularProgressIndicator(
+            SectionSummaryStatus.Working -> CircularProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .size(19.dp),
@@ -148,9 +148,9 @@ internal fun VigilithMascot(
                 trackColor = Indigo.copy(alpha = 0.35f),
                 strokeWidth = 2.dp
             )
-            VigilithActionStatus.Ready -> VigilithStatusBadge("✓", AccentSurface, OnAccentSurface)
-            VigilithActionStatus.Error -> VigilithStatusBadge("!", ErrorSurface, OnErrorSurface)
-            VigilithActionStatus.Idle -> Unit
+            SectionSummaryStatus.Ready -> VigilithStatusBadge("✓", AccentSurface, OnAccentSurface)
+            SectionSummaryStatus.Error -> VigilithStatusBadge("!", ErrorSurface, OnErrorSurface)
+            SectionSummaryStatus.Idle -> Unit
         }
     }
 }

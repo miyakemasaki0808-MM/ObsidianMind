@@ -7,8 +7,8 @@ import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiTimeoutException
 import com.example.newproject.domain.markdown.NoteSection
-import com.example.newproject.ui.vigilith.VigilithActionStatus
-import com.example.newproject.ui.vigilith.sectionChatStatus
+import com.example.newproject.domain.SectionSummaryStatus
+import com.example.newproject.domain.sectionSummaryStatus
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.newproject.model.NoteUiStateStore
@@ -248,7 +248,7 @@ class SectionChatControllerTest {
             .open(SECTION)
         advanceUntilIdle()
 
-        assertEquals(VigilithActionStatus.Idle, sectionChatStatus(state.value.sectionChat))
+        assertEquals(SectionSummaryStatus.Idle, sectionSummaryStatus(state.value.sectionChat))
     }
 
     @Test
@@ -259,7 +259,7 @@ class SectionChatControllerTest {
             .open(SECTION)
         advanceUntilIdle()
 
-        assertEquals(VigilithActionStatus.Error, sectionChatStatus(state.value.sectionChat))
+        assertEquals(SectionSummaryStatus.Error, sectionSummaryStatus(state.value.sectionChat))
     }
 
     /**

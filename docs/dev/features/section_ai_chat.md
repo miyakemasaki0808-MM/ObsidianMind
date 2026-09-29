@@ -4,7 +4,7 @@
 余白メモのシートと1枚へまとめる予定は [この部分](margin_pane.md) が持つ
 **最終検証:** 2026-08-11 / `c25bcea`（質問とクイズの撤去は、撤去のコミットの実装に合わせて書いた）
 **関連コード:** `controller/SectionChatController.kt` / `ui/screen/SectionChatSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
-**関連テスト:** `SectionChatControllerTest` / `VigilithStatusDerivationTest` / `NoteSectionThreadingTest`
+**関連テスト:** `SectionChatControllerTest` / `SectionSummaryStatusTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
 **対象領域:** ノート読書中に、**いま読んでいる節**の要約を出す
@@ -74,7 +74,7 @@
 - **`AiStatus(notice)`:** 端末AIが使えない。通常色で出す
   （→ [background_ai_ux](../system/background_ai_ux.md) §6）
 - **再試行:** `retrySummary()` が開いているセクションのまま作り直す。要約が既にあるなら説明を畳むだけ
-- **派生状態:** `sectionChatStatus` が `Idle` / `Working` / `Ready` / `Error` を導く。
+- **派生状態:** `domain/SectionSummaryStatus.kt` の `sectionSummaryStatus` が `Idle` / `Working` / `Ready` / `Error` を導く。
   通常画面と全画面の 💬 が同じ導出を使う。**端末AIが使えないだけなら `Working` にも `Error` にもしない**
 - **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
 
@@ -159,7 +159,7 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `SectionChatControllerTest`（セッションの寿命・状態遷移・端末AIが使えないときの説明）/
-  `VigilithStatusDerivationTest`（派生状態）/ `NoteSectionThreadingTest`
+  `SectionSummaryStatusTest`（派生状態）/ `NoteSectionThreadingTest`
 - **instrumentation:** `OnDeviceGenerationTest`（節の要約の実生成）
 - **保証していないこと:**
   - **節の追従の精度を測っていない。** `firstVisibleItemIndex` 基準なので、

@@ -17,7 +17,7 @@ import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.ui.vigilith.VigilithNoteAction
-import com.example.newproject.ui.vigilith.sectionChatStatus
+import com.example.newproject.domain.sectionSummaryStatus
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -151,7 +151,7 @@ internal fun NoteReaderTab(
         VigilithNoteAction(
             section = currentSection ?: NoteSection(note.title, 0, note.content),
             sectionLabel = fabSectionLabel,
-            status = sectionChatStatus(activeChat)
+            status = sectionSummaryStatus(activeChat)
         )
     }
     val currentVigilithActionChanged by rememberUpdatedState(onVigilithActionChanged)

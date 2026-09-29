@@ -1,5 +1,6 @@
 package com.example.newproject.ui.vigilith
 
+import com.example.newproject.domain.SectionSummaryStatus
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,7 +60,7 @@ import kotlin.math.roundToInt
 internal data class VigilithNoteAction(
     val section: NoteSection,
     val sectionLabel: String,
-    val status: VigilithActionStatus
+    val status: SectionSummaryStatus
 )
 
 /**
@@ -200,7 +201,7 @@ internal fun BoxScope.VigilithHost(
 
                 VigilithMascot(
                     presentation = presentation,
-                    actionStatus = noteAction?.status ?: VigilithActionStatus.Idle,
+                    actionStatus = noteAction?.status ?: SectionSummaryStatus.Idle,
                     modifier = interactionModifier
                 )
             }
@@ -210,10 +211,10 @@ internal fun BoxScope.VigilithHost(
 
 internal fun vigilithActionDescription(action: VigilithNoteAction): String {
     val stateDescription = when (action.status) {
-        VigilithActionStatus.Idle -> "AIメニューを開く"
-        VigilithActionStatus.Working -> "AI要約を生成中。タップで開く"
-        VigilithActionStatus.Ready -> "AI結果を生成済み。タップで開く"
-        VigilithActionStatus.Error -> "AI処理でエラー。タップで確認"
+        SectionSummaryStatus.Idle -> "AIメニューを開く"
+        SectionSummaryStatus.Working -> "AI要約を生成中。タップで開く"
+        SectionSummaryStatus.Ready -> "AI結果を生成済み。タップで開く"
+        SectionSummaryStatus.Error -> "AI処理でエラー。タップで確認"
     }
     return "Vigilith。$stateDescription。対象は${action.sectionLabel}"
 }
@@ -237,10 +238,10 @@ private fun VigilithActionLabel(action: VigilithNoteAction) {
     ) {
         Text(
             text = when (action.status) {
-                VigilithActionStatus.Idle -> "📌 ${action.sectionLabel}"
-                VigilithActionStatus.Working -> "⏳ AI要約中 · ${action.sectionLabel}"
-                VigilithActionStatus.Ready -> "✓ 要約完了 · ${action.sectionLabel}"
-                VigilithActionStatus.Error -> "! 要約を確認 · ${action.sectionLabel}"
+                SectionSummaryStatus.Idle -> "📌 ${action.sectionLabel}"
+                SectionSummaryStatus.Working -> "⏳ AI要約中 · ${action.sectionLabel}"
+                SectionSummaryStatus.Ready -> "✓ 要約完了 · ${action.sectionLabel}"
+                SectionSummaryStatus.Error -> "! 要約を確認 · ${action.sectionLabel}"
             },
             color = OnVibrant,
             fontSize = 11.sp,

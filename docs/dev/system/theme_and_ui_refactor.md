@@ -17,7 +17,7 @@
 - `AppTheme` が `AppColorScheme` を `CompositionLocal` で配り、画面は直書きの色を持たない
 - **`AppColorScheme` は `Brush` ではなく停止色のリストを受け取り、`Brush` をその場で組み立てる。**
   `Brush` からは色を取り出せないため、渡すとテストが同じ値を書き写すことになり二重管理になる
-- Vigilith の状態は `VigilithActionStatus` に統一（かつて `SectionFabStatus` と重複していた）
+- 部分要約の状態は `SectionSummaryStatus`（`domain`）に統一（かつて `SectionFabStatus` と重複していた）
 - 色トークンは意味ベース（`onSurfaceMuted`・`aiHeading`・`buttonSecondary` など）で命名する
 
 ---
