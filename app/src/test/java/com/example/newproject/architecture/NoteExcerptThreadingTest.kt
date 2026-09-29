@@ -56,9 +56,8 @@ class NoteExcerptThreadingTest {
         private val EXPECTED_CALL_COUNTS = mapOf(
             "domain/SummarizeUseCase.kt" to 1,
             "domain/RelatedNotesUseCase.kt" to 1,
-            "controller/QuizController.kt" to 1,
             "controller/NoteFieldController.kt" to 1,
-            "controller/SectionChatController.kt" to 3
+            "controller/SectionChatController.kt" to 1
         )
         private val BUILD_CALL = Regex("""\bbuildNoteExcerpt\(""")
         private val OFF_MAIN_BUILD_CALL =

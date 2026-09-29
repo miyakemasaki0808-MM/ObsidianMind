@@ -50,7 +50,7 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 /**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
- * タブ（note/related/ai）以外のルート（quiz等）ではバー/レールを出さない。
+ * タブ（note/related/ai）以外のルート（全画面・冊子など）ではバー/レールを出さない。
  *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
@@ -75,7 +75,7 @@ internal fun AppScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             !isTabRoute -> {
-                // 全画面ルート（Q&A等）はバーなしで表示。
+                // 全画面ルート（全画面ノート・冊子など）はバーなしで表示。
                 content(Modifier.fillMaxSize())
             }
             useRail -> {

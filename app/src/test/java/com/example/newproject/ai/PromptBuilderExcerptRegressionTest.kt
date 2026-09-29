@@ -2,7 +2,6 @@ package com.example.newproject.ai
 
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
-import com.example.newproject.model.state.QuizFormat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -55,35 +54,6 @@ class PromptBuilderExcerptRegressionTest {
         )
     }
 
-    /**
-     * **旧期待値は字下げが残った状態を固定していた。**
-     * 複数行の値（[QuizFormat] ごとの書式契約）を `trimIndent()` の raw string へ
-     * 補間していたため、共通インデントが0と判定されテンプレート側の12スペースが
-     * 全行に残っていた。**テストが緑のまま本番で起きていた**ので、期待値ごと直す。
-     */
-    @Test
-    fun `クイズプロンプトに余分な字下げが残らない`() {
-        assertEquals(
-            """
-                You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
-                Answer in the same language as the excerpt content.
-                Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
-
-                Generate exactly 2 true-or-false statements about what the excerpt says.
-                Keep each statement within 50 characters when writing Japanese, or 20 words otherwise.
-                Do not add explanations or choices. Use exactly this format:
-                Q: <statement>
-                ANSWER: <TRUE or FALSE>
-
-                Source: 題名
-                --- BEGIN EXCERPT ---
-                本文
-                --- END EXCERPT ---
-            """.trimIndent(),
-            PromptBuilder.buildQuizPrompt("題名", excerpt, QuizFormat.TrueFalse)
-        )
-    }
-
     @Test
     fun `セクション要約プロンプトは移行前の文字列を保つ`() {
         assertEquals(
@@ -100,57 +70,12 @@ class PromptBuilderExcerptRegressionTest {
     }
 
     @Test
-    fun `セクション提案プロンプトは移行前の文字列を保つ`() {
-        assertEquals(
-            """
-                You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
-                Answer in the same language as the section content.
-                Return only the questions, one per line. Do not add numbers, bullets, or extra text.
-
-                Section heading: 節
-                Section content:
-                本文
-            """.trimIndent(),
-            PromptBuilder.buildSectionSuggestionsPrompt("節", excerpt)
-        )
-    }
-
-    /** 旧期待値は字下げが残った状態を固定していた（→ [`クイズプロンプトに余分な字下げが残らない`]）。 */
-    @Test
-    fun `セクションチャットプロンプトに余分な字下げが残らない`() {
-        assertEquals(
-            """
-                You are a note-taking assistant answering questions about ONE section of an Obsidian note.
-                Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
-                Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
-
-                Section heading: 節
-                Section content:
-                本文
-
-                Conversation so far:
-                User: 前の質問
-                AI: 前の回答
-
-                New question:
-                新しい質問
-            """.trimIndent(),
-            PromptBuilder.buildSectionChatPrompt(
-                sectionTitle = "節",
-                sectionExcerpt = excerpt,
-                history = listOf("User" to "前の質問", "AI" to "前の回答"),
-                question = "新しい質問"
-            )
-        )
-    }
-
-    @Test
-    fun `6プロンプトは抜粋時だけ注意書きを出す`() {
+    fun `3プロンプトは抜粋時だけ注意書きを出す`() {
         assertTrue(NoteExcerptLimits.ABRIDGED_NOTICE.contains("when present"))
         val abridgedPrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = true))
         val completePrompts = buildAllExcerptPrompts(NoteExcerpt("本文", isAbridged = false))
 
-        assertEquals(6, abridgedPrompts.size)
+        assertEquals(3, abridgedPrompts.size)
         abridgedPrompts.forEach { prompt ->
             assertTrue(prompt.contains(NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX + "本文"))
         }
@@ -166,14 +91,6 @@ class PromptBuilderExcerptRegressionTest {
             currentExcerpt = value,
             candidates = listOf(RelatedCandidateLine("C01", "候補"))
         ),
-        PromptBuilder.buildQuizPrompt("題名", value, QuizFormat.TrueFalse),
-        PromptBuilder.buildSectionSummaryPrompt("節", value),
-        PromptBuilder.buildSectionSuggestionsPrompt("節", value),
-        PromptBuilder.buildSectionChatPrompt(
-            sectionTitle = "節",
-            sectionExcerpt = value,
-            history = emptyList(),
-            question = "質問"
-        )
+        PromptBuilder.buildSectionSummaryPrompt("節", value)
     )
 }

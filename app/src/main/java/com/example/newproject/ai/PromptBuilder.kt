@@ -17,7 +17,6 @@ import com.example.newproject.model.PromptLimits
 import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.ReunionPassage
-import com.example.newproject.model.state.QuizFormat
 
 private const val DISTILL_HEADING_LENGTH = 80
 
@@ -88,8 +87,6 @@ internal data class DistillPrompt(
 object PromptBuilder {
 
     private const val PICKER_CANDIDATE_LIMIT = 40
-    // 訪問は最大30件溜まるが、傾向を掴むには直近だけで足り、入力も短く保てる
-    private const val NO_CHAT_HISTORY = "（なし / none）"
 
     /** 前後の要約で、前回いちばん先まで読んだところに置く印。 */
     internal const val REUNION_READ_MARKER = "[READ UP TO HERE]"
@@ -290,59 +287,6 @@ object PromptBuilder {
         )
     }
 
-    // フォーカス周辺クイズ: 本文構造に応じて問題数と選択肢数を抑え、
-    // オンデバイスモデルの出力上限内へ収める。
-    fun buildQuizPrompt(sourceLabel: String, excerpt: NoteExcerpt, format: QuizFormat): String {
-        val formatContract = when (format) {
-            QuizFormat.TrueFalse -> """
-                Generate exactly 2 true-or-false statements about what the excerpt says.
-                Keep each statement within 50 characters when writing Japanese, or 20 words otherwise.
-                Do not add explanations or choices. Use exactly this format:
-                Q: <statement>
-                ANSWER: <TRUE or FALSE>
-            """.trimIndent()
-            QuizFormat.ThreeChoice -> """
-                Generate exactly 2 three-choice questions.
-                Keep each question within 50 characters when writing Japanese, or 20 words otherwise.
-                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
-                Do not add explanations. Use exactly this format:
-                Q: <question>
-                A: <choice>
-                B: <choice>
-                C: <choice>
-                ANSWER: <A or B or C>
-            """.trimIndent()
-            QuizFormat.FourChoice -> """
-                Generate exactly 1 four-choice question.
-                Keep the question within 60 characters when writing Japanese, or 24 words otherwise.
-                Keep each choice within 24 characters when writing Japanese, or 10 words otherwise.
-                Add only one short explanatory sentence. Use exactly this format:
-                Q: <question>
-                A: <choice>
-                B: <choice>
-                C: <choice>
-                D: <choice>
-                ANSWER: <A or B or C or D>
-                EXPLANATION: <one short sentence>
-            """.trimIndent()
-        }
-        val instructions = """
-            You are a study assistant. Read the following excerpt from an Obsidian note and create a compact quiz that helps the user recall its key ideas.
-            Answer in the same language as the excerpt content.
-            Use only information supported by the excerpt. Return only the requested fields, with a blank line between questions.
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            // 書式契約は指示文の一部。**削れる側に置かない** — 欠けると出力の形が崩れる。
-            instructions = instructions + "\n\n" + formatContract,
-            body = buildString {
-                append("\n\nSource: ").append(label(sourceLabel))
-                append("\n--- BEGIN EXCERPT ---\n").append(excerpt.renderForPrompt())
-            },
-            closing = "\n--- END EXCERPT ---"
-        )
-    }
-
     /**
      * 再会カードへ出す1件を、**本文から拾った候補の中から選ばせる。**
      *
@@ -471,7 +415,7 @@ object PromptBuilder {
         )
     }
 
-    // ── セクション単位のAIチャット ─────────────────────────────────────────────
+    // ── セクション単位の部分要約 ─────────────────────────────────────────────
 
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
         val instructions = """
@@ -486,95 +430,6 @@ object PromptBuilder {
                 append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
             }
         )
-    }
-
-    fun buildSectionSuggestionsPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
-        val instructions = """
-            You are a note-taking assistant. Based ONLY on the following section, propose up to 3 short questions a reader might want to ask about this section.
-            Answer in the same language as the section content.
-            Return only the questions, one per line. Do not add numbers, bullets, or extra text.
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nSection heading: ").append(label(sectionTitle))
-                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
-            }
-        )
-    }
-
-    /**
-     * **答える言語はセクションではなくユーザーの質問に従う。**
-     *
-     * ノートの内容を写す要約と違い、**これはユーザーの問いに答える文**なので、
-     * 従うべきは質問の言語である。セクションの言語に従わせると、コードや英語のセクションでは
-     * 日本語の質問に英語で返る。
-     */
-    fun buildSectionChatPrompt(
-        sectionTitle: String,
-        sectionExcerpt: NoteExcerpt,
-        history: List<Pair<String, String>>,
-        question: String
-    ): String {
-        val historyText = renderChatHistory(history)
-        val instructions = """
-            You are a note-taking assistant answering questions about ONE section of an Obsidian note.
-            Answer using ONLY the information in the section below. If the answer is not contained in this section, reply that it is not written in this section ("このセクションには記載がありません").
-            Answer concisely in the same language as the user's question, not the language of the section. Do not invent facts.
-        """.trimIndent()
-
-        return PromptBudget.assemble(
-            instructions = instructions,
-            body = buildString {
-                append("\n\nSection heading: ").append(label(sectionTitle))
-                append("\nSection content:\n").append(sectionExcerpt.renderForPrompt())
-                append("\n\nConversation so far:\n").append(historyText)
-            },
-            // **質問は削らない。** ここを欠くと答えるものが消える。
-            closing = "\n\nNew question:\n" + question.take(PromptLimits.QUESTION_CHARACTERS)
-        )
-    }
-
-    private fun renderChatHistory(history: List<Pair<String, String>>): String =
-        if (history.isEmpty()) {
-            NO_CHAT_HISTORY
-        } else {
-            packFromNewest(
-                history.map { (role, text) -> "$role: $text" },
-                PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
-            )
-        }
-
-    /**
-     * 時系列に並んだ [lines] を、**新しい側から** [budget] 内へ詰める。並び順は保つ。
-     *
-     * **落とすのは古い側である。** 会話履歴も訪問履歴も直近ほど文脈として効くうえ、
-     * どちらも件数が伸びる一方なので、古い側から落とさないと入力が上限へ近づき続ける。
-     *
-     * **末尾（最新）の1件だけは必ず載せる。** 落とすと「直前に何があったか」が消えて
-     * 履歴として成立しない。単独で予算を超えるときだけ、その行を切って印を残す
-     * （呼び出し側が1行の長さを閉じていれば、この経路には来ない）。
-     */
-    private fun packFromNewest(lines: List<String>, budget: Int): String {
-        if (lines.isEmpty()) return ""
-        val kept = ArrayDeque<String>()
-        val newest = lines.last()
-        var used: Int
-        if (newest.length <= budget) {
-            kept.addFirst(newest)
-            used = newest.length
-        } else {
-            val keep = (budget - PromptBudget.TRUNCATION_MARKER.length).coerceAtLeast(0)
-            kept.addFirst(newest.take(keep) + PromptBudget.TRUNCATION_MARKER)
-            used = budget
-        }
-        for (line in lines.dropLast(1).asReversed()) {
-            if (used + 1 + line.length > budget) break
-            kept.addFirst(line)
-            used += 1 + line.length
-        }
-        return kept.joinToString("\n")
     }
 
     /**

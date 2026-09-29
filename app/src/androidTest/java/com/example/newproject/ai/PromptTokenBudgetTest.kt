@@ -14,7 +14,6 @@ import com.example.newproject.domain.selectDistillCandidates
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
-import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.internal.GenAiUtils
 import kotlinx.coroutines.runBlocking
@@ -310,7 +309,7 @@ class PromptTokenBudgetTest {
     // ── 計測ケース ────────────────────────────────────────────────────────────
 
     /**
-     * 機能経路ごとに1ケースを基本とし、セクションは3種、クイズは3形式へ分解して測る。
+     * 機能経路ごとに1ケースを測る。
      * 同じ経路でも指示文の長さが違えばトークン数が変わるため、束ねると読み違える。
      */
     private fun measurementCases(profile: Profile): List<Pair<String, String>> {
@@ -318,7 +317,6 @@ class PromptTokenBudgetTest {
         val summaryExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.SUMMARY)
         val relatedExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.RELATED)
         val sectionExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.SECTION)
-        val quizExcerpt = buildNoteExcerpt(content, NoteExcerptLimits.QUIZ)
 
         return buildList {
             add("要約" to PromptBuilder.buildSummarizePrompt(TITLE, summaryExcerpt))
@@ -331,26 +329,7 @@ class PromptTokenBudgetTest {
                 )
             )
 
-            QuizFormat.entries.forEach { format ->
-                add(
-                    "クイズ(${format.displayName})" to
-                        PromptBuilder.buildQuizPrompt(TITLE, quizExcerpt, format)
-                )
-            }
-
             add("セクション要約" to PromptBuilder.buildSectionSummaryPrompt(SECTION, sectionExcerpt))
-            add("セクション提案" to PromptBuilder.buildSectionSuggestionsPrompt(SECTION, sectionExcerpt))
-            add(
-                "セクションチャット" to PromptBuilder.buildSectionChatPrompt(
-                    sectionTitle = SECTION,
-                    sectionExcerpt = sectionExcerpt,
-                    // 本番は履歴を全件渡す。計測では現実的な往復数を置く。
-                    history = List(CHAT_HISTORY_TURNS) { turn ->
-                        (if (turn % 2 == 0) "User" else "AI") to profile.content.take(120)
-                    },
-                    question = "このセクションの結論は何ですか？"
-                )
-            )
 
             add(
                 "蒸留" to PromptBuilder.buildDistillPrompt(
@@ -469,7 +448,6 @@ class PromptTokenBudgetTest {
         const val TITLE = "オンデバイスAIの入力予算に関する検討"
         const val SECTION = "予算配分の考え方"
         const val RELATED_SNIPPET_LEN = 150
-        const val CHAT_HISTORY_TURNS = 6
         const val PICKER_CANDIDATES = 40
 
         /** 全用途の文字数予算を確実に超える長さにする（＝抜粋と注意書きが必ず働く）。 */

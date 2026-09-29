@@ -7,7 +7,6 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.model.state.SummaryState
-import com.example.newproject.model.state.toEventKey
 import com.example.newproject.ui.theme.Indigo
 import android.content.Intent
 import android.os.Bundle
@@ -20,9 +19,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.activity.viewModels
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
@@ -32,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.example.newproject.ui.markdown.NoteImageMeasurements
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -41,8 +37,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.newproject.domain.readingTraceBackupFileName
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.model.state.NoteState
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.AnnotationManagerScreen
 import com.example.newproject.ui.screen.CrystalListScreen
@@ -55,7 +49,6 @@ import com.example.newproject.ui.navigateToTab
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
-import com.example.newproject.ui.screen.QuizScreen
 import com.example.newproject.ui.screen.RelatedTab
 import com.example.newproject.ui.screen.SearchTab
 import com.example.newproject.ui.vigilith.rememberVigilithState
@@ -152,65 +145,14 @@ class MainActivity : ComponentActivity() {
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
                 // ノートが変われば捨てる。
                 val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
-                // 全画面ルート表示中はSnackbarを抑制する（状態は全画面のAIインジケータが担う）。
                 val currentRoute = navController
                     .currentBackStackEntryAsState().value?.destination?.route
-                val isFullscreenRoute = currentRoute == "note_fullscreen"
                 val vigilith = rememberVigilithState(
                     uiState = uiState,
                     currentRoute = currentRoute,
                     onOpenSection = { section -> viewModel.openSection(section) },
                     onShowSectionChat = { viewModel.showSectionChat() }
                 )
-
-                val openQuizResult = {
-                    snackbarHostState.currentSnackbarData?.dismiss()
-                    viewModel.markQuizViewed()
-                    navController.navigate("quiz") { launchSingleTop = true }
-                }
-                val quizEventKey = uiState.quizState.toEventKey()
-                // 画面回転でActivityが再生成されてもSnackbarを再表示しないよう、
-                // 表示済みキーをrememberSaveableで保持する。Idleでリセットし、
-                // 同じノートの再生成では再び通知できるようにする。
-                var lastShownQuizEvent by rememberSaveable { mutableStateOf<String?>(null) }
-                LaunchedEffect(quizEventKey) {
-                    if (quizEventKey == null) {
-                        lastShownQuizEvent = null
-                        return@LaunchedEffect
-                    }
-                    if (quizEventKey == lastShownQuizEvent) return@LaunchedEffect
-                    lastShownQuizEvent = quizEventKey
-                    if (isFullscreenRoute) return@LaunchedEffect
-                    when (val state = uiState.quizState) {
-                        is QuizState.Loading -> snackbarHostState.showSnackbar(
-                            message = "Q&Aを作成中…",
-                            duration = SnackbarDuration.Short
-                        )
-                        is QuizState.Success -> if (!state.isViewed) {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "Q&Aを作成しました",
-                                actionLabel = "始める",
-                                duration = SnackbarDuration.Long
-                            )
-                            if (result == SnackbarResult.ActionPerformed) openQuizResult()
-                        }
-                        is QuizState.Error -> if (!state.isViewed) {
-                            val result = snackbarHostState.showSnackbar(
-                                message = "Q&Aを作成できませんでした",
-                                actionLabel = "詳細",
-                                duration = SnackbarDuration.Long
-                            )
-                            if (result == SnackbarResult.ActionPerformed) openQuizResult()
-                        }
-                        // 押した機能なので理由をその場で伝える。**行き先は示さない** —
-                        // 開いても同じ1文があるだけで、再試行の起点はチャットシート側にある。
-                        is QuizState.AiNotice -> snackbarHostState.showSnackbar(
-                            message = state.notice.message,
-                            duration = SnackbarDuration.Long
-                        )
-                        is QuizState.Idle -> Unit
-                    }
-                }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
@@ -236,16 +178,9 @@ class MainActivity : ComponentActivity() {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                     else openVault.launch(null)
                                 },
-                                onSuggestionTap = { text -> viewModel.sendSectionMessage(text) },
                                 onRetrySectionSummary = { viewModel.retrySectionSummary() },
-                                onRetrySectionAnswer = { viewModel.retrySectionAnswer() },
                                 onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
                                 onEndSectionChat = { viewModel.endSectionChat() },
-                                onGenerateQuiz = { sourceLabel, context ->
-                                    snackbarHostState.currentSnackbarData?.dismiss()
-                                    viewModel.generateQuiz(sourceLabel, context)
-                                },
-                                onOpenQuizResult = openQuizResult,
                                 noteListState = noteListState,
                                 onOpenBooklet = {
                                     // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
@@ -460,21 +395,6 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        composable("quiz") {
-                            val noteTitle = when (val state = uiState.quizState) {
-                                is QuizState.Loading -> state.sourceTitle
-                                is QuizState.Success -> state.sourceTitle
-                                is QuizState.Error -> state.sourceTitle
-                                is QuizState.AiNotice -> state.sourceTitle
-                                is QuizState.Idle ->
-                                    (uiState.noteState as? NoteState.Success)?.title.orEmpty()
-                            }
-                            QuizScreen(
-                                noteTitle = noteTitle,
-                                quizState = uiState.quizState,
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
                     }
                 }
             }

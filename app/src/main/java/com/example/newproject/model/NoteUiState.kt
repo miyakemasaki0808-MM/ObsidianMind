@@ -11,7 +11,6 @@ import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
@@ -26,7 +25,6 @@ data class NoteUiState(
     val notePaperTone: NotePaperTone = NotePaperTone.Fresh,
     val summaryState: SummaryState = SummaryState.Idle,
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
-    val quizState: QuizState = QuizState.Idle,
     val marginMemoState: MarginMemoState = MarginMemoState.Idle,
     /** 余白メモのシートが出ているか。セクションチャットのシートと同じ形。 */
     val isMarginMemoSheetVisible: Boolean = false,
@@ -69,7 +67,7 @@ data class NoteUiState(
 
 /**
  * 蒸留は意味を変えずMarkdown装飾だけを更新するため、ノート全体から得たAI結果は維持する。
- * 一方、生Markdownのセクション本文に結び付くチャットとクイズは照合不能になるため破棄する。
+ * 一方、生Markdownのセクション本文に結び付くチャットは照合不能になるため破棄する。
  *
  * 再会カード（[NoteUiState.readingTraceCard]）も維持する。同じノートのままで、痕跡は
  * vault相対パスをキーにしているため有効なまま（維持しないと Rediscover→蒸留保存で
@@ -77,7 +75,6 @@ data class NoteUiState(
  */
 internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
     noteState = loaded,
-    quizState = QuizState.Idle,
     sectionChat = null,
     isSectionChatSheetVisible = false
 )

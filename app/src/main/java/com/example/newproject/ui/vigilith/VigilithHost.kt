@@ -59,8 +59,7 @@ import kotlin.math.roundToInt
 internal data class VigilithNoteAction(
     val section: NoteSection,
     val sectionLabel: String,
-    val status: VigilithActionStatus,
-    val isAnswerGenerating: Boolean
+    val status: VigilithActionStatus
 )
 
 /**
@@ -212,11 +211,7 @@ internal fun BoxScope.VigilithHost(
 internal fun vigilithActionDescription(action: VigilithNoteAction): String {
     val stateDescription = when (action.status) {
         VigilithActionStatus.Idle -> "AIメニューを開く"
-        VigilithActionStatus.Working -> if (action.isAnswerGenerating) {
-            "AI回答を生成中。タップで開く"
-        } else {
-            "AI要約を生成中。タップで開く"
-        }
+        VigilithActionStatus.Working -> "AI要約を生成中。タップで開く"
         VigilithActionStatus.Ready -> "AI結果を生成済み。タップで開く"
         VigilithActionStatus.Error -> "AI処理でエラー。タップで確認"
     }
@@ -243,11 +238,7 @@ private fun VigilithActionLabel(action: VigilithNoteAction) {
         Text(
             text = when (action.status) {
                 VigilithActionStatus.Idle -> "📌 ${action.sectionLabel}"
-                VigilithActionStatus.Working -> if (action.isAnswerGenerating) {
-                    "⏳ AI回答中 · ${action.sectionLabel}"
-                } else {
-                    "⏳ AI要約中 · ${action.sectionLabel}"
-                }
+                VigilithActionStatus.Working -> "⏳ AI要約中 · ${action.sectionLabel}"
                 VigilithActionStatus.Ready -> "✓ 要約完了 · ${action.sectionLabel}"
                 VigilithActionStatus.Error -> "! 要約を確認 · ${action.sectionLabel}"
             },

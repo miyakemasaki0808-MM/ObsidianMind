@@ -17,8 +17,6 @@ import com.example.newproject.model.state.DistillRangePreset
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
-import com.example.newproject.model.state.QuizCard
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
@@ -177,12 +175,10 @@ class DistillControllerTest {
     fun `save preserves whole-note AI states and clears raw markdown contexts`() = runTest {
         val summary = SummaryState.Success("既存要約")
         val related = RelatedNotesState.Success(emptyList(), emptyList())
-        val quiz = QuizState.Success("ノート", listOf(QuizCard("Q", listOf("A", "B"), 0)))
         val state = NoteUiStateStore(
             stateWithNote().value.copy(
                 summaryState = summary,
                 relatedNotesState = related,
-                quizState = quiz,
                 sectionChat = SectionChatState(
                     sectionTitle = "旧セクション",
                     sectionContext = "太字化前の本文",
@@ -222,7 +218,6 @@ class DistillControllerTest {
         assertEquals(1, reloadCalls)
         assertEquals(summary, state.value.summaryState)
         assertEquals(related, state.value.relatedNotesState)
-        assertTrue(state.value.quizState is QuizState.Idle)
         assertEquals(null, state.value.sectionChat)
         assertFalse(state.value.isSectionChatSheetVisible)
         assertEquals("再読込本文", (state.value.noteState as NoteState.Success).content)

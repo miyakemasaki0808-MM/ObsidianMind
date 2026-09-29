@@ -230,8 +230,7 @@ class NoteExcerptBuilderTest {
         listOf(
             NoteExcerptLimits.SUMMARY,
             NoteExcerptLimits.RELATED,
-            NoteExcerptLimits.SECTION,
-            NoteExcerptLimits.QUIZ
+            NoteExcerptLimits.SECTION
         ).forEach { b ->
             assertWithinBudget(buildNoteExcerpt(content, b), b)
         }

@@ -26,7 +26,7 @@ class SourceDocSyncTest {
     /**
      * 「型 → 正本」の対応。**明示的に持つ**（自動で探すと、文書が無い型を黙って素通りさせる）。
      *
-     * **対象は平らな `data class` の状態型だけ。** `QuizState` / `RemarkState` のような
+     * **対象は平らな `data class` の状態型だけ。** `SummaryState` / `DistillState` のような
      * sealed 型は欄が variant ごとに散るので、「フィールド一覧」という形が当てはまらない。
      * そちらの同期は `DesignDocStateNameTest`（消した名前）と読み手が受け持つ。
      */

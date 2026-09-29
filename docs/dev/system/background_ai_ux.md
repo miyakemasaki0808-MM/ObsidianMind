@@ -2,8 +2,8 @@
 
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-09-18 / `e407dbd`（§7 の門番。§1〜§6 は 2026-08-15）
-**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `model/state/*.kt`（`toEventKey`）/ `domain/`（`resolveAiTabBadgeState`）/ `controller/NoteDwellGate.kt`（自動生成の門番）
-**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `EventKeyTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
+**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `ui/AppScaffold.kt`（バッジ）/ `domain/`（`resolveAiTabBadgeState`）/ `controller/NoteDwellGate.kt`（自動生成の門番）
+**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `AiTabBadgeStateTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
 **正本:** この文書
 
 **対象領域:** AI生成の待ち時間をどう見せ、結果をどう知らせるか（機能横断）
@@ -48,8 +48,9 @@
 状態が Idle へ戻ったらキーもリセットして同じノートの再生成では再び通知できるようにする。
 
 - **割り切り: 未確認の Success も回転後は再表示しない**（バッジが未確認を伝え続けるため）
-- イベントキーの組み立ては `toEventKey()`、バッジ優先順位は `resolveAiTabBadgeState` として**純関数へ切り出してある** —
-  UI分岐は関数に切り出せばそのままテストになる
+- バッジ優先順位は `resolveAiTabBadgeState` として**純関数へ切り出してある** — UI分岐は関数に切り出せばそのままテストになる
+- **イベントキーで抑止する Snackbar を使っていたのはクイズの完了通知だけで、クイズの撤去（2026-09-30）で使い手は無くなった。**
+  一度きりの通知を足すときは、同じくキーを純関数で組み、`rememberSaveable` で表示済みを覚える
 
 ## 4. 未確認管理（`isViewed`）が要るかどうかは、結果の辿り着きやすさで決まる
 
@@ -61,7 +62,7 @@
 
 分かれるのは**未確認管理を持つかどうか**で、判定軸は **「後から結果へ辿り着けるか」**である。
 
-| | 旧「AI補記メモ」 | ノートへのひとこと | クイズ |
+| | 旧「AI補記メモ」 | ノートへのひとこと | クイズ（撤去済み） |
 |---|---|---|---|
 | 結果の置き場 | Vault内の `.md` ファイル | 痕跡サイドカー | メモリ（ノート単位） |
 | 後から辿れるか | **一覧を開かないと分からない** | **画面を開けば必ず出る**（毎回復元する） | **同じノートを開いている間だけ** |
@@ -78,7 +79,7 @@
 > 2026-08-11 に一度「起点と結果が同じ画面で閉じるから」へ直したが、**これも誤りだった** —
 > 生成開始時にノートタブへ戻るので閉じていない。**同じ箇所を2度誤ったので、判定軸ごと書き直した。**
 
-**したがって未確認管理（`markViewed()` ＋ Snackbar）を持つ機能はクイズ1つだけ。**
+**したがって未確認管理（`markViewed()` ＋ Snackbar）を持つ機能は、クイズの撤去（2026-09-30）で0件になった。**
 [architecture](architecture.md) の Controller 共通化の再検討条件は「3つ目が現れたとき」なので、**条件はさらに遠のいている。**
 
 **副産物として、塗りバッジのコントラスト問題が消えた。** 下部ナビ帯（ライトはブランド色 Indigo）の上で
@@ -111,7 +112,7 @@ Q&Aを `NoteViewModel` のベタ書きから `QuizController` へ切り出した
 
 | 起動契機 | 機能 | 使えないとき |
 |---|---|---|
-| **ユーザーのタップ** | 蒸留・クイズ・ひとこと・セクションチャット・さがす | その場で理由を説明する |
+| **ユーザーのタップ** | 蒸留・部分要約・さがす | その場で理由を説明する |
 | **自動** | 要約・関連ノート・読書痕跡・結晶 | **黙って劣化する** |
 
 読書痕跡の [L4](../lessons.md)「意識させない機能は作法が違う」を**特例から一般則へ昇格**させた形になる。
@@ -192,19 +193,8 @@ Channel を返せることが、**実在しない「走行中のDLを購読で�
 
 **「説明する画面がある」は、説明したことにならない。** その画面へ到達できるかまで見る。
 
-したがってクイズ欄は、要約側の失敗表示があるかどうかと無関係に自分で説明する
-（`ui/screen/SectionChatSheet.kt` の `QuizActionSection`）。
-
-| 状態 | 出すもの |
-|---|---|
-| 恒久非対応 | 理由だけ。**押せないボタンを理由の隣に並べない** |
-| DL中・一時的な不可 | 理由と「↻ クイズを再試行」を同じ場所へ（→ 判断1の「押した場所に返す」） |
-
-**判定は純関数（`quizNotice` / `showsQuizAction` / `isQuizActionEnabled`）に置くが、
-それだけでは足りない。** この欠陥は状態がすべて正しいまま起きていて、
-**シートがその関数を呼ぶかどうかは純関数側から観測できない。**
-描画結果は `QuizActionSectionTest`（androidTest）が見る。
-`ModalBottomSheet` の開閉に巻き込まれないよう、クイズ欄を独立したComposableへ切り出してある。
+この判断を実装していたクイズ欄は、**クイズとともに撤去した（2026-09-30）。**
+原則は他の欄にも効く — **押した場所に理由と次の行動を置き、到達できない画面の説明を根拠にしない。**
 
 ### AICore は短い時間窓の回数で要求を断る（2026-09-13 観測）
 

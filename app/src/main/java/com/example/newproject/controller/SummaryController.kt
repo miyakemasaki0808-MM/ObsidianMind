@@ -14,7 +14,7 @@ import kotlinx.coroutines.launch
 /**
  * ノート本文の要約（モデルDL待ち込み）を担当する。summaryState の更新のみを行う。
  *
- * Quiz・Annotation・Distill と同じく requestId ＋ Job 追跡でノート切替に備える。
+ * Annotation・Distill と同じく requestId ＋ Job 追跡でノート切替に備える。
  * 元は [com.example.newproject.NoteViewModel] に直書きされており、この1本だけが
  * Controller 化から取り残されていた（DL完了が切替をすり抜け、旧ノートの本文で
  * 要約と関連ノートを再実行して新しいノートの画面へ書き戻していた）。

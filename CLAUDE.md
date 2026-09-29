@@ -99,13 +99,13 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 | 引き金 | 出す証拠 |
 |---|---|
-| 状態型に欄を足した／意味を変えた | その欄を**読む全箇所**（UI・派生状態・`toEventKey`）を性質で grep した結果 |
+| 状態型に欄を足した／意味を変えた | その欄を**読む全箇所**（UI・派生状態）を性質で grep した結果 |
 | 非同期Jobやキャンセル・再試行を変えた | **両方向**のテスト（片方の実行中・失敗中にもう片方を操作する）＋走行フラグが残らないテスト |
 | 型・値・欄を改名／削除した | ソース走査テスト（`AiAvailabilityUsageTest` / `DesignDocStateNameTest`） |
 | 上記のいずれか | **正本文書**（`features/` `system/`）の該当記述を直したこと。**`owner/` は含めない** — 更新の契機はオーナーの依頼だけ（→ [owner/README](docs/owner/README.md)） |
 
 **共存しうる2つの処理は、片方ずつのテストでは面が永久に空く。** 実例と型は
-`SectionChatCombinationTest` が持つ（4巡のレビューで出た欠陥のうち2件がこの面にあった）。
+`CrystalSaveInterleavingTest` が持つ（保存の書き込みの途中でノートを替える交錯を、別スレッドで作る）。
 
 **レビューは受け取った経路を問わず、着手前に `docs/review/` へ本文を置く。** チャットで受けても同じ。
 置いた時点で `ReviewFindingsLedgerTest` が全指摘の受付を検査するので、

@@ -277,7 +277,7 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
 - **内容:** 見出し単位の折りたたみと、読んでいるセクション以外を薄くする集中表示。
 - **出所:** 2026-08-02 の外部壁打ち（Antigravity）。
 - **適合理由:** 読書体験の素の質を上げる読み取り専用の拡張で、N-13 と同じ性質。長文ノートで効く。
-- **足場:** [`NoteSection` / `surroundingContext()` / `buildNoteSectionModel()`](../../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt) が既にあり、
+- **足場:** [`NoteSection` / `buildNoteSectionModel()`](../../app/src/main/java/com/example/newproject/domain/markdown/NoteSections.kt) が既にあり、
   2026-07-31 に解析はMainの外へ出て `NoteSectionController` が結果を配っている。
   **つまりセクション構造は既に手元にあって、使っていないのは描画側だけ。**
 - **懸念:**

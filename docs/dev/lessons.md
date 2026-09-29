@@ -41,7 +41,7 @@
 |---|---|---|---|
 | [L28](lessons/L28.md) | Boolean は「何が起きたか」ではなく**呼び出し側が次に何をするか**で決める。**6度出ている** | 境界に戻り値・シグネチャを足した | — |
 | [L29](lessons/L29.md) | **規則は検査へ変えるまで守られない。** 検査は守りたい性質より狭い対象を数える | 文書に「〜する／しない」と書いた | `ReviewFindingsLedgerTest`・`AiAvailabilityContractTest`・`SourceDocSyncTest` ほか7本 |
-| [L14](#l14-横展開は最後の1本を取り残す) | 横展開は**最後の1本**を取り残す。関数名ではなく**性質**で grep し、**共存しうる処理は両方向をテストする** | 同じ変更を2箇所目に書いた／状態・非同期Jobを変えた／**定数の値を上げた** | `SectionChatCombinationTest`・`NoteSectionThreadingTest`・`SchemaVersionDocsTest` |
+| [L14](#l14-横展開は最後の1本を取り残す) | 横展開は**最後の1本**を取り残す。関数名ではなく**性質**で grep し、**共存しうる処理は両方向をテストする** | 同じ変更を2箇所目に書いた／状態・非同期Jobを変えた／**定数の値を上げた** | `CrystalSaveInterleavingTest`・`NoteSectionThreadingTest`・`SchemaVersionDocsTest` |
 | [L11](#l11-テストが効いているかは変異させて確かめる) | テストが効いているかは**変異させて**確かめる。落ちるテストを書けないガードは削除候補 | ガード・条件分岐を足した | — |
 | [L24](lessons/L24.md) | 判定の**根拠が壊れている**なら、ユーザー確認を挟んでも訂正されない | 危険な操作を設計する | — |
 | [L25](lessons/L25.md) | 「網羅テストがある」と「そのフィールドが網羅されている」は別。**4例** | 契約テストへ項目を足した | `WipIssueReferenceTest` |
@@ -213,9 +213,9 @@ AI入力の切り出しを純関数へ出したのは正しかったが、**最�
 
 **面が空く条件は「共存しうる2つの処理」。** 片方ずつのテストは各Jobを単独で通すので、
 **片方が実行中・失敗中にもう片方を操作する経路が丸ごと空く。** ここは両方向ともテストする
-（→ `SectionChatCombinationTest`）。引き金と証拠は [CLAUDE.md](../../CLAUDE.md) の影響面監査が持つ。
+（→ `CrystalSaveInterleavingTest`。要約と回答の組み合わせを押さえていたテストは、回答の撤去とともに外した）。引き金と証拠は [CLAUDE.md](../../CLAUDE.md) の影響面監査が持つ。
 
-**検査:** `SectionChatCombinationTest`・`NoteSectionThreadingTest`
+**検査:** `CrystalSaveInterleavingTest`・`NoteSectionThreadingTest`
 
 ### L15. 警告を黙らせると、判断の催促も一緒に消える
 

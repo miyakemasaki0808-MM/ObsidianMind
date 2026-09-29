@@ -11,7 +11,6 @@ import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
@@ -25,11 +24,6 @@ import kotlinx.coroutines.flow.update
 interface SummaryStateWriter {
     val current: SummaryState
     fun update(transform: (SummaryState) -> SummaryState)
-}
-
-interface QuizStateWriter {
-    val current: QuizState
-    fun update(transform: (QuizState) -> QuizState)
 }
 
 /**
@@ -173,13 +167,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
                     isMarginMemoSheetVisible = next.isMarginMemoSheetVisible
                 )
             }
-        }
-    }
-
-    val quizWriter: QuizStateWriter = object : QuizStateWriter {
-        override val current: QuizState get() = mutableState.value.quizState
-        override fun update(transform: (QuizState) -> QuizState) {
-            mutableState.update { it.copy(quizState = transform(it.quizState)) }
         }
     }
 
@@ -348,8 +335,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         mutableState.update { it.copy(wikilinkTitles = titles) }
     }
 
-    fun hasSectionChat(): Boolean = mutableState.value.sectionChat != null
-
     fun applyReloadedBody(targetUri: String, loaded: NoteState.Success): Boolean {
         while (true) {
             val current = mutableState.value
@@ -377,7 +362,6 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     notePaperTone = NotePaperTone.Fresh,
     summaryState = SummaryState.Idle,
     relatedNotesState = RelatedNotesState.Idle,
-    quizState = QuizState.Idle,
     marginMemoState = MarginMemoState.Idle,
     // **シートの可視も必ず落とす。** 落とさないと、切替後に
     // 前のノートのメモを載せたシートが開いたまま残る。

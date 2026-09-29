@@ -2,7 +2,6 @@ package com.example.newproject
 
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.DistillController
-import com.example.newproject.controller.QuizController
 import com.example.newproject.controller.SectionChatController
 import com.example.newproject.controller.SummaryController
 import com.example.newproject.data.DistillPersistence
@@ -28,7 +27,6 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SummaryState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -62,26 +60,25 @@ import org.junit.Test
  *
  * ## 本番の呼び出し式との対応（1対1）
  *
- * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**10件**。
+ * 母数は `grep -rn "aiClient.checkAvailability()" app/src/main` の**9件**。
  * **1件でも表から漏れると、母数の主張そのものが嘘になる**ので、grep の結果と1対1で並べる。
  *
  * | # | 本番の呼び出し | 起点 | 例外の観測 | キャンセルの観測 |
  * |---|---|---|---|---|
  * | 1 | `DistillController` | `start()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 2 | `QuizController` | `create()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 3 | `SectionChatController` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 4 | `SectionChatController` | `sendMessage()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 5 | `SummarizeUseCase` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 6 | `SearchPickerUseCase` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 7 | `RelatedNotesUseCase` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
- * | 8 | `ReunionCardController` | `revealTrace()` 途中まで（前後の要約） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
- * | 9 | `ReunionCardController` | `revealTrace()` 読了（問いの選別） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
- * | 10 | `NoteFieldController` | `classify()` | **観測点が無い**（下記） | `NoteFieldControllerTest`（再throw） |
+ * | 2 | `SectionChatController` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 3 | `SummarizeUseCase` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 4 | `SearchPickerUseCase` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 5 | `RelatedNotesUseCase` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
+ * | 6 | `ReunionCardController` | `revealTrace()` 途中まで（前後の要約） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 7 | `ReunionCardController` | `revealTrace()` 読了（問いの選別） | `ReunionCardControllerTest`（生カード） | `ReunionCardControllerTest`（**Jobの完了原因**） |
+ * | 8 | `NoteFieldController` | `classify()` | **観測点が無い**（下記） | `NoteFieldControllerTest`（再throw） |
+ * | 9 | `CrystalController` | `crystallize()` | **観測点が無い**（下記） | **未整備**（生成中の切替は `CrystalControllerTest` が見るが、状態確認中の取消は見ていない） |
  *
- * 8・9だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
+ * 6・7だけ他ファイルなのは、**無音の経路で観測点が状態ではない**ため
  * （読書痕跡は「要約なしのカード」）。足場が既存テストにある。
  *
- * **10には観測点が無い。** 分野判定は進捗も失敗も画面へ出さず、**走行状態そのものを持たない**
+ * **8と9には観測点が無い。** 分野判定と結晶は進捗も失敗も画面へ出さず、**走行状態そのものを持たない**
  * （→ system/architecture.md 判断4 の例外）。残りうるフラグが無いので、
  * ここで見る「走行状態を残さない」に対応する観測対象が存在しない。
  * **観測を省いたのではなく、観測すべきものが無い。**
@@ -91,7 +88,7 @@ import org.junit.Test
  * この表は3度作り直している。**行を並べただけでは保証にならない。**
  *
  * - 旧版は `SummaryState.Error` でないことしか見ず、**再throwを外しても緑だった**
- * - 次の版は4と10を「結果が空」で見ており、**握りつぶしても同じ空になるので緑だった**
+ * - 次の版は回答と分野判定を「結果が空」で見ており、**握りつぶしても同じ空になるので緑だった**
  *
  * 無音の経路では**結果を見ても再throwを観測できない。** 起動Jobが
  * `isCancelled` で終わったかを見る（再throwなら cancelled、握りつぶしなら正常終了）。
@@ -114,17 +111,6 @@ class AiAvailabilityContractTest {
     }
 
     @Test
-    fun `クイズは状態確認の例外で走行状態を残さない`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        QuizController(this, throwingClient(), state.quizWriter, dispatcher())
-            .create("対象ノート.md", "本文")
-        advanceUntilIdle()
-
-        assertNotRunning("クイズ", state.value.quizState !is QuizState.Loading)
-        assertTrue(state.value.quizState is QuizState.Error)
-    }
-
-    @Test
     fun `セクション要約は状態確認の例外で走行状態を残さない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
         sectionChatController(state, throwingClient()).open(SECTION)
@@ -133,24 +119,6 @@ class AiAvailabilityContractTest {
         val chat = requireNotNull(state.value.sectionChat)
         assertNotRunning("セクション要約", !chat.isSummaryLoading)
         assertTrue("理由が残ること", chat.summaryProblem != null)
-    }
-
-    @Test
-    fun `セクション回答は状態確認の例外で走行状態を残さない`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        val ai = FakeAiClient { "セクションの要約" }
-        val controller = sectionChatController(state, ai)
-        controller.open(SECTION)
-        advanceUntilIdle()
-
-        // 質問を送る時点で契約違反の実装に差し替わる。
-        ai.availabilityFailure = { IllegalStateException("AICore not bound") }
-        controller.sendMessage("これはどういう意味ですか")
-        advanceUntilIdle()
-
-        val chat = requireNotNull(state.value.sectionChat)
-        assertNotRunning("セクション回答", !chat.isGenerating)
-        assertTrue("理由が残ること", chat.answerProblem != null)
     }
 
     @Test
@@ -236,12 +204,6 @@ class AiAvailabilityContractTest {
         advanceUntilIdle()
         assertTrue("蒸留は分析中のまま", distill.value.distillState is DistillState.Analyzing)
 
-        val quiz = NoteUiStateStore(NoteUiState())
-        QuizController(this, cancellingClient(cancel), quiz.quizWriter, dispatcher())
-            .create("対象ノート.md", "本文")
-        advanceUntilIdle()
-        assertTrue("クイズは生成中のまま", quiz.value.quizState is QuizState.Loading)
-
         val summary = NoteUiStateStore(NoteUiState())
         summaryController(summary, cancellingClient(cancel)).fetch("ノートA", "Aの本文")
         advanceUntilIdle()
@@ -259,18 +221,6 @@ class AiAvailabilityContractTest {
         val summaryChat = requireNotNull(opened.value.sectionChat)
         assertNull("要約側は理由を持たない", summaryChat.summaryProblem)
         assertTrue("走行状態のまま止まる", summaryChat.isSummaryLoading)
-
-        val answering = NoteUiStateStore(NoteUiState())
-        val ai = FakeAiClient { "セクションの要約" }
-        val controller = sectionChatController(answering, ai)
-        controller.open(SECTION)
-        advanceUntilIdle()
-        ai.availabilityFailure = cancel
-        controller.sendMessage("これはどういう意味ですか")
-        advanceUntilIdle()
-        val answerChat = requireNotNull(answering.value.sectionChat)
-        assertNull("回答側は理由を持たない", answerChat.answerProblem)
-        assertTrue("走行状態のまま止まる", answerChat.isGenerating)
     }
 
     // ── 状態を持たない経路（結果型で受ける）────────────────────

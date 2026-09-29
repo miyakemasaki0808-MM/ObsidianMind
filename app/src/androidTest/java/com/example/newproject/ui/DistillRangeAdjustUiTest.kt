@@ -49,8 +49,7 @@ import org.junit.runner.RunWith
  *
  * ## `ModalBottomSheet` ごと開かない理由
  *
- * 開閉アニメーションを待つ必要があり、検査したいものと無関係に落ちうる
- * （→ [QuizActionSectionTest]）。シートの中身は [DistillRangeSheetContent] として
+ * 開閉アニメーションを待つ必要があり、検査したいものと無関係に落ちうる。シートの中身は [DistillRangeSheetContent] として
  * 切り出してあるので直接描ける。
  */
 @RunWith(AndroidJUnit4::class)

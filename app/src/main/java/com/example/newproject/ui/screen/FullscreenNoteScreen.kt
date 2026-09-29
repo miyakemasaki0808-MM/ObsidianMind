@@ -8,7 +8,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.vigilith.VigilithActionStatus
-import com.example.newproject.ui.vigilith.fullscreenAiStatus
+import com.example.newproject.ui.vigilith.sectionChatStatus
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -137,8 +137,8 @@ internal fun FullscreenNoteScreen(
     // 通常表示で依頼された「飛び越した画像」の測定を、全画面でも引き継いで測る（→ NoteImageMeasurements）。
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
-    // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
-    val combinedStatus = fullscreenAiStatus(activeChat, uiState.quizState)
+    // 最小インジケータの状態は、通常画面と同じ導出から取る。
+    val combinedStatus = sectionChatStatus(activeChat)
 
     // 全画面はパネルが画面いっぱいに広がるので、下地も同じ紙の色にする。
     // ここだけ Panel のままだと、縁に現行色の額縁が残る。

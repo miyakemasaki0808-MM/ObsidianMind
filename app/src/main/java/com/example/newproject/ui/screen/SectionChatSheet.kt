@@ -7,7 +7,6 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,16 +16,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -43,30 +37,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.model.state.ChatMessage
-import com.example.newproject.model.state.ChatRole
-import com.example.newproject.model.state.AiNoticeAction
-import com.example.newproject.model.state.isQuizActionEnabled
-import com.example.newproject.model.state.quizNotice
-import com.example.newproject.model.state.showsQuizAction
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
-import com.example.newproject.model.state.SuggestionsDisplay
-import com.example.newproject.model.state.suggestionsDisplay
 import com.example.newproject.ui.component.AiStatusNoticeRow
-import com.example.newproject.ui.theme.AccentSurface
-import com.example.newproject.ui.theme.OnAccentSurface
-import com.example.newproject.ui.theme.OnButtonAi
-import com.example.newproject.ui.theme.ChatDivider
 import com.example.newproject.ui.theme.OnSurfaceFaint
-import com.example.newproject.ui.theme.OnSurfaceSubtle
-import com.example.newproject.ui.theme.PanelBubble
 import com.example.newproject.ui.theme.PanelChip
-import com.example.newproject.ui.theme.PanelRow
 import com.example.newproject.ui.theme.SkeletonBase
 import com.example.newproject.ui.theme.SkeletonHighlight
-import com.example.newproject.ui.theme.ButtonAi
 import com.example.newproject.ui.theme.ErrorText
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
@@ -75,11 +52,7 @@ import com.example.newproject.ui.theme.OnSurface
 @Composable
 fun SectionChatSheet(
     state: SectionChatState,
-    quizState: QuizState,
-    onSuggestionTap: (String) -> Unit,
-    onQuizTap: () -> Unit,
     onRetrySummary: () -> Unit,
-    onRetryAnswer: () -> Unit,
     onDismiss: () -> Unit,
     onEndSession: () -> Unit
 ) {
@@ -111,7 +84,7 @@ fun SectionChatSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // ── 要約（上）─────────────────────────────
+            // ── 要約 ─────────────────────────────
             SectionHeader("📝", "要約")
             Spacer(modifier = Modifier.height(8.dp))
             when {
@@ -122,120 +95,22 @@ fun SectionChatSheet(
                     lineHeight = 22.sp,
                     color = OnSurface
                 )
-                // **要約が出せなかった理由はここだけに出す。** 押された導線の位置が
-                // 再試行の対象を決めるので、回答側の理由をここへ混ぜない。
                 state.summaryProblem != null ->
                     SectionChatProblemRow(state.summaryProblem, onRetrySummary)
                 else -> Text("—", fontSize = 14.sp, color = OnSurfaceFaint)
             }
 
             Spacer(modifier = Modifier.height(20.dp))
-            HorizontalDivider(color = ChatDivider)
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // ── 質問（下）─────────────────────────────
-            SectionHeader("💬", "質問")
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "気になる質問をタップすると回答します。",
-                fontSize = 12.sp,
-                color = OnSurfaceFaint
-            )
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // **空リストから進行中を推測しない**（→ suggestionsDisplay）。
-            when (state.suggestionsDisplay()) {
-                SuggestionsDisplay.Loading ->
-                    Text("質問候補を準備中…", fontSize = 13.sp, color = OnSurfaceFaint)
-                SuggestionsDisplay.Ready -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.suggestions.forEach { q ->
-                        SuggestionRow(text = q, enabled = !state.isGenerating) { onSuggestionTap(q) }
-                    }
-                }
-                // 走っていないのに空。**待たせない**ので、終わったことが分かる文にする。
-                SuggestionsDisplay.None ->
-                    Text("質問候補はありません。", fontSize = 13.sp, color = OnSurfaceFaint)
-            }
-
-            // Q&A ログ
-            if (state.messages.isNotEmpty() || state.isGenerating) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    state.messages.forEach { message -> ChatBubble(message) }
-                    if (state.isGenerating) LoadingRow("回答を生成中…")
-                }
-            }
-
-            // **回答が出せなかった理由はログの直後に出す。** 要約エリアへ出すと、
-            // 要約がある場合に表示が優先されて見えず、未回答の質問だけが残る。
-            state.answerProblem?.let { problem ->
-                Spacer(modifier = Modifier.height(8.dp))
-                SectionChatProblemRow(problem, onRetryAnswer)
-            }
-
-            // ── この部分でクイズ ─────────────────────────
-            Spacer(modifier = Modifier.height(20.dp))
-            QuizActionSection(quizState = quizState, onQuizTap = onQuizTap)
-
-            Spacer(modifier = Modifier.height(10.dp))
             OutlinedButton(
                 onClick = onEndSession,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = if (state.isSummaryLoading || state.isGenerating) "生成を中止" else "確認を終了",
-                    color = if (state.isSummaryLoading || state.isGenerating) ErrorText else AccentText
+                    text = if (state.isSummaryLoading) "生成を中止" else "確認を終了",
+                    color = if (state.isSummaryLoading) ErrorText else AccentText
                 )
             }
-        }
-    }
-}
-
-/**
- * シートのクイズ欄。**理由と導線を同じ場所へ置く。**
- *
- * かつては状態をボタンのラベルへ潰していた。恒久非対応では
- * 「クイズを使えません」とだけ出てボタンが無効になり、**理由を描く `QuizScreen` へ
- * 到達できなかった** — 押した本人に、使えない理由も次の行動も残らなかった
- * （実機レビューで発見）。**到達できない画面の説明を、説明した根拠にしない。**
- *
- * シートから切り出してあるのは、`ModalBottomSheet` を開かずに描画を検査するため。
- */
-@Composable
-internal fun QuizActionSection(
-    quizState: QuizState,
-    onQuizTap: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        // 理由は必ず出す。要約側の失敗表示が出ているかどうかに依存しない。
-        quizState.quizNotice()?.let { notice ->
-            AiStatusNoticeRow(notice = notice)
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // 押せないボタンを理由の隣に並べない（→ showsQuizAction）。
-        // 色はボタン3役ルールのAI生成系（ButtonAi）。シート内の塗りボタンはこれのみ。
-        if (quizState.showsQuizAction()) {
-            val quizLabel = when (quizState) {
-                is QuizState.Idle -> "📝 この部分でクイズ"
-                is QuizState.Loading -> "クイズを作成中…"
-                is QuizState.Success -> "✓ クイズを開く"
-                is QuizState.Error -> if (quizState.isViewed) "↻ クイズを再試行" else "! エラーを確認"
-                // ここへ来るのは「あとで変わりうる」状態だけ（→ showsQuizAction）。
-                is QuizState.AiNotice -> "↻ クイズを再試行"
-            }
-            Button(
-                onClick = onQuizTap,
-                enabled = quizState.isQuizActionEnabled(),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ButtonAi,
-                    contentColor = OnButtonAi
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text(quizLabel, color = OnButtonAi) }
         }
     }
 }
@@ -245,7 +120,7 @@ internal fun QuizActionSection(
  *
  * 生成の失敗と端末AIの状態で色を分ける — 前者は実際に落ちたので `ErrorText`、
  * 後者はまだ何も失敗していないので通常色（`AiStatusNoticeRow` に任せる）。
- * 文言だけ出して導線を出さないと、タイムアウトのたびに質問だけが残る。
+ * 文言だけ出して導線を出さないと、タイムアウトのたびに要約の欄が空のまま残る。
  */
 @Composable
 private fun SectionChatProblemRow(problem: SectionChatProblem, onRetry: () -> Unit) {
@@ -266,32 +141,6 @@ private fun SectionHeader(emoji: String, title: String) {
         Text(emoji, fontSize = 16.sp)
         Spacer(modifier = Modifier.width(6.dp))
         Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold, color = AccentText)
-    }
-}
-
-@Composable
-private fun SuggestionRow(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, onClick = onClick),
-        color = PanelRow,
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = text,
-                color = AccentText,
-                fontSize = 14.sp,
-                lineHeight = 20.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-            Text("＋", color = AccentText, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        }
     }
 }
 
@@ -328,41 +177,4 @@ private fun SkeletonLine(brush: Brush, widthFraction: Float) {
             .height(14.dp)
             .background(brush, RoundedCornerShape(6.dp))
     )
-}
-
-@Composable
-private fun LoadingRow(label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = AccentText)
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(label, fontSize = 13.sp, color = OnSurfaceSubtle)
-    }
-}
-
-@Composable
-private fun ChatBubble(message: ChatMessage) {
-    val isUser = message.role == ChatRole.User
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-    ) {
-        Surface(
-            color = if (isUser) AccentSurface else PanelBubble,
-            shape = RoundedCornerShape(
-                topStart = 14.dp,
-                topEnd = 14.dp,
-                bottomStart = if (isUser) 14.dp else 3.dp,
-                bottomEnd = if (isUser) 3.dp else 14.dp
-            ),
-            modifier = Modifier.fillMaxWidth(0.86f)
-        ) {
-            Text(
-                text = message.text,
-                color = if (isUser) OnAccentSurface else OnSurface,
-                fontSize = 14.sp,
-                lineHeight = 21.sp,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp)
-            )
-        }
-    }
 }

@@ -23,7 +23,7 @@ import org.junit.runner.RunWith
  * 枠の中身を決める純関数（`reunionSlot`）と前置き（`reunionLead`）はJVM側が押さえている。
  * **しかし「カードがその結果を描く」ことは純関数側からは一切観測できない。**
  * 値が正しくても、Composable が前置きを描かない・ボタンを出さない配線退行は
- * そこを通り抜ける（→ `QuizActionSectionTest` が同じ理由で置かれている）。
+ * そこを通り抜ける。
  *
  * **APKが組み立つことは、描画の受け入れ条件を代替しない。**
  */

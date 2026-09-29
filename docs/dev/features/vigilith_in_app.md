@@ -84,7 +84,7 @@ Vigilith を**ポイントを要求するペットではなく**、既存のAI�
 **永続化しない。**
 
 > **該当なし:** キャラクター専用の状態を持たない。表示状態は既存の
-> `SectionChatState` / `DistillState` / `QuizState` / `ReadingTraceCard` から**導出するだけ**で、
+> `SectionChatState` / `DistillState` / `ReadingTraceCard` から**導出するだけ**で、
 > `NoteUiState` にキャラクター用のフィールドを足していない。
 
 **ドラッグ位置だけが例外的にUI側の状態**だが、これも相対座標（0〜1）で持ち、画面変更のたび再計算する。

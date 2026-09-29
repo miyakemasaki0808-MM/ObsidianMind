@@ -29,23 +29,11 @@ class VigilithAccessibilityTest {
         )
     }
 
-    @Test
-    fun `回答生成中は要約と区別して読み上げる`() {
-        assertEquals(
-            "Vigilith。AI回答を生成中。タップで開く。対象は設計",
-            description(VigilithActionStatus.Working, isAnswerGenerating = true)
-        )
-    }
-
-    private fun description(
-        status: VigilithActionStatus,
-        isAnswerGenerating: Boolean = false
-    ) = vigilithActionDescription(
+    private fun description(status: VigilithActionStatus) = vigilithActionDescription(
         VigilithNoteAction(
             section = NoteSection("設計", 0, "本文"),
             sectionLabel = "設計",
-            status = status,
-            isAnswerGenerating = isAnswerGenerating
+            status = status
         )
     )
 }

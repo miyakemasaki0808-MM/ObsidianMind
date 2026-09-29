@@ -9,9 +9,7 @@ import com.example.newproject.domain.NoteFieldAnswer
 import com.example.newproject.domain.parseNoteFieldAnswer
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.buildNoteSectionModel
-import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.model.NoteExcerptLimits
-import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.internal.GenAiUtils
 import kotlinx.coroutines.runBlocking
@@ -141,29 +139,6 @@ class OnDeviceGenerationTest {
         assertGenerated("要約", response)
     }
 
-    /**
-     * クイズは**構造化された出力**を本番パーサへ渡す唯一の経路。
-     *
-     * 書式が一致するかは assert しない（非決定的）。パース結果は logcat へ出す。
-     */
-    @Test
-    fun クイズプロンプトで生成が返りパーサが実出力を処理できる() = runBlocking<Unit> {
-        requireNanoAvailable()
-
-        val prompt = PromptBuilder.buildQuizPrompt(
-            sourceLabel = NOTE_TITLE,
-            excerpt = buildNoteExcerpt(NOTE_BODY, NoteExcerptLimits.QUIZ),
-            format = QuizFormat.TrueFalse
-        )
-        val response = client.generate(prompt)
-        log("クイズ", response)
-        assertGenerated("クイズ", response)
-
-        // 例外を投げないことだけを assert する。件数は観測値として残す。
-        val cards = parseQuizResponse(response, QuizFormat.TrueFalse)
-        Log.i(TAG, "クイズのパース結果: ${cards.size}件" + if (cards.isEmpty()) "（書式不一致）" else "")
-    }
-
     /** 関連ノートは候補IDだけを返させる経路。プロンプトの指示が強く、長さも他と違う。 */
     @Test
     fun 関連ノートプロンプトで生成が返る() = runBlocking<Unit> {
@@ -278,9 +253,7 @@ class OnDeviceGenerationTest {
         val UNCOVERED_BUILDERS = setOf(
             "buildReunionSelectionPrompt",
             "buildDistillPrompt",
-            "buildPickerPrompt",
-            "buildSectionSuggestionsPrompt",
-            "buildSectionChatPrompt"
+            "buildPickerPrompt"
         )
 
         const val NOTE_TITLE = "習慣について"

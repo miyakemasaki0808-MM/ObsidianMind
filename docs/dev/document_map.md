@@ -94,13 +94,13 @@
 | [note_summary.md](features/note_summary.md) | ノート要約（主軸のAI機能・自動起動） |
 | [ai_picker.md](features/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
-| [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
+| [section_ai_chat.md](features/section_ai_chat.md) | 部分要約（今読んでいる節の要約シート）。**質問とクイズは撤去済み** |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」）。**廃止済み・記録として残す** |
 | [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（ひとことの置き換え。**AIを呼ばない唯一のReflect機能**）。実装済み・実機検証待ち |
 | [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
-| [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
+| [quiz.md](features/quiz.md) | クイズ（Q&A）。**撤去済み・判断の記録として残す** |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
@@ -120,7 +120,7 @@
 |---|---|
 | [architecture.md](system/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
 | [saf_boundary_gateway.md](system/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
-| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路8本**へ渡す本文の作り方＋**完成プロンプト12本**を閉じる上限） |
+| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路4本**へ渡す本文の作り方＋**完成プロンプト9本**を閉じる上限） |
 | [ai_quality_measurement.md](system/ai_quality_measurement.md) | AI出力の採点（要約が原文のどこを落としたか）。**測っていないものが多いので、使う前に読む** |
 | [background_ai_ux.md](system/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |

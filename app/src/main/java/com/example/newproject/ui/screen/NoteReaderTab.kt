@@ -66,8 +66,6 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
-import com.example.newproject.model.state.QuizState
-import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
@@ -103,13 +101,9 @@ internal fun NoteReaderTab(
     onRandomNote: () -> Unit,
     /** 10枚を引いて冊子ルートへ入る。**ここでは記録もAIも始まらない**（→ booklet_mode 判断3）。 */
     onOpenBooklet: () -> Unit,
-    onSuggestionTap: (String) -> Unit,
     onRetrySectionSummary: () -> Unit,
-    onRetrySectionAnswer: () -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
-    onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
-    onOpenQuizResult: () -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
     onOpenMarginMemo: () -> Unit,
@@ -157,8 +151,7 @@ internal fun NoteReaderTab(
         VigilithNoteAction(
             section = currentSection ?: NoteSection(note.title, 0, note.content),
             sectionLabel = fabSectionLabel,
-            status = sectionChatStatus(activeChat),
-            isAnswerGenerating = activeChat?.isGenerating == true
+            status = sectionChatStatus(activeChat)
         )
     }
     val currentVigilithActionChanged by rememberUpdatedState(onVigilithActionChanged)
@@ -354,33 +347,9 @@ internal fun NoteReaderTab(
 
     // セクションチャットのボトムシート
     if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
-        // クイズ生成の入力: シートが対象にしているセクションを sectionModel から
-        // 同定し、その周辺テキストを渡す。擬似セクション（ノート全体）は
-        // surroundingContext 側でノート先頭フォールバックになる。
-        val startQuizFromChat: (SectionChatState) -> Unit = { target ->
-            val matched = sectionModel?.sections?.firstOrNull {
-                it.title == target.sectionTitle && it.text == target.sectionContext
-            }
-            val quizContext = sectionModel?.surroundingContext(matched) ?: target.sectionContext
-            onGenerateQuiz(target.sectionTitle, quizContext)
-        }
         SectionChatSheet(
             state = chat,
-            quizState = uiState.quizState,
-            onSuggestionTap = onSuggestionTap,
-            onQuizTap = {
-                when (val qs = uiState.quizState) {
-                    is QuizState.Loading -> Unit
-                    is QuizState.Success -> onOpenQuizResult()
-                    is QuizState.Error ->
-                        if (qs.isViewed) startQuizFromChat(chat) else onOpenQuizResult()
-                    // 非対応ならボタン自体が無効なので、ここへは取得失敗のときだけ来る。
-                    is QuizState.AiNotice -> startQuizFromChat(chat)
-                    is QuizState.Idle -> startQuizFromChat(chat)
-                }
-            },
             onRetrySummary = onRetrySectionSummary,
-            onRetryAnswer = onRetrySectionAnswer,
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )
