@@ -17,7 +17,7 @@
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
 | 2026-09-30 | — | 質問・クイズと常駐マスコットの撤去、見出しの要約ボタンを実機で検証し、通し版8件が成功した（一部未保証） | [レビュー一覧](../review/README.md) |
-| 2026-09-30 | — | 「この部分」の正本を起こし、質問・クイズと常駐マスコットを撤去して見出しに要約ボタンを置いた（別の目・実機待ち） | [margin_pane](features/margin_pane.md)・[section_ai_chat](features/section_ai_chat.md) |
+| 2026-09-30 | — | 「この部分」の正本を起こし、質問・クイズと常駐マスコットを撤去して見出しに要約ボタンを置いた（別の目・実機検証済み） | [margin_pane](features/margin_pane.md)・[section_ai_chat](features/section_ai_chat.md) |
 | 2026-09-29 | — | owner文書を通しで見直し、測定日を09-29へそろえて柱3・結晶と断捨離の3件を反映した（レビュー前） | [owner/README](../owner/README.md) |
 | 2026-09-29 | — | 柱3・結晶の実機検証を受け付け、CRYS-5 をオーナー判断で閉じた（ローカルの Vault を読む前提で、遅い置き場の走査は範囲外） | [reflect_crystal](features/reflect_crystal.md) §10 |
 | 2026-09-28 | — | 結晶の修正2件を再レビューし、旧Vaultの走査と候補IDの漏出を机上解消と確認して実機待ちへ更新した | [レビュー一覧](../review/README.md) |
