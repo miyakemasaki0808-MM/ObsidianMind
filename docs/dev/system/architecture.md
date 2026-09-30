@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（14 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -26,7 +26,6 @@ NoteViewModel（Android境界の窓口）
  └── NoteSessionCoordinator（横断調停・状態所有）
       ├── NoteUiStateStore（機能別Writerを配る）
       ├── SectionChatController
-      ├── QuizController
       ├── AnnotationController        ← 旧補記ファイルの片付けのみ（**Vault単位**）
       ├── MarginMemoController        ← 余白メモ（**AIを呼ばない唯一のController**）
       ├── SearchController
@@ -42,7 +41,7 @@ NoteViewModel（Android境界の窓口）
       └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 15個である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個である。
 
 **行数は倍になったが、窓口の性質は変わっていない。** 68ある関数のうち**43は1行の委譲**で、
 本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
@@ -78,7 +77,7 @@ NoteViewModel（Android境界の窓口）
 
 ## 判断3: 壊れやすいロジックは純関数に切り出す
 
-`QuizResponseParser`・`parseMarkdownBlocks`・タイトル正規化などの文字列処理はAndroid I/Oから分離し、
+`DistillResponseParser`・`parseMarkdownBlocks`・タイトル正規化などの文字列処理はAndroid I/Oから分離し、
 素のJVMユニットテストで回帰を防ぐ。テスト設計の過程で実バグも発見された。
 **テストは検証だけでなく発見の道具になる。**
 
@@ -98,7 +97,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・クイズ・余白メモ・チャット・蒸留 | ノート切替（**各Controllerの `activeRequestId`**） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留 | ノート切替（**各Controllerの `activeRequestId`**） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶 | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
@@ -203,13 +202,14 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Quiz | Distill | ReunionCard | Summary | NoteField | Crystal |
-|---|---|---|---|---|---|---|
-| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| モデルDLを自動開始して完了後に自動再開 | ✓ | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** | **✗（黙って諦める）** |
-| Snackbar通知＋`isViewed` の未確認管理 | ✓ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| 失敗をユーザーへ見せる | ✓ | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** | **✗（一覧だけを持つ）** |
-| 起動契機 | 明示操作 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 | ノート表示（**要約と再会カードの後**） |
+| 要素 | Distill | ReunionCard | Summary | NoteField | Crystal |
+|---|---|---|---|---|---|
+| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** | **✗（黙って諦める）** |
+| 失敗をユーザーへ見せる | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** | **✗（一覧だけを持つ）** |
+| 起動契機 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 | ノート表示（**要約と再会カードの後**） |
+
+Snackbar通知＋`isViewed` の未確認管理を持つ Controller は、クイズの撤去（2026-09-30）で**0件**になった。
 
 **5本目（分野判定）は結論を補強した。** 起動契機は Summary と同じ「ノート表示」なのに、
 **見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
@@ -227,7 +227,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 分けているのは置き場所ではなく辿り着きやすさである。
 
 **再検討の条件:** **`markViewed()` と Snackbar 通知を持つ Controller が3つ目に現れたとき**、
-「AI結果の未確認管理」だけを共通化する候補として再検討する（現状はクイズ1件のみ）。
+「AI結果の未確認管理」だけを共通化する候補として再検討する（現状は0件）。
 **件数はトリガーにしない** → [lessons L31](../lessons/L31.md)。生成・DL側の共通化は打ち切る。
 
 ## 並行処理の規約

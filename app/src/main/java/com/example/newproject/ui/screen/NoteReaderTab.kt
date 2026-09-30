@@ -16,8 +16,9 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
-import com.example.newproject.ui.vigilith.VigilithNoteAction
-import com.example.newproject.ui.vigilith.sectionChatStatus
+import com.example.newproject.domain.sectionSummaryEntryDescription
+import com.example.newproject.domain.sectionSummaryEntrySymbol
+import com.example.newproject.domain.sectionSummaryStatus
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -49,13 +50,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -66,8 +65,6 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
-import com.example.newproject.model.state.QuizState
-import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
@@ -103,13 +100,9 @@ internal fun NoteReaderTab(
     onRandomNote: () -> Unit,
     /** 10枚を引いて冊子ルートへ入る。**ここでは記録もAIも始まらない**（→ booklet_mode 判断3）。 */
     onOpenBooklet: () -> Unit,
-    onSuggestionTap: (String) -> Unit,
     onRetrySectionSummary: () -> Unit,
-    onRetrySectionAnswer: () -> Unit,
     onDismissSectionChat: () -> Unit,
     onEndSectionChat: () -> Unit,
-    onGenerateQuiz: (sourceLabel: String, context: String) -> Unit,
-    onOpenQuizResult: () -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
     onOpenMarginMemo: () -> Unit,
@@ -118,7 +111,8 @@ internal fun NoteReaderTab(
     onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
-    onVigilithActionChanged: (VigilithNoteAction?) -> Unit
+    /** 見出しの要約ボタン。今の節（見出しが無ければノート全体）の部分要約を開く。既にあれば再表示する。 */
+    onOpenSection: (NoteSection) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -151,23 +145,7 @@ internal fun NoteReaderTab(
         }
     }
 
-    val activeChat = uiState.sectionChat
-    val fabSectionLabel = activeChat?.sectionTitle ?: currentSection?.title ?: "ノート全体"
-    val vigilithAction = successState?.let { note ->
-        VigilithNoteAction(
-            section = currentSection ?: NoteSection(note.title, 0, note.content),
-            sectionLabel = fabSectionLabel,
-            status = sectionChatStatus(activeChat),
-            isAnswerGenerating = activeChat?.isGenerating == true
-        )
-    }
-    val currentVigilithActionChanged by rememberUpdatedState(onVigilithActionChanged)
-    LaunchedEffect(vigilithAction) {
-        currentVigilithActionChanged(vigilithAction)
-    }
-    DisposableEffect(Unit) {
-        onDispose { currentVigilithActionChanged(null) }
-    }
+    val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みで食い違わせない）。
     val controls: @Composable ColumnScope.() -> Unit = {
@@ -182,6 +160,16 @@ internal fun NoteReaderTab(
             trailing = if (hasNote) {
                 {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // **要約の入口は ✎ と分ける。** ✎ は書く入口、💬 は AI の入口。
+                        // 状態は記号で静かに示し、浮く通知は作らない（→ features/section_ai_chat.md）。
+                        IconPill(
+                            symbol = sectionSummaryEntrySymbol(summaryStatus),
+                            contentDescription = sectionSummaryEntryDescription(summaryStatus)
+                        ) {
+                            successState?.let { note ->
+                                onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
+                            }
+                        }
                         IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
                             onOpenMarginMemo()
                         }
@@ -354,33 +342,9 @@ internal fun NoteReaderTab(
 
     // セクションチャットのボトムシート
     if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
-        // クイズ生成の入力: シートが対象にしているセクションを sectionModel から
-        // 同定し、その周辺テキストを渡す。擬似セクション（ノート全体）は
-        // surroundingContext 側でノート先頭フォールバックになる。
-        val startQuizFromChat: (SectionChatState) -> Unit = { target ->
-            val matched = sectionModel?.sections?.firstOrNull {
-                it.title == target.sectionTitle && it.text == target.sectionContext
-            }
-            val quizContext = sectionModel?.surroundingContext(matched) ?: target.sectionContext
-            onGenerateQuiz(target.sectionTitle, quizContext)
-        }
         SectionChatSheet(
             state = chat,
-            quizState = uiState.quizState,
-            onSuggestionTap = onSuggestionTap,
-            onQuizTap = {
-                when (val qs = uiState.quizState) {
-                    is QuizState.Loading -> Unit
-                    is QuizState.Success -> onOpenQuizResult()
-                    is QuizState.Error ->
-                        if (qs.isViewed) startQuizFromChat(chat) else onOpenQuizResult()
-                    // 非対応ならボタン自体が無効なので、ここへは取得失敗のときだけ来る。
-                    is QuizState.AiNotice -> startQuizFromChat(chat)
-                    is QuizState.Idle -> startQuizFromChat(chat)
-                }
-            },
             onRetrySummary = onRetrySectionSummary,
-            onRetryAnswer = onRetrySectionAnswer,
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )

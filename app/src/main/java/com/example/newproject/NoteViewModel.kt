@@ -478,10 +478,6 @@ class NoteViewModel internal constructor(
     fun searchByKeyword(query: String) = session.searchByKeyword(query)
     fun pickRandomInScope() = session.pickRandomInScope()
 
-    // sourceLabel=対象セクション名、context=フォーカス周辺テキスト（NoteReaderTab が構築）
-    fun generateQuiz(sourceLabel: String, context: String) = session.generateQuiz(sourceLabel, context)
-    fun markQuizViewed() = session.markQuizViewed()
-
     // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）─────────
 
     fun loadAnnotations() = session.loadAnnotations()
@@ -552,13 +548,11 @@ class NoteViewModel internal constructor(
             repository.writeDocumentBytes(contentResolver, destination, bytes)
         }
 
-    // ── セクション単位のAIチャット（実装は SectionChatController）─────────────
+    // ── セクション単位の部分要約（実装は SectionChatController）─────────────
 
     fun openSection(section: NoteSection) = session.openSection(section)
     fun showSectionChat() = session.showSectionChat()
-    fun sendSectionMessage(text: String) = session.sendSectionMessage(text)
     fun retrySectionSummary() = session.retrySectionSummary()
-    fun retrySectionAnswer() = session.retrySectionAnswer()
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()
 

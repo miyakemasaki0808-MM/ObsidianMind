@@ -31,7 +31,7 @@ import kotlinx.coroutines.withContext
  * ## なぜ状態が [com.example.newproject.model.NoteUiState] に入らないか
  *
  * 依存方向の規約で `model` パッケージはプロジェクト内の何もimportできない（葉である）。
- * [NoteSectionModel] は `domain.markdown` にあり、`surroundingContext()` のような
+ * [NoteSectionModel] は `domain.markdown` にあり、`passageAround()` のような
  * 振る舞いを持つ純データ型ではないため `model` へは移せない。したがって
  * `NoteUiState` には入れられず、テーマと同じく**独立した [StateFlow]** として配る。
  *

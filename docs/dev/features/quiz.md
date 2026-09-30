@@ -1,10 +1,15 @@
-# クイズ（Q&A）
+# クイズ（Q&A・撤去済み）
 
-**状態:** Implemented — 稼働中。**未確認管理（`isViewed`）を持つ唯一の機能**
-**最終検証:** 2026-08-11 / `c25bcea`
-**関連コード:** `controller/QuizController.kt` / `domain/QuizInputProfile.kt` / `domain/QuizResponseParser.kt` / `model/state/QuizState.kt` / `ui/screen/QuizScreen.kt` / `ui/screen/SectionChatSheet.kt`（**入口**）/ `ui/vigilith/VigilithMode.kt`
-**関連テスト:** `QuizControllerTest` / `QuizResponseParserTest` / `QuizInputProfileTest` / `QuizPromptBuilderTest` / `VigilithStatusDerivationTest`
-**正本:** この文書
+**状態:** **Deprecated — 実装は撤去済み（2026-09-30）。** 部分要約だけを残した（→ [部分要約](section_ai_chat.md) 判断3）。
+**この文書は判断の記録であって、現在の仕様ではない**
+**最終検証:** 2026-08-11 / `c25bcea`（撤去前の最後の突合）
+**関連コード:** なし（撤去済み）
+**関連テスト:** なし（撤去済み）
+**正本:** この文書（**撤去した設計の記録として**）
+
+> **なぜ残すか。** 「出題形式をAIに選ばせず本文の構造で決める」「小型モデルに差分生成をさせない」
+> 「未確認管理は結果へ辿り着きにくい機能にだけ要る」という判断は、**次にAI機能を足すときにまた要る。**
+> 以下は**撤去時点の仕様**であり、現在のアプリの説明ではない。
 
 **対象領域:** 読んだノートから設問を作り、専用画面で解かせるまで
 

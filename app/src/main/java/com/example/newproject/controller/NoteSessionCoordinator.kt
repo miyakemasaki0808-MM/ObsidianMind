@@ -137,7 +137,7 @@ internal class NoteSessionCoordinator(
      * 自動で走る生成の門番（→ background_ai_ux.md §7）。**Controller より先に宣言する** —
      * 自動起動の Controller へ [NoteDwellGate.await] を配るため。
      *
-     * **自動起動の機能にだけ配る。** 押して使う機能（クイズ・ひとこと・チャット・蒸留）に配ると、
+     * **自動起動の機能にだけ配る。** 押して使う機能（部分要約・余白メモ・蒸留）に配ると、
      * 押した直後の生成が理由もなく数秒待たされる。
      */
     private val dwell = NoteDwellGate(scope)
@@ -146,7 +146,6 @@ internal class NoteSessionCoordinator(
     // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
     private val sections = NoteSectionController(scope, parseDispatcher)
     private val sectionChat = SectionChatController(scope, aiClient, stateStore.sectionChatWriter)
-    private val quiz = QuizController(scope, aiClient, stateStore.quizWriter)
     private val summary = SummaryController(
         scope = scope,
         summarizeUseCase = summarizeUseCase,
@@ -415,7 +414,6 @@ internal class NoteSessionCoordinator(
         noteField.cancelAndClear()
         // **生成だけを止める。** 保存に入った結晶と一覧（Vault単位）には触らない。
         crystal.cancelAndClear()
-        quiz.cancelAndClear()
         marginMemo.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
         sectionChat.cancelAndClear()
@@ -535,14 +533,13 @@ internal class NoteSessionCoordinator(
 
     /**
      * 蒸留保存後の本文差し替え。対象ノートが変わっていたら何もせず false を返す。
-     * 生Markdown文脈に依存するチャット・クイズだけを破棄し、ノート全体のAI結果は維持する。
+     * 生Markdown文脈に依存するチャットだけを破棄し、ノート全体のAI結果は維持する。
      */
     fun applyReloadedBody(targetUri: String, loaded: NoteState.Success): Boolean {
         val latest = currentNote() ?: return false
         if (latest.targetUri != targetUri) return false
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
         sectionChat.cancelAndClear()
-        quiz.cancelAndClear()
         marginMemo.cancelAndClear()
         val applied = stateStore.applyReloadedBody(targetUri, loaded)
         // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
@@ -645,11 +642,6 @@ internal class NoteSessionCoordinator(
     fun searchByKeyword(query: String) = search.searchByKeyword(query)
     fun pickRandomInScope() = search.pickRandomInScope()
 
-    // ── クイズ（実装は QuizController）──────────────────────────────────────
-
-    fun generateQuiz(sourceLabel: String, context: String) = quiz.create(sourceLabel, context)
-    fun markQuizViewed() = quiz.markViewed()
-
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
     /** シートを開く。**ここでだけサイドカーを1件読む。** */
@@ -701,30 +693,18 @@ internal class NoteSessionCoordinator(
     fun restoreDistillOriginal() = distill.restoreOriginal()
     fun exportDistillOriginal(write: suspend (ByteArray) -> Unit) = distill.exportOriginal(write)
 
-    // ── セクション単位のAIチャット（実装は SectionChatController）────────────
+    // ── セクション単位の部分要約（実装は SectionChatController）────────────
 
-    /**
-     * 吹き出しから新しいセクション文脈を開くとき、前のセクションで作ったクイズを
-     * 持ち越さない（別セクションの古いクイズがシートに残り続ける問題の防止）。
-     * 既存セッションの再表示（sectionChat != null）ではクイズも保持する。
-     */
-    fun openSection(section: NoteSection) {
-        if (!stateStore.hasSectionChat()) quiz.cancelAndClear()
-        sectionChat.open(section)
-    }
+    fun openSection(section: NoteSection) = sectionChat.open(section)
 
     fun showSectionChat() = sectionChat.showSheet()
-    fun sendSectionMessage(text: String) = sectionChat.sendMessage(text)
     /** 要約エリアの再試行。開いているセクションのまま作り直す。 */
     fun retrySectionSummary() = sectionChat.retrySummary()
-    /** Q&Aログの再試行。答えを返せていない質問だけを作り直す。 */
-    fun retrySectionAnswer() = sectionChat.retryAnswer()
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
 
-    /** セッションの明示終了。文脈が閉じるので、そのセッションで作ったクイズも破棄する。 */
+    /** セッションの明示終了。 */
     fun endSectionChat() {
         sectionChat.cancelAndClear()
-        quiz.cancelAndClear()
         marginMemo.cancelAndClear()
     }
 }

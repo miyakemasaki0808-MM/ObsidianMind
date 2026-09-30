@@ -1,6 +1,5 @@
 package com.example.newproject.ui.theme
 
-import com.example.newproject.ui.screen.QuizScreen
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.geometry.Offset
@@ -156,7 +155,6 @@ internal val LightAppColors = AppColorScheme(
     accentGlass = Indigo,
     navBar = Indigo,
     navIndicator = Aqua,
-    vigilithHalo = Color.Transparent,
     buttonPrimary = Color(0xFFFF3D71),
     // 旧 #16B8A6 は白面で 2.46 しかなく、輪郭が見つからなかった（非文字基準は3:1）。
     // 色相173を保ったまま明度を下げて 3.76 へ。塗りは暗くするほど白面で見つけやすくなるが、
@@ -188,8 +186,7 @@ internal val LightAppColors = AppColorScheme(
 )
 
 /**
- * ダーク。土台は `QuizScreen` が単独で持っていた暗色配色（背景 #1A1C2E ／面 #2A2D45）。
- * 机上で新しい暗色を起こすより、既に実装され目視を通っている値から広げるほうが安全。
+ * ダーク。土台は背景 #1A1C2E ／面 #2A2D45 の暗色配色で、目視を通った値から広げている。
  *
  * 文字・アイコンは面に対して4.5:1、塗りボタンは3:1（輪郭）＋ラベル4.5:1を満たす。
  * 数値は `AppColorContrastTest` で固定している。
@@ -244,7 +241,6 @@ internal val DarkAppColors = AppColorScheme(
     accentGlass = Color(0xFF4A4480),
     navBar = Color(0xFF232640),
     navIndicator = Aqua,
-    vigilithHalo = LogoPurple.copy(alpha = 0.22f),
     // ピンクと緑は暗面でも基準を満たすため据え置き。IndigoだけAAを割る（2.83）ので
     // 色相245・彩度100を保ったまま明度を62%→75%へ上げた明るい版を使う。
     buttonPrimary = Color(0xFFFF3D71),
@@ -332,7 +328,6 @@ internal val AccentGlass: Color @Composable @ReadOnlyComposable get() = current.
 // -- ナビゲーション --
 internal val NavBar: Color @Composable @ReadOnlyComposable get() = current.navBar
 internal val NavIndicator: Color @Composable @ReadOnlyComposable get() = current.navIndicator
-internal val VigilithHalo: Color @Composable @ReadOnlyComposable get() = current.vigilithHalo
 
 // -- ボタン --
 // ボタン配色の3役ルール（これ以外の色をボタンに使わない）:
@@ -371,25 +366,3 @@ internal val ButtonOutlineOnGradient: Color
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient
 internal val ReadingGradient: Brush @Composable @ReadOnlyComposable get() = current.readingGradient
-
-// ---------------------------------------------------------------------------
-// 4. クイズ画面の暗色面
-//    QuizScreen は単独でダーク配色として作られており、テーマに追従しない
-//    （ダーク時は周囲と馴染み、ライト時は従来どおり暗いまま）。
-//    集中画面としての意図的な例外なので、明暗で置き換えず固定値のまま残す。
-// ---------------------------------------------------------------------------
-
-internal val QuizSurface = Color(0xFF1A1C2E)      // 画面背景
-internal val QuizPanel = Color(0xFF2A2D45)        // 問題カード・未選択の選択肢
-internal val QuizPanelDim = Color(0xFF222436)     // 選択されなかった選択肢
-internal val QuizOutline = Color(0xFF3D4070)      // 選択肢の枠
-internal val QuizCorrectPanel = Color(0xFF1B3A2A) // 正解の下地
-internal val QuizWrongPanel = Color(0xFF3A1B1B)   // 誤答の下地
-internal val OnQuizSurface = Color(0xFFEEEEFF)    // 本文
-internal val OnQuizAccent = Color(0xFFB0B8FF)     // 見出し・戻る導線
-internal val OnQuizMuted = Color(0xFFCCCCDD)      // 解説
-internal val OnQuizFaint = Color(0xFF777799)      // 補助
-internal val OnQuizDisabled = Color(0xFF555577)   // 選ばれなかった選択肢の文字
-internal val OnQuizLoading = Color(0xFFAAAAAA)    // 生成中メッセージ
-internal val OnQuizError = Color(0xFFFF6B6B)      // エラー文言（旧 #CC0000 は 2.86 で読めなかった）
-internal val OnQuizEmpty = Color(0xFFC3C9DA)      // 生成0件の案内（旧 #555555 は 2.25 で読めなかった）

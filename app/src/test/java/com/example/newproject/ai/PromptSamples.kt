@@ -7,7 +7,6 @@ import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteField
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.ReunionPassage
-import com.example.newproject.model.state.QuizFormat
 import java.io.File
 
 /**
@@ -60,14 +59,8 @@ internal object PromptSamples {
             "buildPickerPrompt" to
                 PromptBuilder.buildPickerPrompt(value, List(entries) { PickerCandidateLine("P0$it", "$MARK$it") }).text,
 
-            "buildQuizPrompt" to
-                PromptBuilder.buildQuizPrompt(value, excerpt, QuizFormat.ThreeChoice),
-
             "buildSectionSummaryPrompt" to
                 PromptBuilder.buildSectionSummaryPrompt(value, excerpt),
-
-            "buildSectionSuggestionsPrompt" to
-                PromptBuilder.buildSectionSuggestionsPrompt(value, excerpt),
 
             "buildReunionSelectionPrompt" to
                 PromptBuilder.buildReunionSelectionPrompt(
@@ -85,15 +78,7 @@ internal object PromptSamples {
             "buildCrystalPrompt" to
                 PromptBuilder.buildCrystalPrompt(
                     List(entries) { CrystalMaterial("$MARK$it.md", value, "$MARK$it", lastSeenAt = 0) }
-                ).text,
-
-            "buildSectionChatPrompt" to
-                PromptBuilder.buildSectionChatPrompt(
-                    sectionTitle = value,
-                    sectionExcerpt = excerpt,
-                    history = List(entries) { "User" to "$MARK$it" },
-                    question = value
-                )
+                ).text
         )
     }
 

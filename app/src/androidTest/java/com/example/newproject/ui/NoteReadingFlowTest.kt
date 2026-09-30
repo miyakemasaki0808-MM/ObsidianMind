@@ -695,13 +695,9 @@ class NoteReadingFlowTest {
             noteListState = listState,
             onSelectVault = {},
             onRandomNote = {},
-            onSuggestionTap = {},
             onRetrySectionSummary = {},
-            onRetrySectionAnswer = {},
             onDismissSectionChat = {},
             onEndSectionChat = {},
-            onGenerateQuiz = { _, _ -> },
-            onOpenQuizResult = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
             onOpenMarginMemo = {},
@@ -710,7 +706,7 @@ class NoteReadingFlowTest {
             onDismissMarginMemo = {},
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
-            onVigilithActionChanged = {}
+            onOpenSection = {}
         )
     }
 

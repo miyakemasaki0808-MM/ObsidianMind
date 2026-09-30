@@ -26,10 +26,9 @@ object NoteExcerptLimits {
      */
     const val RELATED = 800
     const val SECTION = 1500
-    const val QUIZ = 1200
 
     /**
-     * 再会カードの前後の要約。**前後を合わせた**文字数で、クイズの周辺本文と同じ量にしてある。
+     * 再会カードの前後の要約。**前後を合わせた**文字数で、ノート要約の抜粋と同じ量にしてある。
      *
      * 前後の片側が短ければ、余りをもう片側へ回す（→ `NoteSectionModel.passageAround`）。
      */

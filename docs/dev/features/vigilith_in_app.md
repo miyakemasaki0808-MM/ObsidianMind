@@ -1,10 +1,12 @@
-# アプリ内Vigilith（読書相手の身体化）
+# アプリ内Vigilith（読書相手の身体化・撤去済み）
 
-**状態:** Implemented — 稼働中。**実機での目視・操作確認だけが端末の認証ロックにより未完了**
-**最終検証:** 2026-08-12 / `521768b`（素材の実寸は未計測）
-**関連コード:** `ui/vigilith/VigilithMascot.kt` / `ui/vigilith/VigilithMode.kt` / `ui/AppScaffold.kt`（`VigilithHost`）
-**関連テスト:** `VigilithMascotMotionTest` / `VigilithPlacementTest` / `VigilithAccessibilityTest` / `VigilithStatusDerivationTest` / `VigilithModeTest`
-**正本:** この文書（キャラクター設定は [character_vigilith](character_vigilith.md)）
+**状態:** **Deprecated — 常駐マスコットは撤去済み（2026-09-30、オーナー判断）。** 読書中に本文の上へ浮き続け、
+「本質（ノートを読む）を妨げない」に反していた。オプションも置かない。**起動OPとアプリのアイコンは残る**（→ [opening_animation](opening_animation.md)）。
+部分要約の入口は見出しの要約ボタンへ移した（→ [部分要約](section_ai_chat.md)）。**この文書は判断の記録であって、現在の仕様ではない**
+**最終検証:** 2026-08-12 / `521768b`（撤去前の最後の突合）
+**関連コード:** なし（撤去済み）。共有していた部分要約の状態は `domain/SectionSummaryStatus.kt` へ移した
+**関連テスト:** なし（撤去済み）
+**正本:** この文書（**撤去した設計の記録として**。キャラクター設定は [character_vigilith](character_vigilith.md)）
 
 **対象領域:** マスコットの常駐・表示状態の導出・画面内配置
 
@@ -84,7 +86,7 @@ Vigilith を**ポイントを要求するペットではなく**、既存のAI�
 **永続化しない。**
 
 > **該当なし:** キャラクター専用の状態を持たない。表示状態は既存の
-> `SectionChatState` / `DistillState` / `QuizState` / `ReadingTraceCard` から**導出するだけ**で、
+> `SectionChatState` / `DistillState` / `ReadingTraceCard` から**導出するだけ**で、
 > `NoteUiState` にキャラクター用のフィールドを足していない。
 
 **ドラッグ位置だけが例外的にUI側の状態**だが、これも相対座標（0〜1）で持ち、画面変更のたび再計算する。

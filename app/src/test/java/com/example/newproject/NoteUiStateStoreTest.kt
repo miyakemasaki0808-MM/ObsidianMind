@@ -9,7 +9,6 @@ import com.example.newproject.model.SectionChatSlice
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
-import com.example.newproject.model.state.QuizState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
@@ -33,10 +32,6 @@ class NoteUiStateStoreTest {
 
         store.summaryWriter.update { SummaryState.Success("要約") }
         expected = expected.copy(summaryState = SummaryState.Success("要約"))
-        assertEquals(expected, store.value)
-
-        store.quizWriter.update { QuizState.Loading("クイズ対象") }
-        expected = expected.copy(quizState = QuizState.Loading("クイズ対象"))
         assertEquals(expected, store.value)
 
         store.annotationListWriter.update { AnnotationListState.Error("一覧失敗") }
@@ -85,7 +80,6 @@ class NoteUiStateStoreTest {
         val store = NoteUiStateStore(
             NoteUiState(
                 summaryState = SummaryState.Success("旧要約"),
-                quizState = QuizState.Loading("旧ノート"),
                 notePaperTone = NotePaperTone.Weathered
             )
         )
@@ -99,7 +93,6 @@ class NoteUiStateStoreTest {
         assertEquals(1, emissions.size)
         assertTrue(emissions.single().noteState is NoteState.Loading)
         assertTrue(emissions.single().summaryState is SummaryState.Idle)
-        assertTrue(emissions.single().quizState is QuizState.Idle)
         // 紙の地色は前のノートの放置期間で決まっているので、必ず現行のパネル色へ戻る。
         // 残ると、新しいノートを開いた瞬間だけ旧ノートの色で本文が出る。
         assertEquals(NotePaperTone.Fresh, emissions.single().notePaperTone)

@@ -9,9 +9,7 @@ import com.example.newproject.domain.NoteFieldAnswer
 import com.example.newproject.domain.parseNoteFieldAnswer
 import com.example.newproject.domain.buildNoteExcerpt
 import com.example.newproject.domain.markdown.buildNoteSectionModel
-import com.example.newproject.domain.parseQuizResponse
 import com.example.newproject.model.NoteExcerptLimits
-import com.example.newproject.model.state.QuizFormat
 import com.google.mlkit.genai.common.FeatureStatus
 import com.google.mlkit.genai.common.internal.GenAiUtils
 import kotlinx.coroutines.runBlocking
@@ -37,7 +35,7 @@ import com.example.newproject.domain.parseCrystalResponse
  *
  * ## 何を主張し、何を主張しないか
  *
- * **主張する:** 下のテストで実生成を通した経路（分野判定・要約・クイズ・関連ノート・
+ * **主張する:** 下のテストで実生成を通した経路（分野判定・要約・関連ノート・
  * セクション要約・再会カードの前後の要約）で `generate()` が空でない応答を返すこと。
  * SDK制約・API互換の破壊のような**全経路に共通する故障**はここで落ちる。
  *
@@ -139,29 +137,6 @@ class OnDeviceGenerationTest {
 
         log("要約", response)
         assertGenerated("要約", response)
-    }
-
-    /**
-     * クイズは**構造化された出力**を本番パーサへ渡す唯一の経路。
-     *
-     * 書式が一致するかは assert しない（非決定的）。パース結果は logcat へ出す。
-     */
-    @Test
-    fun クイズプロンプトで生成が返りパーサが実出力を処理できる() = runBlocking<Unit> {
-        requireNanoAvailable()
-
-        val prompt = PromptBuilder.buildQuizPrompt(
-            sourceLabel = NOTE_TITLE,
-            excerpt = buildNoteExcerpt(NOTE_BODY, NoteExcerptLimits.QUIZ),
-            format = QuizFormat.TrueFalse
-        )
-        val response = client.generate(prompt)
-        log("クイズ", response)
-        assertGenerated("クイズ", response)
-
-        // 例外を投げないことだけを assert する。件数は観測値として残す。
-        val cards = parseQuizResponse(response, QuizFormat.TrueFalse)
-        Log.i(TAG, "クイズのパース結果: ${cards.size}件" + if (cards.isEmpty()) "（書式不一致）" else "")
     }
 
     /** 関連ノートは候補IDだけを返させる経路。プロンプトの指示が強く、長さも他と違う。 */
@@ -278,9 +253,7 @@ class OnDeviceGenerationTest {
         val UNCOVERED_BUILDERS = setOf(
             "buildReunionSelectionPrompt",
             "buildDistillPrompt",
-            "buildPickerPrompt",
-            "buildSectionSuggestionsPrompt",
-            "buildSectionChatPrompt"
+            "buildPickerPrompt"
         )
 
         const val NOTE_TITLE = "習慣について"

@@ -145,8 +145,6 @@ internal class AppColorScheme(
     // 下部ナビ／レール
     val navBar: Color,
     val navIndicator: Color,
-    // Vigilithの背後に敷く淡い光。ライトは透明（不要）、ダークだけ効かせる。
-    val vigilithHalo: Color,
     // ボタン（塗りとラベルは必ず対で持つ）
     val buttonPrimary: Color,
     val buttonSecondary: Color,

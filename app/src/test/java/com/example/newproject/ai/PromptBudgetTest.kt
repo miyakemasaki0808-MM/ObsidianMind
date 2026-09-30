@@ -46,48 +46,6 @@ class PromptBudgetTest {
         }
     }
 
-    @Test
-    fun `削られても質問は残る`() {
-        val chat = PromptBuilder.buildSectionChatPrompt(
-            sectionTitle = HUGE_VALUE,
-            sectionExcerpt = NoteExcerpt(HUGE_VALUE, isAbridged = true),
-            history = List(HUGE_ENTRIES) { "User" to HUGE_VALUE },
-            question = QUESTION
-        )
-        assertTrue("質問が削られている", chat.endsWith("New question:\n$QUESTION"))
-    }
-
-    @Test
-    fun `会話履歴は古い側から落ちる`() {
-        val turns = (1..40).map { "User" to "質問$it".repeat(20) }
-        val prompt = PromptBuilder.buildSectionChatPrompt(
-            sectionTitle = "節",
-            sectionExcerpt = NoteExcerpt("本文", isAbridged = false),
-            history = turns,
-            question = QUESTION
-        )
-        val history = prompt.substringAfter("Conversation so far:\n").substringBefore("\n\nNew question:")
-
-        assertTrue("直近の発言が落ちている", history.contains("質問40"))
-        assertFalse("古い発言が残っている", history.contains("質問1質問1"))
-        assertTrue(
-            "履歴の取り分を超えている: ${history.length}",
-            history.length <= PromptLimits.SECTION_CHAT_HISTORY_CHARACTERS
-        )
-    }
-
-    /** 履歴が空のときの文言は据え置き（本文の言語に関わらず読める形）。 */
-    @Test
-    fun `履歴が無いときは（なし）と書く`() {
-        val prompt = PromptBuilder.buildSectionChatPrompt(
-            sectionTitle = "節",
-            sectionExcerpt = NoteExcerpt("本文", isAbridged = false),
-            history = emptyList(),
-            question = QUESTION
-        )
-        assertTrue(prompt.contains("Conversation so far:\n（なし / none）"))
-    }
-
     /**
      * **上限を「新しい制約」にしない。** 現行設計が意図する最大構成（関連ノート＝
      * 抜粋 [NoteExcerptLimits.RELATED] ＋候補ブロック `RELATED_CANDIDATES_BUDGET`）が
@@ -187,6 +145,5 @@ class PromptBudgetTest {
     private companion object {
         val HUGE_VALUE = "${PromptSamples.MARK}長い値".repeat(4_000)
         const val HUGE_ENTRIES = 200
-        const val QUESTION = "このセクションの結論は何ですか？"
     }
 }

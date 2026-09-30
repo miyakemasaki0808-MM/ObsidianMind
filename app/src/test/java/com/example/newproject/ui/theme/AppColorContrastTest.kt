@@ -573,29 +573,6 @@ class AppColorContrastTest {
         )
     }
 
-    // -- クイズ画面（テーマに追従しない固定の暗色配色） -------------------------
-
-    @Test
-    fun `クイズ画面の文字は暗面でAA基準を満たす`() {
-        assertAtLeast(4.5, contrast(OnQuizSurface, QuizPanel), "OnQuizSurface（QuizPanel上）")
-        assertAtLeast(4.5, contrast(OnQuizAccent, QuizSurface), "OnQuizAccent（QuizSurface上）")
-        assertAtLeast(4.5, contrast(OnQuizMuted, QuizPanel), "OnQuizMuted（QuizPanel上）")
-        assertAtLeast(4.5, contrast(OnQuizLoading, QuizSurface), "OnQuizLoading（QuizSurface上）")
-        // 以前は #CC0000（2.86）と #555555（2.25）で読めなかった箇所。
-        assertAtLeast(4.5, contrast(OnQuizError, QuizSurface), "OnQuizError（QuizSurface上）")
-        assertAtLeast(4.5, contrast(OnQuizEmpty, QuizSurface), "OnQuizEmpty（QuizSurface上）")
-    }
-
-    @Test
-    fun `正解と誤答の色は暗面で区別できる`() {
-        assertAtLeast(3.0, contrast(SuccessMark_ForTest, QuizPanel), "正解")
-        assertAtLeast(3.0, contrast(FailureMark_ForTest, QuizSurface), "誤答")
-        assertNotEquals(SuccessMark_ForTest, FailureMark_ForTest)
-    }
-
-    private val SuccessMark_ForTest = LightAppColors.successMark
-    private val FailureMark_ForTest = LightAppColors.failureMark
-
     // -- テーマ構造 -----------------------------------------------------------
 
     @Test

@@ -39,10 +39,7 @@ import org.junit.runner.RunWith
  *
  * ## ここで扱わないもの
  *
- * **`VigilithHost` の位置（`rememberSaveable`）の復元は入れていない。**
- * 検証にはドラッグ操作と座標の突き合わせが要り、実測のぶれで
- * 壊れていないのに赤くなりやすい。**入れるなら別の観測方法を先に決める**
- * （位置そのものではなく、保存キーの往復を見る等）。
+ * 画面上に位置を保存して復元する部品は、いまは無い。
  */
 @RunWith(AndroidJUnit4::class)
 class ActivityRecreationTest {

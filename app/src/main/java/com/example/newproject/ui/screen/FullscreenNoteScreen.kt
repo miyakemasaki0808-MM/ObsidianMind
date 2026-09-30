@@ -7,8 +7,8 @@ import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
-import com.example.newproject.ui.vigilith.VigilithActionStatus
-import com.example.newproject.ui.vigilith.fullscreenAiStatus
+import com.example.newproject.domain.SectionSummaryStatus
+import com.example.newproject.domain.sectionSummaryStatus
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -137,8 +137,8 @@ internal fun FullscreenNoteScreen(
     // 通常表示で依頼された「飛び越した画像」の測定を、全画面でも引き継いで測る（→ NoteImageMeasurements）。
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
-    // 要約/回答の状態（通常FABと同じ導出）に、クイズ状態を合成した最小インジケータ用ステータス。
-    val combinedStatus = fullscreenAiStatus(activeChat, uiState.quizState)
+    // 最小インジケータの状態は、通常画面と同じ導出から取る。
+    val combinedStatus = sectionSummaryStatus(activeChat)
 
     // 全画面はパネルが画面いっぱいに広がるので、下地も同じ紙の色にする。
     // ここだけ Panel のままだと、縁に現行色の額縁が残る。
@@ -162,7 +162,7 @@ internal fun FullscreenNoteScreen(
             // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
             // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
         ) { leaveWith(onExit) }
-        // 読書中もAIの状態（要約・クイズ）が分かるよう最小インジケータを残す。
+        // 読書中もAIの状態（部分要約）が分かるよう最小インジケータを残す。
         if (activeChat != null) {
             FullscreenAiFab(status = combinedStatus, onTap = { leaveWith(onOpenSummary) })
         }
@@ -175,20 +175,20 @@ internal fun FullscreenNoteScreen(
  */
 @Composable
 private fun BoxScope.FullscreenAiFab(
-    status: VigilithActionStatus,
+    status: SectionSummaryStatus,
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val currentOnTap by rememberUpdatedState(onTap)
     val fabDescription = when (status) {
-        VigilithActionStatus.Working -> "AI生成中"
-        VigilithActionStatus.Ready -> "AI生成完了。タップで開く"
-        VigilithActionStatus.Error -> "AIエラー。タップで確認"
-        VigilithActionStatus.Idle -> "AIメニュー。タップで開く"
+        SectionSummaryStatus.Working -> "AI生成中"
+        SectionSummaryStatus.Ready -> "AI生成完了。タップで開く"
+        SectionSummaryStatus.Error -> "AIエラー。タップで確認"
+        SectionSummaryStatus.Idle -> "AIメニュー。タップで開く"
     }
     var showLabel by remember { mutableStateOf(false) }
     LaunchedEffect(status) {
-        showLabel = status == VigilithActionStatus.Ready || status == VigilithActionStatus.Error
+        showLabel = status == SectionSummaryStatus.Ready || status == SectionSummaryStatus.Error
         if (showLabel) {
             delay(3000)
             showLabel = false
@@ -210,7 +210,7 @@ private fun BoxScope.FullscreenAiFab(
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Text(
-                    text = if (status == VigilithActionStatus.Error) "! 確認して" else "✓ 完了",
+                    text = if (status == SectionSummaryStatus.Error) "! 確認して" else "✓ 完了",
                     color = OnVibrant,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -241,14 +241,14 @@ private fun BoxScope.FullscreenAiFab(
             contentAlignment = Alignment.Center
         ) {
             when (status) {
-                VigilithActionStatus.Working -> CircularProgressIndicator(
+                SectionSummaryStatus.Working -> CircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
                     color = OnVibrant,
                     strokeWidth = 2.dp
                 )
-                VigilithActionStatus.Ready -> Text("✓", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                VigilithActionStatus.Error -> Text("!", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                VigilithActionStatus.Idle -> Text("💬", fontSize = 18.sp)
+                SectionSummaryStatus.Ready -> Text("✓", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                SectionSummaryStatus.Error -> Text("!", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                SectionSummaryStatus.Idle -> Text("💬", fontSize = 18.sp)
             }
         }
     }

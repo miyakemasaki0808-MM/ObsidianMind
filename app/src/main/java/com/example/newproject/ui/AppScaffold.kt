@@ -1,8 +1,5 @@
 package com.example.newproject.ui
 
-import com.example.newproject.ui.vigilith.VigilithNoteAction
-import com.example.newproject.ui.vigilith.VigilithPresentation
-import com.example.newproject.ui.vigilith.VigilithHost
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -50,7 +47,7 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 /**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
- * タブ（note/related/ai）以外のルート（quiz等）ではバー/レールを出さない。
+ * タブ（note/related/ai）以外のルート（全画面・冊子など）ではバー/レールを出さない。
  *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
@@ -62,9 +59,6 @@ internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
     snackbarHostState: SnackbarHostState,
-    vigilithPresentation: VigilithPresentation,
-    vigilithNoteAction: VigilithNoteAction?,
-    onVigilithTap: (() -> Unit)?,
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -75,7 +69,7 @@ internal fun AppScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         when {
             !isTabRoute -> {
-                // 全画面ルート（Q&A等）はバーなしで表示。
+                // 全画面ルート（全画面ノート・冊子など）はバーなしで表示。
                 content(Modifier.fillMaxSize())
             }
             useRail -> {
@@ -123,14 +117,6 @@ internal fun AppScaffold(
                 }
             }
         }
-
-        VigilithHost(
-            presentation = vigilithPresentation,
-            useNavigationRail = useRail,
-            isSnackbarVisible = snackbarHostState.currentSnackbarData != null,
-            noteAction = vigilithNoteAction,
-            onTap = onVigilithTap
-        )
 
         SnackbarHost(
             hostState = snackbarHostState,

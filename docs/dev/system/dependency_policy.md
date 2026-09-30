@@ -92,7 +92,7 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 
 | グループ | 対象 | 上げ方 | 確認 |
 |---|---|---|---|
-| **ML Kit GenAI** | `genai-prompt` | **必ず単独**。最もリスクが高い | AI 9経路（要約・補記・クイズ・関連ノート・セクションチャット・蒸留・読書痕跡・検索ピッカー・**分野判定**）を実機で一巡。**上げる前にAARを展開してAPIの制約を確認する**（`maxOutputTokens` の 1〜256 で全AI生成が落ちた前例） |
+| **ML Kit GenAI** | `genai-prompt` | **必ず単独**。最もリスクが高い | AI経路（要約・関連ノート・部分要約・蒸留・再会カード・検索ピッカー・**分野判定**・結晶）を実機で一巡。**上げる前にAARを展開してAPIの制約を確認する**（`maxOutputTokens` の 1〜256 で全AI生成が落ちた前例） |
 | **Compose BOM** | `compose-bom` とその管理下 | **BOMごと1PR**。個別に上げない（BOMの意味が消える） | 全画面の描画・テーマ切替・OPアニメーション |
 | **AndroidX Test** | `espresso-core`・`ext:junit` | 単独。**本番依存に影響しない唯一の枠** | `connectedDebugAndroidTest` が緑になること |
 | **AndroidX 本体** | `core-ktx`・`activity-compose`・`lifecycle-*`・`navigation-compose`・`window` | 機能ごとに分ける（navigationは遷移、windowはサイズクラス） | 該当する導線の実機確認 |
@@ -231,7 +231,7 @@ ADR-0002 は「ネットワーク権限を宣言しない」と書いてクラ�
 **危ないのは既定値のほうである。** 現行コードは `maxOutputTokens` を明示設定していないため、
 **依存の1行を上げるだけで生成の挙動が変わる。** 影響は同時に複数へ出る。
 
-- 応答長（クイズ・補記など長出力の経路）
+- 応答長（再会カードの前後の要約など長出力の経路）
 - 推論時間 → 60秒タイムアウトの余裕
 - `AiTruncatedException`（`MAX_TOKENS` 検知）の発生頻度
 - 生成Mutexの占有時間 → 他機能の待ち時間
@@ -281,16 +281,16 @@ javap -c -p -cp out/classes.jar 'com.google.mlkit.genai.prompt.GenerateContentRe
 | 追加 | このアプリにとっての意味 |
 |---|---|
 | `SystemInstruction`（＋ `isSystemPromptAvailable()`） | 指示文と本文を分離できる。**抜粋の注意書きを本文予算の内側から払う構造**（→ [ai_input_excerpt](ai_input_excerpt.md) §9.3）を見直す材料になる。ただしトークン総量が減るわけではない |
-| 構造化出力 `GenerateTypedContentRequest<T>`（＋ `isStructuredOutputFeatureAvailable()`） | `QuizResponseParser` / `DistillResponseParser` のような**自前の壊れやすいパーサ**を置き換えうる。ただし別途大きな設計判断が要る |
+| 構造化出力 `GenerateTypedContentRequest<T>`（＋ `isStructuredOutputFeatureAvailable()`） | `DistillResponseParser` / `CrystalResponseParser` のような**自前の壊れやすいパーサ**を置き換えうる。ただし別途大きな設計判断が要る |
 | thinking mode（`enableThinking`） | 未評価 |
-| マルチターン `Content` | セクションチャットの履歴を文字列連結ではなく構造で渡せる |
+| マルチターン `Content` | 会話の履歴を文字列連結ではなく構造で渡せる。会話を持つ経路は質問の撤去（2026-09-30）で無くなった |
 
 **「上げない」と判断した理由（今回時点）:** 上記の価値はいずれも**それ自体が独立した作業**であり、
 依存を上げるだけでは回収できない。一方で既定値の変化は上げた瞬間に効くので、
 **リスクだけ先に引き受ける形になる。** 上げるのは、`maxOutputTokens` をどう扱うかを決め、
 AI 9経路の実機一巡を回せるタイミングにする。
 **契機の候補は構造化出力である** — 上の表のうち、自前の壊れやすいパーサ3本
-（`QuizResponseParser`・`DistillResponseParser`・`parseNoteFieldAnswer`）を**置き換えうる**のはこれだけで、
+（`DistillResponseParser`・`CrystalResponseParser`・`parseNoteFieldAnswer`）を**置き換えうる**のはこれだけで、
 ほかは新しい作業を足す側にある。
 
 ### 計測の基準線が取れる状態になった

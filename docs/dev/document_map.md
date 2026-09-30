@@ -78,9 +78,9 @@
 
 ### 機能（`features/`）
 
-**内訳は機能仕様22本＋参照シート1本。**
+**内訳は機能仕様23本＋参照シート1本。**
 
-- **機能仕様22本**は [`_template.md`](features/_template.md) の12節に揃っている。
+- **機能仕様23本**は [`_template.md`](features/_template.md) の12節に揃っている。
   **節の存在と、空でないことの両方を `AdrShapeTest` が固定する** —
   埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く
 - **参照シート1本**（[character_vigilith](features/character_vigilith.md)）は12節に従わない。
@@ -94,24 +94,25 @@
 | [note_summary.md](features/note_summary.md) | ノート要約（主軸のAI機能・自動起動） |
 | [ai_picker.md](features/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
-| [section_ai_chat.md](features/section_ai_chat.md) | セクションAI（浮遊吹き出し。**クイズの入口でもある**） |
+| [section_ai_chat.md](features/section_ai_chat.md) | 部分要約（今読んでいる節の要約シート）。**質問とクイズは撤去済み** |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」）。**廃止済み・記録として残す** |
 | [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（ひとことの置き換え。**AIを呼ばない唯一のReflect機能**）。実装済み・実機検証待ち |
 | [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
-| [quiz.md](features/quiz.md) | クイズ（Q&A。**未確認管理を持つ唯一の機能**） |
+| [quiz.md](features/quiz.md) | クイズ（Q&A）。**撤去済み・判断の記録として残す** |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
 | [note_age_paper.md](features/note_age_paper.md) | ノートの年代を紙の地色で伝える |
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
-| [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（読書相手の身体化） |
+| [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（常駐マスコット）。**撤去済み・判断の記録として残す** |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
+| [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置く。**Draft・未実装** |
 
 ### 基盤（`system/`）
 
@@ -119,7 +120,7 @@
 |---|---|
 | [architecture.md](system/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
 | [saf_boundary_gateway.md](system/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
-| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路8本**へ渡す本文の作り方＋**完成プロンプト12本**を閉じる上限） |
+| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路4本**へ渡す本文の作り方＋**完成プロンプト9本**を閉じる上限） |
 | [ai_quality_measurement.md](system/ai_quality_measurement.md) | AI出力の採点（要約が原文のどこを落としたか）。**測っていないものが多いので、使う前に読む** |
 | [background_ai_ux.md](system/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
@@ -247,7 +248,7 @@
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](system/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](system/theme_and_ui_refactor.md) → [dark_mode](features/dark_mode.md) |
 | **情報を色・形・動きで伝える変更**（装飾を足す・分類を見せる・演出を足す） | **[bearing_channels](system/bearing_channels.md)（どのチャネルが何を意味するか）** → [ui_design_principles](system/ui_design_principles.md) |
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
-| `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [vigilith_in_app](features/vigilith_in_app.md) → [opening_animation](features/opening_animation.md) |
+| `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [opening_animation](features/opening_animation.md)（残っているのは起動OPの動きだけ） |
 | `controller/CrystalController.kt`・`data/Crystal*.kt`・`ui/screen/Crystal*.kt` | [reflect_crystal](features/reflect_crystal.md)（試す条件・生成と保存の寿命・再会カードとの順序） |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |

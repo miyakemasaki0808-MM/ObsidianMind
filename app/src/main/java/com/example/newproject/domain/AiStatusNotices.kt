@@ -12,7 +12,7 @@ import com.example.newproject.model.state.AiStatusNotice
  * ここは「言うとしたら何を言うか」だけを答える全域関数に保つ。沈黙の判断を混ぜると、
  * 同じ状態に対する文言が呼び出し側ごとにまた散らばる。
  *
- * @param featureLabel 「蒸留」「Q&A」など、文中へそのまま埋め込める機能名
+ * @param featureLabel 「蒸留」「この部分の要約」など、文中へそのまま埋め込める機能名
  * @param canStartDownload 呼び出し側がその場でモデルDLを開始できるか。
  *   **false なら `NeedsDownload` に `Download` を添えない** — 添えると
  *   「開始してください」と言いながら**開始する操作が存在しない**案内になる

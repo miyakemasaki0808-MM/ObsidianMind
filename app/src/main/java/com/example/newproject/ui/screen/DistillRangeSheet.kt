@@ -125,8 +125,7 @@ internal fun DistillRangeSheet(
 }
 
 /**
- * シートの中身。**`ModalBottomSheet` を開かずに描画を検査するため**に切り出してある
- * （[QuizActionSection] と同じ理由）。
+ * シートの中身。**`ModalBottomSheet` を開かずに描画を検査するため**に切り出してある。
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
