@@ -22,6 +22,7 @@ import androidx.activity.viewModels
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -134,6 +135,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val windowSizeClass = calculateWindowSizeClass(this)
+                val marginPaneOpen by viewModel.marginPaneOpen.collectAsStateWithLifecycle()
                 val navController = rememberNavController()
                 val snackbarHostState = remember { SnackbarHostState() }
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
@@ -189,6 +191,11 @@ class MainActivity : ComponentActivity() {
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 },
                                 onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
+                                onRevealMarginMemo = { viewModel.revealMarginMemoSheet() },
+                                onLoadMarginMemoForPane = { viewModel.loadMarginMemoForPane() },
+                                marginPaneOpen = marginPaneOpen,
+                                onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
+                                expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
                                 onSaveMarginMemo = { text, section ->
                                     viewModel.saveMarginMemo(text, section)
                                 },

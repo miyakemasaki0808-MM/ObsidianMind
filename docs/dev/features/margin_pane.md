@@ -1,10 +1,11 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **Draft — 未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **Draft — 段1だけ実装済み・実機未確認。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
-**最終検証:** —（未実装のため、実装と突き合わせた日は無い。器を整えただけで日付を進めない）
-**関連コード:** 予定 — `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/SectionChatSheet.kt` / `controller/MarginMemoController.kt` / `controller/SectionChatController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `data/AppPreferences.kt` / `domain/MarginMemoComposer.kt`
-**関連テスト:** 予定 — `ReaderLayoutTest` / `MarginMemoControllerTest` / `SectionChatControllerTest` / `NoteSessionCoordinatorTest`
+**最終検証:** —（段1は実機で確かめていない。実機と突き合わせるまで日付を進めない）
+**関連コード:** 段1 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `data/AppPreferences.kt`。
+予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt` / `controller/ReadingTraceController.kt` / `domain/MarginMemoComposer.kt`
+**関連テスト:** 段1 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest`。予定 — `SectionChatControllerTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -369,6 +370,23 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   | 4 | シートの統合、部分要約の3節分の保持と要求の扱い |
   | 5 | 2本の並べ読み |
 
+- **段1で入れたものと、次の段へ残したもの。** 段1は並べ方と ✎ だけを変え、中身は今の余白メモのままにした。
+  そのため次の振る舞いは、正しい形が入る段まで暫定である
+  - **書きかけは画面側に置いた。** ノートの Uri を鍵に `rememberSaveable` で持ち、シートとペインの両方へ渡す。
+    ✎ でペインをしまう・Fold を閉じてシートへ移る・画面の作り直しでは残るが、ノートを替えると捨て、全画面との往復もまたがない。
+    書き込み先の固定も無く、置いた時点の節へ書く。ViewModel 側の一組（§6.1）へ移すのは段2
+  - **窓の切り替わりでは文字だけを引き継ぐ。** 入力のフォーカスは引き継がない（段2）。
+    出せる窓から出せない窓へ移ってシートへ移すのは、書きかけがあるときだけにした
+  - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
+    まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
+    並べ方はその間だけ、折り目の無い窓・左端0として仮に決まる
+  - **メモはペインが出たときに1回読み、読めなかったときだけペインを出し直すと読み直す。**
+    スマホのシートは今までどおり開くたびに読む。読む時期をそろえるのは段2
+  - **再会カードの「前回のメモを見る」は、ペインが出ていれば何もしない。** メモは横に並んでいるので、シートを重ねない。
+    該当するメモまで送るのは段2
+  - **見出しの要約ボタンは、今の要約のシートを開く。** ペインをこのノートの間だけ出して要約を始めるのは段4
+  - **ペインの枠は、ノートを表示しているときと読み込み中だけ出す。** ノートが無いときは置くものが無い。
+    読み込み中も出すのは、ノートを引くたびに並びが揺れないようにするため
 - **実機でしか決まらない前提が3つある。** 平らに開いた Fold で折り目が報告されるか（されなければ本文領域の中央で割る）、キーボードを除いた大きさで判定できるか、主画面と併存するシートの振る舞い
 - **正本の食い違いは、その振る舞いを変える段で直す。** 先に書き換えると、正本が今のアプリと食い違う。
 

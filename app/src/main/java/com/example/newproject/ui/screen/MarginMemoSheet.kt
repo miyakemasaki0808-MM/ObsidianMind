@@ -29,7 +29,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +67,8 @@ import java.util.Locale
 @Composable
 internal fun MarginMemoSheet(
     state: MarginMemoState,
+    draft: String,
+    onDraftChange: (String) -> Unit,
     onSave: (String) -> Unit,
     onDelete: (MarginMemo) -> Unit,
     onDismiss: () -> Unit
@@ -77,7 +79,13 @@ internal fun MarginMemoSheet(
         sheetState = sheetState,
         scrimColor = BottomSheetDefaults.ScrimColor.copy(alpha = 0.5f)
     ) {
-        MarginMemoSheetContent(state = state, onSave = onSave, onDelete = onDelete)
+        MarginMemoSheetContent(
+            state = state,
+            draft = draft,
+            onDraftChange = onDraftChange,
+            onSave = onSave,
+            onDelete = onDelete
+        )
     }
 }
 
@@ -86,15 +94,21 @@ internal fun MarginMemoSheet(
  * 入力の振る舞いを検査するため**（調整シートと同じ切り分け）。
  *
  * 連続して置けること自体がこの機能の要点なので、**下書きの扱いはUIテストで固定する。**
+ *
+ * **書きかけ [draft] は呼び出し側が持つ。** シートとペインのどちらで出しても同じ中身を見せ、
+ * ✎ でペインをしまっても、Fold を閉じてシートへ移っても、書きかけが残るようにするため。
  */
 @Composable
 internal fun MarginMemoSheetContent(
     state: MarginMemoState,
+    draft: String,
+    onDraftChange: (String) -> Unit,
     onSave: (String) -> Unit,
-    onDelete: (MarginMemo) -> Unit
+    onDelete: (MarginMemo) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    // **下書きは回転やプロセス復元をまたいで保つ。** 書きかけを警告なく消さない。
-    var draft by rememberSaveable { mutableStateOf("") }
+    val currentDraft by rememberUpdatedState(draft)
+    val currentOnDraftChange by rememberUpdatedState(onDraftChange)
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
 
     val ready = state as? MarginMemoState.Ready
@@ -115,14 +129,14 @@ internal fun MarginMemoSheetContent(
         // 開き直しで件数が戻ることがあるので、**増えたときだけ**消費する。
         if (accepted > seenAccepted) {
             // 待っているあいだに書き直していたら消さない。
-            if (draft == submitted) draft = ""
+            if (currentDraft == submitted) currentOnDraftChange("")
             submitted = null
         }
         seenAccepted = accepted
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 360.dp)
             .verticalScroll(rememberScrollState())
@@ -139,7 +153,7 @@ internal fun MarginMemoSheetContent(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = draft,
-                onValueChange = { draft = it },
+                onValueChange = onDraftChange,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
                 minLines = 2,

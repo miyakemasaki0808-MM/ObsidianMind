@@ -134,6 +134,9 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
+    private val mutableMarginPaneOpen = MutableStateFlow(preferences.marginPaneOpen)
+    val marginPaneOpen: StateFlow<Boolean> = mutableMarginPaneOpen.asStateFlow()
+
     /**
      * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
@@ -189,6 +192,16 @@ class NoteViewModel internal constructor(
         if (mutableNotePaperAging.value == enabled) return
         preferences.notePaperAging = enabled
         mutableNotePaperAging.value = enabled
+    }
+
+    /**
+     * 余白ペインの開閉。**ノートの状態ではなく端末の設定**なので `NoteUiState` に入れない
+     * （ノートを替えても、Fold を閉じて開いても保つ → features/margin_pane.md §5.4）。
+     */
+    fun setMarginPaneOpen(open: Boolean) {
+        if (mutableMarginPaneOpen.value == open) return
+        preferences.marginPaneOpen = open
+        mutableMarginPaneOpen.value = open
     }
 
     private fun restoreVault() {

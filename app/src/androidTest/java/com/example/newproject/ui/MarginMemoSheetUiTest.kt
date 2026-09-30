@@ -60,12 +60,16 @@ class MarginMemoSheetUiTest {
     fun 置いた後も同じシートで続けて書ける() {
         val saved = mutableListOf<String>()
         composeRule.setContent {
+            // 書きかけは呼び出し側が持つ（本番ではノート画面）。
+            var draft by remember { mutableStateOf("") }
             var state by remember(saved) {
                 mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
             }
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = draft,
+                    onDraftChange = { draft = it },
                     onSave = { text ->
                         saved += text
                         // 実際の Controller と同じく、置けたら一覧へ足して status を進める。
@@ -102,12 +106,16 @@ class MarginMemoSheetUiTest {
     fun 満杯で置けなかった入力は原文のまま残る() {
         val long = "あ".repeat(400)
         composeRule.setContent {
+            // 書きかけは呼び出し側が持つ（本番ではノート画面）。
+            var draft by remember { mutableStateOf("") }
             var state by remember {
                 mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
             }
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = draft,
+                    onDraftChange = { draft = it },
                     onSave = {
                         // 受理していないので acceptedCount は増やさない。
                         state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Full)
@@ -127,9 +135,13 @@ class MarginMemoSheetUiTest {
     @Test
     fun 読み込み中は置くを押せない() {
         composeRule.setContent {
+            // 書きかけは呼び出し側が持つ（本番ではノート画面）。
+            var draft by remember { mutableStateOf("") }
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = MarginMemoState.Loading,
+                    draft = draft,
+                    onDraftChange = { draft = it },
                     onSave = { error("読み込み中に保存を要求した") },
                     onDelete = {}
                 )
@@ -150,6 +162,8 @@ class MarginMemoSheetUiTest {
     fun 保存待ちに書いた下書きは前の要求の完了で消えない() {
         lateinit var finish: (MemoSaveStatus) -> Unit
         composeRule.setContent {
+            // 書きかけは呼び出し側が持つ（本番ではノート画面）。
+            var draft by remember { mutableStateOf("") }
             var state by remember {
                 mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
             }
@@ -167,6 +181,8 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = draft,
+                    onDraftChange = { draft = it },
                     onSave = { _ ->
                         state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Saving)
                     },

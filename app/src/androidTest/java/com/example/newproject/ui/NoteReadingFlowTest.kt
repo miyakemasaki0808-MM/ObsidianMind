@@ -701,6 +701,12 @@ class NoteReadingFlowTest {
             onOpenBooklet = {},
             onEnterFullscreen = {},
             onOpenMarginMemo = {},
+            onRevealMarginMemo = {},
+            onLoadMarginMemoForPane = {},
+            // 読書の流れだけを見るので、どの端末でも縦に積む並べ方に固定する。
+            marginPaneOpen = false,
+            onSetMarginPaneOpen = {},
+            expandedWidth = false,
             onSaveMarginMemo = { _, _ -> },
             onDeleteMarginMemo = {},
             onDismissMarginMemo = {},

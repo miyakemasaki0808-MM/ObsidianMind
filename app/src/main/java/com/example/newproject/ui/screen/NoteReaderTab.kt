@@ -42,7 +42,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -55,6 +60,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -65,6 +77,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
@@ -106,6 +119,15 @@ internal fun NoteReaderTab(
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
     onOpenMarginMemo: () -> Unit,
+    /** ペインの書きかけをシートへ移す。読み直さない。 */
+    onRevealMarginMemo: () -> Unit,
+    /** 余白ペインが出ている間、このノートのメモを持たせる。読み込み済みなら何もしない。 */
+    onLoadMarginMemoForPane: () -> Unit,
+    /** 余白ペインの開閉の設定。端末に残り、再起動をまたいで保つ。 */
+    marginPaneOpen: Boolean,
+    onSetMarginPaneOpen: (Boolean) -> Unit,
+    /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
+    expandedWidth: Boolean,
     onSaveMarginMemo: (text: String, sectionTitle: String?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     onDismissMarginMemo: () -> Unit,
@@ -147,8 +169,24 @@ internal fun NoteReaderTab(
 
     val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
+    // **書きかけはシートとペインの外で持つ。** ✎ でペインをしまっても、Fold を閉じてシートへ移っても残る。
+    // ノートが替われば捨てる — 残すと、前のノートに書きかけた言葉を次のノートへ置けてしまう。
+    var memoDraft by rememberSaveable(successState?.targetUri) { mutableStateOf("") }
+    val foldInfo = rememberReaderFold()
+    // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
+    var regionStartDp by remember { mutableStateOf<Float?>(null) }
+    val density = LocalDensity.current
+    val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
+        when (toggle) {
+            MarginToggle.HideSheet -> onDismissMarginMemo()
+            MarginToggle.ClosePane -> onSetMarginPaneOpen(false)
+            MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
+            MarginToggle.ShowSheet -> onOpenMarginMemo()
+        }
+    }
+
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みで食い違わせない）。
-    val controls: @Composable ColumnScope.() -> Unit = {
+    val controls: @Composable ColumnScope.(memoToggle: MarginToggle) -> Unit = { memoToggle ->
         // 未選択時はVault案内、通常時はコンセプト文を出す。
         GradientHeader(
             title = "Rediscover",
@@ -156,7 +194,7 @@ internal fun NoteReaderTab(
             else "過去のノートから、思考をひとつ。",
             // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
             // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
-            // （→ features/reflect_margin_memo.md 判断7）。
+            // （→ features/reflect_margin_memo.md 判断7）。ペインを出せる窓では、✎ がペインの開閉を兼ねる。
             trailing = if (hasNote) {
                 {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -170,8 +208,8 @@ internal fun NoteReaderTab(
                                 onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
                             }
                         }
-                        IconPill(symbol = "✎", contentDescription = "このノートのメモ") {
-                            onOpenMarginMemo()
+                        IconPill(symbol = "✎", contentDescription = marginToggleDescription(memoToggle)) {
+                            onMemoToggle(memoToggle)
                         }
                         IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
                     }
@@ -236,7 +274,7 @@ internal fun NoteReaderTab(
     // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
     //  セクション判定とスクロール継承を壊さない）。
     val visibleTraceCard = uiState.readingTraceCard?.takeIf { hasNote && !it.isDismissed }
-    val traceCard: @Composable (Modifier) -> Unit = { modifier ->
+    val traceCard: @Composable (Modifier, onOpenMemos: () -> Unit) -> Unit = { modifier, onOpenMemos ->
         if (visibleTraceCard != null) {
             ReadingTraceCardPanel(
                 card = visibleTraceCard,
@@ -244,7 +282,7 @@ internal fun NoteReaderTab(
                 slot = reunionSlot(visibleTraceCard, uiState.summaryState),
                 modifier = modifier,
                 onDismiss = onDismissReadingTrace,
-                onOpenMemos = onOpenMarginMemo,
+                onOpenMemos = onOpenMemos,
                 onResume = {
                     // **畳むのは即時、送るのは別に走らせる。** 送りは suspend で完了の保証が無いので、
                     // その後ろに畳む操作を置かない（→ lessons L35）。
@@ -285,44 +323,116 @@ internal fun NoteReaderTab(
         modifier = Modifier
             .fillMaxSize()
             .background(ReadingGradient)
-            .safeDrawingPadding()
+            // **並べ方はキーボードを含めない大きさで決める**（→ readerLayoutFor）。キーボードの分は内側で避ける。
+            .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
             .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .onGloballyPositioned { coordinates ->
+                regionStartDp = with(density) { coordinates.positionInWindow().x.toDp().value }
+            }
     ) {
         val sideColumnWidth = sideColumnWidthDp(maxWidth.value).dp
-        when (readerLayoutFor(maxWidth.value, maxHeight.value)) {
-            ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                controls()
-                if (!hasNote) {
-                    emptyNote()
-                    // 余りをカードではなく余白へ逃がす。
-                    Spacer(modifier = Modifier.weight(1f))
-                } else {
-                    traceCard(Modifier.padding(top = 20.dp))
-                    notePanel(
-                        Modifier
-                            .weight(1f)
-                            .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
-                    )
-                }
-            }
-            // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
-            ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .width(sideColumnWidth)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    controls()
-                    traceCard(Modifier.padding(top = 16.dp))
-                }
-                Spacer(modifier = Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+        val canShowPane = canShowMarginPane(
+            widthDp = maxWidth.value,
+            heightDp = maxHeight.value,
+            expandedWidth = expandedWidth,
+            fold = foldInfo.fold,
+            regionStartDp = regionStartDp ?: 0f
+        )
+        val layout = readerLayoutFor(
+            widthDp = maxWidth.value,
+            heightDp = maxHeight.value,
+            // ノートが無いときはペインに置くものが無い。読み込み中は枠を保ち、ノートを引くたびに並びを揺らさない。
+            paneOpen = marginPaneOpen && (hasNote || isLoading),
+            expandedWidth = expandedWidth,
+            fold = foldInfo.fold,
+            regionStartDp = regionStartDp ?: 0f
+        )
+        val paneVisible = layout is ReaderLayout.MarginPane
+        val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
+        // ペインが出ていればメモは横に並んでいるので、シートを重ねない（ペインとシートを同時に出さない）。
+        val openMemosFromCard: () -> Unit = { if (!paneVisible) onOpenMarginMemo() }
+
+        MarginWindowShiftEffect(
+            windowKnown = foldInfo.isKnown && regionStartDp != null,
+            canShowPane = canShowPane,
+            paneOpen = marginPaneOpen,
+            sheetVisible = uiState.isMarginMemoSheetVisible,
+            hasDraft = memoDraft.isNotEmpty(),
+            onHideSheet = onDismissMarginMemo,
+            onRevealSheet = onRevealMarginMemo
+        )
+        if (paneVisible && hasNote) {
+            // ペインが出たときと、ノート切替で読み込み前へ戻ったときに頼む。読み込み済みなら何もしない。
+            // **鍵に状態そのものを使わない** — 読めなかったときに読み直しが止まらなくなる。
+            val memoNotLoaded = uiState.marginMemoState is MarginMemoState.Idle
+            LaunchedEffect(successState?.targetUri, memoNotLoaded) { onLoadMarginMemoForPane() }
+        }
+
+        Box(modifier = Modifier.fillMaxSize().imePadding()) {
+            when (layout) {
+                ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
+                    controls(memoToggle)
                     if (!hasNote) {
                         emptyNote()
+                        // 余りをカードではなく余白へ逃がす。
                         Spacer(modifier = Modifier.weight(1f))
                     } else {
-                        notePanel(Modifier.weight(1f))
+                        traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                        notePanel(
+                            Modifier
+                                .weight(1f)
+                                .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
+                        )
+                    }
+                }
+                // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
+                ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
+                    Column(
+                        modifier = Modifier
+                            .width(sideColumnWidth)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        controls(memoToggle)
+                        traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
+                    }
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        if (!hasNote) {
+                            emptyNote()
+                            Spacer(modifier = Modifier.weight(1f))
+                        } else {
+                            notePanel(Modifier.weight(1f))
+                        }
+                    }
+                }
+                // 左に操作と本文、右に余白ペイン。**溝に折り目が入る**ので、文字と操作が折り目に重ならない。
+                // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
+                is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
+                    Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
+                        controls(memoToggle)
+                        if (!hasNote) {
+                            emptyNote()
+                            Spacer(modifier = Modifier.weight(1f))
+                        } else {
+                            traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                            notePanel(
+                                Modifier
+                                    .weight(1f)
+                                    .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(layout.gutterDp.dp))
+                    MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                        MarginMemoSheetContent(
+                            state = uiState.marginMemoState,
+                            draft = memoDraft,
+                            onDraftChange = { memoDraft = it },
+                            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
+                            onDelete = onDeleteMarginMemo,
+                            modifier = Modifier.padding(top = 16.dp)
+                        )
                     }
                 }
             }
@@ -334,6 +444,8 @@ internal fun NoteReaderTab(
     if (uiState.isMarginMemoSheetVisible) {
         MarginMemoSheet(
             state = uiState.marginMemoState,
+            draft = memoDraft,
+            onDraftChange = { memoDraft = it },
             onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
             onDelete = onDeleteMarginMemo,
             onDismiss = onDismissMarginMemo
@@ -348,6 +460,60 @@ internal fun NoteReaderTab(
             onDismiss = onDismissSectionChat,
             onEndSession = onEndSectionChat
         )
+    }
+}
+
+/**
+ * 窓が切り替わったとき、出ている余白をもう一方へ移す（→ [marginWindowShiftFor]）。
+ *
+ * **前に見た窓の判定は画面の作り直しをまたいで保つ。** 折りたたみの開閉で Activity は作り直されるので、
+ * `remember` では前の窓を覚えていられず、移すべき切り替わりを見落とす。
+ * **窓の情報が揃う前は判定しない** — 折り目の報告と本文領域の位置が届く前の判定は仮のもので、
+ * それを前の窓と比べると、切り替わってもいないのに移してしまう。
+ */
+@Composable
+private fun MarginWindowShiftEffect(
+    windowKnown: Boolean,
+    canShowPane: Boolean,
+    paneOpen: Boolean,
+    sheetVisible: Boolean,
+    hasDraft: Boolean,
+    onHideSheet: () -> Unit,
+    onRevealSheet: () -> Unit
+) {
+    var previousCanShowPane by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    val currentPaneOpen by rememberUpdatedState(paneOpen)
+    val currentSheetVisible by rememberUpdatedState(sheetVisible)
+    val currentHasDraft by rememberUpdatedState(hasDraft)
+    val currentOnHideSheet by rememberUpdatedState(onHideSheet)
+    val currentOnRevealSheet by rememberUpdatedState(onRevealSheet)
+    LaunchedEffect(windowKnown, canShowPane) {
+        if (!windowKnown) return@LaunchedEffect
+        val shift = marginWindowShiftFor(
+            previousCanShowPane = previousCanShowPane,
+            canShowPane = canShowPane,
+            paneOpen = currentPaneOpen,
+            sheetVisible = currentSheetVisible,
+            hasDraft = currentHasDraft
+        )
+        previousCanShowPane = canShowPane
+        when (shift) {
+            MarginWindowShift.SheetToPane -> currentOnHideSheet()
+            MarginWindowShift.PaneToSheet -> currentOnRevealSheet()
+            MarginWindowShift.None -> Unit
+        }
+    }
+}
+
+/** 余白ペインの面。本文パネルと同じ地に載せ、右の列として区切る。 */
+@Composable
+private fun MarginPanePanel(modifier: Modifier, content: @Composable () -> Unit) {
+    Surface(
+        modifier = modifier,
+        color = Panel,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        content()
     }
 }
 
