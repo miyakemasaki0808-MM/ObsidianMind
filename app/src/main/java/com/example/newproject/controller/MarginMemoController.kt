@@ -65,12 +65,10 @@ internal class MarginMemoController(
     private var loadWhenPathBound = false
 
     /**
-     * シートを開いたときに読む。**ノート表示の経路では呼ばない** —
-     * 呼ぶとノートを開くたびサイドカーを1件読むことになる。
-     * 余白ペインは出ている間ずっと中身を見せるので、[ensureLoaded] で表示の後に1回だけ読む。
+     * 読む。**ノートを開く経路では呼ばない** — 呼ぶとノートを開くたびサイドカーを1件読むことになる。
      *
-     * **世代を進めるので、走行中の保存の結果を捨てる。** 読み込み済みの中身を別の面へ移すだけなら
-     * [ensureLoaded] を使う。
+     * **世代を進めるので、走行中の保存の結果を捨てる。** シートやペインを出すときは [ensureLoaded] を通し、
+     * 読み込み済みなら読み直さない。
      */
     fun open(vaultRelativePath: String?) {
         val requestId = ++generation

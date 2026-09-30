@@ -571,13 +571,10 @@ class NoteViewModel internal constructor(
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    /** シートを開く。**ここでだけ**サイドカーを1件読む。 */
+    /** シートを開く。まだ読んでいなければサイドカーを1件読む。読み込み済みなら読み直さない。 */
     fun openMarginMemoSheet() = session.openMarginMemoSheet()
 
     fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
-
-    /** ペインの書きかけをシートへ移す。**読み直さない。** */
-    fun revealMarginMemoSheet() = session.revealMarginMemoSheet()
 
     /** 余白ペインが出ている間、このノートのメモを持たせる。 */
     fun loadMarginMemoForPane() = session.loadMarginMemoForPane()

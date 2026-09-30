@@ -25,11 +25,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,8 +65,7 @@ import java.util.Locale
 @Composable
 internal fun MarginMemoSheet(
     state: MarginMemoState,
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: MarginMemoInputBinding,
     onSave: (String) -> Unit,
     onDelete: (MarginMemo) -> Unit,
     onDismiss: () -> Unit
@@ -82,7 +79,6 @@ internal fun MarginMemoSheet(
         MarginMemoSheetContent(
             state = state,
             draft = draft,
-            onDraftChange = onDraftChange,
             onSave = onSave,
             onDelete = onDelete
         )
@@ -95,45 +91,25 @@ internal fun MarginMemoSheet(
  *
  * 連続して置けること自体がこの機能の要点なので、**下書きの扱いはUIテストで固定する。**
  *
- * **書きかけ [draft] は呼び出し側が持つ。** シートとペインのどちらで出しても同じ中身を見せ、
- * ✎ でペインをしまっても、Fold を閉じてシートへ移っても、書きかけが残るようにするため。
+ * **書きかけ [draft] は呼び出し側が持つ**（→ [rememberMarginMemoInput]）。文字だけでなく、
+ * 何を送ったかと受理の対応も一緒に持つ。この部品の中に持つと、保存中にペインをしまう・シートへ移すと
+ * 対応が消え、受理済みの文字が入力欄に残って再送できてしまう。
+ *
+ * **入力欄を楽観的に空にしない。** 空にするのは受け取れたと分かったときで、送った原文のままの入力だけ
+ * （→ [com.example.newproject.domain.MarginMemoInput.reconciled]）。押した瞬間に空にすると、
+ * 置けなかったときに原文を戻せない。
  */
 @Composable
 internal fun MarginMemoSheetContent(
     state: MarginMemoState,
-    draft: String,
-    onDraftChange: (String) -> Unit,
+    draft: MarginMemoInputBinding,
     onSave: (String) -> Unit,
     onDelete: (MarginMemo) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val currentDraft by rememberUpdatedState(draft)
-    val currentOnDraftChange by rememberUpdatedState(onDraftChange)
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
 
     val ready = state as? MarginMemoState.Ready
-
-    // **入力欄を楽観的に空にしない。** 受け取れたと分かってから、
-    // **その要求で出した文字列そのもの**のときだけ空にする。
-    //
-    // - 状態から「置けたら空にする」を導くと、`status` が残るので
-    //   **再コンポーズのたびに2件目が消える**
-    // - 押した瞬間に空にすると、置けなかったときに**原文を戻せない**
-    //   （上限で切り詰めた後の文字列しか手元に無い）
-    //
-    // 受理の件数が増えたときだけ消すので、**置けなかった入力は何もしなくても残る。**
-    var submitted by remember { mutableStateOf<String?>(null) }
-    var seenAccepted by remember { mutableStateOf(ready?.acceptedCount ?: 0L) }
-    LaunchedEffect(ready?.acceptedCount) {
-        val accepted = ready?.acceptedCount ?: 0L
-        // 開き直しで件数が戻ることがあるので、**増えたときだけ**消費する。
-        if (accepted > seenAccepted) {
-            // 待っているあいだに書き直していたら消さない。
-            if (currentDraft == submitted) currentOnDraftChange("")
-            submitted = null
-        }
-        seenAccepted = accepted
-    }
 
     Column(
         modifier = modifier
@@ -152,8 +128,8 @@ internal fun MarginMemoSheetContent(
 
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
-                value = draft,
-                onValueChange = onDraftChange,
+                value = draft.text,
+                onValueChange = draft.onChange,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
                 minLines = 2,
@@ -161,7 +137,7 @@ internal fun MarginMemoSheetContent(
             )
 
             // **合図であって壁ではない。** 超えても切らないし、置けなくもならない。
-            if (isMemoOverSoftLimit(draft)) {
+            if (isMemoOverSoftLimit(draft.text)) {
                 Text(
                     text = "少し長めです（${SOFT_MEMO_CHARS}字をめやすに）。このまま置けます。",
                     color = OnSurfaceMuted,
@@ -179,14 +155,16 @@ internal fun MarginMemoSheetContent(
                 Spacer(modifier = Modifier.height(0.dp))
                 Button(
                     onClick = {
-                        submitted = draft
-                        onSave(draft)
+                        // **送った記録を先に残す。** 保存の結果が同期で返っても、受理を取りこぼさない。
+                        val text = draft.text
+                        draft.onSubmit(text)
+                        onSave(text)
                     },
                     // **受け付けられない状態では押させない。** 押せてしまうと、
                     // Controller が何もしないまま入力だけが宙に浮く。
                     enabled = ready != null &&
                         ready.status != MemoSaveStatus.Saving &&
-                        draft.isNotBlank(),
+                        draft.text.isNotBlank(),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary,
                         contentColor = OnButtonPrimary

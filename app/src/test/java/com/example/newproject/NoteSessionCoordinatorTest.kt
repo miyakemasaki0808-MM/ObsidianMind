@@ -1401,6 +1401,30 @@ class NoteSessionCoordinatorTest {
         assertEquals(listOf("前に書いた"), ready.memos.map { it.text })
     }
 
+    /**
+     * **保存中にシートを閉じて開き直しても、保存の結果を捨てない。**
+     *
+     * 開き直しで読み直すと世代が進み、保存の結果が照合で捨てられる。書きかけはシートの外に残るので、
+     * 受理が届かないまま受理済みの文字が入力欄に残り、押し直すと同じ文が別のメモとして増える。
+     */
+    @Test
+    fun `保存中にシートを閉じて開き直しても、保存の結果を捨てない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.openMarginMemoSheet()
+        advanceUntilIdle()
+
+        coordinator.saveMarginMemo("保存中に閉じたメモ", sectionTitle = null)
+        coordinator.dismissMarginMemoSheet()
+        coordinator.openMarginMemoSheet()
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(1L, ready.acceptedCount)
+        assertEquals(listOf("保存中に閉じたメモ"), ready.memos.map { it.text })
+    }
+
     /** 前のノートのパスが遅れて届いても、**次のノートのペインへ前のノートのメモを読まない。** */
     @Test
     fun `前のノートのパスが遅れて届いても、次のノートのメモを読まない`() = runTest {

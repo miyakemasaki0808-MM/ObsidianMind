@@ -3,9 +3,9 @@
 **状態:** **Draft — 段1だけ実装済み・実機未確認。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
 **最終検証:** —（段1は実機で確かめていない。実機と突き合わせるまで日付を進めない）
-**関連コード:** 段1 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `data/AppPreferences.kt`。
+**関連コード:** 段1 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoInputState.kt` / `domain/MarginMemoInput.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt` / `controller/ReadingTraceController.kt` / `domain/MarginMemoComposer.kt`
-**関連テスト:** 段1 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest`。予定 — `SectionChatControllerTest`
+**関連テスト:** 段1 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoInputTest` / `MarginMemoInputSaverTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest`。予定 — `SectionChatControllerTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -372,16 +372,23 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 
 - **段1で入れたものと、次の段へ残したもの。** 段1は並べ方と ✎ だけを変え、中身は今の余白メモのままにした。
   そのため次の振る舞いは、正しい形が入る段まで暫定である
-  - **書きかけは画面側に置いた。** ノートの Uri を鍵に `rememberSaveable` で持ち、シートとペインの両方へ渡す。
-    ✎ でペインをしまう・Fold を閉じてシートへ移る・画面の作り直しでは残るが、ノートを替えると捨て、全画面との往復もまたがない。
-    書き込み先の固定も無く、置いた時点の節へ書く。ViewModel 側の一組（§6.1）へ移すのは段2
+  - **書きかけは画面側に置いた。** 文字・送った原文・最後に見た受理件数・書いたノートを一組にして
+    （`MarginMemoInput`）画面の保存値へ残し、シートとペインの両方へ渡す。
+    ✎ でペインをしまう・Fold を閉じてシートへ移る・画面の作り直し・ほかのタブとの往復では残り、ノートを替えると捨てる。
+    **ノートの照合は保存した値の中で行う。** 外から比較の鍵を渡すだけでは、見えていない間にノートや Vault が替わった後の
+    復元で、前のノートの文字を今のノートの初期値として受け入れてしまう。
+    **受理の対応も同じ一組に持つ。** 表示部品の中に持つと、保存中にペインをしまう・シートへ移すと対応が消え、
+    受理済みの文字が入力欄に残って同じ文を再送できる。表示部品が無い間に届いた受理は、次に組み立てたときの照合で消費する。
+    全画面から開くシート（段4）とは共有せず、書き込み先の固定も無い（置いた時点の節へ書く）。ViewModel 側の一組（§6.1）へ移すのは段2
   - **窓の切り替わりでは文字だけを引き継ぐ。** 入力のフォーカスは引き継がない（段2）。
     出せる窓から出せない窓へ移ってシートへ移すのは、書きかけがあるときだけにした
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
     並べ方はその間だけ、折り目の無い窓・左端0として仮に決まる
-  - **メモはペインが出たときに1回読み、読めなかったときだけペインを出し直すと読み直す。**
-    スマホのシートは今までどおり開くたびに読む。読む時期をそろえるのは段2
+  - **メモはこのノートでペインかシートを初めて出したときに1回読み、読めなかったときだけ出し直すと読み直す。**
+    シートも開き直しでは読み直さない — 読み直すと世代が進んで保存の結果が捨てられ、保存中に閉じて開き直すと
+    受理済みの文字が入力欄に残る。**代わりに、開いている間に退避の読み戻しでメモが増えても、ノートを開き直すまで一覧に出ない。**
+    表示の後に1回読む形（§6.3）へそろえるのは段2
   - **再会カードの「前回のメモを見る」は、ペインが出ていれば何もしない。** メモは横に並んでいるので、シートを重ねない。
     該当するメモまで送るのは段2
   - **見出しの要約ボタンは、今の要約のシートを開く。** ペインをこのノートの間だけ出して要約を始めるのは段4

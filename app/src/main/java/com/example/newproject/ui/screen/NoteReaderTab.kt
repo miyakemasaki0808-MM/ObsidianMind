@@ -118,9 +118,8 @@ internal fun NoteReaderTab(
     onEndSectionChat: () -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
+    /** シートを出す。読み込み済みなら読み直さない（ペインの書きかけをシートへ移すときにも使う）。 */
     onOpenMarginMemo: () -> Unit,
-    /** ペインの書きかけをシートへ移す。読み直さない。 */
-    onRevealMarginMemo: () -> Unit,
     /** 余白ペインが出ている間、このノートのメモを持たせる。読み込み済みなら何もしない。 */
     onLoadMarginMemoForPane: () -> Unit,
     /** 余白ペインの開閉の設定。端末に残り、再起動をまたいで保つ。 */
@@ -169,9 +168,8 @@ internal fun NoteReaderTab(
 
     val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
-    // **書きかけはシートとペインの外で持つ。** ✎ でペインをしまっても、Fold を閉じてシートへ移っても残る。
-    // ノートが替われば捨てる — 残すと、前のノートに書きかけた言葉を次のノートへ置けてしまう。
-    var memoDraft by rememberSaveable(successState?.targetUri) { mutableStateOf("") }
+    // **書きかけはシートとペインの外で持つ。** 文字と受理の対応とノートを一組で持ち、別のノートの書きかけは捨てる。
+    val memoDraft = rememberMarginMemoInput(successState?.targetUri, uiState.marginMemoState)
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
@@ -357,9 +355,9 @@ internal fun NoteReaderTab(
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
-            hasDraft = memoDraft.isNotEmpty(),
+            hasDraft = memoDraft.text.isNotEmpty(),
             onHideSheet = onDismissMarginMemo,
-            onRevealSheet = onRevealMarginMemo
+            onShowSheet = onOpenMarginMemo
         )
         if (paneVisible && hasNote) {
             // ペインが出たときと、ノート切替で読み込み前へ戻ったときに頼む。読み込み済みなら何もしない。
@@ -428,7 +426,6 @@ internal fun NoteReaderTab(
                         MarginMemoSheetContent(
                             state = uiState.marginMemoState,
                             draft = memoDraft,
-                            onDraftChange = { memoDraft = it },
                             onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
                             onDelete = onDeleteMarginMemo,
                             modifier = Modifier.padding(top = 16.dp)
@@ -445,7 +442,6 @@ internal fun NoteReaderTab(
         MarginMemoSheet(
             state = uiState.marginMemoState,
             draft = memoDraft,
-            onDraftChange = { memoDraft = it },
             onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
             onDelete = onDeleteMarginMemo,
             onDismiss = onDismissMarginMemo
@@ -479,14 +475,14 @@ private fun MarginWindowShiftEffect(
     sheetVisible: Boolean,
     hasDraft: Boolean,
     onHideSheet: () -> Unit,
-    onRevealSheet: () -> Unit
+    onShowSheet: () -> Unit
 ) {
     var previousCanShowPane by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val currentPaneOpen by rememberUpdatedState(paneOpen)
     val currentSheetVisible by rememberUpdatedState(sheetVisible)
     val currentHasDraft by rememberUpdatedState(hasDraft)
     val currentOnHideSheet by rememberUpdatedState(onHideSheet)
-    val currentOnRevealSheet by rememberUpdatedState(onRevealSheet)
+    val currentOnShowSheet by rememberUpdatedState(onShowSheet)
     LaunchedEffect(windowKnown, canShowPane) {
         if (!windowKnown) return@LaunchedEffect
         val shift = marginWindowShiftFor(
@@ -499,7 +495,7 @@ private fun MarginWindowShiftEffect(
         previousCanShowPane = canShowPane
         when (shift) {
             MarginWindowShift.SheetToPane -> currentOnHideSheet()
-            MarginWindowShift.PaneToSheet -> currentOnRevealSheet()
+            MarginWindowShift.PaneToSheet -> currentOnShowSheet()
             MarginWindowShift.None -> Unit
         }
     }

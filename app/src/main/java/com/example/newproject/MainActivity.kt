@@ -191,7 +191,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 },
                                 onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
-                                onRevealMarginMemo = { viewModel.revealMarginMemoSheet() },
                                 onLoadMarginMemoForPane = { viewModel.loadMarginMemoForPane() },
                                 marginPaneOpen = marginPaneOpen,
                                 onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
