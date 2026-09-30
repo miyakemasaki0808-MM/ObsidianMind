@@ -28,5 +28,4 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-09-30-fold-prerequisites-implementation-review/P3-1` | AI入力予算の実機手順が撤去前の12ケースを要求し、現在の7ケースと一致しない | `統合` AI-9 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
