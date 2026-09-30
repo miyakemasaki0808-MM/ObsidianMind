@@ -29,3 +29,5 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
+| `2026-10-01-fold-margin-pane-stage1-implementation-review/P2-1` | ノート画面の復元時に、前のノートの書きかけが別ノート・別Vaultへ渡る | `統合` FOLD-1 |
+| `2026-10-01-fold-margin-pane-stage1-implementation-review/P2-2` | 保存中にペインを閉じるかシートへ移すと、受理済みの文字が入力欄に残り再送できる | `統合` FOLD-1 |
