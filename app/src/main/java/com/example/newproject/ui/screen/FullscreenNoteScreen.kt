@@ -162,7 +162,7 @@ internal fun FullscreenNoteScreen(
             // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
             // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
         ) { leaveWith(onExit) }
-        // 読書中もAIの状態（要約・クイズ）が分かるよう最小インジケータを残す。
+        // 読書中もAIの状態（部分要約）が分かるよう最小インジケータを残す。
         if (activeChat != null) {
             FullscreenAiFab(status = combinedStatus, onTap = { leaveWith(onOpenSummary) })
         }

@@ -42,7 +42,6 @@ internal fun vigilithOpeningMotion(timeline: Float): VigilithOpeningMotion {
     )
 }
 
-// このファイル内の進捗計算専用。同パッケージへ公開すると
-// VigilithMascotMotion 側で同名の別定義が生まれるため private に閉じる。
+// このファイル内の進捗計算専用。
 private fun Float.fractionBetween(start: Float, end: Float): Float =
     ((this - start) / (end - start)).coerceIn(0f, 1f)
