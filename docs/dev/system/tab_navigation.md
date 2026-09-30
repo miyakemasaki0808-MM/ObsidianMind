@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替・バッジ）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
-**関連テスト:** `AiTabBadgeStateTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest`
+**関連テスト:** `AiTabBadgeStateTest` / `AppScaffoldContentSlotTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
 **正本:** この文書
 
 **対象領域:** 画面構成・ナビゲーション・非タブルートの扱い
@@ -19,6 +19,14 @@
 
 **画面幅対応:** `WindowWidthSizeClass.Expanded`（Fold展開）は左サイドレール、それ以外は下部バー。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。
+
+**外殻は本文（NavHost）を、レール・バー・どちらも無しのどの形でも同じ位置で組み立てる。**
+`rememberSaveable` は呼び出し位置で保存先を決め、その位置には前にある兄弟グループの数も入る（Compose 1.7.3）。
+形ごとに呼ぶ場所を分けると、Fold の開閉（Activity の作り直し）で NavHost 配下の保存値が形ごとに別々に戻り、
+非タブルートへ移るたびに NavHost ごと作り直されて各ルートの保存値が消える。
+そのため本文を**最初の子**として組み立て、レールとバーはその後ろに置き、並べる位置は専用の Layout が決める。
+`AppScaffoldContentSlotTest`（構造）と androidTest の `AppScaffoldStateRestorationTest`（作り直しと往復）が固定する。
+非タブルートへの出入りも、タブ間と同じ NavHost の既定の切替演出になる。
 
 ## 2. 判断1: バグを直すのではなく、バグが起きる構造を捨てる
 

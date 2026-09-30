@@ -1,8 +1,6 @@
 package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,6 +22,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,6 +50,12 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
  * タブ（note/related/ai）以外のルート（全画面・冊子など）ではバー/レールを出さない。
  *
+ * **[content] は、どの形でも「最初の子」として同じ位置で呼ぶ。** `rememberSaveable` は呼び出し位置で保存先を
+ * 決め、その位置には**前にある兄弟グループの数**も入る。形ごとに呼ぶ場所を分けたり、条件付きのレールを前に
+ * 置いたりすると、Fold の開閉（Activity の作り直し）で NavHost 配下の保存値が形ごとに別々に戻り、
+ * 全画面へ移るときは NavHost ごと作り直されて各ルートの保存値が消える（→ features/margin_pane.md §11）。
+ * レールとバーは [content] の**後ろ**に組み立て、並べる位置は [ScaffoldLayout] が決める。
+ *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
  * バー/レール自身は既定の windowInsets でシステムバーを避ける。
@@ -67,13 +74,10 @@ internal fun AppScaffold(
     val useRail = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
 
     Box(modifier = Modifier.fillMaxSize()) {
-        when {
-            !isTabRoute -> {
-                // 全画面ルート（全画面ノート・冊子など）はバーなしで表示。
-                content(Modifier.fillMaxSize())
-            }
-            useRail -> {
-                Row(modifier = Modifier.fillMaxSize()) {
+        ScaffoldLayout(
+            body = { content(Modifier.fillMaxSize()) },
+            rail = if (isTabRoute && useRail) {
+                {
                     NavigationRail(containerColor = NavBar) {
                         AppDestination.entries.forEach { dest ->
                             NavigationRailItem(
@@ -91,12 +95,10 @@ internal fun AppScaffold(
                             )
                         }
                     }
-                    Box(modifier = Modifier.weight(1f).fillMaxSize()) { content(Modifier.fillMaxSize()) }
                 }
-            }
-            else -> {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Box(modifier = Modifier.weight(1f).fillMaxSize()) { content(Modifier.fillMaxSize()) }
+            } else null,
+            bottomBar = if (isTabRoute && !useRail) {
+                {
                     NavigationBar(containerColor = NavBar) {
                         AppDestination.entries.forEach { dest ->
                             NavigationBarItem(
@@ -115,8 +117,8 @@ internal fun AppScaffold(
                         }
                     }
                 }
-            }
-        }
+            } else null
+        )
 
         SnackbarHost(
             hostState = snackbarHostState,
@@ -126,6 +128,46 @@ internal fun AppScaffold(
         )
     }
 }
+
+/**
+ * 左にレール、下にバー、残りに本文を置く。**組み立ての順は本文が先**で、並べる位置だけをここで決める
+ * （→ [AppScaffold]）。レールとバーはどちらか一方か、どちらも無い。
+ */
+@Composable
+private fun ScaffoldLayout(
+    body: @Composable () -> Unit,
+    rail: (@Composable () -> Unit)?,
+    bottomBar: (@Composable () -> Unit)?
+) {
+    Layout(
+        content = {
+            Box(modifier = Modifier.layoutId(SLOT_CONTENT)) { body() }
+            if (rail != null) Box(modifier = Modifier.layoutId(SLOT_RAIL)) { rail() }
+            if (bottomBar != null) Box(modifier = Modifier.layoutId(SLOT_BAR)) { bottomBar() }
+        },
+        modifier = Modifier.fillMaxSize()
+    ) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val railPlaceable = measurables.firstOrNull { it.layoutId == SLOT_RAIL }
+            ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))
+        val barPlaceable = measurables.firstOrNull { it.layoutId == SLOT_BAR }
+            ?.measure(Constraints(minWidth = width, maxWidth = width, maxHeight = height))
+        val railWidth = railPlaceable?.width ?: 0
+        val barHeight = barPlaceable?.height ?: 0
+        val contentPlaceable = measurables.first { it.layoutId == SLOT_CONTENT }
+            .measure(Constraints.fixed((width - railWidth).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
+        layout(width, height) {
+            railPlaceable?.placeRelative(0, 0)
+            contentPlaceable.placeRelative(railWidth, 0)
+            barPlaceable?.placeRelative(0, height - barHeight)
+        }
+    }
+}
+
+private const val SLOT_CONTENT = "content"
+private const val SLOT_RAIL = "rail"
+private const val SLOT_BAR = "bar"
 
 /** AIタブの意味は常に✨のまま保つ。 */
 @Composable
