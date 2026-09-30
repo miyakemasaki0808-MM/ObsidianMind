@@ -61,12 +61,40 @@ class ReaderLayoutTest {
         )
     }
 
+    /** **中央で割ると、本文と見出しの操作が折り目をまたぐ。** 中央なら割れる幅でも、中央へ逃げない。 */
     @Test
-    fun `折り目が端に寄りすぎていれば本文領域の中央で割る`() {
+    fun `本文領域の中の折り目で割れなければ、中央へ逃げず縦に積む`() {
         assertEquals(
-            ReaderLayout.MarginPane(bodyWidthDp = 382f, gutterDp = 16f),
+            ReaderLayout.Stacked,
             readerLayoutFor(780f, 900f, paneOpen = true, fold = vertical(300f), regionStartDp = 100f)
         )
+    }
+
+    @Test
+    fun `折り目がレールの中にあれば本文に重ならないので中央で割る`() {
+        assertEquals(
+            ReaderLayout.MarginPane(bodyWidthDp = 382f, gutterDp = 16f),
+            readerLayoutFor(780f, 900f, paneOpen = true, fold = vertical(50f), regionStartDp = 100f)
+        )
+    }
+
+    /**
+     * **実機の報告値。** 平らに開いた Pixel 10 Pro Fold（density 2.4375、窓 852×883dp）は、
+     * 平らでも縦の折り目を x=1038px に報告する。本文領域は左のレール80dpと余白20dpの後ろから始まり、幅は約732dp。
+     * 本文の下限が320dpだったころは、折り目で割った本文（約318dp）が下限を割って中央へ落ち、折り目をまたいでいた。
+     */
+    @Test
+    fun `実機の報告値では溝が折り目を含む`() {
+        val foldDp = 1038f / 2.4375f
+        val regionStart = 100f
+
+        val layout = readerLayoutFor(732f, 800f, paneOpen = true, expandedWidth = true, fold = vertical(foldDp), regionStartDp = regionStart)
+
+        assertTrue("折り目で割れていません: $layout", layout is ReaderLayout.MarginPane)
+        val pane = layout as ReaderLayout.MarginPane
+        val bodyEnd = regionStart + pane.bodyWidthDp
+        assertTrue("本文の右端が折り目を越えています", bodyEnd < foldDp)
+        assertTrue("ペインの左端が折り目より手前です", foldDp < bodyEnd + pane.gutterDp)
     }
 
     @Test
@@ -110,19 +138,19 @@ class ReaderLayoutTest {
 
     @Test
     fun `境界 — 割った後の幅が下限を割るなら縦に積む`() {
-        // 折り目で割って本文320dp・ペイン280dpちょうど
+        // 折り目で割って本文300dp・ペイン280dpちょうど
         assertEquals(
-            ReaderLayout.MarginPane(bodyWidthDp = 320f, gutterDp = 16f),
-            readerLayoutFor(616f, 900f, paneOpen = true, fold = vertical(328f))
+            ReaderLayout.MarginPane(bodyWidthDp = 300f, gutterDp = 16f),
+            readerLayoutFor(596f, 900f, paneOpen = true, fold = vertical(308f))
         )
-        // ペインが1dp足りず、中央で割っても本文が足りない
-        assertEquals(ReaderLayout.Stacked, readerLayoutFor(615f, 900f, paneOpen = true, fold = vertical(328f)))
+        // ペインが1dp足りない
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(595f, 900f, paneOpen = true, fold = vertical(308f)))
         // 中央で割るときは、本文とペインがどちらも下限を満たす幅から
         assertEquals(
-            ReaderLayout.MarginPane(bodyWidthDp = 320f, gutterDp = 16f),
-            readerLayoutFor(656f, 900f, paneOpen = true, expandedWidth = true)
+            ReaderLayout.MarginPane(bodyWidthDp = 300f, gutterDp = 16f),
+            readerLayoutFor(616f, 900f, paneOpen = true, expandedWidth = true)
         )
-        assertEquals(ReaderLayout.Stacked, readerLayoutFor(655f, 900f, paneOpen = true, expandedWidth = true))
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(615f, 900f, paneOpen = true, expandedWidth = true))
     }
 
     /** ✎ がペインとシートのどちらを扱うかは、**今の設定によらず**窓だけで決まる。 */

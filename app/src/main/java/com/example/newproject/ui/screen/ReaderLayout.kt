@@ -45,11 +45,16 @@ internal fun readerLayoutFor(
     return when {
         // 平らでも半開きでも割る。`isSeparating` が偽でも除外しない。
         fold?.isVertical == true -> {
-            val hingeDp = fold.endDp - fold.startDp
-            val gutter = maxOf(PANE_GUTTER_DP, hingeDp)
-            val foldCenter = (fold.startDp + fold.endDp) / 2f - regionStartDp
-            // 折り目がレールの中や端に寄りすぎていれば、本文領域の中央で割る。
-            paneAt(foldCenter, widthDp, gutter) ?: paneAt(widthDp / 2f, widthDp, gutter)
+            val foldStart = fold.startDp - regionStartDp
+            val foldEnd = fold.endDp - regionStartDp
+            if (foldEnd > 0f && foldStart < widthDp) {
+                // **本文領域の中の折り目で割れなければ、中央へ逃げずに縦に積む。** 中央で割ると、
+                // 本文と見出しの操作が折り目をまたぐ。
+                paneAt((foldStart + foldEnd) / 2f, widthDp, maxOf(PANE_GUTTER_DP, foldEnd - foldStart))
+            } else {
+                // 折り目がレールの中など本文領域の外にあれば、本文に重ならないので中央で割ってよい。
+                paneAt(widthDp / 2f, widthDp, PANE_GUTTER_DP)
+            }
         }
         fold == null && expandedWidth -> paneAt(widthDp / 2f, widthDp, PANE_GUTTER_DP)
         // 横の折り目（卓上の形）と、広くない窓は縦に積む。
@@ -90,8 +95,11 @@ internal fun canShowMarginPane(
 /** これより低い横長の画面で2列にする。カバー画面の横向き（約443dp）と横にしたスマホを含み、開いた折りたたみを含まない。 */
 internal const val SIDE_BY_SIDE_MAX_HEIGHT_DP = 480f
 
-/** 余白ペインで本文に残す幅の下限。**仮置きで、実機で調整する。** */
-internal const val MARGIN_PANE_MIN_BODY_DP = 320f
+/**
+ * 余白ペインで本文に残す幅の下限。開いた Pixel 10 Pro Fold を平らにして測った本文の幅（約318dp。
+ * 左のレールと余白で約100dpを取られる）が収まる値にしてある。上げるとこの端末で折り目に割れなくなる。
+ */
+internal const val MARGIN_PANE_MIN_BODY_DP = 300f
 
 /** 余白ペインの幅の下限。**仮置きで、実機で調整する。** */
 internal const val MARGIN_PANE_MIN_PANE_DP = 280f
