@@ -563,6 +563,12 @@ class NoteViewModel internal constructor(
 
     fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
 
+    /** ペインの書きかけをシートへ移す。**読み直さない。** */
+    fun revealMarginMemoSheet() = session.revealMarginMemoSheet()
+
+    /** 余白ペインが出ている間、このノートのメモを持たせる。 */
+    fun loadMarginMemoForPane() = session.loadMarginMemoForPane()
+
     /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
     fun saveMarginMemo(text: String, sectionTitle: String?) =
         session.saveMarginMemo(text, sectionTitle)

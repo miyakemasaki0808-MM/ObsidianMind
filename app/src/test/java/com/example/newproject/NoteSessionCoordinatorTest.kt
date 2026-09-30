@@ -1377,6 +1377,57 @@ class NoteSessionCoordinatorTest {
         targetUri = TARGET_URI
     )
 
+    // ── 余白ペインの読み込み（→ features/margin_pane.md §11 段1）─────────────────
+
+    /**
+     * **パスの確定は表示の後に来ることがある**（さがす・関連から開き、走査のキャッシュが冷えているとき）。
+     * ペインは表示の直後に読みたがるので、確定を待って読む。
+     */
+    @Test
+    fun `パス未確定で開いたノートは、確定したときにペインのメモを読む`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md").copy(memos = listOf(memoOf("前に書いた"))))
+        val coordinator = env.coordinator()
+
+        val sessionId = coordinator.startReadingTrace("習慣について", vaultRelativePath = null, documentId = null)
+        coordinator.loadMarginMemoForPane()
+        advanceUntilIdle()
+        assertTrue(coordinator.uiState.value.marginMemoState is MarginMemoState.Idle)
+
+        coordinator.bindReadingTracePath(sessionId, "ideas/habit.md")
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(listOf("前に書いた"), ready.memos.map { it.text })
+    }
+
+    /** 前のノートのパスが遅れて届いても、**次のノートのペインへ前のノートのメモを読まない。** */
+    @Test
+    fun `前のノートのパスが遅れて届いても、次のノートのメモを読まない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "a.md").copy(memos = listOf(memoOf("Aのメモ"))))
+        env.trace.put(storedTrace(count = 1, path = "b.md").copy(memos = listOf(memoOf("Bのメモ"))))
+        val coordinator = env.coordinator()
+
+        val first = coordinator.startReadingTrace("A", vaultRelativePath = null, documentId = null)
+        coordinator.loadMarginMemoForPane()
+        coordinator.onNoteChanged()
+        val second = coordinator.startReadingTrace("B", vaultRelativePath = null, documentId = null)
+        coordinator.loadMarginMemoForPane()
+
+        coordinator.bindReadingTracePath(first, "a.md")
+        advanceUntilIdle()
+        assertTrue(
+            "前のノートのパスで読んだ",
+            coordinator.uiState.value.marginMemoState is MarginMemoState.Idle
+        )
+
+        coordinator.bindReadingTracePath(second, "b.md")
+        advanceUntilIdle()
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(listOf("Bのメモ"), ready.memos.map { it.text })
+    }
+
     private companion object {
         const val TARGET_URI = "content://vault/note.md"
 
