@@ -36,7 +36,7 @@ class MarginSurfaceTest {
         assertEquals(
             "閉じる設定ならシートのまま移る",
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible, writing = true)
         )
 
         val first = marginToggleFor(canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible)
@@ -54,12 +54,12 @@ class MarginSurfaceTest {
     fun `出せない窓から出せる窓へ移ると、開く設定ならシートをペインへ移す`() {
         assertEquals(
             MarginWindowShift.SheetToPane,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = true, hasDraft = false)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = true, writing = false)
         )
         // シートが出ていなければ何もしない（ペインは設定どおりに出る）
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = false, writing = true)
         )
     }
 
@@ -67,16 +67,16 @@ class MarginSurfaceTest {
     fun `出せる窓から出せない窓へ移ると、書きかけがあるときだけシートへ移す`() {
         assertEquals(
             MarginWindowShift.PaneToSheet,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = false)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, writing = false)
         )
         // ペインが閉じていれば、書きかけは出ていた面に無い
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = false, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = false, sheetVisible = false, writing = true)
         )
     }
 
@@ -86,12 +86,12 @@ class MarginSurfaceTest {
         listOf(null, true).forEach { previous ->
             assertEquals(
                 MarginWindowShift.None,
-                marginWindowShiftFor(previous, canShowPane = true, paneOpen = true, sheetVisible = true, hasDraft = true)
+                marginWindowShiftFor(previous, canShowPane = true, paneOpen = true, sheetVisible = true, writing = true)
             )
         }
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
     }
 

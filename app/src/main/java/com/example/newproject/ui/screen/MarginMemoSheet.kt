@@ -43,6 +43,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -181,10 +183,28 @@ internal fun MarginMemoSheetContent(
      */
     asSheet: Boolean = false,
     /** 閉じるボタン。下へ払うほかに閉じる手段を置く（読み上げで払えないため）。null なら出さない。 */
-    onClose: (() -> Unit)? = null
+    onClose: (() -> Unit)? = null,
+    /**
+     * 入力欄で書いているつもりか。**面の外で持つ** — 窓が切り替わって面が組み替わっても、
+     * 新しい面の入力欄へフォーカスを戻すため（→ features/margin_pane.md §5.4）。
+     */
+    focusIntent: Boolean = false,
+    onFocusIntentChange: (Boolean) -> Unit = {}
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    // 前の面で書いていたなら、この面の入力欄へフォーカスを戻す。
+    LaunchedEffect(Unit) { if (focusIntent) focusRequester.requestFocus() }
+    // **フォーカスが外れたことは、1フレーム後もこの面が残っているときだけ伝える。**
+    // 面ごと組み替わって外れたときは伝えない — 伝えると、次の面へフォーカスを戻せない。
+    var blurPending by remember { mutableStateOf(false) }
+    LaunchedEffect(blurPending) {
+        if (!blurPending) return@LaunchedEffect
+        withFrameNanos { }
+        blurPending = false
+        onFocusIntentChange(false)
+    }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val compact = compactWhileTyping(asSheet = asSheet, inputFocused = inputFocused, imeVisible = imeVisible)
     val focusManager = LocalFocusManager.current
@@ -239,7 +259,13 @@ internal fun MarginMemoSheetContent(
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = onEdit,
-                modifier = Modifier.fillMaxWidth().onFocusChanged { inputFocused = it.isFocused },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { focus ->
+                        if (focus.isFocused) onFocusIntentChange(true) else if (inputFocused) blurPending = true
+                        inputFocused = focus.isFocused
+                    },
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
                 minLines = 2,
                 maxLines = 6

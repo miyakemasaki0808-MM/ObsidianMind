@@ -49,7 +49,7 @@ internal enum class MarginWindowShift {
     /** シートをしまう。ペインは設定どおりに出る。 */
     SheetToPane,
 
-    /** 書きかけを持ったペインが出せなくなったので、同じ中身をシートで出す。 */
+    /** 書きかけを持つか書いている途中のペインが出せなくなったので、同じ中身をシートで出す。 */
     PaneToSheet
 }
 
@@ -58,19 +58,21 @@ internal enum class MarginWindowShift {
  *
  * **移り変わりではなく、前に見た値と今の値の比較で決める。** 途中の窓は届くとは限らない
  * （→ lessons L58）。前の値は画面の作り直しをまたいで保つ — 折りたたみの開閉で Activity は作り直される。
+ *
+ * [writing] は書きかけがあるか、入力欄で書いている途中か。
  */
 internal fun marginWindowShiftFor(
     previousCanShowPane: Boolean?,
     canShowPane: Boolean,
     paneOpen: Boolean,
     sheetVisible: Boolean,
-    hasDraft: Boolean
+    writing: Boolean
 ): MarginWindowShift = when {
     previousCanShowPane == null || previousCanShowPane == canShowPane -> MarginWindowShift.None
     // 出せない → 出せる。閉じる設定ならシートのまま。
     canShowPane -> if (sheetVisible && paneOpen) MarginWindowShift.SheetToPane else MarginWindowShift.None
-    // 出せる → 出せない。書きかけが無ければ何も出さない。
-    else -> if (paneOpen && !sheetVisible && hasDraft) MarginWindowShift.PaneToSheet else MarginWindowShift.None
+    // 出せる → 出せない。書きかけも無く書いてもいなければ、何も出さない。
+    else -> if (paneOpen && !sheetVisible && writing) MarginWindowShift.PaneToSheet else MarginWindowShift.None
 }
 
 /**

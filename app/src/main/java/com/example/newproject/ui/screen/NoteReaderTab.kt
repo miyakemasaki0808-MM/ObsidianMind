@@ -207,14 +207,25 @@ internal fun NoteReaderTab(
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
     val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
     val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
+    // 入力欄で書いているつもりか。**画面の作り直しをまたいで保つ** — Fold の開閉で面が組み替わっても、
+    // 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。
+    // 利用者が面を閉じたときは落とす。次に面を出したときに、頼んでいないキーボードを出さない。
+    var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+    val dismissMemoSheet: () -> Unit = {
+        memoFocusIntent = false
+        onDismissMarginMemo()
+    }
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
     val density = LocalDensity.current
     val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
         when (toggle) {
-            MarginToggle.HideSheet -> onDismissMarginMemo()
-            MarginToggle.ClosePane -> onSetMarginPaneOpen(false)
+            MarginToggle.HideSheet -> dismissMemoSheet()
+            MarginToggle.ClosePane -> {
+                memoFocusIntent = false
+                onSetMarginPaneOpen(false)
+            }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
             MarginToggle.ShowSheet -> onOpenMarginMemo()
         }
@@ -413,7 +424,8 @@ internal fun NoteReaderTab(
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
-            hasDraft = memoDraft.text.isNotEmpty(),
+            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
+            writing = memoDraft.text.isNotEmpty() || memoFocusIntent,
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )
@@ -429,7 +441,7 @@ internal fun NoteReaderTab(
             MarginMemoSheetHost(
                 visible = uiState.isMarginMemoSheetVisible,
                 expandRequested = memoReveal != null,
-                onDismiss = onDismissMarginMemo,
+                onDismiss = dismissMemoSheet,
                 sheet = {
                     // **書いた場所は書き始めた時点の本文の節**（紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
                     MarginMemoSheetContent(
@@ -445,7 +457,9 @@ internal fun NoteReaderTab(
                         onSubmit = onSubmitMemo,
                         onDelete = onDeleteMarginMemo,
                         asSheet = true,
-                        onClose = onDismissMarginMemo
+                        onClose = dismissMemoSheet,
+                        focusIntent = memoFocusIntent,
+                        onFocusIntentChange = { memoFocusIntent = it }
                     )
                 }
             ) {
@@ -519,7 +533,9 @@ internal fun NoteReaderTab(
                                 onEdit = onEditMemo,
                                 onSubmit = onSubmitMemo,
                                 onDelete = onDeleteMarginMemo,
-                                modifier = Modifier.padding(top = 16.dp)
+                                modifier = Modifier.padding(top = 16.dp),
+                                focusIntent = memoFocusIntent,
+                                onFocusIntentChange = { memoFocusIntent = it }
                             )
                         }
                     }
@@ -553,14 +569,14 @@ private fun MarginWindowShiftEffect(
     canShowPane: Boolean,
     paneOpen: Boolean,
     sheetVisible: Boolean,
-    hasDraft: Boolean,
+    writing: Boolean,
     onHideSheet: () -> Unit,
     onShowSheet: () -> Unit
 ) {
     var previousCanShowPane by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val currentPaneOpen by rememberUpdatedState(paneOpen)
     val currentSheetVisible by rememberUpdatedState(sheetVisible)
-    val currentHasDraft by rememberUpdatedState(hasDraft)
+    val currentWriting by rememberUpdatedState(writing)
     val currentOnHideSheet by rememberUpdatedState(onHideSheet)
     val currentOnShowSheet by rememberUpdatedState(onShowSheet)
     LaunchedEffect(windowKnown, canShowPane) {
@@ -570,7 +586,7 @@ private fun MarginWindowShiftEffect(
             canShowPane = canShowPane,
             paneOpen = currentPaneOpen,
             sheetVisible = currentSheetVisible,
-            hasDraft = currentHasDraft
+            writing = currentWriting
         )
         previousCanShowPane = canShowPane
         when (shift) {

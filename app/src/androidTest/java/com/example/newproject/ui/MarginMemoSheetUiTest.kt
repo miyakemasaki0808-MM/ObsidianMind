@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -80,6 +82,7 @@ class MarginMemoSheetUiTest {
         /** 照合して並べたメモ。null は本文の解析の前で、全件を平らに出す。 */
         var arranged by mutableStateOf<ArrangedMemos?>(null)
         var reveal by mutableStateOf<MemoReveal?>(null)
+        var focusIntent by mutableStateOf(false)
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -100,8 +103,13 @@ class MarginMemoSheetUiTest {
         }
     }
 
+    /** 画面のフォーカスを外す（キーボードの完了などで利用者が外したのと同じ）。 */
+    private var focusClearer: () -> Unit = {}
+
     private fun setContent(harness: Harness, shown: () -> Boolean = { true }, inPane: () -> Boolean = { true }) {
         composeRule.setContent {
+            val focusManager = LocalFocusManager.current
+            focusClearer = { focusManager.clearFocus() }
             AppTheme(darkTheme = false) {
                 if (shown()) {
                     val content: @androidx.compose.runtime.Composable () -> Unit = {
@@ -116,7 +124,9 @@ class MarginMemoSheetUiTest {
                             onSubmit = harness::submit,
                             onDelete = {},
                             reveal = harness.reveal,
-                            onRevealHandled = { harness.reveal = null }
+                            onRevealHandled = { harness.reveal = null },
+                            focusIntent = harness.focusIntent,
+                            onFocusIntentChange = { harness.focusIntent = it }
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -229,6 +239,38 @@ class MarginMemoSheetUiTest {
         composeRule.runOnIdle { inPane = false }
 
         composeRule.onNodeWithText("ペインで書きかけ").assertExists()
+    }
+
+    /**
+     * **窓が切り替わって面が組み替わっても、入力のフォーカスを引き継ぐ**（→ features/margin_pane.md §5.4）。
+     * 組み替わりで外れたフォーカスは「書くのをやめた」ではないので、新しい面の入力欄へ戻す。
+     */
+    @Test
+    fun 面が組み替わっても入力のフォーカスを引き継ぐ() {
+        val harness = Harness()
+        var inPane by mutableStateOf(true)
+        setContent(harness, inPane = { inPane })
+
+        input.performClick()
+        input.assertIsFocused()
+        composeRule.runOnIdle { inPane = false }
+
+        input.assertIsFocused()
+        composeRule.runOnIdle { assertEquals(true, harness.focusIntent) }
+    }
+
+    /** 利用者がフォーカスを外したら（面は残っている）、書くのをやめたとして落とす。 */
+    @Test
+    fun 面が残ったままフォーカスを外したら書く意図を落とす() {
+        val harness = Harness()
+        setContent(harness)
+
+        input.performClick()
+        composeRule.runOnIdle { assertEquals(true, harness.focusIntent) }
+        composeRule.runOnIdle { focusClearer() }
+
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals(false, harness.focusIntent) }
     }
 
     /** ノートごとに書きかけを持つ。**別のノートに前のノートの書きかけを出さず、戻れば元に戻る。** */
