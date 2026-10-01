@@ -294,15 +294,18 @@
 
 | 層 | 新規 | 変更 |
 |---|---|---|
-| `domain` | 見出しの照合の3値、前回の訪問の選び方、送信の照合と書きかけを消す判定、ペインを出せる窓かの判定、要約を3節分持つ規則。いずれも純関数 | — |
+| `domain` | 見出しの照合の3値、前回の訪問の選び方、送信の照合と書きかけを消す判定、要約を3節分持つ規則。いずれも純関数 | — |
 | `controller` | **並べ読みの Controller。** ジョブはノート単位で、関連ノートの参照から本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
 | `data` | — | `AppPreferences` にペインの開閉 |
-| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
+| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
 | 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始、ペインの開閉、位置を渡して開く `openNote` |
 
 - **並べ読みの Controller を新しく1つ作る。** 既存の Controller はどれも「今のノート」を前提にしているので、眺めるだけのノートを混ぜない。アーキテクチャ判断4ではノート単位の形に入る
 - 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く
 - `controller` は Android 型を持てないので、本文の読み出しは関連ノートと同じくラムダで受ける
+- **純関数の置き場所は責務で分ける。** 画面の形を決める判定（並べ方・ペインを出せる窓か・✎ と窓の切り替わり）は
+  `readerLayoutFor` と同じ `ui/screen` に置き、メモや訪問の意味を決める判定は `domain` に置く。
+  Android 非依存の検査を受けられるかでは決めない（2026-10-02、オーナー判断）
 
 ## 8. 設計判断と代替案
 
