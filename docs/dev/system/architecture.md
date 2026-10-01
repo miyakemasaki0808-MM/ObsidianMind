@@ -167,6 +167,15 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 > テストはその型を作らねばならず、作れなければその経路は検証できない。
 > `controller` が Android 非依存になったのは、素通しをやめて `VaultBrowser` の裏へ束ねたときである。
 
+**4. 置き場所は責務で決める。** 上の表は import を縛るだけで、どこに置くかは決めない。
+純関数は `ui` にも `domain` にも置けるが、「Android 非依存の検査を受けられるから `domain` へ」では決めない
+（2026-10-02、オーナー判断）。
+
+- **画面の形を決める判定は `ui`。** 並べ方・寸法・幾何・入口の遷移。例: `readerLayoutFor`・`canShowMarginPane`
+- **データや状態の意味を決める判定は `domain`。** 解析・採点・照合・整形。例: `composeMarginMemo`・`DistillResponseParser`・`sectionSummaryStatus`
+
+`ui` の純関数も素のJVMでテストできる（`ReaderLayoutTest` など）。テストのしやすさは置き場所を動かす理由にならない。
+
 ## 判断6: AI本文の切り出し責務は呼び出し側に置く
 
 依存方向は `ai → model` のみを許可し `ai → domain` を禁止しているため、`PromptBuilder` から
