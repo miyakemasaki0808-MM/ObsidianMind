@@ -16,6 +16,9 @@ import org.junit.Test
 class MarginMemoSectionsTest {
 
     private val headings = listOf("導入", "まとめ", "本論", "まとめ")
+    private val index = HeadingIndex(headings)
+
+    private fun matchMemoSection(sectionTitle: String?, headings: List<String>) = HeadingIndex(headings).match(sectionTitle)
 
     private fun memo(text: String, section: String?, at: Long = 1L) =
         MarginMemo(text, at, composeMemoSectionTitle(section))
@@ -75,7 +78,7 @@ class MarginMemoSectionsTest {
             memo("導入の古いメモ", "導入", at = 1L)
         )
 
-        val arranged = arrangeMemos(memos, headings, current = SectionRef("導入"))
+        val arranged = arrangeMemos(memos, index, current = SectionRef("導入"))
 
         assertEquals(listOf("導入のメモ", "導入の古いメモ"), arranged.current.map { it.memo.text })
         assertEquals(listOf(SectionRef(null), SectionRef("本論")), arranged.others.map { it.section })
@@ -85,7 +88,7 @@ class MarginMemoSectionsTest {
     /** **同名に共通のメモはどの候補にも出すが、畳んだ件数では1件と数える。** */
     @Test
     fun `同名に共通のメモはどの候補にも出し、件数は1件と数える`() {
-        val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), headings, current = SectionRef("導入"))
+        val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), index, current = SectionRef("導入"))
 
         assertEquals(listOf(SectionRef("まとめ", 0), SectionRef("まとめ", 1)), arranged.others.map { it.section })
         assertEquals(1, arranged.otherCount)
@@ -95,7 +98,7 @@ class MarginMemoSectionsTest {
 
     @Test
     fun `今の節が同名の候補ならこの節にも出し、ほかの候補にも出す`() {
-        val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), headings, current = SectionRef("まとめ", 1))
+        val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), index, current = SectionRef("まとめ", 1))
 
         assertEquals(listOf("まとめのメモ"), arranged.current.map { it.memo.text })
         assertEquals(listOf(SectionRef("まとめ", 0)), arranged.others.map { it.section })
@@ -106,7 +109,7 @@ class MarginMemoSectionsTest {
     fun `見出しが見つからないメモは最後の組にまとめ、印は付けない`() {
         val arranged = arrangeMemos(
             listOf(memo("消えた節のメモ", "消えた見出し"), memo("本論のメモ", "本論")),
-            headings,
+            index,
             current = SectionRef("導入")
         )
 
@@ -124,7 +127,7 @@ class MarginMemoSectionsTest {
         val sections = listOf(SectionRef(null), SectionRef("導入"), SectionRef("まとめ", 0), SectionRef("本論"), SectionRef("まとめ", 1))
 
         sections.forEach { current ->
-            val arranged = arrangeMemos(memos, headings, current)
+            val arranged = arrangeMemos(memos, index, current)
             val shown = (arranged.current + arranged.others.flatMap { it.memos }).map { it.memo }.toSet()
             assertEquals("$current で落とした", memos.toSet(), shown)
             assertEquals("$current で件数が合わない", memos.size, arranged.current.size + arranged.otherCount)
@@ -133,10 +136,46 @@ class MarginMemoSectionsTest {
 
     @Test
     fun `見出しの無いノートでは見出しを持たないメモが全体の節に出る`() {
-        val arranged = arrangeMemos(listOf(memo("全体のメモ", null)), emptyList(), current = SectionRef(null))
+        val arranged = arrangeMemos(listOf(memo("全体のメモ", null)), HeadingIndex(emptyList()), current = SectionRef(null))
 
         assertEquals(listOf("全体のメモ"), arranged.current.map { it.memo.text })
         assertTrue(arranged.others.isEmpty())
         assertTrue(arranged.countsBySection.isEmpty())
+    }
+
+    // ── 見出しの多いノート（→ lessons L13・L52）──────────────────────────────────
+
+    /**
+     * **見出しの数に比例する仕事は索引を作るときの1回だけ**で、並べ直すたびには見出しを読まない。
+     * 照合のたびに見出しを数え直していたころは、見出しを倍にすると読む回数が4倍になり、Main が秒単位で止まった。
+     */
+    @Test
+    fun `索引は見出しの数に比例して作り、並べるときは見出しを読まない`() {
+        fun build(count: Int): Pair<CountingList, HeadingIndex> {
+            val headings = CountingList((0 until count).map { if (it % 2 == 0) "まとめ" else "節$it" })
+            return headings to HeadingIndex(headings)
+        }
+        val (small, _) = build(1_024)
+        val (large, index) = build(2_048)
+        assertTrue("見出しを倍にして読む回数が ${large.reads}/${small.reads} 倍になった", large.reads <= small.reads * 5 / 2)
+
+        large.reads = 0
+        val memos = (1..20).map { memo("メモ$it", if (it % 2 == 0) "まとめ" else "節${it * 2 - 1}", at = it.toLong()) }
+        listOf(emptyList(), memos).forEach { input ->
+            listOf(SectionRef(null), SectionRef("まとめ", 3), SectionRef("節7")).forEach { current ->
+                arrangeMemos(input, index, current)
+            }
+        }
+        assertEquals("並べるたびに見出しを読み直した", 0, large.reads)
+    }
+
+    /** 読んだ回数を数える見出しの並び。 */
+    private class CountingList(private val inner: List<String>) : AbstractList<String>() {
+        var reads = 0
+        override val size: Int get() = inner.size
+        override fun get(index: Int): String {
+            reads++
+            return inner[index]
+        }
     }
 }

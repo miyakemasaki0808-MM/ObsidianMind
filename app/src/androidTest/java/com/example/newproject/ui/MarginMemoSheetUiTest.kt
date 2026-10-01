@@ -23,6 +23,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.ArrangedMemos
+import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
@@ -344,7 +345,7 @@ class MarginMemoSheetUiTest {
         val harness = Harness()
         val memos = listOf(MarginMemo("節Cのメモ", 1L, "節C"))
         harness.state = READY.copy(memos = memos)
-        harness.arranged = arrangeMemos(memos, listOf("節B", "節C"), current = SectionRef("節B"))
+        harness.arranged = arrangeMemos(memos, HeadingIndex(listOf("節B", "節C")), current = SectionRef("節B"))
         setContent(harness)
 
         composeRule.onNodeWithText("節Cのメモ").assertDoesNotExist()
@@ -361,7 +362,7 @@ class MarginMemoSheetUiTest {
         val harness = Harness()
         val memos = listOf(MarginMemo("節Cのメモ", 1L, "節C"))
         harness.state = READY.copy(memos = memos)
-        harness.arranged = arrangeMemos(memos, listOf("節B", "節C"), current = SectionRef("節B"))
+        harness.arranged = arrangeMemos(memos, HeadingIndex(listOf("節B", "節C")), current = SectionRef("節B"))
         harness.reveal = MemoReveal.AllMemos
         setContent(harness)
 

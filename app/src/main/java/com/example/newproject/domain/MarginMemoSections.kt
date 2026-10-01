@@ -25,19 +25,53 @@ internal sealed interface MemoSectionMatch {
 }
 
 /**
- * メモの見出し名を今の見出し（本文の順）と照合する。
+ * 今の見出しの索引（→ features/margin_pane.md §5.6）。**本文の解析ごとに1回、Main の外で作る**（→ `buildNoteSectionModel`）。
  *
- * **照合の前に、今の見出しにも保存時と同じ整形をかける。** 保存側は長い見出しを切り、制御文字を落としているので、
- * 生の見出しと比べると長い見出しのメモが全部「見つからない」になる。
+ * 見出しの数に比例する仕事はここで済ませ、メモの照合と節への振り分けを**メモの数だけ**で済ませる。
+ * 照合のたびに見出しを数え直すと、見出しの多いノートでは表示のたび・節を移るたびに Main が止まる。
  */
-internal fun matchMemoSection(sectionTitle: String?, headings: List<String>): MemoSectionMatch {
-    if (sectionTitle == null) return MemoSectionMatch.Opening
-    val refs = sectionRefsOf(headings)
-    val hits = headings.indices.filter { composeMemoSectionTitle(headings[it]) == sectionTitle }.map { refs[it] }
-    return when (hits.size) {
-        0 -> MemoSectionMatch.Missing
-        1 -> MemoSectionMatch.Unique(hits.single())
-        else -> MemoSectionMatch.Shared(hits)
+class HeadingIndex internal constructor(headings: List<String>) {
+    /** 見出しの節を本文の順に。同名の見出しには、その名前の中での順番が付く。 */
+    internal val sections: List<SectionRef>
+
+    private val positions: Map<SectionRef, Int>
+
+    /**
+     * 保存時と同じ整形をかけた見出し名から、その名前の節へ。**照合の前に今の見出しにも保存時の整形をかける** —
+     * 保存側は長い見出しを切り、制御文字を落としているので、生の見出しと比べると長い見出しのメモが全部見つからない。
+     */
+    private val byStoredTitle: Map<String, List<SectionRef>>
+
+    init {
+        val seen = HashMap<String, Int>()
+        sections = headings.map { title ->
+            val ordinal = seen[title] ?: 0
+            seen[title] = ordinal + 1
+            SectionRef(title, ordinal)
+        }
+        positions = HashMap<SectionRef, Int>(sections.size * 2).apply {
+            sections.forEachIndexed { k, ref -> put(ref, k) }
+        }
+        val stored = LinkedHashMap<String, MutableList<SectionRef>>()
+        sections.forEach { ref ->
+            val key = ref.title?.let(::composeMemoSectionTitle) ?: return@forEach
+            stored.getOrPut(key) { mutableListOf() }.add(ref)
+        }
+        byStoredTitle = stored
+    }
+
+    /** [ref] の見出しが本文の何番目か。同じ名前と順番の見出しが無ければ null。 */
+    internal fun positionOf(ref: SectionRef): Int? = positions[ref]
+
+    /** メモの見出し名を照合する。保存値は書き換えない。 */
+    internal fun match(sectionTitle: String?): MemoSectionMatch {
+        if (sectionTitle == null) return MemoSectionMatch.Opening
+        val hits = byStoredTitle[sectionTitle].orEmpty()
+        return when (hits.size) {
+            0 -> MemoSectionMatch.Missing
+            1 -> MemoSectionMatch.Unique(hits.single())
+            else -> MemoSectionMatch.Shared(hits)
+        }
     }
 }
 
@@ -64,32 +98,35 @@ internal data class ArrangedMemos(
 
 /**
  * [memos] を今の節 [current] とほかの節に分ける。[memos] の並び（新しい順）は各組の中で保つ。
- * [headings] は今の本文の見出しを本文の順に並べたもの。
+ *
+ * **見出しをたどらない。** 組はメモが当たる節からだけ作り、本文の順は [index] で引く。
+ * 節を移るたびに呼ばれるので、ここの仕事はメモの数だけに比例させる。
  */
-internal fun arrangeMemos(memos: List<MarginMemo>, headings: List<String>, current: SectionRef): ArrangedMemos {
-    val placed = memos.map { PlacedMemo(it, matchMemoSection(it.sectionTitle, headings)) }
+internal fun arrangeMemos(memos: List<MarginMemo>, index: HeadingIndex, current: SectionRef): ArrangedMemos {
     val opening = SectionRef(title = null)
-    val sections = listOf(opening) + sectionRefsOf(headings)
+    val placed = memos.map { PlacedMemo(it, index.match(it.sectionTitle)) }
     val inCurrent = placed.filter { current in it.match.sections(opening) }
-    val groups = sections
-        .filter { it != current }
-        .map { section -> MemoGroup(section, placed.filter { section in it.match.sections(opening) }) }
-        .filter { it.memos.isNotEmpty() }
+    val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
+    placed.forEach { memo ->
+        memo.match.sections(opening)
+            .filter { it != current }
+            .forEach { section -> bySection.getOrPut(section) { mutableListOf() }.add(memo) }
+    }
+    val groups = bySection.entries
+        .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
+        .map { (section, inSection) -> MemoGroup(section, inSection) }
     val missing = placed.filter { it.match == MemoSectionMatch.Missing }
     return ArrangedMemos(
         current = inCurrent,
         others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing),
         otherCount = placed.count { current !in it.match.sections(opening) },
-        countsBySection = sections
+        countsBySection = placed
+            .flatMap { it.match.sections(opening) }
             .filter { it != opening }
-            .associateWith { section -> placed.count { section in it.match.sections(opening) } }
-            .filterValues { it > 0 }
+            .groupingBy { it }
+            .eachCount()
     )
 }
-
-/** 見出しの並びを節の指し方へ。同名の見出しには、その名前の中での順番を付ける。 */
-private fun sectionRefsOf(headings: List<String>): List<SectionRef> =
-    headings.mapIndexed { k, title -> SectionRef(title, ordinal = (0 until k).count { headings[it] == title }) }
 
 private fun MemoSectionMatch.sections(opening: SectionRef): List<SectionRef> = when (this) {
     MemoSectionMatch.Opening -> listOf(opening)

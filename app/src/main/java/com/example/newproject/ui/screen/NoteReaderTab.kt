@@ -178,7 +178,8 @@ internal fun NoteReaderTab(
     val arrangedMemos = remember(readyMemos?.memos, sectionModel, bodySection) {
         val memos = readyMemos?.memos ?: return@remember null
         val model = sectionModel ?: return@remember null
-        arrangeMemos(memos, model.sections.map { it.title }, bodySection ?: SectionRef(title = null))
+        // **見出しの索引は解析と一緒に Main の外で作ってある。** ここでは見出しをたどらない。
+        arrangeMemos(memos, model.headingIndex, bodySection ?: SectionRef(title = null))
     }
     // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
     val jumpToSection: (SectionRef) -> Unit = { ref ->
