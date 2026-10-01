@@ -1,6 +1,7 @@
 package com.example.newproject.domain.markdown
 
 import com.example.newproject.model.ReunionPassage
+import com.example.newproject.model.SectionRef
 
 /**
  * ノート本文のセクション（見出し＋その配下）。
@@ -24,10 +25,23 @@ class NoteSectionModel internal constructor(
     internal val blocks: List<MarkdownBlock>
 ) {
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */
-    fun sectionForBlockIndex(index: Int): NoteSection? {
-        var result: NoteSection? = null
+    fun sectionForBlockIndex(index: Int): NoteSection? = headingAt(index)?.let { sections[it] }
+
+    /**
+     * index を含む節を、**見出し名と同名の中での順番**で指す（→ [SectionRef]）。
+     * 見出しより前と見出しの無いノートは名前の無い節。区切り方は [sectionForBlockIndex] と同じ。
+     */
+    fun sectionRefAt(index: Int): SectionRef {
+        val k = headingAt(index) ?: return SectionRef(title = null)
+        val title = sections[k].title
+        return SectionRef(title, ordinal = (0 until k).count { sections[it].title == title })
+    }
+
+    /** index 以下で最も近い見出しの番号（[sections] の添字）。見出し前／見出し無しは null。 */
+    private fun headingAt(index: Int): Int? {
+        var result: Int? = null
         for (k in headingBlockIndices.indices) {
-            if (headingBlockIndices[k] <= index) result = sections[k] else break
+            if (headingBlockIndices[k] <= index) result = k else break
         }
         return result
     }

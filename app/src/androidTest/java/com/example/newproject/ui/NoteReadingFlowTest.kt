@@ -27,6 +27,7 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.markdown.NoteImageContent
@@ -706,7 +707,9 @@ class NoteReadingFlowTest {
             marginPaneOpen = false,
             onSetMarginPaneOpen = {},
             expandedWidth = false,
-            onSaveMarginMemo = { _, _ -> },
+            memoDraft = MarginMemoDraft(),
+            onEditMarginMemo = { _, _ -> },
+            onSubmitMarginMemo = {},
             onDeleteMarginMemo = {},
             onDismissMarginMemo = {},
             onReadingProgress = onReadingProgress,

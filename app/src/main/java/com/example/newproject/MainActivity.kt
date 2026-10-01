@@ -4,6 +4,7 @@ import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.domain.isDuplicateLauncherLaunch
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.model.state.SummaryState
@@ -195,9 +196,9 @@ class MainActivity : ComponentActivity() {
                                 marginPaneOpen = marginPaneOpen,
                                 onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
                                 expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
-                                onSaveMarginMemo = { text, section ->
-                                    viewModel.saveMarginMemo(text, section)
-                                },
+                                memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
+                                onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
+                                onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },

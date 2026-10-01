@@ -77,6 +77,8 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -127,7 +129,12 @@ internal fun NoteReaderTab(
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
     expandedWidth: Boolean,
-    onSaveMarginMemo: (text: String, sectionTitle: String?) -> Unit,
+    /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
+    memoDraft: MarginMemoDraft,
+    /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
+    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
+    onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
@@ -152,6 +159,10 @@ internal fun NoteReaderTab(
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
+    // 本文の節。余白メモの書き込み先を決める（→ features/margin_pane.md §5.3）。
+    val bodySection by remember(sectionModel) {
+        derivedStateOf { sectionModel?.sectionRefAt(listState.firstVisibleItemIndex) }
+    }
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
@@ -168,8 +179,10 @@ internal fun NoteReaderTab(
 
     val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
-    // **書きかけはシートとペインの外で持つ。** 文字と受理の対応とノートを一組で持ち、別のノートの書きかけは捨てる。
-    val memoDraft = rememberMarginMemoInput(successState?.targetUri, uiState.marginMemoState)
+    // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
+    // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
+    val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
+    val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
@@ -426,7 +439,8 @@ internal fun NoteReaderTab(
                         MarginMemoSheetContent(
                             state = uiState.marginMemoState,
                             draft = memoDraft,
-                            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
+                            onEdit = onEditMemo,
+                            onSubmit = onSubmitMemo,
                             onDelete = onDeleteMarginMemo,
                             modifier = Modifier.padding(top = 16.dp)
                         )
@@ -436,13 +450,14 @@ internal fun NoteReaderTab(
         }
     }
 
-    // 余白メモのボトムシート。**書いた場所は開いた時点の可視セクションから引く**
-    // （紐づけではなく当時の記録 → 判断2）。
+    // 余白メモのボトムシート。**書いた場所は書き始めた時点の本文の節**
+    // （紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
     if (uiState.isMarginMemoSheetVisible) {
         MarginMemoSheet(
             state = uiState.marginMemoState,
             draft = memoDraft,
-            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
+            onEdit = onEditMemo,
+            onSubmit = onSubmitMemo,
             onDelete = onDeleteMarginMemo,
             onDismiss = onDismissMarginMemo
         )

@@ -131,7 +131,16 @@ internal class FakePersistence : ReadingTracePersistence {
         files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
             ?.let { files.remove(it) != null } ?: false
 
-    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
+    /**
+     * 保存が**書けた直後**に割り込む口。書き込みは済んだのに結果が呼び出し元へ戻る前、
+     * という順序（例: 置いた直後にノートを替えた）を作る。
+     */
+    var afterSave: (() -> Unit)? = null
+
+    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult =
+        saveInternal(trace, vaultKey).also { afterSave?.invoke() }
+
+    private fun saveInternal(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
         savedVaultKeys += vaultKey
         if (failSave || failSaveOnAttempt == saveAttempts) {

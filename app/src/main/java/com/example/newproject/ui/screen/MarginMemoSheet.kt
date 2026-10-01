@@ -34,9 +34,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
+import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import com.example.newproject.ui.theme.AccentText
@@ -65,8 +68,9 @@ import java.util.Locale
 @Composable
 internal fun MarginMemoSheet(
     state: MarginMemoState,
-    draft: MarginMemoInputBinding,
-    onSave: (String) -> Unit,
+    draft: MarginMemoDraft,
+    onEdit: (String) -> Unit,
+    onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -79,7 +83,8 @@ internal fun MarginMemoSheet(
         MarginMemoSheetContent(
             state = state,
             draft = draft,
-            onSave = onSave,
+            onEdit = onEdit,
+            onSubmit = onSubmit,
             onDelete = onDelete
         )
     }
@@ -89,27 +94,26 @@ internal fun MarginMemoSheet(
  * シートの中身。**`ModalBottomSheet` から切り出してあるのは、シートを開かずに
  * 入力の振る舞いを検査するため**（調整シートと同じ切り分け）。
  *
- * 連続して置けること自体がこの機能の要点なので、**下書きの扱いはUIテストで固定する。**
+ * **書きかけ [draft] は ViewModel 側が持つ**（→ features/margin_pane.md §6.1）。文字・書き込み先・
+ * 未確定の送信を一組で持ち、受理と入力欄を空にする判断も向こうで行う。この部品は描くだけで、
+ * 何を送ったかを覚えない — 覚えると、保存中にペインをしまう・シートへ移すと対応が消える。
  *
- * **書きかけ [draft] は呼び出し側が持つ**（→ [rememberMarginMemoInput]）。文字だけでなく、
- * 何を送ったかと受理の対応も一緒に持つ。この部品の中に持つと、保存中にペインをしまう・シートへ移すと
- * 対応が消え、受理済みの文字が入力欄に残って再送できてしまう。
- *
- * **入力欄を楽観的に空にしない。** 空にするのは受け取れたと分かったときで、送った原文のままの入力だけ
- * （→ [com.example.newproject.domain.MarginMemoInput.reconciled]）。押した瞬間に空にすると、
- * 置けなかったときに原文を戻せない。
+ * **ボタンの役目は書きかけで決まる**（→ [sendAction]）。未確定の送信と整えた本文が同じなら、
+ * 新しく置かずに元の送信を確かめる。
  */
 @Composable
 internal fun MarginMemoSheetContent(
     state: MarginMemoState,
-    draft: MarginMemoInputBinding,
-    onSave: (String) -> Unit,
+    draft: MarginMemoDraft,
+    onEdit: (String) -> Unit,
+    onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
 
     val ready = state as? MarginMemoState.Ready
+    val action = draft.sendAction()
 
     Column(
         modifier = modifier
@@ -129,7 +133,7 @@ internal fun MarginMemoSheetContent(
             Spacer(modifier = Modifier.height(12.dp))
             OutlinedTextField(
                 value = draft.text,
-                onValueChange = draft.onChange,
+                onValueChange = onEdit,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
                 minLines = 2,
@@ -154,23 +158,23 @@ internal fun MarginMemoSheetContent(
                 StatusText(state)
                 Spacer(modifier = Modifier.height(0.dp))
                 Button(
-                    onClick = {
-                        // **送った記録を先に残す。** 保存の結果が同期で返っても、受理を取りこぼさない。
-                        val text = draft.text
-                        draft.onSubmit(text)
-                        onSave(text)
-                    },
+                    onClick = onSubmit,
                     // **受け付けられない状態では押させない。** 押せてしまうと、
                     // Controller が何もしないまま入力だけが宙に浮く。
                     enabled = ready != null &&
                         ready.status != MemoSaveStatus.Saving &&
-                        draft.text.isNotBlank(),
+                        action != MemoSendAction.None,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ButtonPrimary,
                         contentColor = OnButtonPrimary
                     ),
                     shape = RoundedCornerShape(20.dp)
-                ) { Text("置く", color = OnButtonPrimary) }
+                ) {
+                    Text(
+                        if (action == MemoSendAction.Verify) "保存を確かめる" else "置く",
+                        color = OnButtonPrimary
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -241,6 +245,8 @@ private fun StatusText(state: MarginMemoState) {
         // **入力は消えていない**ことまで言う。消えたと思わせない。
         MemoSaveStatus.Full -> "このノートのメモがいっぱいです。1件消すと置けます"
         MemoSaveStatus.Failed -> "置けませんでした。もう一度お試しください"
+        // **未保存と断定しない。** 読めないだけで、置けている場合がある。
+        MemoSaveStatus.Unconfirmed -> "保存を確認できません"
     }
     if (text.isEmpty()) return
     Text(

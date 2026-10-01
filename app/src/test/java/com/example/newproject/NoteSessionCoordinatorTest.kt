@@ -27,12 +27,6 @@ import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.PendingDistillOriginal
-import com.example.newproject.data.ReadingTraceFolderStatus
-import com.example.newproject.data.ReadingTracePersistence
-import com.example.newproject.data.ReadingTraceKeyListing
-import com.example.newproject.data.ReadingTraceReadResult
-import com.example.newproject.data.ReadingTraceSaveResult
-import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -47,6 +41,9 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.MarginMemoState
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
@@ -1445,16 +1442,18 @@ class NoteSessionCoordinatorTest {
         val env = Env(this)
         val coordinator = env.coordinator()
         coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
         coordinator.openMarginMemoSheet()
         advanceUntilIdle()
 
-        coordinator.saveMarginMemo("保存中に閉じたメモ", sectionTitle = null)
+        coordinator.editMarginMemo("保存中に閉じたメモ", bodySection = null)
+        coordinator.submitMarginMemo(bodySection = null)
         coordinator.dismissMarginMemoSheet()
         coordinator.openMarginMemoSheet()
         advanceUntilIdle()
 
         val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
-        assertEquals(1L, ready.acceptedCount)
+        assertTrue("受理したのに入力欄が残った", env.drafts.draft(TARGET_URI).isEmpty)
         assertEquals(listOf("保存中に閉じたメモ"), ready.memos.map { it.text })
     }
 
@@ -1485,8 +1484,177 @@ class NoteSessionCoordinatorTest {
         assertEquals(listOf("Bのメモ"), ready.memos.map { it.text })
     }
 
+    // ── 書きかけと送信の照合（→ features/margin_pane.md §6.1・§6.2・§10）──────────────
+
+    @Test
+    fun `書きかけはノートを行き来しても書き込み先ごと戻る`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "a.md"))
+        env.trace.put(storedTrace(count = 1, path = "b.md"))
+        val coordinator = env.coordinator()
+
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+        coordinator.editMarginMemo("Aに書きかけ", SectionRef("節B"))
+        coordinator.show("b.md", URI_B)
+        advanceUntilIdle()
+        assertTrue("Bに前のノートの書きかけが出た", env.drafts.draft(URI_B).isEmpty)
+
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        assertEquals(MarginMemoDraft(text = "Aに書きかけ", target = SectionRef("節B")), env.drafts.draft(URI_A))
+    }
+
+    /** 保存を頼んだが書き始める前に離れた。**戻って読めたのに無ければ未受理**で、原文を残す。 */
+    @Test
+    fun `書き始める前に離れた送信は、戻ったときに未受理として原文を残す`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "a.md"))
+        env.trace.put(storedTrace(count = 1, path = "b.md").copy(memos = listOf(memoOf("Bのメモ"))))
+        val coordinator = env.coordinator()
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        coordinator.editMarginMemo("置く前に離れた", bodySection = null)
+        coordinator.submitMarginMemo(bodySection = null)
+        coordinator.show("b.md", URI_B)
+        advanceUntilIdle()
+
+        val inB = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals("Bの画面が更新された", MemoSaveStatus.None, inB.status)
+        assertEquals(listOf("Bのメモ"), inB.memos.map { it.text })
+
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        val inA = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.Failed, inA.status)
+        assertEquals("置く前に離れた", env.drafts.draft(URI_A).text)
+        assertNull(env.drafts.draft(URI_A).pending)
+        assertTrue(env.trace.stored("a.md")!!.memos.isEmpty())
+    }
+
+    /**
+     * 書けた直後に離れて、結果を受け取れなかった。**戻って読んだ一覧で受理が分かれば消費する。**
+     * 受理件数で数えていたころは、ノートを替えると件数が0に戻り、受理済みの文字が入力欄に残った。
+     */
+    @Test
+    fun `書けた直後に離れた送信は、戻ったときに受理して入力欄を空にする`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "a.md"))
+        env.trace.put(storedTrace(count = 1, path = "b.md"))
+        val coordinator = env.coordinator()
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        coordinator.editMarginMemo("書けた直後に離れた", bodySection = null)
+        env.trace.afterSave = {
+            env.trace.afterSave = null
+            coordinator.show("b.md", URI_B)
+        }
+        coordinator.submitMarginMemo(bodySection = null)
+        advanceUntilIdle()
+
+        assertEquals("書き込みが起きていない", listOf("書けた直後に離れた"), env.trace.stored("a.md")!!.memos.map { it.text })
+        val inB = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals("Bの画面が更新された", MemoSaveStatus.None, inB.status)
+        assertTrue(inB.memos.isEmpty())
+
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        val inA = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.Saved, inA.status)
+        assertTrue("受理済みの文字が入力欄に残った", env.drafts.draft(URI_A).isEmpty)
+    }
+
+    /**
+     * **戻ったときに痕跡を読めなくても、未受理へ落とさない**（→ lessons L47）。読めないことと無いことは違う。
+     * 読めるようになったら元の送信を確かめ、**同じメモを2件にしない。**
+     */
+    @Test
+    fun `戻って痕跡を読めなければ未確定のまま持ち、読めるようになったら重複なく受理する`() = runTest {
+        listOf("読み取りの失敗", "破損").forEach { failure ->
+            val env = Env(this)
+            env.trace.put(storedTrace(count = 1, path = "a.md"))
+            env.trace.put(storedTrace(count = 1, path = "b.md"))
+            val coordinator = env.coordinator()
+            coordinator.show("a.md", URI_A)
+            advanceUntilIdle()
+            coordinator.editMarginMemo("読めない間のメモ", bodySection = null)
+            env.trace.afterSave = {
+                env.trace.afterSave = null
+                coordinator.show("b.md", URI_B)
+            }
+            coordinator.submitMarginMemo(bodySection = null)
+            advanceUntilIdle()
+
+            if (failure == "破損") env.trace.corruptPaths += "a.md" else env.trace.unreadablePaths += "a.md"
+            coordinator.show("a.md", URI_A)
+            advanceUntilIdle()
+
+            val unconfirmed = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+            assertEquals("$failure を未受理と読んだ", MemoSaveStatus.Unconfirmed, unconfirmed.status)
+            assertEquals("読めない間のメモ", env.drafts.draft(URI_A).text)
+            assertNotNull("$failure で送信を手放した", env.drafts.draft(URI_A).pending)
+
+            env.trace.corruptPaths.clear()
+            env.trace.unreadablePaths.clear()
+            coordinator.submitMarginMemo(bodySection = null)
+            advanceUntilIdle()
+
+            val confirmed = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+            assertEquals(MemoSaveStatus.Saved, confirmed.status)
+            assertTrue(env.drafts.draft(URI_A).isEmpty)
+            assertEquals(
+                "$failure の後に同じメモを2件にした",
+                1,
+                env.trace.stored("a.md")!!.memos.count { it.text == "読めない間のメモ" }
+            )
+        }
+    }
+
+    /** **Vault を替えたら書きかけを捨てる。** 戻っても、古い Vault での送信は新しい書きかけを消さない。 */
+    @Test
+    fun `Vaultを行き来しても、古い送信は新しい書きかけを消さない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "a.md"))
+        val coordinator = env.coordinator()
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+
+        coordinator.editMarginMemo("同じ文", bodySection = null)
+        env.trace.afterSave = {
+            env.trace.afterSave = null
+            coordinator.onVaultChanged()
+        }
+        coordinator.submitMarginMemo(bodySection = null)
+        advanceUntilIdle()
+        assertTrue("Vault切替で書きかけが残った", env.drafts.draft(URI_A).isEmpty)
+
+        coordinator.onVaultChanged()
+        coordinator.show("a.md", URI_A)
+        advanceUntilIdle()
+        coordinator.editMarginMemo("同じ文", bodySection = null)
+        advanceUntilIdle()
+
+        assertEquals(MarginMemoDraft(text = "同じ文"), env.drafts.draft(URI_A))
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.None, ready.status)
+    }
+
+    /** ノートを開いて本文を出す（ノート切替の契約を通す）。本文には見出しが2つある。 */
+    private fun NoteSessionCoordinator.show(path: String, uri: String) {
+        onNoteChanged()
+        startReadingTrace(path, path, null)
+        setNoteState(NoteState.Success(title = path, content = "冒頭\n\n# 節B\n\n本文\n\n# 節C\n\n続き", targetUri = uri))
+    }
+
     private companion object {
         const val TARGET_URI = "content://vault/note.md"
+        const val URI_A = "content://vault/a.md"
+        const val URI_B = "content://vault/b.md"
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"
@@ -1512,7 +1680,8 @@ class NoteSessionCoordinatorTest {
         val vault = FakeVaultBrowser(handle = null)
         val history = FakeHistoryStore()
         val distill = FakeDistillPersistence()
-        val trace = FakeTracePersistence()
+        /** 痕跡の置き場。**失敗・読めない・書き込み中の割り込みを起こせる**共有の偽物を使う。 */
+        val trace = FakePersistence()
 
         /** 再会カードの前後の要約の保存。 */
         val passageCache = InMemorySummaryCache()
@@ -1526,6 +1695,9 @@ class NoteSessionCoordinatorTest {
 
         /** 要約の保存。**結晶の順序を見るテストが保存済みの要約を仕込む**ために外へ出す。 */
         val summaryCache = InMemorySummaryCache()
+
+        /** 余白メモの書きかけ。**Vault 単位**なので、ノートを替えても残ることを外から確かめる。 */
+        val drafts = InMemoryMarginMemoDrafts()
 
         fun coordinator(
             cancelHostJobs: () -> Unit = {},
@@ -1551,6 +1723,7 @@ class NoteSessionCoordinatorTest {
             reunionPassageCache = passageCache,
             crystalPersistence = crystals,
             crystalMaterials = crystalMaterials,
+            marginMemoDrafts = drafts,
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,
@@ -1617,36 +1790,5 @@ private class FakeHistoryStore : HistoryStore {
         override fun pendingOriginal(): PendingDistillOriginal? = null
         override fun restoreOriginal(): DistillRecoveryResolutionResult =
             DistillRecoveryResolutionResult.NoValidRecord
-    }
-
-    private class FakeTracePersistence : ReadingTracePersistence {
-        val saved = mutableListOf<ReadingTrace>()
-        private val files = mutableMapOf<String, ReadingTrace>()
-
-        fun put(trace: ReadingTrace) {
-            files[trace.vaultRelativePath] = trace
-        }
-
-        override fun folderStatus(): ReadingTraceFolderStatus = ReadingTraceFolderStatus.Ready
-        override fun load(vaultRelativePath: String, vaultKey: String): ReadingTraceReadResult =
-            files[vaultRelativePath]?.let { ReadingTraceReadResult.Valid(it) }
-                ?: ReadingTraceReadResult.None
-
-        override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
-            ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
-
-        override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
-            files.entries.firstOrNull { ReadingTraceStore.keyFor(it.key) == key }
-                ?.let { ReadingTraceReadResult.Valid(it.value) }
-                ?: ReadingTraceReadResult.None
-
-        override fun deleteByKey(key: String, vaultKey: String): Boolean =
-            files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
-                ?.let { files.remove(it) != null } ?: false
-        override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
-            saved += trace
-            files[trace.vaultRelativePath] = trace
-            return ReadingTraceSaveResult.Success
-        }
     }
 }
