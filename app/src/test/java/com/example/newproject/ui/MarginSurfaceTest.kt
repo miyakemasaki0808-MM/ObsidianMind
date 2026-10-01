@@ -4,6 +4,10 @@ import com.example.newproject.ui.screen.MarginToggle
 import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
+import com.example.newproject.ui.screen.sectionLabel
+import com.example.newproject.ui.screen.writeTargetNotice
+import com.example.newproject.model.SectionRef
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -88,5 +92,31 @@ class MarginSurfaceTest {
             MarginWindowShift.None,
             marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = true)
         )
+    }
+
+    // ── 節の呼び名と書き込み先（→ features/margin_pane.md §5.2・§5.3）──────────────
+
+    @Test
+    fun `名前の無い節は見出しの有無で冒頭か全体と呼ぶ`() {
+        assertEquals("ノートの冒頭", sectionLabel(SectionRef(null), hasHeadings = true))
+        assertEquals("ノート全体", sectionLabel(SectionRef(null), hasHeadings = false))
+    }
+
+    /** 同名の見出しを名前だけで呼ぶと、書き込み先がどちらの節か見分けられない。 */
+    @Test
+    fun `同名の見出しの2つ目からは順番を添える`() {
+        assertEquals("まとめ", sectionLabel(SectionRef("まとめ", 0), hasHeadings = true))
+        assertEquals("まとめ（2つ目）", sectionLabel(SectionRef("まとめ", 1), hasHeadings = true))
+    }
+
+    @Test
+    fun `書き込み先は今の本文の節と違うときだけ知らせる`() {
+        val b = SectionRef("節B")
+        val c = SectionRef("節C")
+
+        assertEquals(b, writeTargetNotice(target = b, bodySection = c))
+        assertNull(writeTargetNotice(target = b, bodySection = b))
+        assertNull("書いていないのに知らせた", writeTargetNotice(target = null, bodySection = c))
+        assertNull("本文の節が分からないのに知らせた", writeTargetNotice(target = b, bodySection = null))
     }
 }

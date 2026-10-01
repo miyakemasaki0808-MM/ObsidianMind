@@ -37,6 +37,19 @@ class NoteSectionModel internal constructor(
         return SectionRef(title, ordinal = (0 until k).count { sections[it].title == title })
     }
 
+    /**
+     * [ref] が指す節の始まりのブロック番号。見出しより前の節は先頭（0）。
+     * **本文を解析し直した後もここで引き直す** — 同じ名前と順番の見出しが無ければ null（飛べない）。
+     */
+    fun startBlockOf(ref: SectionRef): Int? {
+        val title = ref.title ?: return 0
+        val k = sections.indices.filter { sections[it].title == title }.getOrNull(ref.ordinal) ?: return null
+        return headingBlockIndices[k]
+    }
+
+    /** 見出しが1つでもあるか。名前の無い節を「冒頭」と呼ぶか「全体」と呼ぶかが変わる。 */
+    val hasHeadings: Boolean get() = sections.isNotEmpty()
+
     /** index 以下で最も近い見出しの番号（[sections] の添字）。見出し前／見出し無しは null。 */
     private fun headingAt(index: Int): Int? {
         var result: Int? = null

@@ -19,6 +19,7 @@ import com.example.newproject.domain.edited
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
 import com.example.newproject.domain.submitted
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import com.example.newproject.model.state.MemoSubmission
@@ -64,12 +65,14 @@ class MarginMemoSheetUiTest {
         val drafts = ComposeMarginMemoDrafts()
         var state by mutableStateOf<MarginMemoState>(READY)
         var note by mutableStateOf(NOTE_A)
+        /** 本文の節。テストが本文を進めたことにして替える。 */
+        var section by mutableStateOf<SectionRef?>(SectionRef("節B"))
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
         val draft get() = drafts.draft(note)
 
-        fun edit(text: String) = drafts.update(note) { it.edited(text, null) }
+        fun edit(text: String) = drafts.update(note) { it.edited(text, section) }
 
         fun submit() {
             val submission = submissionOf(drafts.draft(note).text, null, ++clock) ?: return
@@ -92,6 +95,9 @@ class MarginMemoSheetUiTest {
                         MarginMemoSheetContent(
                             state = harness.state,
                             draft = harness.draft,
+                            section = harness.section,
+                            hasHeadings = true,
+                            onJumpToSection = { harness.section = it },
                             onEdit = harness::edit,
                             onSubmit = harness::submit,
                             onDelete = {}
@@ -247,6 +253,27 @@ class MarginMemoSheetUiTest {
 
         input.performTextReplacement("別の内容")
         composeRule.onNodeWithText("置く").assertExists()
+    }
+
+    /**
+     * **書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない**（→ features/margin_pane.md §5.2）。
+     * 書いている最中に本文を進めると知らせが出るので、そのたびに入力欄が下がると打っている指の下がずれる。
+     */
+    @Test
+    fun 書き込み先の知らせが出ても入力欄は動かない() {
+        val harness = Harness()
+        setContent(harness)
+
+        input.performTextInput("節Bで書き始めた")
+        val before = input.fetchSemanticsNode().boundsInRoot
+        composeRule.runOnIdle { harness.section = SectionRef("節C") }
+
+        composeRule.onNodeWithText("「節B」へ書き込み中").assertExists()
+        assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
+
+        // 「本文を戻す」で本文が書き込み先へ戻れば、知らせは消える。
+        composeRule.onNodeWithText("本文を戻す").performClick()
+        composeRule.onNodeWithText("「節B」へ書き込み中").assertDoesNotExist()
     }
 
     private companion object {

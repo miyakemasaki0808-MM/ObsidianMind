@@ -2,6 +2,7 @@ package com.example.newproject.domain.markdown
 
 import com.example.newproject.model.SectionRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** 節を見出し名と同名の中での順番で指す（→ features/margin_pane.md §5.3）。 */
@@ -31,5 +32,21 @@ class SectionRefTest {
         val plain = buildNoteSectionModel("段落だけ\n\nもう一つ")
 
         assertEquals(SectionRef(title = null), plain.sectionRefAt(1))
+    }
+
+    /** 引き直しは同じ名前と順番で行う。**同名の2つ目を1つ目と取り違えない。** */
+    @Test
+    fun `節の始まりを名前と順番で引き直す`() {
+        val second = model.sectionRefAt(model.blocks.lastIndex)
+
+        assertEquals(0, model.startBlockOf(SectionRef(null)))
+        assertEquals(second, model.sectionRefAt(model.startBlockOf(second)!!))
+        assertEquals(SectionRef("まとめ", 0), model.sectionRefAt(model.startBlockOf(SectionRef("まとめ", 0))!!))
+    }
+
+    @Test
+    fun `同じ名前と順番の見出しが無ければ引けない`() {
+        assertNull(model.startBlockOf(SectionRef("まとめ", 2)))
+        assertNull(model.startBlockOf(SectionRef("消えた見出し")))
     }
 }

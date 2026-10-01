@@ -1,6 +1,7 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.MemoSendAction
@@ -39,6 +41,7 @@ import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
@@ -69,6 +72,9 @@ import java.util.Locale
 internal fun MarginMemoSheet(
     state: MarginMemoState,
     draft: MarginMemoDraft,
+    section: SectionRef?,
+    hasHeadings: Boolean,
+    onJumpToSection: (SectionRef) -> Unit,
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -83,6 +89,9 @@ internal fun MarginMemoSheet(
         MarginMemoSheetContent(
             state = state,
             draft = draft,
+            section = section,
+            hasHeadings = hasHeadings,
+            onJumpToSection = onJumpToSection,
             onEdit = onEdit,
             onSubmit = onSubmit,
             onDelete = onDelete
@@ -105,6 +114,11 @@ internal fun MarginMemoSheet(
 internal fun MarginMemoSheetContent(
     state: MarginMemoState,
     draft: MarginMemoDraft,
+    /** 今の本文の節（＝この面の節）。解析の前は null。 */
+    section: SectionRef?,
+    hasHeadings: Boolean,
+    /** 本文をその節の始まりへ送る。 */
+    onJumpToSection: (SectionRef) -> Unit,
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -122,11 +136,21 @@ internal fun MarginMemoSheetContent(
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
     ) {
-            Text("このノートのメモ", color = OnSurface, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            // **面の節は本文の節に常についていく**（書いている間も動く → features/margin_pane.md §5.3）。
             Text(
-                text = "思いついたことを短く。ノート本体は変わりません。",
-                color = OnSurfaceFaint,
-                fontSize = 12.sp,
+                text = section?.let { sectionLabel(it, hasHeadings) } ?: "このノートのメモ",
+                color = OnSurface,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            // **この1行は高さを変えない。** 書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない
+            // （→ features/margin_pane.md §5.2）。知らせが無いときは使い方を出す。
+            WriteTargetLine(
+                notice = writeTargetNotice(draft.target, section),
+                hasHeadings = hasHeadings,
+                onJumpToSection = onJumpToSection,
                 modifier = Modifier.padding(top = 4.dp)
             )
 
@@ -229,6 +253,52 @@ internal fun MarginMemoSheetContent(
         )
     }
 }
+
+/**
+ * 書き込み先の知らせか、使い方の1行。**1行に収め、高さを変えない。**
+ *
+ * 書き込み先は書き始めた節で、本文を先へ進めても動かない（→ features/margin_pane.md §5.3）。
+ * 「本文を戻す」でその節へ本文を送る。
+ */
+@Composable
+private fun WriteTargetLine(
+    notice: SectionRef?,
+    hasHeadings: Boolean,
+    onJumpToSection: (SectionRef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth().height(WRITE_TARGET_LINE_HEIGHT),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (notice == null) {
+            Text(
+                text = "思いついたことを短く。ノート本体は変わりません。",
+                color = OnSurfaceFaint,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        } else {
+            Text(
+                text = "「${sectionLabel(notice, hasHeadings)}」へ書き込み中",
+                color = AccentText,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            Text(" · ", color = OnSurfaceFaint, fontSize = 12.sp)
+            TextButton(
+                onClick = { onJumpToSection(notice) },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+            ) { Text("本文を戻す", fontSize = 12.sp, color = AccentText) }
+        }
+    }
+}
+
+/** 書き込み先の1行の高さ。**知らせの有無で変えない**（入力欄を動かさないため）。 */
+private val WRITE_TARGET_LINE_HEIGHT = 32.dp
 
 /**
  * 保存の進み具合。**[MemoSaveStatus.Held] を「保存済み」と呼ばない** —

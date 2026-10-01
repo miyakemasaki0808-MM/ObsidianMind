@@ -61,6 +61,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -159,9 +161,20 @@ internal fun NoteReaderTab(
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
-    // 本文の節。余白メモの書き込み先を決める（→ features/margin_pane.md §5.3）。
-    val bodySection by remember(sectionModel) {
-        derivedStateOf { sectionModel?.sectionRefAt(listState.firstVisibleItemIndex) }
+    // 本文の節。**スクロールが止まってから決める**（→ features/margin_pane.md §5.3）。
+    // 流している途中で決めると、ペインの中身が通り過ぎる節ごとに入れ替わる。
+    var settledBlock by remember(sectionModel) { mutableIntStateOf(listState.firstVisibleItemIndex) }
+    LaunchedEffect(listState, sectionModel) {
+        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }
+            .collect { (scrolling, index) -> if (!scrolling) settledBlock = index }
+    }
+    val bodySection = sectionModel?.sectionRefAt(settledBlock)
+    // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
+    val jumpToSection: (SectionRef) -> Unit = { ref ->
+        sectionModel?.startBlockOf(ref)?.let { block ->
+            coroutineScope.launch { listState.animateScrollToItem(block) }
+            imageMeasurements?.requestSkippedMeasurement(block)
+        }
     }
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
@@ -439,6 +452,9 @@ internal fun NoteReaderTab(
                         MarginMemoSheetContent(
                             state = uiState.marginMemoState,
                             draft = memoDraft,
+                            section = bodySection,
+                            hasHeadings = sectionModel?.hasHeadings ?: false,
+                            onJumpToSection = jumpToSection,
                             onEdit = onEditMemo,
                             onSubmit = onSubmitMemo,
                             onDelete = onDeleteMarginMemo,
@@ -456,6 +472,9 @@ internal fun NoteReaderTab(
         MarginMemoSheet(
             state = uiState.marginMemoState,
             draft = memoDraft,
+            section = bodySection,
+            hasHeadings = sectionModel?.hasHeadings ?: false,
+            onJumpToSection = jumpToSection,
             onEdit = onEditMemo,
             onSubmit = onSubmitMemo,
             onDelete = onDeleteMarginMemo,

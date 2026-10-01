@@ -1,5 +1,7 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.model.SectionRef
+
 /**
  * ✎ を押したときの動き（→ features/margin_pane.md §5.4）。
  *
@@ -70,3 +72,20 @@ internal fun marginWindowShiftFor(
     // 出せる → 出せない。書きかけが無ければ何も出さない。
     else -> if (paneOpen && !sheetVisible && hasDraft) MarginWindowShift.PaneToSheet else MarginWindowShift.None
 }
+
+/**
+ * 節の呼び名（→ features/margin_pane.md §5.2）。見出しより前は「ノートの冒頭」、見出しの無いノートは「ノート全体」。
+ * **同名の見出しの2つ目からは順番を添える** — 名前だけでは、書き込み先がどちらの節か見分けられない。
+ */
+internal fun sectionLabel(section: SectionRef, hasHeadings: Boolean): String = when {
+    section.title == null -> if (hasHeadings) "ノートの冒頭" else "ノート全体"
+    section.ordinal == 0 -> section.title
+    else -> "${section.title}（${section.ordinal + 1}つ目）"
+}
+
+/**
+ * 知らせる書き込み先。**書き込み先が今の本文の節と違うときだけ**返す（→ features/margin_pane.md §5.2 の5）。
+ * 本文の節がまだ分からない（解析の前）ときは知らせない。
+ */
+internal fun writeTargetNotice(target: SectionRef?, bodySection: SectionRef?): SectionRef? =
+    target?.takeIf { bodySection != null && it != bodySection }
