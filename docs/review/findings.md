@@ -31,5 +31,5 @@
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-10-01-fold-margin-pane-stage1-implementation-review/P2-1` | 別Vaultの入力分離は実機で成功。同一ノートのFold開閉での保持は未解消（実機レビュー P1-1） | `統合` FOLD-1 |
 | `2026-10-01-fold-margin-pane-stage1-implementation-review/P2-2` | 表示切替時の送信受理は実機で部分確認。保存中の状態を観測できず、保存完了前の交錯は未保証 | `統合` FOLD-1 |
-| `2026-10-01-fold-margin-pane-stage1-device-review/P1-1` | Fold を開閉すると、書きかけが窓ごとに別々に復元される | `統合` FOLD-1 |
-| `2026-10-01-fold-margin-pane-stage1-device-review/P2-1` | 折り目で割れないとき中央で割り、本文と操作が折り目をまたぐ | `統合` FOLD-1 |
+| `2026-10-01-fold-margin-pane-stage1-device-review/P1-1` | Fold開閉の復元先分離は呼出位置を固定する修正をコード確認済み。実Foldでの文字・シート保持を再検証待ち | `統合` FOLD-1 |
+| `2026-10-01-fold-margin-pane-stage1-device-review/P2-1` | 中央への退避撤去と本文下限調整をコード確認済み。実報告値のJVM成功、実機外観は再検証待ち | `統合` FOLD-1 |
