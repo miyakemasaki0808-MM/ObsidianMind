@@ -11,7 +11,7 @@ import com.example.newproject.model.MarginMemo
 sealed class MarginMemoState {
     data object Idle : MarginMemoState()
 
-    /** サイドカーを1件読んでいる。**このノートでシートかペインを初めて出したとき**（と、読めなかった後に出し直したとき）だけ通る。 */
+    /** サイドカーを1件読んでいる。**ノートを表示した後**（と、読めなかった後に面を出し直したとき）だけ通る。 */
     data object Loading : MarginMemoState()
 
     /**

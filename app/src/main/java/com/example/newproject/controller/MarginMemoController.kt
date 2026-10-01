@@ -65,10 +65,8 @@ internal class MarginMemoController(
     private var loadWhenPathBound = false
 
     /**
-     * 読む。**ノートを開く経路では呼ばない** — 呼ぶとノートを開くたびサイドカーを1件読むことになる。
-     *
-     * **世代を進めるので、走行中の保存の結果を捨てる。** シートやペインを出すときは [ensureLoaded] を通し、
-     * 読み込み済みなら読み直さない。
+     * 読む。**世代を進めるので、走行中の保存の結果を捨てる。** ノートの表示とシートやペインを出すときは
+     * [ensureLoaded] を通し、読み込み済みなら読み直さない（→ features/margin_pane.md §6.3）。
      */
     fun open(vaultRelativePath: String?) {
         val requestId = ++generation
@@ -236,7 +234,7 @@ internal class MarginMemoController(
         }
     }
 
-    /** シートの開閉。**開いたときにだけ**サイドカーを1件読む。 */
+    /** シートの開閉。**読み込みとは切り離す** — 開閉のたびに読み直すと、走行中の保存の結果を捨てる。 */
     fun setSheetVisible(visible: Boolean) {
         state.update { it.copy(isMarginMemoSheetVisible = visible) }
     }

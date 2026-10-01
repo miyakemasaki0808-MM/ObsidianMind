@@ -1377,20 +1377,53 @@ class NoteSessionCoordinatorTest {
         targetUri = TARGET_URI
     )
 
-    // ── 余白ペインの読み込み（→ features/margin_pane.md §11 段1）─────────────────
+    // ── 余白メモの読み込み（→ features/margin_pane.md §6.3）──────────────────────
+
+    /** **面を出さなくても、ノートを表示したら読む。** 見出しの印はペインの有無と関係なく要る。 */
+    @Test
+    fun `ノートを表示すると、面を出さなくてもメモを読む`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md").copy(memos = listOf(memoOf("前に書いた"))))
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(listOf("前に書いた"), ready.memos.map { it.text })
+    }
+
+    /** 蒸留の差し替えも部分要約の終了も本文の外の話なので、**読んだメモを捨てない**（捨てると印が消える）。 */
+    @Test
+    fun `蒸留の差し替えと部分要約の終了では、読んだメモを捨てない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md").copy(memos = listOf(memoOf("前に書いた"))))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# 導入\n\n**本文**"))
+        coordinator.endSectionChat()
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(listOf("前に書いた"), ready.memos.map { it.text })
+    }
 
     /**
      * **パスの確定は表示の後に来ることがある**（さがす・関連から開き、走査のキャッシュが冷えているとき）。
-     * ペインは表示の直後に読みたがるので、確定を待って読む。
+     * 表示の時点でパスが無ければ、確定を待って読む。
      */
     @Test
-    fun `パス未確定で開いたノートは、確定したときにペインのメモを読む`() = runTest {
+    fun `パス未確定で開いたノートは、確定したときにメモを読む`() = runTest {
         val env = Env(this)
         env.trace.put(storedTrace(count = 1, path = "ideas/habit.md").copy(memos = listOf(memoOf("前に書いた"))))
         val coordinator = env.coordinator()
 
         val sessionId = coordinator.startReadingTrace("習慣について", vaultRelativePath = null, documentId = null)
-        coordinator.loadMarginMemoForPane()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
         advanceUntilIdle()
         assertTrue(coordinator.uiState.value.marginMemoState is MarginMemoState.Idle)
 
@@ -1434,10 +1467,10 @@ class NoteSessionCoordinatorTest {
         val coordinator = env.coordinator()
 
         val first = coordinator.startReadingTrace("A", vaultRelativePath = null, documentId = null)
-        coordinator.loadMarginMemoForPane()
+        coordinator.setNoteState(successNote("# A\n\n本文"))
         coordinator.onNoteChanged()
         val second = coordinator.startReadingTrace("B", vaultRelativePath = null, documentId = null)
-        coordinator.loadMarginMemoForPane()
+        coordinator.setNoteState(successNote("# B\n\n本文"))
 
         coordinator.bindReadingTracePath(first, "a.md")
         advanceUntilIdle()

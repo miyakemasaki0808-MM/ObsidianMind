@@ -505,12 +505,16 @@ internal class NoteSessionCoordinator(
      *
      * **自動生成の待ち時間もここから数える。** 本文が出た時点が「開いた」であって、
      * 読込を始めた時点ではない。[applyReloadedBody] では数え直さない（同じノートに居続けている）。
+     *
+     * **余白メモもここで1回だけ読む**（→ features/margin_pane.md §6.3）。見出しの印はペインを出さなくても要るので、
+     * 面を出したときまで待たない。本文は待たせない。パスがまだ無ければ、確定したときに読む。
      */
     fun setNoteState(state: NoteState) {
         stateStore.setNoteState(state)
         if (state is NoteState.Success) {
             sections.parse(state.content)
             dwell.start()
+            marginMemo.ensureLoaded(readingTrace.currentPath())
         } else {
             sections.cancelAndClear()
         }
@@ -539,8 +543,8 @@ internal class NoteSessionCoordinator(
         val latest = currentNote() ?: return false
         if (latest.targetUri != targetUri) return false
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
+        // **余白メモは止めない。** 保存先は痕跡で本文は触らないので、差し替えで消すと見出しの印まで消える。
         sectionChat.cancelAndClear()
-        marginMemo.cancelAndClear()
         val applied = stateStore.applyReloadedBody(targetUri, loaded)
         // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
         // 旧いブロックが描かれ続ける（[setNoteState] と対になる2つ目の経路）。
@@ -651,8 +655,8 @@ internal class NoteSessionCoordinator(
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
     /**
-     * シートを開く。**読み込み済みなら読み直さない** — 読み直すと世代が進み、走行中の保存の結果が
-     * 照合で捨てられる（保存中に閉じて開き直すと、受理された文字が入力欄に残って再送できる）。
+     * シートを開く。メモはノートの表示の後に読んであるので、**ここでは読み直さない** — 読み直すと世代が進み、
+     * 走行中の保存の結果が照合で捨てられる。読めなかったときだけ読み直す。
      * ペインの書きかけをシートへ移すときにも同じ口を使う。
      */
     fun openMarginMemoSheet() {
@@ -665,7 +669,7 @@ internal class NoteSessionCoordinator(
     }
 
     /**
-     * 余白ペインが出ている間に呼ぶ。**読み込み済みなら何もしない**ので、再表示のたびに読み直さない。
+     * 余白ペインを出したときに呼ぶ。**読み込み済みなら何もしない。**
      * 読めなかったときだけ、ペインを出し直したときに読み直す。
      */
     fun loadMarginMemoForPane() {
@@ -720,9 +724,8 @@ internal class NoteSessionCoordinator(
     fun retrySectionSummary() = sectionChat.retrySummary()
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
 
-    /** セッションの明示終了。 */
+    /** 部分要約のセッションの明示終了。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
     fun endSectionChat() {
         sectionChat.cancelAndClear()
-        marginMemo.cancelAndClear()
     }
 }
