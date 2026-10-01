@@ -1,9 +1,10 @@
 # 余白メモ
 
-**状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。[ノートへのひとこと](reflect_remark.md) は撤去済み
+**状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。[ノートへのひとこと](reflect_remark.md) は撤去済み。
+Fold の「この部分」段2で、書きかけ・送信の照合・読む時期・シートの形・見出しとの照合を変えた（別の目と実機検証待ち → [margin_pane](margin_pane.md) §11）
 **最終検証:** 2026-09-26 / `01d48b6`（通し版14ケース。**障害・競合・長い見出しの境界は未突合** → §10）
-**関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** `MarginMemoComposerTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
+**関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `ui/screen/MarginMemoDrafts.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `MarginMemoComposerTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書
 
 **関連:** [reflect_reading_trace](reflect_reading_trace.md)（保存先のサイドカー）・[reading_trace_backup](reading_trace_backup.md)（退避と突き合わせ）・[reunion_card](reunion_card.md)（再会カードの枠）・[reflect_remark](reflect_remark.md)（畳む対象）
@@ -44,22 +45,25 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
-| メモを置く | ヘッダの `✎` でシートが上がり、書いて置ける。**シートは開いたまま**で続けて書ける。開いた Fold では本文の右のペインに書く（→ [margin_pane](margin_pane.md)） | ノート表示中（Vault選択済み） |
-| このノートのメモ一覧 | シートかペインの中に、置いた順の**新しい順**で並ぶ | このノートでシートかペインを初めて出したとき |
+| メモを置く | ヘッダの `✎` で**半分で止まるシート**が上がり、本文を動かしながら書いて置ける。**シートは開いたまま**で続けて書ける。開いた Fold では本文の右のペインに書く（→ [margin_pane](margin_pane.md)） | ノート表示中（Vault選択済み） |
+| このノートのメモ一覧 | シートかペインの中に、**今の節のメモ**が新しい順に並ぶ。ほかの節のメモは畳んで件数だけ。メモのある本文の見出しの脇に件数つきの印が出る（→ [margin_pane](margin_pane.md) §5.6） | ノートを表示した後に1回読む |
 | メモを消す | 各行の `消す` → 確認ダイアログ → 消える | 一覧に1件以上あるとき |
 | 上限の知らせ | 長いときは静かに知らせ、満杯のときは置けない理由を出す | §5 の上限に触れたとき |
-| 再会で気づく | 再会カードの行が **`前回のメモを見る`** になり、押すとシートが開く（余白ペインが出ていれば、メモは既に横にあるのでシートを重ねない） | Rediscover で引き当て、メモが1件以上あるとき |
+| 再会で気づく | 再会カードの行が **`前回のメモを見る`** になり、押すと出せる面（シートかペイン）を出し、ほかの節のメモも開いてメモの並びまで送る | Rediscover で引き当て、メモが1件以上あるとき |
 
 ## 4. 現在のユーザーフロー
 
 1. ノートを開いて読む
-2. ヘッダ右の **`✎`**（全画面ボタン `⛶` の隣）を押す → ボトムシートが上がる。**本文はスクロール位置ごと背後に残る**
-3. シートの上段が入力欄、下段がこのノートの既存メモ（新しい順）
-4. 書いて `置く` を押す → 一覧の先頭に増え、入力欄が空になる。**シートは閉じない**
-5. シートを閉じる → 読書へ戻る。**スクロール位置は動かない**
-6. 後日 Rediscover で同じノートを引き当てると、再会カードに `前回のメモを見る` が出る。押すと同じシートが開く
+2. ヘッダ右の **`✎`**（全画面ボタン `⛶` の隣）を押す → シートが**半分の高さ**まで上がる。暗くならず、**本文は上側でスクロールできる**
+3. シートの上段が今の節の見出しと入力欄、下段がこの節の既存メモ（新しい順）。ほかの節のメモは畳んで件数だけ
+4. 書き始めた節が書き込み先になる。本文を先へ進めても動かず、「〇〇へ書き込み中 · 本文を戻す」が出る
+5. 書いて `置く` を押す → 受け取れたと分かったら一覧に増え、入力欄が空になる。**シートは閉じない**
+6. シートを閉じる（閉じるボタン・下へ払う・戻る）→ 読書へ戻る。**スクロール位置は動かない**
+7. 後日 Rediscover で同じノートを引き当てると、再会カードに `前回のメモを見る` が出る。押すとメモの並びまで送る
 
-**中断:** ノートを切り替えるとシートは閉じ、状態は `Idle` へ戻る（契約2箇所 → §6）。
+**書きかけはノートを替えても残る。** 同じ Vault の間は、戻れば書き込み先ごと元に戻る。Vault を替えると捨てる（→ [margin_pane](margin_pane.md) §6.1）。
+
+**中断:** ノートを切り替えるとシートは閉じ、状態は `Idle` へ戻る（契約2箇所 → §6）。書きかけは残る。
 
 **全画面表示中は書けない。** `✕` で通常表示へ戻ってから置く（→ §8 判断7）。
 
@@ -112,7 +116,7 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 - **状態遷移:** §6
 - **保存と寿命:** 読書痕跡サイドカー `_ReadingTraces/*.json`（**本機能で schema を v7 へ上げる**）。
   ノートを消しても痕跡は残る（孤児掃除が受け持つ）。Vault のフォルダが消えれば一緒に消える
-- **画面遷移:** **ルートを増やさない。** ボトムシート1枚で完結する
+- **画面遷移:** **ルートを増やさない。** 本文と併存するボトムシート1枚で完結する
   （ひとことは専用ルート `remark` を持っていたが、これは結果が長く、待ち時間があったため）
 - **他機能との連携:**
   - **再会カード:** `前回の返事を見る` の行を `前回のメモを見る` へ置き換える（→ 判断8）
@@ -131,7 +135,7 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 `MarginMemoState`（`NoteUiState.marginMemoState`）:
 `Idle` / `Loading` / `Ready(memos, status, wasTruncated)` / `Error(message)`
 
-`MemoSaveStatus`: `None` / `Saving` / `Held` / `Saved` / `Failed` / `Full`
+`MemoSaveStatus`: `None` / `Saving` / `Held` / `Saved` / `Failed` / `Full` / `Unconfirmed`
 
 > **`Boolean` の束にしない。** 「保存中かつ未保存」のような無意味な組み合わせを型として作れてしまう。
 > **`Full` を `Failed` に畳まない** — 再試行して直るものと、消さなければ直らないものは、次の行動が違う。
@@ -139,15 +143,18 @@ Reflect の中でユーザーへの要求が最も重く、しかも1ノート1�
 
 シートの開閉は `NoteUiState.isMarginMemoSheetVisible`（セクションチャットのシートと同じ形）。
 
-**入力欄の中身は画面側が持ち、受け取れたと分かってから空にする。**
-状態には受理の通算件数（`acceptedCount`）だけを置き、
-**その件数が増えたとき、出した文字列そのものが残っていれば**空にする。
+**入力欄の中身は書きかけが持ち、受け取れたと分かってから空にする**（→ [margin_pane](margin_pane.md) §6.1・§6.2）。
+書きかけは文字・書き込み先・未確定の送信の一組で、ViewModel 側の Compose の状態としてノートごとに持つ。
+送信は整えた保存値と時刻で照合し、**送った原文のままの入力だけ**を空にする。
 
 - **状態から「置けたら空にする」を導かない** — `status` は保存後も残るので、
   **再コンポーズのたびに条件が成立し、2件目に書いた文字が入力するそばから消える**
 - **押した瞬間にも空にしない** — 置けなかったときに戻せるのが切り詰めた後の文字列だけになり、
   **原文が失われる。** 消さなければ、失敗しても手元に原文がそのまま残る
-- **受け付けられない状態（読み込み中・失敗中）では押させない。**
+- **受理件数では数えない** — 件数はノートの画面状態の一部で、ノートを替えると0に戻る
+- **読めないことを未保存と断定しない** — 離れている間に頼んだ送信を、戻って読んでも確かめられなければ
+  `Unconfirmed` とし、ボタンは新しく置かずに元の送信を確かめる
+- **受け付けられない状態（読み込み中・失敗中・保存中）では押させない。**
   押せると、Controller が何もしないまま入力だけが宙に浮く
 
 ### 永続化モデル
@@ -273,6 +280,9 @@ Mutex 直列の待ち行列にも並ばないので、要約・関連ノート�
 置いたときに見ていた見出し名を `sectionTitle` として残す。**ユーザーの操作は1つも増えない**のに、
 数か月後に読み返したとき断片が読める文になる。訪問の `deepestSectionTitle` と同じ**歴史的記録**で、
 後から本文が編集されて見出しが消えても再解決しない。
+
+**表示のときだけ、今の見出しと照合する**（→ [margin_pane](margin_pane.md) §5.6）。照合の前に今の見出しにも保存時と同じ整形をかけ、
+一致・同名に共通・見つからないの3つに分ける。**保存値は書き換えない。** 見つからないメモは控えた見出し名を添えて出す。
 
 **本文の範囲へ紐づける案（長押しした段落に付ける）は採らない。** 紐づけた瞬間、
 ユーザーは「どこに付けるか」を決めることになり、要求が1つ増える。
@@ -459,8 +469,8 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 ## 9. 品質要件
 
 - **性能:** AI生成が無いので待ち時間は**サイドカー1件の読み書き**だけ。
-  このノートでシートか余白ペインを初めて出したときに1件読み、開き直しでは読み直さない。
-  ノートを開く経路には置かず、ペインは本文の表示の後に読む
+  ノートを表示した後に1件読み、シートやペインの開き直しでは読み直さない。本文の表示は待たせない。
+  見出しの印のために、面を出さなくても読む
 - **プライバシー:** ユーザーが書いた文は端末内のVaultにしか存在しない。
   **AIへ渡さないので、プロンプトにも乗らない**（→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）
 - **データ保護:** **この機能の核心。** ユーザーが書いた言葉は作り直せない。
@@ -473,13 +483,16 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 
 - **JVMテスト:**
   - `MarginMemoComposerTest` — 制御文字の正規化・切り詰めと合図の境界・空白だけの入力
-  - `MarginMemoControllerTest` — 保存状態の遷移（`Saved` / `Held` / `Lost` / `Full` / `Failed`）・
-    ノート切替でのキャンセル・置けなかった入力を返すこと・長い見出しを切ってから渡すこと。
+  - `MarginMemoControllerTest` — 保存状態の遷移（`Saved` / `Held` / `Lost` / `Full` / `Failed` / `Unconfirmed`）・
+    ノート切替でのキャンセル・置けなかった入力を返すこと・長い見出しを切ってから渡すこと・
+    戻って読んだときの送信の照合・書きかけがノート切替で残り Vault 切替で消えること。
     **保存と削除が互いを取り消さないことを両方向で固定する**
     （取り消し合っていたころは、`Saving` の残留と「消したように見えるだけ」が両方起きた）
+  - `MarginMemoDraftRulesTest` — 書きかけと送信の規則。書き込み先の固定、整えた保存値と時刻での照合、
+    読めないときに未受理と読まないこと、未確定の間の編集で同じ本文を2件にしないこと
   - `MarginMemoSheetUiTest`（instrumentation）— **入力欄の中身がいつ消え、いつ戻るか。**
-    連続して置けること・置けなかった入力が戻ること・保存待ちの下書きが上書きされないこと。
-    **Controller のテストでは捕まらない**（下書きは画面側にしか無い）
+    連続して置けること・置けなかった入力が戻ること・保存待ちの下書きが上書きされないこと・面を組み替えても書きかけが残ること。
+    **規則は JVM のテストが持ち、ここは規則が入力欄へ届くことを見る**
   - `ReadingTraceControllerTest` — **§7 の合流契約を固定する:**
     - A保存失敗 → 退避の再試行も失敗 → B追加 → 保存回復で**AとBが各1件残る**
     - A退避 → 訪問だけの保存が成功 → 再試行で**Aが残る**（丸ごと忘れない）
@@ -505,8 +518,9 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
   - `ReadingTraceStoreTest` — encode 後に上限を超える痕跡は**書かずに失敗を返し、
     既存ファイルが残ること**
   - `ReadingTraceControllerTest` — 門番の例外が**メモを預かっているとき**に効くこと
-- **instrumentation:** `MarginMemoSheetUiTest`。シートの中身を `ModalBottomSheet` から
-  切り出してあるので、シートを開かずに入力の振る舞いを検査できる（調整シートと同じ切り分け）。
+- **instrumentation:** `MarginMemoSheetUiTest`。シートの中身をシートの器から切り出してあるので、
+  シートを開かずに入力の振る舞いを検査できる（調整シートと同じ切り分け）。シートが本文と併存すること（本文を押せる）と、
+  閉じるボタンで閉じることは器ごと通す。
   端末AIを通さないので `Assume` による skip は要らない
 - **実機確認:** **通し版14ケース全件成功**（2026-09-26・Pixel 10 Pro Fold）。
   ケースは [margin_memo](../../review/device_validation/margin_memo.md)（MEMO-01〜14）。
