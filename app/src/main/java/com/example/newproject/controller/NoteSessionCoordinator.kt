@@ -251,7 +251,7 @@ internal class NoteSessionCoordinator(
     private val marginMemo = MarginMemoController(
         scope = scope,
         state = stateStore.marginMemoWriter,
-        loadMemos = { path -> readingTrace.loadMemos(path) },
+        loadMemos = { path, confirmAbsence -> readingTrace.loadMemos(path, confirmAbsence) },
         appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
         deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
         clock = clock

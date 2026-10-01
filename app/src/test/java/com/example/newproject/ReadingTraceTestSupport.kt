@@ -109,12 +109,18 @@ internal class FakePersistence : ReadingTracePersistence {
             ?: ReadingTraceReadResult.None
     }
 
-    override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
-        if (!listable) {
+    /** 置き場を列挙した回数。**列挙は全走査なので、読むたびには走らせない**ことを確かめる。 */
+    var listKeysCalls = 0
+        private set
+
+    override fun listKeys(vaultKey: String): ReadingTraceKeyListing {
+        listKeysCalls++
+        return if (!listable) {
             ReadingTraceKeyListing.Unavailable("列挙できませんでした")
         } else {
             ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
         }
+    }
 
     override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
         files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }

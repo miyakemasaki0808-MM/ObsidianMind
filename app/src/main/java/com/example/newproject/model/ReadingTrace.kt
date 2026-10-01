@@ -124,6 +124,23 @@ internal fun mergeMarginMemos(
     .sortedBy { it.writtenAtEpochMillis }
 
 /**
+ * メモを読んだとき、**痕跡ファイルについて何が分かったか**（→ features/margin_pane.md §6.3）。
+ *
+ * 合流した一覧に無いメモを「どこにも無い」と読んでよいのは、ファイルを読めたか、
+ * 無いことを確かめたときだけ。**読めないことを無いことに畳むと、未保存と誤って送り直させる。**
+ */
+internal enum class MemoFileRead {
+    /** 読めた。一覧に無いメモはファイルにも無い。 */
+    Read,
+
+    /** ファイルが無いことを、置き場の列挙で確かめた。 */
+    ConfirmedAbsent,
+
+    /** 読めなかったか、無いことを確かめていない。**一覧に無いことを不在の根拠にしない。** */
+    Unconfirmed
+}
+
+/**
  * 1ノート分の痕跡。
  *
  * [vaultRelativePath] が主キー。SAF の documentId は端末／権限グラントごとに変わるため

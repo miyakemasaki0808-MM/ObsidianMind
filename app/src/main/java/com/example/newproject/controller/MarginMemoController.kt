@@ -27,8 +27,8 @@ import kotlinx.coroutines.sync.withLock
 internal class MarginMemoController(
     private val scope: CoroutineScope,
     private val state: MarginMemoStateWriter,
-    /** このノートのメモを読む。**3箇所を合流した結果**が返る。 */
-    private val loadMemos: suspend (vaultRelativePath: String) -> List<MarginMemo>,
+    /** このノートのメモを読む。**3箇所を合流した結果**と、ファイルについて分かったことが返る。 */
+    private val loadMemos: suspend (vaultRelativePath: String, confirmAbsence: Boolean) -> MemoLoad,
     private val appendMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoSaveOutcome,
     private val deleteMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoDeleteOutcome,
     private val clock: () -> Long = System::currentTimeMillis
@@ -84,7 +84,7 @@ internal class MarginMemoController(
         loadJob?.cancel()
         loadJob = scope.launch {
             val loaded = try {
-                loadMemos(path)
+                loadMemos(path, false).memos
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

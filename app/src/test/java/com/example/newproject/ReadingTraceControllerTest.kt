@@ -9,6 +9,7 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.withVisit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -1232,10 +1233,83 @@ class ReadingTraceControllerTest {
         controller.appendMemo("ideas/habit.md", memoOf("まだ書けていない", at = 2_000L))
         advanceUntilIdle()
 
-        val memos = controller.loadMemos("ideas/habit.md")
+        val memos = controller.loadMemos("ideas/habit.md").memos
         advanceUntilIdle()
 
         assertEquals(listOf("保存済み", "まだ書けていない"), memos.map { it.text })
+    }
+
+    // ── 読み込みの確かさ（→ features/margin_pane.md §6.3）────────────────────────
+
+    @Test
+    fun `ファイルを読めたら読めたと返す`() = runTest {
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1).copy(memos = listOf(memoOf("保存済み", at = 1_000L))))
+        val controller = controller(persistence, TestClock())
+
+        val load = controller.loadMemos("ideas/habit.md", confirmAbsence = true)
+
+        assertEquals(MemoFileRead.Read, load.fileRead)
+        assertEquals(listOf("保存済み"), load.memos.map { it.text })
+    }
+
+    /** 置き場を列挙して無いと確かめたときだけ「無い」と言う。預かり中のメモは一覧に残す。 */
+    @Test
+    fun `列挙で無いと確かめたら不在を返し、預かりは一覧に残す`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.appendMemo("ideas/habit.md", memoOf("預けたメモ", at = 2_000L))
+        advanceUntilIdle()
+
+        val load = controller.loadMemos("ideas/habit.md", confirmAbsence = true)
+
+        assertEquals(MemoFileRead.ConfirmedAbsent, load.fileRead)
+        assertEquals(listOf("預けたメモ"), load.memos.map { it.text })
+    }
+
+    /**
+     * **読めなかったことを無いことに畳まない**（→ lessons L47）。実体があるのに読み取りだけ失敗した・
+     * 置き場を列挙できない・壊れている、のどれも「確かめられない」。
+     */
+    @Test
+    fun `読めないときは確かめられないと返す`() = runTest {
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1))
+        persistence.put(storedTrace(count = 1, path = "ideas/broken.md"))
+        persistence.unreadablePaths += "ideas/habit.md"
+        persistence.corruptPaths += "ideas/broken.md"
+        val controller = controller(persistence, TestClock())
+
+        assertEquals(
+            "読み取りの失敗を不在と読んだ",
+            MemoFileRead.Unconfirmed,
+            controller.loadMemos("ideas/habit.md", confirmAbsence = true).fileRead
+        )
+        assertEquals(
+            "壊れた痕跡を不在と読んだ",
+            MemoFileRead.Unconfirmed,
+            controller.loadMemos("ideas/broken.md", confirmAbsence = true).fileRead
+        )
+
+        persistence.listable = false
+        assertEquals(
+            "列挙できないのに不在と言った",
+            MemoFileRead.Unconfirmed,
+            controller.loadMemos("ideas/absent.md", confirmAbsence = true).fileRead
+        )
+    }
+
+    /** 置き場の列挙は全走査なので、**照合が要るとき以外は走らせない。** */
+    @Test
+    fun `確認を頼まれなければ置き場を列挙しない`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+
+        val load = controller.loadMemos("ideas/absent.md")
+
+        assertEquals(MemoFileRead.Unconfirmed, load.fileRead)
+        assertEquals(0, persistence.listKeysCalls)
     }
 
     /**
@@ -1275,7 +1349,7 @@ class ReadingTraceControllerTest {
         // 預けた分は消えていない。上限が空けば次の契機で書かれる。
         assertTrue(
             "預けたメモを失った",
-            controller.loadMemos("ideas/habit.md").any { it.text == "預けた古いメモ" }
+            controller.loadMemos("ideas/habit.md").memos.any { it.text == "預けた古いメモ" }
         )
     }
 
@@ -1447,7 +1521,7 @@ class ReadingTraceControllerTest {
         assertEquals(
             "失敗したのに預かりから消えた",
             listOf("預けたメモ"),
-            controller.loadMemos("ideas/habit.md").map { it.text }
+            controller.loadMemos("ideas/habit.md").memos.map { it.text }
         )
 
         // 回復すれば消せる。

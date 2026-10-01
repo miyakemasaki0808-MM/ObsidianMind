@@ -2,8 +2,10 @@ package com.example.newproject
 
 import com.example.newproject.controller.MarginMemoController
 import com.example.newproject.controller.MemoDeleteOutcome
+import com.example.newproject.controller.MemoLoad
 import com.example.newproject.controller.MemoSaveOutcome
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.ReadingTraceLimits
@@ -484,7 +486,7 @@ class MarginMemoControllerTest {
     ) = MarginMemoController(
         scope = this,
         state = store.marginMemoWriter,
-        loadMemos = loadMemos,
+        loadMemos = { path, _ -> MemoLoad(loadMemos(path), MemoFileRead.Read) },
         appendMemo = { _, memo ->
             beforeAppend()
             onAppend(memo)

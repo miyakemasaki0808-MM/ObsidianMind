@@ -8,6 +8,7 @@ import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.mergeMarginMemos
 import com.example.newproject.model.withVisit
@@ -380,20 +381,33 @@ internal class ReadingTraceController(
      *
      * **3箇所を合流して返す**（→ features/reflect_margin_memo.md §7 の契約1・2）。
      * ファイルだけを見せると、**まだ書けていないメモが画面から消える。**
+     *
+     * **ファイルについて分かったことも返す**（→ [MemoFileRead]）。一覧だけでは、
+     * ファイルが無いのか読めなかったのかを区別できない（→ lessons L47）。
+     * 無いことを確かめるのは [confirmAbsence] のときだけ — 置き場を全列挙するので、
+     * 送信の照合が要るときに限る。
      */
-    suspend fun loadMemos(vaultRelativePath: String): List<MarginMemo> {
-        if (vaultRelativePath.isBlank()) return emptyList()
-        val vaultKey = currentVaultKey() ?: return emptyList()
+    suspend fun loadMemos(vaultRelativePath: String, confirmAbsence: Boolean = false): MemoLoad {
+        if (vaultRelativePath.isBlank()) return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
+        val vaultKey = currentVaultKey() ?: return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
         return withContext(ioDispatcher) {
-            val stored = writeMutex.withLock {
-                (persistence.load(vaultRelativePath, vaultKey) as? ReadingTraceReadResult.Valid)
-                    ?.trace
-                    ?.memos
-                    .orEmpty()
+            // **無いことの確認も同じ錠の内側で行う。** 外へ出すと、確かめるまでの間に書かれたファイルを見落とす。
+            val (stored, fileRead) = writeMutex.withLock {
+                when (val loaded = persistence.load(vaultRelativePath, vaultKey)) {
+                    is ReadingTraceReadResult.Valid -> loaded.trace.memos to MemoFileRead.Read
+                    ReadingTraceReadResult.None ->
+                        emptyList<MarginMemo>() to
+                            if (confirmAbsence && isConfirmedAbsent(vaultKey, vaultRelativePath)) {
+                                MemoFileRead.ConfirmedAbsent
+                            } else {
+                                MemoFileRead.Unconfirmed
+                            }
+                    is ReadingTraceReadResult.Corrupt -> emptyList<MarginMemo>() to MemoFileRead.Unconfirmed
+                }
             }
             val pending = pendingWriteMemos(vaultKey, vaultRelativePath)
             val held = heldMemosFor(vaultKey, vaultRelativePath)
-            mergeMarginMemos(mergeMarginMemos(stored, pending), held)
+            MemoLoad(mergeMarginMemos(mergeMarginMemos(stored, pending), held), fileRead)
         }
     }
 
@@ -939,3 +953,6 @@ internal enum class MemoSaveOutcome { Saved, Held, Full, Lost }
  * 1箇所でも残っていれば、次の書き込み契機で合流して復活してしまう。
  */
 internal enum class MemoDeleteOutcome { Deleted, Failed }
+
+/** 1ノート分のメモの読み込み。[memos] は3箇所を合流した一覧（古い順）。 */
+internal data class MemoLoad(val memos: List<MarginMemo>, val fileRead: MemoFileRead)
