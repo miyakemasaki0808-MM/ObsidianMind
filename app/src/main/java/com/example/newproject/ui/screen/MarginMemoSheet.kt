@@ -32,10 +32,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.ArrangedMemos
+import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
@@ -75,6 +79,7 @@ internal fun MarginMemoSheet(
     section: SectionRef?,
     hasHeadings: Boolean,
     onJumpToSection: (SectionRef) -> Unit,
+    arranged: ArrangedMemos?,
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -92,6 +97,7 @@ internal fun MarginMemoSheet(
             section = section,
             hasHeadings = hasHeadings,
             onJumpToSection = onJumpToSection,
+            arranged = arranged,
             onEdit = onEdit,
             onSubmit = onSubmit,
             onDelete = onDelete
@@ -119,12 +125,16 @@ internal fun MarginMemoSheetContent(
     hasHeadings: Boolean,
     /** 本文をその節の始まりへ送る。 */
     onJumpToSection: (SectionRef) -> Unit,
+    /** メモを今の見出しと照合して並べたもの（→ [arrangeMemos]）。本文の解析の前は null。 */
+    arranged: ArrangedMemos?,
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
+    // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
+    var othersExpanded by remember { mutableStateOf(false) }
 
     val ready = state as? MarginMemoState.Ready
     val action = draft.sendAction()
@@ -219,16 +229,24 @@ internal fun MarginMemoSheetContent(
                 )
 
                 is MarginMemoState.Ready ->
-                    if (state.memos.isEmpty()) {
-                        Text(
-                            text = "このノートにはまだメモがありません。",
-                            color = OnSurfaceFaint,
-                            fontSize = 12.sp
-                        )
-                    } else {
+                    if (arranged == null) {
+                        // 本文の解析の前は節が分からない。照合せずに全件を出す。
                         state.memos.forEach { memo ->
-                            MemoRow(memo = memo, onDelete = { pendingDelete = memo })
+                            MemoRow(memo = memo, match = null, onDelete = { pendingDelete = memo })
                         }
+                    } else {
+                        // **静かにするのは、この節のメモが0件のときだけ**（→ features/margin_pane.md §5.2）。
+                        arranged.current.forEach { placed ->
+                            MemoRow(memo = placed.memo, match = placed.match, onDelete = { pendingDelete = placed.memo })
+                        }
+                        OtherSectionMemos(
+                            arranged = arranged,
+                            hasHeadings = hasHeadings,
+                            expanded = othersExpanded,
+                            onToggle = { othersExpanded = !othersExpanded },
+                            onJumpToSection = onJumpToSection,
+                            onDelete = { pendingDelete = it }
+                        )
                     }
 
                 MarginMemoState.Idle -> Unit
@@ -327,8 +345,58 @@ private fun StatusText(state: MarginMemoState) {
     )
 }
 
+/**
+ * ほかの節のメモ。**畳んで件数だけ**を出し、開くと節ごとに本文の順で並べる（→ features/margin_pane.md §5.2 の8）。
+ * 節の名前を押すと本文がその節へ飛ぶ。同名の見出しに共通のメモは候補のどの節にも並ぶので、
+ * どの節へ飛ぶかは押した名前で決まる（黙って先頭へ決めない）。見出しが見つからないメモは飛べない。
+ */
 @Composable
-private fun MemoRow(memo: MarginMemo, onDelete: () -> Unit) {
+private fun OtherSectionMemos(
+    arranged: ArrangedMemos,
+    hasHeadings: Boolean,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onJumpToSection: (SectionRef) -> Unit,
+    onDelete: (MarginMemo) -> Unit
+) {
+    if (arranged.otherCount == 0) return
+    TextButton(
+        onClick = onToggle,
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = "${if (expanded) "▾" else "▸"} ほかの節のメモ ${arranged.otherCount}件",
+            color = OnSurfaceMuted,
+            fontSize = 13.sp
+        )
+    }
+    if (!expanded) return
+    arranged.others.forEach { group ->
+        val section = group.section
+        if (section == null) {
+            Text(
+                text = "見出しが見つからないメモ",
+                color = OnSurfaceFaint,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            )
+        } else {
+            TextButton(
+                onClick = { onJumpToSection(section) },
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                modifier = Modifier.semantics { contentDescription = "${sectionLabel(section, hasHeadings)}へ本文を送る" }
+            ) {
+                Text(sectionLabel(section, hasHeadings), color = AccentText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        group.memos.forEach { placed ->
+            MemoRow(memo = placed.memo, match = placed.match, onDelete = { onDelete(placed.memo) })
+        }
+    }
+}
+
+@Composable
+private fun MemoRow(memo: MarginMemo, match: MemoSectionMatch?, onDelete: () -> Unit) {
     Surface(
         color = PanelChip,
         shape = RoundedCornerShape(8.dp),
@@ -342,7 +410,7 @@ private fun MemoRow(memo: MarginMemo, onDelete: () -> Unit) {
             ) {
                 // 書いた場所は**紐づけではなく当時の記録**。見出しが消えても解決し直さない。
                 Text(
-                    text = memoCaption(memo),
+                    text = memoCaption(memo, match),
                     color = OnSurfaceFaint,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
@@ -353,8 +421,17 @@ private fun MemoRow(memo: MarginMemo, onDelete: () -> Unit) {
     }
 }
 
-private fun memoCaption(memo: MarginMemo): String {
+/**
+ * メモの添え書き。節ごとに並べたときは節の名前を繰り返さない。
+ * **同名の見出しに共通**なら、どの候補にも並んでいることを添える。見つからないメモは、控えた見出し名を
+ * 当時の記録として添える（**紐づけではない**ので、今の見出しへ解決し直さない）。照合の前（[match] が null）も同じ。
+ */
+internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?): String {
     val stamp = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
         .format(Date(memo.writtenAtEpochMillis))
-    return memo.sectionTitle?.let { "$stamp ・ $it のあたり" } ?: stamp
+    return when (match) {
+        MemoSectionMatch.Opening, is MemoSectionMatch.Unique -> stamp
+        is MemoSectionMatch.Shared -> "$stamp ・ 同名の見出しに共通"
+        MemoSectionMatch.Missing, null -> memo.sectionTitle?.let { "$stamp ・ $it のあたり" } ?: stamp
+    }
 }

@@ -14,7 +14,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.SubmissionCheck
+import com.example.newproject.domain.arrangeMemos
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.domain.edited
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
@@ -67,6 +70,8 @@ class MarginMemoSheetUiTest {
         var note by mutableStateOf(NOTE_A)
         /** 本文の節。テストが本文を進めたことにして替える。 */
         var section by mutableStateOf<SectionRef?>(SectionRef("節B"))
+        /** 照合して並べたメモ。null は本文の解析の前で、全件を平らに出す。 */
+        var arranged by mutableStateOf<ArrangedMemos?>(null)
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -98,6 +103,7 @@ class MarginMemoSheetUiTest {
                             section = harness.section,
                             hasHeadings = true,
                             onJumpToSection = { harness.section = it },
+                            arranged = harness.arranged,
                             onEdit = harness::edit,
                             onSubmit = harness::submit,
                             onDelete = {}
@@ -274,6 +280,23 @@ class MarginMemoSheetUiTest {
         // 「本文を戻す」で本文が書き込み先へ戻れば、知らせは消える。
         composeRule.onNodeWithText("本文を戻す").performClick()
         composeRule.onNodeWithText("「節B」へ書き込み中").assertDoesNotExist()
+    }
+
+    /** ほかの節のメモは畳んで件数だけ。開くと節の名前が並び、押すと本文がその節へ飛ぶ。 */
+    @Test
+    fun ほかの節のメモは開くと節ごとに並び_節の名前で本文が飛ぶ() {
+        val harness = Harness()
+        val memos = listOf(MarginMemo("節Cのメモ", 1L, "節C"))
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(memos, listOf("節B", "節C"), current = SectionRef("節B"))
+        setContent(harness)
+
+        composeRule.onNodeWithText("節Cのメモ").assertDoesNotExist()
+        composeRule.onNodeWithText("▸ ほかの節のメモ 1件").performClick()
+        composeRule.onNodeWithText("節Cのメモ").assertExists()
+
+        composeRule.onNodeWithText("節C").performClick()
+        composeRule.runOnIdle { assertEquals(SectionRef("節C"), harness.section) }
     }
 
     private companion object {

@@ -85,6 +85,7 @@ import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
+import com.example.newproject.domain.arrangeMemos
 import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -169,6 +170,13 @@ internal fun NoteReaderTab(
             .collect { (scrolling, index) -> if (!scrolling) settledBlock = index }
     }
     val bodySection = sectionModel?.sectionRefAt(settledBlock)
+    // メモを今の見出しと照合して並べる。印と件数と飛ぶ先も同じ照合から作る（→ features/margin_pane.md §5.6）。
+    val readyMemos = uiState.marginMemoState as? MarginMemoState.Ready
+    val arrangedMemos = remember(readyMemos?.memos, sectionModel, bodySection) {
+        val memos = readyMemos?.memos ?: return@remember null
+        val model = sectionModel ?: return@remember null
+        arrangeMemos(memos, model.sections.map { it.title }, bodySection ?: SectionRef(title = null))
+    }
     // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
     val jumpToSection: (SectionRef) -> Unit = { ref ->
         sectionModel?.startBlockOf(ref)?.let { block ->
@@ -455,6 +463,7 @@ internal fun NoteReaderTab(
                             section = bodySection,
                             hasHeadings = sectionModel?.hasHeadings ?: false,
                             onJumpToSection = jumpToSection,
+                            arranged = arrangedMemos,
                             onEdit = onEditMemo,
                             onSubmit = onSubmitMemo,
                             onDelete = onDeleteMarginMemo,
@@ -475,6 +484,7 @@ internal fun NoteReaderTab(
             section = bodySection,
             hasHeadings = sectionModel?.hasHeadings ?: false,
             onJumpToSection = jumpToSection,
+            arranged = arrangedMemos,
             onEdit = onEditMemo,
             onSubmit = onSubmitMemo,
             onDelete = onDeleteMarginMemo,
