@@ -329,6 +329,10 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("「節B」へ書き込み中").assertExists()
         assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
 
+        // 長い見出しの節へ移っても、見出しの行が増えて入力欄が下がらない。
+        composeRule.runOnIdle { harness.section = SectionRef("長い見出し".repeat(20)) }
+        assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
+
         // 「本文を戻す」で本文が書き込み先へ戻れば、知らせは消える。
         composeRule.onNodeWithText("本文を戻す").performClick()
         composeRule.onNodeWithText("「節B」へ書き込み中").assertDoesNotExist()

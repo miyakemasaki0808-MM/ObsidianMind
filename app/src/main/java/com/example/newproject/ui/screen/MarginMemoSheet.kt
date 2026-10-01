@@ -233,12 +233,13 @@ internal fun MarginMemoSheetContent(
     ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // **面の節は本文の節に常についていく**（書いている間も動く → features/margin_pane.md §5.3）。
+                // **1行に収める。** 書いている間に長い見出しの節へ移って2行になると、入力欄が下がる。
                 Text(
                     text = section?.let { sectionLabel(it, hasHeadings) } ?: "このノートのメモ",
                     color = OnSurface,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
