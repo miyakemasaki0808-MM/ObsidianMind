@@ -134,6 +134,9 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
+    private val mutableMarginPaneOpen = MutableStateFlow(preferences.marginPaneOpen)
+    val marginPaneOpen: StateFlow<Boolean> = mutableMarginPaneOpen.asStateFlow()
+
     /**
      * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
@@ -189,6 +192,16 @@ class NoteViewModel internal constructor(
         if (mutableNotePaperAging.value == enabled) return
         preferences.notePaperAging = enabled
         mutableNotePaperAging.value = enabled
+    }
+
+    /**
+     * 余白ペインの開閉。**ノートの状態ではなく端末の設定**なので `NoteUiState` に入れない
+     * （ノートを替えても、Fold を閉じて開いても保つ → features/margin_pane.md §5.4）。
+     */
+    fun setMarginPaneOpen(open: Boolean) {
+        if (mutableMarginPaneOpen.value == open) return
+        preferences.marginPaneOpen = open
+        mutableMarginPaneOpen.value = open
     }
 
     private fun restoreVault() {
@@ -558,10 +571,13 @@ class NoteViewModel internal constructor(
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    /** シートを開く。**ここでだけ**サイドカーを1件読む。 */
+    /** シートを開く。まだ読んでいなければサイドカーを1件読む。読み込み済みなら読み直さない。 */
     fun openMarginMemoSheet() = session.openMarginMemoSheet()
 
     fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
+
+    /** 余白ペインが出ている間、このノートのメモを持たせる。 */
+    fun loadMarginMemoForPane() = session.loadMarginMemoForPane()
 
     /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
     fun saveMarginMemo(text: String, sectionTitle: String?) =

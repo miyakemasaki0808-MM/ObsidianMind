@@ -21,6 +21,12 @@ interface AppPreferences {
      */
     var notePaperAging: Boolean
 
+    /**
+     * ペインを出せる窓で、本文の右に余白ペインを出すか。**既定は開いている。**
+     * ✎ で切り替え、再起動をまたいで保つ（→ features/margin_pane.md §5.4）。
+     */
+    var marginPaneOpen: Boolean
+
     /** 選択中Vaultの永続化URI（文字列）。未選択なら null。 */
     var vaultUri: String?
 }
@@ -39,6 +45,12 @@ class SharedAppPreferences(private val prefs: SharedPreferences) : AppPreference
             prefs.edit { putBoolean(KEY_NOTE_PAPER_AGING, value) }
         }
 
+    override var marginPaneOpen: Boolean
+        get() = prefs.getBoolean(KEY_MARGIN_PANE_OPEN, true)
+        set(value) {
+            prefs.edit { putBoolean(KEY_MARGIN_PANE_OPEN, value) }
+        }
+
     override var vaultUri: String?
         get() = prefs.getString(KEY_VAULT_URI, null)
         set(value) {
@@ -50,5 +62,6 @@ class SharedAppPreferences(private val prefs: SharedPreferences) : AppPreference
         private const val KEY_VAULT_URI = "vault_uri"
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_NOTE_PAPER_AGING = "note_paper_aging"
+        private const val KEY_MARGIN_PANE_OPEN = "margin_pane_open"
     }
 }

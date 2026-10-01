@@ -610,7 +610,13 @@ internal class NoteSessionCoordinator(
             documentId = documentId
         )
 
-    fun bindReadingTracePath(sessionId: Long, path: String) = readingTrace.bindPath(sessionId, path)
+    fun bindReadingTracePath(sessionId: Long, path: String) {
+        readingTrace.bindPath(sessionId, path)
+        // **今のノートのパスとして埋まったときだけ**渡す。前のノートの確定が遅れて届いても、
+        // `currentPath()` は今のセッションしか見ないので、別のノートのメモを読まない。
+        readingTrace.currentPath()?.let { marginMemo.onPathBound(it) }
+    }
+
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
         reunionCard.revealTrace(vaultRelativePath, content)
     fun reportReadingProgress(
@@ -644,14 +650,26 @@ internal class NoteSessionCoordinator(
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    /** シートを開く。**ここでだけサイドカーを1件読む。** */
+    /**
+     * シートを開く。**読み込み済みなら読み直さない** — 読み直すと世代が進み、走行中の保存の結果が
+     * 照合で捨てられる（保存中に閉じて開き直すと、受理された文字が入力欄に残って再送できる）。
+     * ペインの書きかけをシートへ移すときにも同じ口を使う。
+     */
     fun openMarginMemoSheet() {
         marginMemo.setSheetVisible(true)
-        marginMemo.open(readingTrace.currentPath())
+        marginMemo.ensureLoaded(readingTrace.currentPath())
     }
 
     fun dismissMarginMemoSheet() {
         marginMemo.setSheetVisible(false)
+    }
+
+    /**
+     * 余白ペインが出ている間に呼ぶ。**読み込み済みなら何もしない**ので、再表示のたびに読み直さない。
+     * 読めなかったときだけ、ペインを出し直したときに読み直す。
+     */
+    fun loadMarginMemoForPane() {
+        marginMemo.ensureLoaded(readingTrace.currentPath())
     }
 
     /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */

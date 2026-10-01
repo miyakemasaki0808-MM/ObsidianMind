@@ -56,17 +56,30 @@ internal class MarginMemoController(
     private var generation = 0L
 
     /**
-     * シートを開いたときに読む。**ノート表示の経路では呼ばない** —
-     * 呼ぶとノートを開くたびサイドカーを1件読むことになる。
+     * 相対パスが分かる前に読もうとした。**分かったら読む**（[onPathBound]）。
+     *
+     * さがす・関連から開いたノートは、走査のキャッシュが冷えていると表示の後にパスが埋まる。
+     * パスの無いまま読んで空の一覧で確定すると、そのノートの間は一覧が空のまま置けなくなる。
+     * ノート単位の値なので [cancelAndClear] で落とす。
+     */
+    private var loadWhenPathBound = false
+
+    /**
+     * 読む。**ノートを開く経路では呼ばない** — 呼ぶとノートを開くたびサイドカーを1件読むことになる。
+     *
+     * **世代を進めるので、走行中の保存の結果を捨てる。** シートやペインを出すときは [ensureLoaded] を通し、
+     * 読み込み済みなら読み直さない。
      */
     fun open(vaultRelativePath: String?) {
         val requestId = ++generation
         val path = vaultRelativePath?.takeIf { it.isNotBlank() }
         if (path == null) {
             // 相対パスが分からないノートには保存先が無い。空で開いて、書ける状態にはしない。
+            loadWhenPathBound = true
             state.update { it.copy(marginMemoState = MarginMemoState.Ready(memos = emptyList())) }
             return
         }
+        loadWhenPathBound = false
         state.update { it.copy(marginMemoState = MarginMemoState.Loading) }
         loadJob?.cancel()
         loadJob = scope.launch {
@@ -82,6 +95,28 @@ internal class MarginMemoController(
             if (!isCurrent(requestId)) return@launch
             state.update { it.copy(marginMemoState = MarginMemoState.Ready(memos = loaded.newestFirst())) }
         }
+    }
+
+    /**
+     * 読み込み済みか読み込み中なら何もしない。まだ読んでいないか、読めなかったときだけ読む。
+     * **パスがまだ無ければ読まずに待つ** — 状態は変えず、パスが分かったときに [onPathBound] が読む。
+     */
+    fun ensureLoaded(vaultRelativePath: String?) {
+        when (state.current.marginMemoState) {
+            is MarginMemoState.Ready, MarginMemoState.Loading -> return
+            MarginMemoState.Idle, is MarginMemoState.Error -> Unit
+        }
+        if (vaultRelativePath.isNullOrBlank()) {
+            loadWhenPathBound = true
+            return
+        }
+        open(vaultRelativePath)
+    }
+
+    /** 今のノートの相対パスが分かった。パスを待っていた読み込みがあれば、ここで読む。 */
+    fun onPathBound(vaultRelativePath: String) {
+        if (!loadWhenPathBound) return
+        open(vaultRelativePath)
     }
 
     /**
@@ -212,6 +247,7 @@ internal class MarginMemoController(
      */
     fun cancelAndClear() {
         generation++
+        loadWhenPathBound = false
         loadJob?.cancel()
         loadJob = null
         // **ここだけが取り消してよい場所。** 保存と削除は互いを取り消さない。

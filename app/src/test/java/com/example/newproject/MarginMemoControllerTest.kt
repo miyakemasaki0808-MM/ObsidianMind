@@ -325,6 +325,149 @@ class MarginMemoControllerTest {
         assertFalse(store.value.isMarginMemoSheetVisible)
     }
 
+    // ── 余白ペインからの読み込み（→ features/margin_pane.md §11 段1）──────────────
+
+    /** ペインは再表示のたびに頼むので、**読み込み済みなら読み直さない。** */
+    @Test
+    fun `読み込み済みなら頼まれても読み直さない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val loads = mutableListOf<String>()
+        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+
+        controller.ensureLoaded(path)
+        advanceUntilIdle()
+        controller.ensureLoaded(path)
+        advanceUntilIdle()
+
+        assertEquals(listOf(path), loads)
+        assertTrue(store.value.marginMemoState is MarginMemoState.Ready)
+    }
+
+    /**
+     * **読み込み済みの中身を別の面へ移しても、走行中の保存の結果を捨てない。**
+     *
+     * [MarginMemoController.open] は世代を進めるので、保存中に呼ぶと結果が照合で捨てられ `Saving` が残る。
+     */
+    @Test
+    fun `保存中に頼まれても保存の結果が残る`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val gate = Mutex(locked = true)
+        val controller = controller(store, beforeAppend = { gate.withLock { } })
+        controller.ensureLoaded(path)
+        advanceUntilIdle()
+
+        controller.save(path, "ペインで書いた", sectionTitle = null)
+        advanceUntilIdle()
+        controller.ensureLoaded(path)
+        gate.unlock()
+        advanceUntilIdle()
+
+        assertEquals(MemoSaveStatus.Saved, ready(store).status)
+        assertEquals(listOf("ペインで書いた"), ready(store).memos.map { it.text })
+    }
+
+    @Test
+    fun `読めなかったときだけ、頼まれたら読み直す`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        var fail = true
+        var loads = 0
+        val controller = controller(store, loadMemos = {
+            loads++
+            if (fail) error("読めない") else emptyList()
+        })
+
+        controller.ensureLoaded(path)
+        advanceUntilIdle()
+        assertTrue(store.value.marginMemoState is MarginMemoState.Error)
+
+        fail = false
+        controller.ensureLoaded(path)
+        advanceUntilIdle()
+
+        assertEquals(2, loads)
+        assertTrue(store.value.marginMemoState is MarginMemoState.Ready)
+    }
+
+    /**
+     * **パスが分かる前に頼まれたら、空の一覧で確定しない。**
+     *
+     * 確定すると、そのノートの間は一覧が空のまま「置く」が何も保存しない。
+     */
+    @Test
+    fun `パスが分かる前に頼まれたら待ち、分かったときに読む`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val loads = mutableListOf<String>()
+        val controller = controller(store, loadMemos = { loads += it; listOf(memoOf("前に書いた", at = 1L)) })
+
+        controller.ensureLoaded(null)
+        advanceUntilIdle()
+        assertTrue(store.value.marginMemoState is MarginMemoState.Idle)
+
+        controller.onPathBound(path)
+        advanceUntilIdle()
+
+        assertEquals(listOf(path), loads)
+        assertEquals(listOf("前に書いた"), ready(store).memos.map { it.text })
+    }
+
+    /** シートをパスの無いまま開いたときも、分かったら読み直す（空の一覧のまま残さない）。 */
+    @Test
+    fun `パスの無いまま開いたシートも、パスが分かったら読み直す`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val controller = controller(store, loaded = listOf(memoOf("前に書いた", at = 1L)))
+
+        controller.open(null)
+        assertTrue(ready(store).memos.isEmpty())
+        controller.onPathBound(path)
+        advanceUntilIdle()
+
+        assertEquals(listOf("前に書いた"), ready(store).memos.map { it.text })
+    }
+
+    @Test
+    fun `待っていなければ、パスが分かっても読まない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val loads = mutableListOf<String>()
+        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+
+        controller.onPathBound(path)
+        advanceUntilIdle()
+
+        assertTrue(loads.isEmpty())
+        assertTrue(store.value.marginMemoState is MarginMemoState.Idle)
+    }
+
+    /** **待ちはノート単位。** 切替の後に前のノートのパスが届いても、次のノートで読まない。 */
+    @Test
+    fun `ノート切替でパスの待ちを捨てる`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val loads = mutableListOf<String>()
+        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+
+        controller.ensureLoaded(null)
+        controller.cancelAndClear()
+        controller.onPathBound(path)
+        advanceUntilIdle()
+
+        assertTrue("切替の前の待ちが残った", loads.isEmpty())
+    }
+
+    /** 1度読んだら待ちは消える。パスの確定が重ねて届いても、読み直して保存の結果を捨てない。 */
+    @Test
+    fun `読んだ後にパスが届いても読み直さない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val loads = mutableListOf<String>()
+        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+
+        controller.ensureLoaded(null)
+        controller.onPathBound(path)
+        advanceUntilIdle()
+        controller.onPathBound(path)
+        advanceUntilIdle()
+
+        assertEquals(listOf(path), loads)
+    }
+
     private fun ready(store: NoteUiStateStore): MarginMemoState.Ready =
         store.value.marginMemoState as MarginMemoState.Ready
 
@@ -336,11 +479,12 @@ class MarginMemoControllerTest {
         beforeAppend: suspend () -> Unit = {},
         beforeDelete: suspend () -> Unit = {},
         onAppend: (MarginMemo) -> Unit = {},
-        onDeleted: (MarginMemo) -> Unit = {}
+        onDeleted: (MarginMemo) -> Unit = {},
+        loadMemos: suspend (String) -> List<MarginMemo> = { loaded }
     ) = MarginMemoController(
         scope = this,
         state = store.marginMemoWriter,
-        loadMemos = { loaded },
+        loadMemos = loadMemos,
         appendMemo = { _, memo ->
             beforeAppend()
             onAppend(memo)

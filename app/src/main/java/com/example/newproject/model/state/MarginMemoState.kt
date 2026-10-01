@@ -3,7 +3,7 @@ package com.example.newproject.model.state
 import com.example.newproject.model.MarginMemo
 
 /**
- * 余白メモのシートの状態。
+ * 余白メモのシートと余白ペインの状態（2つの面で同じものを見せる）。
  *
  * **端末AIの状態を持たない。** この機能はAIを1回も呼ばないので、
  * `AiNotice` に相当する枝が要らない（Reflect 系で唯一）。
@@ -11,7 +11,7 @@ import com.example.newproject.model.MarginMemo
 sealed class MarginMemoState {
     data object Idle : MarginMemoState()
 
-    /** サイドカーを1件読んでいる。**シートを開いたときだけ**通る。 */
+    /** サイドカーを1件読んでいる。**このノートでシートかペインを初めて出したとき**（と、読めなかった後に出し直したとき）だけ通る。 */
     data object Loading : MarginMemoState()
 
     /**

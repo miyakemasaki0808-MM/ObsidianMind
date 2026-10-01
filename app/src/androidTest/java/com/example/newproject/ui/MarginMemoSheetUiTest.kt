@@ -16,6 +16,10 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import com.example.newproject.ui.screen.MarginMemoSheetContent
+import com.example.newproject.ui.screen.rememberMarginMemoInput
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -36,6 +40,9 @@ import org.junit.runner.RunWith
  *
  * 保存そのもの（預かり・退避・合流）は `ReadingTraceControllerTest` が持つ。
  * ここは**入力欄の中身がいつ消え、いつ戻るか**だけを見る。
+ *
+ * 書きかけは本番と同じ [rememberMarginMemoInput] で持つ。照合の規則そのものは
+ * `MarginMemoInputTest`（JVM）が持ち、ここは**表示部品を外す・作り直す・画面を復元する**経路を通す。
  */
 @RunWith(AndroidJUnit4::class)
 class MarginMemoSheetUiTest {
@@ -66,6 +73,7 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = rememberMarginMemoInput(NOTE_A, state),
                     onSave = { text ->
                         saved += text
                         // 実際の Controller と同じく、置けたら一覧へ足して status を進める。
@@ -108,6 +116,7 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = rememberMarginMemoInput(NOTE_A, state),
                     onSave = {
                         // 受理していないので acceptedCount は増やさない。
                         state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Full)
@@ -130,6 +139,7 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = MarginMemoState.Loading,
+                    draft = rememberMarginMemoInput(NOTE_A, MarginMemoState.Loading),
                     onSave = { error("読み込み中に保存を要求した") },
                     onDelete = {}
                 )
@@ -167,6 +177,7 @@ class MarginMemoSheetUiTest {
             AppTheme(darkTheme = false) {
                 MarginMemoSheetContent(
                     state = state,
+                    draft = rememberMarginMemoInput(NOTE_A, state),
                     onSave = { _ ->
                         state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Saving)
                     },
@@ -187,5 +198,138 @@ class MarginMemoSheetUiTest {
         // 1件目が失敗した場合も同じ（下書きは触られない）。
         composeRule.runOnIdle { finish(MemoSaveStatus.Full) }
         composeRule.onNodeWithText("待っているあいだに書いた").assertExists()
+    }
+
+    /**
+     * **保存中に表示部品を外し、外している間に受理されても、戻したときに入力は空。**
+     *
+     * 送った記録を表示部品の中に持っていたころは、作り直した部品が何を送ったかを知らず、
+     * 受理済みの文字が残って押し直せた（ペインを ✎ でしまったときの形）。
+     */
+    @Test
+    fun 保存中に表示を外しても_受理されていれば戻したとき入力は空() {
+        var shown by mutableStateOf(true)
+        var state by mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
+        val saved = mutableListOf<String>()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val draft = rememberMarginMemoInput(NOTE_A, state)
+                if (shown) {
+                    MarginMemoSheetContent(
+                        state = state,
+                        draft = draft,
+                        onSave = { text ->
+                            saved += text
+                            state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Saving)
+                        },
+                        onDelete = {}
+                    )
+                }
+            }
+        }
+
+        input.performTextInput("送信するメモ")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle {
+            val ready = state as MarginMemoState.Ready
+            state = ready.copy(
+                memos = listOf(MarginMemo("送信するメモ", 1L)),
+                status = MemoSaveStatus.Saved,
+                acceptedCount = ready.acceptedCount + 1
+            )
+        }
+        composeRule.runOnIdle { shown = true }
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        assertEquals(listOf("送信するメモ"), saved)
+    }
+
+    /** **ペインとシートの行き来**（別の場所へ組み直す）をまたいで受理されても同じ。 */
+    @Test
+    fun 保存中に別の場所へ組み直しても_受理されれば入力は空() {
+        var inPane by mutableStateOf(true)
+        var state by mutableStateOf<MarginMemoState>(MarginMemoState.Ready(memos = emptyList()))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val draft = rememberMarginMemoInput(NOTE_A, state)
+                val content: @androidx.compose.runtime.Composable () -> Unit = {
+                    MarginMemoSheetContent(
+                        state = state,
+                        draft = draft,
+                        onSave = { state = (state as MarginMemoState.Ready).copy(status = MemoSaveStatus.Saving) },
+                        onDelete = {}
+                    )
+                }
+                if (inPane) Box { content() } else Column { content() }
+            }
+        }
+
+        input.performTextInput("送信するメモ")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { inPane = false }
+        composeRule.runOnIdle {
+            val ready = state as MarginMemoState.Ready
+            state = ready.copy(status = MemoSaveStatus.Saved, acceptedCount = ready.acceptedCount + 1)
+        }
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+    }
+
+    /**
+     * **画面を戻したとき、ノートが替わっていたら前のノートの書きかけを出さない。**
+     *
+     * 見えていない間（ほかのタブにいる間）にVaultやノートを替えると、戻したときに初めて今のノートを知る。
+     * 比較の鍵を外から渡すだけでは、戻した値を今のノートの初期値として受け入れてしまった。
+     */
+    @Test
+    fun 画面を戻したときノートが替わっていれば前の書きかけを出さない() {
+        val restoration = StateRestorationTester(composeRule)
+        // **状態にしない。** 見えている間に替えると、見えている間の切替として照合されてしまう。
+        var note = NOTE_A
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                MarginMemoSheetContent(
+                    state = READY,
+                    draft = rememberMarginMemoInput(note, READY),
+                    onSave = {},
+                    onDelete = {}
+                )
+            }
+        }
+
+        input.performTextInput("Aにだけ書きかけたメモ")
+        note = NOTE_B
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        composeRule.onNodeWithText("Aにだけ書きかけたメモ").assertDoesNotExist()
+    }
+
+    /** 対照。**同じノートへ戻すなら**（Fold の開閉・回転）書きかけは残る。 */
+    @Test
+    fun 同じノートへ画面を戻したときは書きかけが残る() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                MarginMemoSheetContent(
+                    state = READY,
+                    draft = rememberMarginMemoInput(NOTE_A, READY),
+                    onSave = {},
+                    onDelete = {}
+                )
+            }
+        }
+
+        input.performTextInput("Aに書きかけ")
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.onNodeWithText("Aに書きかけ").assertExists()
+    }
+
+    private companion object {
+        const val NOTE_A = "content://vault-a/a.md"
+        const val NOTE_B = "content://vault-b/b.md"
+        val READY: MarginMemoState = MarginMemoState.Ready(memos = emptyList())
     }
 }
