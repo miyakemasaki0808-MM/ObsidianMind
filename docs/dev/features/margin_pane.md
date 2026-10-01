@@ -1,8 +1,8 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **Draft — 段1だけ実装済み・実機未確認。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1だけ実装済み・実機検証済み（段2〜5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
-**最終検証:** —（段1は実機で確かめていない。実機と突き合わせるまで日付を進めない）
+**最終検証:** 2026-10-01 / `fd1f091e`（段1のみ。Pixel 10 Pro Fold で通し版。実機は `1b3d3b1f` のAPKで確認）
 **関連コード:** 段1 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoInputState.kt` / `domain/MarginMemoInput.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt` / `controller/ReadingTraceController.kt` / `domain/MarginMemoComposer.kt`
 **関連テスト:** 段1 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoInputTest` / `MarginMemoInputSaverTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest`。予定 — `SectionChatControllerTest`
@@ -362,6 +362,8 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - **体感。** 並び順、再会カードの長さ、節の切り替わりの時機、シートの高さ、並べ読みが閉じると終わること、は内容を入れた試作と実機で調整する。調整しても機能の範囲は変えない
   - プロセスが終わったときの書きかけの保護
   - 遠いプロバイダでのメモの読み込み待ち。本文は待たせないが、ペインと印は遅れて出る
+  - **保存中（Saving）に面を替える交錯の実機確認。** 端末内の保存は数十ミリ秒で終わり、実機の操作では保存中を捉えられない。
+    この順序は `MarginMemoSheetUiTest` と JVM の検査が持つ（オーナー判断 2026-10-01）
 
 ## 11. 既知の制約・未解決事項
 
