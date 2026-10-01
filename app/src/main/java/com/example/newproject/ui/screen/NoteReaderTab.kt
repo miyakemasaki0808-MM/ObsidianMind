@@ -406,16 +406,14 @@ internal fun NoteReaderTab(
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
         // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
-        // 押すと本文をその節へ送り、面はその節のメモまで送る。
+        // 押すと、面をその節のメモまで送る。**本文は動かさない** — 見出しは押した指の下に見えているうえ、
+        // 短い節は上端まで送れないので、面の節が本文についてくることを当てにできない。
         val headingMark: (@Composable (Int) -> Unit)? = arrangedMemos?.let { arranged ->
             { block ->
                 val ref = sectionModel?.sectionRefAt(block)
                 val count = ref?.let { arranged.countsBySection[it] } ?: 0
                 if (ref != null && count > 0) {
-                    HeadingMemoMark(count) {
-                        jumpToSection(ref)
-                        revealMemos(MemoReveal.CurrentSection)
-                    }
+                    HeadingMemoMark(count) { revealMemos(MemoReveal.Section(ref)) }
                 }
             }
         }

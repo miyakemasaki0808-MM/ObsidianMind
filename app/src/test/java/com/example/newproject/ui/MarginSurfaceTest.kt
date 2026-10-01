@@ -4,7 +4,10 @@ import com.example.newproject.ui.screen.MarginToggle
 import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
+import com.example.newproject.ui.screen.MemoReveal
+import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
 import com.example.newproject.ui.screen.sectionLabel
 import com.example.newproject.ui.screen.writeTargetNotice
@@ -138,5 +141,19 @@ class MarginSurfaceTest {
         assertEquals("隠れているのに覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 800f))
         assertEquals("組まれる前に覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = null))
         assertEquals("画面いっぱいを超えて覆った", 800, sheetCoveredHeight(layoutHeight = 800, sheetOffset = -10f))
+    }
+
+    /**
+     * 印から来たら**行き先の節**へ送る。面の節が行き先ならこの節のメモ、違えばほかの節を開いてその組へ。
+     * 本文を上端まで送れない短い節でも、面の節が追いつくことを当てにしない。
+     */
+    @Test
+    fun `印の行き先が面の節でなければ、ほかの節を開いてその組へ送る`() {
+        val b = SectionRef("節B")
+        val a = SectionRef("節A")
+
+        assertEquals(MemoRevealStop.CurrentMemos, memoRevealStop(MemoReveal.Section(b), current = b))
+        assertEquals("別の節のメモを行き先にした", MemoRevealStop.OtherGroup(b), memoRevealStop(MemoReveal.Section(b), current = a))
+        assertEquals(MemoRevealStop.OtherGroup(null), memoRevealStop(MemoReveal.AllMemos, current = a))
     }
 }

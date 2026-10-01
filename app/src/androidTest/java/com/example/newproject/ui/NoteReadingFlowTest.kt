@@ -701,6 +701,42 @@ class NoteReadingFlowTest {
         composeRule.runOnIdle { assertEquals(1, opened) }
     }
 
+    /**
+     * **本文を上端まで送れない短い2節のノートでも、印の1回の操作で行き先の節のメモが見える**（→ features/margin_pane.md §5.6）。
+     * 面の節は本文についていくが、短い節は上端まで来ないので、それを当てにすると「ほかの節」に畳まれたまま残る。
+     */
+    @Test
+    fun 短い2節のノートでも_シートで印から行き先の節のメモが見える() = assertMarkRevealsSectionMemo(pane = false)
+
+    @Test
+    fun 短い2節のノートでも_ペインで印から行き先の節のメモが見える() = assertMarkRevealsSectionMemo(pane = true)
+
+    private fun assertMarkRevealsSectionMemo(pane: Boolean) {
+        val state = loadedNote(SHORT_TWO_SECTIONS).copy(
+            marginMemoState = MarginMemoState.Ready(memos = listOf(MarginMemo("節Bのメモ", 1L, "節B"))),
+            isMarginMemoSheetVisible = !pane
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = if (pane) 960.dp else 400.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = pane,
+                        expandedWidth = pane
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("節Bのメモ").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -709,7 +745,9 @@ class NoteReadingFlowTest {
         loader: NoteImageLoader? = null,
         measurements: NoteImageMeasurements? = null,
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
-        onOpenMarginMemo: () -> Unit = {}
+        onOpenMarginMemo: () -> Unit = {},
+        marginPaneOpen: Boolean = false,
+        expandedWidth: Boolean = false
     ) {
         NoteReaderTab(
             uiState = state,
@@ -726,10 +764,10 @@ class NoteReadingFlowTest {
             onEnterFullscreen = {},
             onOpenMarginMemo = onOpenMarginMemo,
             onLoadMarginMemoForPane = {},
-            // 読書の流れだけを見るので、どの端末でも縦に積む並べ方に固定する。
-            marginPaneOpen = false,
+            // 読書の流れだけを見るテストは、どの端末でも縦に積む並べ方に固定する（既定）。
+            marginPaneOpen = marginPaneOpen,
             onSetMarginPaneOpen = {},
-            expandedWidth = false,
+            expandedWidth = expandedWidth,
             memoDraft = MarginMemoDraft(),
             onEditMarginMemo = { _, _ -> },
             onSubmitMarginMemo = {},
@@ -757,6 +795,17 @@ class NoteReadingFlowTest {
         """.trimIndent()
 
         const val TARGET_BLOCK = 12
+
+        /** 本文領域に収まる短い2節。どちらの見出しも上端まで送れない。 */
+        val SHORT_TWO_SECTIONS = """
+            # 節A
+
+            短い段落。
+
+            # 節B
+
+            短い段落。
+        """.trimIndent()
 
         /** 画像を1枚挟んだ本文。画像の後ろにも十分なブロックを置く。 */
         const val IMAGE_BLOCK_INDEX = 2

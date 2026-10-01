@@ -443,6 +443,47 @@ class MarginMemoSheetUiTest {
         }
     }
 
+    /**
+     * **印から来たら、行き先の節の組まで送る。** 面の節が行き先でないとき（短い節で本文が上端まで来ない）も、
+     * ほかの節を開いてその組を見せる。別の節の組を行き先にしない。
+     */
+    @Test
+    fun 印から来たら行き先の節の組まで送る() {
+        val harness = Harness()
+        val memos = (1..12).map { MarginMemo("節Bのメモ$it", 100L + it, "節B") } +
+            listOf(MarginMemo("節Cのメモ", 2L, "節C"), MarginMemo("節Dのメモ", 1L, "節D"))
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(memos, HeadingIndex(listOf("節B", "節C", "節D")), current = SectionRef("節B"))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(320.dp)) {
+                    MarginMemoSheetContent(
+                        state = harness.state,
+                        draft = harness.draft,
+                        section = harness.section,
+                        hasHeadings = true,
+                        onJumpToSection = {},
+                        arranged = harness.arranged,
+                        onEdit = harness::edit,
+                        onSubmit = harness::submit,
+                        onDelete = {},
+                        reveal = harness.reveal,
+                        onRevealHandled = { harness.reveal = null }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("節Dのメモ").assertDoesNotExist()
+
+        composeRule.runOnIdle { harness.reveal = MemoReveal.Section(SectionRef("節D")) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("節Dのメモ").assertIsDisplayed()
+
+        composeRule.runOnIdle { harness.reveal = MemoReveal.Section(SectionRef("節C")) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("節Cのメモ").assertIsDisplayed()
+    }
+
     /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
     @Test
     fun 閉じるボタンでシートを閉じ_隠れたら中身を組まない() {

@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -85,7 +86,10 @@ import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 余白メモのシートを、本文と**併存させて**出す器（→ features/margin_pane.md §5.5）。[body] は本文側。
@@ -127,10 +131,19 @@ internal fun MarginMemoSheetHost(
             .drop(1)
             .collect { value -> if (value == SheetValue.Hidden && currentVisible) currentOnDismiss() }
     }
-    // **画面いっぱいの止まりどころが無いときは頼まない。** 無い止まりどころを頼むと、
-    // 状態だけが「いっぱい」になってシートは動かない（Material3 1.3.0 の実装）。
-    LaunchedEffect(expandRequested, visible) {
-        if (visible && expandRequested && sheetState.hasExpandedState) sheetState.expand()
+    // **送る依頼は、広げ終えるまで持つ。** 依頼そのものは面が送り終えると消えるので、それに合わせて止めると
+    // 広げる途中で止まる。ほかの節を開いて中身が伸び、画面いっぱいの止まりどころが現れるのも待つ。
+    // **止まりどころが無いときは頼まない** — 無い止まりどころを頼むと、状態だけが「いっぱい」になってシートは動かない
+    // （Material3 1.3.0 の実装）。
+    var expandPending by remember { mutableStateOf(false) }
+    LaunchedEffect(expandRequested) { if (expandRequested) expandPending = true }
+    LaunchedEffect(expandPending, visible) {
+        if (!expandPending || !visible) return@LaunchedEffect
+        withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
+            snapshotFlow { sheetState.hasExpandedState }.first { it }
+        }
+        if (sheetState.hasExpandedState) sheetState.expand()
+        expandPending = false
     }
     BackHandler(enabled = visible) {
         scope.launch {
@@ -165,6 +178,9 @@ internal fun MarginMemoSheetHost(
         }
     }
 }
+
+/** 開いたほかの節の組が並ぶのを待つ上限。並ばなければメモの並びの始まりへ送り、シートも広げない。 */
+private const val REVEAL_LAYOUT_TIMEOUT_MILLIS = 500L
 
 /** シートの上端の位置。最初に組まれる前は無い。 */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -239,12 +255,23 @@ internal fun MarginMemoSheetContent(
     val scrollState = rememberScrollState()
     // メモの並びの始まり（この面の中の位置）。目的のメモまで送るときの行き先。
     var memosTop by remember { mutableIntStateOf(0) }
+    // ほかの節の組の始まり（この面の中の位置）。印から来たときの行き先。
+    val groupTops = remember { mutableStateMapOf<SectionRef, Int>() }
     LaunchedEffect(reveal) {
         val target = reveal ?: return@LaunchedEffect
-        if (target == MemoReveal.AllMemos) othersExpanded = true
-        // 開いた分が並んでから送る。
+        val stop = memoRevealStop(target, section)
+        if (stop is MemoRevealStop.OtherGroup) othersExpanded = true
         withFrameNanos { }
-        scrollState.animateScrollTo(memosTop)
+        val top = when (stop) {
+            MemoRevealStop.CurrentMemos -> memosTop
+            is MemoRevealStop.OtherGroup -> stop.section?.let { group ->
+                // **開いた組が並ぶのを待つ。** 開いた直後のフレームではまだ位置が無い。来なければ並びの始まりへ。
+                withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
+                    snapshotFlow { groupTops[group] }.filterNotNull().first()
+                }
+            } ?: memosTop
+        }
+        scrollState.animateScrollTo(top)
         onRevealHandled()
     }
 
@@ -385,9 +412,14 @@ internal fun MarginMemoSheetContent(
                             arranged = arranged,
                             hasHeadings = hasHeadings,
                             expanded = othersExpanded,
-                            onToggle = { othersExpanded = !othersExpanded },
+                            onToggle = {
+                                othersExpanded = !othersExpanded
+                                // 畳んだ組の位置は古くなるので捨てる（次に開いたときに並び直した位置を待つ）。
+                                if (!othersExpanded) groupTops.clear()
+                            },
                             onJumpToSection = onJumpToSection,
-                            onDelete = { pendingDelete = it }
+                            onDelete = { pendingDelete = it },
+                            onGroupPlaced = { group, top -> groupTops[group] = top }
                         )
                     }
 
@@ -499,7 +531,9 @@ private fun OtherSectionMemos(
     expanded: Boolean,
     onToggle: () -> Unit,
     onJumpToSection: (SectionRef) -> Unit,
-    onDelete: (MarginMemo) -> Unit
+    onDelete: (MarginMemo) -> Unit,
+    /** 節の組の見出しが並んだ位置（この面の中）。印から来たときの行き先に使う。 */
+    onGroupPlaced: (SectionRef, Int) -> Unit
 ) {
     if (arranged.otherCount == 0) return
     TextButton(
@@ -526,7 +560,9 @@ private fun OtherSectionMemos(
             TextButton(
                 onClick = { onJumpToSection(section) },
                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                modifier = Modifier.semantics { contentDescription = "${sectionLabel(section, hasHeadings)}へ本文を送る" }
+                modifier = Modifier
+                    .semantics { contentDescription = "${sectionLabel(section, hasHeadings)}へ本文を送る" }
+                    .onGloballyPositioned { onGroupPlaced(section, it.positionInParent().y.roundToInt()) }
             ) {
                 Text(sectionLabel(section, hasHeadings), color = AccentText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }

@@ -97,12 +97,34 @@ internal fun writeTargetNotice(target: SectionRef?, bodySection: SectionRef?): S
  * 面の中で、目的のメモまで送る依頼（→ features/margin_pane.md §5.4「入口から目的の中身へ直接届く」）。
  * 送ったら依頼を消す（同じ依頼で何度も送らない）。
  */
-internal enum class MemoReveal {
-    /** 見出しの印から。本文をその節へ送った後、この節のメモへ。 */
-    CurrentSection,
+internal sealed interface MemoReveal {
+    /**
+     * 見出しの印から。**行き先の節を持つ。** 本文をその節まで送れるとは限らない（短い節は上端まで来ない）ので、
+     * 面の節が本文についてくることを当てにしない。
+     */
+    data class Section(val section: SectionRef) : MemoReveal
 
     /** 再会カードの「前回のメモを見る」から。ほかの節のメモも開いて、メモの並びへ。 */
-    AllMemos
+    data object AllMemos : MemoReveal
+}
+
+/** 面の中の送り先。 */
+internal sealed interface MemoRevealStop {
+    /** この節のメモの並びの始まり。 */
+    data object CurrentMemos : MemoRevealStop
+
+    /** ほかの節のメモを開き、[section] の組へ。null は並びの始まり。 */
+    data class OtherGroup(val section: SectionRef?) : MemoRevealStop
+}
+
+/**
+ * 依頼を面の中の送り先へ。行き先が面の節ならこの節のメモ、違えばほかの節のメモを開いてその組へ送る。
+ * **別の節のメモを行き先にしない。**
+ */
+internal fun memoRevealStop(reveal: MemoReveal, current: SectionRef?): MemoRevealStop = when (reveal) {
+    MemoReveal.AllMemos -> MemoRevealStop.OtherGroup(section = null)
+    is MemoReveal.Section ->
+        if (reveal.section == current) MemoRevealStop.CurrentMemos else MemoRevealStop.OtherGroup(reveal.section)
 }
 
 /** 見出しの脇の印の読み上げ名。**色だけにしない**ので件数を言う。 */
