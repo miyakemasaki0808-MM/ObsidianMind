@@ -535,7 +535,8 @@ private fun OtherSectionMemos(
     /** 節の組の見出しが並んだ位置（この面の中）。印から来たときの行き先に使う。 */
     onGroupPlaced: (SectionRef, Int) -> Unit
 ) {
-    if (arranged.otherCount == 0) return
+    // **出すかは、ほかの組があるかで決める。** 件数で決めると、今の節と共通のメモだけを持つ同名の候補が選べなくなる。
+    if (arranged.others.isEmpty()) return
     TextButton(
         onClick = onToggle,
         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)

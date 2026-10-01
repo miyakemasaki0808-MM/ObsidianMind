@@ -86,7 +86,7 @@ internal data class MemoGroup(val section: SectionRef?, val memos: List<PlacedMe
  *
  * - [current] この節のメモ（新しい順）
  * - [others] ほかの節のメモを**本文の順**に節ごと。見出しが見つからないメモは最後の組
- * - [otherCount] 畳んだときに見せる件数。同名の見出しに共通のメモを2度数えない
+ * - [otherCount] 畳んだときに見せる件数。[others] に並ぶメモを、同名の見出しに共通でも2度数えない
  * - [countsBySection] 本文の見出しの脇の印。印・件数・飛ぶ先はこの照合から作る
  */
 internal data class ArrangedMemos(
@@ -116,10 +116,13 @@ internal fun arrangeMemos(memos: List<MarginMemo>, index: HeadingIndex, current:
         .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
         .map { (section, inSection) -> MemoGroup(section, inSection) }
     val missing = placed.filter { it.match == MemoSectionMatch.Missing }
+    val others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing)
     return ArrangedMemos(
         current = inCurrent,
-        others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing),
-        otherCount = placed.count { current !in it.match.sections(opening) },
+        others = others,
+        // **ほかの組に並ぶメモを、重ねずに数える。** 「今の節に無いメモ」で数えると、今の節と同名のほかの候補に
+        // 共通のメモが0件になり、候補の組があるのに開く口が消える。
+        otherCount = others.flatMap { group -> group.memos.map { it.memo } }.distinct().size,
         countsBySection = placed
             .flatMap { it.match.sections(opening) }
             .filter { it != opening }

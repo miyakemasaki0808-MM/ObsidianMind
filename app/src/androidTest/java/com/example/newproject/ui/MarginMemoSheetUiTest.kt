@@ -364,6 +364,24 @@ class MarginMemoSheetUiTest {
         composeRule.runOnIdle { assertEquals(SectionRef("節C"), harness.section) }
     }
 
+    /**
+     * **今の節と同名のほかの候補に共通のメモだけでも、他方の候補を開いて選べる。** 選んだ候補へ本文が移る。
+     */
+    @Test
+    fun 同名の見出しに共通のメモだけでも_他方の候補を開いて選べる() {
+        val harness = Harness()
+        val memos = listOf(MarginMemo("まとめのメモ", 1L, "まとめ"))
+        harness.section = SectionRef("まとめ", 0)
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(memos, HeadingIndex(listOf("まとめ", "本論", "まとめ")), current = SectionRef("まとめ", 0))
+        setContent(harness)
+
+        composeRule.onNodeWithText("▸ ほかの節のメモ 1件").performClick()
+        composeRule.onNodeWithText("まとめ（2つ目）").performClick()
+
+        composeRule.runOnIdle { assertEquals(SectionRef("まとめ", 1), harness.section) }
+    }
+
     /** 再会カードの「前回のメモを見る」から来たら、**ほかの節のメモも開いて**メモの並びまで送る。 */
     @Test
     fun 前回のメモを見るから来たら_ほかの節のメモを開いて送る() {

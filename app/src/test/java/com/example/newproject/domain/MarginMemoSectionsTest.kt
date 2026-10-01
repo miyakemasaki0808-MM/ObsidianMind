@@ -96,13 +96,20 @@ class MarginMemoSectionsTest {
         assertEquals(1, arranged.countsBySection[SectionRef("まとめ", 1)])
     }
 
+    /**
+     * **今の節と同名のほかの候補に共通のメモだけでも、ほかの候補を選べる。** どちらの節にいても他方の組が出て、件数は1件。
+     * 「今の節に無いメモ」で数えていたころは0件になり、候補の組があるのに開く口が消えた。
+     */
     @Test
-    fun `今の節が同名の候補ならこの節にも出し、ほかの候補にも出す`() {
-        val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), index, current = SectionRef("まとめ", 1))
+    fun `今の節が同名の候補なら、この節にも出し、他方の候補も組として出して1件と数える`() {
+        listOf(SectionRef("まとめ", 0) to SectionRef("まとめ", 1), SectionRef("まとめ", 1) to SectionRef("まとめ", 0))
+            .forEach { (current, other) ->
+                val arranged = arrangeMemos(listOf(memo("まとめのメモ", "まとめ")), index, current)
 
-        assertEquals(listOf("まとめのメモ"), arranged.current.map { it.memo.text })
-        assertEquals(listOf(SectionRef("まとめ", 0)), arranged.others.map { it.section })
-        assertEquals("今の節にあるメモを、ほかの節の件数に数えた", 0, arranged.otherCount)
+                assertEquals(listOf("まとめのメモ"), arranged.current.map { it.memo.text })
+                assertEquals("$current から他方の候補が出ない", listOf(other), arranged.others.map { it.section })
+                assertEquals(1, arranged.otherCount)
+            }
     }
 
     @Test
@@ -130,7 +137,11 @@ class MarginMemoSectionsTest {
             val arranged = arrangeMemos(memos, index, current)
             val shown = (arranged.current + arranged.others.flatMap { it.memos }).map { it.memo }.toSet()
             assertEquals("$current で落とした", memos.toSet(), shown)
-            assertEquals("$current で件数が合わない", memos.size, arranged.current.size + arranged.otherCount)
+            assertEquals(
+                "$current でほかの節の件数が、並ぶメモの数と合わない",
+                arranged.others.flatMap { group -> group.memos.map { it.memo } }.toSet().size,
+                arranged.otherCount
+            )
         }
     }
 
