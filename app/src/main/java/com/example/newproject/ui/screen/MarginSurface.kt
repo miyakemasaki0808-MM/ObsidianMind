@@ -104,3 +104,11 @@ internal enum class MemoReveal {
 
 /** 見出しの脇の印の読み上げ名。**色だけにしない**ので件数を言う。 */
 internal fun headingMemoMarkDescription(count: Int): String = "この節のメモ ${count}件"
+
+/**
+ * シートを書いている間の畳み方にするか（→ features/margin_pane.md §5.5）。
+ * **シートで、入力欄に触れていて、キーボードが出ているときだけ。** キーボードを閉じれば元の並びに戻す —
+ * 入力欄に触れたままでも、キーボードが無ければ畳む理由が無い。ペインは高さが足りるので畳まない。
+ */
+internal fun compactWhileTyping(asSheet: Boolean, inputFocused: Boolean, imeVisible: Boolean): Boolean =
+    asSheet && inputFocused && imeVisible

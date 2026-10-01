@@ -4,6 +4,7 @@ import com.example.newproject.ui.screen.MarginToggle
 import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
+import com.example.newproject.ui.screen.compactWhileTyping
 import com.example.newproject.ui.screen.sectionLabel
 import com.example.newproject.ui.screen.writeTargetNotice
 import com.example.newproject.model.SectionRef
@@ -118,5 +119,14 @@ class MarginSurfaceTest {
         assertNull(writeTargetNotice(target = b, bodySection = b))
         assertNull("書いていないのに知らせた", writeTargetNotice(target = null, bodySection = c))
         assertNull("本文の節が分からないのに知らせた", writeTargetNotice(target = b, bodySection = null))
+    }
+
+    /** **シートで、入力欄に触れていて、キーボードが出ているときだけ**畳む。キーボードを閉じれば元に戻る。 */
+    @Test
+    fun `書いている間に畳むのはシートでキーボードが出ているときだけ`() {
+        assertEquals(true, compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = true))
+        assertEquals("キーボードを閉じたのに畳んだまま", false, compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = false))
+        assertEquals(false, compactWhileTyping(asSheet = true, inputFocused = false, imeVisible = true))
+        assertEquals("ペインを畳んだ", false, compactWhileTyping(asSheet = false, inputFocused = true, imeVisible = true))
     }
 }

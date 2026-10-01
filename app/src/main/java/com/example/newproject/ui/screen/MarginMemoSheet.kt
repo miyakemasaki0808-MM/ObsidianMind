@@ -1,43 +1,54 @@
 package com.example.newproject.ui.screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
-import kotlin.math.roundToInt
-import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.runtime.withFrameNanos
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -62,56 +73,76 @@ import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
+import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.PanelChip
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 
 /**
- * 余白メモのシート。**読んでいる流れを止めずに、短い断片を何度でも置く口。**
+ * 余白メモのシートを、本文と**併存させて**出す器（→ features/margin_pane.md §5.5）。[body] は本文側。
  *
- * **ルートを増やさない。** 結果が長くも遅くもないので、専用画面にすると
- * 「読む → 書く → 戻る」の往復が重くなる（廃止したひとことが専用ルートを
- * 持っていたのは、待ち時間と長い結果があったため）。
+ * **暗幕を出さない。** `ModalBottomSheet` は暗幕を透明にしても背後の本文を触らせないので、主画面と併存する
+ * `BottomSheetScaffold` を使う。書いていない間は半分の高さで止め、本文をスクロールできるまま残す。
+ * 半分は**今の領域の**半分 — キーボードを避けた領域に置くので、キーボードが出ると一緒に低くなる。
  *
- * **置いても閉じない。** 続けて書けることがこの機能の要点で、
- * 閉じると「何度でも置ける」が体験として消える。
+ * **ルートを増やさない。** 結果が長くも遅くもないので、専用画面にすると「読む → 書く → 戻る」の往復が重くなる。
+ * **置いても閉じない。** 続けて書けることがこの機能の要点。
+ *
+ * 戻る操作は内側から順に閉じる。キーボード（IME が先に閉じる）、画面いっぱいなら半分へ、半分なら閉じる。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun MarginMemoSheet(
-    state: MarginMemoState,
-    draft: MarginMemoDraft,
-    section: SectionRef?,
-    hasHeadings: Boolean,
-    onJumpToSection: (SectionRef) -> Unit,
-    arranged: ArrangedMemos?,
-    reveal: MemoReveal?,
-    onRevealHandled: () -> Unit,
-    onEdit: (String) -> Unit,
-    onSubmit: () -> Unit,
-    onDelete: (MarginMemo) -> Unit,
-    onDismiss: () -> Unit
+internal fun MarginMemoSheetHost(
+    visible: Boolean,
+    /** 目的のメモまで送る依頼が来ている。メモが半分の外にあることがあるので、出せるなら画面いっぱいにする。 */
+    expandRequested: Boolean,
+    onDismiss: () -> Unit,
+    sheet: @Composable () -> Unit,
+    body: @Composable () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        scrimColor = BottomSheetDefaults.ScrimColor.copy(alpha = 0.5f)
-    ) {
-        MarginMemoSheetContent(
-            state = state,
-            draft = draft,
-            section = section,
-            hasHeadings = hasHeadings,
-            onJumpToSection = onJumpToSection,
-            arranged = arranged,
-            onEdit = onEdit,
-            onSubmit = onSubmit,
-            onDelete = onDelete,
-            reveal = reveal,
-            onRevealHandled = onRevealHandled
-        )
+    val sheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        skipHiddenState = false
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
+    val scope = rememberCoroutineScope()
+    val currentVisible by rememberUpdatedState(visible)
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
+
+    LaunchedEffect(visible) {
+        if (visible) sheetState.partialExpand() else sheetState.hide()
+    }
+    // **下へ払って隠したら、閉じたことにする。** 最初の値は見ない — 出す前の Hidden を閉じたと読まない。
+    LaunchedEffect(sheetState) {
+        snapshotFlow { sheetState.currentValue }
+            .drop(1)
+            .collect { value -> if (value == SheetValue.Hidden && currentVisible) currentOnDismiss() }
+    }
+    // **画面いっぱいの止まりどころが無いときは頼まない。** 無い止まりどころを頼むと、
+    // 状態だけが「いっぱい」になってシートは動かない（Material3 1.3.0 の実装）。
+    LaunchedEffect(expandRequested, visible) {
+        if (visible && expandRequested && sheetState.hasExpandedState) sheetState.expand()
+    }
+    BackHandler(enabled = visible) {
+        scope.launch {
+            if (sheetState.currentValue == SheetValue.Expanded) sheetState.partialExpand() else currentOnDismiss()
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        BottomSheetScaffold(
+            scaffoldState = scaffoldState,
+            sheetPeekHeight = maxHeight / 2,
+            sheetContainerColor = Panel,
+            containerColor = Color.Transparent,
+            snackbarHost = {},
+            // 隠れている間は中身を組まない — 画面の外に置いたままだと、読み上げが隠れたメモへ移れてしまう。
+            sheetContent = { if (visible || sheetState.isVisible) sheet() }
+        ) { _ -> body() }
     }
 }
 
@@ -143,9 +174,20 @@ internal fun MarginMemoSheetContent(
     modifier: Modifier = Modifier,
     /** 目的のメモまで送る依頼（→ [MemoReveal]）。送り終えたら [onRevealHandled] で消してもらう。 */
     reveal: MemoReveal? = null,
-    onRevealHandled: () -> Unit = {}
+    onRevealHandled: () -> Unit = {},
+    /**
+     * スマホのシートとして出す。**書いている間は入力を優先して畳む**（→ [compactWhileTyping]）。
+     * ペインは本文の横にあり高さが足りるので畳まない。
+     */
+    asSheet: Boolean = false,
+    /** 閉じるボタン。下へ払うほかに閉じる手段を置く（読み上げで払えないため）。null なら出さない。 */
+    onClose: (() -> Unit)? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
+    var inputFocused by remember { mutableStateOf(false) }
+    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val compact = compactWhileTyping(asSheet = asSheet, inputFocused = inputFocused, imeVisible = imeVisible)
+    val focusManager = LocalFocusManager.current
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
     var othersExpanded by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
@@ -166,19 +208,24 @@ internal fun MarginMemoSheetContent(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 360.dp)
             .verticalScroll(scrollState)
             .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
     ) {
-            // **面の節は本文の節に常についていく**（書いている間も動く → features/margin_pane.md §5.3）。
-            Text(
-                text = section?.let { sectionLabel(it, hasHeadings) } ?: "このノートのメモ",
-                color = OnSurface,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // **面の節は本文の節に常についていく**（書いている間も動く → features/margin_pane.md §5.3）。
+                Text(
+                    text = section?.let { sectionLabel(it, hasHeadings) } ?: "このノートのメモ",
+                    color = OnSurface,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                if (onClose != null) {
+                    TextButton(onClick = onClose) { Text("閉じる", color = OnSurfaceMuted, fontSize = 13.sp) }
+                }
+            }
             // **この1行は高さを変えない。** 書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない
             // （→ features/margin_pane.md §5.2）。知らせが無いときは使い方を出す。
             WriteTargetLine(
@@ -192,7 +239,7 @@ internal fun MarginMemoSheetContent(
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = onEdit,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { inputFocused = it.isFocused },
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
                 minLines = 2,
                 maxLines = 6
@@ -216,7 +263,12 @@ internal fun MarginMemoSheetContent(
                 StatusText(state)
                 Spacer(modifier = Modifier.height(0.dp))
                 Button(
-                    onClick = onSubmit,
+                    onClick = {
+                        onSubmit()
+                        // シートでは置いたらキーボードを閉じ、畳んだ要約とメモを戻す（→ features/margin_pane.md §5.5）。
+                        // **入力欄は空にしない** — 空にするのは受理が分かったときだけ。
+                        if (asSheet) focusManager.clearFocus()
+                    },
                     // **受け付けられない状態では押させない。** 押せてしまうと、
                     // Controller が何もしないまま入力だけが宙に浮く。
                     enabled = ready != null &&
@@ -233,6 +285,17 @@ internal fun MarginMemoSheetContent(
                         color = OnButtonPrimary
                     )
                 }
+            }
+
+            if (compact) {
+                // **書いている間は入力を優先する。** メモは1行に畳み、置くかキーボードを閉じれば戻す。
+                Text(
+                    text = "メモ ${ready?.memos?.size ?: 0}件",
+                    color = OnSurfaceFaint,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+                return@Column
             }
 
             Spacer(modifier = Modifier.height(12.dp))

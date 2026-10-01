@@ -425,51 +425,36 @@ internal fun NoteReaderTab(
         }
 
         Box(modifier = Modifier.fillMaxSize().imePadding()) {
-            when (layout) {
-                ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                    controls(memoToggle)
-                    if (!hasNote) {
-                        emptyNote()
-                        // 余りをカードではなく余白へ逃がす。
-                        Spacer(modifier = Modifier.weight(1f))
-                    } else {
-                        traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
-                        notePanel(
-                            Modifier
-                                .weight(1f)
-                                .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp),
-                            headingMark
-                        )
-                    }
+            // スマホのシートは本文と併存させる。**キーボードを避けた領域に置く**ので、半分はこの領域の半分になる。
+            MarginMemoSheetHost(
+                visible = uiState.isMarginMemoSheetVisible,
+                expandRequested = memoReveal != null,
+                onDismiss = onDismissMarginMemo,
+                sheet = {
+                    // **書いた場所は書き始めた時点の本文の節**（紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
+                    MarginMemoSheetContent(
+                        state = uiState.marginMemoState,
+                        draft = memoDraft,
+                        section = bodySection,
+                        hasHeadings = sectionModel?.hasHeadings ?: false,
+                        onJumpToSection = jumpToSection,
+                        arranged = arrangedMemos,
+                        reveal = memoReveal,
+                        onRevealHandled = { memoReveal = null },
+                        onEdit = onEditMemo,
+                        onSubmit = onSubmitMemo,
+                        onDelete = onDeleteMarginMemo,
+                        asSheet = true,
+                        onClose = onDismissMarginMemo
+                    )
                 }
-                // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
-                ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .width(sideColumnWidth)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        controls(memoToggle)
-                        traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        if (!hasNote) {
-                            emptyNote()
-                            Spacer(modifier = Modifier.weight(1f))
-                        } else {
-                            notePanel(Modifier.weight(1f), headingMark)
-                        }
-                    }
-                }
-                // 左に操作と本文、右に余白ペイン。**溝に折り目が入る**ので、文字と操作が折り目に重ならない。
-                // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
-                is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
+            ) {
+                when (layout) {
+                    ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
                         controls(memoToggle)
                         if (!hasNote) {
                             emptyNote()
+                            // 余りをカードではなく余白へ逃がす。
                             Spacer(modifier = Modifier.weight(1f))
                         } else {
                             traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
@@ -481,45 +466,66 @@ internal fun NoteReaderTab(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(layout.gutterDp.dp))
-                    MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        MarginMemoSheetContent(
-                            state = uiState.marginMemoState,
-                            draft = memoDraft,
-                            section = bodySection,
-                            hasHeadings = sectionModel?.hasHeadings ?: false,
-                            onJumpToSection = jumpToSection,
-                            arranged = arrangedMemos,
-                            reveal = memoReveal,
-                            onRevealHandled = { memoReveal = null },
-                            onEdit = onEditMemo,
-                            onSubmit = onSubmitMemo,
-                            onDelete = onDeleteMarginMemo,
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
+                    // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
+                    ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .width(sideColumnWidth)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            controls(memoToggle)
+                            traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            if (!hasNote) {
+                                emptyNote()
+                                Spacer(modifier = Modifier.weight(1f))
+                            } else {
+                                notePanel(Modifier.weight(1f), headingMark)
+                            }
+                        }
+                    }
+                    // 左に操作と本文、右に余白ペイン。**溝に折り目が入る**ので、文字と操作が折り目に重ならない。
+                    // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
+                    is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
+                            controls(memoToggle)
+                            if (!hasNote) {
+                                emptyNote()
+                                Spacer(modifier = Modifier.weight(1f))
+                            } else {
+                                traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                                notePanel(
+                                    Modifier
+                                        .weight(1f)
+                                        .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp),
+                                    headingMark
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(layout.gutterDp.dp))
+                        MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            MarginMemoSheetContent(
+                                state = uiState.marginMemoState,
+                                draft = memoDraft,
+                                section = bodySection,
+                                hasHeadings = sectionModel?.hasHeadings ?: false,
+                                onJumpToSection = jumpToSection,
+                                arranged = arrangedMemos,
+                                reveal = memoReveal,
+                                onRevealHandled = { memoReveal = null },
+                                onEdit = onEditMemo,
+                                onSubmit = onSubmitMemo,
+                                onDelete = onDeleteMarginMemo,
+                                modifier = Modifier.padding(top = 16.dp)
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-
-    // 余白メモのボトムシート。**書いた場所は書き始めた時点の本文の節**
-    // （紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
-    if (uiState.isMarginMemoSheetVisible) {
-        MarginMemoSheet(
-            state = uiState.marginMemoState,
-            draft = memoDraft,
-            section = bodySection,
-            hasHeadings = sectionModel?.hasHeadings ?: false,
-            onJumpToSection = jumpToSection,
-            arranged = arrangedMemos,
-            reveal = memoReveal,
-            onRevealHandled = { memoReveal = null },
-            onEdit = onEditMemo,
-            onSubmit = onSubmitMemo,
-            onDelete = onDeleteMarginMemo,
-            onDismiss = onDismissMarginMemo
-        )
     }
 
     // セクションチャットのボトムシート

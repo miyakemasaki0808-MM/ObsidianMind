@@ -2,6 +2,12 @@ package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import com.example.newproject.ui.screen.MarginMemoSheetHost
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -315,6 +321,69 @@ class MarginMemoSheetUiTest {
 
         composeRule.onNodeWithText("節Cのメモ").assertExists()
         composeRule.runOnIdle { assertEquals("送った後も依頼が残った", null, harness.reveal) }
+    }
+
+    /**
+     * **シートを出しても本文を操作できる**（→ features/margin_pane.md §5.5）。暗幕を出す
+     * `ModalBottomSheet` では、暗幕を透明にしても本文を触れなかった。
+     */
+    @Test
+    fun シートを出しても本文を押せる() {
+        var bodyClicks = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                MarginMemoSheetHost(
+                    visible = true,
+                    expandRequested = false,
+                    onDismiss = {},
+                    sheet = { Text("シートの中身") }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Button(onClick = { bodyClicks++ }) { Text("本文のボタン") }
+                    }
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("シートの中身").assertIsDisplayed()
+        composeRule.onNodeWithText("本文のボタン").performClick()
+        composeRule.runOnIdle { assertEquals(1, bodyClicks) }
+    }
+
+    /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
+    @Test
+    fun 閉じるボタンでシートを閉じ_隠れたら中身を組まない() {
+        var visible by mutableStateOf(true)
+        val harness = Harness()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                MarginMemoSheetHost(
+                    visible = visible,
+                    expandRequested = false,
+                    onDismiss = { visible = false },
+                    sheet = {
+                        MarginMemoSheetContent(
+                            state = harness.state,
+                            draft = harness.draft,
+                            section = harness.section,
+                            hasHeadings = true,
+                            onJumpToSection = {},
+                            arranged = null,
+                            onEdit = harness::edit,
+                            onSubmit = harness::submit,
+                            onDelete = {},
+                            asSheet = true,
+                            onClose = { visible = false }
+                        )
+                    }
+                ) { Box(modifier = Modifier.fillMaxSize()) }
+            }
+        }
+
+        composeRule.onNodeWithText("閉じる").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertDoesNotExist()
     }
 
     private companion object {
