@@ -26,6 +26,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import kotlin.math.roundToInt
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -80,6 +86,8 @@ internal fun MarginMemoSheet(
     hasHeadings: Boolean,
     onJumpToSection: (SectionRef) -> Unit,
     arranged: ArrangedMemos?,
+    reveal: MemoReveal?,
+    onRevealHandled: () -> Unit,
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -100,7 +108,9 @@ internal fun MarginMemoSheet(
             arranged = arranged,
             onEdit = onEdit,
             onSubmit = onSubmit,
-            onDelete = onDelete
+            onDelete = onDelete,
+            reveal = reveal,
+            onRevealHandled = onRevealHandled
         )
     }
 }
@@ -130,11 +140,25 @@ internal fun MarginMemoSheetContent(
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 目的のメモまで送る依頼（→ [MemoReveal]）。送り終えたら [onRevealHandled] で消してもらう。 */
+    reveal: MemoReveal? = null,
+    onRevealHandled: () -> Unit = {}
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
     var othersExpanded by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+    // メモの並びの始まり（この面の中の位置）。目的のメモまで送るときの行き先。
+    var memosTop by remember { mutableIntStateOf(0) }
+    LaunchedEffect(reveal) {
+        val target = reveal ?: return@LaunchedEffect
+        if (target == MemoReveal.AllMemos) othersExpanded = true
+        // 開いた分が並んでから送る。
+        withFrameNanos { }
+        scrollState.animateScrollTo(memosTop)
+        onRevealHandled()
+    }
 
     val ready = state as? MarginMemoState.Ready
     val action = draft.sendAction()
@@ -143,7 +167,7 @@ internal fun MarginMemoSheetContent(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 360.dp)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
             .padding(start = 20.dp, end = 20.dp, bottom = 28.dp)
     ) {
             // **面の節は本文の節に常についていく**（書いている間も動く → features/margin_pane.md §5.3）。
@@ -212,7 +236,9 @@ internal fun MarginMemoSheetContent(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
+            HorizontalDivider(
+                modifier = Modifier.onGloballyPositioned { memosTop = it.positionInParent().y.roundToInt() }
+            )
             Spacer(modifier = Modifier.height(12.dp))
 
             when (state) {

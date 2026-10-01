@@ -27,7 +27,9 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.markdown.NoteImageContent
@@ -679,6 +681,26 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
     }
 
+    /**
+     * **メモのある見出しの脇に、件数つきの印が出る**（→ features/margin_pane.md §5.6）。色だけにせず件数を読み上げ、
+     * 押すとメモの面を出す（縦積みの窓ではシート）。
+     */
+    @Test
+    fun メモのある見出しの脇に件数つきの印が出て_押すとメモの面を出す() {
+        var opened = 0
+        val state = loadedNote(BODY).copy(
+            marginMemoState = MarginMemoState.Ready(memos = listOf(MarginMemo("見出しのメモ", 1L, "見出し")))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(state, buildNoteSectionModel(BODY), rememberLazyListState(), onOpenMarginMemo = { opened++ })
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.runOnIdle { assertEquals(1, opened) }
+    }
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -686,7 +708,8 @@ class NoteReadingFlowTest {
         listState: LazyListState,
         loader: NoteImageLoader? = null,
         measurements: NoteImageMeasurements? = null,
-        onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> }
+        onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
+        onOpenMarginMemo: () -> Unit = {}
     ) {
         NoteReaderTab(
             uiState = state,
@@ -701,7 +724,7 @@ class NoteReadingFlowTest {
             onEndSectionChat = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
-            onOpenMarginMemo = {},
+            onOpenMarginMemo = onOpenMarginMemo,
             onLoadMarginMemoForPane = {},
             // 読書の流れだけを見るので、どの端末でも縦に積む並べ方に固定する。
             marginPaneOpen = false,

@@ -177,7 +177,9 @@ internal fun NoteContentPanel(
     precomputedBlocks: List<MarkdownBlock>? = null,
     imageLoader: NoteImageLoader? = null,
     /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
-    imageMeasurements: NoteImageMeasurements? = null
+    imageMeasurements: NoteImageMeasurements? = null,
+    /** 見出しの脇に置くもの（→ [MarkdownNoteContent]）。通常表示の余白メモの印だけが使う。 */
+    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -211,7 +213,8 @@ internal fun NoteContentPanel(
                         listState = listState,
                         precomputedBlocks = blocksForContent,
                         imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements
+                        imageMeasurements = imageMeasurements,
+                        headingAccessory = if (isNote) headingAccessory else null
                     )
                 } else {
                     MarkdownNoteContent(

@@ -39,6 +39,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -334,7 +337,9 @@ internal fun NoteReaderTab(
             )
         }
     }
-    val notePanel: @Composable (Modifier) -> Unit = { modifier ->
+    // 面の中で目的のメモまで送る依頼。面が組み立てられて送り終えたら消す。
+    var memoReveal by remember { mutableStateOf<MemoReveal?>(null) }
+    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?) -> Unit = { modifier, headingMark ->
         NoteContentPanel(
             uiState = uiState,
             modifier = modifier
@@ -347,7 +352,8 @@ internal fun NoteReaderTab(
             listState = listState,
             precomputedBlocks = sectionModel?.blocks,
             imageLoader = imageLoader,
-            imageMeasurements = imageMeasurements
+            imageMeasurements = imageMeasurements,
+            headingAccessory = headingMark
         )
     }
 
@@ -381,8 +387,26 @@ internal fun NoteReaderTab(
         )
         val paneVisible = layout is ReaderLayout.MarginPane
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
-        // ペインが出ていればメモは横に並んでいるので、シートを重ねない（ペインとシートを同時に出さない）。
-        val openMemosFromCard: () -> Unit = { if (!paneVisible) onOpenMarginMemo() }
+        // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
+        val revealMemos: (MemoReveal) -> Unit = { reveal ->
+            if (!paneVisible) onOpenMarginMemo()
+            memoReveal = reveal
+        }
+        val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
+        // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
+        // 押すと本文をその節へ送り、面はその節のメモまで送る。
+        val headingMark: (@Composable (Int) -> Unit)? = arrangedMemos?.let { arranged ->
+            { block ->
+                val ref = sectionModel?.sectionRefAt(block)
+                val count = ref?.let { arranged.countsBySection[it] } ?: 0
+                if (ref != null && count > 0) {
+                    HeadingMemoMark(count) {
+                        jumpToSection(ref)
+                        revealMemos(MemoReveal.CurrentSection)
+                    }
+                }
+            }
+        }
 
         MarginWindowShiftEffect(
             windowKnown = foldInfo.isKnown && regionStartDp != null,
@@ -413,7 +437,8 @@ internal fun NoteReaderTab(
                         notePanel(
                             Modifier
                                 .weight(1f)
-                                .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
+                                .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp),
+                            headingMark
                         )
                     }
                 }
@@ -434,7 +459,7 @@ internal fun NoteReaderTab(
                             emptyNote()
                             Spacer(modifier = Modifier.weight(1f))
                         } else {
-                            notePanel(Modifier.weight(1f))
+                            notePanel(Modifier.weight(1f), headingMark)
                         }
                     }
                 }
@@ -451,7 +476,8 @@ internal fun NoteReaderTab(
                             notePanel(
                                 Modifier
                                     .weight(1f)
-                                    .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
+                                    .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp),
+                                headingMark
                             )
                         }
                     }
@@ -464,6 +490,8 @@ internal fun NoteReaderTab(
                             hasHeadings = sectionModel?.hasHeadings ?: false,
                             onJumpToSection = jumpToSection,
                             arranged = arrangedMemos,
+                            reveal = memoReveal,
+                            onRevealHandled = { memoReveal = null },
                             onEdit = onEditMemo,
                             onSubmit = onSubmitMemo,
                             onDelete = onDeleteMarginMemo,
@@ -485,6 +513,8 @@ internal fun NoteReaderTab(
             hasHeadings = sectionModel?.hasHeadings ?: false,
             onJumpToSection = jumpToSection,
             arranged = arrangedMemos,
+            reveal = memoReveal,
+            onRevealHandled = { memoReveal = null },
             onEdit = onEditMemo,
             onSubmit = onSubmitMemo,
             onDelete = onDeleteMarginMemo,
@@ -541,6 +571,33 @@ private fun MarginWindowShiftEffect(
             MarginWindowShift.SheetToPane -> currentOnHideSheet()
             MarginWindowShift.PaneToSheet -> currentOnShowSheet()
             MarginWindowShift.None -> Unit
+        }
+    }
+}
+
+/**
+ * 見出しの脇の印（→ features/margin_pane.md §5.6）。**件数と読み上げ名を持ち、色だけにしない。**
+ * 押せる範囲は広く取る — 見出しの脇の小さな印は、狭いと隣の本文を選んでしまう。
+ */
+@Composable
+private fun HeadingMemoMark(count: Int, onClick: () -> Unit) {
+    val description = headingMemoMarkDescription(count)
+    Box(
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(color = PanelChip, shape = RoundedCornerShape(10.dp)) {
+            Text(
+                text = "✎$count",
+                color = AccentText,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clearAndSetSemantics {}
+            )
         }
     }
 }

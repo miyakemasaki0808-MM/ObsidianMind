@@ -89,3 +89,18 @@ internal fun sectionLabel(section: SectionRef, hasHeadings: Boolean): String = w
  */
 internal fun writeTargetNotice(target: SectionRef?, bodySection: SectionRef?): SectionRef? =
     target?.takeIf { bodySection != null && it != bodySection }
+
+/**
+ * 面の中で、目的のメモまで送る依頼（→ features/margin_pane.md §5.4「入口から目的の中身へ直接届く」）。
+ * 送ったら依頼を消す（同じ依頼で何度も送らない）。
+ */
+internal enum class MemoReveal {
+    /** 見出しの印から。本文をその節へ送った後、この節のメモへ。 */
+    CurrentSection,
+
+    /** 再会カードの「前回のメモを見る」から。ほかの節のメモも開いて、メモの並びへ。 */
+    AllMemos
+}
+
+/** 見出しの脇の印の読み上げ名。**色だけにしない**ので件数を言う。 */
+internal fun headingMemoMarkDescription(count: Int): String = "この節のメモ ${count}件"

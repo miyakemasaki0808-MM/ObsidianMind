@@ -28,6 +28,7 @@ import com.example.newproject.model.state.MemoSaveStatus
 import com.example.newproject.model.state.MemoSubmission
 import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
 import com.example.newproject.ui.screen.MarginMemoSheetContent
+import com.example.newproject.ui.screen.MemoReveal
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -72,6 +73,7 @@ class MarginMemoSheetUiTest {
         var section by mutableStateOf<SectionRef?>(SectionRef("節B"))
         /** 照合して並べたメモ。null は本文の解析の前で、全件を平らに出す。 */
         var arranged by mutableStateOf<ArrangedMemos?>(null)
+        var reveal by mutableStateOf<MemoReveal?>(null)
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -106,7 +108,9 @@ class MarginMemoSheetUiTest {
                             arranged = harness.arranged,
                             onEdit = harness::edit,
                             onSubmit = harness::submit,
-                            onDelete = {}
+                            onDelete = {},
+                            reveal = harness.reveal,
+                            onRevealHandled = { harness.reveal = null }
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -297,6 +301,20 @@ class MarginMemoSheetUiTest {
 
         composeRule.onNodeWithText("節C").performClick()
         composeRule.runOnIdle { assertEquals(SectionRef("節C"), harness.section) }
+    }
+
+    /** 再会カードの「前回のメモを見る」から来たら、**ほかの節のメモも開いて**メモの並びまで送る。 */
+    @Test
+    fun 前回のメモを見るから来たら_ほかの節のメモを開いて送る() {
+        val harness = Harness()
+        val memos = listOf(MarginMemo("節Cのメモ", 1L, "節C"))
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(memos, listOf("節B", "節C"), current = SectionRef("節B"))
+        harness.reveal = MemoReveal.AllMemos
+        setContent(harness)
+
+        composeRule.onNodeWithText("節Cのメモ").assertExists()
+        composeRule.runOnIdle { assertEquals("送った後も依頼が残った", null, harness.reveal) }
     }
 
     private companion object {
