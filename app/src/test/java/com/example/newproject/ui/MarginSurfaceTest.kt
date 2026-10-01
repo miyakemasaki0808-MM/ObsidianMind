@@ -5,6 +5,7 @@ import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
 import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.sheetCoveredHeight
 import com.example.newproject.ui.screen.sectionLabel
 import com.example.newproject.ui.screen.writeTargetNotice
 import com.example.newproject.model.SectionRef
@@ -128,5 +129,14 @@ class MarginSurfaceTest {
         assertEquals("キーボードを閉じたのに畳んだまま", false, compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = false))
         assertEquals(false, compactWhileTyping(asSheet = true, inputFocused = false, imeVisible = true))
         assertEquals("ペインを畳んだ", false, compactWhileTyping(asSheet = false, inputFocused = true, imeVisible = true))
+    }
+
+    /** 本文はシートが覆う分だけ低くする。**隠れているシートは器の下端にあるので0。** 組まれる前も覆っていない。 */
+    @Test
+    fun `シートが覆う高さは器の下端からシートの上端まで`() {
+        assertEquals(400, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 400f))
+        assertEquals("隠れているのに覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 800f))
+        assertEquals("組まれる前に覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = null))
+        assertEquals("画面いっぱいを超えて覆った", 800, sheetCoveredHeight(layoutHeight = 800, sheetOffset = -10f))
     }
 }

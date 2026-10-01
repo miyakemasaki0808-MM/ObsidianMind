@@ -1,6 +1,7 @@
 package com.example.newproject.ui.screen
 
 import com.example.newproject.model.SectionRef
+import kotlin.math.roundToInt
 
 /**
  * ✎ を押したときの動き（→ features/margin_pane.md §5.4）。
@@ -114,3 +115,10 @@ internal fun headingMemoMarkDescription(count: Int): String = "この節のメ�
  */
 internal fun compactWhileTyping(asSheet: Boolean, inputFocused: Boolean, imeVisible: Boolean): Boolean =
     asSheet && inputFocused && imeVisible
+
+/**
+ * シートが本文を覆う高さ（px）。[sheetOffset] はシートの上端で、器の上端からの位置。まだ組まれていなければ null で、覆っていない。
+ * **隠れている間はシートが器の下端にあるので0になる** — 出ているかどうかを別に見なくてよい。
+ */
+internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
+    sheetOffset?.let { (layoutHeight - it).roundToInt().coerceIn(0, layoutHeight) } ?: 0

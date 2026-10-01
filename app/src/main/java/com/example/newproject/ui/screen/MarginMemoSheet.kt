@@ -2,6 +2,7 @@ package com.example.newproject.ui.screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -24,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,6 +49,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
@@ -144,8 +147,31 @@ internal fun MarginMemoSheetHost(
             snackbarHost = {},
             // 隠れている間は中身を組まない — 画面の外に置いたままだと、読み上げが隠れたメモへ移れてしまう。
             sheetContent = { if (visible || sheetState.isVisible) sheet() }
-        ) { _ -> body() }
+        ) { _ ->
+            // **本文はシートが覆う分だけ低くして組む**（→ features/margin_pane.md §5.5）。この器は本文を全高で組むので、
+            // そのままだと本文の末尾がシートの背後でスクロールの限界に達し、背後のブロックまで「読めた」と報告される。
+            // 覆う高さはシートの位置から組むたびに求める — 払う途中も、画面いっぱいも、キーボードが出たときも同じ式で済む。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .layout { measurable, constraints ->
+                        val covered = sheetCoveredHeight(constraints.maxHeight, sheetOffsetOrNull(sheetState))
+                        val placeable = measurable.measure(
+                            constraints.copy(minHeight = 0, maxHeight = constraints.maxHeight - covered)
+                        )
+                        layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                    }
+            ) { body() }
+        }
     }
+}
+
+/** シートの上端の位置。最初に組まれる前は無い。 */
+@OptIn(ExperimentalMaterial3Api::class)
+private fun sheetOffsetOrNull(state: SheetState): Float? = try {
+    state.requireOffset()
+} catch (e: IllegalStateException) {
+    null
 }
 
 /**

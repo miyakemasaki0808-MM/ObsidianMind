@@ -2,6 +2,14 @@ package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import org.junit.Assert.assertTrue
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import com.example.newproject.ui.screen.MarginMemoSheetHost
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.Modifier
@@ -397,6 +405,44 @@ class MarginMemoSheetUiTest {
         composeRule.runOnIdle { assertEquals(1, bodyClicks) }
     }
 
+    /**
+     * **半分のシートを出したまま、本文の最後の段落をシートより上で読める**（→ features/margin_pane.md §5.5）。
+     * 本文を全高で組むと、末尾はシートの背後でスクロールの限界に達し、読書の進捗も背後のブロックを数える。
+     * キーボードが出たときは器が低くなるので、器の高さを替えて同じことを確かめる。
+     */
+    @Test
+    fun 半分のシートを出したまま本文の最後の段落をシートより上で読める() {
+        var height by mutableStateOf(800.dp)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(height)) {
+                    MarginMemoSheetHost(
+                        visible = true,
+                        expandRequested = false,
+                        onDismiss = {},
+                        sheet = { Text("シートの中身", modifier = Modifier.height(300.dp)) }
+                    ) {
+                        LazyColumn(modifier = Modifier.fillMaxSize().testTag(BODY_TAG)) {
+                            items(60) { Text("段落$it", modifier = Modifier.height(40.dp)) }
+                        }
+                    }
+                }
+            }
+        }
+
+        listOf(800.dp, 450.dp).forEach { containerHeight ->
+            composeRule.runOnIdle { height = containerHeight }
+            composeRule.onNodeWithTag(BODY_TAG).performScrollToIndex(59)
+            composeRule.waitForIdle()
+
+            val sheetTop = composeRule.onNodeWithText("シートの中身").fetchSemanticsNode().boundsInRoot.top
+            val last = composeRule.onNodeWithText("段落59").fetchSemanticsNode().boundsInRoot
+            val bodyBottom = composeRule.onNodeWithTag(BODY_TAG).fetchSemanticsNode().boundsInRoot.bottom
+            assertTrue("$containerHeight: 最後の段落がシートの背後にある", last.bottom <= sheetTop)
+            assertTrue("$containerHeight: 本文の表示域がシートの背後まで伸びている", bodyBottom <= sheetTop)
+        }
+    }
+
     /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
     @Test
     fun 閉じるボタンでシートを閉じ_隠れたら中身を組まない() {
@@ -434,6 +480,7 @@ class MarginMemoSheetUiTest {
     }
 
     private companion object {
+        const val BODY_TAG = "本文"
         const val NOTE_A = "content://vault-a/a.md"
         const val NOTE_B = "content://vault-a/b.md"
         val READY = MarginMemoState.Ready(memos = emptyList())
