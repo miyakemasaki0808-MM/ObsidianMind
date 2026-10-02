@@ -88,6 +88,13 @@ internal data class ReadingVisit(
 )
 
 /**
+ * 最後まで読んだか。**再会カードと前回の読書の跡は、この1つの判定を使う**（→ features/margin_pane.md §5.7）。
+ *
+ * 到達率は切り捨てで求めるので、100 になるのは最後のブロックの末端が画面に入った回だけである。
+ */
+internal fun isReadToEnd(progressPercent: Int): Boolean = progressPercent >= 100
+
+/**
  * 読んでいる最中に置いた短い断片。
  *
  * **何にも紐づかない。** AIの生成物にも、ユーザーが選んだ本文の範囲にも結び付けない。
