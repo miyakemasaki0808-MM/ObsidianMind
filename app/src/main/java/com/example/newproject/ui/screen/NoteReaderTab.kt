@@ -450,7 +450,9 @@ internal fun NoteReaderTab(
             // スマホのシートは本文と併存させる。**キーボードを避けた領域に置く**ので、半分はこの領域の半分になる。
             @OptIn(ExperimentalMaterial3Api::class)
             MarginMemoSheetHost(
-                visible = uiState.isMarginMemoSheetVisible,
+                // **ペインが出ている間はシートを出さない**（ペインとシートを同時に出さない → §5.4）。
+                // Fold を開いた直後は窓の切り替わりの判定より先にペインが組まれるので、その間もシートを重ねない。
+                visible = uiState.isMarginMemoSheetVisible && !paneVisible,
                 // ペインへ送る依頼をシートに残さない。残すと、後でシートを出したときに古い依頼で広がる。
                 expandRequested = memoReveal != null && !paneVisible,
                 onDismiss = dismissMemoSheet,
@@ -471,7 +473,8 @@ internal fun NoteReaderTab(
                         asSheet = true,
                         onClose = dismissMemoSheet,
                         focusIntent = memoFocusIntent,
-                        onFocusIntentChange = { memoFocusIntent = it }
+                        onFocusIntentChange = { memoFocusIntent = it },
+                        active = uiState.isMarginMemoSheetVisible && !paneVisible
                     )
                 }
             ) {
@@ -553,7 +556,8 @@ internal fun NoteReaderTab(
                                 onDelete = onDeleteMarginMemo,
                                 modifier = Modifier.padding(top = 16.dp),
                                 focusIntent = memoFocusIntent,
-                                onFocusIntentChange = { memoFocusIntent = it }
+                                onFocusIntentChange = { memoFocusIntent = it },
+                                active = true
                             )
                         }
                     }

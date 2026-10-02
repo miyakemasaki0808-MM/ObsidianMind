@@ -55,6 +55,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -250,21 +251,32 @@ internal fun MarginMemoSheetContent(
      * 新しい面の入力欄へフォーカスを戻すため（→ features/margin_pane.md §5.4）。
      */
     focusIntent: Boolean = false,
-    onFocusIntentChange: (Boolean) -> Unit = {}
+    onFocusIntentChange: (Boolean) -> Unit = {},
+    /**
+     * この面が今出ている面か。**フォーカスを取ってよいのは出ている面だけ**（→ features/margin_pane.md §5.4）。
+     * Fold を開いた直後は、しまう途中のシートとペインが一瞬だけ両方組まれる。どちらもフォーカスを取りにいくと、
+     * 後からしまわれるシートの入力欄がフォーカスを持ち去り、ペインに残らない。
+     */
+    active: Boolean = true
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    // 前の面で書いていたなら、この面の入力欄へフォーカスを戻す。
-    LaunchedEffect(Unit) { if (focusIntent) focusRequester.requestFocus() }
-    // **フォーカスが外れたことは、1フレーム後もこの面が残っているときだけ伝える。**
-    // 面ごと組み替わって外れたときは伝えない — 伝えると、次の面へフォーカスを戻せない。
+    // 前の面で書いていたなら、この面の入力欄へフォーカスを戻す。**窓がフォーカスを得てからも頼み直す** —
+    // 画面の作り直しの直後は窓がまだフォーカスを持たず、そのときに頼んでも残らないことがある。
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(active, focusIntent, windowFocused) {
+        if (active && focusIntent && !inputFocused) focusRequester.requestFocus()
+    }
+    // **フォーカスが外れたことは、1フレーム後もこの面が出ているときだけ伝える。**
+    // 面ごと組み替わって外れたときと、しまう途中の面から外れたときは伝えない — 伝えると、次の面へフォーカスを戻せない。
     var blurPending by remember { mutableStateOf(false) }
+    val currentActive by rememberUpdatedState(active)
     LaunchedEffect(blurPending) {
         if (!blurPending) return@LaunchedEffect
         withFrameNanos { }
         blurPending = false
-        onFocusIntentChange(false)
+        if (currentActive) onFocusIntentChange(false)
     }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val compact = compactWhileTyping(asSheet = asSheet, inputFocused = inputFocused, imeVisible = imeVisible)

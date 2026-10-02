@@ -31,6 +31,8 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -275,6 +277,51 @@ class MarginMemoSheetUiTest {
 
         input.assertIsFocused()
         composeRule.runOnIdle { assertEquals(true, harness.focusIntent) }
+    }
+
+    /**
+     * **フォーカスを取ってよいのは出ている面だけ。** しまう途中のシートとペインが一瞬だけ両方組まれても、
+     * ペインの入力欄がフォーカスを持ち、しまわれるシートが外れても書く意図は落ちない。
+     */
+    @Test
+    fun しまう途中の面と出ている面が並んでも_出ている面がフォーカスを持つ() {
+        val harness = Harness()
+        harness.focusIntent = true
+        var sheetShown by mutableStateOf(true)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Column {
+                    listOf(PANE_TAG to true, SHEET_TAG to false).forEach { (tag, active) ->
+                        if (active || sheetShown) {
+                            Box(modifier = Modifier.testTag(tag)) {
+                                MarginMemoSheetContent(
+                                    state = harness.state,
+                                    draft = harness.draft,
+                                    section = harness.section,
+                                    hasHeadings = true,
+                                    onJumpToSection = {},
+                                    arranged = null,
+                                    onEdit = harness::edit,
+                                    onSubmit = harness::submit,
+                                    onDelete = {},
+                                    focusIntent = harness.focusIntent,
+                                    onFocusIntentChange = { harness.focusIntent = it },
+                                    active = active
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        val paneInput = composeRule.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag(PANE_TAG)))
+        paneInput.assertIsFocused()
+
+        composeRule.runOnIdle { sheetShown = false }
+        composeRule.waitForIdle()
+
+        paneInput.assertIsFocused()
+        composeRule.runOnIdle { assertEquals("しまわれた面が書く意図を落とした", true, harness.focusIntent) }
     }
 
     /** 利用者がフォーカスを外したら（面は残っている）、書くのをやめたとして落とす。 */
@@ -662,6 +709,8 @@ class MarginMemoSheetUiTest {
 
     private companion object {
         const val BODY_TAG = "本文"
+        const val PANE_TAG = "ペイン"
+        const val SHEET_TAG = "シート"
         const val NOTE_A = "content://vault-a/a.md"
         const val NOTE_B = "content://vault-a/b.md"
         val READY = MarginMemoState.Ready(memos = emptyList())

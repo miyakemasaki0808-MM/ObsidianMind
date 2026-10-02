@@ -15,6 +15,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -784,6 +788,43 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
 
         composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
+    /**
+     * **Fold を開いて画面を作り直しても、シートで書いていた入力のフォーカスをペインの入力欄が引き継ぐ**（→ features/margin_pane.md §5.4）。
+     * 開いた直後は、しまう途中のシートとペインが一瞬だけ両方組まれる。どちらもフォーカスを取りにいくと、
+     * しまわれるシートが持ち去ってペインに残らなかった（閉じる方向は面が1つなので引き継げていた）。
+     * 窓を広げたうえで、画面の作り直しと復元を通す。
+     */
+    @Test
+    fun Foldを開いて画面を作り直しても_ペインの入力欄がフォーカスを引き継ぐ() {
+        val restoration = StateRestorationTester(composeRule)
+        var opened by mutableStateOf(false)
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(isMarginMemoSheetVisible = true))
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = if (opened) 960.dp else 400.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        marginPaneOpen = true,
+                        expandedWidth = opened
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).performClick()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused()
+
+        composeRule.runOnIdle { opened = true }
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals("シートが残った", false, state.isMarginMemoSheetVisible) }
+        composeRule.onNode(hasSetTextAction() and isFocused()).assertExists()
     }
 
     /**
