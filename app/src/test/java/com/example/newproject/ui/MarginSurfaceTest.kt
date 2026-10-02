@@ -160,17 +160,17 @@ class MarginSurfaceTest {
     }
 
     /**
-     * **縦積みの窓でシートに書いている間だけ、上の操作を隠す。** キーボードとシートが出ると、残る高さを操作が使い切って本文が消えた。
-     * 左右2列は操作が横の列にあるので隠さない。キーボードを閉じれば（書いている間でなくなれば）戻る。
+     * **入力欄に触れてキーボードが出ている間だけ、本文の列の上の操作を隠す。** 縦積みはシートで書いているとき、
+     * 余白ペインはペインで書いているとき。キーボードとシート、または再会カードで本文が消えた。
+     * 左右2列は操作が横の列にあるので隠さない。キーボードを閉じれば戻る。
      */
     @Test
-    fun `上の操作を隠すのは縦積みでシートに書いている間だけ`() {
-        val writing = compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = true)
-        val keyboardClosed = compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = false)
-
-        assertEquals(true, hidesReaderControls(ReaderLayout.Stacked, sheetWriting = writing))
-        assertEquals("キーボードを閉じても隠したまま", false, hidesReaderControls(ReaderLayout.Stacked, sheetWriting = keyboardClosed))
-        assertEquals(false, hidesReaderControls(ReaderLayout.SideBySide, sheetWriting = writing))
-        assertEquals(false, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetWriting = writing))
+    fun `上の操作を隠すのは本文の列の上に操作がある形で、キーボードを出して書いている間だけ`() {
+        assertEquals(true, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = true, writingWithKeyboard = true))
+        assertEquals("シートを出していない縦積みで隠した", false, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = false, writingWithKeyboard = true))
+        assertEquals("キーボードを閉じても隠したまま", false, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = true, writingWithKeyboard = false))
+        assertEquals("ペインで書いている間に隠さない", true, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = true))
+        assertEquals(false, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = false))
+        assertEquals(false, hidesReaderControls(ReaderLayout.SideBySide, sheetVisible = true, writingWithKeyboard = true))
     }
 }

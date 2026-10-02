@@ -146,9 +146,16 @@ internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
     sheetOffset?.let { (layoutHeight - it).roundToInt().coerceIn(0, layoutHeight) } ?: 0
 
 /**
- * 読書画面の上の操作（見出し・ボタン・再会カード）を隠すか（→ features/margin_pane.md §5.5）。
- * **縦積みの窓で、シートで書いている間だけ。** キーボードとシートが出ると、残る高さを操作が使い切って本文が消える。
- * 左右2列は操作が横の列にあり、本文の高さを取らないので隠さない。
+ * 本文の列の上の操作（見出し・ボタン・再会カード）を隠すか（→ features/margin_pane.md §5.5）。
+ * **入力欄に触れてキーボードが出ている間だけ。** キーボードが出ると、残る高さを操作とカードが使い切って本文が消える。
+ *
+ * - 縦積み — シートで書いているとき。シートはさらに本文の下を覆う
+ * - 余白ペイン — ペインで書いているとき。本文の列の上に操作とカードが残る形は縦積みと同じ
+ * - 左右2列 — 隠さない。操作は横の列にあり、本文の高さを取らない
  */
-internal fun hidesReaderControls(layout: ReaderLayout, sheetWriting: Boolean): Boolean =
-    layout == ReaderLayout.Stacked && sheetWriting
+internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, writingWithKeyboard: Boolean): Boolean =
+    writingWithKeyboard && when (layout) {
+        ReaderLayout.Stacked -> sheetVisible
+        is ReaderLayout.MarginPane -> true
+        ReaderLayout.SideBySide -> false
+    }
