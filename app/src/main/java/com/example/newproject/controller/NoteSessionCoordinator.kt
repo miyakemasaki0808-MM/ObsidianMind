@@ -14,6 +14,8 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MarginMemoDraftStore
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
 import com.example.newproject.domain.indexNoteFieldHints
@@ -75,6 +77,11 @@ internal class NoteSessionCoordinator(
      */
     crystalPersistence: CrystalPersistence,
     crystalMaterials: CrystalMaterialPersistence,
+    /**
+     * 余白メモの書きかけの置き場（→ features/margin_pane.md §6.1）。**実体は ViewModel 側の Compose の状態。**
+     * 既定値を置かない — 配線を落とすと、書きかけがノートの行き来で黙って消えるだけで何も落ちない。
+     */
+    marginMemoDrafts: MarginMemoDraftStore,
     private val history: HistoryStore,
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
@@ -251,7 +258,10 @@ internal class NoteSessionCoordinator(
     private val marginMemo = MarginMemoController(
         scope = scope,
         state = stateStore.marginMemoWriter,
-        loadMemos = { path -> readingTrace.loadMemos(path) },
+        drafts = marginMemoDrafts,
+        // **ノートの識別は本文の URI。** 相対パスは表示の後に埋まることがあり、その間の入力を取りこぼす。
+        currentNoteKey = { stateStore.currentNote()?.targetUri },
+        loadMemos = { path, confirmAbsence -> readingTrace.loadMemos(path, confirmAbsence) },
         appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
         deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
         clock = clock
@@ -473,6 +483,8 @@ internal class NoteSessionCoordinator(
         noteField.clearVaultScoped()
         // 読み込みと生成を止める。保存は止めないが、世代の照合で新しいVaultの一覧へは足さない。
         crystal.clearVaultScoped()
+        // 余白メモの書きかけは Vault 単位。**ノート切替では預かり、ここでだけ捨てる。**
+        marginMemo.clearVaultScoped()
         // **走査より先に読む。** 走査のときには揃っている状態にしておく（→ 判断17）。
         loadPersistedNoteFields()
         cancelNoteScopedJobs()
@@ -505,12 +517,16 @@ internal class NoteSessionCoordinator(
      *
      * **自動生成の待ち時間もここから数える。** 本文が出た時点が「開いた」であって、
      * 読込を始めた時点ではない。[applyReloadedBody] では数え直さない（同じノートに居続けている）。
+     *
+     * **余白メモもここで1回だけ読む**（→ features/margin_pane.md §6.3）。見出しの印はペインを出さなくても要るので、
+     * 面を出したときまで待たない。本文は待たせない。パスがまだ無ければ、確定したときに読む。
      */
     fun setNoteState(state: NoteState) {
         stateStore.setNoteState(state)
         if (state is NoteState.Success) {
             sections.parse(state.content)
             dwell.start()
+            marginMemo.ensureLoaded(readingTrace.currentPath())
         } else {
             sections.cancelAndClear()
         }
@@ -539,8 +555,8 @@ internal class NoteSessionCoordinator(
         val latest = currentNote() ?: return false
         if (latest.targetUri != targetUri) return false
         // raw Markdownを保持しているジョブを先に止め、旧文脈の結果が後着しないようにする。
+        // **余白メモは止めない。** 保存先は痕跡で本文は触らないので、差し替えで消すと見出しの印まで消える。
         sectionChat.cancelAndClear()
-        marginMemo.cancelAndClear()
         val applied = stateStore.applyReloadedBody(targetUri, loaded)
         // 本文が変わったので解析し直す。ここを落とすと太字化した本文に対して
         // 旧いブロックが描かれ続ける（[setNoteState] と対になる2つ目の経路）。
@@ -651,8 +667,8 @@ internal class NoteSessionCoordinator(
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
     /**
-     * シートを開く。**読み込み済みなら読み直さない** — 読み直すと世代が進み、走行中の保存の結果が
-     * 照合で捨てられる（保存中に閉じて開き直すと、受理された文字が入力欄に残って再送できる）。
+     * シートを開く。メモはノートの表示の後に読んであるので、**ここでは読み直さない** — 読み直すと世代が進み、
+     * 走行中の保存の結果が照合で捨てられる。読めなかったときだけ読み直す。
      * ペインの書きかけをシートへ移すときにも同じ口を使う。
      */
     fun openMarginMemoSheet() {
@@ -665,16 +681,22 @@ internal class NoteSessionCoordinator(
     }
 
     /**
-     * 余白ペインが出ている間に呼ぶ。**読み込み済みなら何もしない**ので、再表示のたびに読み直さない。
+     * 余白ペインを出したときに呼ぶ。**読み込み済みなら何もしない。**
      * 読めなかったときだけ、ペインを出し直したときに読み直す。
      */
     fun loadMarginMemoForPane() {
         marginMemo.ensureLoaded(readingTrace.currentPath())
     }
 
-    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
-    fun saveMarginMemo(text: String, sectionTitle: String?) =
-        marginMemo.save(readingTrace.currentPath(), text, sectionTitle)
+    /** 書きかけを変える。[bodySection] は今の本文の節で、書き始めた瞬間だけ書き込み先になる。 */
+    fun editMarginMemo(text: String, bodySection: SectionRef?) = marginMemo.edit(text, bodySection)
+
+    /**
+     * 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。
+     * 見出しは書き込み先の節（**紐づけではなく当時の記録**）。
+     */
+    fun submitMarginMemo(bodySection: SectionRef?) =
+        marginMemo.submit(readingTrace.currentPath(), bodySection)
 
     fun deleteMarginMemo(memo: MarginMemo) =
         marginMemo.delete(readingTrace.currentPath(), memo)
@@ -720,9 +742,8 @@ internal class NoteSessionCoordinator(
     fun retrySectionSummary() = sectionChat.retrySummary()
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
 
-    /** セッションの明示終了。 */
+    /** 部分要約のセッションの明示終了。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
     fun endSectionChat() {
         sectionChat.cancelAndClear()
-        marginMemo.cancelAndClear()
     }
 }

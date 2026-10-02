@@ -15,6 +15,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.isFocused
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -27,6 +31,9 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.markdown.NoteImageContent
@@ -678,6 +685,172 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(FIRST_PARAGRAPH, substring = true).assertIsDisplayed()
     }
 
+    /**
+     * **メモのある見出しの脇に、件数つきの印が出る**（→ features/margin_pane.md §5.6）。色だけにせず件数を読み上げ、
+     * 押すとメモの面を出す（縦積みの窓ではシート）。
+     */
+    @Test
+    fun メモのある見出しの脇に件数つきの印が出て_押すとメモの面を出す() {
+        var opened = 0
+        val state = loadedNote(BODY).copy(
+            marginMemoState = MarginMemoState.Ready(memos = listOf(MarginMemo("見出しのメモ", 1L, "見出し")))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(state, buildNoteSectionModel(BODY), rememberLazyListState(), onOpenMarginMemo = { opened++ })
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.runOnIdle { assertEquals(1, opened) }
+    }
+
+    /**
+     * **本文を上端まで送れない短い2節のノートでも、印の1回の操作で行き先の節のメモが見える**（→ features/margin_pane.md §5.6）。
+     * 面の節は本文についていくが、短い節は上端まで来ないので、それを当てにすると「ほかの節」に畳まれたまま残る。
+     *
+     * **シートは閉じた状態から始める。** 入口が本番と同じく面を開く状態更新を通さないと、閉じた面から開けない不具合を踏めない
+     * （最初から開いた面で組むと、半分の面に本文が削られて印にも届かなかった）。
+     */
+    @Test
+    fun 短い2節のノートでも_閉じたシートから印で行き先の節のメモが見える() {
+        setReaderWithSheet(loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B")), SHORT_TWO_SECTIONS)
+        composeRule.onNodeWithText("節Bのメモ").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
+    @Test
+    fun 短い2節のノートでも_ペインで印から行き先の節のメモが見える() {
+        val state = loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("節Bのメモ").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
+    /** **末尾の短い節**の印でも、閉じたシートから1回で行き先のメモが見える。本文はそこまで送れない。 */
+    @Test
+    fun 長いノートの末尾の短い節でも_閉じたシートから印で行き先の節のメモが見える() {
+        val listState = LazyListState()
+        setReaderWithSheet(
+            loadedNote(LONG_WITH_SHORT_TAIL).withMemos(MarginMemo("付記のメモ", 1L, "付記")),
+            LONG_WITH_SHORT_TAIL,
+            listState
+        )
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(buildNoteSectionModel(LONG_WITH_SHORT_TAIL).blocks.lastIndex) } }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("付記のメモ").assertIsDisplayed()
+    }
+
+    /** 再会カードの「前回のメモを見る」も、**閉じたシートから**1回でメモの並びまで届く。 */
+    @Test
+    fun 再会カードの前回のメモを見るで_閉じたシートからメモの並びが見える() {
+        val state = loadedNote(SHORT_TWO_SECTIONS)
+            .withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
+            .copy(
+                readingTraceCard = ReadingTraceCard(
+                    visitCount = 2,
+                    lastVisitAtMillis = 0L,
+                    lastSectionTitle = "節A",
+                    lastProgressPercent = 50,
+                    aiSummary = null,
+                    aiSummaryKind = null,
+                    hasMemos = true,
+                    resumeBlockIndex = null
+                )
+            )
+        setReaderWithSheet(state, SHORT_TWO_SECTIONS)
+
+        composeRule.onNodeWithText("前回のメモを見る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
+    /**
+     * **Fold を開いて画面を作り直しても、シートで書いていた入力のフォーカスをペインの入力欄が引き継ぐ**（→ features/margin_pane.md §5.4）。
+     * 開いた直後は、しまう途中のシートとペインが一瞬だけ両方組まれる。どちらもフォーカスを取りにいくと、
+     * しまわれるシートが持ち去ってペインに残らなかった（閉じる方向は面が1つなので引き継げていた）。
+     * 窓を広げたうえで、画面の作り直しと復元を通す。
+     */
+    @Test
+    fun Foldを開いて画面を作り直しても_ペインの入力欄がフォーカスを引き継ぐ() {
+        val restoration = StateRestorationTester(composeRule)
+        var opened by mutableStateOf(false)
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(isMarginMemoSheetVisible = true))
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = if (opened) 960.dp else 400.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        marginPaneOpen = true,
+                        expandedWidth = opened
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).performClick()
+        composeRule.onNode(hasSetTextAction()).assertIsFocused()
+
+        composeRule.runOnIdle { opened = true }
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals("シートが残った", false, state.isMarginMemoSheetVisible) }
+        composeRule.onNode(hasSetTextAction() and isFocused()).assertExists()
+    }
+
+    /**
+     * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
+     * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
+     */
+    private fun setReaderWithSheet(initial: NoteUiState, body: String, listState: LazyListState? = null) {
+        var state by mutableStateOf(initial)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 900.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(body),
+                        listState ?: rememberLazyListState(),
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) }
+                    )
+                }
+            }
+        }
+    }
+
+    private fun NoteUiState.withMemos(vararg memos: MarginMemo) =
+        copy(marginMemoState = MarginMemoState.Ready(memos = memos.toList()))
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -685,7 +858,11 @@ class NoteReadingFlowTest {
         listState: LazyListState,
         loader: NoteImageLoader? = null,
         measurements: NoteImageMeasurements? = null,
-        onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> }
+        onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
+        onOpenMarginMemo: () -> Unit = {},
+        onDismissMarginMemo: () -> Unit = {},
+        marginPaneOpen: Boolean = false,
+        expandedWidth: Boolean = false
     ) {
         NoteReaderTab(
             uiState = state,
@@ -700,15 +877,17 @@ class NoteReadingFlowTest {
             onEndSectionChat = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
-            onOpenMarginMemo = {},
+            onOpenMarginMemo = onOpenMarginMemo,
             onLoadMarginMemoForPane = {},
-            // 読書の流れだけを見るので、どの端末でも縦に積む並べ方に固定する。
-            marginPaneOpen = false,
+            // 読書の流れだけを見るテストは、どの端末でも縦に積む並べ方に固定する（既定）。
+            marginPaneOpen = marginPaneOpen,
             onSetMarginPaneOpen = {},
-            expandedWidth = false,
-            onSaveMarginMemo = { _, _ -> },
+            expandedWidth = expandedWidth,
+            memoDraft = MarginMemoDraft(),
+            onEditMarginMemo = { _, _ -> },
+            onSubmitMarginMemo = {},
             onDeleteMarginMemo = {},
-            onDismissMarginMemo = {},
+            onDismissMarginMemo = onDismissMarginMemo,
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
             onOpenSection = {}
@@ -731,6 +910,26 @@ class NoteReadingFlowTest {
         """.trimIndent()
 
         const val TARGET_BLOCK = 12
+
+        /** 長い4節の後に短い「付記」。付記の見出しは上端まで送れない。 */
+        val LONG_WITH_SHORT_TAIL = buildString {
+            listOf("第一", "第二", "第三", "第四").forEach { section ->
+                append("## $section\n\n")
+                (1..8).forEach { append("${section}の段落$it。読みながら思ったことを、本文の横に短く残す。\n\n") }
+            }
+            append("## 付記\n\n短い付記。\n")
+        }
+
+        /** 本文領域に収まる短い2節。どちらの見出しも上端まで送れない。 */
+        val SHORT_TWO_SECTIONS = """
+            # 節A
+
+            短い段落。
+
+            # 節B
+
+            短い段落。
+        """.trimIndent()
 
         /** 画像を1枚挟んだ本文。画像の後ろにも十分なブロックを置く。 */
         const val IMAGE_BLOCK_INDEX = 2

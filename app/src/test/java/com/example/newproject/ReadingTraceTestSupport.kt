@@ -109,12 +109,18 @@ internal class FakePersistence : ReadingTracePersistence {
             ?: ReadingTraceReadResult.None
     }
 
-    override fun listKeys(vaultKey: String): ReadingTraceKeyListing =
-        if (!listable) {
+    /** 置き場を列挙した回数。**列挙は全走査なので、読むたびには走らせない**ことを確かめる。 */
+    var listKeysCalls = 0
+        private set
+
+    override fun listKeys(vaultKey: String): ReadingTraceKeyListing {
+        listKeysCalls++
+        return if (!listable) {
             ReadingTraceKeyListing.Unavailable("列挙できませんでした")
         } else {
             ReadingTraceKeyListing.Available(files.keys.map { ReadingTraceStore.keyFor(it) }.toSet())
         }
+    }
 
     override fun loadByKey(key: String, vaultKey: String): ReadingTraceReadResult =
         files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
@@ -125,7 +131,16 @@ internal class FakePersistence : ReadingTracePersistence {
         files.keys.firstOrNull { ReadingTraceStore.keyFor(it) == key }
             ?.let { files.remove(it) != null } ?: false
 
-    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
+    /**
+     * 保存が**書けた直後**に割り込む口。書き込みは済んだのに結果が呼び出し元へ戻る前、
+     * という順序（例: 置いた直後にノートを替えた）を作る。
+     */
+    var afterSave: (() -> Unit)? = null
+
+    override fun save(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult =
+        saveInternal(trace, vaultKey).also { afterSave?.invoke() }
+
+    private fun saveInternal(trace: ReadingTrace, vaultKey: String): ReadingTraceSaveResult {
         saveAttempts++
         savedVaultKeys += vaultKey
         if (failSave || failSaveOnAttempt == saveAttempts) {

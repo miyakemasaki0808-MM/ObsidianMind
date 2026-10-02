@@ -30,6 +30,9 @@ import com.example.newproject.model.DocumentRef
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.RelatedNotesResult
 import com.example.newproject.domain.notePaperTone
@@ -77,6 +80,12 @@ class NoteViewModel internal constructor(
      */
     private val scope: CoroutineScope = dependencies.scope ?: viewModelScope
 
+    /**
+     * 余白メモの書きかけ。**ViewModel が持つ**ので、シートとペインの切替・全画面との往復・
+     * Fold の開閉や回転による作り直しをまたいで同じ一組を使う（→ features/margin_pane.md §6.1）。
+     */
+    private val marginMemoDrafts = ComposeMarginMemoDrafts()
+
     private val session = NoteSessionCoordinator(
         scope = scope,
         persistScope = readingTraceWriteScope,
@@ -90,6 +99,7 @@ class NoteViewModel internal constructor(
         reunionPassageCache = dependencies.reunionPassageCache,
         crystalPersistence = dependencies.crystalPersistence,
         crystalMaterials = dependencies.crystalMaterials,
+        marginMemoDrafts = marginMemoDrafts,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
@@ -571,17 +581,25 @@ class NoteViewModel internal constructor(
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
-    /** シートを開く。まだ読んでいなければサイドカーを1件読む。読み込み済みなら読み直さない。 */
+    /** シートを開く。メモはノートの表示の後に読んであるので、読めなかったときだけ読み直す。 */
     fun openMarginMemoSheet() = session.openMarginMemoSheet()
 
     fun dismissMarginMemoSheet() = session.dismissMarginMemoSheet()
 
-    /** 余白ペインが出ている間、このノートのメモを持たせる。 */
+    /** 余白ペインを出したとき。読めなかったときだけ読み直す。 */
     fun loadMarginMemoForPane() = session.loadMarginMemoForPane()
 
-    /** メモを置く。[sectionTitle] は置いたときに見ていた見出し（**紐づけではない**）。 */
-    fun saveMarginMemo(text: String, sectionTitle: String?) =
-        session.saveMarginMemo(text, sectionTitle)
+    /**
+     * [noteKey] のノートの書きかけ。**Compose の状態なので、画面はここを直接読む** —
+     * 打った文字が同じフレームのうちに入力欄へ戻る（StateFlow を挟むと変換中の入力が崩れやすい）。
+     */
+    internal fun marginMemoDraft(noteKey: String?): MarginMemoDraft =
+        noteKey?.let(marginMemoDrafts::draft) ?: MarginMemoDraft()
+
+    fun editMarginMemo(text: String, bodySection: SectionRef?) = session.editMarginMemo(text, bodySection)
+
+    /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
+    fun submitMarginMemo(bodySection: SectionRef?) = session.submitMarginMemo(bodySection)
 
     fun deleteMarginMemo(memo: MarginMemo) = session.deleteMarginMemo(memo)
 

@@ -39,6 +39,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -53,6 +56,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -61,6 +65,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -77,10 +83,13 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
+import com.example.newproject.domain.arrangeMemos
 import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -127,7 +136,12 @@ internal fun NoteReaderTab(
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
     expandedWidth: Boolean,
-    onSaveMarginMemo: (text: String, sectionTitle: String?) -> Unit,
+    /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
+    memoDraft: MarginMemoDraft,
+    /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
+    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
+    onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     onDismissMarginMemo: () -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
@@ -152,6 +166,29 @@ internal fun NoteReaderTab(
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
+    // 本文の節。**スクロールが止まってから決める**（→ features/margin_pane.md §5.3）。
+    // 流している途中で決めると、ペインの中身が通り過ぎる節ごとに入れ替わる。
+    var settledBlock by remember(sectionModel) { mutableIntStateOf(listState.firstVisibleItemIndex) }
+    LaunchedEffect(listState, sectionModel) {
+        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }
+            .collect { (scrolling, index) -> if (!scrolling) settledBlock = index }
+    }
+    val bodySection = sectionModel?.sectionRefAt(settledBlock)
+    // メモを今の見出しと照合して並べる。印と件数と飛ぶ先も同じ照合から作る（→ features/margin_pane.md §5.6）。
+    val readyMemos = uiState.marginMemoState as? MarginMemoState.Ready
+    val arrangedMemos = remember(readyMemos?.memos, sectionModel, bodySection) {
+        val memos = readyMemos?.memos ?: return@remember null
+        val model = sectionModel ?: return@remember null
+        // **見出しの索引は解析と一緒に Main の外で作ってある。** ここでは見出しをたどらない。
+        arrangeMemos(memos, model.headingIndex, bodySection ?: SectionRef(title = null))
+    }
+    // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
+    val jumpToSection: (SectionRef) -> Unit = { ref ->
+        sectionModel?.startBlockOf(ref)?.let { block ->
+            coroutineScope.launch { listState.animateScrollToItem(block) }
+            imageMeasurements?.requestSkippedMeasurement(block)
+        }
+    }
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
@@ -168,16 +205,29 @@ internal fun NoteReaderTab(
 
     val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
 
-    // **書きかけはシートとペインの外で持つ。** 文字と受理の対応とノートを一組で持ち、別のノートの書きかけは捨てる。
-    val memoDraft = rememberMarginMemoInput(successState?.targetUri, uiState.marginMemoState)
+    // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
+    // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
+    val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
+    val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
+    // 入力欄で書いているつもりか。**画面の作り直しをまたいで保つ** — Fold の開閉で面が組み替わっても、
+    // 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。
+    // 利用者が面を閉じたときは落とす。次に面を出したときに、頼んでいないキーボードを出さない。
+    var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+    val dismissMemoSheet: () -> Unit = {
+        memoFocusIntent = false
+        onDismissMarginMemo()
+    }
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
     val density = LocalDensity.current
     val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
         when (toggle) {
-            MarginToggle.HideSheet -> onDismissMarginMemo()
-            MarginToggle.ClosePane -> onSetMarginPaneOpen(false)
+            MarginToggle.HideSheet -> dismissMemoSheet()
+            MarginToggle.ClosePane -> {
+                memoFocusIntent = false
+                onSetMarginPaneOpen(false)
+            }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
             MarginToggle.ShowSheet -> onOpenMarginMemo()
         }
@@ -300,7 +350,9 @@ internal fun NoteReaderTab(
             )
         }
     }
-    val notePanel: @Composable (Modifier) -> Unit = { modifier ->
+    // 面の中で目的のメモまで送る依頼。面が組み立てられて送り終えたら消す。
+    var memoReveal by remember { mutableStateOf<MemoReveal?>(null) }
+    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?) -> Unit = { modifier, headingMark ->
         NoteContentPanel(
             uiState = uiState,
             modifier = modifier
@@ -313,7 +365,8 @@ internal fun NoteReaderTab(
             listState = listState,
             precomputedBlocks = sectionModel?.blocks,
             imageLoader = imageLoader,
-            imageMeasurements = imageMeasurements
+            imageMeasurements = imageMeasurements,
+            headingAccessory = headingMark
         )
     }
 
@@ -347,15 +400,39 @@ internal fun NoteReaderTab(
         )
         val paneVisible = layout is ReaderLayout.MarginPane
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
-        // ペインが出ていればメモは横に並んでいるので、シートを重ねない（ペインとシートを同時に出さない）。
-        val openMemosFromCard: () -> Unit = { if (!paneVisible) onOpenMarginMemo() }
+        // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
+        // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。
+        val hideControls = hidesReaderControls(
+            layout = layout,
+            sheetVisible = uiState.isMarginMemoSheetVisible,
+            writingWithKeyboard = memoFocusIntent && WindowInsets.ime.getBottom(density) > 0
+        )
+        // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
+        val revealMemos: (MemoReveal) -> Unit = { reveal ->
+            if (!paneVisible) onOpenMarginMemo()
+            memoReveal = reveal
+        }
+        val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
+        // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
+        // 押すと、面をその節のメモまで送る。**本文は動かさない** — 見出しは押した指の下に見えているうえ、
+        // 短い節は上端まで送れないので、面の節が本文についてくることを当てにできない。
+        val headingMark: (@Composable (Int) -> Unit)? = arrangedMemos?.let { arranged ->
+            { block ->
+                val ref = sectionModel?.sectionRefAt(block)
+                val count = ref?.let { arranged.countsBySection[it] } ?: 0
+                if (ref != null && count > 0) {
+                    HeadingMemoMark(count) { revealMemos(MemoReveal.Section(ref)) }
+                }
+            }
+        }
 
         MarginWindowShiftEffect(
             windowKnown = foldInfo.isKnown && regionStartDp != null,
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
-            hasDraft = memoDraft.text.isNotEmpty(),
+            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
+            writing = memoDraft.text.isNotEmpty() || memoFocusIntent,
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )
@@ -367,85 +444,129 @@ internal fun NoteReaderTab(
         }
 
         Box(modifier = Modifier.fillMaxSize().imePadding()) {
-            when (layout) {
-                ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                    controls(memoToggle)
-                    if (!hasNote) {
-                        emptyNote()
-                        // 余りをカードではなく余白へ逃がす。
-                        Spacer(modifier = Modifier.weight(1f))
-                    } else {
-                        traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
-                        notePanel(
-                            Modifier
-                                .weight(1f)
-                                .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
-                        )
-                    }
+            // スマホのシートは本文と併存させる。**キーボードを避けた領域に置く**ので、半分はこの領域の半分になる。
+            @OptIn(ExperimentalMaterial3Api::class)
+            MarginMemoSheetHost(
+                // **ペインが出ている間はシートを出さない**（ペインとシートを同時に出さない → §5.4）。
+                // Fold を開いた直後は窓の切り替わりの判定より先にペインが組まれるので、その間もシートを重ねない。
+                visible = uiState.isMarginMemoSheetVisible && !paneVisible,
+                // ペインへ送る依頼をシートに残さない。残すと、後でシートを出したときに古い依頼で広がる。
+                expandRequested = memoReveal != null && !paneVisible,
+                onDismiss = dismissMemoSheet,
+                sheet = {
+                    // **書いた場所は書き始めた時点の本文の節**（紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
+                    MarginMemoSheetContent(
+                        state = uiState.marginMemoState,
+                        draft = memoDraft,
+                        section = bodySection,
+                        hasHeadings = sectionModel?.hasHeadings ?: false,
+                        onJumpToSection = jumpToSection,
+                        arranged = arrangedMemos,
+                        reveal = memoReveal,
+                        onRevealHandled = { memoReveal = null },
+                        onEdit = onEditMemo,
+                        onSubmit = onSubmitMemo,
+                        onDelete = onDeleteMarginMemo,
+                        asSheet = true,
+                        onClose = dismissMemoSheet,
+                        focusIntent = memoFocusIntent,
+                        onFocusIntentChange = { memoFocusIntent = it },
+                        active = uiState.isMarginMemoSheetVisible && !paneVisible
+                    )
                 }
-                // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
-                ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .width(sideColumnWidth)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        controls(memoToggle)
-                        traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+            ) {
+                when (layout) {
+                    ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
+                        if (!hideControls) controls(memoToggle)
                         if (!hasNote) {
                             emptyNote()
+                            // 余りをカードではなく余白へ逃がす。
                             Spacer(modifier = Modifier.weight(1f))
                         } else {
-                            notePanel(Modifier.weight(1f))
-                        }
-                    }
-                }
-                // 左に操作と本文、右に余白ペイン。**溝に折り目が入る**ので、文字と操作が折り目に重ならない。
-                // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
-                is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
-                    Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
-                        controls(memoToggle)
-                        if (!hasNote) {
-                            emptyNote()
-                            Spacer(modifier = Modifier.weight(1f))
-                        } else {
-                            traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                            if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
                             notePanel(
                                 Modifier
                                     .weight(1f)
-                                    .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp)
+                                    .padding(
+                                        top = when {
+                                            hideControls -> 0.dp
+                                            isLoading || visibleTraceCard != null -> 8.dp
+                                            else -> 20.dp
+                                        }
+                                    ),
+                                headingMark
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(layout.gutterDp.dp))
-                    MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        MarginMemoSheetContent(
-                            state = uiState.marginMemoState,
-                            draft = memoDraft,
-                            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
-                            onDelete = onDeleteMarginMemo,
-                            modifier = Modifier.padding(top = 16.dp)
-                        )
+                    // 左に操作とカード、右に本文。**左列だけをスクロールさせる** — カードが長くても本文の高さは削らない。
+                    ReaderLayout.SideBySide -> Row(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier
+                                .width(sideColumnWidth)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                        ) {
+                            controls(memoToggle)
+                            traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
+                        }
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            if (!hasNote) {
+                                emptyNote()
+                                Spacer(modifier = Modifier.weight(1f))
+                            } else {
+                                notePanel(Modifier.weight(1f), headingMark)
+                            }
+                        }
+                    }
+                    // 左に操作と本文、右に余白ペイン。**溝に折り目が入る**ので、文字と操作が折り目に重ならない。
+                    // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
+                    is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
+                            if (!hideControls) controls(memoToggle)
+                            if (!hasNote) {
+                                emptyNote()
+                                Spacer(modifier = Modifier.weight(1f))
+                            } else {
+                                if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                                notePanel(
+                                    Modifier
+                                        .weight(1f)
+                                        .padding(
+                                            top = when {
+                                                hideControls -> 0.dp
+                                                isLoading || visibleTraceCard != null -> 8.dp
+                                                else -> 20.dp
+                                            }
+                                        ),
+                                    headingMark
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(layout.gutterDp.dp))
+                        MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                            MarginMemoSheetContent(
+                                state = uiState.marginMemoState,
+                                draft = memoDraft,
+                                section = bodySection,
+                                hasHeadings = sectionModel?.hasHeadings ?: false,
+                                onJumpToSection = jumpToSection,
+                                arranged = arrangedMemos,
+                                reveal = memoReveal,
+                                onRevealHandled = { memoReveal = null },
+                                onEdit = onEditMemo,
+                                onSubmit = onSubmitMemo,
+                                onDelete = onDeleteMarginMemo,
+                                modifier = Modifier.padding(top = 16.dp),
+                                focusIntent = memoFocusIntent,
+                                onFocusIntentChange = { memoFocusIntent = it },
+                                active = true
+                            )
+                        }
                     }
                 }
             }
         }
-    }
-
-    // 余白メモのボトムシート。**書いた場所は開いた時点の可視セクションから引く**
-    // （紐づけではなく当時の記録 → 判断2）。
-    if (uiState.isMarginMemoSheetVisible) {
-        MarginMemoSheet(
-            state = uiState.marginMemoState,
-            draft = memoDraft,
-            onSave = { text -> onSaveMarginMemo(text, currentSection?.title) },
-            onDelete = onDeleteMarginMemo,
-            onDismiss = onDismissMarginMemo
-        )
     }
 
     // セクションチャットのボトムシート
@@ -473,14 +594,14 @@ private fun MarginWindowShiftEffect(
     canShowPane: Boolean,
     paneOpen: Boolean,
     sheetVisible: Boolean,
-    hasDraft: Boolean,
+    writing: Boolean,
     onHideSheet: () -> Unit,
     onShowSheet: () -> Unit
 ) {
     var previousCanShowPane by rememberSaveable { mutableStateOf<Boolean?>(null) }
     val currentPaneOpen by rememberUpdatedState(paneOpen)
     val currentSheetVisible by rememberUpdatedState(sheetVisible)
-    val currentHasDraft by rememberUpdatedState(hasDraft)
+    val currentWriting by rememberUpdatedState(writing)
     val currentOnHideSheet by rememberUpdatedState(onHideSheet)
     val currentOnShowSheet by rememberUpdatedState(onShowSheet)
     LaunchedEffect(windowKnown, canShowPane) {
@@ -490,13 +611,40 @@ private fun MarginWindowShiftEffect(
             canShowPane = canShowPane,
             paneOpen = currentPaneOpen,
             sheetVisible = currentSheetVisible,
-            hasDraft = currentHasDraft
+            writing = currentWriting
         )
         previousCanShowPane = canShowPane
         when (shift) {
             MarginWindowShift.SheetToPane -> currentOnHideSheet()
             MarginWindowShift.PaneToSheet -> currentOnShowSheet()
             MarginWindowShift.None -> Unit
+        }
+    }
+}
+
+/**
+ * 見出しの脇の印（→ features/margin_pane.md §5.6）。**件数と読み上げ名を持ち、色だけにしない。**
+ * 押せる範囲は広く取る — 見出しの脇の小さな印は、狭いと隣の本文を選んでしまう。
+ */
+@Composable
+private fun HeadingMemoMark(count: Int, onClick: () -> Unit) {
+    val description = headingMemoMarkDescription(count)
+    Box(
+        modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(color = PanelChip, shape = RoundedCornerShape(10.dp)) {
+            Text(
+                text = "✎$count",
+                color = AccentText,
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .clearAndSetSemantics {}
+            )
         }
     }
 }

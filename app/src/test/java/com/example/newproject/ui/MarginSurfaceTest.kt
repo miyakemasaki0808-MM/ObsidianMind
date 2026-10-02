@@ -4,6 +4,17 @@ import com.example.newproject.ui.screen.MarginToggle
 import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
+import com.example.newproject.ui.screen.MemoReveal
+import com.example.newproject.ui.screen.MemoRevealStop
+import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.hidesReaderControls
+import com.example.newproject.ui.screen.memoRevealStop
+import com.example.newproject.ui.screen.sheetCoveredHeight
+import com.example.newproject.ui.screen.sectionLabel
+import com.example.newproject.ui.screen.writeTargetNotice
+import com.example.newproject.model.SectionRef
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -31,7 +42,7 @@ class MarginSurfaceTest {
         assertEquals(
             "閉じる設定ならシートのまま移る",
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible, writing = true)
         )
 
         val first = marginToggleFor(canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible)
@@ -49,12 +60,12 @@ class MarginSurfaceTest {
     fun `出せない窓から出せる窓へ移ると、開く設定ならシートをペインへ移す`() {
         assertEquals(
             MarginWindowShift.SheetToPane,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = true, hasDraft = false)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = true, writing = false)
         )
         // シートが出ていなければ何もしない（ペインは設定どおりに出る）
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = true, paneOpen = true, sheetVisible = false, writing = true)
         )
     }
 
@@ -62,16 +73,16 @@ class MarginSurfaceTest {
     fun `出せる窓から出せない窓へ移ると、書きかけがあるときだけシートへ移す`() {
         assertEquals(
             MarginWindowShift.PaneToSheet,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = false)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = true, sheetVisible = false, writing = false)
         )
         // ペインが閉じていれば、書きかけは出ていた面に無い
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(true, canShowPane = false, paneOpen = false, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(true, canShowPane = false, paneOpen = false, sheetVisible = false, writing = true)
         )
     }
 
@@ -81,12 +92,85 @@ class MarginSurfaceTest {
         listOf(null, true).forEach { previous ->
             assertEquals(
                 MarginWindowShift.None,
-                marginWindowShiftFor(previous, canShowPane = true, paneOpen = true, sheetVisible = true, hasDraft = true)
+                marginWindowShiftFor(previous, canShowPane = true, paneOpen = true, sheetVisible = true, writing = true)
             )
         }
         assertEquals(
             MarginWindowShift.None,
-            marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, hasDraft = true)
+            marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
+    }
+
+    // ── 節の呼び名と書き込み先（→ features/margin_pane.md §5.2・§5.3）──────────────
+
+    @Test
+    fun `名前の無い節は見出しの有無で冒頭か全体と呼ぶ`() {
+        assertEquals("ノートの冒頭", sectionLabel(SectionRef(null), hasHeadings = true))
+        assertEquals("ノート全体", sectionLabel(SectionRef(null), hasHeadings = false))
+    }
+
+    /** 同名の見出しを名前だけで呼ぶと、書き込み先がどちらの節か見分けられない。 */
+    @Test
+    fun `同名の見出しの2つ目からは順番を添える`() {
+        assertEquals("まとめ", sectionLabel(SectionRef("まとめ", 0), hasHeadings = true))
+        assertEquals("まとめ（2つ目）", sectionLabel(SectionRef("まとめ", 1), hasHeadings = true))
+    }
+
+    @Test
+    fun `書き込み先は今の本文の節と違うときだけ知らせる`() {
+        val b = SectionRef("節B")
+        val c = SectionRef("節C")
+
+        assertEquals(b, writeTargetNotice(target = b, bodySection = c))
+        assertNull(writeTargetNotice(target = b, bodySection = b))
+        assertNull("書いていないのに知らせた", writeTargetNotice(target = null, bodySection = c))
+        assertNull("本文の節が分からないのに知らせた", writeTargetNotice(target = b, bodySection = null))
+    }
+
+    /** **シートで、入力欄に触れていて、キーボードが出ているときだけ**畳む。キーボードを閉じれば元に戻る。 */
+    @Test
+    fun `書いている間に畳むのはシートでキーボードが出ているときだけ`() {
+        assertEquals(true, compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = true))
+        assertEquals("キーボードを閉じたのに畳んだまま", false, compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = false))
+        assertEquals(false, compactWhileTyping(asSheet = true, inputFocused = false, imeVisible = true))
+        assertEquals("ペインを畳んだ", false, compactWhileTyping(asSheet = false, inputFocused = true, imeVisible = true))
+    }
+
+    /** 本文はシートが覆う分だけ低くする。**隠れているシートは器の下端にあるので0。** 組まれる前も覆っていない。 */
+    @Test
+    fun `シートが覆う高さは器の下端からシートの上端まで`() {
+        assertEquals(400, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 400f))
+        assertEquals("隠れているのに覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 800f))
+        assertEquals("組まれる前に覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = null))
+        assertEquals("画面いっぱいを超えて覆った", 800, sheetCoveredHeight(layoutHeight = 800, sheetOffset = -10f))
+    }
+
+    /**
+     * 印から来たら**行き先の節**へ送る。面の節が行き先ならこの節のメモ、違えばほかの節を開いてその組へ。
+     * 本文を上端まで送れない短い節でも、面の節が追いつくことを当てにしない。
+     */
+    @Test
+    fun `印の行き先が面の節でなければ、ほかの節を開いてその組へ送る`() {
+        val b = SectionRef("節B")
+        val a = SectionRef("節A")
+
+        assertEquals(MemoRevealStop.CurrentMemos, memoRevealStop(MemoReveal.Section(b), current = b))
+        assertEquals("別の節のメモを行き先にした", MemoRevealStop.OtherGroup(b), memoRevealStop(MemoReveal.Section(b), current = a))
+        assertEquals(MemoRevealStop.OtherGroup(null), memoRevealStop(MemoReveal.AllMemos, current = a))
+    }
+
+    /**
+     * **入力欄に触れてキーボードが出ている間だけ、本文の列の上の操作を隠す。** 縦積みはシートで書いているとき、
+     * 余白ペインはペインで書いているとき。キーボードとシート、または再会カードで本文が消えた。
+     * 左右2列は操作が横の列にあるので隠さない。キーボードを閉じれば戻る。
+     */
+    @Test
+    fun `上の操作を隠すのは本文の列の上に操作がある形で、キーボードを出して書いている間だけ`() {
+        assertEquals(true, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = true, writingWithKeyboard = true))
+        assertEquals("シートを出していない縦積みで隠した", false, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = false, writingWithKeyboard = true))
+        assertEquals("キーボードを閉じても隠したまま", false, hidesReaderControls(ReaderLayout.Stacked, sheetVisible = true, writingWithKeyboard = false))
+        assertEquals("ペインで書いている間に隠さない", true, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = true))
+        assertEquals(false, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = false))
+        assertEquals(false, hidesReaderControls(ReaderLayout.SideBySide, sheetVisible = true, writingWithKeyboard = true))
     }
 }

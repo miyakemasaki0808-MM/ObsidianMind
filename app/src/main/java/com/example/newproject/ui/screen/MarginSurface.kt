@@ -1,5 +1,8 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.model.SectionRef
+import kotlin.math.roundToInt
+
 /**
  * ✎ を押したときの動き（→ features/margin_pane.md §5.4）。
  *
@@ -47,7 +50,7 @@ internal enum class MarginWindowShift {
     /** シートをしまう。ペインは設定どおりに出る。 */
     SheetToPane,
 
-    /** 書きかけを持ったペインが出せなくなったので、同じ中身をシートで出す。 */
+    /** 書きかけを持つか書いている途中のペインが出せなくなったので、同じ中身をシートで出す。 */
     PaneToSheet
 }
 
@@ -56,17 +59,103 @@ internal enum class MarginWindowShift {
  *
  * **移り変わりではなく、前に見た値と今の値の比較で決める。** 途中の窓は届くとは限らない
  * （→ lessons L58）。前の値は画面の作り直しをまたいで保つ — 折りたたみの開閉で Activity は作り直される。
+ *
+ * [writing] は書きかけがあるか、入力欄で書いている途中か。
  */
 internal fun marginWindowShiftFor(
     previousCanShowPane: Boolean?,
     canShowPane: Boolean,
     paneOpen: Boolean,
     sheetVisible: Boolean,
-    hasDraft: Boolean
+    writing: Boolean
 ): MarginWindowShift = when {
     previousCanShowPane == null || previousCanShowPane == canShowPane -> MarginWindowShift.None
     // 出せない → 出せる。閉じる設定ならシートのまま。
     canShowPane -> if (sheetVisible && paneOpen) MarginWindowShift.SheetToPane else MarginWindowShift.None
-    // 出せる → 出せない。書きかけが無ければ何も出さない。
-    else -> if (paneOpen && !sheetVisible && hasDraft) MarginWindowShift.PaneToSheet else MarginWindowShift.None
+    // 出せる → 出せない。書きかけも無く書いてもいなければ、何も出さない。
+    else -> if (paneOpen && !sheetVisible && writing) MarginWindowShift.PaneToSheet else MarginWindowShift.None
 }
+
+/**
+ * 節の呼び名（→ features/margin_pane.md §5.2）。見出しより前は「ノートの冒頭」、見出しの無いノートは「ノート全体」。
+ * **同名の見出しの2つ目からは順番を添える** — 名前だけでは、書き込み先がどちらの節か見分けられない。
+ */
+internal fun sectionLabel(section: SectionRef, hasHeadings: Boolean): String = when {
+    section.title == null -> if (hasHeadings) "ノートの冒頭" else "ノート全体"
+    section.ordinal == 0 -> section.title
+    else -> "${section.title}（${section.ordinal + 1}つ目）"
+}
+
+/**
+ * 知らせる書き込み先。**書き込み先が今の本文の節と違うときだけ**返す（→ features/margin_pane.md §5.2 の5）。
+ * 本文の節がまだ分からない（解析の前）ときは知らせない。
+ */
+internal fun writeTargetNotice(target: SectionRef?, bodySection: SectionRef?): SectionRef? =
+    target?.takeIf { bodySection != null && it != bodySection }
+
+/**
+ * 面の中で、目的のメモまで送る依頼（→ features/margin_pane.md §5.4「入口から目的の中身へ直接届く」）。
+ * 送ったら依頼を消す（同じ依頼で何度も送らない）。
+ */
+internal sealed interface MemoReveal {
+    /**
+     * 見出しの印から。**行き先の節を持つ。** 本文をその節まで送れるとは限らない（短い節は上端まで来ない）ので、
+     * 面の節が本文についてくることを当てにしない。
+     */
+    data class Section(val section: SectionRef) : MemoReveal
+
+    /** 再会カードの「前回のメモを見る」から。ほかの節のメモも開いて、メモの並びへ。 */
+    data object AllMemos : MemoReveal
+}
+
+/** 面の中の送り先。 */
+internal sealed interface MemoRevealStop {
+    /** この節のメモの並びの始まり。 */
+    data object CurrentMemos : MemoRevealStop
+
+    /** ほかの節のメモを開き、[section] の組へ。null は並びの始まり。 */
+    data class OtherGroup(val section: SectionRef?) : MemoRevealStop
+}
+
+/**
+ * 依頼を面の中の送り先へ。行き先が面の節ならこの節のメモ、違えばほかの節のメモを開いてその組へ送る。
+ * **別の節のメモを行き先にしない。**
+ */
+internal fun memoRevealStop(reveal: MemoReveal, current: SectionRef?): MemoRevealStop = when (reveal) {
+    MemoReveal.AllMemos -> MemoRevealStop.OtherGroup(section = null)
+    is MemoReveal.Section ->
+        if (reveal.section == current) MemoRevealStop.CurrentMemos else MemoRevealStop.OtherGroup(reveal.section)
+}
+
+/** 見出しの脇の印の読み上げ名。**色だけにしない**ので件数を言う。 */
+internal fun headingMemoMarkDescription(count: Int): String = "この節のメモ ${count}件"
+
+/**
+ * シートを書いている間の畳み方にするか（→ features/margin_pane.md §5.5）。
+ * **シートで、入力欄に触れていて、キーボードが出ているときだけ。** キーボードを閉じれば元の並びに戻す —
+ * 入力欄に触れたままでも、キーボードが無ければ畳む理由が無い。ペインは高さが足りるので畳まない。
+ */
+internal fun compactWhileTyping(asSheet: Boolean, inputFocused: Boolean, imeVisible: Boolean): Boolean =
+    asSheet && inputFocused && imeVisible
+
+/**
+ * シートが本文を覆う高さ（px）。[sheetOffset] はシートの上端で、器の上端からの位置。まだ組まれていなければ null で、覆っていない。
+ * **隠れている間はシートが器の下端にあるので0になる** — 出ているかどうかを別に見なくてよい。
+ */
+internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
+    sheetOffset?.let { (layoutHeight - it).roundToInt().coerceIn(0, layoutHeight) } ?: 0
+
+/**
+ * 本文の列の上の操作（見出し・ボタン・再会カード）を隠すか（→ features/margin_pane.md §5.5）。
+ * **入力欄に触れてキーボードが出ている間だけ。** キーボードが出ると、残る高さを操作とカードが使い切って本文が消える。
+ *
+ * - 縦積み — シートで書いているとき。シートはさらに本文の下を覆う
+ * - 余白ペイン — ペインで書いているとき。本文の列の上に操作とカードが残る形は縦積みと同じ
+ * - 左右2列 — 隠さない。操作は横の列にあり、本文の高さを取らない
+ */
+internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, writingWithKeyboard: Boolean): Boolean =
+    writingWithKeyboard && when (layout) {
+        ReaderLayout.Stacked -> sheetVisible
+        is ReaderLayout.MarginPane -> true
+        ReaderLayout.SideBySide -> false
+    }

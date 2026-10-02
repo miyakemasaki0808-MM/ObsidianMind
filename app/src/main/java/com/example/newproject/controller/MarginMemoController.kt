@@ -1,10 +1,18 @@
 package com.example.newproject.controller
 
-import com.example.newproject.domain.composeMarginMemo
-import com.example.newproject.domain.composeMemoSectionTitle
+import com.example.newproject.domain.MemoSendAction
+import com.example.newproject.domain.SubmissionCheck
+import com.example.newproject.domain.checkSubmission
+import com.example.newproject.domain.edited
+import com.example.newproject.domain.sendAction
+import com.example.newproject.domain.settled
+import com.example.newproject.domain.submissionOf
+import com.example.newproject.domain.submitted
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MarginMemoDraftStore
 import com.example.newproject.model.MarginMemoSlice
 import com.example.newproject.model.MarginMemoStateWriter
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import kotlinx.coroutines.CancellationException
@@ -22,13 +30,20 @@ import kotlinx.coroutines.sync.withLock
  * 待ち時間を1ミリ秒も増やさない（→ features/reflect_margin_memo.md 判断1）。
  *
  * **保存そのものは持たない。** 3箇所（永続ファイル・セッションの預かり・退避）の
- * 合流は [ReadingTraceController] の契約で、ここは**画面の状態と入力の整形だけ**を持つ。
+ * 合流は [ReadingTraceController] の契約で、ここは**画面の状態と書きかけ**を持つ。
+ *
+ * **寿命が2つある**（→ docs/dev/system/architecture.md 判断4の3行目）。読み書きのジョブと一覧はノート単位で、
+ * ノート切替で止めて捨てる。書きかけ（[drafts]）は Vault 単位で、ノートを替えても預かり、Vault 切替でだけ捨てる。
  */
 internal class MarginMemoController(
     private val scope: CoroutineScope,
     private val state: MarginMemoStateWriter,
-    /** このノートのメモを読む。**3箇所を合流した結果**が返る。 */
-    private val loadMemos: suspend (vaultRelativePath: String) -> List<MarginMemo>,
+    /** 書きかけの置き場。**ノートの識別で引く**（→ [currentNoteKey]）。 */
+    private val drafts: MarginMemoDraftStore,
+    /** 今のノートの識別。本文を表示していないときは null。 */
+    private val currentNoteKey: () -> String?,
+    /** このノートのメモを読む。**3箇所を合流した結果**と、ファイルについて分かったことが返る。 */
+    private val loadMemos: suspend (vaultRelativePath: String, confirmAbsence: Boolean) -> MemoLoad,
     private val appendMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoSaveOutcome,
     private val deleteMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoDeleteOutcome,
     private val clock: () -> Long = System::currentTimeMillis
@@ -65,10 +80,8 @@ internal class MarginMemoController(
     private var loadWhenPathBound = false
 
     /**
-     * 読む。**ノートを開く経路では呼ばない** — 呼ぶとノートを開くたびサイドカーを1件読むことになる。
-     *
-     * **世代を進めるので、走行中の保存の結果を捨てる。** シートやペインを出すときは [ensureLoaded] を通し、
-     * 読み込み済みなら読み直さない。
+     * 読む。**世代を進めるので、走行中の保存の結果を捨てる。** ノートの表示とシートやペインを出すときは
+     * [ensureLoaded] を通し、読み込み済みなら読み直さない（→ features/margin_pane.md §6.3）。
      */
     fun open(vaultRelativePath: String?) {
         val requestId = ++generation
@@ -80,11 +93,14 @@ internal class MarginMemoController(
             return
         }
         loadWhenPathBound = false
+        // **照合する送信は、頼んだ時点で決める**（→ lessons L26）。無いことの確認（全列挙）もそのときだけ頼む。
+        val noteKey = currentNoteKey()
+        val pending = noteKey?.let { drafts.draft(it).pending }
         state.update { it.copy(marginMemoState = MarginMemoState.Loading) }
         loadJob?.cancel()
         loadJob = scope.launch {
             val loaded = try {
-                loadMemos(path)
+                loadMemos(path, pending != null)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -93,7 +109,29 @@ internal class MarginMemoController(
                 return@launch
             }
             if (!isCurrent(requestId)) return@launch
-            state.update { it.copy(marginMemoState = MarginMemoState.Ready(memos = loaded.newestFirst())) }
+            // **離れている間に頼んだ送信は、戻って読んだ一覧で決める**（→ features/margin_pane.md §6.2 の②）。
+            val check = if (noteKey != null && pending != null) {
+                checkSubmission(pending, loaded.memos, loaded.fileRead).also { check ->
+                    drafts.update(noteKey) { it.settled(pending, check) }
+                }
+            } else {
+                null
+            }
+            state.update {
+                it.copy(
+                    marginMemoState = MarginMemoState.Ready(
+                        memos = loaded.memos.newestFirst(),
+                        status = when (check) {
+                            null -> MemoSaveStatus.None
+                            SubmissionCheck.Accepted -> MemoSaveStatus.Saved
+                            SubmissionCheck.NotAccepted -> MemoSaveStatus.Failed
+                            SubmissionCheck.Unconfirmed -> MemoSaveStatus.Unconfirmed
+                        },
+                        // 戻った後に受理が分かったときも、切ったことは知らせる。
+                        wasTruncated = check == SubmissionCheck.Accepted && pending?.wasTruncated == true
+                    )
+                )
+            }
         }
     }
 
@@ -120,38 +158,47 @@ internal class MarginMemoController(
     }
 
     /**
-     * メモを置く。
-     *
-     * **入力欄を空にしてよいのは、置けたときだけ。** [MemoSaveStatus.Full] と
-     * [MemoSaveStatus.Failed] では画面側が文字を残す（消すと「置けなかった」と
-     * 「消された」が同じ顔になる）。
-     *
-     * [sectionTitle] は置いたときに見ていた見出し。**紐づけではなく歴史的記録**なので、
-     * 解決できなければ null のままでよい。
+     * 入力を変えた。**書き始めた瞬間の本文の節を書き込み先にする**（→ features/margin_pane.md §5.3）。
+     * 本文を表示していないときは何もしない。
      */
-    fun save(vaultRelativePath: String?, raw: String, sectionTitle: String?) {
+    fun edit(text: String, bodySection: SectionRef?) {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.edited(text, bodySection) }
+    }
+
+    /**
+     * 置くボタン。**役目は今の入力を整えた本文で決める**（→ [sendAction]）。
+     *
+     * 未確定の送信と同じ内容なら、新しく置かずに読み直して元の送信を確かめる。
+     * 置くときは書き込み先の節（まだ無ければ [bodySection]）の見出しを添える。
+     *
+     * **入力欄を楽観的に空にしない。** 空にするのは受け取れたと分かったときで、
+     * 送った原文のままの入力だけ（→ [com.example.newproject.domain.accepted]）。
+     */
+    fun submit(vaultRelativePath: String?, bodySection: SectionRef?) {
+        val noteKey = currentNoteKey() ?: return
         val current = state.current.marginMemoState as? MarginMemoState.Ready ?: return
         if (current.status == MemoSaveStatus.Saving) return
-        val draft = composeMarginMemo(raw)
-        if (draft.isBlank) return
         val path = vaultRelativePath?.takeIf { it.isNotBlank() } ?: return
+        val draft = drafts.draft(noteKey)
+        when (draft.sendAction()) {
+            MemoSendAction.None -> return
+            MemoSendAction.Verify -> {
+                open(path)
+                return
+            }
+            MemoSendAction.Place -> Unit
+        }
+        val section = draft.target ?: bodySection
+        val submission = submissionOf(draft.text, section?.title, clock()) ?: return
+        // **送った記録を先に残す。** 結果が同期で返っても、受理を取りこぼさない。
+        drafts.update(noteKey) { it.submitted(submission) }
 
         val requestId = generation
         state.update {
-            it.copy(
-                marginMemoState = current.copy(
-                    status = MemoSaveStatus.Saving,
-                    wasTruncated = false
-                )
-            )
+            it.copy(marginMemoState = current.copy(status = MemoSaveStatus.Saving, wasTruncated = false))
         }
-        val memo = MarginMemo(
-            text = draft.text,
-            writtenAtEpochMillis = clock(),
-            // **見出しも整えてから渡す。** 長すぎる見出しをそのまま載せると
-            // 検証で弾かれ続け、短いメモまで永久に保存できなくなる（再試行でも直らない）。
-            sectionTitle = composeMemoSectionTitle(sectionTitle)
-        )
+        val memo = submission.memo
         launchWrite {
             val outcome = try {
                 appendMemo(path, memo)
@@ -162,18 +209,19 @@ internal class MarginMemoController(
                 // 画面だけ保存済みになり、メモが黙って消える。
                 MemoSaveOutcome.Lost
             }
+            val accepted = outcome == MemoSaveOutcome.Saved || outcome == MemoSaveOutcome.Held
+            // **結果は送信を作ったノートの書きかけにだけ届ける。** 照合は送信そのもので行うので、
+            // 追わなくなった古い送信の結果は新しい入力を消さない。
+            drafts.update(noteKey) {
+                it.settled(submission, if (accepted) SubmissionCheck.Accepted else SubmissionCheck.NotAccepted)
+            }
             if (!isCurrent(requestId)) return@launchWrite
             state.update { latest ->
                 val ready = latest.marginMemoState as? MarginMemoState.Ready ?: return@update latest
                 // **置けた場合だけ一覧へ足す。** Full・Lost で足すと、
                 // 画面には在るのにどこにも保存されていないメモができる。
-                val memos = when (outcome) {
-                    MemoSaveOutcome.Saved, MemoSaveOutcome.Held ->
-                        (ready.memos + memo).newestFirst()
-                    MemoSaveOutcome.Full, MemoSaveOutcome.Lost -> ready.memos
-                }
                 latest.copy(marginMemoState = ready.copy(
-                    memos = memos,
+                    memos = if (accepted) (ready.memos + memo).newestFirst() else ready.memos,
                     status = when (outcome) {
                         MemoSaveOutcome.Saved -> MemoSaveStatus.Saved
                         // **保存済みとは呼ばない。** 離脱時の書き込みで確定する。
@@ -182,16 +230,7 @@ internal class MarginMemoController(
                         MemoSaveOutcome.Lost -> MemoSaveStatus.Failed
                     },
                     // 切り詰めは保存の成否と独立に示す（切ったうえで保存は成功しうる）。
-                    wasTruncated = draft.wasTruncated &&
-                        outcome != MemoSaveOutcome.Full &&
-                        outcome != MemoSaveOutcome.Lost,
-                    // **受け取れた回だけ数える。** これが画面の「入力欄を空にしてよい」合図で、
-                    // 置けなかった回は増えないので**原文が手元に残る**
-                    // （→ features/reflect_margin_memo.md §5）。
-                    acceptedCount = when (outcome) {
-                        MemoSaveOutcome.Saved, MemoSaveOutcome.Held -> ready.acceptedCount + 1
-                        MemoSaveOutcome.Full, MemoSaveOutcome.Lost -> ready.acceptedCount
-                    }
+                    wasTruncated = accepted && submission.wasTruncated
                 ))
             }
         }
@@ -236,7 +275,7 @@ internal class MarginMemoController(
         }
     }
 
-    /** シートの開閉。**開いたときにだけ**サイドカーを1件読む。 */
+    /** シートの開閉。**読み込みとは切り離す** — 開閉のたびに読み直すと、走行中の保存の結果を捨てる。 */
     fun setSheetVisible(visible: Boolean) {
         state.update { it.copy(isMarginMemoSheetVisible = visible) }
     }
@@ -244,6 +283,9 @@ internal class MarginMemoController(
     /**
      * ノート・Vault切替で読み書きを止め、旧ノートの結果が後から混入するのを防ぐ。
      * **シートも閉じる** — 開いたままだと前のノートのメモを載せた面が残る。
+     *
+     * **書きかけには触らない。** 同じ Vault の間は預かり、戻れば書き込み先ごと元に戻す。
+     * 止めた保存が受理されたかは、戻って読んだときの照合で決まる。
      */
     fun cancelAndClear() {
         generation++
@@ -269,6 +311,11 @@ internal class MarginMemoController(
         }
         writeJobs += job
         job.invokeOnCompletion { writeJobs -= job }
+    }
+
+    /** Vault 切替。**書きかけを全ノート分捨てる** — 別の Vault のノートへ置けてしまう。 */
+    fun clearVaultScoped() {
+        drafts.clear()
     }
 
     private fun isCurrent(requestId: Long): Boolean = generation == requestId

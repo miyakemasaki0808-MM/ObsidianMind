@@ -27,7 +27,7 @@ NoteViewModel（Android境界の窓口）
       ├── NoteUiStateStore（機能別Writerを配る）
       ├── SectionChatController
       ├── AnnotationController        ← 旧補記ファイルの片付けのみ（**Vault単位**）
-      ├── MarginMemoController        ← 余白メモ（**AIを呼ばない唯一のController**）
+      ├── MarginMemoController        ← 余白メモ（**AIを呼ばない唯一のController**。**ジョブはノート単位・書きかけはVault単位 → 判断4**）
       ├── SearchController
       ├── DistillController
       ├── ReadingTraceController      ← 訪問の記録・余白メモの保存（3箇所の合流）
@@ -50,7 +50,7 @@ NoteViewModel（Android境界の窓口）
 
 - 各Controllerは実行スコープと機能別の `*StateWriter` を注入され、**担当フィールド以外は型として書けない**
 - `NoteUiStateStore` だけが `MutableStateFlow<NoteUiState>` を所有し、UIには読み取り専用の `StateFlow` を公開する
-- 状態の単一ソース（1つの `NoteUiState`）は維持する。**例外は2つだけ**（下記「状態がUiStateの外に出る例外」）
+- 状態の単一ソース（1つの `NoteUiState`）は維持する。**例外は下記「状態が `NoteUiState` の外に出るもの」の表に挙げたものだけ**
 
 **機能追加の定型:** Controller 1ファイル＋状態1フィールド＋対応するWriter＋契約2箇所への登録＋**この系統図の更新**。
 純粋ロジックは最初から別ファイルに切り、テストを同時に書く。
@@ -99,7 +99,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 |---|---|---|---|---|
 | ノート単位 | 要約・DL・余白メモ・部分要約・蒸留 | ノート切替（**各Controllerの `activeRequestId`**） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
-| ジョブはノート単位・結果はVault単位 | 分野判定・結晶 | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
+| ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
 **1行目と2行目は混ぜられない。** 補記管理画面はノートと無関係なので、ノートを開き直しただけで一覧が消えるのは誤り。
 逆に要約をVault世代だけで守ると、同じVault内のノート切替を検出できない。**片方に寄せると必ずどちらかが壊れる。**
@@ -107,6 +107,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 **3行目は「どちらでもよい」ではない。** 起動の契機がノートを開くことなのでジョブはノート単位で止め、
 結果はVault全体の索引なので**ノートを切り替えただけで消してはいけない**。
 分野判定（索引A）と結晶（一覧）が同じ形で、**AIの結果をVault単位の索引へ溜める**機能がこの行に入る。
+**利用者の書きかけをVaultの間預かる**機能（余白メモ）も同じ形になる。
 登録の列を省けないようにしてあるのは、行が増えると次の Controller が契約への登録を考えなくなるため。
 
 - **分野判定**は照合を requestId だけで行う（Vault切替でも `clearVaultScoped()` が同じ requestId を進めるので、旧Vaultの結果は書かれない）
@@ -114,6 +115,10 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 - **結晶**は生成と保存の寿命を分ける。生成はこの行どおりノート単位で止め、**保存に入った結晶はノート切替で止めない**。
   一覧へ足すかは **`vaultGeneration`** で照合する（→ [reflect_crystal](../features/reflect_crystal.md) 判断9）。
   絞り込みに使う今のノートの相対パスだけはノート単位の状態で、`withNoteScopedReset()` に載せる
+- **余白メモ**は読み書きのジョブと一覧をノート単位で止めて捨て、書きかけ（文字・書き込み先・未確定の送信）をVault単位で持つ。
+  書きかけは `NoteUiState` の外（→ 下の表）なので、`withVaultScopedReset()` ではなく `onVaultChanged()` から
+  `clearVaultScoped()` で捨てる。止めた保存が受理されたかは、戻って読んだ一覧と**送信そのもの（保存値と時刻）**で照合する
+  → [margin_pane](../features/margin_pane.md) §6.1・§6.2
 
 **Vault世代を `vaultUri` の比較で代用しない。** Vault を A→B→A と選び直すと `cachedNotes` も破棄されるため
 無効化したいが、Uri比較では同じ値になって素通りする。単調増加する `Long` なら選び直しも1回の切替として数えられ、
@@ -167,6 +172,15 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 > テストはその型を作らねばならず、作れなければその経路は検証できない。
 > `controller` が Android 非依存になったのは、素通しをやめて `VaultBrowser` の裏へ束ねたときである。
 
+**4. 置き場所は責務で決める。** 上の表は import を縛るだけで、どこに置くかは決めない。
+純関数は `ui` にも `domain` にも置けるが、「Android 非依存の検査を受けられるから `domain` へ」では決めない
+（2026-10-02、オーナー判断）。
+
+- **画面の形を決める判定は `ui`。** 並べ方・寸法・幾何・入口の遷移。例: `readerLayoutFor`・`canShowMarginPane`
+- **データや状態の意味を決める判定は `domain`。** 解析・採点・照合・整形。例: `composeMarginMemo`・`DistillResponseParser`・`sectionSummaryStatus`
+
+`ui` の純関数も素のJVMでテストできる（`ReaderLayoutTest` など）。テストのしやすさは置き場所を動かす理由にならない。
+
 ## 判断6: AI本文の切り出し責務は呼び出し側に置く
 
 依存方向は `ai → model` のみを許可し `ai → domain` を禁止しているため、`PromptBuilder` から
@@ -185,6 +199,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 |---|---|
 | 設定（`darkTheme`・`notePaperAging`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
 | `NoteSectionModel` | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
+| 余白メモの書きかけ（`ComposeMarginMemoDrafts`） | 入力中の文字を StateFlow 経由で描くと、日本語の変換中に入力が崩れやすい（**IME**）。文字・書き込み先・送信を一組で持つので、まとめて外へ出す。ViewModel が持ち、Controller は `MarginMemoDraftStore` の口だけを通す（→ 判断4の3行目） |
 
 **本数は数えない**（設定が増えるだけなので危険と相関しない）。危ないのは
 **ノート単位の状態が外へ出ること**で、そこは CLAUDE.md の必須原則が直接見ている。

@@ -2,8 +2,13 @@ package com.example.newproject
 
 import com.example.newproject.controller.MarginMemoController
 import com.example.newproject.controller.MemoDeleteOutcome
+import com.example.newproject.controller.MemoLoad
 import com.example.newproject.controller.MemoSaveOutcome
+import com.example.newproject.domain.submissionOf
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.ReadingTraceLimits
@@ -18,6 +23,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -31,6 +37,10 @@ import org.junit.Test
 class MarginMemoControllerTest {
 
     private val path = "ideas/habit.md"
+
+    private companion object {
+        const val NOTE = "content://vault/ideas/habit.md"
+    }
 
     @Test
     fun `開くと保存済みのメモを新しい順で出す`() = runTest {
@@ -52,7 +62,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "置いた断片", sectionTitle = "導入")
+        controller.place("置いた断片", sectionTitle = "導入")
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.Saved, ready(store).status)
@@ -68,7 +78,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "預けた断片", sectionTitle = null)
+        controller.place("預けた断片", sectionTitle = null)
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.Held, ready(store).status)
@@ -87,7 +97,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "あふれる断片", sectionTitle = null)
+        controller.place("あふれる断片", sectionTitle = null)
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.Full, ready(store).status)
@@ -101,7 +111,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "消えた断片", sectionTitle = null)
+        controller.place("消えた断片", sectionTitle = null)
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.Failed, ready(store).status)
@@ -116,7 +126,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "あ".repeat(2_000), sectionTitle = null)
+        controller.place("あ".repeat(2_000), sectionTitle = null)
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.Saved, ready(store).status)
@@ -130,7 +140,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "   ", sectionTitle = null)
+        controller.place("   ", sectionTitle = null)
         advanceUntilIdle()
 
         assertEquals(MemoSaveStatus.None, ready(store).status)
@@ -193,7 +203,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "新しいメモ", sectionTitle = null)
+        controller.place("新しいメモ", sectionTitle = null)
         advanceUntilIdle()
         assertEquals(MemoSaveStatus.Saving, ready(store).status)
 
@@ -229,7 +239,7 @@ class MarginMemoControllerTest {
 
         controller.delete(path, existing)
         advanceUntilIdle()
-        controller.save(path, "あとから置くメモ", sectionTitle = null)
+        controller.place("あとから置くメモ", sectionTitle = null)
         advanceUntilIdle()
         gate.unlock()
         advanceUntilIdle()
@@ -239,50 +249,218 @@ class MarginMemoControllerTest {
     }
 
     /**
-     * **受け取れた回だけ数える。** これが画面の「入力欄を空にしてよい」合図で、
-     * 置けなかった回に増やすと、原文が手元から消える。
+     * **受け取れた回だけ入力欄を空にする**（→ features/margin_pane.md §6.2）。
+     * 置けなかった回に空にすると、原文が手元から消える。
      */
     @Test
-    fun `置けた回だけ受理の件数が増える`() = runTest {
+    fun `置けたら入力欄を空にし、書き込み先も放す`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
-        val controller = controller(store, outcome = MemoSaveOutcome.Saved)
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(store, drafts = drafts, outcome = MemoSaveOutcome.Saved)
         controller.open(path)
         advanceUntilIdle()
-        assertEquals(0L, ready(store).acceptedCount)
 
-        controller.save(path, "置けた断片", sectionTitle = null)
+        controller.place("置けた断片", sectionTitle = "導入")
         advanceUntilIdle()
 
-        assertEquals(1L, ready(store).acceptedCount)
+        assertEquals(MarginMemoDraft(), drafts.draft(NOTE))
     }
 
     @Test
-    fun `満杯や失敗では受理の件数を増やさない`() = runTest {
+    fun `満杯や失敗では原文を残し、送信を取り下げる`() = runTest {
         listOf(MemoSaveOutcome.Full, MemoSaveOutcome.Lost).forEach { outcome ->
             val store = NoteUiStateStore(NoteUiState())
-            val controller = controller(store, outcome = outcome)
+            val drafts = InMemoryMarginMemoDrafts()
+            val controller = controller(store, drafts = drafts, outcome = outcome)
             controller.open(path)
             advanceUntilIdle()
 
-            controller.save(path, "置けない断片", sectionTitle = null)
+            controller.place("置けない断片", sectionTitle = null)
             advanceUntilIdle()
 
-            assertEquals("$outcome で受理を数えた", 0L, ready(store).acceptedCount)
+            assertEquals("$outcome で原文を消した", "置けない断片", drafts.draft(NOTE).text)
+            assertNull("$outcome で送信を追い続けた", drafts.draft(NOTE).pending)
         }
     }
 
     /** 預かりも「受け取れた」側。離脱時に書かれるので、入力欄は空にしてよい。 */
     @Test
-    fun `預かったときも受理の件数が増える`() = runTest {
+    fun `預かったときも受理として入力欄を空にする`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
-        val controller = controller(store, outcome = MemoSaveOutcome.Held)
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(store, drafts = drafts, outcome = MemoSaveOutcome.Held)
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "預けた断片", sectionTitle = null)
+        controller.place("預けた断片", sectionTitle = null)
         advanceUntilIdle()
 
-        assertEquals(1L, ready(store).acceptedCount)
+        assertTrue(drafts.draft(NOTE).isEmpty)
+    }
+
+    /** 待っている間に書き直した文字は、受理されても消さない。 */
+    @Test
+    fun `保存を待っている間に書き直した文字は受理されても残す`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val gate = Mutex(locked = true)
+        val controller = controller(store, drafts = drafts, beforeAppend = { gate.withLock { } })
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.place("1件目", sectionTitle = null)
+        advanceUntilIdle()
+        controller.edit("待っているあいだに書いた", bodySection = null)
+        gate.unlock()
+        advanceUntilIdle()
+
+        assertEquals("待っているあいだに書いた", drafts.draft(NOTE).text)
+        assertNull(drafts.draft(NOTE).pending)
+    }
+
+    // ── 書き込み先（→ features/margin_pane.md §5.3）─────────────────────────────
+
+    /** **書き込み先は書き始めた節で、本文を先へ進めても動かない。** 置いた時点の節へは書かない。 */
+    @Test
+    fun `書き始めた節へ書き、置くときの本文の節へは書かない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        var received: MarginMemo? = null
+        val controller = controller(store, onAppend = { received = it })
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.edit("書", bodySection = SectionRef("節B"))
+        controller.edit("書き足す", bodySection = SectionRef("節C"))
+        controller.submit(path, bodySection = SectionRef("節C"))
+        advanceUntilIdle()
+
+        assertEquals("節B", received?.sectionTitle)
+    }
+
+    /** 書き始めた時点で節が分からなかったときは、置いた時点の本文の節へ書く。 */
+    @Test
+    fun `書き込み先が決まっていなければ置いた時点の節へ書く`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        var received: MarginMemo? = null
+        val controller = controller(store, onAppend = { received = it })
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.edit("節が分かる前に書いた", bodySection = null)
+        controller.submit(path, bodySection = SectionRef("節C"))
+        advanceUntilIdle()
+
+        assertEquals("節C", received?.sectionTitle)
+    }
+
+    // ── 戻って読んだときの照合（→ features/margin_pane.md §6.2 の②）───────────────
+
+    /** 送信が無ければ、置き場の全列挙（不在の確認）を頼まない。 */
+    @Test
+    fun `送信の無いノートを読むときは不在の確認を頼まない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val confirms = mutableListOf<Boolean>()
+        val controller = controller(store, loadMemos = { _, confirm -> confirms += confirm; read() })
+
+        controller.open(path)
+        advanceUntilIdle()
+
+        assertEquals(listOf(false), confirms)
+    }
+
+    /** **受理が後から分かっても、切ったことを知らせる。** 知らせないと、切られた後半が消えたことに気づけない。 */
+    @Test
+    fun `戻って読んだ一覧に送信があれば受理し、切ったことも知らせる`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val raw = "あ".repeat(2_000)
+        val submission = submissionOf(raw, null, 7L)!!
+        drafts.update(NOTE) { MarginMemoDraft(text = raw, pending = submission) }
+        val confirms = mutableListOf<Boolean>()
+        val controller = controller(store, drafts = drafts, loadMemos = { _, confirm ->
+            confirms += confirm
+            read(submission.memo)
+        })
+
+        controller.open(path)
+        advanceUntilIdle()
+
+        assertEquals("送信があるのに不在の確認を頼まなかった", listOf(true), confirms)
+        assertEquals(MemoSaveStatus.Saved, ready(store).status)
+        assertTrue("切ったことを知らせなかった", ready(store).wasTruncated)
+        assertTrue(drafts.draft(NOTE).isEmpty)
+    }
+
+    @Test
+    fun `戻って読めたのに無ければ未受理にし、原文を残す`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val submission = submissionOf("届かなかった", null, 7L)!!
+        drafts.update(NOTE) { MarginMemoDraft(text = "届かなかった", pending = submission) }
+        val controller = controller(store, drafts = drafts, loadMemos = { _, _ ->
+            MemoLoad(emptyList(), MemoFileRead.ConfirmedAbsent)
+        })
+
+        controller.open(path)
+        advanceUntilIdle()
+
+        assertEquals(MemoSaveStatus.Failed, ready(store).status)
+        assertEquals("届かなかった", drafts.draft(NOTE).text)
+        assertNull(drafts.draft(NOTE).pending)
+    }
+
+    /**
+     * **読めないことを未受理と読まない**（→ lessons L47）。未確定のまま持ち、入力を少し直しても
+     * 新しく保存せずに元の送信を確かめる。読めるようになったら受理して、重複は0件。
+     */
+    @Test
+    fun `戻って読めなければ未確定のまま持ち、確かめても新しく保存しない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val raw = "読めない間のメモ"
+        val submission = submissionOf(raw, null, 7L)!!
+        drafts.update(NOTE) { MarginMemoDraft(text = raw, pending = submission) }
+        var readable = false
+        val appended = mutableListOf<MarginMemo>()
+        val controller = controller(
+            store,
+            drafts = drafts,
+            onAppend = { appended += it },
+            loadMemos = { _, _ ->
+                if (readable) read(submission.memo) else MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
+            }
+        )
+
+        controller.open(path)
+        advanceUntilIdle()
+        assertEquals(MemoSaveStatus.Unconfirmed, ready(store).status)
+        assertEquals(submission, drafts.draft(NOTE).pending)
+
+        // 末尾に空白を足しただけ。整えた本文は同じなので、別のメモとして送らない。
+        controller.edit("$raw ", bodySection = null)
+        readable = true
+        controller.submit(path, bodySection = null)
+        advanceUntilIdle()
+
+        assertTrue("同じ本文を別のメモとして保存した", appended.isEmpty())
+        assertEquals(MemoSaveStatus.Saved, ready(store).status)
+        assertNull(drafts.draft(NOTE).pending)
+    }
+
+    // ── 書きかけの寿命（→ docs/dev/system/architecture.md 判断4の3行目）──────────
+
+    @Test
+    fun `書きかけはノート切替では預かり、Vault切替でだけ捨てる`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(store, drafts = drafts)
+
+        controller.edit("預けておく", bodySection = SectionRef("節B"))
+        controller.cancelAndClear()
+        assertEquals(MarginMemoDraft(text = "預けておく", target = SectionRef("節B")), drafts.draft(NOTE))
+
+        controller.clearVaultScoped()
+        assertTrue(drafts.draft(NOTE).isEmpty)
     }
 
     /**
@@ -299,7 +477,7 @@ class MarginMemoControllerTest {
         controller.open(path)
         advanceUntilIdle()
 
-        controller.save(path, "短いメモ", sectionTitle = "あ".repeat(171))
+        controller.place("短いメモ", sectionTitle = "あ".repeat(171))
         advanceUntilIdle()
 
         val title = received?.sectionTitle
@@ -332,7 +510,7 @@ class MarginMemoControllerTest {
     fun `読み込み済みなら頼まれても読み直さない`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val loads = mutableListOf<String>()
-        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+        val controller = controller(store, loadMemos = { p, _ -> loads += p; read() })
 
         controller.ensureLoaded(path)
         advanceUntilIdle()
@@ -356,7 +534,7 @@ class MarginMemoControllerTest {
         controller.ensureLoaded(path)
         advanceUntilIdle()
 
-        controller.save(path, "ペインで書いた", sectionTitle = null)
+        controller.place("ペインで書いた", sectionTitle = null)
         advanceUntilIdle()
         controller.ensureLoaded(path)
         gate.unlock()
@@ -371,9 +549,9 @@ class MarginMemoControllerTest {
         val store = NoteUiStateStore(NoteUiState())
         var fail = true
         var loads = 0
-        val controller = controller(store, loadMemos = {
+        val controller = controller(store, loadMemos = { _, _ ->
             loads++
-            if (fail) error("読めない") else emptyList()
+            if (fail) error("読めない") else read()
         })
 
         controller.ensureLoaded(path)
@@ -397,7 +575,7 @@ class MarginMemoControllerTest {
     fun `パスが分かる前に頼まれたら待ち、分かったときに読む`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val loads = mutableListOf<String>()
-        val controller = controller(store, loadMemos = { loads += it; listOf(memoOf("前に書いた", at = 1L)) })
+        val controller = controller(store, loadMemos = { p, _ -> loads += p; read(memoOf("前に書いた", at = 1L)) })
 
         controller.ensureLoaded(null)
         advanceUntilIdle()
@@ -428,7 +606,7 @@ class MarginMemoControllerTest {
     fun `待っていなければ、パスが分かっても読まない`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val loads = mutableListOf<String>()
-        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+        val controller = controller(store, loadMemos = { p, _ -> loads += p; read() })
 
         controller.onPathBound(path)
         advanceUntilIdle()
@@ -442,7 +620,7 @@ class MarginMemoControllerTest {
     fun `ノート切替でパスの待ちを捨てる`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val loads = mutableListOf<String>()
-        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+        val controller = controller(store, loadMemos = { p, _ -> loads += p; read() })
 
         controller.ensureLoaded(null)
         controller.cancelAndClear()
@@ -457,7 +635,7 @@ class MarginMemoControllerTest {
     fun `読んだ後にパスが届いても読み直さない`() = runTest {
         val store = NoteUiStateStore(NoteUiState())
         val loads = mutableListOf<String>()
-        val controller = controller(store, loadMemos = { loads += it; emptyList() })
+        val controller = controller(store, loadMemos = { p, _ -> loads += p; read() })
 
         controller.ensureLoaded(null)
         controller.onPathBound(path)
@@ -471,6 +649,15 @@ class MarginMemoControllerTest {
     private fun ready(store: NoteUiStateStore): MarginMemoState.Ready =
         store.value.marginMemoState as MarginMemoState.Ready
 
+    /** 読めた一覧。 */
+    private fun read(vararg memos: MarginMemo) = MemoLoad(memos.toList(), MemoFileRead.Read)
+
+    /** 書いて置く。書き込み先は [sectionTitle] の節（null は見出しより前）。 */
+    private fun MarginMemoController.place(text: String, sectionTitle: String?) {
+        edit(text, SectionRef(sectionTitle))
+        submit(path, bodySection = null)
+    }
+
     private fun TestScope.controller(
         store: NoteUiStateStore,
         loaded: List<MarginMemo> = emptyList(),
@@ -480,10 +667,13 @@ class MarginMemoControllerTest {
         beforeDelete: suspend () -> Unit = {},
         onAppend: (MarginMemo) -> Unit = {},
         onDeleted: (MarginMemo) -> Unit = {},
-        loadMemos: suspend (String) -> List<MarginMemo> = { loaded }
+        drafts: InMemoryMarginMemoDrafts = InMemoryMarginMemoDrafts(),
+        loadMemos: suspend (String, Boolean) -> MemoLoad = { _, _ -> MemoLoad(loaded, MemoFileRead.Read) }
     ) = MarginMemoController(
         scope = this,
         state = store.marginMemoWriter,
+        drafts = drafts,
+        currentNoteKey = { NOTE },
         loadMemos = loadMemos,
         appendMemo = { _, memo ->
             beforeAppend()

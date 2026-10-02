@@ -59,7 +59,10 @@ internal fun MarkdownNoteContent(
     imageLoader: NoteImageLoader? = null,
     // 画像の寸法を通常表示と全画面で共有する入れ物。null なら共有しない
     // （画像を持たない文脈や、進捗を報告しない画面で使い回すため）。
-    imageMeasurements: NoteImageMeasurements? = null
+    imageMeasurements: NoteImageMeasurements? = null,
+    // 見出しの脇に置くもの（ブロック番号を受け取る）。null なら見出しだけを描く。
+    // **ブロックを増やさずに脇へ置く** — LazyColumn の index がずれると、節の判定と進捗の報告が壊れる。
+    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -72,7 +75,14 @@ internal fun MarkdownNoteContent(
         ) {
             items(blocks.size) { i ->
                 when (val block = blocks[i]) {
-                    is MarkdownBlock.Heading       -> MarkdownHeading(block)
+                    is MarkdownBlock.Heading       -> if (headingAccessory == null) {
+                        MarkdownHeading(block)
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
+                            headingAccessory(i)
+                        }
+                    }
                     is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
                     is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
                     is MarkdownBlock.ListBlock     -> MarkdownList(block.items)

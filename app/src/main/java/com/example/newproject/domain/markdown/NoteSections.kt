@@ -1,6 +1,8 @@
 package com.example.newproject.domain.markdown
 
+import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.model.ReunionPassage
+import com.example.newproject.model.SectionRef
 
 /**
  * ノート本文のセクション（見出し＋その配下）。
@@ -23,13 +25,42 @@ class NoteSectionModel internal constructor(
     // 描画側（`MarkdownNoteContent`）で再パースせず使い回すためのパース済みブロック列
     internal val blocks: List<MarkdownBlock>
 ) {
+    /**
+     * 見出しの索引。**解析と一緒に作る**ので、画面は見出しをたどらずに節を引き、メモを照合できる（→ [HeadingIndex]）。
+     * このモデルは Main の外で組み立てる（→ `NoteSectionController`）ので、見出しの数に比例する仕事は Main に載らない。
+     */
+    internal val headingIndex: HeadingIndex = HeadingIndex(sections.map { it.title })
+
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */
-    fun sectionForBlockIndex(index: Int): NoteSection? {
-        var result: NoteSection? = null
-        for (k in headingBlockIndices.indices) {
-            if (headingBlockIndices[k] <= index) result = sections[k] else break
-        }
-        return result
+    fun sectionForBlockIndex(index: Int): NoteSection? = headingAt(index)?.let { sections[it] }
+
+    /**
+     * index を含む節を、**見出し名と同名の中での順番**で指す（→ [SectionRef]）。
+     * 見出しより前と見出しの無いノートは名前の無い節。区切り方は [sectionForBlockIndex] と同じ。
+     */
+    fun sectionRefAt(index: Int): SectionRef =
+        headingAt(index)?.let { headingIndex.sections[it] } ?: SectionRef(title = null)
+
+    /**
+     * [ref] が指す節の始まりのブロック番号。見出しより前の節は先頭（0）。
+     * **本文を解析し直した後もここで引き直す** — 同じ名前と順番の見出しが無ければ null（飛べない）。
+     */
+    fun startBlockOf(ref: SectionRef): Int? {
+        if (ref.title == null) return 0
+        return headingIndex.positionOf(ref)?.let { headingBlockIndices[it] }
+    }
+
+    /** 見出しが1つでもあるか。名前の無い節を「冒頭」と呼ぶか「全体」と呼ぶかが変わる。 */
+    val hasHeadings: Boolean get() = sections.isNotEmpty()
+
+    /**
+     * index 以下で最も近い見出しの番号（[sections] の添字）。見出し前／見出し無しは null。
+     * **二分探索で引く** — スクロールのたび・見出しの印を描くたびに呼ばれるので、見出しの数に比例させない。
+     */
+    private fun headingAt(index: Int): Int? {
+        val found = headingBlockIndices.binarySearch(index)
+        val k = if (found >= 0) found else -found - 2
+        return k.takeIf { it >= 0 }
     }
 
     /**
