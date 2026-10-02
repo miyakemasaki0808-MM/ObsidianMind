@@ -1,8 +1,10 @@
 package com.example.newproject
 
+import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.ReadFrontier
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.model.ReadingTraceLimits
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -67,6 +69,30 @@ class ReunionPassageTest {
         // 前に段落を足す編集で到達率が「まとめ」側へずれても、記録した「本論」の中へ戻す。
         assertEquals(6, model.readFrontier(sectionTitle = "本論", progressPercent = 90)!!.block)
         assertEquals(3, model.readFrontier(sectionTitle = "本論", progressPercent = 10)!!.block)
+    }
+
+    /**
+     * 訪問の見出しは、メモと同じ整形（上限で切る）をかけて保存される。**生の見出しと比べると、長い見出しの節が見つからない。**
+     */
+    @Test
+    fun `上限で切って記録した長い見出しの節も、その節の範囲へ収める`() {
+        val longTitle = "本論".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 6 + 10)
+        val model = buildNoteSectionModel(
+            "# 導入\n導入1\n\n導入2\n\n# $longTitle\n本論1\n\n本論2\n\n本論3\n\n# まとめ\nまとめ1"
+        )
+        val recorded = requireNotNull(composeMemoSectionTitle(longTitle))
+        assertTrue(recorded.length < longTitle.length)
+        // ブロック: 0導入 1導入1 2導入2 3本論 4本論1 5本論2 6本論3 7まとめ 8まとめ1。
+        assertEquals(6, model.readFrontier(sectionTitle = recorded, progressPercent = 90)!!.block)
+    }
+
+    /** 整形の前に記録した訪問は、生の見出し名を持っている。**引くときにも同じ整形をかける。** */
+    @Test
+    fun `整形の前に生のまま記録した見出しの節も引ける`() {
+        val raw = "本\u0007論"
+        val model = buildNoteSectionModel("# 導入\n導入1\n\n導入2\n\n# $raw\n本論1\n\n本論2\n\n本論3\n\n# まとめ\nまとめ1")
+        assertEquals(raw, model.sections[1].title)
+        assertEquals(6, model.readFrontier(sectionTitle = raw, progressPercent = 90)!!.block)
     }
 
     @Test

@@ -4,7 +4,9 @@ import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.MemoDeleteOutcome
 import com.example.newproject.controller.MemoSaveOutcome
+import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -45,6 +47,28 @@ class ReadingTraceControllerTest {
         val visit = saved.visits.single()
         assertEquals("導入", visit.deepestSectionTitle)
         assertEquals(40, visit.progressPercent)
+    }
+
+    /**
+     * 生の見出しをそのまま記録すると、上限を超えた見出しは保存の検証で弾かれ、そのノートの訪問は二度と書けない。
+     * **実物のエンコーダに通して**確かめる（このテストの保存先は検証をしない）。
+     */
+    @Test
+    fun `records a visit whose deepest heading is over the limit`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+        val longTitle = "\u0007長い見出し" + "あ".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 3)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = longTitle)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val saved = persistence.saved.single()
+        ReadingTraceJson.encode(saved)
+        assertEquals(composeMemoSectionTitle(longTitle), saved.visits.single().deepestSectionTitle)
     }
 
     // 一瞬引いてすぐ次のノートへ送った分を訪問に数えると痕跡が濁る。

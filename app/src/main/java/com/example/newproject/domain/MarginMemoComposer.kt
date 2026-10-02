@@ -53,6 +53,9 @@ internal fun composeMarginMemo(raw: String): MarginMemoDraft {
  * — しかもそれは再試行で直らないのに、I/O失敗と同じ顔で預かられてしまう。
  *
  * **紐づけではなく当時の記録**なので、切っても意味は壊れない。
+ *
+ * **訪問の最深の見出しも、これで整えてから保存する。** 痕跡に残す見出し名の整形を1つにしておくと、
+ * 今の見出しとの照合（[HeadingIndex.match]）がメモと訪問の両方にそのまま使える。
  */
 internal fun composeMemoSectionTitle(raw: String?): String? {
     val normalized = raw

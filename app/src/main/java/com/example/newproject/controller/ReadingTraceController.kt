@@ -5,6 +5,7 @@ import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
@@ -745,7 +746,9 @@ internal class ReadingTraceController(
 
         val visit = ReadingVisit(
             atEpochMillis = clock(),
-            deepestSectionTitle = active.deepestSectionTitle,
+            // **メモの見出しと同じ整形をかける。** 生の見出しは上限を超えうるので、そのまま渡すと
+            // 検証で弾かれ、そのノートの訪問は再試行しても二度と書けない。照合も同じ整形で行う（→ readFrontier）。
+            deepestSectionTitle = composeMemoSectionTitle(active.deepestSectionTitle),
             // totalBlocks が 0 のまま（メモだけ置いて離れた）なら到達率は 0。
             // progressPercent は 0 除算を自分で防ぐので、そのまま渡してよい。
             progressPercent = progressPercent(
