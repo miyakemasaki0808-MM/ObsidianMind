@@ -1,8 +1,8 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1は実装済み・実機検証済み。段2は実装済みで、別の目と実機検証を待つ（段3〜5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1・段2は実装済み・実機検証済み（段3〜5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
-**最終検証:** 2026-10-01 / `fd1f091e`（段1のみ。Pixel 10 Pro Fold で通し版。実機は `1b3d3b1f` のAPKで確認）
+**最終検証:** 2026-10-03 / `f47f4d5a`（段2まで。Pixel 10 Pro Fold で段2の変更面の選抜。段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1・段2 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt`
 **関連テスト:** 段1・段2 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`。予定 — `SectionChatControllerTest`
@@ -438,7 +438,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - **再会カードをペインの上に載せること（§5.2 の1）は、どの段にも入っていない**
 - **実機でしか決まらない前提が3つあった。** 平らに開いた Fold で折り目が報告されるかは、報告されると分かった（§5.1 の3）。
   キーボードを除いた大きさで判定できるかは、IME の出入りで並べ方が替わらないことを確かめた。
-  主画面と併存するシートは、3段とキーボードでの振る舞いを Material3 1.3.0 のソースで確かめた。手触りは段2の実機検証で見る
+  主画面と併存するシートは、3段とキーボードでの振る舞いを Material3 1.3.0 のソースで確かめ、段2の実機検証で半分・全展開・閉じるとキーボード表示中の本文を確かめた
 - **正本の食い違いは、その振る舞いを変える段で直す。** 先に書き換えると、正本が今のアプリと食い違う。
 
   | 正本 | 直す段 | 直す向き |
