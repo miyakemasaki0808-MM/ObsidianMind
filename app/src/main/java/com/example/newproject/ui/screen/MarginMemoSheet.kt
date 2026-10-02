@@ -111,19 +111,27 @@ internal fun MarginMemoSheetHost(
     expandRequested: Boolean,
     onDismiss: () -> Unit,
     sheet: @Composable () -> Unit,
-    body: @Composable () -> Unit
-) {
-    val sheetState = rememberStandardBottomSheetState(
+    /** シートの状態。テストが広げる途中に割り込むために渡す。 */
+    sheetState: SheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
         skipHiddenState = false
-    )
+    ),
+    body: @Composable () -> Unit
+) {
     val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState = sheetState)
     val scope = rememberCoroutineScope()
     val currentVisible by rememberUpdatedState(visible)
     val currentOnDismiss by rememberUpdatedState(onDismiss)
 
+    // 送る依頼の保留（下）。**閉じたら捨てる** — 次に ✎ で出したとき、古い依頼で画面いっぱいへ広げない。
+    var expandPending by remember { mutableStateOf(false) }
     LaunchedEffect(visible) {
-        if (visible) sheetState.partialExpand() else sheetState.hide()
+        if (visible) {
+            sheetState.partialExpand()
+        } else {
+            expandPending = false
+            sheetState.hide()
+        }
     }
     // **下へ払って隠したら、閉じたことにする。** 最初の値は見ない — 出す前の Hidden を閉じたと読まない。
     LaunchedEffect(sheetState) {
@@ -135,15 +143,22 @@ internal fun MarginMemoSheetHost(
     // 広げる途中で止まる。ほかの節を開いて中身が伸び、画面いっぱいの止まりどころが現れるのも待つ。
     // **止まりどころが無いときは頼まない** — 無い止まりどころを頼むと、状態だけが「いっぱい」になってシートは動かない
     // （Material3 1.3.0 の実装）。
-    var expandPending by remember { mutableStateOf(false) }
+    //
+    // **保留は、広げ終えたときも、途中で止められたときも外す。** 広げる途中で利用者が払って半分へ戻すと、
+    // `expand()` は呼び出し元ごと取り消される。正常に終えたときだけ外していたころは保留が残り、
+    // キーが変わらないので、後から押した別の印でもう広がらなくなった。
     LaunchedEffect(expandRequested) { if (expandRequested) expandPending = true }
     LaunchedEffect(expandPending, visible) {
+        // 出る前の依頼は、出るまで待つ（シートを出す依頼と同じフレームで届く）。
         if (!expandPending || !visible) return@LaunchedEffect
-        withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
-            snapshotFlow { sheetState.hasExpandedState }.first { it }
+        try {
+            withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
+                snapshotFlow { sheetState.hasExpandedState }.first { it }
+            }
+            if (sheetState.hasExpandedState) sheetState.expand()
+        } finally {
+            expandPending = false
         }
-        if (sheetState.hasExpandedState) sheetState.expand()
-        expandPending = false
     }
     BackHandler(enabled = visible) {
         scope.launch {

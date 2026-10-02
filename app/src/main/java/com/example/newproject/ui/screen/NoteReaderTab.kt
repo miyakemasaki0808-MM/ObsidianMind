@@ -56,6 +56,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -437,6 +438,7 @@ internal fun NoteReaderTab(
 
         Box(modifier = Modifier.fillMaxSize().imePadding()) {
             // スマホのシートは本文と併存させる。**キーボードを避けた領域に置く**ので、半分はこの領域の半分になる。
+            @OptIn(ExperimentalMaterial3Api::class)
             MarginMemoSheetHost(
                 visible = uiState.isMarginMemoSheetVisible,
                 expandRequested = memoReveal != null,

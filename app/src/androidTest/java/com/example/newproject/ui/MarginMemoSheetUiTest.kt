@@ -2,6 +2,13 @@ package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.rememberStandardBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.SheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import org.junit.Assert.assertTrue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.performScrollToIndex
@@ -63,6 +70,8 @@ import org.junit.runner.RunWith
  *
  * 保存そのもの（預かり・退避・合流）は `ReadingTraceControllerTest` が持つ。
  */
+// シートの器（`MarginMemoSheetHost`）は Material3 の試験的な `SheetState` を受け取る。
+@OptIn(ExperimentalMaterial3Api::class)
 @RunWith(AndroidJUnit4::class)
 class MarginMemoSheetUiTest {
 
@@ -500,6 +509,82 @@ class MarginMemoSheetUiTest {
         composeRule.runOnIdle { harness.reveal = MemoReveal.Section(SectionRef("節C")) }
         composeRule.waitForIdle()
         composeRule.onNodeWithText("節Cのメモ").assertIsDisplayed()
+    }
+
+    /**
+     * **広げる依頼は、途中で止められても持ち越さず、次の依頼を別の依頼として受ける**（→ features/margin_pane.md §11）。
+     * 正常に広げ終えたときだけ保留を外していたころは、広げる途中で払って半分へ戻すと保留が残り、後から押した印で広がらなかった。
+     * 時計を止めて本番の器を通し、①通常 ②途中で半分へ戻した後の別の依頼 ③途中で閉じた後の ✎ ④依頼が先に消えた場合を順に見る。
+     */
+    @Test
+    fun 広げる途中で止められても_次の送る依頼でまた広げ_閉じたら持ち越さない() {
+        composeRule.mainClock.autoAdvance = false
+        var visible by mutableStateOf(true)
+        var expandRequested by mutableStateOf(false)
+        lateinit var sheetState: SheetState
+        lateinit var scope: CoroutineScope
+        composeRule.setContent {
+            sheetState = rememberStandardBottomSheetState(initialValue = SheetValue.Hidden, skipHiddenState = false)
+            scope = rememberCoroutineScope()
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(800.dp)) {
+                    MarginMemoSheetHost(
+                        visible = visible,
+                        expandRequested = expandRequested,
+                        onDismiss = { visible = false },
+                        sheet = { Text("シートの中身", modifier = Modifier.height(700.dp)) },
+                        sheetState = sheetState
+                    ) { Box(modifier = Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        fun settle() = composeRule.mainClock.advanceTimeBy(3_000)
+        fun onUi(block: () -> Unit) = composeRule.runOnUiThread(block)
+        fun backToHalf() {
+            onUi { scope.launch { sheetState.partialExpand() } }
+            settle()
+        }
+        settle()
+        assertEquals(SheetValue.PartiallyExpanded, sheetState.currentValue)
+
+        // ① 通常の依頼で画面いっぱいへ広がる。
+        onUi { expandRequested = true }
+        settle()
+        assertEquals("①", SheetValue.Expanded, sheetState.currentValue)
+        onUi { expandRequested = false }
+        backToHalf()
+
+        // ② 広げる途中で半分へ戻す。面が送り終えて依頼が消えた後、別の依頼でまた広がる。
+        onUi { expandRequested = true }
+        composeRule.mainClock.advanceTimeBy(100)
+        onUi { expandRequested = false }
+        backToHalf()
+        assertEquals(SheetValue.PartiallyExpanded, sheetState.currentValue)
+        onUi { expandRequested = true }
+        settle()
+        assertEquals("② 途中で止めた後の依頼で広がらない", SheetValue.Expanded, sheetState.currentValue)
+        onUi { expandRequested = false }
+        backToHalf()
+
+        // ③ 広げる途中で閉じる。✎ で出し直すと半分で止まり、古い依頼で広がらない。
+        onUi { expandRequested = true }
+        composeRule.mainClock.advanceTimeBy(100)
+        onUi {
+            visible = false
+            expandRequested = false
+        }
+        settle()
+        assertEquals(SheetValue.Hidden, sheetState.currentValue)
+        onUi { visible = true }
+        settle()
+        assertEquals("③ 閉じる前の依頼を持ち越した", SheetValue.PartiallyExpanded, sheetState.currentValue)
+
+        // ④ 面が先に送り終えて依頼が消えても、始めた広げは止めない。
+        onUi { expandRequested = true }
+        composeRule.mainClock.advanceTimeByFrame()
+        onUi { expandRequested = false }
+        settle()
+        assertEquals("④", SheetValue.Expanded, sheetState.currentValue)
     }
 
     /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
