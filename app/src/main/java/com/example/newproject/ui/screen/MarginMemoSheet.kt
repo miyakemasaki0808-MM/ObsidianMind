@@ -85,7 +85,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -143,22 +145,24 @@ internal fun MarginMemoSheetHost(
     // 広げる途中で止まる。ほかの節を開いて中身が伸び、画面いっぱいの止まりどころが現れるのも待つ。
     // **止まりどころが無いときは頼まない** — 無い止まりどころを頼むと、状態だけが「いっぱい」になってシートは動かない
     // （Material3 1.3.0 の実装）。
-    //
-    // **保留は、広げ終えたときも、途中で止められたときも外す。** 広げる途中で利用者が払って半分へ戻すと、
-    // `expand()` は呼び出し元ごと取り消される。正常に終えたときだけ外していたころは保留が残り、
-    // キーが変わらないので、後から押した別の印でもう広がらなくなった。
     LaunchedEffect(expandRequested) { if (expandRequested) expandPending = true }
-    LaunchedEffect(expandPending, visible) {
-        // 出る前の依頼は、出るまで待つ（シートを出す依頼と同じフレームで届く）。
-        if (!expandPending || !visible) return@LaunchedEffect
-        try {
-            withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
-                snapshotFlow { sheetState.hasExpandedState }.first { it }
+    // **見張りは1本で、保留をキーにしない。** キーにすると、閉じた面から印を押したとき（出す依頼と広げる依頼が
+    // 同じ再構成で届く）に、保留が立った変化で効果が自分を取り消し、先に始めた partialExpand ごと止まってシートが開かない。
+    // **広げるのは子に任せる。** 利用者が払って止めると Material3 は広げている呼び出し元を取り消すので、
+    // 見張りが直接呼ぶと見張りごと止まる。子なら止められても見張りは続き、保留は終えたときも止められたときも外れる。
+    LaunchedEffect(sheetState) {
+        snapshotFlow { expandPending && currentVisible }
+            .filter { it }
+            .collect {
+                withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
+                    snapshotFlow { sheetState.hasExpandedState }.first { it }
+                }
+                // 待っている間に閉じられたら広げない（閉じると保留は外れている）。
+                if (expandPending && currentVisible && sheetState.hasExpandedState) {
+                    coroutineScope { launch { sheetState.expand() } }
+                }
+                expandPending = false
             }
-            if (sheetState.hasExpandedState) sheetState.expand()
-        } finally {
-            expandPending = false
-        }
     }
     BackHandler(enabled = visible) {
         scope.launch {

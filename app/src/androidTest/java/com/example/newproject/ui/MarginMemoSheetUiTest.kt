@@ -587,6 +587,43 @@ class MarginMemoSheetUiTest {
         assertEquals("④", SheetValue.Expanded, sheetState.currentValue)
     }
 
+    /**
+     * **閉じた面から、出す依頼と広げる依頼が同じフレームで届いても、シートが開いて広がる**（→ features/margin_pane.md §11）。
+     * 閉じたシートで見出しの印や「前回のメモを見る」を押すと、この2つが同じ再構成で届く。
+     * 保留を効果のキーにしていたころは、保留が立った変化で広げる効果が自分を取り消し、先に始めた partialExpand ごと止まってシートが開かなかった。
+     */
+    @Test
+    fun 閉じた面から出す依頼と広げる依頼が同時に届いても_開いて広がる() {
+        composeRule.mainClock.autoAdvance = false
+        var visible by mutableStateOf(false)
+        var expandRequested by mutableStateOf(false)
+        lateinit var sheetState: SheetState
+        composeRule.setContent {
+            sheetState = rememberStandardBottomSheetState(initialValue = SheetValue.Hidden, skipHiddenState = false)
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(800.dp)) {
+                    MarginMemoSheetHost(
+                        visible = visible,
+                        expandRequested = expandRequested,
+                        onDismiss = { visible = false },
+                        sheet = { Text("シートの中身", modifier = Modifier.height(700.dp)) },
+                        sheetState = sheetState
+                    ) { Box(modifier = Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        composeRule.mainClock.advanceTimeBy(3_000)
+        assertEquals(SheetValue.Hidden, sheetState.currentValue)
+
+        composeRule.runOnUiThread {
+            visible = true
+            expandRequested = true
+        }
+        composeRule.mainClock.advanceTimeBy(3_000)
+
+        assertEquals("閉じた面から開いて広がらない", SheetValue.Expanded, sheetState.currentValue)
+    }
+
     /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
     @Test
     fun 閉じるボタンでシートを閉じ_隠れたら中身を組まない() {

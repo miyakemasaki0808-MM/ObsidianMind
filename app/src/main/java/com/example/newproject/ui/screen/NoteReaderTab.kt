@@ -441,7 +441,8 @@ internal fun NoteReaderTab(
             @OptIn(ExperimentalMaterial3Api::class)
             MarginMemoSheetHost(
                 visible = uiState.isMarginMemoSheetVisible,
-                expandRequested = memoReveal != null,
+                // ペインへ送る依頼をシートに残さない。残すと、後でシートを出したときに古い依頼で広がる。
+                expandRequested = memoReveal != null && !paneVisible,
                 onDismiss = dismissMemoSheet,
                 sheet = {
                     // **書いた場所は書き始めた時点の本文の節**（紐づけではなく当時の記録 → reflect_margin_memo 判断2）。
