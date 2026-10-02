@@ -28,8 +28,5 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-10-02-fold-margin-pane-stage2-implementation-review/P2-1` | 見出し照合の二乗走査がUIスレッドを秒単位で止める | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-implementation-review/P2-2` | シート用の下余白を捨てるため本文末尾が隠れ、進捗も背後を数える | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-implementation-review/P2-3` | 上端へ揃えられない節の印から、その節のメモへ届かない | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-implementation-review/P2-4` | 同名見出しの共有メモだけでは他候補の選択UIが消える | `統合` FOLD-1 |
+| `2026-10-02-fold-margin-pane-stage2-recheck-review/P2-1` | シートの自動展開を途中で中断すると保留が残り、次の展開要求が動かない | `統合` FOLD-1 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
