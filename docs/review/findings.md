@@ -28,8 +28,6 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-10-02-fold-margin-pane-stage2-device-review/P2-1` | 閉じたシートを、見出しの印・再会カードの明示入口から開けない | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-device-review/P2-2` | IME表示中に、シートの上の本文表示域がなくなる | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-device-review/P3-1` | 短い2節のシート経路のUIテストが印を押せず、閉じた面からの初回入口も踏まない | `統合` FOLD-1 |
-| `2026-10-02-fold-margin-pane-stage2-recheck-review/P2-1` | シートの自動展開を途中で中断すると保留が残り、次の展開要求が動かない | `統合` FOLD-1 |
+| `2026-10-03-fold-margin-pane-stage2-device-rerun-review/P2-1` | Foldを開く方向で、入力のフォーカスを引き継がない | `統合` FOLD-1 |
+| `2026-10-03-fold-margin-pane-stage2-device-rerun-review/P2-2` | 開いたFoldのペインで、再会カードとIMEが出ると本文が消える | `統合` FOLD-1 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
