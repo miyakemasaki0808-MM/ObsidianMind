@@ -6,7 +6,9 @@ import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
 import com.example.newproject.ui.screen.MemoReveal
 import com.example.newproject.ui.screen.MemoRevealStop
+import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
 import com.example.newproject.ui.screen.sectionLabel
@@ -155,5 +157,20 @@ class MarginSurfaceTest {
         assertEquals(MemoRevealStop.CurrentMemos, memoRevealStop(MemoReveal.Section(b), current = b))
         assertEquals("別の節のメモを行き先にした", MemoRevealStop.OtherGroup(b), memoRevealStop(MemoReveal.Section(b), current = a))
         assertEquals(MemoRevealStop.OtherGroup(null), memoRevealStop(MemoReveal.AllMemos, current = a))
+    }
+
+    /**
+     * **縦積みの窓でシートに書いている間だけ、上の操作を隠す。** キーボードとシートが出ると、残る高さを操作が使い切って本文が消えた。
+     * 左右2列は操作が横の列にあるので隠さない。キーボードを閉じれば（書いている間でなくなれば）戻る。
+     */
+    @Test
+    fun `上の操作を隠すのは縦積みでシートに書いている間だけ`() {
+        val writing = compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = true)
+        val keyboardClosed = compactWhileTyping(asSheet = true, inputFocused = true, imeVisible = false)
+
+        assertEquals(true, hidesReaderControls(ReaderLayout.Stacked, sheetWriting = writing))
+        assertEquals("キーボードを閉じても隠したまま", false, hidesReaderControls(ReaderLayout.Stacked, sheetWriting = keyboardClosed))
+        assertEquals(false, hidesReaderControls(ReaderLayout.SideBySide, sheetWriting = writing))
+        assertEquals(false, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetWriting = writing))
     }
 }

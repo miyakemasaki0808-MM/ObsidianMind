@@ -144,3 +144,11 @@ internal fun compactWhileTyping(asSheet: Boolean, inputFocused: Boolean, imeVisi
  */
 internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
     sheetOffset?.let { (layoutHeight - it).roundToInt().coerceIn(0, layoutHeight) } ?: 0
+
+/**
+ * 読書画面の上の操作（見出し・ボタン・再会カード）を隠すか（→ features/margin_pane.md §5.5）。
+ * **縦積みの窓で、シートで書いている間だけ。** キーボードとシートが出ると、残る高さを操作が使い切って本文が消える。
+ * 左右2列は操作が横の列にあり、本文の高さを取らないので隠さない。
+ */
+internal fun hidesReaderControls(layout: ReaderLayout, sheetWriting: Boolean): Boolean =
+    layout == ReaderLayout.Stacked && sheetWriting

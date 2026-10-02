@@ -400,6 +400,16 @@ internal fun NoteReaderTab(
         )
         val paneVisible = layout is ReaderLayout.MarginPane
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
+        // シートで書いている間は、上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
+        // キーボードとシートが出ると、残る高さを操作が使い切って本文が消える。キーボードを閉じるか置けば戻る。
+        val hideControls = hidesReaderControls(
+            layout = layout,
+            sheetWriting = compactWhileTyping(
+                asSheet = uiState.isMarginMemoSheetVisible,
+                inputFocused = memoFocusIntent,
+                imeVisible = WindowInsets.ime.getBottom(density) > 0
+            )
+        )
         // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
             if (!paneVisible) onOpenMarginMemo()
@@ -467,17 +477,23 @@ internal fun NoteReaderTab(
             ) {
                 when (layout) {
                     ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                        controls(memoToggle)
+                        if (!hideControls) controls(memoToggle)
                         if (!hasNote) {
                             emptyNote()
                             // 余りをカードではなく余白へ逃がす。
                             Spacer(modifier = Modifier.weight(1f))
                         } else {
-                            traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                            if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
                             notePanel(
                                 Modifier
                                     .weight(1f)
-                                    .padding(top = if (isLoading || visibleTraceCard != null) 8.dp else 20.dp),
+                                    .padding(
+                                        top = when {
+                                            hideControls -> 0.dp
+                                            isLoading || visibleTraceCard != null -> 8.dp
+                                            else -> 20.dp
+                                        }
+                                    ),
                                 headingMark
                             )
                         }
