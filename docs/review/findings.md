@@ -28,6 +28,5 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-10-03-fold-margin-pane-stage2-device-rerun-review/P2-1` | Foldを開く方向で、入力のフォーカスを引き継がない | `統合` FOLD-1 |
-| `2026-10-03-fold-margin-pane-stage2-device-rerun-review/P2-2` | 開いたFoldのペインで、再会カードとIMEが出ると本文が消える | `統合` FOLD-1 |
+| `2026-10-03-fold-margin-pane-stage2-device-rerun2-review/P3-1` | 閉じたシートの白い面とドラッグハンドルが、画面の下端に露出する | `統合` FOLD-1 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
