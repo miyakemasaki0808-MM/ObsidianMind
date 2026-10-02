@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -172,14 +173,24 @@ internal fun MarginMemoSheetHost(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // **閉じたシートは描かない。** 閉じたシートは本文の領域のすぐ下に置かれ、面とハンドルは中身と別に常に組まれる
+        // （Material3 1.3.0）。描くと上端が下の余白へはみ出し、開いていないのに白い面とハンドルが下端に見える。
+        // 出ている間と、出す・しまう動きの間だけ面とハンドルを描く。
+        val sheetShown = visible || sheetState.isVisible
         BottomSheetScaffold(
             scaffoldState = scaffoldState,
             sheetPeekHeight = maxHeight / 2,
-            sheetContainerColor = Panel,
+            sheetContainerColor = if (sheetShown) Panel else Color.Transparent,
+            sheetShadowElevation = if (sheetShown) BottomSheetDefaults.Elevation else 0.dp,
+            sheetDragHandle = if (sheetShown) {
+                { BottomSheetDefaults.DragHandle() }
+            } else {
+                null
+            },
             containerColor = Color.Transparent,
             snackbarHost = {},
             // 隠れている間は中身を組まない — 画面の外に置いたままだと、読み上げが隠れたメモへ移れてしまう。
-            sheetContent = { if (visible || sheetState.isVisible) sheet() }
+            sheetContent = { if (sheetShown) sheet() }
         ) { _ ->
             // **本文はシートが覆う分だけ低くして組む**（→ features/margin_pane.md §5.5）。この器は本文を全高で組むので、
             // そのままだと本文の末尾がシートの背後でスクロールの限界に達し、背後のブロックまで「読めた」と報告される。

@@ -1,5 +1,9 @@
 package com.example.newproject.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import kotlinx.coroutines.launch
@@ -671,6 +675,44 @@ class MarginMemoSheetUiTest {
         assertEquals("閉じた面から開いて広がらない", SheetValue.Expanded, sheetState.currentValue)
     }
 
+    /**
+     * **閉じたシートを画面に描かない**（→ features/margin_pane.md §5.5）。閉じたシートは器のすぐ下に置かれ、
+     * 面とハンドルは中身と別に常に組まれるので、描くと上端が下の余白へはみ出し、開いていないのに白い面が見えた。
+     * 中身の有無ではなく、**器のすぐ下の余白に何が描かれたか**で確かめる。開く前と、開いて閉じた後の両方。
+     */
+    @Test
+    fun 閉じたシートの面とハンドルは_器の下の余白に描かれない() {
+        var visible by mutableStateOf(false)
+        composeRule.setContent {
+            Column(modifier = Modifier.fillMaxWidth().background(Color.Black)) {
+                Box(modifier = Modifier.fillMaxWidth().height(600.dp)) {
+                    MarginMemoSheetHost(
+                        visible = visible,
+                        expandRequested = false,
+                        onDismiss = { visible = false },
+                        sheet = { Text("シートの中身", modifier = Modifier.height(300.dp)) }
+                    ) { Box(modifier = Modifier.fillMaxSize()) }
+                }
+                // 器のすぐ下の余白。ここ自身は何も描かない（はみ出したものだけが映る）。
+                Box(modifier = Modifier.fillMaxWidth().height(48.dp).testTag(BELOW_TAG))
+            }
+        }
+        fun assertBelowIsBlank(label: String) {
+            val pixels = composeRule.onNodeWithTag(BELOW_TAG).captureToImage().toPixelMap()
+            val drawn = (0 until pixels.width).sumOf { x -> (0 until pixels.height).count { y -> pixels[x, y] != Color.Black } }
+            assertEquals("$label: 器の下の余白に閉じたシートが描かれた", 0, drawn)
+        }
+
+        composeRule.waitForIdle()
+        assertBelowIsBlank("開く前")
+
+        composeRule.runOnIdle { visible = true }
+        composeRule.onNodeWithText("シートの中身").assertIsDisplayed()
+        composeRule.runOnIdle { visible = false }
+        composeRule.waitForIdle()
+        assertBelowIsBlank("閉じた後")
+    }
+
     /** 下へ払うほかに**閉じるボタン**で閉じられる。隠れたら中身を組まない（読み上げが隠れたメモへ移れない）。 */
     @Test
     fun 閉じるボタンでシートを閉じ_隠れたら中身を組まない() {
@@ -710,6 +752,7 @@ class MarginMemoSheetUiTest {
     private companion object {
         const val BODY_TAG = "本文"
         const val PANE_TAG = "ペイン"
+        const val BELOW_TAG = "器の下"
         const val SHEET_TAG = "シート"
         const val NOTE_A = "content://vault-a/a.md"
         const val NOTE_B = "content://vault-a/b.md"
