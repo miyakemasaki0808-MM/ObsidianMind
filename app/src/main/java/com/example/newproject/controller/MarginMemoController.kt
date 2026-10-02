@@ -128,7 +128,8 @@ internal class MarginMemoController(
                             SubmissionCheck.Unconfirmed -> MemoSaveStatus.Unconfirmed
                         },
                         // 戻った後に受理が分かったときも、切ったことは知らせる。
-                        wasTruncated = check == SubmissionCheck.Accepted && pending?.wasTruncated == true
+                        wasTruncated = check == SubmissionCheck.Accepted && pending?.wasTruncated == true,
+                        previousVisit = loaded.previousVisit
                     )
                 )
             }
