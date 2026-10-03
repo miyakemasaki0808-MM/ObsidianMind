@@ -10,6 +10,8 @@ import com.example.newproject.ui.screen.marginWindowShiftFor
 import com.example.newproject.ui.screen.MemoReveal
 import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.SummaryEntry
+import com.example.newproject.ui.screen.summaryEntryFor
 import com.example.newproject.ui.screen.compactWhileTyping
 import com.example.newproject.ui.screen.dropsHiddenSheet
 import com.example.newproject.ui.screen.hidesReaderControls
@@ -105,6 +107,20 @@ class MarginSurfaceTest {
             MarginWindowShift.None,
             marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
+    }
+
+    /**
+     * 見出しの要約ボタン。出ている面があればそこに出し、無ければその窓で出せる面を出す。
+     * **ペインを出せる窓で設定が閉じているときは、このノートの間だけペインを出す**（設定は書き換えない）。
+     */
+    @Test
+    fun `要約ボタンは出ている面に出し、無ければ出せる面を出す`() {
+        assertEquals(SummaryEntry.Pane, summaryEntryFor(canShowPane = true, paneVisible = true, sheetVisible = false))
+        assertEquals(SummaryEntry.PaneForNote, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = false))
+        // 閉じる設定でシートを出したまま Fold を開いたときは、出ているシートに出す（面を2つにしない）
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = true))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = false))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = true))
     }
 
     /**

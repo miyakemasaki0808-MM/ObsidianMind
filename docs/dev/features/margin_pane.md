@@ -1,6 +1,6 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜3は実装済み・実機検証済み。段4は実装中（別の目と実機検証の前）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1〜3は実装済み・実機検証済み。段4は実装済み（別の目と実機検証の前）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。
 **最終検証:** 2026-10-03 / `621dfa9c`（段3まで。Pixel 10 Pro Fold で段3の通し版と段2から持ち越した範囲。段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
@@ -253,6 +253,7 @@
 | シートの可視 | 余白メモと部分要約で1本（`isMarginMemoSheetVisible`）。部分要約の専用の可視は消した | 登録済み |
 | 並べ読み | **新規。** 読み込み中・読めた・失敗と、選んだ要求の番号 | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`** |
 | ペインの開閉 | 新規。`AppPreferences` | 設定なので登録しない |
+| このノートの間だけ出したペイン | 新規。画面側の保存値で、**今のノートで鍵をかける** | ノートが替わると鍵が替わって消えるので登録しない。`NoteUiState` に入れない |
 | 本文の節・ペインの節 | 画面側で導く | 状態に入れない |
 
 ### 6.1 書きかけ
@@ -472,13 +473,16 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     保つのはキーボードが出ている間だけ — ペインは置いても入力欄からフォーカスを外さないので、フォーカスで判断すると、
     キーボードを閉じて読んでいる間も要約が狭い行に押し込まれたままになる。シートは書いている間は畳む側なので、「要約とメモ N件」の1行に入る
   - **見出しより前の本文は、解析と一緒に Main の外で組み立てる**（`NoteSectionModel.summarySourceOf`）。見出しの無いノートでは本文全体に比例する
+  - **ペインを出せる窓で設定が閉じているとき、見出しの要約ボタンはペインをこのノートの間だけ出す**（`summaryEntryFor`）。
+    一度の要約のために設定を書き換えると、次のノートでも頼んでいないペインが出る。状態は画面側の保存値で、今のノートで鍵をかける —
+    ノートが替われば消え、Fold の開閉と全画面との往復では残る。✎ でしまえば消える。
+    **出ている面があればそこに出す** — 閉じる設定でシートを出したまま Fold を開いたときは、ペインを足さずにシートへ出す
 - **段3の時点でも暫定のもの**
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
     並べ方はその間だけ、折り目の無い窓・左端0として仮に決まる
   - **前に見た窓と、書いている途中かは、画面の保存値で持つ。** Fold の開閉で残るのは、外殻が本文をどの形でも同じ位置で
     組み立てることが前提（→ [tab_navigation](../system/tab_navigation.md) §1）
-  - **見出しの要約ボタンは、ペインを出せる窓で設定が閉じているとシートを出す。** ペインをこのノートの間だけ出すのは段4の残り
   - **ペインの枠は、ノートを表示しているときと読み込み中だけ出す。** ノートが無いときは置くものが無い。
     読み込み中も出すのは、ノートを引くたびに並びが揺れないようにするため
   - **再会カードをペインの上に載せること（§5.2 の1）は、どの段にも入っていない**

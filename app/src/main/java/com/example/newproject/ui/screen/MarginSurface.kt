@@ -45,6 +45,30 @@ internal fun marginToggleDescription(toggle: MarginToggle): String = when (toggl
     MarginToggle.HideSheet, MarginToggle.ShowSheet -> "このノートのメモ"
 }
 
+/** 見出しの要約ボタンを押したときに、要約をどの面に出すか（→ features/margin_pane.md §5.4）。 */
+internal enum class SummaryEntry {
+    /** 出ているペインに出す。 */
+    Pane,
+
+    /** ペインをこのノートの間だけ出す。**設定は変えない。** */
+    PaneForNote,
+
+    /** シートに出す。出ていなければ出す。 */
+    Sheet
+}
+
+/**
+ * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。出ていなければ、その窓で出せる面を出す。
+ * ペインを出せる窓で設定が閉じているときは、ペインをこのノートの間だけ出す — 要約は本文の横で読むほうがよく、
+ * 一度の要約のために設定を書き換えると、次のノートでも頼んでいないペインが出る。
+ */
+internal fun summaryEntryFor(canShowPane: Boolean, paneVisible: Boolean, sheetVisible: Boolean): SummaryEntry = when {
+    paneVisible -> SummaryEntry.Pane
+    sheetVisible -> SummaryEntry.Sheet
+    canShowPane -> SummaryEntry.PaneForNote
+    else -> SummaryEntry.Sheet
+}
+
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
 internal enum class MarginWindowShift {
     None,
