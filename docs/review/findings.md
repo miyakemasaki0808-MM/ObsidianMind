@@ -29,4 +29,3 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
-| `2026-10-04-fold-margin-pane-stage4-recheck-review/P2-1` | 復元UIテストが同じRuleでsetContentを2回呼び、別ノートの検証前に例外になる | `統合` FOLD-1 |
