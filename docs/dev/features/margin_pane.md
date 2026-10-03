@@ -1,8 +1,8 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1・段2は実装済み・実機検証済み。段3は実装済み・実機検証待ち（段4・5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1〜3は実装済み・実機検証済み（段4・5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
-**最終検証:** 2026-10-03 / `f47f4d5a`（段2まで。Pixel 10 Pro Fold で段2の変更面の選抜。段1の通し版は 2026-10-01 / `fd1f091e`）
+**最終検証:** 2026-10-03 / `621dfa9c`（段3まで。Pixel 10 Pro Fold で段3の通し版と段2から持ち越した範囲。段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt`
 **関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`。予定 — `SectionChatControllerTest`
@@ -373,6 +373,10 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - 遠いプロバイダでのメモの読み込み待ち。本文は待たせないが、ペインと印は遅れて出る
   - **保存中（Saving）に面を替える交錯の実機確認。** 端末内の保存は数十ミリ秒で終わり、実機の操作では保存中を捉えられない。
     この順序は `MarginMemoSheetUiTest` と JVM の検査が持つ（オーナー判断 2026-10-01）
+  - **前回の訪問の保存が失敗した後の順序の実機確認**（前回の保存失敗 → 再訪 → 背面化 → 読み直し）。実SAFで読み取りだけ成功し
+    書き込みだけ失敗する状態を安全に作れない。この順序は `ReadingTraceControllerTest` が持つ（オーナー判断 2026-10-03）
+  - **シートが自動で広がる動きの途中へ、実際の指で割り込むこと。** 動きは一瞬で終わり、狙って止められず、観察でも
+    一覧のスクロールと区別できない。止められた後の保留の扱いは `MarginMemoSheetUiTest` が時計を止めて持つ（オーナー判断 2026-10-03）
 
 ## 11. 既知の制約・未解決事項
 
