@@ -151,7 +151,14 @@ internal class NoteSessionCoordinator(
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
     // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
     private val sections = NoteSectionController(scope, parseDispatcher)
-    private val sectionChat = SectionChatController(scope, aiClient, stateStore.sectionChatWriter)
+    // 抜粋の組み立ては節の本文に比例するので Main の外へ。**解析と同じ口を使う** — テストがテストスケジューラへ
+    // 差し替えられないと、生成の始まりを待てない。
+    private val sectionChat = SectionChatController(
+        scope = scope,
+        aiClient = aiClient,
+        state = stateStore.sectionChatWriter,
+        excerptDispatcher = parseDispatcher
+    )
     private val summary = SummaryController(
         scope = scope,
         summarizeUseCase = summarizeUseCase,
