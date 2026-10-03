@@ -899,15 +899,22 @@ class NoteReadingFlowTest {
     /**
      * **このノートの間だけ出したペインを、別のノートで復元された画面に持ち込まない**（→ features/margin_pane.md §5.4）。
      * 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で復元される。そのときは読み込み中を挟まない。
-     * 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。
      */
     @Test
     fun このノートの間だけのペインは_別のノートで復元された画面には出ない() {
-        assertTrue("同じノートで作り直すと残る", paneAfterRestore(restoreWith = NOTE_A))
         assertFalse("別のノートへ持ち込んだ", paneAfterRestore(restoreWith = NOTE_B))
     }
 
-    /** ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。 */
+    /** 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。上の検査の対照。 */
+    @Test
+    fun このノートの間だけのペインは_同じノートで作り直すと残る() {
+        assertTrue("同じノートで作り直すと消えた", paneAfterRestore(restoreWith = NOTE_A))
+    }
+
+    /**
+     * ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。
+     * **1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回で、2回目は例外になる。
+     */
     private fun paneAfterRestore(restoreWith: String): Boolean {
         val restoration = StateRestorationTester(composeRule)
         // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
