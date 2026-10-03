@@ -90,7 +90,7 @@ grep -rhE '^[[:space:]]*@Test' app/src/androidTest | wc -l  # instrumentation件
 - 余白ペインを、平らに開いたまま回したとき。半開きでの回転は確かめてあり、段4の実機検証で見る
 - 余白ペインのうち、実機で作れない2つの順序。前回の訪問の保存が失敗した後の読み直しは JVM が、シートが自動で広がる途中への指の割り込みは時計を止めた UI テストが持つ
 
-未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中3件・低11件・超低1件ある。高は無い。
+未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中3件・低12件・超低1件ある。高は無い。
 台帳の読み方と課題の出どころの分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
 ---

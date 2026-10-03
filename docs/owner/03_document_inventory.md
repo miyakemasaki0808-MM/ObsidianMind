@@ -145,7 +145,7 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在15件で、中3件・低11件・超低1件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在16件で、中3件・低12件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
 | [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。677行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留4件 |
