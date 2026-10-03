@@ -15,6 +15,7 @@ import com.example.newproject.ui.screen.summaryEntryFor
 import com.example.newproject.ui.screen.compactWhileTyping
 import com.example.newproject.ui.screen.dropsHiddenSheet
 import com.example.newproject.ui.screen.paneForNoteShown
+import com.example.newproject.ui.screen.pendingAfterReveal
 import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
@@ -187,6 +188,20 @@ class MarginSurfaceTest {
         assertEquals("隠れているのに覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 800f))
         assertEquals("組まれる前に覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = null))
         assertEquals("画面いっぱいを超えて覆った", 800, sheetCoveredHeight(layoutHeight = 800, sheetOffset = -10f))
+    }
+
+    /**
+     * 送る依頼は、送り終えたときも止められたときも、**その依頼だけを消す**。古い依頼の終わりで後から来た依頼を消すと、
+     * 押し直した要約ボタンや印が働かない。
+     */
+    @Test
+    fun `送り終えた依頼だけを消し、後から来た依頼は残す`() {
+        assertNull(pendingAfterReveal(pending = 1L, handled = 1L))
+        assertEquals(2L, pendingAfterReveal(pending = 2L, handled = 1L))
+        assertNull(pendingAfterReveal<Long>(pending = null, handled = 1L))
+        val section = MemoReveal.Section(SectionRef("節C"))
+        assertNull(pendingAfterReveal<MemoReveal>(pending = MemoReveal.Section(SectionRef("節C")), handled = section))
+        assertEquals(MemoReveal.AllMemos, pendingAfterReveal<MemoReveal>(pending = MemoReveal.AllMemos, handled = section))
     }
 
     /**

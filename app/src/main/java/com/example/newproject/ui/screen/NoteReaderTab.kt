@@ -64,6 +64,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -198,8 +199,10 @@ internal fun NoteReaderTab(
             onCancel = { onCancelSectionSummary(section) }
         )
     }
-    // 面を要約の行まで送る依頼。AI の入口から来たときに立て、面が送り終えたら消す。
-    var summaryReveal by remember { mutableStateOf(false) }
+    // 面を要約の行まで送る依頼。**押すたびに新しい番号を振る** — 前の依頼が残っていても、次の押下で送り直せるように。
+    // 面が送り終えたら（止められても）その番号の依頼を消す。
+    var summaryReveal by remember { mutableStateOf<Long?>(null) }
+    var summaryRevealCount by remember { mutableLongStateOf(0L) }
 
     // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
@@ -425,7 +428,7 @@ internal fun NoteReaderTab(
                 SummaryEntry.Sheet -> onOpenMarginMemo()
             }
             bodySection?.let(onRequestSectionSummary)
-            summaryReveal = true
+            summaryReveal = ++summaryRevealCount
         }
         // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
         // 押すと、面をその節のメモまで送る。**本文は動かさない** — 見出しは押した指の下に見えているうえ、
@@ -483,7 +486,7 @@ internal fun NoteReaderTab(
                         onJumpToSection = jumpToSection,
                         arranged = arrangedMemos,
                         reveal = memoReveal,
-                        onRevealHandled = { memoReveal = null },
+                        onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                         onEdit = onEditMemo,
                         onSubmit = onSubmitMemo,
                         onDelete = onDeleteMarginMemo,
@@ -494,8 +497,8 @@ internal fun NoteReaderTab(
                         active = uiState.isMarginMemoSheetVisible && !paneVisible,
                         previousReadingAt = previousReadingAt,
                         summaryRow = summaryRow,
-                        revealSummary = summaryReveal && !paneVisible,
-                        onSummaryRevealHandled = { summaryReveal = false }
+                        revealSummary = summaryReveal.takeIf { !paneVisible },
+                        onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) }
                     )
                 }
             ) {
@@ -577,7 +580,7 @@ internal fun NoteReaderTab(
                                 onJumpToSection = jumpToSection,
                                 arranged = arrangedMemos,
                                 reveal = memoReveal,
-                                onRevealHandled = { memoReveal = null },
+                                onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                                 onEdit = onEditMemo,
                                 onSubmit = onSubmitMemo,
                                 onDelete = onDeleteMarginMemo,
@@ -588,7 +591,7 @@ internal fun NoteReaderTab(
                                 previousReadingAt = previousReadingAt,
                                 summaryRow = summaryRow,
                                 revealSummary = summaryReveal,
-                                onSummaryRevealHandled = { summaryReveal = false }
+                                onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) }
                             )
                         }
                     }

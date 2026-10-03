@@ -249,9 +249,9 @@ internal fun MarginMemoSheetContent(
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
     modifier: Modifier = Modifier,
-    /** 目的のメモまで送る依頼（→ [MemoReveal]）。送り終えたら [onRevealHandled] で消してもらう。 */
+    /** 目的のメモまで送る依頼（→ [MemoReveal]）。送り終えたら（止められても）[onRevealHandled] でその依頼を消してもらう。 */
     reveal: MemoReveal? = null,
-    onRevealHandled: () -> Unit = {},
+    onRevealHandled: (MemoReveal) -> Unit = {},
     /**
      * スマホのシートとして出す。**書いている間は入力を優先して畳む**（→ [compactWhileTyping]）。
      * ペインは本文の横にあり高さが足りるので畳まない。
@@ -278,9 +278,12 @@ internal fun MarginMemoSheetContent(
     previousReadingAt: Long? = null,
     /** この節の部分要約の行（→ [SummaryRowInputs]）。null なら行を出さない。 */
     summaryRow: SummaryRowInputs? = null,
-    /** 要約の行まで送る依頼。AI の入口から来たときに立つ。送り終えたら [onSummaryRevealHandled] で消してもらう。 */
-    revealSummary: Boolean = false,
-    onSummaryRevealHandled: () -> Unit = {}
+    /**
+     * 要約の行まで送る依頼の番号。AI の入口を押すたびに新しくなる。送り終えたら（止められても）
+     * [onSummaryRevealHandled] でその番号の依頼を消してもらう（→ [pendingAfterReveal]）。
+     */
+    revealSummary: Long? = null,
+    onSummaryRevealHandled: (Long) -> Unit = {}
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -325,27 +328,35 @@ internal fun MarginMemoSheetContent(
     // 要約の行の始まり（この面の中の位置）。AI の入口から来たときの行き先。
     var summaryTop by remember { mutableIntStateOf(0) }
     LaunchedEffect(revealSummary) {
-        if (!revealSummary) return@LaunchedEffect
-        withFrameNanos { }
-        scrollState.animateScrollTo(summaryTop)
-        onSummaryRevealHandled()
+        val request = revealSummary ?: return@LaunchedEffect
+        // **止められても依頼を消す。** 送る動きは利用者のスクロールで取り消され、後ろに置いた解除まで届かない（→ lessons L35）。
+        try {
+            withFrameNanos { }
+            scrollState.animateScrollTo(summaryTop)
+        } finally {
+            onSummaryRevealHandled(request)
+        }
     }
     LaunchedEffect(reveal) {
         val target = reveal ?: return@LaunchedEffect
-        val stop = memoRevealStop(target, section)
-        if (stop is MemoRevealStop.OtherGroup) othersExpanded = true
-        withFrameNanos { }
-        val top = when (stop) {
-            MemoRevealStop.CurrentMemos -> memosTop
-            is MemoRevealStop.OtherGroup -> stop.section?.let { group ->
-                // **開いた組が並ぶのを待つ。** 開いた直後のフレームではまだ位置が無い。来なければ並びの始まりへ。
-                withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
-                    snapshotFlow { groupTops[group] }.filterNotNull().first()
-                }
-            } ?: memosTop
+        // 要約の行へ送るときと同じく、**止められても依頼を消す**。
+        try {
+            val stop = memoRevealStop(target, section)
+            if (stop is MemoRevealStop.OtherGroup) othersExpanded = true
+            withFrameNanos { }
+            val top = when (stop) {
+                MemoRevealStop.CurrentMemos -> memosTop
+                is MemoRevealStop.OtherGroup -> stop.section?.let { group ->
+                    // **開いた組が並ぶのを待つ。** 開いた直後のフレームではまだ位置が無い。来なければ並びの始まりへ。
+                    withTimeoutOrNull(REVEAL_LAYOUT_TIMEOUT_MILLIS) {
+                        snapshotFlow { groupTops[group] }.filterNotNull().first()
+                    }
+                } ?: memosTop
+            }
+            scrollState.animateScrollTo(top)
+        } finally {
+            onRevealHandled(target)
         }
-        scrollState.animateScrollTo(top)
-        onRevealHandled()
     }
 
     val ready = state as? MarginMemoState.Ready

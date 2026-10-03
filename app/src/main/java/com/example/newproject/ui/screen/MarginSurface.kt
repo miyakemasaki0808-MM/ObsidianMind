@@ -151,6 +151,13 @@ internal sealed interface MemoReveal {
     data object AllMemos : MemoReveal
 }
 
+/**
+ * 送り終えた依頼 [handled] を消した後に残す依頼。**止められて終わったときも送り終えたことにする**（利用者のスクロールは
+ * 送る動きを取り消す）。消さないと、次に同じ入口を押しても依頼が変わらず、送り直せない。
+ * **古い依頼の終わりで、後から来た依頼を消さない。**
+ */
+internal fun <T> pendingAfterReveal(pending: T?, handled: T): T? = if (pending == handled) null else pending
+
 /** 面の中の送り先。 */
 internal sealed interface MemoRevealStop {
     /** この節のメモの並びの始まり。 */
