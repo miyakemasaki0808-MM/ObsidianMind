@@ -29,6 +29,6 @@ internal fun previousVisitOf(visits: List<ReadingVisit>, readingStartedAtMillis:
  */
 internal fun showsPreviousReading(previous: PreviousVisit?, index: HeadingIndex, current: SectionRef?): Boolean {
     if (previous == null || previous.readToEnd || current == null) return false
-    val match = index.match(composeMemoSectionTitle(previous.sectionTitle))
+    val match = index.match(previous.sectionTitle)
     return match is MemoSectionMatch.Unique && match.section == current
 }

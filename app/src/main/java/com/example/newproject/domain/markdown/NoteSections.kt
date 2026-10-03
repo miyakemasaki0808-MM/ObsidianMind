@@ -2,7 +2,6 @@ package com.example.newproject.domain.markdown
 
 import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.domain.MemoSectionMatch
-import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.SectionRef
 
@@ -88,7 +87,7 @@ class NoteSectionModel internal constructor(
         val fraction = ((reachedHundredths - estimate * 100L) / 100f).coerceIn(0f, 1f)
         // **余白メモと同じ照合で節を引く**（→ [HeadingIndex.match]）。訪問の見出しは保存の前に整えてあるので、
         // 生の見出しと比べると、長い見出しや制御文字を含む見出しの節が見つからない。
-        val candidates = when (val match = headingIndex.match(composeMemoSectionTitle(sectionTitle))) {
+        val candidates = when (val match = headingIndex.match(sectionTitle?.takeIf { it.isNotBlank() })) {
             is MemoSectionMatch.Unique -> listOf(match.section)
             is MemoSectionMatch.Shared -> match.sections
             MemoSectionMatch.Opening, MemoSectionMatch.Missing -> return ReadFrontier(estimate, fraction)

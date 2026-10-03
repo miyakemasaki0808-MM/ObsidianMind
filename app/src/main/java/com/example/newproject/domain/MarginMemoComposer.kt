@@ -56,6 +56,9 @@ internal fun composeMarginMemo(raw: String): MarginMemoDraft {
  *
  * **訪問の最深の見出しも、これで整えてから保存する。** 痕跡に残す見出し名の整形を1つにしておくと、
  * 今の見出しとの照合（[HeadingIndex.match]）がメモと訪問の両方にそのまま使える。
+ *
+ * **冪等ではない。** 前後の空白を削ってから切るので、切り口の直前が空白なら末尾に空白が残り、もう一度かけると消える。
+ * 保存値にかけ直さない。保存済みの値と索引のキーは、どちらもこの関数を1回だけ通した形で揃っている。
  */
 internal fun composeMemoSectionTitle(raw: String?): String? {
     val normalized = raw

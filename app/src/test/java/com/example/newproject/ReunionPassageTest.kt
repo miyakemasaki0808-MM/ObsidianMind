@@ -86,6 +86,24 @@ class ReunionPassageTest {
         assertEquals(6, model.readFrontier(sectionTitle = recorded, progressPercent = 90)!!.block)
     }
 
+    /**
+     * **保存値に整形をかけ直さない。** 切り口の直前が空白だと保存値の末尾に空白が残り、かけ直すと消えて、
+     * 切り口と同じ別の短い見出しへ当たる。
+     */
+    @Test
+    fun `切り口の直前が空白の長い見出しも、切り口と同じ短い見出しへ取り違えない`() {
+        val prefix = "あ".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 3)
+        val longTitle = "$prefix 尾"
+        val model = buildNoteSectionModel(
+            "# 導入\n導入1\n\n導入2\n\n# $longTitle\n本論1\n\n本論2\n\n本論3\n\n# $prefix\nまとめ1"
+        )
+        val recorded = requireNotNull(composeMemoSectionTitle(longTitle))
+        assertTrue(recorded.endsWith(" "))
+        // ブロック: 0導入 1導入1 2導入2 3長い見出し 4本論1 5本論2 6本論3 7短い見出し 8まとめ1。
+        // 90% の見積もりは短い見出しの節（第8ブロック）に落ちる。記録した長い見出しの節の末尾へ戻す。
+        assertEquals(ReadFrontier(6, 1f), model.readFrontier(sectionTitle = recorded, progressPercent = 90))
+    }
+
     /** 整形の前に記録した訪問は、生の見出し名を持っている。**引くときにも同じ整形をかける。** */
     @Test
     fun `整形の前に生のまま記録した見出しの節も引ける`() {

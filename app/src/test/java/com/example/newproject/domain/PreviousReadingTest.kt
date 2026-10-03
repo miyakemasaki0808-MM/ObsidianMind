@@ -95,13 +95,29 @@ class PreviousReadingTest {
         assertFalse(showsPreviousReading(midway("本論"), index, current = null))
     }
 
-    /** 訪問の見出し名は保存の前に上限で切ってある。**照合は保存時と同じ整形で行う。** */
+    /** 訪問の見出し名は保存の前に上限で切ってある。**索引のキーも同じ整形で作るので、保存値のまま引ける。** */
     @Test
     fun `長い見出しの節にも出す`() {
         val long = "長".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES)
         val recorded = composeMemoSectionTitle(long)
 
         assertTrue(showsPreviousReading(midway(recorded), HeadingIndex(listOf("導入", long)), SectionRef(long)))
+    }
+
+    /**
+     * **保存値に整形をかけ直さない。** 切り口の直前が空白だと保存値の末尾に空白が残り、かけ直すと消えて索引とずれる。
+     * 切り口と同じ短い見出しを併設し、そちらへ当たらないことも見る。
+     */
+    @Test
+    fun `切り口の直前が空白の長い見出しでも、元の節にだけ出す`() {
+        val prefix = "あ".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 3)
+        val long = "$prefix 尾"
+        val recorded = requireNotNull(composeMemoSectionTitle(long))
+        assertTrue("保存値の末尾に空白が残る前提が崩れた", recorded.endsWith(" "))
+        val index = HeadingIndex(listOf("導入", long, prefix))
+
+        assertTrue("元の節に出ない", showsPreviousReading(midway(recorded), index, SectionRef(long)))
+        assertFalse("切り口と同じ短い見出しへ出た", showsPreviousReading(midway(recorded), index, SectionRef(prefix)))
     }
 
     /** 整形の前に記録した訪問は、生の見出し名を持っている。 */
