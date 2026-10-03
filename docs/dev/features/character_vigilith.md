@@ -1,7 +1,7 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
 **種別:** Character Reference（**機能仕様ではない**）
-**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OPが従っている。アプリ内の常駐マスコットは 2026-09-30 に撤去した
+**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OPが従っている。アプリ内には常駐させない
 **最終検証:** 2026-08-11 / `e7b9f18`（造形・色の記述は未突合）
 **関連コード:** `ui/vigilith/VigilithOpeningMotion.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
 **関連テスト:** `VigilithOpeningMotionTest`
@@ -19,7 +19,6 @@
 > | 知りたいこと | 見る文書 |
 > |---|---|
 > | Vigilith とは何か・どう描くか | **本書** |
-> | アプリ内でどう振る舞うか（表示状態・配置・操作） | [vigilith_in_app](vigilith_in_app.md) |
 > | 起動演出でどう出るか | [opening_animation](opening_animation.md) |
 
 **関連:** [reflect_distill](reflect_distill.md)・[reflect_reading_trace](reflect_reading_trace.md)
@@ -105,7 +104,7 @@ Vigilithは Reflect/Rediscover ループの**一貫した見守り手／配達�
 
 - **アプリアイコン:** 実装済み（下記 §9）。
 - **起動OP:** 実装済み。暗闇で読書レンズが先に灯り、黒曜石の輪郭が現れる（下記 §9・[opening_animation](opening_animation.md)）。
-- **アプリ内マスコット:** 常駐させていたが、読書の邪魔になるため 2026-09-30 に撤去した（[vigilith_in_app](vigilith_in_app.md)）。
+- **アプリ内には常駐させない。** 読書中に本文の上へ浮き続けると、ノートを読むことを妨げる。梟が出るのは起動OPとアイコンだけ。
 - **将来の作画:** 本シート＋§10の発注プロンプトを、外部作画やイラスト依頼の**発注資料**として使う。
 
 ---
@@ -172,7 +171,7 @@ Compose OPにも同じ月光スレートと実効アルファを使い、起動�
 
 ## 10. 外部AIへの作画発注プロンプト
 
-アイコン（ベクター）とは別に、**質感のある1枚絵**（起動OP・ストア掲載・アプリ内マスコット）が要るときに使う。
+アイコン（ベクター）とは別に、**質感のある1枚絵**（起動OP・ストア掲載）が要るときに使う。
 本シートの造形・配色・ガードレールをプロンプト化したもの。
 
 ### Midjourney 向け

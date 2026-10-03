@@ -20,6 +20,7 @@ import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingTraceStateWriter
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.ReunionPassage
+import com.example.newproject.model.isReadToEnd
 import com.example.newproject.model.isReunionNone
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.truncateToUtf8Bytes
@@ -130,7 +131,7 @@ internal class ReunionCardController(
             } ?: return@launch
             if (!isCurrent(requestId)) return@launch
 
-            if (trace.visits.last().progressPercent < 100) {
+            if (!isReadToEnd(trace.visits.last().progressPercent)) {
                 revealMidway(trace, requestId)
             } else {
                 revealFinished(trace, content, vaultKey, requestId)

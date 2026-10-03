@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-29（基準 `36fe88f`）
+**作成:** 2026-09-08 / **更新:** 2026-10-03（基準 `967a52fe`。この見直しで足した10月の日誌1本を含めて数えた）
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,9 +14,9 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 128本・約23,500行。** `CLAUDE.md`・`README.md` と `docs/` 配下の126本を数えた。
-作業ツリーにはこの他に追跡しないものが12本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ2本。
-証跡フォルダには再会カードと結晶の実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
+**追跡対象の Markdown は 128本・約23,900行。** `CLAUDE.md`・`README.md` と `docs/` 配下の126本を数えた。
+作業ツリーにはこの他に追跡しないものが14本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ4本。
+証跡フォルダには再会カード・結晶・余白ペインの実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
 
 ```
@@ -24,11 +24,11 @@ CLAUDE.md                  開発規約（憲法）
 README.md                  リポジトリの入口
 docs/
 ├── README.md              文書の入口
-├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
-│   ├── journal/  (4本)    開発日誌。README＋月別3本
+├── owner/     (18本)      オーナーが読む俯瞰。検査に載せない
+│   ├── journal/  (5本)    開発日誌。README＋月別4本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
-├── dev/       (84本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (25本)  ユーザーから見える機能。README・様式＋仕様23本
+├── dev/       (82本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (23本)  ユーザーから見える機能。README・様式＋仕様21本
 │   ├── system/    (13本)  横断的な基盤。README＋12本
 │   ├── decisions/  (6本)  ADR。README＋5本
 │   └── lessons/   (36本)  教訓65件のうち、カードを持つ36本
@@ -37,10 +37,11 @@ docs/
     └── device_validation/ (18本)  共通手順・簡易版・機能別ケース16本
 ```
 
-**前回の数え直しから2本増えた。** 結晶の設計書と、その実機ケースである。
-**廃止した機能の文書は消さない** — [reflect_remark](../dev/features/reflect_remark.md) は
-「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という判断の記録として残す。
-機能は消えてもその教訓は次にAI機能を足すときにまた要る。
+**前回の数え直しから3本増え、3本減った。** 増えたのは開いた Fold の「この部分」の正本、その設計の下書き、10月の日誌、減ったのは廃止した機能の設計書3本である。
+**廃止した機能の文書は消す**（2026-10-03、オーナー判断）。やめた理由だけを残る正本へ数行で移し、
+全文は git 履歴に任せる。ノートへのひとこと・クイズ・アプリ内 Vigilith の3本をこの日に消した。
+ひとことの設計書が持っていた「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という教訓は
+[ai_input_excerpt](../dev/system/ai_input_excerpt.md) §10 へ移してある。いつ何をやめたかは、変更履歴・日誌・年表が持つ。
 
 ## 2. 場所ごとの役割
 
@@ -60,21 +61,20 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。23本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。21本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
-| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口。低い横長の画面だけノート画面を左右2列にする |
+| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口。低い横長の画面だけノート画面を左右2列にし、開いた Fold では本文の右に余白ペインを置く |
 | [reflect_reading_trace](../dev/features/reflect_reading_trace.md) | 読書痕跡 | 稼働中。サイドカーは schema v7 |
 | [reunion_card](../dev/features/reunion_card.md) | 再会カードに何を出すか | 実装済み・実機検証済み。途中までは前後の要約と続きから読む、読了は問いか要約の先頭1文。「まだ考えたい」は撤去した |
 | [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI。**同じ入力の要約は端末に保存する** |
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中 |
-| [section_ai_chat](../dev/features/section_ai_chat.md) | セクションAI | 稼働中 |
-| [quiz](../dev/features/quiz.md) | クイズ | 稼働中。未確認管理を持つ唯一の機能 |
+| [section_ai_chat](../dev/features/section_ai_chat.md) | 部分要約 | 稼働中。質問候補・回答とクイズは撤去し、節の要約だけを残した。入口は見出しの 💬 |
 | [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
+| [margin_pane](../dev/features/margin_pane.md) | 「この部分」余白のペインとシート | 段1〜3は実装済み・実機検証済み、段4・5は未実装。開いた Fold では本文の右に、今の節のメモ・前回の読書の跡・書く欄を置く。**2026-09-30 に新設** |
 | [reflect_crystal](../dev/features/reflect_crystal.md) | 結晶 | 実装済み・実機確認済み。読んできたノートの要約から共通する筋を1文にして Vault に溜める。Reflect の3本目 |
-| [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | **Deprecated。実装は撤去済み。** 判断の記録として残す |
 | [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。931行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。**2026-09-09〜12 に新設** |
@@ -82,8 +82,7 @@ docs/
 | [note_fullscreen](../dev/features/note_fullscreen.md) | 全画面ノート | 稼働中 |
 | [note_age_paper](../dev/features/note_age_paper.md) | 年代の紙色 | 稼働中・実機確認済み。既定オフ |
 | [reading_trace_backup](../dev/features/reading_trace_backup.md) | 読書痕跡の退避と復元 | 実装済み・稼働中 |
-| [character_vigilith](../dev/features/character_vigilith.md) | キャラクターシート | Adopted。12節に従わない参照シート |
-| [vigilith_in_app](../dev/features/vigilith_in_app.md) | アプリ内 Vigilith | 稼働中。実機の目視だけ端末の認証ロックで未了 |
+| [character_vigilith](../dev/features/character_vigilith.md) | キャラクターシート | Adopted。12節に従わない参照シート。起動OPとアイコンが従う |
 | [opening_animation](../dev/features/opening_animation.md) | 起動OP | 稼働中。ランチャー重複起動のガードは判断7 |
 | [dark_mode](../dev/features/dark_mode.md) | ダークモード | 稼働中・実機確認済み |
 | [sealed_reply](../dev/features/sealed_reply.md) | 封をした返事 | **前提を失ったまま据え置き**（2026-09-20、オーナー判断）。封をする対象だった「返事」がひとことごと無くなった |
@@ -146,9 +145,9 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在15件で、中4件・低10件・超低1件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在16件で、中3件・低12件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
-| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。649行・使い捨て |
+| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。677行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留4件 |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
@@ -158,7 +157,7 @@ docs/
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
-| [README](../review/README.md) | レビューの入口と運用。全体で224行 | ✅ |
+| [README](../review/README.md) | レビューの入口と運用。全体で246行 | ✅ |
 | [findings](../review/findings.md) | 未解決指摘の受付簿。現在1件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
@@ -167,7 +166,7 @@ docs/
 | device_validation の機能別ケース16本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・**結晶**。結果は持たない | ✅ |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
-## 9. `docs/owner/` — オーナーが読む俯瞰。16本
+## 9. `docs/owner/` — オーナーが読む俯瞰。18本
 
 **ファイル名の番号が読む順である**（2026-09-19）。「いま何があるか → どう書くか → 何を学んだか → どう歩んできたか」で並ぶ。
 `README.md` と `journal/` は名前で指されている先が多いので改名せず、順路の両端に置くだけにした。
@@ -186,8 +185,9 @@ docs/
 | 08 | [idea_catalog](08_idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
 | 09 | [project_origin](09_project_origin.md) | どこから始まったか。2026-04-30。更新しない |
 | 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |
-| — | [journal/](journal/) | どんな日々だったか。2026-07・08・09 |
+| — | [journal/](journal/) | どんな日々だったか。2026-07・08・09・10 |
 | — | [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**実装したら役目が終わる下書きなので、番号列に入れない** |
+| — | [fold_margin_pane_design](fold_margin_pane_design.md) | 開いた Fold の「この部分」の設計の下書き。凍結してあり、正本は [margin_pane](../dev/features/margin_pane.md)。**同じく番号列に入れない** |
 
 `Fable5.1_report/` は git 管理外で、入口 README と章3本・課題一覧、`完了/` に4本ある。本書の数には入れない。
 

@@ -59,6 +59,27 @@ class MarginMemoSectionsTest {
         assertEquals(MemoSectionMatch.Unique(SectionRef(long)), matchMemoSection(saved, listOf(long)))
     }
 
+    /**
+     * **保存値に整形をかけ直さない。** 切り口の直前が空白だと保存値の末尾に空白が残り、かけ直すと消える。
+     * 切り口と同じ短い見出しを併設しても、メモは元の長い見出しの節に出る。
+     */
+    @Test
+    fun `切り口の直前が空白の長い見出しのメモは、切り口と同じ短い見出しへ取り違えない`() {
+        val prefix = "あ".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 3)
+        val long = "$prefix 尾"
+        val saved = requireNotNull(composeMemoSectionTitle(long))
+        assertTrue(saved.endsWith(" "))
+
+        assertEquals(MemoSectionMatch.Unique(SectionRef(long)), matchMemoSection(saved, listOf(long, prefix)))
+    }
+
+    /** 整える前に生のまま記録した見出し名（制御文字を含む）だけは、整えてから照合する。 */
+    @Test
+    fun `制御文字を含む生の見出し名は整えてから照合する`() {
+        assertEquals(MemoSectionMatch.Unique(SectionRef("本\u0007論")), matchMemoSection("本\u0007論", listOf("本\u0007論")))
+        assertEquals("制御文字だけの見出し名", MemoSectionMatch.Missing, matchMemoSection("\u0007", listOf("本論")))
+    }
+
     /** 制御文字や前後の空白だけが違う見出しは、整えると同じになる。どちらにも出す。 */
     @Test
     fun `整えると同じになる見出しは同名として扱う`() {

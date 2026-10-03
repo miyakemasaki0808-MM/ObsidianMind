@@ -1,6 +1,7 @@
 package com.example.newproject.domain.markdown
 
 import com.example.newproject.domain.HeadingIndex
+import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.SectionRef
 
@@ -84,9 +85,15 @@ class NoteSectionModel internal constructor(
         val reachedHundredths = progressPercent.coerceIn(0, 100).toLong() * blocks.size
         val estimate = ((reachedHundredths + 99) / 100 - 1).toInt().coerceIn(0, lastIndex)
         val fraction = ((reachedHundredths - estimate * 100L) / 100f).coerceIn(0f, 1f)
-        val title = sectionTitle?.takeIf { it.isNotBlank() } ?: return ReadFrontier(estimate, fraction)
-        val nearest = headingBlockIndices.indices
-            .filter { sections[it].title == title }
+        // **余白メモと同じ照合で節を引く**（→ [HeadingIndex.match]）。訪問の見出しは保存の前に整えてあるので、
+        // 生の見出しと比べると、長い見出しや制御文字を含む見出しの節が見つからない。
+        val candidates = when (val match = headingIndex.match(sectionTitle?.takeIf { it.isNotBlank() })) {
+            is MemoSectionMatch.Unique -> listOf(match.section)
+            is MemoSectionMatch.Shared -> match.sections
+            MemoSectionMatch.Opening, MemoSectionMatch.Missing -> return ReadFrontier(estimate, fraction)
+        }
+        val nearest = candidates
+            .mapNotNull { headingIndex.positionOf(it) }
             .map { k -> headingBlockIndices[k]..((headingBlockIndices.getOrNull(k + 1) ?: blocks.size) - 1) }
             // **同名の見出しが複数あれば、見積もりに最も近いもの。** 先頭固定にすると、
             // 後ろの「まとめ」を読んでいたのに前の「まとめ」へ戻される。

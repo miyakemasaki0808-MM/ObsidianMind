@@ -63,10 +63,21 @@ class HeadingIndex internal constructor(headings: List<String>) {
     /** [ref] の見出しが本文の何番目か。同じ名前と順番の見出しが無ければ null。 */
     internal fun positionOf(ref: SectionRef): Int? = positions[ref]
 
-    /** メモの見出し名を照合する。保存値は書き換えない。 */
+    /**
+     * 痕跡に控えた見出し名（メモ・訪問）を照合する。保存値は書き換えない。
+     *
+     * **保存値に整形をかけ直さない。** 整形は上限で切った後の末尾の空白を残すので、もう一度かけると値が変わり、
+     * 索引とずれる（元の節が見つからないか、切り口と同じ別の短い見出しへ当たる）。
+     * かけ直すのは、整える前に生のまま記録した訪問の見出し名（制御文字を含む）だけ。整えた値は制御文字を含まない。
+     */
     internal fun match(sectionTitle: String?): MemoSectionMatch {
         if (sectionTitle == null) return MemoSectionMatch.Opening
-        val hits = byStoredTitle[sectionTitle].orEmpty()
+        val key = if (sectionTitle.any(Char::isISOControl)) {
+            composeMemoSectionTitle(sectionTitle) ?: return MemoSectionMatch.Missing
+        } else {
+            sectionTitle
+        }
+        val hits = byStoredTitle[key].orEmpty()
         return when (hits.size) {
             0 -> MemoSectionMatch.Missing
             1 -> MemoSectionMatch.Unique(hits.single())

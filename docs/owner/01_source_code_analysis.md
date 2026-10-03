@@ -2,9 +2,9 @@
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
 **この文書が答える問い:** いまコードがどうなっているか。構成・状態・データの流れ・検証の状態を、コードを開かずに見渡すための地図である。
-**測定日:** 2026-09-29。基準は `36fe88f` で、作業ツリーは clean。測った値は §0 に集め、ほかの章には日付を書かない
+**測定日:** 2026-10-03。基準は `967a52fe` で、作業ツリーは clean。測った値は §0 に集め、ほかの章には日付を書かない
 
-> **レビュー前である。** 2026-09-24 の書き直しも、2026-09-27 と 2026-09-29 の見直しも、Codex のレビューをまだ通していない。
+> **レビュー前である。** 2026-09-24 の書き直しも、2026-09-27・09-29・10-03 の見直しも、Codex のレビューをまだ通していない。
 > 本文の事実はソースと突き合わせたが、別の目では確かめていないので未確定として読むこと。
 >
 > 分野の索引の照合で設計文書と食い違っていた1件は、オーナー判断で設計文書を実装に合わせた。
@@ -25,10 +25,10 @@
 - [5. ナビゲーションと画面構成](#5-ナビゲーションと画面構成)
 - [6. 主要機能のデータフロー](#6-主要機能のデータフロー)
   - [6.1 Vault選択と復元](#61-vault選択と復元) ・ [6.2 ランダムノート表示](#62-ランダムノート表示) ・ [6.3 ノート要約](#63-ノート要約)
-  - [6.4 関連ノート](#64-関連ノート) ・ [6.5 さがす](#65-さがす) ・ [6.6 セクションAI](#66-セクションai) ・ [6.7 適応出題クイズ](#67-適応出題クイズ)
-  - [6.8 余白メモ](#68-余白メモ) ・ [6.9 当日閲覧履歴](#69-当日閲覧履歴) ・ [6.10 蒸留](#610-蒸留) ・ [6.11 読書痕跡と再会カード](#611-読書痕跡と再会カード)
-  - [6.12 読書痕跡の退避と読み戻し](#612-読書痕跡の退避と読み戻し) ・ [6.13 冊子](#613-冊子) ・ [6.14 分野判定と冊子の紙の色](#614-分野判定と冊子の紙の色)
-  - [6.15 結晶](#615-結晶)
+  - [6.4 関連ノート](#64-関連ノート) ・ [6.5 さがす](#65-さがす) ・ [6.6 部分要約](#66-部分要約) ・ [6.7 余白メモと「この部分」](#67-余白メモとこの部分)
+  - [6.8 当日閲覧履歴](#68-当日閲覧履歴) ・ [6.9 蒸留](#69-蒸留) ・ [6.10 読書痕跡と再会カード](#610-読書痕跡と再会カード)
+  - [6.11 読書痕跡の退避と読み戻し](#611-読書痕跡の退避と読み戻し) ・ [6.12 冊子](#612-冊子) ・ [6.13 分野判定と冊子の紙の色](#613-分野判定と冊子の紙の色)
+  - [6.14 結晶](#614-結晶)
 - [7. SAF・Vaultアクセス層](#7-safvaultアクセス層)
 - [8. AI層](#8-ai層)
 - [9. Markdown解析・描画](#9-markdown解析描画)
@@ -45,20 +45,21 @@
 
 ### 0.1 規模
 
-| 指標 | 前回 2026-09-27 | 今回 2026-09-29 | 増減 |
+| 指標 | 前回 2026-09-29 | 今回 2026-10-03 | 増減 |
 |---|---:|---:|---:|
-| 本番コードのファイル数 | 170 | **182** | +12 |
-| 本番コードの行数 | 29,705 | **31,372** | +1,667 |
-| JVMテストのファイル数 | 148 | **158** | +10 |
-| JVMテストの行数 | 31,753 | **33,392** | +1,639 |
-| JVMテストの件数 | 1,571 | **1,651** | +80 |
-| instrumentation の件数 | 115 | **116** | +1 |
+| 本番コードのファイル数 | 182 | **181** | −1 |
+| 本番コードの行数 | 31,372 | **30,792** | −580 |
+| JVMテストのファイル数 | 158 | **156** | −2 |
+| JVMテストの行数 | 33,392 | **33,306** | −86 |
+| JVMテストの件数 | 1,651 | **1,673** | +22 |
+| instrumentation の件数 | 116 | **142** | +26 |
 | debug ソースセットのファイル数 | 4 | **4** | ±0 |
 
-前回からの間に、Reflect の3本目である結晶が入った。
+前回からの間に、セクションの質問・クイズ・常駐マスコットを外し、開いた Fold の余白ペイン「この部分」の段1〜3が入った。
+外した分が足した分より多く、本番コードは減った。
 
 行数は空行とコメントを含む `wc -l` で数え、生成物と Gradle スクリプトは含まない。
-本番31,372行の内訳はコメント8,681行・空行2,277行・本体20,414行で、コメントの比率は28%。
+本番30,792行の内訳はコメント8,940行・空行2,271行・本体19,581行で、コメントの比率は29%。
 テスト件数は行頭の `@Test` を数える。増え方の推移はこの文書の git 履歴にある。
 
 ```bash
@@ -72,23 +73,24 @@ grep -rhE '^[[:space:]]*@Test' app/src/androidTest | wc -l  # instrumentation件
 
 | | 結果 |
 |---|---|
-| `testDebugUnitTest` | **1,651件すべて成功。** 148クラス、failure 0、skip 0 |
+| `testDebugUnitTest` | **1,673件すべて成功。** 145クラス、failure 0、skip 0 |
 | `lintDebug` | **Error 0 / Warning 0。** 依存更新の催促は hint として出るがゲートに載せない。件数は Lint の最新版情報のキャッシュ次第で揺れる |
 | Kotlin のコンパイル警告 | 0。警告があるとビルドが落ちる設定 |
 | マージ後マニフェストの権限 | 期待する2件と一致する。AICore への接続と、自己定義の受信権限 |
 | `assembleDebugAndroidTest` | CI で通す |
-| instrumentation の実行 | 全116件を一度に通した実行は無い。着手した機能のケースだけを実機で走らせる形で、手順は `docs/review/device_validation/` が持つ。直近では結晶の実生成1件とトークン計測5件を実機で通した |
+| instrumentation の実行 | 全142件を一度に通した実行は無い。着手した機能のケースだけを実機で走らせる形で、手順は `docs/review/device_validation/` が持つ。直近では余白ペインの段3の実機検証で、`MarginMemoSheetUiTest` と `NoteReadingFlowTest` の45件を実機で通した |
 
 **実機でまだ確かめていないもの**
 
 - ひとことの導線がどこにも残っていないこと
 - ランチャー再タップの起動ガードのうち、回転と Fold 開閉の1ケース
 - ネットワーク権限を除いたあとのモデルDL。未DLの状態を作りにはいかず、契機を待つ
-- Vigilith Phase 3 の目視
 - 冊子の分割画面
 - 結晶が Nano 非対応の端末で何も出さないこと。対応端末しか手元に無い
+- 余白ペインを、平らに開いたまま回したとき。半開きでの回転は確かめてあり、段4の実機検証で見る
+- 余白ペインのうち、実機で作れない2つの順序。前回の訪問の保存が失敗した後の読み直しは JVM が、シートが自動で広がる途中への指の割り込みは時計を止めた UI テストが持つ
 
-未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中4件・低10件・超低1件ある。高は無い。
+未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中3件・低12件・超低1件ある。高は無い。
 台帳の読み方と課題の出どころの分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
 ---
@@ -99,7 +101,7 @@ Vigilith AI は、Android の Storage Access Framework でユーザーが選ん�
 AIはクラウドを使わず、ML Kit GenAI Prompt API を通して端末内の Gemini Nano で動く。成果物はネットワーク権限を持たない。
 何ができるかは [README](README.md) の機能表が持つので、ここでは構造だけを述べる。
 
-- **入口は1つで、実装は15の Controller に分かれる。** 単一 Activity・Compose Navigation・単一 ViewModel を入口にする。
+- **入口は1つで、実装は14の Controller に分かれる。** 単一 Activity・Compose Navigation・単一 ViewModel を入口にする。
   `NoteViewModel` は `Uri`・`ContentResolver`・`SharedPreferences` を扱う Android 境界だけを持ち、
   Controller の生成と調停と状態の所有は、Android API を呼ばない `NoteSessionCoordinator` が持つ。
 - **状態の持ち主は1つ。** `NoteUiStateStore` だけが状態全体を持ち、各 Controller には担当する欄の Writer だけを渡す。担当外の欄へはコンパイルの時点で書けない。
@@ -109,7 +111,7 @@ AIはクラウドを使わず、ML Kit GenAI Prompt API を通して端末内の
 - **境界はテストで固定してある。** パッケージの依存の向き、Android 非依存の3層、リセットの登録漏れ、見た目のチャネルの割り当ては JVM テストが落とす。
 
 **総評。** 依存の循環、ViewModel をテストできないこと、状態の共有所有という構造の成長限界は解消されている。
-壊れやすい純粋ロジックには1,651件の JVM テストがあり、instrumentation 116件が SAF・描画・画面遷移・画素・端末AIの一部を実機で覆う。
+壊れやすい純粋ロジックには1,673件の JVM テストがあり、instrumentation 142件が SAF・描画・画面遷移・画素・端末AIの一部を実機で覆う。
 残る弱点は3つに絞られる。
 
 1. **実機でしか分からないものが多い。** instrumentation は CI で実行されず、画面の佇まいと手触りはどのテストにも掛からない。判定は実機検証のケース表が持つ
@@ -124,9 +126,9 @@ AIはクラウドを使わず、ML Kit GenAI Prompt API を通して端末内の
 
 | 区分 | ファイル数 | 行数と件数 |
 |---|---:|---|
-| 本番 Kotlin | 182 | 31,372行 |
-| JVM テスト Kotlin | 158 | 33,392行・1,651件。テストクラスは148で、残り10本は共有のフェイクとヘルパ |
-| instrumentation テスト Kotlin | 17 | 4,718行・116件 |
+| 本番 Kotlin | 181 | 30,792行 |
+| JVM テスト Kotlin | 156 | 33,306行・1,673件。テストクラスは145で、残り11本は共有のフェイクとヘルパ |
+| instrumentation テスト Kotlin | 17 | 5,504行・142件 |
 | debug ソースセット Kotlin | 4 | 826行。instrumentation 用の偽SAFプロバイダと要約の採点器。release には入らない |
 | Android モジュール | 1 | `:app` |
 
@@ -149,6 +151,7 @@ AIはクラウドを使わず、ML Kit GenAI Prompt API を通して端末内の
 | Core SplashScreen | 1.0.1 |
 | Lifecycle | 2.8.7 |
 | Coroutines | 1.9.0 |
+| WindowManager | 1.3.0。開いた Fold の折り目の報告 `FoldingFeature` を読む |
 | ML Kit GenAI Prompt | 1.0.0-beta2 |
 | AndroidX Core KTX | 1.13.1。`edit {}` と `toUri()` を直接使うので明示している |
 | JUnit | 4.13.2 |
@@ -183,17 +186,16 @@ app/src/main/
 │   │   ├── AiGenerationFailure.kt          # 回数制限で断られた失敗だけを見分ける
 │   │   ├── GenerationRecordingAiClient.kt  # 要約の生成を呼ぶたび logcat へ1行出す。Debug APK だけ
 │   │   ├── PromptBudget.kt                 # 完成プロンプトの入力上限を1箇所で当てる
-│   │   └── PromptBuilder.kt                # 各機能のプロンプト。12本
+│   │   └── PromptBuilder.kt                # 各機能のプロンプト。9本
 │   ├── controller/
-│   │   ├── NoteSessionCoordinator.kt       # 15 Controller の生成と横断調停、Vault世代、自動生成の門番
+│   │   ├── NoteSessionCoordinator.kt       # 14 Controller の生成と横断調停、Vault世代、自動生成の門番
 │   │   ├── SummaryController.kt            # ノート要約と、モデルDL後の再開
 │   │   ├── SearchController.kt             # フォルダ検索とスコープのキャッシュ
-│   │   ├── SectionChatController.kt        # セクションの要約・質問候補・Q&A
-│   │   ├── QuizController.kt               # 適応出題クイズのバックグラウンド生成と確認状態
-│   │   ├── MarginMemoController.kt         # 余白メモの読み出し・追記・削除。AIを呼ばない
+│   │   ├── SectionChatController.kt        # 今の節の部分要約
+│   │   ├── MarginMemoController.kt         # 余白メモの読み出し・追記・削除と、書きかけの送信の照合。AIを呼ばない
 │   │   ├── AnnotationController.kt         # 旧補記ファイルの一覧と削除だけ。Vault単位
 │   │   ├── DistillController.kt            # 蒸留の候補提示・選択・保存・復旧
-│   │   ├── ReadingTraceController.kt       # 読書セッション、能動読書時間、訪問と余白メモの保存
+│   │   ├── ReadingTraceController.kt       # 読書セッション、能動読書時間、訪問と余白メモの保存、前回の訪問の取り出し
 │   │   ├── ReunionCardController.kt        # 再会カードの照合・前後の要約・読了の問いの選別
 │   │   ├── NoteDwellGate.kt                # 自動で走る生成の門番。本文表示から続けて3秒で開く
 │   │   ├── ReadingTraceCleanupController.kt # 痕跡の孤児の洗い出しと削除。Vault単位
@@ -208,7 +210,7 @@ app/src/main/
 │   │   ├── VaultBrowser.kt                 # さがすと補記が使うVaultスコープの操作。ContentResolverを裏へ束ねる
 │   │   ├── NoteImageGateway.kt             # 画像1枚の読み込み境界。寸法・復号・失敗理由
 │   │   ├── VaultImageIndexStore.kt         # 画像索引のメモリキャッシュ、TTL、Vault世代
-│   │   ├── AppPreferences.kt               # テーマとVault URIの永続化の境界
+│   │   ├── AppPreferences.kt               # テーマ・Vault URI・余白ペインの開閉の永続化の境界
 │   │   ├── VaultLocation.kt                # 選択中Vaultの共有参照
 │   │   ├── NoteSnapshot.kt                 # 蒸留用の原バイト保持、上限付き読込、UTF-8厳格判定
 │   │   ├── NoteHistoryStore.kt             # 当日分だけの閲覧履歴
@@ -257,11 +259,12 @@ app/src/main/
 │   │   ├── DistillTransformer.kt           # オフセット降順の ** 挿入と太字比率の上限
 │   │   ├── DistillRangeAdjust.kt           # 太字範囲の3段プリセット、保護範囲、重なり解消
 │   │   ├── DistillRangeSnap.kt             # 自由範囲の端を置ける位置へ寄せる
-│   │   ├── MarginMemoComposer.kt           # 余白メモの入力整形。制御文字の除去と上限での切り
-│   │   ├── QuizResponseParser.kt           # クイズ応答のパース
-│   │   ├── QuizInputProfile.kt             # AIを使わない入力分類から出題形式を決める
+│   │   ├── MarginMemoComposer.kt           # 余白メモの入力整形。制御文字の除去と上限での切り。見出し名の整形も持つ
+│   │   ├── MarginMemoDraftRules.kt         # 書きかけと送信の規則。受理は保存値と時刻の組で照合する
+│   │   ├── MarginMemoSections.kt           # 見出しの索引と、メモを今の節へ置く照合。一致・候補が複数・見つからない
+│   │   ├── PreviousReading.kt              # 前回の読書の跡。今の読書より前の最新の訪問と、どの節に出すか
+│   │   ├── SectionSummaryStatus.kt         # 部分要約の4状態。通常画面と全画面の 💬 が共用する
 │   │   ├── NoteTitleNormalizer.kt          # Obsidianのタイトル正規化
-│   │   ├── AiResponseParsing.kt            # AIが返したタイトルの共通正規化
 │   │   ├── LauncherEntry.kt                # ランチャー再タップの重複起動を判定する
 │   │   ├── NoteFieldHint.kt                # パスから分野のヒントを作る辞書照合
 │   │   ├── NoteFieldIndex.kt               # 索引Aへヒントを流し込む規則。確定を消さない
@@ -276,10 +279,12 @@ app/src/main/
 │   │   └── markdown/
 │   │       ├── InlineSyntax.kt             # インライン記法の唯一の解釈器。表示と蒸留が共有
 │   │       ├── MarkdownBlocks.kt           # ブロック解析
-│   │       └── NoteSections.kt             # 見出し単位のセクションモデル。再会カードの読み進めたところ・前後・送り先も求める
+│   │       └── NoteSections.kt             # 見出し単位のセクションモデルと見出しの索引。再会カードの読み進めたところ・前後・送り先も求める
 │   ├── model/                              # 依存グラフの葉。プロジェクト内の他パッケージも android.* も import しない
 │   │   ├── NoteUiState.kt                  # 全UI状態を集める data class
 │   │   ├── NoteUiStateStore.kt             # 状態の唯一の所有者、機能別 Writer、リセット契約
+│   │   ├── SectionRef.kt                   # 本文の節を、見出し名と同名の中での順番で指す
+│   │   ├── MarginMemoDraftStore.kt         # 余白メモの書きかけの置き場の口。実体は ui 側
 │   │   ├── NoteTypes.kt                    # NoteFile / NoteFolder / NoteMeta
 │   │   ├── DocumentRef.kt                  # Vault内の1ドキュメントを指す不透明な参照
 │   │   ├── HistoryEntry.kt                 # 当日履歴の1件
@@ -296,13 +301,13 @@ app/src/main/
 │   │   ├── NotePaperTone.kt                # 紙の地色の段階
 │   │   ├── ReadingTraceOrphanTypes.kt      # 孤児判定の上限
 │   │   ├── ReadingTraceBackupTypes.kt      # 退避ファイルの形式と上限
-│   │   ├── ReadingTrace.kt                 # 読書痕跡のモデル、上限、検証、余白メモの配列。schema v7
+│   │   ├── ReadingTrace.kt                 # 読書痕跡のモデル、上限、検証、余白メモの配列、最後まで読んだかの判定。schema v7
 │   │   ├── ReunionKind.kt                  # 再会カードの枠に出ている1件の種別
 │   │   ├── ReunionPassage.kt               # 読み進めたところの前と後の本文
 │   │   ├── Crystal.kt                      # 結晶・根拠・材料・控えの型と上限
 │   │   └── state/                          # 機能別の sealed state。一覧は §4.3
 │   └── ui/
-│       ├── AppScaffold.kt                  # 5タブ、NavigationBar と Rail の切替、SnackbarHost
+│       ├── AppScaffold.kt                  # 5タブ、NavigationBar と Rail の切替。本文はどの形でも最初の子として組む
 │       ├── ReadingProgressGeometry.kt      # 最終可視ブロックの可視割合と量子化
 │       ├── ReadingTraceCleanupText.kt      # 孤児整理の文言
 │       ├── ReadingTraceBackupText.kt       # 退避と読み戻しの文言
@@ -323,7 +328,10 @@ app/src/main/
 │       ├── screen/
 │       │   ├── OpeningScreen.kt            # 起動OP
 │       │   ├── NoteReaderTab.kt            # ノートタブ本体
-│       │   ├── ReaderLayout.kt             # ノート画面の並べ方。低い横長の画面だけ左右2列
+│       │   ├── ReaderLayout.kt             # ノート画面の並べ方。縦積み・左右2列・余白ペインを判定の優先順で決める
+│       │   ├── ReaderFoldState.kt          # 窓に報告された折り目を本文領域の座標へ直す
+│       │   ├── MarginSurface.kt            # ✎ の動き、窓の切り替わり、節の呼び名、前回の跡の行など余白の面の判定
+│       │   ├── MarginMemoDrafts.kt         # 書きかけを Compose の状態で持つ置き場。ViewModel が1つ持つ
 │       │   ├── FullscreenNoteScreen.kt     # 全画面読書ルート
 │       │   ├── SearchScreen.kt             # AI検索とランダム抽出
 │       │   ├── RelatedTab.kt               # 関連ノートとAI推薦の一覧
@@ -337,22 +345,15 @@ app/src/main/
 │       │   ├── BookletSheet.kt             # 紙1枚の描画。扉・ノート名・縁
 │       │   ├── BookletSheetGeometry.kt     # めくりと積み直りの幾何
 │       │   ├── DistillRangeSheet.kt        # 太字範囲の調整シート
-│       │   ├── QuizScreen.kt               # クイズ画面
-│       │   ├── MarginMemoSheet.kt          # 余白メモのボトムシート
+│       │   ├── MarginMemoSheet.kt          # 「この部分」の中身と、本文と併存するシートの器。ペインもこの中身を使う
 │       │   ├── AnnotationManagerScreen.kt  # 旧補記ファイルの一覧と削除
-│       │   └── SectionChatSheet.kt         # セクションAIのボトムシート
+│       │   └── SectionChatSheet.kt         # 部分要約のボトムシート
 │       ├── theme/
 │       │   ├── AppShapes.kt                # 面の形の役割。読む面は角丸、眺める面はほぼ直角
 │       │   ├── AppColors.kt                # ブランドパレット、明暗2組、役割トークン
 │       │   └── AppTheme.kt                 # AppColorScheme・LocalAppColors・AppTheme
 │       └── vigilith/
-│           ├── VigilithHost.kt             # 5タブ共通の配置、ノート操作の文脈、ドラッグ
-│           ├── VigilithState.kt            # Vigilith の配線
-│           ├── VigilithMascot.kt           # アプリ内4状態のWebP、補助光、AI状態バッジ
-│           ├── VigilithMascotMotion.kt     # 翼・レンズ・コア・カプセルのモーション
-│           ├── VigilithMode.kt             # 既存の状態から表示状態を導く
-│           ├── VigilithOpeningMotion.kt    # 起動OPのタイムライン
-│           └── VigilithPlacement.kt        # 画面端・画面変更・予約領域を扱う配置計算
+│           └── VigilithOpeningMotion.kt    # 起動OPのタイムライン。梟が出るのは起動OPだけ
 └── res/
     ├── values/                             # app_name、テーマ
     └── xml/                                # backup_rules / data_extraction_rules
@@ -366,14 +367,14 @@ app/src/main/
 
 ```text
 Compose UI / MainActivity
-     │ イベントを送り、StateFlow を購読する。uiState と設定2つは別の Flow
+     │ イベントを送り、StateFlow を購読する。uiState と設定3つは別の Flow
      ▼
 NoteViewModel ─────────────────── Android 境界。Uri・ContentResolver・設定
   │  └ NoteViewModelDependencies    依存の組み立て
   ▼
 NoteSessionCoordinator ────────── 横断調停と状態の所有。Android API を呼ばない
   ├ NoteUiStateStore                機能別の Writer を配る
-  ├ Controller 15個                 持ち主の一覧は §4.2
+  ├ Controller 14個                 持ち主の一覧は §4.2
   ├ NoteDwellGate                   自動生成の門番
   │
   ├──► NoteRepository ────────────► SAF / DocumentsContract
@@ -388,7 +389,8 @@ NoteSessionCoordinator ────────── 横断調停と状態の�
 ルートの `MainActivity` と `NoteViewModel` はどの層からも参照されない。`PackageDependencyTest` が import を走査して固定する。
 許す向きの表と理由は [architecture](../dev/system/architecture.md) の判断5 にある。
 
-純粋ロジックは `domain/` と、`ui/` の `*Geometry`・`*Measurements`、`ui/vigilith/` の `*Motion`・`*Placement`・`VigilithMode` に置く。
+純粋ロジックは `domain/` と、`ui/` の `*Geometry`・`*Measurements`、`ui/screen/` の `ReaderLayout`・`MarginSurface` に置く。
+画面の形を決める判定は `ui`、データや状態の意味を決める判定は `domain` に置く。置き場所を決めるのは責務で、テストのしやすさではない → [architecture](../dev/system/architecture.md) 判断5の4。
 
 ### 4.2 状態の持ち主
 
@@ -400,7 +402,6 @@ Controller は独自の Flow を作らず、受け取った Writer で担当の�
 | `SummaryController` | `SummaryStateWriter` | `summaryState` |
 | `SearchController` | `SearchStateWriter` | `folders`・`selectedFolder`・`foldersError`・`searchState` |
 | `SectionChatController` | `SectionChatStateWriter` | `sectionChat`・`isSectionChatSheetVisible` |
-| `QuizController` | `QuizStateWriter` | `quizState` |
 | `MarginMemoController` | `MarginMemoStateWriter` | `marginMemoState`・`isMarginMemoSheetVisible` |
 | `AnnotationController` | `AnnotationListStateWriter` | `annotationListState` |
 | `DistillController` | `DistillStateWriter` | `distillState` |
@@ -416,23 +417,24 @@ Controller は独自の Flow を作らず、受け取った Writer で担当の�
 Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`todayHistory`・`notePaperTone`・`vaultSelected` は、`NoteSessionCoordinator` 専用のメソッドで書く。
 関連ノートは `Uri` を持つ走査キャッシュに依存しているので、`NoteViewModel` 側に残っていて Controller になっていない。
 
-`NoteUiState` の外にあるのは3つである。
+`NoteUiState` の外にあるのは次のものである。
 
-- `darkTheme` と `notePaperAging` は、`NoteViewModel` が独立の `StateFlow<Boolean>` で持つ。`MainActivity` はこの2つだけを `AppTheme` の外で購読する
+- 設定の `darkTheme`・`notePaperAging`・`marginPaneOpen` は、`NoteViewModel` が独立の `StateFlow<Boolean>` で持つ。変わったときにアプリの最上位まで組み直さないため
 - `NoteSectionModel` は `NoteSectionController` が持つ。解析の開始点は Coordinator の `setNoteState()` と `applyReloadedBody()` の2箇所
+- 余白メモの書きかけは、`NoteViewModel` が `ComposeMarginMemoDrafts` に Compose の状態で持つ。文字・書き込み先・未確定の送信を一組にしてノートごとに持ち、`MarginMemoController` は `MarginMemoDraftStore` の口だけを通す。入力中の文字を StateFlow 経由で描くと、日本語の変換中に入力が崩れやすいため
+- `knownNotePaths` は走査の結果にあるノートの相対パスで、`NoteScanCache` から配る。結晶の一覧で根拠のノート名を押せるかを決める
 
 ### 4.3 状態モデル
 
-`NoteUiState` は25の欄を持つ。sealed state は `model/state/` に機能ごとのファイルで置く。
+`NoteUiState` は24の欄を持つ。sealed state は `model/state/` に機能ごとのファイルで置く。
 
 | 欄 | 取りうる状態と、持っている値 |
 |---|---|
 | `noteState` | Idle / Loading / Success / Empty / Error。Success は蒸留の書き戻し用に `targetUri`・`originalHash`・`distillUnavailableReason` を持つ |
 | `summaryState` | Idle / Loading / Success / Downloading / AiUnavailable / Error |
 | `relatedNotesState` | Idle / Loading / Success。失敗の枝は無い |
-| `quizState` | Idle / Loading / Success / Error / AiNotice。`sourceTitle` を持ち、Success と Error は `isViewed` も持つ |
-| `marginMemoState` | Idle / Loading / Ready / Error。Ready はメモの一覧、保存の状態、切り詰めたかどうかを持つ。保存の状態は None / Saving / Held / Saved / Failed / Full の1つ |
-| `isMarginMemoSheetVisible` | 余白メモのシートを出しているか |
+| `marginMemoState` | Idle / Loading / Ready / Error。Ready はメモの一覧、保存の状態、切り詰めたかどうか、前回の訪問を持つ。保存の状態は None / Saving / Held / Saved / Full / Failed / Unconfirmed の1つ |
+| `isMarginMemoSheetVisible` | 「この部分」のシートを出しているか |
 | `annotationListState` | Idle / Loading / Success / Error |
 | `distillState` | Idle / Analyzing / AiNotice / Downloading / Unavailable / Candidates / Saving / Saved / Conflict / RecoveryRequired / RecoveryResolved / Error。AiNotice は端末AIの状態、Unavailable はノート側の理由。Candidates は候補ごとの範囲調整も持つ |
 | `bookletState` | Idle / Loading / Open / Failed。Open は引く束と編む束の2つを持ち、それぞれがページ位置を持つ。編む側は種なし・編めない・編めるの3状態 |
@@ -443,7 +445,7 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 | `readingTraceBackupState` | Idle / Working / Exported / Planned / Imported / Error |
 | `notePaperTone` | 放置期間から決めた紙の地色の段階 |
 | `readingTraceCard` | 再会カード。Rediscover で過去の痕跡が見つかったときだけ入る |
-| `sectionChat` | セクションAIのセッション。無ければ `null` |
+| `sectionChat` | 部分要約のセッション。節の名前・要約・生成中か・出せなかった理由を持つ。無ければ `null` |
 | `isSectionChatSheetVisible` | シートを出しているか。セッションの有無とは別に持つ |
 | `folders`・`selectedFolder`・`foldersError`・`searchState` | さがすタブ |
 | `wikilinkTitles` | 現ノートのリンク先タイトル |
@@ -454,13 +456,13 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 
 | 契機 | 落とすもの |
 |---|---|
-| ノート切替。`withNoteScopedReset()` | 紙の地色・要約・関連・クイズ・余白メモの一覧とシート・セクションチャット・再会カード・結晶の絞り込みのパス |
+| ノート切替。`withNoteScopedReset()` | 紙の地色・要約・関連・余白メモの一覧とシート・部分要約・再会カード・結晶の絞り込みのパス |
 | Vault 切替。`withVaultScopedReset()` を追加で当てる | 検索スコープ・閲覧履歴・痕跡の整理と退避・冊子の束・分野の索引・結晶の一覧 |
-| 状態変換の外で落とすもの | 旧補記の一覧は `AnnotationController` が、蒸留の状態は `DistillController` が自分で扱う |
+| 状態変換の外で落とすもの | 旧補記の一覧は `AnnotationController` が、蒸留の状態は `DistillController` が自分で扱う。余白メモの書きかけは `NoteUiState` の外にあるので、Vault 切替でだけ `MarginMemoController.clearVaultScoped()` が捨てる。ノートを替えても書きかけは残る |
 | どちらでも残すもの | `noteState` と `wikilinkTitles`。Vault 切替の直後に新しいノートで差し替わる |
 
 ノート切替では、ジョブの停止と状態のリセットを必ず対で行う。`NoteSessionCoordinator.onNoteChanged()` がこの2つと Loading への遷移を1手で行う。
-契約の全体と、ジョブはノート単位で結果は Vault 単位という分野判定と結晶の形は [architecture](../dev/system/architecture.md) の判断2と判断4 にある。
+契約の全体と、ジョブはノート単位で結果は Vault 単位という分野判定・結晶・余白メモの書きかけの形は [architecture](../dev/system/architecture.md) の判断2と判断4 にある。
 
 ---
 
@@ -477,7 +479,6 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 | タブ | `options` | オプション |
 | 全画面 | `note_fullscreen` | 全画面ノート。バーとシステムバーを隠す |
 | 全画面 | `booklet` | 冊子 |
-| 全画面 | `quiz` | クイズ |
 | 全画面 | `crystal_list` | 結晶の一覧 |
 | 全画面 | `data_management` | 痕跡の書き出しと読み戻し、整理と旧補記の片付けへの入口 |
 | 全画面 | `reading_trace_cleanup` | 孤児になった読書痕跡の洗い出しと削除 |
@@ -493,7 +494,20 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 
 `AppScaffold` は `WindowSizeClass` を見て、Expanded 幅では左の `NavigationRail`、それ以外では下の `NavigationBar` を使う。
 全画面ルートではタブを出さない。全画面ノートはシステムバーも隠し、離れるときにナビバーだけを戻す。
-ノートタブは、高さ480dp未満で横長の画面だけ、左に見出し・操作ボタン・再会カード、右に本文を置く。左列だけがスクロールする。
+外殻はレールでもバーでも、本文を最初の子として組む。Fold の開閉で画面が作り直されても、本文側の保存値が同じ位置に戻るためで、`AppScaffoldContentSlotTest` が固定する。
+
+ノートタブの並べ方は `readerLayoutFor` が3通りから決める。判定は上から当て、最初に当たったものを採る。
+
+| 並べ方 | いつ | 中身 |
+|---|---|---|
+| 左右2列 | 高さ480dp未満の横長 | 左に見出し・操作ボタン・再会カード、右に本文。左列だけがスクロールする |
+| 余白ペイン | 余白ペインの設定が開いていて、縦の折り目があるか、折り目が無く横幅が Expanded | 左に操作と本文、右に「この部分」。縦の折り目で割り、折り目が無ければ本文領域の中央で割る |
+| 縦積み | それ以外。横の折り目、つまり卓上の形もここ | 見出し・ボタン・再会カード・本文 |
+
+- 割った後の幅が本文300dp・ペイン280dpを割れば縦積みへ戻す。折り目が本文領域の中にあって割れないときも、中央へ逃げずに縦積みにする
+- 折り目は `androidx.window` の `FoldingFeature` から取り、窓の座標から本文領域の座標へ直す。平らに開いても半開きでも縦の折り目は割る
+- 判定にはキーボードを除いた大きさを使うので、キーボードの出入りで並べ方は変わらない
+- 窓の大きさで決め、端末の種類では決めない。分割窓で狭ければ、開いた Fold でもペインは出ない
 
 ### 5.3 画面ごとの責務
 
@@ -502,11 +516,14 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 - ランダム表示。Vault の選択ボタンは未選択のときだけ出る
 - 主ボタンの隣の `📖` で冊子へ行く
 - Markdown 本文の表示とテキスト選択
-- ヘッダ右の `✎` で余白メモのシートが上がる
-- `⛶` で全画面へ行く。本文は最大720dpで中央に寄せ、スクロール位置を引き継ぐ。要約とクイズの状態は最小のFABで示す
+- 見出しの右に `💬`・`✎`・`⛶` の3つを並べる。ノートを表示していないときは出さない
+- `💬` は今の節の部分要約を開く。記号が 💬・⏳・✓・! と変わって状態を示し、浮く通知は出さない
+- `✎` は「この部分」の入口。ペインを出せる窓ではペインの開閉を兼ね、出せない窓では本文と併存するシートを出す
+- `⛶` で全画面へ行く。本文は最大720dpで中央に寄せ、スクロール位置を引き継ぐ。部分要約の状態は最小の `💬` で示す
 - スクロール位置から現在のセクションを判定し、最終可視ブロックとその可視割合を読書痕跡へ報告する
+- 本文の見出しの脇に、その節のメモの件数を印で出す。押すとその節のメモへ届く
 - Rediscover で過去の痕跡があれば、本文の上に再会カードを出す。途中まで読んだノートには「続きから読む」が付く
-- ドラッグできる吹き出しからセクションAIを開き、そのシートから「この部分でクイズ」を始める
+- 「この部分」で書いていてキーボードが出ている間は、本文の列の上の見出し・ボタン・再会カードを隠して本文に高さを回す。左右2列では隠さない
 
 **さがすタブ**
 
@@ -526,7 +543,7 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 - 要約の下に、今のノートを根拠に含む結晶を最大3件と、結晶の一覧への入口を出す。結晶が1件も無ければ何も出さない
 - 蒸留の起点。候補をタップすると範囲の調整シートが開く
 - モデルのダウンロード中は進捗を出す
-- クイズの起点は読書画面の吹き出しシートにあり、AIタブには無い。タブアイコンのバッジも無い
+- タブアイコンのバッジは無い
 
 **オプション**
 
@@ -534,11 +551,10 @@ Writer を持たない `noteState`・`relatedNotesState`・`wikilinkTitles`・`t
 - 「データ管理」。痕跡の書き出しと読み戻しを本体に持ち、痕跡の整理と旧補記の片付けをここから開く
 - 「ダークモード」。OS の設定には追従しない。`SharedPreferences` に保存し、再起動なしで反映する
 
-**Snackbar 通知**
+**通知**
 
-クイズの生成の開始・完了・失敗を `MainActivity` の `LaunchedEffect` が通知する。完了と失敗には「見る」「詳細」「もう一度」の操作が付く。
-表示済みのイベントキーを `rememberSaveable` に控え、回転で再表示しない。全画面ノートの表示中は通知を出さず、全画面のFABが状態を示す。
-余白メモと結晶は通知を持たない。
+いま Snackbar で知らせる機能は無い。外殻は `SnackbarHost` を持つが、使う機能が無い。
+バックグラウンドのAIは、浮く通知ではなく記号と面の中身で静かに示す。部分要約は `💬` の記号、要約はAIタブ、結晶は要約の下に出る。
 
 ---
 
@@ -682,72 +698,98 @@ Vault に Markdown が無ければ `NoteState.Empty`、読み込みに失敗す�
 - `SearchPickerUseCase` は結果型でエラーを返すが、`CancellationException` だけは畳まずに投げ直す
 - 検索タブでは `_AI補記` を除かないので、旧補記ファイルも候補に出うる
 
-### 6.6 セクションAI
+### 6.6 部分要約
 
-いま読んでいる見出し単位で、要約・質問候補・Q&Aを出す。
+いま読んでいる節を2〜4文に要約し、シートに出す。
 
-- **入口**: 読書画面のドラッグできる吹き出し
-- **状態**: `sectionChat`・`isSectionChatSheetVisible`
-- **AI**: 開いたときに要約と質問候補で2回。候補をタップするたびに回答で1回。本文の抜粋は1,500文字まで
+- **入口**: 見出しの右の `💬`。全画面では右下の最小の `💬`
+- **状態**: `sectionChat`・`isSectionChatSheetVisible`。入口の記号は `sectionSummaryStatus` が Idle・Working・Ready・Error の4つから導く
+- **AI**: 開いたときに1回。節の本文は1,500文字まで
 - **正本**: [section_ai_chat](../dev/features/section_ai_chat.md)
 
 **流れ**
 
-1. 本文を一度 Markdown ブロックへ解析し、描画とセクション判定で共有する。`LazyColumn` の先頭可視ブロックより前で最も近い見出しが現在のセクション
-2. セクションの範囲は、その見出しから同じレベルか上位の次の見出しの直前まで。配下の小見出しを含む。見出しが無ければノート全体
-3. 吹き出しを開くと、要約、続けて最大3件の質問候補を生成する
-4. 候補をタップすると、セクション本文と会話履歴を渡して回答を生成する
+1. 本文を一度 Markdown ブロックへ解析し、描画とセクション判定で共有する。`LazyColumn` の先頭可視ブロックより前で最も近い見出しが今の節
+2. 節の範囲は、その見出しから同じレベルか上位の次の見出しの直前まで。配下の小見出しを含む。見出しが無ければノート全体
+3. `💬` を押すと今の節で `open()` を呼ぶ。セッションがあれば作り直さずに再表示する。セッションは開始した節に固定する
+4. 端末AIが `Ready` なら要約を生成する。それ以外は `AiStatusNotice` の説明と導線をシートに出し、ここではモデルのダウンロードを始めない
+5. 生成に失敗したら、シートの中で理由と再試行を出す
 
 **約束**
 
-- 回答のプロンプトは、セクションに書かれていないことを推測しないよう制約する
-- 自由入力の欄は無い。質問の入口は生成した候補のタップだけ
-- シートを閉じても同じノートのうちは結果を持ち、吹き出しから再表示できる
+- `✎` は書く入口、`💬` は AI の入口で、分けて置く。読み上げ名は「この節を要約」を核にする
+- 通常画面と全画面の `💬` は同じ導出を使う。端末AIが使えないだけなら Working にも Error にもしない
+- シートを閉じても同じノートのうちは結果を持つ。ノート切替・Vault 切替と、蒸留で本文を読み直したときに捨てる
+- 自由入力の欄も、質問の入口も無い
 
-### 6.7 適応出題クイズ
+### 6.7 余白メモと「この部分」
 
-いま読んでいる周辺のテキストから、素材の量に合う形式で出題する。
+本文の隣に「この部分」という面を置き、今の節のメモ・前回の読書の跡・書く欄を集める。
+開いた Fold ではペインとして本文の右に常設し、それ以外の窓では本文と併存するシートになる。中身は1つの部品が組み、置き場所だけが変わる。AIを1回も呼ばない。
 
-- **入口**: セクションAIのシートの「この部分でクイズ」
-- **状態**: `quizState`
-- **AI**: 1回。周辺テキストの抜粋は1,200文字まで
-- **正本**: [quiz](../dev/features/quiz.md)、[section_ai_chat](../dev/features/section_ai_chat.md)
-
-**流れ**
-
-1. シートの対象セクションを核に、前後のブロックを交互に足して約1,200文字の周辺テキストを作る。ブロック単位で足すので超えうる。プロンプトの直前で1,200文字の抜粋を通す
-2. `QuizState.Loading` を立てる。待機画面は出さない
-3. `checkAvailability()` で分ける。`Ready` なら生成し、`NeedsDownload` ならダウンロード後に自動で再開する。`Downloading` はダウンロードを始めずに待つ。`Unsupported` と `TemporarilyUnavailable` はエラーにせず `QuizState.AiNotice` にする
-4. 周辺テキストを AI を使わずに分類し、形式を決める。コードの比率が45%以上なら3択2問。本文が180字未満か文のシグナルが2以下なら○×2問。本文が700字以上かつ文のシグナルが6以上なら4択1問。それ以外は3択2問。解説は4択だけに1文付ける
-5. `Q:` 行を問題の始まりとして `parseQuizResponse` が読む。多択の正解記号は単語境界の正規表現 `\b[A-D]\b` で抜き、崩れた書き方を救う。必須の欄が欠けたものと範囲外の記号は捨てる
-6. 読めた問題が0件なら `QuizState.Error`、あれば `QuizState.Success` にして Snackbar で知らせる
-
-**約束**
-
-- 生成中の再タップは無視する。ノート切替後の古い結果は requestId で捨てる
-- クイズはセクションチャットのセッションに従属し、新しいセッションの開始か明示の終了で消える
-- 出力を256トークン程度に収めるため、問題数と解説を形式ごとに絞っている
-
-### 6.8 余白メモ
-
-読んでいる最中に浮かんだ短い断片を、本文に触れずに何度でも置ける。AIを1回も呼ばない。
-
-- **入口**: ノート本文ヘッダ右の `✎`。再会カードに `前回のメモを見る` が出ていればそこからも同じシートが開く
-- **状態**: `marginMemoState`・`isMarginMemoSheetVisible`
+- **入口**: 見出しの右の `✎`、本文の見出しの脇の印、再会カードの `前回のメモを見る`
+- **状態**: `marginMemoState`・`isMarginMemoSheetVisible`。書きかけは `NoteUiState` の外の `ComposeMarginMemoDrafts`、ペインの開閉は設定の `marginPaneOpen`
 - **書く先**: `_ReadingTraces/*.json` の `memos` 配列。schema v7。Vault の `.md` には触れない
-- **AI**: 呼ばない。Nano 非対応の端末でも同じに動く
-- **正本**: [reflect_margin_memo](../dev/features/reflect_margin_memo.md)。前身のひとことを畳んだ判断は [reflect_remark](../dev/features/reflect_remark.md)
+- **AI**: 呼ばない。Nano 非対応の端末でも同じに動く。部分要約はこの面ではなく別のシートにある
+- **正本**: [margin_pane](../dev/features/margin_pane.md)、[reflect_margin_memo](../dev/features/reflect_margin_memo.md)
+
+**面の中身**
+
+上から次の順に並ぶ。
+
+1. 節の見出し。見出しより前は「ノートの冒頭」、見出しの無いノートは「ノート全体」。1行に収める
+2. 前回の読書の跡。「前回はここまで読んだ · 9/12」の1行で、前回いちばん深く読んだ節にだけ出る。今年でなければ年を添える
+3. 書き込み先の1行。書き込み先が今の節と違えば「〇〇へ書き込み中 · 本文を戻す」、同じなら使い方を出す。高さは変えない
+4. 入力欄と `置く`。保存の状態を横に出す
+5. この節のメモ。新しい順
+6. ほかの節のメモ。畳んで件数だけを出し、開くと節ごとに本文の順で並ぶ。節の名前を押すと本文がその節へ飛ぶ
 
 **流れ**
 
-1. `✎` を押すとボトムシートが上がる。本文はスクロール位置ごと背後に残る
-2. 上段が入力欄、下段がこのノートの既存メモで、新しい順に並ぶ
-3. 書いて `置く` を押すと一覧の先頭に増え、入力欄が空になる。シートは閉じない
-4. 各行の `消す` は確認ダイアログを挟む。編集は無い
-5. 後日 Rediscover で同じノートを引き、メモが1件以上あれば再会カードの行が `前回のメモを見る` になる
+```text
+ノートを表示した後に1回だけ読む
+  → 相対パスがまだ分からなければ待ち、分かったときに読む
+  → 永続・保存待ち・預かりの3箇所を合流したメモ、ファイルを読めたか、前回の訪問の3つを返す
+  → ペインの開閉やシートとの行き来では読み直さない
 
-1件は本文・書いた日時・置いたときに見ていた見出しの3つを持つ。見出しは記録で、あとで改名しても解決し直さない。
-全画面表示中は書けず、`✕` で通常表示へ戻ってから置く。
+本文のスクロールが止まる
+  → 先頭に見えているブロックの節が本文の節になり、面の節も同じになる
+
+入力欄に書き始める
+  → その瞬間の本文の節が書き込み先になり、文字がある間は動かない
+  → 置く。整えた本文・時刻・書き込み先の見出し名から送信を作り、書きかけに控えてから保存を頼む
+      保存・預かり   受理。入力が原文のままなら空にし、一覧へ足す
+      満杯・失敗     未受理。文字を残す
+  → 結果を待たずにノートを離れたら、戻って読んだ一覧で照合する
+      一致あり       受理
+      不在を確認     未受理。「置けませんでした」
+      確認できない   未確定。「保存を確認できません」と出し、ボタンは「保存を確かめる」になる
+```
+
+**見出しとの照合**
+
+メモと訪問が控えているのは、書いたときの見出し名だけである。紐づけではないので、表示のたびに `HeadingIndex` で今の見出しと照合する。
+結果は、一意に一致・候補が複数・見つからない・見出しを持たない、の4つに分かれる。
+候補が複数ならどの候補の節にも出して「同名の見出しに共通」と添え、見つからないメモは「見出しが見つからないメモ」の組にまとめる。
+見出しの脇の印・件数・飛ぶ先も同じ照合から作る。索引は本文の解析と一緒に Main の外で作り、照合はメモの数にだけ比例させる。
+
+**前回の読書の跡**
+
+今の読書を始める前の、最新の訪問1件だけを見る。それが最後まで読んだ回なら出さず、その前の読みかけまでは遡らない。
+見出しが一意に一致した節にだけ出し、見出しより前で離れた回と見出しの無いノートでは出さない。
+今の読書はノートを開いた時刻で区切る。離れてすぐ戻ったときは、まだファイルに書かれていない訪問をメモリから足して選ぶ。
+
+**器ごとの違い**
+
+| | ペイン | シート |
+|---|---|---|
+| 出る窓 | ペインを出せる窓で、設定が開いているとき | それ以外。スマホ・カバー画面・狭い分割窓・低い横長・横の折り目 |
+| `✎` | ペインの開閉。開閉は端末に残る | シートを出す・しまう |
+| 書いている間 | 並びは変えない。前回の跡の行は、書き始めたときの有無を保つ | キーボードが出ている間は、見出し・書き込み先・入力欄・置く・保存の状態だけを残し、メモを1行に畳む |
+| 閉じ方 | `✎` | 下へ払う、閉じるボタン、戻る操作。戻る操作はキーボード・半分の高さ・閉じるの順に内側から閉じる |
+
+窓が切り替わったときは、書きかけ・書き込み先・入力のフォーカスを引き継ぎ、面は1つにする。ペインとシートを同時に出さない。
+シートは Material3 の `BottomSheetScaffold` で作り、本文を暗くしない。本文はシートが覆う分だけ低くして組み直すので、末尾までシートの上へ送れる。
 
 **上限**
 
@@ -758,19 +800,22 @@ Vault に Markdown が無ければ `NoteState.Empty`、読み込みに失敗す�
 | 1ノートの保持件数 | 20件。達したら置けない。古いものから捨てない |
 | 置いた見出し | 512バイト |
 | 痕跡ファイル全体 | 128KB |
+| 未確定の送信 | 1ノート1件 |
 
 **約束**
 
-- 1,024バイトを超えたら切り、切ったことを必ず示す。20件に達して置けなかったときは入力欄の文字を消さない
-- 保存の結果は Saved・Held・Failed の3値で、Held を「保存済み」と呼ばない。Full は Failed に畳まない。切り詰めたかどうかは成否と別に持つ
-- 保存と削除は同じ錠で直列化する
-- 訪問の保存で容量が足りないときは、メモに触れず訪問だけを書く
-- 入力欄の中身は画面側が持つ。状態の受理件数が増えたときにだけ空にする
-- 入力は保存前に改行とタブ以外の制御文字を落とす。上限どうしの整合は実シリアライザで測って固定する
+- 1回の送信で1件だけ保存され、未保存と断定しない。受理は件数ではなく、送信の保存値と時刻の組で照合する
+- 未確定の送信は入力欄とは別に持ち続け、入力を編集しただけでは捨てない。今の入力を整えた本文が未確定の送信と同じなら、新しく置かずに元の送信を確かめる
+- 書きかけはノートごとに持ち、同じ Vault の間はノートを替えても残る。Vault を替えると捨てる。プロセスが終わったときの保護は無い
+- 1,024バイトを超えたら切り、切ったことを必ず示す。戻った後の照合で受理が分かったときも示す。20件に達して置けなかったときは入力欄の文字を消さない
+- 保存の状態は None・Saving・Held・Saved・Full・Failed・Unconfirmed の7つで、Held を「保存済み」と呼ばない。Full は Failed に畳まない
+- 保存と削除は同じ錠で直列化する。訪問の保存で容量が足りないときは、メモに触れず訪問だけを書く
+- 入力は保存前に改行とタブ以外の制御文字を落とし、見出し名も同じ形に整えて切る。照合では保存値に整形をかけ直さない
+- 全画面表示中は書けず、全画面の本文には印も出さない
 - v6 以前のひとことの欄は、書かれた版の正規形で checksum を検証してから読み捨てる
 - 2026-08-09 より前に作られた `_AI補記/*.md` は消さない。`AnnotationController` が一覧と削除だけを持つ
 
-### 6.9 当日閲覧履歴
+### 6.8 当日閲覧履歴
 
 その日に開いたノートを最大10件、さがすタブに出す。
 
@@ -780,7 +825,7 @@ Vault に Markdown が無ければ `NoteState.Empty`、読み込みに失敗す�
 読み出したときに保存日が今日でなければ空を返すので、日付が変わると履歴は消える。
 同じ URI は先頭へ移る。`loadRandomNote` と `openNote` の成功時に記録し、「今日読んだノート」から `openNote` で開き直せる。
 
-### 6.10 蒸留
+### 6.9 蒸留
 
 AI が原文の重要箇所を選び、ユーザーが確認した箇所だけを元ノートで `**太字**` にする。AI は文章を作らず、選ぶだけ。
 
@@ -799,7 +844,7 @@ AI が原文の重要箇所を選び、ユーザーが確認した箇所だけ�
 5. 候補をタップすると調整シートが開く。太字にする範囲を `語句`・`意味節`・`文全体` の3段から選ぶか、両端のつまみを引いて親文の内側で自由に決める。端を1境界ずつ動かす微調整ボタンもある。範囲を広げて他の選択と重なれば `resolveOverlaps` が相手の選択を外し、理由を印として残す
 6. `applyDistillBold` がオフセットの降順で `**` を挿す。重なる範囲は `require` で拒む。太字の累積は本文の30%まで
 7. `DistillWriteRepository` が保存する。原バイトの SHA-256 を二重に照合し、キャッシュを作って fsync、復旧レコードを原子的に確定、SAF の `"wt"` で一気に書き、出力のハッシュを検証する
-8. 保存後は `openNote()` を使わずに本文だけを読み直す。要約・関連・余白メモは残し、セクションチャットとクイズは捨てる
+8. 保存後は `openNote()` を使わずに本文だけを読み直す。要約・関連・余白メモは残し、部分要約は捨てる
 
 **約束**
 
@@ -809,7 +854,7 @@ AI が原文の重要箇所を選び、ユーザーが確認した箇所だけ�
 - ノート切替では止めるが、復旧はノートをまたいで残す
 - ハッシュ照合と書き込みの間の TOCTOU は完全には閉じられない。既知の制約
 
-### 6.11 読書痕跡と再会カード
+### 6.10 読書痕跡と再会カード
 
 読書位置を自動で記録し、Rediscover で同じノートを引いたときだけ、前回どこまで読んだかとその中身を再会カードに出す。
 
@@ -861,6 +906,8 @@ Rediscover
 - 「まだ考えたい」の印の3欄は画面に出さず、付ける操作も無い。それでも読み書き・合流・退避では落とさない
 - 前後の要約の保存は訪問数で失効させない。読み進めたところか、その前後の本文が変わったときだけ鍵が変わる
 - 照合が待つのは同じ痕跡への保存だけで、別の痕跡の保存が止まっていても待たない
+- 訪問の見出し名はメモと同じ形に整えてから保存し、今の見出しとの照合もメモと同じ `HeadingIndex` で引く。生の見出しは上限を超えうるので、整えないと検証で弾かれて書けない
+- 最後まで読んだかの判定は `isReadToEnd` の1つで、再会カードと余白の前回の読書の跡が共有する
 - 続きから読むで飛び越した画像は、測定の依頼をノート単位の入れ物へ残し、通常表示と全画面のどちらかが測り終える。測るまでは未測定の画像より後ろを報告しない
 - 候補の列挙は抜粋ではなく原文全体に当てる
 - 到達率は最深ブロックの index とその可視割合を総ブロック数で割り、切り捨てる。100%は最終ブロックの末端が画面に入ったときだけ
@@ -868,7 +915,7 @@ Rediscover
 - 保存と照合の要求は開いた時点の Vault キーを運び、Gateway が書く直前に現在の Vault と照合して、違えば捨てる
 - フォルダ索引は、照合したキーが索引に無いときだけ作り直す。外部同期で後から増えたファイルもこれで拾う
 
-### 6.12 読書痕跡の退避と読み戻し
+### 6.11 読書痕跡の退避と読み戻し
 
 痕跡を1ファイルへ書き出し、そこから読み戻せる。ユーザーが書いた余白メモは再生成できないので、フォルダごと失ったときの退避先になる。
 
@@ -897,7 +944,7 @@ Rediscover
 - 中止は要求であって完了ではない。停止を待つ間の再タップで件数を確定しない
 - 走査と JSON 処理は Main の外で行う。`ReadingTraceBackupThreadingTest` が最大入力で固定する
 
-### 6.13 冊子
+### 6.12 冊子
 
 ランダムを1回押して10枚の束を作り、上へ繰る。冊子の中ではAIも訪問の記録も走らない。
 
@@ -938,7 +985,7 @@ Rediscover
 
 この3つは1つの役割トークンから引き、`BearingChannelTest` がどの面がどちらを引くかを固定する。
 縁は束の10枚に位置によらず同じに出て、「もう10枚引く」のページにだけ無い。残りの枚数はページインジケータの文字が持つ。
-紙の地色はノートの分野で塗り分ける。流れは §6.14。
+紙の地色はノートの分野で塗り分ける。流れは §6.13。
 
 綴じは天綴じで、紙は上端を蝶番にして倒れる。倒れるのは束を引き直した積み直りのときだけで、最大22度。
 めくりは右下の角を持ち上げると折り目が左上へ斜めに走り、折り返した紙は折り目を鏡にした像として裏を見せる。
@@ -952,7 +999,7 @@ Rediscover
 - 冊子では、冊子の候補について新しいAI・痕跡・履歴を始めない。冊子へ入る前から走っている処理は止めない。読書時間の計測だけは止める
 - 冊子へ戻ったときは、走行中の「これを読む」を `cancelBookletRead()` で取り消す
 
-### 6.14 分野判定と冊子の紙の色
+### 6.13 分野判定と冊子の紙の色
 
 ノートを開いたときに、AI が固定リストから分野を1つ選ぶ。結果は冊子の紙の色になり、画面には進捗も失敗も出さない。
 
@@ -991,7 +1038,7 @@ Vault走査
 - モデルのダウンロードを自動で始めない
 - ジョブはノート単位の契約に登録して切替で止め、古い結果は requestId で捨てる。索引はノート切替では触らず、Vault 切替で落とす
 
-### 6.15 結晶
+### 6.14 結晶
 
 読んできたノートの要約から、別々のノートに共通する筋を AI が1文にまとめ、Vault に溜める。総括するのは読み手の考えではなく、読んできたものである。
 
@@ -1087,7 +1134,7 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 ### 8.3 直列化と生成の制約
 
-- **直列化。** `generate()` は companion object の `Mutex` で1件ずつ実行する。要約・関連推薦・検索・クイズ・セクションAI・再会カード・分野判定・結晶が同時に来ても、モデルの生成は1本ずつ
+- **直列化。** `generate()` は companion object の `Mutex` で1件ずつ実行する。要約・関連推薦・検索・部分要約・蒸留・再会カード・分野判定・結晶が同時に来ても、モデルの生成は1本ずつ
 - **タイムアウト。** 60秒で、Mutex を取った後から数える。ロックの待ち時間は含まないので、先の生成が長いと後の機能はその分だけ待つ。ML Kit の `TimeoutCancellationException` は `AiTimeoutException` に変えて、通常のエラー表示に乗せる
 - **門番。** 自動で走る5本は、ノートの本文が出てから続けて3秒表示されるまで `generate()` を呼ばない。結晶はさらに要約と再会カードの照合の終わりを待つ。押して使う機能は待たせない → [background_ai_ux](../dev/system/background_ai_ux.md) §7
 - **回数制限。** 錠の外側に AICore 自身の短期の回数制限がある。計測テストでは、連続で12回成功した直後の13回目が `ErrorCode 9 / BUSY` で断られた。窓の長さは AICore の内部にあり、固定の上限ではない → [ai_quality_measurement](../dev/system/ai_quality_measurement.md) 判断8
@@ -1101,10 +1148,8 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 | 要約 | 1,200文字 | 2〜4文 |
 | 関連ノート | 800文字 | 候補最大40件を予算3,500文字内へ縮める。IDで5件を要求 |
 | AIピッカー | 本文なし | タイトル最大40件を予算2,000文字内へ。切らずに行ごと落とす。3件を要求 |
-| クイズ | 周辺1,200文字 | ○×2問、3択2問、4択1問のどれか。解説は4択だけ1文 |
 | 蒸留 | 本文なし。候補の文だけ | 候補最大24件を予算1,500文字内へ。IDで最大6件を要求 |
-| セクション要約 | 1,500文字 | 2〜4文 |
-| セクションの質問と Q&A | 1,500文字 | 質問候補は最大3件 |
+| 部分要約 | 1,500文字 | 2〜4文 |
 | 再会カードの前後の要約 | 読み進めたところの前後を合わせて1,200文字。境目に印 `[READ UP TO HERE]` を置く | 前と後を1文ずつの2文。印は出力から落とす |
 | 再会カードの候補選別 | 本文なし。原文の1文ずつ。読了のときだけ | 種別ごとに最大10件を `ID｜原文` で出し、IDで1件。該当なしは `NONE` |
 | 分野判定 | 600文字 | ヒントを添え、固定リスト6分野から IDで1件。該当なしは `NONE` |
@@ -1122,14 +1167,14 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 **完成プロンプトの上限**
 
-上の表は本文に由来する部分だけを閉じている。会話履歴・質問・候補名・見出しはその外にある。
-`PromptBudget.assemble()` が最後に1回だけ `PromptLimits.MAX_PROMPT_CHARACTERS` の6,000文字を当て、12本すべての builder がここを通る。
+上の表は本文に由来する部分だけを閉じている。候補名・見出し・検索の言葉はその外にある。
+`PromptBudget.assemble()` が最後に1回だけ `PromptLimits.MAX_PROMPT_CHARACTERS` の6,000文字を当て、9本すべての builder がここを通る。
 
 | 部位 | 上限を超えたとき |
 |---|---|
-| 指示文。役割・出力形式・クイズの書式 | 削らない |
-| 材料。タイトル・本文の抜粋・候補一覧・会話履歴 | 末尾から削り `(truncated)` を残す |
-| 締め。新しい質問 | 削らない |
+| 指示文。役割・出力形式 | 削らない |
+| 材料。タイトル・本文の抜粋・候補一覧 | 末尾から削り `(truncated)` を残す |
+| 締め | 削らない。今は締めを渡すプロンプトが無い |
 
 6,000は、意図する最大の構成である関連ノートの指示文・タイトル・抜粋800・候補3,500から決めた値で、この値ではどの経路の入力も短くならない。
 部分の予算を上げると `PromptBudgetTest` が落ちる。実トークンでの余裕は [ai_input_excerpt](../dev/system/ai_input_excerpt.md) §13 にある。
@@ -1208,18 +1253,17 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 |---|---|---|
 | `NoteViewModel` | `noteLoadJob`・`relatedNotesJob`・`crystalListScanJob` | 前の2つは Coordinator の `cancelHostJobs` から止まる。結晶の一覧の走査は Vault 切替で止め、走査の結果は `NoteScanCache` が公開の直前に `vaultGeneration` で照合する |
 | `SummaryController` | `summaryJob`・`downloadJob` | requestId |
-| `QuizController` | `generateJob`・`downloadJob` | requestId |
-| `SectionChatController` | `openJob`・`answerJob` | 書く直前に、いまのセッションがまだあるかを見る |
+| `SectionChatController` | `openJob` | 書く直前に、いまのセッションがまだあるかを見る |
 | `DistillController` | `job`・`recoveryJob` | requestId |
-| `MarginMemoController` | `loadJob`・`writeJobs` | 自前の世代番号。保存と削除は錠で直列化する |
+| `MarginMemoController` | `loadJob`・`writeJobs` | 自前の世代番号。保存と削除は錠で直列化する。保存の結果は書きかけへ、送信そのものとの照合で届ける |
 | `ReunionCardController` | `revealJob` | requestId。照合の前に同じ痕跡への訪問の保存を待つ |
 | `NoteFieldController` | `job` | requestId。ノート切替でも Vault 切替でも `cancelAndClear()` が進める |
 | `CrystalController` | `generateJob`・`loadJob`・保存ごとの Job | 生成は requestId で、保存へ渡す直前に照合する。保存はノート切替で止めず、一覧へ足すかを `vaultGeneration` で照合する。一覧の読み込みも `vaultGeneration` |
 | `NoteSectionController` | `parseJob` | キャンセルだけ。requestId は持たない |
-| `ReadingTraceController` | 訪問の保存を保存先ごとに控える。保存そのものは `persistScope` へ投げる | 開いた時点の Vault キーを書く直前に照合する |
+| `ReadingTraceController` | 訪問の保存を保存先ごとに控える。保存そのものは `persistScope` へ投げる | 開いた時点の Vault キーを書く直前に照合する。記録を頼んだ訪問は読書ごとに控え、前回の読書を選ぶときに足す |
 | `SearchController` | `searchJob`・`foldersJob` | 検索とランダムは requestId を共有する。フォルダ一覧は `vaultGeneration` |
 | `AnnotationController` | `listJob` | `vaultGeneration` |
-| `ReadingTraceCleanupController` | `assessJob` | `vaultGeneration`。削除は洗い出した時点の Vault 識別子も照合する |
+| `ReadingTraceCleanupController` | `assessJob`・`deleteJobs` | `vaultGeneration`。削除は洗い出した時点の Vault 識別子も照合する |
 | `ReadingTraceBackupController` | `job` | `vaultGeneration` |
 | `BookletController` | `drawJob`・ページごとの `coverJobs` | `vaultGeneration`。引き直しとすれ違った扉は新しい束へ書かない |
 | `NoteSessionCoordinator` | `bookletReadJob` | 冊子へ戻ったときに取り消す |
@@ -1229,7 +1273,7 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 ### 10.2 CancellationException
 
-要約・関連ノート・セクションAI・クイズ・余白メモ・検索・蒸留の主要な経路で `CancellationException` を投げ直し、一般のエラーに変えない。
+要約・関連ノート・部分要約・余白メモ・検索・蒸留の主要な経路で `CancellationException` を投げ直し、一般のエラーに変えない。
 結果型でエラーを返す `SearchPickerUseCase` も、キャンセルだけは例外のまま通す。
 蒸留の元本文の書き出しはキャンセルされてもエラーにせず、復旧レコードも消さない。
 
@@ -1259,8 +1303,7 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 - ノート読込の失敗、AI 生成の失敗、モデルのダウンロードの失敗を sealed state で UI へ伝える
 - 関連ノートは AI が失敗しても規則ベースの結果を保つ
-- セクションの質問候補が失敗しても、要約と Q&A 本体は壊れない
-- AI の空応答には、要約文・チャットの回答・分野判定の応答読み取りで一定の備えがある
+- AI の空応答には、要約文・部分要約・分野判定の応答読み取りで一定の備えがある
 - プロンプトに書いた契約は検査に移す。分野判定は行の全体がIDのときだけ受け付け、蒸留は許可集合の外のIDを捨てる
 
 ### 11.2 注意点
@@ -1280,7 +1323,7 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 - 蒸留の上書きは原バイトの SHA-256 の二重照合と出力ハッシュの検証を通し、中断したら `noBackupFilesDir` の復旧レコードから起動時に判定する
 - 読書痕跡はユーザーの `.md` に触れないベストエフォートの設計で、checksum で破損を検知するが、復旧ファイルと原子的な更新は持たない
 - 痕跡の書き出しファイルは平文で、Vault 内へ保存すると Obsidian の同期でクラウドへ渡る。保存の前にそう伝える
-- `android:allowBackup="true"` のまま、`random_note_prefs` はバックアップと端末移行の両方から除いている。中身は Vault の SAF URI・テーマ・当日の閲覧履歴・分野の確定。API 31以上は `dataExtractionRules`、API 30以下は `fullBackupContent` で覆う。要約と再会カードの前後の要約の保存、結晶の材料の控え、蒸留の復旧レコードは `noBackupFilesDir` に置く
+- `android:allowBackup="true"` のまま、`random_note_prefs` はバックアップと端末移行の両方から除いている。中身は Vault の SAF URI・テーマ・余白ペインの開閉・当日の閲覧履歴・分野の確定。API 31以上は `dataExtractionRules`、API 30以下は `fullBackupContent` で覆う。要約と再会カードの前後の要約の保存、結晶の材料の控え、蒸留の復旧レコードは `noBackupFilesDir` に置く
 - 端末に残す置き場を足したら除外に載っていることを、`BackupExclusionTest` が走査で数える
 - 本番にログ出力は無く、ノート本文やプロンプトを logcat へ出さない。例外は debug ソースセットの計測器と instrumentation で、固定コーパスの応答を logcat へ出す
 
@@ -1292,23 +1335,23 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 | 置き場 | ファイル | 件数 | 何を見ているか |
 |---|---:|---:|---|
-| `test/.../` の直下 | 54 | 815 | Controller・保存と読込・パーサ |
-| `test/.../domain/` | 39 | 476 | 純関数。採点・抜粋・スコアリング・解析 |
-| `test/.../ui/` | 22 | 194 | 表示ロジックを数値として固定する。色・幾何・派生状態 |
-| `test/.../architecture/` | 26 | 88 | コードではなく規約と文書を守る検査 |
-| `test/.../ai/` | 8 | 39 | プロンプトの組み立てと生成失敗の判定。端末AIは呼ばない |
+| `test/.../` の直下 | 48 | 796 | Controller・保存と読込・パーサ |
+| `test/.../domain/` | 44 | 534 | 純関数。採点・抜粋・スコアリング・解析・照合 |
+| `test/.../ui/` | 19 | 179 | 表示ロジックを数値として固定する。色・幾何・派生状態・余白の面の判定 |
+| `test/.../architecture/` | 28 | 92 | コードではなく規約と文書を守る検査 |
+| `test/.../ai/` | 8 | 33 | プロンプトの組み立てと生成失敗の判定。端末AIは呼ばない |
 | `test/.../testing/` | 5 | 39 | 要約の採点器そのものの検査 |
 | `test/.../fakes/` | 4 | — | 共有のフェイク |
-| **合計** | **158** | **1,651** | 148クラスと共有ヘルパ10本 |
+| **合計** | **156** | **1,673** | 145クラスと共有ヘルパ11本 |
 
-どういう観点で確かめているかは [jvm_test_report](02_jvm_test_report.md) が持ち、全148クラスの件数と対象はその付録にある。
+どういう観点で確かめているかは [jvm_test_report](02_jvm_test_report.md) が持ち、全145クラスの件数と対象はその付録にある。
 `NoteHistoryStore` は `Uri` と `org.json` の Android 実装に依存するので、素のJVMでは検証していない。
 
 ### 13.2 実行
 
 ```text
 ./gradlew testDebugUnitTest lintDebug --offline
-BUILD SUCCESSFUL   148クラス・1,651件・failure 0・skip 0／Lint 0 errors, 0 warnings
+BUILD SUCCESSFUL   145クラス・1,673件・failure 0・skip 0／Lint 0 errors, 0 warnings
 ```
 
 JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home` にあるので、`/usr/libexec/java_home` では見つからない。`JAVA_HOME` へ明示する。
@@ -1336,9 +1379,10 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 - `SearchController.onVaultChanged()` が落とすスコープのキャッシュとジョブ。観測できる副作用が `ContentResolver` を要する経路にしか無い
 - `RelatedNotesUseCase` の結線全体と、`SearchPickerUseCase` の AI 応答の解釈。部品の純ロジックは個別に覆っている
 - `NoteHistoryStore` の日付判定と重複排除
-- `PromptBuilder` の出力契約のうち、要約・関連・ピッカー・セクション系。クイズと蒸留は覆っている
+- `PromptBuilder` の出力契約のうち、要約・関連・ピッカー・部分要約・分野判定・再会カードの選別。抜粋と予算の共通の検査は9本すべてに掛かり、蒸留と前後の要約は専用の検査が覆っている
 - 読書痕跡の Compose 実レイアウト上の可視量、Activity のライフサイクルを通した一時停止と再開、SAF Gateway での実 Vault の照合
-- Gemini Nano のダウンロードとタイムアウト。生成は12本のプロンプトのうち7本だけ
+- 余白メモの保存が失敗した後の順序の実機での確認。読めるのに書き込みだけ失敗する状態を実機で安全に作れないので、`ReadingTraceControllerTest` が持つ
+- Gemini Nano のダウンロードとタイムアウト。生成は9本のプロンプトのうち6本だけ
 - 端末AIの出力の意味。採点器は語の重なりしか測らず、実機の出力では忠実な文と誤りの文を閾値で分けられない
 - 画面幅による Rail の切替
 - 連続操作での競合。タブの連打テストは競合を作れていない
@@ -1353,18 +1397,18 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 |---|---:|---|---|
 | `InstrumentationSetupTest` | 1 | 対象アプリの Context 取得 | Runner の疎通 |
 | `ComposeRenderingSetupTest` | 1 | Compose テストルールの描画 | Compose の実行環境 |
-| `ui/NoteReadingFlowTest` | 14 | 解析待ちの描画抑止、全画面への位置の引き継ぎ、進捗報告の整合、画像の表示、続きから読むで飛び越した画像の測定と全画面への移行、低い横長の枠でノート名と本文が見えること | レイアウトの実測と可視判定 |
+| `ui/NoteReadingFlowTest` | 20 | 解析待ちの描画抑止、全画面への位置の引き継ぎ、進捗報告の整合、画像の表示、続きから読むで飛び越した画像の測定と全画面への移行、低い横長の枠でノート名と本文が見えること。見出しの印から行き先の節のメモへ届くこと、Fold を開いて作り直してもペインの入力欄が残ること | レイアウトの実測と可視判定 |
 | `data/VaultScanInstrumentationTest` | 9 | 走査の相対パス、読取失敗と不在の区別、補記の作成・一覧・削除、document の同一性 | 実物の `ContentResolver`・`DocumentsContract` |
 | `data/NoteImageGatewayInstrumentationTest` | 13 | 復号と寸法読み、上限の内外、大きすぎると壊れているの切り分け、索引の世代と鮮度 | 実物の `BitmapFactory` |
 | `ai/PromptTokenBudgetTest` | 5 | トークン計測と能力診断、完成プロンプトの実トークンの基準線 | 端末AI |
-| `ai/OnDeviceGenerationTest` | 7 | 本番プロンプトでの実生成。要約・クイズ・関連ノート・セクション要約・分野判定・再会カードの前後の要約・結晶 | 端末AI |
+| `ai/OnDeviceGenerationTest` | 6 | 本番プロンプトでの実生成。要約・関連ノート・部分要約・分野判定・再会カードの前後の要約・結晶 | 端末AI |
 | `ai/SummaryCoverageBaselineTest` | 2 | 固定コーパスを本番の要約プロンプトで生成し、採点器に掛けて記録する。値は主張しない | 端末AI |
 | `ui/ActivityRecreationTest` | 2 | Activity の再生成で OP を再生しない、繰り返しの再生成 | Activity のライフサイクル |
+| `ui/AppScaffoldStateRestorationTest` | 2 | 窓の形を替えて作り直しても、本文側の保存値が同じ場所へ戻る。タブ以外のルートを往復しても残る | 画面の作り直しと状態の保存 |
 | `ui/TabNavigationTest` | 5 | タブの往復と巡回、戻る操作での履歴契約、遷移先での再生成 | `NavHost` のバックスタック |
-| `ui/QuizActionSectionTest` | 2 | クイズが使えない理由が押した場所に描かれる | Composable の描画結果 |
 | `ui/ReadingTraceCardPanelTest` | 9 | 再会カードの種別ごとの前置き、前後の要約、待ち表示、続きから読む、「まだ考えたい」を出さないこと | Composable の描画結果 |
 | `ui/DistillRangeAdjustUiTest` | 9 | 範囲調整シートの操作。プリセットの切替、最初の範囲へ戻す、つまみのドラッグ、端の微調整、告知の出方 | 描画結果とシートの操作 |
-| `ui/MarginMemoSheetUiTest` | 4 | 余白メモのシート。入力・一覧・削除の確認・保存中も入力が消えない | 描画結果とシートの操作 |
+| `ui/MarginMemoSheetUiTest` | 25 | 「この部分」の中身と器。続けて書けること、書きかけが面の組み替えやノートの行き来をまたいで残ること、フォーカスの引き継ぎ、保存を確認できない間のボタン、書き込み先の知らせや前回の跡が出入りしても入力欄が動かないこと、ほかの節の組と同名の候補、本文と併存するシート、広げる依頼の保留、閉じたシートを描かないこと | 描画結果とシートの操作 |
 | `ui/BookletScreenTest` | 22 | 冊子の描画。扉・めくり・終端・0件・失敗ページ・読み上げ名、編む側のトグル3通りと終端 | Pager の実挙動と描画結果 |
 | `ui/BookletNavigationTest` | 2 | 実 `NavHost` での `note → booklet → note` の往復とページ位置の復帰 | バックスタックと状態の復元 |
 | `ui/BookletSheetPerspectiveTest` | 9 | 倒れた紙の投影の向き、枠への収まり、カメラ距離、めくりで現れる裏、積み直りとの同時進行 | 描いた画素を数えないと符号の意味が確かめられない |
@@ -1379,7 +1423,7 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 
 - **タブの連打は試していない。** `performClick` は毎回 semantics を取り直して同期し、生の `MotionEvent` は Android 17 が instrumentation の UID からの注入を拒む。代わりにタブの履歴契約を「戻る」で観測する。`launchSingleTop` 単体の効果は、`restoreState` が肩代わりするので識別できていない
 - **`ActivityScenario.recreate()` はプロセスの死亡ではない。** 同じプロセスの中で Activity を作り直すだけで、Application・静的な状態・プロセス内のキャッシュは生き残る。プロセス死亡への耐性は保証していない
-- **端末AIの生成は12本のプロンプトのうち7本だけ。** 蒸留・検索ピッカー・再会カードの選別・セクションの候補・セクションのチャットの5本は未保証。`PromptGenerationCoverageTest` が、builder を足したら覆うか未保証と宣言するまで落とす
+- **端末AIの生成は9本のプロンプトのうち6本だけ。** 蒸留・検索ピッカー・再会カードの選別の3本は未保証。`PromptGenerationCoverageTest` が、builder を足したら覆うか未保証と宣言するまで落とす
 
 ---
 
@@ -1387,12 +1431,12 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 
 ### 14.1 強み
 
-1. **責務の分割がはっきりしている。** 機能は15の Controller に分かれ、横断調停と状態の所有は `NoteSessionCoordinator`、Android 境界は `NoteViewModel` にある。Vault へ破壊的に書く蒸留は、書き込みの経路も `DistillWriteRepository` と `DistillRecoveryStore` へ切り出してある
+1. **責務の分割がはっきりしている。** 機能は14の Controller に分かれ、横断調停と状態の所有は `NoteSessionCoordinator`、Android 境界は `NoteViewModel` にある。Vault へ破壊的に書く蒸留は、書き込みの経路も `DistillWriteRepository` と `DistillRecoveryStore` へ切り出してある
 2. **状態の所有権が型で守られている。** 書けるのは `NoteUiStateStore` だけで、Controller には担当の Writer しか渡らない
-3. **境界が文書ではなくテストで守られている。** 依存の向きは `PackageDependencyTest`、切替時の一斉停止と一斉初期化は実物の15 Controller を束ねた `NoteSessionCoordinatorTest`、見た目のチャネルは `BearingChannelTest` が固定する。ノート単位と Vault 単位のリセット漏れは別々に検査する
+3. **境界が文書ではなくテストで守られている。** 依存の向きは `PackageDependencyTest`、切替時の一斉停止と一斉初期化は実物の14 Controller を束ねた `NoteSessionCoordinatorTest`、見た目のチャネルは `BearingChannelTest` が固定する。ノート単位と Vault 単位のリセット漏れは別々に検査する
 4. **AI が無くても価値が残る。** 関連ノートは wikilink とファイル名の規則で動き、検索にはランダムとキーワード一致のフォールバックがある。余白メモと冊子は AI を呼ばない
 5. **端末の負荷に配慮している。** 生成の直列化、60秒のタイムアウト、3秒の門番、要約の保存、SAF 走査のキャッシュ、Markdown 解析の使い回し
-6. **壊れやすい文字列処理が純関数になっている。** クイズのパース、余白メモの入力整形、タイトル正規化、Markdown 解析、蒸留の文分割と範囲の決定が Android の I/O から離れている
+6. **壊れやすい文字列処理が純関数になっている。** 余白メモの入力整形と送信の照合、見出しの照合、タイトル正規化、Markdown 解析、蒸留の文分割と範囲の決定が Android の I/O から離れている
 7. **Obsidian 固有の仕様に合わせている。** wikilink の別名・見出し・ブロック参照、frontmatter、画像の埋め込み、機能用のフォルダを扱う
 
 ### 14.2 残る技術的な注意点
@@ -1403,14 +1447,14 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 |---|---|---|
 | 中 | 痕跡サイドカーの書き込みが原子的でない | `"wt"` で直接上書きするので、書いている途中でプロセスが死ぬと部分的に壊れたファイルが残り、復旧元も無い。SAF の `renameDocument()` はプロバイダによって動かないので割り切っている。壊れれば checksum で検知して孤立扱いにする |
 | 中 | 画面の佇まいを判定する工程が実機検証にしか無い | 振る舞いは JVM と instrumentation が見ているが、見分けられるか・手触りがあるかはどのテストにも掛からない。テストで埋める種類の穴ではない |
-| 低 | 回数制限の文言を置き換えているのは要約だけ | AICore の短期の回数制限で断られたとき、要約は日本語の案内を出すが、クイズなどの押して使う機能は例外のメッセージをそのまま出す |
-| 低 | 端末で作れない順序は JVM でしか確かめていない | 再会カードまわりでは、飛び越した画像の測定を待っている間に全画面へ移る順序と、別の痕跡の保存が止まっている間の照合がそれにあたる。結晶では、保存の途中の切替と、切替の前に始まった走査が遅れて返る順序がそれにあたる。どれも錠や保留の注入で JVM が固定している → [reunion_card](../dev/features/reunion_card.md) §10・[reflect_crystal](../dev/features/reflect_crystal.md) §10 |
+| 低 | 回数制限の文言を置き換えているのは要約だけ | AICore の短期の回数制限で断られたとき、要約は日本語の案内を出すが、部分要約と蒸留は例外のメッセージをそのまま出す |
+| 低 | 端末で作れない順序は JVM でしか確かめていない | 再会カードまわりでは、飛び越した画像の測定を待っている間に全画面へ移る順序と、別の痕跡の保存が止まっている間の照合がそれにあたる。結晶では、保存の途中の切替と、切替の前に始まった走査が遅れて返る順序がそれにあたる。余白では、保存中に面を替える順序、前回の訪問の保存が失敗した後の読み直し、シートが自動で広がる途中への指の割り込みがそれにあたる。どれも錠や保留の注入、時計を止めた UI テストで固定している → [reunion_card](../dev/features/reunion_card.md) §10・[reflect_crystal](../dev/features/reflect_crystal.md) §10・[margin_pane](../dev/features/margin_pane.md) §10 |
 | 低 | instrumentation は実機でしか走らず、変異で確かめられない | 変異を入れて落ちるかを見る工程が CI に無いので、緑であることしか分からない。観測点を JVM 側へ引き出せるときはそうするが、描画そのものは引き出せない → [lessons L53](../dev/lessons/L53.md) |
 | 低 | YAML の解析が簡易 | 複雑な YAML・引用・ネスト・複数行の値に対応しない。AI 推薦で使う tags と aliases を取りこぼしうる |
 | 低 | Markdown の未対応 | タップできるリンク、ノートの埋め込み、数式 |
 | 低 | 同名ノートの曖昧さ | AI 推薦は一時IDで解決するので不定にならない。規則ベースと除外判定で使う正規化タイトルの集合には、同名の畳み込みが残る |
 | 低 | R8 と署名が未設定 | R8 を有効にすると ML Kit GenAI のリフレクションで解決する部分が縮小で消え、release ビルドでだけ全AI機能が落ちる恐れがある。JVM テストは縮小前のクラスを見るので検出できず、実機検証とセットになる |
-| 低 | コメントの密度が28% | 判断が読める強みの一方、読む量が増え、コメントも実装より古くなる。経緯を書かない規約と検査は置いてある |
+| 低 | コメントの密度が29% | 判断が読める強みの一方、読む量が増え、コメントも実装より古くなる。経緯を書かない規約と検査は置いてある |
 | 低 | 依存の更新そのものが未着手 | Lint の3チェックを hint にして毎ビルドで見えるようにしてある。`genai-prompt` は beta2 から beta4 へ上げるとソースは互換だが動作は互換でないことが分かっている |
 
 ---

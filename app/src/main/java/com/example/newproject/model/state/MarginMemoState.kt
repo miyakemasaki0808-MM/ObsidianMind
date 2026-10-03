@@ -27,12 +27,28 @@ sealed class MarginMemoState {
          * **切ったら必ず示す**ための欄で、[status] とは独立に立つ
          * （切り詰めたうえで保存は成功する）。
          */
-        val wasTruncated: Boolean = false
+        val wasTruncated: Boolean = false,
+        /**
+         * 前回の読書（→ features/margin_pane.md §5.7）。今の読書を始める前の最新の訪問で、無ければ null。
+         * **今の読書の訪問は数えない**ので、読み直しても、この読書の間に自分の訪問へ置き換わらない。
+         */
+        val previousVisit: PreviousVisit? = null
     ) : MarginMemoState()
 
     /** 読み込みに失敗した。書くことはできるので、入口は閉じない。 */
     data class Error(val message: String) : MarginMemoState()
 }
+
+/**
+ * 前回の読書。**どの節に出すかは、画面が今の見出しと照合して決める**（見出し名は保存値のまま持つ）。
+ */
+data class PreviousVisit(
+    /** いちばん深く読んだ節の見出し名。見出しより前で離れた回と、見出しの無いノートは null。 */
+    val sectionTitle: String?,
+    val atEpochMillis: Long,
+    /** 最後まで読んだ回か。そうなら出さない — その前の読みかけまでは遡らない。 */
+    val readToEnd: Boolean
+)
 
 /**
  * メモの保存がどこまで進んだか。

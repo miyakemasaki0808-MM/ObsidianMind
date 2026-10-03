@@ -1,11 +1,11 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1・段2は実装済み・実機検証済み（段3〜5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
-実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
-**最終検証:** 2026-10-03 / `f47f4d5a`（段2まで。Pixel 10 Pro Fold で段2の変更面の選抜。段1の通し版は 2026-10-01 / `fd1f091e`）
-**関連コード:** 段1・段2 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
+**状態:** **段1〜3は実装済み・実機検証済み（段4・5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+実装は段に分けて進める（→ §11）。
+**最終検証:** 2026-10-03 / `621dfa9c`（段3まで。Pixel 10 Pro Fold で段3の通し版と段2から持ち越した範囲。段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
+**関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt`
-**関連テスト:** 段1・段2 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`。予定 — `SectionChatControllerTest`
+**関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`。予定 — `SectionChatControllerTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -40,7 +40,7 @@
 - **段落の控え。** メモが控えるのは見出し名までで、段落へ紐づけない。痕跡のスキーマを上げることになるので別に扱う
 - **節ごとの関連ノート推薦。** 並べ読みの候補は、ノートを開いたときに作られた関連ノートをそのまま使う
 - **半開きの形・見開き冊子・開くと本文へ移る体験。** Fold だけの体験の残りで、本書の範囲外
-- **質問とクイズ。** 撤去済みの前提で、この面へは持ち込まない
+- **質問と設問。** この面へは持ち込まない（→ [部分要約](section_ai_chat.md) 判断3）
 - **読み方の状況を推測して中身を切り替えること**（→ §8 判断2）
 - **並べ読みの右のノートを「今のノート」にすること。** 右は眺めるだけ（→ §8 判断1）
 
@@ -60,7 +60,7 @@
 
 ## 4. 現在のユーザーフロー
 
-> **段1・段2の分だけ実装済み。** 前回の跡（段3）・部分要約の3節分（段4）・このノートの関連と並べ読み（段5）は未実装で、
+> **段1〜3の分だけ実装済み。** 部分要約の3節分（段4）・このノートの関連と並べ読み（段5）は未実装で、
 > 以下のうちそれに当たる部分は予定のフローである。再会カードをペインの上に載せること（§5.2 の1）も、まだどの段にも入っていない。
 
 **開いた Fold**
@@ -195,6 +195,9 @@
 ### 5.6 見出しの照合
 
 - **照合の前に、今の見出しにも保存時と同じ整形をかける。** 保存側の `composeMemoSectionTitle` をそのまま使う。保存値は書き換えない
+- **保存値には整形をかけ直さない。** この整形は前後の空白を削ってから上限で切るので、切り口の直前が空白だと末尾に空白が残り、
+  もう一度かけると消えて索引とずれる（元の節が見つからないか、切り口と同じ別の短い見出しへ当たる）。
+  かけ直すのは、整える前に生のまま記録した訪問の見出し名（制御文字を含む）だけで、整えた値は制御文字を含まない（→ `HeadingIndex`）
 
 | 結果 | 出し方 |
 |---|---|
@@ -322,7 +325,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 ### 判断2: 中身は状況の推測ではなく、今の節で決める
 
 読み方の状況（読み途中・深掘り中など）を推測して中身を切り替える案は採らない。
-推測が外れると邪魔になり、本文の横で中身が勝手に変わるのは、常駐マスコットを撤去する理由と同じ「本文より目立つ」型になる。
+推測が外れると邪魔になり、本文の横で中身が勝手に変わるものは「本文より目立つ」。アプリ内に常駐のキャラクターを置かないのと同じ線である。
 今の節についていくだけなら、切り替わった理由を利用者が説明できる。
 
 ### 判断3: 書いている間に固定するのは書き込み先だけ
@@ -370,6 +373,10 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - 遠いプロバイダでのメモの読み込み待ち。本文は待たせないが、ペインと印は遅れて出る
   - **保存中（Saving）に面を替える交錯の実機確認。** 端末内の保存は数十ミリ秒で終わり、実機の操作では保存中を捉えられない。
     この順序は `MarginMemoSheetUiTest` と JVM の検査が持つ（オーナー判断 2026-10-01）
+  - **前回の訪問の保存が失敗した後の順序の実機確認**（前回の保存失敗 → 再訪 → 背面化 → 読み直し）。実SAFで読み取りだけ成功し
+    書き込みだけ失敗する状態を安全に作れない。この順序は `ReadingTraceControllerTest` が持つ（オーナー判断 2026-10-03）
+  - **シートが自動で広がる動きの途中へ、実際の指で割り込むこと。** 動きは一瞬で終わり、狙って止められず、観察でも
+    一覧のスクロールと区別できない。止められた後の保留の扱いは `MarginMemoSheetUiTest` が時計を止めて持つ（オーナー判断 2026-10-03）
 
 ## 11. 既知の制約・未解決事項
 
@@ -388,7 +395,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - **本文の節は、スクロールが止まったときに決める。** 流している途中で決めると、通り過ぎる節ごとに面の中身が入れ替わる
   - **入力欄の位置を保つため、面の見出しと書き込み先の行は1行で、高さを変えない。** 書いている間に本文を進めると、
     面の見出しは替わり、書き込み先の知らせが出る。どちらで行が増えても入力欄が下がる。
-    上に遅れて届く中身（再会カード・前回の跡・要約）を足す段では、別に位置を保つ形が要る
+    上に遅れて届く中身（再会カード・前回の跡・要約）を足す段では、別に位置を保つ形が要る（前回の跡は段3で入れた → 下の「段3で決めたこと」）
   - **見出しの索引（`HeadingIndex`）は、本文の解析と一緒に Main の外で作る。** 同名の中での順番と、保存時と同じ整形をかけた
     見出し名をここで1回だけ求め、画面ではメモの数に比例する振り分けだけを行う。節を引くのも二分探索で、見出しの数に比例させない。
     照合のたびに見出しを数え直すと、見出しの多いノートで表示と節の移動のたびに Main が止まる（→ [アーキテクチャ](../system/architecture.md) 判断3）
@@ -426,7 +433,22 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - **再会カードの「前回のメモを見る」は、ペインが出ていても、ほかの節のメモを開いてメモの並びまで送る**
   - **蒸留の差し替えと部分要約の終了では、余白メモを空にしない。** 見出しの印が消え、保存中の書き込みも止まるため
   - **全画面の本文には印を出さない。** 全画面から書ける面が入るのは段4
-- **段2の時点でも暫定のもの**
+- **段3で決めたこと。** 前回の読書の跡を面の見出しの下に1行で出した
+  - **「今の読書」はノートを開いた時刻で区切る。** 背面へ回すたびに今の読書の訪問が書かれるので、それより前の訪問だけから選ぶ。
+    「保存を確かめる」でノートを開いたまま読み直しても、自分の今の訪問に置き換わらない
+  - **離れたノートの訪問の保存は待たない。** 待つと、保存が止まったときにメモまで読めず置けなくなる
+    （→ [lessons L35](../lessons/L35.md)）。離れてすぐ戻ったときは、記録を頼んだ訪問をメモリから足して選ぶ。
+    保存に失敗した訪問も読んだことには変わりないので数える。**メモリの訪問は読書ごとに持ち、今の読書の訪問で前の読書の分を押し出さない** —
+    1ノート1枠だと、背面へ回した時点で前回が消え、読み直すとさらに古い訪問を前回として選ぶ
+  - **見出しより前と見出しの無いノートでは出さない。** §5.7 の「一意に一致したときだけ」を字義どおりに当てた。
+    見出しの無いノートでは、どこまで読んだかを節で指せない
+  - **訪問の見出し名はメモと同じ整形で保存し、同じ照合で引く**（→ [読書痕跡](reflect_reading_trace.md)）。
+    生の見出しは上限を超えうるので、整えずに保存すると、長い見出しの節まで読んだ訪問が検証で弾かれて書けない
+  - **書いている間は、書き始めたときの行の有無を保つ。** 跡は読み込みで遅れて届き、面の節は書いている間も本文についていくので、
+    そのまま出し入れすると入力欄が上下に動く。行があったなら跡の無い節へ移っても高さを取っておき、無かったなら書き終えるまで足さない。
+    シートで書いている間は畳む側なので出さない（→ §5.5）
+  - **日付は今年なら月/日、違う年なら年を添える。** 知らせるだけの行で、押せない。自動で出入りするので読み上げの割り込みにもしない
+- **段3の時点でも暫定のもの**
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
     並べ方はその間だけ、折り目の無い窓・左端0として仮に決まる

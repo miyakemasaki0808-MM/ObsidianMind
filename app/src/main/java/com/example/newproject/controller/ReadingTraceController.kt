@@ -5,6 +5,8 @@ import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.domain.composeMemoSectionTitle
+import com.example.newproject.domain.previousVisitOf
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
@@ -13,6 +15,7 @@ import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.mergeMarginMemos
 import com.example.newproject.model.withVisit
 import com.example.newproject.model.withoutLastVisit
+import com.example.newproject.model.state.PreviousVisit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -87,6 +90,11 @@ internal class ReadingTraceController(
         val documentId: String?,
         /** このノートを開いた時点のVault。保存はここへ向けてしか行わない。 */
         val vaultKey: String,
+        /**
+         * このノートを開いた時刻。**ここより後の訪問は今の読書のもの**で、前回の読書に数えない
+         * （→ features/margin_pane.md §5.7）。停止中に開いても入る（[startedAtMillis] とは別）。
+         */
+        val openedAtMillis: Long,
         /**
          * 読書区間の開始時刻。**停止中に開いたセッションでは null。**
          *
@@ -185,6 +193,23 @@ internal class ReadingTraceController(
      */
     private val visitSaves = ConcurrentHashMap<Job, String>()
 
+    /**
+     * ノートごとに、記録を頼んだ訪問（キーは [pendingKey]）。**読書ごとに1件、新しい [MAX_REQUESTED_READINGS] 回分まで。**
+     * Main からだけ触る。
+     *
+     * 訪問はノートを離れてから非同期に書かれるので、離れてすぐ戻ると、ファイルにはまだ前の読書が無い。
+     * **書き終わりは待たない** — 待つと保存が止まったときにメモまで読めず、置けなくなる。
+     * 代わりにここから足して前回の読書を選ぶ（→ [loadMemos]）。保存に失敗した訪問も、読んだことには変わりない。
+     * キーが Vault を含むので、Vault を替えても別の Vault の読書は混ざらない（切替で捨てる必要が無い）。
+     *
+     * **今の読書の訪問で、前の読書の分を押し出さない。** 1ノート1枠にすると、背面へ回して今の訪問を頼んだ時点で
+     * 前の読書の分が消える。読み直すと今の分は開始時刻で除くので、さらに古い訪問を前回として選んでしまう。
+     */
+    private val requestedVisits = HashMap<String, List<RequestedVisit>>()
+
+    /** 記録を頼んだ訪問と、頼んだ読書（[Session.id]）。同じ読書が頼み直したら差し替える。 */
+    private class RequestedVisit(val sessionId: Long, val visit: ReadingVisit)
+
     /** 書けなかった痕跡。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
     private class PendingWrite(val vaultKey: String, val trace: ReadingTrace)
 
@@ -250,6 +275,7 @@ internal class ReadingTraceController(
         val id = ++sessionCounter
         // Vault未選択なら保存先が無いので、そもそも追跡しない。
         val vaultKey = currentVaultKey()
+        val now = clock()
         session = vaultKey?.let {
             Session(
                 id = id,
@@ -257,9 +283,10 @@ internal class ReadingTraceController(
                 noteTitle = noteTitle,
                 documentId = documentId,
                 vaultKey = it,
+                openedAtMillis = now,
                 // **停止中に始まったセッションは計測しない。** 理由が残っている間は
                 // まだ本文が前景に出ていない。
-                startedAtMillis = clock().takeIf { pauseReasons.isEmpty() }
+                startedAtMillis = now.takeIf { pauseReasons.isEmpty() }
             )
         }
         return id
@@ -383,28 +410,40 @@ internal class ReadingTraceController(
      * ファイルが無いのか読めなかったのかを区別できない（→ lessons L47）。
      * 無いことを確かめるのは [confirmAbsence] のときだけ — 置き場を全列挙するので、
      * 送信の照合が要るときに限る。
+     *
+     * **前回の読書も同じ1回で返す**（→ features/margin_pane.md §6.3）。今の読書より前の訪問だけから選ぶ。
      */
     suspend fun loadMemos(vaultRelativePath: String, confirmAbsence: Boolean = false): MemoLoad {
         if (vaultRelativePath.isBlank()) return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
         val vaultKey = currentVaultKey() ?: return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
+        // **頼んだ時点で決める**（→ lessons L26）。どちらも Main からだけ触る値なので、IO へ移る前に読む。
+        val requested = requestedVisits[pendingKey(vaultKey, vaultRelativePath)].orEmpty().map { it.visit }
+        val readingStartedAt = session
+            ?.takeIf { it.vaultKey == vaultKey && it.vaultRelativePath == vaultRelativePath }
+            ?.openedAtMillis
+            ?: clock()
         return withContext(ioDispatcher) {
             // **無いことの確認も同じ錠の内側で行う。** 外へ出すと、確かめるまでの間に書かれたファイルを見落とす。
-            val (stored, fileRead) = writeMutex.withLock {
+            val (trace, fileRead) = writeMutex.withLock {
                 when (val loaded = persistence.load(vaultRelativePath, vaultKey)) {
-                    is ReadingTraceReadResult.Valid -> loaded.trace.memos to MemoFileRead.Read
+                    is ReadingTraceReadResult.Valid -> loaded.trace to MemoFileRead.Read
                     ReadingTraceReadResult.None ->
-                        emptyList<MarginMemo>() to
+                        null to
                             if (confirmAbsence && isConfirmedAbsent(vaultKey, vaultRelativePath)) {
                                 MemoFileRead.ConfirmedAbsent
                             } else {
                                 MemoFileRead.Unconfirmed
                             }
-                    is ReadingTraceReadResult.Corrupt -> emptyList<MarginMemo>() to MemoFileRead.Unconfirmed
+                    is ReadingTraceReadResult.Corrupt -> null to MemoFileRead.Unconfirmed
                 }
             }
             val pending = pendingWriteMemos(vaultKey, vaultRelativePath)
             val held = heldMemosFor(vaultKey, vaultRelativePath)
-            MemoLoad(mergeMarginMemos(mergeMarginMemos(stored, pending), held), fileRead)
+            MemoLoad(
+                memos = mergeMarginMemos(mergeMarginMemos(trace?.memos.orEmpty(), pending), held),
+                fileRead = fileRead,
+                previousVisit = previousVisitOf(trace?.visits.orEmpty() + requested, readingStartedAt)
+            )
         }
     }
 
@@ -745,7 +784,9 @@ internal class ReadingTraceController(
 
         val visit = ReadingVisit(
             atEpochMillis = clock(),
-            deepestSectionTitle = active.deepestSectionTitle,
+            // **メモの見出しと同じ整形をかける。** 生の見出しは上限を超えうるので、そのまま渡すと
+            // 検証で弾かれ、そのノートの訪問は再試行しても二度と書けない。照合も同じ整形で行う（→ readFrontier）。
+            deepestSectionTitle = composeMemoSectionTitle(active.deepestSectionTitle),
             // totalBlocks が 0 のまま（メモだけ置いて離れた）なら到達率は 0。
             // progressPercent は 0 除算を自分で防ぐので、そのまま渡してよい。
             progressPercent = progressPercent(
@@ -759,6 +800,9 @@ internal class ReadingTraceController(
         val previous = active.recordedVisit
         active.recordedVisit = visit
         active.dirty = false
+        val requestKey = pendingKey(active.vaultKey, path)
+        val otherReadings = requestedVisits[requestKey].orEmpty().filter { it.sessionId != active.id }
+        requestedVisits[requestKey] = (otherReadings + RequestedVisit(active.id, visit)).takeLast(MAX_REQUESTED_READINGS)
         val title = active.noteTitle
         val documentId = active.documentId
         val vaultKey = active.vaultKey
@@ -927,6 +971,9 @@ internal class ReadingTraceController(
         const val MAX_PENDING_WRITES = 8
 
         const val MIN_READING_MILLIS = 10_000L
+
+        /** 記録を頼んだ訪問を何回分の読書まで持つか。今の読書と、その前の読書。 */
+        const val MAX_REQUESTED_READINGS = 2
     }
 }
 
@@ -951,5 +998,12 @@ internal enum class MemoSaveOutcome { Saved, Held, Full, Lost }
  */
 internal enum class MemoDeleteOutcome { Deleted, Failed }
 
-/** 1ノート分のメモの読み込み。[memos] は3箇所を合流した一覧（古い順）。 */
-internal data class MemoLoad(val memos: List<MarginMemo>, val fileRead: MemoFileRead)
+/**
+ * 1ノート分のメモの読み込み。[memos] は3箇所を合流した一覧（古い順）。
+ * [previousVisit] は今の読書を始める前の最新の訪問（→ features/margin_pane.md §5.7）。
+ */
+internal data class MemoLoad(
+    val memos: List<MarginMemo>,
+    val fileRead: MemoFileRead,
+    val previousVisit: PreviousVisit? = null
+)

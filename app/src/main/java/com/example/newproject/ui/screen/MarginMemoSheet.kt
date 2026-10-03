@@ -268,10 +268,17 @@ internal fun MarginMemoSheetContent(
      * Fold を開いた直後は、しまう途中のシートとペインが一瞬だけ両方組まれる。どちらもフォーカスを取りにいくと、
      * 後からしまわれるシートの入力欄がフォーカスを持ち去り、ペインに残らない。
      */
-    active: Boolean = true
+    active: Boolean = true,
+    /**
+     * この節に前回の読書の跡を出すなら、その訪問の日時（→ `showsPreviousReading`）。出さなければ null。
+     * 照合は画面の外で済ませ、ここは行の出し方（→ [previousReadingRowFor]）だけを決める。
+     */
+    previousReadingAt: Long? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
+    // 書き始めたときに前回の跡の行があったか。書いていなければ null（→ [previousReadingRowFor]）。
+    var previousRowAtFocus by remember { mutableStateOf<Boolean?>(null) }
     val focusRequester = remember { FocusRequester() }
     // 前の面で書いていたなら、この面の入力欄へフォーカスを戻す。**窓がフォーカスを得てからも頼み直す** —
     // 画面の作り直しの直後は窓がまだフォーカスを持たず、そのときに頼んでも残らないことがある。
@@ -291,6 +298,7 @@ internal fun MarginMemoSheetContent(
     }
     val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val compact = compactWhileTyping(asSheet = asSheet, inputFocused = inputFocused, imeVisible = imeVisible)
+    val previousRow = previousReadingRowFor(previousReadingAt, compact, previousRowAtFocus)
     val focusManager = LocalFocusManager.current
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
     var othersExpanded by remember { mutableStateOf(false) }
@@ -342,6 +350,7 @@ internal fun MarginMemoSheetContent(
                     TextButton(onClick = onClose) { Text("閉じる", color = OnSurfaceMuted, fontSize = 13.sp) }
                 }
             }
+            PreviousReadingLine(previousRow)
             // **この1行は高さを変えない。** 書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない
             // （→ features/margin_pane.md §5.2）。知らせが無いときは使い方を出す。
             WriteTargetLine(
@@ -360,6 +369,8 @@ internal fun MarginMemoSheetContent(
                     .focusRequester(focusRequester)
                     .onFocusChanged { focus ->
                         if (focus.isFocused) onFocusIntentChange(true) else if (inputFocused) blurPending = true
+                        previousRowAtFocus =
+                            if (focus.isFocused) previousRowAtFocus ?: (previousRow != PreviousReadingRow.Hidden) else null
                         inputFocused = focus.isFocused
                     },
                 placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
@@ -533,6 +544,33 @@ private fun WriteTargetLine(
 
 /** 書き込み先の1行の高さ。**知らせの有無で変えない**（入力欄を動かさないため）。 */
 private val WRITE_TARGET_LINE_HEIGHT = 32.dp
+
+/**
+ * 前回の読書の跡（→ features/margin_pane.md §5.7）。**知らせるだけで、押せない。**
+ * 自動で出入りする行なので、読み上げの割り込み（ライブ領域）にもしない（→ §9）。
+ */
+@Composable
+private fun PreviousReadingLine(row: PreviousReadingRow) {
+    when (row) {
+        PreviousReadingRow.Hidden -> Unit
+        PreviousReadingRow.Reserved -> Spacer(modifier = Modifier.height(PREVIOUS_READING_LINE_HEIGHT))
+        is PreviousReadingRow.Shown -> Box(
+            modifier = Modifier.fillMaxWidth().height(PREVIOUS_READING_LINE_HEIGHT),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = previousReadingLabel(row.atEpochMillis, System.currentTimeMillis()),
+                color = OnSurfaceMuted,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** 前回の読書の跡の行の高さ。**取っておくときも同じ高さにする**（入力欄を動かさないため）。 */
+private val PREVIOUS_READING_LINE_HEIGHT = 24.dp
 
 /**
  * 保存の進み具合。**[MemoSaveStatus.Held] を「保存済み」と呼ばない** —

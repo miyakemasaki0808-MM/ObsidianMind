@@ -90,6 +90,7 @@ import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
 import com.example.newproject.domain.arrangeMemos
+import com.example.newproject.domain.showsPreviousReading
 import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -181,6 +182,12 @@ internal fun NoteReaderTab(
         val model = sectionModel ?: return@remember null
         // **見出しの索引は解析と一緒に Main の外で作ってある。** ここでは見出しをたどらない。
         arrangeMemos(memos, model.headingIndex, bodySection ?: SectionRef(title = null))
+    }
+    // 前回の読書の跡。**メモと同じ照合で、見出しが一意に一致した節にだけ出す**（→ features/margin_pane.md §5.7）。
+    val previousReadingAt = remember(readyMemos?.previousVisit, sectionModel, bodySection) {
+        val previous = readyMemos?.previousVisit ?: return@remember null
+        val model = sectionModel ?: return@remember null
+        previous.atEpochMillis.takeIf { showsPreviousReading(previous, model.headingIndex, bodySection) }
     }
     // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
     val jumpToSection: (SectionRef) -> Unit = { ref ->
@@ -471,7 +478,8 @@ internal fun NoteReaderTab(
                         onClose = dismissMemoSheet,
                         focusIntent = memoFocusIntent,
                         onFocusIntentChange = { memoFocusIntent = it },
-                        active = uiState.isMarginMemoSheetVisible && !paneVisible
+                        active = uiState.isMarginMemoSheetVisible && !paneVisible,
+                        previousReadingAt = previousReadingAt
                     )
                 }
             ) {
@@ -560,7 +568,8 @@ internal fun NoteReaderTab(
                                 modifier = Modifier.padding(top = 16.dp),
                                 focusIntent = memoFocusIntent,
                                 onFocusIntentChange = { memoFocusIntent = it },
-                                active = true
+                                active = true,
+                                previousReadingAt = previousReadingAt
                             )
                         }
                     }

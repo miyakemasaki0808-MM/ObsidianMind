@@ -14,6 +14,7 @@ import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.state.PreviousVisit
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -644,6 +645,24 @@ class MarginMemoControllerTest {
         advanceUntilIdle()
 
         assertEquals(listOf(path), loads)
+    }
+
+    /** **前回の読書はメモと同じ1回の読み込みで届く**（→ features/margin_pane.md §6.3）。置いても消えない。 */
+    @Test
+    fun `前回の読書を一覧と一緒に持ち、メモを置いても保つ`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val previous = PreviousVisit("本論", atEpochMillis = 1_000L, readToEnd = false)
+        val controller = controller(store, loadMemos = { _, _ -> read().copy(previousVisit = previous) })
+
+        controller.open(path)
+        advanceUntilIdle()
+        assertEquals(previous, ready(store).previousVisit)
+
+        controller.place("置いたメモ", "本論")
+        advanceUntilIdle()
+
+        assertEquals(listOf("置いたメモ"), ready(store).memos.map { it.text })
+        assertEquals(previous, ready(store).previousVisit)
     }
 
     private fun ready(store: NoteUiStateStore): MarginMemoState.Ready =

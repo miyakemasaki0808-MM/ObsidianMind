@@ -4,13 +4,16 @@ import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.MemoDeleteOutcome
 import com.example.newproject.controller.MemoSaveOutcome
+import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.withVisit
+import com.example.newproject.model.state.PreviousVisit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
@@ -45,6 +48,28 @@ class ReadingTraceControllerTest {
         val visit = saved.visits.single()
         assertEquals("導入", visit.deepestSectionTitle)
         assertEquals(40, visit.progressPercent)
+    }
+
+    /**
+     * 生の見出しをそのまま記録すると、上限を超えた見出しは保存の検証で弾かれ、そのノートの訪問は二度と書けない。
+     * **実物のエンコーダに通して**確かめる（このテストの保存先は検証をしない）。
+     */
+    @Test
+    fun `records a visit whose deepest heading is over the limit`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+        val longTitle = "\u0007長い見出し" + "あ".repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES / 3)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", null)
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = longTitle)
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val saved = persistence.saved.single()
+        ReadingTraceJson.encode(saved)
+        assertEquals(composeMemoSectionTitle(longTitle), saved.visits.single().deepestSectionTitle)
     }
 
     // 一瞬引いてすぐ次のノートへ送った分を訪問に数えると痕跡が濁る。
@@ -1310,6 +1335,132 @@ class ReadingTraceControllerTest {
 
         assertEquals(MemoFileRead.Unconfirmed, load.fileRead)
         assertEquals(0, persistence.listKeysCalls)
+    }
+
+    // ── 前回の読書（→ features/margin_pane.md §5.7・§6.3）──────────────────────────
+
+    /**
+     * 背面へ回すと今の読書の訪問が書かれる。**読み直してもそれを前回に数えない** —
+     * 「保存を確かめる」はノートを開いたまま一覧を読み直す。
+     */
+    @Test
+    fun `前回の読書は今の読書より前の最新の訪問から選ぶ`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 3))
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 8, blockFraction = 1f, totalBlocks = 10, sectionTitle = "まとめ")
+        clock.advance(10_000L)
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        assertEquals("今の読書の訪問がファイルに書かれていない", 4, persistence.stored("ideas/habit.md")!!.visits.size)
+        // 戻ってしばらくしてから読み直す。読み直した時刻ではなく、ノートを開いた時刻で区切る。
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(5_000L)
+
+        val load = controller.loadMemos("ideas/habit.md")
+
+        assertEquals(PreviousVisit("導入", 3_000L, readToEnd = false), load.previousVisit)
+    }
+
+    /**
+     * 訪問はノートを離れてから書かれる。**書き終わりを待たない**ので、離れてすぐ戻るとファイルにはまだ無い。
+     * 書けなかった訪問も、読んだことには変わりない。
+     */
+    @Test
+    fun `離れてすぐ戻って訪問がまだファイルに無くても、前回に数える`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        persistence.put(storedTrace(count = 1))
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 5, blockFraction = 1f, totalBlocks = 10, sectionTitle = "本論")
+        clock.advance(10_000L)
+        persistence.failSave = true
+        controller.flush()
+        advanceUntilIdle()
+        val leftAt = clock.now()
+
+        clock.advance(1_000L)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        val load = controller.loadMemos("ideas/habit.md")
+
+        assertEquals(1, persistence.stored("ideas/habit.md")!!.visits.size)
+        assertEquals(PreviousVisit("本論", leftAt, readToEnd = false), load.previousVisit)
+    }
+
+    /**
+     * **今の読書の訪問で、前の読書の分を押し出さない。** 前回の保存に失敗すると前回はメモリにしか無い。
+     * 今の読書を背面へ回すとその訪問も頼まれるが、読み直したときに前回が古い訪問へ戻ってはいけない。
+     * 背面化を2回にするのは、同じ読書の頼み直しが前の読書の分を押し出さないことも見るため。
+     */
+    @Test
+    fun `前回の保存に失敗した後、今の読書を背面へ回して読み直しても同じ前回を返す`() = runTest {
+        listOf(
+            "前回は最後まで読んだ" to (9 to "まとめ"),
+            "前回は途中まで読んだ" to (5 to "本論")
+        ).forEach { (label, deepest) ->
+            val clock = TestClock()
+            val persistence = FakePersistence()
+            persistence.put(storedTrace(count = 1))
+            val controller = controller(persistence, clock)
+            controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+            controller.onReadingProgress(deepest.first, blockFraction = 1f, totalBlocks = 10, sectionTitle = deepest.second)
+            clock.advance(10_000L)
+            persistence.failSave = true
+            controller.flush()
+            advanceUntilIdle()
+
+            clock.advance(1_000L)
+            controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+            val first = controller.loadMemos("ideas/habit.md").previousVisit
+            persistence.failSave = false
+            repeat(2) { round ->
+                controller.onReadingProgress(round + 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+                clock.advance(10_000L)
+                controller.pause(ReadingPauseReason.AppBackground)
+                advanceUntilIdle()
+                controller.resume(ReadingPauseReason.AppBackground)
+            }
+            clock.advance(5_000L)
+
+            assertEquals(label, deepest.second, first?.sectionTitle)
+            assertEquals(label, first, controller.loadMemos("ideas/habit.md").previousVisit)
+        }
+    }
+
+    /** メモリの訪問は Vault とノートで分ける。別のノート・別の Vault の前回に混ざらない。 */
+    @Test
+    fun `頼んだ訪問は別のノートと別のVaultの前回に混ざらない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val vault = FakeVault()
+        val controller = controller(persistence, clock, vault)
+        persistence.failSave = true
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 5, blockFraction = 1f, totalBlocks = 10, sectionTitle = "本論")
+        clock.advance(10_000L)
+        controller.flush()
+        advanceUntilIdle()
+        clock.advance(1_000L)
+
+        controller.onNoteOpened("ideas/other.md", "別のノート", "doc-2")
+        assertNull("別のノート", controller.loadMemos("ideas/other.md").previousVisit)
+
+        vault.key = VAULT_B
+        controller.discard()
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        assertNull("別のVault", controller.loadMemos("ideas/habit.md").previousVisit)
+    }
+
+    @Test
+    fun `訪問が無ければ前回は無い`() = runTest {
+        val persistence = FakePersistence()
+        val controller = controller(persistence, TestClock())
+        controller.onNoteOpened("ideas/absent.md", "初めて", null)
+
+        assertNull(controller.loadMemos("ideas/absent.md").previousVisit)
     }
 
     /**

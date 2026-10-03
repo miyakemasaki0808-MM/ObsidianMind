@@ -1,6 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.isReadToEnd
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.SummaryState
 
@@ -29,7 +30,7 @@ internal fun reunionSlot(card: ReadingTraceCard, summary: SummaryState): Reunion
         // **選別や前後の要約が決まるまで、ノートの要約を先に出さない。**
         // 先に出して後から差し替えると、読み始めた枠の中身が入れ替わる。
         card.isSummaryLoading -> ReunionSlot.Waiting
-        card.lastProgressPercent < 100 -> ReunionSlot.Hidden
+        !isReadToEnd(card.lastProgressPercent) -> ReunionSlot.Hidden
         else -> noteSummarySlot(summary)
     }
 }

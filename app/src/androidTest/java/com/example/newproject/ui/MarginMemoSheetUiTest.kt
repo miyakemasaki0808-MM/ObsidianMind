@@ -107,6 +107,8 @@ class MarginMemoSheetUiTest {
         var arranged by mutableStateOf<ArrangedMemos?>(null)
         var reveal by mutableStateOf<MemoReveal?>(null)
         var focusIntent by mutableStateOf(false)
+        /** この節に前回の読書の跡を出すなら、その訪問の日時。テストが節を移ったことにして替える。 */
+        var previousReadingAt by mutableStateOf<Long?>(null)
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -150,7 +152,8 @@ class MarginMemoSheetUiTest {
                             reveal = harness.reveal,
                             onRevealHandled = { harness.reveal = null },
                             focusIntent = harness.focusIntent,
-                            onFocusIntentChange = { harness.focusIntent = it }
+                            onFocusIntentChange = { harness.focusIntent = it },
+                            previousReadingAt = harness.previousReadingAt
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -405,6 +408,46 @@ class MarginMemoSheetUiTest {
         // 「本文を戻す」で本文が書き込み先へ戻れば、知らせは消える。
         composeRule.onNodeWithText("本文を戻す").performClick()
         composeRule.onNodeWithText("「節B」へ書き込み中").assertDoesNotExist()
+    }
+
+    /**
+     * **前回の跡の行が出入りしても、書いている間は入力欄を動かさない**（→ features/margin_pane.md §5.2）。
+     * 面の節は書いている間も本文についていくので、跡のある節と無い節を行き来する。
+     */
+    @Test
+    fun 跡のある節で書き始めたら跡の無い節へ移っても入力欄は動かない() {
+        val harness = Harness()
+        harness.previousReadingAt = PREVIOUS_READING_AT
+        setContent(harness)
+        composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertExists()
+
+        input.performTextInput("跡のある節で書き始めた")
+        val before = input.fetchSemanticsNode().boundsInRoot
+        composeRule.runOnIdle { harness.previousReadingAt = null }
+
+        composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertDoesNotExist()
+        assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
+
+        composeRule.runOnIdle { harness.previousReadingAt = PREVIOUS_READING_AT }
+        composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertExists()
+        assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
+    }
+
+    /** 跡は読み込みで遅れて届くこともある。**書いている間は足さず、書き終えたら出す。** */
+    @Test
+    fun 跡の無いときに書き始めたら跡が届いても入力欄は動かず書き終えると出る() {
+        val harness = Harness()
+        setContent(harness)
+
+        input.performTextInput("跡の無い節で書き始めた")
+        val before = input.fetchSemanticsNode().boundsInRoot
+        composeRule.runOnIdle { harness.previousReadingAt = PREVIOUS_READING_AT }
+
+        composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertDoesNotExist()
+        assertEquals(before, input.fetchSemanticsNode().boundsInRoot)
+
+        composeRule.runOnIdle { focusClearer() }
+        composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertExists()
     }
 
     /** ほかの節のメモは畳んで件数だけ。開くと節の名前が並び、押すと本文がその節へ飛ぶ。 */
@@ -756,6 +799,9 @@ class MarginMemoSheetUiTest {
         const val SHEET_TAG = "シート"
         const val NOTE_A = "content://vault-a/a.md"
         const val NOTE_B = "content://vault-a/b.md"
+        /** 前回の跡の文言の頭。日付は今日によって年が付くかが変わるので、頭だけで探す。 */
+        const val PREVIOUS_READING = "前回はここまで読んだ"
+        const val PREVIOUS_READING_AT = 1_757_635_200_000L
         val READY = MarginMemoState.Ready(memos = emptyList())
     }
 }

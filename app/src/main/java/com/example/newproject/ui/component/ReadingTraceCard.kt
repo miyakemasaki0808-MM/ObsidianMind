@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.ReunionSlot
 import com.example.newproject.model.ReunionKind
+import com.example.newproject.model.isReadToEnd
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AccentText
@@ -147,7 +148,7 @@ internal fun reunionLead(slot: ReunionSlot.Shown): String? = when (slot.kind) {
 internal fun readingTraceHeadline(card: ReadingTraceCard, nowMillis: Long): String {
     val whenLabel = elapsedLabel(card.lastVisitAtMillis, nowMillis)
     val where = when {
-        card.lastProgressPercent >= 100 -> "最後まで読んでいます"
+        isReadToEnd(card.lastProgressPercent) -> "最後まで読んでいます"
         !card.lastSectionTitle.isNullOrBlank() ->
             "「${card.lastSectionTitle}」の節まで読んでいます（全体の${card.lastProgressPercent}%）"
         else -> "全体の${card.lastProgressPercent}%のあたりまで読んでいます"

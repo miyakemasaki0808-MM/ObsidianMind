@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-10-03 | — | 「この部分」に前回の読書の跡を出し、長い見出しの節まで読んだ訪問が保存されない不具合を直した（段3・別の目と実機検証済み） | [margin_pane](features/margin_pane.md) §11 |
 | 2026-10-02 | — | 余白メモの書きかけと送信の照合、節への追従、見出しとの照合と印、本文と併存するシートを入れた（段2・別の目と実機検証済み） | [margin_pane](features/margin_pane.md) §11 |
 | 2026-10-01 | — | 開いたFoldで本文の右に余白メモのペインを置き、✎ でペインの開閉とシートを切り替えるようにした（段1・別の目と実機検証済み） | [margin_pane](features/margin_pane.md) §11 |
 | 2026-09-30 | — | 質問・クイズと常駐マスコットの撤去、見出しの要約ボタンを実機で検証し、通し版8件が成功した（一部未保証） | [レビュー一覧](../review/README.md) |
@@ -77,7 +78,7 @@
 | 2026-09-19 | — | dev に通読ルートを置き、廃止した design/ を指していたマニフェストのコメントを直した | [document_map](document_map.md) §5 |
 | 2026-09-19 | — | owner文書10本のファイル名へ読む順の番号を付け、参照28ファイルを張り替えた | [owner/README](../owner/README.md) |
 | 2026-09-19 | — | 蒸留の太字範囲を端のつまみと微調整で自由に決められるようにした（実機未確認） | [reflect_distill](features/reflect_distill.md) §5・判断15〜19 |
-| 2026-09-19 | — | ノートへのひとことの廃止を決め、AI-8 を直さない扱いにして Now から落とした | [reflect_remark](features/reflect_remark.md) |
+| 2026-09-19 | — | ノートへのひとことの廃止を決め、AI-8 を直さない扱いにして Now から落とした | reflect_remark（削除済み） |
 | 2026-09-19 | — | Reflect リニューアルの範囲を3本柱（蒸留の自由範囲・余白メモ・結晶）へ確定した | — |
 | 2026-09-19 | — | Reflect 機能リニューアルを Now の先頭へ置き、最初の作業を範囲決めと明記した | — |
 | 2026-09-19 | — | ひとことの同文再生成と返事消失を実機で確認し、全文・実保存・連打の観測手順を補強した | [remark_regenerate](../review/device_validation/remark_regenerate.md) |
@@ -296,27 +297,27 @@
 | 2026-08-12 | — | 壊れた節参照25件を内容参照へ直し、番号依存を AdrShapeTest で止めた | [lessons](lessons.md) L29 |
 | 2026-08-12 | — | 最終検証の捏造コミット12件を実在する値へ直し、実在と12節の存在を検査へ載せた | **[lessons](lessons.md) L38**・[_template](features/_template.md) |
 | 2026-08-11 | — | features の全16本を12節の新様式へ揃え、空欄の代わりに理由を書く規約を検査へ載せた | **[_template](features/_template.md)**・[lessons](lessons.md) L29 |
-| 2026-08-11 | — | さがす・セクションAIをテンプレートへ移行し、クイズの入口の誤りを直した | **[ai_picker](features/ai_picker.md)**・**[section_ai_chat](features/section_ai_chat.md)**・[quiz](features/quiz.md) |
+| 2026-08-11 | — | さがす・セクションAIをテンプレートへ移行し、クイズの入口の誤りを直した | **[ai_picker](features/ai_picker.md)**・**[section_ai_chat](features/section_ai_chat.md)**・quiz（削除済み） |
 | 2026-08-11 | — | Rediscover・ノート要約・クイズの機能仕様を実装から起こして新設した | **[rediscover](features/rediscover.md)（新規）**・**[note_summary](features/note_summary.md)（新規）** |
 | 2026-08-11 | — | 恒久文書の _wip 項目ID 13件を内容の記述へ直し、検査を features / system へ広げた | [decisions/README](decisions/README.md)・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | ADRの行数規則を `wc -l` 基準の30行へ直し、`AdrShapeTest` で検査に載せた | [decisions/README](decisions/README.md)・[lessons](lessons.md) L29 |
 | 2026-08-11 | — | 「結果がAIタブへ直接出る」という誤りを文書2本とKDoc2箇所から潰した | **[background_ai_ux](system/background_ai_ux.md) §4**・[lessons](lessons.md) L37 |
-| 2026-08-11 | — | ひとことの復元・生成・通知の記述を実装から起こし直した | **[reflect_remark](features/reflect_remark.md) §4・§5** |
+| 2026-08-11 | — | ひとことの復元・生成・通知の記述を実装から起こし直した | **reflect_remark（削除済み） §4・§5** |
 | 2026-08-11 | — | リポジトリ直下と dev / features / system に索引を新設し、README の規約を揃えた | [README](../../README.md)（新設）・[dev/README](README.md)（新設） |
 | 2026-08-11 | — | 設計書を features / system / decisions へ種別で分け、機能仕様テンプレートを標準化した | **[decisions/README](decisions/README.md)**（新設）・[document_map](document_map.md) §2 |
 | 2026-08-10 | — | feature_ideas を圧縮し、冊子モードを設計書へ切り出してローカルDB案を起票した | **[booklet_mode](features/booklet_mode.md)**（新設） |
 | 2026-08-10 | — | 外部レビュー本文を最新1本だけ残す運用へ変え、過去4本を削除した | [review/README](../review/README.md) |
-| 2026-08-09 | — | リンク付き文の問い判定から `でしょう` `だろう` を外した（誤拒否の修正） | **[reflect_remark](features/reflect_remark.md)** §11.8 |
-| 2026-08-09 | — | ひとことの「問いか接続かどちらか一方」を指示から検査へ移した | **[reflect_remark](features/reflect_remark.md)** §11.8 |
-| 2026-08-09 | — | 退避のP1 2件を塞ぎ、映し返しの本文の出所を直した | **[reflect_remark](features/reflect_remark.md)** §11.8 |
-| 2026-08-09 | — | 返事の退避を作り直した（同日中の再設計）＋システムBack対応 | **[reflect_remark](features/reflect_remark.md)** §11.7 |
-| 2026-08-09 | — | 「保存ボタンを押した文章は必ず永続化する」を契約として固めた（5件） | **[reflect_remark](features/reflect_remark.md)** §11.7 |
-| 2026-08-09 | — | ひとこと・映し返しの冒頭から「あなた」を外した | **[reflect_remark](features/reflect_remark.md)** §11.6 |
-| 2026-08-09 | — | ひとことの実機確認4巡目を反映した（長文の扱い） | **[reflect_remark](features/reflect_remark.md)** §11 |
-| 2026-08-09 | — | ひとことの実機確認3巡目を反映した（返事の保全＋1往復で閉じる＋Rediscover連携） | **[reflect_remark](features/reflect_remark.md)** §10 |
-| 2026-08-09 | — | ひとことの実機確認2巡目を反映した（言語バグ＋返事欄） | **[reflect_remark](features/reflect_remark.md)** §9 |
-| 2026-08-09 | — | ひとことの実機確認1巡目を反映した（4件） | **[reflect_remark](features/reflect_remark.md)** §8 |
-| 2026-08-09 | — | 「AI補記メモ」を「ノートへのひとこと」へ作り直した | **[reflect_remark](features/reflect_remark.md)**（新規） |
+| 2026-08-09 | — | リンク付き文の問い判定から `でしょう` `だろう` を外した（誤拒否の修正） | **reflect_remark（削除済み）** §11.8 |
+| 2026-08-09 | — | ひとことの「問いか接続かどちらか一方」を指示から検査へ移した | **reflect_remark（削除済み）** §11.8 |
+| 2026-08-09 | — | 退避のP1 2件を塞ぎ、映し返しの本文の出所を直した | **reflect_remark（削除済み）** §11.8 |
+| 2026-08-09 | — | 返事の退避を作り直した（同日中の再設計）＋システムBack対応 | **reflect_remark（削除済み）** §11.7 |
+| 2026-08-09 | — | 「保存ボタンを押した文章は必ず永続化する」を契約として固めた（5件） | **reflect_remark（削除済み）** §11.7 |
+| 2026-08-09 | — | ひとこと・映し返しの冒頭から「あなた」を外した | **reflect_remark（削除済み）** §11.6 |
+| 2026-08-09 | — | ひとことの実機確認4巡目を反映した（長文の扱い） | **reflect_remark（削除済み）** §11 |
+| 2026-08-09 | — | ひとことの実機確認3巡目を反映した（返事の保全＋1往復で閉じる＋Rediscover連携） | **reflect_remark（削除済み）** §10 |
+| 2026-08-09 | — | ひとことの実機確認2巡目を反映した（言語バグ＋返事欄） | **reflect_remark（削除済み）** §9 |
+| 2026-08-09 | — | ひとことの実機確認1巡目を反映した（4件） | **reflect_remark（削除済み）** §8 |
+| 2026-08-09 | — | 「AI補記メモ」を「ノートへのひとこと」へ作り直した | **reflect_remark（削除済み）**（新規） |
 | 2026-08-08 | — | CIでのエミュレータ実行を再検討し、見送りで確定した。あわせて「件数をトリガーにしない」を教訓へ足した（L31） | **[instrumentation_testing](system/instrumentation_testing.md) 判断4**・[lessons](lessons.md) L31 |
 | 2026-08-08 | — | TEST-2 段階4a〜4c — 端末AIの生成・再生成・タブ遷移の instrumentation を10件足した | **[instrumentation_testing](system/instrumentation_testing.md)** |
 | 2026-08-08 | — | instrumentation 段階1〜3の実機確認が完了した（24/24 成功・0 skipped）。あわせて「CIにエミュレータジョブを足さない」判断を撤回した | **[instrumentation_testing](system/instrumentation_testing.md)** |

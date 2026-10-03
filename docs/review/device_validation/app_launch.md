@@ -18,10 +18,11 @@ OPの再生条件を触ったときに使う。**起動経路そのものを触�
 ## 検証前
 
 - **Vaultの状態に依存しない。** 常設検証用Vaultのままでよく、一時Vaultも fixture も要らない。
-- 開始前に `MainActivity` が1枚だけであることを数えておく。
+- 開始前に `MainActivity` が1枚だけであることを数えておく。**タスクの履歴の行（`Hist #`）だけを数える。**
+  同じ記録は前面・フォーカス・IME の行などにも出るので、`ActivityRecord` の行を数えると1枚でも10前後になる。
 
   ```text
-  adb -s <serial> shell dumpsys activity activities | grep -cE 'ActivityRecord\{[^}]*MainActivity'
+  adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*MainActivity'
   ```
 
 - **`LAUNCH-01` の前に、アプリを完全に終了させる**（タスクを一度捨てる）。

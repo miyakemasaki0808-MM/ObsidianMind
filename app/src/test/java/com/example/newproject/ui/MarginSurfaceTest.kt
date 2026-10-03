@@ -2,6 +2,9 @@ package com.example.newproject.ui
 
 import com.example.newproject.ui.screen.MarginToggle
 import com.example.newproject.ui.screen.MarginWindowShift
+import com.example.newproject.ui.screen.PreviousReadingRow
+import com.example.newproject.ui.screen.previousReadingLabel
+import com.example.newproject.ui.screen.previousReadingRowFor
 import com.example.newproject.ui.screen.marginToggleFor
 import com.example.newproject.ui.screen.marginWindowShiftFor
 import com.example.newproject.ui.screen.MemoReveal
@@ -17,6 +20,8 @@ import com.example.newproject.model.SectionRef
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 // ✎ と窓の切り替わりで、どの余白を出すか（→ features/margin_pane.md §5.4）。
 class MarginSurfaceTest {
@@ -172,5 +177,42 @@ class MarginSurfaceTest {
         assertEquals("ペインで書いている間に隠さない", true, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = true))
         assertEquals(false, hidesReaderControls(ReaderLayout.MarginPane(400f, 16f), sheetVisible = false, writingWithKeyboard = false))
         assertEquals(false, hidesReaderControls(ReaderLayout.SideBySide, sheetVisible = true, writingWithKeyboard = true))
+    }
+
+    /**
+     * 前回の読書の跡の行（→ features/margin_pane.md §5.2）。**書いている間は、書き始めたときの行の有無を保つ** —
+     * 跡は遅れて届き、面の節は書いている間も本文についていくので、そのまま出し入れすると入力欄が上下に動く。
+     */
+    @Test
+    fun `書いている間は、書き始めたときの前回の跡の行の有無を保つ`() {
+        // 書いていなければ、跡がある節でだけ出す
+        assertEquals(PreviousReadingRow.Shown(9L), previousReadingRowFor(9L, compact = false, heldAtFocus = null))
+        assertEquals(PreviousReadingRow.Hidden, previousReadingRowFor(null, compact = false, heldAtFocus = null))
+        // 行があるときに書き始めた → 跡の無い節へ移っても高さを取っておく
+        assertEquals(PreviousReadingRow.Shown(9L), previousReadingRowFor(9L, compact = false, heldAtFocus = true))
+        assertEquals("跡の無い節で行を詰めた", PreviousReadingRow.Reserved, previousReadingRowFor(null, compact = false, heldAtFocus = true))
+        // 行が無いときに書き始めた → 跡が届いても、跡のある節へ移っても足さない
+        assertEquals("書いている間に行を足した", PreviousReadingRow.Hidden, previousReadingRowFor(9L, compact = false, heldAtFocus = false))
+        assertEquals(PreviousReadingRow.Hidden, previousReadingRowFor(null, compact = false, heldAtFocus = false))
+    }
+
+    /** シートで書いている間は畳む（→ §5.5）。残すのは見出し・書き込み先・入力欄・置くボタン・保存の状態だけ。 */
+    @Test
+    fun `シートで書いている間は前回の跡を出さない`() {
+        assertEquals(PreviousReadingRow.Hidden, previousReadingRowFor(9L, compact = true, heldAtFocus = true))
+        assertEquals(PreviousReadingRow.Hidden, previousReadingRowFor(null, compact = true, heldAtFocus = true))
+    }
+
+    /** **「止まった」と言わない。** 記録は前回いちばん深く読んだところで、読み戻って離れても下がらない（→ §5.7）。 */
+    @Test
+    fun `前回の跡は「ここまで読んだ」と日付で言い、今年でなければ年を添える`() {
+        val zone = ZoneId.of("Asia/Tokyo")
+        fun at(year: Int, month: Int, day: Int) =
+            LocalDate.of(year, month, day).atTime(21, 30).atZone(zone).toInstant().toEpochMilli()
+        val now = at(2026, 10, 3)
+
+        assertEquals("前回はここまで読んだ · 9/12", previousReadingLabel(at(2026, 9, 12), now, zone))
+        assertEquals("前回はここまで読んだ · 2025/12/31", previousReadingLabel(at(2025, 12, 31), now, zone))
+        assertEquals(false, previousReadingLabel(at(2026, 9, 12), now, zone).contains("止まった"))
     }
 }

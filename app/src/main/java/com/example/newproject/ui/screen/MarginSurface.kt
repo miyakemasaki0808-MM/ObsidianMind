@@ -1,6 +1,8 @@
 package com.example.newproject.ui.screen
 
 import com.example.newproject.model.SectionRef
+import java.time.Instant
+import java.time.ZoneId
 import kotlin.math.roundToInt
 
 /**
@@ -159,3 +161,45 @@ internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, wr
         is ReaderLayout.MarginPane -> true
         ReaderLayout.SideBySide -> false
     }
+
+/** 前回の読書の跡の行（→ features/margin_pane.md §5.2 の3）。 */
+internal sealed interface PreviousReadingRow {
+    data object Hidden : PreviousReadingRow
+
+    /** 行の高さだけを取る。書いている間に跡の無い節へ移っても、入力欄を上げない。 */
+    data object Reserved : PreviousReadingRow
+
+    data class Shown(val atEpochMillis: Long) : PreviousReadingRow
+}
+
+/**
+ * [shownAt] はこの節に跡を出すなら前回の訪問の日時（→ `showsPreviousReading`）。
+ * [heldAtFocus] は書き始めたときに行があったかで、書いていなければ null。
+ *
+ * - **シートで書いている間は畳むので出さない**（→ §5.5。残すのは見出し・書き込み先・入力欄・置くボタン・保存の状態だけ）
+ * - **書いている間は、書き始めたときの行の有無を保つ**（→ §5.2）。行が増えても減っても入力欄が上下に動く。
+ *   跡は遅れて届き、面の節は書いている間も本文についていくので、どちらでも行が出入りしうる
+ */
+internal fun previousReadingRowFor(shownAt: Long?, compact: Boolean, heldAtFocus: Boolean?): PreviousReadingRow = when {
+    compact -> PreviousReadingRow.Hidden
+    heldAtFocus == false -> PreviousReadingRow.Hidden
+    shownAt != null -> PreviousReadingRow.Shown(shownAt)
+    heldAtFocus == true -> PreviousReadingRow.Reserved
+    else -> PreviousReadingRow.Hidden
+}
+
+/**
+ * 「前回はここまで読んだ · 9/12」。今年でなければ年も添える。
+ *
+ * **「ここで止まった」と言わない。** 記録は前回いちばん深く読んだところで、読み戻って離れても下がらない（→ §5.7）。
+ */
+internal fun previousReadingLabel(atEpochMillis: Long, nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()): String {
+    val at = Instant.ofEpochMilli(atEpochMillis).atZone(zone).toLocalDate()
+    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    val date = if (at.year == today.year) {
+        "${at.monthValue}/${at.dayOfMonth}"
+    } else {
+        "${at.year}/${at.monthValue}/${at.dayOfMonth}"
+    }
+    return "前回はここまで読んだ · $date"
+}

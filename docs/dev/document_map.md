@@ -78,9 +78,9 @@
 
 ### 機能（`features/`）
 
-**内訳は機能仕様23本＋参照シート1本。**
+**内訳は機能仕様20本＋参照シート1本。**
 
-- **機能仕様23本**は [`_template.md`](features/_template.md) の12節に揃っている。
+- **機能仕様20本**は [`_template.md`](features/_template.md) の12節に揃っている。
   **節の存在と、空でないことの両方を `AdrShapeTest` が固定する** —
   埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く
 - **参照シート1本**（[character_vigilith](features/character_vigilith.md)）は12節に従わない。
@@ -94,25 +94,23 @@
 | [note_summary.md](features/note_summary.md) | ノート要約（主軸のAI機能・自動起動） |
 | [ai_picker.md](features/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
-| [section_ai_chat.md](features/section_ai_chat.md) | 部分要約（今読んでいる節の要約シート）。**質問とクイズは撤去済み** |
+| [section_ai_chat.md](features/section_ai_chat.md) | 部分要約（今読んでいる節の要約シート） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
-| [reflect_remark.md](features/reflect_remark.md) | ノートへのひとこと（旧「AI補記メモ」）。**廃止済み・記録として残す** |
-| [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（ひとことの置き換え。**AIを呼ばない唯一のReflect機能**）。実装済み・実機検証待ち |
+| [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（**AIを呼ばない唯一のReflect機能**） |
 | [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
-| [quiz.md](features/quiz.md) | クイズ（Q&A）。**撤去済み・判断の記録として残す** |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
 | [note_age_paper.md](features/note_age_paper.md) | ノートの年代を紙の地色で伝える |
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
-| [vigilith_in_app.md](features/vigilith_in_app.md) | アプリ内Vigilith（常駐マスコット）。**撤去済み・判断の記録として残す** |
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
-| [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置く。**Draft・未実装** |
+| [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置く |
+| [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 
 ### 基盤（`system/`）
 
@@ -178,6 +176,9 @@
 3. **`_wip/` の項目は実機検証まで終わったら削除する。** 実装完了では消さない（検証待ちが消えると誰も確認しなくなる）。残すと未対応の課題が埋もれる。
 4. **修正の主張は、修正コードを別の目で読むまで確定させない。** 方針が正しいと文書とコミットメッセージだけ通ってしまう（→ [L26](lessons/L26.md)・[L34](lessons/L34.md)）。
 5. **`features/` `system/` の各文書には `**状態:**` 行を置く。** 実装済みか構想段階かが本文を読まずに分かるようにする。
+6. **機能を廃止したら、その設計書は消す。** やめた理由は、残る正本に数行で書く（例: [section_ai_chat](features/section_ai_chat.md) 判断3）。
+   **今の仕様書には、撤去した機能の注記を残さない** — 「撤去した」は今の状態の1文へ書き直す。
+   いつ何をやめたかは [change_history](change_history.md)・[開発日誌](../owner/journal/)・年表・コミットが持ち、設計書の全文は git 履歴に残る。
 
 > 各文書の内部ルール（課題番号の扱いなど）はその文書の冒頭が持つ。ここには集約しない。
 
