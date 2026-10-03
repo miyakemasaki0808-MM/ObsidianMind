@@ -743,11 +743,12 @@ internal class NoteSessionCoordinator(
 
     /**
      * [section] の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。
-     * **節の本文は今の解析から引く。** 解析の前と、節が今の本文に無いときは何もしない。
+     * **節の本文は今の本文の解析から引く。** 解析の前・解析し直している間・節が今の本文に無いときは何もしない —
+     * 蒸留の差し替えの後は解析が届くまで前の解析が描画に残るので、そこから引くと前の本文の要約が残る。
      */
     fun requestSectionSummary(section: SectionRef) {
         val note = currentNote() ?: return
-        val source = sections.model.value?.summarySourceOf(section, note.title) ?: return
+        val source = sections.settledModel()?.summarySourceOf(section, note.title) ?: return
         sectionChat.request(section, source.title, source.text)
     }
 

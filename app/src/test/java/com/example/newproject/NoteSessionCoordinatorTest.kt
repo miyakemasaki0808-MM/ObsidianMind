@@ -1454,6 +1454,50 @@ class NoteSessionCoordinatorTest {
         assertEquals("導入の要約", coordinator.uiState.value.sectionChat.summaryOf(INTRO)?.summary)
     }
 
+    /**
+     * **本文を解析し直している間は、部分要約を前の本文から作らない。** 蒸留の差し替えの後は解析が届くまで
+     * 前の解析が描画に残る。そこから要求を作ると、新しい本文の節に前の本文の要約が残る。
+     */
+    @Test
+    fun `本文を解析し直している間に頼んでも、前の本文から部分要約を作らない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# B\n\nOLD_TEXT"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# B\n\nNEW_TEXT"))
+        coordinator.requestSectionSummary(SectionRef("B"))
+        advanceUntilIdle()
+        assertTrue("解析の前に頼んだ要求が残った", coordinator.uiState.value.sectionChat.summaries.isEmpty())
+
+        coordinator.requestSectionSummary(SectionRef("B"))
+        advanceUntilIdle()
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+
+        val summary = requireNotNull(coordinator.uiState.value.sectionChat.summaryOf(SectionRef("B")))
+        assertTrue(summary.sectionContext.contains("NEW_TEXT"))
+        assertFalse("前の本文をプロンプトへ渡した", env.ai.prompts.any { "OLD_TEXT" in it })
+    }
+
+    /** 同名の見出しを消した差し替えでも、解析し直している間の要求で消えた節を要約しない。 */
+    @Test
+    fun `同名の見出しを消した差し替えの後、消えた節は要約しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# まとめ\n\n一つ目\n\n# まとめ\n\n二つ目"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# まとめ\n\n二つ目"))
+        coordinator.requestSectionSummary(SectionRef("まとめ", ordinal = 1))
+        advanceUntilIdle()
+        coordinator.requestSectionSummary(SectionRef("まとめ", ordinal = 1))
+        advanceUntilIdle()
+
+        assertTrue(coordinator.uiState.value.sectionChat.summaries.isEmpty())
+        assertEquals(0, env.ai.generateCalls)
+    }
+
     /** 蒸留の差し替えも部分要約の中止も本文の外の話なので、**読んだメモを捨てない**（捨てると印が消える）。 */
     @Test
     fun `蒸留の差し替えと部分要約の中止では、読んだメモを捨てない`() = runTest {
