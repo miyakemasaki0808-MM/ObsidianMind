@@ -118,8 +118,8 @@ adb -s <serial> logcat -s Launch05Probe
 **監視テストが終わったら**、次の2つを取って `LAUNCH-05b`〜`05e` の期待へ加える。
 
 ```text
-# MainActivity の枚数（1であること）
-adb -s <serial> shell dumpsys activity activities | grep -cE 'ActivityRecord\{[^}]*MainActivity'
+# MainActivity の枚数（1であること）。同じ記録はほかの行にも出るので、タスクの履歴の行だけを数える
+adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*MainActivity'
 # 前面のActivity（com.vigilith.ai であること）
 adb -s <serial> shell dumpsys activity activities | grep -E 'topResumedActivity'
 ```
