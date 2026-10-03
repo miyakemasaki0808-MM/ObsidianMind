@@ -1,6 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 
@@ -10,6 +11,18 @@ internal const val SECTION_SUMMARY_LIMIT = 3
 /** [section] の要約。持っていなければ null。 */
 internal fun SectionChatState.summaryOf(section: SectionRef?): SectionSummary? =
     section?.let { target -> summaries.firstOrNull { it.section == target } }
+
+/**
+ * 頼み直されたとき、持っている要約をそのまま見せるか（→ features/margin_pane.md §5.8）。見せないなら作り直す。
+ *
+ * **後で使えるようになる説明（モデルの準備待ち・一時的に使えない）だけは確かめ直す。** 準備待ちの説明には
+ * 再試行のボタンが無いので、見せ続けると、モデルが揃った後も同じ節を要約できない。
+ * 生成中・完成・生成の失敗（再試行のボタンがある）・非対応（確かめ直しても変わらない）は、そのまま見せる。
+ */
+internal fun SectionSummary.isShownAsIsOnRequest(): Boolean {
+    val notice = (summaryProblem as? SectionChatProblem.AiStatus)?.notice ?: return true
+    return isSummaryLoading || summary != null || !notice.canTryAgainLater
+}
 
 /**
  * [started] を最も新しい要約として足す。

@@ -1,9 +1,14 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -40,6 +45,21 @@ class SectionSummariesTest {
 
         assertEquals(SECTION_SUMMARY_LIMIT, next.summaries.size)
         assertNull(next.summaryOf(SectionRef("A")))
+    }
+
+    /** **後で使えるようになる説明だけは、頼み直すと確かめ直す**（準備待ちには再試行のボタンが無い）。 */
+    @Test
+    fun `頼み直したときに確かめ直すのは、後で使えるようになる説明だけ`() {
+        fun notice(canTryAgainLater: Boolean) = SectionChatProblem.AiStatus(
+            AiStatusNotice("いま使えません。", AiNoticeAction.None, canTryAgainLater = canTryAgainLater)
+        )
+        val base = summary("B", 1)
+
+        assertFalse(base.copy(summaryProblem = notice(canTryAgainLater = true)).isShownAsIsOnRequest())
+        assertTrue(base.copy(summaryProblem = notice(canTryAgainLater = false)).isShownAsIsOnRequest())
+        assertTrue(base.copy(summaryProblem = SectionChatProblem.GenerationFailed("失敗")).isShownAsIsOnRequest())
+        assertTrue(base.copy(isSummaryLoading = true).isShownAsIsOnRequest())
+        assertTrue(base.copy(summary = "要約").isShownAsIsOnRequest())
     }
 
     /** **取り消された要求の結果は、どこにも書かない。** 同じ節を頼み直した後なら、番号が違う。 */

@@ -10,6 +10,7 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PromptBuilder
 import com.example.newproject.domain.aiStatusNotice
 import com.example.newproject.domain.buildNoteExcerpt
+import com.example.newproject.domain.isShownAsIsOnRequest
 import com.example.newproject.domain.summaryOf
 import com.example.newproject.domain.updated
 import com.example.newproject.domain.withStarted
@@ -41,12 +42,13 @@ class SectionChatController(
 
     /**
      * [section] の要約を頼む。**持っていれば作り直さない** — 生成中ならその生成を、できていればその要約を、
-     * 出せなかったならその理由を見せる（見せるのは画面）。
+     * 出せなかったならその理由を見せる（見せるのは画面）。ただし後で使えるようになる説明は確かめ直す
+     * （→ [isShownAsIsOnRequest]）。
      *
      * 見出し名と本文は**頼んだ時点のもの**を要求に持たせる（→ lessons L26）。
      */
     fun request(section: SectionRef, sectionTitle: String, sectionText: String) {
-        if (state.current.summaryOf(section) != null) return
+        if (state.current.summaryOf(section)?.isShownAsIsOnRequest() == true) return
         start(section, sectionTitle, sectionText)
     }
 

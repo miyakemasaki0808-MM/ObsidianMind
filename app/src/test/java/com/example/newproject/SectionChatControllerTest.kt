@@ -75,6 +75,54 @@ class SectionChatControllerTest {
         assertEquals("Bの要約", summaryOf(state, B)?.summary)
     }
 
+    /**
+     * **準備待ちの説明は、頼み直すと確かめ直す。** 準備待ちには再試行のボタンが無いので、見せ続けると
+     * モデルが揃った後も同じ節を要約できない。確かめ直すだけで、この面からモデルのDLは始めない。
+     */
+    @Test
+    fun `準備待ちの説明を持つ節は、モデルが揃った後に頼み直すと生成する`() = runTest {
+        listOf(AiAvailability.NeedsDownload, AiAvailability.Downloading).forEach { waiting ->
+            val state = NoteUiStateStore(NoteUiState())
+            val ai = FakeAiClient(waiting) { "Bの要約" }
+            val controller = controller(state, ai)
+            controller.request(B, "B", "Bの本文")
+            advanceUntilIdle()
+            assertTrue("$waiting: 準備待ちの説明が出ていない", summaryOf(state, B)?.summaryProblem is SectionChatProblem.AiStatus)
+
+            ai.availability = AiAvailability.Ready
+            controller.request(B, "B", "Bの本文")
+            advanceUntilIdle()
+
+            assertEquals("$waiting: 揃った後に生成しない", 1, ai.generateCalls)
+            assertEquals("Bの要約", summaryOf(state, B)?.summary)
+            assertEquals("$waiting: この面からDLを始めた", 0, ai.downloadCalls)
+        }
+    }
+
+    /** 確かめ直しても変わらない説明と、再試行のボタンがある失敗は、頼み直してもそのまま見せる。 */
+    @Test
+    fun `非対応の説明と生成の失敗は、頼み直しても作り直さない`() = runTest {
+        val unsupported = NoteUiStateStore(NoteUiState())
+        val unsupportedAi = FakeAiClient(AiAvailability.Unsupported) { "要約" }
+        controller(unsupported, unsupportedAi).apply {
+            request(B, "B", "Bの本文")
+            advanceUntilIdle()
+            request(B, "B", "Bの本文")
+            advanceUntilIdle()
+        }
+        assertEquals(0, unsupportedAi.generateCalls)
+
+        val failed = NoteUiStateStore(NoteUiState())
+        val failingAi = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        controller(failed, failingAi).apply {
+            request(B, "B", "Bの本文")
+            advanceUntilIdle()
+            request(B, "B", "Bの本文")
+            advanceUntilIdle()
+        }
+        assertEquals("失敗は面の再試行から作り直す", 1, failingAi.generateCalls)
+    }
+
     /** **生成は一度に1本。** 別の節を頼むと前の生成を取り消し、取り消された節はボタンに戻る。 */
     @Test
     fun `Bの生成中にCを頼むと、Bを取り消してCを始める`() = runTest {
