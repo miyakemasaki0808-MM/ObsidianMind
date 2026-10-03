@@ -194,14 +194,21 @@ internal class ReadingTraceController(
     private val visitSaves = ConcurrentHashMap<Job, String>()
 
     /**
-     * ノートごとに、最後に記録を頼んだ訪問（キーは [pendingKey]）。**Main からだけ触る。**
+     * ノートごとに、記録を頼んだ訪問（キーは [pendingKey]）。**読書ごとに1件、新しい [MAX_REQUESTED_READINGS] 回分まで。**
+     * Main からだけ触る。
      *
      * 訪問はノートを離れてから非同期に書かれるので、離れてすぐ戻ると、ファイルにはまだ前の読書が無い。
      * **書き終わりは待たない** — 待つと保存が止まったときにメモまで読めず、置けなくなる。
      * 代わりにここから足して前回の読書を選ぶ（→ [loadMemos]）。保存に失敗した訪問も、読んだことには変わりない。
      * キーが Vault を含むので、Vault を替えても別の Vault の読書は混ざらない（切替で捨てる必要が無い）。
+     *
+     * **今の読書の訪問で、前の読書の分を押し出さない。** 1ノート1枠にすると、背面へ回して今の訪問を頼んだ時点で
+     * 前の読書の分が消える。読み直すと今の分は開始時刻で除くので、さらに古い訪問を前回として選んでしまう。
      */
-    private val requestedVisits = HashMap<String, ReadingVisit>()
+    private val requestedVisits = HashMap<String, List<RequestedVisit>>()
+
+    /** 記録を頼んだ訪問と、頼んだ読書（[Session.id]）。同じ読書が頼み直したら差し替える。 */
+    private class RequestedVisit(val sessionId: Long, val visit: ReadingVisit)
 
     /** 書けなかった痕跡。Vaultキーごと持つ（切替後に別Vaultへ書かないため）。 */
     private class PendingWrite(val vaultKey: String, val trace: ReadingTrace)
@@ -410,7 +417,7 @@ internal class ReadingTraceController(
         if (vaultRelativePath.isBlank()) return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
         val vaultKey = currentVaultKey() ?: return MemoLoad(emptyList(), MemoFileRead.Unconfirmed)
         // **頼んだ時点で決める**（→ lessons L26）。どちらも Main からだけ触る値なので、IO へ移る前に読む。
-        val requested = requestedVisits[pendingKey(vaultKey, vaultRelativePath)]
+        val requested = requestedVisits[pendingKey(vaultKey, vaultRelativePath)].orEmpty().map { it.visit }
         val readingStartedAt = session
             ?.takeIf { it.vaultKey == vaultKey && it.vaultRelativePath == vaultRelativePath }
             ?.openedAtMillis
@@ -435,7 +442,7 @@ internal class ReadingTraceController(
             MemoLoad(
                 memos = mergeMarginMemos(mergeMarginMemos(trace?.memos.orEmpty(), pending), held),
                 fileRead = fileRead,
-                previousVisit = previousVisitOf(trace?.visits.orEmpty() + listOfNotNull(requested), readingStartedAt)
+                previousVisit = previousVisitOf(trace?.visits.orEmpty() + requested, readingStartedAt)
             )
         }
     }
@@ -793,7 +800,9 @@ internal class ReadingTraceController(
         val previous = active.recordedVisit
         active.recordedVisit = visit
         active.dirty = false
-        requestedVisits[pendingKey(active.vaultKey, path)] = visit
+        val requestKey = pendingKey(active.vaultKey, path)
+        val otherReadings = requestedVisits[requestKey].orEmpty().filter { it.sessionId != active.id }
+        requestedVisits[requestKey] = (otherReadings + RequestedVisit(active.id, visit)).takeLast(MAX_REQUESTED_READINGS)
         val title = active.noteTitle
         val documentId = active.documentId
         val vaultKey = active.vaultKey
@@ -962,6 +971,9 @@ internal class ReadingTraceController(
         const val MAX_PENDING_WRITES = 8
 
         const val MIN_READING_MILLIS = 10_000L
+
+        /** 記録を頼んだ訪問を何回分の読書まで持つか。今の読書と、その前の読書。 */
+        const val MAX_REQUESTED_READINGS = 2
     }
 }
 
