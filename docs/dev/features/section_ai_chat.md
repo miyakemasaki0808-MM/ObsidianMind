@@ -1,11 +1,11 @@
-# 部分要約（セクションの要約シート）
+# 部分要約（この節の要約）
 
-**状態:** Implemented — 稼働中。節の要約だけを出す（→ §8 判断3）。
-余白メモのシートと1枚へまとめる予定は [この部分](margin_pane.md) が持つ
-**最終検証:** 2026-08-11 / `c25bcea`（判断3の範囲は、撤去のコミットの実装に合わせて書いた）
-**関連コード:** `controller/SectionChatController.kt` / `ui/screen/SectionChatSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
-**関連テスト:** `SectionChatControllerTest` / `SectionSummaryStatusTest` / `NoteSectionThreadingTest`
-**正本:** この文書
+**状態:** Implemented — 稼働中。節の要約を「この部分」の面に出し、ノートを開いている間は最近3節分を持つ（2026-10-04、別の目と実機検証の前）。
+質問とクイズは撤去済み（→ §8 判断3）
+**最終検証:** 2026-08-11 / `c25bcea`（判断3の範囲は、撤去のコミットの実装に合わせて書いた。面へ移した後は未検証）
+**関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionSummaryStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
+**関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `NoteSectionThreadingTest`
+**正本:** この文書（置き場所と面の並びは [この部分](margin_pane.md)）
 
 **対象領域:** ノート読書中に、**いま読んでいる節**の要約を出す
 
@@ -13,8 +13,9 @@
 
 ## 1. 概要
 
-読んでいる位置の節を対象に、ボトムシートで**その節の要約**を出す。
-入口は見出しの要約ボタン（✎ ⛶ の隣の 💬）である。**全画面には入口を置かない** — 要約は全画面に入る前のおさらいという立ち位置（→ [全画面](note_fullscreen.md) 判断5）。
+読んでいる節の要約を、「この部分」の面（スマホのシート・開いた Fold のペイン）に出す。
+入口は見出しの要約ボタン（✎ ⛶ の隣の 💬）と、面の中の「この節を要約」である。
+**全画面には入口を置かない** — 要約は全画面に入る前のおさらいという立ち位置（→ [全画面](note_fullscreen.md) 判断5）。
 
 > クラス名の `SectionChat…` は、質問と回答を持っていた頃の名残である。
 > 改名は影響が広いので、撤去とは分けて扱う。
@@ -25,85 +26,98 @@
 - 長いノートでも**入力をコンテキスト長に収める**
 - 要約の根拠を「今見ている部分」に絞る
 - **読書を止めずに**節の要点を確かめられる
+- 少し前に要約した節へ戻ったとき、作り直さずに見返せる
 
 ### 非ゴール
 - **質問に答えない。** 候補の質問も自由記述の質問も持たない（→ §8 判断3）
 - **設問を作らない**（→ §8 判断3）
-- **要約を永続化しない**（シートを閉じても同じノートの間は残るが、端末には残さない）
+- **要約を永続化しない**（面を閉じても同じノートの間は最近3節分が残るが、端末には残さない）
 - **ノート横断にしない**
 
 ## 3. 詳細機能一覧
 
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
-| 節の追従 | スクロールすると対象の節が変わる | 常時 |
-| 節の要約 | シートに今の節の要約が出る | 入口を押したとき |
+| 節の追従 | 面の節が本文の節に替わり、その節の要約か「この節を要約」が出る | 本文のスクロールが止まったとき |
+| 節の要約 | 面の中、入力欄の上に要約が出る | 見出しの 💬・面の「この節を要約」 |
+| 3節分の保持 | 要約した節へ戻ると、作り直さずにその要約が出る。4節目を作ると最も古いものから消える | ノートを開いている間 |
+| 生成を中止 | 生成中だけ出る。押すとその節はボタンに戻る | 生成中 |
 | 再試行 | 出せなかった理由の隣から作り直せる | 要約が出せなかったとき |
-| 再表示 | 閉じても同じノートの間は結果が残り、入口から再び開ける | セッションがあるとき |
-| 入口の状態表示 | 見出しの要約ボタンの記号が 💬・⏳・✓・! で状態を示す。浮く通知は作らない | 常時 |
+| 入口の状態表示 | 見出しの要約ボタンの記号が、面の節の要約の状態で 💬・⏳・✓・! に変わる。浮く通知は作らない | 常時 |
 
 ## 4. 現在のユーザーフロー
 
-1. 本文をスクロールすると、`firstVisibleItemIndex` から**直近の見出し**が対象の節になる
-   - **見出しが無いノートはノート全体へフォールバック**する
-2. 入口を押す → `open(section)`
-   - **既にセッションがあれば、それを再表示するだけ**（→ §8 判断2）
+1. 本文をスクロールすると、止まったところで面の節が替わる（→ [この部分](margin_pane.md) §5.3）
+   - **見出しより前は見出しより前だけ、見出しの無いノートは全体**が1つの節になる
+2. 見出しの 💬 を押す → 出せる面を出し、その節の要約を始めて、面を要約の行まで送る
+   - **その節の要約を持っていれば作り直さない**（生成中・完成・出せなかった理由のどれでも、それを見せる）
+   - 面の「この節を要約」も同じ要求を出す
 3. `checkAvailability()` を見る
    - `Ready` → 4へ
    - それ以外 → `aiStatusNotice()` の説明を `summaryProblem` へ載せる。
      **文言も導線も `AiStatusNotice` が持つ**（message だけ取り出すと再試行できず、
-     赤いエラー表示になる）。再試行は `retrySummary()` が受ける。**ここではDLしない** → §8 判断4
-4. 節の要約を生成する
-5. シートを閉じる → 要約は残るが、**セッションを明示終了すると破棄される**
+     赤いエラー表示になる）。再試行は `retry()` が受ける。**ここではDLしない** → §8 判断4
+4. 節の要約を生成する。**生成中に別の節を頼むと、前の生成を取り消して新しい節を始める**（取り消した節はボタンに戻る）
+5. 面を閉じても要約は残る。ノートを替えるか、蒸留で本文が解析し直されると全部消える
 
 ## 5. 機能仕様
 
-- **前提条件:** ノートが表示されていること
-- **対象の節:** 直近の見出しから**次の同レベル以下の見出しの直前まで**
+- **前提条件:** ノートが表示され、本文の解析が済んでいること（どの節かが決まらないので、それまでは要約の行を出さない）
+- **対象の節:** 見出しのある節は、直近の見出しから**次の同レベル以下の見出しの直前まで**。見出しより前は最初の見出しの直前まで、
+  見出しの無いノートは全体。**本文は頼んだ時点の解析から引き、要求に持たせる**（`NoteSectionModel.summarySourceOf`）
 - **上限:**
 
   | 対象 | 値 | 定数 |
   |---|---|---|
   | プロンプトへ渡す節の本文 | **1500文字** | `NoteExcerptLimits.SECTION` |
+  | 持つ節の数 | **3節** | `SECTION_SUMMARY_LIMIT` |
   | 出力枠 | 256トークン | `genai-prompt` |
 
 <!-- state-fields: SectionChatState -->
-- **状態 `SectionChatState`:** `sectionTitle` / `sectionContext`（**LLMへ渡すだけで表示しない**）/
-  `summary` / `isSummaryLoading` / `summaryProblem`
+- **状態 `SectionChatState`:** `summaries`（最近作った順）
+<!-- /state-fields -->
+<!-- state-fields: SectionSummary -->
+- **1節分 `SectionSummary`:** `section`（見出し名と同名の中での順番）/ `requestId` / `sectionTitle` /
+  `sectionContext`（**LLMへ渡すだけで表示しない**）/ `summary` / `isSummaryLoading` / `summaryProblem`
 <!-- /state-fields -->
 - **`GenerationFailed(message)`:** 生成が落ちた（タイムアウト・出力打ち切り）。赤で出す
 - **`AiStatus(notice)`:** 端末AIが使えない。通常色で出す
   （→ [background_ai_ux](../system/background_ai_ux.md) §6）
-- **再試行:** `retrySummary()` が開いているセクションのまま作り直す。要約が既にあるなら説明を畳むだけ
-- **入口:** 見出しの要約ボタンは、今の節（見出しが無ければノート全体）で `open()` を呼ぶ。セッションがあれば再表示になる。
-  **✎ とは分ける** — ✎ は書く入口、💬 は AI の入口。読み上げ名は「この節を要約」を核にし、撤去した自由な質問を期待させない
+- **再試行:** `retry()` が**頼んだときの本文のまま**作り直す。生成中か、要約を持っているなら何もしない
+- **入口:** 見出しの要約ボタンは、面の節で要求を出す。**✎ とは分ける** — ✎ は書く入口、💬 は AI の入口。
+  読み上げ名は「この節を要約」を核にし、撤去した自由な質問を期待させない
   （記号と読み上げ名は `sectionSummaryEntrySymbol` / `sectionSummaryEntryDescription` の純関数）
-- **派生状態:** `domain/SectionSummaryStatus.kt` の `sectionSummaryStatus` が `Idle` / `Working` / `Ready` / `Error` を導く。
+- **派生状態:** `domain/SectionSummaryStatus.kt` の `sectionSummaryStatus` が、面の節の要約から `Idle` / `Working` / `Ready` / `Error` を導く。
   見出しの要約ボタンの記号はこの導出で決まる。**端末AIが使えないだけなら `Working` にも `Error` にもしない**
-- **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
+- **キャンセル:** 別の節の要求と「生成を中止」で今の生成を止める。ノート・Vault切替と本文の解析し直しでは `cancelAndClear()` で全部捨てる
+- **後着:** 結果は `requestId` が一致する要約にだけ書く。取り消しに従わない生成が遅れて届いても、取り除いた節や頼み直した節を上書きしない
 
 ## 6. 状態とデータ
 
-**UI状態:** `NoteUiState.sectionChat`（`null` ならセッション無し）＋ `isSectionChatSheetVisible`。
-**シートの表示状態とセッションの存在を分けている** — 閉じても要約は残る。
+**UI状態:** `NoteUiState.sectionChat`（`SectionChatState`）。面を出すかどうかは「この部分」の側が持つ
+（シートは `isMarginMemoSheetVisible`、ペインは並べ方と設定）。**面の可視と要約の有無を分けている** — 閉じても要約は残る。
 
 **永続化しない。**
 
 **契約2箇所への登録（ノート単位の状態）:**
 `cancelNoteScopedJobs()` → `sectionChat.cancelAndClear()`、
-`withNoteScopedReset()` → `sectionChat = null` / `isSectionChatSheetVisible = false`。**両方に登録済み。**
+`withNoteScopedReset()` → `sectionChat = SectionChatState()`。**両方に登録済み。**
+蒸留の差し替え（`applyReloadedBody`）でも `cancelAndClear()` し、状態は `withDistillBodyReloaded` が空にする。
 
-**セクション構造の解析は別 Controller が持つ。** `NoteSectionController` が
+**節の構造の解析は別 Controller が持つ。** `NoteSectionController` が
 `Dispatchers.Default` で解析して `StateFlow<NoteSectionModel?>` を配る
 （→ [architecture](../system/architecture.md)。**最大1MBの解析はMainで走らせない**）。
+見出しより前の本文もこの解析で一緒に組み立てる（見出しの無いノートでは全体に比例するため）。
 
 ## 7. システム設計
 
 ```
-本文（LazyColumn）── firstVisibleItemIndex ──> 対象の節の決定
- └─ 入口（見出しの要約ボタン）
-      └─ SectionChatSheet
-           └─ SectionChatController.open()   ← セッション作成・節の要約
+本文（LazyColumn）── スクロールが止まった位置 ──> 面の節（SectionRef）
+ └─ 入口（見出しの要約ボタン・面の「この節を要約」）
+      └─ NoteSessionCoordinator.requestSectionSummary(節)
+           └─ NoteSectionModel.summarySourceOf(節) で本文を引き
+                └─ SectionChatController.request()   ← 節ごとの要約・3節分・一度に1本
+                     └─ 「この部分」の面の SectionSummaryRow に出す
 
 NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> 上記
 ```
@@ -118,12 +132,14 @@ NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> �
 **対象はユーザーに選ばせず、スクロール位置から自動追従する。** 選ばせると手数が増え、
 「読んでいる場所を確かめる」という動機と噛み合わない。
 
-### 判断2: セッションは開始時の節に固定する
+### 判断2: 節ごとに持ち、最近3節分を残す
 
-既にセッションがあれば `open()` は**再表示するだけ**で、対象を作り直さない。
-**スクロール先の別の節で重複生成しないため。** 固定しないと、
-シートを閉じて少しスクロールして開き直すたびに Nano が走る。
-複数の節の要約を持つ形は [この部分](margin_pane.md) §5.8 が設計している。
+要約は節ごとに持ち、同じ節を頼み直しても作り直さない。**スクロールしただけでは生成も取り消しもしない** —
+生成が走るのは入口を押したときだけで、できた要約は作り始めた節に入る。
+1つのセッションを最初の節に固定する形では、別の節で 💬 を押しても前の節の要約が出て、新しい節を要約するには
+明示的に終わらせる操作が要った。節ごとに持てば終わらせる操作は要らず、少し前の節へ戻っても見返せる。
+数は「戻って見返す」に足りる最小の3節にし、生成は一度に1本に留める（Nano の Mutex を待たせない）。
+置き場所と面の並びは [この部分](margin_pane.md) §5.8。
 
 ### 判断3: 質問とクイズを撤去した（オーナー判断・2026-09-28）
 
@@ -141,8 +157,14 @@ NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> �
 **待てば使えることだけを言う文**にする。運ぶと終端UIがコールバックを渡さず、
 **ボタンが描かれないまま「開始してください」だけが残る** — 開始する操作が存在しない案内になる。
 
-**読書中に開くシートなので、数分かかる処理をここから起こさない。**
+**読書中に開く面なので、数分かかる処理をここから起こさない。**
 DLの起点は自動生成される要約側に寄せてある（→ [architecture](../system/architecture.md) の比較表）。
+
+### 判断5: 終了のボタンを置かない（オーナー判断・2026-10-03）
+
+専用シートにあった「確認を終了」は撤去し、生成中だけ「生成を中止」を出す。
+要約は面を閉じても残り、古い節は3節を超えると自動で消えるので、終わらせる操作に役目が無い。
+**UXの観点で無駄なボタンは削る**という方針に沿う。
 
 ### 撤退した試み: UIの初期案（6版の反復）
 
@@ -154,26 +176,27 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
 
 ## 9. 品質要件
 
-- **性能:** セクション解析は `Dispatchers.Default`（`NoteSectionThreadingTest` がソース走査で固定）
+- **性能:** 節の解析は `Dispatchers.Default`（`NoteSectionThreadingTest` がソース走査で固定）。抜粋の組み立ても Main の外
 - **プライバシー:** 節の本文はプロンプトへ入るが端末外へ出ない
   （→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）
-- **端末制約:** Nano 非対応・モデル未準備は**シート内の文言**で伝える
+- **端末制約:** Nano 非対応・モデル未準備は**面の中の文言**で伝える
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** `SectionChatControllerTest`（セッションの寿命・状態遷移・端末AIが使えないときの説明）/
-  `SectionSummaryStatusTest`（派生状態）/ `NoteSectionThreadingTest`
+- **JVMテスト:** `SectionChatControllerTest`（同じ節は作り直さない・B の生成中に C で B を取り消す・取り消しに従わない後着が
+  頼み直した節を上書きしない・3節を超えたら古いものから消える・中止・再試行・端末AIが使えないときの説明）/
+  `SectionSummariesTest`（保持の規則）/ `SectionSummaryStatusTest`（派生状態）/ `SectionRefTest`（要約に渡す本文の範囲）/
+  `NoteSessionCoordinatorTest`（ノート切替で後着しない・要約の生成中にメモを置く・メモの保存中に要約を始める）/ `NoteSectionThreadingTest`
 - **instrumentation:** `OnDeviceGenerationTest`（節の要約の実生成）
 - **保証していないこと:**
-  - **節の追従の精度を測っていない。** `firstVisibleItemIndex` 基準なので、
-    画面上端の見出しが対象になる（読んでいる位置とずれうる）
+  - **節の追従の精度を測っていない。** 本文の最上端に見えているブロックの節なので、読んでいる位置とずれうる
   - **要約の質を測っていない**
 
 ## 11. 既知の制約・未解決事項
 
 | | |
 |---|---|
-| 要約が残らない | ノートを替えると消える。数節分を持つ形は [この部分](margin_pane.md) が設計している |
+| 要約がノートの間しか残らない | ノートを替えると消える。端末には残さない（§2 非ゴール） |
 | 対象の節の判定が画面上端基準 | 上記「保証していないこと」参照 |
 
 ## 12. 開発経緯

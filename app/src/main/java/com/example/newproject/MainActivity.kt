@@ -172,9 +172,9 @@ class MainActivity : ComponentActivity() {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                     else openVault.launch(null)
                                 },
-                                onRetrySectionSummary = { viewModel.retrySectionSummary() },
-                                onDismissSectionChat = { viewModel.dismissSectionChatSheet() },
-                                onEndSectionChat = { viewModel.endSectionChat() },
+                                onRequestSectionSummary = { section -> viewModel.requestSectionSummary(section) },
+                                onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
+                                onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },
                                 noteListState = noteListState,
                                 onOpenBooklet = {
                                     // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
@@ -207,8 +207,7 @@ class MainActivity : ComponentActivity() {
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 memoFocusIntent = memoFocusIntent,
                                 onMemoFocusIntentChange = { memoFocusIntent = it },
-                                onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
-                                onOpenSection = { section -> viewModel.openSection(section) }
+                                onDismissReadingTrace = { viewModel.dismissReadingTraceCard() }
                             )
                         }
 

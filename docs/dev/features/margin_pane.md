@@ -1,11 +1,10 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜3は実装済み・実機検証済み（段4・5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1〜3は実装済み・実機検証済み。段4は実装中（別の目と実機検証の前）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。
 **最終検証:** 2026-10-03 / `621dfa9c`（段3まで。Pixel 10 Pro Fold で段3の通し版と段2から持ち越した範囲。段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
-**関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
-予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt`
-**関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`。予定 — `SectionChatControllerTest`
+**関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
+**関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -60,8 +59,8 @@
 
 ## 4. 現在のユーザーフロー
 
-> **段1〜3の分だけ実装済み。** 部分要約の3節分（段4）・このノートの関連と並べ読み（段5）は未実装で、
-> 以下のうちそれに当たる部分は予定のフローである。再会カードをペインの上に載せること（§5.2 の1）も、まだどの段にも入っていない。
+> **段4まで実装済み。** このノートの関連と並べ読み（段5）は未実装で、以下のうちそれに当たる部分は予定のフローである。
+> 再会カードをペインの上に載せること（§5.2 の1）は、段4でもやらないと決めた（2026-10-03、オーナー判断）。どの段にも入っていない。
 
 **開いた Fold**
 1. ノートを開くと、本文が左、「この部分」が右に並ぶ。右は今の節の見出し・前回の跡・要約のボタン・入力欄・この節のメモの順
@@ -226,7 +225,10 @@
 - 生成は一度に1本。**生成中に別の節の要約を押すと、前の生成を取り消して新しい節を始める。** 取り消された節はボタンに戻る
 - **スクロールでは生成も取り消しもしない。** 生成中に本文を進めても、できた要約は作り始めた節に入る
 - 同じ節を頼み直したときは、生成中ならその生成を、持っていればその要約を見せる
-- 要求はノートの世代・本文の版・節の位置と組にし、届いた結果が今の要求のものかを確かめてから書く
+- 要求ごとに番号を振り、結果は番号が一致する要約にだけ書く。**ノート切替と本文の解析し直しで全部捨てる**ので、
+  番号が一致すれば、ノート・本文の版・節の位置の組も一致する（それぞれを別に照合しない）
+- **生成中だけ「生成を中止」を出す。** 取り消した節はボタンに戻る。終わらせる操作は置かない — 面を閉じても要約は残り、
+  古い節は3節を超えると消える（2026-10-03、オーナー判断 → [部分要約](section_ai_chat.md) 判断5）
 
 ### 5.9 2本の並べ読み
 
@@ -247,8 +249,8 @@
 |---|---|---|
 | `MarginMemoState.Ready` | 前回の訪問の欄を足す。見出し名・日時・最後まで読んだか | 登録済み |
 | 書きかけ | **新規。** ノートごとの一組と、未確定の送信。Vault 単位で持つ。**`NoteUiState` の外**（ViewModel 側の Compose の状態）に置く（→ §6.1） | ジョブはノート単位で止め、書きかけは Vault 切替でだけ捨てる（アーキテクチャ判断4の3行目の形）。`NoteUiState` の外なので `withVaultScopedReset()` ではなく、`onVaultChanged()` から `MarginMemoController.clearVaultScoped()` で捨てる |
-| 部分要約 | 1節分から最近の3節分へ。節の位置と本文の版を持つ | 登録済み |
-| シートの可視 | 余白メモと部分要約の2本を1本にまとめる | 登録済みの片方へ寄せる |
+| 部分要約 | 最近の3節分（`SectionChatState.summaries`）。節の位置と要求の番号を持つ。本文の版は持たず、解析し直しで全部捨てる | 登録済み |
+| シートの可視 | 余白メモと部分要約で1本（`isMarginMemoSheetVisible`）。部分要約の専用の可視は消した | 登録済み |
 | 並べ読み | **新規。** 読み込み中・読めた・失敗と、選んだ要求の番号 | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`** |
 | ペインの開閉 | 新規。`AppPreferences` | 設定なので登録しない |
 | 本文の節・ペインの節 | 画面側で導く | 状態に入れない |
@@ -436,7 +438,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     窓の切り替わりの判定より先にペインが組まれ、しまう途中のシートと一瞬だけ並ぶ。両方が取りにいくとシートが持ち去り、
     開く方向だけ引き継げなかった。**ペインが出ている間はシートを出さない**ので、この並びでもシートは出ている面にならない
   - **再会カードの「前回のメモを見る」は、ペインが出ていても、ほかの節のメモを開いてメモの並びまで送る**
-  - **蒸留の差し替えと部分要約の終了では、余白メモを空にしない。** 見出しの印が消え、保存中の書き込みも止まるため
+  - **蒸留の差し替えと部分要約の中止では、余白メモを空にしない。** 見出しの印が消え、保存中の書き込みも止まるため
   - **全画面の本文には印を出さない。** 段4で全画面から書けるようにした後も出さない — 全画面は本文以外を消す面で、この節のメモは ✎ で開いたシートで見られる
 - **段3で決めたこと。** 前回の読書の跡を面の見出しの下に1行で出した
   - **「今の読書」はノートを開いた時刻で区切る。** 背面へ回すたびに今の読書の訪問が書かれるので、それより前の訪問だけから選ぶ。
@@ -462,13 +464,21 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - **ペインが出ている窓では、シートが出ている扱いを落とす。** 書いたまま全画面から開いた Fold へ戻ると、この形で来る。
     落とさないと ✎ の1回目が見えないシートをしまうだけになる。窓の情報が揃う前は落とさない（`dropsHiddenSheet`）
   - **面が本文から受け取るもの（本文の節・メモの照合・前回の跡・飛ぶ先）は1か所で作る**（`rememberMarginFaceInputs`）。通常表示と全画面が同じ規則で作る
+  - **部分要約は面の中、前回の跡と書き込み先の間に置いた。** 専用のシートは消し、シートは余白メモと共用の1枚になった。
+    見出しの要約ボタンは、出せる面を出して面の節の要約を頼み、面を要約の行まで送る。**記号も面の節の要約の状態で決める**
+  - **本文の節が分かるまで要約の行を出さない。** どの節の要約かが決まらない
+  - **ペインで書いている間は、要約の行を書き始めたときの高さに保つ。** 要約は遅れて届き、面の節は書いている間も本文についていくので、
+    そのまま描くと入力欄が上下に動く。高さを超える分は行の中でスクロールする。書き始めたときに行が無ければ書き終えるまで足さない。
+    保つのはキーボードが出ている間だけ — ペインは置いても入力欄からフォーカスを外さないので、フォーカスで判断すると、
+    キーボードを閉じて読んでいる間も要約が狭い行に押し込まれたままになる。シートは書いている間は畳む側なので、「要約とメモ N件」の1行に入る
+  - **見出しより前の本文は、解析と一緒に Main の外で組み立てる**（`NoteSectionModel.summarySourceOf`）。見出しの無いノートでは本文全体に比例する
 - **段3の時点でも暫定のもの**
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
     並べ方はその間だけ、折り目の無い窓・左端0として仮に決まる
   - **前に見た窓と、書いている途中かは、画面の保存値で持つ。** Fold の開閉で残るのは、外殻が本文をどの形でも同じ位置で
     組み立てることが前提（→ [tab_navigation](../system/tab_navigation.md) §1）
-  - **見出しの要約ボタンは、今の要約のシートを開く。** ペインをこのノートの間だけ出して要約を始めるのは段4
+  - **見出しの要約ボタンは、ペインを出せる窓で設定が閉じているとシートを出す。** ペインをこのノートの間だけ出すのは段4の残り
   - **ペインの枠は、ノートを表示しているときと読み込み中だけ出す。** ノートが無いときは置くものが無い。
     読み込み中も出すのは、ノートを引くたびに並びが揺れないようにするため
   - **再会カードをペインの上に載せること（§5.2 の1）は、どの段にも入っていない**

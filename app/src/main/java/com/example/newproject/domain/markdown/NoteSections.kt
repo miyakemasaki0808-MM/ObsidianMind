@@ -24,7 +24,12 @@ class NoteSectionModel internal constructor(
     private val headingBlockIndices: List<Int>,
     val sections: List<NoteSection>,
     // 描画側（`MarkdownNoteContent`）で再パースせず使い回すためのパース済みブロック列
-    internal val blocks: List<MarkdownBlock>
+    internal val blocks: List<MarkdownBlock>,
+    /**
+     * 最初の見出しより前の本文（見出しの無いノートは全体）を LLM 入力用に組み直したもの。
+     * **解析と一緒に Main の外で作る** — 見出しの無いノートでは本文全体（最大1MB）に比例する。
+     */
+    private val openingText: String
 ) {
     /**
      * 見出しの索引。**解析と一緒に作る**ので、画面は見出しをたどらずに節を引き、メモを照合できる（→ [HeadingIndex]）。
@@ -50,6 +55,18 @@ class NoteSectionModel internal constructor(
         if (ref.title == null) return 0
         return headingIndex.positionOf(ref)?.let { headingBlockIndices[it] }
     }
+
+    /**
+     * [ref] の節の要約に渡す見出し名と本文（→ features/margin_pane.md §5.3）。今の本文に無い節と、空の冒頭は null。
+     * **見出しより前は見出しより前だけ、見出しの無いノートは全体**を渡す — 面に出している節の範囲と揃える。
+     * 名前の無い節の見出し名には [noteTitle] を使う。
+     */
+    fun summarySourceOf(ref: SectionRef, noteTitle: String): NoteSection? =
+        if (ref.title == null) {
+            openingText.takeIf { it.isNotBlank() }?.let { NoteSection(noteTitle, 0, it) }
+        } else {
+            headingIndex.positionOf(ref)?.let { sections[it] }
+        }
 
     /** 見出しが1つでもあるか。名前の無い節を「冒頭」と呼ぶか「全体」と呼ぶかが変わる。 */
     val hasHeadings: Boolean get() = sections.isNotEmpty()
@@ -243,7 +260,8 @@ fun buildNoteSectionModel(content: String): NoteSectionModel {
         }
     }
 
-    return NoteSectionModel(headingIndices, sections, blocks)
+    val opening = blocks.subList(0, headingIndices.firstOrNull() ?: blocks.size)
+    return NoteSectionModel(headingIndices, sections, blocks, blocksToMarkdown(opening))
 }
 
 /**

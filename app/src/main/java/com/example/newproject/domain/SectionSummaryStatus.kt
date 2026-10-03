@@ -1,7 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.state.SectionChatProblem
-import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionSummary
 
 /** 部分要約の4状態。見出しの要約ボタンの記号を決める。 */
 internal enum class SectionSummaryStatus {
@@ -12,13 +12,13 @@ internal enum class SectionSummaryStatus {
 }
 
 /**
- * 部分要約の状態から [SectionSummaryStatus] を導出する。
+ * 1節分の部分要約から [SectionSummaryStatus] を導出する。持っていなければ Idle。
  *
  * 判定順に意味がある。エラーを最優先で拾い、次に生成中、最後に完了。
- * セッションが存在するのに要約も理由も無い場合は「これから要約が始まる」= Working とする。
+ * 要求があるのに要約も理由も無い場合は「これから要約が始まる」= Working とする。
  * **理由があるなら待っていない**ので Idle にする — 端末AIが使えないだけで「生成中」を出し続けない。
  */
-internal fun sectionSummaryStatus(chat: SectionChatState?): SectionSummaryStatus = when {
+internal fun sectionSummaryStatus(chat: SectionSummary?): SectionSummaryStatus = when {
     chat == null -> SectionSummaryStatus.Idle
     // **状態の説明は失敗として数えない。** 端末AIが使えないだけならインジケータは光らせない。
     chat.summaryProblem is SectionChatProblem.GenerationFailed -> SectionSummaryStatus.Error

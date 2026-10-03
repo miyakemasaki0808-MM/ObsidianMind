@@ -22,7 +22,6 @@ import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryCache
-import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
@@ -733,16 +732,21 @@ internal class NoteSessionCoordinator(
     fun restoreDistillOriginal() = distill.restoreOriginal()
     fun exportDistillOriginal(write: suspend (ByteArray) -> Unit) = distill.exportOriginal(write)
 
-    // ── セクション単位の部分要約（実装は SectionChatController）────────────
+    // ── 節ごとの部分要約（実装は SectionChatController）────────────────────
 
-    fun openSection(section: NoteSection) = sectionChat.open(section)
-
-    /** 要約エリアの再試行。開いているセクションのまま作り直す。 */
-    fun retrySectionSummary() = sectionChat.retrySummary()
-    fun dismissSectionChatSheet() = sectionChat.dismissSheet()
-
-    /** 部分要約のセッションの明示終了。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
-    fun endSectionChat() {
-        sectionChat.cancelAndClear()
+    /**
+     * [section] の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。
+     * **節の本文は今の解析から引く。** 解析の前と、節が今の本文に無いときは何もしない。
+     */
+    fun requestSectionSummary(section: SectionRef) {
+        val note = currentNote() ?: return
+        val source = sections.model.value?.summarySourceOf(section, note.title) ?: return
+        sectionChat.request(section, source.title, source.text)
     }
+
+    /** 出せなかった要約を、頼んだときの本文のまま作り直す。 */
+    fun retrySectionSummary(section: SectionRef) = sectionChat.retry(section)
+
+    /** 生成を中止する。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
+    fun cancelSectionSummary(section: SectionRef) = sectionChat.cancel(section)
 }

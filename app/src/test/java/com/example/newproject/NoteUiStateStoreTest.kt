@@ -5,13 +5,14 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SearchSlice
-import com.example.newproject.model.SectionChatSlice
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.SummaryState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.drop
@@ -58,10 +59,9 @@ class NoteUiStateStoreTest {
         expected = expected.copy(distillState = DistillState.Analyzing("蒸留対象"))
         assertEquals(expected, store.value)
 
-        val chat = SectionChatState("節", "本文")
-        val chatSlice = SectionChatSlice(chat, isSectionChatSheetVisible = true)
-        store.sectionChatWriter.update { chatSlice }
-        expected = expected.copy(sectionChat = chat, isSectionChatSheetVisible = true)
+        val chat = SectionChatState(listOf(SectionSummary(SectionRef("節"), requestId = 1L, sectionTitle = "節", sectionContext = "本文")))
+        store.sectionChatWriter.update { chat }
+        expected = expected.copy(sectionChat = chat)
         assertEquals(expected, store.value)
 
         val card = ReadingTraceCard(

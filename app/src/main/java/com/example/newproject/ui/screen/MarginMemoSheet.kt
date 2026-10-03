@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +54,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -273,7 +275,12 @@ internal fun MarginMemoSheetContent(
      * この節に前回の読書の跡を出すなら、その訪問の日時（→ `showsPreviousReading`）。出さなければ null。
      * 照合は画面の外で済ませ、ここは行の出し方（→ [previousReadingRowFor]）だけを決める。
      */
-    previousReadingAt: Long? = null
+    previousReadingAt: Long? = null,
+    /** この節の部分要約の行（→ [SummaryRowInputs]）。null なら行を出さない。 */
+    summaryRow: SummaryRowInputs? = null,
+    /** 要約の行まで送る依頼。AI の入口から来たときに立つ。送り終えたら [onSummaryRevealHandled] で消してもらう。 */
+    revealSummary: Boolean = false,
+    onSummaryRevealHandled: () -> Unit = {}
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -296,8 +303,16 @@ internal fun MarginMemoSheetContent(
         blurPending = false
         if (currentActive) onFocusIntentChange(false)
     }
-    val imeVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
+    val density = LocalDensity.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
     val compact = compactWhileTyping(asSheet = asSheet, inputFocused = inputFocused, imeVisible = imeVisible)
+    // 書いている間は、要約の行を書き始めたときの高さに保つ（→ features/margin_pane.md §5.2）。要約は遅れて届き、
+    // 面の節は書いている間も本文についていくので、そのまま描くと入力欄が上下に動く。高さを超える分は行の中でスクロールする。
+    // シートは書いている間に畳む側なので保たない。
+    var summaryRowHeight by remember { mutableIntStateOf(0) }
+    var heldSummaryRowHeight by remember { mutableStateOf<Int?>(null) }
+    val holdSummaryRow = !asSheet && inputFocused && imeVisible
+    LaunchedEffect(holdSummaryRow) { heldSummaryRowHeight = if (holdSummaryRow) summaryRowHeight else null }
     val previousRow = previousReadingRowFor(previousReadingAt, compact, previousRowAtFocus)
     val focusManager = LocalFocusManager.current
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
@@ -307,6 +322,14 @@ internal fun MarginMemoSheetContent(
     var memosTop by remember { mutableIntStateOf(0) }
     // ほかの節の組の始まり（この面の中の位置）。印から来たときの行き先。
     val groupTops = remember { mutableStateMapOf<SectionRef, Int>() }
+    // 要約の行の始まり（この面の中の位置）。AI の入口から来たときの行き先。
+    var summaryTop by remember { mutableIntStateOf(0) }
+    LaunchedEffect(revealSummary) {
+        if (!revealSummary) return@LaunchedEffect
+        withFrameNanos { }
+        scrollState.animateScrollTo(summaryTop)
+        onSummaryRevealHandled()
+    }
     LaunchedEffect(reveal) {
         val target = reveal ?: return@LaunchedEffect
         val stop = memoRevealStop(target, section)
@@ -351,6 +374,24 @@ internal fun MarginMemoSheetContent(
                 }
             }
             PreviousReadingLine(previousRow)
+            val held = heldSummaryRowHeight
+            val rowPlacement = Modifier.onGloballyPositioned { summaryTop = it.positionInParent().y.roundToInt() }
+            when {
+                compact -> Unit
+                held != null -> Box(
+                    modifier = rowPlacement
+                        .fillMaxWidth()
+                        .height(with(density) { held.toDp() })
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    summaryRow?.let { SectionSummaryRow(it.summary, it.onRequest, it.onRetry, it.onCancel) }
+                }
+                summaryRow != null -> Box(modifier = rowPlacement.onSizeChanged { summaryRowHeight = it.height }) {
+                    // 行が消えたら高さは0。書き始めたときに行が無ければ、書き終えるまで足さない。
+                    DisposableEffect(Unit) { onDispose { summaryRowHeight = 0 } }
+                    SectionSummaryRow(summaryRow.summary, summaryRow.onRequest, summaryRow.onRetry, summaryRow.onCancel)
+                }
+            }
             // **この1行は高さを変えない。** 書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない
             // （→ features/margin_pane.md §5.2）。知らせが無いときは使い方を出す。
             WriteTargetLine(
@@ -421,9 +462,9 @@ internal fun MarginMemoSheetContent(
             }
 
             if (compact) {
-                // **書いている間は入力を優先する。** メモは1行に畳み、置くかキーボードを閉じれば戻す。
+                // **書いている間は入力を優先する。** 要約とメモは1行に畳み、置くかキーボードを閉じれば戻す。
                 Text(
-                    text = "メモ ${ready?.memos?.size ?: 0}件",
+                    text = "${if (summaryRow != null) "要約とメモ" else "メモ"} ${ready?.memos?.size ?: 0}件",
                     color = OnSurfaceFaint,
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp)

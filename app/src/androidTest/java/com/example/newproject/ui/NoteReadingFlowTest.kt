@@ -941,9 +941,9 @@ class NoteReadingFlowTest {
             noteListState = listState,
             onSelectVault = {},
             onRandomNote = {},
+            onRequestSectionSummary = {},
             onRetrySectionSummary = {},
-            onDismissSectionChat = {},
-            onEndSectionChat = {},
+            onCancelSectionSummary = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
             onOpenMarginMemo = onOpenMarginMemo,
@@ -960,8 +960,7 @@ class NoteReadingFlowTest {
             memoFocusIntent = memoFocusIntent,
             onMemoFocusIntentChange = { memoFocusIntent = it },
             onReadingProgress = onReadingProgress,
-            onDismissReadingTrace = {},
-            onOpenSection = {}
+            onDismissReadingTrace = {}
         )
     }
 
