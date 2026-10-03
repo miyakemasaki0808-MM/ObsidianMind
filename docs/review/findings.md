@@ -28,6 +28,4 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-10-03-fold-margin-pane-stage3-implementation-review/P2-1` | 保存済み見出しの再整形で、前回の跡と再会の位置が別の節を指しうる | `統合` FOLD-1 / TRACE-9 |
-| `2026-10-03-fold-margin-pane-stage3-implementation-review/P2-2` | 今回の背面化がメモリの前回を上書きし、再読込で古い読みかけが復活する | `統合` FOLD-1 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
