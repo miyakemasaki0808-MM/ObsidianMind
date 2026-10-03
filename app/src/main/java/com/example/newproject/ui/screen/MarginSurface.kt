@@ -79,6 +79,16 @@ internal fun marginWindowShiftFor(
 }
 
 /**
+ * ペインが出ているのに、シートが出ている扱いのままか。そうならシートの扱いを落とす（ペインとシートを同時に出さない → §5.4）。
+ * 全画面のシートで書いたまま戻ると、この形でペインの窓へ来る。
+ *
+ * **窓の情報が揃う前は判定しない** — 画面の作り直しの直後は、折り目の無い窓として仮にペインが組まれることがある。
+ * そのときに落とすと、本当はシートで続けるはずの書きかけからシートが消える。
+ */
+internal fun dropsHiddenSheet(windowKnown: Boolean, paneVisible: Boolean, sheetVisible: Boolean): Boolean =
+    windowKnown && paneVisible && sheetVisible
+
+/**
  * 節の呼び名（→ features/margin_pane.md §5.2）。見出しより前は「ノートの冒頭」、見出しの無いノートは「ノート全体」。
  * **同名の見出しの2つ目からは順番を添える** — 名前だけでは、書き込み先がどちらの節か見分けられない。
  */

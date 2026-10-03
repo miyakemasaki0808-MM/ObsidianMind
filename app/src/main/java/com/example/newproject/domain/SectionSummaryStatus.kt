@@ -3,7 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 
-/** 部分要約の4状態。入口の表示と全画面の最小AIインジケータが共用する。 */
+/** 部分要約の4状態。見出しの要約ボタンの記号を決める。 */
 internal enum class SectionSummaryStatus {
     Idle,
     Working,

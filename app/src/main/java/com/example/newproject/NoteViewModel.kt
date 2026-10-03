@@ -574,7 +574,6 @@ class NoteViewModel internal constructor(
     // ── セクション単位の部分要約（実装は SectionChatController）─────────────
 
     fun openSection(section: NoteSection) = session.openSection(section)
-    fun showSectionChat() = session.showSectionChat()
     fun retrySectionSummary() = session.retrySectionSummary()
     fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
     fun endSectionChat() = session.endSectionChat()

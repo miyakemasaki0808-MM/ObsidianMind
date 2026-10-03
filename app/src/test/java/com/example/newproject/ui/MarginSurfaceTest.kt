@@ -11,6 +11,7 @@ import com.example.newproject.ui.screen.MemoReveal
 import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.dropsHiddenSheet
 import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
@@ -104,6 +105,18 @@ class MarginSurfaceTest {
             MarginWindowShift.None,
             marginWindowShiftFor(false, canShowPane = false, paneOpen = true, sheetVisible = false, writing = true)
         )
+    }
+
+    /**
+     * 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
+     * 落とさないと ✎ の1回目が見えないシートをしまうだけになる。**窓の情報が揃う前は落とさない。**
+     */
+    @Test
+    fun `ペインが出ている窓では、シートが出ている扱いを落とす`() {
+        assertEquals(true, dropsHiddenSheet(windowKnown = true, paneVisible = true, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = false, paneVisible = true, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = true, paneVisible = false, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = true, paneVisible = true, sheetVisible = false))
     }
 
     // ── 節の呼び名と書き込み先（→ features/margin_pane.md §5.2・§5.3）──────────────

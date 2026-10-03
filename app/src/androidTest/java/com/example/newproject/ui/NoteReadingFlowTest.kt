@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -146,7 +147,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = null,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { _, _, _, _ -> }
                     )
                 } else {
@@ -168,6 +176,52 @@ class NoteReadingFlowTest {
 
         // 全画面でも同じブロックが見えている＝位置が引き継がれた。
         composeRule.onNodeWithText(markerAt(visibleBlock), substring = true).assertIsDisplayed()
+    }
+
+    /**
+     * 全画面に置く入口は ✎ だけで、押すと「この部分」のシートが全画面の上に出て書ける。
+     * **シートに要約の行を出さない** — 要約は全画面に入る前のおさらい（→ features/note_fullscreen.md）。
+     */
+    @Test
+    fun 全画面の書く入口はシートを出しそこで書けて要約の行は出ない() {
+        val model = buildNoteSectionModel(LONG_BODY)
+        var sheetVisible by mutableStateOf(false)
+        var openCalls = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                FullscreenNoteScreen(
+                    uiState = loadedNote(LONG_BODY).copy(
+                        marginMemoState = MarginMemoState.Ready(memos = emptyList()),
+                        isMarginMemoSheetVisible = sheetVisible
+                    ),
+                    sectionModel = model,
+                    imageLoader = null,
+                    imageMeasurements = null,
+                    tabListState = rememberLazyListState(),
+                    onExit = {},
+                    onOpenMarginMemo = {
+                        openCalls++
+                        sheetVisible = true
+                    },
+                    onDismissMarginMemo = { sheetVisible = false },
+                    memoDraft = MarginMemoDraft(),
+                    onEditMarginMemo = { _, _ -> },
+                    onSubmitMarginMemo = {},
+                    onDeleteMarginMemo = {},
+                    memoFocusIntent = false,
+                    onMemoFocusIntentChange = {},
+                    onReadingProgress = { _, _, _, _ -> }
+                )
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("このノートのメモ").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        composeRule.onNodeWithText("この節を要約").assertDoesNotExist()
     }
 
     /**
@@ -357,7 +411,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = measurements,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { index, _, _, _ -> reports += index }
                     )
                 } else {
@@ -434,7 +495,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = measurements,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { _, _, _, _ -> }
                     )
                 } else {
@@ -864,6 +932,7 @@ class NoteReadingFlowTest {
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false
     ) {
+        var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
             uiState = state,
             sectionModel = model,
@@ -888,6 +957,8 @@ class NoteReadingFlowTest {
             onSubmitMarginMemo = {},
             onDeleteMarginMemo = {},
             onDismissMarginMemo = onDismissMarginMemo,
+            memoFocusIntent = memoFocusIntent,
+            onMemoFocusIntentChange = { memoFocusIntent = it },
             onReadingProgress = onReadingProgress,
             onDismissReadingTrace = {},
             onOpenSection = {}

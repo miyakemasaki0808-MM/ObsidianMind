@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.example.newproject.ui.markdown.NoteImageMeasurements
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
@@ -146,6 +147,9 @@ class MainActivity : ComponentActivity() {
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
                 // ノートが変われば捨てる。
                 val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
+                // 余白メモの入力欄で書いているつもりか。**通常表示と全画面で共有する** — 全画面のシートで書いたまま戻ると、
+                // 戻った先の面へフォーカスを引き継ぐ（→ features/margin_pane.md §5.4）。画面の作り直しもまたいで保つ。
+                var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
@@ -201,6 +205,8 @@ class MainActivity : ComponentActivity() {
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
+                                memoFocusIntent = memoFocusIntent,
+                                onMemoFocusIntentChange = { memoFocusIntent = it },
                                 onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
                                 onOpenSection = { section -> viewModel.openSection(section) }
                             )
@@ -256,12 +262,14 @@ class MainActivity : ComponentActivity() {
                                 imageMeasurements = noteImageMeasurements,
                                 tabListState = noteListState,
                                 onExit = { navController.popBackStack() },
-                                // 要約シートは通常表示（noteルート）で描画されるため、
-                                // 全画面を閉じてからシートを開く。
-                                onOpenSummary = {
-                                    navController.popBackStack()
-                                    viewModel.showSectionChat()
-                                },
+                                onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
+                                onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
+                                memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
+                                onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
+                                onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
+                                onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
+                                memoFocusIntent = memoFocusIntent,
+                                onMemoFocusIntentChange = { memoFocusIntent = it },
                                 onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
                                 }

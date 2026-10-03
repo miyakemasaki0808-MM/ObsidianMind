@@ -14,7 +14,7 @@
 ## 1. 概要
 
 読んでいる位置の節を対象に、ボトムシートで**その節の要約**を出す。
-通常画面の入口は見出しの要約ボタン（✎ ⛶ の隣の 💬）、全画面の入口は 💬 の最小AIインジケータである。
+入口は見出しの要約ボタン（✎ ⛶ の隣の 💬）である。**全画面には入口を置かない** — 要約は全画面に入る前のおさらいという立ち位置（→ [全画面](note_fullscreen.md) 判断5）。
 
 > クラス名の `SectionChat…` は、質問と回答を持っていた頃の名残である。
 > 改名は影響が広いので、撤去とは分けて扱う。
@@ -79,7 +79,7 @@
   **✎ とは分ける** — ✎ は書く入口、💬 は AI の入口。読み上げ名は「この節を要約」を核にし、撤去した自由な質問を期待させない
   （記号と読み上げ名は `sectionSummaryEntrySymbol` / `sectionSummaryEntryDescription` の純関数）
 - **派生状態:** `domain/SectionSummaryStatus.kt` の `sectionSummaryStatus` が `Idle` / `Working` / `Ready` / `Error` を導く。
-  通常画面と全画面の 💬 が同じ導出を使う。**端末AIが使えないだけなら `Working` にも `Error` にもしない**
+  見出しの要約ボタンの記号はこの導出で決まる。**端末AIが使えないだけなら `Working` にも `Error` にもしない**
 - **キャンセル:** ノート・Vault切替、セッションの開始・終了で `cancelAndClear()`
 
 ## 6. 状態とデータ
@@ -101,7 +101,7 @@
 
 ```
 本文（LazyColumn）── firstVisibleItemIndex ──> 対象の節の決定
- └─ 入口（通常画面は見出しの要約ボタン、全画面は 💬）
+ └─ 入口（見出しの要約ボタン）
       └─ SectionChatSheet
            └─ SectionChatController.open()   ← セッション作成・節の要約
 

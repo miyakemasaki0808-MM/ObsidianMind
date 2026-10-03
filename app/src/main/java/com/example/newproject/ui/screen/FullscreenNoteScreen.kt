@@ -7,8 +7,6 @@ import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
-import com.example.newproject.domain.SectionSummaryStatus
-import com.example.newproject.domain.sectionSummaryStatus
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -18,10 +16,8 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -30,12 +26,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +54,15 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.theme.AccentGlass
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.notePaperColor
 import kotlin.math.roundToInt
-import kotlinx.coroutines.delay
 
 // ---------------------------------------------------------------------------
 // 全画面ノート（独立ルート note_fullscreen）
@@ -90,7 +86,17 @@ internal fun FullscreenNoteScreen(
     imageMeasurements: NoteImageMeasurements?,
     tabListState: LazyListState,
     onExit: () -> Unit,
-    onOpenSummary: () -> Unit,
+    /** シートを出す。読み込み済みなら読み直さない。 */
+    onOpenMarginMemo: () -> Unit,
+    onDismissMarginMemo: () -> Unit,
+    /** このノートの余白メモの書きかけ。通常画面と同じ一組（→ features/margin_pane.md §6.1）。 */
+    memoDraft: MarginMemoDraft,
+    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
+    onDeleteMarginMemo: (MarginMemo) -> Unit,
+    /** 入力欄で書いているつもりか。通常画面と共有する（戻った先の面へフォーカスを引き継ぐ）。 */
+    memoFocusIntent: Boolean,
+    onMemoFocusIntentChange: (Boolean) -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit
 ) {
     val context = LocalContext.current
@@ -113,7 +119,14 @@ internal fun FullscreenNoteScreen(
         tabListState.firstVisibleItemIndex,
         tabListState.firstVisibleItemScrollOffset
     )
+    // 閉じ始めた。**閉じる遷移の間もこの画面は組まれている**ので、ここからはシートを出さず、フォーカスも取りにいかない。
+    // 取りにいくと戻った先の面とフォーカスを奪い合い、外れたことを「書くのをやめた」と読んでしまう。
+    var leaving by remember { mutableStateOf(false) }
     val leaveWith: (() -> Unit) -> Unit = { action ->
+        leaving = true
+        // **書いていなければシートはしまう。** 書いている途中なら、戻った先で出せる面へ引き継ぐ
+        // （窓が切り替わったときと同じ規則 → features/margin_pane.md §5.4）。
+        if (memoDraft.text.isEmpty() && !memoFocusIntent) onDismissMarginMemo()
         // 閉じる処理(action)は必ず即実行する。以前は suspend の scrollToItem の完了後に
         // action を呼んでいたが（フリング中の書き戻し消失を防ぐ狙い）、Fold開閉による
         // Activity再生成後などに tabListState 側の coroutine が完了せず、✕もバックも
@@ -126,10 +139,8 @@ internal fun FullscreenNoteScreen(
         )
         action()
     }
-    // システムバックでもスクロール位置を書き戻してから閉じる。
+    // システムバックでもスクロール位置を書き戻してから閉じる。シートが出ている間はシートの側が先に受ける。
     BackHandler { leaveWith(onExit) }
-
-    val activeChat = uiState.sectionChat
 
     // 全画面でも読んだ位置を報告する。全画面は専用の listState を持つため、
     // ここで報告しないと「全画面で読み進めてそのままアプリを離れた」分が記録から漏れる。
@@ -137,120 +148,112 @@ internal fun FullscreenNoteScreen(
     // 通常表示で依頼された「飛び越した画像」の測定を、全画面でも引き継いで測る（→ NoteImageMeasurements）。
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
-    // 最小インジケータの状態は、通常画面と同じ導出から取る。
-    val combinedStatus = sectionSummaryStatus(activeChat)
+    // 面の節は全画面の本文についていく。通常画面と同じ規則で作る。
+    val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+    val sheetShown = uiState.isMarginMemoSheetVisible && !leaving
+    val dismissSheet: () -> Unit = {
+        onMemoFocusIntentChange(false)
+        onDismissMarginMemo()
+    }
 
     // 全画面はパネルが画面いっぱいに広がるので、下地も同じ紙の色にする。
     // ここだけ Panel のままだと、縁に現行色の額縁が残る。
-    Box(modifier = Modifier.fillMaxSize().background(notePaperColor(uiState.notePaperTone))) {
-        NoteContentPanel(
-            uiState = uiState,
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .widthIn(max = 720.dp)
-                .fillMaxSize()
-                .safeDrawingPadding(),
-            listState = listState,
-            precomputedBlocks = sectionModel?.blocks,
-            imageLoader = imageLoader,
-            imageMeasurements = imageMeasurements
-        )
-        IconPill(
-            symbol = "✕",
-            contentDescription = "全画面表示を閉じる",
-            modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
-            // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
-            // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
-        ) { leaveWith(onExit) }
-        // 読書中もAIの状態（部分要約）が分かるよう最小インジケータを残す。
-        if (activeChat != null) {
-            FullscreenAiFab(status = combinedStatus, onTap = { leaveWith(onOpenSummary) })
+    Box(modifier = Modifier.fillMaxSize().background(notePaperColor(uiState.notePaperTone)).imePadding()) {
+        // **全画面のシートは書くための面で、要約の行を出さない。** 要約は全画面に入る前のおさらい
+        // （→ features/note_fullscreen.md）。見出しの印も出さない — 全画面は本文以外を消す面である。
+        @OptIn(ExperimentalMaterial3Api::class)
+        MarginMemoSheetHost(
+            visible = sheetShown,
+            expandRequested = false,
+            onDismiss = dismissSheet,
+            sheet = {
+                MarginMemoSheetContent(
+                    state = uiState.marginMemoState,
+                    draft = memoDraft,
+                    section = face.bodySection,
+                    hasHeadings = sectionModel?.hasHeadings ?: false,
+                    onJumpToSection = face.jumpToSection,
+                    arranged = face.arranged,
+                    onEdit = { text -> onEditMarginMemo(text, face.bodySection) },
+                    onSubmit = { onSubmitMarginMemo(face.bodySection) },
+                    onDelete = onDeleteMarginMemo,
+                    asSheet = true,
+                    onClose = dismissSheet,
+                    focusIntent = memoFocusIntent,
+                    onFocusIntentChange = onMemoFocusIntentChange,
+                    active = sheetShown,
+                    previousReadingAt = face.previousReadingAt
+                )
+            }
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                NoteContentPanel(
+                    uiState = uiState,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .widthIn(max = 720.dp)
+                        .fillMaxSize()
+                        .safeDrawingPadding(),
+                    listState = listState,
+                    precomputedBlocks = sectionModel?.blocks,
+                    imageLoader = imageLoader,
+                    imageMeasurements = imageMeasurements
+                )
+                IconPill(
+                    symbol = "✕",
+                    contentDescription = "全画面表示を閉じる",
+                    modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(8.dp),
+                    // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
+                    // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
+                ) { leaveWith(onExit) }
+                // **全画面に置く入口は書くためのものだけ。** ✎ の規則は通常画面と同じで、出ている面をしまうか、シートを出す。
+                FullscreenMemoButton(
+                    description = marginToggleDescription(MarginToggle.ShowSheet),
+                    onTap = { if (sheetShown) dismissSheet() else onOpenMarginMemo() }
+                )
+            }
         }
     }
 }
 
 /**
- * 全画面用の最小AIインジケータ。通常FABの立体グラスは使わず小さなフラット円で、
- * 状態が完了/エラーへ変わったときだけ短くラベルをフラッシュする。タップで要約シートへ。
+ * 全画面の ✎。通常FABの立体グラスは使わず小さなフラット円にする。
+ * **指で動かせる** — 本文の右下に固定すると、その位置の文字を隠し続ける。
  */
 @Composable
-private fun BoxScope.FullscreenAiFab(
-    status: SectionSummaryStatus,
+private fun BoxScope.FullscreenMemoButton(
+    description: String,
     onTap: () -> Unit
 ) {
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val currentOnTap by rememberUpdatedState(onTap)
-    val fabDescription = when (status) {
-        SectionSummaryStatus.Working -> "AI生成中"
-        SectionSummaryStatus.Ready -> "AI生成完了。タップで開く"
-        SectionSummaryStatus.Error -> "AIエラー。タップで確認"
-        SectionSummaryStatus.Idle -> "AIメニュー。タップで開く"
-    }
-    var showLabel by remember { mutableStateOf(false) }
-    LaunchedEffect(status) {
-        showLabel = status == SectionSummaryStatus.Ready || status == SectionSummaryStatus.Error
-        if (showLabel) {
-            delay(3000)
-            showLabel = false
-        }
-    }
-    Column(
+    Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
             .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
             .safeDrawingPadding()
-            .padding(end = 20.dp, bottom = 20.dp),
-        horizontalAlignment = Alignment.End
+            .padding(end = 20.dp, bottom = 20.dp)
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(AccentGlass)
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    change.consume()
+                    dragOffset += dragAmount
+                }
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(onTap = { currentOnTap() })
+            }
+            // pointerInput はSemanticsを持たないため、スクリーンリーダー用に明示する。
+            .clearAndSetSemantics {
+                contentDescription = description
+                role = Role.Button
+                onClick { currentOnTap(); true }
+            },
+        contentAlignment = Alignment.Center
     ) {
-        if (showLabel) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(AccentGlass)
-                    .padding(horizontal = 10.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    text = if (status == SectionSummaryStatus.Error) "! 確認して" else "✓ 完了",
-                    color = OnVibrant,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CircleShape)
-                .background(AccentGlass)
-                .pointerInput(Unit) {
-                    detectDragGestures { change, dragAmount ->
-                        change.consume()
-                        dragOffset += dragAmount
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { currentOnTap() })
-                }
-                // pointerInput はSemanticsを持たないため、スクリーンリーダー用に明示する。
-                .clearAndSetSemantics {
-                    contentDescription = fabDescription
-                    role = Role.Button
-                    onClick { currentOnTap(); true }
-                },
-            contentAlignment = Alignment.Center
-        ) {
-            when (status) {
-                SectionSummaryStatus.Working -> CircularProgressIndicator(
-                    modifier = Modifier.size(18.dp),
-                    color = OnVibrant,
-                    strokeWidth = 2.dp
-                )
-                SectionSummaryStatus.Ready -> Text("✓", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                SectionSummaryStatus.Error -> Text("!", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                SectionSummaryStatus.Idle -> Text("💬", fontSize = 18.sp)
-            }
-        }
+        Text("✎", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
 

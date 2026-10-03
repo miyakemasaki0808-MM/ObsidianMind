@@ -65,8 +65,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -89,8 +87,6 @@ import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
-import com.example.newproject.domain.arrangeMemos
-import com.example.newproject.domain.showsPreviousReading
 import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -145,6 +141,12 @@ internal fun NoteReaderTab(
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     onDismissMarginMemo: () -> Unit,
+    /**
+     * 入力欄で書いているつもりか。**画面の作り直しと全画面との往復をまたいで保つ** — 面が組み替わっても、
+     * 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。全画面と同じ値を共有する。
+     */
+    memoFocusIntent: Boolean,
+    onMemoFocusIntentChange: (Boolean) -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
     onDismissReadingTrace: () -> Unit,
     /** 見出しの要約ボタン。今の節（見出しが無ければノート全体）の部分要約を開く。既にあれば再表示する。 */
@@ -167,35 +169,11 @@ internal fun NoteReaderTab(
     val currentSection by remember(sectionModel) {
         derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
     }
-    // 本文の節。**スクロールが止まってから決める**（→ features/margin_pane.md §5.3）。
-    // 流している途中で決めると、ペインの中身が通り過ぎる節ごとに入れ替わる。
-    var settledBlock by remember(sectionModel) { mutableIntStateOf(listState.firstVisibleItemIndex) }
-    LaunchedEffect(listState, sectionModel) {
-        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }
-            .collect { (scrolling, index) -> if (!scrolling) settledBlock = index }
-    }
-    val bodySection = sectionModel?.sectionRefAt(settledBlock)
-    // メモを今の見出しと照合して並べる。印と件数と飛ぶ先も同じ照合から作る（→ features/margin_pane.md §5.6）。
-    val readyMemos = uiState.marginMemoState as? MarginMemoState.Ready
-    val arrangedMemos = remember(readyMemos?.memos, sectionModel, bodySection) {
-        val memos = readyMemos?.memos ?: return@remember null
-        val model = sectionModel ?: return@remember null
-        // **見出しの索引は解析と一緒に Main の外で作ってある。** ここでは見出しをたどらない。
-        arrangeMemos(memos, model.headingIndex, bodySection ?: SectionRef(title = null))
-    }
-    // 前回の読書の跡。**メモと同じ照合で、見出しが一意に一致した節にだけ出す**（→ features/margin_pane.md §5.7）。
-    val previousReadingAt = remember(readyMemos?.previousVisit, sectionModel, bodySection) {
-        val previous = readyMemos?.previousVisit ?: return@remember null
-        val model = sectionModel ?: return@remember null
-        previous.atEpochMillis.takeIf { showsPreviousReading(previous, model.headingIndex, bodySection) }
-    }
-    // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
-    val jumpToSection: (SectionRef) -> Unit = { ref ->
-        sectionModel?.startBlockOf(ref)?.let { block ->
-            coroutineScope.launch { listState.animateScrollToItem(block) }
-            imageMeasurements?.requestSkippedMeasurement(block)
-        }
-    }
+    val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+    val bodySection = face.bodySection
+    val arrangedMemos = face.arranged
+    val previousReadingAt = face.previousReadingAt
+    val jumpToSection = face.jumpToSection
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
@@ -216,12 +194,9 @@ internal fun NoteReaderTab(
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
     val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
     val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
-    // 入力欄で書いているつもりか。**画面の作り直しをまたいで保つ** — Fold の開閉で面が組み替わっても、
-    // 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。
-    // 利用者が面を閉じたときは落とす。次に面を出したときに、頼んでいないキーボードを出さない。
-    var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+    // 利用者が面を閉じたときは、書いているつもりも落とす。次に面を出したときに、頼んでいないキーボードを出さない。
     val dismissMemoSheet: () -> Unit = {
-        memoFocusIntent = false
+        onMemoFocusIntentChange(false)
         onDismissMarginMemo()
     }
     val foldInfo = rememberReaderFold()
@@ -232,7 +207,7 @@ internal fun NoteReaderTab(
         when (toggle) {
             MarginToggle.HideSheet -> dismissMemoSheet()
             MarginToggle.ClosePane -> {
-                memoFocusIntent = false
+                onMemoFocusIntentChange(false)
                 onSetMarginPaneOpen(false)
             }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
@@ -248,7 +223,7 @@ internal fun NoteReaderTab(
             subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
             else "過去のノートから、思考をひとつ。",
             // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
-            // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
+            // 本文スクロール・蒸留のつまみ・全画面の右下の丸と縁を取り合わない
             // （→ features/reflect_margin_memo.md 判断7）。ペインを出せる窓では、✎ がペインの開閉を兼ねる。
             trailing = if (hasNote) {
                 {
@@ -266,7 +241,12 @@ internal fun NoteReaderTab(
                         IconPill(symbol = "✎", contentDescription = marginToggleDescription(memoToggle)) {
                             onMemoToggle(memoToggle)
                         }
-                        IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
+                        // **出ていたシートはしまってから入る。** 全画面は本文だけで始める面である
+                        // （→ features/note_fullscreen.md）。
+                        IconPill(symbol = "⛶", contentDescription = "全画面表示") {
+                            dismissMemoSheet()
+                            onEnterFullscreen()
+                        }
                     }
                 }
             } else null
@@ -433,8 +413,14 @@ internal fun NoteReaderTab(
             }
         }
 
+        val windowKnown = foldInfo.isKnown && regionStartDp != null
+        // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
+        // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
+        LaunchedEffect(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible) {
+            if (dropsHiddenSheet(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible)) onDismissMarginMemo()
+        }
         MarginWindowShiftEffect(
-            windowKnown = foldInfo.isKnown && regionStartDp != null,
+            windowKnown = windowKnown,
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
@@ -477,7 +463,7 @@ internal fun NoteReaderTab(
                         asSheet = true,
                         onClose = dismissMemoSheet,
                         focusIntent = memoFocusIntent,
-                        onFocusIntentChange = { memoFocusIntent = it },
+                        onFocusIntentChange = onMemoFocusIntentChange,
                         active = uiState.isMarginMemoSheetVisible && !paneVisible,
                         previousReadingAt = previousReadingAt
                     )
@@ -567,7 +553,7 @@ internal fun NoteReaderTab(
                                 onDelete = onDeleteMarginMemo,
                                 modifier = Modifier.padding(top = 16.dp),
                                 focusIntent = memoFocusIntent,
-                                onFocusIntentChange = { memoFocusIntent = it },
+                                onFocusIntentChange = onMemoFocusIntentChange,
                                 active = true,
                                 previousReadingAt = previousReadingAt
                             )

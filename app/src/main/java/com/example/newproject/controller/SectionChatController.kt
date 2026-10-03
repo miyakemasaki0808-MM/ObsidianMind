@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * セクション単位の部分要約（見出しの要約ボタン・全画面の💬→ボトムシート）を担当する。
+ * セクション単位の部分要約（見出しの要約ボタン→ボトムシート）を担当する。
  * NoteViewModel から scope と状態Flowを注入され、sectionChat の更新のみを行う。
  */
 class SectionChatController(

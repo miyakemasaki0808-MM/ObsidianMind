@@ -737,7 +737,6 @@ internal class NoteSessionCoordinator(
 
     fun openSection(section: NoteSection) = sectionChat.open(section)
 
-    fun showSectionChat() = sectionChat.showSheet()
     /** 要約エリアの再試行。開いているセクションのまま作り直す。 */
     fun retrySectionSummary() = sectionChat.retrySummary()
     fun dismissSectionChatSheet() = sectionChat.dismissSheet()
