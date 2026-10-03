@@ -731,7 +731,7 @@ Vault に Markdown が無ければ `NoteState.Empty`、読み込みに失敗す�
 - **状態**: `marginMemoState`・`isMarginMemoSheetVisible`。書きかけは `NoteUiState` の外の `ComposeMarginMemoDrafts`、ペインの開閉は設定の `marginPaneOpen`
 - **書く先**: `_ReadingTraces/*.json` の `memos` 配列。schema v7。Vault の `.md` には触れない
 - **AI**: 呼ばない。Nano 非対応の端末でも同じに動く。部分要約はこの面ではなく別のシートにある
-- **正本**: [margin_pane](../dev/features/margin_pane.md)、[reflect_margin_memo](../dev/features/reflect_margin_memo.md)。前身のひとことを畳んだ判断は [reflect_remark](../dev/features/reflect_remark.md)
+- **正本**: [margin_pane](../dev/features/margin_pane.md)、[reflect_margin_memo](../dev/features/reflect_margin_memo.md)
 
 **面の中身**
 

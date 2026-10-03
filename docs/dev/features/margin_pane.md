@@ -1,7 +1,7 @@
 # この部分 — 余白のペインとシート
 
 **状態:** **段1〜3は実装済み・実機検証済み（段4・5は未実装）。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
-実装は段に分けて進める（→ §11）。**前提は、セクションの質問とクイズの撤去と常駐マスコットの撤去が済んでいること**
+実装は段に分けて進める（→ §11）。
 **最終検証:** 2026-10-03 / `621dfa9c`（段3まで。Pixel 10 Pro Fold で段3の通し版と段2から持ち越した範囲。段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 予定 — `ui/screen/SectionChatSheet.kt` / `controller/SectionChatController.kt`
@@ -40,7 +40,7 @@
 - **段落の控え。** メモが控えるのは見出し名までで、段落へ紐づけない。痕跡のスキーマを上げることになるので別に扱う
 - **節ごとの関連ノート推薦。** 並べ読みの候補は、ノートを開いたときに作られた関連ノートをそのまま使う
 - **半開きの形・見開き冊子・開くと本文へ移る体験。** Fold だけの体験の残りで、本書の範囲外
-- **質問とクイズ。** 撤去済みの前提で、この面へは持ち込まない
+- **質問と設問。** この面へは持ち込まない（→ [部分要約](section_ai_chat.md) 判断3）
 - **読み方の状況を推測して中身を切り替えること**（→ §8 判断2）
 - **並べ読みの右のノートを「今のノート」にすること。** 右は眺めるだけ（→ §8 判断1）
 
@@ -325,7 +325,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 ### 判断2: 中身は状況の推測ではなく、今の節で決める
 
 読み方の状況（読み途中・深掘り中など）を推測して中身を切り替える案は採らない。
-推測が外れると邪魔になり、本文の横で中身が勝手に変わるのは、常駐マスコットを撤去する理由と同じ「本文より目立つ」型になる。
+推測が外れると邪魔になり、本文の横で中身が勝手に変わるものは「本文より目立つ」。アプリ内に常駐のキャラクターを置かないのと同じ線である。
 今の節についていくだけなら、切り替わった理由を利用者が説明できる。
 
 ### 判断3: 書いている間に固定するのは書き込み先だけ

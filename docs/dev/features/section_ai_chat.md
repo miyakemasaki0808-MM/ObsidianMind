@@ -1,8 +1,8 @@
 # 部分要約（セクションの要約シート）
 
-**状態:** Implemented — 稼働中。**質問候補・回答とクイズは撤去した（2026-09-30、→ §8 判断3）**。
+**状態:** Implemented — 稼働中。節の要約だけを出す（→ §8 判断3）。
 余白メモのシートと1枚へまとめる予定は [この部分](margin_pane.md) が持つ
-**最終検証:** 2026-08-11 / `c25bcea`（質問とクイズの撤去は、撤去のコミットの実装に合わせて書いた）
+**最終検証:** 2026-08-11 / `c25bcea`（判断3の範囲は、撤去のコミットの実装に合わせて書いた）
 **関連コード:** `controller/SectionChatController.kt` / `ui/screen/SectionChatSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
 **関連テスト:** `SectionChatControllerTest` / `SectionSummaryStatusTest` / `NoteSectionThreadingTest`
 **正本:** この文書
@@ -28,7 +28,7 @@
 
 ### 非ゴール
 - **質問に答えない。** 候補の質問も自由記述の質問も持たない（→ §8 判断3）
-- **設問を作らない。** クイズは撤去した（→ §8 判断3）
+- **設問を作らない**（→ §8 判断3）
 - **要約を永続化しない**（シートを閉じても同じノートの間は残るが、端末には残さない）
 - **ノート横断にしない**
 
@@ -131,7 +131,6 @@ NoteSectionController（Dispatchers.Default）── NoteSectionModel ──> �
 出力256トークン・1回数十秒の中で、**待ったうえで読んで得をする水準に届かなかった**（オーナーの体感）。
 どちらも本文から選ぶのではない自由生成で、**結果はシートを閉じるかノートを替えると消える** —
 「次の再会の材料として残るか」に答えない。**部分要約だけを残した。**
-クイズの設計の記録は [quiz](quiz.md) に残してある。
 
 ### 判断4: ここではモデルDLを始めない
 

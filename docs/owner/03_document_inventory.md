@@ -14,7 +14,7 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 131本・約24,700行。** `CLAUDE.md`・`README.md` と `docs/` 配下の129本を数えた。
+**追跡対象の Markdown は 128本・約23,900行。** `CLAUDE.md`・`README.md` と `docs/` 配下の126本を数えた。
 作業ツリーにはこの他に追跡しないものが14本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ4本。
 証跡フォルダには再会カード・結晶・余白ペインの実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
@@ -27,8 +27,8 @@ docs/
 ├── owner/     (18本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (5本)    開発日誌。README＋月別4本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
-├── dev/       (85本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (26本)  ユーザーから見える機能。README・様式＋仕様24本
+├── dev/       (82本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (23本)  ユーザーから見える機能。README・様式＋仕様21本
 │   ├── system/    (13本)  横断的な基盤。README＋12本
 │   ├── decisions/  (6本)  ADR。README＋5本
 │   └── lessons/   (36本)  教訓65件のうち、カードを持つ36本
@@ -37,11 +37,11 @@ docs/
     └── device_validation/ (18本)  共通手順・簡易版・機能別ケース16本
 ```
 
-**前回の数え直しから3本増えた。** 開いた Fold の「この部分」の正本、その設計の下書き、10月の日誌である。
-**廃止した機能の文書は消さない** — [reflect_remark](../dev/features/reflect_remark.md) は
-「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という判断の記録として残す。
-2026-09-30 に撤去した [quiz](../dev/features/quiz.md) と [vigilith_in_app](../dev/features/vigilith_in_app.md) も同じ扱いで、
-状態を Deprecated にして残してある。機能は消えてもその教訓は次にAI機能を足すときにまた要る。
+**前回の数え直しから3本増え、3本減った。** 増えたのは開いた Fold の「この部分」の正本、その設計の下書き、10月の日誌、減ったのは廃止した機能の設計書3本である。
+**廃止した機能の文書は消す**（2026-10-03、オーナー判断）。やめた理由だけを残る正本へ数行で移し、
+全文は git 履歴に任せる。ノートへのひとこと・クイズ・アプリ内 Vigilith の3本をこの日に消した。
+ひとことの設計書が持っていた「出力枠256トークンはゼロサムで、分類ラベルを足すと本命が痩せる」という教訓は
+[ai_input_excerpt](../dev/system/ai_input_excerpt.md) §10 へ移してある。いつ何をやめたかは、変更履歴・日誌・年表が持つ。
 
 ## 2. 場所ごとの役割
 
@@ -61,7 +61,7 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。24本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。21本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
@@ -72,11 +72,9 @@ docs/
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中 |
 | [section_ai_chat](../dev/features/section_ai_chat.md) | 部分要約 | 稼働中。質問候補・回答とクイズは撤去し、節の要約だけを残した。入口は見出しの 💬 |
-| [quiz](../dev/features/quiz.md) | クイズ | **Deprecated。実装は撤去済み。** 設計の記録として残す |
 | [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
 | [margin_pane](../dev/features/margin_pane.md) | 「この部分」余白のペインとシート | 段1〜3は実装済み・実機検証済み、段4・5は未実装。開いた Fold では本文の右に、今の節のメモ・前回の読書の跡・書く欄を置く。**2026-09-30 に新設** |
 | [reflect_crystal](../dev/features/reflect_crystal.md) | 結晶 | 実装済み・実機確認済み。読んできたノートの要約から共通する筋を1文にして Vault に溜める。Reflect の3本目 |
-| [reflect_remark](../dev/features/reflect_remark.md) | ノートへのひとこと | **Deprecated。実装は撤去済み。** 判断の記録として残す |
 | [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。931行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。**2026-09-09〜12 に新設** |
@@ -85,7 +83,6 @@ docs/
 | [note_age_paper](../dev/features/note_age_paper.md) | 年代の紙色 | 稼働中・実機確認済み。既定オフ |
 | [reading_trace_backup](../dev/features/reading_trace_backup.md) | 読書痕跡の退避と復元 | 実装済み・稼働中 |
 | [character_vigilith](../dev/features/character_vigilith.md) | キャラクターシート | Adopted。12節に従わない参照シート。起動OPとアイコンが従う |
-| [vigilith_in_app](../dev/features/vigilith_in_app.md) | アプリ内 Vigilith | **Deprecated。常駐マスコットは撤去済み。** 判断の記録として残す |
 | [opening_animation](../dev/features/opening_animation.md) | 起動OP | 稼働中。ランチャー重複起動のガードは判断7 |
 | [dark_mode](../dev/features/dark_mode.md) | ダークモード | 稼働中・実機確認済み |
 | [sealed_reply](../dev/features/sealed_reply.md) | 封をした返事 | **前提を失ったまま据え置き**（2026-09-20、オーナー判断）。封をする対象だった「返事」がひとことごと無くなった |

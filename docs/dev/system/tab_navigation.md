@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替・バッジ）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
-**関連テスト:** `AiTabBadgeStateTest` / `AppScaffoldContentSlotTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
+**関連テスト:** `AppScaffoldContentSlotTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
 **正本:** この文書
 
 **対象領域:** 画面構成・ナビゲーション・非タブルートの扱い

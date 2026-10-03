@@ -1,6 +1,6 @@
 # 機能名
 
-**状態:** Draft / Implemented / Deprecated
+**状態:** Draft / Implemented（廃止したら文書ごと消す → [document_map](../document_map.md) §4）
 **最終検証:** YYYY-MM-DD / `<commit>`
 **関連コード:**
 **関連テスト:**

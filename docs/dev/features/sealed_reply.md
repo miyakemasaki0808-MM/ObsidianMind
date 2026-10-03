@@ -10,7 +10,7 @@
 **関連テスト:** 予定 — `RemarkControllerTest` / `ReunionCardControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest`
 **正本:** この文書
 
-**関連:** [reflect_remark](reflect_remark.md)（返事の保存先と契約）・[reflect_reading_trace](reflect_reading_trace.md)（痕跡サイドカー）・[reunion_card](reunion_card.md)（再会カードの枠）・[reading_trace_backup](reading_trace_backup.md)（退避と復元）
+**関連:** ノートへのひとことの設計書（返事の保存先と契約。2026-10-03 に削除し、git 履歴にある）・[reflect_reading_trace](reflect_reading_trace.md)（痕跡サイドカー）・[reunion_card](reunion_card.md)（再会カードの枠）・[reading_trace_backup](reading_trace_backup.md)（退避と復元）
 
 ---
 
@@ -20,7 +20,7 @@
 再会カードで封を切ると、書いた当時の自分の言葉が、時間差で届く。
 
 Reflect 系の中で、書いた言葉を**未来の自分へ宛てる**唯一の仕掛けである。AIは使わない。
-返事の保存先と契約は [reflect_remark](reflect_remark.md) がそのまま持ち、本書はその上に「封」という状態を1つ足す。
+返事の保存先と契約はノートへのひとことの設計書が持っていた（削除済み）。本書はその上に「封」という状態を1つ足す。
 
 出どころは [owner/idea_catalog](../../owner/08_idea_catalog.md) の「封をした返事」で、
 北極星の「過去の自分と再会する」を、AIを1回も呼ばずに最も直接に作る案として選ばれた。
@@ -158,7 +158,7 @@ Rediscover で引き当て
 ## 9. 品質要件
 
 - **プライバシー:** 封は平文のまま。退避ファイル・Obsidian の同期先では読める。封の表示にその旨を1行添える
-- **データ保護:** 封の書き込みが失敗しても返事は失われない。返事が先に保存済みであることは [reflect_remark](reflect_remark.md) §8 判断7 の契約に乗る
+- **データ保護:** 封の書き込みが失敗しても返事は失われない。返事が先に保存済みであることは ノートへのひとことの設計書 §8 判断7 の契約に乗る
 - **アクセシビリティ:** 封筒の状態と「封を切る」「封を破る」を読み上げ名で区別する
 - **オフライン・端末制約:** 端末内で閉じる。AIも通信も使わない
 
