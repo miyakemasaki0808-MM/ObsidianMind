@@ -69,6 +69,13 @@ internal fun summaryEntryFor(canShowPane: Boolean, paneVisible: Boolean, sheetVi
     else -> SummaryEntry.Sheet
 }
 
+/**
+ * このノートの間だけ出したペインを、今出すか。**出したノート [owner] と今のノートが同じときだけ。**
+ * 画面の保存値は、別のノートを開いている状態で復元されることがある（冊子から別のノートを読んで戻ったとき）。
+ * 保存の鍵で照合したつもりにならず、値そのものに持ち主を持たせて照合する。
+ */
+internal fun paneForNoteShown(owner: String?, currentNote: String?): Boolean = owner != null && owner == currentNote
+
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
 internal enum class MarginWindowShift {
     None,

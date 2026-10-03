@@ -47,6 +47,7 @@ import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -896,6 +897,46 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **このノートの間だけ出したペインを、別のノートで復元された画面に持ち込まない**（→ features/margin_pane.md §5.4）。
+     * 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で復元される。そのときは読み込み中を挟まない。
+     * 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。
+     */
+    @Test
+    fun このノートの間だけのペインは_別のノートで復元された画面には出ない() {
+        assertTrue("同じノートで作り直すと残る", paneAfterRestore(restoreWith = NOTE_A))
+        assertFalse("別のノートへ持ち込んだ", paneAfterRestore(restoreWith = NOTE_B))
+    }
+
+    /** ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。 */
+    private fun paneAfterRestore(restoreWith: String): Boolean {
+        val restoration = StateRestorationTester(composeRule)
+        // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
+        var current = NOTE_A
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS, targetUri = current).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = false,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        current = restoreWith
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        return composeRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+    }
+
+    /**
      * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
      * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
      */
@@ -964,13 +1005,15 @@ class NoteReadingFlowTest {
         )
     }
 
-    private fun loadedNote(content: String) = NoteUiState(
+    private fun loadedNote(content: String, targetUri: String = "") = NoteUiState(
         vaultSelected = true,
-        noteState = NoteState.Success(title = TITLE, content = content)
+        noteState = NoteState.Success(title = TITLE, content = content, targetUri = targetUri)
     )
 
     private companion object {
         const val TITLE = "テスト用ノート"
+        const val NOTE_A = "content://vault/a.md"
+        const val NOTE_B = "content://vault/b.md"
         const val FIRST_PARAGRAPH = "最初の段落"
 
         val BODY = """

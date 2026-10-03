@@ -14,6 +14,7 @@ import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
 import com.example.newproject.ui.screen.compactWhileTyping
 import com.example.newproject.ui.screen.dropsHiddenSheet
+import com.example.newproject.ui.screen.paneForNoteShown
 import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
@@ -121,6 +122,15 @@ class MarginSurfaceTest {
         assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = true))
         assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = false))
         assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = true))
+    }
+
+    /** このノートの間だけ出したペインは、**出したノートと今のノートが同じときだけ**出す（保存値の復元でも照合する）。 */
+    @Test
+    fun `このノートの間だけのペインは、出したノートを開いている間だけ出す`() {
+        assertEquals(true, paneForNoteShown(owner = "content://a", currentNote = "content://a"))
+        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = "content://b"))
+        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = null))
+        assertEquals(false, paneForNoteShown(owner = null, currentNote = "content://a"))
     }
 
     /**

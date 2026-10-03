@@ -211,9 +211,13 @@ internal fun NoteReaderTab(
         onDismissMarginMemo()
     }
     // 見出しの要約ボタンで、このノートの間だけ出したペイン（→ features/margin_pane.md §5.4）。**設定は変えない。**
-    // ノートで鍵をかけるので、ノートが替われば消える。Fold の開閉と全画面との往復では残る。
-    var paneForNote by rememberSaveable(successState?.targetUri) { mutableStateOf(false) }
-    val paneShown = marginPaneOpen || paneForNote
+    // **出したノートを値として持つ。** 保存した画面は別のノートを開いた状態で復元されることがあり、
+    // 保存の鍵では照合されない（→ paneForNoteShown）。Fold の開閉と全画面との往復では同じノートなので残る。
+    var paneForNote by rememberSaveable { mutableStateOf<String?>(null) }
+    val currentNoteUri = successState?.targetUri
+    // ノートを離れたら（読み込み中を含む）持ち主を捨てる。戻ってきても、頼み直すまで出さない。
+    LaunchedEffect(currentNoteUri) { if (paneForNote != currentNoteUri) paneForNote = null }
+    val paneShown = marginPaneOpen || paneForNoteShown(paneForNote, currentNoteUri)
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
@@ -223,7 +227,7 @@ internal fun NoteReaderTab(
             MarginToggle.HideSheet -> dismissMemoSheet()
             MarginToggle.ClosePane -> {
                 onMemoFocusIntentChange(false)
-                paneForNote = false
+                paneForNote = null
                 onSetMarginPaneOpen(false)
             }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
@@ -417,7 +421,7 @@ internal fun NoteReaderTab(
         val openSummary: () -> Unit = {
             when (summaryEntryFor(canShowPane, paneVisible, uiState.isMarginMemoSheetVisible)) {
                 SummaryEntry.Pane -> Unit
-                SummaryEntry.PaneForNote -> paneForNote = true
+                SummaryEntry.PaneForNote -> paneForNote = currentNoteUri
                 SummaryEntry.Sheet -> onOpenMarginMemo()
             }
             bodySection?.let(onRequestSectionSummary)
