@@ -22,6 +22,7 @@ import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.domain.SummaryCache
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
@@ -124,6 +125,9 @@ internal class NoteSessionCoordinator(
      */
     val sectionModel: StateFlow<NoteSectionModel?> get() = sections.model
 
+    /** 並べ読みで右に出す本文の解析結果。`NoteUiState` の外にあるのは [sectionModel] と同じ理由。 */
+    val sideReadingBlocks: StateFlow<List<MarkdownBlock>?> get() = sideReading.blocks
+
     /**
      * Vault単位の非同期要求の世代。[onVaultChanged] のたびに進めて、補記一覧・
      * フォルダ一覧の結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
@@ -151,6 +155,8 @@ internal class NoteSessionCoordinator(
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
     // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
     private val sections = NoteSectionController(scope, parseDispatcher)
+    // 並べ読みの本文も最大1MBなので、**解析と同じ口**で Main の外へ。テストがテストスケジューラへ差し替えられる。
+    private val sideReading = SideReadingController(scope, stateStore.sideReadingWriter, parseDispatcher)
     // 抜粋の組み立ては節の本文に比例するので Main の外へ。**解析と同じ口を使う** — テストがテストスケジューラへ
     // 差し替えられないと、生成の始まりを待てない。
     private val sectionChat = SectionChatController(
@@ -433,6 +439,8 @@ internal class NoteSessionCoordinator(
         marginMemo.cancelAndClear()
         // 補記一覧（annotation）はVault単位なのでここには登録しない。
         sectionChat.cancelAndClear()
+        // 右で眺めていたノートの読み込みも止める。状態は withNoteScopedReset() が落とす。
+        sideReading.cancelAndClear()
         distill.cancelForNoteChange()
     }
 
@@ -757,4 +765,15 @@ internal class NoteSessionCoordinator(
 
     /** 生成を中止する。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
     fun cancelSectionSummary(section: SectionRef) = sectionChat.cancel(section)
+
+    // ── 並べ読み（実装は SideReadingController）────────────────────────────
+
+    /**
+     * 関連ノートを右で開く（→ features/margin_pane.md §5.9）。**今のノートにはしない** — 訪問・履歴・要約・
+     * 分野判定・余白メモのどれにも渡さない。[read] は本文を読む口（Android の I/O を持つ窓口が渡す）。
+     */
+    fun openSideReading(note: RelatedNote, read: suspend () -> String) = sideReading.open(note, read)
+
+    /** 余白へ戻る・ペインを閉じる・余白ペインでない並べ方になった。 */
+    fun closeSideReading() = sideReading.close()
 }

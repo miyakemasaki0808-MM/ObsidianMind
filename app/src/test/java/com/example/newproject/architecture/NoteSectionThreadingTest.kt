@@ -42,6 +42,41 @@ class NoteSectionThreadingTest {
         )
     }
 
+    /**
+     * **ブロック解析を呼ぶ場所を性質で数える。** 並べ読みの右の本文も最大1MBで、表示用の解析と同じパーサを使う
+     * （→ lessons L14）。ここに無い場所から呼んだら、Main の外へ逃がしたかを確かめてから足す。
+     */
+    @Test
+    fun `ブロック解析を呼ぶのは決まった場所だけ`() {
+        val callSites = mainSourceRoot().walkTopDown()
+            .filter { it.isFile && it.extension == "kt" }
+            .filter { PARSE_CALL.containsMatchIn(it.readText()) }
+            .map { it.relativePath() }
+            .toSet()
+
+        assertEquals(
+            setOf(BLOCKS_DEFINITION, SECTIONS_DEFINITION, EXCERPT_BUILDER, MARKDOWN_RENDERER, SIDE_READING_CONTROLLER),
+            callSites
+        )
+    }
+
+    @Test
+    fun `並べ読みの Controller は parseDispatcher の外で解析しない`() {
+        val source = mainSourceRoot().resolve(SIDE_READING_CONTROLLER).readText()
+
+        assertTrue("$SIDE_READING_CONTROLLER が解析を呼んでいません", PARSE_CALL.containsMatchIn(source))
+        assertEquals(
+            "$SIDE_READING_CONTROLLER の解析が parseDispatcher の外へ出ています",
+            PARSE_CALL.findAll(source).count(),
+            OFF_MAIN_PARSE_CALL.findAll(source).count()
+        )
+        assertEquals(
+            "$SIDE_READING_CONTROLLER の本番既定ディスパッチャが Default ではありません",
+            1,
+            DEFAULT_DISPATCHER.findAll(source).count()
+        )
+    }
+
     @Test
     fun `ui パッケージはブロック解析を自前で呼ばない`() {
         // MarkdownRenderer だけは、AI補記の結果画面など「短い本文をその場で描く」
@@ -81,6 +116,9 @@ class NoteSectionThreadingTest {
     companion object {
         private const val SECTION_CONTROLLER = "controller/NoteSectionController.kt"
         private const val SECTIONS_DEFINITION = "domain/markdown/NoteSections.kt"
+        private const val BLOCKS_DEFINITION = "domain/markdown/MarkdownBlocks.kt"
+        private const val EXCERPT_BUILDER = "domain/NoteExcerptBuilder.kt"
+        private const val SIDE_READING_CONTROLLER = "controller/SideReadingController.kt"
         private const val MARKDOWN_RENDERER = "ui/markdown/MarkdownRenderer.kt"
         private const val NOTE_COMPONENTS = "ui/component/NoteComponents.kt"
 
@@ -90,6 +128,8 @@ class NoteSectionThreadingTest {
         private val DEFAULT_DISPATCHER =
             Regex("""parseDispatcher:\s*CoroutineDispatcher\s*=\s*Dispatchers\.Default""")
         private val PARSE_CALL = Regex("""\bparseMarkdownBlocks\(""")
+        private val OFF_MAIN_PARSE_CALL =
+            Regex("""withContext\(parseDispatcher\)\s*\{\s*parseMarkdownBlocks\(""")
         private val BODY_GUARD = Regex("""if\s*\(!isNote\s*\|\|\s*blocksForContent\s*!=\s*null\)""")
     }
 }

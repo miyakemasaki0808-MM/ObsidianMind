@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（14 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -38,12 +38,13 @@ NoteViewModel（Android境界の窓口）
       ├── ReadingTraceBackupController  ← 痕跡の書き出し・読み戻し（**Vault単位**）
       ├── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
       ├── NoteFieldController           ← ノートの分野判定（**ジョブはノート単位・結果はVault単位 → 判断4**）
+      ├── SideReadingController         ← 並べ読み（関連ノートを右で眺めるだけ。**ノート単位**。今のノートにしない）
       └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 15個である。
 
-**行数は倍になったが、窓口の性質は変わっていない。** 68ある関数のうち**43は1行の委譲**で、
+**行数は倍になったが、窓口の性質は変わっていない。** 70ある関数のうち**44は1行の委譲**で、
 本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
 **測るべきは行数ではなく「業務ロジックが戻ってきていないか」**で、そちらは戻っていない。
 （分割の動機だった906行と比べる意味は薄い — あのときは業務ロジックが同居していた。）
@@ -97,7 +98,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留 | ノート切替（**各Controllerの `activeRequestId`**） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しだけ） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
@@ -199,6 +200,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 |---|---|
 | 設定（`darkTheme`・`notePaperAging`） | 状態22項目の変更でアプリ最上位まで再評価されるのを避ける（**再コンポーズ範囲**） |
 | `NoteSectionModel` | `domain.markdown` にあり振る舞いを持つため `model` へ移せない（**パッケージ境界**） |
+| 並べ読みの本文の解析結果（`SideReadingController.blocks`） | `NoteSectionModel` と同じく `domain.markdown` の型を持つ（**パッケージ境界**）。読み込み中・読めた・失敗の状態は `NoteUiState` に置き、`withNoteScopedReset()` で落とす。本文はそれと一緒に `cancelNoteScopedJobs()` が消す（→ [margin_pane](../features/margin_pane.md) §6） |
 | 余白メモの書きかけ（`ComposeMarginMemoDrafts`） | 入力中の文字を StateFlow 経由で描くと、日本語の変換中に入力が崩れやすい（**IME**）。文字・書き込み先・送信を一組で持つので、まとめて外へ出す。ViewModel が持ち、Controller は `MarginMemoDraftStore` の口だけを通す（→ 判断4の3行目） |
 
 **本数は数えない**（設定が増えるだけなので危険と相関しない）。危ないのは

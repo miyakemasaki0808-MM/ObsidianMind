@@ -15,6 +15,7 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,6 +81,12 @@ interface DistillStateWriter {
 interface SectionChatStateWriter {
     val current: SectionChatState
     fun update(transform: (SectionChatState) -> SectionChatState)
+}
+
+/** 並べ読み（ノート単位）。本文の解析結果は `domain` の型なので Controller が別に持つ。 */
+interface SideReadingStateWriter {
+    val current: SideReadingState
+    fun set(state: SideReadingState)
 }
 
 interface ReadingTraceStateWriter {
@@ -219,6 +226,13 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         }
     }
 
+    val sideReadingWriter: SideReadingStateWriter = object : SideReadingStateWriter {
+        override val current: SideReadingState get() = mutableState.value.sideReading
+        override fun set(state: SideReadingState) {
+            mutableState.update { it.copy(sideReading = state) }
+        }
+    }
+
     val readingTraceWriter: ReadingTraceStateWriter = object : ReadingTraceStateWriter {
         override val current: ReadingTraceCard? get() = mutableState.value.readingTraceCard
         override fun update(transform: (ReadingTraceCard?) -> ReadingTraceCard?) {
@@ -350,6 +364,8 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     // 前のノートのメモを載せたシートが開いたまま残る。
     isMarginMemoSheetVisible = false,
     sectionChat = SectionChatState(),
+    // 右で眺めていたノート。残すと、次のノートのペインに前のノートの関連が開いたまま出る。
+    sideReading = SideReadingState.Idle,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。
     readingTraceCard = null,
     // **結晶の一覧は落とさない**（Vault単位）。落とすのは絞り込みのパスだけで、

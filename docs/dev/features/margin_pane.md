@@ -253,7 +253,7 @@
 | 書きかけ | **新規。** ノートごとの一組と、未確定の送信。Vault 単位で持つ。**`NoteUiState` の外**（ViewModel 側の Compose の状態）に置く（→ §6.1） | ジョブはノート単位で止め、書きかけは Vault 切替でだけ捨てる（アーキテクチャ判断4の3行目の形）。`NoteUiState` の外なので `withVaultScopedReset()` ではなく、`onVaultChanged()` から `MarginMemoController.clearVaultScoped()` で捨てる |
 | 部分要約 | 最近の3節分（`SectionChatState.summaries`）。節の位置と要求の番号を持つ。本文の版は持たず、解析し直しで全部捨てる | 登録済み |
 | シートの可視 | 余白メモと部分要約で1本（`isMarginMemoSheetVisible`）。部分要約の専用の可視は消した | 登録済み |
-| 並べ読み | **新規。** 読み込み中・読めた・失敗と、選んだ要求の番号 | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`** |
+| 並べ読み | **新規。** 読み込み中・読めた・失敗と、右で眺めているノート（`SideReadingState`）。**本文の解析結果は `NoteUiState` の外**（`SideReadingController.blocks`。`domain` の型なので `NoteSectionModel` と同じ扱い）。要求の番号は持たない — 書き込みはすべて1本のジョブの中にあり、新しい要求・戻る・切替はどれも先にジョブを取り消すので、取り消しだけで遅れた結果は書かれない | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`**。本文は前者が状態と一緒に消す |
 | ペインの開閉 | 新規。`AppPreferences` | 設定なので登録しない |
 | このノートの間だけ出したペイン | 新規。画面側の保存値で、**出したノートを値として持つ** | 今のノートと照合して出し、ノートを離れたら捨てるので登録しない。`NoteUiState` に入れない |
 | 本文の節・ペインの節 | 画面側で導く | 状態に入れない |
@@ -312,14 +312,16 @@
 | 層 | 新規 | 変更 |
 |---|---|---|
 | `domain` | 見出しの照合の3値、前回の訪問の選び方、送信の照合と書きかけを消す判定、要約を3節分持つ規則。いずれも純関数 | — |
-| `controller` | **並べ読みの Controller。** ジョブはノート単位で、関連ノートの参照から本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
+| `controller` | **並べ読みの Controller（`SideReadingController`）。** ジョブはノート単位で、窓口が渡す口で本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
 | `data` | — | `AppPreferences` にペインの開閉 |
 | `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数）。書きかけの置き場（`ComposeMarginMemoDrafts`） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
 | 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始、ペインの開閉、位置を渡して開く `openNote` |
 
 - **並べ読みの Controller を新しく1つ作る。** 既存の Controller はどれも「今のノート」を前提にしているので、眺めるだけのノートを混ぜない。アーキテクチャ判断4ではノート単位の形に入る
-- 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く
-- `controller` は Android 型を持てないので、本文の読み出しは関連ノートと同じくラムダで受ける
+- 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く。
+  右は描くだけなので、節の索引まで作る `buildNoteSectionModel` ではなくブロックの解析だけを行う。番号は同じパーサなので左とそろう
+- `controller` は Android 型を持てないので、本文の読み出しは冊子と同じく呼ぶたびにラムダで受ける。
+  **読み方は `openNote` と同じ**にする — 「このノートへ移る」で右の位置を左へ渡すとき、ブロックの番号がそろう
 - 純関数の置き場所は責務で分ける（→ [アーキテクチャ](../system/architecture.md) 判断5の4）。
   窓と ✎ の判定は画面の形を決めるので `readerLayoutFor` と同じ `ui/screen`、メモや訪問の照合と選び方は `domain`
 

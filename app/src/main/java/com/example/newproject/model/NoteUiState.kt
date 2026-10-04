@@ -15,6 +15,7 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
 
 data class NoteUiState(
@@ -52,6 +53,8 @@ data class NoteUiState(
     val crystalNotePath: String? = null,
     // 部分要約。ノートを開いている間、最近作った3節分を持つ。**面を閉じても消さない**（→ features/margin_pane.md §5.8）。
     val sectionChat: SectionChatState = SectionChatState(),
+    // 並べ読み。ペインの右で眺めている関連ノート。**ノート単位**（→ features/margin_pane.md §5.9）。
+    val sideReading: SideReadingState = SideReadingState.Idle,
     // Rediscover で引いた時だけ入る「前回のあなた」カード
     val readingTraceCard: ReadingTraceCard? = null,
     // さがすタブ

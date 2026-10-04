@@ -39,6 +39,7 @@ import com.example.newproject.domain.notePaperTone
 import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.ReadingTraceBackupLimits
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -120,6 +121,9 @@ class NoteViewModel internal constructor(
      * （→ [com.example.newproject.controller.NoteSectionController]）。テーマと同じ扱い。
      */
     val sectionModel: StateFlow<NoteSectionModel?> = session.sectionModel
+
+    /** 並べ読みで右に出す本文の解析結果（→ [openSideReading]）。[sectionModel] と同じく Main の外で作る。 */
+    internal val sideReadingBlocks: StateFlow<List<MarkdownBlock>?> = session.sideReadingBlocks
 
     /**
      * ノート内画像の読み込み口。**Vault世代を Coordinator から受けるのでここで組み立てる**
@@ -575,6 +579,17 @@ class NoteViewModel internal constructor(
     fun requestSectionSummary(section: SectionRef) = session.requestSectionSummary(section)
     fun retrySectionSummary(section: SectionRef) = session.retrySectionSummary(section)
     fun cancelSectionSummary(section: SectionRef) = session.cancelSectionSummary(section)
+
+    // ── 並べ読み（実装は SideReadingController）────────────────────────────
+
+    /**
+     * 関連ノートをペインの右で眺める（→ features/margin_pane.md §5.9）。**今のノートにはしない。**
+     * 本文は [openNote] と同じ読み方で読む — 「このノートへ移る」で右の位置を左へ渡すとき、ブロックの番号がそろう。
+     */
+    fun openSideReading(contentResolver: ContentResolver, note: RelatedNote) =
+        session.openSideReading(note) { loadNoteForDistill(contentResolver, note.title, note.ref).content }
+
+    fun closeSideReading() = session.closeSideReading()
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
