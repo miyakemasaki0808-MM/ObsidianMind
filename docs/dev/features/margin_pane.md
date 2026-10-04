@@ -1,7 +1,7 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜5は実装済み・実機検証済み。** 段5の実機検証で見ていない範囲（実 SAF での取消後の後着・自然なモデル準備待ち・閉じる直後の割り込みの内部の瞬間）は課題台帳にあり、段5の完了の線はオーナー判断待ち。文字の大きさ2.0では本文の幅の下限を割るので並べ読みは出ない（§5.1 どおり）。 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
-実装は段に分けて進める（→ §11）。
+**状態:** **段1〜5は実装済み・実機検証済みで、完了した**（2026-10-04、オーナー判断）。実機で確かめなかった順序は §10「保証していないこと」にある。文字の大きさ2.0では本文の幅の下限を割るので並べ読みは出ない（§5.1 どおり。オーナーが受容した。使っていて気になったら見直す）。
+実装は段に分けて進めた（→ §11）。
 **最終検証:** 2026-10-04 / `0defc6de`（段5まで。Pixel 10 Pro Fold で段5の通し版と段4から持ち越した閉じる直後の割り込み・拡大文字と TalkBack。段4は 2026-10-04 / `9e377cf5`、Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`
@@ -388,6 +388,11 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     この順序は `MarginMemoSheetUiTest` と JVM の検査が持つ（オーナー判断 2026-10-01）
   - **前回の訪問の保存が失敗した後の順序の実機確認**（前回の保存失敗 → 再訪 → 背面化 → 読み直し）。実SAFで読み取りだけ成功し
     書き込みだけ失敗する状態を安全に作れない。この順序は `ReadingTraceControllerTest` が持つ（オーナー判断 2026-10-03）
+  - **取り消した後に右の読み出しが遅れて届く順序の実機確認**（実 SAF で読み出しを遅らせたまま余白へ戻る・選び直す・切り替える）。
+    利用者の操作では起こせないため実機では確かめない。この順序は取り消しに従わない読み出しで `SideReadingControllerTest` と
+    `NoteSessionCoordinatorTest` が持つ（オーナー判断 2026-10-04）
+  - **モデルの準備待ちから使える状態へ自然に移った後の部分要約の実機確認。** 検証の端末は初めから使える状態で、自然な遷移を起こせない。
+    準備待ちの説明を押し直すと確かめ直すことは JVM のテストが持つ（オーナー判断 2026-10-04）
   - **シートが自動で広がる動きの途中へ、実際の指で割り込むこと。** 動きは一瞬で終わり、狙って止められず、観察でも
     一覧のスクロールと区別できない。止められた後の保留の扱いは `MarginMemoSheetUiTest` が時計を止めて持つ（オーナー判断 2026-10-03）
 
