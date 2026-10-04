@@ -2,7 +2,7 @@
 
 **状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。
 Fold の「この部分」段2で、書きかけ・送信の照合・読む時期・シートの形・見出しとの照合を変えた（別の目と実機検証済み 2026-10-03 → [margin_pane](margin_pane.md) §11）
-**最終検証:** 2026-10-03 / `f47f4d5a`（Fold段2の変更面の選抜で MEMO-01・02・13。通し版14ケースは 2026-09-26 / `01d48b6`。**障害・競合・長い見出しの境界は未突合** → §10）
+**最終検証:** 2026-10-04 / `9e377cf5`（Fold段4の実機検証で MEMO-02・05・10・13。段2の変更面の選抜は 2026-10-03 / `f47f4d5a` で MEMO-01・02・13。通し版14ケースは 2026-09-26 / `01d48b6`。**障害・競合・長い見出しの境界は未突合** → §10）
 **関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `ui/screen/MarginMemoDrafts.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** `MarginMemoComposerTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書

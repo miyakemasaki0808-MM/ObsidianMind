@@ -1,7 +1,7 @@
 # 全画面ノート
 
 **状態:** Implemented — 稼働中。ダークモード対応まで反映済み。全画面の入口は ✎ だけで、「この部分」のシートで書ける（2026-10-03）
-**最終検証:** 2026-08-12 / `521768b`
+**最終検証:** 2026-10-04 / `9e377cf5`（Fold余白ペイン段4の実機検証で、全画面の ✎・戻る操作の順・下書きの持ち帰りを確認。バーとレールの消え方などは 2026-08-12 / `521768b`）
 **関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/AppScaffold.kt`
 **関連テスト:** `MarginSurfaceTest` / androidTest: `ActivityRecreationTest` / `TabNavigationTest` / `NoteReadingFlowTest`
 **正本:** この文書
