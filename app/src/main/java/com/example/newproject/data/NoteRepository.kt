@@ -246,7 +246,7 @@ class NoteRepository {
 
     /**
      * 上限付きでテキストを読む。上限で切ると多バイト文字が割れるため、
-     * 復号前に末尾の不完全なシーケンスを落とす。
+     * 復号（[decodeNoteText]）は末尾の不完全なシーケンスを落としてから行う。
      *
      * 復号は厳密検証しない（この2経路は「読めるところまで見せる」のが目的で、
      * 不正UTF-8を弾く役目は蒸留用の [readNoteSnapshot] が持つ）。
@@ -262,7 +262,7 @@ class NoteRepository {
             readAtMostBytes(stream, maximumBytes)
         } ?: return@withContext null
         BoundedText(
-            text = String(dropIncompleteUtf8Tail(bounded.bytes), Charsets.UTF_8),
+            text = decodeNoteText(bounded.bytes),
             isTruncated = bounded.isTruncated
         )
     }
@@ -279,7 +279,7 @@ class NoteRepository {
         NoteSnapshot(
             uri = uri,
             bytes = bytes,
-            content = decodeUtf8Strict(bytes),
+            content = decodeNoteTextStrict(bytes),
             hash = sha256Hex(bytes)
         )
     }

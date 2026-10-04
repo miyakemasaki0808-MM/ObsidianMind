@@ -26,6 +26,11 @@
 **したがって個別の判断は「規格がどう言っているか」ではなく「意味が落ちるか」で決める。**
 以下の判断はすべてこの基準に沿っている。
 
+**入力は先頭の BOM を外した本文である。** 外すのは読み込みの復号
+（[`decodeNoteText`](../../../app/src/main/java/com/example/newproject/data/NoteSnapshot.kt) と `decodeNoteTextStrict`）で、
+このパーサは BOM を扱わない。BOM が残ったまま届くと1行目の見出しと前付けを読めない
+（→ [reflect_distill](../features/reflect_distill.md) 判断20）。
+
 ## 2. 判断1 — リスト項目は1つの型に、属性として持つ
 
 2026-08-02 まで `MarkdownBlock.ListBlock` は `items: List<String>` の単一型で、
