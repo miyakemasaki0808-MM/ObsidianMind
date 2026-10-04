@@ -45,6 +45,37 @@ internal fun marginToggleDescription(toggle: MarginToggle): String = when (toggl
     MarginToggle.HideSheet, MarginToggle.ShowSheet -> "このノートのメモ"
 }
 
+/** 見出しの要約ボタンを押したときに、要約をどの面に出すか（→ features/margin_pane.md §5.4）。 */
+internal enum class SummaryEntry {
+    /** 出ているペインに出す。 */
+    Pane,
+
+    /** ペインをこのノートの間だけ出す。**設定は変えない。** */
+    PaneForNote,
+
+    /** シートに出す。出ていなければ出す。 */
+    Sheet
+}
+
+/**
+ * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。出ていなければ、その窓で出せる面を出す。
+ * ペインを出せる窓で設定が閉じているときは、ペインをこのノートの間だけ出す — 要約は本文の横で読むほうがよく、
+ * 一度の要約のために設定を書き換えると、次のノートでも頼んでいないペインが出る。
+ */
+internal fun summaryEntryFor(canShowPane: Boolean, paneVisible: Boolean, sheetVisible: Boolean): SummaryEntry = when {
+    paneVisible -> SummaryEntry.Pane
+    sheetVisible -> SummaryEntry.Sheet
+    canShowPane -> SummaryEntry.PaneForNote
+    else -> SummaryEntry.Sheet
+}
+
+/**
+ * このノートの間だけ出したペインを、今出すか。**出したノート [owner] と今のノートが同じときだけ。**
+ * 画面の保存値は、別のノートを開いている状態で復元されることがある（冊子から別のノートを読んで戻ったとき）。
+ * 保存の鍵で照合したつもりにならず、値そのものに持ち主を持たせて照合する。
+ */
+internal fun paneForNoteShown(owner: String?, currentNote: String?): Boolean = owner != null && owner == currentNote
+
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
 internal enum class MarginWindowShift {
     None,
@@ -79,6 +110,16 @@ internal fun marginWindowShiftFor(
 }
 
 /**
+ * ペインが出ているのに、シートが出ている扱いのままか。そうならシートの扱いを落とす（ペインとシートを同時に出さない → §5.4）。
+ * 全画面のシートで書いたまま戻ると、この形でペインの窓へ来る。
+ *
+ * **窓の情報が揃う前は判定しない** — 画面の作り直しの直後は、折り目の無い窓として仮にペインが組まれることがある。
+ * そのときに落とすと、本当はシートで続けるはずの書きかけからシートが消える。
+ */
+internal fun dropsHiddenSheet(windowKnown: Boolean, paneVisible: Boolean, sheetVisible: Boolean): Boolean =
+    windowKnown && paneVisible && sheetVisible
+
+/**
  * 節の呼び名（→ features/margin_pane.md §5.2）。見出しより前は「ノートの冒頭」、見出しの無いノートは「ノート全体」。
  * **同名の見出しの2つ目からは順番を添える** — 名前だけでは、書き込み先がどちらの節か見分けられない。
  */
@@ -109,6 +150,13 @@ internal sealed interface MemoReveal {
     /** 再会カードの「前回のメモを見る」から。ほかの節のメモも開いて、メモの並びへ。 */
     data object AllMemos : MemoReveal
 }
+
+/**
+ * 送り終えた依頼 [handled] を消した後に残す依頼。**止められて終わったときも送り終えたことにする**（利用者のスクロールは
+ * 送る動きを取り消す）。消さないと、次に同じ入口を押しても依頼が変わらず、送り直せない。
+ * **古い依頼の終わりで、後から来た依頼を消さない。**
+ */
+internal fun <T> pendingAfterReveal(pending: T?, handled: T): T? = if (pending == handled) null else pending
 
 /** 面の中の送り先。 */
 internal sealed interface MemoRevealStop {

@@ -251,7 +251,16 @@ class DesignDocStateNameTest {
             "toggleMark",
             "onToggleMark",
             "isMarked",
-            "withoutMark"
+            "withoutMark",
+            // 部分要約の専用シートと全画面の状態表示（features/margin_pane.md の段4で「この部分」の面へまとめた）
+            "isSectionChatSheetVisible",
+            "SectionChatSlice",
+            "SectionChatSheet",
+            "FullscreenAiFab",
+            "showSectionChat",
+            "dismissSectionChatSheet",
+            "endSectionChat",
+            "openSection"
         )
     }
 }

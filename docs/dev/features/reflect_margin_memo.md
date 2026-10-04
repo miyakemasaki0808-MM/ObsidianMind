@@ -2,8 +2,8 @@
 
 **状態:** Implemented — 実装済み・**実機検証済み**（2026-09-26）。
 Fold の「この部分」段2で、書きかけ・送信の照合・読む時期・シートの形・見出しとの照合を変えた（別の目と実機検証済み 2026-10-03 → [margin_pane](margin_pane.md) §11）
-**最終検証:** 2026-10-03 / `f47f4d5a`（Fold段2の変更面の選抜で MEMO-01・02・13。通し版14ケースは 2026-09-26 / `01d48b6`。**障害・競合・長い見出しの境界は未突合** → §10）
-**関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `ui/screen/MarginMemoDrafts.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/component/ReadingTraceCard.kt`
+**最終検証:** 2026-10-04 / `9e377cf5`（Fold段4の実機検証で MEMO-02・05・10・13。段2の変更面の選抜は 2026-10-03 / `f47f4d5a` で MEMO-01・02・13。通し版14ケースは 2026-09-26 / `01d48b6`。**障害・競合・長い見出しの境界は未突合** → §10）
+**関連コード:** `model/ReadingTrace.kt` / `model/state/MarginMemoState.kt` / `domain/MarginMemoComposer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `ui/screen/MarginMemoDrafts.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `domain/ReadingTraceMerge.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/component/ReadingTraceCard.kt`
 **関連テスト:** `MarginMemoComposerTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `ReadingTraceControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupControllerTest`
 **正本:** この文書
 
@@ -62,7 +62,7 @@ Fold の「この部分」段2で、書きかけ・送信の照合・読む時�
 
 **中断:** ノートを切り替えるとシートは閉じ、状態は `Idle` へ戻る（契約2箇所 → §6）。書きかけは残る。
 
-**全画面表示中は書けない。** `✕` で通常表示へ戻ってから置く（→ §8 判断7）。
+**全画面では右下の ✎ から書ける。** 同じシートが全画面の上に出る。書いたまま `✕` で戻ると、戻った先の面で書き続けられる（→ §8 判断7）。
 
 ## 5. 機能仕様
 
@@ -367,20 +367,21 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 `GradientHeader` の `trailing` に、全画面ボタン `⛶` と並べて置く。
 
 - **常に同じ位置にある。** 本文のどこを読んでいても探し直さずに押せる
-- **ジェスチャを取り合わない。** 本文スクロール・蒸留の範囲つまみ・全画面の `💬` と競合しない
+- **ジェスチャを取り合わない。** 本文スクロール・蒸留の範囲つまみ・全画面の右下の丸と競合しない
 - 既存の枠を使うので、新規UIは**シート1枚**で済む
 
 | 検討した案 | 却下理由 |
 |---|---|
-| 画面端から引き出すシート | 読書位置を動かさずに書けるのが最大の利点だが、本文スクロール・蒸留のつまみ・全画面の `💬` と縁を取り合う。**この1機能の中で最も重い部分になる** |
+| 画面端から引き出すシート | 読書位置を動かさずに書けるのが最大の利点だが、本文スクロール・蒸留のつまみ・全画面の右下の丸と縁を取り合う。**この1機能の中で最も重い部分になる** |
 | AIタブのボタンを置き換えるだけ | 最も安く、廃止と置き換えが1対1で対応する。ただし**読んでいる流れを止めずに置く**が満たせず、既存機能と差別化していた点が消える |
 
 **開いた Fold では、`✎` がペインの開閉を兼ねる。** ペインを出せる窓では `✎` でペインをしまって1列へ戻し、
 もう一度押すと出す。開閉は端末の設定として残る。ペインを出せない窓では今までどおりシートを出す
 （規則と窓の切り替わりは → [margin_pane](margin_pane.md) §5.4）。
 
-**全画面表示中は書けない。** 全画面にはヘッダが無く、`💬` は既に別の役目を持っている。
-`✕` で戻る一手を要求することになるが、**読む面を増やさない**ほうを採る。
+**全画面では右下の ✎ から書ける**（2026-10-03、オーナー判断）。全画面にはヘッダが無いので、右下の丸を部分要約の 💬 から ✎ に替えた。
+全画面で読んでいる人には要約よりメモのほうが嬉しく、要約は全画面に入る前のおさらいという立ち位置にした（→ [note_fullscreen](note_fullscreen.md) 判断5）。
+出るのは通常表示と同じシートで、要約の行だけを出さない。
 
 ### 判断8: 再会カードは、メモが在ることだけを示す
 
@@ -524,7 +525,6 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 | **メモを編集できない** | 判断9 |
 | **Vault横断で読む面が無い** | 本機能は1ノート分まで。横断は別機能が受け持つ |
 | **削除が同期しない** | §10「保証していないこと」参照 |
-| **全画面表示中は書けない** | 判断7 |
 
 **この機能を足すと、痕跡サイドカーは「訪問・AI要約・印・メモ」の4系統になる。**
 メモだけがユーザーの言葉で、残り3つはアプリが書いたものである。

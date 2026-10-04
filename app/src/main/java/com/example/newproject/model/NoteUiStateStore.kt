@@ -27,7 +27,7 @@ interface SummaryStateWriter {
 }
 
 /**
- * メモの中身とシートの可視を**1つのスライスで持つ**（セクションチャットと同じ形）。
+ * メモの中身とシートの可視を**1つのスライスで持つ**。シートは部分要約と共用の「この部分」の1枚である。
  *
  * 分けると「シートは開いているが中身は Idle」のような中間状態を作れてしまい、
  * ノート切替で片方だけ落とす取りこぼしが起きる。
@@ -77,14 +77,9 @@ interface DistillStateWriter {
     fun update(transform: (DistillState) -> DistillState)
 }
 
-data class SectionChatSlice(
-    val sectionChat: SectionChatState?,
-    val isSectionChatSheetVisible: Boolean
-)
-
 interface SectionChatStateWriter {
-    val current: SectionChatSlice
-    fun update(transform: (SectionChatSlice) -> SectionChatSlice)
+    val current: SectionChatState
+    fun update(transform: (SectionChatState) -> SectionChatState)
 }
 
 interface ReadingTraceStateWriter {
@@ -218,21 +213,9 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     }
 
     val sectionChatWriter: SectionChatStateWriter = object : SectionChatStateWriter {
-        override val current: SectionChatSlice
-            get() = mutableState.value.let {
-                SectionChatSlice(it.sectionChat, it.isSectionChatSheetVisible)
-            }
-
-        override fun update(transform: (SectionChatSlice) -> SectionChatSlice) {
-            mutableState.update { state ->
-                val next = transform(
-                    SectionChatSlice(state.sectionChat, state.isSectionChatSheetVisible)
-                )
-                state.copy(
-                    sectionChat = next.sectionChat,
-                    isSectionChatSheetVisible = next.isSectionChatSheetVisible
-                )
-            }
+        override val current: SectionChatState get() = mutableState.value.sectionChat
+        override fun update(transform: (SectionChatState) -> SectionChatState) {
+            mutableState.update { it.copy(sectionChat = transform(it.sectionChat)) }
         }
     }
 
@@ -366,8 +349,7 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     // **シートの可視も必ず落とす。** 落とさないと、切替後に
     // 前のノートのメモを載せたシートが開いたまま残る。
     isMarginMemoSheetVisible = false,
-    sectionChat = null,
-    isSectionChatSheetVisible = false,
+    sectionChat = SectionChatState(),
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。
     readingTraceCard = null,
     // **結晶の一覧は落とさない**（Vault単位）。落とすのは絞り込みのパスだけで、

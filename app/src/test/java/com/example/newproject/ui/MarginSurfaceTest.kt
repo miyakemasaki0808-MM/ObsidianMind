@@ -10,7 +10,12 @@ import com.example.newproject.ui.screen.marginWindowShiftFor
 import com.example.newproject.ui.screen.MemoReveal
 import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.SummaryEntry
+import com.example.newproject.ui.screen.summaryEntryFor
 import com.example.newproject.ui.screen.compactWhileTyping
+import com.example.newproject.ui.screen.dropsHiddenSheet
+import com.example.newproject.ui.screen.paneForNoteShown
+import com.example.newproject.ui.screen.pendingAfterReveal
 import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
 import com.example.newproject.ui.screen.sheetCoveredHeight
@@ -106,6 +111,41 @@ class MarginSurfaceTest {
         )
     }
 
+    /**
+     * 見出しの要約ボタン。出ている面があればそこに出し、無ければその窓で出せる面を出す。
+     * **ペインを出せる窓で設定が閉じているときは、このノートの間だけペインを出す**（設定は書き換えない）。
+     */
+    @Test
+    fun `要約ボタンは出ている面に出し、無ければ出せる面を出す`() {
+        assertEquals(SummaryEntry.Pane, summaryEntryFor(canShowPane = true, paneVisible = true, sheetVisible = false))
+        assertEquals(SummaryEntry.PaneForNote, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = false))
+        // 閉じる設定でシートを出したまま Fold を開いたときは、出ているシートに出す（面を2つにしない）
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = true))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = false))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = true))
+    }
+
+    /** このノートの間だけ出したペインは、**出したノートと今のノートが同じときだけ**出す（保存値の復元でも照合する）。 */
+    @Test
+    fun `このノートの間だけのペインは、出したノートを開いている間だけ出す`() {
+        assertEquals(true, paneForNoteShown(owner = "content://a", currentNote = "content://a"))
+        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = "content://b"))
+        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = null))
+        assertEquals(false, paneForNoteShown(owner = null, currentNote = "content://a"))
+    }
+
+    /**
+     * 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
+     * 落とさないと ✎ の1回目が見えないシートをしまうだけになる。**窓の情報が揃う前は落とさない。**
+     */
+    @Test
+    fun `ペインが出ている窓では、シートが出ている扱いを落とす`() {
+        assertEquals(true, dropsHiddenSheet(windowKnown = true, paneVisible = true, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = false, paneVisible = true, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = true, paneVisible = false, sheetVisible = true))
+        assertEquals(false, dropsHiddenSheet(windowKnown = true, paneVisible = true, sheetVisible = false))
+    }
+
     // ── 節の呼び名と書き込み先（→ features/margin_pane.md §5.2・§5.3）──────────────
 
     @Test
@@ -148,6 +188,20 @@ class MarginSurfaceTest {
         assertEquals("隠れているのに覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = 800f))
         assertEquals("組まれる前に覆った", 0, sheetCoveredHeight(layoutHeight = 800, sheetOffset = null))
         assertEquals("画面いっぱいを超えて覆った", 800, sheetCoveredHeight(layoutHeight = 800, sheetOffset = -10f))
+    }
+
+    /**
+     * 送る依頼は、送り終えたときも止められたときも、**その依頼だけを消す**。古い依頼の終わりで後から来た依頼を消すと、
+     * 押し直した要約ボタンや印が働かない。
+     */
+    @Test
+    fun `送り終えた依頼だけを消し、後から来た依頼は残す`() {
+        assertNull(pendingAfterReveal(pending = 1L, handled = 1L))
+        assertEquals(2L, pendingAfterReveal(pending = 2L, handled = 1L))
+        assertNull(pendingAfterReveal<Long>(pending = null, handled = 1L))
+        val section = MemoReveal.Section(SectionRef("節C"))
+        assertNull(pendingAfterReveal<MemoReveal>(pending = MemoReveal.Section(SectionRef("節C")), handled = section))
+        assertEquals(MemoReveal.AllMemos, pendingAfterReveal<MemoReveal>(pending = MemoReveal.AllMemos, handled = section))
     }
 
     /**

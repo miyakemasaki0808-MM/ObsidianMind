@@ -39,7 +39,6 @@ import com.example.newproject.domain.notePaperTone
 import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
 import com.example.newproject.model.ReadingTraceBackupLimits
-import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -571,13 +570,11 @@ class NoteViewModel internal constructor(
             repository.writeDocumentBytes(contentResolver, destination, bytes)
         }
 
-    // ── セクション単位の部分要約（実装は SectionChatController）─────────────
+    // ── 節ごとの部分要約（実装は SectionChatController）─────────────────────
 
-    fun openSection(section: NoteSection) = session.openSection(section)
-    fun showSectionChat() = session.showSectionChat()
-    fun retrySectionSummary() = session.retrySectionSummary()
-    fun dismissSectionChatSheet() = session.dismissSectionChatSheet()
-    fun endSectionChat() = session.endSectionChat()
+    fun requestSectionSummary(section: SectionRef) = session.requestSectionSummary(section)
+    fun retrySectionSummary(section: SectionRef) = session.retrySectionSummary(section)
+    fun cancelSectionSummary(section: SectionRef) = session.cancelSectionSummary(section)
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 

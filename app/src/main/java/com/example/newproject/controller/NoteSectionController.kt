@@ -61,6 +61,14 @@ class NoteSectionController(
     private var parseJob: Job? = null
 
     /**
+     * 今の本文の解析が済んでいれば、その結果。解析し直している間は null。
+     *
+     * [model] は解析し直している間も前の結果を返す（描画のため）。**新しい要求の材料にはこちらを使う** —
+     * 前の結果から作った要求は、解析が届いた後も今の本文のものとして残ってしまう。
+     */
+    fun settledModel(): NoteSectionModel? = mutableModel.value.takeIf { parseJob?.isActive != true }
+
+    /**
      * 本文の解析を始める。**ここで現在値を null に戻さない**のが要点で、
      * 蒸留の保存後に本文を差し替えるとき（[NoteSessionCoordinator.applyReloadedBody]）に
      * 本文が数百ミリ秒消えるのを避ける。ノート切替では [cancelAndClear] が先に

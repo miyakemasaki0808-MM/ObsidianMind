@@ -3,7 +3,8 @@ package com.example.newproject.domain
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
-import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.SectionSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
@@ -11,7 +12,7 @@ import org.junit.Assert.assertNotEquals
 import org.junit.Test
 
 /**
- * 部分要約の4状態の導出（[sectionSummaryStatus]）を固定する。入口の表示と全画面が同じ導出を使う。
+ * 部分要約の4状態の導出（[sectionSummaryStatus]）を固定する。見出しの要約ボタンの記号がこの導出で決まる。
  */
 class SectionSummaryStatusTest {
 
@@ -20,7 +21,9 @@ class SectionSummaryStatusTest {
         isSummaryLoading: Boolean = false,
         error: String? = null,
         summaryProblem: SectionChatProblem? = error?.let(SectionChatProblem::GenerationFailed)
-    ) = SectionChatState(
+    ) = SectionSummary(
+        section = SectionRef("設計"),
+        requestId = 1L,
         sectionTitle = "設計",
         sectionContext = "本文",
         summary = summary,
@@ -36,7 +39,7 @@ class SectionSummaryStatusTest {
      * **走っていないのに Working にしない。**
      *
      * 端末AIが使えず要約も無い状態で最後の `else` に落ち、
-     * 生成していないのに Vigilith と全画面FABが「AI生成中」を出し続けていた。
+     * 生成していないのに入口が「AI生成中」を出し続けていた。
      */
     @Test
     fun `端末AIが使えず要約も無いならIdle`() {
@@ -71,7 +74,7 @@ class SectionSummaryStatusTest {
     }
 
     @Test
-    fun `チャットが無ければIdle`() {
+    fun `その節の要約を持っていなければIdle`() {
         assertEquals(SectionSummaryStatus.Idle, sectionSummaryStatus(null))
     }
 
@@ -94,7 +97,7 @@ class SectionSummaryStatusTest {
     }
 
     @Test
-    fun `チャットはあるが要約もエラーも無い状態はこれから始まるWorking`() {
+    fun `要求はあるが要約もエラーも無い状態はこれから始まるWorking`() {
         assertEquals(SectionSummaryStatus.Working, sectionSummaryStatus(chat()))
     }
 

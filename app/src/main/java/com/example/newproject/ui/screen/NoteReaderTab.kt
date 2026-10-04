@@ -19,6 +19,7 @@ import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.domain.sectionSummaryEntryDescription
 import com.example.newproject.domain.sectionSummaryEntrySymbol
 import com.example.newproject.domain.sectionSummaryStatus
+import com.example.newproject.domain.summaryOf
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -60,13 +61,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -86,11 +85,8 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
-import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
-import com.example.newproject.domain.arrangeMemos
-import com.example.newproject.domain.showsPreviousReading
 import kotlinx.coroutines.launch
 import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
@@ -123,9 +119,13 @@ internal fun NoteReaderTab(
     onRandomNote: () -> Unit,
     /** 10枚を引いて冊子ルートへ入る。**ここでは記録もAIも始まらない**（→ booklet_mode 判断3）。 */
     onOpenBooklet: () -> Unit,
-    onRetrySectionSummary: () -> Unit,
-    onDismissSectionChat: () -> Unit,
-    onEndSectionChat: () -> Unit,
+    /**
+     * その節の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。
+     * 見出しの要約ボタンと面の「この節を要約」が呼ぶ。
+     */
+    onRequestSectionSummary: (SectionRef) -> Unit,
+    onRetrySectionSummary: (SectionRef) -> Unit,
+    onCancelSectionSummary: (SectionRef) -> Unit,
     noteListState: LazyListState,
     onEnterFullscreen: () -> Unit,
     /** シートを出す。読み込み済みなら読み直さない（ペインの書きかけをシートへ移すときにも使う）。 */
@@ -145,10 +145,14 @@ internal fun NoteReaderTab(
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     onDismissMarginMemo: () -> Unit,
+    /**
+     * 入力欄で書いているつもりか。**画面の作り直しと全画面との往復をまたいで保つ** — 面が組み替わっても、
+     * 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。全画面と同じ値を共有する。
+     */
+    memoFocusIntent: Boolean,
+    onMemoFocusIntentChange: (Boolean) -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
-    onDismissReadingTrace: () -> Unit,
-    /** 見出しの要約ボタン。今の節（見出しが無ければノート全体）の部分要約を開く。既にあれば再表示する。 */
-    onOpenSection: (NoteSection) -> Unit
+    onDismissReadingTrace: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -164,38 +168,11 @@ internal fun NoteReaderTab(
 
     val listState = noteListState
     val coroutineScope = rememberCoroutineScope()
-    val currentSection by remember(sectionModel) {
-        derivedStateOf { sectionModel?.sectionForBlockIndex(listState.firstVisibleItemIndex) }
-    }
-    // 本文の節。**スクロールが止まってから決める**（→ features/margin_pane.md §5.3）。
-    // 流している途中で決めると、ペインの中身が通り過ぎる節ごとに入れ替わる。
-    var settledBlock by remember(sectionModel) { mutableIntStateOf(listState.firstVisibleItemIndex) }
-    LaunchedEffect(listState, sectionModel) {
-        snapshotFlow { listState.isScrollInProgress to listState.firstVisibleItemIndex }
-            .collect { (scrolling, index) -> if (!scrolling) settledBlock = index }
-    }
-    val bodySection = sectionModel?.sectionRefAt(settledBlock)
-    // メモを今の見出しと照合して並べる。印と件数と飛ぶ先も同じ照合から作る（→ features/margin_pane.md §5.6）。
-    val readyMemos = uiState.marginMemoState as? MarginMemoState.Ready
-    val arrangedMemos = remember(readyMemos?.memos, sectionModel, bodySection) {
-        val memos = readyMemos?.memos ?: return@remember null
-        val model = sectionModel ?: return@remember null
-        // **見出しの索引は解析と一緒に Main の外で作ってある。** ここでは見出しをたどらない。
-        arrangeMemos(memos, model.headingIndex, bodySection ?: SectionRef(title = null))
-    }
-    // 前回の読書の跡。**メモと同じ照合で、見出しが一意に一致した節にだけ出す**（→ features/margin_pane.md §5.7）。
-    val previousReadingAt = remember(readyMemos?.previousVisit, sectionModel, bodySection) {
-        val previous = readyMemos?.previousVisit ?: return@remember null
-        val model = sectionModel ?: return@remember null
-        previous.atEpochMillis.takeIf { showsPreviousReading(previous, model.headingIndex, bodySection) }
-    }
-    // 本文をその節の始まりへ送る。**飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
-    val jumpToSection: (SectionRef) -> Unit = { ref ->
-        sectionModel?.startBlockOf(ref)?.let { block ->
-            coroutineScope.launch { listState.animateScrollToItem(block) }
-            imageMeasurements?.requestSkippedMeasurement(block)
-        }
-    }
+    val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+    val bodySection = face.bodySection
+    val arrangedMemos = face.arranged
+    val previousReadingAt = face.previousReadingAt
+    val jumpToSection = face.jumpToSection
 
     ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
@@ -210,20 +187,40 @@ internal fun NoteReaderTab(
         }
     }
 
-    val summaryStatus = sectionSummaryStatus(uiState.sectionChat)
+    // 面の節の要約。**見出しの要約ボタンの記号も面の節で決める**（要約は節ごとに持つ）。
+    val faceSummary = uiState.sectionChat.summaryOf(bodySection)
+    val summaryStatus = sectionSummaryStatus(faceSummary)
+    // 要約の行。**本文の節が分かるまでは出さない**（どの節の要約かが決まらない）。
+    val summaryRow = bodySection?.let { section ->
+        SummaryRowInputs(
+            summary = faceSummary,
+            onRequest = { onRequestSectionSummary(section) },
+            onRetry = { onRetrySectionSummary(section) },
+            onCancel = { onCancelSectionSummary(section) }
+        )
+    }
+    // 面を要約の行まで送る依頼。**押すたびに新しい番号を振る** — 前の依頼が残っていても、次の押下で送り直せるように。
+    // 面が送り終えたら（止められても）その番号の依頼を消す。
+    var summaryReveal by remember { mutableStateOf<Long?>(null) }
+    var summaryRevealCount by remember { mutableLongStateOf(0L) }
 
     // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
     val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
     val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
-    // 入力欄で書いているつもりか。**画面の作り直しをまたいで保つ** — Fold の開閉で面が組み替わっても、
-    // 新しい面の入力欄へフォーカスを戻す（→ features/margin_pane.md §5.4）。
-    // 利用者が面を閉じたときは落とす。次に面を出したときに、頼んでいないキーボードを出さない。
-    var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+    // 利用者が面を閉じたときは、書いているつもりも落とす。次に面を出したときに、頼んでいないキーボードを出さない。
     val dismissMemoSheet: () -> Unit = {
-        memoFocusIntent = false
+        onMemoFocusIntentChange(false)
         onDismissMarginMemo()
     }
+    // 見出しの要約ボタンで、このノートの間だけ出したペイン（→ features/margin_pane.md §5.4）。**設定は変えない。**
+    // **出したノートを値として持つ。** 保存した画面は別のノートを開いた状態で復元されることがあり、
+    // 保存の鍵では照合されない（→ paneForNoteShown）。Fold の開閉と全画面との往復では同じノートなので残る。
+    var paneForNote by rememberSaveable { mutableStateOf<String?>(null) }
+    val currentNoteUri = successState?.targetUri
+    // ノートを離れたら（読み込み中を含む）持ち主を捨てる。戻ってきても、頼み直すまで出さない。
+    LaunchedEffect(currentNoteUri) { if (paneForNote != currentNoteUri) paneForNote = null }
+    val paneShown = marginPaneOpen || paneForNoteShown(paneForNote, currentNoteUri)
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
@@ -232,7 +229,8 @@ internal fun NoteReaderTab(
         when (toggle) {
             MarginToggle.HideSheet -> dismissMemoSheet()
             MarginToggle.ClosePane -> {
-                memoFocusIntent = false
+                onMemoFocusIntentChange(false)
+                paneForNote = null
                 onSetMarginPaneOpen(false)
             }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
@@ -241,14 +239,14 @@ internal fun NoteReaderTab(
     }
 
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みで食い違わせない）。
-    val controls: @Composable ColumnScope.(memoToggle: MarginToggle) -> Unit = { memoToggle ->
+    val controls: @Composable ColumnScope.(memoToggle: MarginToggle, onSummaryEntry: () -> Unit) -> Unit = { memoToggle, onSummaryEntry ->
         // 未選択時はVault案内、通常時はコンセプト文を出す。
         GradientHeader(
             title = "Rediscover",
             subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
             else "過去のノートから、思考をひとつ。",
             // **✎ を ⛶ の隣へ置く。** 本文のどこを読んでいても同じ位置にあり、
-            // 本文スクロール・蒸留のつまみ・全画面の💬と縁を取り合わない
+            // 本文スクロール・蒸留のつまみ・全画面の右下の丸と縁を取り合わない
             // （→ features/reflect_margin_memo.md 判断7）。ペインを出せる窓では、✎ がペインの開閉を兼ねる。
             trailing = if (hasNote) {
                 {
@@ -258,15 +256,16 @@ internal fun NoteReaderTab(
                         IconPill(
                             symbol = sectionSummaryEntrySymbol(summaryStatus),
                             contentDescription = sectionSummaryEntryDescription(summaryStatus)
-                        ) {
-                            successState?.let { note ->
-                                onOpenSection(currentSection ?: NoteSection(note.title, 0, note.content))
-                            }
-                        }
+                        ) { onSummaryEntry() }
                         IconPill(symbol = "✎", contentDescription = marginToggleDescription(memoToggle)) {
                             onMemoToggle(memoToggle)
                         }
-                        IconPill(symbol = "⛶", contentDescription = "全画面表示") { onEnterFullscreen() }
+                        // **出ていたシートはしまってから入る。** 全画面は本文だけで始める面である
+                        // （→ features/note_fullscreen.md）。
+                        IconPill(symbol = "⛶", contentDescription = "全画面表示") {
+                            dismissMemoSheet()
+                            onEnterFullscreen()
+                        }
                     }
                 }
             } else null
@@ -400,13 +399,13 @@ internal fun NoteReaderTab(
             widthDp = maxWidth.value,
             heightDp = maxHeight.value,
             // ノートが無いときはペインに置くものが無い。読み込み中は枠を保ち、ノートを引くたびに並びを揺らさない。
-            paneOpen = marginPaneOpen && (hasNote || isLoading),
+            paneOpen = paneShown && (hasNote || isLoading),
             expandedWidth = expandedWidth,
             fold = foldInfo.fold,
             regionStartDp = regionStartDp ?: 0f
         )
         val paneVisible = layout is ReaderLayout.MarginPane
-        val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
+        val memoToggle = marginToggleFor(canShowPane, paneShown, uiState.isMarginMemoSheetVisible)
         // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
         // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。
         val hideControls = hidesReaderControls(
@@ -420,6 +419,17 @@ internal fun NoteReaderTab(
             memoReveal = reveal
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
+        // 見出しの要約ボタン。**出せる面を出し、要約を始めて、要約の行まで送る**（→ features/margin_pane.md §5.4）。
+        // 持っている節なら作り直さず、その要約を見せる。
+        val openSummary: () -> Unit = {
+            when (summaryEntryFor(canShowPane, paneVisible, uiState.isMarginMemoSheetVisible)) {
+                SummaryEntry.Pane -> Unit
+                SummaryEntry.PaneForNote -> paneForNote = currentNoteUri
+                SummaryEntry.Sheet -> onOpenMarginMemo()
+            }
+            bodySection?.let(onRequestSectionSummary)
+            summaryReveal = ++summaryRevealCount
+        }
         // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
         // 押すと、面をその節のメモまで送る。**本文は動かさない** — 見出しは押した指の下に見えているうえ、
         // 短い節は上端まで送れないので、面の節が本文についてくることを当てにできない。
@@ -433,10 +443,16 @@ internal fun NoteReaderTab(
             }
         }
 
+        val windowKnown = foldInfo.isKnown && regionStartDp != null
+        // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
+        // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
+        LaunchedEffect(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible) {
+            if (dropsHiddenSheet(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible)) onDismissMarginMemo()
+        }
         MarginWindowShiftEffect(
-            windowKnown = foldInfo.isKnown && regionStartDp != null,
+            windowKnown = windowKnown,
             canShowPane = canShowPane,
-            paneOpen = marginPaneOpen,
+            paneOpen = paneShown,
             sheetVisible = uiState.isMarginMemoSheetVisible,
             // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
             writing = memoDraft.text.isNotEmpty() || memoFocusIntent,
@@ -470,22 +486,25 @@ internal fun NoteReaderTab(
                         onJumpToSection = jumpToSection,
                         arranged = arrangedMemos,
                         reveal = memoReveal,
-                        onRevealHandled = { memoReveal = null },
+                        onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                         onEdit = onEditMemo,
                         onSubmit = onSubmitMemo,
                         onDelete = onDeleteMarginMemo,
                         asSheet = true,
                         onClose = dismissMemoSheet,
                         focusIntent = memoFocusIntent,
-                        onFocusIntentChange = { memoFocusIntent = it },
+                        onFocusIntentChange = onMemoFocusIntentChange,
                         active = uiState.isMarginMemoSheetVisible && !paneVisible,
-                        previousReadingAt = previousReadingAt
+                        previousReadingAt = previousReadingAt,
+                        summaryRow = summaryRow,
+                        revealSummary = summaryReveal.takeIf { !paneVisible },
+                        onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) }
                     )
                 }
             ) {
                 when (layout) {
                     ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                        if (!hideControls) controls(memoToggle)
+                        if (!hideControls) controls(memoToggle, openSummary)
                         if (!hasNote) {
                             emptyNote()
                             // 余りをカードではなく余白へ逃がす。
@@ -514,7 +533,7 @@ internal fun NoteReaderTab(
                                 .fillMaxHeight()
                                 .verticalScroll(rememberScrollState())
                         ) {
-                            controls(memoToggle)
+                            controls(memoToggle, openSummary)
                             traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
                         }
                         Spacer(modifier = Modifier.width(16.dp))
@@ -531,7 +550,7 @@ internal fun NoteReaderTab(
                     // 操作は本文の上に残す — 左右2列で操作をわきへ寄せたのは高さが足りなかったからで、ここには当たらない。
                     is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
                         Column(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
-                            if (!hideControls) controls(memoToggle)
+                            if (!hideControls) controls(memoToggle, openSummary)
                             if (!hasNote) {
                                 emptyNote()
                                 Spacer(modifier = Modifier.weight(1f))
@@ -561,15 +580,18 @@ internal fun NoteReaderTab(
                                 onJumpToSection = jumpToSection,
                                 arranged = arrangedMemos,
                                 reveal = memoReveal,
-                                onRevealHandled = { memoReveal = null },
+                                onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                                 onEdit = onEditMemo,
                                 onSubmit = onSubmitMemo,
                                 onDelete = onDeleteMarginMemo,
                                 modifier = Modifier.padding(top = 16.dp),
                                 focusIntent = memoFocusIntent,
-                                onFocusIntentChange = { memoFocusIntent = it },
+                                onFocusIntentChange = onMemoFocusIntentChange,
                                 active = true,
-                                previousReadingAt = previousReadingAt
+                                previousReadingAt = previousReadingAt,
+                                summaryRow = summaryRow,
+                                revealSummary = summaryReveal,
+                                onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) }
                             )
                         }
                     }
@@ -578,15 +600,6 @@ internal fun NoteReaderTab(
         }
     }
 
-    // セクションチャットのボトムシート
-    if (uiState.isSectionChatSheetVisible) uiState.sectionChat?.let { chat ->
-        SectionChatSheet(
-            state = chat,
-            onRetrySummary = onRetrySectionSummary,
-            onDismiss = onDismissSectionChat,
-            onEndSession = onEndSectionChat
-        )
-    }
 }
 
 /**

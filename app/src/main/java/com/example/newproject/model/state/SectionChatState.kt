@@ -1,5 +1,7 @@
 package com.example.newproject.model.state
 
+import com.example.newproject.model.SectionRef
+
 /**
  * 部分要約で「いま出せない」ことの説明。
  *
@@ -14,12 +16,26 @@ sealed class SectionChatProblem {
     data class AiStatus(val notice: AiStatusNotice) : SectionChatProblem()
 }
 
-// セクション単位の部分要約。null のときシートは閉じている。
-data class SectionChatState(
+/**
+ * 1節分の部分要約（→ features/margin_pane.md §5.8）。
+ *
+ * [section] は今の解析の中でだけ意味を持つ。**本文を解析し直すかノートを替えると全部捨てる**ので、
+ * [requestId] が一致すれば、ノート・本文の版・節の組も一致する。
+ */
+data class SectionSummary(
+    val section: SectionRef,
+    /** 生成の要求ごとに振る番号。結果はこの番号が一致する要約にだけ書く。 */
+    val requestId: Long,
+    /** プロンプトへ渡す見出し名。見出しより前と見出しの無いノートではノートの題名。 */
     val sectionTitle: String,
     val sectionContext: String,     // LLM に渡す本文（表示はしない）
     val summary: String? = null,
     val isSummaryLoading: Boolean = false,
-    /** 要約が出せなかった理由。要約エリアへ出す。 */
+    /** 要約が出せなかった理由。要約の欄へ出す。 */
     val summaryProblem: SectionChatProblem? = null
+)
+
+/** ノートを開いている間の部分要約。**最近作った順**に持つ（上限は `SECTION_SUMMARY_LIMIT`）。 */
+data class SectionChatState(
+    val summaries: List<SectionSummary> = emptyList()
 )

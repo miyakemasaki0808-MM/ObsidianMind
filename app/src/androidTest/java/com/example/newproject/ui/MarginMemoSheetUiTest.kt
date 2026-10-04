@@ -64,6 +64,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.ui.screen.SummaryRowInputs
+import com.example.newproject.ui.screen.pendingAfterReveal
 
 /**
  * **入力欄の中身がいつ消え、いつ戻るか**を、本番と同じ書きかけの置き場（[ComposeMarginMemoDrafts]）で見る。
@@ -679,6 +687,103 @@ class MarginMemoSheetUiTest {
         onUi { expandRequested = false }
         settle()
         assertEquals("④", SheetValue.Expanded, sheetState.currentValue)
+    }
+
+    /**
+     * **要約の行へ送る動きを途中で止めても、依頼を残さず、同じ面のまま次の押下でまた送れる**（→ features/margin_pane.md §11）。
+     * 送り終えたときだけ依頼を消していたころは、利用者のスクロールで止めると依頼が残り、押し直しても送れなかった。
+     * 時計を止めて、送る動きの途中に指のドラッグを割り込ませる。
+     */
+    @Test
+    fun 要約の行へ送る途中で止めても_次の押下でまた要約の行へ届く() {
+        var pending by mutableStateOf<Long?>(null)
+        val memos = (1..20).map { MarginMemo("下のメモ$it", writtenAtEpochMillis = it.toLong(), sectionTitle = "節B") }
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(400.dp).testTag(PANE_TAG)) {
+                    MarginMemoSheetContent(
+                        state = MarginMemoState.Ready(memos = memos),
+                        draft = MarginMemoDraft(),
+                        section = SectionRef("節B"),
+                        hasHeadings = true,
+                        onJumpToSection = {},
+                        arranged = null,
+                        onEdit = {},
+                        onSubmit = {},
+                        onDelete = {},
+                        summaryRow = SummaryRowInputs(
+                            summary = SectionSummary(SectionRef("節B"), 1L, "節B", "本文", summary = "節Bの要約"),
+                            onRequest = {},
+                            onRetry = {},
+                            onCancel = {}
+                        ),
+                        revealSummary = pending,
+                        onSummaryRevealHandled = { handled -> pending = pendingAfterReveal(pending, handled) }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("下のメモ20").performScrollTo()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("節Bの要約").assertIsNotDisplayed()
+
+        composeRule.mainClock.autoAdvance = false
+        composeRule.runOnUiThread { pending = 1L }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.onNodeWithTag(PANE_TAG).performTouchInput {
+            down(center)
+            moveBy(Offset(0f, -viewConfiguration.touchSlop * 4))
+            up()
+        }
+        composeRule.mainClock.advanceTimeBy(3_000)
+        composeRule.runOnIdle { assertEquals("止めた依頼が残った", null, pending) }
+
+        composeRule.runOnUiThread { pending = 2L }
+        composeRule.mainClock.advanceTimeBy(3_000)
+        composeRule.onNodeWithText("節Bの要約").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals("送り終えた依頼が残った", null, pending) }
+    }
+
+    /**
+     * **閉じた後、隠す途中で指が触れても、隠し終える**（→ features/margin_pane.md §11）。
+     * 隠す動きは、シートに指で触れると取り消される。1度頼むだけだったころは、閉じた扱いのシートが画面に残り、
+     * 「閉じる」は閉じた扱いを閉じ直すだけ、戻る操作はランチャーまで抜けた。時計を止めて、隠す途中にハンドルの辺りを掴んで離す。
+     */
+    @Test
+    fun 閉じた後に隠す途中で指が触れても_隠し終える() {
+        var visible by mutableStateOf(true)
+        lateinit var sheetState: SheetState
+        composeRule.setContent {
+            sheetState = rememberStandardBottomSheetState(initialValue = SheetValue.Hidden, skipHiddenState = false)
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(800.dp)) {
+                    MarginMemoSheetHost(
+                        visible = visible,
+                        expandRequested = false,
+                        onDismiss = { visible = false },
+                        sheet = { Text("シートの中身", modifier = Modifier.height(700.dp).testTag(SHEET_TAG)) },
+                        sheetState = sheetState
+                    ) { Box(modifier = Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(SheetValue.PartiallyExpanded, sheetState.currentValue)
+
+        composeRule.mainClock.autoAdvance = false
+        composeRule.runOnUiThread { visible = false }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.onNodeWithTag(SHEET_TAG).performTouchInput {
+            down(topCenter)
+            moveBy(Offset(0f, -80f))
+        }
+        composeRule.mainClock.advanceTimeBy(300)
+        composeRule.onNodeWithTag(SHEET_TAG).performTouchInput { up() }
+        composeRule.mainClock.advanceTimeBy(3_000)
+
+        assertEquals("閉じた扱いのシートが画面に残った", SheetValue.Hidden, sheetState.currentValue)
     }
 
     /**

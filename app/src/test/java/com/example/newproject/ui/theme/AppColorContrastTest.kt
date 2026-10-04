@@ -86,7 +86,7 @@ class AppColorContrastTest {
     }
 
     /**
-     * パネルの上に載るボタン（SectionChatSheet・DistillPanel）は、塗り自身で境界を出す。
+     * パネルの上に載るボタン（DistillPanel など）は、塗り自身で境界を出す。
      * グラデーション直上のボタンは条件が違うので、下の別テストで扱う。
      */
     @Test
@@ -214,9 +214,9 @@ class AppColorContrastTest {
             "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
             "onSurfaceMuted" -> listOf(panelS, tinted, blue) + paper
-            // Markdown の引用＋SectionChatSheet の進捗ラベル＋DistillCandidateRow
+            // Markdown の引用＋DistillCandidateRow
             "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet) + paper
-            // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／チャットシート
+            // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／「この部分」のシート
             "onSurfaceFaint" -> listOf(panelS, tinted, blue, sheet) + paper
             "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
             "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ

@@ -26,7 +26,10 @@ data class NoteUiState(
     val summaryState: SummaryState = SummaryState.Idle,
     val relatedNotesState: RelatedNotesState = RelatedNotesState.Idle,
     val marginMemoState: MarginMemoState = MarginMemoState.Idle,
-    /** 余白メモのシートが出ているか。セクションチャットのシートと同じ形。 */
+    /**
+     * 「この部分」のシートが出ているか。余白メモと部分要約は同じ面に載るので、シートは1枚だけ
+     * （→ features/margin_pane.md §6）。
+     */
     val isMarginMemoSheetVisible: Boolean = false,
     val wikilinkTitles: Set<String> = emptySet(),
     val distillState: DistillState = DistillState.Idle,
@@ -47,10 +50,8 @@ data class NoteUiState(
     val crystalLog: CrystalLogState = CrystalLogState.NotLoaded,
     // ✨タブで結晶を絞り込む、今のノートの相対パス。**ノート単位**（一覧とは寿命が違う）。
     val crystalNotePath: String? = null,
-    val sectionChat: SectionChatState? = null,
-    // セッションの有無とシート表示を分離する。シートを閉じても同じノート内では
-    // AI生成と結果を保持し、吹き出しから再表示できる。
-    val isSectionChatSheetVisible: Boolean = false,
+    // 部分要約。ノートを開いている間、最近作った3節分を持つ。**面を閉じても消さない**（→ features/margin_pane.md §5.8）。
+    val sectionChat: SectionChatState = SectionChatState(),
     // Rediscover で引いた時だけ入る「前回のあなた」カード
     val readingTraceCard: ReadingTraceCard? = null,
     // さがすタブ
@@ -67,7 +68,7 @@ data class NoteUiState(
 
 /**
  * 蒸留は意味を変えずMarkdown装飾だけを更新するため、ノート全体から得たAI結果は維持する。
- * 一方、生Markdownのセクション本文に結び付くチャットは照合不能になるため破棄する。
+ * 一方、生Markdownの節の本文に結び付く部分要約は照合不能になるため破棄する。
  *
  * 再会カード（[NoteUiState.readingTraceCard]）も維持する。同じノートのままで、痕跡は
  * vault相対パスをキーにしているため有効なまま（維持しないと Rediscover→蒸留保存で
@@ -75,6 +76,5 @@ data class NoteUiState(
  */
 internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
     noteState = loaded,
-    sectionChat = null,
-    isSectionChatSheetVisible = false
+    sectionChat = SectionChatState()
 )

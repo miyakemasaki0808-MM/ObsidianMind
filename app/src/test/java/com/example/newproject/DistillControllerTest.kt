@@ -20,6 +20,8 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
@@ -180,11 +182,16 @@ class DistillControllerTest {
                 summaryState = summary,
                 relatedNotesState = related,
                 sectionChat = SectionChatState(
-                    sectionTitle = "旧セクション",
-                    sectionContext = "太字化前の本文",
-                    summaryProblem = SectionChatProblem.GenerationFailed("旧エラー")
-                ),
-                isSectionChatSheetVisible = true
+                    listOf(
+                        SectionSummary(
+                            section = SectionRef("旧セクション"),
+                            requestId = 1L,
+                            sectionTitle = "旧セクション",
+                            sectionContext = "太字化前の本文",
+                            summaryProblem = SectionChatProblem.GenerationFailed("旧エラー")
+                        )
+                    )
+                )
             )
         )
         val persistence = FakePersistence()
@@ -218,8 +225,7 @@ class DistillControllerTest {
         assertEquals(1, reloadCalls)
         assertEquals(summary, state.value.summaryState)
         assertEquals(related, state.value.relatedNotesState)
-        assertEquals(null, state.value.sectionChat)
-        assertFalse(state.value.isSectionChatSheetVisible)
+        assertEquals(SectionChatState(), state.value.sectionChat)
         assertEquals("再読込本文", (state.value.noteState as NoteState.Success).content)
         assertTrue(persistence.lastWrite!!.outputBytes.decodeToString().contains("**"))
     }

@@ -30,7 +30,6 @@ import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
-import com.example.newproject.domain.markdown.NoteSection
 import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletBundle
 import com.example.newproject.model.state.WeaveState
@@ -43,6 +42,7 @@ import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.domain.summaryOf
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
@@ -55,6 +55,7 @@ import com.example.newproject.domain.reunionSlot
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.Crystal
 import com.example.newproject.model.CrystalSource
@@ -328,8 +329,7 @@ class NoteSessionCoordinatorTest {
         // **シートの可視も落ちること。** 落とさないと、切替後に
         // 前のノートのメモを載せたシートが開いたまま残る。
         assertEquals(false, reset.isMarginMemoSheetVisible)
-        assertNull(reset.sectionChat)
-        assertEquals(false, reset.isSectionChatSheetVisible)
+        assertEquals(SectionChatState(), reset.sectionChat)
         assertNull(reset.readingTraceCard)
         assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
     }
@@ -394,8 +394,7 @@ class NoteSessionCoordinatorTest {
         assertTrue(state.marginMemoState is MarginMemoState.Idle)
         assertEquals(false, state.isMarginMemoSheetVisible)
         assertTrue(state.distillState is DistillState.Idle)
-        assertNull(state.sectionChat)
-        assertEquals(false, state.isSectionChatSheetVisible)
+        assertEquals(SectionChatState(), state.sectionChat)
         assertNull(state.readingTraceCard)
         assertNull(state.crystalNotePath)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
@@ -479,13 +478,15 @@ class NoteSessionCoordinatorTest {
         // 生成が走行中の状態を作れない（→ 下の「自動生成の門番」）。
         coordinator.setNoteState(successNote("Aの本文"))
         coordinator.fetchSummary("ノートA", "Aの本文")
-        coordinator.openSection(NoteSection(title = "導入", level = 2, text = "セクション本文"))
+        advanceUntilIdle()
+        // 部分要約は今の解析から本文を引くので、解析の後に頼む。見出しの無いノートは全体が1つの節。
+        coordinator.requestSectionSummary(SectionRef(title = null))
         advanceUntilIdle()
 
         // まだ生成は返っていない
         assertTrue("要約の生成が走っていない", env.ai.prompts.any { "Aの本文" in it })
         assertTrue(coordinator.uiState.value.summaryState is SummaryState.Loading)
-        assertNotNull(coordinator.uiState.value.sectionChat)
+        assertTrue("部分要約が走っていない", coordinator.uiState.value.sectionChat.summaries.single().isSummaryLoading)
 
         coordinator.onNoteChanged()
         advanceUntilIdle()
@@ -498,7 +499,7 @@ class NoteSessionCoordinatorTest {
         assertTrue(state.summaryState is SummaryState.Idle)
         assertTrue(state.marginMemoState is MarginMemoState.Idle)
         assertEquals(false, state.isMarginMemoSheetVisible)
-        assertNull(state.sectionChat)
+        assertEquals(SectionChatState(), state.sectionChat)
     }
 
     /**
@@ -932,7 +933,7 @@ class NoteSessionCoordinatorTest {
     private fun assertAllControllersDirty(state: NoteUiState) {
         assertTrue("Summary", state.summaryState !is SummaryState.Idle)
         assertTrue("MarginMemo(余白メモ)", state.marginMemoState !is MarginMemoState.Idle)
-        assertTrue("SectionChat", state.sectionChat != null)
+        assertTrue("SectionChat", state.sectionChat.summaries.isNotEmpty())
         assertTrue("Annotation(一覧)", state.annotationListState !is AnnotationListState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
@@ -984,8 +985,9 @@ class NoteSessionCoordinatorTest {
             )
         ),
         crystalNotePath = "旧ノート.md",
-        sectionChat = SectionChatState(sectionTitle = "導入", sectionContext = "文脈"),
-        isSectionChatSheetVisible = true,
+        sectionChat = SectionChatState(
+            listOf(SectionSummary(SectionRef("導入"), requestId = 1L, sectionTitle = "導入", sectionContext = "文脈"))
+        ),
         readingTraceCard = ReadingTraceCard(
             visitCount = 2,
             lastVisitAtMillis = 1L,
@@ -1391,9 +1393,114 @@ class NoteSessionCoordinatorTest {
         assertEquals(listOf("前に書いた"), ready.memos.map { it.text })
     }
 
-    /** 蒸留の差し替えも部分要約の終了も本文の外の話なので、**読んだメモを捨てない**（捨てると印が消える）。 */
+    /**
+     * **両方向の1つ目。** 部分要約の生成中にメモを置いても、保存は待たされず、生成も止まらない。
+     * 2つは同じ面に載るが、別の Controller が別の錠で動く（→ features/margin_pane.md §10）。
+     */
     @Test
-    fun `蒸留の差し替えと部分要約の終了では、読んだメモを捨てない`() = runTest {
+    fun `部分要約の生成中にメモを置いても、保存も生成も止まらない`() = runTest {
+        val env = Env(this)
+        // 痕跡ファイルがあるノート。無いと置いたメモは預かり（Held）になり、保存の終わりが見えない。
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        coordinator.openMarginMemoSheet()
+        advanceUntilIdle()
+        coordinator.requestSectionSummary(INTRO)
+        advanceUntilIdle()
+        assertTrue("要約が生成中でない", coordinator.uiState.value.sectionChat.summaryOf(INTRO)!!.isSummaryLoading)
+
+        coordinator.editMarginMemo("要約を待ちながら書いた", INTRO)
+        coordinator.submitMarginMemo(INTRO)
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.Saved, ready.status)
+        assertEquals(listOf("要約を待ちながら書いた"), ready.memos.map { it.text })
+        assertTrue("メモを置いて生成が止まった", coordinator.uiState.value.sectionChat.summaryOf(INTRO)!!.isSummaryLoading)
+
+        env.ai.completeAll("導入の要約")
+        advanceUntilIdle()
+        assertEquals("導入の要約", coordinator.uiState.value.sectionChat.summaryOf(INTRO)?.summary)
+        assertEquals(listOf("要約を待ちながら書いた"), (coordinator.uiState.value.marginMemoState as MarginMemoState.Ready).memos.map { it.text })
+    }
+
+    /** **両方向の2つ目。** メモの保存中に要約を始めても、保存の結果を捨てない。 */
+    @Test
+    fun `メモの保存中に部分要約を始めても、保存の結果を捨てない`() = runTest {
+        val env = Env(this)
+        // 痕跡ファイルがあるノート。無いと置いたメモは預かり（Held）になり、保存の終わりが見えない。
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        coordinator.openMarginMemoSheet()
+        advanceUntilIdle()
+
+        coordinator.editMarginMemo("保存中に要約を頼んだ", INTRO)
+        coordinator.submitMarginMemo(INTRO)
+        assertEquals(MemoSaveStatus.Saving, (coordinator.uiState.value.marginMemoState as MarginMemoState.Ready).status)
+        coordinator.requestSectionSummary(INTRO)
+        advanceUntilIdle()
+
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.Saved, ready.status)
+        assertEquals(listOf("保存中に要約を頼んだ"), ready.memos.map { it.text })
+        assertTrue("受理したのに入力欄が残った", env.drafts.draft(TARGET_URI).isEmpty)
+
+        env.ai.completeAll("導入の要約")
+        advanceUntilIdle()
+        assertEquals("導入の要約", coordinator.uiState.value.sectionChat.summaryOf(INTRO)?.summary)
+    }
+
+    /**
+     * **本文を解析し直している間は、部分要約を前の本文から作らない。** 蒸留の差し替えの後は解析が届くまで
+     * 前の解析が描画に残る。そこから要求を作ると、新しい本文の節に前の本文の要約が残る。
+     */
+    @Test
+    fun `本文を解析し直している間に頼んでも、前の本文から部分要約を作らない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# B\n\nOLD_TEXT"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# B\n\nNEW_TEXT"))
+        coordinator.requestSectionSummary(SectionRef("B"))
+        advanceUntilIdle()
+        assertTrue("解析の前に頼んだ要求が残った", coordinator.uiState.value.sectionChat.summaries.isEmpty())
+
+        coordinator.requestSectionSummary(SectionRef("B"))
+        advanceUntilIdle()
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+
+        val summary = requireNotNull(coordinator.uiState.value.sectionChat.summaryOf(SectionRef("B")))
+        assertTrue(summary.sectionContext.contains("NEW_TEXT"))
+        assertFalse("前の本文をプロンプトへ渡した", env.ai.prompts.any { "OLD_TEXT" in it })
+    }
+
+    /** 同名の見出しを消した差し替えでも、解析し直している間の要求で消えた節を要約しない。 */
+    @Test
+    fun `同名の見出しを消した差し替えの後、消えた節は要約しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# まとめ\n\n一つ目\n\n# まとめ\n\n二つ目"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# まとめ\n\n二つ目"))
+        coordinator.requestSectionSummary(SectionRef("まとめ", ordinal = 1))
+        advanceUntilIdle()
+        coordinator.requestSectionSummary(SectionRef("まとめ", ordinal = 1))
+        advanceUntilIdle()
+
+        assertTrue(coordinator.uiState.value.sectionChat.summaries.isEmpty())
+        assertEquals(0, env.ai.generateCalls)
+    }
+
+    /** 蒸留の差し替えも部分要約の中止も本文の外の話なので、**読んだメモを捨てない**（捨てると印が消える）。 */
+    @Test
+    fun `蒸留の差し替えと部分要約の中止では、読んだメモを捨てない`() = runTest {
         val env = Env(this)
         env.trace.put(storedTrace(count = 1, path = "ideas/habit.md").copy(memos = listOf(memoOf("前に書いた"))))
         val coordinator = env.coordinator()
@@ -1401,8 +1508,9 @@ class NoteSessionCoordinatorTest {
         coordinator.setNoteState(successNote("# 導入\n\n本文"))
         advanceUntilIdle()
 
+        coordinator.requestSectionSummary(SectionRef("導入"))
+        coordinator.cancelSectionSummary(SectionRef("導入"))
         coordinator.applyReloadedBody(TARGET_URI, successNote("# 導入\n\n**本文**"))
-        coordinator.endSectionChat()
         advanceUntilIdle()
 
         val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
@@ -1655,6 +1763,9 @@ class NoteSessionCoordinatorTest {
         const val TARGET_URI = "content://vault/note.md"
         const val URI_A = "content://vault/a.md"
         const val URI_B = "content://vault/b.md"
+
+        /** `# 導入` の節。部分要約とメモが同じ節を扱う両方向のテストで使う。 */
+        val INTRO = SectionRef("導入")
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"

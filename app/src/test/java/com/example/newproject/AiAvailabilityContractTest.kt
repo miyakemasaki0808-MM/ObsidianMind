@@ -19,7 +19,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteMeta
 import com.example.newproject.domain.SummarizeUseCase
-import com.example.newproject.domain.markdown.NoteSection
+import com.example.newproject.model.SectionRef
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.fakes.passDwell
 import com.example.newproject.fakes.InMemorySummaryCache
@@ -66,7 +66,7 @@ import org.junit.Test
  * | # | 本番の呼び出し | 起点 | 例外の観測 | キャンセルの観測 |
  * |---|---|---|---|---|
  * | 1 | `DistillController` | `start()` | ここ（終端状態） | ここ（走行状態のまま） |
- * | 2 | `SectionChatController` | `open()` | ここ（終端状態） | ここ（走行状態のまま） |
+ * | 2 | `SectionChatController` | `request()` | ここ（終端状態） | ここ（走行状態のまま） |
  * | 3 | `SummarizeUseCase` | `summarize()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 4 | `SearchPickerUseCase` | `pick()` | ここ（結果型） | ここ（**同一インスタンス**） |
  * | 5 | `RelatedNotesUseCase` | `findRelated()` | ここ（結果型） | ここ（**同一インスタンス**） |
@@ -113,10 +113,10 @@ class AiAvailabilityContractTest {
     @Test
     fun `セクション要約は状態確認の例外で走行状態を残さない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        sectionChatController(state, throwingClient()).open(SECTION)
+        sectionChatController(state, throwingClient()).request(SECTION, SECTION_TITLE, SECTION_TEXT)
         advanceUntilIdle()
 
-        val chat = requireNotNull(state.value.sectionChat)
+        val chat = state.value.sectionChat.summaries.single()
         assertNotRunning("セクション要約", !chat.isSummaryLoading)
         assertTrue("理由が残ること", chat.summaryProblem != null)
     }
@@ -210,15 +210,14 @@ class AiAvailabilityContractTest {
         assertTrue("自動要約は生成中のまま", summary.value.summaryState is SummaryState.Loading)
     }
 
-    /** セクションチャットは要約・回答の両方向とも同じ。 */
     @Test
-    fun `セクションチャットはキャンセルを理由へ変換しない`() = runTest {
+    fun `セクション要約はキャンセルを理由へ変換しない`() = runTest {
         val cancel = { CancellationException("note changed") as Throwable }
 
         val opened = NoteUiStateStore(NoteUiState())
-        sectionChatController(opened, cancellingClient(cancel)).open(SECTION)
+        sectionChatController(opened, cancellingClient(cancel)).request(SECTION, SECTION_TITLE, SECTION_TEXT)
         advanceUntilIdle()
-        val summaryChat = requireNotNull(opened.value.sectionChat)
+        val summaryChat = opened.value.sectionChat.summaries.single()
         assertNull("要約側は理由を持たない", summaryChat.summaryProblem)
         assertTrue("走行状態のまま止まる", summaryChat.isSummaryLoading)
     }
@@ -318,7 +317,9 @@ class AiAvailabilityContractTest {
     }
 
     private companion object {
-        val SECTION = NoteSection("対象セクション", 2, "## 対象セクション\n本文")
+        val SECTION = SectionRef("対象セクション")
+        const val SECTION_TITLE = "対象セクション"
+        const val SECTION_TEXT = "## 対象セクション\n本文"
         const val BODY = "読書は著者との対話である。問いを持ち込むことで、書かれていないことまで考えられる。"
     }
 }

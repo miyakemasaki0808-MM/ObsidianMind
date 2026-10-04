@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -46,6 +47,7 @@ import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -146,7 +148,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = null,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { _, _, _, _ -> }
                     )
                 } else {
@@ -168,6 +177,52 @@ class NoteReadingFlowTest {
 
         // 全画面でも同じブロックが見えている＝位置が引き継がれた。
         composeRule.onNodeWithText(markerAt(visibleBlock), substring = true).assertIsDisplayed()
+    }
+
+    /**
+     * 全画面に置く入口は ✎ だけで、押すと「この部分」のシートが全画面の上に出て書ける。
+     * **シートに要約の行を出さない** — 要約は全画面に入る前のおさらい（→ features/note_fullscreen.md）。
+     */
+    @Test
+    fun 全画面の書く入口はシートを出しそこで書けて要約の行は出ない() {
+        val model = buildNoteSectionModel(LONG_BODY)
+        var sheetVisible by mutableStateOf(false)
+        var openCalls = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                FullscreenNoteScreen(
+                    uiState = loadedNote(LONG_BODY).copy(
+                        marginMemoState = MarginMemoState.Ready(memos = emptyList()),
+                        isMarginMemoSheetVisible = sheetVisible
+                    ),
+                    sectionModel = model,
+                    imageLoader = null,
+                    imageMeasurements = null,
+                    tabListState = rememberLazyListState(),
+                    onExit = {},
+                    onOpenMarginMemo = {
+                        openCalls++
+                        sheetVisible = true
+                    },
+                    onDismissMarginMemo = { sheetVisible = false },
+                    memoDraft = MarginMemoDraft(),
+                    onEditMarginMemo = { _, _ -> },
+                    onSubmitMarginMemo = {},
+                    onDeleteMarginMemo = {},
+                    memoFocusIntent = false,
+                    onMemoFocusIntentChange = {},
+                    onReadingProgress = { _, _, _, _ -> }
+                )
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("このノートのメモ").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        composeRule.onNodeWithText("この節を要約").assertDoesNotExist()
     }
 
     /**
@@ -357,7 +412,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = measurements,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { index, _, _, _ -> reports += index }
                     )
                 } else {
@@ -434,7 +496,14 @@ class NoteReadingFlowTest {
                         imageMeasurements = measurements,
                         tabListState = listState,
                         onExit = {},
-                        onOpenSummary = {},
+                        onOpenMarginMemo = {},
+                        onDismissMarginMemo = {},
+                        memoDraft = MarginMemoDraft(),
+                        onEditMarginMemo = { _, _ -> },
+                        onSubmitMarginMemo = {},
+                        onDeleteMarginMemo = {},
+                        memoFocusIntent = false,
+                        onMemoFocusIntentChange = {},
                         onReadingProgress = { _, _, _, _ -> }
                     )
                 } else {
@@ -828,6 +897,53 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **このノートの間だけ出したペインを、別のノートで復元された画面に持ち込まない**（→ features/margin_pane.md §5.4）。
+     * 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で復元される。そのときは読み込み中を挟まない。
+     */
+    @Test
+    fun このノートの間だけのペインは_別のノートで復元された画面には出ない() {
+        assertFalse("別のノートへ持ち込んだ", paneAfterRestore(restoreWith = NOTE_B))
+    }
+
+    /** 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。上の検査の対照。 */
+    @Test
+    fun このノートの間だけのペインは_同じノートで作り直すと残る() {
+        assertTrue("同じノートで作り直すと消えた", paneAfterRestore(restoreWith = NOTE_A))
+    }
+
+    /**
+     * ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。
+     * **1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回で、2回目は例外になる。
+     */
+    private fun paneAfterRestore(restoreWith: String): Boolean {
+        val restoration = StateRestorationTester(composeRule)
+        // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
+        var current = NOTE_A
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS, targetUri = current).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = false,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        current = restoreWith
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        return composeRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+    }
+
+    /**
      * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
      * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
      */
@@ -864,6 +980,7 @@ class NoteReadingFlowTest {
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false
     ) {
+        var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
             uiState = state,
             sectionModel = model,
@@ -872,9 +989,9 @@ class NoteReadingFlowTest {
             noteListState = listState,
             onSelectVault = {},
             onRandomNote = {},
+            onRequestSectionSummary = {},
             onRetrySectionSummary = {},
-            onDismissSectionChat = {},
-            onEndSectionChat = {},
+            onCancelSectionSummary = {},
             onOpenBooklet = {},
             onEnterFullscreen = {},
             onOpenMarginMemo = onOpenMarginMemo,
@@ -888,19 +1005,22 @@ class NoteReadingFlowTest {
             onSubmitMarginMemo = {},
             onDeleteMarginMemo = {},
             onDismissMarginMemo = onDismissMarginMemo,
+            memoFocusIntent = memoFocusIntent,
+            onMemoFocusIntentChange = { memoFocusIntent = it },
             onReadingProgress = onReadingProgress,
-            onDismissReadingTrace = {},
-            onOpenSection = {}
+            onDismissReadingTrace = {}
         )
     }
 
-    private fun loadedNote(content: String) = NoteUiState(
+    private fun loadedNote(content: String, targetUri: String = "") = NoteUiState(
         vaultSelected = true,
-        noteState = NoteState.Success(title = TITLE, content = content)
+        noteState = NoteState.Success(title = TITLE, content = content, targetUri = targetUri)
     )
 
     private companion object {
         const val TITLE = "テスト用ノート"
+        const val NOTE_A = "content://vault/a.md"
+        const val NOTE_B = "content://vault/b.md"
         const val FIRST_PARAGRAPH = "最初の段落"
 
         val BODY = """
