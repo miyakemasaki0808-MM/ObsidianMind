@@ -1,6 +1,6 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜4は実装済み・実機検証済み（段4の完了の線はオーナー判断待ち）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1〜4は実装済み・実機検証済み（段4で実機で見ていない3点は段5の実機検証へ持ち越し）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。
 **最終検証:** 2026-10-04 / `9e377cf5`（段4まで。Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
