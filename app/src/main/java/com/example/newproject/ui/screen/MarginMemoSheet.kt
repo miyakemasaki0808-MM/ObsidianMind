@@ -89,7 +89,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -136,7 +139,7 @@ internal fun MarginMemoSheetHost(
             sheetState.partialExpand()
         } else {
             expandPending = false
-            sheetState.hide()
+            hideUntilHidden(sheetState)
         }
     }
     // **下へ払って隠したら、閉じたことにする。** 最初の値は見ない — 出す前の Hidden を閉じたと読まない。
@@ -208,6 +211,26 @@ internal fun MarginMemoSheetHost(
                         layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
                     }
             ) { body() }
+        }
+    }
+}
+
+/**
+ * **隠し終えるまで頼み直す。** 隠す動きは、シートへ指で触れる・指を離した後に落ち着かせる動きに取り消される
+ * （Material3 1.3.0 の `SheetState.hide()`）。1度頼んだだけだと、閉じた扱いのシートが画面に残り、
+ * 閉じる・戻るが効かなくなる（どちらも閉じた扱いを閉じ直すだけになる）。
+ *
+ * **取り消しを握りつぶさない。** 器の効果そのものが止められたとき（出す側へ切り替わったとき）は投げ直す。
+ * 止めたのがシートの別の動きなら、次のフレームで頼み直す — 指で押さえている間は頼んでも退けられる。
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+private suspend fun hideUntilHidden(sheetState: SheetState) {
+    while (sheetState.isVisible) {
+        try {
+            sheetState.hide()
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            withFrameNanos { }
         }
     }
 }

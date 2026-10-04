@@ -746,6 +746,47 @@ class MarginMemoSheetUiTest {
     }
 
     /**
+     * **閉じた後、隠す途中で指が触れても、隠し終える**（→ features/margin_pane.md §11）。
+     * 隠す動きは、シートに指で触れると取り消される。1度頼むだけだったころは、閉じた扱いのシートが画面に残り、
+     * 「閉じる」は閉じた扱いを閉じ直すだけ、戻る操作はランチャーまで抜けた。時計を止めて、隠す途中にハンドルの辺りを掴んで離す。
+     */
+    @Test
+    fun 閉じた後に隠す途中で指が触れても_隠し終える() {
+        var visible by mutableStateOf(true)
+        lateinit var sheetState: SheetState
+        composeRule.setContent {
+            sheetState = rememberStandardBottomSheetState(initialValue = SheetValue.Hidden, skipHiddenState = false)
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.fillMaxWidth().height(800.dp)) {
+                    MarginMemoSheetHost(
+                        visible = visible,
+                        expandRequested = false,
+                        onDismiss = { visible = false },
+                        sheet = { Text("シートの中身", modifier = Modifier.height(700.dp).testTag(SHEET_TAG)) },
+                        sheetState = sheetState
+                    ) { Box(modifier = Modifier.fillMaxSize()) }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(SheetValue.PartiallyExpanded, sheetState.currentValue)
+
+        composeRule.mainClock.autoAdvance = false
+        composeRule.runOnUiThread { visible = false }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.onNodeWithTag(SHEET_TAG).performTouchInput {
+            down(topCenter)
+            moveBy(Offset(0f, -80f))
+        }
+        composeRule.mainClock.advanceTimeBy(300)
+        composeRule.onNodeWithTag(SHEET_TAG).performTouchInput { up() }
+        composeRule.mainClock.advanceTimeBy(3_000)
+
+        assertEquals("閉じた扱いのシートが画面に残った", SheetValue.Hidden, sheetState.currentValue)
+    }
+
+    /**
      * **閉じた面から、出す依頼と広げる依頼が同じフレームで届いても、シートが開いて広がる**（→ features/margin_pane.md §11）。
      * 閉じたシートで見出しの印や「前回のメモを見る」を押すと、この2つが同じ再構成で届く。
      * 保留を効果のキーにしていたころは、保留が立った変化で広げる効果が自分を取り消し、先に始めた partialExpand ごと止まってシートが開かなかった。
