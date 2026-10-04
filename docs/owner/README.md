@@ -43,14 +43,13 @@
 | 10 | [project_chronology](10_project_chronology.md) | **どう歩んできたか。** Git 履歴から辿る開発年表 |
 | — | [journal/](journal/) | **どんな日々だったか。** 読み物としての開発日誌 |
 
-**番号を持たないものが4つある。**
+**番号を持たないものが3つある。**
 
 | | なぜ |
 |---|---|
 | 本書（`README.md`） | フォルダの入口。GitHub が自動で開き、`CLAUDE.md` とテストのKDocが名前で指している |
 | [journal/](journal/) | フォルダで、約20ファイルが名前で指している。順路の末尾に置くが、読み物なので列には入れない |
 | [rebuttal_sentence_design](rebuttal_sentence_design.md) | **実装したら役目が終わる下書き。** 反証の一文をどう作るかを引き渡しの粒度で書いてある。恒久文書の列に混ぜない |
-| [fold_margin_pane_design](fold_margin_pane_design.md) | **同じく実装したら役目が終わる下書き。** 開いた Fold の本文の隣に置く「この部分」のペインを、オーナーへの grill で決めた範囲で書いてある |
 
 **欠番は詰めない。** 文書が消えたらその番号を空けたままにする。詰め直すと、既存の参照が別の文書を指す。
 

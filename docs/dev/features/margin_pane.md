@@ -542,5 +542,4 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 
 ## 12. 開発経緯
 
-- 設計の下書き（凍結・更新しない）: [owner/fold_margin_pane_design](../../owner/fold_margin_pane_design.md)
 - 開発日誌: [owner/journal/](../../owner/journal/)

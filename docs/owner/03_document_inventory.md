@@ -187,7 +187,6 @@ docs/
 | 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |
 | — | [journal/](journal/) | どんな日々だったか。2026-07・08・09・10 |
 | — | [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**実装したら役目が終わる下書きなので、番号列に入れない** |
-| — | [fold_margin_pane_design](fold_margin_pane_design.md) | 開いた Fold の「この部分」の設計の下書き。凍結してあり、正本は [margin_pane](../dev/features/margin_pane.md)。**同じく番号列に入れない** |
 
 `Fable5.1_report/` は git 管理外で、入口 README と章3本・課題一覧、`完了/` に4本ある。本書の数には入れない。
 
