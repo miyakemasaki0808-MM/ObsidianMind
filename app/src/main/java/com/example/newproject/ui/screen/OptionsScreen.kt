@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.OptionRow
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AppGradient
@@ -52,7 +53,7 @@ fun OptionsScreen(
             .background(AppGradient)
             .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(title = "オプション")
 

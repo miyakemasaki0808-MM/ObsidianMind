@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
@@ -82,7 +83,7 @@ fun SearchTab(
             .safeDrawingPadding()
             // 検索結果＋当日履歴で縦に伸びるため、タブ全体をスクロール可能にする
             .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(
             title = "Explore",

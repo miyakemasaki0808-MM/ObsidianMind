@@ -32,6 +32,7 @@ import com.example.newproject.ui.backupProgressText
 import com.example.newproject.ui.backupProtectedDataText
 import com.example.newproject.ui.backupStepLabel
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.OptionRow
 import com.example.newproject.ui.exportSummary
@@ -79,7 +80,7 @@ fun DataManagementScreen(
             .background(AppGradient)
             .safeDrawingPadding()
             .verticalScroll(rememberScrollState())
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(
             title = "データ管理",

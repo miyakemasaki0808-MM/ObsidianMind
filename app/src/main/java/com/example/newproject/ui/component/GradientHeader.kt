@@ -43,8 +43,9 @@ import com.example.newproject.ui.theme.OnGradientHeaderTitle
  * 濃さを保つ割合が要素全体の高さに対する比になるため、**副題が2行に折り返した瞬間に
  * フェードの開始位置が文字へ食い込む**。
  *
- * 面はメイン領域の**全幅**へ広げる（[horizontalBleed]）。角丸を付けず端まで抜くことで、
+ * 面はメイン領域の**全幅**へ広げる。角丸を付けず端まで抜くことで、
  * 「上に乗ったカード」ではなく「上部が霞んだ背景」として読ませる。
+ * **広げる幅は画面の余白から取るので、見出しを置く画面は [screenContentPadding] で余白を取る。**
  */
 @Composable
 internal fun GradientHeader(
@@ -52,19 +53,18 @@ internal fun GradientHeader(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     titleSize: TextUnit = 28.sp,
-    horizontalBleed: Dp = DEFAULT_HORIZONTAL_BLEED,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null
 ) {
     val scrim = GradientHeaderScrim
-    Column(modifier = modifier.fillMaxWidth().bleedHorizontally(horizontalBleed)) {
+    Column(modifier = modifier.fillMaxWidth().bleedHorizontally(SCREEN_HORIZONTAL_PADDING)) {
         // 文字領域。濃さは一様で、高さは中身に任せる。
         // 内側の余白を bleed と同じにすることで、外へ広げても文字の位置は動かない。
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(scrim)
-                .padding(horizontal = horizontalBleed, vertical = 12.dp),
+                .padding(horizontal = SCREEN_HORIZONTAL_PADDING, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -100,10 +100,10 @@ internal fun GradientHeader(
 /**
  * 親が与えた左右の余白の外側まで広がる。
  *
- * 各画面は本文用に左右20dpを持っており、その内側で背景を描くと帯が浮いたカードに
+ * 各画面は本文用に左右の余白を持っており、その内側で背景を描くと帯が浮いたカードに
  * 見える。見出しの面だけは端まで抜きたいので、測定時に横幅を広げて負のオフセットで
- * 戻す。**[bleed] は呼び出し側の水平パディングと一致していなければならない**
- * （既定値は現在の全画面共通の20dp）。
+ * 戻す。**[bleed] が親の余白と食い違うと、見出しの面だけが端からずれる** —
+ * だから余白と同じ定数から渡す（→ [screenContentPadding]）。
  */
 private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, constraints ->
     val extra = bleed.roundToPx() * 2
@@ -122,8 +122,14 @@ private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, co
     }
 }
 
-/** 各画面が本文へ与えている水平パディング。 */
-private val DEFAULT_HORIZONTAL_BLEED = 20.dp
+/**
+ * 見出しを置く画面の本文の余白。**左右は [GradientHeader] が面を広げる幅と同じ値である**ので、
+ * 余白を数値で書き写さず、必ずこれで取る（片方だけ変えると見出しだけがずれる）。
+ */
+internal fun Modifier.screenContentPadding(): Modifier =
+    padding(start = SCREEN_HORIZONTAL_PADDING, end = SCREEN_HORIZONTAL_PADDING, top = 8.dp, bottom = 12.dp)
+
+private val SCREEN_HORIZONTAL_PADDING = 20.dp
 
 /** 帯の下端で面を透明へ抜く区間の高さ。文字は載らない。 */
 internal val SCRIM_FADE_HEIGHT = 10.dp

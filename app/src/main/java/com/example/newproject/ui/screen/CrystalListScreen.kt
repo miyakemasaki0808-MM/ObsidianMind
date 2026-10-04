@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.ui.CRYSTAL_EMPTY_MESSAGE
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.crystalDateLabel
 import com.example.newproject.ui.theme.AccentText
@@ -53,7 +54,7 @@ fun CrystalListScreen(
             .fillMaxSize()
             .background(AppGradient)
             .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(
             title = "結晶",
