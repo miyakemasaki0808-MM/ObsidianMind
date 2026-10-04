@@ -19,6 +19,10 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollToIndexAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -33,6 +37,10 @@ import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.NoteState
@@ -943,6 +951,110 @@ class NoteReadingFlowTest {
         return composeRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
     }
 
+    // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────
+
+    /**
+     * ペインの「このノートの関連」から候補を右で開き、「← 余白へ戻る」で**選んだ一覧の場所へ戻る**。
+     * 右で眺めている間は余白の面（入力欄）を出さない。
+     */
+    @Test
+    fun ペインの関連から右で開き_余白へ戻ると関連の一覧へ戻る() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onCloseSideReading = { state = state.copy(sideReading = SideReadingState.Idle) }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        composeRule.onNodeWithText("▾ このノートの関連 2件").assertIsDisplayed()
+    }
+
+    /** 「このノートへ移る」は、**右で読んでいたブロック**を添えて開き、左の一覧をその位置に置く。 */
+    @Test
+    fun このノートへ移ると_右で読んでいたブロックから左で開く() {
+        val listState = LazyListState()
+        var opened: RelatedNote? = null
+        val state = loadedNote(LONG_BODY).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(LONG_BODY),
+                        listState,
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks,
+                        onOpenNote = { opened = it }
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
+            .performScrollToIndex(SIDE_TARGET_BLOCK)
+        composeRule.onNodeWithText("このノートへ移る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(SIDE_NOTE, opened)
+            assertEquals(SIDE_TARGET_BLOCK, listState.firstVisibleItemIndex)
+        }
+    }
+
+    /** **余白ペインでない並べ方になったら終える**（Fold を閉じた・✎ でしまった）。窓を縮めて縦積みにする。 */
+    @Test
+    fun 余白ペインでない並べ方になると_並べ読みを終える() {
+        var wide by mutableStateOf(true)
+        var closed = 0
+        val state = loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = if (wide) 960.dp else 400.dp, height = 720.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = wide,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks,
+                        onCloseSideReading = { closed++ }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals("ペインのまま終えた", 0, closed) }
+
+        composeRule.runOnIdle { wide = false }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals(1, closed) }
+    }
+
     /**
      * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
      * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
@@ -978,7 +1090,11 @@ class NoteReadingFlowTest {
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
         marginPaneOpen: Boolean = false,
-        expandedWidth: Boolean = false
+        expandedWidth: Boolean = false,
+        sideBlocks: List<MarkdownBlock>? = null,
+        onOpenSideReading: (RelatedNote) -> Unit = {},
+        onCloseSideReading: () -> Unit = {},
+        onOpenNote: (RelatedNote) -> Unit = {}
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -1008,7 +1124,11 @@ class NoteReadingFlowTest {
             memoFocusIntent = memoFocusIntent,
             onMemoFocusIntentChange = { memoFocusIntent = it },
             onReadingProgress = onReadingProgress,
-            onDismissReadingTrace = {}
+            onDismissReadingTrace = {},
+            sideReadingBlocks = sideBlocks,
+            onOpenSideReading = onOpenSideReading,
+            onCloseSideReading = onCloseSideReading,
+            onOpenNote = onOpenNote
         )
     }
 
@@ -1078,5 +1198,17 @@ class NoteReadingFlowTest {
         val LONG_BODY = (0 until 40).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
 
         fun markerAt(index: Int) = "段落$index"
+
+        /** 並べ読みで右に開く関連ノート。 */
+        val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
+        val OTHER_NOTE = RelatedNote(title = "もう1つの関連", ref = DocumentRef("content://vault/other.md"), isWikilinked = true)
+        const val SIDE_PARAGRAPH = "右で眺める本文。"
+        val SIDE_BODY = "# 右の見出し\n\n$SIDE_PARAGRAPH"
+
+        /** 右で送る先。左の [LONG_BODY] にも十分な後続がある位置。 */
+        const val SIDE_TARGET_BLOCK = 12
+        val LONG_SIDE_BODY = (0 until 40).joinToString("\n\n") { "${sideMarkerAt(it)} の本文です。" }
+
+        fun sideMarkerAt(index: Int) = "右の段落$index"
     }
 }

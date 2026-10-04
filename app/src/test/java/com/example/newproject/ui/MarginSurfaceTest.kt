@@ -22,6 +22,11 @@ import com.example.newproject.ui.screen.sheetCoveredHeight
 import com.example.newproject.ui.screen.sectionLabel
 import com.example.newproject.ui.screen.writeTargetNotice
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.ui.screen.endsSideReading
+import com.example.newproject.ui.screen.paneRelatedCandidates
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -268,5 +273,52 @@ class MarginSurfaceTest {
         assertEquals("前回はここまで読んだ · 9/12", previousReadingLabel(at(2026, 9, 12), now, zone))
         assertEquals("前回はここまで読んだ · 2025/12/31", previousReadingLabel(at(2025, 12, 31), now, zone))
         assertEquals(false, previousReadingLabel(at(2026, 9, 12), now, zone).contains("止まった"))
+    }
+
+    // ── 並べ読み（→ features/margin_pane.md §5.9）─────────────────────────────
+
+    private fun related(title: String) = RelatedNote(title = title, ref = DocumentRef("content://vault/$title.md"), isWikilinked = false)
+
+    @Test
+    fun `関連の候補は、リンクの候補の後にAIの推薦を並べる`() {
+        val state = RelatedNotesState.Success(relatedNotes = listOf(related("A"), related("B")), aiNotes = listOf(related("C")))
+
+        assertEquals(listOf("A", "B", "C"), paneRelatedCandidates(null, state)?.map { it.title })
+    }
+
+    /**
+     * **AI の推薦が後から届いても、開いている一覧の並びを入れ替えない。** モデルの準備が済むと関連ノートを読み直し、
+     * 読み込み中を挟んでリンクの候補とAIの推薦が一緒に届く。読み込み中で一覧を消さず、届いた新しい候補は下へ足す。
+     */
+    @Test
+    fun `後から届いた候補は並びを入れ替えず下へ足す`() {
+        val first = paneRelatedCandidates(null, RelatedNotesState.Success(listOf(related("A"), related("B")), emptyList()))
+        val reloading = paneRelatedCandidates(first, RelatedNotesState.Loading)
+        val withAi = paneRelatedCandidates(
+            reloading,
+            RelatedNotesState.Success(relatedNotes = listOf(related("B"), related("A")), aiNotes = listOf(related("C")))
+        )
+
+        assertEquals(listOf("A", "B"), reloading?.map { it.title })
+        assertEquals(listOf("A", "B", "C"), withAi?.map { it.title })
+    }
+
+    @Test
+    fun `関連ノートがまだ届いていなければ候補を持たない`() {
+        assertNull(paneRelatedCandidates(null, RelatedNotesState.Idle))
+        assertNull(paneRelatedCandidates(null, RelatedNotesState.Loading))
+    }
+
+    @Test
+    fun `並べ読みは余白ペインでない並べ方になったら終える`() {
+        assertEquals(true, endsSideReading(windowKnown = true, paneVisible = false, reading = true))
+        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = true, reading = true))
+        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = false, reading = false))
+    }
+
+    /** 画面の作り直しの直後は、仮に余白ペインでない並べ方で組まれることがある。その間に終えると、閉じていないのに消える。 */
+    @Test
+    fun `窓の情報が揃う前は並べ読みを終えない`() {
+        assertEquals(false, endsSideReading(windowKnown = false, paneVisible = false, reading = true))
     }
 }

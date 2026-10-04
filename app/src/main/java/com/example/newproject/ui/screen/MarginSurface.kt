@@ -1,6 +1,8 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.RelatedNotesState
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -251,3 +253,25 @@ internal fun previousReadingLabel(atEpochMillis: Long, nowMillis: Long, zone: Zo
     }
     return "前回はここまで読んだ · $date"
 }
+
+/**
+ * ペインの「このノートの関連」に並べる候補（→ features/margin_pane.md §5.9）。**並びを入れ替えず、新しい候補を下へ足す。**
+ * AI の推薦は、モデルの準備が済んで関連ノートを読み直したときに後から届く。そのとき開いている一覧の並びを動かさない。
+ *
+ * [shown] はこのノートで出した並びで、まだ無ければ null。[state] がまだ届いていなければ [shown] のまま返す
+ * （読み直しの間の読み込み中で一覧を消さない）。AI を新しく呼ばず、関連ノートの結果だけを使う。
+ */
+internal fun paneRelatedCandidates(shown: List<RelatedNote>?, state: RelatedNotesState): List<RelatedNote>? {
+    val success = state as? RelatedNotesState.Success ?: return shown
+    val base = shown.orEmpty()
+    val known = base.mapTo(HashSet()) { it.ref }
+    return base + (success.relatedNotes + success.aiNotes).distinctBy { it.ref }.filterNot { it.ref in known }
+}
+
+/**
+ * 並べ読みを終えるか。**余白ペインでない並べ方になったら終える**（Fold を閉じた・回して横の折り目になった・
+ * ✎ でペインをしまった → features/margin_pane.md §5.9）。
+ * **窓の情報が揃う前は判定しない** — 画面の作り直しの直後は、仮に余白ペインでない並べ方で組まれることがある。
+ */
+internal fun endsSideReading(windowKnown: Boolean, paneVisible: Boolean, reading: Boolean): Boolean =
+    reading && windowKnown && !paneVisible

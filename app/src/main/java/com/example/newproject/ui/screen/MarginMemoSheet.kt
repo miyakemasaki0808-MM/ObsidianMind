@@ -72,6 +72,7 @@ import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
@@ -306,7 +307,9 @@ internal fun MarginMemoSheetContent(
      * [onSummaryRevealHandled] でその番号の依頼を消してもらう（→ [pendingAfterReveal]）。
      */
     revealSummary: Long? = null,
-    onSummaryRevealHandled: (Long) -> Unit = {}
+    onSummaryRevealHandled: (Long) -> Unit = {},
+    /** このノートの関連（→ [PaneRelatedInputs]）。**ペインだけ**が渡す。null なら出さない。 */
+    related: PaneRelatedInputs? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -350,6 +353,19 @@ internal fun MarginMemoSheetContent(
     val groupTops = remember { mutableStateMapOf<SectionRef, Int>() }
     // 要約の行の始まり（この面の中の位置）。AI の入口から来たときの行き先。
     var summaryTop by remember { mutableIntStateOf(0) }
+    // このノートの関連の始まり（この面の中の位置）。並べ読みから戻ったときの行き先。
+    var relatedTop by remember { mutableIntStateOf(0) }
+    val currentRelated by rememberUpdatedState(related)
+    LaunchedEffect(related?.reveal) {
+        val request = related?.reveal ?: return@LaunchedEffect
+        // 戻ってきたので、送る動きは見せずに元の場所へ置く。要約の行へ送るときと同じく、**止められても依頼を消す**。
+        try {
+            withFrameNanos { }
+            scrollState.scrollTo(relatedTop)
+        } finally {
+            currentRelated?.onRevealHandled?.invoke(request)
+        }
+    }
     LaunchedEffect(revealSummary) {
         val request = revealSummary ?: return@LaunchedEffect
         // **止められても依頼を消す。** 送る動きは利用者のスクロールで取り消され、後ろに置いた解除まで届かない（→ lessons L35）。
@@ -553,6 +569,10 @@ internal fun MarginMemoSheetContent(
 
                 MarginMemoState.Idle -> Unit
             }
+
+            related?.let { inputs ->
+                PaneRelatedNotes(inputs, onPlaced = { relatedTop = it })
+            }
     }
 
     // **消すのは不可逆なので確認を挟む。** 置くのは何度でもやり直せるが、消したものは戻らない。
@@ -572,6 +592,47 @@ internal fun MarginMemoSheetContent(
             }
         )
     }
+}
+
+/**
+ * ペインの「このノートの関連」（→ features/margin_pane.md §5.9）。並べ読みの入口で、**ペインだけ**に置く。
+ * 候補はノートを開いたときに作った関連ノートで、ここから AI を呼ばない。
+ */
+internal class PaneRelatedInputs(
+    /** 並べる候補（→ [paneRelatedCandidates]）。まだ届いていなければ null。 */
+    val candidates: List<RelatedNote>?,
+    val expanded: Boolean,
+    val onToggle: () -> Unit,
+    /** 候補を右で開く。 */
+    val onOpen: (RelatedNote) -> Unit,
+    /** 並べ読みから戻ったときに、この一覧まで送る依頼の番号。送り終えたら（止められても）[onRevealHandled] で消してもらう。 */
+    val reveal: Long? = null,
+    val onRevealHandled: (Long) -> Unit = {}
+)
+
+/**
+ * **畳んで件数だけ**を出し、開くと候補を並べる。候補が無いか、まだ届いていなければ何も出さない
+ * — 自動で走る機能なので、探している途中も見つからないことも面に置かない（関連タブの AI 推薦と同じ）。
+ */
+@Composable
+private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit) {
+    val candidates = inputs.candidates
+    if (candidates.isNullOrEmpty()) return
+    Spacer(modifier = Modifier.height(12.dp))
+    HorizontalDivider()
+    TextButton(
+        onClick = inputs.onToggle,
+        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+        modifier = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
+    ) {
+        Text(
+            text = "${if (inputs.expanded) "▾" else "▸"} このノートの関連 ${candidates.size}件",
+            color = OnSurfaceMuted,
+            fontSize = 13.sp
+        )
+    }
+    if (!inputs.expanded) return
+    candidates.forEach { note -> RelatedNoteItem(note = note, onClick = { inputs.onOpen(note) }) }
 }
 
 /**

@@ -1,10 +1,11 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜4は実装済み・実機検証済み（段4で実機で見ていない3点は段5の実機検証へ持ち越し）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
+**状態:** **段1〜4は実装済み・実機検証済み（段4で実機で見ていない3点は段5の実機検証へ持ち越し）、段5は実装済み・実機検証待ち。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
 実装は段に分けて進める（→ §11）。
 **最終検証:** 2026-10-04 / `9e377cf5`（段4まで。Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
-**関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
+段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`
+**関連テスト:** 段1〜5 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -59,8 +60,7 @@
 
 ## 4. 現在のユーザーフロー
 
-> **段4まで実装済み。** このノートの関連と並べ読み（段5）は未実装で、以下のうちそれに当たる部分は予定のフローである。
-> 再会カードをペインの上に載せること（§5.2 の1）は、段4でもやらないと決めた（2026-10-03、オーナー判断）。どの段にも入っていない。
+> **段5まで実装済み。** 再会カードをペインの上に載せること（§5.2 の1）は、段4でもやらないと決めた（2026-10-03、オーナー判断）。どの段にも入っていない。
 
 **開いた Fold**
 1. ノートを開くと、本文が左、「この部分」が右に並ぶ。右は今の節の見出し・前回の跡・要約のボタン・入力欄・この節のメモの順
@@ -314,8 +314,8 @@
 | `domain` | 見出しの照合の3値、前回の訪問の選び方、送信の照合と書きかけを消す判定、要約を3節分持つ規則。いずれも純関数 | — |
 | `controller` | **並べ読みの Controller（`SideReadingController`）。** ジョブはノート単位で、窓口が渡す口で本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
 | `data` | — | `AppPreferences` にペインの開閉 |
-| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数）。書きかけの置き場（`ComposeMarginMemoDrafts`） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
-| 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始、ペインの開閉、位置を渡して開く `openNote` |
+| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数）。書きかけの置き場（`ComposeMarginMemoDrafts`）。並べ読みの右側（`SideReadingPane`）と、候補の並べ方・並べ読みを終える判定（`paneRelatedCandidates`・`endsSideReading`。いずれも純関数） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
+| 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始と終わり、ペインの開閉。「このノートへ移る」は `openNote` をそのまま通し、位置は画面が置く（→ §11「段5で決めたこと」） |
 
 - **並べ読みの Controller を新しく1つ作る。** 既存の Controller はどれも「今のノート」を前提にしているので、眺めるだけのノートを混ぜない。アーキテクチャ判断4ではノート単位の形に入る
 - 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く。
@@ -377,7 +377,8 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - 並べ読み。B→C の後着、読み込み中に余白へ戻る・ペインを閉じる・Fold を閉じて開く、Vault A→B→A、右だけの失敗で、古い本文が戻らず、右では訪問・要約・分野判定・メモが増えない
   - **両方向。** 部分要約の生成中にメモを置く、メモの保存中に要約を始める
   - 契約。書きかけと並べ読みを `NoteSessionCoordinatorTest` のリセット検査の該当する側へ載せる
-- **instrumentation:** 書きかけの文字と書き込み先の復元、通常と全画面の往復、見出しへ飛ぶ、印と件数の同期、戻る操作の順
+- **instrumentation:** 書きかけの文字と書き込み先の復元、通常と全画面の往復、見出しへ飛ぶ、印と件数の同期、戻る操作の順。
+  並べ読みは、関連から右で開いて余白へ戻ると一覧へ戻る、「このノートへ移る」で右の位置から開く、余白ペインでなくなったら終える
 - **実機確認:** 開いた Fold で窓の dp と折り目の報告値を測り、折り目に文字と操作が重ならないこと。開閉の往復。カバー画面で、キーボードを出したまま本文の一文を読んでメモを書き、もう一文を確かめて書き足せること。全画面の ✎ から書け、書いたまま戻った先の面で書き続けられること。TalkBack
 - **保証していないこと:**
   - **体感。** 並び順、再会カードの長さ、節の切り替わりの時機、シートの高さ、並べ読みが閉じると終わること、は内容を入れた試作と実機で調整する。調整しても機能の範囲は変えない
@@ -392,7 +393,7 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 
 ## 11. 既知の制約・未解決事項
 
-- **未実装。** 次の段に分けて実装する。各段で机上ゲートと実機確認を通してから次へ進む
+- **段に分けて実装した。** 各段で机上ゲートと実機確認を通してから次へ進む
 
   | 段 | 中身 |
   |---|---|
@@ -489,6 +490,25 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     初期化にしか効かず、復元では照合されない — 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で
     読み込み中を挟まずに復元され、前のノートの一時ペインが出た。ノートを離れたら捨て、Fold の開閉と全画面との往復では残る。✎ でしまえば消える。
     **出ている面があればそこに出す** — 閉じる設定でシートを出したまま Fold を開いたときは、ペインを足さずにシートへ出す
+- **段5で決めたこと**
+  - **並べ読みの状態は `NoteUiState` に、本文の解析結果はその外に置いた**（→ §6）。状態はノート切替の一括リセットに載せ、
+    本文は `domain` の型なので `NoteSectionModel` と同じく Controller が持つ。**要求の番号は持たない** — 失効はジョブの取り消しで足りる
+  - **右の本文は `openNote` と同じ読み方で読み、ブロックの解析だけを行う。** 同じパーサなので、右のブロックの番号が左でもそのまま使える
+  - **「このノートへ移る」は `openNote` を変えずに通し、位置は画面が置く。** 開くと同時に左の一覧へ右で読んでいたブロックを頼み、
+    新しいノートの解析が届いたら飛び越した画像の測定を頼む（画像の寸法の入れ物はノートごとに作り直されるので、届く前には頼めない）。
+    前のノートの一覧に位置を縮められていたら、解析が届いたときに置き直す。読書の記録は最も深い位置しか残さないので、
+    手前で1度報告されても置き直した位置で上書きされる
+  - **候補はノートを開いている間の並びを保ち、後から届いた候補は下へ足す**（`paneRelatedCandidates`）。AI の推薦は、
+    モデルの準備が済んで関連ノートを読み直したときに読み込み中を挟んで届く。読み込み中で一覧を消さない
+  - **候補がまだ届いていないか0件なら、「このノートの関連」の行を出さない。** 関連ノートは自動で走る機能なので、
+    探している途中も見つからないことも面に置かない（関連タブの AI 推薦と同じ）
+  - **右で開くと、余白の面は右の本文に代わる。「← 余白へ戻る」と戻る操作は、選んだ一覧まで面を送って戻す。**
+    面の中の位置は組み直すと失われるので、戻るたびに番号を振った依頼で関連の一覧まで送る（要約の行へ送るのと同じ形）。
+    一覧の開閉はこのノートの間だけ画面が持つ
+  - **右で開くとき、書いているつもりを落とす。** 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。書きかけそのものは残る
+  - **見出しの要約ボタン・見出しの印・「前回のメモを見る」は、右で眺めている間に押されたら余白へ戻してから送る**（要約とメモは余白の面にある）
+  - **余白ペインでない並べ方になったら終える**（`endsSideReading`）。Fold を閉じた・回して横の折り目になった・✎ でペインをしまった、を
+    同じ1つの判定で受ける。窓の情報が揃う前は判定しない
 - **段3の時点でも暫定のもの**
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。

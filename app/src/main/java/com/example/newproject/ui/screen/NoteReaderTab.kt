@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.clickable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -82,9 +83,12 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
+import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
 import kotlinx.coroutines.launch
@@ -152,7 +156,14 @@ internal fun NoteReaderTab(
     memoFocusIntent: Boolean,
     onMemoFocusIntentChange: (Boolean) -> Unit,
     onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
-    onDismissReadingTrace: () -> Unit
+    onDismissReadingTrace: () -> Unit,
+    /** 並べ読みで右に出す本文の解析結果（→ features/margin_pane.md §5.9）。読める前と、並べ読みをしていない間は null。 */
+    sideReadingBlocks: List<MarkdownBlock>?,
+    /** 関連ノートを右で開く。**今のノートにはしない。** */
+    onOpenSideReading: (RelatedNote) -> Unit,
+    onCloseSideReading: () -> Unit,
+    /** 関連ノートを普通に開く（関連タブと同じ経路）。右で読んでいた位置へ送るのはこの画面が行う。 */
+    onOpenNote: (RelatedNote) -> Unit
 ) {
     val context = LocalContext.current
 
@@ -221,6 +232,47 @@ internal fun NoteReaderTab(
     // ノートを離れたら（読み込み中を含む）持ち主を捨てる。戻ってきても、頼み直すまで出さない。
     LaunchedEffect(currentNoteUri) { if (paneForNote != currentNoteUri) paneForNote = null }
     val paneShown = marginPaneOpen || paneForNoteShown(paneForNote, currentNoteUri)
+    // ペインの「このノートの関連」。並びはこのノートの間だけ持ち、後から届いた候補は下へ足す（→ paneRelatedCandidates）。
+    var relatedCandidates by remember(currentNoteUri) { mutableStateOf<List<RelatedNote>?>(null) }
+    LaunchedEffect(currentNoteUri, uiState.relatedNotesState) {
+        relatedCandidates = paneRelatedCandidates(relatedCandidates, uiState.relatedNotesState)
+    }
+    var relatedExpanded by remember(currentNoteUri) { mutableStateOf(false) }
+    // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
+    var relatedReveal by remember { mutableStateOf<Long?>(null) }
+    var relatedRevealCount by remember { mutableLongStateOf(0L) }
+    val sideReading = uiState.sideReading
+    val reading = sideReading != SideReadingState.Idle
+    // 右で開く。**書いているつもりは落とす** — 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。
+    val openSide: (RelatedNote) -> Unit = { note ->
+        onMemoFocusIntentChange(false)
+        onOpenSideReading(note)
+    }
+    // 「← 余白へ戻る」と戻る操作。**元の場所へ戻す** — 選んだ一覧まで面を送る。
+    val returnFromSide: () -> Unit = {
+        onCloseSideReading()
+        relatedReveal = ++relatedRevealCount
+    }
+    // 「このノートへ移る」で開いたノートと、右で読んでいたブロック。新しいノートの解析が届いたら、
+    // 飛び越した画像の測定を頼む（→ 下の効果）。画像の寸法の入れ物はノートごとに作り直されるので、届く前には頼めない。
+    var moveStart by rememberSaveable { mutableStateOf<Pair<String, Int>?>(null) }
+    val moveToNote: (RelatedNote, Int) -> Unit = { note, block ->
+        onOpenNote(note)
+        // **開くのと同時に位置を置く。** 新しいノートの一覧は、最初に組まれたときからこの位置で始まる（冊子から開くときと同じ）。
+        listState.requestScrollToItem(block)
+        moveStart = note.ref.value to block
+    }
+    LaunchedEffect(currentNoteUri, sectionModel) {
+        val (uri, block) = moveStart ?: return@LaunchedEffect
+        val opened = currentNoteUri ?: return@LaunchedEffect
+        if (opened == uri && sectionModel != null) {
+            // 前のノートの一覧に位置を縮められていたら置き直す。読書の記録は最も深い位置しか残さないので、
+            // 手前で1度報告されても、置き直した位置からの報告で上書きされる。
+            if (listState.firstVisibleItemIndex != block) listState.scrollToItem(block)
+            imageMeasurements?.requestSkippedMeasurement(block)
+        }
+        if (opened != uri || sectionModel != null) moveStart = null
+    }
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
@@ -415,6 +467,8 @@ internal fun NoteReaderTab(
         )
         // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
+            // 右で眺めている間は、余白へ戻してから送る（メモは余白の面にある）。
+            if (reading) onCloseSideReading()
             if (!paneVisible) onOpenMarginMemo()
             memoReveal = reveal
         }
@@ -422,6 +476,7 @@ internal fun NoteReaderTab(
         // 見出しの要約ボタン。**出せる面を出し、要約を始めて、要約の行まで送る**（→ features/margin_pane.md §5.4）。
         // 持っている節なら作り直さず、その要約を見せる。
         val openSummary: () -> Unit = {
+            if (reading) onCloseSideReading()
             when (summaryEntryFor(canShowPane, paneVisible, uiState.isMarginMemoSheetVisible)) {
                 SummaryEntry.Pane -> Unit
                 SummaryEntry.PaneForNote -> paneForNote = currentNoteUri
@@ -444,6 +499,12 @@ internal fun NoteReaderTab(
         }
 
         val windowKnown = foldInfo.isKnown && regionStartDp != null
+        // **余白ペインでない並べ方になったら並べ読みを終える**（Fold を閉じた・✎ でしまった → endsSideReading）。
+        LaunchedEffect(windowKnown, paneVisible, reading) {
+            if (endsSideReading(windowKnown, paneVisible, reading)) onCloseSideReading()
+        }
+        // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
+        BackHandler(enabled = reading && paneVisible) { returnFromSide() }
         // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
         // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
         LaunchedEffect(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible) {
@@ -572,7 +633,17 @@ internal fun NoteReaderTab(
                         }
                         Spacer(modifier = Modifier.width(layout.gutterDp.dp))
                         MarginPanePanel(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                            MarginMemoSheetContent(
+                            // 右で眺めている間は、余白の面に代えてそのノートを出す。
+                            if (reading) {
+                                SideReadingPane(
+                                    state = sideReading,
+                                    blocks = sideReadingBlocks,
+                                    imageLoader = imageLoader,
+                                    onBack = returnFromSide,
+                                    onMove = moveToNote,
+                                    onRetry = onOpenSideReading
+                                )
+                            } else MarginMemoSheetContent(
                                 state = uiState.marginMemoState,
                                 draft = memoDraft,
                                 section = bodySection,
@@ -591,7 +662,15 @@ internal fun NoteReaderTab(
                                 previousReadingAt = previousReadingAt,
                                 summaryRow = summaryRow,
                                 revealSummary = summaryReveal,
-                                onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) }
+                                onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) },
+                                related = PaneRelatedInputs(
+                                    candidates = relatedCandidates,
+                                    expanded = relatedExpanded,
+                                    onToggle = { relatedExpanded = !relatedExpanded },
+                                    onOpen = openSide,
+                                    reveal = relatedReveal,
+                                    onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) }
+                                )
                             )
                         }
                     }

@@ -128,6 +128,8 @@ class MainActivity : ComponentActivity() {
                 // 本文のパース結果は Main の外で1回だけ作られる。noteListState と同じく
                 // ここで受けて通常表示と全画面表示へ配り、進入のたびの再解析をなくす。
                 val sectionModel by viewModel.sectionModel.collectAsStateWithLifecycle()
+                // 並べ読みで右に出す本文の解析結果。本文と同じく Main の外で作られる。
+                val sideReadingBlocks by viewModel.sideReadingBlocks.collectAsStateWithLifecycle()
                 // 新規Activity起動時だけ再生する。回転・Fold開閉・プロセス復元では
                 // savedInstanceStateが非nullになるため、OPを再生し直さない。
                 var showOpening by remember { mutableStateOf(savedInstanceState == null) }
@@ -207,7 +209,12 @@ class MainActivity : ComponentActivity() {
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 memoFocusIntent = memoFocusIntent,
                                 onMemoFocusIntentChange = { memoFocusIntent = it },
-                                onDismissReadingTrace = { viewModel.dismissReadingTraceCard() }
+                                onDismissReadingTrace = { viewModel.dismissReadingTraceCard() },
+                                sideReadingBlocks = sideReadingBlocks,
+                                onOpenSideReading = { note -> viewModel.openSideReading(contentResolver, note) },
+                                onCloseSideReading = { viewModel.closeSideReading() },
+                                // 関連タブと同じ経路で開く。ノートタブの中なので画面は移らない。
+                                onOpenNote = { note -> viewModel.openNote(contentResolver, note) }
                             )
                         }
 
