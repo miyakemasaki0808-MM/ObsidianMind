@@ -29,3 +29,5 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
+| `2026-10-04-fold-margin-pane-stage5-implementation-review/P2-1` | 取消後のI/O例外が旧候補の失敗を右ペインへ後着させる | `統合` FOLD-1 |
+| `2026-10-04-fold-margin-pane-stage5-implementation-review/P2-2` | 同じノートの画面復元で戻り先の関連候補と展開状態を失う | `統合` FOLD-1 |
