@@ -127,9 +127,6 @@ internal fun ReadingProgressReporter(
  * 丸いアイコンボタン（material-icons 依存を避けるため絵文字/記号を使用）。
  * 既定色はグラデーション背景に置く前提。明色パネルの上に置く場合は
  * containerColor で暗めの下地を指定しないと視認できない。
- *
- * 補記管理画面にも同等の実装が別途あったが、そちらは contentDescription を
- * Semantics へ設定しておらずTalkBackで読み上げられなかったため、本関数へ統合した。
  */
 @Composable
 internal fun IconPill(

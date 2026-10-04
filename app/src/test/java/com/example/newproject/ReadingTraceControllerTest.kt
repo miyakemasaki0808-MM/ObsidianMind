@@ -801,7 +801,7 @@ class ReadingTraceControllerTest {
         assertTrue(persistence.saved.isEmpty())
     }
 
-    // 相対パスが最後まで分からなかったノート（_AI補記 の一覧から開いた等）は追跡しない。
+    // 相対パスが最後まで分からなかったノート（さがすで _AI補記 配下を開いた等）は追跡しない。
     @Test
     fun `unresolved relative path is not tracked`() = runTest {
         val clock = TestClock()

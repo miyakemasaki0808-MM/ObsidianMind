@@ -28,8 +28,8 @@ import kotlinx.coroutines.withContext
 /**
  * 読書痕跡の整理（孤児の洗い出し）。
  *
- * **Vault単位の機能**なので、ノート切替では止めない。寿命は補記一覧
- * （[AnnotationController] の `listJob`）と同じで、無効化の契機は Vault切替だけ。
+ * **Vault単位の機能**なので、ノート切替では止めない。無効化の契機は Vault切替だけ
+ * （→ system/architecture.md 判断4）。
  * したがってノート単位の契約（`cancelNoteScopedJobs` / `withNoteScopedReset`）へは登録しない。
  *
  * 候補と、遮断器が保留した一群を洗い出す。削除は**1件ずつのみ**で、一括削除は持たない
@@ -172,7 +172,7 @@ internal class ReadingTraceCleanupController(
      * 消す瞬間に一度だけ確かめ直す（対象は1件なので走査1回で足りる）。
      *
      * 対象は「いま画面に出ている候補」に固定する。走行中にVaultが切り替わっても
-     * 拾い直した新Vaultのファイルを消さないため（[AnnotationController.deleteAll] と同じ規律）。
+     * 拾い直した新Vaultのファイルを消さないため。
      *
      * **失敗した候補は一覧に残す** — 消えると再試行できなくなる。
      *

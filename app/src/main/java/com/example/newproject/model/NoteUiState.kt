@@ -3,7 +3,6 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
-import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
@@ -34,8 +33,7 @@ data class NoteUiState(
     val isMarginMemoSheetVisible: Boolean = false,
     val wikilinkTitles: Set<String> = emptySet(),
     val distillState: DistillState = DistillState.Idle,
-    val annotationListState: AnnotationListState = AnnotationListState.Idle,
-    // 読書痕跡の整理画面。補記一覧と同じくVault単位（ノート切替では消えない）。
+    // 読書痕跡の整理画面。Vault単位（ノート切替では消えない）。
     val readingTraceCleanupState: ReadingTraceCleanupState = ReadingTraceCleanupState.Idle,
     // 読書痕跡の退避（書き出し／読み戻し）。整理と同じくVault単位。
     val readingTraceBackupState: ReadingTraceBackupState = ReadingTraceBackupState.Idle,

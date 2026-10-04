@@ -13,7 +13,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * **実物のSAFを通す**走査と補記の読み書き（→ instrumentation_testing 段階2）。
+ * **実物のSAFを通す**走査（→ instrumentation_testing 段階2）。
  *
  * ## JVMでは書けない理由
  *
@@ -153,50 +153,5 @@ class VaultScanInstrumentationTest {
 
         assertEquals("列挙が重複している", 1, notes.count { it.vaultRelativePath == "ideas/habit.md" })
         assertEquals("2回目の本文", readText(notes.single().ref))
-    }
-
-    /**
-     * 旧補記ファイルの一覧と削除が実物のSAFで通る。
-     *
-     * **作成経路はもう無い。** 「AI補記メモ」は「ノートへのひとこと」へ作り直され、
-     * 保存先は読書痕跡サイドカーへ移った（→ features/reflect_margin_memo.md）。
-     * 残っているのは、作り直す前に生成された `.md` を片付ける導線だけなので、
-     * ここもファイルを**直接置いて**から一覧・削除を確かめる形にしてある。
-     */
-    @Test
-    fun 旧補記ファイルを一覧に出して削除できる() = runBlocking<Unit> {
-        FakeVaultDocumentsProvider.putFile(
-            "_AI補記/習慣について__補記_20260808_2015.md",
-            "# 補記\n\n本文です。"
-        )
-        val handle = requireNotNull(browser().current())
-
-        val listed = handle.listAnnotationFiles()
-
-        assertEquals(1, listed.size)
-        assertEquals("習慣について__補記_20260808_2015.md", listed.single().name)
-        assertTrue("削除に失敗した", handle.deleteDocument(listed.single().ref))
-        assertTrue("削除後も一覧に残っている", handle.listAnnotationFiles().isEmpty())
-    }
-
-    /** 一覧はタイムスタンプの新しい順。ファイル名の辞書順ではない。 */
-    @Test
-    fun 旧補記の一覧はタイムスタンプの新しい順に並ぶ() = runBlocking<Unit> {
-        FakeVaultDocumentsProvider.putFile("_AI補記/z__補記_20260101_0900.md", "古い")
-        FakeVaultDocumentsProvider.putFile("_AI補記/a__補記_20260808_2015.md", "新しい")
-        val handle = requireNotNull(browser().current())
-
-        assertEquals(
-            listOf("a__補記_20260808_2015.md", "z__補記_20260101_0900.md"),
-            handle.listAnnotationFiles().map { it.name }
-        )
-    }
-
-    /** フォルダが無ければ空。作る経路が無くなったので、これが通常の状態になる。 */
-    @Test
-    fun 補記フォルダが無ければ一覧は空になる() = runBlocking<Unit> {
-        val handle = requireNotNull(browser().current())
-
-        assertTrue(handle.listAnnotationFiles().isEmpty())
     }
 }

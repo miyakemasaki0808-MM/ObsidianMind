@@ -350,7 +350,7 @@
 
 - **状態:** 未着手（2026-09-28、オーナー判断で起票）。**方針は「撤去する」まで決まっている。**
 - **現状:** オプション → データ管理の「AI補記メモを削除」（[`DataManagementScreen`](../../app/src/main/java/com/example/newproject/ui/screen/DataManagementScreen.kt)）が、
-  `_AI補記/` 配下の旧 `.md` を一覧して消す画面（[`AnnotationManagerScreen`](../../app/src/main/java/com/example/newproject/ui/screen/AnnotationManagerScreen.kt)）を開く。
+  `_AI補記/` 配下の旧 `.md` を一覧して消す画面（`AnnotationManagerScreen`）を開く。
   **書き出す側は既に無い**（AI補記メモは「ノートへのひとこと」へ作り直され、そのひとことも余白メモへ置き換わって撤去済み）。
 - **問題:** **オーナーの Vault に旧データはもう無い**（オーナーが実機の Vault で `_AI補記` フォルダが無いことを確認済み・2026-09-28）。
   片付ける対象の無い導線のために、画面・Controller・状態・SAF の列挙と削除・テストを保守し続けている。

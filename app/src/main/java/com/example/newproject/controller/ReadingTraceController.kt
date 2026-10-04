@@ -768,7 +768,7 @@ internal class ReadingTraceController(
         val active = session ?: return
         // 前回の書き込みから何も変わっていなければ、SAF書込を出さない。
         if (!active.dirty) return
-        // 相対パスが最後まで分からなかったノート（_AI補記 の一覧から開いた等）は記録しない。
+        // 相対パスが最後まで分からなかったノート（さがすで _AI補記 配下を開いた等）は記録しない。
         val path = active.vaultRelativePath ?: return
         // **メモを預かっているときは読書量の門番を通す。**
         // 10秒・1ブロックは「一瞬引いてすぐ送った表示を訪問に数えない」ための条件だが、

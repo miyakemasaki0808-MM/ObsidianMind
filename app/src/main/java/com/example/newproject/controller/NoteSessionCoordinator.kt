@@ -129,13 +129,13 @@ internal class NoteSessionCoordinator(
     val sideReadingBlocks: StateFlow<List<MarkdownBlock>?> get() = sideReading.blocks
 
     /**
-     * Vault単位の非同期要求の世代。[onVaultChanged] のたびに進めて、補記一覧・
-     * フォルダ一覧の結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
+     * Vault単位の非同期要求の世代。[onVaultChanged] のたびに進めて、フォルダ一覧・
+     * 孤児掃除などの結果が旧Vaultのものでないかを Controller 側が update 直前に照合する。
      *
      * `vaultUri` の比較で代用しないのは、A→B→A と選び直したときに同じ値になるため。
      *
      * ノート単位の世代は各Controllerが `activeRequestId` として自前で持つ（寿命が違う。
-     * 補記一覧はノート切替では無効化してはいけない）。
+     * フォルダ一覧はノート切替では無効化してはいけない）。
      */
     var vaultGeneration = 0L
 
@@ -185,12 +185,6 @@ internal class NoteSessionCoordinator(
         vaultKey = currentVaultKey
     )
 
-    private val annotation = AnnotationController(
-        scope = scope,
-        vault = vaultBrowser,
-        state = stateStore.annotationListWriter,
-        vaultGeneration = { vaultGeneration }
-    )
     private val search = SearchController(
         scope = scope,
         vault = vaultBrowser,
@@ -437,7 +431,6 @@ internal class NoteSessionCoordinator(
         // **生成だけを止める。** 保存に入った結晶と一覧（Vault単位）には触らない。
         crystal.cancelAndClear()
         marginMemo.cancelAndClear()
-        // 補記一覧（annotation）はVault単位なのでここには登録しない。
         sectionChat.cancelAndClear()
         // 右で眺めていたノートの読み込みも止める。状態は withNoteScopedReset() が落とす。
         sideReading.cancelAndClear()
@@ -489,7 +482,6 @@ internal class NoteSessionCoordinator(
         vaultGeneration++
         applyLocation()
         search.onVaultChanged()
-        annotation.onVaultChanged()
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
         booklet.onVaultChanged()
@@ -714,12 +706,6 @@ internal class NoteSessionCoordinator(
 
     fun deleteMarginMemo(memo: MarginMemo) =
         marginMemo.delete(readingTrace.currentPath(), memo)
-
-    // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）──────
-
-    fun loadAnnotations() = annotation.loadList()
-    fun deleteAnnotation(ref: DocumentRef) = annotation.delete(ref)
-    fun deleteAllAnnotations() = annotation.deleteAll()
 
     // ── 蒸留（実装は DistillController）─────────────────────────────────────
 

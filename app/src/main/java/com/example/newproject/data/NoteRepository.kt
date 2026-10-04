@@ -82,7 +82,8 @@ class NoteRepository {
         NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId).toDocumentRef(), lastModified)
 
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
-    // AI生成の補記メモは復習対象にしない方針のため _AI補記 フォルダを除外する。
+    // 旧版が書き出した _AI補記 フォルダは除外する。書き出す経路はもう無いが、
+    // フォルダが残った Vault でも旧補記がランダム表示や関連ノートに混ざらないようにする。
     // ※さがすタブ（collectNotesInScope）は _AI補記 だけは仕様どおり除外しない。
     // 完全性まで返すのは、不在を根拠に何かを消す処理（読書痕跡の孤児判定）が
     // 「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
@@ -101,7 +102,7 @@ class NoteRepository {
      * Vault全体の画像を収集する（画像索引用）。
      *
      * 除外するのは機能フォルダ（`_AI補記` / `_ReadingTraces`）と `.obsidian`。
-     * 前2つはアプリが作るものなのでユーザーのノートが参照する画像は入らず、
+     * 前2つはアプリが書き出すフォルダ（`_AI補記` は旧版）なのでユーザーのノートが参照する画像は入らず、
      * `.obsidian` はテーマやプラグインの画像でノートの内容ではない。
      *
      * **完全性まで返すのは、ノート走査と同じ理由ではない。** ここでは
@@ -321,32 +322,6 @@ class NoteRepository {
         } ?: error("書き出し先を開けませんでした。")
     }
 
-    // _AI補記/ フォルダ内の補記メモファイルを列挙する（1階層のみ）
-    suspend fun listAnnotationFiles(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFile> =
-        withContext(Dispatchers.IO) {
-            val folderUri = findAnnotationFolder(contentResolver, vaultUri) ?: return@withContext emptyList()
-            val folderId = DocumentsContract.getDocumentId(folderUri)
-            // 作成日時の新しい順に並べる。ファイル名は "{タイトル}__補記_{yyyyMMdd_HHmm}.md"
-            // 形式のため、名前全体でなくタイムスタンプ部をソートキーにする
-            // （名前降順だとタイトルの辞書順が支配して日付順にならない）
-            // 補記の一覧は読めた分を出す（削除判断には使わないため完全性を要求しない）。
-            queryChildren(contentResolver, vaultUri, folderId)
-                .items
-                .filter { !it.isDirectory && isMarkdownFile(it.name) }
-                .map { it.toNoteFile(vaultUri) }
-                .sortedByDescending { it.name.substringAfterLast(ANNOTATION_FILE_MARKER, "") }
-        }
-
-    // 単一ドキュメントを削除する。成功時 true。
-    suspend fun deleteDocument(contentResolver: ContentResolver, uri: Uri): Boolean =
-        withContext(Dispatchers.IO) {
-            try {
-                DocumentsContract.deleteDocument(contentResolver, uri)
-            } catch (e: Exception) {
-                false
-            }
-        }
-
     // frontmatter（tags/aliases）と [[wikilink]] を抽出
     fun parseMeta(content: String): NoteMeta {
         val lines = content.lines()
@@ -390,17 +365,8 @@ class NoteRepository {
             .filter { it.isNotBlank() }
     }
 
-    // Found 以外は null。Absent（本当に無い）と Unreadable（読めなかった）を
-    // ここで潰してよいのは、この戻り値で作成判断をしないため
-    // （フォルダを作る経路はもう無い。ひとことは痕跡サイドカーへ保存する）。
-    private fun findAnnotationFolder(contentResolver: ContentResolver, vaultUri: Uri): Uri? =
-        (findRootChildFolder(contentResolver, vaultUri, ANNOTATION_FOLDER_NAME)
-            as? RootFolderLookup.Found)?.uri
-
     companion object {
         private const val ANNOTATION_FOLDER_NAME = "_AI補記"
-        // 補記メモのファイル名区切り: "{タイトル}__補記_{yyyyMMdd_HHmm}.md"
-        private const val ANNOTATION_FILE_MARKER = "__補記_"
         private val WIKILINK_REGEX = Regex("\\[\\[([^\\]]+)]]")
     }
 }

@@ -54,7 +54,7 @@ internal class NoteViewModelDependencies(
     val noteFieldStore: NoteFieldStore? = null,
     val repository: NoteRepository,
     /**
-     * さがす／補記が使う Vault スコープの操作。`ContentResolver` と Vault ルートを束ねてあるので、
+     * さがす・冊子・痕跡の整理が使う Vault スコープの操作。`ContentResolver` と Vault ルートを束ねてあるので、
      * この2つを controller の引数から消せる（＝素のJVMテストで happy path を書ける）。
      */
     val vaultBrowser: VaultBrowser,
