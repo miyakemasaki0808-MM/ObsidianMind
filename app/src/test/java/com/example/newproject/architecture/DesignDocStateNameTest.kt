@@ -260,7 +260,19 @@ class DesignDocStateNameTest {
             "showSectionChat",
             "dismissSectionChatSheet",
             "endSectionChat",
-            "openSection"
+            "openSection",
+            // 旧補記の片付け（データ管理の「AI補記メモを削除」を撤去。走査の除外だけは残す）
+            "AnnotationController",
+            "AnnotationControllerTest",
+            "AnnotationListState",
+            "annotationListState",
+            "AnnotationListStateWriter",
+            "annotationListWriter",
+            "AnnotationManagerScreen",
+            "listAnnotationFiles",
+            "loadAnnotations",
+            "deleteAnnotation",
+            "deleteAllAnnotations"
         )
     }
 }
