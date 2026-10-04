@@ -173,11 +173,77 @@ class BookletCoverLineTest {
     @Test
     fun `表の区切り行は扉にしない`() {
         val content = """
+            |---|:--|
+            区切りの後の文を選ぶ。
+        """.trimIndent()
+
+        assertEquals("区切りの後の文を選ぶ。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `表の見出し行は扉にせず本文の行へ進む`() {
+        val content = """
+            | ID | タグ | タイトル | 概要 |
+            |---|---|---|---|
+            | 0210_0001 | #資格 | ビジネス法務 | 試験の記録 |
+        """.trimIndent()
+
+        assertEquals("0210_0001 #資格 ビジネス法務 試験の記録", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `見出し行だけの表ならタイトルを出す`() {
+        val content = """
             | 項目 | 値 |
             |---|:--|
         """.trimIndent()
 
-        assertEquals("項目 値", selectCoverLine(content, "タイトル"))
+        assertEquals("タイトル", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `次の行が区切りでなければ縦棒を含む行は扉にできる`() {
+        val content = """
+            A | B を比べて、B を選んだ。
+            次の行の文。
+        """.trimIndent()
+
+        assertEquals("A B を比べて、B を選んだ。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `値が日付だけの行は扉にしない`() {
+        val content = """
+            開始日　　：2025/05/23
+            作成日: 2026-03-28
+            - **更新日**: 2026年3月28日（土）
+            2026-03-28 10:30
+            本文の最初の文である。
+        """.trimIndent()
+
+        assertEquals("本文の最初の文である。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `値が読めるラベル行は扉にできる`() {
+        assertEquals("ゴール: 2026-03-01 までに合格する。", selectCoverLine("ゴール: 2026-03-01 までに合格する。", "タイトル"))
+        assertEquals("書籍名：ピープルウェア", selectCoverLine("書籍名：ピープルウェア", "タイトル"))
+    }
+
+    @Test
+    fun `ナビの行は扉にしない`() {
+        val content = """
+            🧭 クイックナビ: [[1000.License]] ｜ [[1000_0001.Python3_Basic_Exam]]
+            > 🧭 関連ノート: 1000.License
+            会社の種類と出資者の責任を整理する。
+        """.trimIndent()
+
+        assertEquals("会社の種類と出資者の責任を整理する。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `ほかの絵文字で始まる行は扉にできる`() {
+        assertEquals("📌 ゴール: 試験に合格する。", selectCoverLine("📌 ゴール: 試験に合格する。", "タイトル"))
     }
 
     @Test
