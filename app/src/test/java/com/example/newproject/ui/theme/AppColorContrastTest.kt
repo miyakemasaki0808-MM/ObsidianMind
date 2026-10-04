@@ -209,8 +209,7 @@ class AppColorContrastTest {
             "notePaper(Weathered)" to notePaper.weathered
         )
         return when (token) {
-            // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階、
-            // AnnotationResultScreen は Panel/PanelTinted）＋各パネルの本文
+            // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階）＋各パネルの本文
             "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
             "onSurfaceMuted" -> listOf(panelS, tinted, blue) + paper

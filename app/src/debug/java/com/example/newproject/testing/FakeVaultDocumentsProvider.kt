@@ -83,8 +83,7 @@ class FakeVaultDocumentsProvider : DocumentsProvider() {
 
     override fun createDocument(parentDocumentId: String, mimeType: String, displayName: String): String {
         val parent = nodes[parentDocumentId] ?: throw FileNotFoundException(parentDocumentId)
-        // 同名があれば連番を足す。**実プロバイダが名前を変える**ことの再現でもある
-        // （SavedAnnotation が「保存後の実名」を返す契約はこれが理由）。
+        // 同名があれば連番を足す。**実プロバイダが名前を変える**ことの再現でもある。
         val name = uniqueNameUnder(parent, displayName)
         val id = "$parentDocumentId/$name"
         val node = Node(

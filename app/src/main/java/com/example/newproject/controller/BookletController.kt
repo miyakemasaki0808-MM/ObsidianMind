@@ -39,7 +39,7 @@ internal const val BOOKLET_COVER_PREFETCH = 1
  * ノート切替では止めない。冊子から「これを読む」でノートへ渡り、**戻れば同じ10枚が残る**
  * のが冊子の目的そのものなので、ノート単位の契約
  * （`cancelNoteScopedJobs` / `withNoteScopedReset`）へは登録しない。
- * 無効化の契機はVault切替だけで、補記一覧・痕跡の整理と同じ扱いになる。
+ * 無効化の契機はVault切替だけで、痕跡の整理と同じ扱いになる。
  *
  * ## 束は2つある
  *

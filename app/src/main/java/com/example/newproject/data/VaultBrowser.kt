@@ -8,11 +8,11 @@ import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.VaultScan
 
 /**
- * さがす／補記が使う Vault スコープの操作。**`ContentResolver` と Vault ルートは実装が束ねる。**
+ * さがす・冊子・痕跡の整理が使う Vault スコープの操作。**`ContentResolver` と Vault ルートは実装が束ねる。**
  *
  * ## なぜ要るか
  *
- * `SearchController` と `AnnotationController` は、以前は
+ * `SearchController` は、以前は
  * `repository`・`vaultUri: () -> Uri?`・各メソッド引数の `contentResolver` の
  * 3つを受け取っていた。この3つが揃うと**素のJVMテストで happy path を1本も書けない**:
  *
@@ -31,12 +31,12 @@ import com.example.newproject.model.VaultScan
  * 蒸留（[DistillPersistence] ＋ `SafDistillDocumentGateway`）と
  * 読書痕跡（[ReadingTracePersistence] ＋ [SafReadingTraceDocumentGateway]）は
  * 既にこの形で、どちらも `ContentResolver` を構築時に束ねているから Fake を書ける。
- * ここはその2つと同じ形をさがす／補記へ広げたもので、新しい発明ではない。
+ * ここはその2つと同じ形をさがすへ広げたもので、新しい発明ではない。
  *
  * ## 「Vault未選択」の扱いはここでは決めない
  *
  * [current] が null を返すところまでが本インターフェースの責任で、そのとき何を出すかは
- * 呼び出し側が決める。実際に挙動が違う — さがすは黙って何もせず、補記は
+ * 呼び出し側が決める。実際に挙動が違う — さがすは黙って何もせず、痕跡の整理は
  * 「Vault が選択されていません。」を状態に出す。ここへ押し込むとその差が消える。
  */
 interface VaultBrowser {
@@ -106,15 +106,6 @@ interface VaultHandle {
     suspend fun collectImages(): VaultImageScan
 
     /**
-     * `_AI補記` 配下の一覧。フォルダが無ければ空。
-     *
-     * **書き出す側はもう無い。** 「AI補記メモ」は「ノートへのひとこと」へ作り直され、
-     * 保存先は読書痕跡サイドカーへ移った。この一覧は、作り直す前に生成された
-     * `.md` をユーザーが片付けるためだけに残している。
-     */
-    suspend fun listAnnotationFiles(): List<NoteFile>
-
-    /**
      * 1件の**先頭だけ**読む。冊子の扉（代表文1行）が使う。
      *
      * **全文を読まない。** 表示は最大1MBまで許容しているが、扉に要るのは1文で、
@@ -127,9 +118,6 @@ interface VaultHandle {
      * 「そのページだけ失敗」として扱うこと（→ features/booklet_mode.md §10）。
      */
     suspend fun readNoteSnippet(ref: DocumentRef): String?
-
-    /** 1件削除する。**SAFプロバイダの都合で失敗し得る**ので、結果を捨てないこと。 */
-    suspend fun deleteDocument(ref: DocumentRef): Boolean
 
     /**
      * 1件の更新日時を引き直す。**走査の代わりに使う。**
@@ -170,16 +158,8 @@ private class SafVaultHandle(
     override suspend fun collectImages(): VaultImageScan =
         repository.collectImages(contentResolver, vaultUri)
 
-    override suspend fun listAnnotationFiles(): List<NoteFile> =
-        repository.listAnnotationFiles(contentResolver, vaultUri)
-
     override suspend fun readNoteSnippet(ref: DocumentRef): String? =
         repository.readNoteSnippetOrNull(contentResolver, ref.toUri())
-
-    // 削除自体はVaultルートを要さないが、`ContentResolver` を呼び出し側から
-    // 消すのが目的なので同じハンドルに置く。
-    override suspend fun deleteDocument(ref: DocumentRef): Boolean =
-        repository.deleteDocument(contentResolver, ref.toUri())
 
     override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup =
         repository.queryDocumentVersion(contentResolver, ref.toUri())

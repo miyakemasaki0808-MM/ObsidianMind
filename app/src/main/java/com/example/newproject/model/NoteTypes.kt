@@ -7,7 +7,7 @@ package com.example.newproject.model
 // SAF の documentId は端末／権限グラントごとに異なり、同期した別端末では同じファイルでも
 // 別IDになる＝可搬キーにならない。そのため ReadingTrace のサイドカー引き当てには
 // 同期をまたいで安定するこの相対パスを使う。
-// 再帰走査でのみ組み立てるので、非再帰の列挙（_AI補記 一覧）では既定の空文字が入る。
+// 走査で組み立てるので、走査を経ずに参照だけで作るとき（冊子から、走査に居ないノートを開く等）は既定の空文字が入る。
 data class NoteFile(
     val name: String,
     val ref: DocumentRef,

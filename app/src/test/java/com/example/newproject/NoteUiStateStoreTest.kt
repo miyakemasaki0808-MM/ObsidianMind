@@ -6,7 +6,6 @@ import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SearchSlice
 import com.example.newproject.model.SectionRef
-import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
@@ -33,10 +32,6 @@ class NoteUiStateStoreTest {
 
         store.summaryWriter.update { SummaryState.Success("要約") }
         expected = expected.copy(summaryState = SummaryState.Success("要約"))
-        assertEquals(expected, store.value)
-
-        store.annotationListWriter.update { AnnotationListState.Error("一覧失敗") }
-        expected = expected.copy(annotationListState = AnnotationListState.Error("一覧失敗"))
         assertEquals(expected, store.value)
 
         val folder = NoteFolder("下書き", "folder-id")

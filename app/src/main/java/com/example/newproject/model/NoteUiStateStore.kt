@@ -3,7 +3,6 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
-import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
@@ -41,15 +40,6 @@ data class MarginMemoSlice(
 interface MarginMemoStateWriter {
     val current: MarginMemoSlice
     fun update(transform: (MarginMemoSlice) -> MarginMemoSlice)
-}
-
-/**
- * 補記ファイル一覧（Vault単位）。生成側と寿命が違うので Writer を分ける
- * — 一覧はノート切替で消してはいけない（補記管理画面はノートと無関係）。
- */
-interface AnnotationListStateWriter {
-    val current: AnnotationListState
-    fun update(transform: (AnnotationListState) -> AnnotationListState)
 }
 
 /**
@@ -169,13 +159,6 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
                     isMarginMemoSheetVisible = next.isMarginMemoSheetVisible
                 )
             }
-        }
-    }
-
-    val annotationListWriter: AnnotationListStateWriter = object : AnnotationListStateWriter {
-        override val current: AnnotationListState get() = mutableState.value.annotationListState
-        override fun update(transform: (AnnotationListState) -> AnnotationListState) {
-            mutableState.update { it.copy(annotationListState = transform(it.annotationListState)) }
         }
     }
 
@@ -381,8 +364,7 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     searchState = SearchState.Idle,
     todayHistory = emptyList(),
     // 旧Vaultの候補を新Vaultの画面へ残さない。Controller 側ではなく状態変換で落とすのは、
-    // 「別Vaultのノートを消しませんか」と尋ねる状態を作らないことを構造的に保証するため
-    // （補記一覧は Controller が落とすが、あちらは誤って消す危険が無い）。
+    // 「別Vaultのノートを消しませんか」と尋ねる状態を作らないことを構造的に保証するため。
     readingTraceCleanupState = ReadingTraceCleanupState.Idle,
     // 退避も同じ理由で落とす。旧Vaultの下見を残すと、**確定を押した瞬間に
     // 別Vaultの痕跡へ書き込む**ことになる（Controller側も下見した時点のVaultと

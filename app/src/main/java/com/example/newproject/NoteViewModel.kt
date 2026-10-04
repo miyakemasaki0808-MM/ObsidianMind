@@ -504,12 +504,6 @@ class NoteViewModel internal constructor(
     fun searchByKeyword(query: String) = session.searchByKeyword(query)
     fun pickRandomInScope() = session.pickRandomInScope()
 
-    // ── 旧補記ファイルの片付け（実装は AnnotationController・Vault単位）─────────
-
-    fun loadAnnotations() = session.loadAnnotations()
-    fun deleteAnnotation(ref: DocumentRef) = session.deleteAnnotation(ref)
-    fun deleteAllAnnotations() = session.deleteAllAnnotations()
-
     /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
     fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
 

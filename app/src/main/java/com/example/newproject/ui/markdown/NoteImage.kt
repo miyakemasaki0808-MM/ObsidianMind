@@ -44,7 +44,7 @@ import com.example.newproject.ui.theme.OnSurfaceSubtle
  * 高さへ移り、復号が終わってもレイアウトは動かない。
  *
  * [loader] が null なら読み込み口が無いので、原文をそのまま段落として出す
- * （補記結果の画面など、画像を持たない文脈で使い回せるようにするため）。
+ * （画像を持たない文脈で使い回せるようにするため）。
  */
 @Composable
 internal fun MarkdownImage(

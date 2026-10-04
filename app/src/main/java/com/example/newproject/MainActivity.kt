@@ -40,7 +40,6 @@ import androidx.navigation.compose.rememberNavController
 import com.example.newproject.domain.readingTraceBackupFileName
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.ui.screen.AiTab
-import com.example.newproject.ui.screen.AnnotationManagerScreen
 import com.example.newproject.ui.screen.CrystalListScreen
 import com.example.newproject.ui.screen.DataManagementScreen
 import com.example.newproject.ui.screen.ReadingTraceCleanupScreen
@@ -377,19 +376,6 @@ class MainActivity : ComponentActivity() {
                                 onManageReadingTraces = {
                                     navController.navigate("reading_trace_cleanup")
                                 },
-                                onManageAnnotations = {
-                                    navController.navigate("annotation_manager")
-                                },
-                                onBack = { navController.popBackStack() }
-                            )
-                        }
-
-                        composable("annotation_manager") {
-                            AnnotationManagerScreen(
-                                state = uiState.annotationListState,
-                                onLoad = { viewModel.loadAnnotations() },
-                                onDelete = { ref -> viewModel.deleteAnnotation(ref) },
-                                onDeleteAll = { viewModel.deleteAllAnnotations() },
                                 onBack = { navController.popBackStack() }
                             )
                         }

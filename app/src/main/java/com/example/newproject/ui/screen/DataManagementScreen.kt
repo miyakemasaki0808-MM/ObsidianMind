@@ -55,10 +55,9 @@ import com.example.newproject.ui.withheldImportText
 /**
  * データ管理。**アプリが管理している非表示データを人間が扱えるようにする**画面。
  *
- * 読書痕跡の退避（書き出し／読み戻し）を本体に持ち、痕跡の整理と旧補記の片付けを
- * ここから開く。3つを1画面へまとめているのは、どれも「Vault内にあるがノートではない
- * データ」を相手にしていて、**単独の設定項目としては寿命が違いすぎる**ため
- * （旧補記の片付けは移行が済めば価値を失うが、退避と整理は残る）。
+ * 読書痕跡の退避（書き出し／読み戻し）を本体に持ち、痕跡の整理をここから開く。
+ * 2つを1画面へまとめているのは、どちらも「Vault内にあるがノートではないデータ」を
+ * 相手にしているため。
  *
  * **退避を上に置く。** 失われうるものを守る操作のほうが、掃除より先に必要になる。
  */
@@ -72,7 +71,6 @@ fun DataManagementScreen(
     onCancel: () -> Unit,
     onDismiss: () -> Unit,
     onManageReadingTraces: () -> Unit,
-    onManageAnnotations: () -> Unit,
     onBack: () -> Unit
 ) {
     Column(
@@ -171,14 +169,6 @@ fun DataManagementScreen(
             title = "読書痕跡を整理",
             subtitle = "無くなったノートの読書痕跡を確認",
             onClick = onManageReadingTraces
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OptionRow(
-            emoji = "🗂",
-            title = "AI補記メモを削除",
-            subtitle = "Vault に残っている旧「AI補記メモ」を削除",
-            onClick = onManageAnnotations
         )
 
         Spacer(modifier = Modifier.height(24.dp))

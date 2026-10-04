@@ -36,15 +36,12 @@ class FakeVaultBrowser(var handle: FakeVaultHandle? = FakeVaultHandle()) : Vault
 class FakeVaultHandle(
     var folders: List<NoteFolder> = emptyList(),
     var notesByFolder: Map<String?, List<NoteFile>> = emptyMap(),
-    var annotationFiles: List<NoteFile> = emptyList(),
     /** [collectAllNotes] が返すVault全体の走査結果。**完全性ごと差し替えられる。** */
     var vaultScan: VaultScan = VaultScan(emptyList()),
     /** [collectImages] が返す画像走査。**完全性ごと差し替えられる。** */
     var imageScan: VaultImageScan = VaultImageScan(emptyList(), isComplete = true),
     /** null 以外にすると、その操作が例外を投げる。 */
     var failure: Exception? = null,
-    /** [deleteDocument] の戻り値。false は「SAFプロバイダが消せなかった」を表す。 */
-    var deleteSucceeds: Boolean = true,
     /**
      * [documentVersion] が返す値。既定は「列を返さないプロバイダ」＝世代で見分けられない状態で、
      * **鮮度確認を入れる前と同じ挙動**にあたる。
@@ -65,13 +62,10 @@ class FakeVaultHandle(
         private set
     var collectCount = 0
         private set
-    var listAnnotationsCount = 0
-        private set
     var collectAllCount = 0
         private set
     var collectImagesCount = 0
         private set
-    val deletedRefs = mutableListOf<DocumentRef>()
 
     /** [documentVersion] を呼ばれた回数。**走査の代わりに何回引いたか**を数える。 */
     var documentVersionCount = 0
@@ -105,25 +99,11 @@ class FakeVaultHandle(
         return notesByFolder[folder?.documentId].orEmpty()
     }
 
-    override suspend fun listAnnotationFiles(): List<NoteFile> {
-        listAnnotationsCount++
-        beforeEachCall()
-        failure?.let { throw it }
-        return annotationFiles
-    }
-
     override suspend fun readNoteSnippet(ref: DocumentRef): String? {
         readSnippetRefs += ref
         beforeEachCall()
         failure?.let { throw it }
         return snippets(ref)
-    }
-
-    override suspend fun deleteDocument(ref: DocumentRef): Boolean {
-        deletedRefs += ref
-        beforeEachCall()
-        failure?.let { throw it }
-        return deleteSucceeds
     }
 
     override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup {

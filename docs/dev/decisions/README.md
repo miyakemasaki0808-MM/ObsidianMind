@@ -30,6 +30,7 @@
 | [ADR-0003](ADR-0003-opaque-saf-references.md) | SAF参照を不透明化し `model` を葉に保つ | [system/saf_boundary_gateway.md](../system/saf_boundary_gateway.md) |
 | [ADR-0004](ADR-0004-do-not-rewrite-vault-body.md) | Vault本文を書き換えない（例外は蒸留の太字化のみ） | [features/reflect_distill.md](../features/reflect_distill.md) |
 | [ADR-0005](ADR-0005-bearing-channel-allocation.md) | 佇まいのチャネルは1つの意味だけに割り当てる | [system/bearing_channels.md](../system/bearing_channels.md) |
+| [ADR-0006](ADR-0006-single-current-note.md) | 今のノートは主の面の1つだけ。複数インスタンスを採らない | [system/fold_experience.md](../system/fold_experience.md) |
 
 ## 様式
 

@@ -15,7 +15,7 @@
 **タブは5つ** — 📄ノート／🔎さがす／🔗関連／✨AI／⚙️オプション（`AppScaffold.kt` の enum が単一の定義元）。
 
 **非タブの独立ルート**が別にあり、こちらは**バー／レールを出さない構造**を持つ。
-`note_fullscreen`・冊子・補記メモ管理・読書痕跡の整理・結晶の一覧がこれにあたる。
+`note_fullscreen`・冊子・読書痕跡の整理・結晶の一覧がこれにあたる。
 
 **画面幅対応:** `WindowWidthSizeClass.Expanded`（Fold展開）は左サイドレール、それ以外は下部バー。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。

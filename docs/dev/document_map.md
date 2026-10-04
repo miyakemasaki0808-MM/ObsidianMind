@@ -124,6 +124,7 @@
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
 | [tab_navigation.md](system/tab_navigation.md) | 画面構成・ナビゲーション（Plan C） |
 | [ui_design_principles.md](system/ui_design_principles.md) | **UIデザインの指針（国際規約＋好み）。見た目に触る前に読む** |
+| [fold_experience.md](system/fold_experience.md) | **Fold の机**（面を役割で呼ぶ・今のノートは主の面の1つ・4つの契約・姿勢の割り当て）。Fold だけの体験を足す前に読む |
 | [bearing_channels.md](system/bearing_channels.md) | **佇まいのチャネル割り当て**（色＝年代／形＝面の役割／位置＝分類…）。装飾を足す前に読む |
 | [theme_and_ui_refactor.md](system/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 |
 | [instrumentation_testing.md](system/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 |
@@ -251,6 +252,7 @@
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [opening_animation](features/opening_animation.md)（残っているのは起動OPの動きだけ） |
 | `controller/CrystalController.kt`・`data/Crystal*.kt`・`ui/screen/Crystal*.kt` | [reflect_crystal](features/reflect_crystal.md)（試す条件・生成と保存の寿命・再会カードとの順序） |
+| `ui/screen/ReaderLayout.kt`・`ui/screen/ReaderFoldState.kt`・Fold だけの表示と操作・補助の面 | **[fold_experience](system/fold_experience.md)（不変条件・契約・姿勢の割り当て）** → [margin_pane](features/margin_pane.md) |
 | `controller/SideReadingController.kt`・`controller/MarginMemoController.kt`・`ui/screen/Margin*.kt`・`ui/screen/SideReadingPane.kt` | [margin_pane](features/margin_pane.md)（並べ方の判定・書きかけと送信の照合・並べ読み） |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |

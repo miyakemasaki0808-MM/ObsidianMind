@@ -30,7 +30,6 @@ import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
-import com.example.newproject.model.state.AnnotationListState
 import com.example.newproject.model.state.BookletBundle
 import com.example.newproject.model.state.WeaveState
 import com.example.newproject.model.state.BookletState
@@ -108,8 +107,8 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
  *    全フィールドを埋めた状態から、何が消えて何が残るかをリフレクションで漏れなく突き合わせる。
  *    フィールドを足してリセット登録を忘れたら落ちる。
  *  - **調停の結線**: 7 Controller すべてのUI状態を非初期状態にしてから切替を通す。
- *    UI状態の一括リセットと重複して観測できない内部状態（Searchのキャッシュ／Job、
- *    Annotationの生成Job）は、実物Controllerへテスト用の値を直接積んで個別に確認する。
+ *    UI状態の一括リセットと重複して観測できない内部状態（Searchのキャッシュ／Job）は、
+ *    実物Controllerへテスト用の値を直接積んで個別に確認する。
  *  - **ジョブ停止**: 走行中のAI生成を止めずに切り替えると旧結果が後着することの確認。
  *    状態リセットだけでは防げないので、対になっていること自体をここで担保する。
  */
@@ -131,14 +130,12 @@ class NoteSessionCoordinatorTest {
         // 切替直後に loadRandomNote が走って差し替わるため、ここで落とすと画面が点滅する
         "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
         "wikilinkTitles" to setOf("旧リンク"),
-        // 以下2つは**状態変換ではなくController側が落とす**。
-        // 蒸留は復旧待ち（RecoveryRequired）だけは残す判断があるため
-        // DistillController.cancelForNoteChange() が持ち、補記一覧は
-        // AnnotationController.onVaultChanged() が走行中のJob停止と一緒に落とす。
+        // 蒸留は**状態変換ではなくController側が落とす**。
+        // 復旧待ち（RecoveryRequired）だけは残す判断があるため
+        // DistillController.cancelForNoteChange() が持つ。
         // ここで二重に落とすと、その判断が状態変換側にも分裂する。
         // 実際に Idle へ戻ることは下の結線テストで確かめている。
-        "distillState" to DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
-        "annotationListState" to AnnotationListState.Success(emptyList())
+        "distillState" to DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3)
     )
 
     /**
@@ -303,9 +300,8 @@ class NoteSessionCoordinatorTest {
         store.beginNoteLoad()
         val reset = store.value
 
-        // 補記管理画面の一覧とさがすタブのスコープはノートと無関係なので、
+        // さがすタブのスコープはノートと無関係なので、
         // ノートを開き直しただけで消えてはいけない（A案で分けた二層の担保）。
-        assertTrue(reset.annotationListState is AnnotationListState.Success)
         assertEquals(1, reset.folders.size)
         assertEquals("下書き", reset.selectedFolder?.name)
         assertTrue(reset.searchState is SearchState.Success)
@@ -342,9 +338,8 @@ class NoteSessionCoordinatorTest {
     /**
      * **全Controllerを非初期状態にしてから** Vault を切り替える。
      *
-     * 状態変換だけでは落ちない `distillState`（DistillController）と
-     * `annotationListState`（AnnotationController）を含めているので、
-     * どちらかの後始末を [NoteSessionCoordinator.onVaultChanged] から消すと落ちる。
+     * 状態変換だけでは落ちない `distillState`（DistillController）を含めているので、
+     * その後始末を [NoteSessionCoordinator.onVaultChanged] から消すと落ちる。
      */
     @Test
     fun `Vault切替で全Controller の状態が一斉に初期化される`() = runTest {
@@ -404,8 +399,7 @@ class NoteSessionCoordinatorTest {
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
         assertEquals(1, hostCancelCount)
 
-        // Vault単位は巻き込まない（補記管理画面とさがすタブのスコープ）
-        assertTrue(state.annotationListState is AnnotationListState.Success)
+        // Vault単位は巻き込まない（さがすタブのスコープ）
         assertEquals(1, state.folders.size)
         assertEquals("下書き", state.selectedFolder?.name)
         assertTrue(state.searchState is SearchState.Success)
@@ -939,7 +933,6 @@ class NoteSessionCoordinatorTest {
         assertTrue("MarginMemo(余白メモ)", state.marginMemoState !is MarginMemoState.Idle)
         assertTrue("SectionChat", state.sectionChat.summaries.isNotEmpty())
         assertTrue("SideReading(並べ読み)", state.sideReading != SideReadingState.Idle)
-        assertTrue("Annotation(一覧)", state.annotationListState !is AnnotationListState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
         assertTrue("Search", state.searchState !is SearchState.Idle)
@@ -952,7 +945,7 @@ class NoteSessionCoordinatorTest {
     /**
      * 全フィールドを初期値と異なる値で埋めた状態。
      *
-     * `Uri` を要する中身（補記の保存先・候補ノート・ノートファイル）は素のJVMテストで
+     * `Uri` を要する中身（候補ノート・ノートファイル）は素のJVMテストで
      * 作れないため、`Uri` を持たない派生や空リストで代用する。
      * `todayHistory` だけは**空だとリセット漏れを検出できない**ので、
      * 要素の中身を見ないことを承知のうえで型消去で非空にする。
@@ -968,7 +961,6 @@ class NoteSessionCoordinatorTest {
         isMarginMemoSheetVisible = true,
         wikilinkTitles = setOf("旧リンク"),
         distillState = DistillState.Saved(sourceTitle = "旧ノート", changedCount = 3),
-        annotationListState = AnnotationListState.Success(emptyList()),
         readingTraceCleanupState = ReadingTraceCleanupState.Success(emptyList(), emptyList()),
         readingTraceBackupState = ReadingTraceBackupState.Exported(written = 2, unreadableKeys = emptyList()),
         bookletState = BookletState.Open(

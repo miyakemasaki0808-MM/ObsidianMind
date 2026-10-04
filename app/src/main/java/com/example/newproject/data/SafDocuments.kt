@@ -89,7 +89,7 @@ internal sealed interface RootFolderLookup {
 
 /**
  * Vault ルート直下にある同名フォルダを探す。
- * 機能フォルダ（`_AI補記` / `_ReadingTraces`）はいずれもルート直下に作る仕様なので
+ * 機能フォルダ（`_ReadingTraces`）はルート直下に作る仕様なので
  * Vault全体をBFSせずルート直下だけを見る（以前は保存・一覧のたびに全走査していた）。
  */
 internal fun findRootChildFolder(

@@ -3,7 +3,7 @@
 **状態:** 実装済み・実機確認済み・稼働中
 **最終検証:** 2026-08-11 / `9af63ee`
 **関連コード:** `model/DocumentRef.kt` / `data/SafDocuments.kt`（唯一の変換点）/ `data/VaultBrowser.kt`・`VaultLocation.kt`
-**関連テスト:** `PackageDependencyTest`（CIで固定）/ `SearchControllerTest` / `AnnotationControllerTest` / `NoteSessionCoordinatorTest`
+**関連テスト:** `PackageDependencyTest`（CIで固定）/ `SearchControllerTest` / `NoteSessionCoordinatorTest`
 **正本:** この文書
 
 **対象領域:** SAF操作の呼び出し境界と、`model` / `domain` / `controller` を Android 非依存に保つ規約
@@ -85,7 +85,7 @@ controller は「未選択なら null」だけを見る。
 | 経路 | Vault未選択のとき |
 |---|---|
 | `SearchController`（列挙・検索・ランダム） | 黙って返る |
-| `AnnotationController.create` / `loadList` | `Error("Vault が選択されていません。")` |
+| `ReadingTraceCleanupController.assess` | `Error("Vault が選択されていません。")` |
 
 下へ押し込むとこの差が消える。**共通化できるのは「未選択かどうか」までで、その先ではない。**
 
