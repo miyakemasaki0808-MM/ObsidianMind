@@ -993,6 +993,113 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText("▾ このノートの関連 2件").assertIsDisplayed()
     }
 
+    /**
+     * **右で読んでいる間に同じノートで画面を作り直しても、余白へ戻ると選んだ一覧へ戻る**（→ features/margin_pane.md §11）。
+     * 右の本文は状態に残るので、戻る先の一覧の並びと開閉も同じだけ残らないと、戻った面で一覧が畳まれる。
+     */
+    @Test
+    fun 右で読んでいる間に同じノートで作り直しても_余白へ戻ると関連の一覧へ戻る() {
+        returnToRelatedAfterRestore(reloadBeforeRestore = false)
+    }
+
+    /**
+     * 関連ノートを読み直している間（読み込み中）に作り直しても、候補は消えない。読み直しで届いた候補は
+     * 並びを入れ替えず下へ足す。
+     */
+    @Test
+    fun 関連ノートの読み直し中に作り直しても_余白へ戻ると関連の一覧と並びが残る() {
+        returnToRelatedAfterRestore(reloadBeforeRestore = true)
+
+        composeRule.runOnIdle {
+            related = RelatedNotesState.Success(relatedNotes = listOf(OTHER_NOTE, SIDE_NOTE), aiNotes = listOf(THIRD_NOTE))
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ このノートの関連 3件").assertIsDisplayed()
+        // 送ると位置が動くので、送らずに並びの上下だけを比べる。
+        val tops = listOf(SIDE_NOTE, OTHER_NOTE, THIRD_NOTE).map {
+            composeRule.onNodeWithText(it.title).getUnclippedBoundsInRoot().top
+        }
+        assertEquals("並びが入れ替わった", tops.sorted(), tops)
+    }
+
+    /** **別のノートで作り直したら、関連の一覧を持ち越さない。** 保存値は別のノートを開いた状態で復元されることがある。 */
+    @Test
+    fun 別のノートで作り直すと_関連の一覧を持ち越さない() {
+        val restoration = StateRestorationTester(composeRule)
+        // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
+        var current = loadedNote(SHORT_TWO_SECTIONS, targetUri = NOTE_A).withMemos()
+            .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText("▾ このノートの関連 2件").assertExists()
+
+        current = loadedNote(SHORT_TWO_SECTIONS, targetUri = NOTE_B).withMemos()
+            .copy(relatedNotesState = RelatedNotesState.Loading)
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("このノートの関連", substring = true).assertDoesNotExist()
+    }
+
+    /** 関連ノートの状態。読み直し中の作り直しを作るために、テストの外から差し替える。 */
+    private var related: RelatedNotesState by mutableStateOf(RelatedNotesState.Idle)
+
+    /**
+     * ペインで関連の一覧を開き、候補を右で読み、[reloadBeforeRestore] なら関連ノートを読み込み中にしてから、
+     * 同じノートで画面を作り直す。余白へ戻ると、開いていた一覧が見える。
+     * **1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回で、2回目は例外になる。
+     */
+    private fun returnToRelatedAfterRestore(reloadBeforeRestore: Boolean) {
+        val restoration = StateRestorationTester(composeRule)
+        related = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList())
+        var side by mutableStateOf<SideReadingState>(SideReadingState.Idle)
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS, targetUri = NOTE_A).withMemos()
+                            .copy(relatedNotesState = related, sideReading = side),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { side is SideReadingState.Ready },
+                        onOpenSideReading = { note -> side = SideReadingState.Ready(note) },
+                        onCloseSideReading = { side = SideReadingState.Idle }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        if (reloadBeforeRestore) composeRule.runOnIdle { related = RelatedNotesState.Loading }
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ このノートの関連 2件").assertIsDisplayed()
+        composeRule.onNodeWithText(OTHER_NOTE.title).assertExists()
+    }
+
     /** 「このノートへ移る」は、**右で読んでいたブロック**を添えて開き、左の一覧をその位置に置く。 */
     @Test
     fun このノートへ移ると_右で読んでいたブロックから左で開く() {
@@ -1202,6 +1309,7 @@ class NoteReadingFlowTest {
         /** 並べ読みで右に開く関連ノート。 */
         val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
         val OTHER_NOTE = RelatedNote(title = "もう1つの関連", ref = DocumentRef("content://vault/other.md"), isWikilinked = true)
+        val THIRD_NOTE = RelatedNote(title = "後から届いた関連", ref = DocumentRef("content://vault/third.md"), isWikilinked = false)
         const val SIDE_PARAGRAPH = "右で眺める本文。"
         val SIDE_BODY = "# 右の見出し\n\n$SIDE_PARAGRAPH"
 

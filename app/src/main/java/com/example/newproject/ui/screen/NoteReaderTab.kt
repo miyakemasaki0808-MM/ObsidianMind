@@ -232,12 +232,13 @@ internal fun NoteReaderTab(
     // ノートを離れたら（読み込み中を含む）持ち主を捨てる。戻ってきても、頼み直すまで出さない。
     LaunchedEffect(currentNoteUri) { if (paneForNote != currentNoteUri) paneForNote = null }
     val paneShown = marginPaneOpen || paneForNoteShown(paneForNote, currentNoteUri)
-    // ペインの「このノートの関連」。並びはこのノートの間だけ持ち、後から届いた候補は下へ足す（→ paneRelatedCandidates）。
-    var relatedCandidates by remember(currentNoteUri) { mutableStateOf<List<RelatedNote>?>(null) }
+    // ペインの「このノートの関連」の並びと開閉。後から届いた候補は下へ足す（→ paneRelatedCandidates）。
+    // **画面の保存値に置き、持ち主のノートを値として持つ。** 右で読んでいる間に画面が組み直されても、戻る先の一覧を失わない。
+    var relatedList by rememberSaveable(stateSaver = PaneRelatedListSaver) { mutableStateOf<PaneRelatedList?>(null) }
     LaunchedEffect(currentNoteUri, uiState.relatedNotesState) {
-        relatedCandidates = paneRelatedCandidates(relatedCandidates, uiState.relatedNotesState)
+        relatedList = paneRelatedListFor(relatedList, currentNoteUri, uiState.relatedNotesState)
     }
-    var relatedExpanded by remember(currentNoteUri) { mutableStateOf(false) }
+    val shownRelated = relatedList?.takeIf { it.owner == currentNoteUri }
     // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
     var relatedReveal by remember { mutableStateOf<Long?>(null) }
     var relatedRevealCount by remember { mutableLongStateOf(0L) }
@@ -664,9 +665,9 @@ internal fun NoteReaderTab(
                                 revealSummary = summaryReveal,
                                 onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) },
                                 related = PaneRelatedInputs(
-                                    candidates = relatedCandidates,
-                                    expanded = relatedExpanded,
-                                    onToggle = { relatedExpanded = !relatedExpanded },
+                                    candidates = shownRelated?.candidates,
+                                    expanded = shownRelated?.expanded ?: false,
+                                    onToggle = { shownRelated?.let { relatedList = it.copy(expanded = !it.expanded) } },
                                     onOpen = openSide,
                                     reveal = relatedReveal,
                                     onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) }

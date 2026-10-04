@@ -26,6 +26,10 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.ui.screen.endsSideReading
+import com.example.newproject.ui.screen.PaneRelatedList
+import com.example.newproject.ui.screen.PaneRelatedListSaver
+import com.example.newproject.ui.screen.paneRelatedListFor
+import androidx.compose.runtime.saveable.SaverScope
 import com.example.newproject.ui.screen.paneRelatedCandidates
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
@@ -320,5 +324,65 @@ class MarginSurfaceTest {
     @Test
     fun `窓の情報が揃う前は並べ読みを終えない`() {
         assertEquals(false, endsSideReading(windowKnown = false, paneVisible = false, reading = true))
+    }
+
+    // ── 関連の一覧の保存値（→ features/margin_pane.md §11「段5で決めたこと」）──────────
+
+    /** 同じノートで組み直したとき、並びと開閉を保ち、読み込み中でも候補を失わない。 */
+    @Test
+    fun `同じノートの関連の一覧は、読み込み中も並びと開閉を保つ`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A"), related("B")), expanded = true)
+
+        val restored = paneRelatedListFor(saved, "a.md", RelatedNotesState.Loading)
+        val withAi = paneRelatedListFor(
+            restored,
+            "a.md",
+            RelatedNotesState.Success(relatedNotes = listOf(related("B"), related("A")), aiNotes = listOf(related("C")))
+        )
+
+        assertEquals(saved, restored)
+        assertEquals(listOf("A", "B", "C"), withAi?.candidates?.map { it.title })
+        assertEquals(true, withAi?.expanded)
+    }
+
+    /** **別のノートへ持ち越さない。** 保存値は別のノートを開いた状態で復元されることがある。 */
+    @Test
+    fun `別のノートでは関連の一覧の並びも開閉も持ち越さない`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A")), expanded = true)
+
+        assertEquals(PaneRelatedList("b.md", null, false), paneRelatedListFor(saved, "b.md", RelatedNotesState.Loading))
+        assertEquals(
+            PaneRelatedList("b.md", listOf(related("X")), false),
+            paneRelatedListFor(saved, "b.md", RelatedNotesState.Success(listOf(related("X")), emptyList()))
+        )
+    }
+
+    @Test
+    fun `ノートが決まらない間は関連の一覧を保存値のまま返す`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A")), expanded = true)
+
+        assertEquals(saved, paneRelatedListFor(saved, null, RelatedNotesState.Loading))
+    }
+
+    /** 画面の保存値を経ても、持ち主・開閉・候補の並びと欄が戻る。スニペットは持たない。 */
+    @Test
+    fun `関連の一覧は画面の保存値を経て同じ形に戻る`() {
+        val scope = SaverScope { true }
+        val list = PaneRelatedList(
+            owner = "content://vault/a.md",
+            candidates = listOf(
+                RelatedNote("A", DocumentRef("content://vault/A.md"), isWikilinked = true, lastModified = 42L, snippet = "冒頭"),
+                RelatedNote("B", DocumentRef("content://vault/B.md"), isWikilinked = false, lastModified = null)
+            ),
+            expanded = true
+        )
+        val waiting = list.copy(candidates = null, expanded = false)
+
+        fun roundTrip(value: PaneRelatedList?) =
+            with(PaneRelatedListSaver) { scope.save(value) }?.let { PaneRelatedListSaver.restore(it) }
+
+        assertEquals(list.copy(candidates = list.candidates!!.map { it.copy(snippet = null) }), roundTrip(list))
+        assertEquals(waiting, roundTrip(waiting))
+        assertNull(roundTrip(null))
     }
 }

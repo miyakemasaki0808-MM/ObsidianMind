@@ -1,5 +1,7 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.runtime.saveable.Saver
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
@@ -267,6 +269,70 @@ internal fun paneRelatedCandidates(shown: List<RelatedNote>?, state: RelatedNote
     val known = base.mapTo(HashSet()) { it.ref }
     return base + (success.relatedNotes + success.aiNotes).distinctBy { it.ref }.filterNot { it.ref in known }
 }
+
+/**
+ * ペインの「このノートの関連」の並びと開閉。**持ち主のノート [owner] を値として持つ**（→ [paneForNoteShown] と同じ理由）。
+ *
+ * 右で読んでいる間に画面が組み直されても（全画面やほかのタブとの往復・画面の保存と復元）、右の本文は残るので、
+ * 戻ったときに選んだ一覧と、届いた順の並びが要る。だから画面の保存値に置く（→ [PaneRelatedListSaver]）。
+ */
+internal data class PaneRelatedList(
+    val owner: String,
+    /** 並べる候補（→ [paneRelatedCandidates]）。まだ届いていなければ null。 */
+    val candidates: List<RelatedNote>?,
+    val expanded: Boolean
+)
+
+/**
+ * 今のノート [note] の一覧を、保存していた [saved] と関連ノートの状態 [state] から作る。
+ * **持ち主の違う保存値は使わない** — 別のノートへ候補と開閉を持ち越さない。ノートが決まらない間（読み込み中）は保存値のまま返す。
+ */
+internal fun paneRelatedListFor(saved: PaneRelatedList?, note: String?, state: RelatedNotesState): PaneRelatedList? {
+    if (note == null) return saved
+    val held = saved?.takeIf { it.owner == note }
+    return PaneRelatedList(note, paneRelatedCandidates(held?.candidates, state), held?.expanded ?: false)
+}
+
+/**
+ * [PaneRelatedList] を画面の保存値へ入れる形。候補は表示と開くのに要る欄だけを持ち、本文冒頭のスニペットは落とす。
+ * 並びは `持ち主, 開閉, 候補があるか` に、候補ごとの `題名, 参照, リンク済みか, 更新日時` を続ける。
+ */
+internal val PaneRelatedListSaver: Saver<PaneRelatedList?, Any> = Saver(
+    save = { list ->
+        list?.let {
+            ArrayList<Any?>().apply {
+                add(it.owner)
+                add(it.expanded)
+                add(it.candidates != null)
+                it.candidates?.forEach { note ->
+                    add(note.title)
+                    add(note.ref.value)
+                    add(note.isWikilinked)
+                    add(note.lastModified)
+                }
+            }
+        }
+    },
+    restore = { saved ->
+        val values = saved as List<*>
+        PaneRelatedList(
+            owner = values[0] as String,
+            expanded = values[1] as Boolean,
+            candidates = if (values[2] as Boolean) {
+                values.drop(3).chunked(4).map { (title, ref, linked, modified) ->
+                    RelatedNote(
+                        title = title as String,
+                        ref = DocumentRef(ref as String),
+                        isWikilinked = linked as Boolean,
+                        lastModified = modified as Long?
+                    )
+                }
+            } else {
+                null
+            }
+        )
+    }
+)
 
 /**
  * 並べ読みを終えるか。**余白ペインでない並べ方になったら終える**（Fold を閉じた・回して横の折り目になった・
