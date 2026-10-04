@@ -1819,6 +1819,41 @@ class NoteSessionCoordinatorTest {
     }
 
     /**
+     * **取り消しに従わない読み出しが、ノート切替・Vault切替の後に成功でも失敗でも終わる。** 本番の読み出しは同期の I/O で、
+     * 取り消した後に例外で終わると、その例外が取り消しより優先して届く。切替後の初期状態を上書きしない。
+     */
+    @Test
+    fun `ノートやVaultを替えた後に右の読み出しが終わっても、成功でも失敗でも書かない`() = runTest {
+        val switches: List<Pair<String, (NoteSessionCoordinator) -> Unit>> = listOf(
+            "ノート切替" to { it.onNoteChanged() },
+            "Vault切替" to { it.onVaultChanged() }
+        )
+        val endings: List<Pair<String, () -> String>> = listOf(
+            "成功" to { "# 右の見出し" },
+            "失敗" to { throw java.io.IOException("後着の失敗") }
+        )
+        switches.forEach { (switchLabel, switch) ->
+            endings.forEach { (endingLabel, ending) ->
+                val env = Env(this)
+                val coordinator = env.coordinator()
+                coordinator.setNoteState(successNote("# 導入\n\n本文"))
+                val finish = CompletableDeferred<() -> String>()
+                coordinator.openSideReading(SIDE_NOTE) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { finish.await()() }
+                }
+                advanceUntilIdle()
+
+                switch(coordinator)
+                finish.complete(ending)
+                advanceUntilIdle()
+
+                assertEquals("$switchLabel→$endingLabel", SideReadingState.Idle, coordinator.uiState.value.sideReading)
+                assertNull("$switchLabel→$endingLabel", coordinator.sideReadingBlocks.value)
+            }
+        }
+    }
+
+    /**
      * **右は眺めるだけ。** 開いても、今のノート・訪問・履歴・要約・分野判定・余白メモのどれも動かない
      * （→ features/margin_pane.md §5.9）。
      */

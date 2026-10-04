@@ -98,7 +98,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しだけ） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しと、失敗を書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | 補記一覧・補記削除・フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
@@ -262,7 +262,10 @@ Snackbar通知＋`isViewed` の未確認管理を持つ Controller は**0件**�
 - 完了通知がキャンセルをすり抜ける経路には requestId＋`isCurrent()` ガードを併用する
 - **落ちるテストを書けないガードは削除の候補**。実際に3回この判定を行い3回とも削除した。
   **キャンセルと世代照合を両方置くと後者が死ぬ**のがこのコードベースの傾向
-  → [lessons L11](../lessons.md#l11-テストが効いているかは変異させて確かめる)
+  → [lessons L11](../lessons.md#l11-テストが効いているかは変異させて確かめる)。
+  **ただし「書けない」と判断する前に、偽物が取り消しに協調していないかを見る。** 同期の I/O は取り消しで止まらず、
+  取り消した後に例外で終わると、その例外が取り消しより優先して `catch` へ届く。協調する偽物ではこの枝へ届かない
+  （並べ読みで、失敗を書く前の生存確認を一度省いた → [margin_pane](../features/margin_pane.md) §11）
 
 ## 教訓: 重複が品質問題の温床だった
 

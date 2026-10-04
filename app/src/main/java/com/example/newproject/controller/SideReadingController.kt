@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -25,9 +26,11 @@ import kotlinx.coroutines.withContext
  * 寿命はノート単位（→ architecture.md 判断4の1行目）。ノート切替と Vault 切替では [cancelAndClear] がジョブと本文を、
  * `withNoteScopedReset()` が状態を落とす。余白へ戻る・ペインを閉じる・余白ペインでない並べ方になったときは [close]。
  *
- * **失効はジョブの取り消しだけで足りる。** 書き込みはすべてこのジョブの中にあり、[open]・[close]・[cancelAndClear] は
- * どれも先にジョブを取り消す。読み出しと解析は `withContext` から戻るときに取り消しを確かめるので、遅れて届いた結果は書かれない
- * （`NoteSectionController` と同じ形）。要求の番号を足すなら、先に「番号を消すと落ちるテスト」を書けることを確かめる。
+ * **失効はジョブの取り消しで守る。** 書き込みはすべてこのジョブの中にあり、[open]・[close]・[cancelAndClear] は
+ * どれも先にジョブを取り消す。読み出しと解析が正常に戻ったときは `withContext` が取り消しを確かめるので、遅れた本文は書かれない。
+ * **例外で戻ったときは確かめない** — 読み出しは同期の I/O で取り消しでは止まらず、取り消した後に失敗すると、その例外が
+ * 取り消しより優先して届く。だから失敗を書く前に、このジョブがまだ生きているかを確かめる。
+ * 要求の番号を足すなら、先に「番号を消すと落ちるテスト」を書けることを確かめる。
  */
 internal class SideReadingController(
     private val scope: CoroutineScope,
@@ -62,6 +65,8 @@ internal class SideReadingController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                // 取り消した後の失敗は、閉じた面や選び直した候補を上書きする。取り消されていれば投げ直して何も書かない。
+                ensureActive()
                 state.set(SideReadingState.Failed(note, e.message ?: "読み込めませんでした"))
             }
         }
