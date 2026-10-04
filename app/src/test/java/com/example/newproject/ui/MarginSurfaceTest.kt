@@ -22,6 +22,15 @@ import com.example.newproject.ui.screen.sheetCoveredHeight
 import com.example.newproject.ui.screen.sectionLabel
 import com.example.newproject.ui.screen.writeTargetNotice
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.ui.screen.endsSideReading
+import com.example.newproject.ui.screen.PaneRelatedList
+import com.example.newproject.ui.screen.PaneRelatedListSaver
+import com.example.newproject.ui.screen.paneRelatedListFor
+import androidx.compose.runtime.saveable.SaverScope
+import com.example.newproject.ui.screen.paneRelatedCandidates
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -268,5 +277,112 @@ class MarginSurfaceTest {
         assertEquals("前回はここまで読んだ · 9/12", previousReadingLabel(at(2026, 9, 12), now, zone))
         assertEquals("前回はここまで読んだ · 2025/12/31", previousReadingLabel(at(2025, 12, 31), now, zone))
         assertEquals(false, previousReadingLabel(at(2026, 9, 12), now, zone).contains("止まった"))
+    }
+
+    // ── 並べ読み（→ features/margin_pane.md §5.9）─────────────────────────────
+
+    private fun related(title: String) = RelatedNote(title = title, ref = DocumentRef("content://vault/$title.md"), isWikilinked = false)
+
+    @Test
+    fun `関連の候補は、リンクの候補の後にAIの推薦を並べる`() {
+        val state = RelatedNotesState.Success(relatedNotes = listOf(related("A"), related("B")), aiNotes = listOf(related("C")))
+
+        assertEquals(listOf("A", "B", "C"), paneRelatedCandidates(null, state)?.map { it.title })
+    }
+
+    /**
+     * **AI の推薦が後から届いても、開いている一覧の並びを入れ替えない。** モデルの準備が済むと関連ノートを読み直し、
+     * 読み込み中を挟んでリンクの候補とAIの推薦が一緒に届く。読み込み中で一覧を消さず、届いた新しい候補は下へ足す。
+     */
+    @Test
+    fun `後から届いた候補は並びを入れ替えず下へ足す`() {
+        val first = paneRelatedCandidates(null, RelatedNotesState.Success(listOf(related("A"), related("B")), emptyList()))
+        val reloading = paneRelatedCandidates(first, RelatedNotesState.Loading)
+        val withAi = paneRelatedCandidates(
+            reloading,
+            RelatedNotesState.Success(relatedNotes = listOf(related("B"), related("A")), aiNotes = listOf(related("C")))
+        )
+
+        assertEquals(listOf("A", "B"), reloading?.map { it.title })
+        assertEquals(listOf("A", "B", "C"), withAi?.map { it.title })
+    }
+
+    @Test
+    fun `関連ノートがまだ届いていなければ候補を持たない`() {
+        assertNull(paneRelatedCandidates(null, RelatedNotesState.Idle))
+        assertNull(paneRelatedCandidates(null, RelatedNotesState.Loading))
+    }
+
+    @Test
+    fun `並べ読みは余白ペインでない並べ方になったら終える`() {
+        assertEquals(true, endsSideReading(windowKnown = true, paneVisible = false, reading = true))
+        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = true, reading = true))
+        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = false, reading = false))
+    }
+
+    /** 画面の作り直しの直後は、仮に余白ペインでない並べ方で組まれることがある。その間に終えると、閉じていないのに消える。 */
+    @Test
+    fun `窓の情報が揃う前は並べ読みを終えない`() {
+        assertEquals(false, endsSideReading(windowKnown = false, paneVisible = false, reading = true))
+    }
+
+    // ── 関連の一覧の保存値（→ features/margin_pane.md §11「段5で決めたこと」）──────────
+
+    /** 同じノートで組み直したとき、並びと開閉を保ち、読み込み中でも候補を失わない。 */
+    @Test
+    fun `同じノートの関連の一覧は、読み込み中も並びと開閉を保つ`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A"), related("B")), expanded = true)
+
+        val restored = paneRelatedListFor(saved, "a.md", RelatedNotesState.Loading)
+        val withAi = paneRelatedListFor(
+            restored,
+            "a.md",
+            RelatedNotesState.Success(relatedNotes = listOf(related("B"), related("A")), aiNotes = listOf(related("C")))
+        )
+
+        assertEquals(saved, restored)
+        assertEquals(listOf("A", "B", "C"), withAi?.candidates?.map { it.title })
+        assertEquals(true, withAi?.expanded)
+    }
+
+    /** **別のノートへ持ち越さない。** 保存値は別のノートを開いた状態で復元されることがある。 */
+    @Test
+    fun `別のノートでは関連の一覧の並びも開閉も持ち越さない`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A")), expanded = true)
+
+        assertEquals(PaneRelatedList("b.md", null, false), paneRelatedListFor(saved, "b.md", RelatedNotesState.Loading))
+        assertEquals(
+            PaneRelatedList("b.md", listOf(related("X")), false),
+            paneRelatedListFor(saved, "b.md", RelatedNotesState.Success(listOf(related("X")), emptyList()))
+        )
+    }
+
+    @Test
+    fun `ノートが決まらない間は関連の一覧を保存値のまま返す`() {
+        val saved = PaneRelatedList(owner = "a.md", candidates = listOf(related("A")), expanded = true)
+
+        assertEquals(saved, paneRelatedListFor(saved, null, RelatedNotesState.Loading))
+    }
+
+    /** 画面の保存値を経ても、持ち主・開閉・候補の並びと欄が戻る。スニペットは持たない。 */
+    @Test
+    fun `関連の一覧は画面の保存値を経て同じ形に戻る`() {
+        val scope = SaverScope { true }
+        val list = PaneRelatedList(
+            owner = "content://vault/a.md",
+            candidates = listOf(
+                RelatedNote("A", DocumentRef("content://vault/A.md"), isWikilinked = true, lastModified = 42L, snippet = "冒頭"),
+                RelatedNote("B", DocumentRef("content://vault/B.md"), isWikilinked = false, lastModified = null)
+            ),
+            expanded = true
+        )
+        val waiting = list.copy(candidates = null, expanded = false)
+
+        fun roundTrip(value: PaneRelatedList?) =
+            with(PaneRelatedListSaver) { scope.save(value) }?.let { PaneRelatedListSaver.restore(it) }
+
+        assertEquals(list.copy(candidates = list.candidates!!.map { it.copy(snippet = null) }), roundTrip(list))
+        assertEquals(waiting, roundTrip(waiting))
+        assertNull(roundTrip(null))
     }
 }

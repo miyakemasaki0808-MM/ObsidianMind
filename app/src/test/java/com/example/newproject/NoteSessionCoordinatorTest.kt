@@ -56,6 +56,7 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.Crystal
 import com.example.newproject.model.CrystalSource
@@ -330,6 +331,8 @@ class NoteSessionCoordinatorTest {
         // 前のノートのメモを載せたシートが開いたまま残る。
         assertEquals(false, reset.isMarginMemoSheetVisible)
         assertEquals(SectionChatState(), reset.sectionChat)
+        // 右で眺めていたノート。残すと、次のノートのペインに前のノートの関連が開いたまま出る。
+        assertEquals(SideReadingState.Idle, reset.sideReading)
         assertNull(reset.readingTraceCard)
         assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
     }
@@ -395,6 +398,7 @@ class NoteSessionCoordinatorTest {
         assertEquals(false, state.isMarginMemoSheetVisible)
         assertTrue(state.distillState is DistillState.Idle)
         assertEquals(SectionChatState(), state.sectionChat)
+        assertEquals(SideReadingState.Idle, state.sideReading)
         assertNull(state.readingTraceCard)
         assertNull(state.crystalNotePath)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
@@ -934,6 +938,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("Summary", state.summaryState !is SummaryState.Idle)
         assertTrue("MarginMemo(余白メモ)", state.marginMemoState !is MarginMemoState.Idle)
         assertTrue("SectionChat", state.sectionChat.summaries.isNotEmpty())
+        assertTrue("SideReading(並べ読み)", state.sideReading != SideReadingState.Idle)
         assertTrue("Annotation(一覧)", state.annotationListState !is AnnotationListState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
@@ -988,6 +993,7 @@ class NoteSessionCoordinatorTest {
         sectionChat = SectionChatState(
             listOf(SectionSummary(SectionRef("導入"), requestId = 1L, sectionTitle = "導入", sectionContext = "文脈"))
         ),
+        sideReading = SideReadingState.Ready(SIDE_NOTE),
         readingTraceCard = ReadingTraceCard(
             visitCount = 2,
             lastVisitAtMillis = 1L,
@@ -1752,6 +1758,178 @@ class NoteSessionCoordinatorTest {
         assertEquals(MemoSaveStatus.None, ready.status)
     }
 
+    // ── 並べ読み（→ features/margin_pane.md §5.9）──────────────────────────────
+
+    /**
+     * 右の本文は `NoteUiState` の外にあるので、リフレクションのリセット検査に掛からない。
+     * ノート切替で状態と一緒に消えることを個別に固定する。
+     */
+    @Test
+    fun `ノート切替で並べ読みの本文が消える`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し\n\n右の本文" }
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Ready(SIDE_NOTE), coordinator.uiState.value.sideReading)
+        assertNotNull(coordinator.sideReadingBlocks.value)
+
+        coordinator.onNoteChanged()
+
+        assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        assertNull(coordinator.sideReadingBlocks.value)
+    }
+
+    /** 読み込み中にノートを替える。**ジョブを止める側の登録を消すと、ここが後着で落ちる。** */
+    @Test
+    fun `ノート切替の後に、前のノートで開いた並べ読みが後着しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        val body = CompletableDeferred<String>()
+        coordinator.openSideReading(SIDE_NOTE) { body.await() }
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Loading(SIDE_NOTE), coordinator.uiState.value.sideReading)
+
+        coordinator.onNoteChanged()
+        body.complete("# 右の見出し")
+        advanceUntilIdle()
+
+        assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        assertNull(coordinator.sideReadingBlocks.value)
+    }
+
+    /** Vault を A→B→A と選び直す間に、A で開いた読み込みが届く。戻った A に古い本文を出さない。 */
+    @Test
+    fun `Vaultを選び直す間に届いた並べ読みを書かない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        val body = CompletableDeferred<String>()
+        coordinator.openSideReading(SIDE_NOTE) { body.await() }
+        advanceUntilIdle()
+
+        coordinator.onVaultChanged()
+        coordinator.onVaultChanged()
+        body.complete("# 右の見出し")
+        advanceUntilIdle()
+
+        assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        assertNull(coordinator.sideReadingBlocks.value)
+    }
+
+    /**
+     * **取り消しに従わない読み出しが、ノート切替・Vault切替の後に成功でも失敗でも終わる。** 本番の読み出しは同期の I/O で、
+     * 取り消した後に例外で終わると、その例外が取り消しより優先して届く。切替後の初期状態を上書きしない。
+     */
+    @Test
+    fun `ノートやVaultを替えた後に右の読み出しが終わっても、成功でも失敗でも書かない`() = runTest {
+        val switches: List<Pair<String, (NoteSessionCoordinator) -> Unit>> = listOf(
+            "ノート切替" to { it.onNoteChanged() },
+            "Vault切替" to { it.onVaultChanged() }
+        )
+        val endings: List<Pair<String, () -> String>> = listOf(
+            "成功" to { "# 右の見出し" },
+            "失敗" to { throw java.io.IOException("後着の失敗") }
+        )
+        switches.forEach { (switchLabel, switch) ->
+            endings.forEach { (endingLabel, ending) ->
+                val env = Env(this)
+                val coordinator = env.coordinator()
+                coordinator.setNoteState(successNote("# 導入\n\n本文"))
+                val finish = CompletableDeferred<() -> String>()
+                coordinator.openSideReading(SIDE_NOTE) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { finish.await()() }
+                }
+                advanceUntilIdle()
+
+                switch(coordinator)
+                finish.complete(ending)
+                advanceUntilIdle()
+
+                assertEquals("$switchLabel→$endingLabel", SideReadingState.Idle, coordinator.uiState.value.sideReading)
+                assertNull("$switchLabel→$endingLabel", coordinator.sideReadingBlocks.value)
+            }
+        }
+    }
+
+    /**
+     * **右は眺めるだけ。** 開いても、今のノート・訪問・履歴・要約・分野判定・余白メモのどれも動かない
+     * （→ features/margin_pane.md §5.9）。
+     */
+    @Test
+    fun `右で眺めても、今のノートと記録は何も変わらない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+        val before = coordinator.uiState.value
+        val modelBefore = coordinator.sectionModel.value
+        val savesBefore = env.trace.saveAttempts
+
+        coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し\n\n右の本文" }
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+
+        val after = coordinator.uiState.value
+        assertEquals(SideReadingState.Ready(SIDE_NOTE), after.sideReading)
+        assertEquals(before.copy(sideReading = after.sideReading), after)
+        assertTrue("今のノートの解析が作り直された", modelBefore === coordinator.sectionModel.value)
+        assertEquals("右で開いて生成を呼んだ", 0, env.ai.generateCalls)
+        assertEquals("右で開いて履歴に積んだ", emptyList<String>(), env.history.recorded)
+        assertEquals("右で開いて痕跡を書いた", savesBefore, env.trace.saveAttempts)
+    }
+
+    /** **両方向の1つ目。** 部分要約の生成中に右で開いても戻っても、生成は止まらない。 */
+    @Test
+    fun `部分要約の生成中に並べ読みを開いて戻っても、生成は止まらない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+        coordinator.requestSectionSummary(INTRO)
+        advanceUntilIdle()
+        assertTrue("要約が生成中でない", coordinator.uiState.value.sectionChat.summaryOf(INTRO)!!.isSummaryLoading)
+
+        coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し" }
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Ready(SIDE_NOTE), coordinator.uiState.value.sideReading)
+        coordinator.closeSideReading()
+        assertTrue("並べ読みで生成が止まった", coordinator.uiState.value.sectionChat.summaryOf(INTRO)!!.isSummaryLoading)
+
+        env.ai.completeAll("導入の要約")
+        advanceUntilIdle()
+        assertEquals("導入の要約", coordinator.uiState.value.sectionChat.summaryOf(INTRO)?.summary)
+        assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
+    }
+
+    /** **両方向の2つ目。** 右の読み込み中にメモを置いても、保存も読み込みも止まらない。 */
+    @Test
+    fun `並べ読みの読み込み中にメモを置いても、保存も読み込みも止まらない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+        val body = CompletableDeferred<String>()
+        coordinator.openSideReading(SIDE_NOTE) { body.await() }
+        advanceUntilIdle()
+
+        coordinator.editMarginMemo("右を待ちながら書いた", INTRO)
+        coordinator.submitMarginMemo(INTRO)
+        advanceUntilIdle()
+        val ready = coordinator.uiState.value.marginMemoState as MarginMemoState.Ready
+        assertEquals(MemoSaveStatus.Saved, ready.status)
+        assertEquals(listOf("右を待ちながら書いた"), ready.memos.map { it.text })
+        assertEquals(SideReadingState.Loading(SIDE_NOTE), coordinator.uiState.value.sideReading)
+
+        body.complete("# 右の見出し")
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Ready(SIDE_NOTE), coordinator.uiState.value.sideReading)
+    }
+
     /** ノートを開いて本文を出す（ノート切替の契約を通す）。本文には見出しが2つある。 */
     private fun NoteSessionCoordinator.show(path: String, uri: String) {
         onNoteChanged()
@@ -1766,6 +1944,9 @@ class NoteSessionCoordinatorTest {
 
         /** `# 導入` の節。部分要約とメモが同じ節を扱う両方向のテストで使う。 */
         val INTRO = SectionRef("導入")
+
+        /** 並べ読みで右に開く関連ノート。 */
+        val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"

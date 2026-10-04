@@ -1,10 +1,11 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜4は実装済み・実機検証済み（段4で実機で見ていない3点は段5の実機検証へ持ち越し）、段5は未実装。** 設計はオーナーへの grill と設計レビュー5回で確定した（2026-09-30）。
-実装は段に分けて進める（→ §11）。
-**最終検証:** 2026-10-04 / `9e377cf5`（段4まで。Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
+**状態:** **段1〜5は実装済み・実機検証済みで、完了した**（2026-10-04、オーナー判断）。実機で確かめなかった順序は §10「保証していないこと」にある。文字の大きさ2.0では本文の幅の下限を割るので並べ読みは出ない（§5.1 どおり。オーナーが受容した。使っていて気になったら見直す）。
+実装は段に分けて進めた（→ §11）。
+**最終検証:** 2026-10-04 / `0defc6de`（段5まで。Pixel 10 Pro Fold で段5の通し版と段4から持ち越した閉じる直後の割り込み・拡大文字と TalkBack。段4は 2026-10-04 / `9e377cf5`、Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
-**関連テスト:** 段1〜3 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
+段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`
+**関連テスト:** 段1〜5 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -59,8 +60,7 @@
 
 ## 4. 現在のユーザーフロー
 
-> **段4まで実装済み。** このノートの関連と並べ読み（段5）は未実装で、以下のうちそれに当たる部分は予定のフローである。
-> 再会カードをペインの上に載せること（§5.2 の1）は、段4でもやらないと決めた（2026-10-03、オーナー判断）。どの段にも入っていない。
+> **段5まで実装済み。** 再会カードをペインの上に載せること（§5.2 の1）は、段4でもやらないと決めた（2026-10-03、オーナー判断）。どの段にも入っていない。
 
 **開いた Fold**
 1. ノートを開くと、本文が左、「この部分」が右に並ぶ。右は今の節の見出し・前回の跡・要約のボタン・入力欄・この節のメモの順
@@ -253,7 +253,7 @@
 | 書きかけ | **新規。** ノートごとの一組と、未確定の送信。Vault 単位で持つ。**`NoteUiState` の外**（ViewModel 側の Compose の状態）に置く（→ §6.1） | ジョブはノート単位で止め、書きかけは Vault 切替でだけ捨てる（アーキテクチャ判断4の3行目の形）。`NoteUiState` の外なので `withVaultScopedReset()` ではなく、`onVaultChanged()` から `MarginMemoController.clearVaultScoped()` で捨てる |
 | 部分要約 | 最近の3節分（`SectionChatState.summaries`）。節の位置と要求の番号を持つ。本文の版は持たず、解析し直しで全部捨てる | 登録済み |
 | シートの可視 | 余白メモと部分要約で1本（`isMarginMemoSheetVisible`）。部分要約の専用の可視は消した | 登録済み |
-| 並べ読み | **新規。** 読み込み中・読めた・失敗と、選んだ要求の番号 | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`** |
+| 並べ読み | **新規。** 読み込み中・読めた・失敗と、右で眺めているノート（`SideReadingState`）。**本文の解析結果は `NoteUiState` の外**（`SideReadingController.blocks`。`domain` の型なので `NoteSectionModel` と同じ扱い）。要求の番号は持たない — 書き込みはすべて1本のジョブの中にあり、新しい要求・戻る・切替はどれも先にジョブを取り消す。**正常に戻った結果は取り消しで捨てられるが、例外で戻った失敗は捨てられない**（同期の I/O は取り消しで止まらず、取り消した後の例外が取り消しより優先して届く）ので、失敗を書く前にジョブが生きているかを確かめる | **`cancelNoteScopedJobs()` と `withNoteScopedReset()`**。本文は前者が状態と一緒に消す |
 | ペインの開閉 | 新規。`AppPreferences` | 設定なので登録しない |
 | このノートの間だけ出したペイン | 新規。画面側の保存値で、**出したノートを値として持つ** | 今のノートと照合して出し、ノートを離れたら捨てるので登録しない。`NoteUiState` に入れない |
 | 本文の節・ペインの節 | 画面側で導く | 状態に入れない |
@@ -312,14 +312,16 @@
 | 層 | 新規 | 変更 |
 |---|---|---|
 | `domain` | 見出しの照合の3値、前回の訪問の選び方、送信の照合と書きかけを消す判定、要約を3節分持つ規則。いずれも純関数 | — |
-| `controller` | **並べ読みの Controller。** ジョブはノート単位で、関連ノートの参照から本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
+| `controller` | **並べ読みの Controller（`SideReadingController`）。** ジョブはノート単位で、窓口が渡す口で本文を読み、Main の外で解析する | `MarginMemoController` は書きかけを Vault 単位で持ち、読み込みを表示の切替から切り離す。`SectionChatController` は3節分の保持と、別の節の要求で前の生成を取り消す形へ。`ReadingTraceController` はメモと、今の読書より前の最新の訪問と、永続の読み込みの確かさを1回で返す。`NoteSessionCoordinator` に並べ読みの生成と契約への登録 |
 | `data` | — | `AppPreferences` にペインの開閉 |
-| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数）。書きかけの置き場（`ComposeMarginMemoDrafts`） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
-| 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始、ペインの開閉、位置を渡して開く `openNote` |
+| `ui` | 「この部分」の中身を組む Composable。ペインとシートの両方から呼ぶ。ペインを出せる窓か・✎ の遷移・窓の切り替わりの判定（`canShowMarginPane`・`marginToggleFor`・`marginWindowShiftFor`。いずれも純関数）。書きかけの置き場（`ComposeMarginMemoDrafts`）。並べ読みの右側（`SideReadingPane`）と、候補の並べ方・並べ読みを終える判定（`paneRelatedCandidates`・`endsSideReading`。いずれも純関数） | `readerLayoutFor` に折り目の入力と優先順。`NoteReaderTab` で置き場所を分ける。余白メモと部分要約のシートを、主画面と併存する1枚へまとめる。本文の見出しの脇に印 |
+| 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始と終わり、ペインの開閉。「このノートへ移る」は `openNote` をそのまま通し、位置は画面が置く（→ §11「段5で決めたこと」） |
 
 - **並べ読みの Controller を新しく1つ作る。** 既存の Controller はどれも「今のノート」を前提にしているので、眺めるだけのノートを混ぜない。アーキテクチャ判断4ではノート単位の形に入る
-- 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く
-- `controller` は Android 型を持てないので、本文の読み出しは関連ノートと同じくラムダで受ける
+- 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く。
+  右は描くだけなので、節の索引まで作る `buildNoteSectionModel` ではなくブロックの解析だけを行う。番号は同じパーサなので左とそろう
+- `controller` は Android 型を持てないので、本文の読み出しは冊子と同じく呼ぶたびにラムダで受ける。
+  **読み方は `openNote` と同じ**にする — 「このノートへ移る」で右の位置を左へ渡すとき、ブロックの番号がそろう
 - 純関数の置き場所は責務で分ける（→ [アーキテクチャ](../system/architecture.md) 判断5の4）。
   窓と ✎ の判定は画面の形を決めるので `readerLayoutFor` と同じ `ui/screen`、メモや訪問の照合と選び方は `domain`
 
@@ -375,7 +377,8 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
   - 並べ読み。B→C の後着、読み込み中に余白へ戻る・ペインを閉じる・Fold を閉じて開く、Vault A→B→A、右だけの失敗で、古い本文が戻らず、右では訪問・要約・分野判定・メモが増えない
   - **両方向。** 部分要約の生成中にメモを置く、メモの保存中に要約を始める
   - 契約。書きかけと並べ読みを `NoteSessionCoordinatorTest` のリセット検査の該当する側へ載せる
-- **instrumentation:** 書きかけの文字と書き込み先の復元、通常と全画面の往復、見出しへ飛ぶ、印と件数の同期、戻る操作の順
+- **instrumentation:** 書きかけの文字と書き込み先の復元、通常と全画面の往復、見出しへ飛ぶ、印と件数の同期、戻る操作の順。
+  並べ読みは、関連から右で開いて余白へ戻ると一覧へ戻る、「このノートへ移る」で右の位置から開く、余白ペインでなくなったら終える
 - **実機確認:** 開いた Fold で窓の dp と折り目の報告値を測り、折り目に文字と操作が重ならないこと。開閉の往復。カバー画面で、キーボードを出したまま本文の一文を読んでメモを書き、もう一文を確かめて書き足せること。全画面の ✎ から書け、書いたまま戻った先の面で書き続けられること。TalkBack
 - **保証していないこと:**
   - **体感。** 並び順、再会カードの長さ、節の切り替わりの時機、シートの高さ、並べ読みが閉じると終わること、は内容を入れた試作と実機で調整する。調整しても機能の範囲は変えない
@@ -385,12 +388,17 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     この順序は `MarginMemoSheetUiTest` と JVM の検査が持つ（オーナー判断 2026-10-01）
   - **前回の訪問の保存が失敗した後の順序の実機確認**（前回の保存失敗 → 再訪 → 背面化 → 読み直し）。実SAFで読み取りだけ成功し
     書き込みだけ失敗する状態を安全に作れない。この順序は `ReadingTraceControllerTest` が持つ（オーナー判断 2026-10-03）
+  - **取り消した後に右の読み出しが遅れて届く順序の実機確認**（実 SAF で読み出しを遅らせたまま余白へ戻る・選び直す・切り替える）。
+    利用者の操作では起こせないため実機では確かめない。この順序は取り消しに従わない読み出しで `SideReadingControllerTest` と
+    `NoteSessionCoordinatorTest` が持つ（オーナー判断 2026-10-04）
+  - **モデルの準備待ちから使える状態へ自然に移った後の部分要約の実機確認。** 検証の端末は初めから使える状態で、自然な遷移を起こせない。
+    準備待ちの説明を押し直すと確かめ直すことは JVM のテストが持つ（オーナー判断 2026-10-04）
   - **シートが自動で広がる動きの途中へ、実際の指で割り込むこと。** 動きは一瞬で終わり、狙って止められず、観察でも
     一覧のスクロールと区別できない。止められた後の保留の扱いは `MarginMemoSheetUiTest` が時計を止めて持つ（オーナー判断 2026-10-03）
 
 ## 11. 既知の制約・未解決事項
 
-- **未実装。** 次の段に分けて実装する。各段で机上ゲートと実機確認を通してから次へ進む
+- **段に分けて実装した。** 各段で机上ゲートと実機確認を通してから次へ進む
 
   | 段 | 中身 |
   |---|---|
@@ -487,6 +495,28 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
     初期化にしか効かず、復元では照合されない — 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で
     読み込み中を挟まずに復元され、前のノートの一時ペインが出た。ノートを離れたら捨て、Fold の開閉と全画面との往復では残る。✎ でしまえば消える。
     **出ている面があればそこに出す** — 閉じる設定でシートを出したまま Fold を開いたときは、ペインを足さずにシートへ出す
+- **段5で決めたこと**
+  - **並べ読みの状態は `NoteUiState` に、本文の解析結果はその外に置いた**（→ §6）。状態はノート切替の一括リセットに載せ、
+    本文は `domain` の型なので `NoteSectionModel` と同じく Controller が持つ。**要求の番号は持たない** — 失効はジョブの取り消しと、失敗を書く前の生存確認で守る。取り消しだけでは、取り消した後に同期の I/O が例外で終わったとき、閉じた面や選び直した候補を旧候補の失敗が上書きした（2026-10-04 の実装レビューで指摘）。
+    テストの読み出しは取り消しに従わない偽物も使う — 協調する偽物ではこの枝へ届かない
+  - **右の本文は `openNote` と同じ読み方で読み、ブロックの解析だけを行う。** 同じパーサなので、右のブロックの番号が左でもそのまま使える
+  - **「このノートへ移る」は `openNote` を変えずに通し、位置は画面が置く。** 開くと同時に左の一覧へ右で読んでいたブロックを頼み、
+    新しいノートの解析が届いたら飛び越した画像の測定を頼む（画像の寸法の入れ物はノートごとに作り直されるので、届く前には頼めない）。
+    前のノートの一覧に位置を縮められていたら、解析が届いたときに置き直す。読書の記録は最も深い位置しか残さないので、
+    手前で1度報告されても置き直した位置で上書きされる
+  - **候補はノートを開いている間の並びを保ち、後から届いた候補は下へ足す**（`paneRelatedCandidates`）。AI の推薦は、
+    モデルの準備が済んで関連ノートを読み直したときに読み込み中を挟んで届く。読み込み中で一覧を消さない
+  - **候補がまだ届いていないか0件なら、「このノートの関連」の行を出さない。** 関連ノートは自動で走る機能なので、
+    探している途中も見つからないことも面に置かない（関連タブの AI 推薦と同じ）
+  - **右で開くと、余白の面は右の本文に代わる。「← 余白へ戻る」と戻る操作は、選んだ一覧まで面を送って戻す。**
+    面の中の位置は組み直すと失われるので、戻るたびに番号を振った依頼で関連の一覧まで送る（要約の行へ送るのと同じ形）
+  - **一覧の並びと開閉は画面の保存値に置き、持ち主のノートを値として持つ**（`PaneRelatedList`。一時ペインの `paneForNoteShown` と同じ形）。
+    右の本文は状態に残るので、右で読んでいる間に画面が組み直されると（全画面やほかのタブとの往復・画面の保存と復元）、
+    戻る先の一覧だけが畳まれ、関連ノートの読み直しの最中なら候補ごと消えていた。持ち主の違う保存値は使わず、別のノートへ持ち越さない
+  - **右で開くとき、書いているつもりを落とす。** 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。書きかけそのものは残る
+  - **見出しの要約ボタン・見出しの印・「前回のメモを見る」は、右で眺めている間に押されたら余白へ戻してから送る**（要約とメモは余白の面にある）
+  - **余白ペインでない並べ方になったら終える**（`endsSideReading`）。Fold を閉じた・回して横の折り目になった・✎ でペインをしまった、を
+    同じ1つの判定で受ける。窓の情報が揃う前は判定しない
 - **段3の時点でも暫定のもの**
   - **窓の情報が揃う前は、窓の切り替わりを判定しない。** 画面の作り直しの直後は、折り目の報告と本文領域の位置が
     まだ届いていない。その間の判定を前の窓と比べると、切り替わってもいないのにシートを出してしまう。
@@ -512,5 +542,4 @@ Fold 専用のデータや重複した機能は作らない。Fold でしか成�
 
 ## 12. 開発経緯
 
-- 設計の下書き（凍結・更新しない）: [owner/fold_margin_pane_design](../../owner/fold_margin_pane_design.md)
 - 開発日誌: [owner/journal/](../../owner/journal/)
