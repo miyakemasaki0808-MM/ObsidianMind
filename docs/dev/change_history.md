@@ -16,6 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-10-04 | — | 北極星へ「開いた Fold は思考を並べて考える机」を足し、Fold の原則・不変条件・契約の正本と ADR-0006 を起こした | [fold_experience](system/fold_experience.md)・[ADR-0006](decisions/ADR-0006-single-current-note.md) |
 | 2026-10-04 | — | 「この部分」の設計の下書きを物理削除した。正本の margin_pane があり、段1〜5の完了で下書きの役目が終わったため | [margin_pane](features/margin_pane.md) |
 | 2026-10-04 | — | ペインの「このノートの関連」から関連ノートを右で眺め、読んでいた位置からそのノートへ移れるようにした（段5・別の目と実機検証済み） | [margin_pane](features/margin_pane.md) §5.9・§11 |
 | 2026-10-04 | — | 部分要約を「この部分」の面へ移して節ごとに3節分持ち、全画面の右下の丸を ✎ に替えた（段4・別の目と実機検証済み） | [margin_pane](features/margin_pane.md) §11・[note_fullscreen](features/note_fullscreen.md) 判断5 |
