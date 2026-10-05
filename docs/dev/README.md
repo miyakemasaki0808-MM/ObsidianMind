@@ -16,7 +16,7 @@
 | [system/](system/) | **横断的な基盤**（責務・保証・不変条件・利用者） |
 | [decisions/](decisions/) | **ADR。覆りにくい重大判断だけ**（文脈・決定・帰結、**30行以内＝`AdrShapeTest` が固定**） |
 | [lessons.md](lessons.md) ＋ [lessons/](lessons/) | 同じ失敗を繰り返さないための索引とカード。**IDは永久の住所** |
-| [change_history.md](change_history.md) | PR単位の変更履歴（新しい順・1文100字以内） |
+| [change_history.md](change_history.md) | 変更の履歴（新しい順・変更1つに1行・1文100字以内） |
 
 > **種別が混ざると役割が曖昧になる。** 2026-08-11 まで全部が `design/` 1つにあり、
 > **24本中11本が `## 判断N` 形式＝ADRの形**で機能仕様と同居していた。
