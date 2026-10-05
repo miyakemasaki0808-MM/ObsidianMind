@@ -16,7 +16,7 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
-| 2026-10-05 | — | BOM 付きノートの最初の見出しを見出しとして読み、冊子の扉から日付・表の見出し行・ナビの行を外し、見出しの余白を1つの定数にまとめた（別の目のレビュー前） | [reflect_distill](features/reflect_distill.md) 判断20・[booklet_mode](features/booklet_mode.md) §10・[theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
+| 2026-10-05 | — | BOM 付きノートの最初の見出しを見出しとして読み、冊子の扉から日付・表の見出し行・ナビの行を外し、見出しの余白を1つの定数にまとめた（別の目済み） | [reflect_distill](features/reflect_distill.md) 判断20・[booklet_mode](features/booklet_mode.md) §10・[theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-05 | — | データ管理の「AI補記メモを削除」を撤去し、退避の設計書を今の合流に当て直し、実機の証跡の置き場を evidence/ へ移した（別の目済み・撤去はオーナーが実機で確認） | [architecture](system/architecture.md)・[reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-10-04 | — | 北極星へ「開いた Fold は思考を並べて考える机」を足し、Fold の原則・不変条件・契約の正本と ADR-0006 を起こした | [fold_experience](system/fold_experience.md)・[ADR-0006](decisions/ADR-0006-single-current-note.md) |
 | 2026-10-04 | — | 「この部分」の設計の下書きを物理削除した。正本の margin_pane があり、段1〜5の完了で下書きの役目が終わったため | [margin_pane](features/margin_pane.md) |

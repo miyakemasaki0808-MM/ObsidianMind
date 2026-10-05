@@ -225,6 +225,30 @@ class BookletCoverLineTest {
     }
 
     @Test
+    fun `日付に曜日の括弧が付いた行は扉にしない`() {
+        val content = """
+            締切: 2026-03-28（土）
+            2026/03/29 (Sun)
+            更新: 2026年3月30日（月曜日）
+            契約を整理する。
+        """.trimIndent()
+
+        assertEquals("契約を整理する。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `日付に説明の括弧が付いた行は扉にできる`() {
+        assertEquals(
+            "締切: 2026-03-28（契約更新の判断）",
+            selectCoverLine("締切: 2026-03-28（契約更新の判断）\n次の文。", "タイトル")
+        )
+        assertEquals(
+            "2026-03-28（設計を見直した理由）",
+            selectCoverLine("2026-03-28（設計を見直した理由）", "タイトル")
+        )
+    }
+
+    @Test
     fun `値が読めるラベル行は扉にできる`() {
         assertEquals("ゴール: 2026-03-01 までに合格する。", selectCoverLine("ゴール: 2026-03-01 までに合格する。", "タイトル"))
         assertEquals("書籍名：ピープルウェア", selectCoverLine("書籍名：ピープルウェア", "タイトル"))
