@@ -251,7 +251,6 @@ RESULT	budget_x2/0700_no_heading	4	0.357	0.646	1/1	reused:production/0700_no_hea
 **値だけで品質の優劣は確定できず、予算増加の採用・棄却も保留する。**
 応答全文と入力指紋は [未ラベル観測資料](../../../app/src/androidTest/assets/ai_corpus/references/nano/observations/2026-09-13/README.md) に保存した。
 較正用の上位10本・labels.tsvは変更していない。新しい観測は今後のラベル付けの材料である。
-当日の実行範囲と後処理は [レビュー一覧](../../review/README.md) が持つ。
 
 採るときは `SummaryCoverageBaselineTest` を実機で回し、手順は [実機ケース](../../review/device_validation/summary_coverage.md) が持つ。
 そのとき次を守る。
