@@ -17,6 +17,13 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-06 | タブ・Rediscover・読書痕跡の正本をコードと突き合わせ、冊子と共有する引いた経路などの食い違いを直した | [rediscover](features/rediscover.md)・[reflect_reading_trace](features/reflect_reading_trace.md)・[tab_navigation](system/tab_navigation.md) |
+| 2026-10-06 | 佇まいの割り当ての分野色を実装済みに直し、実装と同じ回に足すはずだった検査が無いことを起票した | [bearing_channels](system/bearing_channels.md) |
+| 2026-10-06 | 設計書の状態行と最終検証行を1行ずつに戻し、日付・巡数・段の進め方を外した | [_template](features/_template.md) |
+| 2026-10-06 | 封をした返事の設計の下書きを物理削除した。封をする対象だった返事が機能ごと無くなったため | — |
+| 2026-10-06 | レビュー一覧を今の作業のレビューだけにし、過去の176行を消した。あったことはこの表が残す | — |
+| 2026-10-06 | 変更履歴を「まとまった変更1つにつき1行」にし、空欄ばかりだった PR 欄をなくした | — |
+| 2026-10-06 | レビュー入口・文書地図・変更履歴・Fable 検討枠の食い違いを直した（リンク切れ・旧基準・実在しない計画書） | [document_map](document_map.md) |
 | 2026-10-06 | owner の _wip 分析（Fable 5.1）を物理削除した。提案に答えが出そろい、反映先の台帳・共通手順・教訓が中身を持つため | — |
 | 2026-10-05 | BOM 付きノートの最初の見出しを見出しとして読み、冊子の扉から日付・表の見出し行・ナビの行を外し、見出しの余白を1つの定数にまとめた（別の目済み） | [reflect_distill](features/reflect_distill.md) 判断20・[booklet_mode](features/booklet_mode.md) §10・[theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-05 | データ管理の「AI補記メモを削除」を撤去し、退避の設計書を今の合流に当て直し、実機の証跡の置き場を evidence/ へ移した（別の目済み・撤去はオーナーが実機で確認） | [architecture](system/architecture.md)・[reading_trace_backup](features/reading_trace_backup.md) |
