@@ -86,7 +86,6 @@ Fable 5.1 が `_wip/` を外から読んだ分析を消した。提案に答え�
 | [character_vigilith](../dev/features/character_vigilith.md) | キャラクターシート | Adopted。12節に従わない参照シート。起動OPとアイコンが従う |
 | [opening_animation](../dev/features/opening_animation.md) | 起動OP | 稼働中。ランチャー重複起動のガードは判断7 |
 | [dark_mode](../dev/features/dark_mode.md) | ダークモード | 稼働中・実機確認済み |
-| [sealed_reply](../dev/features/sealed_reply.md) | 封をした返事 | **前提を失ったまま据え置き**（2026-09-20、オーナー判断）。封をする対象だった「返事」がひとことごと無くなった |
 | [README](../dev/features/README.md) ／ [_template](../dev/features/_template.md) | 索引と様式 | — |
 
 ## 4. `docs/dev/system/` — 基盤設計。13本＋README

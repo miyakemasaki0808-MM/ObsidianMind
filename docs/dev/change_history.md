@@ -107,7 +107,7 @@
 | 2026-09-14 | 読書痕跡から再会カードを、冊子の画面から紙1枚の描画とめくりの幾何を分け、分けたファイルのコメントを整理した | [architecture](system/architecture.md) 判断1 |
 | 2026-09-14 | 保守の足場の修正確認レビューを受け、指摘3件の台帳・受付行と検討枠の失敗枝の行を閉じた | [review](../review/README.md) |
 | 2026-09-14 | 保守の足場のレビュー3件に対応し、コメント検査の文字列誤認・テスト側の入力漏れ・冊子設計の旧理由を直した | [review](../review/README.md)・[booklet_mode](features/booklet_mode.md) 判断12 |
-| 2026-09-14 | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
+| 2026-09-14 | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | — |
 | 2026-09-14 | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/08_idea_catalog.md) |
 | 2026-09-14 | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [roadmap](../_wip/roadmap.md) |
 | 2026-09-14 | 宙に浮いたKDocと関連ノートの死んだ失敗枝を消し、キャンセルの再throwとコメントに経緯を書かない規約を検査つきで置いた | [owner/comments_and_history_practices](../owner/05_comments_and_history_practices.md) |
