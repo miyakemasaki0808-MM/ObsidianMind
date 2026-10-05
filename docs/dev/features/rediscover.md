@@ -142,7 +142,7 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 `openNote`（関連ノート・さがすタブ経由）は候補の最終更新と走査キャッシュから近似し、材料が無ければ現行色に落ちる
 （→ [note_age_paper](note_age_paper.md) の `notePaperToneForCandidate`）。**常に確定するのは引いた経路だけ**である。
 
-### 判断4: 再会カードは Rediscover 経路だけで出す
+### 判断4: 再会カードは引いた経路だけで出す
 
 `revealReadingTrace()` は引いた経路の `presentDrawnNote` からしか呼ばない。**`openNote` では呼ばない。**
 冊子の「これを読む」も同じ経路を通る — 冊子で引いた1枚も、ランダムに引いた1枚である。
