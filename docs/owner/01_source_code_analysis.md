@@ -91,7 +91,7 @@ grep -rhE '^[[:space:]]*@Test' app/src/androidTest | wc -l  # instrumentation件
 - 部分要約で、モデルの準備待ちから自然に使える状態へ移ったあとに同じ節を頼み直すこと。手元の端末は初めから使える状態だった。押し直すと確かめ直すことは JVM が持つ
 - 保守の回の3つの直し。BOM 付きノートの見出しの表示と、蒸留の書き戻しで BOM が残ること、冊子の扉の新しい除外、画面見出しの余白。オーナー判断で実機検証をせず、JVM と別の目のレビューで受理した
 
-未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中2件・低10件・超低1件ある。高は無い。
+未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中2件・低11件・超低1件ある。高は無い。
 台帳を外から読んだ観察と、答えの出ていない提案は [wip_analysis](07_wip_analysis.md) が持つ。
 
 ---
