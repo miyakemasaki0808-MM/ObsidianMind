@@ -35,18 +35,23 @@ internal fun selectCoverLine(content: String, title: String): String =
 /**
  * 最初に「読める」1文。
  *
- * **行を落としてから記法を落とす順序が要る。** `stripMarkdownMarkers` は見出しの `#` を
- * 消してしまうので、先に均すと見出しが本文の文と見分けられなくなる。
+ * **行を落としてから記法を落とす順序が要る。** `stripMarkdownMarkers` は見出しの `#` や表の `|` を
+ * 消してしまうので、先に均すと見出しと表の見出し行が本文の文と見分けられなくなる。
+ * 日付とナビは逆に**均した後**で見る — `- **作成日**: …` や `> 🧭 …` も同じ形として落とすため。
  */
-private fun firstReadableSentence(content: String): String? =
-    withoutFencedCode(stripFrontmatter(content))
-        .lineSequence()
-        .filterNot { it.isHeading() || it.isTableDelimiter() || it.isLinkOnly() }
+private fun firstReadableSentence(content: String): String? {
+    val lines = withoutFencedCode(stripFrontmatter(content)).lines()
+    return lines.asSequence()
+        .filterIndexed { index, line ->
+            !line.isHeading() && !line.isTableDelimiter() && !line.isLinkOnly() && !lines.isTableHeaderAt(index)
+        }
         .map { it.unwrapInlineCode().stripMarkdownMarkers().collapseSpaces() }
+        .filterNot { it.isDateOnly() || it.isNavigation() }
         .firstOrNull { it.hasReadableText() }
         ?.let { splitIntoSentences(it).first().trim() }
         ?.takeIf { it.hasReadableText() }
         ?.let(::truncateForCover)
+}
 
 /**
  * `` `NoteViewModel` `` のようなインラインコードを、**中身を残して**記法だけ落とす。
@@ -64,6 +69,22 @@ private fun String.isHeading(): Boolean = HEADING.containsMatchIn(this)
 
 /** `|---|:--|` のような表の区切り。記法を落とすと `- :` だけが残り、意味を持たない。 */
 private fun String.isTableDelimiter(): Boolean = TABLE_DELIMITER.matches(this)
+
+/**
+ * 表の見出し行（すぐ次の行が区切り）。「ID タグ タイトル 概要」は列の名前であって、何のノートかを言わない。
+ * **表の本文の行は落とさない** — 列の名前と違い、何が並んでいるかを伝える中身の行である。
+ */
+private fun List<String>.isTableHeaderAt(index: Int): Boolean =
+    '|' in this[index] && getOrNull(index + 1)?.isTableDelimiter() == true
+
+/**
+ * 値が日付だけの行（「開始日　　：2025/05/23」「作成日: 2026-03-28」、ラベルの無い日付）。
+ * **ラベル付きの行を一律には落とさない** — 「ゴール: …」「書籍名：…」は値が読めるので良い扉になる。
+ */
+private fun String.isDateOnly(): Boolean = DATE_ONLY.matches(this)
+
+/** 🧭 で始まるナビの行（「🧭 クイックナビ: …」）。ほかの絵文字の行は見出し代わりの良い扉でありうるので落とさない。 */
+private fun String.isNavigation(): Boolean = startsWith(NAVIGATION_MARK)
 
 /**
  * リンクだけの行。**ラベルへ畳んでから判定しない。**
@@ -97,5 +118,16 @@ private fun truncateForCover(text: String): String {
 private val INLINE_CODE_FENCE = Regex("""`([^`\n]*)`""")
 private val HEADING = Regex("""^\s{0,3}#{1,6}\s""")
 private val TABLE_DELIMITER = Regex("""^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$""")
+
+/**
+ * ラベル（20字まで）と区切りは任意。曜日の括弧と時刻は付いてよい。`\s` は全角空白を含まないので並べて書く。
+ * **括弧の中は曜日だけを受ける** — 「2026-03-28（設計を見直した理由）」は説明が読めるので扉に残す。
+ */
+private val DATE_ONLY = Regex(
+    """^(?:[^:：]{1,20}[:：][\s\u3000]*)?\d{4}[-/.年][\s\u3000]*\d{1,2}[-/.月][\s\u3000]*\d{1,2}日?""" +
+        """(?:[\s\u3000]*[（(](?:[月火水木金土日](?:曜日?)?|Mon|Tue|Wed|Thu|Fri|Sat|Sun)[）)])?""" +
+        """(?:[\s\u3000]+\d{1,2}:\d{2}(?::\d{2})?)?$"""
+)
+private const val NAVIGATION_MARK = "🧭"
 private val READABLE = Regex("""[\p{L}\p{N}]""")
 private val WHITESPACE_RUN = Regex("""\s+""")

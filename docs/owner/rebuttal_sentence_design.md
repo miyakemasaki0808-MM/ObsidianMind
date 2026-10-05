@@ -1,10 +1,11 @@
 # 反証の一文 — 実装設計書
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-17 / **更新:** 2026-09-29（基準 `36fe88f`）
+**作成:** 2026-09-17 / **更新:** 2026-10-06（基準 `7a2ac616`）
 **状態:** Draft — 未実装。[idea_catalog](08_idea_catalog.md) の AI◯1「反証の一文」を、他のAI（Claude／Codex）が実装できる粒度へ起こしたもの。
 **2026-09-20 に足場を当て直した** — ひとことの撤去で消えた型を指していた2箇所を差し替えてある。
 **2026-09-27 に再会カードの作り直しを反映した** — 呼び出し回数の検算だけが変わり、候補の規則と設計は変わらない
+**2026-10-06 に足場を当て直した** — 撤去した常駐マスコットと通知の口を指していた行を外し、余白ペインの関連一覧を読み手に足した。候補の規則と設計は変わらない
 **最終検証:** —（未実装。器を整えただけで日付を進めない）
 **関連コード（予定）:** `domain/RebuttalClaimScanner.kt` / `domain/RebuttalCandidateRanking.kt` / `domain/RelatedCandidateId.kt` / `model/state/RebuttalSentence.kt` / `model/RebuttalProtocol.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBuilder.kt` / `controller/RebuttalController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト（予定）:** `RebuttalClaimScannerTest` / `RebuttalCandidateRankingTest` / `RebuttalControllerTest` / 既存の走査・契約テスト群（→ §0.4）
@@ -278,16 +279,16 @@ X01 | ...
 | 世代 | **ノート単位のみ**（`activeRequestId`）。Vault 世代は使わない。二層の表の基本形であり、分野判定のような例外にしない |
 | 永続化 | **しない。** 痕跡サイドカーにも端末内ストアにも書かない。開き直せば選び直す |
 | 蒸留保存後の本文差し替え | **維持する。** `withDistillBodyReloaded` はこの欄に触れない（一文は他ノートの原文なので有効なまま） |
-| `toEventKey` / バッジ / Snackbar | **無し。** 結果は関連タブを開けば見え、後から辿れるので未確認管理を持たない（→ [background_ai_ux](../dev/system/background_ai_ux.md) §4） |
-| Vigilith の導出 | **足さない。** 読み込み中の状態が無いので `resolveVigilithPresentation` に渡す材料が無い |
+| バッジ / Snackbar | **無し。** アプリに Snackbar で知らせる機能は1つも無い。結果は関連タブを開けば見え、後から辿れるので未確認管理を持たない（→ [background_ai_ux](../dev/system/background_ai_ux.md) §4） |
 
 **名前の制約。** 状態や結果の variant に `Available` / `Unavailable` を使わない（`DesignDocStateNameTest` の退役名）。
 Controller 内部の結果型は `Selected` / `NoneChosen` / `Skipped` の3値にする。
 
 **影響面監査の証拠（新しい欄を読む箇所）。** 読むのは `RelatedTab` の1箇所だけ。`MainActivity` は `uiState` を
-そのまま渡す。`relatedNotesState` を読む既存2箇所（`RelatedTab`・`openBooklet`）は**変えない** —
-`RelatedNotesState` に欄を足さないので、編む冊子は無傷である。
+そのまま渡す。`relatedNotesState` を読む既存3箇所（`RelatedTab`・`openBooklet`・ノート画面の余白ペインの関連一覧）は**変えない** —
+`RelatedNotesState` に欄を足さないので、編む冊子もペインの関連一覧も無傷である。
 （**2026-09-20 に3箇所から2箇所へ減った。** ひとことの生成が読んでいた経路が機能ごと無くなったため。）
+**2026-10-04 に3箇所へ戻った。** 開いた Fold の余白ペインが、同じ候補を「このノートの関連」として読むようになったためである。
 
 ## 7. システム設計
 
@@ -478,7 +479,7 @@ LRU 300件のキャッシュが最大で数百KBに膨らむ。使うのは最�
 | `RebuttalCandidateRankingTest` | ノート内上位3件／総数12件／同点の順（並び順→原文順）／score 0 を捨てない／空入力 |
 | `RelatedCandidateIdTest`（追記） | `X` 接頭辞で `C01` を受理しない／`X3` の桁落ち補正／`X01通信` を捨てる |
 | `RebuttalControllerTest` | `Ready` で1回だけ生成し状態へ書く／`NONE`・空・候補外で書かない／候補ゼロで `generateCalls == 0`／**`Ready` 以外の4値で生成せず `downloadCalls == 0`**／読み直し失敗の候補だけ落として続行／生成中にノート切替（`cancelAndClear`）→ 後着で書かない／`CancellationException` を握らない／例外で書かない・状態は null のまま／`buildNoteExcerpt` が `excerptDispatcher` で走る（テストスケジューラで完了を待てる） |
-| `NoteSessionCoordinatorTest`（追記） | `fullyPopulatedState()` へ登録／ノート切替で null／実物 Controller の Job が `onNoteChanged()` で止まる（クイズ・余白メモの検査と同形）／**関連ノートの完了から反証が始まる**（`completeRelatedNotes` が1手であること） |
+| `NoteSessionCoordinatorTest`（追記） | `fullyPopulatedState()` へ登録／ノート切替で null／実物 Controller の Job が `onNoteChanged()` で止まる（余白メモの検査と同形）／**関連ノートの完了から反証が始まる**（`completeRelatedNotes` が1手であること） |
 | `NoteUiStateStoreTest`（追記） | Writer が担当スライスだけを更新する |
 | `PromptSamples` / `PromptIndentationTest` / `PromptBudgetTest`（追記） | builder を列挙に足す。字下げと上限は自動で乗る |
 | `PromptGenerationCoverageTest`（更新） | 件数 14。`OnDeviceGenerationTest.UNCOVERED_BUILDERS` へ列挙 |

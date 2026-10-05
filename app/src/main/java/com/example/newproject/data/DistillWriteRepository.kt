@@ -32,6 +32,10 @@ internal class SafDistillDocumentGateway(
     }
 }
 
+/**
+ * [outputBytes] は蒸留した本文のバイト列で、**先頭の BOM を含まない**（読み込みが外している）。
+ * 元のファイルが BOM で始まっていれば、[DistillWriteRepository] が書く前に戻す。
+ */
 internal data class DistillWriteRequest(
     val targetUri: String,
     val baselineHash: String,
@@ -132,13 +136,7 @@ internal class DistillWriteRepository(
                 recoveryRequired = false
             )
         }
-        if (request.outputBytes.size > MAX_OUTPUT_BYTES) {
-            return DistillWriteResult.Failure(
-                DistillWriteFailureStage.VALIDATION,
-                "書き込み後のノートがサイズ上限を超えています。",
-                recoveryRequired = false
-            )
-        }
+        if (request.outputBytes.size > MAX_OUTPUT_BYTES) return outputTooLarge()
         try {
             decodeUtf8Strict(request.outputBytes)
         } catch (error: InvalidNoteEncodingException) {
@@ -162,8 +160,12 @@ internal class DistillWriteRepository(
         if (initialHash != request.baselineHash) {
             return DistillWriteResult.Conflict(initialHash, "ノートが外部で変更されています。再解析してください。")
         }
+        // 書くのは BOM を戻したこのバイト列。サイズ・期待ハッシュ・復旧の記録もこちらで取る
+        // （本文のバイト列で取ると、書いた後の検証と再読込の照合が必ず外れる）。
+        val outputBytes = restoreLeadingByteOrderMark(initialBytes, request.outputBytes)
+        if (outputBytes.size > MAX_OUTPUT_BYTES) return outputTooLarge()
 
-        val requiredBytes = requiredDistillStorageBytes(initialBytes.size, request.outputBytes.size)
+        val requiredBytes = requiredDistillStorageBytes(initialBytes.size, outputBytes.size)
         val availableBytes = try {
             // `usableSpace` の採用理由は DistillRecoveryStore.usableSpace() のコメントを参照。
             @Suppress("UsableSpace")
@@ -196,8 +198,8 @@ internal class DistillWriteRepository(
         var documentWriteStarted = false
         var failureStage = DistillWriteFailureStage.STAGING
         try {
-            writeStageFile(stageFile, request.outputBytes)
-            val expectedHash = sha256Hex(request.outputBytes)
+            writeStageFile(stageFile, outputBytes)
+            val expectedHash = sha256Hex(outputBytes)
             if (sha256Hex(stageFile.readBytes()) != expectedHash) {
                 return DistillWriteResult.Failure(
                     DistillWriteFailureStage.STAGING,
@@ -341,6 +343,12 @@ internal class DistillWriteRepository(
             if (stageFile.exists()) stageFile.delete()
         }
     }
+
+    private fun outputTooLarge() = DistillWriteResult.Failure(
+        DistillWriteFailureStage.VALIDATION,
+        "書き込み後のノートがサイズ上限を超えています。",
+        recoveryRequired = false
+    )
 
     fun cleanupStaleCacheFiles() {
         cacheDirectory.listFiles { file -> file.isFile && file.name.startsWith(CACHE_PREFIX) }

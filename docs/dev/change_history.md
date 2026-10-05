@@ -16,6 +16,8 @@
 
 | 日付 | PR | 変更内容 | 設計メモ |
 |---|---|---|---|
+| 2026-10-06 | — | owner の _wip 分析（Fable 5.1）を物理削除した。提案に答えが出そろい、反映先の台帳・共通手順・教訓が中身を持つため | — |
+| 2026-10-05 | — | BOM 付きノートの最初の見出しを見出しとして読み、冊子の扉から日付・表の見出し行・ナビの行を外し、見出しの余白を1つの定数にまとめた（別の目済み） | [reflect_distill](features/reflect_distill.md) 判断20・[booklet_mode](features/booklet_mode.md) §10・[theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-05 | — | データ管理の「AI補記メモを削除」を撤去し、退避の設計書を今の合流に当て直し、実機の証跡の置き場を evidence/ へ移した（別の目済み・撤去はオーナーが実機で確認） | [architecture](system/architecture.md)・[reading_trace_backup](features/reading_trace_backup.md) |
 | 2026-10-04 | — | 北極星へ「開いた Fold は思考を並べて考える机」を足し、Fold の原則・不変条件・契約の正本と ADR-0006 を起こした | [fold_experience](system/fold_experience.md)・[ADR-0006](decisions/ADR-0006-single-current-note.md) |
 | 2026-10-04 | — | 「この部分」の設計の下書きを物理削除した。正本の margin_pane があり、段1〜5の完了で下書きの役目が終わったため | [margin_pane](features/margin_pane.md) |
@@ -106,7 +108,7 @@
 | 2026-09-14 | — | 保守の足場のレビュー3件に対応し、コメント検査の文字列誤認・テスト側の入力漏れ・冊子設計の旧理由を直した | [review](../review/README.md)・[booklet_mode](features/booklet_mode.md) 判断12 |
 | 2026-09-14 | — | アイデア帳の「封をした返事」を、オーナー判断で設計の下書き（Draft・未実装）として features に起こした | [sealed_reply](features/sealed_reply.md) |
 | 2026-09-14 | — | Fable 5.1 のアイデア帳を owner に置いた。AI活用・非活用 × 北極星に沿う・沿わないで各10件、沿わない案には折り返す形を添えた | [idea_catalog](../owner/08_idea_catalog.md) |
-| 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [wip_analysis](../owner/07_wip_analysis.md)・[roadmap](../_wip/roadmap.md) |
+| 2026-09-14 | — | オーナー向け文書を通しで見直し、`_wip/` の分析と提案を owner に置き、オーナー判断3件（演出を Later へ・蒸留の観点と「留まったら生成」を Next へ）をロードマップへ反映した | [roadmap](../_wip/roadmap.md) |
 | 2026-09-14 | — | 宙に浮いたKDocと関連ノートの死んだ失敗枝を消し、キャンセルの再throwとコメントに経緯を書かない規約を検査つきで置いた | [owner/comments_and_history_practices](../owner/05_comments_and_history_practices.md) |
 | 2026-09-13 | — | AI品質の全27組を時間を空けて分割取得し、計測の未完了と再開手順の指摘を閉じた | [review](../review/README.md) |
 | 2026-09-13 | — | AI品質の修正後を簡易実機検証し、再利用の動作と13回目のBUSY再発を記録した | [review](../review/README.md) |

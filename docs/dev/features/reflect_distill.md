@@ -4,7 +4,7 @@
 **表示・候補境界・保存・競合・故障復旧・プリセット・自由範囲まで実機確認済み**
 **最終検証:** 2026-09-20 / `b2bed77`
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt` / `model/DistillModels.kt` / `model/state/DistillRangeEdit.kt` / `ui/screen/DistillRangeSheet.kt`
-**関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest` / `DistillRangeAdjustTest` / `DistillRangeSnapTest` / `DistillRangeHighlightTest` / `DistillRangeHandleTest` / `DistillRangeNoticeTest` / `DistillProtectedScanTest` / `DistillCandidateUnitCopyTest` / `DistillRangeAdjustUiTest`（androidTest）
+**関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `NoteSnapshotTest` / `NoteByteOrderMarkTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest` / `DistillRangeAdjustTest` / `DistillRangeSnapTest` / `DistillRangeHighlightTest` / `DistillRangeHandleTest` / `DistillRangeNoticeTest` / `DistillProtectedScanTest` / `DistillCandidateUnitCopyTest` / `DistillRangeAdjustUiTest`（androidTest）
 **正本:** この文書
 
 **対象領域:** ノート本文の太字化・オンデバイスAIによる文の選択・太字範囲の調整・安全な書き戻し
@@ -191,7 +191,8 @@
 |---|---|
 | 編集範囲 | **UTF-16 コードユニットのインデックス** |
 | 入力 | **UTF-8 を厳格にデコード。** 非UTF-8・不正バイトは**書き込まずエラー** |
-| BOM・CRLF・末尾改行 | **元の文字列構造を維持する** |
+| BOM | **読み込みが先頭の1つを外し、書き戻しで元のファイルに合わせて戻す。** 位置は BOM を数えない（→ 判断20） |
+| CRLF・末尾改行 | **元の文字列構造を維持する** |
 | 絵文字・サロゲートペア | それ以降の文も正しい位置へ挿入できること |
 
 ### 一段目スコア（非AI）
@@ -253,6 +254,7 @@ score = 1.0 * dice(文, タイトル)
 - **既に太字の文はスキップ**する
 - 書き込み前に**空き容量不足・キャッシュ生成失敗・復旧レコード生成失敗**を検知して安全に中断する
 - キャッシュファイルは**成功・失敗・起動時に必ず掃除**する
+- 元のファイルが BOM で始まっていれば、**書くバイト列の先頭へ戻す**。期待出力ハッシュと復旧レコードは戻した後のバイト列で取る（→ 判断20）
 
 ### 累積太字上限ポリシー
 
@@ -797,6 +799,24 @@ IDパーサーが桁落ちを自動補正せず破棄するのと同じ「入口
 - **採らない案（保存時に自動でマージする）:** 選んだ範囲と保存範囲が食い違い、「自動補正しない」（判断5）と逆を向く
 - **採らない案（重なる操作自体を禁止する）:** 「句を文全体へ広げたい」という最も普通の操作が、
   同じ文の別の句がたまたま候補にいるだけで不能になる
+
+### 判断20: BOM は読み込みで外し、書き戻しで戻す
+
+ノートの本文は、読み込みの復号（[`decodeNoteTextStrict`](../../../app/src/main/java/com/example/newproject/data/NoteSnapshot.kt)）で
+**先頭の BOM を1つ外した文字列**である。BOM が残ると1行目の `#` や `---` が行頭でなくなり、
+表示・節・抜粋・扉・再会カードがそろって見出しと前付けを読み損ねるため、解析の手前で1回だけ外す。
+
+**蒸留が見る本文も BOM を含まない。** 書き戻しは
+[`DistillWriteRepository`](../../../app/src/main/java/com/example/newproject/data/DistillWriteRepository.kt) が、
+基準ハッシュの一致を確かめた元のファイルが BOM で始まっていれば出力の先頭へ戻す
+（[`restoreLeadingByteOrderMark`](../../../app/src/main/java/com/example/newproject/data/NoteSnapshot.kt)）。
+**ファイルはバイト単位で元の形を保つ。** 基準ハッシュ・競合判定・復旧レコードの元本文は、従来どおり原バイト列で取る。
+
+- **出力が BOM で始まっていても足す。** 読み込みは1つしか外さないので、その BOM は本文に残った2つ目である
+- **採らない案（解析器の側で外す）:** 外す場所が解析の入口の数だけ散り、次に足す読み手が外し忘れる
+- **採らない案（「BOM があった」を状態に持ち、Controller で戻す）:** 状態を渡す境界の1行がJVMテストに載らず、
+  そこで落とすと BOM が黙って消える。書き戻しの手前でファイルそのものを見れば、渡し忘れが起きない
+
 ### 判断12: 記法・配置・レイヤーは v1で絞る
 
 `**太字**` を採ったのは**実装ゼロで Obsidian 互換**だから。配置はAIタブの候補リスト、レイヤーは1つ。

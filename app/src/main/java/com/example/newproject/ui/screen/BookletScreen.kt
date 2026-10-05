@@ -61,6 +61,7 @@ import com.example.newproject.model.state.canWeave
 import com.example.newproject.model.state.showsModeToggle
 import com.example.newproject.model.state.visibleBundle
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonOutlineOnGradient
@@ -234,7 +235,7 @@ internal fun BookletScreen(
             .fillMaxSize()
             .background(ReadingGradient)
             .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(
             title = "冊子",

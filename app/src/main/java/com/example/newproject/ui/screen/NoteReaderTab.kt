@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -435,7 +436,7 @@ internal fun NoteReaderTab(
             .background(ReadingGradient)
             // **並べ方はキーボードを含めない大きさで決める**（→ readerLayoutFor）。キーボードの分は内側で避ける。
             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
             .onGloballyPositioned { coordinates ->
                 regionStartDp = with(density) { coordinates.positionInWindow().x.toDp().value }
             }

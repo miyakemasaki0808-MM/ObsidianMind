@@ -35,6 +35,7 @@ import com.example.newproject.model.WithheldOrphans
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.ui.blockedExplanation
 import com.example.newproject.ui.component.GradientHeader
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.AppGradient
@@ -76,7 +77,7 @@ fun ReadingTraceCleanupScreen(
             .fillMaxSize()
             .background(AppGradient)
             .safeDrawingPadding()
-            .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 12.dp)
+            .screenContentPadding()
     ) {
         GradientHeader(
             title = "読書痕跡の整理",

@@ -51,6 +51,55 @@ class DistillWriteRepositoryTest {
     }
 
     @Test
+    fun `a note that starts with a BOM keeps it after distill`() {
+        val original = BOM + "# 見出し\r\n元本文です。\r\n".toByteArray()
+        val body = "# 見出し\r\n**元本文です。**\r\n".toByteArray()
+        val gateway = FakeGateway(original)
+
+        val result = repository(gateway).write(request(original, body))
+
+        assertArrayEquals(BOM + body, gateway.content)
+        assertEquals(DistillWriteResult.Success(sha256Hex(BOM + body), BOM.size + body.size), result)
+    }
+
+    @Test
+    fun `a second BOM left in the body is written back next to the restored one`() {
+        val original = BOM + BOM + "本文。".toByteArray()
+        val body = BOM + "**本文。**".toByteArray()
+        val gateway = FakeGateway(original)
+
+        val result = repository(gateway).write(request(original, body))
+
+        assertTrue(result is DistillWriteResult.Success)
+        assertArrayEquals(BOM + BOM + "**本文。**".toByteArray(), gateway.content)
+    }
+
+    @Test
+    fun `a crash after writing a BOM note leaves the expected output assessable`() {
+        val original = BOM + "元本文です。".toByteArray()
+        val body = "**元本文です。**".toByteArray()
+        val gateway = FakeGateway(original)
+        val crashingRepository = DistillWriteRepository(
+            gateway,
+            recoveryStore,
+            cache,
+            DistillWriteFaultInjector { checkpoint ->
+                if (checkpoint == DistillWriteCheckpoint.AFTER_DOCUMENT_WRITE) throw SimulatedCrash()
+            }
+        )
+
+        try {
+            crashingRepository.write(request(original, body))
+            throw AssertionError("crash was not injected")
+        } catch (_: SimulatedCrash) {
+            // 復旧レコードが残る
+        }
+
+        assertArrayEquals(BOM + body, gateway.content)
+        assertTrue(repository(gateway).assessPendingRecovery() is DistillRecoveryAssessment.ExpectedOutputPresent)
+    }
+
+    @Test
     fun `external edit before transaction is a conflict without recovery record`() {
         val baseline = "元本文です。".toByteArray()
         val external = "外部編集です。".toByteArray()
@@ -326,6 +375,10 @@ class DistillWriteRepositoryTest {
     ) = DistillWriteRequest(uri, sha256Hex(original), output)
 
     private class SimulatedCrash : Error()
+
+    private companion object {
+        val BOM = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+    }
 
     private class FakeGateway(initial: ByteArray) : DistillDocumentGateway {
         var content: ByteArray = initial.copyOf()

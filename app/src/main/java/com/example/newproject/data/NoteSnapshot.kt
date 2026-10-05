@@ -8,6 +8,10 @@ import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 
+/**
+ * 蒸留が読むノート。**[content] は先頭の BOM を外した本文、[bytes] と [hash] はファイルの原バイト列**で、
+ * 競合の判定と復旧は原バイト列で行う。外した BOM は書き戻しで戻る（→ [restoreLeadingByteOrderMark]）。
+ */
 internal data class NoteSnapshot(
     val uri: Uri,
     val bytes: ByteArray,
@@ -101,6 +105,40 @@ internal fun dropIncompleteUtf8Tail(bytes: ByteArray): ByteArray {
     }
     return bytes
 }
+
+/**
+ * 表示とスニペットのためにノートを復号する。末尾の割れた文字を落とし、先頭の BOM を外す。
+ * 不正な UTF-8 は置換文字になる（弾くのは蒸留用の [decodeNoteTextStrict]）。
+ */
+internal fun decodeNoteText(bytes: ByteArray): String =
+    withoutLeadingByteOrderMark(String(dropIncompleteUtf8Tail(bytes), Charsets.UTF_8))
+
+/** 蒸留のためにノートを復号する。不正な UTF-8 は例外にし、先頭の BOM を外す。 */
+internal fun decodeNoteTextStrict(bytes: ByteArray): String =
+    withoutLeadingByteOrderMark(decodeUtf8Strict(bytes))
+
+/**
+ * 先頭の BOM（U+FEFF）を**1つだけ**外す。**ノートの本文は、どの経路でもこれを通った文字列である。**
+ *
+ * BOM は符号化の印であって本文ではない。残すと1行目の `#` や `---` が行頭でなくなり、
+ * 見出しと前付けを読む解析（表示・節・抜粋・扉・再会カード・タグ）がそろって外れる。
+ */
+private fun withoutLeadingByteOrderMark(decoded: String): String = decoded.removePrefix(BYTE_ORDER_MARK)
+
+/**
+ * 書き戻すバイト列へ、[original] の先頭の BOM を戻す。[original] が BOM で始まらなければ [output] のまま。
+ *
+ * **[output] がすでに BOM で始まっていても足す。** 読み込みは1つしか外さないので、
+ * その BOM は本文に残った2つ目であり、足さなければファイルから1つ消える。
+ */
+internal fun restoreLeadingByteOrderMark(original: ByteArray, output: ByteArray): ByteArray =
+    if (original.startsWithByteOrderMark()) UTF8_BYTE_ORDER_MARK + output else output
+
+private fun ByteArray.startsWithByteOrderMark(): Boolean =
+    size >= UTF8_BYTE_ORDER_MARK.size && UTF8_BYTE_ORDER_MARK.indices.all { this[it] == UTF8_BYTE_ORDER_MARK[it] }
+
+private const val BYTE_ORDER_MARK = "\uFEFF"
+private val UTF8_BYTE_ORDER_MARK = BYTE_ORDER_MARK.toByteArray(Charsets.UTF_8)
 
 internal fun decodeUtf8Strict(bytes: ByteArray): String = try {
     Charsets.UTF_8.newDecoder()
