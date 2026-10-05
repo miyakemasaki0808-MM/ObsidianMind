@@ -14,7 +14,7 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 129本・約23,800行。** `CLAUDE.md`・`README.md` と `docs/` 配下の127本を数えた。
+**追跡対象の Markdown は 128本・約23,800行。** `CLAUDE.md`・`README.md` と `docs/` 配下の126本を数えた。
 作業ツリーにはこの他に追跡しないものが14本ある。レビュー本文1本、Fable 5.1 の報告書9本、実機検証の証跡フォルダの引き継ぎメモ4本。
 証跡フォルダには再会カード・結晶・余白ペインの実機検証で使ったノートの原本もあるが、端末へ入れた入力であって文書ではないので数に入れない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
@@ -24,7 +24,7 @@ CLAUDE.md                  開発規約（憲法）
 README.md                  リポジトリの入口
 docs/
 ├── README.md              文書の入口
-├── owner/     (17本)      オーナーが読む俯瞰。検査に載せない
+├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (5本)    開発日誌。README＋月別4本
 │   └── Fable5.1_report/   評価報告書。git 管理外の特別枠
 ├── dev/       (84本)      判断の正本。ここが古くなると実害が出る
@@ -37,9 +37,10 @@ docs/
     └── device_validation/ (18本)  共通手順・簡易版・機能別ケース16本
 ```
 
-**前回の数え直しから2本増えた。** 開いた Fold を「思考を並べて考える机」として扱う原則の正本 [fold_experience](../dev/system/fold_experience.md) と、
-今のノートを1つに保つと決めた [ADR-0006](../dev/decisions/ADR-0006-single-current-note.md) である（2026-10-04、オーナー判断）。
-**役目を終えた文書は消す**という扱いは変わらない。廃止した機能の文書と、正本ができた後の下書きは、全文を git 履歴に任せて消してある。
+**前回の数え直しから1本増えた。** 開いた Fold を「思考を並べて考える机」として扱う原則の正本 [fold_experience](../dev/system/fold_experience.md) と、
+今のノートを1つに保つと決めた [ADR-0006](../dev/decisions/ADR-0006-single-current-note.md) が入り（2026-10-04、オーナー判断）、
+Fable 5.1 が `_wip/` を外から読んだ分析を消した。提案に答えが出そろい、役目が終わったためである（2026-10-06、オーナー判断）。
+**役目を終えた文書は消す**という扱いは変わらない。廃止した機能の文書と、正本ができた後の下書きも、全文を git 履歴に任せて消してある。
 ノートへのひとこと・クイズ・アプリ内 Vigilith の設計書もこの規則で消してあり、やめた理由だけを残る正本へ数行で移した。
 いつ何をやめたかは、変更履歴・日誌・年表が持つ。
 
@@ -149,11 +150,10 @@ docs/
 |---|---|
 | [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在14件で、中2件・低11件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
-| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。675行・使い捨て |
+| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。676行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留4件 |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
-外から読んだ分析は [wip_analysis](07_wip_analysis.md) が持つ。
 
 ## 8. `docs/review/` — レビューと実機検証。21本＋追跡しない本文1本
 
@@ -168,7 +168,7 @@ docs/
 | device_validation の機能別ケース16本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・**結晶**。結果は持たない | ✅ |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
-## 9. `docs/owner/` — オーナーが読む俯瞰。17本
+## 9. `docs/owner/` — オーナーが読む俯瞰。16本
 
 **ファイル名の番号が読む順である**（2026-09-19）。「いま何があるか → どう書くか → 何を学んだか → どう歩んできたか」で並ぶ。
 `README.md` と `journal/` は名前で指されている先が多いので改名せず、順路の両端に置くだけにした。
@@ -183,7 +183,6 @@ docs/
 | 04 | [readme_map](04_readme_map.md) | 18本ある README がそれぞれ何をしているか |
 | 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
 | 06 | [lessons_summary](06_lessons_summary.md) | 教訓66件に何が書かれているか |
-| 07 | [wip_analysis](07_wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と、答えの出ていない提案 |
 | 08 | [idea_catalog](08_idea_catalog.md) | Fable は何を足せると考えるか。4象限×10件 |
 | 09 | [project_origin](09_project_origin.md) | どこから始まったか。2026-04-30。更新しない |
 | 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |

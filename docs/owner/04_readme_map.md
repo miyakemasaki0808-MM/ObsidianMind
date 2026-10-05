@@ -40,7 +40,7 @@
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 12 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 52 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 132 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 131 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 53 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
