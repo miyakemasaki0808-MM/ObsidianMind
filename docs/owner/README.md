@@ -37,7 +37,7 @@
 | 04 | [readme_map](04_readme_map.md) | **18本ある README がそれぞれ何をしているか。** 入口そのものの構造 |
 | 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | **コメント・設計書・経緯をどこに置くか。** 外部の指針と、経緯をコミットから取り出す方法 |
 | 06 | [lessons_summary](06_lessons_summary.md) | **教訓65件に何が書かれているか。** 棚卸し用の作業台 |
-| 07 | [wip_analysis](07_wip_analysis.md) | **`_wip/` の4本は何を抱え、どこに歪みがあるか。** 観察と提案 |
+| 07 | [wip_analysis](07_wip_analysis.md) | **`_wip/` の4本は何を抱えているか。** 観察と、答えの出ていない提案 |
 | 08 | [idea_catalog](08_idea_catalog.md) | **Fable は何を足せると考えるか。** AI活用・非活用 × 北極星に沿う・沿わない、各10件 |
 | 09 | [project_origin](09_project_origin.md) | **どこから始まったか。** 2026-04-30 の記録。更新しない |
 | 10 | [project_chronology](10_project_chronology.md) | **どう歩んできたか。** Git 履歴から辿る開発年表 |
