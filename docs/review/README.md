@@ -228,21 +228,8 @@
 **再利用できる手順とケースはリポジトリに置く** — 実機依頼のたびに導出し直さないため。
 
 実機検証を依頼されたCodexは、まず [共通手順](device_validation/README.md) を読み、
-対象機能のケースIDを選ぶ。現在の機能別ケースは次のとおり。
-
-- [蒸留](device_validation/reflect_distill.md)
-- [AI状態UX](device_validation/background_ai_ux.md)
-- [ノート内画像](device_validation/note_image_rendering.md)
-- [AI入力予算](device_validation/ai_input_budget.md)
-- [再会カード](device_validation/reunion_card.md)
-- [読書痕跡の退避](device_validation/reading_trace_backup.md)
-- [読書痕跡の整理（孤児掃除）](device_validation/reading_trace_cleanup.md)
-- [別のひとことが別の一文か](device_validation/remark_regenerate.md)
-- [冊子モード](device_validation/booklet_mode.md)
-- [起動](device_validation/app_launch.md)
-- [起動の再生成（回転・Fold）](device_validation/app_launch_recreation.md)
-- [分野色と復元](device_validation/note_field_color.md)
-- [返事の保存先分離](device_validation/reading_trace_reply.md)
+対象機能のケースIDを選ぶ。**機能別ケースの一覧は [簡易版](device_validation/quick_check.md) のスモークセットが持つ。**
+全ケースが載っていることを `DeviceValidationDocsTest` が検査するので、ここには写さない。
 
 機能別ケースには**再現手順と期待だけ**を書く。端末・日付・成否は最新のレビュー本文、
 現在も残る問題は [findings.md](findings.md) が持つ。
