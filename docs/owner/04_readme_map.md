@@ -1,32 +1,32 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-08 / **更新:** 2026-09-29
+**作成:** 2026-09-08 / **更新:** 2026-10-06
 
-**位置づけ:** 16本ある `README.md` がそれぞれ何をしているかを一望する1枚。
+**位置づけ:** 18本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
 本書は入口そのものの構造だけを扱う。`owner/` の他文書と同じく検査に載せない。
 
 ---
 
-## 1. なぜ16本もあるのか
+## 1. なぜ18本もあるのか
 
 **フォルダを1つ作ったら、その入口を1本置く**という運用になっているためである。
 `README.md` は多くのツールと GitHub がフォルダを開いたとき最初に見せるので、
 「このフォルダは何か」を置く場所として決め打ちしてある。
 
-ただし16本すべてが同じ役割ではない。4種類に分かれる。
+ただし18本すべてが同じ役割ではない。4種類に分かれる。
 
 | 種類 | 本数 | 何をしているか |
 |---|---:|---|
 | **A. 入口・索引** | 8 | そのフォルダの中身へ案内する。内容は持たない |
 | **B. それ自体が正本** | 2 | 入口ではなく運用の規則そのもの。検査が中身を見ている |
 | **C. テスト入力の説明** | 3 | 固定コーパスと実機の観測値が何であるかを、隣に置いて読ませる。**2026-09-13 に増えた種類** |
-| **D. 追跡しない作業ファイル** | 3 | 一時的な引き継ぎメモと、git 管理外の報告書の入口 |
+| **D. 追跡しない作業ファイル** | 5 | 一時的な引き継ぎメモと、git 管理外の報告書の入口 |
 
-前回の目録は11本だったので5本増えた。C の3本と、D の2本である。
+前回の目録は16本だったので2本増えた。どちらも D で、余白ペインの段1のレビューで Codex が残した証跡の説明である。
 
-## 2. 全16本
+## 2. 全18本
 
 **凡例:** 追跡 ✅＝git 管理下、❌＝`.gitignore`。検査＝JVMテストが中身を見ているか。
 
@@ -37,11 +37,11 @@
 | [`README.md`](../../README.md) | Vigilith AI | 48 | リポジトリの入口。何ができるアプリか＋`docs/` の4フォルダ | ✅ | — |
 | [`docs/README.md`](../README.md) | ドキュメントの入口 | 37 | 分類の軸は「その文書が答える問い」。4フォルダへ振り分ける | ✅ | — |
 | [`docs/dev/README.md`](../dev/README.md) | 開発知識 | 23 | features・system・decisions・lessons への道標 | ✅ | — |
-| [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 15 | 様式とヘッダ5行の決まり | ✅ | — |
+| [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 12 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
-| [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 51 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 131 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
-| [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 52 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
+| [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 52 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 132 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 53 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
 [document_map.md](../dev/document_map.md) で、パッケージから引く逆引き表はそちらが持つ。
@@ -54,8 +54,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 224 | レビュー運用の正本＋レビュー一覧145行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
-| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 282 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 257 | レビュー運用の正本＋レビュー一覧178行。本文が消えても結果が追える | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 286 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 
 この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
 だから検査も中身を見ている。
@@ -67,7 +67,7 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 分担そのものは `CLAUDE.md` の「作業の進め方」が正本で、`review/README.md` は Codex の手順だけを持つ。
 2026-09-12 にそう分けた。2箇所に書くと必ず片方が古くなる。
 **2026-09-19 に、実機検証の区間そのものを割り直した** — 組み立てと片付けはこちら、ケースの判定は Codex。
-`device_validation/README.md` が185行から282行へ伸びたのは、その割りを「誰が行うか」の節として書いたためである。
+`device_validation/README.md` が185行から280行台へ伸びたのは、その割りを「誰が行うか」の節として書いたためである。
 
 > スクリーンショットの扱いもここにある。実機検証で何をどの道具で見るかは「実機検証中」節が持ち、
 > 「画面上の文字はUI階層、見た目はスクリーンショット、永続化は端末上の実ファイル。どれか1つで他を代用しない」
@@ -86,13 +86,15 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 [ai_quality_measurement](../dev/system/ai_quality_measurement.md) で、3本ともそこへリンクする。
 README という名前を使ったのは、フォルダを開いたとき最初に見える位置に置くためで、A の8本と動機は同じである。
 
-### D. 追跡しない作業ファイル。3本
+### D. 追跡しない作業ファイル。5本
 
 | 場所 | 見出し | 行数 | 何か |
 |---|---|---:|---|
-| `docs/owner/Fable5.1_report/README.md` | Fable 5.1 評価報告書 | 81 | 2026-09-11 の総評の入口。8軸の点数と最重要5点。報告書は更新しないと決めてある |
+| `docs/owner/Fable5.1_report/README.md` | Fable 5.1 評価報告書 | 77 | 2026-09-11 の総評の入口。8軸の点数と最重要5点。報告書は更新しないと決めてある |
 | `docs/review/device_validation/evidence/book4-weave-20260907/README.md` | 編む冊子の実機検証 | 156 | 利用枠切れで中断した回の引き継ぎメモ |
 | `docs/review/device_validation/evidence/scale-review-20260910/README.md` | 全体レビューのJVM再現証拠 | 18 | レビューの再現手順 |
+| `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-review/README.md` | Fold段1・独立Compose状態プローブ | 21 | 余白ペイン段1のレビューで、入力欄の保存値を Compose の実行環境だけで確かめた手順 |
+| `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-recheck/README.md` | Fold段1・再レビューの独立状態検査 | 16 | 同じ確かめ方を修正後にやり直した記録 |
 
 `evidence/` と `Fable5.1_report/` は `.gitignore` 済み。端末を特定する値や検証中のローカルパスが入るため、
 あるいはオーナー判断で特別枠としたためである。フォルダを開いたとき最初に読まれるよう README という名前にしてあるが、

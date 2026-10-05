@@ -180,7 +180,7 @@ docs/
 | 01 | [source_code_analysis](01_source_code_analysis.md) | いまコードがどうなっているか。最大の文書 |
 | 02 | [jvm_test_report](02_jvm_test_report.md) | どういう観点でテストしているか |
 | 03 | **本書** | どんな文書があるか |
-| 04 | [readme_map](04_readme_map.md) | 16本ある README がそれぞれ何をしているか |
+| 04 | [readme_map](04_readme_map.md) | 18本ある README がそれぞれ何をしているか |
 | 05 | [comments_and_history_practices](05_comments_and_history_practices.md) | コメント・設計書・経緯をどこに置くか |
 | 06 | [lessons_summary](06_lessons_summary.md) | 教訓65件に何が書かれているか |
 | 07 | [wip_analysis](07_wip_analysis.md) | `_wip/` の4本は何を抱えているか。観察と提案 |
