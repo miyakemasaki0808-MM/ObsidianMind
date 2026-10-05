@@ -1,6 +1,6 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** Implemented — 稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで提供し、自動化は未着手
+**状態:** 実装済み・稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで（自動化は未着手）
 **最終検証:** 2026-08-22 / `c9a48d2`（§8 の判断17件は未突合）
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`

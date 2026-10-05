@@ -1,8 +1,7 @@
 # 設計思想 — Fold の机（開いた Fold を何として扱うか）
 
-**状態:** 原則は確定（2026-10-04、オーナー判断）。**不変条件は今の実装で成り立っている。**
-契約1〜4は未実装で、今の並べ読みは補助の面で1枚を眺めるだけ（→ [margin_pane](../features/margin_pane.md) の「2本の並べ読み」）
-**最終検証:** 未検証（原則を定めただけで、契約はまだ実装していない）
+**状態:** 原則は確定。**不変条件は今の実装で成り立ち、契約1〜4は未実装**
+**最終検証:** 未検証（契約はまだ実装していない）
 **関連コード:** `ui/screen/ReaderLayout.kt` / `ui/screen/ReaderFoldState.kt` / `controller/SideReadingController.kt` / `ui/screen/SideReadingPane.kt`
 **関連テスト:** `ReaderLayoutTest` / `SideReadingControllerTest`
 **正本:** この文書（Fold の原則・面の名前・不変条件・契約・姿勢の割り当て）。**個々の見え方と操作の仕様は各機能の設計書**が持つ

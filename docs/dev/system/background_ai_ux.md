@@ -1,7 +1,7 @@
 # AI生成のバックグラウンドUX
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-09-18 / `e407dbd`（§7 の門番。§1〜§6 は 2026-08-15）
+**最終検証:** 2026-09-18 / `e407dbd`（§7 のほかは 2026-08-15 から未突合）
 **関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `domain/SectionSummaryStatus.kt`（部分要約の記号）/ `controller/NoteDwellGate.kt`（自動生成の門番）
 **関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `SectionSummaryStatusTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
 **正本:** この文書

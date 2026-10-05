@@ -1,6 +1,6 @@
 # 設計思想 — 依存更新の方針（Lintの更新系チェックをどう扱うか）
 
-**状態:** 方針確定・運用中。Lint設定と権限の検査は済み、**更新の実行そのものは未着手**（`genai-prompt` beta4 は調査済みで、ソース互換だが動作互換ではないため上げていない）
+**状態:** 方針確定・運用中。**更新の実行そのものは未着手**（`genai-prompt` beta4 はソース互換だが動作互換ではないため上げていない）
 **最終検証:** 2026-09-12 / `0b78f8a`
 **関連コード:** `app/build.gradle.kts`（**バージョンカタログは使っていない。依存はここに直書きする**）／`app/src/main/AndroidManifest.xml`
 **関連テスト:** `lintDebug`（`warningsAsErrors`）／`verifyDebugManifestPermissions`・`verifyReleaseManifestPermissions`

@@ -1,6 +1,6 @@
 # 関連ノートAI推薦
 
-**状態:** Implemented — 稼働中
+**状態:** 実装済み・稼働中
 **最終検証:** 2026-08-12 / `f3fb353`
 **関連コード:** `domain/RelatedNotesUseCase.kt` / `domain/RelatedCandidate*.kt` / `domain/RelatedContextScoring.kt` / `ui/screen/RelatedTab.kt`
 **関連テスト:** `RelatedCandidateScoringTest` / `RelatedCandidateRankingTest` / `RelatedCandidateOrderingTest` / `RelatedCandidateContextTest` / `RelatedCandidateIdTest` / `RelatedContextScoringTest`

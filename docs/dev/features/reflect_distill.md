@@ -1,7 +1,6 @@
 # 蒸留（Distill）
 
-**状態:** Implemented — v1 Phase 1〜6＋長文の句分割＋括弧内語句＋太字範囲の調整（プリセット・自由範囲）を実装済み。
-**表示・候補境界・保存・競合・故障復旧・プリセット・自由範囲まで実機確認済み**
+**状態:** 実装済み・稼働中・実機確認済み
 **最終検証:** 2026-09-20 / `b2bed77`
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt` / `model/DistillModels.kt` / `model/state/DistillRangeEdit.kt` / `ui/screen/DistillRangeSheet.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `NoteSnapshotTest` / `NoteByteOrderMarkTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest` / `DistillRangeAdjustTest` / `DistillRangeSnapTest` / `DistillRangeHighlightTest` / `DistillRangeHandleTest` / `DistillRangeNoticeTest` / `DistillProtectedScanTest` / `DistillCandidateUnitCopyTest` / `DistillRangeAdjustUiTest`（androidTest）

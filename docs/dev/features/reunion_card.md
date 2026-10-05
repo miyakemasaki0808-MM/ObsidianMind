@@ -1,11 +1,7 @@
 # 再会カードに何を出すか
 
-**状態:** **実装済み。** 判断6（枠を前回読み進めたところから決め、続きから読めるようにする）と判断7（「まだ考えたい」の撤去）は**実装済み・実機確認済み**（部分確認2件を除く → §10）。
-それ以前の種別も実機検証済み（→ [device_validation](../../review/device_validation/reunion_card.md)）
-**最終検証:** 2026-09-27 / `7bf0726`（製品コードは `001e551` まで同一）
-
-> **ここへ実機ケースの範囲を書かない。** どのケースがあるかの正本はケース文書の側で、
-> 両方に書くとケースを足すたびに片方が古くなる（実際に一度古くなった）。
+**状態:** 実装済み・稼働中・実機確認済み（部分確認2件 → §10）
+**最終検証:** 2026-09-27 / `7bf0726`
 **関連コード:** `domain/ReunionCandidateScanner.kt` / `domain/ReunionSlot.kt` / `domain/markdown/NoteSections.kt`（読み進めたところ・前後・送り先）/
 `model/ReunionKind.kt` / `model/ReunionPassage.kt` / `model/ReadingTrace.kt` /
 `ai/PromptBuilder.buildReunionSelectionPrompt` / `ai/PromptBuilder.buildReunionPassagePrompt` / `controller/ReunionCardController.kt` /

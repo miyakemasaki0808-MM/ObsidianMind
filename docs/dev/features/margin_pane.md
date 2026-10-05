@@ -1,8 +1,7 @@
 # この部分 — 余白のペインとシート
 
-**状態:** **段1〜5は実装済み・実機検証済みで、完了した**（2026-10-04、オーナー判断）。実機で確かめなかった順序は §10「保証していないこと」にある。文字の大きさ2.0では本文の幅の下限を割るので並べ読みは出ない（§5.1 どおり。オーナーが受容した。使っていて気になったら見直す）。
-実装は段に分けて進めた（→ §11）。
-**最終検証:** 2026-10-04 / `0defc6de`（段5まで。Pixel 10 Pro Fold で段5の通し版と段4から持ち越した閉じる直後の割り込み・拡大文字と TalkBack。段4は 2026-10-04 / `9e377cf5`、Pixel 10 Pro Fold で段4の通し版と段3から持ち越した平らに開いたままの回転。段3は 2026-10-03 / `621dfa9c`、段2の変更面の選抜は 2026-10-03 / `f47f4d5a`、段1の通し版は 2026-10-01 / `fd1f091e`）
+**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序は §10）
+**最終検証:** 2026-10-04 / `0defc6de`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`
 **関連テスト:** 段1〜5 — `ReaderLayoutTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
@@ -398,6 +397,7 @@
 
 ## 11. 既知の制約・未解決事項
 
+- **文字の大きさ2.0では本文の幅が §5.1 の下限を割るので、並べ読みは出ない。** オーナーが受容した。使っていて気になったら見直す
 - **段に分けて実装した。** 各段で机上ゲートと実機確認を通してから次へ進む
 
   | 段 | 中身 |

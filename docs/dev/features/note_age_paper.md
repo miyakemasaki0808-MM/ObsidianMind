@@ -1,6 +1,6 @@
 # ノートの年代を紙の地色で伝える
 
-**状態:** Implemented — 稼働中・実機確認済み。**既定オフ**
+**状態:** 実装済み・稼働中・実機確認済み。**既定オフ**
 **最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `domain/NotePaperAge.kt` / `model/NotePaperTone.kt` / `ui/theme/AppTheme.kt` / `data/AppPreferences.kt`
 **関連テスト:** `NotePaperAgeTest` / `AppColorContrastTest`

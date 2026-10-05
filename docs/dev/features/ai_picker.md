@@ -1,6 +1,6 @@
 # さがす（AIピッカー・閲覧履歴）
 
-**状態:** Implemented — 稼働中
+**状態:** 実装済み・稼働中
 **最終検証:** 2026-09-17 / `1433179`
 **関連コード:** `controller/SearchController.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `ui/screen/SearchScreen.kt`
 **関連テスト:** `SearchControllerTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest`

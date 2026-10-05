@@ -1,6 +1,6 @@
 # 設計思想 — AI出力の品質測定（要約のカバレッジ）
 
-**状態:** 物差し・較正（人手と実機出力の2系統）・実機の計画は実装済み（JVM）。**実機の出力では「裏付けが弱い」で正誤を分離できない**ことが分かっている。全変種27組の実機記録を分割して取得済み（単回の探索。品質保証ではない）
+**状態:** 物差し・較正・実機の計画は実装済み（JVM）。**実機の出力では「裏付けが弱い」で正誤を分離できない**
 **最終検証:** 2026-09-13
 **関連コード:** `debug/testing/SummaryCoverage.kt` / `debug/testing/SummaryExcerptVariants.kt` / `debug/testing/SummaryBaselinePlan.kt` / 固定コーパス `app/src/androidTest/assets/ai_corpus/`（実機出力とラベルは `references/nano/`）
 **関連テスト:** `SummaryCoverageTest`（計測器の挙動）/ `SummaryCoverageCalibrationTest`（較正2系統）/ `SummaryExcerptVariantsTest`（変種の形）/ `SummaryBaselinePlanTest`（実機の計画）/ androidTest: `SummaryCoverageBaselineTest`

@@ -1,8 +1,6 @@
 # 設計思想 — 佇まいのチャネル割り当て
 
-**状態:** 決定済み。**形の割り当てと、2行へ割った動きの手触り側は実装・実機検証完了**（冊子の紙面・判断10）。
-**色は面ごとに持ち主が分かれた（判断6・2026-09-09）** — 読む面＝年代は実装済み、冊子の面＝分野は未実装。
-位置・本数と書体・行間は持ち主なしの予約
+**状態:** 決定済み。色・形・動きの手触りは実装済み、出来事の強度の動きは未実装。位置・本数と書体・行間は持ち主なしの予約
 **最終検証:** 2026-09-04 / `d05585b`
 **関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/screen/BookletSheet.kt` / `ui/component/NoteComponents.kt`
 **関連テスト:** `BearingChannelTest` / `AppColorContrastTest` / `NotePaperAgeTest`
