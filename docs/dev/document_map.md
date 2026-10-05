@@ -202,22 +202,22 @@
 **`features/` `system/` に読む順は無い。** 普段はコードから下の逆引き表で引く。
 **ここは例外で、「どんな考え方で作られたアプリか」を通しで掴みたいときの順路**である。
 
-**11本・約3,900行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
+**11本。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
 必要になったとき逆引きで引けば読める。
 
-| | 文書 | なぜこの位置か | 行数 |
-|---:|---|---|---:|
-| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 257 |
-| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** | 116 |
-| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する | 311 |
-| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** | 300 |
-| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget | 133 |
-| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** | 291 |
-| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 198 |
-| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 606 |
-| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 499 |
-| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 312 |
-| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 889 |
+| | 文書 | なぜこの位置か |
+|---:|---|---|
+| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** |
+| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** |
+| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する |
+| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** |
+| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget |
+| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** |
+| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる |
+| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 |
+| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 |
+| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 |
+| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い |
 
 **1〜6が先なのは、7以降がそこで決めた規約を前提に書かれているから。** 逆順で読むと、
 機能ごとに同じ規約の説明を読み直すことになる。
