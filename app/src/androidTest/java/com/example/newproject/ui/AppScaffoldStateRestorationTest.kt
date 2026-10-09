@@ -7,6 +7,7 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -88,12 +89,38 @@ class AppScaffoldStateRestorationTest {
         assertCount(1)
     }
 
+    /**
+     * **ノートタブで余白ペインが出ている間はレールを畳む。畳んでも出しても、NavHost 配下の保存値は同じ場所へ戻る**
+     * （→ features/margin_pane.md §5.1）。レールは本文の後ろに組み立てるので、出し入れしても本文の呼び出し位置は変わらない。
+     */
+    @Test
+    fun レールを畳んで戻しても保存値が残る() {
+        var paneVisible by mutableStateOf(false)
+        composeRule.setContent {
+            Scaffolded(EXPANDED, rememberNavController(), notePaneVisible = paneVisible)
+        }
+        composeRule.onNodeWithText(AppDestination.Search.label).assertExists()
+        tap()
+        assertCount(1)
+
+        paneVisible = true
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(AppDestination.Search.label).assertDoesNotExist()
+        assertCount(1)
+
+        paneVisible = false
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(AppDestination.Search.label).assertExists()
+        assertCount(1)
+    }
+
     @androidx.compose.runtime.Composable
-    private fun Scaffolded(windowSizeClass: WindowSizeClass, nav: NavHostController) {
+    private fun Scaffolded(windowSizeClass: WindowSizeClass, nav: NavHostController, notePaneVisible: Boolean = false) {
         AppScaffold(
             windowSizeClass = windowSizeClass,
             navController = nav,
-            snackbarHostState = remember { SnackbarHostState() }
+            snackbarHostState = remember { SnackbarHostState() },
+            notePaneVisible = notePaneVisible
         ) { modifier ->
             NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
                 composable(AppDestination.Note.route) {

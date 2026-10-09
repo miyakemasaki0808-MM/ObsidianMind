@@ -142,6 +142,8 @@ internal fun NoteReaderTab(
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
     expandedWidth: Boolean,
+    /** 余白ペインが出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
+    onMarginPaneVisibleChange: (Boolean) -> Unit,
     /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
     memoDraft: MarginMemoDraft,
     /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
@@ -231,6 +233,7 @@ internal fun NoteReaderTab(
     var backgroundSummary by remember { mutableStateOf<SectionRef?>(null) }
     LaunchedEffect(currentNoteUri, sectionModel) { backgroundSummary = null }
     val currentOnOpenMarginMemo by rememberUpdatedState(onOpenMarginMemo)
+    val currentOnMarginPaneVisibleChange by rememberUpdatedState(onMarginPaneVisibleChange)
     // ペインの「このノートの関連」の並びと開閉。後から届いた候補は下へ足す（→ paneRelatedCandidates）。
     // **画面の保存値に置き、持ち主のノートを値として持つ。** 右で読んでいる間に画面が組み直されても、戻る先の一覧を失わない。
     var relatedList by rememberSaveable(stateSaver = PaneRelatedListSaver) { mutableStateOf<PaneRelatedList?>(null) }
@@ -519,6 +522,14 @@ internal fun NoteReaderTab(
         }
 
         val windowKnown = foldInfo.isKnown && regionStartDp != null
+        // 余白ペインが出ているかを外殻へ知らせる。**窓の情報が揃う前の仮の並べ方は知らせない** — 折り目が届く前に
+        // 仮にペインが組まれると、レールが一瞬畳まれてから戻る。
+        // **畳んだせいでペインが出せなくなってはいけない**（出せなくなるとレールが戻り、また畳む、を繰り返す）。
+        // 折り目で割る窓では、畳んでも本文が左へ広がるだけでペインの幅は変わらない（ReaderLayoutTest）。
+        // 折り目がレールの下に来ると割り方が替わるが、レールを出す Expanded の窓では折り目は窓の中ほどにある。
+        LaunchedEffect(windowKnown, paneVisible) {
+            if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible)
+        }
         // **余白ペインでない並べ方になったら並べ読みを終える**（Fold を閉じた・✎ でしまった → endsSideReading）。
         LaunchedEffect(windowKnown, paneVisible, reading) {
             if (endsSideReading(windowKnown, paneVisible, reading)) onCloseSideReading()

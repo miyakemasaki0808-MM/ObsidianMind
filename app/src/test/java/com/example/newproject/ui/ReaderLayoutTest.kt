@@ -97,6 +97,32 @@ class ReaderLayoutTest {
         assertTrue("ペインの左端が折り目より手前です", foldDp < bodyEnd + pane.gutterDp)
     }
 
+    /**
+     * **ペインが出ている間はレールを畳む**（→ features/margin_pane.md §5.1）。同じ Pixel 10 Pro Fold の値で、
+     * 畳む前は本文が約318dp・ペインが約398dp、畳むと本文が左へ広がって両方約398dpになる。
+     * **畳んでもペインの幅は減らない** — 減ると、畳んだせいでペインが出せなくなり、レールが戻ってまた畳む、を繰り返す。
+     */
+    @Test
+    fun `レールを畳むと本文が左へ広がり、ペインの幅は変わらない`() {
+        val foldDp = 1038f / 2.4375f
+        val windowDp = 852f
+        val padding = 20f
+        val rail = 80f
+
+        val withRail = readerLayoutFor(windowDp - rail - 2 * padding, 800f, paneOpen = true, expandedWidth = true, fold = vertical(foldDp), regionStartDp = rail + padding)
+        val folded = readerLayoutFor(windowDp - 2 * padding, 800f, paneOpen = true, expandedWidth = true, fold = vertical(foldDp), regionStartDp = padding)
+
+        assertTrue("レールがあるときに折り目で割れていません: $withRail", withRail is ReaderLayout.MarginPane)
+        assertTrue("レールを畳むと折り目で割れません: $folded", folded is ReaderLayout.MarginPane)
+        val before = withRail as ReaderLayout.MarginPane
+        val after = folded as ReaderLayout.MarginPane
+        val paneBefore = windowDp - rail - 2 * padding - before.bodyWidthDp - before.gutterDp
+        val paneAfter = windowDp - 2 * padding - after.bodyWidthDp - after.gutterDp
+        assertEquals(before.bodyWidthDp + rail, after.bodyWidthDp, 0.01f)
+        assertEquals(paneBefore, paneAfter, 0.01f)
+        assertTrue("畳んでも本文がペインより細い: 本文 ${after.bodyWidthDp} / ペイン $paneAfter", after.bodyWidthDp >= paneAfter - 2f)
+    }
+
     @Test
     fun `幅を持つ折り目は溝をその幅まで広げる`() {
         assertEquals(

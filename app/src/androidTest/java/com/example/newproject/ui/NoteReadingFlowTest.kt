@@ -948,6 +948,38 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
     }
 
+    /**
+     * **余白ペインが出ているかを外殻へ知らせる**（→ features/margin_pane.md §5.1）。外殻はこれでタブのレールを畳む。
+     * ペインの設定を閉じると、出ていないことを知らせてレールを戻させる。
+     */
+    @Test
+    fun 余白ペインが出ているかを外殻へ知らせ_閉じると戻す() {
+        val reports = mutableListOf<Boolean>()
+        var paneOpen by mutableStateOf(true)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = paneOpen,
+                        expandedWidth = true,
+                        onMarginPaneVisibleChange = { reports += it }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        assertEquals("ペインが出ているのに知らせていない: $reports", true, reports.lastOrNull())
+
+        paneOpen = false
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        assertEquals("ペインをしまったのに知らせていない: $reports", false, reports.lastOrNull())
+    }
+
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────
 
     /**
@@ -1196,6 +1228,7 @@ class NoteReadingFlowTest {
         onRequestSectionSummary: (SectionRef) -> Unit = {},
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false,
+        onMarginPaneVisibleChange: (Boolean) -> Unit = {},
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
@@ -1221,6 +1254,7 @@ class NoteReadingFlowTest {
             marginPaneOpen = marginPaneOpen,
             onSetMarginPaneOpen = {},
             expandedWidth = expandedWidth,
+            onMarginPaneVisibleChange = onMarginPaneVisibleChange,
             memoDraft = MarginMemoDraft(),
             onEditMarginMemo = { _, _ -> },
             onSubmitMarginMemo = {},

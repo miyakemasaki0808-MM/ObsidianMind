@@ -98,6 +98,7 @@ internal const val SIDE_BY_SIDE_MAX_HEIGHT_DP = 480f
 /**
  * 余白ペインで本文に残す幅の下限。開いた Pixel 10 Pro Fold を平らにして測った本文の幅（約318dp。
  * 左のレールと余白で約100dpを取られる）が収まる値にしてある。上げるとこの端末で折り目に割れなくなる。
+ * **ペインを出すかはレールがある状態で決まる**（出た後に外殻がレールを畳む → `showsRail`）ので、畳んだ後の幅で測り直さない。
  */
 internal const val MARGIN_PANE_MIN_BODY_DP = 300f
 
