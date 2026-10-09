@@ -29,6 +29,10 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipeRight
@@ -1128,9 +1132,11 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput { swipeUp(startY = bottom, endY = top - 300f) }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
 
+        // 本文に触れる。**帯より下の、左の面の中ほどを押す** — 題名など本文の上のほうは帯の下に隠れ、
+        // 箱の下端の近くは画面下のバーを避ける余白で、左の面の外になる。
         composeRule.onNodeWithContentDescription("操作を出す").performClick()
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
-        composeRule.onNodeWithText(TITLE).performClick()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput { click(Offset(x = 100.dp.toPx(), y = centerY + 60.dp.toPx())) }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
     }
 
@@ -1199,7 +1205,8 @@ class NoteReadingFlowTest {
     private fun setDesk(onRandomNote: () -> Unit = {}) {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                // 窓より大きいと中央に寄せて置かれるので、位置はこの箱から測る（→ DESK_TAG）。
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS).withMemos(),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
@@ -1546,6 +1553,7 @@ class NoteReadingFlowTest {
         const val NOTE_B = "content://vault/b.md"
         const val FIRST_PARAGRAPH = "最初の段落"
         const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
+        const val DESK_TAG = "机の画面"
         val NOTICE = SectionChatProblem.AiStatus(
             AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
         )
