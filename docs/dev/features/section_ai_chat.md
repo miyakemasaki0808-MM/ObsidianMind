@@ -1,7 +1,7 @@
 # 部分要約（この節の要約）
 
-**状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す。見出しの要約ボタンが面を出さずに始める形は実機確認待ち
-**最終検証:** 2026-10-04 / `9e377cf5`（Pixel 10 Pro Fold で面への統合・3節分・中止・見出しより前・同名の見出し・蒸留での破棄を実モデルで確認）
+**状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す
+**最終検証:** 2026-10-10 / `fce6745a`（Pixel 10 Pro Fold で面を出さずに始める形・頼んだ節の再押下・ノート全体を実モデルで確認）
 **関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionSummaryStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
 **関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `NoteSectionThreadingTest`
 **正本:** この文書（置き場所と面の並びは [この部分](margin_pane.md)）

@@ -1,7 +1,7 @@
 # この部分 — 余白のペインとシート
 
-**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序は §10）。見出しの要約ボタンが面を出さずに始める形と、ペインを出している間の机の画面（レールと見出しを出さず、つまみで操作の帯を呼ぶ）は実機確認待ち
-**最終検証:** 2026-10-04 / `0defc6de`
+**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序と面は §10）
+**最終検証:** 2026-10-10 / `fce6745a`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/AppScaffold.kt`
 **関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
@@ -442,6 +442,12 @@
     準備待ちの説明を押し直すと確かめ直すことは JVM のテストが持つ（オーナー判断 2026-10-04）
   - **シートが自動で広がる動きの途中へ、実際の指で割り込むこと。** 動きは一瞬で終わり、狙って止められず、観察でも
     一覧のスクロールと区別できない。止められた後の保留の扱いは `MarginMemoSheetUiTest` が時計を止めて持つ（オーナー判断 2026-10-03）
+  - **見出しの要約ボタンの生成中の記号（⏳）。** 実機の生成は画面の読み取り（2秒以上）より短く終わり、観測できなかった。
+    面を出さずに始め、できた記号を押して見せる流れは実 Nano で確かめた（2026-10-10）
+  - **端末 AI が使えない理由を面で見せる動き。** 検証端末は初めから使える状態で、自然には起こせない。
+    `MarginSurfaceTest`・`SectionSummaryNoticeTest` と UI テストが持つ（オーナー判断 2026-10-10）
+  - **Fold を開閉する瞬間のレールの揺れ。** 開閉の後に机の画面へ落ち着き、レールが出入りを繰り返さないことは確かめた。瞬間の揺れは連続監視していない（2026-10-10）
+  - **机の画面の TalkBack の実機操作。** 端末の読み上げ機能は有効化していない。「操作を出す」の読み上げの操作は UI テストの semantics 検査が持つ（2026-10-10）
 
 ## 11. 既知の制約・未解決事項
 
