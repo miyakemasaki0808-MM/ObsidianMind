@@ -225,14 +225,12 @@ internal fun NoteReaderTab(
         onMemoFocusIntentChange(false)
         onDismissMarginMemo()
     }
-    // 見出しの要約ボタンで、このノートの間だけ出したペイン（→ features/margin_pane.md §5.4）。**設定は変えない。**
-    // **出したノートを値として持つ。** 保存した画面は別のノートを開いた状態で復元されることがあり、
-    // 保存の鍵では照合されない（→ paneForNoteShown）。Fold の開閉と全画面との往復では同じノートなので残る。
-    var paneForNote by rememberSaveable { mutableStateOf<String?>(null) }
     val currentNoteUri = successState?.targetUri
-    // ノートを離れたら（読み込み中を含む）持ち主を捨てる。戻ってきても、頼み直すまで出さない。
-    LaunchedEffect(currentNoteUri) { if (paneForNote != currentNoteUri) paneForNote = null }
-    val paneShown = marginPaneOpen || paneForNoteShown(paneForNote, currentNoteUri)
+    // 見出しの要約ボタンで、面を出さずに始めた節（→ backgroundSummaryStep）。端末AIが使えない理由が届いたら面を出す。
+    // ノートか本文の解析が替わったら追うのをやめる — 要約はそこで全部捨てられる。
+    var backgroundSummary by remember { mutableStateOf<SectionRef?>(null) }
+    LaunchedEffect(currentNoteUri, sectionModel) { backgroundSummary = null }
+    val currentOnOpenMarginMemo by rememberUpdatedState(onOpenMarginMemo)
     // ペインの「このノートの関連」の並びと開閉。後から届いた候補は下へ足す（→ paneRelatedCandidates）。
     // **画面の保存値に置き、持ち主のノートを値として持つ。** 右で読んでいる間に画面が組み直されても、戻る先の一覧を失わない。
     var relatedList by rememberSaveable(stateSaver = PaneRelatedListSaver) { mutableStateOf<PaneRelatedList?>(null) }
@@ -284,7 +282,6 @@ internal fun NoteReaderTab(
             MarginToggle.HideSheet -> dismissMemoSheet()
             MarginToggle.ClosePane -> {
                 onMemoFocusIntentChange(false)
-                paneForNote = null
                 onSetMarginPaneOpen(false)
             }
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
@@ -453,13 +450,13 @@ internal fun NoteReaderTab(
             widthDp = maxWidth.value,
             heightDp = maxHeight.value,
             // ノートが無いときはペインに置くものが無い。読み込み中は枠を保ち、ノートを引くたびに並びを揺らさない。
-            paneOpen = paneShown && (hasNote || isLoading),
+            paneOpen = marginPaneOpen && (hasNote || isLoading),
             expandedWidth = expandedWidth,
             fold = foldInfo.fold,
             regionStartDp = regionStartDp ?: 0f
         )
         val paneVisible = layout is ReaderLayout.MarginPane
-        val memoToggle = marginToggleFor(canShowPane, paneShown, uiState.isMarginMemoSheetVisible)
+        val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
         // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
         // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。
         val hideControls = hidesReaderControls(
@@ -475,17 +472,38 @@ internal fun NoteReaderTab(
             memoReveal = reveal
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
-        // 見出しの要約ボタン。**出せる面を出し、要約を始めて、要約の行まで送る**（→ features/margin_pane.md §5.4）。
+        // 見出しの要約ボタン（→ features/margin_pane.md §5.4）。面が出ていれば、要約を始めてその面の要約の行まで送る。
+        // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
         val openSummary: () -> Unit = {
+            val entry = summaryEntryFor(paneVisible, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
             if (reading) onCloseSideReading()
-            when (summaryEntryFor(canShowPane, paneVisible, uiState.isMarginMemoSheetVisible)) {
-                SummaryEntry.Pane -> Unit
-                SummaryEntry.PaneForNote -> paneForNote = currentNoteUri
-                SummaryEntry.Sheet -> onOpenMarginMemo()
-            }
+            if (entry == SummaryEntry.Sheet) onOpenMarginMemo()
             bodySection?.let(onRequestSectionSummary)
-            summaryReveal = ++summaryRevealCount
+            if (entry == SummaryEntry.Background) {
+                backgroundSummary = bodySection
+            } else {
+                backgroundSummary = null
+                summaryReveal = ++summaryRevealCount
+            }
+        }
+        // 面を出さずに始めた要約を見届ける。**端末AIが使えない理由が届いたときだけ**シートを出して見せる。
+        backgroundSummary?.let { followed ->
+            val step = backgroundSummaryStep(
+                summary = uiState.sectionChat.summaryOf(followed),
+                faceVisible = paneVisible || uiState.isMarginMemoSheetVisible
+            )
+            LaunchedEffect(followed, step) {
+                when (step) {
+                    BackgroundSummaryStep.Wait -> Unit
+                    BackgroundSummaryStep.ShowNotice -> {
+                        currentOnOpenMarginMemo()
+                        summaryReveal = ++summaryRevealCount
+                        backgroundSummary = null
+                    }
+                    BackgroundSummaryStep.Done -> backgroundSummary = null
+                }
+            }
         }
         // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。
         // 押すと、面をその節のメモまで送る。**本文は動かさない** — 見出しは押した指の下に見えているうえ、
@@ -515,7 +533,7 @@ internal fun NoteReaderTab(
         MarginWindowShiftEffect(
             windowKnown = windowKnown,
             canShowPane = canShowPane,
-            paneOpen = paneShown,
+            paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
             // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
             writing = memoDraft.text.isNotEmpty() || memoFocusIntent,

@@ -1,6 +1,6 @@
 # 部分要約（この節の要約）
 
-**状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す
+**状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す。見出しの要約ボタンが面を出さずに始める形は実機確認待ち
 **最終検証:** 2026-10-04 / `9e377cf5`（Pixel 10 Pro Fold で面への統合・3節分・中止・見出しより前・同名の見出し・蒸留での破棄を実モデルで確認）
 **関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionSummaryStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
 **関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `NoteSectionThreadingTest`
@@ -14,6 +14,7 @@
 
 読んでいる節の要約を、「この部分」の面（スマホのシート・開いた Fold のペイン）に出す。
 入口は見出しの要約ボタン（✎ ⛶ の隣の 💬）と、面の中の「この節を要約」である。
+**面が出ていなければ、見出しの要約ボタンは要約を始めるだけで面を出さない** — 読書を止めずに頼み、できたら記号を押して見に行く（→ [この部分](margin_pane.md) §5.4）。
 **全画面には入口を置かない** — 要約は全画面に入る前のおさらいという立ち位置（→ [全画面](note_fullscreen.md) 判断5）。
 
 > クラス名の `SectionChat…` は、質問と回答を持っていた頃の名残である。
@@ -48,7 +49,9 @@
 
 1. 本文をスクロールすると、止まったところで面の節が替わる（→ [この部分](margin_pane.md) §5.3）
    - **見出しより前は見出しより前だけ、見出しの無いノートは全体**が1つの節になる
-2. 見出しの 💬 を押す → 出せる面を出し、その節の要約を始めて、面を要約の行まで送る
+2. 見出しの 💬 を押す → その節の要約を始める。面が出ていれば、面を要約の行まで送る
+   - **面が出ていなければ、面を出さない。** 記号が ⏳ に変わり、できたら ✓（失敗なら !）になる。その記号を押すとシートが出て、要約の行まで送る
+   - **端末AIが使えない理由が届いたときだけ、面を出して見せる。** 理由では記号が 💬 のまま変わらないため
    - **その節の要約を持っていれば作り直さない**（生成中・完成・生成の失敗・非対応の説明は、それを見せる）。
      **後で使えるようになる説明（準備待ち・一時的に使えない）だけは、押し直すと状態を確かめ直す** — 準備待ちの説明には再試行のボタンが無い
    - 面の「この節を要約」も同じ要求を出す
@@ -87,6 +90,7 @@
 - **再試行:** `retry()` が**頼んだときの本文のまま**作り直す。生成中か、要約を持っているなら何もしない。
   再試行のボタンを持たない準備待ちの説明は、入口を押し直すと確かめ直す（`isShownAsIsOnRequest`）
 - **入口:** 見出しの要約ボタンは、面の節で要求を出す。**✎ とは分ける** — ✎ は書く入口、💬 は AI の入口。
+  どの面に出すか（面が無ければ始めるだけ）は `summaryEntryFor` が決める（→ [この部分](margin_pane.md) §5.4）。
   読み上げ名は「この節を要約」を核にし、撤去した自由な質問を期待させない
   （記号と読み上げ名は `sectionSummaryEntrySymbol` / `sectionSummaryEntryDescription` の純関数）
 - **派生状態:** `domain/SectionSummaryStatus.kt` の `sectionSummaryStatus` が、面の節の要約から `Idle` / `Working` / `Ready` / `Error` を導く。

@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 見出しの要約ボタンは、面が出ていなければ要約を始めるだけにし、頼んだ節でもう一度押すとシートで見せるようにした | [margin_pane](features/margin_pane.md) §5.4・[section_ai_chat](features/section_ai_chat.md) §4 |
 | 2026-10-08 | 外部のデザイン壁打ちから、規約の内側で持ち帰れる装飾と手触り6件を owner の持ち帰り帳に起こした | — |
 | 2026-10-07 | 実機の体感から UX の課題3件とアイデア3案を起票し、困っている5件をロードマップの Now の先頭に置いた | — |
 | 2026-10-06 | タブ・Rediscover・読書痕跡の正本をコードと突き合わせ、冊子と共有する引いた経路などの食い違いを直した | [rediscover](features/rediscover.md)・[reflect_reading_trace](features/reflect_reading_trace.md)・[tab_navigation](system/tab_navigation.md) |

@@ -39,8 +39,11 @@ import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.NoteState
@@ -55,7 +58,6 @@ import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -905,50 +907,45 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **このノートの間だけ出したペインを、別のノートで復元された画面に持ち込まない**（→ features/margin_pane.md §5.4）。
-     * 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で復元される。そのときは読み込み中を挟まない。
+     * **面が出ていなければ、まだ頼んでいない節の要約ボタンは要約を始めるだけで、面を出さない**（→ features/margin_pane.md §5.4）。
+     * 頼んだ節で押すと、シートを出して見せに行く。**ペインを出せる窓で設定が閉じていても、ペインは出さない。**
      */
     @Test
-    fun このノートの間だけのペインは_別のノートで復元された画面には出ない() {
-        assertFalse("別のノートへ持ち込んだ", paneAfterRestore(restoreWith = NOTE_B))
-    }
-
-    /** 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。上の検査の対照。 */
-    @Test
-    fun このノートの間だけのペインは_同じノートで作り直すと残る() {
-        assertTrue("同じノートで作り直すと消えた", paneAfterRestore(restoreWith = NOTE_A))
-    }
-
-    /**
-     * ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。
-     * **1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回で、2回目は例外になる。
-     */
-    private fun paneAfterRestore(restoreWith: String): Boolean {
-        val restoration = StateRestorationTester(composeRule)
-        // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
-        var current = NOTE_A
-        restoration.setContent {
+    fun 要約ボタンは_頼んでいない節では面を出さず_頼んだ節ではシートを出す() {
+        var openCalls = 0
+        val requests = mutableListOf<SectionRef>()
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos())
+        composeRule.setContent {
             AppTheme(darkTheme = false) {
                 Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
                     ReaderTab(
-                        loadedNote(SHORT_TWO_SECTIONS, targetUri = current).withMemos(),
+                        state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
+                        onOpenMarginMemo = { openCalls++ },
+                        onRequestSectionSummary = { requests += it },
                         marginPaneOpen = false,
                         expandedWidth = true
                     )
                 }
             }
         }
-        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
         composeRule.onNodeWithContentDescription("この節を要約").performClick()
         composeRule.waitForIdle()
-        composeRule.onNode(hasSetTextAction()).assertExists()
+        assertEquals(listOf(SectionRef("節A")), requests)
+        assertEquals("頼んでいない節で面を出した", 0, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
 
-        current = restoreWith
-        restoration.emulateSavedInstanceStateRestore()
+        state = state.copy(
+            sectionChat = SectionChatState(
+                listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約"))
+            )
+        )
+        composeRule.onNodeWithContentDescription("この節の要約あり。タップで開く").performClick()
         composeRule.waitForIdle()
-        return composeRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+        assertEquals("頼んだ節でシートを出さなかった", 1, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
     }
 
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────
@@ -1196,6 +1193,7 @@ class NoteReadingFlowTest {
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
+        onRequestSectionSummary: (SectionRef) -> Unit = {},
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false,
         sideBlocks: List<MarkdownBlock>? = null,
@@ -1212,7 +1210,7 @@ class NoteReadingFlowTest {
             noteListState = listState,
             onSelectVault = {},
             onRandomNote = {},
-            onRequestSectionSummary = {},
+            onRequestSectionSummary = onRequestSectionSummary,
             onRetrySectionSummary = {},
             onCancelSectionSummary = {},
             onOpenBooklet = {},
