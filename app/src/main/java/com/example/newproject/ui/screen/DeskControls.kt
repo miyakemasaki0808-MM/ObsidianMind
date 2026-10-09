@@ -1,13 +1,8 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.DraggableState
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -22,17 +17,17 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -40,32 +35,40 @@ import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
-import kotlinx.coroutines.CoroutineScope
 
 // 開いた Fold で ✎ を押した後の「机の画面」の操作（→ features/margin_pane.md §5.1）。
 // 机の画面では本文とペインを同じ大きさで並べ、見出しと操作の行は出さない。
 // 左の面の上のつまみを下へ払うか押すと、操作の帯が本文の上に重なって出る。帯の出し入れで本文とペインの大きさは変えない。
 
-/** つまみや帯を縦に払ったときの扱い。 */
+/** つまみに触れて離したときの扱い。 */
 internal enum class DeskBarGesture {
+    /** 動かさずに離した。押した扱い。 */
+    Tap,
     Show,
     Hide,
     None
 }
 
 /**
- * 縦に払った量 [dragDp]（下向きが正）から、帯を出すかしまうかを決める。
- * **払った向きだけで決め、どこで払い始めたかは見ない** — 受けるのはつまみと帯だけで、本文のスクロールとは取り合わない。
- * 指が少し揺れただけで出し入れしないよう、[DESK_BAR_SWIPE_DP] に届かなければ何もしない（押した扱いは別に受ける）。
+ * つまみに触れて離したときの扱いを決める。[moved] は指が触れた位置から動いたと言える距離（タッチスロップ）を越えたか、
+ * [dragDp] は触れた位置から離した位置までの縦の距離（下向きが正）、[velocityDpPerSec] は離したときの縦の速さ。
+ *
+ * **距離か速さのどちらかで決める。** 短く素早く払う（フリック）は距離が足りなくても開閉する — 距離だけで決めると、
+ * 押して開閉はできるのに払っても何も起きない。向きは距離の符号で決め、速さが逆向きなら数えない。
+ * 横へ払ったときは縦の距離も速さも小さいので何もしない（横の払いは片側を広げる操作に残す）。
  */
-internal fun deskBarGestureFor(dragDp: Float): DeskBarGesture = when {
-    dragDp >= DESK_BAR_SWIPE_DP -> DeskBarGesture.Show
-    dragDp <= -DESK_BAR_SWIPE_DP -> DeskBarGesture.Hide
+internal fun deskBarGestureFor(moved: Boolean, dragDp: Float, velocityDpPerSec: Float): DeskBarGesture = when {
+    !moved -> DeskBarGesture.Tap
+    dragDp > 0f && (dragDp >= DESK_BAR_SWIPE_DP || velocityDpPerSec >= DESK_BAR_FLING_DP_PER_SEC) -> DeskBarGesture.Show
+    dragDp < 0f && (dragDp <= -DESK_BAR_SWIPE_DP || velocityDpPerSec <= -DESK_BAR_FLING_DP_PER_SEC) -> DeskBarGesture.Hide
     else -> DeskBarGesture.None
 }
 
-/** 帯を出し入れするのに払う距離。 */
+/** 速さが足りないときに、帯を出し入れするのに払う距離。 */
 internal const val DESK_BAR_SWIPE_DP = 24f
+
+/** 距離が足りなくても出し入れする速さ。Material3 のシートが払いで開閉する速さ（125dp/秒）にそろえる。 */
+internal const val DESK_BAR_FLING_DP_PER_SEC = 125f
 
 /**
  * 机の画面で、本文とペインの上に置く余白の高さ。**両方に同じだけ置く** — 片方にだけ置くと上端がずれ、同じ大きさに見えない。
@@ -80,16 +83,22 @@ internal val DeskStripHeight = 48.dp
 @Composable
 internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modifier = Modifier) {
     val currentOnShow by rememberUpdatedState(onShow)
-    val swipe = rememberDeskSwipe { gesture -> if (gesture == DeskBarGesture.Show) currentOnShow() }
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(DeskStripHeight)
-            .draggable(swipe.state, Orientation.Vertical, onDragStarted = swipe.onStarted, onDragStopped = swipe.onStopped)
-            .clickable(onClickLabel = "操作を出す") { currentOnShow() }
+            .pointerInput(Unit) {
+                detectDeskGrip { gesture ->
+                    if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Show) currentOnShow()
+                }
+            }
             .semantics {
                 role = Role.Button
                 contentDescription = "操作を出す"
+                onClick(label = "操作を出す") {
+                    currentOnShow()
+                    true
+                }
             },
         contentAlignment = Alignment.Center
     ) {
@@ -111,7 +120,6 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
 @Composable
 internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val currentOnHide by rememberUpdatedState(onHide)
-    val swipe = rememberDeskSwipe { gesture -> if (gesture == DeskBarGesture.Hide) currentOnHide() }
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -123,11 +131,18 @@ internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content:
             modifier = Modifier
                 .fillMaxWidth()
                 .height(32.dp)
-                .draggable(swipe.state, Orientation.Vertical, onDragStarted = swipe.onStarted, onDragStopped = swipe.onStopped)
-                .clickable(onClickLabel = "操作をしまう") { currentOnHide() }
+                .pointerInput(Unit) {
+                    detectDeskGrip { gesture ->
+                        if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Hide) currentOnHide()
+                    }
+                }
                 .semantics {
                     role = Role.Button
                     contentDescription = "操作をしまう"
+                    onClick(label = "操作をしまう") {
+                        currentOnHide()
+                        true
+                    }
                 },
             contentAlignment = Alignment.Center
         ) { GripPill() }
@@ -165,25 +180,28 @@ private fun GripPill() {
     )
 }
 
-/** 縦に払うのを受ける口。[rememberDeskSwipe] で作り、`draggable` へそのまま渡す。 */
-private class DeskSwipe(
-    val state: DraggableState,
-    val onStarted: suspend CoroutineScope.(Offset) -> Unit,
-    val onStopped: suspend CoroutineScope.(Float) -> Unit
-)
-
-/** 払い終えたとき、払った量から決めた扱い（→ [deskBarGestureFor]）を [onGesture] へ渡す。 */
-@Composable
-private fun rememberDeskSwipe(onGesture: (DeskBarGesture) -> Unit): DeskSwipe {
-    val density = LocalDensity.current
-    val currentOnGesture by rememberUpdatedState(onGesture)
-    val dragged = remember { mutableFloatStateOf(0f) }
-    val state = rememberDraggableState { delta -> dragged.floatValue += delta }
-    return remember(state, density) {
-        DeskSwipe(
-            state = state,
-            onStarted = { dragged.floatValue = 0f },
-            onStopped = { currentOnGesture(deskBarGestureFor(with(density) { dragged.floatValue.toDp().value })) }
-        )
+/**
+ * つまみに触れてから離すまでを見て、[deskBarGestureFor] の扱いを [onGesture] へ渡す。
+ * **押すと払うを1つの検出で受ける。** 押す部品と払う部品を重ねると、払った量を指が動き始めてからしか数えず、
+ * 短いフリックが判定に届かない。ここでは触れた位置から離した位置までを数える。
+ * 動いたと言えてからの指は使い、ほかへ渡さない。
+ */
+private suspend fun PointerInputScope.detectDeskGrip(onGesture: (DeskBarGesture) -> Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown()
+        val velocity = VelocityTracker().apply { addPointerInputChange(down) }
+        var moved = false
+        var last = down
+        while (true) {
+            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            velocity.addPointerInputChange(change)
+            last = change
+            if (!moved && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+            if (moved) change.consume()
+            if (!change.pressed) break
+        }
+        val dragDp = (last.position.y - down.position.y).toDp().value
+        val velocityDpPerSec = velocity.calculateVelocity().y.toDp().value
+        onGesture(deskBarGestureFor(moved, dragDp, velocityDpPerSec))
     }
 }

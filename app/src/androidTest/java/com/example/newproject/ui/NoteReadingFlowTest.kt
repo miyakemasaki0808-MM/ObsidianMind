@@ -31,6 +31,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -1130,6 +1131,36 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithContentDescription("操作を出す").performClick()
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
         composeRule.onNodeWithText(TITLE).performClick()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **短く素早く払う（フリック）でも帯が出入りする。** 払った量を指が動き始めてからしか数えず距離だけで決めていたときは、
+     * 押せば開閉するのにフリックでは何も起きなかった（実機で観測）。20dp を 40ms で払う。
+     */
+    @Test
+    fun 机の画面ではつまみを短くフリックしても帯が出て_帯のつまみをフリックするとしまう() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** 横へ払っても帯は出ない。押した扱いにもしない（横の払いは片側を広げる操作に残す）。 */
+    @Test
+    fun 机の画面ではつまみを横へ払っても帯は出ない() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipeRight(startX = centerX, endX = centerX + 120.dp.toPx(), durationMillis = 120)
+        }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
     }
 
