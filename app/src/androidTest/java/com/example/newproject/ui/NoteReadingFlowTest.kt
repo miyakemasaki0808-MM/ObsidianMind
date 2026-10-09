@@ -28,6 +28,9 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -1092,6 +1095,63 @@ class NoteReadingFlowTest {
         assertEquals("ペインをしまったのに知らせていない: $reports", false, reports.lastOrNull())
     }
 
+    // ── 机の画面（→ features/margin_pane.md §5.1）───────────────────────────
+
+    /**
+     * **✎ の後の机の画面では、見出しと操作の行を出さない。** つまみを押すと操作の帯が出て、帯のボタンを押すと、
+     * その操作をしてから帯がしまう。
+     */
+    @Test
+    fun 机の画面では操作を出さず_つまみを押すと帯が出て_ボタンを押すとしまう() {
+        var randoms = 0
+        setDesk(onRandomNote = { randoms++ })
+        composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        composeRule.onNodeWithText("Rediscover").assertIsDisplayed()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, randoms)
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** つまみを下へ払うと帯が出て、帯のつまみを上へ払うとしまう。帯が出ている間に本文に触れてもしまう。 */
+    @Test
+    fun 机の画面ではつまみを下へ払うと帯が出て_上へ払うか本文に触れるとしまう() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput { swipeUp(startY = bottom, endY = top - 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+        composeRule.onNodeWithText(TITLE).performClick()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** 本文とペインを並べた机の画面。ペインの入力欄が出ていることを確かめてから返す。 */
+    private fun setDesk(onRandomNote: () -> Unit = {}) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        onRandomNote = onRandomNote
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+    }
+
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────
 
     /**
@@ -1365,6 +1425,7 @@ class NoteReadingFlowTest {
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
         onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onRandomNote: () -> Unit = {},
         onAcknowledgeSectionSummaryNotice: (Long) -> Unit = {},
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false,
@@ -1382,7 +1443,7 @@ class NoteReadingFlowTest {
             imageMeasurements = measurements,
             noteListState = listState,
             onSelectVault = {},
-            onRandomNote = {},
+            onRandomNote = onRandomNote,
             onRequestSectionSummary = onRequestSectionSummary,
             onAcknowledgeSectionSummaryNotice = onAcknowledgeSectionSummaryNotice,
             onRetrySectionSummary = {},

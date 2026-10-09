@@ -213,7 +213,7 @@ internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
  * **入力欄に触れてキーボードが出ている間だけ。** キーボードが出ると、残る高さを操作とカードが使い切って本文が消える。
  *
  * - 縦積み — シートで書いているとき。シートはさらに本文の下を覆う
- * - 余白ペイン — ペインで書いているとき。本文の列の上に操作とカードが残る形は縦積みと同じ
+ * - 余白ペイン — ペインで書いているとき。本文の上に再会カードが残る（操作は机の画面の帯に入っていて、ここでは出ていない）
  * - 左右2列 — 隠さない。操作は横の列にあり、本文の高さを取らない
  */
 internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, writingWithKeyboard: Boolean): Boolean =
