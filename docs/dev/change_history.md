@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 要約ボタンとFoldのレールをレビューし、AI利用不可の説明で対象の節と画面再作成の扱いに問題が残ることを確認した | [レビュー一覧](../review/README.md) |
 | 2026-10-10 | 開いた Fold で余白ペインが出ている間はタブのレールを畳み、本文とペインをほぼ同じ幅にした | [margin_pane](features/margin_pane.md) §5.1・[tab_navigation](system/tab_navigation.md) |
 | 2026-10-10 | 見出しの要約ボタンは、面が出ていなければ要約を始めるだけにし、頼んだ節でもう一度押すとシートで見せるようにした | [margin_pane](features/margin_pane.md) §5.4・[section_ai_chat](features/section_ai_chat.md) §4 |
 | 2026-10-08 | 外部のデザイン壁打ちから、規約の内側で持ち帰れる装飾と手触り6件を owner の持ち帰り帳に起こした | — |
