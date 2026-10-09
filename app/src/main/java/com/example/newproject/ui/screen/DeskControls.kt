@@ -41,7 +41,7 @@ import com.example.newproject.ui.theme.ReadingGradient
 
 // 開いた Fold で ✎ を押した後の「机の画面」の操作（→ features/margin_pane.md §5.1）。
 // 机の画面では本文とペインを同じ大きさで並べ、見出しと操作の行は出さない。
-// 左の面の上のつまみを下へ払うか押すと、操作の帯が本文の上に重なって出る。帯の出し入れで本文とペインの大きさは変えない。
+// 左の面の上のつまみを下へ払うと、操作の帯が本文の上に重なって出る（指で押しても開かない）。帯の出し入れで本文とペインの大きさは変えない。
 
 /** つまみに触れて離したときの扱い。 */
 internal enum class DeskBarGesture {
@@ -57,7 +57,7 @@ internal enum class DeskBarGesture {
  * [dragDp] は触れた位置から離した位置までの縦の距離（下向きが正）、[velocityDpPerSec] は離したときの縦の速さ。
  *
  * **距離か速さのどちらかで決める。** 短く素早く払う（フリック）は距離が足りなくても開閉する — 距離だけで決めると、
- * 押して開閉はできるのに払っても何も起きない。向きは距離の符号で決め、速さが逆向きなら数えない。
+ * 短く素早く払っても何も起きない。向きは距離の符号で決め、速さが逆向きなら数えない。
  * 横へ払ったときは縦の距離も速さも小さいので何もしない（横の払いは片側を広げる操作に残す）。
  */
 internal fun deskBarGestureFor(moved: Boolean, dragDp: Float, velocityDpPerSec: Float): DeskBarGesture = when {
@@ -75,12 +75,15 @@ internal const val DESK_BAR_FLING_DP_PER_SEC = 125f
 
 /**
  * 机の画面で、本文とペインの上に置く余白の高さ。**両方に同じだけ置く** — 片方にだけ置くと上端がずれ、同じ大きさに見えない。
- * 左ではここがつまみになり、押せる高さを兼ねる（触れる部品の下限 48dp）。
+ * 左ではここがつまみになり、払い始められる高さを兼ねる（触れる部品の下限 48dp）。
  */
 internal val DeskStripHeight = 48.dp
 
 /**
- * 左の面の上のつまみ。**下へ払うか押すと帯を出す。** 本文の縦のスクロールと取り合わないよう、払いはここでだけ受ける。
+ * 左の面の上のつまみ。**下へ払うと帯を出す。指で押しても開かない**（→ features/margin_pane.md §5.1）。
+ * 本文の縦のスクロールと取り合わないよう、払いはここでだけ受ける。
+ * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
+ * これを外すと帯の ✎ にも届かず、机の画面から抜けられない。この操作は読み上げ機能だけが呼び、指で押しても呼ばれない。
  * 読み込み中は端にくるくるを出す — 帯がしまわれている間も、次のノートを読んでいることが分かるように。
  */
 @Composable
@@ -91,9 +94,7 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
             .fillMaxWidth()
             .height(DeskStripHeight)
             .pointerInput(Unit) {
-                detectDeskGrip { gesture ->
-                    if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Show) currentOnShow()
-                }
+                detectDeskGrip { gesture -> if (gesture == DeskBarGesture.Show) currentOnShow() }
             }
             .semantics {
                 role = Role.Button
@@ -117,7 +118,7 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
 /**
  * つまみの上の余白も、払い始める場所に含める。**画面の上の縁から引き下ろしても帯が出る**ようにするため。
  * つまみの上には切り欠きを避ける余白と画面の余白があり、上のほうから引き下ろすと指がそこに置かれる。
- * ここを受けないと、押せば帯が出るのに、払っても出ない。
+ * ここを受けないと、上のほうから引き下ろしても帯が出ない。
  *
  * 本文領域の左上に置き、[reachAbove] だけ上へはみ出させる。余白ペインの中身はシートの器（切り取りをする面）の内側にあるので、
  * **器の外に置かないと、はみ出した分が指を受け取らない。** 帯が出ている間は置かない — 帯の上の操作を横取りする。
@@ -131,9 +132,7 @@ internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit) {
             .width(width)
             .height(reachAbove + DeskStripHeight)
             .pointerInput(Unit) {
-                detectDeskGrip { gesture ->
-                    if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Show) currentOnShow()
-                }
+                detectDeskGrip { gesture -> if (gesture == DeskBarGesture.Show) currentOnShow() }
             }
     )
 }

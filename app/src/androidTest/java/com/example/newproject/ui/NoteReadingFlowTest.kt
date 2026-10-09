@@ -29,6 +29,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.geometry.Offset
@@ -1103,17 +1105,21 @@ class NoteReadingFlowTest {
     // ── 机の画面（→ features/margin_pane.md §5.1）───────────────────────────
 
     /**
-     * **✎ の後の机の画面では、見出しと操作の行を出さない。** つまみを押すと操作の帯が出て、帯のボタンを押すと、
-     * その操作をしてから帯がしまう。
+     * **✎ の後の机の画面では、見出しと操作の行を出さない。** つまみを指で押しても帯は出ず、下へ払うと出る。
+     * 帯のボタンを押すと、その操作をしてから帯がしまう。
      */
     @Test
-    fun 机の画面では操作を出さず_つまみを押すと帯が出て_ボタンを押すとしまう() {
+    fun 机の画面では操作を出さず_つまみを押しても帯は出ず_下へ払うと出て_ボタンを押すとしまう() {
         var randoms = 0
         setDesk(onRandomNote = { randoms++ })
         composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
 
         composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        openDeskBar()
         composeRule.onNodeWithText("Rediscover").assertIsDisplayed()
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed().performClick()
         composeRule.waitForIdle()
@@ -1134,7 +1140,7 @@ class NoteReadingFlowTest {
 
         // 本文に触れる。**帯より下の、左の面の中ほどを押す** — 題名など本文の上のほうは帯の下に隠れ、
         // 箱の下端の近くは画面下のバーを避ける余白で、左の面の外になる。
-        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        openDeskBar()
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
         composeRule.onNodeWithTag(DESK_TAG).performTouchInput { click(Offset(x = 100.dp.toPx(), y = centerY + 60.dp.toPx())) }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
@@ -1166,7 +1172,7 @@ class NoteReadingFlowTest {
     @Test
     fun 机の画面では帯の見出しの上から上へフリックしても帯がしまう() {
         setDesk()
-        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        openDeskBar()
 
         composeRule.onNodeWithText("Rediscover").performTouchInput {
             swipeUp(startY = centerY, endY = centerY - 20.dp.toPx(), durationMillis = 40)
@@ -1179,7 +1185,7 @@ class NoteReadingFlowTest {
     fun 机の画面では帯のボタンの上から上へ払っても_ボタンは押されず帯がしまう() {
         var randoms = 0
         setDesk(onRandomNote = { randoms++ })
-        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        openDeskBar()
 
         composeRule.onNodeWithText("別のノートをひらく").performTouchInput {
             swipeUp(startY = centerY, endY = centerY - 80.dp.toPx(), durationMillis = 120)
@@ -1199,6 +1205,24 @@ class NoteReadingFlowTest {
             swipeRight(startX = centerX, endX = centerX + 120.dp.toPx(), durationMillis = 120)
         }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
+     * これが無いと帯の ✎ にも届かず、机の画面から抜けられない。指で押したときは呼ばれない（上の検査）。
+     */
+    @Test
+    fun 机の画面では読み上げの操作で帯が開く() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    /** 机の画面の帯を、つまみを下へ払って出す。 */
+    private fun openDeskBar() {
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
     }
 
     /** 本文とペインを並べた机の画面。ペインの入力欄が出ていることを確かめてから返す。 */
