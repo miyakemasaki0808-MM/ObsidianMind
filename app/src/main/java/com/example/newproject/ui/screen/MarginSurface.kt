@@ -5,7 +5,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.domain.hasUnshownNotice
 import com.example.newproject.model.state.SectionSummary
 import java.time.Instant
 import java.time.ZoneId
@@ -76,33 +76,18 @@ internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, reques
     else -> SummaryEntry.Background
 }
 
-/** 面を出さずに頼んだ要約の、端末AIが使えない理由をどう扱うか（→ [pendingNoticeFor]）。 */
-internal enum class PendingNotice {
-    /** 見せる理由が無い。 */
-    None,
-
-    /** 面を開いて理由を見せ、見せたことを伝える。 */
-    Open,
-
-    /** 理由は出ている面の要約の行に見えている。見せたことだけを伝える。 */
-    Acknowledge
-}
-
 /**
- * **端末AIが使えない理由が届いていて、まだ見せていなければ見せる。** 理由は失敗として数えないので記号が 💬 のまま変わらず
- * （→ `sectionSummaryStatus`）、面を出さないと押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示す。
+ * 端末AIが使えない理由をまだ見せていなければ、面を開くか（→ features/margin_pane.md §5.4）。
+ * 理由は失敗として数えないので記号が 💬 のまま変わらず（→ `sectionSummaryStatus`）、面を出さないと押しても何も起きないように見える。
+ *
+ * **開くのは、どの面も出ていないときだけ。** 見せたかどうかは、理由の行が実際に組まれたときに行が伝える（→ `SectionSummaryRow`）。
+ * 面が出ていても、シートで書いている間は行が畳まれ、並べ読みの間はペインに行が無い。そこで開き直さず、行が出るまで待つ。
  *
  * [summary] には**今の本文の節の要約**を渡す。面はいつも今の本文の節を映すので、別の節の理由で面を開くと、
- * 理由の無い面が出る。頼んだ節から読み進めていれば、その節へ戻ったときに見せる。
- * [rowVisible] は要約の行が出ている面があるか。[paneVisible] はペインが出ているか — 出ていて行が無いのは並べ読みの間で、
- * シートを重ねられないので、余白へ戻って行が出るまで待つ。
+ * 理由の無い面が出る。頼んだ節から読み進めていれば、その節へ戻ったときに開く。
  */
-internal fun pendingNoticeFor(summary: SectionSummary?, rowVisible: Boolean, paneVisible: Boolean): PendingNotice = when {
-    summary == null || !summary.noticePending || summary.summaryProblem !is SectionChatProblem.AiStatus -> PendingNotice.None
-    rowVisible -> PendingNotice.Acknowledge
-    paneVisible -> PendingNotice.None
-    else -> PendingNotice.Open
-}
+internal fun opensFaceForNotice(summary: SectionSummary?, faceVisible: Boolean): Boolean =
+    !faceVisible && summary?.hasUnshownNotice() == true
 
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
 internal enum class MarginWindowShift {

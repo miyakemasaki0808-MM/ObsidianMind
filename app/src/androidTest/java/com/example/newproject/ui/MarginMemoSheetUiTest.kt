@@ -70,6 +70,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.AiNoticeAction
+import androidx.compose.ui.test.hasText
 import com.example.newproject.ui.screen.SummaryRowInputs
 import com.example.newproject.ui.screen.pendingAfterReveal
 
@@ -715,7 +719,8 @@ class MarginMemoSheetUiTest {
                             summary = SectionSummary(SectionRef("節B"), 1L, "節B", "本文", summary = "節Bの要約"),
                             onRequest = {},
                             onRetry = {},
-                            onCancel = {}
+                            onCancel = {},
+                            onNoticeShown = {}
                         ),
                         revealSummary = pending,
                         onSummaryRevealHandled = { handled -> pending = pendingAfterReveal(pending, handled) }
@@ -897,7 +902,102 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText(PLACEHOLDER).assertDoesNotExist()
     }
 
+    // ── 端末AIが使えない理由を「見せた」と伝える時機（→ features/margin_pane.md §5.4）──────────────
+
+    /**
+     * **見せたことは、理由の行が組まれたときに一度だけ伝える。** ペインの形（書いていても行を畳まない）で、
+     * まだ見せていない理由を持つ節の面を組むと、その要求の番号で1回だけ伝わる。
+     */
+    @Test
+    fun 理由の行が組まれると_見せたことを一度だけ伝える() {
+        val shown = mutableListOf<Long>()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                NoticeFace(asSheet = false, focusIntent = false, onFocusIntentChange = {}, onNoticeShown = { shown += it })
+            }
+        }
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertIsDisplayed()
+        composeRule.waitForIdle()
+        assertEquals(listOf(NOTICE_REQUEST), shown)
+    }
+
+    /**
+     * **シートで書いている間は、理由の行が畳まれるので見せたことにしない。** 書くのをやめてキーボードを閉じ、
+     * 行が出たときに一度だけ伝える。面が出ているだけで見せたことにすると、見ていない理由が消費される。
+     */
+    @Test
+    fun シートで書いている間は_理由を見せたことにせず_行が出てから伝える() {
+        val shown = mutableListOf<Long>()
+        var focusIntent by mutableStateOf(true)
+        composeRule.setContent {
+            val focusManager = LocalFocusManager.current
+            focusClearer = { focusManager.clearFocus() }
+            AppTheme(darkTheme = false) {
+                NoticeFace(
+                    asSheet = true,
+                    focusIntent = focusIntent,
+                    onFocusIntentChange = { focusIntent = it },
+                    onNoticeShown = { shown += it }
+                )
+            }
+        }
+        // 前提: 入力欄にフォーカスしてキーボードが出ると、要約とメモは1行に畳まれる。出なければこの検査は前提が立たない。
+        composeRule.waitUntil(KEYBOARD_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasText("要約とメモ", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertDoesNotExist()
+        assertEquals("畳まれた行の理由を見せたことにした", emptyList<Long>(), shown)
+
+        composeRule.runOnIdle { focusClearer() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertIsDisplayed()
+        assertEquals(listOf(NOTICE_REQUEST), shown)
+    }
+
+    /** まだ見せていない理由を持つ節の面。理由は端末AIが使えないことで、生成の失敗ではない。 */
+    @androidx.compose.runtime.Composable
+    private fun NoticeFace(
+        asSheet: Boolean,
+        focusIntent: Boolean,
+        onFocusIntentChange: (Boolean) -> Unit,
+        onNoticeShown: (Long) -> Unit
+    ) {
+        MarginMemoSheetContent(
+            state = READY,
+            draft = MarginMemoDraft(),
+            section = SectionRef("節A"),
+            hasHeadings = true,
+            onJumpToSection = {},
+            arranged = null,
+            onEdit = {},
+            onSubmit = {},
+            onDelete = {},
+            asSheet = asSheet,
+            focusIntent = focusIntent,
+            onFocusIntentChange = onFocusIntentChange,
+            summaryRow = SummaryRowInputs(
+                summary = SectionSummary(
+                    SectionRef("節A"),
+                    requestId = NOTICE_REQUEST,
+                    sectionTitle = "節A",
+                    sectionContext = "本文",
+                    summaryProblem = SectionChatProblem.AiStatus(
+                        AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
+                    ),
+                    noticePending = true
+                ),
+                onRequest = {},
+                onRetry = {},
+                onCancel = {},
+                onNoticeShown = onNoticeShown
+            )
+        )
+    }
+
     private companion object {
+        const val NOTICE_REQUEST = 7L
+        const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
+        const val KEYBOARD_TIMEOUT_MILLIS = 5_000L
         const val BODY_TAG = "本文"
         const val PANE_TAG = "ペイン"
         const val BELOW_TAG = "器の下"

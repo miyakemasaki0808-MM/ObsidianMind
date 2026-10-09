@@ -105,7 +105,7 @@
 **UI状態:** `NoteUiState.sectionChat`（`SectionChatState`）。面を出すかどうかは「この部分」の側が持つ
 （シートは `isMarginMemoSheetVisible`、ペインは並べ方と設定）。**面の可視と要約の有無を分けている** — 閉じても要約は残る。
 面を出さずに頼んだ要求は、端末AIが使えない理由をまだ見せていない印（`SectionSummary.noticePending`）を持ち、
-画面が見せたら `acknowledgeNotice(requestId)` で下ろす。**画面の値ではなくここに置く** — 画面を作り直しても失わない。
+理由の行が組まれたら `acknowledgeNotice(requestId)` で下ろす（面が出ているだけでは下ろさない）。**画面の値ではなくここに置く** — 画面を作り直しても失わない。
 
 **永続化しない。**
 

@@ -126,7 +126,7 @@ internal fun NoteReaderTab(
     onOpenBooklet: () -> Unit,
     /**
      * その節の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。
-     * 見出しの要約ボタンと面の「この節を要約」が呼ぶ。`quietly` は面を出さずに頼んだか（→ [pendingNoticeFor]）。
+     * 見出しの要約ボタンと面の「この節を要約」が呼ぶ。`quietly` は面を出さずに頼んだか（→ [opensFaceForNotice]）。
      */
     onRequestSectionSummary: (section: SectionRef, quietly: Boolean) -> Unit,
     /** 面を出さずに頼んだ要約の、端末AIが使えない理由を見せた。要求の番号で伝える。 */
@@ -212,7 +212,8 @@ internal fun NoteReaderTab(
             summary = faceSummary,
             onRequest = { onRequestSectionSummary(section, false) },
             onRetry = { onRetrySectionSummary(section) },
-            onCancel = { onCancelSectionSummary(section) }
+            onCancel = { onCancelSectionSummary(section) },
+            onNoticeShown = onAcknowledgeSectionSummaryNotice
         )
     }
     // 面を要約の行まで送る依頼。**押すたびに新しい番号を振る** — 前の依頼が残っていても、次の押下で送り直せるように。
@@ -231,7 +232,6 @@ internal fun NoteReaderTab(
     }
     val currentNoteUri = successState?.targetUri
     val currentOnOpenMarginMemo by rememberUpdatedState(onOpenMarginMemo)
-    val currentOnAcknowledgeNotice by rememberUpdatedState(onAcknowledgeSectionSummaryNotice)
     val currentOnMarginPaneVisibleChange by rememberUpdatedState(onMarginPaneVisibleChange)
     // ペインの「このノートの関連」の並びと開閉。後から届いた候補は下へ足す（→ paneRelatedCandidates）。
     // **画面の保存値に置き、持ち主のノートを値として持つ。** 右で読んでいる間に画面が組み直されても、戻る先の一覧を失わない。
@@ -484,23 +484,13 @@ internal fun NoteReaderTab(
             bodySection?.let { onRequestSectionSummary(it, entry == SummaryEntry.Background) }
             if (entry != SummaryEntry.Background) summaryReveal = ++summaryRevealCount
         }
-        // 面を出さずに頼んだ要約に、端末AIが使えない理由が届いていれば、**今の本文の節のものに限って**見せる（→ pendingNoticeFor）。
-        // 見せたかどうかは状態の側が持つので、画面を作り直しても、見せていない理由は失われず、見せた理由は出し直さない。
-        val notice = pendingNoticeFor(
-            summary = faceSummary,
-            rowVisible = if (paneVisible) !reading else uiState.isMarginMemoSheetVisible,
-            paneVisible = paneVisible
-        )
-        LaunchedEffect(faceSummary?.requestId, notice) {
-            val requestId = faceSummary?.requestId ?: return@LaunchedEffect
-            when (notice) {
-                PendingNotice.None -> Unit
-                PendingNotice.Acknowledge -> currentOnAcknowledgeNotice(requestId)
-                PendingNotice.Open -> {
-                    currentOnAcknowledgeNotice(requestId)
-                    currentOnOpenMarginMemo()
-                    summaryReveal = ++summaryRevealCount
-                }
+        // 面を出さずに頼んだ要約に、端末AIが使えない理由が届いていて、どの面も出ていなければ開く（→ opensFaceForNotice）。
+        // **見るのは今の本文の節の要約だけ。** 見せたことは理由の行が組まれたときに行が伝えるので、ここでは開くだけにする。
+        val opensNotice = opensFaceForNotice(faceSummary, faceVisible = paneVisible || uiState.isMarginMemoSheetVisible)
+        LaunchedEffect(faceSummary?.requestId, opensNotice) {
+            if (opensNotice) {
+                currentOnOpenMarginMemo()
+                summaryReveal = ++summaryRevealCount
             }
         }
         // 見出しの脇の印。**件数と飛ぶ先は面と同じ照合から作る**ので、メモを消せば印も同時に変わる。

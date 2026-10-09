@@ -434,12 +434,18 @@ internal fun MarginMemoSheetContent(
                         .height(with(density) { held.toDp() })
                         .verticalScroll(rememberScrollState())
                 ) {
-                    summaryRow?.let { SectionSummaryRow(it.summary, it.onRequest, it.onRetry, it.onCancel) }
+                    summaryRow?.let { SectionSummaryRow(it.summary, it.onRequest, it.onRetry, it.onCancel, onNoticeShown = it.onNoticeShown) }
                 }
                 summaryRow != null -> Box(modifier = rowPlacement.onSizeChanged { summaryRowHeight = it.height }) {
                     // 行が消えたら高さは0。書き始めたときに行が無ければ、書き終えるまで足さない。
                     DisposableEffect(Unit) { onDispose { summaryRowHeight = 0 } }
-                    SectionSummaryRow(summaryRow.summary, summaryRow.onRequest, summaryRow.onRetry, summaryRow.onCancel)
+                    SectionSummaryRow(
+                        summaryRow.summary,
+                        summaryRow.onRequest,
+                        summaryRow.onRetry,
+                        summaryRow.onCancel,
+                        onNoticeShown = summaryRow.onNoticeShown
+                    )
                 }
             }
             // **この1行は高さを変えない。** 書き込み先の知らせが出入りしても、入力欄の画面上の位置を動かさない

@@ -71,4 +71,20 @@ class SectionSummariesTest {
 
         assertEquals(state, next)
     }
+
+    /**
+     * **まだ見せていない理由があるのは、面を出さずに頼んだ要求に端末AIが使えない理由が届いたときだけ**（→ features/margin_pane.md §5.4）。
+     * 生成中・完成・生成の失敗は記号が示すので、見せる理由として数えない。
+     */
+    @Test
+    fun `まだ見せていない理由は、面を出さずに頼んだ要求の端末AIの理由だけ`() {
+        val notice = SectionChatProblem.AiStatus(AiStatusNotice("使えません", AiNoticeAction.None, canTryAgainLater = false))
+        val quiet = summary("A", 1, loading = true).copy(noticePending = true)
+
+        assertTrue(quiet.copy(isSummaryLoading = false, summaryProblem = notice).hasUnshownNotice())
+        assertFalse(quiet.hasUnshownNotice())
+        assertFalse(quiet.copy(isSummaryLoading = false, summary = "要約").hasUnshownNotice())
+        assertFalse(quiet.copy(isSummaryLoading = false, summaryProblem = SectionChatProblem.GenerationFailed("x")).hasUnshownNotice())
+        assertFalse(quiet.copy(isSummaryLoading = false, summaryProblem = notice, noticePending = false).hasUnshownNotice())
+    }
 }

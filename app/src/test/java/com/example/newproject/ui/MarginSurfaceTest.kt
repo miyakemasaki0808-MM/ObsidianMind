@@ -12,8 +12,7 @@ import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
-import com.example.newproject.ui.screen.PendingNotice
-import com.example.newproject.ui.screen.pendingNoticeFor
+import com.example.newproject.ui.screen.opensFaceForNotice
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
@@ -38,6 +37,8 @@ import androidx.compose.runtime.saveable.SaverScope
 import com.example.newproject.ui.screen.paneRelatedCandidates
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -145,7 +146,7 @@ class MarginSurfaceTest {
     }
 
     /**
-     * 面を出さずに頼んだ要約。**端末AIが使えない理由が届いていて、まだ見せていなければ面を開く** — 理由は失敗として数えないので、
+     * 面を出さずに頼んだ要約。**端末AIが使えない理由が届いてまだ見せていなければ面を開く** — 理由は失敗として数えないので、
      * 記号が 💬 のまま変わらず、押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示すので開かない。
      */
     @Test
@@ -153,35 +154,28 @@ class MarginSurfaceTest {
         val requested = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", isSummaryLoading = true, noticePending = true)
         val noticed = requested.copy(isSummaryLoading = false, summaryProblem = NOTICE)
 
-        assertEquals(PendingNotice.Open, pendingNoticeFor(noticed, rowVisible = false, paneVisible = false))
-        assertEquals(PendingNotice.None, pendingNoticeFor(requested, rowVisible = false, paneVisible = false))
-        assertEquals(PendingNotice.None, pendingNoticeFor(noticed.copy(noticePending = false), rowVisible = false, paneVisible = false))
-        assertEquals(
-            PendingNotice.None,
-            pendingNoticeFor(requested.copy(isSummaryLoading = false, summary = "要約"), rowVisible = false, paneVisible = false)
-        )
-        assertEquals(
-            PendingNotice.None,
-            pendingNoticeFor(
+        assertTrue(opensFaceForNotice(noticed, faceVisible = false))
+        assertFalse(opensFaceForNotice(requested, faceVisible = false))
+        assertFalse(opensFaceForNotice(noticed.copy(noticePending = false), faceVisible = false))
+        assertFalse(opensFaceForNotice(requested.copy(isSummaryLoading = false, summary = "要約"), faceVisible = false))
+        assertFalse(
+            opensFaceForNotice(
                 requested.copy(isSummaryLoading = false, summaryProblem = SectionChatProblem.GenerationFailed("x")),
-                rowVisible = false,
-                paneVisible = false
+                faceVisible = false
             )
         )
-        assertEquals(PendingNotice.None, pendingNoticeFor(summary = null, rowVisible = false, paneVisible = false))
+        assertFalse(opensFaceForNotice(summary = null, faceVisible = false))
     }
 
     /**
-     * 要約の行が出ている面があれば、理由はそこに見えているので、見せたことだけを伝える。
-     * **ペインが並べ読みを映している間は待つ** — シートを重ねられず、行も無い。余白へ戻ると行に見える。
+     * **面が出ていれば開き直さない。** 見せたことは理由の行が組まれたときに行が伝えるので、ここでは開くかだけを決める。
+     * シートで書いている間に行が畳まれていても、並べ読みでペインに行が無くても、面は出ているので待つ。
      */
     @Test
-    fun `理由は、行が見えていれば見せたことにし、並べ読みの間は待つ`() {
+    fun `面が出ていれば、行が畳まれていても開き直さない`() {
         val noticed = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", summaryProblem = NOTICE, noticePending = true)
 
-        assertEquals(PendingNotice.Acknowledge, pendingNoticeFor(noticed, rowVisible = true, paneVisible = false))
-        assertEquals(PendingNotice.Acknowledge, pendingNoticeFor(noticed, rowVisible = true, paneVisible = true))
-        assertEquals(PendingNotice.None, pendingNoticeFor(noticed, rowVisible = false, paneVisible = true))
+        assertFalse(opensFaceForNotice(noticed, faceVisible = true))
     }
 
     /**
