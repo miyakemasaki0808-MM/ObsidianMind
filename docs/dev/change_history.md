@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 机の画面で、つまみの上の余白（切り欠きと画面の余白）から引き下ろしても帯が出るようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | 机の画面の帯を、下端のつまみだけでなく帯のどこからでも上へ払えばしまうようにし、ボタンの上から払っても押さないようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | 机の画面のつまみを、押すと払うを1つの検出で受け、距離か速さで決める形にし、短いフリックでも帯が開閉するようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | 開いた Fold で ✎ の後は本文とペインを同じ大きさで並べ、操作はつまみを払うか押すと出る帯に入れた | [margin_pane](features/margin_pane.md) §5.1・[fold_experience](system/fold_experience.md) §6 |

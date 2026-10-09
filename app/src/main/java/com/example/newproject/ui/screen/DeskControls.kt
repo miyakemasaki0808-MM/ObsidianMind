@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -31,6 +32,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
@@ -110,6 +112,30 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
             }
         }
     }
+}
+
+/**
+ * つまみの上の余白も、払い始める場所に含める。**画面の上の縁から引き下ろしても帯が出る**ようにするため。
+ * つまみの上には切り欠きを避ける余白と画面の余白があり、上のほうから引き下ろすと指がそこに置かれる。
+ * ここを受けないと、押せば帯が出るのに、払っても出ない。
+ *
+ * 本文領域の左上に置き、[reachAbove] だけ上へはみ出させる。余白ペインの中身はシートの器（切り取りをする面）の内側にあるので、
+ * **器の外に置かないと、はみ出した分が指を受け取らない。** 帯が出ている間は置かない — 帯の上の操作を横取りする。
+ */
+@Composable
+internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit) {
+    val currentOnShow by rememberUpdatedState(onShow)
+    Box(
+        modifier = Modifier
+            .offset(y = -reachAbove)
+            .width(width)
+            .height(reachAbove + DeskStripHeight)
+            .pointerInput(Unit) {
+                detectDeskGrip { gesture ->
+                    if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Show) currentOnShow()
+                }
+            }
+    )
 }
 
 /**

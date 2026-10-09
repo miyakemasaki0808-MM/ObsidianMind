@@ -278,6 +278,8 @@ internal fun NoteReaderTab(
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
+    // 本文領域の上端（窓の座標）。机の画面で、つまみの上の余白まで払い始める場所に含めるのに使う（→ DeskGripReach）。
+    var regionTopDp by remember { mutableStateOf<Float?>(null) }
     val density = LocalDensity.current
     val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
         when (toggle) {
@@ -457,6 +459,7 @@ internal fun NoteReaderTab(
             .screenContentPadding()
             .onGloballyPositioned { coordinates ->
                 regionStartDp = with(density) { coordinates.positionInWindow().x.toDp().value }
+                regionTopDp = with(density) { coordinates.positionInWindow().y.toDp().value }
             }
     ) {
         val sideColumnWidth = sideColumnWidthDp(maxWidth.value).dp
@@ -717,6 +720,15 @@ internal fun NoteReaderTab(
                         }
                     }
                 }
+            }
+            // 机の画面で帯がしまわれている間は、つまみの上の余白も払い始める場所にする（→ DeskGripReach）。
+            // シートの器の外（ここ）に置く — 器の内側では、はみ出した分が指を受け取らない。
+            if (layout is ReaderLayout.MarginPane && !deskBarShown) {
+                DeskGripReach(
+                    reachAbove = (regionTopDp ?: 0f).dp,
+                    width = layout.bodyWidthDp.dp,
+                    onShow = { deskBarShown = true }
+                )
             }
         }
     }
