@@ -38,6 +38,7 @@ import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
+import kotlin.math.abs
 
 // 開いた Fold で ✎ を押した後の「机の画面」の操作（→ features/margin_pane.md §5.1）。
 // 机の画面では本文とペインを同じ大きさで並べ、見出しと操作の行は出さない。
@@ -54,18 +55,27 @@ internal enum class DeskBarGesture {
 
 /**
  * つまみに触れて離したときの扱いを決める。[moved] は指が触れた位置から動いたと言える距離（タッチスロップ）を越えたか、
- * [dragDp] は触れた位置から離した位置までの縦の距離（下向きが正）、[velocityDpPerSec] は離したときの縦の速さ。
+ * [vertical] は越えた時点で縦に払っていたか（→ [isVerticalSwipe]）、[dragDp] は触れた位置から離した位置までの縦の距離
+ * （下向きが正）、[velocityDpPerSec] は離したときの縦の速さ。
  *
- * **距離か速さのどちらかで決める。** 短く素早く払う（フリック）は距離が足りなくても開閉する — 距離だけで決めると、
+ * **横に払ったときは、縦に少しずれていても帯の操作にしない。** 縦の成分だけを見ると、横へ払うつもりの指で帯が開閉する
+ * （縦は操作を呼び、横は片側を広げる、と分けているため）。
+ * **縦なら、距離か速さのどちらかで決める。** 短く素早く払う（フリック）は距離が足りなくても開閉する — 距離だけで決めると、
  * 短く素早く払っても何も起きない。向きは距離の符号で決め、速さが逆向きなら数えない。
- * 横へ払ったときは縦の距離も速さも小さいので何もしない（横の払いは片側を広げる操作に残す）。
  */
-internal fun deskBarGestureFor(moved: Boolean, dragDp: Float, velocityDpPerSec: Float): DeskBarGesture = when {
+internal fun deskBarGestureFor(moved: Boolean, vertical: Boolean, dragDp: Float, velocityDpPerSec: Float): DeskBarGesture = when {
     !moved -> DeskBarGesture.Tap
+    !vertical -> DeskBarGesture.None
     dragDp > 0f && (dragDp >= DESK_BAR_SWIPE_DP || velocityDpPerSec >= DESK_BAR_FLING_DP_PER_SEC) -> DeskBarGesture.Show
     dragDp < 0f && (dragDp <= -DESK_BAR_SWIPE_DP || velocityDpPerSec <= -DESK_BAR_FLING_DP_PER_SEC) -> DeskBarGesture.Hide
     else -> DeskBarGesture.None
 }
+
+/**
+ * 指が動いたと言えた時点の移動（[dx], [dy]）から、縦に払っているかを決める。**縦が横より大きいときだけ縦**で、斜め45度は縦にしない。
+ * 向きは動き始めで決め、払っている途中で縦横を入れ替えない（スクロールと同じ決め方）。
+ */
+internal fun isVerticalSwipe(dx: Float, dy: Float): Boolean = abs(dy) > abs(dx)
 
 /** 速さが足りないときに、帯を出し入れするのに払う距離。 */
 internal const val DESK_BAR_SWIPE_DP = 24f
@@ -226,17 +236,22 @@ private suspend fun PointerInputScope.detectDeskGrip(
         val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
         val velocity = VelocityTracker().apply { addPointerInputChange(down) }
         var moved = false
+        var vertical = false
         var last = down
         while (true) {
             val change = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
             velocity.addPointerInputChange(change)
             last = change
-            if (!moved && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+            val offset = change.position - down.position
+            if (!moved && offset.getDistance() > viewConfiguration.touchSlop) {
+                moved = true
+                vertical = isVerticalSwipe(offset.x, offset.y)
+            }
             if (moved) change.consume()
             if (!change.pressed) break
         }
         val dragDp = (last.position.y - down.position.y).toDp().value
         val velocityDpPerSec = velocity.calculateVelocity().y.toDp().value
-        onGesture(deskBarGestureFor(moved, dragDp, velocityDpPerSec))
+        onGesture(deskBarGestureFor(moved, vertical, dragDp, velocityDpPerSec))
     }
 }

@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -1205,6 +1206,28 @@ class NoteReadingFlowTest {
             swipeRight(startX = centerX, endX = centerX + 120.dp.toPx(), durationMillis = 120)
         }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **横寄りに払っても、縦の成分だけで帯を出し入れしない。** 横120dp・縦30dp を 240ms で払う。
+     * 縦の成分だけで決めていたときは、閉じた帯が開き、開いた帯がしまった。
+     */
+    @Test
+    fun 机の画面では横寄りに払っても_帯は開かず_開いた帯もしまわない() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipe(start = center, end = center + Offset(120.dp.toPx(), 30.dp.toPx()), durationMillis = 240)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        openDeskBar()
+        composeRule.onNodeWithText("Rediscover").performTouchInput {
+            swipe(start = center, end = center + Offset(120.dp.toPx(), -30.dp.toPx()), durationMillis = 240)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
     }
 
     /**
