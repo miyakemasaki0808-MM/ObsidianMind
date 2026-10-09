@@ -21,6 +21,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
@@ -113,7 +114,9 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
 
 /**
  * 本文の上に重なって出る操作の帯。中身は今の見出しの行と同じ並びで、**ボタンの位置を探し直さない。**
- * 下端のつまみを上へ払うか押すとしまう。
+ * **帯のどこからでも上へ払うとしまう。** 下端のつまみは押してもしまう。
+ * ボタンの上から払い始めても、そのボタンは押さない — 帯が子より先に指を見て、動いたと言えた時点で使うので、
+ * ボタンは押下を取り消す。
  *
  * 背景は画面と同じ地にし、**はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
  */
@@ -125,16 +128,18 @@ internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content:
             .fillMaxWidth()
             .clipToBounds()
             .background(ReadingGradient)
+            .pointerInput(Unit) {
+                detectDeskGrip(PointerEventPass.Initial) { gesture -> if (gesture == DeskBarGesture.Hide) currentOnHide() }
+            }
     ) {
         content()
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(32.dp)
+                // 払ってしまうのは帯が受ける。ここは押してしまう分だけ。
                 .pointerInput(Unit) {
-                    detectDeskGrip { gesture ->
-                        if (gesture == DeskBarGesture.Tap || gesture == DeskBarGesture.Hide) currentOnHide()
-                    }
+                    detectDeskGrip { gesture -> if (gesture == DeskBarGesture.Tap) currentOnHide() }
                 }
                 .semantics {
                     role = Role.Button
@@ -181,19 +186,24 @@ private fun GripPill() {
 }
 
 /**
- * つまみに触れてから離すまでを見て、[deskBarGestureFor] の扱いを [onGesture] へ渡す。
+ * つまみや帯に触れてから離すまでを見て、[deskBarGestureFor] の扱いを [onGesture] へ渡す。
+ * [pass] は指を見る段。子にボタンを持つ帯は [PointerEventPass.Initial] で子より先に見て、動いた指を使って子の押下を取り消す。
  * **押すと払うを1つの検出で受ける。** 押す部品と払う部品を重ねると、払った量を指が動き始めてからしか数えず、
  * 短いフリックが判定に届かない。ここでは触れた位置から離した位置までを数える。
  * 動いたと言えてからの指は使い、ほかへ渡さない。
  */
-private suspend fun PointerInputScope.detectDeskGrip(onGesture: (DeskBarGesture) -> Unit) {
+private suspend fun PointerInputScope.detectDeskGrip(
+    pass: PointerEventPass = PointerEventPass.Main,
+    onGesture: (DeskBarGesture) -> Unit
+) {
     awaitEachGesture {
-        val down = awaitFirstDown()
+        // 子のボタンが触れた瞬間を使っていても見る。
+        val down = awaitFirstDown(requireUnconsumed = false, pass = pass)
         val velocity = VelocityTracker().apply { addPointerInputChange(down) }
         var moved = false
         var last = down
         while (true) {
-            val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            val change = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
             velocity.addPointerInputChange(change)
             last = change
             if (!moved && (change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true

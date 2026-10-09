@@ -1153,6 +1153,37 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
     }
 
+    /**
+     * **帯のどこからでも上へ払うとしまう。** 「Rediscover」の見出しの上から短く払う。下端のつまみだけで受けていたときは、
+     * 帯の本体を払っても何も起きなかった（実機で観測）。
+     */
+    @Test
+    fun 机の画面では帯の見出しの上から上へフリックしても帯がしまう() {
+        setDesk()
+        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+
+        composeRule.onNodeWithText("Rediscover").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** ボタンの上から払い始めても、そのボタンは押さずに帯をしまう。 */
+    @Test
+    fun 机の画面では帯のボタンの上から上へ払っても_ボタンは押されず帯がしまう() {
+        var randoms = 0
+        setDesk(onRandomNote = { randoms++ })
+        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+
+        composeRule.onNodeWithText("別のノートをひらく").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 80.dp.toPx(), durationMillis = 120)
+        }
+        composeRule.waitForIdle()
+
+        assertEquals("払っただけでボタンが押された", 0, randoms)
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
     /** 横へ払っても帯は出ない。押した扱いにもしない（横の払いは片側を広げる操作に残す）。 */
     @Test
     fun 机の画面ではつまみを横へ払っても帯は出ない() {
