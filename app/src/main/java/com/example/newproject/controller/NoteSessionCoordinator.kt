@@ -740,11 +740,14 @@ internal class NoteSessionCoordinator(
      * **節の本文は今の本文の解析から引く。** 解析の前・解析し直している間・節が今の本文に無いときは何もしない —
      * 蒸留の差し替えの後は解析が届くまで前の解析が描画に残るので、そこから引くと前の本文の要約が残る。
      */
-    fun requestSectionSummary(section: SectionRef) {
+    fun requestSectionSummary(section: SectionRef, quietly: Boolean = false) {
         val note = currentNote() ?: return
         val source = sections.settledModel()?.summarySourceOf(section, note.title) ?: return
-        sectionChat.request(section, source.title, source.text)
+        sectionChat.request(section, source.title, source.text, quietly)
     }
+
+    /** 面を出さずに頼んだ要求の、端末AIが使えない理由を画面が見せた。 */
+    fun acknowledgeSectionSummaryNotice(requestId: Long) = sectionChat.acknowledgeNotice(requestId)
 
     /** 出せなかった要約を、頼んだときの本文のまま作り直す。 */
     fun retrySectionSummary(section: SectionRef) = sectionChat.retry(section)

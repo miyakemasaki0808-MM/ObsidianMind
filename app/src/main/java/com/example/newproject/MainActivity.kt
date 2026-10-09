@@ -177,7 +177,8 @@ class MainActivity : ComponentActivity() {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                     else openVault.launch(null)
                                 },
-                                onRequestSectionSummary = { section -> viewModel.requestSectionSummary(section) },
+                                onRequestSectionSummary = { section, quietly -> viewModel.requestSectionSummary(section, quietly) },
+                                onAcknowledgeSectionSummaryNotice = { requestId -> viewModel.acknowledgeSectionSummaryNotice(requestId) },
                                 onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
                                 onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },
                                 noteListState = noteListState,

@@ -43,6 +43,9 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
@@ -58,6 +61,7 @@ import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -913,7 +917,7 @@ class NoteReadingFlowTest {
     @Test
     fun 要約ボタンは_頼んでいない節では面を出さず_頼んだ節ではシートを出す() {
         var openCalls = 0
-        val requests = mutableListOf<SectionRef>()
+        val requests = mutableListOf<Pair<SectionRef, Boolean>>()
         var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos())
         composeRule.setContent {
             AppTheme(darkTheme = false) {
@@ -923,7 +927,7 @@ class NoteReadingFlowTest {
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         onOpenMarginMemo = { openCalls++ },
-                        onRequestSectionSummary = { requests += it },
+                        onRequestSectionSummary = { section, quietly -> requests += section to quietly },
                         marginPaneOpen = false,
                         expandedWidth = true
                     )
@@ -933,7 +937,7 @@ class NoteReadingFlowTest {
 
         composeRule.onNodeWithContentDescription("この節を要約").performClick()
         composeRule.waitForIdle()
-        assertEquals(listOf(SectionRef("節A")), requests)
+        assertEquals("面を出さずに頼んだことを伝えていない", listOf(SectionRef("節A") to true), requests)
         assertEquals("頼んでいない節で面を出した", 0, openCalls)
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
 
@@ -946,6 +950,114 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
         assertEquals("頼んだ節でシートを出さなかった", 1, openCalls)
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    /**
+     * **面を出さずに頼んだ節の、端末AIが使えない理由は、その節を映しているときにだけ面を開いて見せる**（→ features/margin_pane.md §5.4）。
+     * 理由が届く前に次の節まで読み進めていれば、そこでは開かない — 面は今の本文の節を映すので、開くと理由の無い面が出る。
+     * 頼んだ節へ戻ると開き、理由が見える。
+     */
+    @Test
+    fun 頼んだ節の利用不可の理由は_読み進めた先のまだ頼んでいない節では開かず_戻ると見せる() {
+        noticeAfterReadingOn(secondHasSummary = false)
+    }
+
+    /** 読み進めた先の節が別の要約を持っていても、その要約で面を開かない。上の検査と対にする。 */
+    @Test
+    fun 頼んだ節の利用不可の理由は_読み進めた先が要約を持っていても開かず_戻ると見せる() {
+        noticeAfterReadingOn(secondHasSummary = true)
+    }
+
+    /** 第一の節で面を出さずに頼み、状態確認の結果が届く前に第二の節まで読み進め、そこで第一の利用不可の理由を届ける。 */
+    private fun noticeAfterReadingOn(secondHasSummary: Boolean) {
+        val model = buildNoteSectionModel(LONG_WITH_SHORT_TAIL)
+        val secondHeading = model.blocks.indices.first { model.sectionRefAt(it) == SECOND }
+        val listState = LazyListState()
+        val acknowledged = mutableListOf<Long>()
+        val second = SectionSummary(SECOND, requestId = 2, sectionTitle = "第二", sectionContext = "", summary = "第二の要約")
+        var state by mutableStateOf(
+            loadedNote(LONG_WITH_SHORT_TAIL).withMemos().withSummaries(
+                listOfNotNull(quietRequest(FIRST, requestId = 1), second.takeIf { secondHasSummary })
+            )
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 900.dp)) {
+                    ReaderTab(
+                        state,
+                        model,
+                        listState,
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        onAcknowledgeSectionSummaryNotice = { id ->
+                            acknowledged += id
+                            state = state.acknowledging(id)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(secondHeading) } }
+        composeRule.waitForIdle()
+
+        state = state.withNoticeArrived(requestId = 1)
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertFalse("読み進めた先の節で面を開いた", state.isMarginMemoSheetVisible) }
+        assertEquals("読み進めた先の節で見せたことにした", emptyList<Long>(), acknowledged)
+
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(0) } }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertTrue("頼んだ節へ戻っても面を開かない", state.isMarginMemoSheetVisible) }
+        composeRule.onNodeWithText(NOTICE_MESSAGE).performScrollTo().assertIsDisplayed()
+        assertEquals(listOf(1L), acknowledged)
+    }
+
+    /**
+     * **状態確認の途中で画面を作り直しても、届いた理由を一度だけ見せる**（→ features/margin_pane.md §5.4）。
+     * 見せたかどうかは要約の状態（ViewModel の寿命）が持つ。見せた後に作り直しても、もう開かない。
+     */
+    @Test
+    fun 状態確認の途中で画面を作り直しても_届いた理由を一度だけ見せる() {
+        val restoration = StateRestorationTester(composeRule)
+        var opens = 0
+        val acknowledged = mutableListOf<Long>()
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos().withSummaries(listOf(quietRequest(SectionRef("節A"), requestId = 1)))
+        )
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 900.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = {
+                            opens++
+                            state = state.copy(isMarginMemoSheetVisible = true)
+                        },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        onAcknowledgeSectionSummaryNotice = { id ->
+                            acknowledged += id
+                            state = state.acknowledging(id)
+                        }
+                    )
+                }
+            }
+        }
+
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        state = state.withNoticeArrived(requestId = 1)
+        composeRule.waitForIdle()
+        assertEquals("作り直した後に届いた理由で面を開かない", 1, opens)
+        assertEquals(listOf(1L), acknowledged)
+        composeRule.onNodeWithText(NOTICE_MESSAGE).performScrollTo().assertIsDisplayed()
+
+        state = state.copy(isMarginMemoSheetVisible = false)
+        composeRule.waitForIdle()
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        assertEquals("見せた理由で、作り直すたびに面を開く", 1, opens)
     }
 
     /**
@@ -1215,6 +1327,33 @@ class NoteReadingFlowTest {
     private fun NoteUiState.withMemos(vararg memos: MarginMemo) =
         copy(marginMemoState = MarginMemoState.Ready(memos = memos.toList()))
 
+    private fun NoteUiState.withSummaries(summaries: List<SectionSummary>) = copy(sectionChat = SectionChatState(summaries))
+
+    /** 面を出さずに頼み、状態確認の結果を待っている要約。 */
+    private fun quietRequest(section: SectionRef, requestId: Long) = SectionSummary(
+        section,
+        requestId = requestId,
+        sectionTitle = section.title.orEmpty(),
+        sectionContext = "",
+        isSummaryLoading = true,
+        noticePending = true
+    )
+
+    /** [requestId] の要求に、端末AIが使えない理由が届いた（Controller の書き方と同じく、番号の一致する要約にだけ書く）。 */
+    private fun NoteUiState.withNoticeArrived(requestId: Long) = copy(
+        sectionChat = SectionChatState(
+            sectionChat.summaries.map {
+                if (it.requestId == requestId) it.copy(isSummaryLoading = false, summaryProblem = NOTICE) else it
+            }
+        )
+    )
+
+    private fun NoteUiState.acknowledging(requestId: Long) = copy(
+        sectionChat = SectionChatState(
+            sectionChat.summaries.map { if (it.requestId == requestId) it.copy(noticePending = false) else it }
+        )
+    )
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -1225,7 +1364,8 @@ class NoteReadingFlowTest {
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
-        onRequestSectionSummary: (SectionRef) -> Unit = {},
+        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onAcknowledgeSectionSummaryNotice: (Long) -> Unit = {},
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false,
         onMarginPaneVisibleChange: (Boolean) -> Unit = {},
@@ -1244,6 +1384,7 @@ class NoteReadingFlowTest {
             onSelectVault = {},
             onRandomNote = {},
             onRequestSectionSummary = onRequestSectionSummary,
+            onAcknowledgeSectionSummaryNotice = onAcknowledgeSectionSummaryNotice,
             onRetrySectionSummary = {},
             onCancelSectionSummary = {},
             onOpenBooklet = {},
@@ -1281,6 +1422,12 @@ class NoteReadingFlowTest {
         const val NOTE_A = "content://vault/a.md"
         const val NOTE_B = "content://vault/b.md"
         const val FIRST_PARAGRAPH = "最初の段落"
+        const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
+        val NOTICE = SectionChatProblem.AiStatus(
+            AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
+        )
+        val FIRST = SectionRef("第一")
+        val SECOND = SectionRef("第二")
 
         val BODY = """
             # 見出し

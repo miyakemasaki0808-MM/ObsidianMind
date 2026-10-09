@@ -32,7 +32,13 @@ data class SectionSummary(
     val summary: String? = null,
     val isSummaryLoading: Boolean = false,
     /** 要約が出せなかった理由。要約の欄へ出す。 */
-    val summaryProblem: SectionChatProblem? = null
+    val summaryProblem: SectionChatProblem? = null,
+    /**
+     * **面を出さずに頼み、端末AIが使えない理由をまだ見せていないか**（→ features/margin_pane.md §5.4）。
+     * 理由は失敗として数えず記号に出ないので、画面がこの節を映したときに面を開いて一度だけ見せ、見せたら下ろす。
+     * **画面ではなくここに置く** — 画面を作り直しても、見せていない理由を失わない。ノート切替と本文の解析し直しでは要約ごと捨てる。
+     */
+    val noticePending: Boolean = false
 )
 
 /** ノートを開いている間の部分要約。**最近作った順**に持つ（上限は `SECTION_SUMMARY_LIMIT`）。 */

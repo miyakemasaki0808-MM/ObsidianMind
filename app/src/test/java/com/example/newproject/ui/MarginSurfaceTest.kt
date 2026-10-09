@@ -12,8 +12,8 @@ import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
-import com.example.newproject.ui.screen.BackgroundSummaryStep
-import com.example.newproject.ui.screen.backgroundSummaryStep
+import com.example.newproject.ui.screen.PendingNotice
+import com.example.newproject.ui.screen.pendingNoticeFor
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
 import com.example.newproject.model.state.SectionChatProblem
@@ -145,45 +145,43 @@ class MarginSurfaceTest {
     }
 
     /**
-     * 面を出さずに始めた要約。**端末AIが使えない理由が届いたときだけ面を出す** — 理由は失敗として数えないので、
-     * 記号が 💬 のまま変わらず、押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示す。
+     * 面を出さずに頼んだ要約。**端末AIが使えない理由が届いていて、まだ見せていなければ面を開く** — 理由は失敗として数えないので、
+     * 記号が 💬 のまま変わらず、押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示すので開かない。
      */
     @Test
-    fun `面を出さずに始めた要約は、端末AIが使えない理由が届いたときだけ面を出す`() {
-        val notice = SectionChatProblem.AiStatus(
-            AiStatusNotice(message = "準備中", action = AiNoticeAction.None, canTryAgainLater = true)
-        )
-        val started = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", isSummaryLoading = true)
+    fun `面を出さずに頼んだ要約は、端末AIが使えない理由が届いてまだ見せていないときだけ面を開く`() {
+        val requested = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", isSummaryLoading = true, noticePending = true)
+        val noticed = requested.copy(isSummaryLoading = false, summaryProblem = NOTICE)
 
-        assertEquals(BackgroundSummaryStep.Wait, backgroundSummaryStep(started, faceVisible = false))
+        assertEquals(PendingNotice.Open, pendingNoticeFor(noticed, rowVisible = false, paneVisible = false))
+        assertEquals(PendingNotice.None, pendingNoticeFor(requested, rowVisible = false, paneVisible = false))
+        assertEquals(PendingNotice.None, pendingNoticeFor(noticed.copy(noticePending = false), rowVisible = false, paneVisible = false))
         assertEquals(
-            BackgroundSummaryStep.ShowNotice,
-            backgroundSummaryStep(started.copy(isSummaryLoading = false, summaryProblem = notice), faceVisible = false)
+            PendingNotice.None,
+            pendingNoticeFor(requested.copy(isSummaryLoading = false, summary = "要約"), rowVisible = false, paneVisible = false)
         )
         assertEquals(
-            BackgroundSummaryStep.Done,
-            backgroundSummaryStep(started.copy(isSummaryLoading = false, summary = "要約"), faceVisible = false)
-        )
-        assertEquals(
-            BackgroundSummaryStep.Done,
-            backgroundSummaryStep(
-                started.copy(isSummaryLoading = false, summaryProblem = SectionChatProblem.GenerationFailed("x")),
-                faceVisible = false
+            PendingNotice.None,
+            pendingNoticeFor(
+                requested.copy(isSummaryLoading = false, summaryProblem = SectionChatProblem.GenerationFailed("x")),
+                rowVisible = false,
+                paneVisible = false
             )
         )
+        assertEquals(PendingNotice.None, pendingNoticeFor(summary = null, rowVisible = false, paneVisible = false))
     }
 
-    /** 頼んだ結果がまだ画面の状態へ届いていない間は待つ。面が出ていれば理由はそこに見えているので、追わない。 */
+    /**
+     * 要約の行が出ている面があれば、理由はそこに見えているので、見せたことだけを伝える。
+     * **ペインが並べ読みを映している間は待つ** — シートを重ねられず、行も無い。余白へ戻ると行に見える。
+     */
     @Test
-    fun `面を出さずに始めた要約は、届く前は待ち、面が出ていれば追わない`() {
-        val notice = SectionChatProblem.AiStatus(
-            AiStatusNotice(message = "非対応", action = AiNoticeAction.None, canTryAgainLater = false)
-        )
-        val failed = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", summaryProblem = notice)
+    fun `理由は、行が見えていれば見せたことにし、並べ読みの間は待つ`() {
+        val noticed = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", summaryProblem = NOTICE, noticePending = true)
 
-        assertEquals(BackgroundSummaryStep.Wait, backgroundSummaryStep(summary = null, faceVisible = false))
-        assertEquals(BackgroundSummaryStep.Done, backgroundSummaryStep(failed, faceVisible = true))
-        assertEquals(BackgroundSummaryStep.Done, backgroundSummaryStep(summary = null, faceVisible = true))
+        assertEquals(PendingNotice.Acknowledge, pendingNoticeFor(noticed, rowVisible = true, paneVisible = false))
+        assertEquals(PendingNotice.Acknowledge, pendingNoticeFor(noticed, rowVisible = true, paneVisible = true))
+        assertEquals(PendingNotice.None, pendingNoticeFor(noticed, rowVisible = false, paneVisible = true))
     }
 
     /**
@@ -427,5 +425,11 @@ class MarginSurfaceTest {
         assertEquals(list.copy(candidates = list.candidates!!.map { it.copy(snippet = null) }), roundTrip(list))
         assertEquals(waiting, roundTrip(waiting))
         assertNull(roundTrip(null))
+    }
+
+    private companion object {
+        val NOTICE = SectionChatProblem.AiStatus(
+            AiStatusNotice(message = "この端末では使えません", action = AiNoticeAction.None, canTryAgainLater = false)
+        )
     }
 }

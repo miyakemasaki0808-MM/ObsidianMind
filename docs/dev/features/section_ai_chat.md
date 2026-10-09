@@ -51,7 +51,8 @@
    - **見出しより前は見出しより前だけ、見出しの無いノートは全体**が1つの節になる
 2. 見出しの 💬 を押す → その節の要約を始める。面が出ていれば、面を要約の行まで送る
    - **面が出ていなければ、面を出さない。** 記号が ⏳ に変わり、できたら ✓（失敗なら !）になる。その記号を押すとシートが出て、要約の行まで送る
-   - **端末AIが使えない理由が届いたときだけ、面を出して見せる。** 理由では記号が 💬 のまま変わらないため
+   - **端末AIが使えない理由が届いたときだけ、面を出して見せる。** 理由では記号が 💬 のまま変わらないため。
+     見せるのは頼んだ節を本文が映しているときだけで、読み進めていれば戻ったときに見せる（→ [この部分](margin_pane.md) §5.4）
    - **その節の要約を持っていれば作り直さない**（生成中・完成・生成の失敗・非対応の説明は、それを見せる）。
      **後で使えるようになる説明（準備待ち・一時的に使えない）だけは、押し直すと状態を確かめ直す** — 準備待ちの説明には再試行のボタンが無い
    - 面の「この節を要約」も同じ要求を出す
@@ -82,7 +83,8 @@
 <!-- /state-fields -->
 <!-- state-fields: SectionSummary -->
 - **1節分 `SectionSummary`:** `section`（見出し名と同名の中での順番）/ `requestId` / `sectionTitle` /
-  `sectionContext`（**LLMへ渡すだけで表示しない**）/ `summary` / `isSummaryLoading` / `summaryProblem`
+  `sectionContext`（**LLMへ渡すだけで表示しない**）/ `summary` / `isSummaryLoading` / `summaryProblem` /
+  `noticePending`（面を出さずに頼み、端末AIが使えない理由をまだ見せていない → [この部分](margin_pane.md) §5.4）
 <!-- /state-fields -->
 - **`GenerationFailed(message)`:** 生成が落ちた（タイムアウト・出力打ち切り）。赤で出す
 - **`AiStatus(notice)`:** 端末AIが使えない。通常色で出す
@@ -102,6 +104,8 @@
 
 **UI状態:** `NoteUiState.sectionChat`（`SectionChatState`）。面を出すかどうかは「この部分」の側が持つ
 （シートは `isMarginMemoSheetVisible`、ペインは並べ方と設定）。**面の可視と要約の有無を分けている** — 閉じても要約は残る。
+面を出さずに頼んだ要求は、端末AIが使えない理由をまだ見せていない印（`SectionSummary.noticePending`）を持ち、
+画面が見せたら `acknowledgeNotice(requestId)` で下ろす。**画面の値ではなくここに置く** — 画面を作り直しても失わない。
 
 **永続化しない。**
 
@@ -190,7 +194,8 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
 ## 10. 検証と受け入れ条件
 
 - **JVMテスト:** `SectionChatControllerTest`（同じ節は作り直さない・B の生成中に C で B を取り消す・取り消しに従わない後着が
-  頼み直した節を上書きしない・3節を超えたら古いものから消える・中止・再試行・端末AIが使えないときの説明）/
+  頼み直した節を上書きしない・3節を超えたら古いものから消える・中止・再試行・端末AIが使えないときの説明・
+  面を出さずに頼んだ要求だけが理由を見せる印を持ち、要求の番号で下ろす）/
   `SectionSummariesTest`（保持の規則）/ `SectionSummaryStatusTest`（派生状態）/ `SectionRefTest`（要約に渡す本文の範囲）/
   `NoteSessionCoordinatorTest`（ノート切替で後着しない・要約の生成中にメモを置く・メモの保存中に要約を始める）/ `NoteSectionThreadingTest`
 - **instrumentation:** `OnDeviceGenerationTest`（節の要約の実生成）

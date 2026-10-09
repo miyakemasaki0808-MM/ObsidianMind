@@ -381,6 +381,70 @@ class SectionChatControllerTest {
         assertTrue("あとで使えるようになるので入口は閉じない", notice.canTryAgainLater)
     }
 
+    /**
+     * **面を出さずに頼んだ要求だけが、理由を見せる印を持つ**（→ features/margin_pane.md §5.4）。印は要約の状態にあり、
+     * 画面を作り直しても残る。面から頼んだ要求と、面の再試行は持たない — 理由はその面に出る。
+     */
+    @Test
+    fun `面を出さずに頼んだ要求だけが、理由を見せる印を持つ`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.Unsupported }
+        val controller = controller(state, ai)
+
+        controller.request(A, "A", "Aの本文", quietly = true)
+        advanceUntilIdle()
+        // 生成中の別の節は取り除かれるので、A の結果が出てから B を頼む。
+        controller.request(B, "B", "Bの本文")
+        advanceUntilIdle()
+
+        assertTrue(summaryOf(state, A)?.noticePending == true)
+        assertTrue(summaryOf(state, A)?.summaryProblem is SectionChatProblem.AiStatus)
+        assertFalse(summaryOf(state, B)?.noticePending == true)
+    }
+
+    /** 見せたら番号で下ろす。**下ろした後に同じ節を頼み直していれば、新しい要求の印は残す。** */
+    @Test
+    fun `見せた理由の印は要求の番号で下ろし、頼み直した要求の印は残す`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.NeedsDownload }
+        val controller = controller(state, ai)
+
+        controller.request(A, "A", "Aの本文", quietly = true)
+        advanceUntilIdle()
+        val first = requireNotNull(summaryOf(state, A))
+
+        // 準備待ちの説明は頼み直すと確かめ直す（新しい要求になる）。
+        controller.request(A, "A", "Aの本文", quietly = true)
+        advanceUntilIdle()
+        val second = requireNotNull(summaryOf(state, A))
+        assertNotEquals(first.requestId, second.requestId)
+
+        controller.acknowledgeNotice(first.requestId)
+        assertTrue("古い要求の番号で新しい印を下ろした", summaryOf(state, A)?.noticePending == true)
+
+        controller.acknowledgeNotice(second.requestId)
+        assertFalse(summaryOf(state, A)?.noticePending == true)
+    }
+
+    /** 面の再試行は面から押すので、印を持たない。 */
+    @Test
+    fun `面の再試行は理由を見せる印を持たない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val (ai, response) = pendingAi()
+        ai.availability = AiAvailability.NeedsDownload
+        val controller = controller(state, ai)
+
+        controller.request(A, "A", "Aの本文", quietly = true)
+        advanceUntilIdle()
+        ai.availability = AiAvailability.Ready
+        controller.retry(A)
+        runCurrent()
+
+        assertFalse(summaryOf(state, A)?.noticePending == true)
+        response.complete("要約")
+        advanceUntilIdle()
+    }
+
     private fun TestScope.controller(state: NoteUiStateStore, ai: FakeAiClient) =
         SectionChatController(this, ai, state.sectionChatWriter, StandardTestDispatcher(testScheduler))
 

@@ -76,32 +76,32 @@ internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, reques
     else -> SummaryEntry.Background
 }
 
-/** 面を出さずに始めた要約を、その後どうするか（→ [backgroundSummaryStep]）。 */
-internal enum class BackgroundSummaryStep {
-    /** 結果がまだ届いていない。 */
-    Wait,
+/** 面を出さずに頼んだ要約の、端末AIが使えない理由をどう扱うか（→ [pendingNoticeFor]）。 */
+internal enum class PendingNotice {
+    /** 見せる理由が無い。 */
+    None,
 
-    /** 端末AIの状態で出せなかった。面を出して理由を見せる。 */
-    ShowNotice,
+    /** 面を開いて理由を見せ、見せたことを伝える。 */
+    Open,
 
-    /** 追うのをやめる。結果はボタンの記号が示す。 */
-    Done
+    /** 理由は出ている面の要約の行に見えている。見せたことだけを伝える。 */
+    Acknowledge
 }
 
 /**
- * **端末AIが使えない理由が届いたときだけ、面を出す。** 理由は失敗として数えないので記号が 💬 のまま変わらず
+ * **端末AIが使えない理由が届いていて、まだ見せていなければ見せる。** 理由は失敗として数えないので記号が 💬 のまま変わらず
  * （→ `sectionSummaryStatus`）、面を出さないと押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示す。
  *
- * [summary] が無いのは、頼んだ結果がまだ画面の状態へ届いていないときなので待つ。要約が取り除かれる経路
- * （別の節を頼む・ノートや本文が替わる）では、画面のほうが追うのをやめる。
- * [faceVisible] は面が出ているか。出ていれば理由はそこに見えている。
+ * [summary] には**今の本文の節の要約**を渡す。面はいつも今の本文の節を映すので、別の節の理由で面を開くと、
+ * 理由の無い面が出る。頼んだ節から読み進めていれば、その節へ戻ったときに見せる。
+ * [rowVisible] は要約の行が出ている面があるか。[paneVisible] はペインが出ているか — 出ていて行が無いのは並べ読みの間で、
+ * シートを重ねられないので、余白へ戻って行が出るまで待つ。
  */
-internal fun backgroundSummaryStep(summary: SectionSummary?, faceVisible: Boolean): BackgroundSummaryStep = when {
-    faceVisible -> BackgroundSummaryStep.Done
-    summary == null -> BackgroundSummaryStep.Wait
-    summary.summaryProblem is SectionChatProblem.AiStatus -> BackgroundSummaryStep.ShowNotice
-    summary.isSummaryLoading -> BackgroundSummaryStep.Wait
-    else -> BackgroundSummaryStep.Done
+internal fun pendingNoticeFor(summary: SectionSummary?, rowVisible: Boolean, paneVisible: Boolean): PendingNotice = when {
+    summary == null || !summary.noticePending || summary.summaryProblem !is SectionChatProblem.AiStatus -> PendingNotice.None
+    rowVisible -> PendingNotice.Acknowledge
+    paneVisible -> PendingNotice.None
+    else -> PendingNotice.Open
 }
 
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
