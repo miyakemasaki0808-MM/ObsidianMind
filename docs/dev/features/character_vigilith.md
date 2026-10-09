@@ -1,7 +1,7 @@
 # キャラクターシート — Vigilith（黒曜の梟オートマトン）
 
 **種別:** Character Reference（**機能仕様ではない**）
-**状態:** Adopted — 造形・配色・ガードレールが確定し、アイコン／起動OPが従っている。アプリ内には常駐させない
+**状態:** 採用済み — 造形・配色・ガードレールが確定し、アイコンと起動OPが従う。アプリ内には常駐させない
 **最終検証:** 2026-08-11 / `e7b9f18`（造形・色の記述は未突合）
 **関連コード:** `ui/vigilith/VigilithOpeningMotion.kt` / `ui/theme/AppColors.kt`（パレット）/ `res/drawable/ic_vigilith*.xml`
 **関連テスト:** `VigilithOpeningMotionTest`
@@ -13,7 +13,7 @@
 > **`AdrShapeTest` の `TEMPLATE_EXEMPT` に明示的に列挙してある**ので、例外が増えれば気づける
 > （同種の資料が2〜3本に増えたら `reference/` へ独立させる合図）。
 >
-> **`状態:` が `Implemented` ではなく `Adopted` なのも同じ理由。**
+> **`状態:` が「実装済み」ではなく「採用済み」なのも同じ理由。**
 > この文書は「実装された機能」ではなく**規範**で、実装がこれに従う向きになる。
 >
 > | 知りたいこと | 見る文書 |

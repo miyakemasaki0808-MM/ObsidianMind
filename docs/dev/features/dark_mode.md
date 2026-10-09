@@ -1,6 +1,6 @@
 # ダークモード
 
-**状態:** Implemented — 稼働中・実機確認済み
+**状態:** 実装済み・稼働中・実機確認済み
 **最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `ui/theme/AppTheme.kt` / `ui/theme/AppColors.kt` / `data/AppPreferences.kt` / `ui/screen/OptionsScreen.kt`
 **関連テスト:** `AppColorContrastTest` / `VibrantTextUsageTest`

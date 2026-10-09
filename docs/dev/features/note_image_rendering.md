@@ -1,6 +1,6 @@
 # ノート内画像の表示
 
-**状態:** Implemented — 稼働中・実機確認済み。**EXIF回転・SVG・アニメーション・インライン画像は非対応**
+**状態:** 実装済み・稼働中・実機確認済み。**EXIF回転・SVG・アニメーション・インライン画像は非対応**
 **最終検証:** 2026-08-12 / `bb764ce`
 **関連コード:** `data/NoteImageGateway.kt` / `data/VaultImageIndexStore.kt` / `domain/image/` / `ui/markdown/NoteImage.kt`
 **関連テスト:** `ImageLinkResolutionTest` / `ImageDecodePolicyTest` / `NoteImageMeasurementsTest` / `NoteImageTextTest` / `VaultImageIndexStoreTest` / androidTest: `NoteImageGatewayInstrumentationTest`

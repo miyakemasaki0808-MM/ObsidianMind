@@ -1,11 +1,7 @@
 # 再会カードに何を出すか
 
-**状態:** **実装済み。** 判断6（枠を前回読み進めたところから決め、続きから読めるようにする）と判断7（「まだ考えたい」の撤去）は**実装済み・実機確認済み**（部分確認2件を除く → §10）。
-それ以前の種別も実機検証済み（→ [device_validation](../../review/device_validation/reunion_card.md)）
-**最終検証:** 2026-09-27 / `7bf0726`（製品コードは `001e551` まで同一）
-
-> **ここへ実機ケースの範囲を書かない。** どのケースがあるかの正本はケース文書の側で、
-> 両方に書くとケースを足すたびに片方が古くなる（実際に一度古くなった）。
+**状態:** 実装済み・稼働中・実機確認済み（部分確認2件 → §10）
+**最終検証:** 2026-09-27 / `7bf0726`
 **関連コード:** `domain/ReunionCandidateScanner.kt` / `domain/ReunionSlot.kt` / `domain/markdown/NoteSections.kt`（読み進めたところ・前後・送り先）/
 `model/ReunionKind.kt` / `model/ReunionPassage.kt` / `model/ReadingTrace.kt` /
 `ai/PromptBuilder.buildReunionSelectionPrompt` / `ai/PromptBuilder.buildReunionPassagePrompt` / `controller/ReunionCardController.kt` /
@@ -64,7 +60,7 @@
 
 ## 5. 機能仕様
 
-- **前提条件:** Rediscover 経路であること（→ [reflect_reading_trace](reflect_reading_trace.md)）。
+- **前提条件:** 引いた経路であること。Rediscover と冊子の「これを読む」が該当する（→ [rediscover](rediscover.md) 判断4）。
   **1回目の再会から枠を出す。** 生成の契機は判断6 — 前後の要約は入力を鍵にした保存が無いとき、
   読了の選別は痕跡の試行が今回の分岐で使えないとき（訪問数が変わった・旧仕様の俯瞰要約など）。
   **照合は、同じ痕跡（Vaultと相対パス）への訪問の保存が終わるのを待ってから痕跡を読む**

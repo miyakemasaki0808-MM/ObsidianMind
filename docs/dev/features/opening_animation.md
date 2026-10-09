@@ -1,7 +1,6 @@
 # 起動OPアニメーション
 
-**状態:** Implemented — 稼働中。**新規Activity起動時のみ再生**（回転・Fold開閉・プロセス復元では再生しない）。
-**ランチャー再タップの重複起動を畳むガードも稼働中**（→ 判断7）
+**状態:** 実装済み・稼働中。**新規Activity起動時だけ再生する**（回転・Fold開閉・プロセス復元では再生しない）
 **最終検証:** 2026-09-17 / `f2d1f18`
 **関連コード:** `ui/screen/OpeningScreen.kt` / `ui/vigilith/`（`vigilithOpeningMotion`）/ `MainActivity.kt` / `domain/LauncherEntry.kt`
 **関連テスト:** `VigilithOpeningMotionTest` / `LauncherEntryTest` / `ActivityRecreationTest`（instrumentation）

@@ -1,7 +1,7 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** Implemented — 稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで提供し、自動化は未着手
-**最終検証:** 2026-08-22 / `c9a48d2`（§8 の判断17件は未突合）
+**状態:** 実装済み・稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで（自動化は未着手）
+**最終検証:** 2026-10-06 / `6b39f134`
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
 **正本:** この文書
@@ -18,7 +18,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 **AI自身には記憶を持たせない**という方針（ステートレス維持）の裏返しで、
 記憶はこことノートの太字（蒸留の痕跡）だけが持つ。
 
-**Rediscover で同じノートを引き当てたときだけ**「前回のあなた」を再会カードとして出す。
+**同じノートを引き当てたときだけ**「前回のあなた」を再会カードとして出す。引くのは Rediscover と冊子の「これを読む」である。
 
 ## 2. ゴールと非ゴール
 
@@ -36,7 +36,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
 | 読書位置の記録 | 自動。ユーザーには見えない | 離脱時・背面化時 |
-| 再会カード | 「前回のあなた」が本文上部に出る | **Rediscover 経路だけ**（→ [rediscover](rediscover.md) 判断4） |
+| 再会カード | 「前回のあなた」が本文上部に出る | **引いた経路だけ** — Rediscover と冊子の「これを読む」（→ [rediscover](rediscover.md) 判断4） |
 | 再会カードの枠 | 途中までなら読み進めたところの前後の要約、読了なら当時の問い・古い前提かノートの要約（→ [reunion_card](reunion_card.md) 判断6） | 再会したとき（1回目から） |
 | 孤児の整理 | 一覧と手動削除 | オプションから |
 
@@ -46,7 +46,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 2. 読む（スクロール位置と到達率が追われる）
 3. ノートを離れる／アプリを背面化する → **`flush` / `pause` でファイルへ書く**
    - 記録には門番がある（条件は §5）
-4. 次に同じノートを **Rediscover で引き当てる**と、再会カードが出る
+4. 次に同じノートを **Rediscover か冊子で引き当てる**と、再会カードが出る
 
 ## 5. 機能仕様
 
@@ -97,7 +97,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | | 条件 |
 |---|---|
 | **記録**（JSONに訪問を足す） | **能動読書が `MIN_READING_MILLIS` 以上**、かつ**本文が1ブロック以上描画されている**（`totalBlocks > 0`）。経路は問わない（Rediscover・さがす・関連のどれでも） |
-| **表示**（再会カード） | **Rediscover 経路のみ** |
+| **表示**（再会カード） | **引いた経路のみ**（Rediscover と冊子の「これを読む」） |
 
 「スクロールが発生した」は条件に**入れない**（→ §8 判断3）。
 
@@ -139,7 +139,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 ## 6. 状態とデータ
 
 **永続化:** 上記のサイドカー。**Vault と一緒に運べる**のが利点で、
-**Vault のフォルダが消えれば一緒に消える**のが代償（退避手段は未実装）。
+**Vault のフォルダが消えれば一緒に消える**のが代償（手動の退避と読み戻しは [reading_trace_backup](reading_trace_backup.md)）。
 
 ### データモデル
 
@@ -161,7 +161,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | `markedKind` | 印を付けた時点の種別 |
 <!-- /state-fields -->
 
-`Visit(atEpochMillis, deepestSectionTitle, progressPercent)`。checksum は保存形式の関心事なので
+`ReadingVisit(atEpochMillis, deepestSectionTitle, progressPercent)`。checksum は保存形式の関心事なので
 モデルには持たせず、`ReadingTraceJson` が付与・検証する。
 
 > **欄の追加はここが正本。** 上の区切りは
@@ -214,15 +214,18 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 ```
 ノート表示
- ├─ ReadingTraceController        ← セッション・訪問記録
+ ├─ ReadingTraceController        ← セッション・訪問記録・余白メモの保存
  │    └─ ReadingTraceStore        ← flush/pause で writeMutex 直列・read-modify-write
- └─ ReunionCardController         ← Rediscover の再会カード・前後の要約・問いの選別・印（同じ writeMutex）
+ └─ ReunionCardController         ← 引いた経路の再会カード・前後の要約・問いの選別（同じ writeMutex）
       └─ ReadingTraceStore
            └─ ReadingTraceJson    ← スキーマ版・バイト上限・checksum
 
 オプション
- └─ ReadingTraceCleanupController（**Vault単位**）
-      └─ ReadingTraceOrphans      ← 純関数。痕跡は在るがノートが無い、を判定
+ ├─ ReadingTraceCleanupController（**Vault単位**）
+ │    └─ ReadingTraceOrphans      ← 純関数。痕跡は在るがノートが無い、を判定
+ └─ ReadingTraceBackupController（**Vault単位**）← 読み戻しの適用も同じ writeMutex（→ reading_trace_backup）
+
+writeMutex は NoteSessionCoordinator が1つ作って3つへ配る（→ architecture の並行処理の規約）
 ```
 
 ## 8. 設計判断と代替案
@@ -248,7 +251,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 ```
 普通に読む ──> 読んだ位置が裏で溜まる（AI呼び出しゼロ）
                        │（時間が経つ）
-Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが枠の1件を用意（→ reunion_card 判断6）
+Rediscover か冊子で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが枠の1件を用意（→ reunion_card 判断6）
 ```
 
 ### 採らなかった案 — TimeCapsule（明示的に問いを残す）
@@ -269,12 +272,9 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 **失ったもの:** 行動データなので「**何を考えていたか**」は回収できない。
 「前回は40%で止まった」は「前回は〇〇が引っかかった」ではない。
 
-**2026-08-21、この穴の埋め方を確定した。** 作成は無意識のまま、
-**意図だけを再会の瞬間に宿す**（カードの「まだ考えたい」）。上表の (c) を守ったまま
-(a) を取り戻す形で、**読書中の操作は増やさない。** 規則と優先順位の正本は
-[reunion_card](reunion_card.md)。
-**2026-09-27、その「まだ考えたい」は撤去した**（使われていなかった）。何を考えていたかを残す手段は、
-読んでいる最中に書ける余白メモ（[reflect_margin_memo](reflect_margin_memo.md)）が担う。
+**この穴は余白メモが埋める。** 何を考えていたかは、読んでいる最中に書ける
+余白メモ（[reflect_margin_memo](reflect_margin_memo.md)）が残す。痕跡の自動記録（上表の (c)）はそのままで、
+書くかどうかはユーザーに任せる。再会カードに何を出すかの正本は [reunion_card](reunion_card.md)。
 
 ### 設計原則: シンプル最優先
 
@@ -291,15 +291,15 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 記録するのは**最深到達セクションと到達率**。累積すれば「3回開いていずれも前半で止まっている」という**俯瞰**が出せる。
 **滞在時間は採らない** — 離席で値が汚れ、テストもしづらい。
 
-#### 判断2: 記録は全経路・表示は Rediscover 限定
+#### 判断2: 記録は全経路・表示は引いた経路に限る
 
 **ここが非対称**なので実装時に混同しやすい（条件は §5）。
 
 「目的を持って開いた時には出さず、偶然引いた時だけ"再会"を濃くする」という意図的な割り切り。
 
-**由来フラグは持たない。** カードを設定するのは `revealTrace` だけ、それを呼ぶのは `loadRandomNote` だけ、
-`withNoteScopedReset()` がノートを開くたびカードを消す。つまり
-**「カードが存在する」こと自体が「Rediscover由来」を意味**しており、フラグは二つ目の真実になるだけ。
+**由来フラグは持たない。** カードを設定するのは `revealTrace` だけ、それを呼ぶのは引いた経路の `presentDrawnNote` だけ
+（Rediscover と冊子の「これを読む」が共有する）、`withNoteScopedReset()` がノートを開くたびカードを消す。つまり
+**「カードが存在する」こと自体が「引いた経路由来」を意味**しており、フラグは二つ目の真実になるだけ。
 
 #### 判断3: 門番は「能動読書の時間」と「本文が描かれたか」で決める
 
@@ -310,7 +310,7 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 
 そこで門番は**時間**と、**本文が実際に描かれたか**（進捗報告が来ているか）の2つにした。
 後者が要るのは、**本文を描く前に離れた場合も時間だけは経過している**ため。
-契約は §5 で、**返事を預かっているときの例外**もそこにある。
+契約は §5 で、**余白メモを預かっているときの例外**もそこにある。
 
 **背面にいた時間を除いた「能動読書時間」だけを積算する。** `pause()`（`onStop`）で止め `resume()`（`onStart`）で再開。
 背面化の時点で訪問を**書き出す**が**セッションは残す**ので、復帰して読み進めたら同じ訪問を差し替える。
@@ -335,21 +335,19 @@ Rediscover で引かれる ──> 生の痕跡を即表示 ──> 裏でAIが�
 > **この「全可視扱い」は画像表示で牙を剥いた。** 高さ0のプレースホルダを置くと進捗が水増しされ、
 > 「最深到達点は下げない」規則で固着し永続化される → [note_image_rendering](note_image_rendering.md) 判断5。
 
-#### 判断5: AI要約は再会時・裏で・失敗しても黙って劣化
+#### 判断5: 再会のAIは再会時・裏で・失敗しても黙って劣化
 
-> **俯瞰要約は 2026-09-26 に撤去した。** 枠の1件は [reunion_card](reunion_card.md) 判断6 が決める。
-> 下の「まず生の痕跡を出す・裏で1回だけ・自動DLしない・黙って劣化」は、前後の要約と問いの選別へそのまま引き継いだ。
-> 「新しい内容を作らせない」も同じで、前後の要約は本文に無いことを書かせない。
-
+枠の1件（前後の要約と問いの選別）を何にするかは [reunion_card](reunion_card.md) 判断6 が決める。ここが決めるのは出し方である。
 `generate()` は Mutex で全機能直列＋タイムアウトつきなので、待ってからカードを出すと**長く何も出ない**。
 
 - **まず生の痕跡でカードを出す**（AIなし・即時）
-- 訪問が増えていれば**裏で1回だけ**生成し、届いたら**生の痕跡の下に足す**（置き換えると失敗時に文面が消える）
+- 枠の1件は**裏で多くて1回**生成し、届いたら**生の痕跡の下に足す**（置き換えると失敗時に文面が消える）
 - `NeedsDownload` では**自動DLしない**。失敗・タイムアウトも**エラー表示を出さず**生の痕跡のままにする
-- `aiSummaryVisitCount` には「**要約が説明している訪問数**」を入れる
-  （生成中に `flush` が訪問を足すことがあるため、最新件数を入れると次回作り直されなくなる）
+- `aiSummaryVisitCount` には**選別を試みた時点**の延べ回数を入れる（→ §6）
+  （生成中に `flush` が訪問を足すことがあるため、最新件数を入れると次回選び直されなくなる）
 
 **AIには新しい内容を作らせない。** 「データに無いことを書かせない・助言や問いを足させない」を明示する。
+問いの選別は本文の候補から選ぶだけで、前後の要約は本文に無いことを書かない。
 これが「前回の自分」という体験を保つ肝。→ この「意識させない」作法は [lessons L4](../lessons.md#l4-見せ方は機能名ではなく起動契機で決める)。
 
 #### 判断6: 保存はvault内の可視フォルダにサイドカー（本文は編集しない）
@@ -407,7 +405,7 @@ v1 のファイルに `totalVisitCount` が書き足されていても読まな�
 
 消費済みの印（`dirty=false` / `recordedVisit`）は保存の起動**前**に立てているので、
 書けなかったら巻き戻す。**巻き戻すのは自分が書こうとした訪問がまだ最新のときだけ**（後発の訪問を潰さない）。
-`persistSummary` は対象外 — 書けなくても次回の再会で選び直され、自己修復する。
+再会カードの結果の保存（`ReunionCardController` の `persistOutcome`）は対象外 — 書けなくても次回の再会で選び直され、自己修復する。
 
 #### 判断11: Vault分離は保存要求自身が運ぶ
 
@@ -589,7 +587,7 @@ Gateway が書き込み直前に照合し、不一致なら書かずに捨てる
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** 9本（Controller・Store・JSON・孤児判定・掃除・文言・見出し・上限整合・進捗幾何）
+- **JVMテスト:** 冒頭の関連テスト（Controller・Store・JSON・孤児判定・掃除・文言・見出し・上限整合・進捗幾何）
 - **実機確認:** 実施済み
 - **保証していないこと:**
   - **書き込みの原子性が無い。** truncate 後に書き直すため、書込中にプロセスが死ぬと部分破損が残り復旧元もない

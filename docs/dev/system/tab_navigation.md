@@ -1,8 +1,8 @@
 # タブ・ナビゲーション
 
 **状態:** 実装済み・稼働中
-**最終検証:** 2026-08-11 / `9af63ee`
-**関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替・バッジ）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
+**最終検証:** 2026-10-06 / `6b39f134`
+**関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
 **関連テスト:** `AppScaffoldContentSlotTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
 **正本:** この文書
 
@@ -15,7 +15,7 @@
 **タブは5つ** — 📄ノート／🔎さがす／🔗関連／✨AI／⚙️オプション（`AppScaffold.kt` の enum が単一の定義元）。
 
 **非タブの独立ルート**が別にあり、こちらは**バー／レールを出さない構造**を持つ。
-`note_fullscreen`・冊子・読書痕跡の整理・結晶の一覧がこれにあたる。
+`note_fullscreen`・冊子・データ管理・読書痕跡の整理・結晶の一覧がこれにあたる。
 
 **画面幅対応:** `WindowWidthSizeClass.Expanded`（Fold展開）は左サイドレール、それ以外は下部バー。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。
@@ -55,15 +55,14 @@ Pixel Fold で操作ボタンが画面外に切れ、同時にダブルタップ
 - **タブアイコンは絵文字**（📄🔎🔗✨⚙️）を使い `material-icons` 依存を回避
 - `NoteViewModel` / `NoteUiState` は無変更。状態が集約済みだったため、各タブは同一 `uiState` の別スライスを表示するだけで成立した
 
-## 5. 共有UI部品の色は「置かれる背景」を前提に持つ
+## 5. 共有UI部品の色は「置かれる背景」を前提にしない
 
-`IconPill` は当初 `containerColor` を持たず、**グラデーション背景の上に置く前提**の配色（Panel色22%透過＋白記号）で固定されていた。
-全画面表示ではほぼ白のノートパネルの真上に重なるため、**白地に白**になって✕がほぼ見えなかった。
+`IconPill` の下地は既定で不透明な `AccentGlass` で、グラデーションの上でも、全画面のほぼ白のノートパネルの上でも同じに見える。
+全画面の ✕ もこの既定を使う。**半透明の下地は使わない** — 下の面が透けて、記号のコントラストが下地の明るさで変わる
+（白の ✕ で 2.5 前後）。文字を不透明な面と対の前景へ載せる規則は [theme_and_ui_refactor](theme_and_ui_refactor.md) 判断5 が持つ。
 
-対処は `containerColor` のパラメータ化で、全画面の✕にだけ暗い半透明下地（`OnSurface` 45%）を敷く。
-
-> **部品を新しい文脈で使うときは、その部品が持つ背景の前提が保たれているかを確認する。**
-> 色の指定が部品内に固定されている＝前提が隠れている、という合図。
+> **部品を新しい文脈で使うときは、その部品の色が置かれる背景に頼っていないかを確認する。**
+> 半透明の下地や、背景を前提にした前景色は、置き場所が変わると前提ごと崩れる。
 
 ## 6. 設定系の操作はオプションへ寄せる
 

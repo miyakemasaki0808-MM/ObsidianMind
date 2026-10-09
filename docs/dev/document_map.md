@@ -46,9 +46,9 @@
 
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
-| [change_history.md](change_history.md) | PR単位の変更履歴（新しい順） | **PRごとに1行追記** |
+| [change_history.md](change_history.md) | 変更の履歴（新しい順） | **まとまった変更1つにつき1行追記** |
 | [review/](../review/) | 最新の外部レビュー1本（未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
-| [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度した／構造上また起きると判断したとき |
+| [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度したとき。1度目は検査を同時に置けるときだけ（→ [lessons.md](lessons.md) の追加の条件） |
 | [09_project_origin.md](../owner/09_project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
@@ -78,9 +78,9 @@
 
 ### 機能（`features/`）
 
-**内訳は機能仕様20本＋参照シート1本。**
+**内訳は機能仕様と、参照シート1本。**
 
-- **機能仕様20本**は [`_template.md`](features/_template.md) の12節に揃っている。
+- **機能仕様**は [`_template.md`](features/_template.md) の12節に揃っている。
   **節の存在と、空でないことの両方を `AdrShapeTest` が固定する** —
   埋まっていない節は空欄ではなく `> **未確認:**` か `> **該当なし:**` で理由を書く
 - **参照シート1本**（[character_vigilith](features/character_vigilith.md)）は12節に従わない。
@@ -108,7 +108,6 @@
 | [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
-| [sealed_reply.md](features/sealed_reply.md) | 封をした返事。次の再会まで自分でも読めない返事。**Draft・未実装** |
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 
@@ -165,18 +164,20 @@
 | [current_issues.md](../_wip/current_issues.md) | 課題台帳。**「いま何が壊れているか」だけ**を持ち、順序は書かない。未対応のものだけを残し、**実機検証まで終わったら削除する**（実装完了では消さない）。IDはカテゴリ記号（TEST-1・AI-1 など） |
 | [roadmap.md](../_wip/roadmap.md) | Now / Next / Later。日付を切らず優先度と成熟度で3段。**使い捨て**（完了項目は取り消し線を残さず削除する） |
 | [feature_ideas.md](../_wip/feature_ideas.md) | 未実装の採用候補（使い捨て。実装済み・却下は残さない） |
-| `plan_*.md` | **特定作業の実装計画**（使い捨て。着手して終わったら削除する）。現在2本 |
+| [fable51_triage.md](../_wip/fable51_triage.md) | Fable 5.1 の課題候補の処遇（今回限りの特別枠。処遇が決まり切ったら消す） |
+| `plan_*.md` | **特定作業の実装計画**（使い捨て。着手して終わったら削除する）。必要なときだけ置く |
 
 ---
 
 ## 4. 運用ルール
 
-1. **PRごとに** [change_history.md](change_history.md) へ1行追記する。設計判断や試行錯誤があった変更だけ `features/` か `system/` に対応文書を作成／追記し、履歴表からリンクする。
+1. **まとまった変更1つにつき** [change_history.md](change_history.md) へ1行追記する。設計判断や試行錯誤があった変更だけ `features/` か `system/` に対応文書を作成／追記し、履歴表からリンクする。
 2. **解析書・総評で「問題」と書いたものは、必ず [_wip/current_issues.md](../_wip/current_issues.md) に起票する。** 書いただけでは追跡されない。
    ただし**起票先へのリンクや番号は恒久文書側に残さない**（§3 の一方通行ルール）。恒久文書には問題の内容だけを書く。
 3. **`_wip/` の項目は実機検証まで終わったら削除する。** 実装完了では消さない（検証待ちが消えると誰も確認しなくなる）。残すと未対応の課題が埋もれる。
 4. **修正の主張は、修正コードを別の目で読むまで確定させない。** 方針が正しいと文書とコミットメッセージだけ通ってしまう（→ [L26](lessons/L26.md)・[L34](lessons/L34.md)）。
 5. **`features/` `system/` の各文書には `**状態:**` 行を置く。** 実装済みか構想段階かが本文を読まずに分かるようにする。
+   **1行で今の状態だけを書く**（様式は [`_template.md`](features/_template.md)）。
 6. **機能を廃止したら、その設計書は消す。** やめた理由は、残る正本に数行で書く（例: [section_ai_chat](features/section_ai_chat.md) 判断3）。
    **今の仕様書には、撤去した機能の注記を残さない** — 「撤去した」は今の状態の1文へ書き直す。
    いつ何をやめたかは [change_history](change_history.md)・[開発日誌](../owner/journal/)・年表・コミットが持ち、設計書の全文は git 履歴に残る。
@@ -201,22 +202,22 @@
 **`features/` `system/` に読む順は無い。** 普段はコードから下の逆引き表で引く。
 **ここは例外で、「どんな考え方で作られたアプリか」を通しで掴みたいときの順路**である。
 
-**11本・約3,900行。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
+**11本。** これで全部ではなく、**残りはこの土台の上に乗る**ので、
 必要になったとき逆引きで引けば読める。
 
-| | 文書 | なぜこの位置か | 行数 |
-|---:|---|---|---:|
-| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** | 257 |
-| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** | 116 |
-| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する | 311 |
-| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** | 300 |
-| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget | 133 |
-| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** | 291 |
-| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる | 198 |
-| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 | 606 |
-| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 | 499 |
-| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 | 312 |
-| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い | 889 |
+| | 文書 | なぜこの位置か |
+|---:|---|---|
+| 1 | [system/architecture](system/architecture.md) | 構造・状態の所有・並行処理。**他の全部がこの上に乗る** |
+| 2 | [system/saf_boundary_gateway](system/saf_boundary_gateway.md) | Vault との境界。**なぜ層を Android 非依存に保つのか** |
+| 3 | [system/ai_input_excerpt](system/ai_input_excerpt.md) | AIへ何を渡すか。全AI機能の入口が共有する |
+| 4 | [system/background_ai_ux](system/background_ai_ux.md) | 待ち時間と失敗をどう見せるか。**機能を分ける軸がここにある** |
+| 5 | [system/ui_design_principles](system/ui_design_principles.md) | 見た目の土台。コントラストとタッチtarget |
+| 6 | [system/bearing_channels](system/bearing_channels.md) | 色・形・動きの持ち主。**装飾を足す前に必ず通る** |
+| 7 | [features/rediscover](features/rediscover.md) | 入口であり心臓。ここからループが始まる |
+| 8 | [features/reflect_reading_trace](features/reflect_reading_trace.md) | 痕跡の記録と再会。ループのもう半分 |
+| 9 | [features/reunion_card](features/reunion_card.md) | 再会したとき何を1件出すか。枠の排他 |
+| 10 | [features/note_summary](features/note_summary.md) | 主軸のAI。保存と待たせ方の実例 |
+| 11 | [features/reflect_distill](features/reflect_distill.md) | **唯一ノート本文を書き換える**。安全設計の密度が最も高い |
 
 **1〜6が先なのは、7以降がそこで決めた規約を前提に書かれているから。** 逆順で読むと、
 機能ごとに同じ規約の説明を読み直すことになる。

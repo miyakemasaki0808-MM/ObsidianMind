@@ -1,6 +1,6 @@
 # ノートの年代を紙の地色で伝える
 
-**状態:** Implemented — 稼働中・実機確認済み。**既定オフ**
+**状態:** 実装済み・稼働中・実機確認済み。**既定オフ**
 **最終検証:** 2026-08-12 / `521768b`
 **関連コード:** `domain/NotePaperAge.kt` / `model/NotePaperTone.kt` / `ui/theme/AppTheme.kt` / `data/AppPreferences.kt`
 **関連テスト:** `NotePaperAgeTest` / `AppColorContrastTest`
@@ -36,7 +36,7 @@
 
 ## 4. 現在のユーザーフロー
 
-1. ノートを開く（Rediscover 経路なら Vault 全体の分布が手元にある）
+1. ノートを開く（引いた経路なら Vault 全体の分布が手元にある）
 2. `lastModified` を Vault 内の分布と比べ、**相対四分位**で段階を決める
 3. 本文表示より**前**に紙の色を決める（→ [rediscover](rediscover.md)。後だと現行色で1フレーム描かれる）
 4. 本文が生成り寄りの紙に載る
@@ -310,7 +310,7 @@ frontmatter は各所で**除去**されるだけで、`created:` のような�
 （[architecture](../system/architecture.md) 判断3）。`model` は葉なので `android.*` を含めない
 （→ [saf_boundary_gateway](../system/saf_boundary_gateway.md)）。
 
-**純関数は2つある。** Rediscover 経路は走査結果を手元に持つので `notePaperTone` を直接呼べるが、
+**純関数は2つある。** 引いた経路（Rediscover と冊子の「これを読む」）は走査結果を手元に持つので `notePaperTone` を直接呼べるが、
 さがす・関連ノート経由は**材料が2箇所に散る**（候補自身の `lastModified` と走査キャッシュ）ため、
 その優先順位と分母の補正を `notePaperToneForCandidate` として切り出した。
 
@@ -425,8 +425,8 @@ Weathered の差ですら判定が曖昧になる。
 
 | | |
 |---|---|
-| 色チャネルを1つ使い切っている | 分野を色帯で示す未実装候補と**同じ画面で2つの色符号を読ませる**ことになる。着手時は主役をどちらにするか先に決める |
-| `openNote` 経路では分布が手元に無い | Rediscover だけが Vault 全体の分布を持つ（→ [rediscover](rediscover.md) 判断3） |
+| 読む面の色チャネルを使い切っている | 読む面へ色を足す提案は、年代を降ろす提案になる。分野の色は冊子の面だけが持つ（→ [bearing_channels](../system/bearing_channels.md) 判断6） |
+| `openNote` 経路では分布が手元に無い | 引いた経路だけが Vault 全体の分布を持つ。`openNote` は候補の最終更新と走査キャッシュから近似する（→ [rediscover](rediscover.md) 判断3） |
 
 ## 12. 開発経緯
 

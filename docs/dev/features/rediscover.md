@@ -1,9 +1,9 @@
 # Rediscover（ランダム表示）
 
-**状態:** Implemented — 稼働中。**アプリの入口であり心臓**
-**最終検証:** 2026-08-11 / `c25bcea`
-**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.collectAllNotesCached()` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）/ `ui/screen/ReaderLayout.kt`（並べ方）
-**関連テスト:** `NoteRepositoryTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
+**状態:** 実装済み・稼働中。**アプリの入口であり心臓**
+**最終検証:** 2026-10-06 / `6b39f134`
+**関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.presentDrawnNote()`（冊子と共有）/ `NoteViewModel.collectAllNotesCached()` / `NoteScanCache.kt` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）/ `ui/screen/ReaderLayout.kt`（並べ方）
+**関連テスト:** `NoteRepositoryTest` / `NoteScanCacheTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **対象領域:** Vault からノートを1件無作為に引き、読める状態にするまで
@@ -37,7 +37,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 | ランダム表示 | Vault から1件引いて本文を表示する | ノートタブの「別のノートをひらく」 |
 | Vault未選択時の案内 | 「Vaultフォルダを選択して…」と出し、**ボタンは無効** | Vault が未選択 |
 | 空Vault | ノートが1件も無いことを伝える | 走査結果が0件 |
-| 再会カード | 「前回のあなた」を出す | **Rediscover 経路だけ**（`openNote` では出さない） |
+| 再会カード | 「前回のあなた」を出す | **引いた経路だけ** — Rediscover と冊子の「これを読む」（`openNote` では出さない） |
 
 ## 4. 現在のユーザーフロー
 
@@ -50,8 +50,11 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 7. **紙の地色を決める** — これも**本文より前**（→ §8 判断3）
 8. 本文を表示する
 9. 当日履歴へ記録する
-10. **再会カードを出す**（この経路だけ）
-11. 要約と関連ノートの生成を始める（どちらもバックグラウンド）
+10. **再会カードを出す**（引いた経路だけ）
+11. 要約・分野判定・結晶・関連ノートを始める（どれもバックグラウンド）。
+    自動で走るAIは、ノートに3秒留まってから生成する（→ [background_ai_ux](../system/background_ai_ux.md) §7）
+
+**4〜11 は冊子の「これを読む」と共有する**（`presentDrawnNote`）。冊子で引いた1枚も、ランダムに引いた1枚だからである。
 
 **Vault未選択なら何もせず返る。** ボタン自体も無効になっている。
 
@@ -59,7 +62,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 
 - **前提条件:** Vault が選択済みであること
 - **母集団:** Vault 配下の `.md` すべて。**ただし機能フォルダは除外する** —
-  `_AI補記` / `_ReadingTraces` / `.obsidian`
+  `_AI補記`（旧版が書き出したフォルダ）/ `_ReadingTraces` / `.obsidian`
 - **抽選:** `notes.random()` の一様抽選。**重み付けも履歴の考慮もしない**
 - **上限:**
 
@@ -71,7 +74,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 
 - **走査キャッシュ:** Vault 全体の走査は SAF の IPC が重いので、結果を60秒保持する。
   **連打しても走査は1回**で、関連ノートの補填もこのキャッシュを使う。
-  **Vault切替で破棄する**（`saveVault()` が `cachedNotes` を空にする）
+  **Vault切替で破棄し**（`saveVault()` が `noteScan.clear()` を呼ぶ）、**走査の結果は公開の直前に `vaultGeneration` を照合する**（→ 判断2）
 - **走査が部分的に失敗しても続行する。** 読めた分でランダム表示と関連ノートを続ける
   （止めるほうが体験として悪い）。**完全性を要求するのは、不在を根拠に何かを消す処理だけ**
   （＝痕跡の孤児掃除）
@@ -85,7 +88,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 **永続化しない。** 引いた結果そのものは残らない。残るのは副産物 —
 当日履歴（SharedPreferences・日付が変われば破棄）と読書痕跡（Vault内サイドカー）。
 
-**走査キャッシュ `cachedNotes` は `NoteViewModel` が持つ。** `NoteUiState` の外にあるが、
+**走査キャッシュ（`NoteScanCache`）は `NoteViewModel` が持つ。** `NoteUiState` の外にあるが、
 これは表示状態ではなく I/O のキャッシュなので「状態の単一ソース」の例外にはあたらない。
 **破棄の契機は Vault 切替だけ**（ノート切替では捨てない — 次の抽選で使う）。
 
@@ -95,15 +98,15 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 NoteReaderTab（ボタン）
  └─ NoteViewModel.loadRandomNote(contentResolver)
       ├─ session.onNoteChanged()            ← 旧ノートのジョブ停止＋状態リセット
-      ├─ collectAllNotesCached()            ← 60秒TTL・Vault切替で破棄
+      ├─ collectAllNotesCached()            ← 60秒TTL・Vault切替で破棄・公開前に世代を照合
       │    └─ NoteRepository.collectNotes() ← SAF再帰走査（機能フォルダを除外）
-      ├─ notes.random()
-      ├─ loadNoteForDistill()               ← 本文読み取り（1MB上限）
-      ├─ startReadingTrace()                ← **本文表示より前**
-      ├─ setNotePaperTone()                 ← **本文表示より前**
-      ├─ setNoteState()                     ← ここで初めて画面が変わる
-      ├─ recordHistory() / revealReadingTrace()
-      └─ fetchSummary() / fetchRelatedNotes()  ← バックグラウンド
+      └─ presentDrawnNote(notes.random())   ← 冊子の「これを読む」と共有
+           ├─ loadNoteForDistill()          ← 本文読み取り（1MB上限）
+           ├─ startReadingTrace()           ← **本文表示より前**
+           ├─ setNotePaperTone()            ← **本文表示より前**
+           ├─ setNoteState()                ← ここで初めて画面が変わる
+           ├─ recordHistory() / revealReadingTrace()
+           └─ fetchSummary() / classifyNoteField() / crystallize() / fetchRelatedNotes()  ← バックグラウンド
 ```
 
 ## 8. 設計判断と代替案
@@ -122,8 +125,9 @@ NoteReaderTab（ボタン）
 SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連打・関連ノートの補填・短時間の往復**で
 毎回走らせると体感が壊れる。一方で長く持つと Obsidian 側の追加が見えなくなるので、60秒に置いた。
 
-**Vault切替では即座に捨てる。** 世代（`vaultGeneration`）ではなく参照の破棄で行う —
-キャッシュは状態ではなく I/O の写しなので、無効化ではなく破棄でよい。
+**Vault切替では即座に捨て、走査の結果は公開の直前に `vaultGeneration` を照合する。**
+捨てるだけでは、切替の前に始まった走査が後から返って、新しいVaultのキャッシュを上書きする。
+走査を呼ぶ処理の多くは切替で取り消されるが、取り消しには頼らない（→ [note_field_color](note_field_color.md) の走査キャッシュの照合）。
 
 ### 判断3: 痕跡セッションと紙の地色は、本文より先に決める
 
@@ -135,12 +139,13 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 | 紙の地色（`setNotePaperTone`） | **現行色で1フレーム描かれてから**変わる（ちらつく） |
 
 **この経路は走査結果を手元に持つので、紙の段階が常に確定する。**
-`openNote`（関連ノート・さがすタブ経由）はVault全体の分布を持たないため、同じ計算ができない —
-**Rediscover だけが持つ強み**である。
+`openNote`（関連ノート・さがすタブ経由）は候補の最終更新と走査キャッシュから近似し、材料が無ければ現行色に落ちる
+（→ [note_age_paper](note_age_paper.md) の `notePaperToneForCandidate`）。**常に確定するのは引いた経路だけ**である。
 
-### 判断4: 再会カードは Rediscover 経路だけで出す
+### 判断4: 再会カードは引いた経路だけで出す
 
-`revealReadingTrace()` は `loadRandomNote` からしか呼ばない。**`openNote` では呼ばない。**
+`revealReadingTrace()` は引いた経路の `presentDrawnNote` からしか呼ばない。**`openNote` では呼ばない。**
+冊子の「これを読む」も同じ経路を通る — 冊子で引いた1枚も、ランダムに引いた1枚である。
 
 「前回のあなたはここまで読んだ」は**偶然引き当てたときにこそ効く**。
 関連ノートやさがすタブから意図して開いたノートでは、驚きにならない。

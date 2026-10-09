@@ -1,8 +1,6 @@
 # ノートの分野を冊子の紙の色で伝える
 
-**状態:** 実装済み（主要経路を実機確認） — 走査のヒント→索引A→冊子の色／ノートを開くとAIが判定して確定へ昇格し、
-確定は端末へ永続する。Vault別の追加語彙は §11 を参照。
-設計レビュー3巡（7件＋5件＋1件）を反映済み
+**状態:** 実装済み・稼働中（主要経路を実機確認済み）
 **最終検証:** 2026-09-12 / `35ba5b5`（分類精度・全表示幅は未保証）
 **関連コード:** `controller/NoteFieldController.kt` / `data/NoteFieldStore.kt` / `model/NoteField.kt` / `domain/NoteFieldHint.kt` / `domain/NoteFieldIndex.kt` /
 `domain/NoteFieldAnswer.kt` / `domain/NoteFieldInputVersion.kt` / `ai/PromptBuilder.kt` /

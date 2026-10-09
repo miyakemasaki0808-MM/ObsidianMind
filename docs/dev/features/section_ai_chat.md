@@ -1,7 +1,6 @@
 # 部分要約（この節の要約）
 
-**状態:** Implemented — 稼働中。節の要約を「この部分」の面に出し、ノートを開いている間は最近3節分を持つ（2026-10-04、別の目と実機検証済み）。
-質問とクイズは撤去済み（→ §8 判断3）
+**状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す
 **最終検証:** 2026-10-04 / `9e377cf5`（Pixel 10 Pro Fold で面への統合・3節分・中止・見出しより前・同名の見出し・蒸留での破棄を実モデルで確認）
 **関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionSummaryStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
 **関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `NoteSectionThreadingTest`
