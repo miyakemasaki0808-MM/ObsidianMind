@@ -18,6 +18,7 @@
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
 | 2026-10-08 | 外部のデザイン壁打ちから、規約の内側で持ち帰れる装飾と手触り6件を owner の持ち帰り帳に起こした | — |
+| 2026-10-07 | 実機の体感から UX の課題3件とアイデア3案を起票し、困っている5件をロードマップの Now の先頭に置いた | — |
 | 2026-10-06 | タブ・Rediscover・読書痕跡の正本をコードと突き合わせ、冊子と共有する引いた経路などの食い違いを直した | [rediscover](features/rediscover.md)・[reflect_reading_trace](features/reflect_reading_trace.md)・[tab_navigation](system/tab_navigation.md) |
 | 2026-10-06 | 佇まいの割り当ての分野色を実装済みに直し、実装と同じ回に足すはずだった検査が無いことを起票した | [bearing_channels](system/bearing_channels.md) |
 | 2026-10-06 | 設計書の状態行と最終検証行を1行ずつに戻し、日付・巡数・段の進め方を外した | [_template](features/_template.md) |
