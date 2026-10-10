@@ -1,7 +1,7 @@
 # ノート内のリンクを押して開く
 
 **状態:** 実装済み。実機では未検証（→ §10）
-**最終検証:** 未検証（実装前）
+**最終検証:** 2026-10-10 / `0588ab53`（机上のみ。実機は §10）
 **関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
 **関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / androidTest: `NoteLinkTapUiTest`（組み立てのみ。端末では未実行）
 **正本:** この文書
