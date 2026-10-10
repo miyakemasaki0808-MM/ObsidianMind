@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | UX改善の最終差分の外部レビューで、結晶の一覧の下端の宝石で中身へ送らない不備をP2として起票した（CRYS-8） | [review](../review/README.md) |
 | 2026-10-10 | 結晶の一覧を、月ごとの棚に根拠の分野の色の宝石を並べ、押した段の直下に1文と根拠を開く画面にした | [reflect_crystal](features/reflect_crystal.md) 判断11 |
 | 2026-10-10 | 結晶の一覧を月の棚に宝石を並べる形に決め、宝石を根拠のノートの分野で左右半々に塗ることを色の割り当てに足した | [reflect_crystal](features/reflect_crystal.md) 判断11・[bearing_channels](system/bearing_channels.md) §10 |
 | 2026-10-10 | 机の画面の帯の地を、画面の地を敷いた箱の角を端点にして描き、帯の中に別の虹が縮まらず背景とつながるようにした | [margin_pane](features/margin_pane.md) §5.1 |
