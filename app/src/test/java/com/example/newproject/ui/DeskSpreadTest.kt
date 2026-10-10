@@ -8,6 +8,7 @@ import com.example.newproject.ui.screen.DeskFacePlacement
 import com.example.newproject.ui.screen.DeskSpread
 import com.example.newproject.ui.screen.DeskSpreadGesture
 import com.example.newproject.ui.screen.SummaryEntry
+import com.example.newproject.ui.screen.SupportingScrollMemory
 import com.example.newproject.ui.screen.closesSideReading
 import com.example.newproject.ui.screen.deskFacePlacement
 import com.example.newproject.ui.screen.deskPaneCountsAsFace
@@ -22,6 +23,7 @@ import com.example.newproject.ui.screen.shows
 import com.example.newproject.ui.screen.summaryEntryFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -199,6 +201,48 @@ class DeskSpreadTest {
     fun `横と決まった後に取り消された払いでは広げない`() {
         assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = -120f, dy = 0f, durationMillis = 300, cancelled = true)))
         assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 0f, durationMillis = 300, cancelled = true)))
+    }
+
+    /**
+     * **余白を1画面に広げて戻したら、広げる前の位置へ戻す。** 画素で位置を持つ余白の面は、広がって中身が短くなると位置が縮められ、
+     * 戻しても元に戻らなかった（実機で、関連の見出しの上端が 1272→1452px）。覚えるのは2面から補助の面だけへ広げるときだけ。
+     */
+    @Test
+    fun `余白を1画面に広げる前の位置を覚え、戻したら返す`() {
+        val memory = SupportingScrollMemory()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.MainOnly, scrollValue = 900)
+        assertNull("本文だけへ広げるときは覚えない", memory.restoreTarget())
+
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        assertEquals(900, memory.restoreTarget())
+        memory.forget()
+        assertNull(memory.restoreTarget())
+    }
+
+    /** **1画面の間に面が動いたら戻さない**（利用者のスクロールか、面の中の送り）。動いた先を残す。 */
+    @Test
+    fun `1画面の間に動いたら戻さない`() {
+        val memory = SupportingScrollMemory()
+        memory.movedWhileWide()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        assertEquals("覚える前の動きは数えない", 900, memory.restoreTarget())
+
+        memory.movedWhileWide()
+        assertNull(memory.restoreTarget())
+        memory.forget()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 300)
+        assertEquals("次に広げるときは改めて覚える", 300, memory.restoreTarget())
+    }
+
+    /**
+     * **戻し終える前にもう一度広げたら覚え直さない。** そのときの位置は戻す途中の値（縮められたまま）で、広げる前の位置ではない。
+     */
+    @Test
+    fun `戻し終える前にもう一度広げても、最初に広げる前の位置を持ち続ける`() {
+        val memory = SupportingScrollMemory()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 260)
+        assertEquals(900, memory.restoreTarget())
     }
 
     private fun spreadFor(events: List<androidx.compose.ui.input.pointer.PointerEvent>): List<DeskSpreadGesture> =

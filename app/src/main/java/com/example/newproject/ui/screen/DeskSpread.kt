@@ -3,6 +3,7 @@ package com.example.newproject.ui.screen
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
@@ -11,6 +12,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -21,6 +23,8 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -183,6 +187,67 @@ internal fun DeskFaces(
         layout(constraints.maxWidth, height) {
             mains.forEach { it.place(placement.mainX.roundToInt(), 0) }
             supportings.forEach { it.place(placement.supportingX.roundToInt(), 0) }
+        }
+    }
+}
+
+/**
+ * 補助の面を1画面に広げて戻すときの、補助の面のスクロール位置の覚え（→ features/margin_pane.md §5.1）。
+ *
+ * **画素で位置を持つ面（余白の面）は、1画面に広げると位置を失う。** 幅が広がると折り返しが減って中身が短くなり、
+ * 位置が新しい上限まで縮められ、2面へ戻しても元に戻らない。段落で位置を持つ面（本文・並べ読み）はずれない。
+ * 広げる前の位置を覚え、戻したら戻す。**1画面の間に面が動いたら**（利用者のスクロールか、面の中の送り）、戻さずにそちらを残す。
+ */
+internal class SupportingScrollMemory {
+    private var saved: Int? = null
+    private var moved = false
+
+    /**
+     * 広げ方を替える直前に呼ぶ。補助の面だけへ広げるときに、**まだ2面の幅の位置**を覚える。
+     * 戻し終える前にもう一度広げたら覚え直さない — そのときの位置は戻す途中の値で、広げる前の位置ではない。
+     */
+    fun beforeSpread(current: DeskSpread, next: DeskSpread, scrollValue: Int) {
+        if (next == DeskSpread.SupportingOnly && current != DeskSpread.SupportingOnly && saved == null) {
+            saved = scrollValue
+            moved = false
+        }
+    }
+
+    /** 補助の面だけの間に、面が動いた。覚える前の動きは、覚えるときに数え直すので残らない。 */
+    fun movedWhileWide() {
+        moved = true
+    }
+
+    /** 補助の面だけでなくなったときに戻す位置。覚えていないか、1画面の間に動いたなら null（今の位置を残す）。 */
+    fun restoreTarget(): Int? = saved.takeIf { !moved }
+
+    /** 戻し終えたか、戻さないと決めた。 */
+    fun forget() {
+        saved = null
+        moved = false
+    }
+}
+
+/**
+ * 補助の面を1画面に広げて戻したとき、補助の面の [scrollState] を広げる前の位置へ戻す（→ [SupportingScrollMemory]）。
+ * 広げる前の位置は、広げ方を替える操作が [SupportingScrollMemory.beforeSpread] で覚えておく。
+ */
+@Composable
+internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollState, memory: SupportingScrollMemory) {
+    val wide = spread == DeskSpread.SupportingOnly
+    LaunchedEffect(wide, scrollState, memory) {
+        if (wide) {
+            // 広がるときに上限で縮められても動いた扱いにしない（それは利用者の操作ではない）。
+            snapshotFlow { scrollState.isScrollInProgress }.first { it }
+            memory.movedWhileWide()
+        } else {
+            val target = memory.restoreTarget()
+            if (target != null) {
+                // 戻る途中は幅が狭まって中身が伸びていく。伸び切る前に置くと、その時点の上限で切り詰められる。
+                withTimeoutOrNull(DESK_MOTION_MILLIS * 4L) { snapshotFlow { scrollState.maxValue }.first { it >= target } }
+                scrollState.scrollTo(target)
+            }
+            memory.forget()
         }
     }
 }

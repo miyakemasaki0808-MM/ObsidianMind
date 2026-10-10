@@ -30,6 +30,7 @@ import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -492,6 +493,10 @@ internal fun NoteReaderTab(
         // 机の画面の操作の帯と広げ方（→ DeskSpread）。**しまった状態と2面から始める** — ペインを出し直したときも、ノートを替えたときも。
         var deskBarShown by remember(paneVisible, currentNoteUri) { mutableStateOf(false) }
         var deskSpread by remember(paneVisible, currentNoteUri) { mutableStateOf(DeskSpread.Both) }
+        // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
+        // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
+        val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
+        val paneScrollMemory = remember(paneVisible, currentNoteUri) { SupportingScrollMemory() }
         // 広げ方を替える。**本文だけにするときは書いているつもりを落とす** — 入力欄は組んだまま隠れるので、見えない欄へ打ち込ませない。
         val spreadTo: (DeskSpread) -> Unit = { next ->
             if (!next.shows(DeskFace.Supporting) && memoFocusIntent) {
@@ -499,6 +504,7 @@ internal fun NoteReaderTab(
                 focusManager.clearFocus()
             }
             deskBarShown = false
+            paneScrollMemory.beforeSpread(deskSpread, next, paneScroll.value)
             deskSpread = next
         }
         // 面の中身へ送る依頼の前に、その面が隠れていれば2面へ戻す（→ deskSpreadShowing）。
@@ -586,6 +592,7 @@ internal fun NoteReaderTab(
         // 戻る操作は内側から — 帯が出ていればまず帯をしまい、片側を1画面にしていれば次に2面へ戻す
         // （後に置いた BackHandler ほど先に効く）。
         BackHandler(enabled = deskSpread != DeskSpread.Both && paneVisible) { spreadTo(DeskSpread.Both) }
+        RestoreSupportingScroll(deskSpread, paneScroll, paneScrollMemory)
         BackHandler(enabled = deskBarShown && paneVisible) { deskBarShown = false }
         // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
         // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
@@ -772,6 +779,7 @@ internal fun NoteReaderTab(
                                         onSubmit = onSubmitMemo,
                                         onDelete = onDeleteMarginMemo,
                                         modifier = Modifier.padding(top = 16.dp),
+                                        scrollState = paneScroll,
                                         focusIntent = memoFocusIntent,
                                         onFocusIntentChange = onMemoFocusIntentChange,
                                         active = deskSpread.shows(DeskFace.Supporting),

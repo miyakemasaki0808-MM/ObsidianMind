@@ -1357,6 +1357,47 @@ class NoteReadingFlowTest {
         }
     }
 
+    /**
+     * **余白を下のほうまで送ってから余白を1画面に広げ、2面へ戻すと、余白は元の位置に戻る。** 余白の面は画素で位置を持つので、
+     * 広がって中身が短くなると位置が縮められ、戻しても元に戻らなかった（実機で、関連の見出しの上端が 1272→1452px）。
+     */
+    @Test
+    fun 机の画面で余白を1画面にして戻しても_余白のスクロール位置が戻る() {
+        val memos = (1..12).map { index ->
+            MarginMemo("節Aのメモ$index。" + "読み返して引っかかったところを、本文の横に短く残しておく。".repeat(3), index.toLong(), "節A")
+        }
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(*memos.toTypedArray()),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        // メモは新しい順に並ぶので、いちばん古いメモが余白の下端にある。そこまで送ると、位置が上限の近くになる。
+        val bottomMemo = memos.first().text
+        composeRule.onNodeWithText(bottomMemo).performScrollTo()
+        composeRule.waitForIdle()
+        val before = composeRule.onNodeWithText(bottomMemo).getUnclippedBoundsInRoot().top
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        val after = composeRule.onNodeWithText(bottomMemo).getUnclippedBoundsInRoot().top
+        assertEquals("余白の位置が戻っていない: $before → $after", before.value, after.value, 1f)
+    }
+
     /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
     @Test
     fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
