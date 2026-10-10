@@ -108,6 +108,8 @@ internal class NoteSessionCoordinator(
      * 時間を進められないと検証できない）。
      */
     clock: () -> Long = System::currentTimeMillis,
+    /** 結晶の材料を控える線（[NoteReadGate]）が読んだ時間を測る、単調に進む時計。テストがテストスケジューラの時刻へ差し替える。 */
+    elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000 },
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /**
      * 表示用Markdownの解析を載せるディスパッチャ。既定は [NoteSectionController] 側の
@@ -151,6 +153,12 @@ internal class NoteSessionCoordinator(
      * 押した直後の生成が理由もなく数秒待たされる。
      */
     private val dwell = NoteDwellGate(scope)
+
+    /**
+     * 結晶の材料を控える線（→ features/reflect_crystal.md 判断4）。**結晶にだけ配る。**
+     * 門番と同じ入口で数え始め・止め・離れるが、冊子や背面から戻ると続きから足す（門番は数え直す）。
+     */
+    private val read = NoteReadGate(scope, elapsedMillis)
 
     // 機能ごとのController。各Controllerには担当領域だけを書けるWriterを渡す。
     // sections だけは NoteUiState の外に状態を持つ（理由は sectionModel のKDoc）。
@@ -245,7 +253,7 @@ internal class NoteSessionCoordinator(
     private val crystal = CrystalController(
         scope = scope,
         aiClient = aiClient,
-        awaitDwell = dwell::await,
+        awaitRead = read::await,
         awaitSummary = ::awaitSummaryText,
         awaitReunionSettled = reunionCard::awaitSettled,
         state = stateStore.crystalWriter,
@@ -421,6 +429,7 @@ internal class NoteSessionCoordinator(
         // 門を待っている生成は、下の各 Job の停止と同じ手で取り消す。
         // **次のノートは最初から数える**（通った門を持ち越さない）。
         dwell.stop()
+        read.stop()
         reunionCard.cancelForNoteChange()
         cancelHostJobs()
         sections.cancelAndClear()
@@ -532,6 +541,7 @@ internal class NoteSessionCoordinator(
         if (state is NoteState.Success) {
             sections.parse(state.content)
             dwell.start()
+            read.start()
             marginMemo.ensureLoaded(readingTrace.currentPath())
         } else {
             sections.cancelAndClear()
@@ -648,17 +658,19 @@ internal class NoteSessionCoordinator(
         sectionTitle: String?
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
     /**
-     * 冊子が前面に来た・アプリが背面へ回った。**読書時間と、自動生成の待ち時間の両方を止める。**
-     * 片方にだけ伝えると、冊子をめくっている間に開いたノートの生成が始まる。
+     * 冊子が前面に来た・アプリが背面へ回った。**読書時間と、自動生成の待ち時間と、結晶の材料の線をすべて止める。**
+     * どれかにだけ伝えると、冊子をめくっている間に開いたノートの生成が始まる。
      */
     fun pauseReadingTrace(reason: ReadingPauseReason) {
         readingTrace.pause(reason)
         dwell.pause(reason)
+        read.pause(reason)
     }
 
     fun resumeReadingTrace(reason: ReadingPauseReason) {
         readingTrace.resume(reason)
         dwell.resume(reason)
+        read.resume(reason)
     }
 
     fun dismissReadingTraceCard() = reunionCard.dismissCard()

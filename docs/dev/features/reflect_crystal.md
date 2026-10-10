@@ -1,9 +1,9 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 は実機確認待ち）
+**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 と、材料を控える30秒の線 → 判断4 は実機確認待ち）
 **最終検証:** 2026-09-27 / `d559e33`
-**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
-**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
+**関連コード:** `controller/CrystalController.kt` / `controller/NoteReadGate.kt`（材料を控える線） / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
+**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteReadGateTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
 **正本:** この文書
 
 **関連:** [note_summary](note_summary.md)（材料の出どころ）・[reflect_reading_trace](reflect_reading_trace.md)（置き場を共有する）・
@@ -45,7 +45,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 
 | 詳細機能 | ユーザーから見える挙動 | 起動条件 |
 |---|---|---|
-| 材料を控える | 見えない | 要約が出ているノートに3秒留まったとき（→ 判断4） |
+| 材料を控える | 見えない | 要約が出ているノートを、冊子と背面の間を除いて足し算で30秒読んだとき（→ 判断4） |
 | 結晶を作る | 見えない。条件がそろうと裏で1文ができる | 控えた直後に、試す条件（→ 判断5）を満たし、**このノートの再会カードの照合が終わり**（→ 判断10）、Nano が `Ready` のとき |
 | ✨タブの結晶 | 要約の下に、このノートを根拠に含む結晶が新しい順に最大3件。各結晶の下に「〇〇・△△ から」 | ✨タブを開いたとき。該当が無ければ出さない |
 | 根拠を開く | 「〇〇・△△ から」を押すと、根拠のノート名と、AIへ渡した要約がその場で開く | 押したとき |
@@ -59,7 +59,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 ## 4. 現在のユーザーフロー
 
 1. ノートを開き、本文が出る。この Vault の結晶をまだ読み込んでいなければ、読み込みを始める（AIを呼ばない）
-2. ノートに3秒留まり、要約が出ている → そのノートの要約を、材料として端末に控える
+2. ノートを30秒読み（冊子と背面の間は数えず、戻ったら続きから足す）、要約が出ている → そのノートの要約を、材料として端末に控える
 3. 試す条件（→ 判断5）を満たせば、このノートの再会カードの照合が終わるのを待ち（→ 判断10）、
    **今のノートと、最近見た他のノート最大5件**を候補にして、生成を1回だけ呼ぶ
 4. AI は、今のノートと筋を共有するノートを他の候補から1〜3件選び、選んだ要約だけを材料に1文で総括する。
@@ -67,7 +67,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 5. ✨タブを開くと、要約の下に、今のノートを根拠に含む結晶が出る
 6. 「結晶の一覧」から、これまでの結晶を月ごとの宝石の棚で見る。宝石を押すと1文と根拠が開き、根拠のノート名を押すとそのノートが開く
 
-**中断:** ノートを切り替えると、門番待ち・要約待ち・生成中の試行は取り消され、**試行として数えない。**
+**中断:** ノートを切り替えると、読み終え待ち・要約待ち・生成中の試行は取り消され、**試行として数えない。** 30秒に届く前に離れたノートは控えない
 **保存に入った結晶は、切り替えても止めずに書き終え、同じ Vault なら一覧へ足す**（→ 判断9）。
 Vault を切り替えると、読み込み中の一覧と生成中の試行を捨てる。保存は要求した Vault へ書き終えるが、新しい Vault の一覧には足さない。
 
@@ -208,7 +208,7 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
       │    └─ CrystalStore.readAll(vaultKey)  @Dispatchers.IO
       └─ crystal.onNoteShown(path, title)          ← requestId を採番し、crystalNotePath を置き、vaultKey をこの時点で決める
            │ ── 生成（ノート単位。切り替えたら取り消す）──
-           ├─ awaitDwell()                          ← 3秒（→ background_ai_ux §7）
+           ├─ awaitRead()                           ← 足し算で30秒（→ 判断4）。3秒の門番の代わりも兼ねる
            ├─ 要約が Success になるのを待つ          ← Error・AiUnavailable なら終わる
            ├─ fragmentOf(summary)                   ← 純関数・240字
            ├─ CrystalMaterialStore.record()         ← 端末内
@@ -264,14 +264,23 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 - 「どれとどれが似ているか」を全組み合わせから探させるより、1件を軸に選ばせるほうが指示が単純で、応答の検証も書ける
 - **無理につなげさせない。** 筋が無ければ `NONE` を返してよく、空振りは何も書かない
 
-### 判断4: 控えるのは門番を通ったとき（読書痕跡の門番ではない）
+### 判断4: 控えるのはノートを30秒読んだとき（2026-10-07、オーナー判断）
 
-材料を控える線は、自動生成の門番（ノートに3秒留まる → [background_ai_ux](../system/background_ai_ux.md) §7）にする。
-読書痕跡の記録の門番（能動読書10秒）のほうが「読んだ」の定義としては正しいが、
-**訪問はノートを離れたときに保存される** — その時点では要約はノート単位の状態としてもう消えている。
-読書中に「10秒に達した」を知らせる経路を痕跡セッションへ足すのは、離脱・背面化・メモの預かりの契約を持つ部品への新しい入口になる。
-**3秒は「このノートに Nano を使ってよい」とアプリが既に決めている線**なので、それに揃えた。
-代償として、3秒だけ見たノートも「読んできたもの」に入る（→ §10）。
+材料を控える線は、**ノートを足し算で30秒読んだとき**にする（`NoteReadGate`）。3秒の門番（→ [background_ai_ux](../system/background_ai_ux.md) §7）は変えず、結晶だけが別の線を持つ。
+
+- **3秒では速すぎた。** 3秒で読めるのは題名と1行目まで（日本語で約15〜30字）で、チラ見したノートも「読んできたもの」に入り、
+  要約済みのノートを3本開けば約10秒で結晶ができた（オーナーの体感「結晶化のスピードが異様に早い」）。
+  30秒は、検索の研究で「満足したクリック」とみなす線（Fox ほか 2005）にそろえた。**実機で様子を見て決め直す値**で、
+  ノートの長さで変える形は、固定の線の様子を見てから考える（固定の線の上に計算を足せる）
+- **数え方は読書痕跡の10秒と同じ足し算。** 冊子を見ている間とアプリが背面の間だけ止め、戻ったら続きから足す。
+  3秒の門番は「今いるか」を見るので戻ると数え直すが、こちらは「どれだけ読んだか」を見る。数え直すと、一瞬離れただけで30秒をやり直す
+- **門番と同じ入口で動く。** 本文を出したら数え始め、ノート単位のジョブ停止の契約（`cancelNoteScopedJobs()`）で止め、
+  冊子・背面の合図は読書痕跡と同じ `ReadingPauseReason` の入口から受ける。調停側が持ち、**結晶にだけ配る**。
+  30秒に届く前にノートを離れたら控えない。止めるのは今と同じノート単位のジョブで、キャンセルの経路は増えない
+- **3秒の門番は待たない。** 30秒読んだノートは、すぐ離れるノートではない
+- **読書痕跡の門番（能動読書10秒）を使わない理由は変わらない。** 訪問はノートを離れたときに保存され、
+  その時点では要約はノート単位の状態としてもう消えている。痕跡セッションへ「届いた」を知らせる経路を足すのは、
+  離脱・背面化・メモの預かりの契約を持つ部品への新しい入口になる
 
 ### 判断5: 試すのは1日1回まで、まだ渡していない材料が3件たまってから
 
@@ -344,12 +353,12 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 
 **要約の完了を待つだけでは、再会カードより先に走りうる。** 再会カードは Rediscover で本文を出した直後に照合を始めるが、
 訪問の保存待ち・痕跡の読み込み・本文の解析を経てから生成を呼ぶ。要約が保存済みで即座に出れば、
-3秒の門番を抜けた結晶のほうが先に `generateMutex` を取る。**錠は先に並んだ順で、後から来た要求は追い越せない。**
+読み終えた結晶のほうが先に `generateMutex` を取る（材料の線が3秒だったときに起きた。30秒ではたいてい照合が先に終わるが、訪問の保存が遅いときやカードの生成が長いときは起きうる）。**錠は先に並んだ順で、後から来た要求は追い越せない。**
 60秒の計測も錠を取った後に始まるので、カードの枠は結晶の生成時間だけ遅れる。
 
 - **結晶は、生成を呼ぶ直前に、このノートの再会カードの照合が終わるのを待つ。** 照合の Job が無ければすぐ進む。
   待つのは試す条件を満たしたときだけで、材料を控えるのは待たない
-- **照合は結晶より先に要求されている。** Rediscover では本文を出した直後に照合を要求し、結晶はその後で門番を待ち始めるので、
+- **照合は結晶より先に要求されている。** Rediscover では本文を出した直後に照合を要求し、結晶はその後で材料の線を待ち始めるので、
   待つ時点で照合の Job は既に走っている。**この順序を `NoteSessionCoordinatorTest` で固定する**。
   照合が入れ替わったら新しいほうも待つ
 - **永久には待たない。** 照合の Job はどの枝でも終わる — Rediscover 以外の経路（Job が無い）、痕跡が無い・読めない、
@@ -422,7 +431,9 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - `crystalShelf`・`crystalShelfColumns`・`crystalShelfToggle`・`crystalShelfRevealFor` — 凡例を先頭にした並び、月の区切り（端末の暦）、段の割り方、開いた結晶の段の直下だけに中身、窓の幅と段の数、開くのは1つ、開いた中身を送る量（収まる・はみ出す・長い・組まれていない）（`CrystalShelfTest`）
   - 宝石の色 — 7色がパネルの上で 3:1、色相が同じ分野の紙とそろい、6色の明度がそろう（`NoteFieldPaletteTest`）
   - `CrystalJson` — 往復、checksum 不一致・未知の版・16KB超をその1件だけ飛ばすこと
-  - `CrystalController` の**両方向** — 門番待ち・要約待ち・生成中にノートを切り替えると書かず数えない／
+  - `NoteReadGate` — 続けて30秒で開く、冊子・背面の間は数えず続きから足す、停止理由が2つなら両方解けるまで、本文が出る前の再開では数えない、届く前・届いた後に離れても持ち越さない、止めていないときの再開で区間を始め直さない（`NoteReadGateTest`）
+  - `NoteSessionCoordinator` から結晶の材料の線 — 3秒では控えず30秒で控える、冊子と背面を挟んでも続きから足す、届く前に離れると控えず次のノートは0から
+  - `CrystalController` の**両方向** — 読み終え待ち・要約待ち・生成中にノートを切り替えると書かず数えない／
     生成中に Vault を切り替えると新しい Vault に書かない／走行フラグが残らない
   - **保存の途中で止める**（→ 判断9）。偽 Store を**書き込みの開始後・完了前**で止め、実スレッドで交錯させる
     （単一スレッドのスケジューラではこの交錯を作れない → [L49](../lessons/L49.md)）。
@@ -431,7 +442,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     保存が失敗したら一覧に足さない／保存を依頼する前の取消（生成中を含む）では保存0件／
     一覧の読込中に保存が終わっても、読み込みの完了後に1回だけ出る
   - `NoteSessionCoordinator` — ノート切替で一覧は残り、絞り込みのパスは消えること。Vault切替では両方消えること
-  - **再会カードとの順序**（→ 判断10）。要約を保存済みにして、再会カードの訪問の保存待ちか解析を3秒より後まで止める。
+  - **再会カードとの順序**（→ 判断10）。要約を保存済みにして、再会カードの訪問の保存待ちか解析を材料の線（30秒）より後まで止める。
     結晶の試す条件を満たしていても先に錠を取らず、止めを解くとカードの生成が先に走る／
     逆向き（カードの生成中に結晶が待つ）／カードの無い経路・保存済みで済んだカード・生成が失敗したカードの後では結晶が進む／
     待っている間にノートを切り替えると、両方の旧い要求が残らない／照合は結晶が待ち始める前に要求されていること
@@ -449,7 +460,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 - **保証していないこと:**
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
     根拠の断片を並べて、読む人が検算できるようにしている
-  - 3秒だけ見たノートも材料に入る（→ 判断4）
+  - 材料の線の30秒が結晶の溜まる速さとして適切か（→ 判断4）。実機でオーナーが様子を見る
   - 関連ノートのAI推薦と分野判定より先に錠を取ることはある（→ 判断10）
   - 他の端末が作った結晶は、次に Vault を選んだときかアプリを起動し直したときに見える。その場では届かない
   - 根拠のノート名は作った時点のもの。改名・移動したノートは一覧から押せなくなる
