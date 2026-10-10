@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import com.example.newproject.fakes.ScriptedPointerInput
 import com.example.newproject.ui.screen.DESK_SPREAD_FLING_DP_PER_SEC
 import com.example.newproject.ui.screen.DESK_SPREAD_SWIPE_DP
 import com.example.newproject.ui.screen.DeskFace
@@ -14,6 +15,7 @@ import com.example.newproject.ui.screen.deskSpreadActionsFor
 import com.example.newproject.ui.screen.deskSpreadAfter
 import com.example.newproject.ui.screen.deskSpreadGestureFor
 import com.example.newproject.ui.screen.deskSpreadShowing
+import com.example.newproject.ui.screen.detectDeskSpread
 import com.example.newproject.ui.screen.position
 import com.example.newproject.ui.screen.shows
 import com.example.newproject.ui.screen.summaryEntryFor
@@ -155,6 +157,28 @@ class DeskSpreadTest {
             assertEquals(GUTTER, toSupporting.supportingX - (toSupporting.mainX + toSupporting.mainWidth), 0.001f)
         }
     }
+
+    /** 面の上の横の払いは、離せば払った向きを1回だけ渡す。縦の払いと、動かさずに離した指は渡さない（本文のスクロールと押す操作に残す）。 */
+    @Test
+    fun `面の上で横に払って離せば払った向きを1回渡し、縦と押すだけなら渡さない`() {
+        assertEquals(listOf(DeskSpreadGesture.Left), spreadFor(ScriptedPointerInput.swipe(dx = -120f, dy = 0f, durationMillis = 300)))
+        assertEquals(listOf(DeskSpreadGesture.Right), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 30f, durationMillis = 300)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 30f, dy = -120f, durationMillis = 300)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 0f, dy = 0f, durationMillis = 200)))
+    }
+
+    /**
+     * **横と決まって十分に動いた後でも、取り消されて終わった払いでは広げない。** 途中でシステムなどへ渡って取り消されると、
+     * Compose は最後と同じ位置の使用済みの指離しを渡してくる。普通の指離しと同じに数えると、渡したはずの払いをこちらでも確定する。
+     */
+    @Test
+    fun `横と決まった後に取り消された払いでは広げない`() {
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = -120f, dy = 0f, durationMillis = 300, cancelled = true)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 0f, durationMillis = 300, cancelled = true)))
+    }
+
+    private fun spreadFor(events: List<androidx.compose.ui.input.pointer.PointerEvent>): List<DeskSpreadGesture> =
+        ScriptedPointerInput.run(events) { onGesture -> detectDeskSpread(onGesture) }
 
     private fun placementAt(spread: DeskSpread) = deskFacePlacement(spread.position, TOTAL, MAIN, GUTTER)
 

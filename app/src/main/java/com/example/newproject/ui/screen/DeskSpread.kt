@@ -183,6 +183,8 @@ internal fun DeskFaces(
  *   縦と決まったら手放し、本文のスクロールやつまみへ渡す。縦横は動いたと言えた時点の移動で決める（[isVerticalSwipe]）
  * - **長押しが成り立つまでに横と決まらなければ手放す。** 長押しの後の動きは本文の文字の選択が使う
  * - 画面の端から払い始めた指はシステムの戻る操作が先に取るので、ここへは届かない（取り返さない）
+ * - **取り消された指では広げない。** 途中でシステムなどへ渡って取り消されると、Compose は最後と同じ位置の、
+ *   使用済みの指離しを渡してくる。普通の指離しと同じに数えると、渡したはずの払いをこちらでも確定してしまう
  */
 internal suspend fun PointerInputScope.detectDeskSpread(onGesture: (DeskSpreadGesture) -> Unit) {
     awaitEachGesture {
@@ -207,7 +209,9 @@ internal suspend fun PointerInputScope.detectDeskSpread(onGesture: (DeskSpreadGe
         if (!horizontal) return@awaitEachGesture
         last.consume()
         while (last.pressed) {
-            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
+            // 自分で使う前から使用済みなら、取り消されたか、ほかが取った指。
+            if (change == null || change.isConsumed) return@awaitEachGesture
             velocity.addPointerInputChange(change)
             change.consume()
             last = change

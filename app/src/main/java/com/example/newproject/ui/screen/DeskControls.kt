@@ -253,8 +253,10 @@ private fun GripPill() {
  * **押すと払うを1つの検出で受ける。** 押す部品と払う部品を重ねると、払った量を指が動き始めてからしか数えず、
  * 短いフリックが判定に届かない。ここでは触れた位置から離した位置までを数える。
  * 動いたと言えてからの指は使い、ほかへ渡さない。
+ * **取り消された指では何もしない**（Compose は使用済みの指離しとして渡してくる → [detectDeskSpread]）。
+ * 自分で使う前から使用済みの指は、取り消されたか、ほかが取った指として手放す。
  */
-private suspend fun PointerInputScope.detectDeskGrip(
+internal suspend fun PointerInputScope.detectDeskGrip(
     pass: PointerEventPass = PointerEventPass.Main,
     onGesture: (DeskBarGesture) -> Unit
 ) {
@@ -267,6 +269,7 @@ private suspend fun PointerInputScope.detectDeskGrip(
         var last = down
         while (true) {
             val change = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            if (change.isConsumed) return@awaitEachGesture
             velocity.addPointerInputChange(change)
             last = change
             val offset = change.position - down.position
