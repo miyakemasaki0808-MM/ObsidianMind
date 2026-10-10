@@ -16,6 +16,7 @@ import com.example.newproject.ui.screen.deskSpreadAfter
 import com.example.newproject.ui.screen.deskSpreadGestureFor
 import com.example.newproject.ui.screen.deskSpreadShowing
 import com.example.newproject.ui.screen.detectDeskSpread
+import com.example.newproject.ui.screen.isSpreadSwipe
 import com.example.newproject.ui.screen.position
 import com.example.newproject.ui.screen.shows
 import com.example.newproject.ui.screen.summaryEntryFor
@@ -165,6 +166,29 @@ class DeskSpreadTest {
         assertEquals(listOf(DeskSpreadGesture.Right), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 30f, durationMillis = 300)))
         assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 30f, dy = -120f, durationMillis = 300)))
         assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 0f, dy = 0f, durationMillis = 200)))
+    }
+
+    /**
+     * **横とみなすのは、横の移動が縦の2倍を超えたときだけ。** 縦より大きいだけで横にすると、真斜め45度に読み進める指で
+     * 片側が広がった（実機で、100dp ずつ右上・左上へ払うと1画面になった）。
+     */
+    @Test
+    fun `横の移動が縦の2倍を超えたときだけ横の払いとみなす`() {
+        assertTrue(isSpreadSwipe(dx = 18f, dy = 0f))
+        assertTrue(isSpreadSwipe(dx = -18f, dy = 4.5f))
+        assertTrue(isSpreadSwipe(dx = 18.1f, dy = -9f))
+        assertFalse(isSpreadSwipe(dx = 18f, dy = 9f))
+        assertFalse(isSpreadSwipe(dx = 13f, dy = -13f))
+        assertFalse(isSpreadSwipe(dx = -15.6f, dy = 9f))
+        assertFalse(isSpreadSwipe(dx = 4.5f, dy = 18f))
+    }
+
+    /** 真斜め45度と、30度ほど傾いた払いでは広げない（本文のスクロールへ渡す）。 */
+    @Test
+    fun `斜めに払っても広げない`() {
+        listOf(100f to -100f, -100f to -100f, 100f to 100f, 120f to -70f).forEach { (dx, dy) ->
+            assertEquals("dx=$dx dy=$dy", emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = dx, dy = dy, durationMillis = 300)))
+        }
     }
 
     /**

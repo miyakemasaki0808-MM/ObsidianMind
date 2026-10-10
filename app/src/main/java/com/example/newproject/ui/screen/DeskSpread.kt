@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // 机の画面で、本文と補助の面のどちらかを横の払いで1画面にする（→ features/margin_pane.md §5.1）。
@@ -66,7 +67,7 @@ internal fun deskPaneCountsAsFace(spread: DeskSpread, reading: Boolean): Boolean
 internal enum class DeskSpreadGesture { Left, Right, None }
 
 /**
- * 横に払って離したときの扱いを決める（縦横は動いたと言えた時点で [isVerticalSwipe] が決めた後）。
+ * 横に払って離したときの扱いを決める（横かどうかは動いたと言えた時点で [isSpreadSwipe] が決めた後）。
  * [dragDp] は触れた位置から離した位置までの横の距離（右が正）、[velocityDpPerSec] は離したときの横の速さ。
  * **距離か速さのどちらかで決める** — 短く素早く払う（フリック）は距離が足りなくても広げる。向きは距離の符号で決め、速さが逆向きなら数えない。
  */
@@ -75,6 +76,16 @@ internal fun deskSpreadGestureFor(dragDp: Float, velocityDpPerSec: Float): DeskS
     dragDp > 0f && (dragDp >= DESK_SPREAD_SWIPE_DP || velocityDpPerSec >= DESK_SPREAD_FLING_DP_PER_SEC) -> DeskSpreadGesture.Right
     else -> DeskSpreadGesture.None
 }
+
+/**
+ * 指が動いたと言えた時点の移動（[dx], [dy]）から、片側を広げる横の払いかを決める。**横の移動が縦の2倍を超えたときだけ**横とする
+ * （androidx の ViewPager が横の払いを取る比と同じ）。縦より大きいだけで横にすると、真斜め45度に読み進める指で片側が広がる —
+ * 本文と余白の面のどこからでも受けるので、つまみ（[isVerticalSwipe]）より強く横を求める。どちらでもない斜めは、本文のスクロールへ渡す。
+ */
+internal fun isSpreadSwipe(dx: Float, dy: Float): Boolean = abs(dx) > DESK_SPREAD_HORIZONTAL_RATIO * abs(dy)
+
+/** 片側を広げる横の払いとみなす、横と縦の移動の比。 */
+internal const val DESK_SPREAD_HORIZONTAL_RATIO = 2f
 
 /**
  * 1回の払いで、仕切りを払った向きへ1段だけ動かす。左へ払うと補助の面が、右へ払うと本文が広がる。
@@ -180,7 +191,7 @@ internal fun DeskFaces(
  * 机の画面の面で、横の払いを受けて [deskSpreadGestureFor] の扱いを [onGesture] へ渡す。**本文と補助の面のどこからでも受ける。**
  *
  * - **子より先に指を見て（Initial の段）、横と決まったら使い切る。** 子の本文のスクロール・ボタン・入力欄は、使われた指を見て手放す。
- *   縦と決まったら手放し、本文のスクロールやつまみへ渡す。縦横は動いたと言えた時点の移動で決める（[isVerticalSwipe]）
+ *   横でないと決まったら手放し、本文のスクロールやつまみへ渡す。横かどうかは動いたと言えた時点の移動で決める（[isSpreadSwipe]）
  * - **長押しが成り立つまでに横と決まらなければ手放す。** 長押しの後の動きは本文の文字の選択が使う
  * - 画面の端から払い始めた指はシステムの戻る操作が先に取るので、ここへは届かない（取り返さない）
  * - **取り消された指では広げない。** 途中でシステムなどへ渡って取り消されると、Compose は最後と同じ位置の、
@@ -201,7 +212,7 @@ internal suspend fun PointerInputScope.detectDeskSpread(onGesture: (DeskSpreadGe
                     velocity.addPointerInputChange(change)
                     last = change
                     val offset = change.position - down.position
-                    if (offset.getDistance() > viewConfiguration.touchSlop) decided = !isVerticalSwipe(offset.x, offset.y)
+                    if (offset.getDistance() > viewConfiguration.touchSlop) decided = isSpreadSwipe(offset.x, offset.y)
                 }
             }
             decided == true

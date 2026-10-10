@@ -1338,6 +1338,25 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
     }
 
+    /**
+     * **真斜め45度に払っても広げない。** 横とみなすのは横の移動が縦の2倍を超えたときだけ。縦より大きいだけで横にしていたときは、
+     * 100dp ずつ右上・左上へ払うと片側が1画面になった（実機で観測）。
+     */
+    @Test
+    fun 机の画面では真斜めに払っても片側を広げない() {
+        setDesk()
+
+        listOf(Offset(100f, -100f), Offset(-100f, -100f)).forEach { direction ->
+            composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+                val start = Offset(250.dp.toPx(), centerY)
+                swipe(start = start, end = start + direction * density, durationMillis = 300)
+            }
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+            composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        }
+    }
+
     /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
     @Test
     fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
