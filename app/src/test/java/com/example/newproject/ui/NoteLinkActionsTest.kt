@@ -5,9 +5,11 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.screen.NoteLinkAction
+import com.example.newproject.ui.screen.NoteStartBlock
 import com.example.newproject.ui.screen.currentNoteScrollTarget
 import com.example.newproject.ui.screen.noteLinkActionFor
 import com.example.newproject.ui.screen.noteLinkHeadingMissingText
+import com.example.newproject.ui.screen.noteStartBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -70,6 +72,18 @@ class NoteLinkActionsTest {
     @Test
     fun `見出しの無いリンクは先頭へ送る`() {
         assertEquals(0, currentNoteScrollTarget(blocks, null))
+    }
+
+    /**
+     * 開いたノートの始まり。**見出しが無くても見つからなくても、決めた位置へ送る** — 補助の面で同じノートを開き直すと
+     * 位置がノートごとに残っているので、送らないと途中から始まる。
+     */
+    @Test
+    fun `開いたノートは見出しがあればそこから、無いか見つからなければ決めた位置から始める`() {
+        assertEquals(NoteStartBlock(1, headingMissing = false), noteStartBlock(blocks, "節", fallback = 0))
+        assertEquals(NoteStartBlock(0, headingMissing = false), noteStartBlock(blocks, null, fallback = 0))
+        assertEquals(NoteStartBlock(0, headingMissing = true), noteStartBlock(blocks, "無い", fallback = 0))
+        assertEquals(NoteStartBlock(7, headingMissing = false), noteStartBlock(blocks, null, fallback = 7))
     }
 
     @Test

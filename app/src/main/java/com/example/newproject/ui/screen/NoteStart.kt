@@ -41,9 +41,8 @@ internal fun rememberNoteStart(
         val start = pending ?: return@LaunchedEffect
         val opened = currentNoteUri ?: return@LaunchedEffect
         if (opened == start.noteUri && sectionModel != null) {
-            val headingBlock = start.heading?.let { headingBlockIndex(sectionModel.blocks, it) }
-            if (start.heading != null && headingBlock == null) currentOnHeadingMissing(start.heading)
-            val block = headingBlock ?: start.block
+            val (block, headingMissing) = noteStartBlock(sectionModel.blocks, start.heading, fallback = start.block)
+            if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
             // 読書の記録は最も深い位置しか残さないので、手前で1度報告されても、置き直した位置からの報告で上書きされる。
             if (listState.firstVisibleItemIndex != block) listState.scrollToItem(block)
             // 飛び越した画像は描画されないので測られない。測らないと、その先の読書の報告が止まり続ける。
@@ -55,6 +54,18 @@ internal fun rememberNoteStart(
         listState.requestScrollToItem(start.block)
         pending = start
     }
+}
+
+/** 開いたノートを始めるブロックと、リンクの見出しが見つからなかったか。 */
+internal data class NoteStartBlock(val block: Int, val headingMissing: Boolean)
+
+/**
+ * 開いたノートを始めるブロック。見出しがあればその見出し、**見出しが無いか見つからなければ [fallback]**
+ * （リンクなら先頭、「このノートへ移る」なら右で読んでいたブロック）。
+ */
+internal fun noteStartBlock(blocks: List<MarkdownBlock>, heading: String?, fallback: Int): NoteStartBlock {
+    val found = heading?.let { headingBlockIndex(blocks, it) }
+    return NoteStartBlock(block = found ?: fallback, headingMissing = heading != null && found == null)
 }
 
 /**

@@ -30,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.newproject.domain.headingBlockIndex
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
@@ -69,7 +68,7 @@ internal fun SideReadingPane(
     val note = state.note ?: return
     // **候補ごとに先頭から。** 別の候補を選んだら位置を持ち越さない。画面の作り直しでは保つ。
     val listState = rememberSaveable(note.ref.value, saver = LazyListState.Saver) { LazyListState() }
-    // リンクの見出しへ送るのは、読めた後に1度だけ。**送った要求の番号を保存値に置く** — 画面を作り直しても、読み進めた位置を見出しへ戻さない。
+    // リンクの始まりへ送るのは、読めた後に要求ごとに1度だけ。**送った要求の番号を保存値に置く** — 画面を作り直しても、読み進めた位置を戻さない。
     var startedRequest by rememberSaveable { mutableLongStateOf(0L) }
     val currentOnHeadingMissing by rememberUpdatedState(onHeadingMissing)
     val ready = state is SideReadingState.Ready && blocks != null
@@ -77,9 +76,10 @@ internal fun SideReadingPane(
         val start = linkStart ?: return@LaunchedEffect
         if (!ready || start.request == startedRequest) return@LaunchedEffect
         startedRequest = start.request
-        val heading = start.heading ?: return@LaunchedEffect
-        val block = headingBlockIndex(blocks, heading)
-        if (block != null) listState.scrollToItem(block) else currentOnHeadingMissing(heading)
+        // **見出しが無くても見つからなくても先頭へ送る。** 同じノートを開き直したときは、位置がノートごとに残っている。
+        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0)
+        listState.scrollToItem(block)
+        if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
     }
     Column(modifier = modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
         Row(
