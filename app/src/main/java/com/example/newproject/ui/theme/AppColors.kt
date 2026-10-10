@@ -366,3 +366,6 @@ internal val ButtonOutlineOnGradient: Color
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient
 internal val ReadingGradient: Brush @Composable @ReadOnlyComposable get() = current.readingGradient
+
+/** 読む画面の地（[ReadingGradient]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
+internal val ReadingGradientStops: List<Color> @Composable @ReadOnlyComposable get() = current.readingGradientStops

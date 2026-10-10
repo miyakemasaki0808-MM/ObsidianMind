@@ -29,9 +29,9 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,6 +53,8 @@ import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.ReadingGradient
+import com.example.newproject.ui.theme.ReadingGradientStops
+import com.example.newproject.ui.theme.diagonalGradientOver
 import kotlin.math.abs
 
 // 開いた Fold で ✎ を押した後の「机の画面」の操作（→ features/margin_pane.md §5.1）。
@@ -193,8 +195,9 @@ internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpre
  * ボタンの上から払い始めても、そのボタンは押さない — 帯が子より先に指を見て、動いたと言えた時点で使うので、
  * ボタンは押下を取り消す。
  *
- * **地は画面の地と同じグラデーションを、画面の中のこの帯の位置から描く**（[backdrop]）。帯の大きさで描くと、
- * 藍から珊瑚色までの全部が帯の中へ縮まり、後ろの背景とつながらない。降りる途中も地は画面に留まり、背景が降りてくるように見える。
+ * **地は画面の地と同じグラデーションを、画面の中のこの帯の位置から描く**（[backdrop]・[deskBackdropInBar]）。
+ * 端点を地の箱の角に置いて渡す — 端点を描く大きさに任せると、藍から珊瑚色までの全部が帯の中へ縮まり、後ろの背景とつながらない。
+ * 降りる途中も地は画面に留まり、背景が降りてくるように見える。
  * 見出しの霞はフェードを付けない — 帯の中ほどで横縞に見える。下端には薄い影を落とし、本文との境目にする。
  * **はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
  * 影は帯の外へ落ちるので、その分だけ下に余白を取る（帯を出し入れする器は、上の縁で切るために自分の外を切る）。
@@ -202,7 +205,7 @@ internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpre
 @Composable
 internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val currentOnHide by rememberUpdatedState(onHide)
-    val gradient = ReadingGradient
+    val stops = ReadingGradientStops
     var origin by remember { mutableStateOf(Offset.Zero) }
     Column(
         modifier = modifier
@@ -211,11 +214,7 @@ internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modif
             .onGloballyPositioned { origin = it.positionInWindow() }
             .shadow(DeskBarElevation, RectangleShape, clip = false)
             .clipToBounds()
-            .drawBehind {
-                translate(backdrop.origin.x - origin.x, backdrop.origin.y - origin.y) {
-                    drawRect(gradient, size = backdrop.size)
-                }
-            }
+            .drawBehind { drawRect(diagonalGradientOver(stops, deskBackdropInBar(backdrop.origin, backdrop.size, origin))) }
             .pointerInput(Unit) {
                 detectDeskGrip(PointerEventPass.Initial) { gesture -> if (gesture == DeskBarGesture.Hide) currentOnHide() }
             }
@@ -262,6 +261,13 @@ internal fun Modifier.reportDeskBackdrop(backdrop: DeskBackdrop): Modifier = onG
     backdrop.origin = it.positionInWindow()
     backdrop.size = it.size.toSize()
 }
+
+/**
+ * 地を敷いた箱（窓の中の [backdropOrigin] と [backdropSize]）を、窓の中の [barOrigin] にある帯の座標で表す。
+ * 帯の地はこの矩形に合わせて流す（→ [diagonalGradientOver]）。窓の同じ点は、帯の中でも地の上でも同じ色になる。
+ */
+internal fun deskBackdropInBar(backdropOrigin: Offset, backdropSize: Size, barOrigin: Offset): Rect =
+    Rect(backdropOrigin - barOrigin, backdropSize)
 
 /**
  * 帯が出ている間、本文への最初の一触れで帯をしまう。**その一触れは本文へ渡さない** — 渡すと、しまうつもりの指で本文が流れる。

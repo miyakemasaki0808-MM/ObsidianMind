@@ -13,6 +13,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -73,6 +76,8 @@ import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
+import kotlin.math.roundToInt
+import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1254,6 +1259,28 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **帯の地は後ろの背景の続きに見える**（→ features/margin_pane.md §5.1）。帯の下端のつまみの段で、帯の右端の内側と、
+     * その外の溝（背景がそのまま見える）の色を比べる。地を帯の大きさで流すと、藍から珊瑚色までの全部が帯の中へ縮まり、ここで大きく食い違う。
+     * 帯の左端は、窓より大きい箱が中央に寄るので窓の外に出ることがあり、比べない。
+     */
+    @Test
+    fun 机の画面の帯の地は_右の溝の背景と継ぎ目なくつながる() {
+        setDesk()
+        openDeskBar()
+
+        val grip = composeRule.onNodeWithContentDescription("操作をしまう").fetchSemanticsNode().boundsInRoot
+        val image = composeRule.onRoot().captureToImage().toPixelMap()
+        val step = with(composeRule.density) { 8.dp.toPx() }
+        val y = grip.center.y.roundToInt()
+        val inside = image[(grip.right - step).roundToInt(), y]
+        val outside = image[(grip.right + step).roundToInt(), y]
+
+        listOf(inside.red to outside.red, inside.green to outside.green, inside.blue to outside.blue).forEach { (a, b) ->
+            assertTrue("帯の内側 $inside と外の背景 $outside の色が違う", abs(a - b) <= SEAM_TOLERANCE)
+        }
+    }
+
+    /**
      * **帯は上の縁からシャッターのように降りて出て、しまうときは巻き上がる。** 途中では、帯の見出しが出きった位置より上にあり、
      * しまう途中はまだ組まれている。瞬時に出入りしていたときは、払った次の瞬間に出きり、しまった次の瞬間に消えていた。
      */
@@ -1869,6 +1896,8 @@ class NoteReadingFlowTest {
         const val FIRST_PARAGRAPH = "最初の段落"
         const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
         const val DESK_TAG = "机の画面"
+        /** 帯の継ぎ目で許す色の差（1チャンネルあたり）。8dp 離れた2点のグラデーションの差と、描画の誤差を含む。 */
+        const val SEAM_TOLERANCE = 12f / 255f
         val NOTICE = SectionChatProblem.AiStatus(
             AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
         )
