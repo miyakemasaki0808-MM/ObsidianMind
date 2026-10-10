@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 机の画面の操作の帯を、上の縁からシャッターのように降りて出し、しまうときは巻き上げるようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | 机の画面で面のどこからでも横に払うと、左へは余白が、右へは本文が1画面になり、逆へ払うか戻る操作で2面へ戻るようにした | [margin_pane](features/margin_pane.md) §5.1・[fold_experience](system/fold_experience.md) §6 |
 | 2026-10-10 | 要約ボタンと Fold の机の画面を実機で通し版の検証にかけ、指摘なしで UI-4・FOLD-2 を台帳から外した | [margin_pane](features/margin_pane.md) §10・[レビュー一覧](../review/README.md) |
 | 2026-10-10 | 横寄りの払いの修正を独立検査で確認し、再レビューの机上指摘なしを記録した | [review](../review/README.md) |

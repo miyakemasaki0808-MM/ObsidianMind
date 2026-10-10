@@ -1244,6 +1244,30 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
     }
 
+    /**
+     * **帯は上の縁からシャッターのように降りて出て、しまうときは巻き上がる。** 途中では、帯の見出しが出きった位置より上にあり、
+     * しまう途中はまだ組まれている。瞬時に出入りしていたときは、払った次の瞬間に出きり、しまった次の瞬間に消えていた。
+     */
+    @Test
+    fun 机の画面の帯は上の縁から降りて出て_しまうときは巻き上がる() {
+        setDesk()
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.mainClock.advanceTimeBy(100)
+        val descending = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        composeRule.mainClock.advanceTimeBy(500)
+        val shown = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        assertTrue("降りている途中なのに出きっている: $descending / $shown", descending < shown)
+
+        composeRule.onNodeWithContentDescription("操作をしまう").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.mainClock.advanceTimeBy(100)
+        val rising = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        assertTrue("巻き上がっている途中なのに動いていない: $rising / $shown", rising < shown)
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
+    }
+
     // ── 片側を払って1画面に（→ features/margin_pane.md §5.1）───────────────
 
     /**

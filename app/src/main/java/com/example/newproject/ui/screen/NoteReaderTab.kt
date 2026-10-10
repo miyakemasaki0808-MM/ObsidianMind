@@ -22,7 +22,12 @@ import com.example.newproject.domain.sectionSummaryEntrySymbol
 import com.example.newproject.domain.sectionSummaryStatus
 import com.example.newproject.domain.summaryOf
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -76,6 +81,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -708,8 +714,23 @@ internal fun NoteReaderTab(
                                         notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark)
                                     }
                                 }
+                                // 本文に触れて帯をしまう受け口は、帯と一緒に動かさない — 帯の中に入れると、滑る距離が帯の高さではなく面の高さになる。
                                 if (deskBarShown) {
                                     DeskTouchCatcher(onTouch = { deskBarShown = false }, modifier = Modifier.matchParentSize())
+                                }
+                                // 帯は面の上の縁からシャッターのように降り、しまうときは巻き上がる。縁で切るので、窓の上の余白へははみ出さない。
+                                AnimatedVisibility(
+                                    visible = deskBarShown,
+                                    modifier = Modifier.clipToBounds(),
+                                    enter = slideInVertically(
+                                        initialOffsetY = { -it },
+                                        animationSpec = tween(DESK_MOTION_MILLIS, easing = FastOutSlowInEasing)
+                                    ),
+                                    exit = slideOutVertically(
+                                        targetOffsetY = { -it },
+                                        animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
+                                    )
+                                ) {
                                     DeskBar(onHide = { deskBarShown = false }, modifier = Modifier.width(layout.bodyWidthDp.dp)) {
                                         controls(memoToggle, openSummary) { deskBarShown = false }
                                     }

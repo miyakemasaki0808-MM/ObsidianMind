@@ -128,9 +128,6 @@ internal const val DESK_SPREAD_SWIPE_DP = 56f
 /** 距離が足りなくても広げる速さ。Material3 の横から出るドロワーが払いで開閉する速さ（400dp/秒）にそろえる。 */
 internal const val DESK_SPREAD_FLING_DP_PER_SEC = 400f
 
-/** 机の画面の帯と仕切りが動く時間。出るときと広がるときにそろえる。 */
-internal const val DESK_MOTION_MILLIS = 250
-
 /**
  * 本文と補助の面を広げ方 [spread] に従って並べ、仕切りを滑らせる。[mainWidth] と [gutter] は2面のときの本文と溝の幅。
  *

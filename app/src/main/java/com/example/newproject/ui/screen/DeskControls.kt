@@ -86,6 +86,14 @@ internal const val DESK_BAR_SWIPE_DP = 24f
 internal const val DESK_BAR_FLING_DP_PER_SEC = 125f
 
 /**
+ * 帯が降りて出る時間と、仕切りが滑る時間。机の画面で動くものはこの速さにそろえ、終わりで減速する。
+ */
+internal const val DESK_MOTION_MILLIS = 250
+
+/** 帯が巻き上がってしまう時間。出るときより短い — しまうのは読むことへ戻る操作なので、待たせない。 */
+internal const val DESK_BAR_HIDE_MILLIS = 200
+
+/**
  * 机の画面で、本文とペインの上に置く余白の高さ。**両方に同じだけ置く** — 片方にだけ置くと上端がずれ、同じ大きさに見えない。
  * 左ではここがつまみになり、払い始められる高さを兼ねる（触れる部品の下限 48dp）。
  */
