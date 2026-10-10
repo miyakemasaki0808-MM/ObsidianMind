@@ -1,9 +1,9 @@
 # ノート内のリンクを押して開く
 
-**状態:** 実装済み。実機では未検証（→ §10）
-**最終検証:** 2026-10-10 / `eb5fa9ed`（机上のみ。実機は §10）
+**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった範囲は §10）
+**最終検証:** 2026-10-10 / `b17fe669`
 **関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
-**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / androidTest: `NoteLinkTapUiTest`（閉じた外画面で7件成功。見張りを直した後の版は開いた画面で未実行）
+**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / androidTest: `NoteLinkTapUiTest`
 **正本:** この文書
 
 **関連:** [Markdown解析](../system/markdown_rendering.md)（描画とインライン記法の解釈器）・
@@ -195,7 +195,9 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
   リンクの上から長押しして文字を選べるか。スクロールの途中や横の払いで誤って開かないか
 - **保証していないこと:** 走査の後に作ったノートへのリンクは、次の走査まで見つからない。
   走査が一部のフォルダを読めなかったとき、「見つかりませんでした」はノートが無いことを意味しない。
-  机の画面の横の払いをリンクの上から始めたときにリンクが開かないことは、払いの判定が子より先に指を使い切ることに頼っていて、自動テストでは確かめない
+  机の画面の横の払いをリンクの上から始めたときにリンクが開かないことは、払いの判定が子より先に指を使い切ることに頼っていて、自動テストでは確かめない（実機では確かめた）。
+  実機で確かめていないもの：実際の書き込み障害の後のリンク（太字の復元は中断状態を注入して確かめた）・TalkBack・暗い配色・IME・
+  物理的な開閉の最中の画面の作り直し・表と全画面での選択ハンドル（通常の本文のリンクを代表にした）
 
 ## 11. 既知の制約・未解決事項
 

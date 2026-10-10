@@ -415,34 +415,6 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
     一覧の読み込みは件数に比例する（→ [reflect_crystal](../dev/features/reflect_crystal.md) §11）
 - **規模感:** 小〜中。UI だけで閉じ、状態もデータも増えない。
 
-#### N-21. ノート内のリンクを押して開く
-
-- **内容:** 本文の `[[ノート名]]` と `[文字](ノート.md)` を押すと、そのノートを開く。
-  **開いた Fold では右の面で眺め、スマホでは今のノートとして開く**（2026-10-06、オーナー判断）。
-  右で眺めたノートは、今ある「このノートへ移る」で今のノートに替えられる。スマホで開いたノートでは、訪問の記録・要約・結晶がふだんどおり走る。
-- **出所:** 2026-10-06、オーナーが実機で使った体感。正本の [markdown_rendering](../dev/system/markdown_rendering.md) §7 は「クリック可能リンク」を未着手として持つ。順序は [roadmap](roadmap.md) が持つ。
-- **設計:** [note_links](../dev/features/note_links.md)（2026-10-10）。戻る道は作らない・外部URLは押せないまま・見出しへの送りは含める（オーナー判断）。
-  表のセルが `\|` で割れて目次の表のリンク（約400本）が崩れていたので、表の解析も同じ段で直す
-- **適合理由:** markdown_rendering §7 が言うとおり、表示の拡張では終わらない。ノートからノートへ渡れると、
-  Rediscover で引いた1冊を起点に Reflect のループが広がる。開いた Fold で右に開く形は、今のノートを1つに保ったまま
-  （→ [fold_experience](../dev/system/fold_experience.md) §4）、Fold の机の契約1（補助の面を独立して探索する）と同じ向きにある。
-- **足場:**
-  - **描画。** [`InlineMarkdown`](../../app/src/main/java/com/example/newproject/ui/markdown/InlineMarkdown.kt) が `[[...]]` と `[...](...)` を見分け、色と下線で描いている。押せないだけ
-  - **解決。** 関連ノートが `[[...]]` の名前を、正規化した題名でノートと突き合わせている（[`RelatedNotesUseCase`](../../app/src/main/java/com/example/newproject/domain/RelatedNotesUseCase.kt)）。
-    画像で作った Vault 横断の索引とパス解決もある（→ [note_image_rendering](../dev/features/note_image_rendering.md)）
-  - **右で開く。** 並べ読みの [`SideReadingController`](../../app/src/main/java/com/example/newproject/controller/SideReadingController.kt) が、
-    ノート1本を右で眺める経路を持つ（→ [margin_pane](../dev/features/margin_pane.md) §5.9）。入口を足せば右に出せる
-- **懸念:**
-  - **文字選択と取り合う。** 本文は `SelectionContainer` の中にあり、markdown_rendering §7 が「クリック検証が要る」としている
-  - **スマホで飛んだ後に戻る道が無い。** 今はノートを開いた順を持たないので、戻る操作で元のノートへ戻れない。
-    持つならどの寿命の状態に置き、何本まで持つかを決める
-  - **解決できないリンク。** 同名のノート、まだ無いノート、`[[ノート#見出し]]` の見出しへ送るか。`![[...]]` の埋め込み（N-13）とは分けて扱う
-  - **外部URL。** アプリはネットワーク権限を持たないが、ブラウザへ渡すだけなら権限は要らない。押せる対象に入れるかを決める
-  - **リンク先が在るかを描画のときに確かめると、表示経路に乗る**（→ §2）。押したときに解決すれば乗らない
-  - **右のノートの中のリンク。** 右で眺めているノートのリンクを押したとき、さらに右で辿るかは契約1の「独立した探索」そのものなので、
-    Fold の机の土台と束ねて決める
-- **規模感:** 中。押す口・解決の純関数・スマホの戻る道。
-
 ### 非優先（当面やらないが記録は残す）
 
 #### N-5. ウィジェット対応
@@ -682,8 +654,8 @@ grillの回答（称号を選びポイントを避けた）は**安全な方向�
   分類軸も効果測定の道具も要らなくなった（v1は非AI）。残る未確認は実Vaultでの分布だけ。
 - **A-1 + N-8** — 同じ `NoteSectionModel` に乗る2つの見出しUI。**先に着手するほうが両者の関係を決める責任を負う。**
 - **P-1 → P-2** — キャッシュを入れると自動生成の回数が減るので、**優先度キューが要るかは P-1 の後でないと判断できない。**
-- **N-21 + Fold の机の土台** — 開いた Fold でリンク先を右で開くのは、補助の面の探索（[fold_experience](../dev/system/fold_experience.md) 契約1）と同じ面を使う。
-  右のノートの中のリンクをどう辿るかは、土台と一緒に決める。
+- **右のノートの中のリンク + Fold の机の土台** — 本文のリンクは補助の面で開けるが、右のノートの中のリンクは押せないままにした
+  （→ [note_links](../dev/features/note_links.md)）。辿る形は補助の面の探索（[fold_experience](../dev/system/fold_experience.md) 契約1）そのものなので、土台と一緒に決める。
 - **読む面の佇まいを触る候補は、もう束ねる相手がいない。** 取り合っていた4件のうち
   N-9（2026-09-09）と N-10（2026-09-18）は取り下げ、N-2 だけが残った。
   **割り当ての正本は [bearing_channels](../dev/system/bearing_channels.md)** で、
@@ -722,6 +694,7 @@ grillの回答（称号を選びポイントを避けた）は**安全な方向�
 - **N-12** — 冊子モード → [booklet_mode](../dev/features/booklet_mode.md)。残件は無く、新たに出たものは内容で台帳へ起票する
 - **N-18** — 冊子の面を分野で色分け → [note_field_color](../dev/features/note_field_color.md)
 - **N-14** — 蒸留の太字範囲をユーザーが調整する。プリセットと自由範囲まで実装した → [reflect_distill](../dev/features/reflect_distill.md) §5
+- **N-21** — ノート内のリンクを押して開く → [note_links](../dev/features/note_links.md)。右のノートの中のリンクは Fold の机の土台で決める
 
 ### やらないと決めたもの
 
