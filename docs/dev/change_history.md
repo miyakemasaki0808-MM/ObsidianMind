@@ -17,6 +17,8 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | owner文書を通しで見直し、測定日を10-11へそろえてUX改善の5件を反映し、規模と検証の数字を解析書の§0だけに置いた（レビュー前） | [owner/README](../owner/README.md) |
+| 2026-10-11 | アイデア帳から答えの出た問いと時点ごとの注記を消し、持ち帰り帳から使い終えた結晶の棚のカードを消した | [owner/README](../owner/README.md) |
 | 2026-10-11 | 結晶の材料を控える30秒の線をオーナーが使って受理したので、課題台帳から外した | [reflect_crystal](features/reflect_crystal.md) 判断4 |
 | 2026-10-11 | 宝石の棚・下端の送り・30秒の線・帯の地を実機で検証して合格とし、2件を台帳から外してロードマップの UX の節を除いた | [reflect_crystal](features/reflect_crystal.md) §10・[margin_pane](features/margin_pane.md) §10・[review](../review/README.md) |
 | 2026-10-11 | UX改善の再レビューで、一覧の送りの修正と結晶の材料の30秒の線に新しい指摘が無いことを確かめ、実機待ちを残した | [review](../review/README.md) |
