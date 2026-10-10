@@ -3,6 +3,7 @@ package com.example.newproject.ui
 import com.example.newproject.model.Crystal
 import com.example.newproject.model.CrystalSource
 import com.example.newproject.ui.CrystalShelfItem.Detail
+import com.example.newproject.ui.CrystalShelfItem.Legend
 import com.example.newproject.ui.CrystalShelfItem.Month
 import com.example.newproject.ui.CrystalShelfItem.Row
 import java.time.OffsetDateTime
@@ -17,13 +18,14 @@ class CrystalShelfTest {
 
     private val tokyo = ZoneOffset.ofHours(9)
 
-    /** 月も宝石も新しい順。月の見出しには、その月の数を添える。 */
+    /** 先頭は凡例。月も宝石も新しい順。月の見出しには、その月の数を添える。 */
     @Test
-    fun `月ごとの棚に新しい順に並べる`() {
+    fun `凡例の後に、月ごとの棚に新しい順に並べる`() {
         val shelf = crystalShelf(listOf(c("9-29", "2026-09-29"), c("10-07", "2026-10-07"), c("10-01", "2026-10-01")), columns = 4, opened = null, zone = tokyo)
 
         assertEquals(
             listOf(
+                Legend,
                 Month(YearMonth.of(2026, 10), 2),
                 Row(listOf(c("10-07", "2026-10-07"), c("10-01", "2026-10-01")), bottom = true),
                 Month(YearMonth.of(2026, 9), 1),
@@ -37,8 +39,8 @@ class CrystalShelfTest {
     @Test
     fun `月は端末の暦で分ける`() {
         val lateNightUtc = Crystal(OffsetDateTime.parse("2026-09-30T20:00:00Z").toInstant().toEpochMilli(), "筋。", SOURCES, "x.json")
-        assertEquals(Month(YearMonth.of(2026, 10), 1), crystalShelf(listOf(lateNightUtc), 4, null, tokyo).first())
-        assertEquals(Month(YearMonth.of(2026, 9), 1), crystalShelf(listOf(lateNightUtc), 4, null, ZoneOffset.UTC).first())
+        assertEquals(Month(YearMonth.of(2026, 10), 1), crystalShelf(listOf(lateNightUtc), 4, null, tokyo)[1])
+        assertEquals(Month(YearMonth.of(2026, 9), 1), crystalShelf(listOf(lateNightUtc), 4, null, ZoneOffset.UTC)[1])
     }
 
     /** 1段は [columns] 個で、月をまたいで詰めない。月の最後の段だけが棚の下端。 */
@@ -96,6 +98,50 @@ class CrystalShelfTest {
         assertEquals("a.json", crystalShelfToggle(null, "a.json"))
         assertEquals(null, crystalShelfToggle("a.json", "a.json"))
         assertEquals("b.json", crystalShelfToggle("a.json", "b.json"))
+    }
+
+    @Test
+    fun `結晶が無ければ何も並べない`() {
+        assertEquals(emptyList<CrystalShelfItem>(), crystalShelf(emptyList(), 4, null, tokyo))
+    }
+
+    /** 押した宝石の段の位置は、一覧に出す項目の並び（凡例を含む）で数える。一覧はこの位置で送る。 */
+    @Test
+    fun `押した宝石の段の位置を、凡例を含む並びで引く`() {
+        val october = (1..5).map { c("10-$it", "2026-10-%02d".format(10 - it)) }
+        val shelf = crystalShelf(october + c("9-1", "2026-09-20"), columns = 2, opened = "10-4.json", zone = tokyo)
+        // 凡例・10月・段(1,2)・段(3,4)・中身(4)・段(5)・9月・段(9-1)
+        assertEquals(3, crystalShelfRowIndex(shelf, "10-4.json"))
+        assertEquals(crystalShelfDetailKey("10-4.json"), shelf[4].key)
+        assertEquals(7, crystalShelfRowIndex(shelf, "9-1.json"))
+        assertEquals(null, crystalShelfRowIndex(shelf, "別のVault.json"))
+    }
+
+    /** 中身が画面に収まっていれば送らない。 */
+    @Test
+    fun `中身が画面に収まっていれば送らない`() {
+        assertEquals(CrystalShelfReveal.None, crystalShelfRevealFor(detailTop = 300, detailBottom = 600, viewportTop = 0, viewportBottom = 600))
+    }
+
+    /** 下がはみ出すだけなら、はみ出した分だけ送る。 */
+    @Test
+    fun `中身の下がはみ出せば、はみ出した分だけ送る`() {
+        assertEquals(CrystalShelfReveal.By(120), crystalShelfRevealFor(detailTop = 500, detailBottom = 720, viewportTop = 0, viewportBottom = 600))
+    }
+
+    /** 画面より長い中身は、1文のある上端を画面の上端までしか送らない。 */
+    @Test
+    fun `画面より長い中身は、上端が画面の上端に来るまでしか送らない`() {
+        assertEquals(CrystalShelfReveal.By(500), crystalShelfRevealFor(detailTop = 500, detailBottom = 1_400, viewportTop = 0, viewportBottom = 600))
+    }
+
+    /**
+     * **中身が一覧に組まれていなければ、押した宝石の段を上端へ送る。** 一覧は画面を満たした先の項目を組まないので、
+     * 下端の宝石を押すと中身の位置が分からない。中身の項目に送らせていた作りは、ここで何も送れなかった。
+     */
+    @Test
+    fun `中身が組まれていなければ、押した宝石の段を上端へ送る`() {
+        assertEquals(CrystalShelfReveal.ToRow, crystalShelfRevealFor(detailTop = null, detailBottom = null, viewportTop = 0, viewportBottom = 600))
     }
 
     private fun c(name: String, date: String): Crystal = Crystal(

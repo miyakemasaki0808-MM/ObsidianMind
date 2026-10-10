@@ -1,6 +1,5 @@
 package com.example.newproject.ui.screen
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,8 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
@@ -26,6 +25,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -38,6 +38,10 @@ import com.example.newproject.model.NoteFieldClassification
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.ui.CRYSTAL_EMPTY_MESSAGE
 import com.example.newproject.ui.CrystalShelfItem
+import com.example.newproject.ui.CrystalShelfReveal
+import com.example.newproject.ui.crystalShelfDetailKey
+import com.example.newproject.ui.crystalShelfRevealFor
+import com.example.newproject.ui.crystalShelfRowIndex
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.IconPill
@@ -118,6 +122,10 @@ fun CrystalListScreen(
     }
 }
 
+/**
+ * 宝石の棚。**開いた中身を画面の中へ送るのは棚の側** — 中身の項目は画面の外だと一覧に組まれず、
+ * 自分の副作用では送れない。送るのは宝石を押したときだけで、項目が組み直されただけでは送り直さない。
+ */
 @Composable
 private fun CrystalShelf(
     crystals: List<Crystal>,
@@ -126,14 +134,30 @@ private fun CrystalShelf(
     onOpenSource: (String) -> Unit
 ) {
     var opened by rememberSaveable { mutableStateOf<String?>(null) }
+    // 押して開いた結晶。押したときにだけ変わり、送る合図になる。画面を作り直したら持ち越さない。
+    var revealing by remember { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
     val fieldsOf: (Crystal) -> List<NoteField> = { crystalFields(it, fieldOf) }
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val columns = crystalShelfColumns((maxWidth - CrystalShelfInnerPadding * 2).value)
         val items = crystalShelf(crystals, columns, opened, ZoneId.systemDefault())
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            item(key = "legend") { CrystalShelfLegend(modifier = Modifier.padding(bottom = 14.dp)) }
+        LaunchedEffect(revealing) {
+            val fileName = revealing ?: return@LaunchedEffect
+            // 中身を足した並びが測られるのを待つ。
+            withFrameNanos { }
+            val info = listState.layoutInfo
+            val detail = info.visibleItemsInfo.firstOrNull { it.key == crystalShelfDetailKey(fileName) }
+            when (val reveal = crystalShelfRevealFor(detail?.offset, detail?.let { it.offset + it.size }, info.viewportStartOffset, info.viewportEndOffset)) {
+                CrystalShelfReveal.None -> Unit
+                is CrystalShelfReveal.By -> listState.animateScrollBy(reveal.pixels.toFloat())
+                CrystalShelfReveal.ToRow -> crystalShelfRowIndex(items, fileName)?.let { listState.animateScrollToItem(it) }
+            }
+        }
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             itemsIndexed(items, key = { _, item -> item.key }) { index, item ->
                 when (item) {
+                    CrystalShelfItem.Legend -> CrystalShelfLegend(modifier = Modifier.padding(bottom = 14.dp))
+
                     is CrystalShelfItem.Month -> Text(
                         text = crystalMonthLabel(item.month, item.count),
                         fontSize = 13.sp,
@@ -141,7 +165,7 @@ private fun CrystalShelf(
                         modifier = Modifier
                             .fillMaxWidth()
                             // 棚と棚の間は地のまま空ける。最初の棚は凡例の下の余白に任せる。
-                            .padding(top = if (index == 0) 0.dp else 14.dp)
+                            .padding(top = if (index == 1) 0.dp else 14.dp)
                             .crystalShelfSegment(Panel, top = true, bottom = false)
                             .padding(horizontal = 14.dp, vertical = 10.dp)
                     )
@@ -151,7 +175,10 @@ private fun CrystalShelf(
                         columns = columns,
                         opened = opened,
                         fieldsOf = fieldsOf,
-                        onToggle = { crystal -> opened = crystalShelfToggle(opened, crystal.fileName) },
+                        onToggle = { crystal ->
+                            opened = crystalShelfToggle(opened, crystal.fileName)
+                            revealing = opened
+                        },
                         modifier = Modifier
                             .crystalShelfSegment(Panel, top = false, bottom = item.bottom)
                             .padding(bottom = if (item.bottom) 8.dp else 0.dp)
@@ -171,11 +198,7 @@ private fun CrystalShelf(
     }
 }
 
-/**
- * 開いた結晶の中身。✨タブと同じ結晶のカードに、分野と日付を添える。
- * **開いたら画面の中へ送る** — 画面の下のほうの宝石を開くと、中身が画面の外に出る。
- */
-@OptIn(ExperimentalFoundationApi::class)
+/** 開いた結晶の中身。✨タブと同じ結晶のカードに、分野と日付を添える。 */
 @Composable
 private fun CrystalShelfDetail(
     crystal: Crystal,
@@ -185,9 +208,7 @@ private fun CrystalShelfDetail(
     onOpenSource: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val requester = remember { BringIntoViewRequester() }
-    LaunchedEffect(crystal.fileName) { requester.bringIntoView() }
-    Box(modifier = modifier.fillMaxWidth().bringIntoViewRequester(requester).padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+    Box(modifier = modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
         Surface(modifier = Modifier.fillMaxWidth(), color = PanelBlue, shape = RoundedCornerShape(CrystalShelfCorner)) {
             Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
                 CrystalCard(
