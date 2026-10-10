@@ -1,7 +1,7 @@
 # この部分 — 余白のペインとシート
 
 **状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序と面は §10）
-**最終検証:** 2026-10-10 / `fce6745a`
+**最終検証:** 2026-10-10 / `5cc23123`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
 **関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
@@ -131,9 +131,11 @@
   - **帯は左の面の上の縁からシャッターのように降りて出て、しまうときは巻き上がる**（2026-10-10、オーナー判断）。出るのは 250ms で終わりに減速し、
     しまうのは 200ms で加速して抜ける — しまうのは読むことへ戻る操作なので、出るときより待たせない。縁で切るので、窓の上の余白へははみ出さない。
     本文に触れて帯をしまう受け口は帯と一緒に動かさず、帯を出した瞬間から本文の上に敷き、しまった瞬間に外す
-  - **帯の地は画面の地そのもの**（2026-10-10、オーナーが見本で選んだ）。画面と同じグラデーションを、画面の中の帯の位置から描く（`DeskBackdrop`）。
-    グラデーションは描く要素の大きさに合わせて左下から右上へ流れるので、帯の大きさで描くと藍から珊瑚色までの全部が帯の中へ縮まり、
-    後ろの背景とつながらない（帯だけに別の虹が見えた）。降りる途中も地は画面に留まり、背景が降りてくるように見える。
+  - **帯の地は画面の地そのものにする**（2026-10-10、オーナーが見本で選んだ）。画面と同じグラデーションを、画面の中の帯の位置から描き、
+    降りる途中も地を画面に留めて、背景が降りてくるように見せる。グラデーションは描く大きさに合わせて左下から右上へ流れるので、
+    帯の大きさで描くと藍から珊瑚色までの全部が帯の中へ縮まり、後ろの背景とつながらない（帯だけに別の虹が見えた）。
+    **今の実装ではまだつながっていない**（§11）— 画面の地を敷いた箱の位置と大きさを知らせ（`DeskBackdrop`）、箱の大きさの矩形を帯の位置からずらして描いているが、
+    Brush は描画スコープの大きさ（帯の大きさ）で解決されるので、色の流れは帯の中に縮まったままである。
     見出しの白い霞は文字の行だけに敷いてフェードを付けない — 帯の中では、フェードが帯の中ほどの横縞に見える。
     下端に薄い影（4dp）を落として本文との境目にし、影の分だけ帯の下に余白を取る（帯を出し入れする器は上の縁で切るために自分の外を切る）。
     帯の下に載る色は今までと同じグラデーションの上の色だけで、霞も文字の行に残るので、文字の比は変わらない。白い紙にする案は採らなかった
@@ -505,10 +507,14 @@
     `MarginSurfaceTest`・`SectionSummaryNoticeTest` と UI テストが持つ（オーナー判断 2026-10-10）
   - **Fold を開閉する瞬間のレールの揺れ。** 開閉の後に机の画面へ落ち着き、レールが出入りを繰り返さないことは確かめた。瞬間の揺れは連続監視していない（2026-10-10）
   - **机の画面の TalkBack の実機操作。** 端末の読み上げ機能は有効化していない。「操作を出す」の読み上げの操作は UI テストの semantics 検査が持つ（2026-10-10）
+  - **片側を1画面にする払いの、実機で確かめなかった面**（2026-10-10 の実機検証）: 物理的な開閉、暗い配色、書きかけの保持、
+    余白を1画面にしている間に利用者が位置を変える分岐（戻さずに残す側。`DeskSpreadTest` が持つ）、文字の選択のハンドルの操作
 
 ## 11. 既知の制約・未解決事項
 
 - **文字の大きさ2.0では本文の幅が §5.1 の下限を割るので、並べ読みは出ない。** オーナーが受容した。使っていて気になったら見直す
+- **机の画面の帯の地が、まだ周りの背景とつながっていない。** §5.1 の帯の地の項のとおり、Brush が帯の大きさで解決される。
+  見た目だけの問題で、オーナーが致命的ではないとして後続の対応へ回した（2026-10-10）。直すときは、帯の中の点と同じ画面座標の背景の色を比べる検査を置く
 - **段に分けて実装した。** 各段で机上ゲートと実機確認を通してから次へ進む
 
   | 段 | 中身 |
