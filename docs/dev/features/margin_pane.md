@@ -1,7 +1,7 @@
 # この部分 — 余白のペインとシート
 
 **状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序と面は §10）
-**最終検証:** 2026-10-10 / `5cc23123`
+**最終検証:** 2026-10-11 / `ecf95dd7`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteStart.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
 **関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskBackdropTest` / `DiagonalGradientTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
@@ -514,12 +514,12 @@
   - **机の画面の TalkBack の実機操作。** 端末の読み上げ機能は有効化していない。「操作を出す」の読み上げの操作は UI テストの semantics 検査が持つ（2026-10-10）
   - **片側を1画面にする払いの、実機で確かめなかった面**（2026-10-10 の実機検証）: 物理的な開閉、暗い配色、書きかけの保持、
     余白を1画面にしている間に利用者が位置を変える分岐（戻さずに残す側。`DeskSpreadTest` が持つ）、文字の選択のハンドルの操作
+  - **帯の地の、実機で確かめなかった面**（2026-10-11 の実機検証）: 帯が背景とつながることは、明色を描画テスト（帯の右端の内側と溝の画素）、
+    暗色を実画面（帯と溝の色の差は最大 1/255、帯と本文の境目が見える）で確かめた。物理的な開閉・外画面・全状態の文字のコントラストは見ていない
 
 ## 11. 既知の制約・未解決事項
 
 - **文字の大きさ2.0では本文の幅が §5.1 の下限を割るので、並べ読みは出ない。** オーナーが受容した。使っていて気になったら見直す
-- **机の画面の帯の地が背景とつながることは、実機ではまだ確かめていない。** 机上では、窓の同じ点が帯と地で同じ色の位置になること（`DeskBackdropTest`）と、
-  帯の右端の内側と溝の色が揃うこと（`NoteReadingFlowTest`、端末でだけ走る）を置いた。暗い配色で下端の影が本文との境目になるかも、実機で見ていない
 - **段に分けて実装した。** 各段で机上ゲートと実機確認を通してから次へ進む
 
   | 段 | 中身 |

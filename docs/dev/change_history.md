@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 宝石の棚・下端の送り・30秒の線・帯の地を実機で検証して合格とし、2件を台帳から外してロードマップの UX の節を除いた | [reflect_crystal](features/reflect_crystal.md) §10・[margin_pane](features/margin_pane.md) §10・[review](../review/README.md) |
 | 2026-10-11 | UX改善の再レビューで、一覧の送りの修正と結晶の材料の30秒の線に新しい指摘が無いことを確かめ、実機待ちを残した | [review](../review/README.md) |
 | 2026-10-11 | 結晶の材料を控える線を、3秒の門番から、冊子と背面を除いて足し算で30秒読んだときに変えた | [reflect_crystal](features/reflect_crystal.md) 判断4 |
 | 2026-10-11 | 結晶の一覧で下端の宝石を押したとき、棚の側が開いた中身を画面の中へ送るようにした | [reflect_crystal](features/reflect_crystal.md) 判断11 |

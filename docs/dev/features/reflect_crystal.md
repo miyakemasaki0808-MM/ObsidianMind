@@ -1,7 +1,7 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 と、材料を控える30秒の線 → 判断4 は実機確認待ち）
-**最終検証:** 2026-09-27 / `d559e33`
+**状態:** 実装済み・稼働中・実機確認済み（材料を控える30秒の線 → 判断4 は、結晶の溜まる速さのオーナーの体感が残る）
+**最終検証:** 2026-10-11 / `ecf95dd7`
 **関連コード:** `controller/CrystalController.kt` / `controller/NoteReadGate.kt`（材料を控える線） / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
 **関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteReadGateTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
 **正本:** この文書
@@ -456,11 +456,14 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   `CrystalShelfUiTest` — 宝石を押すと段の直下に1文が開き、もう一度押すと閉じ、別の宝石を押すと替わる。読み上げの名前に日と分野が入る。
   画面の下端（宝石の段の下端が画面の外）で押すと追加の払いなしで1文が見え、替えても中身は1件、手で離れて戻っても送り直さない、窓の幅で段の数が変わっても開いた結晶は替わらない
 - **実機確認:** ケースは [結晶の実機ケース](../../review/device_validation/reflect_crystal.md)（`CRYSTAL-01`〜`07`）。
-  初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた
+  初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた。
+  **宝石の棚と30秒の線（2026-10-11、通し版）:** 71件の棚の月の区切り・分野の1色と2色・分からない根拠の灰色・凡例・明暗の配色、
+  下端の宝石の送り（修正前の作りで落ち、今の作りで通ることを対照で確認）、30秒未満では控えないこと・冊子と背面を除いて続きから足すこと・
+  別のノートで0に戻ること、3秒の AI 経路が30秒へ遅れていないことを確かめた。物理的な開閉・外画面と、溜まる速さの体感は見ていない
 - **保証していないこと:**
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
     根拠の断片を並べて、読む人が検算できるようにしている
-  - 材料の線の30秒が結晶の溜まる速さとして適切か（→ 判断4）。実機でオーナーが様子を見る
+  - 材料の線の30秒が結晶の溜まる速さとして適切か（→ 判断4）。動作は実機で確かめたが、速さの体感はオーナーが使って確かめる
   - 関連ノートのAI推薦と分野判定より先に錠を取ることはある（→ 判断10）
   - 他の端末が作った結晶は、次に Vault を選んだときかアプリを起動し直したときに見える。その場では届かない
   - 根拠のノート名は作った時点のもの。改名・移動したノートは一覧から押せなくなる
@@ -476,7 +479,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   結晶は Vault に置くので、Vault が残る限り失われない
 - **一覧の読み込みは件数に比例する。** 1日1件なら年に約365件。遅さが体感できたら、端末内に索引を持つ
 - **結晶を消す・直す導線が無い。** 実機で困ったら足す
-- **宝石の見え方は実機で決め直してよい。** 左右半々の境目が小さな宝石で見分けられるか、31個の月と開いた Fold の段の数を実機で見る
+- **宝石の見え方は使って決め直してよい。** 2026-10-11 の実機では、左右半々の境目・31個の月・明暗の配色は見分けられた
 - **文言は実機で見て決め直す。** 見出し・入口・「〇〇・△△ から」・一覧の見出し
 
 ## 12. 開発経緯
