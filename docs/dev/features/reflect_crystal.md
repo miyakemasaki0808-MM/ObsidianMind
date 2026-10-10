@@ -1,6 +1,6 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** 実装済み・稼働中・実機確認済み（材料を控える30秒の線 → 判断4 は、結晶の溜まる速さのオーナーの体感が残る）
+**状態:** 実装済み・稼働中・実機確認済み
 **最終検証:** 2026-10-11 / `ecf95dd7`
 **関連コード:** `controller/CrystalController.kt` / `controller/NoteReadGate.kt`（材料を控える線） / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
 **関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteReadGateTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
@@ -270,7 +270,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
 
 - **3秒では速すぎた。** 3秒で読めるのは題名と1行目まで（日本語で約15〜30字）で、チラ見したノートも「読んできたもの」に入り、
   要約済みのノートを3本開けば約10秒で結晶ができた（オーナーの体感「結晶化のスピードが異様に早い」）。
-  30秒は、検索の研究で「満足したクリック」とみなす線（Fox ほか 2005）にそろえた。**実機で様子を見て決め直す値**で、
+  30秒は、検索の研究で「満足したクリック」とみなす線（Fox ほか 2005）にそろえた。**使って決め直してよい値**で（2026-10-11 にオーナーが使って受理した）、
   ノートの長さで変える形は、固定の線の様子を見てから考える（固定の線の上に計算を足せる）
 - **数え方は読書痕跡の10秒と同じ足し算。** 冊子を見ている間とアプリが背面の間だけ止め、戻ったら続きから足す。
   3秒の門番は「今いるか」を見るので戻ると数え直すが、こちらは「どれだけ読んだか」を見る。数え直すと、一瞬離れただけで30秒をやり直す
@@ -459,11 +459,11 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた。
   **宝石の棚と30秒の線（2026-10-11、通し版）:** 71件の棚の月の区切り・分野の1色と2色・分からない根拠の灰色・凡例・明暗の配色、
   下端の宝石の送り（修正前の作りで落ち、今の作りで通ることを対照で確認）、30秒未満では控えないこと・冊子と背面を除いて続きから足すこと・
-  別のノートで0に戻ること、3秒の AI 経路が30秒へ遅れていないことを確かめた。物理的な開閉・外画面と、溜まる速さの体感は見ていない
+  別のノートで0に戻ること、3秒の AI 経路が30秒へ遅れていないことを確かめた。溜まる速さはオーナーが使って受理した。
+  物理的な開閉と外画面は確かめない（オーナー判断）
 - **保証していないこと:**
   - **結晶の中身の正しさ。** 要約に無いことを書かない・本人の考えとして語らない、はプロンプトで頼んでいるだけで、機械では検査していない。
     根拠の断片を並べて、読む人が検算できるようにしている
-  - 材料の線の30秒が結晶の溜まる速さとして適切か（→ 判断4）。動作は実機で確かめたが、速さの体感はオーナーが使って確かめる
   - 関連ノートのAI推薦と分野判定より先に錠を取ることはある（→ 判断10）
   - 他の端末が作った結晶は、次に Vault を選んだときかアプリを起動し直したときに見える。その場では届かない
   - 根拠のノート名は作った時点のもの。改名・移動したノートは一覧から押せなくなる
