@@ -29,5 +29,3 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
-| `2026-10-10-roadmap-no01-implementation-review/P2-1` | 本文だけの表示で背景要約を頼むと、隠していた並べ読みが終了する | `統合` FOLD-3 |
-| `2026-10-10-roadmap-no01-implementation-review/P3-1` | 横方向の認識後に入力が取り消されても、払いを確定して表示を変える | `統合` FOLD-3 |
