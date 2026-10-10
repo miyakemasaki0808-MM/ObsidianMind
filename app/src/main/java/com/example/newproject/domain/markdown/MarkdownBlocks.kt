@@ -310,9 +310,35 @@ private const val TAB_STOP = 4
  * テーブル行をセルに分割する。先頭・末尾の | の外側だけを捨て、
  * 中間の空セルは列位置を保つため保持する（"| a |  | c |" → ["a", "", "c"]）。
  * 以前は isNotBlank フィルタで中間の空セルまで捨てられ、列がズレていた。
+ *
+ * **`\|` では割らない。** 目次の表は `[[ノート\|表示名]]` と書くので、割るとリンクが2つのセルに分かれて描かれない。
+ * セルには `\|` のまま残す — 表示はエスケープとして `|` を出し、リンクは `\|` を表示名の区切りとして読む（→ features/note_links.md §5）。
+ * `\\` は1組として飛ばすので、`\\|` の `|` では割る。
  */
-private fun splitTableRow(line: String): List<String> =
-    line.trimEnd().split("|").drop(1).dropLast(1).map { it.trim() }
+private fun splitTableRow(line: String): List<String> {
+    val text = line.trimEnd()
+    val cells = mutableListOf<String>()
+    val cell = StringBuilder()
+    var index = 0
+    while (index < text.length) {
+        val char = text[index]
+        when {
+            char == '\\' && index + 1 < text.length -> {
+                cell.append(char).append(text[index + 1])
+                index += 2
+                continue
+            }
+            char == '|' -> {
+                cells += cell.toString()
+                cell.clear()
+            }
+            else -> cell.append(char)
+        }
+        index++
+    }
+    cells += cell.toString()
+    return cells.drop(1).dropLast(1).map { it.trim() }
+}
 
 /**
  * YAML frontmatter（先頭の --- ～ --- ブロック）を描画対象から除外する。

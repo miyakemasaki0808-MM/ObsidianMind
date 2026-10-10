@@ -16,7 +16,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -54,11 +59,28 @@ internal fun SideReadingPane(
     /** 右で読んでいたブロック [startBlock] から、[RelatedNote] を普通に開く。 */
     onMove: (note: RelatedNote, startBlock: Int) -> Unit,
     onRetry: (RelatedNote) -> Unit,
+    /** 本文のリンクから開いたなら、その見出し（→ features/note_links.md）。関連の候補から開いたなら null。 */
+    linkStart: SideLinkStart? = null,
+    /** リンクの見出しがこのノートに無かった。先頭から始めたことを知らせる。 */
+    onHeadingMissing: (heading: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val note = state.note ?: return
     // **候補ごとに先頭から。** 別の候補を選んだら位置を持ち越さない。画面の作り直しでは保つ。
     val listState = rememberSaveable(note.ref.value, saver = LazyListState.Saver) { LazyListState() }
+    // リンクの始まりへ送るのは、読めた後に要求ごとに1度だけ。**送った要求の番号を保存値に置く** — 画面を作り直しても、読み進めた位置を戻さない。
+    var startedRequest by rememberSaveable { mutableLongStateOf(0L) }
+    val currentOnHeadingMissing by rememberUpdatedState(onHeadingMissing)
+    val ready = state is SideReadingState.Ready && blocks != null
+    LaunchedEffect(linkStart, ready) {
+        val start = linkStart ?: return@LaunchedEffect
+        if (!ready || start.request == startedRequest) return@LaunchedEffect
+        startedRequest = start.request
+        // **見出しが無くても見つからなくても先頭へ送る。** 同じノートを開き直したときは、位置がノートごとに残っている。
+        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0)
+        listState.scrollToItem(block)
+        if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
+    }
     Column(modifier = modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),

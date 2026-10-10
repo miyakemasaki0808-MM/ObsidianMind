@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中・実機確認済み
 **最終検証:** 2026-10-04 / `9e377cf5`（全画面の ✎ と戻る順のほかは 2026-08-12 / `521768b` から未突合）
-**関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/AppScaffold.kt`
+**関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/NoteStart.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/AppScaffold.kt`
 **関連テスト:** `MarginSurfaceTest` / androidTest: `ActivityRecreationTest` / `TabNavigationTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
@@ -36,6 +36,7 @@
 | スクロール継承 | 通常表示で読んでいた位置から始まる | 進入時 |
 | スクロール書き戻し | 全画面で読み進めた位置が通常表示へ戻る | ✕・システムバック |
 | ✎ | 右下の丸。押すと「この部分」のシートが全画面の上に出て、入力欄から書ける。指で動かせる | 常時 |
+| 本文のリンク | 押すとリンク先を今のノートとして開き、全画面のまま続ける。同じノートの見出しなら本文を送る（→ [note_links](note_links.md)） | ノートと見出しへのリンク |
 
 ## 4. 現在のユーザーフロー
 
@@ -65,6 +66,7 @@
 - **Snackbar:** 全画面ルート表示中は**抑制する**（`isFullscreenRoute` ガード）
 - **シート:** 通常表示と同じ「この部分」のシートを、全画面の本文の上に出す。節は全画面の本文についていく。
   **要約の行と見出しの印は出さない**。書きかけ・シートの可視・書いているつもりは通常表示と共有する（→ [この部分](margin_pane.md) §6.1）
+- **本文のリンク:** 全画面は面が1つなので、開いた Fold でもリンク先を今のノートとして開く。全画面のまま続け、戻る操作は今どおりまず全画面を抜ける（→ [note_links](note_links.md) §5）
 - **エラー／キャンセル時:** この画面はAI生成を行わない。余白メモの保存の状態はシートの中に出す（→ [余白メモ](reflect_margin_memo.md)）
 
 ## 6. 状態とデータ

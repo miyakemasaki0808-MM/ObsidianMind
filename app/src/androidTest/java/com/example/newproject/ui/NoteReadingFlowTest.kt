@@ -43,6 +43,7 @@ import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
@@ -183,7 +184,9 @@ class NoteReadingFlowTest {
                         onDeleteMarginMemo = {},
                         memoFocusIntent = false,
                         onMemoFocusIntentChange = {},
-                        onReadingProgress = { _, _, _, _ -> }
+                        onReadingProgress = { _, _, _, _ -> },
+                        onOpenNote = {},
+                        onResolveNoteLink = { NoteLinkResolution.NotReady }
                     )
                 } else {
                     ReaderTab(loadedNote(LONG_BODY), model, listState)
@@ -238,7 +241,9 @@ class NoteReadingFlowTest {
                     onDeleteMarginMemo = {},
                     memoFocusIntent = false,
                     onMemoFocusIntentChange = {},
-                    onReadingProgress = { _, _, _, _ -> }
+                    onReadingProgress = { _, _, _, _ -> },
+                    onOpenNote = {},
+                    onResolveNoteLink = { NoteLinkResolution.NotReady }
                 )
             }
         }
@@ -447,7 +452,9 @@ class NoteReadingFlowTest {
                         onDeleteMarginMemo = {},
                         memoFocusIntent = false,
                         onMemoFocusIntentChange = {},
-                        onReadingProgress = { index, _, _, _ -> reports += index }
+                        onReadingProgress = { index, _, _, _ -> reports += index },
+                        onOpenNote = {},
+                        onResolveNoteLink = { NoteLinkResolution.NotReady }
                     )
                 } else {
                     ReaderTab(
@@ -531,7 +538,9 @@ class NoteReadingFlowTest {
                         onDeleteMarginMemo = {},
                         memoFocusIntent = false,
                         onMemoFocusIntentChange = {},
-                        onReadingProgress = { _, _, _, _ -> }
+                        onReadingProgress = { _, _, _, _ -> },
+                        onOpenNote = {},
+                        onResolveNoteLink = { NoteLinkResolution.NotReady }
                     )
                 } else {
                     ReaderTab(
@@ -1843,7 +1852,8 @@ class NoteReadingFlowTest {
             sideReadingBlocks = sideBlocks,
             onOpenSideReading = onOpenSideReading,
             onCloseSideReading = onCloseSideReading,
-            onOpenNote = onOpenNote
+            onOpenNote = onOpenNote,
+            onResolveNoteLink = { NoteLinkResolution.NotReady }
         )
     }
 

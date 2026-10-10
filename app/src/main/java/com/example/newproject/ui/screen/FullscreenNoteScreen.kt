@@ -8,6 +8,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import android.app.Activity
+import android.widget.Toast
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.activity.compose.BackHandler
@@ -33,6 +34,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,6 +54,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.newproject.domain.NoteLink
+import com.example.newproject.domain.NoteLinkResolution
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
@@ -63,6 +68,7 @@ import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.notePaperColor
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------------------
 // 全画面ノート（独立ルート note_fullscreen）
@@ -97,7 +103,11 @@ internal fun FullscreenNoteScreen(
     /** 入力欄で書いているつもりか。通常画面と共有する（戻った先の面へフォーカスを引き継ぐ）。 */
     memoFocusIntent: Boolean,
     onMemoFocusIntentChange: (Boolean) -> Unit,
-    onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit
+    onReadingProgress: (blockIndex: Int, blockFraction: Float, totalBlocks: Int, sectionTitle: String?) -> Unit,
+    /** リンク先を今のノートとして開く（関連タブと同じ経路）。全画面のまま続ける。 */
+    onOpenNote: (RelatedNote) -> Unit,
+    /** 本文のリンクを今の走査結果から引く（→ features/note_links.md）。 */
+    onResolveNoteLink: (NoteLink) -> NoteLinkResolution
 ) {
     val context = LocalContext.current
     DisposableEffect(Unit) {
@@ -150,6 +160,32 @@ internal fun FullscreenNoteScreen(
 
     // 面の節は全画面の本文についていく。通常画面と同じ規則で作る。
     val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+
+    // 本文のリンク（→ features/note_links.md）。**全画面は面が1つなので、リンク先は今のノートとして開く**（→ noteLinkActionFor）。
+    val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val currentNoteUri = (uiState.noteState as? NoteState.Success)?.targetUri
+    val startNote = rememberNoteStart(listState, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+        showNotice(noteLinkHeadingMissingText(heading, opened = true))
+    }
+    val coroutineScope = rememberCoroutineScope()
+    val openLink: (NoteLink) -> Unit = { link ->
+        when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = false)) {
+            is NoteLinkAction.ScrollCurrent -> {
+                val target = currentNoteScrollTarget(sectionModel?.blocks, action.heading)
+                if (target == null) {
+                    action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
+                } else {
+                    coroutineScope.launch { listState.scrollToItem(target) }
+                    imageMeasurements?.requestSkippedMeasurement(target)
+                }
+            }
+            is NoteLinkAction.Open -> {
+                onOpenNote(action.note)
+                startNote(PendingNoteStart(action.note.ref.value, block = 0, heading = action.heading))
+            }
+            is NoteLinkAction.Notice -> showNotice(action.text)
+        }
+    }
     val sheetShown = uiState.isMarginMemoSheetVisible && !leaving
     val dismissSheet: () -> Unit = {
         onMemoFocusIntentChange(false)
@@ -197,7 +233,8 @@ internal fun FullscreenNoteScreen(
                     listState = listState,
                     precomputedBlocks = sectionModel?.blocks,
                     imageLoader = imageLoader,
-                    imageMeasurements = imageMeasurements
+                    imageMeasurements = imageMeasurements,
+                    onLink = openLink
                 )
                 IconPill(
                     symbol = "✕",

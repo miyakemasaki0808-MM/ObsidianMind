@@ -1,6 +1,6 @@
 # 設計思想 — Markdown解析（準拠先・リスト構造）
 
-**状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。**クリック可能リンク・埋め込み・数式は未着手**
+**状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。ノートへのリンクは押して開ける（実機確認済み）。**埋め込み・数式は未着手**
 **最終検証:** 2026-09-12 / `825f054`
 **関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
 **関連テスト:** `MarkdownParserTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `NoteSectionThreadingTest`
@@ -138,8 +138,9 @@ AI入力にも使われている**ことだった（→ [ai_input_excerpt](ai_in
 
 | 項目 | 状態 |
 |---|---|
-| クリック可能リンク（`[[note]]` のノート遷移・外部URL） | 未着手。`SelectionContainer` 内でのクリック検証が要る |
+| クリック可能リンク（`[[note]]` のノート遷移） | **実装済み・実機確認済み** → [note_links](../features/note_links.md)。`SelectionContainer` の中で、長押しの後の指離しではリンクを開かない。外部URLは押せないまま |
 | 画像 `![alt](path)` / `![[image.png]]` | **実装済み**（単独行のみ） → [note_image_rendering](../features/note_image_rendering.md) |
+| 表のセルの中の `\|` | **実装済み。** `\|` では列を割らず、セルに `\|` のまま残す。目次の表の `[[ノート\|表示名]]` がリンクとして描かれる（→ [note_links](../features/note_links.md) §5） |
 | 埋め込み `![[note]]`・数式 | 未着手。画像と同じ性質だが、循環参照とレンダラ依存が別問題として付く |
 | 段落の遅延継続・ネスト引用・setext見出し | 未着手。§1のとおり規格適合は目標にしていない |
 

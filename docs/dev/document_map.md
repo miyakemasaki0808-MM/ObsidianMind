@@ -110,6 +110,7 @@
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
+| [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
 
 ### 基盤（`system/`）
 
@@ -240,6 +241,7 @@
 | `domain/NoteExcerptBuilder.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` | [ai_input_excerpt](system/ai_input_excerpt.md) |
 | `debug/testing/`（要約の採点器・抜粋の変種・実機の計画）/ `androidTest/assets/ai_corpus/` | [ai_quality_measurement](system/ai_quality_measurement.md) |
 | `domain/markdown/` / `ui/markdown/` | [markdown_rendering](system/markdown_rendering.md) → [ai_input_excerpt](system/ai_input_excerpt.md)（同じパーサがAI入力にも効くため） |
+| `domain/NoteLinks.kt`・`ui/markdown/NoteLinkTaps.kt`・`ui/screen/NoteLinkActions.kt`・`ui/screen/NoteStart.kt`・本文のリンク | [note_links](features/note_links.md)（押せる記法・引き方・開く面・長押しの見張り） → [markdown_rendering](system/markdown_rendering.md) |
 | `ui/markdown/` の画像・画像索引・復号 | [note_image_rendering](features/note_image_rendering.md) → [markdown_rendering](system/markdown_rendering.md) |
 | `domain/` | [related_notes_ai](features/related_notes_ai.md) / [reflect_distill](features/reflect_distill.md) |
 | `data/` | [reflect_reading_trace](features/reflect_reading_trace.md)（サイドカー）/ [reflect_distill](features/reflect_distill.md)（原子性・復旧） |

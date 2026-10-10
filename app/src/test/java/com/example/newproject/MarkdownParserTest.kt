@@ -50,6 +50,46 @@ class MarkdownParserTest {
         assertEquals(listOf("a", "", "c"), table.rows[0])
     }
 
+    /**
+     * 目次の表はリンクの表示名を `\|` で区切る。**割ると、リンクが2つのセルに分かれて描かれず、列もずれる。**
+     * セルには `\|` のまま残す（表示とリンクの解釈は、それぞれエスケープと表示名の区切りとして読む）。
+     */
+    @Test
+    fun `表のセルはエスケープした縦棒で割らない`() {
+        val content = """
+            | ID | 分類 | 概要 |
+            |---|---|---|
+            | [[0E00_0001.Plan_Bento\|0E00_0001]] | #弁当 | 弁当ネタ |
+            | a \| b | [[x\|y]] |  |
+        """.trimIndent()
+        val table = parseMarkdownBlocks(content).filterIsInstance<MarkdownBlock.Table>().single()
+        assertEquals(listOf("ID", "分類", "概要"), table.headers)
+        assertEquals(listOf("[[0E00_0001.Plan_Bento\\|0E00_0001]]", "#弁当", "弁当ネタ"), table.rows[0])
+        assertEquals(listOf("a \\| b", "[[x\\|y]]", ""), table.rows[1])
+    }
+
+    @Test
+    fun `表のセルはエスケープした逆斜線の後の縦棒では割る`() {
+        val content = """
+            | a | b |
+            |---|---|
+            | c\\ | d |
+        """.trimIndent()
+        val table = parseMarkdownBlocks(content).filterIsInstance<MarkdownBlock.Table>().single()
+        assertEquals(listOf("c\\\\", "d"), table.rows[0])
+    }
+
+    @Test
+    fun `表を組み直しても縦棒のエスケープは残る`() {
+        val content = """
+            | a | b |
+            |---|---|
+            | [[x\|y]] | z |
+        """.trimIndent()
+        val blocks = parseMarkdownBlocks(content)
+        assertEquals(blocks, parseMarkdownBlocks(blocksToMarkdown(blocks)))
+    }
+
     @Test
     fun `見出しレベルが正しくパースされる`() {
         val blocks = parseMarkdownBlocks("## 第二レベル")

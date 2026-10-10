@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -176,7 +177,9 @@ internal fun NoteContentPanel(
     /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
     imageMeasurements: NoteImageMeasurements? = null,
     /** 見出しの脇に置くもの（→ [MarkdownNoteContent]）。通常表示の余白メモの印だけが使う。 */
-    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null
+    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null,
+    /** 本文のリンクを押したとき（→ features/note_links.md）。null ならリンクは押せない。 */
+    onLink: ((NoteLink) -> Unit)? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -211,7 +214,8 @@ internal fun NoteContentPanel(
                         precomputedBlocks = blocksForContent,
                         imageLoader = imageLoader,
                         imageMeasurements = imageMeasurements,
-                        headingAccessory = if (isNote) headingAccessory else null
+                        headingAccessory = if (isNote) headingAccessory else null,
+                        onLink = if (isNote) onLink else null
                     )
                 } else {
                     MarkdownNoteContent(
@@ -219,7 +223,8 @@ internal fun NoteContentPanel(
                         modifier = Modifier.padding(top = 12.dp).weight(1f),
                         precomputedBlocks = blocksForContent,
                         imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements
+                        imageMeasurements = imageMeasurements,
+                        onLink = if (isNote) onLink else null
                     )
                 }
             } else {

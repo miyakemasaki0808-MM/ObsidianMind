@@ -24,8 +24,11 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -34,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -62,34 +66,46 @@ internal fun MarkdownNoteContent(
     imageMeasurements: NoteImageMeasurements? = null,
     // 見出しの脇に置くもの（ブロック番号を受け取る）。null なら見出しだけを描く。
     // **ブロックを増やさずに脇へ置く** — LazyColumn の index がずれると、節の判定と進捗の報告が壊れる。
-    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null
+    headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null,
+    // ノートと見出しへのリンクを押したとき（→ features/note_links.md）。null ならリンクは押せない文字列のまま描く。
+    onLink: ((NoteLink) -> Unit)? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
     }
+    // リンクの装飾は文字列ごとに覚えるので、口は作り直さずに中身だけ差し替える。
+    val currentOnLink by rememberUpdatedState(onLink)
+    val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
 
     SelectionContainer(modifier = modifier) {
-        LazyColumn(
-            state = listState,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(blocks.size) { i ->
-                when (val block = blocks[i]) {
-                    is MarkdownBlock.Heading       -> if (headingAccessory == null) {
-                        MarkdownHeading(block)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
-                            headingAccessory(i)
+        CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
+            // **長押しの見張りは選択の容器の修飾子に付けない。** 付けると押下の途中で見張りが作り直され
+            // （PointerInputResetException）、指離しを受け取れずに長押しでもリンクが開く。容器の修飾子は選択の状態で並びが変わる。
+            // 見張りだけを持つ内側の層に置き、最小の大きさも渡して本文の並べ方を変えない。
+            Box(modifier = linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier, propagateMinConstraints = true) {
+                LazyColumn(
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(blocks.size) { i ->
+                        when (val block = blocks[i]) {
+                            is MarkdownBlock.Heading       -> if (headingAccessory == null) {
+                                MarkdownHeading(block)
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
+                                    headingAccessory(i)
+                                }
+                            }
+                            is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
+                            is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
+                            is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
+                            is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
+                            is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
+                            is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.lines)
+                            is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
                         }
                     }
-                    is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
-                    is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
-                    is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
-                    is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
-                    is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
-                    is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.lines)
-                    is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
                 }
             }
         }
@@ -106,7 +122,8 @@ private fun rememberInline(text: String): AnnotatedString {
         codeBackground = CodePanel,
         link = LinkText
     )
-    return remember(text, colors) { inlineMarkdown(text, colors) }
+    val linkTaps = LocalNoteLinkTaps.current
+    return remember(text, colors, linkTaps) { inlineMarkdown(text, colors, linkTaps) }
 }
 
 @Composable

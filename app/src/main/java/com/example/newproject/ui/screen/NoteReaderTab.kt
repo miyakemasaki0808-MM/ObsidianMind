@@ -98,6 +98,9 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.note
+import com.example.newproject.domain.NoteLink
+import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.reunionSlot
@@ -177,9 +180,12 @@ internal fun NoteReaderTab(
     onOpenSideReading: (RelatedNote) -> Unit,
     onCloseSideReading: () -> Unit,
     /** 関連ノートを普通に開く（関連タブと同じ経路）。右で読んでいた位置へ送るのはこの画面が行う。 */
-    onOpenNote: (RelatedNote) -> Unit
+    onOpenNote: (RelatedNote) -> Unit,
+    /** 本文のリンクを今の走査結果から引く（→ features/note_links.md）。押したときに同期で呼ぶ。 */
+    onResolveNoteLink: (NoteLink) -> NoteLinkResolution
 ) {
     val context = LocalContext.current
+    val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -254,35 +260,30 @@ internal fun NoteReaderTab(
     var relatedRevealCount by remember { mutableLongStateOf(0L) }
     val sideReading = uiState.sideReading
     val reading = sideReading != SideReadingState.Idle
+    // 本文のリンクから右で開いたノートと、その見出し（→ features/note_links.md）。関連の候補から開いたときは null。
+    var sideLinkStart by rememberSaveable { mutableStateOf<SideLinkStart?>(null) }
+    var sideLinkCount by rememberSaveable { mutableLongStateOf(0L) }
     // 右で開く。**書いているつもりは落とす** — 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。
     val openSide: (RelatedNote) -> Unit = { note ->
         onMemoFocusIntentChange(false)
+        sideLinkStart = null
         onOpenSideReading(note)
     }
-    // 「← 余白へ戻る」と戻る操作。**元の場所へ戻す** — 選んだ一覧まで面を送る。
+    // 「← 余白へ戻る」と戻る操作。**元の場所へ戻す** — 関連の候補から開いたなら、選んだ一覧まで面を送る。
+    // 本文のリンクから開いたなら、余白は開く前の位置のままでよい。
     val returnFromSide: () -> Unit = {
+        val fromLink = sideLinkStart?.noteUri == sideReading.note?.ref?.value
         onCloseSideReading()
-        relatedReveal = ++relatedRevealCount
+        sideLinkStart = null
+        if (!fromLink) relatedReveal = ++relatedRevealCount
     }
-    // 「このノートへ移る」で開いたノートと、右で読んでいたブロック。新しいノートの解析が届いたら、
-    // 飛び越した画像の測定を頼む（→ 下の効果）。画像の寸法の入れ物はノートごとに作り直されるので、届く前には頼めない。
-    var moveStart by rememberSaveable { mutableStateOf<Pair<String, Int>?>(null) }
+    // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
+    val startNote = rememberNoteStart(listState, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+        showNotice(noteLinkHeadingMissingText(heading, opened = true))
+    }
     val moveToNote: (RelatedNote, Int) -> Unit = { note, block ->
         onOpenNote(note)
-        // **開くのと同時に位置を置く。** 新しいノートの一覧は、最初に組まれたときからこの位置で始まる（冊子から開くときと同じ）。
-        listState.requestScrollToItem(block)
-        moveStart = note.ref.value to block
-    }
-    LaunchedEffect(currentNoteUri, sectionModel) {
-        val (uri, block) = moveStart ?: return@LaunchedEffect
-        val opened = currentNoteUri ?: return@LaunchedEffect
-        if (opened == uri && sectionModel != null) {
-            // 前のノートの一覧に位置を縮められていたら置き直す。読書の記録は最も深い位置しか残さないので、
-            // 手前で1度報告されても、置き直した位置からの報告で上書きされる。
-            if (listState.firstVisibleItemIndex != block) listState.scrollToItem(block)
-            imageMeasurements?.requestSkippedMeasurement(block)
-        }
-        if (opened != uri || sectionModel != null) moveStart = null
+        startNote(PendingNoteStart(note.ref.value, block))
     }
     val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
@@ -446,7 +447,7 @@ internal fun NoteReaderTab(
     }
     // 面の中で目的のメモまで送る依頼。面が組み立てられて送り終えたら消す。
     var memoReveal by remember { mutableStateOf<MemoReveal?>(null) }
-    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?) -> Unit = { modifier, headingMark ->
+    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?, (NoteLink) -> Unit) -> Unit = { modifier, headingMark, onLink ->
         NoteContentPanel(
             uiState = uiState,
             modifier = modifier
@@ -460,7 +461,8 @@ internal fun NoteReaderTab(
             precomputedBlocks = sectionModel?.blocks,
             imageLoader = imageLoader,
             imageMeasurements = imageMeasurements,
-            headingAccessory = headingMark
+            headingAccessory = headingMark,
+            onLink = onLink
         )
     }
 
@@ -515,6 +517,31 @@ internal fun NoteReaderTab(
         }
         // 面の中身へ送る依頼の前に、その面が隠れていれば2面へ戻す（→ deskSpreadShowing）。
         val showDeskFace: (DeskFace) -> Unit = { face -> spreadTo(deskSpreadShowing(deskSpread, face)) }
+        // 本文のリンク（→ features/note_links.md）。開く面は窓で決める（→ noteLinkActionFor）。
+        val openLink: (NoteLink) -> Unit = { link ->
+            when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = canShowPane)) {
+                is NoteLinkAction.ScrollCurrent -> {
+                    val target = currentNoteScrollTarget(sectionModel?.blocks, action.heading)
+                    if (target == null) {
+                        action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
+                    } else {
+                        coroutineScope.launch { listState.scrollToItem(target) }
+                        imageMeasurements?.requestSkippedMeasurement(target)
+                    }
+                }
+                is NoteLinkAction.Open -> if (action.onSupporting) {
+                    // ペインを閉じていれば ✎ と同じく開き（設定に残る）、本文だけにしていれば2面へ戻す。
+                    if (!marginPaneOpen) onSetMarginPaneOpen(true)
+                    if (paneVisible) showDeskFace(DeskFace.Supporting)
+                    openSide(action.note)
+                    sideLinkStart = SideLinkStart(action.note.ref.value, action.heading, ++sideLinkCount)
+                } else {
+                    onOpenNote(action.note)
+                    startNote(PendingNoteStart(action.note.ref.value, block = 0, heading = action.heading))
+                }
+                is NoteLinkAction.Notice -> showNotice(action.text)
+            }
+        }
         // 横の払いで仕切りを1段動かす。**帯が出ている間は受けない** — 帯の操作と、本文に触れて帯をしまう操作が先。
         val onSpreadGesture: (DeskSpreadGesture) -> Unit = { gesture -> spreadTo(deskSpreadAfter(deskSpread, gesture)) }
         val currentOnSpreadGesture by rememberUpdatedState(onSpreadGesture)
@@ -677,7 +704,8 @@ internal fun NoteReaderTab(
                                             else -> 20.dp
                                         }
                                     ),
-                                headingMark
+                                headingMark,
+                                openLink
                             )
                         }
                     }
@@ -698,7 +726,7 @@ internal fun NoteReaderTab(
                                 emptyNote()
                                 Spacer(modifier = Modifier.weight(1f))
                             } else {
-                                notePanel(Modifier.weight(1f), headingMark)
+                                notePanel(Modifier.weight(1f), headingMark, openLink)
                             }
                         }
                     }
@@ -728,7 +756,7 @@ internal fun NoteReaderTab(
                                         // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
                                         val cardShown = !hideControls && visibleTraceCard != null
                                         if (cardShown) traceCard(Modifier, openMemosFromCard)
-                                        notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark)
+                                        notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark, openLink)
                                     }
                                 }
                                 // 本文に触れて帯をしまう受け口は、帯と一緒に動かさない — 帯の中に入れると、滑る距離が帯の高さではなく面の高さになる。
@@ -766,7 +794,9 @@ internal fun NoteReaderTab(
                                             imageLoader = imageLoader,
                                             onBack = returnFromSide,
                                             onMove = moveToNote,
-                                            onRetry = onOpenSideReading
+                                            onRetry = onOpenSideReading,
+                                            linkStart = sideLinkStart?.takeIf { it.noteUri == sideReading.note?.ref?.value },
+                                            onHeadingMissing = { heading -> showNotice(noteLinkHeadingMissingText(heading, opened = true)) }
                                         )
                                     } else MarginMemoSheetContent(
                                         state = uiState.marginMemoState,

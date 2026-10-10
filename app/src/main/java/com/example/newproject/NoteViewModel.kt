@@ -34,7 +34,10 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.domain.NoteLink
+import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.RelatedNotesResult
+import com.example.newproject.domain.resolveNoteLink
 import com.example.newproject.domain.notePaperTone
 import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
@@ -432,6 +435,15 @@ class NoteViewModel internal constructor(
         )
     }
 
+    /**
+     * 本文のリンクを、今のノートを出発点に今の走査結果から引く（→ features/note_links.md）。
+     * **押したときに同期で引くだけで、走査し直さない。** 走査は本文を出す経路が済ませている。
+     */
+    internal fun resolveNoteLink(link: NoteLink): NoteLinkResolution {
+        val source = (uiState.value.noteState as? NoteState.Success)?.targetUri?.takeIf { it.isNotEmpty() }
+        return resolveNoteLink(link, source?.let(::DocumentRef), noteScan.linkIndex)
+    }
+
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
 
     /** 最終可視ブロックと、そのブロックの可視割合の報告。NoteReaderTab がスクロールに追従して呼ぶ。 */
@@ -691,7 +703,7 @@ class NoteViewModel internal constructor(
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
-            noteScan.clear()
+            noteScan.expireAfterBodyWrite()
             relatedNotesUseCase.clearCache()
             true
         } catch (e: CancellationException) {
