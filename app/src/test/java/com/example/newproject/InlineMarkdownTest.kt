@@ -116,6 +116,13 @@ class InlineMarkdownTest {
         assertEquals("ノート名", plainText("[[ノート名]]"))
     }
 
+    /** 表のセルはリンクの表示名の区切りを `\|` のまま持つ（→ MarkdownParserTest）。表の外と同じに表示名だけを出す。 */
+    @Test
+    fun `表のセルのエスケープした縦棒は表示名の区切りとして読む`() {
+        assertEquals("0E00_0001", plainText("[[0E00_0001.Plan_Bento\\|0E00_0001]]"))
+        assertEquals("a | b", plainText("a \\| b"))
+    }
+
     @Test
     fun `通常リンクはラベルだけ残る`() {
         assertEquals("参考資料 を見る", plainText("[参考資料](https://example.com) を見る"))

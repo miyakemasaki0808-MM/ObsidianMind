@@ -140,6 +140,7 @@ AI入力にも使われている**ことだった（→ [ai_input_excerpt](ai_in
 |---|---|
 | クリック可能リンク（`[[note]]` のノート遷移） | 設計済み・実装中 → [note_links](../features/note_links.md)。外部URLは押せないままにする |
 | 画像 `![alt](path)` / `![[image.png]]` | **実装済み**（単独行のみ） → [note_image_rendering](../features/note_image_rendering.md) |
+| 表のセルの中の `\|` | **実装済み。** `\|` では列を割らず、セルに `\|` のまま残す。目次の表の `[[ノート\|表示名]]` がリンクとして描かれる（→ [note_links](../features/note_links.md) §5） |
 | 埋め込み `![[note]]`・数式 | 未着手。画像と同じ性質だが、循環参照とレンダラ依存が別問題として付く |
 | 段落の遅延継続・ネスト引用・setext見出し | 未着手。§1のとおり規格適合は目標にしていない |
 
