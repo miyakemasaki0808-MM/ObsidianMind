@@ -531,9 +531,10 @@ internal fun NoteReaderTab(
         // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
         // 本文だけにしている机の画面は、面が出ていないときと同じに扱い、見に行くときはシートに代えてペインを戻す。
+        // 並べ読みを閉じるのは要約の行を見せる入口だけ（→ closesSideReading）。
         val openSummary: () -> Unit = {
             val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
-            if (reading) onCloseSideReading()
+            if (reading && entry.closesSideReading()) onCloseSideReading()
             if (entry == SummaryEntry.Sheet) {
                 if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             }
@@ -542,7 +543,10 @@ internal fun NoteReaderTab(
         }
         // 面を出さずに頼んだ要約に、端末AIが使えない理由が届いていて、どの面も出ていなければ開く（→ opensFaceForNotice）。
         // **見るのは今の本文の節の要約だけ。** 見せたことは理由の行が組まれたときに行が伝えるので、ここでは開くだけにする。
-        val opensNotice = opensFaceForNotice(faceSummary, faceVisible = paneShown || uiState.isMarginMemoSheetVisible)
+        val opensNotice = opensFaceForNotice(
+            faceSummary,
+            faceVisible = (paneVisible && deskPaneCountsAsFace(deskSpread, reading)) || uiState.isMarginMemoSheetVisible
+        )
         val currentPaneVisible by rememberUpdatedState(paneVisible)
         val currentShowDeskFace by rememberUpdatedState(showDeskFace)
         LaunchedEffect(faceSummary?.requestId, opensNotice) {

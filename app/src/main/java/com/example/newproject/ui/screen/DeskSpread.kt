@@ -54,6 +54,14 @@ internal fun DeskSpread.shows(face: DeskFace): Boolean = when (this) {
 internal fun deskSpreadShowing(current: DeskSpread, face: DeskFace): DeskSpread =
     if (current.shows(face)) current else DeskSpread.Both
 
+/**
+ * 端末AIが使えない理由を見せるとき、机の画面のペインを出ている面として数えるか（→ `opensFaceForNotice`）。
+ * 本文だけにしている間はペインが隠れているので数えず、理由が届けばペインを戻して見せる。
+ * **ただし並べ読みを隠しているときは数える** — 戻してもペインは並べ読みのままで、理由の行が無い。並べ読みを閉じてまで見せず、
+ * 余白へ戻ったときか、要約の入口でもう一度見に行ったときに見せる。
+ */
+internal fun deskPaneCountsAsFace(spread: DeskSpread, reading: Boolean): Boolean = spread.shows(DeskFace.Supporting) || reading
+
 /** 横に払って離したときの扱い。 */
 internal enum class DeskSpreadGesture { Left, Right, None }
 

@@ -12,6 +12,7 @@ import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
+import com.example.newproject.ui.screen.closesSideReading
 import com.example.newproject.ui.screen.opensFaceForNotice
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
@@ -143,6 +144,17 @@ class MarginSurfaceTest {
     fun `面が出ていなければ、頼んでいない節は始めるだけで、頼んだ節はシートで見せる`() {
         assertEquals(SummaryEntry.Background, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = false))
         assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = true))
+    }
+
+    /**
+     * **並べ読みを閉じるのは、要約の行を見せる入口だけ。** 背景で始めるだけなら面を替えないので、
+     * 隠している並べ読みを閉じると、戻したときに読みかけが消えている。
+     */
+    @Test
+    fun `並べ読みを閉じるのは要約の行を見せる入口だけ`() {
+        assertTrue(SummaryEntry.Pane.closesSideReading())
+        assertTrue(SummaryEntry.Sheet.closesSideReading())
+        assertFalse(SummaryEntry.Background.closesSideReading())
     }
 
     /**

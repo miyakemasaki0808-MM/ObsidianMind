@@ -6,13 +6,20 @@ import com.example.newproject.ui.screen.DeskFace
 import com.example.newproject.ui.screen.DeskFacePlacement
 import com.example.newproject.ui.screen.DeskSpread
 import com.example.newproject.ui.screen.DeskSpreadGesture
+import com.example.newproject.ui.screen.SummaryEntry
+import com.example.newproject.ui.screen.closesSideReading
 import com.example.newproject.ui.screen.deskFacePlacement
+import com.example.newproject.ui.screen.deskPaneCountsAsFace
 import com.example.newproject.ui.screen.deskSpreadActionsFor
 import com.example.newproject.ui.screen.deskSpreadAfter
 import com.example.newproject.ui.screen.deskSpreadGestureFor
 import com.example.newproject.ui.screen.deskSpreadShowing
 import com.example.newproject.ui.screen.position
+import com.example.newproject.ui.screen.shows
+import com.example.newproject.ui.screen.summaryEntryFor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 // 机の画面で片側を払って1画面にする（→ features/margin_pane.md §5.1）。
@@ -66,6 +73,35 @@ class DeskSpreadTest {
         assertEquals(DeskSpread.MainOnly, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Main))
         assertEquals(DeskSpread.SupportingOnly, deskSpreadShowing(DeskSpread.SupportingOnly, DeskFace.Supporting))
         DeskFace.entries.forEach { assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.Both, it)) }
+    }
+
+    /**
+     * **本文だけにしている間に、まだ頼んでいない節の要約を頼むと、背景で始めるだけで隠した並べ読みを閉じない。**
+     * 頼んだ節をもう一度押して見に行くときは、ペインを戻して並べ読みを閉じる。2面ではペインに出すので閉じる。
+     */
+    @Test
+    fun `本文だけで頼んだ要約は背景で始めるだけで、隠した並べ読みを閉じない`() {
+        fun entryIn(spread: DeskSpread, requested: Boolean) =
+            summaryEntryFor(paneVisible = spread.shows(DeskFace.Supporting), sheetVisible = false, requested = requested)
+
+        assertEquals(SummaryEntry.Background, entryIn(DeskSpread.MainOnly, requested = false))
+        assertFalse(entryIn(DeskSpread.MainOnly, requested = false).closesSideReading())
+        assertTrue(entryIn(DeskSpread.MainOnly, requested = true).closesSideReading())
+        assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Supporting))
+        assertTrue(entryIn(DeskSpread.Both, requested = false).closesSideReading())
+    }
+
+    /**
+     * 理由を見せるとき、本文だけにして隠したペインは出ている面として数えず、戻して見せる。
+     * **並べ読みを隠しているときは数える** — 戻してもペインは並べ読みのままで理由の行が無く、並べ読みを閉じてまで見せない。
+     */
+    @Test
+    fun `理由を見せるとき、隠したペインは数えないが、並べ読みを隠しているなら数える`() {
+        assertFalse(deskPaneCountsAsFace(DeskSpread.MainOnly, reading = false))
+        assertTrue(deskPaneCountsAsFace(DeskSpread.MainOnly, reading = true))
+        listOf(DeskSpread.Both, DeskSpread.SupportingOnly).forEach { spread ->
+            listOf(false, true).forEach { reading -> assertTrue("$spread $reading", deskPaneCountsAsFace(spread, reading)) }
+        }
     }
 
     /** 読み上げの操作は、払いで行ける先と同じ。1画面からは2面へ戻すだけ。 */

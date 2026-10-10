@@ -1381,6 +1381,58 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
     }
 
+    /**
+     * **右で眺めている関連ノートを隠して本文だけにし、まだ頼んでいない節の要約を頼んでも、並べ読みは残る。**
+     * 要約は面を出さずに1回だけ頼み、2面へ戻すと同じ関連ノートが出る。並べ読みを閉じていたときは、戻ると余白の面になっていた。
+     */
+    @Test
+    fun 机の画面で並べ読みを隠して本文だけにし_要約を頼んでも_戻すと並べ読みが残っている() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val requests = mutableListOf<Boolean>()
+        var closes = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onRequestSectionSummary = { _, quietly -> requests += quietly },
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onCloseSideReading = {
+                            closes++
+                            state = state.copy(sideReading = SideReadingState.Idle)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertDoesNotExist()
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("面を出さずに1回だけ頼んでいない", listOf(true), requests)
+        assertEquals("背景で頼んだだけで並べ読みを閉じた", 0, closes)
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
     private fun performGripAction(label: String) {
         val actions = composeRule.onNodeWithContentDescription("操作を出す").fetchSemanticsNode()
             .config[SemanticsActions.CustomActions]
