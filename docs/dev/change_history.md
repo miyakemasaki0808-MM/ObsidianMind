@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 結晶の一覧を月の棚に宝石を並べる形に決め、宝石を根拠のノートの分野で左右半々に塗ることを色の割り当てに足した | [reflect_crystal](features/reflect_crystal.md) 判断11・[bearing_channels](system/bearing_channels.md) §10 |
 | 2026-10-10 | 机の画面の帯の地を、画面の地を敷いた箱の角を端点にして描き、帯の中に別の虹が縮まらず背景とつながるようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | ノート内のリンクを実機で検証し、長押しの修正の再検証まで合格として LINK-1〜3 を台帳から外し、ロードマップから完了分を除いた | [note_links](features/note_links.md) §10・[review](../review/README.md) |
 | 2026-10-10 | 本文のリンクを長押しして離してもリンクが開かないよう、長押しの見張りを選択の容器の内側の層へ移した | [note_links](features/note_links.md) §7・§8 |

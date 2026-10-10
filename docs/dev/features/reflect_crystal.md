@@ -1,9 +1,9 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** 実装済み・稼働中・実機確認済み
+**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 は設計のみ。実装と実機確認が残る）
 **最終検証:** 2026-09-27 / `d559e33`
-**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/CrystalText.kt`
-**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest`
+**関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
+**関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
 **正本:** この文書
 
 **関連:** [note_summary](note_summary.md)（材料の出どころ）・[reflect_reading_trace](reflect_reading_trace.md)（置き場を共有する）・
@@ -50,10 +50,11 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 | ✨タブの結晶 | 要約の下に、このノートを根拠に含む結晶が新しい順に最大3件。各結晶の下に「〇〇・△△ から」 | ✨タブを開いたとき。該当が無ければ出さない |
 | 根拠を開く | 「〇〇・△△ から」を押すと、根拠のノート名と、AIへ渡した要約がその場で開く | 押したとき |
 | 一覧への入口 | 「結晶の一覧（N件）」の1行 | Vault に結晶が1件以上あるとき。このノートが根拠に入っていなくても出す |
-| 結晶の一覧 | 新しい順に、日付・1文・根拠。根拠のノート名を押すとそのノートを開く | 入口を押したとき |
+| 結晶の一覧 | 月ごとの棚に、宝石と日だけが新しい順に格子で並ぶ。宝石は根拠のノートの分野の色で、2つの分野にまたがれば左右半分ずつ。上に分野の凡例 | 入口を押したとき |
+| 宝石を開く | 押した宝石の段の直下に、分野・日付・1文・根拠が開く。根拠のノート名を押すとそのノートを開く。開くのは1つで、もう一度押すと閉じる | 宝石を押したとき |
 | AI非対応 | 何も出ない。入口も、結晶が1件も無ければ出ない | 端末が Nano 非対応 |
 
-文言は候補で、実機で見て決め直してよい。いまの実装は、見出し「💎 結晶」・入口「結晶の一覧（N件） ›」・根拠「A・B から ▾」・一覧が空のときの説明1文（`ui/CrystalText.kt`）。
+文言は候補で、実機で見て決め直してよい。いまの実装は、見出し「💎 結晶」・入口「結晶の一覧（N件） ›」・根拠「A・B から ▾」・一覧が空のときの説明1文・棚の見出し「2026年10月 · 7」・宝石の下の「7日」・分野が分からない宝石の凡例「分野なし・未判定」（`ui/CrystalText.kt`）。
 
 ## 4. 現在のユーザーフロー
 
@@ -64,7 +65,7 @@ Reflect を作り直す3本目である。北極星の2つ目の基準「その�
 4. AI は、今のノートと筋を共有するノートを他の候補から1〜3件選び、選んだ要約だけを材料に1文で総括する。
    Vault に1ファイルとして書き、一覧へ足す。**筋が無ければ何も書かない**
 5. ✨タブを開くと、要約の下に、今のノートを根拠に含む結晶が出る
-6. 「結晶の一覧」から、これまでの結晶を新しい順に見る。根拠のノート名を押すとそのノートが開く
+6. 「結晶の一覧」から、これまでの結晶を月ごとの宝石の棚で見る。宝石を押すと1文と根拠が開き、根拠のノート名を押すとそのノートが開く
 
 **中断:** ノートを切り替えると、門番待ち・要約待ち・生成中の試行は取り消され、**試行として数えない。**
 **保存に入った結晶は、切り替えても止めずに書き終え、同じ Vault なら一覧へ足す**（→ 判断9）。
@@ -132,12 +133,13 @@ Vault を切り替えると、読み込み中の一覧と生成中の試行を�
 - **今のノートの相対パスは `NoteState` が持たない**ので、結晶を試す契機（`crystallize`）で `crystalNotePath` に置く。
   相対パスが確定しないノートでは置かないので、そのノートの✨タブには結晶が出ない（入口は出る）
 - 根拠のノート名は、結晶を作った時点のものを出す。改名・移動には追従しない
-- 一覧: 新しい順。根拠のノート名は、**今の走査結果に同じ相対パスがあれば押せる**。無ければ押せない表示にする
+- 一覧: 月ごとの棚に宝石を新しい順に並べる（→ 判断11）。並べ方は純関数 `crystalShelf`、1段の数は窓の幅から `crystalShelfColumns`、宝石の分野は `crystalFields` が決める。
+  根拠のノート名は、**今の走査結果に同じ相対パスがあれば押せる**。無ければ押せない表示にする
 - 一覧を開いたときの走査は **Vault単位の Job** として持ち、Vault切替で取り消す。取り消しに加えて、走査キャッシュが
   公開の直前に Vault の世代を照合するので、切替の前に始まった走査が後から返っても**切替後のキャッシュ・開けるパス・分野の索引へ戻らない**
   （→ [note_field_color](note_field_color.md) の「別Vaultの遅れて届いた結果を現Vaultへ合成しない」）
-- 見た目は [ui_design_principles](../system/ui_design_principles.md) と [bearing_channels](../system/bearing_channels.md) に従い、
-  **新しい色・形の意味を足さない**。面は要約と同じパネルを使う
+- 見た目は [ui_design_principles](../system/ui_design_principles.md) と [bearing_channels](../system/bearing_channels.md) に従う。
+  **✨タブは新しい色・形の意味を足さない**（面は要約と同じパネル）。**一覧の宝石の色は、冊子の紙と同じく分野を表す**（→ 判断11・bearing_channels 判断6）
 
 ## 6. 状態とデータ
 
@@ -357,6 +359,26 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   （→ [background_ai_ux](../system/background_ai_ux.md) §7）。結晶は1日に多くて1回なので、それらを遅らせるのは多くて1日1回である。
   **本文と同じ画面に出る再会カードだけを、結晶より先にする**
 
+### 判断11: 一覧は宝石の陳列にし、宝石は根拠の分野で塗る（2026-10-10、オーナー判断。見本で合意）
+
+出どころはオーナーの実機の体感で、文字の札が縦に並ぶだけでは結晶が溜まった実感が出なかった。**溜まることそのものが役目**（§1）なので、溜まった数を棚として見せる。
+
+- **棚は月で区切る。** 1日に多くて1件なので、1か月で多くて31個。宝石の下は日だけ（月は棚の見出しにある）。1段の数は窓の幅で決める
+- **押す前に1文を出さない。** 見比べる読み方に1手増えるのは受け入れる。✨タブは読んでいる途中に目に入る場所なので、文字のまま
+- **押した段の直下に開く。** 中身は✨タブと同じ結晶のカードに、分野と日付を添えたもの。開くのは1つだけ。
+  **動きを付けない** — 押して開く動きは、bearing_channels の動きの2行（自動の一瞬・指に追従する連続）のどちらにも当たらない。付けるなら行を足す提案になる
+- **宝石の色は根拠のノートの分野。** 冊子の紙と同じ判定を引くだけで、**新しいAI呼び出しもデータも無い**。
+  一覧は色符号を1本も持たない面だったので、bearing_channels 判断6 の「面を割れるのは、その面に色符号が1本も無いとき」に当たる。
+  **意味は冊子と同じ分野で、色相もそろえる**（`NoteFieldPaletteTest`）ので、冊子で覚えた色の読み方がそのまま効く
+- **2つの分野まで、左右半々。** 結晶は別々のノートの共通の筋なので、根拠が分野をまたぐ。根拠の分野を数え、多い順に2つ。
+  同数なら根拠の並びで先のほう（先頭は作ったときに読んでいたノート）を左に置く。面積は件数に合わせない — 小さい宝石で比は読めない。
+  3分野まではまたがりうるが、3つに割ると細くて見分けられない。分野の分からない根拠は数えず、全部分からなければ無彩色
+- **混色しない。** 6分野は色相を60°刻みに置いたので、120°離れた2色の中間がちょうど別の分野の色相になる
+  （技術＋仕事 → 学習、技術＋暮らし → 内省）。混ぜた宝石が別の分野に読める
+- **色以外の手がかり（1.4.1）** は、一覧の上の凡例・開いた中身の分野名・読み上げの分野名。3つ目の分野は、根拠を開いたときのノートごとの分野で分かる
+- **代償:** 分類の正しさは保証しない（→ [note_field_color](note_field_color.md) §10）。判定は端末の中にあるので、
+  別の端末で作った結晶や、まだ判定していないノートだけが根拠の結晶は無彩色になる。色は今の判定を引くので、ノートの分野が判定し直されると宝石の色も変わる
+
 ### 採らなかった案
 
 | 案 | 採らない理由 |
@@ -392,6 +414,9 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
     控えに未提示が3件あっても渡す候補の中が0〜2件なら0回、3件で暦日も満たせば1回。予算で候補を落とした後の集合でも同じ
   - `selectCrystalCandidates` と断片の切り方 — 同じノートの重複、直近順、6件の上限、文の区切りへの寄せ、区切りの無い長文
   - `crystalsForNote` — 根拠に含むものだけ、新しい順、3件で打ち切り
+  - `crystalFields` — 根拠の分野を数えて多い順に2つ、同数は根拠の並び、分からない根拠は数えない（`CrystalFieldsTest`）
+  - `crystalShelf`・`crystalShelfColumns` — 月の区切り（端末の暦）、段の割り方、開いた結晶の段の直下だけに中身、窓の幅と段の数（`CrystalShelfTest`）
+  - 宝石の色 — 7色がパネルの上で 3:1、色相が同じ分野の紙とそろい、6色の明度がそろう（`NoteFieldPaletteTest`）
   - `CrystalJson` — 往復、checksum 不一致・未知の版・16KB超をその1件だけ飛ばすこと
   - `CrystalController` の**両方向** — 門番待ち・要約待ち・生成中にノートを切り替えると書かず数えない／
     生成中に Vault を切り替えると新しい Vault に書かない／走行フラグが残らない
@@ -412,7 +437,8 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` に12本目を足す
 - **instrumentation:** `PromptTokenBudgetTest` に結晶の最大構成（6件・断片240字・ノート名200字）を足した。
   実機（Pixel 10 Pro Fold）の余裕は2プロファイルで 1,894・1,972 トークン（上限4,352・出力予約256）。
-  `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）
+  `OnDeviceGenerationTest` に結晶を1件足し、実Nanoの応答を本番のパーサへ通した結果を logcat へ出す（形の一致は assert しない）。
+  `CrystalShelfUiTest` — 宝石を押すと段の直下に1文が開き、もう一度押すと閉じ、別の宝石を押すと替わる。読み上げの名前に日と分野が入る
 - **実機確認:** ケースは [結晶の実機ケース](../../review/device_validation/reflect_crystal.md)（`CRYSTAL-01`〜`07`）。
   初回生成・保存・✨と一覧・根拠のノートへの遷移・同じ日の2回目を試さないこと・実SAFの A→B→A・実Nanoの応答を確かめた
 - **保証していないこと:**
@@ -434,6 +460,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   結晶は Vault に置くので、Vault が残る限り失われない
 - **一覧の読み込みは件数に比例する。** 1日1件なら年に約365件。遅さが体感できたら、端末内に索引を持つ
 - **結晶を消す・直す導線が無い。** 実機で困ったら足す
+- **宝石の見え方は実機で決め直してよい。** 左右半々の境目が小さな宝石で見分けられるか、31個の月と開いた Fold の段の数を実機で見る
 - **文言は実機で見て決め直す。** 見出し・入口・「〇〇・△△ から」・一覧の見出し
 
 ## 12. 開発経緯
