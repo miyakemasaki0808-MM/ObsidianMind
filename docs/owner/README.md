@@ -31,7 +31,7 @@
 | No. | 文書 | 答える問い |
 |---|---|---|
 | — | **本書** | `owner/` の入口と、**何ができるアプリか** |
-| 01 | [source_code_analysis](01_source_code_analysis.md) | **いまコードがどうなっているか。** 構成・技術・規模の推移。`owner/` に出る数字はここの §0 だけが持つ |
+| 01 | [source_code_analysis](01_source_code_analysis.md) | **いまコードがどうなっているか。** 構成・技術・規模。`owner/` に出る数字はここの §0 だけが持つ |
 | 02 | [jvm_test_report](02_jvm_test_report.md) | **どういう観点でテストしているか。** JVMテストの俯瞰と、全クラスの一覧 |
 | 03 | [document_inventory](03_document_inventory.md) | **どんな文書があるか。** 目録と、検査で守られている範囲 |
 | 04 | [readme_map](04_readme_map.md) | **README がそれぞれ何をしているか。** 入口そのものの構造 |
