@@ -17,16 +17,28 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -36,6 +48,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
@@ -180,16 +193,29 @@ internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpre
  * ボタンの上から払い始めても、そのボタンは押さない — 帯が子より先に指を見て、動いたと言えた時点で使うので、
  * ボタンは押下を取り消す。
  *
- * 背景は画面と同じ地にし、**はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
+ * **地は画面の地と同じグラデーションを、画面の中のこの帯の位置から描く**（[backdrop]）。帯の大きさで描くと、
+ * 藍から珊瑚色までの全部が帯の中へ縮まり、後ろの背景とつながらない。降りる途中も地は画面に留まり、背景が降りてくるように見える。
+ * 見出しの霞はフェードを付けない — 帯の中ほどで横縞に見える。下端には薄い影を落とし、本文との境目にする。
+ * **はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
+ * 影は帯の外へ落ちるので、その分だけ下に余白を取る（帯を出し入れする器は、上の縁で切るために自分の外を切る）。
  */
 @Composable
-internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val currentOnHide by rememberUpdatedState(onHide)
+    val gradient = ReadingGradient
+    var origin by remember { mutableStateOf(Offset.Zero) }
     Column(
         modifier = modifier
+            .padding(bottom = DeskBarShadowRoom)
             .fillMaxWidth()
+            .onGloballyPositioned { origin = it.positionInWindow() }
+            .shadow(DeskBarElevation, RectangleShape, clip = false)
             .clipToBounds()
-            .background(ReadingGradient)
+            .drawBehind {
+                translate(backdrop.origin.x - origin.x, backdrop.origin.y - origin.y) {
+                    drawRect(gradient, size = backdrop.size)
+                }
+            }
             .pointerInput(Unit) {
                 detectDeskGrip(PointerEventPass.Initial) { gesture -> if (gesture == DeskBarGesture.Hide) currentOnHide() }
             }
@@ -214,6 +240,27 @@ internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content:
             contentAlignment = Alignment.Center
         ) { GripPill() }
     }
+}
+
+/** 帯の下端に落とす影の高さ。 */
+private val DeskBarElevation = 4.dp
+
+/** 帯の影が落ちる分の、帯の下の余白。 */
+private val DeskBarShadowRoom = 8.dp
+
+/**
+ * 読む画面の地（[ReadingGradient]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。
+ */
+@Stable
+internal class DeskBackdrop {
+    var origin by mutableStateOf(Offset.Zero)
+    var size by mutableStateOf(Size.Zero)
+}
+
+/** この要素を、読む画面の地を敷いた箱として [backdrop] へ知らせる。地を敷くのと同じ要素の、地より前に付ける。 */
+internal fun Modifier.reportDeskBackdrop(backdrop: DeskBackdrop): Modifier = onGloballyPositioned {
+    backdrop.origin = it.positionInWindow()
+    backdrop.size = it.size.toSize()
 }
 
 /**

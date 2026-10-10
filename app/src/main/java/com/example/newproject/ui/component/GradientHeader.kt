@@ -43,6 +43,9 @@ import com.example.newproject.ui.theme.OnGradientHeaderTitle
  * 濃さを保つ割合が要素全体の高さに対する比になるため、**副題が2行に折り返した瞬間に
  * フェードの開始位置が文字へ食い込む**。
  *
+ * [fade] を切ると、文字領域の下のフェードを描かない。机の画面の帯のように見出しを箱の中へ閉じ込める所では、
+ * フェードが箱の中ほどの横縞に見える（→ `DeskBar`）。
+ *
  * 面はメイン領域の**全幅**へ広げる。角丸を付けず端まで抜くことで、
  * 「上に乗ったカード」ではなく「上部が霞んだ背景」として読ませる。
  * **広げる幅は画面の余白から取るので、見出しを置く画面は [screenContentPadding] で余白を取る。**
@@ -54,7 +57,8 @@ internal fun GradientHeader(
     subtitle: String? = null,
     titleSize: TextUnit = 28.sp,
     leading: @Composable (() -> Unit)? = null,
-    trailing: @Composable (() -> Unit)? = null
+    trailing: @Composable (() -> Unit)? = null,
+    fade: Boolean = true
 ) {
     val scrim = GradientHeaderScrim
     Column(modifier = modifier.fillMaxWidth().bleedHorizontally(SCREEN_HORIZONTAL_PADDING)) {
@@ -88,12 +92,14 @@ internal fun GradientHeader(
             trailing?.invoke()
         }
         // フェード。文字は載らないので高さを固定できる。
-        Spacer(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(SCRIM_FADE_HEIGHT)
-                .background(Brush.verticalGradient(listOf(scrim, Color.Transparent)))
-        )
+        if (fade) {
+            Spacer(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(SCRIM_FADE_HEIGHT)
+                    .background(Brush.verticalGradient(listOf(scrim, Color.Transparent)))
+            )
+        }
     }
 }
 
