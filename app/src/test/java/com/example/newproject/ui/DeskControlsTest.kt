@@ -1,9 +1,12 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.input.pointer.PointerEvent
+import com.example.newproject.fakes.ScriptedPointerInput
 import com.example.newproject.ui.screen.DESK_BAR_FLING_DP_PER_SEC
 import com.example.newproject.ui.screen.DESK_BAR_SWIPE_DP
 import com.example.newproject.ui.screen.DeskBarGesture
 import com.example.newproject.ui.screen.deskBarGestureFor
+import com.example.newproject.ui.screen.detectDeskGrip
 import com.example.newproject.ui.screen.isVerticalSwipe
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -50,6 +53,28 @@ class DeskControlsTest {
         assertEquals(DeskBarGesture.None, deskBarGestureFor(moved = true, vertical = false, dragDp = 30f, velocityDpPerSec = 500f))
         assertEquals(DeskBarGesture.None, deskBarGestureFor(moved = true, vertical = false, dragDp = -30f, velocityDpPerSec = -500f))
     }
+
+    /** つまみに触れて離せば、払いの扱いを1回渡す。下へ払えば出し、上へ払えばしまい、動かさなければ押した扱い。 */
+    @Test
+    fun `つまみで払って離せば扱いを1回渡す`() {
+        assertEquals(listOf(DeskBarGesture.Show), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = 60f, durationMillis = 300)))
+        assertEquals(listOf(DeskBarGesture.Hide), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = -60f, durationMillis = 300)))
+        assertEquals(listOf(DeskBarGesture.Tap), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = 0f, durationMillis = 100)))
+    }
+
+    /**
+     * **取り消されて終わった指では、払っても押しても何も渡さない。** Compose は取り消しを使用済みの指離しとして渡してくる。
+     * 普通の指離しと同じに数えると、取り消された払いで帯が出入りし、取り消された一触れで帯の下端のつまみが帯をしまう。
+     */
+    @Test
+    fun `取り消されて終わった指では何も渡さない`() {
+        assertEquals(emptyList<DeskBarGesture>(), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = 60f, durationMillis = 300, cancelled = true)))
+        assertEquals(emptyList<DeskBarGesture>(), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = -60f, durationMillis = 300, cancelled = true)))
+        assertEquals(emptyList<DeskBarGesture>(), gripFor(ScriptedPointerInput.swipe(dx = 0f, dy = 0f, durationMillis = 100, cancelled = true)))
+    }
+
+    private fun gripFor(events: List<PointerEvent>): List<DeskBarGesture> =
+        ScriptedPointerInput.run(events) { onGesture -> detectDeskGrip(onGesture = onGesture) }
 
     /** 動いたと言えた時点の移動で縦横を決める。縦が横より大きいときだけ縦で、斜め45度は縦にしない。 */
     @Test

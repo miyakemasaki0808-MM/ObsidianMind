@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -309,7 +310,9 @@ internal fun MarginMemoSheetContent(
     revealSummary: Long? = null,
     onSummaryRevealHandled: (Long) -> Unit = {},
     /** このノートの関連（→ [PaneRelatedInputs]）。**ペインだけ**が渡す。null なら出さない。 */
-    related: PaneRelatedInputs? = null
+    related: PaneRelatedInputs? = null,
+    /** 面のスクロール。机の画面のペインは外で持ち、余白を1画面に広げて戻したときに位置を戻す（→ [RestoreSupportingScroll]）。 */
+    scrollState: ScrollState = rememberScrollState()
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -346,7 +349,6 @@ internal fun MarginMemoSheetContent(
     val focusManager = LocalFocusManager.current
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
     var othersExpanded by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
     // メモの並びの始まり（この面の中の位置）。目的のメモまで送るときの行き先。
     var memosTop by remember { mutableIntStateOf(0) }
     // ほかの節の組の始まり（この面の中の位置）。印から来たときの行き先。

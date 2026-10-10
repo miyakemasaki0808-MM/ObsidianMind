@@ -38,8 +38,10 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -1240,6 +1242,262 @@ class NoteReadingFlowTest {
 
         composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    /**
+     * **帯は上の縁からシャッターのように降りて出て、しまうときは巻き上がる。** 途中では、帯の見出しが出きった位置より上にあり、
+     * しまう途中はまだ組まれている。瞬時に出入りしていたときは、払った次の瞬間に出きり、しまった次の瞬間に消えていた。
+     */
+    @Test
+    fun 机の画面の帯は上の縁から降りて出て_しまうときは巻き上がる() {
+        setDesk()
+        composeRule.mainClock.autoAdvance = false
+
+        composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.mainClock.advanceTimeBy(100)
+        val descending = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        composeRule.mainClock.advanceTimeBy(500)
+        val shown = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        assertTrue("降りている途中なのに出きっている: $descending / $shown", descending < shown)
+
+        composeRule.onNodeWithContentDescription("操作をしまう").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.mainClock.advanceTimeBy(100)
+        val rising = composeRule.onNodeWithText("Rediscover").getUnclippedBoundsInRoot().top
+        assertTrue("巻き上がっている途中なのに動いていない: $rising / $shown", rising < shown)
+        composeRule.mainClock.advanceTimeBy(500)
+        composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
+    }
+
+    // ── 片側を払って1画面に（→ features/margin_pane.md §5.1）───────────────
+
+    /**
+     * **本文の上のどこからでも、左へ払うと余白が1画面になり、右へ払うと2面へ戻る。** 本文は組んだまま隠れ、読み上げからも外れる。
+     */
+    @Test
+    fun 机の画面では本文の上で左へ払うと余白が1画面になり_右へ払うと2面へ戻る() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        // 余白の上から右へ払う。1画面の余白は窓いっぱいなので、窓の中ほどから払える。
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /**
+     * **余白の上から右へ短くフリックすると本文が1画面になる。** 30dp を 40ms で払う（距離の線 56dp に届かず、速さで決まる）。
+     * 余白は組んだまま隠れ、入力欄は読み上げからも外れる。戻る操作で2面へ戻る。
+     */
+    @Test
+    fun 机の画面では余白の上で右へフリックすると本文が1画面になり_戻る操作で2面へ戻る() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = right - 240.dp.toPx(), endX = right - 210.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        Espresso.pressBack()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+    }
+
+    /** 本文を縦に払うとスクロールするだけで、片側は広げない（縦横は動き始めで決める）。 */
+    @Test
+    fun 机の画面では本文を縦に払うとスクロールし_片側は広げない() {
+        val listState = LazyListState()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        loadedNote(LONG_BODY).withMemos(),
+                        buildNoteSectionModel(LONG_BODY),
+                        listState,
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipe(start = Offset(200.dp.toPx(), centerY + 150.dp.toPx()), end = Offset(230.dp.toPx(), centerY - 150.dp.toPx()), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+
+        assertTrue("縦に払ったのにスクロールしていない", listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /**
+     * **真斜め45度に払っても広げない。** 横とみなすのは横の移動が縦の2倍を超えたときだけ。縦より大きいだけで横にしていたときは、
+     * 100dp ずつ右上・左上へ払うと片側が1画面になった（実機で観測）。
+     */
+    @Test
+    fun 机の画面では真斜めに払っても片側を広げない() {
+        setDesk()
+
+        listOf(Offset(100f, -100f), Offset(-100f, -100f)).forEach { direction ->
+            composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+                val start = Offset(250.dp.toPx(), centerY)
+                swipe(start = start, end = start + direction * density, durationMillis = 300)
+            }
+            composeRule.waitForIdle()
+            composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+            composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        }
+    }
+
+    /**
+     * **余白を下のほうまで送ってから余白を1画面に広げ、2面へ戻すと、余白は元の位置に戻る。** 余白の面は画素で位置を持つので、
+     * 広がって中身が短くなると位置が縮められ、戻しても元に戻らなかった（実機で、関連の見出しの上端が 1272→1452px）。
+     */
+    @Test
+    fun 机の画面で余白を1画面にして戻しても_余白のスクロール位置が戻る() {
+        val memos = (1..12).map { index ->
+            MarginMemo("節Aのメモ$index。" + "読み返して引っかかったところを、本文の横に短く残しておく。".repeat(3), index.toLong(), "節A")
+        }
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(*memos.toTypedArray()),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        // メモは新しい順に並ぶので、いちばん古いメモが余白の下端にある。そこまで送ると、位置が上限の近くになる。
+        val bottomMemo = memos.first().text
+        composeRule.onNodeWithText(bottomMemo).performScrollTo()
+        composeRule.waitForIdle()
+        val before = composeRule.onNodeWithText(bottomMemo).getUnclippedBoundsInRoot().top
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        val after = composeRule.onNodeWithText(bottomMemo).getUnclippedBoundsInRoot().top
+        assertEquals("余白の位置が戻っていない: $before → $after", before.value, after.value, 1f)
+    }
+
+    /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
+    @Test
+    fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            down(Offset(300.dp.toPx(), centerY))
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 200)
+            moveTo(Offset(120.dp.toPx(), centerY))
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** **帯が出ている間は横の払いで広げない。** 帯の操作と、本文に触れて帯をしまう操作が先。 */
+    @Test
+    fun 机の画面では帯が出ている間は横に払っても片側を広げない() {
+        setDesk()
+        openDeskBar()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = right - 300.dp.toPx(), endX = right - 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** 読み上げ（TalkBack）からは、つまみの操作で片側を1画面にして、2面へ戻せる。 */
+    @Test
+    fun 机の画面では読み上げの操作で片側を1画面にして戻せる() {
+        setDesk()
+
+        performGripAction("本文を1画面に")
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        performGripAction("2面に戻す")
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /**
+     * **右で眺めている関連ノートを隠して本文だけにし、まだ頼んでいない節の要約を頼んでも、並べ読みは残る。**
+     * 要約は面を出さずに1回だけ頼み、2面へ戻すと同じ関連ノートが出る。並べ読みを閉じていたときは、戻ると余白の面になっていた。
+     */
+    @Test
+    fun 机の画面で並べ読みを隠して本文だけにし_要約を頼んでも_戻すと並べ読みが残っている() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val requests = mutableListOf<Boolean>()
+        var closes = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onRequestSectionSummary = { _, quietly -> requests += quietly },
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onCloseSideReading = {
+                            closes++
+                            state = state.copy(sideReading = SideReadingState.Idle)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertDoesNotExist()
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("面を出さずに1回だけ頼んでいない", listOf(true), requests)
+        assertEquals("背景で頼んだだけで並べ読みを閉じた", 0, closes)
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
+    private fun performGripAction(label: String) {
+        val actions = composeRule.onNodeWithContentDescription("操作を出す").fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions]
+        composeRule.runOnIdle { assertTrue(actions.first { it.label == label }.action()) }
+        composeRule.waitForIdle()
     }
 
     /** 机の画面の帯を、つまみを下へ払って出す。 */

@@ -1,0 +1,259 @@
+package com.example.newproject.ui
+
+import com.example.newproject.fakes.ScriptedPointerInput
+import com.example.newproject.ui.screen.DESK_SPREAD_FLING_DP_PER_SEC
+import com.example.newproject.ui.screen.DESK_SPREAD_SWIPE_DP
+import com.example.newproject.ui.screen.DeskFace
+import com.example.newproject.ui.screen.DeskFacePlacement
+import com.example.newproject.ui.screen.DeskSpread
+import com.example.newproject.ui.screen.DeskSpreadGesture
+import com.example.newproject.ui.screen.SummaryEntry
+import com.example.newproject.ui.screen.SupportingScrollMemory
+import com.example.newproject.ui.screen.closesSideReading
+import com.example.newproject.ui.screen.deskFacePlacement
+import com.example.newproject.ui.screen.deskPaneCountsAsFace
+import com.example.newproject.ui.screen.deskSpreadActionsFor
+import com.example.newproject.ui.screen.deskSpreadAfter
+import com.example.newproject.ui.screen.deskSpreadGestureFor
+import com.example.newproject.ui.screen.deskSpreadShowing
+import com.example.newproject.ui.screen.detectDeskSpread
+import com.example.newproject.ui.screen.isSpreadSwipe
+import com.example.newproject.ui.screen.position
+import com.example.newproject.ui.screen.shows
+import com.example.newproject.ui.screen.summaryEntryFor
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+// 机の画面で片側を払って1画面にする（→ features/margin_pane.md §5.1）。
+class DeskSpreadTest {
+
+    /** ゆっくりでも、横に十分な距離を払えば広げる。左へは左、右へは右。 */
+    @Test
+    fun `ゆっくりでも横に十分払えば、払った向きを返す`() {
+        assertEquals(DeskSpreadGesture.Left, deskSpreadGestureFor(dragDp = -DESK_SPREAD_SWIPE_DP, velocityDpPerSec = -10f))
+        assertEquals(DeskSpreadGesture.Right, deskSpreadGestureFor(dragDp = DESK_SPREAD_SWIPE_DP, velocityDpPerSec = 10f))
+    }
+
+    /** **短く素早く払う（フリック）でも広げる。** 距離だけで決めると、フリックでは何も起きない。 */
+    @Test
+    fun `横に短く素早く払うと、距離が足りなくても払った向きを返す`() {
+        assertEquals(DeskSpreadGesture.Left, deskSpreadGestureFor(dragDp = -20f, velocityDpPerSec = -DESK_SPREAD_FLING_DP_PER_SEC))
+        assertEquals(DeskSpreadGesture.Right, deskSpreadGestureFor(dragDp = 20f, velocityDpPerSec = DESK_SPREAD_FLING_DP_PER_SEC))
+    }
+
+    /** 距離も速さも足りなければ何もしない。速さが距離と逆向きなら数えない。 */
+    @Test
+    fun `距離も速さも足りないか、速さが逆向きなら何もしない`() {
+        assertEquals(DeskSpreadGesture.None, deskSpreadGestureFor(dragDp = 40f, velocityDpPerSec = DESK_SPREAD_FLING_DP_PER_SEC - 1f))
+        assertEquals(DeskSpreadGesture.None, deskSpreadGestureFor(dragDp = -40f, velocityDpPerSec = 1_000f))
+        assertEquals(DeskSpreadGesture.None, deskSpreadGestureFor(dragDp = 40f, velocityDpPerSec = -1_000f))
+    }
+
+    /** 左へ払うと補助の面が、右へ払うと本文が広がる。1回の払いで1段だけ動く。 */
+    @Test
+    fun `払った向きへ仕切りを1段だけ動かす`() {
+        assertEquals(DeskSpread.SupportingOnly, deskSpreadAfter(DeskSpread.Both, DeskSpreadGesture.Left))
+        assertEquals(DeskSpread.MainOnly, deskSpreadAfter(DeskSpread.Both, DeskSpreadGesture.Right))
+        // 1画面から逆へ払えば2面へ戻り、反対の片側へ一度に跳ばない。
+        assertEquals(DeskSpread.Both, deskSpreadAfter(DeskSpread.MainOnly, DeskSpreadGesture.Left))
+        assertEquals(DeskSpread.Both, deskSpreadAfter(DeskSpread.SupportingOnly, DeskSpreadGesture.Right))
+    }
+
+    /** 端ではそれ以上動かない。払わなかったら変えない。 */
+    @Test
+    fun `端と払わなかったときは変えない`() {
+        assertEquals(DeskSpread.SupportingOnly, deskSpreadAfter(DeskSpread.SupportingOnly, DeskSpreadGesture.Left))
+        assertEquals(DeskSpread.MainOnly, deskSpreadAfter(DeskSpread.MainOnly, DeskSpreadGesture.Right))
+        DeskSpread.entries.forEach { assertEquals(it, deskSpreadAfter(it, DeskSpreadGesture.None)) }
+    }
+
+    /** **隠れた面の中身へ送る依頼が来たら2面へ戻す。** 見えている面へ送るなら広げ方を変えない。 */
+    @Test
+    fun `隠れた面へ送るときだけ2面へ戻す`() {
+        assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Supporting))
+        assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.SupportingOnly, DeskFace.Main))
+        assertEquals(DeskSpread.MainOnly, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Main))
+        assertEquals(DeskSpread.SupportingOnly, deskSpreadShowing(DeskSpread.SupportingOnly, DeskFace.Supporting))
+        DeskFace.entries.forEach { assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.Both, it)) }
+    }
+
+    /**
+     * **本文だけにしている間に、まだ頼んでいない節の要約を頼むと、背景で始めるだけで隠した並べ読みを閉じない。**
+     * 頼んだ節をもう一度押して見に行くときは、ペインを戻して並べ読みを閉じる。2面ではペインに出すので閉じる。
+     */
+    @Test
+    fun `本文だけで頼んだ要約は背景で始めるだけで、隠した並べ読みを閉じない`() {
+        fun entryIn(spread: DeskSpread, requested: Boolean) =
+            summaryEntryFor(paneVisible = spread.shows(DeskFace.Supporting), sheetVisible = false, requested = requested)
+
+        assertEquals(SummaryEntry.Background, entryIn(DeskSpread.MainOnly, requested = false))
+        assertFalse(entryIn(DeskSpread.MainOnly, requested = false).closesSideReading())
+        assertTrue(entryIn(DeskSpread.MainOnly, requested = true).closesSideReading())
+        assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Supporting))
+        assertTrue(entryIn(DeskSpread.Both, requested = false).closesSideReading())
+    }
+
+    /**
+     * 理由を見せるとき、本文だけにして隠したペインは出ている面として数えず、戻して見せる。
+     * **並べ読みを隠しているときは数える** — 戻してもペインは並べ読みのままで理由の行が無く、並べ読みを閉じてまで見せない。
+     */
+    @Test
+    fun `理由を見せるとき、隠したペインは数えないが、並べ読みを隠しているなら数える`() {
+        assertFalse(deskPaneCountsAsFace(DeskSpread.MainOnly, reading = false))
+        assertTrue(deskPaneCountsAsFace(DeskSpread.MainOnly, reading = true))
+        listOf(DeskSpread.Both, DeskSpread.SupportingOnly).forEach { spread ->
+            listOf(false, true).forEach { reading -> assertTrue("$spread $reading", deskPaneCountsAsFace(spread, reading)) }
+        }
+    }
+
+    /** 読み上げの操作は、払いで行ける先と同じ。1画面からは2面へ戻すだけ。 */
+    @Test
+    fun `読み上げの操作は払いで行ける先と同じ`() {
+        DeskSpread.entries.forEach { spread ->
+            val reachable = DeskSpreadGesture.entries.map { deskSpreadAfter(spread, it) }.filter { it != spread }.toSet()
+            assertEquals(spread.name, reachable, deskSpreadActionsFor(spread).map { it.second }.toSet())
+        }
+    }
+
+    /** 2面では、本文は左端から本文の幅、補助の面は溝の向こうから残りの幅。 */
+    @Test
+    fun `2面では本文と補助の面を溝を挟んで並べる`() {
+        assertEquals(DeskFacePlacement(mainX = 0f, mainWidth = 398f, supportingX = 414f, supportingWidth = 398f), placementAt(DeskSpread.Both))
+    }
+
+    /** 本文だけでは本文が窓の幅いっぱいになり、補助の面は**元の幅のまま**窓の右の外にいる。 */
+    @Test
+    fun `本文だけでは本文が窓いっぱいで、補助の面は元の幅のまま右の外にいる`() {
+        val placement = placementAt(DeskSpread.MainOnly)
+        assertEquals(0f, placement.mainX)
+        assertEquals(TOTAL, placement.mainWidth)
+        assertEquals(398f, placement.supportingWidth)
+        assertEquals(true, placement.supportingX >= TOTAL)
+    }
+
+    /** 補助の面だけでは補助の面が窓の幅いっぱいになり、本文は**元の幅のまま**窓の左の外にいる。 */
+    @Test
+    fun `補助の面だけでは補助の面が窓いっぱいで、本文は元の幅のまま左の外にいる`() {
+        val placement = placementAt(DeskSpread.SupportingOnly)
+        assertEquals(0f, placement.supportingX)
+        assertEquals(TOTAL, placement.supportingWidth)
+        assertEquals(398f, placement.mainWidth)
+        assertEquals(true, placement.mainX + placement.mainWidth <= 0f)
+    }
+
+    /**
+     * **滑っている途中は、広がる面だけが幅を変え、隠れる面は元の幅のまま。** 隠れる面まで縮めると、
+     * 滑っている間ずっと中身が折り返し直される。面どうしは溝より近づかない。
+     */
+    @Test
+    fun `滑っている途中は広がる面だけが幅を変え、溝を保つ`() {
+        listOf(0.25f, 0.5f, 0.75f).forEach { t ->
+            val toMain = deskFacePlacement(t, TOTAL, MAIN, GUTTER)
+            assertEquals(398f, toMain.supportingWidth)
+            assertEquals(GUTTER, toMain.supportingX - (toMain.mainX + toMain.mainWidth), 0.001f)
+
+            val toSupporting = deskFacePlacement(-t, TOTAL, MAIN, GUTTER)
+            assertEquals(398f, toSupporting.mainWidth)
+            assertEquals(GUTTER, toSupporting.supportingX - (toSupporting.mainX + toSupporting.mainWidth), 0.001f)
+        }
+    }
+
+    /** 面の上の横の払いは、離せば払った向きを1回だけ渡す。縦の払いと、動かさずに離した指は渡さない（本文のスクロールと押す操作に残す）。 */
+    @Test
+    fun `面の上で横に払って離せば払った向きを1回渡し、縦と押すだけなら渡さない`() {
+        assertEquals(listOf(DeskSpreadGesture.Left), spreadFor(ScriptedPointerInput.swipe(dx = -120f, dy = 0f, durationMillis = 300)))
+        assertEquals(listOf(DeskSpreadGesture.Right), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 30f, durationMillis = 300)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 30f, dy = -120f, durationMillis = 300)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 0f, dy = 0f, durationMillis = 200)))
+    }
+
+    /**
+     * **横とみなすのは、横の移動が縦の2倍を超えたときだけ。** 縦より大きいだけで横にすると、真斜め45度に読み進める指で
+     * 片側が広がった（実機で、100dp ずつ右上・左上へ払うと1画面になった）。
+     */
+    @Test
+    fun `横の移動が縦の2倍を超えたときだけ横の払いとみなす`() {
+        assertTrue(isSpreadSwipe(dx = 18f, dy = 0f))
+        assertTrue(isSpreadSwipe(dx = -18f, dy = 4.5f))
+        assertTrue(isSpreadSwipe(dx = 18.1f, dy = -9f))
+        assertFalse(isSpreadSwipe(dx = 18f, dy = 9f))
+        assertFalse(isSpreadSwipe(dx = 13f, dy = -13f))
+        assertFalse(isSpreadSwipe(dx = -15.6f, dy = 9f))
+        assertFalse(isSpreadSwipe(dx = 4.5f, dy = 18f))
+    }
+
+    /** 真斜め45度と、30度ほど傾いた払いでは広げない（本文のスクロールへ渡す）。 */
+    @Test
+    fun `斜めに払っても広げない`() {
+        listOf(100f to -100f, -100f to -100f, 100f to 100f, 120f to -70f).forEach { (dx, dy) ->
+            assertEquals("dx=$dx dy=$dy", emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = dx, dy = dy, durationMillis = 300)))
+        }
+    }
+
+    /**
+     * **横と決まって十分に動いた後でも、取り消されて終わった払いでは広げない。** 途中でシステムなどへ渡って取り消されると、
+     * Compose は最後と同じ位置の使用済みの指離しを渡してくる。普通の指離しと同じに数えると、渡したはずの払いをこちらでも確定する。
+     */
+    @Test
+    fun `横と決まった後に取り消された払いでは広げない`() {
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = -120f, dy = 0f, durationMillis = 300, cancelled = true)))
+        assertEquals(emptyList<DeskSpreadGesture>(), spreadFor(ScriptedPointerInput.swipe(dx = 120f, dy = 0f, durationMillis = 300, cancelled = true)))
+    }
+
+    /**
+     * **余白を1画面に広げて戻したら、広げる前の位置へ戻す。** 画素で位置を持つ余白の面は、広がって中身が短くなると位置が縮められ、
+     * 戻しても元に戻らなかった（実機で、関連の見出しの上端が 1272→1452px）。覚えるのは2面から補助の面だけへ広げるときだけ。
+     */
+    @Test
+    fun `余白を1画面に広げる前の位置を覚え、戻したら返す`() {
+        val memory = SupportingScrollMemory()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.MainOnly, scrollValue = 900)
+        assertNull("本文だけへ広げるときは覚えない", memory.restoreTarget())
+
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        assertEquals(900, memory.restoreTarget())
+        memory.forget()
+        assertNull(memory.restoreTarget())
+    }
+
+    /** **1画面の間に面が動いたら戻さない**（利用者のスクロールか、面の中の送り）。動いた先を残す。 */
+    @Test
+    fun `1画面の間に動いたら戻さない`() {
+        val memory = SupportingScrollMemory()
+        memory.movedWhileWide()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        assertEquals("覚える前の動きは数えない", 900, memory.restoreTarget())
+
+        memory.movedWhileWide()
+        assertNull(memory.restoreTarget())
+        memory.forget()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 300)
+        assertEquals("次に広げるときは改めて覚える", 300, memory.restoreTarget())
+    }
+
+    /**
+     * **戻し終える前にもう一度広げたら覚え直さない。** そのときの位置は戻す途中の値（縮められたまま）で、広げる前の位置ではない。
+     */
+    @Test
+    fun `戻し終える前にもう一度広げても、最初に広げる前の位置を持ち続ける`() {
+        val memory = SupportingScrollMemory()
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 260)
+        assertEquals(900, memory.restoreTarget())
+    }
+
+    private fun spreadFor(events: List<androidx.compose.ui.input.pointer.PointerEvent>): List<DeskSpreadGesture> =
+        ScriptedPointerInput.run(events) { onGesture -> detectDeskSpread(onGesture) }
+
+    private fun placementAt(spread: DeskSpread) = deskFacePlacement(spread.position, TOTAL, MAIN, GUTTER)
+
+    private companion object {
+        // 平らに開いた Pixel 10 Pro Fold の机の画面に近い寸法。
+        const val MAIN = 398f
+        const val GUTTER = 16f
+        const val TOTAL = MAIN + GUTTER + 398f
+    }
+}

@@ -17,23 +17,38 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
@@ -84,6 +99,14 @@ internal const val DESK_BAR_SWIPE_DP = 24f
 internal const val DESK_BAR_FLING_DP_PER_SEC = 125f
 
 /**
+ * 帯が降りて出る時間と、仕切りが滑る時間。机の画面で動くものはこの速さにそろえ、終わりで減速する。
+ */
+internal const val DESK_MOTION_MILLIS = 250
+
+/** 帯が巻き上がってしまう時間。出るときより短い — しまうのは読むことへ戻る操作なので、待たせない。 */
+internal const val DESK_BAR_HIDE_MILLIS = 200
+
+/**
  * 机の画面で、本文とペインの上に置く余白の高さ。**両方に同じだけ置く** — 片方にだけ置くと上端がずれ、同じ大きさに見えない。
  * 左ではここがつまみになり、払い始められる高さを兼ねる（触れる部品の下限 48dp）。
  */
@@ -91,14 +114,21 @@ internal val DeskStripHeight = 48.dp
 
 /**
  * 左の面の上のつまみ。**下へ払うと帯を出す。指で押しても開かない**（→ features/margin_pane.md §5.1）。
- * 本文の縦のスクロールと取り合わないよう、払いはここでだけ受ける。
+ * 本文の縦のスクロールと取り合わないよう、縦の払いはここでだけ受ける（横の払いは面のどこからでも受ける → [detectDeskSpread]）。
  * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
  * これを外すと帯の ✎ にも届かず、机の画面から抜けられない。この操作は読み上げ機能だけが呼び、指で押しても呼ばれない。
  * 読み込み中は端にくるくるを出す — 帯がしまわれている間も、次のノートを読んでいることが分かるように。
  */
 @Composable
-internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modifier = Modifier) {
+internal fun DeskGripStrip(
+    loading: Boolean,
+    onShow: () -> Unit,
+    spread: DeskSpread,
+    onSpread: (DeskSpread) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val currentOnShow by rememberUpdatedState(onShow)
+    val currentOnSpread by rememberUpdatedState(onSpread)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -112,6 +142,13 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
                 onClick(label = "操作を出す") {
                     currentOnShow()
                     true
+                }
+                // 片側を1画面にする横の払いも、読み上げ中は払えないので操作として置く（→ deskSpreadActionsFor）。
+                customActions = deskSpreadActionsFor(spread).map { (label, next) ->
+                    CustomAccessibilityAction(label) {
+                        currentOnSpread(next)
+                        true
+                    }
                 }
             },
         contentAlignment = Alignment.Center
@@ -134,13 +171,16 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
  * **器の外に置かないと、はみ出した分が指を受け取らない。** 帯が出ている間は置かない — 帯の上の操作を横取りする。
  */
 @Composable
-internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit) {
+internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpread: (DeskSpreadGesture) -> Unit) {
     val currentOnShow by rememberUpdatedState(onShow)
+    val currentOnSpread by rememberUpdatedState(onSpread)
     Box(
         modifier = Modifier
             .offset(y = -reachAbove)
             .width(width)
             .height(reachAbove + DeskStripHeight)
+            // 面の上に重ねて置くので、ここで払い始めた指は面へ届かない。横の払いもここで受ける。
+            .pointerInput(Unit) { detectDeskSpread { gesture -> currentOnSpread(gesture) } }
             .pointerInput(Unit) {
                 detectDeskGrip { gesture -> if (gesture == DeskBarGesture.Show) currentOnShow() }
             }
@@ -153,16 +193,29 @@ internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit) {
  * ボタンの上から払い始めても、そのボタンは押さない — 帯が子より先に指を見て、動いたと言えた時点で使うので、
  * ボタンは押下を取り消す。
  *
- * 背景は画面と同じ地にし、**はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
+ * **地は画面の地と同じグラデーションを、画面の中のこの帯の位置から描く**（[backdrop]）。帯の大きさで描くと、
+ * 藍から珊瑚色までの全部が帯の中へ縮まり、後ろの背景とつながらない。降りる途中も地は画面に留まり、背景が降りてくるように見える。
+ * 見出しの霞はフェードを付けない — 帯の中ほどで横縞に見える。下端には薄い影を落とし、本文との境目にする。
+ * **はみ出しを切る** — 見出しの霞は左右の余白へ広げて描くので、切らないと溝とペインの上へかかる。
+ * 影は帯の外へ落ちるので、その分だけ下に余白を取る（帯を出し入れする器は、上の縁で切るために自分の外を切る）。
  */
 @Composable
-internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val currentOnHide by rememberUpdatedState(onHide)
+    val gradient = ReadingGradient
+    var origin by remember { mutableStateOf(Offset.Zero) }
     Column(
         modifier = modifier
+            .padding(bottom = DeskBarShadowRoom)
             .fillMaxWidth()
+            .onGloballyPositioned { origin = it.positionInWindow() }
+            .shadow(DeskBarElevation, RectangleShape, clip = false)
             .clipToBounds()
-            .background(ReadingGradient)
+            .drawBehind {
+                translate(backdrop.origin.x - origin.x, backdrop.origin.y - origin.y) {
+                    drawRect(gradient, size = backdrop.size)
+                }
+            }
             .pointerInput(Unit) {
                 detectDeskGrip(PointerEventPass.Initial) { gesture -> if (gesture == DeskBarGesture.Hide) currentOnHide() }
             }
@@ -187,6 +240,27 @@ internal fun DeskBar(onHide: () -> Unit, modifier: Modifier = Modifier, content:
             contentAlignment = Alignment.Center
         ) { GripPill() }
     }
+}
+
+/** 帯の下端に落とす影の高さ。 */
+private val DeskBarElevation = 4.dp
+
+/** 帯の影が落ちる分の、帯の下の余白。 */
+private val DeskBarShadowRoom = 8.dp
+
+/**
+ * 読む画面の地（[ReadingGradient]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。
+ */
+@Stable
+internal class DeskBackdrop {
+    var origin by mutableStateOf(Offset.Zero)
+    var size by mutableStateOf(Size.Zero)
+}
+
+/** この要素を、読む画面の地を敷いた箱として [backdrop] へ知らせる。地を敷くのと同じ要素の、地より前に付ける。 */
+internal fun Modifier.reportDeskBackdrop(backdrop: DeskBackdrop): Modifier = onGloballyPositioned {
+    backdrop.origin = it.positionInWindow()
+    backdrop.size = it.size.toSize()
 }
 
 /**
@@ -226,8 +300,10 @@ private fun GripPill() {
  * **押すと払うを1つの検出で受ける。** 押す部品と払う部品を重ねると、払った量を指が動き始めてからしか数えず、
  * 短いフリックが判定に届かない。ここでは触れた位置から離した位置までを数える。
  * 動いたと言えてからの指は使い、ほかへ渡さない。
+ * **取り消された指では何もしない**（Compose は使用済みの指離しとして渡してくる → [detectDeskSpread]）。
+ * 自分で使う前から使用済みの指は、取り消されたか、ほかが取った指として手放す。
  */
-private suspend fun PointerInputScope.detectDeskGrip(
+internal suspend fun PointerInputScope.detectDeskGrip(
     pass: PointerEventPass = PointerEventPass.Main,
     onGesture: (DeskBarGesture) -> Unit
 ) {
@@ -240,6 +316,7 @@ private suspend fun PointerInputScope.detectDeskGrip(
         var last = down
         while (true) {
             val change = awaitPointerEvent(pass).changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+            if (change.isConsumed) return@awaitEachGesture
             velocity.addPointerInputChange(change)
             last = change
             val offset = change.position - down.position

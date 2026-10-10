@@ -22,9 +22,15 @@ import com.example.newproject.domain.sectionSummaryEntrySymbol
 import com.example.newproject.domain.sectionSummaryStatus
 import com.example.newproject.domain.summaryOf
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,8 +82,11 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -281,6 +290,8 @@ internal fun NoteReaderTab(
     // 本文領域の上端（窓の座標）。机の画面で、つまみの上の余白まで払い始める場所に含めるのに使う（→ DeskGripReach）。
     var regionTopDp by remember { mutableStateOf<Float?>(null) }
     val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+    val deskBackdrop = remember { DeskBackdrop() }
     val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
         when (toggle) {
             MarginToggle.HideSheet -> dismissMemoSheet()
@@ -295,13 +306,16 @@ internal fun NoteReaderTab(
 
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みと机の画面の帯で食い違わせない）。
     // afterAction はどのボタンを押した後にも呼ぶ。机の画面の帯は、押したら帯をしまう。
+    // inDeskBar は机の画面の帯の中か。帯の中では見出しの霞の下のフェードを描かない（→ DeskBar）。
     val controls: @Composable ColumnScope.(
         memoToggle: MarginToggle,
         onSummaryEntry: () -> Unit,
+        inDeskBar: Boolean,
         afterAction: () -> Unit
-    ) -> Unit = { memoToggle, onSummaryEntry, afterAction ->
+    ) -> Unit = { memoToggle, onSummaryEntry, inDeskBar, afterAction ->
         // 未選択時はVault案内、通常時はコンセプト文を出す。
         GradientHeader(
+            fade = !inDeskBar,
             title = "Rediscover",
             subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
             else "過去のノートから、思考をひとつ。",
@@ -453,6 +467,8 @@ internal fun NoteReaderTab(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
+            // 机の画面の帯は、この地と同じグラデーションをここに合わせて描く（→ DeskBar）。
+            .reportDeskBackdrop(deskBackdrop)
             .background(ReadingGradient)
             // **並べ方はキーボードを含めない大きさで決める**（→ readerLayoutFor）。キーボードの分は内側で避ける。
             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
@@ -480,6 +496,33 @@ internal fun NoteReaderTab(
             regionStartDp = regionStartDp ?: 0f
         )
         val paneVisible = layout is ReaderLayout.MarginPane
+        // 机の画面の操作の帯と広げ方（→ DeskSpread）。**しまった状態と2面から始める** — ペインを出し直したときも、ノートを替えたときも。
+        var deskBarShown by remember(paneVisible, currentNoteUri) { mutableStateOf(false) }
+        var deskSpread by remember(paneVisible, currentNoteUri) { mutableStateOf(DeskSpread.Both) }
+        // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
+        // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
+        val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
+        val paneScrollMemory = remember(paneVisible, currentNoteUri) { SupportingScrollMemory() }
+        // 広げ方を替える。**本文だけにするときは書いているつもりを落とす** — 入力欄は組んだまま隠れるので、見えない欄へ打ち込ませない。
+        val spreadTo: (DeskSpread) -> Unit = { next ->
+            if (!next.shows(DeskFace.Supporting) && memoFocusIntent) {
+                onMemoFocusIntentChange(false)
+                focusManager.clearFocus()
+            }
+            deskBarShown = false
+            paneScrollMemory.beforeSpread(deskSpread, next, paneScroll.value)
+            deskSpread = next
+        }
+        // 面の中身へ送る依頼の前に、その面が隠れていれば2面へ戻す（→ deskSpreadShowing）。
+        val showDeskFace: (DeskFace) -> Unit = { face -> spreadTo(deskSpreadShowing(deskSpread, face)) }
+        // 横の払いで仕切りを1段動かす。**帯が出ている間は受けない** — 帯の操作と、本文に触れて帯をしまう操作が先。
+        val onSpreadGesture: (DeskSpreadGesture) -> Unit = { gesture -> spreadTo(deskSpreadAfter(deskSpread, gesture)) }
+        val currentOnSpreadGesture by rememberUpdatedState(onSpreadGesture)
+        val spreadSwipe = Modifier.pointerInput(deskBarShown) {
+            if (!deskBarShown) detectDeskSpread { gesture -> currentOnSpreadGesture(gesture) }
+        }
+        // ペインが見えているか。本文だけにしている間は、組んだまま隠れている。
+        val paneShown = paneVisible && deskSpread.shows(DeskFace.Supporting)
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
         // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
         // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。
@@ -492,26 +535,35 @@ internal fun NoteReaderTab(
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
             // 右で眺めている間は、余白へ戻してから送る（メモは余白の面にある）。
             if (reading) onCloseSideReading()
-            if (!paneVisible) onOpenMarginMemo()
+            if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             memoReveal = reveal
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
         // 見出しの要約ボタン（→ features/margin_pane.md §5.4）。面が出ていれば、要約を始めてその面の要約の行まで送る。
         // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
+        // 本文だけにしている机の画面は、面が出ていないときと同じに扱い、見に行くときはシートに代えてペインを戻す。
+        // 並べ読みを閉じるのは要約の行を見せる入口だけ（→ closesSideReading）。
         val openSummary: () -> Unit = {
-            val entry = summaryEntryFor(paneVisible, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
-            if (reading) onCloseSideReading()
-            if (entry == SummaryEntry.Sheet) onOpenMarginMemo()
+            val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
+            if (reading && entry.closesSideReading()) onCloseSideReading()
+            if (entry == SummaryEntry.Sheet) {
+                if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
+            }
             bodySection?.let { onRequestSectionSummary(it, entry == SummaryEntry.Background) }
             if (entry != SummaryEntry.Background) summaryReveal = ++summaryRevealCount
         }
         // 面を出さずに頼んだ要約に、端末AIが使えない理由が届いていて、どの面も出ていなければ開く（→ opensFaceForNotice）。
         // **見るのは今の本文の節の要約だけ。** 見せたことは理由の行が組まれたときに行が伝えるので、ここでは開くだけにする。
-        val opensNotice = opensFaceForNotice(faceSummary, faceVisible = paneVisible || uiState.isMarginMemoSheetVisible)
+        val opensNotice = opensFaceForNotice(
+            faceSummary,
+            faceVisible = (paneVisible && deskPaneCountsAsFace(deskSpread, reading)) || uiState.isMarginMemoSheetVisible
+        )
+        val currentPaneVisible by rememberUpdatedState(paneVisible)
+        val currentShowDeskFace by rememberUpdatedState(showDeskFace)
         LaunchedEffect(faceSummary?.requestId, opensNotice) {
             if (opensNotice) {
-                currentOnOpenMarginMemo()
+                if (currentPaneVisible) currentShowDeskFace(DeskFace.Supporting) else currentOnOpenMarginMemo()
                 summaryReveal = ++summaryRevealCount
             }
         }
@@ -543,9 +595,10 @@ internal fun NoteReaderTab(
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }
-        // 机の画面の操作の帯。**しまった状態から始める** — ペインを出し直したときも、ノートを替えたときも。
-        // 戻る操作は内側から — 帯が出ていれば、まず帯をしまう（並べ読みの戻るより先に効くよう、後に置く）。
-        var deskBarShown by remember(paneVisible, currentNoteUri) { mutableStateOf(false) }
+        // 戻る操作は内側から — 帯が出ていればまず帯をしまい、片側を1画面にしていれば次に2面へ戻す
+        // （後に置いた BackHandler ほど先に効く）。
+        BackHandler(enabled = deskSpread != DeskSpread.Both && paneVisible) { spreadTo(DeskSpread.Both) }
+        RestoreSupportingScroll(deskSpread, paneScroll, paneScrollMemory)
         BackHandler(enabled = deskBarShown && paneVisible) { deskBarShown = false }
         // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
         // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
@@ -607,7 +660,7 @@ internal fun NoteReaderTab(
             ) {
                 when (layout) {
                     ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                        if (!hideControls) controls(memoToggle, openSummary) {}
+                        if (!hideControls) controls(memoToggle, openSummary, false) {}
                         if (!hasNote) {
                             emptyNote()
                             // 余りをカードではなく余白へ逃がす。
@@ -636,7 +689,7 @@ internal fun NoteReaderTab(
                                 .fillMaxHeight()
                                 .verticalScroll(rememberScrollState())
                         ) {
-                            controls(memoToggle, openSummary) {}
+                            controls(memoToggle, openSummary, false) {}
                             traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
                         }
                         Spacer(modifier = Modifier.width(16.dp))
@@ -651,83 +704,119 @@ internal fun NoteReaderTab(
                     }
                     // 机の画面（→ features/margin_pane.md §5.1）。本文とペインを**同じ大きさ**で並べ、見出しと操作の行は出さない。
                     // 上に同じ高さの余白を両方へ置き（左はつまみ）、操作はつまみで呼ぶ帯に入れる。帯の出し入れで大きさは変えない。
-                    // **溝に折り目が入る**ので、文字と操作が折り目に重ならない。
-                    is ReaderLayout.MarginPane -> Row(modifier = Modifier.fillMaxSize()) {
-                        Box(modifier = Modifier.width(layout.bodyWidthDp.dp).fillMaxHeight()) {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                DeskGripStrip(loading = isLoading, onShow = { deskBarShown = true })
-                                if (!hasNote) {
-                                    emptyNote()
-                                    Spacer(modifier = Modifier.weight(1f))
-                                } else {
-                                    // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
-                                    val cardShown = !hideControls && visibleTraceCard != null
-                                    if (cardShown) traceCard(Modifier, openMemosFromCard)
-                                    notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark)
+                    // **溝に折り目が入る**ので、文字と操作が折り目に重ならない。横に払うと片側を1画面にする（→ DeskFaces）。
+                    is ReaderLayout.MarginPane -> DeskFaces(
+                        spread = deskSpread,
+                        mainWidth = layout.bodyWidthDp.dp,
+                        gutter = layout.gutterDp.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        main = {
+                            Box(modifier = Modifier.fillMaxSize().then(spreadSwipe)) {
+                                Column(modifier = Modifier.fillMaxSize()) {
+                                    // つまみと帯は2面のときの本文の幅に留める — 本文だけにしても、折り目にかからないように。
+                                    DeskGripStrip(
+                                        loading = isLoading,
+                                        onShow = { deskBarShown = true },
+                                        spread = deskSpread,
+                                        onSpread = spreadTo,
+                                        modifier = Modifier.width(layout.bodyWidthDp.dp)
+                                    )
+                                    if (!hasNote) {
+                                        emptyNote()
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    } else {
+                                        // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
+                                        val cardShown = !hideControls && visibleTraceCard != null
+                                        if (cardShown) traceCard(Modifier, openMemosFromCard)
+                                        notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark)
+                                    }
+                                }
+                                // 本文に触れて帯をしまう受け口は、帯と一緒に動かさない — 帯の中に入れると、滑る距離が帯の高さではなく面の高さになる。
+                                if (deskBarShown) {
+                                    DeskTouchCatcher(onTouch = { deskBarShown = false }, modifier = Modifier.matchParentSize())
+                                }
+                                // 帯は面の上の縁からシャッターのように降り、しまうときは巻き上がる。縁で切るので、窓の上の余白へははみ出さない。
+                                AnimatedVisibility(
+                                    visible = deskBarShown,
+                                    modifier = Modifier.clipToBounds(),
+                                    enter = slideInVertically(
+                                        initialOffsetY = { -it },
+                                        animationSpec = tween(DESK_MOTION_MILLIS, easing = FastOutSlowInEasing)
+                                    ),
+                                    exit = slideOutVertically(
+                                        targetOffsetY = { -it },
+                                        animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
+                                    )
+                                ) {
+                                    DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.bodyWidthDp.dp)) {
+                                        controls(memoToggle, openSummary, true) { deskBarShown = false }
+                                    }
                                 }
                             }
-                            if (deskBarShown) {
-                                DeskTouchCatcher(onTouch = { deskBarShown = false }, modifier = Modifier.matchParentSize())
-                                DeskBar(onHide = { deskBarShown = false }) {
-                                    controls(memoToggle, openSummary) { deskBarShown = false }
+                        },
+                        supporting = {
+                            Column(modifier = Modifier.fillMaxSize().then(spreadSwipe)) {
+                                Spacer(modifier = Modifier.height(DeskStripHeight))
+                                MarginPanePanel(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                    // 右で眺めている間は、余白の面に代えてそのノートを出す。
+                                    if (reading) {
+                                        SideReadingPane(
+                                            state = sideReading,
+                                            blocks = sideReadingBlocks,
+                                            imageLoader = imageLoader,
+                                            onBack = returnFromSide,
+                                            onMove = moveToNote,
+                                            onRetry = onOpenSideReading
+                                        )
+                                    } else MarginMemoSheetContent(
+                                        state = uiState.marginMemoState,
+                                        draft = memoDraft,
+                                        section = bodySection,
+                                        hasHeadings = sectionModel?.hasHeadings ?: false,
+                                        // 本文へ飛ぶので、本文が隠れていれば2面へ戻す。
+                                        onJumpToSection = { ref ->
+                                            showDeskFace(DeskFace.Main)
+                                            jumpToSection(ref)
+                                        },
+                                        arranged = arrangedMemos,
+                                        reveal = memoReveal,
+                                        onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
+                                        onEdit = onEditMemo,
+                                        onSubmit = onSubmitMemo,
+                                        onDelete = onDeleteMarginMemo,
+                                        modifier = Modifier.padding(top = 16.dp),
+                                        scrollState = paneScroll,
+                                        focusIntent = memoFocusIntent,
+                                        onFocusIntentChange = onMemoFocusIntentChange,
+                                        active = deskSpread.shows(DeskFace.Supporting),
+                                        previousReadingAt = previousReadingAt,
+                                        summaryRow = summaryRow,
+                                        revealSummary = summaryReveal,
+                                        onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) },
+                                        related = PaneRelatedInputs(
+                                            candidates = shownRelated?.candidates,
+                                            expanded = shownRelated?.expanded ?: false,
+                                            onToggle = { shownRelated?.let { relatedList = it.copy(expanded = !it.expanded) } },
+                                            onOpen = openSide,
+                                            reveal = relatedReveal,
+                                            onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) }
+                                        )
+                                    )
                                 }
                             }
                         }
-                        Spacer(modifier = Modifier.width(layout.gutterDp.dp))
-                        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                            Spacer(modifier = Modifier.height(DeskStripHeight))
-                            MarginPanePanel(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                // 右で眺めている間は、余白の面に代えてそのノートを出す。
-                                if (reading) {
-                                    SideReadingPane(
-                                        state = sideReading,
-                                        blocks = sideReadingBlocks,
-                                        imageLoader = imageLoader,
-                                        onBack = returnFromSide,
-                                        onMove = moveToNote,
-                                        onRetry = onOpenSideReading
-                                    )
-                                } else MarginMemoSheetContent(
-                                    state = uiState.marginMemoState,
-                                    draft = memoDraft,
-                                    section = bodySection,
-                                    hasHeadings = sectionModel?.hasHeadings ?: false,
-                                    onJumpToSection = jumpToSection,
-                                    arranged = arrangedMemos,
-                                    reveal = memoReveal,
-                                    onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
-                                    onEdit = onEditMemo,
-                                    onSubmit = onSubmitMemo,
-                                    onDelete = onDeleteMarginMemo,
-                                    modifier = Modifier.padding(top = 16.dp),
-                                    focusIntent = memoFocusIntent,
-                                    onFocusIntentChange = onMemoFocusIntentChange,
-                                    active = true,
-                                    previousReadingAt = previousReadingAt,
-                                    summaryRow = summaryRow,
-                                    revealSummary = summaryReveal,
-                                    onSummaryRevealHandled = { handled -> summaryReveal = pendingAfterReveal(summaryReveal, handled) },
-                                    related = PaneRelatedInputs(
-                                        candidates = shownRelated?.candidates,
-                                        expanded = shownRelated?.expanded ?: false,
-                                        onToggle = { shownRelated?.let { relatedList = it.copy(expanded = !it.expanded) } },
-                                        onOpen = openSide,
-                                        reveal = relatedReveal,
-                                        onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) }
-                                    )
-                                )
-                            }
-                        }
-                    }
+                    )
                 }
             }
             // 机の画面で帯がしまわれている間は、つまみの上の余白も払い始める場所にする（→ DeskGripReach）。
             // シートの器の外（ここ）に置く — 器の内側では、はみ出した分が指を受け取らない。
-            if (layout is ReaderLayout.MarginPane && !deskBarShown) {
+            // 本文が隠れている間は置かない（つまみも本文と一緒に隠れている）。
+            if (layout is ReaderLayout.MarginPane && !deskBarShown && deskSpread.shows(DeskFace.Main)) {
                 DeskGripReach(
                     reachAbove = (regionTopDp ?: 0f).dp,
                     width = layout.bodyWidthDp.dp,
-                    onShow = { deskBarShown = true }
+                    onShow = { deskBarShown = true },
+                    onSpread = onSpreadGesture
                 )
             }
         }
