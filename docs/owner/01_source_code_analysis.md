@@ -1,6 +1,6 @@
 # ソースコード解析書
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 **この文書が答える問い:** いまコードがどうなっているか。構成・状態・データの流れ・検証の状態を、コードを開かずに見渡すための地図である。
 **測定日:** 2026-10-11。基準は `a3661274` で、作業ツリーは clean。測った値は §0 に集め、ほかの章には日付を書かない
 
@@ -76,18 +76,7 @@ grep -rhE '^[[:space:]]*@Test' app/src/androidTest | wc -l  # instrumentation件
 | `assembleDebugAndroidTest` | CI で通す |
 | instrumentation の実行 | 全188件を一度に通した実行は無い。着手した機能のケースだけを実機で走らせ、手順は `docs/review/device_validation/` が持つ |
 
-**実機でまだ確かめていないもの**
-
-- ランチャー再タップの起動ガードのうち、回転の1ケース
-- ネットワーク権限を除いたあとのモデルDL。未DLの状態を作りにはいかず、契機を待つ
-- 冊子の分割画面
-- 結晶が Nano 非対応の端末で何も出さないこと。対応端末しか手元に無い
-- 余白ペインのうち、実機で作れない順序。前回の訪問の保存が失敗した後の読み直しと、取り消した後に並べ読みの右の読み出しが遅れて届く順序は JVM が、シートが自動で広がる途中への指の割り込みは時計を止めた UI テストが持つ
-- 部分要約で、モデルの準備待ちから自然に使える状態へ移ったあとに同じ節を頼み直すこと。手元の端末は初めから使える状態だった。押し直すと確かめ直すことは JVM が持つ
-- BOM 付きノートの見出しの表示と、蒸留の書き戻しで BOM が残ること、冊子の扉の除外の規則、画面見出しの余白。オーナー判断で実機では確かめず、JVM と別の目のレビューで受理した
-- ノート内のリンクを読み上げ（TalkBack）から開くこと、暗い配色でのリンクの見え方
-
-Fold の物理的な開閉と外画面は、確かめないとオーナーが決めた。
+実機で確かめていない範囲は、各機能の正本の §10 が持つ。
 
 未対応の課題は [_wip/current_issues.md](../_wip/current_issues.md) が正本で、測定日の時点で中2件・低12件・超低1件ある。高は無い。
 
@@ -1375,18 +1364,12 @@ ML Kit の状態はアプリ内の5状態へ写す。判断の正本は [backgro
 
 ## 11. エラー処理とフォールバック
 
-### 11.1 備えているもの
-
-- ノート読込の失敗、AI 生成の失敗、モデルのダウンロードの失敗を sealed state で UI へ伝える
+- ノート読込の失敗、AI 生成の失敗、モデルのダウンロードの失敗は sealed state で UI へ伝える
 - 関連ノートは AI が失敗しても規則ベースの結果を保つ
-- AI の空応答には、要約文・部分要約・分野判定の応答読み取りで一定の備えがある
+- AI の空応答は、要約文・部分要約・分野判定の応答読み取りで受け止める
 - プロンプトに書いた契約は検査に移す。分野判定は行の全体がIDのときだけ受け付け、蒸留は許可集合の外のIDを捨てる
-
-### 11.2 注意点
-
-- フォルダ一覧の取得に失敗しても、ユーザーには知らせない
-- 閲覧履歴の JSON が読めなければ空の履歴として扱う。失うのは履歴だけ
-- `openInputStream()` が `null` なら空文字を返すので、読込の失敗と空のノートを見分けない
+- フォルダ一覧の取得に失敗したときは知らせない。閲覧履歴の JSON が読めなければ空の履歴として扱う
+- `openInputStream()` が `null` なら空文字として読む。読込の失敗と空のノートは同じに見える
 
 ---
 
@@ -1448,23 +1431,7 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 - `assembleDebugAndroidTest` が保証するのはテストAPKのコンパイルと組み立てまでで、instrumentation は実行しない。エミュレータのジョブは置かないと決めてあり、判断と再検討の条件は [instrumentation_testing](../dev/system/instrumentation_testing.md) の判断4 にある
 - Lint は `warningsAsErrors` で警告があるとビルドが落ちる。依存更新の3チェック `GradleDependency`・`NewerVersionAvailable`・`AndroidGradlePluginVersion` だけは hint として報告する。件数はキャッシュ次第で揺れるので、回帰の基準値に使わない → [dependency_policy](../dev/system/dependency_policy.md)
 
-### 13.4 覆っていないもの
-
-- `NoteViewModel` 自体。`AndroidViewModel` と `Uri` を素のJVMで作れない。壊れやすい調停は `NoteSessionCoordinator` へ、走査キャッシュは `NoteScanCache` へ出してJVMで見ており、残るのはノート読込・関連ノート・結晶の一覧の走査を止める配線といった `ContentResolver` に依存する経路
-- `SearchController.onVaultChanged()` が落とすスコープのキャッシュとジョブ。観測できる副作用が `ContentResolver` を要する経路にしか無い
-- `RelatedNotesUseCase` の結線全体と、`SearchPickerUseCase` の AI 応答の解釈。部品の純ロジックは個別に覆っている
-- `NoteHistoryStore` の日付判定と重複排除
-- `PromptBuilder` の出力契約のうち、要約・関連・ピッカー・部分要約・分野判定・再会カードの選別。抜粋と予算の共通の検査は9本すべてに掛かり、蒸留と前後の要約は専用の検査が覆っている
-- 読書痕跡の Compose 実レイアウト上の可視量、Activity のライフサイクルを通した一時停止と再開、SAF Gateway での実 Vault の照合
-- 余白メモの保存が失敗した後の順序の実機での確認。読めるのに書き込みだけ失敗する状態を実機で安全に作れないので、`ReadingTraceControllerTest` が持つ
-- Gemini Nano のダウンロードとタイムアウト。生成は9本のプロンプトのうち6本だけ
-- 端末AIの出力の意味。採点器は語の重なりしか測らず、実機の出力では忠実な文と誤りの文を閾値で分けられない
-- 画面幅による Rail の切替の描画。畳むかどうかの判定は JVM の `AppScaffoldRailTest` が見る
-- 連続操作での競合。タブの連打テストは競合を作れていない
-- 実際の Obsidian Vault を使った E2E。偽の Vault での経路は覆っている
-- 画面の佇まい。面の見え方・束の中身・繰る手触りは、どのテストにも掛からない。形の役割の取り違えは走査で固定できるが、どう見えるかは実機検証のケース表が判定する
-
-### 13.5 instrumentation の内訳
+### 13.4 instrumentation の内訳
 
 段階の定義と判断は [instrumentation_testing](../dev/system/instrumentation_testing.md) が持つ。全件を一度に通した実行は無い。
 
@@ -1493,14 +1460,6 @@ JBR は `/Applications` 直下ではなく `/Applications/AIセット/Android St
 土台は `src/debug` の `FakeVaultDocumentsProvider` で、`SafVaultBrowser` と `NoteRepository` を本番のまま動かす。
 `androidTest` ではなくアプリ側の debug ソースセットに置くのは、別APKにすると tree URI の権限付与が要るため。release には入らない。
 `@Test` の戻り値が `void` でなくなる書き方は、そのクラスのテストが全件起動しなくなるので `InstrumentationTestShapeTest` が JVM 側で禁じる。
-
-### 13.6 instrumentation が保証していない範囲
-
-件数が増えても、保護範囲が同じだけ広がるわけではない。次の3つは保証していない。
-
-- **タブの連打は試していない。** `performClick` は毎回 semantics を取り直して同期し、生の `MotionEvent` は Android 17 が instrumentation の UID からの注入を拒む。代わりにタブの履歴契約を「戻る」で観測する。`launchSingleTop` 単体の効果は、`restoreState` が肩代わりするので識別できていない
-- **`ActivityScenario.recreate()` はプロセスの死亡ではない。** 同じプロセスの中で Activity を作り直すだけで、Application・静的な状態・プロセス内のキャッシュは生き残る。プロセス死亡への耐性は保証していない
-- **端末AIの生成は9本のプロンプトのうち6本だけ。** 蒸留・検索ピッカー・再会カードの選別の3本は未保証。`PromptGenerationCoverageTest` が、builder を足したら覆うか未保証と宣言するまで落とす
 
 ---
 
