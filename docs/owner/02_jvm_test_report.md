@@ -395,7 +395,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `architecture/DistillProtectedScanTest.kt` | 2 | **保護範囲をカーソル越しにしか読まないことをソース走査で固定**（時間差が出ない二乗経路を形で縛る）。文書全体の保護範囲はモデルへ渡す1箇所でしか読まない |
 | `architecture/DistillRangeRebuildCostTest.kt` | 1 | **段の導出を候補状態の作り直しから呼ばないことをソース走査で固定**（自由範囲のドラッグではフレームごとに走るため） |
 | `architecture/GradientHeaderPaddingTest.kt` | 2 | **見出しを置く画面が `screenContentPadding()` で余白を取ること**と、見出しの面を広げる幅と左右の余白が同じ定数であることをソース走査で固定 |
-| `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ [解析書](01_source_code_analysis.md) §13.5） |
+| `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ [instrumentation_testing](../dev/system/instrumentation_testing.md) 判断9） |
 | `architecture/KotlinCommentScannerTest.kt` | 17 | コメントの字句解析（文字列リテラルやエスケープの中の記号をコメントと誤認しないこと） |
 | `architecture/NoteExcerptThreadingTest.kt` | 1 | 抜粋生成が本番の6ファイル9箇所すべてで `Dispatchers.Default` 側にあること（呼び出し箇所の一覧ごとソース走査で固定） |
 | `architecture/NoteScanExpiryWiringTest.kt` | 2 | 本文を書き換えた後は走査キャッシュを失効させるだけで、リンクの索引は捨てないこと。窓口の配線をソースで見る |
