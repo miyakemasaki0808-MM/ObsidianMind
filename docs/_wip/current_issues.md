@@ -428,7 +428,7 @@
 
 ## LINK-1. 蒸留の保存・復元後にノートへのリンクを開けない
 
-- **状態:** 未着手（2026-10-10、リンク機能の外部レビューP2-1）。机上で確認、実機は未検証。
+- **状態:** 修正済み・修正確認待ち（2026-10-10、リンク機能の外部レビューP2-1）。本文の書き換えでは走査の一覧だけを失効させ、リンクの索引は残すようにした。実機は未検証。
 - **現状:** [`NoteViewModel.reloadNoteBody`](../../app/src/main/java/com/example/newproject/NoteViewModel.kt) が本文の差し替え後に
   [`NoteScanCache.clear`](../../app/src/main/java/com/example/newproject/NoteScanCache.kt) を呼ぶ。リンク索引も空になるが、再走査は始まらない。
 - **再現:** 走査と関連候補の取得を終えたAで蒸留を保存、または太字を復元する。その後Aの `[[B]]`・`[B](B.md)` を押すと `NotReady` となり、待っても回復しない。

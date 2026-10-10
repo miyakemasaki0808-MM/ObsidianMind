@@ -703,7 +703,7 @@ class NoteViewModel internal constructor(
             )
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
-            noteScan.clear()
+            noteScan.expireAfterBodyWrite()
             relatedNotesUseCase.clearCache()
             true
         } catch (e: CancellationException) {

@@ -27,7 +27,10 @@ internal class NoteScanCache(
     var notes: List<NoteFile> = emptyList()
         private set
 
-    /** 本文のリンクを引くための索引（→ features/note_links.md §6）。[notes] と同じ時点で替わり、同じ時点で捨てる。 */
+    /**
+     * 本文のリンクを引くための索引（→ features/note_links.md §6）。[notes] と同じ時点で替わる。
+     * **捨てるのは Vault 切替（[clear]）だけ** — 本文の書き換え（[expireAfterBodyWrite]）では残す。
+     */
     var linkIndex: NoteLinkIndex = NoteLinkIndex.EMPTY
         private set
 
@@ -63,10 +66,19 @@ internal class NoteScanCache(
         return scanned
     }
 
-    /** 捨てる。Vault切替と、本文を書き換えた後に呼ぶ。 */
+    /** 捨てる。Vault切替で呼ぶ。リンクの索引も捨てる — 前の Vault の参照を返さない。 */
     fun clear() {
-        notes = emptyList()
+        expireAfterBodyWrite()
         linkIndex = NoteLinkIndex.EMPTY
+    }
+
+    /**
+     * 本文を書き換えた後に呼ぶ。一覧は更新日時を持つので捨て、次の [get] で走査し直す。
+     * **リンクの索引は残す。** 書き換えではノートの名前・パス・参照が変わらず、ここで捨てると、
+     * 本文を出したまま次の走査が起きるまで別のノートへのリンクを開けない。
+     */
+    fun expireAfterBodyWrite() {
+        notes = emptyList()
         loadedAt = 0L
         mutableKnownPaths.value = emptySet()
     }

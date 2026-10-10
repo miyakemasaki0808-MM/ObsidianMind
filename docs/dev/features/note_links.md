@@ -3,7 +3,7 @@
 **状態:** 実装済み。実機では未検証（→ §10）
 **最終検証:** 2026-10-10 / `0588ab53`（机上のみ。実機は §10）
 **関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
-**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / androidTest: `NoteLinkTapUiTest`（組み立てのみ。端末では未実行）
+**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / androidTest: `NoteLinkTapUiTest`（組み立てのみ。端末では未実行）
 **正本:** この文書
 
 **関連:** [Markdown解析](../system/markdown_rendering.md)（描画とインライン記法の解釈器）・
@@ -116,6 +116,9 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 - **引く材料はリンク用の索引である。** Vault 全体の走査結果（`NoteScanCache`）と同じ場所で持ち、走査を公開するたびに作り直し、Vault 切替で捨てる。
   中身は走査結果の写しなので、寿命は Vault 単位（→ [architecture](../system/architecture.md) 判断4の2行目）。
   索引の中の表は、初めて引いたときに組む
+- **本文の書き換え（蒸留の保存・太字の復元）では索引を残す。** 走査結果の一覧は更新日時を持つので書き換えの後に捨てて走査し直すが、
+  ノートの名前・パス・参照は変わらない。索引まで捨てると、本文を出したまま次の走査が起きるまで別のノートへのリンクを開けない
+  （`NoteScanCache.expireAfterBodyWrite` と `clear` の呼び分け）
 - **見出しへ送る依頼は画面の保存値に置く。** 「このノートへ移る」が右の位置を持ち越すのと同じ置き場で、Fold の開閉で画面が作り直されても失わない
 
 ## 7. システム設計
@@ -180,7 +183,8 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 
 - **JVMテスト:** `NoteLinksTest` — 記法の分け方・名前とパスの引き方・同じ名前の選び方・見出しの照合。この Vault で数えたリンクの型（表示名つき・表の中の `\|`・フォルダつき・相対の `.md`・`%20`・目次のアンカー・添付・外部URL）を写す。
   `MarkdownParserTest` — 表のセルを `\|` で割らない。`InlineMarkdownTest` — 押せるリンクだけに `LinkAnnotation` が付き、押す口が無ければ付かない。
-  `NoteLinkActionsTest` — 窓ごとの開き方と知らせ
+  `NoteLinkActionsTest` — 窓ごとの開き方と知らせ。`NoteScanCacheTest` — 本文の書き換えの後も索引が残り、Vault 切替で捨てる。
+  `NoteScanExpiryWiringTest` — 本文の読み直しが失効だけを呼ぶ
 - **instrumentation:** `NoteLinkTapUiTest` — 押すと開く・長押しでは開かない・リンクの上から縦にスクロールしても開かない
 - **実機確認:** 開いた Fold と閉じた外画面の両方で、目次の表のリンク・相対の `.md`・同じノートの目次を押す。
   リンクの上から長押しして文字を選べるか。スクロールの途中や横の払いで誤って開かないか

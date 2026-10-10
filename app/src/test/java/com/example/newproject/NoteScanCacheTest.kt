@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.domain.NoteLinkResolution
+import com.example.newproject.domain.markdown.scanInlineSyntax
+import com.example.newproject.domain.noteLinkOf
+import com.example.newproject.domain.resolveNoteLink
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.CancellationException
@@ -72,6 +76,37 @@ class NoteScanCacheTest {
         assertEquals(setOf("a.md"), cache.knownPaths.value)
         assertEquals(1, published.size)
     }
+
+    /**
+     * 本文を書き換えた後（蒸留の保存・太字の復元）も、リンクは引ける。書き換えでノートの名前・パス・参照は変わらず、
+     * 索引まで捨てると次の走査まで「読み込んでいます」が続く（→ features/note_links.md §6）。
+     */
+    @Test
+    fun `本文を書き換えた後もリンクの索引は残り、一覧は次に走査し直す`() = runTest {
+        var scans = 0
+        val scan = { scans++; listOf(note("A.md", "A-ref"), note("B.md", "B-ref")) }
+        cache.get(scan = scan, onPublished = ::record)
+
+        cache.expireAfterBodyWrite()
+
+        assertEquals(DocumentRef("B-ref"), (linkFromA("[[B]]") as NoteLinkResolution.Open).note.ref)
+        assertEquals(DocumentRef("B-ref"), (linkFromA("[x](B.md)") as NoteLinkResolution.Open).note.ref)
+        assertEquals(emptyList<NoteFile>(), cache.notes)
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals("書き換えの後は TTL 内でも走査し直す", 2, scans)
+    }
+
+    @Test
+    fun `Vaultを切り替えたらリンクの索引も捨てる`() = runTest {
+        cache.get(scan = { listOf(note("A.md", "A-ref"), note("B.md", "B-ref")) }, onPublished = ::record)
+
+        switchVault()
+
+        assertEquals(NoteLinkResolution.NotReady, linkFromA("[[B]]"))
+    }
+
+    private fun linkFromA(text: String): NoteLinkResolution =
+        resolveNoteLink(noteLinkOf(text, scanInlineSyntax(text).spans.single())!!, DocumentRef("A-ref"), cache.linkIndex)
 
     private fun switchVault() {
         generation++
