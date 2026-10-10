@@ -92,6 +92,8 @@ internal class AppColorScheme(
     val notePaper: NotePaperTones,
     // 冊子の紙の地色（分野）。**読む面には載せない**（→ bearing_channels 判断6）。
     val noteField: NoteFieldTones,
+    // 結晶の一覧の宝石（分野）。冊子の紙と同じ色相で、パネルの上に置く（→ reflect_crystal 判断11）。
+    val crystalGem: NoteFieldTones,
     val codePanel: Color,
     val panelTinted: Color,
     val panelBlue: Color,
