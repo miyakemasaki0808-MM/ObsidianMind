@@ -3,7 +3,7 @@
 **状態:** 実装済み。実機では未検証（→ §10）
 **最終検証:** 2026-10-10 / `eb5fa9ed`（机上のみ。実機は §10）
 **関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
-**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / androidTest: `NoteLinkTapUiTest`（組み立てのみ。端末では未実行）
+**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / androidTest: `NoteLinkTapUiTest`（閉じた外画面で7件成功。見張りを直した後の版は開いた画面で未実行）
 **正本:** この文書
 
 **関連:** [Markdown解析](../system/markdown_rendering.md)（描画とインライン記法の解釈器）・
@@ -138,7 +138,9 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 - **長押しでは開かせない。** Compose 1.7.3 のリンクは、リンクごとに押せる箱を重ねる作りで、長押しを受け取らない。
   そのため、長く押してから離しても「押した」になる（ソースで確かめた）。文字の選択は長押しで始まるので、
   そのまま使うと、リンクの上から選ぼうとした指を離した瞬間にノートが替わる。
-  本文の容器が子より先に指離しを見て、長押しの時間を超えていればリンクを開かない（→ §8 判断4）
+  本文の容器が子より先に指離しを見て、長押しの時間を超えていればリンクを開かない（→ §8 判断4）。
+  **見張りは `SelectionContainer` の修飾子ではなく、その内側の見張りだけを持つ層に置く。** 選択の容器の修飾子に付けると、
+  押下の途中で見張りが作り直され（`PointerInputResetException`）、指離しを受け取れずに長押しでもリンクが開く。実機で確かめた
 - **補助の面に押す口を渡さない。** `SideReadingPane` の本文は押せない文字列のまま描く
 
 ## 8. 設計判断と代替案
@@ -167,6 +169,7 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 代替案は、リンクごとに独自の押下の検出を書く形（`ClickableText` の形）。各 `Text` に配置の結果を受ける口が要るうえ、
 読み上げからリンクとして押す操作を失う。`LinkAnnotation` なら TalkBack からリンクとして押せる。
 見張りは指の時間だけを見るので、読み上げからの押下は止めない。
+**見張りの正しさは JVM では確かめられない。** 指の流れと Compose の配送の順に頼るので、端末で UI テストを流して確かめる。
 
 ### 判断5: 外部URLと戻る道は作らない
 

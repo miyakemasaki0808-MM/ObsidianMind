@@ -29,7 +29,8 @@ internal class NoteLinkTaps(private val onLink: (NoteLink) -> Unit) {
 internal val LocalNoteLinkTaps = staticCompositionLocalOf<NoteLinkTaps?> { null }
 
 /**
- * 長押しの後の指離しでリンクを開かせない見張り（→ features/note_links.md §8 判断4）。本文の容器に付ける。
+ * 長押しの後の指離しでリンクを開かせない見張り（→ features/note_links.md §8 判断4）。本文のリンクより外側の層に付ける。
+ * **`SelectionContainer` の修飾子には付けない** — 押下の途中で作り直され、指離しを受け取れない（→ `MarkdownNoteContent`）。
  *
  * Compose 1.7.3 のリンクはリンクごとに押せる箱を重ね、長押しを受け取らないので、長く押してから離しても「押した」になる。
  * 文字の選択は長押しで始まるので、そのままではリンクの上から選ぼうとした指を離した瞬間にノートが替わる。
