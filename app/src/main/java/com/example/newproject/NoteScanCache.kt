@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.domain.NoteLinkIndex
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,10 +37,13 @@ internal class NoteScanCache(
 
     private var loadedAt = 0L
 
-    private val mutableKnownPaths = MutableStateFlow<Set<String>>(emptySet())
+    private val mutableKnownNotes = MutableStateFlow<Map<String, DocumentRef>>(emptyMap())
 
-    /** いまのキャッシュにあるノートの相対パス。結晶の一覧で、根拠のノート名を押せるかを決める。 */
-    val knownPaths: StateFlow<Set<String>> = mutableKnownPaths.asStateFlow()
+    /**
+     * いまのキャッシュにあるノートの相対パスと参照。結晶の一覧で、根拠のノート名を押せるかを決め、
+     * 根拠のノートの分野を引く（分野の索引は参照で引く）。
+     */
+    val knownNotes: StateFlow<Map<String, DocumentRef>> = mutableKnownNotes.asStateFlow()
 
     /**
      * TTL内ならキャッシュを返し、切れていれば [scan] で走査して公開する。
@@ -59,9 +63,9 @@ internal class NoteScanCache(
         notes = scanned
         linkIndex = NoteLinkIndex(scanned)
         loadedAt = now
-        mutableKnownPaths.value = scanned.mapNotNullTo(HashSet()) { note ->
-            note.vaultRelativePath.takeIf { it.isNotEmpty() }
-        }
+        mutableKnownNotes.value = scanned
+            .filter { it.vaultRelativePath.isNotEmpty() }
+            .associate { it.vaultRelativePath to it.ref }
         onPublished(scanned)
         return scanned
     }
@@ -80,6 +84,6 @@ internal class NoteScanCache(
     fun expireAfterBodyWrite() {
         notes = emptyList()
         loadedAt = 0L
-        mutableKnownPaths.value = emptySet()
+        mutableKnownNotes.value = emptyMap()
     }
 }

@@ -14,13 +14,13 @@ import java.time.ZoneId
 internal sealed interface CrystalShelfItem {
     val key: String
 
-    /** 月の見出し。[count] はその月の結晶の数。 */
+    /** 月の見出し。その月の棚の上端になる（見出しは棚の中に置く）。[count] はその月の結晶の数。 */
     data class Month(val month: YearMonth, val count: Int) : CrystalShelfItem {
         override val key: String get() = "month-$month"
     }
 
-    /** 宝石の段。[top]・[bottom] は、その月の棚の上端・下端にあるか（角を丸める側）。 */
-    data class Row(val crystals: List<Crystal>, val top: Boolean, val bottom: Boolean) : CrystalShelfItem {
+    /** 宝石の段。[bottom] は、その月の棚の下端にあるか（角を丸める側）。 */
+    data class Row(val crystals: List<Crystal>, val bottom: Boolean) : CrystalShelfItem {
         override val key: String get() = "row-${crystals.first().fileName}"
     }
 
@@ -48,12 +48,15 @@ internal fun crystalShelf(crystals: List<Crystal>, columns: Int, opened: String?
                 val last = i == rows.lastIndex
                 val openedColumn = row.indexOfFirst { it.fileName == opened }
                 // 開いた段の下端は中身のほうなので、段は下端にならない。
-                add(CrystalShelfItem.Row(row, top = i == 0, bottom = last && openedColumn < 0))
+                add(CrystalShelfItem.Row(row, bottom = last && openedColumn < 0))
                 if (openedColumn >= 0) add(CrystalShelfItem.Detail(row[openedColumn], openedColumn, bottom = last))
             }
         }
     }
 }
+
+/** 宝石 [pressed]（ファイル名）を押した後に開いている結晶。開いていた宝石なら閉じ、別の宝石なら替える。 */
+internal fun crystalShelfToggle(opened: String?, pressed: String): String? = if (opened == pressed) null else pressed
 
 /** 宝石1つの枠の幅。宝石と日の文字に、押せる幅 48dp を含めて左右の余白を足した値。 */
 internal const val CRYSTAL_GEM_CELL_DP = 76f

@@ -1,6 +1,6 @@
 # 結晶 — 読んできたものの総括
 
-**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 は設計のみ。実装と実機確認が残る）
+**状態:** 実装済み・稼働中・実機確認済み（一覧の宝石の陳列 → 判断11 は実機確認待ち）
 **最終検証:** 2026-09-27 / `d559e33`
 **関連コード:** `controller/CrystalController.kt` / `domain/CrystalCandidates.kt` / `domain/CrystalResponseParser.kt` / `data/CrystalStore.kt` / `data/CrystalMaterialStore.kt` / `data/CrystalJson.kt` / `model/Crystal.kt` / `model/state/CrystalLogState.kt` / `controller/NoteSessionCoordinator.kt`（配線・順序）/ `controller/ReunionCardController.kt`（`awaitSettled`）/ `data/ReadingTraceStore.kt`（`readingTraceKeyOf`）/ `ai/PromptBuilder.kt` / `NoteViewModel.kt` / `NoteScanCache.kt` / `ui/screen/CrystalViews.kt` / `ui/screen/CrystalListScreen.kt` / `ui/screen/CrystalShelfViews.kt` / `ui/CrystalShelf.kt` / `ui/CrystalText.kt` / `domain/CrystalFields.kt` / `ui/theme/AppColors.kt`（宝石の色）
 **関連テスト:** `CrystalCandidatesTest` / `CrystalResponseParserTest` / `CrystalStoreTest` / `CrystalControllerTest` / `CrystalSaveInterleavingTest` / `NoteSessionCoordinatorTest` / `ReadingTraceKeyTest` / `CrystalWiringOrderTest` / `CrystalTextTest` / `CrystalFieldsTest` / `CrystalShelfTest` / `NoteFieldPaletteTest`（宝石の色） / `NoteScanCacheTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / androidTest: `OnDeviceGenerationTest` / `PromptTokenBudgetTest` / `CrystalShelfUiTest`
@@ -415,7 +415,7 @@ AIに候補の中から自由に組を選ばせず、**今のノート（`N1`）
   - `selectCrystalCandidates` と断片の切り方 — 同じノートの重複、直近順、6件の上限、文の区切りへの寄せ、区切りの無い長文
   - `crystalsForNote` — 根拠に含むものだけ、新しい順、3件で打ち切り
   - `crystalFields` — 根拠の分野を数えて多い順に2つ、同数は根拠の並び、分からない根拠は数えない（`CrystalFieldsTest`）
-  - `crystalShelf`・`crystalShelfColumns` — 月の区切り（端末の暦）、段の割り方、開いた結晶の段の直下だけに中身、窓の幅と段の数（`CrystalShelfTest`）
+  - `crystalShelf`・`crystalShelfColumns`・`crystalShelfToggle` — 月の区切り（端末の暦）、段の割り方、開いた結晶の段の直下だけに中身、窓の幅と段の数、開くのは1つ（`CrystalShelfTest`）
   - 宝石の色 — 7色がパネルの上で 3:1、色相が同じ分野の紙とそろい、6色の明度がそろう（`NoteFieldPaletteTest`）
   - `CrystalJson` — 往復、checksum 不一致・未知の版・16KB超をその1件だけ飛ばすこと
   - `CrystalController` の**両方向** — 門番待ち・要約待ち・生成中にノートを切り替えると書かず数えない／

@@ -42,7 +42,7 @@ class NoteScanCacheTest {
 
         assertTrue("旧Vaultの走査が止まっていない", pendingA.await().exceptionOrNull() is CancellationException)
         assertEquals(listOf("B.md", "both.md"), cache.notes.map { it.vaultRelativePath })
-        assertEquals(setOf("B.md", "both.md"), cache.knownPaths.value)
+        assertEquals(mapOf("B.md" to DocumentRef("B-ref"), "both.md" to DocumentRef("B-both")), cache.knownNotes.value)
         assertEquals("分野の索引へ載せたのはBだけ", listOf(listOf("B.md", "both.md")), published)
         // 結晶の根拠を押したときに引く参照（→ NoteViewModel.openCrystalSource）
         assertEquals(null, cache.notes.firstOrNull { it.vaultRelativePath == "A.md" })
@@ -73,7 +73,7 @@ class NoteScanCacheTest {
             cache.get(scan = { scans++; listOf(note("a.md", "a-ref")) }, onPublished = ::record)
         }
         assertEquals(1, scans)
-        assertEquals(setOf("a.md"), cache.knownPaths.value)
+        assertEquals(mapOf("a.md" to DocumentRef("a-ref")), cache.knownNotes.value)
         assertEquals(1, published.size)
     }
 

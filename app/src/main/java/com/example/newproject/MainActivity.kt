@@ -343,10 +343,11 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable("crystal_list") {
-                            val knownNotePaths by viewModel.knownNotePaths.collectAsStateWithLifecycle()
+                            val knownNotes by viewModel.knownNotes.collectAsStateWithLifecycle()
                             CrystalListScreen(
                                 state = uiState.crystalLog,
-                                knownNotePaths = knownNotePaths,
+                                knownNotes = knownNotes,
+                                noteFields = uiState.noteFields,
                                 onLoad = { viewModel.openCrystalList(contentResolver) },
                                 onOpenSource = { path ->
                                     viewModel.openCrystalSource(contentResolver, path)
