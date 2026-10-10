@@ -18,12 +18,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.hasUnshownNotice
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.ui.component.AiStatusNoticeRow
@@ -40,7 +43,9 @@ internal class SummaryRowInputs(
     val summary: SectionSummary?,
     val onRequest: () -> Unit,
     val onRetry: () -> Unit,
-    val onCancel: () -> Unit
+    val onCancel: () -> Unit,
+    /** 面を出さずに頼んだ要求の理由を、行が見せた。要求の番号で伝える（→ [SectionSummary.noticePending]）。 */
+    val onNoticeShown: (requestId: Long) -> Unit
 )
 
 /**
@@ -55,8 +60,15 @@ internal fun SectionSummaryRow(
     onRequest: () -> Unit,
     onRetry: () -> Unit,
     onCancel: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNoticeShown: (requestId: Long) -> Unit = {}
 ) {
+    // **見せたことは、理由の行が組まれたときにここで伝える。** 面が出ていても、書いている間に畳まれた行や
+    // 並べ読みの間の行は組まれないので、見せていない理由を見せたことにしない（→ features/margin_pane.md §5.4）。
+    if (summary != null && summary.hasUnshownNotice()) {
+        val currentOnNoticeShown by rememberUpdatedState(onNoticeShown)
+        LaunchedEffect(summary.requestId) { currentOnNoticeShown(summary.requestId) }
+    }
     Column(modifier = modifier.fillMaxWidth()) {
         when {
             summary == null -> TextButton(

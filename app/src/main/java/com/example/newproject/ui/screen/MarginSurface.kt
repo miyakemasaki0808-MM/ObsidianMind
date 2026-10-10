@@ -5,6 +5,8 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.domain.hasUnshownNotice
+import com.example.newproject.model.state.SectionSummary
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.roundToInt
@@ -54,31 +56,38 @@ internal enum class SummaryEntry {
     /** 出ているペインに出す。 */
     Pane,
 
-    /** ペインをこのノートの間だけ出す。**設定は変えない。** */
-    PaneForNote,
-
     /** シートに出す。出ていなければ出す。 */
-    Sheet
+    Sheet,
+
+    /** 面を出さず、要約を始めるだけ。ボタンの記号が生成中へ変わる。 */
+    Background
 }
 
 /**
- * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。出ていなければ、その窓で出せる面を出す。
- * ペインを出せる窓で設定が閉じているときは、ペインをこのノートの間だけ出す — 要約は本文の横で読むほうがよく、
- * 一度の要約のために設定を書き換えると、次のノートでも頼んでいないペインが出る。
+ * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。
+ * 面が出ていなければ、**まだ頼んでいない節は始めるだけで面を出さない** — 頼むたびに面が読書へ割り込む。
+ * [requested] はこの節の要約を持っているか（生成中・完成・失敗・出せない理由のどれか）。持っていれば記号がその状態を示しているので、
+ * 押すのは見に行くときであり、シートで見せる。**ペインの設定は書き換えない** — 一度見るために開くと、次のノートでも頼んでいないペインが出る。
  */
-internal fun summaryEntryFor(canShowPane: Boolean, paneVisible: Boolean, sheetVisible: Boolean): SummaryEntry = when {
+internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, requested: Boolean): SummaryEntry = when {
     paneVisible -> SummaryEntry.Pane
     sheetVisible -> SummaryEntry.Sheet
-    canShowPane -> SummaryEntry.PaneForNote
-    else -> SummaryEntry.Sheet
+    requested -> SummaryEntry.Sheet
+    else -> SummaryEntry.Background
 }
 
 /**
- * このノートの間だけ出したペインを、今出すか。**出したノート [owner] と今のノートが同じときだけ。**
- * 画面の保存値は、別のノートを開いている状態で復元されることがある（冊子から別のノートを読んで戻ったとき）。
- * 保存の鍵で照合したつもりにならず、値そのものに持ち主を持たせて照合する。
+ * 端末AIが使えない理由をまだ見せていなければ、面を開くか（→ features/margin_pane.md §5.4）。
+ * 理由は失敗として数えないので記号が 💬 のまま変わらず（→ `sectionSummaryStatus`）、面を出さないと押しても何も起きないように見える。
+ *
+ * **開くのは、どの面も出ていないときだけ。** 見せたかどうかは、理由の行が実際に組まれたときに行が伝える（→ `SectionSummaryRow`）。
+ * 面が出ていても、シートで書いている間は行が畳まれ、並べ読みの間はペインに行が無い。そこで開き直さず、行が出るまで待つ。
+ *
+ * [summary] には**今の本文の節の要約**を渡す。面はいつも今の本文の節を映すので、別の節の理由で面を開くと、
+ * 理由の無い面が出る。頼んだ節から読み進めていれば、その節へ戻ったときに開く。
  */
-internal fun paneForNoteShown(owner: String?, currentNote: String?): Boolean = owner != null && owner == currentNote
+internal fun opensFaceForNotice(summary: SectionSummary?, faceVisible: Boolean): Boolean =
+    !faceVisible && summary?.hasUnshownNotice() == true
 
 /** 窓が切り替わったときに、出ている余白をどちらへ移すか（→ features/margin_pane.md §5.4 の2つ目の表）。 */
 internal enum class MarginWindowShift {
@@ -204,7 +213,7 @@ internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
  * **入力欄に触れてキーボードが出ている間だけ。** キーボードが出ると、残る高さを操作とカードが使い切って本文が消える。
  *
  * - 縦積み — シートで書いているとき。シートはさらに本文の下を覆う
- * - 余白ペイン — ペインで書いているとき。本文の列の上に操作とカードが残る形は縦積みと同じ
+ * - 余白ペイン — ペインで書いているとき。本文の上に再会カードが残る（操作は机の画面の帯に入っていて、ここでは出ていない）
  * - 左右2列 — 隠さない。操作は横の列にあり、本文の高さを取らない
  */
 internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, writingWithKeyboard: Boolean): Boolean =
@@ -271,7 +280,9 @@ internal fun paneRelatedCandidates(shown: List<RelatedNote>?, state: RelatedNote
 }
 
 /**
- * ペインの「このノートの関連」の並びと開閉。**持ち主のノート [owner] を値として持つ**（→ [paneForNoteShown] と同じ理由）。
+ * ペインの「このノートの関連」の並びと開閉。**持ち主のノート [owner] を値として持つ。**
+ * 画面の保存値は、別のノートを開いている状態で復元されることがある（冊子から別のノートを読んで戻ったとき）。
+ * 保存の鍵で照合したつもりにならず、値そのものに持ち主を持たせて照合する。
  *
  * 右で読んでいる間に画面が組み直されても（全画面やほかのタブとの往復・画面の保存と復元）、右の本文は残るので、
  * 戻ったときに選んだ一覧と、届いた順の並びが要る。だから画面の保存値に置く（→ [PaneRelatedListSaver]）。

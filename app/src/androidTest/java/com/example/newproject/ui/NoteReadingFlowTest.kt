@@ -28,6 +28,17 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.swipeDown
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -39,8 +50,14 @@ import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.SectionChatState
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.NoteState
@@ -905,50 +922,350 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **このノートの間だけ出したペインを、別のノートで復元された画面に持ち込まない**（→ features/margin_pane.md §5.4）。
-     * 冊子から別のノートを読んで戻ると、保存した読書画面が別のノートを開いた状態で復元される。そのときは読み込み中を挟まない。
+     * **面が出ていなければ、まだ頼んでいない節の要約ボタンは要約を始めるだけで、面を出さない**（→ features/margin_pane.md §5.4）。
+     * 頼んだ節で押すと、シートを出して見せに行く。**ペインを出せる窓で設定が閉じていても、ペインは出さない。**
      */
     @Test
-    fun このノートの間だけのペインは_別のノートで復元された画面には出ない() {
-        assertFalse("別のノートへ持ち込んだ", paneAfterRestore(restoreWith = NOTE_B))
-    }
-
-    /** 同じノートで作り直したとき（Fold の開閉・回転・全画面との往復）は残る。上の検査の対照。 */
-    @Test
-    fun このノートの間だけのペインは_同じノートで作り直すと残る() {
-        assertTrue("同じノートで作り直すと消えた", paneAfterRestore(restoreWith = NOTE_A))
-    }
-
-    /**
-     * ペインを閉じる設定のまま、Aで要約ボタンを押してペインを出し、[restoreWith] を開いた状態で画面を作り直す。
-     * **1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回で、2回目は例外になる。
-     */
-    private fun paneAfterRestore(restoreWith: String): Boolean {
-        val restoration = StateRestorationTester(composeRule)
-        // **状態にしない。** 作り直す前に替えても、組み直しを起こさずに復元させるため。
-        var current = NOTE_A
-        restoration.setContent {
+    fun 要約ボタンは_頼んでいない節では面を出さず_頼んだ節ではシートを出す() {
+        var openCalls = 0
+        val requests = mutableListOf<Pair<SectionRef, Boolean>>()
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos())
+        composeRule.setContent {
             AppTheme(darkTheme = false) {
                 Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
                     ReaderTab(
-                        loadedNote(SHORT_TWO_SECTIONS, targetUri = current).withMemos(),
+                        state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
+                        onOpenMarginMemo = { openCalls++ },
+                        onRequestSectionSummary = { section, quietly -> requests += section to quietly },
                         marginPaneOpen = false,
                         expandedWidth = true
                     )
                 }
             }
         }
-        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
         composeRule.onNodeWithContentDescription("この節を要約").performClick()
         composeRule.waitForIdle()
-        composeRule.onNode(hasSetTextAction()).assertExists()
+        assertEquals("面を出さずに頼んだことを伝えていない", listOf(SectionRef("節A") to true), requests)
+        assertEquals("頼んでいない節で面を出した", 0, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
 
-        current = restoreWith
+        state = state.copy(
+            sectionChat = SectionChatState(
+                listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約"))
+            )
+        )
+        composeRule.onNodeWithContentDescription("この節の要約あり。タップで開く").performClick()
+        composeRule.waitForIdle()
+        assertEquals("頼んだ節でシートを出さなかった", 1, openCalls)
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    /**
+     * **面を出さずに頼んだ節の、端末AIが使えない理由は、その節を映しているときにだけ面を開いて見せる**（→ features/margin_pane.md §5.4）。
+     * 理由が届く前に次の節まで読み進めていれば、そこでは開かない — 面は今の本文の節を映すので、開くと理由の無い面が出る。
+     * 頼んだ節へ戻ると開き、理由が見える。
+     */
+    @Test
+    fun 頼んだ節の利用不可の理由は_読み進めた先のまだ頼んでいない節では開かず_戻ると見せる() {
+        noticeAfterReadingOn(secondHasSummary = false)
+    }
+
+    /** 読み進めた先の節が別の要約を持っていても、その要約で面を開かない。上の検査と対にする。 */
+    @Test
+    fun 頼んだ節の利用不可の理由は_読み進めた先が要約を持っていても開かず_戻ると見せる() {
+        noticeAfterReadingOn(secondHasSummary = true)
+    }
+
+    /** 第一の節で面を出さずに頼み、状態確認の結果が届く前に第二の節まで読み進め、そこで第一の利用不可の理由を届ける。 */
+    private fun noticeAfterReadingOn(secondHasSummary: Boolean) {
+        val model = buildNoteSectionModel(LONG_WITH_SHORT_TAIL)
+        val secondHeading = model.blocks.indices.first { model.sectionRefAt(it) == SECOND }
+        val listState = LazyListState()
+        val acknowledged = mutableListOf<Long>()
+        val second = SectionSummary(SECOND, requestId = 2, sectionTitle = "第二", sectionContext = "", summary = "第二の要約")
+        var state by mutableStateOf(
+            loadedNote(LONG_WITH_SHORT_TAIL).withMemos().withSummaries(
+                listOfNotNull(quietRequest(FIRST, requestId = 1), second.takeIf { secondHasSummary })
+            )
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 900.dp)) {
+                    ReaderTab(
+                        state,
+                        model,
+                        listState,
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        onAcknowledgeSectionSummaryNotice = { id ->
+                            acknowledged += id
+                            state = state.acknowledging(id)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(secondHeading) } }
+        composeRule.waitForIdle()
+
+        state = state.withNoticeArrived(requestId = 1)
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertFalse("読み進めた先の節で面を開いた", state.isMarginMemoSheetVisible) }
+        assertEquals("読み進めた先の節で見せたことにした", emptyList<Long>(), acknowledged)
+
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(0) } }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertTrue("頼んだ節へ戻っても面を開かない", state.isMarginMemoSheetVisible) }
+        composeRule.onNodeWithText(NOTICE_MESSAGE).performScrollTo().assertIsDisplayed()
+        assertEquals(listOf(1L), acknowledged)
+    }
+
+    /**
+     * **状態確認の途中で画面を作り直しても、届いた理由を一度だけ見せる**（→ features/margin_pane.md §5.4）。
+     * 見せたかどうかは要約の状態（ViewModel の寿命）が持つ。見せた後に作り直しても、もう開かない。
+     */
+    @Test
+    fun 状態確認の途中で画面を作り直しても_届いた理由を一度だけ見せる() {
+        val restoration = StateRestorationTester(composeRule)
+        var opens = 0
+        val acknowledged = mutableListOf<Long>()
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos().withSummaries(listOf(quietRequest(SectionRef("節A"), requestId = 1)))
+        )
+        restoration.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 900.dp)) {
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = {
+                            opens++
+                            state = state.copy(isMarginMemoSheetVisible = true)
+                        },
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        onAcknowledgeSectionSummaryNotice = { id ->
+                            acknowledged += id
+                            state = state.acknowledging(id)
+                        }
+                    )
+                }
+            }
+        }
+
         restoration.emulateSavedInstanceStateRestore()
         composeRule.waitForIdle()
-        return composeRule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty()
+        state = state.withNoticeArrived(requestId = 1)
+        composeRule.waitForIdle()
+        assertEquals("作り直した後に届いた理由で面を開かない", 1, opens)
+        assertEquals(listOf(1L), acknowledged)
+        composeRule.onNodeWithText(NOTICE_MESSAGE).performScrollTo().assertIsDisplayed()
+
+        state = state.copy(isMarginMemoSheetVisible = false)
+        composeRule.waitForIdle()
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        assertEquals("見せた理由で、作り直すたびに面を開く", 1, opens)
+    }
+
+    /**
+     * **余白ペインが出ているかを外殻へ知らせる**（→ features/margin_pane.md §5.1）。外殻はこれでタブのレールを畳む。
+     * ペインの設定を閉じると、出ていないことを知らせてレールを戻させる。
+     */
+    @Test
+    fun 余白ペインが出ているかを外殻へ知らせ_閉じると戻す() {
+        val reports = mutableListOf<Boolean>()
+        var paneOpen by mutableStateOf(true)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = paneOpen,
+                        expandedWidth = true,
+                        onMarginPaneVisibleChange = { reports += it }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        assertEquals("ペインが出ているのに知らせていない: $reports", true, reports.lastOrNull())
+
+        paneOpen = false
+        composeRule.waitForIdle()
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        assertEquals("ペインをしまったのに知らせていない: $reports", false, reports.lastOrNull())
+    }
+
+    // ── 机の画面（→ features/margin_pane.md §5.1）───────────────────────────
+
+    /**
+     * **✎ の後の机の画面では、見出しと操作の行を出さない。** つまみを指で押しても帯は出ず、下へ払うと出る。
+     * 帯のボタンを押すと、その操作をしてから帯がしまう。
+     */
+    @Test
+    fun 机の画面では操作を出さず_つまみを押しても帯は出ず_下へ払うと出て_ボタンを押すとしまう() {
+        var randoms = 0
+        setDesk(onRandomNote = { randoms++ })
+        composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        openDeskBar()
+        composeRule.onNodeWithText("Rediscover").assertIsDisplayed()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed().performClick()
+        composeRule.waitForIdle()
+
+        assertEquals(1, randoms)
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** つまみを下へ払うと帯が出て、帯のつまみを上へ払うとしまう。帯が出ている間に本文に触れてもしまう。 */
+    @Test
+    fun 机の画面ではつまみを下へ払うと帯が出て_上へ払うか本文に触れるとしまう() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput { swipeUp(startY = bottom, endY = top - 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        // 本文に触れる。**帯より下の、左の面の中ほどを押す** — 題名など本文の上のほうは帯の下に隠れ、
+        // 箱の下端の近くは画面下のバーを避ける余白で、左の面の外になる。
+        openDeskBar()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput { click(Offset(x = 100.dp.toPx(), y = centerY + 60.dp.toPx())) }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **短く素早く払う（フリック）でも帯が出入りする。** 払った量を指が動き始めてからしか数えず距離だけで決めていたときは、
+     * 押せば開閉するのにフリックでは何も起きなかった（実機で観測）。20dp を 40ms で払う。
+     */
+    @Test
+    fun 机の画面ではつまみを短くフリックしても帯が出て_帯のつまみをフリックするとしまう() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipeDown(startY = centerY, endY = centerY + 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **帯のどこからでも上へ払うとしまう。** 「Rediscover」の見出しの上から短く払う。下端のつまみだけで受けていたときは、
+     * 帯の本体を払っても何も起きなかった（実機で観測）。
+     */
+    @Test
+    fun 机の画面では帯の見出しの上から上へフリックしても帯がしまう() {
+        setDesk()
+        openDeskBar()
+
+        composeRule.onNodeWithText("Rediscover").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 20.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** ボタンの上から払い始めても、そのボタンは押さずに帯をしまう。 */
+    @Test
+    fun 机の画面では帯のボタンの上から上へ払っても_ボタンは押されず帯がしまう() {
+        var randoms = 0
+        setDesk(onRandomNote = { randoms++ })
+        openDeskBar()
+
+        composeRule.onNodeWithText("別のノートをひらく").performTouchInput {
+            swipeUp(startY = centerY, endY = centerY - 80.dp.toPx(), durationMillis = 120)
+        }
+        composeRule.waitForIdle()
+
+        assertEquals("払っただけでボタンが押された", 0, randoms)
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /** 横へ払っても帯は出ない。押した扱いにもしない（横の払いは片側を広げる操作に残す）。 */
+    @Test
+    fun 机の画面ではつまみを横へ払っても帯は出ない() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipeRight(startX = centerX, endX = centerX + 120.dp.toPx(), durationMillis = 120)
+        }
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+    }
+
+    /**
+     * **横寄りに払っても、縦の成分だけで帯を出し入れしない。** 横120dp・縦30dp を 240ms で払う。
+     * 縦の成分だけで決めていたときは、閉じた帯が開き、開いた帯がしまった。
+     */
+    @Test
+    fun 机の画面では横寄りに払っても_帯は開かず_開いた帯もしまわない() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput {
+            swipe(start = center, end = center + Offset(120.dp.toPx(), 30.dp.toPx()), durationMillis = 240)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        openDeskBar()
+        composeRule.onNodeWithText("Rediscover").performTouchInput {
+            swipe(start = center, end = center + Offset(120.dp.toPx(), -30.dp.toPx()), durationMillis = 240)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    /**
+     * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
+     * これが無いと帯の ✎ にも届かず、机の画面から抜けられない。指で押したときは呼ばれない（上の検査）。
+     */
+    @Test
+    fun 机の画面では読み上げの操作で帯が開く() {
+        setDesk()
+
+        composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    /** 机の画面の帯を、つまみを下へ払って出す。 */
+    private fun openDeskBar() {
+        composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
+        composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    /** 本文とペインを並べた机の画面。ペインの入力欄が出ていることを確かめてから返す。 */
+    private fun setDesk(onRandomNote: () -> Unit = {}) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                // 窓より大きいと中央に寄せて置かれるので、位置はこの箱から測る（→ DESK_TAG）。
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        expandedWidth = true,
+                        onRandomNote = onRandomNote
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertExists()
     }
 
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────
@@ -1186,6 +1503,33 @@ class NoteReadingFlowTest {
     private fun NoteUiState.withMemos(vararg memos: MarginMemo) =
         copy(marginMemoState = MarginMemoState.Ready(memos = memos.toList()))
 
+    private fun NoteUiState.withSummaries(summaries: List<SectionSummary>) = copy(sectionChat = SectionChatState(summaries))
+
+    /** 面を出さずに頼み、状態確認の結果を待っている要約。 */
+    private fun quietRequest(section: SectionRef, requestId: Long) = SectionSummary(
+        section,
+        requestId = requestId,
+        sectionTitle = section.title.orEmpty(),
+        sectionContext = "",
+        isSummaryLoading = true,
+        noticePending = true
+    )
+
+    /** [requestId] の要求に、端末AIが使えない理由が届いた（Controller の書き方と同じく、番号の一致する要約にだけ書く）。 */
+    private fun NoteUiState.withNoticeArrived(requestId: Long) = copy(
+        sectionChat = SectionChatState(
+            sectionChat.summaries.map {
+                if (it.requestId == requestId) it.copy(isSummaryLoading = false, summaryProblem = NOTICE) else it
+            }
+        )
+    )
+
+    private fun NoteUiState.acknowledging(requestId: Long) = copy(
+        sectionChat = SectionChatState(
+            sectionChat.summaries.map { if (it.requestId == requestId) it.copy(noticePending = false) else it }
+        )
+    )
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -1196,8 +1540,12 @@ class NoteReadingFlowTest {
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
+        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onRandomNote: () -> Unit = {},
+        onAcknowledgeSectionSummaryNotice: (Long) -> Unit = {},
         marginPaneOpen: Boolean = false,
         expandedWidth: Boolean = false,
+        onMarginPaneVisibleChange: (Boolean) -> Unit = {},
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
@@ -1211,8 +1559,9 @@ class NoteReadingFlowTest {
             imageMeasurements = measurements,
             noteListState = listState,
             onSelectVault = {},
-            onRandomNote = {},
-            onRequestSectionSummary = {},
+            onRandomNote = onRandomNote,
+            onRequestSectionSummary = onRequestSectionSummary,
+            onAcknowledgeSectionSummaryNotice = onAcknowledgeSectionSummaryNotice,
             onRetrySectionSummary = {},
             onCancelSectionSummary = {},
             onOpenBooklet = {},
@@ -1223,6 +1572,7 @@ class NoteReadingFlowTest {
             marginPaneOpen = marginPaneOpen,
             onSetMarginPaneOpen = {},
             expandedWidth = expandedWidth,
+            onMarginPaneVisibleChange = onMarginPaneVisibleChange,
             memoDraft = MarginMemoDraft(),
             onEditMarginMemo = { _, _ -> },
             onSubmitMarginMemo = {},
@@ -1249,6 +1599,13 @@ class NoteReadingFlowTest {
         const val NOTE_A = "content://vault/a.md"
         const val NOTE_B = "content://vault/b.md"
         const val FIRST_PARAGRAPH = "最初の段落"
+        const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
+        const val DESK_TAG = "机の画面"
+        val NOTICE = SectionChatProblem.AiStatus(
+            AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
+        )
+        val FIRST = SectionRef("第一")
+        val SECOND = SectionRef("第二")
 
         val BODY = """
             # 見出し

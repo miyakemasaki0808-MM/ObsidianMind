@@ -151,11 +151,15 @@ class MainActivity : ComponentActivity() {
                 // 余白メモの入力欄で書いているつもりか。**通常表示と全画面で共有する** — 全画面のシートで書いたまま戻ると、
                 // 戻った先の面へフォーカスを引き継ぐ（→ features/margin_pane.md §5.4）。画面の作り直しもまたいで保つ。
                 var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+                // ノートタブが余白ペインを出しているか。出ている間は外殻がレールを畳む（→ showsRail）。
+                // 画面の作り直しをまたいで保つ — 戻すと、Fold の開閉のたびにレールが一瞬出てから畳まれる。
+                var notePaneVisible by rememberSaveable { mutableStateOf(false) }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
-                    snackbarHostState = snackbarHostState
+                    snackbarHostState = snackbarHostState,
+                    notePaneVisible = notePaneVisible
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -173,7 +177,8 @@ class MainActivity : ComponentActivity() {
                                     if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
                                     else openVault.launch(null)
                                 },
-                                onRequestSectionSummary = { section -> viewModel.requestSectionSummary(section) },
+                                onRequestSectionSummary = { section, quietly -> viewModel.requestSectionSummary(section, quietly) },
+                                onAcknowledgeSectionSummaryNotice = { requestId -> viewModel.acknowledgeSectionSummaryNotice(requestId) },
                                 onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
                                 onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },
                                 noteListState = noteListState,
@@ -201,6 +206,7 @@ class MainActivity : ComponentActivity() {
                                 marginPaneOpen = marginPaneOpen,
                                 onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
                                 expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
+                                onMarginPaneVisibleChange = { notePaneVisible = it },
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },

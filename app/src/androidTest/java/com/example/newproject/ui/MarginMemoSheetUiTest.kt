@@ -70,6 +70,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.AiNoticeAction
+import androidx.compose.ui.test.hasText
 import com.example.newproject.ui.screen.SummaryRowInputs
 import com.example.newproject.ui.screen.pendingAfterReveal
 
@@ -715,7 +719,8 @@ class MarginMemoSheetUiTest {
                             summary = SectionSummary(SectionRef("節B"), 1L, "節B", "本文", summary = "節Bの要約"),
                             onRequest = {},
                             onRetry = {},
-                            onCancel = {}
+                            onCancel = {},
+                            onNoticeShown = {}
                         ),
                         revealSummary = pending,
                         onSummaryRevealHandled = { handled -> pending = pendingAfterReveal(pending, handled) }
@@ -897,7 +902,154 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText(PLACEHOLDER).assertDoesNotExist()
     }
 
+    // ── 端末AIが使えない理由を「見せた」と伝える時機（→ features/margin_pane.md §5.4）──────────────
+
+    /**
+     * **見せたことは、理由の行が組まれたときに一度だけ伝える。** ペインの形（書いていても行を畳まない）で、
+     * 状態確認中の要求に理由が届くと、その要求の番号で1回だけ伝わる。見せた後に行を組み直しても2回目を数えない。
+     */
+    @Test
+    fun 理由の行が組まれると_見せたことを一度だけ伝える() {
+        val harness = NoticeHarness()
+        var rowShown by mutableStateOf(true)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                NoticeFace(harness, asSheet = false, focusIntent = false, onFocusIntentChange = {}, rowShown = rowShown)
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals("理由が届く前に見せたことにした", emptyList<Long>(), harness.shown)
+
+        composeRule.runOnIdle { harness.arrive() }
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertIsDisplayed()
+        assertEquals(listOf(NOTICE_REQUEST), harness.shown)
+
+        rowShown = false
+        composeRule.waitForIdle()
+        rowShown = true
+        composeRule.waitForIdle()
+        assertEquals("行を組み直すたびに見せたことにした", listOf(NOTICE_REQUEST), harness.shown)
+    }
+
+    /**
+     * **シートで書いている間に理由が届いても、行が畳まれているので見せたことにしない。** 書くのをやめて行が出たときに
+     * 一度だけ伝える。面が出ているだけで見せたことにすると、見ていない理由が消費される。
+     *
+     * 順序をこのとおりに作る — 状態確認中に書き始め、畳まれたのを確かめてから理由を届ける。最初から理由を渡すと、
+     * 入力欄にフォーカスが入る前の最初の描画で行が組まれ、正しく伝わったものまで数えてしまう。
+     */
+    @Test
+    fun シートで書いている間は_理由を見せたことにせず_行が出てから伝える() {
+        val harness = NoticeHarness()
+        var focusIntent by mutableStateOf(true)
+        composeRule.setContent {
+            val focusManager = LocalFocusManager.current
+            focusClearer = { focusManager.clearFocus() }
+            AppTheme(darkTheme = false) {
+                NoticeFace(harness, asSheet = true, focusIntent = focusIntent, onFocusIntentChange = { focusIntent = it })
+            }
+        }
+        awaitCompactWhileTyping()
+        assertEquals("理由が届く前に見せたことにした", emptyList<Long>(), harness.shown)
+
+        composeRule.runOnIdle { harness.arrive() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertDoesNotExist()
+        assertEquals("畳まれた行の理由を見せたことにした", emptyList<Long>(), harness.shown)
+
+        composeRule.runOnIdle { focusClearer() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertIsDisplayed()
+        assertEquals(listOf(NOTICE_REQUEST), harness.shown)
+
+        // もう一度書き始めて畳み、やめて行を組み直しても、見せた理由を2回目には数えない。
+        focusIntent = true
+        awaitCompactWhileTyping()
+        composeRule.runOnIdle { focusClearer() }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(NOTICE_MESSAGE).assertIsDisplayed()
+        assertEquals(listOf(NOTICE_REQUEST), harness.shown)
+    }
+
+    /** 前提: 入力欄にフォーカスしてキーボードが出ると、要約とメモは1行に畳まれる。出なければこの検査は前提が立たない。 */
+    private fun awaitCompactWhileTyping() {
+        composeRule.waitUntil(KEYBOARD_TIMEOUT_MILLIS) {
+            composeRule.onAllNodes(hasText("要約とメモ", substring = true)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /**
+     * 面を出さずに頼んだ要求の状態を、Controller と同じ形で動かす。最初は状態確認中で理由はまだ無い。
+     * [arrive] で端末AIが使えない理由が届き、見せたと伝わったら要求の番号で印を下ろす（→ `SectionChatController.acknowledgeNotice`）。
+     */
+    private class NoticeHarness {
+        var summary by mutableStateOf(
+            SectionSummary(
+                SectionRef("節A"),
+                requestId = NOTICE_REQUEST,
+                sectionTitle = "節A",
+                sectionContext = "本文",
+                isSummaryLoading = true,
+                noticePending = true
+            )
+        )
+        val shown = mutableListOf<Long>()
+
+        fun arrive() {
+            summary = summary.copy(
+                isSummaryLoading = false,
+                summaryProblem = SectionChatProblem.AiStatus(
+                    AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
+                )
+            )
+        }
+
+        fun acknowledge(requestId: Long) {
+            shown += requestId
+            if (summary.requestId == requestId) summary = summary.copy(noticePending = false)
+        }
+    }
+
+    /** [harness] の要約を持つ節の面。[rowShown] が偽なら要約の行を渡さない（行を組み直すために使う）。 */
+    @androidx.compose.runtime.Composable
+    private fun NoticeFace(
+        harness: NoticeHarness,
+        asSheet: Boolean,
+        focusIntent: Boolean,
+        onFocusIntentChange: (Boolean) -> Unit,
+        rowShown: Boolean = true
+    ) {
+        MarginMemoSheetContent(
+            state = READY,
+            draft = MarginMemoDraft(),
+            section = SectionRef("節A"),
+            hasHeadings = true,
+            onJumpToSection = {},
+            arranged = null,
+            onEdit = {},
+            onSubmit = {},
+            onDelete = {},
+            asSheet = asSheet,
+            focusIntent = focusIntent,
+            onFocusIntentChange = onFocusIntentChange,
+            summaryRow = if (rowShown) {
+                SummaryRowInputs(
+                    summary = harness.summary,
+                    onRequest = {},
+                    onRetry = {},
+                    onCancel = {},
+                    onNoticeShown = harness::acknowledge
+                )
+            } else {
+                null
+            }
+        )
+    }
+
     private companion object {
+        const val NOTICE_REQUEST = 7L
+        const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
+        const val KEYBOARD_TIMEOUT_MILLIS = 5_000L
         const val BODY_TAG = "本文"
         const val PANE_TAG = "ペイン"
         const val BELOW_TAG = "器の下"

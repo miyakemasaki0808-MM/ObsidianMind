@@ -46,10 +46,11 @@ class SectionChatController(
      * （→ [isShownAsIsOnRequest]）。
      *
      * 見出し名と本文は**頼んだ時点のもの**を要求に持たせる（→ lessons L26）。
+     * [quietly] は面を出さずに頼んだか。端末AIが使えない理由が届いたら、画面が一度だけ面を開いて見せる（→ [SectionSummary.noticePending]）。
      */
-    fun request(section: SectionRef, sectionTitle: String, sectionText: String) {
+    fun request(section: SectionRef, sectionTitle: String, sectionText: String, quietly: Boolean = false) {
         if (state.current.summaryOf(section)?.isShownAsIsOnRequest() == true) return
-        start(section, sectionTitle, sectionText)
+        start(section, sectionTitle, sectionText, noticePending = quietly)
     }
 
     /**
@@ -59,7 +60,15 @@ class SectionChatController(
     fun retry(section: SectionRef) {
         val previous = state.current.summaryOf(section) ?: return
         if (previous.isSummaryLoading || previous.summary != null) return
-        start(previous.section, previous.sectionTitle, previous.sectionContext)
+        start(previous.section, previous.sectionTitle, previous.sectionContext, noticePending = false)
+    }
+
+    /**
+     * 面を出さずに頼んだ要求の理由を、画面が見せた（→ [SectionSummary.noticePending]）。
+     * **要求の番号で下ろす** — 見せた後に同じ節を頼み直していれば、新しい要求の印は残す。
+     */
+    fun acknowledgeNotice(requestId: Long) {
+        state.update { it.updated(requestId) { summary -> summary.copy(noticePending = false) } }
     }
 
     /** 生成を中止する。**取り消した節はボタンに戻る。** 生成中でなければ何もしない。 */
@@ -70,7 +79,7 @@ class SectionChatController(
         state.update { it.without(section) }
     }
 
-    private fun start(section: SectionRef, sectionTitle: String, sectionText: String) {
+    private fun start(section: SectionRef, sectionTitle: String, sectionText: String, noticePending: Boolean) {
         // 別の節の生成が走っていれば、ここで止める（その節は withStarted が取り除く）。
         job?.cancel()
         val requestId = ++lastRequestId
@@ -81,7 +90,8 @@ class SectionChatController(
                     requestId = requestId,
                     sectionTitle = sectionTitle,
                     sectionContext = sectionText,
-                    isSummaryLoading = true
+                    isSummaryLoading = true,
+                    noticePending = noticePending
                 )
             )
         }

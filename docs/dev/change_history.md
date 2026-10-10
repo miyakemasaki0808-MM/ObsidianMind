@@ -17,6 +17,23 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-10 | 要約ボタンと Fold の机の画面を実機で通し版の検証にかけ、指摘なしで UI-4・FOLD-2 を台帳から外した | [margin_pane](features/margin_pane.md) §10・[レビュー一覧](../review/README.md) |
+| 2026-10-10 | 横寄りの払いの修正を独立検査で確認し、再レビューの机上指摘なしを記録した | [review](../review/README.md) |
+| 2026-10-10 | 机の画面のつまみと帯で、縦横を動き始めで決め、横寄りの払いでは帯を開閉しないようにした | [margin_pane](features/margin_pane.md) §5.1 |
+| 2026-10-10 | 通知のUIテスト修正を机上で確認し、机の画面の帯が横寄りの払いでも開閉する問題を再レビューで記録した | [review](../review/README.md) |
+| 2026-10-10 | 机の画面の帯を、つまみを下へ払ったときだけ開くようにし、指で押しても開かないようにした（読み上げの操作では開く） | [margin_pane](features/margin_pane.md) §5.1 |
+| 2026-10-10 | 机の画面で、つまみの上の余白（切り欠きと画面の余白）から引き下ろしても帯が出るようにした | [margin_pane](features/margin_pane.md) §5.1 |
+| 2026-10-10 | 机の画面の帯を、下端のつまみだけでなく帯のどこからでも上へ払えばしまうようにし、ボタンの上から払っても押さないようにした | [margin_pane](features/margin_pane.md) §5.1 |
+| 2026-10-10 | 机の画面のつまみを、押すと払うを1つの検出で受け、距離か速さで決める形にし、短いフリックでも帯が開閉するようにした | [margin_pane](features/margin_pane.md) §5.1 |
+| 2026-10-10 | 開いた Fold で ✎ の後は本文とペインを同じ大きさで並べ、操作はつまみを払うか押すと出る帯に入れた | [margin_pane](features/margin_pane.md) §5.1・[fold_experience](system/fold_experience.md) §6 |
+| 2026-10-10 | 書いている間の理由の通知を見る UI テストを、状態確認中から書き始めて畳まれてから理由を届ける順序に直した | — |
+| 2026-10-10 | 入力中の利用不可通知の製品修正を机上で確認し、追加UIテストが入力開始前から理由を渡す問題を記録した | [レビュー一覧](../review/README.md) |
+| 2026-10-10 | 利用不可の理由を「見せた」と数えるのを、理由の行が実際に組まれたときだけにし、書いている間の畳まれた行で消費しないようにした | [margin_pane](features/margin_pane.md) §5.4 |
+| 2026-10-10 | 要約ボタンのレビュー指摘2件を机上で解消と確認し、入力中に隠れた要約欄の通知を消費する問題を追加で記録した | [レビュー一覧](../review/README.md) |
+| 2026-10-10 | 面を出さずに頼んだ要約の利用不可の理由を、頼んだ節を映しているときに一度だけ見せ、画面を作り直しても失わないようにした | [margin_pane](features/margin_pane.md) §5.4 |
+| 2026-10-10 | 要約ボタンとFoldのレールをレビューし、AI利用不可の説明で対象の節と画面再作成の扱いに問題が残ることを確認した | [レビュー一覧](../review/README.md) |
+| 2026-10-10 | 開いた Fold で余白ペインが出ている間はタブのレールを畳み、本文とペインをほぼ同じ幅にした | [margin_pane](features/margin_pane.md) §5.1・[tab_navigation](system/tab_navigation.md) |
+| 2026-10-10 | 見出しの要約ボタンは、面が出ていなければ要約を始めるだけにし、頼んだ節でもう一度押すとシートで見せるようにした | [margin_pane](features/margin_pane.md) §5.4・[section_ai_chat](features/section_ai_chat.md) §4 |
 | 2026-10-08 | 外部のデザイン壁打ちから、規約の内側で持ち帰れる装飾と手触り6件を owner の持ち帰り帳に起こした | — |
 | 2026-10-07 | 実機の体感から UX の課題3件とアイデア3案を起票し、困っている5件をロードマップの Now の先頭に置いた | — |
 | 2026-10-06 | タブ・Rediscover・読書痕跡の正本をコードと突き合わせ、冊子と共有する引いた経路などの食い違いを直した | [rediscover](features/rediscover.md)・[reflect_reading_trace](features/reflect_reading_trace.md)・[tab_navigation](system/tab_navigation.md) |

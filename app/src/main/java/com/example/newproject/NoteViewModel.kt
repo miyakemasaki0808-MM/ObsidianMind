@@ -570,7 +570,8 @@ class NoteViewModel internal constructor(
 
     // ── 節ごとの部分要約（実装は SectionChatController）─────────────────────
 
-    fun requestSectionSummary(section: SectionRef) = session.requestSectionSummary(section)
+    fun requestSectionSummary(section: SectionRef, quietly: Boolean = false) = session.requestSectionSummary(section, quietly)
+    fun acknowledgeSectionSummaryNotice(requestId: Long) = session.acknowledgeSectionSummaryNotice(requestId)
     fun retrySectionSummary(section: SectionRef) = session.retrySectionSummary(section)
     fun cancelSectionSummary(section: SectionRef) = session.cancelSectionSummary(section)
 

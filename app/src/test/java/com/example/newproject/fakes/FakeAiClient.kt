@@ -40,6 +40,12 @@ class FakeAiClient(
      */
     var availabilityFailure: (() -> Throwable)? = null
 
+    /**
+     * 渡すと、[checkAvailability] はこれが完了するまで返さない。**状態確認の途中に起きること**を作る
+     * （頼んだ後・結果が届く前に読む節を動かす、など）。返す値は完了した時点の [availability]。
+     */
+    var availabilityGate: CompletableDeferred<Unit>? = null
+
     /** 投げられたプロンプトを順に控える。どの本文で生成が走ったかを見るために要る。 */
     val prompts = mutableListOf<String>()
     val generateCalls: Int get() = prompts.size
@@ -59,6 +65,7 @@ class FakeAiClient(
     private val pending = mutableListOf<CompletableDeferred<String>>()
 
     override suspend fun checkAvailability(): AiAvailability {
+        availabilityGate?.await()
         availabilityFailure?.let { throw it() }
         return availability
     }

@@ -48,7 +48,8 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 /**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
- * タブ（note/related/ai）以外のルート（全画面・冊子など）ではバー/レールを出さない。
+ * タブ以外のルート（全画面・冊子など）ではバー/レールを出さない。
+ * ノートタブで余白ペインが出ている間はレールを畳む（→ [showsRail]）。
  *
  * **[content] は、どの形でも「最初の子」として同じ位置で呼ぶ。** `rememberSaveable` は呼び出し位置で保存先を
  * 決め、その位置には**前にある兄弟グループの数**も入る。形ごとに呼ぶ場所を分けたり、条件付きのレールを前に
@@ -66,6 +67,8 @@ internal fun AppScaffold(
     windowSizeClass: WindowSizeClass,
     navController: NavHostController,
     snackbarHostState: SnackbarHostState,
+    /** ノートタブが余白ペインを出しているか。出ている間はレールを畳む。 */
+    notePaneVisible: Boolean,
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -76,7 +79,7 @@ internal fun AppScaffold(
     Box(modifier = Modifier.fillMaxSize()) {
         ScaffoldLayout(
             body = { content(Modifier.fillMaxSize()) },
-            rail = if (isTabRoute && useRail) {
+            rail = if (showsRail(isTabRoute, useRail, currentRoute, notePaneVisible)) {
                 {
                     NavigationRail(containerColor = NavBar) {
                         AppDestination.entries.forEach { dest ->
@@ -128,6 +131,15 @@ internal fun AppScaffold(
         )
     }
 }
+
+/**
+ * レールを出すか。**ノートタブで余白ペインが出ている間は畳む**（→ features/margin_pane.md §5.1）。
+ * レールが本文の列の幅を取り、折り目で割った本文がペインより細くなる。畳めば本文とペインがほぼ等しくなる。
+ * 見出しの行の操作は本文の列の上にあって幅を取らないので、畳まない。
+ * 畳んでいる間は下のバーも出さない — タブを替えるのは ✎ でペインをしまってから。
+ */
+internal fun showsRail(isTabRoute: Boolean, useRail: Boolean, currentRoute: String?, notePaneVisible: Boolean): Boolean =
+    isTabRoute && useRail && !(currentRoute == AppDestination.Note.route && notePaneVisible)
 
 /**
  * 左にレール、下にバー、残りに本文を置く。**組み立ての順は本文が先**で、並べる位置だけをここで決める

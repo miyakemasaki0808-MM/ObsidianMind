@@ -12,9 +12,13 @@ import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
+import com.example.newproject.ui.screen.opensFaceForNotice
+import com.example.newproject.model.state.AiNoticeAction
+import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.ui.screen.compactWhileTyping
 import com.example.newproject.ui.screen.dropsHiddenSheet
-import com.example.newproject.ui.screen.paneForNoteShown
 import com.example.newproject.ui.screen.pendingAfterReveal
 import com.example.newproject.ui.screen.hidesReaderControls
 import com.example.newproject.ui.screen.memoRevealStop
@@ -33,6 +37,8 @@ import androidx.compose.runtime.saveable.SaverScope
 import com.example.newproject.ui.screen.paneRelatedCandidates
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
 import java.time.ZoneId
@@ -120,27 +126,56 @@ class MarginSurfaceTest {
         )
     }
 
-    /**
-     * 見出しの要約ボタン。出ている面があればそこに出し、無ければその窓で出せる面を出す。
-     * **ペインを出せる窓で設定が閉じているときは、このノートの間だけペインを出す**（設定は書き換えない）。
-     */
+    /** 見出しの要約ボタン。**出ている面があればそこに出す**（面を2つにしない）。 */
     @Test
-    fun `要約ボタンは出ている面に出し、無ければ出せる面を出す`() {
-        assertEquals(SummaryEntry.Pane, summaryEntryFor(canShowPane = true, paneVisible = true, sheetVisible = false))
-        assertEquals(SummaryEntry.PaneForNote, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = false))
-        // 閉じる設定でシートを出したまま Fold を開いたときは、出ているシートに出す（面を2つにしない）
-        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = true, paneVisible = false, sheetVisible = true))
-        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = false))
-        assertEquals(SummaryEntry.Sheet, summaryEntryFor(canShowPane = false, paneVisible = false, sheetVisible = true))
+    fun `要約ボタンは出ている面に出す`() {
+        for (requested in listOf(false, true)) {
+            assertEquals(SummaryEntry.Pane, summaryEntryFor(paneVisible = true, sheetVisible = false, requested = requested))
+            assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = true, requested = requested))
+        }
     }
 
-    /** このノートの間だけ出したペインは、**出したノートと今のノートが同じときだけ**出す（保存値の復元でも照合する）。 */
+    /**
+     * **面が出ていなければ、まだ頼んでいない節は始めるだけで面を出さない。** 頼んだ節は記号が状態を示しているので、
+     * 押すのは見に行くときで、シートで見せる（ペインの設定は書き換えない）。
+     */
     @Test
-    fun `このノートの間だけのペインは、出したノートを開いている間だけ出す`() {
-        assertEquals(true, paneForNoteShown(owner = "content://a", currentNote = "content://a"))
-        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = "content://b"))
-        assertEquals(false, paneForNoteShown(owner = "content://a", currentNote = null))
-        assertEquals(false, paneForNoteShown(owner = null, currentNote = "content://a"))
+    fun `面が出ていなければ、頼んでいない節は始めるだけで、頼んだ節はシートで見せる`() {
+        assertEquals(SummaryEntry.Background, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = false))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = true))
+    }
+
+    /**
+     * 面を出さずに頼んだ要約。**端末AIが使えない理由が届いてまだ見せていなければ面を開く** — 理由は失敗として数えないので、
+     * 記号が 💬 のまま変わらず、押しても何も起きないように見える。生成中・完成・生成の失敗は記号が示すので開かない。
+     */
+    @Test
+    fun `面を出さずに頼んだ要約は、端末AIが使えない理由が届いてまだ見せていないときだけ面を開く`() {
+        val requested = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", isSummaryLoading = true, noticePending = true)
+        val noticed = requested.copy(isSummaryLoading = false, summaryProblem = NOTICE)
+
+        assertTrue(opensFaceForNotice(noticed, faceVisible = false))
+        assertFalse(opensFaceForNotice(requested, faceVisible = false))
+        assertFalse(opensFaceForNotice(noticed.copy(noticePending = false), faceVisible = false))
+        assertFalse(opensFaceForNotice(requested.copy(isSummaryLoading = false, summary = "要約"), faceVisible = false))
+        assertFalse(
+            opensFaceForNotice(
+                requested.copy(isSummaryLoading = false, summaryProblem = SectionChatProblem.GenerationFailed("x")),
+                faceVisible = false
+            )
+        )
+        assertFalse(opensFaceForNotice(summary = null, faceVisible = false))
+    }
+
+    /**
+     * **面が出ていれば開き直さない。** 見せたことは理由の行が組まれたときに行が伝えるので、ここでは開くかだけを決める。
+     * シートで書いている間に行が畳まれていても、並べ読みでペインに行が無くても、面は出ているので待つ。
+     */
+    @Test
+    fun `面が出ていれば、行が畳まれていても開き直さない`() {
+        val noticed = SectionSummary(SectionRef("A"), requestId = 1, sectionTitle = "A", sectionContext = "", summaryProblem = NOTICE, noticePending = true)
+
+        assertFalse(opensFaceForNotice(noticed, faceVisible = true))
     }
 
     /**
@@ -384,5 +419,11 @@ class MarginSurfaceTest {
         assertEquals(list.copy(candidates = list.candidates!!.map { it.copy(snippet = null) }), roundTrip(list))
         assertEquals(waiting, roundTrip(waiting))
         assertNull(roundTrip(null))
+    }
+
+    private companion object {
+        val NOTICE = SectionChatProblem.AiStatus(
+            AiStatusNotice(message = "この端末では使えません", action = AiNoticeAction.None, canTryAgainLater = false)
+        )
     }
 }

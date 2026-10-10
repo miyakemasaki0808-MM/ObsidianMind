@@ -25,6 +25,13 @@ internal fun SectionSummary.isShownAsIsOnRequest(): Boolean {
 }
 
 /**
+ * 面を出さずに頼んだ要求に、端末AIが使えない理由が届いていて、まだ見せていないか（→ features/margin_pane.md §5.4）。
+ * 理由は失敗として数えず記号に出ないので、要約の行で見せるまで印を残す。
+ */
+internal fun SectionSummary.hasUnshownNotice(): Boolean =
+    noticePending && summaryProblem is SectionChatProblem.AiStatus
+
+/**
  * [started] を最も新しい要約として足す。
  *
  * - 同じ節の要約は置き換える（作り直し）
