@@ -38,8 +38,10 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.swipeDown
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -1240,6 +1242,126 @@ class NoteReadingFlowTest {
 
         composeRule.onNodeWithContentDescription("操作を出す").performSemanticsAction(SemanticsActions.OnClick)
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
+    }
+
+    // ── 片側を払って1画面に（→ features/margin_pane.md §5.1）───────────────
+
+    /**
+     * **本文の上のどこからでも、左へ払うと余白が1画面になり、右へ払うと2面へ戻る。** 本文は組んだまま隠れ、読み上げからも外れる。
+     */
+    @Test
+    fun 机の画面では本文の上で左へ払うと余白が1画面になり_右へ払うと2面へ戻る() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        // 余白の上から右へ払う。1画面の余白は窓いっぱいなので、窓の中ほどから払える。
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /**
+     * **余白の上から右へ短くフリックすると本文が1画面になる。** 30dp を 40ms で払う（距離の線 56dp に届かず、速さで決まる）。
+     * 余白は組んだまま隠れ、入力欄は読み上げからも外れる。戻る操作で2面へ戻る。
+     */
+    @Test
+    fun 机の画面では余白の上で右へフリックすると本文が1画面になり_戻る操作で2面へ戻る() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = right - 240.dp.toPx(), endX = right - 210.dp.toPx(), durationMillis = 40)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        Espresso.pressBack()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+    }
+
+    /** 本文を縦に払うとスクロールするだけで、片側は広げない（縦横は動き始めで決める）。 */
+    @Test
+    fun 机の画面では本文を縦に払うとスクロールし_片側は広げない() {
+        val listState = LazyListState()
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                    ReaderTab(
+                        loadedNote(LONG_BODY).withMemos(),
+                        buildNoteSectionModel(LONG_BODY),
+                        listState,
+                        marginPaneOpen = true,
+                        expandedWidth = true
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipe(start = Offset(200.dp.toPx(), centerY + 150.dp.toPx()), end = Offset(230.dp.toPx(), centerY - 150.dp.toPx()), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+
+        assertTrue("縦に払ったのにスクロールしていない", listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0)
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
+    @Test
+    fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
+        setDesk()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            down(Offset(300.dp.toPx(), centerY))
+            advanceEventTime(viewConfiguration.longPressTimeoutMillis + 200)
+            moveTo(Offset(120.dp.toPx(), centerY))
+            up()
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** **帯が出ている間は横の払いで広げない。** 帯の操作と、本文に触れて帯をしまう操作が先。 */
+    @Test
+    fun 机の画面では帯が出ている間は横に払っても片側を広げない() {
+        setDesk()
+        openDeskBar()
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = right - 300.dp.toPx(), endX = right - 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    /** 読み上げ（TalkBack）からは、つまみの操作で片側を1画面にして、2面へ戻せる。 */
+    @Test
+    fun 机の画面では読み上げの操作で片側を1画面にして戻せる() {
+        setDesk()
+
+        performGripAction("本文を1画面に")
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        performGripAction("2面に戻す")
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+    }
+
+    private fun performGripAction(label: String) {
+        val actions = composeRule.onNodeWithContentDescription("操作を出す").fetchSemanticsNode()
+            .config[SemanticsActions.CustomActions]
+        composeRule.runOnIdle { assertTrue(actions.first { it.label == label }.action()) }
+        composeRule.waitForIdle()
     }
 
     /** 机の画面の帯を、つまみを下へ払って出す。 */

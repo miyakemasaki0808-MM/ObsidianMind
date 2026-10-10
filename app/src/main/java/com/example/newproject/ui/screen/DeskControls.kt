@@ -27,8 +27,10 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.input.pointer.util.addPointerInputChange
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -91,14 +93,21 @@ internal val DeskStripHeight = 48.dp
 
 /**
  * 左の面の上のつまみ。**下へ払うと帯を出す。指で押しても開かない**（→ features/margin_pane.md §5.1）。
- * 本文の縦のスクロールと取り合わないよう、払いはここでだけ受ける。
+ * 本文の縦のスクロールと取り合わないよう、縦の払いはここでだけ受ける（横の払いは面のどこからでも受ける → [detectDeskSpread]）。
  * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
  * これを外すと帯の ✎ にも届かず、机の画面から抜けられない。この操作は読み上げ機能だけが呼び、指で押しても呼ばれない。
  * 読み込み中は端にくるくるを出す — 帯がしまわれている間も、次のノートを読んでいることが分かるように。
  */
 @Composable
-internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modifier = Modifier) {
+internal fun DeskGripStrip(
+    loading: Boolean,
+    onShow: () -> Unit,
+    spread: DeskSpread,
+    onSpread: (DeskSpread) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val currentOnShow by rememberUpdatedState(onShow)
+    val currentOnSpread by rememberUpdatedState(onSpread)
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -112,6 +121,13 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
                 onClick(label = "操作を出す") {
                     currentOnShow()
                     true
+                }
+                // 片側を1画面にする横の払いも、読み上げ中は払えないので操作として置く（→ deskSpreadActionsFor）。
+                customActions = deskSpreadActionsFor(spread).map { (label, next) ->
+                    CustomAccessibilityAction(label) {
+                        currentOnSpread(next)
+                        true
+                    }
                 }
             },
         contentAlignment = Alignment.Center
@@ -134,13 +150,16 @@ internal fun DeskGripStrip(loading: Boolean, onShow: () -> Unit, modifier: Modif
  * **器の外に置かないと、はみ出した分が指を受け取らない。** 帯が出ている間は置かない — 帯の上の操作を横取りする。
  */
 @Composable
-internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit) {
+internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpread: (DeskSpreadGesture) -> Unit) {
     val currentOnShow by rememberUpdatedState(onShow)
+    val currentOnSpread by rememberUpdatedState(onSpread)
     Box(
         modifier = Modifier
             .offset(y = -reachAbove)
             .width(width)
             .height(reachAbove + DeskStripHeight)
+            // 面の上に重ねて置くので、ここで払い始めた指は面へ届かない。横の払いもここで受ける。
+            .pointerInput(Unit) { detectDeskSpread { gesture -> currentOnSpread(gesture) } }
             .pointerInput(Unit) {
                 detectDeskGrip { gesture -> if (gesture == DeskBarGesture.Show) currentOnShow() }
             }
