@@ -1,6 +1,6 @@
 # 開発日誌
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 
 > ## ⚠️ この日誌は現在状態の正本ではない
 >

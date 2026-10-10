@@ -1,6 +1,6 @@
 # プロダクトロードマップ
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 **初版:** 2026-07-22（最終更新: 2026-10-11）
 **基準:** 何がどこまで進んだかは [change_history.md](../dev/change_history.md) が正、未対応の課題は [current_issues.md](current_issues.md) が正。**ここに進捗のスナップショットを書かない**（書いた瞬間から古くなり、実際 ReadingTrace v1 の記述が2週間ずれていた）。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。

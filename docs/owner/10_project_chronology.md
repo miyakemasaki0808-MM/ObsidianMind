@@ -1,6 +1,6 @@
 # プロジェクト年表
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 **作成日:** 2026-09-08 / **更新:** 2026-10-11
 **位置づけ:** オーナーの依頼に基づき、Git のコミットと PR 履歴から編纂した開発年代記。
 **原点記録:** [09_project_origin.md](09_project_origin.md)

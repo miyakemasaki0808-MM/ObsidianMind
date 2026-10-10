@@ -1,6 +1,6 @@
 # 教訓（lessons）の棚卸しシート
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 **作成:** 2026-09-08 / 全62件を通読して作成
 **更新:** 2026-10-11。件数と中身を [dev/lessons.md](../dev/lessons.md) と突き合わせ、10-06 から変わりが無いことを確かめた
 
