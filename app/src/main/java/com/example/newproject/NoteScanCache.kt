@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,10 @@ internal class NoteScanCache(
     var notes: List<NoteFile> = emptyList()
         private set
 
+    /** 本文のリンクを引くための索引（→ features/note_links.md §6）。[notes] と同じ時点で替わり、同じ時点で捨てる。 */
+    var linkIndex: NoteLinkIndex = NoteLinkIndex.EMPTY
+        private set
+
     private var loadedAt = 0L
 
     private val mutableKnownPaths = MutableStateFlow<Set<String>>(emptySet())
@@ -49,6 +54,7 @@ internal class NoteScanCache(
             throw CancellationException("走査の間に Vault が切り替わったので、結果を捨てました。")
         }
         notes = scanned
+        linkIndex = NoteLinkIndex(scanned)
         loadedAt = now
         mutableKnownPaths.value = scanned.mapNotNullTo(HashSet()) { note ->
             note.vaultRelativePath.takeIf { it.isNotEmpty() }
@@ -60,6 +66,7 @@ internal class NoteScanCache(
     /** 捨てる。Vault切替と、本文を書き換えた後に呼ぶ。 */
     fun clear() {
         notes = emptyList()
+        linkIndex = NoteLinkIndex.EMPTY
         loadedAt = 0L
         mutableKnownPaths.value = emptySet()
     }

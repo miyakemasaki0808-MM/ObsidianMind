@@ -16,7 +16,12 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -25,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.headingBlockIndex
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
@@ -54,11 +60,27 @@ internal fun SideReadingPane(
     /** 右で読んでいたブロック [startBlock] から、[RelatedNote] を普通に開く。 */
     onMove: (note: RelatedNote, startBlock: Int) -> Unit,
     onRetry: (RelatedNote) -> Unit,
+    /** 本文のリンクから開いたなら、その見出し（→ features/note_links.md）。関連の候補から開いたなら null。 */
+    linkStart: SideLinkStart? = null,
+    /** リンクの見出しがこのノートに無かった。先頭から始めたことを知らせる。 */
+    onHeadingMissing: (heading: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val note = state.note ?: return
     // **候補ごとに先頭から。** 別の候補を選んだら位置を持ち越さない。画面の作り直しでは保つ。
     val listState = rememberSaveable(note.ref.value, saver = LazyListState.Saver) { LazyListState() }
+    // リンクの見出しへ送るのは、読めた後に1度だけ。**送った要求の番号を保存値に置く** — 画面を作り直しても、読み進めた位置を見出しへ戻さない。
+    var startedRequest by rememberSaveable { mutableLongStateOf(0L) }
+    val currentOnHeadingMissing by rememberUpdatedState(onHeadingMissing)
+    val ready = state is SideReadingState.Ready && blocks != null
+    LaunchedEffect(linkStart, ready) {
+        val start = linkStart ?: return@LaunchedEffect
+        if (!ready || start.request == startedRequest) return@LaunchedEffect
+        startedRequest = start.request
+        val heading = start.heading ?: return@LaunchedEffect
+        val block = headingBlockIndex(blocks, heading)
+        if (block != null) listState.scrollToItem(block) else currentOnHeadingMissing(heading)
+    }
     Column(modifier = modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),

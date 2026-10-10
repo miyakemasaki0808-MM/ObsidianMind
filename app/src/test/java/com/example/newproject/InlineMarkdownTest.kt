@@ -6,6 +6,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import com.example.newproject.domain.markdown.InlineSpanKind
 import com.example.newproject.domain.markdown.scanInlineSyntax
+import androidx.compose.ui.text.LinkAnnotation
+import com.example.newproject.domain.NoteLink
+import com.example.newproject.ui.markdown.NoteLinkTaps
 import com.example.newproject.ui.markdown.inlineMarkdown
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -121,6 +124,62 @@ class InlineMarkdownTest {
     fun `表のセルのエスケープした縦棒は表示名の区切りとして読む`() {
         assertEquals("0E00_0001", plainText("[[0E00_0001.Plan_Bento\\|0E00_0001]]"))
         assertEquals("a | b", plainText("a \\| b"))
+    }
+
+    // ── 押せるリンク（→ features/note_links.md） ─────────────────────────────
+
+    /** 押せる範囲の文字と、そこを押したときに届くリンク。 */
+    private fun clickableLinks(input: String): List<Pair<String, NoteLink>> {
+        val opened = mutableListOf<NoteLink>()
+        val text = inlineMarkdown(input, linkTaps = NoteLinkTaps { opened += it })
+        return text.getLinkAnnotations(0, text.length).map { range ->
+            (range.item as LinkAnnotation.Clickable).linkInteractionListener!!.onClick(range.item)
+            text.text.substring(range.start, range.end) to opened.last()
+        }
+    }
+
+    private val noTaps = NoteLinkTaps {}
+
+    @Test
+    fun `押す口を渡すとノートと見出しへのリンクだけが押せる`() {
+        val input = "[[A|エー]] と [B](b.md#節) と [外](https://example.com) と [[図.png]] と [目次](#はじめに)"
+        assertEquals(
+            listOf(
+                "エー" to NoteLink.ByName("A", null),
+                "B" to NoteLink.ByPath("b.md", "節"),
+                "目次" to NoteLink.InNote("はじめに")
+            ),
+            clickableLinks(input)
+        )
+    }
+
+    @Test
+    fun `押す口が無ければリンクは押せない文字列のまま`() {
+        val text = inlineMarkdown("[[A]] と [B](b.md)")
+        assertTrue(text.getLinkAnnotations(0, text.length).isEmpty())
+    }
+
+    @Test
+    fun `押せるリンクも押せないリンクと同じ見た目で描く`() {
+        val input = "[[A]] と [外](https://example.com)"
+        assertEquals(inlineMarkdown(input).spanStyles, inlineMarkdown(input, linkTaps = noTaps).spanStyles)
+        assertEquals(inlineMarkdown(input).text, inlineMarkdown(input, linkTaps = noTaps).text)
+    }
+
+    @Test
+    fun `入れ子の中のリンクも押せる`() {
+        assertEquals(listOf("A" to NoteLink.ByName("A", null)), clickableLinks("**太字の [[A]] です**"))
+    }
+
+    @Test
+    fun `長押しの後の指離しではリンクを開かない`() {
+        val opened = mutableListOf<NoteLink>()
+        val taps = NoteLinkTaps { opened += it }
+        taps.heldTooLong = true
+        taps.open(NoteLink.ByName("A", null))
+        taps.heldTooLong = false
+        taps.open(NoteLink.ByName("B", null))
+        assertEquals(listOf(NoteLink.ByName("B", null)), opened)
     }
 
     @Test

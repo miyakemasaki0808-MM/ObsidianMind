@@ -2,13 +2,16 @@ package com.example.newproject.ui.markdown
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import com.example.newproject.domain.noteLinkOf
 import com.example.newproject.domain.markdown.InlineSpan
 import com.example.newproject.domain.markdown.InlineSpanKind
 import com.example.newproject.domain.markdown.scanInlineSyntax
@@ -44,14 +47,18 @@ internal data class InlineMarkdownColors(
  *
  * **入れ子も描く。** `**A *B* C**` の内側の斜体を捨てると、蒸留が文を太字にした瞬間に
  * ユーザーの装飾が表示から消える。
+ *
+ * [linkTaps] を渡すと、ノートと見出しへのリンクを押せるようにする（→ features/note_links.md）。
+ * **見た目は押せるかどうかで変えない。** どのリンクが押せるかは [noteLinkOf] が記法だけで決める。
  */
 internal fun inlineMarkdown(
     text: String,
-    colors: InlineMarkdownColors = InlineMarkdownColors.Light
+    colors: InlineMarkdownColors = InlineMarkdownColors.Light,
+    linkTaps: NoteLinkTaps? = null
 ) = buildAnnotatedString {
     val scan = scanInlineSyntax(text)
     val escapedBackslashes = scan.escapes.mapTo(mutableSetOf()) { it.start }
-    appendSpans(text, scan.spans, 0, text.length, escapedBackslashes, colors)
+    appendSpans(text, scan.spans, 0, text.length, escapedBackslashes, colors, linkTaps)
 }
 
 /** [from]〜[to] を、[spans] の範囲だけ装飾しながら描く。範囲の内側は子で描き直す。 */
@@ -61,7 +68,8 @@ private fun AnnotatedString.Builder.appendSpans(
     from: Int,
     to: Int,
     escapedBackslashes: Set<Int>,
-    colors: InlineMarkdownColors
+    colors: InlineMarkdownColors,
+    linkTaps: NoteLinkTaps?
 ) {
     var index = from
     spans.forEach { span ->
@@ -69,12 +77,15 @@ private fun AnnotatedString.Builder.appendSpans(
         withStyle(styleFor(span, colors)) {
             when (span.kind) {
                 // `[[note|表示名]]` は表示名だけを出す。内側は解釈しない。
-                InlineSpanKind.WikiLink ->
+                InlineSpanKind.WikiLink -> appendLink(text, span, linkTaps) {
                     append(text.substring(span.contentStart, span.contentEnd).split("|").last())
-                InlineSpanKind.Code, InlineSpanKind.Link ->
+                }
+                InlineSpanKind.Link -> appendLink(text, span, linkTaps) {
                     append(text.substring(span.contentStart, span.contentEnd))
+                }
+                InlineSpanKind.Code -> append(text.substring(span.contentStart, span.contentEnd))
                 else -> appendSpans(
-                    text, span.children, span.contentStart, span.contentEnd, escapedBackslashes, colors
+                    text, span.children, span.contentStart, span.contentEnd, escapedBackslashes, colors, linkTaps
                 )
             }
         }
@@ -82,6 +93,23 @@ private fun AnnotatedString.Builder.appendSpans(
     }
     appendPlain(text, index, to, escapedBackslashes)
 }
+
+/** 押せるリンクなら押せる範囲で包み、押せないリンクはそのまま描く。 */
+private fun AnnotatedString.Builder.appendLink(
+    text: String,
+    span: InlineSpan,
+    linkTaps: NoteLinkTaps?,
+    appendLabel: AnnotatedString.Builder.() -> Unit
+) {
+    val link = linkTaps?.let { noteLinkOf(text, span) }
+    if (link == null) {
+        appendLabel()
+    } else {
+        withLink(LinkAnnotation.Clickable(tag = NOTE_LINK_TAG) { linkTaps.open(link) }) { appendLabel() }
+    }
+}
+
+private const val NOTE_LINK_TAG = "note-link"
 
 /** 装飾の外側。エスケープは記号だけを出す（`\*` → `*`）。Obsidianと同じ見え方にする。 */
 private fun AnnotatedString.Builder.appendPlain(

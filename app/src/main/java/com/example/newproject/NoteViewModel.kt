@@ -34,7 +34,10 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.domain.NoteLink
+import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.RelatedNotesResult
+import com.example.newproject.domain.resolveNoteLink
 import com.example.newproject.domain.notePaperTone
 import com.example.newproject.domain.notePaperToneForCandidate
 import com.example.newproject.model.DistillLimits
@@ -430,6 +433,15 @@ class NoteViewModel internal constructor(
             contentResolver,
             RelatedNote(title = note.name, ref = note.ref, isWikilinked = false, lastModified = note.lastModified)
         )
+    }
+
+    /**
+     * 本文のリンクを、今のノートを出発点に今の走査結果から引く（→ features/note_links.md）。
+     * **押したときに同期で引くだけで、走査し直さない。** 走査は本文を出す経路が済ませている。
+     */
+    internal fun resolveNoteLink(link: NoteLink): NoteLinkResolution {
+        val source = (uiState.value.noteState as? NoteState.Success)?.targetUri?.takeIf { it.isNotEmpty() }
+        return resolveNoteLink(link, source?.let(::DocumentRef), noteScan.linkIndex)
     }
 
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────

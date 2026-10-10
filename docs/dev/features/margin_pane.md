@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序と面は §10）
 **最終検証:** 2026-10-10 / `5cc23123`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
-段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
+段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteStart.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
 **関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
@@ -327,6 +327,9 @@
 
 - ペインの下の「このノートの関連」に、ノートを開いたときに作られた候補が並ぶ。**AI を新しく呼ばない。** AI の推薦が後から届いても、開いている一覧の並びは入れ替えず下へ足す
 - 候補を押すと、ペインの中身がそのノートの本文に替わる。上に「← 余白へ戻る」と「このノートへ移る」を置く
+- **本文のリンクからも右で開く**（→ [note_links](note_links.md)）。見出しつきのリンクならその見出しから始める。
+  そのときの「← 余白へ戻る」は関連の一覧まで面を送らず、余白を開く前の位置のまま戻す
+- **右のノートの中のリンクは押せない。** 右を独立して辿る形は Fold の机の契約1で決める
 - **右のノートは眺めるだけ。** 訪問を記録せず、要約も分野判定も走らせず、メモも置けない。左の進捗にも右のスクロールを入れない。画像の寸法の入れ物も渡さない
 - **次の契機で要求を失効させ、遅れて届いた結果を書かない。** 別の候補を選ぶ、余白へ戻る、ペインを閉じる、余白ペインでない並べ方になる、ノートを替える、Vault を替える
 - 読み込みの失敗は右側だけに出し、そこで再試行できる。左の読書と書きかけは止めない

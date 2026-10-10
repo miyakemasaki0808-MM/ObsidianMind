@@ -1,9 +1,9 @@
 # ノート内のリンクを押して開く
 
-**状態:** 構想。設計は確定し、実装は未着手
+**状態:** 実装済み。実機では未検証（→ §10）
 **最終検証:** 未検証（実装前）
-**関連コード:** 予定 — `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt`
-**関連テスト:** 予定 — `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / androidTest: `NoteLinkTapUiTest`
+**関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
+**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / androidTest: `NoteLinkTapUiTest`（組み立てのみ。端末では未実行）
 **正本:** この文書
 
 **関連:** [Markdown解析](../system/markdown_rendering.md)（描画とインライン記法の解釈器）・
@@ -125,8 +125,8 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 | `domain` | `NoteLinks.kt` — 記法からリンクを読む（`noteLinkOf`）、走査結果の索引（`NoteLinkIndex`）、引く（`resolveNoteLink`）、見出しのブロックを探す（`headingBlockIndex`）。いずれも純関数 | `domain/markdown/MarkdownBlocks.kt` — 表のセルを `\|` で割らない |
 | 走査のキャッシュ | — | `NoteScanCache` — 公開と同じ1か所で索引を作り直す。Vault 世代の照合は今の公開と共有する |
 | 窓口 | — | `NoteViewModel.resolveNoteLink` — 今のノートを出発点に、今の索引で引く。同期で、ジョブを持たない |
-| `ui/markdown` | — | `inlineMarkdown` が押せるリンクにだけ `LinkAnnotation` を付ける。押す口を渡されなければ今と同じ文字列になる。`MarkdownNoteContent` が押す口と、長押しで開かせない見張りを持つ |
-| `ui/screen` | `NoteLinkActions.kt` — 引いた結果と窓から、画面の操作を決める純関数と、知らせの文 | `NoteReaderTab` と `FullscreenNoteScreen` がリンクを受ける。`SideReadingPane` が見出しから始める |
+| `ui/markdown` | `NoteLinkTaps.kt` — 押す口（`NoteLinkTaps`）と、長押しで開かせない見張り（`watchLinkPresses`） | `inlineMarkdown` が押せるリンクにだけ `LinkAnnotation` を付ける。押す口を渡されなければ今と同じ文字列になる。`MarkdownNoteContent` が口を本文の中へ配り、見張りを容器に付ける |
+| `ui/screen` | `NoteLinkActions.kt` — 引いた結果と窓から、画面の操作を決める純関数（`noteLinkActionFor`）と知らせの文。`NoteStart.kt` — 開いたノートを見出しやブロックから始める口（`rememberNoteStart`）と、同じノートの送り先（`currentNoteScrollTarget`） | `NoteReaderTab` と `FullscreenNoteScreen` がリンクを受ける。「このノートへ移る」も同じ `rememberNoteStart` を通る。`SideReadingPane` が見出しから始める |
 
 - **押せるかは描くときに記法だけで決める。** リンク先の文字列は `scanInlineSyntax` が決めた範囲から切り出し、記法を別に解釈しない。
   解釈器が2つになると、片方の規則だけが変わったときに表示と押せる範囲が食い違う（→ [lessons L51](../lessons/L51.md)）

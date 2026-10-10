@@ -219,7 +219,8 @@ class MainActivity : ComponentActivity() {
                                 onOpenSideReading = { note -> viewModel.openSideReading(contentResolver, note) },
                                 onCloseSideReading = { viewModel.closeSideReading() },
                                 // 関連タブと同じ経路で開く。ノートタブの中なので画面は移らない。
-                                onOpenNote = { note -> viewModel.openNote(contentResolver, note) }
+                                onOpenNote = { note -> viewModel.openNote(contentResolver, note) },
+                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) }
                             )
                         }
 
@@ -283,7 +284,10 @@ class MainActivity : ComponentActivity() {
                                 onMemoFocusIntentChange = { memoFocusIntent = it },
                                 onReadingProgress = { blockIndex, blockFraction, totalBlocks, sectionTitle ->
                                     viewModel.reportReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
-                                }
+                                },
+                                // リンク先は全画面のまま今のノートとして開く（→ features/note_links.md §5）。
+                                onOpenNote = { note -> viewModel.openNote(contentResolver, note) },
+                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) }
                             )
                         }
 
