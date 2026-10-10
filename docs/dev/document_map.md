@@ -110,6 +110,7 @@
 | [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
+| [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
 
 ### 基盤（`system/`）
 
