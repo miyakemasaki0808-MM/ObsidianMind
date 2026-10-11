@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 反証の一文の候補を、本文と同じパーサとインラインの解釈器から段落単位・見える文字で作り、英文もピリオドで割るようにした | [rebuttal_sentence](features/rebuttal_sentence.md) 判断8 |
 | 2026-10-11 | 反証の一文の独立レビューとエミュレータUI確認を行い、候補抽出で原文や文境界が変わる4件を課題台帳へ起票した | [review](../review/README.md) |
 | 2026-10-11 | 実機で起こせない順序を正本の §10 で先に列挙する欄を様式に足し、実機検証の選抜で射程外とする規則を共通手順へ足した | [_template](features/_template.md)・[device_validation](../review/device_validation/README.md) |
 | 2026-10-11 | 関連ノートの本文から今のノートと食い違う1文をAIが選び、関連タブと Fold の余白ペインに原文のまま出す反証の一文を足した | [rebuttal_sentence](features/rebuttal_sentence.md) |
