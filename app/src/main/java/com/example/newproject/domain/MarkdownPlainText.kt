@@ -26,15 +26,18 @@ package com.example.newproject.domain
  * 字下げは3空白までをフェンスとみなす（4空白以上はコードブロックの字下げ）。
  *
  * 閉じられていないフェンスは、開いた行以降を全部コードとみなす（未閉じの本文へ落とさない）。
+ *
+ * [keepBlankLines] が真なら、落とす行を詰めずに空行へ替える。**段落の境目を保つ**ためで、
+ * 詰めるとフェンスの前後の段落が1つにつながる（行ごとに見る用途では、どちらでも同じ）。
  */
-internal fun withoutFencedCode(content: String): String {
+internal fun withoutFencedCode(content: String, keepBlankLines: Boolean = false): String {
     if (!content.contains(BACKTICK_FENCE) && !content.contains(TILDE_FENCE)) return content
     var opened: FenceMarker? = null
     return content.lineSequence()
-        .filter { line ->
+        .mapNotNull { line ->
             val marker = fenceMarkerOf(line)
             val open = opened
-            when {
+            val outside = when {
                 open == null -> {
                     if (marker == null) true else { opened = marker; false }
                 }
@@ -48,6 +51,11 @@ internal fun withoutFencedCode(content: String): String {
                 }
                 // フェンスの中身。短いフェンス行もここへ落ちる（閉じにならない）。
                 else -> false
+            }
+            when {
+                outside -> line
+                keepBlankLines -> ""
+                else -> null
             }
         }
         .joinToString("\n")

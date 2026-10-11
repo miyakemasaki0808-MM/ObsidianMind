@@ -94,6 +94,7 @@ class RebuttalClaimScannerTest {
     fun `終止符で終わらない行は候補にしない`() {
         val content = """
             最終検証: 2026-08-12 と関連のテスト
+
             This sentence is an English claim.
         """.trimIndent()
 
@@ -141,5 +142,82 @@ class RebuttalClaimScannerTest {
             listOf("一つめの主張をここに書いた。", "二つめの主張もここに書いた。"),
             scanRebuttalClaims("- 一つめの主張をここに書いた。二つめの主張もここに書いた。")
         )
+    }
+
+    // --- 文の単位（本文の画面と同じ段落） ------------------------------------
+
+    /**
+     * 段落の中で折り返した1文を、行ごとに割らない。割ると条件節を落とした後半だけが「本文にある一文」として出る。
+     * つなぎ方は本文の画面と同じ（行を空白でつなぐ）。
+     */
+    @Test
+    fun `段落の中で折り返した1文は条件節ごと1つの候補にする`() {
+        val content = """
+            十分な睡眠を取れていない場合に限り、
+            朝の光だけでは生活リズムを整えられない。
+        """.trimIndent()
+
+        assertEquals(
+            listOf("十分な睡眠を取れていない場合に限り、 朝の光だけでは生活リズムを整えられない。"),
+            scanRebuttalClaims(content)
+        )
+    }
+
+    @Test
+    fun `別の段落・見出し・リスト項目はつながない`() {
+        val content = """
+            句点で終わらない段落の書きかけ
+
+            次の段落の主張はここで終わる。
+            ## 見出しの行
+            - 箇条書きの項目は独立した主張である。
+            続けて書いた段落の文もここで終わる。
+        """.trimIndent()
+
+        assertEquals(
+            listOf("次の段落の主張はここで終わる。", "箇条書きの項目は独立した主張である。", "続けて書いた段落の文もここで終わる。"),
+            scanRebuttalClaims(content)
+        )
+    }
+
+    /** フェンスを詰めて落とすと、前後の段落が1つにつながる。 */
+    @Test
+    fun `コードフェンスを挟んだ前後の段落はつながない`() {
+        val content = """
+            前の段落の書きかけで終わる
+            ```
+            val x = 1
+            ```
+            後ろの段落の主張はここで終わる。
+        """.trimIndent()
+
+        assertEquals(listOf("後ろの段落の主張はここで終わる。"), scanRebuttalClaims(content))
+    }
+
+    @Test
+    fun `引用は空行の区切りまでを1つの段落としてつなぐ`() {
+        val content = """
+            > 引用の中で折り返した
+            > 一文はここで終わる。
+            >
+            > 次の引用の段落もここで終わる。
+        """.trimIndent()
+
+        assertEquals(
+            listOf("引用の中で折り返した 一文はここで終わる。", "次の引用の段落もここで終わる。"),
+            scanRebuttalClaims(content)
+        )
+    }
+
+    /** 表は本文の画面でもセルごとに描く。列の名前は主張ではない。 */
+    @Test
+    fun `表は本文の行のセルを1つずつ候補にし、列の名前は候補にしない`() {
+        val content = """
+            | 列の名前を書いた見出しである。 | 理由 |
+            |---|---|
+            | 睡眠 | 朝の光で生活リズムが整うと書いた。 |
+        """.trimIndent()
+
+        assertEquals(listOf("朝の光で生活リズムが整うと書いた。"), scanRebuttalClaims(content))
     }
 }
