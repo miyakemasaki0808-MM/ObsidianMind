@@ -346,4 +346,4 @@ CPU もメモリも小さい。読む経路を2本にしない。
 
 ## 12. 開発経緯
 
-[開発日誌 2026-10](../../owner/journal/2026-10.md)。設計の出どころは [owner/rebuttal_sentence_design](../../owner/rebuttal_sentence_design.md)（実装後は更新しない）。
+[開発日誌 2026-10](../../owner/journal/2026-10.md)。アイデアの出どころは [owner/08_idea_catalog](../../owner/08_idea_catalog.md) の AI◯1。

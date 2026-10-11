@@ -181,7 +181,6 @@ docs/
 | 09 | [project_origin](09_project_origin.md) | どこから始まったか。2026-04-30。更新しない |
 | 10 | [project_chronology](10_project_chronology.md) | どう歩んできたか。年表 |
 | — | [journal/](journal/) | どんな日々だったか。2026-07・08・09・10 |
-| — | [rebuttal_sentence_design](rebuttal_sentence_design.md) | 反証の一文をどう実装するか。**実装したら役目が終わる下書きなので、番号列に入れない** |
 | — | [design_takeaways](design_takeaways.md) | 外部のデザイン壁打ちから、規約の内側に収まる装飾と手触りをどう持ち帰るか。**持ち帰り切ったら役目が終わる帳なので、番号列に入れない** |
 
 `Fable5.1_report/` は git 管理外で、入口 README と章3本・課題一覧がある。反映し終えた章は消している。本書の数には入れない。
