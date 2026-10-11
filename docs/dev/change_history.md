@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 課題対応7コミットをレビューし、空のAI抜粋とThreading走査の検出漏れを既存課題へ対応づけた | [review](../review/README.md) |
 | 2026-10-11 | 重い純関数を Main の外で呼ぶことを守る走査3本を、表駆動の1本（ThreadingScanTest）へ寄せた（レビュー前） | [architecture](system/architecture.md) 判断3 |
 | 2026-10-11 | AI の抜粋の冒頭に、設計書や読書ノートの頭の情報の塊を数えないようにした（レビュー前） | [ai_input_excerpt](system/ai_input_excerpt.md) §2 |
 | 2026-10-11 | 冊子の扉から、頭の3行以上のラベル行の塊と表の本文の行を外した（レビュー前） | [booklet_mode](features/booklet_mode.md) §10・§11 |

@@ -29,3 +29,5 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
+| `2026-10-11-issue-fixes-code-review/P2-1` | 末尾として採った頭の情報ブロックが連続レイアウトで削除され、抜粋が空になる | `統合` AI-8 |
+| `2026-10-11-issue-fixes-code-review/P2-2` | Threading走査が文字列中の括弧を数え、withContext外の重い呼び出しを見逃す | `統合` PROC-1 |
