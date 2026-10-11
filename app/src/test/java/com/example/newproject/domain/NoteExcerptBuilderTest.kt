@@ -375,6 +375,29 @@ class NoteExcerptBuilderTest {
         assertWithinBudget(excerpt, budget)
     }
 
+    @Test
+    fun `頭の情報しか無い本文は末尾として残り空にならない`() {
+        // frontmatter で原文だけが予算を超え、解析後に残るのは頭の塊だけ。冒頭は塊を数えないので、末尾が採る。
+        val content = "---\ndescription: " + "a".repeat(2000) + "\n---\n" +
+            "開始日: 2026-10-01\n現在位置: 第2章\nステータス: 読書中"
+
+        listOf(
+            NoteExcerptLimits.FIELD,
+            NoteExcerptLimits.RELATED,
+            NoteExcerptLimits.SUMMARY,
+            NoteExcerptLimits.SECTION
+        ).forEach { budget ->
+            val excerpt = buildNoteExcerpt(content, budget)
+
+            assertTrue(excerpt.isAbridged)
+            assertTrue(
+                "予算 $budget で頭の塊が抜粋から消えています: ${excerpt.text}",
+                listOf("開始日: 2026-10-01", "現在位置: 第2章", "ステータス: 読書中").all { excerpt.text.contains(it) }
+            )
+            assertWithinBudget(excerpt, budget)
+        }
+    }
+
     /** `## Beginning excerpt` の直後から、中略か末尾のラベルまで。 */
     private fun String.beginningSection(): String =
         substringAfter("## Beginning excerpt\n").substringBefore("\n\n(omitted)").substringBefore("\n\n## Ending excerpt")

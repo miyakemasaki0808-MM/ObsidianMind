@@ -79,15 +79,17 @@ fun buildNoteExcerpt(content: String, budget: Int): NoteExcerpt {
 
     val beginning = selectBeginning(blocks, beginningCap, skipped = headMetadata)
     val ending = selectEnding(blocks, endingCap, beginning)
-    // 頭の情報の塊は省いたのではなく、冒頭に数えないだけ。それ以外が全部入るなら中略を出さない。
+    // 頭の情報の塊は冒頭に数えないだけで、末尾が採ったなら残す。末尾も採らなかったときだけ出さず、
+    // そのときは中略にも数えない（塊のほかが全部入るなら中略を出さない）。
+    val leftOut = headMetadata?.takeUnless { it in ending.wholeIndices }
     val allBlocksCovered = beginning.partialIndex == null &&
         ending.partialIndex == null &&
-        (beginning.wholeIndices + ending.wholeIndices + listOfNotNull(headMetadata)).size == blocks.size
+        (beginning.wholeIndices + ending.wholeIndices + listOfNotNull(leftOut)).size == blocks.size
 
     val text = if (allBlocksCovered) {
         renderContinuousLayout(
             outline = outline.takeIf { it.isNotEmpty() },
-            body = blocksToMarkdown(blocks.filterIndexed { index, _ -> index != headMetadata })
+            body = blocksToMarkdown(blocks.filterIndexed { index, _ -> index != leftOut })
         )
     } else {
         renderAbridgedLayout(
