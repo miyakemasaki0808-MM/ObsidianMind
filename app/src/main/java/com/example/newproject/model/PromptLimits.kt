@@ -56,4 +56,12 @@ object PromptLimits {
      * 超えたら古い候補から行ごと落とし、今のノート（`N1`）は落とさない。
      */
     const val CRYSTAL_CANDIDATES_CHARACTERS = 2_700
+
+    /**
+     * 反証の一文の候補一覧（`ID | 文`）の取り分。
+     *
+     * 12件 ×（ID・区切り・文 120文字まで）が収まる値にしてある。文は列挙の段で長さを閉じているので、通常この予算では落ちない。
+     * 超えた行は飛ばして先へ進み、飛ばした候補は許可するIDにも入れない。
+     */
+    const val REBUTTAL_CANDIDATES_CHARACTERS = 1_800
 }

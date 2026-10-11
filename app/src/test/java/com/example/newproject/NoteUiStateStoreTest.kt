@@ -1,14 +1,17 @@
 package com.example.newproject
 
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SearchSlice
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
@@ -67,6 +70,14 @@ class NoteUiStateStoreTest {
         )
         store.readingTraceWriter.update { card }
         expected = expected.copy(readingTraceCard = card)
+        assertEquals(expected, store.value)
+
+        val rebuttal = RebuttalSentence(
+            text = "食い違う一文。",
+            source = RelatedNote(title = "別のノート", ref = DocumentRef("content://vault/other.md"), isWikilinked = false)
+        )
+        store.rebuttalWriter.update { rebuttal }
+        expected = expected.copy(rebuttalSentence = rebuttal)
         assertEquals(expected, store.value)
     }
 

@@ -48,6 +48,14 @@ object NoteExcerptLimits {
      */
     const val FIELD = 600
 
+    /**
+     * 反証の一文の現ノート側。**関連ノートと同じ量にしてある** — 候補ブロック（最大1,800文字）を併せて載せる点が同じで、
+     * 順位付けもこの抜粋で行うので、AIが見る本文と順位付けが見る本文がずれない（→ features/rebuttal_sentence.md §5）。
+     *
+     * **実機で測っていない。** 動かすときは `PromptTokenBudgetTest` の掃引と体感で決める。
+     */
+    const val REBUTTAL = 800
+
     const val ABRIDGED_NOTICE =
         "The following content has been compacted and may combine a note outline with excerpts " +
             "from the beginning and ending. A (omitted) marker denotes a skipped span when present. " +

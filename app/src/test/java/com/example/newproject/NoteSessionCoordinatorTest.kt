@@ -48,6 +48,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.domain.ReunionSlot
@@ -331,6 +332,8 @@ class NoteSessionCoordinatorTest {
         // 右で眺めていたノート。残すと、次のノートのペインに前のノートの関連が開いたまま出る。
         assertEquals(SideReadingState.Idle, reset.sideReading)
         assertNull(reset.readingTraceCard)
+        // 残すと、次のノートの関連タブに前のノートと食い違う文が出る。
+        assertNull(reset.rebuttalSentence)
         assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
     }
 
@@ -396,6 +399,7 @@ class NoteSessionCoordinatorTest {
         assertEquals(SectionChatState(), state.sectionChat)
         assertEquals(SideReadingState.Idle, state.sideReading)
         assertNull(state.readingTraceCard)
+        assertNull(state.rebuttalSentence)
         assertNull(state.crystalNotePath)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
         assertEquals(1, hostCancelCount)
@@ -936,6 +940,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("SideReading(並べ読み)", state.sideReading != SideReadingState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
+        assertTrue("Rebuttal(反証の一文)", state.rebuttalSentence != null)
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
@@ -993,6 +998,7 @@ class NoteSessionCoordinatorTest {
             lastSectionTitle = "導入",
             lastProgressPercent = 40
         ),
+        rebuttalSentence = RebuttalSentence(text = "旧ノートと食い違う一文。", source = SIDE_NOTE),
         folders = listOf(NoteFolder(name = "下書き", documentId = "old-folder")),
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
