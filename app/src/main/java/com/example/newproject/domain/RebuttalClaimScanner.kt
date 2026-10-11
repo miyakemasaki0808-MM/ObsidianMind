@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.TableRowRegex
+import com.example.newproject.domain.markdown.inlineVisibleText
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ internal const val REBUTTAL_CLAIM_MAX_CHARS = 120
 /**
  * 関連ノート1件の本文から、主張の形をした文を原文順に返す。同じ文は1つに畳む。
  *
- * **インラインコードは中身を残す**（冊子の扉と同じ）。枠には原文を出すので、中身ごと落とすと主語が消えた文が出る。
+ * 文字は**本文の画面に見えるとおり**にする（→ [visible]）。コードの中身もリンクの表示名も残す。
  */
 internal fun scanRebuttalClaims(content: String): List<String> =
     readableUnits(content)
@@ -78,8 +79,11 @@ private fun quoteParagraphs(lines: List<String>): Sequence<String> = sequence {
     }
 }
 
-/** 記法を落として中身を残す。 */
-private fun visible(text: String): String = text.unwrapInlineCode().stripMarkdownMarkers()
+/**
+ * 本文の画面に見える文字。**記法を別の規則で落とさない** — 正規表現で落とすと、コードの中の `|` や `*` が消え、
+ * `[[note|表示名]]` がリンク先の名前に化けて、本文と違う主張が候補になる。
+ */
+private fun visible(text: String): String = inlineVisibleText(text)
 
 /**
  * リンクだけの行。主張ではないので候補の段落から外す。**表の行は外さない** —

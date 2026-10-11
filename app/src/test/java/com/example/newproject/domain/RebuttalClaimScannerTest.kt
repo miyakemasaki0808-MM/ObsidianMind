@@ -220,4 +220,45 @@ class RebuttalClaimScannerTest {
 
         assertEquals(listOf("朝の光で生活リズムが整うと書いた。"), scanRebuttalClaims(content))
     }
+
+    // --- 本文に見える文字 ---------------------------------------------------
+
+    /** コードの中の `|` や `*` は記法ではない。消すと演算子が欠けた別の主張になる。 */
+    @Test
+    fun `インラインコードの中の記号を残す`() {
+        assertEquals(
+            listOf("left || right はどちらかの条件が真なら成立する。"),
+            scanRebuttalClaims("`left || right` はどちらかの条件が真なら成立する。")
+        )
+        assertEquals(
+            listOf("a * b * c は掛ける順を入れ替えても同じになる。"),
+            scanRebuttalClaims("`a * b * c` は掛ける順を入れ替えても同じになる。")
+        )
+    }
+
+    /** 本文の画面は `[[note|表示名]]` の表示名を描く。候補だけリンク先の名前にすると主語が変わる。 */
+    @Test
+    fun `Wikiリンクは本文と同じく表示名を残す`() {
+        assertEquals(
+            listOf("対面勤務は常に生産性を高める。"),
+            scanRebuttalClaims("[[リモートワーク|対面勤務]]は常に生産性を高める。")
+        )
+        assertEquals(
+            listOf("リモートワークは常に生産性を高める。"),
+            scanRebuttalClaims("[[リモートワーク]]は常に生産性を高める。")
+        )
+        assertEquals(
+            listOf("光療法は睡眠の乱れには効かない。"),
+            scanRebuttalClaims("[光療法](https://example.com)は睡眠の乱れには効かない。")
+        )
+    }
+
+    /** 強調の記号は落とし、強調でない `*` は本文と同じく残す。 */
+    @Test
+    fun `強調の記号は落とし強調でない記号は残す`() {
+        assertEquals(
+            listOf("睡眠は朝の光で整うと考えている。", "2 * 3 * 4 を先に計算すると24になる。"),
+            scanRebuttalClaims("**睡眠**は朝の光で*整う*と考えている。\n\n2 * 3 * 4 を先に計算すると24になる。")
+        )
+    }
 }
