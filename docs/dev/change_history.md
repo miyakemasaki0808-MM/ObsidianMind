@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 実機で起こせない順序を正本の §10 で先に列挙する欄を様式に足し、実機検証の選抜で射程外とする規則を共通手順へ足した | [_template](features/_template.md)・[device_validation](../review/device_validation/README.md) |
 | 2026-10-11 | 関連ノートの本文から今のノートと食い違う1文をAIが選び、関連タブと Fold の余白ペインに原文のまま出す反証の一文を足した | [rebuttal_sentence](features/rebuttal_sentence.md) |
 | 2026-10-11 | owner/01 解析書を約1,470行から743行へ絞り、機能の詳細は正本へ任せて不変条件と上限だけを残した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) |
 | 2026-10-11 | 文書の見出しから旧名「Obsidian Mind」を外し、owner/01 からできていないことの一覧を外した | — |
