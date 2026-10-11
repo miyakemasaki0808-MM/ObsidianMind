@@ -4,7 +4,10 @@ import com.example.newproject.bookletSources
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.Density
+import com.example.newproject.model.NotePaperTone
 import com.example.newproject.ui.theme.BrowsingSheetShape
+import com.example.newproject.ui.theme.DarkAppColors
+import com.example.newproject.ui.theme.LightAppColors
 import com.example.newproject.ui.theme.ReadingSurfaceShape
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
@@ -12,7 +15,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * 佇まいのチャネル割り当てのうち、**形の役割**を固定する（→ docs/dev/system/bearing_channels.md）。
+ * 佇まいのチャネル割り当てのうち、**形の役割**と**面の色の持ち主**を固定する（→ docs/dev/system/bearing_channels.md）。
  *
  * ## なぜ検査が要るか
  *
@@ -39,6 +42,10 @@ class BearingChannelTest {
      */
     private val bookletFiles = bookletSources().map { source("main", "ui/screen/${it.name}") }
     private val noteComponents = source("main", "ui/component/NoteComponents.kt")
+    private val fullscreen = source("main", "ui/screen/FullscreenNoteScreen.kt")
+
+    /** 全画面の本文を描く関数の本体。本文パネルと並ぶ、もう1枚の「読む面」。 */
+    private val fullscreenBody = fullscreen.bodyOf("internal fun FullscreenNoteScreen(")
 
     /** 紙そのものを描く関数の本体。**縁の代入と混ざらないよう、ここへ絞る。** */
     private val sheetBody = bookletFiles.bodyOf("internal fun BookletSheet(")
@@ -203,6 +210,76 @@ class BearingChannelTest {
         assertTrue(
             "束の紙でないページが `isBundleSheet = false` を渡していません。",
             drawAgainBody.passesConstantArgument("BookletSheet(isBundleSheet = false")
+        )
+    }
+
+    /**
+     * **面の色の持ち主は面ごとに違う** — 読む面は年代、冊子の面は分野（→ bearing_channels 判断6）。
+     * **これが色の行の受け入れ条件。** 走査ではなく値で見る。
+     *
+     * 分野の色が年代の段階のどれかと同値なら、冊子の紙は年代も運び始める。
+     * **重なってよいのは「何も表さない紙」だけ** — 未判定の分野も、演出が効いていない年代も `panel` へ落ちるので、
+     * 分野の6色だけを見る。
+     */
+    @Test
+    fun `冊子の分野色は年代の色をひとつも含まない`() {
+        listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors).forEach { (theme, scheme) ->
+            val ageTones = NotePaperTone.entries.map { scheme.notePaper.color(it) }.toSet()
+            val shared = scheme.noteField.fieldColors.filter { it in ageTones }
+            assertTrue(
+                "$theme: 冊子の分野色が年代の色と同値です（$shared）。冊子の面の色は分野だけが持ちます。",
+                shared.isEmpty()
+            )
+        }
+    }
+
+    /**
+     * 冊子の紙が分野の色源を通ること。**`paper` への代入と、紙がそれで塗られることで見る。**
+     * 色が本当に紙へ載ったかは、実機ケース（`note_field_color` の `FIELDDEV`）が画素で見る。
+     *
+     * 紙は表と、めくれて裏返った角の両方を塗る。片方だけ別の色へ戻すと、めくる途中に別の紙が覗く。
+     */
+    @Test
+    fun `冊子の紙は分野の色源を引く`() {
+        assertTrue(
+            "束の紙が `paper = noteFieldPaper(field)` を代入していません。",
+            bundlePageBody.contains("paper = noteFieldPaper(field)")
+        )
+        val backgrounds = Regex("""\.background\(([^)]*)\)""").findAll(sheetBody).map { it.groupValues[1] }.toList()
+        assertTrue(
+            "冊子の紙が受け取った `paper` で地を塗っていない面があります（$backgrounds）。",
+            backgrounds.isNotEmpty() && backgrounds.all { it == "paper" }
+        )
+    }
+
+    /** 本文の紙が年代の色源を通ること。本文パネルと全画面の**両方**で、地色への代入で見る。 */
+    @Test
+    fun `本文の紙は年代の色源を引く`() {
+        assertTrue(
+            "本文パネルが `color = notePaperColor(uiState.notePaperTone)` を代入していません。",
+            notePanelBody.contains("color = notePaperColor(uiState.notePaperTone)")
+        )
+        assertTrue(
+            "全画面の本文が `background(notePaperColor(uiState.notePaperTone))` で地を塗っていません。",
+            fullscreenBody.contains(".background(notePaperColor(uiState.notePaperTone))")
+        )
+    }
+
+    /**
+     * **2つの面が互いの色源を引いていないこと。** 上の2本は「引いている」しか見ないので、
+     * 片方の面が両方の色を引く形が通る。窓口の関数だけでなく、色の表（`notePaper`・`noteField`）を直に引く形も落とす。
+     */
+    @Test
+    fun `2つの面は互いの色源を引かない`() {
+        val ageSource = Regex("""\bnotePaperColor\b|\.notePaper\b""")
+        val fieldSource = Regex("""\bnoteFieldPaper\b|\.noteField\b""")
+        assertTrue(
+            "冊子のソースが年代の色源を参照しています。冊子の面の色は分野が持ちます（→ bearing_channels §9）。",
+            bookletFiles.none { ageSource.containsMatchIn(it) }
+        )
+        assertTrue(
+            "本文の紙のソースが分野の色源を参照しています。読む面の色は年代が持ちます。",
+            listOf(noteComponents, fullscreen).none { fieldSource.containsMatchIn(it) }
         )
     }
 
