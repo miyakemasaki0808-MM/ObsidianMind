@@ -506,6 +506,59 @@ class NoteSessionCoordinatorTest {
     }
 
     /**
+     * 関連ノートの結果を出す1手で、反証の一文の選定が始まる（→ features/rebuttal_sentence.md §7）。
+     * 結果だけ出して選定を始め忘れる経路を作らない。
+     */
+    @Test
+    fun `関連ノートの完了から反証の一文が始まる`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.startRebuttal()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.uiState.value.relatedNotesState is RelatedNotesState.Success)
+        assertTrue("反証の選定が始まっていない", env.ai.prompts.any { "X01 | $REBUTTAL_CLAIM" in it })
+
+        env.ai.completeAll("X01")
+        advanceUntilIdle()
+
+        assertEquals(RebuttalSentence(REBUTTAL_CLAIM, SIDE_NOTE), coordinator.uiState.value.rebuttalSentence)
+    }
+
+    /**
+     * 実物の Controller の選定が、ノート切替の契約から止まる。
+     * 状態リセットだけでは、生きているジョブが**リセットの後から**旧ノートの一文を書き戻す。
+     * `cancelNoteScopedJobs()` から外すとここが落ちる。
+     */
+    @Test
+    fun `ノート切替後に旧ノートの反証の一文が後着しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.startRebuttal()
+        advanceUntilIdle()
+        assertTrue("反証の選定が始まっていない", env.ai.prompts.any { "X01 | $REBUTTAL_CLAIM" in it })
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+        env.ai.completeAll("X01")
+        advanceUntilIdle()
+
+        assertNull(coordinator.uiState.value.rebuttalSentence)
+    }
+
+    private fun NoteSessionCoordinator.startRebuttal() {
+        // 本文を出してから始める。出さないと選定は門番の手前で待ったままになる。
+        setNoteState(successNote(REBUTTAL_CURRENT))
+        completeRelatedNotes(
+            currentTitle = "睡眠について",
+            currentContent = REBUTTAL_CURRENT,
+            relatedNotes = listOf(SIDE_NOTE),
+            aiNotes = emptyList(),
+            readContent = { REBUTTAL_CLAIM }
+        )
+    }
+
+    /**
      * セクションモデルは `NoteUiState` の外にあるため、リフレクションによる
      * 「リセット漏れ検査」の網に掛からない。切替で消えることを個別に固定する。
      */
@@ -2034,6 +2087,10 @@ class NoteSessionCoordinatorTest {
 
         /** 並べ読みで右に開く関連ノート。 */
         val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
+
+        /** 反証の一文の今のノートと、関連ノート（[SIDE_NOTE]）の本文の1文。 */
+        const val REBUTTAL_CURRENT = "睡眠は朝の光で整う。夜更かしをしても朝に光を浴びれば戻る。"
+        const val REBUTTAL_CLAIM = "睡眠は朝の光では整わない。"
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"

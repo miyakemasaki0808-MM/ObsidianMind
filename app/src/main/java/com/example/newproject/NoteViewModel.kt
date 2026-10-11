@@ -741,23 +741,26 @@ class NoteViewModel internal constructor(
             val wikilinkTitles = repository.parseMeta(content).wikilinkTitles
             session.setWikilinkTitles(wikilinkTitles)
             val contentResolver = getApplication<Application>().contentResolver
+            // 候補はスニペットとfront matterしか使わないので、先頭だけ読む。反証の一文も同じ口で読み直す。
+            val readSnippet: suspend (DocumentRef) -> String =
+                { ref -> repository.readNoteSnippet(contentResolver, ref.toDocumentUri()) }
             when (
                 val result = relatedNotesUseCase.findRelated(
                     currentTitle = title,
                     currentContent = content,
                     allNotes = cachedNotes,
                     wikilinkTitles = wikilinkTitles,
-                    // 候補はスニペットとfront matterしか使わないので、先頭だけ読む
-                    readContent = { ref -> repository.readNoteSnippet(contentResolver, ref.toDocumentUri()) },
+                    readContent = readSnippet,
                     parseMeta = { repository.parseMeta(it) },
                     awaitDwell = session::awaitNoteDwell
                 )
             ) {
-                is RelatedNotesResult.Success -> session.setRelatedNotesState(
-                    RelatedNotesState.Success(
-                        relatedNotes = result.relatedNotes,
-                        aiNotes = result.aiNotes
-                    )
+                is RelatedNotesResult.Success -> session.completeRelatedNotes(
+                    currentTitle = title,
+                    currentContent = content,
+                    relatedNotes = result.relatedNotes,
+                    aiNotes = result.aiNotes,
+                    readContent = readSnippet
                 )
             }
         }
