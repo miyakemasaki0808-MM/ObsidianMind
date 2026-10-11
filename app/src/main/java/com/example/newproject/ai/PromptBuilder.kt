@@ -183,9 +183,16 @@ object PromptBuilder {
         NoteField.Reflection -> "diaries, retrospectives, loose ideas, thinking out loud"
     }
 
+    /**
+     * ノートの要約。**出力は常に日本語**（→ features/note_summary.md 判断10）。
+     *
+     * 「本文と同じ言語で」と任せると、英語の注意書き・見出しのラベル・コード・ファイル名が混じる抜粋で、
+     * 日本語のノートでも英語の要約が返る。生成は決定的なので、そのノートでは毎回英語になる。
+     */
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         val instructions = """
-            You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
+            You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences.
+            Write the summary in Japanese, even if the note or parts of it are written in English.
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
         """.trimIndent()
 
@@ -485,9 +492,11 @@ object PromptBuilder {
 
     // ── セクション単位の部分要約 ─────────────────────────────────────────────
 
+    /** 節の要約。**出力は常に日本語**（理由はノートの要約と同じ → [buildSummarizePrompt]）。 */
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
         val instructions = """
-            You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
+            You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences.
+            Write the summary in Japanese, even if the section or parts of it are written in English.
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
         """.trimIndent()
 

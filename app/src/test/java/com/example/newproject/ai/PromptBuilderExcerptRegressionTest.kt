@@ -16,10 +16,11 @@ class PromptBuilderExcerptRegressionTest {
     private val excerpt = NoteExcerpt("本文", isAbridged = false)
 
     @Test
-    fun `要約プロンプトは移行前の文字列を保つ`() {
+    fun `要約プロンプトの文字列を固定する`() {
         assertEquals(
             """
-                You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
+                You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences.
+                Write the summary in Japanese, even if the note or parts of it are written in English.
                 Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
 
                 Note title: 題名
@@ -55,10 +56,11 @@ class PromptBuilderExcerptRegressionTest {
     }
 
     @Test
-    fun `セクション要約プロンプトは移行前の文字列を保つ`() {
+    fun `セクション要約プロンプトの文字列を固定する`() {
         assertEquals(
             """
-                You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
+                You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences.
+                Write the summary in Japanese, even if the section or parts of it are written in English.
                 Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
 
                 Section heading: 節
