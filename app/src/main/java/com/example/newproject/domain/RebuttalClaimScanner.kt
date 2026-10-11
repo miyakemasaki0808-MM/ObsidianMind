@@ -27,7 +27,8 @@ internal const val REBUTTAL_CLAIM_MAX_CHARS = 120
  */
 internal fun scanRebuttalClaims(content: String): List<String> =
     readableUnits(content)
-        .flatMap { unit -> splitIntoSentences(unit).asSequence() }
+        // 英文のピリオドでも割る。割らないと英文の複数文が1候補になり、合計が上限を超えると全部消える。
+        .flatMap { unit -> splitIntoSentences(unit, splitAtPeriods = true).asSequence() }
         .map { it.trim() }
         .filter { it.length in REBUTTAL_CLAIM_MIN_CHARS..REBUTTAL_CLAIM_MAX_CHARS }
         .filter { it.hasReadableText() }

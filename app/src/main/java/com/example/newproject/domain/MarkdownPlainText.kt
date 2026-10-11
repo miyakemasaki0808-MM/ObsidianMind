@@ -146,25 +146,58 @@ private val READABLE_CHAR = Regex("""[\p{L}\p{N}]""")
  * 素朴に終止符で切ると、引用した発言（「これでいいのか？」）の途中で割れ、
  * **閉じ括弧の無い断片**がそのまま候補になる。カードには1文をそのまま出すので、
  * 割れた断片が見えてしまう。
+ *
+ * [splitAtPeriods] が真なら、英文のピリオドでも割る（→ [endsSentenceAtPeriod]）。
+ * 偽のときは割らない — 英文の複数文が1つの「文」になるが、用途によってはそれで足りる。
  */
-internal fun splitIntoSentences(line: String): List<String> {
+internal fun splitIntoSentences(line: String, splitAtPeriods: Boolean = false): List<String> {
     val sentences = mutableListOf<String>()
     val buffer = StringBuilder()
     var depth = 0
-    for (char in line) {
+    line.forEachIndexed { index, char ->
         buffer.append(char)
-        when (char) {
-            in OPENING_BRACKETS -> depth++
-            in CLOSING_BRACKETS -> if (depth > 0) depth--
-            in SENTENCE_TERMINATORS -> if (depth == 0) {
-                sentences += buffer.toString()
-                buffer.setLength(0)
+        val ends = when (char) {
+            in OPENING_BRACKETS -> {
+                depth++
+                false
             }
+            in CLOSING_BRACKETS -> {
+                if (depth > 0) depth--
+                false
+            }
+            in SENTENCE_TERMINATORS -> depth == 0
+            '.' -> splitAtPeriods && depth == 0 && endsSentenceAtPeriod(line, index)
+            else -> false
+        }
+        if (ends) {
+            sentences += buffer.toString()
+            buffer.setLength(0)
         }
     }
     if (buffer.isNotBlank()) sentences += buffer.toString()
     return sentences
 }
+
+/**
+ * [index] のピリオドで英文が終わるか。**小数・略語・頭文字では切らない。**
+ *
+ * 終わりとみなすのは、直後が空白で、続く文字が小文字でないとき。直後が空白でなければ小数や版番号（`3.5`・`v1.2`）、
+ * 続きが小文字なら文の途中の略語（`approx. three`）である。ピリオドの前の語が1文字（頭文字・`e.g.`）か
+ * [PERIOD_ABBREVIATIONS] にあれば、続きが大文字でも切らない（`Dr. Smith`）。省略記号（`...`）でも切らない。
+ */
+private fun endsSentenceAtPeriod(text: String, index: Int): Boolean {
+    if (text.getOrNull(index + 1)?.isWhitespace() != true) return false
+    if (text.getOrNull(index - 1) == '.') return false
+    val word = text.substring(0, index).takeLastWhile { it.isLetter() }
+    if (word.length == 1 || word.lowercase() in PERIOD_ABBREVIATIONS) return false
+    val following = text.substring(index + 1).trimStart().firstOrNull() ?: return false
+    return !following.isLowerCase()
+}
+
+private val PERIOD_ABBREVIATIONS = setOf(
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "al",
+    "inc", "ltd", "co", "no", "vol", "fig", "eq", "cf", "approx", "ver", "ed"
+)
 
 internal const val OPENING_BRACKETS = "「『（(【［[{"
 internal const val CLOSING_BRACKETS = "」』）)】］]}"

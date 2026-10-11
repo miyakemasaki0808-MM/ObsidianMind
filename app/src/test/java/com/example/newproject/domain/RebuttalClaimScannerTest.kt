@@ -261,4 +261,44 @@ class RebuttalClaimScannerTest {
             scanRebuttalClaims("**睡眠**は朝の光で*整う*と考えている。\n\n2 * 3 * 4 を先に計算すると24になる。")
         )
     }
+
+    // --- 英文の文境界 ---------------------------------------------------------
+
+    @Test
+    fun `英文はピリオドで文ごとに割る`() {
+        assertEquals(
+            listOf("Remote work always improves productivity.", "Office work always improves productivity."),
+            scanRebuttalClaims("Remote work always improves productivity. Office work always improves productivity.")
+        )
+    }
+
+    /** 割らないと、各文が上限内でも合計が上限を超えた段落は丸ごと消える。 */
+    @Test
+    fun `段落全体が上限を超えても上限内の文は残す`() {
+        val first = "Remote work always improves the productivity of every team that tries it for a month."
+        val second = "Office work always improves the productivity of every team that returns to it for good."
+        assertTrue((first.length + 1 + second.length) > REBUTTAL_CLAIM_MAX_CHARS)
+
+        assertEquals(listOf(first, second), scanRebuttalClaims("$first $second"))
+    }
+
+    /** 小数・版番号・略語・頭文字は文の終わりではない。 */
+    @Test
+    fun `小数や略語のピリオドでは割らない`() {
+        listOf(
+            "The rate rose to 3.5 percent after the change in v1.2 of the app.",
+            "Dr. Smith said that sleep matters more than light, e.g. in winter.",
+            "The approx. figure came from J. K. Rowling and her team et al. in print."
+        ).forEach { line ->
+            assertEquals(line, listOf(line), scanRebuttalClaims(line))
+        }
+    }
+
+    @Test
+    fun `英文の後の日本語の文も割る`() {
+        assertEquals(
+            listOf("This is an English claim about sleep.", "次の文は日本語で書いた主張である。"),
+            scanRebuttalClaims("This is an English claim about sleep. 次の文は日本語で書いた主張である。")
+        )
+    }
 }
