@@ -4,7 +4,8 @@ package com.example.newproject.domain
 // Markdown を「人が読む文字列」へ均す純関数。**選ぶ規則は持たない。**
 //
 // 再会カードの候補列挙（[scanReunionCandidates]）と冊子モードの扉（[selectCoverLine]）が
-// 同じ前処理を要求したので、**前処理だけ**をここへ出した。
+// 同じ前処理を要求したので、**前処理だけ**をここへ出した。行の種類の判定（見出し・表の区切り・
+// リンクだけの行）も前処理であって選定規則ではないので、ここに置く。
 // **選定規則は共有しない** — 候補として何を採るかは用途ごとに違い、
 // そこまで束ねると片方の都合でもう片方の見え方が変わる。
 //
@@ -98,6 +99,38 @@ internal val MARKDOWN_LINK = Regex("""\[([^\]]*)]\([^)]*\)""")
 internal val LINE_PREFIX = Regex("""^\s{0,8}(?:>\s*|#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)+""")
 internal val TABLE_PIPE = Regex("""\|""")
 internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
+
+/**
+ * `` `NoteViewModel` `` のようなインラインコードを、**中身を残して**記法だけ落とす。
+ *
+ * [stripMarkdownMarkers] はインラインコードを空白へ替えるので、原文の1文をそのまま見せる用途では
+ * **先にこちらを通す。** 通さないと「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
+ */
+internal fun String.unwrapInlineCode(): String = replace(INLINE_CODE_CONTENT) { it.groupValues[1] }
+
+/** 見出しの行。**記法を落とす前に**判定する（落とすと本文の行と見分けられない）。 */
+internal fun String.isHeadingLine(): Boolean = HEADING_LINE.containsMatchIn(this)
+
+/** `|---|:--|` のような表の区切り。記法を落とすと `- :` だけが残り、意味を持たない。 */
+internal fun String.isTableDelimiter(): Boolean = TABLE_DELIMITER_LINE.matches(this)
+
+/**
+ * リンクだけの行。**ラベルへ畳んでから判定しない。**
+ *
+ * [stripMarkdownMarkers] はリンクをラベルへ置き換えるので、
+ * 畳んだ後では「リンクだけの行」と「その語を書いた行」を区別できない。
+ * 判定はリンクを**丸ごと消して**から行う（画像 `![alt](path)` も同じ経路で消える）。
+ */
+internal fun String.isLinkOnly(): Boolean =
+    !replace(WIKILINK, "").replace(MARKDOWN_LINK, "").hasReadableText()
+
+/** 文字か数字が1つも無ければ、罫線・記号だけの行である。 */
+internal fun String.hasReadableText(): Boolean = READABLE_CHAR.containsMatchIn(this)
+
+private val INLINE_CODE_CONTENT = Regex("""`([^`\n]*)`""")
+private val HEADING_LINE = Regex("""^\s{0,3}#{1,6}\s""")
+private val TABLE_DELIMITER_LINE = Regex("""^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$""")
+private val READABLE_CHAR = Regex("""[\p{L}\p{N}]""")
 
 /**
  * 1行を文へ割る。**括弧・鉤括弧の内側では切らない。**
