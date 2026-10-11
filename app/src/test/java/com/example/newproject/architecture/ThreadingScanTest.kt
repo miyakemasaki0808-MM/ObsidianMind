@@ -19,6 +19,8 @@ import org.junit.Test
  *   「全部逃がしている」が0対0で通ってしまう
  * - **呼ぶたびに `withContext(ディスパッチャ) { … }` の内側でなければ落ちる。** 内側かどうかは括弧の対応で見る —
  *   文字数の窓で探すと、手前の別の `withContext` から届いてしまう。ディスパッチャの本番既定も `Dispatchers.Default` であること
+ * - **括弧と呼び出しはコードの中だけで数える**（[codeOnly]）。文字列やコメントの `{` を数えると、
+ *   `withContext(…) { "{" }` の後ろへ出した呼び出しまで内側に見える。数え方そのものは「括弧の対応は文字列とコメントを数えない」が固定する
  *
  * ## 見ていないもの
  *
@@ -44,16 +46,48 @@ class ThreadingScanTest {
     fun `重い純関数はディスパッチャの内側でだけ呼ぶ`() {
         val violations = HEAVY_CALLS.flatMap { heavy ->
             heavy.offMain.mapNotNull { (path, expected) ->
-                val source = mainSource(path)
-                val calls = heavy.callRegex().findAll(source).map { it.range.first }.toList()
-                val blocks = blockRanges(source, Regex("""withContext\(\s*${heavy.dispatcher}\s*\)\s*\{"""))
-                val inside = calls.count { call -> blocks.any { call in it } }
-                "${heavy.name}: $path は ${calls.size} 回呼び、${heavy.dispatcher} の内側は $inside 回（表は $expected 回）"
-                    .takeIf { calls.size != expected || inside != expected }
+                val (calls, inside) = heavy.countCalls(mainSource(path))
+                "${heavy.name}: $path は $calls 回呼び、${heavy.dispatcher} の内側は $inside 回（表は $expected 回）"
+                    .takeIf { calls != expected || inside != expected }
             }
         }
 
         assertTrue("重い純関数が Main の外へ逃がされていません:\n" + violations.joinToString("\n"), violations.isEmpty())
+    }
+
+    /**
+     * **内側かどうかの数え方を、作った入力で固定する。** 本番のコードはたまたま文字列に括弧を持たないので、
+     * 本番だけに当てていると、数え方が文字列やコメントの括弧に騙される形が緑のまま通る。
+     */
+    @Test
+    fun `括弧の対応は文字列とコメントを数えない`() {
+        val heavy = HEAVY_CALLS.first { it.dispatcher == "excerptDispatcher" }
+        val tq = "\"\"\""
+        val cases = listOf(
+            "文字列の { の後ろへ出した呼び出し" to
+                ("withContext(excerptDispatcher) { \"{\" }\nval e = buildNoteExcerpt(c, 1)\n" to (1 to 0)),
+            "複数行文字列の { の後ろへ出した呼び出し" to
+                ("withContext(excerptDispatcher) { $tq { $tq }\nbuildNoteExcerpt(c, 1)\n" to (1 to 0)),
+            "文字の { の後ろへ出した呼び出し" to
+                ("withContext(excerptDispatcher) { '{' }\nbuildNoteExcerpt(c, 1)\n" to (1 to 0)),
+            "行コメントの { の後ろへ出した呼び出し" to
+                ("withContext(excerptDispatcher) { // {\n}\nbuildNoteExcerpt(c, 1)\n" to (1 to 0)),
+            "ブロックコメントの { の後ろへ出した呼び出し" to
+                ("withContext(excerptDispatcher) { /* { */ }\nbuildNoteExcerpt(c, 1)\n" to (1 to 0)),
+            "文字列の } を挟んでも内側の呼び出し" to
+                ("withContext(excerptDispatcher) {\n val s = \"}\"\n buildNoteExcerpt(c, 1)\n}\n" to (1 to 1)),
+            "テンプレートの中の括弧はコードとして数える" to
+                ("withContext(excerptDispatcher) {\n log(\"\${items.joinToString { it }}\")\n buildNoteExcerpt(c, 1)\n}\n" to (1 to 1)),
+            "テンプレートの中の文字列の } も数えない" to
+                ("withContext(excerptDispatcher) {\n log(\"\${\"}\"}\")\n buildNoteExcerpt(c, 1)\n}\n" to (1 to 1)),
+            "文字列に書いた呼び出しは呼び出しではない" to
+                ("val s = \"buildNoteExcerpt(\"\n" to (0 to 0))
+        )
+
+        cases.forEach { (name, case) ->
+            val (source, expected) = case
+            assertEquals(name, expected, heavy.countCalls(codeOnly(source)))
+        }
     }
 
     @Test
@@ -61,7 +95,7 @@ class ThreadingScanTest {
         val files = mainSourceRoot().walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
         HEAVY_CALLS.forEach { heavy ->
             val callers = files
-                .filter { heavy.callRegex().containsMatchIn(stripComments(it.readText())) }
+                .filter { heavy.callRegex().containsMatchIn(codeOnly(it.readText())) }
                 .map { it.relativePath() }
                 .toSet()
             assertEquals(
@@ -121,7 +155,14 @@ class ThreadingScanTest {
 
     private fun HeavyCall.callRegex(): Regex = Regex("""(?<!fun )$call""")
 
-    /** `{` の直後から、対応する `}` の手前まで。文字列やコメントの中の括弧は数えない前提（コメントは先に落とす）。 */
+    /** [code]（[codeOnly] の写し）での呼び出しの回数と、そのうち `withContext(ディスパッチャ) { … }` の内側の回数。 */
+    private fun HeavyCall.countCalls(code: String): Pair<Int, Int> {
+        val calls = callRegex().findAll(code).map { it.range.first }.toList()
+        val blocks = blockRanges(code, Regex("""withContext\(\s*$dispatcher\s*\)\s*\{"""))
+        return calls.size to calls.count { call -> blocks.any { call in it } }
+    }
+
+    /** `{` の直後から、対応する `}` の手前まで。[source] は [codeOnly] の写しで、括弧はコードのものだけが残っている。 */
     private fun blockRanges(source: String, opener: Regex): List<IntRange> = opener.findAll(source).map { match ->
         var depth = 1
         var index = match.range.last + 1
@@ -138,13 +179,87 @@ class ThreadingScanTest {
     private fun mainSource(path: String): String {
         val file = mainSourceRoot().resolve(path)
         require(file.isFile) { "走査対象が見つかりません: $path" }
-        return stripComments(file.readText())
+        return codeOnly(file.readText())
     }
 
-    /** KDoc に書いた呼び出しの形を数えないよう、ブロックコメントと行頭からのコメントを落とす。 */
-    private fun stripComments(source: String): String = source
-        .replace(Regex("""/\*[\s\S]*?\*/"""), " ")
-        .replace(Regex("""(?m)^\s*//[^\n]*"""), " ")
+    private enum class Lexeme { Code, BlockComment, Text, RawText }
+
+    /**
+     * コードだけを残した写し。**文字列・複数行文字列・文字・バッククォートの名前・コメントの中身を空白にする**
+     * （改行と位置は変えないので、範囲の比較はそのまま効く）。
+     * 文字列テンプレートの `${ … }` の中はコードとして残し、テンプレートの開きと閉じの括弧だけを空白にする。
+     */
+    private fun codeOnly(source: String): String {
+        val out = StringBuilder(source)
+        fun blank(from: Int, to: Int) {
+            for (k in from until minOf(to, source.length)) if (out[k] != '\n') out[k] = ' '
+        }
+        // 開いているテンプレート。[0] は戻る先（0 = 文字列・1 = 複数行文字列）、[1] はテンプレートの中で開いた括弧の数。
+        val templates = ArrayDeque<IntArray>()
+        var lexeme = Lexeme.Code
+        var commentDepth = 0
+        var i = 0
+        while (i < source.length) {
+            val c = source[i]
+            when (lexeme) {
+                Lexeme.Code -> when {
+                    source.startsWith("//", i) -> {
+                        val end = source.indexOf('\n', i).let { if (it < 0) source.length else it }
+                        blank(i, end); i = end
+                    }
+                    source.startsWith("/*", i) -> { lexeme = Lexeme.BlockComment; commentDepth = 1; blank(i, i + 2); i += 2 }
+                    source.startsWith("\"\"\"", i) -> { lexeme = Lexeme.RawText; blank(i, i + 3); i += 3 }
+                    c == '"' -> { lexeme = Lexeme.Text; blank(i, i + 1); i++ }
+                    c == '\'' -> {
+                        val end = if (source.getOrNull(i + 1) == '\\') source.indexOf('\'', i + 3) + 1 else i + 3
+                        blank(i, end); i = maxOf(end, i + 1)
+                    }
+                    c == '`' -> {
+                        val end = source.indexOf('`', i + 1).let { if (it < 0) source.length else it + 1 }
+                        blank(i, end); i = end
+                    }
+                    c == '{' && templates.isNotEmpty() -> { templates.last()[1]++; i++ }
+                    c == '}' && templates.isNotEmpty() -> {
+                        val top = templates.last()
+                        if (top[1] == 0) {
+                            templates.removeLast()
+                            lexeme = if (top[0] == 1) Lexeme.RawText else Lexeme.Text
+                            blank(i, i + 1)
+                        } else {
+                            top[1]--
+                        }
+                        i++
+                    }
+                    else -> i++
+                }
+                Lexeme.BlockComment -> when {
+                    source.startsWith("/*", i) -> { commentDepth++; blank(i, i + 2); i += 2 }
+                    source.startsWith("*/", i) -> {
+                        blank(i, i + 2); i += 2
+                        if (--commentDepth == 0) lexeme = Lexeme.Code
+                    }
+                    else -> { blank(i, i + 1); i++ }
+                }
+                Lexeme.Text -> when {
+                    c == '\\' -> { blank(i, i + 2); i += 2 }
+                    source.startsWith("\${", i) -> { templates.addLast(intArrayOf(0, 0)); lexeme = Lexeme.Code; blank(i, i + 2); i += 2 }
+                    c == '"' -> { lexeme = Lexeme.Code; blank(i, i + 1); i++ }
+                    else -> { blank(i, i + 1); i++ }
+                }
+                Lexeme.RawText -> when {
+                    source.startsWith("\"\"\"", i) -> {
+                        // 閉じは引用符の並びの最後の3つ。それより前の引用符は中身。
+                        var end = i + 3
+                        while (end < source.length && source[end] == '"') end++
+                        lexeme = Lexeme.Code; blank(i, end); i = end
+                    }
+                    source.startsWith("\${", i) -> { templates.addLast(intArrayOf(1, 0)); lexeme = Lexeme.Code; blank(i, i + 2); i += 2 }
+                    else -> { blank(i, i + 1); i++ }
+                }
+            }
+        }
+        return out.toString()
+    }
 
     private fun mainSourceRoot(): File {
         val workingDirectory = File(
