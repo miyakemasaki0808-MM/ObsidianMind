@@ -193,6 +193,18 @@ internal class NoteSessionCoordinator(
         vaultKey = currentVaultKey
     )
 
+    /**
+     * 反証の一文。関連ノートの結果が届いたときに [completeRelatedNotes] から始まる。
+     * 候補の列挙は本文に比例するので、**解析と同じ口**に載せる（テストがテストスケジューラへ差し替えるため）。
+     */
+    private val rebuttal = RebuttalController(
+        scope = scope,
+        aiClient = aiClient,
+        awaitDwell = dwell::await,
+        state = stateStore.rebuttalWriter,
+        excerptDispatcher = parseDispatcher
+    )
+
     private val search = SearchController(
         scope = scope,
         vault = vaultBrowser,
@@ -441,6 +453,7 @@ internal class NoteSessionCoordinator(
         crystal.cancelAndClear()
         marginMemo.cancelAndClear()
         sectionChat.cancelAndClear()
+        rebuttal.cancelAndClear()
         // 右で眺めていたノートの読み込みも止める。状態は withNoteScopedReset() が落とす。
         sideReading.cancelAndClear()
         distill.cancelForNoteChange()
@@ -626,6 +639,25 @@ internal class NoteSessionCoordinator(
 
     fun setRelatedNotesState(state: RelatedNotesState) {
         stateStore.setRelatedNotesState(state)
+    }
+
+    /**
+     * 関連ノートの結果を出し、**同じ1手で**反証の一文の選定を始める（→ features/rebuttal_sentence.md §7）。
+     *
+     * 呼び出し側へ2手を配らないのは、結果だけ出して選定を始め忘れる経路を作らないため。
+     * 結果を書くのは窓口（ViewModel）の関連ノートのジョブで、ノート切替ではそのジョブごと止まる。
+     *
+     * @param readContent 関連ノートの本文の先頭を読む口。SAF を伴うので窓口が渡す。
+     */
+    fun completeRelatedNotes(
+        currentTitle: String,
+        currentContent: String,
+        relatedNotes: List<RelatedNote>,
+        aiNotes: List<RelatedNote>,
+        readContent: suspend (DocumentRef) -> String
+    ) {
+        stateStore.setRelatedNotesState(RelatedNotesState.Success(relatedNotes = relatedNotes, aiNotes = aiNotes))
+        rebuttal.select(currentTitle, currentContent, relatedNotes, aiNotes, readContent)
     }
 
     fun setWikilinkTitles(titles: Set<String>) {

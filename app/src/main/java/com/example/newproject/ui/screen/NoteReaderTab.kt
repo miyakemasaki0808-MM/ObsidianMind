@@ -829,7 +829,8 @@ internal fun NoteReaderTab(
                                             onToggle = { shownRelated?.let { relatedList = it.copy(expanded = !it.expanded) } },
                                             onOpen = openSide,
                                             reveal = relatedReveal,
-                                            onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) }
+                                            onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) },
+                                            rebuttal = uiState.rebuttalSentence
                                         )
                                     )
                                 }

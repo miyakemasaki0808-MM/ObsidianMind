@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（14 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
 **正本:** この文書
 
@@ -38,10 +38,11 @@ NoteViewModel（Android境界の窓口）
       ├── BookletController             ← 冊子（10枚の束と扉）（**Vault単位**）
       ├── NoteFieldController           ← ノートの分野判定（**ジョブはノート単位・結果はVault単位 → 判断4**）
       ├── SideReadingController         ← 並べ読み（関連ノートを右で眺めるだけ。**ノート単位**。今のノートにしない）
+      ├── RebuttalController            ← 反証の一文（関連ノートの完了から始まる。**ノート単位**）
       └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 14個である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 15個である。
 
 **行数は倍になったが、窓口の性質は変わっていない。** 70ある関数のうち**44は1行の委譲**で、
 本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
@@ -97,7 +98,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しと、失敗を書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み・反証の一文 | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しと、失敗を書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
@@ -218,12 +219,12 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 2026-07-24 / 07-25 / 07-26 / 08-09 の4度の判定を経て「**共通化せず、相似のまま維持**」で決着した。
 共有できるのは **requestId ガードの数行だけ**で、周囲は全部違う。
 
-| 要素 | Distill | ReunionCard | Summary | NoteField | Crystal |
-|---|---|---|---|---|---|
-| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| モデルDLを自動開始して完了後に自動再開 | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** | **✗（黙って諦める）** |
-| 失敗をユーザーへ見せる | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** | **✗（一覧だけを持つ）** |
-| 起動契機 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 | ノート表示（**要約と再会カードの後**） |
+| 要素 | Distill | ReunionCard | Summary | NoteField | Crystal | Rebuttal |
+|---|---|---|---|---|---|---|
+| requestId ＋ `isCurrent()` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| モデルDLを自動開始して完了後に自動再開 | **✗（明示タップ）** | **✗（黙って諦める）** | ✓ | **✗（黙って諦める）** | **✗（黙って諦める）** | **✗（黙って諦める。DL完了で関連ノートと一緒に呼び戻される）** |
+| 失敗をユーザーへ見せる | ✓ | **✗（黙って劣化）** | ✓ | **✗（状態すら持たない）** | **✗（一覧だけを持つ）** | **✗（選べた1文か無しだけを持つ）** |
+| 起動契機 | 明示操作 | **再会（Rediscover でノートを引いたとき）** | ノート表示 | ノート表示 | ノート表示（**要約と再会カードの後**） | **関連ノートの完了** |
 
 Snackbar通知＋`isViewed` の未確認管理を持つ Controller は**0件**である。
 
@@ -231,7 +232,7 @@ Snackbar通知＋`isViewed` の未確認管理を持つ Controller は**0件**�
 **見せ方は正反対**（要約は待たせて見せる／分野は進捗も失敗も出さず、状態すら持たない）。
 **起動契機が同じでも共通化できない**ことの実例である。
 6本目（結晶）も見せ方は分野判定と同じ（進捗も失敗も出さない）だが、材料・保存・表示がすべて違い、
-再検討の条件にも当たらない。
+再検討の条件にも当たらない。7本目（反証の一文）も同じ見せ方で、`markViewed()` も Snackbar も持たないので条件に当たらない。
 
 **判定軸は「ユーザーへの見せ方」である。** バックグラウンドAI機能の共通性は生成処理そのものではなく
 通知と失敗の見せ方に宿るため、そこが違えば処理が似ていても共通化できない。

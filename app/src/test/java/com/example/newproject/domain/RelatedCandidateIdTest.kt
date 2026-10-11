@@ -73,4 +73,30 @@ class RelatedCandidateIdTest {
     fun `該当なしは空リスト`() {
         assertEquals(emptyList<String>(), parseCandidateIds("no ids here", valid, 5))
     }
+
+    // --- 反証の一文（X01..）-------------------------------------------------
+
+    private val rebuttalIds = (0 until 12).map { rebuttalCandidateId(it) }.toSet() // X01..X12
+
+    @Test
+    fun `反証の候補IDはXで始まる2桁`() {
+        assertEquals("X01", rebuttalCandidateId(0))
+        assertEquals("X12", rebuttalCandidateId(11))
+    }
+
+    /** 経路ごとに接頭辞を分けているので、関連ノートのIDを反証の答えとして受けない。 */
+    @Test
+    fun `反証の接頭辞では関連ノートのIDを受けない`() {
+        assertEquals(emptyList<String>(), parseCandidateIds("C01", rebuttalIds + valid, 1, prefix = 'X'))
+    }
+
+    @Test
+    fun `反証のIDも大文字小文字と桁落ちを吸収する`() {
+        assertEquals(listOf("X03"), parseCandidateIds("x3", rebuttalIds, 1, prefix = 'X'))
+    }
+
+    @Test
+    fun `反証のIDの直後に文字が続く断片は拾わない`() {
+        assertEquals(emptyList<String>(), parseCandidateIds("X01通信", rebuttalIds, 1, prefix = 'X'))
+    }
 }

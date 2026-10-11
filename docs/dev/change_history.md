@@ -17,6 +17,16 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 反証の一文の実装用の下書き（owner）を、正本へ反映し終えたので削除し、参照を正本へ張り替えた | [rebuttal_sentence](features/rebuttal_sentence.md) |
+| 2026-10-11 | 実機で起こせない順序を正本で先に宣言する運用（反証の一文で初めて使った）をオーナーが受理し、課題台帳から外した | [_template](features/_template.md) |
+| 2026-10-11 | 反証の一文と要約の日本語指定を実機で検証し、新規の指摘なしで REBUT-1・AI-7 を課題台帳から外した | [review](../review/README.md) |
+| 2026-10-11 | 要約の日本語指定を独立レビューし、新規指摘なしと確認して実Nanoでの言語確認待ちを残した | [review](../review/README.md) |
+| 2026-10-11 | ノートの要約と節の要約を、本文の言語に任せず常に日本語で書かせるようにした | [note_summary](features/note_summary.md) 判断10 |
+| 2026-10-11 | 反証の一文の4指摘を独立再レビューで解消と確認し、受付簿と課題台帳から外して実機確認待ちを残した | [review](../review/README.md) |
+| 2026-10-11 | 反証の一文の候補を、本文と同じパーサとインラインの解釈器から段落単位・見える文字で作り、英文もピリオドで割るようにした | [rebuttal_sentence](features/rebuttal_sentence.md) 判断8 |
+| 2026-10-11 | 反証の一文の独立レビューとエミュレータUI確認を行い、候補抽出で原文や文境界が変わる4件を課題台帳へ起票した | [review](../review/README.md) |
+| 2026-10-11 | 実機で起こせない順序を正本の §10 で先に列挙する欄を様式に足し、実機検証の選抜で射程外とする規則を共通手順へ足した | [_template](features/_template.md)・[device_validation](../review/device_validation/README.md) |
+| 2026-10-11 | 関連ノートの本文から今のノートと食い違う1文をAIが選び、関連タブと Fold の余白ペインに原文のまま出す反証の一文を足した | [rebuttal_sentence](features/rebuttal_sentence.md) |
 | 2026-10-11 | owner/01 解析書を約1,470行から743行へ絞り、機能の詳細は正本へ任せて不変条件と上限だけを残した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) |
 | 2026-10-11 | 文書の見出しから旧名「Obsidian Mind」を外し、owner/01 からできていないことの一覧を外した | — |
 | 2026-10-11 | Fable 5.1 の報告書のうち反映し終えた4本（AI設計・文書とプロセス・リリース準備・計測値）を消し、検討枠のリンクを外した | — |

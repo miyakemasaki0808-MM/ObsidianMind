@@ -4,7 +4,8 @@ package com.example.newproject.domain
 // Markdown を「人が読む文字列」へ均す純関数。**選ぶ規則は持たない。**
 //
 // 再会カードの候補列挙（[scanReunionCandidates]）と冊子モードの扉（[selectCoverLine]）が
-// 同じ前処理を要求したので、**前処理だけ**をここへ出した。
+// 同じ前処理を要求したので、**前処理だけ**をここへ出した。行の種類の判定（見出し・表の区切り・
+// リンクだけの行）も前処理であって選定規則ではないので、ここに置く。
 // **選定規則は共有しない** — 候補として何を採るかは用途ごとに違い、
 // そこまで束ねると片方の都合でもう片方の見え方が変わる。
 //
@@ -25,15 +26,18 @@ package com.example.newproject.domain
  * 字下げは3空白までをフェンスとみなす（4空白以上はコードブロックの字下げ）。
  *
  * 閉じられていないフェンスは、開いた行以降を全部コードとみなす（未閉じの本文へ落とさない）。
+ *
+ * [keepBlankLines] が真なら、落とす行を詰めずに空行へ替える。**段落の境目を保つ**ためで、
+ * 詰めるとフェンスの前後の段落が1つにつながる（行ごとに見る用途では、どちらでも同じ）。
  */
-internal fun withoutFencedCode(content: String): String {
+internal fun withoutFencedCode(content: String, keepBlankLines: Boolean = false): String {
     if (!content.contains(BACKTICK_FENCE) && !content.contains(TILDE_FENCE)) return content
     var opened: FenceMarker? = null
     return content.lineSequence()
-        .filter { line ->
+        .mapNotNull { line ->
             val marker = fenceMarkerOf(line)
             val open = opened
-            when {
+            val outside = when {
                 open == null -> {
                     if (marker == null) true else { opened = marker; false }
                 }
@@ -47,6 +51,11 @@ internal fun withoutFencedCode(content: String): String {
                 }
                 // フェンスの中身。短いフェンス行もここへ落ちる（閉じにならない）。
                 else -> false
+            }
+            when {
+                outside -> line
+                keepBlankLines -> ""
+                else -> null
             }
         }
         .joinToString("\n")
@@ -100,30 +109,115 @@ internal val TABLE_PIPE = Regex("""\|""")
 internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
 
 /**
+ * `` `NoteViewModel` `` のようなインラインコードを、**中身を残して**記法だけ落とす。
+ *
+ * [stripMarkdownMarkers] はインラインコードを空白へ替えるので、原文の1文をそのまま見せる用途では
+ * **先にこちらを通す。** 通さないと「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
+ */
+internal fun String.unwrapInlineCode(): String = replace(INLINE_CODE_CONTENT) { it.groupValues[1] }
+
+/** 見出しの行。**記法を落とす前に**判定する（落とすと本文の行と見分けられない）。 */
+internal fun String.isHeadingLine(): Boolean = HEADING_LINE.containsMatchIn(this)
+
+/** `|---|:--|` のような表の区切り。記法を落とすと `- :` だけが残り、意味を持たない。 */
+internal fun String.isTableDelimiter(): Boolean = TABLE_DELIMITER_LINE.matches(this)
+
+/**
+ * リンクだけの行。**ラベルへ畳んでから判定しない。**
+ *
+ * [stripMarkdownMarkers] はリンクをラベルへ置き換えるので、
+ * 畳んだ後では「リンクだけの行」と「その語を書いた行」を区別できない。
+ * 判定はリンクを**丸ごと消して**から行う（画像 `![alt](path)` も同じ経路で消える）。
+ */
+internal fun String.isLinkOnly(): Boolean =
+    !replace(WIKILINK, "").replace(MARKDOWN_LINK, "").hasReadableText()
+
+/** 文字か数字が1つも無ければ、罫線・記号だけの行である。 */
+internal fun String.hasReadableText(): Boolean = READABLE_CHAR.containsMatchIn(this)
+
+private val INLINE_CODE_CONTENT = Regex("""`([^`\n]*)`""")
+private val HEADING_LINE = Regex("""^\s{0,3}#{1,6}\s""")
+private val TABLE_DELIMITER_LINE = Regex("""^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$""")
+private val READABLE_CHAR = Regex("""[\p{L}\p{N}]""")
+
+/**
  * 1行を文へ割る。**括弧・鉤括弧の内側では切らない。**
  *
  * 素朴に終止符で切ると、引用した発言（「これでいいのか？」）の途中で割れ、
  * **閉じ括弧の無い断片**がそのまま候補になる。カードには1文をそのまま出すので、
  * 割れた断片が見えてしまう。
+ *
+ * [splitAtPeriods] が真なら、英文のピリオドでも割る（→ [endsSentenceAtPeriod]）。
+ * 偽のときは割らない — 英文の複数文が1つの「文」になるが、用途によってはそれで足りる。
  */
-internal fun splitIntoSentences(line: String): List<String> {
+internal fun splitIntoSentences(line: String, splitAtPeriods: Boolean = false): List<String> {
     val sentences = mutableListOf<String>()
     val buffer = StringBuilder()
     var depth = 0
-    for (char in line) {
+    line.forEachIndexed { index, char ->
         buffer.append(char)
-        when (char) {
-            in OPENING_BRACKETS -> depth++
-            in CLOSING_BRACKETS -> if (depth > 0) depth--
-            in SENTENCE_TERMINATORS -> if (depth == 0) {
-                sentences += buffer.toString()
-                buffer.setLength(0)
+        val ends = when (char) {
+            in OPENING_BRACKETS -> {
+                depth++
+                false
             }
+            in CLOSING_BRACKETS -> {
+                if (depth > 0) depth--
+                false
+            }
+            in SENTENCE_TERMINATORS -> depth == 0
+            '.' -> splitAtPeriods && depth == 0 && endsSentenceAtPeriod(line, index)
+            else -> false
+        }
+        if (ends) {
+            sentences += buffer.toString()
+            buffer.setLength(0)
         }
     }
     if (buffer.isNotBlank()) sentences += buffer.toString()
     return sentences
 }
+
+/**
+ * [index] のピリオドで英文が終わるか。**小数・略語・頭文字では切らない。**
+ *
+ * 終わりとみなすのは、直後が空白で、続く文字が小文字でないとき。直後が空白でなければ小数や版番号（`3.5`・`v1.2`）、
+ * 続きが小文字なら文の途中の略語（`approx. three`）である。ピリオドの前の語が1文字（頭文字・`e.g.`）か
+ * [PERIOD_ABBREVIATIONS] にあれば、続きが大文字でも切らない（`Dr. Smith`）。省略記号（`...`）でも切らない。
+ */
+private fun endsSentenceAtPeriod(text: String, index: Int): Boolean {
+    if (text.getOrNull(index + 1)?.isWhitespace() != true) return false
+    if (text.getOrNull(index - 1) == '.') return false
+    val word = text.substring(0, index).takeLastWhile { it.isLetter() }
+    if (word.length == 1 || word.lowercase() in PERIOD_ABBREVIATIONS) return false
+    val following = text.substring(index + 1).trimStart().firstOrNull() ?: return false
+    return !following.isLowerCase()
+}
+
+private val PERIOD_ABBREVIATIONS = setOf(
+    "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "al",
+    "inc", "ltd", "co", "no", "vol", "fig", "eq", "cf", "approx", "ver", "ed"
+)
+
+/**
+ * 段落の中で折り返した行を、1行の文としてつなぐ。**日本語の側では空白を入れない。**
+ *
+ * 空白でつなぐと、どこで折り返したかで文が変わる（「場合に限り、 朝の光」「十分な睡眠を 取れて」）。
+ * 改行の両側が英数字や記号のときだけ空白を入れる（`Remote work always` ＋ `improves` は空白が要る）。
+ * 各行は前後の空白を落としてからつなぐ。
+ */
+internal fun joinSoftWrappedLines(lines: List<String>): String = buildString {
+    lines.map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+        val previous = lastOrNull()
+        if (previous != null && !previous.isJapanese() && !line.first().isJapanese()) append(' ')
+        append(line)
+    }
+}
+
+/** 漢字・かな・全角の記号。語の間に空白を置かない書き方の文字。 */
+private fun Char.isJapanese(): Boolean =
+    code in 0x3000..0x30FF || code in 0xFF00..0xFFEF ||
+        Character.UnicodeScript.of(code) == Character.UnicodeScript.HAN
 
 internal const val OPENING_BRACKETS = "「『（(【［[{"
 internal const val CLOSING_BRACKETS = "」』）)】］]}"

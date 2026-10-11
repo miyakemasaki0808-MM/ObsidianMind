@@ -14,6 +14,8 @@ import androidx.compose.ui.text.withStyle
 import com.example.newproject.domain.noteLinkOf
 import com.example.newproject.domain.markdown.InlineSpan
 import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.linkLabel
+import com.example.newproject.domain.markdown.plainVisibleText
 import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.ui.theme.LightAppColors
 
@@ -76,12 +78,9 @@ private fun AnnotatedString.Builder.appendSpans(
         appendPlain(text, index, span.start, escapedBackslashes)
         withStyle(styleFor(span, colors)) {
             when (span.kind) {
-                // `[[note|表示名]]` は表示名だけを出す。内側は解釈しない。
-                InlineSpanKind.WikiLink -> appendLink(text, span, linkTaps) {
-                    append(text.substring(span.contentStart, span.contentEnd).split("|").last())
-                }
-                InlineSpanKind.Link -> appendLink(text, span, linkTaps) {
-                    append(text.substring(span.contentStart, span.contentEnd))
+                // `[[note|表示名]]` は表示名だけを出す。内側は解釈しない。見える文字は反証の一文の候補と同じ規則で決める。
+                InlineSpanKind.WikiLink, InlineSpanKind.Link -> appendLink(text, span, linkTaps) {
+                    append(linkLabel(text, span))
                 }
                 InlineSpanKind.Code -> append(text.substring(span.contentStart, span.contentEnd))
                 else -> appendSpans(
@@ -111,23 +110,14 @@ private fun AnnotatedString.Builder.appendLink(
 
 private const val NOTE_LINK_TAG = "note-link"
 
-/** 装飾の外側。エスケープは記号だけを出す（`\*` → `*`）。Obsidianと同じ見え方にする。 */
+/** 装飾の外側（→ [plainVisibleText]）。 */
 private fun AnnotatedString.Builder.appendPlain(
     text: String,
     from: Int,
     to: Int,
     escapedBackslashes: Set<Int>
 ) {
-    var index = from
-    while (index < to) {
-        if (index in escapedBackslashes && index + 1 < to) {
-            append(text[index + 1])
-            index += 2
-            continue
-        }
-        append(text[index])
-        index++
-    }
+    append(plainVisibleText(text, from, to, escapedBackslashes))
 }
 
 private fun styleFor(span: InlineSpan, colors: InlineMarkdownColors): SpanStyle = when (span.kind) {

@@ -57,7 +57,8 @@ class NoteExcerptThreadingTest {
             "domain/SummarizeUseCase.kt" to 1,
             "domain/RelatedNotesUseCase.kt" to 1,
             "controller/NoteFieldController.kt" to 1,
-            "controller/SectionChatController.kt" to 1
+            "controller/SectionChatController.kt" to 1,
+            "controller/RebuttalController.kt" to 1
         )
         private val BUILD_CALL = Regex("""\bbuildNoteExcerpt\(""")
         private val OFF_MAIN_BUILD_CALL =

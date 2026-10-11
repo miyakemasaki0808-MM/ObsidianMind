@@ -48,6 +48,7 @@ import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.domain.ReunionSlot
@@ -331,6 +332,8 @@ class NoteSessionCoordinatorTest {
         // 右で眺めていたノート。残すと、次のノートのペインに前のノートの関連が開いたまま出る。
         assertEquals(SideReadingState.Idle, reset.sideReading)
         assertNull(reset.readingTraceCard)
+        // 残すと、次のノートの関連タブに前のノートと食い違う文が出る。
+        assertNull(reset.rebuttalSentence)
         assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
     }
 
@@ -396,6 +399,7 @@ class NoteSessionCoordinatorTest {
         assertEquals(SectionChatState(), state.sectionChat)
         assertEquals(SideReadingState.Idle, state.sideReading)
         assertNull(state.readingTraceCard)
+        assertNull(state.rebuttalSentence)
         assertNull(state.crystalNotePath)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
         assertEquals(1, hostCancelCount)
@@ -499,6 +503,59 @@ class NoteSessionCoordinatorTest {
         assertTrue(state.marginMemoState is MarginMemoState.Idle)
         assertEquals(false, state.isMarginMemoSheetVisible)
         assertEquals(SectionChatState(), state.sectionChat)
+    }
+
+    /**
+     * 関連ノートの結果を出す1手で、反証の一文の選定が始まる（→ features/rebuttal_sentence.md §7）。
+     * 結果だけ出して選定を始め忘れる経路を作らない。
+     */
+    @Test
+    fun `関連ノートの完了から反証の一文が始まる`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.startRebuttal()
+        advanceUntilIdle()
+
+        assertTrue(coordinator.uiState.value.relatedNotesState is RelatedNotesState.Success)
+        assertTrue("反証の選定が始まっていない", env.ai.prompts.any { "X01 | $REBUTTAL_CLAIM" in it })
+
+        env.ai.completeAll("X01")
+        advanceUntilIdle()
+
+        assertEquals(RebuttalSentence(REBUTTAL_CLAIM, SIDE_NOTE), coordinator.uiState.value.rebuttalSentence)
+    }
+
+    /**
+     * 実物の Controller の選定が、ノート切替の契約から止まる。
+     * 状態リセットだけでは、生きているジョブが**リセットの後から**旧ノートの一文を書き戻す。
+     * `cancelNoteScopedJobs()` から外すとここが落ちる。
+     */
+    @Test
+    fun `ノート切替後に旧ノートの反証の一文が後着しない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.startRebuttal()
+        advanceUntilIdle()
+        assertTrue("反証の選定が始まっていない", env.ai.prompts.any { "X01 | $REBUTTAL_CLAIM" in it })
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+        env.ai.completeAll("X01")
+        advanceUntilIdle()
+
+        assertNull(coordinator.uiState.value.rebuttalSentence)
+    }
+
+    private fun NoteSessionCoordinator.startRebuttal() {
+        // 本文を出してから始める。出さないと選定は門番の手前で待ったままになる。
+        setNoteState(successNote(REBUTTAL_CURRENT))
+        completeRelatedNotes(
+            currentTitle = "睡眠について",
+            currentContent = REBUTTAL_CURRENT,
+            relatedNotes = listOf(SIDE_NOTE),
+            aiNotes = emptyList(),
+            readContent = { REBUTTAL_CLAIM }
+        )
     }
 
     /**
@@ -936,6 +993,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("SideReading(並べ読み)", state.sideReading != SideReadingState.Idle)
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
+        assertTrue("Rebuttal(反証の一文)", state.rebuttalSentence != null)
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
@@ -993,6 +1051,7 @@ class NoteSessionCoordinatorTest {
             lastSectionTitle = "導入",
             lastProgressPercent = 40
         ),
+        rebuttalSentence = RebuttalSentence(text = "旧ノートと食い違う一文。", source = SIDE_NOTE),
         folders = listOf(NoteFolder(name = "下書き", documentId = "old-folder")),
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
@@ -2028,6 +2087,10 @@ class NoteSessionCoordinatorTest {
 
         /** 並べ読みで右に開く関連ノート。 */
         val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
+
+        /** 反証の一文の今のノートと、関連ノート（[SIDE_NOTE]）の本文の1文。 */
+        const val REBUTTAL_CURRENT = "睡眠は朝の光で整う。夜更かしをしても朝に光を浴びれば戻る。"
+        const val REBUTTAL_CLAIM = "睡眠は朝の光では整わない。"
 
         /** 問いも古い前提も無い本文。読了の枠はノートの要約になる。 */
         const val PLAIN = "これは説明だけの本文である。"

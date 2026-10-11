@@ -69,6 +69,13 @@ internal object PromptSamples {
                     candidates = List(entries) { ReunionCandidateLine("R0$it", "$MARK$it") }
                 ).text,
 
+            "buildRebuttalPrompt" to
+                PromptBuilder.buildRebuttalPrompt(
+                    currentTitle = value,
+                    currentExcerpt = excerpt,
+                    candidates = List(entries) { RebuttalCandidateLine("X0$it", "$MARK$it") }
+                ).text,
+
             "buildReunionPassagePrompt" to
                 PromptBuilder.buildReunionPassagePrompt(
                     noteTitle = value,

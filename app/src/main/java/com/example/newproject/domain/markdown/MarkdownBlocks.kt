@@ -121,7 +121,14 @@ internal fun parseStandaloneImage(line: String): MarkdownBlock.Image? {
     )
 }
 
-internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
+/**
+ * [joinParagraphLines] は段落の行のつなぎ方。本文の画面は空白でつなぐ。
+ * **段落の切れ目の規則は変えずに、つなぎ方だけを差し替える口**で、反証の一文が日本語の折り返しを空白なしでつなぐのに使う。
+ */
+internal fun parseMarkdownBlocks(
+    content: String,
+    joinParagraphLines: (List<String>) -> String = { it.joinToString(" ") }
+): List<MarkdownBlock> {
     val lines = content.replace("\r\n", "\n").lines().stripFrontmatter()
     val blocks = mutableListOf<MarkdownBlock>()
     var index = 0
@@ -229,7 +236,7 @@ internal fun parseMarkdownBlocks(content: String): List<MarkdownBlock> {
             paragraphLines.add(current.trim())
             index++
         }
-        blocks.add(MarkdownBlock.Paragraph(paragraphLines.joinToString(" ")))
+        blocks.add(MarkdownBlock.Paragraph(joinParagraphLines(paragraphLines)))
     }
 
     return blocks

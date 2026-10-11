@@ -11,6 +11,7 @@ import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
@@ -82,6 +83,12 @@ interface SideReadingStateWriter {
 interface ReadingTraceStateWriter {
     val current: ReadingTraceCard?
     fun update(transform: (ReadingTraceCard?) -> ReadingTraceCard?)
+}
+
+/** 反証の一文（ノート単位）。null が「出さない」。 */
+interface RebuttalStateWriter {
+    val current: RebuttalSentence?
+    fun update(transform: (RebuttalSentence?) -> RebuttalSentence?)
 }
 
 interface ReadingTraceCleanupStateWriter {
@@ -223,6 +230,13 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         }
     }
 
+    val rebuttalWriter: RebuttalStateWriter = object : RebuttalStateWriter {
+        override val current: RebuttalSentence? get() = mutableState.value.rebuttalSentence
+        override fun update(transform: (RebuttalSentence?) -> RebuttalSentence?) {
+            mutableState.update { it.copy(rebuttalSentence = transform(it.rebuttalSentence)) }
+        }
+    }
+
     val readingTraceCleanupWriter: ReadingTraceCleanupStateWriter =
         object : ReadingTraceCleanupStateWriter {
             override val current: ReadingTraceCleanupState
@@ -351,6 +365,8 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     sideReading = SideReadingState.Idle,
     // ここで必ず消えることが「カードは Rediscover でしか出ない」の担保。
     readingTraceCard = null,
+    // 残すと、次のノートの関連タブに前のノートと食い違う文が出る。
+    rebuttalSentence = null,
     // **結晶の一覧は落とさない**（Vault単位）。落とすのは絞り込みのパスだけで、
     // 残すと次のノートの✨タブに前のノートの結晶が出る。
     crystalNotePath = null

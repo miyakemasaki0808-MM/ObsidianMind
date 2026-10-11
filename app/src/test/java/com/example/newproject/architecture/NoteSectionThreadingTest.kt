@@ -55,7 +55,11 @@ class NoteSectionThreadingTest {
             .toSet()
 
         assertEquals(
-            setOf(BLOCKS_DEFINITION, SECTIONS_DEFINITION, EXCERPT_BUILDER, MARKDOWN_RENDERER, SIDE_READING_CONTROLLER),
+            setOf(
+                BLOCKS_DEFINITION, SECTIONS_DEFINITION, EXCERPT_BUILDER, MARKDOWN_RENDERER, SIDE_READING_CONTROLLER,
+                // 反証の一文の候補列挙（関連ノートの先頭8KB）。呼ぶのは RebuttalController の excerptDispatcher の内側だけ。
+                REBUTTAL_SCANNER
+            ),
             callSites
         )
     }
@@ -119,6 +123,7 @@ class NoteSectionThreadingTest {
         private const val BLOCKS_DEFINITION = "domain/markdown/MarkdownBlocks.kt"
         private const val EXCERPT_BUILDER = "domain/NoteExcerptBuilder.kt"
         private const val SIDE_READING_CONTROLLER = "controller/SideReadingController.kt"
+        private const val REBUTTAL_SCANNER = "domain/RebuttalClaimScanner.kt"
         private const val MARKDOWN_RENDERER = "ui/markdown/MarkdownRenderer.kt"
         private const val NOTE_COMPONENTS = "ui/component/NoteComponents.kt"
 

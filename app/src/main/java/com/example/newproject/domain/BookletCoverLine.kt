@@ -7,9 +7,9 @@ package com.example.newproject.domain
 // 速度には原理的に間に合わない。本文から1文を**抽出**すれば即時に出せる
 // （→ features/booklet_mode.md 判断5）。
 //
-// **前処理は [withoutFencedCode] / [stripMarkdownMarkers] と共有し、選ぶ規則はここに持つ。**
+// **前処理（記法の除去・行の種類の判定）は `MarkdownPlainText.kt` と共有し、選ぶ規則はここに持つ。**
 // 再会カードは「問い」や「古びうる記述」を探すが、扉が欲しいのは**最初に読める1文**で、
-// 探しているものが違う。
+// 探しているものが違う。インラインコードの中身を残す（[unwrapInlineCode]）のも、再会カードとは意図的に違う。
 // ---------------------------------------------------------------------------
 
 /**
@@ -43,7 +43,7 @@ private fun firstReadableSentence(content: String): String? {
     val lines = withoutFencedCode(stripFrontmatter(content)).lines()
     return lines.asSequence()
         .filterIndexed { index, line ->
-            !line.isHeading() && !line.isTableDelimiter() && !line.isLinkOnly() && !lines.isTableHeaderAt(index)
+            !line.isHeadingLine() && !line.isTableDelimiter() && !line.isLinkOnly() && !lines.isTableHeaderAt(index)
         }
         .map { it.unwrapInlineCode().stripMarkdownMarkers().collapseSpaces() }
         .filterNot { it.isDateOnly() || it.isNavigation() }
@@ -52,23 +52,6 @@ private fun firstReadableSentence(content: String): String? {
         ?.takeIf { it.hasReadableText() }
         ?.let(::truncateForCover)
 }
-
-/**
- * `` `NoteViewModel` `` のようなインラインコードを、**中身を残して**記法だけ落とす。
- *
- * **ここは再会カードと意図的に違う。** [stripMarkdownMarkers] はインラインコードを
- * 空白へ替える（問いや前提を探すのに、コードは邪魔なため）。
- * だが扉は**最初の1文をそのまま見せる**役なので、同じことをすると
- * 「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
- * このリポジトリのノートのように記法を多用する本文では、これが常時起きる。
- */
-private fun String.unwrapInlineCode(): String = replace(INLINE_CODE_FENCE) { it.groupValues[1] }
-
-/** 見出しは「何が書いてあるか」であって代表文ではない。 */
-private fun String.isHeading(): Boolean = HEADING.containsMatchIn(this)
-
-/** `|---|:--|` のような表の区切り。記法を落とすと `- :` だけが残り、意味を持たない。 */
-private fun String.isTableDelimiter(): Boolean = TABLE_DELIMITER.matches(this)
 
 /**
  * 表の見出し行（すぐ次の行が区切り）。「ID タグ タイトル 概要」は列の名前であって、何のノートかを言わない。
@@ -86,19 +69,6 @@ private fun String.isDateOnly(): Boolean = DATE_ONLY.matches(this)
 /** 🧭 で始まるナビの行（「🧭 クイックナビ: …」）。ほかの絵文字の行は見出し代わりの良い扉でありうるので落とさない。 */
 private fun String.isNavigation(): Boolean = startsWith(NAVIGATION_MARK)
 
-/**
- * リンクだけの行。**ラベルへ畳んでから判定しない。**
- *
- * `stripMarkdownMarkers` はリンクをラベルへ置き換えるので、
- * 畳んだ後では「リンクだけの行」と「その語を書いた行」を区別できない。
- * 判定はリンクを**丸ごと消して**から行う（画像 `![alt](path)` も同じ経路で消える）。
- */
-private fun String.isLinkOnly(): Boolean =
-    !replace(WIKILINK, "").replace(MARKDOWN_LINK, "").hasReadableText()
-
-/** 文字か数字が1つも無ければ、罫線・記号だけの行なので扉にならない。 */
-private fun String.hasReadableText(): Boolean = READABLE.containsMatchIn(this)
-
 /** 表の `|` を空白へ替えた後などに空白が続くので、1つへ均す。 */
 private fun String.collapseSpaces(): String = replace(WHITESPACE_RUN, " ").trim()
 
@@ -115,9 +85,6 @@ private fun truncateForCover(text: String): String {
     return text.substring(0, end).trimEnd() + "…"
 }
 
-private val INLINE_CODE_FENCE = Regex("""`([^`\n]*)`""")
-private val HEADING = Regex("""^\s{0,3}#{1,6}\s""")
-private val TABLE_DELIMITER = Regex("""^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$""")
 
 /**
  * ラベル（20字まで）と区切りは任意。曜日の括弧と時刻は付いてよい。`\s` は全角空白を含まないので並べて書く。
@@ -129,5 +96,4 @@ private val DATE_ONLY = Regex(
         """(?:[\s\u3000]+\d{1,2}:\d{2}(?::\d{2})?)?$"""
 )
 private const val NAVIGATION_MARK = "🧭"
-private val READABLE = Regex("""[\p{L}\p{N}]""")
 private val WHITESPACE_RUN = Regex("""\s+""")

@@ -14,6 +14,7 @@ import com.example.newproject.model.promptId
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.PromptLimits
+import com.example.newproject.model.REBUTTAL_NONE_TOKEN
 import com.example.newproject.model.REUNION_NONE_TOKEN
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.ReunionPassage
@@ -57,6 +58,22 @@ data class ReunionCandidateLine(val id: String, val text: String) {
 internal data class ReunionSelectionPrompt(
     val text: String,
     val candidates: List<ReunionCandidateLine>
+) {
+    val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
+}
+
+/**
+ * 反証の一文の候補行。**関連ノートの本文からそのまま取った1文**で、出どころのタイトルは載せない
+ * （食い違いの判定に要らず、入力を増やすだけ → features/rebuttal_sentence.md §5）。
+ */
+internal data class RebuttalCandidateLine(val id: String, val text: String) {
+    fun renderForPrompt(): String = "$id | $text"
+}
+
+/** 予算で飛ばした候補は [candidates] にも入れない。応答IDの許可集合とプロンプトをずらさない（→ [DistillPrompt]）。 */
+internal data class RebuttalSelectionPrompt(
+    val text: String,
+    val candidates: List<RebuttalCandidateLine>
 ) {
     val validIds: Set<String> get() = candidates.mapTo(linkedSetOf()) { it.id }
 }
@@ -166,9 +183,16 @@ object PromptBuilder {
         NoteField.Reflection -> "diaries, retrospectives, loose ideas, thinking out loud"
     }
 
+    /**
+     * ノートの要約。**出力は常に日本語**（→ features/note_summary.md 判断10）。
+     *
+     * 「本文と同じ言語で」と任せると、英語の注意書き・見出しのラベル・コード・ファイル名が混じる抜粋で、
+     * 日本語のノートでも英語の要約が返る。生成は決定的なので、そのノートでは毎回英語になる。
+     */
     fun buildSummarizePrompt(title: String, excerpt: NoteExcerpt): String {
         val instructions = """
-            You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences in the same language as the note content.
+            You are a note-taking assistant. Summarize the following Obsidian note concisely in 2–4 sentences.
+            Write the summary in Japanese, even if the note or parts of it are written in English.
             Focus on the key ideas. Do not include phrases like "This note is about" — just write the summary directly.
         """.trimIndent()
 
@@ -336,6 +360,57 @@ object PromptBuilder {
     }
 
     /**
+     * 反証の一文（→ features/rebuttal_sentence.md §5）。**関連ノートの文から、今のノートと最も食い違う1文を選ばせる。**
+     *
+     * **生成させない。** IDだけを返させ、表示する文は手元の候補から引く（再会カードと同じ契約）。
+     * 正誤は判定させない — 食い違いを示すだけで、どちらが正しいかは言わない。
+     *
+     * 候補は [PromptLimits.REBUTTAL_CANDIDATES_CHARACTERS] で閉じ、超える行は**飛ばして先へ進む**
+     * （[buildPickerPrompt] と同じ詰め方）。
+     */
+    internal fun buildRebuttalPrompt(
+        currentTitle: String,
+        currentExcerpt: NoteExcerpt,
+        candidates: List<RebuttalCandidateLine>
+    ): RebuttalSelectionPrompt {
+        val presented = mutableListOf<RebuttalCandidateLine>()
+        val rendered = mutableListOf<String>()
+        var used = 0
+        for (candidate in candidates) {
+            val line = candidate.renderForPrompt()
+            val cost = line.length + if (rendered.isEmpty()) 0 else 1
+            if (used + cost > PromptLimits.REBUTTAL_CANDIDATES_CHARACTERS) continue
+            presented += candidate
+            rendered += line
+            used += cost
+        }
+
+        val instructions = """
+            You are helping someone think further about a note they wrote.
+            Each candidate below is one sentence taken from a DIFFERENT note in the same vault, listed as "ID | sentence".
+            Choose the ONE candidate that most directly conflicts with a claim made in the current note:
+            it asserts the opposite, denies a premise the current note relies on, or reaches a different conclusion about the same subject.
+            Prefer a clear conflict on the same subject over a sentence about a different subject.
+            Ignore candidates that agree with, restate, or merely add detail to the current note.
+            Return only the ID of the sentence you chose, on one line (for example: X01).
+            Do not return the sentence, an explanation, or more than one ID.
+            If no candidate conflicts with the current note, return exactly: 
+        """.trimIndent().trimEnd() + " " + REBUTTAL_NONE_TOKEN
+
+        return RebuttalSelectionPrompt(
+            text = PromptBudget.assemble(
+                instructions = instructions,
+                body = buildString {
+                    append("\n\nCurrent note title: ").append(label(currentTitle))
+                    append("\nCurrent note content:\n").append(currentExcerpt.renderForPrompt())
+                    append("\n\nCandidates:\n").append(rendered.joinToString("\n"))
+                }
+            ),
+            candidates = presented
+        )
+    }
+
+    /**
      * 再会カードの前後の要約（→ features/reunion_card.md 判断6）。
      *
      * **境目を印で示して渡す。** 前後を1本にすると、直前に読んでいたことと、この先にあることを書き分けられない。
@@ -417,9 +492,11 @@ object PromptBuilder {
 
     // ── セクション単位の部分要約 ─────────────────────────────────────────────
 
+    /** 節の要約。**出力は常に日本語**（理由はノートの要約と同じ → [buildSummarizePrompt]）。 */
     fun buildSectionSummaryPrompt(sectionTitle: String, sectionExcerpt: NoteExcerpt): String {
         val instructions = """
-            You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences, in the same language as the section content.
+            You are a note-taking assistant. Summarize ONLY the following section of an Obsidian note, concisely in 2–4 sentences.
+            Write the summary in Japanese, even if the section or parts of it are written in English.
             Focus on the key ideas of this section. Do not include phrases like "This section is about" — just write the summary directly.
         """.trimIndent()
 

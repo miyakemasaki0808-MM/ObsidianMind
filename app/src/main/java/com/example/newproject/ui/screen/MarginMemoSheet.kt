@@ -61,6 +61,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -78,6 +79,7 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.DangerAction
@@ -615,7 +617,9 @@ internal class PaneRelatedInputs(
     val onOpen: (RelatedNote) -> Unit,
     /** 並べ読みから戻ったときに、この一覧まで送る依頼の番号。送り終えたら（止められても）[onRevealHandled] で消してもらう。 */
     val reveal: Long? = null,
-    val onRevealHandled: (Long) -> Unit = {}
+    val onRevealHandled: (Long) -> Unit = {},
+    /** 反証の一文（→ [PaneRebuttal]）。選べていなければ null。 */
+    val rebuttal: RebuttalSentence? = null
 )
 
 /**
@@ -625,22 +629,43 @@ internal class PaneRelatedInputs(
 @Composable
 private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit) {
     val candidates = inputs.candidates
-    if (candidates.isNullOrEmpty()) return
+    if (!candidates.isNullOrEmpty()) {
+        Spacer(modifier = Modifier.height(12.dp))
+        HorizontalDivider()
+        TextButton(
+            onClick = inputs.onToggle,
+            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+            modifier = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
+        ) {
+            Text(
+                text = "${if (inputs.expanded) "▾" else "▸"} このノートの関連 ${candidates.size}件",
+                color = OnSurfaceMuted,
+                fontSize = 13.sp
+            )
+        }
+        if (inputs.expanded) {
+            candidates.forEach { note -> RelatedNoteItem(note = note, onClick = { inputs.onOpen(note) }) }
+        }
+    }
+    inputs.rebuttal?.let { PaneRebuttal(it, onOpen = inputs.onOpen) }
+}
+
+/**
+ * 反証の一文（→ features/rebuttal_sentence.md §5.7）。**関連の直下に、畳まずに出す** —
+ * 畳んだ一覧の中に入れると、机の画面では目に入らない。
+ * 出どころの行は関連の候補と同じく**右で開く**（今のノートは替えない）。反対の意見を隣に並べて読める。
+ */
+@Composable
+private fun PaneRebuttal(sentence: RebuttalSentence, onOpen: (RelatedNote) -> Unit) {
     Spacer(modifier = Modifier.height(12.dp))
     HorizontalDivider()
-    TextButton(
-        onClick = inputs.onToggle,
-        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-        modifier = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
-    ) {
-        Text(
-            text = "${if (inputs.expanded) "▾" else "▸"} このノートの関連 ${candidates.size}件",
-            color = OnSurfaceMuted,
-            fontSize = 13.sp
-        )
-    }
-    if (!inputs.expanded) return
-    candidates.forEach { note -> RelatedNoteItem(note = note, onClick = { inputs.onOpen(note) }) }
+    Text(
+        text = REBUTTAL_HEADING,
+        color = OnSurfaceMuted,
+        fontSize = 13.sp,
+        modifier = Modifier.padding(vertical = 8.dp).semantics { heading() }
+    )
+    RebuttalSentenceBody(sentence = sentence, onOpenSource = onOpen)
 }
 
 /**

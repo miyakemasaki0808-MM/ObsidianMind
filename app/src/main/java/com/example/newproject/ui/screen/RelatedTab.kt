@@ -24,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +34,7 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.AiHeading
@@ -87,9 +90,69 @@ fun RelatedTab(
                     onNoteClick = onOpenNote
                 )
             }
+            // 選べたときだけ出す。探している途中も、見つからなかったことも出さない（自動で走る機能）。
+            uiState.rebuttalSentence?.let { sentence ->
+                Spacer(modifier = Modifier.height(12.dp))
+                RebuttalPanel(sentence = sentence, onOpenSource = onOpenNote)
+            }
         }
     }
 }
+
+/**
+ * 反証の一文の枠（→ features/rebuttal_sentence.md §5.7）。**色も形も足さない** — 関連ノートと同じ面に載せる。
+ * 出どころの行を押すと、関連ノートと同じくそのノートへ移る。
+ */
+@Composable
+internal fun RebuttalPanel(
+    sentence: RebuttalSentence,
+    onOpenSource: (RelatedNote) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = PanelBlue,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Text(
+                text = REBUTTAL_HEADING,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = AccentText,
+                modifier = Modifier.semantics { heading() }
+            )
+            RebuttalSentenceBody(sentence = sentence, onOpenSource = onOpenSource)
+        }
+    }
+}
+
+/**
+ * 反証の一文の中身。関連タブの枠と余白ペインで共有する。見出しの見え方だけが置き場で違う。
+ *
+ * **出どころは関連ノートの行をそのまま使う**（→ features/rebuttal_sentence.md 判断6）。
+ * 同じ意味の行が2つの見た目で並ばないように、タップの先・linked・更新日を関連ノートと揃える。
+ */
+@Composable
+internal fun RebuttalSentenceBody(sentence: RebuttalSentence, onOpenSource: (RelatedNote) -> Unit) {
+    Text(
+        text = "いま読んでいるノートと食い違う、別のノートの一文",
+        fontSize = 11.sp,
+        color = OnSurfaceFaint
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    Text(
+        text = sentence.text,
+        fontSize = 14.sp,
+        lineHeight = 19.sp,
+        color = OnSurface
+    )
+    Spacer(modifier = Modifier.height(8.dp))
+    HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
+    RelatedNoteItem(note = sentence.source, onClick = { onOpenSource(sentence.source) })
+}
+
+internal const val REBUTTAL_HEADING = "反証の一文"
 
 @Composable
 internal fun RelatedNotesPanel(
@@ -185,7 +248,7 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = 44.dp)
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = "開く", onClick = onClick)
             .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp)

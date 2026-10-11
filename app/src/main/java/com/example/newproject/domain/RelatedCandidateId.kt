@@ -16,6 +16,10 @@ internal fun reunionCandidateId(index: Int): String =
 internal fun pickerCandidateId(index: Int): String =
     "P" + (index + 1).toString().padStart(2, '0')
 
+// 反証の一文の候補の一時ID（X01..）。接頭辞を分ける理由は再会カードと同じ。
+internal fun rebuttalCandidateId(index: Int): String =
+    "X" + (index + 1).toString().padStart(2, '0')
+
 // 行頭のIDのみを対象にする。接頭辞の後は1〜2桁で、直後に文字も数字も続かないこと。
 // "C012"・"P2P通信"・"P01通信" のようなタイトル断片をIDと読むと、モデルが返していない
 // 別の候補を受理してしまう。記号や空白（"C01: 理由"・"P03 | タイトル"）は区切りとして許す。

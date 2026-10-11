@@ -5,6 +5,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import com.example.newproject.domain.markdown.InlineSpanKind
+import com.example.newproject.domain.markdown.inlineVisibleText
 import com.example.newproject.domain.markdown.scanInlineSyntax
 import androidx.compose.ui.text.LinkAnnotation
 import com.example.newproject.domain.NoteLink
@@ -235,5 +236,23 @@ class InlineMarkdownTest {
     fun `インラインコードと打ち消し線が処理される`() {
         assertEquals("code", plainText("`code`"))
         assertEquals("済み", plainText("~~済み~~"))
+    }
+
+    /**
+     * **描いた文字と、反証の一文が候補にする文字は同じ規則で決まる**（→ lessons L51）。
+     * 片方だけ直すと、本文に見える文と枠に出す文がずれる。
+     */
+    @Test
+    fun `描いた文字は見える文字と一致する`() {
+        listOf(
+            "[[リモートワーク|対面勤務]]は常に生産性を高める。",
+            "[[note#見出し]] と [ラベル](https://example.com)",
+            "`left || right` と `a * b`",
+            "**太字の中の *斜体* と `code`** の後",
+            "~~消した~~ 文と \\* エスケープ \\[ 括弧",
+            "2 * 3 * 4 は斜体にしない"
+        ).forEach { input ->
+            assertEquals(input, plainText(input), inlineVisibleText(input))
+        }
     }
 }

@@ -11,6 +11,7 @@ import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
@@ -55,6 +56,8 @@ data class NoteUiState(
     val sideReading: SideReadingState = SideReadingState.Idle,
     // Rediscover で引いた時だけ入る「前回のあなた」カード
     val readingTraceCard: ReadingTraceCard? = null,
+    // 反証の一文。関連ノートの結果から選ぶ。**ノート単位**（→ features/rebuttal_sentence.md §6）。
+    val rebuttalSentence: RebuttalSentence? = null,
     // さがすタブ
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
@@ -73,7 +76,7 @@ data class NoteUiState(
  *
  * 再会カード（[NoteUiState.readingTraceCard]）も維持する。同じノートのままで、痕跡は
  * vault相対パスをキーにしているため有効なまま（維持しないと Rediscover→蒸留保存で
- * カードだけが消える）。
+ * カードだけが消える）。反証の一文（[NoteUiState.rebuttalSentence]）も他ノートの原文なので維持する。
  */
 internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
     noteState = loaded,
