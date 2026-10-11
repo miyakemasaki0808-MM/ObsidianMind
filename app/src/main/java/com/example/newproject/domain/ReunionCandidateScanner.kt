@@ -118,8 +118,11 @@ private val SENTENCE_END = Regex("""[。！？!?]\s*$""")
  * 別に要るのは `かな` だけ（`か` の直後が `な` で、句点が来ないため）。
  *
  * 未解決かどうかの判断はここでしない。**形が問いであることまでを規則で見て、選別はAIへ渡す。**
+ *
+ * 反証の一文の候補列挙（[scanRebuttalClaims]）は、同じ判定で問いを**捨てる**。
+ * 変えると、問いとして拾う文と主張として拾う文の境目が両方で同時に動く。
  */
-private val QUESTION_END = Regex("""(?:[?？]|(?:か|かな)[。．.])\s*$""")
+internal val QUESTION_END = Regex("""(?:[?？]|(?:か|かな)[。．.])\s*$""")
 
 /** 古びうる印。西暦・版番号風の並び・通貨記号。 */
 private val STALENESS_MARK = Regex(
