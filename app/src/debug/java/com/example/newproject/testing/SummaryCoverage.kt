@@ -15,7 +15,7 @@ import com.example.newproject.domain.withoutFencedCode
 //
 // **`debug` ソースセットに置く。** 本番経路から呼ばないものを `main` に置くと、
 // リリースへ載るだけでなく、入力サイズに比例するMarkdown解析を本番から呼べる場所が1つ増え、
-// 「最大1MBの解析をMainから呼ばない」を守る走査（`NoteSectionThreadingTest` など）の面を広げる。
+// 「最大1MBの解析をMainから呼ばない」を守る走査（`ThreadingScanTest`）の面を広げる。
 
 /** 要約1文が、原文にどれだけ支えられ、どの節の話として数えられたか。 */
 data class SummarySentenceSupport(

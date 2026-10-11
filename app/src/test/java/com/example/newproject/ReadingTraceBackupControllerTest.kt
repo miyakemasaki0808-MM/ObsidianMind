@@ -556,7 +556,7 @@ class ReadingTraceBackupControllerTest {
      * `scope` は本番では `viewModelScope`（Main）なので、ここを外すと
      * 上限近傍で進捗表示も中止ボタンも止まる。
      *
-     * **何がその中で走るか**は `ReadingTraceBackupThreadingTest` がソース走査で見る。
+     * **何がその中で走るか**は `ThreadingScanTest` がソース走査で見る。
      * こちらは**差し替え口が本当に使われている**ことを見る。
      */
     @Test

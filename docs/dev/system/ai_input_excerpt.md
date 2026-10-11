@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中。**抜粋の予算調整は打ち止め**（効果が測れなかったため）
 **最終検証:** 2026-08-22 / `85b9e70`
 **関連コード:** `domain/NoteExcerptBuilder.kt` / `model/NoteExcerpt.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` / `ai/PromptBuilder.kt`
-**関連テスト:** `NoteExcerptBuilderTest` / `HeadMetadataRunTest` / `PromptBuilderExcerptRegressionTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / `NoteExcerptThreadingTest` / androidTest: `PromptTokenBudgetTest`
+**関連テスト:** `NoteExcerptBuilderTest` / `HeadMetadataRunTest` / `PromptBuilderExcerptRegressionTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / `ThreadingScanTest` / androidTest: `PromptTokenBudgetTest`
 **正本:** この文書
 
 **対象領域:** AIへ渡す入力の作り方（本文のどこを捨てどこを残すか＋完成プロンプトを何で閉じるか）
@@ -134,7 +134,7 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 `excerptDispatcher` を持ち、JVMテストではテストスケジューラへ差し替える。
 
 **従来の `take()` は先頭N文字のコピーで実質ゼロコストだったため、これは変更が持ち込んだ新しい負荷である。**
-呼び出しが再びメインスレッドへ戻らないことは、**ソース走査テスト**（`NoteExcerptThreadingTest`）が
+呼び出しが再びメインスレッドへ戻らないことは、**ソース走査テスト**（`ThreadingScanTest`）が
 「`buildNoteExcerpt` を呼ぶ全箇所」を対象に固定する（Controller一覧ではない）。
 
 ---

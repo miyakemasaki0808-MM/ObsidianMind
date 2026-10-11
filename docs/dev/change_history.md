@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | 重い純関数を Main の外で呼ぶことを守る走査3本を、表駆動の1本（ThreadingScanTest）へ寄せた（レビュー前） | [architecture](system/architecture.md) 判断3 |
 | 2026-10-11 | AI の抜粋の冒頭に、設計書や読書ノートの頭の情報の塊を数えないようにした（レビュー前） | [ai_input_excerpt](system/ai_input_excerpt.md) §2 |
 | 2026-10-11 | 冊子の扉から、頭の3行以上のラベル行の塊と表の本文の行を外した（レビュー前） | [booklet_mode](features/booklet_mode.md) §10・§11 |
 | 2026-10-11 | 冊子の紙は分野、本文の紙は年代という色の持ち主を、値と境界の走査で検査に固定した（レビュー前） | [bearing_channels](system/bearing_channels.md) §10 |

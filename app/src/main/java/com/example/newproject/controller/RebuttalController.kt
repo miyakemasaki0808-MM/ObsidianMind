@@ -44,7 +44,7 @@ class RebuttalController(
     private val state: RebuttalStateWriter,
     /**
      * 抜粋の組み立てと、候補の列挙・順位付けを逃がす先。**純粋だが入力に比例する**（→ `docs/dev/lessons.md` L13）。
-     * `NoteExcerptThreadingTest` がこの形を走査で固定している。
+     * `ThreadingScanTest` がこの形を走査で固定している。
      */
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
