@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-12 | ノート画面で余白メモのシートの器を画面の端まで広げ、見出しの霞が本文の列で切れて題名が端に付くのを直した（レビュー前） | [theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-12 | 見出し配置の変更をレビューし、新規指摘なしで実機確認待ちとした | [review](../review/README.md) |
 | 2026-10-12 | 見出しの丸ボタンを題名の行だけに並べて副題を全幅に通し、ノート画面で副題が折り返すのを解いた | [theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-12 | 空のAI抜粋とThreading走査の指摘2件を再確認し、解消を確認して受付簿から外した | [review](../review/README.md) |

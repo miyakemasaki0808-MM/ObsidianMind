@@ -144,6 +144,17 @@ private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, co
 internal fun Modifier.screenContentPadding(): Modifier =
     padding(start = SCREEN_HORIZONTAL_PADDING, end = SCREEN_HORIZONTAL_PADDING, top = 8.dp, bottom = 12.dp)
 
+/**
+ * [screenContentPadding] の左右の余白の外まで、見出しの面と同じ幅だけ広げる。**中身は [screenHorizontalPadding] で元の位置へ戻す。**
+ *
+ * 中身を自分の枠で切る器（ノート画面の余白メモのシート）を、余白の内側に置いたまま画面の端まで届かせるのに使う。
+ * 切られると、見出しの霞が本文の列の幅で止まり、題名が霞の左端に付く。**片方だけ使うと中身が余白の分ずれる。**
+ */
+internal fun Modifier.bleedScreenPadding(): Modifier = bleedHorizontally(SCREEN_HORIZONTAL_PADDING)
+
+/** [bleedScreenPadding] で広げた器の中身を、元の余白の位置へ戻す。 */
+internal fun Modifier.screenHorizontalPadding(): Modifier = padding(horizontal = SCREEN_HORIZONTAL_PADDING)
+
 private val SCREEN_HORIZONTAL_PADDING = 20.dp
 
 /** 帯の下端で面を透明へ抜く区間の高さ。文字は載らない。 */

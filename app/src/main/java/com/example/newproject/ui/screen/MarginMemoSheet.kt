@@ -124,6 +124,8 @@ internal fun MarginMemoSheetHost(
     expandRequested: Boolean,
     onDismiss: () -> Unit,
     sheet: @Composable () -> Unit,
+    /** 器そのものの修飾。器は本文とシートを自分の枠で切るので、枠を広げたいときはここで広げる。 */
+    modifier: Modifier = Modifier,
     /** シートの状態。テストが広げる途中に割り込むために渡す。 */
     sheetState: SheetState = rememberStandardBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -181,7 +183,7 @@ internal fun MarginMemoSheetHost(
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         // **閉じたシートは描かない。** 閉じたシートは本文の領域のすぐ下に置かれ、面とハンドルは中身と別に常に組まれる
         // （Material3 1.3.0）。描くと上端が下の余白へはみ出し、開いていないのに白い面とハンドルが下端に見える。
         // 出ている間と、出す・しまう動きの間だけ面とハンドルを描く。
