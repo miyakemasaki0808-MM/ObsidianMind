@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中。**主軸のAI機能**。混雑時の文言（判断9）は実機で未観測（→ §10）
 **最終検証:** 2026-09-18 / `e407dbd`
 **関連コード:** `controller/SummaryController.kt` / `controller/NoteDwellGate.kt` / `domain/SummarizeUseCase.kt` / `domain/SummaryCache.kt` / `data/FileSummaryCache.kt` / `ai/AiGenerationFailure.kt` / `ai/GenerationRecordingAiClient.kt` / `model/state/SummaryState.kt` / `ui/screen/AiTab.kt`（`SummaryPanel`）
-**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest`
+**関連テスト:** `SummaryControllerTest` / `SummarizeUseCaseTest` / `FileSummaryCacheTest` / `SummaryGenerationObservationTest` / `AiGenerationFailureTest` / `NoteExcerptBuilderTest` / `PromptGenerationCoverageTest` / `PromptOutputLanguageTest`
 **正本:** この文書
 
 **対象領域:** 開いたノートの要約を自動生成し、AIタブへ出すまで
@@ -67,7 +67,7 @@
 
 - **前提条件:** ノートが表示されていること。Vault未選択では走らない
 - **入力:** ノートのタイトルと本文（**抜粋してから渡す**）
-- **出力:** 2〜4文の要約
+- **出力:** 2〜4文の要約。**ノートが英語でも常に日本語で書かせる**（→ 判断10）
 - **上限:**
 
   | 対象 | 値 | 定数 |
@@ -247,6 +247,25 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
 - **長期の利用枠の超過（27）は含めない。** 少し待っても通らないので、同じ案内は誤りになる
 - **それ以外の失敗の文言は変えていない**（→ §11）
 
+### 判断10: 要約は常に日本語で書かせる（2026-10-11、オーナー判断）
+
+**出力の言語を本文に任せない。** 「本文と同じ言語で」と指示していたため、日本語のノートでも英語の要約が返っていた
+（オーナーが `background_ai_ux` で確認）。原因はモデルに渡す抜粋の中身にある。
+
+- 1,200字を超えるノートでは、本文の欄の先頭に英語の注意書き（226字）と英語の見出し（`## Note outline` など）が入る
+- 文書の頭の情報行（関連コード・関連テストのファイル名）や、コード・英語の用語が冒頭の抜粋を占める
+- タイトルが英語のファイル名のことがある
+
+`background_ai_ux` では本文の欄が英字501・日本語320で、モデルは本文を英語と読んだ。
+**生成は決定的なので、そのノートでは毎回英語になる**（判断6）。
+
+読み手はオーナーで、アプリの文言も日本語である。文章を書かせる他のプロンプト（再会カードの前後の要約・結晶）は
+元から日本語を指定していたので、要約と節の要約もそれに揃える。**英語のノートの要約も日本語になる**（オーナーが受け入れた）。
+文章を書かせるプロンプトが日本語を指定し、本文に任せないことは `PromptOutputLanguageTest` が固定する。
+
+**保存済みの英語の要約は、手当てなしに作り直される。** 保存の鍵は完成したプロンプトなので（判断6）、
+指示を変えた時点で前の鍵には当たらなくなり、次に開いたときに生成し直す。古い保存は上限で古い順に消える。
+
 ## 9. 品質要件
 
 - **性能:** 抜粋の生成は `Dispatchers.Default`。**最大1MBの本文解析はMainで走らせない**
@@ -263,6 +282,7 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
   `FileSummaryCacheTest`（1件1ファイル・古い順の削除・大きさの上限・書きかけの片付け・置き場を作れないとき）/
   `SummaryGenerationObservationTest`（生成の記録が、保存済みの当たりと同じ入力の再生成を区別できること）/
   `AiGenerationFailureTest`（回数制限の判定）/ `NoteExcerptBuilderTest`（抜粋）/
+  `PromptOutputLanguageTest`（出力を日本語と指定し、本文に任せない → 判断10）/ `PromptBuilderExcerptRegressionTest`（プロンプトの文字列）/
   `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）/
   `SummaryCoverageTest`・`SummaryCoverageCalibrationTest`（出力を採点する物差しと、その閾値）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）/ `PromptTokenBudgetTest`（トークン余裕）
@@ -290,6 +310,7 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
   - **モデルが変わっても保存済みの要約を出し続ける。** 同じ入力で同じ出力になるのは同じモデルのあいだだけで、
     端末のモデルが更新されても、本文かタイトルを変えるか古い順に消えるまで前のモデルの要約が出る（判断6）
   - 抜粋で切り落とされた区間の内容は要約に現れない
+  - **Nano が日本語の指定に従うかは実機で確かめていない**（判断10）。コードや英語の用語は、訳されずに英語のまま残りうる
 
 **受理した未確認の範囲（2026-09-18、オーナー判断）:** 保存（判断6〜8）は実機ケース `SUMCACHE-01`〜`07` で確認した。
 次の2つは実機で見ていないまま受理した。**BUSY は生成を投げ続けないと起こせず、それはしないと決めてある**（判断9）。
@@ -306,6 +327,8 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
 | 優先度が無い | 自動生成が先に入ると、ユーザーが押した操作が後ろで待つ。**開き直したノートでは生成しないので、待つのは初めて開いたノートだけになった** |
 | 回数制限以外の生成失敗は例外の文言のまま | SDK の英文が出うる。自動機能は例外本文を出さない方針（[background_ai_ux](../system/background_ai_ux.md) §6）とずれている |
 | 品質の正しさを判定できない | [探索用の実機基準線](../system/ai_quality_measurement.md) は取得済みだが、語彙指標だけでは正誤や方式の優劣を判定できない |
+| 冒頭の抜粋が文書の頭の情報行で埋まる | 「状態」「関連コード」のような行が続く文書では、冒頭の抜粋がそれで埋まり、本文の説明が要約に届かない。抜粋の作り方は全AI経路で共有しているので、要約だけでは直していない |
+| 抜粋の注意書きと見出しは英語のまま | 本文の欄に英語が入る。出力を日本語と指定したので要約の言語は左右しないが、抜粋は5つのAI経路で共有している（→ [ai_input_excerpt](../system/ai_input_excerpt.md)） |
 
 ## 12. 開発経緯
 
