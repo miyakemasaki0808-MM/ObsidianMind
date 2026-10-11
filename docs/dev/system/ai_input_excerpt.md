@@ -12,8 +12,8 @@
 >
 > | 呼び方 | 数 | 意味 |
 > |---|---|---|
-> | **プロンプト** | **9本** | `PromptBuilder` が持つ `build*Prompt` の総数 |
-> | **抜粋経路** | **4本** | そのうち `NoteExcerpt` を引数に取る＝本書の対象。要約・関連ノート・分野判定・節の要約 |
+> | **プロンプト** | **10本** | `PromptBuilder` が持つ `build*Prompt` の総数 |
+> | **抜粋経路** | **5本** | そのうち `NoteExcerpt` を引数に取る＝本書の対象。要約・関連ノート・分野判定・節の要約・反証の一文（→ [rebuttal_sentence](../features/rebuttal_sentence.md)） |
 > | 抜粋を通さない5本 | 5本 | 再会カードの前後の要約（本文を境目つきで切り出す → [reunion_card](../features/reunion_card.md) 判断6）・再会カードの問いの選別・検索ピッカー（タイトルのみ）・蒸留（候補文を直接渡す）・結晶（保存済みの要約から作った断片を渡す → [reflect_crystal](../features/reflect_crystal.md)） |
 **関連:** [architecture](architecture.md)（依存方向）・[markdown_rendering](markdown_rendering.md)・[related_notes_ai](../features/related_notes_ai.md)
 **経緯:** [開発日誌 2026-07](../../owner/journal/2026-07.md#2026-07-27--28--ai入力の切り出しを後ろ捨てから真ん中捨てへ)・[2026-08](../../owner/journal/2026-08.md)
@@ -129,6 +129,7 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 | `NoteExcerptLimits.SUMMARY` | 1,200 | 要約の本文抜粋上限 |
 | `SECTION` | 1,500 | 節の要約 |
 | `RELATED` | 800 | 関連ノートの現ノート側 |
+| `REBUTTAL` | 800 | 反証の一文の現ノート側。順位付けも同じ抜粋で行う |
 | `ABRIDGED_NOTICE_PREFIX` | 226文字 | 注意書き＋区切り改行。**予算の内側** |
 | 骨格の上限 | 残予算の 25% | 見出し骨格 |
 | 冒頭 / 末尾 | 60% / 40% | 骨格を引いた残りの配分 |
@@ -213,7 +214,7 @@ AI出力を別のAI入力へ流すと、受け取る側の入力は元の生成�
 ### 判断8: 強制は1箇所、削るのは材料だけ
 
 `PromptBudget.assemble(instructions, body, closing)` が最後に1回だけ上限を当てる。
-9本すべての builder がここを通る。
+10本すべての builder がここを通る。
 
 | 部位 | 例 | 上限を超えたとき |
 |---|---|---|
@@ -245,6 +246,7 @@ AI出力を別のAI入力へ流すと、受け取る側の入力は元の生成�
 | `QUERY_CHARACTERS` | 200 | AIピッカーの自然文クエリ |
 | `PICKER_CANDIDATES_CHARACTERS` | 2,000 | ピッカーの候補タイトル一覧 |
 | `CRYSTAL_CANDIDATES_CHARACTERS` | 2,700 | 結晶の候補ブロック |
+| `REBUTTAL_CANDIDATES_CHARACTERS` | 1,800 | 反証の一文の候補ブロック（12件×120字が収まる） |
 
 **見出しを閉じたのは、それがMarkdownの1行で長さの保証が無いため。**
 ノート名はファイル名なので実質短いが、見出しは段落まるごとになり得る。

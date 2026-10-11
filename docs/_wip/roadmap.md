@@ -95,9 +95,9 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **Next へ入れたのもオーナー判断（2026-09-17）。** Fable 5.1 の推しアイデアで、北極星の
   「Rediscover→Reflect のループを濃くするか」に**似た意見ではなく反対の意見との再会**という形で直接効く。
   A-2 と同じく物差しの外で線を引いた。
-- **設計は完了・実装は未着手。** 層別の新規・変更ファイル、通すべき既存検査、実機ケースまで
-  引き渡しの粒度で書かれている。着手時は [owner/rebuttal_sentence_design](../owner/rebuttal_sentence_design.md) を読む
-  （**正本は実装時に `docs/dev/features/rebuttal_sentence.md` を起こす**。owner文書は実装後も更新しない）。
+- **実装は済み、別の目のレビューと実機検証が残る**（→ [REBUT-1](current_issues.md#rebut-1-反証の一文を実機で確かめていない)）。
+  正本は [features/rebuttal_sentence](../dev/features/rebuttal_sentence.md)。設計の出どころの
+  [owner/rebuttal_sentence_design](../owner/rebuttal_sentence_design.md) は実装後も更新しない。
 - **足場は関連ノートの経路を流用する。** 新しいAI呼び出しは関連ノートの完了に鎖でつなぎ、
   既存のID契約・世代照合をそのまま使う。呼び出し回数が1本増えるが、
   自動の生成は留まってから始まるようになった（→ [background_ai_ux](../dev/system/background_ai_ux.md) §7）ので、

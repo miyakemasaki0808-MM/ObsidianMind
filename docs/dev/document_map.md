@@ -111,6 +111,7 @@
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 | [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
+| [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
 
 ### 基盤（`system/`）
 
@@ -118,7 +119,7 @@
 |---|---|
 | [architecture.md](system/architecture.md) | ViewModel分割・状態管理・並行処理の規約 |
 | [saf_boundary_gateway.md](system/saf_boundary_gateway.md) | SAF境界の gateway 化（`Uri` の不透明化） |
-| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路4本**へ渡す本文の作り方＋**完成プロンプト9本**を閉じる上限） |
+| [ai_input_excerpt.md](system/ai_input_excerpt.md) | AI入力（**抜粋経路5本**へ渡す本文の作り方＋**完成プロンプト10本**を閉じる上限） |
 | [ai_quality_measurement.md](system/ai_quality_measurement.md) | AI出力の採点（要約が原文のどこを落としたか）。**測っていないものが多いので、使う前に読む** |
 | [background_ai_ux.md](system/background_ai_ux.md) | AI生成の待ち時間と結果通知 |
 | [markdown_rendering.md](system/markdown_rendering.md) | Markdown解析の準拠先とリスト構造 |
@@ -255,6 +256,7 @@
 | `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [opening_animation](features/opening_animation.md)（残っているのは起動OPの動きだけ） |
 | `controller/CrystalController.kt`・`data/Crystal*.kt`・`ui/screen/Crystal*.kt` | [reflect_crystal](features/reflect_crystal.md)（試す条件・生成と保存の寿命・再会カードとの順序） |
+| `controller/RebuttalController.kt`・`domain/Rebuttal*.kt`・`ui/screen/RelatedTab.kt` の反証の枠 | [rebuttal_sentence](features/rebuttal_sentence.md)（候補の列挙と順位付け・関連ノートの完了からの起動・置き場） |
 | `ui/screen/ReaderLayout.kt`・`ui/screen/ReaderFoldState.kt`・Fold だけの表示と操作・補助の面 | **[fold_experience](system/fold_experience.md)（不変条件・契約・姿勢の割り当て）** → [margin_pane](features/margin_pane.md) |
 | `controller/SideReadingController.kt`・`controller/MarginMemoController.kt`・`ui/screen/Margin*.kt`・`ui/screen/SideReadingPane.kt` | [margin_pane](features/margin_pane.md)（並べ方の判定・書きかけと送信の照合・並べ読み） |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
