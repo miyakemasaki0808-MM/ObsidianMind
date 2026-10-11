@@ -43,8 +43,8 @@ internal fun scanRebuttalClaims(content: String): List<String> =
  * 本文を、本文の画面が1つの文字列として描く単位に分ける（段落・リスト項目・引用の段落・表のセル）。
  *
  * **段落の中の改行では切らない。** 1文を折り返して書いた本文を行ごとに割ると、
- * 条件節を落とした後半だけが「本文にある一文」として出る。段落のつなぎ方は本文の画面と同じ（行を空白でつなぐ）。
- * 別の段落・見出し・リスト項目はつながない。
+ * 条件節を落とした後半だけが「本文にある一文」として出る。段落の切れ目は本文の画面と同じパーサで決め、
+ * 折り返しは [joinSoftWrappedLines] でつなぐ（どこで折り返しても同じ文になる）。別の段落・見出し・リスト項目はつながない。
  */
 private fun readableUnits(content: String): Sequence<String> {
     // フェンスとリンクだけの行は空行に替える。**詰めると前後の段落が1つにつながる。**
@@ -52,7 +52,7 @@ private fun readableUnits(content: String): Sequence<String> {
         .lineSequence()
         .map { line -> if (line.isLinkOnlyLine()) "" else line }
         .joinToString("\n")
-    return parseMarkdownBlocks(prepared).asSequence().flatMap { block ->
+    return parseMarkdownBlocks(prepared, ::joinSoftWrappedLines).asSequence().flatMap { block ->
         when (block) {
             is MarkdownBlock.Paragraph -> sequenceOf(visible(block.text))
             is MarkdownBlock.ListBlock -> block.items.asSequence().map { visible(it.text) }
@@ -67,14 +67,14 @@ private fun readableUnits(content: String): Sequence<String> {
     }
 }
 
-/** 引用の行を、空行で区切った段落ごとにつなぐ。つなぎ方は本文の段落と同じ。 */
+/** 引用の行を、空行で区切った段落ごとにつなぐ。つなぎ方は段落と同じ。 */
 private fun quoteParagraphs(lines: List<String>): Sequence<String> = sequence {
     val paragraph = mutableListOf<String>()
     for (line in lines + "") {
         if (line.isNotBlank()) {
             paragraph += visible(line.trim())
         } else if (paragraph.isNotEmpty()) {
-            yield(paragraph.joinToString(" "))
+            yield(joinSoftWrappedLines(paragraph))
             paragraph.clear()
         }
     }

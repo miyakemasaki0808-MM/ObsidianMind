@@ -199,6 +199,26 @@ private val PERIOD_ABBREVIATIONS = setOf(
     "inc", "ltd", "co", "no", "vol", "fig", "eq", "cf", "approx", "ver", "ed"
 )
 
+/**
+ * 段落の中で折り返した行を、1行の文としてつなぐ。**日本語の側では空白を入れない。**
+ *
+ * 空白でつなぐと、どこで折り返したかで文が変わる（「場合に限り、 朝の光」「十分な睡眠を 取れて」）。
+ * 改行の両側が英数字や記号のときだけ空白を入れる（`Remote work always` ＋ `improves` は空白が要る）。
+ * 各行は前後の空白を落としてからつなぐ。
+ */
+internal fun joinSoftWrappedLines(lines: List<String>): String = buildString {
+    lines.map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+        val previous = lastOrNull()
+        if (previous != null && !previous.isJapanese() && !line.first().isJapanese()) append(' ')
+        append(line)
+    }
+}
+
+/** 漢字・かな・全角の記号。語の間に空白を置かない書き方の文字。 */
+private fun Char.isJapanese(): Boolean =
+    code in 0x3000..0x30FF || code in 0xFF00..0xFFEF ||
+        Character.UnicodeScript.of(code) == Character.UnicodeScript.HAN
+
 internal const val OPENING_BRACKETS = "「『（(【［[{"
 internal const val CLOSING_BRACKETS = "」』）)】］]}"
 internal const val SENTENCE_TERMINATORS = "。！？!?"

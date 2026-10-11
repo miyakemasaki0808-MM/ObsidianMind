@@ -148,18 +148,22 @@ class RebuttalClaimScannerTest {
 
     /**
      * 段落の中で折り返した1文を、行ごとに割らない。割ると条件節を落とした後半だけが「本文にある一文」として出る。
-     * つなぎ方は本文の画面と同じ（行を空白でつなぐ）。
+     * **どこで折り返しても同じ文になる。** 日本語の側では空白を入れずにつなぐ。
      */
     @Test
     fun `段落の中で折り返した1文は条件節ごと1つの候補にする`() {
-        val content = """
-            十分な睡眠を取れていない場合に限り、
-            朝の光だけでは生活リズムを整えられない。
-        """.trimIndent()
+        val expected = listOf("十分な睡眠を取れていない場合に限り、朝の光だけでは生活リズムを整えられない。")
 
+        assertEquals(expected, scanRebuttalClaims("十分な睡眠を取れていない場合に限り、\n朝の光だけでは生活リズムを整えられない。"))
+        assertEquals(expected, scanRebuttalClaims("十分な睡眠を\n取れていない場合に限り、朝の光だけでは\n生活リズムを整えられない。"))
+    }
+
+    /** 英文の折り返しは語の境目なので、空白を入れてつなぐ。 */
+    @Test
+    fun `英文の折り返しは空白でつなぐ`() {
         assertEquals(
-            listOf("十分な睡眠を取れていない場合に限り、 朝の光だけでは生活リズムを整えられない。"),
-            scanRebuttalClaims(content)
+            listOf("Remote work always improves productivity."),
+            scanRebuttalClaims("Remote work always\nimproves productivity.")
         )
     }
 
@@ -204,7 +208,7 @@ class RebuttalClaimScannerTest {
         """.trimIndent()
 
         assertEquals(
-            listOf("引用の中で折り返した 一文はここで終わる。", "次の引用の段落もここで終わる。"),
+            listOf("引用の中で折り返した一文はここで終わる。", "次の引用の段落もここで終わる。"),
             scanRebuttalClaims(content)
         )
     }
