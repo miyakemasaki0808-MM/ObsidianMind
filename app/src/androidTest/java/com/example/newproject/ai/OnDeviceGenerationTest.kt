@@ -252,6 +252,7 @@ class OnDeviceGenerationTest {
          */
         val UNCOVERED_BUILDERS = setOf(
             "buildReunionSelectionPrompt",
+            "buildRebuttalPrompt",
             "buildDistillPrompt",
             "buildPickerPrompt"
         )

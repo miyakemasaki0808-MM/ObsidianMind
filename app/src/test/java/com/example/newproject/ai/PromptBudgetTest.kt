@@ -1,6 +1,9 @@
 package com.example.newproject.ai
 
+import com.example.newproject.domain.REBUTTAL_CANDIDATE_LIMIT
+import com.example.newproject.domain.REBUTTAL_CLAIM_MAX_CHARS
 import com.example.newproject.domain.RelatedNotesUseCase
+import com.example.newproject.domain.rebuttalCandidateId
 import com.example.newproject.model.NoteExcerpt
 import com.example.newproject.model.NoteExcerptLimits
 import com.example.newproject.model.CrystalLimits
@@ -118,6 +121,39 @@ class PromptBudgetTest {
         assertEquals(CrystalLimits.CANDIDATES, prompt.candidates.size)
         assertFalse("結晶が切り詰められている（${prompt.text.length}字）", prompt.text.contains(PromptBudget.TRUNCATION_MARKER))
         assertTrue(prompt.text.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
+    }
+
+    /**
+     * 反証の一文は、候補12件・文120字・抜粋の上限いっぱいでも候補を落とさず、切り詰めも起きない。
+     * 落ちると、列挙と順位付けを通った候補がAIに見えないまま捨てられる（→ features/rebuttal_sentence.md §5）。
+     */
+    @Test
+    fun `反証の一文は最大構成でも候補を落とさず切り詰めが起きない`() {
+        val candidates = List(REBUTTAL_CANDIDATE_LIMIT) { index ->
+            RebuttalCandidateLine(rebuttalCandidateId(index), "文".repeat(REBUTTAL_CLAIM_MAX_CHARS))
+        }
+        val prompt = PromptBuilder.buildRebuttalPrompt(
+            currentTitle = "題".repeat(PromptLimits.LABEL_CHARACTERS),
+            currentExcerpt = NoteExcerpt("あ".repeat(NoteExcerptLimits.REBUTTAL), isAbridged = true),
+            candidates = candidates
+        )
+
+        assertEquals(REBUTTAL_CANDIDATE_LIMIT, prompt.candidates.size)
+        assertFalse("反証の一文が切り詰められている（${prompt.text.length}字）", prompt.text.contains(PromptBudget.TRUNCATION_MARKER))
+        assertTrue(prompt.text.length <= PromptLimits.MAX_PROMPT_CHARACTERS)
+    }
+
+    /** 予算を超えた候補は飛ばし、許可するIDにも入れない。見せていない候補をモデルが指しても通さないため。 */
+    @Test
+    fun `反証の一文で予算を超えた候補は許可するIDに入らない`() {
+        val fits = RebuttalCandidateLine("X01", "短い文。")
+        val tooLong = RebuttalCandidateLine("X02", "長".repeat(PromptLimits.REBUTTAL_CANDIDATES_CHARACTERS))
+        val alsoFits = RebuttalCandidateLine("X03", "これも短い文。")
+
+        val prompt = PromptBuilder.buildRebuttalPrompt("題", NoteExcerpt("本文", isAbridged = false), listOf(fits, tooLong, alsoFits))
+
+        assertEquals(setOf("X01", "X03"), prompt.validIds)
+        assertFalse(prompt.text.contains("X02"))
     }
 
     /** 予算を超えたら古い候補から落とし、今のノート（N1）は落とさない。 */
