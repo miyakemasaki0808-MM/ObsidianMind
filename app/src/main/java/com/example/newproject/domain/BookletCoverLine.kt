@@ -36,16 +36,24 @@ internal fun selectCoverLine(content: String, title: String): String =
  * 最初に「読める」1文。
  *
  * **行を落としてから記法を落とす順序が要る。** `stripMarkdownMarkers` は見出しの `#` や表の `|` を
- * 消してしまうので、先に均すと見出しと表の見出し行が本文の文と見分けられなくなる。
- * 日付とナビは逆に**均した後**で見る — `- **作成日**: …` や `> 🧭 …` も同じ形として落とすため。
+ * 消してしまうので、先に均すと見出しと表の行が本文の文と見分けられなくなる。
+ * 日付・ナビ・頭のラベル行の塊は逆に**均した後**で見る — `- **作成日**: …` や `> 🧭 …` も同じ形として落とすため。
  */
 private fun firstReadableSentence(content: String): String? {
-    val lines = withoutFencedCode(stripFrontmatter(content)).lines()
-    return lines.asSequence()
-        .filterIndexed { index, line ->
-            !line.isHeadingLine() && !line.isTableDelimiter() && !line.isLinkOnly() && !lines.isTableHeaderAt(index)
-        }
-        .map { it.unwrapInlineCode().stripMarkdownMarkers().collapseSpaces() }
+    // フェンスの中は空行へ替える。詰めると、フェンスをはさんだラベル行が1つの塊につながる。
+    val lines = withoutFencedCode(stripFrontmatter(content), keepBlankLines = true).lines()
+    val tableLines = lines.tableLineIndices()
+    // 扉にしない行は空文字にしておく。頭の情報の塊を探すときも、塊を切る行として数える。
+    // ラベルの無い日付だけの行も空にする — 頭の塊の手前にあっても、塊を頭から外さない。
+    val plain = lines.mapIndexed { index, line ->
+        if (line.isHeadingLine() || index in tableLines || line.isLinkOnly()) return@mapIndexed ""
+        val text = line.unwrapInlineCode().stripMarkdownMarkers().collapseSpaces()
+        if (text.isDateOnly() && !text.isLabelLine()) "" else text
+    }
+    val metadata = headMetadataRun(plain)
+    return plain.indices.asSequence()
+        .filter { it !in metadata }
+        .map { plain[it] }
         .filterNot { it.isDateOnly() || it.isNavigation() }
         .firstOrNull { it.hasReadableText() }
         ?.let { splitIntoSentences(it).first().trim() }
@@ -54,11 +62,23 @@ private fun firstReadableSentence(content: String): String? {
 }
 
 /**
- * 表の見出し行（すぐ次の行が区切り）。「ID タグ タイトル 概要」は列の名前であって、何のノートかを言わない。
- * **表の本文の行は落とさない** — 列の名前と違い、何が並んでいるかを伝える中身の行である。
+ * 表をなす行（見出し行・区切り・本文の行）の番号。**表はどの行も扉にしない。**
+ * 見出し行は列の名前で、本文の行は ID・タグ・日付の並びになりやすく、どちらも何のノートかを言わない。
+ * 表しか無い索引ノートはタイトルへ縮退する — タイトルのほうが何のノートかを言う。
+ *
+ * 表とみなすのは区切りの行があるときだけで、**区切りの無い `|` を含む行は本文の文として残す。**
  */
-private fun List<String>.isTableHeaderAt(index: Int): Boolean =
-    '|' in this[index] && getOrNull(index + 1)?.isTableDelimiter() == true
+private fun List<String>.tableLineIndices(): Set<Int> {
+    val table = mutableSetOf<Int>()
+    for (index in indices) {
+        if (!this[index].isTableDelimiter()) continue
+        table += index
+        if (index > 0 && '|' in this[index - 1]) table += index - 1
+        var row = index + 1
+        while (row < size && '|' in this[row] && !this[row].isTableDelimiter()) table += row++
+    }
+    return table
+}
 
 /**
  * 値が日付だけの行（「開始日　　：2025/05/23」「作成日: 2026-03-28」、ラベルの無い日付）。

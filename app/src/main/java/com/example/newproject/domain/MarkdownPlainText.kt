@@ -135,6 +135,36 @@ internal fun String.isLinkOnly(): Boolean =
 /** 文字か数字が1つも無ければ、罫線・記号だけの行である。 */
 internal fun String.hasReadableText(): Boolean = READABLE_CHAR.containsMatchIn(this)
 
+/**
+ * 「ラベル：値」の行。**記法を落とした後の行で**判定する（`- **状態:** …` も同じ形として見る）。
+ * 値は空でもよい（`現在位置　：`）。ラベルは20字までで、文字を1つは含む — `10:30` のような時刻は
+ * ラベルにしない。URL の `://` も区切りにしない。
+ */
+internal fun String.isLabelLine(): Boolean = LABEL_LINE.containsMatchIn(this)
+
+/**
+ * ノートの頭にある、何のノートかを言わない情報の塊（読書ノートの「開始日・現在位置・ステータス」、
+ * 設計書の頭の「状態・最終検証・関連コード」）の行の範囲。無ければ空の範囲。
+ *
+ * 塊とみなすのは、**最初の読める行から始まり、空行を挟まずに [METADATA_RUN_MIN_LINES] 行以上続くラベル行**だけ。
+ * - **頭に限る。** 本文の中の「用語：説明」の並びは定義の一覧で、中身そのものである
+ * - **2行では塊にしない。** 「日付・プロジェクト」の2行のように、ラベルの値が何のノートかを言う頭がある。
+ *   1行だけの「ゴール: …」「書籍名：…」も同じで、単独なら良い代表文になる
+ *
+ * [plainLines] は記法を落とした後の行。見出しなど、呼び出し側が数えない行は空文字で渡す（塊を切る）。
+ */
+internal fun headMetadataRun(plainLines: List<String>): IntRange {
+    val start = plainLines.indexOfFirst { it.hasReadableText() }
+    if (start < 0) return IntRange.EMPTY
+    var end = start
+    while (end < plainLines.size && plainLines[end].isLabelLine()) end++
+    return if (end - start >= METADATA_RUN_MIN_LINES) start until end else IntRange.EMPTY
+}
+
+internal const val METADATA_RUN_MIN_LINES = 3
+
+private val LABEL_LINE = Regex("""^(?=[^:：]*\p{L})[^:：]{1,20}[:：](?!//)""")
+
 private val INLINE_CODE_CONTENT = Regex("""`([^`\n]*)`""")
 private val HEADING_LINE = Regex("""^\s{0,3}#{1,6}\s""")
 private val TABLE_DELIMITER_LINE = Regex("""^\s*\|?[\s:|-]*-[\s:|-]*\|[\s:|-]*$""")
