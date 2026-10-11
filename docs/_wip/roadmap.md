@@ -95,7 +95,7 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **Next へ入れたのもオーナー判断（2026-09-17）。** Fable 5.1 の推しアイデアで、北極星の
   「Rediscover→Reflect のループを濃くするか」に**似た意見ではなく反対の意見との再会**という形で直接効く。
   A-2 と同じく物差しの外で線を引いた。
-- **実装は済み、別の目のレビューと実機検証が残る**（→ [REBUT-1](current_issues.md#rebut-1-反証の一文を実機で確かめていない)）。
+- **実装・別の目のレビュー・実機検証まで済んだ（2026-10-11）。** Now から外して次の段を繰り上げるかは、オーナーが決める。
   正本は [features/rebuttal_sentence](../dev/features/rebuttal_sentence.md)。設計の出どころの
   [owner/rebuttal_sentence_design](../owner/rebuttal_sentence_design.md) は実装後も更新しない。
 - **足場は関連ノートの経路を流用する。** 新しいAI呼び出しは関連ノートの完了に鎖でつなぎ、
