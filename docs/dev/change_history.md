@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-12 | 見出しの丸ボタンを題名の行だけに並べて副題を全幅に通し、ノート画面で副題が折り返すのを解いた | [theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-10-12 | 空のAI抜粋とThreading走査の指摘2件を再確認し、解消を確認して受付簿から外した | [review](../review/README.md) |
 | 2026-10-11 | Threading の走査が文字列やコメントの括弧を数えないようにし、withContext の外へ出した呼び出しを見逃すのを直した（再確認前） | [architecture](system/architecture.md) 判断3 |
 | 2026-10-11 | AI の抜粋で、末尾として採った頭の情報の塊を残すようにし、本文が塊だけのノートで抜粋が空になるのを直した（再確認前） | [ai_input_excerpt](system/ai_input_excerpt.md) §2 |

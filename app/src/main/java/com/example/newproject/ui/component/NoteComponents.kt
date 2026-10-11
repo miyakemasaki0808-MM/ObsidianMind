@@ -148,7 +148,7 @@ internal fun IconPill(
     val description = contentDescription
     Surface(
         modifier = modifier
-            .size(40.dp)
+            .size(ICON_PILL_SIZE)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 this.contentDescription = description
@@ -165,6 +165,9 @@ internal fun IconPill(
         }
     }
 }
+
+/** [IconPill] の直径。見出しの題名の行はこの高さを最初から持つ（→ [GradientHeader]）。 */
+internal val ICON_PILL_SIZE = 40.dp
 
 /** ノート本文パネル（通常表示・全画面で共用）。 */
 @Composable

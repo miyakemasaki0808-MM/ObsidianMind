@@ -11,6 +11,7 @@ import org.junit.Test
  * `GradientHeader` は親の左右の余白の外まで面を広げるので、余白と広げる幅が食い違うと
  * **見出しの面だけが画面の端からずれる**。レイアウトは素のJVMで測れないので、ここでは
  * 「見出しを置く画面は `screenContentPadding()` で余白を取る」と「広げる幅と余白が同じ定数」の2つを見る。
+ * 同じ形で、題名の行の高さと丸ボタンの大きさが同じ定数から来ていることも見る。
  *
  * **届かない形がある。** 見出しを余白の内側でさらに入れ子にして余白を足す形は、この走査では見えない。
  */
@@ -37,6 +38,19 @@ class GradientHeaderPaddingTest {
         assertEquals("面を広げる幅と画面の余白が別の値です", bleed, padding.groupValues[1])
     }
 
+    /**
+     * 題名の行が丸ボタンより低いと、ボタンを置いた見出しだけが高くなる（ノートを開くたびに見出しの高さが変わる）。
+     * 2つの値が別の数で書かれると、片方だけ変えたときにこの検査しか気づけない。
+     */
+    @Test
+    fun `題名の行の高さと丸ボタンの大きさは同じ定数から取る`() {
+        val header = stripComments(repositoryRoot().resolve(HEADER_PATH).readText())
+        val pill = stripComments(repositoryRoot().resolve(PILL_PATH).readText())
+
+        assertTrue("題名の行が丸ボタンの大きさを最低の高さに取っていません", TITLE_ROW_MIN_HEIGHT in header)
+        assertTrue("丸ボタンの大きさが ICON_PILL_SIZE から取られていません", PILL_SIZE in pill)
+    }
+
     private fun mainSources(): List<Pair<String, String>> {
         val root = repositoryRoot()
         return root.resolve(MAIN_SOURCE_DIR).walkTopDown()
@@ -57,6 +71,9 @@ class GradientHeaderPaddingTest {
     private companion object {
         const val MAIN_SOURCE_DIR = "app/src/main/java"
         const val HEADER_PATH = "app/src/main/java/com/example/newproject/ui/component/GradientHeader.kt"
+        const val PILL_PATH = "app/src/main/java/com/example/newproject/ui/component/NoteComponents.kt"
+        const val TITLE_ROW_MIN_HEIGHT = "heightIn(min = ICON_PILL_SIZE)"
+        const val PILL_SIZE = ".size(ICON_PILL_SIZE)"
         val LINE_COMMENT = Regex("""//[^\n]*""")
         val BLOCK_COMMENT = Regex("""/\*[\s\S]*?\*/""")
 
