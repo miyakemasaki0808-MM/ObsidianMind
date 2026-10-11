@@ -29,7 +29,3 @@
 | ID | 指摘 | 処遇 |
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
-| `2026-10-11-rebuttal-sentence-review/P2-1` | 反証候補のインラインコード内の記号が消える | `起票` REBUT-2 |
-| `2026-10-11-rebuttal-sentence-review/P2-2` | 反証候補のWikiリンク別名がリンク先の名前に変わる | `起票` REBUT-3 |
-| `2026-10-11-rebuttal-sentence-review/P2-3` | 反証候補の文中改行で条件節が欠落する | `起票` REBUT-4 |
-| `2026-10-11-rebuttal-sentence-review/P2-4` | 英文の複数文を反証の1候補として扱う | `起票` REBUT-5 |
