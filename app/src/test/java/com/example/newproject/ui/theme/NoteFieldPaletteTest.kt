@@ -131,6 +131,54 @@ class NoteFieldPaletteTest {
     }
 
     // -----------------------------------------------------------------------
+    // 結晶の宝石（→ reflect_crystal.md 判断11）
+    // -----------------------------------------------------------------------
+
+    /** **宝石はパネルの上で見分けられる。** 押せる部品が色で分野を伝えるので、記号と同じ 3:1 を求める（ui_design_principles §1）。 */
+    @Test
+    fun `宝石の7色はパネルの上で3対1を満たす`() {
+        val violations = listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors).flatMap { (theme, scheme) ->
+            (scheme.crystalGem.fieldColors + scheme.crystalGem.neutral).mapNotNull { gem ->
+                val ratio = contrastRatio(gem, scheme.panel)
+                if (ratio >= 3.0) null else "$theme: %s がパネルの上で %.2f".format(gem.hex(), ratio)
+            }
+        }
+        assertTrue("パネルの上で見分けにくい宝石があります:\n${violations.joinToString("\n")}", violations.isEmpty())
+    }
+
+    /**
+     * **宝石の色相は、同じ分野の紙の色相とそろう。** 冊子で覚えた色の読み方を一覧へそのまま延ばすため（bearing_channels 判断6）。
+     * 1色だけ好みで動かすと、その分野だけ冊子と一覧で色が食い違う。
+     */
+    @Test
+    fun `宝石の色相は同じ分野の紙の色相とそろう`() {
+        listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors).forEach { (theme, scheme) ->
+            scheme.crystalGem.fieldColors.zip(scheme.noteField.fieldColors).forEachIndexed { i, (gem, paper) ->
+                val gap = abs(((oklabHue(gem) - oklabHue(paper)) % 360.0 + 540.0) % 360.0 - 180.0)
+                assertTrue("$theme の ${com.example.newproject.model.NoteField.entries[i]} で宝石と紙の色相が %.1f° ずれています".format(gap), gap <= 3.0)
+            }
+        }
+    }
+
+    /** **宝石の6色は明度がそろう。** そろっていないと、明るい分野の宝石だけが目立つ。 */
+    @Test
+    fun `宝石の6色は明度が揃っている`() {
+        listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors).forEach { (theme, scheme) ->
+            val lightness = scheme.crystalGem.fieldColors.map { oklabLightness(it) }
+            assertTrue("$theme の宝石で明度が揃っていません", lightness.max() - lightness.min() <= 0.010)
+        }
+    }
+
+    /** **分野の分からない宝石は色味を持たない。** 色味があると、どれかの分野に読める。 */
+    @Test
+    fun `分野の分からない宝石は色味を持たない`() {
+        listOf("ライト" to LightAppColors, "ダーク" to DarkAppColors).forEach { (theme, scheme) ->
+            val (_, a, b) = oklab(scheme.crystalGem.neutral)
+            assertTrue("$theme の分野なしの宝石に色味があります", kotlin.math.sqrt(a * a + b * b) <= 0.01)
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // 計算
     // -----------------------------------------------------------------------
 

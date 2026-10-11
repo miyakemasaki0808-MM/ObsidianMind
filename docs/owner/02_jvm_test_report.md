@@ -1,7 +1,7 @@
 # JVMテスト俯瞰 — 何を、どういう観点で確かめているか
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
-**作成:** 2026-09-07 / **更新:** 2026-10-06。ブランチ `feature/Maintenance_Check_No.01`、`7a2ac616` で計測。本文と付録の両方を同じ時点にそろえた
+**プロジェクト:** Vigilith AI
+**作成:** 2026-09-07 / **更新:** 2026-10-11。`a3661274` で見直し、本文と付録の両方を同じ時点にそろえた。規模と検証の数字は [01 の §0](01_source_code_analysis.md#0-いまの数字) が持つ
 **位置づけ:** テストスイートを読むための地図。`owner/` の他文書と同じく、
 指示があったときに通しで見直す読み物である → [README](README.md)。
 正本ではない。個々の判断理由は各テストのKDocと `dev/` が持つ。ここはその入口。
@@ -10,33 +10,28 @@
 
 ## 0. 3行でいうと
 
-- JVMテストは **148クラス・1,740件**あり、**3秒**ほどで終わる。端末もエミュレータも要らない
+- JVMテストは全件が**数秒**で終わる。端末もエミュレータも要らない。件数は [01 の §0](01_source_code_analysis.md#0-いまの数字) にある
 - 中身は「機能が正しいか」だけではない。**半分近くが「構造・規約・文書が壊れていないか」を見ている**
 - 見ている観点は6種類に分けられる。A 純関数、B 非同期と状態、C 組み合わせ、D 見た目の数値化、E 構造と文書、F 計測器そのもの
 
 ---
 
-## 1. 数字で見る全体像
+## 1. 置き場ごとの役割
 
-| 置き場 | ファイル | テスト件数 | 何を見ているか |
-|---|---:|---:|---|
-| `test/.../`（直下） | 49 | 828 | Controller・保存と読込・パーサ。アプリの動きの本体。共有フェイク `FakeVault.kt` と、読書痕跡と余白メモの足場を含む |
-| `test/.../domain/` | 45 | 552 | 純関数。採点・抜粋・スコアリング・解析・分野判定・余白メモの入力整形と送信の照合・見出しの照合・前回の読書の跡。`markdown/` 2本を含む |
-| `test/.../ui/` | 19 | 192 | 表示ロジックを数値として固定。色・幾何・派生状態・余白の面と並べ読みの判定。`theme/` 3本を含む |
-| `test/.../architecture/` | 29 | 96 | コードではなく規約と文書を守る検査。コメントを読む道具 `KotlinCommentScanner.kt` を含む |
-| `test/.../ai/` | 8 | 33 | プロンプト組み立てと生成失敗の判定。端末AIは呼ばない。共有サンプル `PromptSamples.kt` を含む |
-| `test/.../testing/` | 5 | 39 | **要約の採点器そのものの検査。** 共有コーパス `FixedCorpus.kt` を含む |
-| `test/.../fakes/` | 4 | — | `FakeAiClient.kt`・保存のフェイク・門番を置かない印・結晶の置き場と控えのフェイク。本体ではなく道具 |
-| **合計** | **159** | **1,740** | 148クラス＋共有ヘルパ11本 |
+置き場ごとのファイル数と件数は [01 の §13.1](01_source_code_analysis.md#131-jvmテスト) が持つ。ここは何を見ているかだけを書く。
 
-> 参考: 実機で走らせる instrumentation テストは別に **17ファイル・150件**ある。
+| 置き場 | 何を見ているか |
+|---|---|
+| `test/.../`（直下） | Controller・保存と読込・パーサ。アプリの動きの本体。共有フェイク `FakeVault.kt` と、読書痕跡と余白メモの足場を含む |
+| `test/.../domain/` | 純関数。採点・抜粋・スコアリング・解析・分野判定・余白メモの入力整形と送信の照合・見出しの照合・前回の読書の跡・リンクの解決・結晶の宝石の分野。`markdown/` を含む |
+| `test/.../ui/` | 表示ロジックを数値として固定。色・幾何・派生状態・余白の面と並べ読みの判定・机の画面の払いと帯・結晶の棚。`theme/` を含む |
+| `test/.../architecture/` | コードではなく規約と文書を守る検査。コメントを読む道具 `KotlinCommentScanner.kt` を含む |
+| `test/.../ai/` | プロンプト組み立てと生成失敗の判定。端末AIは呼ばない。共有サンプル `PromptSamples.kt` を含む |
+| `test/.../testing/` | **要約の採点器そのものの検査。** 共有コーパス `FixedCorpus.kt` を含む |
+| `test/.../fakes/` | `FakeAiClient.kt`・保存のフェイク・門番を置かない印・結晶の置き場と控えのフェイク・押下の台本。本体ではなく道具 |
+
+> 実機で走らせる instrumentation テストは別にある。
 > JVMは「端末に触らずに分かること」だけを引き受け、残りを実機へ渡すという分担になっている。
->
-> **前回から JVM は15件増えた。** 機能を足さない保守の回の分である。
-> 旧補記の片付けを撤去したので、その Controller の検査10件が消えた。
-> 増えたのは、先頭に BOM があるノートの14件、冊子の扉の9件、画面見出しの余白の2件である。
-> BOM の14件は、復号と書き戻しの6件、ファイルのバイト列を読み込みから各機能の解析まで通す5件、蒸留の書き戻しでファイルが元の形を保つ3件に分かれる。
-> instrumentation は3件減った。旧補記ファイルを作って一覧し、削除する実 SAF の検査である。
 
 **依存ライブラリは3つだけ。**
 
@@ -46,7 +41,7 @@ org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0
 org.json:json:20240303          ← Android の org.json をJVM側で代替
 ```
 
-Robolectric も mockk も使っていない。代わりに `fakes/` の4本と `FakeVault.kt` を手で書いている。
+Robolectric も mockk も使っていない。代わりに `fakes/` と `FakeVault.kt` を手で書いている。
 これは横着ではなく設計と対になっている。`model`・`domain`・`controller` の3層は
 Android非依存であることをCIで固定してあるので → [architecture](../dev/system/architecture.md) 判断5、
 そもそもAndroidを模す仕掛けが要らない。**「テストが素直に書けること」を層の設計で買っている。**
@@ -301,7 +296,7 @@ Gradle が UP-TO-DATE と判定して走査テストが飛ぶ。2026-09-14 に�
 
 ## 5. このスイートが見ていないもの
 
-- **実際の描画・タップ・スクロールの手触り** → `androidTest` 17ファイル150件と、Codexの実機検証
+- **実際の描画・タップ・スクロールの手触り** → `androidTest` と、Codexの実機検証
 - **端末AIの実生成** → `OnDeviceGenerationTest`。Nano非対応端末では `Assume` で skip。9本のプロンプトのうち6本
 - **SAFの実挙動。権限・Uri・実ファイル** → 実機検証
 - **文言の自然さ・配色の好み** → レビューとオーナー判断。テストは「読めるか」まで
@@ -324,10 +319,10 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 
 ---
 
-## 付録. 全148クラスの一覧
+## 付録. 全クラスの一覧
 
 本文は観点ごとに代表を挙げている。ここは全クラスを1行ずつ引くための索引で、件数は `testDebugUnitTest` のレポートから採った。
-説明は手で書いているので、件数より先に古くなりうる。行頭の `@Test` を数えると同じ1,740件になる。
+説明は手で書いているので、件数より先に古くなりうる。行頭の `@Test` を数えた合計は、01 の §0 の件数と一致する。
 行頭に限らず数えると4件多く出るのは、文字列リテラルの中に `@Test` を書くテストがあるため。
 
 | テストファイル | ケース数 | 主な対象 |
@@ -345,16 +340,17 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `DistillRecoveryStoreTest.kt` | 3 | 復旧レコードの書込・読出・破棄 |
 | `DistillWriteRepositoryTest.kt` | 18 | 二重ハッシュ照合、原子確定、出力ハッシュ検証、中断・容量不足。**元のファイルの BOM を戻し、二重の BOM も含めてバイト単位で元の形を保つこと** |
 | `FileSummaryCacheTest.kt` | 9 | 要約の保存（1件1ファイル・古い順の削除・大きさの上限・書きかけの片付け・置き場を作れないとき） |
-| `InlineMarkdownTest.kt` | 16 | 強調、リンク、コード、打ち消し、誤検出防止、**描画範囲が共有トークナイザーの答えと一致すること**、エスケープ |
+| `InlineMarkdownTest.kt` | 22 | 強調、リンク、コード、打ち消し、誤検出防止、**描画範囲が共有トークナイザーの答えと一致すること**、エスケープ。**押せるリンクに口を付けること**（ノートと見出しへのリンクだけ） |
 | `MarginMemoControllerTest.kt` | 33 | 余白メモの読み出し・追記・削除と書きかけ。保存結果の見せ分け、満杯で一覧へ足さないこと、**保存と削除が互いを取り消さないこと**、**送信の照合**（保存の結果と、戻って読んだ一覧の2つの道で受理を決め、確認できない間は元の送信を確かめる）、パスが分かる前の読み込みを待つこと、前回の読書を一覧と一緒に持つこと、長い見出しを保存できる長さへ切ってから渡すこと |
-| `MarkdownParserTest.kt` | 38 | frontmatter、テーブル空セル、見出し、コード、CRLF、引用、リストのマーカー保持（区切り記号・先頭ゼロ・巨大桁）、段数の算出規則5つ、タブの4列展開、タスク混在、`blocksToMarkdown` の往復 |
+| `MarkdownParserTest.kt` | 41 | frontmatter、テーブル空セル、見出し、コード、CRLF、引用、リストのマーカー保持（区切り記号・先頭ゼロ・巨大桁）、段数の算出規則5つ、タブの4列展開、タスク混在、`blocksToMarkdown` の往復。**表のセルをエスケープした縦棒で割らないこと** |
 | `NoteByteOrderMarkTest.kt` | 5 | **BOM で始まるファイルを読み込みの復号から通す。** 表示と節の一覧の最初の見出し、前付けとタグ、冊子の扉、要約の抜粋の見出し、再会カードの問い |
 | `NoteDwellGateTest.kt` | 11 | **自動生成の門番**（3秒で開く・離れたら取り消す・冊子と背面で数え直す・開いた門を次のノートへ持ち越さない） |
 | `NoteFieldControllerTest.kt` | 24 | **分野判定のController**（索引B命中でAIを呼ばない・失効時にヒントへ降格・有効な確定では索引へ書かないことを回数で見る・キャンセルで何も書かない・切替で索引に触らない・永続の上限） |
+| `NoteReadGateTest.kt` | 11 | **結晶の材料を控える線**（続けて30秒で開く・冊子と背面の間は数えず続きから足す・停止理由が2つなら両方解けるまで・本文が出る前の再開では数えない・離れたら読んだ時間を持ち越さない・止めていないときの再開で区間を始め直さない） |
 | `NoteRepositoryTest.kt` | 4 | Markdown判定、wikilink・タイトル正規化 |
-| `NoteScanCacheTest.kt` | 3 | **走査キャッシュ**。Aの走査を止めたままBへ切り替えてもBのまま、A→B→Aでも最初の走査が上書きしない、TTL内は走査し直さない |
+| `NoteScanCacheTest.kt` | 5 | **走査キャッシュ**。Aの走査を止めたままBへ切り替えてもBのまま、A→B→Aでも最初の走査が上書きしない、TTL内は走査し直さない。走査の結果から相対パスと参照の対応を配ること、本文を書き換えてもリンクの索引を残すこと |
 | `NoteSectionControllerTest.kt` | 6 | 表示用Markdown解析のMain外退避と、本文差し替え時の再解析 |
-| `NoteSessionCoordinatorTest.kt` | 59 | Vault/ノート切替の一斉停止と一斉初期化、リセット登録漏れ検出（**ノート単位とVault単位の両方**）、旧結果の後着防止、Vault世代、冊子から始めた読込の取り消し、**分野の索引の復元と走査の配線**、**結晶が再会カードの照合を待つ順序**（保存待ち・生成中・保存済み・失敗・切替）、**余白メモの書きかけと送信の照合の配線**（ノートを行き来しても書き込み先ごと戻る・Vault を行き来しても古い送信が新しい書きかけを消さない・ノートを表示すると面を出さなくてもメモを読む・パス未確定のノート・戻って読めない間は未確定のまま持つ）、**部分要約の要求と本文の解析し直し**、**並べ読みの失効**（ノート切替・Vault 切替で本文を消す・取り消しに従わない読み出しの後着を書かない・右で眺めても今のノートと記録が変わらない・部分要約やメモの保存と両方向） |
+| `NoteSessionCoordinatorTest.kt` | 62 | Vault/ノート切替の一斉停止と一斉初期化、リセット登録漏れ検出（**ノート単位とVault単位の両方**）、旧結果の後着防止、Vault世代、冊子から始めた読込の取り消し、**分野の索引の復元と走査の配線**、**結晶が再会カードの照合を待つ順序**（保存待ち・生成中・保存済み・失敗・切替）、**余白メモの書きかけと送信の照合の配線**（ノートを行き来しても書き込み先ごと戻る・Vault を行き来しても古い送信が新しい書きかけを消さない・ノートを表示すると面を出さなくてもメモを読む・パス未確定のノート・戻って読めない間は未確定のまま持つ）、**部分要約の要求と本文の解析し直し**、**並べ読みの失効**（ノート切替・Vault 切替で本文を消す・取り消しに従わない読み出しの後着を書かない・右で眺めても今のノートと記録が変わらない・部分要約やメモの保存と両方向）。**結晶の材料の線**（3秒では控えず30秒で控える・冊子と背面を挟んでも続きから足す・届く前に離れると控えない） |
 | `NoteSnapshotTest.kt` | 11 | 上限付きバイト読込、UTF-8厳格判定、ハッシュ。**ノートの復号で先頭の BOM を1つだけ外すこと、書き戻しで戻すと元のバイト列になること** |
 | `NoteUiStateStoreTest.kt` | 2 | 各Writerが担当スライスだけを更新すること、ノート読込開始の単一通知 |
 | `ReadingTraceBackupControllerTest.kt` | 31 | 痕跡の書き出し・下見・適用・中止、停止待ち中の再入、Vault世代 |
@@ -372,7 +368,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `ReunionPassageTest.kt` | 23 | **読み進めたところの算出と前後の切り出し**（節の範囲へ収める・同名の見出し・長い1ブロックを読んだ割合で割る・文の区切りへ手前寄せ・続きから読むの送り先）。記録した見出し名はメモと同じ照合で引く（上限で切った長い見出し・切り口の直前の空白・整える前の生の見出し名） |
 | `SearchControllerTest.kt` | 15 | スコープ切替時の結果破棄・同一スコープ再選択の保持 |
 | `SideReadingControllerTest.kt` | 10 | **並べ読みの読み込み**（選び直し・余白へ戻る・解析の途中で戻るの後着を書かない、取り消しに従わない読み出しが成功でも失敗でも終わったときに閉じた面と新しい候補を覆わない、右だけの失敗と開き直し、取り消しを失敗として書かない） |
-| `SectionChatControllerTest.kt` | 18 | 部分要約の状態遷移・再試行・破棄。モデルの未取得では開始を求めずDLも始めないこと、端末AIが使えないだけなら派生状態を Working にも Error にもしないこと。**3節分の保持**（別の節を頼むと前の生成を取り消す・遅れて届いた結果は番号が一致する要約にだけ書く・準備待ちの説明は頼み直すと確かめ直す・中止） |
+| `SectionChatControllerTest.kt` | 21 | 部分要約の状態遷移・再試行・破棄。モデルの未取得では開始を求めずDLも始めないこと、端末AIが使えないだけなら派生状態を Working にも Error にもしないこと。**3節分の保持**（別の節を頼むと前の生成を取り消す・遅れて届いた結果は番号が一致する要約にだけ書く・準備待ちの説明は頼み直すと確かめ直す・中止）。面を出さずに頼んだ要約の、使えない理由をまだ見せていない印 |
 | `SummaryControllerTest.kt` | 7 | モデルDL待ちの要約がノート切替をすり抜けないこと、DL進捗の照合 |
 | `SummaryGenerationObservationTest.kt` | 4 | 保存済みの当たりと、同じ入力の再生成を生成の呼び出し回数で区別できること（再起動の数え方を含む） |
 | `VaultImageIndexStoreTest.kt` | 23 | 画像索引のTTL・再走査の歯止め・Vault世代 |
@@ -399,9 +395,10 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `architecture/DistillProtectedScanTest.kt` | 2 | **保護範囲をカーソル越しにしか読まないことをソース走査で固定**（時間差が出ない二乗経路を形で縛る）。文書全体の保護範囲はモデルへ渡す1箇所でしか読まない |
 | `architecture/DistillRangeRebuildCostTest.kt` | 1 | **段の導出を候補状態の作り直しから呼ばないことをソース走査で固定**（自由範囲のドラッグではフレームごとに走るため） |
 | `architecture/GradientHeaderPaddingTest.kt` | 2 | **見出しを置く画面が `screenContentPadding()` で余白を取ること**と、見出しの面を広げる幅と左右の余白が同じ定数であることをソース走査で固定 |
-| `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ [解析書](01_source_code_analysis.md) §13.5） |
+| `architecture/InstrumentationTestShapeTest.kt` | 1 | **`@Test` の戻り値が `void` でなくなる書き方をソース走査で禁じる**（→ [instrumentation_testing](../dev/system/instrumentation_testing.md) 判断9） |
 | `architecture/KotlinCommentScannerTest.kt` | 17 | コメントの字句解析（文字列リテラルやエスケープの中の記号をコメントと誤認しないこと） |
 | `architecture/NoteExcerptThreadingTest.kt` | 1 | 抜粋生成が本番の6ファイル9箇所すべてで `Dispatchers.Default` 側にあること（呼び出し箇所の一覧ごとソース走査で固定） |
+| `architecture/NoteScanExpiryWiringTest.kt` | 2 | 本文を書き換えた後は走査キャッシュを失効させるだけで、リンクの索引は捨てないこと。窓口の配線をソースで見る |
 | `architecture/NoteSectionThreadingTest.kt` | 5 | 本文解析がMainのスコープから呼ばれていないことをソース走査で固定。ブロック解析を呼ぶ場所の一覧と、並べ読みの Controller が `parseDispatcher` の中でだけ解析すること |
 | `architecture/PackageDependencyTest.kt` | 2 | パッケージ依存の向き（ルートパッケージ経由の抜け道を含む） |
 | `architecture/PromptGenerationCoverageTest.kt` | 3 | 全プロンプトが実生成テストで覆われるか未保証として列挙されるか（12本中7本が実生成）、件数の固定 |
@@ -417,6 +414,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `domain/BoundedInputStreamTest.kt` | 13 | **上限の境界（-1／ちょうど／+1）を単一read・配列read・`skip`・混在で固定**、`len == 0` の契約、`available()` の丸め、先読みが1回だけであること |
 | `domain/ByteBudgetCacheTest.kt` | 10 | バイト予算つきLRU（超過時の追い出し順・単一エントリ超過） |
 | `domain/CrystalCandidatesTest.kt` | 20 | **結晶の試す条件**（異なる3件で初回・同じ内容の再訪で0回・同じ1件は1件・候補の外の未提示材料では同じ6件を渡さない・予算で落とした後の集合で判定）、断片の切り方、候補の並び、絞り込み |
+| `domain/CrystalFieldsTest.kt` | 6 | **結晶の宝石を塗る分野**（多い順に2つ・同数は根拠の並び・分からない根拠は数えない） |
 | `domain/CrystalResponseParserTest.kt` | 14 | 結晶の応答の検証。2行の採用、NONEの揺れ、今のノート抜け・提示外ID・件数の外れ、2文・疑問文・長さ、**選択欄が読むどの表記でも本文のIDは不正** |
 | `domain/DistillCandidateScoringTest.kt` | 18 | サリエンス採点、構造的重み、チャンク網羅 |
 | `domain/DistillRangeAdjustTest.kt` | 15 | 太字範囲の3段プリセット導出（存在する段だけ出す・親文の内側に収まる）、重なり解消（広げた側が相手を外す・再チェックで非重複を保つ・未選択は誰も押し出さない）、文書全体の保護範囲と親文ぶんの取り出し |
@@ -436,6 +434,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `domain/NoteFieldHintTest.kt` | 8 | パスから分野のヒントを作る辞書照合。当たらない3例が実際に区別されること |
 | `domain/NoteFieldIndexTest.kt` | 9 | 索引Aへヒントを流し込む規則。再走査で確定をヒントへ戻さないこと |
 | `domain/NoteFieldInputVersionTest.kt` | 5 | 入力指紋がAIへ渡したものすべてを含むこと。落とした項目はそのまま「変えても再判定されない」バグになる |
+| `domain/NoteLinksTest.kt` | 26 | **本文のリンク**（記法の読み方・押せないリンク・同名の解決順・相対パス・見出しの照合） |
 | `domain/NotePaperAgeTest.kt` | 15 | 相対四分位による紙の地色の段階決定 |
 | `domain/PreviousReadingTest.kt` | 11 | **前回の読書の跡**（今の読書より前の最新1件・今の読書の訪問を数えない・最後まで読んだ回なら遡らない・一意に一致した節だけ・同名と見つからないと見出し無しでは出さない・長い見出しと生の見出し名） |
 | `domain/ReadingTraceOrphansTest.kt` | 27 | 孤児判定の遮断器（フォルダ単位・読取失敗の伝播・**ルートと別サブツリーの混在**）、削除直前の三値再走査 |
@@ -452,7 +451,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `domain/SearchKeywordMatchingTest.kt` | 10 | bigram採点、1文字クエリの部分一致、フォールバックの並び順と一致0件除外、再現率カットの0件保持 |
 | `domain/SearchPickerBudgetTest.kt` | 2 | ピッカーの**提示集合＝許可集合**（予算で落ちた候補を応答で受理しない） |
 | `domain/SearchPickerIdContractTest.kt` | 7 | ピッカーのID契約（IDの直後に文字や数字が続くものをIDと読まない） |
-| `domain/SectionSummariesTest.kt` | 5 | **部分要約を3節分持つ規則**（同じ節は置き換え・生成中の別の節は外す・4節目で最も古いものを落とす・番号の一致した要約だけを書き換える・頼み直しで見せたままにするか） |
+| `domain/SectionSummariesTest.kt` | 6 | **部分要約を3節分持つ規則**（同じ節は置き換え・生成中の別の節は外す・4節目で最も古いものを落とす・番号の一致した要約だけを書き換える・頼み直しで見せたままにするか） |
 | `domain/SectionSummaryStatusTest.kt` | 10 | 部分要約の4状態の導出（エラー優先・生成中・要約済み・端末AIが使えないだけならエラーにしない）と、要約ボタンの記号と読み上げ名 |
 | `domain/SummarizeUseCaseTest.kt` | 12 | 要約の保存の鍵＝AIへ渡したプロンプト、保存してよい結果、引いてよい状態、混雑時の文言 |
 | `domain/markdown/InlineSyntaxTest.kt` | 9 | **インライン記法の唯一の解釈器**（種別・エスケープ・バッククォートrun・リンク消費・対の探索・空白規則・入れ子） |
@@ -461,23 +460,31 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | `testing/SummaryCoverageCalibrationTest.kt` | 5 | 採点器の閾値を固定コーパスで決める。人の参照では分離できること・**実機の出力では分離できないこと**の両方を固定 |
 | `testing/SummaryCoverageTest.kt` | 18 | 採点器が「落としたこと」を検出できること。裏付けの弱い文と触れなかった節。誤判定3件の回帰 |
 | `testing/SummaryExcerptVariantsTest.kt` | 5 | 抜粋の変種の形。予算超過・切り詰め・変種が実は同じ、を机上で落とす |
+| `ui/AppScaffoldRailTest.kt` | 3 | 余白ペインが出ている間だけ外殻がレールを畳むこと |
 | `ui/BookletPeelGeometryTest.kt` | 13 | **めくりの幾何**（折り目が右下から左上へ走る・表と裏の面積が合う・裏が枠から出ない・静止時に紙が欠けない） |
 | `ui/BookletTurnGeometryTest.kt` | 19 | 紙の**置き方**（積み直りの傾き0〜22度・定位置への付け替え・遠い紙を引き寄せない・束の縁の在不在・影・カメラ距離・縮小率） |
-| `ui/CrystalTextTest.kt` | 3 | 結晶の根拠の行・一覧への入口・日付の文言 |
+| `ui/CrystalShelfTest.kt` | 14 | **結晶の一覧の棚**（凡例・月の区切りを端末の暦で・段の割り方・開いた中身の位置・開閉・開いた中身を送る量） |
+| `ui/CrystalTextTest.kt` | 6 | 結晶の根拠の行・一覧への入口・日付の文言。棚の見出し・宝石の下の日・中身と読み上げの分野名 |
+| `ui/DeskBackdropTest.kt` | 2 | 机の画面の帯の地。窓の同じ点が帯と背景で同じ色の位置になること |
+| `ui/DeskControlsTest.kt` | 8 | 机の画面のつまみ。押す・払う・フリック・横寄りの払いの判定 |
+| `ui/DeskSpreadTest.kt` | 20 | **片側を1画面にする横の払い**（距離と速さ・縦横の決め方・面の並べ方・戻り・補助の面のスクロール位置の覚え） |
 | `ui/DistillRangeHandleTest.kt` | 6 | ドラッグで掴む端を**押下の1回で決める**（近いほうを採る・行が違えば横位置が近くても掴まない） |
 | `ui/DistillRangeHighlightTest.kt` | 3 | **確定範囲の強調を値として観測する**（範囲の内側だけに太字と下線・親文の外へ出る指定は内側へ丸める） |
 | `ui/DistillRangeNoticeTest.kt` | 5 | 重なり解消の告知の**主語**（解消を起こした側と外された側で言い分ける・件数の単位は「箇所」） |
 | `ui/MarginMemoCaptionTest.kt` | 3 | メモの添え書き。節ごとに並べたときは節の名前を繰り返さず、同名に共通ならそう添え、見つからないメモには控えた見出し名を添える |
-| `ui/MarginSurfaceTest.kt` | 28 | **余白の面の判定**（✎ の動き・窓の切り替わりで面を移す規則・節の呼び名・書き込み先の知らせ・印の行き先・書いている間に畳むか・上の操作を隠すか・シートが覆う高さ・前回の跡の行の有無と文言・要約の入口とこのノートの間だけのペイン）と**並べ読みの判定**（関連の候補を後着でも入れ替えず下へ足す・持ち主の違う保存値を使わない・保存値の往復・余白ペインでなくなったら終える） |
+| `ui/MarginSurfaceTest.kt` | 31 | **余白の面の判定**（✎ の動き・窓の切り替わりで面を移す規則・節の呼び名・書き込み先の知らせ・印の行き先・書いている間に畳むか・上の操作を隠すか・シートが覆う高さ・前回の跡の行の有無と文言・要約の入口とこのノートの間だけのペイン）と**並べ読みの判定**（関連の候補を後着でも入れ替えず下へ足す・持ち主の違う保存値を使わない・保存値の往復・余白ペインでなくなったら終える）。面を出さずに頼んだ要約の理由を、いつ面を開いて見せるか |
 | `ui/NoteImageMeasurementsTest.kt` | 7 | 画像の表示寸法算出（原寸・上限・アスペクト保持） |
 | `ui/NoteImageTextTest.kt` | 19 | 画像の失敗理由ごとの文言と代替テキスト |
-| `ui/ReaderLayoutTest.kt` | 15 | **ノート画面の並べ方**（低い横長の画面だけ左右2列・480dpの境界・左列の幅、縦の折り目で割る・折り目を本文領域の座標へ直す・本文領域の中で割れなければ縦積み・レールの中の折り目は中央で割る・幅を持つ折り目・折り目の無い広い窓・卓上の形・ペインの設定が閉じているとき・下限の幅の前後） |
+| `ui/NoteLinkActionsTest.kt` | 9 | リンクを押した後の画面の操作。開く面を窓で決める・同じノートの見出しへ送る・知らせ |
+| `ui/ReaderLayoutTest.kt` | 16 | **ノート画面の並べ方**（低い横長の画面だけ左右2列・480dpの境界・左列の幅、縦の折り目で割る・折り目を本文領域の座標へ直す・本文領域の中で割れなければ縦積み・レールの中の折り目は中央で割る・幅を持つ折り目・折り目の無い広い窓・卓上の形・ペインの設定が閉じているとき・下限の幅の前後） |
 | `ui/ReadingProgressGeometryTest.kt` | 13 | 最終可視ブロックの可視割合（完全/一部/画面外/高さ未確定）、5%刻みの量子化 |
 | `ui/ReadingTraceCleanupTextTest.kt` | 6 | 孤児整理画面の文言（件数・削除の取り返しのつかなさ） |
 | `ui/ReadingTraceHeadlineTest.kt` | 9 | 経過日・セクション・到達率・訪問回数のカード文面。**「止まった」と言わないこと** |
 | `ui/ReunionLeadTest.kt` | 2 | **種別ごとの前置き**（問い・古い前提。前後の要約とノートの要約には付けない） |
+| `ui/SectionSummaryNoticeTest.kt` | 5 | 面を出さずに頼んだ要約の、使えない理由をどの節で見せるか。本物の Controller の順序で |
 | `ui/VigilithOpeningMotionTest.kt` | 8 | ハロー・全身・名称の登場順、保持区間、退場、終端・範囲外入力 |
 | `ui/theme/AppColorContrastTest.kt` | 26 | 明暗の役割トークンのコントラスト比。文字は4.5:1・塗りと記号は3:1を**強制**する |
-| `ui/theme/NoteFieldPaletteTest.kt` | 5 | 分野の6色を値ではなく規則で固定（明度が揃い色相が等間隔）と、面としての合否1件 |
+| `ui/theme/DiagonalGradientTest.kt` | 2 | 背景のグラデーションの向きを1箇所で決めていること |
+| `ui/theme/NoteFieldPaletteTest.kt` | 9 | 分野の6色を値ではなく規則で固定（明度が揃い色相が等間隔）と、面としての合否1件。**結晶の宝石の7色**（パネルの上で3:1・同じ分野の紙と色相がそろう・明度がそろう・灰色に色味が無い） |
 | `ui/theme/VibrantTextUsageTest.kt` | 2 | 画面からの `onVibrant` 直接使用と、文字色への任意の `copy(alpha)` をソース走査で禁じる |
-| **合計。148クラス** | **1,740** | |
+| **合計** | 01 の §0 | |

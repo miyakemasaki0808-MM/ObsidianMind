@@ -1,6 +1,6 @@
 # 変更履歴表
 
-**プロジェクト:** Vigilith AI（旧 Obsidian Mind）
+**プロジェクト:** Vigilith AI
 
 このファイルは変更の履歴を新しい順に記録する累積文書である。
 
@@ -17,6 +17,20 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-11 | owner/01 解析書を約1,470行から743行へ絞り、機能の詳細は正本へ任せて不変条件と上限だけを残した（レビュー前） | [source_code_analysis](../owner/01_source_code_analysis.md) |
+| 2026-10-11 | 文書の見出しから旧名「Obsidian Mind」を外し、owner/01 からできていないことの一覧を外した | — |
+| 2026-10-11 | Fable 5.1 の報告書のうち反映し終えた4本（AI設計・文書とプロセス・リリース準備・計測値）を消し、検討枠のリンクを外した | — |
+| 2026-10-11 | owner文書を通しで見直し、測定日を10-11へそろえてUX改善の5件を反映し、規模と検証の数字を解析書の§0だけに置いた（レビュー前） | [owner/README](../owner/README.md) |
+| 2026-10-11 | アイデア帳から答えの出た問いと時点ごとの注記を消し、持ち帰り帳から使い終えた結晶の棚のカードを消した | [owner/README](../owner/README.md) |
+| 2026-10-11 | 結晶の材料を控える30秒の線をオーナーが使って受理したので、課題台帳から外した | [reflect_crystal](features/reflect_crystal.md) 判断4 |
+| 2026-10-11 | 宝石の棚・下端の送り・30秒の線・帯の地を実機で検証して合格とし、2件を台帳から外してロードマップの UX の節を除いた | [reflect_crystal](features/reflect_crystal.md) §10・[margin_pane](features/margin_pane.md) §10・[review](../review/README.md) |
+| 2026-10-11 | UX改善の再レビューで、一覧の送りの修正と結晶の材料の30秒の線に新しい指摘が無いことを確かめ、実機待ちを残した | [review](../review/README.md) |
+| 2026-10-11 | 結晶の材料を控える線を、3秒の門番から、冊子と背面を除いて足し算で30秒読んだときに変えた | [reflect_crystal](features/reflect_crystal.md) 判断4 |
+| 2026-10-11 | 結晶の一覧で下端の宝石を押したとき、棚の側が開いた中身を画面の中へ送るようにした | [reflect_crystal](features/reflect_crystal.md) 判断11 |
+| 2026-10-11 | UX改善の最終差分の外部レビューで、結晶の一覧の下端の宝石で中身へ送らない不備をP2として起票した | [review](../review/README.md) |
+| 2026-10-10 | 結晶の一覧を、月ごとの棚に根拠の分野の色の宝石を並べ、押した段の直下に1文と根拠を開く画面にした | [reflect_crystal](features/reflect_crystal.md) 判断11 |
+| 2026-10-10 | 結晶の一覧を月の棚に宝石を並べる形に決め、宝石を根拠のノートの分野で左右半々に塗ることを色の割り当てに足した | [reflect_crystal](features/reflect_crystal.md) 判断11・[bearing_channels](system/bearing_channels.md) §10 |
+| 2026-10-10 | 机の画面の帯の地を、画面の地を敷いた箱の角を端点にして描き、帯の中に別の虹が縮まらず背景とつながるようにした | [margin_pane](features/margin_pane.md) §5.1 |
 | 2026-10-10 | ノート内のリンクを実機で検証し、長押しの修正の再検証まで合格として LINK-1〜3 を台帳から外し、ロードマップから完了分を除いた | [note_links](features/note_links.md) §10・[review](../review/README.md) |
 | 2026-10-10 | 本文のリンクを長押しして離してもリンクが開かないよう、長押しの見張りを選択の容器の内側の層へ移した | [note_links](features/note_links.md) §7・§8 |
 | 2026-10-10 | 補助の面で同じノートのリンクを押し直したとき、見出しが無くても見つからなくても先頭から始めるようにした | [note_links](features/note_links.md) §4 |

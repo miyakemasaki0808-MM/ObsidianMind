@@ -255,7 +255,8 @@ Snackbar通知＋`isViewed` の未確認管理を持つ Controller は**0件**�
   1つの `Mutex` を作って3つへ渡す。**クラスごとに錠を持つと「錠はあるのに守られない」**
   という、最も気づきにくい形になる
 - **自動で走る生成は、生成の直前に調停側の門番（`NoteDwellGate`）を待つ。** 痕跡の錠と同じく
-  `NoteSessionCoordinator` が1つ作って自動起動の機能にだけ配る（→ [background_ai_ux](background_ai_ux.md) §7）
+  `NoteSessionCoordinator` が1つ作って自動起動の機能にだけ配る（→ [background_ai_ux](background_ai_ux.md) §7）。
+  結晶の材料だけは、同じく調停側が持つ別の線（`NoteReadGate`、足し算で30秒）を待つ（→ [reflect_crystal](../features/reflect_crystal.md) 判断4）
 - ノート・Vault単位のジョブは追跡してキャンセルする
 - `CancellationException` は再throwし、一般エラーへ変換しない
 - 完了通知がキャンセルをすり抜ける経路には requestId＋`isCurrent()` ガードを併用する

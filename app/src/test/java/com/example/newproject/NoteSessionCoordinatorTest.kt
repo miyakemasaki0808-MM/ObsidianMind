@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.NoteDwellGate
+import com.example.newproject.controller.NoteReadGate
 import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
@@ -1194,7 +1195,7 @@ class NoteSessionCoordinatorTest {
 
         env.leaveAfterFirstRead(coordinator, clock)
         env.openRediscovered(coordinator)
-        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advance(NoteReadGate.READ_MILLIS + 1_000)
 
         assertTrue(coordinator.uiState.value.summaryState is SummaryState.Success)
         assertEquals("照合の前処理を待たずに結晶が錠を取った", 0, env.ai.generateCalls)
@@ -1226,7 +1227,7 @@ class NoteSessionCoordinatorTest {
 
         env.leaveAfterFirstRead(coordinator, clock)
         env.openRediscovered(coordinator)
-        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advance(NoteReadGate.READ_MILLIS + 1_000)
         assertEquals(0, env.ai.generateCalls)
 
         coordinator.onNoteChanged()
@@ -1247,7 +1248,7 @@ class NoteSessionCoordinatorTest {
 
         env.leaveAfterFirstRead(coordinator, clock)
         env.openRediscovered(coordinator)
-        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advance(NoteReadGate.READ_MILLIS + 1_000)
         advanceUntilIdle()
 
         assertEquals("カードは保存済みで済み、生成したのは結晶だけ", 1, env.ai.generateCalls)
@@ -1270,7 +1271,7 @@ class NoteSessionCoordinatorTest {
 
         env.leaveAfterFirstRead(coordinator, clock)
         env.openRediscovered(coordinator)
-        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advance(NoteReadGate.READ_MILLIS + 1_000)
         advanceUntilIdle()
 
         assertEquals(2, env.ai.generateCalls)
@@ -1297,7 +1298,7 @@ class NoteSessionCoordinatorTest {
         coordinator.setNoteState(successNote(CRYSTAL_NOTE_BODY))
         coordinator.fetchSummary(CRYSTAL_NOTE_TITLE, CRYSTAL_NOTE_BODY)
         coordinator.crystallize(CRYSTAL_NOTE_PATH, CRYSTAL_NOTE_TITLE)
-        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+        advance(NoteReadGate.READ_MILLIS + 1_000)
 
         assertEquals(1, env.ai.generateCalls)
         assertTrue(env.ai.lastPrompt!!.contains("Candidates:"))
@@ -1305,6 +1306,94 @@ class NoteSessionCoordinatorTest {
         env.ai.completeAll(CRYSTAL_ANSWER)
         advanceUntilIdle()
     }
+
+    // ── 結晶の材料を控える線（→ features/reflect_crystal.md 判断4）────────────────
+    // 線そのものの規則は NoteReadGateTest が見る。ここは本番と同じ入口から、結晶にだけ配られていることと、
+    // 冊子・切替の両方向を見る。要約は保存済みで、3秒の門番は何も待たせない。
+
+    /** **30秒読むまで材料を控えない。** 3秒の門番が開いても、結晶は控えも試行もしない。 */
+    @Test
+    fun `結晶は30秒読むまで材料を控えない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+
+        env.openWithoutReunion(coordinator)
+        advance(NoteReadGate.READ_MILLIS - 1)
+        assertEquals("30秒の手前で結晶が生成した", 0, env.ai.generateCalls)
+        assertFalse("30秒の手前で材料を控えた", env.crystalMaterialRecorded())
+
+        advance(1)
+        assertTrue(env.crystalMaterialRecorded())
+        assertEquals(1, env.ai.generateCalls)
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+    }
+
+    /**
+     * **冊子を見ている間とアプリが背面の間は数えず、戻ったら続きから足す。**
+     * 3秒の門番のように最初から数え直すと、一瞬離れただけで30秒をやり直すことになる。
+     */
+    @Test
+    fun `結晶の材料の線は冊子と背面の間は数えず、戻ったら続きから足す`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+
+        env.openWithoutReunion(coordinator)
+        advance(20_000L)
+        coordinator.pauseReadingTrace(ReadingPauseReason.Booklet)
+        advance(NoteReadGate.READ_MILLIS * 3)
+        coordinator.resumeReadingTrace(ReadingPauseReason.Booklet)
+        coordinator.pauseReadingTrace(ReadingPauseReason.AppBackground)
+        advance(NoteReadGate.READ_MILLIS * 3)
+        assertFalse("冊子か背面の間を読んだ時間に入れた", env.crystalMaterialRecorded())
+
+        coordinator.resumeReadingTrace(ReadingPauseReason.AppBackground)
+        advance(10_000L - 1)
+        assertFalse(env.crystalMaterialRecorded())
+        advance(1)
+        assertTrue("戻った後に続きから足していない", env.crystalMaterialRecorded())
+        assertEquals(1, env.ai.generateCalls)
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+    }
+
+    /**
+     * **30秒に届く前にノートを離れると控えず、次のノートは0から数える。** 読んだ時間を次のノートへ持ち越さない。
+     * 届いた後に離れる向き（生成中の切替）は `CrystalControllerTest` と、照合を待つ間の切替の検査が見る。
+     */
+    @Test
+    fun `30秒に届く前に離れると控えず、次のノートは0から数える`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        env.readyForCrystal()
+
+        env.openWithoutReunion(coordinator)
+        advance(NoteReadGate.READ_MILLIS - 1_000)
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+        assertFalse("届く前に離れたノートを控えた", env.crystalMaterialRecorded())
+        assertEquals(0, env.ai.generateCalls)
+
+        env.openWithoutReunion(coordinator)
+        advance(NoteReadGate.READ_MILLIS - 1)
+        assertFalse("前のノートで読んだ時間を持ち越した", env.crystalMaterialRecorded())
+        advance(1)
+        assertTrue(env.crystalMaterialRecorded())
+        env.ai.completeAll(CRYSTAL_ANSWER)
+        advanceUntilIdle()
+    }
+
+    /** 再会カードを経ない並び — 本文 → 要約 → 結晶。 */
+    private fun Env.openWithoutReunion(coordinator: NoteSessionCoordinator) {
+        coordinator.setNoteState(successNote(CRYSTAL_NOTE_BODY))
+        coordinator.fetchSummary(CRYSTAL_NOTE_TITLE, CRYSTAL_NOTE_BODY)
+        coordinator.crystallize(CRYSTAL_NOTE_PATH, CRYSTAL_NOTE_TITLE)
+    }
+
+    private fun Env.crystalMaterialRecorded(): Boolean =
+        crystalMaterials.load("vault-a").entries.any { it.vaultRelativePath == CRYSTAL_NOTE_PATH }
 
     /** 止めていた訪問の保存を流し、走り切らせる。 */
     private fun TestScope.releasePersist(persist: HeldDispatcher) {
@@ -2016,6 +2105,8 @@ class NoteSessionCoordinatorTest {
             cancelHostJobs = cancelHostJobs,
             initialState = initialState,
             clock = clock::now,
+            // 結晶の材料の線は、テストスケジューラの時刻で読んだ時間を測る。
+            elapsedMillis = { scope.testScheduler.currentTime },
             // 痕跡I/Oもテストスケジューラに載せて、照合が走行中のまま切り替える状況を作る。
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
             // 表示用Markdownの解析も同様。解析中に切り替える状況を作れるようにする。

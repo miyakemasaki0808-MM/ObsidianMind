@@ -62,17 +62,17 @@ class CrystalControllerTest {
     // ── 取り消しの両方向 ─────────────────────────────────────────────────────
 
     @Test
-    fun `門番を待っている間に切り替えると控えも試行もしない`() = runTest {
+    fun `読み終えるのを待っている間に切り替えると控えも試行もしない`() = runTest {
         val env = Env(this)
         env.seedOthers("b.md", "c.md")
-        val dwell = CompletableDeferred<Unit>()
-        env.dwell = { dwell.await() }
+        val read = CompletableDeferred<Unit>()
+        env.read = { read.await() }
         val controller = env.controller()
 
         controller.onNoteShown("a.md", "A")
         runCurrent()
         controller.cancelAndClear()
-        dwell.complete(Unit)
+        read.complete(Unit)
         advanceUntilIdle()
 
         assertEquals(0, env.ai.generateCalls)
@@ -249,14 +249,14 @@ class CrystalControllerTest {
         var vaultKey: String? = VAULT_A
         var generation = 0L
         var now = 1_000_000L
-        var dwell: suspend () -> Unit = {}
+        var read: suspend () -> Unit = {}
         var summary: suspend () -> String? = { "今のノートの要約。" }
         var reunion: suspend () -> Unit = {}
 
         fun controller() = CrystalController(
             scope = scope,
             aiClient = ai,
-            awaitDwell = { dwell() },
+            awaitRead = { read() },
             awaitSummary = { summary() },
             awaitReunionSettled = { reunion() },
             state = uiStore.crystalWriter,

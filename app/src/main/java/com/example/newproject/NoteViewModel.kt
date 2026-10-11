@@ -164,10 +164,10 @@ class NoteViewModel internal constructor(
     private val cachedNotes: List<NoteFile> get() = noteScan.notes
 
     /**
-     * 今の走査結果にあるノートの相対パス。**結晶の一覧で、根拠のノート名を押せるかを決める**
-     * （改名・移動・削除したノートは押せない表示にする → features/reflect_crystal.md §5）。
+     * 今の走査結果にあるノートの相対パスと参照。**結晶の一覧で、根拠のノート名を押せるかを決め**
+     * （改名・移動・削除したノートは押せない表示にする → features/reflect_crystal.md §5）、宝石を塗る分野を引く（判断11）。
      */
-    val knownNotePaths: StateFlow<Set<String>> = noteScan.knownPaths
+    val knownNotes: StateFlow<Map<String, DocumentRef>> = noteScan.knownNotes
 
     /**
      * 結晶の一覧を開いたときの走査。**Vault単位**で、Vault切替で取り消す（ノート切替では止めない —

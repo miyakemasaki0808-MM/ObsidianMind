@@ -96,6 +96,38 @@ internal val DarkNoteFieldTones = NoteFieldTones(
     reflection = Color(0xFF3C2A3D)
 )
 
+/**
+ * 結晶の宝石の色（分野）。**ライト。**（→ `docs/dev/features/reflect_crystal.md` 判断11）
+ *
+ * **色相は冊子の紙と同じ分野の色相**で、OKLch の L=0.62・C=0.105 を固定して置いた。`neutral` は同じ明度の灰色。
+ * 宝石は紙と違い**パネルの上に置く部品**なので、明度はパネルの上で 3:1 を保つ側に寄せ、
+ * 彩度はその明度で6色とも sRGB に収まる最大にした（最も狭いのは水色）。
+ */
+internal val LightCrystalGemTones = NoteFieldTones(
+    neutral = Color(0xFF868686),
+    technical = Color(0xFFBD6C66),
+    learning = Color(0xFFA38131),
+    business = Color(0xFF5B975E),
+    creative = Color(0xFF0598A3),
+    living = Color(0xFF6685C6),
+    reflection = Color(0xFFA570AA)
+)
+
+/**
+ * 結晶の宝石の色（分野）。**ダーク。** OKLch の L=0.74・C=0.126、色相はライトと同じ。
+ * **ライトと逆に、パネルより明るく置く。** 暗いパネルの上で 3:1 を保つには明度を上げるしかない。
+ * L は彩度が最も多く取れる値で、これより上でも下でも6色が sRGB に収まる彩度が下がる。
+ */
+internal val DarkCrystalGemTones = NoteFieldTones(
+    neutral = Color(0xFFABABAB),
+    technical = Color(0xFFF08A80),
+    learning = Color(0xFFCEA540),
+    business = Color(0xFF76C077),
+    creative = Color(0xFF04C1D1),
+    living = Color(0xFF84A8FB),
+    reflection = Color(0xFFD38ED7)
+)
+
 // ---------------------------------------------------------------------------
 // 2. 明暗それぞれの実体
 //    値を書くのはここだけ。§3のトークンは、現在のテーマからこれを引くだけの窓口。
@@ -105,6 +137,7 @@ internal val LightAppColors = AppColorScheme(
     panel = LightPanel,
     notePaper = LightNotePaperTones,
     noteField = LightNoteFieldTones,
+    crystalGem = LightCrystalGemTones,
     codePanel = Color(0xFFF1F4F8),
     panelTinted = Color(0xFFF7F3FF),
     panelBlue = Color(0xFFF0F4FF),
@@ -196,6 +229,7 @@ internal val DarkAppColors = AppColorScheme(
     // ダークでは段階を作らない（判断5）。全段階を panel と同値にして演出を殺す。
     notePaper = NotePaperTones.uniform(Color(0xFF2A2D45)),
     noteField = DarkNoteFieldTones,
+    crystalGem = DarkCrystalGemTones,
     codePanel = Color(0xFF202234),
     panelTinted = Color(0xFF2B2740),
     panelBlue = Color(0xFF22273F),
@@ -283,6 +317,11 @@ internal val Panel: Color @Composable @ReadOnlyComposable get() = current.panel
 @Composable
 @ReadOnlyComposable
 internal fun noteFieldPaper(field: NoteField?): Color = current.noteField.color(field)
+
+/** 結晶の宝石の色を分野から引く。**分野が分からなければ灰色**（→ reflect_crystal 判断11）。 */
+@Composable
+@ReadOnlyComposable
+internal fun crystalGemColor(field: NoteField?): Color = current.crystalGem.color(field)
 internal val CodePanel: Color @Composable @ReadOnlyComposable get() = current.codePanel
 internal val PanelTinted: Color @Composable @ReadOnlyComposable get() = current.panelTinted
 internal val PanelBlue: Color @Composable @ReadOnlyComposable get() = current.panelBlue
@@ -366,3 +405,6 @@ internal val ButtonOutlineOnGradient: Color
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient
 internal val ReadingGradient: Brush @Composable @ReadOnlyComposable get() = current.readingGradient
+
+/** 読む画面の地（[ReadingGradient]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
+internal val ReadingGradientStops: List<Color> @Composable @ReadOnlyComposable get() = current.readingGradientStops

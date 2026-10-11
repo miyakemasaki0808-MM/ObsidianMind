@@ -49,7 +49,7 @@ class CrystalSaveInterleavingTest {
     private val controller = CrystalController(
         scope = scope,
         aiClient = FakeAiClient.returning(ANSWER),
-        awaitDwell = {},
+        awaitRead = {},
         awaitSummary = { "今のノートの要約。" },
         awaitReunionSettled = {},
         state = uiStore.crystalWriter,

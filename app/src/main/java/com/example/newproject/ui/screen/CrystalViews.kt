@@ -26,10 +26,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.crystalsForNote
 import com.example.newproject.model.Crystal
+import com.example.newproject.model.NoteField
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.ui.CRYSTAL_PANEL_TITLE
 import com.example.newproject.ui.crystalListEntryLabel
-import com.example.newproject.ui.crystalNoteLabel
+import com.example.newproject.ui.crystalSourceLabel
 import com.example.newproject.ui.crystalSourcesLine
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
@@ -82,20 +83,22 @@ internal fun CrystalPanel(
 /**
  * 結晶1件。1文と「A・B から」を出し、押すと根拠（ノート名とAIへ渡した断片）を開く。
  *
+ * [caption] は1文の上に出す小さな1行（一覧では分野と日付）。
  * [onOpenSource] を渡したときだけ、根拠のノート名を押せる。[canOpen] が偽のノート
- * （改名・移動・削除で今の走査に無い）は押せない表示にする。
+ * （改名・移動・削除で今の走査に無い）は押せない表示にする。[sourceField] が分野を返せば、開いた根拠のノート名に添える。
  */
 @Composable
 internal fun CrystalCard(
     crystal: Crystal,
-    dateLabel: String? = null,
+    caption: String? = null,
     onOpenSource: ((String) -> Unit)? = null,
-    canOpen: (String) -> Boolean = { false }
+    canOpen: (String) -> Boolean = { false },
+    sourceField: (String) -> NoteField? = { null }
 ) {
     var expanded by rememberSaveable(crystal.fileName) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (dateLabel != null) {
-            Text(text = dateLabel, fontSize = 12.sp, color = OnSurfaceMuted)
+        if (caption != null) {
+            Text(text = caption, fontSize = 12.sp, color = OnSurfaceMuted)
         }
         Text(text = crystal.sentence, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
         Text(
@@ -115,7 +118,7 @@ internal fun CrystalCard(
             crystal.sources.forEach { source ->
                 val openable = onOpenSource != null && canOpen(source.vaultRelativePath)
                 Text(
-                    text = crystalNoteLabel(source.noteTitle) + if (openable) " ›" else "",
+                    text = crystalSourceLabel(source.noteTitle, sourceField(source.vaultRelativePath)) + if (openable) " ›" else "",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (openable) AccentText else OnSurface,

@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.example.newproject.model.NoteField
@@ -92,6 +92,8 @@ internal class AppColorScheme(
     val notePaper: NotePaperTones,
     // 冊子の紙の地色（分野）。**読む面には載せない**（→ bearing_channels 判断6）。
     val noteField: NoteFieldTones,
+    // 結晶の一覧の宝石（分野）。冊子の紙と同じ色相で、パネルの上に置く（→ reflect_crystal 判断11）。
+    val crystalGem: NoteFieldTones,
     val codePanel: Color,
     val panelTinted: Color,
     val panelBlue: Color,
@@ -173,11 +175,21 @@ internal class AppColorScheme(
     val readingGradient: Brush = diagonalGradient(readingGradientStops)
 }
 
-/** 左下から右上へ流す。全画面で向きを揃えるため1箇所に閉じる。 */
-private fun diagonalGradient(stops: List<Color>): Brush = Brush.linearGradient(
+/** 左下から右上へ流す。全画面で向きを揃えるため、向きは [diagonalGradientOver] だけが決める。 */
+private fun diagonalGradient(stops: List<Color>): Brush =
+    diagonalGradientOver(stops, Rect(0f, 0f, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY))
+
+/**
+ * [area] の左下から右上へ流す。座標は描く要素の中で表す。
+ *
+ * **無限大の端点は、描く要素の大きさに置き換えられる**（`LinearGradient.createShader`）。無限大の矩形を渡すと、
+ * どの要素に敷いても要素いっぱいに流れる（背景の地）。**ほかの要素の地とつなげて描くときは、有限の矩形を渡す** —
+ * その要素の中にある別の部品から描いても、端点は部品の大きさで解決されず、地と同じ色が同じ位置に来る。
+ */
+internal fun diagonalGradientOver(stops: List<Color>, area: Rect): Brush = Brush.linearGradient(
     colors = stops,
-    start = Offset(0f, Float.POSITIVE_INFINITY),
-    end = Offset(Float.POSITIVE_INFINITY, 0f)
+    start = area.bottomLeft,
+    end = area.topRight
 )
 
 internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }

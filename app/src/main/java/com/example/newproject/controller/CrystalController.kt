@@ -55,8 +55,11 @@ import kotlinx.coroutines.withContext
 internal class CrystalController(
     private val scope: CoroutineScope,
     private val aiClient: AiClient,
-    /** 生成の直前に通す門番。ノートを離れたら `CancellationException` で抜ける。 */
-    private val awaitDwell: suspend () -> Unit,
+    /**
+     * 材料を控える前に通す線（ノートを足し算で30秒読んだ → 判断4）。ノートを離れたら `CancellationException` で抜ける。
+     * **3秒の門番の代わりでもある** — 30秒読んだノートは、すぐ離れるノートではない。
+     */
+    private val awaitRead: suspend () -> Unit,
     /** このノートの要約の終わりを待つ。`Success` なら要約、`Error`・`AiUnavailable` なら null。 */
     private val awaitSummary: suspend () -> String?,
     /** このノートの再会カードの照合が終わるのを待つ（→ 判断10）。 */
@@ -119,7 +122,7 @@ internal class CrystalController(
         // どのVaultへの試行かは、サスペンドする前のこの時点で決める。
         val vaultKey = currentVaultKey() ?: return
         generateJob = scope.launch {
-            awaitDwell()
+            awaitRead()
             val summary = awaitSummary() ?: return@launch
             val fragment = crystalFragmentOf(summary)
             if (fragment.isEmpty()) return@launch
