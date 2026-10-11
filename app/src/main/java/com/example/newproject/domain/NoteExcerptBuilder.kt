@@ -41,7 +41,10 @@ fun buildNoteExcerpt(content: String, budget: Int): NoteExcerpt {
     }
 
     val textBudget = budget - NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length
-    val blocks = parseMarkdownBlocks(content)
+    // 段落の行は改行でつないで解析し、頭の情報の塊を行で見分けてから空白へ戻す。戻した後は既定の解析と同じブロックになる。
+    val parsed = parseMarkdownBlocks(content) { it.joinToString("\n") }
+    val headMetadata = headMetadataBlockIndex(parsed)
+    val blocks = parsed.map { if (it is MarkdownBlock.Paragraph) MarkdownBlock.Paragraph(it.text.replace('\n', ' ')) else it }
     if (blocks.isEmpty() || textBudget == 0) {
         return NoteExcerpt(
             text = truncatePlain(OMITTED_MARKER, textBudget, fromStart = true),
@@ -74,16 +77,17 @@ fun buildNoteExcerpt(content: String, budget: Int): NoteExcerpt {
     val beginningCap = bodyBudget * 60 / 100
     val endingCap = bodyBudget - beginningCap
 
-    val beginning = selectBeginning(blocks, beginningCap)
+    val beginning = selectBeginning(blocks, beginningCap, skipped = headMetadata)
     val ending = selectEnding(blocks, endingCap, beginning)
+    // 頭の情報の塊は省いたのではなく、冒頭に数えないだけ。それ以外が全部入るなら中略を出さない。
     val allBlocksCovered = beginning.partialIndex == null &&
         ending.partialIndex == null &&
-        (beginning.wholeIndices + ending.wholeIndices).size == blocks.size
+        (beginning.wholeIndices + ending.wholeIndices + listOfNotNull(headMetadata)).size == blocks.size
 
     val text = if (allBlocksCovered) {
         renderContinuousLayout(
             outline = outline.takeIf { it.isNotEmpty() },
-            body = blocksToMarkdown(blocks)
+            body = blocksToMarkdown(blocks.filterIndexed { index, _ -> index != headMetadata })
         )
     } else {
         renderAbridgedLayout(
@@ -190,12 +194,34 @@ private data class BodySelection(
     val wholeIndices: Set<Int> = parts.filter { it.isWhole }.mapTo(mutableSetOf()) { it.index }
 }
 
-private fun selectBeginning(blocks: List<MarkdownBlock>, budget: Int): BodySelection {
+/**
+ * 頭の情報の塊（→ [headMetadataRun]）だけでできたブロックの番号。無ければ null。
+ *
+ * 「状態・最終検証・関連コード」の行が続く設計書や、「開始日・現在位置・ステータス」の読書ノートでは、
+ * その塊が冒頭の枠をほぼ使い切り、本文の説明がモデルへ届かない。**見るのは最初の中身のブロックだけ**で、
+ * 見出し・罫線・画像は数えない（冊子の扉と同じく、それらは何のノートかを言う行に数えない）。
+ * 塊の判定は冊子の扉と共有する — 本文の中の「用語：説明」の並びや2行の頭は残る。
+ */
+private fun headMetadataBlockIndex(blocks: List<MarkdownBlock>): Int? {
+    val index = blocks.indexOfFirst {
+        it !is MarkdownBlock.Heading && it !is MarkdownBlock.HorizontalRule && it !is MarkdownBlock.Image
+    }
+    val lines = when (val block = blocks.getOrNull(index)) {
+        is MarkdownBlock.Paragraph -> block.text.lines()
+        is MarkdownBlock.ListBlock -> block.items.map { it.text }
+        else -> return null
+    }
+    val plain = lines.map { it.unwrapInlineCode().stripMarkdownMarkers() }
+    return index.takeIf { headMetadataRun(plain) == plain.indices }
+}
+
+private fun selectBeginning(blocks: List<MarkdownBlock>, budget: Int, skipped: Int?): BodySelection {
     if (budget <= 0) return BodySelection(emptyList(), partialIndex = null)
     val parts = mutableListOf<IndexedBlockPart>()
     var used = 0
 
     for (index in blocks.indices) {
+        if (index == skipped) continue
         val separator = if (parts.isEmpty()) 0 else BLOCK_SEPARATOR.length
         val available = budget - used - separator
         if (available <= 0) break

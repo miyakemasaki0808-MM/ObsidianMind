@@ -7,7 +7,8 @@ import org.junit.Test
 
 /**
  * 頭の情報の塊（[headMetadataRun]）と、それを組み立てるラベル行（[isLabelLine]）を固定する。
- * 共有の前処理なので、**用途に依らない形**だけをここで見る（扉での効き方は `BookletCoverLineTest`）。
+ * 冊子の扉と AI の抜粋の冒頭が同じ判定を使うので、**用途に依らない形**だけをここで見る
+ * （用途ごとの効き方は `BookletCoverLineTest`・`NoteExcerptBuilderTest`）。
  */
 class HeadMetadataRunTest {
 

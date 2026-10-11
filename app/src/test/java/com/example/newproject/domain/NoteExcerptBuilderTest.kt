@@ -286,6 +286,99 @@ class NoteExcerptBuilderTest {
         buildNoteExcerpt("本文", -1)
     }
 
+    @Test
+    fun `頭の情報行の塊は冒頭に数えない`() {
+        val content = """
+            # 設計書
+
+            **状態:** 実装済み・稼働中
+            **最終検証:** 2026-09-12 / `23dce6b`
+            **関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt`
+
+            BODY_START 本文の説明。${"a".repeat(800)}
+
+            ## 末尾
+
+            ${"z".repeat(600)} END_TOKEN
+        """.trimIndent()
+
+        val excerpt = buildNoteExcerpt(content, budget)
+
+        // 見出しは冒頭に残り、その直後から本文が始まる。
+        assertTrue(excerpt.text.beginningSection().startsWith("# 設計書\n\nBODY_START"))
+        assertFalse(excerpt.text.contains("最終検証"))
+        assertTrue(excerpt.text.contains("END_TOKEN"))
+        assertWithinBudget(excerpt, budget)
+    }
+
+    @Test
+    fun `箇条書きの頭の情報も冒頭に数えない`() {
+        val content = """
+            ## 概要
+            - 開始日　　：2025/05/23
+            - 現在位置　：第2章から
+            - ステータス：読書中
+
+            BODY_START ${"a".repeat(900)}
+        """.trimIndent()
+
+        val beginning = buildNoteExcerpt(content, budget).text.beginningSection()
+
+        assertTrue(beginning.startsWith("## 概要\n\nBODY_START"))
+    }
+
+    @Test
+    fun `2行の頭と、ラベル行でない行が混じる頭は冒頭に残る`() {
+        val twoLines = "**日付:** 2026-04-29\n**プロジェクト:** 天気概況\n\n${"a".repeat(900)}"
+        val mixed = "**状態:** 稼働中\n**最終検証:** 2026-09-12\n本文が続く行\n**関連:** なし\n\n${"a".repeat(900)}"
+
+        assertTrue(buildNoteExcerpt(twoLines, budget).text.beginningSection().startsWith("**日付:**"))
+        assertTrue(buildNoteExcerpt(mixed, budget).text.beginningSection().startsWith("**状態:**"))
+    }
+
+    @Test
+    fun `頭の塊の後ろの用語と説明の並びは冒頭に残る`() {
+        val content = """
+            - 科目：科目A テクノロジ系
+            - 出題数目安：約3〜5問
+            - 難易度：★★★☆☆
+
+            - **フォールトトレラント**：障害が起きても継続稼働
+            - **フェールセーフ**：障害時に安全な状態へ移行
+            - **フェールソフト**：一部機能を落としてでも継続
+
+            ${"a".repeat(900)}
+        """.trimIndent()
+
+        val beginning = buildNoteExcerpt(content, budget).text.beginningSection()
+
+        assertTrue(beginning.startsWith("- **フォールトトレラント**"))
+    }
+
+    @Test
+    fun `頭の情報だけを省いて全部入るなら中略を出さない`() {
+        val content = """
+            **状態:** 実装済み
+            **最終検証:** 2026-09-12
+            **関連コード:** ${"`a.kt` / ".repeat(100)}
+
+            BODY_ONLY 短い本文。
+        """.trimIndent()
+
+        val excerpt = buildNoteExcerpt(content, budget)
+
+        assertTrue(content.length > budget)
+        assertTrue(excerpt.isAbridged)
+        assertTrue(excerpt.text.contains("BODY_ONLY"))
+        assertFalse(excerpt.text.contains("関連コード"))
+        assertFalse(excerpt.text.contains("(omitted)"))
+        assertWithinBudget(excerpt, budget)
+    }
+
+    /** `## Beginning excerpt` の直後から、中略か末尾のラベルまで。 */
+    private fun String.beginningSection(): String =
+        substringAfter("## Beginning excerpt\n").substringBefore("\n\n(omitted)").substringBefore("\n\n## Ending excerpt")
+
     private fun assertWithinBudget(excerpt: NoteExcerpt, expectedBudget: Int) {
         val noticeLength = if (excerpt.isAbridged) NoteExcerptLimits.ABRIDGED_NOTICE_PREFIX.length else 0
         assertTrue(
