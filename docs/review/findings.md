@@ -6,8 +6,9 @@
 [_wip/current_issues.md](../_wip/current_issues.md) が持つ。この受付簿は両者をつなぎ、
 レビュー指摘が課題台帳へ移されないまま消えることだけを防ぐ。
 
-過去の原文と処遇はgit履歴、完了した変更は
+過去の受付行・レビュー一覧の要点はgit履歴、完了した変更は
 [change_history.md](../dev/change_history.md)、現在有効な判断は `dev/features/`・`dev/system/` が持つ。
+日付つきのレビュー原文は未追跡なので、git履歴には残らない。
 **解消済みの指摘はここへ残さない。** 修正確認が済んだら課題台帳の項目と同時に受付行も削除する。
 
 検査は [`ReviewFindingsLedgerTest`](../../app/src/test/java/com/example/newproject/architecture/ReviewFindingsLedgerTest.kt) が行う。

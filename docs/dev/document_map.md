@@ -98,16 +98,16 @@
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（**AIを呼ばない唯一のReflect機能**） |
-| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
+| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める） |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
 | [note_age_paper.md](features/note_age_paper.md) | ノートの年代を紙の地色で伝える |
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
-| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
+| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る） |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
-| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
+| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む） |
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 | [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
