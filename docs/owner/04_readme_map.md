@@ -3,29 +3,29 @@
 **プロジェクト:** Vigilith AI
 **作成:** 2026-09-08 / **更新:** 2026-10-11
 
-**位置づけ:** 18本ある `README.md` がそれぞれ何をしているかを一望する1枚。
+**位置づけ:** 17本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
 本書は入口そのものの構造だけを扱う。`owner/` の他文書と同じく検査に載せない。
 
 ---
 
-## 1. なぜ18本もあるのか
+## 1. なぜ17本もあるのか
 
 **フォルダを1つ作ったら、その入口を1本置く**という運用になっているためである。
 `README.md` は多くのツールと GitHub がフォルダを開いたとき最初に見せるので、
 「このフォルダは何か」を置く場所として決め打ちしてある。
 
-ただし18本すべてが同じ役割ではない。4種類に分かれる。
+ただし17本すべてが同じ役割ではない。4種類に分かれる。
 
 | 種類 | 本数 | 何をしているか |
 |---|---:|---|
 | **A. 入口・索引** | 8 | そのフォルダの中身へ案内する。内容は持たない |
 | **B. それ自体が正本** | 2 | 入口ではなく運用の規則そのもの。検査が中身を見ている |
 | **C. テスト入力の説明** | 3 | 固定コーパスと実機の観測値が何であるかを、隣に置いて読ませる |
-| **D. 追跡しない作業ファイル** | 5 | 一時的な引き継ぎメモと、git 管理外の報告書の入口 |
+| **D. 追跡しない作業ファイル** | 4 | 一時的な引き継ぎメモ |
 
 
-## 2. 全18本
+## 2. 全17本
 
 **凡例:** 追跡 ✅＝git 管理下、❌＝`.gitignore`。検査＝JVMテストが中身を見ているか。
 
@@ -84,18 +84,16 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 [ai_quality_measurement](../dev/system/ai_quality_measurement.md) で、3本ともそこへリンクする。
 README という名前を使ったのは、フォルダを開いたとき最初に見える位置に置くためで、A の8本と動機は同じである。
 
-### D. 追跡しない作業ファイル。5本
+### D. 追跡しない作業ファイル。4本
 
 | 場所 | 見出し | 行数 | 何か |
 |---|---|---:|---|
-| `docs/owner/Fable5.1_report/README.md` | Fable 5.1 評価報告書 | 77 | 2026-09-11 の総評の入口。8軸の点数と最重要5点。報告書は更新しないと決めてある |
 | `docs/review/device_validation/evidence/book4-weave-20260907/README.md` | 編む冊子の実機検証 | 156 | 利用枠切れで中断した回の引き継ぎメモ |
 | `docs/review/device_validation/evidence/scale-review-20260910/README.md` | 全体レビューのJVM再現証拠 | 18 | レビューの再現手順 |
 | `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-review/README.md` | Fold段1・独立Compose状態プローブ | 21 | 余白ペイン段1のレビューで、入力欄の保存値を Compose の実行環境だけで確かめた手順 |
 | `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-recheck/README.md` | Fold段1・再レビューの独立状態検査 | 16 | 同じ確かめ方を修正後にやり直した記録 |
 
-`evidence/` と `Fable5.1_report/` は `.gitignore` 済み。端末を特定する値や検証中のローカルパスが入るため、
-あるいはオーナー判断で特別枠としたためである。フォルダを開いたとき最初に読まれるよう README という名前にしてあるが、
+`evidence/` は `.gitignore` 済み。端末を特定する値や検証中のローカルパスが入るためである。フォルダを開いたとき最初に読まれるよう README という名前にしてあるが、
 リポジトリには入らない。**この種類は今後も一時的に増減する。**
 
 ## 3. 入口の連なり
@@ -103,7 +101,7 @@ README という名前を使ったのは、フォルダを開いたとき最初�
 ```
 README.md（リポジトリ）
 └── docs/README.md（分類の軸＝「答える問い」）
-    ├── owner/README.md ──── journal/README.md ・ Fable5.1_report/README.md（管理外）
+    ├── owner/README.md ──── journal/README.md
     ├── dev/README.md ────── features/ ・ system/ ・ decisions/ の各README
     │   └── （索引の正本は document_map.md）
     ├── review/README.md ─── device_validation/README.md ─── evidence/…/README.md（管理外）
