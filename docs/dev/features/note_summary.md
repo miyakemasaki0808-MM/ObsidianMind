@@ -269,7 +269,7 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
 ## 9. 品質要件
 
 - **性能:** 抜粋の生成は `Dispatchers.Default`。**最大1MBの本文解析はMainで走らせない**
-  （→ [architecture](../system/architecture.md) 判断3・`NoteExcerptThreadingTest` がソース走査で固定）。
+  （→ [architecture](../system/architecture.md) 判断3・`ThreadingScanTest` がソース走査で固定）。
   保存の読み書きは `Dispatchers.IO`
 - **プライバシー:** 本文はプロンプトへ入るが端末外へ出ない（→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）。
   保存する要約も `noBackupFilesDir` に置き、自動バックアップへ載せない（判断7）
@@ -283,7 +283,7 @@ AICore は短い時間窓の回数で要求を断る（→ [background_ai_ux](..
   `SummaryGenerationObservationTest`（生成の記録が、保存済みの当たりと同じ入力の再生成を区別できること）/
   `AiGenerationFailureTest`（回数制限の判定）/ `NoteExcerptBuilderTest`（抜粋）/
   `PromptOutputLanguageTest`（出力を日本語と指定し、本文に任せない → 判断10）/ `PromptBuilderExcerptRegressionTest`（プロンプトの文字列）/
-  `NoteExcerptThreadingTest`（Main外で解析することをソース走査で固定）/
+  `ThreadingScanTest`（Main外で解析することをソース走査で固定）/
   `SummaryCoverageTest`・`SummaryCoverageCalibrationTest`（出力を採点する物差しと、その閾値）
 - **instrumentation:** `OnDeviceGenerationTest`（実端末での生成）/ `PromptTokenBudgetTest`（トークン余裕）
 - **実機:** [要約の実機検証ケース](../../review/device_validation/note_summary.md)。

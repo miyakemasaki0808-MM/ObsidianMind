@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中・実機確認済み。節の要約を「この部分」の面に出す
 **最終検証:** 2026-10-10 / `fce6745a`（Pixel 10 Pro Fold で面を出さずに始める形・頼んだ節の再押下・ノート全体を実モデルで確認）
 **関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionSummaryStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
-**関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `NoteSectionThreadingTest`
+**関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionSummaryStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest`
 **正本:** この文書（置き場所と面の並びは [この部分](margin_pane.md)）
 
 **対象領域:** ノート読書中に、**いま読んでいる節**の要約を出す
@@ -191,7 +191,7 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
 
 ## 9. 品質要件
 
-- **性能:** 節の解析は `Dispatchers.Default`（`NoteSectionThreadingTest` がソース走査で固定）。抜粋の組み立ても Main の外
+- **性能:** 節の解析は `Dispatchers.Default`（`ThreadingScanTest` がソース走査で固定）。抜粋の組み立ても Main の外
 - **プライバシー:** 節の本文はプロンプトへ入るが端末外へ出ない
   （→ [ADR-0002](../decisions/ADR-0002-on-device-ai-only.md)）
 - **端末制約:** Nano 非対応・モデル未準備は**面の中の文言**で伝える
@@ -202,7 +202,7 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
   頼み直した節を上書きしない・3節を超えたら古いものから消える・中止・再試行・端末AIが使えないときの説明・
   面を出さずに頼んだ要求だけが理由を見せる印を持ち、要求の番号で下ろす）/
   `SectionSummariesTest`（保持の規則）/ `SectionSummaryStatusTest`（派生状態）/ `SectionRefTest`（要約に渡す本文の範囲）/
-  `NoteSessionCoordinatorTest`（ノート切替で後着しない・要約の生成中にメモを置く・メモの保存中に要約を始める）/ `NoteSectionThreadingTest`
+  `NoteSessionCoordinatorTest`（ノート切替で後着しない・要約の生成中にメモを置く・メモの保存中に要約を始める）/ `ThreadingScanTest`
 - **instrumentation:** `OnDeviceGenerationTest`（節の要約の実生成）
 - **保証していないこと:**
   - **節の追従の精度を測っていない。** 本文の最上端に見えているブロックの節なので、読んでいる位置とずれうる

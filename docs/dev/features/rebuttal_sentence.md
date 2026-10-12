@@ -307,7 +307,7 @@ CPU もメモリも小さい。読む経路を2本にしない。
   - `NoteSessionCoordinatorTest` — 関連ノートの完了から選定が始まる／ノート切替で実物の Controller の選定が止まり後着しない／リセット検査の入力に欄を登録
   - `NoteUiStateStoreTest` — Writer が担当の欄だけを更新する
   - `PromptBudgetTest` — 最大構成で候補を落とさず切り詰めが起きない／予算を超えた候補を許可するIDに入れない。字下げと上限は `PromptSamples` 経由で全 builder と同じ検査に乗る
-  - `NoteExcerptThreadingTest` — 抜粋が `excerptDispatcher` の内側で組まれる
+  - `ThreadingScanTest` — 抜粋と候補の列挙が `excerptDispatcher` の内側で組まれる
   - **変異で確かめた:** ジョブ停止の契約から外す／リセットの契約から外す／requestId の照合を外す／`Ready` 以外でも進める。4つとも赤くなる
 - **instrumentation:** `RebuttalPanelTest` — 関連タブで一文と出どころが描かれ、押すと出どころへ移る／null で枠を出さない／
   ペインで関連を畳んだままでも一文が出て、押すと右で開く／null で出さない。**実生成は通していない**（`OnDeviceGenerationTest` の未保証に列挙）

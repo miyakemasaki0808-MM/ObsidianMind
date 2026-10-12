@@ -50,7 +50,7 @@ class NoteFieldController(
     /**
      * 抜粋の組み立てを逃がす先。**純粋だが軽くない** — 最大1MBの本文に比例するので、
      * Main で走らせるとノートを開いた瞬間に固まる（→ `docs/dev/lessons.md` L13）。
-     * `NoteExcerptThreadingTest` がこの形を走査で固定している。
+     * `ThreadingScanTest` がこの形を走査で固定している。
      */
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** 確定の永続。**保存はこの機能の前提条件である**（→ 判断3）。 */

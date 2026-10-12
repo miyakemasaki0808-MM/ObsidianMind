@@ -40,8 +40,8 @@
 | ID | 教訓 | いつ当てるか | 検査 |
 |---|---|---|---|
 | [L28](lessons/L28.md) | Boolean は「何が起きたか」ではなく**呼び出し側が次に何をするか**で決める。**6度出ている** | 境界に戻り値・シグネチャを足した | — |
-| [L29](lessons/L29.md) | **規則は検査へ変えるまで守られない。** 検査は守りたい性質より狭い対象を数える | 文書に「〜する／しない」と書いた | `ReviewFindingsLedgerTest`・`AiAvailabilityContractTest`・`SourceDocSyncTest` ほか7本 |
-| [L14](#l14-横展開は最後の1本を取り残す) | 横展開は**最後の1本**を取り残す。関数名ではなく**性質**で grep し、**共存しうる処理は両方向をテストする** | 同じ変更を2箇所目に書いた／状態・非同期Jobを変えた／**定数の値を上げた** | `CrystalSaveInterleavingTest`・`NoteSectionThreadingTest`・`SchemaVersionDocsTest` |
+| [L29](lessons/L29.md) | **規則は検査へ変えるまで守られない。** 検査は守りたい性質より狭い対象を数える | 文書に「〜する／しない」と書いた | `ReviewFindingsLedgerTest`・`AiAvailabilityContractTest`・`SourceDocSyncTest` ほか6本 |
+| [L14](#l14-横展開は最後の1本を取り残す) | 横展開は**最後の1本**を取り残す。関数名ではなく**性質**で grep し、**共存しうる処理は両方向をテストする** | 同じ変更を2箇所目に書いた／状態・非同期Jobを変えた／**定数の値を上げた** | `CrystalSaveInterleavingTest`・`ThreadingScanTest`・`SchemaVersionDocsTest` |
 | [L11](#l11-テストが効いているかは変異させて確かめる) | テストが効いているかは**変異させて**確かめる。落ちるテストを書けないガードは削除候補 | ガード・条件分岐を足した | — |
 | [L24](lessons/L24.md) | 判定の**根拠が壊れている**なら、ユーザー確認を挟んでも訂正されない | 危険な操作を設計する | — |
 | [L25](lessons/L25.md) | 「網羅テストがある」と「そのフィールドが網羅されている」は別。**4例** | 契約テストへ項目を足した | `WipIssueReferenceTest` |
@@ -72,7 +72,7 @@
 | [L46](lessons/L46.md) | **リフレクションで全欄を見る検査でも、入力を手で書いていれば新しい欄は素通りする。** 「全部」がどこから来るかをたどる | 状態型へ欄を足した／「全フィールドを見る」検査を書く | `NoteSessionCoordinatorTest` |
 | [L47](lessons/L47.md) | **不在を破壊的処理の根拠にするなら、不在を返しうる全境界で「不能」と分ける。** 1つの境界で分けたことは対応済みの証拠ではない | 「見つからない」を根拠に上書き・削除・新規作成を決める | `ReadingTraceBackupControllerTest` |
 | [L48](lessons/L48.md) | **不可逆操作の承認は、見せた瞬間と書く直前の状態を突き合わせて初めて意味を持つ。**「最新の値で処理する」とは別の要求 | 「実行前に内容を確認させる」画面を作る | `ReadingTraceBackupControllerTest` |
-| [L49](lessons/L49.md) | **中止は要求であって完了ではない。** 止めた側が、まだ動いている書き手の途中経過を確定しない。**待っている間の再入も同じ穴。2度出た** | 走行中の処理へ中止を付けた／中断の結果に件数を添えた／**完了待ちを入れた** | `ReadingTraceBackupControllerTest`・`ReadingTraceBackupThreadingTest` |
+| [L49](lessons/L49.md) | **中止は要求であって完了ではない。** 止めた側が、まだ動いている書き手の途中経過を確定しない。**待っている間の再入も同じ穴。2度出た** | 走行中の処理へ中止を付けた／中断の結果に件数を添えた／**完了待ちを入れた** | `ReadingTraceBackupControllerTest`・`ThreadingScanTest` |
 | [L50](lessons/L50.md) | **外から見える契約は、外から見える形で検査する。** decodeした意味・型は形の欠落を通す | 管理外へ出すファイル形式／利用者へ見せる文言を決めた | `ReadingTraceBackupJsonTest` |
 | [L51](lessons/L51.md) | **同じ文字列を2つが読むなら、解釈器を共有する。** 一覧を揃えても解釈規則がずれ、書き込みが表示を壊す | 本文へ記号を挿す／描画側が解釈する記法を増やした | `InlineSyntaxTest`・`InlineMarkdownTest` |
 | [L52](lessons/L52.md) | **上限テストは長さだけでなく、処理対象の要素数も最大化する。** 文字だけの最大入力は、要素数に比例する経路を通らない | 入力サイズの上限を決めた／全文を走査する処理を足した | `DistillSourceModelTest` |
@@ -182,7 +182,7 @@ AI入力の切り出しを純関数へ出したのは正しかったが、**最�
 **2026-08-26、3度目を踏んだ。** 痕跡の退避で、最大8MBのJSONの組み立てと解析を
 `viewModelScope`（Main）のまま呼んでいた。**走査が2本あったのに、退避だけがその外にあった** —
 この教訓が守られたのは検査が届いた範囲だけ、という形がそのまま出ている。
-**検査:** `NoteExcerptThreadingTest`・`NoteSectionThreadingTest`・`ReadingTraceBackupThreadingTest`
+**検査:** `ThreadingScanTest`
 
 ### L14. 横展開は「最後の1本」を取り残す
 
@@ -216,7 +216,7 @@ AI入力の切り出しを純関数へ出したのは正しかったが、**最�
 **片方が実行中・失敗中にもう片方を操作する経路が丸ごと空く。** ここは両方向ともテストする
 （→ `CrystalSaveInterleavingTest`。要約と回答の組み合わせを押さえていたテストは、回答の撤去とともに外した）。引き金と証拠は [CLAUDE.md](../../CLAUDE.md) の影響面監査が持つ。
 
-**検査:** `CrystalSaveInterleavingTest`・`NoteSectionThreadingTest`
+**検査:** `CrystalSaveInterleavingTest`・`ThreadingScanTest`
 
 ### L15. 警告を黙らせると、判断の催促も一緒に消える
 

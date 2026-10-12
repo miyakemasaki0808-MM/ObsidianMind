@@ -2,7 +2,7 @@
 
 **状態:** 決定済み。色・形・動きの手触りは実装済み、出来事の強度の動きは未実装。位置・本数と書体・行間は持ち主なしの予約
 **最終検証:** 2026-09-04 / `d05585b`
-**関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/screen/BookletSheet.kt` / `ui/component/NoteComponents.kt`
+**関連コード:** `ui/theme/AppShapes.kt` / `ui/theme/AppColors.kt` / `domain/NotePaperAge.kt` / `ui/screen/BookletScreen.kt` / `ui/screen/BookletSheet.kt` / `ui/component/NoteComponents.kt` / `ui/screen/FullscreenNoteScreen.kt`
 **関連テスト:** `BearingChannelTest` / `AppColorContrastTest` / `NotePaperAgeTest`
 **正本:** この文書。**個々の見え方の仕様は各機能の設計書**が持ち、ここは割り当てだけを持つ
 
@@ -135,7 +135,7 @@
 
 **好みの側は検査で守れない**（→ [ui_design_principles](ui_design_principles.md) §5）。守れるのは割り当てのほうである。
 
-`BearingChannelTest` が8件を固定する（2026-09-02 時点）。
+`BearingChannelTest` が形の割り当てを固定する（色の行は §10）。
 
 - **2つの役割が別物であること**は走査ではなく**値で見る**。「役割を2つ用意した」だけでは、
   両方を同じ形にする変更が素通りする。角の大小も、値そのものではなく**順序**で見る（→ [lessons](../lessons.md) L44）。
@@ -282,8 +282,16 @@
 
 ### 検査
 
-**冊子の分野色は実装済みだが、この検査はまだ足していない。** `BearingChannelTest` へ足す — 見るのは「読む面と冊子の面が同じ色源を引いていないこと」で、
-§7 の前例どおり**走査は境界を通っているかまでに留め、受け入れ条件は結果で書く**。
+`BearingChannelTest` が固定する。**受け入れ条件は値で見る** — 分野の6色が、年代の段階のどれとも同値でないこと（ライト・ダークとも）。
+重なってよいのは何も表さない紙（`panel`）だけで、未判定の分野も、演出が効いていない年代もそこへ落ちる。
+
+**どの面がどちらの色源を引いているか**は走査で見て、§7 の前例どおり**境界を通っているかまでに留める** —
+冊子の紙が `noteFieldPaper` を代入し、表とめくれた角をそれで塗ること。本文パネルと全画面が `notePaperColor` を代入すること。
+**互いの色源を引かないこと**（窓口の関数だけでなく、色の表 `notePaper`・`noteField` を直に引く形も落とす）。
+色が本当に紙へ載ったかは、実機ケースが画素で見る（→ [分野色の実機ケース](../../review/device_validation/note_field_color.md)）。
+
+**変異6種すべてで落ちる** — 冊子の紙を年代へ差し替える・分野の1色を年代の段階と同値にする（ライトとダーク）・
+本文パネルと全画面を分野へ差し替える・めくれた角だけ `Panel` で塗る。
 
 ### この判断が壊れる形
 

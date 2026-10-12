@@ -181,14 +181,145 @@ class BookletCoverLineTest {
     }
 
     @Test
-    fun `表の見出し行は扉にせず本文の行へ進む`() {
+    fun `表は見出し行も本文の行も扉にせず表の後の文へ進む`() {
         val content = """
             | ID | タグ | タイトル | 概要 |
             |---|---|---|---|
             | 0210_0001 | #資格 | ビジネス法務 | 試験の記録 |
+            | 0210_0002 | #片付け | 小物 | 見直し |
+
+            予定は月の初めに見直す。
         """.trimIndent()
 
-        assertEquals("0210_0001 #資格 ビジネス法務 試験の記録", selectCoverLine(content, "タイトル"))
+        assertEquals("予定は月の初めに見直す。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `表しか無い索引ノートはタイトルを出す`() {
+        val content = """
+            | ID | タグ | タイトル |
+            |---|---|---|
+            | 0210_0001 | #資格 | ビジネス法務 |
+        """.trimIndent()
+
+        assertEquals("0210.Future_Event", selectCoverLine(content, "0210.Future_Event"))
+    }
+
+    @Test
+    fun `頭のラベル行の塊は扉にしない`() {
+        val content = """
+            # 📘 0500_0001_Peopleware
+
+            ## 🕓 概要
+            - 開始日　　：2025/05/23
+            - 現在位置　：第2章から
+            - ステータス：📖 読書中
+
+            ## 💡 要点メモ
+            - 人材活用
+        """.trimIndent()
+
+        assertEquals("人材活用", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `強調したラベルの段落も頭の塊として落とす`() {
+        val content = """
+            # 設計書
+
+            **状態:** 実装済み・稼働中
+            **最終検証:** 2026-09-12 / `23dce6b`
+            **関連コード:** `NoteViewModel.kt`
+
+            **対象領域:** ノートを開いたときの要約
+        """.trimIndent()
+
+        assertEquals("対象領域: ノートを開いたときの要約", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `ラベルの無い日付の後ろにあっても頭の塊として落とす`() {
+        val content = """
+            2026-03-28
+            - 開始日　　：-
+            - 現在位置　：-
+            - ステータス：✅ 完読
+
+            ストラテジの基礎知識。
+        """.trimIndent()
+
+        assertEquals("ストラテジの基礎知識。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `頭のラベル行が2行なら塊にしない`() {
+        // 日付は飛ばし、何のノートかを言うラベル行を扉にする。
+        val content = """
+            **日付:** 2026-04-29
+            **プロジェクト:** 気象庁 API を用いた天気概況取得プログラム
+
+            本文の文。
+        """.trimIndent()
+
+        assertEquals("プロジェクト: 気象庁 API を用いた天気概況取得プログラム", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `本文の中に並ぶ用語と説明は扉にできる`() {
+        val content = """
+            ## 概要
+            - 科目：科目A テクノロジ系
+            - 出題数目安：約3〜5問
+            - 難易度：★★★☆☆
+
+            ## 信頼性設計
+            - **フォールトトレラント**：障害が起きても継続稼働
+            - **フェールセーフ**：障害時に安全な状態へ移行
+            - **フェールソフト**：一部機能を落としてでも継続
+        """.trimIndent()
+
+        assertEquals("フォールトトレラント：障害が起きても継続稼働", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `空行で離れたラベル行は塊にしない`() {
+        val content = """
+            ゴール: 試験に合格する。
+
+            書籍名：ピープルウェア
+
+            著者：デマルコ
+        """.trimIndent()
+
+        assertEquals("ゴール: 試験に合格する。", selectCoverLine(content, "タイトル"))
+    }
+
+    @Test
+    fun `時刻やURLが続く行はラベルの塊にしない`() {
+        val times = """
+            07:00 起床
+            07:30 朝食
+            08:00 出発
+        """.trimIndent()
+        val urls = """
+            https://example.com/a
+            https://example.com/b
+            https://example.com/c
+        """.trimIndent()
+
+        assertEquals("07:00 起床", selectCoverLine(times, "タイトル"))
+        assertEquals("https://example.com/a", selectCoverLine(urls, "タイトル"))
+    }
+
+    @Test
+    fun `頭のラベル行しか無いノートはタイトルを出す`() {
+        val content = """
+            - 開始日　　：
+            - 現在位置　：
+            - ステータス：
+        """.trimIndent()
+
+        assertEquals("読書ノート", selectCoverLine(content, "読書ノート"))
     }
 
     @Test

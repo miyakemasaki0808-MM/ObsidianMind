@@ -4,7 +4,7 @@
 **最終検証:** 2026-10-11 / `ecf95dd7`
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteStart.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
-**関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskBackdropTest` / `DiagonalGradientTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `NoteSectionThreadingTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
+**関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskBackdropTest` / `DiagonalGradientTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `ThreadingScanTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **関連:** [余白メモ](reflect_margin_memo.md)（中身の主役）・[部分要約](section_ai_chat.md)（中身の1つ）・
@@ -289,6 +289,10 @@
 - 本文側には、反応している数行が読める高さを残す
 - **戻る操作は内側から順に閉じる。** キーボード、シートを半分へ、シートを閉じる。1回で読書画面や全画面から離れない
 - 閉じ方は下へ払うほかに閉じるボタンを置く。TalkBack で本文・入力欄・閉じるへ移れる。拡大文字でも入力欄が見える
+- **読書画面では、シートの器を画面の端まで広げ、本文は余白の位置へ戻す**（2026-10-12、オーナー判断）。器（`BottomSheetScaffold`）は
+  本文とシートを自分の枠で切るので、余白の内側に置くと見出しの霞が本文の列の幅で止まる（→ [theme_and_ui_refactor](../system/theme_and_ui_refactor.md) 判断5）。
+  そのためシートも、Material3 の幅の上限（640dp）までは画面の端まで広がる。横向きの左右2列のような広い窓では中央に640dpで置かれ、
+  **上限は外さない**（書く面が横に長くなりすぎる。2026-10-12、オーナー判断）。全画面は余白を持たないので広げない
 
 ### 5.6 見出しの照合
 
@@ -415,7 +419,7 @@
 | 窓口 | — | `NoteViewModel` に書きかけ、並べ読みの開始と終わり、ペインの開閉。「このノートへ移る」は `openNote` をそのまま通し、位置は画面が置く（→ §11「段5で決めたこと」） |
 
 - **並べ読みの Controller を新しく1つ作る。** 既存の Controller はどれも「今のノート」を前提にしているので、眺めるだけのノートを混ぜない。アーキテクチャ判断4ではノート単位の形に入る
-- 本文の解析は `Dispatchers.Default` へ逃がし、`NoteSectionThreadingTest` の走査に載る形で書く。
+- 本文の解析は `Dispatchers.Default` へ逃がし、`ThreadingScanTest` の走査に載る形で書く。
   右は描くだけなので、節の索引まで作る `buildNoteSectionModel` ではなくブロックの解析だけを行う。番号は同じパーサなので左とそろう
 - `controller` は Android 型を持てないので、本文の読み出しは冊子と同じく呼ぶたびにラムダで受ける。
   **読み方は `openNote` と同じ**にする — 「このノートへ移る」で右の位置を左へ渡すとき、ブロックの番号がそろう

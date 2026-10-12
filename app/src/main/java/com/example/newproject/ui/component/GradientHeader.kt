@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +44,11 @@ import com.example.newproject.ui.theme.OnGradientHeaderTitle
  * 濃さを保つ割合が要素全体の高さに対する比になるため、**副題が2行に折り返した瞬間に
  * フェードの開始位置が文字へ食い込む**。
  *
+ * **[leading]・[trailing] は題名の行にだけ並べ、副題はその下に全幅で通す。** 題名と副題の列の横に並べると、
+ * ボタンの幅だけ副題が細い列へ押し込まれて折り返す。
+ * 題名の行は丸ボタンの高さ（[ICON_PILL_SIZE]）を最初から持つので、ボタンの有無で見出しの高さは変わらない
+ * （→ system/theme_and_ui_refactor.md 判断5）。
+ *
  * [fade] を切ると、文字領域の下のフェードを描かない。机の画面の帯のように見出しを箱の中へ閉じ込める所では、
  * フェードが箱の中ほどの横縞に見える（→ `DeskBar`）。
  *
@@ -64,32 +70,35 @@ internal fun GradientHeader(
     Column(modifier = modifier.fillMaxWidth().bleedHorizontally(SCREEN_HORIZONTAL_PADDING)) {
         // 文字領域。濃さは一様で、高さは中身に任せる。
         // 内側の余白を bleed と同じにすることで、外へ広げても文字の位置は動かない。
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(scrim)
-                .padding(horizontal = SCREEN_HORIZONTAL_PADDING, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = SCREEN_HORIZONTAL_PADDING, vertical = 12.dp)
         ) {
-            leading?.invoke()
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = ICON_PILL_SIZE),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                leading?.invoke()
                 Text(
                     text = title,
                     color = OnGradientHeaderTitle,
                     fontSize = titleSize,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
                 )
-                if (subtitle != null) {
-                    Text(
-                        text = subtitle,
-                        color = OnGradientHeaderSubtitle,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
+                trailing?.invoke()
             }
-            trailing?.invoke()
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    color = OnGradientHeaderSubtitle,
+                    fontSize = 13.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
         }
         // フェード。文字は載らないので高さを固定できる。
         if (fade) {
@@ -134,6 +143,17 @@ private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, co
  */
 internal fun Modifier.screenContentPadding(): Modifier =
     padding(start = SCREEN_HORIZONTAL_PADDING, end = SCREEN_HORIZONTAL_PADDING, top = 8.dp, bottom = 12.dp)
+
+/**
+ * [screenContentPadding] の左右の余白の外まで、見出しの面と同じ幅だけ広げる。**中身は [screenHorizontalPadding] で元の位置へ戻す。**
+ *
+ * 中身を自分の枠で切る器（ノート画面の余白メモのシート）を、余白の内側に置いたまま画面の端まで届かせるのに使う。
+ * 切られると、見出しの霞が本文の列の幅で止まり、題名が霞の左端に付く。**片方だけ使うと中身が余白の分ずれる。**
+ */
+internal fun Modifier.bleedScreenPadding(): Modifier = bleedHorizontally(SCREEN_HORIZONTAL_PADDING)
+
+/** [bleedScreenPadding] で広げた器の中身を、元の余白の位置へ戻す。 */
+internal fun Modifier.screenHorizontalPadding(): Modifier = padding(horizontal = SCREEN_HORIZONTAL_PADDING)
 
 private val SCREEN_HORIZONTAL_PADDING = 20.dp
 

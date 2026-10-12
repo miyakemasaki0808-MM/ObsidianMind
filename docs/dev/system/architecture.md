@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
 **関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
-**関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteExcerptThreadingTest` / `NoteSectionThreadingTest`
+**関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `ThreadingScanTest`
 **正本:** この文書
 
 **対象領域:** 横断的なコード構造・状態管理・並行処理の規約
@@ -86,8 +86,8 @@ NoteViewModel（Android境界の窓口）
 Mainのスコープから呼ぶ純関数は**入力サイズに比例するかどうか**を必ず見て、比例するなら
 `Dispatchers.Default` へ逃がす。**逃がしたら対で「元の同期経路が代わりに走らないか」を確認する**
 （`precomputedBlocks ?: parse(content)` のようなフォールバックが残っていると退避の意味が消える）
-→ [lessons L13](../lessons.md#l13-純粋と軽いは別)。これは `NoteExcerptThreadingTest` /
-`NoteSectionThreadingTest` / `ReadingTraceBackupThreadingTest` がソース走査で固定している。
+→ [lessons L13](../lessons.md#l13-純粋と軽いは別)。これは `ThreadingScanTest` がソース走査で固定している。
+**重い純関数を Main の外へ逃がしたら、その表へ1行足す**（ファイルは増やさない）。
 **走査は届く範囲しか守らない** — 2026-08-26 に退避のJSON（最大8MB）が3本目としてこの穴を踏んだ。
 
 ---

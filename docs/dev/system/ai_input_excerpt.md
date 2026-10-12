@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中。**抜粋の予算調整は打ち止め**（効果が測れなかったため）
 **最終検証:** 2026-08-22 / `85b9e70`
 **関連コード:** `domain/NoteExcerptBuilder.kt` / `model/NoteExcerpt.kt` / `model/NoteExcerptLimits.kt` / `model/PromptLimits.kt` / `ai/PromptBudget.kt` / `ai/PromptBuilder.kt`
-**関連テスト:** `NoteExcerptBuilderTest` / `PromptBuilderExcerptRegressionTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / `NoteExcerptThreadingTest` / androidTest: `PromptTokenBudgetTest`
+**関連テスト:** `NoteExcerptBuilderTest` / `HeadMetadataRunTest` / `PromptBuilderExcerptRegressionTest` / `PromptBudgetTest` / `PromptIndentationTest` / `PromptGenerationCoverageTest` / `ThreadingScanTest` / androidTest: `PromptTokenBudgetTest`
 **正本:** この文書
 
 **対象領域:** AIへ渡す入力の作り方（本文のどこを捨てどこを残すか＋完成プロンプトを何で閉じるか）
@@ -43,6 +43,20 @@
 
 **冒頭と末尾は 60% / 40%。** 冒頭を厚くするのは、主題の宣言が読み取れないと末尾の結論も解釈できないため。
 末尾を4割確保するのは、そこが最も価値が高いから。
+
+**冒頭は、頭の情報の塊を数えない**（2026-10-11）。設計書の「状態・最終検証・関連コード・関連テスト」や
+読書ノートの「開始日・現在位置・ステータス」は、主題の宣言ではなくファイル名と日付の並びである。
+冒頭に数えると枠をほぼ使い切り、`background_ai_ux` では冒頭412字の大半がファイル名で、§1 以降の説明がモデルに届いていなかった。
+
+- **塊の形は冊子の扉と共有する**（`headMetadataRun` → [booklet_mode](../features/booklet_mode.md) §10）。
+  最初の中身のブロック（見出し・罫線・画像は数えない）が、空行を挟まず3行以上続く「ラベル：値」の行だけでできているときに限る。
+  2行の頭・ラベルでない行が混じる頭・本文の中の「用語：説明」の並びは残る
+- **省くのではなく、冒頭に数えないだけ。** 末尾が採れば残す — 本文が頭の塊しか無いノートでは、塊が末尾として届く。
+  末尾も採らなかったときだけ出さず、そのときは中略にも数えない（塊のほかが全部入るなら中略を出さない）
+- **効くのは予算を超えるノートだけ**（予算内は原文のまま → 判断5）。手元の Vault と `docs/` の632本に当てると、
+  5用途のどれかの抜粋が変わったのは149本で、変わったものは全部、旧い冒頭の最初の中身のブロックが頭の情報の塊だった
+- **代償: 抜粋が変わったノートでは、保存済みの要約が1度外れる。** 要約は完成したプロンプトを鍵にして保存するので
+  （→ [note_summary](../features/note_summary.md) 判断6）、次に開いたときに1度だけ生成し直す
 
 ## 3. 判断2: 見出しは削らず、骨格へ「昇格」させる
 
@@ -121,7 +135,7 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 `excerptDispatcher` を持ち、JVMテストではテストスケジューラへ差し替える。
 
 **従来の `take()` は先頭N文字のコピーで実質ゼロコストだったため、これは変更が持ち込んだ新しい負荷である。**
-呼び出しが再びメインスレッドへ戻らないことは、**ソース走査テスト**（`NoteExcerptThreadingTest`）が
+呼び出しが再びメインスレッドへ戻らないことは、**ソース走査テスト**（`ThreadingScanTest`）が
 「`buildNoteExcerpt` を呼ぶ全箇所」を対象に固定する（Controller一覧ではない）。
 
 ---
@@ -137,6 +151,7 @@ Markdown記法を削ってスリムにしたのではない。**`#` の行だけ
 | `ABRIDGED_NOTICE_PREFIX` | 226文字 | 注意書き＋区切り改行。**予算の内側** |
 | 骨格の上限 | 残予算の 25% | 見出し骨格 |
 | 冒頭 / 末尾 | 60% / 40% | 骨格を引いた残りの配分 |
+| 頭の情報の塊 | ラベル行3行以上 | 冒頭に数えない（→ §2）。行数は冊子の扉と共有（`METADATA_RUN_MIN_LINES`） |
 | 骨格に載せる見出し | level ≤ 3 | H4以下は構造の粒度として細かすぎる |
 
 **上限はすべて UTF-16 文字数であり、トークン数ではない。**
