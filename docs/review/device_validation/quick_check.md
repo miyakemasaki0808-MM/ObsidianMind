@@ -63,6 +63,7 @@
 | ネットワーク権限 | [network_permission.md](network_permission.md) | `PERM-01` |
 | 要約カバレッジの基準線 | [summary_coverage.md](summary_coverage.md) | `COVER-01` `COVER-02` |
 | 結晶（初回は通し版） | [reflect_crystal.md](reflect_crystal.md) | `CRYSTAL-01` `CRYSTAL-04` `CRYSTAL-05` |
+| 実機で見れば決まる観測（使い捨て・簡易版の射程外） | [observation_bundle.md](observation_bundle.md) | `OBS-01` |
 
 **ネットワーク権限の行は `PERM-01` だけを置く。** 1コマンドで終わり、
 **いま端末に入っているのがどのAPKか**という他の全ケースの前提を確かめられる。
@@ -74,6 +75,9 @@ OSがインストール時に足す分を見ていない。
 **要約カバレッジの行は2つとも `am instrument` で終わる。** `COVER-01` は Nano を使わないので
 **assetsの同梱が壊れていれば生成を1件も走らせないうちに落ちる**。残る `COVER-03`〜`COVER-09` は
 logcat の行を人が読む手順と、途中で止まったときの再開なので、**絞る対象ではなく通し版で行う**。
+
+**実機で見れば決まる観測の行は、簡易版では通さない。** 回帰確認ではなく1回だけの観測で、全件を通し版で見る。
+検査が行を要求するので代表の1件を置いている。
 
 **再生成の行は入口の例外に含めない。** 回転と開閉をユーザーの手で行うケースなので、起動経路（`MainActivity` の `onCreate`・マニフェスト・OPの再生条件）を触り、**ユーザーが端末の前にいるとき**だけ通す。陽性対照（`LAUNCH-05a`）と回転1回（`LAUNCH-05b`）までに絞り、Fold開閉は通し版で見る。
 
