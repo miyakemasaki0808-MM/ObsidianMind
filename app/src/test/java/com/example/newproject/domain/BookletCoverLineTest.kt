@@ -419,6 +419,27 @@ class BookletCoverLineTest {
         assertEquals("強調した コード と 取り消し を含む文。", selectCoverLine(content, "タイトル"))
     }
 
+    /** Obsidian のコールアウトは、印（`[!quote]` と開閉の `+` `-`）を落として題を出す。 */
+    @Test
+    fun `コールアウトの印は扉に残らない`() {
+        assertEquals("AIエージェント実践", selectCoverLine("> [!quote] AIエージェント実践", "タイトル"))
+        assertEquals("畳んだ注記の題", selectCoverLine("> [!note]- 畳んだ注記の題", "タイトル"))
+    }
+
+    /** タスクは、済んだ印（`[x]`）も未了の印（`[ ]`）も落として項目を出す。番号つきの項目も同じ。 */
+    @Test
+    fun `タスクの印は扉に残らない`() {
+        assertEquals("1章・2章を読む", selectCoverLine("- [ ] 1章・2章を読む", "タイトル"))
+        assertEquals("済んだ項目", selectCoverLine("- [x] 済んだ項目", "タイトル"))
+        assertEquals("番号つきの項目", selectCoverLine("1. [ ] 番号つきの項目", "タイトル"))
+    }
+
+    /** 箇条書きの後ろでなければ角括弧は印ではない。本文の `[注]` は残す。 */
+    @Test
+    fun `箇条書きの印に続かない角括弧は残す`() {
+        assertEquals("[注] 本文の角括弧は残す", selectCoverLine("[注] 本文の角括弧は残す", "タイトル"))
+    }
+
     @Test
     fun `1行に複数の文があれば最初の1文だけを出す`() {
         val content = "最初の文である。次の文は出さない。"

@@ -89,6 +89,7 @@ private const val TILDE_FENCE = "~~~"
 
 /**
  * 見出し・引用・箇条書きの印と、インラインの記法を落とす。
+ * Obsidian のコールアウトの印（`> [!quote] 題`）とタスクの印（`- [ ] 項目`）も、行頭の印として落とす。
  *
  * **表の行は落とさない。** このリポジトリの文書がそうであるように、
  * 判断の理由が表の中に書かれていることがある。区切りの `|` だけを空白へ替える。
@@ -105,7 +106,8 @@ internal fun String.stripMarkdownMarkers(): String = this
 internal val INLINE_CODE = Regex("`[^`\n]*`")
 internal val WIKILINK = Regex("""\[\[([^\]|]+)(?:\|[^\]]*)?]]""")
 internal val MARKDOWN_LINK = Regex("""\[([^\]]*)]\([^)]*\)""")
-internal val LINE_PREFIX = Regex("""^\s{0,8}(?:>\s*|#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)+""")
+internal val LINE_PREFIX =
+    Regex("""^\s{0,8}(?:>\s*(?:\[![^\]\s]+][+-]?\s*)?|#{1,6}\s+|(?:[-*+]|\d+[.)])\s+(?:\[[^\]]]\s+)?)+""")
 internal val TABLE_PIPE = Regex("""\|""")
 internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
 
