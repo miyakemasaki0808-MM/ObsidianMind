@@ -173,6 +173,6 @@ class TabNavigationTest {
          */
         const val NOTE_MARKER = "Rediscover"
         const val SEARCH_MARKER = "Explore"
-        const val OPTIONS_MARKER = "AI補記メモを削除"
+        const val OPTIONS_MARKER = "データ管理"
     }
 }
