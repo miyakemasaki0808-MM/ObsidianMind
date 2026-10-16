@@ -245,7 +245,8 @@
 
 ## MD-2. コールアウト・タスクの記法除去でコード内の文字まで消える
 
-- **状態:** 追加修正待ち（2026-10-16、実装レビュー）。通常のコールアウト・タスクの印の除去は成功するが、コードとして書いた文字まで削る反例を確認したため、受理待ちから戻す。
+- **状態:** 追加修正済み・別の目の確認待ち（2026-10-16）。行頭の印をインラインコードを開く前に落とす `stripMarkdownMarkersKeepingCode` を足し、冊子の扉と AI の抜粋の頭の塊の判定をそちらへ替えた。上記2入力の保持と本物の印の除去を対で回帰テストにした（修正前の処理順では落ちることを確認）。
+  実装レビューで、通常のコールアウト・タスクの印の除去は成功するが、コードとして書いた文字まで削る反例が見つかっていた。
 - **該当箇所:** [`LINE_PREFIX`](../../app/src/main/java/com/example/newproject/domain/MarkdownPlainText.kt) と、冊子の [`firstReadableSentence`](../../app/src/main/java/com/example/newproject/domain/BookletCoverLine.kt)。
   冊子は `unwrapInlineCode` で中身を残してから `stripMarkdownMarkers` を当てる。新しい印の判定は、この時点ではコード内の文字と本物の印を区別できない。
 - **再現:** `selectCoverLine` に ``- `[x]` は完了を表す。`` を渡すと「は完了を表す。」、``> `[!note]` は注記を表す。`` を渡すと「は注記を表す。」になる。

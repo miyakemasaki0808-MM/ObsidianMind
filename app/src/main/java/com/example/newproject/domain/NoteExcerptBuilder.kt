@@ -213,7 +213,7 @@ private fun headMetadataBlockIndex(blocks: List<MarkdownBlock>): Int? {
         is MarkdownBlock.ListBlock -> block.items.map { it.text }
         else -> return null
     }
-    val plain = lines.map { it.unwrapInlineCode().stripMarkdownMarkers() }
+    val plain = lines.map { it.stripMarkdownMarkersKeepingCode() }
     return index.takeIf { headMetadataRun(plain) == plain.indices }
 }
 
