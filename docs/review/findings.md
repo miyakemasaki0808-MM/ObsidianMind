@@ -35,4 +35,3 @@
 | `2026-10-12-observation-device/P3-1` | カバー画面の左右2列で見出しの霞が左の列から溝へはみ出す | `統合` UI-3 |
 | `2026-10-12-instrumentation-all/P3-1` | タブ遷移テストの目印が撤去済み | `起票` TEST-1 |
 | `2026-10-12-instrumentation-all/P3-2` | 机のテストに実画面の可視幅の前提が無い | `起票` TEST-2 |
-| `2026-10-16-improvement-implementation-review/P2-1` | 冊子の扉でコードとして書いたタスク・コールアウトの印まで消える | `統合` MD-2 |
