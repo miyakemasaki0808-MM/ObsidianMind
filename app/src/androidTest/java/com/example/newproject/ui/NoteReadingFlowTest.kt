@@ -79,6 +79,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
@@ -1589,6 +1590,38 @@ class NoteReadingFlowTest {
             }
         }
         composeRule.onNode(hasSetTextAction()).assertExists()
+    }
+
+    // ── 別のノートを開く（→ features/rediscover.md §5）───────────────────────
+
+    /**
+     * **ランダム・さがす・関連などから別のノートを開くと、本文の先頭から始まる。** 本文の一覧の位置は Activity で共有され、
+     * ノートを替えても戻らないので、開く経路が [openNoteFromTop] で戻す。一覧の実際の位置と、新しいノートの冒頭で確かめる。
+     */
+    @Test
+    fun 別のノートを開くと_前のノートで読んでいた位置ではなく先頭から始まる() {
+        val listState = LazyListState()
+        var state by mutableStateOf(loadedNote(LONG_BODY, targetUri = NOTE_A))
+        var model by mutableStateOf(buildNoteSectionModel(LONG_BODY))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(state, model, listState)
+            }
+        }
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(markerAt(0), substring = true)))
+            .performScrollToIndex(20)
+        composeRule.runOnIdle { assertEquals(20, listState.firstVisibleItemIndex) }
+
+        composeRule.runOnIdle {
+            openNoteFromTop(listState) {
+                state = loadedNote(LONG_SIDE_BODY, targetUri = NOTE_B)
+                model = buildNoteSectionModel(LONG_SIDE_BODY)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals(0, listState.firstVisibleItemIndex) }
+        composeRule.onNode(hasText("${sideMarkerAt(0)} の本文", substring = true)).assertIsDisplayed()
     }
 
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────

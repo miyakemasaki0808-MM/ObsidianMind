@@ -80,6 +80,11 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
   （＝痕跡の孤児掃除）
 - **エラー時:** `NoteState.Error` を出す。`CancellationException` は再throwする
 - **空のとき:** `NoteState.Empty`
+- **開いたノートは本文の先頭から始まる。** 本文の一覧の位置（`noteListState`）は Activity で共有され、ノートを替えても戻らないので、
+  ランダム（「別のノートをひらく」）・さがす・関連・結晶の元ノート・冊子から開く経路は [`openNoteFromTop`](../../../app/src/main/java/com/example/newproject/ui/screen/NoteStart.kt) を通して先頭へ戻す。
+  例外は位置を持って開く経路で、本文リンクは見出しから（→ [note_links](note_links.md)）、
+  並べ読みの「このノートへ移る」は右で読んでいた位置から開く（→ [margin_pane](margin_pane.md) §5.9）。
+  Vault を選び直した直後に引くノートは、この境界を通らない
 
 ## 6. 状態とデータ
 
@@ -184,8 +189,9 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 
 - **JVMテスト:** `NoteRepositoryTest`（走査と除外）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
 - **JVMテスト:** `ReaderLayoutTest`（どの画面で2列にするか。縦の見た目を変えないことも同じ表で見る）
+- **JVMテスト:** `NoteOpenRouteContractTest`（ノートを開く経路が先頭から開く境界を通ること）
 - **instrumentation:** `VaultScanInstrumentationTest`（実物SAFでの走査）/ `NoteReadingFlowTest`（読書画面。
-  低い横長の枠で再会カードがあってもノート名と本文が見え、「読んだ」へ届くこと）
+  低い横長の枠で再会カードがあってもノート名と本文が見え、「読んだ」へ届くこと。別のノートを開くと先頭から始まること）
 - **保証していないこと:**
   - **抽選の分布は検証していない。** `notes.random()` に委ねており、偏りのテストは無い
   - **走査キャッシュのTTL境界は実測していない。** 60秒は見積もり

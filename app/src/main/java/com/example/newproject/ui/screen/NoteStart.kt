@@ -15,6 +15,18 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import java.io.Serializable
 
 /**
+ * 別のノートを本文の先頭から開く。**ランダム・さがす・関連・結晶・冊子から開く経路はここを通す。**
+ *
+ * `noteListState` は Activity 生存で共有され、ノート切替ではリセットされないので、何もしないと
+ * 開いたノートが前のノートで読んでいた位置から始まる。「このノートへ移る」とリンクは
+ * [rememberNoteStart] が始まりの位置を置くので、ここを通さない。
+ */
+internal fun openNoteFromTop(noteListState: LazyListState, open: () -> Unit) {
+    open()
+    noteListState.requestScrollToItem(0)
+}
+
+/**
  * 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しを持つ。
  * [heading] があれば解析が届いた後にその見出しへ送り、見つからなければ [block] から始める。
  * **画面の保存値に置く**（Fold の開閉で画面が作り直されても失わない）。

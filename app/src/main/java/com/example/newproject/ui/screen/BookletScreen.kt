@@ -94,8 +94,7 @@ internal fun openFromBooklet(
     open: () -> Unit,
     navigateToNote: () -> Unit
 ) {
-    open()
-    noteListState.requestScrollToItem(0)
+    openNoteFromTop(noteListState, open)
     navigateToNote()
 }
 

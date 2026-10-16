@@ -7,6 +7,7 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
+import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.Indigo
 import android.content.Intent
@@ -174,8 +175,11 @@ class MainActivity : ComponentActivity() {
                                 imageMeasurements = noteImageMeasurements,
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
-                                    if (viewModel.vaultUri != null) viewModel.loadRandomNote(contentResolver)
-                                    else openVault.launch(null)
+                                    if (viewModel.vaultUri != null) {
+                                        openNoteFromTop(noteListState) { viewModel.loadRandomNote(contentResolver) }
+                                    } else {
+                                        openVault.launch(null)
+                                    }
                                 },
                                 onRequestSectionSummary = { section, quietly -> viewModel.requestSectionSummary(section, quietly) },
                                 onAcknowledgeSectionSummaryNotice = { requestId -> viewModel.acknowledgeSectionSummaryNotice(requestId) },
@@ -301,7 +305,7 @@ class MainActivity : ComponentActivity() {
                                 onSearch = { q -> viewModel.searchByKeyword(q) },
                                 onRandom = { viewModel.pickRandomInScope() },
                                 onOpenNote = { note ->
-                                    viewModel.openNote(contentResolver, note)
+                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -311,7 +315,7 @@ class MainActivity : ComponentActivity() {
                             RelatedTab(
                                 uiState = uiState,
                                 onOpenNote = { note ->
-                                    viewModel.openNote(contentResolver, note)
+                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -350,7 +354,7 @@ class MainActivity : ComponentActivity() {
                                 noteFields = uiState.noteFields,
                                 onLoad = { viewModel.openCrystalList(contentResolver) },
                                 onOpenSource = { path ->
-                                    viewModel.openCrystalSource(contentResolver, path)
+                                    openNoteFromTop(noteListState) { viewModel.openCrystalSource(contentResolver, path) }
                                     navController.navigateToTab(AppDestination.Note)
                                 },
                                 onBack = { navController.popBackStack() }
