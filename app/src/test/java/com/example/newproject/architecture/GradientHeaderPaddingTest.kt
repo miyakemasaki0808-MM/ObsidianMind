@@ -99,7 +99,7 @@ class GradientHeaderPaddingTest {
 
         /** `GradientHeader(` の呼び出し。宣言 `fun GradientHeader(` は別ファイルなので数えない。 */
         val HEADER_CALL = Regex("""(?<![.\w])GradientHeader\(""")
-        val BLEED_CALL = Regex("""bleedHorizontally\((\w+)\)""")
+        val BLEED_CALL = Regex("""bleedHorizontally\((\w+)[,)]""")
         val REPAD = Regex("""fun Modifier\.screenHorizontalPadding\(\)[^=]*=\s*padding\(horizontal = (\w+)\)""")
         const val NOTE_TAB = "ui/screen/NoteReaderTab.kt"
         val SHEET_HOST_BLEED = Regex("""MarginMemoSheetHost\(\s*modifier = Modifier\.bleedScreenPadding\(\)""")

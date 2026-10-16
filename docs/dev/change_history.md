@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-16 | 左右2列の左の列で、見出しの霞を右の溝へ広げず列の端で止めるようにした | [rediscover](features/rediscover.md) |
 | 2026-10-16 | 記法の除去がコールアウトとタスクの印も落とし、冊子の扉と再会カードの候補に印が出ないようにした | [booklet_mode](features/booklet_mode.md) |
 | 2026-10-16 | 蒸留の候補のチェックが、読み上げで候補の文を名乗るようにした | [reflect_distill](features/reflect_distill.md) |
 | 2026-10-16 | ランダム・さがす・関連・結晶から開いたノートが、前のノートの読む位置ではなく本文の先頭から始まるようにした | [rediscover](features/rediscover.md) |
