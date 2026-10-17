@@ -60,6 +60,13 @@ class ReunionCandidateScannerTest {
         assertEquals(1, candidates.questions.size)
     }
 
+    /** タスクやコールアウトの印は、問いの文面に残さない（扉と同じ前処理を通る）。 */
+    @Test
+    fun `タスクとコールアウトの印は問いの文面に残らない`() {
+        assertEquals(listOf("この方式は本当に速いのだろうか？"), scanReunionCandidates("- [ ] この方式は本当に速いのだろうか？").questions)
+        assertEquals(listOf("この前提はまだ正しいのか？"), scanReunionCandidates("> [!question] この前提はまだ正しいのか？").questions)
+    }
+
     /**
      * **引用の途中で切らない。** 素朴に終止符で割ると「これでいいのか？ と言われた。」が
      * 閉じ括弧の無い断片になり、カードにそのまま出てしまう。

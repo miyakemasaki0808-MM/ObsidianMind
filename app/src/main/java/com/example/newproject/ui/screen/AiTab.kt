@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -460,7 +462,12 @@ private fun DistillCandidateRow(
         Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
             // **チェックと調整で押す場所を分ける。** Checkbox は自分でタップを受けるので、
             // 行のクリックは範囲調整だけに割り当てられる。
-            Checkbox(checked = item.isSelected, onCheckedChange = { onToggle(item.id) })
+            // チェックは本文と別の対象なので、読み上げでどの候補かが分かる名前を自分で持つ。
+            Checkbox(
+                checked = item.isSelected,
+                onCheckedChange = { onToggle(item.id) },
+                modifier = Modifier.semantics { contentDescription = distillCandidateCheckLabel(item.text) }
+            )
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -493,6 +500,9 @@ private fun DistillCandidateRow(
         }
     }
 }
+
+/** 蒸留の候補のチェックの読み上げ名。選択の状態はチェック自身が読むので、ここではどの候補かだけを言う。 */
+internal fun distillCandidateCheckLabel(text: String): String = "「$text」を太字にする"
 
 @Composable
 private fun ProgressRow(label: String) {

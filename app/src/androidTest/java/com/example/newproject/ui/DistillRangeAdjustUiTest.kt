@@ -3,6 +3,7 @@ package com.example.newproject.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performScrollTo
@@ -25,6 +26,7 @@ import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.AiTab
 import com.example.newproject.ui.screen.DistillRangeSheetContent
+import com.example.newproject.ui.screen.distillCandidateCheckLabel
 import com.example.newproject.ui.screen.label
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
@@ -96,6 +98,47 @@ class DistillRangeAdjustUiTest {
         composeRule.onAllNodes(isToggleable()).onFirst().performScrollTo().performClick()
         assertEquals(listOf("S001"), toggled)
         assertEquals("シートは開かない", listOf("S001"), opened)
+    }
+
+    /**
+     * **候補のチェックは、読み上げでどの候補かが分かる。** チェックは本文と別の対象なので、名前が無いと状態しか読まれない。
+     * 2件並べ、2件目の文を名乗るチェックを押すと2件目が取捨されることで、名前と候補の結びつきまで確かめる。
+     */
+    @Test
+    fun 候補のチェックは読み上げでどの候補かを名乗る() {
+        val toggled = mutableListOf<String>()
+        val second = candidateItem().copy(id = "S002", text = SECOND_TEXT, positionLabel = "2 / 2")
+
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                AiTab(
+                    uiState = uiStateWith(candidates(items = listOf(candidateItem(), second))),
+                    onStartDistill = {},
+                    onDownloadDistillModel = {},
+                    onToggleDistillCandidate = { toggled += it },
+                    onOpenDistillRangeSheet = {},
+                    onCloseDistillRangeSheet = {},
+                    onSelectDistillRange = { _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _, _ -> },
+                    onNudgeDistillRangeEdge = { _, _ -> },
+                    onResetDistillRange = {},
+                    onSaveDistill = {},
+                    onRetryDistill = {},
+                    onDismissDistill = {},
+                    onKeepCurrentRecovery = {},
+                    onRestoreOriginal = {},
+                    onExportOriginal = {},
+                    onLoadCrystals = {},
+                    onOpenCrystalList = {}
+                )
+            }
+        }
+
+        composeRule.onNode(isToggleable() and hasContentDescription(distillCandidateCheckLabel(BOLD_TEXT))).assertExists()
+        composeRule.onNode(isToggleable() and hasContentDescription(distillCandidateCheckLabel(SECOND_TEXT)))
+            .performScrollTo()
+            .performClick()
+        assertEquals(listOf("S002"), toggled)
     }
 
     @Test
@@ -414,6 +457,7 @@ class DistillRangeAdjustUiTest {
 
     private companion object {
         const val BOLD_TEXT = "ここが太字になる意味節です"
+        const val SECOND_TEXT = "二つめの候補になる一文です"
         const val PARENT_TEXT = "ここが太字になる意味節です、こちらは残る後半です。"
     }
 }

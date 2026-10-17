@@ -29,7 +29,7 @@
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
 | **いまコードがどうなっているか** | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
-| **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 最新1本＋未解決の受付簿 |
+| **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 転記まで最大1本＋未解決の受付簿 |
 | **Codexが実機でどう検証するか** | [review/device_validation/](../review/device_validation/) | 共通手順＋機能別ケース（結果は持たない） |
 | **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
 
@@ -47,7 +47,7 @@
 | 文書 | 役割 | 更新契機 |
 |---|---|---|
 | [change_history.md](change_history.md) | 変更の履歴（新しい順） | **まとまった変更1つにつき1行追記** |
-| [review/](../review/) | 最新の外部レビュー1本（未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
+| [review/](../review/) | 転記までの外部レビュー本文（最大1本・未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度したとき。1度目は検査を同時に置けるときだけ（→ [lessons.md](lessons.md) の追加の条件） |
 | [09_project_origin.md](../owner/09_project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
@@ -98,16 +98,16 @@
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |
 | [reflect_reading_trace.md](features/reflect_reading_trace.md) | ReadingTrace（読書痕跡・サイドカー） |
 | [reflect_margin_memo.md](features/reflect_margin_memo.md) | 余白メモ（**AIを呼ばない唯一のReflect機能**） |
-| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める）。実装済み・実機確認済み |
+| [reflect_crystal.md](features/reflect_crystal.md) | 結晶（読んできたノートの要約から共通する筋を1文にして Vault に溜める） |
 | [note_fullscreen.md](features/note_fullscreen.md) | 全画面ノート（独立ルート化） |
 | [note_image_rendering.md](features/note_image_rendering.md) | ノート内画像の表示（パス解決・復号・描画） |
 | [dark_mode.md](features/dark_mode.md) | ダークモード |
 | [note_age_paper.md](features/note_age_paper.md) | ノートの年代を紙の地色で伝える |
 | [opening_animation.md](features/opening_animation.md) | 起動OPアニメーション |
 | [character_vigilith.md](features/character_vigilith.md) | **参照シート（12節の例外）。** キャラクターの造形・世界観・作画基準 |
-| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る）。**実装済み・実機検証完了** |
+| [booklet_mode.md](features/booklet_mode.md) | 冊子モード（10枚束ねて捲る） |
 | [reading_trace_backup.md](features/reading_trace_backup.md) | 読書痕跡の退避と復元（エクスポート／インポート） |
-| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む）。**実装済み** |
+| [reunion_card.md](features/reunion_card.md) | 再会カードに何を出すか（枠の排他・種別・優先順位、前後の要約と続きから読む） |
 | [margin_pane.md](features/margin_pane.md) | この部分 — 余白のペインとシート。開いた Fold で本文の隣に今の節の余白メモ・前回の跡・部分要約を置き、関連ノートを右で並べ読みする |
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 | [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
@@ -155,7 +155,7 @@
 >
 > **例外は [`review/2026-*.md`](../review/README.md) の最新レビューのみ。**
 > レビュアーが書くスナップショットなので、残している間はこちらから手を入れない。
-> 新しいレビューを受け付けたら前の本文は削除する。**本文はコミットしない**ので履歴にも残らない。
+> 転記と指摘の受付の後に本文を削除する（オーナーの受理は待たない）。新しいレビューの受付時も前の本文の転記を済ませてから削除する。**本文はコミットしない**ので履歴にも残らない。
 > 指摘の存在と処遇は [`review/findings.md`](../review/findings.md) が引き受ける。
 > `_wip/` 廃棄時にリンク切れが残るが、当時の記録なので許容する。
 > **`review/` の他のファイル（`README.md`・`review_template.md`・`findings.md`）は

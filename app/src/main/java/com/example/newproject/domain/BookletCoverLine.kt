@@ -9,7 +9,7 @@ package com.example.newproject.domain
 //
 // **前処理（記法の除去・行の種類の判定）は `MarkdownPlainText.kt` と共有し、選ぶ規則はここに持つ。**
 // 再会カードは「問い」や「古びうる記述」を探すが、扉が欲しいのは**最初に読める1文**で、
-// 探しているものが違う。インラインコードの中身を残す（[unwrapInlineCode]）のも、再会カードとは意図的に違う。
+// 探しているものが違う。インラインコードの中身を残す（[stripMarkdownMarkersKeepingCode]）のも、再会カードとは意図的に違う。
 // ---------------------------------------------------------------------------
 
 /**
@@ -47,7 +47,7 @@ private fun firstReadableSentence(content: String): String? {
     // ラベルの無い日付だけの行も空にする — 頭の塊の手前にあっても、塊を頭から外さない。
     val plain = lines.mapIndexed { index, line ->
         if (line.isHeadingLine() || index in tableLines || line.isLinkOnly()) return@mapIndexed ""
-        val text = line.unwrapInlineCode().stripMarkdownMarkers().collapseSpaces()
+        val text = line.stripMarkdownMarkersKeepingCode().collapseSpaces()
         if (text.isDateOnly() && !text.isLabelLine()) "" else text
     }
     val metadata = headMetadataRun(plain)

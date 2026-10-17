@@ -2,12 +2,13 @@
 
 **この文書が答える問い:** **レビューで見つかった問題のうち、いまも未解決なのはどれか。**
 
-レビュー本文は最新の1本だけ、進行中の対応内容は
+レビュー本文は転記まで最大1本を置き、削除後も未解決の受付行は残す。進行中の対応内容は
 [_wip/current_issues.md](../_wip/current_issues.md) が持つ。この受付簿は両者をつなぎ、
 レビュー指摘が課題台帳へ移されないまま消えることだけを防ぐ。
 
-過去の原文と処遇はgit履歴、完了した変更は
+過去の受付行・レビュー一覧の要点はgit履歴、完了した変更は
 [change_history.md](../dev/change_history.md)、現在有効な判断は `dev/features/`・`dev/system/` が持つ。
+日付つきのレビュー原文は未追跡なので、git履歴には残らない。
 **解消済みの指摘はここへ残さない。** 修正確認が済んだら課題台帳の項目と同時に受付行も削除する。
 
 検査は [`ReviewFindingsLedgerTest`](../../app/src/test/java/com/example/newproject/architecture/ReviewFindingsLedgerTest.kt) が行う。
@@ -30,5 +31,5 @@
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-10-12-observation-device/P2-1` | ランダム・さがす・関連で開いたノートが前のノートの読んでいた位置から始まる | `統合` UI-2 |
-| `2026-10-12-observation-device/P2-2` | 蒸留の候補のチェックに対象の名前が無く、TalkBack では状態しか読まれない | `起票` A11Y-2 |
-| `2026-10-12-observation-device/P3-1` | カバー画面の左右2列で見出しの霞が左の列から溝へはみ出す | `統合` UI-3 |
+| `2026-10-12-instrumentation-all/P3-2` | 机のテストに実画面の可視幅の前提が無い | `起票` TEST-2 |
+| `2026-10-17-improvement-device/P3-1` | 机・余白ペインのテストが実機の折り目の向きに依存し、内側横で28件失敗する | `統合` TEST-2 |

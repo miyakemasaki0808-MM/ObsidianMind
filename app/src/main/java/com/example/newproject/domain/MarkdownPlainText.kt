@@ -89,15 +89,27 @@ private const val TILDE_FENCE = "~~~"
 
 /**
  * 見出し・引用・箇条書きの印と、インラインの記法を落とす。
+ * Obsidian のコールアウトの印（`> [!quote] 題`）とタスクの印（`- [ ] 項目`）も、行頭の印として落とす。
  *
  * **表の行は落とさない。** このリポジトリの文書がそうであるように、
  * 判断の理由が表の中に書かれていることがある。区切りの `|` だけを空白へ替える。
  */
-internal fun String.stripMarkdownMarkers(): String = this
+internal fun String.stripMarkdownMarkers(): String = replace(LINE_PREFIX, "").stripInlineMarkers()
+
+/**
+ * [stripMarkdownMarkers] と同じく記法を落とすが、**インラインコードは中身を残す**（→ [unwrapInlineCode]）。
+ *
+ * **行頭の印はコードを開く前に落とす。** 開いてからだと、`` - `[x]` は完了を表す。 `` のように
+ * コードとして書いた `[x]` や `[!note]` が行頭の印に見え、説明している語ごと消える。
+ */
+internal fun String.stripMarkdownMarkersKeepingCode(): String =
+    replace(LINE_PREFIX, "").unwrapInlineCode().stripInlineMarkers()
+
+/** インラインの記法（コード・リンク・表の縦棒・強調）を落とす。行頭の印は見ない。 */
+private fun String.stripInlineMarkers(): String = this
     .replace(INLINE_CODE, " ")
     .replace(WIKILINK) { it.groupValues[1] }
     .replace(MARKDOWN_LINK) { it.groupValues[1] }
-    .replace(LINE_PREFIX, "")
     .replace(TABLE_PIPE, " ")
     .replace(EMPHASIS, "")
     .trim()
@@ -105,7 +117,8 @@ internal fun String.stripMarkdownMarkers(): String = this
 internal val INLINE_CODE = Regex("`[^`\n]*`")
 internal val WIKILINK = Regex("""\[\[([^\]|]+)(?:\|[^\]]*)?]]""")
 internal val MARKDOWN_LINK = Regex("""\[([^\]]*)]\([^)]*\)""")
-internal val LINE_PREFIX = Regex("""^\s{0,8}(?:>\s*|#{1,6}\s+|[-*+]\s+|\d+[.)]\s+)+""")
+internal val LINE_PREFIX =
+    Regex("""^\s{0,8}(?:>\s*(?:\[![^\]\s]+][+-]?\s*)?|#{1,6}\s+|(?:[-*+]|\d+[.)])\s+(?:\[[^\]]]\s+)?)+""")
 internal val TABLE_PIPE = Regex("""\|""")
 internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
 
@@ -113,7 +126,7 @@ internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
  * `` `NoteViewModel` `` のようなインラインコードを、**中身を残して**記法だけ落とす。
  *
  * [stripMarkdownMarkers] はインラインコードを空白へ替えるので、原文の1文をそのまま見せる用途では
- * **先にこちらを通す。** 通さないと「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
+ * [stripMarkdownMarkersKeepingCode] を使う。通さないと「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
  */
 internal fun String.unwrapInlineCode(): String = replace(INLINE_CODE_CONTENT) { it.groupValues[1] }
 

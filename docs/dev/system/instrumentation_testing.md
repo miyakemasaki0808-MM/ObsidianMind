@@ -1,6 +1,6 @@
 # 設計思想 — instrumentation テスト
 
-**状態:** 実装済み・稼働中。CIでは実行せず、PR前に Android Studio で回す
+**状態:** 実装済み・稼働中。CIでは実行せず、PR前に実機検証の共通手順で回す
 **最終検証:** 2026-09-13
 **関連コード:** `app/src/androidTest/` / `app/src/debug/`（テスト用 `DocumentsProvider`）
 **関連テスト:** `InstrumentationTestShapeTest`（形をJVM側から固定）/ androidTest 一式
@@ -67,7 +67,9 @@ debug ソースセットならアプリ本体と同じUIDになるので `Docume
    しかも**最も実機固有な部分がここ**なので、エミュレータが緑でも実機確認は残る
 2. CI時間の増加が大きく、現在の1人開発の回転数に見合わない
 
-代わりに**「PR前にAndroid Studioで実行する」を運用として明記**する。
+代わりに**PR前に [実機検証の共通手順](../../review/device_validation/README.md) で実行する**。
+本体・テストAPKを `adb install -r` で入れ、`am force-stop` 後に `am instrument -w -r` で実行する。
+実機で `connectedDebugAndroidTest` は使わない（本体のデータが消えるため）。
 **運用は検査に劣ることを承知の上での選択。**
 
 > **再検討の契機に件数を使わない。** かつて「20件を超えたら再検討」を置いたところ、
@@ -128,6 +130,17 @@ JUnit4 の `@Test` は `void` を要求する。Kotlin の `fun x() = runBlockin
 **上限の境界はBMPで通す。** PNG は圧縮が効くので「入力バイト数の上限ちょうど」を狙って作れない。
 BMP は非圧縮なので寸法から正確にバイト数を決められる。
 
+## 判断11: 机の画面のテストは、机を出す幅の実窓でだけ確かめる
+
+机の画面のテストは本文と余白を 960dp の箱で組み、窓より大きいと中央に寄せて置かれる。
+**カバー画面（約443dp）では箱の両端が窓の外へ出て、題名の表示確認と端寄りの払いが届かない。**
+内側の画面（約852dp）では同じテストが成功する。
+
+アプリも閉じた外画面には机を出さない（→ [fold_experience](fold_experience.md) の姿勢の割り当て）。
+**だから机の保証は内側の画面で確かめ、カバー画面では主張しない。**
+題名の表示や端寄りの座標に頼るテストは、実窓の幅が Expanded でなければ `Assume` で skip する。
+表示の確認を存在の確認へ弱めて通すことはしない。skip は成功と数えない。
+
 ---
 
 ## ソースセットは4つ
@@ -145,5 +158,5 @@ BMP は非圧縮なので寸法から正確にバイト数を決められる。
 export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home" && ./gradlew assembleDebugAndroidTest --offline
 ```
 
-**実行は Android Studio から行う**（CIはコンパイルまで）。
+**実行条件・端末選択・後処理は [共通手順](../../review/device_validation/README.md) に従う**（CIはコンパイルまで）。
 **テストを足したら、足した数だけ増えたかを件数で確かめる**（判断9）。

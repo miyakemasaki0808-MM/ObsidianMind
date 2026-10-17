@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,9 +46,11 @@ import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -74,6 +79,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlin.math.roundToInt
@@ -82,6 +88,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -1311,6 +1318,7 @@ class NoteReadingFlowTest {
      */
     @Test
     fun 机の画面では本文の上で左へ払うと余白が1画面になり_右へ払うと2面へ戻る() {
+        assumeDeskWindow()
         setDesk()
 
         composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
@@ -1333,6 +1341,7 @@ class NoteReadingFlowTest {
      */
     @Test
     fun 机の画面では余白の上で右へフリックすると本文が1画面になり_戻る操作で2面へ戻る() {
+        assumeDeskWindow()
         setDesk()
 
         composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
@@ -1380,6 +1389,7 @@ class NoteReadingFlowTest {
      */
     @Test
     fun 机の画面では真斜めに払っても片側を広げない() {
+        assumeDeskWindow()
         setDesk()
 
         listOf(Offset(100f, -100f), Offset(-100f, -100f)).forEach { direction ->
@@ -1399,6 +1409,7 @@ class NoteReadingFlowTest {
      */
     @Test
     fun 机の画面で余白を1画面にして戻しても_余白のスクロール位置が戻る() {
+        assumeDeskWindow()
         val memos = (1..12).map { index ->
             MarginMemo("節Aのメモ$index。" + "読み返して引っかかったところを、本文の横に短く残しておく。".repeat(3), index.toLong(), "節A")
         }
@@ -1437,6 +1448,7 @@ class NoteReadingFlowTest {
     /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
     @Test
     fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
+        assumeDeskWindow()
         setDesk()
 
         composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
@@ -1536,6 +1548,24 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
     }
 
+    /**
+     * **実窓がアプリの机を出す幅（Expanded）のときだけ続ける。** 狭い窓では skip する。
+     *
+     * 机は 960dp の箱で組み、窓より大きいと中央に寄せて置かれる。カバー画面のような狭い窓では箱の両端が窓の外へ出て、
+     * 題名の表示確認と端寄りの払いが届かない。アプリも閉じた外画面には机を出さないので、
+     * 机の保証は内側の画面で確かめる（→ docs/dev/system/instrumentation_testing.md 判断11）。
+     * 題名の表示や端寄りの座標に頼るテストだけが呼ぶ。存在の確認へ弱めて通すことはしない。
+     */
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+    private fun assumeDeskWindow() {
+        val configuration = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
+        val window = DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
+        assumeTrue(
+            "机を出さない幅の窓（${configuration.screenWidthDp}dp）。机の保証は内側の画面で確かめる",
+            WindowSizeClass.calculateFromSize(window).widthSizeClass == WindowWidthSizeClass.Expanded
+        )
+    }
+
     /** 机の画面の帯を、つまみを下へ払って出す。 */
     private fun openDeskBar() {
         composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
@@ -1560,6 +1590,38 @@ class NoteReadingFlowTest {
             }
         }
         composeRule.onNode(hasSetTextAction()).assertExists()
+    }
+
+    // ── 別のノートを開く（→ features/rediscover.md §5）───────────────────────
+
+    /**
+     * **ランダム・さがす・関連などから別のノートを開くと、本文の先頭から始まる。** 本文の一覧の位置は Activity で共有され、
+     * ノートを替えても戻らないので、開く経路が [openNoteFromTop] で戻す。一覧の実際の位置と、新しいノートの冒頭で確かめる。
+     */
+    @Test
+    fun 別のノートを開くと_前のノートで読んでいた位置ではなく先頭から始まる() {
+        val listState = LazyListState()
+        var state by mutableStateOf(loadedNote(LONG_BODY, targetUri = NOTE_A))
+        var model by mutableStateOf(buildNoteSectionModel(LONG_BODY))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(state, model, listState)
+            }
+        }
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(markerAt(0), substring = true)))
+            .performScrollToIndex(20)
+        composeRule.runOnIdle { assertEquals(20, listState.firstVisibleItemIndex) }
+
+        composeRule.runOnIdle {
+            openNoteFromTop(listState) {
+                state = loadedNote(LONG_SIDE_BODY, targetUri = NOTE_B)
+                model = buildNoteSectionModel(LONG_SIDE_BODY)
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals(0, listState.firstVisibleItemIndex) }
+        composeRule.onNode(hasText("${sideMarkerAt(0)} の本文", substring = true)).assertIsDisplayed()
     }
 
     // ── 並べ読み（→ features/margin_pane.md §5.9）───────────────────────────

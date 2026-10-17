@@ -55,6 +55,9 @@ import com.example.newproject.ui.theme.OnGradientHeaderTitle
  * 面はメイン領域の**全幅**へ広げる。角丸を付けず端まで抜くことで、
  * 「上に乗ったカード」ではなく「上部が霞んだ背景」として読ませる。
  * **広げる幅は画面の余白から取るので、見出しを置く画面は [screenContentPadding] で余白を取る。**
+ *
+ * [bleedEnd] を切ると、右へは広げない。左右2列の左の列のように、右が画面の端ではなく列の間の溝である所で使う。
+ * 右の内側の余白も同時に外すので、題名とボタンの位置は変わらない。
  */
 @Composable
 internal fun GradientHeader(
@@ -64,17 +67,23 @@ internal fun GradientHeader(
     titleSize: TextUnit = 28.sp,
     leading: @Composable (() -> Unit)? = null,
     trailing: @Composable (() -> Unit)? = null,
-    fade: Boolean = true
+    fade: Boolean = true,
+    bleedEnd: Boolean = true
 ) {
     val scrim = GradientHeaderScrim
-    Column(modifier = modifier.fillMaxWidth().bleedHorizontally(SCREEN_HORIZONTAL_PADDING)) {
+    Column(modifier = modifier.fillMaxWidth().bleedHorizontally(SCREEN_HORIZONTAL_PADDING, bleedEnd)) {
         // 文字領域。濃さは一様で、高さは中身に任せる。
         // 内側の余白を bleed と同じにすることで、外へ広げても文字の位置は動かない。
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(scrim)
-                .padding(horizontal = SCREEN_HORIZONTAL_PADDING, vertical = 12.dp)
+                .padding(
+                    start = SCREEN_HORIZONTAL_PADDING,
+                    end = if (bleedEnd) SCREEN_HORIZONTAL_PADDING else 0.dp,
+                    top = 12.dp,
+                    bottom = 12.dp
+                )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().heightIn(min = ICON_PILL_SIZE),
@@ -113,15 +122,15 @@ internal fun GradientHeader(
 }
 
 /**
- * 親が与えた左右の余白の外側まで広がる。
+ * 親が与えた左右の余白の外側まで広がる。[end] が偽なら左だけに広がる。
  *
  * 各画面は本文用に左右の余白を持っており、その内側で背景を描くと帯が浮いたカードに
  * 見える。見出しの面だけは端まで抜きたいので、測定時に横幅を広げて負のオフセットで
  * 戻す。**[bleed] が親の余白と食い違うと、見出しの面だけが端からずれる** —
  * だから余白と同じ定数から渡す（→ [screenContentPadding]）。
  */
-private fun Modifier.bleedHorizontally(bleed: Dp) = this.layout { measurable, constraints ->
-    val extra = bleed.roundToPx() * 2
+private fun Modifier.bleedHorizontally(bleed: Dp, end: Boolean = true) = this.layout { measurable, constraints ->
+    val extra = bleed.roundToPx() * if (end) 2 else 1
     val widened = constraints.copy(
         minWidth = constraints.minWidth + extra,
         maxWidth = if (constraints.maxWidth == Constraints.Infinity) {

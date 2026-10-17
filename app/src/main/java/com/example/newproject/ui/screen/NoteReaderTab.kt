@@ -309,16 +309,18 @@ internal fun NoteReaderTab(
 
     // 並べ方ごとに置き場所だけを変える。**中身は1か所で組み立てる**（2列と縦積みと机の画面の帯で食い違わせない）。
     // afterAction はどのボタンを押した後にも呼ぶ。机の画面の帯は、押したら帯をしまう。
-    // inDeskBar は机の画面の帯の中か。帯の中では見出しの霞の下のフェードを描かない（→ DeskBar）。
+    // place は置き場所。机の画面の帯の中では見出しの霞の下のフェードを描かない（→ DeskBar）。
+    // 左右2列の左の列では、霞を右の溝へ広げない（右は画面の端ではなく列の間）。
     val controls: @Composable ColumnScope.(
         memoToggle: MarginToggle,
         onSummaryEntry: () -> Unit,
-        inDeskBar: Boolean,
+        place: ControlsPlace,
         afterAction: () -> Unit
-    ) -> Unit = { memoToggle, onSummaryEntry, inDeskBar, afterAction ->
+    ) -> Unit = { memoToggle, onSummaryEntry, place, afterAction ->
         // 未選択時はVault案内、通常時はコンセプト文を出す。
         GradientHeader(
-            fade = !inDeskBar,
+            fade = place != ControlsPlace.DeskBar,
+            bleedEnd = place != ControlsPlace.SideColumn,
             title = "Rediscover",
             subtitle = if (!uiState.vaultSelected) "Vaultフォルダが未選択です"
             else "過去のノートから、思考をひとつ。",
@@ -693,7 +695,7 @@ internal fun NoteReaderTab(
                 Box(modifier = Modifier.fillMaxSize().screenHorizontalPadding()) {
                     when (layout) {
                         ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
-                            if (!hideControls) controls(memoToggle, openSummary, false) {}
+                            if (!hideControls) controls(memoToggle, openSummary, ControlsPlace.Top) {}
                             if (!hasNote) {
                                 emptyNote()
                                 // 余りをカードではなく余白へ逃がす。
@@ -723,7 +725,7 @@ internal fun NoteReaderTab(
                                     .fillMaxHeight()
                                     .verticalScroll(rememberScrollState())
                             ) {
-                                controls(memoToggle, openSummary, false) {}
+                                controls(memoToggle, openSummary, ControlsPlace.SideColumn) {}
                                 traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
                             }
                             Spacer(modifier = Modifier.width(16.dp))
@@ -783,7 +785,7 @@ internal fun NoteReaderTab(
                                         )
                                     ) {
                                         DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.bodyWidthDp.dp)) {
-                                            controls(memoToggle, openSummary, true) { deskBarShown = false }
+                                            controls(memoToggle, openSummary, ControlsPlace.DeskBar) { deskBarShown = false }
                                         }
                                     }
                                 }
@@ -1024,3 +1026,6 @@ private fun NoteActionButtons(
         }
     }
 }
+
+/** ノート画面の見出しと操作の置き場所。縦積みの上・左右2列の左の列・机の画面の帯。 */
+private enum class ControlsPlace { Top, SideColumn, DeskBar }
