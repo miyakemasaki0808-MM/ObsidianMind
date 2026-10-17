@@ -38,6 +38,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
@@ -47,6 +50,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -79,6 +83,8 @@ import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.ReaderFold
+import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
@@ -845,13 +851,13 @@ class NoteReadingFlowTest {
         val state = loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true
+                        window = window
                     )
                 }
             }
@@ -911,7 +917,7 @@ class NoteReadingFlowTest {
      * **Fold を開いて画面を作り直しても、シートで書いていた入力のフォーカスをペインの入力欄が引き継ぐ**（→ features/margin_pane.md §5.4）。
      * 開いた直後は、しまう途中のシートとペインが一瞬だけ両方組まれる。どちらもフォーカスを取りにいくと、
      * しまわれるシートが持ち去ってペインに残らなかった（閉じる方向は面が1つなので引き継げていた）。
-     * 窓を広げたうえで、画面の作り直しと復元を通す。
+     * 閉じた外画面から本の形の窓へ替えたうえで、画面の作り直しと復元を通す。
      */
     @Test
     fun Foldを開いて画面を作り直しても_ペインの入力欄がフォーカスを引き継ぐ() {
@@ -920,7 +926,7 @@ class NoteReadingFlowTest {
         var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(isMarginMemoSheetVisible = true))
         restoration.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = if (opened) 960.dp else 400.dp, height = 720.dp)) {
+                PostureBox(if (opened) Posture.Book else Posture.Closed) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
@@ -928,7 +934,7 @@ class NoteReadingFlowTest {
                         onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
                         onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
                         marginPaneOpen = true,
-                        expandedWidth = opened
+                        window = window
                     )
                 }
             }
@@ -955,7 +961,7 @@ class NoteReadingFlowTest {
         var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos())
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
@@ -963,7 +969,7 @@ class NoteReadingFlowTest {
                         onOpenMarginMemo = { openCalls++ },
                         onRequestSectionSummary = { section, quietly -> requests += section to quietly },
                         marginPaneOpen = false,
-                        expandedWidth = true
+                        window = window
                     )
                 }
             }
@@ -1104,13 +1110,13 @@ class NoteReadingFlowTest {
         var paneOpen by mutableStateOf(true)
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS).withMemos(),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = paneOpen,
-                        expandedWidth = true,
+                        window = window,
                         onMarginPaneVisibleChange = { reports += it }
                     )
                 }
@@ -1124,6 +1130,41 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
         assertEquals("ペインをしまったのに知らせていない: $reports", false, reports.lastOrNull())
+    }
+
+    /**
+     * **横の折り目（卓上の形）では机を組まず、縦に積む**（→ docs/dev/system/fold_experience.md §6）。ペインの設定が開いていても
+     * 入力欄は出ず、外殻へはペインが出ていないと知らせ、✎ はシートを出す。
+     * テストが渡した折り目で並べ方が決まることの裏側でもある — 実窓の折り目を読んでいると、縦に持った内側の画面ではペインが出て落ちる。
+     * **JVMでは書けない** — 渡した折り目が並べ方と ✎ の行き先まで届くかは、画面を組んでみないと出ない。
+     */
+    @Test
+    fun 横の折り目では机を組まず_ペインを出さずにメモはシートで出す() {
+        val reports = mutableListOf<Boolean>()
+        var sheetOpens = 0
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Tabletop) { window ->
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos(),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = { sheetOpens++ },
+                        marginPaneOpen = true,
+                        window = window,
+                        onMarginPaneVisibleChange = { reports += it }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        assertEquals("ペインを出していないのに出ていると知らせた: $reports", listOf(false), reports.distinct())
+
+        // 箱の右端は狭い窓では窓の外へ出るので、座標に頼らず押す。
+        composeRule.onNodeWithContentDescription("このノートのメモ").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.runOnIdle { assertEquals("✎ がシートを出さなかった", 1, sheetOpens) }
     }
 
     // ── 机の画面（→ features/margin_pane.md §5.1）───────────────────────────
@@ -1361,13 +1402,13 @@ class NoteReadingFlowTest {
         val listState = LazyListState()
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
                     ReaderTab(
                         loadedNote(LONG_BODY).withMemos(),
                         buildNoteSectionModel(LONG_BODY),
                         listState,
                         marginPaneOpen = true,
-                        expandedWidth = true
+                        window = window
                     )
                 }
             }
@@ -1415,13 +1456,13 @@ class NoteReadingFlowTest {
         }
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS).withMemos(*memos.toTypedArray()),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true
+                        window = window
                     )
                 }
             }
@@ -1503,14 +1544,14 @@ class NoteReadingFlowTest {
         var closes = 0
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         onRequestSectionSummary = { _, quietly -> requests += quietly },
                         marginPaneOpen = true,
-                        expandedWidth = true,
+                        window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
                         onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
                         onCloseSideReading = {
@@ -1555,6 +1596,7 @@ class NoteReadingFlowTest {
      * 題名の表示確認と端寄りの払いが届かない。アプリも閉じた外画面には机を出さないので、
      * 机の保証は内側の画面で確かめる（→ docs/dev/system/instrumentation_testing.md 判断11）。
      * 題名の表示や端寄りの座標に頼るテストだけが呼ぶ。存在の確認へ弱めて通すことはしない。
+     * **見るのは箱が窓に収まるかだけで、折り目は見ない** — 折り目は [PostureBox] でテストが決める（同 判断12）。
      */
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     private fun assumeDeskWindow() {
@@ -1577,13 +1619,13 @@ class NoteReadingFlowTest {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 // 窓より大きいと中央に寄せて置かれるので、位置はこの箱から測る（→ DESK_TAG）。
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp).testTag(DESK_TAG)) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS).withMemos(),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true,
+                        window = window,
                         onRandomNote = onRandomNote
                     )
                 }
@@ -1638,13 +1680,13 @@ class NoteReadingFlowTest {
         )
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true,
+                        window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
                         onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
                         onCloseSideReading = { state = state.copy(sideReading = SideReadingState.Idle) }
@@ -1705,13 +1747,13 @@ class NoteReadingFlowTest {
             .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
         restoration.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         current,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true
+                        window = window
                     )
                 }
             }
@@ -1741,14 +1783,14 @@ class NoteReadingFlowTest {
         var side by mutableStateOf<SideReadingState>(SideReadingState.Idle)
         restoration.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS, targetUri = NOTE_A).withMemos()
                             .copy(relatedNotesState = related, sideReading = side),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = true,
+                        window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { side is SideReadingState.Ready },
                         onOpenSideReading = { note -> side = SideReadingState.Ready(note) },
                         onCloseSideReading = { side = SideReadingState.Idle }
@@ -1781,13 +1823,13 @@ class NoteReadingFlowTest {
         val state = loadedNote(LONG_BODY).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                PostureBox(Posture.Book) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(LONG_BODY),
                         listState,
                         marginPaneOpen = true,
-                        expandedWidth = true,
+                        window = window,
                         sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks,
                         onOpenNote = { opened = it }
                     )
@@ -1805,7 +1847,7 @@ class NoteReadingFlowTest {
         }
     }
 
-    /** **余白ペインでない並べ方になったら終える**（Fold を閉じた・✎ でしまった）。窓を縮めて縦積みにする。 */
+    /** **余白ペインでない並べ方になったら終える**（Fold を閉じた・✎ でしまった）。本の形から閉じた外画面の窓へ替えて縦積みにする。 */
     @Test
     fun 余白ペインでない並べ方になると_並べ読みを終える() {
         var wide by mutableStateOf(true)
@@ -1813,13 +1855,13 @@ class NoteReadingFlowTest {
         val state = loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                Box(modifier = Modifier.requiredSize(width = if (wide) 960.dp else 400.dp, height = 720.dp)) {
+                PostureBox(if (wide) Posture.Book else Posture.Closed) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
-                        expandedWidth = wide,
+                        window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks,
                         onCloseSideReading = { closed++ }
                     )
@@ -1886,6 +1928,64 @@ class NoteReadingFlowTest {
         )
     )
 
+    /**
+     * 箱で模す窓の姿勢（→ docs/dev/system/fold_experience.md §6 の姿勢の割り当て）。
+     * **折り目はテストが決める。** 実窓の折り目を読むと、同じテストが端末の持ち方で机を組んだり組まなかったりして、
+     * 前提が崩れたのか製品が壊れたのかを区別できない（→ docs/dev/system/instrumentation_testing.md 判断12）。
+     */
+    private enum class Posture {
+        /** 開いた内側の画面の本の形。縦の折り目で主と補助に分ける。**机を保証する条件。** */
+        Book,
+
+        /** 開いた内側の画面を横に持った卓上の形。横の折り目では縦に積み、補助の面は出さない。 */
+        Tabletop,
+
+        /** 閉じた外画面。折り目が無く、ペインを出さない幅。 */
+        Closed
+    }
+
+    /** 読書画面へ渡す窓の情報。本番では外殻が窓から読む2つを、テストが代わりに決める。 */
+    private data class TestWindow(val foldInfo: ReaderFoldInfo, val expandedWidth: Boolean)
+
+    /**
+     * [posture] の窓を模した箱。開いた形は内側の画面を模した 960×720dp、閉じた形は 400×720dp。
+     *
+     * 縦の折り目は箱の中央に置く。折り目は窓の座標で渡すので、箱を置いて左端を測るまでは
+     * 窓の情報が届く前として渡す（画面を作り直した直後と同じ）。箱の幅が替わったら、測り直すまで前の値を使わない。
+     * [modifier] は大きさの後に付ける（目印の境界を箱の実寸にする）。
+     */
+    @Composable
+    private fun PostureBox(posture: Posture, modifier: Modifier = Modifier, content: @Composable (TestWindow) -> Unit) {
+        val width = if (posture == Posture.Closed) 400.dp else 960.dp
+        val density = LocalDensity.current
+        var placed by remember { mutableStateOf<Pair<Dp, Float>?>(null) }
+        val startDp = placed?.takeIf { it.first == width }?.second
+        Box(
+            modifier = Modifier
+                .requiredSize(width = width, height = 720.dp)
+                .then(modifier)
+                .onGloballyPositioned { placed = width to with(density) { it.positionInWindow().x.toDp().value } }
+        ) {
+            content(posture.window(startDp, width))
+        }
+    }
+
+    private fun Posture.window(boxStartDp: Float?, boxWidth: Dp): TestWindow = when (this) {
+        Posture.Book -> TestWindow(
+            foldInfo = boxStartDp?.let { start ->
+                val center = start + boxWidth.value / 2f
+                ReaderFoldInfo(isKnown = true, fold = ReaderFold(isVertical = true, startDp = center, endDp = center))
+            } ?: ReaderFoldInfo(isKnown = false, fold = null),
+            expandedWidth = true
+        )
+        // 横の折り目は位置を使わないので、測るのを待たない。
+        Posture.Tabletop -> TestWindow(
+            foldInfo = ReaderFoldInfo(isKnown = true, fold = ReaderFold(isVertical = false, startDp = 0f, endDp = 0f)),
+            expandedWidth = true
+        )
+        Posture.Closed -> CLOSED_WINDOW
+    }
+
     @Composable
     private fun ReaderTab(
         state: NoteUiState,
@@ -1900,7 +2000,8 @@ class NoteReadingFlowTest {
         onRandomNote: () -> Unit = {},
         onAcknowledgeSectionSummaryNotice: (Long) -> Unit = {},
         marginPaneOpen: Boolean = false,
-        expandedWidth: Boolean = false,
+        // 既定は閉じた外画面。机を組むテストは PostureBox で姿勢を決めて渡す。
+        window: TestWindow = CLOSED_WINDOW,
         onMarginPaneVisibleChange: (Boolean) -> Unit = {},
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
@@ -1927,7 +2028,8 @@ class NoteReadingFlowTest {
             // 読書の流れだけを見るテストは、どの端末でも縦に積む並べ方に固定する（既定）。
             marginPaneOpen = marginPaneOpen,
             onSetMarginPaneOpen = {},
-            expandedWidth = expandedWidth,
+            expandedWidth = window.expandedWidth,
+            foldInfo = window.foldInfo,
             onMarginPaneVisibleChange = onMarginPaneVisibleChange,
             memoDraft = MarginMemoDraft(),
             onEditMarginMemo = { _, _ -> },
@@ -1958,6 +2060,7 @@ class NoteReadingFlowTest {
         const val FIRST_PARAGRAPH = "最初の段落"
         const val NOTICE_MESSAGE = "この端末では、この部分の要約を使えません"
         const val DESK_TAG = "机の画面"
+        val CLOSED_WINDOW = TestWindow(ReaderFoldInfo(isKnown = true, fold = null), expandedWidth = false)
         /** 帯の継ぎ目で許す色の差（1チャンネルあたり）。8dp 離れた2点のグラデーションの差と、描画の誤差を含む。 */
         const val SEAM_TOLERANCE = 12f / 255f
         val NOTICE = SectionChatProblem.AiStatus(

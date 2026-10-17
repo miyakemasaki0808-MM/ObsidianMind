@@ -158,6 +158,11 @@ internal fun NoteReaderTab(
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
     expandedWidth: Boolean,
+    /**
+     * 窓に報告された折り目（→ [rememberReaderFold]）。**ここで読まずに外から受け取る** — 机の画面のテストは、
+     * 端末の持ち方によらず自分で決めた折り目で机を組む（→ system/instrumentation_testing.md 判断12）。
+     */
+    foldInfo: ReaderFoldInfo,
     /** 余白ペインが出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
     onMarginPaneVisibleChange: (Boolean) -> Unit,
     /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
@@ -287,7 +292,6 @@ internal fun NoteReaderTab(
         onOpenNote(note)
         startNote(PendingNoteStart(note.ref.value, block))
     }
-    val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
     // 本文領域の上端（窓の座標）。机の画面で、つまみの上の余白まで払い始める場所に含めるのに使う（→ DeskGripReach）。
