@@ -7,6 +7,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -192,34 +193,34 @@ internal fun DeskFaces(
 }
 
 /**
- * 補助の面を1画面に広げて戻すときの、補助の面のスクロール位置の覚え（→ features/margin_pane.md §5.1）。
+ * 片側を1画面に広げて戻すときの、広がる面の読む位置の覚え（→ features/margin_pane.md §5.1）。[wide] はこの面が1画面になる広げ方。
  *
- * **画素で位置を持つ面（余白の面）は、1画面に広げると位置を失う。** 幅が広がると折り返しが減って中身が短くなり、
- * 位置が新しい上限まで縮められ、2面へ戻しても元に戻らない。段落で位置を持つ面（本文・並べ読み）はずれない。
+ * **広がった面は、末尾に近いと位置を失う。** 幅が広がると折り返しが減って中身が短くなり、位置が新しい上限まで縮められ、
+ * 2面へ戻しても元に戻らない。画素で位置を持つ面（余白）も、段落で持つ面（本文・並べ読み）も同じ。
  * 広げる前の位置を覚え、戻したら戻す。**1画面の間に面が動いたら**（利用者のスクロールか、面の中の送り）、戻さずにそちらを残す。
  */
-internal class SupportingScrollMemory {
-    private var saved: Int? = null
+internal class SpreadScrollMemory<P : Any>(val wide: DeskSpread) {
+    private var saved: P? = null
     private var moved = false
 
     /**
-     * 広げ方を替える直前に呼ぶ。補助の面だけへ広げるときに、**まだ2面の幅の位置**を覚える。
+     * 広げ方を替える直前に呼ぶ。この面だけへ広げるときに、**まだ2面の幅の位置**を覚える。
      * 戻し終える前にもう一度広げたら覚え直さない — そのときの位置は戻す途中の値で、広げる前の位置ではない。
      */
-    fun beforeSpread(current: DeskSpread, next: DeskSpread, scrollValue: Int) {
-        if (next == DeskSpread.SupportingOnly && current != DeskSpread.SupportingOnly && saved == null) {
-            saved = scrollValue
+    fun beforeSpread(current: DeskSpread, next: DeskSpread, position: P) {
+        if (next == wide && current != wide && saved == null) {
+            saved = position
             moved = false
         }
     }
 
-    /** 補助の面だけの間に、面が動いた。覚える前の動きは、覚えるときに数え直すので残らない。 */
+    /** この面だけの間に、面が動いた。覚える前の動きは、覚えるときに数え直すので残らない。 */
     fun movedWhileWide() {
         moved = true
     }
 
-    /** 補助の面だけでなくなったときに戻す位置。覚えていないか、1画面の間に動いたなら null（今の位置を残す）。 */
-    fun restoreTarget(): Int? = saved.takeIf { !moved }
+    /** この面だけでなくなったときに戻す位置。覚えていないか、1画面の間に動いたなら null（今の位置を残す）。 */
+    fun restoreTarget(): P? = saved.takeIf { !moved }
 
     /** 戻し終えたか、戻さないと決めた。 */
     fun forget() {
@@ -229,12 +230,12 @@ internal class SupportingScrollMemory {
 }
 
 /**
- * 補助の面を1画面に広げて戻したとき、補助の面の [scrollState] を広げる前の位置へ戻す（→ [SupportingScrollMemory]）。
- * 広げる前の位置は、広げ方を替える操作が [SupportingScrollMemory.beforeSpread] で覚えておく。
+ * 補助の面を1画面に広げて戻したとき、余白の面の [scrollState] を広げる前の位置へ戻す（→ [SpreadScrollMemory]）。
+ * 広げる前の位置は、広げ方を替える操作が [SpreadScrollMemory.beforeSpread] で覚えておく。
  */
 @Composable
-internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollState, memory: SupportingScrollMemory) {
-    val wide = spread == DeskSpread.SupportingOnly
+internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollState, memory: SpreadScrollMemory<Int>) {
+    val wide = spread == memory.wide
     LaunchedEffect(wide, scrollState, memory) {
         if (wide) {
             // 広がるときに上限で縮められても動いた扱いにしない（それは利用者の操作ではない）。
@@ -246,6 +247,56 @@ internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollStat
                 // 戻る途中は幅が狭まって中身が伸びていく。伸び切る前に置くと、その時点の上限で切り詰められる。
                 withTimeoutOrNull(DESK_MOTION_MILLIS * 4L) { snapshotFlow { scrollState.maxValue }.first { it >= target } }
                 scrollState.scrollTo(target)
+            }
+            memory.forget()
+        }
+    }
+}
+
+/** 段落で位置を持つ面（本文・並べ読み）の読む位置。[viewportWidth] はそのときの面の幅（px）。 */
+internal data class LazyFacePosition(val index: Int, val offset: Int, val viewportWidth: Int)
+
+internal val LazyListState.facePosition: LazyFacePosition
+    get() = LazyFacePosition(firstVisibleItemIndex, firstVisibleItemScrollOffset, layoutInfo.viewportSize.width)
+
+/** 段落で位置を持つ面の [SpreadScrollMemory.beforeSpread]。**組まれていない面（幅0）は覚えない。** */
+internal fun SpreadScrollMemory<LazyFacePosition>.beforeSpread(current: DeskSpread, next: DeskSpread, listState: LazyListState) {
+    listState.facePosition.takeIf { it.viewportWidth > 0 }?.let { beforeSpread(current, next, it) }
+}
+
+/**
+ * 1画面の間に、段落で位置を持つ面が動いたか。[previous] から [next] へ移ったときに、
+ * **幅が同じまま位置が変わったか、スクロール中なら動いた**とする。
+ * 広がる途中は、幅が変わったのと同じ組み直しで位置が上限へ縮められる。それは利用者の操作ではない。
+ * **スクロール中の印だけでは見ない** — リンクで見出しへ送る（`scrollToItem`）は、印が同じフレームの中で立って消えるので捕まらない。
+ */
+internal fun lazyFaceMoved(previous: LazyFacePosition, next: LazyFacePosition, scrolling: Boolean): Boolean =
+    scrolling || (next != previous && next.viewportWidth == previous.viewportWidth)
+
+/**
+ * 片側を1画面に広げて戻したとき、段落で位置を持つ面（本文・並べ読み）の [listState] を広げる前の位置へ戻す（→ [SpreadScrollMemory]）。
+ * 広げる前の位置は、広げ方を替える操作が [beforeSpread] で覚えておく。
+ */
+@Composable
+internal fun RestoreLazyFacePosition(spread: DeskSpread, listState: LazyListState, memory: SpreadScrollMemory<LazyFacePosition>) {
+    val wide = spread == memory.wide
+    LaunchedEffect(wide, listState, memory) {
+        if (wide) {
+            var previous: LazyFacePosition? = null
+            snapshotFlow { listState.facePosition to listState.isScrollInProgress }.first { (position, scrolling) ->
+                val moved = previous?.let { lazyFaceMoved(it, position, scrolling) } ?: scrolling
+                previous = position
+                moved
+            }
+            memory.movedWhileWide()
+        } else {
+            val target = memory.restoreTarget()
+            if (target != null) {
+                // 戻る途中の幅で置くと、その幅の上限でまた縮められる。広げる前の幅まで戻り切ってから置く。
+                withTimeoutOrNull(DESK_MOTION_MILLIS * 4L) {
+                    snapshotFlow { listState.layoutInfo.viewportSize.width }.first { it in 1..target.viewportWidth }
+                }
+                listState.scrollToItem(target.index, target.offset)
             }
             memory.forget()
         }

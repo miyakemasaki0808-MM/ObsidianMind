@@ -32,6 +32,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
@@ -1487,6 +1488,179 @@ class NoteReadingFlowTest {
         assertEquals("余白の位置が戻っていない: $before → $after", before.value, after.value, 1f)
     }
 
+    /**
+     * **右の関連ノートを末尾の近くまで読んでから右を1画面に広げ、2面へ戻すと、右は元の段落の同じ位置に戻る。**
+     * 右は段落で位置を持つが、広がって残りが窓に収まると位置が上限へ縮められ、戻しても元に戻らなかった（実機で、段落18が16へ）。
+     */
+    @Test
+    fun 机の画面で並べ読みの右を1画面にして戻しても_末尾近くの読書位置が戻る() {
+        assumeDeskWindow()
+        setWrappingSideDesk()
+        val before = firstShownWrapping(SIDE_WRAP)
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        assertTrue("広げても右の位置が縮まず、この検査が効いていない", firstShownWrapping(SIDE_WRAP).first < before.first)
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        val after = firstShownWrapping(SIDE_WRAP)
+        assertEquals("右の段落が戻っていない: $before → $after", before.first, after.first)
+        assertEquals("右の段落の中の位置が戻っていない: $before → $after", before.second, after.second, 1f)
+    }
+
+    /** **右を1画面にしている間に縦に送ったら、2面へ戻してもその位置を残す。** 広げる前の位置へは戻さない。 */
+    @Test
+    fun 机の画面で並べ読みの右を1画面にしている間に縦に送った先は_戻しても残る() {
+        assumeDeskWindow()
+        setWrappingSideDesk()
+        val before = firstShownWrapping(SIDE_WRAP)
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeDown(startY = centerY - 150.dp.toPx(), endY = centerY + 150.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+        val moved = firstShownWrapping(SIDE_WRAP).first
+        assertTrue("縦に払ったのに右が送られていない", moved < before.first)
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        assertEquals("1画面の間に送った先が残っていない", moved, firstShownWrapping(SIDE_WRAP).first)
+    }
+
+    /**
+     * **本文を末尾の近くまで読んでから本文を1画面に広げ、2面へ戻すと、本文は元の段落の同じ位置に戻る。**
+     * 右と同じく、広がって残りが窓に収まると位置が上限へ縮められる。
+     */
+    @Test
+    fun 机の画面で本文を1画面にして戻しても_末尾近くの読書位置が戻る() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setWrappingMainDesk(listState)
+        val before = composeRule.runOnIdle { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        composeRule.runOnIdle {
+            assertTrue("広げても本文の位置が縮まず、この検査が効いていない", listState.firstVisibleItemIndex < before.first)
+        }
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            assertEquals("本文の位置が戻っていない", before, listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset)
+        }
+    }
+
+    /**
+     * **本文を1画面にしている間に見出しへ送ったら（リンクと同じ `scrollToItem`）、2面へ戻してもその位置を残す。**
+     * この送りはスクロール中の印が同じフレームの中で立って消えるので、印だけで見ると広げる前の位置へ戻してしまう。
+     */
+    @Test
+    fun 机の画面で本文を1画面にしている間に飛んだ先は_戻しても残る() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setWrappingMainDesk(listState)
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        wrappingList(MAIN_WRAP).performScrollToIndex(JUMPED_BLOCK)
+        composeRule.runOnIdle { assertEquals(JUMPED_BLOCK, listState.firstVisibleItemIndex) }
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        composeRule.runOnIdle { assertEquals("1画面の間に飛んだ先が残っていない", JUMPED_BLOCK, listState.firstVisibleItemIndex) }
+    }
+
+    /** [WRAPPING_COUNT] 段落の本文を左に置いた机の画面。本文を末尾の近く（末尾から少し戻した位置）まで送って返す。 */
+    private fun setWrappingMainDesk(listState: LazyListState) {
+        val body = wrappingBody(MAIN_WRAP)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    ReaderTab(
+                        loadedNote(body).withMemos(),
+                        buildNoteSectionModel(body),
+                        listState,
+                        marginPaneOpen = true,
+                        window = window
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        scrollNearEnd(MAIN_WRAP)
+    }
+
+    /** [WRAPPING_COUNT] 段落の関連ノートを右で開いた机の画面。右を末尾の近く（末尾から少し戻した位置）まで送って返す。 */
+    private fun setWrappingSideDesk() {
+        val sideBlocks = buildNoteSectionModel(wrappingBody(SIDE_WRAP)).blocks
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = sideBlocks.takeIf { state.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.onNodeWithText(wrappingParagraph(SIDE_WRAP, 0)).assertIsDisplayed()
+        scrollNearEnd(SIDE_WRAP)
+    }
+
+    /**
+     * 末尾まで送ってから少し戻す。**末尾そのものにはしない** — 末尾に留める直し方でも通ってしまう。
+     * 残りは窓より少し長いだけなので、幅が倍ほどに広がって折り返しが減ると窓に収まり、位置が上限へ縮む。
+     */
+    private fun scrollNearEnd(side: String) {
+        wrappingList(side).performScrollToIndex(WRAPPING_COUNT - 1)
+        val back = with(composeRule.density) { 200.dp.toPx() }
+        wrappingList(side).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, -back) }
+        composeRule.waitForIdle()
+    }
+
+    /** [side] の面の本文の一覧。 */
+    private fun wrappingList(side: String) =
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText("${side}で折り返す段落", substring = true)))
+
+    /** [side] の面に組まれている最初の段落の番号と、その上端（窓の外へ出た分も含む）。 */
+    private fun firstShownWrapping(side: String): Pair<Int, Float> {
+        val index = (0 until WRAPPING_COUNT).first {
+            composeRule.onAllNodesWithText(wrappingParagraph(side, it)).fetchSemanticsNodes().isNotEmpty()
+        }
+        return index to composeRule.onNodeWithText(wrappingParagraph(side, index)).getUnclippedBoundsInRoot().top.value
+    }
+
     /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
     @Test
     fun 机の画面では長押ししてから横へ動かしても片側を広げない() {
@@ -2309,5 +2483,19 @@ class NoteReadingFlowTest {
 
         /** 閉じて開いても保つ右の位置。開いた形の右の面に先頭の段落が入らないところ。 */
         const val KEPT_SIDE_BLOCK = 30
+
+        /** 片側を1画面に広げて戻す本文の段落の数と、その左右の目印。 */
+        const val WRAPPING_COUNT = 32
+        const val MAIN_WRAP = "左"
+        const val SIDE_WRAP = "右"
+
+        /** 本文を1画面にしている間に飛ぶ先。広げる前の位置から遠いところ。 */
+        const val JUMPED_BLOCK = 5
+
+        /** 2面と1画面で折り返しが大きく変わる長い段落。番号の前方一致（「段落3」と「段落30」）で取り違えないよう、文全体で探す。 */
+        fun wrappingParagraph(side: String, index: Int) =
+            "${side}で折り返す段落$index。" + "読み返すたびに引っかかるところが変わるので、同じ段落でも前とは違う問いが立つ。".repeat(3)
+
+        fun wrappingBody(side: String) = (0 until WRAPPING_COUNT).joinToString("\n\n") { wrappingParagraph(side, it) }
     }
 }

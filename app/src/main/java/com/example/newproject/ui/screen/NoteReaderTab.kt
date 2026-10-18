@@ -527,7 +527,13 @@ internal fun NoteReaderTab(
         // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
         // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
         val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
-        val paneScrollMemory = remember(paneVisible, currentNoteUri) { SupportingScrollMemory() }
+        val paneScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<Int>(DeskSpread.SupportingOnly) }
+        // 本文と並べ読みの読む位置も、片側を1画面に広げて戻したときに戻す（→ RestoreLazyFacePosition）。
+        // 並べ読みは右のノートごとに位置を持つので、覚えも右のノートごとに替える。
+        val mainScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<LazyFacePosition>(DeskSpread.MainOnly) }
+        val sideScrollMemory = remember(paneVisible, currentNoteUri, sideListState) {
+            SpreadScrollMemory<LazyFacePosition>(DeskSpread.SupportingOnly)
+        }
         // 広げ方を替える。**本文だけにするときは書いているつもりを落とす** — 入力欄は組んだまま隠れるので、見えない欄へ打ち込ませない。
         val spreadTo: (DeskSpread) -> Unit = { next ->
             if (!next.shows(DeskFace.Supporting) && memoFocusIntent) {
@@ -536,6 +542,8 @@ internal fun NoteReaderTab(
             }
             deskBarShown = false
             paneScrollMemory.beforeSpread(deskSpread, next, paneScroll.value)
+            mainScrollMemory.beforeSpread(deskSpread, next, listState)
+            sideScrollMemory.beforeSpread(deskSpread, next, sideListState)
             deskSpread = next
         }
         // 面の中身へ送る依頼の前に、その面が隠れていれば2面へ戻す（→ deskSpreadShowing）。
@@ -678,6 +686,8 @@ internal fun NoteReaderTab(
         // （後に置いた BackHandler ほど先に効く）。
         BackHandler(enabled = deskSpread != DeskSpread.Both && paneVisible) { spreadTo(DeskSpread.Both) }
         RestoreSupportingScroll(deskSpread, paneScroll, paneScrollMemory)
+        RestoreLazyFacePosition(deskSpread, listState, mainScrollMemory)
+        RestoreLazyFacePosition(deskSpread, sideListState, sideScrollMemory)
         BackHandler(enabled = deskBarShown && paneVisible) { deskBarShown = false }
         // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
         // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
