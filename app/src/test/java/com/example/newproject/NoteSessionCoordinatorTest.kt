@@ -2021,6 +2021,34 @@ class NoteSessionCoordinatorTest {
         assertEquals("右で開いて痕跡を書いた", savesBefore, env.trace.saveAttempts)
     }
 
+    /**
+     * **右で辿っても今のノートにはならない**（→ features/desk_foundation.md §7・system/fold_experience.md §9）。
+     * 右のノートの中のリンクで2枚目へ移るのも、右で開くのと同じ口を通る。今のノートの切替と訪問の記録はどちらも動かない。
+     */
+    @Test
+    fun `右で別のノートへ辿っても、今のノートと記録は何も変わらない`() = runTest {
+        val env = Env(this)
+        env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+        val coordinator = env.coordinator()
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        advanceUntilIdle()
+        val before = coordinator.uiState.value
+        val savesBefore = env.trace.saveAttempts
+
+        coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し\n\n[[辿った先]]" }
+        advanceUntilIdle()
+        coordinator.openSideReading(LINKED_SIDE_NOTE) { "# 辿った先の見出し\n\n辿った先の本文" }
+        advance(NoteDwellGate.DWELL_MILLIS + 1_000)
+
+        val after = coordinator.uiState.value
+        assertEquals(SideReadingState.Ready(LINKED_SIDE_NOTE), after.sideReading)
+        assertEquals(before.copy(sideReading = after.sideReading), after)
+        assertEquals("右で辿って生成を呼んだ", 0, env.ai.generateCalls)
+        assertEquals("右で辿って履歴に積んだ", emptyList<String>(), env.history.recorded)
+        assertEquals("右で辿って痕跡を書いた", savesBefore, env.trace.saveAttempts)
+    }
+
     /** **両方向の1つ目。** 部分要約の生成中に右で開いても戻っても、生成は止まらない。 */
     @Test
     fun `部分要約の生成中に並べ読みを開いて戻っても、生成は止まらない`() = runTest {
@@ -2087,6 +2115,7 @@ class NoteSessionCoordinatorTest {
 
         /** 並べ読みで右に開く関連ノート。 */
         val SIDE_NOTE = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = false)
+        val LINKED_SIDE_NOTE = RelatedNote(title = "辿った先", ref = DocumentRef("content://vault/linked.md"), isWikilinked = true)
 
         /** 反証の一文の今のノートと、関連ノート（[SIDE_NOTE]）の本文の1文。 */
         const val REBUTTAL_CURRENT = "睡眠は朝の光で整う。夜更かしをしても朝に光を浴びれば戻る。"

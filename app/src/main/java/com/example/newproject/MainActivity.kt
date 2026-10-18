@@ -226,7 +226,8 @@ class MainActivity : ComponentActivity() {
                                 onCloseSideReading = { viewModel.closeSideReading() },
                                 // 関連タブと同じ経路で開く。ノートタブの中なので画面は移らない。
                                 onOpenNote = { note -> viewModel.openNote(contentResolver, note) },
-                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) }
+                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) },
+                                onResolveSideNoteLink = { link, sideNote -> viewModel.resolveSideNoteLink(link, sideNote) }
                             )
                         }
 

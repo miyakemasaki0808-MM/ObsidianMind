@@ -18,10 +18,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -30,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
@@ -44,6 +42,7 @@ import com.example.newproject.ui.theme.OnSurfaceMuted
 
 /**
  * 並べ読みの右側（→ features/margin_pane.md §5.9）。関連ノートを**眺めるだけ**で、今のノートにはしない。
+ * 中のリンクは右のまま辿る（→ features/desk_foundation.md）。
  *
  * 進捗の報告も見出しの印も置かず、画像の寸法の入れ物も渡さない — 左の読書と、左の画像の測定に右を混ぜない。
  * 「このノートへ移る」は、右で読んでいたブロックを添えて普通に開く。
@@ -59,23 +58,33 @@ internal fun SideReadingPane(
     /** 右で読んでいたブロック [startBlock] から、[RelatedNote] を普通に開く。 */
     onMove: (note: RelatedNote, startBlock: Int) -> Unit,
     onRetry: (RelatedNote) -> Unit,
-    /** 本文のリンクから開いたなら、その見出し（→ features/note_links.md）。関連の候補から開いたなら null。 */
-    linkStart: SideLinkStart? = null,
+    /**
+     * 右の本文の位置。**右のノートごとに、呼ぶ側が持つ** — この面はペインを出せない窓では組まれないので、
+     * ここに置くと開き直したときに失う（→ features/desk_foundation.md 判断3）。
+     */
+    listState: LazyListState,
+    /** リンクから開いたなら、その見出し（→ features/note_links.md）。関連の候補から開いたなら null。 */
+    linkStart: SideLinkStart?,
+    /**
+     * 送り終えたリンクの要求の番号。リンクの始まりへ送るのは、読めた後に要求ごとに1度だけ。
+     * **位置と同じ寿命で呼ぶ側が持つ** — 面と一緒に消えると、開き直すたびに見出しへ送り直して読み進めた位置を戻す。
+     */
+    handledLinkRequest: Long,
+    onLinkRequestHandled: (request: Long) -> Unit,
     /** リンクの見出しがこのノートに無かった。先頭から始めたことを知らせる。 */
-    onHeadingMissing: (heading: String) -> Unit = {},
+    onHeadingMissing: (heading: String) -> Unit,
+    /** 右のノートの中のリンクを押したとき（→ features/desk_foundation.md §5）。null ならリンクは押せない文字列のまま描く。 */
+    onLink: ((NoteLink) -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val note = state.note ?: return
-    // **候補ごとに先頭から。** 別の候補を選んだら位置を持ち越さない。画面の作り直しでは保つ。
-    val listState = rememberSaveable(note.ref.value, saver = LazyListState.Saver) { LazyListState() }
-    // リンクの始まりへ送るのは、読めた後に要求ごとに1度だけ。**送った要求の番号を保存値に置く** — 画面を作り直しても、読み進めた位置を戻さない。
-    var startedRequest by rememberSaveable { mutableLongStateOf(0L) }
     val currentOnHeadingMissing by rememberUpdatedState(onHeadingMissing)
+    val currentOnLinkRequestHandled by rememberUpdatedState(onLinkRequestHandled)
     val ready = state is SideReadingState.Ready && blocks != null
     LaunchedEffect(linkStart, ready) {
         val start = linkStart ?: return@LaunchedEffect
-        if (!ready || start.request == startedRequest) return@LaunchedEffect
-        startedRequest = start.request
+        if (!ready || start.request == handledLinkRequest) return@LaunchedEffect
+        currentOnLinkRequestHandled(start.request)
         // **見出しが無くても見つからなくても先頭へ送る。** 同じノートを開き直したときは、位置がノートごとに残っている。
         val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0)
         listState.scrollToItem(block)
@@ -133,7 +142,8 @@ internal fun SideReadingPane(
                     listState = listState,
                     precomputedBlocks = blocks,
                     imageLoader = imageLoader,
-                    imageMeasurements = null
+                    imageMeasurements = null,
+                    onLink = onLink
                 )
             }
 

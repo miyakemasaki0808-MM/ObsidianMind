@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -1709,6 +1710,60 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **右のノートの中のリンクを押すと、右のままそのノートへ辿る**（→ features/desk_foundation.md §4）。左の今のノートは替わらない。
+     * 余白へ戻る先は、最後に辿ったリンクではなく辿り始めた入口（関連の候補）で決まり、関連の一覧まで送る。
+     * **JVMでは書けない** — 右の本文に押す口が渡り、押した結果が右の面と戻り先まで届くかは、画面を組んでみないと出ない。
+     */
+    @Test
+    fun 右のノートの中のリンクで右のまま辿り_余白へ戻ると関連の一覧へ戻る() {
+        val resolvedFrom = mutableListOf<DocumentRef>()
+        val opened = mutableListOf<RelatedNote>()
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS, targetUri = NOTE_A).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book) { window ->
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = (state.sideReading as? SideReadingState.Ready)?.let { ready ->
+                            buildNoteSectionModel(if (ready.note == SIDE_NOTE) SIDE_LINK_BODY else THIRD_BODY).blocks
+                        },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onCloseSideReading = { state = state.copy(sideReading = SideReadingState.Idle) },
+                        onOpenNote = { opened += it },
+                        onResolveSideNoteLink = { _, from ->
+                            resolvedFrom += from
+                            NoteLinkResolution.Open(THIRD_NOTE, heading = null)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_LINK_TEXT).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(THIRD_PARAGRAPH).assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals("右のノートを出発点に引いていない", listOf(SIDE_NOTE.ref), resolvedFrom)
+            assertEquals("右で辿って今のノートを替えた", emptyList<RelatedNote>(), opened)
+        }
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        composeRule.onNodeWithText("▾ このノートの関連 2件").assertIsDisplayed()
+    }
+
+    /**
      * **右で読んでいる間に同じノートで画面を作り直しても、余白へ戻ると選んだ一覧へ戻る**（→ features/margin_pane.md §11）。
      * 右の本文は状態に残るので、戻る先の一覧の並びと開閉も同じだけ残らないと、戻った面で一覧が畳まれる。
      */
@@ -2006,7 +2061,8 @@ class NoteReadingFlowTest {
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
-        onOpenNote: (RelatedNote) -> Unit = {}
+        onOpenNote: (RelatedNote) -> Unit = {},
+        onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady }
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -2044,7 +2100,8 @@ class NoteReadingFlowTest {
             onOpenSideReading = onOpenSideReading,
             onCloseSideReading = onCloseSideReading,
             onOpenNote = onOpenNote,
-            onResolveNoteLink = { NoteLinkResolution.NotReady }
+            onResolveNoteLink = { NoteLinkResolution.NotReady },
+            onResolveSideNoteLink = onResolveSideNoteLink
         )
     }
 
@@ -2131,6 +2188,10 @@ class NoteReadingFlowTest {
         val THIRD_NOTE = RelatedNote(title = "後から届いた関連", ref = DocumentRef("content://vault/third.md"), isWikilinked = false)
         const val SIDE_PARAGRAPH = "右で眺める本文。"
         val SIDE_BODY = "# 右の見出し\n\n$SIDE_PARAGRAPH"
+        const val SIDE_LINK_TEXT = "辿った先"
+        val SIDE_LINK_BODY = "# 右の見出し\n\n$SIDE_PARAGRAPH\n\n[[$SIDE_LINK_TEXT]]"
+        const val THIRD_PARAGRAPH = "右で辿った先の本文。"
+        val THIRD_BODY = "# 辿った先の見出し\n\n$THIRD_PARAGRAPH"
 
         /** 右で送る先。左の [LONG_BODY] にも十分な後続がある位置。 */
         const val SIDE_TARGET_BLOCK = 12
