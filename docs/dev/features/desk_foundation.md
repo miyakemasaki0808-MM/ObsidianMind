@@ -1,7 +1,7 @@
 # 机の土台 — 補助の面で辿り、閉じても戻す
 
-**状態:** 実装・机上再レビュー済み。実NavHostでのシート開閉の往復と実機確認が残る
-**最終検証:** 2026-10-18 / `f4723de3`（独立再レビュー・JVM・Lint・test APK組み立て。実機は未検証 → [レビュー一覧](../../review/README.md)）
+**状態:** 実装済み・稼働中。右を1画面に広げて戻すと末尾に近い位置が戻らない課題が残る（→ §11）
+**最終検証:** 2026-10-18 / `bd9c957b`（実機。見出し無しの自己リンクと、関連の一覧への実距離の送りは手動未確認）
 **関連コード:** `ui/screen/NoteReaderTab.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/MarginSurface.kt` / `NoteViewModel.kt` / `controller/SideReadingController.kt`
 **関連テスト:** `NoteLinkActionsTest` / `MarginSurfaceTest` / `NoteSessionCoordinatorTest` / `NoteReadingFlowTest` / `NoteLinkTapUiTest`
 **正本:** この文書（補助の面で辿る形と、窓が変わっても並べ読みを保つ形）。原則と契約は [fold_experience](../system/fold_experience.md)、
@@ -162,6 +162,8 @@ Fold を閉じたら終える形では、閉じて開くたびに右が消え、
 ## 11. 既知の制約・未解決事項
 
 - **文字の大きさ2.0では並べ読み自体が出ない**（本文の幅が下限を割る → [margin_pane](margin_pane.md) §11）。辿る操作もその窓では使えない
+- **右を1画面に広げて2面へ戻すと、並べ読みの末尾に近い読書位置が手前へ戻る。** 広げて残りの本文が収まると、リストが位置を上限へ縮め、戻しても復元しない。
+  片側1画面の側の穴で、課題台帳に起票してある
 - **開いた Fold を横に持つと2面が出ない。** 横の折り目は縦積みのまま（→ [fold_experience](../system/fold_experience.md) §6）。その間も並べ読みは隠して保つ
 
 ## 12. 開発経緯
