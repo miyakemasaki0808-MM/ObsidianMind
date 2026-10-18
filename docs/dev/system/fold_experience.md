@@ -104,7 +104,7 @@ Fold の体験を北極星の外に置かず、Rediscover から Reflect への�
 | Tier 1: 本の形で長文を読む | 縦の折り目の行（見開きの冊子）。Google が名指しする用途と、このアプリの本業が重なる |
 | Tier 1: 卓上の形 | 横の折り目の行。Google の名指しは動画と通話で、読む面への読み替えはこのアプリ独自 |
 | Tier 1: 複数インスタンス | 採らない → [ADR-0006](../decisions/ADR-0006-single-current-note.md) |
-| Compose の適応レイアウト（`SupportingPaneScaffold` など） | 使わず自前の `readerLayoutFor`。**採らなかった理由はまだ書かれていない** — 契約1の実装時に比べて残す |
+| Compose の適応レイアウト（`SupportingPaneScaffold` など） | 使わず自前の `readerLayoutFor`（理由と再検討の条件 → [desk_foundation](../features/desk_foundation.md) 判断4） |
 
 出典: [Adaptive app quality](https://developer.android.com/docs/quality-guidelines/large-screen-app-quality)・
 [Foldables experience](https://developer.android.com/docs/quality-guidelines/adaptive-app-quality/experiences/foldables)・
