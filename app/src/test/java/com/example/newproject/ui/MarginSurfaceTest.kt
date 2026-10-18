@@ -364,28 +364,23 @@ class MarginSurfaceTest {
     // ── 並べ読みの終わり方（→ features/desk_foundation.md §5 の状態遷移）────────────
 
     /**
-     * **窓は判定に入らない。** Fold を閉じても内側を横にしても、ペインの設定が開いていて余白のシートが出ていなければ終えない。
-     * 窓の情報が揃う前の仮の並べ方で終えることも、これで起きない。
+     * **窓は判定に入らない。** Fold を閉じても内側を横にしても、ペインの設定が開いていれば終えない。
+     * 窓の情報が揃う前の仮の並べ方で終えることも、これで起きない。余白のシートを開いたときは調停側が終える
+     * （→ `NoteSessionCoordinatorTest`）。
      */
     @Test
     fun `並べ読みは窓が変わっただけでは終えない`() {
-        assertFalse(endsSideReading(reading = true, paneOpen = true, marginSheetVisible = false))
+        assertFalse(endsSideReading(reading = true, paneOpen = true))
     }
 
     @Test
     fun `並べ読みはペインの設定を閉じると終える`() {
-        assertTrue(endsSideReading(reading = true, paneOpen = false, marginSheetVisible = false))
-    }
-
-    /** 補助の面は1つで、ペインを出せない窓ではシートがそれにあたる。シートに余白を出すのは余白へ戻るのと同じ。 */
-    @Test
-    fun `並べ読みは余白のシートが出ると終える`() {
-        assertTrue(endsSideReading(reading = true, paneOpen = true, marginSheetVisible = true))
+        assertTrue(endsSideReading(reading = true, paneOpen = false))
     }
 
     @Test
     fun `並べ読みをしていなければ終える操作も無い`() {
-        assertFalse(endsSideReading(reading = false, paneOpen = false, marginSheetVisible = true))
+        assertFalse(endsSideReading(reading = false, paneOpen = false))
     }
 
     /**

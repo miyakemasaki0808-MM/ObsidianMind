@@ -2049,6 +2049,48 @@ class NoteSessionCoordinatorTest {
         assertEquals("右で辿って痕跡を書いた", savesBefore, env.trace.saveAttempts)
     }
 
+    /**
+     * **余白のシートを開くと並べ読みを終え、閉じても戻らない**（→ features/desk_foundation.md 判断2）。
+     * 全画面の間に開いて閉じる順で、通常の画面が組まれていなくても終わるよう、シートを開く口そのもので終える。
+     */
+    @Test
+    fun `余白のシートを開くと並べ読みを終え、閉じても戻らない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し\n\n右の本文" }
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Ready(SIDE_NOTE), coordinator.uiState.value.sideReading)
+
+        coordinator.openMarginMemoSheet()
+        assertEquals("シートを開いても並べ読みが残った", SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        coordinator.dismissMarginMemoSheet()
+        advanceUntilIdle()
+
+        assertEquals("シートを閉じたら並べ読みが戻った", SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        assertNull(coordinator.sideReadingBlocks.value)
+    }
+
+    /** **両方向のもう1つ。** 右の読み込み中にシートを開くと、後から届いた本文で並べ読みを書き戻さない。 */
+    @Test
+    fun `右の読み込み中に余白のシートを開くと、後から届いた本文を書かない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 導入\n\n本文"))
+        val body = CompletableDeferred<String>()
+        coordinator.openSideReading(SIDE_NOTE) { body.await() }
+        advanceUntilIdle()
+        assertEquals(SideReadingState.Loading(SIDE_NOTE), coordinator.uiState.value.sideReading)
+
+        coordinator.openMarginMemoSheet()
+        body.complete("# 右の見出し")
+        advanceUntilIdle()
+
+        assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
+        assertNull(coordinator.sideReadingBlocks.value)
+        assertTrue("シートが出ていない", coordinator.uiState.value.isMarginMemoSheetVisible)
+    }
+
     /** **両方向の1つ目。** 部分要約の生成中に右で開いても戻っても、生成は止まらない。 */
     @Test
     fun `部分要約の生成中に並べ読みを開いて戻っても、生成は止まらない`() = runTest {

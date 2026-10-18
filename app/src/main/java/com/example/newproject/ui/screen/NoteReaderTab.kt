@@ -667,10 +667,10 @@ internal fun NoteReaderTab(
         LaunchedEffect(windowKnown, paneVisible) {
             if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible)
         }
-        // 並べ読みを終えるのは、ペインの設定を閉じたときと余白のシートが出たときだけ。**窓が変わっただけでは終えない** —
-        // ペインを出せない窓の間は隠しておき、出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。
-        LaunchedEffect(reading, marginPaneOpen, uiState.isMarginMemoSheetVisible) {
-            if (endsSideReading(reading, marginPaneOpen, uiState.isMarginMemoSheetVisible)) onCloseSideReading()
+        // ペインの設定を閉じたら並べ読みを終える。**窓が変わっただけでは終えない** — ペインを出せない窓の間は隠しておき、
+        // 出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。余白のシートを開いたときは調停側が終える。
+        LaunchedEffect(reading, marginPaneOpen) {
+            if (endsSideReading(reading, marginPaneOpen)) onCloseSideReading()
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }

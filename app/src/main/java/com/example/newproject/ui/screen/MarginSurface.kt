@@ -355,12 +355,10 @@ internal val PaneRelatedListSaver: Saver<PaneRelatedList?, Any> = Saver(
  * 並べ読みを終えるか（→ features/desk_foundation.md §5 の状態遷移）。**窓は判定に入れない** — Fold を閉じても
  * 内側を横にしても終えず、ペインを出せる窓へ戻ったら同じノートを出す。窓の情報が揃う前の仮の並べ方でも誤って終えない。
  *
- * 終えるのは、✎ でペインの設定を閉じたときと、余白のシートが出たとき。補助の面は1つで、ペインを出せない窓では
- * シートがそれにあたるので、シートに余白を出すことは余白へ戻ることと同じに扱う（同 判断2）。
- * 入口ごとに閉じず、シートが出ていることで決める — シートを出す入口が増えても漏れない。
+ * 画面が終えるのは ✎ でペインの設定を閉じたときだけ。余白のシートを開いたときは、どの画面から開いても通る
+ * 調停側の口（`NoteSessionCoordinator.openMarginMemoSheet`）が終える — 全画面の間は、この画面が組まれていない。
  */
-internal fun endsSideReading(reading: Boolean, paneOpen: Boolean, marginSheetVisible: Boolean): Boolean =
-    reading && (!paneOpen || marginSheetVisible)
+internal fun endsSideReading(reading: Boolean, paneOpen: Boolean): Boolean = reading && !paneOpen
 
 /**
  * ペインからシートへ移る窓の切り替わりで、書いている途中として扱うか（→ features/margin_pane.md §5.4 の2つ目の表）。

@@ -1994,43 +1994,6 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **閉じた外画面で余白のシートを出すと、隠していた並べ読みを終える。** シートは狭い窓での補助の面なので、余白へ戻るのと同じに扱う。
-     * 終えずに開き直すと、シートで書いていた入力欄が右のノートに隠れる（→ features/desk_foundation.md 判断2）。
-     * ✎ はシートを出すだけで並べ読みを閉じない — シートが出たことで終わる。
-     */
-    @Test
-    fun 閉じた外画面で余白のシートを出すと並べ読みを終える() {
-        var closed = 0
-        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE)))
-        composeRule.setContent {
-            AppTheme(darkTheme = false) {
-                PostureBox(Posture.Closed) { window ->
-                    ReaderTab(
-                        state,
-                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
-                        rememberLazyListState(),
-                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
-                        marginPaneOpen = true,
-                        window = window,
-                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks,
-                        onCloseSideReading = {
-                            closed++
-                            state = state.copy(sideReading = SideReadingState.Idle)
-                        }
-                    )
-                }
-            }
-        }
-        composeRule.waitForIdle()
-        composeRule.runOnIdle { assertEquals("シートを出す前に終えた", 0, closed) }
-
-        composeRule.onNodeWithContentDescription("このノートのメモ").performSemanticsAction(SemanticsActions.OnClick)
-        composeRule.waitForIdle()
-
-        composeRule.runOnIdle { assertEquals(1, closed) }
-    }
-
-    /**
      * **隠している間に右の読み込みが終わっても、本の形へ戻すと読めた本文が出る。** 実機では読み込みが一瞬で終わり、
      * 閉じる操作と重ねられないので、ここで持つ（→ features/desk_foundation.md §10）。
      */
