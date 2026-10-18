@@ -6,10 +6,12 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.screen.NoteLinkAction
 import com.example.newproject.ui.screen.NoteStartBlock
+import com.example.newproject.ui.screen.SideLinkAction
 import com.example.newproject.ui.screen.currentNoteScrollTarget
 import com.example.newproject.ui.screen.noteLinkActionFor
 import com.example.newproject.ui.screen.noteLinkHeadingMissingText
 import com.example.newproject.ui.screen.noteStartBlock
+import com.example.newproject.ui.screen.sideLinkActionFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -51,6 +53,51 @@ class NoteLinkActionsTest {
         val missing = noteLinkActionFor(NoteLinkResolution.Missing("まだ無いノート"), canShowSupporting = true)
         assertEquals(NoteLinkAction.Notice("「まだ無いノート」は見つかりませんでした"), missing)
         assertTrue(noteLinkActionFor(NoteLinkResolution.NotReady, canShowSupporting = false) is NoteLinkAction.Notice)
+    }
+
+    // ── 右（補助の面）のノートの中のリンク（→ features/desk_foundation.md §5）─────────
+
+    private val current = DocumentRef("ref:A")
+
+    @Test
+    fun `右のノートから別のノートへのリンクは右をそのノートに替える`() {
+        assertEquals(
+            SideLinkAction.OpenSide(note, "節"),
+            sideLinkActionFor(NoteLinkResolution.Open(note, "節"), currentNote = current)
+        )
+    }
+
+    @Test
+    fun `右のノート自身へのリンクは右を送る`() {
+        assertEquals(SideLinkAction.ScrollSide("節"), sideLinkActionFor(NoteLinkResolution.InCurrent("節"), currentNote = current))
+        assertEquals(SideLinkAction.ScrollSide(null), sideLinkActionFor(NoteLinkResolution.InCurrent(null), currentNote = current))
+    }
+
+    /** **左に出ている今のノートを右へ開かない。** 右の「このノートへ移る」が今のノートを開き直すことになる。 */
+    @Test
+    fun `右のノートから今のノートへのリンクは左の本文を送る`() {
+        val toCurrent = note.copy(ref = current)
+        assertEquals(
+            SideLinkAction.ScrollMain("節"),
+            sideLinkActionFor(NoteLinkResolution.Open(toCurrent, "節"), currentNote = current)
+        )
+        // 今のノートが無ければ（読み込み中）、ほかのノートと同じに右で開く。
+        assertEquals(
+            SideLinkAction.OpenSide(toCurrent, "節"),
+            sideLinkActionFor(NoteLinkResolution.Open(toCurrent, "節"), currentNote = null)
+        )
+    }
+
+    @Test
+    fun `右のリンクも見つからないときと走査結果が無いときは本文のリンクと同じ知らせだけを出す`() {
+        assertEquals(
+            SideLinkAction.Notice("「まだ無いノート」は見つかりませんでした"),
+            sideLinkActionFor(NoteLinkResolution.Missing("まだ無いノート"), currentNote = current)
+        )
+        assertEquals(
+            (noteLinkActionFor(NoteLinkResolution.NotReady, canShowSupporting = true) as NoteLinkAction.Notice).text,
+            (sideLinkActionFor(NoteLinkResolution.NotReady, currentNote = current) as SideLinkAction.Notice).text
+        )
     }
 
     @Test

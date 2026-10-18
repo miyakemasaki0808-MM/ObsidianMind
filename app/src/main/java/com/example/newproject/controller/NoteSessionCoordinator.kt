@@ -720,8 +720,13 @@ internal class NoteSessionCoordinator(
      * シートを開く。メモはノートの表示の後に読んであるので、**ここでは読み直さない** — 読み直すと世代が進み、
      * 走行中の保存の結果が照合で捨てられる。読めなかったときだけ読み直す。
      * ペインの書きかけをシートへ移すときにも同じ口を使う。
+     *
+     * **シートを開いたら並べ読みを終える**（→ features/desk_foundation.md 判断2）。シートは狭い窓と全画面での補助の面で、
+     * 余白を出すことは余白へ戻ることと同じ。画面の側でシートの可視を見て終えると、全画面の間に開いて閉じたシートを
+     * 通常の画面が組まれていないために見落とすので、どの画面から開いても通るここで終える。
      */
     fun openMarginMemoSheet() {
+        sideReading.close()
         marginMemo.setSheetVisible(true)
         marginMemo.ensureLoaded(readingTrace.currentPath())
     }
@@ -807,6 +812,6 @@ internal class NoteSessionCoordinator(
      */
     fun openSideReading(note: RelatedNote, read: suspend () -> String) = sideReading.open(note, read)
 
-    /** 余白へ戻る・ペインを閉じる・余白ペインでない並べ方になった。 */
+    /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun closeSideReading() = sideReading.close()
 }

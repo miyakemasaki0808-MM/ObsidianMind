@@ -31,6 +31,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.ui.screen.endsSideReading
+import com.example.newproject.ui.screen.writingForWindowShift
 import com.example.newproject.ui.screen.PaneRelatedList
 import com.example.newproject.ui.screen.PaneRelatedListSaver
 import com.example.newproject.ui.screen.paneRelatedListFor
@@ -360,17 +361,38 @@ class MarginSurfaceTest {
         assertNull(paneRelatedCandidates(null, RelatedNotesState.Loading))
     }
 
+    // ── 並べ読みの終わり方（→ features/desk_foundation.md §5 の状態遷移）────────────
+
+    /**
+     * **窓は判定に入らない。** Fold を閉じても内側を横にしても、ペインの設定が開いていれば終えない。
+     * 窓の情報が揃う前の仮の並べ方で終えることも、これで起きない。余白のシートを開いたときは調停側が終える
+     * （→ `NoteSessionCoordinatorTest`）。
+     */
     @Test
-    fun `並べ読みは余白ペインでない並べ方になったら終える`() {
-        assertEquals(true, endsSideReading(windowKnown = true, paneVisible = false, reading = true))
-        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = true, reading = true))
-        assertEquals(false, endsSideReading(windowKnown = true, paneVisible = false, reading = false))
+    fun `並べ読みは窓が変わっただけでは終えない`() {
+        assertFalse(endsSideReading(reading = true, paneOpen = true))
     }
 
-    /** 画面の作り直しの直後は、仮に余白ペインでない並べ方で組まれることがある。その間に終えると、閉じていないのに消える。 */
     @Test
-    fun `窓の情報が揃う前は並べ読みを終えない`() {
-        assertEquals(false, endsSideReading(windowKnown = false, paneVisible = false, reading = true))
+    fun `並べ読みはペインの設定を閉じると終える`() {
+        assertTrue(endsSideReading(reading = true, paneOpen = false))
+    }
+
+    @Test
+    fun `並べ読みをしていなければ終える操作も無い`() {
+        assertFalse(endsSideReading(reading = false, paneOpen = false))
+    }
+
+    /**
+     * **並べ読み中は、書きかけの文字だけではペインからシートへ移さない。** 余白は右のノートに隠れていたので、閉じた後も出さない。
+     * 移すとシートが出て、並べ読みが終わる（→ features/desk_foundation.md §5）。
+     */
+    @Test
+    fun `並べ読み中は書きかけだけでは窓の切り替わりでシートへ移さない`() {
+        assertFalse(writingForWindowShift(hasDraft = true, focusIntent = false, sideReading = true))
+        assertTrue("並べ読みでなければ書きかけで移す", writingForWindowShift(hasDraft = true, focusIntent = false, sideReading = false))
+        assertTrue("入力中なら移す", writingForWindowShift(hasDraft = false, focusIntent = true, sideReading = true))
+        assertFalse(writingForWindowShift(hasDraft = false, focusIntent = false, sideReading = false))
     }
 
     // ── 関連の一覧の保存値（→ features/margin_pane.md §11「段5で決めたこと」）──────────

@@ -102,6 +102,7 @@ import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.note
 import com.example.newproject.domain.NoteLink
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -158,6 +159,11 @@ internal fun NoteReaderTab(
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
     expandedWidth: Boolean,
+    /**
+     * 窓に報告された折り目（→ [rememberReaderFold]）。**ここで読まずに外から受け取る** — 机の画面のテストは、
+     * 端末の持ち方によらず自分で決めた折り目で机を組む（→ system/instrumentation_testing.md 判断12）。
+     */
+    foldInfo: ReaderFoldInfo,
     /** 余白ペインが出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
     onMarginPaneVisibleChange: (Boolean) -> Unit,
     /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
@@ -184,7 +190,9 @@ internal fun NoteReaderTab(
     /** 関連ノートを普通に開く（関連タブと同じ経路）。右で読んでいた位置へ送るのはこの画面が行う。 */
     onOpenNote: (RelatedNote) -> Unit,
     /** 本文のリンクを今の走査結果から引く（→ features/note_links.md）。押したときに同期で呼ぶ。 */
-    onResolveNoteLink: (NoteLink) -> NoteLinkResolution
+    onResolveNoteLink: (NoteLink) -> NoteLinkResolution,
+    /** 右のノートの中のリンクを、右のノートを出発点に引く（→ features/desk_foundation.md §5）。押したときに同期で呼ぶ。 */
+    onResolveSideNoteLink: (link: NoteLink, sideNote: DocumentRef) -> NoteLinkResolution
 ) {
     val context = LocalContext.current
     val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
@@ -262,9 +270,17 @@ internal fun NoteReaderTab(
     var relatedRevealCount by remember { mutableLongStateOf(0L) }
     val sideReading = uiState.sideReading
     val reading = sideReading != SideReadingState.Idle
-    // 本文のリンクから右で開いたノートと、その見出し（→ features/note_links.md）。関連の候補から開いたときは null。
+    // リンクから右で開いたノートと、その見出し（→ features/note_links.md）。関連の候補から開いたときは null。
     var sideLinkStart by rememberSaveable { mutableStateOf<SideLinkStart?>(null) }
     var sideLinkCount by rememberSaveable { mutableLongStateOf(0L) }
+    // 右で辿り始めた入口が本文のリンクだったか。**最後に辿ったリンクではなく入口で決める** — 余白へ戻るとき、
+    // 関連の候補から始めたなら一覧まで送る（→ features/desk_foundation.md §4）。
+    var sideFromLink by rememberSaveable { mutableStateOf(false) }
+    // 右の本文の位置と、送り終えたリンクの要求。**右の面ではなくここに置く** — 右の面はペインを出せない窓では組まれず、
+    // 面に置くと、開き直したときに位置を失い、リンクの見出しへ送り直してしまう（→ features/desk_foundation.md 判断3）。
+    // 位置は右のノートごとに先頭から始め、画面の作り直しでは保つ。
+    val sideListState = rememberSaveable(sideReading.note?.ref?.value, saver = LazyListState.Saver) { LazyListState() }
+    var sideLinkHandled by rememberSaveable { mutableLongStateOf(0L) }
     // 右で開く。**書いているつもりは落とす** — 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。
     val openSide: (RelatedNote) -> Unit = { note ->
         onMemoFocusIntentChange(false)
@@ -274,10 +290,14 @@ internal fun NoteReaderTab(
     // 「← 余白へ戻る」と戻る操作。**元の場所へ戻す** — 関連の候補から開いたなら、選んだ一覧まで面を送る。
     // 本文のリンクから開いたなら、余白は開く前の位置のままでよい。
     val returnFromSide: () -> Unit = {
-        val fromLink = sideLinkStart?.noteUri == sideReading.note?.ref?.value
         onCloseSideReading()
         sideLinkStart = null
-        if (!fromLink) relatedReveal = ++relatedRevealCount
+        if (!sideFromLink) relatedReveal = ++relatedRevealCount
+    }
+    // 余白から右で開く（関連の候補と、反証の一文の出どころ）。
+    val openSideFromMargin: (RelatedNote) -> Unit = { note ->
+        sideFromLink = false
+        openSide(note)
     }
     // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
     val startNote = rememberNoteStart(listState, currentNoteUri, sectionModel, imageMeasurements) { heading ->
@@ -287,7 +307,6 @@ internal fun NoteReaderTab(
         onOpenNote(note)
         startNote(PendingNoteStart(note.ref.value, block))
     }
-    val foldInfo = rememberReaderFold()
     // 本文領域の左端（窓の座標）。折り目を本文領域の座標へ直すのに使う。最初の配置までは測れていない。
     var regionStartDp by remember { mutableStateOf<Float?>(null) }
     // 本文領域の上端（窓の座標）。机の画面で、つまみの上の余白まで払い始める場所に含めるのに使う（→ DeskGripReach）。
@@ -521,22 +540,25 @@ internal fun NoteReaderTab(
         }
         // 面の中身へ送る依頼の前に、その面が隠れていれば2面へ戻す（→ deskSpreadShowing）。
         val showDeskFace: (DeskFace) -> Unit = { face -> spreadTo(deskSpreadShowing(deskSpread, face)) }
+        // 今の本文を見出しへ送る。見出しが見つからなければ動かさずに知らせる。
+        val scrollCurrentTo: (String?) -> Unit = { heading ->
+            val target = currentNoteScrollTarget(sectionModel?.blocks, heading)
+            if (target == null) {
+                heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
+            } else {
+                coroutineScope.launch { listState.scrollToItem(target) }
+                imageMeasurements?.requestSkippedMeasurement(target)
+            }
+        }
         // 本文のリンク（→ features/note_links.md）。開く面は窓で決める（→ noteLinkActionFor）。
         val openLink: (NoteLink) -> Unit = { link ->
             when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = canShowPane)) {
-                is NoteLinkAction.ScrollCurrent -> {
-                    val target = currentNoteScrollTarget(sectionModel?.blocks, action.heading)
-                    if (target == null) {
-                        action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
-                    } else {
-                        coroutineScope.launch { listState.scrollToItem(target) }
-                        imageMeasurements?.requestSkippedMeasurement(target)
-                    }
-                }
+                is NoteLinkAction.ScrollCurrent -> scrollCurrentTo(action.heading)
                 is NoteLinkAction.Open -> if (action.onSupporting) {
                     // ペインを閉じていれば ✎ と同じく開き（設定に残る）、本文だけにしていれば2面へ戻す。
                     if (!marginPaneOpen) onSetMarginPaneOpen(true)
                     if (paneVisible) showDeskFace(DeskFace.Supporting)
+                    sideFromLink = true
                     openSide(action.note)
                     sideLinkStart = SideLinkStart(action.note.ref.value, action.heading, ++sideLinkCount)
                 } else {
@@ -544,6 +566,31 @@ internal fun NoteReaderTab(
                     startNote(PendingNoteStart(action.note.ref.value, block = 0, heading = action.heading))
                 }
                 is NoteLinkAction.Notice -> showNotice(action.text)
+            }
+        }
+        // 右のノートの中のリンク（→ features/desk_foundation.md §5）。右のノートを出発点に引き、今のノートにはしない。
+        // 辿り始めた入口（sideFromLink）は替えない。
+        val openSideLink: (NoteLink) -> Unit = { link ->
+            sideReading.note?.let { side ->
+                when (val action = sideLinkActionFor(onResolveSideNoteLink(link, side.ref), currentNoteUri?.let(::DocumentRef))) {
+                    is SideLinkAction.ScrollSide -> {
+                        val target = currentNoteScrollTarget(sideReadingBlocks, action.heading)
+                        if (target == null) {
+                            action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
+                        } else {
+                            coroutineScope.launch { sideListState.scrollToItem(target) }
+                        }
+                    }
+                    is SideLinkAction.ScrollMain -> {
+                        showDeskFace(DeskFace.Main)
+                        scrollCurrentTo(action.heading)
+                    }
+                    is SideLinkAction.OpenSide -> {
+                        openSide(action.note)
+                        sideLinkStart = SideLinkStart(action.note.ref.value, action.heading, ++sideLinkCount)
+                    }
+                    is SideLinkAction.Notice -> showNotice(action.text)
+                }
             }
         }
         // 横の払いで仕切りを1段動かす。**帯が出ている間は受けない** — 帯の操作と、本文に触れて帯をしまう操作が先。
@@ -620,9 +667,10 @@ internal fun NoteReaderTab(
         LaunchedEffect(windowKnown, paneVisible) {
             if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible)
         }
-        // **余白ペインでない並べ方になったら並べ読みを終える**（Fold を閉じた・✎ でしまった → endsSideReading）。
-        LaunchedEffect(windowKnown, paneVisible, reading) {
-            if (endsSideReading(windowKnown, paneVisible, reading)) onCloseSideReading()
+        // ペインの設定を閉じたら並べ読みを終える。**窓が変わっただけでは終えない** — ペインを出せない窓の間は隠しておき、
+        // 出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。余白のシートを開いたときは調停側が終える。
+        LaunchedEffect(reading, marginPaneOpen) {
+            if (endsSideReading(reading, marginPaneOpen)) onCloseSideReading()
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }
@@ -641,8 +689,8 @@ internal fun NoteReaderTab(
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
-            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
-            writing = memoDraft.text.isNotEmpty() || memoFocusIntent,
+            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。並べ読み中は入力中だけ。
+            writing = writingForWindowShift(hasDraft = memoDraft.text.isNotEmpty(), focusIntent = memoFocusIntent, sideReading = reading),
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )
@@ -803,8 +851,12 @@ internal fun NoteReaderTab(
                                                 onBack = returnFromSide,
                                                 onMove = moveToNote,
                                                 onRetry = onOpenSideReading,
+                                                listState = sideListState,
                                                 linkStart = sideLinkStart?.takeIf { it.noteUri == sideReading.note?.ref?.value },
-                                                onHeadingMissing = { heading -> showNotice(noteLinkHeadingMissingText(heading, opened = true)) }
+                                                handledLinkRequest = sideLinkHandled,
+                                                onLinkRequestHandled = { sideLinkHandled = it },
+                                                onHeadingMissing = { heading -> showNotice(noteLinkHeadingMissingText(heading, opened = true)) },
+                                                onLink = openSideLink
                                             )
                                         } else MarginMemoSheetContent(
                                             state = uiState.marginMemoState,
@@ -835,7 +887,7 @@ internal fun NoteReaderTab(
                                                 candidates = shownRelated?.candidates,
                                                 expanded = shownRelated?.expanded ?: false,
                                                 onToggle = { shownRelated?.let { relatedList = it.copy(expanded = !it.expanded) } },
-                                                onOpen = openSide,
+                                                onOpen = openSideFromMargin,
                                                 reveal = relatedReveal,
                                                 onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) },
                                                 rebuttal = uiState.rebuttalSentence

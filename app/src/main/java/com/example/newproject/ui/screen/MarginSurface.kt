@@ -352,9 +352,18 @@ internal val PaneRelatedListSaver: Saver<PaneRelatedList?, Any> = Saver(
 )
 
 /**
- * 並べ読みを終えるか。**余白ペインでない並べ方になったら終える**（Fold を閉じた・回して横の折り目になった・
- * ✎ でペインをしまった → features/margin_pane.md §5.9）。
- * **窓の情報が揃う前は判定しない** — 画面の作り直しの直後は、仮に余白ペインでない並べ方で組まれることがある。
+ * 並べ読みを終えるか（→ features/desk_foundation.md §5 の状態遷移）。**窓は判定に入れない** — Fold を閉じても
+ * 内側を横にしても終えず、ペインを出せる窓へ戻ったら同じノートを出す。窓の情報が揃う前の仮の並べ方でも誤って終えない。
+ *
+ * 画面が終えるのは ✎ でペインの設定を閉じたときだけ。余白のシートを開いたときは、どの画面から開いても通る
+ * 調停側の口（`NoteSessionCoordinator.openMarginMemoSheet`）が終える — 全画面の間は、この画面が組まれていない。
  */
-internal fun endsSideReading(windowKnown: Boolean, paneVisible: Boolean, reading: Boolean): Boolean =
-    reading && windowKnown && !paneVisible
+internal fun endsSideReading(reading: Boolean, paneOpen: Boolean): Boolean = reading && !paneOpen
+
+/**
+ * ペインからシートへ移る窓の切り替わりで、書いている途中として扱うか（→ features/margin_pane.md §5.4 の2つ目の表）。
+ * **並べ読み中は、書きかけの文字だけでは書いている途中にしない** — 余白は右のノートに隠れていたので、閉じた後も出さない。
+ * 出すとシートが出て、並べ読みが終わってしまう（→ features/desk_foundation.md §5）。
+ */
+internal fun writingForWindowShift(hasDraft: Boolean, focusIntent: Boolean, sideReading: Boolean): Boolean =
+    focusIntent || (hasDraft && !sideReading)

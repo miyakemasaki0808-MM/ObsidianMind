@@ -3,8 +3,11 @@ package com.example.newproject.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
@@ -111,8 +114,11 @@ class NoteLinkTapUiTest {
     private val sideNote = RelatedNote(title = "右のノート", ref = DocumentRef("content://vault/side.md"), isWikilinked = true)
     private var sideLink by mutableStateOf<SideLinkStart?>(null)
 
+    /** 位置と送り終えた要求は、読書画面と同じく面の外の保存値で持つ（→ docs/dev/features/desk_foundation.md 判断3）。 */
     @androidx.compose.runtime.Composable
     private fun SidePane(missing: MutableList<String>) {
+        val listState = rememberSaveable(sideNote.ref.value, saver = LazyListState.Saver) { LazyListState() }
+        var handled by rememberSaveable { mutableLongStateOf(0L) }
         Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
             SideReadingPane(
                 state = SideReadingState.Ready(sideNote),
@@ -121,8 +127,12 @@ class NoteLinkTapUiTest {
                 onBack = {},
                 onMove = { _, _ -> },
                 onRetry = {},
+                listState = listState,
                 linkStart = sideLink,
-                onHeadingMissing = { missing += it }
+                handledLinkRequest = handled,
+                onLinkRequestHandled = { handled = it },
+                onHeadingMissing = { missing += it },
+                onLink = null
             )
         }
     }

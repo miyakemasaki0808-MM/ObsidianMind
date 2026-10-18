@@ -444,6 +444,10 @@ class NoteViewModel internal constructor(
         return resolveNoteLink(link, source?.let(::DocumentRef), noteScan.linkIndex)
     }
 
+    /** 右（補助の面）のノートの中のリンクを、**右のノートを出発点に**引く（→ features/desk_foundation.md §5）。 */
+    internal fun resolveSideNoteLink(link: NoteLink, sideNote: DocumentRef): NoteLinkResolution =
+        resolveNoteLink(link, sideNote, noteScan.linkIndex)
+
     // ── 読書痕跡（実装は ReadingTraceController）────────────────────────────────
 
     /** 最終可視ブロックと、そのブロックの可視割合の報告。NoteReaderTab がスクロールに追従して呼ぶ。 */

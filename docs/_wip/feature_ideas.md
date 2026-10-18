@@ -628,8 +628,6 @@ grillの回答（称号を選びポイントを避けた）は**安全な方向�
   分類軸も効果測定の道具も要らなくなった（v1は非AI）。残る未確認は実Vaultでの分布だけ。
 - **A-1 + N-8** — 同じ `NoteSectionModel` に乗る2つの見出しUI。**先に着手するほうが両者の関係を決める責任を負う。**
 - **P-1 → P-2** — キャッシュを入れると自動生成の回数が減るので、**優先度キューが要るかは P-1 の後でないと判断できない。**
-- **右のノートの中のリンク + Fold の机の土台** — 本文のリンクは補助の面で開けるが、右のノートの中のリンクは押せないままにした
-  （→ [note_links](../dev/features/note_links.md)）。辿る形は補助の面の探索（[fold_experience](../dev/system/fold_experience.md) 契約1）そのものなので、土台と一緒に決める。
 - **読む面の佇まいを触る候補は、もう束ねる相手がいない。** 取り合っていた4件のうち
   N-9（2026-09-09）と N-10（2026-09-18）は取り下げ、N-2 だけが残った。
   **割り当ての正本は [bearing_channels](../dev/system/bearing_channels.md)** で、
@@ -668,7 +666,7 @@ grillの回答（称号を選びポイントを避けた）は**安全な方向�
 - **N-12** — 冊子モード → [booklet_mode](../dev/features/booklet_mode.md)。残件は無く、新たに出たものは内容で台帳へ起票する
 - **N-18** — 冊子の面を分野で色分け → [note_field_color](../dev/features/note_field_color.md)
 - **N-14** — 蒸留の太字範囲をユーザーが調整する。プリセットと自由範囲まで実装した → [reflect_distill](../dev/features/reflect_distill.md) §5
-- **N-21** — ノート内のリンクを押して開く → [note_links](../dev/features/note_links.md)。右のノートの中のリンクは Fold の机の土台で決める
+- **N-21** — ノート内のリンクを押して開く → [note_links](../dev/features/note_links.md)。右のノートの中のリンクは右のまま辿る → [desk_foundation](../dev/features/desk_foundation.md)
 - **N-20** — 結晶の一覧を宝石の陳列にする。月の棚・根拠のノートの分野で左右半々に塗る宝石・段の直下に開く → [reflect_crystal](../dev/features/reflect_crystal.md) 判断11
 
 ### やらないと決めたもの

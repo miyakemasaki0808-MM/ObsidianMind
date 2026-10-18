@@ -10,7 +10,7 @@ import com.example.newproject.domain.NoteLink
 
 /**
  * 本文のリンクを押したときの口（→ features/note_links.md §7）。**リンクを押せるのは、これを渡された本文だけ。**
- * 補助の面の本文には渡さないので、そちらのリンクは今と同じ押せない文字列のまま描かれる。
+ * 右（補助の面）の本文にも渡す。押した後の行き先は、左の本文なら note_links、右の本文なら features/desk_foundation.md が決める。
  */
 internal class NoteLinkTaps(private val onLink: (NoteLink) -> Unit) {
     /**

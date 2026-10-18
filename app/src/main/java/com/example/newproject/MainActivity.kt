@@ -53,6 +53,7 @@ import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
 import com.example.newproject.ui.screen.RelatedTab
 import com.example.newproject.ui.screen.SearchTab
+import com.example.newproject.ui.screen.rememberReaderFold
 import com.example.newproject.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -210,6 +211,7 @@ class MainActivity : ComponentActivity() {
                                 marginPaneOpen = marginPaneOpen,
                                 onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
                                 expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
+                                foldInfo = rememberReaderFold(),
                                 onMarginPaneVisibleChange = { notePaneVisible = it },
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
@@ -224,7 +226,8 @@ class MainActivity : ComponentActivity() {
                                 onCloseSideReading = { viewModel.closeSideReading() },
                                 // 関連タブと同じ経路で開く。ノートタブの中なので画面は移らない。
                                 onOpenNote = { note -> viewModel.openNote(contentResolver, note) },
-                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) }
+                                onResolveNoteLink = { link -> viewModel.resolveNoteLink(link) },
+                                onResolveSideNoteLink = { link, sideNote -> viewModel.resolveSideNoteLink(link, sideNote) }
                             )
                         }
 
