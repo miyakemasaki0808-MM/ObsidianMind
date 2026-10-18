@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
  * 訪問の記録・要約・分野判定・余白メモのどれも呼ばない。
  *
  * 寿命はノート単位（→ architecture.md 判断4の1行目）。ノート切替と Vault 切替では [cancelAndClear] がジョブと本文を、
- * `withNoteScopedReset()` が状態を落とす。余白へ戻る・ペインを閉じる・余白ペインでない並べ方になったときは [close]。
+ * `withNoteScopedReset()` が状態を落とす。余白へ戻る・ペインを閉じる・余白のシートを出したときは [close]。
  *
  * **失効はジョブの取り消しで守る。** 書き込みはすべてこのジョブの中にあり、[open]・[close]・[cancelAndClear] は
  * どれも先にジョブを取り消す。読み出しと解析が正常に戻ったときは `withContext` が取り消しを確かめるので、遅れた本文は書かれない。
@@ -72,7 +72,7 @@ internal class SideReadingController(
         }
     }
 
-    /** 余白へ戻る・ペインを閉じる・余白ペインでない並べ方になった。 */
+    /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun close() {
         cancelAndClear()
         state.set(SideReadingState.Idle)

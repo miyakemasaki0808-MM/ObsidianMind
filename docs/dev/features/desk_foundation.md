@@ -1,7 +1,7 @@
 # 机の土台 — 補助の面で辿り、閉じても戻す
 
-**状態:** 実装中。右で辿る形（契約1）は実装済み、窓が変わっても並べ読みを保つ形（契約4）はこれから
-**最終検証:** 未検証（実装前）
+**状態:** 実装済み。実機ではまだ確かめていない
+**最終検証:** 未検証（別の目の突合と実機はまだ）
 **関連コード:** `ui/screen/NoteReaderTab.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/MarginSurface.kt` / `NoteViewModel.kt` / `controller/SideReadingController.kt`
 **関連テスト:** `NoteLinkActionsTest` / `MarginSurfaceTest` / `NoteSessionCoordinatorTest` / `NoteReadingFlowTest` / `NoteLinkTapUiTest`
 **正本:** この文書（補助の面で辿る形と、窓が変わっても並べ読みを保つ形）。原則と契約は [fold_experience](../system/fold_experience.md)、

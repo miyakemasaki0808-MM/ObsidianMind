@@ -807,6 +807,6 @@ internal class NoteSessionCoordinator(
      */
     fun openSideReading(note: RelatedNote, read: suspend () -> String) = sideReading.open(note, read)
 
-    /** 余白へ戻る・ペインを閉じる・余白ペインでない並べ方になった。 */
+    /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun closeSideReading() = sideReading.close()
 }

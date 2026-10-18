@@ -667,9 +667,10 @@ internal fun NoteReaderTab(
         LaunchedEffect(windowKnown, paneVisible) {
             if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible)
         }
-        // **余白ペインでない並べ方になったら並べ読みを終える**（Fold を閉じた・✎ でしまった → endsSideReading）。
-        LaunchedEffect(windowKnown, paneVisible, reading) {
-            if (endsSideReading(windowKnown, paneVisible, reading)) onCloseSideReading()
+        // 並べ読みを終えるのは、ペインの設定を閉じたときと余白のシートが出たときだけ。**窓が変わっただけでは終えない** —
+        // ペインを出せない窓の間は隠しておき、出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。
+        LaunchedEffect(reading, marginPaneOpen, uiState.isMarginMemoSheetVisible) {
+            if (endsSideReading(reading, marginPaneOpen, uiState.isMarginMemoSheetVisible)) onCloseSideReading()
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }
@@ -688,8 +689,8 @@ internal fun NoteReaderTab(
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
-            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。
-            writing = memoDraft.text.isNotEmpty() || memoFocusIntent,
+            // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。並べ読み中は入力中だけ。
+            writing = writingForWindowShift(hasDraft = memoDraft.text.isNotEmpty(), focusIntent = memoFocusIntent, sideReading = reading),
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )

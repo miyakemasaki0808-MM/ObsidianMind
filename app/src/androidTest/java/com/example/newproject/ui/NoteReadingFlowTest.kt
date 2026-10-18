@@ -1902,20 +1902,81 @@ class NoteReadingFlowTest {
         }
     }
 
-    /** **余白ペインでない並べ方になったら終える**（Fold を閉じた・✎ でしまった）。本の形から閉じた外画面の窓へ替えて縦積みにする。 */
+    // ── 窓が変わっても並べ読みを保つ（→ features/desk_foundation.md §5）─────────────────
+
+    /**
+     * **閉じた外画面へ替えても並べ読みを終えず、本の形へ戻すと同じノートを読んでいた位置で出す。**
+     * 右の位置は右の面ではなくノートの画面が持つので、右の面が組まれていない間も失わない（→ features/desk_foundation.md 判断3）。
+     * **JVMでは書けない** — 右の面が組まれない間の位置の寿命は、画面を組み替えてみないと出ない。
+     */
     @Test
-    fun 余白ペインでない並べ方になると_並べ読みを終える() {
-        var wide by mutableStateOf(true)
+    fun 閉じた外画面へ替えても並べ読みを終えず_本の形へ戻すと同じ位置で出す() {
+        keepSideReadingAcrossClose(recreate = false)
+    }
+
+    /** 実機の Fold の開閉は画面を作り直すので、替えるたびに作り直しと復元を挟む形でも確かめる。 */
+    @Test
+    fun 作り直しを挟んで閉じて開いても_並べ読みを同じ位置で出す() {
+        keepSideReadingAcrossClose(recreate = true)
+    }
+
+    /**
+     * 本の形で右のノートを [KEPT_SIDE_BLOCK] まで送り、閉じた外画面へ替えてから本の形へ戻す。[recreate] なら替えるたびに
+     * 画面の作り直しと復元を挟む。**1つのテストで1回だけ呼ぶ** — 画面を設定できるのはテストごとに1回。
+     */
+    private fun keepSideReadingAcrossClose(recreate: Boolean) {
+        val restoration = StateRestorationTester(composeRule)
+        var opened by mutableStateOf(true)
         var closed = 0
         val state = loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
-        composeRule.setContent {
+        restoration.setContent {
             AppTheme(darkTheme = false) {
-                PostureBox(if (wide) Posture.Book else Posture.Closed) { window ->
+                PostureBox(if (opened) Posture.Book else Posture.Closed) { window ->
                     ReaderTab(
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks,
+                        onCloseSideReading = { closed++ }
+                    )
+                }
+            }
+        }
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
+            .performScrollToIndex(KEPT_SIDE_BLOCK)
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertIsDisplayed()
+
+        composeRule.runOnIdle { opened = false }
+        if (recreate) restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals("閉じた外画面へ替えて並べ読みを終えた", 0, closed) }
+
+        composeRule.runOnIdle { opened = true }
+        if (recreate) restoration.emulateSavedInstanceStateRestore()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertIsDisplayed()
+        composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+        composeRule.runOnIdle { assertEquals("開き直して並べ読みを終えた", 0, closed) }
+    }
+
+    /** **✎ でペインの設定を閉じると並べ読みを終える。** 窓が変わっただけのときと分ける（→ features/desk_foundation.md §5）。 */
+    @Test
+    fun ペインの設定を閉じると並べ読みを終える() {
+        var paneOpen by mutableStateOf(true)
+        var closed = 0
+        val state = loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book) { window ->
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = paneOpen,
                         window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks,
                         onCloseSideReading = { closed++ }
@@ -1926,10 +1987,91 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
         composeRule.runOnIdle { assertEquals("ペインのまま終えた", 0, closed) }
 
-        composeRule.runOnIdle { wide = false }
+        composeRule.runOnIdle { paneOpen = false }
         composeRule.waitForIdle()
 
         composeRule.runOnIdle { assertEquals(1, closed) }
+    }
+
+    /**
+     * **閉じた外画面で余白のシートを出すと、隠していた並べ読みを終える。** シートは狭い窓での補助の面なので、余白へ戻るのと同じに扱う。
+     * 終えずに開き直すと、シートで書いていた入力欄が右のノートに隠れる（→ features/desk_foundation.md 判断2）。
+     * ✎ はシートを出すだけで並べ読みを閉じない — シートが出たことで終わる。
+     */
+    @Test
+    fun 閉じた外画面で余白のシートを出すと並べ読みを終える() {
+        var closed = 0
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = SideReadingState.Ready(SIDE_NOTE)))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Closed) { window ->
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks,
+                        onCloseSideReading = {
+                            closed++
+                            state = state.copy(sideReading = SideReadingState.Idle)
+                        }
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals("シートを出す前に終えた", 0, closed) }
+
+        composeRule.onNodeWithContentDescription("このノートのメモ").performSemanticsAction(SemanticsActions.OnClick)
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals(1, closed) }
+    }
+
+    /**
+     * **隠している間に右の読み込みが終わっても、本の形へ戻すと読めた本文が出る。** 実機では読み込みが一瞬で終わり、
+     * 閉じる操作と重ねられないので、ここで持つ（→ features/desk_foundation.md §10）。
+     */
+    @Test
+    fun 隠している間に右の読み込みが終わっても_本の形へ戻すと本文が出る() {
+        finishSideReadingWhileHidden(SideReadingState.Ready(SIDE_NOTE), shown = SIDE_PARAGRAPH)
+    }
+
+    @Test
+    fun 隠している間に右の読み込みが失敗しても_本の形へ戻すと右だけに失敗が出る() {
+        finishSideReadingWhileHidden(SideReadingState.Failed(SIDE_NOTE, "読めない"), shown = "このノートを読み込めませんでした")
+    }
+
+    /** 本の形で読み込み中のまま閉じた外画面へ替え、隠している間に [result] へ進めてから本の形へ戻す。 */
+    private fun finishSideReadingWhileHidden(result: SideReadingState, shown: String) {
+        var opened by mutableStateOf(true)
+        var side by mutableStateOf<SideReadingState>(SideReadingState.Loading(SIDE_NOTE))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(if (opened) Posture.Book else Posture.Closed) { window ->
+                    ReaderTab(
+                        loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(sideReading = side),
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { side is SideReadingState.Ready }
+                    )
+                }
+            }
+        }
+        composeRule.runOnIdle { opened = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { side = result }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(shown, substring = true).assertDoesNotExist()
+
+        composeRule.runOnIdle { opened = true }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(shown, substring = true).assertIsDisplayed()
     }
 
     /**
@@ -2198,5 +2340,11 @@ class NoteReadingFlowTest {
         val LONG_SIDE_BODY = (0 until 40).joinToString("\n\n") { "${sideMarkerAt(it)} の本文です。" }
 
         fun sideMarkerAt(index: Int) = "右の段落$index"
+
+        /** [LONG_SIDE_BODY] の段落の文全体。番号の前方一致（「右の段落3」と「右の段落30」）で取り違えない。 */
+        fun sideParagraph(index: Int) = "${sideMarkerAt(index)} の本文です。"
+
+        /** 閉じて開いても保つ右の位置。開いた形の右の面に先頭の段落が入らないところ。 */
+        const val KEPT_SIDE_BLOCK = 30
     }
 }

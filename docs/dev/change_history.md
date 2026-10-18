@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-18 | Fold を閉じても並べ読みを終えず、ペインを出せる窓へ戻ると右のノートを同じ位置で出すようにした | [desk_foundation](features/desk_foundation.md) |
 | 2026-10-18 | 開いた Fold の右のノートの中のリンクを押すと、右のままそのノートへ辿れるようにした。辿った順は持たない | [desk_foundation](features/desk_foundation.md) |
 | 2026-10-17 | 机のテストの折り目を外から渡す変更を独立レビューし、新規指摘なしと机上ゲート成功を記録して、3姿勢の実機確認待ちを残した | [レビュー](../review/README.md) |
 | 2026-10-17 | 机の画面のテストが実窓の折り目を読まないよう、折り目を読書画面の外で読んで渡し、テストは姿勢を決めて机を組むようにした | [instrumentation_testing](system/instrumentation_testing.md) |
