@@ -32,7 +32,9 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -90,6 +92,7 @@ import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.BodyPosition
+import com.example.newproject.ui.screen.headingMemoMarkDescription
 import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
@@ -2100,12 +2103,41 @@ class NoteReadingFlowTest {
         assertTrue("縦積みになっていない: $bounds / $center", bounds.left.value < center && bounds.right.value > center)
     }
 
-    /** 本の形の窓で、ペインを閉じた（見開きになる）読書画面。[fontScale] を渡すと、その文字の倍率で組む。 */
+    /**
+     * 見出しの脇の印は枠（48dp）の高さを取る。**計測が文字の高さだけだと、印のある見出しが続くページの下で本文が切れる**
+     * （ページは縦に送れず、次のページは計測した位置から始まるので、切れた行を読む手段が無い）。
+     * メモが届く前と後で、最初の見開きに出た段落が1つも縮まず切れずに出ることを確かめる。
+     */
+    @Test
+    fun 印のある見出しが続いても見開きのページの下で本文が切れない() {
+        assumeDeskWindow()
+        var memos by mutableStateOf(emptyList<MarginMemo>())
+        setSpread(MARKED_SPREAD_BODY, memos = { memos })
+        assertSpreadParagraphsWhole()
+
+        memos = (0 until MARKED_SECTIONS).map { MarginMemo("印の節${it}のメモ", it.toLong(), markedSection(it)) }
+        composeRule.waitForIdle()
+        composeRule.onAllNodesWithContentDescription(headingMemoMarkDescription(1)).onFirst().assertIsDisplayed()
+        assertSpreadParagraphsWhole()
+    }
+
+    /** 見開きに出た [MARKED_SPREAD_BODY] の段落が、どれも最初の段落と同じ高さで切れずに出ている。 */
+    private fun assertSpreadParagraphsWhole() {
+        val shown = (0 until MARKED_SECTIONS).flatMap { composeRule.onAllNodesWithText(markedParagraph(it)).fetchSemanticsNodes() }
+        assertTrue("見開きに段落がほとんど出ていない: ${shown.size}", shown.size >= 6)
+        val whole = shown.first().boundsInRoot.height
+        val tolerance = with(composeRule.density) { 1.dp.toPx() }
+        val cut = shown.filter { it.boundsInRoot.height < whole - tolerance }.map { it.boundsInRoot }
+        assertTrue("ページの下で切れた段落がある: $cut（1行の高さ $whole）", cut.isEmpty())
+    }
+
+    /** 本の形の窓で、ペインを閉じた（見開きになる）読書画面。[fontScale] を渡すと、その文字の倍率で組む。[memos] を渡すと余白メモを読み込んだ状態にする。 */
     private fun setSpread(
         body: String,
         listState: LazyListState = LazyListState(),
         position: BodyPosition? = null,
         fontScale: Float? = null,
+        memos: (() -> List<MarginMemo>)? = null,
         opened: () -> Boolean = { true },
         paneOpen: () -> Boolean = { false },
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> }
@@ -2117,7 +2149,7 @@ class NoteReadingFlowTest {
                 CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
                     PostureBox(if (opened()) Posture.Book else Posture.Closed, Modifier.testTag(DESK_TAG)) { window ->
                         ReaderTab(
-                            loadedNote(body),
+                            memos?.let { loadedNote(body).withMemos(*it().toTypedArray()) } ?: loadedNote(body),
                             model,
                             listState,
                             marginPaneOpen = paneOpen(),
@@ -2829,6 +2861,15 @@ class NoteReadingFlowTest {
         /** 見開きで読む、短い段落だけの本文。最初の見開きには40段落ほどが入る。 */
         const val SPREAD_PARAGRAPHS = 120
         val SPREAD_BODY = (0 until SPREAD_PARAGRAPHS).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
+
+        /** 見出しと1行の段落を交互に並べた本文の節の数。最初の見開きは見出しで埋まる。 */
+        const val MARKED_SECTIONS = 40
+
+        fun markedSection(index: Int) = "印の節$index"
+
+        fun markedParagraph(index: Int) = "印の節${index}の本文です。"
+
+        val MARKED_SPREAD_BODY = (0 until MARKED_SECTIONS).joinToString("\n\n") { "## ${markedSection(it)}\n\n${markedParagraph(it)}" }
 
         /** 見開きで送る先。最初の見開きに入らないところ。 */
         const val JUMPED_SPREAD_BLOCK = 100

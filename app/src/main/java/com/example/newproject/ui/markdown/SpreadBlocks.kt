@@ -2,7 +2,7 @@ package com.example.newproject.ui.markdown
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +52,7 @@ internal data class SpreadTableCell(val text: AnnotatedString, val lineStarts: L
 
 /**
  * 測るための入力。[baseStyle] は描画が重ねる `LocalTextStyle`、[textWidthPx] はページの本文の幅。
- * [headingAccessoryPx] は見出しの脇の印のために空ける幅（印を出すときだけ）。
+ * [headingAccessoryPx] は見出しの脇の印のために空ける幅（印を出すときだけ）。空けるときは、見出しの高さも印の枠を下回らない。
  * [imageHeightPx] は画像の高さ。寸法が分からなければ大きい側（ページいっぱい）に取るよう、大きな値を返す。
  */
 internal class SpreadMeasureInputs(
@@ -88,7 +88,8 @@ internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInput
                     layout.spreadLines(0),
                     text.length,
                     fragmentPadding = px(MarkdownBodyStyle.headingTopPadding(block.level).value),
-                    heading = true
+                    heading = true,
+                    minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight.value) else 0f
                 ),
                 SpreadBlockRender.Heading(block.level, text)
             )
@@ -203,9 +204,12 @@ internal fun SpreadSliceView(
         is SpreadBlockRender.Heading -> if (headingAccessory == null || slice.charStart > 0) {
             MarkdownHeadingText(render.level, render.text.cut(range))
         } else {
+            // 印の枠は、印の有無にかかわらず計測と同じ寸法で取る。メモが届いても消えても組み直さずに済む。
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f)) { MarkdownHeadingText(render.level, render.text.cut(range)) }
-                Box(modifier = Modifier.width(HeadingAccessoryWidth)) { headingAccessory(slice.blockIndex) }
+                Box(modifier = Modifier.size(HeadingAccessoryWidth, HeadingAccessoryHeight), contentAlignment = Alignment.Center) {
+                    headingAccessory(slice.blockIndex)
+                }
             }
         }
 
@@ -274,8 +278,9 @@ internal fun spreadTableLines(
     }
 }
 
-/** 見出しの脇の印のために空ける幅。印（`HeadingMemoMark`）は押せる大きさとして48dp四方を取る。 */
+/** 見出しの脇の印の枠。印（`HeadingMemoMark`）は押せる大きさとしてこの四方を取り、見開きはこの寸法で測って描く。 */
 internal val HeadingAccessoryWidth = 48.dp
+internal val HeadingAccessoryHeight = 48.dp
 
 private fun overlaps(start: Int, end: Int, slice: SpreadSlice): Boolean =
     start < slice.charEnd && end > slice.charStart || start == end && start in slice.charStart until maxOf(slice.charEnd, slice.charStart + 1)

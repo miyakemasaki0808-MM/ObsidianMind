@@ -15,6 +15,8 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.HeadingAccessoryHeight
+import com.example.newproject.ui.markdown.HeadingAccessoryWidth
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
@@ -1076,7 +1078,7 @@ private fun HeadingMemoMark(count: Int, onClick: () -> Unit) {
     val description = headingMemoMarkDescription(count)
     Box(
         modifier = Modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .sizeIn(minWidth = HeadingAccessoryWidth, minHeight = HeadingAccessoryHeight)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center

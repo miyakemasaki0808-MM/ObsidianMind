@@ -117,6 +117,19 @@ class SpreadPaginationTest {
         assertEquals(listOf(7, 7, 6), pages.map { it.slices.single().run { unitEnd - unitStart } })
     }
 
+    /** 見出しの脇の印の枠は、文字より高ければその高さを取る。文字の高さで詰めると、描いたページの下が切れる。 */
+    @Test
+    fun `印の枠のある見出しは枠の高さで詰める`() {
+        val marked = SpreadBlock.Lines(listOf(SpreadLine(10f, 0)), textLength = 4, fragmentPadding = 2f, heading = true, minHeight = 30f)
+        val blocks = List(6) { listOf(marked, lines(1)) }.flatten()
+        val pages = paginateSpread(blocks, leftPageHeight = 100f, blockSpacing = 0f)
+
+        assertEquals(listOf(4, 4, 4), pages.map { it.slices.size })
+        assertTrue(pages.all { page -> page.slices.sumOf { it.height.toDouble() } <= 100.0 })
+        assertTrue(pages.flatMap { it.slices }.filter { it.blockIndex % 2 == 0 }.all { it.height == 30f })
+        assertCovered(blocks, pages)
+    }
+
     @Test
     fun `表は行の境目で割り、ページより高い行はセルの中の行で割る`() {
         val tall = tableRow(listOf(30, 12), lineHeight = 10f, padding = 6f, firstChar = 0)

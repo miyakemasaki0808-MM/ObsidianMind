@@ -18,12 +18,14 @@ internal sealed interface SpreadBlock {
      * 行の境目で割れるブロック（段落・見出し・リストの項目・引用の行・コード）。
      * [fragmentPadding] は切れ端ごとに上下へ付く余白の合計（コードの面の内側の余白など）で、ページをまたいで割ると切れ端の数だけ付く。
      * [heading] なら、ページの末尾に見出しだけを残さない。
+     * [minHeight] は最初の行を含む切れ端の最低の高さ（見出しの脇の印の枠。文字が低くても枠の高さを取る）。
      */
     data class Lines(
         val lines: List<SpreadLine>,
         override val textLength: Int,
         val fragmentPadding: Float = 0f,
-        val heading: Boolean = false
+        val heading: Boolean = false,
+        val minHeight: Float = 0f
     ) : SpreadBlock
 
     /** 割らない画像。ページの高さに収まらなければ、ページの高さまで縮める。 */
@@ -122,6 +124,10 @@ private fun SpreadBlock.units(pageHeight: Float): List<SpreadUnit> = when (this)
 
 private fun SpreadBlock.fragmentPadding(): Float = (this as? SpreadBlock.Lines)?.fragmentPadding ?: 0f
 
+/** 単位 [unitStart] から始まる、余白込みで [height] の切れ端が占める高さ。最初の行を含めば最低の高さを下回らない。 */
+private fun SpreadBlock.fragmentHeight(unitStart: Int, height: Float): Float =
+    if (unitStart == 0 && this is SpreadBlock.Lines) max(height, minHeight) else height
+
 /**
  * ブロックを本文の順に、ページへ詰める（→ features/note_spread.md §5「ページの割り方」）。
  * [leftPageHeight]・[rightPageHeight] は左右のページの本文の高さ（再会カードが出ている間は左が短い）、
@@ -163,7 +169,7 @@ internal fun paginateSpread(
         if (block is SpreadBlock.Lines && block.heading && current.isNotEmpty()) {
             val next = blocks.getOrNull(index + 1)
             val nextFirst = unitsOf.getOrNull(index + 1)?.firstOrNull()
-            val headingHeight = blockSpacing + units.sumOf { it.height.toDouble() }.toFloat() + padding
+            val headingHeight = blockSpacing + block.fragmentHeight(0, units.sumOf { it.height.toDouble() }.toFloat() + padding)
             val withNext = headingHeight + (nextFirst?.let { blockSpacing + it.height + (next?.fragmentPadding() ?: 0f) } ?: 0f)
             if (used + withNext > pageHeight()) closePage()
         }
@@ -172,10 +178,11 @@ internal fun paginateSpread(
             val spacing = if (current.isEmpty()) 0f else blockSpacing
             var end = unit
             var height = padding
-            while (end < units.size && (end == unit && current.isEmpty() || used + spacing + height + units[end].height <= pageHeight())) {
+            while (end < units.size && (end == unit && current.isEmpty() || used + spacing + block.fragmentHeight(unit, height + units[end].height) <= pageHeight())) {
                 height += units[end].height
                 end++
             }
+            height = block.fragmentHeight(unit, height)
             if (end == unit) {
                 closePage()
                 continue
