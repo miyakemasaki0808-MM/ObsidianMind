@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
-**状態:** 実装中。区切り0（技術検証）・区切り1（組版の純関数）と、区切り2のうち本文の位置の口まで。見開きの画面はまだ出ない
+**状態:** 実装中。区切り0・区切り1と、区切り2のうち位置の口・計測・見開きの画面まで。帯と重ねるレールは未実装で、見開きの間はタブを替えられない
 **最終検証:** 未検証（区切り1の純関数だけ実装。§5〜§7 の画面と接続は実装前）
-**関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt`。（予定）`ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`。新規に `ui/screen/NoteSpread.kt`
-**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest`。（予定）`ReaderLayoutTest` / `NoteReadingFlowTest`、本文の位置の口のテスト
+**関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt`。（予定）`ui/AppScaffold.kt`
+**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest`。（予定）`NoteReadingFlowTest`
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、
 机の画面は [margin_pane](margin_pane.md) §5.1、面の色・形・動きの割り当ては [bearing_channels](../system/bearing_channels.md) が持つ
 

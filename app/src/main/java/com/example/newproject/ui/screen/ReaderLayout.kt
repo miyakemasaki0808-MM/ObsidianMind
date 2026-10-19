@@ -16,7 +16,16 @@ internal sealed interface ReaderLayout {
 
     /** 左に操作と本文、右に余白ペイン。本文の幅と、折り目をまたぐ溝の幅を持つ。 */
     data class MarginPane(val bodyWidthDp: Float, val gutterDp: Float) : ReaderLayout
+
+    /**
+     * 本の形でペインを閉じて読むときの、本文の見開き（→ features/note_spread.md）。
+     * [pageStartDp] は左ページの左端（本文領域の座標）、[pageWidthDp] は1ページの幅（左右同じ）、[gutterDp] は折り目をまたぐ溝。
+     */
+    data class Spread(val pageStartDp: Float, val pageWidthDp: Float, val gutterDp: Float) : ReaderLayout
 }
+
+/** 見開きに入れるかを決める、本文の側の入力（→ [spreadAllowed]）。[maxBlockChars] は本文のブロックの文字数の最大。 */
+internal data class SpreadFit(val fontScale: Float, val maxBlockChars: Int)
 
 /**
  * 窓に報告された折り目。座標は**窓の**左端からの dp で、本文領域の座標ではない。
@@ -37,11 +46,13 @@ internal fun readerLayoutFor(
     paneOpen: Boolean = false,
     expandedWidth: Boolean = false,
     fold: ReaderFold? = null,
-    regionStartDp: Float = 0f
+    regionStartDp: Float = 0f,
+    /** 本文の側の入力。ノートが無いか解析の前なら null で、見開きにしない。 */
+    spread: SpreadFit? = null
 ): ReaderLayout {
     // 高さの足りない窓では、ペインより本文の高さを優先する。ペインの設定によらない。
     if (heightDp < SIDE_BY_SIDE_MAX_HEIGHT_DP && widthDp > heightDp) return ReaderLayout.SideBySide
-    if (!paneOpen) return ReaderLayout.Stacked
+    if (!paneOpen) return spreadFor(widthDp, heightDp, fold, regionStartDp, spread) ?: ReaderLayout.Stacked
     return when {
         // 平らでも半開きでも割る。`isSeparating` が偽でも除外しない。
         fold?.isVertical == true -> {
@@ -61,6 +72,33 @@ internal fun readerLayoutFor(
         else -> null
     } ?: ReaderLayout.Stacked
 }
+
+/**
+ * ペインを閉じた本の形の見開き。縦の折り目が本文領域の中にあり、1行の字数・ページの行数・巨大なブロックの条件を満たすとき。
+ * **入れるかは右のページで決める** — 左のページはレールを畳むまで狭く、畳むのは見開きが出てからなので、左で決めると出入りを繰り返す。
+ * 2ページは狭いほうの幅にそろえ、折り目をはさんで置く（レールが畳まれると左右が同じになる）。
+ */
+private fun spreadFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, regionStartDp: Float, spread: SpreadFit?): ReaderLayout.Spread? {
+    if (spread == null || fold?.isVertical != true) return null
+    val foldStart = fold.startDp - regionStartDp
+    val foldEnd = fold.endDp - regionStartDp
+    if (foldEnd <= 0f || foldStart >= widthDp) return null
+    val gutter = maxOf(PANE_GUTTER_DP, foldEnd - foldStart)
+    val center = (foldStart + foldEnd) / 2f
+    val left = center - gutter / 2f
+    val right = widthDp - center - gutter / 2f
+    val textWidth = right - SPREAD_PAGE_PADDING_DP * 2
+    val textHeight = heightDp - SPREAD_STRIP_DP - SPREAD_PAGE_PADDING_DP * 2
+    if (!spreadAllowed(textWidth, textHeight, spread.fontScale, spread.maxBlockChars)) return null
+    val page = minOf(left, right)
+    return ReaderLayout.Spread(pageStartDp = left - page, pageWidthDp = page, gutterDp = gutter)
+}
+
+/** 見開きのページの内側の余白。縦の流しの本文の面と同じ。 */
+internal const val SPREAD_PAGE_PADDING_DP = 18f
+
+/** 見開きの上に置くつまみの段の高さ（机の画面と同じ `DeskStripHeight`）。 */
+private const val SPREAD_STRIP_DP = 48f
 
 /** [centerDp] を溝の中心にして割る。**割った後の幅が下限を割るなら割らない。** */
 private fun paneAt(centerDp: Float, widthDp: Float, gutterDp: Float): ReaderLayout.MarginPane? {

@@ -50,7 +50,9 @@ import com.example.newproject.ui.theme.OnSurfaceSubtle
 internal fun MarkdownImage(
     block: MarkdownBlock.Image,
     loader: NoteImageLoader?,
-    measurements: NoteImageMeasurements?
+    measurements: NoteImageMeasurements?,
+    /** 高さの上限。見開きでページに収まるよう縮めるときだけ渡す。画像は縦横比を保って枠の中へ収まる。 */
+    maxHeightDp: Int? = null
 ) {
     if (loader == null) {
         MarkdownParagraph(block.sourceText())
@@ -89,12 +91,13 @@ internal fun MarkdownImage(
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val widthDp = maxWidth.value.toInt()
         val measured = measurement as? NoteImageMeasurement.Measured
-        val heightDp = reservedImageHeightDp(
+        val reserved = reservedImageHeightDp(
             widthDp = widthDp,
             sourceWidth = measured?.width ?: 0,
             sourceHeight = measured?.height ?: 0,
             pendingHeightDp = pendingHeightDp
         )
+        val heightDp = maxHeightDp?.let { minOf(reserved, it) } ?: reserved
         val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
 
         // 寸法が取れてから中身を読む。先に読むと確保する高さが決まらない。

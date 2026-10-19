@@ -13,6 +13,7 @@ import com.example.newproject.ui.screen.SpreadTableRow
 import com.example.newproject.ui.screen.anchorAfterReparse
 import com.example.newproject.ui.screen.anchorAfterRequest
 import com.example.newproject.ui.screen.anchorAfterTurn
+import com.example.newproject.ui.screen.maxBlockChars
 import com.example.newproject.ui.screen.paginateSpread
 import com.example.newproject.ui.screen.splitTableRow
 import com.example.newproject.ui.screen.spreadAllowed
@@ -76,6 +77,23 @@ class SpreadPaginationTest {
         )
 
         assertEquals(listOf(listOf(0), listOf(1), listOf(2)), pages.map { page -> page.slices.map { it.blockIndex } })
+    }
+
+    /** 最初のページはノートの題名の分だけ短い。2枚目からは左右の高さに戻る。 */
+    @Test
+    fun `最初のページだけ題名の分を短くして詰める`() {
+        val pages = paginateSpread(listOf(lines(30)), leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 0f)
+
+        assertEquals(listOf(6, 10, 10, 4), pages.map { it.slices.single().run { unitEnd - unitStart } })
+    }
+
+    @Test
+    fun `ブロックの文字数の最大は、表・リスト・引用をまとめて1ブロックとして数える`() {
+        val model = buildNoteSectionModel("# 見出し\n\n短い段落。\n\n- 一つ目\n- 二つ目\n\n| 列A | 列B |\n|---|---|\n| あいう | えお |")
+        val longest = maxBlockChars(model.blocks)
+
+        assertTrue("表のセルを合わせた長さが最大になる: $longest", longest >= "列A列Bあいうえお".length)
+        assertEquals(0, maxBlockChars(emptyList()))
     }
 
     @Test

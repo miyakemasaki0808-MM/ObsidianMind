@@ -36,7 +36,9 @@ internal fun rememberMarginFaceInputs(
     sectionModel: NoteSectionModel?,
     position: BodyPosition,
     memoState: MarginMemoState,
-    imageMeasurements: NoteImageMeasurements?
+    imageMeasurements: NoteImageMeasurements?,
+    /** 節へ飛ぶときアニメーションで送るか。**見開きの間は送らない** — 一覧が組まれておらず、初回の配置を待って終わらない（→ [BodyPosition]）。 */
+    animateJumps: () -> Boolean = { true }
 ): MarginFaceInputs {
     val coroutineScope = rememberCoroutineScope()
     val listState = position.listState
@@ -63,7 +65,7 @@ internal fun rememberMarginFaceInputs(
     // **飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
     val jumpToSection: (SectionRef) -> Unit = { ref ->
         sectionModel?.startBlockOf(ref)?.let { block ->
-            position.animateTo(coroutineScope, block)
+            if (animateJumps()) position.animateTo(coroutineScope, block) else position.moveTo(block)
             imageMeasurements?.requestSkippedMeasurement(block)
         }
     }

@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import com.example.newproject.domain.markdown.MarkdownBlock
 import kotlin.math.max
 import kotlin.math.min
 
@@ -124,6 +125,7 @@ private fun SpreadBlock.fragmentPadding(): Float = (this as? SpreadBlock.Lines)?
 /**
  * ブロックを本文の順に、ページへ詰める（→ features/note_spread.md §5「ページの割り方」）。
  * [leftPageHeight]・[rightPageHeight] は左右のページの本文の高さ（再会カードが出ている間は左が短い）、
+ * [firstPageHeight] は最初のページの本文の高さ（ノートの題名の分だけ短い。null なら左と同じ）、
  * [blockSpacing] はブロックの間の余白（ページの頭には付けない）。
  *
  * - **どのページにも少なくとも1つの単位を置く。** 空のページに収まらない単位でも置いて進めるので、かならず終わる
@@ -134,12 +136,17 @@ internal fun paginateSpread(
     blocks: List<SpreadBlock>,
     leftPageHeight: Float,
     rightPageHeight: Float = leftPageHeight,
+    firstPageHeight: Float? = null,
     blockSpacing: Float
 ): List<SpreadPage> {
     val pages = mutableListOf<SpreadPage>()
     val current = mutableListOf<SpreadSlice>()
     var used = 0f
-    fun pageHeight(): Float = if (pages.size % 2 == 0) leftPageHeight else rightPageHeight
+    fun pageHeight(): Float = when {
+        pages.isEmpty() && firstPageHeight != null -> firstPageHeight
+        pages.size % 2 == 0 -> leftPageHeight
+        else -> rightPageHeight
+    }
 
     fun closePage() {
         if (current.isNotEmpty()) pages += SpreadPage(current.toList())
@@ -147,7 +154,7 @@ internal fun paginateSpread(
         used = 0f
     }
 
-    val fit = min(leftPageHeight, rightPageHeight)
+    val fit = minOf(leftPageHeight, rightPageHeight, firstPageHeight ?: leftPageHeight)
     val unitsOf = blocks.map { it.units(fit) }
     blocks.forEachIndexed { index, block ->
         val units = unitsOf[index]
@@ -258,3 +265,20 @@ internal const val SPREAD_MIN_LINES = 12f
  * この字数で約2ms（→ features/note_spread.md §8 判断10 の実測）で、実際の本文で数倍かかっても 120Hz の1フレームに収まる。
  */
 internal const val SPREAD_MAX_BLOCK_CHARS = 8_000
+
+/**
+ * 本文のブロックの文字数の最大。見開きに入るかの判定（[spreadAllowed]）に使う。
+ * **原文の文字数で数える** — 表示文字列（記法を消したもの）より長いか同じなので、上限の判定は厳しい側に倒れる。
+ * 組み始める前に解析結果だけから決まるので、読んでいる途中で並べ方が替わらない。
+ */
+internal fun maxBlockChars(blocks: List<MarkdownBlock>): Int = blocks.maxOfOrNull { block ->
+    when (block) {
+        is MarkdownBlock.Heading -> block.text.length
+        is MarkdownBlock.Paragraph -> block.text.length
+        is MarkdownBlock.ListBlock -> block.items.sumOf { it.text.length + 1 }
+        is MarkdownBlock.CodeBlock -> block.code.length
+        is MarkdownBlock.Blockquote -> block.lines.sumOf { it.length + 1 }
+        is MarkdownBlock.Table -> (block.headers + block.rows.flatten()).sumOf { it.length + 1 }
+        else -> 0
+    }
+} ?: 0

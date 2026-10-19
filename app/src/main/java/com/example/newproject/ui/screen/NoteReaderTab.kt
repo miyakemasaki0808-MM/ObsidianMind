@@ -8,6 +8,7 @@ import com.example.newproject.ui.theme.Panel
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import com.example.newproject.ui.theme.AccentText
+import com.example.newproject.ui.theme.notePaperColor
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.bleedScreenPadding
 import com.example.newproject.ui.component.screenContentPadding
@@ -71,6 +72,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -211,13 +213,14 @@ internal fun NoteReaderTab(
 
     val listState = noteListState
     val coroutineScope = rememberCoroutineScope()
-    val face = rememberMarginFaceInputs(sectionModel, bodyPosition, uiState.marginMemoState, imageMeasurements)
+    // 見開きが出ているか。並べ方は下の窓の中で決まるので、そこで書く（節へ飛ぶ送り方と、本文の記録の入れ替えに使う）。
+    var spreadShown by remember { mutableStateOf(false) }
+    val face = rememberMarginFaceInputs(sectionModel, bodyPosition, uiState.marginMemoState, imageMeasurements) { !spreadShown }
     val bodySection = face.bodySection
     val arrangedMemos = face.arranged
     val previousReadingAt = face.previousReadingAt
     val jumpToSection = face.jumpToSection
 
-    ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
     // ノートを引くたびに本文パネルをふわっと出す（フェード＋0.95→1.0のスケール）。
@@ -491,6 +494,9 @@ internal fun NoteReaderTab(
         )
     }
 
+    // 見開きに入れるかの、本文の側の入力（巨大なブロックが無いか → spreadAllowed）。解析結果から1回だけ数える。
+    val spreadBlockChars = remember(sectionModel) { sectionModel?.let { maxBlockChars(it.blocks) } }
+
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
@@ -520,11 +526,20 @@ internal fun NoteReaderTab(
             paneOpen = marginPaneOpen && (hasNote || isLoading),
             expandedWidth = expandedWidth,
             fold = foldInfo.fold,
-            regionStartDp = regionStartDp ?: 0f
+            regionStartDp = regionStartDp ?: 0f,
+            spread = spreadBlockChars?.takeIf { hasNote }?.let { SpreadFit(density.fontScale, it) }
         )
         val paneVisible = layout is ReaderLayout.MarginPane
+        // 本文の見開き（→ features/note_spread.md）。机と同じく、つまみで帯を呼び、外殻はレールを畳む。
+        val spreadVisible = layout is ReaderLayout.Spread
+        SideEffect { spreadShown = spreadVisible }
+        // 見開きの間は本文の一覧が組まれない。縦の流しで走っていた送りは取り消す（遅れて終わって新しい位置を上書きしない）。
+        LaunchedEffect(spreadVisible) { if (spreadVisible) bodyPosition.cancelAnimation() }
+        // **見開きの間は、縦の流しの本文の記録を組まない。** 一覧が最後に組まれたときの見えている範囲を読み、古い範囲を記録へ混ぜうる。
+        // 見開きは自分で記録を送る（→ NoteSpread）。
+        if (!spreadVisible) ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
         // 机の画面の操作の帯と広げ方（→ DeskSpread）。**しまった状態と2面から始める** — ペインを出し直したときも、ノートを替えたときも。
-        var deskBarShown by remember(paneVisible, currentNoteUri) { mutableStateOf(false) }
+        var deskBarShown by remember(paneVisible || spreadVisible, currentNoteUri) { mutableStateOf(false) }
         var deskSpread by remember(paneVisible, currentNoteUri) { mutableStateOf(DeskSpread.Both) }
         // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
         // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
@@ -674,8 +689,8 @@ internal fun NoteReaderTab(
         // **畳んだせいでペインが出せなくなってはいけない**（出せなくなるとレールが戻り、また畳む、を繰り返す）。
         // 折り目で割る窓では、畳んでも本文が左へ広がるだけでペインの幅は変わらない（ReaderLayoutTest）。
         // 折り目がレールの下に来ると割り方が替わるが、レールを出す Expanded の窓では折り目は窓の中ほどにある。
-        LaunchedEffect(windowKnown, paneVisible) {
-            if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible)
+        LaunchedEffect(windowKnown, paneVisible, spreadVisible) {
+            if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible || spreadVisible)
         }
         // ペインの設定を閉じたら並べ読みを終える。**窓が変わっただけでは終えない** — ペインを出せない窓の間は隠しておき、
         // 出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。余白のシートを開いたときは調停側が終える。
@@ -690,7 +705,7 @@ internal fun NoteReaderTab(
         RestoreSupportingScroll(deskSpread, paneScroll, paneScrollMemory)
         RestoreLazyFacePosition(deskSpread, listState, mainScrollMemory)
         RestoreLazyFacePosition(deskSpread, sideListState, sideScrollMemory)
-        BackHandler(enabled = deskBarShown && paneVisible) { deskBarShown = false }
+        BackHandler(enabled = deskBarShown && (paneVisible || spreadVisible)) { deskBarShown = false }
         // 全画面のシートで書いたまま戻ると、シートが出ている扱いのままペインの窓へ来る。
         // そのままだと ✎ の1回目が見えないシートをしまうだけになるので、ペインへ移したことにする。
         LaunchedEffect(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible) {
@@ -795,6 +810,60 @@ internal fun NoteReaderTab(
                                     Spacer(modifier = Modifier.weight(1f))
                                 } else {
                                     notePanel(Modifier.weight(1f), headingMark, openLink)
+                                }
+                            }
+                        }
+                        // 本文の見開き（→ features/note_spread.md）。本文を左右2ページに組み、横に払ってめくる。
+                        // 操作は机と同じく、左ページの上のつまみで呼ぶ帯に入れる（→ 同 §8 判断3）。
+                        is ReaderLayout.Spread -> Box(modifier = Modifier.fillMaxSize().padding(start = layout.pageStartDp.dp)) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                DeskGripStrip(
+                                    loading = isLoading,
+                                    onShow = { deskBarShown = true },
+                                    spread = null,
+                                    onSpread = {},
+                                    modifier = Modifier.width(layout.pageWidthDp.dp)
+                                )
+                                if (successState != null && sectionModel != null) {
+                                    NoteSpread(
+                                        noteKey = successState.targetUri,
+                                        title = successState.title,
+                                        sectionModel = sectionModel,
+                                        position = bodyPosition,
+                                        paperColor = notePaperColor(uiState.notePaperTone),
+                                        imageLoader = imageLoader,
+                                        imageMeasurements = imageMeasurements,
+                                        headingAccessory = headingMark,
+                                        onLink = openLink,
+                                        onReadingProgress = onReadingProgress,
+                                        pageWidth = layout.pageWidthDp.dp,
+                                        gutter = layout.gutterDp.dp,
+                                        leftPageTop = if (visibleTraceCard != null && !hideControls) {
+                                            { traceCard(Modifier, openMemosFromCard) }
+                                        } else {
+                                            null
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                            if (deskBarShown) {
+                                DeskTouchCatcher(onTouch = { deskBarShown = false }, modifier = Modifier.matchParentSize())
+                            }
+                            AnimatedVisibility(
+                                visible = deskBarShown,
+                                modifier = Modifier.clipToBounds(),
+                                enter = slideInVertically(
+                                    initialOffsetY = { -it },
+                                    animationSpec = tween(DESK_MOTION_MILLIS, easing = FastOutSlowInEasing)
+                                ),
+                                exit = slideOutVertically(
+                                    targetOffsetY = { -it },
+                                    animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
+                                )
+                            ) {
+                                DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.pageWidthDp.dp)) {
+                                    controls(memoToggle, openSummary, ControlsPlace.DeskBar) { deskBarShown = false }
                                 }
                             }
                         }
@@ -921,6 +990,14 @@ internal fun NoteReaderTab(
                     width = layout.bodyWidthDp.dp,
                     onShow = { deskBarShown = true },
                     onSpread = onSpreadGesture
+                )
+            }
+            if (layout is ReaderLayout.Spread && !deskBarShown) {
+                DeskGripReach(
+                    reachAbove = (regionTopDp ?: 0f).dp,
+                    width = layout.pageWidthDp.dp,
+                    onShow = { deskBarShown = true },
+                    onSpread = {}
                 )
             }
         }

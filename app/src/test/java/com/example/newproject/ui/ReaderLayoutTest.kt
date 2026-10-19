@@ -2,6 +2,8 @@ package com.example.newproject.ui
 
 import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
+import com.example.newproject.ui.screen.SpreadFit
 import com.example.newproject.ui.screen.canShowMarginPane
 import com.example.newproject.ui.screen.readerLayoutFor
 import com.example.newproject.ui.screen.sideColumnWidthDp
@@ -188,5 +190,55 @@ class ReaderLayoutTest {
         assertFalse(canShowMarginPane(900f, 443f, expandedWidth = true, fold = vertical(450f), regionStartDp = 20f))
         assertFalse(canShowMarginPane(1000f, 700f, expandedWidth = true, fold = tabletop, regionStartDp = 20f))
         assertFalse(canShowMarginPane(500f, 900f, expandedWidth = false, fold = vertical(260f), regionStartDp = 20f))
+    }
+
+    // ── 本文の見開き（→ features/note_spread.md §5「入る条件」）────────────────
+
+    private val note = SpreadFit(fontScale = 1f, maxBlockChars = 500)
+
+    /** 平らに開いた本の形でレールを畳んだ窓。本文領域は窓の20dpから812dp、折り目は窓の426dp。 */
+    @Test
+    fun `本の形でペインを閉じていれば、折り目をはさんで同じ幅の2ページに組む`() {
+        assertEquals(
+            ReaderLayout.Spread(pageStartDp = 0f, pageWidthDp = 398f, gutterDp = 16f),
+            readerLayoutFor(812f, 820f, paneOpen = false, expandedWidth = true, fold = vertical(426f), regionStartDp = 20f, spread = note)
+        )
+    }
+
+    /**
+     * レールが出ている間（畳む前）は左のページが狭いので、2ページを狭いほうにそろえる。
+     * **入れるかは右のページで決める** — 左で決めると、畳む前は入らず、入らないので畳まない、を繰り返す。
+     */
+    @Test
+    fun `レールが出ている間は狭いほうにそろえ、入れるかは右のページで決める`() {
+        assertEquals(
+            ReaderLayout.Spread(pageStartDp = 0f, pageWidthDp = 318f, gutterDp = 16f),
+            readerLayoutFor(732f, 820f, paneOpen = false, expandedWidth = true, fold = vertical(426f), regionStartDp = 100f, spread = note)
+        )
+    }
+
+    /** 同じ窓で文字の倍率だけを上げる。1行の字数が16字を割ると縦積み（→ 判断9）。 */
+    @Test
+    fun `同じ窓で文字の倍率を上げて1行の字数が下限を割ると縦積み`() {
+        fun at(scale: Float) = readerLayoutFor(812f, 820f, fold = vertical(426f), regionStartDp = 20f, spread = note.copy(fontScale = scale))
+        assertTrue(at(1.3f) is ReaderLayout.Spread)
+        assertEquals(ReaderLayout.Stacked, at(1.5f))
+    }
+
+    @Test
+    fun `巨大なブロックのあるノート・ノートが無い・卓上の形・折り目の無い窓は縦積み`() {
+        assertEquals(
+            ReaderLayout.Stacked,
+            readerLayoutFor(812f, 820f, fold = vertical(426f), regionStartDp = 20f, spread = note.copy(maxBlockChars = SPREAD_MAX_BLOCK_CHARS + 1))
+        )
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(812f, 820f, fold = vertical(426f), regionStartDp = 20f, spread = null))
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(812f, 820f, fold = tabletop, regionStartDp = 20f, spread = note))
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(1280f, 800f, expandedWidth = true, spread = note))
+    }
+
+    @Test
+    fun `ペインを開けば机、高さの足りない横長は左右2列のまま`() {
+        assertTrue(readerLayoutFor(812f, 820f, paneOpen = true, fold = vertical(426f), regionStartDp = 20f, spread = note) is ReaderLayout.MarginPane)
+        assertEquals(ReaderLayout.SideBySide, readerLayoutFor(970f, 443f, spread = note))
     }
 }
