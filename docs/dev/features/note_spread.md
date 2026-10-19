@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
-**状態:** 構想。仕様は決め、実装はこれから
-**最終検証:** 未検証（実装前）
-**関連コード:** （予定）`ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`。新規に `ui/screen/NoteSpread.kt`・`ui/screen/SpreadPagination.kt`
-**関連テスト:** （予定）`ReaderLayoutTest` / `NoteReadingFlowTest`。新規に `SpreadPaginationTest` と本文の位置の口のテスト
+**状態:** 実装中。区切り1（組版の純関数）まで実装し、画面はまだ変えていない
+**最終検証:** 未検証（区切り1の純関数だけ実装。§5〜§7 の画面と接続は実装前）
+**関連コード:** `ui/screen/SpreadPagination.kt`。（予定）`ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`。新規に `ui/screen/NoteSpread.kt`
+**関連テスト:** `SpreadPaginationTest`。（予定）`ReaderLayoutTest` / `NoteReadingFlowTest`、本文の位置の口のテスト
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、
 机の画面は [margin_pane](margin_pane.md) §5.1、面の色・形・動きの割り当ては [bearing_channels](../system/bearing_channels.md) が持つ
 
@@ -170,7 +170,9 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 
 0. **技術検証（区切り1で計測の単位と位置の型を固める前）:** 実機で、①1ブロックの計測1回が Main を占める時間を表示文字数ごとに測り、巨大なブロックの上限を決める。
    ②`TextMeasurer` を Main の外で使えるか（専用の計測器・フォントの解決・キャッシュを UI と共有しない形）を確かめる。③切れ端を描いた行の範囲・高さ・押せる範囲が、全文を測った行と一致するかを描いて確かめる（→ §8 判断5）
-1. **組版の土台（JVM）:** ページの割り方・読む位置と見開きの対応・入る条件の純関数とテスト。画面は変えない。計測の結果に依らない部分（ページへの詰め方・読む位置の規則）は区切り0と並べて進めてよい
+1. **組版の土台（JVM）:** ページの割り方・読む位置と見開きの対応・入る条件の純関数とテスト。画面は変えない。計測の結果に依らない部分（ページへの詰め方・読む位置の規則）は区切り0と並べて進めてよい。
+   実装は [`paginateSpread`](../../../app/src/main/java/com/example/newproject/ui/screen/SpreadPagination.kt)（左右のページの高さを別に受ける — 再会カードが出ている間は左が短い）・`splitTableRow`・`spreadIndexOf`・`anchorAfterTurn`・`spreadProgress`・`anchorAfterRequest`・`anchorAfterReparse`・`spreadAllowed`。
+   **表の行を割った切れ端は、どれも異なる文字の位置から始める**（そのセルで最初に出す行の位置）。同じ位置だと、めくって決まった読む位置が前の見開きを指し、めくった直後に跳ね戻る
 2. **見開きを出す:** 計測・2ページの描画・めくり・入る条件・つまみと帯とレール（判断3）・本文の位置の口・縦の流しとの受け渡し
 3. **つなぐ:** 読書の記録・節・リンク・続きから読む・見出しの印・再会カード
 4. **仕上げ:** 見出しを残さない・表とコードの分割・画像の縮小・読み上げ・アニメーションの設定
