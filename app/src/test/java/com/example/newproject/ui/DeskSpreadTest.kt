@@ -21,6 +21,7 @@ import com.example.newproject.ui.screen.detectDeskSpread
 import com.example.newproject.ui.screen.isSpreadSwipe
 import com.example.newproject.ui.screen.lazyFaceMoved
 import com.example.newproject.ui.screen.position
+import com.example.newproject.ui.screen.restoresAfterReturn
 import com.example.newproject.ui.screen.shows
 import com.example.newproject.ui.screen.summaryEntryFor
 import org.junit.Assert.assertEquals
@@ -290,6 +291,30 @@ class DeskSpreadTest {
     fun `スクロール中なら幅が変わっていても動いた`() {
         val narrow = LazyFacePosition(index = 18, offset = 120, viewportWidth = 1080)
         assertTrue(lazyFaceMoved(narrow, narrow.copy(index = 17, viewportWidth = 1300), scrolling = true))
+    }
+
+    /** **戻る途中に何も動かなければ、戻り切ったところで広げる前の位置へ戻す。** 戻る途中は中身が伸びるだけで、位置は変わらない。 */
+    @Test
+    fun `戻る途中に動かなければ戻す`() {
+        assertTrue(restoresAfterReturn(start = 16 to 40, now = 16 to 40, scrolling = false))
+        assertTrue(restoresAfterReturn(start = 900, now = 900, scrolling = false))
+    }
+
+    /**
+     * **戻る途中に送られたら戻さない。** リンクで見出しへ送るなど、戻るアニメーションの間の送りを、
+     * 幅を待ち終えた復元が広げる前の位置で上書きしていた（レビューの一時検証で、段落5へ送ったのに18へ戻った）。
+     */
+    @Test
+    fun `戻る途中に送られたら戻さない`() {
+        assertFalse(restoresAfterReturn(start = 16 to 40, now = 5 to 0, scrolling = false))
+        assertFalse("段落の中で送られただけでも戻さない", restoresAfterReturn(start = 16 to 40, now = 16 to 90, scrolling = false))
+        assertFalse(restoresAfterReturn(start = 900, now = 300, scrolling = false))
+    }
+
+    /** **戻り切ったときにスクロール中なら戻さない。** 縦に送り始めた操作を、古い位置への送りで取り消さない。 */
+    @Test
+    fun `戻り切ったときにスクロール中なら戻さない`() {
+        assertFalse(restoresAfterReturn(start = 16 to 40, now = 16 to 40, scrolling = true))
     }
 
     private fun spreadFor(events: List<androidx.compose.ui.input.pointer.PointerEvent>): List<DeskSpreadGesture> =

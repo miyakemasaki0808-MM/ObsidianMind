@@ -230,6 +230,15 @@ internal class SpreadScrollMemory<P : Any>(val wide: DeskSpread) {
 }
 
 /**
+ * 2面へ戻り切ったときに、広げる前の位置へ戻してよいか。[start] は戻り始めたときの位置、[now] は戻り切った今の位置。
+ *
+ * **戻る途中は幅が狭まって中身が伸びるだけで、位置は変わらない。** 変わっていれば、戻る途中に利用者か面の中の送り
+ * （リンクで見出しへ送るなど）が動かしたので戻さない — 戻すと、後から来た送りを広げる前の古い位置で上書きする。
+ * 待ち始めだけでなく、**書く直前に**確かめる。スクロール中も戻さない（送り始めた操作を取り消すことになる）。
+ */
+internal fun <T> restoresAfterReturn(start: T, now: T, scrolling: Boolean): Boolean = !scrolling && now == start
+
+/**
  * 補助の面を1画面に広げて戻したとき、余白の面の [scrollState] を広げる前の位置へ戻す（→ [SpreadScrollMemory]）。
  * 広げる前の位置は、広げ方を替える操作が [SpreadScrollMemory.beforeSpread] で覚えておく。
  */
@@ -244,9 +253,10 @@ internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollStat
         } else {
             val target = memory.restoreTarget()
             if (target != null) {
+                val start = scrollState.value
                 // 戻る途中は幅が狭まって中身が伸びていく。伸び切る前に置くと、その時点の上限で切り詰められる。
                 withTimeoutOrNull(DESK_MOTION_MILLIS * 4L) { snapshotFlow { scrollState.maxValue }.first { it >= target } }
-                scrollState.scrollTo(target)
+                if (restoresAfterReturn(start, scrollState.value, scrollState.isScrollInProgress)) scrollState.scrollTo(target)
             }
             memory.forget()
         }
@@ -292,11 +302,13 @@ internal fun RestoreLazyFacePosition(spread: DeskSpread, listState: LazyListStat
         } else {
             val target = memory.restoreTarget()
             if (target != null) {
+                val start = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
                 // 戻る途中の幅で置くと、その幅の上限でまた縮められる。広げる前の幅まで戻り切ってから置く。
                 withTimeoutOrNull(DESK_MOTION_MILLIS * 4L) {
                     snapshotFlow { listState.layoutInfo.viewportSize.width }.first { it in 1..target.viewportWidth }
                 }
-                listState.scrollToItem(target.index, target.offset)
+                val now = listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset
+                if (restoresAfterReturn(start, now, listState.isScrollInProgress)) listState.scrollToItem(target.index, target.offset)
             }
             memory.forget()
         }

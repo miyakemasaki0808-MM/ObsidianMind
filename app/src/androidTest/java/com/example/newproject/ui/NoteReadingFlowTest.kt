@@ -83,6 +83,7 @@ import com.example.newproject.ui.markdown.NoteImageContent
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageMeasurements
+import com.example.newproject.ui.screen.DESK_MOTION_MILLIS
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.ReaderFold
@@ -1588,6 +1589,105 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
 
         composeRule.runOnIdle { assertEquals("1画面の間に飛んだ先が残っていない", JUMPED_BLOCK, listState.firstVisibleItemIndex) }
+    }
+
+    /**
+     * **本文を1画面から2面へ戻す途中に見出しへ送ったら（リンクと同じ `scrollToItem`）、戻り切った後も送った先が残る。**
+     * 幅を待ち終えた復元が、戻る途中の送りを広げる前の位置で上書きしていた。時計を止めて、戻るアニメーションの半ばで送る。
+     */
+    @Test
+    fun 机の画面で本文を2面へ戻す途中に飛んだ先は_戻り切っても残る() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setWrappingMainDesk(listState)
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.mainClock.autoAdvance = false
+        swipeDeskWhilePaused(dxDp = -200f)
+        composeRule.mainClock.advanceTimeBy(DESK_MOTION_MILLIS / 2L)
+        wrappingList(MAIN_WRAP).performScrollToIndex(JUMPED_BLOCK)
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.runOnIdle { assertEquals("戻る途中に送れていない", JUMPED_BLOCK, listState.firstVisibleItemIndex) }
+        composeRule.mainClock.autoAdvance = true
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            assertEquals("戻る途中に送った先が、広げる前の位置で上書きされた", JUMPED_BLOCK, listState.firstVisibleItemIndex)
+        }
+    }
+
+    /** **右を1画面から2面へ戻す途中に送ったら、戻り切った後も送った先が残る。** 本文と同じ復元の仕組みを右でも確かめる。 */
+    @Test
+    fun 机の画面で並べ読みの右を2面へ戻す途中に飛んだ先は_戻り切っても残る() {
+        assumeDeskWindow()
+        setWrappingSideDesk()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+
+        composeRule.mainClock.autoAdvance = false
+        swipeDeskWhilePaused(dxDp = 200f)
+        composeRule.mainClock.advanceTimeBy(DESK_MOTION_MILLIS / 2L)
+        wrappingList(SIDE_WRAP).performScrollToIndex(JUMPED_BLOCK)
+        composeRule.mainClock.advanceTimeByFrame()
+        assertEquals("戻る途中に送れていない", JUMPED_BLOCK, firstShownWrapping(SIDE_WRAP).first)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        assertEquals("戻る途中に送った先が、広げる前の位置で上書きされた", JUMPED_BLOCK, firstShownWrapping(SIDE_WRAP).first)
+    }
+
+    /** **本文を2面へ戻す途中に縦に送り始めたら、戻り切っても広げる前の位置へ戻さない。** 送り始めた操作を取り消さない。 */
+    @Test
+    fun 机の画面で本文を2面へ戻す途中に縦に送り始めたら_広げる前の位置へ戻さない() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setWrappingMainDesk(listState)
+        val before = composeRule.runOnIdle { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+        val wide = composeRule.runOnIdle { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+
+        composeRule.mainClock.autoAdvance = false
+        swipeDeskWhilePaused(dxDp = -200f)
+        composeRule.mainClock.advanceTimeBy(DESK_MOTION_MILLIS / 2L)
+        // 本文の面（箱の左寄り）を下へ送る。末尾の近くにいるので、手前の段落へ戻る向きに送れる。
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            down(Offset(200.dp.toPx(), centerY))
+            moveBy(Offset(0f, 120.dp.toPx()))
+            up()
+        }
+        composeRule.mainClock.advanceTimeByFrame()
+        composeRule.runOnIdle {
+            assertTrue("戻る途中に縦に送れていない", (listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset) != wide)
+        }
+        composeRule.mainClock.autoAdvance = true
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            assertTrue(
+                "戻る途中に送り始めたのに、広げる前の位置へ戻された",
+                (listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset) != before
+            )
+        }
+    }
+
+    /**
+     * 時計を止めたまま、机の画面を横に [dxDp] だけ払う（右が正）。払いの判定は時間を待たないので、止めた時計でも届く。
+     * 片側を広げる・戻すアニメーションを途中で止めて、そこへ操作を挟むために使う。
+     */
+    private fun swipeDeskWhilePaused(dxDp: Float) {
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            down(Offset(centerX - dxDp.dp.toPx() / 2f, centerY))
+            repeat(4) { moveBy(Offset(dxDp.dp.toPx() / 4f, 0f)) }
+            up()
+        }
     }
 
     /** [WRAPPING_COUNT] 段落の本文を左に置いた机の画面。本文を末尾の近く（末尾から少し戻した位置）まで送って返す。 */
