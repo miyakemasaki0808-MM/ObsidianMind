@@ -161,9 +161,10 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 
 - **置き場所は `ui`。** ページの割り方は画面の形を決める判定なので、純関数でも `domain` に置かない（→ [architecture](../system/architecture.md) 判断5の4）
 - **計測は Compose の `TextMeasurer`。** 使う口（`measure`、行ごとの `getLineStart`・`getLineEnd`・`getLineTop`・`getLineBottom`）は Compose 1.7.3 の ui-text のバイナリにあることを確かめた。`measure` は同期の呼び出しで、途中で止められない
-- **実装のときに書き換える既存の記述（→ [lessons L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）:** [margin_pane](margin_pane.md) §5.1 の「✎ を押すとふだんの画面（縦積み）へ戻り」は、本の形では見開きへ戻る。
+- **見開きに合わせて書き換えた既存の記述（→ [lessons L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）:** [margin_pane](margin_pane.md) §5.1 の ✎ の行き先（本の形では見開きへ戻る）。
   fold_experience §6 の縦の折り目の行の「今」の列。[bearing_channels](../system/bearing_channels.md) §2 の指に追従する動きの「載る面」（→ 判断7）。
-  机の帯でもレールを重ねて出すので、[`showsRail`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt) の KDoc と [tab_navigation](../system/tab_navigation.md)（書き換え済み。重ねる判定は `overlaysRail` と `AppScaffoldRailTest`）
+  [`showsRail`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt) の KDoc と [tab_navigation](../system/tab_navigation.md)（重ねる判定は `overlaysRail` と `AppScaffoldRailTest`）。
+  本の形でペインを閉じる前提だった `NoteReadingFlowTest` の2件（要約ボタンは帯から押す・外殻へ知らせるのは縦積みへ替えたときに戻る）
 
 ### 実装の区切り
 
