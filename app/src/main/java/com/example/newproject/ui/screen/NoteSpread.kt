@@ -55,6 +55,7 @@ import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.LocalNoteLinkTaps
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import com.example.newproject.ui.markdown.MeasuredSpreadBlock
+import com.example.newproject.ui.markdown.NoteImageBlockRef
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurement
 import com.example.newproject.ui.markdown.NoteImageMeasurements
@@ -75,7 +76,10 @@ import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.ReadingSurfaceShape
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 
 // 本文の見開き（→ features/note_spread.md）。測って、ページへ詰めて、左右2ページで出し、横の払いでめくる。
 
@@ -169,6 +173,8 @@ internal fun NoteSpread(
     BoxWithConstraints(modifier = modifier) {
         val pageContentHeight = with(density) { (maxHeight - PagePadding * 2).toPx() }
         var cardHeightPx by remember(noteKey) { mutableIntStateOf(0) }
+        // 再会カードを測ったか。**測る前の高さ（前に測った値か0）で組んだ見開きは、読書の記録へ送らない。** カードが出入りするたびに測り直す。
+        var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
         val leftHeight = pageContentHeight - if (leftPageTop != null) cardHeightPx + with(density) { CardGap.toPx() } else 0f
         val titleHeight = remember(title, textWidthPx, density, baseStyle) {
             val layout = measurer.measure(AnnotatedString(title), baseStyle.merge(TitleStyle), constraints = Constraints(maxWidth = textWidthPx), density = density)
@@ -200,35 +206,51 @@ internal fun NoteSpread(
         val currentReading by rememberUpdatedState(reading)
         val currentReport by rememberUpdatedState(onReadingProgress)
         val imageRefs = remember(blocks) { imageBlockRefs(blocks) }
+        val shown = remember(pages, measured, target, leftPageTop == null || cardMeasured, sectionModel, imageRefs) {
+            ShownSpread(pages, measured.blocks.map { it.spread }, target, leftPageTop == null || cardMeasured, sectionModel, imageRefs)
+        }
+        val currentShown by rememberUpdatedState(shown)
 
         // 組み直しや外からの送りで、読む位置を含む見開きが替わったら、そこを出す。めくりとは数えない（読む位置を替えない）。
         LaunchedEffect(target, available) {
             val page = target.coerceIn(0, available - 1)
             if (pagerState.currentPage != page) pagerState.scrollToPage(page)
         }
-        // めくりが決まって止まったら、読む位置をその見開きの左ページの先頭にして書き戻し、読んだ位置を記録へ送る。
+        // めくりが決まって止まったら、読む位置をその見開きの左ページの先頭にして書き戻す。
         LaunchedEffect(pagerState, noteKey) {
             snapshotFlow { pagerState.settledPage to pagerState.isScrollInProgress }
                 .filter { (_, moving) -> !moving }
                 .collect { (settled, _) ->
-                    val shown = currentPages
-                    if (settled != spreadIndexOf(shown, currentReading.anchor)) {
-                        anchorAfterTurn(shown, settled)?.let { turned ->
+                    val pagesNow = currentPages
+                    if (settled != spreadIndexOf(pagesNow, currentReading.anchor)) {
+                        anchorAfterTurn(pagesNow, settled)?.let { turned ->
                             position.moveTo(turned.blockIndex, source = BodyPositionSource.SpreadTurn)
                             saved = currentReading.copy(anchor = turned, seenRequest = position.lastRequest.request)
                         }
                     }
-                    val progress = spreadProgress(shown, settled, measured.blocks.map { it.spread }) ?: return@collect
-                    val unmeasured = imageMeasurements?.let { firstUnmeasuredImageIndex(imageRefs, it.measuredReferences()) }
-                    if (shouldReportReadingProgress(progress.blockIndex, unmeasured)) {
-                        val step = quantizeReadingFraction(progress.fraction)
-                        currentReport(
-                            progress.blockIndex,
-                            step.toFloat() / READING_FRACTION_STEPS,
-                            blocks.size,
-                            sectionModel.sectionForBlockIndex(progress.blockIndex)?.title
-                        )
-                    }
+                }
+        }
+        // 出ている見開きの読んだ位置を記録へ送る。**送るのは、止まった見開きが今の組版で読む位置の見開きで、再会カードを測り終えたときだけ。**
+        // 組み直しのたびに照らし直すので、ページの番号が変わらない組み直しでも、出ている中身で送り直す。
+        // 記録の最深到達点は下がらないので、確定する前の組版で先まで送ると取り消せない。
+        LaunchedEffect(pagerState, noteKey) {
+            snapshotFlow { Triple(pagerState.settledPage, pagerState.isScrollInProgress, currentShown) }
+                .filter { (settled, moving, now) -> !moving && now.cardMeasured && settled == now.spread }
+                .map { (settled, _, now) ->
+                    val progress = spreadProgress(now.pages, settled, now.blocks) ?: return@map null
+                    val unmeasured = imageMeasurements?.let { firstUnmeasuredImageIndex(now.imageRefs, it.measuredReferences()) }
+                    if (!shouldReportReadingProgress(progress.blockIndex, unmeasured)) return@map null
+                    ReadingReport(progress.blockIndex, quantizeReadingFraction(progress.fraction), now.model)
+                }
+                .distinctUntilChanged()
+                .filterNotNull()
+                .collect { report ->
+                    currentReport(
+                        report.blockIndex,
+                        report.step.toFloat() / READING_FRACTION_STEPS,
+                        report.model.blocks.size,
+                        report.model.sectionForBlockIndex(report.blockIndex)?.title
+                    )
                 }
         }
 
@@ -236,7 +258,12 @@ internal fun NoteSpread(
             Row(modifier = Modifier.fillMaxSize()) {
                 Column(modifier = Modifier.width(pageWidth).fillMaxHeight()) {
                     if (leftPageTop != null) {
-                        Box(modifier = Modifier.onSizeChanged { cardHeightPx = it.height }) { leftPageTop() }
+                        Box(
+                            modifier = Modifier.onSizeChanged {
+                                cardHeightPx = it.height
+                                cardMeasured = true
+                            }
+                        ) { leftPageTop() }
                         Spacer(modifier = Modifier.height(CardGap))
                     }
                     SpreadPageView(
@@ -328,6 +355,22 @@ private fun SpreadComposing(paperColor: Color, pageWidth: Dp, gutter: Dp) {
         Surface(color = paperColor, shape = ReadingSurfaceShape, modifier = Modifier.width(pageWidth).fillMaxHeight()) {}
     }
 }
+
+/**
+ * 出ている組版。[spread] は読む位置を含む見開き、[cardMeasured] は再会カードの高さを測ってから組んだか（カードが無ければ真）。
+ * 読書の記録はこれから送る — 組版と、その組版を組んだときの解析結果を一緒に持つので、古い組版の中身を新しい本文へ当てない。
+ */
+private class ShownSpread(
+    val pages: List<SpreadPage>,
+    val blocks: List<SpreadBlock>,
+    val spread: Int,
+    val cardMeasured: Boolean,
+    val model: NoteSectionModel,
+    val imageRefs: List<NoteImageBlockRef>
+)
+
+/** 読書の記録へ送る1回分。同じ値は送り直さない。 */
+private data class ReadingReport(val blockIndex: Int, val step: Int, val model: NoteSectionModel)
 
 /** 測った分のブロックと、本文の最後まで測り終えたか。 */
 private data class SpreadMeasured(val blocks: List<MeasuredSpreadBlock>, val complete: Boolean)

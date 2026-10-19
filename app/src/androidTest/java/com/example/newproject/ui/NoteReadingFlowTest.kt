@@ -2,6 +2,9 @@ package com.example.newproject.ui
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -55,6 +58,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso
@@ -90,6 +94,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.screen.DESK_MOTION_MILLIS
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.NoteSpread
 import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.BodyPosition
@@ -2184,6 +2189,55 @@ class NoteReadingFlowTest {
         composeRule.runOnIdle { assertEquals(0, listState.firstVisibleItemIndex) }
     }
 
+    /**
+     * **再会カードの高さを測る前の組版で、読んだ位置を記録へ送らない**（→ features/note_spread.md §5「他機能との連携」）。
+     * カードを0として組んだ見開きは確定した表示より先まで入る。そこで送ると、記録の最深到達点は下がらないので取り消せない。
+     * カードを畳んで低くすると、ページの番号は同じでも、組み直した中身で送り直す。
+     */
+    @Test
+    fun 再会カードの高さを測る前の見開きでは_読んだ位置を記録へ送らない() {
+        assumeDeskWindow()
+        val reports = mutableListOf<Int>()
+        var cardHeight by mutableStateOf(OPEN_CARD_HEIGHT)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                Box(modifier = Modifier.requiredSize(width = 960.dp, height = 720.dp)) {
+                    NoteSpread(
+                        noteKey = NOTE_A,
+                        title = TITLE,
+                        sectionModel = remember { buildNoteSectionModel(SPREAD_BODY) },
+                        position = remember { BodyPosition(LazyListState()) },
+                        paperColor = Color.White,
+                        imageLoader = null,
+                        imageMeasurements = null,
+                        headingAccessory = null,
+                        onLink = null,
+                        onReadingProgress = { block, _, _, _ -> reports += block },
+                        pageWidth = 440.dp,
+                        gutter = 24.dp,
+                        leftPageTop = { Box(modifier = Modifier.fillMaxWidth().height(cardHeight)) },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        val lastShown = (0 until SPREAD_PARAGRAPHS).last { shownBounds(paragraphText(it)) != null }
+        composeRule.runOnIdle {
+            assertTrue("記録へ送っていない", reports.isNotEmpty())
+            assertTrue("出ている最後の段落$lastShown より先を送った: $reports", reports.all { it <= lastShown })
+            assertEquals(lastShown, reports.last())
+        }
+
+        composeRule.runOnIdle { cardHeight = FOLDED_CARD_HEIGHT }
+        composeRule.waitForIdle()
+        val lastFolded = (0 until SPREAD_PARAGRAPHS).last { shownBounds(paragraphText(it)) != null }
+        composeRule.runOnIdle {
+            assertTrue("畳んでも見開きに入る段落が増えていない", lastFolded > lastShown)
+            assertEquals("組み直した中身で送り直していない", lastFolded, reports.last())
+        }
+    }
+
     /** 本の形の読書画面を、離れても保存値を残す形（ナビゲーションの戻り先と同じ）で組む。[shown] が false の間は画面を離れている。 */
     private fun setSpreadAway(
         note: () -> NoteUiState,
@@ -2986,6 +3040,10 @@ class NoteReadingFlowTest {
 
         /** 見開きで読む、もう1つのノート。番号の前方一致を避けるため、目印は [sideParagraph] の文全体で探す。 */
         val SPREAD_SIDE_BODY = (0 until SPREAD_PARAGRAPHS).joinToString("\n\n") { sideParagraph(it) }
+
+        /** 左ページの上に置く再会カードの高さ。開いたときと畳んだとき。 */
+        val OPEN_CARD_HEIGHT = 240.dp
+        val FOLDED_CARD_HEIGHT = 40.dp
 
         /** 解析し直した本文の末尾に足す段落。 */
         const val REPARSED_TAIL = "解析し直した後に足した段落。"
