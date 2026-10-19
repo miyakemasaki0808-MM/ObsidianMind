@@ -33,6 +33,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
@@ -1781,12 +1782,21 @@ class NoteReadingFlowTest {
     private fun wrappingList(side: String) =
         composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText("${side}で折り返す段落", substring = true)))
 
-    /** [side] の面に組まれている最初の段落の番号と、その上端（窓の外へ出た分も含む）。 */
+    /**
+     * [side] の面に**見えている**最初の段落の番号と、その上端（一覧の上へはみ出した分も含む）。
+     * **組まれているだけの段落は数えない** — 一覧は見える範囲の外の段落も semantics に残すことがあり、
+     * その上端は NaN になる。存在だけで選ぶと、実機で (27, NaN) を先頭として拾い、正しい往復を失敗と報告した。
+     */
     private fun firstShownWrapping(side: String): Pair<Int, Float> {
-        val index = (0 until WRAPPING_COUNT).first {
-            composeRule.onAllNodesWithText(wrappingParagraph(side, it)).fetchSemanticsNodes().isNotEmpty()
+        val index = (0 until WRAPPING_COUNT).first { i ->
+            val nodes = composeRule.onAllNodesWithText(wrappingParagraph(side, i))
+            (0 until nodes.fetchSemanticsNodes().size).any { nodes[it].isDisplayed() }
         }
-        return index to composeRule.onNodeWithText(wrappingParagraph(side, index)).getUnclippedBoundsInRoot().top.value
+        val nodes = composeRule.onAllNodesWithText(wrappingParagraph(side, index))
+        val shown = (0 until nodes.fetchSemanticsNodes().size).first { nodes[it].isDisplayed() }
+        val top = nodes[shown].getUnclippedBoundsInRoot().top.value
+        assertTrue("見えている段落$index の上端が有限でない: $top", top.isFinite())
+        return index to top
     }
 
     /** **長押ししてから横へ動かしても広げない。** 長押しの後の動きは本文の文字の選択が使う。 */
