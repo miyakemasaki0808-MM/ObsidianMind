@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-19 | 本文の見開きの操作とレールを机と同じ形（帯を出すとレールも重ねて出す）に決め、Fold 専用の体験を導く元に姿勢の割り当てを足した | [note_spread](features/note_spread.md) §8 判断3 |
 | 2026-10-19 | 本文の見開き（開いた Fold でペインを閉じて読むとき本文を左右2ページに組む）の正本を構想として起こした | [note_spread](features/note_spread.md) |
 | 2026-10-19 | FOLD-8・TEST-8 の指摘対応を机上で再レビューし、新規指摘なしで実機の再検証待ちを残した | [レビュー](../review/README.md) |
 | 2026-10-19 | 机の往復の検査が、見えている段落だけを先頭として数えるようにした | [instrumentation_testing](system/instrumentation_testing.md) |
