@@ -242,6 +242,31 @@ internal fun spreadProgress(pages: List<SpreadPage>, spread: Int, blocks: List<S
 internal fun anchorAfterRequest(current: SpreadAnchor, seenRequest: Long, request: BodyPositionRequest): SpreadAnchor =
     if (request.request != seenRequest && request.source == BodyPositionSource.External) SpreadAnchor(request.blockIndex) else current
 
+/**
+ * 見開きの読む位置の保存値。どのノートの読む位置で、本文の位置の口（[port]）のどの番号の書き込みまで処理したか。
+ * 画面を離れて戻ると読む位置は保存値から戻るので、**留守の間の書き込みとノートの替わりは、この値を今の口と照らして見つける**。
+ */
+internal data class SpreadReading(val noteKey: String, val anchor: SpreadAnchor, val port: Long, val seenRequest: Long)
+
+/**
+ * 保存値（無ければ null）を、今のノートと本文の位置の口に合わせる。何も替わっていなければ [saved] をそのまま返す。
+ * - ノートが違えば、一覧の位置（[listBlock]。新しいノートを開いた経路が書いたもの）から始める
+ * - 口が作り直されていれば、番号は最初から数え直しなので、[FIRST_BODY_REQUEST] より後を新しい書き込みとみなす
+ * - 処理していない外からの書き込みがあれば、その送り先のブロックの先頭へ替える（→ [anchorAfterRequest]）
+ */
+internal fun reconcileSpreadReading(
+    saved: SpreadReading?,
+    noteKey: String,
+    port: Long,
+    request: BodyPositionRequest,
+    listBlock: () -> Int
+): SpreadReading {
+    if (saved == null || saved.noteKey != noteKey) return SpreadReading(noteKey, SpreadAnchor(listBlock()), port, request.request)
+    val seen = if (saved.port == port) saved.seenRequest else FIRST_BODY_REQUEST
+    val next = SpreadReading(noteKey, anchorAfterRequest(saved.anchor, seen, request), port, request.request)
+    return if (next == saved) saved else next
+}
+
 /** 同じノートで本文の解析結果が替わった。読む位置のブロックは保ち、文字の位置は古い表示文字列のものなので0に戻す。 */
 internal fun anchorAfterReparse(current: SpreadAnchor, blockCount: Int): SpreadAnchor =
     SpreadAnchor(current.blockIndex.coerceIn(0, max(blockCount - 1, 0)))

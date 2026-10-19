@@ -21,9 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -156,14 +156,12 @@ internal fun NoteSpread(
         measured = SpreadMeasured(out.toList(), complete = true)
     }
 
-    // 読む位置。ノートの画面の保存値に置き、ノートが替われば一覧の位置から始める。
-    var anchor by rememberSaveable(noteKey, stateSaver = AnchorSaver) { mutableStateOf(SpreadAnchor(position.listState.firstVisibleItemIndex)) }
-    var seenRequest by remember(noteKey) { mutableLongStateOf(position.lastRequest.request) }
-    val request = position.lastRequest
-    LaunchedEffect(request) {
-        anchor = anchorAfterRequest(anchor, seenRequest, request)
-        seenRequest = request.request
-    }
+    // 読む位置。ノートの画面の保存値に置き、組むたびに今のノートと本文の位置の口へ合わせる。
+    // **保存値から戻した直後も同じ照合を通す** — 留守の間の送りや、別のノートを開いたことを見落とさない。
+    var saved by rememberSaveable(stateSaver = ReadingSaver) { mutableStateOf<SpreadReading?>(null) }
+    val reading = reconcileSpreadReading(saved, noteKey, position.port, position.lastRequest) { position.listState.firstVisibleItemIndex }
+    SideEffect { if (saved != reading) saved = reading }
+    val anchor = reading.anchor
 
     BoxWithConstraints(modifier = modifier) {
         val pageContentHeight = with(density) { (maxHeight - PagePadding * 2).toPx() }
@@ -196,7 +194,7 @@ internal fun NoteSpread(
 
         val pagerState = rememberPagerState(initialPage = target.coerceIn(0, available - 1)) { available }
         val currentPages by rememberUpdatedState(pages)
-        val currentAnchor by rememberUpdatedState(anchor)
+        val currentReading by rememberUpdatedState(reading)
         val currentReport by rememberUpdatedState(onReadingProgress)
         val imageRefs = remember(blocks) { imageBlockRefs(blocks) }
 
@@ -211,11 +209,10 @@ internal fun NoteSpread(
                 .filter { (_, moving) -> !moving }
                 .collect { (settled, _) ->
                     val shown = currentPages
-                    if (settled != spreadIndexOf(shown, currentAnchor)) {
+                    if (settled != spreadIndexOf(shown, currentReading.anchor)) {
                         anchorAfterTurn(shown, settled)?.let { turned ->
-                            anchor = turned
                             position.moveTo(turned.blockIndex, source = BodyPositionSource.SpreadTurn)
-                            seenRequest = position.lastRequest.request
+                            saved = currentReading.copy(anchor = turned, seenRequest = position.lastRequest.request)
                         }
                     }
                     val progress = spreadProgress(shown, settled, measured.blocks.map { it.spread }) ?: return@collect
@@ -332,9 +329,9 @@ private fun SpreadComposing(paperColor: Color, pageWidth: Dp, gutter: Dp) {
 /** 測った分のブロックと、本文の最後まで測り終えたか。 */
 private data class SpreadMeasured(val blocks: List<MeasuredSpreadBlock>, val complete: Boolean)
 
-private val AnchorSaver = Saver<SpreadAnchor, List<Int>>(
-    save = { listOf(it.blockIndex, it.charOffset) },
-    restore = { SpreadAnchor(it[0], it[1]) }
+private val ReadingSaver = Saver<SpreadReading?, ArrayList<Any>>(
+    save = { reading -> reading?.run { arrayListOf(noteKey, anchor.blockIndex, anchor.charOffset, port, seenRequest) } },
+    restore = { SpreadReading(it[0] as String, SpreadAnchor(it[1] as Int, it[2] as Int), it[3] as Long, it[4] as Long) }
 )
 
 /** ページの内側の余白（→ [SPREAD_PAGE_PADDING_DP]）。 */

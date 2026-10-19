@@ -6,6 +6,7 @@ import com.example.newproject.ui.markdown.SpreadBlockRender
 import com.example.newproject.ui.markdown.SpreadTableCell
 import com.example.newproject.ui.markdown.spreadTableLines
 import com.example.newproject.ui.screen.BodyPositionRequest
+import com.example.newproject.ui.screen.FIRST_BODY_REQUEST
 import com.example.newproject.ui.screen.BodyPositionSource
 import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
 import com.example.newproject.ui.screen.SpreadAnchor
@@ -13,12 +14,14 @@ import com.example.newproject.ui.screen.SpreadBlock
 import com.example.newproject.ui.screen.SpreadLine
 import com.example.newproject.ui.screen.SpreadPage
 import com.example.newproject.ui.screen.SpreadProgress
+import com.example.newproject.ui.screen.SpreadReading
 import com.example.newproject.ui.screen.SpreadTableRow
 import com.example.newproject.ui.screen.anchorAfterReparse
 import com.example.newproject.ui.screen.anchorAfterRequest
 import com.example.newproject.ui.screen.anchorAfterTurn
 import com.example.newproject.ui.screen.maxBlockChars
 import com.example.newproject.ui.screen.paginateSpread
+import com.example.newproject.ui.screen.reconcileSpreadReading
 import com.example.newproject.ui.screen.splitTableRow
 import com.example.newproject.ui.screen.spreadAllowed
 import com.example.newproject.ui.screen.spreadCount
@@ -26,6 +29,7 @@ import com.example.newproject.ui.screen.spreadIndexOf
 import com.example.newproject.ui.screen.spreadProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -262,6 +266,35 @@ class SpreadPaginationTest {
         assertEquals(inside, anchorAfterRequest(inside, seenRequest = 3, BodyPositionRequest(4, 0, BodyPositionSource.SpreadTurn)))
         assertEquals(SpreadAnchor(0), anchorAfterRequest(inside, seenRequest = 3, BodyPositionRequest(4, 0, BodyPositionSource.External)))
         assertEquals(inside, anchorAfterRequest(inside, seenRequest = 4, BodyPositionRequest(4, 0, BodyPositionSource.External)))
+    }
+
+    /**
+     * 画面を離れて戻ると、読む位置は保存値から戻る。**留守の間の送り・別のノート・口の作り直しを、保存値と今の口を照らして見分ける。**
+     * 保存値を戻すときに番号を今の番号で始めると、留守の間の送りを処理済みとみなして古い位置を出す。
+     */
+    @Test
+    fun `保存した読む位置は、留守の間の送りと別のノートを見落とさずに今の口へ合わせる`() {
+        val port = 7L
+        val saved = SpreadReading("a", SpreadAnchor(40, charOffset = 120), port, seenRequest = 3)
+        val list = { 0 }
+
+        // 送りが無ければ文字の位置まで保つ。
+        assertSame(saved, reconcileSpreadReading(saved, "a", port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn), list))
+        // 留守の間の外からの送り（全画面から100で戻る）。同じブロックへの送りでも文字の位置は先頭へ戻る。
+        assertEquals(SpreadAnchor(100), reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(40), reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 40, BodyPositionSource.External), list).anchor)
+        // 別のノートを先頭から開いた。保存値の読む位置ではなく一覧の位置から始める。
+        val other = reconcileSpreadReading(saved, "b", port, BodyPositionRequest(4, 0, BodyPositionSource.External)) { 0 }
+        assertEquals(SpreadReading("b", SpreadAnchor(0), port, seenRequest = 4), other)
+        // 送りが無くてもノートが違えば、前のノートの読む位置を持ち込まない。
+        assertEquals(SpreadAnchor(5), reconcileSpreadReading(saved, "b", port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn)) { 5 }.anchor)
+        // 口が作り直された（番号は最初から）。作った後に何も書いていなければ保ち、書いていれば送り先へ替える。
+        val rebuilt = 9L
+        assertEquals(SpreadAnchor(40, 120), reconcileSpreadReading(saved, "a", rebuilt, BodyPositionRequest(FIRST_BODY_REQUEST, 40, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(2), reconcileSpreadReading(saved, "a", rebuilt, BodyPositionRequest(1, 2, BodyPositionSource.External), list).anchor)
+        // 照合した後は処理済み。もう一度照らしても替わらない。
+        val reconciled = reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list)
+        assertSame(reconciled, reconcileSpreadReading(reconciled, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list))
     }
 
     @Test

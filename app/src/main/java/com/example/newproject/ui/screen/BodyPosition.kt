@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 /**
  * 本文の一覧の位置を書く口（→ features/note_spread.md §5「位置の書き込み」・§6 の監査表）。
@@ -16,9 +17,10 @@ import kotlinx.coroutines.launch
  * - 書き込みは `requestScrollToItem` — 一覧が一度も組まれていなくても効く。`scrollToItem` は一覧の初回の配置を待つので、見開きの間に呼ぶと効かない
  * - 書くたびに要求の番号を進める（[lastRequest]）。同じ値の送りも見開きが見分けられるように
  * - アニメーションで送る口（[animateTo]）の Job は1本だけ持ち、次の書き込みで取り消す。遅れて終わった送りが新しい位置を上書きしない
+ * - [port] はこの口を見分ける値。Activity を作り直すと口も作り直され、番号は [FIRST_BODY_REQUEST] から数え直す
  */
 @Stable
-internal class BodyPosition(val listState: LazyListState) {
+internal class BodyPosition(val listState: LazyListState, val port: Long = Random.nextLong()) {
     private val requests = BodyPositionRequests(listState.firstVisibleItemIndex)
     private var animation: Job? = null
 
@@ -56,9 +58,12 @@ internal enum class BodyPositionSource {
 /** 本文の一覧の位置への1回の書き込み。[request] は書くたびに進む番号で、同じ値の送りも見分ける。 */
 internal data class BodyPositionRequest(val request: Long, val blockIndex: Int, val source: BodyPositionSource)
 
+/** 口を作った時点の番号。この番号はまだ何も書いていないことを表す。 */
+internal const val FIRST_BODY_REQUEST = 0L
+
 /** 書き込みの番号を数える。番号は位置の値と別に持つ — 同じ値を書いても位置の値は変わらない。 */
 internal class BodyPositionRequests(initialBlock: Int) {
-    var last by mutableStateOf(BodyPositionRequest(0, initialBlock, BodyPositionSource.External))
+    var last by mutableStateOf(BodyPositionRequest(FIRST_BODY_REQUEST, initialBlock, BodyPositionSource.External))
         private set
 
     fun record(block: Int, source: BodyPositionSource): BodyPositionRequest {

@@ -13,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -2104,6 +2105,95 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **見開きを離れている間の送りと、別のノートを開いたことを、戻ったときに見落とさない**（→ features/note_spread.md §5「読む位置」）。
+     * ノートの画面は離れても読む位置を保存値に残し、戻ると保存値から戻す。全画面から戻る送りと、検索から別のノートを先頭で開く送りの両方。
+     */
+    @Test
+    fun 見開きを離れている間の送りと別のノートを_戻ったときに見落とさない() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var shown by mutableStateOf(true)
+        var note by mutableStateOf(loadedNote(SPREAD_BODY, targetUri = NOTE_A))
+        var model by mutableStateOf(buildNoteSectionModel(SPREAD_BODY))
+        setSpreadAway({ note }, { model }, listState, position) { shown }
+        composeRule.runOnIdle { position.moveTo(SAVED_SPREAD_BLOCK) }
+        assertNotNull(shownBounds(paragraphText(SAVED_SPREAD_BLOCK)))
+        assertNull(shownBounds(paragraphText(JUMPED_SPREAD_BLOCK)))
+
+        // 全画面へ移り、先まで読んで戻る（戻る処理が本文の位置を書く）。
+        leaveSpread { shown = it }
+        composeRule.runOnIdle { position.moveTo(JUMPED_SPREAD_BLOCK) }
+        composeRule.runOnIdle { shown = true }
+        assertNotNull("留守の間の送りを見落とした", shownBounds(paragraphText(JUMPED_SPREAD_BLOCK)))
+
+        // 検索へ移り、別のノートを先頭から開いて戻る。
+        leaveSpread { shown = it }
+        composeRule.runOnIdle {
+            openNoteFromTop(position) {
+                note = loadedNote(SPREAD_SIDE_BODY, targetUri = NOTE_B)
+                model = buildNoteSectionModel(SPREAD_SIDE_BODY)
+            }
+            shown = true
+        }
+        assertNotNull("前のノートの読む位置を持ち込んだ", shownBounds(sideParagraph(0)))
+    }
+
+    /**
+     * 長い段落の途中で離れて戻ると、**送りが無ければ同じ見開き**に戻る。**同じ段落への送りがあれば、その段落の先頭の見開き**へ戻る
+     * （全画面で同じ段落から戻ったとき）。一覧の位置は同じブロックのままなので、番号で見分けるほかない。題名は最初のページにだけ出る。
+     */
+    @Test
+    fun 長い段落の途中で離れて戻ると_送りが無ければ同じ見開き_同じ段落への送りなら先頭の見開き() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var shown by mutableStateOf(true)
+        setSpreadAway({ loadedNote(LONG_PARAGRAPH, targetUri = NOTE_A) }, { buildNoteSectionModel(LONG_PARAGRAPH) }, listState, position) { shown }
+        turnSpread()
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+
+        leaveSpread { shown = it }
+        composeRule.runOnIdle { shown = true }
+        composeRule.onAllNodesWithText(LONG_PARAGRAPH.take(4), substring = true).onFirst().assertIsDisplayed()
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+
+        leaveSpread { shown = it }
+        composeRule.runOnIdle { position.moveTo(0) }
+        composeRule.runOnIdle { shown = true }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+    }
+
+    /** 本の形の読書画面を、離れても保存値を残す形（ナビゲーションの戻り先と同じ）で組む。[shown] が false の間は画面を離れている。 */
+    private fun setSpreadAway(
+        note: () -> NoteUiState,
+        model: () -> NoteSectionModel,
+        listState: LazyListState,
+        position: BodyPosition,
+        shown: () -> Boolean
+    ) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val holder = rememberSaveableStateHolder()
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    if (shown()) {
+                        holder.SaveableStateProvider(NOTE_SCREEN) {
+                            ReaderTab(note(), model(), listState, window = window, bodyPosition = position)
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** 読書画面を離れる。見開きが組みから外れて、読む位置が保存値になるまで待つ。 */
+    private fun leaveSpread(setShown: (Boolean) -> Unit) {
+        composeRule.runOnIdle { setShown(false) }
+        composeRule.waitForIdle()
+    }
+
+    /**
      * 見出しの脇の印は枠（48dp）の高さを取る。**計測が文字の高さだけだと、印のある見出しが続くページの下で本文が切れる**
      * （ページは縦に送れず、次のページは計測した位置から始まるので、切れた行を読む手段が無い）。
      * メモが届く前と後で、最初の見開きに出た段落が1つも縮まず切れずに出ることを確かめる。
@@ -2870,6 +2960,15 @@ class NoteReadingFlowTest {
         fun markedParagraph(index: Int) = "印の節${index}の本文です。"
 
         val MARKED_SPREAD_BODY = (0 until MARKED_SECTIONS).joinToString("\n\n") { "## ${markedSection(it)}\n\n${markedParagraph(it)}" }
+
+        /** 見開きを離れる前に読んでいる段落。[JUMPED_SPREAD_BLOCK] とは別の見開きに入る。 */
+        const val SAVED_SPREAD_BLOCK = 40
+
+        /** 見開きで読む、もう1つのノート。番号の前方一致を避けるため、目印は [sideParagraph] の文全体で探す。 */
+        val SPREAD_SIDE_BODY = (0 until SPREAD_PARAGRAPHS).joinToString("\n\n") { sideParagraph(it) }
+
+        /** 保存値を残す読書画面の鍵。 */
+        const val NOTE_SCREEN = "note"
 
         /** 見開きで送る先。最初の見開きに入らないところ。 */
         const val JUMPED_SPREAD_BLOCK = 100
