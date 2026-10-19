@@ -253,5 +253,8 @@ internal const val SPREAD_MIN_CHARS_PER_LINE = 16f
 /** 見開きに入る、ページの行数の下限。 */
 internal const val SPREAD_MIN_LINES = 12f
 
-/** 見開きに入る、ブロックの表示文字数の上限。超えるブロックの計測は Main を1フレームより長く占めうる。 */
+/**
+ * 見開きに入る、ブロックの表示文字数の上限。1回の計測は途中で止められず、字数にほぼ比例して Main を占める。
+ * この字数で約2ms（→ features/note_spread.md §8 判断10 の実測）で、実際の本文で数倍かかっても 120Hz の1フレームに収まる。
+ */
 internal const val SPREAD_MAX_BLOCK_CHARS = 8_000
