@@ -35,3 +35,8 @@
 | `2026-10-19-fold8-review/P2-1` | 2面へ戻る途中の新しい送りを、位置の復元が広げる前の位置で上書きする | `統合` FOLD-8 |
 | `2026-10-19-fold8-device/P2-1` | 右を1画面にしている間の自己リンクの送りを、2面へ戻すと失う | `統合` FOLD-8 |
 | `2026-10-19-fold8-device/P3-1` | 机の往復の検査が、画面外の NaN 座標の段落を先頭として拾う | `起票` TEST-8 |
+| `2026-10-20-note-spread-implementation-review/P2-1` | 保存された見開きへ戻ると、留守中の位置の送りとノートの替わりを見落とす | `起票` SPREAD-2 |
+| `2026-10-20-note-spread-implementation-review/P2-2` | 同じページに入った表の見出しの行の2つ目以降の切れ端が描かれない | `起票` SPREAD-3 |
+| `2026-10-20-note-spread-implementation-review/P2-3` | 見出しの脇のメモの印の高さ（48dp）を計測に入れていない | `起票` SPREAD-4 |
+| `2026-10-20-note-spread-implementation-review/P2-4` | 同じノートで本文を解析し直したとき、文字の位置を0に戻す規則が画面から呼ばれていない | `起票` SPREAD-5 |
+| `2026-10-20-note-spread-implementation-review/P2-5` | 再会カードの高さを測る前の組版で読書の到達点を送る | `起票` SPREAD-6 |
