@@ -18,8 +18,10 @@
 `note_fullscreen`・冊子・データ管理・読書痕跡の整理・結晶の一覧がこれにあたる。
 
 **画面幅対応:** `WindowWidthSizeClass.Expanded`（Fold展開）は左サイドレール、それ以外は下部バー。
-**ノートタブで余白ペインが出ている間はレールを畳む**（`showsRail`）。タブを替えるのは、つまみで呼ぶ帯の ✎ でペインをしまってから
-（→ [margin_pane](../features/margin_pane.md) の「並べ方と、判定の優先順」）。
+**ノートタブで机の形（余白ペイン・本文の見開き）が出ている間はレールを畳む**（`showsRail`）。
+**つまみで帯を呼んでいる間だけ、レールを本文の上の左端に重ねて出す**（`overlaysRail`）。重ねるだけで本文の幅は変えず、タブを押すと帯ごとしまう
+（→ [margin_pane](../features/margin_pane.md) の「並べ方と、判定の優先順」・[note_spread](../features/note_spread.md) §8 判断3）。
+重ねるレールも本文の後ろに組み立てる（本文が最初の子のまま）。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。
 
 **外殻は本文（NavHost）を、レール・バー・どちらも無しのどの形でも同じ位置で組み立てる。**

@@ -30,6 +30,7 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.example.newproject.ui.markdown.NoteImageMeasurements
@@ -156,15 +157,20 @@ class MainActivity : ComponentActivity() {
                 // 余白メモの入力欄で書いているつもりか。**通常表示と全画面で共有する** — 全画面のシートで書いたまま戻ると、
                 // 戻った先の面へフォーカスを引き継ぐ（→ features/margin_pane.md §5.4）。画面の作り直しもまたいで保つ。
                 var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
-                // ノートタブが余白ペインを出しているか。出ている間は外殻がレールを畳む（→ showsRail）。
+                // ノートタブが机の形（余白ペイン・本文の見開き）を出しているか。出ている間は外殻がレールを畳む（→ showsRail）。
                 // 画面の作り直しをまたいで保つ — 戻すと、Fold の開閉のたびにレールが一瞬出てから畳まれる。
                 var notePaneVisible by rememberSaveable { mutableStateOf(false) }
+                // 机の形で帯が出ているか（外殻がレールを重ねて出す → overlaysRail）と、重ねたレールでタブが押された回数（帯をしまわせる）。
+                var noteBarShown by remember { mutableStateOf(false) }
+                var noteBarHideRequest by remember { mutableLongStateOf(0L) }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
                     snackbarHostState = snackbarHostState,
-                    notePaneVisible = notePaneVisible
+                    notePaneVisible = notePaneVisible,
+                    noteBarShown = noteBarShown,
+                    onOverlayRailTab = { noteBarHideRequest++ }
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -217,6 +223,8 @@ class MainActivity : ComponentActivity() {
                                 expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
                                 foldInfo = rememberReaderFold(),
                                 onMarginPaneVisibleChange = { notePaneVisible = it },
+                                onDeskBarShownChange = { noteBarShown = it },
+                                deskBarHideRequest = noteBarHideRequest,
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },

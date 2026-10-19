@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
-**状態:** 実装中。区切り0・区切り1と、区切り2のうち位置の口・計測・見開きの画面まで。帯と重ねるレールは未実装で、見開きの間はタブを替えられない
+**状態:** 実装中。区切り0・区切り1・区切り2まで実装（位置の口・計測・見開きの画面・帯と重ねるレール）。区切り3（つなぐ）は一部（読書の記録・節・リンク・続きから読む・再会カード）を区切り2と一緒に入れた。instrumentation と実機はまだ
 **最終検証:** 未検証（区切り1の純関数だけ実装。§5〜§7 の画面と接続は実装前）
-**関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt`。（予定）`ui/AppScaffold.kt`
-**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest`。（予定）`NoteReadingFlowTest`
+**関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`
+**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest` / `AppScaffoldRailTest`。（予定）`NoteReadingFlowTest`
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、
 机の画面は [margin_pane](margin_pane.md) §5.1、面の色・形・動きの割り当ては [bearing_channels](../system/bearing_channels.md) が持つ
 
@@ -163,7 +163,7 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 - **計測は Compose の `TextMeasurer`。** 使う口（`measure`、行ごとの `getLineStart`・`getLineEnd`・`getLineTop`・`getLineBottom`）は Compose 1.7.3 の ui-text のバイナリにあることを確かめた。`measure` は同期の呼び出しで、途中で止められない
 - **実装のときに書き換える既存の記述（→ [lessons L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）:** [margin_pane](margin_pane.md) §5.1 の「✎ を押すとふだんの画面（縦積み）へ戻り」は、本の形では見開きへ戻る。
   fold_experience §6 の縦の折り目の行の「今」の列。[bearing_channels](../system/bearing_channels.md) §2 の指に追従する動きの「載る面」（→ 判断7）。
-  机の帯でもレールを重ねて出すので、[`showsRail`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt) の KDoc「タブを替えるのは ✎ でペインをしまってから」と `AppScaffoldRailTest`
+  机の帯でもレールを重ねて出すので、[`showsRail`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt) の KDoc と [tab_navigation](../system/tab_navigation.md)（書き換え済み。重ねる判定は `overlaysRail` と `AppScaffoldRailTest`）
 
 ### 実装の区切り
 

@@ -72,6 +72,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import com.example.newproject.ui.RailWidth
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -168,8 +170,12 @@ internal fun NoteReaderTab(
      * 端末の持ち方によらず自分で決めた折り目で机を組む（→ system/instrumentation_testing.md 判断12）。
      */
     foldInfo: ReaderFoldInfo,
-    /** 余白ペインが出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
+    /** 机の形（余白ペイン・本文の見開き）が出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
     onMarginPaneVisibleChange: (Boolean) -> Unit,
+    /** 机の形の帯が出ているかを外殻へ知らせる。出ている間、外殻はレールを重ねて出す（→ `overlaysRail`）。 */
+    onDeskBarShownChange: (Boolean) -> Unit = {},
+    /** 重ねて出したレールでタブが押されるたびに進む番号。進んだら帯をしまう。 */
+    deskBarHideRequest: Long = 0L,
     /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
     memoDraft: MarginMemoDraft,
     /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
@@ -540,6 +546,20 @@ internal fun NoteReaderTab(
         if (!spreadVisible) ReadingProgressReporter(sectionModel, listState, imageMeasurements, onReadingProgress)
         // 机の画面の操作の帯と広げ方（→ DeskSpread）。**しまった状態と2面から始める** — ペインを出し直したときも、ノートを替えたときも。
         var deskBarShown by remember(paneVisible || spreadVisible, currentNoteUri) { mutableStateOf(false) }
+        // 帯が出ているかを外殻へ知らせる（レールを重ねて出す）。画面が組まれなくなったら、出ていない。
+        val currentOnDeskBarShownChange by rememberUpdatedState(onDeskBarShownChange)
+        LaunchedEffect(deskBarShown) { currentOnDeskBarShownChange(deskBarShown) }
+        DisposableEffect(Unit) { onDispose { currentOnDeskBarShownChange(false) } }
+        // 重ねて出したレールでタブが押されたら、帯ごとしまう。
+        var seenHideRequest by remember { mutableLongStateOf(deskBarHideRequest) }
+        LaunchedEffect(deskBarHideRequest) {
+            if (deskBarHideRequest != seenHideRequest) {
+                seenHideRequest = deskBarHideRequest
+                deskBarShown = false
+            }
+        }
+        // 重ねて出すレールが帯の中身を隠さないよう、帯の中身をその分だけ右から始める（窓の左端からレールの幅まで）。
+        val railInset = if (expandedWidth) (RailWidth - (regionStartDp ?: 0f).dp).coerceAtLeast(0.dp) else 0.dp
         var deskSpread by remember(paneVisible, currentNoteUri) { mutableStateOf(DeskSpread.Both) }
         // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
         // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
@@ -862,7 +882,7 @@ internal fun NoteReaderTab(
                                     animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
                                 )
                             ) {
-                                DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.pageWidthDp.dp)) {
+                                DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.pageWidthDp.dp).padding(start = railInset)) {
                                     controls(memoToggle, openSummary, ControlsPlace.DeskBar) { deskBarShown = false }
                                 }
                             }
@@ -913,7 +933,7 @@ internal fun NoteReaderTab(
                                             animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
                                         )
                                     ) {
-                                        DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.bodyWidthDp.dp)) {
+                                        DeskBar(onHide = { deskBarShown = false }, backdrop = deskBackdrop, modifier = Modifier.width(layout.bodyWidthDp.dp).padding(start = railInset)) {
                                             controls(memoToggle, openSummary, ControlsPlace.DeskBar) { deskBarShown = false }
                                         }
                                     }
