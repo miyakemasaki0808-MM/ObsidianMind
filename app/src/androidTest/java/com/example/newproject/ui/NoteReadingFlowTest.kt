@@ -1540,12 +1540,20 @@ class NoteReadingFlowTest {
             swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
         }
         composeRule.onNodeWithText(TITLE).assertDoesNotExist()
-        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
-            swipeDown(startY = centerY - 150.dp.toPx(), endY = centerY + 150.dp.toPx(), durationMillis = 300)
+        // 広がると、末尾に近い位置は上限へ縮められている。縦に送ったかは、縮んだ後の位置と比べる。
+        val wide = firstShownWrapping(SIDE_WRAP).first
+        // 見えている段落に指を置いて下へ動かし、手前の段落へ戻る向きに送る。
+        // **座標で決め打ちしない** — 窓の上の余白で中身が下がり、右の題名の上から払うと一覧が送られない。
+        val shown = composeRule.onAllNodesWithText(wrappingParagraph(SIDE_WRAP, wide))
+        val node = (0 until shown.fetchSemanticsNodes().size).first { shown[it].isDisplayed() }
+        shown[node].performTouchInput {
+            down(center)
+            repeat(10) { moveBy(Offset(0f, 30.dp.toPx())) }
+            up()
         }
         composeRule.waitForIdle()
         val moved = firstShownWrapping(SIDE_WRAP).first
-        assertTrue("縦に払ったのに右が送られていない", moved < before.first)
+        assertTrue("縦に払ったのに右が送られていない（広げる前 ${before.first}・広げた後 $wide・払った後 $moved）", moved < wide)
         composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
             swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
         }
