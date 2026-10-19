@@ -89,6 +89,7 @@ import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderFoldInfo
+import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
@@ -1968,7 +1969,7 @@ class NoteReadingFlowTest {
         composeRule.runOnIdle { assertEquals(20, listState.firstVisibleItemIndex) }
 
         composeRule.runOnIdle {
-            openNoteFromTop(listState) {
+            openNoteFromTop(BodyPosition(listState)) {
                 state = loadedNote(LONG_SIDE_BODY, targetUri = NOTE_B)
                 model = buildNoteSectionModel(LONG_SIDE_BODY)
             }

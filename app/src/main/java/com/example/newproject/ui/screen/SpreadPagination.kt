@@ -221,18 +221,6 @@ internal fun spreadProgress(pages: List<SpreadPage>, spread: Int, blocks: List<S
     return SpreadProgress(last.blockIndex, fraction)
 }
 
-/** 本文の一覧の位置の書き込みの出どころ（→ features/note_spread.md §5「位置の書き込み」）。 */
-internal enum class BodyPositionSource {
-    /** リンク・続きから読む・節へ飛ぶ・ノートの始まり・全画面からの戻りなど、見開きの外からの送り。 */
-    External,
-
-    /** 見開きのめくりが決まって、読む位置を書き戻した。 */
-    SpreadTurn
-}
-
-/** 本文の一覧の位置への1回の書き込み。[request] は書くたびに進む番号で、同じ値の送りも見分ける。 */
-internal data class BodyPositionRequest(val request: Long, val blockIndex: Int, val source: BodyPositionSource)
-
 /**
  * 書き込みを受けたあとの読む位置。**番号が進んだ外からの送りなら、値が同じでも送り先のブロックの先頭へ替える。**
  * 自分の書き戻しと、見たことのある番号では替えない。

@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
-**状態:** 実装中。区切り1（組版の純関数）まで実装し、画面はまだ変えていない
+**状態:** 実装中。区切り1（組版の純関数）と、区切り2のうち本文の位置の口まで実装。見開きの画面はまだ出ない
 **最終検証:** 未検証（区切り1の純関数だけ実装。§5〜§7 の画面と接続は実装前）
-**関連コード:** `ui/screen/SpreadPagination.kt`。（予定）`ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`。新規に `ui/screen/NoteSpread.kt`
-**関連テスト:** `SpreadPaginationTest`。（予定）`ReaderLayoutTest` / `NoteReadingFlowTest`、本文の位置の口のテスト
+**関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt`。（予定）`ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`。新規に `ui/screen/NoteSpread.kt`
+**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest`。（予定）`ReaderLayoutTest` / `NoteReadingFlowTest`、本文の位置の口のテスト
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、
 机の画面は [margin_pane](margin_pane.md) §5.1、面の色・形・動きの割り当ては [bearing_channels](../system/bearing_channels.md) が持つ
 
@@ -135,18 +135,18 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 
 正本を残しても、見開きに合わせて変える口がある。**ここに無い口を足したら、この表に1行足す**（→ [lessons L14](../lessons.md#l14-横展開は最後の1本を取り残す)）。
 
-| 今の口 | 見開きでの契約 |
+| 口 | 今の書き方と、見開きでの契約 |
 |---|---|
-| `openNoteFromTop`（ランダム・さがす・関連・結晶・冊子） | 今も `requestScrollToItem(0)`。本文の位置の口を通し、同じノート・先頭のままでも新しい要求として読む位置を捨てる |
-| `rememberNoteStart` | 開いた直後は非 suspend、解析が届いた後の見出しへの送りは今 `scrollToItem`。口を通して配置を待たない形にする。飛び越す画像の測定の依頼と、要求を使い終えたことを失わない |
-| 続きから読む | 今 `scrollToItem`。口を通す。カードを即座に畳む・送り先を受け取る・高さが変わって組み直す、が同時に起きても、組み直しが古い読む位置へ戻さない |
-| 同じノートへのリンク（本文・右から主の面へ） | 今 `scrollToItem`。口を通し、同じ値でも受け付ける。読む位置の見開きが組み上がっていなければ要求を持って待つ |
-| `rememberMarginFaceInputs` の節 | 今は一覧の先頭のブロックをスクロールが止まってから読む。見開きの間は読む位置のブロックから決める（判断12）。一覧の値は書き戻しの時点まで遅れるので読まない |
-| `rememberMarginFaceInputs.jumpToSection` | 今 `animateScrollToItem`。縦の流しでは口の Job で走らせ、見開きでは非 suspend の要求にする。走っているアニメーションは新しい要求と見開きへの切り替えで取り消す |
-| `FullscreenNoteScreen` の継承と `leaveWith` | 継承は一覧の値を読むだけ。戻りは今も非 suspend。口を通し、見開きへはブロックだけを渡す（画素のオフセットは捨てる） |
-| `RestoreLazyFacePosition`（机の片側1画面の復元） | 机の中だけで走る。並べ方が見開きへ替われば広げ方と覚えの鍵が替わって捨てられ、見開きの読む位置を書かない |
+| `openNoteFromTop`（ランダム・さがす・関連・結晶・冊子） | [`BodyPosition`](../../../app/src/main/java/com/example/newproject/ui/screen/BodyPosition.kt) の `moveTo(0)`。同じノート・先頭のままでも番号が進むので、見開きは新しい要求として読む位置を捨てる |
+| `rememberNoteStart` | 開いた直後も、解析が届いた後の見出しへの送りも `moveTo`（配置を待たない）。飛び越す画像の測定の依頼と、要求を使い終えたことを失わない |
+| 続きから読む | `moveTo`。カードを即座に畳む・送り先を受け取る・高さが変わって組み直す、が同時に起きても、組み直しが古い読む位置へ戻さない |
+| 同じノートへのリンク（本文・右から主の面へ） | `moveTo`。同じ値でも番号が進む。読む位置の見開きが組み上がっていなければ要求を持って待つ |
+| `rememberMarginFaceInputs` の節 | 一覧の先頭のブロックをスクロールが止まってから読む。見開きの間は読む位置のブロックから決める（判断12）。一覧の値は書き戻しの時点まで遅れるので読まない |
+| `rememberMarginFaceInputs.jumpToSection` | 縦の流しでは口の `animateTo`（Job は口が1本だけ持ち、次の書き込みで取り消す）。見開きでは `moveTo` にする |
+| `FullscreenNoteScreen` の継承と `leaveWith` | 継承は一覧の値を読むだけ。戻りは `moveTo(ブロック, オフセット)`。見開きへはブロックだけを渡す（画素のオフセットは捨てる）。全画面の中の一覧は全画面だけの口で書く |
+| `RestoreLazyFacePosition`（机の片側1画面の復元） | 口を通さず一覧へ直接書く唯一の例外。机の中だけで走り、並べ方が見開きへ替われば広げ方と覚えの鍵が替わって捨てられ、見開きの読む位置を書かない |
 | `ReadingProgressReporter` | 今は表示の分岐の外で組まれている。縦の流しが出ている間だけ組み、見開きの間は見開きの報告と入れ替える |
-| 見開きのめくり・組み直し | めくりが決まったら読む位置を替えて書き戻す。組み直しは読む位置を書かない。指で動かしている途中と組み上がる前は、正本にも記録にも送らない |
+| 見開きのめくり・組み直し | めくりが決まったら読む位置を替えて `moveTo(…, SpreadTurn)` で書き戻す。組み直しは読む位置を書かない。指で動かしている途中と組み上がる前は、正本にも記録にも送らない |
 
 ## 7. システム設計
 

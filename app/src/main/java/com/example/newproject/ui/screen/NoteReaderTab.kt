@@ -149,6 +149,8 @@ internal fun NoteReaderTab(
     onRetrySectionSummary: (SectionRef) -> Unit,
     onCancelSectionSummary: (SectionRef) -> Unit,
     noteListState: LazyListState,
+    /** 本文の位置を書く口。Activity で [noteListState] と一緒に1つだけ作って渡す（→ [BodyPosition]）。 */
+    bodyPosition: BodyPosition = remember(noteListState) { BodyPosition(noteListState) },
     onEnterFullscreen: () -> Unit,
     /** シートを出す。読み込み済みなら読み直さない（ペインの書きかけをシートへ移すときにも使う）。 */
     onOpenMarginMemo: () -> Unit,
@@ -209,7 +211,7 @@ internal fun NoteReaderTab(
 
     val listState = noteListState
     val coroutineScope = rememberCoroutineScope()
-    val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+    val face = rememberMarginFaceInputs(sectionModel, bodyPosition, uiState.marginMemoState, imageMeasurements)
     val bodySection = face.bodySection
     val arrangedMemos = face.arranged
     val previousReadingAt = face.previousReadingAt
@@ -300,7 +302,7 @@ internal fun NoteReaderTab(
         openSide(note)
     }
     // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
-    val startNote = rememberNoteStart(listState, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+    val startNote = rememberNoteStart(bodyPosition, currentNoteUri, sectionModel, imageMeasurements) { heading ->
         showNotice(noteLinkHeadingMissingText(heading, opened = true))
     }
     val moveToNote: (RelatedNote, Int) -> Unit = { note, block ->
@@ -457,7 +459,7 @@ internal fun NoteReaderTab(
                     val blocks = sectionModel?.blocks
                     if (target != null && !blocks.isNullOrEmpty()) {
                         val clamped = target.coerceAtMost(blocks.lastIndex)
-                        coroutineScope.launch { listState.scrollToItem(clamped) }
+                        bodyPosition.moveTo(clamped)
                         // **飛び越した画像は描画されないので測られない。** 測らないと、その先の読書の
                         // 報告が止まり続ける。止める検査は緩めず、測り終えれば報告が再開する。
                         // **ここで測らず、ノート単位の入れ物へ依頼する** — この画面のスコープで測ると、
@@ -554,7 +556,7 @@ internal fun NoteReaderTab(
             if (target == null) {
                 heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
             } else {
-                coroutineScope.launch { listState.scrollToItem(target) }
+                bodyPosition.moveTo(target)
                 imageMeasurements?.requestSkippedMeasurement(target)
             }
         }

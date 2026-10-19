@@ -28,6 +28,7 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.WeaveBlockedReason
 import com.example.newproject.model.state.WeaveState
 import com.example.newproject.ui.screen.BookletScreen
+import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
@@ -212,7 +213,7 @@ class BookletScreenTest {
         composeRule.waitForIdle()
         assertEquals(3, listState.firstVisibleItemIndex)
 
-        composeRule.runOnUiThread { openFromBooklet(listState, open = {}, navigateToNote = {}) }
+        composeRule.runOnUiThread { openFromBooklet(BodyPosition(listState), open = {}, navigateToNote = {}) }
         composeRule.waitForIdle()
 
         assertEquals(0, listState.firstVisibleItemIndex)
@@ -231,7 +232,7 @@ class BookletScreenTest {
 
         composeRule.runOnUiThread {
             openFromBooklet(
-                listState,
+                BodyPosition(listState),
                 open = { calls += "open" },
                 navigateToNote = { calls += "navigate" }
             )

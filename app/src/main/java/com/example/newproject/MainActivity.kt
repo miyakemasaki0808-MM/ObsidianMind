@@ -7,6 +7,7 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
+import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.Indigo
@@ -145,6 +146,8 @@ class MainActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
                 val noteListState = rememberLazyListState()
+                // 本文の位置を書く口。**本文の位置を書く経路はすべてここを通す**（→ BodyPosition）。
+                val bodyPosition = remember(noteListState) { BodyPosition(noteListState) }
                 // 画像の寸法も同じスコープで持つ。**位置だけ引き継いで寸法を捨てると、
                 // 全画面へ入った瞬間に未計測へ戻り、後続ブロックが可視になって到達率が
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
@@ -177,7 +180,7 @@ class MainActivity : ComponentActivity() {
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
                                     if (viewModel.vaultUri != null) {
-                                        openNoteFromTop(noteListState) { viewModel.loadRandomNote(contentResolver) }
+                                        openNoteFromTop(bodyPosition) { viewModel.loadRandomNote(contentResolver) }
                                     } else {
                                         openVault.launch(null)
                                     }
@@ -187,6 +190,7 @@ class MainActivity : ComponentActivity() {
                                 onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
                                 onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },
                                 noteListState = noteListState,
+                                bodyPosition = bodyPosition,
                                 onOpenBooklet = {
                                     // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
                                     viewModel.openBooklet(contentResolver)
@@ -260,7 +264,7 @@ class MainActivity : ComponentActivity() {
                                     // 冊子ルートごと畳んでしまい、戻れなくなる
                                     // （→ features/booklet_mode.md 判断8）。
                                     openFromBooklet(
-                                        noteListState = noteListState,
+                                        position = bodyPosition,
                                         open = { viewModel.openBookletEntry(contentResolver, entry) },
                                         navigateToNote = { navController.navigate("note") }
                                     )
@@ -280,6 +284,7 @@ class MainActivity : ComponentActivity() {
                                 imageLoader = viewModel.imageLoader,
                                 imageMeasurements = noteImageMeasurements,
                                 tabListState = noteListState,
+                                tabPosition = bodyPosition,
                                 onExit = { navController.popBackStack() },
                                 onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
@@ -308,7 +313,7 @@ class MainActivity : ComponentActivity() {
                                 onSearch = { q -> viewModel.searchByKeyword(q) },
                                 onRandom = { viewModel.pickRandomInScope() },
                                 onOpenNote = { note ->
-                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -318,7 +323,7 @@ class MainActivity : ComponentActivity() {
                             RelatedTab(
                                 uiState = uiState,
                                 onOpenNote = { note ->
-                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -357,7 +362,7 @@ class MainActivity : ComponentActivity() {
                                 noteFields = uiState.noteFields,
                                 onLoad = { viewModel.openCrystalList(contentResolver) },
                                 onOpenSource = { path ->
-                                    openNoteFromTop(noteListState) { viewModel.openCrystalSource(contentResolver, path) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openCrystalSource(contentResolver, path) }
                                     navController.navigateToTab(AppDestination.Note)
                                 },
                                 onBack = { navController.popBackStack() }

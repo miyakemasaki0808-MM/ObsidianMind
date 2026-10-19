@@ -1,6 +1,5 @@
 package com.example.newproject.ui.screen
 
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -17,13 +16,13 @@ import java.io.Serializable
 /**
  * 別のノートを本文の先頭から開く。**ランダム・さがす・関連・結晶・冊子から開く経路はここを通す。**
  *
- * `noteListState` は Activity 生存で共有され、ノート切替ではリセットされないので、何もしないと
+ * 本文の一覧の状態は Activity 生存で共有され、ノート切替ではリセットされないので、何もしないと
  * 開いたノートが前のノートで読んでいた位置から始まる。「このノートへ移る」とリンクは
  * [rememberNoteStart] が始まりの位置を置くので、ここを通さない。
  */
-internal fun openNoteFromTop(noteListState: LazyListState, open: () -> Unit) {
+internal fun openNoteFromTop(position: BodyPosition, open: () -> Unit) {
     open()
-    noteListState.requestScrollToItem(0)
+    position.moveTo(0)
 }
 
 /**
@@ -41,7 +40,7 @@ internal data class PendingNoteStart(val noteUri: String, val block: Int, val he
  */
 @Composable
 internal fun rememberNoteStart(
-    listState: LazyListState,
+    position: BodyPosition,
     currentNoteUri: String?,
     sectionModel: NoteSectionModel?,
     imageMeasurements: NoteImageMeasurements?,
@@ -56,14 +55,14 @@ internal fun rememberNoteStart(
             val (block, headingMissing) = noteStartBlock(sectionModel.blocks, start.heading, fallback = start.block)
             if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
             // 読書の記録は最も深い位置しか残さないので、手前で1度報告されても、置き直した位置からの報告で上書きされる。
-            if (listState.firstVisibleItemIndex != block) listState.scrollToItem(block)
+            if (position.listState.firstVisibleItemIndex != block) position.moveTo(block)
             // 飛び越した画像は描画されないので測られない。測らないと、その先の読書の報告が止まり続ける。
             imageMeasurements?.requestSkippedMeasurement(block)
         }
         if (opened != start.noteUri || sectionModel != null) pending = null
     }
     return { start ->
-        listState.requestScrollToItem(start.block)
+        position.moveTo(start.block)
         pending = start
     }
 }
