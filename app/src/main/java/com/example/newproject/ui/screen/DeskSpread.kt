@@ -263,7 +263,10 @@ internal fun RestoreSupportingScroll(spread: DeskSpread, scrollState: ScrollStat
     }
 }
 
-/** 段落で位置を持つ面（本文・並べ読み）の読む位置。[viewportWidth] はそのときの面の幅（px）。 */
+/**
+ * 段落で位置を持つ面（本文・並べ読み）の読む位置。[viewportWidth] はそのときの面の幅（px）。
+ * **一覧が面の幅いっぱいに組まれていることが前提**（→ `MarkdownNoteContent`）。内容で幅が決まると、送っただけで幅が変わる。
+ */
 internal data class LazyFacePosition(val index: Int, val offset: Int, val viewportWidth: Int)
 
 internal val LazyListState.facePosition: LazyFacePosition

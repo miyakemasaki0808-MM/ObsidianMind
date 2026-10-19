@@ -1679,6 +1679,30 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **右を1画面にしている間に、短い段落の並ぶところへ飛んだら（リンクと同じ `scrollToItem`）、2面へ戻してもそこに残る。**
+     * 一覧が表示中の段落の文字幅で自身の幅を決めていたときは、飛んだだけで一覧の幅が変わり、送りを広がる途中の縮みと取り違えて
+     * 広げる前の位置へ戻した（実機で、右の自己リンクで段落30へ送ったのに、2面へ戻すと先頭へ）。
+     */
+    @Test
+    fun 机の画面で並べ読みの右を1画面にしている間に短い段落へ飛んだ先は_戻しても残る() {
+        assumeDeskWindow()
+        setWrappingSideDesk(shortHead = SHORT_HEAD_COUNT)
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = 360.dp.toPx(), endX = 160.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+        wrappingList(SIDE_WRAP).performScrollToIndex(0)
+        composeRule.onNodeWithText(shortWrappingParagraph(SIDE_WRAP, 0)).assertIsDisplayed()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = centerX - 100.dp.toPx(), endX = centerX + 100.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+
+        composeRule.onNodeWithText(shortWrappingParagraph(SIDE_WRAP, 0)).assertIsDisplayed()
+    }
+
+    /**
      * 時計を止めたまま、机の画面を横に [dxDp] だけ払う（右が正）。払いの判定は時間を待たないので、止めた時計でも届く。
      * 片側を広げる・戻すアニメーションを途中で止めて、そこへ操作を挟むために使う。
      */
@@ -1710,9 +1734,12 @@ class NoteReadingFlowTest {
         scrollNearEnd(MAIN_WRAP)
     }
 
-    /** [WRAPPING_COUNT] 段落の関連ノートを右で開いた机の画面。右を末尾の近く（末尾から少し戻した位置）まで送って返す。 */
-    private fun setWrappingSideDesk() {
-        val sideBlocks = buildNoteSectionModel(wrappingBody(SIDE_WRAP)).blocks
+    /**
+     * [WRAPPING_COUNT] 段落の関連ノートを右で開いた机の画面。右を末尾の近く（末尾から少し戻した位置）まで送って返す。
+     * [shortHead] があれば、長い段落の前に1行で収まる短い段落をその数だけ置く。
+     */
+    private fun setWrappingSideDesk(shortHead: Int = 0) {
+        val sideBlocks = buildNoteSectionModel(wrappingBody(SIDE_WRAP, shortHead)).blocks
         var state by mutableStateOf(
             loadedNote(SHORT_TWO_SECTIONS).withMemos()
                 .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
@@ -1734,16 +1761,17 @@ class NoteReadingFlowTest {
         }
         composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
         composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
-        composeRule.onNodeWithText(wrappingParagraph(SIDE_WRAP, 0)).assertIsDisplayed()
-        scrollNearEnd(SIDE_WRAP)
+        val first = if (shortHead > 0) shortWrappingParagraph(SIDE_WRAP, 0) else wrappingParagraph(SIDE_WRAP, 0)
+        composeRule.onNodeWithText(first).assertIsDisplayed()
+        scrollNearEnd(SIDE_WRAP, lastIndex = shortHead + WRAPPING_COUNT - 1)
     }
 
     /**
      * 末尾まで送ってから少し戻す。**末尾そのものにはしない** — 末尾に留める直し方でも通ってしまう。
      * 残りは窓より少し長いだけなので、幅が倍ほどに広がって折り返しが減ると窓に収まり、位置が上限へ縮む。
      */
-    private fun scrollNearEnd(side: String) {
-        wrappingList(side).performScrollToIndex(WRAPPING_COUNT - 1)
+    private fun scrollNearEnd(side: String, lastIndex: Int = WRAPPING_COUNT - 1) {
+        wrappingList(side).performScrollToIndex(lastIndex)
         val back = with(composeRule.density) { 200.dp.toPx() }
         wrappingList(side).performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, -back) }
         composeRule.waitForIdle()
@@ -2596,6 +2624,14 @@ class NoteReadingFlowTest {
         fun wrappingParagraph(side: String, index: Int) =
             "${side}で折り返す段落$index。" + "読み返すたびに引っかかるところが変わるので、同じ段落でも前とは違う問いが立つ。".repeat(3)
 
-        fun wrappingBody(side: String) = (0 until WRAPPING_COUNT).joinToString("\n\n") { wrappingParagraph(side, it) }
+        /** 長い段落の前に置く、1行で収まる短い段落の数。窓の高さを短い段落だけで埋められる数にする。 */
+        const val SHORT_HEAD_COUNT = 24
+
+        /** 1行で収まる短い段落。一覧の目印（「…で折り返す段落」）を含めて、飛んだ先でも一覧を探せるようにする。 */
+        fun shortWrappingParagraph(side: String, index: Int) = "${side}で折り返す段落の前置き$index。"
+
+        fun wrappingBody(side: String, shortHead: Int = 0) =
+            ((0 until shortHead).map { shortWrappingParagraph(side, it) } + (0 until WRAPPING_COUNT).map { wrappingParagraph(side, it) })
+                .joinToString("\n\n")
     }
 }

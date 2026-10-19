@@ -83,8 +83,11 @@ internal fun MarkdownNoteContent(
             // （PointerInputResetException）、指離しを受け取れずに長押しでもリンクが開く。容器の修飾子は選択の状態で並びが変わる。
             // 見張りだけを持つ内側の層に置き、最小の大きさも渡して本文の並べ方を変えない。
             Box(modifier = linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier, propagateMinConstraints = true) {
+                // **幅は内容で決めず、置かれた幅いっぱいに組む。** 机の画面は一覧の幅の変化で、広がる途中の縮みと送りを見分ける
+                // （→ lazyFaceMoved）。内容で決めると、表示中の段落が替わるだけで幅が変わり、リンクの送りを縮みと取り違える。
                 LazyColumn(
                     state = listState,
+                    modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(blocks.size) { i ->
