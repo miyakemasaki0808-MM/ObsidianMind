@@ -1,6 +1,10 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.text.AnnotatedString
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.ui.markdown.SpreadBlockRender
+import com.example.newproject.ui.markdown.SpreadTableCell
+import com.example.newproject.ui.markdown.spreadTableLines
 import com.example.newproject.ui.screen.BodyPositionRequest
 import com.example.newproject.ui.screen.BodyPositionSource
 import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
@@ -126,6 +130,29 @@ class SpreadPaginationTest {
         }
         // 切れ端ごとに始まりの位置が異なる（読む位置がどの切れ端かを見分けられる）。
         assertEquals(chunks.size, chunks.map { it.charStart }.distinct().size)
+    }
+
+    /**
+     * 最初のページが題名の分だけ短いと、見出しの行の後ろの切れ端が2つ右ページに入る。
+     * 描くときに見出しの切れ端を1つに絞ると、残りの文字がどのページにも出ない。
+     */
+    @Test
+    fun `割れた見出しの行は同じページに入った切れ端を全部描く`() {
+        val lineCount = 33
+        val text = AnnotatedString((0 until lineCount).joinToString("") { "line%02d".format(it) })
+        val starts = List(lineCount) { it * 6 }
+        val table = SpreadBlock.Table(
+            listOf(SpreadTableRow(listOf(starts.map { SpreadLine(24f, it) }), padding = 13f)),
+            textLength = text.length + 1
+        )
+        val render = SpreadBlockRender.Table(listOf(listOf(SpreadTableCell(text, starts))))
+        val pages = paginateSpread(listOf(table), leftPageHeight = 450f, firstPageHeight = 410f, blockSpacing = 0f)
+        val fit = 410f
+
+        assertEquals(listOf(0 until 1, 1 until 3), pages.map { page -> page.slices.single().run { unitStart until unitEnd } })
+        val drawn = pages.flatMap { page -> spreadTableLines(table, render, page.slices.single(), fit) }
+        assertTrue(drawn.all { it.header })
+        assertEquals(text.text, drawn.joinToString("") { it.cells.single().text })
     }
 
     /** レビューの受理条件: ページより高い1行の表でも終わり、全セルの全文へ届き、空のページを作らない。 */

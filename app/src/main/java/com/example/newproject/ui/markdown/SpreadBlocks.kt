@@ -234,18 +234,8 @@ internal fun SpreadSliceView(
         is SpreadBlockRender.Code -> MarkdownCodeBlock(render.text.cut(range).text)
 
         is SpreadBlockRender.Table -> {
-            val table = measured.spread as SpreadBlock.Table
-            val units = table.rows.flatMapIndexed { row, spreadRow -> splitTableRow(spreadRow, fitHeightPx).map { row to it } }
-            val shown = units.subList(slice.unitStart, slice.unitEnd).map { (row, chunk) ->
-                row to render.rows[row].mapIndexed { cell, value ->
-                    val lines = chunk.cellLines[cell]
-                    if (lines.isEmpty()) AnnotatedString("") else value.text.cut(
-                        value.lineStarts[lines.first] until (value.lineStarts.getOrNull(lines.last + 1) ?: value.text.length)
-                    )
-                }
-            }
-            val header = shown.firstOrNull { it.first == 0 }?.second
-            MarkdownTableView(header, shown.filter { it.first > 0 }.map { it.second })
+            val lines = spreadTableLines(measured.spread as SpreadBlock.Table, render, slice, fitHeightPx)
+            MarkdownTableView(lines.filter { it.header }.map { it.cells }, lines.filterNot { it.header }.map { it.cells })
         }
 
         is SpreadBlockRender.Image -> {
@@ -254,6 +244,33 @@ internal fun SpreadSliceView(
         }
 
         SpreadBlockRender.Rule -> MarkdownHorizontalRule()
+    }
+}
+
+/** 表の切れ端で描く1行。[header] なら見出しの行（の切れ端）で、見出しの書式で描く。 */
+internal data class SpreadTableLine(val header: Boolean, val cells: List<AnnotatedString>)
+
+/**
+ * 表の切れ端 [slice] に出す行を、組版と同じ割り方（[fitHeightPx]）で引き直す。
+ * 見出しの行が割れて同じページに2つ以上入ることがあるので、**見出しの切れ端も全部**返す。
+ */
+internal fun spreadTableLines(
+    table: SpreadBlock.Table,
+    render: SpreadBlockRender.Table,
+    slice: SpreadSlice,
+    fitHeightPx: Float
+): List<SpreadTableLine> {
+    val units = table.rows.flatMapIndexed { row, spreadRow -> splitTableRow(spreadRow, fitHeightPx).map { row to it } }
+    return units.subList(slice.unitStart, slice.unitEnd).map { (row, chunk) ->
+        SpreadTableLine(
+            header = row == 0,
+            cells = render.rows[row].mapIndexed { cell, value ->
+                val lines = chunk.cellLines[cell]
+                if (lines.isEmpty()) AnnotatedString("") else value.text.cut(
+                    value.lineStarts[lines.first] until (value.lineStarts.getOrNull(lines.last + 1) ?: value.text.length)
+                )
+            }
+        )
     }
 }
 

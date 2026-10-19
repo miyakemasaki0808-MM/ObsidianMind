@@ -187,15 +187,15 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
         val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
         padded.take(headers.size).map { rememberInline(it.trim()) }
     }
-    MarkdownTableView(headerTexts, rowTexts)
+    MarkdownTableView(listOf(headerTexts), rowTexts)
 }
 
 /**
- * 表。[header] が null なら見出しの行を描かない（見開きで、見出しの行より後ろだけを出す切れ端）。
- * [rows] はセルの文字で、列の数は全行でそろっている前提。
+ * 表。[headers] は見出しの書式で描く行で、ふつうは1行。見開きでは割れた見出しの行の切れ端が並び、
+ * 見出しの行より後ろだけを出す切れ端では空になる。[rows] はセルの文字で、列の数は全行でそろっている前提。
  */
 @Composable
-internal fun MarkdownTableView(header: List<AnnotatedString>?, rows: List<List<AnnotatedString>>) {
+internal fun MarkdownTableView(headers: List<List<AnnotatedString>>, rows: List<List<AnnotatedString>>) {
     val borderColor = ContentDivider
     val headerStyle = LocalTextStyle.current.merge(MarkdownBodyStyle.TableHeader)
     val cellStyle = LocalTextStyle.current.merge(MarkdownBodyStyle.TableCell)
@@ -208,7 +208,7 @@ internal fun MarkdownTableView(header: List<AnnotatedString>?, rows: List<List<A
             .fillMaxWidth()
             .border(1.dp, borderColor, RoundedCornerShape(4.dp))
     ) {
-        if (header != null) {
+        headers.forEach { header ->
             Row(modifier = Modifier.background(CodePanel)) {
                 header.forEachIndexed { i, text ->
                     Text(
