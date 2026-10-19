@@ -2164,6 +2164,26 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(TITLE).assertIsDisplayed()
     }
 
+    /**
+     * **同じノートで本文を解析し直すと（蒸留の保存など）、読む位置の段落の先頭の見開きへ戻る**（→ features/note_spread.md §5「読む位置」）。
+     * 文字の位置は古い表示文字列のものなので持ち越さない。題名は最初のページにだけ出る。
+     */
+    @Test
+    fun 長い段落の途中で本文を解析し直すと_その段落の先頭の見開きへ戻る() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var model by mutableStateOf(buildNoteSectionModel(LONG_PARAGRAPH))
+        setSpreadAway({ loadedNote(LONG_PARAGRAPH, targetUri = NOTE_A) }, { model }, listState, position) { true }
+        turnSpread()
+        composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+
+        composeRule.runOnIdle { model = buildNoteSectionModel("$LONG_PARAGRAPH\n\n$REPARSED_TAIL") }
+
+        composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(0, listState.firstVisibleItemIndex) }
+    }
+
     /** 本の形の読書画面を、離れても保存値を残す形（ナビゲーションの戻り先と同じ）で組む。[shown] が false の間は画面を離れている。 */
     private fun setSpreadAway(
         note: () -> NoteUiState,
@@ -2966,6 +2986,9 @@ class NoteReadingFlowTest {
 
         /** 見開きで読む、もう1つのノート。番号の前方一致を避けるため、目印は [sideParagraph] の文全体で探す。 */
         val SPREAD_SIDE_BODY = (0 until SPREAD_PARAGRAPHS).joinToString("\n\n") { sideParagraph(it) }
+
+        /** 解析し直した本文の末尾に足す段落。 */
+        const val REPARSED_TAIL = "解析し直した後に足した段落。"
 
         /** 保存値を残す読書画面の鍵。 */
         const val NOTE_SCREEN = "note"

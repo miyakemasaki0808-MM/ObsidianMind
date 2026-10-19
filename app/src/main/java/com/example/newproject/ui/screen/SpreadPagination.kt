@@ -243,27 +243,32 @@ internal fun anchorAfterRequest(current: SpreadAnchor, seenRequest: Long, reques
     if (request.request != seenRequest && request.source == BodyPositionSource.External) SpreadAnchor(request.blockIndex) else current
 
 /**
- * 見開きの読む位置の保存値。どのノートの読む位置で、本文の位置の口（[port]）のどの番号の書き込みまで処理したか。
+ * 見開きの読む位置の保存値。どのノートのどの解析結果（[parse]）の読む位置で、本文の位置の口（[port]）のどの番号の書き込みまで処理したか。
  * 画面を離れて戻ると読む位置は保存値から戻るので、**留守の間の書き込みとノートの替わりは、この値を今の口と照らして見つける**。
  */
-internal data class SpreadReading(val noteKey: String, val anchor: SpreadAnchor, val port: Long, val seenRequest: Long)
+internal data class SpreadReading(val noteKey: String, val anchor: SpreadAnchor, val parse: Int, val port: Long, val seenRequest: Long)
 
 /**
- * 保存値（無ければ null）を、今のノートと本文の位置の口に合わせる。何も替わっていなければ [saved] をそのまま返す。
+ * 保存値（無ければ null）を、今のノート・解析結果・本文の位置の口に合わせる。何も替わっていなければ [saved] をそのまま返す。
  * - ノートが違えば、一覧の位置（[listBlock]。新しいノートを開いた経路が書いたもの）から始める
+ * - 同じノートで解析結果が替わっていれば、ブロックを保って文字の位置を0に戻す（→ [anchorAfterReparse]）。[parse] は解析結果の中身から作る鍵で、
+ *   幅や画像の寸法が替わっただけの組み直しでは替わらない
  * - 口が作り直されていれば、番号は最初から数え直しなので、[FIRST_BODY_REQUEST] より後を新しい書き込みとみなす
- * - 処理していない外からの書き込みがあれば、その送り先のブロックの先頭へ替える（→ [anchorAfterRequest]）
+ * - 処理していない外からの書き込みがあれば、その送り先のブロックの先頭へ替える（→ [anchorAfterRequest]）。解析し直しと重なれば送りを採る
  */
 internal fun reconcileSpreadReading(
     saved: SpreadReading?,
     noteKey: String,
+    parse: Int,
+    blockCount: Int,
     port: Long,
     request: BodyPositionRequest,
     listBlock: () -> Int
 ): SpreadReading {
-    if (saved == null || saved.noteKey != noteKey) return SpreadReading(noteKey, SpreadAnchor(listBlock()), port, request.request)
+    if (saved == null || saved.noteKey != noteKey) return SpreadReading(noteKey, SpreadAnchor(listBlock()), parse, port, request.request)
+    val anchor = if (saved.parse == parse) saved.anchor else anchorAfterReparse(saved.anchor, blockCount)
     val seen = if (saved.port == port) saved.seenRequest else FIRST_BODY_REQUEST
-    val next = SpreadReading(noteKey, anchorAfterRequest(saved.anchor, seen, request), port, request.request)
+    val next = SpreadReading(noteKey, anchorAfterRequest(anchor, seen, request), parse, port, request.request)
     return if (next == saved) saved else next
 }
 

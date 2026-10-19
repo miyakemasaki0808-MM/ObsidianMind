@@ -275,26 +275,44 @@ class SpreadPaginationTest {
     @Test
     fun `保存した読む位置は、留守の間の送りと別のノートを見落とさずに今の口へ合わせる`() {
         val port = 7L
-        val saved = SpreadReading("a", SpreadAnchor(40, charOffset = 120), port, seenRequest = 3)
+        val saved = SpreadReading("a", SpreadAnchor(40, charOffset = 120), parse = 1, port, seenRequest = 3)
         val list = { 0 }
 
         // 送りが無ければ文字の位置まで保つ。
-        assertSame(saved, reconcileSpreadReading(saved, "a", port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn), list))
+        assertSame(saved, reconcileSpreadReading(saved, "a", 1, 200, port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn), list))
         // 留守の間の外からの送り（全画面から100で戻る）。同じブロックへの送りでも文字の位置は先頭へ戻る。
-        assertEquals(SpreadAnchor(100), reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list).anchor)
-        assertEquals(SpreadAnchor(40), reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 40, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(100), reconcileSpreadReading(saved, "a", 1, 200, port, BodyPositionRequest(4, 100, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(40), reconcileSpreadReading(saved, "a", 1, 200, port, BodyPositionRequest(4, 40, BodyPositionSource.External), list).anchor)
         // 別のノートを先頭から開いた。保存値の読む位置ではなく一覧の位置から始める。
-        val other = reconcileSpreadReading(saved, "b", port, BodyPositionRequest(4, 0, BodyPositionSource.External)) { 0 }
-        assertEquals(SpreadReading("b", SpreadAnchor(0), port, seenRequest = 4), other)
+        val other = reconcileSpreadReading(saved, "b", 1, 200, port, BodyPositionRequest(4, 0, BodyPositionSource.External)) { 0 }
+        assertEquals(SpreadReading("b", SpreadAnchor(0), parse = 1, port, seenRequest = 4), other)
         // 送りが無くてもノートが違えば、前のノートの読む位置を持ち込まない。
-        assertEquals(SpreadAnchor(5), reconcileSpreadReading(saved, "b", port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn)) { 5 }.anchor)
+        assertEquals(SpreadAnchor(5), reconcileSpreadReading(saved, "b", 1, 200, port, BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn)) { 5 }.anchor)
         // 口が作り直された（番号は最初から）。作った後に何も書いていなければ保ち、書いていれば送り先へ替える。
         val rebuilt = 9L
-        assertEquals(SpreadAnchor(40, 120), reconcileSpreadReading(saved, "a", rebuilt, BodyPositionRequest(FIRST_BODY_REQUEST, 40, BodyPositionSource.External), list).anchor)
-        assertEquals(SpreadAnchor(2), reconcileSpreadReading(saved, "a", rebuilt, BodyPositionRequest(1, 2, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(40, 120), reconcileSpreadReading(saved, "a", 1, 200, rebuilt, BodyPositionRequest(FIRST_BODY_REQUEST, 40, BodyPositionSource.External), list).anchor)
+        assertEquals(SpreadAnchor(2), reconcileSpreadReading(saved, "a", 1, 200, rebuilt, BodyPositionRequest(1, 2, BodyPositionSource.External), list).anchor)
         // 照合した後は処理済み。もう一度照らしても替わらない。
-        val reconciled = reconcileSpreadReading(saved, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list)
-        assertSame(reconciled, reconcileSpreadReading(reconciled, "a", port, BodyPositionRequest(4, 100, BodyPositionSource.External), list))
+        val reconciled = reconcileSpreadReading(saved, "a", 1, 200, port, BodyPositionRequest(4, 100, BodyPositionSource.External), list)
+        assertSame(reconciled, reconcileSpreadReading(reconciled, "a", 1, 200, port, BodyPositionRequest(4, 100, BodyPositionSource.External), list))
+    }
+
+    /**
+     * 同じノートで本文の解析結果が替わると、読む位置の文字の位置は古い表示文字列のもの。**画面の照合で0に戻す。**
+     * 幅だけの組み直しは解析の鍵が替わらないので保つ。解析し直しと外からの送りが重なれば送りを採る。
+     */
+    @Test
+    fun `保存した読む位置は、解析し直しでブロックを保って文字の位置を0に戻す`() {
+        val port = 7L
+        val saved = SpreadReading("a", SpreadAnchor(3, charOffset = 120), parse = 1, port, seenRequest = 3)
+        val seen = BodyPositionRequest(3, 3, BodyPositionSource.SpreadTurn)
+        val list = { 0 }
+
+        assertSame(saved, reconcileSpreadReading(saved, "a", parse = 1, blockCount = 10, port, seen, list))
+        assertEquals(SpreadReading("a", SpreadAnchor(3), parse = 2, port, seenRequest = 3), reconcileSpreadReading(saved, "a", parse = 2, blockCount = 10, port, seen, list))
+        assertEquals(SpreadAnchor(1), reconcileSpreadReading(saved, "a", parse = 2, blockCount = 2, port, seen, list).anchor)
+        val sent = BodyPositionRequest(4, 8, BodyPositionSource.External)
+        assertEquals(SpreadAnchor(8), reconcileSpreadReading(saved, "a", parse = 2, blockCount = 10, port, sent, list).anchor)
     }
 
     @Test

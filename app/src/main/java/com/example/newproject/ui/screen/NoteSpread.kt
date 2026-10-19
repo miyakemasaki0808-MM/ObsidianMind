@@ -159,7 +159,10 @@ internal fun NoteSpread(
     // 読む位置。ノートの画面の保存値に置き、組むたびに今のノートと本文の位置の口へ合わせる。
     // **保存値から戻した直後も同じ照合を通す** — 留守の間の送りや、別のノートを開いたことを見落とさない。
     var saved by rememberSaveable(stateSaver = ReadingSaver) { mutableStateOf<SpreadReading?>(null) }
-    val reading = reconcileSpreadReading(saved, noteKey, position.port, position.lastRequest) { position.listState.firstVisibleItemIndex }
+    val parse = remember(blocks) { blocks.hashCode() }
+    val reading = reconcileSpreadReading(saved, noteKey, parse, blocks.size, position.port, position.lastRequest) {
+        position.listState.firstVisibleItemIndex
+    }
     SideEffect { if (saved != reading) saved = reading }
     val anchor = reading.anchor
 
@@ -330,8 +333,8 @@ private fun SpreadComposing(paperColor: Color, pageWidth: Dp, gutter: Dp) {
 private data class SpreadMeasured(val blocks: List<MeasuredSpreadBlock>, val complete: Boolean)
 
 private val ReadingSaver = Saver<SpreadReading?, ArrayList<Any>>(
-    save = { reading -> reading?.run { arrayListOf(noteKey, anchor.blockIndex, anchor.charOffset, port, seenRequest) } },
-    restore = { SpreadReading(it[0] as String, SpreadAnchor(it[1] as Int, it[2] as Int), it[3] as Long, it[4] as Long) }
+    save = { reading -> reading?.run { arrayListOf(noteKey, anchor.blockIndex, anchor.charOffset, parse, port, seenRequest) } },
+    restore = { SpreadReading(it[0] as String, SpreadAnchor(it[1] as Int, it[2] as Int), it[3] as Int, it[4] as Long, it[5] as Long) }
 )
 
 /** ページの内側の余白（→ [SPREAD_PAGE_PADDING_DP]）。 */
