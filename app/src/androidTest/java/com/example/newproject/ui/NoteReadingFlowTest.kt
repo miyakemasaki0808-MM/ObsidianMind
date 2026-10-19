@@ -97,6 +97,10 @@ import kotlin.math.roundToInt
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertNotNull
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
@@ -958,6 +962,7 @@ class NoteReadingFlowTest {
     /**
      * **面が出ていなければ、まだ頼んでいない節の要約ボタンは要約を始めるだけで、面を出さない**（→ features/margin_pane.md §5.4）。
      * 頼んだ節で押すと、シートを出して見せに行く。**ペインを出せる窓で設定が閉じていても、ペインは出さない。**
+     * 本の形でペインを閉じると本文の見開きになり（→ features/note_spread.md）、ボタンはつまみで呼ぶ帯の中にある。
      */
     @Test
     fun 要約ボタンは_頼んでいない節では面を出さず_頼んだ節ではシートを出す() {
@@ -980,6 +985,7 @@ class NoteReadingFlowTest {
             }
         }
 
+        openDeskBar()
         composeRule.onNodeWithContentDescription("この節を要約").performClick()
         composeRule.waitForIdle()
         assertEquals("面を出さずに頼んだことを伝えていない", listOf(SectionRef("節A") to true), requests)
@@ -991,6 +997,7 @@ class NoteReadingFlowTest {
                 listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約"))
             )
         )
+        openDeskBar()
         composeRule.onNodeWithContentDescription("この節の要約あり。タップで開く").performClick()
         composeRule.waitForIdle()
         assertEquals("頼んだ節でシートを出さなかった", 1, openCalls)
@@ -1106,16 +1113,18 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **余白ペインが出ているかを外殻へ知らせる**（→ features/margin_pane.md §5.1）。外殻はこれでタブのレールを畳む。
-     * ペインの設定を閉じると、出ていないことを知らせてレールを戻させる。
+     * **机の形（余白ペイン・本文の見開き）が出ているかを外殻へ知らせる**（→ features/margin_pane.md §5.1・features/note_spread.md）。
+     * 外殻はこれでタブのレールを畳む。本の形でペインの設定を閉じると見開きになるので、畳んだまま。
+     * 閉じた外画面へ替えて縦積みになると、出ていないことを知らせてレールを戻させる。
      */
     @Test
-    fun 余白ペインが出ているかを外殻へ知らせ_閉じると戻す() {
+    fun 机の形が出ているかを外殻へ知らせ_縦積みになると戻す() {
         val reports = mutableListOf<Boolean>()
         var paneOpen by mutableStateOf(true)
+        var opened by mutableStateOf(true)
         composeRule.setContent {
             AppTheme(darkTheme = false) {
-                PostureBox(Posture.Book) { window ->
+                PostureBox(if (opened) Posture.Book else Posture.Closed) { window ->
                     ReaderTab(
                         loadedNote(SHORT_TWO_SECTIONS).withMemos(),
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
@@ -1134,7 +1143,11 @@ class NoteReadingFlowTest {
         paneOpen = false
         composeRule.waitForIdle()
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
-        assertEquals("ペインをしまったのに知らせていない: $reports", false, reports.lastOrNull())
+        assertEquals("見開きなのに畳むのをやめさせた: $reports", true, reports.lastOrNull())
+
+        opened = false
+        composeRule.waitForIdle()
+        assertEquals("縦積みになったのに知らせていない: $reports", false, reports.lastOrNull())
     }
 
     /**
@@ -1948,6 +1961,189 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertExists()
     }
 
+    // ── 本文の見開き（→ features/note_spread.md）──────────────────────────────
+
+    /** **本の形でペインを閉じると、本文を左右2ページに組む。** 先頭は左ページ、続きは右ページに出て、どの段落も折り目をまたがない。 */
+    @Test
+    fun 本の形でペインを閉じると_本文を左右2ページの見開きに組み_折り目をまたがない() {
+        assumeDeskWindow()
+        setSpread(SPREAD_BODY)
+        val center = deskCenter()
+
+        assertTrue("先頭が左ページに無い", shownBounds(paragraphText(0))!!.right <= center)
+        assertNotNull("右ページに続きが出ていない", (1 until SPREAD_PARAGRAPHS).firstOrNull { (shownBounds(paragraphText(it))?.left ?: 0f) >= center })
+        (0 until SPREAD_PARAGRAPHS).forEach { index ->
+            shownBounds(paragraphText(index))?.let { bounds ->
+                assertFalse("段落$index が折り目をまたぐ: $bounds / $center", bounds.left < center && bounds.right > center)
+            }
+        }
+    }
+
+    /** **左へ払うと次の見開きへめくり、読む位置（左ページの先頭）を一覧へ書き戻す。** 短い段落は割れないので、次の見開きは前の最後の段落の次から始まる。 */
+    @Test
+    fun 見開きを左へ払うと次の見開きへめくり_読む位置を一覧へ書き戻す() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setSpread(SPREAD_BODY, listState = listState)
+        val lastOnFirst = (0 until SPREAD_PARAGRAPHS).last { shownBounds(paragraphText(it)) != null }
+
+        turnSpread()
+
+        composeRule.runOnIdle { assertEquals(lastOnFirst + 1, listState.firstVisibleItemIndex) }
+        assertNotNull(shownBounds(paragraphText(lastOnFirst + 1)))
+        assertNull("前の見開きが残っている", shownBounds(paragraphText(0)))
+    }
+
+    /**
+     * **長い段落の途中までめくっても、同じ段落の先頭への送りで毎回先頭の見開きへ戻る**（→ features/note_spread.md §5「位置の書き込み」）。
+     * めくっても一覧の位置は同じブロックのままなので、値の変化だけを見ると送りを見分けられない。題名は最初のページにだけ出る。
+     */
+    @Test
+    fun 長い段落の途中までめくっても_同じ段落の先頭への送りで毎回先頭の見開きへ戻る() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        setSpread(LONG_PARAGRAPH, listState = listState, position = position)
+
+        repeat(2) {
+            turnSpread()
+            composeRule.onNodeWithText(TITLE).assertDoesNotExist()
+            composeRule.runOnIdle { assertEquals("同じ段落の中のはず", 0, listState.firstVisibleItemIndex) }
+            composeRule.runOnIdle { position.moveTo(0) }
+            composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+        }
+    }
+
+    /** **一覧を一度も組まずに見開きへ入っても、送りが効く。** `scrollToItem` は一覧の初回の配置を待つので、口は配置を待たない形で書く。 */
+    @Test
+    fun 一覧を一度も組まずに見開きへ入っても_送りでその段落の見開きを出す() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        setSpread(SPREAD_BODY, listState = listState, position = position)
+
+        composeRule.runOnIdle { position.moveTo(JUMPED_SPREAD_BLOCK) }
+
+        assertNotNull("送った段落が出ていない", shownBounds(paragraphText(JUMPED_SPREAD_BLOCK)))
+        assertNull(shownBounds(paragraphText(0)))
+    }
+
+    /** **めくり終えたら、出ている最後の段落までを読んだ位置として記録へ送る。** めくるほど先へ進む。 */
+    @Test
+    fun 見開きで読んだ位置を記録へ送り_めくると先へ進む() {
+        assumeDeskWindow()
+        val reports = mutableListOf<Int>()
+        setSpread(SPREAD_BODY, onReadingProgress = { block, _, _, _ -> reports += block })
+        val lastOnFirst = (0 until SPREAD_PARAGRAPHS).last { shownBounds(paragraphText(it)) != null }
+        composeRule.runOnIdle { assertEquals("最初の見開きの最後の段落を送っていない: $reports", lastOnFirst, reports.lastOrNull()) }
+
+        turnSpread()
+
+        composeRule.runOnIdle { assertTrue("めくっても先へ進まない: $reports", (reports.lastOrNull() ?: -1) > lastOnFirst) }
+    }
+
+    /** **閉じた外画面では読む位置のブロックから縦に流し、本の形へ戻すとそのブロックを含む見開きを出す。** ブロックで受け渡す。 */
+    @Test
+    fun 閉じた外画面へ替えて戻しても_読む位置のブロックから読める() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        var opened by mutableStateOf(true)
+        setSpread(SPREAD_BODY, listState = listState, opened = { opened })
+        turnSpread()
+        val anchor = composeRule.runOnIdle { listState.firstVisibleItemIndex }
+
+        opened = false
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals("縦の流しが読む位置のブロックから始まらない", anchor, listState.firstVisibleItemIndex) }
+
+        opened = true
+        composeRule.waitForIdle()
+        assertNotNull("本の形へ戻した見開きに読む位置のブロックが無い", shownBounds(paragraphText(anchor)))
+    }
+
+    /** **ペインを開くと机になり、左の本文は読む位置のブロックから始まる。** */
+    @Test
+    fun 見開きでペインを開くと_机の本文は読む位置のブロックから始まる() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        var paneOpen by mutableStateOf(false)
+        setSpread(SPREAD_BODY, listState = listState, paneOpen = { paneOpen })
+        turnSpread()
+        val anchor = composeRule.runOnIdle { listState.firstVisibleItemIndex }
+
+        paneOpen = true
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        composeRule.runOnIdle { assertEquals(anchor, listState.firstVisibleItemIndex) }
+    }
+
+    /**
+     * **同じ窓で文字の倍率だけを上げると、1行の字数が下限を割って縦積みになる**（→ features/note_spread.md §8 判断9）。
+     * 縦積みでは長い段落が1つの文字列として窓いっぱいに流れ、折り目をまたぐ。
+     */
+    @Test
+    fun 文字の倍率を上げると見開きにせず縦積みにする() {
+        assumeDeskWindow()
+        setSpread(LONG_PARAGRAPH, fontScale = 1.8f)
+
+        val center = deskCenter()
+        val bounds = composeRule.onNodeWithText(LONG_PARAGRAPH).getUnclippedBoundsInRoot()
+        assertTrue("縦積みになっていない: $bounds / $center", bounds.left.value < center && bounds.right.value > center)
+    }
+
+    /** 本の形の窓で、ペインを閉じた（見開きになる）読書画面。[fontScale] を渡すと、その文字の倍率で組む。 */
+    private fun setSpread(
+        body: String,
+        listState: LazyListState = LazyListState(),
+        position: BodyPosition? = null,
+        fontScale: Float? = null,
+        opened: () -> Boolean = { true },
+        paneOpen: () -> Boolean = { false },
+        onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> }
+    ) {
+        val model = buildNoteSectionModel(body)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale ?: density.fontScale)) {
+                    PostureBox(if (opened()) Posture.Book else Posture.Closed, Modifier.testTag(DESK_TAG)) { window ->
+                        ReaderTab(
+                            loadedNote(body),
+                            model,
+                            listState,
+                            marginPaneOpen = paneOpen(),
+                            window = window,
+                            onReadingProgress = onReadingProgress,
+                            bodyPosition = position
+                        )
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** 見開きを左へ払って次の見開きへめくる。右ページの中ほどから払う。 */
+    private fun turnSpread() {
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeLeft(startX = centerX + 300.dp.toPx(), endX = centerX - 300.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+    }
+
+    /** 机の箱の左右の中央（折り目）。 */
+    private fun deskCenter(): Float = composeRule.onNodeWithTag(DESK_TAG).getUnclippedBoundsInRoot().run { (left.value + right.value) / 2f }
+
+    /** [text] の段落が見えていればその位置（dp）。見えていなければ null。 */
+    private fun shownBounds(text: String): androidx.compose.ui.geometry.Rect? {
+        val nodes = composeRule.onAllNodesWithText(text)
+        val shown = (0 until nodes.fetchSemanticsNodes().size).firstOrNull { nodes[it].isDisplayed() } ?: return null
+        return nodes[shown].getUnclippedBoundsInRoot().run { androidx.compose.ui.geometry.Rect(left.value, top.value, right.value, bottom.value) }
+    }
+
+    private fun paragraphText(index: Int) = "${markerAt(index)} の本文です。"
+
     // ── 別のノートを開く（→ features/rediscover.md §5）───────────────────────
 
     /**
@@ -2480,7 +2676,8 @@ class NoteReadingFlowTest {
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
         onOpenNote: (RelatedNote) -> Unit = {},
-        onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady }
+        onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady },
+        bodyPosition: BodyPosition? = null
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -2489,6 +2686,7 @@ class NoteReadingFlowTest {
             imageLoader = loader,
             imageMeasurements = measurements,
             noteListState = listState,
+            bodyPosition = bodyPosition ?: remember(listState) { BodyPosition(listState) },
             onSelectVault = {},
             onRandomNote = onRandomNote,
             onRequestSectionSummary = onRequestSectionSummary,
@@ -2619,6 +2817,16 @@ class NoteReadingFlowTest {
 
         /** [LONG_SIDE_BODY] の段落の文全体。番号の前方一致（「右の段落3」と「右の段落30」）で取り違えない。 */
         fun sideParagraph(index: Int) = "${sideMarkerAt(index)} の本文です。"
+
+        /** 見開きで読む、短い段落だけの本文。最初の見開きには40段落ほどが入る。 */
+        const val SPREAD_PARAGRAPHS = 120
+        val SPREAD_BODY = (0 until SPREAD_PARAGRAPHS).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
+
+        /** 見開きで送る先。最初の見開きに入らないところ。 */
+        const val JUMPED_SPREAD_BLOCK = 100
+
+        /** いくつもの見開きにまたがる1つの段落（巨大なブロックの上限より短い）。 */
+        val LONG_PARAGRAPH = "長い段落の文が続いていく。".repeat(300)
 
         /** 閉じて開いても保つ右の位置。開いた形の右の面に先頭の段落が入らないところ。 */
         const val KEPT_SIDE_BLOCK = 30
