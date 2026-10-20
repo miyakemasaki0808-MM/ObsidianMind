@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
-**状態:** 実装中。区切り0・区切り1・区切り2まで実装（位置の口・計測・見開きの画面・帯と重ねるレール）。区切り3（つなぐ）は一部（読書の記録・節・リンク・続きから読む・再会カード）を区切り2と一緒に入れた。instrumentation は書いたが端末ではまだ流していない
-**最終検証:** 未検証（区切り1の純関数だけ実装。§5〜§7 の画面と接続は実装前）
+**状態:** 実装中。区切り0・区切り1・区切り2まで実装（位置の口・計測・見開きの画面・帯と重ねるレール）。区切り3（つなぐ）は読書の記録・節・リンク・続きから読む・見出しの印・再会カードを区切り2と一緒に入れた。ここまでは実機検証済み。残りは区切り4（仕上げ）と、§10 の交錯の順序の自動テストの一部
+**最終検証:** 2026-10-21 / `f101bc78`（区切り2と区切り3の実装分。Pixel 10 Pro Fold の内側縦で通し版）
 **関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt`
-**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest` / `AppScaffoldRailTest` / `NoteReadingFlowTest`（見開きの8件）
+**関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest` / `AppScaffoldRailTest` / `NoteReadingFlowTest`（見開きの13件）
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、
 机の画面は [margin_pane](margin_pane.md) §5.1、面の色・形・動きの割り当ては [bearing_channels](../system/bearing_channels.md) が持つ
 
