@@ -7,8 +7,9 @@ import com.example.newproject.ui.screen.DeskFace
 import com.example.newproject.ui.screen.DeskFacePlacement
 import com.example.newproject.ui.screen.DeskSpread
 import com.example.newproject.ui.screen.DeskSpreadGesture
+import com.example.newproject.ui.screen.LazyFacePosition
+import com.example.newproject.ui.screen.SpreadScrollMemory
 import com.example.newproject.ui.screen.SummaryEntry
-import com.example.newproject.ui.screen.SupportingScrollMemory
 import com.example.newproject.ui.screen.closesSideReading
 import com.example.newproject.ui.screen.deskFacePlacement
 import com.example.newproject.ui.screen.deskPaneCountsAsFace
@@ -18,7 +19,9 @@ import com.example.newproject.ui.screen.deskSpreadGestureFor
 import com.example.newproject.ui.screen.deskSpreadShowing
 import com.example.newproject.ui.screen.detectDeskSpread
 import com.example.newproject.ui.screen.isSpreadSwipe
+import com.example.newproject.ui.screen.lazyFaceMoved
 import com.example.newproject.ui.screen.position
+import com.example.newproject.ui.screen.restoresAfterReturn
 import com.example.newproject.ui.screen.shows
 import com.example.newproject.ui.screen.summaryEntryFor
 import org.junit.Assert.assertEquals
@@ -209,11 +212,11 @@ class DeskSpreadTest {
      */
     @Test
     fun `余白を1画面に広げる前の位置を覚え、戻したら返す`() {
-        val memory = SupportingScrollMemory()
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.MainOnly, scrollValue = 900)
+        val memory = SpreadScrollMemory<Int>(DeskSpread.SupportingOnly)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.MainOnly, position = 900)
         assertNull("本文だけへ広げるときは覚えない", memory.restoreTarget())
 
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, position = 900)
         assertEquals(900, memory.restoreTarget())
         memory.forget()
         assertNull(memory.restoreTarget())
@@ -222,15 +225,15 @@ class DeskSpreadTest {
     /** **1画面の間に面が動いたら戻さない**（利用者のスクロールか、面の中の送り）。動いた先を残す。 */
     @Test
     fun `1画面の間に動いたら戻さない`() {
-        val memory = SupportingScrollMemory()
+        val memory = SpreadScrollMemory<Int>(DeskSpread.SupportingOnly)
         memory.movedWhileWide()
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, position = 900)
         assertEquals("覚える前の動きは数えない", 900, memory.restoreTarget())
 
         memory.movedWhileWide()
         assertNull(memory.restoreTarget())
         memory.forget()
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 300)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, position = 300)
         assertEquals("次に広げるときは改めて覚える", 300, memory.restoreTarget())
     }
 
@@ -239,10 +242,79 @@ class DeskSpreadTest {
      */
     @Test
     fun `戻し終える前にもう一度広げても、最初に広げる前の位置を持ち続ける`() {
-        val memory = SupportingScrollMemory()
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 900)
-        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, scrollValue = 260)
+        val memory = SpreadScrollMemory<Int>(DeskSpread.SupportingOnly)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, position = 900)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, position = 260)
         assertEquals(900, memory.restoreTarget())
+    }
+
+    /**
+     * **本文と並べ読みも、広げる前の位置を覚えて戻す。** 段落で位置を持つ面も、末尾に近いと広がった幅の上限へ縮められ、
+     * 戻しても元に戻らなかった（実機で、右の段落18が16へ）。本文の覚えは本文だけへ広げるときだけ覚える。
+     */
+    @Test
+    fun `本文の覚えは本文だけへ広げるときに覚え、戻したら返す`() {
+        val memory = SpreadScrollMemory<LazyFacePosition>(DeskSpread.MainOnly)
+        val before = LazyFacePosition(index = 18, offset = 120, viewportWidth = 1080)
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.SupportingOnly, before)
+        assertNull("余白だけへ広げるときは本文を覚えない", memory.restoreTarget())
+
+        memory.beforeSpread(DeskSpread.Both, DeskSpread.MainOnly, before)
+        assertEquals(before, memory.restoreTarget())
+    }
+
+    /**
+     * **広がる途中に上限で縮められたのは、動いたことにしない。** 縮むのは幅が変わったのと同じ組み直しの中なので、幅で見分ける。
+     * 縮んだのを動いた扱いにすると、戻すべきときに戻さない。
+     */
+    @Test
+    fun `幅が変わるのと同時に位置が縮んだのは動いたことにしない`() {
+        val narrow = LazyFacePosition(index = 18, offset = 120, viewportWidth = 1080)
+        val clamped = LazyFacePosition(index = 16, offset = 40, viewportWidth = 1700)
+        assertFalse(lazyFaceMoved(narrow, clamped, scrolling = false))
+        assertFalse("何も変わらなければ動いていない", lazyFaceMoved(clamped, clamped, scrolling = false))
+    }
+
+    /**
+     * **1画面の間に、幅が同じまま位置が変わったら動いた。** リンクで見出しへ送る `scrollToItem` は、スクロール中の印が
+     * 同じフレームの中で立って消えるので、印だけで見ると捕まらない。段落が替わるのも、段落の中で送るのも数える。
+     */
+    @Test
+    fun `幅が同じまま位置が変われば動いた`() {
+        val settled = LazyFacePosition(index = 16, offset = 40, viewportWidth = 1700)
+        assertTrue(lazyFaceMoved(settled, settled.copy(index = 5, offset = 0), scrolling = false))
+        assertTrue(lazyFaceMoved(settled, settled.copy(offset = 90), scrolling = false))
+    }
+
+    /** **スクロール中なら、広がる途中でも動いた。** 広がる途中に利用者が送り始めたら、送った先を残す。 */
+    @Test
+    fun `スクロール中なら幅が変わっていても動いた`() {
+        val narrow = LazyFacePosition(index = 18, offset = 120, viewportWidth = 1080)
+        assertTrue(lazyFaceMoved(narrow, narrow.copy(index = 17, viewportWidth = 1300), scrolling = true))
+    }
+
+    /** **戻る途中に何も動かなければ、戻り切ったところで広げる前の位置へ戻す。** 戻る途中は中身が伸びるだけで、位置は変わらない。 */
+    @Test
+    fun `戻る途中に動かなければ戻す`() {
+        assertTrue(restoresAfterReturn(start = 16 to 40, now = 16 to 40, scrolling = false))
+        assertTrue(restoresAfterReturn(start = 900, now = 900, scrolling = false))
+    }
+
+    /**
+     * **戻る途中に送られたら戻さない。** リンクで見出しへ送るなど、戻るアニメーションの間の送りを、
+     * 幅を待ち終えた復元が広げる前の位置で上書きしていた（レビューの一時検証で、段落5へ送ったのに18へ戻った）。
+     */
+    @Test
+    fun `戻る途中に送られたら戻さない`() {
+        assertFalse(restoresAfterReturn(start = 16 to 40, now = 5 to 0, scrolling = false))
+        assertFalse("段落の中で送られただけでも戻さない", restoresAfterReturn(start = 16 to 40, now = 16 to 90, scrolling = false))
+        assertFalse(restoresAfterReturn(start = 900, now = 300, scrolling = false))
+    }
+
+    /** **戻り切ったときにスクロール中なら戻さない。** 縦に送り始めた操作を、古い位置への送りで取り消さない。 */
+    @Test
+    fun `戻り切ったときにスクロール中なら戻さない`() {
+        assertFalse(restoresAfterReturn(start = 16 to 40, now = 16 to 40, scrolling = true))
     }
 
     private fun spreadFor(events: List<androidx.compose.ui.input.pointer.PointerEvent>): List<DeskSpreadGesture> =

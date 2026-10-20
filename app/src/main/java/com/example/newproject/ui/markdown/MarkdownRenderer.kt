@@ -23,6 +23,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.draw.alpha
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -31,12 +33,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.ListMarker
@@ -83,9 +81,12 @@ internal fun MarkdownNoteContent(
             // （PointerInputResetException）、指離しを受け取れずに長押しでもリンクが開く。容器の修飾子は選択の状態で並びが変わる。
             // 見張りだけを持つ内側の層に置き、最小の大きさも渡して本文の並べ方を変えない。
             Box(modifier = linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier, propagateMinConstraints = true) {
+                // **幅は内容で決めず、置かれた幅いっぱいに組む。** 机の画面は一覧の幅の変化で、広がる途中の縮みと送りを見分ける
+                // （→ lazyFaceMoved）。内容で決めると、表示中の段落が替わるだけで幅が変わり、リンクの送りを縮みと取り違える。
                 LazyColumn(
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)
                 ) {
                     items(blocks.size) { i ->
                         when (val block = blocks[i]) {
@@ -128,24 +129,17 @@ private fun rememberInline(text: String): AnnotatedString {
 
 @Composable
 internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
-    val size = when (block.level) {
-        1 -> 24.sp
-        2 -> 21.sp
-        3 -> 19.sp
-        4 -> 17.sp
-        5 -> 15.sp
-        else -> 14.sp
-    }
-    val style = if (block.level >= 6) FontStyle.Italic else FontStyle.Normal
+    MarkdownHeadingText(block.level, rememberInline(block.text))
+}
 
+/** 見出しの文字。見開きは割った切れ端（[text] の一部）をこれで描く。 */
+@Composable
+internal fun MarkdownHeadingText(level: Int, text: AnnotatedString, modifier: Modifier = Modifier) {
     Text(
-        text = rememberInline(block.text),
-        color = if (block.level >= 5) OnSurfaceMuted else OnSurface,
-        fontSize = size,
-        lineHeight = (size.value + 6).sp,
-        fontWeight = FontWeight.Bold,
-        fontStyle = style,
-        modifier = Modifier.padding(top = if (block.level <= 2) 8.dp else 4.dp)
+        text = text,
+        color = if (level >= 5) OnSurfaceMuted else OnSurface,
+        style = LocalTextStyle.current.merge(MarkdownBodyStyle.heading(level)),
+        modifier = modifier.padding(top = MarkdownBodyStyle.headingTopPadding(level))
     )
 }
 
@@ -153,75 +147,94 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
 internal fun MarkdownHorizontalRule() {
     HorizontalDivider(
         color = ContentDivider,
-        thickness = 1.dp,
-        modifier = Modifier.padding(vertical = 8.dp)
+        thickness = MarkdownBodyStyle.RuleThickness,
+        modifier = Modifier.padding(vertical = MarkdownBodyStyle.RuleVerticalPadding)
     )
 }
 
 @Composable
 internal fun MarkdownBlockquote(lines: List<String>) {
+    MarkdownBlockquoteLines(lines.map { rememberInline(it) })
+}
+
+/** 引用の行。見開きは割った切れ端の行をこれで描く。 */
+@Composable
+internal fun MarkdownBlockquoteLines(lines: List<AnnotatedString>) {
     // バーの高さはテキスト側に追従させる。以前は行数×固定値で計算しており、
     // 長い行が画面幅で折り返すとバーがテキストより短くなっていた。
     Row(
         modifier = Modifier
-            .padding(vertical = 4.dp)
+            .padding(vertical = MarkdownBodyStyle.QuoteVerticalPadding)
             .height(IntrinsicSize.Min)
     ) {
         Box(
             modifier = Modifier
-                .width(4.dp)
+                .width(MarkdownBodyStyle.QuoteBarWidth)
                 .fillMaxHeight()
                 .background(CheckboxOutline, RoundedCornerShape(2.dp))
         )
-        Column(modifier = Modifier.padding(start = 12.dp)) {
-            lines.forEach { line ->
-                Text(
-                    text = rememberInline(line),
-                    color = OnSurfaceSubtle,
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
-                    fontStyle = FontStyle.Italic
-                )
-            }
+        Column(modifier = Modifier.padding(start = MarkdownBodyStyle.QuoteTextStart)) {
+            val style = LocalTextStyle.current.merge(MarkdownBodyStyle.Quote)
+            lines.forEach { line -> Text(text = line, color = OnSurfaceSubtle, style = style) }
         }
     }
 }
 
 @Composable
 internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
+    val headerTexts = headers.map { rememberInline(it.trim()) }
+    val rowTexts = rows.map { row ->
+        val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
+        padded.take(headers.size).map { rememberInline(it.trim()) }
+    }
+    MarkdownTableView(listOf(headerTexts), rowTexts)
+}
+
+/**
+ * 表。[headers] は見出しの書式で描く行で、ふつうは1行。見開きでは割れた見出しの行の切れ端が並び、
+ * 見出しの行より後ろだけを出す切れ端では空になる。[rows] はセルの文字で、列の数は全行でそろっている前提。
+ */
+@Composable
+internal fun MarkdownTableView(headers: List<List<AnnotatedString>>, rows: List<List<AnnotatedString>>) {
     val borderColor = ContentDivider
+    val headerStyle = LocalTextStyle.current.merge(MarkdownBodyStyle.TableHeader)
+    val cellStyle = LocalTextStyle.current.merge(MarkdownBodyStyle.TableCell)
+    val cellPadding = Modifier.padding(
+        horizontal = MarkdownBodyStyle.TableCellPaddingHorizontal,
+        vertical = MarkdownBodyStyle.TableCellPaddingVertical
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .border(1.dp, borderColor, RoundedCornerShape(4.dp))
     ) {
-        Row(modifier = Modifier.background(CodePanel)) {
-            headers.forEachIndexed { i, header ->
-                Text(
-                    text = rememberInline(header.trim()),
-                    color = OnSurface,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .weight(1f)
-                        .then(if (i > 0) Modifier.border(width = 1.dp, color = borderColor) else Modifier)
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                )
-            }
-        }
-        HorizontalDivider(color = borderColor, thickness = 1.dp)
-        rows.forEach { row ->
-            Row {
-                val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
-                padded.take(headers.size).forEachIndexed { i, cell ->
+        headers.forEach { header ->
+            Row(modifier = Modifier.background(CodePanel)) {
+                header.forEachIndexed { i, text ->
                     Text(
-                        text = rememberInline(cell.trim()),
+                        text = text,
                         color = OnSurface,
-                        fontSize = 14.sp,
+                        style = headerStyle,
                         modifier = Modifier
                             .weight(1f)
                             .then(if (i > 0) Modifier.border(width = 1.dp, color = borderColor) else Modifier)
-                            .padding(horizontal = 8.dp, vertical = 6.dp)
+                            .then(cellPadding)
+                    )
+                }
+            }
+            HorizontalDivider(color = borderColor, thickness = 1.dp)
+        }
+        rows.forEach { row ->
+            Row {
+                row.forEachIndexed { i, text ->
+                    Text(
+                        text = text,
+                        color = OnSurface,
+                        style = cellStyle,
+                        modifier = Modifier
+                            .weight(1f)
+                            .then(if (i > 0) Modifier.border(width = 1.dp, color = borderColor) else Modifier)
+                            .then(cellPadding)
                     )
                 }
             }
@@ -232,59 +245,70 @@ internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
 
 @Composable
 internal fun MarkdownParagraph(text: String) {
-    Text(
-        text = rememberInline(text),
-        color = OnSurface,
-        fontSize = 16.sp,
-        lineHeight = 24.sp
-    )
+    MarkdownParagraphText(rememberInline(text))
 }
 
-/** 入れ子1段あたりの字下げ幅。深さは字下げだけで示し、記号は段によらず変えない。 */
-private val ListIndentPerDepth = 16.dp
+/** 段落の文字。見開きは割った切れ端（[text] の一部）をこれで描く。 */
+@Composable
+internal fun MarkdownParagraphText(text: AnnotatedString) {
+    Text(text = text, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph))
+}
 
 @Composable
 internal fun MarkdownList(items: List<ListItem>) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        items.forEach { item ->
+    MarkdownListRows(items.map { MarkdownListRow(it, rememberInline(it.text), showMarker = true) })
+}
+
+/** リストの1項目の描き方。[showMarker] が false なら記号の幅だけ空ける（見開きで、前のページから続く項目の続き）。 */
+internal data class MarkdownListRow(val item: ListItem, val text: AnnotatedString, val showMarker: Boolean)
+
+@Composable
+internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
+    val style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph)
+    Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.ListItemSpacing)) {
+        rows.forEach { row ->
+            val item = row.item
             val checked = item.checked
             Row(
-                modifier = Modifier.padding(start = ListIndentPerDepth * item.depth),
+                modifier = Modifier.padding(start = MarkdownBodyStyle.ListIndentPerDepth * item.depth),
                 verticalAlignment = if (checked == null) Alignment.Top else Alignment.CenterVertically
             ) {
+                val markerAlpha = if (row.showMarker) Modifier else Modifier.alpha(0f)
                 if (checked == null) {
                     Text(
                         // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
                         // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
-                        text = when (val marker = item.marker) {
-                            is ListMarker.Bullet -> "\u2022"
-                            is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
-                        },
+                        text = listMarkerText(item),
                         color = OnSurface,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp
+                        style = style,
+                        modifier = markerAlpha
                     )
                 } else {
                     Checkbox(
                         checked = checked,
                         onCheckedChange = null,
-                        modifier = Modifier
-                            .width(20.dp)
-                            .height(20.dp)
+                        modifier = markerAlpha
+                            .width(MarkdownBodyStyle.CheckboxSize)
+                            .height(MarkdownBodyStyle.CheckboxSize)
                     )
                 }
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(MarkdownBodyStyle.ListMarkerGap))
                 Text(
-                    text = rememberInline(item.text),
+                    text = row.text,
                     color = if (checked == true) OnSurfaceFaint else OnSurface,
-                    fontSize = 16.sp,
-                    lineHeight = 24.sp,
+                    style = style,
                     textDecoration = if (checked == true) TextDecoration.LineThrough else TextDecoration.None,
                     modifier = Modifier.weight(1f)
                 )
             }
         }
     }
+}
+
+/** リストの項目の記号。番号付きは原文の表記のまま。 */
+internal fun listMarkerText(item: ListItem): String = when (val marker = item.marker) {
+    is ListMarker.Bullet -> "\u2022"
+    is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
 }
 
 @Composable
@@ -297,10 +321,8 @@ internal fun MarkdownCodeBlock(code: String) {
         Text(
             text = code.trimEnd(),
             color = OnSurface,
-            fontSize = 14.sp,
-            lineHeight = 20.sp,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.padding(12.dp)
+            style = LocalTextStyle.current.merge(MarkdownBodyStyle.Code),
+            modifier = Modifier.padding(MarkdownBodyStyle.CodePadding)
         )
     }
 }

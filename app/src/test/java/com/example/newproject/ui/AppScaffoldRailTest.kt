@@ -28,4 +28,18 @@ class AppScaffoldRailTest {
         assertFalse(showsRail(isTabRoute = false, useRail = true, currentRoute = "note_fullscreen", notePaneVisible = false))
         assertFalse(showsRail(isTabRoute = true, useRail = false, currentRoute = AppDestination.Note.route, notePaneVisible = false))
     }
+
+    /**
+     * **机の形で帯が出ている間だけ、レールを重ねて出す**（→ features/note_spread.md §8 判断3）。見開きにはペインをしまう先が無く、
+     * タブへの道がここしか無い。帯をしまうと消え、机の形でないとき・ほかのタブ・広くない窓では重ねない。
+     */
+    @Test
+    fun `机の形で帯が出ている間だけレールを重ねて出す`() {
+        val note = AppDestination.Note.route
+        assertTrue(overlaysRail(isTabRoute = true, useRail = true, currentRoute = note, notePaneVisible = true, noteBarShown = true))
+        assertFalse(overlaysRail(isTabRoute = true, useRail = true, currentRoute = note, notePaneVisible = true, noteBarShown = false))
+        assertFalse(overlaysRail(isTabRoute = true, useRail = true, currentRoute = note, notePaneVisible = false, noteBarShown = true))
+        assertFalse(overlaysRail(isTabRoute = true, useRail = false, currentRoute = note, notePaneVisible = true, noteBarShown = true))
+        assertFalse(overlaysRail(isTabRoute = true, useRail = true, currentRoute = AppDestination.Search.route, notePaneVisible = true, noteBarShown = true))
+    }
 }

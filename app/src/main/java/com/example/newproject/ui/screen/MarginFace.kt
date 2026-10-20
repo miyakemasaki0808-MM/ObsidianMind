@@ -1,6 +1,5 @@
 package com.example.newproject.ui.screen
 
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,7 +15,6 @@ import com.example.newproject.domain.showsPreviousReading
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.ui.markdown.NoteImageMeasurements
-import kotlinx.coroutines.launch
 
 /**
  * 「この部分」の面が本文から受け取るもの。**通常画面と全画面が同じ規則で作る**（→ features/margin_pane.md §5.3）。
@@ -32,15 +30,18 @@ internal class MarginFaceInputs(
     val jumpToSection: (SectionRef) -> Unit
 )
 
-/** [listState] は面を並べる画面の本文の一覧。全画面は自分の一覧を渡す。 */
+/** [position] は面を並べる画面の本文の位置の口。全画面は自分の一覧の口を渡す。 */
 @Composable
 internal fun rememberMarginFaceInputs(
     sectionModel: NoteSectionModel?,
-    listState: LazyListState,
+    position: BodyPosition,
     memoState: MarginMemoState,
-    imageMeasurements: NoteImageMeasurements?
+    imageMeasurements: NoteImageMeasurements?,
+    /** 節へ飛ぶときアニメーションで送るか。**見開きの間は送らない** — 一覧が組まれておらず、初回の配置を待って終わらない（→ [BodyPosition]）。 */
+    animateJumps: () -> Boolean = { true }
 ): MarginFaceInputs {
     val coroutineScope = rememberCoroutineScope()
+    val listState = position.listState
     // **スクロールが止まってから決める。** 流している途中で決めると、面の中身が通り過ぎる節ごとに入れ替わる。
     var settledBlock by remember(sectionModel) { mutableIntStateOf(listState.firstVisibleItemIndex) }
     LaunchedEffect(listState, sectionModel) {
@@ -64,7 +65,7 @@ internal fun rememberMarginFaceInputs(
     // **飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
     val jumpToSection: (SectionRef) -> Unit = { ref ->
         sectionModel?.startBlockOf(ref)?.let { block ->
-            coroutineScope.launch { listState.animateScrollToItem(block) }
+            if (animateJumps()) position.animateTo(coroutineScope, block) else position.moveTo(block)
             imageMeasurements?.requestSkippedMeasurement(block)
         }
     }

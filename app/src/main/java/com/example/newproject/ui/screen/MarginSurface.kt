@@ -221,12 +221,15 @@ internal fun sheetCoveredHeight(layoutHeight: Int, sheetOffset: Float?): Int =
  * - 縦積み — シートで書いているとき。シートはさらに本文の下を覆う
  * - 余白ペイン — ペインで書いているとき。本文の上に再会カードが残る（操作は机の画面の帯に入っていて、ここでは出ていない）
  * - 左右2列 — 隠さない。操作は横の列にあり、本文の高さを取らない
+ * - 見開き — シートで書いているとき（→ features/note_spread.md）
  */
 internal fun hidesReaderControls(layout: ReaderLayout, sheetVisible: Boolean, writingWithKeyboard: Boolean): Boolean =
     writingWithKeyboard && when (layout) {
         ReaderLayout.Stacked -> sheetVisible
         is ReaderLayout.MarginPane -> true
         ReaderLayout.SideBySide -> false
+        // 見開きはペインを閉じているので、書くのはシート。縦積みと同じく、シートで書いている間は再会カードを隠す。
+        is ReaderLayout.Spread -> sheetVisible
     }
 
 /** 前回の読書の跡の行（→ features/margin_pane.md §5.2 の3）。 */

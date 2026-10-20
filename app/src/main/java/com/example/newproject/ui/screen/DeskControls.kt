@@ -125,7 +125,8 @@ internal val DeskStripHeight = 48.dp
 internal fun DeskGripStrip(
     loading: Boolean,
     onShow: () -> Unit,
-    spread: DeskSpread,
+    /** 机の広げ方。見開き（片側を1画面にする操作が無い）では null。 */
+    spread: DeskSpread?,
     onSpread: (DeskSpread) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -146,7 +147,7 @@ internal fun DeskGripStrip(
                     true
                 }
                 // 片側を1画面にする横の払いも、読み上げ中は払えないので操作として置く（→ deskSpreadActionsFor）。
-                customActions = deskSpreadActionsFor(spread).map { (label, next) ->
+                customActions = (spread?.let { deskSpreadActionsFor(it) } ?: emptyList()).map { (label, next) ->
                     CustomAccessibilityAction(label) {
                         currentOnSpread(next)
                         true

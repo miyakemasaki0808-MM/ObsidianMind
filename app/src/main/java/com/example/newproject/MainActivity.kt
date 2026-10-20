@@ -7,6 +7,7 @@ import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
+import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.openNoteFromTop
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.Indigo
@@ -29,6 +30,7 @@ import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import com.example.newproject.ui.markdown.NoteImageMeasurements
@@ -145,6 +147,8 @@ class MainActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
                 val noteListState = rememberLazyListState()
+                // 本文の位置を書く口。**本文の位置を書く経路はすべてここを通す**（→ BodyPosition）。
+                val bodyPosition = remember(noteListState) { BodyPosition(noteListState) }
                 // 画像の寸法も同じスコープで持つ。**位置だけ引き継いで寸法を捨てると、
                 // 全画面へ入った瞬間に未計測へ戻り、後続ブロックが可視になって到達率が
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
@@ -153,15 +157,20 @@ class MainActivity : ComponentActivity() {
                 // 余白メモの入力欄で書いているつもりか。**通常表示と全画面で共有する** — 全画面のシートで書いたまま戻ると、
                 // 戻った先の面へフォーカスを引き継ぐ（→ features/margin_pane.md §5.4）。画面の作り直しもまたいで保つ。
                 var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
-                // ノートタブが余白ペインを出しているか。出ている間は外殻がレールを畳む（→ showsRail）。
+                // ノートタブが机の形（余白ペイン・本文の見開き）を出しているか。出ている間は外殻がレールを畳む（→ showsRail）。
                 // 画面の作り直しをまたいで保つ — 戻すと、Fold の開閉のたびにレールが一瞬出てから畳まれる。
                 var notePaneVisible by rememberSaveable { mutableStateOf(false) }
+                // 机の形で帯が出ているか（外殻がレールを重ねて出す → overlaysRail）と、重ねたレールでタブが押された回数（帯をしまわせる）。
+                var noteBarShown by remember { mutableStateOf(false) }
+                var noteBarHideRequest by remember { mutableLongStateOf(0L) }
 
                 AppScaffold(
                     windowSizeClass = windowSizeClass,
                     navController = navController,
                     snackbarHostState = snackbarHostState,
-                    notePaneVisible = notePaneVisible
+                    notePaneVisible = notePaneVisible,
+                    noteBarShown = noteBarShown,
+                    onOverlayRailTab = { noteBarHideRequest++ }
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -177,7 +186,7 @@ class MainActivity : ComponentActivity() {
                                 onSelectVault = { openVault.launch(null) },
                                 onRandomNote = {
                                     if (viewModel.vaultUri != null) {
-                                        openNoteFromTop(noteListState) { viewModel.loadRandomNote(contentResolver) }
+                                        openNoteFromTop(bodyPosition) { viewModel.loadRandomNote(contentResolver) }
                                     } else {
                                         openVault.launch(null)
                                     }
@@ -187,6 +196,7 @@ class MainActivity : ComponentActivity() {
                                 onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
                                 onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },
                                 noteListState = noteListState,
+                                bodyPosition = bodyPosition,
                                 onOpenBooklet = {
                                     // 冊子へ入る前に束を作り始める。ここでは記録もAIも動かない。
                                     viewModel.openBooklet(contentResolver)
@@ -213,6 +223,8 @@ class MainActivity : ComponentActivity() {
                                 expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
                                 foldInfo = rememberReaderFold(),
                                 onMarginPaneVisibleChange = { notePaneVisible = it },
+                                onDeskBarShownChange = { noteBarShown = it },
+                                deskBarHideRequest = noteBarHideRequest,
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section -> viewModel.editMarginMemo(text, section) },
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
@@ -260,7 +272,7 @@ class MainActivity : ComponentActivity() {
                                     // 冊子ルートごと畳んでしまい、戻れなくなる
                                     // （→ features/booklet_mode.md 判断8）。
                                     openFromBooklet(
-                                        noteListState = noteListState,
+                                        position = bodyPosition,
                                         open = { viewModel.openBookletEntry(contentResolver, entry) },
                                         navigateToNote = { navController.navigate("note") }
                                     )
@@ -280,6 +292,7 @@ class MainActivity : ComponentActivity() {
                                 imageLoader = viewModel.imageLoader,
                                 imageMeasurements = noteImageMeasurements,
                                 tabListState = noteListState,
+                                tabPosition = bodyPosition,
                                 onExit = { navController.popBackStack() },
                                 onOpenMarginMemo = { viewModel.openMarginMemoSheet() },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
@@ -308,7 +321,7 @@ class MainActivity : ComponentActivity() {
                                 onSearch = { q -> viewModel.searchByKeyword(q) },
                                 onRandom = { viewModel.pickRandomInScope() },
                                 onOpenNote = { note ->
-                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -318,7 +331,7 @@ class MainActivity : ComponentActivity() {
                             RelatedTab(
                                 uiState = uiState,
                                 onOpenNote = { note ->
-                                    openNoteFromTop(noteListState) { viewModel.openNote(contentResolver, note) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )
@@ -357,7 +370,7 @@ class MainActivity : ComponentActivity() {
                                 noteFields = uiState.noteFields,
                                 onLoad = { viewModel.openCrystalList(contentResolver) },
                                 onOpenSource = { path ->
-                                    openNoteFromTop(noteListState) { viewModel.openCrystalSource(contentResolver, path) }
+                                    openNoteFromTop(bodyPosition) { viewModel.openCrystalSource(contentResolver, path) }
                                     navController.navigateToTab(AppDestination.Note)
                                 },
                                 onBack = { navController.popBackStack() }

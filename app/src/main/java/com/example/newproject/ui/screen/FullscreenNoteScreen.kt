@@ -91,6 +91,8 @@ internal fun FullscreenNoteScreen(
     /** 画像の寸法を通常表示と全画面で共有する（→ NoteImageMeasurements）。 */
     imageMeasurements: NoteImageMeasurements?,
     tabListState: LazyListState,
+    /** タブ側の本文の位置を書く口。戻るときの書き戻しはここを通す（→ [BodyPosition]）。 */
+    tabPosition: BodyPosition = remember(tabListState) { BodyPosition(tabListState) },
     onExit: () -> Unit,
     /** シートを出す。読み込み済みなら読み直さない。 */
     onOpenMarginMemo: () -> Unit,
@@ -143,10 +145,7 @@ internal fun FullscreenNoteScreen(
         // 無反応で全画面を解除できなくなった。非suspendの requestScrollToItem で保留位置を
         // 積むだけにし、書き戻しをベストエフォート化して閉じる導線から切り離す
         // （pop でルートが破棄されてもキャンセルの影響を受けない）。
-        tabListState.requestScrollToItem(
-            listState.firstVisibleItemIndex,
-            listState.firstVisibleItemScrollOffset
-        )
+        tabPosition.moveTo(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
         action()
     }
     // システムバックでもスクロール位置を書き戻してから閉じる。シートが出ている間はシートの側が先に受ける。
@@ -159,12 +158,14 @@ internal fun FullscreenNoteScreen(
     SkippedImageMeasurement(sectionModel, imageLoader, imageMeasurements)
 
     // 面の節は全画面の本文についていく。通常画面と同じ規則で作る。
-    val face = rememberMarginFaceInputs(sectionModel, listState, uiState.marginMemoState, imageMeasurements)
+    // 全画面の一覧は全画面だけのもの。口も全画面の中で作る。
+    val position = remember(listState) { BodyPosition(listState) }
+    val face = rememberMarginFaceInputs(sectionModel, position, uiState.marginMemoState, imageMeasurements)
 
     // 本文のリンク（→ features/note_links.md）。**全画面は面が1つなので、リンク先は今のノートとして開く**（→ noteLinkActionFor）。
     val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     val currentNoteUri = (uiState.noteState as? NoteState.Success)?.targetUri
-    val startNote = rememberNoteStart(listState, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+    val startNote = rememberNoteStart(position, currentNoteUri, sectionModel, imageMeasurements) { heading ->
         showNotice(noteLinkHeadingMissingText(heading, opened = true))
     }
     val coroutineScope = rememberCoroutineScope()
@@ -175,7 +176,7 @@ internal fun FullscreenNoteScreen(
                 if (target == null) {
                     action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
                 } else {
-                    coroutineScope.launch { listState.scrollToItem(target) }
+                    position.moveTo(target)
                     imageMeasurements?.requestSkippedMeasurement(target)
                 }
             }

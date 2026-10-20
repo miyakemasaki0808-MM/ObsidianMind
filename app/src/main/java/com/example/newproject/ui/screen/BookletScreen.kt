@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.VerticalPager
@@ -82,7 +81,7 @@ import kotlinx.coroutines.launch
 /**
  * 冊子から本文へ渡す境界。**先頭から開くことをここで保証する。**
  *
- * `noteListState` は Activity 生存で共有され、**ノート切替ではリセットされない**ので、
+ * 本文の一覧の状態は Activity 生存で共有され、**ノート切替ではリセットされない**ので、
  * 何もしないと選んだ本文が前のノートの途中から開く（→ features/booklet_mode.md §10）。
  *
  * 関数として切り出しているのは、`MainActivity` のラムダの中にあると
@@ -90,11 +89,11 @@ import kotlinx.coroutines.launch
  * 「渡すと先頭から始まる」ことをそのまま確かめられる。
  */
 internal fun openFromBooklet(
-    noteListState: LazyListState,
+    position: BodyPosition,
     open: () -> Unit,
     navigateToNote: () -> Unit
 ) {
-    openNoteFromTop(noteListState, open)
+    openNoteFromTop(position, open)
     navigateToNote()
 }
 
