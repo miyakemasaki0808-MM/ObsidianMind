@@ -1,6 +1,6 @@
 # タブ・ナビゲーション
 
-**状態:** 実装済み・稼働中
+**状態:** 実装済み・稼働中。**縦の折り目のある開いた窓のレールに「見開き」タブを足す（2026-10-21、オーナー判断 → §1）のは設計済み・未実装**
 **最終検証:** 2026-10-06 / `6b39f134`
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
 **関連テスト:** `AppScaffoldContentSlotTest` / `AppScaffoldRailTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
@@ -12,15 +12,24 @@
 
 ## 1. 現在の構成
 
-**タブは5つ** — 📄ノート／🔎さがす／🔗関連／✨AI／⚙️オプション（`AppScaffold.kt` の enum が単一の定義元）。
+**タブは5つ** — 📄ノート／🔎さがす／🔗関連／✨AI／⚙️オプション。5つは NavHost の行き先で、`AppScaffold.kt` の enum が行き先の単一の定義元。
+
+**縦の折り目のある開いた窓のレールだけ、6つ目に「見開き」が「ノート」のすぐ下に並ぶ**（2026-10-21、オーナー判断。未実装。記号は未定 → [note_spread](../features/note_spread.md) §11）。
+- **見開きは行き先ではなく、ノートの行き先の中の読む形（ふだん／見開き）を選ぶ項目である**（→ [note_spread](../features/note_spread.md) 判断13）。行き先の enum には足さず、レールの並びを決める純関数で足す。
+  レールで選んでいる項目は、ノートの行き先なら読む形から決める
+- **出すのは、横幅が Expanded で縦の折り目が報告されている窓だけ。** 閉じた画面とスマホの下のバーは5つのまま。折り目の無い Expanded の窓・横の折り目・狭い分割窓のレールにも出さない。窓だけから決め、ノートの中身では出し分けない
+- **戻る操作:** 見開きからはノートのタブへ。ほかのタブから戻る操作で戻ると、離れたときの読む形（ノートか見開き）へ戻る
+- **寿命:** 選んでいる読む形は端末に保存しない。見開きのタブを出せない窓へ移るとノートへ戻し、出せる窓へ戻っても見開きにしない。起動し直すとノート（→ [fold_experience](fold_experience.md) §6 の初期状態）。
+  判定はノートの画面ではなく外殻の高さで、窓だけから行う — ほかのタブにいる間に窓が替わっても戻すため
 
 **非タブの独立ルート**が別にあり、こちらは**バー／レールを出さない構造**を持つ。
 `note_fullscreen`・冊子・データ管理・読書痕跡の整理・結晶の一覧がこれにあたる。
 
 **画面幅対応:** `WindowWidthSizeClass.Expanded`（Fold展開）は左サイドレール、それ以外は下部バー。
-**ノートタブで机の形（余白ペイン・本文の見開き）が出ている間はレールを畳む**（`showsRail`）。
+**ノートタブで机の形（余白ペイン・本文の見開き）が出ている間はレールを畳む**（`showsRail`）。見開きを選んでいても、見開きにできないノートを縦の流しで出している間は畳まない（未決の推奨の形 → [note_spread](../features/note_spread.md) §5）。
 **つまみで帯を呼んでいる間だけ、レールを本文の上の左端に重ねて出す**（`overlaysRail`）。重ねるだけで本文の幅は変えず、タブを押すと帯ごとしまう
 （→ [margin_pane](../features/margin_pane.md) の「並べ方と、判定の優先順」・[note_spread](../features/note_spread.md) §8 判断3）。
+重ねたレールで「ノート」か「見開き」を押すと、机をしまってその画面へ移る（→ [margin_pane](../features/margin_pane.md) §5.4。入り方の変更で足す）。
 重ねるレールも本文の後ろに組み立てる（本文が最初の子のまま）。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。
 
@@ -56,7 +65,7 @@ Pixel Fold で操作ボタンが画面外に切れ、同時にダブルタップ
 ## 4. 判断3: 依存を増やさない
 
 - `NavigationBar` / `NavigationRail` は material3 コアに含まれるため新規依存なし
-- **タブアイコンは絵文字**（📄🔎🔗✨⚙️）を使い `material-icons` 依存を回避
+- **タブアイコンは絵文字**（📄🔎🔗✨⚙️）を使い `material-icons` 依存を回避。見開きの記号も絵文字から選ぶ（📖 は冊子のボタンで使っているので、候補は [note_spread](../features/note_spread.md) §11）
 - `NoteViewModel` / `NoteUiState` は無変更。状態が集約済みだったため、各タブは同一 `uiState` の別スライスを表示するだけで成立した
 
 ## 5. 共有UI部品の色は「置かれる背景」を前提にしない

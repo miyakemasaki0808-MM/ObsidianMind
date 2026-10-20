@@ -112,7 +112,7 @@
 | [note_field_color.md](features/note_field_color.md) | 冊子の分野色（AIが分野を判定し、紙の地色で伝える） |
 | [note_links.md](features/note_links.md) | ノート内のリンクを押して開く（開いた Fold では補助の面、スマホでは今のノート。見出しへ送る） |
 | [desk_foundation.md](features/desk_foundation.md) | 机の土台 — 右（補助の面）のノートの中のリンクを右のまま辿り、Fold を閉じても並べ読みを保って開き直すと戻す |
-| [note_spread.md](features/note_spread.md) | 本文の見開き — 開いた Fold を本の形で持ちペインを閉じて読むとき、本文を左右2ページに組んで横に払ってめくる（構想） |
+| [note_spread.md](features/note_spread.md) | 本文の見開き — 開いた Fold の本の形で、左のレールの見開きのタブを選ぶと本文を左右2ページに組み、横に払ってめくる |
 | [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
 
 ### 基盤（`system/`）
@@ -259,7 +259,7 @@
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [opening_animation](features/opening_animation.md)（残っているのは起動OPの動きだけ） |
 | `controller/CrystalController.kt`・`data/Crystal*.kt`・`ui/screen/Crystal*.kt` | [reflect_crystal](features/reflect_crystal.md)（試す条件・生成と保存の寿命・再会カードとの順序） |
 | `controller/RebuttalController.kt`・`domain/Rebuttal*.kt`・`ui/screen/RelatedTab.kt` の反証の枠 | [rebuttal_sentence](features/rebuttal_sentence.md)（候補の列挙と順位付け・関連ノートの完了からの起動・置き場） |
-| `ui/screen/ReaderLayout.kt`・`ui/screen/ReaderFoldState.kt`・Fold だけの表示と操作・補助の面 | **[fold_experience](system/fold_experience.md)（不変条件・契約・姿勢の割り当て）** → [margin_pane](features/margin_pane.md)・[desk_foundation](features/desk_foundation.md)（右で辿る・窓が変わっても並べ読みを保つ）・[note_spread](features/note_spread.md)（ペインを閉じた本の形の見開き） |
+| `ui/screen/ReaderLayout.kt`・`ui/screen/ReaderFoldState.kt`・Fold だけの表示と操作・補助の面 | **[fold_experience](system/fold_experience.md)（不変条件・契約・姿勢の割り当て）** → [margin_pane](features/margin_pane.md)・[desk_foundation](features/desk_foundation.md)（右で辿る・窓が変わっても並べ読みを保つ）・[note_spread](features/note_spread.md)（本の形の見開きと、レールの見開きのタブ） |
 | `controller/SideReadingController.kt`・`controller/MarginMemoController.kt`・`ui/screen/Margin*.kt`・`ui/screen/SideReadingPane.kt` | [margin_pane](features/margin_pane.md)（並べ方の判定・書きかけと送信の照合・並べ読み） |
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md) |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |
