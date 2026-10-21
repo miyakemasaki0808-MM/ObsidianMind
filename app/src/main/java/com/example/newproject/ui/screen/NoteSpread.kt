@@ -164,10 +164,21 @@ internal fun NoteSpread(
     // **保存値から戻した直後も同じ照合を通す** — 留守の間の送りや、別のノートを開いたことを見落とさない。
     var saved by rememberSaveable(stateSaver = ReadingSaver) { mutableStateOf<SpreadReading?>(null) }
     val parse = remember(blocks) { blocks.hashCode() }
-    val reading = reconcileSpreadReading(saved, noteKey, parse, blocks.size, position.port, position.lastRequest) {
-        position.listState.firstVisibleItemIndex
+    // **組み始めて保存値を戻すときは、ブロックを一覧から取る**（→ restoredAnchor）。保存値は見開きを組むまで消費されずに残るので、
+    // その間にふだんの画面で読み進めた位置（口を通らない指のスクロール）や、適用済みの送り・解析し直しの後の位置を見落とさない。
+    var restoring by remember { mutableStateOf(true) }
+    val listBlock = { position.listState.firstVisibleItemIndex }
+    val base = if (restoring) restoreSpreadReading(saved, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock) else saved
+    val reading = reconcileSpreadReading(base, noteKey, parse, blocks.size, position.port, position.lastRequest, listBlock)
+    SideEffect {
+        restoring = false
+        if (saved != reading) saved = reading
+        // **読む位置のブロックが一覧と食い違えば書き戻す**（めくりと同じ自分の書き戻し）。解析し直しで範囲へ収めたときも書かないと、
+        // 離れて直接戻ったときに一覧のブロックが古く、戻すときの規則が古いほうを採る（→ features/note_spread.md §5「読む位置」）。
+        if (reading.anchor.blockIndex != position.listState.firstVisibleItemIndex) {
+            position.moveTo(reading.anchor.blockIndex, source = BodyPositionSource.SpreadTurn)
+        }
     }
-    SideEffect { if (saved != reading) saved = reading }
     val anchor = reading.anchor
 
     BoxWithConstraints(modifier = modifier) {

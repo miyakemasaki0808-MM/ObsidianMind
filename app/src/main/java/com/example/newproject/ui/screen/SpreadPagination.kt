@@ -272,6 +272,45 @@ internal fun reconcileSpreadReading(
     return if (next == saved) saved else next
 }
 
+/**
+ * 見開きを組み始めて保存値を戻すときに、[reconcileSpreadReading] の前に1回だけ通す（→ features/note_spread.md §5「読む位置」・§8 判断14）。
+ * 保存値が無いか別のノートのものなら、そのまま返して照合に任せる。戻した後の値は、今の解析結果・口・番号を処理済みとして持つ。
+ */
+internal fun restoreSpreadReading(
+    saved: SpreadReading?,
+    noteKey: String,
+    parse: Int,
+    blockCount: Int,
+    port: Long,
+    request: BodyPositionRequest,
+    listBlock: () -> Int
+): SpreadReading? {
+    if (saved == null || saved.noteKey != noteKey) return saved
+    val seen = if (saved.port == port) saved.seenRequest else FIRST_BODY_REQUEST
+    val next = SpreadReading(noteKey, restoredAnchor(saved, parse, blockCount, seen, request, listBlock()), parse, port, request.request)
+    return if (next == saved) saved else next
+}
+
+/**
+ * 保存値を戻すときの読む位置（→ [restoreSpreadReading]）。**ブロックはいつも一覧から取る**（範囲に収める）。
+ * 一覧を動かす書き手（口を通った送り・見開きの書き戻し・口を通らない指のスクロール）は、どれも書いた時点で一覧に入るので、
+ * 見開きを離れている間に何が起きても一覧が最も新しい。要求の番号と解析結果は「見開きがまだ見ていない」ことしか表さない。
+ * 文字の位置を保存値から借りるのは、同じ解析結果で、ブロックが一致し、処理していない外からの送りが無いときだけ。
+ */
+internal fun restoredAnchor(
+    saved: SpreadReading,
+    parse: Int,
+    blockCount: Int,
+    seenRequest: Long,
+    request: BodyPositionRequest,
+    listBlock: Int
+): SpreadAnchor {
+    val block = listBlock.coerceIn(0, max(blockCount - 1, 0))
+    val sent = request.request != seenRequest && request.source == BodyPositionSource.External
+    val keepsChar = saved.parse == parse && saved.anchor.blockIndex == block && !sent
+    return SpreadAnchor(block, if (keepsChar) saved.anchor.charOffset else 0)
+}
+
 /** 同じノートで本文の解析結果が替わった。読む位置のブロックは保ち、文字の位置は古い表示文字列のものなので0に戻す。 */
 internal fun anchorAfterReparse(current: SpreadAnchor, blockCount: Int): SpreadAnchor =
     SpreadAnchor(current.blockIndex.coerceIn(0, max(blockCount - 1, 0)))

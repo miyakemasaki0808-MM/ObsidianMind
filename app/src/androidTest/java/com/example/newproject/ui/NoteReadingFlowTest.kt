@@ -2237,6 +2237,61 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **見開きを離れ、ふだんの画面で読み進めてから見開きへ入ると、読み進めたブロックから始まる**（→ features/note_spread.md §8 判断14）。
+     * 見開きの読む位置の保存値は、見開きを組むまで消費されずに残る。読み進めたのは一覧を直接送る操作（口を通らない指のスクロールと同じ）。
+     */
+    @Test
+    fun 見開きを離れてふだんの画面で読み進めてから見開きへ入ると_読み進めたブロックから始まる() {
+        readOnInPlainThenReturn { _, _ -> }
+    }
+
+    /** 縦の流しで同じノートの見出しへの送り（口を通る）を適用した後に読み進めても、送り先ではなく読み進めたブロックから始まる。 */
+    @Test
+    fun ふだんの画面で送りを適用した後に読み進めても_見開きは読み進めたブロックから始まる() {
+        readOnInPlainThenReturn { position, _ -> position.moveTo(LINK_SPREAD_BLOCK) }
+    }
+
+    /** 見開きの留守中に同じノートを解析し直してから読み進めても、古い保存ブロックではなく読み進めたブロックから始まる。 */
+    @Test
+    fun 見開きの留守中に解析し直してから読み進めても_見開きは読み進めたブロックから始まる() {
+        readOnInPlainThenReturn { _, reparse -> reparse() }
+    }
+
+    /**
+     * 見開きで [SAVED_SPREAD_BLOCK] を出して離れ、ふだんの画面で戻って [beforeReading] を行い、一覧を [JUMPED_SPREAD_BLOCK] まで送ってから見開きを選ぶ。
+     * [beforeReading] には本文の位置の口と、同じノートの本文を解析し直す操作を渡す。
+     */
+    private fun readOnInPlainThenReturn(beforeReading: (BodyPosition, () -> Unit) -> Unit) {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var shown by mutableStateOf(true)
+        var spread by mutableStateOf(true)
+        var model by mutableStateOf(buildNoteSectionModel(SPREAD_BODY))
+        setSpreadAway({ loadedNote(SPREAD_BODY, targetUri = NOTE_A) }, { model }, listState, position, spread = { spread }) { shown }
+        composeRule.runOnIdle { position.moveTo(SAVED_SPREAD_BLOCK) }
+        assertNotNull(shownBounds(paragraphText(SAVED_SPREAD_BLOCK)))
+
+        // さがすへ移り、レールの「ノート」でふだんの画面へ戻る（見開きの保存値は消費されないまま残る）。
+        leaveSpread { shown = it }
+        composeRule.runOnIdle {
+            spread = false
+            shown = true
+        }
+        composeRule.waitForIdle()
+        beforeReading(position) { model = buildNoteSectionModel("$SPREAD_BODY\n\n$REPARSED_TAIL") }
+        composeRule.waitForIdle()
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(markerAt(0), substring = true)))
+            .performScrollToIndex(JUMPED_SPREAD_BLOCK)
+        composeRule.runOnIdle { assertEquals(JUMPED_SPREAD_BLOCK, listState.firstVisibleItemIndex) }
+
+        composeRule.runOnIdle { spread = true }
+        composeRule.waitForIdle()
+        assertNotNull("読み進めたブロックを含む見開きから始まらない", shownBounds(paragraphText(JUMPED_SPREAD_BLOCK)))
+        assertNull("古い見開きの位置へ戻った", shownBounds(paragraphText(SAVED_SPREAD_BLOCK)))
+    }
+
+    /**
      * **同じノートで本文を解析し直すと（蒸留の保存など）、読む位置の段落の先頭の見開きへ戻る**（→ features/note_spread.md §5「読む位置」）。
      * 文字の位置は古い表示文字列のものなので持ち越さない。題名は最初のページにだけ出る。
      */
@@ -3176,6 +3231,9 @@ class NoteReadingFlowTest {
 
         /** 見開きで送る先。最初の見開きに入らないところ。 */
         const val JUMPED_SPREAD_BLOCK = 100
+
+        /** ふだんの画面でリンクの送りを適用する先。保存した見開きとも、読み進める先とも別の見開きにある。 */
+        const val LINK_SPREAD_BLOCK = 10
 
         /** いくつもの見開きにまたがる1つの段落（巨大なブロックの上限より短い）。 */
         val LONG_PARAGRAPH = "長い段落の文が続いていく。".repeat(300)
