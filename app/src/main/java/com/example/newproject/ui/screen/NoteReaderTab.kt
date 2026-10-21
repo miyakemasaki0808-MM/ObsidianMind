@@ -1219,7 +1219,7 @@ private fun NoteActionButtons(
             border = outline,
             shape = RoundedCornerShape(24.dp)
         ) {
-            Text("📖", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
+            Text("📚", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
         }
     }
 }
