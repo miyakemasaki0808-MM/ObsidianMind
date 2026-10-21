@@ -1,8 +1,10 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -34,6 +36,19 @@ internal fun rememberReaderFold(): ReaderFoldInfo {
     }
     val info by flow.collectAsStateWithLifecycle(initialValue = ReaderFoldInfo(isKnown = false, fold = null))
     return info
+}
+
+/**
+ * 窓の値で、ペインの開閉と読む形を戻す（→ [readerChoiceAfterWindow]）。**外殻に置く** — ノートの画面が組まれていない間（ほかのタブ）に
+ * 窓が替わっても効かせるため（→ features/margin_pane.md §5.4）。選択か窓が替わるたびに照らし、出せない窓の選択だけを閉じる。
+ */
+@Composable
+internal fun ReaderWindowEffect(window: ReaderWindow, choice: ReaderChoice, onChoice: (ReaderChoice) -> Unit) {
+    val currentOnChoice by rememberUpdatedState(onChoice)
+    LaunchedEffect(window, choice) {
+        val next = readerChoiceAfterWindow(choice, window)
+        if (next != choice) currentOnChoice(next)
+    }
 }
 
 /** 境界は窓の座標の px で届く。本文領域の座標へ直すのは判定側（→ readerLayoutFor）。 */

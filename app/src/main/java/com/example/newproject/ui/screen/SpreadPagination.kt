@@ -281,10 +281,30 @@ internal fun anchorAfterReparse(current: SpreadAnchor, blockCount: Int): SpreadA
  * **1行に入る字数**と**ページに入る行数**を文字の倍率込みで数え、巨大なブロックの無いノートだけを入れる。
  * [pageTextWidthDp]・[pageTextHeightDp] はページの本文の幅と高さ、[maxBlockChars] は本文のブロックの表示文字数の最大。
  */
-internal fun spreadAllowed(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): Boolean {
+internal fun spreadAllowed(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): Boolean =
+    spreadRefusal(pageTextWidthDp, pageTextHeightDp, fontScale, maxBlockChars) == null
+
+/** 見開きにできない理由（→ features/note_spread.md §5「見開きにできないノート」）。本文の側の条件だけで、窓の側の条件は含めない。 */
+internal enum class SpreadRefusal {
+    /** 表示文字数が上限を超えるブロックがある。文字の倍率を下げても入らないので、先に判定する。 */
+    LongBlock,
+
+    /** 文字の倍率で、1行の字数かページの行数が下限を割る。 */
+    LargeText
+}
+
+/** 見開きを選んでいるのに縦の流しで出すときに添える1行。理由は短く言う。 */
+internal fun spreadRefusalText(refusal: SpreadRefusal): String = when (refusal) {
+    SpreadRefusal.LongBlock -> "このノートは見開きにできません（長い段落があるため）"
+    SpreadRefusal.LargeText -> "このノートは見開きにできません（文字が大きいため）"
+}
+
+/** 見開きにできない理由。入れるなら null（→ [spreadAllowed]）。 */
+internal fun spreadRefusal(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): SpreadRefusal? {
+    if (maxBlockChars > SPREAD_MAX_BLOCK_CHARS) return SpreadRefusal.LongBlock
     val charsPerLine = pageTextWidthDp / (SPREAD_BODY_FONT_SP * fontScale)
     val lines = pageTextHeightDp / (SPREAD_BODY_LINE_SP * fontScale)
-    return charsPerLine >= SPREAD_MIN_CHARS_PER_LINE && lines >= SPREAD_MIN_LINES && maxBlockChars <= SPREAD_MAX_BLOCK_CHARS
+    return if (charsPerLine >= SPREAD_MIN_CHARS_PER_LINE && lines >= SPREAD_MIN_LINES) null else SpreadRefusal.LargeText
 }
 
 /** 本文の段落の文字の大きさと行の高さ（`MarkdownParagraph` と同じ）。 */

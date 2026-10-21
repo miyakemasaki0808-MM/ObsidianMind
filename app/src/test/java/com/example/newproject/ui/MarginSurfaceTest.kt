@@ -30,7 +30,6 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RelatedNotesState
-import com.example.newproject.ui.screen.endsSideReading
 import com.example.newproject.ui.screen.writingForWindowShift
 import com.example.newproject.ui.screen.PaneRelatedList
 import com.example.newproject.ui.screen.PaneRelatedListSaver
@@ -60,14 +59,14 @@ class MarginSurfaceTest {
         assertEquals(MarginToggle.HideSheet, marginToggleFor(canShowPane = false, paneOpen = true, sheetVisible = true))
     }
 
-    /** 閉じる設定でシートを出したまま Fold を開き、✎ を2回押す。**ペインとシートを同時に出さない。** */
+    /** ペインを閉じたままシートを出して Fold を開き、✎ を2回押す。**ペインとシートを同時に出さない。** */
     @Test
     fun `シートを出したまま出せる窓へ移ると、1回目はシートをしまい2回目でペインを出す`() {
         var paneOpen = false
         var sheetVisible = true
 
         assertEquals(
-            "閉じる設定ならシートのまま移る",
+            "ペインが閉じていればシートのまま",
             MarginWindowShift.None,
             marginWindowShiftFor(false, canShowPane = true, paneOpen = paneOpen, sheetVisible = sheetVisible, writing = true)
         )
@@ -139,7 +138,7 @@ class MarginSurfaceTest {
 
     /**
      * **面が出ていなければ、まだ頼んでいない節は始めるだけで面を出さない。** 頼んだ節は記号が状態を示しているので、
-     * 押すのは見に行くときで、シートで見せる（ペインの設定は書き換えない）。
+     * 押すのは見に行くときで、シートで見せる（ペインの開閉は書き換えない）。
      */
     @Test
     fun `面が出ていなければ、頼んでいない節は始めるだけで、頼んだ節はシートで見せる`() {
@@ -361,27 +360,7 @@ class MarginSurfaceTest {
         assertNull(paneRelatedCandidates(null, RelatedNotesState.Loading))
     }
 
-    // ── 並べ読みの終わり方（→ features/desk_foundation.md §5 の状態遷移）────────────
-
-    /**
-     * **窓は判定に入らない。** Fold を閉じても内側を横にしても、ペインの設定が開いていれば終えない。
-     * 窓の情報が揃う前の仮の並べ方で終えることも、これで起きない。余白のシートを開いたときは調停側が終える
-     * （→ `NoteSessionCoordinatorTest`）。
-     */
-    @Test
-    fun `並べ読みは窓が変わっただけでは終えない`() {
-        assertFalse(endsSideReading(reading = true, paneOpen = true))
-    }
-
-    @Test
-    fun `並べ読みはペインの設定を閉じると終える`() {
-        assertTrue(endsSideReading(reading = true, paneOpen = false))
-    }
-
-    @Test
-    fun `並べ読みをしていなければ終える操作も無い`() {
-        assertFalse(endsSideReading(reading = false, paneOpen = false))
-    }
+    // ── 並べ読みと窓の切り替わり（→ features/desk_foundation.md §5）────────────
 
     /**
      * **並べ読み中は、書きかけの文字だけではペインからシートへ移さない。** 余白は右のノートに隠れていたので、閉じた後も出さない。

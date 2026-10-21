@@ -1,8 +1,8 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
 **状態:** 実装中。区切り0・区切り1・区切り2まで実装（位置の口・計測・見開きの画面・帯と重ねるレール）。区切り3（つなぐ）は読書の記録・節・リンク・続きから読む・見出しの印・再会カードを区切り2と一緒に入れた。ここまでは実機検証済み。
-**入り方を、姿勢とペインの設定から左のレールの見開きのタブへ替える（2026-10-21、オーナー判断 → 判断2・判断13）のは設計済み・未実装**で、今のアプリは本の形でペインを閉じていると見開きになる。
-残りはその入り方と区切り4（仕上げ）、§10 の交錯の順序の自動テストの一部。見開きにできないノートでのタブの扱いとタブの記号は、オーナーが決めた（2026-10-22 → §5）
+**入り方を、姿勢とペインの設定から左のレールの見開きのタブへ替えた（2026-10-21、オーナー判断 → 判断2・判断13）。実装済み・別の目と実機は未確認。**
+残りは入り方の別の目と実機、区切り4（仕上げ）、§10 の交錯の順序の自動テストの一部。見開きにできないノートでのタブの扱いとタブの記号は、オーナーが決めた（2026-10-22 → §5）
 **最終検証:** 2026-10-21 / `f101bc78`（区切り2と区切り3の実装分。Pixel 10 Pro Fold の内側縦で通し版）
 **関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt` / `MainActivity.kt` / `NoteViewModel.kt`
 **関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest` / `AppScaffoldRailTest` / `NoteReadingFlowTest`（見開きの13件）
@@ -61,8 +61,6 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 
 ## 4. 現在のユーザーフロー
 
-> **入り方は未実装:** 今のアプリは、本の形でペインを閉じていると見開きになる。下は入り方を替えた後の流れ（→ 判断2）。
-
 1. 開いた Fold を本の形で開くと、閉じていたときと同じふだんの画面が出る。Rediscover でノートを引く
 2. 左のレールの「見開き」を押す。レールが畳まれ、本文がふだんの画面で読んでいたブロックを含む見開きで出る
 3. 左へ払って読み進める。右へ払うと戻る
@@ -73,7 +71,7 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
 
 ## 5. 機能仕様
 
-- **見開きのタブ（2026-10-21、オーナー判断 → 判断2・判断13。未実装）:**
+- **見開きのタブ（2026-10-21、オーナー判断 → 判断2・判断13）:**
   - **出す窓:** 横幅が Expanded（レールを出す窓）で、縦の折り目が本文領域の中にあり、高さの足りない横長（左右2列になる窓）ではない窓。並びは「ノート」のすぐ下。
     閉じた画面・スマホ（下のバー）・折り目の無い Expanded の窓・横の折り目（卓上の形・内側を横に持った形）・狭い分割窓・高さを下げた分割窓では出さない。
     **窓の寸法と折り目だけから決め、ノートの中身（巨大なブロック・文字の倍率による1行の字数と行数）では出し分けない**（ノートを替えるたびにレールの並びが動かない）。
@@ -95,7 +93,7 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
     採らなかった案: ノートごとにタブを消す・押せなくする（ノートを替えるたびにレールの並びや見た目が動き、なぜ押せないかも分からない）
   - **記号は 📖（2026-10-22、オーナー判断）。** 見開きに最も合う記号なので見開きのタブへ回し、冊子のボタンは 📚 へ替えた（→ [booklet_mode](booklet_mode.md)）
 - **入る条件（`readerLayoutFor` へ条件を足す。純関数で、文字の倍率と本文の最大のブロックの字数を入力に加える）:** 次のすべてを満たすとき見開き、どれかを欠けば今の並べ方（縦積み）。
-  - **見開きのタブを選んでいる**（入り方の変更で足す。今はこの条件が無い）。ペインを閉じている。縦の折り目が本文領域の中にある。高さの足りない横長ではない（左右2列の判定が先に当たる）。ノートがある
+  - **見開きのタブを選んでいる**（[`spreadFitFor`](../../../app/src/main/java/com/example/newproject/ui/screen/ReaderLayout.kt)）。ペインを閉じている。縦の折り目が本文領域の中にある。高さの足りない横長ではない（左右2列の判定が先に当たる）。ノートがある
   - **1行に入る字数が下限以上**（→ §8 判断9）。ページの本文の幅を、本文の文字の大きさ（16sp）に文字の倍率を掛けた幅で割る。下限は仮に16字（倍率1.0で約22字、1.3で約17字、1.5で約15字）
   - **ページの本文の高さが、本文の行（24sp に倍率を掛けた高さ）で下限の行数以上**（仮に12行）。これで「1行もページに収まらない」が起きない
   - **本文に巨大なブロックが無い**（→ §8 判断10）。ブロックの表示文字数の最大が上限以下（上限は区切り0で決める）。解析結果から引けるので、組み始める前に決まる
@@ -219,12 +217,12 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
   fold_experience §6 の縦の折り目の行の「今」の列。[bearing_channels](../system/bearing_channels.md) §2 の指に追従する動きの「載る面」（→ 判断7）。
   [`showsRail`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt) の KDoc と [tab_navigation](../system/tab_navigation.md)（重ねる判定は `overlaysRail` と `AppScaffoldRailTest`）。
   本の形でペインを閉じる前提だった `NoteReadingFlowTest` の2件（要約ボタンは帯から押す・外殻へ知らせるのは縦積みへ替えたときに戻る）
-- **入り方の変更で書き換える既存の記述とテスト（→ [lessons L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）:**
-  文書は先に書き換えた — [fold_experience](../system/fold_experience.md) §5 の契約4と §6、[margin_pane](margin_pane.md) §3・§4・§5.1・§5.4・判断6、
+- **入り方の変更で書き換えた既存の記述とテスト（→ [lessons L27](../lessons.md#l27-仕様を変えるときは旧仕様を固定している箇所を先に数える)）:**
+  文書 — [fold_experience](../system/fold_experience.md) §5 の契約4と §6、[margin_pane](margin_pane.md) §3・§4・§5.1・§5.4・判断6、
   [desk_foundation](desk_foundation.md) §1〜§5・§10、[tab_navigation](../system/tab_navigation.md) §1、[note_fullscreen](note_fullscreen.md) §5・§10、[rediscover](rediscover.md) 判断6の余白ペインの行、[document_map](../document_map.md) の説明。
-  実装と同時に直すもの — `ReaderLayoutTest`（ペインを閉じた本の形を見開きとする入力）、`NoteReadingFlowTest`（見開きの13件をタブを選んだ形へ。閉じた外画面へ替えて戻すと机と右のノートが出る検査を、ふだんの画面で始まり ✎ で戻る形へ）、
+  実装と同時に直したもの — `ReaderLayoutTest`（ペインを閉じた本の形を見開きとする入力）、`NoteReadingFlowTest`（見開きの13件をタブを選んだ形へ。閉じた外画面へ替えて戻すと机と右のノートが出る検査を、ふだんの画面で始まり ✎ で戻る形へ）、
   `AppScaffoldRailTest`（見開きのタブの出し分けと選んでいる項目）、`MarginSurfaceTest`（並べ読みを終える判定をペインの開閉の値から ✎ の操作へ）、`TabNavigationTest`、
-  `AppPreferences.marginPaneOpen` の説明、実機ケース [summary_entry_desk](../../review/device_validation/summary_entry_desk.md) の `RM00-11`（再起動で机へ戻る）と `RM00-12`（開閉で幅に合う面へ移る）
+  端末の設定のペインの開閉（`AppPreferences` から外した）、実機ケース [summary_entry_desk](../../review/device_validation/summary_entry_desk.md) の `RM00-03`・`RM00-11`（再起動で机へ戻る）・`RM00-12`（開閉で幅に合う面へ移る）。入り方の実機ケースは同じ文書の `RM02-*`
 
 ### 実装の区切り
 

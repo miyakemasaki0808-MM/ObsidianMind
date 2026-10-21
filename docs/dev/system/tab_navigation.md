@@ -1,6 +1,6 @@
 # タブ・ナビゲーション
 
-**状態:** 実装済み・稼働中。**縦の折り目のある開いた窓のレールに「見開き」タブを足す（2026-10-21、オーナー判断 → §1）のは設計済み・未実装**
+**状態:** 実装済み・稼働中。**縦の折り目のある開いた窓のレールに「見開き」タブを足した（2026-10-21、オーナー判断 → §1）。別の目と実機は未確認**
 **最終検証:** 2026-10-06 / `6b39f134`
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
 **関連テスト:** `AppScaffoldContentSlotTest` / `AppScaffoldRailTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
@@ -14,8 +14,8 @@
 
 **タブは5つ** — 📄ノート／🔎さがす／🔗関連／✨AI／⚙️オプション。5つは NavHost の行き先で、`AppScaffold.kt` の enum が行き先の単一の定義元。
 
-**縦の折り目のある開いた窓のレールだけ、6つ目に「見開き」が「ノート」のすぐ下に並ぶ**（2026-10-21、オーナー判断。未実装。記号は 📖 → [note_spread](../features/note_spread.md) §5）。
-- **見開きは行き先ではなく、ノートの行き先の中の読む形（ふだん／見開き）を選ぶ項目である**（→ [note_spread](../features/note_spread.md) 判断13）。行き先の enum には足さず、レールの並びを決める純関数で足す。
+**縦の折り目のある開いた窓のレールだけ、6つ目に「見開き」が「ノート」のすぐ下に並ぶ**（2026-10-21、オーナー判断。記号は 📖 → [note_spread](../features/note_spread.md) §5）。
+- **見開きは行き先ではなく、ノートの行き先の中の読む形（ふだん／見開き）を選ぶ項目である**（→ [note_spread](../features/note_spread.md) 判断13）。行き先の enum には足さず、レールの並びを決める純関数（[`railItems`](../../../app/src/main/java/com/example/newproject/ui/AppScaffold.kt)）で足す。
   レールで選んでいる項目は、ノートの行き先なら読む形から決める
 - **出すのは、横幅が Expanded で、縦の折り目が本文領域の中にあり、高さの足りない横長ではない窓だけ。** 閉じた画面とスマホの下のバーは5つのまま。折り目の無い Expanded の窓・横の折り目・狭い分割窓・高さを下げた分割窓のレールにも出さない。窓の寸法と折り目だけから決め、ノートの中身では出し分けない
 - **戻る操作:** 見開きからはノートのタブへ。ほかのタブから戻る操作で戻ると、離れたときの読む形（ノートか見開き）へ戻る
@@ -29,7 +29,7 @@
 **ノートタブで机の形（余白ペイン・本文の見開き）が出ている間はレールを畳む**（`showsRail`）。見開きを選んでいても、見開きにできないノートを縦の流しで出している間は畳まない（2026-10-22、オーナー判断 → [note_spread](../features/note_spread.md) §5）。
 **つまみで帯を呼んでいる間だけ、レールを本文の上の左端に重ねて出す**（`overlaysRail`）。重ねるだけで本文の幅は変えず、タブを押すと帯ごとしまう
 （→ [margin_pane](../features/margin_pane.md) の「並べ方と、判定の優先順」・[note_spread](../features/note_spread.md) §8 判断3）。
-重ねたレールで「ノート」か「見開き」を押すと、机をしまってその画面へ移る（→ [margin_pane](../features/margin_pane.md) §5.4。入り方の変更で足す）。
+重ねたレールで「ノート」か「見開き」を押すと、机をしまってその画面へ移る（→ [margin_pane](../features/margin_pane.md) §5.4）。
 重ねるレールも本文の後ろに組み立てる（本文が最初の子のまま）。
 タブ切替は `saveState` / `restoreState` / `launchSingleTop` の標準構成で往復時の画面内状態を保つ。
 
