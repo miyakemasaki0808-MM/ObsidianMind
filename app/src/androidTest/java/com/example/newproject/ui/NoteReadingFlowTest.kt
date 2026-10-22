@@ -2281,8 +2281,8 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
         beforeReading(position) { model = buildNoteSectionModel("$SPREAD_BODY\n\n$REPARSED_TAIL") }
         composeRule.waitForIdle()
-        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(markerAt(0), substring = true)))
-            .performScrollToIndex(JUMPED_SPREAD_BLOCK)
+        // **一覧を中身の文字で探さない。** 送った後は段落0が画面外で、一覧の子に無い。ふだんの画面で送れる一覧は本文の1つだけ。
+        composeRule.onNode(hasScrollToIndexAction()).performScrollToIndex(JUMPED_SPREAD_BLOCK)
         composeRule.runOnIdle { assertEquals(JUMPED_SPREAD_BLOCK, listState.firstVisibleItemIndex) }
 
         composeRule.runOnIdle { spread = true }

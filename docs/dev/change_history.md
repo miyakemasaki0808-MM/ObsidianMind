@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-10-23 | SPREAD-7 の instrumentation 3件が一覧を画面外の段落で探して止まっていたので、送れる一覧で探す | [note_spread](features/note_spread.md) §10 |
 | 2026-10-23 | 入り方の実装をレビューし、レールの実幅の食い違いを FOLD-10 へ起票、SPREAD-7 の検査の止まりを統合した | [レビュー](../review/README.md) |
 | 2026-10-22 | 冊子のボタンの記号を📖から📚へ替え、📖を見開きのタブに回した | [booklet_mode](features/booklet_mode.md) |
 | 2026-10-22 | 見開きの保存値を戻すときブロックを一覧から取り、表示中は読む位置のブロックが替わるたびに一覧へ書き戻す | [note_spread](features/note_spread.md) 判断14 |
