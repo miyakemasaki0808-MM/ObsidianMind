@@ -1,16 +1,28 @@
 package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.DpSize
@@ -20,11 +32,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.screen.ReaderChoice
+import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.ReaderRegion
 import com.example.newproject.ui.screen.ReaderWindowEffect
+import com.example.newproject.ui.screen.canShowMarginPane
 import com.example.newproject.ui.screen.readerWindowFor
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -62,6 +78,79 @@ class ReaderWindowShellTest {
         shell.height = LOW
         composeRule.waitForIdle()
         composeRule.runOnIdle { assertTrue("窓の情報が揃う前に閉じた", shell.choice.paneOpen) }
+    }
+
+    /**
+     * **外殻の値は、実際に組まれたレールの幅を除いた本文領域と一致する。** レールは最小80dpで、文字の倍率でラベルが広がると幅が増える
+     * （→ features/margin_pane.md §5.4）。80dpとみなすと、倍率2倍のこの窓で外殻は机を出せる・本文は出せない、と食い違った。
+     * レールを畳んでも（机・見開きの間）外殻の値は替わらない — 見えないまま組んだ同じレールで幅を測る。
+     */
+    @Test
+    fun 文字の倍率を上げても_外殻の値と本文領域の机の可否が一致し_レールを畳んでも替わらない() {
+        var fontScale by mutableStateOf(1f)
+        var railHidden by mutableStateOf(false)
+        var probe: ReaderRegion? = null
+        var body: ReaderRegion? = null
+        var boxLeft = 0f
+        composeRule.setContent {
+            val base = LocalDensity.current
+            fun LayoutCoordinates.region() = ReaderRegion(
+                widthDp = size.width / base.density,
+                heightDp = size.height / base.density,
+                startDp = positionInWindow().x / base.density
+            )
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                Box(
+                    modifier = Modifier
+                        .requiredSize(width = 840.dp, height = 900.dp)
+                        .onGloballyPositioned { boxLeft = it.positionInWindow().x / base.density }
+                ) {
+                    val nav = rememberNavController()
+                    AppScaffold(
+                        windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(840.dp, 900.dp)),
+                        navController = nav,
+                        snackbarHostState = remember { SnackbarHostState() },
+                        notePaneVisible = railHidden,
+                        onReaderRegion = { probe = it }
+                    ) { modifier ->
+                        NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
+                            // ノートの画面と同じ取り方の本文領域（→ NoteReaderTab）。
+                            composable(AppDestination.Note.route) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
+                                        .screenContentPadding()
+                                        .onGloballyPositioned { body = it.region() }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 窓の中ほど（箱の左端から420dp）に縦の折り目。
+        fun fold() = ReaderFold(isVertical = true, startDp = boxLeft + 420f, endDp = boxLeft + 420f)
+        fun ReaderRegion.canShow() = canShowMarginPane(widthDp, heightDp, expandedWidth = true, fold = fold(), regionStartDp = startDp)
+
+        listOf(1f, 2f).forEach { scale ->
+            composeRule.runOnIdle {
+                fontScale = scale
+                railHidden = false
+            }
+            composeRule.waitForIdle()
+            val shown = composeRule.runOnIdle { requireNotNull(probe) }
+            composeRule.runOnIdle {
+                assertEquals("倍率 $scale で外殻と本文が食い違う（外殻 $shown・本文 $body）", requireNotNull(body).canShow(), shown.canShow())
+            }
+
+            composeRule.runOnIdle { railHidden = true }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle {
+                assertEquals("倍率 $scale でレールを畳むと外殻の値が替わった", shown.canShow(), requireNotNull(probe).canShow())
+                assertEquals("倍率 $scale でレールを畳むと測った本文領域が替わった", shown.startDp, requireNotNull(probe).startDp, 0.5f)
+            }
+        }
     }
 
     private fun heightRoundTrip(onSearch: Boolean) {

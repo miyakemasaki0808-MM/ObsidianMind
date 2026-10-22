@@ -43,6 +43,7 @@ import androidx.compose.ui.layout.layoutId
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -210,7 +211,11 @@ internal fun AppScaffold(
                     }
                 }
             } else null,
-            useRail = useRail,
+            // レールを出していない間（机・見開き・タブ以外のルート）も、出したときと同じ項目のレールを見えないまま組んで幅だけ測る。
+            // 定数の80dpでは足りない — レールは最小80dpで、ラベルの幅（文字の倍率）や左の Insets で広がる（→ features/margin_pane.md §5.4）。
+            railMeasure = if (useRail) {
+                { TabRail(items, currentRoute, spreadChosen) {} }
+            } else null,
             // ノートの画面と同じ取り方で本文領域を測る（レールがある状態・キーボードを除く → features/margin_pane.md §5.4）。
             probe = {
                 Box(
@@ -286,7 +291,8 @@ private fun TabRail(items: List<RailItem>, currentRoute: String?, spreadChosen: 
  * 左にレール、下にバー、残りに本文を置く。**組み立ての順は本文が先**で、並べる位置だけをここで決める
  * （→ [AppScaffold]）。レールとバーはどちらか一方か、どちらも無い。
  * 重ねるレール（[overlayRail]）は本文の幅を取らず、本文の上の左端に置く。
- * [probe] は本文領域を測る見えない箱で、**レールの有無によらずレールがある状態の位置と幅**に置く（[useRail] の窓では [RailWidth] を除く）。
+ * [probe] は本文領域を測る見えない箱で、**レールの有無によらずレールがある状態の位置と幅**に置く。レールを出していない間は
+ * [railMeasure]（同じ項目のレール）を測るだけ測って置かず、その幅を除く。
  */
 @Composable
 private fun ScaffoldLayout(
@@ -294,7 +300,7 @@ private fun ScaffoldLayout(
     rail: (@Composable () -> Unit)?,
     overlayRail: (@Composable () -> Unit)?,
     bottomBar: (@Composable () -> Unit)?,
-    useRail: Boolean,
+    railMeasure: (@Composable () -> Unit)?,
     probe: @Composable () -> Unit
 ) {
     Layout(
@@ -303,6 +309,10 @@ private fun ScaffoldLayout(
             if (rail != null) Box(modifier = Modifier.layoutId(SLOT_RAIL)) { rail() }
             if (bottomBar != null) Box(modifier = Modifier.layoutId(SLOT_BAR)) { bottomBar() }
             if (overlayRail != null) Box(modifier = Modifier.layoutId(SLOT_OVERLAY_RAIL)) { overlayRail() }
+            if (rail == null && railMeasure != null) {
+                // 測るだけで置かない（描かず、指も受けない）。読み上げにも出さない。
+                Box(modifier = Modifier.layoutId(SLOT_RAIL_MEASURE).clearAndSetSemantics {}) { railMeasure() }
+            }
             Box(modifier = Modifier.layoutId(SLOT_PROBE)) { probe() }
         },
         modifier = Modifier.fillMaxSize()
@@ -319,7 +329,11 @@ private fun ScaffoldLayout(
             .measure(Constraints.fixed((width - railWidth).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         val overlayPlaceable = measurables.firstOrNull { it.layoutId == SLOT_OVERLAY_RAIL }
             ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))
-        val probeRail = if (useRail) RailWidth.roundToPx() else 0
+        // レールがある状態の幅。出しているレールがあればその幅、無ければ見えないまま組んだレールの幅（どちらも同じ項目）。
+        val probeRail = railPlaceable?.width
+            ?: measurables.firstOrNull { it.layoutId == SLOT_RAIL_MEASURE }
+                ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))?.width
+            ?: 0
         val probePlaceable = measurables.first { it.layoutId == SLOT_PROBE }
             .measure(Constraints.fixed((width - probeRail).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         layout(width, height) {
@@ -338,6 +352,7 @@ private const val SLOT_RAIL = "rail"
 private const val SLOT_BAR = "bar"
 private const val SLOT_OVERLAY_RAIL = "overlayRail"
 private const val SLOT_PROBE = "probe"
+private const val SLOT_RAIL_MEASURE = "railMeasure"
 
 /** AIタブの意味は常に✨のまま保つ。 */
 @Composable
