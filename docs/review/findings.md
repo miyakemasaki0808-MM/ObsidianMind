@@ -34,5 +34,4 @@
 | `2026-10-21-fold-entry-design-review/P2-2` | ふだんの画面で読み進めてから見開きへ入ると、復元待ちの見開きの位置が一覧の位置より優先される | `起票` SPREAD-7 |
 | `2026-10-22-fold-entry-design-rereview/P2-1` | 縦の流しで適用済みの送りが、その後に指で読んだ位置より優先される | `統合` SPREAD-7 |
 | `2026-10-22-fold-entry-design-rereview/P2-2` | 見開きの留守中に解析し直すと、一覧の新しい読書位置を照らさず古い保存ブロックを採る | `統合` SPREAD-7 |
-| `2026-10-23-fold-entry-implementation-review/P2-1` | 外殻がレールの幅を80dpに固定し、文字の倍率を上げた窓で机の可否が本文と食い違う | `起票` FOLD-10 |
 | `2026-10-23-fold-entry-implementation-review/P2-2` | SPREAD-7 の instrumentation 3件が、画面外の段落0で一覧を探して止まる | `統合` SPREAD-7 |
