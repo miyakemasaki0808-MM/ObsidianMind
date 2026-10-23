@@ -2130,6 +2130,73 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **読み上げの操作で見開きを送れる**（→ features/note_spread.md §5「めくり」）。払ってめくったときと同じく、読む位置が次の見開きの
+     * 左ページの先頭になって一覧へ書き戻され、今の位置を「n番目の見開き」で伝える。最初の見開きでは前へ送る操作を出さない。
+     */
+    @Test
+    fun 読み上げの操作で見開きを送ると_読む位置を書き戻し_何番目の見開きかを伝える() {
+        assumeDeskWindow()
+        val listState = LazyListState()
+        setSpread(SPREAD_BODY, listState = listState)
+        val lastOnFirst = (0 until SPREAD_PARAGRAPHS).last { shownBounds(paragraphText(it)) != null }
+        val pager = SemanticsMatcher.keyIsDefined(SemanticsProperties.StateDescription) and
+            SemanticsMatcher.keyIsDefined(SemanticsActions.CustomActions)
+        fun labels() = composeRule.onNode(pager).fetchSemanticsNode().config[SemanticsActions.CustomActions].map { it.label }
+        fun position() = composeRule.onNode(pager).fetchSemanticsNode().config[SemanticsProperties.StateDescription]
+
+        assertEquals("1番目の見開き", position())
+        assertEquals("最初の見開きで前へ送る操作を出した", listOf("次の見開きへ"), labels())
+
+        val next = composeRule.onNode(pager).fetchSemanticsNode().config[SemanticsActions.CustomActions].single { it.label == "次の見開きへ" }
+        composeRule.runOnIdle { assertTrue(next.action()) }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertEquals("送った見開きの読む位置を書き戻していない", lastOnFirst + 1, listState.firstVisibleItemIndex) }
+        assertEquals("2番目の見開き", position())
+        assertTrue("2番目の見開きで前へ送る操作が無い", "前の見開きへ" in labels())
+        assertNotNull(shownBounds(paragraphText(lastOnFirst + 1)))
+        assertNull("前の見開きが残っている", shownBounds(paragraphText(0)))
+    }
+
+    /**
+     * **めくる1枚は綴じ目を軸に手前へ持ち上がる**（→ features/note_spread.md 判断7）。右ページを左へ4分の1ほど引いたまま止め、
+     * めくる紙の外寄りの列で、紙の色がページの上の縁より上まで続くことを画素で確かめる。手前へ出れば縁が伸びて上へはみ出し、
+     * 奥へ倒れれば縮んで、下から現れるページの縁で止まる。**向きは値に現れないので、ここでしか確かめられない**（→ docs/dev/lessons/L61.md）。
+     * 同じ画像で、めくらない左ページの紙の色が止まっているときと同じことも見る（紙の色も透明度も動かさず、影が左ページへ広がらない）。
+     */
+    @Test
+    fun 見開きをめくる途中_めくる紙は手前へ持ち上がり_左ページの紙の色は変わらない() {
+        assumeDeskWindow()
+        setSpread(SPREAD_BODY)
+        val density = composeRule.density
+        val box = composeRule.onNodeWithTag(DESK_TAG).fetchSemanticsNode().boundsInRoot
+        val spine = (box.left + box.right) / 2f
+        val page = with(density) { SPREAD_TEST_PAGE_DP.dp.toPx() }
+        val title = composeRule.onNodeWithText(TITLE).fetchSemanticsNode().boundsInRoot
+        // 題名の上はページの内側の余白で、紙の色だけがある。めくらない左ページの4分の1の列で紙の色を取る。
+        val leftColumn = (spine - page * 0.75f).roundToInt()
+        val paperY = (title.top - with(density) { 9.dp.toPx() }).roundToInt()
+        val rest = composeRule.onRoot().captureToImage().toPixelMap()
+        val paper = rest[leftColumn, paperY]
+        val pageTop = (paperY downTo 0).first { !rest[leftColumn, it].near(paper) } + 1
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            down(Offset(centerX + 300.dp.toPx(), centerY))
+            repeat(12) { moveBy(Offset(-20.dp.toPx(), 0f)) }
+        }
+        composeRule.waitForIdle()
+        val turning = composeRule.onRoot().captureToImage().toPixelMap()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput { up() }
+
+        assertTrue("めくっていない左ページの紙の色が変わった（${turning[leftColumn, paperY]}・止まっているとき $paper）", turning[leftColumn, paperY].near(paper))
+        val turnColumn = (spine + page * 0.3f).roundToInt()
+        val paperRun = (pageTop + 4 downTo 0).takeWhile { turning[turnColumn, it].near(paper) }
+        assertTrue("めくる紙の上の縁の内側が紙の色でない（${turning[turnColumn, pageTop + 4]}）", paperRun.isNotEmpty())
+        val lift = pageTop - paperRun.last()
+        assertTrue("めくる紙が手前へ持ち上がっていない（ページの上の縁より ${lift}px 上まで）", lift >= with(density) { 2.dp.toPx() })
+    }
+
+    /**
      * **長い段落の途中までめくっても、同じ段落の先頭への送りで毎回先頭の見開きへ戻る**（→ features/note_spread.md §5「位置の書き込み」）。
      * めくっても一覧の位置は同じブロックのままなので、値の変化だけを見ると送りを見分けられない。題名は最初のページにだけ出る。
      */
@@ -2586,6 +2653,10 @@ class NoteReadingFlowTest {
     }
 
     private fun paragraphText(index: Int) = "${markerAt(index)} の本文です。"
+
+    /** 2つの色が、描画の誤差の範囲で同じか（1チャンネルあたり [PAPER_TOLERANCE]）。 */
+    private fun Color.near(other: Color): Boolean =
+        abs(red - other.red) <= PAPER_TOLERANCE && abs(green - other.green) <= PAPER_TOLERANCE && abs(blue - other.blue) <= PAPER_TOLERANCE
 
     // ── 別のノートを開く（→ features/rediscover.md §5）───────────────────────
 
@@ -3237,6 +3308,10 @@ class NoteReadingFlowTest {
         val CLOSED_WINDOW = TestWindow(ReaderFoldInfo(isKnown = true, fold = null), expandedWidth = false)
         /** 帯の継ぎ目で許す色の差（1チャンネルあたり）。8dp 離れた2点のグラデーションの差と、描画の誤差を含む。 */
         const val SEAM_TOLERANCE = 12f / 255f
+        /** 紙の色とみなす差（1チャンネルあたり）。紙は1色で塗るので、文字や背景とはこれより大きく離れる。 */
+        const val PAPER_TOLERANCE = 6f / 255f
+        /** [PostureBox] の本の形で、ペインを閉じた見開きの1ページの幅（箱 960dp から画面の余白 20dp ずつと溝 16dp を引いた半分）。 */
+        const val SPREAD_TEST_PAGE_DP = 452f
         val NOTICE = SectionChatProblem.AiStatus(
             AiStatusNotice(message = NOTICE_MESSAGE, action = AiNoticeAction.None, canTryAgainLater = false)
         )
