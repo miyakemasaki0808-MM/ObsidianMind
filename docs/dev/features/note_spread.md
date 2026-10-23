@@ -1,9 +1,9 @@
 # 本文の見開き — 開いた Fold で本文を本のように2ページずつ組む
 
 **状態:** 実装中。区切り0・区切り1・区切り2まで実装（位置の口・計測・見開きの画面・帯と重ねるレール）。区切り3（つなぐ）は読書の記録・節・リンク・続きから読む・見出しの印・再会カードを区切り2と一緒に入れた。ここまでは実機検証済み。
-**入り方を、姿勢とペインの設定から左のレールの見開きのタブへ替えた（2026-10-21、オーナー判断 → 判断2・判断13）。実装済み・別の目と実機は未確認。**
-残りは入り方の別の目と実機、区切り4（仕上げ）、§10 の交錯の順序の自動テストの一部。見開きにできないノートでのタブの扱いとタブの記号は、オーナーが決めた（2026-10-22 → §5）
-**最終検証:** 2026-10-21 / `f101bc78`（区切り2と区切り3の実装分。Pixel 10 Pro Fold の内側縦で通し版）
+**入り方を、姿勢とペインの設定から左のレールの見開きのタブへ替えた（2026-10-21、オーナー判断 → 判断2・判断13）。実装済み・実機検証済み（2026-10-24。`RM02-07` は実機未確認）。**
+残りは区切り4（仕上げ）、§10 の交錯の順序の自動テストの一部。見開きにできないノートでのタブの扱いとタブの記号は、オーナーが決めた（2026-10-22 → §5）
+**最終検証:** 2026-10-24 / `386fea2e`（入り方と SPREAD-7。分割窓で高さだけを往復する `RM02-07` は実機未確認）。区切り2・3の実装分は 2026-10-21 / `f101bc78`（Pixel 10 Pro Fold の内側縦で通し版）
 **関連コード:** `ui/screen/SpreadPagination.kt` / `ui/screen/BodyPosition.kt` / `ui/screen/NoteSpread.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/markdown/MarkdownBodyStyle.kt` / `ui/screen/ReaderLayout.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/MarginFace.kt` / `ui/AppScaffold.kt` / `MainActivity.kt` / `NoteViewModel.kt`
 **関連テスト:** `SpreadPaginationTest` / `BodyPositionRequestsTest` / `ReaderLayoutTest` / `AppScaffoldRailTest` / `NoteReadingFlowTest`（見開きの13件）
 **正本:** この文書（本文を見開きで組む形・ページの割り方・縦の流しとの位置の受け渡し）。Fold の原則と姿勢の割り当ては [fold_experience](../system/fold_experience.md)、

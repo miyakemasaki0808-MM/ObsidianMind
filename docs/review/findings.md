@@ -31,7 +31,3 @@
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-10-12-observation-device/P2-1` | ランダム・さがす・関連で開いたノートが前のノートの読んでいた位置から始まる | `統合` UI-2 |
-| `2026-10-21-fold-entry-design-review/P2-2` | ふだんの画面で読み進めてから見開きへ入ると、復元待ちの見開きの位置が一覧の位置より優先される | `起票` SPREAD-7 |
-| `2026-10-22-fold-entry-design-rereview/P2-1` | 縦の流しで適用済みの送りが、その後に指で読んだ位置より優先される | `統合` SPREAD-7 |
-| `2026-10-22-fold-entry-design-rereview/P2-2` | 見開きの留守中に解析し直すと、一覧の新しい読書位置を照らさず古い保存ブロックを採る | `統合` SPREAD-7 |
-| `2026-10-23-fold-entry-implementation-review/P2-2` | SPREAD-7 の instrumentation 3件が、画面外の段落0で一覧を探して止まる | `統合` SPREAD-7 |

@@ -1,7 +1,7 @@
 # タブ・ナビゲーション
 
-**状態:** 実装済み・稼働中。**縦の折り目のある開いた窓のレールに「見開き」タブを足した（2026-10-21、オーナー判断 → §1）。別の目と実機は未確認**
-**最終検証:** 2026-10-06 / `6b39f134`
+**状態:** 実装済み・稼働中。**縦の折り目のある開いた窓のレールに「見開き」タブを足した（2026-10-21、オーナー判断 → §1）。実機検証済み（2026-10-24）**
+**最終検証:** 2026-10-24 / `386fea2e`（見開きのタブ・戻る操作・重ねたレールのタブ）
 **関連コード:** `ui/AppScaffold.kt`（タブ定義・バー/レール切替）/ `ui/component/NoteComponents.kt`（`IconPill`）/ `MainActivity.kt`（NavHost）
 **関連テスト:** `AppScaffoldContentSlotTest` / `AppScaffoldRailTest` / androidTest: `TabNavigationTest` / `ActivityRecreationTest` / `AppScaffoldStateRestorationTest`
 **正本:** この文書

@@ -1,8 +1,8 @@
 # この部分 — 余白のペインとシート
 
 **状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった順序と面は §10）。
-**入り方の変更 — ✎ でだけ机に入り、ペインの開閉を覚えない（2026-10-21、オーナー判断 → §5.4・判断6）— は実装済み・別の目と実機は未確認**
-**最終検証:** 2026-10-11 / `ecf95dd7`
+**入り方の変更 — ✎ でだけ机に入り、ペインの開閉を覚えない（2026-10-21、オーナー判断 → §5.4・判断6）— は実装済み・実機検証済み（2026-10-24。`RM02-07` は実機未確認）**
+**最終検証:** 2026-10-24 / `386fea2e`（入り方の実機検証。分割窓で高さだけを往復する `RM02-07` は実機未確認）
 **関連コード:** 段1〜3 — `ui/screen/ReaderLayout.kt` / `ui/screen/MarginSurface.kt` / `ui/screen/MarginFace.kt` / `ui/screen/ReaderFoldState.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/MarginMemoDrafts.kt` / `ui/markdown/MarkdownRenderer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `domain/PreviousReading.kt` / `domain/markdown/NoteSections.kt` / `model/SectionRef.kt` / `model/MarginMemoDraftStore.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SectionChatState.kt` / `domain/SectionSummaries.kt` / `ui/screen/SectionSummaryRow.kt` / `controller/SectionChatController.kt` / `controller/MarginMemoController.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `data/AppPreferences.kt`。
 段5 — `controller/SideReadingController.kt` / `model/state/SideReadingState.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteStart.kt`。机の画面 — `ui/screen/DeskControls.kt` / `ui/screen/DeskSpread.kt` / `ui/AppScaffold.kt`
 **関連テスト:** 段1〜5 と机の画面 — `ReaderLayoutTest` / `DeskControlsTest` / `DeskBackdropTest` / `DiagonalGradientTest` / `DeskSpreadTest` / `AppScaffoldRailTest` / `MarginSurfaceTest` / `MarginMemoCaptionTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `PreviousReadingTest` / `SectionRefTest` / `MarginMemoControllerTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SectionChatControllerTest` / `SectionSummariesTest` / `SideReadingControllerTest` / `ThreadingScanTest` / androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`

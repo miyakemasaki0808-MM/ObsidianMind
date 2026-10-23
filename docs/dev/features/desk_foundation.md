@@ -1,8 +1,8 @@
 # 机の土台 — 補助の面で辿り、閉じても戻す
 
 **状態:** 実装済み・稼働中。右を1画面に広げて戻すと末尾に近い位置が戻らない課題が残る（→ §11）。
-**出せる窓へ戻ったら自動で机を出す形から、✎ で机を開いたときに戻す形へ替えた（2026-10-21、オーナー判断 → [fold_experience](../system/fold_experience.md) §6 の初期状態）。実装済み・別の目と実機は未確認**
-**最終検証:** 2026-10-18 / `bd9c957b`（実機。見出し無しの自己リンクと、関連の一覧への実距離の送りは手動未確認）
+**出せる窓へ戻ったら自動で机を出す形から、✎ で机を開いたときに戻す形へ替えた（2026-10-21、オーナー判断 → [fold_experience](../system/fold_experience.md) §6 の初期状態）。実装済み・実機検証済み（2026-10-24。閉じて開いた後に ✎ で同じ右のノートと位置が戻る `RM02-04`）**
+**最終検証:** 2026-10-24 / `386fea2e`（入り方の実機検証で契約4の ✎ で戻す形）。前回は 2026-10-18 / `bd9c957b`（見出し無しの自己リンクと、関連の一覧への実距離の送りは手動未確認）
 **関連コード:** `ui/screen/NoteReaderTab.kt` / `ui/screen/SideReadingPane.kt` / `ui/screen/NoteLinkActions.kt` / `ui/screen/MarginSurface.kt` / `NoteViewModel.kt` / `controller/SideReadingController.kt`
 **関連テスト:** `NoteLinkActionsTest` / `MarginSurfaceTest` / `NoteSessionCoordinatorTest` / `NoteReadingFlowTest` / `NoteLinkTapUiTest`
 **正本:** この文書（補助の面で辿る形と、窓が変わっても並べ読みを保つ形）。原則と契約は [fold_experience](../system/fold_experience.md)、
