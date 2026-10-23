@@ -49,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
+import com.example.newproject.ui.RailWidth
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
@@ -247,6 +248,15 @@ private val DeskBarElevation = 4.dp
 
 /** 帯の影が落ちる分の、帯の下の余白。 */
 private val DeskBarShadowRoom = 8.dp
+
+/**
+ * 帯の中身を右へずらす幅（dp）。**重ねて出したレールが帯の左端を隠さないよう、帯の中身をレールの右端から始める**（→ features/margin_pane.md §5.1）。
+ * [railEndDp] は外殻が測ったレールの右端、[regionStartDp] は本文領域の左端で、どちらも窓の座標。
+ * レールは最小80dpで、文字の倍率や左の Insets で広がるので、外殻が測った値を使う。外殻の無い組み立て（画面だけのテスト）と測る前は、
+ * 窓の左端から最小幅（[RailWidth]）までをレールとみなす。レールを出さない窓（Expanded でない）ではずらさない。
+ */
+internal fun deskBarRailInsetDp(expandedWidth: Boolean, railEndDp: Float?, regionStartDp: Float?): Float =
+    if (!expandedWidth) 0f else ((railEndDp ?: RailWidth.value) - (regionStartDp ?: 0f)).coerceAtLeast(0f)
 
 /**
  * 読む画面の地（[ReadingGradient]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -18,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.onRoot
@@ -44,6 +47,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
@@ -61,6 +66,9 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -1989,6 +1997,105 @@ class NoteReadingFlowTest {
         composeRule.onNode(hasSetTextAction()).assertExists()
     }
 
+    // ── 重ねて出すレールと帯（→ features/margin_pane.md §5.1）─────────────────────
+
+    /**
+     * **文字の倍率でレールが広がっても、重ねて出したレールが机の帯の左端を隠さない。** 倍率2倍でレールは最小の80dpより広がるので、
+     * 帯の中身は外殻が測ったレールの右端から始める。
+     */
+    @Test
+    fun 文字の倍率でレールが広がっても_重ねたレールが机の帯の左端を隠さない() {
+        assumeDeskWindow()
+        setShellWithBand(fontScale = 2f, spread = false)
+        assertBandStartsAtRailEnd(widened = true)
+    }
+
+    /** 見開きも同じ帯。倍率2倍では1行の字数が下限を割って見開きにならないので、見開きに入れる中で大きい倍率（1.6倍）で確かめる。 */
+    @Test
+    fun 文字の倍率でレールが広がっても_重ねたレールが見開きの帯の左端を隠さない() {
+        assumeDeskWindow()
+        setShellWithBand(fontScale = 1.6f, spread = true)
+        assertBandStartsAtRailEnd(widened = true)
+    }
+
+    /** 倍率1倍ではレールは最小の80dpのままで、帯の中身は今どおりレールの右端から始まる（見た目を変えない）。 */
+    @Test
+    fun 倍率1倍では_帯の中身は今どおりレールの右端から始まる() {
+        assumeDeskWindow()
+        setShellWithBand(fontScale = 1f, spread = false)
+        assertBandStartsAtRailEnd(widened = false)
+    }
+
+    /**
+     * 本番の外殻（[AppScaffold]）の中に、机か見開きのノートの画面を組む。外殻は帯が出ている間レールを重ねて出し、
+     * 測ったレールの右端を画面へ渡す（MainActivity と同じ配線）。箱は本番の外殻と同じく窓の左端から置く。
+     */
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+    private fun setShellWithBand(fontScale: Float, spread: Boolean) {
+        val body = if (spread) SPREAD_BODY else SHORT_TWO_SECTIONS
+        val model = buildNoteSectionModel(body)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val density = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                    PostureBox(Posture.Book, anchorStart = true) { window ->
+                        val nav = rememberNavController()
+                        var paneVisible by remember { mutableStateOf(false) }
+                        var barShown by remember { mutableStateOf(false) }
+                        var railEnd by remember { mutableStateOf<Float?>(null) }
+                        AppScaffold(
+                            windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(960.dp, 720.dp)),
+                            navController = nav,
+                            snackbarHostState = remember { SnackbarHostState() },
+                            notePaneVisible = paneVisible,
+                            noteBarShown = barShown,
+                            spreadTab = spread,
+                            spreadSelected = spread,
+                            onRailEnd = { railEnd = it }
+                        ) { modifier ->
+                            NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
+                                composable(AppDestination.Note.route) {
+                                    ReaderTab(
+                                        loadedNote(body),
+                                        model,
+                                        rememberLazyListState(),
+                                        marginPaneOpen = !spread,
+                                        window = window,
+                                        onMarginPaneVisibleChange = { paneVisible = it },
+                                        spreadSelected = spread,
+                                        onDeskBarShownChange = { barShown = it },
+                                        railEndDp = railEnd
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    /**
+     * 帯を出し、重ねて出したレールの右端と、帯の左端の文字（見出しの「Rediscover」）の左端を比べる。
+     * [widened] なら、先にレールが最小幅より広いことを確かめる — 広がっていなければ、確かめたいことが起きていない。
+     */
+    private fun assertBandStartsAtRailEnd(widened: Boolean) {
+        openDeskBar()
+        composeRule.waitForIdle()
+        val rails = composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)).fetchSemanticsNodes()
+        assertEquals("重ねて出したレールが1本ではない", 1, rails.size)
+        val rail = rails.single().boundsInRoot
+        val title = composeRule.onNodeWithText("Rediscover").fetchSemanticsNode().boundsInRoot
+        if (widened) {
+            val minRail = with(composeRule.density) { 80.dp.toPx() }
+            assertTrue("この倍率でレールが最小幅より広がっていない（幅 ${rail.width}px）", rail.width > minRail + 1f)
+            assertTrue("帯の左端がレールの下に入った（レールの右端 ${rail.right}px・帯の文字 ${title.left}px）", title.left >= rail.right - 1f)
+        } else {
+            assertEquals("倍率1倍で帯の中身の位置が変わった", rail.right, title.left, 1f)
+        }
+    }
+
     // ── 本文の見開き（→ features/note_spread.md）──────────────────────────────
 
     /** **見開きのタブを選ぶと、本文を左右2ページに組む。** 先頭は左ページ、続きは右ページに出て、どの段落も折り目をまたがない。 */
@@ -2998,15 +3105,22 @@ class NoteReadingFlowTest {
      * 縦の折り目は箱の中央に置く。折り目は窓の座標で渡すので、箱を置いて左端を測るまでは
      * 窓の情報が届く前として渡す（画面を作り直した直後と同じ）。箱の幅が替わったら、測り直すまで前の値を使わない。
      * [modifier] は大きさの後に付ける（目印の境界を箱の実寸にする）。
+     * [anchorStart] なら、窓より大きい箱も中央へ寄せず窓の左上に置く。外殻（[AppScaffold]）を本番と同じく窓の左端から組むときに使う。
      */
     @Composable
-    private fun PostureBox(posture: Posture, modifier: Modifier = Modifier, content: @Composable (TestWindow) -> Unit) {
+    private fun PostureBox(
+        posture: Posture,
+        modifier: Modifier = Modifier,
+        anchorStart: Boolean = false,
+        content: @Composable (TestWindow) -> Unit
+    ) {
         val width = if (posture == Posture.Closed) 400.dp else 960.dp
         val density = LocalDensity.current
         var placed by remember { mutableStateOf<Pair<Dp, Float>?>(null) }
         val startDp = placed?.takeIf { it.first == width }?.second
         Box(
             modifier = Modifier
+                .then(if (anchorStart) Modifier.wrapContentSize(Alignment.TopStart, unbounded = true) else Modifier)
                 .requiredSize(width = width, height = 720.dp)
                 .then(modifier)
                 .onGloballyPositioned { placed = width to with(density) { it.positionInWindow().x.toDp().value } }
@@ -3057,7 +3171,10 @@ class NoteReadingFlowTest {
         // ペインの開閉と読む形は外殻（ViewModel）が持つ。ここでは呼び出したテストが持ち、窓が替わったときの外殻の戻しもテストが行う。
         onSetMarginPaneOpen: (Boolean) -> Unit = {},
         spreadSelected: Boolean = false,
-        onSelectSpread: (Boolean) -> Unit = {}
+        onSelectSpread: (Boolean) -> Unit = {},
+        // 外殻と組むテストだけが渡す（→ setShellWithBand）。
+        onDeskBarShownChange: (Boolean) -> Unit = {},
+        railEndDp: Float? = null
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -3085,6 +3202,8 @@ class NoteReadingFlowTest {
             spreadSelected = spreadSelected,
             onSelectSpread = onSelectSpread,
             onMarginPaneVisibleChange = onMarginPaneVisibleChange,
+            onDeskBarShownChange = onDeskBarShownChange,
+            railEndDp = railEndDp,
             memoDraft = MarginMemoDraft(),
             onEditMarginMemo = { _, _ -> },
             onSubmitMarginMemo = {},

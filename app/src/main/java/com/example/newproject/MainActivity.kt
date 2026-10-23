@@ -154,6 +154,8 @@ class MainActivity : ComponentActivity() {
                 val foldInfo = rememberReaderFold()
                 var readerRegion by remember { mutableStateOf<ReaderRegion?>(null) }
                 val readerWindow = readerWindowFor(readerRegion, expandedWidth, foldInfo)
+                // レールの右端。机と見開きで重ねて出すレールの分だけ、帯の中身をずらすのに使う（→ deskBarRailInsetDp）。
+                var railEndDp by remember { mutableStateOf<Float?>(null) }
                 // **机と見開きは、出せない窓では閉じ、出せる窓へ戻っても開かない**（→ features/fold_experience.md §6 の初期状態）。
                 // ノートの画面が組まれていない間（ほかのタブ）に窓が替わっても効くよう、ここで行う。閉じても並べ読みは終えない。
                 ReaderWindowEffect(readerWindow, ReaderChoice(marginPaneOpen, spreadSelected)) { next ->
@@ -200,7 +202,8 @@ class MainActivity : ComponentActivity() {
                         viewModel.setMarginPaneOpen(tap.choice.paneOpen)
                         viewModel.setSpreadSelected(tap.choice.spreadSelected)
                     },
-                    onReaderRegion = { readerRegion = it }
+                    onReaderRegion = { readerRegion = it },
+                    onRailEnd = { railEndDp = it }
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -253,6 +256,7 @@ class MainActivity : ComponentActivity() {
                                 expandedWidth = expandedWidth,
                                 foldInfo = foldInfo,
                                 readerWindow = readerWindow,
+                                railEndDp = railEndDp,
                                 spreadSelected = spreadSelected,
                                 onSelectSpread = { viewModel.setSpreadSelected(it) },
                                 onMarginPaneVisibleChange = { notePaneVisible = it },

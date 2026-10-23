@@ -74,7 +74,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import com.example.newproject.ui.RailWidth
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -181,6 +180,11 @@ internal fun NoteReaderTab(
      * 外殻の無い組み立て（画面だけのテスト）と、値が揃う前は、この画面の本文領域で決める。
      */
     readerWindow: ReaderWindow? = null,
+    /**
+     * 外殻が測ったレールの右端（窓の座標、dp）。机と見開きで重ねて出すレールが帯の中身を隠さないよう、帯の中身をここから始める
+     * （→ [deskBarRailInsetDp]）。外殻の無い組み立てと測る前は null。
+     */
+    railEndDp: Float? = null,
     /** 読む形が見開きか（レールの見開きのタブ → features/note_spread.md §5「見開きのタブ」）。選んでいなければ見開きにしない。 */
     spreadSelected: Boolean = false,
     /** 読む形を替える。見開きの戻る操作でノートのタブへ戻すのに使う。 */
@@ -585,8 +589,8 @@ internal fun NoteReaderTab(
                 deskBarShown = false
             }
         }
-        // 重ねて出すレールが帯の中身を隠さないよう、帯の中身をその分だけ右から始める（窓の左端からレールの幅まで）。
-        val railInset = if (expandedWidth) (RailWidth - (regionStartDp ?: 0f).dp).coerceAtLeast(0.dp) else 0.dp
+        // 重ねて出すレールが帯の中身を隠さないよう、帯の中身をレールの右端から始める。
+        val railInset = deskBarRailInsetDp(expandedWidth, railEndDp, regionStartDp).dp
         var deskSpread by remember(paneVisible, currentNoteUri) { mutableStateOf(DeskSpread.Both) }
         // ペインの余白の面のスクロール。余白を1画面に広げて戻したときに位置を戻すため外で持つ（→ RestoreSupportingScroll）。
         // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
