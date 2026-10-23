@@ -22,6 +22,7 @@ import com.example.newproject.ui.screen.anchorAfterTurn
 import com.example.newproject.ui.screen.maxBlockChars
 import com.example.newproject.ui.screen.paginateSpread
 import com.example.newproject.ui.screen.reconcileSpreadReading
+import com.example.newproject.ui.screen.restoreSpreadReading
 import com.example.newproject.ui.screen.splitTableRow
 import com.example.newproject.ui.screen.spreadAllowed
 import com.example.newproject.ui.screen.spreadCount
@@ -29,6 +30,7 @@ import com.example.newproject.ui.screen.spreadIndexOf
 import com.example.newproject.ui.screen.spreadProgress
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -313,6 +315,70 @@ class SpreadPaginationTest {
         assertEquals(SpreadAnchor(1), reconcileSpreadReading(saved, "a", parse = 2, blockCount = 2, port, seen, list).anchor)
         val sent = BodyPositionRequest(4, 8, BodyPositionSource.External)
         assertEquals(SpreadAnchor(8), reconcileSpreadReading(saved, "a", parse = 2, blockCount = 10, port, sent, list).anchor)
+    }
+
+    /**
+     * **保存値を戻すとき、ブロックはいつも一覧から取る**（→ features/note_spread.md §8 判断14）。保存値は見開きを組むまで消費されずに残るので、
+     * その間にふだんの画面で読み進めた位置を、要求の番号や解析結果で「未処理」と見て古いほうへ戻さない。設計レビュー2回の順序を具体値で固定する。
+     */
+    @Test
+    fun `保存値を戻すときは一覧のブロックから始め、条件を満たすときだけ文字の位置を借りる`() {
+        val port = 7L
+        val saved = SpreadReading("a", SpreadAnchor(40, charOffset = 120), parse = 1, port, seenRequest = 3)
+        val turned = BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn)
+        fun restore(listBlock: Int, request: BodyPositionRequest = turned, parse: Int = 1, blockCount: Int = 200, at: Long = port): SpreadAnchor {
+            val base = restoreSpreadReading(saved, "a", parse, blockCount, at, request) { listBlock }
+            return reconcileSpreadReading(base, "a", parse, blockCount, at, request) { listBlock }.anchor
+        }
+
+        // ふだんの画面で指で100まで読んだ（口を通らない）。
+        assertEquals(SpreadAnchor(100), restore(listBlock = 100))
+        // 縦の流しでリンクの送り（ブロック10）を適用した後に、指で100まで読んだ。送りは見開きにとって未処理でも、一覧のほうが新しい。
+        assertEquals(SpreadAnchor(100), restore(listBlock = 100, request = BodyPositionRequest(4, 10, BodyPositionSource.External)))
+        // 留守の間に同じノートを解析し直し、その後に指で100まで読んだ。
+        assertEquals(SpreadAnchor(100), restore(listBlock = 100, parse = 2))
+        // 見開きへ直接戻った（一覧は見開きが書き戻した40のまま）。文字の位置まで保つ。口を作り直した復元も同じ。
+        assertEquals(SpreadAnchor(40, 120), restore(listBlock = 40))
+        assertEquals(SpreadAnchor(40, 120), restore(listBlock = 40, request = BodyPositionRequest(FIRST_BODY_REQUEST, 40, BodyPositionSource.External), at = 9L))
+        // 同じブロックへの新しい外からの送り（口は送りと一覧を同時に書く）。文字の位置は0。
+        assertEquals(SpreadAnchor(40), restore(listBlock = 40, request = BodyPositionRequest(4, 40, BodyPositionSource.External)))
+        // 全画面からの送り・同じノートを先頭で開き直す送りは、一覧も送り先になっているので送り先から。
+        assertEquals(SpreadAnchor(100), restore(listBlock = 100, request = BodyPositionRequest(4, 100, BodyPositionSource.External)))
+        assertEquals(SpreadAnchor(0), restore(listBlock = 0, request = BodyPositionRequest(4, 0, BodyPositionSource.External)))
+        // 解析し直しで同じブロックに留まっても、文字の位置は古い表示文字列のものなので0。
+        assertEquals(SpreadAnchor(40), restore(listBlock = 40, parse = 2))
+        // 一覧がブロックの数を超えていれば範囲に収める。
+        assertEquals(SpreadAnchor(1), restore(listBlock = 3, parse = 2, blockCount = 2))
+    }
+
+    /** 戻すときの規則は、見開きを組み始めたときだけ。保存値が無い・別のノートのときは照合に任せ、戻した値をもう一度照らしても替わらない。 */
+    @Test
+    fun `保存値を戻す規則は、保存値が無いか別のノートなら照合に任せる`() {
+        val port = 7L
+        val saved = SpreadReading("a", SpreadAnchor(40, charOffset = 120), parse = 1, port, seenRequest = 3)
+        val request = BodyPositionRequest(3, 40, BodyPositionSource.SpreadTurn)
+        assertNull(restoreSpreadReading(null, "a", 1, 200, port, request) { 100 })
+        assertSame(saved, restoreSpreadReading(saved, "b", 1, 200, port, request) { 100 })
+        assertSame(saved, restoreSpreadReading(saved, "a", 1, 200, port, request) { 40 })
+        val restored = restoreSpreadReading(saved, "a", 1, 200, port, request) { 100 }
+        assertSame(restored, reconcileSpreadReading(restored, "a", 1, 200, port, request) { 100 })
+    }
+
+    /**
+     * 見開きを出している間に解析し直しで読む位置を範囲へ収めると（3→1）、見開きは一覧へ書き戻す。めくらずに離れて直接戻ると (1, 0)。
+     * 書き戻しが無くても、戻すときの規則が範囲に収めるので古い3へは戻らない。
+     */
+    @Test
+    fun `表示中に範囲へ収めた読む位置は、離れて直接戻っても保つ`() {
+        val port = 7L
+        val shown = SpreadReading("a", SpreadAnchor(3, charOffset = 120), parse = 1, port, seenRequest = 3)
+        val request = BodyPositionRequest(3, 3, BodyPositionSource.SpreadTurn)
+        val clamped = reconcileSpreadReading(shown, "a", parse = 2, blockCount = 2, port, request) { 3 }
+        assertEquals(SpreadAnchor(1), clamped.anchor)
+        val written = BodyPositionRequest(4, 1, BodyPositionSource.SpreadTurn)
+        val back = restoreSpreadReading(clamped.copy(seenRequest = 4), "a", 2, 2, port, written) { 1 }
+        assertEquals(SpreadAnchor(1), back?.anchor)
+        assertEquals(SpreadAnchor(1), restoreSpreadReading(clamped, "a", 2, 2, port, request) { 3 }?.anchor)
     }
 
     @Test

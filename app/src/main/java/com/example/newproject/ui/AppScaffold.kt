@@ -6,10 +6,18 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.screen.DESK_BAR_HIDE_MILLIS
 import com.example.newproject.ui.screen.DESK_MOTION_MILLIS
+import com.example.newproject.ui.screen.ReaderChoice
+import com.example.newproject.ui.screen.ReaderRegion
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.BadgedBox
@@ -32,6 +40,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layoutId
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,7 +56,7 @@ import com.example.newproject.ui.theme.NavBar
 import com.example.newproject.ui.theme.NavIndicator
 import com.example.newproject.ui.theme.OnVibrant
 
-/** トップレベルのタブ。route は NavHost のルート名と一致させる。 */
+/** トップレベルのタブ。route は NavHost のルート名と一致させる。**行き先の単一の定義元**で、見開きはここに足さない（→ [RailItem]）。 */
 enum class AppDestination(val route: String, val label: String, val emoji: String) {
     Note("note", "ノート", "📄"),
     Search("search", "さがす", "🔎"),
@@ -54,10 +66,49 @@ enum class AppDestination(val route: String, val label: String, val emoji: Strin
 }
 
 /**
+ * レールの項目。行き先のタブと、ノートの行き先の中の読む形を選ぶ「見開き」（→ features/note_spread.md §8 判断13）。
+ * 見開きは NavHost の行き先ではない — ノートのタブと本文の一覧の状態と位置の口を1組のまま共有する。
+ */
+internal sealed interface RailItem {
+    data class Tab(val destination: AppDestination) : RailItem
+    data object Spread : RailItem
+}
+
+/** 見開きのタブの名前と記号。冊子のボタンは 📚 を使う（→ features/note_spread.md §5「見開きのタブ」）。 */
+internal const val SPREAD_TAB_LABEL = "見開き"
+internal const val SPREAD_TAB_EMOJI = "📖"
+
+/** レールの並び。**見開きは「ノート」のすぐ下で、見開きのタブを出す窓だけ**（→ `canShowSpreadTab`）。下のバーは行き先の5つのまま。 */
+internal fun railItems(spreadTab: Boolean): List<RailItem> = AppDestination.entries.flatMap { dest ->
+    if (dest == AppDestination.Note && spreadTab) listOf(RailItem.Tab(dest), RailItem.Spread) else listOf(RailItem.Tab(dest))
+}
+
+/** レールで選んでいる項目か。ノートの行き先では、読む形が見開きなら見開き、そうでなければノート。 */
+internal fun railItemSelected(item: RailItem, currentRoute: String?, spreadChosen: Boolean): Boolean = when (item) {
+    is RailItem.Tab -> currentRoute == item.destination.route && !(item.destination == AppDestination.Note && spreadChosen)
+    RailItem.Spread -> currentRoute == AppDestination.Note.route && spreadChosen
+}
+
+/** レールで「ノート」か「見開き」を押した後の選択（→ [readerChoiceAfterRailTap]）。[closesDesk] は利用者が机をしまったか（並べ読みも終える）。 */
+internal data class RailTap(val choice: ReaderChoice, val closesDesk: Boolean)
+
+/**
+ * レールの「ノート」（[spread] が偽）か「見開き」を押した。読む形をそれに替える。
+ * **ノートの行き先で押したら机をしまう**（重ねたレールは机と見開きの帯にだけ出る → features/margin_pane.md §5.4）。✎ でしまうのと同じ扱いで、並べ読みも終える。
+ * ほかのタブから押したときは机の開閉を変えない — ほかのタブとの往復では机へ戻る。
+ */
+internal fun readerChoiceAfterRailTap(choice: ReaderChoice, spread: Boolean, fromNoteRoute: Boolean): RailTap {
+    val closesDesk = fromNoteRoute && choice.paneOpen
+    return RailTap(ReaderChoice(paneOpen = choice.paneOpen && !closesDesk, spreadSelected = spread), closesDesk)
+}
+
+/**
  * 画面幅に応じてタブUIを切り替えるアプリの外殻。
  * Expanded（Fold展開など）は左サイドの NavigationRail、それ以外は下部の NavigationBar。
  * タブ以外のルート（全画面・冊子など）ではバー/レールを出さない。
  * ノートタブで机の形（余白ペイン・本文の見開き）が出ている間はレールを畳み、帯が出ている間だけ重ねて出す（→ [showsRail]・[overlaysRail]）。
+ * 縦の折り目のある開いた窓のレールには、ノートのすぐ下に見開きのタブを足す（→ [railItems]）。本文領域を測る見えない箱も置き、
+ * ペインを出せる窓と見開きのタブを出す窓はその寸法で決める（→ [ReaderRegion]）。
  *
  * **[content] は、どの形でも「最初の子」として同じ位置で呼ぶ。** `rememberSaveable` は呼び出し位置で保存先を
  * 決め、その位置には**前にある兄弟グループの数**も入る。形ごとに呼ぶ場所を分けたり、条件付きのレールを前に
@@ -81,18 +132,42 @@ internal fun AppScaffold(
     noteBarShown: Boolean = false,
     /** 重ねて出したレールでタブを押した。帯をしまわせる。 */
     onOverlayRailTab: () -> Unit = {},
+    /** レールに見開きのタブを出す窓か（→ `canShowSpreadTab`）。 */
+    spreadTab: Boolean = false,
+    /** ノートの行き先の読む形が見開きか。 */
+    spreadSelected: Boolean = false,
+    /** レールの「ノート」（偽）か「見開き」（真）を押した。[fromNoteRoute] はノートの行き先で押したか（→ [readerChoiceAfterRailTap]）。 */
+    onSelectReading: (spread: Boolean, fromNoteRoute: Boolean) -> Unit = { _, _ -> },
+    /** 本文領域を測った（→ [ReaderRegion]）。ペインを出せる窓と見開きのタブを出す窓は、外殻がこれで決める。 */
+    onReaderRegion: (ReaderRegion) -> Unit = {},
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val isTabRoute = AppDestination.entries.any { it.route == currentRoute }
     val useRail = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
+    val items = railItems(spreadTab)
+    val spreadChosen = spreadSelected && spreadTab
+    val selectRailItem: (RailItem) -> Unit = { item ->
+        val onNote = currentRoute == AppDestination.Note.route
+        when (item) {
+            is RailItem.Tab -> {
+                if (item.destination == AppDestination.Note) onSelectReading(false, onNote)
+                navController.navigateToTab(item.destination)
+            }
+            RailItem.Spread -> {
+                onSelectReading(true, onNote)
+                navController.navigateToTab(AppDestination.Note)
+            }
+        }
+    }
+    val density = LocalDensity.current
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScaffoldLayout(
             body = { content(Modifier.fillMaxSize()) },
             rail = if (showsRail(isTabRoute, useRail, currentRoute, notePaneVisible)) {
-                { TabRail(currentRoute) { dest -> navController.navigateToTab(dest) } }
+                { TabRail(items, currentRoute, spreadChosen, selectRailItem) }
             } else null,
             // 帯と同時に、左の縁から滑り込む（→ features/note_spread.md §8 判断3）。しまうのも帯と同じ速さ。
             overlayRail = if (isTabRoute && useRail && currentRoute == AppDestination.Note.route) {
@@ -108,9 +183,9 @@ internal fun AppScaffold(
                             animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
                         )
                     ) {
-                        TabRail(currentRoute) { dest ->
+                        TabRail(items, currentRoute, spreadChosen) { item ->
                             onOverlayRailTab()
-                            navController.navigateToTab(dest)
+                            selectRailItem(item)
                         }
                     }
                 }
@@ -122,7 +197,7 @@ internal fun AppScaffold(
                             NavigationBarItem(
                                 selected = currentRoute == dest.route,
                                 onClick = { navController.navigateToTab(dest) },
-                                icon = { TabIcon(dest) },
+                                icon = { TabIcon(dest.emoji) },
                                 label = { TabLabel(dest.label) },
                                 colors = NavigationBarItemDefaults.colors(
                                     selectedIconColor = OnVibrant,
@@ -135,7 +210,32 @@ internal fun AppScaffold(
                         }
                     }
                 }
-            } else null
+            } else null,
+            // レールを出していない間（机・見開き・タブ以外のルート）も、出したときと同じ項目のレールを見えないまま組んで幅だけ測る。
+            // 定数の80dpでは足りない — レールは最小80dpで、ラベルの幅（文字の倍率）や左の Insets で広がる（→ features/margin_pane.md §5.4）。
+            railMeasure = if (useRail) {
+                { TabRail(items, currentRoute, spreadChosen) {} }
+            } else null,
+            // ノートの画面と同じ取り方で本文領域を測る（レールがある状態・キーボードを除く → features/margin_pane.md §5.4）。
+            probe = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
+                        .screenContentPadding()
+                        .onGloballyPositioned { coordinates ->
+                            with(density) {
+                                onReaderRegion(
+                                    ReaderRegion(
+                                        widthDp = coordinates.size.width.toDp().value,
+                                        heightDp = coordinates.size.height.toDp().value,
+                                        startDp = coordinates.positionInWindow().x.toDp().value
+                                    )
+                                )
+                            }
+                        }
+                )
+            }
         )
 
         SnackbarHost(
@@ -167,14 +267,14 @@ internal fun overlaysRail(isTabRoute: Boolean, useRail: Boolean, currentRoute: S
 internal val RailWidth = 80.dp
 
 @Composable
-private fun TabRail(currentRoute: String?, onSelect: (AppDestination) -> Unit) {
+private fun TabRail(items: List<RailItem>, currentRoute: String?, spreadChosen: Boolean, onSelect: (RailItem) -> Unit) {
     NavigationRail(containerColor = NavBar) {
-        AppDestination.entries.forEach { dest ->
+        items.forEach { item ->
             NavigationRailItem(
-                selected = currentRoute == dest.route,
-                onClick = { onSelect(dest) },
-                icon = { TabIcon(dest) },
-                label = { TabLabel(dest.label) },
+                selected = railItemSelected(item, currentRoute, spreadChosen),
+                onClick = { onSelect(item) },
+                icon = { TabIcon(if (item is RailItem.Tab) item.destination.emoji else SPREAD_TAB_EMOJI) },
+                label = { TabLabel(if (item is RailItem.Tab) item.destination.label else SPREAD_TAB_LABEL) },
                 colors = NavigationRailItemDefaults.colors(
                     selectedIconColor = OnVibrant,
                     selectedTextColor = OnVibrant,
@@ -191,13 +291,17 @@ private fun TabRail(currentRoute: String?, onSelect: (AppDestination) -> Unit) {
  * 左にレール、下にバー、残りに本文を置く。**組み立ての順は本文が先**で、並べる位置だけをここで決める
  * （→ [AppScaffold]）。レールとバーはどちらか一方か、どちらも無い。
  * 重ねるレール（[overlayRail]）は本文の幅を取らず、本文の上の左端に置く。
+ * [probe] は本文領域を測る見えない箱で、**レールの有無によらずレールがある状態の位置と幅**に置く。レールを出していない間は
+ * [railMeasure]（同じ項目のレール）を測るだけ測って置かず、その幅を除く。
  */
 @Composable
 private fun ScaffoldLayout(
     body: @Composable () -> Unit,
     rail: (@Composable () -> Unit)?,
     overlayRail: (@Composable () -> Unit)?,
-    bottomBar: (@Composable () -> Unit)?
+    bottomBar: (@Composable () -> Unit)?,
+    railMeasure: (@Composable () -> Unit)?,
+    probe: @Composable () -> Unit
 ) {
     Layout(
         content = {
@@ -205,6 +309,11 @@ private fun ScaffoldLayout(
             if (rail != null) Box(modifier = Modifier.layoutId(SLOT_RAIL)) { rail() }
             if (bottomBar != null) Box(modifier = Modifier.layoutId(SLOT_BAR)) { bottomBar() }
             if (overlayRail != null) Box(modifier = Modifier.layoutId(SLOT_OVERLAY_RAIL)) { overlayRail() }
+            if (rail == null && railMeasure != null) {
+                // 測るだけで置かない（描かず、指も受けない）。読み上げにも出さない。
+                Box(modifier = Modifier.layoutId(SLOT_RAIL_MEASURE).clearAndSetSemantics {}) { railMeasure() }
+            }
+            Box(modifier = Modifier.layoutId(SLOT_PROBE)) { probe() }
         },
         modifier = Modifier.fillMaxSize()
     ) { measurables, constraints ->
@@ -220,7 +329,15 @@ private fun ScaffoldLayout(
             .measure(Constraints.fixed((width - railWidth).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         val overlayPlaceable = measurables.firstOrNull { it.layoutId == SLOT_OVERLAY_RAIL }
             ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))
+        // レールがある状態の幅。出しているレールがあればその幅、無ければ見えないまま組んだレールの幅（どちらも同じ項目）。
+        val probeRail = railPlaceable?.width
+            ?: measurables.firstOrNull { it.layoutId == SLOT_RAIL_MEASURE }
+                ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))?.width
+            ?: 0
+        val probePlaceable = measurables.first { it.layoutId == SLOT_PROBE }
+            .measure(Constraints.fixed((width - probeRail).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         layout(width, height) {
+            probePlaceable.placeRelative(probeRail, 0)
             railPlaceable?.placeRelative(0, 0)
             contentPlaceable.placeRelative(railWidth, 0)
             barPlaceable?.placeRelative(0, height - barHeight)
@@ -234,11 +351,13 @@ private const val SLOT_CONTENT = "content"
 private const val SLOT_RAIL = "rail"
 private const val SLOT_BAR = "bar"
 private const val SLOT_OVERLAY_RAIL = "overlayRail"
+private const val SLOT_PROBE = "probe"
+private const val SLOT_RAIL_MEASURE = "railMeasure"
 
 /** AIタブの意味は常に✨のまま保つ。 */
 @Composable
-private fun TabIcon(dest: AppDestination) {
-    Text(dest.emoji, fontSize = 20.sp)
+private fun TabIcon(emoji: String) {
+    Text(emoji, fontSize = 20.sp)
 }
 
 @Composable

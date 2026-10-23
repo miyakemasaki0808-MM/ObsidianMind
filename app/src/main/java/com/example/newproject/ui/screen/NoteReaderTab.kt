@@ -162,7 +162,10 @@ internal fun NoteReaderTab(
     onOpenMarginMemo: () -> Unit,
     /** 余白ペインが出ている間、このノートのメモを持たせる。読み込み済みなら何もしない。 */
     onLoadMarginMemoForPane: () -> Unit,
-    /** 余白ペインの開閉の設定。端末に残り、再起動をまたいで保つ。 */
+    /**
+     * 余白ペインの開閉。**端末に保存しない** — 開くのは ✎ と別のノートへのリンクだけで、出せない窓へ移ったら外殻が閉じる
+     * （→ features/margin_pane.md §5.4）。外殻が閉じても並べ読みは終えない。
+     */
     marginPaneOpen: Boolean,
     onSetMarginPaneOpen: (Boolean) -> Unit,
     /** 窓の横幅が Expanded か。折り目の無い広い窓でペインを出すかを決める。 */
@@ -172,6 +175,16 @@ internal fun NoteReaderTab(
      * 端末の持ち方によらず自分で決めた折り目で机を組む（→ system/instrumentation_testing.md 判断12）。
      */
     foldInfo: ReaderFoldInfo,
+    /**
+     * 外殻が観測した窓の値（→ [readerWindowFor]）。**ペインを出せるかはこの値で決め、この画面で測り直した可否を使わない** —
+     * 閉じる判定と同じ値を読まないと、片方だけが出せると決めて机が残る（→ features/margin_pane.md §5.4）。
+     * 外殻の無い組み立て（画面だけのテスト）と、値が揃う前は、この画面の本文領域で決める。
+     */
+    readerWindow: ReaderWindow? = null,
+    /** 読む形が見開きか（レールの見開きのタブ → features/note_spread.md §5「見開きのタブ」）。選んでいなければ見開きにしない。 */
+    spreadSelected: Boolean = false,
+    /** 読む形を替える。見開きの戻る操作でノートのタブへ戻すのに使う。 */
+    onSelectSpread: (Boolean) -> Unit = {},
     /** 机の形（余白ペイン・本文の見開き）が出ているかを外殻へ知らせる。出ている間、外殻はタブのレールを畳む（→ `showsRail`）。 */
     onMarginPaneVisibleChange: (Boolean) -> Unit,
     /** 机の形の帯が出ているかを外殻へ知らせる。出ている間、外殻はレールを重ねて出す（→ `overlaysRail`）。 */
@@ -327,13 +340,17 @@ internal fun NoteReaderTab(
     val density = LocalDensity.current
     val focusManager = LocalFocusManager.current
     val deskBackdrop = remember { DeskBackdrop() }
+    // 利用者が机をしまう。**並べ読みを終えるのはこの操作だけ** — 外殻が窓のせいでペインを閉じたときは終えず、✎ で開けば同じ配置で戻る
+    // （→ features/margin_pane.md §5.4・features/desk_foundation.md §5）。重ねたレールのタブで机をしまうときは外殻が同じことをする。
+    val closeDesk: () -> Unit = {
+        onMemoFocusIntentChange(false)
+        onSetMarginPaneOpen(false)
+        if (reading) onCloseSideReading()
+    }
     val onMemoToggle: (MarginToggle) -> Unit = { toggle ->
         when (toggle) {
             MarginToggle.HideSheet -> dismissMemoSheet()
-            MarginToggle.ClosePane -> {
-                onMemoFocusIntentChange(false)
-                onSetMarginPaneOpen(false)
-            }
+            MarginToggle.ClosePane -> closeDesk()
             MarginToggle.OpenPane -> onSetMarginPaneOpen(true)
             MarginToggle.ShowSheet -> onOpenMarginMemo()
         }
@@ -520,13 +537,15 @@ internal fun NoteReaderTab(
             }
     ) {
         val sideColumnWidth = sideColumnWidthDp(maxWidth.value).dp
-        val canShowPane = canShowMarginPane(
+        val sharedWindow = readerWindow?.takeIf { it.known }
+        val canShowPane = sharedWindow?.canShowPane ?: canShowMarginPane(
             widthDp = maxWidth.value,
             heightDp = maxHeight.value,
             expandedWidth = expandedWidth,
             fold = foldInfo.fold,
             regionStartDp = regionStartDp ?: 0f
         )
+        val spreadFit = spreadFitFor(spreadSelected, hasNote, spreadBlockChars, density.fontScale)
         val layout = readerLayoutFor(
             widthDp = maxWidth.value,
             heightDp = maxHeight.value,
@@ -535,8 +554,14 @@ internal fun NoteReaderTab(
             expandedWidth = expandedWidth,
             fold = foldInfo.fold,
             regionStartDp = regionStartDp ?: 0f,
-            spread = spreadBlockChars?.takeIf { hasNote }?.let { SpreadFit(density.fontScale, it) }
+            spread = spreadFit
         )
+        // 見開きを選んでいるのに、本文の側の条件を欠いて縦の流しにしたとき、その理由（→ features/note_spread.md §5「見開きにできないノート」）。
+        val spreadRefusal = if (layout == ReaderLayout.Stacked) {
+            spreadRefusalFor(maxWidth.value, maxHeight.value, foldInfo.fold, regionStartDp ?: 0f, spreadFit)
+        } else {
+            null
+        }
         val paneVisible = layout is ReaderLayout.MarginPane
         // 本文の見開き（→ features/note_spread.md）。机と同じく、つまみで帯を呼び、外殻はレールを畳む。
         val spreadVisible = layout is ReaderLayout.Spread
@@ -602,7 +627,7 @@ internal fun NoteReaderTab(
             when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = canShowPane)) {
                 is NoteLinkAction.ScrollCurrent -> scrollCurrentTo(action.heading)
                 is NoteLinkAction.Open -> if (action.onSupporting) {
-                    // ペインを閉じていれば ✎ と同じく開き（設定に残る）、本文だけにしていれば2面へ戻す。
+                    // ペインを閉じていれば ✎ と同じく開き（端末には残さない）、本文だけにしていれば2面へ戻す。
                     if (!marginPaneOpen) onSetMarginPaneOpen(true)
                     if (paneVisible) showDeskFace(DeskFace.Supporting)
                     sideFromLink = true
@@ -714,10 +739,11 @@ internal fun NoteReaderTab(
         LaunchedEffect(windowKnown, paneVisible, spreadVisible) {
             if (windowKnown) currentOnMarginPaneVisibleChange(paneVisible || spreadVisible)
         }
-        // ペインの設定を閉じたら並べ読みを終える。**窓が変わっただけでは終えない** — ペインを出せない窓の間は隠しておき、
-        // 出せる窓へ戻ったら同じノートを出す（→ endsSideReading）。余白のシートを開いたときは調停側が終える。
-        LaunchedEffect(reading, marginPaneOpen) {
-            if (endsSideReading(reading, marginPaneOpen)) onCloseSideReading()
+        // 見開きのタブでは、戻る操作でノートのタブへ戻る（→ features/note_spread.md §5「見開きのタブ」）。内側（帯・1画面・並べ読み）が先に効くよう、
+        // それらより前に置く。見開きから入った机では、内側を閉じた後に机をしまってノートのタブへ戻る（レールの「ノート」と同じ）。
+        BackHandler(enabled = spreadSelected) {
+            if (paneVisible) closeDesk()
+            onSelectSpread(false)
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }
@@ -734,7 +760,8 @@ internal fun NoteReaderTab(
             if (dropsHiddenSheet(windowKnown, paneVisible, uiState.isMarginMemoSheetVisible)) onDismissMarginMemo()
         }
         MarginWindowShiftEffect(
-            windowKnown = windowKnown,
+            // 外殻の値を使うときは、その値も揃ってから判定する。
+            windowKnown = windowKnown && readerWindow?.known != false,
             canShowPane = canShowPane,
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
@@ -793,6 +820,7 @@ internal fun NoteReaderTab(
                     when (layout) {
                         ReaderLayout.Stacked -> Column(modifier = Modifier.fillMaxSize()) {
                             if (!hideControls) controls(memoToggle, openSummary, ControlsPlace.Top) {}
+                            if (spreadRefusal != null) SpreadRefusalLine(spreadRefusal)
                             if (!hasNote) {
                                 emptyNote()
                                 // 余りをカードではなく余白へ逃がす。
@@ -1046,7 +1074,13 @@ private fun MarginWindowShiftEffect(
     onShowSheet: () -> Unit
 ) {
     var previousCanShowPane by rememberSaveable { mutableStateOf<Boolean?>(null) }
-    val currentPaneOpen by rememberUpdatedState(paneOpen)
+    // **出せる窓で最後に見たペインの開閉。** 出せない窓へ移ると外殻がペインを閉じるので、移った時点の開閉ではなく移る前の開閉で決める。
+    // 作り直しとほかのタブとの往復をまたいで保つ（ほかのタブにいる間に窓が替わっても、戻ったときに書きかけをシートへ移す）。
+    var paneOpenWhenShowable by rememberSaveable { mutableStateOf(false) }
+    if (windowKnown && canShowPane && paneOpenWhenShowable != paneOpen) {
+        SideEffect { paneOpenWhenShowable = paneOpen }
+    }
+    val currentPaneOpen by rememberUpdatedState(if (canShowPane) paneOpen else paneOpenWhenShowable)
     val currentSheetVisible by rememberUpdatedState(sheetVisible)
     val currentWriting by rememberUpdatedState(writing)
     val currentOnHideSheet by rememberUpdatedState(onHideSheet)
@@ -1185,8 +1219,29 @@ private fun NoteActionButtons(
             border = outline,
             shape = RoundedCornerShape(24.dp)
         ) {
-            Text("📖", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
+            Text("📚", fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
         }
+    }
+}
+
+/**
+ * 見開きを選んでいるのに縦の流しで出すときの1行（→ features/note_spread.md §5「見開きにできないノート」）。
+ * タブは選んだままなので、なぜ見開きでないかをここで言う。次のノートが条件を満たせば見開きに戻る。
+ */
+@Composable
+private fun SpreadRefusalLine(refusal: SpreadRefusal) {
+    Surface(
+        color = PanelChip,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 12.dp)
+    ) {
+        Text(
+            text = spreadRefusalText(refusal),
+            color = OnSurface,
+            fontSize = 13.sp,
+            lineHeight = 18.sp,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        )
     }
 }
 

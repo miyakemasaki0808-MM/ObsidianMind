@@ -291,7 +291,7 @@ class BookletScreenTest {
         )
 
         composeRule.onNodeWithText("読書について.mdから編む").assertIsNotEnabled()
-        // **待てば編める、と読ませない。** 種は📖を押した一瞬のコピーなので、
+        // **待てば編める、と読ませない。** 種は📚を押した一瞬のコピーなので、
         // 開いたまま待っても編めるようにはならない（→ booklet_mode 判断12）。
         composeRule.onNodeWithText("関連ノートをまだ探しています。冊子を開き直すと編めます。").assertIsDisplayed()
     }

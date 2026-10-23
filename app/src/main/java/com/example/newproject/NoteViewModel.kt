@@ -150,8 +150,11 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
-    private val mutableMarginPaneOpen = MutableStateFlow(preferences.marginPaneOpen)
+    private val mutableMarginPaneOpen = MutableStateFlow(false)
     val marginPaneOpen: StateFlow<Boolean> = mutableMarginPaneOpen.asStateFlow()
+
+    private val mutableSpreadSelected = MutableStateFlow(false)
+    val spreadSelected: StateFlow<Boolean> = mutableSpreadSelected.asStateFlow()
 
     /**
      * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
@@ -211,13 +214,20 @@ class NoteViewModel internal constructor(
     }
 
     /**
-     * 余白ペインの開閉。**ノートの状態ではなく端末の設定**なので `NoteUiState` に入れない
-     * （ノートを替えても、Fold を閉じて開いても保つ → features/margin_pane.md §5.4）。
+     * 余白ペインの開閉。**端末に保存しない** — 起動し直すと閉じていて、出せない窓へ移ったら外殻が閉じる
+     * （→ features/margin_pane.md §5.4・features/fold_experience.md §6 の初期状態）。ノート単位ではないので
+     * `NoteUiState` にも契約2箇所にも載せない（ノートを替えても机は閉じない）。Activity の作り直しはまたぐ。
      */
     fun setMarginPaneOpen(open: Boolean) {
-        if (mutableMarginPaneOpen.value == open) return
-        preferences.marginPaneOpen = open
         mutableMarginPaneOpen.value = open
+    }
+
+    /**
+     * 読む形が見開きか（レールの見開きのタブ → features/note_spread.md §5「見開きのタブ」）。ペインの開閉と同じく端末に保存せず、
+     * 見開きのタブを出せない窓へ移ったら外殻がふだんへ戻す。
+     */
+    fun setSpreadSelected(selected: Boolean) {
+        mutableSpreadSelected.value = selected
     }
 
     private fun restoreVault() {

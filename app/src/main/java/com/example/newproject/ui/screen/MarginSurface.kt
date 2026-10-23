@@ -18,7 +18,7 @@ import kotlin.math.roundToInt
  * ペインとシートを同時に出さない。✎ は書く入口なので、どの動きも生成を始めない。
  */
 internal enum class MarginToggle {
-    /** シートをしまう。ペインの設定は変えない。 */
+    /** シートをしまう。ペインの開閉は変えない。 */
     HideSheet,
 
     /** ペインをしまい、設定を「閉じる」へ。 */
@@ -27,7 +27,7 @@ internal enum class MarginToggle {
     /** ペインを出し、設定を「開く」へ。 */
     OpenPane,
 
-    /** シートを出す。ペインの設定は変えない。 */
+    /** シートを出す。ペインの開閉は変えない。 */
     ShowSheet
 }
 
@@ -36,7 +36,7 @@ internal fun marginToggleFor(
     paneOpen: Boolean,
     sheetVisible: Boolean
 ): MarginToggle = when {
-    // ペインを出せる窓でもシートが出ていることがある（閉じる設定のままFoldを開いたとき）。
+    // ペインを出せる窓でもシートが出ていることがある（閉じた画面でシートを出したまま Fold を開いたとき）。
     // そのときはまずシートをしまい、ペインを出すのは次の ✎ に回す。
     sheetVisible -> MarginToggle.HideSheet
     canShowPane && paneOpen -> MarginToggle.ClosePane
@@ -67,7 +67,7 @@ internal enum class SummaryEntry {
  * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。
  * 面が出ていなければ、**まだ頼んでいない節は始めるだけで面を出さない** — 頼むたびに面が読書へ割り込む。
  * [requested] はこの節の要約を持っているか（生成中・完成・失敗・出せない理由のどれか）。持っていれば記号がその状態を示しているので、
- * 押すのは見に行くときであり、シートで見せる。**ペインの設定は書き換えない** — 一度見るために開くと、次のノートでも頼んでいないペインが出る。
+ * 押すのは見に行くときであり、シートで見せる。**ペインの開閉は書き換えない** — 一度見るために開くと、次のノートでも頼んでいないペインが出る。
  */
 internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, requested: Boolean): SummaryEntry = when {
     paneVisible -> SummaryEntry.Pane
@@ -113,6 +113,8 @@ internal enum class MarginWindowShift {
  * （→ lessons L58）。前の値は画面の作り直しをまたいで保つ — 折りたたみの開閉で Activity は作り直される。
  *
  * [writing] は書きかけがあるか、入力欄で書いている途中か。
+ * [paneOpen] は、出せる窓では今の開閉、出せない窓では**出せる窓で最後に見た開閉**を渡す — 出せない窓へ移ると外殻がペインを閉じるので、
+ * 移った時点の開閉を渡すと、書きかけをシートへ移す切り替わりを見落とす。
  */
 internal fun marginWindowShiftFor(
     previousCanShowPane: Boolean?,
@@ -122,7 +124,7 @@ internal fun marginWindowShiftFor(
     writing: Boolean
 ): MarginWindowShift = when {
     previousCanShowPane == null || previousCanShowPane == canShowPane -> MarginWindowShift.None
-    // 出せない → 出せる。閉じる設定ならシートのまま。
+    // 出せない → 出せる。ペインが閉じていればシートのまま（出せない窓へ移ったときに外殻が閉じている）。
     canShowPane -> if (sheetVisible && paneOpen) MarginWindowShift.SheetToPane else MarginWindowShift.None
     // 出せる → 出せない。書きかけも無く書いてもいなければ、何も出さない。
     else -> if (paneOpen && !sheetVisible && writing) MarginWindowShift.PaneToSheet else MarginWindowShift.None
@@ -353,15 +355,6 @@ internal val PaneRelatedListSaver: Saver<PaneRelatedList?, Any> = Saver(
         )
     }
 )
-
-/**
- * 並べ読みを終えるか（→ features/desk_foundation.md §5 の状態遷移）。**窓は判定に入れない** — Fold を閉じても
- * 内側を横にしても終えず、ペインを出せる窓へ戻ったら同じノートを出す。窓の情報が揃う前の仮の並べ方でも誤って終えない。
- *
- * 画面が終えるのは ✎ でペインの設定を閉じたときだけ。余白のシートを開いたときは、どの画面から開いても通る
- * 調停側の口（`NoteSessionCoordinator.openMarginMemoSheet`）が終える — 全画面の間は、この画面が組まれていない。
- */
-internal fun endsSideReading(reading: Boolean, paneOpen: Boolean): Boolean = reading && !paneOpen
 
 /**
  * ペインからシートへ移る窓の切り替わりで、書いている途中として扱うか（→ features/margin_pane.md §5.4 の2つ目の表）。

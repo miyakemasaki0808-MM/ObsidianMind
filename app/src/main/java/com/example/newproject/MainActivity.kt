@@ -51,6 +51,11 @@ import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.navigateToTab
 import com.example.newproject.ui.screen.NoteReaderTab
+import com.example.newproject.ui.screen.ReaderChoice
+import com.example.newproject.ui.screen.ReaderRegion
+import com.example.newproject.ui.screen.ReaderWindowEffect
+import com.example.newproject.ui.screen.readerWindowFor
+import com.example.newproject.ui.readerChoiceAfterRailTap
 import com.example.newproject.ui.screen.OpeningScreen
 import com.example.newproject.ui.screen.OptionsScreen
 import com.example.newproject.ui.screen.RelatedTab
@@ -142,7 +147,19 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val windowSizeClass = calculateWindowSizeClass(this)
+                val expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded
                 val marginPaneOpen by viewModel.marginPaneOpen.collectAsStateWithLifecycle()
+                val spreadSelected by viewModel.spreadSelected.collectAsStateWithLifecycle()
+                // 折り目はノートの画面と外殻で同じものを読む。外殻は本文領域と合わせて窓の値を作る（→ features/margin_pane.md §5.4）。
+                val foldInfo = rememberReaderFold()
+                var readerRegion by remember { mutableStateOf<ReaderRegion?>(null) }
+                val readerWindow = readerWindowFor(readerRegion, expandedWidth, foldInfo)
+                // **机と見開きは、出せない窓では閉じ、出せる窓へ戻っても開かない**（→ features/fold_experience.md §6 の初期状態）。
+                // ノートの画面が組まれていない間（ほかのタブ）に窓が替わっても効くよう、ここで行う。閉じても並べ読みは終えない。
+                ReaderWindowEffect(readerWindow, ReaderChoice(marginPaneOpen, spreadSelected)) { next ->
+                    viewModel.setMarginPaneOpen(next.paneOpen)
+                    viewModel.setSpreadSelected(next.spreadSelected)
+                }
                 val navController = rememberNavController()
                 val snackbarHostState = remember { SnackbarHostState() }
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
@@ -170,7 +187,20 @@ class MainActivity : ComponentActivity() {
                     snackbarHostState = snackbarHostState,
                     notePaneVisible = notePaneVisible,
                     noteBarShown = noteBarShown,
-                    onOverlayRailTab = { noteBarHideRequest++ }
+                    onOverlayRailTab = { noteBarHideRequest++ },
+                    spreadTab = readerWindow.spreadTab,
+                    spreadSelected = spreadSelected,
+                    onSelectReading = { spread, fromNoteRoute ->
+                        val tap = readerChoiceAfterRailTap(ReaderChoice(marginPaneOpen, spreadSelected), spread, fromNoteRoute)
+                        // 机をしまう操作は ✎ と同じ扱い — 書いているつもりを落とし、並べ読みも終える（→ features/margin_pane.md §5.4）。
+                        if (tap.closesDesk) {
+                            memoFocusIntent = false
+                            viewModel.closeSideReading()
+                        }
+                        viewModel.setMarginPaneOpen(tap.choice.paneOpen)
+                        viewModel.setSpreadSelected(tap.choice.spreadSelected)
+                    },
+                    onReaderRegion = { readerRegion = it }
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -220,8 +250,11 @@ class MainActivity : ComponentActivity() {
                                 onLoadMarginMemoForPane = { viewModel.loadMarginMemoForPane() },
                                 marginPaneOpen = marginPaneOpen,
                                 onSetMarginPaneOpen = { open -> viewModel.setMarginPaneOpen(open) },
-                                expandedWidth = windowSizeClass.widthSizeClass == WindowWidthSizeClass.Expanded,
-                                foldInfo = rememberReaderFold(),
+                                expandedWidth = expandedWidth,
+                                foldInfo = foldInfo,
+                                readerWindow = readerWindow,
+                                spreadSelected = spreadSelected,
+                                onSelectSpread = { viewModel.setSpreadSelected(it) },
                                 onMarginPaneVisibleChange = { notePaneVisible = it },
                                 onDeskBarShownChange = { noteBarShown = it },
                                 deskBarHideRequest = noteBarHideRequest,

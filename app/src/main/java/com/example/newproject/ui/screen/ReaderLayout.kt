@@ -8,7 +8,7 @@ package com.example.newproject.ui.screen
  * 2列なら本文は画面の高さをまるごと使える。
  *
  * **十分に高く広い窓では、本文の右に余白ペインを置く。** 開いた折りたたみでは折り目で割る。
- * ペインの設定が閉じていれば、縦長の画面と同じく縦に積む。
+ * ペインを閉じていれば、縦長の画面と同じく縦に積む（見開きのタブを選んでいれば本の形で見開き）。
  */
 internal sealed interface ReaderLayout {
     data object Stacked : ReaderLayout
@@ -47,10 +47,10 @@ internal fun readerLayoutFor(
     expandedWidth: Boolean = false,
     fold: ReaderFold? = null,
     regionStartDp: Float = 0f,
-    /** 本文の側の入力。ノートが無いか解析の前なら null で、見開きにしない。 */
+    /** 本文の側の入力。見開きのタブを選んでいないとき、ノートが無いとき、解析の前は null で、見開きにしない（→ [spreadFitFor]）。 */
     spread: SpreadFit? = null
 ): ReaderLayout {
-    // 高さの足りない窓では、ペインより本文の高さを優先する。ペインの設定によらない。
+    // 高さの足りない窓では、ペインより本文の高さを優先する。ペインの開閉によらない。
     if (heightDp < SIDE_BY_SIDE_MAX_HEIGHT_DP && widthDp > heightDp) return ReaderLayout.SideBySide
     if (!paneOpen) return spreadFor(widthDp, heightDp, fold, regionStartDp, spread) ?: ReaderLayout.Stacked
     return when {
@@ -79,7 +79,27 @@ internal fun readerLayoutFor(
  * 2ページは狭いほうの幅にそろえ、折り目をはさんで置く（レールが畳まれると左右が同じになる）。
  */
 private fun spreadFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, regionStartDp: Float, spread: SpreadFit?): ReaderLayout.Spread? {
-    if (spread == null || fold?.isVertical != true) return null
+    val pages = spreadPagesFor(widthDp, heightDp, fold, regionStartDp) ?: return null
+    if (spread == null || !spreadAllowed(pages.textWidthDp, pages.textHeightDp, spread.fontScale, spread.maxBlockChars)) return null
+    return ReaderLayout.Spread(pageStartDp = pages.pageStartDp, pageWidthDp = pages.pageWidthDp, gutterDp = pages.gutterDp)
+}
+
+/**
+ * 見開きにできない理由（→ features/note_spread.md §5「見開きにできないノート」）。**窓の側は見開きにできて、本文の側の条件だけを欠く**ときに返す。
+ * 窓の側（縦の折り目が本文領域に無い）で入れないとき・ノートが無いとき（[spread] が null）・入れるときは null。
+ */
+internal fun spreadRefusalFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, regionStartDp: Float, spread: SpreadFit?): SpreadRefusal? {
+    if (spread == null) return null
+    if (heightDp < SIDE_BY_SIDE_MAX_HEIGHT_DP && widthDp > heightDp) return null
+    val pages = spreadPagesFor(widthDp, heightDp, fold, regionStartDp) ?: return null
+    return spreadRefusal(pages.textWidthDp, pages.textHeightDp, spread.fontScale, spread.maxBlockChars)
+}
+
+/** 折り目で割った2ページの寸法。本文の幅と高さは右のページで測る（→ [spreadFor]）。折り目が本文領域に無ければ null。 */
+private data class SpreadPages(val pageStartDp: Float, val pageWidthDp: Float, val gutterDp: Float, val textWidthDp: Float, val textHeightDp: Float)
+
+private fun spreadPagesFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, regionStartDp: Float): SpreadPages? {
+    if (fold?.isVertical != true) return null
     val foldStart = fold.startDp - regionStartDp
     val foldEnd = fold.endDp - regionStartDp
     if (foldEnd <= 0f || foldStart >= widthDp) return null
@@ -87,11 +107,14 @@ private fun spreadFor(widthDp: Float, heightDp: Float, fold: ReaderFold?, region
     val center = (foldStart + foldEnd) / 2f
     val left = center - gutter / 2f
     val right = widthDp - center - gutter / 2f
-    val textWidth = right - SPREAD_PAGE_PADDING_DP * 2
-    val textHeight = heightDp - SPREAD_STRIP_DP - SPREAD_PAGE_PADDING_DP * 2
-    if (!spreadAllowed(textWidth, textHeight, spread.fontScale, spread.maxBlockChars)) return null
     val page = minOf(left, right)
-    return ReaderLayout.Spread(pageStartDp = left - page, pageWidthDp = page, gutterDp = gutter)
+    return SpreadPages(
+        pageStartDp = left - page,
+        pageWidthDp = page,
+        gutterDp = gutter,
+        textWidthDp = right - SPREAD_PAGE_PADDING_DP * 2,
+        textHeightDp = heightDp - SPREAD_STRIP_DP - SPREAD_PAGE_PADDING_DP * 2
+    )
 }
 
 /** 見開きのページの内側の余白。縦の流しの本文の面と同じ。 */
@@ -112,7 +135,7 @@ private fun paneAt(centerDp: Float, widthDp: Float, gutterDp: Float): ReaderLayo
 }
 
 /**
- * ペインを出せる窓か。**ペインの設定を開いているとみなしたとき、余白ペインになる窓**
+ * ペインを出せる窓か。**ペインを開いているとみなしたとき、余白ペインになる窓**
  * （→ features/margin_pane.md §5.4）。✎ がペインとシートのどちらを扱うかはこれで分ける。
  */
 internal fun canShowMarginPane(
@@ -129,6 +152,59 @@ internal fun canShowMarginPane(
     fold = fold,
     regionStartDp = regionStartDp
 ) is ReaderLayout.MarginPane
+
+/**
+ * 見開きに入るかの本文の側の入力（→ [readerLayoutFor]）。**見開きのタブを選んでいなければ null** — 本の形でペインを閉じても見開きにしない
+ * （→ features/note_spread.md §8 判断2）。ノートが無いときと解析の前も null。
+ */
+internal fun spreadFitFor(spreadSelected: Boolean, hasNote: Boolean, maxBlockChars: Int?, fontScale: Float): SpreadFit? =
+    if (spreadSelected && hasNote && maxBlockChars != null) SpreadFit(fontScale, maxBlockChars) else null
+
+/**
+ * 外殻が観測した本文領域。**レールがある状態で、キーボードを除いて測る**（→ features/margin_pane.md §5.4「1つの値」）。
+ * 机と見開きではレールを畳むが、畳んだ本文領域で測り直すと、畳んだせいで値が替わって出す・閉じるを繰り返しうる。
+ */
+internal data class ReaderRegion(val widthDp: Float, val heightDp: Float, val startDp: Float)
+
+/**
+ * 外殻が観測する窓の値（→ features/margin_pane.md §5.4・features/note_spread.md §5「見開きのタブ」）。
+ * [canShowPane] は閉じる判定と描画の側（✎ の扱い・机を組むか）が同じ値を読む。[known] が偽のあいだは判定しない。
+ */
+internal data class ReaderWindow(val known: Boolean, val canShowPane: Boolean, val spreadTab: Boolean) {
+    companion object {
+        val Unknown = ReaderWindow(known = false, canShowPane = false, spreadTab = false)
+    }
+}
+
+/** 窓の値。本文領域を測る前と、折り目の報告が届く前（作り直しの直後の1フレーム）は [ReaderWindow.Unknown]。 */
+internal fun readerWindowFor(region: ReaderRegion?, expandedWidth: Boolean, foldInfo: ReaderFoldInfo): ReaderWindow {
+    if (region == null || !foldInfo.isKnown) return ReaderWindow.Unknown
+    return ReaderWindow(
+        known = true,
+        canShowPane = canShowMarginPane(region.widthDp, region.heightDp, expandedWidth, foldInfo.fold, region.startDp),
+        spreadTab = canShowSpreadTab(region.widthDp, region.heightDp, expandedWidth, foldInfo.fold, region.startDp)
+    )
+}
+
+/**
+ * レールに見開きのタブを出す窓か（→ features/note_spread.md §5「見開きのタブ」）。横幅が Expanded で、縦の折り目が本文領域の中にあり、
+ * 高さの足りない横長ではない窓。**ペインの幅の下限は効かない**（ペインとは別の条件）。ノートの中身では出し分けない。
+ */
+internal fun canShowSpreadTab(widthDp: Float, heightDp: Float, expandedWidth: Boolean, fold: ReaderFold?, regionStartDp: Float): Boolean {
+    if (!expandedWidth) return false
+    if (heightDp < SIDE_BY_SIDE_MAX_HEIGHT_DP && widthDp > heightDp) return false
+    return spreadPagesFor(widthDp, heightDp, fold, regionStartDp) != null
+}
+
+/** 利用者が選んだ画面の形。ペインの開閉と、読む形が見開きか（→ features/fold_experience.md §6 の初期状態）。 */
+internal data class ReaderChoice(val paneOpen: Boolean, val spreadSelected: Boolean)
+
+/**
+ * 窓を観測した後の選択。**出せない窓では閉じ、出せる窓へ戻っても開かない** — 開くのは利用者の操作だけ（→ features/fold_experience.md §6）。
+ * 値が揃う前は替えない。閉じても並べ読みは終えない（終えるのは利用者が机をしまう操作 → features/margin_pane.md §5.4）。
+ */
+internal fun readerChoiceAfterWindow(choice: ReaderChoice, window: ReaderWindow): ReaderChoice =
+    if (!window.known) choice else ReaderChoice(choice.paneOpen && window.canShowPane, choice.spreadSelected && window.spreadTab)
 
 /** これより低い横長の画面で2列にする。カバー画面の横向き（約443dp）と横にしたスマホを含み、開いた折りたたみを含まない。 */
 internal const val SIDE_BY_SIDE_MAX_HEIGHT_DP = 480f

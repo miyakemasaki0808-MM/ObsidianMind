@@ -272,6 +272,45 @@ internal fun reconcileSpreadReading(
     return if (next == saved) saved else next
 }
 
+/**
+ * 見開きを組み始めて保存値を戻すときに、[reconcileSpreadReading] の前に1回だけ通す（→ features/note_spread.md §5「読む位置」・§8 判断14）。
+ * 保存値が無いか別のノートのものなら、そのまま返して照合に任せる。戻した後の値は、今の解析結果・口・番号を処理済みとして持つ。
+ */
+internal fun restoreSpreadReading(
+    saved: SpreadReading?,
+    noteKey: String,
+    parse: Int,
+    blockCount: Int,
+    port: Long,
+    request: BodyPositionRequest,
+    listBlock: () -> Int
+): SpreadReading? {
+    if (saved == null || saved.noteKey != noteKey) return saved
+    val seen = if (saved.port == port) saved.seenRequest else FIRST_BODY_REQUEST
+    val next = SpreadReading(noteKey, restoredAnchor(saved, parse, blockCount, seen, request, listBlock()), parse, port, request.request)
+    return if (next == saved) saved else next
+}
+
+/**
+ * 保存値を戻すときの読む位置（→ [restoreSpreadReading]）。**ブロックはいつも一覧から取る**（範囲に収める）。
+ * 一覧を動かす書き手（口を通った送り・見開きの書き戻し・口を通らない指のスクロール）は、どれも書いた時点で一覧に入るので、
+ * 見開きを離れている間に何が起きても一覧が最も新しい。要求の番号と解析結果は「見開きがまだ見ていない」ことしか表さない。
+ * 文字の位置を保存値から借りるのは、同じ解析結果で、ブロックが一致し、処理していない外からの送りが無いときだけ。
+ */
+internal fun restoredAnchor(
+    saved: SpreadReading,
+    parse: Int,
+    blockCount: Int,
+    seenRequest: Long,
+    request: BodyPositionRequest,
+    listBlock: Int
+): SpreadAnchor {
+    val block = listBlock.coerceIn(0, max(blockCount - 1, 0))
+    val sent = request.request != seenRequest && request.source == BodyPositionSource.External
+    val keepsChar = saved.parse == parse && saved.anchor.blockIndex == block && !sent
+    return SpreadAnchor(block, if (keepsChar) saved.anchor.charOffset else 0)
+}
+
 /** 同じノートで本文の解析結果が替わった。読む位置のブロックは保ち、文字の位置は古い表示文字列のものなので0に戻す。 */
 internal fun anchorAfterReparse(current: SpreadAnchor, blockCount: Int): SpreadAnchor =
     SpreadAnchor(current.blockIndex.coerceIn(0, max(blockCount - 1, 0)))
@@ -281,10 +320,30 @@ internal fun anchorAfterReparse(current: SpreadAnchor, blockCount: Int): SpreadA
  * **1行に入る字数**と**ページに入る行数**を文字の倍率込みで数え、巨大なブロックの無いノートだけを入れる。
  * [pageTextWidthDp]・[pageTextHeightDp] はページの本文の幅と高さ、[maxBlockChars] は本文のブロックの表示文字数の最大。
  */
-internal fun spreadAllowed(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): Boolean {
+internal fun spreadAllowed(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): Boolean =
+    spreadRefusal(pageTextWidthDp, pageTextHeightDp, fontScale, maxBlockChars) == null
+
+/** 見開きにできない理由（→ features/note_spread.md §5「見開きにできないノート」）。本文の側の条件だけで、窓の側の条件は含めない。 */
+internal enum class SpreadRefusal {
+    /** 表示文字数が上限を超えるブロックがある。文字の倍率を下げても入らないので、先に判定する。 */
+    LongBlock,
+
+    /** 文字の倍率で、1行の字数かページの行数が下限を割る。 */
+    LargeText
+}
+
+/** 見開きを選んでいるのに縦の流しで出すときに添える1行。理由は短く言う。 */
+internal fun spreadRefusalText(refusal: SpreadRefusal): String = when (refusal) {
+    SpreadRefusal.LongBlock -> "このノートは見開きにできません（長い段落があるため）"
+    SpreadRefusal.LargeText -> "このノートは見開きにできません（文字が大きいため）"
+}
+
+/** 見開きにできない理由。入れるなら null（→ [spreadAllowed]）。 */
+internal fun spreadRefusal(pageTextWidthDp: Float, pageTextHeightDp: Float, fontScale: Float, maxBlockChars: Int): SpreadRefusal? {
+    if (maxBlockChars > SPREAD_MAX_BLOCK_CHARS) return SpreadRefusal.LongBlock
     val charsPerLine = pageTextWidthDp / (SPREAD_BODY_FONT_SP * fontScale)
     val lines = pageTextHeightDp / (SPREAD_BODY_LINE_SP * fontScale)
-    return charsPerLine >= SPREAD_MIN_CHARS_PER_LINE && lines >= SPREAD_MIN_LINES && maxBlockChars <= SPREAD_MAX_BLOCK_CHARS
+    return if (charsPerLine >= SPREAD_MIN_CHARS_PER_LINE && lines >= SPREAD_MIN_LINES) null else SpreadRefusal.LargeText
 }
 
 /** 本文の段落の文字の大きさと行の高さ（`MarkdownParagraph` と同じ）。 */

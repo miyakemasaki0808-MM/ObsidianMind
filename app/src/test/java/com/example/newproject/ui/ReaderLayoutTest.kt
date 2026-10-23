@@ -1,12 +1,23 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.screen.ReaderChoice
 import com.example.newproject.ui.screen.ReaderFold
+import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.ReaderRegion
+import com.example.newproject.ui.screen.ReaderWindow
 import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
 import com.example.newproject.ui.screen.SpreadFit
+import com.example.newproject.ui.screen.SpreadRefusal
 import com.example.newproject.ui.screen.canShowMarginPane
+import com.example.newproject.ui.screen.canShowSpreadTab
+import com.example.newproject.ui.screen.readerChoiceAfterWindow
 import com.example.newproject.ui.screen.readerLayoutFor
+import com.example.newproject.ui.screen.readerWindowFor
 import com.example.newproject.ui.screen.sideColumnWidthDp
+import com.example.newproject.ui.screen.spreadFitFor
+import com.example.newproject.ui.screen.spreadRefusalFor
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -151,7 +162,7 @@ class ReaderLayoutTest {
     }
 
     @Test
-    fun `ペインの設定が閉じていれば今までの規則に戻る`() {
+    fun `ペインを閉じていれば今までの規則に戻る`() {
         assertEquals(ReaderLayout.Stacked, readerLayoutFor(800f, 900f, paneOpen = false, fold = vertical(420f)))
         assertEquals(ReaderLayout.Stacked, readerLayoutFor(1000f, 700f, paneOpen = false, expandedWidth = true))
     }
@@ -240,5 +251,118 @@ class ReaderLayoutTest {
     fun `ペインを開けば机、高さの足りない横長は左右2列のまま`() {
         assertTrue(readerLayoutFor(812f, 820f, paneOpen = true, fold = vertical(426f), regionStartDp = 20f, spread = note) is ReaderLayout.MarginPane)
         assertEquals(ReaderLayout.SideBySide, readerLayoutFor(970f, 443f, spread = note))
+    }
+
+    // ── 入り方（→ features/fold_experience.md §6 の初期状態・features/margin_pane.md §5.4・features/note_spread.md §5）────────────
+
+    private val noFold = ReaderFoldInfo(isKnown = true, fold = null)
+
+    /**
+     * **ペインを出せるかは横幅の区分と折り目だけでは決まらない。** 分割窓で高さだけを下げると、出せなくなった時点で閉じ、
+     * 高さを戻しても開かない（開くのは ✎ だけ）。2つの入力だけで決めると、開いたまま残った机が高さを戻したときに自動で出る。
+     */
+    @Test
+    fun `横幅の区分と折り目が同じまま高さを往復すると、下げた時点で閉じ戻しても開かない`() {
+        val tall = readerWindowFor(ReaderRegion(900f, 700f, 100f), expandedWidth = true, foldInfo = noFold)
+        val low = readerWindowFor(ReaderRegion(900f, 400f, 100f), expandedWidth = true, foldInfo = noFold)
+        assertTrue(tall.canShowPane)
+        assertFalse(low.canShowPane)
+
+        val opened = ReaderChoice(paneOpen = true, spreadSelected = false)
+        assertEquals(opened, readerChoiceAfterWindow(opened, tall))
+        val lowered = readerChoiceAfterWindow(opened, low)
+        assertFalse(lowered.paneOpen)
+        assertFalse("高さを戻しただけで机が開いた", readerChoiceAfterWindow(lowered, tall).paneOpen)
+    }
+
+    /** 下限の幅をまたぐときも、窓の値と並べ方（机を組めるか）が一致する — 描画と閉じる判定が同じ値を読む。 */
+    @Test
+    fun `下限の幅の前後で、窓の値と机を組めるかが一致する`() {
+        listOf(560f, 590f, 595f, 596f, 600f, 640f, 900f).forEach { width ->
+            val window = readerWindowFor(ReaderRegion(width, 800f, 100f), expandedWidth = true, foldInfo = noFold)
+            val desk = readerLayoutFor(width, 800f, paneOpen = true, expandedWidth = true, regionStartDp = 100f) is ReaderLayout.MarginPane
+            assertEquals("幅 $width", desk, window.canShowPane)
+        }
+    }
+
+    /** 折り目の報告と本文領域が揃う前（作り直しの直後の1フレーム）は判定しない。同じ窓での作り直しで机や見開きを閉じない。 */
+    @Test
+    fun `窓の情報が揃う前は、ペインの開閉も読む形も替えない`() {
+        val chosen = ReaderChoice(paneOpen = true, spreadSelected = true)
+        assertEquals(ReaderWindow.Unknown, readerWindowFor(null, expandedWidth = true, foldInfo = noFold))
+        assertEquals(ReaderWindow.Unknown, readerWindowFor(ReaderRegion(900f, 700f, 100f), true, ReaderFoldInfo(isKnown = false, fold = null)))
+        assertEquals(chosen, readerChoiceAfterWindow(chosen, ReaderWindow.Unknown))
+    }
+
+    /**
+     * 値はレールがある状態の本文領域で測る。**レールを畳んだ本文領域は、出せると決まった窓で割れなくならない** —
+     * 折り目で割る窓はペインの幅が変わらず本文が広がり、中央で割る窓は両方が広がる（折り目がレールの下に来る窓は含めない）。
+     */
+    @Test
+    fun `レールがある状態で出せる窓は、レールを畳んでも机を組める`() {
+        val rail = 80f
+        listOf(700f, 760f, 812f, 900f, 1000f).forEach { width ->
+            listOf<ReaderFold?>(null, vertical(426f), vertical(500f, 8f), vertical(380f)).forEach { fold ->
+                val start = 100f
+                val withRail = canShowMarginPane(width, 800f, expandedWidth = true, fold = fold, regionStartDp = start)
+                if (withRail) {
+                    val collapsed = readerLayoutFor(width + rail, 800f, paneOpen = true, expandedWidth = true, fold = fold, regionStartDp = start - rail)
+                    assertTrue("幅 $width 折り目 $fold", collapsed is ReaderLayout.MarginPane)
+                }
+            }
+        }
+    }
+
+    /** ペインの開閉と読む形は、それぞれの窓の値で別に閉じる。出せる窓では替えない（開くのは利用者の操作だけ）。 */
+    @Test
+    fun `ペインと見開きのタブは、それぞれ出せない窓でだけ閉じる`() {
+        val chosen = ReaderChoice(paneOpen = true, spreadSelected = true)
+        assertEquals(ReaderChoice(false, true), readerChoiceAfterWindow(chosen, ReaderWindow(known = true, canShowPane = false, spreadTab = true)))
+        assertEquals(ReaderChoice(true, false), readerChoiceAfterWindow(chosen, ReaderWindow(known = true, canShowPane = true, spreadTab = false)))
+        val closed = ReaderChoice(paneOpen = false, spreadSelected = false)
+        assertEquals(closed, readerChoiceAfterWindow(closed, ReaderWindow(known = true, canShowPane = true, spreadTab = true)))
+    }
+
+    /**
+     * 見開きのタブは、Expanded で縦の折り目が本文領域の中にあり、高さの足りない横長ではない窓だけ。
+     * **ペインの幅の下限には左右されない**（ペインとは別の条件）。
+     */
+    @Test
+    fun `見開きのタブを出す窓`() {
+        val book = vertical(426f)
+        assertTrue(canShowSpreadTab(812f, 820f, expandedWidth = true, fold = book, regionStartDp = 20f))
+        assertFalse("閉じた画面・狭い分割", canShowSpreadTab(812f, 820f, expandedWidth = false, fold = book, regionStartDp = 20f))
+        assertFalse("折り目の無い Expanded", canShowSpreadTab(1280f, 800f, expandedWidth = true, fold = null, regionStartDp = 20f))
+        assertFalse("横の折り目", canShowSpreadTab(812f, 820f, expandedWidth = true, fold = tabletop, regionStartDp = 20f))
+        assertFalse("高さを下げた分割", canShowSpreadTab(812f, 420f, expandedWidth = true, fold = book, regionStartDp = 20f))
+        assertFalse("折り目が本文領域の外", canShowSpreadTab(812f, 820f, expandedWidth = true, fold = vertical(10f), regionStartDp = 20f))
+        // 右がペインの下限を割る位置の折り目でも、見開きのタブは出す。
+        assertFalse(canShowMarginPane(812f, 820f, expandedWidth = true, fold = vertical(600f), regionStartDp = 20f))
+        assertTrue(canShowSpreadTab(812f, 820f, expandedWidth = true, fold = vertical(600f), regionStartDp = 20f))
+    }
+
+    /** **見開きのタブを選んでいなければ、本の形でペインを閉じても見開きにしない**（→ features/note_spread.md §8 判断2）。 */
+    @Test
+    fun `見開きのタブを選んでいなければ本の形でも縦積み`() {
+        val fit = spreadFitFor(spreadSelected = false, hasNote = true, maxBlockChars = 500, fontScale = 1f)
+        assertNull(fit)
+        assertEquals(ReaderLayout.Stacked, readerLayoutFor(812f, 820f, fold = vertical(426f), regionStartDp = 20f, spread = fit))
+        val chosen = spreadFitFor(spreadSelected = true, hasNote = true, maxBlockChars = 500, fontScale = 1f)
+        assertTrue(readerLayoutFor(812f, 820f, fold = vertical(426f), regionStartDp = 20f, spread = chosen) is ReaderLayout.Spread)
+        assertNull("ノートが無い", spreadFitFor(spreadSelected = true, hasNote = false, maxBlockChars = 500, fontScale = 1f))
+        assertNull("解析の前", spreadFitFor(spreadSelected = true, hasNote = true, maxBlockChars = null, fontScale = 1f))
+    }
+
+    /** 見開きを選んでいるのに縦の流しで出す理由。窓の側で入れないときは理由を出さない（タブも出ていない）。 */
+    @Test
+    fun `見開きにできない理由は本文の側の条件だけで決める`() {
+        val book = vertical(426f)
+        assertEquals(SpreadRefusal.LongBlock, spreadRefusalFor(812f, 820f, book, 20f, note.copy(maxBlockChars = SPREAD_MAX_BLOCK_CHARS + 1)))
+        assertEquals(SpreadRefusal.LargeText, spreadRefusalFor(812f, 820f, book, 20f, note.copy(fontScale = 2f)))
+        assertEquals("両方なら長い段落を言う", SpreadRefusal.LongBlock, spreadRefusalFor(812f, 820f, book, 20f, SpreadFit(2f, SPREAD_MAX_BLOCK_CHARS + 1)))
+        assertNull(spreadRefusalFor(812f, 820f, book, 20f, note))
+        assertNull("折り目が無い", spreadRefusalFor(812f, 820f, null, 20f, note.copy(fontScale = 2f)))
+        assertNull("高さの足りない横長", spreadRefusalFor(970f, 443f, book, 20f, note.copy(fontScale = 2f)))
+        assertNull("ノートが無い", spreadRefusalFor(812f, 820f, book, 20f, null))
     }
 }
