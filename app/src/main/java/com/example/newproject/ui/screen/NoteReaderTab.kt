@@ -803,6 +803,7 @@ internal fun NoteReaderTab(
                         hasHeadings = sectionModel?.hasHeadings ?: false,
                         onJumpToSection = jumpToSection,
                         arranged = arrangedMemos,
+                        onJumpToBlock = face.jumpToBlock,
                         reveal = memoReveal,
                         onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                         onEdit = onEditMemo,
@@ -1004,6 +1005,10 @@ internal fun NoteReaderTab(
                                                 jumpToSection(ref)
                                             },
                                             arranged = arrangedMemos,
+                                            onJumpToBlock = { block ->
+                                                showDeskFace(DeskFace.Main)
+                                                face.jumpToBlock(block)
+                                            },
                                             reveal = memoReveal,
                                             onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                                             onEdit = onEditMemo,

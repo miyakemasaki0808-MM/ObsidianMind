@@ -211,6 +211,7 @@ internal fun FullscreenNoteScreen(
                     hasHeadings = sectionModel?.hasHeadings ?: false,
                     onJumpToSection = face.jumpToSection,
                     arranged = face.arranged,
+                    onJumpToBlock = face.jumpToBlock,
                     onEdit = { text -> onEditMarginMemo(text, face.bodySection) },
                     onSubmit = { onSubmitMarginMemo(face.bodySection) },
                     onDelete = onDeleteMarginMemo,

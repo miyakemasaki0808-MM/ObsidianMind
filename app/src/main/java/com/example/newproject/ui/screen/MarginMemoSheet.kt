@@ -1,8 +1,13 @@
 package com.example.newproject.ui.screen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -68,12 +73,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.ArrangedMemos
+import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
@@ -274,6 +281,8 @@ internal fun MarginMemoSheetContent(
     onJumpToSection: (SectionRef) -> Unit,
     /** メモを今の見出しと照合して並べたもの（→ [arrangeMemos]）。本文の解析の前は null。 */
     arranged: ArrangedMemos?,
+    /** 本文をそのブロックへ送る。引用した段落と書いた頃の位置へ飛ぶ（→ features/margin_quote.md §5.5）。 */
+    onJumpToBlock: (Int) -> Unit = {},
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -562,7 +571,13 @@ internal fun MarginMemoSheetContent(
                     } else {
                         // **静かにするのは、この節のメモが0件のときだけ**（→ features/margin_pane.md §5.2）。
                         arranged.current.forEach { placed ->
-                            MemoRow(memo = placed.memo, match = placed.match, onDelete = { pendingDelete = placed.memo })
+                            MemoRow(
+                                memo = placed.memo,
+                                match = placed.match,
+                                placement = placed.placement,
+                                onJumpToBlock = onJumpToBlock,
+                                onDelete = { pendingDelete = placed.memo }
+                            )
                         }
                         OtherSectionMemos(
                             arranged = arranged,
@@ -574,6 +589,7 @@ internal fun MarginMemoSheetContent(
                                 if (!othersExpanded) groupTops.clear()
                             },
                             onJumpToSection = onJumpToSection,
+                            onJumpToBlock = onJumpToBlock,
                             onDelete = { pendingDelete = it },
                             onGroupPlaced = { group, top -> groupTops[group] = top }
                         )
@@ -782,6 +798,7 @@ private fun OtherSectionMemos(
     expanded: Boolean,
     onToggle: () -> Unit,
     onJumpToSection: (SectionRef) -> Unit,
+    onJumpToBlock: (Int) -> Unit,
     onDelete: (MarginMemo) -> Unit,
     /** 節の組の見出しが並んだ位置（この面の中）。印から来たときの行き先に使う。 */
     onGroupPlaced: (SectionRef, Int) -> Unit
@@ -820,19 +837,36 @@ private fun OtherSectionMemos(
             }
         }
         group.memos.forEach { placed ->
-            MemoRow(memo = placed.memo, match = placed.match, onDelete = { onDelete(placed.memo) })
+            MemoRow(
+                memo = placed.memo,
+                match = placed.match,
+                placement = placed.placement,
+                onJumpToBlock = onJumpToBlock,
+                onDelete = { onDelete(placed.memo) }
+            )
         }
     }
 }
 
 @Composable
-private fun MemoRow(memo: MarginMemo, match: MemoSectionMatch?, onDelete: () -> Unit) {
+private fun MemoRow(
+    memo: MarginMemo,
+    match: MemoSectionMatch?,
+    onDelete: () -> Unit,
+    placement: MemoPlacement? = null,
+    onJumpToBlock: (Int) -> Unit = {}
+) {
+    // 確定した段落だけへ飛べる。特定できない・見つからない・照らし直しの前は押せない（→ features/margin_quote.md §5.5）。
+    val located = placement as? MemoPlacement.Located
     Surface(
         color = PanelChip,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            (memo.passage as? MemoPassage.Quoted)?.let { quote ->
+                QuoteLine(quote, onJump = located?.let { { onJumpToBlock(it.block) } })
+            }
             Text(memo.text, color = OnSurface, fontSize = 14.sp, lineHeight = 20.sp)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -840,28 +874,68 @@ private fun MemoRow(memo: MarginMemo, match: MemoSectionMatch?, onDelete: () -> 
             ) {
                 // 書いた場所は**紐づけではなく当時の記録**。見出しが消えても解決し直さない。
                 Text(
-                    text = memoCaption(memo, match),
+                    text = memoCaption(memo, match, placement),
                     color = OnSurfaceFaint,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
                 )
+                // **書いた頃の位置は手掛かりで、書いた対象ではない**（→ features/margin_quote.md 判断5）。語と読み上げを引用と分ける。
+                if (located != null && memo.passage is MemoPassage.Seen) {
+                    TextButton(
+                        onClick = { onJumpToBlock(located.block) },
+                        modifier = Modifier.semantics { contentDescription = "メモを書いた頃に読んでいた位置へ本文を送る" }
+                    ) { Text("書いた頃の位置へ", color = AccentText, fontSize = 12.sp) }
+                }
                 TextButton(onClick = onDelete) { Text("消す", color = OnSurfaceMuted, fontSize = 12.sp) }
             }
         }
     }
 }
 
+/** メモの本文の上に出す引用。途中までの引用は末尾に「…」を付ける。[onJump] が null なら押せない（引用元が確定していない）。 */
+@Composable
+private fun QuoteLine(quote: MemoPassage.Quoted, onJump: (() -> Unit)?) {
+    val text = quoteDisplayText(quote)
+    // 縦線は引用の高さに合わせる（複数行の引用でも左に1本通す）。
+    val base = Modifier
+        .fillMaxWidth()
+        .height(IntrinsicSize.Min)
+        .padding(bottom = 6.dp)
+    Row(modifier = if (onJump == null) base else base.clickable(onClickLabel = "引用した段落へ本文を送る", onClick = onJump)) {
+        Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(OnSurfaceFaint))
+        Text(
+            text = text,
+            color = OnSurfaceMuted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+/** 引用の見せ方。途中までの引用は末尾に「…」（→ features/margin_quote.md §5.2）。 */
+internal fun quoteDisplayText(quote: MemoPassage.Quoted): String = if (quote.truncated) quote.text + "…" else quote.text
+
 /**
  * メモの添え書き。節ごとに並べたときは節の名前を繰り返さない。
  * **同名の見出しに共通**なら、どの候補にも並んでいることを添える。見つからないメモは、控えた見出し名を
  * 当時の記録として添える（**紐づけではない**ので、今の見出しへ解決し直さない）。照合の前（[match] が null）も同じ。
+ *
+ * **照らし直しの結果（[placement]）が見出しの照合より先**（→ features/margin_quote.md §5.5）。段落が確定すれば節も1つに決まるので日時だけ、
+ * 特定できない引用は似た一節の数を、見つからない引用はそのことを添える。黙って先の方を引用元と言わない。
  */
-internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?): String {
+internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?, placement: MemoPlacement? = null): String {
     val stamp = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
         .format(Date(memo.writtenAtEpochMillis))
-    return when (match) {
+    val byHeading = when (match) {
         MemoSectionMatch.Opening, is MemoSectionMatch.Unique -> stamp
         is MemoSectionMatch.Shared -> "$stamp ・ 同名の見出しに共通"
         MemoSectionMatch.Missing, null -> memo.sectionTitle?.let { "$stamp ・ $it のあたり" } ?: stamp
+    }
+    return when (placement) {
+        is MemoPlacement.Located -> stamp
+        is MemoPlacement.Uncertain -> "$stamp ・ 引用した場所を特定できません · 似た一節 ${placement.candidateCount} か所"
+        MemoPlacement.Missing -> "$byHeading ・ 引用した一節は本文に見つかりません"
+        null -> byHeading
     }
 }

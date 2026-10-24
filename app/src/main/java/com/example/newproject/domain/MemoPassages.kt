@@ -164,11 +164,14 @@ private fun locatePassage(
  * 本文の大きさに比例する候補の列を、走査でもハッシュでも読ませない（→ features/margin_quote.md §5.5）。
  */
 internal sealed interface MemoPlacement {
-    /** 引用か控えた位置が確定した段落の節。 */
-    data class Located(val section: SectionRef) : MemoPlacement
+    /** 引用か控えた位置が確定した段落（[block]）と、その節。押すとそのブロックへ本文を送る。 */
+    data class Located(val section: SectionRef, val block: Int) : MemoPlacement
 
-    /** 特定できない引用。候補の節（同じ節にある候補は1つに数える）のどれにも出す。 */
-    data class Uncertain(val sections: List<SectionRef>) : MemoPlacement
+    /** 特定できない引用。候補の節（同じ節にある候補は1つに数える）のどれにも出す。[candidateCount] は似た一節の数。 */
+    data class Uncertain(val sections: List<SectionRef>, val candidateCount: Int) : MemoPlacement
+
+    /** 本文に見つからない引用。並べ方は見出しの照合に戻し、見つからないことだけを添える。 */
+    data object Missing : MemoPlacement
 }
 
 /**
@@ -187,17 +190,20 @@ internal class MemoLocations internal constructor(
 
     internal fun of(memo: MarginMemo): PassageLocation? = byMemo[memo]
 
-    /** 並べるときの置き場所。null は見出しの照合で並べる（見つからない・特定できない控えた位置）。 */
+    /** 並べるときの置き場所。null は見出しの照合で並べる（引用も控えた位置も持たない・見つからない控えた位置・特定できない控えた位置）。 */
     internal fun placementOf(memo: MarginMemo): MemoPlacement? = placements[memo]
 }
 
 private fun placementOf(passage: MemoPassage?, location: PassageLocation, passages: PassageIndex): MemoPlacement? =
     when (location) {
-        is PassageLocation.Located -> MemoPlacement.Located(location.section)
-        // 控えた位置は手掛かりなので、特定できなければ見出しの照合へ戻す。
-        is PassageLocation.Uncertain ->
-            if (passage is MemoPassage.Quoted) MemoPlacement.Uncertain(location.candidates.map { passages.sections[it] }.distinct()) else null
-        PassageLocation.NotFound -> null
+        is PassageLocation.Located -> MemoPlacement.Located(location.section, location.block)
+        // 控えた位置は手掛かりなので、特定できなければ見出しの照合へ戻し、何も添えない。
+        is PassageLocation.Uncertain -> if (passage is MemoPassage.Quoted) {
+            MemoPlacement.Uncertain(location.candidates.map { passages.sections[it] }.distinct(), location.candidates.size)
+        } else {
+            null
+        }
+        PassageLocation.NotFound -> if (passage is MemoPassage.Quoted) MemoPlacement.Missing else null
     }
 
 /**

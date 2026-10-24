@@ -34,7 +34,9 @@ internal class MarginFaceInputs(
     /** この節に前回の読書の跡を出すなら、その訪問の日時。 */
     val previousReadingAt: Long?,
     /** 本文をその節の始まりへ送る。 */
-    val jumpToSection: (SectionRef) -> Unit
+    val jumpToSection: (SectionRef) -> Unit,
+    /** 本文をそのブロックへ送る。引用した段落と書いた頃の位置へ飛ぶのに使う（→ features/margin_quote.md §5.5）。 */
+    val jumpToBlock: (Int) -> Unit
 )
 
 /** 照らし直しの結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLocations]）。 */
@@ -98,11 +100,10 @@ internal fun rememberMarginFaceInputs(
         previous.atEpochMillis.takeIf { showsPreviousReading(previous, model.headingIndex, bodySection) }
     }
     // **飛び越した画像は測られない**ので、続きから読むと同じく測定を頼む。
-    val jumpToSection: (SectionRef) -> Unit = { ref ->
-        sectionModel?.startBlockOf(ref)?.let { block ->
-            if (animateJumps()) position.animateTo(coroutineScope, block) else position.moveTo(block)
-            imageMeasurements?.requestSkippedMeasurement(block)
-        }
+    val jumpToBlock: (Int) -> Unit = { block ->
+        if (animateJumps()) position.animateTo(coroutineScope, block) else position.moveTo(block)
+        imageMeasurements?.requestSkippedMeasurement(block)
     }
-    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection)
+    val jumpToSection: (SectionRef) -> Unit = { ref -> sectionModel?.startBlockOf(ref)?.let(jumpToBlock) }
+    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection, jumpToBlock)
 }

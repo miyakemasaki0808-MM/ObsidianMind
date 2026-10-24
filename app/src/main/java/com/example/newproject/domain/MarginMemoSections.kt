@@ -161,7 +161,7 @@ internal fun arrangeMemos(
 private fun PlacedMemo.sections(opening: SectionRef): List<SectionRef> = when (val found = placement) {
     is MemoPlacement.Located -> listOf(found.section)
     is MemoPlacement.Uncertain -> found.sections
-    null -> match.sections(opening)
+    MemoPlacement.Missing, null -> match.sections(opening)
 }
 
 private fun MemoSectionMatch.sections(opening: SectionRef): List<SectionRef> = when (this) {

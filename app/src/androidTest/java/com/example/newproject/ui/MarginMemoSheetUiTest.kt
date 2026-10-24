@@ -48,6 +48,10 @@ import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.QuoteContext
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.edited
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
@@ -121,6 +125,8 @@ class MarginMemoSheetUiTest {
         var focusIntent by mutableStateOf(false)
         /** この節に前回の読書の跡を出すなら、その訪問の日時。テストが節を移ったことにして替える。 */
         var previousReadingAt by mutableStateOf<Long?>(null)
+        /** 引用した段落か書いた頃の位置へ送ったブロック。 */
+        var jumpedBlock by mutableStateOf<Int?>(null)
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -158,6 +164,7 @@ class MarginMemoSheetUiTest {
                             hasHeadings = true,
                             onJumpToSection = { harness.section = it },
                             arranged = harness.arranged,
+                            onJumpToBlock = { harness.jumpedBlock = it },
                             onEdit = harness::edit,
                             onSubmit = harness::submit,
                             onDelete = {},
@@ -495,6 +502,34 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("まとめ（2つ目）").performClick()
 
         composeRule.runOnIdle { assertEquals(SectionRef("まとめ", 1), harness.section) }
+    }
+
+    /**
+     * **引用は本文の上に出し、確定していれば押すとその段落へ、書いた頃の位置は「書いた頃の位置へ」でその位置へ本文を送る**（→ features/margin_quote.md §5.5）。
+     * 特定できない引用は押せず、似た一節の数を添える。照らし直しと並べ方は本番の関数を通す。
+     */
+    @Test
+    fun 引用と書いた頃の位置から本文の段落へ飛べ_特定できない引用はそう添える() {
+        val harness = Harness()
+        val model = buildNoteSectionModel(
+            "## 節B\n\n意志の力に頼ると、三日で元に戻る。\n\n結論として、この方法は有効である。ただし条件Aでは使わない。\n\n同じ一節\n\n同じ一節"
+        )
+        val memos = listOf(
+            MarginMemo("位置のメモ", 3L, "節B", MemoPassage.Seen("意志の力に頼ると、三日で元に戻る。")),
+            MarginMemo("引用のメモ", 2L, "節B", MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Aでは使わな"), truncated = true)),
+            MarginMemo("特定できないメモ", 1L, "節B", MemoPassage.Quoted("同じ一節", context = null, truncated = false))
+        )
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(memos, model.headingIndex, SectionRef("節B"), locateMemos(memos, model.passages, model.headingIndex))
+        setContent(harness)
+
+        composeRule.onNodeWithText("書いた頃の位置へ").performClick()
+        composeRule.runOnIdle { assertEquals(1, harness.jumpedBlock) }
+        composeRule.onNodeWithText("この方法は有効である。…").performClick()
+        composeRule.runOnIdle { assertEquals(2, harness.jumpedBlock) }
+        composeRule.onNodeWithText("引用した場所を特定できません · 似た一節 2 か所", substring = true).assertExists()
+        composeRule.onNodeWithText("同じ一節").performClick()
+        composeRule.runOnIdle { assertEquals("特定できない引用で本文を送った", 2, harness.jumpedBlock) }
     }
 
     /** 再会カードの「前回のメモを見る」から来たら、**ほかの節のメモも開いて**メモの並びまで送る。 */
