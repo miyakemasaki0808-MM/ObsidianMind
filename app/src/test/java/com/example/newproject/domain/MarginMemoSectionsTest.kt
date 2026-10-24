@@ -347,6 +347,7 @@ class MarginMemoSectionsTest {
         val texts = CountingReads(List(blocks) { "Q" })
         val passages = PassageIndex(texts = texts, sections = List(blocks) { SectionRef(title = null) }, readable = List(blocks) { true })
         val memos = List(20) { k -> MarginMemo("メモ$k", k.toLong(), null, MemoPassage.Quoted("Q", context = null, truncated = false)) }
+        texts.reads = 0
 
         locateMemos(memos, passages, HeadingIndex(emptyList()))
 

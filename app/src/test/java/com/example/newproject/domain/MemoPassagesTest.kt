@@ -245,6 +245,51 @@ class MemoPassagesTest {
     }
 
     @Test
+    fun `最上端が節の途中の本文ならそのブロックを控え、次の節の本文へは越えない`() {
+        val (index, _) = indexOf("## 習慣\n\n一つ目の段落\n\n二つ目の段落\n\n---\n\n## 次\n\n次の節の本文")
+
+        assertEquals(MemoPassage.Seen("二つ目の段落"), seenPassageAt(2, index))
+        assertNull(seenPassageAt(3, index))
+        assertNull(seenPassageAt(99, index))
+    }
+
+    private class CountingReads<T>(private val inner: List<T>) : AbstractList<T>() {
+        var reads = 0
+        override val size: Int get() = inner.size
+        override fun get(index: Int): T {
+            reads++
+            return inner[index]
+        }
+    }
+
+    /**
+     * **控えに使えないブロックが長く続いても、控えを得る処理はその区間をたどらない**（本文が止まるたびに Main で呼ばれる）。
+     * 区間の先頭・途中・末尾のどこで止まっても、読むのは控えるブロックの文字だけ。続く本文が同じ節に無ければ何も読まない。
+     */
+    @Test
+    fun `控えに使えない区間が長くても控えを得る読み取りは区間の長さに比例しない`() {
+        listOf(1_000, 10_000, 100_000).forEach { run ->
+            // 見出し・区切り線 run 個・同じ節の本文・次の節の見出し・区切り線 run 個（その節には本文が無い）
+            val blocks = 1 + run + 1 + 1 + run
+            val texts = CountingReads(List(blocks) { block -> if (block == run + 1) "続きの本文" else "" })
+            val sections = CountingReads(List(blocks) { block -> if (block <= run + 1) SectionRef("習慣") else SectionRef("次") })
+            val index = PassageIndex(texts = texts, sections = sections, readable = List(blocks) { block -> block == run + 1 })
+            texts.reads = 0
+            sections.reads = 0
+
+            listOf(0, 1, run / 2, run).forEach { top ->
+                assertEquals("区間 $run の $top で止めた", MemoPassage.Seen("続きの本文"), seenPassageAt(top, index))
+            }
+            listOf(run + 2, run + 3, run + 2 + run / 2, blocks - 1).forEach { top ->
+                assertNull("区間 $run の次の節の $top で止めた", seenPassageAt(top, index))
+            }
+
+            assertEquals("区間 $run で文字を読んだ回数", 4, texts.reads)
+            assertEquals("区間 $run で節を読んだ回数", 0, sections.reads)
+        }
+    }
+
+    @Test
     fun `控える位置はブロックの頭の64バイトまで`() {
         val (index, _) = indexOf("あ".repeat(40))
 

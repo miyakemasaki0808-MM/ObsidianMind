@@ -47,9 +47,23 @@ internal class PassageIndex internal constructor(
     /** ブロックごとの節。 */
     internal val sections: List<SectionRef>,
     /** 書き始めた位置として控えてよいブロックか（段落・リストの項目・引用の行・コード）。 */
-    private val readable: List<Boolean>
+    readable: List<Boolean>
 ) {
-    internal fun isReadable(block: Int): Boolean = readable[block]
+    /**
+     * ブロックごとの、書き始めた位置として控えるブロック（→ [seenPassageAt]）。そのブロックから同じ節の中で最初の、控えてよい空でないブロックで、無ければ -1。
+     * **作るときに後ろから1度だけたどる** — 画像や表や区切り線が長く続く節で、本文が止まるたびに Main でその区間をたどり直さない。
+     */
+    private val seenBlocks = IntArray(texts.size).also { seen ->
+        for (block in texts.indices.reversed()) {
+            seen[block] = when {
+                readable[block] && texts[block].isNotEmpty() -> block
+                block + 1 < texts.size && sections[block + 1] == sections[block] -> seen[block + 1]
+                else -> -1
+            }
+        }
+    }
+
+    internal fun seenBlockFrom(block: Int): Int = seenBlocks[block]
 }
 
 internal fun buildPassageIndex(model: NoteSectionModel): PassageIndex = PassageIndex(
@@ -107,19 +121,13 @@ internal fun resolveQuoteAt(quote: String, block: Int, index: PassageIndex): Quo
  * 書き始めた頃に読んでいた位置の手掛かり（→ features/margin_quote.md §5.4）。[topBlock] は本文の最上端に見えているブロック。
  *
  * 見出し・画像・区切り線・表なら、同じ節の中で次の本文のブロックを使う。無ければ null。
+ * 本文が止まるたびに Main で呼ばれるので、どのブロックを使うかは [PassageIndex] が作るときに決めてあり、ここは引くだけにする。
  */
 internal fun seenPassageAt(topBlock: Int, index: PassageIndex): MemoPassage.Seen? {
     if (topBlock !in index.texts.indices) return null
-    val section = index.sections[topBlock]
-    for (block in topBlock until index.texts.size) {
-        if (index.sections[block] != section) return null
-        val text = index.texts[block]
-        if (index.isReadable(block) && text.isNotEmpty()) {
-            return MemoPassage.Seen(takeFirstUtf8Bytes(text, ReadingTraceLimits.MAX_SEEN_BYTES).trimEnd())
-                .takeIf { it.text.isNotEmpty() }
-        }
-    }
-    return null
+    val block = index.seenBlockFrom(topBlock).takeIf { it >= 0 } ?: return null
+    return MemoPassage.Seen(takeFirstUtf8Bytes(index.texts[block], ReadingTraceLimits.MAX_SEEN_BYTES).trimEnd())
+        .takeIf { it.text.isNotEmpty() }
 }
 
 /** 照らし直しの結果（→ features/margin_quote.md §5.5）。 */

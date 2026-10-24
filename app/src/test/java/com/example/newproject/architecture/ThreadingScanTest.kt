@@ -321,6 +321,13 @@ class ThreadingScanTest {
                 nested = mapOf("domain/markdown/NoteSections.kt" to "節のモデルの中（解析と一緒に作り、解析し直したときだけ作り直す）")
             ),
             HeavyCall(
+                name = "書き始めた頃の位置として控えるブロックの索引",
+                call = """\bPassageIndex\(""",
+                dispatcher = "parseDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/MemoPassages.kt" to "照らし直しの材料を作る buildPassageIndex の中（それ自体が節のモデルの中）")
+            ),
+            HeavyCall(
                 name = "引用と書いた頃の位置の照らし直し",
                 call = """\blocateMemos\(""",
                 dispatcher = "locateDispatcher",
