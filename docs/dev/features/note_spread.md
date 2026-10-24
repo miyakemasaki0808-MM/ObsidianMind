@@ -228,7 +228,7 @@ Google が開いた Fold の用途として名指しする「本の形で長文�
   [desk_foundation](desk_foundation.md) §1〜§5・§10、[tab_navigation](../system/tab_navigation.md) §1、[note_fullscreen](note_fullscreen.md) §5・§10、[rediscover](rediscover.md) 判断6の余白ペインの行、[document_map](../document_map.md) の説明。
   実装と同時に直したもの — `ReaderLayoutTest`（ペインを閉じた本の形を見開きとする入力）、`NoteReadingFlowTest`（見開きの13件をタブを選んだ形へ。閉じた外画面へ替えて戻すと机と右のノートが出る検査を、ふだんの画面で始まり ✎ で戻る形へ）、
   `AppScaffoldRailTest`（見開きのタブの出し分けと選んでいる項目）、`MarginSurfaceTest`（並べ読みを終える判定をペインの開閉の値から ✎ の操作へ）、`TabNavigationTest`、
-  端末の設定のペインの開閉（`AppPreferences` から外した）、実機ケース [summary_entry_desk](../../review/device_validation/summary_entry_desk.md) の `RM00-03`・`RM00-11`（再起動で机へ戻る）・`RM00-12`（開閉で幅に合う面へ移る）。入り方の実機ケースは同じ文書の `RM02-*`
+  端末の設定のペインの開閉（`AppPreferences` から外した）、実機ケース [summary_entry_desk](../../review/device_validation/summary_entry_desk.md) の `RM00-03`・`RM00-11`（再起動で机へ戻る）・`RM00-12`（開閉で幅に合う面へ移る）。入り方の実機ケースは同じ文書の `RM02-*`、めくり・読み上げからの送り・帯の幅は `RM03-*`
 
 ### 実装の区切り
 
