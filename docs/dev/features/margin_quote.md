@@ -1,9 +1,11 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
-**状態:** 構想。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）。実装はこれから
-**最終検証:** 未検証（実装前）
-**関連コード:** （予定）`model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `model/state/SideReadingState.kt` / `domain/MarginMemoComposer.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `data/ReadingTraceStore.kt` / `controller/MarginMemoController.kt` / `controller/SideReadingController.kt` / `controller/NoteSessionCoordinator.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/DeskSpread.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/FullscreenNoteScreen.kt`。新規に `domain/MemoPassages.kt`・`ui/markdown/QuoteTextToolbar.kt`・`ui/screen/QuoteChip.kt`
-**関連テスト:** （予定）`MarginMemoComposerTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceMergeTest` / `ReadingTraceBackupControllerTest` / `SideReadingControllerTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `SchemaVersionDocsTest`。新規に `MemoPassagesTest`・`QuoteChipTest`。androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
+**状態:** 区切り1（土台。画面は変えない）は実装済み、区切り2〜4（画面）は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
+**最終検証:** 未検証（区切り1だけを実装。§5.1・§5.6・§5.7 と画面の §7 は未実装で未突合）
+**関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
+（予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt` / `controller/NoteSessionCoordinator.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/DeskSpread.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/FullscreenNoteScreen.kt`。新規に `ui/markdown/QuoteTextToolbar.kt`・`ui/screen/QuoteChip.kt`
+**関連テスト:** 区切り1 — `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupJsonTest` / `SchemaVersionDocsTest`。
+（予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest`。新規に `QuoteChipTest`。androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書（本文の一節を余白メモへ移す操作・引用と控えた位置のデータ・段落への照合）。Fold の原則と契約は [fold_experience](../system/fold_experience.md)、
 余白の面の並べ方・✎ の遷移・書きかけと送信の照合は [margin_pane](margin_pane.md)、余白メモの保存・上限・合流は [reflect_margin_memo](reflect_margin_memo.md) が持つ
 
@@ -258,9 +260,9 @@ data class QuoteContext(val before: String, val after: String)
   JSON では `context` のキーが無いことが null で、`{"before": "", "after": ""}` はブロックの端で引いた引用である。往復と退避・読み戻しの後もこの区別を保つ
 - **検証:** 引用の `text` は空でなく1,024バイト以内（`ReadingTraceLimits.MAX_QUOTE_BYTES`）、`context` があれば `before`・`after` は各32バイト以内（`MAX_QUOTE_CONTEXT_BYTES`。空でよい）。
   控えた位置の `text` は空でなく64バイト以内（`MAX_SEEN_BYTES`）。種類は既知の値だけ。v7 以前は欄が無いので null として読む
-- **容量:** 全欄を上限まで詰めた痕跡は今 112,843 バイト（2026-10-24、実シリアライザで測った）。20件すべてに最大の引用と前後の文字を足すと、
-  エスケープで2倍に膨らむ最悪で約45KB 増え、約158KB になる見込みで、128KB に収まらない。**上限を 192KB へ上げる**（余りは約34KB）。
-  **実装時に `ReadingTraceLimitsTest` の最悪の痕跡へ passage を足して測り直す**（→ [reflect_margin_memo](reflect_margin_memo.md) 判断11）
+- **容量:** 引用を足す前の最悪の痕跡は 112,843 バイトで、128KB に収まっていた。20件すべてに最大の引用と前後の文字を足すと
+  **159,923 バイト**になり（2026-10-24、実シリアライザで測った）、128KB に収まらないので **上限を 192KB にした**（余りは 36,685 バイト）。
+  `ReadingTraceLimitsTest` の最悪の痕跡は passage まで詰めてある（→ [reflect_margin_memo](reflect_margin_memo.md) 判断11）
 - **上限を上げるときに同じ変更で直すもの:** `ReadingTraceLimits.MAX_FILE_BYTES` とその KDoc、`ReadingTraceLimitsTest`・`ReadingTraceStoreTest` の KDoc、
   [reflect_margin_memo](reflect_margin_memo.md) の上限の表と判断11、[reflect_reading_trace](reflect_reading_trace.md) の上限の表（2026-10-24 に「128KB」を名指ししている箇所を数えた）。
   上げても退避ファイル全体の上限（5,000件かつ8MB → [reading_trace_backup](reading_trace_backup.md)）は変えない。配布前なので、上げた後のファイルを古い版のアプリが読む場面は考えない
@@ -282,7 +284,7 @@ data class QuoteContext(val before: String, val after: String)
 | 層 | 新規 | 変更 |
 |---|---|---|
 | `model` | `MemoPassage`（`Quoted`・`Seen`）、`MAX_QUOTE_BYTES`・`MAX_QUOTE_CONTEXT_BYTES`・`MAX_SEEN_BYTES` | `MarginMemo` に `passage`。スキーマ版を v8 に。`MAX_FILE_BYTES` を 192KB に。`MarginMemoDraft` に引用と控え |
-| `domain` | `MemoPassages.kt` — 引用を整えて切れる部分を分ける（`composeQuote`）・引用元の前後を控える（`quoteContextOf`。控えられなければ null）・位置から決まらないときに本文の全体の候補を求める（`quoteSourceCandidates`）・書き始めの位置を選ぶ（`seenPassageAt`）・照らし直す（`locatePassage`。確定・特定できない・見つからないの3値）。いずれも純関数 | `arrangeMemos` が照合の結果を優先して節を決める。書きかけの規則（`quoted`・`unquoted`・`edited`・`sendAction`・`accepted`）に引用を足す |
+| `domain` | `MemoPassages.kt` — 引用を整えて切れる部分を分ける（`composeQuote`）・照らし直しの材料を作る（`buildPassageIndex`。本文に比例するので Main の外で）・引用元を決める（`quoteSourceFor`。位置が取れなければ本文の全体で1つのときだけ補い、2つ以上は付ける場で選ぶ候補を返す。選んだ候補は `resolveQuoteAt`）・書き始めの位置を選ぶ（`seenPassageAt`）・照らし直す（`locatePassage`。確定・特定できない・見つからないの3値。メモの一覧は `locateMemos` で `MemoLocations` にまとめる）。いずれも純関数 | `arrangeMemos` が照合の結果（`MemoLocations`）を見出しの照合より先に使う。書きかけの規則に引用を足す（`quoted`・`unquoted`・`edited`・`sendAction`・`accepted`）。受理で今の書きかけを空にできるかは `consumedBy` |
 | `data` | — | `ReadingTraceJson` が `passage` を読み書きし、v1〜v8 を読む |
 | `controller` | — | `MarginMemoController` の送信が引用か控えを持つ。`SideReadingController` に右の面の出し分け。`NoteSessionCoordinator` が受理を並べ読みへ伝える |
 | `ui` | `QuoteTextToolbar.kt` — 選択メニューに「引用して書く」を足し、選んだ文字と範囲の矩形を端末のクリップボードを通さずに受け取る。`QuoteChip.kt` — 札の表示と運び、落とし先の判定（`quoteDropTargetFor`）、範囲の矩形から引用元のブロックを決める判定（`quoteSourceBlockAt`）。いずれも判定は純関数 | `MarkdownRenderer` と `NoteSpread` の本文の選択に上の2つを渡す（右のノートには渡さない）。余白の面に引用の欄と、付けるときの引用元の候補の選択・メモの行に引用と「書いた頃の位置へ」と候補の選択。並べ読みの右の面に切替。`DeskSpread` に札の層 |
