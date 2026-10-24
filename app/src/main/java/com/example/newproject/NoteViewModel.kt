@@ -633,6 +633,21 @@ class NoteViewModel internal constructor(
     fun editMarginMemo(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) =
         session.editMarginMemo(text, bodySection, seenAtStart)
 
+    /**
+     * 選択メニューの「引用して書く」。[model] は選んだ本文の解析結果で、[sourceBlock] と [hintBlock] はそのブロックの番号
+     * （→ features/margin_quote.md §5.2）。
+     */
+    fun quoteMarginMemo(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, model: NoteSectionModel) =
+        session.quoteMarginMemo(selected, sourceBlock, hintBlock, bodySection, model.passages)
+
+    /** 付ける場で候補 [block] を引用元に選んだ。[model] は候補を出した解析結果。 */
+    fun chooseMarginMemoQuoteSource(quote: MemoPassage.Quoted, block: Int, model: NoteSectionModel) =
+        session.chooseMarginMemoQuoteSource(quote, block, model.passages)
+
+    fun dismissMarginMemoQuoteChoice() = session.dismissMarginMemoQuoteChoice()
+
+    fun detachMarginMemoQuote() = session.detachMarginMemoQuote()
+
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
     fun submitMarginMemo(bodySection: SectionRef?) = session.submitMarginMemo(bodySection)
 

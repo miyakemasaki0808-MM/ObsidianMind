@@ -1,5 +1,11 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.PassageIndex
+import com.example.newproject.domain.QuoteSource
+import com.example.newproject.domain.chosen
+import com.example.newproject.domain.choiceDismissed
+import com.example.newproject.domain.quoteAttachmentFor
+import com.example.newproject.domain.resolveQuoteAt
 import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.checkSubmission
@@ -20,6 +26,9 @@ import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -50,9 +59,17 @@ internal class MarginMemoController(
     private val loadMemos: suspend (vaultRelativePath: String, confirmAbsence: Boolean) -> MemoLoad,
     private val appendMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoSaveOutcome,
     private val deleteMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoDeleteOutcome,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    /** 引用元を探す先。位置で決まらなければ本文の全体を探すので、Main で走らせない（→ features/margin_quote.md §5.2）。 */
+    private val quoteDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     private var loadJob: Job? = null
+
+    /**
+     * 引用を付ける・引用元を選ぶ仕事。**新しく頼んだら前の仕事は取り消す**ので、届くのは後から頼んだものだけ。
+     * ジョブはノート単位で、ノート切替と Vault 切替で止める。書きかけそのものは Vault 単位で預かる。
+     */
+    private var quoteJob: Job? = null
 
     /**
      * 走行中の書き込み。**保存と削除で1本を共有しない。**
@@ -187,6 +204,51 @@ internal class MarginMemoController(
     }
 
     /**
+     * 選択メニューの「引用して書く」（→ features/margin_quote.md §5.2）。選んだ文字 [selected] から引用元を決めて、書きかけへ付ける。
+     * [sourceBlock] は選んだ範囲の始まりを含むブロック（位置から決まらなければ null）、[hintBlock] は境目で切るためだけの手掛かり。
+     * 引用元が決まらなければ、書き込み先は [bodySection]（そのときの本文の節）にする。
+     *
+     * **待つ間にノートを替えたら付けない。もう一度引用したら後のものだけを付ける。** 空白だけなら何も付けない。
+     */
+    fun quote(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, passages: PassageIndex) {
+        val noteKey = currentNoteKey() ?: return
+        launchQuote {
+            val attachment = withContext(quoteDispatcher) { quoteAttachmentFor(selected, sourceBlock, hintBlock, passages) } ?: return@launchQuote
+            if (currentNoteKey() != noteKey) return@launchQuote
+            drafts.update(noteKey) { it.quoted(attachment.quote, attachment.section ?: bodySection) }
+        }
+    }
+
+    /**
+     * 付ける場で候補 [block] を引用元に選んだ（→ 判断13）。[quote] は選んでいた引用で、[passages] は候補を出した解析結果。
+     * 選んでいた引用が待つ間に替わっていれば、書きかけの規則が何もしない（→ `chosen`）。
+     */
+    fun chooseQuoteSource(quote: MemoPassage.Quoted, block: Int, passages: PassageIndex) {
+        val noteKey = currentNoteKey() ?: return
+        launchQuote {
+            val source = withContext(quoteDispatcher) { resolveQuoteAt(quote.text, block, passages) } as? QuoteSource.Resolved ?: return@launchQuote
+            if (currentNoteKey() != noteKey) return@launchQuote
+            drafts.update(noteKey) { it.chosen(quote, source.context, passages.sections[source.block]) }
+        }
+    }
+
+    /** 候補を選ばずに閉じた。引用元を決めないまま付けておく。 */
+    fun dismissQuoteChoice() {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.choiceDismissed() }
+    }
+
+    private fun launchQuote(block: suspend CoroutineScope.() -> Unit) {
+        quoteJob?.cancel()
+        quoteJob = scope.launch(block = block)
+    }
+
+    private fun stopQuote() {
+        quoteJob?.cancel()
+        quoteJob = null
+    }
+
+    /**
      * 置くボタン。**役目は今の入力を整えた本文で決める**（→ [sendAction]）。
      *
      * 未確定の送信と同じ内容なら、新しく置かずに読み直して元の送信を確かめる。
@@ -310,6 +372,7 @@ internal class MarginMemoController(
      */
     fun cancelAndClear() {
         generation++
+        stopQuote()
         loadWhenPathBound = false
         loadJob?.cancel()
         loadJob = null
@@ -336,6 +399,7 @@ internal class MarginMemoController(
 
     /** Vault 切替。**書きかけを全ノート分捨てる** — 別の Vault のノートへ置けてしまう。 */
     fun clearVaultScoped() {
+        stopQuote()
         drafts.clear()
     }
 

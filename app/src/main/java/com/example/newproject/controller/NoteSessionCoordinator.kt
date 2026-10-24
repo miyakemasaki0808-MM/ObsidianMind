@@ -19,6 +19,7 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -747,6 +748,19 @@ internal class NoteSessionCoordinator(
     /** 書きかけを変える。[bodySection] は今の本文の節で、書き始めた瞬間だけ書き込み先になる。 */
     fun editMarginMemo(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) =
         marginMemo.edit(text, bodySection, seenAtStart)
+
+    /** 選択メニューの「引用して書く」（→ features/margin_quote.md §5.2）。引用元は [passages] で決める。 */
+    fun quoteMarginMemo(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, passages: PassageIndex) =
+        marginMemo.quote(selected, sourceBlock, hintBlock, bodySection, passages)
+
+    /** 付ける場で候補から引用元を選んだ（→ features/margin_quote.md 判断13）。 */
+    fun chooseMarginMemoQuoteSource(quote: MemoPassage.Quoted, block: Int, passages: PassageIndex) =
+        marginMemo.chooseQuoteSource(quote, block, passages)
+
+    fun dismissMarginMemoQuoteChoice() = marginMemo.dismissQuoteChoice()
+
+    /** 引用の ✕。引用だけを外す。 */
+    fun detachMarginMemoQuote() = marginMemo.detachQuote()
 
     /**
      * 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。

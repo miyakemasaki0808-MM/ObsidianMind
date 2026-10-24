@@ -4,6 +4,7 @@ import com.example.newproject.controller.MarginMemoController
 import com.example.newproject.controller.MemoDeleteOutcome
 import com.example.newproject.controller.MemoLoad
 import com.example.newproject.controller.MemoSaveOutcome
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.submissionOf
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
@@ -18,9 +19,11 @@ import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import com.example.newproject.model.state.PreviousVisit
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -30,6 +33,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 /**
  * 余白メモの画面状態。**保存そのものは [com.example.newproject.controller.ReadingTraceController] が持つ**ので、
@@ -784,6 +788,176 @@ class MarginMemoControllerTest {
         submit(path, bodySection = null)
     }
 
+    // ── 選択メニューの「引用して書く」（→ features/margin_quote.md §5.2）────────────────
+
+    private val twoSameBody = buildNoteSectionModel("## 節A\n\n同じ一節\n\n## 節B\n\n同じ一節\n\n## 節C\n\n一度だけの一節").passages
+
+    @Test
+    fun `引用すると引用元を決めて書きかけへ付け、書き込み先を引用元の節にする`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+
+        controller.quote("同じ一節", sourceBlock = 3, hintBlock = 3, bodySection = SectionRef("節A"), passages = twoSameBody)
+        // 引用元を探すのは Main の外。結果が届くまで書きかけは変えない。
+        assertNull(drafts.draft(NOTE).quote)
+        advanceUntilIdle()
+
+        val draft = drafts.draft(NOTE)
+        assertEquals(MemoPassage.Quoted("同じ一節", QuoteContext("", ""), truncated = false), draft.quote?.passage)
+        assertEquals(SectionRef("節B"), draft.target)
+    }
+
+    @Test
+    fun `引用元が決まらなければ、そのときの本文の節を書き込み先にする`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+
+        controller.quote("本文に無い一節", sourceBlock = null, hintBlock = null, bodySection = SectionRef("節C"), passages = twoSameBody)
+        advanceUntilIdle()
+
+        assertNull(drafts.draft(NOTE).quote?.passage?.context)
+        assertEquals(SectionRef("節C"), drafts.draft(NOTE).target)
+    }
+
+    @Test
+    fun `空白だけの選択では何も付けない`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+            .quote("  \n ", sourceBlock = 1, hintBlock = 1, bodySection = SectionRef("節A"), passages = twoSameBody)
+        advanceUntilIdle()
+
+        assertEquals(MarginMemoDraft(), drafts.draft(NOTE))
+    }
+
+    @Test
+    fun `引用元を探す間にもう一度引用したら後のものだけを付ける`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+
+        controller.quote("同じ一節", sourceBlock = 1, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        controller.quote("一度だけの一節", sourceBlock = 5, hintBlock = 5, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+
+        assertEquals("一度だけの一節", drafts.draft(NOTE).quote?.passage?.text)
+        assertEquals(SectionRef("節C"), drafts.draft(NOTE).target)
+    }
+
+    /** 渡された仕事を溜め、**新しいものから**流す。後から頼んだ仕事が先に終わる順序を作る。 */
+    private class NewestFirstDispatcher : CoroutineDispatcher() {
+        private val held = ArrayDeque<Runnable>()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            held.addLast(block)
+        }
+
+        fun runNewestFirst() {
+            while (held.isNotEmpty()) held.removeLast().run()
+        }
+    }
+
+    /** 前の引用の仕事（本文の全体を探す）が後の引用（位置で決まる）より遅れて終わっても、前のものを付けない。 */
+    @Test
+    fun `前の引用の仕事が後から終わっても、後の引用だけを付ける`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val work = NewestFirstDispatcher()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts, quoteDispatcher = work)
+
+        controller.quote("同じ一節", sourceBlock = null, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        controller.quote("一度だけの一節", sourceBlock = 5, hintBlock = 5, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+        work.runNewestFirst()
+        advanceUntilIdle()
+
+        assertEquals("一度だけの一節", drafts.draft(NOTE).quote?.passage?.text)
+        assertEquals(SectionRef("節C"), drafts.draft(NOTE).target)
+    }
+
+    /** 書きかけは Vault 単位で預かるが、付ける仕事はノート単位。待つ間に離れたノートへ前のノートの引用を付けない。 */
+    @Test
+    fun `引用元を探す間にノートを替えたら、どちらのノートにも付けない`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        var note = NOTE
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts, currentNoteKey = { note })
+
+        controller.quote("同じ一節", sourceBlock = 1, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        note = "content://vault/other.md"
+        advanceUntilIdle()
+
+        assertNull(drafts.draft(NOTE).quote)
+        assertNull(drafts.draft(note).quote)
+    }
+
+    @Test
+    fun `ノート切替とVault切替の後始末で止めた引用は付けない`() = runTest {
+        listOf<(MarginMemoController) -> Unit>({ it.cancelAndClear() }, { it.clearVaultScoped() }).forEach { stop ->
+            val drafts = InMemoryMarginMemoDrafts()
+            val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+
+            controller.quote("同じ一節", sourceBlock = 1, hintBlock = 1, bodySection = null, passages = twoSameBody)
+            stop(controller)
+            advanceUntilIdle()
+
+            assertNull(drafts.draft(NOTE).quote)
+        }
+    }
+
+    @Test
+    fun `本文に2か所以上あれば選んでもらい、選んだ候補で前後と書き込み先が決まる`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+        controller.quote("同じ一節", sourceBlock = null, hintBlock = 1, bodySection = SectionRef("節C"), passages = twoSameBody)
+        advanceUntilIdle()
+        val choosing = checkNotNull(drafts.draft(NOTE).quote)
+        assertTrue(choosing.choosing)
+        assertEquals(SectionRef("節C"), drafts.draft(NOTE).target)
+
+        controller.chooseQuoteSource(choosing.passage, block = 3, passages = twoSameBody)
+        advanceUntilIdle()
+
+        assertEquals(QuoteContext("", ""), drafts.draft(NOTE).quote?.passage?.context)
+        assertFalse(drafts.draft(NOTE).quote!!.choosing)
+        assertEquals(SectionRef("節B"), drafts.draft(NOTE).target)
+    }
+
+    /** 両方向 — 選んだ結果を待つ間に別の引用を付けた／別の引用を待つ間に選んだ。後の操作だけが残る。 */
+    @Test
+    fun `選ぶのと引用を付け替えるのが交錯しても、後の操作だけが残る`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+        controller.quote("同じ一節", sourceBlock = null, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+        val choosing = checkNotNull(drafts.draft(NOTE).quote).passage
+
+        // 選んだ結果を待つ間に別の引用を付けた → 別の引用が残り、遅れた選択では何も変えない。
+        controller.chooseQuoteSource(choosing, block = 3, passages = twoSameBody)
+        controller.quote("一度だけの一節", sourceBlock = 5, hintBlock = 5, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+        assertEquals("一度だけの一節", drafts.draft(NOTE).quote?.passage?.text)
+
+        // 別の引用を待つ間に、前に出ていた候補を選んだ → 選んだ時点の書きかけの引用が別物なので何も変えない。
+        controller.quote("同じ一節", sourceBlock = null, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+        val again = checkNotNull(drafts.draft(NOTE).quote).passage
+        controller.quote("一度だけの一節", sourceBlock = 5, hintBlock = 5, bodySection = null, passages = twoSameBody)
+        controller.chooseQuoteSource(again, block = 1, passages = twoSameBody)
+        advanceUntilIdle()
+        assertEquals("同じ一節", drafts.draft(NOTE).quote?.passage?.text)
+        assertEquals(QuoteContext("", ""), drafts.draft(NOTE).quote?.passage?.context)
+    }
+
+    @Test
+    fun `候補を選ばずに閉じれば、引用元を決めないまま付けておく`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val controller = controller(NoteUiStateStore(NoteUiState()), drafts = drafts)
+        controller.quote("同じ一節", sourceBlock = null, hintBlock = 1, bodySection = null, passages = twoSameBody)
+        advanceUntilIdle()
+
+        controller.dismissQuoteChoice()
+
+        assertFalse(drafts.draft(NOTE).quote!!.choosing)
+        assertNull(drafts.draft(NOTE).quote?.passage?.context)
+    }
+
     private fun TestScope.controller(
         store: NoteUiStateStore,
         loaded: List<MarginMemo> = emptyList(),
@@ -794,12 +968,15 @@ class MarginMemoControllerTest {
         onAppend: (MarginMemo) -> Unit = {},
         onDeleted: (MarginMemo) -> Unit = {},
         drafts: InMemoryMarginMemoDrafts = InMemoryMarginMemoDrafts(),
-        loadMemos: suspend (String, Boolean) -> MemoLoad = { _, _ -> MemoLoad(loaded, MemoFileRead.Read) }
+        loadMemos: suspend (String, Boolean) -> MemoLoad = { _, _ -> MemoLoad(loaded, MemoFileRead.Read) },
+        currentNoteKey: () -> String? = { NOTE },
+        // 引用元を探す仕事も試験の時計で進める（実の Default に出すと advanceUntilIdle が待たない）。
+        quoteDispatcher: CoroutineDispatcher = StandardTestDispatcher(testScheduler)
     ) = MarginMemoController(
         scope = this,
         state = store.marginMemoWriter,
         drafts = drafts,
-        currentNoteKey = { NOTE },
+        currentNoteKey = currentNoteKey,
         loadMemos = loadMemos,
         appendMemo = { _, memo ->
             beforeAppend()
@@ -811,6 +988,7 @@ class MarginMemoControllerTest {
             if (deleteOutcome == MemoDeleteOutcome.Deleted) onDeleted(memo)
             deleteOutcome
         },
-        clock = { 5_000L }
+        clock = { 5_000L },
+        quoteDispatcher = quoteDispatcher
     )
 }

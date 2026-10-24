@@ -340,6 +340,36 @@ class ThreadingScanTest {
                 offMain = mapOf("ui/screen/MarginFace.kt" to 1)
             ),
             HeavyCall(
+                name = "引用の候補を本文の全体から探す",
+                call = """\bcandidatesOf\(""",
+                dispatcher = "locateDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf(
+                    "domain/MemoPassages.kt" to "照らし直し（locateMemos）と引用元を決める quoteSourceFor の中",
+                    "domain/QuoteAttachment.kt" to "候補を並べる quoteCandidates の中"
+                )
+            ),
+            HeavyCall(
+                name = "引用元を決める",
+                call = """\bquoteSourceFor\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/QuoteAttachment.kt" to "付ける引用を作る quoteAttachmentFor の中")
+            ),
+            HeavyCall(
+                name = "付ける引用を作る",
+                call = """\bquoteAttachmentFor\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = mapOf("controller/MarginMemoController.kt" to 1)
+            ),
+            HeavyCall(
+                name = "選んだ候補で引用元の前後を控える",
+                call = """\bresolveQuoteAt\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = mapOf("controller/MarginMemoController.kt" to 1),
+                nested = mapOf("domain/MemoPassages.kt" to "引用元を決める quoteSourceFor の中")
+            ),
+            HeavyCall(
                 name = "反証の候補の列挙",
                 call = """\bscanRebuttalClaims\(""",
                 dispatcher = "excerptDispatcher",
