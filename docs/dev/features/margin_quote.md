@@ -1,11 +1,13 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
-**状態:** 区切り1（土台。画面は変えない）は実装済み、区切り2〜4（画面）は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
-**最終検証:** 未検証（区切り1だけを実装。§5.1・§5.6・§5.7 と画面の §7 は未実装で未突合）
+**状態:** 区切り1（土台。画面は変えない）と区切り2a（照合の配線と表示・書き始めの控え）は実装済み、区切り2b〜4は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
+**最終検証:** 未検証（区切り1と2aだけを実装。§5.1〜§5.3・§5.6・§5.7 と、§5.5 の候補を選ぶ操作は未実装で未突合）
 **関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
-（予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt` / `controller/NoteSessionCoordinator.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/DeskSpread.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/FullscreenNoteScreen.kt`。新規に `ui/markdown/QuoteTextToolbar.kt`・`ui/screen/QuoteChip.kt`
+区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
+（2b〜4 で予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/screen/DeskSpread.kt` / `ui/screen/NoteSpread.kt`。2a で変えた面と窓口も変える。新規に `ui/markdown/QuoteTextToolbar.kt`・`ui/screen/QuoteChip.kt`
 **関連テスト:** 区切り1 — `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupJsonTest` / `SchemaVersionDocsTest`。
-（予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest`。新規に `QuoteChipTest`。androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
+区切り2a — `MarginFaceLocationsTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `MarginMemoSheetUiTest`。
+（2b〜4 で予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest`。新規に `QuoteChipTest`。androidTest: `MarginMemoSheetUiTest` / `NoteReadingFlowTest`
 **正本:** この文書（本文の一節を余白メモへ移す操作・引用と控えた位置のデータ・段落への照合）。Fold の原則と契約は [fold_experience](../system/fold_experience.md)、
 余白の面の並べ方・✎ の遷移・書きかけと送信の照合は [margin_pane](margin_pane.md)、余白メモの保存・上限・合流は [reflect_margin_memo](reflect_margin_memo.md) が持つ
 
@@ -195,7 +197,10 @@
   節の割り当ては、候補の節のどれにも出す「同名に共通」と同じ扱いにし、一意の節として数えない。控えた位置は「書いた頃の位置へ」を出さず、見出しの照合へ戻る
 - **見つからなければ、今の見出しの照合に戻る。** 引用は表示したまま押せなくし、添え書きに「引用した一節は本文に見つかりません」と出す
 - **飛び方は節へ飛ぶのと同じ口を使う**（`BodyPosition` → 見開きの間も同じ位置へ送る）。飛び越した画像の測定も同じく頼む
-- **照合は本文の大きさに比例するので Main で走らせない**（最大1MB × メモ20件 → [architecture](../system/architecture.md) 判断3）。メモか解析結果が替わったときに Main の外で作り直し、`ThreadingScanTest` の表へ1行足す
+- **照合は本文の大きさに比例するので Main で走らせない**（最大1MB × メモ20件 → [architecture](../system/architecture.md) 判断3）。`ThreadingScanTest` の表が2つとも持つ。
+  照らし直しの材料（`buildPassageIndex`）は本文の解析と一緒に `NoteSectionModel` で作り、照らし直し（`locateMemos`）は余白の面がメモか解析結果の替わったときだけ Main の外で作り直す
+- **作り直している間は、前の結果で並べない。** 作ったときのメモと解析結果が今のものと違えば使わず、見出しの照合で並べる（`currentLocations`）。
+  解析結果は同じものかで比べ（同じ本文を解析し直しても待つ）、メモは中身で比べる（保存の状態だけが替わっても作り直さない）
 - **候補から節への集約も、照合と同じ事前計算で済ませる。** 面に並べる処理（節を移るたびに呼ばれる）は、メモごとの置き場所（確定した節か、特定できない引用の候補の節）を引くだけで、
   候補のブロックの列とブロックごとの節の列を読まない。候補の列を持つ構造を地図の鍵にもしない — ハッシュと等価比較が列全体を読むため。
   同じ鍵の候補探しはメモの間で1度だけにし、候補の列も共有する
@@ -307,7 +312,9 @@ data class QuoteContext(val before: String, val after: String)
 着手の順はロードマップが持つ。この文書は区切り方だけを決める。
 
 1. **土台（JVM）:** スキーマ v8（`passage`）・ファイルの上限を 192KB に・引用の整え方と切れる部分・前後の文字の控え・書き始めの位置の選び方・照らし直し（3値）・並べ方・書きかけの規則・容量の測り直し・退避と読み戻し。送信が引用か控えを運ぶところまで。画面に出るものは変えない
-2. **引用と段落へ飛ぶ（全端末）:** 選択メニューの「引用して書く」・矩形からの引用元・決まらないときに付ける場で選ぶ候補・引用つきの書きかけ（行き先と未保存の表示・切れる部分）・メモの行の引用と「書いた頃の位置へ」と候補の選択・書き始めの控え・照合を Main の外で作る
+2. **引用と段落へ飛ぶ（全端末）:** 2つに分けて入れる（2026-10-24、オーナー判断）
+   - **2a 照合の配線と表示:** 照合を Main の外で作る・メモの行の引用と「書いた頃の位置へ」・特定できない／見つからないの添え書き・書き始めの控え。付ける操作はまだ無く、見え方が変わるのは保存済みの引用か控えを持つメモだけ
+   - **2b 引用を付ける:** 選択メニューの「引用して書く」・矩形からの引用元・決まらないときに付ける場で選ぶ候補・引用つきの書きかけ（行き先と未保存の表示・切れる部分）・特定できない引用を押して候補を選ぶ
 3. **机の札（開いた Fold）:** 札の表示と運び・落とし先・外で離したときに戻す・横の払いとの取り合い
 4. **並べ読み中の引用:** 右の面の出し分けと切替・受け取れたら資料へ戻す・窓が変わったときの扱い
 
@@ -427,6 +434,7 @@ data class QuoteContext(val before: String, val after: String)
   - 位置から引用元が決まらないときの補い方（**候補A・Bで画面にはBだけが見えていても、Bを引用元にせずBの前後も控えない**。Aだけが見えていても同じ。
     本文の全体で候補が1つなら補う。2つ以上なら付ける場で選ぶ候補を返し、選べばその前後を控え、選ばなければ null のまま付く。位置が取れた普通の場合はその位置を使う）
   - 並べ方（確定すれば同名の見出しでも一意の節、特定できなければ候補の節のどれにも出して一意として数えない、見つからなければ今の見出しの照合、印の件数がそれに従う）
+  - 照らし直しの結果の使い分け（作ったときのメモと解析結果が今と違えば使わない。解析し直した結果は同じ本文でも別物、メモは中身が同じなら同じ）と、メモの行の添え書き（確定は日時だけ・特定できないは似た一節の数・見つからないはそう言って控えた見出し名も残す・途中までの引用に「…」）
   - 範囲の矩形から引用元のブロックを決める（矩形の始まりを含むブロック・画面の外に始まる範囲では決めない・見開きのページに組んだブロック）
   - 引用元の節だけを替えたとき（節Aと節Bに「同じ一節」だけの段落を置き、Aから引いて送り、待つ間にBから引き直すと、引用の値は同じでも前の送信の受理で空にせず、確かめるではなく置く。同名の見出しの別の順番でも同じ。何も替えなければ受理で空になる）
   - 引用を外したときの控え（Aで書き始め、Bから引用して外し、置いて JSON を往復し照合・並べ直しても Bの組に残り、Aの件数を増やさない。引用を付けずに置いたメモは元の控えのまま元の段落へ戻る）
@@ -441,7 +449,7 @@ data class QuoteContext(val before: String, val after: String)
   - 落とし先と札（折り目の帯・余白の面の外で離すと元の位置へ戻る・本文に触れる／別の文字を選ぶ／スクロール／窓の変化で消える・左の面に収める・片側1画面と帯の間は出さない）
 - **instrumentation:** 選択メニューに「引用して書く」が出て、押すと引用が付き入力欄にフォーカスが移る（スマホのシート・机）。端末のクリップボードの中身が変わらない。
   同じ文が2度ある本文で後ろを選ぶと、引用元が後ろに決まる（縦の流しと見開き）。始まりが画面の外に出るまで長く選ぶと、付ける場で候補が出て、選んだ段落へ後で戻れる。札を運んで落とすと引用が付き、札から始めた指で片側1画面にならない。
-  並べ読みの間に引用して ✕ を押しても入力面のまま。切替で右のノートと書きかけを行き来し、置くと右が同じノートの同じ位置へ戻る。引用つきのメモの引用を押すと本文がその段落へ飛ぶ
+  並べ読みの間に引用して ✕ を押しても入力面のまま。切替で右のノートと書きかけを行き来し、置くと右が同じノートの同じ位置へ戻る。引用つきのメモの引用と「書いた頃の位置へ」を押すと本文がその段落へ飛び、特定できない引用は押しても飛ばない
 - **実機確認:** 机で札を運ぶ手触り（つまみやすさ・落とし先の縁・折り目の近くで離したとき・外で離して戻った札をもう一度運ぶ）。長押しの選択・選択の端の調整・横の払い・本文のスクロールとの取り合い。
   **比べながら書く流れを補助なしで一度通す** — 左の一節を引用 → 右の別の一節を資料で確かめる → 引用と書きかけを保ったまま続きを書く → 引用だけ外す → 置く。
   **書き始めの位置の控え方が、読んでいた位置の手掛かりとして役に立つか**（判断5 の見直しの材料。オーナーが使って判断する）。
