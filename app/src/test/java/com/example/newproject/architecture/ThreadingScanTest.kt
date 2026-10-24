@@ -334,6 +334,12 @@ class ThreadingScanTest {
                 offMain = mapOf("ui/screen/MarginFace.kt" to 1)
             ),
             HeavyCall(
+                name = "余白メモの並べ方（今の節に依らない組・順序・件数）",
+                call = """\blayoutMemos\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
                 name = "反証の候補の列挙",
                 call = """\bscanRebuttalClaims\(""",
                 dispatcher = "excerptDispatcher",

@@ -228,7 +228,7 @@ class MarginMemoSectionsTest {
     private fun arrangeWithPassages(body: String, memos: List<MarginMemo>, current: SectionRef): ArrangedMemos {
         val model = buildNoteSectionModel(body)
         val passages = buildPassageIndex(model)
-        return arrangeMemos(memos, model.headingIndex, current, locateMemos(memos, passages, model.headingIndex))
+        return arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, passages, model.headingIndex)), current)
     }
 
     /** **同名の見出しでも、前後とも合う引用は1つの節に決まる。** 見出しの照合だけなら両方の候補に出る。 */
@@ -331,12 +331,87 @@ class MarginMemoSectionsTest {
             sections.reads = 0
             candidateLists.forEach { it.reads = 0 }
 
-            val arranged = arrangeMemos(memos, HeadingIndex(listOf("まとめ")), current = section, locations = locations)
+            val arranged = arrangeMemos(layoutMemos(memos, HeadingIndex(listOf("まとめ")), locations), current = section)
 
             assertEquals("候補 $blocks 件でブロックごとの節の列を読んだ", 0, sections.reads)
             assertEquals("候補 $blocks 件で候補の列を読んだ", 0, candidateLists.sumOf { it.reads })
             assertEquals(20, arranged.current.size)
             assertEquals(mapOf(section to 20), arranged.countsBySection)
+        }
+    }
+
+    /**
+     * **候補が別々の節に散らばっても、今の節を替えるだけなら候補の節の列をたどらず、組も作り直さない**（→ features/margin_quote.md §5.5）。
+     * 候補を節へ畳んでも、別々の節にあれば小さくならない。候補のある節を 1,000 から 50,000 へ増やしても、読み取りは変わらない。
+     */
+    @Test
+    fun `候補が多数の節に散らばっても今の節を替える処理は候補の節の数に比例しない`() {
+        listOf(1_000, 10_000, 50_000).forEach { count ->
+            val headings = List(count) { "S$it" }
+            val sections = headings.map { SectionRef(it) }
+            val passages = PassageIndex(texts = List(count) { "Q" }, sections = sections, readable = List(count) { true })
+            val index = HeadingIndex(headings)
+            val memos = List(20) { k -> MarginMemo("メモ$k", k.toLong(), "S0", MemoPassage.Quoted("Q", context = null, truncated = false)) }
+            val layout = layoutMemos(memos, index, locateMemos(memos, passages, index))
+            val sectionLists = layout.sectionsOf.map { CountingReads(it) }
+            val groups = CountingReads(layout.groups)
+            val counted = MemoLayout(layout.placed, sectionLists, groups, layout.groupIndex, layout.missing, layout.countsBySection)
+
+            listOf(sections.first(), sections[count / 2], sections.last(), SectionRef(title = null)).forEach { current ->
+                val arranged = arrangeMemos(counted, current)
+                // 畳んだ面と本文の見出しの印が読むもの
+                val inCurrent = if (current.title == null) 0 else 20
+                assertEquals(inCurrent, arranged.current.size)
+                assertEquals(if (current.title == null) count else count - 1, arranged.others.size)
+                assertEquals(20, arranged.otherCount)
+                assertEquals(20, arranged.countsBySection[sections[1]])
+            }
+
+            assertEquals("候補の節 $count で、メモごとの節の列を読んだ回数", 0, sectionLists.sumOf { it.reads })
+            assertTrue("候補の節 $count で、組の列を読んだ回数が ${groups.reads}", groups.reads <= 3)
+        }
+    }
+
+    /** 今の節ごとに組を作り直す形（区切り2a までの並べ方）。今の節を引くだけの形が、これと同じ結果を返すことを確かめる。 */
+    private fun rebuiltFor(layout: MemoLayout, index: HeadingIndex, current: SectionRef): ArrangedMemos {
+        val opening = SectionRef(title = null)
+        val sections = layout.sectionsOf
+        val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
+        layout.placed.forEachIndexed { k, memo ->
+            sections[k].filter { it != current }.forEach { bySection.getOrPut(it) { mutableListOf() }.add(memo) }
+        }
+        val groups = bySection.entries
+            .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
+            .map { (section, inSection) -> MemoGroup(section, inSection) }
+        val missing = layout.placed.filterIndexed { k, _ -> sections[k].isEmpty() }
+        val others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing)
+        return ArrangedMemos(
+            current = layout.placed.filterIndexed { k, _ -> current in sections[k] },
+            others = others,
+            otherCount = others.flatMap { group -> group.memos.map { it.memo } }.distinct().size,
+            countsBySection = sections.flatten().filter { it != opening }.groupingBy { it }.eachCount()
+        )
+    }
+
+    /** 今の節・ほかの節の組と順序・件数・印は、確定・特定できない・同名に共通・見出しより前・見つからないが混ざっても、作り直したときと同じ。 */
+    @Test
+    fun `今の節を引くだけの並べ方は、節ごとに組を作り直したときと同じ`() {
+        val model = buildNoteSectionModel(
+            "冒頭の段落\n\n## まとめ\n\n同じ一節\n\n## 本論\n\n本論の段落\n\n## まとめ\n\n同じ一節\n\n## 付録\n\n同じ一節"
+        )
+        val memos = listOf(
+            MarginMemo("特定できない", 7L, "まとめ", MemoPassage.Quoted("同じ一節", context = null, truncated = false)),
+            MarginMemo("同名に共通", 6L, "まとめ"),
+            MarginMemo("確定", 5L, "まとめ", MemoPassage.Seen("本論の段落")),
+            MarginMemo("本論", 4L, "本論"),
+            MarginMemo("冒頭", 3L, null),
+            MarginMemo("消えた節", 2L, "消えた見出し"),
+            MarginMemo("見つからない引用", 1L, "付録", MemoPassage.Quoted("どこにも無い", context = null, truncated = false))
+        )
+        val layout = layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex))
+
+        (model.headingIndex.sections + SectionRef(title = null) + SectionRef("無い節")).forEach { current ->
+            assertEquals("今の節 $current", rebuiltFor(layout, model.headingIndex, current), arrangeMemos(layout, current))
         }
     }
 
@@ -385,7 +460,7 @@ class MarginMemoSectionsTest {
         val passages = buildPassageIndex(model)
         val submission = submissionOf(draft.text, draft.target?.title, 1_000L, draft.passage, target = draft.target)!!
         val memo = throughJson(submission.memo)
-        return memo to arrangeMemos(listOf(memo), model.headingIndex, current, locateMemos(listOf(memo), passages, model.headingIndex))
+        return memo to arrangeMemos(layoutMemos(listOf(memo), model.headingIndex, locateMemos(listOf(memo), passages, model.headingIndex)), current)
     }
 
     /**

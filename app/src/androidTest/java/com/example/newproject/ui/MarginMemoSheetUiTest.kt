@@ -51,6 +51,7 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.domain.layoutMemos
 import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.edited
 import com.example.newproject.domain.settled
@@ -520,7 +521,7 @@ class MarginMemoSheetUiTest {
             MarginMemo("特定できないメモ", 1L, "節B", MemoPassage.Quoted("同じ一節", context = null, truncated = false))
         )
         harness.state = READY.copy(memos = memos)
-        harness.arranged = arrangeMemos(memos, model.headingIndex, SectionRef("節B"), locateMemos(memos, model.passages, model.headingIndex))
+        harness.arranged = arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex)), SectionRef("節B"))
         setContent(harness)
 
         composeRule.onNodeWithText("書いた頃の位置へ").performClick()

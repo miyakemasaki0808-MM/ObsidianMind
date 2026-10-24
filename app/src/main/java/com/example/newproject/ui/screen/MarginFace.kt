@@ -10,8 +10,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import com.example.newproject.domain.ArrangedMemos
-import com.example.newproject.domain.MemoLocations
+import com.example.newproject.domain.MemoLayout
 import com.example.newproject.domain.arrangeMemos
+import com.example.newproject.domain.layoutMemos
 import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.seenPassageAt
@@ -43,22 +44,23 @@ internal class MarginFaceInputs(
     val seenAtStart: MemoPassage.Seen?
 )
 
-/** 照らし直しの結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLocations]）。 */
-internal class LocatedMemos(val memos: List<MarginMemo>, val model: NoteSectionModel, val locations: MemoLocations)
+/** 照らし直しと並べ方の結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLayout]）。 */
+internal class LaidOutMemos(val memos: List<MarginMemo>, val model: NoteSectionModel, val layout: MemoLayout)
 
 /**
- * 今のメモと解析結果に対する照らし直しの結果。**古い結果を混ぜない** — 結果は Main の外で遅れて届くので、
+ * 今のメモと解析結果に対する並べ方。**古い結果を混ぜない** — 結果は Main の外で遅れて届くので、
  * 届く前にメモか解析結果が替わっていれば（ノートの切替・解析し直し・メモの保存や削除）、その結果は使わず見出しの照合で並べる。
- * 解析結果は同じものか（同一性）で、メモは中身で比べる（件数は20件まで）。
+ * 解析結果は同じものか（同一性）で、メモは中身で比べる（件数は20件まで）。今の節は並べ方に含まれないので比べない。
  */
-internal fun currentLocations(located: LocatedMemos?, memos: List<MarginMemo>?, model: NoteSectionModel?): MemoLocations? =
-    located?.takeIf { memos != null && it.model === model && it.memos == memos }?.locations
+internal fun currentLayout(laidOut: LaidOutMemos?, memos: List<MarginMemo>?, model: NoteSectionModel?): MemoLayout? =
+    laidOut?.takeIf { memos != null && it.model === model && it.memos == memos }?.layout
 
 /**
  * [position] は面を並べる画面の本文の位置の口。全画面は自分の一覧の口を渡す。
  *
- * **引用と書いた頃の位置の照らし直しは [locateDispatcher] の上で行う。** 本文の大きさに比例する（1MB で数十ms）ので Main で走らせず、
- * メモか解析結果が替わったときだけ作り直す。節を移るたびに並べ直すのは、その結果を引くだけの [arrangeMemos]（→ features/margin_quote.md §5.5）。
+ * **引用と書いた頃の位置の照らし直しと、今の節に依らない並べ方は [locateDispatcher] の上で作る。**
+ * 本文の大きさ（1MB で数十ms）と候補のある節の数に比例するので Main で走らせず、メモか解析結果が替わったときだけ作り直す。
+ * 節を移るたびに Main でするのは、今の節の組を引くだけの [arrangeMemos]（→ features/margin_quote.md §5.5）。
  */
 @Composable
 internal fun rememberMarginFaceInputs(
@@ -81,21 +83,23 @@ internal fun rememberMarginFaceInputs(
     val bodySection = sectionModel?.sectionRefAt(settledBlock)
     val readyMemos = memoState as? MarginMemoState.Ready
     val memos = readyMemos?.memos
-    // 引用か書いた頃の位置を持つメモがあるときだけ照らす。キーが替わると前の計算は取り消され、その結果は書かれない。
-    val located by produceState<LocatedMemos?>(null, memos, sectionModel) {
+    // キーが替わると前の計算は取り消され、その結果は書かれない。前の値は残るので、使うかは [currentLayout] が決める。
+    val laidOut by produceState<LaidOutMemos?>(null, memos, sectionModel) {
         val forMemos = memos ?: return@produceState
         val model = sectionModel ?: return@produceState
-        if (forMemos.none { it.passage != null }) return@produceState
         value = withContext(locateDispatcher) {
-            LocatedMemos(forMemos, model, locateMemos(forMemos, model.passages, model.headingIndex))
+            val locations = locateMemos(forMemos, model.passages, model.headingIndex)
+            LaidOutMemos(forMemos, model, layoutMemos(forMemos, model.headingIndex, locations))
         }
     }
-    val locations = currentLocations(located, memos, sectionModel)
-    val arranged = remember(memos, sectionModel, bodySection, locations) {
+    val layout = currentLayout(laidOut, memos, sectionModel)
+    val arranged = remember(memos, sectionModel, bodySection, layout) {
         val forMemos = memos ?: return@remember null
         val model = sectionModel ?: return@remember null
-        // **見出しの索引と照らし直しは Main の外で作ってある。** ここでは見出しも候補もたどらない。
-        arrangeMemos(forMemos, model.headingIndex, bodySection ?: SectionRef(title = null), locations)
+        val current = bodySection ?: SectionRef(title = null)
+        // **並べ方は Main の外で作ってある。** ここでは今の節の組を引くだけで、候補の節をたどらない。
+        // 届くまで（メモか解析結果が替わった直後）は見出しの照合だけで並べ、一覧を空にも並べ替え前にもしない。
+        if (layout != null) arrangeMemos(layout, current) else arrangeMemos(forMemos, model.headingIndex, current)
     }
     // 書き始めたら控える位置。スクロールが止まった最上端のブロックから、同じ節の最初の本文のブロックを選ぶ（ほとんどは最上端そのもの）。
     val seenAtStart = remember(sectionModel, settledBlock) { sectionModel?.let { seenPassageAt(settledBlock, it.passages) } }
