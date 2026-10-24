@@ -3,6 +3,8 @@ package com.example.newproject
 import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -23,7 +25,7 @@ import org.junit.Test
  * かつてここは**生のバイト上限を足し**、JSONの器を定数で見込んでいた。
  * **それは保証になっていなかった** — JSONは `"` と `\` を2バイトへ、
  * 制御文字を `\u00XX` の6バイトへ広げるので、
- * **全欄が上限内なのに128KBを超えたファイルを書ける。**
+ * **全欄が上限内なのにファイルの上限を超えたファイルを書ける。**
  *
  * そこで推定値を置くのをやめ、**本物の [ReadingTraceJson.encode] に通して数える。**
  * 欄が増えても計算式を直し忘れられない（→ features/reflect_margin_memo.md 判断11）。
@@ -87,7 +89,13 @@ class ReadingTraceLimitsTest {
                 MarginMemo(
                     text = escaping(MAX_MEMO_BYTES),
                     writtenAtEpochMillis = Long.MAX_VALUE - index,
-                    sectionTitle = escaping(MAX_SECTION_TITLE_BYTES)
+                    sectionTitle = escaping(MAX_SECTION_TITLE_BYTES),
+                    // 控えた位置より引用のほうが大きいので、全件を前後つきの最大の引用にする。
+                    passage = MemoPassage.Quoted(
+                        text = escaping(MAX_QUOTE_BYTES),
+                        context = QuoteContext(escaping(MAX_QUOTE_CONTEXT_BYTES), escaping(MAX_QUOTE_CONTEXT_BYTES)),
+                        truncated = true
+                    )
                 )
             },
             markedAtEpochMillis = Long.MAX_VALUE,

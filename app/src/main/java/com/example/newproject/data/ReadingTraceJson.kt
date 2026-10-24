@@ -1,6 +1,8 @@
 package com.example.newproject.data
 
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
@@ -51,6 +53,7 @@ internal object ReadingTraceJson {
                     .put(KEY_MEMO_TEXT, memo.text)
                     .put(KEY_MEMO_WRITTEN_AT, memo.writtenAtEpochMillis)
                     .put(KEY_MEMO_SECTION, memo.sectionTitle ?: JSONObject.NULL)
+                    .put(KEY_MEMO_PASSAGE, memo.passage?.toJson() ?: JSONObject.NULL)
             )
         }
         val root = JSONObject()
@@ -128,7 +131,9 @@ internal object ReadingTraceJson {
                     MarginMemo(
                         text = memo.getString(KEY_MEMO_TEXT),
                         writtenAtEpochMillis = memo.getLong(KEY_MEMO_WRITTEN_AT),
-                        sectionTitle = memo.stringOrNull(KEY_MEMO_SECTION)
+                        sectionTitle = memo.stringOrNull(KEY_MEMO_SECTION),
+                        // v8 で追加。旧版の checksum はこの値を含まないので、書かれていても読まない。
+                        passage = if (version >= 8) memo.passageOrNull() else null
                     )
                 },
                 // v5 までの `aiSummary` はすべて俯瞰要約なので、種別を補って読む。
@@ -242,10 +247,78 @@ internal object ReadingTraceJson {
                     out.writeSized(memo.text)
                     out.writeLong(memo.writtenAtEpochMillis)
                     out.writeSizedNullable(memo.sectionTitle)
+                    // v8 で追加。**v7 の正規形には無い**ので、v7 のファイルを破損扱いにしない。
+                    if (trace.schemaVersion >= 8) out.writePassage(memo.passage)
                 }
             }
         }
         return buffer.toByteArray()
+    }
+
+    /**
+     * 引用と控えた位置の正規形。種類の印を1バイト前置する（0＝無し・1＝引用・2＝控えた位置）。
+     *
+     * **前後の文字は、無い（控えていない）と空（ブロックの端）を存在フラグで分ける。** 分けないと、
+     * 引用元を決められなかった引用を、段落を丸ごと引用したものへ書き換えても検出できない。
+     */
+    private fun DataOutputStream.writePassage(passage: MemoPassage?) {
+        when (passage) {
+            null -> writeByte(PASSAGE_NONE)
+            is MemoPassage.Quoted -> {
+                writeByte(PASSAGE_QUOTED)
+                writeSized(passage.text)
+                val context = passage.context
+                if (context == null) {
+                    writeByte(0)
+                } else {
+                    writeByte(1)
+                    writeSized(context.before)
+                    writeSized(context.after)
+                }
+                writeBoolean(passage.truncated)
+            }
+            is MemoPassage.Seen -> {
+                writeByte(PASSAGE_SEEN)
+                writeSized(passage.text)
+            }
+        }
+    }
+
+    /** **控えていない前後は `context` のキーを書かない。** 空の前後（ブロックの端）とは別の形で残す（→ features/margin_quote.md §6）。 */
+    private fun MemoPassage.toJson(): JSONObject = when (this) {
+        is MemoPassage.Quoted -> JSONObject()
+            .put(KEY_PASSAGE_KIND, KIND_QUOTED)
+            .put(KEY_PASSAGE_TEXT, text)
+            .put(KEY_PASSAGE_TRUNCATED, truncated)
+            .apply {
+                context?.let {
+                    put(KEY_PASSAGE_CONTEXT, JSONObject().put(KEY_CONTEXT_BEFORE, it.before).put(KEY_CONTEXT_AFTER, it.after))
+                }
+            }
+        is MemoPassage.Seen -> JSONObject()
+            .put(KEY_PASSAGE_KIND, KIND_SEEN)
+            .put(KEY_PASSAGE_TEXT, text)
+    }
+
+    /** 種類を厳格に解く。**知らない種類は破損として扱う**（黙って捨てると、改変した種類で表示が変わる）。 */
+    private fun JSONObject.passageOrNull(): MemoPassage? {
+        if (isNull(KEY_MEMO_PASSAGE)) return null
+        val passage = getJSONObject(KEY_MEMO_PASSAGE)
+        return when (val kind = passage.getString(KEY_PASSAGE_KIND)) {
+            KIND_QUOTED -> MemoPassage.Quoted(
+                text = passage.getString(KEY_PASSAGE_TEXT),
+                context = if (passage.isNull(KEY_PASSAGE_CONTEXT)) {
+                    null
+                } else {
+                    passage.getJSONObject(KEY_PASSAGE_CONTEXT).let {
+                        QuoteContext(before = it.getString(KEY_CONTEXT_BEFORE), after = it.getString(KEY_CONTEXT_AFTER))
+                    }
+                },
+                truncated = passage.getBoolean(KEY_PASSAGE_TRUNCATED)
+            )
+            KIND_SEEN -> MemoPassage.Seen(text = passage.getString(KEY_PASSAGE_TEXT))
+            else -> error("未対応の引用の種類です（$kind）。")
+        }
     }
 
     private fun DataOutputStream.writeSized(value: String) {
@@ -288,6 +361,9 @@ internal object ReadingTraceJson {
 
     private const val ABSENT_VISIT_COUNT = -1
     private const val ABSENT_TIMESTAMP = -1L
+    private const val PASSAGE_NONE = 0
+    private const val PASSAGE_QUOTED = 1
+    private const val PASSAGE_SEEN = 2
 
     private const val KEY_SCHEMA_VERSION = "schemaVersion"
     private const val KEY_RELATIVE_PATH = "vaultRelativePath"
@@ -314,6 +390,15 @@ internal object ReadingTraceJson {
     private const val KEY_MEMO_TEXT = "text"
     private const val KEY_MEMO_WRITTEN_AT = "writtenAt"
     private const val KEY_MEMO_SECTION = "section"
+    private const val KEY_MEMO_PASSAGE = "passage"
+    private const val KEY_PASSAGE_KIND = "kind"
+    private const val KEY_PASSAGE_TEXT = "text"
+    private const val KEY_PASSAGE_TRUNCATED = "truncated"
+    private const val KEY_PASSAGE_CONTEXT = "context"
+    private const val KEY_CONTEXT_BEFORE = "before"
+    private const val KEY_CONTEXT_AFTER = "after"
+    private const val KIND_QUOTED = "quoted"
+    private const val KIND_SEEN = "seen"
     private const val KEY_CHECKSUM = "checksum"
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"

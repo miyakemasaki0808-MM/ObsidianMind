@@ -1,6 +1,6 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** 実装済み・稼働中。サイドカーは **schema v7**。孤児掃除は手動削除まで（自動化は未着手）
+**状態:** 実装済み・稼働中。サイドカーは **schema v8**。孤児掃除は手動削除まで（自動化は未着手）
 **最終検証:** 2026-10-06 / `6b39f134`
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
@@ -58,7 +58,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
 - **置き場には痕跡のほかに結晶のフォルダ `crystals/` がある**（→ [reflect_crystal](reflect_crystal.md) 判断7）。
   索引はフォルダと先頭64文字に満たない名前を載せない（`readingTraceKeyOf`）ので、孤児掃除・退避・読み戻しの下見には現れない
-- **スキーマ:** **v7**。v1〜v6 も読める（書き戻しは常に現行版）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
+- **スキーマ:** **v8**。v1〜v7 も読める（書き戻しは常に現行版）。v8 は余白メモに引用と控えた位置（`passage`）を足した（→ [margin_quote](margin_quote.md) §6）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
@@ -67,7 +67,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 | 対象 | 値 | 定数 |
 |---|---|---|
-| ファイル全体 | 128KB | `MAX_FILE_BYTES` |
+| ファイル全体 | 192KB | `MAX_FILE_BYTES` |
 | 訪問の保持件数 | 30（超過時は古いものから捨てる） | `MAX_VISITS` |
 | 枠の1件・印の内容 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
 | 相対パス | 1,024バイト | `MAX_RELATIVE_PATH_BYTES` |
@@ -155,7 +155,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | `aiSummary` | 再会カードの枠へ出す1件。**空振りの回は null** |
 | `aiSummaryVisitCount` | **最後に生成を試みた**時点の延べ回数（null＝未試行） |
 | `aiSummaryKind` | その試行の種別（schema v6〜 → [reunion_card](reunion_card.md)） |
-| `memos` | 余白メモ（schema v7〜 → [reflect_margin_memo](reflect_margin_memo.md)）。**追記で溜まる・上書きしない** |
+| `memos` | 余白メモ（schema v7〜 → [reflect_margin_memo](reflect_margin_memo.md)）。**追記で溜まる・上書きしない**。v8 から各メモが引用か控えた位置（`passage`）を持てる（→ [margin_quote](margin_quote.md)） |
 | `markedAtEpochMillis` | 「まだ考えたい」を押した時刻（schema v6〜）。**下2つと3つで1組。** 画面には出さず、付ける操作も無い。読み書き・合流・退避で保つだけ（→ [reunion_card](reunion_card.md)「『まだ考えたい』は撤去した」） |
 | `markedSummary` | 印を付けた時点の内容。**再生成できない** |
 | `markedKind` | 印を付けた時点の種別 |

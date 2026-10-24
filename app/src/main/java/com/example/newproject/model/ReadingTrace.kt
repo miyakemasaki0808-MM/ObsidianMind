@@ -21,11 +21,11 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * 正規形は書かれた版で計算するので、片方だけだと既存のファイルが破損扱いになる。
  * 各版で足した欄とその理由は features/reflect_reading_trace.md が持つ。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 7
+internal const val READING_TRACE_SCHEMA_VERSION = 8
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
 internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
-    setOf(1, 2, 3, 4, 5, 6, READING_TRACE_SCHEMA_VERSION)
+    setOf(1, 2, 3, 4, 5, 6, 7, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -59,6 +59,20 @@ internal object ReadingTraceLimits {
     const val MAX_MEMOS = 20
 
     /**
+     * 引用1件の上限。メモ本文と同じで、日本語で約340字。
+     *
+     * **超えた選択は置く前に切れる部分を見せる**ので、ここで切った文章を黙って確定しない
+     * （→ features/margin_quote.md 判断4）。
+     */
+    const val MAX_QUOTE_BYTES = 1_024
+
+    /** 引用の直前・直後に控える文字の上限（それぞれ）。照らし直しで引用元を確かめるためだけに持つ。 */
+    const val MAX_QUOTE_CONTEXT_BYTES = 32
+
+    /** 書き始めた頃に読んでいた位置の手掛かり。照らし直しの鍵なので、ブロックの頭だけで足りる。 */
+    const val MAX_SEEN_BYTES = 64
+
+    /**
      * サイドカー1ファイルの読み込み上限。
      *
      * **全欄を上限まで詰めた実物が収まること**が条件で、`ReadingTraceLimitsTest` が
@@ -69,8 +83,11 @@ internal object ReadingTraceLimits {
      * ここを超えられる（→ features/reflect_margin_memo.md 判断11）。
      * 超えると**正しく保存したファイルを次回読めなくなる**（保存側と
      * 読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
+     *
+     * 20件のメモすべてに最大の引用を付けると 128KB に収まらないので 192KB にしてある
+     * （→ features/margin_quote.md §6）。
      */
-    const val MAX_FILE_BYTES = 128 * 1024
+    const val MAX_FILE_BYTES = 192 * 1024
 }
 
 /**
@@ -97,19 +114,41 @@ internal fun isReadToEnd(progressPercent: Int): Boolean = progressPercent >= 100
 /**
  * 読んでいる最中に置いた短い断片。
  *
- * **何にも紐づかない。** AIの生成物にも、ユーザーが選んだ本文の範囲にも結び付けない。
+ * **何にも紐づかない。** AIの生成物にも、本文の範囲にも結び付けない。
  * 紐づけると「どこに付けるか」という判断が増え、本文が編集されれば紐づけ先も壊れる。
  *
  * [sectionTitle] は置いたときに見ていた見出し。**紐づけではなく歴史的記録**で、
  * 後から本文が編集されて見出しが消えても再解決しない（訪問の最深セクション名と同じ扱い）。
  * ユーザーの操作は1つも増えないのに、数か月後に読み返したとき断片が読める文になる。
+ *
+ * [passage] も同じく記録で、本文の位置を保存しない。表示のたびに文字で照らし直す（→ features/margin_quote.md §5.5）。
  */
 // UI状態として画面まで運ばれるため public（`RelatedNote` と同じ理由）。
 data class MarginMemo(
     val text: String,
     val writtenAtEpochMillis: Long,
-    val sectionTitle: String? = null
+    val sectionTitle: String? = null,
+    /** 引用か、書き始めた頃に読んでいた位置。v7 以前のメモは null（→ features/margin_quote.md §6）。 */
+    val passage: MemoPassage? = null
 )
+
+/** メモを書いた場所の手掛かり。**種類ごとに型を分け、意味の無い組を作れなくする**（→ features/margin_quote.md 判断3）。 */
+sealed interface MemoPassage {
+    /**
+     * 利用者が選んだ一節。[context] が null なら引用元を決められなかった引用で、照らし直しても確定しない。
+     * [truncated] は上限で途中までになったこと（表示の末尾に「…」を出す）。
+     */
+    data class Quoted(val text: String, val context: QuoteContext?, val truncated: Boolean) : MemoPassage
+
+    /** 書き始めた頃に読んでいた位置の手掛かり。**書いた対象の記録ではない**（→ features/margin_quote.md 判断5）。 */
+    data class Seen(val text: String) : MemoPassage
+}
+
+/**
+ * 引用元のブロックの中で、引用の直前と直後の文字。**空はブロックの端で引いたという正しい値**で、
+ * 「控えていない」は [MemoPassage.Quoted.context] の null で表す（空の文字で表すと区別できない）。
+ */
+data class QuoteContext(val before: String, val after: String)
 
 /**
  * 2つの並びを合流させる。**どちらも捨てない。**
@@ -253,6 +292,23 @@ internal fun truncateToUtf8Bytes(value: String, maximumBytes: Int): String {
     return ""
 }
 
+private fun validateMemoPassage(passage: MemoPassage) {
+    when (passage) {
+        is MemoPassage.Quoted -> {
+            require(passage.text.isNotBlank()) { "引用が空です。" }
+            requireWithinBytes(passage.text, ReadingTraceLimits.MAX_QUOTE_BYTES, "引用")
+            passage.context?.let {
+                requireWithinBytes(it.before, ReadingTraceLimits.MAX_QUOTE_CONTEXT_BYTES, "引用の前の文字")
+                requireWithinBytes(it.after, ReadingTraceLimits.MAX_QUOTE_CONTEXT_BYTES, "引用の後の文字")
+            }
+        }
+        is MemoPassage.Seen -> {
+            require(passage.text.isNotBlank()) { "控えた位置が空です。" }
+            requireWithinBytes(passage.text, ReadingTraceLimits.MAX_SEEN_BYTES, "控えた位置")
+        }
+    }
+}
+
 private fun requireWithinBytes(value: String, maximumBytes: Int, label: String) {
     require(value.toByteArray(Charsets.UTF_8).size <= maximumBytes) { "${label}が長すぎます。" }
 }
@@ -306,6 +362,7 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
         memo.sectionTitle?.let {
             requireWithinBytes(it, ReadingTraceLimits.MAX_SECTION_TITLE_BYTES, "余白メモのセクション名")
         }
+        memo.passage?.let(::validateMemoPassage)
     }
     // **並び順は要求しない。** 別端末との合流で前後しうる。
     trace.aiSummaryVisitCount?.let {

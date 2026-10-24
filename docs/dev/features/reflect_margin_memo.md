@@ -77,13 +77,13 @@
   | 静かに知らせる目安 | 200字（**壁ではなく合図**） | `SOFT_MEMO_CHARS` |
   | 1ノートの保持件数 | **20件**（**古いものから捨てない** → 判断4） | `MAX_MEMOS` |
   | 書いた場所（見出し名） | 512バイト（訪問と同じ枠を使う） | `MAX_SECTION_TITLE_BYTES` |
-  | 痕跡ファイル全体 | 128KB | `MAX_FILE_BYTES` |
+  | 痕跡ファイル全体 | 192KB（メモの引用を足すために128KBから上げた → [margin_quote](margin_quote.md) §6） | `MAX_FILE_BYTES` |
 
   > **`MAX_FILE_BYTES` との整合は、計算ではなく実シリアライザで測って固定する**
   > （`ReadingTraceLimitsTest` → 判断11）。
   > **生の文字列長を足す形では保証にならない** — JSONは `"` と `\` を2バイトへ、
   > 制御文字を `\u00XX` の6バイトへ広げるので、各欄の上限を満たしたまま
-  > 128KBを超えられる。**上限を足したり上げたりしたら、測る対象へ必ず加えること。**
+  > ファイルの上限を超えられる。**上限を足したり上げたりしたら、測る対象へ必ず加えること。**
 
 - **入力の正規化（容量上限の前提）:** メモ本文は保存前に
   **改行とタブ以外の制御文字を落とす。** これで JSON 化後の膨張が最悪2倍に抑えられ、
@@ -159,7 +159,9 @@ data class MarginMemo(
     val text: String,
     val writtenAtEpochMillis: Long,
     /** 置いたときに見ていた見出し。**歴史的記録で、改名しても再解決しない** */
-    val sectionTitle: String? = null
+    val sectionTitle: String? = null,
+    /** 引用か、書き始めた頃に読んでいた位置（v8〜。v7 以前は null → [margin_quote](margin_quote.md) §6） */
+    val passage: MemoPassage? = null
 )
 ```
 
@@ -175,7 +177,8 @@ data class MarginMemo(
 
 ### スキーマ版
 
-**v6 → v7。** 読めるのは v1〜v7（書き戻しは常に現行版）。
+**v6 → v7（この機能）、v7 → v8（[margin_quote](margin_quote.md)）。** 読めるのは v1〜v8（書き戻しは常に現行版）。
+v8 はメモに `passage`（引用か控えた位置）を足しただけで、v7 のメモは `passage` を null として読む。checksum は v7 の正規形で照合する。
 
 | v7 での扱い | 欄 |
 |---|---|
@@ -412,7 +415,7 @@ v3 は実機へ書き出された版で、`ReadingTraceJsonTest` に実ファイ
 
 既存の `ReadingTraceLimitsTest` は、各欄の**生のバイト上限を足し**、JSONの器を定数で見込んでいた。
 **これは保証になっていない。** JSONは `"` と `\` を2バイトへ、制御文字を `\u00XX` の6バイトへ広げるので、
-**全欄が上限内なのに128KBを超えたファイルを書ける。**
+**全欄が上限内なのにファイルの上限を超えたファイルを書ける。**
 
 しかも `ReadingTraceStore.save` は**encode後のサイズを見ずに書く**（上限を使うのは読込側だけ）。
 つまり**保存は成功し、テストも緑のまま、次に開くと痕跡が消えている**という、
