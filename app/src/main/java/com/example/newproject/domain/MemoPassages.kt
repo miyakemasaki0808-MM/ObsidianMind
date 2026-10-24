@@ -145,37 +145,79 @@ internal fun locatePassage(
     sectionTitle: String?,
     index: PassageIndex,
     headings: HeadingIndex
+): PassageLocation = locatePassage(passage, sectionTitle, index, headings) { candidatesOf(it, index) }
+
+/** [candidatesFor] は鍵から候補のブロックを引く口。メモの一覧をまとめて照らすときは、同じ鍵を1度だけ探す（[locateMemos]）。 */
+private fun locatePassage(
+    passage: MemoPassage,
+    sectionTitle: String?,
+    index: PassageIndex,
+    headings: HeadingIndex,
+    candidatesFor: (String) -> List<Int>
 ): PassageLocation = when (passage) {
-    is MemoPassage.Quoted -> locateQuote(passage, index)
-    is MemoPassage.Seen -> locateSeen(passage, sectionTitle, index, headings)
+    is MemoPassage.Quoted -> locateQuote(passage, index, candidatesFor)
+    is MemoPassage.Seen -> locateSeen(passage, sectionTitle, index, headings, candidatesFor)
+}
+
+/**
+ * 面に並べるときに引く、メモの置き場所。**候補のブロックの列を持たない** — 並べる処理は節を移るたびに呼ばれるので、
+ * 本文の大きさに比例する候補の列を、走査でもハッシュでも読ませない（→ features/margin_quote.md §5.5）。
+ */
+internal sealed interface MemoPlacement {
+    /** 引用か控えた位置が確定した段落の節。 */
+    data class Located(val section: SectionRef) : MemoPlacement
+
+    /** 特定できない引用。候補の節（同じ節にある候補は1つに数える）のどれにも出す。 */
+    data class Uncertain(val sections: List<SectionRef>) : MemoPlacement
 }
 
 /**
  * メモごとの照らし直しの結果。**本文の解析かメモが替わるたびに、Main の外で作り直す**（→ features/margin_quote.md §5.5）。
- * 面に並べるとき（[arrangeMemos]）は、ここから引くだけにする。
+ *
+ * **候補から節への集約もここで済ませる。** 面に並べるとき（[arrangeMemos]）は [placementOf] を引くだけで、
+ * 候補の列とブロックごとの節の列には触れない。候補の列は、付ける場や押したときに候補を並べる [of] のためだけに残す。
  */
 internal class MemoLocations internal constructor(
     private val byMemo: Map<MarginMemo, PassageLocation>,
-    private val passages: PassageIndex
+    passages: PassageIndex
 ) {
+    private val placements: Map<MarginMemo, MemoPlacement> = byMemo.entries.mapNotNull { (memo, location) ->
+        placementOf(memo.passage, location, passages)?.let { memo to it }
+    }.toMap()
+
     internal fun of(memo: MarginMemo): PassageLocation? = byMemo[memo]
 
-    /** 特定できない候補の節。同じ節に候補が複数あれば1つに数える。 */
-    internal fun sectionsOf(location: PassageLocation.Uncertain): List<SectionRef> =
-        location.candidates.map { passages.sections[it] }.distinct()
+    /** 並べるときの置き場所。null は見出しの照合で並べる（見つからない・特定できない控えた位置）。 */
+    internal fun placementOf(memo: MarginMemo): MemoPlacement? = placements[memo]
 }
 
-internal fun locateMemos(memos: List<MarginMemo>, passages: PassageIndex, headings: HeadingIndex): MemoLocations =
-    MemoLocations(
+private fun placementOf(passage: MemoPassage?, location: PassageLocation, passages: PassageIndex): MemoPlacement? =
+    when (location) {
+        is PassageLocation.Located -> MemoPlacement.Located(location.section)
+        // 控えた位置は手掛かりなので、特定できなければ見出しの照合へ戻す。
+        is PassageLocation.Uncertain ->
+            if (passage is MemoPassage.Quoted) MemoPlacement.Uncertain(location.candidates.map { passages.sections[it] }.distinct()) else null
+        PassageLocation.NotFound -> null
+    }
+
+/**
+ * メモの一覧をまとめて照らし直す。**本文の全体を鍵で探すのは、同じ鍵につき1度だけ**にし、候補の列もメモの間で共有する —
+ * 同じ一節を引いたメモが多いと、探す回数と候補の列が鍵の数ではなくメモの数だけ増えるため。
+ */
+internal fun locateMemos(memos: List<MarginMemo>, passages: PassageIndex, headings: HeadingIndex): MemoLocations {
+    val candidatesByKey = HashMap<String, List<Int>>()
+    val candidatesFor: (String) -> List<Int> = { key -> candidatesByKey.getOrPut(key) { candidatesOf(key, passages) } }
+    return MemoLocations(
         byMemo = memos.mapNotNull { memo ->
-            memo.passage?.let { memo to locatePassage(it, memo.sectionTitle, passages, headings) }
+            memo.passage?.let { memo to locatePassage(it, memo.sectionTitle, passages, headings, candidatesFor) }
         }.toMap(),
         passages = passages
     )
+}
 
-private fun locateQuote(quote: MemoPassage.Quoted, index: PassageIndex): PassageLocation {
+private fun locateQuote(quote: MemoPassage.Quoted, index: PassageIndex, candidatesFor: (String) -> List<Int>): PassageLocation {
     val key = quoteKey(quote.text)
-    val candidates = candidatesOf(key, index)
+    val candidates = candidatesFor(key)
     if (candidates.isEmpty()) return PassageLocation.NotFound
     val context = quote.context ?: return PassageLocation.Uncertain(candidates)
     val matched = candidates.filter { contextIn(index.texts[it], key) == context }
@@ -183,9 +225,15 @@ private fun locateQuote(quote: MemoPassage.Quoted, index: PassageIndex): Passage
     return PassageLocation.Located(located, index.sections[located])
 }
 
-private fun locateSeen(seen: MemoPassage.Seen, sectionTitle: String?, index: PassageIndex, headings: HeadingIndex): PassageLocation {
+private fun locateSeen(
+    seen: MemoPassage.Seen,
+    sectionTitle: String?,
+    index: PassageIndex,
+    headings: HeadingIndex,
+    candidatesFor: (String) -> List<Int>
+): PassageLocation {
     val key = normalizeForMatch(seen.text)
-    val candidates = candidatesOf(key, index)
+    val candidates = candidatesFor(key)
     if (candidates.isEmpty()) return PassageLocation.NotFound
     val scope = when (val match = headings.match(sectionTitle)) {
         MemoSectionMatch.Opening -> setOf(SectionRef(title = null))
@@ -199,8 +247,11 @@ private fun locateSeen(seen: MemoPassage.Seen, sectionTitle: String?, index: Pas
     return PassageLocation.Located(located, index.sections[located])
 }
 
-private fun candidatesOf(key: String, index: PassageIndex): List<Int> =
-    if (key.isEmpty()) emptyList() else index.texts.indices.filter { index.texts[it].contains(key) }
+private fun candidatesOf(key: String, index: PassageIndex): List<Int> {
+    if (key.isEmpty()) return emptyList()
+    val texts = index.texts
+    return buildList { for (block in texts.indices) if (texts[block].contains(key)) add(block) }
+}
 
 /**
  * [blockText] の中の [key] の最初の出現の、直前と直後の文字（各32バイトまで）。鍵が無ければ null。

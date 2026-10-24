@@ -291,4 +291,71 @@ class MarginMemoSectionsTest {
         assertEquals(listOf(SectionRef("まとめ", ordinal = 1)), arranged.others.map { it.section })
         assertEquals(listOf(quoted), arranged.current.map { it.memo })
     }
+
+    // ── 並べる処理の仕事はメモの数だけ（→ features/margin_quote.md §5.5）─────────────
+
+    /** 読んだ回数を数える列（見出しの [CountingList] と同じ形）。`hashCode` と `equals` も要素を読むので、隠れた走査もここで数える。 */
+    private class CountingReads<T>(private val inner: List<T>) : AbstractList<T>() {
+        var reads = 0
+        override val size: Int get() = inner.size
+        override fun get(index: Int): T {
+            reads++
+            return inner[index]
+        }
+    }
+
+    /**
+     * **事前計算の後の並べる処理は、候補の列とブロックごとの節の列を読まない。** 候補を1,000から10,000へ増やしても0回のまま。
+     * 時間ではなく読み取りの回数で見る — 走査は明示のループだけでなく、地図の鍵のハッシュや等価比較にも隠れる。
+     */
+    @Test
+    fun `事前計算の後の並べる処理は候補の数に比例する読み取りをしない`() {
+        listOf(1_000, 10_000).forEach { blocks ->
+            val section = SectionRef("まとめ")
+            val sections = CountingReads(List(blocks) { section })
+            val passages = PassageIndex(texts = List(blocks) { "Q" }, sections = sections, readable = List(blocks) { true })
+            val candidateLists = List(20) { CountingReads(List(blocks) { it }) }
+            val memos = List(20) { k ->
+                MarginMemo("メモ$k", k.toLong(), "まとめ", MemoPassage.Quoted("Q", context = null, truncated = false))
+            }
+            val locations = MemoLocations(
+                byMemo = memos.zip(candidateLists).associate { (memo, candidates) -> memo to PassageLocation.Uncertain(candidates) },
+                passages = passages
+            )
+            sections.reads = 0
+            candidateLists.forEach { it.reads = 0 }
+
+            val arranged = arrangeMemos(memos, HeadingIndex(listOf("まとめ")), current = section, locations = locations)
+
+            assertEquals("候補 $blocks 件でブロックごとの節の列を読んだ", 0, sections.reads)
+            assertEquals("候補 $blocks 件で候補の列を読んだ", 0, candidateLists.sumOf { it.reads })
+            assertEquals(20, arranged.current.size)
+            assertEquals(mapOf(section to 20), arranged.countsBySection)
+        }
+    }
+
+    /** **同じ一節を引いたメモが多くても、本文を鍵で探すのは鍵につき1度だけ**（候補の列もメモの間で共有する）。 */
+    @Test
+    fun `同じ鍵のメモをまとめて照らしても本文を探すのは1度だけ`() {
+        val blocks = 1_000
+        val texts = CountingReads(List(blocks) { "Q" })
+        val passages = PassageIndex(texts = texts, sections = List(blocks) { SectionRef(title = null) }, readable = List(blocks) { true })
+        val memos = List(20) { k -> MarginMemo("メモ$k", k.toLong(), null, MemoPassage.Quoted("Q", context = null, truncated = false)) }
+
+        locateMemos(memos, passages, HeadingIndex(emptyList()))
+
+        assertEquals(blocks, texts.reads)
+    }
+
+    /** 候補の節は、事前計算のときに同じ節を1つにまとめてある。 */
+    @Test
+    fun `特定できない引用の候補が同じ節に多くても1つの節に1度だけ並ぶ`() {
+        val body = (1..50).joinToString("\n\n") { "同じ一節" }
+        val memo = MarginMemo("どれか", 1L, null, MemoPassage.Quoted("同じ一節", context = null, truncated = false))
+
+        val arranged = arrangeWithPassages(body, listOf(memo), current = SectionRef(title = null))
+
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
+        assertTrue(arranged.others.isEmpty())
+    }
 }
