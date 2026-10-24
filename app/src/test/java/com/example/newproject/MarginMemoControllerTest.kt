@@ -400,6 +400,32 @@ class MarginMemoControllerTest {
         assertNull(drafts.draft(NOTE).pending)
     }
 
+    /** **保存を待つ間に引用元の節だけを替えたら、前の送信の受理で書きかけを消さない**（引用の値は同じでも別の書きかけ）。 */
+    @Test
+    fun `保存を待っている間に引用元の節だけを替えても受理で書きかけを消さない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val gate = Mutex(locked = true)
+        val controller = controller(store, drafts = drafts, beforeAppend = { gate.withLock { } })
+        controller.open(path)
+        advanceUntilIdle()
+        val sameQuote = DraftQuote(MemoPassage.Quoted("同じ一節", QuoteContext("", ""), truncated = false))
+
+        controller.attachQuote(sameQuote, SectionRef("A"))
+        controller.edit("添える言葉", bodySection = SectionRef("A"))
+        controller.submit(path, bodySection = null)
+        advanceUntilIdle()
+        controller.attachQuote(sameQuote, SectionRef("B"))
+        gate.unlock()
+        advanceUntilIdle()
+
+        val draft = drafts.draft(NOTE)
+        assertEquals("添える言葉", draft.text)
+        assertEquals(SectionRef("B"), draft.target)
+        assertEquals(sameQuote, draft.quote)
+        assertNull(draft.pending)
+    }
+
     // ── 書き込み先（→ features/margin_pane.md §5.3）─────────────────────────────
 
     /** **書き込み先は書き始めた節で、本文を先へ進めても動かない。** 置いた時点の節へは書かない。 */

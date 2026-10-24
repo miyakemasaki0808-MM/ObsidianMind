@@ -45,7 +45,13 @@ internal enum class MemoSendAction {
  * **整えるのはここの1回だけ**で、その結果を保存にも照合にも使う。整え直すと、
  * 切り詰めや制御文字の扱いで照合の鍵がずれうる。時刻もここで1度だけ決める。
  */
-internal fun submissionOf(raw: String, sectionTitle: String?, nowEpochMillis: Long, passage: MemoPassage? = null): MemoSubmission? {
+internal fun submissionOf(
+    raw: String,
+    sectionTitle: String?,
+    nowEpochMillis: Long,
+    passage: MemoPassage? = null,
+    target: SectionRef? = null
+): MemoSubmission? {
     val composed = composeMarginMemo(raw)
     if (composed.isBlank) return null
     return MemoSubmission(
@@ -56,7 +62,8 @@ internal fun submissionOf(raw: String, sectionTitle: String?, nowEpochMillis: Lo
             sectionTitle = composeMemoSectionTitle(sectionTitle),
             passage = passage
         ),
-        wasTruncated = composed.wasTruncated
+        wasTruncated = composed.wasTruncated,
+        target = target
     )
 }
 
@@ -117,11 +124,18 @@ internal fun MarginMemoDraft.submitted(submission: MemoSubmission): MarginMemoDr
  * （保存を待つ間に書き直していれば、まだ書き終えていない → features/margin_quote.md §5.6）。
  */
 internal fun MarginMemoDraft.consumedBy(submission: MemoSubmission): Boolean =
-    pending == submission && text == submission.raw && passage == submission.memo.passage
+    pending == submission && text == submission.raw && passage == submission.memo.passage && sameTargetAs(submission)
+
+/**
+ * 書き込み先が送ったときと同じか。**引用の文字が同じでも、引用元の節だけを替えれば別の書きかけ**として扱う。
+ * どちらかが分からないとき（書き込み先が決まる前に置いた送信）は同じとみなす。違うと言えるのは両方が分かるときだけ。
+ */
+private fun MarginMemoDraft.sameTargetAs(submission: MemoSubmission): Boolean =
+    target == null || submission.target == null || target == submission.target
 
 /**
  * 受理された。送信を消費し、**[consumedBy] のときだけ**空にして書き込み先・引用・控えを放す。
- * 待っている間に書き直した文字や替えた引用は残す。**追わなくなった古い送信の結果では何も消さない。**
+ * 待っている間に書き直した文字や替えた引用・引用元の節は残す。**追わなくなった古い送信の結果では何も消さない。**
  */
 internal fun MarginMemoDraft.accepted(submission: MemoSubmission): MarginMemoDraft = when {
     pending != submission -> this
@@ -153,7 +167,8 @@ internal fun MarginMemoDraft.sendAction(): MemoSendAction {
         // **引用だけでは置かない。** 自分の言葉が要る（→ features/margin_quote.md 判断2）。
         composed.isBlank -> MemoSendAction.None
         // 引用を替えたら同じ本文でも別のメモなので、確かめるではなく置く。
-        pending != null && composed.text == pending.memo.text && passage == pending.memo.passage -> MemoSendAction.Verify
+        pending != null && composed.text == pending.memo.text && passage == pending.memo.passage && sameTargetAs(pending) ->
+            MemoSendAction.Verify
         else -> MemoSendAction.Place
     }
 }

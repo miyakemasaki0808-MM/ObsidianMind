@@ -211,7 +211,7 @@ internal class MarginMemoController(
         }
         val section = draft.target ?: bodySection
         // **引用か控えた位置も一緒に送る。** 照合の鍵（保存値と時刻）には入れない。
-        val submission = submissionOf(draft.text, section?.title, clock(), draft.passage) ?: return
+        val submission = submissionOf(draft.text, section?.title, clock(), draft.passage, target = section) ?: return
         // **送った記録を先に残す。** 結果が同期で返っても、受理を取りこぼさない。
         drafts.update(noteKey) { it.submitted(submission) }
 

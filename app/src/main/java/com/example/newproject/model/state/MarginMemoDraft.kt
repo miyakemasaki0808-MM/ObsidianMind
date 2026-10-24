@@ -42,5 +42,10 @@ data class MemoSubmission(
     val raw: String,
     val memo: MarginMemo,
     /** 1024バイトで切ったか。**受理の後も失わない**（戻った後の照合で受理が分かったときも知らせる）。 */
-    val wasTruncated: Boolean
+    val wasTruncated: Boolean,
+    /**
+     * 送ったときの書き込み先。**今の書きかけと同じ送信かを比べるためだけに持つ**（受理の照合の鍵には入れない）。
+     * 引用の文字が同じでも、引用元の節を替えれば別の書きかけである（同名の見出しの別の順番も別 → features/margin_quote.md §5.3）。
+     */
+    val target: SectionRef? = null
 )
