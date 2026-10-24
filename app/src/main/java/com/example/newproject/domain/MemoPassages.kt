@@ -262,7 +262,7 @@ private fun locateSeen(
     return PassageLocation.Located(located, index.sections[located])
 }
 
-private fun candidatesOf(key: String, index: PassageIndex): List<Int> {
+internal fun candidatesOf(key: String, index: PassageIndex): List<Int> {
     if (key.isEmpty()) return emptyList()
     val texts = index.texts
     return buildList { for (block in texts.indices) if (texts[block].contains(key)) add(block) }
@@ -272,7 +272,7 @@ private fun candidatesOf(key: String, index: PassageIndex): List<Int> {
  * [blockText] の中の [key] の最初の出現の、直前と直後の文字（各32バイトまで）。鍵が無ければ null。
  * **控えるときと照らし直すときに同じ取り方をする**ので、空はブロックの端を意味し、候補の側も空のときだけ合う。
  */
-private fun contextIn(blockText: String, key: String): QuoteContext? {
+internal fun contextIn(blockText: String, key: String): QuoteContext? {
     val at = blockText.indexOf(key)
     if (at < 0) return null
     return QuoteContext(

@@ -28,8 +28,11 @@ data class MarginMemoDraft(
     val passage: MemoPassage? get() = quote?.passage ?: seen
 }
 
-/** 付けた引用。[cut] は上限で入らなかった部分で、**置く前に見せる**（→ features/margin_quote.md §5.2）。 */
-data class DraftQuote(val passage: MemoPassage.Quoted, val cut: String = "")
+/**
+ * 付けた引用。[cut] は上限で入らなかった部分で、**置く前に見せる**（→ features/margin_quote.md §5.2）。
+ * [choosing] は本文に同じ一節が2か所以上あり、付ける場で引用元を選んでもらっている間（→ 判断13）。選ぶまで前後の文字は控えていない。
+ */
+data class DraftQuote(val passage: MemoPassage.Quoted, val cut: String = "", val choosing: Boolean = false)
 
 /**
  * 保存を頼んだ1回の送信（→ features/margin_pane.md §6.2）。

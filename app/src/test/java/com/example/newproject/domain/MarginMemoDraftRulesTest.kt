@@ -365,6 +365,61 @@ class MarginMemoDraftRulesTest {
     // ── 引用元の節だけを替えたとき（→ features/margin_quote.md §5.3）──────────────────
 
     /** 本番の取り方で [block] から「同じ一節」を引き、引用とその節を返す。 */
+    // ── 付ける場で引用元を選ぶ（→ features/margin_quote.md 判断13）────────────────
+
+    private val choosingQuote = DraftQuote(MemoPassage.Quoted("同じ一節", context = null, truncated = false), choosing = true)
+
+    @Test
+    fun `選んでいた引用のまま選べば前後の文字が入り、書き込み先が引用元の節へ移る`() {
+        val draft = MarginMemoDraft().edited("書いていた", bodySection = sectionB, seenAtStart = seenTop).quoted(choosingQuote, section = sectionB)
+
+        val chosen = draft.chosen(choosingQuote.passage, QuoteContext("前", "後"), sectionC)
+
+        assertEquals(MemoPassage.Quoted("同じ一節", QuoteContext("前", "後"), truncated = false), chosen.quote?.passage)
+        assertEquals(false, chosen.quote?.choosing)
+        assertEquals(sectionC, chosen.target)
+        // 書き込み先を別の節へ移したので、前の節の控えは捨てる。
+        assertEquals(null, chosen.seen)
+        assertEquals("書いていた", chosen.text)
+    }
+
+    /** 選ぶ間に引用を入れ替えた・選ぶのをやめた・外したなら、遅れて届いた選択では何もしない。 */
+    @Test
+    fun `選んでいた引用が替わっていれば選んでも何もしない`() {
+        val replaced = MarginMemoDraft().quoted(choosingQuote, sectionB).quoted(quoteB, sectionB)
+        // 入れ替えた引用も選んでいる途中なら、選んだのはどちらの候補かで見分ける。
+        val replacedByChoosing = MarginMemoDraft().quoted(choosingQuote, sectionB)
+            .quoted(DraftQuote(MemoPassage.Quoted("別の同じ一節", context = null, truncated = false), choosing = true), sectionB)
+        val dismissed = MarginMemoDraft().quoted(choosingQuote, sectionB).choiceDismissed()
+        val detached = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB).unquoted()
+
+        listOf(replaced, replacedByChoosing, dismissed, detached).forEach { draft ->
+            assertEquals(draft, draft.chosen(choosingQuote.passage, QuoteContext("前", "後"), sectionC))
+        }
+    }
+
+    @Test
+    fun `選ばずに閉じれば引用元を決めないまま付けておく`() {
+        val draft = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB)
+
+        val dismissed = draft.choiceDismissed()
+
+        assertEquals(choosingQuote.passage, dismissed.quote?.passage)
+        assertEquals(false, dismissed.quote?.choosing)
+        assertEquals(sectionB, dismissed.target)
+        assertEquals(dismissed, dismissed.choiceDismissed())
+    }
+
+    /** 選ぶ前に置いたら、前後の文字を控えていない引用として送る。選んでいる間かどうかは送るものに入らない。 */
+    @Test
+    fun `選ぶ前に置いた送信は前後を控えていない引用を運ぶ`() {
+        val draft = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB)
+
+        val passage = draft.passage
+        assertEquals(MemoPassage.Quoted("同じ一節", context = null, truncated = false), passage)
+        assertEquals(MemoSendAction.Place, draft.sendAction())
+    }
+
     private fun sameQuoteFrom(body: String, block: Int): Pair<DraftQuote, SectionRef> {
         val passages = buildPassageIndex(buildNoteSectionModel(body))
         val source = resolveQuoteAt("同じ一節", block, passages) as QuoteSource.Resolved

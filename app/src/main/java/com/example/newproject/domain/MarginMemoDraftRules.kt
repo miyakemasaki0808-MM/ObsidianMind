@@ -1,5 +1,6 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.MemoPassage
@@ -111,6 +112,21 @@ internal fun MarginMemoDraft.edited(text: String, bodySection: SectionRef?, seen
 internal fun MarginMemoDraft.quoted(quote: DraftQuote, section: SectionRef?): MarginMemoDraft {
     val nextTarget = section ?: target
     return copy(quote = quote, target = nextTarget, seen = if (nextTarget == target) seen else null)
+}
+
+/**
+ * 付ける場で候補から引用元を選んだ（→ features/margin_quote.md 判断13）。**選んでいた引用のままのときだけ**前後の文字を入れ、
+ * 書き込み先を引用元の [section] へ移す。待つ間に引用を入れ替えた・外した・選ぶのをやめたなら何もしない。
+ */
+internal fun MarginMemoDraft.chosen(quote: MemoPassage.Quoted, context: QuoteContext, section: SectionRef): MarginMemoDraft {
+    val choosing = this.quote?.takeIf { it.choosing && it.passage == quote } ?: return this
+    return quoted(choosing.copy(passage = quote.copy(context = context), choosing = false), section)
+}
+
+/** 候補を選ばずに閉じた。**引用元を決めないまま付けておく**（前後は控えていない）。 */
+internal fun MarginMemoDraft.choiceDismissed(): MarginMemoDraft {
+    val choosing = quote?.takeIf { it.choosing } ?: return this
+    return copy(quote = choosing.copy(choosing = false))
 }
 
 /** 引用を外した（✕）。**引用だけを消す。** 文字があれば書き込み先はそのまま、空なら放す。 */
