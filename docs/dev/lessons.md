@@ -75,7 +75,7 @@
 | [L49](lessons/L49.md) | **中止は要求であって完了ではない。** 止めた側が、まだ動いている書き手の途中経過を確定しない。**待っている間の再入も同じ穴。2度出た** | 走行中の処理へ中止を付けた／中断の結果に件数を添えた／**完了待ちを入れた** | `ReadingTraceBackupControllerTest`・`ThreadingScanTest` |
 | [L50](lessons/L50.md) | **外から見える契約は、外から見える形で検査する。** decodeした意味・型は形の欠落を通す | 管理外へ出すファイル形式／利用者へ見せる文言を決めた | `ReadingTraceBackupJsonTest` |
 | [L51](lessons/L51.md) | **同じ文字列を2つが読むなら、解釈器を共有する。** 一覧を揃えても解釈規則がずれ、書き込みが表示を壊す | 本文へ記号を挿す／描画側が解釈する記法を増やした | `InlineSyntaxTest`・`InlineMarkdownTest`・`DistillSourceModelTest` |
-| [L52](lessons/L52.md) | **上限テストは長さだけでなく、処理対象の要素数も最大化する。** 文字だけの最大入力は、要素数に比例する経路を通らない | 入力サイズの上限を決めた／全文を走査する処理を足した | `DistillSourceModelTest` |
+| [L52](lessons/L52.md) | **上限テストは長さだけでなく、処理対象の要素数も最大化する。** 文字だけの最大入力は、要素数に比例する経路を通らない | 入力サイズの上限を決めた／全文を走査する処理を足した | `DistillSourceModelTest`・`DistillProtectedScanTest` |
 | [L53](lessons/L53.md) | **実機でしか走らないテストは、効いていることを確かめられない。** 値として観測できる部分をJVMへ引き出す | 描画・レイアウト・タップの契約を `androidTest` で守ろうとした | `DistillRangeHighlightTest`・`DistillRangeNoticeTest` |
 | [L56](lessons/L56.md) | **1つの受け入れ条件を複数の状態で満たすなら、寿命を揃える。**短いほうが条件を決め、壊れ方が半端になる | 「◯◯すると△△が残る」を2つ以上の状態で実現するとき | `BookletNavigationTest` |
 | [L55](lessons/L55.md) | **走査テストは呼び出しの存在しか見ない。**受理条件は「名前があること」ではなく**どの面のどの代入・呼び出しか**で書く。**3度出た** | ソースを文字列で走査するテストを振る舞いの担保として置いた／**変異を「その行を消す」で作った**／**検査の受理条件を緩めた** | `BookletRouteContractTest`・`BearingChannelTest` |
