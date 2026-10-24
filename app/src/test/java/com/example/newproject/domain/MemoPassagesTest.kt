@@ -228,6 +228,40 @@ class MemoPassagesTest {
         assertEquals(PassageLocation.Located(0, SectionRef(title = null)), locatePassage(passage, null, index, headings))
     }
 
+    // ── 照らし直しの文字は選択のコピーと同じ形（→ features/margin_quote.md §11）─────────
+
+    /**
+     * Compose の選択は文字の部品ごとに選んだ部分を**間に何も挟まずに**つなぐ。リストの記号と項目・引用の行・表のセルは部品が分かれるので、
+     * 照らし直しの文字も描く順に何も挟まずにつなぐ。間に空白や改行を入れると、2つの部品にまたがって選んだ文字が本文に見つからない。
+     */
+    @Test
+    fun `リストは記号と項目を描く順に何も挟まずにつなぐ`() {
+        val (index, _) = indexOf("- 一つ目\n- 二つ目\n\n1. 最初\n2) 次\n\n- [ ] 未了\n- [x] 完了")
+
+        assertEquals(listOf("•一つ目•二つ目", "1.最初2)次", "未了完了"), index.texts)
+    }
+
+    @Test
+    fun `引用の行と表のセルも何も挟まずにつなぐ`() {
+        val (index, _) = indexOf("> 一行目\n> 二行目\n\n| 列A | 列B |\n|---|---|\n| a1 | a2 | 余り |\n| b1 |")
+
+        assertEquals("一行目二行目", index.texts[0])
+        // 見出しの列の数にそろえて描く（多い列は描かず、足りない列は空）。
+        assertEquals("列A列Ba1a2b1", index.texts[1])
+    }
+
+    /** 部品の境目をまたいで選んでも、その文字は1つのブロックの中に見つかる。 */
+    @Test
+    fun `リストの項目の境目をまたいで選んだ文字もそのブロックで確定する`() {
+        val (index, headings) = indexOf("段落\n\n- 一つ目の項目\n- 二つ目の項目")
+        val source = quoteSourceFor("項目•二つ目", selectedBlock = 1, index)
+
+        assertTrue(source is QuoteSource.Resolved)
+        assertEquals(1, (source as QuoteSource.Resolved).block)
+        assertEquals(PassageLocation.Located(1, SectionRef(title = null)),
+            locatePassage(MemoPassage.Quoted("項目•二つ目", source.context, truncated = false), null, index, headings))
+    }
+
     // ── 書き始めた頃の位置 ─────────────────────────────────────────────────
 
     @Test

@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.inlineVisibleText
+import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.QuoteContext
@@ -328,14 +329,24 @@ internal fun normalizeForMatch(text: String): String =
         .filter { it.isNotEmpty() }
         .joinToString(" ")
 
-/** 本文に見える文字。**表示と同じ解釈器を通す**（→ lessons L51）。リストと引用の行は1行ずつ、表はセルを空白でつなぐ。 */
+/**
+ * 本文に見える文字。**表示と同じ解釈器を通し、選択のコピーと同じ形にする**（→ lessons L51・features/margin_quote.md §11）。
+ * Compose の選択は、文字の部品（`Text`）ごとに選んだ部分を**間に何も挟まずに**つなぐ（1.7.3 のバイナリで確かめた）。
+ * リストの記号と項目・引用の行・表のセルは部品が分かれるので、ここも描く順に何も挟まずにつなぐ。
+ * 形を変えると、選んだ文字が本文に見つからなくなる（`MarkdownNoteContent` が描く部品と一緒に直す）。
+ */
 private fun MarkdownBlock.visibleText(): String = when (this) {
     is MarkdownBlock.Heading -> inlineVisibleText(text)
     is MarkdownBlock.Paragraph -> inlineVisibleText(text)
-    is MarkdownBlock.ListBlock -> items.joinToString("\n") { inlineVisibleText(it.text) }
-    is MarkdownBlock.Blockquote -> lines.joinToString("\n") { inlineVisibleText(it) }
+    is MarkdownBlock.ListBlock -> items.joinToString("") { item ->
+        (if (item.checked == null) listMarkerText(item) else "") + inlineVisibleText(item.text)
+    }
+    is MarkdownBlock.Blockquote -> lines.joinToString("") { inlineVisibleText(it) }
     is MarkdownBlock.CodeBlock -> code
-    is MarkdownBlock.Table -> (listOf(headers) + rows).joinToString("\n") { row -> row.joinToString(" ") { inlineVisibleText(it) } }
+    is MarkdownBlock.Table -> (listOf(headers) + rows).joinToString("") { row ->
+        // 表は見出しの列の数にそろえて描く（足りない列は空、多い列は描かない）。
+        List(headers.size) { k -> inlineVisibleText(row.getOrElse(k) { "" }.trim()) }.joinToString("")
+    }
     is MarkdownBlock.Image -> ""
     MarkdownBlock.HorizontalRule -> ""
 }

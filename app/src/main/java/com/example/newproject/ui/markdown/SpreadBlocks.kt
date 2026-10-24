@@ -1,5 +1,6 @@
 package com.example.newproject.ui.markdown
 
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.ui.screen.SpreadBlock
 import com.example.newproject.ui.screen.SpreadLine
 import com.example.newproject.ui.screen.SpreadSlice
@@ -208,7 +210,8 @@ internal fun SpreadSliceView(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(modifier = Modifier.weight(1f)) { MarkdownHeadingText(render.level, render.text.cut(range)) }
                 Box(modifier = Modifier.size(HeadingAccessoryWidth, HeadingAccessoryHeight), contentAlignment = Alignment.Center) {
-                    headingAccessory(slice.blockIndex)
+                    // 脇の印は本文ではないので、選択のコピーに入れない（→ features/margin_quote.md §11）。
+                    DisableSelection { headingAccessory(slice.blockIndex) }
                 }
             }
         }

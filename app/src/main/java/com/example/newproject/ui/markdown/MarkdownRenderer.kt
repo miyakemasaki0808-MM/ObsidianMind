@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
@@ -37,7 +38,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
-import com.example.newproject.domain.markdown.ListMarker
+import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.sourceText
@@ -95,7 +96,8 @@ internal fun MarkdownNoteContent(
                             } else {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(modifier = Modifier.weight(1f)) { MarkdownHeading(block) }
-                                    headingAccessory(i)
+                                    // 脇の印は本文ではないので、選択のコピーに入れない（→ features/margin_quote.md §11）。
+                                    DisableSelection { headingAccessory(i) }
                                 }
                             }
                             is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
@@ -275,14 +277,18 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
             ) {
                 val markerAlpha = if (row.showMarker) Modifier else Modifier.alpha(0f)
                 if (checked == null) {
-                    Text(
-                        // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
-                        // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
-                        text = listMarkerText(item),
-                        color = OnSurface,
-                        style = style,
-                        modifier = markerAlpha
-                    )
+                    val marker: @Composable () -> Unit = {
+                        Text(
+                            // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
+                            // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
+                            text = listMarkerText(item),
+                            color = OnSurface,
+                            style = style,
+                            modifier = markerAlpha
+                        )
+                    }
+                    // 前のページから続く項目の見えない記号は、選択のコピーに入れない（照らし直しの文字と揃える → features/margin_quote.md §11）。
+                    if (row.showMarker) marker() else DisableSelection(marker)
                 } else {
                     Checkbox(
                         checked = checked,
@@ -303,12 +309,6 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
             }
         }
     }
-}
-
-/** リストの項目の記号。番号付きは原文の表記のまま。 */
-internal fun listMarkerText(item: ListItem): String = when (val marker = item.marker) {
-    is ListMarker.Bullet -> "\u2022"
-    is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
 }
 
 @Composable
