@@ -1,5 +1,9 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
@@ -22,10 +27,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,10 +41,17 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +60,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -80,6 +95,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 // 本文の見開き（→ features/note_spread.md）。測って、ページへ詰めて、左右2ページで出し、横の払いでめくる。
 
@@ -265,9 +282,52 @@ internal fun NoteSpread(
                 }
         }
 
-        HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize(), key = { it }) { spread ->
-            Row(modifier = Modifier.fillMaxSize()) {
-                Column(modifier = Modifier.width(pageWidth).fillMaxHeight()) {
+        val scope = rememberCoroutineScope()
+        val turnTargets = spreadTurnTargets(pagerState.currentPage, available)
+        val gutterPx = with(density) { gutter.toPx() }
+        val liftRoomPx = with(density) { SPREAD_TURN_LIFT_ROOM_DP.dp.toPx() }
+        // 指を離した後の寄せ。倍率0のときだけ、行き先の規則は同じまま途中を省く寄せに替える（→ SpreadSettleFling）。
+        val smoothSettle = PagerDefaults.flingBehavior(state = pagerState)
+        val instantSettle = PagerDefaults.flingBehavior(state = pagerState, snapAnimationSpec = SpreadInstantSettleSpec)
+        val settle = remember(smoothSettle, instantSettle) { SpreadSettleFling(smoothSettle, instantSettle) }
+        HorizontalPager(
+            state = pagerState,
+            flingBehavior = settle,
+            modifier = Modifier
+                .fillMaxSize()
+                // 払えない利用者のめくり。送りは時間で進むので、OS のアニメーションの設定に従う（→ features/note_spread.md 判断7）。
+                .semantics {
+                    stateDescription = spreadPositionDescription(pagerState.currentPage)
+                    customActions = listOfNotNull(
+                        turnTargets.next?.let { next ->
+                            CustomAccessibilityAction("次の見開きへ") {
+                                scope.launch { pagerState.animateScrollToPage(next) }
+                                true
+                            }
+                        },
+                        turnTargets.previous?.let { previous ->
+                            CustomAccessibilityAction("前の見開きへ") {
+                                scope.launch { pagerState.animateScrollToPage(previous) }
+                                true
+                            }
+                        }
+                    )
+                },
+            key = { it }
+        ) { spread ->
+            // 今の見開きからの距離（→ spreadTurnLayers）。描く段で読むので、めくっている間に組み直さない。
+            val offset = { (pagerState.currentPage - spread) + pagerState.currentPageOffsetFraction }
+            // めくる1枚を描いている見開きを上に重ねる。ページャは番号順に置くので、放っておくとめくる紙が下に隠れる。
+            // 入れ替わるのは90度を越えるときだけなので、そのときだけ組み直す。
+            val onTop by remember(spread) { derivedStateOf { spreadTurnLayers(offset()).onTop } }
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(if (onTop) 1f else 0f)
+                    // 見開きは動かさない。ページャが送るために与えた変位を打ち消して、定位置へ置き直す。
+                    .graphicsLayer { translationX = size.width * spreadTurnLayers(offset()).slotShift }
+            ) {
+                Column(modifier = Modifier.width(pageWidth).fillMaxHeight().spreadTurnFace(rightPage = false, offset, gutterPx, liftRoomPx)) {
                     if (leftPageTop != null) {
                         Box(
                             modifier = Modifier.onSizeChanged {
@@ -303,12 +363,28 @@ internal fun NoteSpread(
                     imageLoader = imageLoader,
                     imageMeasurements = imageMeasurements,
                     headingAccessory = headingAccessory,
-                    modifier = Modifier.width(pageWidth).fillMaxHeight()
+                    modifier = Modifier.width(pageWidth).fillMaxHeight().spreadTurnFace(rightPage = true, offset, gutterPx, liftRoomPx)
                 )
             }
         }
     }
 }
+
+/**
+ * 見開きの1ページを、めくる1枚の表か裏なら綴じ目を軸に回し、描かない側なら描かない（→ [spreadTurnLayers]）。
+ * 紙の色も透明度も途中の値を取らない — 描くか描かないかだけ。持ち上がりは遠近と影で言う。
+ */
+private fun Modifier.spreadTurnFace(rightPage: Boolean, offset: () -> Float, gutterPx: Float, liftRoomPx: Float): Modifier =
+    graphicsLayer {
+        val layers = spreadTurnLayers(offset())
+        val face = if (rightPage) layers.right else layers.left
+        alpha = if (face.shown) 1f else 0f
+        rotationY = face.rotationY
+        transformOrigin = TransformOrigin(spreadSpinePivot(size.width, gutterPx, rightPage), 0.5f)
+        cameraDistance = spreadTurnCameraDistance(size.width, size.height, liftRoomPx)
+        shadowElevation = if (face.shown && face.turning) spreadTurnShadowDp(face.rotationY).dp.toPx() else 0f
+        shape = ReadingSurfaceShape
+    }
 
 /** 1ページ。読む面（紙の色は年代、形は読む面）に、切れ端を本文の順で並べる。[page] が null なら空のページ（最後の見開きの右）。 */
 @Composable
@@ -379,6 +455,39 @@ private class ShownSpread(
     val model: NoteSectionModel,
     val imageRefs: List<NoteImageBlockRef>
 )
+
+/**
+ * 指を離した後の寄せ（→ features/note_spread.md 判断7）。**OS のアニメーションの倍率が0なら [instant]、それ以外は [smooth]** で寄せる。
+ * どちらもページャ既定の寄せで、行き先の規則は同じ。ページャ既定の寄せは時間の倍率を1に固定した中で動くので、
+ * 外から倍率を渡しても途中は省かれない — 途中を省くには寄せそのものを替えるしかない。
+ * 倍率は寄せを始めるときの実行コンテキストから読む（設定を切り替えると次の寄せから効く）。
+ */
+internal class SpreadSettleFling(private val smooth: TargetedFlingBehavior, private val instant: TargetedFlingBehavior) : TargetedFlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float, onRemainingDistanceUpdated: (Float) -> Unit): Float {
+        val chosen = if (spreadSettlesInstantly(coroutineContext[MotionDurationScale]?.scaleFactor)) instant else smooth
+        return with(chosen) { performFling(initialVelocity, onRemainingDistanceUpdated) }
+    }
+}
+
+/** 寄せの途中を省くか。倍率が0のときだけ。実行コンテキストに倍率が無ければ、既定の1とみなして省かない。 */
+internal fun spreadSettlesInstantly(scaleFactor: Float?): Boolean = scaleFactor == 0f
+
+/** 途中を省く寄せ。時間が0なので、最初のフレームで行き先に着く。 */
+internal val SpreadInstantSettleSpec: AnimationSpec<Float> = snap()
+
+/** 読み上げの操作で送れる見開き（→ features/note_spread.md §5「めくり」）。組み上がった見開きの中だけで、端では送らない。 */
+internal data class SpreadTurnTargets(val next: Int?, val previous: Int?)
+
+internal fun spreadTurnTargets(current: Int, available: Int): SpreadTurnTargets = SpreadTurnTargets(
+    next = (current + 1).takeIf { it < available },
+    previous = (current - 1).takeIf { it >= 0 }
+)
+
+/**
+ * 読み上げにだけ伝える今の見開きの位置。画面には出さない。**総数は言わない** — 全体を組み終えるまで決まらない（→ features/note_spread.md §11）。
+ * 送った後に位置を言えないと、払えない利用者は送れたのかが分からない。
+ */
+internal fun spreadPositionDescription(spread: Int): String = "${spread + 1}番目の見開き"
 
 /** 読書の記録へ送る1回分。同じ値は送り直さない。 */
 private data class ReadingReport(val blockIndex: Int, val step: Int, val model: NoteSectionModel)

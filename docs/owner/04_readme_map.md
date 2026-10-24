@@ -1,31 +1,31 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-10-11
+**作成:** 2026-09-08 / **更新:** 2026-10-24
 
-**位置づけ:** 17本ある `README.md` がそれぞれ何をしているかを一望する1枚。
+**位置づけ:** 13本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
 本書は入口そのものの構造だけを扱う。`owner/` の他文書と同じく検査に載せない。
 
 ---
 
-## 1. なぜ17本もあるのか
+## 1. なぜ13本もあるのか
 
 **フォルダを1つ作ったら、その入口を1本置く**という運用になっているためである。
 `README.md` は多くのツールと GitHub がフォルダを開いたとき最初に見せるので、
 「このフォルダは何か」を置く場所として決め打ちしてある。
 
-ただし17本すべてが同じ役割ではない。4種類に分かれる。
+ただし13本すべてが同じ役割ではない。3種類に分かれ、検証の間だけ現れる4種類目がある。
 
 | 種類 | 本数 | 何をしているか |
 |---|---:|---|
 | **A. 入口・索引** | 8 | そのフォルダの中身へ案内する。内容は持たない |
 | **B. それ自体が正本** | 2 | 入口ではなく運用の規則そのもの。検査が中身を見ている |
 | **C. テスト入力の説明** | 3 | 固定コーパスと実機の観測値が何であるかを、隣に置いて読ませる |
-| **D. 追跡しない作業ファイル** | 4 | 一時的な引き継ぎメモ |
+| **D. 追跡しない作業ファイル** | 0 | 検証の間だけ現れる引き継ぎメモ。いまは無い |
 
 
-## 2. 全17本
+## 2. 全13本
 
 **凡例:** 追跡 ✅＝git 管理下、❌＝`.gitignore`。検査＝JVMテストが中身を見ているか。
 
@@ -39,7 +39,7 @@
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 12 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 52 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 135 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 138 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 53 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
@@ -53,8 +53,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 65 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
-| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 298 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 67 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 303 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 
 この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
 だから検査も中身を見ている。
@@ -67,9 +67,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 2箇所に書くと必ず片方が古くなる。
 実機検証は区間で割ってある。組み立てと片付けはこちら、ケースの判定は Codex で、`device_validation/README.md` の「誰が行うか」の節がその割りを持つ。
 
-> スクリーンショットの扱いもここにある。実機検証で何をどの道具で見るかは「実機検証中」節が持ち、
-> 「画面上の文字はUI階層、見た目はスクリーンショット、永続化は端末上の実ファイル。どれか1つで他を代用しない」
-> が中心の1行である。簡易版の例外は [quick_check.md](../review/device_validation/quick_check.md) 側。
+> スクリーンショットの扱いもここにある。実機検証で何をどの道具で見るかは「実機検証中」節の表が持ち、
+> 「スクリーンショットは原則として検証NG時のみ取得する」が中心の1行である。外観の合否に画像が要るケースだけを例外にする。
 
 ### C. テスト入力の説明。3本
 
@@ -84,17 +83,11 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 [ai_quality_measurement](../dev/system/ai_quality_measurement.md) で、3本ともそこへリンクする。
 README という名前を使ったのは、フォルダを開いたとき最初に見える位置に置くためで、A の8本と動機は同じである。
 
-### D. 追跡しない作業ファイル。4本
+### D. 追跡しない作業ファイル。いまは0本
 
-| 場所 | 見出し | 行数 | 何か |
-|---|---|---:|---|
-| `docs/review/device_validation/evidence/book4-weave-20260907/README.md` | 編む冊子の実機検証 | 156 | 利用枠切れで中断した回の引き継ぎメモ |
-| `docs/review/device_validation/evidence/scale-review-20260910/README.md` | 全体レビューのJVM再現証拠 | 18 | レビューの再現手順 |
-| `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-review/README.md` | Fold段1・独立Compose状態プローブ | 21 | 余白ペイン段1のレビューで、入力欄の保存値を Compose の実行環境だけで確かめた手順 |
-| `docs/review/device_validation/evidence/2026-10-01-fold-margin-pane-stage1-recheck/README.md` | Fold段1・再レビューの独立状態検査 | 16 | 同じ確かめ方を修正後にやり直した記録 |
-
-`evidence/` は `.gitignore` 済み。端末を特定する値や検証中のローカルパスが入るためである。フォルダを開いたとき最初に読まれるよう README という名前にしてあるが、
-リポジトリには入らない。**この種類は今後も一時的に増減する。**
+実機検証やレビューの間だけ、`docs/review/device_validation/evidence/` の中に引き継ぎメモの README が現れることがある。
+`evidence/` は `.gitignore` 済みで、端末を特定する値や検証中のローカルパスが入る。
+**検証が終わるたびに、転記してから証跡ごと物理削除する**ので、通常は1本も残らない。
 
 ## 3. 入口の連なり
 
@@ -110,7 +103,7 @@ README.md（リポジトリ）
 app/src/androidTest/assets/ai_corpus/README.md ─── references/nano/README.md ─── observations/…/README.md
 ```
 
-**`_wip/` だけ README が無い。** 4本とも役割が明確で、`CLAUDE.md` に「どれを見るか」の表が直接置いてあるため。
+**`_wip/` だけ README が無い。** 文書はどれも役割が明確で、`CLAUDE.md` に「どれを見るか」の表が直接置いてあるため。
 入口を1本増やす価値が無いと判断されている。
 
 **コーパスの3本は `docs/` の連なりから外れている。** テスト入力の隣に置く注意書きなので、

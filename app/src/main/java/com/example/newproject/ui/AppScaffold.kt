@@ -140,6 +140,11 @@ internal fun AppScaffold(
     onSelectReading: (spread: Boolean, fromNoteRoute: Boolean) -> Unit = { _, _ -> },
     /** 本文領域を測った（→ [ReaderRegion]）。ペインを出せる窓と見開きのタブを出す窓は、外殻がこれで決める。 */
     onReaderRegion: (ReaderRegion) -> Unit = {},
+    /**
+     * レールの右端を測った（窓の座標、dp）。レールを出していても畳んでいても、レールがある状態の本文領域の左端の位置で測る。
+     * 重ねて出すレールも同じ項目で同じ幅なので、ノートの画面は帯の中身をここから始める（→ features/margin_pane.md §5.1）。
+     */
+    onRailEnd: (Float) -> Unit = {},
     content: @Composable (Modifier) -> Unit
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -235,7 +240,8 @@ internal fun AppScaffold(
                             }
                         }
                 )
-            }
+            },
+            onProbeStart = { x -> onRailEnd(with(density) { x.toDp().value }) }
         )
 
         SnackbarHost(
@@ -263,7 +269,10 @@ internal fun showsRail(isTabRoute: Boolean, useRail: Boolean, currentRoute: Stri
 internal fun overlaysRail(isTabRoute: Boolean, useRail: Boolean, currentRoute: String?, notePaneVisible: Boolean, noteBarShown: Boolean): Boolean =
     isTabRoute && useRail && currentRoute == AppDestination.Note.route && notePaneVisible && noteBarShown
 
-/** Material3 の `NavigationRail` の幅。重ねて出したレールが帯を隠さないよう、帯の中身はこの幅だけ右から始める。 */
+/**
+ * Material3 の `NavigationRail` の最小幅。**実際の幅は文字の倍率や左の Insets で広がる**ので、寸法は外殻が測った値を使う。
+ * これは外殻の無い組み立て（画面だけのテスト）と、測る前にだけ使う（→ `deskBarRailInsetDp`）。
+ */
 internal val RailWidth = 80.dp
 
 @Composable
@@ -293,6 +302,7 @@ private fun TabRail(items: List<RailItem>, currentRoute: String?, spreadChosen: 
  * 重ねるレール（[overlayRail]）は本文の幅を取らず、本文の上の左端に置く。
  * [probe] は本文領域を測る見えない箱で、**レールの有無によらずレールがある状態の位置と幅**に置く。レールを出していない間は
  * [railMeasure]（同じ項目のレール）を測るだけ測って置かず、その幅を除く。
+ * [onProbeStart] は測る箱を置いた左端（窓の座標、px）で、レールの右端と同じ位置になる。
  */
 @Composable
 private fun ScaffoldLayout(
@@ -301,7 +311,8 @@ private fun ScaffoldLayout(
     overlayRail: (@Composable () -> Unit)?,
     bottomBar: (@Composable () -> Unit)?,
     railMeasure: (@Composable () -> Unit)?,
-    probe: @Composable () -> Unit
+    probe: @Composable () -> Unit,
+    onProbeStart: (Float) -> Unit
 ) {
     Layout(
         content = {
@@ -313,7 +324,7 @@ private fun ScaffoldLayout(
                 // 測るだけで置かない（描かず、指も受けない）。読み上げにも出さない。
                 Box(modifier = Modifier.layoutId(SLOT_RAIL_MEASURE).clearAndSetSemantics {}) { railMeasure() }
             }
-            Box(modifier = Modifier.layoutId(SLOT_PROBE)) { probe() }
+            Box(modifier = Modifier.layoutId(SLOT_PROBE).onGloballyPositioned { onProbeStart(it.positionInWindow().x) }) { probe() }
         },
         modifier = Modifier.fillMaxSize()
     ) { measurables, constraints ->

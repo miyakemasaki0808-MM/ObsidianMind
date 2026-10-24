@@ -5,6 +5,7 @@ import com.example.newproject.fakes.ScriptedPointerInput
 import com.example.newproject.ui.screen.DESK_BAR_FLING_DP_PER_SEC
 import com.example.newproject.ui.screen.DESK_BAR_SWIPE_DP
 import com.example.newproject.ui.screen.DeskBarGesture
+import com.example.newproject.ui.screen.deskBarRailInsetDp
 import com.example.newproject.ui.screen.deskBarGestureFor
 import com.example.newproject.ui.screen.detectDeskGrip
 import com.example.newproject.ui.screen.isVerticalSwipe
@@ -85,5 +86,37 @@ class DeskControlsTest {
         assertFalse(isVerticalSwipe(dx = 18f, dy = 4.5f))
         assertFalse(isVerticalSwipe(dx = -18f, dy = -4.5f))
         assertFalse(isVerticalSwipe(dx = 10f, dy = 10f))
+    }
+
+    /**
+     * **帯の中身は、外殻が測ったレールの右端から始める**（→ features/margin_pane.md §5.1）。文字の倍率でレールが広がると（倍率2倍で約113dp）、
+     * 最小幅の80dpとみなしたままでは帯の左端が重ねたレールの下に入る。倍率1倍（レールが80dp）では今の見た目のまま。
+     */
+    @Test
+    fun `帯の中身は外殻が測ったレールの右端から始め、倍率1倍では今のまま`() {
+        // 本文領域は窓の左端から20dp（画面の余白）。
+        assertEquals(93f, deskBarRailInsetDp(expandedWidth = true, railEndDp = 113f, regionStartDp = 20f), 0.001f)
+        assertEquals(60f, deskBarRailInsetDp(expandedWidth = true, railEndDp = 80f, regionStartDp = 20f), 0.001f)
+    }
+
+    /** 窓の座標どうしで引くので、外殻が窓の左端からずれて置かれていても（テストの箱を中央に寄せたときなど）、ずらす幅は同じ。 */
+    @Test
+    fun `外殻が窓の左端からずれていても、ずらす幅はレールの幅から本文の余白を引いた分`() {
+        assertEquals(93f, deskBarRailInsetDp(expandedWidth = true, railEndDp = -54f + 113f, regionStartDp = -54f + 20f), 0.001f)
+        assertEquals(93f, deskBarRailInsetDp(expandedWidth = true, railEndDp = 160f + 113f, regionStartDp = 160f + 20f), 0.001f)
+    }
+
+    /** 外殻の無い組み立てと測る前は、窓の左端から最小幅（80dp）までをレールとみなす。 */
+    @Test
+    fun `レールを測る前は最小幅のレールとみなす`() {
+        assertEquals(60f, deskBarRailInsetDp(expandedWidth = true, railEndDp = null, regionStartDp = 20f), 0.001f)
+        assertEquals(80f, deskBarRailInsetDp(expandedWidth = true, railEndDp = null, regionStartDp = null), 0.001f)
+    }
+
+    /** レールを出さない窓ではずらさない。本文領域がレールより右から始まっていれば、ずらす分は無い（負にしない）。 */
+    @Test
+    fun `レールを出さない窓と、本文領域がレールより右にある窓ではずらさない`() {
+        assertEquals(0f, deskBarRailInsetDp(expandedWidth = false, railEndDp = 113f, regionStartDp = 20f), 0.001f)
+        assertEquals(0f, deskBarRailInsetDp(expandedWidth = true, railEndDp = 80f, regionStartDp = 100f), 0.001f)
     }
 }
