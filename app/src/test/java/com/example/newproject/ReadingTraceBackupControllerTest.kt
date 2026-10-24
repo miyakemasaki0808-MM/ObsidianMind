@@ -657,7 +657,7 @@ class ReadingTraceBackupControllerTest {
     }
 
     // 追加だけでなく**既存痕跡との結合**でも同じ性質を保つ。
-    // 結合は端末側の返事を置き換え得るので、報告から漏れると損失に気づけない。
+    // 結合は端末側にある痕跡を書き換えるので、報告から漏れると、どのノートを書き換えたかに気づけない。
     @Test
     fun `結合を含む適用の中断も報告と実保存が一致する`() = runTest {
         val env = Env(this)
@@ -699,7 +699,7 @@ class ReadingTraceBackupControllerTest {
     @Test
     fun `停止待ち中の再タップは停止前の件数を確定しない`() = assertReentrantCancelKeepsCountsExact(merging = false)
 
-    /** 結合（端末側の返事が置き換わる側）でも同じ性質を保つ。 */
+    /** 結合（端末側にある痕跡を書き換える側）でも同じ性質を保つ。 */
     @Test
     fun `停止待ち中の再タップは結合でも件数を確定しない`() = assertReentrantCancelKeepsCountsExact(merging = true)
 

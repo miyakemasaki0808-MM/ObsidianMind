@@ -139,6 +139,8 @@ class ThreadingScanTest {
      * その場で途中経過を確定すると、まだ書いている分だけ少なく報告する。書き手を `join()` してから数える。
      * **この交錯は単一スレッドのテストスケジューラでは作れない**ので、順序は走査で固定し、
      * 件数の一致そのものは `ReadingTraceBackupControllerTest` が見る。
+     * **停止待ちの間の2度目の中止（再入）は、この並びのまま通る**ので走査では捕まらない。
+     * そちらも `ReadingTraceBackupControllerTest` が実スレッドで見る。
      */
     @Test
     fun `退避の中止の結果は書き手を join してから確定する`() {
