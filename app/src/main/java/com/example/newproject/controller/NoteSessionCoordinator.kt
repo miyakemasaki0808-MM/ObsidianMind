@@ -15,6 +15,7 @@ import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MarginMemoDraftStore
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
@@ -744,7 +745,8 @@ internal class NoteSessionCoordinator(
     }
 
     /** 書きかけを変える。[bodySection] は今の本文の節で、書き始めた瞬間だけ書き込み先になる。 */
-    fun editMarginMemo(text: String, bodySection: SectionRef?) = marginMemo.edit(text, bodySection)
+    fun editMarginMemo(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) =
+        marginMemo.edit(text, bodySection, seenAtStart)
 
     /**
      * 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。

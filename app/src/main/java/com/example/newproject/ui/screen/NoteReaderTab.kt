@@ -101,6 +101,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
@@ -198,7 +199,7 @@ internal fun NoteReaderTab(
     /** このノートの余白メモの書きかけ。**ViewModel 側の Compose の状態**を直接渡す（→ features/margin_pane.md §6.1）。 */
     memoDraft: MarginMemoDraft,
     /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
-    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
@@ -278,7 +279,9 @@ internal fun NoteReaderTab(
 
     // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
-    val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection) }
+    // 書き始めた瞬間の位置も渡す。控えるのは書き込み先を決める瞬間だけで、そこは規則が決める（→ features/margin_quote.md §5.4）。
+    val seenAtStart = face.seenAtStart
+    val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection, seenAtStart) }
     val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }
     // 利用者が面を閉じたときは、書いているつもりも落とす。次に面を出したときに、頼んでいないキーボードを出さない。
     val dismissMemoSheet: () -> Unit = {

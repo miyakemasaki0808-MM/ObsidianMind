@@ -14,8 +14,10 @@ import com.example.newproject.domain.MemoLocations
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.seenPassageAt
 import com.example.newproject.domain.showsPreviousReading
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.ui.markdown.NoteImageMeasurements
@@ -36,7 +38,9 @@ internal class MarginFaceInputs(
     /** 本文をその節の始まりへ送る。 */
     val jumpToSection: (SectionRef) -> Unit,
     /** 本文をそのブロックへ送る。引用した段落と書いた頃の位置へ飛ぶのに使う（→ features/margin_quote.md §5.5）。 */
-    val jumpToBlock: (Int) -> Unit
+    val jumpToBlock: (Int) -> Unit,
+    /** 今書き始めたら控える位置（→ features/margin_quote.md §5.4）。本文の節と同じく、スクロールが止まった最上端のブロックから決める。 */
+    val seenAtStart: MemoPassage.Seen?
 )
 
 /** 照らし直しの結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLocations]）。 */
@@ -93,6 +97,8 @@ internal fun rememberMarginFaceInputs(
         // **見出しの索引と照らし直しは Main の外で作ってある。** ここでは見出しも候補もたどらない。
         arrangeMemos(forMemos, model.headingIndex, bodySection ?: SectionRef(title = null), locations)
     }
+    // 書き始めたら控える位置。スクロールが止まった最上端のブロックから、同じ節の最初の本文のブロックを選ぶ（ほとんどは最上端そのもの）。
+    val seenAtStart = remember(sectionModel, settledBlock) { sectionModel?.let { seenPassageAt(settledBlock, it.passages) } }
     // **メモと同じ照合で、見出しが一意に一致した節にだけ出す**（→ features/margin_pane.md §5.7）。
     val previousReadingAt = remember(readyMemos?.previousVisit, sectionModel, bodySection) {
         val previous = readyMemos?.previousVisit ?: return@remember null
@@ -105,5 +111,5 @@ internal fun rememberMarginFaceInputs(
         imageMeasurements?.requestSkippedMeasurement(block)
     }
     val jumpToSection: (SectionRef) -> Unit = { ref -> sectionModel?.startBlockOf(ref)?.let(jumpToBlock) }
-    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection, jumpToBlock)
+    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection, jumpToBlock, seenAtStart)
 }

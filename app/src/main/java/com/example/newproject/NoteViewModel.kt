@@ -30,6 +30,7 @@ import com.example.newproject.model.DocumentRef
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
@@ -629,7 +630,8 @@ class NoteViewModel internal constructor(
     internal fun marginMemoDraft(noteKey: String?): MarginMemoDraft =
         noteKey?.let(marginMemoDrafts::draft) ?: MarginMemoDraft()
 
-    fun editMarginMemo(text: String, bodySection: SectionRef?) = session.editMarginMemo(text, bodySection)
+    fun editMarginMemo(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) =
+        session.editMarginMemo(text, bodySection, seenAtStart)
 
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
     fun submitMarginMemo(bodySection: SectionRef?) = session.submitMarginMemo(bodySection)

@@ -60,6 +60,7 @@ import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -99,7 +100,7 @@ internal fun FullscreenNoteScreen(
     onDismissMarginMemo: () -> Unit,
     /** このノートの余白メモの書きかけ。通常画面と同じ一組（→ features/margin_pane.md §6.1）。 */
     memoDraft: MarginMemoDraft,
-    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     /** 入力欄で書いているつもりか。通常画面と共有する（戻った先の面へフォーカスを引き継ぐ）。 */
@@ -212,7 +213,7 @@ internal fun FullscreenNoteScreen(
                     onJumpToSection = face.jumpToSection,
                     arranged = face.arranged,
                     onJumpToBlock = face.jumpToBlock,
-                    onEdit = { text -> onEditMarginMemo(text, face.bodySection) },
+                    onEdit = { text -> onEditMarginMemo(text, face.bodySection, face.seenAtStart) },
                     onSubmit = { onSubmitMarginMemo(face.bodySection) },
                     onDelete = onDeleteMarginMemo,
                     asSheet = true,
