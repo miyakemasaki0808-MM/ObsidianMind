@@ -103,9 +103,15 @@ internal fun MarginMemoDraft.edited(text: String, bodySection: SectionRef?, seen
  * 引用を付けた。**書いている途中でも、書き込み先を引用元の節 [section] へ移す** — 引用は利用者が場所を選ぶ明示の操作で、
  * 本文のスクロールとは違う（→ features/margin_quote.md §5.2）。引用元が決まらなければ呼ぶ側が今の本文の節を渡す。
  * 付いていた引用とは入れ替え、書いた文字と未確定の送信はそのまま。
+ *
+ * **書き込み先を別の節へ移したら、書き始めた頃の位置の控えを捨てる。** 控えは前の書き込み先の節の段落を指すので、
+ * 残すと引用を外して置いたメモが、利用者が選んだ書き込み先ではなく前の節へ並ぶ（→ features/margin_quote.md §5.3）。
+ * 外したときに今の位置を取り直すこともしない — それは書き始めた頃ではない。
  */
-internal fun MarginMemoDraft.quoted(quote: DraftQuote, section: SectionRef?): MarginMemoDraft =
-    copy(quote = quote, target = section ?: target)
+internal fun MarginMemoDraft.quoted(quote: DraftQuote, section: SectionRef?): MarginMemoDraft {
+    val nextTarget = section ?: target
+    return copy(quote = quote, target = nextTarget, seen = if (nextTarget == target) seen else null)
+}
 
 /** 引用を外した（✕）。**引用だけを消す。** 文字があれば書き込み先はそのまま、空なら放す。 */
 internal fun MarginMemoDraft.unquoted(): MarginMemoDraft =

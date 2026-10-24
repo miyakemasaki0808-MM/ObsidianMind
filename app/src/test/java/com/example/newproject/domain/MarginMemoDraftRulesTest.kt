@@ -422,4 +422,29 @@ class MarginMemoDraftRulesTest {
         assertEquals(MemoSendAction.Verify, waiting.sendAction())
         assertEquals(MarginMemoDraft(), waiting.accepted(sent))
     }
+
+    // ── 引用を外したときの控え（→ features/margin_quote.md §5.3）────────────────────
+
+    @Test
+    fun `引用で書き込み先を別の節へ移すと書き始めた頃の控えを捨て、外しても取り直さない`() {
+        val draft = MarginMemoDraft()
+            .edited("書いていた", bodySection = sectionB, seenAtStart = seenTop)
+            .quoted(quoteA, sectionC)
+            .unquoted()
+
+        assertNull(draft.seen)
+        assertNull(draft.passage)
+        assertEquals(sectionC, draft.target)
+        assertEquals("書いていた", draft.text)
+    }
+
+    @Test
+    fun `引用元が同じ節なら書き始めた頃の控えを保つ`() {
+        val draft = MarginMemoDraft()
+            .edited("書いていた", bodySection = sectionB, seenAtStart = seenTop)
+            .quoted(quoteA, sectionB)
+            .unquoted()
+
+        assertEquals(seenTop, draft.passage)
+    }
 }

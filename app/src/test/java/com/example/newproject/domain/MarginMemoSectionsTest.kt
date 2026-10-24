@@ -2,6 +2,12 @@ package com.example.newproject.domain
 
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTraceLimits
@@ -357,5 +363,58 @@ class MarginMemoSectionsTest {
 
         assertEquals(listOf(memo), arranged.current.map { it.memo })
         assertTrue(arranged.others.isEmpty())
+    }
+
+    // ── 書き込み先と所属する節が食い違わない（→ features/margin_quote.md §5.3）──────────
+
+    private val twoSections = "## A\n\nAで読んでいた段落\n\n## B\n\nBから引く一節"
+
+    /** 置いたメモを、痕跡の JSON に通して読み戻す（保存して開き直したのと同じ値にする）。 */
+    private fun throughJson(memo: MarginMemo): MarginMemo {
+        val trace = ReadingTrace(
+            vaultRelativePath = "note.md", noteTitle = "ノート", documentId = null,
+            visits = listOf(ReadingVisit(1L, null, 10)), memos = listOf(memo)
+        )
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(trace)) as ReadingTraceReadResult.Valid
+        return decoded.trace.memos.single()
+    }
+
+    private fun placeAndArrange(draft: MarginMemoDraft, current: SectionRef): Pair<MarginMemo, ArrangedMemos> {
+        val model = buildNoteSectionModel(twoSections)
+        val passages = buildPassageIndex(model)
+        val submission = submissionOf(draft.text, draft.target?.title, 1_000L, draft.passage, target = draft.target)!!
+        val memo = throughJson(submission.memo)
+        return memo to arrangeMemos(listOf(memo), model.headingIndex, current, locateMemos(listOf(memo), passages, model.headingIndex))
+    }
+
+    /**
+     * **Aで書き始めて、Bから引用し、引用を外して置いたメモは、Bの組に残る。** 古い控え（Aの段落）が書き込み先を取り消さない。
+     * 保存・読み直し・並べ直しまでつないで確かめる（操作の直後だけでは通ってしまう）。
+     */
+    @Test
+    fun `Aで書き始めBから引用して外したメモは保存して並べ直してもBに残る`() {
+        val passages = buildPassageIndex(buildNoteSectionModel(twoSections))
+        val source = quoteSourceFor("Bから引く一節", selectedBlock = 3, index = passages) as QuoteSource.Resolved
+        val draft = MarginMemoDraft()
+            .edited("書いていた", passages.sections[1], seenPassageAt(0, passages))
+            .quoted(DraftQuote(MemoPassage.Quoted("Bから引く一節", source.context, truncated = false)), passages.sections[source.block])
+            .unquoted()
+
+        val (memo, arranged) = placeAndArrange(draft, current = SectionRef("B"))
+
+        assertEquals("B", memo.sectionTitle)
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
+        assertEquals(mapOf(SectionRef("B") to 1), arranged.countsBySection)
+    }
+
+    @Test
+    fun `引用を付けずに置いたメモは元の控えのまま元の段落の節に並ぶ`() {
+        val passages = buildPassageIndex(buildNoteSectionModel(twoSections))
+        val draft = MarginMemoDraft().edited("Aについて", passages.sections[1], seenPassageAt(0, passages))
+
+        val (memo, arranged) = placeAndArrange(draft, current = SectionRef("A"))
+
+        assertEquals(MemoPassage.Seen("Aで読んでいた段落"), memo.passage)
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
     }
 }
