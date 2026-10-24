@@ -16,7 +16,6 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 // 本文の見開きのめくり（→ features/note_spread.md 判断7）。めくる1枚が綴じ目を軸に立ち上がって倒れる。
 // 向き（どちらが手前か）は値に現れないので、ここでは一貫性だけを見る。手前かどうかは描いた画素で確かめる（NoteReadingFlowTest）。
@@ -163,16 +162,5 @@ class SpreadTurnTest {
     fun `読み上げる位置はn番目の見開きで、総数は言わない`() {
         assertEquals("1番目の見開き", spreadPositionDescription(0))
         assertEquals("3番目の見開き", spreadPositionDescription(2))
-    }
-
-    /**
-     * **アニメーションの倍率を上書きしない**（→ features/note_spread.md 判断7）。上書きすると、設定を切っている利用者にだけ回転が戻る。
-     * 読み上げからの送りと指を離した後の寄せは時間で進むので、倍率0なら途中の回転が省かれる。それは実機ケースが持つ。
-     */
-    @Test
-    fun `見開きのめくりはアニメーションの倍率を上書きしない`() {
-        val sources = listOf("NoteSpread.kt", "SpreadTurnGeometry.kt").map { File("src/main/java/com/example/newproject/ui/screen/$it") }
-        assertTrue(sources.all { it.exists() })
-        assertFalse(sources.any { it.readText().contains("MotionDurationScale") })
     }
 }

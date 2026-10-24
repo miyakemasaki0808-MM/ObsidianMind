@@ -1,5 +1,9 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.snap
+import androidx.compose.foundation.gestures.ScrollScope
+import androidx.compose.foundation.gestures.TargetedFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +41,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -90,6 +96,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 // 本文の見開き（→ features/note_spread.md）。測って、ページへ詰めて、左右2ページで出し、横の払いでめくる。
 
@@ -279,8 +286,13 @@ internal fun NoteSpread(
         val turnTargets = spreadTurnTargets(pagerState.currentPage, available)
         val gutterPx = with(density) { gutter.toPx() }
         val liftRoomPx = with(density) { SPREAD_TURN_LIFT_ROOM_DP.dp.toPx() }
+        // 指を離した後の寄せ。倍率0のときだけ、行き先の規則は同じまま途中を省く寄せに替える（→ SpreadSettleFling）。
+        val smoothSettle = PagerDefaults.flingBehavior(state = pagerState)
+        val instantSettle = PagerDefaults.flingBehavior(state = pagerState, snapAnimationSpec = SpreadInstantSettleSpec)
+        val settle = remember(smoothSettle, instantSettle) { SpreadSettleFling(smoothSettle, instantSettle) }
         HorizontalPager(
             state = pagerState,
+            flingBehavior = settle,
             modifier = Modifier
                 .fillMaxSize()
                 // 払えない利用者のめくり。送りは時間で進むので、OS のアニメーションの設定に従う（→ features/note_spread.md 判断7）。
@@ -443,6 +455,25 @@ private class ShownSpread(
     val model: NoteSectionModel,
     val imageRefs: List<NoteImageBlockRef>
 )
+
+/**
+ * 指を離した後の寄せ（→ features/note_spread.md 判断7）。**OS のアニメーションの倍率が0なら [instant]、それ以外は [smooth]** で寄せる。
+ * どちらもページャ既定の寄せで、行き先の規則は同じ。ページャ既定の寄せは時間の倍率を1に固定した中で動くので、
+ * 外から倍率を渡しても途中は省かれない — 途中を省くには寄せそのものを替えるしかない。
+ * 倍率は寄せを始めるときの実行コンテキストから読む（設定を切り替えると次の寄せから効く）。
+ */
+internal class SpreadSettleFling(private val smooth: TargetedFlingBehavior, private val instant: TargetedFlingBehavior) : TargetedFlingBehavior {
+    override suspend fun ScrollScope.performFling(initialVelocity: Float, onRemainingDistanceUpdated: (Float) -> Unit): Float {
+        val chosen = if (spreadSettlesInstantly(coroutineContext[MotionDurationScale]?.scaleFactor)) instant else smooth
+        return with(chosen) { performFling(initialVelocity, onRemainingDistanceUpdated) }
+    }
+}
+
+/** 寄せの途中を省くか。倍率が0のときだけ。実行コンテキストに倍率が無ければ、既定の1とみなして省かない。 */
+internal fun spreadSettlesInstantly(scaleFactor: Float?): Boolean = scaleFactor == 0f
+
+/** 途中を省く寄せ。時間が0なので、最初のフレームで行き先に着く。 */
+internal val SpreadInstantSettleSpec: AnimationSpec<Float> = snap()
 
 /** 読み上げの操作で送れる見開き（→ features/note_spread.md §5「めくり」）。組み上がった見開きの中だけで、端では送らない。 */
 internal data class SpreadTurnTargets(val next: Int?, val previous: Int?)
