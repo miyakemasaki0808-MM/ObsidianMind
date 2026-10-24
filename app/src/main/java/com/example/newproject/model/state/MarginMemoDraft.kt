@@ -1,6 +1,7 @@
 package com.example.newproject.model.state
 
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 
 /**
@@ -14,11 +15,21 @@ data class MarginMemoDraft(
     /** 書き込み先。**書き始めた時点の本文の節で、文字がある間は動かない。** null はまだ書き始めていない。 */
     val target: SectionRef? = null,
     /** 受理が確かめられていない送信。**1ノート1件まで**で、入力欄とは別に持ち続ける。 */
-    val pending: MemoSubmission? = null
+    val pending: MemoSubmission? = null,
+    /** 付けた引用（→ features/margin_quote.md §5.3）。**引用だけの書きかけも空ではない。** */
+    val quote: DraftQuote? = null,
+    /** 書き始めた頃に読んでいた位置。書き込み先と同じ瞬間に控え、引用が付いていれば控えない。 */
+    val seen: MemoPassage.Seen? = null
 ) {
     /** 何も持っていない。一覧から外してよい。 */
-    val isEmpty: Boolean get() = text.isEmpty() && pending == null
+    val isEmpty: Boolean get() = text.isEmpty() && pending == null && quote == null
+
+    /** 置くときにメモへ載せる手掛かり。**引用が先**で、無ければ控えた位置。 */
+    val passage: MemoPassage? get() = quote?.passage ?: seen
 }
+
+/** 付けた引用。[cut] は上限で入らなかった部分で、**置く前に見せる**（→ features/margin_quote.md §5.2）。 */
+data class DraftQuote(val passage: MemoPassage.Quoted, val cut: String = "")
 
 /**
  * 保存を頼んだ1回の送信（→ features/margin_pane.md §6.2）。

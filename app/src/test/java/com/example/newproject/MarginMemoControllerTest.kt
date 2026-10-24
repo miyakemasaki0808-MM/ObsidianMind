@@ -6,7 +6,10 @@ import com.example.newproject.controller.MemoLoad
 import com.example.newproject.controller.MemoSaveOutcome
 import com.example.newproject.domain.submissionOf
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.MemoFileRead
 import com.example.newproject.model.NoteUiState
@@ -316,6 +319,84 @@ class MarginMemoControllerTest {
         advanceUntilIdle()
 
         assertEquals("待っているあいだに書いた", drafts.draft(NOTE).text)
+        assertNull(drafts.draft(NOTE).pending)
+    }
+
+    // ── 引用と控えた位置（→ features/margin_quote.md §5.3）────────────────────────
+
+    /** **送信は引用を運び、書き込み先は引用元の節になる。** 置けたら引用も書きかけから消える。 */
+    @Test
+    fun `引用を付けて置くと引用つきのメモを引用元の節へ書く`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        var received: MarginMemo? = null
+        val controller = controller(store, drafts = drafts, onAppend = { received = it })
+        controller.open(path)
+        advanceUntilIdle()
+        val quote = DraftQuote(MemoPassage.Quoted("一節", QuoteContext("前", "後"), truncated = false))
+
+        controller.edit("書いていた", bodySection = SectionRef("節B"))
+        controller.attachQuote(quote, SectionRef("節C"))
+        controller.submit(path, bodySection = SectionRef("節B"))
+        advanceUntilIdle()
+
+        assertEquals(quote.passage, received?.passage)
+        assertEquals("節C", received?.sectionTitle)
+        assertEquals(MarginMemoDraft(), drafts.draft(NOTE))
+    }
+
+    @Test
+    fun `引用だけでは置かない`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val appended = mutableListOf<MarginMemo>()
+        val controller = controller(store, onAppend = { appended += it })
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.attachQuote(DraftQuote(MemoPassage.Quoted("一節", context = null, truncated = false)), SectionRef("節C"))
+        controller.submit(path, bodySection = null)
+        advanceUntilIdle()
+
+        assertTrue(appended.isEmpty())
+    }
+
+    @Test
+    fun `引用の無いメモは書き始めた頃の位置を運ぶ`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        var received: MarginMemo? = null
+        val controller = controller(store, onAppend = { received = it })
+        controller.open(path)
+        advanceUntilIdle()
+
+        controller.edit("書", bodySection = SectionRef("節B"), seenAtStart = MemoPassage.Seen("最上端の段落"))
+        controller.edit("書き足す", bodySection = SectionRef("節B"), seenAtStart = MemoPassage.Seen("別の段落"))
+        controller.submit(path, bodySection = null)
+        advanceUntilIdle()
+
+        assertEquals(MemoPassage.Seen("最上端の段落"), received?.passage)
+    }
+
+    /** 保存を待つ間に引用を替えたら、受理されても新しい引用と文字は残る。 */
+    @Test
+    fun `保存を待っている間に替えた引用は受理されても残す`() = runTest {
+        val store = NoteUiStateStore(NoteUiState())
+        val drafts = InMemoryMarginMemoDrafts()
+        val gate = Mutex(locked = true)
+        val controller = controller(store, drafts = drafts, beforeAppend = { gate.withLock { } })
+        controller.open(path)
+        advanceUntilIdle()
+        val replaced = DraftQuote(MemoPassage.Quoted("替えた一節", context = null, truncated = false))
+
+        controller.attachQuote(DraftQuote(MemoPassage.Quoted("最初の一節", context = null, truncated = false)), SectionRef("節B"))
+        controller.edit("添える", bodySection = SectionRef("節B"))
+        controller.submit(path, bodySection = null)
+        advanceUntilIdle()
+        controller.attachQuote(replaced, SectionRef("節B"))
+        gate.unlock()
+        advanceUntilIdle()
+
+        assertEquals(replaced, drafts.draft(NOTE).quote)
+        assertEquals("添える", drafts.draft(NOTE).text)
         assertNull(drafts.draft(NOTE).pending)
     }
 

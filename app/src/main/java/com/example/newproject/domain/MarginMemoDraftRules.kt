@@ -2,7 +2,9 @@ package com.example.newproject.domain
 
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoFileRead
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MemoSubmission
 
@@ -43,7 +45,7 @@ internal enum class MemoSendAction {
  * **整えるのはここの1回だけ**で、その結果を保存にも照合にも使う。整え直すと、
  * 切り詰めや制御文字の扱いで照合の鍵がずれうる。時刻もここで1度だけ決める。
  */
-internal fun submissionOf(raw: String, sectionTitle: String?, nowEpochMillis: Long): MemoSubmission? {
+internal fun submissionOf(raw: String, sectionTitle: String?, nowEpochMillis: Long, passage: MemoPassage? = null): MemoSubmission? {
     val composed = composeMarginMemo(raw)
     if (composed.isBlank) return null
     return MemoSubmission(
@@ -51,7 +53,8 @@ internal fun submissionOf(raw: String, sectionTitle: String?, nowEpochMillis: Lo
         memo = MarginMemo(
             text = composed.text,
             writtenAtEpochMillis = nowEpochMillis,
-            sectionTitle = composeMemoSectionTitle(sectionTitle)
+            sectionTitle = composeMemoSectionTitle(sectionTitle),
+            passage = passage
         ),
         wasTruncated = composed.wasTruncated
     )
@@ -76,18 +79,30 @@ internal fun checkSubmission(
 
 /**
  * 入力を変えた。**書き始めた瞬間の本文の節を書き込み先にし、文字がある間は動かさない。** 空にしたら放す。
+ * 書き込み先を決める瞬間に、そのとき読んでいた位置 [seenAtStart] も控える（引用が付いていれば控えない → features/margin_quote.md §5.4）。
  *
  * 本文の節がまだ分からない（解析の前）ときは決めずに置き、次の入力で決める。
+ * **引用が付いていれば、空にしても書き込み先を放さない** — 書き込み先は引用元の節で、引用は残っている。
  * **未確定の送信には触らない** — 末尾の空白を足しただけの編集でも、整えた本文は同じになるため。
  */
-internal fun MarginMemoDraft.edited(text: String, bodySection: SectionRef?): MarginMemoDraft = copy(
-    text = text,
-    target = when {
-        text.isEmpty() -> null
-        target != null -> target
-        else -> bodySection
+internal fun MarginMemoDraft.edited(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null): MarginMemoDraft =
+    when {
+        text.isEmpty() -> copy(text = text, target = if (quote != null) target else null, seen = null)
+        target != null -> copy(text = text)
+        else -> copy(text = text, target = bodySection, seen = if (bodySection != null && quote == null) seenAtStart else null)
     }
-)
+
+/**
+ * 引用を付けた。**書いている途中でも、書き込み先を引用元の節 [section] へ移す** — 引用は利用者が場所を選ぶ明示の操作で、
+ * 本文のスクロールとは違う（→ features/margin_quote.md §5.2）。引用元が決まらなければ呼ぶ側が今の本文の節を渡す。
+ * 付いていた引用とは入れ替え、書いた文字と未確定の送信はそのまま。
+ */
+internal fun MarginMemoDraft.quoted(quote: DraftQuote, section: SectionRef?): MarginMemoDraft =
+    copy(quote = quote, target = section ?: target)
+
+/** 引用を外した（✕）。**引用だけを消す。** 文字があれば書き込み先はそのまま、空なら放す。 */
+internal fun MarginMemoDraft.unquoted(): MarginMemoDraft =
+    copy(quote = null, target = if (text.isEmpty()) null else target)
 
 /**
  * 保存を頼んだ。**入力は空にしない** — 置けなかったときに原文を残すため。
@@ -96,12 +111,21 @@ internal fun MarginMemoDraft.edited(text: String, bodySection: SectionRef?): Mar
 internal fun MarginMemoDraft.submitted(submission: MemoSubmission): MarginMemoDraft = copy(pending = submission)
 
 /**
- * 受理された。送信を消費し、**入力が原文のままのときだけ**空にして書き込み先を放す。
- * 待っている間に書き直した文字は残す。**追わなくなった古い送信の結果では何も消さない。**
+ * この送信の受理で、今の書きかけを空にできるか。**入力が原文のままで、引用も送ったものと同じ**ときだけ。
+ *
+ * 受理されたことと、今の書きかけを消費できたことは別である。並べ読みの右を資料へ戻すのは後者のときだけ
+ * （保存を待つ間に書き直していれば、まだ書き終えていない → features/margin_quote.md §5.6）。
+ */
+internal fun MarginMemoDraft.consumedBy(submission: MemoSubmission): Boolean =
+    pending == submission && text == submission.raw && passage == submission.memo.passage
+
+/**
+ * 受理された。送信を消費し、**[consumedBy] のときだけ**空にして書き込み先・引用・控えを放す。
+ * 待っている間に書き直した文字や替えた引用は残す。**追わなくなった古い送信の結果では何も消さない。**
  */
 internal fun MarginMemoDraft.accepted(submission: MemoSubmission): MarginMemoDraft = when {
     pending != submission -> this
-    text == submission.raw -> copy(text = "", target = null, pending = null)
+    consumedBy(submission) -> MarginMemoDraft()
     else -> copy(pending = null)
 }
 
@@ -126,8 +150,10 @@ internal fun MarginMemoDraft.settled(submission: MemoSubmission, check: Submissi
 internal fun MarginMemoDraft.sendAction(): MemoSendAction {
     val composed = composeMarginMemo(text)
     return when {
+        // **引用だけでは置かない。** 自分の言葉が要る（→ features/margin_quote.md 判断2）。
         composed.isBlank -> MemoSendAction.None
-        pending != null && composed.text == pending.memo.text -> MemoSendAction.Verify
+        // 引用を替えたら同じ本文でも別のメモなので、確かめるではなく置く。
+        pending != null && composed.text == pending.memo.text && passage == pending.memo.passage -> MemoSendAction.Verify
         else -> MemoSendAction.Place
     }
 }

@@ -4,6 +4,8 @@ import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.checkSubmission
 import com.example.newproject.domain.edited
+import com.example.newproject.domain.quoted
+import com.example.newproject.domain.unquoted
 import com.example.newproject.domain.sendAction
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
@@ -12,7 +14,9 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MarginMemoDraftStore
 import com.example.newproject.model.MarginMemoSlice
 import com.example.newproject.model.MarginMemoStateWriter
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
 import kotlinx.coroutines.CancellationException
@@ -162,9 +166,24 @@ internal class MarginMemoController(
      * 入力を変えた。**書き始めた瞬間の本文の節を書き込み先にする**（→ features/margin_pane.md §5.3）。
      * 本文を表示していないときは何もしない。
      */
-    fun edit(text: String, bodySection: SectionRef?) {
+    fun edit(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) {
         val noteKey = currentNoteKey() ?: return
-        drafts.update(noteKey) { it.edited(text, bodySection) }
+        drafts.update(noteKey) { it.edited(text, bodySection, seenAtStart) }
+    }
+
+    /**
+     * 引用を付けた（→ features/margin_quote.md §5.2）。書き込み先は引用元の節 [section] へ移る。
+     * 本文を表示していないときは何もしない。
+     */
+    fun attachQuote(quote: DraftQuote, section: SectionRef?) {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.quoted(quote, section) }
+    }
+
+    /** 引用の ✕。引用だけを外す。 */
+    fun detachQuote() {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.unquoted() }
     }
 
     /**
@@ -191,7 +210,8 @@ internal class MarginMemoController(
             MemoSendAction.Place -> Unit
         }
         val section = draft.target ?: bodySection
-        val submission = submissionOf(draft.text, section?.title, clock()) ?: return
+        // **引用か控えた位置も一緒に送る。** 照合の鍵（保存値と時刻）には入れない。
+        val submission = submissionOf(draft.text, section?.title, clock(), draft.passage) ?: return
         // **送った記録を先に残す。** 結果が同期で返っても、受理を取りこぼさない。
         drafts.update(noteKey) { it.submitted(submission) }
 
