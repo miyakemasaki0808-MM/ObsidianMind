@@ -12,6 +12,8 @@ import androidx.compose.runtime.snapshotFlow
 import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.MemoLayout
 import com.example.newproject.domain.arrangeMemos
+import com.example.newproject.domain.quoteCandidates
+import com.example.newproject.domain.QuoteCandidate
 import com.example.newproject.domain.layoutMemos
 import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -41,8 +43,28 @@ internal class MarginFaceInputs(
     /** 本文をそのブロックへ送る。引用した段落と書いた頃の位置へ飛ぶのに使う（→ features/margin_quote.md §5.5）。 */
     val jumpToBlock: (Int) -> Unit,
     /** 今書き始めたら控える位置（→ features/margin_quote.md §5.4）。本文の節と同じく、スクロールが止まった最上端のブロックから決める。 */
-    val seenAtStart: MemoPassage.Seen?
+    val seenAtStart: MemoPassage.Seen?,
+    /** 引用の候補を今の本文から探す口。付ける場で選ぶときと、特定できない引用を押したときに使う（→ features/margin_quote.md 判断13）。 */
+    val quoteCandidates: QuoteCandidateFinder
 )
+
+/** [quote] の候補と、それを探した解析結果。選んだ候補のブロックはこの解析結果の番号（→ `chooseMarginMemoQuoteSource`）。 */
+internal class QuoteCandidates(val quote: MemoPassage.Quoted, val model: NoteSectionModel, val items: List<QuoteCandidate>)
+
+/**
+ * 引用の候補を今の本文の全体から探す。**本文に比例するので [locateDispatcher] の上で探し**、引用か解析結果が替わったときだけ探し直す。
+ * 探している間と、探した後に引用か解析結果が替わった間は null（前の候補を出さない）。
+ */
+internal class QuoteCandidateFinder(private val model: NoteSectionModel?, private val locateDispatcher: CoroutineDispatcher) {
+    @Composable
+    fun candidatesFor(quote: MemoPassage.Quoted): QuoteCandidates? {
+        val found by produceState<QuoteCandidates?>(null, quote, model, locateDispatcher) {
+            val forModel = model ?: return@produceState
+            value = withContext(locateDispatcher) { QuoteCandidates(quote, forModel, quoteCandidates(quote.text, forModel.passages)) }
+        }
+        return found?.takeIf { it.quote == quote && it.model === model }
+    }
+}
 
 /** 照らし直しと並べ方の結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLayout]）。 */
 internal class LaidOutMemos(val memos: List<MarginMemo>, val model: NoteSectionModel, val layout: MemoLayout)
@@ -115,5 +137,6 @@ internal fun rememberMarginFaceInputs(
         imageMeasurements?.requestSkippedMeasurement(block)
     }
     val jumpToSection: (SectionRef) -> Unit = { ref -> sectionModel?.startBlockOf(ref)?.let(jumpToBlock) }
-    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection, jumpToBlock, seenAtStart)
+    val quoteCandidates = remember(sectionModel, locateDispatcher) { QuoteCandidateFinder(sectionModel, locateDispatcher) }
+    return MarginFaceInputs(bodySection, arranged, previousReadingAt, jumpToSection, jumpToBlock, seenAtStart, quoteCandidates)
 }

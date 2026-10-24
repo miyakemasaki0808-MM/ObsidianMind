@@ -357,6 +357,12 @@ class ThreadingScanTest {
                 nested = mapOf("domain/QuoteAttachment.kt" to "付ける引用を作る quoteAttachmentFor の中")
             ),
             HeavyCall(
+                name = "引用の候補を前後の文字つきで並べる",
+                call = """\bquoteCandidates\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
                 name = "付ける引用を作る",
                 call = """\bquoteAttachmentFor\(""",
                 dispatcher = "quoteDispatcher",

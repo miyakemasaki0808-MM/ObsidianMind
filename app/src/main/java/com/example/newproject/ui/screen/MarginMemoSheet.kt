@@ -32,6 +32,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.model.QuoteContext
+import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.quoteKey
+import com.example.newproject.domain.QuoteCandidate
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -325,7 +333,11 @@ internal fun MarginMemoSheetContent(
     /** このノートの関連（→ [PaneRelatedInputs]）。**ペインだけ**が渡す。null なら出さない。 */
     related: PaneRelatedInputs? = null,
     /** 面のスクロール。机の画面のペインは外で持ち、余白を1画面に広げて戻したときに位置を戻す（→ [RestoreSupportingScroll]）。 */
-    scrollState: ScrollState = rememberScrollState()
+    scrollState: ScrollState = rememberScrollState(),
+    /** 引用の候補を今の本文から探す口（→ [QuoteCandidateFinder]）。本文の解析の前は null で、候補を出さない。 */
+    quoteCandidates: QuoteCandidateFinder? = null,
+    /** 引用の欄の操作。 */
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -473,6 +485,10 @@ internal fun MarginMemoSheetContent(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
+            draft.quote?.let { quote ->
+                DraftQuoteField(quote, hasHeadings, quoteCandidates, quoteActions)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             OutlinedTextField(
                 value = draft.text,
                 onValueChange = onEdit,
@@ -485,7 +501,8 @@ internal fun MarginMemoSheetContent(
                             if (focus.isFocused) previousRowAtFocus ?: (previousRow != PreviousReadingRow.Hidden) else null
                         inputFocused = focus.isFocused
                     },
-                placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
+                // 引用だけでは置けない（→ features/margin_quote.md 判断2）。引用があって言葉が空なら、添えることを促す。
+                placeholder = { Text(memoInputPlaceholder(draft), color = OnSurfaceFaint) },
                 minLines = 2,
                 maxLines = 6
             )
@@ -576,12 +593,15 @@ internal fun MarginMemoSheetContent(
                                 match = placed.match,
                                 placement = placed.placement,
                                 onJumpToBlock = onJumpToBlock,
-                                onDelete = { pendingDelete = placed.memo }
+                                onDelete = { pendingDelete = placed.memo },
+                                hasHeadings = hasHeadings,
+                                quoteCandidates = quoteCandidates
                             )
                         }
                         OtherSectionMemos(
                             arranged = arranged,
                             hasHeadings = hasHeadings,
+                            quoteCandidates = quoteCandidates,
                             expanded = othersExpanded,
                             onToggle = {
                                 othersExpanded = !othersExpanded
@@ -795,6 +815,7 @@ private fun StatusText(state: MarginMemoState) {
 private fun OtherSectionMemos(
     arranged: ArrangedMemos,
     hasHeadings: Boolean,
+    quoteCandidates: QuoteCandidateFinder?,
     expanded: Boolean,
     onToggle: () -> Unit,
     onJumpToSection: (SectionRef) -> Unit,
@@ -842,7 +863,9 @@ private fun OtherSectionMemos(
                 match = placed.match,
                 placement = placed.placement,
                 onJumpToBlock = onJumpToBlock,
-                onDelete = { onDelete(placed.memo) }
+                onDelete = { onDelete(placed.memo) },
+                hasHeadings = hasHeadings,
+                quoteCandidates = quoteCandidates
             )
         }
     }
@@ -854,10 +877,15 @@ private fun MemoRow(
     match: MemoSectionMatch?,
     onDelete: () -> Unit,
     placement: MemoPlacement? = null,
-    onJumpToBlock: (Int) -> Unit = {}
+    onJumpToBlock: (Int) -> Unit = {},
+    hasHeadings: Boolean = true,
+    quoteCandidates: QuoteCandidateFinder? = null
 ) {
-    // 確定した段落だけへ飛べる。特定できない・見つからない・照らし直しの前は押せない（→ features/margin_quote.md §5.5）。
+    // 確定した段落へは押すと飛ぶ。**特定できない引用は押すと候補を並べ、選んだ段落へ飛ぶ。選んだものは覚えない**（→ features/margin_quote.md §5.5・判断13）。
+    // 見つからない・照らし直しの前は押せない。
     val located = placement as? MemoPlacement.Located
+    val uncertain = placement is MemoPlacement.Uncertain && quoteCandidates != null
+    var choosing by remember(memo) { mutableStateOf(false) }
     Surface(
         color = PanelChip,
         shape = RoundedCornerShape(8.dp),
@@ -865,7 +893,17 @@ private fun MemoRow(
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             (memo.passage as? MemoPassage.Quoted)?.let { quote ->
-                QuoteLine(quote, onJump = located?.let { { onJumpToBlock(it.block) } })
+                when {
+                    located != null -> QuoteLine(quote, onJump = { onJumpToBlock(located.block) })
+                    uncertain -> QuoteLine(quote, onJump = { choosing = !choosing }, jumpLabel = "同じ一節の候補を選ぶ")
+                    else -> QuoteLine(quote, onJump = null)
+                }
+                if (choosing && quoteCandidates != null) {
+                    QuoteCandidateList(quote, quoteCandidates.candidatesFor(quote), hasHeadings) { candidate, _ ->
+                        choosing = false
+                        onJumpToBlock(candidate.block)
+                    }
+                }
             }
             Text(memo.text, color = OnSurface, fontSize = 14.sp, lineHeight = 20.sp)
             Row(
@@ -894,14 +932,14 @@ private fun MemoRow(
 
 /** メモの本文の上に出す引用。途中までの引用は末尾に「…」を付ける。[onJump] が null なら押せない（引用元が確定していない）。 */
 @Composable
-private fun QuoteLine(quote: MemoPassage.Quoted, onJump: (() -> Unit)?) {
+private fun QuoteLine(quote: MemoPassage.Quoted, onJump: (() -> Unit)?, jumpLabel: String = "引用した段落へ本文を送る") {
     val text = quoteDisplayText(quote)
     // 縦線は引用の高さに合わせる（複数行の引用でも左に1本通す）。
     val base = Modifier
         .fillMaxWidth()
         .height(IntrinsicSize.Min)
         .padding(bottom = 6.dp)
-    Row(modifier = if (onJump == null) base else base.clickable(onClickLabel = "引用した段落へ本文を送る", onClick = onJump)) {
+    Row(modifier = if (onJump == null) base else base.clickable(onClickLabel = jumpLabel, onClick = onJump)) {
         Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(OnSurfaceFaint))
         Text(
             text = text,
@@ -937,5 +975,103 @@ internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?, placement: 
         is MemoPlacement.Uncertain -> "$stamp ・ 引用した場所を特定できません · 似た一節 ${placement.candidateCount} か所"
         MemoPlacement.Missing -> "$byHeading ・ 引用した一節は本文に見つかりません"
         null -> byHeading
+    }
+}
+
+/** 引用の欄の操作（→ features/margin_quote.md §5.2・§5.3）。[onChoose] の番号は、候補を探した解析結果 [NoteSectionModel] のブロック。 */
+internal class DraftQuoteActions(
+    val onDetach: () -> Unit,
+    val onChoose: (quote: MemoPassage.Quoted, block: Int, model: NoteSectionModel) -> Unit,
+    val onDismissChoice: () -> Unit
+) {
+    companion object {
+        val None = DraftQuoteActions(onDetach = {}, onChoose = { _, _, _ -> }, onDismissChoice = {})
+    }
+}
+
+/** 入力欄の案内。引用があって言葉が空なら、添えることを促す（引用だけでは置けない → features/margin_quote.md 判断2）。 */
+internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
+    if (draft.quote != null && draft.text.isEmpty()) "引用にひとこと添えて置く" else "いま思ったこと"
+
+/** 引用の欄の行き先の知らせ。右のノートを並べていても、左のノートのメモになり、まだ保存していないことが分かる。 */
+internal const val DRAFT_QUOTE_DESTINATION = "今のノートの余白へ · まだ置いていません"
+
+/** 上限で入らなかった部分の知らせ（→ features/margin_quote.md §5.2）。切れる部分は続けて薄く添える。 */
+internal const val DRAFT_QUOTE_CUT_NOTICE = "ここから先は入りません"
+
+/** 付ける場で候補を選んでもらう問い（→ features/margin_quote.md 判断13）。 */
+internal fun quoteChoiceQuestion(count: Int): String = "この一節は本文に $count か所あります。どこから引用しましたか"
+
+/** 候補を見分けるための抜き出し。鍵の前後に控えた文字を添え、ブロックの途中なら「…」で切れ目を示す。 */
+internal fun candidateExcerpt(key: String, context: QuoteContext): String =
+    (if (context.before.isEmpty()) "" else "…" + context.before) + key + (if (context.after.isEmpty()) "" else context.after + "…")
+
+/**
+ * 書きかけに付けた引用（→ features/margin_quote.md §5.2・§5.3）。引用の文字・入らない部分・行き先と未保存の知らせ・✕ を出す。
+ * **引用元を付ける場で選んでいる間は、候補を並べる。** 選ばずに閉じても書く流れは止めない（入力欄は使える）。
+ */
+@Composable
+private fun DraftQuoteField(quote: DraftQuote, hasHeadings: Boolean, finder: QuoteCandidateFinder?, actions: DraftQuoteActions) {
+    Surface(color = PanelChip, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
+                    QuoteLine(quote.passage.copy(truncated = false), onJump = null)
+                    if (quote.cut.isNotEmpty()) {
+                        Text(
+                            text = "$DRAFT_QUOTE_CUT_NOTICE：${quote.cut.trim()}",
+                            color = OnSurfaceFaint,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = actions.onDetach,
+                    modifier = Modifier.semantics { contentDescription = "引用を外す" }
+                ) { Text("✕", color = OnSurfaceMuted, fontSize = 14.sp) }
+            }
+            Text(DRAFT_QUOTE_DESTINATION, color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.padding(end = 12.dp))
+            if (quote.choosing && finder != null) {
+                QuoteCandidateList(quote.passage, finder.candidatesFor(quote.passage), hasHeadings) { candidate, model ->
+                    actions.onChoose(quote.passage, candidate.block, model)
+                }
+                TextButton(onClick = actions.onDismissChoice) { Text("選ばずに閉じる", color = OnSurfaceMuted, fontSize = 12.sp) }
+            }
+        }
+    }
+}
+
+/**
+ * 同じ一節の候補（→ features/margin_quote.md 判断13）。節の名前と前後の文字で見分けて選ぶ。**候補は削らない** — 多ければこの中でスクロールする。
+ * 探している間は、その旨だけを出す。
+ */
+@Composable
+private fun QuoteCandidateList(
+    quote: MemoPassage.Quoted,
+    found: QuoteCandidates?,
+    hasHeadings: Boolean,
+    onPick: (QuoteCandidate, NoteSectionModel) -> Unit
+) {
+    if (found == null) {
+        Text("候補を探しています", color = OnSurfaceFaint, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+        return
+    }
+    val key = remember(quote) { quoteKey(quote.text) }
+    Text(quoteChoiceQuestion(found.items.size), color = OnSurfaceMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, end = 12.dp))
+    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)) {
+        items(found.items.size) { k ->
+            val candidate = found.items[k]
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = "この候補を引用元にする") { onPick(candidate, found.model) }
+                    .padding(vertical = 6.dp)
+            ) {
+                Text(sectionLabel(candidate.section, hasHeadings), color = AccentText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(candidateExcerpt(key, candidate.context), color = OnSurfaceMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }

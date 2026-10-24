@@ -204,6 +204,8 @@ internal fun NoteReaderTab(
     onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
     /** 本文の選択メニューの「引用して書く」。[model] は選んだ本文の解析結果（→ features/margin_quote.md §5.2）。 */
     onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
+    /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
@@ -829,6 +831,8 @@ internal fun NoteReaderTab(
                         onJumpToSection = jumpToSection,
                         arranged = arrangedMemos,
                         onJumpToBlock = face.jumpToBlock,
+                        quoteCandidates = face.quoteCandidates,
+                        quoteActions = quoteActions,
                         reveal = memoReveal,
                         onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                         onEdit = onEditMemo,
@@ -1036,6 +1040,8 @@ internal fun NoteReaderTab(
                                                 showDeskFace(DeskFace.Main)
                                                 face.jumpToBlock(block)
                                             },
+                                            quoteCandidates = face.quoteCandidates,
+                                            quoteActions = quoteActions,
                                             reveal = memoReveal,
                                             onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                                             onEdit = onEditMemo,

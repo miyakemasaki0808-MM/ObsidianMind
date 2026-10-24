@@ -3,6 +3,12 @@ package com.example.newproject.ui
 import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.model.MemoPassage
+import com.example.newproject.ui.screen.quoteChoiceQuestion
+import com.example.newproject.ui.screen.memoInputPlaceholder
+import com.example.newproject.ui.screen.candidateExcerpt
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.SectionRef
 import com.example.newproject.ui.screen.memoCaption
@@ -67,5 +73,29 @@ class MarginMemoCaptionTest {
     fun `途中までの引用は末尾に三点を付ける`() {
         assertEquals("長い一節…", quoteDisplayText(MemoPassage.Quoted("長い一節", context = null, truncated = true)))
         assertEquals("短い一節", quoteDisplayText(MemoPassage.Quoted("短い一節", context = null, truncated = false)))
+    }
+
+    // ── 引用の欄（→ features/margin_quote.md §5.2・§5.3）────────────────────────
+
+    @Test
+    fun `引用があって言葉が空なら添えることを促す`() {
+        val quote = DraftQuote(MemoPassage.Quoted("一節", context = null, truncated = false))
+
+        assertEquals("引用にひとこと添えて置く", memoInputPlaceholder(MarginMemoDraft(quote = quote)))
+        assertEquals("いま思ったこと", memoInputPlaceholder(MarginMemoDraft()))
+        assertEquals("いま思ったこと", memoInputPlaceholder(MarginMemoDraft(text = "書", quote = quote)))
+    }
+
+    /** 候補はブロックの途中なら「…」で切れ目を示す。ブロックの端なら付けない。 */
+    @Test
+    fun `候補の抜き出しは前後の文字を添えてブロックの途中なら切れ目を示す`() {
+        assertEquals("…前の同じ一節の後…", candidateExcerpt("同じ一節", QuoteContext("前の", "の後")))
+        assertEquals("同じ一節", candidateExcerpt("同じ一節", QuoteContext("", "")))
+        assertEquals("同じ一節の後…", candidateExcerpt("同じ一節", QuoteContext("", "の後")))
+    }
+
+    @Test
+    fun `付ける場の問いは候補の数を言う`() {
+        assertEquals("この一節は本文に 3 か所あります。どこから引用しましたか", quoteChoiceQuestion(3))
     }
 }

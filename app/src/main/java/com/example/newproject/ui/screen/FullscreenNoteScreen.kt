@@ -105,6 +105,8 @@ internal fun FullscreenNoteScreen(
     onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
     /** 本文の選択メニューの「引用して書く」。[model] は選んだ本文の解析結果（→ features/margin_quote.md §5.2）。 */
     onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
+    /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     /** 入力欄で書いているつもりか。通常画面と共有する（戻った先の面へフォーカスを引き継ぐ）。 */
@@ -227,6 +229,8 @@ internal fun FullscreenNoteScreen(
                     onJumpToSection = face.jumpToSection,
                     arranged = face.arranged,
                     onJumpToBlock = face.jumpToBlock,
+                    quoteCandidates = face.quoteCandidates,
+                    quoteActions = quoteActions,
                     onEdit = { text -> onEditMarginMemo(text, face.bodySection, face.seenAtStart) },
                     onSubmit = { onSubmitMarginMemo(face.bodySection) },
                     onDelete = onDeleteMarginMemo,

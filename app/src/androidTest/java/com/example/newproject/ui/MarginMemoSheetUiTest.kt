@@ -48,6 +48,20 @@ import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
+import org.junit.Assert.assertNull
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.hasContentDescription
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.domain.quoted
+import com.example.newproject.domain.unquoted
+import com.example.newproject.domain.choiceDismissed
+import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.ui.screen.quoteChoiceQuestion
+import com.example.newproject.ui.screen.DRAFT_QUOTE_DESTINATION
+import com.example.newproject.ui.screen.DRAFT_QUOTE_CUT_NOTICE
+import com.example.newproject.ui.screen.QuoteCandidateFinder
+import com.example.newproject.ui.screen.DraftQuoteActions
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.domain.markdown.buildNoteSectionModel
@@ -128,6 +142,16 @@ class MarginMemoSheetUiTest {
         var previousReadingAt by mutableStateOf<Long?>(null)
         /** 引用した段落か書いた頃の位置へ送ったブロック。 */
         var jumpedBlock by mutableStateOf<Int?>(null)
+        /** 引用の候補を探す口。null は本文の解析の前。 */
+        var finder by mutableStateOf<QuoteCandidateFinder?>(null)
+        /** 付ける場で選んだ候補のブロックと、候補を探した解析結果。 */
+        val chosen = mutableListOf<Pair<Int, NoteSectionModel>>()
+        /** 引用の欄の操作も、本番と同じ書きかけの規則で演じる。 */
+        val quoteActions = DraftQuoteActions(
+            onDetach = { drafts.update(note) { it.unquoted() } },
+            onChoose = { _, block, model -> chosen += block to model },
+            onDismissChoice = { drafts.update(note) { it.choiceDismissed() } }
+        )
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -173,7 +197,9 @@ class MarginMemoSheetUiTest {
                             onRevealHandled = { harness.reveal = null },
                             focusIntent = harness.focusIntent,
                             onFocusIntentChange = { harness.focusIntent = it },
-                            previousReadingAt = harness.previousReadingAt
+                            previousReadingAt = harness.previousReadingAt,
+                            quoteCandidates = harness.finder,
+                            quoteActions = harness.quoteActions
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -531,6 +557,69 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("引用した場所を特定できません · 似た一節 2 か所", substring = true).assertExists()
         composeRule.onNodeWithText("同じ一節").performClick()
         composeRule.runOnIdle { assertEquals("特定できない引用で本文を送った", 2, harness.jumpedBlock) }
+    }
+
+    /**
+     * **引用の欄は、引用・入らない部分・行き先と未保存を見せ、✕ で引用だけを外す**（→ features/margin_quote.md §5.2・§5.3）。
+     * 引用があって言葉が空なら、入力欄が添えることを促す（引用だけでは置けない → 判断2）。
+     */
+    @Test
+    fun 引用の欄は引用と入らない部分と行き先を見せ_バツで引用だけを外す() {
+        val harness = Harness()
+        harness.drafts.update(NOTE_A) {
+            it.quoted(DraftQuote(MemoPassage.Quoted("引いた一節", QuoteContext("", ""), truncated = true), cut = "入らない残り"), SectionRef("節B"))
+        }
+        setContent(harness)
+
+        composeRule.onNodeWithText("引いた一節").assertExists()
+        composeRule.onNodeWithText("$DRAFT_QUOTE_CUT_NOTICE：入らない残り").assertExists()
+        composeRule.onNodeWithText(DRAFT_QUOTE_DESTINATION).assertExists()
+        composeRule.onNodeWithText("引用にひとこと添えて置く").assertExists()
+
+        composeRule.onNode(hasContentDescription("引用を外す")).performClick()
+
+        composeRule.onNodeWithText("引いた一節").assertDoesNotExist()
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        composeRule.runOnIdle { assertNull(harness.draft.quote) }
+    }
+
+    /** **本文に同じ一節が2か所以上あれば、付ける場で前後の文字つきの候補から選んでもらう**（→ 判断13）。選ばずに閉じても引用は付いたまま。 */
+    @Test
+    fun 付ける場で候補から引用元を選べ_選ばずに閉じても引用は残る() {
+        val harness = Harness()
+        val model = buildNoteSectionModel("## 節A\n\n前の同じ一節\n\n## 節B\n\n同じ一節の後")
+        harness.finder = QuoteCandidateFinder(model, Dispatchers.Default)
+        harness.drafts.update(NOTE_A) {
+            it.quoted(DraftQuote(MemoPassage.Quoted("同じ一節", context = null, truncated = false), choosing = true), SectionRef("節B"))
+        }
+        setContent(harness)
+
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText(quoteChoiceQuestion(2)).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("同じ一節の後…").performClick()
+        composeRule.runOnIdle { assertEquals(listOf(3 to model), harness.chosen.map { (block, from) -> block to from }) }
+
+        composeRule.onNodeWithText("選ばずに閉じる").performClick()
+        composeRule.onNodeWithText(quoteChoiceQuestion(2)).assertDoesNotExist()
+        composeRule.onNodeWithText("同じ一節").assertExists()
+    }
+
+    /** **特定できない引用は押すと候補を並べ、選んだ段落へ本文を送る。選んだものは覚えない**（→ §5.5・判断13）。 */
+    @Test
+    fun メモの行の特定できない引用を押すと候補が並び_選んだ段落へ飛ぶ() {
+        val harness = Harness()
+        val model = buildNoteSectionModel("## 節B\n\n前の同じ一節\n\n同じ一節の後")
+        val memos = listOf(MarginMemo("特定できないメモ", 1L, "節B", MemoPassage.Quoted("同じ一節", context = null, truncated = false)))
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex)), SectionRef("節B"))
+        harness.finder = QuoteCandidateFinder(model, Dispatchers.Default)
+        setContent(harness)
+
+        composeRule.onNodeWithText("同じ一節").performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText("…前の同じ一節").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("…前の同じ一節").performClick()
+
+        composeRule.runOnIdle { assertEquals(1, harness.jumpedBlock) }
+        composeRule.onNodeWithText("…前の同じ一節").assertDoesNotExist()
     }
 
     /** 再会カードの「前回のメモを見る」から来たら、**ほかの節のメモも開いて**メモの並びまで送る。 */
