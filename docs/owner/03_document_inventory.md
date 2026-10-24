@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-10-11。基準は `a3661274`
+**作成:** 2026-09-08 / **更新:** 2026-10-24。基準は `a0f550b9`
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -24,15 +24,15 @@ CLAUDE.md                  開発規約（憲法）
 README.md                  リポジトリの入口
 docs/
 ├── README.md              文書の入口
-├── owner/     (17本)      オーナーが読む俯瞰。検査に載せない
+├── owner/     (16本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (5本)    開発日誌。README＋月別4本
 │   └── Fable5.1_report/   評価報告書の課題一覧。git 管理外の特別枠
-├── dev/       (84本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (23本)  ユーザーから見える機能。README・様式＋仕様21本
+├── dev/       (87本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (26本)  ユーザーから見える機能。README・様式＋仕様24本
 │   ├── system/    (14本)  横断的な基盤。README＋13本
 │   ├── decisions/  (7本)  ADR。README＋6本
-│   └── lessons/   (36本)  教訓66件のうち、カードを持つ36本
-├── _wip/       (4本)      進行中。リリース時に廃棄する
+│   └── lessons/   (36本)  教訓67件のうち、カードを持つ36本
+├── _wip/       (7本)      進行中。リリース時に廃棄する。文書6本と補助スクリプト1本
 └── review/    (22本)      レビューと実機検証。ほかに追跡しない本文1本
     └── device_validation/ (19本)  共通手順・簡易版・機能別ケース17本
 ```
@@ -58,21 +58,24 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。21本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。24本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
-| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口。低い横長の画面だけノート画面を左右2列にし、開いた Fold では本文の右に余白ペインを置く |
+| [rediscover](../dev/features/rediscover.md) | Rediscover | 稼働中。アプリの入口。低い横長の画面だけノート画面を左右2列にする。開いた Fold でも開いた直後はふだんの画面で、✎ で本文の右に余白ペインを置く |
 | [reflect_reading_trace](../dev/features/reflect_reading_trace.md) | 読書痕跡 | 稼働中。サイドカーは schema v7 |
 | [reunion_card](../dev/features/reunion_card.md) | 再会カードに何を出すか | 実装済み・実機検証済み。途中までは前後の要約と続きから読む、読了は問いか要約の先頭1文。「まだ考えたい」は撤去した |
 | [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI。**同じ入力の要約は端末に保存する** |
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
+| [rebuttal_sentence](../dev/features/rebuttal_sentence.md) | 反証の一文 | 実装済み・稼働中。関連ノートの本文から、今のノートと最も食い違う一文を選んで原文のまま出す。AIは選ぶだけ |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中 |
 | [section_ai_chat](../dev/features/section_ai_chat.md) | 部分要約 | 稼働中。節の要約を「この部分」の面に出し、最近3節分を持つ。入口は見出しの 💬 と面の「この節を要約」。面が出ていなければ面を出さずに裏で作る。全画面には置かない |
 | [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
-| [margin_pane](../dev/features/margin_pane.md) | 「この部分」余白のペインとシート | 稼働中・実機確認済み。開いた Fold では本文の右に、今の節のメモ・前回の読書の跡・部分要約・書く欄と、関連ノートを右で眺める並べ読みを置く。ペインを出している間は机の画面になり、つまみで操作の帯を呼び、横に払って片側を1画面にできる |
+| [margin_pane](../dev/features/margin_pane.md) | 「この部分」余白のペインとシート | 稼働中・実機確認済み。開いた Fold では本文の右に、今の節のメモ・前回の読書の跡・部分要約・書く欄と、関連ノートを右で眺める並べ読みを置く。ペインを出している間は机の画面になり、つまみで操作の帯を呼び、横に払って片側を1画面にできる。帯が出ている間はタブのレールも重ねて出す |
+| [desk_foundation](../dev/features/desk_foundation.md) | 机の土台 | 実装済み・稼働中。右のノートの中のリンクを右のまま辿り、窓のせいで机が閉じても並べ読みを保って ✎ で同じ配置に戻す |
+| [note_spread](../dev/features/note_spread.md) | 本文の見開き | **完了。** 開いた Fold の本の形で、レールの見開きのタブから本文を左右2ページに組む。めくる1枚は綴じ目を軸に回る。開いた直後の初期状態をふだんの画面にそろえた入り方もここ |
 | [reflect_crystal](../dev/features/reflect_crystal.md) | 結晶 | 実装済み・実機確認済み。読んできたノートの要約から共通する筋を1文にして Vault に溜める。材料は合計30秒読んだノートだけ。一覧は月の棚に、分野の色の宝石を並べる。Reflect の3本目 |
-| [note_links](../dev/features/note_links.md) | ノート内のリンク | 実装済み・実機確認済み。本文のノートと見出しへのリンクを押して開く。開いた Fold では右の面で眺め、スマホでは今のノートとして開く |
+| [note_links](../dev/features/note_links.md) | ノート内のリンク | 実装済み・実機確認済み。本文のノートと見出しへのリンクを押して開く。開いた Fold では右の面で眺め、右のノートの中のリンクも右のまま辿る。スマホでは今のノートとして開く |
 | [reflect_distill](../dev/features/reflect_distill.md) | 蒸留 | v1 Phase 1〜6＋句分割＋括弧内語句＋太字範囲の調整。自由範囲まで実機検証済み |
 | [booklet_mode](../dev/features/booklet_mode.md) | 冊子モード | **完了。** 佇まい・めくり・編む冊子まで実機で受理。扉が代表文にならない形の残りを既知の制約に持つ。940行で最大の文書 |
 | [note_field_color](../dev/features/note_field_color.md) | 冊子の分野色 | 実装済み。主要経路を実機確認。分野の色は結晶の宝石にも使う |
@@ -117,35 +120,37 @@ docs/
 | [0005](../dev/decisions/ADR-0005-bearing-channel-allocation.md) | 佇まいのチャネルは1つの意味だけに割り当てる |
 | [0006](../dev/decisions/ADR-0006-single-current-note.md) | 今のノートは主の面の1つだけ。複数インスタンスを採らない |
 
-## 6. `docs/dev/lessons/` — 教訓。66件
+## 6. `docs/dev/lessons/` — 教訓。67件
 
 **[索引](../dev/lessons.md) が本体で、カードは詳細。** 索引の「いつ当てるか」列を引き、該当したカードだけを読む。
 中身の棚卸しは [lessons_summary](06_lessons_summary.md) が持つ。
 
 | 数え方 | 件数 |
 |---|---|
-| 教訓の総数 | **66。** `L1`〜`L67` で、欠番は `L62` の1つ。取り下げ |
+| 教訓の総数 | **67。** `L1`〜`L68` で、欠番は `L62` の1つ。取り下げ |
 | 独立カードがあるもの | 36 |
-| 索引の中に本文があるもの | 30。`L1`〜`L18`・`L21`・`L27`・`L33`・`L37`・`L43`・`L54`・`L57`・`L63`〜`L67` |
+| 索引の中に本文があるもの | 31。`L1`〜`L18`・`L21`・`L27`・`L33`・`L37`・`L43`・`L54`・`L57`・`L63`〜`L68` |
 | 検査を名指ししているもの＝規約 | **26** |
-| 検査を持たないもの＝参考 | **40** |
+| 検査を持たないもの＝参考 | **41** |
 | うち索引の「検査」列が埋まっている行 | 23。`L7`・`L9`・`L13` は本文に検査があるのに列が空 |
 | 役目を終えたもの。転送だけを持つ | 2。`L12`・`L15` |
-| 索引の行数 | 53。`L1`〜`L16` を1行に畳んでいるので件数とは一致しない |
+| 索引の行数 | 54。`L1`〜`L16` を1行に畳んでいるので件数とは一致しない |
 
 **教訓を足すのは、同じ形の失敗を2度したときだけである。** 1度目はどこにも書かない。例外は検査を同時に置けるときだけ。
 
 > **検査列が空の教訓は、規約ではなく参考である。** このリポジトリで規則が守られたのは
 > 検査に載せたときだけ、というのが実績 → `L29`。両者を同じ強さで扱わない。
 
-## 7. `docs/_wip/` — 進行中。4本・リリース時に廃棄
+## 7. `docs/_wip/` — 進行中。文書6本と補助スクリプト1本・リリース時に廃棄
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在14件で、中2件・低11件・超低1件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在14件で、中4件・低8件・超低2件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
-| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。676行・使い捨て |
-| [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。表に残るのは15件で、うち未検討6件・保留3件 |
+| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。692行・使い捨て |
+| [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残る行の内訳は本体の表が持つ |
+| [lesson_card_vs_kdoc](../_wip/lesson_card_vs_kdoc.md) | 検査を持つ教訓を、カードとテストの KDoc のどちらに置くかの仕分け。Codex の分析で、オーナー判断待ち。使い捨て |
+| [random_scan_options](../_wip/random_scan_options.md) | 大きな Vault の最初のランダム表示を速くする3案の比較。Codex の分析で、オーナー判断待ち。測り直し用の `random_scan_fixture.py` を伴う。使い捨て |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 
@@ -154,7 +159,7 @@ docs/
 | 文書 | 役割 | 追跡 |
 |---|---|---|
 | [README](../review/README.md) | レビューの入口と運用。一覧は今の作業のレビューだけを持つ | ✅ |
-| [findings](../review/findings.md) | 未解決指摘の受付簿。現在1件 | ✅ |
+| [findings](../review/findings.md) | 未解決指摘の受付簿。現在2件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
