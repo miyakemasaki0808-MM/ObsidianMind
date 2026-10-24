@@ -2,6 +2,9 @@ package com.example.newproject.ui
 
 import com.example.newproject.domain.layoutMemos
 import com.example.newproject.domain.locateMemos
+import com.example.newproject.ui.screen.currentCandidates
+import com.example.newproject.ui.screen.QuoteCandidates
+import com.example.newproject.domain.quoteCandidates
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
@@ -64,5 +67,28 @@ class MarginFaceLayoutTest {
         assertNull(currentLayout(null, memos, laidOut.model))
         assertNull(currentLayout(laidOut, null, laidOut.model))
         assertNull(currentLayout(laidOut, memos, null))
+    }
+
+    // ── 引用の候補（→ features/margin_quote.md 判断13）─────────────────────────────
+
+    private val quote = MemoPassage.Quoted("意志の力", context = null, truncated = false)
+
+    @Test
+    fun `探したときと同じ引用と解析結果なら候補を出す`() {
+        val model = buildNoteSectionModel(content)
+        val found = QuoteCandidates(quote, model, quoteCandidates(quote.text, model.passages))
+
+        assertSame(found, currentCandidates(found, quote, model))
+    }
+
+    @Test
+    fun `探した後に引用か解析結果が替われば前の候補を出さない`() {
+        val model = buildNoteSectionModel(content)
+        val found = QuoteCandidates(quote, model, quoteCandidates(quote.text, model.passages))
+
+        assertNull(currentCandidates(found, quote.copy(text = "頼ると"), model))
+        assertNull(currentCandidates(found, quote, buildNoteSectionModel(content)))
+        assertNull(currentCandidates(found, quote, null))
+        assertNull(currentCandidates(null, quote, model))
     }
 }

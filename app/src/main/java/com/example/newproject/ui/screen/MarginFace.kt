@@ -62,9 +62,13 @@ internal class QuoteCandidateFinder(private val model: NoteSectionModel?, privat
             val forModel = model ?: return@produceState
             value = withContext(locateDispatcher) { QuoteCandidates(quote, forModel, quoteCandidates(quote.text, forModel.passages)) }
         }
-        return found?.takeIf { it.quote == quote && it.model === model }
+        return currentCandidates(found, quote, model)
     }
 }
+
+/** 今の引用と解析結果に対する候補。探した後に引用か解析結果が替わっていれば null（前の候補を出さない。解析結果は同じものかで比べる）。 */
+internal fun currentCandidates(found: QuoteCandidates?, quote: MemoPassage.Quoted, model: NoteSectionModel?): QuoteCandidates? =
+    found?.takeIf { it.quote == quote && it.model === model }
 
 /** 照らし直しと並べ方の結果と、それを作った材料。**材料が今のものと違えば使わない**（→ [currentLayout]）。 */
 internal class LaidOutMemos(val memos: List<MarginMemo>, val model: NoteSectionModel, val layout: MemoLayout)
