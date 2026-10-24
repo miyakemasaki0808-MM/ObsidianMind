@@ -3,6 +3,7 @@ package com.example.newproject.domain
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.inlineVisibleText
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTraceLimits
@@ -148,6 +149,29 @@ internal fun locatePassage(
     is MemoPassage.Quoted -> locateQuote(passage, index)
     is MemoPassage.Seen -> locateSeen(passage, sectionTitle, index, headings)
 }
+
+/**
+ * メモごとの照らし直しの結果。**本文の解析かメモが替わるたびに、Main の外で作り直す**（→ features/margin_quote.md §5.5）。
+ * 面に並べるとき（[arrangeMemos]）は、ここから引くだけにする。
+ */
+internal class MemoLocations internal constructor(
+    private val byMemo: Map<MarginMemo, PassageLocation>,
+    private val passages: PassageIndex
+) {
+    internal fun of(memo: MarginMemo): PassageLocation? = byMemo[memo]
+
+    /** 特定できない候補の節。同じ節に候補が複数あれば1つに数える。 */
+    internal fun sectionsOf(location: PassageLocation.Uncertain): List<SectionRef> =
+        location.candidates.map { passages.sections[it] }.distinct()
+}
+
+internal fun locateMemos(memos: List<MarginMemo>, passages: PassageIndex, headings: HeadingIndex): MemoLocations =
+    MemoLocations(
+        byMemo = memos.mapNotNull { memo ->
+            memo.passage?.let { memo to locatePassage(it, memo.sectionTitle, passages, headings) }
+        }.toMap(),
+        passages = passages
+    )
 
 private fun locateQuote(quote: MemoPassage.Quoted, index: PassageIndex): PassageLocation {
     val key = quoteKey(quote.text)

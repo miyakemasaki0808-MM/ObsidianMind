@@ -1,13 +1,15 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 
 // ---------------------------------------------------------------------------
 // 余白メモを今の本文の節へ置く（→ features/margin_pane.md §5.6）。
 //
-// メモが控えているのは書いたときの見出し名だけで、紐づけではない（→ reflect_margin_memo.md 判断2）。
-// だから表示のたびに今の見出しと照合し、**一致・候補が複数・見つからない**を分ける。保存値は書き換えない。
+// メモが控えているのは書いたときの見出し名と、v8 からは引用か書き始めた頃の位置で、どれも紐づけではない（→ reflect_margin_memo.md 判断2）。
+// だから表示のたびに今の本文と照合し、**一致・候補が複数・見つからない**を分ける。保存値は書き換えない。
+// 引用と位置の照らし直しは MemoPassages.kt が持ち、ここはその結果を見出しの照合より先に使う（→ features/margin_quote.md §5.5）。
 // ---------------------------------------------------------------------------
 
 /** メモが今の本文のどの節に当たるか。 */
@@ -86,8 +88,11 @@ class HeadingIndex internal constructor(headings: List<String>) {
     }
 }
 
-/** 照合したメモ。 */
-internal data class PlacedMemo(val memo: MarginMemo, val match: MemoSectionMatch)
+/**
+ * 照合したメモ。[match] は見出しの照合、[location] は引用か控えた位置の照らし直し（無ければ null）。
+ * **節を決めるのは [location] が先**（→ features/margin_quote.md §5.5）。
+ */
+internal data class PlacedMemo(val memo: MarginMemo, val match: MemoSectionMatch, val location: PassageLocation? = null)
 
 /** 節ごとのメモ。[section] が null の組は「見出しが見つからないメモ」。 */
 internal data class MemoGroup(val section: SectionRef?, val memos: List<PlacedMemo>)
@@ -111,22 +116,33 @@ internal data class ArrangedMemos(
  * [memos] を今の節 [current] とほかの節に分ける。[memos] の並び（新しい順）は各組の中で保つ。
  *
  * **見出しをたどらない。** 組はメモが当たる節からだけ作り、本文の順は [index] で引く。
- * 節を移るたびに呼ばれるので、ここの仕事はメモの数だけに比例させる。
+ * 節を移るたびに呼ばれるので、ここの仕事はメモの数だけに比例させる。照らし直しは [locations] が済ませてある。
+ *
+ * 節の決め方（→ features/margin_quote.md §5.5）:
+ * - 引用か控えた位置が**確定**したら、その段落の節。同名の見出しでも1つに決まる
+ * - **特定できない引用**は、候補の節のどれにも出す（同名の見出しに共通と同じ扱い）。一意の節にしない
+ * - それ以外（見つからない・特定できない控えた位置・照らし直しの前）は見出しの照合
  */
-internal fun arrangeMemos(memos: List<MarginMemo>, index: HeadingIndex, current: SectionRef): ArrangedMemos {
+internal fun arrangeMemos(
+    memos: List<MarginMemo>,
+    index: HeadingIndex,
+    current: SectionRef,
+    locations: MemoLocations? = null
+): ArrangedMemos {
     val opening = SectionRef(title = null)
-    val placed = memos.map { PlacedMemo(it, index.match(it.sectionTitle)) }
-    val inCurrent = placed.filter { current in it.match.sections(opening) }
+    val placed = memos.map { PlacedMemo(it, index.match(it.sectionTitle), locations?.of(it)) }
+    val sectionsOf = placed.associateWith { it.sections(opening, locations) }
+    val inCurrent = placed.filter { current in sectionsOf.getValue(it) }
     val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
     placed.forEach { memo ->
-        memo.match.sections(opening)
+        sectionsOf.getValue(memo)
             .filter { it != current }
             .forEach { section -> bySection.getOrPut(section) { mutableListOf() }.add(memo) }
     }
     val groups = bySection.entries
         .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
         .map { (section, inSection) -> MemoGroup(section, inSection) }
-    val missing = placed.filter { it.match == MemoSectionMatch.Missing }
+    val missing = placed.filter { sectionsOf.getValue(it).isEmpty() }
     val others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing)
     return ArrangedMemos(
         current = inCurrent,
@@ -135,11 +151,18 @@ internal fun arrangeMemos(memos: List<MarginMemo>, index: HeadingIndex, current:
         // 共通のメモが0件になり、候補の組があるのに開く口が消える。
         otherCount = others.flatMap { group -> group.memos.map { it.memo } }.distinct().size,
         countsBySection = placed
-            .flatMap { it.match.sections(opening) }
+            .flatMap { sectionsOf.getValue(it) }
             .filter { it != opening }
             .groupingBy { it }
             .eachCount()
     )
+}
+
+private fun PlacedMemo.sections(opening: SectionRef, locations: MemoLocations?): List<SectionRef> = when (val found = location) {
+    is PassageLocation.Located -> listOf(found.section)
+    is PassageLocation.Uncertain ->
+        if (memo.passage is MemoPassage.Quoted && locations != null) locations.sectionsOf(found) else match.sections(opening)
+    PassageLocation.NotFound, null -> match.sections(opening)
 }
 
 private fun MemoSectionMatch.sections(opening: SectionRef): List<SectionRef> = when (this) {

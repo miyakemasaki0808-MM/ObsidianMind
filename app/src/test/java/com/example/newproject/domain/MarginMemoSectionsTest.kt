@@ -1,6 +1,9 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.SectionRef
 import org.junit.Assert.assertEquals
@@ -209,5 +212,83 @@ class MarginMemoSectionsTest {
             reads++
             return inner[index]
         }
+    }
+
+    // ── 引用と控えた位置で節を決める（→ features/margin_quote.md §5.5）──────────────
+
+    private val sameNameBody = "## まとめ\n\n結論として、この方法は有効である。ただし条件Aでは使わない。\n\n" +
+        "## まとめ\n\n結論として、この方法は有効である。ただし条件Bでは使わない。"
+
+    private fun arrangeWithPassages(body: String, memos: List<MarginMemo>, current: SectionRef): ArrangedMemos {
+        val model = buildNoteSectionModel(body)
+        val passages = buildPassageIndex(model)
+        return arrangeMemos(memos, model.headingIndex, current, locateMemos(memos, passages, model.headingIndex))
+    }
+
+    /** **同名の見出しでも、前後とも合う引用は1つの節に決まる。** 見出しの照合だけなら両方の候補に出る。 */
+    @Test
+    fun `確定した引用は同名の見出しでも1つの節に並ぶ`() {
+        val quoted = MarginMemo(
+            "条件Bについて", 1L, "まとめ",
+            MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Bでは使わな"), truncated = false)
+        )
+
+        val arranged = arrangeWithPassages(sameNameBody, listOf(quoted), current = SectionRef("まとめ", ordinal = 1))
+
+        assertEquals(listOf(quoted), arranged.current.map { it.memo })
+        assertTrue("先の同名の節にも出ている", arranged.others.isEmpty())
+        assertEquals(mapOf(SectionRef("まとめ", ordinal = 1) to 1), arranged.countsBySection)
+    }
+
+    /** **特定できない引用は候補の節のどれにも出し、一意の節として数えない。** */
+    @Test
+    fun `特定できない引用は候補の節のどれにも並ぶ`() {
+        // 控えた見出しは本文に無い。見出しの照合だけなら「見出しが見つからないメモ」になる。
+        val unresolved = MarginMemo("どちらか", 1L, "消えた見出し", MemoPassage.Quoted("この方法は有効である。", context = null, truncated = false))
+
+        val arranged = arrangeWithPassages(sameNameBody, listOf(unresolved), current = SectionRef("まとめ"))
+
+        assertEquals(listOf(unresolved), arranged.current.map { it.memo })
+        assertEquals(listOf(SectionRef("まとめ", ordinal = 1)), arranged.others.map { it.section })
+        assertEquals(mapOf(SectionRef("まとめ") to 1, SectionRef("まとめ", ordinal = 1) to 1), arranged.countsBySection)
+    }
+
+    /** 見出しを改名しても、引用が前後とも合えばその段落の節に並び、「見出しが見つからないメモ」にならない。 */
+    @Test
+    fun `見出しを改名しても確定した引用は段落の節に並ぶ`() {
+        val quoted = MarginMemo(
+            "改名の前に書いた", 1L, "元の見出し",
+            MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Aでは使わな"), truncated = false)
+        )
+        val body = "## 新しい見出し\n\n結論として、この方法は有効である。ただし条件Aでは使わない。"
+
+        val arranged = arrangeWithPassages(body, listOf(quoted), current = SectionRef(title = null))
+
+        assertEquals(listOf(SectionRef("新しい見出し")), arranged.others.map { it.section })
+    }
+
+    /** 控えた位置が特定できなければ、今どおり見出しの照合で並べる。 */
+    @Test
+    fun `特定できない控えた位置は見出しの照合で並ぶ`() {
+        val body = "## 導入\n\n同じ書き出し\n\n## 本論\n\n同じ書き出し"
+        val seen = MarginMemo("どこかで書いた", 1L, "導入", MemoPassage.Seen("同じ書き出し"))
+        val missingHeading = MarginMemo("見出しが消えた", 2L, "消えた見出し", MemoPassage.Seen("同じ書き出し"))
+
+        val arranged = arrangeWithPassages(body, listOf(seen, missingHeading), current = SectionRef("導入"))
+
+        assertEquals(listOf(seen), arranged.current.map { it.memo })
+        assertEquals(listOf<SectionRef?>(null), arranged.others.map { it.section })
+    }
+
+    /** 照らし直しの結果を渡さなければ、v7 までと同じ並べ方になる。 */
+    @Test
+    fun `照らし直しが無ければ見出しの照合だけで並ぶ`() {
+        val quoted = MarginMemo("条件B", 1L, "まとめ", MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Bでは使わな"), truncated = false))
+        val model = buildNoteSectionModel(sameNameBody)
+
+        val arranged = arrangeMemos(listOf(quoted), model.headingIndex, SectionRef("まとめ"))
+
+        assertEquals(listOf(SectionRef("まとめ", ordinal = 1)), arranged.others.map { it.section })
+        assertEquals(listOf(quoted), arranged.current.map { it.memo })
     }
 }
