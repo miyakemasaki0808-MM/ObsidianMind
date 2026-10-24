@@ -264,6 +264,9 @@ class MainActivity : ComponentActivity() {
                                 deskBarHideRequest = noteBarHideRequest,
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section, seen -> viewModel.editMarginMemo(text, section, seen) },
+                                onQuoteMarginMemo = { selection, section, model ->
+                                    viewModel.quoteMarginMemo(selection.text, selection.source, selection.hint, section, model)
+                                },
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
@@ -335,6 +338,9 @@ class MainActivity : ComponentActivity() {
                                 onDismissMarginMemo = { viewModel.dismissMarginMemoSheet() },
                                 memoDraft = viewModel.marginMemoDraft((uiState.noteState as? NoteState.Success)?.targetUri),
                                 onEditMarginMemo = { text, section, seen -> viewModel.editMarginMemo(text, section, seen) },
+                                onQuoteMarginMemo = { selection, section, model ->
+                                    viewModel.quoteMarginMemo(selection.text, selection.source, selection.hint, section, model)
+                                },
                                 onSubmitMarginMemo = { section -> viewModel.submitMarginMemo(section) },
                                 onDeleteMarginMemo = { viewModel.deleteMarginMemo(it) },
                                 memoFocusIntent = memoFocusIntent,

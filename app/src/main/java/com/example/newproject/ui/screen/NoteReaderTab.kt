@@ -15,6 +15,7 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.HeadingAccessoryHeight
 import com.example.newproject.ui.markdown.HeadingAccessoryWidth
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -22,6 +23,7 @@ import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
+import com.example.newproject.domain.isQuotable
 import com.example.newproject.domain.sectionSummaryEntryDescription
 import com.example.newproject.domain.sectionSummaryEntrySymbol
 import com.example.newproject.domain.sectionSummaryStatus
@@ -200,6 +202,8 @@ internal fun NoteReaderTab(
     memoDraft: MarginMemoDraft,
     /** 書きかけを変える。今の本文の節を添える（書き始めた瞬間だけ書き込み先になる）。 */
     onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
+    /** 本文の選択メニューの「引用して書く」。[model] は選んだ本文の解析結果（→ features/margin_quote.md §5.2）。 */
+    onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
@@ -507,7 +511,7 @@ internal fun NoteReaderTab(
     }
     // 面の中で目的のメモまで送る依頼。面が組み立てられて送り終えたら消す。
     var memoReveal by remember { mutableStateOf<MemoReveal?>(null) }
-    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?, (NoteLink) -> Unit) -> Unit = { modifier, headingMark, onLink ->
+    val notePanel: @Composable (Modifier, (@Composable (Int) -> Unit)?, (NoteLink) -> Unit, ((QuoteSelection) -> Unit)?) -> Unit = { modifier, headingMark, onLink, onQuote ->
         NoteContentPanel(
             uiState = uiState,
             modifier = modifier
@@ -522,7 +526,8 @@ internal fun NoteReaderTab(
             imageLoader = imageLoader,
             imageMeasurements = imageMeasurements,
             headingAccessory = headingMark,
-            onLink = onLink
+            onLink = onLink,
+            onQuote = onQuote
         )
     }
 
@@ -696,6 +701,23 @@ internal fun NoteReaderTab(
             memoReveal = reveal
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
+        // 本文の選択メニューの「引用して書く」（→ features/margin_quote.md §5.1）。**✎ と同じ規則で面を出し、入力欄へフォーカスを送る** —
+        // 引用には言葉が要るので、次にすることは書くこと。面が出ていれば面は替えずに引用だけを付ける。空白だけの選択では何も付けない。
+        // **並べ読みの間は出さない**（右の面を書きかけへ替える規則は区切り4で入れる）。
+        val quoteFromBody: ((QuoteSelection) -> Unit)? = sectionModel?.takeIf { !reading }?.let { model ->
+            { selection ->
+                if (isQuotable(selection.text)) {
+                    if (canShowPane) {
+                        if (!marginPaneOpen) onSetMarginPaneOpen(true)
+                        if (paneVisible) showDeskFace(DeskFace.Supporting)
+                    } else if (!uiState.isMarginMemoSheetVisible) {
+                        onOpenMarginMemo()
+                    }
+                    onMemoFocusIntentChange(true)
+                    onQuoteMarginMemo(selection, bodySection, model)
+                }
+            }
+        }
         // 見出しの要約ボタン（→ features/margin_pane.md §5.4）。面が出ていれば、要約を始めてその面の要約の行まで送る。
         // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
@@ -846,7 +868,8 @@ internal fun NoteReaderTab(
                                             }
                                         ),
                                     headingMark,
-                                    openLink
+                                    openLink,
+                                    quoteFromBody
                                 )
                             }
                         }
@@ -867,7 +890,7 @@ internal fun NoteReaderTab(
                                     emptyNote()
                                     Spacer(modifier = Modifier.weight(1f))
                                 } else {
-                                    notePanel(Modifier.weight(1f), headingMark, openLink)
+                                    notePanel(Modifier.weight(1f), headingMark, openLink, quoteFromBody)
                                 }
                             }
                         }
@@ -901,7 +924,8 @@ internal fun NoteReaderTab(
                                         } else {
                                             null
                                         },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.weight(1f),
+                                        onQuote = quoteFromBody
                                     )
                                 }
                             }
@@ -951,7 +975,7 @@ internal fun NoteReaderTab(
                                             // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
                                             val cardShown = !hideControls && visibleTraceCard != null
                                             if (cardShown) traceCard(Modifier, openMemosFromCard)
-                                            notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark, openLink)
+                                            notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark, openLink, quoteFromBody)
                                         }
                                     }
                                     // 本文に触れて帯をしまう受け口は、帯と一緒に動かさない — 帯の中に入れると、滑る距離が帯の高さではなく面の高さになる。

@@ -31,6 +31,9 @@ internal fun quoteAttachmentFor(selected: String, sourceBlock: Int?, hintBlock: 
     }
 }
 
+/** 引用にできる文字か。空白と制御文字だけの選択は引用にしない（[composeQuote] が null を返すのと同じ）。押した側が面を出す前に確かめる。 */
+internal fun isQuotable(selected: String): Boolean = selected.any { !it.isWhitespace() && !it.isISOControl() }
+
 /**
  * 選んだ文字を、[from] のブロックから先の**ブロックの境目で改行に切る**（→ features/margin_quote.md §11）。
  * Compose の選択はブロックの間にも何も挟まないので、そのままだと最初の行（照らし直しの鍵）が次のブロックへはみ出して、

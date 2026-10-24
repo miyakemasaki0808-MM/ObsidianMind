@@ -19,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.DisableSelection
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
@@ -34,6 +33,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.NoteLink
@@ -67,7 +70,11 @@ internal fun MarkdownNoteContent(
     // **ブロックを増やさずに脇へ置く** — LazyColumn の index がずれると、節の判定と進捗の報告が壊れる。
     headingAccessory: (@Composable (blockIndex: Int) -> Unit)? = null,
     // ノートと見出しへのリンクを押したとき（→ features/note_links.md）。null ならリンクは押せない文字列のまま描く。
-    onLink: ((NoteLink) -> Unit)? = null
+    onLink: ((NoteLink) -> Unit)? = null,
+    // 選択メニューに「引用して書く」を置ける本文か（→ features/margin_quote.md §5.1）。**今のノートの本文だけが真にし、呼ぶ場所ごとに固定する。**
+    quotable: Boolean = false,
+    // 「引用して書く」の受け手。null の間は項目を出さない。
+    onQuote: ((QuoteSelection) -> Unit)? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -76,17 +83,36 @@ internal fun MarkdownNoteContent(
     val currentOnLink by rememberUpdatedState(onLink)
     val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
 
-    SelectionContainer(modifier = modifier) {
+    // 範囲の矩形（窓の座標）から始まりのブロックを決める材料。描き直しには使わないので状態にしない。
+    val quoteGeometry = remember { QuoteGeometry() }
+    val currentOnQuote by rememberUpdatedState(onQuote)
+    val quoteFromSelection: ((String, Rect) -> Unit)? = if (onQuote == null) null else { text, rect ->
+        val boxes = listState.layoutInfo.visibleItemsInfo.map { item ->
+            BlockBox(item.index, quoteGeometry.listTop + item.offset, quoteGeometry.listTop + item.offset + item.size)
+        }
+        // 一覧のいちばん上で張り付いているなら、始まりは見えている（→ quoteSourceAt）。
+        val contentAbove = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        val at = quoteSourceAt(rect.top, quoteGeometry.visibleTop, boxes, contentAbove)
+        currentOnQuote?.invoke(QuoteSelection(text, at.source, at.hint))
+    }
+
+    QuoteSelectionContainer(quotable = quotable, onQuote = quoteFromSelection, modifier = modifier) {
         CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
             // **長押しの見張りは選択の容器の修飾子に付けない。** 付けると押下の途中で見張りが作り直され
             // （PointerInputResetException）、指離しを受け取れずに長押しでもリンクが開く。容器の修飾子は選択の状態で並びが変わる。
             // 見張りだけを持つ内側の層に置き、最小の大きさも渡して本文の並べ方を変えない。
-            Box(modifier = linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier, propagateMinConstraints = true) {
+            Box(
+                modifier = (linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier)
+                    .onGloballyPositioned { quoteGeometry.visibleTop = it.boundsInRoot().top },
+                propagateMinConstraints = true
+            ) {
                 // **幅は内容で決めず、置かれた幅いっぱいに組む。** 机の画面は一覧の幅の変化で、広がる途中の縮みと送りを見分ける
                 // （→ lazyFaceMoved）。内容で決めると、表示中の段落が替わるだけで幅が変わり、リンクの送りを縮みと取り違える。
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .onGloballyPositioned { quoteGeometry.listTop = it.positionInRoot().y },
                     verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)
                 ) {
                     items(blocks.size) { i ->
@@ -325,4 +351,13 @@ internal fun MarkdownCodeBlock(code: String) {
             modifier = Modifier.padding(MarkdownBodyStyle.CodePadding)
         )
     }
+}
+
+/**
+ * 選択の容器の見えている上端と、本文の一覧の上端（どちらも窓の座標）。選択メニューが渡す範囲の矩形と同じ座標で、
+ * 一覧の見えている項目の位置を窓の座標へ直すのに使う（→ [quoteSourceAt]）。
+ */
+private class QuoteGeometry {
+    var visibleTop = 0f
+    var listTop = 0f
 }
