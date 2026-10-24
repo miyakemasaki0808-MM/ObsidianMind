@@ -279,7 +279,7 @@ internal fun NoteReaderTab(
 
     // **書きかけは ViewModel 側が持つ**ので、シートとペインのどちらから書いても同じ一組になる。
     // 節は押した・打った時点のものを読む（ラムダの中で読むので、組み立て直しを待たない）。
-    // 書き始めた瞬間の位置も渡す。控えるのは書き込み先を決める瞬間だけで、そこは規則が決める（→ features/margin_quote.md §5.4）。
+    // 控える位置も渡す（直前にスクロールが止まっていた最上端から。本文の節と同じ基準）。控えるのは書き込み先を決める瞬間だけで、そこは規則が決める（→ features/margin_quote.md §5.4）。
     val seenAtStart = face.seenAtStart
     val onEditMemo: (String) -> Unit = { text -> onEditMarginMemo(text, bodySection, seenAtStart) }
     val onSubmitMemo: () -> Unit = { onSubmitMarginMemo(bodySection) }

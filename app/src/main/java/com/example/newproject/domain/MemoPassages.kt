@@ -118,7 +118,7 @@ internal fun resolveQuoteAt(quote: String, block: Int, index: PassageIndex): Quo
 }
 
 /**
- * 書き始めた頃に読んでいた位置の手掛かり（→ features/margin_quote.md §5.4）。[topBlock] は本文の最上端に見えているブロック。
+ * 書き始めた頃に読んでいた位置の手掛かり（→ features/margin_quote.md §5.4）。[topBlock] は直前にスクロールが止まっていた本文の最上端のブロック。
  *
  * 見出し・画像・区切り線・表なら、同じ節の中で次の本文のブロックを使う。無ければ null。
  * 本文が止まるたびに Main で呼ばれるので、どのブロックを使うかは [PassageIndex] が作るときに決めてあり、ここは引くだけにする。
