@@ -1,6 +1,8 @@
 package com.example.newproject.domain.markdown
 
 import com.example.newproject.domain.HeadingIndex
+import com.example.newproject.domain.PassageIndex
+import com.example.newproject.domain.buildPassageIndex
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.model.ReunionPassage
 import com.example.newproject.model.SectionRef
@@ -36,6 +38,12 @@ class NoteSectionModel internal constructor(
      * このモデルは Main の外で組み立てる（→ `NoteSectionController`）ので、見出しの数に比例する仕事は Main に載らない。
      */
     internal val headingIndex: HeadingIndex = HeadingIndex(sections.map { it.title })
+
+    /**
+     * 引用と書き始めた頃の位置を照らし直す材料（→ features/margin_quote.md §5.5）。**解析と一緒に作る**ので、作り直すのは本文を解析し直したときだけで、
+     * 本文の大きさに比例する仕事は Main に載らない。[headingIndex] の後に置く — 節の割り当てにそれを使う。
+     */
+    internal val passages: PassageIndex = buildPassageIndex(this)
 
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */
     fun sectionForBlockIndex(index: Int): NoteSection? = headingAt(index)?.let { sections[it] }

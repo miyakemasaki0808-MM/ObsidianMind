@@ -314,6 +314,19 @@ class ThreadingScanTest {
                 )
             ),
             HeavyCall(
+                name = "引用と書いた頃の位置を照らし直す材料",
+                call = """\bbuildPassageIndex\(""",
+                dispatcher = "parseDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/markdown/NoteSections.kt" to "節のモデルの中（解析と一緒に作り、解析し直したときだけ作り直す）")
+            ),
+            HeavyCall(
+                name = "引用と書いた頃の位置の照らし直し",
+                call = """\blocateMemos\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
                 name = "反証の候補の列挙",
                 call = """\bscanRebuttalClaims\(""",
                 dispatcher = "excerptDispatcher",
