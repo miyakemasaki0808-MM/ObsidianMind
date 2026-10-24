@@ -41,3 +41,5 @@
 | `2026-10-24-margin-quote-foundation-review/P2-1` | 保存中に引用元の節だけを替えると、前の保存成功が新しい書きかけを消す | `統合` MEMO-17 |
 | `2026-10-24-margin-quote-foundation-review/P2-2` | 引用を外した後、古い位置の控えが新しい書き込み先より優先される | `統合` MEMO-16 |
 | `2026-10-24-margin-quote-foundation-review/P2-3` | 照合済みの結果を並べる処理が、本文全体に比例する候補の走査を繰り返す | `起票` PERF-4 |
+| `2026-10-25-margin-quote-2a-review/P2-1` | 候補が多数の節に散らばると、節を移るたびに全候補節のメモの組を Main で作り直す | `統合` PERF-4 |
+| `2026-10-25-margin-quote-2a-review/P2-2` | 書き始めの控えを求める線形の走査を、本文が止まるたびに Main で行う | `統合` PERF-4 |
