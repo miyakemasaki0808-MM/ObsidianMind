@@ -1122,7 +1122,8 @@ internal fun NoteReaderTab(
                                 QuoteChipLayer(
                                     chip = quoteChip.value,
                                     onEvent = { event -> quoteChip.value = quoteChipAfter(quoteChip.value, event) },
-                                    main = deskMainBounds,
+                                    // つまみの帯（とその上へ広げた受け口 → DeskGripReach）は札の層より上にあるので、札は帯より下の本文に置く。
+                                    main = deskMainBounds?.let { bounds -> bounds.copy(top = bounds.top + with(density) { DeskStripHeight.toPx() }) },
                                     supporting = deskSupportingBounds,
                                     onAttach = { selection -> quoteFromBody?.invoke(selection) }
                                 )
