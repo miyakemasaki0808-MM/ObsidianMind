@@ -8,6 +8,7 @@ import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.screen.QuoteChip
 import com.example.newproject.ui.screen.QuoteChipEvent
 import com.example.newproject.ui.screen.quoteChipAfter
+import com.example.newproject.ui.screen.quoteChipDropped
 import com.example.newproject.ui.screen.quoteChipPosition
 import com.example.newproject.ui.screen.quoteDropTargetFor
 import org.junit.Assert.assertEquals
@@ -60,6 +61,18 @@ class QuoteChipTest {
         assertFalse(quoteDropTargetFor(Offset(300f, 500f), supporting, creaseBand = 24f))
         assertFalse(quoteDropTargetFor(Offset(700f, 1200f), supporting, creaseBand = 24f))
         assertTrue(quoteDropTargetFor(Offset(564f, 500f), supporting, creaseBand = 24f))
+    }
+
+    /** **離した指の位置で決め、運び始めてから面が変わっていれば付けない**（キーボードで高さだけが変わったときなど）。 */
+    @Test
+    fun `離したときは指の位置で決め、面が変わっていれば付けない`() {
+        val shorter = supporting.copy(bottom = 600f)
+
+        assertTrue(quoteChipDropped(Offset(700f, 500f), main, supporting, main, supporting, creaseBand = 24f))
+        assertFalse(quoteChipDropped(Offset(550f, 500f), main, supporting, main, supporting, creaseBand = 24f))
+        assertFalse(quoteChipDropped(Offset(700f, 500f), main, supporting, main, shorter, creaseBand = 24f))
+        assertFalse(quoteChipDropped(Offset(700f, 500f), main, supporting, main.copy(bottom = 600f), supporting, creaseBand = 24f))
+        assertFalse(quoteChipDropped(Offset(700f, 500f), main, supporting, main, null, creaseBand = 24f))
     }
 
     // ── 札の様子 ──────────────────────────────────────────────────────

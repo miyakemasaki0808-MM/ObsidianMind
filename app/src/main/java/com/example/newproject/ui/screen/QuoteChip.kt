@@ -1,7 +1,10 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,6 +16,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -23,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -111,6 +116,21 @@ internal fun quoteDropTargetFor(pointer: Offset, supporting: Rect, creaseBand: F
     pointer.x >= supporting.left + creaseBand && pointer.x < supporting.right &&
         pointer.y >= supporting.top && pointer.y < supporting.bottom
 
+/**
+ * 離したときに付けるか。**離した指の位置 [finger] で決め**、描いた時点の判定（縁を強める表示）は使わない — 描く前に離すと、前の位置で決まってしまう。
+ * **運び始めてから面の位置か大きさが変わっていれば付けない**（キーボードで高さだけが変わったときなど。札もそのとき消える）。
+ */
+internal fun quoteChipDropped(
+    finger: Offset,
+    mainAtStart: Rect?,
+    supportingAtStart: Rect?,
+    mainNow: Rect?,
+    supportingNow: Rect?,
+    creaseBand: Float
+): Boolean =
+    supportingNow != null && mainNow == mainAtStart && supportingNow == supportingAtStart &&
+        quoteDropTargetFor(finger, supportingNow, creaseBand)
+
 /** 札の大きさ。押せる範囲を広く取る。 */
 private val CHIP_WIDTH = 88.dp
 private val CHIP_HEIGHT = 40.dp
@@ -129,15 +149,19 @@ internal const val QUOTE_DROP_DESTINATION = "今のノートの余白へ"
 
 /**
  * 札の層。机の画面の面の上に重ね、札が出ているときだけ札を描く。[chip] と [onEvent] は持ち主（机の画面）が持つ。
- * [main]・[supporting] は本文の面と余白の面の位置（窓の座標）。測れていなければ札を出さない。
+ * [main]・[supporting] は本文の面と余白の面の位置（窓の座標）を返す。測れていなければ null で、札を出さない。
+ * **指の処理からも読むので、値ではなく読み口で受け取る** — 面を測り直した直後の指にも、描き直しを待たずに今の位置を見せる。
  * [onAttach] は引用を付ける（メニューの「引用して書く」と同じ口）。
+ *
+ * **面の位置か大きさが変わったら札を消す**（→ features/margin_quote.md §5.7）。並べ方の値が同じまま高さだけが変わる
+ * （右の入力欄でキーボードを出す）ときも消す — 持った札の元の位置は、変わる前の面の中で決めたもの。
  */
 @Composable
 internal fun QuoteChipLayer(
     chip: QuoteChip,
     onEvent: (QuoteChipEvent) -> Unit,
-    main: Rect?,
-    supporting: Rect?,
+    main: () -> Rect?,
+    supporting: () -> Rect?,
     onAttach: (QuoteSelection) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -147,23 +171,36 @@ internal fun QuoteChipLayer(
     val creaseBand = with(density) { QUOTE_DROP_CREASE_BAND.toPx() }
     // 層の左上（窓の座標）。札の位置は窓の座標で決め、ここで層の中へ直す。
     var origin by remember { mutableStateOf(Offset.Zero) }
-    // 運んでいる間の、札の動いた分と指の位置（窓の座標）。離したら消す。
+    // 運んでいる間の、札の動いた分と指の位置（窓の座標）。描くためのもので、付けるかは指の処理の中の位置で決める。離したら消す。
     var dragged by remember { mutableStateOf(Offset.Zero) }
     var pointer by remember { mutableStateOf<Offset?>(null) }
+    val mainNow = main()
+    val supportingNow = supporting()
     val home: Offset? = when {
-        main == null -> null
+        mainNow == null -> null
         chip is QuoteChip.Holding -> chip.home
-        chip is QuoteChip.Offered -> quoteChipPosition(chip.offer.rect, main, chipSize, gap)
+        chip is QuoteChip.Offered -> quoteChipPosition(chip.offer.rect, mainNow, chipSize, gap)
         else -> null
     }
-    val hovering = pointer?.let { at -> supporting != null && quoteDropTargetFor(at, supporting, creaseBand) } == true
+    val hovering = pointer?.let { at -> supportingNow != null && quoteDropTargetFor(at, supportingNow, creaseBand) } == true
 
     // 指の処理は札が長く持つので、最新の様子と口を読む（→ lessons L34）。
     val currentChip by rememberUpdatedState(chip)
     val currentHome by rememberUpdatedState(home)
     val currentOnEvent by rememberUpdatedState(onEvent)
     val currentOnAttach by rememberUpdatedState(onAttach)
-    val currentHovering by rememberUpdatedState(hovering)
+    val currentMain by rememberUpdatedState(main)
+    val currentSupporting by rememberUpdatedState(supporting)
+
+    // 面の位置か大きさが変わったら消す。測れていない間と、最初に測れたときは変わったと数えない。
+    val geometry = if (mainNow != null && supportingNow != null) mainNow to supportingNow else null
+    val seenGeometry = remember { arrayOfNulls<Pair<Rect, Rect>>(1) }
+    LaunchedEffect(geometry) {
+        if (geometry == null) return@LaunchedEffect
+        val before = seenGeometry[0]
+        seenGeometry[0] = geometry
+        if (before != null && before != geometry) currentOnEvent(QuoteChipEvent.Dismissed)
+    }
 
     /** 持っている一節を返す。まだ受け取っていなければ受け取る（受け取ると選択は解ける）。 */
     fun held(): QuoteSelection? = when (val now = currentChip) {
@@ -172,19 +209,18 @@ internal fun QuoteChipLayer(
         QuoteChip.Hidden -> null
     }
 
-    fun attach() {
-        val selection = held() ?: return
+    fun attach(selection: QuoteSelection) {
         currentOnEvent(QuoteChipEvent.Attached)
         currentOnAttach(selection)
     }
 
     Box(modifier = modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInRoot() }) {
-        if (hovering && supporting != null) {
-            // 余白の面に入ったら縁を強め、行き先を出す。
+        if (hovering && supportingNow != null) {
+            // 余白の面に入ったら縁を強め、行き先を出す（表示だけ。付けるかは離した指の位置で決める）。
             Box(
                 modifier = Modifier
-                    .offset { (supporting.topLeft - origin).round() }
-                    .size(with(density) { supporting.width.toDp() }, with(density) { supporting.height.toDp() })
+                    .offset { (supportingNow.topLeft - origin).round() }
+                    .size(with(density) { supportingNow.width.toDp() }, with(density) { supportingNow.height.toDp() })
                     .border(2.dp, AccentText, RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.TopCenter
             ) {
@@ -202,32 +238,36 @@ internal fun QuoteChipLayer(
                     .semantics {
                         role = Role.Button
                         contentDescription = QUOTE_CHIP_DESCRIPTION
-                        onClick { attach(); true }
+                        onClick { held()?.let(::attach); true }
                     }
-                    .pointerInput(Unit) { detectTapGestures(onTap = { attach() }) }
+                    .pointerInput(Unit) { detectTapGestures(onTap = { held()?.let(::attach) }) }
                     .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = { at ->
-                                if (held() == null) return@detectDragGestures
-                                pointer = (currentHome ?: Offset.Zero) + at
-                            },
-                            onDrag = { change, delta ->
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            val from = currentHome ?: return@awaitEachGesture
+                            val start = awaitTouchSlopOrCancellation(down.id) { change, _ -> change.consume() } ?: return@awaitEachGesture
+                            val selection = held() ?: return@awaitEachGesture
+                            // **指の位置は窓の座標で1つだけ持つ。** 運び始めるまで札は動かないので、始まりは札の元の位置と、しきい値を越えたときの位置で決まる。
+                            // その後は動いた量を足す — 札の局所座標の位置は札と一緒に動くので使わず、動いた量（札が動いても変わらない）だけを使う。
+                            var finger = from + start.position
+                            val mainAtStart = currentMain()
+                            val supportingAtStart = currentSupporting()
+                            dragged = start.position - down.position
+                            pointer = finger
+                            val released = drag(start.id) { change ->
                                 change.consume()
-                                dragged += delta
-                                pointer = pointer?.plus(delta)
-                            },
-                            onDragEnd = {
-                                val dropped = currentHovering
-                                dragged = Offset.Zero
-                                pointer = null
-                                if (dropped) attach() else currentOnEvent(QuoteChipEvent.ReleasedOutside)
-                            },
-                            onDragCancel = {
-                                dragged = Offset.Zero
-                                pointer = null
-                                currentOnEvent(QuoteChipEvent.ReleasedOutside)
+                                val moved = change.positionChange()
+                                finger += moved
+                                dragged += moved
+                                pointer = finger
                             }
-                        )
+                            // **離した指の位置で決める**（描いた時点の縁の判定は使わない）。面が変わっていれば付けない。
+                            val dropped = released &&
+                                quoteChipDropped(finger, mainAtStart, supportingAtStart, currentMain(), currentSupporting(), creaseBand)
+                            dragged = Offset.Zero
+                            pointer = null
+                            if (dropped) attach(selection) else currentOnEvent(QuoteChipEvent.ReleasedOutside)
+                        }
                     }
             ) {
                 Box(contentAlignment = Alignment.Center) {
