@@ -40,7 +40,11 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.ArrangedMemos
@@ -145,6 +149,8 @@ class MarginMemoSheetUiTest {
         var previousReadingAt by mutableStateOf<Long?>(null)
         /** 引用した段落か書いた頃の位置へ送ったブロック。 */
         var jumpedBlock by mutableStateOf<Int?>(null)
+        /** 入力欄の編集の状態の置き場（机の画面と同じく面の外で持つ）。 */
+        val field = mutableStateOf(TextFieldValue())
         /** 引用の候補を探す口。null は本文の解析の前。 */
         var finder by mutableStateOf<QuoteCandidateFinder?>(null)
         /** 付ける場で選んだ候補のブロックと、候補を探した解析結果。 */
@@ -202,7 +208,8 @@ class MarginMemoSheetUiTest {
                             onFocusIntentChange = { harness.focusIntent = it },
                             previousReadingAt = harness.previousReadingAt,
                             quoteCandidates = harness.finder,
-                            quoteActions = harness.quoteActions
+                            quoteActions = harness.quoteActions,
+                            fieldValue = harness.field
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -584,6 +591,34 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("引いた一節").assertDoesNotExist()
         composeRule.onNodeWithText(PLACEHOLDER).assertExists()
         composeRule.runOnIdle { assertNull(harness.draft.quote) }
+    }
+
+    /**
+     * **面が外れて組み直されても、入力欄のカーソルと選択を保つ**（→ features/margin_quote.md §5.6）。並べ読みの右を資料に替えると入力欄は面ごと外れる。
+     * 文中のカーソルでは次の1文字がその位置へ入り、選択した範囲ではその範囲だけが置き換わる。
+     */
+    // 選択を置く試験の口（performTextInputSelection）は試験的な API。
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 面が外れて戻っても入力欄のカーソルと選択を保つ() {
+        val harness = Harness()
+        var shown by mutableStateOf(true)
+        setContent(harness, shown = { shown })
+        input.performTextInput("abcdef")
+
+        input.performTextInputSelection(TextRange(3))
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+        input.performTextInput("X")
+        composeRule.runOnIdle { assertEquals("abcXdef", harness.draft.text) }
+
+        input.performTextInputSelection(TextRange(4, 6))
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+        input.performTextInput("Y")
+        composeRule.runOnIdle { assertEquals("abcXYf", harness.draft.text) }
     }
 
     /** **引用の結果を待つ間は置けず、そのことを引用の欄に出す**（→ features/margin_quote.md §5.3）。届けば置ける。 */

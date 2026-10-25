@@ -2,6 +2,9 @@ package com.example.newproject.ui
 
 import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
+import com.example.newproject.ui.screen.memoFieldValueFor
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.ui.screen.quoteChoiceQuestion
 import com.example.newproject.ui.screen.memoInputPlaceholder
@@ -97,5 +100,24 @@ class MarginMemoCaptionTest {
     @Test
     fun `付ける場の問いは候補の数を言う`() {
         assertEquals("この一節は本文に 3 か所あります。どこから引用しましたか", quoteChoiceQuestion(3))
+    }
+
+    // ── 入力欄の編集の状態（→ features/margin_quote.md §5.6）──────────────────────
+
+    /** 書きかけの文字と同じなら、持っているカーソルと選択をそのまま使う（面が外れて組み直されても保つ）。 */
+    @Test
+    fun `書きかけの文字と同じならカーソルと選択をそのまま使う`() {
+        val held = TextFieldValue("いま思ったこと", TextRange(3, 5))
+
+        assertEquals(held, memoFieldValueFor(held, "いま思ったこと"))
+    }
+
+    /** 文字が違えば（受け取れて空になった・ノートを替えた）末尾にカーソルを置き直し、前の選択を混ぜない。 */
+    @Test
+    fun `書きかけの文字が違えば末尾にカーソルを置き直す`() {
+        val held = TextFieldValue("前の書きかけ", TextRange(1, 3))
+
+        assertEquals(TextFieldValue("別の書きかけです", TextRange(8)), memoFieldValueFor(held, "別の書きかけです"))
+        assertEquals(TextFieldValue("", TextRange(0)), memoFieldValueFor(held, ""))
     }
 }

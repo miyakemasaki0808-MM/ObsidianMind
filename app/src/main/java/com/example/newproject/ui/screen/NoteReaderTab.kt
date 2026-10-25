@@ -6,6 +6,7 @@ import com.example.newproject.ui.theme.OnSurface
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
@@ -522,6 +523,9 @@ internal fun NoteReaderTab(
             )
         }
     }
+    // 入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）。**面の外でノートごとに持つ** — 並べ読みの右を資料に替えると入力欄は面ごと外れるので、
+    // 面の中に置くと、書きかけへ戻すたびにカーソルと選択が先頭へ戻る（→ features/margin_quote.md §5.6）。シートとペインで同じ1つを使う。
+    val memoField = remember(currentNoteUri) { mutableStateOf(TextFieldValue()) }
     // 面の中で目的のメモまで送る依頼。面が組み立てられて送り終えたら消す。
     var memoReveal by remember { mutableStateOf<MemoReveal?>(null) }
     // 机の札（→ QuoteChipLayer）。様子は入れ物ごと覚え、長く走る見張りからも同じ入れ物へ書く。面の位置は札を置く・落とす判定にだけ使う。
@@ -834,7 +838,12 @@ internal fun NoteReaderTab(
             sheetVisible = uiState.isMarginMemoSheetVisible,
             // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。並べ読み中は入力中だけ。
             // 引用だけの書きかけも「書きかけがある」に数える（→ features/margin_quote.md §5.7）。
-            writing = writingForWindowShift(hasDraft = memoDraft.text.isNotEmpty() || memoDraft.quote != null, focusIntent = memoFocusIntent, sideReading = reading),
+            writing = writingForWindowShift(
+                hasDraft = memoDraft.text.isNotEmpty() || memoDraft.quote != null,
+                focusIntent = memoFocusIntent,
+                sideReading = reading,
+                draftOnRight = sideReading.face == SideFace.Draft
+            ),
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )
@@ -870,6 +879,7 @@ internal fun NoteReaderTab(
                         onJumpToBlock = face.jumpToBlock,
                         quoteCandidates = face.quoteCandidates,
                         quoteActions = quoteActions,
+                        fieldValue = memoField,
                         reveal = memoReveal,
                         onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                         onEdit = onEditMemo,
@@ -1104,6 +1114,7 @@ internal fun NoteReaderTab(
                                                 },
                                                 quoteCandidates = face.quoteCandidates,
                                                 quoteActions = quoteActions,
+                                                fieldValue = memoField,
                                                 reveal = memoReveal,
                                                 onRevealHandled = { handled -> memoReveal = pendingAfterReveal(memoReveal, handled) },
                                                 onEdit = onEditMemo,

@@ -32,6 +32,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
+import androidx.compose.runtime.MutableState
 import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -337,7 +340,12 @@ internal fun MarginMemoSheetContent(
     /** 引用の候補を今の本文から探す口（→ [QuoteCandidateFinder]）。本文の解析の前は null で、候補を出さない。 */
     quoteCandidates: QuoteCandidateFinder? = null,
     /** 引用の欄の操作。 */
-    quoteActions: DraftQuoteActions = DraftQuoteActions.None
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None,
+    /**
+     * 入力欄の編集の状態（カーソル・選択・変換中の範囲）の置き場。**面の外で持てば、面が外れて組み直されても保つ**（→ [memoFieldValueFor]）。
+     * null ならこの面の中で持つ。
+     */
+    fieldValue: MutableState<TextFieldValue>? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -489,9 +497,13 @@ internal fun MarginMemoSheetContent(
                 DraftQuoteField(draft.quote, quoting = draft.quoting != null, hasHeadings, quoteCandidates, quoteActions)
                 Spacer(modifier = Modifier.height(8.dp))
             }
+            val field = fieldValue ?: remember { mutableStateOf(TextFieldValue()) }
             OutlinedTextField(
-                value = draft.text,
-                onValueChange = onEdit,
+                value = memoFieldValueFor(field.value, draft.text),
+                onValueChange = { next ->
+                    field.value = next
+                    if (next.text != draft.text) onEdit(next.text)
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -988,6 +1000,13 @@ internal class DraftQuoteActions(
         val None = DraftQuoteActions(onDetach = {}, onChoose = { _, _, _ -> }, onDismissChoice = {})
     }
 }
+
+/**
+ * 入力欄に描く値。**書きかけの文字と同じなら、持っているカーソル・選択・変換中の範囲をそのまま使う**（→ features/margin_quote.md §5.6）。
+ * 違えば（受け取れて空になった・ノートを替えた・まだ持っていない）末尾にカーソルを置き直し、別の書きかけへ前の選択を混ぜない。
+ */
+internal fun memoFieldValueFor(held: TextFieldValue, text: String): TextFieldValue =
+    if (held.text == text) held else TextFieldValue(text, TextRange(text.length))
 
 /** 入力欄の案内。引用があって言葉が空なら、添えることを促す（引用だけでは置けない → features/margin_quote.md 判断2）。 */
 internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
