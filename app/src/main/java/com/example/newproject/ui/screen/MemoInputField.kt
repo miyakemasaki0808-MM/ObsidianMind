@@ -1,5 +1,6 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.defaultMinSize
@@ -16,15 +17,20 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.VisualTransformation
 import com.example.newproject.ui.theme.OnSurfaceFaint
@@ -56,6 +62,33 @@ internal class MemoField(initial: String = "") {
         memoFieldReset(state.text.toString(), draft, synced)?.let(state::setTextAndPlaceCursorAtEnd)
         synced = draft
     }
+
+    /**
+     * 元に戻す・やり直すを入力欄の代わりに行い、その場で書きかけへ渡す。**入力欄に任せると変換の口を通らない**（Compose Foundation 1.7.3）ので、
+     * 書きかけへ届くまでの間に押した「置く」や前の送信の受理が、戻す前の文字で判定する。
+     */
+    // 元に戻す履歴の口（UndoState）は Foundation 1.7 では試験的な API。
+    @OptIn(ExperimentalFoundationApi::class)
+    fun step(history: MemoHistory, onEdit: (String) -> Unit) {
+        when (history) {
+            MemoHistory.Undo -> state.undoState.undo()
+            MemoHistory.Redo -> state.undoState.redo()
+        }
+        edited(state.text.toString(), onEdit)
+    }
+}
+
+internal enum class MemoHistory { Undo, Redo }
+
+/**
+ * キー操作が入力欄の元に戻す・やり直すに当たるか。**Compose Foundation 1.7.3 の割り当て（`KeyMapping`）と同じにする** —
+ * 押したときだけ、Ctrl+Z で元に戻し、Ctrl+Shift+Z と Ctrl+Y でやり直す。ずれると、入力欄に任せた操作が書きかけへ届かない。
+ */
+internal fun memoHistoryFor(keyDown: Boolean, key: Key, ctrl: Boolean, shift: Boolean): MemoHistory? = when {
+    !keyDown || !ctrl -> null
+    key == Key.Z -> if (shift) MemoHistory.Redo else MemoHistory.Undo
+    key == Key.Y && !shift -> MemoHistory.Redo
+    else -> null
 }
 
 /** 入力欄で変わった文字 [text] を書きかけへ渡すなら、その文字。最後にそろった文字 [synced] と同じなら null（カーソル・選択だけの変更も同じ）。 */
@@ -84,15 +117,13 @@ internal fun MemoInputField(
     modifier: Modifier = Modifier
 ) {
     val currentOnEdit by rememberUpdatedState(onEdit)
-    // 利用者の編集は変換の口で同期して渡す。次の描画を待つと、その間に押した「置く」が前の文字で送る。
+    // 利用者の編集は変換の口で同期して渡す。次の描画を待つと、その間に押した「置く」や前の送信の受理が前の文字で判定する。
+    // **変換の口を通らずに文字を変えるのは、SDK では元に戻す・やり直すだけ**（Compose Foundation 1.7.3 で確認）で、それはキー操作で横取りして行う（→ [MemoField.step]）。
+    // 依存を上げたら、変換の口を通らない経路が増えていないかを確かめ直す。
     val transformation = remember(field) {
         object : InputTransformation {
             override fun TextFieldBuffer.transformInput() = field.edited(asCharSequence().toString(), currentOnEdit)
         }
-    }
-    // **元に戻す・やり直すは変換の口を通らない**（Compose Foundation 1.7.3 で確認）。状態の変化を見張って渡す。
-    LaunchedEffect(field) {
-        snapshotFlow { field.state.text.toString() }.collect { field.edited(it, currentOnEdit) }
     }
     SideEffect { field.follow(draftText) }
 
@@ -103,7 +134,13 @@ internal fun MemoInputField(
     CompositionLocalProvider(LocalTextSelectionColors provides colors.textSelectionColors) {
         BasicTextField(
             state = field.state,
-            modifier = modifier.defaultMinSize(
+            modifier = modifier
+                .onPreviewKeyEvent { event ->
+                    val history = memoHistoryFor(event.type == KeyEventType.KeyDown, event.key, event.isCtrlPressed, event.isShiftPressed)
+                    history?.let { field.step(it, currentOnEdit) }
+                    history != null
+                }
+                .defaultMinSize(
                 minWidth = OutlinedTextFieldDefaults.MinWidth,
                 minHeight = OutlinedTextFieldDefaults.MinHeight
             ),

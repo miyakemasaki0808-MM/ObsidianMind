@@ -43,6 +43,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextRange
+import com.example.newproject.domain.consumedBy
+import org.junit.Assert.assertFalse
+import android.view.KeyEvent as AndroidKeyEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import androidx.compose.ui.platform.LocalView
@@ -726,23 +729,92 @@ class MarginMemoSheetUiTest {
         assertEquals(listOf("abc"), harness.sent.map { it.raw })
     }
 
-    /** **元に戻す操作で戻した文字も書きかけへ渡る。** 元に戻す操作は入力欄の変換の口を通らないので、状態の変化から渡す。 */
-    // キーを送る試験の口（performKeyInput）は試験的な API。
-    @OptIn(ExperimentalTestApi::class)
+    /**
+     * **元に戻す・やり直すは、その場で書きかけへ渡る**（→ features/margin_quote.md §5.6）。入力欄に任せると変換の口を通らないので、
+     * キー操作を横取りして行う。キーと確かめを UI スレッドの1回の実行の中で行い、描き直しも観測も待たない。
+     */
     @Test
-    fun 元に戻す操作で戻した文字も書きかけへ渡る() {
+    fun 元に戻す操作とやり直す操作はその場で書きかけへ渡る() {
         val harness = Harness()
         setContent(harness)
-        input.performTextInput("abc")
-        input.performTextInput("def")
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
 
-        input.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+        composeRule.runOnUiThread {
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            assertEquals("abcd", harness.field.state.text.toString())
+            assertEquals("abcd", harness.draft.text)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z, shift = true)
+            assertEquals("abc", harness.field.state.text.toString())
+            assertEquals("abc", harness.draft.text)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Y)
+            assertEquals("abc", harness.field.state.text.toString())
+            assertEquals("abc", harness.draft.text)
+        }
+    }
+
+    /** **元に戻してすぐ「置く」を押しても、入力欄に見えている文字で送る。** */
+    @Test
+    fun 元に戻してすぐ置いても_入力欄の文字で送る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+
+        composeRule.runOnUiThread {
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            harness.submit()
+        }
+
+        composeRule.runOnIdle { assertEquals(listOf(harness.field.state.text.toString()), harness.sent.map { it.raw }) }
+        assertEquals(listOf("abcd"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **送って結果を待つ間に元に戻すと、前の送信の受理で書きかけを消さない**（→ features/margin_quote.md §5.3「受け取れた」）。
+     * 戻した文字は送ったものと違うので、受理は今の書きかけを消費しない。戻してすぐ受理が届く順と、描き直してから届く順の両方。
+     */
+    @Test
+    fun 送って待つ間に元に戻すと_すぐ届いた受理で書きかけが消えない() = undoWhileSaving(idleBeforeSettle = false)
+
+    @Test
+    fun 送って待つ間に元に戻すと_描き直した後に届いた受理でも書きかけが消えない() = undoWhileSaving(idleBeforeSettle = true)
+
+    private fun undoWhileSaving(idleBeforeSettle: Boolean) {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+
+        val settle = {
+            assertFalse("戻した書きかけを前の送信が消費した", harness.draft.consumedBy(harness.sent.last()))
+            harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved)
+            assertEquals("abcd", harness.draft.text)
+        }
+        // すぐ届く順は、キーと受理を UI スレッドの1回の実行の中で行う。分けると、その間に Main の待ち行列が進む。
+        if (idleBeforeSettle) {
+            composeRule.runOnUiThread { pressCtrl(AndroidKeyEvent.KEYCODE_Z) }
+            composeRule.waitForIdle()
+            composeRule.runOnUiThread(settle)
+        } else {
+            composeRule.runOnUiThread {
+                pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+                settle()
+            }
+        }
 
         composeRule.runOnIdle {
-            val shown = harness.field.state.text.toString()
-            assertTrue("元に戻す操作が入力欄に効いていない", shown != "abcdef")
-            assertEquals(shown, harness.draft.text)
+            assertEquals("abcd", harness.draft.text)
+            assertEquals("abcd", harness.field.state.text.toString())
         }
+        composeRule.onNodeWithText(PLACEHOLDER).assertDoesNotExist()
     }
 
     /** **置いて受け取れた文字を、元に戻す操作で入力欄へ呼び戻さない。** 受け取れて空にしたときに元に戻す履歴も消える。 */
@@ -1396,6 +1468,16 @@ class MarginMemoSheetUiTest {
         const val PREVIOUS_READING = "前回はここまで読んだ"
         const val PREVIOUS_READING_AT = 1_757_635_200_000L
         val READY = MarginMemoState.Ready(memos = emptyList())
+    }
+
+    /** Ctrl つきのキーを画面の根から押して離す。UI スレッドで呼ぶ。 */
+    private fun pressCtrl(keyCode: Int, shift: Boolean = false) {
+        val meta = AndroidKeyEvent.META_CTRL_ON or AndroidKeyEvent.META_CTRL_LEFT_ON or
+            if (shift) AndroidKeyEvent.META_SHIFT_ON or AndroidKeyEvent.META_SHIFT_LEFT_ON else 0
+        val view = checkNotNull(rootView)
+        for (action in listOf(AndroidKeyEvent.ACTION_DOWN, AndroidKeyEvent.ACTION_UP)) {
+            view.dispatchKeyEvent(AndroidKeyEvent(0L, 0L, action, keyCode, 0, meta))
+        }
     }
 
     /** 入力欄が持つ文字・選択・変換中の範囲。 */

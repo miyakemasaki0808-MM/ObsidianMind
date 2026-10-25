@@ -4,6 +4,9 @@ import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import androidx.compose.ui.text.TextRange
 import com.example.newproject.ui.screen.MemoField
+import com.example.newproject.ui.screen.MemoHistory
+import com.example.newproject.ui.screen.memoHistoryFor
+import androidx.compose.ui.input.key.Key
 import com.example.newproject.ui.screen.memoFieldEdit
 import com.example.newproject.ui.screen.memoFieldReset
 import com.example.newproject.model.MemoPassage
@@ -174,5 +177,18 @@ class MarginMemoCaptionTest {
         assertEquals(null, memoFieldReset(field = "abc", draft = "abc", synced = "ab"))
         assertEquals(null, memoFieldReset(field = "ab", draft = "abc", synced = "abc"))
         assertEquals("", memoFieldReset(field = "abc", draft = "", synced = "abc"))
+    }
+
+    /** 元に戻す・やり直すのキーは、入力欄の部品（Compose Foundation 1.7.3）の割り当てと同じに数える。押したときだけ。 */
+    @Test
+    fun `元に戻す・やり直すのキーは入力欄の部品と同じ割り当てで数える`() {
+        assertEquals(MemoHistory.Undo, memoHistoryFor(keyDown = true, Key.Z, ctrl = true, shift = false))
+        assertEquals(MemoHistory.Redo, memoHistoryFor(keyDown = true, Key.Z, ctrl = true, shift = true))
+        assertEquals(MemoHistory.Redo, memoHistoryFor(keyDown = true, Key.Y, ctrl = true, shift = false))
+
+        assertEquals(null, memoHistoryFor(keyDown = true, Key.Y, ctrl = true, shift = true))
+        assertEquals(null, memoHistoryFor(keyDown = true, Key.Z, ctrl = false, shift = false))
+        assertEquals(null, memoHistoryFor(keyDown = false, Key.Z, ctrl = true, shift = false))
+        assertEquals(null, memoHistoryFor(keyDown = true, Key.X, ctrl = true, shift = false))
     }
 }
