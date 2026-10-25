@@ -3,9 +3,9 @@ package com.example.newproject.ui
 import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
+import com.example.newproject.ui.screen.MemoField
 import com.example.newproject.ui.screen.memoFieldEdit
-import com.example.newproject.ui.screen.memoFieldValueFor
+import com.example.newproject.ui.screen.memoFieldReset
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.ui.screen.quoteChoiceQuestion
 import com.example.newproject.ui.screen.memoInputPlaceholder
@@ -105,47 +105,74 @@ class MarginMemoCaptionTest {
 
     // ── 入力欄の編集の状態（→ features/margin_quote.md §5.6）──────────────────────
 
-    /** 書きかけの文字と同じなら、持っているカーソルと選択をそのまま使う（面が外れて組み直されても保つ）。 */
+    /**
+     * **描き直しの前に続けて届く編集を落とさない。** 「abc」に1文字足して消すと、戻した「abc」は描いた時点の文字と同じだが、
+     * 最後にそろった「abcd」とは違うので書きかけへ渡す。
+     */
     @Test
-    fun `書きかけの文字と同じならカーソルと選択をそのまま使う`() {
-        val held = TextFieldValue("いま思ったこと", TextRange(3, 5))
+    fun `足して戻した最後の編集も書きかけへ渡す`() {
+        val field = MemoField("abc")
+        val edits = mutableListOf<String>()
 
-        assertEquals(held, memoFieldValueFor(held, "いま思ったこと"))
+        field.edited("abcd", edits::add)
+        field.edited("abc", edits::add)
+
+        assertEquals(listOf("abcd", "abc"), edits)
     }
 
-    /** 文字が違えば（受け取れて空になった・ノートを替えた）末尾にカーソルを置き直し、前の選択を混ぜない。 */
+    /** カーソル・選択・変換中の範囲だけの変更は、文字が同じなので渡さない（書き込み先も引用も変えない）。 */
     @Test
-    fun `書きかけの文字が違えば末尾にカーソルを置き直す`() {
-        val held = TextFieldValue("前の書きかけ", TextRange(1, 3))
+    fun `文字が同じなら書きかけへ渡さない`() {
+        assertEquals(null, memoFieldEdit("abc", synced = "abc"))
+        assertEquals("abcd", memoFieldEdit("abcd", synced = "abc"))
+    }
 
-        assertEquals(TextFieldValue("別の書きかけです", TextRange(8)), memoFieldValueFor(held, "別の書きかけです"))
-        assertEquals(TextFieldValue("", TextRange(0)), memoFieldValueFor(held, ""))
+    /** 受け取れて空になったら入力欄も空にしてカーソルを先頭へ置き、その後に前と同じ文字を入れても渡す。 */
+    @Test
+    fun `受け取れて空になったら入力欄も空にし_同じ文字の打ち直しを渡す`() {
+        val field = MemoField("abc")
+        val edits = mutableListOf<String>()
+
+        field.follow("")
+        assertEquals("", field.state.text.toString())
+        assertEquals(TextRange(0), field.state.selection)
+        field.edited("abc", edits::add)
+
+        assertEquals(listOf("abc"), edits)
+    }
+
+    @Test
+    fun `書きかけが外で変わったら入力欄を合わせて末尾に置く`() {
+        val field = MemoField("前の書きかけ")
+
+        field.follow("別の書きかけです")
+
+        assertEquals("別の書きかけです", field.state.text.toString())
+        assertEquals(TextRange(8), field.state.selection)
     }
 
     /**
-     * **描き直しの前に続けて届く編集を落とさない。** 変換中の「abc」を「abcd」で確定して1文字消すと、戻した「abc」は描いた時点の文字と同じだが、
-     * 直前に反映した「abcd」とは違うので書きかけへ渡す。比べる相手は直前に反映した値。
+     * 書きかけが外で変わっていなければ入力欄を書き換えない。元に戻す操作は変換の口を通らずに入力欄だけを変えるので、
+     * 次の描画で書きかけへ合わせ直すと、戻した文字が消える。
      */
     @Test
-    fun `描き直しの前に足して戻しても最後の編集を書きかけへ渡す`() {
-        val drawn = TextFieldValue("abc", TextRange(3), composition = TextRange(0, 3))
-        val added = TextFieldValue("abcd", TextRange(4))
-        val removed = TextFieldValue("abc", TextRange(3))
+    fun `書きかけが変わっていなければ入力欄だけの変更を保ち_書きかけへ渡す`() {
+        val field = MemoField("abc")
+        val edits = mutableListOf<String>()
+        field.state.edit { replace(2, 3, "") }
 
-        assertEquals("abcd", memoFieldEdit(drawn, added))
-        assertEquals("abc", memoFieldEdit(added, removed))
+        field.follow("abc")
+        field.edited(field.state.text.toString(), edits::add)
+
+        assertEquals("ab", field.state.text.toString())
+        assertEquals(listOf("ab"), edits)
     }
 
+    /** 入力欄がもう書きかけと同じ文字なら、カーソルと選択を動かさない。 */
     @Test
-    fun `カーソルと選択だけの変更は書きかけへ渡さない`() {
-        assertEquals(null, memoFieldEdit(TextFieldValue("abc", TextRange(3)), TextFieldValue("abc", TextRange(1, 2))))
-    }
-
-    /** 受け取れて空になった後に、前と同じ文字を新しく入れても渡す（持っている値は描くときに空へ合わせてある）。 */
-    @Test
-    fun `空へ合わせた後に前と同じ文字を入れても渡す`() {
-        val synced = memoFieldValueFor(TextFieldValue("abc", TextRange(3)), "")
-
-        assertEquals("abc", memoFieldEdit(synced, TextFieldValue("abc", TextRange(3))))
+    fun `入力欄がもう同じ文字ならカーソルを動かさない`() {
+        assertEquals(null, memoFieldReset(field = "abc", draft = "abc", synced = "ab"))
+        assertEquals(null, memoFieldReset(field = "ab", draft = "abc", synced = "abc"))
+        assertEquals("", memoFieldReset(field = "abc", draft = "", synced = "abc"))
     }
 }

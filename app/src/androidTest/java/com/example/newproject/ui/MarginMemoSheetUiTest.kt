@@ -43,13 +43,21 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextRange
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.test.pressKey
+import androidx.compose.foundation.text.input.TextFieldState
+import com.example.newproject.ui.screen.MemoField
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.performTextInputSelection
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.ArrangedMemos
@@ -155,7 +163,7 @@ class MarginMemoSheetUiTest {
         /** 引用した段落か書いた頃の位置へ送ったブロック。 */
         var jumpedBlock by mutableStateOf<Int?>(null)
         /** 入力欄の編集の状態の置き場（机の画面と同じく面の外で持つ）。 */
-        val field = mutableStateOf(TextFieldValue())
+        val field = MemoField()
         /** 引用の候補を探す口。null は本文の解析の前。 */
         var finder by mutableStateOf<QuoteCandidateFinder?>(null)
         /** 付ける場で選んだ候補のブロックと、候補を探した解析結果。 */
@@ -189,10 +197,14 @@ class MarginMemoSheetUiTest {
     /** 画面のフォーカスを外す（キーボードの完了などで利用者が外したのと同じ）。 */
     private var focusClearer: () -> Unit = {}
 
+    /** 画面の根の View。キーボードと同じ口（InputConnection）を開くのに使う。 */
+    private var rootView: View? = null
+
     private fun setContent(harness: Harness, shown: () -> Boolean = { true }, inPane: () -> Boolean = { true }) {
         composeRule.setContent {
             val focusManager = LocalFocusManager.current
             focusClearer = { focusManager.clearFocus() }
+            rootView = LocalView.current
             AppTheme(darkTheme = false) {
                 if (shown()) {
                     val content: @androidx.compose.runtime.Composable () -> Unit = {
@@ -214,7 +226,7 @@ class MarginMemoSheetUiTest {
                             previousReadingAt = harness.previousReadingAt,
                             quoteCandidates = harness.finder,
                             quoteActions = harness.quoteActions,
-                            fieldValue = harness.field
+                            memoField = harness.field
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -661,6 +673,93 @@ class MarginMemoSheetUiTest {
 
         composeRule.onNodeWithText("置く").performClick()
         assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **描き直しの前に足して戻し、カーソルまで描いた位置へ戻っても、最後の編集を落とさない**（→ features/margin_quote.md §5.6）。
+     * キーボードと同じ口（InputConnection）から2つの編集を UI スレッドの1回の実行の中で送り、間に描き直しを挟まない。
+     * 最後の値は描いた値と文字・選択・変換中の範囲まで同じになる — `TextFieldValue` 版の入力欄はこの通知を捨てていた。
+     */
+    @Test
+    fun 足して戻しカーソルまで描いた位置へ戻っても_最後の編集が書きかけと描画と置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abc")
+        val drawn = composeRule.runOnIdle { harness.field.state.edited() }
+        assertEquals(Triple("abc", TextRange(3), null), drawn)
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+
+        composeRule.runOnUiThread {
+            connection.commitText("d", 1)
+            assertEquals("描き直しを待たないと書きかけへ届かない", "abcd", harness.draft.text)
+            connection.deleteSurroundingText(1, 0)
+            assertEquals(drawn, harness.field.state.edited())
+        }
+
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("abc")))
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /** **変換中の文字を確定して1文字消しても、最後の編集を落とさない。** 確定と削除を描き直しを挟まずに送る（→ features/margin_quote.md §5.6）。 */
+    @Test
+    fun 変換中の文字を確定して1文字消しても_最後の編集が書きかけと置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performClick()
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.setComposingText("abc", 1) }
+        composeRule.runOnIdle { assertEquals(Triple("abc", TextRange(3), TextRange(0, 3)), harness.field.state.edited()) }
+
+        composeRule.runOnUiThread {
+            connection.commitText("abcd", 1)
+            connection.deleteSurroundingText(1, 0)
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(Triple("abc", TextRange(3), null), harness.field.state.edited())
+            assertEquals("abc", harness.draft.text)
+        }
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /** **元に戻す操作で戻した文字も書きかけへ渡る。** 元に戻す操作は入力欄の変換の口を通らないので、状態の変化から渡す。 */
+    // キーを送る試験の口（performKeyInput）は試験的な API。
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 元に戻す操作で戻した文字も書きかけへ渡る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abc")
+        input.performTextInput("def")
+
+        input.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+
+        composeRule.runOnIdle {
+            val shown = harness.field.state.text.toString()
+            assertTrue("元に戻す操作が入力欄に効いていない", shown != "abcdef")
+            assertEquals(shown, harness.draft.text)
+        }
+    }
+
+    /** **置いて受け取れた文字を、元に戻す操作で入力欄へ呼び戻さない。** 受け取れて空にしたときに元に戻す履歴も消える。 */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 置いて受け取れた文字を元に戻す操作で呼び戻さない() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("置いた")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved) }
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+
+        input.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        composeRule.runOnIdle { assertEquals("", harness.draft.text) }
     }
 
     /** **受け取れて空になった後に、前と同じ文字を打っても書きかけへ渡る。** 入力欄が持つ値は、描くときに空へ合わせてある。 */
@@ -1298,4 +1397,8 @@ class MarginMemoSheetUiTest {
         const val PREVIOUS_READING_AT = 1_757_635_200_000L
         val READY = MarginMemoState.Ready(memos = emptyList())
     }
+
+    /** 入力欄が持つ文字・選択・変換中の範囲。 */
+    private fun TextFieldState.edited() = Triple(text.toString(), selection, composition)
+
 }

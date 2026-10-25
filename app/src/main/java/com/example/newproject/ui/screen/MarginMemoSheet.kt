@@ -31,11 +31,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
-import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.SideEffect
 import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -343,10 +338,10 @@ internal fun MarginMemoSheetContent(
     /** 引用の欄の操作。 */
     quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /**
-     * 入力欄の編集の状態（カーソル・選択・変換中の範囲）の置き場。**面の外で持てば、面が外れて組み直されても保つ**（→ [memoFieldValueFor]）。
+     * 入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）の置き場。**面の外で持てば、面が外れて組み直されても保つ**（→ [MemoField]）。
      * null ならこの面の中で持つ。
      */
-    fieldValue: MutableState<TextFieldValue>? = null
+    memoField: MemoField? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -498,18 +493,12 @@ internal fun MarginMemoSheetContent(
                 DraftQuoteField(draft.quote, quoting = draft.quoting != null, hasHeadings, quoteCandidates, quoteActions)
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            val field = fieldValue ?: remember { mutableStateOf(TextFieldValue()) }
-            val shown = memoFieldValueFor(field.value, draft.text)
-            // 書きかけが外から変わった（受け取れて空になった・ノートを替えた）ら、持っている値も合わせる — 次の入力の比べる相手にする。
-            if (shown !== field.value) SideEffect { field.value = shown }
-            OutlinedTextField(
-                value = shown,
-                onValueChange = { next ->
-                    // **比べる相手は直前に反映した値**（描いた時点の書きかけではない）。描き直しの前に続けて届く編集を落とさない。
-                    val edited = memoFieldEdit(field.value, next)
-                    field.value = next
-                    if (edited != null) onEdit(edited)
-                },
+            MemoInputField(
+                field = memoField ?: remember { MemoField(draft.text) },
+                draftText = draft.text,
+                onEdit = onEdit,
+                // 引用だけでは置けない（→ features/margin_quote.md 判断2）。引用があって言葉が空なら、添えることを促す。
+                placeholder = memoInputPlaceholder(draft),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -518,11 +507,7 @@ internal fun MarginMemoSheetContent(
                         previousRowAtFocus =
                             if (focus.isFocused) previousRowAtFocus ?: (previousRow != PreviousReadingRow.Hidden) else null
                         inputFocused = focus.isFocused
-                    },
-                // 引用だけでは置けない（→ features/margin_quote.md 判断2）。引用があって言葉が空なら、添えることを促す。
-                placeholder = { Text(memoInputPlaceholder(draft), color = OnSurfaceFaint) },
-                minLines = 2,
-                maxLines = 6
+                    }
             )
 
             // **合図であって壁ではない。** 超えても切らないし、置けなくもならない。
@@ -1006,21 +991,6 @@ internal class DraftQuoteActions(
         val None = DraftQuoteActions(onDetach = {}, onChoose = { _, _, _ -> }, onDismissChoice = {})
     }
 }
-
-/**
- * 入力欄に描く値。**書きかけの文字と同じなら、持っているカーソル・選択・変換中の範囲をそのまま使う**（→ features/margin_quote.md §5.6）。
- * 違えば（受け取れて空になった・ノートを替えた・まだ持っていない）末尾にカーソルを置き直し、別の書きかけへ前の選択を混ぜない。
- */
-internal fun memoFieldValueFor(held: TextFieldValue, text: String): TextFieldValue =
-    if (held.text == text) held else TextFieldValue(text, TextRange(text.length))
-
-/**
- * 入力欄の変更 [next] が、直前に反映した値 [before] から文字を変えたなら、その文字を返す（書きかけへ渡す）。
- * カーソル・選択・変換中の範囲だけの変更なら null — 文字・書き込み先・引用を変えない。
- * **比べる相手は直前に反映した値で、描いた時点の書きかけではない** — 描き直しの前に「足して戻す」と続けて届くと、
- * 戻した文字が描いた時点の文字と同じになり、最後の編集を落とす（→ features/margin_quote.md §5.6）。
- */
-internal fun memoFieldEdit(before: TextFieldValue, next: TextFieldValue): String? = next.text.takeIf { it != before.text }
 
 /** 入力欄の案内。引用があって言葉が空なら、添えることを促す（引用だけでは置けない → features/margin_quote.md 判断2）。 */
 internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
