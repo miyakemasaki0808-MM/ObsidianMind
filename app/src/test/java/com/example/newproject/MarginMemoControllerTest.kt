@@ -1128,6 +1128,71 @@ class MarginMemoControllerTest {
         assertNull(h.drafts.draft(NOTE).quote)
     }
 
+    // ── 受理で書きかけを空にできたことを並べ読みへ伝える（→ features/margin_quote.md §5.6）────────────
+
+    /** 送ったままの書きかけが受け取れたら1回知らせる。待つ間に書き直していた・失敗した・満杯なら知らせない。 */
+    @Test
+    fun `受理で書きかけを空にできたときだけ知らせる`() = runTest {
+        data class Case(val label: String, val outcome: MemoSaveOutcome, val editWhileSaving: Boolean, val expected: Int)
+        listOf(
+            Case("そのまま受け取れた", MemoSaveOutcome.Saved, editWhileSaving = false, expected = 1),
+            Case("預かった", MemoSaveOutcome.Held, editWhileSaving = false, expected = 1),
+            Case("待つ間に書き直した", MemoSaveOutcome.Saved, editWhileSaving = true, expected = 0),
+            Case("失敗した", MemoSaveOutcome.Lost, editWhileSaving = false, expected = 0),
+            Case("満杯", MemoSaveOutcome.Full, editWhileSaving = false, expected = 0)
+        ).forEach { case ->
+            val drafts = InMemoryMarginMemoDrafts()
+            val save = CompletableDeferred<Unit>()
+            var consumed = 0
+            val controller = controller(
+                NoteUiStateStore(NoteUiState()),
+                outcome = case.outcome,
+                drafts = drafts,
+                beforeAppend = { save.await() },
+                onDraftConsumed = { consumed++ }
+            )
+            controller.open(path)
+            advanceUntilIdle()
+            controller.edit("送る言葉", SectionRef("A"))
+            controller.submit(path, SectionRef("A"))
+            advanceUntilIdle()
+            if (case.editWhileSaving) controller.edit("送る言葉と書き足し", SectionRef("A"))
+
+            save.complete(Unit)
+            advanceUntilIdle()
+
+            assertEquals(case.label, case.expected, consumed)
+        }
+    }
+
+    /** 送ったノートを離れてから受け取れたら知らせない（今のノートの並べ読みではない）。 */
+    @Test
+    fun `別のノートへ移った後の受理では知らせない`() = runTest {
+        val drafts = InMemoryMarginMemoDrafts()
+        val save = CompletableDeferred<Unit>()
+        var note = NOTE
+        var consumed = 0
+        val controller = controller(
+            NoteUiStateStore(NoteUiState()),
+            drafts = drafts,
+            beforeAppend = { save.await() },
+            currentNoteKey = { note },
+            onDraftConsumed = { consumed++ }
+        )
+        controller.open(path)
+        advanceUntilIdle()
+        controller.edit("送る言葉", SectionRef("A"))
+        controller.submit(path, SectionRef("A"))
+        advanceUntilIdle()
+
+        note = "content://vault/other.md"
+        save.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(0, consumed)
+        assertTrue(drafts.draft(NOTE).isEmpty)
+    }
+
     private fun TestScope.controller(
         store: NoteUiStateStore,
         loaded: List<MarginMemo> = emptyList(),
@@ -1141,7 +1206,8 @@ class MarginMemoControllerTest {
         loadMemos: suspend (String, Boolean) -> MemoLoad = { _, _ -> MemoLoad(loaded, MemoFileRead.Read) },
         currentNoteKey: () -> String? = { NOTE },
         // 引用元を探す仕事も試験の時計で進める（実の Default に出すと advanceUntilIdle が待たない）。
-        quoteDispatcher: CoroutineDispatcher = StandardTestDispatcher(testScheduler)
+        quoteDispatcher: CoroutineDispatcher = StandardTestDispatcher(testScheduler),
+        onDraftConsumed: () -> Unit = {}
     ) = MarginMemoController(
         scope = this,
         state = store.marginMemoWriter,
@@ -1159,6 +1225,7 @@ class MarginMemoControllerTest {
             deleteOutcome
         },
         clock = { 5_000L },
-        quoteDispatcher = quoteDispatcher
+        quoteDispatcher = quoteDispatcher,
+        onDraftConsumed = onDraftConsumed
     )
 }

@@ -106,6 +106,8 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.state.face
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
@@ -211,6 +213,8 @@ internal fun NoteReaderTab(
     onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
     /** 本文の選択メニューの「引用して書く」。[model] は選んだ本文の解析結果（→ features/margin_quote.md §5.2）。 */
     onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
+    /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
+    onShowSideFace: (SideFace) -> Unit = {},
     /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
     quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
@@ -716,12 +720,10 @@ internal fun NoteReaderTab(
             memoReveal = reveal
         }
         val openMemosFromCard: () -> Unit = { revealMemos(MemoReveal.AllMemos) }
-        // 本文の選択メニューの「引用して書く」（→ features/margin_quote.md §5.1）。**✎ と同じ規則で面を出し、入力欄へフォーカスを送る** —
-        // 引用には言葉が要るので、次にすることは書くこと。面が出ていれば面は替えずに引用だけを付ける。空白だけの選択では何も付けない。
-        // **並べ読みの間は出さない**（右の面を書きかけへ替える規則は区切り4で入れる）。
         // 机の札（→ features/margin_quote.md §5.1）。**2面が並ぶ机で、帯をしまっているときだけ出す**（片側を1画面・帯・見開き・スマホ・全画面には出さない）。
         // 選択メニューが出ている間の範囲は本文の選択の容器が [quoteOffers] へ書く。窓・机の形が変わったら、運んでいる途中でも消す。
-        val chipEnabled = layout is ReaderLayout.MarginPane && deskSpread == DeskSpread.Both && !deskBarShown && !reading && sectionModel != null
+        // 並べ読みの間も出す — 右の面（右のノート）も落とし先で、落とすと右を書きかけに替える（→ features/margin_quote.md §5.1）。
+        val chipEnabled = layout is ReaderLayout.MarginPane && deskSpread == DeskSpread.Both && !deskBarShown && sectionModel != null
         LaunchedEffect(layout, deskSpread, foldInfo.fold, chipEnabled) { quoteChip.value = QuoteChip.Hidden }
         LaunchedEffect(quoteOffers) {
             snapshotFlow { quoteOffers.current }.collect { offer ->
@@ -734,9 +736,13 @@ internal fun NoteReaderTab(
                 if (scrolling) quoteChip.value = quoteChipAfter(quoteChip.value, QuoteChipEvent.Dismissed)
             }
         }
-        val quoteFromBody: ((QuoteSelection) -> Unit)? = sectionModel?.takeIf { !reading }?.let { model ->
+        // 本文の選択メニューの「引用して書く」（→ features/margin_quote.md §5.1）。**✎ と同じ規則で面を出し、入力欄へフォーカスを送る** —
+        // 引用には言葉が要るので、次にすることは書くこと。面が出ていれば面は替えずに引用だけを付ける。空白だけの選択では何も付けない。
+        // **並べ読みの間は、右の面を書きかけへ替えて引用を付ける。** 右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
+        val quoteFromBody: ((QuoteSelection) -> Unit)? = sectionModel?.let { model ->
             { selection ->
                 if (isQuotable(selection.text)) {
+                    if (reading) onShowSideFace(SideFace.Draft)
                     if (canShowPane) {
                         if (!marginPaneOpen) onSetMarginPaneOpen(true)
                         if (paneVisible) showDeskFace(DeskFace.Supporting)
@@ -806,6 +812,8 @@ internal fun NoteReaderTab(
         }
         // 戻る操作は内側から — 右で眺めている間は余白へ戻る（→ features/margin_pane.md §5.4）。
         BackHandler(enabled = reading && paneVisible) { returnFromSide() }
+        // 右が書きかけなら、戻る操作はまず資料（右のノート）へ戻す。引用と書いた言葉は書きかけに残る（→ features/margin_quote.md §5.6）。
+        BackHandler(enabled = reading && sideReading.face == SideFace.Draft && paneVisible) { onShowSideFace(SideFace.Reference) }
         // 戻る操作は内側から — 帯が出ていればまず帯をしまい、片側を1画面にしていれば次に2面へ戻す
         // （後に置いた BackHandler ほど先に効く）。
         BackHandler(enabled = deskSpread != DeskSpread.Both && paneVisible) { spreadTo(DeskSpread.Both) }
@@ -825,7 +833,8 @@ internal fun NoteReaderTab(
             paneOpen = marginPaneOpen,
             sheetVisible = uiState.isMarginMemoSheetVisible,
             // **書きかけがあるか入力中なら**シートへ移す（→ features/margin_pane.md §5.4 の2つ目の表）。並べ読み中は入力中だけ。
-            writing = writingForWindowShift(hasDraft = memoDraft.text.isNotEmpty(), focusIntent = memoFocusIntent, sideReading = reading),
+            // 引用だけの書きかけも「書きかけがある」に数える（→ features/margin_quote.md §5.7）。
+            writing = writingForWindowShift(hasDraft = memoDraft.text.isNotEmpty() || memoDraft.quote != null, focusIntent = memoFocusIntent, sideReading = reading),
             onHideSheet = onDismissMarginMemo,
             onShowSheet = onOpenMarginMemo
         )
@@ -1056,9 +1065,14 @@ internal fun NoteReaderTab(
                                             .onGloballyPositioned { deskSupportingBounds = it.boundsInRoot() }
                                     ) {
                                         Spacer(modifier = Modifier.height(DeskStripHeight))
+                                        // 並べ読みの間に右の面が出すもの（→ features/margin_quote.md §5.6）。引用の有無ではなく出し分けの状態で決める。
+                                        val sideFace = sideReading.face
+                                        if (showsSideFaceSwitch(reading, sideFace, hasDraft = memoDraft.text.isNotEmpty() || memoDraft.quote != null)) {
+                                            SideFaceSwitch(face = sideFace, title = sideReading.note?.title, onSelect = onShowSideFace)
+                                        }
                                         MarginPanePanel(modifier = Modifier.weight(1f).fillMaxWidth()) {
-                                            // 右で眺めている間は、余白の面に代えてそのノートを出す。
-                                            if (reading) {
+                                            // 右で眺めている間は、余白の面に代えてそのノートを出す（右が書きかけのときは余白の面）。
+                                            if (reading && sideFace == SideFace.Reference) {
                                                 SideReadingPane(
                                                     state = sideReading,
                                                     blocks = sideReadingBlocks,

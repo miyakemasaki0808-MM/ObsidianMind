@@ -12,6 +12,7 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.data.NoteFileTooLargeException
 import com.example.newproject.model.NoteFolder
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.DistillRangeEdge
 import com.example.newproject.model.state.DistillRangeEdgeMove
@@ -612,6 +613,9 @@ class NoteViewModel internal constructor(
         session.openSideReading(note) { loadNoteForDistill(contentResolver, note.title, note.ref).content }
 
     fun closeSideReading() = session.closeSideReading()
+
+    /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
+    fun showSideFace(face: SideFace) = session.showSideFace(face)
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 

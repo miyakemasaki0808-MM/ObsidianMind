@@ -10,6 +10,7 @@ import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.checkSubmission
 import com.example.newproject.domain.edited
+import com.example.newproject.domain.consumedBy
 import com.example.newproject.domain.quoted
 import com.example.newproject.domain.quoteAbandoned
 import com.example.newproject.domain.quoteSettled
@@ -28,6 +29,7 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.state.MemoSubmission
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
@@ -64,7 +66,12 @@ internal class MarginMemoController(
     private val deleteMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoDeleteOutcome,
     private val clock: () -> Long = System::currentTimeMillis,
     /** 引用元を探す先。位置で決まらなければ本文の全体を探すので、Main で走らせない（→ features/margin_quote.md §5.2）。 */
-    private val quoteDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val quoteDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * 今のノートの送信が受け取れて、**その受理で書きかけを空にできた**（→ features/margin_quote.md §5.6）。
+     * 受理されたことだけでは呼ばない — 待つ間に書き直していれば、まだ書き終えていない。並べ読みの右を資料へ戻すのに使う。
+     */
+    private val onDraftConsumed: () -> Unit = {}
 ) {
     private var loadJob: Job? = null
 
@@ -138,7 +145,7 @@ internal class MarginMemoController(
             // **離れている間に頼んだ送信は、戻って読んだ一覧で決める**（→ features/margin_pane.md §6.2 の②）。
             val check = if (noteKey != null && pending != null) {
                 checkSubmission(pending, loaded.memos, loaded.fileRead).also { check ->
-                    drafts.update(noteKey) { it.settled(pending, check) }
+                    settleDraft(noteKey, pending, check)
                 }
             } else {
                 null
@@ -308,9 +315,7 @@ internal class MarginMemoController(
             val accepted = outcome == MemoSaveOutcome.Saved || outcome == MemoSaveOutcome.Held
             // **結果は送信を作ったノートの書きかけにだけ届ける。** 照合は送信そのもので行うので、
             // 追わなくなった古い送信の結果は新しい入力を消さない。
-            drafts.update(noteKey) {
-                it.settled(submission, if (accepted) SubmissionCheck.Accepted else SubmissionCheck.NotAccepted)
-            }
+            settleDraft(noteKey, submission, if (accepted) SubmissionCheck.Accepted else SubmissionCheck.NotAccepted)
             if (!isCurrent(requestId)) return@launchWrite
             state.update { latest ->
                 val ready = latest.marginMemoState as? MarginMemoState.Ready ?: return@update latest
@@ -414,6 +419,13 @@ internal class MarginMemoController(
     fun clearVaultScoped() {
         stopQuote()
         drafts.clear()
+    }
+
+    /** 照合の結果を [noteKey] の書きかけへ当てる。受理で今のノートの書きかけを空にできたら知らせる（→ [onDraftConsumed]）。 */
+    private fun settleDraft(noteKey: String, submission: MemoSubmission, check: SubmissionCheck) {
+        val consumed = check == SubmissionCheck.Accepted && drafts.draft(noteKey).consumedBy(submission)
+        drafts.update(noteKey) { it.settled(submission, check) }
+        if (consumed && currentNoteKey() == noteKey) onDraftConsumed()
     }
 
     private fun isCurrent(requestId: Long): Boolean = generation == requestId

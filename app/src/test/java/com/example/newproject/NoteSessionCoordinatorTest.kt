@@ -57,6 +57,7 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.model.Crystal
@@ -1918,6 +1919,35 @@ class NoteSessionCoordinatorTest {
 
         assertEquals(SideReadingState.Idle, coordinator.uiState.value.sideReading)
         assertNull(coordinator.sideReadingBlocks.value)
+    }
+
+    /**
+     * **並べ読みの間に右を書きかけにして置き、その受理で書きかけを空にできたら右を資料へ戻す**（→ features/margin_quote.md §5.6）。
+     * 保存を待つ間に書き直していたら、受け取れても書きかけのまま。調停側が書きかけの規則の結果を並べ読みへ伝える。
+     */
+    @Test
+    fun `並べ読みの間に置いたメモの受理で書きかけを空にできたら右を資料へ戻す`() = runTest {
+        listOf(false, true).forEach { editWhileSaving ->
+            val env = Env(this)
+            env.trace.put(storedTrace(count = 1, path = "ideas/habit.md"))
+            val coordinator = env.coordinator()
+            coordinator.startReadingTrace("習慣について", "ideas/habit.md", null)
+            coordinator.setNoteState(successNote("# 導入\n\n本文"))
+            coordinator.openMarginMemoSheet()
+            advanceUntilIdle()
+            coordinator.dismissMarginMemoSheet()
+            coordinator.openSideReading(SIDE_NOTE) { "# 右の見出し" }
+            advanceUntilIdle()
+            coordinator.showSideFace(SideFace.Draft)
+
+            coordinator.editMarginMemo("右を見ながら書いた", INTRO)
+            coordinator.submitMarginMemo(INTRO)
+            if (editWhileSaving) coordinator.editMarginMemo("右を見ながら書いた。続き", INTRO)
+            advanceUntilIdle()
+
+            val expected = if (editWhileSaving) SideFace.Draft else SideFace.Reference
+            assertEquals("保存中に書き直した=$editWhileSaving", SideReadingState.Ready(SIDE_NOTE, expected), coordinator.uiState.value.sideReading)
+        }
     }
 
     /** 読み込み中にノートを替える。**ジョブを止める側の登録を消すと、ここが後着で落ちる。** */

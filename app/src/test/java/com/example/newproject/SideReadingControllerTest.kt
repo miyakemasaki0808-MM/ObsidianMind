@@ -6,6 +6,8 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.face
+import com.example.newproject.model.state.SideFace
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.NonCancellable
@@ -216,6 +218,71 @@ class SideReadingControllerTest {
             assertEquals("$label の後着", SideReadingState.Ready(NOTE_C), env.state)
             assertEquals("$label の後着", listOf("Cの見出し"), env.headings)
         }
+    }
+
+    // ── 右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）──────────────
+
+    /** 左で引用すると右が書きかけになり、切替で資料と行き来できる。右のノートは保ったまま。 */
+    @Test
+    fun `右の面を書きかけと資料で替えても右のノートは保つ`() = runTest {
+        val env = Env(this)
+        env.controller.open(NOTE_B) { "# Bの見出し" }
+        advanceUntilIdle()
+
+        env.controller.showFace(SideFace.Draft)
+        assertEquals(SideReadingState.Ready(NOTE_B, SideFace.Draft), env.state)
+        env.controller.showFace(SideFace.Reference)
+        assertEquals(SideReadingState.Ready(NOTE_B, SideFace.Reference), env.state)
+        assertEquals(listOf("Bの見出し"), env.headings)
+    }
+
+    /** 読み込む間に書きかけへ替えたら、読めた後も失敗した後も書きかけのまま。 */
+    @Test
+    fun `読み込む間に書きかけへ替えたら読めた後も失敗した後もそのまま`() = runTest {
+        LATE_ENDINGS.forEach { (label, ending) ->
+            val env = Env(this)
+            val finish = CompletableDeferred<() -> String>()
+            env.controller.open(NOTE_B, uncancellableRead(finish))
+            runCurrent()
+
+            env.controller.showFace(SideFace.Draft)
+            finish.complete(ending)
+            advanceUntilIdle()
+
+            assertEquals("$label の後", SideFace.Draft, env.state.face)
+        }
+    }
+
+    /** 新しい候補は資料として出す（書きかけの関連から別の候補を開いたとき）。 */
+    @Test
+    fun `新しい候補を開くと資料から始まる`() = runTest {
+        val env = Env(this)
+        env.controller.open(NOTE_B) { "# B" }
+        advanceUntilIdle()
+        env.controller.showFace(SideFace.Draft)
+
+        env.controller.open(NOTE_C) { "# C" }
+        advanceUntilIdle()
+
+        assertEquals(SideReadingState.Ready(NOTE_C, SideFace.Reference), env.state)
+    }
+
+    /** **受理で書きかけを空にできたときだけ資料へ戻す。** 資料のままなら何も替えない（手で選んだ面を覆さない）。並べ読みが無ければ何もしない。 */
+    @Test
+    fun `書きかけを空にできた受理で書きかけなら資料へ戻し、資料ならそのまま`() = runTest {
+        val env = Env(this)
+        env.controller.draftConsumed()
+        env.controller.showFace(SideFace.Draft)
+        assertEquals(SideReadingState.Idle, env.state)
+
+        env.controller.open(NOTE_B) { "# B" }
+        advanceUntilIdle()
+        env.controller.showFace(SideFace.Draft)
+        env.controller.draftConsumed()
+        assertEquals(SideReadingState.Ready(NOTE_B, SideFace.Reference), env.state)
+
+        env.controller.draftConsumed()
+        assertEquals(SideReadingState.Ready(NOTE_B, SideFace.Reference), env.state)
     }
 
     /** 頼まれるまで仕事を溜めておくディスパッチャ。溜めていない間はそのまま流す。 */

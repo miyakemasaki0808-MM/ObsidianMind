@@ -28,6 +28,7 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.DistillRangeEdge
 import com.example.newproject.model.state.DistillRangeEdgeMove
@@ -292,7 +293,9 @@ internal class NoteSessionCoordinator(
         loadMemos = { path, confirmAbsence -> readingTrace.loadMemos(path, confirmAbsence) },
         appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
         deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
-        clock = clock
+        clock = clock,
+        // **受理で今の書きかけを空にできたときだけ**、並べ読みの右を資料へ戻す（→ features/margin_quote.md §5.6）。
+        onDraftConsumed = { sideReading.draftConsumed() }
     )
 
     /**
@@ -830,4 +833,7 @@ internal class NoteSessionCoordinator(
 
     /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun closeSideReading() = sideReading.close()
+
+    /** 並べ読みの間の右の面の出し分け（→ features/margin_quote.md §5.6）。 */
+    fun showSideFace(face: SideFace) = sideReading.showFace(face)
 }
