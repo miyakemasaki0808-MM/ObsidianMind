@@ -6,12 +6,12 @@
 区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
 区切り2b — `domain/QuoteAttachment.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/QuoteTextToolbar.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `MainActivity.kt` と、2a の面・窓口・`MarginMemoController.kt`。
 区切り3 — `ui/screen/QuoteChip.kt` / `ui/markdown/QuoteTextToolbar.kt`（`QuoteOffers`）/ `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/NoteReaderTab.kt`。
-区切り4 — `model/state/SideReadingState.kt`（`SideFace`）/ `controller/SideReadingController.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `MainActivity.kt` / `ui/screen/SideReadingPane.kt`（`SideFaceSwitch`）/ `ui/screen/NoteReaderTab.kt`
+区切り4 — `model/state/SideReadingState.kt`（`SideFace`）/ `controller/SideReadingController.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `MainActivity.kt` / `ui/screen/SideReadingPane.kt`（`SideFaceSwitch`）/ `ui/screen/NoteReaderTab.kt` / `ui/screen/MemoInputField.kt`（`MemoField`）
 **関連テスト:** 区切り1 — `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupJsonTest` / `SchemaVersionDocsTest`。
 区切り2a — `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `MarginMemoSheetUiTest` / `MarginFaceLayoutUiTest`。
 区切り2b — `QuoteAttachmentTest` / `QuoteSourceAtTest` / `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoControllerTest` / `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `QuoteSelectionUiTest` / `MarginMemoSheetUiTest`。
 区切り3 — `QuoteChipTest`。androidTest: `QuoteChipUiTest`。
-区切り4 — `SideReadingControllerTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest` / `SideFaceSwitchTest`
+区切り4 — `SideReadingControllerTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest` / `SideFaceSwitchTest` / `MarginMemoCaptionTest`。androidTest: `MarginMemoSheetUiTest`
 **正本:** この文書（本文の一節を余白メモへ移す操作・引用と控えた位置のデータ・段落への照合）。Fold の原則と契約は [fold_experience](../system/fold_experience.md)、
 余白の面の並べ方・✎ の遷移・書きかけと送信の照合は [margin_pane](margin_pane.md)、余白メモの保存・上限・合流は [reflect_margin_memo](reflect_margin_memo.md) が持つ
 
@@ -247,14 +247,15 @@
   そうでなければ何も出さずに並べ読みを隠して保つ（✎ で机を開くと出し分けのまま戻る）。引用だけの書きかけも「書きかけがある」に数える（§5.7）のは、並べ読みでないときの規則
 - **右が資料を出している間は「入力中」と扱わない**（2026-10-25、区切り4の実装レビューから）。入力欄は資料に替えると面ごと外れ、外れたことの知らせ（1フレーム待つ）は面と一緒に取り消される。
   入力中の印は書きかけへ戻したときにフォーカスを戻すために残し、窓の切り替わりの判定（`writingForWindowShift`）は右が書きかけのときだけそれを入力中と数える。手で替えた・戻る操作・受理で戻した、のどれでも同じ
-- **入力欄の編集の状態（カーソル・選択・変換中の範囲）は面の外でノートごとに持つ**（`memoFieldValueFor`）。資料から書きかけへ戻すと入力欄は作り直されるので、面の中に置くとカーソルと選択が先頭へ戻る。
-  書きかけの文字が変わっていれば（受け取れて空になった・ノートを替えた）末尾に置き直し、別の書きかけへ前の選択を混ぜない
-- **入力欄からの通知は、直前に反映した値と文字を比べて書きかけへ渡す**（`memoFieldEdit`）。描いた時点の書きかけと比べると、描き直しの前に「足して戻す」が続けて届いたとき、
-  戻した文字が描いた文字と同じに見えて最後の編集を落とす。書きかけが外から変わったら持っている値も描く値へ合わせ、受け取れて空になった後に前と同じ文字を打っても届くようにする。
-  カーソル・選択・変換中の範囲だけの変更は渡さない（文字・書き込み先・引用を変えない）
-  - **描いた値と文字・選択・変換中の範囲まで同じ通知は、入力欄の部品（`TextFieldValue` 版の `BasicTextField`）自身が捨てる**（Compose Foundation 1.7.3 のバイナリで確認）。
-    描き直しの前に足して戻し、カーソルまで描いた位置へ戻ったときだけ、最後の編集はこちらへ届かない。文字だけで受ける版なら届くが、面を外すとカーソルと選択を失う。
-    1フレームのうちに別々の編集が2度届くときだけ起きるので、この形のまま残す
+- **入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）は面の外でノートごとに持つ**（`MemoField`、中身は `TextFieldState`）。資料から書きかけへ戻すと入力欄は作り直されるので、面の中に置くとカーソルと選択が先頭へ戻る。
+  書きかけの文字が外で変わったら（受け取れて空になった・ノートを替えた）入力欄をそれへ合わせて末尾に置き、別の書きかけへ前の選択を混ぜない（`memoFieldReset`）。
+  受け取れて空になった後に前と同じ文字を打っても届くよう、どちら側が変わったかは最後にそろった文字と比べて決める
+- **利用者の編集は入力欄の状態へ直接入り、変換の口（`InputTransformation`）から同期して書きかけへ渡す**（`MemoInputField`）。次の描画を待つと、その間に押した「置く」が前の文字で送る。
+  最後にそろった文字と同じなら渡さない（`memoFieldEdit`）ので、カーソル・選択・変換中の範囲だけの変更は文字・書き込み先・引用を変えない
+  - **`TextFieldValue` 版の入力欄は使わない。** 描いた値と文字・選択・変換中の範囲まで同じ通知を部品自身が捨てる（Compose Foundation 1.7.3 のバイナリで確認）ので、
+    描き直しの前に足して戻しカーソルまで描いた位置へ戻ると、最後の編集がアプリへ届かない。文字だけで受ける版は届くが、面を外すとカーソルと選択を失う
+  - **元に戻す・やり直すは変換の口を通らない**（同じく 1.7.3）ので、状態の変化も見張って書きかけへ渡す。書きかけへ合わせる書き換えは元に戻す履歴も消すので、置いて受け取れた文字を元に戻す操作で呼び戻さない
+  - 見た目は前の枠つきの入力欄から変えない（枠と案内は `OutlinedTextFieldDefaults.DecorationBox` で描く。Material3 1.3 では試験的な API）
 - **切替は、並べ読みの間に、右が書きかけを出しているか、書きかけが空でないときに出す。** 右が書きかけのときは必ず出すので、書きかけを空にしても右のノートへ戻る入口は消えない
 - **出し分けは並べ読みと同じ寿命で持つ**（ノート単位。並べ読みが終われば一緒に消える）
 - **資料へ自動で戻す契機は1つだけ — その送信の受理で、今の書きかけを空にできたとき**（§5.3 の「受け取れた」が返す結果）。送信が受理されたことだけでは戻さない。
