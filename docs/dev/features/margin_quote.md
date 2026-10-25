@@ -1,7 +1,7 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
 **状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）・区切り3（机の札）・区切り4（並べ読み中の引用）は実装済み。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
-**最終検証:** 未検証（区切り1〜4を実装し、実機は未確認。§5.6 の「窓が変わってペインが閉じる」の行はオーナー判断待ち → 同表の注記）
+**最終検証:** 未検証（区切り1〜4を実装し、実機は未確認）
 **関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
 区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
 区切り2b — `domain/QuoteAttachment.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/QuoteTextToolbar.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `MainActivity.kt` と、2a の面・窓口・`MarginMemoController.kt`。
@@ -239,12 +239,13 @@
 | 置いたが満杯・失敗・確認できない | 書きかけのまま（保存の状態を見せる） | 保ったまま |
 | 書きかけの「このノートの関連」から別の候補を開く | 新しい候補を資料として出す | 新しい並べ読みに替わる。書きかけは残る |
 | 帯の ✎・重ねたレールのタブ・ノート切替・Vault 切替 | 今どおり | 今どおり終える（出し分けも一緒に消える） |
-| 窓が変わってペインが閉じる | — | 今どおり隠して保つ。書きかけがあるのでシートへ移す（→ [margin_pane](margin_pane.md) §5.4）※ |
+| 窓が変わってペインが閉じる（右が書きかけで、入力中） | — | シートへ移す。**並べ読みは終わる**。文字と引用はシートの書きかけに残る（→ [margin_pane](margin_pane.md) §5.4） |
+| 窓が変わってペインが閉じる（上のほか。右が資料のときは入力中に数えない） | — | 何も出さずに隠して保つ（→ [margin_pane](margin_pane.md) §5.4） |
 | 出せる窓へ戻って ✎ で机を開く | **出し分けのまま**（書きかけなら書きかけ、資料なら右のノート） | 保ったまま |
 
-- ※ **この行はオーナー判断待ち**（2026-10-25、区切り4の実装で気づいた）。シートを開くと並べ読みが終わる（[desk_foundation](desk_foundation.md) 判断2）ので、
-  「隠して保つ」と「シートへ移す」は同時に成り立たない。実装は参照先の [margin_pane](margin_pane.md) §5.4 のまま — 並べ読みの間は**入力中のときだけ**シートへ移し（並べ読みは終わる）、
-  そうでなければ何も出さずに並べ読みを隠して保つ（✎ で机を開くと出し分けのまま戻る）。引用だけの書きかけも「書きかけがある」に数える（§5.7）のは、並べ読みでないときの規則
+- **窓が変わったときは [margin_pane](margin_pane.md) §5.4 の規則に従う**（2026-10-26、オーナー判断）。シートを開くと並べ読みが終わる（[desk_foundation](desk_foundation.md) 判断2）ので、
+  「隠して保つ」と「シートへ移す」は同時には成り立たない。並べ読みの間は**入力中のときだけ**シートへ移し、それ以外は並べ読みを隠して保つ（✎ で机を開くと出し分けのまま戻る）。
+  書きかけがあるだけでは移さない — 引用だけの書きかけも「書きかけがある」に数える（§5.7）のは、並べ読みでないときの規則
 - **右が資料を出している間は「入力中」と扱わない**（2026-10-25、区切り4の実装レビューから）。入力欄は資料に替えると面ごと外れ、外れたことの知らせ（1フレーム待つ）は面と一緒に取り消される。
   入力中の印は書きかけへ戻したときにフォーカスを戻すために残し、窓の切り替わりの判定（`writingForWindowShift`）は右が書きかけのときだけそれを入力中と数える。手で替えた・戻る操作・受理で戻した、のどれでも同じ
 - **入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）は面の外でノートごとに持つ**（`MemoField`、中身は `TextFieldState`）。資料から書きかけへ戻すと入力欄は作り直されるので、面の中に置くとカーソルと選択が先頭へ戻る。
