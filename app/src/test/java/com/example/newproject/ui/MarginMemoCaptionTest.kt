@@ -4,6 +4,7 @@ import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import com.example.newproject.ui.screen.memoFieldEdit
 import com.example.newproject.ui.screen.memoFieldValueFor
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.ui.screen.quoteChoiceQuestion
@@ -119,5 +120,32 @@ class MarginMemoCaptionTest {
 
         assertEquals(TextFieldValue("別の書きかけです", TextRange(8)), memoFieldValueFor(held, "別の書きかけです"))
         assertEquals(TextFieldValue("", TextRange(0)), memoFieldValueFor(held, ""))
+    }
+
+    /**
+     * **描き直しの前に続けて届く編集を落とさない。** 変換中の「abc」を「abcd」で確定して1文字消すと、戻した「abc」は描いた時点の文字と同じだが、
+     * 直前に反映した「abcd」とは違うので書きかけへ渡す。比べる相手は直前に反映した値。
+     */
+    @Test
+    fun `描き直しの前に足して戻しても最後の編集を書きかけへ渡す`() {
+        val drawn = TextFieldValue("abc", TextRange(3), composition = TextRange(0, 3))
+        val added = TextFieldValue("abcd", TextRange(4))
+        val removed = TextFieldValue("abc", TextRange(3))
+
+        assertEquals("abcd", memoFieldEdit(drawn, added))
+        assertEquals("abc", memoFieldEdit(added, removed))
+    }
+
+    @Test
+    fun `カーソルと選択だけの変更は書きかけへ渡さない`() {
+        assertEquals(null, memoFieldEdit(TextFieldValue("abc", TextRange(3)), TextFieldValue("abc", TextRange(1, 2))))
+    }
+
+    /** 受け取れて空になった後に、前と同じ文字を新しく入れても渡す（持っている値は描くときに空へ合わせてある）。 */
+    @Test
+    fun `空へ合わせた後に前と同じ文字を入れても渡す`() {
+        val synced = memoFieldValueFor(TextFieldValue("abc", TextRange(3)), "")
+
+        assertEquals("abc", memoFieldEdit(synced, TextFieldValue("abc", TextRange(3))))
     }
 }

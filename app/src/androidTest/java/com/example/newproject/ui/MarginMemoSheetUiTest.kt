@@ -43,6 +43,11 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.test.performTextReplacement
@@ -619,6 +624,60 @@ class MarginMemoSheetUiTest {
         composeRule.waitForIdle()
         input.performTextInput("Y")
         composeRule.runOnIdle { assertEquals("abcXYf", harness.draft.text) }
+    }
+
+    /**
+     * **描き直しの前に続けて届く編集を落とさない**（→ features/margin_quote.md §5.6）。描いた時点の文字へ戻す編集でも、
+     * 直前に反映した文字と違えば書きかけへ渡し、次の描画と置いたメモもその文字になる。
+     * 2つの通知を UI スレッドの1回の実行の中で送り、間に描き直しを挟まない。
+     */
+    // 選択を置く試験の口（performTextInputSelection）は試験的な API。
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 描き直しの前に足して戻しても最後の編集が書きかけと描画と置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abc")
+        // 描いた値とカーソルを違えておく。値まで同じ通知は、入力欄の部品自身が捨てる。
+        input.performTextInputSelection(TextRange(1))
+        val setText = checkNotNull(input.fetchSemanticsNode().config[SemanticsActions.SetText].action)
+
+        composeRule.runOnUiThread {
+            setText(AnnotatedString("abcd"))
+            setText(AnnotatedString("abc"))
+        }
+
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("abc")))
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
+
+        // 描いた文字へ戻らない連続の編集も、最後の値で終わる。
+        composeRule.runOnUiThread {
+            setText(AnnotatedString("abcd"))
+            setText(AnnotatedString("abcde"))
+        }
+        composeRule.runOnIdle { assertEquals("abcde", harness.draft.text) }
+        composeRule.runOnUiThread { setText(AnnotatedString("abc")) }
+
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /** **受け取れて空になった後に、前と同じ文字を打っても書きかけへ渡る。** 入力欄が持つ値は、描くときに空へ合わせてある。 */
+    @Test
+    fun 受け取れて空になった後に前と同じ文字を打っても置ける() {
+        val harness = Harness()
+        setContent(harness)
+
+        input.performTextInput("同じ")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved) }
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        input.performTextInput("同じ")
+        composeRule.runOnIdle { assertEquals("同じ", harness.draft.text) }
+        composeRule.onNodeWithText("置く").performClick()
+
+        assertEquals(listOf("同じ", "同じ"), harness.sent.map { it.raw })
     }
 
     /** **引用の結果を待つ間は置けず、そのことを引用の欄に出す**（→ features/margin_quote.md §5.3）。届けば置ける。 */
