@@ -1,17 +1,17 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
-**状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）・区切り3（机の札）は実装済み、区切り4は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
-**最終検証:** 未検証（区切り1〜3を実装し、実機は未確認。§5.6 と §5.7 の並べ読みの部分は未実装で未突合）
+**状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）・区切り3（机の札）・区切り4（並べ読み中の引用）は実装済み。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
+**最終検証:** 未検証（区切り1〜4を実装し、実機は未確認。§5.6 の「窓が変わってペインが閉じる」の行はオーナー判断待ち → 同表の注記）
 **関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
 区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
 区切り2b — `domain/QuoteAttachment.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/QuoteTextToolbar.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `MainActivity.kt` と、2a の面・窓口・`MarginMemoController.kt`。
 区切り3 — `ui/screen/QuoteChip.kt` / `ui/markdown/QuoteTextToolbar.kt`（`QuoteOffers`）/ `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/NoteReaderTab.kt`。
-（4 で予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt`
+区切り4 — `model/state/SideReadingState.kt`（`SideFace`）/ `controller/SideReadingController.kt` / `controller/MarginMemoController.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt` / `MainActivity.kt` / `ui/screen/SideReadingPane.kt`（`SideFaceSwitch`）/ `ui/screen/NoteReaderTab.kt`
 **関連テスト:** 区切り1 — `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupJsonTest` / `SchemaVersionDocsTest`。
 区切り2a — `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `MarginMemoSheetUiTest` / `MarginFaceLayoutUiTest`。
 区切り2b — `QuoteAttachmentTest` / `QuoteSourceAtTest` / `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoControllerTest` / `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `QuoteSelectionUiTest` / `MarginMemoSheetUiTest`。
 区切り3 — `QuoteChipTest`。androidTest: `QuoteChipUiTest`。
-（4 で予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest`。androidTest: `NoteReadingFlowTest`
+区切り4 — `SideReadingControllerTest` / `MarginMemoControllerTest` / `NoteSessionCoordinatorTest` / `SideFaceSwitchTest`
 **正本:** この文書（本文の一節を余白メモへ移す操作・引用と控えた位置のデータ・段落への照合）。Fold の原則と契約は [fold_experience](../system/fold_experience.md)、
 余白の面の並べ方・✎ の遷移・書きかけと送信の照合は [margin_pane](margin_pane.md)、余白メモの保存・上限・合流は [reflect_margin_memo](reflect_margin_memo.md) が持つ
 
@@ -239,9 +239,12 @@
 | 置いたが満杯・失敗・確認できない | 書きかけのまま（保存の状態を見せる） | 保ったまま |
 | 書きかけの「このノートの関連」から別の候補を開く | 新しい候補を資料として出す | 新しい並べ読みに替わる。書きかけは残る |
 | 帯の ✎・重ねたレールのタブ・ノート切替・Vault 切替 | 今どおり | 今どおり終える（出し分けも一緒に消える） |
-| 窓が変わってペインが閉じる | — | 今どおり隠して保つ。書きかけがあるのでシートへ移す（→ [margin_pane](margin_pane.md) §5.4） |
+| 窓が変わってペインが閉じる | — | 今どおり隠して保つ。書きかけがあるのでシートへ移す（→ [margin_pane](margin_pane.md) §5.4）※ |
 | 出せる窓へ戻って ✎ で机を開く | **出し分けのまま**（書きかけなら書きかけ、資料なら右のノート） | 保ったまま |
 
+- ※ **この行はオーナー判断待ち**（2026-10-25、区切り4の実装で気づいた）。シートを開くと並べ読みが終わる（[desk_foundation](desk_foundation.md) 判断2）ので、
+  「隠して保つ」と「シートへ移す」は同時に成り立たない。実装は参照先の [margin_pane](margin_pane.md) §5.4 のまま — 並べ読みの間は**入力中のときだけ**シートへ移し（並べ読みは終わる）、
+  そうでなければ何も出さずに並べ読みを隠して保つ（✎ で机を開くと出し分けのまま戻る）。引用だけの書きかけも「書きかけがある」に数える（§5.7）のは、並べ読みでないときの規則
 - **切替は、並べ読みの間に、右が書きかけを出しているか、書きかけが空でないときに出す。** 右が書きかけのときは必ず出すので、書きかけを空にしても右のノートへ戻る入口は消えない
 - **出し分けは並べ読みと同じ寿命で持つ**（ノート単位。並べ読みが終われば一緒に消える）
 - **資料へ自動で戻す契機は1つだけ — その送信の受理で、今の書きかけを空にできたとき**（§5.3 の「受け取れた」が返す結果）。送信が受理されたことだけでは戻さない。
@@ -341,7 +344,7 @@ data class QuoteContext(val before: String, val after: String)
 2. **引用と段落へ飛ぶ（全端末）:** 2つに分けて入れる（2026-10-24、オーナー判断）
    - **2a 照合の配線と表示:** 照合を Main の外で作る・メモの行の引用と「書いた頃の位置へ」・特定できない／見つからないの添え書き・書き始めの控え。付ける操作はまだ無く、見え方が変わるのは保存済みの引用か控えを持つメモだけ
    - **2b 引用を付ける:** 選択メニューの「引用して書く」・矩形からの引用元・決まらないときに付ける場で選ぶ候補・引用つきの書きかけ（行き先と未保存の表示・切れる部分）・特定できない引用を押して候補を選ぶ。
-     **並べ読みの間は「引用して書く」を出さない**（右の面を書きかけへ替える規則が無いと、付けた引用と入力欄が見えないため。区切り4で右の面の切替と一緒に入れる）
+     並べ読みの間は区切り4まで「引用して書く」を出さなかった（区切り4で右の面の切替と一緒に入れた）
 3. **机の札（開いた Fold）:** 札の表示と運び・落とし先・外で離したときに戻す・横の払いとの取り合い
 4. **並べ読み中の引用:** 右の面の出し分けと切替・受け取れたら資料へ戻す・窓が変わったときの扱い
 
