@@ -1,15 +1,17 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
-**状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）は実装済み、区切り3・4は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
-**最終検証:** 未検証（区切り1〜2bを実装し、実機は未確認。札（§5.1 の後半）・§5.6・§5.7 は未実装で未突合）
+**状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）・区切り3（机の札）は実装済み、区切り4は実装前。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
+**最終検証:** 未検証（区切り1〜3を実装し、実機は未確認。§5.6 と §5.7 の並べ読みの部分は未実装で未突合）
 **関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
 区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
 区切り2b — `domain/QuoteAttachment.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/QuoteTextToolbar.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `MainActivity.kt` と、2a の面・窓口・`MarginMemoController.kt`。
-（3・4 で予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt` / `ui/screen/DeskSpread.kt`。新規に `ui/screen/QuoteChip.kt`
+区切り3 — `ui/screen/QuoteChip.kt` / `ui/markdown/QuoteTextToolbar.kt`（`QuoteOffers`）/ `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `ui/screen/NoteReaderTab.kt`。
+（4 で予定）`model/state/SideReadingState.kt` / `controller/SideReadingController.kt`
 **関連テスト:** 区切り1 — `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoSectionsTest` / `MarginMemoControllerTest` / `ReadingTraceJsonTest` / `ReadingTraceLimitsTest` / `ReadingTraceStoreTest` / `ReadingTraceBackupJsonTest` / `SchemaVersionDocsTest`。
 区切り2a — `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `MarginMemoSheetUiTest` / `MarginFaceLayoutUiTest`。
 区切り2b — `QuoteAttachmentTest` / `QuoteSourceAtTest` / `MemoPassagesTest` / `MarginMemoDraftRulesTest` / `MarginMemoControllerTest` / `MarginFaceLayoutTest` / `MarginMemoCaptionTest` / `ThreadingScanTest`。androidTest: `QuoteSelectionUiTest` / `MarginMemoSheetUiTest`。
-（3・4 で予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest`。新規に `QuoteChipTest`。androidTest: `NoteReadingFlowTest`
+区切り3 — `QuoteChipTest`。androidTest: `QuoteChipUiTest`。
+（4 で予定）`SideReadingControllerTest` / `NoteSessionCoordinatorTest`。androidTest: `NoteReadingFlowTest`
 **正本:** この文書（本文の一節を余白メモへ移す操作・引用と控えた位置のデータ・段落への照合）。Fold の原則と契約は [fold_experience](../system/fold_experience.md)、
 余白の面の並べ方・✎ の遷移・書きかけと送信の照合は [margin_pane](margin_pane.md)、余白メモの保存・上限・合流は [reflect_margin_memo](reflect_margin_memo.md) が持つ
 
@@ -310,7 +312,7 @@ data class QuoteContext(val before: String, val after: String)
 | `data` | — | `ReadingTraceJson` が `passage` を読み書きし、v1〜v8 を読む |
 | `domain` | `QuoteAttachment.kt` — 選んだ文字から付ける引用を作る（`quoteAttachmentFor`。境目で切る `splitAtBlocks`）・候補を前後の文字つきで並べる（`quoteCandidates`）。本文に比例するので Main の外で | 照らし直しの文字を選択のコピーと同じ形に（`visibleText`）。書きかけの規則に付ける場の選択（`chosen`・`choiceDismissed`） |
 | `controller` | — | `MarginMemoController` の送信が引用か控えを持つ。引用を付ける・付ける場で選ぶ仕事を Main の外で行う（`quote`・`chooseQuoteSource`）。`SideReadingController` に右の面の出し分け。`NoteSessionCoordinator` が受理を並べ読みへ伝える |
-| `ui` | `QuoteTextToolbar.kt`（`ui/markdown`）— 選択メニューに「引用して書く」を足し、選んだ文字と範囲の矩形を端末のクリップボードを通さずに受け取る。範囲の矩形から引用元のブロックを決める判定（`quoteSourceAt`）もここに置く — 縦の流し（`ui/markdown`）と見開き（`ui/screen`）の両方が使い、`ui/markdown` から `ui/screen` は引かないため。`QuoteChip.kt` — 札の表示と運び、落とし先の判定（`quoteDropTargetFor`）。いずれも判定は純関数 | `MarkdownRenderer` と `NoteSpread` の本文の選択に上の2つを渡す（右のノートには渡さない）。余白の面に引用の欄と、付けるときの引用元の候補の選択・メモの行に引用と「書いた頃の位置へ」と候補の選択。並べ読みの右の面に切替。`DeskSpread` に札の層 |
+| `ui` | `QuoteTextToolbar.kt`（`ui/markdown`）— 選択メニューに「引用して書く」を足し、選んだ文字と範囲の矩形を端末のクリップボードを通さずに受け取る。範囲の矩形から引用元のブロックを決める判定（`quoteSourceAt`）もここに置く — 縦の流し（`ui/markdown`）と見開き（`ui/screen`）の両方が使い、`ui/markdown` から `ui/screen` は引かないため。`QuoteChip.kt` — 札の層（`QuoteChipLayer`）・札の様子の移り方（`quoteChipAfter`）・置く位置（`quoteChipPosition`）・落とし先の判定（`quoteDropTargetFor`）。札は選択メニューが出ている間の範囲を `QuoteOffers` から読む。いずれも判定は純関数 | `MarkdownRenderer` と `NoteSpread` の本文の選択に上の2つを渡す（右のノートには渡さない）。余白の面に引用の欄と、付けるときの引用元の候補の選択・メモの行に引用と「書いた頃の位置へ」と候補の選択。並べ読みの右の面に切替。`DeskSpread` に札の層 |
 | 窓口 | — | `NoteViewModel` に引用を付ける・外す口と、右の面の切替の口 |
 
 - **選んだ文字の受け取り方。** Compose 1.7.3 の `SelectionContainer` は、選択メニューを `LocalTextToolbar` から、コピー先を `LocalClipboardManager` から読む（2026-10-24、バイナリで確かめた）。
@@ -318,7 +320,11 @@ data class QuoteContext(val before: String, val after: String)
   **範囲の矩形はメニューを出す呼び出しが渡してくる**ので、文字と一緒に受け取って引用元のブロックを決める（§5.2）
 - **引用元のブロックは、矩形の始まりと本文の一覧の見えているブロックの位置から決める**（縦の流しは `LazyListState` の見えている項目、見開きはページに組んだブロック）。
   一覧の位置は窓の座標へ直してから比べる
-- **札は机の画面の Composable の最上層に置き、指を自分で受ける。** 机の横の払いは子より先に指を見るが（`detectDeskSpread`）、札は兄弟として上に重なるので、札から始まった指は払いに届かない。これは実装時に instrumentation で確かめる
+- **札は机の画面の Composable の最上層に置き、指を自分で受ける。** 机の横の払い（`detectDeskSpread`）と本文のスクロールは面の中の修飾子なので、
+  面の上に重なる兄弟の層（`DeskFaces` の上）に置いた札から始まった指は、面に届かない。札の無い場所の指は層を素通りして面に届く（`QuoteChipUiTest`、端末では未実行）
+- **札は選択メニューと一緒に出す。** 本文の選択の容器が、メニューが出ている間の範囲と、その範囲を受け取る口（`QuoteOffer`）を `QuoteOffers` へ書き、札の層が読む。
+  札を押すか運び始めた瞬間に一節を受け取る（受け取ると選択が解け、メニューも閉じる）。受け取った後はメニューが閉じても一節を持ったまま
+- **札の寸法は 88×40dp、余白の面のうち折り目の側の 24dp は落とさない帯**（2026-10-25、実装時に決めた。実機で見直す）。本文の面のどこかに触れたら（つまみの帯も含む）札を消す
 - **落とし先の判定は純関数にする**（指の位置・余白の面の範囲・折り目の帯 → 落とす／落とさない）。札の位置の決め方（選択の矩形・左の面の範囲 → 置く位置）も同じ
 - 純関数の置き場所は責務で分ける（→ [architecture](../system/architecture.md) 判断5の4）。照合と書きかけの規則は `domain`、札と落とし先と矩形からブロックを決める判定は画面の形なので `ui`（札と落とし先は `ui/screen`、矩形からブロックは選択メニューと同じ `ui/markdown`）
 
@@ -467,7 +473,8 @@ data class QuoteContext(val before: String, val after: String)
     **保存を待てる偽物で、送信の後に本文を変えて成功・送信の後に引用を変えて成功の両方が、変えた内容と書きかけの面を保つ。** 保存中に手で資料へ切り替えたら資料のままで、書き直した書きかけも残る。追わなくなった古い送信の結果では面を替えない。
     **片方の実行中にもう片方を操作する両方向**（保存の途中に切替や右の候補の替えを押す、右の読み込み中に引用する）
   - 付ける場で引用元の候補を選ぶ途中の交錯（候補を出している間に引用を入れ替える・置く・本文が解析し直される。選ぶ前に置いたら前後を控えていない引用として送る）
-  - 落とし先と札（折り目の帯・余白の面の外で離すと元の位置へ戻る・本文に触れる／別の文字を選ぶ／スクロール／窓の変化で消える・左の面に収める・片側1画面と帯の間は出さない）
+  - 落とし先と札（折り目の帯・余白の面の外で離すと元の位置へ戻る・本文に触れる／別の文字を選ぶ／スクロール／窓の変化で消える・左の面に収める・片側1画面と帯の間は出さない）。
+    札の様子は `quoteChipAfter`、位置は `quoteChipPosition`、落とし先は `quoteDropTargetFor` が持ち、`QuoteChipTest` が固定する
 - **instrumentation:** 選択メニューに「引用して書く」が出て、押すと引用が付き入力欄にフォーカスが移る（スマホのシート・机）。端末のクリップボードの中身が変わらない。
   選択のコピーは見出し・段落・リスト・引用・表・コードをまたいでも、照らし直しの文字を何も挟まずにつないだものと同じになる（`QuoteSelectionUiTest`）。
   同じ文が2度ある本文で後ろを選ぶと、引用元が後ろに決まる（縦の流しと見開き）。始まりが画面の外に出るまで長く選ぶと、付ける場で候補が出て、選んだ段落へ後で戻れる。札を運んで落とすと引用が付き、札から始めた指で片側1画面にならない。
@@ -494,7 +501,7 @@ data class QuoteContext(val before: String, val after: String)
     照らし直しの文字をこの形に合わせ（§5.5）、ブロックの境目は付けるときに改行に切る（§5.2）
   - **コピーは組まれている部品の文字しか含まない。** 一覧の外へ流れて組まれなくなった項目の文字は、選択に入っていても渡らない。始まりが画面の外へ出るまで長く選ぶと、引用は見えている最初の項目から始まる
   - 見出しの脇の印と、見開きで前のページから続く項目の見えない記号は本文ではないので、選択のコピーに入れない
-- **札を机の最上層に置いたとき、札から始まった指が `detectDeskSpread` に届かないこと**は、区切り3の着手時に確かめる
+- **札から始まった指が `detectDeskSpread` に届かないこと**は、札を面の上の兄弟の層に置くことで満たし、`QuoteChipUiTest` で確かめる（端末では未実行。運ぶ手触りと選択の端のつまみとの取り合いは実機で見る）
 - **浮かぶメニューは Compose の試験の外の窓に出る。** instrumentation は本文の選択の容器が作ったメニューを受け取り（`LocalQuoteMenuProbe`）、その項目を押す。メニューの見え方そのものは実機で確かめる
 - **選んだ範囲は札をつかむと解ける。** 選択メニューのコピーは、文字を渡した後に選択を解く作りになっている（`toolbarCopy` が `copy` の後に `onRelease` を呼ぶ。2026-10-24、バイナリで確かめた）。
   選択の中身を直接読む公開の口は無いので、札が一節と引用元を持って戻る形で補う（判断12）
