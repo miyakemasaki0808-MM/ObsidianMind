@@ -132,11 +132,11 @@ internal fun quoteChipDropped(
         quoteDropTargetFor(finger, supportingNow, creaseBand)
 
 /** 札の大きさ。押せる範囲を広く取る。 */
-private val CHIP_WIDTH = 88.dp
-private val CHIP_HEIGHT = 40.dp
+internal val QUOTE_CHIP_WIDTH = 88.dp
+internal val QUOTE_CHIP_HEIGHT = 40.dp
 
 /** 札と縁・選んだ範囲の間。 */
-private val CHIP_GAP = 8.dp
+internal val QUOTE_CHIP_GAP = 8.dp
 
 /** 余白の面のうち、折り目の側で落とさない帯の幅。 */
 internal val QUOTE_DROP_CREASE_BAND = 24.dp
@@ -166,8 +166,8 @@ internal fun QuoteChipLayer(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val chipSize = with(density) { Size(CHIP_WIDTH.toPx(), CHIP_HEIGHT.toPx()) }
-    val gap = with(density) { CHIP_GAP.toPx() }
+    val chipSize = with(density) { Size(QUOTE_CHIP_WIDTH.toPx(), QUOTE_CHIP_HEIGHT.toPx()) }
+    val gap = with(density) { QUOTE_CHIP_GAP.toPx() }
     val creaseBand = with(density) { QUOTE_DROP_CREASE_BAND.toPx() }
     // 層の左上（窓の座標）。札の位置は窓の座標で決め、ここで層の中へ直す。
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -234,7 +234,7 @@ internal fun QuoteChipLayer(
                 shadowElevation = if (pointer != null) 6.dp else 2.dp,
                 modifier = Modifier
                     .offset { (home - origin + dragged).round() }
-                    .size(CHIP_WIDTH, CHIP_HEIGHT)
+                    .size(QUOTE_CHIP_WIDTH, QUOTE_CHIP_HEIGHT)
                     .semantics {
                         role = Role.Button
                         contentDescription = QUOTE_CHIP_DESCRIPTION
@@ -252,20 +252,25 @@ internal fun QuoteChipLayer(
                             var finger = from + start.position
                             val mainAtStart = currentMain()
                             val supportingAtStart = currentSupporting()
-                            dragged = start.position - down.position
-                            pointer = finger
-                            val released = drag(start.id) { change ->
-                                change.consume()
-                                val moved = change.positionChange()
-                                finger += moved
-                                dragged += moved
+                            // **描くための動いた分と指の位置は、どう終わっても片付ける** — 札が外れて処理が取り消されたときも。
+                            // 残すと、次に選んだ一節の札がずれて出る（この2つは札より長く生きる）。
+                            val dropped = try {
+                                dragged = start.position - down.position
                                 pointer = finger
+                                val released = drag(start.id) { change ->
+                                    // **動いた量は使用済みにする前に読む** — 使用済みの動きは 0 を返す。
+                                    val moved = change.positionChange()
+                                    change.consume()
+                                    finger += moved
+                                    dragged += moved
+                                    pointer = finger
+                                }
+                                // **離した指の位置で決める**（描いた時点の縁の判定は使わない）。面が変わっていれば付けない。
+                                released && quoteChipDropped(finger, mainAtStart, supportingAtStart, currentMain(), currentSupporting(), creaseBand)
+                            } finally {
+                                dragged = Offset.Zero
+                                pointer = null
                             }
-                            // **離した指の位置で決める**（描いた時点の縁の判定は使わない）。面が変わっていれば付けない。
-                            val dropped = released &&
-                                quoteChipDropped(finger, mainAtStart, supportingAtStart, currentMain(), currentSupporting(), creaseBand)
-                            dragged = Offset.Zero
-                            pointer = null
                             if (dropped) attach(selection) else currentOnEvent(QuoteChipEvent.ReleasedOutside)
                         }
                     }

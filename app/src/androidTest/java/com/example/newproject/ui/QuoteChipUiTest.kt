@@ -10,6 +10,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import com.example.newproject.ui.screen.quoteChipPosition
+import com.example.newproject.ui.screen.QuoteChipEvent
+import com.example.newproject.ui.screen.QUOTE_CHIP_WIDTH
+import com.example.newproject.ui.screen.QUOTE_CHIP_HEIGHT
+import com.example.newproject.ui.screen.QUOTE_CHIP_GAP
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.click
@@ -243,5 +249,80 @@ class QuoteChipUiTest {
             assertTrue("面が変わった後の指で付いた", attached.isEmpty())
             assertEquals(QuoteChip.Hidden, chip)
         }
+    }
+
+    /** 札の左上（窓の座標）。 */
+    private fun chipTopLeft(): Offset = chipNode.fetchSemanticsNode().boundsInRoot.topLeft
+
+    /**
+     * **運び始めた後の動きも札と指に入る**（使用済みにする前に動いた量を読む）。本文側で運び始め、別の動きで余白の面へ運んで離すと付き、
+     * 途中でも札が指に追従する。最初に面へ入ってから折り目の側の帯へ戻して離すと付かない。
+     */
+    @Test
+    fun 運び始めた後の動きに札が追従し_離した位置で付くかが決まる() {
+        setDesk()
+        val y = heightPx * 0.5f
+        val mid = Offset(widthPx * 0.3f, y)
+        val inside = Offset(widthPx * 0.8f, y)
+        val inBand = Offset(checkNotNull(supporting).left + bandPx - 2f, y)
+        val grab = Offset(20f, 10f)
+
+        chipNode.performTouchInput {
+            down(grab)
+            moveBy(Offset(30f, 0f))
+            moveTo(local(mid))
+        }
+        composeRule.waitForIdle()
+        val followed = chipTopLeft()
+        assertEquals("札が途中の指に追従しない", mid.x - grab.x, followed.x, 2f)
+        composeRule.onRoot().performTouchInput {
+            moveTo(inside)
+            up()
+        }
+        composeRule.runOnIdle { assertEquals(listOf(selection), attached) }
+
+        chip = QuoteChip.Holding(selection, home)
+        composeRule.waitForIdle()
+        chipNode.performTouchInput {
+            down(grab)
+            moveTo(local(inside))
+            moveTo(local(inBand))
+            up()
+        }
+        composeRule.runOnIdle {
+            assertEquals("帯へ戻して離したのに付いた", 1, attached.size)
+            assertEquals(QuoteChip.Holding(selection, home), chip)
+        }
+    }
+
+    /**
+     * **運ぶ途中で取り消されても、動いた分を次の札へ残さない。** 面が変わって札が外れた後に別の一節を選ぶと、新しい札は新しい置く位置に出て、
+     * 運び直して離した場所で付くかが決まる。
+     */
+    @Test
+    fun 運ぶ途中で取り消された後の次の札は新しい位置に出て運び直せる() {
+        setDesk()
+        chipNode.performTouchInput {
+            down(center)
+            moveBy(Offset(widthPx * 0.4f, 0f))
+        }
+        composeRule.runOnIdle { supporting = checkNotNull(supporting).copy(bottom = heightPx * 0.9f) }
+        composeRule.waitForIdle()
+        composeRule.onRoot().performTouchInput { up() }
+        composeRule.runOnIdle { assertEquals(QuoteChip.Hidden, chip) }
+
+        val offer = QuoteOffer(Rect(60f, 200f, 220f, 240f)) { selection }
+        composeRule.runOnIdle { chip = quoteChipAfter(chip, QuoteChipEvent.MenuShown(offer)) }
+        composeRule.waitForIdle()
+        val density = composeRule.density
+        val expected = with(density) {
+            quoteChipPosition(offer.rect, checkNotNull(main), Size(QUOTE_CHIP_WIDTH.toPx(), QUOTE_CHIP_HEIGHT.toPx()), QUOTE_CHIP_GAP.toPx())
+        }
+        assertEquals(expected.x, chipTopLeft().x, 1f)
+        assertEquals(expected.y, chipTopLeft().y, 1f)
+
+        val target = Offset(widthPx * 0.8f, heightPx * 0.5f)
+        chipNode.performTouchInput { swipe(center, center + (target - (expected + center)), durationMillis = 300) }
+        composeRule.runOnIdle { assertEquals(listOf(selection), attached) }
     }
 }
