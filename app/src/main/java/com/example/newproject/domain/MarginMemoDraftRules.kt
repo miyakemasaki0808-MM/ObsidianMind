@@ -131,7 +131,21 @@ internal fun MarginMemoDraft.choiceDismissed(): MarginMemoDraft {
 
 /** 引用を外した（✕）。**引用だけを消す。** 文字があれば書き込み先はそのまま、空なら放す。 */
 internal fun MarginMemoDraft.unquoted(): MarginMemoDraft =
-    copy(quote = null, target = if (text.isEmpty()) null else target)
+    copy(quote = null, quoting = null, target = if (text.isEmpty()) null else target)
+
+/** 引用を付ける・引用元を選ぶことを頼んだ。**結果が届く前から**、書きかけはこの要求 [request] を待っている。 */
+internal fun MarginMemoDraft.quoteRequested(request: Long): MarginMemoDraft = copy(quoting = request)
+
+/**
+ * 要求 [request] の結果が届いた。**今も待っている要求のときだけ** [apply] を当てる。
+ * ✕ を押した・後から別の要求をした・取り下げたなら、遅れて届いた結果では何も変えない。
+ */
+internal fun MarginMemoDraft.quoteSettled(request: Long, apply: (MarginMemoDraft) -> MarginMemoDraft): MarginMemoDraft =
+    if (quoting != request) this else apply(copy(quoting = null))
+
+/** 要求 [request] が結果を当てずに終わった（空白だけ・引用元が決まらなかった・取り消した）。待っている印だけを下ろす。 */
+internal fun MarginMemoDraft.quoteAbandoned(request: Long): MarginMemoDraft =
+    if (quoting == request) copy(quoting = null) else this
 
 /**
  * 保存を頼んだ。**入力は空にしない** — 置けなかったときに原文を残すため。
@@ -146,7 +160,8 @@ internal fun MarginMemoDraft.submitted(submission: MemoSubmission): MarginMemoDr
  * （保存を待つ間に書き直していれば、まだ書き終えていない → features/margin_quote.md §5.6）。
  */
 internal fun MarginMemoDraft.consumedBy(submission: MemoSubmission): Boolean =
-    pending == submission && text == submission.raw && passage == submission.memo.passage && sameTargetAs(submission)
+    // 引用の結果を待っている間は、書きかけが送ったものから変わりつつある（→ [MarginMemoDraft.quoting]）。
+    quoting == null && pending == submission && text == submission.raw && passage == submission.memo.passage && sameTargetAs(submission)
 
 /**
  * 書き込み先が送ったときと同じか。**引用の文字が同じでも、引用元の節だけを替えれば別の書きかけ**として扱う。
@@ -186,6 +201,8 @@ internal fun MarginMemoDraft.settled(submission: MemoSubmission, check: Submissi
 internal fun MarginMemoDraft.sendAction(): MemoSendAction {
     val composed = composeMarginMemo(text)
     return when {
+        // **引用の結果を待つ間は置かない。** 置くと前の引用のまま保存され、届いた引用だけが次の書きかけへ付く。
+        quoting != null -> MemoSendAction.None
         // **引用だけでは置かない。** 自分の言葉が要る（→ features/margin_quote.md 判断2）。
         composed.isBlank -> MemoSendAction.None
         // 引用を替えたら同じ本文でも別のメモなので、確かめるではなく置く。

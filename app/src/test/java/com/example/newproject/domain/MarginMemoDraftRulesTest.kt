@@ -420,6 +420,40 @@ class MarginMemoDraftRulesTest {
         assertEquals(MemoSendAction.Place, draft.sendAction())
     }
 
+    // ── 引用の結果を待つ間（→ features/margin_quote.md §5.3）────────────────────
+
+    @Test
+    fun `引用の結果を待つ間は、前の送信の受理で空にせず置かせない`() {
+        val sent = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB)
+        val submission = checkNotNull(submissionOf(sent.text, sectionB.title, 1L, sent.passage, target = sectionB))
+        val waiting = sent.submitted(submission).quoteRequested(7L)
+
+        assertFalse(waiting.consumedBy(submission))
+        assertEquals("添える", waiting.accepted(submission).text)
+        assertEquals(7L, waiting.accepted(submission).quoting)
+        assertEquals(MemoSendAction.None, waiting.sendAction())
+    }
+
+    @Test
+    fun `結果は今も待っている要求のときだけ当てる`() {
+        val waiting = MarginMemoDraft().edited("添える", sectionB).quoteRequested(7L)
+
+        assertEquals(quoteB, waiting.quoteSettled(7L) { it.quoted(quoteB, sectionC) }.quote)
+        assertNull(waiting.quoteSettled(7L) { it.quoted(quoteB, sectionC) }.quoting)
+        // 後から頼んだ・外した・取り下げたなら、遅れて届いた結果では変えない。
+        assertEquals(waiting.quoteRequested(8L), waiting.quoteRequested(8L).quoteSettled(7L) { it.quoted(quoteB, sectionC) })
+        assertEquals(waiting.unquoted(), waiting.unquoted().quoteSettled(7L) { it.quoted(quoteB, sectionC) })
+        assertNull(waiting.unquoted().quoting)
+        assertEquals(waiting.quoteRequested(8L), waiting.quoteRequested(8L).quoteAbandoned(7L))
+        assertNull(waiting.quoteAbandoned(7L).quoting)
+    }
+
+    @Test
+    fun `引用の結果を待っているだけの書きかけも空ではない`() {
+        assertFalse(MarginMemoDraft().quoteRequested(1L).isEmpty)
+        assertTrue(MarginMemoDraft().quoteRequested(1L).quoteAbandoned(1L).isEmpty)
+    }
+
     private fun sameQuoteFrom(body: String, block: Int): Pair<DraftQuote, SectionRef> {
         val passages = buildPassageIndex(buildNoteSectionModel(body))
         val source = resolveQuoteAt("同じ一節", block, passages) as QuoteSource.Resolved

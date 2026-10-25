@@ -485,8 +485,8 @@ internal fun MarginMemoSheetContent(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            draft.quote?.let { quote ->
-                DraftQuoteField(quote, hasHeadings, quoteCandidates, quoteActions)
+            if (draft.quote != null || draft.quoting != null) {
+                DraftQuoteField(draft.quote, quoting = draft.quoting != null, hasHeadings, quoteCandidates, quoteActions)
                 Spacer(modifier = Modifier.height(8.dp))
             }
             OutlinedTextField(
@@ -996,6 +996,9 @@ internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
 /** 引用の欄の行き先の知らせ。右のノートを並べていても、左のノートのメモになり、まだ保存していないことが分かる。 */
 internal const val DRAFT_QUOTE_DESTINATION = "今のノートの余白へ · まだ置いていません"
 
+/** 引用の結果を待っている間の知らせ。届くまで置けないことを示す（→ features/margin_quote.md §5.3）。 */
+internal const val DRAFT_QUOTE_PENDING = "引用を付けています（付くまで置けません）"
+
 /** 上限で入らなかった部分の知らせ（→ features/margin_quote.md §5.2）。切れる部分は続けて薄く添える。 */
 internal const val DRAFT_QUOTE_CUT_NOTICE = "ここから先は入りません"
 
@@ -1009,15 +1012,17 @@ internal fun candidateExcerpt(key: String, context: QuoteContext): String =
 /**
  * 書きかけに付けた引用（→ features/margin_quote.md §5.2・§5.3）。引用の文字・入らない部分・行き先と未保存の知らせ・✕ を出す。
  * **引用元を付ける場で選んでいる間は、候補を並べる。** 選ばずに閉じても書く流れは止めない（入力欄は使える）。
+ * [quoting] は引用の結果を待っている間で、その旨を出す（その間は置けない）。✕ は待っている要求も取り下げる。
  */
 @Composable
-private fun DraftQuoteField(quote: DraftQuote, hasHeadings: Boolean, finder: QuoteCandidateFinder?, actions: DraftQuoteActions) {
+private fun DraftQuoteField(quote: DraftQuote?, quoting: Boolean, hasHeadings: Boolean, finder: QuoteCandidateFinder?, actions: DraftQuoteActions) {
     Surface(color = PanelChip, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 8.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
-                    QuoteLine(quote.passage.copy(truncated = false), onJump = null)
-                    if (quote.cut.isNotEmpty()) {
+                    if (quote != null) QuoteLine(quote.passage.copy(truncated = false), onJump = null)
+                    if (quoting) Text(DRAFT_QUOTE_PENDING, color = OnSurfaceFaint, fontSize = 11.sp)
+                    if (quote != null && quote.cut.isNotEmpty()) {
                         Text(
                             text = "$DRAFT_QUOTE_CUT_NOTICE：${quote.cut.trim()}",
                             color = OnSurfaceFaint,
@@ -1033,7 +1038,7 @@ private fun DraftQuoteField(quote: DraftQuote, hasHeadings: Boolean, finder: Quo
                 ) { Text("✕", color = OnSurfaceMuted, fontSize = 14.sp) }
             }
             Text(DRAFT_QUOTE_DESTINATION, color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.padding(end = 12.dp))
-            if (quote.choosing && finder != null) {
+            if (quote != null && quote.choosing && finder != null) {
                 QuoteCandidateList(quote.passage, finder.candidatesFor(quote.passage), hasHeadings) { candidate, model ->
                     actions.onChoose(quote.passage, candidate.block, model)
                 }

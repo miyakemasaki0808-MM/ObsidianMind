@@ -48,6 +48,9 @@ import com.example.newproject.domain.HeadingIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.ui.screen.DRAFT_QUOTE_PENDING
+import com.example.newproject.domain.quoteAbandoned
+import com.example.newproject.domain.quoteRequested
 import org.junit.Assert.assertNull
 import kotlinx.coroutines.Dispatchers
 import androidx.compose.ui.test.onAllNodesWithText
@@ -581,6 +584,21 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("引いた一節").assertDoesNotExist()
         composeRule.onNodeWithText(PLACEHOLDER).assertExists()
         composeRule.runOnIdle { assertNull(harness.draft.quote) }
+    }
+
+    /** **引用の結果を待つ間は置けず、そのことを引用の欄に出す**（→ features/margin_quote.md §5.3）。届けば置ける。 */
+    @Test
+    fun 引用の結果を待つ間は置けず_その旨を出す() {
+        val harness = Harness()
+        harness.drafts.update(NOTE_A) { it.edited("ひとこと", SectionRef("節B")).quoteRequested(1L) }
+        setContent(harness)
+
+        composeRule.onNodeWithText(DRAFT_QUOTE_PENDING).assertExists()
+        composeRule.onNodeWithText("置く").assertIsNotEnabled()
+
+        composeRule.runOnIdle { harness.drafts.update(NOTE_A) { it.quoteAbandoned(1L) } }
+        composeRule.onNodeWithText(DRAFT_QUOTE_PENDING).assertDoesNotExist()
+        composeRule.onNodeWithText("置く").assertIsEnabled()
     }
 
     /** **本文に同じ一節が2か所以上あれば、付ける場で前後の文字つきの候補から選んでもらう**（→ 判断13）。選ばずに閉じても引用は付いたまま。 */

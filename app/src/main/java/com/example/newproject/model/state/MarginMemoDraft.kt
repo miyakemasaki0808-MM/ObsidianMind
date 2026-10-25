@@ -19,10 +19,16 @@ data class MarginMemoDraft(
     /** 付けた引用（→ features/margin_quote.md §5.3）。**引用だけの書きかけも空ではない。** */
     val quote: DraftQuote? = null,
     /** 書き始めた頃に読んでいた位置。書き込み先と同じ瞬間に控え、引用が付いていれば控えない。 */
-    val seen: MemoPassage.Seen? = null
+    val seen: MemoPassage.Seen? = null,
+    /**
+     * 引用を付ける・引用元を選ぶ要求のうち、結果を待っているものの番号（→ features/margin_quote.md §5.3）。
+     * **頼んだ瞬間に持つ** — 結果は Main の外から遅れて届くので、待つ間も書きかけが変わりつつあることを、受理と置く操作に見せる。
+     * ✕ と、後から頼んだ要求で失効する。
+     */
+    val quoting: Long? = null
 ) {
     /** 何も持っていない。一覧から外してよい。 */
-    val isEmpty: Boolean get() = text.isEmpty() && pending == null && quote == null
+    val isEmpty: Boolean get() = text.isEmpty() && pending == null && quote == null && quoting == null
 
     /** 置くときにメモへ載せる手掛かり。**引用が先**で、無ければ控えた位置。 */
     val passage: MemoPassage? get() = quote?.passage ?: seen

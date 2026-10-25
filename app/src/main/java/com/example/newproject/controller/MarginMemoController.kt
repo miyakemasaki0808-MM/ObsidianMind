@@ -11,6 +11,9 @@ import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.checkSubmission
 import com.example.newproject.domain.edited
 import com.example.newproject.domain.quoted
+import com.example.newproject.domain.quoteAbandoned
+import com.example.newproject.domain.quoteSettled
+import com.example.newproject.domain.quoteRequested
 import com.example.newproject.domain.unquoted
 import com.example.newproject.domain.sendAction
 import com.example.newproject.domain.settled
@@ -66,10 +69,12 @@ internal class MarginMemoController(
     private var loadJob: Job? = null
 
     /**
-     * 引用を付ける・引用元を選ぶ仕事。**新しく頼んだら前の仕事は取り消す**ので、届くのは後から頼んだものだけ。
+     * 引用を付ける・引用元を選ぶ仕事。**頼んだ瞬間に書きかけへ要求の番号を持たせ**（[MarginMemoDraft.quoting]）、
+     * 結果はその番号が今も待っているときだけ当てる。新しく頼んだら前の仕事は取り消す。
      * ジョブはノート単位で、ノート切替と Vault 切替で止める。書きかけそのものは Vault 単位で預かる。
      */
     private var quoteJob: Job? = null
+    private var quoteRequest = 0L
 
     /**
      * 走行中の書き込み。**保存と削除で1本を共有しない。**
@@ -212,10 +217,10 @@ internal class MarginMemoController(
      */
     fun quote(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, passages: PassageIndex) {
         val noteKey = currentNoteKey() ?: return
-        launchQuote {
+        launchQuote(noteKey) { request ->
             val attachment = withContext(quoteDispatcher) { quoteAttachmentFor(selected, sourceBlock, hintBlock, passages) } ?: return@launchQuote
             if (currentNoteKey() != noteKey) return@launchQuote
-            drafts.update(noteKey) { it.quoted(attachment.quote, attachment.section ?: bodySection) }
+            drafts.update(noteKey) { draft -> draft.quoteSettled(request) { it.quoted(attachment.quote, attachment.section ?: bodySection) } }
         }
     }
 
@@ -225,10 +230,10 @@ internal class MarginMemoController(
      */
     fun chooseQuoteSource(quote: MemoPassage.Quoted, block: Int, passages: PassageIndex) {
         val noteKey = currentNoteKey() ?: return
-        launchQuote {
+        launchQuote(noteKey) { request ->
             val source = withContext(quoteDispatcher) { resolveQuoteAt(quote.text, block, passages) } as? QuoteSource.Resolved ?: return@launchQuote
             if (currentNoteKey() != noteKey) return@launchQuote
-            drafts.update(noteKey) { it.chosen(quote, source.context, passages.sections[source.block]) }
+            drafts.update(noteKey) { draft -> draft.quoteSettled(request) { it.chosen(quote, source.context, passages.sections[source.block]) } }
         }
     }
 
@@ -238,9 +243,17 @@ internal class MarginMemoController(
         drafts.update(noteKey) { it.choiceDismissed() }
     }
 
-    private fun launchQuote(block: suspend CoroutineScope.() -> Unit) {
+    /**
+     * 引用の仕事を始める。**頼んだ瞬間に [noteKey] の書きかけへ要求の番号を持たせ**、結果を当てずに終わったら
+     * （空白だけ・決まらなかった・取り消した。始まる前に取り消した場合も）待っている印を下ろす。
+     */
+    private fun launchQuote(noteKey: String, block: suspend CoroutineScope.(request: Long) -> Unit) {
+        val request = ++quoteRequest
+        drafts.update(noteKey) { it.quoteRequested(request) }
         quoteJob?.cancel()
-        quoteJob = scope.launch(block = block)
+        quoteJob = scope.launch { block(request) }.apply {
+            invokeOnCompletion { drafts.update(noteKey) { it.quoteAbandoned(request) } }
+        }
     }
 
     private fun stopQuote() {
