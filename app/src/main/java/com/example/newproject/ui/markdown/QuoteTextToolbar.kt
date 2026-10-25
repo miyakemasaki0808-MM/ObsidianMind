@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -98,7 +100,9 @@ internal class QuoteTextToolbar(
     private val view: View,
     private val clipboard: QuoteClipboard,
     /** 今の「引用して書く」の受け手。null の間は項目を出さない（並べ読みの間など）。 */
-    private val onQuote: () -> ((text: String, rect: Rect) -> Unit)?
+    private val onQuote: () -> ((text: String, rect: Rect) -> Unit)?,
+    /** メニューを出した（範囲の矩形）・閉じた（null）。机の札が、出ている間の範囲を読む（→ [QuoteOffers]）。 */
+    private val onMenu: (rect: Rect?) -> Unit = {}
 ) : TextToolbar {
     private var actionMode: ActionMode? = null
     private var rect = Rect.Zero
@@ -125,12 +129,14 @@ internal class QuoteTextToolbar(
         status = TextToolbarStatus.Shown
         val shown = actionMode
         if (shown == null) actionMode = view.startActionMode(callback, ActionMode.TYPE_FLOATING) else shown.invalidate()
+        onMenu(rect)
     }
 
     override fun hide() {
         status = TextToolbarStatus.Hidden
         actionMode?.finish()
         actionMode = null
+        onMenu(null)
     }
 
     /** メニューの項目を押した。**試験もここから押す**（浮かぶメニューは Compose の試験の外の窓にある → [LocalQuoteMenuProbe]）。未知の項目なら偽。 */
@@ -149,10 +155,19 @@ internal class QuoteTextToolbar(
     /** 「引用して書く」。選択の容器のコピーで文字を受け取り、そのときの範囲の矩形と一緒に渡す。空白だけかは受け取った側が決める。 */
     private fun quote() {
         val receiver = onQuote() ?: return
-        val copy = onCopy ?: return
+        val (text, at) = capture() ?: return
+        receiver(text, at)
+    }
+
+    /**
+     * 選んだ文字を、端末のクリップボードを通さずに受け取る（メニューの「引用して書く」と机の札が使う）。
+     * **受け取ると選択は解け、メニューも閉じる**（選択の容器のコピーが選択を解く）。選択が無ければ null。
+     */
+    internal fun capture(): Pair<String, Rect>? {
+        val copy = onCopy ?: return null
         val at = rect
-        val text = clipboard.capture(copy) ?: return
-        receiver(text.text, at)
+        val text = clipboard.capture(copy) ?: return null
+        return text.text to at
     }
 
     private val callback = object : ActionMode.Callback2() {
@@ -211,8 +226,23 @@ internal val LocalQuoteMenuProbe = staticCompositionLocalOf<((QuoteTextToolbar) 
 internal const val QUOTE_ITEM_TITLE = "引用して書く"
 
 /**
+ * 選択メニューが出ている間の、選んだ範囲（窓の座標）と、その範囲を引用として受け取る口。机の札が読む（→ features/margin_quote.md §5.1）。
+ */
+internal class QuoteOffer(val rect: Rect, private val takeSelection: () -> QuoteSelection?) {
+    /** 選んだ一節を受け取る。**受け取ると選択は解け、メニューも閉じる。** 選択がもう無ければ null。 */
+    fun take(): QuoteSelection? = takeSelection()
+}
+
+/** 今の [QuoteOffer]。選択メニューが出ている間だけ値を持つ。本文の選択の容器が書き、机の札の層が読む。 */
+internal class QuoteOffers {
+    var current: QuoteOffer? by mutableStateOf(null)
+        internal set
+}
+
+/**
  * 本文の選択の容器。[quotable] が偽なら今の選択の容器のまま（右のノートなど）。真なら、この容器の内側だけでメニューとコピー先を差し替え、
- * [onQuote] がある間だけ「引用して書く」を出す。[onQuote] は範囲の矩形（窓の座標）を受け取る。
+ * [onQuote] がある間だけ「引用して書く」を出す。[selectionAt] は選んだ文字と範囲の矩形（窓の座標）から、始まりのブロックを決める。
+ * [offers] を渡せば、メニューが出ている間の範囲をそこへ書く（机の札 → [QuoteOffers]）。
  *
  * **[quotable] は呼ぶ場所ごとに固定する。** 途中で替えると容器の組み立てが変わり、本文の一覧が作り直される。
  * 出す・出さないの切り替えは [onQuote] の有無で行う。
@@ -220,8 +250,10 @@ internal const val QUOTE_ITEM_TITLE = "引用して書く"
 @Composable
 internal fun QuoteSelectionContainer(
     quotable: Boolean,
-    onQuote: ((text: String, rect: Rect) -> Unit)?,
+    onQuote: ((QuoteSelection) -> Unit)?,
+    selectionAt: (text: String, rect: Rect) -> QuoteSelection,
     modifier: Modifier = Modifier,
+    offers: QuoteOffers? = null,
     content: @Composable () -> Unit
 ) {
     if (!quotable) {
@@ -232,8 +264,22 @@ internal fun QuoteSelectionContainer(
     val system = LocalClipboardManager.current
     // メニューは選択の容器が長く持つので、押したときの処理は最新のものを読む（→ lessons L34）。
     val currentOnQuote by rememberUpdatedState(onQuote)
+    val currentSelectionAt by rememberUpdatedState(selectionAt)
+    val currentOffers by rememberUpdatedState(offers)
     val clipboard = remember(system) { QuoteClipboard(system) }
-    val toolbar = remember(view, clipboard) { QuoteTextToolbar(view, clipboard) { currentOnQuote } }
+    val toolbar = remember(view, clipboard) {
+        val captured = arrayOfNulls<QuoteTextToolbar>(1)
+        QuoteTextToolbar(
+            view,
+            clipboard,
+            onQuote = { currentOnQuote?.let { receiver -> { text, rect -> receiver(currentSelectionAt(text, rect)) } } },
+            onMenu = { rect ->
+                currentOffers?.current = rect?.let { at ->
+                    QuoteOffer(at) { captured[0]?.capture()?.let { (text, from) -> currentSelectionAt(text, from) } }
+                }
+            }
+        ).also { captured[0] = it }
+    }
     LocalQuoteMenuProbe.current?.let { probe -> SideEffect { probe(toolbar) } }
     CompositionLocalProvider(LocalTextToolbar provides toolbar, LocalClipboardManager provides clipboard) {
         SelectionContainer(modifier = modifier, content = content)

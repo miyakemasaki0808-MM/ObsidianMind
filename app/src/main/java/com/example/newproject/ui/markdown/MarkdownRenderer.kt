@@ -74,7 +74,9 @@ internal fun MarkdownNoteContent(
     // 選択メニューに「引用して書く」を置ける本文か（→ features/margin_quote.md §5.1）。**今のノートの本文だけが真にし、呼ぶ場所ごとに固定する。**
     quotable: Boolean = false,
     // 「引用して書く」の受け手。null の間は項目を出さない。
-    onQuote: ((QuoteSelection) -> Unit)? = null
+    onQuote: ((QuoteSelection) -> Unit)? = null,
+    // 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ QuoteOffers）。
+    quoteOffers: QuoteOffers? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -85,18 +87,17 @@ internal fun MarkdownNoteContent(
 
     // 範囲の矩形（窓の座標）から始まりのブロックを決める材料。描き直しには使わないので状態にしない。
     val quoteGeometry = remember { QuoteGeometry() }
-    val currentOnQuote by rememberUpdatedState(onQuote)
-    val quoteFromSelection: ((String, Rect) -> Unit)? = if (onQuote == null) null else { text, rect ->
+    val selectionAt: (String, Rect) -> QuoteSelection = { text, rect ->
         val boxes = listState.layoutInfo.visibleItemsInfo.map { item ->
             BlockBox(item.index, quoteGeometry.listTop + item.offset, quoteGeometry.listTop + item.offset + item.size)
         }
         // 一覧のいちばん上で張り付いているなら、始まりは見えている（→ quoteSourceAt）。
         val contentAbove = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
         val at = quoteSourceAt(rect.top, quoteGeometry.visibleTop, boxes, contentAbove)
-        currentOnQuote?.invoke(QuoteSelection(text, at.source, at.hint))
+        QuoteSelection(text, at.source, at.hint)
     }
 
-    QuoteSelectionContainer(quotable = quotable, onQuote = quoteFromSelection, modifier = modifier) {
+    QuoteSelectionContainer(quotable = quotable, onQuote = onQuote, selectionAt = selectionAt, modifier = modifier, offers = quoteOffers) {
         CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
             // **長押しの見張りは選択の容器の修飾子に付けない。** 付けると押下の途中で見張りが作り直され
             // （PointerInputResetException）、指離しを受け取れずに長押しでもリンクが開く。容器の修飾子は選択の状態で並びが変わる。

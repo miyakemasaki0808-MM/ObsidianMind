@@ -39,6 +39,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.ui.markdown.QuoteOffers
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -185,7 +186,9 @@ internal fun NoteContentPanel(
     /** 本文のリンクを押したとき（→ features/note_links.md）。null ならリンクは押せない。 */
     onLink: ((NoteLink) -> Unit)? = null,
     /** 選択メニューの「引用して書く」の受け手（→ features/margin_quote.md §5.1）。null の間は項目を出さない。 */
-    onQuote: ((QuoteSelection) -> Unit)? = null
+    onQuote: ((QuoteSelection) -> Unit)? = null,
+    /** 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ [QuoteOffers]）。 */
+    quoteOffers: QuoteOffers? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -224,7 +227,8 @@ internal fun NoteContentPanel(
                         onLink = if (isNote) onLink else null,
                         // 今のノートの本文はいつも置ける本文として組み、案内の文字を出す間は受け手を渡さない。
                         quotable = true,
-                        onQuote = if (isNote) onQuote else null
+                        onQuote = if (isNote) onQuote else null,
+                        quoteOffers = if (isNote) quoteOffers else null
                     )
                 } else {
                     MarkdownNoteContent(

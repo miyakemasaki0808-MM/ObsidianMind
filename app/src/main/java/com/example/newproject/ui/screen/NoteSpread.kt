@@ -416,15 +416,14 @@ private fun SpreadPageView(
     // 描き直しには使わないので状態にしない。
     val sliceBoxes = remember(page) { arrayOfNulls<BlockBox>(page?.slices?.size ?: 0) }
     val pageTop = remember { floatArrayOf(0f) }
-    val currentOnQuote by rememberUpdatedState(onQuote)
-    val quoteFromSelection: ((String, Rect) -> Unit)? = if (onQuote == null) null else { text, rect ->
+    val selectionAt: (String, Rect) -> QuoteSelection = { text, rect ->
         // ページの前に本文は組まれていない（選択はページを越えない）ので、張り付いていても始まりは見えている。
         val at = quoteSourceAt(rect.top, pageTop[0], sliceBoxes.filterNotNull().sortedBy { it.top }, contentAbove = false)
-        currentOnQuote?.invoke(QuoteSelection(text, at.source, at.hint))
+        QuoteSelection(text, at.source, at.hint)
     }
     Surface(color = paperColor, shape = ReadingSurfaceShape, modifier = modifier) {
         // 見開きは今のノートの本文だけを組むので、いつも置ける本文として組む。
-        QuoteSelectionContainer(quotable = true, onQuote = quoteFromSelection) {
+        QuoteSelectionContainer(quotable = true, onQuote = onQuote, selectionAt = selectionAt) {
             CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
                 // 長押しの見張りは選択の容器の内側に置く（→ MarkdownNoteContent と同じ理由）。
                 Box(
