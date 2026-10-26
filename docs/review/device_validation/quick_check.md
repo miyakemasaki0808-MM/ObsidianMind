@@ -55,6 +55,7 @@
 | 読書痕跡の整理 | [reading_trace_cleanup.md](reading_trace_cleanup.md) | `CLEAN-01` `CLEAN-03` `CLEAN-04` |
 | 要約の入口と机の操作帯（UI変更・初回は通し版） | [summary_entry_desk.md](summary_entry_desk.md) | `RM00-06` `RM00-07` `RM00-08` `RM00-10` `RM01-01` `RM01-07` `RM03-02` |
 | 余白メモ | [margin_memo.md](margin_memo.md) | `MEMO-02` `MEMO-03` `MEMO-04` `MEMO-08` `MEMO-10` |
+| 面を越える引用（UI変更・初回は通し版） | [margin_quote.md](margin_quote.md) | `QUOTE-02` `QUOTE-10` `QUOTE-18` `QUOTE-30` `QUOTE-41` |
 | ノート内画像 | [note_image_rendering.md](note_image_rendering.md) | `IMAGE-01` `IMAGE-04` `IMAGE-09` `IMAGE-11` |
 | 再会カード | [reunion_card.md](reunion_card.md) | `J6-01` `REUNION-01` `J7-01` `REUNION-11` |
 | AI状態UX | [background_ai_ux.md](background_ai_ux.md) | `AIUX-01` `AIUX-07` `AIUX-08` |
