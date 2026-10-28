@@ -730,17 +730,20 @@ class MarginMemoSheetUiTest {
         assertEquals(listOf("abc"), harness.sent.map { it.raw })
     }
 
-    /** **変換中の文字を確定して1文字消しても、最後の編集を落とさない。** 確定と削除を描き直しを挟まずに送る（→ features/margin_quote.md §5.6）。 */
+    /**
+     * **変換中の文字を確定して1文字消しても、最後の編集を落とさない。** 確定と削除を描き直しを挟まずに送る（→ features/margin_quote.md §5.6）。
+     * 変換中の文字を入れて確かめるところから削除まで、UI スレッドの1回の実行の中で行う — 実機では本物のキーボードも同じ入力欄につながっていて、
+     * 実行を分けた隙に変換を確定してしまう。
+     */
     @Test
     fun 変換中の文字を確定して1文字消しても_最後の編集が書きかけと置いたメモに残る() {
         val harness = Harness()
         setContent(harness)
         input.performClick()
         val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
-        composeRule.runOnUiThread { connection.setComposingText("abc", 1) }
-        composeRule.runOnIdle { assertEquals(Triple("abc", TextRange(3), TextRange(0, 3)), harness.field.state.edited()) }
-
         composeRule.runOnUiThread {
+            connection.setComposingText("abc", 1)
+            assertEquals(Triple("abc", TextRange(3), TextRange(0, 3)), harness.field.state.edited())
             connection.commitText("abcd", 1)
             connection.deleteSurroundingText(1, 0)
         }
