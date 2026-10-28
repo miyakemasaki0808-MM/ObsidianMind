@@ -93,14 +93,24 @@ class HeadingIndex internal constructor(headings: List<String>) {
  */
 internal data class PlacedMemo(val memo: MarginMemo, val match: MemoSectionMatch, val placement: MemoPlacement? = null)
 
-/** 節ごとのメモ。[section] が null の組は「見出しが見つからないメモ」。 */
-internal data class MemoGroup(val section: SectionRef?, val memos: List<PlacedMemo>)
+/**
+ * 節ごとのメモ。[section] が null の組は節を持たない — [scattered] なら「場所を一つに絞れないメモ」（→ [MAX_SPREAD_SECTIONS]）、
+ * そうでなければ「見出しが見つからないメモ」。
+ */
+internal data class MemoGroup(val section: SectionRef?, val memos: List<PlacedMemo>, val scattered: Boolean = false)
+
+/**
+ * 1つのメモを並べる節の数の上限（→ features/margin_pane.md §5.6）。**候補の節がこれを超えるメモは、節ごとの組にも今の節にも見出しの印にも数えず、
+ * 「場所を一つに絞れないメモ」の1組にまとめる。** 候補の節ごとに重ねると、ほかの節のメモの行の数が候補の節の数に比例し、
+ * 同じ一節が数千の節にあるだけで面を組む途中にメモリが尽きる。上限があれば、行の数はメモの件数×この数で止まる。
+ */
+internal const val MAX_SPREAD_SECTIONS = 5
 
 /**
  * 面に並べる形（→ features/margin_pane.md §5.2 の7・8）。
  *
  * - [current] この節のメモ（新しい順）
- * - [others] ほかの節のメモを**本文の順**に節ごと。見出しが見つからないメモは最後の組
+ * - [others] ほかの節のメモを**本文の順**に節ごと。場所を一つに絞れないメモ、見出しが見つからないメモの組がその後に続く
  * - [otherCount] 畳んだときに見せる件数。[others] に並ぶメモを、同名の見出しに共通でも2度数えない
  * - [countsBySection] 本文の見出しの脇の印。印・件数・飛ぶ先はこの照合から作る
  */
@@ -115,13 +125,13 @@ internal data class ArrangedMemos(
  * 今の節に依らない並べ方（→ features/margin_quote.md §5.5）。**メモか解析結果が替わったときに Main の外で1度作り**（[layoutMemos]）、
  * 節を移るたびには [arrangeMemos] で今の節を引くだけにする。
  *
- * 特定できない引用は候補の節のどれにも出すので、組の数はメモの数ではなく**候補のある節の数**に比例する
- * （別々の節に同じ一節が数万あれば組も数万）。組を作るのも本文の順に並べるのも、件数を数えるのもここで済ませる。
+ * 特定できない引用は候補の節のどれにも出すので、組の数はメモの数ではなく**候補のある節の数**に比例しうる。
+ * ただし1つのメモを並べる節は [MAX_SPREAD_SECTIONS] までで、それを超えるメモは [scattered] へまとめる。組を作るのも本文の順に並べるのも、件数を数えるのもここで済ませる。
  */
 internal class MemoLayout internal constructor(
     /** メモごとの照合と置き場所。メモの並び（新しい順）。 */
     internal val placed: List<PlacedMemo>,
-    /** メモごとの節。[placed] と同じ並びで、見つからないメモは空。同じ節は重ならない。 */
+    /** メモごとの候補の節。[placed] と同じ並びで、見つからないメモは空。同じ節は重ならない。[scattered] へまとめたメモも候補の節を持つ。 */
     internal val sectionsOf: List<List<SectionRef>>,
     /** 節ごとの組を本文の順に（見出しより前が先頭）。各組の中はメモの並び。見つからないメモの組は持たない（[missing]）。 */
     internal val groups: List<MemoGroup>,
@@ -129,7 +139,9 @@ internal class MemoLayout internal constructor(
     internal val groupIndex: Map<SectionRef, Int>,
     /** 見出しが見つからないメモの組。無ければ null。 */
     internal val missing: MemoGroup?,
-    internal val countsBySection: Map<SectionRef, Int>
+    internal val countsBySection: Map<SectionRef, Int>,
+    /** 候補の節が [MAX_SPREAD_SECTIONS] を超えて、場所を一つに絞れないメモの組。無ければ null。 */
+    internal val scattered: MemoGroup? = null
 )
 
 /**
@@ -142,6 +154,7 @@ internal class MemoLayout internal constructor(
  * - 引用か控えた位置が**確定**したら、その段落の節。同名の見出しでも1つに決まる
  * - **特定できない引用**は、候補の節のどれにも出す（同名の見出しに共通と同じ扱い）。一意の節にしない
  * - それ以外（見つからない・特定できない控えた位置・照らし直しを持たないメモ）は見出しの照合
+ * - **候補の節が [MAX_SPREAD_SECTIONS] を超えるメモは、どの節にも出さず [MemoLayout.scattered] へまとめる**（同名の見出しでも引用でも）
  */
 internal fun layoutMemos(memos: List<MarginMemo>, index: HeadingIndex, locations: MemoLocations): MemoLayout =
     layoutOf(memos, index, locations)
@@ -161,7 +174,7 @@ internal fun arrangeMemos(layout: MemoLayout, current: SectionRef): ArrangedMemo
     val currentGroup = layout.groupIndex[current] ?: -1
     return ArrangedMemos(
         current = if (currentGroup < 0) emptyList() else layout.groups[currentGroup].memos,
-        others = OtherGroups(layout.groups, skip = currentGroup, missing = layout.missing),
+        others = OtherGroups(layout.groups, skip = currentGroup, tail = listOfNotNull(layout.scattered, layout.missing)),
         // **ほかの組に並ぶメモを、重ねずに数える。** 「今の節に無いメモ」で数えると、今の節と同名のほかの候補に
         // 共通のメモが0件になり、候補の組があるのに開く口が消える。メモの節は重ならないので、2つ以上なら必ずほかの組にも並ぶ。
         otherCount = layout.sectionsOf.count { it.size != 1 || it[0] != current },
@@ -173,10 +186,12 @@ private fun layoutOf(memos: List<MarginMemo>, index: HeadingIndex, locations: Me
     val opening = SectionRef(title = null)
     val placed = memos.map { PlacedMemo(it, index.match(it.sectionTitle), locations?.placementOf(it)) }
     val sections = placed.map { it.sections(opening) }
+    val spread = sections.map { it.size > MAX_SPREAD_SECTIONS }
     val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
     placed.forEachIndexed { k, memo ->
-        sections[k].forEach { section -> bySection.getOrPut(section) { mutableListOf() }.add(memo) }
+        if (!spread[k]) sections[k].forEach { section -> bySection.getOrPut(section) { mutableListOf() }.add(memo) }
     }
+    val scattered = placed.filterIndexed { k, _ -> spread[k] }
     val sorted = bySection.entries
         .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
     val missing = placed.filterIndexed { k, _ -> sections[k].isEmpty() }
@@ -189,26 +204,28 @@ private fun layoutOf(memos: List<MarginMemo>, index: HeadingIndex, locations: Me
         },
         missing = if (missing.isEmpty()) null else MemoGroup(section = null, memos = missing),
         countsBySection = sections
+            .filterIndexed { k, _ -> !spread[k] }
             .flatten()
             .filter { it != opening }
             .groupingBy { it }
-            .eachCount()
+            .eachCount(),
+        scattered = if (scattered.isEmpty()) null else MemoGroup(section = null, memos = scattered, scattered = true)
     )
 }
 
-/** ほかの節の組。**今の節の組を飛ばして見せるだけで、組を写し直さない**（組の数は候補のある節の数に比例しうる）。見つからないメモの組は最後。 */
+/** ほかの節の組。**今の節の組を飛ばして見せるだけで、組を写し直さない**（組の数は候補のある節の数に比例しうる）。節を持たない組 [tail] は最後。 */
 private class OtherGroups(
     private val groups: List<MemoGroup>,
     private val skip: Int,
-    private val missing: MemoGroup?
+    private val tail: List<MemoGroup>
 ) : AbstractList<MemoGroup>() {
     private val kept = if (skip < 0) groups.size else groups.size - 1
 
-    override val size: Int get() = if (missing == null) kept else kept + 1
+    override val size: Int get() = kept + tail.size
 
     override fun get(index: Int): MemoGroup = when {
         index in 0 until kept -> groups[if (skip in 0..index) index + 1 else index]
-        index == kept && missing != null -> missing
+        index - kept in tail.indices -> tail[index - kept]
         else -> throw IndexOutOfBoundsException("index $index, size $size")
     }
 }

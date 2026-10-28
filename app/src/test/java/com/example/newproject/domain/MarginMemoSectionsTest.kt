@@ -342,10 +342,11 @@ class MarginMemoSectionsTest {
 
     /**
      * **候補が別々の節に散らばっても、今の節を替えるだけなら候補の節の列をたどらず、組も作り直さない**（→ features/margin_quote.md §5.5）。
-     * 候補を節へ畳んでも、別々の節にあれば小さくならない。候補のある節を 1,000 から 50,000 へ増やしても、読み取りは変わらない。
+     * 候補のある節を 1,000 から 50,000 へ増やしても、読み取りは変わらない。**候補の節が上限を超えるメモは1組にまとめる**ので、
+     * ほかの節のメモの組と行の数も、今の節の行も見出しの印も、候補の節の数に比例しない（→ [MAX_SPREAD_SECTIONS]）。
      */
     @Test
-    fun `候補が多数の節に散らばっても今の節を替える処理は候補の節の数に比例しない`() {
+    fun `候補が多数の節に散らばっても今の節を替える処理と並ぶ行は候補の節の数に比例しない`() {
         listOf(1_000, 10_000, 50_000).forEach { count ->
             val headings = List(count) { "S$it" }
             val sections = headings.map { SectionRef(it) }
@@ -355,16 +356,16 @@ class MarginMemoSectionsTest {
             val layout = layoutMemos(memos, index, locateMemos(memos, passages, index))
             val sectionLists = layout.sectionsOf.map { CountingReads(it) }
             val groups = CountingReads(layout.groups)
-            val counted = MemoLayout(layout.placed, sectionLists, groups, layout.groupIndex, layout.missing, layout.countsBySection)
+            val counted = MemoLayout(layout.placed, sectionLists, groups, layout.groupIndex, layout.missing, layout.countsBySection, layout.scattered)
 
             listOf(sections.first(), sections[count / 2], sections.last(), SectionRef(title = null)).forEach { current ->
                 val arranged = arrangeMemos(counted, current)
                 // 畳んだ面と本文の見出しの印が読むもの
-                val inCurrent = if (current.title == null) 0 else 20
-                assertEquals(inCurrent, arranged.current.size)
-                assertEquals(if (current.title == null) count else count - 1, arranged.others.size)
+                assertEquals(0, arranged.current.size)
+                assertEquals(listOf(true), arranged.others.map { it.scattered })
+                assertEquals(20, arranged.others.sumOf { it.memos.size })
                 assertEquals(20, arranged.otherCount)
-                assertEquals(20, arranged.countsBySection[sections[1]])
+                assertEquals(null, arranged.countsBySection[sections[1]])
             }
 
             assertEquals("候補の節 $count で、メモごとの節の列を読んだ回数", 0, sectionLists.sumOf { it.reads })
@@ -375,7 +376,8 @@ class MarginMemoSectionsTest {
     /** 今の節ごとに組を作り直す形（区切り2a までの並べ方）。今の節を引くだけの形が、これと同じ結果を返すことを確かめる。 */
     private fun rebuiltFor(layout: MemoLayout, index: HeadingIndex, current: SectionRef): ArrangedMemos {
         val opening = SectionRef(title = null)
-        val sections = layout.sectionsOf
+        val spread = layout.sectionsOf.map { it.size > MAX_SPREAD_SECTIONS }
+        val sections = layout.sectionsOf.mapIndexed { k, it -> if (spread[k]) emptyList() else it }
         val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
         layout.placed.forEachIndexed { k, memo ->
             sections[k].filter { it != current }.forEach { bySection.getOrPut(it) { mutableListOf() }.add(memo) }
@@ -383,14 +385,45 @@ class MarginMemoSectionsTest {
         val groups = bySection.entries
             .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
             .map { (section, inSection) -> MemoGroup(section, inSection) }
-        val missing = layout.placed.filterIndexed { k, _ -> sections[k].isEmpty() }
-        val others = if (missing.isEmpty()) groups else groups + MemoGroup(section = null, memos = missing)
+        val scattered = layout.placed.filterIndexed { k, _ -> spread[k] }
+        val missing = layout.placed.filterIndexed { k, _ -> !spread[k] && sections[k].isEmpty() }
+        val others = groups +
+            listOfNotNull(
+                scattered.takeIf { it.isNotEmpty() }?.let { MemoGroup(section = null, memos = it, scattered = true) },
+                missing.takeIf { it.isNotEmpty() }?.let { MemoGroup(section = null, memos = it) }
+            )
         return ArrangedMemos(
             current = layout.placed.filterIndexed { k, _ -> current in sections[k] },
             others = others,
             otherCount = others.flatMap { group -> group.memos.map { it.memo } }.distinct().size,
             countsBySection = sections.flatten().filter { it != opening }.groupingBy { it }.eachCount()
         )
+    }
+
+    /**
+     * **候補の節が上限ちょうどなら今どおり候補の節ごとに並べ、上限を超えたら1組にまとめる**（→ [MAX_SPREAD_SECTIONS]）。
+     * まとめたメモは今の節にも見出しの印にも数えない（印を押しても、その節の組にそのメモが無いことになるため）。特定できない引用でも、同名の見出しでも同じ。
+     */
+    @Test
+    fun `候補の節が上限を超えるメモだけを1組にまとめ、今の節と印に数えない`() {
+        fun note(sections: Int) = buildNoteSectionModel((0 until sections).joinToString("") { "## 同じ見出し\n\n同じ一節\n\n" } + "## 別の節\n\n別の段落")
+        listOf(MAX_SPREAD_SECTIONS to false, MAX_SPREAD_SECTIONS + 1 to true).forEach { (count, gathered) ->
+            val model = note(count)
+            val memos = listOf(
+                MarginMemo("特定できない引用", 2L, "同じ見出し", MemoPassage.Quoted("同じ一節", context = null, truncated = false)),
+                MarginMemo("同名の見出し", 1L, "同じ見出し")
+            )
+            val layout = layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex))
+            val first = model.headingIndex.sections.first()
+
+            val inFirst = arrangeMemos(layout, first)
+            val inOther = arrangeMemos(layout, SectionRef("別の節"))
+
+            assertEquals("候補の節 $count の今の節", if (gathered) 0 else 2, inFirst.current.size)
+            assertEquals("候補の節 $count の印", if (gathered) null else 2, inFirst.countsBySection[first])
+            assertEquals("候補の節 $count のまとめた組", if (gathered) listOf(true) else List(count) { false }, inOther.others.map { it.scattered })
+            assertEquals(2, inOther.otherCount)
+        }
     }
 
     /** 今の節・ほかの節の組と順序・件数・印は、確定・特定できない・同名に共通・見出しより前・見つからないが混ざっても、作り直したときと同じ。 */

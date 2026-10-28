@@ -65,6 +65,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.HeadingIndex
+import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
@@ -524,6 +525,29 @@ class MarginMemoSheetUiTest {
 
         composeRule.runOnIdle { focusClearer() }
         composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertExists()
+    }
+
+    /**
+     * **同じ一節が1万の節にあり、それを前後を控えずに引用したメモが20件あっても、見出しの印からほかの節のメモを開いて組み立てられる**
+     * （→ features/margin_pane.md §5.6）。候補の節が上限を超えるメモは1組にまとめるので、並ぶのは20行だけ。候補の節ごとに並べると約20万行になり、組む途中でメモリが尽きた。
+     */
+    @Test
+    fun 候補の節が1万あるメモも_ほかの節を開くと1組にまとめて並ぶ() {
+        val count = 10_000
+        val sections = List(count) { SectionRef("S$it") }
+        val index = HeadingIndex(sections.map { it.title!! })
+        val passages = PassageIndex(texts = List(count) { "同じ一節" }, sections = sections, readable = List(count) { true })
+        val memos = List(20) { k -> MarginMemo("前後を控えていない引用 ${k + 1}", k.toLong(), "S0", MemoPassage.Quoted("同じ一節", context = null, truncated = false)) }
+        val harness = Harness()
+        harness.section = sections[count / 2]
+        harness.arranged = arrangeMemos(layoutMemos(memos, index, locateMemos(memos, passages, index)), sections[count / 2])
+        setContent(harness)
+
+        composeRule.runOnIdle { harness.reveal = MemoReveal.Section(sections.first()) }
+
+        composeRule.onNodeWithText("場所を一つに絞れないメモ").assertExists()
+        composeRule.onNodeWithText("▾ ほかの節のメモ 20件").assertExists()
+        assertEquals(20, composeRule.onAllNodesWithText("前後を控えていない引用", substring = true).fetchSemanticsNodes().size)
     }
 
     /** ほかの節のメモは畳んで件数だけ。開くと節の名前が並び、押すと本文がその節へ飛ぶ。 */

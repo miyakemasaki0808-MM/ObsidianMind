@@ -844,7 +844,7 @@ private fun OtherSectionMemos(
         val section = group.section
         if (section == null) {
             Text(
-                text = "見出しが見つからないメモ",
+                text = if (group.scattered) "場所を一つに絞れないメモ" else "見出しが見つからないメモ",
                 color = OnSurfaceFaint,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
