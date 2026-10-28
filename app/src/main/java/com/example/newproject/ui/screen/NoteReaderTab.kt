@@ -3,10 +3,6 @@ package com.example.newproject.ui.screen
 import com.example.newproject.ui.theme.PanelChip
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurface
-import androidx.compose.runtime.snapshotFlow
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.layout.Spacer
@@ -727,18 +723,8 @@ internal fun NoteReaderTab(
         // 選択メニューが出ている間の範囲は本文の選択の容器が [quoteOffers] へ書く。窓・机の形が変わったら、運んでいる途中でも消す。
         // 並べ読みの間も出す — 右の面（右のノート）も落とし先で、落とすと右を書きかけに替える（→ features/margin_quote.md §5.1）。
         val chipEnabled = layout is ReaderLayout.MarginPane && deskSpread == DeskSpread.Both && !deskBarShown && sectionModel != null
-        LaunchedEffect(layout, deskSpread, foldInfo.fold, chipEnabled) { quoteChip.value = QuoteChip.Hidden }
-        LaunchedEffect(quoteOffers) {
-            snapshotFlow { quoteOffers.current }.collect { offer ->
-                quoteChip.value = quoteChipAfter(quoteChip.value, if (offer != null) QuoteChipEvent.MenuShown(offer) else QuoteChipEvent.MenuHidden)
-            }
-        }
-        // 本文がスクロールしたら消す。
-        LaunchedEffect(listState) {
-            snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
-                if (scrolling) quoteChip.value = quoteChipAfter(quoteChip.value, QuoteChipEvent.Dismissed)
-            }
-        }
+        // 本文がスクロールしたとき・机の形が替わったときに消した札は、その選択では出し直さない（→ QuoteChip.Withdrawn）。
+        QuoteChipEffects(quoteChip, quoteOffers, listState, layout, deskSpread, foldInfo.fold, chipEnabled)
         // 本文の選択メニューの「引用して書く」（→ features/margin_quote.md §5.1）。**✎ と同じ規則で面を出し、入力欄へフォーカスを送る** —
         // 引用には言葉が要るので、次にすることは書くこと。面が出ていれば面は替えずに引用だけを付ける。空白だけの選択では何も付けない。
         // **並べ読みの間は、右の面を書きかけへ替えて引用を付ける。** 右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
@@ -1016,13 +1002,8 @@ internal fun NoteReaderTab(
                                             .fillMaxSize()
                                             .then(spreadSwipe)
                                             .onGloballyPositioned { deskMainBounds = it.boundsInRoot() }
-                                            // 本文のほかの場所に触れたら札を消す。指は使わずに見るだけ（選択と払いへそのまま渡す）。
-                                            .pointerInput(Unit) {
-                                                awaitEachGesture {
-                                                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                                                    quoteChip.value = quoteChipAfter(quoteChip.value, QuoteChipEvent.Dismissed)
-                                                }
-                                            }
+                                            // 本文のほかの場所に触れたら札を消し、次の選択で出せるようにする。
+                                            .quoteChipTouch(quoteChip)
                                     ) {
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             // つまみと帯は2面のときの本文の幅に留める — 本文だけにしても、折り目にかからないように。

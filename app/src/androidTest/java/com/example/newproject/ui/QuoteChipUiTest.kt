@@ -1,6 +1,18 @@
 package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.QuoteOffers
+import com.example.newproject.ui.screen.QuoteChipEffects
+import com.example.newproject.ui.screen.quoteChipTouch
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.SideEffect
@@ -325,4 +337,44 @@ class QuoteChipUiTest {
         chipNode.performTouchInput { swipe(center, center + (target - (expected + center)), durationMillis = 300) }
         composeRule.runOnIdle { assertEquals(listOf(selection), attached) }
     }
+
+    /**
+     * **本物の選択の容器で文字を選んで本文をスクロールすると、スクロールの後も札が出ない**（→ features/margin_quote.md §5.1）。
+     * 選択メニューは動いた選択の位置で出し直されるが、スクロールで消した札はその選択では出し直さない。本文に触れて選び直せば出る。
+     * 札の配線は本番と同じ [QuoteChipEffects] と [quoteChipTouch] を使う（札の層と擬似の範囲だけでは、メニューの出し直しを通らない）。
+     */
+    @Test
+    fun 選んでスクロールした後は札が出ず_選び直せば出る() {
+        val model = buildNoteSectionModel((1..60).joinToString("\n\n") { "段落${it}の文。選んで引用する。" })
+        val chip = mutableStateOf<QuoteChip>(QuoteChip.Hidden)
+        val offers = QuoteOffers()
+        composeRule.setContent {
+            val listState = rememberLazyListState()
+            QuoteChipEffects(chip, offers, listState)
+            MarkdownNoteContent(
+                content = "",
+                modifier = Modifier.fillMaxSize().testTag("body").quoteChipTouch(chip),
+                listState = listState,
+                precomputedBlocks = model.blocks,
+                quotable = true,
+                onQuote = {},
+                quoteOffers = offers
+            )
+        }
+
+        composeRule.onNodeWithText("段落2の文。選んで引用する。").performTouchInput { longClick() }
+        composeRule.waitUntil(5_000) { chip.value is QuoteChip.Offered }
+
+        // 選択の端のつまみも根になるので、根ではなく本文の上で払う。
+        composeRule.onNodeWithTag("body").performTouchInput { swipe(Offset(centerX, bottom * 0.8f), Offset(centerX, bottom * 0.3f), durationMillis = 300) }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle {
+            assertTrue("スクロールの後も選択メニューは出し直されている（試験の前提）", offers.current != null)
+            assertEquals(QuoteChip.Withdrawn, chip.value)
+        }
+
+        composeRule.onAllNodesWithText("選んで引用する", substring = true).onFirst().performTouchInput { longClick() }
+        composeRule.waitUntil(5_000) { chip.value is QuoteChip.Offered }
+    }
+
 }

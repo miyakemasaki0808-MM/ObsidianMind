@@ -1,6 +1,11 @@
 package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.border
+import com.example.newproject.ui.markdown.QuoteOffers
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.MutableState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
@@ -59,6 +64,12 @@ internal sealed interface QuoteChip {
     /** 出していない。 */
     data object Hidden : QuoteChip
 
+    /**
+     * 出していない。**その選択では出し直さない**（本文のスクロール・窓や机の形の変化で消した）。選択メニューは動いた選択の位置で出し直されるので、
+     * 出し直しのたびに札を出すと、選択が画面の外へ出ても札だけが本文の面に残る。本文に触れれば（新しい選択の始まり）[Hidden] へ戻る。
+     */
+    data object Withdrawn : QuoteChip
+
     /** 選択メニューと一緒に出している。押すか運び始めると、選んだ一節を受け取る（受け取ると選択は解ける）。 */
     data class Offered(val offer: QuoteOffer) : QuoteChip
 
@@ -83,17 +94,48 @@ internal sealed interface QuoteChipEvent {
     /** 余白の外で離した。**持ったまま元の位置へ戻る**（→ 判断12）。 */
     data object ReleasedOutside : QuoteChipEvent
 
-    /** 本文のほかの場所に触れた・本文がスクロールした・窓が変わった。 */
+    /** 本文のほかの場所に触れた。札を消し、次に出た選択メニューでは出す（新しい選択は本文に触れて始まる）。 */
+    data object Touched : QuoteChipEvent
+
+    /** 本文がスクロールした・窓や机の形が変わった。札を消し、**その選択では出し直さない**（→ [QuoteChip.Withdrawn]）。 */
     data object Dismissed : QuoteChipEvent
 }
 
 /** 札の次の様子（→ features/margin_quote.md §5.1）。 */
 internal fun quoteChipAfter(chip: QuoteChip, event: QuoteChipEvent): QuoteChip = when (event) {
-    is QuoteChipEvent.MenuShown -> QuoteChip.Offered(event.offer)
+    is QuoteChipEvent.MenuShown -> if (chip is QuoteChip.Withdrawn) chip else QuoteChip.Offered(event.offer)
     QuoteChipEvent.MenuHidden -> if (chip is QuoteChip.Offered) QuoteChip.Hidden else chip
     is QuoteChipEvent.Taken -> event.selection?.let { QuoteChip.Holding(it, event.home) } ?: QuoteChip.Hidden
     QuoteChipEvent.ReleasedOutside -> chip
-    QuoteChipEvent.Attached, QuoteChipEvent.Dismissed -> QuoteChip.Hidden
+    QuoteChipEvent.Attached, QuoteChipEvent.Touched -> QuoteChip.Hidden
+    QuoteChipEvent.Dismissed -> QuoteChip.Withdrawn
+}
+
+/**
+ * 札の様子を、本文の選択メニュー・本文のスクロール・机の形の変化から決める（→ features/margin_quote.md §5.1）。[shape] は机の形を決める値で、
+ * 替わったら消す。本文に触れたときは本文の面に [quoteChipTouch] を付けて知らせる。
+ */
+@Composable
+internal fun QuoteChipEffects(chip: MutableState<QuoteChip>, offers: QuoteOffers, listState: LazyListState, vararg shape: Any?) {
+    LaunchedEffect(*shape) { chip.value = quoteChipAfter(chip.value, QuoteChipEvent.Dismissed) }
+    LaunchedEffect(offers) {
+        snapshotFlow { offers.current }.collect { offer ->
+            chip.value = quoteChipAfter(chip.value, if (offer != null) QuoteChipEvent.MenuShown(offer) else QuoteChipEvent.MenuHidden)
+        }
+    }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }.collect { scrolling ->
+            if (scrolling) chip.value = quoteChipAfter(chip.value, QuoteChipEvent.Dismissed)
+        }
+    }
+}
+
+/** 本文のほかの場所に触れたら札を消し、次の選択で出せるようにする。指は使わずに見るだけ（選択と払いへそのまま渡す）。 */
+internal fun Modifier.quoteChipTouch(chip: MutableState<QuoteChip>): Modifier = pointerInput(chip) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        chip.value = quoteChipAfter(chip.value, QuoteChipEvent.Touched)
+    }
 }
 
 /**
@@ -206,7 +248,7 @@ internal fun QuoteChipLayer(
     fun held(): QuoteSelection? = when (val now = currentChip) {
         is QuoteChip.Holding -> now.selection
         is QuoteChip.Offered -> now.offer.take().also { taken -> currentOnEvent(QuoteChipEvent.Taken(taken, currentHome ?: Offset.Zero)) }
-        QuoteChip.Hidden -> null
+        QuoteChip.Hidden, QuoteChip.Withdrawn -> null
     }
 
     fun attach(selection: QuoteSelection) {

@@ -111,8 +111,25 @@ class QuoteChipTest {
         val holding = QuoteChip.Holding(selection, home)
 
         assertEquals(QuoteChip.Hidden, quoteChipAfter(holding, QuoteChipEvent.Attached))
-        assertEquals(QuoteChip.Hidden, quoteChipAfter(holding, QuoteChipEvent.Dismissed))
-        assertEquals(QuoteChip.Hidden, quoteChipAfter(QuoteChip.Offered(offer), QuoteChipEvent.Dismissed))
+        assertEquals(QuoteChip.Hidden, quoteChipAfter(holding, QuoteChipEvent.Touched))
+        assertEquals(QuoteChip.Withdrawn, quoteChipAfter(holding, QuoteChipEvent.Dismissed))
+        assertEquals(QuoteChip.Withdrawn, quoteChipAfter(QuoteChip.Offered(offer), QuoteChipEvent.Dismissed))
+    }
+
+    /**
+     * **スクロールや窓の変化で消した札は、その選択の選択メニューが出し直されても出さない**（→ features/margin_quote.md §5.1）。
+     * 選択メニューは動いた選択の位置で出し直され、閉じて開き直すこともある。本文に触れて選び直せば、次の選択メニューで出す。
+     */
+    @Test
+    fun `スクロールで消した札は選び直すまで出し直さない`() {
+        val moved = QuoteOffer(Rect(100f, -400f, 300f, -300f)) { selection }
+        val withdrawn = quoteChipAfter(QuoteChip.Offered(offer), QuoteChipEvent.Dismissed)
+
+        assertEquals(QuoteChip.Withdrawn, quoteChipAfter(withdrawn, QuoteChipEvent.MenuShown(moved)))
+        assertEquals(QuoteChip.Withdrawn, quoteChipAfter(quoteChipAfter(withdrawn, QuoteChipEvent.MenuHidden), QuoteChipEvent.MenuShown(moved)))
+
+        val touched = quoteChipAfter(withdrawn, QuoteChipEvent.Touched)
+        assertEquals(QuoteChip.Offered(offer), quoteChipAfter(touched, QuoteChipEvent.MenuShown(offer)))
     }
 
     /** 別の文字を選んだら、持っていた一節は捨てて新しい選択の札になる。 */
