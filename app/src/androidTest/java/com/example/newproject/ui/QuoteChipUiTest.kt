@@ -229,7 +229,7 @@ class QuoteChipUiTest {
         }
         composeRule.waitForIdle()
         chipNode.assertDoesNotExist()
-        composeRule.runOnIdle { assertEquals(QuoteChip.Hidden, chip) }
+        composeRule.runOnIdle { assertEquals(QuoteChip.Withdrawn, chip) }
     }
 
     @Test
@@ -259,7 +259,7 @@ class QuoteChipUiTest {
 
         composeRule.runOnIdle {
             assertTrue("面が変わった後の指で付いた", attached.isEmpty())
-            assertEquals(QuoteChip.Hidden, chip)
+            assertEquals(QuoteChip.Withdrawn, chip)
         }
     }
 
@@ -321,10 +321,11 @@ class QuoteChipUiTest {
         composeRule.runOnIdle { supporting = checkNotNull(supporting).copy(bottom = heightPx * 0.9f) }
         composeRule.waitForIdle()
         composeRule.onRoot().performTouchInput { up() }
-        composeRule.runOnIdle { assertEquals(QuoteChip.Hidden, chip) }
+        composeRule.runOnIdle { assertEquals(QuoteChip.Withdrawn, chip) }
 
+        // 新しい選択は本文に触れて始まる。
         val offer = QuoteOffer(Rect(60f, 200f, 220f, 240f)) { selection }
-        composeRule.runOnIdle { chip = quoteChipAfter(chip, QuoteChipEvent.MenuShown(offer)) }
+        composeRule.runOnIdle { chip = quoteChipAfter(quoteChipAfter(chip, QuoteChipEvent.Touched), QuoteChipEvent.MenuShown(offer)) }
         composeRule.waitForIdle()
         val density = composeRule.density
         val expected = with(density) {
