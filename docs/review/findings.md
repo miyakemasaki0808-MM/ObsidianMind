@@ -49,6 +49,3 @@
 | `2026-10-25-margin-quote-3-review/P2-3` | 面の高さだけが縮むと、持った札が元の位置のまま面の外に残る | `統合` MEMO-16 |
 | `2026-10-25-margin-quote-3-rereview/P2-1` | 運ぶ動きを使用済みにしてから動いた量を読むので、札が追従せず運び始めの位置で決める | `統合` MEMO-16 |
 | `2026-10-25-margin-quote-3-rereview/P2-2` | 運ぶ途中で取り消すと動いた分が残り、次の札がずれて出る | `統合` MEMO-16 |
-| `2026-10-29-margin-quote-device-record-review/P2-1` | QUOTE-34(c) の並べ読みの終了は確かめておらず、成功と書いたのは強すぎる | `統合` MEMO-17 |
-| `2026-10-29-margin-quote-device-record-review/P2-2` | 修正後の再検証への引き継ぎ（新しい条件・13b・文言訂正の扱い）が記録に無い | `統合` MEMO-16 |
-| `2026-10-29-margin-quote-device-record-review/P3-1` | 実機検証の記録のケース表が空行で切れている | `統合` MEMO-16 |
