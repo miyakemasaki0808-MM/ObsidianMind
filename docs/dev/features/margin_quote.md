@@ -1,7 +1,7 @@
 # 面を越える引用 — 本文の一節を余白メモへ移す
 
 **状態:** 区切り1（土台。画面は変えない）・区切り2a（照合の配線と表示・書き始めの控え）・区切り2b（選択メニューの「引用して書く」と引用の欄・候補の選択）・区切り3（机の札）・区切り4（並べ読み中の引用）は実装済み。操作・置き方・引用元の決め方・長さ・控えの見せ方・並べ読みとの関係はオーナーが決めた（§8）
-**最終検証:** 未検証（区切り1〜4を実装し、実機は未確認）
+**最終検証:** 2026-10-30 / `c81da0e6`（区切り2〜4を開いた Fold と閉じた画面で通し版。一部確認・未確認の範囲はレビュー一覧）
 **関連コード:** 区切り1 — `model/ReadingTrace.kt` / `model/state/MarginMemoDraft.kt` / `domain/MemoPassages.kt` / `domain/MarginMemoDraftRules.kt` / `domain/MarginMemoSections.kt` / `data/ReadingTraceJson.kt` / `controller/MarginMemoController.kt`。
 区切り2a — `domain/markdown/NoteSections.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `controller/NoteSessionCoordinator.kt` / `NoteViewModel.kt`。
 区切り2b — `domain/QuoteAttachment.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/QuoteTextToolbar.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/markdown/SpreadBlocks.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteSpread.kt` / `MainActivity.kt` と、2a の面・窓口・`MarginMemoController.kt`。
