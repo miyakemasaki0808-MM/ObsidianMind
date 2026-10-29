@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
@@ -41,6 +40,13 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.geometry.Rect
+import com.example.newproject.ui.markdown.quoteSourceAt
+import com.example.newproject.ui.markdown.QuoteSelectionContainer
+import com.example.newproject.ui.markdown.QuoteSelection
+import com.example.newproject.ui.markdown.BlockBox
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -123,7 +129,9 @@ internal fun NoteSpread(
     pageWidth: Dp,
     gutter: Dp,
     leftPageTop: (@Composable () -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** 選択メニューの「引用して書く」の受け手（→ features/margin_quote.md §5.1）。null の間は項目を出さない。 */
+    onQuote: ((QuoteSelection) -> Unit)? = null
 ) {
     val density = LocalDensity.current
     val blocks = sectionModel.blocks
@@ -348,6 +356,7 @@ internal fun NoteSpread(
                         imageLoader = imageLoader,
                         imageMeasurements = imageMeasurements,
                         headingAccessory = headingAccessory,
+                        onQuote = onQuote,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -363,6 +372,7 @@ internal fun NoteSpread(
                     imageLoader = imageLoader,
                     imageMeasurements = imageMeasurements,
                     headingAccessory = headingAccessory,
+                    onQuote = onQuote,
                     modifier = Modifier.width(pageWidth).fillMaxHeight().spreadTurnFace(rightPage = true, offset, gutterPx, liftRoomPx)
                 )
             }
@@ -399,22 +409,44 @@ private fun SpreadPageView(
     imageLoader: NoteImageLoader?,
     imageMeasurements: NoteImageMeasurements?,
     headingAccessory: (@Composable (blockIndex: Int) -> Unit)?,
+    onQuote: ((QuoteSelection) -> Unit)?,
     modifier: Modifier
 ) {
+    // 範囲の矩形（窓の座標）から始まりのブロックを決める材料。ページの見えている上端と、組んだ切れ端の位置（→ quoteSourceAt）。
+    // 描き直しには使わないので状態にしない。
+    val sliceBoxes = remember(page) { arrayOfNulls<BlockBox>(page?.slices?.size ?: 0) }
+    val pageTop = remember { floatArrayOf(0f) }
+    val selectionAt: (String, Rect) -> QuoteSelection = { text, rect ->
+        // ページの前に本文は組まれていない（選択はページを越えない）ので、張り付いていても始まりは見えている。
+        val at = quoteSourceAt(rect.top, pageTop[0], sliceBoxes.filterNotNull().sortedBy { it.top }, contentAbove = false)
+        QuoteSelection(text, at.source, at.hint)
+    }
     Surface(color = paperColor, shape = ReadingSurfaceShape, modifier = modifier) {
-        SelectionContainer {
+        // 見開きは今のノートの本文だけを組むので、いつも置ける本文として組む。
+        QuoteSelectionContainer(quotable = true, onQuote = onQuote, selectionAt = selectionAt) {
             CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
                 // 長押しの見張りは選択の容器の内側に置く（→ MarkdownNoteContent と同じ理由）。
-                Box(modifier = (linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier).fillMaxSize()) {
+                Box(
+                    modifier = (linkTaps?.let { Modifier.watchLinkPresses(it) } ?: Modifier)
+                        .fillMaxSize()
+                        .onGloballyPositioned { pageTop[0] = it.boundsInRoot().top }
+                ) {
                     Column(modifier = Modifier.padding(PagePadding)) {
                         if (showTitle) {
                             Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(TitleStyle))
                             Spacer(modifier = Modifier.height(TitleGap))
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)) {
-                            page?.slices?.forEach { slice ->
+                            page?.slices?.forEachIndexed { k, slice ->
                                 measured.getOrNull(slice.blockIndex)?.let { block ->
-                                    SpreadSliceView(block, slice, fitHeightPx, imageLoader, imageMeasurements, headingAccessory)
+                                    Box(
+                                        modifier = Modifier.onGloballyPositioned {
+                                            val bounds = it.boundsInRoot()
+                                            if (k < sliceBoxes.size) sliceBoxes[k] = BlockBox(slice.blockIndex, bounds.top, bounds.bottom)
+                                        }
+                                    ) {
+                                        SpreadSliceView(block, slice, fitHeightPx, imageLoader, imageMeasurements, headingAccessory)
+                                    }
                                 }
                             }
                         }

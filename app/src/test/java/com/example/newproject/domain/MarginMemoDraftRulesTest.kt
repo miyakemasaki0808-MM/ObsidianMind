@@ -1,11 +1,16 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoFileRead
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoDraft
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -219,5 +224,316 @@ class MarginMemoDraftRulesTest {
 
         assertNotNull(draft.pending)
         assertEquals(false, draft.isEmpty)
+    }
+
+    // ── 引用と控えた位置（→ features/margin_quote.md §5.3・§5.4）──────────────────
+
+    private val quoteA = DraftQuote(MemoPassage.Quoted("一節A", QuoteContext("前", "後"), truncated = false))
+    private val quoteB = DraftQuote(MemoPassage.Quoted("一節B", context = null, truncated = false))
+    private val seenTop = MemoPassage.Seen("最上端の段落")
+
+    @Test
+    fun `書き始めた瞬間に、書き込み先と一緒に読んでいた位置を控える`() {
+        val draft = MarginMemoDraft()
+            .edited("書", bodySection = sectionB, seenAtStart = seenTop)
+            .edited("書き足す", bodySection = sectionC, seenAtStart = MemoPassage.Seen("後で見えた段落"))
+
+        assertEquals(seenTop, draft.seen)
+        assertEquals(seenTop, draft.passage)
+    }
+
+    @Test
+    fun `空にしたら控えた位置も放す`() {
+        val draft = MarginMemoDraft().edited("書", sectionB, seenTop).edited("", sectionB, seenTop)
+
+        assertNull(draft.seen)
+    }
+
+    @Test
+    fun `引用が付いていれば書き始めても位置を控えない`() {
+        val draft = MarginMemoDraft().quoted(quoteA, sectionC).edited("書", bodySection = sectionB, seenAtStart = seenTop)
+
+        assertNull(draft.seen)
+        assertEquals(quoteA.passage, draft.passage)
+    }
+
+    /** **書いている途中でも、引用は書き込み先を引用元の節へ移す**（スクロールでは動かない書き込み先とは別の、明示の操作）。 */
+    @Test
+    fun `引用を付けると書いている途中でも書き込み先が引用元の節へ移る`() {
+        val draft = MarginMemoDraft().edited("書いていた", bodySection = sectionB).quoted(quoteA, sectionC)
+
+        assertEquals(sectionC, draft.target)
+        assertEquals("書いていた", draft.text)
+    }
+
+    @Test
+    fun `引用元が決まらなければ書き込み先はそのまま`() {
+        val draft = MarginMemoDraft().edited("書いていた", bodySection = sectionB).quoted(quoteB, section = null)
+
+        assertEquals(sectionB, draft.target)
+    }
+
+    @Test
+    fun `もう一度引用すると入れ替わり、書いた文字は残る`() {
+        val draft = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える言葉", sectionB).quoted(quoteB, sectionC)
+
+        assertEquals(quoteB, draft.quote)
+        assertEquals("添える言葉", draft.text)
+    }
+
+    /** **引用だけの書きかけは空ではない** — 窓の変化やノートの行き来で預かる。 */
+    @Test
+    fun `引用だけの書きかけは空ではなく、文字を空にしても書き込み先を保つ`() {
+        val draft = MarginMemoDraft().quoted(quoteA, sectionC).edited("書", sectionB).edited("", sectionB)
+
+        assertFalse(draft.isEmpty)
+        assertEquals(sectionC, draft.target)
+    }
+
+    @Test
+    fun `引用を外すと引用だけが消え、文字があれば書き込み先を保つ`() {
+        val withText = MarginMemoDraft().quoted(quoteA, sectionC).edited("添える言葉", sectionB).unquoted()
+        val onlyQuote = MarginMemoDraft().quoted(quoteA, sectionC).unquoted()
+
+        assertNull(withText.quote)
+        assertEquals("添える言葉", withText.text)
+        assertEquals(sectionC, withText.target)
+        assertTrue(onlyQuote.isEmpty)
+        assertNull(onlyQuote.target)
+    }
+
+    /** **引用だけでは置かない。** 自分の言葉が要る（→ 判断2）。 */
+    @Test
+    fun `引用だけの書きかけは置けない`() {
+        assertEquals(MemoSendAction.None, MarginMemoDraft().quoted(quoteA, sectionB).sendAction())
+        assertEquals(MemoSendAction.Place, MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB).sendAction())
+    }
+
+    @Test
+    fun `送信は引用か控えた位置を運ぶ`() {
+        val withQuote = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB)
+        val submission = submissionOf(withQuote.text, sectionB.title, 1_000L, withQuote.passage)!!
+
+        assertEquals(quoteA.passage, submission.memo.passage)
+        assertEquals(null, submissionOf("添える", null, 1_000L)!!.memo.passage)
+    }
+
+    /** 同じ本文でも引用を替えたら別のメモ。**確かめるではなく置く。** */
+    @Test
+    fun `引用を替えたら同じ本文でも確かめるではなく置く`() {
+        val draft = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB)
+        val submission = submissionOf(draft.text, sectionB.title, 1_000L, draft.passage)!!
+        val sent = draft.submitted(submission)
+
+        assertEquals(MemoSendAction.Verify, sent.sendAction())
+        assertEquals(MemoSendAction.Place, sent.quoted(quoteB, sectionB).sendAction())
+    }
+
+    /**
+     * **受理されたことと、今の書きかけを空にできたことは別**（→ features/margin_quote.md §5.6）。
+     * 保存を待つ間に本文か引用を書き直していれば、受理されても書きかけを残し、空にしたとも言わない。
+     */
+    @Test
+    fun `受理で書きかけを空にできるのは送った後に何も変えていないときだけ`() {
+        val draft = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB)
+        val submission = submissionOf(draft.text, sectionB.title, 1_000L, draft.passage)!!
+        val sent = draft.submitted(submission)
+        val textChanged = sent.edited("添える言葉を書き直した", sectionB)
+        val quoteChanged = sent.quoted(quoteB, sectionB)
+
+        assertTrue(sent.consumedBy(submission))
+        assertEquals(MarginMemoDraft(), sent.accepted(submission))
+        assertFalse(textChanged.consumedBy(submission))
+        assertEquals("添える言葉を書き直した", textChanged.accepted(submission).text)
+        assertFalse(quoteChanged.consumedBy(submission))
+        assertEquals(quoteB, quoteChanged.accepted(submission).quote)
+        assertNull(quoteChanged.accepted(submission).pending)
+    }
+
+    @Test
+    fun `追わなくなった古い送信の受理では何も変えず、空にしたとも言わない`() {
+        val first = MarginMemoDraft().edited("1件目", sectionB)
+        val old = submissionOf(first.text, sectionB.title, 1_000L)!!
+        val second = first.submitted(old).edited("2件目", sectionB)
+        val newer = submissionOf(second.text, sectionB.title, 2_000L)!!
+        val tracking = second.submitted(newer)
+
+        assertFalse(tracking.consumedBy(old))
+        assertEquals(tracking, tracking.accepted(old))
+    }
+
+    // ── 引用元の節だけを替えたとき（→ features/margin_quote.md §5.3）──────────────────
+
+    /** 本番の取り方で [block] から「同じ一節」を引き、引用とその節を返す。 */
+    // ── 付ける場で引用元を選ぶ（→ features/margin_quote.md 判断13）────────────────
+
+    private val choosingQuote = DraftQuote(MemoPassage.Quoted("同じ一節", context = null, truncated = false), choosing = true)
+
+    @Test
+    fun `選んでいた引用のまま選べば前後の文字が入り、書き込み先が引用元の節へ移る`() {
+        val draft = MarginMemoDraft().edited("書いていた", bodySection = sectionB, seenAtStart = seenTop).quoted(choosingQuote, section = sectionB)
+
+        val chosen = draft.chosen(choosingQuote.passage, QuoteContext("前", "後"), sectionC)
+
+        assertEquals(MemoPassage.Quoted("同じ一節", QuoteContext("前", "後"), truncated = false), chosen.quote?.passage)
+        assertEquals(false, chosen.quote?.choosing)
+        assertEquals(sectionC, chosen.target)
+        // 書き込み先を別の節へ移したので、前の節の控えは捨てる。
+        assertEquals(null, chosen.seen)
+        assertEquals("書いていた", chosen.text)
+    }
+
+    /** 選ぶ間に引用を入れ替えた・選ぶのをやめた・外したなら、遅れて届いた選択では何もしない。 */
+    @Test
+    fun `選んでいた引用が替わっていれば選んでも何もしない`() {
+        val replaced = MarginMemoDraft().quoted(choosingQuote, sectionB).quoted(quoteB, sectionB)
+        // 入れ替えた引用も選んでいる途中なら、選んだのはどちらの候補かで見分ける。
+        val replacedByChoosing = MarginMemoDraft().quoted(choosingQuote, sectionB)
+            .quoted(DraftQuote(MemoPassage.Quoted("別の同じ一節", context = null, truncated = false), choosing = true), sectionB)
+        val dismissed = MarginMemoDraft().quoted(choosingQuote, sectionB).choiceDismissed()
+        val detached = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB).unquoted()
+
+        listOf(replaced, replacedByChoosing, dismissed, detached).forEach { draft ->
+            assertEquals(draft, draft.chosen(choosingQuote.passage, QuoteContext("前", "後"), sectionC))
+        }
+    }
+
+    @Test
+    fun `選ばずに閉じれば引用元を決めないまま付けておく`() {
+        val draft = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB)
+
+        val dismissed = draft.choiceDismissed()
+
+        assertEquals(choosingQuote.passage, dismissed.quote?.passage)
+        assertEquals(false, dismissed.quote?.choosing)
+        assertEquals(sectionB, dismissed.target)
+        assertEquals(dismissed, dismissed.choiceDismissed())
+    }
+
+    /** 選ぶ前に置いたら、前後の文字を控えていない引用として送る。選んでいる間かどうかは送るものに入らない。 */
+    @Test
+    fun `選ぶ前に置いた送信は前後を控えていない引用を運ぶ`() {
+        val draft = MarginMemoDraft().quoted(choosingQuote, sectionB).edited("添える", sectionB)
+
+        val passage = draft.passage
+        assertEquals(MemoPassage.Quoted("同じ一節", context = null, truncated = false), passage)
+        assertEquals(MemoSendAction.Place, draft.sendAction())
+    }
+
+    // ── 引用の結果を待つ間（→ features/margin_quote.md §5.3）────────────────────
+
+    @Test
+    fun `引用の結果を待つ間は、前の送信の受理で空にせず置かせない`() {
+        val sent = MarginMemoDraft().quoted(quoteA, sectionB).edited("添える", sectionB)
+        val submission = checkNotNull(submissionOf(sent.text, sectionB.title, 1L, sent.passage, target = sectionB))
+        val waiting = sent.submitted(submission).quoteRequested(7L)
+
+        assertFalse(waiting.consumedBy(submission))
+        assertEquals("添える", waiting.accepted(submission).text)
+        assertEquals(7L, waiting.accepted(submission).quoting)
+        assertEquals(MemoSendAction.None, waiting.sendAction())
+    }
+
+    @Test
+    fun `結果は今も待っている要求のときだけ当てる`() {
+        val waiting = MarginMemoDraft().edited("添える", sectionB).quoteRequested(7L)
+
+        assertEquals(quoteB, waiting.quoteSettled(7L) { it.quoted(quoteB, sectionC) }.quote)
+        assertNull(waiting.quoteSettled(7L) { it.quoted(quoteB, sectionC) }.quoting)
+        // 後から頼んだ・外した・取り下げたなら、遅れて届いた結果では変えない。
+        assertEquals(waiting.quoteRequested(8L), waiting.quoteRequested(8L).quoteSettled(7L) { it.quoted(quoteB, sectionC) })
+        assertEquals(waiting.unquoted(), waiting.unquoted().quoteSettled(7L) { it.quoted(quoteB, sectionC) })
+        assertNull(waiting.unquoted().quoting)
+        assertEquals(waiting.quoteRequested(8L), waiting.quoteRequested(8L).quoteAbandoned(7L))
+        assertNull(waiting.quoteAbandoned(7L).quoting)
+    }
+
+    @Test
+    fun `引用の結果を待っているだけの書きかけも空ではない`() {
+        assertFalse(MarginMemoDraft().quoteRequested(1L).isEmpty)
+        assertTrue(MarginMemoDraft().quoteRequested(1L).quoteAbandoned(1L).isEmpty)
+    }
+
+    private fun sameQuoteFrom(body: String, block: Int): Pair<DraftQuote, SectionRef> {
+        val passages = buildPassageIndex(buildNoteSectionModel(body))
+        val source = resolveQuoteAt("同じ一節", block, passages) as QuoteSource.Resolved
+        return DraftQuote(MemoPassage.Quoted("同じ一節", source.context, truncated = false)) to passages.sections[block]
+    }
+
+    /**
+     * **引用の値が同じでも、引用元の節だけを替えたら別の書きかけ。** 前の送信の受理で空にせず、確かめるではなく置く。
+     * 節Aと節Bに「同じ一節」だけの段落があると、どちらから引いても引用は同じ値になる。
+     */
+    @Test
+    fun `保存を待つ間に引用元の節だけを替えたら前の送信の受理で空にしない`() {
+        listOf(
+            "## A\n\n同じ一節\n\n## B\n\n同じ一節",
+            // 同名の見出しの別の順番でも同じ。
+            "## 節\n\n同じ一節\n\n## 節\n\n同じ一節"
+        ).forEach { body ->
+            val (quoteA, sectionA) = sameQuoteFrom(body, block = 1)
+            val (quoteB, sectionB) = sameQuoteFrom(body, block = 3)
+            assertEquals("引用の値が違う（この再現の前提が崩れた）", quoteA, quoteB)
+            val draft = MarginMemoDraft().quoted(quoteA, sectionA).edited("添える言葉", sectionA)
+            val sent = submissionOf(draft.text, draft.target?.title, 1_000L, draft.passage, target = draft.target)!!
+
+            val requoted = draft.submitted(sent).quoted(quoteB, sectionB)
+            val after = requoted.accepted(sent)
+
+            assertEquals(MemoSendAction.Place, requoted.sendAction())
+            assertFalse(requoted.consumedBy(sent))
+            assertEquals("添える言葉", after.text)
+            assertEquals(sectionB, after.target)
+            assertEquals(quoteB, after.quote)
+            assertNull(after.pending)
+        }
+    }
+
+    @Test
+    fun `何も替えなければ受理で空になる`() {
+        val (quoteA, sectionA) = sameQuoteFrom("## A\n\n同じ一節\n\n## B\n\n同じ一節", block = 1)
+        val draft = MarginMemoDraft().quoted(quoteA, sectionA).edited("添える言葉", sectionA)
+        val sent = submissionOf(draft.text, draft.target?.title, 1_000L, draft.passage, target = draft.target)!!
+        val waiting = draft.submitted(sent)
+
+        assertEquals(MemoSendAction.Verify, waiting.sendAction())
+        assertTrue(waiting.consumedBy(sent))
+        assertEquals(MarginMemoDraft(), waiting.accepted(sent))
+    }
+
+    /** 書き込み先が決まる前に置いた送信（置いた時点の本文の節へ書いた）は、そのまま待てば同じ送信として確かめ、受理で空にする。 */
+    @Test
+    fun `書き込み先が決まる前に置いた送信も受理で空になる`() {
+        val draft = MarginMemoDraft().edited("節が分かる前に書いた", bodySection = null)
+        val sent = submissionOf(draft.text, sectionC.title, 1_000L, target = sectionC)!!
+        val waiting = draft.submitted(sent)
+
+        assertEquals(MemoSendAction.Verify, waiting.sendAction())
+        assertEquals(MarginMemoDraft(), waiting.accepted(sent))
+    }
+
+    // ── 引用を外したときの控え（→ features/margin_quote.md §5.3）────────────────────
+
+    @Test
+    fun `引用で書き込み先を別の節へ移すと書き始めた頃の控えを捨て、外しても取り直さない`() {
+        val draft = MarginMemoDraft()
+            .edited("書いていた", bodySection = sectionB, seenAtStart = seenTop)
+            .quoted(quoteA, sectionC)
+            .unquoted()
+
+        assertNull(draft.seen)
+        assertNull(draft.passage)
+        assertEquals(sectionC, draft.target)
+        assertEquals("書いていた", draft.text)
+    }
+
+    @Test
+    fun `引用元が同じ節なら書き始めた頃の控えを保つ`() {
+        val draft = MarginMemoDraft()
+            .edited("書いていた", bodySection = sectionB, seenAtStart = seenTop)
+            .quoted(quoteA, sectionB)
+            .unquoted()
+
+        assertEquals(seenTop, draft.passage)
     }
 }

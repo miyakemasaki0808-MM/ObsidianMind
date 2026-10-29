@@ -360,6 +360,8 @@ internal val PaneRelatedListSaver: Saver<PaneRelatedList?, Any> = Saver(
  * ペインからシートへ移る窓の切り替わりで、書いている途中として扱うか（→ features/margin_pane.md §5.4 の2つ目の表）。
  * **並べ読み中は、書きかけの文字だけでは書いている途中にしない** — 余白は右のノートに隠れていたので、閉じた後も出さない。
  * 出すとシートが出て、並べ読みが終わってしまう（→ features/desk_foundation.md §5）。
+ * **並べ読み中に右が資料を出していれば、入力中の印があっても書いている途中にしない**（→ features/margin_quote.md §5.6）。
+ * 印は書きかけへ戻したときにフォーカスを戻すためのもので、入力欄は資料に替えたときに面ごと外れている。[draftOnRight] は右が書きかけを出しているか。
  */
-internal fun writingForWindowShift(hasDraft: Boolean, focusIntent: Boolean, sideReading: Boolean): Boolean =
-    focusIntent || (hasDraft && !sideReading)
+internal fun writingForWindowShift(hasDraft: Boolean, focusIntent: Boolean, sideReading: Boolean, draftOnRight: Boolean = false): Boolean =
+    (focusIntent && (!sideReading || draftOnRight)) || (hasDraft && !sideReading)

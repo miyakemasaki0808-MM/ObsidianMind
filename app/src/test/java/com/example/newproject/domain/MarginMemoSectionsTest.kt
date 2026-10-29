@@ -1,6 +1,15 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.model.ReadingVisit
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.SectionRef
 import org.junit.Assert.assertEquals
@@ -209,5 +218,312 @@ class MarginMemoSectionsTest {
             reads++
             return inner[index]
         }
+    }
+
+    // ── 引用と控えた位置で節を決める（→ features/margin_quote.md §5.5）──────────────
+
+    private val sameNameBody = "## まとめ\n\n結論として、この方法は有効である。ただし条件Aでは使わない。\n\n" +
+        "## まとめ\n\n結論として、この方法は有効である。ただし条件Bでは使わない。"
+
+    private fun arrangeWithPassages(body: String, memos: List<MarginMemo>, current: SectionRef): ArrangedMemos {
+        val model = buildNoteSectionModel(body)
+        val passages = buildPassageIndex(model)
+        return arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, passages, model.headingIndex)), current)
+    }
+
+    /** **同名の見出しでも、前後とも合う引用は1つの節に決まる。** 見出しの照合だけなら両方の候補に出る。 */
+    @Test
+    fun `確定した引用は同名の見出しでも1つの節に並ぶ`() {
+        val quoted = MarginMemo(
+            "条件Bについて", 1L, "まとめ",
+            MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Bでは使わな"), truncated = false)
+        )
+
+        val arranged = arrangeWithPassages(sameNameBody, listOf(quoted), current = SectionRef("まとめ", ordinal = 1))
+
+        assertEquals(listOf(quoted), arranged.current.map { it.memo })
+        assertTrue("先の同名の節にも出ている", arranged.others.isEmpty())
+        assertEquals(mapOf(SectionRef("まとめ", ordinal = 1) to 1), arranged.countsBySection)
+    }
+
+    /** **特定できない引用は候補の節のどれにも出し、一意の節として数えない。** */
+    @Test
+    fun `特定できない引用は候補の節のどれにも並ぶ`() {
+        // 控えた見出しは本文に無い。見出しの照合だけなら「見出しが見つからないメモ」になる。
+        val unresolved = MarginMemo("どちらか", 1L, "消えた見出し", MemoPassage.Quoted("この方法は有効である。", context = null, truncated = false))
+
+        val arranged = arrangeWithPassages(sameNameBody, listOf(unresolved), current = SectionRef("まとめ"))
+
+        assertEquals(listOf(unresolved), arranged.current.map { it.memo })
+        assertEquals(listOf(SectionRef("まとめ", ordinal = 1)), arranged.others.map { it.section })
+        assertEquals(mapOf(SectionRef("まとめ") to 1, SectionRef("まとめ", ordinal = 1) to 1), arranged.countsBySection)
+    }
+
+    /** 見出しを改名しても、引用が前後とも合えばその段落の節に並び、「見出しが見つからないメモ」にならない。 */
+    @Test
+    fun `見出しを改名しても確定した引用は段落の節に並ぶ`() {
+        val quoted = MarginMemo(
+            "改名の前に書いた", 1L, "元の見出し",
+            MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Aでは使わな"), truncated = false)
+        )
+        val body = "## 新しい見出し\n\n結論として、この方法は有効である。ただし条件Aでは使わない。"
+
+        val arranged = arrangeWithPassages(body, listOf(quoted), current = SectionRef(title = null))
+
+        assertEquals(listOf(SectionRef("新しい見出し")), arranged.others.map { it.section })
+    }
+
+    /** 控えた位置が特定できなければ、今どおり見出しの照合で並べる。 */
+    @Test
+    fun `特定できない控えた位置は見出しの照合で並ぶ`() {
+        val body = "## 導入\n\n同じ書き出し\n\n## 本論\n\n同じ書き出し"
+        val seen = MarginMemo("どこかで書いた", 1L, "導入", MemoPassage.Seen("同じ書き出し"))
+        val missingHeading = MarginMemo("見出しが消えた", 2L, "消えた見出し", MemoPassage.Seen("同じ書き出し"))
+
+        val arranged = arrangeWithPassages(body, listOf(seen, missingHeading), current = SectionRef("導入"))
+
+        assertEquals(listOf(seen), arranged.current.map { it.memo })
+        assertEquals(listOf<SectionRef?>(null), arranged.others.map { it.section })
+    }
+
+    /** 照らし直しの結果を渡さなければ、v7 までと同じ並べ方になる。 */
+    @Test
+    fun `照らし直しが無ければ見出しの照合だけで並ぶ`() {
+        val quoted = MarginMemo("条件B", 1L, "まとめ", MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Bでは使わな"), truncated = false))
+        val model = buildNoteSectionModel(sameNameBody)
+
+        val arranged = arrangeMemos(listOf(quoted), model.headingIndex, SectionRef("まとめ"))
+
+        assertEquals(listOf(SectionRef("まとめ", ordinal = 1)), arranged.others.map { it.section })
+        assertEquals(listOf(quoted), arranged.current.map { it.memo })
+    }
+
+    // ── 並べる処理の仕事はメモの数だけ（→ features/margin_quote.md §5.5）─────────────
+
+    /** 読んだ回数を数える列（見出しの [CountingList] と同じ形）。`hashCode` と `equals` も要素を読むので、隠れた走査もここで数える。 */
+    private class CountingReads<T>(private val inner: List<T>) : AbstractList<T>() {
+        var reads = 0
+        override val size: Int get() = inner.size
+        override fun get(index: Int): T {
+            reads++
+            return inner[index]
+        }
+    }
+
+    /**
+     * **事前計算の後の並べる処理は、候補の列とブロックごとの節の列を読まない。** 候補を1,000から10,000へ増やしても0回のまま。
+     * 時間ではなく読み取りの回数で見る — 走査は明示のループだけでなく、地図の鍵のハッシュや等価比較にも隠れる。
+     */
+    @Test
+    fun `事前計算の後の並べる処理は候補の数に比例する読み取りをしない`() {
+        listOf(1_000, 10_000).forEach { blocks ->
+            val section = SectionRef("まとめ")
+            val sections = CountingReads(List(blocks) { section })
+            val passages = PassageIndex(texts = List(blocks) { "Q" }, sections = sections, readable = List(blocks) { true })
+            val candidateLists = List(20) { CountingReads(List(blocks) { it }) }
+            val memos = List(20) { k ->
+                MarginMemo("メモ$k", k.toLong(), "まとめ", MemoPassage.Quoted("Q", context = null, truncated = false))
+            }
+            val locations = MemoLocations(
+                byMemo = memos.zip(candidateLists).associate { (memo, candidates) -> memo to PassageLocation.Uncertain(candidates) },
+                passages = passages
+            )
+            sections.reads = 0
+            candidateLists.forEach { it.reads = 0 }
+
+            val arranged = arrangeMemos(layoutMemos(memos, HeadingIndex(listOf("まとめ")), locations), current = section)
+
+            assertEquals("候補 $blocks 件でブロックごとの節の列を読んだ", 0, sections.reads)
+            assertEquals("候補 $blocks 件で候補の列を読んだ", 0, candidateLists.sumOf { it.reads })
+            assertEquals(20, arranged.current.size)
+            assertEquals(mapOf(section to 20), arranged.countsBySection)
+        }
+    }
+
+    /**
+     * **候補が別々の節に散らばっても、今の節を替えるだけなら候補の節の列をたどらず、組も作り直さない**（→ features/margin_quote.md §5.5）。
+     * 候補のある節を 1,000 から 50,000 へ増やしても、読み取りは変わらない。**候補の節が上限を超えるメモは1組にまとめる**ので、
+     * ほかの節のメモの組と行の数も、今の節の行も見出しの印も、候補の節の数に比例しない（→ [MAX_SPREAD_SECTIONS]）。
+     */
+    @Test
+    fun `候補が多数の節に散らばっても今の節を替える処理と並ぶ行は候補の節の数に比例しない`() {
+        listOf(1_000, 10_000, 50_000).forEach { count ->
+            val headings = List(count) { "S$it" }
+            val sections = headings.map { SectionRef(it) }
+            val passages = PassageIndex(texts = List(count) { "Q" }, sections = sections, readable = List(count) { true })
+            val index = HeadingIndex(headings)
+            val memos = List(20) { k -> MarginMemo("メモ$k", k.toLong(), "S0", MemoPassage.Quoted("Q", context = null, truncated = false)) }
+            val layout = layoutMemos(memos, index, locateMemos(memos, passages, index))
+            val sectionLists = layout.sectionsOf.map { CountingReads(it) }
+            val groups = CountingReads(layout.groups)
+            val counted = MemoLayout(layout.placed, sectionLists, groups, layout.groupIndex, layout.missing, layout.countsBySection, layout.scattered)
+
+            listOf(sections.first(), sections[count / 2], sections.last(), SectionRef(title = null)).forEach { current ->
+                val arranged = arrangeMemos(counted, current)
+                // 畳んだ面と本文の見出しの印が読むもの
+                assertEquals(0, arranged.current.size)
+                assertEquals(listOf(true), arranged.others.map { it.scattered })
+                assertEquals(20, arranged.others.sumOf { it.memos.size })
+                assertEquals(20, arranged.otherCount)
+                assertEquals(null, arranged.countsBySection[sections[1]])
+            }
+
+            assertEquals("候補の節 $count で、メモごとの節の列を読んだ回数", 0, sectionLists.sumOf { it.reads })
+            assertTrue("候補の節 $count で、組の列を読んだ回数が ${groups.reads}", groups.reads <= 3)
+        }
+    }
+
+    /** 今の節ごとに組を作り直す形（区切り2a までの並べ方）。今の節を引くだけの形が、これと同じ結果を返すことを確かめる。 */
+    private fun rebuiltFor(layout: MemoLayout, index: HeadingIndex, current: SectionRef): ArrangedMemos {
+        val opening = SectionRef(title = null)
+        val spread = layout.sectionsOf.map { it.size > MAX_SPREAD_SECTIONS }
+        val sections = layout.sectionsOf.mapIndexed { k, it -> if (spread[k]) emptyList() else it }
+        val bySection = LinkedHashMap<SectionRef, MutableList<PlacedMemo>>()
+        layout.placed.forEachIndexed { k, memo ->
+            sections[k].filter { it != current }.forEach { bySection.getOrPut(it) { mutableListOf() }.add(memo) }
+        }
+        val groups = bySection.entries
+            .sortedBy { (section, _) -> if (section == opening) -1 else index.positionOf(section) ?: Int.MAX_VALUE }
+            .map { (section, inSection) -> MemoGroup(section, inSection) }
+        val scattered = layout.placed.filterIndexed { k, _ -> spread[k] }
+        val missing = layout.placed.filterIndexed { k, _ -> !spread[k] && sections[k].isEmpty() }
+        val others = groups +
+            listOfNotNull(
+                scattered.takeIf { it.isNotEmpty() }?.let { MemoGroup(section = null, memos = it, scattered = true) },
+                missing.takeIf { it.isNotEmpty() }?.let { MemoGroup(section = null, memos = it) }
+            )
+        return ArrangedMemos(
+            current = layout.placed.filterIndexed { k, _ -> current in sections[k] },
+            others = others,
+            otherCount = others.flatMap { group -> group.memos.map { it.memo } }.distinct().size,
+            countsBySection = sections.flatten().filter { it != opening }.groupingBy { it }.eachCount()
+        )
+    }
+
+    /**
+     * **候補の節が上限ちょうどなら今どおり候補の節ごとに並べ、上限を超えたら1組にまとめる**（→ [MAX_SPREAD_SECTIONS]）。
+     * まとめたメモは今の節にも見出しの印にも数えない（印を押しても、その節の組にそのメモが無いことになるため）。特定できない引用でも、同名の見出しでも同じ。
+     */
+    @Test
+    fun `候補の節が上限を超えるメモだけを1組にまとめ、今の節と印に数えない`() {
+        fun note(sections: Int) = buildNoteSectionModel((0 until sections).joinToString("") { "## 同じ見出し\n\n同じ一節\n\n" } + "## 別の節\n\n別の段落")
+        listOf(MAX_SPREAD_SECTIONS to false, MAX_SPREAD_SECTIONS + 1 to true).forEach { (count, gathered) ->
+            val model = note(count)
+            val memos = listOf(
+                MarginMemo("特定できない引用", 2L, "同じ見出し", MemoPassage.Quoted("同じ一節", context = null, truncated = false)),
+                MarginMemo("同名の見出し", 1L, "同じ見出し")
+            )
+            val layout = layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex))
+            val first = model.headingIndex.sections.first()
+
+            val inFirst = arrangeMemos(layout, first)
+            val inOther = arrangeMemos(layout, SectionRef("別の節"))
+
+            assertEquals("候補の節 $count の今の節", if (gathered) 0 else 2, inFirst.current.size)
+            assertEquals("候補の節 $count の印", if (gathered) null else 2, inFirst.countsBySection[first])
+            assertEquals("候補の節 $count のまとめた組", if (gathered) listOf(true) else List(count) { false }, inOther.others.map { it.scattered })
+            assertEquals(2, inOther.otherCount)
+        }
+    }
+
+    /** 今の節・ほかの節の組と順序・件数・印は、確定・特定できない・同名に共通・見出しより前・見つからないが混ざっても、作り直したときと同じ。 */
+    @Test
+    fun `今の節を引くだけの並べ方は、節ごとに組を作り直したときと同じ`() {
+        val model = buildNoteSectionModel(
+            "冒頭の段落\n\n## まとめ\n\n同じ一節\n\n## 本論\n\n本論の段落\n\n## まとめ\n\n同じ一節\n\n## 付録\n\n同じ一節"
+        )
+        val memos = listOf(
+            MarginMemo("特定できない", 7L, "まとめ", MemoPassage.Quoted("同じ一節", context = null, truncated = false)),
+            MarginMemo("同名に共通", 6L, "まとめ"),
+            MarginMemo("確定", 5L, "まとめ", MemoPassage.Seen("本論の段落")),
+            MarginMemo("本論", 4L, "本論"),
+            MarginMemo("冒頭", 3L, null),
+            MarginMemo("消えた節", 2L, "消えた見出し"),
+            MarginMemo("見つからない引用", 1L, "付録", MemoPassage.Quoted("どこにも無い", context = null, truncated = false))
+        )
+        val layout = layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex))
+
+        (model.headingIndex.sections + SectionRef(title = null) + SectionRef("無い節")).forEach { current ->
+            assertEquals("今の節 $current", rebuiltFor(layout, model.headingIndex, current), arrangeMemos(layout, current))
+        }
+    }
+
+    /** **同じ一節を引いたメモが多くても、本文を鍵で探すのは鍵につき1度だけ**（候補の列もメモの間で共有する）。 */
+    @Test
+    fun `同じ鍵のメモをまとめて照らしても本文を探すのは1度だけ`() {
+        val blocks = 1_000
+        val texts = CountingReads(List(blocks) { "Q" })
+        val passages = PassageIndex(texts = texts, sections = List(blocks) { SectionRef(title = null) }, readable = List(blocks) { true })
+        val memos = List(20) { k -> MarginMemo("メモ$k", k.toLong(), null, MemoPassage.Quoted("Q", context = null, truncated = false)) }
+        texts.reads = 0
+
+        locateMemos(memos, passages, HeadingIndex(emptyList()))
+
+        assertEquals(blocks, texts.reads)
+    }
+
+    /** 候補の節は、事前計算のときに同じ節を1つにまとめてある。 */
+    @Test
+    fun `特定できない引用の候補が同じ節に多くても1つの節に1度だけ並ぶ`() {
+        val body = (1..50).joinToString("\n\n") { "同じ一節" }
+        val memo = MarginMemo("どれか", 1L, null, MemoPassage.Quoted("同じ一節", context = null, truncated = false))
+
+        val arranged = arrangeWithPassages(body, listOf(memo), current = SectionRef(title = null))
+
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
+        assertTrue(arranged.others.isEmpty())
+    }
+
+    // ── 書き込み先と所属する節が食い違わない（→ features/margin_quote.md §5.3）──────────
+
+    private val twoSections = "## A\n\nAで読んでいた段落\n\n## B\n\nBから引く一節"
+
+    /** 置いたメモを、痕跡の JSON に通して読み戻す（保存して開き直したのと同じ値にする）。 */
+    private fun throughJson(memo: MarginMemo): MarginMemo {
+        val trace = ReadingTrace(
+            vaultRelativePath = "note.md", noteTitle = "ノート", documentId = null,
+            visits = listOf(ReadingVisit(1L, null, 10)), memos = listOf(memo)
+        )
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(trace)) as ReadingTraceReadResult.Valid
+        return decoded.trace.memos.single()
+    }
+
+    private fun placeAndArrange(draft: MarginMemoDraft, current: SectionRef): Pair<MarginMemo, ArrangedMemos> {
+        val model = buildNoteSectionModel(twoSections)
+        val passages = buildPassageIndex(model)
+        val submission = submissionOf(draft.text, draft.target?.title, 1_000L, draft.passage, target = draft.target)!!
+        val memo = throughJson(submission.memo)
+        return memo to arrangeMemos(layoutMemos(listOf(memo), model.headingIndex, locateMemos(listOf(memo), passages, model.headingIndex)), current)
+    }
+
+    /**
+     * **Aで書き始めて、Bから引用し、引用を外して置いたメモは、Bの組に残る。** 古い控え（Aの段落）が書き込み先を取り消さない。
+     * 保存・読み直し・並べ直しまでつないで確かめる（操作の直後だけでは通ってしまう）。
+     */
+    @Test
+    fun `Aで書き始めBから引用して外したメモは保存して並べ直してもBに残る`() {
+        val passages = buildPassageIndex(buildNoteSectionModel(twoSections))
+        val source = quoteSourceFor("Bから引く一節", selectedBlock = 3, index = passages) as QuoteSource.Resolved
+        val draft = MarginMemoDraft()
+            .edited("書いていた", passages.sections[1], seenPassageAt(0, passages))
+            .quoted(DraftQuote(MemoPassage.Quoted("Bから引く一節", source.context, truncated = false)), passages.sections[source.block])
+            .unquoted()
+
+        val (memo, arranged) = placeAndArrange(draft, current = SectionRef("B"))
+
+        assertEquals("B", memo.sectionTitle)
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
+        assertEquals(mapOf(SectionRef("B") to 1), arranged.countsBySection)
+    }
+
+    @Test
+    fun `引用を付けずに置いたメモは元の控えのまま元の段落の節に並ぶ`() {
+        val passages = buildPassageIndex(buildNoteSectionModel(twoSections))
+        val draft = MarginMemoDraft().edited("Aについて", passages.sections[1], seenPassageAt(0, passages))
+
+        val (memo, arranged) = placeAndArrange(draft, current = SectionRef("A"))
+
+        assertEquals(MemoPassage.Seen("Aで読んでいた段落"), memo.passage)
+        assertEquals(listOf(memo), arranged.current.map { it.memo })
     }
 }

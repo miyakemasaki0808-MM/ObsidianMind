@@ -1,9 +1,21 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.PassageIndex
+import com.example.newproject.domain.QuoteSource
+import com.example.newproject.domain.chosen
+import com.example.newproject.domain.choiceDismissed
+import com.example.newproject.domain.quoteAttachmentFor
+import com.example.newproject.domain.resolveQuoteAt
 import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.checkSubmission
 import com.example.newproject.domain.edited
+import com.example.newproject.domain.consumedBy
+import com.example.newproject.domain.quoted
+import com.example.newproject.domain.quoteAbandoned
+import com.example.newproject.domain.quoteSettled
+import com.example.newproject.domain.quoteRequested
+import com.example.newproject.domain.unquoted
 import com.example.newproject.domain.sendAction
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
@@ -12,10 +24,16 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MarginMemoDraftStore
 import com.example.newproject.model.MarginMemoSlice
 import com.example.newproject.model.MarginMemoStateWriter
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.state.MemoSubmission
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -46,9 +64,24 @@ internal class MarginMemoController(
     private val loadMemos: suspend (vaultRelativePath: String, confirmAbsence: Boolean) -> MemoLoad,
     private val appendMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoSaveOutcome,
     private val deleteMemo: suspend (vaultRelativePath: String, memo: MarginMemo) -> MemoDeleteOutcome,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    /** 引用元を探す先。位置で決まらなければ本文の全体を探すので、Main で走らせない（→ features/margin_quote.md §5.2）。 */
+    private val quoteDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /**
+     * 今のノートの送信が受け取れて、**その受理で書きかけを空にできた**（→ features/margin_quote.md §5.6）。
+     * 受理されたことだけでは呼ばない — 待つ間に書き直していれば、まだ書き終えていない。並べ読みの右を資料へ戻すのに使う。
+     */
+    private val onDraftConsumed: () -> Unit = {}
 ) {
     private var loadJob: Job? = null
+
+    /**
+     * 引用を付ける・引用元を選ぶ仕事。**頼んだ瞬間に書きかけへ要求の番号を持たせ**（[MarginMemoDraft.quoting]）、
+     * 結果はその番号が今も待っているときだけ当てる。新しく頼んだら前の仕事は取り消す。
+     * ジョブはノート単位で、ノート切替と Vault 切替で止める。書きかけそのものは Vault 単位で預かる。
+     */
+    private var quoteJob: Job? = null
+    private var quoteRequest = 0L
 
     /**
      * 走行中の書き込み。**保存と削除で1本を共有しない。**
@@ -112,7 +145,7 @@ internal class MarginMemoController(
             // **離れている間に頼んだ送信は、戻って読んだ一覧で決める**（→ features/margin_pane.md §6.2 の②）。
             val check = if (noteKey != null && pending != null) {
                 checkSubmission(pending, loaded.memos, loaded.fileRead).also { check ->
-                    drafts.update(noteKey) { it.settled(pending, check) }
+                    settleDraft(noteKey, pending, check)
                 }
             } else {
                 null
@@ -162,9 +195,77 @@ internal class MarginMemoController(
      * 入力を変えた。**書き始めた瞬間の本文の節を書き込み先にする**（→ features/margin_pane.md §5.3）。
      * 本文を表示していないときは何もしない。
      */
-    fun edit(text: String, bodySection: SectionRef?) {
+    fun edit(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) {
         val noteKey = currentNoteKey() ?: return
-        drafts.update(noteKey) { it.edited(text, bodySection) }
+        drafts.update(noteKey) { it.edited(text, bodySection, seenAtStart) }
+    }
+
+    /**
+     * 引用を付けた（→ features/margin_quote.md §5.2）。書き込み先は引用元の節 [section] へ移る。
+     * 本文を表示していないときは何もしない。
+     */
+    fun attachQuote(quote: DraftQuote, section: SectionRef?) {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.quoted(quote, section) }
+    }
+
+    /** 引用の ✕。引用だけを外す。 */
+    fun detachQuote() {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.unquoted() }
+    }
+
+    /**
+     * 選択メニューの「引用して書く」（→ features/margin_quote.md §5.2）。選んだ文字 [selected] から引用元を決めて、書きかけへ付ける。
+     * [sourceBlock] は選んだ範囲の始まりを含むブロック（位置から決まらなければ null）、[hintBlock] は境目で切るためだけの手掛かり。
+     * 引用元が決まらなければ、書き込み先は [bodySection]（そのときの本文の節）にする。
+     *
+     * **待つ間にノートを替えたら付けない。もう一度引用したら後のものだけを付ける。** 空白だけなら何も付けない。
+     */
+    fun quote(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, passages: PassageIndex) {
+        val noteKey = currentNoteKey() ?: return
+        launchQuote(noteKey) { request ->
+            val attachment = withContext(quoteDispatcher) { quoteAttachmentFor(selected, sourceBlock, hintBlock, passages) } ?: return@launchQuote
+            if (currentNoteKey() != noteKey) return@launchQuote
+            drafts.update(noteKey) { draft -> draft.quoteSettled(request) { it.quoted(attachment.quote, attachment.section ?: bodySection) } }
+        }
+    }
+
+    /**
+     * 付ける場で候補 [block] を引用元に選んだ（→ 判断13）。[quote] は選んでいた引用で、[passages] は候補を出した解析結果。
+     * 選んでいた引用が待つ間に替わっていれば、書きかけの規則が何もしない（→ `chosen`）。
+     */
+    fun chooseQuoteSource(quote: MemoPassage.Quoted, block: Int, passages: PassageIndex) {
+        val noteKey = currentNoteKey() ?: return
+        launchQuote(noteKey) { request ->
+            val source = withContext(quoteDispatcher) { resolveQuoteAt(quote.text, block, passages) } as? QuoteSource.Resolved ?: return@launchQuote
+            if (currentNoteKey() != noteKey) return@launchQuote
+            drafts.update(noteKey) { draft -> draft.quoteSettled(request) { it.chosen(quote, source.context, passages.sections[source.block]) } }
+        }
+    }
+
+    /** 候補を選ばずに閉じた。引用元を決めないまま付けておく。 */
+    fun dismissQuoteChoice() {
+        val noteKey = currentNoteKey() ?: return
+        drafts.update(noteKey) { it.choiceDismissed() }
+    }
+
+    /**
+     * 引用の仕事を始める。**頼んだ瞬間に [noteKey] の書きかけへ要求の番号を持たせ**、結果を当てずに終わったら
+     * （空白だけ・決まらなかった・取り消した。始まる前に取り消した場合も）待っている印を下ろす。
+     */
+    private fun launchQuote(noteKey: String, block: suspend CoroutineScope.(request: Long) -> Unit) {
+        val request = ++quoteRequest
+        drafts.update(noteKey) { it.quoteRequested(request) }
+        quoteJob?.cancel()
+        quoteJob = scope.launch { block(request) }.apply {
+            invokeOnCompletion { drafts.update(noteKey) { it.quoteAbandoned(request) } }
+        }
+    }
+
+    private fun stopQuote() {
+        quoteJob?.cancel()
+        quoteJob = null
     }
 
     /**
@@ -191,7 +292,8 @@ internal class MarginMemoController(
             MemoSendAction.Place -> Unit
         }
         val section = draft.target ?: bodySection
-        val submission = submissionOf(draft.text, section?.title, clock()) ?: return
+        // **引用か控えた位置も一緒に送る。** 照合の鍵（保存値と時刻）には入れない。
+        val submission = submissionOf(draft.text, section?.title, clock(), draft.passage, target = section) ?: return
         // **送った記録を先に残す。** 結果が同期で返っても、受理を取りこぼさない。
         drafts.update(noteKey) { it.submitted(submission) }
 
@@ -213,9 +315,7 @@ internal class MarginMemoController(
             val accepted = outcome == MemoSaveOutcome.Saved || outcome == MemoSaveOutcome.Held
             // **結果は送信を作ったノートの書きかけにだけ届ける。** 照合は送信そのもので行うので、
             // 追わなくなった古い送信の結果は新しい入力を消さない。
-            drafts.update(noteKey) {
-                it.settled(submission, if (accepted) SubmissionCheck.Accepted else SubmissionCheck.NotAccepted)
-            }
+            settleDraft(noteKey, submission, if (accepted) SubmissionCheck.Accepted else SubmissionCheck.NotAccepted)
             if (!isCurrent(requestId)) return@launchWrite
             state.update { latest ->
                 val ready = latest.marginMemoState as? MarginMemoState.Ready ?: return@update latest
@@ -290,6 +390,7 @@ internal class MarginMemoController(
      */
     fun cancelAndClear() {
         generation++
+        stopQuote()
         loadWhenPathBound = false
         loadJob?.cancel()
         loadJob = null
@@ -316,7 +417,15 @@ internal class MarginMemoController(
 
     /** Vault 切替。**書きかけを全ノート分捨てる** — 別の Vault のノートへ置けてしまう。 */
     fun clearVaultScoped() {
+        stopQuote()
         drafts.clear()
+    }
+
+    /** 照合の結果を [noteKey] の書きかけへ当てる。受理で今のノートの書きかけを空にできたら知らせる（→ [onDraftConsumed]）。 */
+    private fun settleDraft(noteKey: String, submission: MemoSubmission, check: SubmissionCheck) {
+        val consumed = check == SubmissionCheck.Accepted && drafts.draft(noteKey).consumedBy(submission)
+        drafts.update(noteKey) { it.settled(submission, check) }
+        if (consumed && currentNoteKey() == noteKey) onDraftConsumed()
     }
 
     private fun isCurrent(requestId: Long): Boolean = generation == requestId

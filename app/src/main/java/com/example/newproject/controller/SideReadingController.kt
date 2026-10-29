@@ -4,7 +4,10 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SideReadingStateWriter
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.face
+import com.example.newproject.model.state.withFace
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -61,16 +64,31 @@ internal class SideReadingController(
                 // 最大1MBの本文を解析するので Main の外で（→ architecture.md 判断3）。
                 val parsed = withContext(parseDispatcher) { parseMarkdownBlocks(content) }
                 mutableBlocks.value = parsed
-                state.set(SideReadingState.Ready(note))
+                // 読み込む間に右の面を書きかけへ替えていたら、そのまま（→ features/margin_quote.md §5.6）。
+                state.set(SideReadingState.Ready(note, state.current.face))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 // 取り消した後の失敗は、閉じた面や選び直した候補を上書きする。取り消されていれば投げ直して何も書かない。
                 ensureActive()
-                state.set(SideReadingState.Failed(note, e.message ?: "読み込めませんでした"))
+                state.set(SideReadingState.Failed(note, e.message ?: "読み込めませんでした", state.current.face))
             }
         }
     }
+
+    /**
+     * 右の面の出し分けを替える（→ features/margin_quote.md §5.6）。左で引用したら書きかけ、切替や戻る操作で選んだ方。
+     * 並べ読みをしていなければ何もしない。**新しい候補を開くと資料から始まる**（[open]）。
+     */
+    fun showFace(face: SideFace) {
+        state.set(state.current.withFace(face))
+    }
+
+    /**
+     * 送ったメモが受け取れて、**その受理で今の書きかけを空にできた**。右を資料へ戻す（→ features/margin_quote.md §5.6）。
+     * 資料のままなら変わらない — 保存を待つ間に手で資料へ切り替えていたら、結果の到着でそれを覆さない。
+     */
+    fun draftConsumed() = showFace(SideFace.Reference)
 
     /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun close() {

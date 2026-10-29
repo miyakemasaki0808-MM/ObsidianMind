@@ -40,14 +40,57 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.text.TextRange
+import com.example.newproject.domain.consumedBy
+import org.junit.Assert.assertFalse
+import android.view.KeyEvent as AndroidKeyEvent
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.withKeyDown
+import androidx.compose.ui.test.pressKey
+import androidx.compose.foundation.text.input.TextFieldState
+import com.example.newproject.ui.screen.MemoField
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.ArrangedMemos
 import com.example.newproject.domain.HeadingIndex
+import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.SubmissionCheck
 import com.example.newproject.domain.arrangeMemos
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.ui.screen.DRAFT_QUOTE_PENDING
+import com.example.newproject.domain.quoteAbandoned
+import com.example.newproject.domain.quoteRequested
+import org.junit.Assert.assertNull
+import kotlinx.coroutines.Dispatchers
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.hasContentDescription
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.domain.quoted
+import com.example.newproject.domain.unquoted
+import com.example.newproject.domain.choiceDismissed
+import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.ui.screen.quoteChoiceQuestion
+import com.example.newproject.ui.screen.DRAFT_QUOTE_DESTINATION
+import com.example.newproject.ui.screen.DRAFT_QUOTE_CUT_NOTICE
+import com.example.newproject.ui.screen.QuoteCandidateFinder
+import com.example.newproject.ui.screen.DraftQuoteActions
+import com.example.newproject.model.QuoteContext
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.domain.layoutMemos
+import com.example.newproject.domain.locateMemos
 import com.example.newproject.domain.edited
 import com.example.newproject.domain.settled
 import com.example.newproject.domain.submissionOf
@@ -121,6 +164,20 @@ class MarginMemoSheetUiTest {
         var focusIntent by mutableStateOf(false)
         /** この節に前回の読書の跡を出すなら、その訪問の日時。テストが節を移ったことにして替える。 */
         var previousReadingAt by mutableStateOf<Long?>(null)
+        /** 引用した段落か書いた頃の位置へ送ったブロック。 */
+        var jumpedBlock by mutableStateOf<Int?>(null)
+        /** 入力欄の編集の状態の置き場（机の画面と同じく面の外で持つ）。 */
+        val field = MemoField()
+        /** 引用の候補を探す口。null は本文の解析の前。 */
+        var finder by mutableStateOf<QuoteCandidateFinder?>(null)
+        /** 付ける場で選んだ候補のブロックと、候補を探した解析結果。 */
+        val chosen = mutableListOf<Pair<Int, NoteSectionModel>>()
+        /** 引用の欄の操作も、本番と同じ書きかけの規則で演じる。 */
+        val quoteActions = DraftQuoteActions(
+            onDetach = { drafts.update(note) { it.unquoted() } },
+            onChoose = { _, block, model -> chosen += block to model },
+            onDismissChoice = { drafts.update(note) { it.choiceDismissed() } }
+        )
         val sent = mutableListOf<MemoSubmission>()
         private var clock = 0L
 
@@ -144,10 +201,14 @@ class MarginMemoSheetUiTest {
     /** 画面のフォーカスを外す（キーボードの完了などで利用者が外したのと同じ）。 */
     private var focusClearer: () -> Unit = {}
 
+    /** 画面の根の View。キーボードと同じ口（InputConnection）を開くのに使う。 */
+    private var rootView: View? = null
+
     private fun setContent(harness: Harness, shown: () -> Boolean = { true }, inPane: () -> Boolean = { true }) {
         composeRule.setContent {
             val focusManager = LocalFocusManager.current
             focusClearer = { focusManager.clearFocus() }
+            rootView = LocalView.current
             AppTheme(darkTheme = false) {
                 if (shown()) {
                     val content: @androidx.compose.runtime.Composable () -> Unit = {
@@ -158,6 +219,7 @@ class MarginMemoSheetUiTest {
                             hasHeadings = true,
                             onJumpToSection = { harness.section = it },
                             arranged = harness.arranged,
+                            onJumpToBlock = { harness.jumpedBlock = it },
                             onEdit = harness::edit,
                             onSubmit = harness::submit,
                             onDelete = {},
@@ -165,7 +227,10 @@ class MarginMemoSheetUiTest {
                             onRevealHandled = { harness.reveal = null },
                             focusIntent = harness.focusIntent,
                             onFocusIntentChange = { harness.focusIntent = it },
-                            previousReadingAt = harness.previousReadingAt
+                            previousReadingAt = harness.previousReadingAt,
+                            quoteCandidates = harness.finder,
+                            quoteActions = harness.quoteActions,
+                            memoField = harness.field
                         )
                     }
                     if (inPane()) Box { content() } else Column { content() }
@@ -462,6 +527,29 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText(PREVIOUS_READING, substring = true).assertExists()
     }
 
+    /**
+     * **同じ一節が1万の節にあり、それを前後を控えずに引用したメモが20件あっても、見出しの印からほかの節のメモを開いて組み立てられる**
+     * （→ features/margin_pane.md §5.6）。候補の節が上限を超えるメモは1組にまとめるので、並ぶのは20行だけ。候補の節ごとに並べると約20万行になり、組む途中でメモリが尽きた。
+     */
+    @Test
+    fun 候補の節が1万あるメモも_ほかの節を開くと1組にまとめて並ぶ() {
+        val count = 10_000
+        val sections = List(count) { SectionRef("S$it") }
+        val index = HeadingIndex(sections.map { it.title!! })
+        val passages = PassageIndex(texts = List(count) { "同じ一節" }, sections = sections, readable = List(count) { true })
+        val memos = List(20) { k -> MarginMemo("前後を控えていない引用 ${k + 1}", k.toLong(), "S0", MemoPassage.Quoted("同じ一節", context = null, truncated = false)) }
+        val harness = Harness()
+        harness.section = sections[count / 2]
+        harness.arranged = arrangeMemos(layoutMemos(memos, index, locateMemos(memos, passages, index)), sections[count / 2])
+        setContent(harness)
+
+        composeRule.runOnIdle { harness.reveal = MemoReveal.Section(sections.first()) }
+
+        composeRule.onNodeWithText("場所を一つに絞れないメモ").assertExists()
+        composeRule.onNodeWithText("▾ ほかの節のメモ 20件").assertExists()
+        assertEquals(20, composeRule.onAllNodesWithText("前後を控えていない引用", substring = true).fetchSemanticsNodes().size)
+    }
+
     /** ほかの節のメモは畳んで件数だけ。開くと節の名前が並び、押すと本文がその節へ飛ぶ。 */
     @Test
     fun ほかの節のメモは開くと節ごとに並び_節の名前で本文が飛ぶ() {
@@ -495,6 +583,353 @@ class MarginMemoSheetUiTest {
         composeRule.onNodeWithText("まとめ（2つ目）").performClick()
 
         composeRule.runOnIdle { assertEquals(SectionRef("まとめ", 1), harness.section) }
+    }
+
+    /**
+     * **引用は本文の上に出し、確定していれば押すとその段落へ、書いた頃の位置は「書いた頃の位置へ」でその位置へ本文を送る**（→ features/margin_quote.md §5.5）。
+     * 特定できない引用は押せず、似た一節の数を添える。照らし直しと並べ方は本番の関数を通す。
+     */
+    @Test
+    fun 引用と書いた頃の位置から本文の段落へ飛べ_特定できない引用はそう添える() {
+        val harness = Harness()
+        val model = buildNoteSectionModel(
+            "## 節B\n\n意志の力に頼ると、三日で元に戻る。\n\n結論として、この方法は有効である。ただし条件Aでは使わない。\n\n同じ一節\n\n同じ一節"
+        )
+        val memos = listOf(
+            MarginMemo("位置のメモ", 3L, "節B", MemoPassage.Seen("意志の力に頼ると、三日で元に戻る。")),
+            MarginMemo("引用のメモ", 2L, "節B", MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし条件Aでは使わな"), truncated = true)),
+            MarginMemo("特定できないメモ", 1L, "節B", MemoPassage.Quoted("同じ一節", context = null, truncated = false))
+        )
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex)), SectionRef("節B"))
+        setContent(harness)
+
+        composeRule.onNodeWithText("書いた頃の位置へ").performClick()
+        composeRule.runOnIdle { assertEquals(1, harness.jumpedBlock) }
+        composeRule.onNodeWithText("この方法は有効である。…").performClick()
+        composeRule.runOnIdle { assertEquals(2, harness.jumpedBlock) }
+        composeRule.onNodeWithText("引用した場所を特定できません · 似た一節 2 か所", substring = true).assertExists()
+        composeRule.onNodeWithText("同じ一節").performClick()
+        composeRule.runOnIdle { assertEquals("特定できない引用で本文を送った", 2, harness.jumpedBlock) }
+    }
+
+    /**
+     * **引用の欄は、引用・入らない部分・行き先と未保存を見せ、✕ で引用だけを外す**（→ features/margin_quote.md §5.2・§5.3）。
+     * 引用があって言葉が空なら、入力欄が添えることを促す（引用だけでは置けない → 判断2）。
+     */
+    @Test
+    fun 引用の欄は引用と入らない部分と行き先を見せ_バツで引用だけを外す() {
+        val harness = Harness()
+        harness.drafts.update(NOTE_A) {
+            it.quoted(DraftQuote(MemoPassage.Quoted("引いた一節", QuoteContext("", ""), truncated = true), cut = "入らない残り"), SectionRef("節B"))
+        }
+        setContent(harness)
+
+        composeRule.onNodeWithText("引いた一節").assertExists()
+        composeRule.onNodeWithText("$DRAFT_QUOTE_CUT_NOTICE：入らない残り").assertExists()
+        composeRule.onNodeWithText(DRAFT_QUOTE_DESTINATION).assertExists()
+        composeRule.onNodeWithText("引用にひとこと添えて置く").assertExists()
+
+        composeRule.onNode(hasContentDescription("引用を外す")).performClick()
+
+        composeRule.onNodeWithText("引いた一節").assertDoesNotExist()
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        composeRule.runOnIdle { assertNull(harness.draft.quote) }
+    }
+
+    /**
+     * **面が外れて組み直されても、入力欄のカーソルと選択を保つ**（→ features/margin_quote.md §5.6）。並べ読みの右を資料に替えると入力欄は面ごと外れる。
+     * 文中のカーソルでは次の1文字がその位置へ入り、選択した範囲ではその範囲だけが置き換わる。
+     */
+    // 選択を置く試験の口（performTextInputSelection）は試験的な API。
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 面が外れて戻っても入力欄のカーソルと選択を保つ() {
+        val harness = Harness()
+        var shown by mutableStateOf(true)
+        setContent(harness, shown = { shown })
+        input.performTextInput("abcdef")
+
+        input.performTextInputSelection(TextRange(3))
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+        input.performTextInput("X")
+        composeRule.runOnIdle { assertEquals("abcXdef", harness.draft.text) }
+
+        input.performTextInputSelection(TextRange(4, 6))
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+        input.performTextInput("Y")
+        composeRule.runOnIdle { assertEquals("abcXYf", harness.draft.text) }
+    }
+
+    /**
+     * **描き直しの前に続けて届く編集を落とさない**（→ features/margin_quote.md §5.6）。描いた時点の文字へ戻す編集でも、
+     * 直前に反映した文字と違えば書きかけへ渡し、次の描画と置いたメモもその文字になる。
+     * 2つの通知を UI スレッドの1回の実行の中で送り、間に描き直しを挟まない。
+     */
+    // 選択を置く試験の口（performTextInputSelection）は試験的な API。
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 描き直しの前に足して戻しても最後の編集が書きかけと描画と置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abc")
+        // 描いた値とカーソルを違えておく。値まで同じ通知は、入力欄の部品自身が捨てる。
+        input.performTextInputSelection(TextRange(1))
+        val setText = checkNotNull(input.fetchSemanticsNode().config[SemanticsActions.SetText].action)
+
+        composeRule.runOnUiThread {
+            setText(AnnotatedString("abcd"))
+            setText(AnnotatedString("abc"))
+        }
+
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("abc")))
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
+
+        // 描いた文字へ戻らない連続の編集も、最後の値で終わる。
+        composeRule.runOnUiThread {
+            setText(AnnotatedString("abcd"))
+            setText(AnnotatedString("abcde"))
+        }
+        composeRule.runOnIdle { assertEquals("abcde", harness.draft.text) }
+        composeRule.runOnUiThread { setText(AnnotatedString("abc")) }
+
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **描き直しの前に足して戻し、カーソルまで描いた位置へ戻っても、最後の編集を落とさない**（→ features/margin_quote.md §5.6）。
+     * キーボードと同じ口（InputConnection）から2つの編集を UI スレッドの1回の実行の中で送り、間に描き直しを挟まない。
+     * 最後の値は描いた値と文字・選択・変換中の範囲まで同じになる — `TextFieldValue` 版の入力欄はこの通知を捨てていた。
+     */
+    @Test
+    fun 足して戻しカーソルまで描いた位置へ戻っても_最後の編集が書きかけと描画と置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abc")
+        val drawn = composeRule.runOnIdle { harness.field.state.edited() }
+        assertEquals(Triple("abc", TextRange(3), null), drawn)
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+
+        composeRule.runOnUiThread {
+            connection.commitText("d", 1)
+            assertEquals("描き直しを待たないと書きかけへ届かない", "abcd", harness.draft.text)
+            connection.deleteSurroundingText(1, 0)
+            assertEquals(drawn, harness.field.state.edited())
+        }
+
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, AnnotatedString("abc")))
+        input.assert(SemanticsMatcher.expectValue(SemanticsProperties.TextSelectionRange, TextRange(3)))
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **変換中の文字を確定して1文字消しても、最後の編集を落とさない。** 確定と削除を描き直しを挟まずに送る（→ features/margin_quote.md §5.6）。
+     * 変換中の文字を入れて確かめるところから削除まで、UI スレッドの1回の実行の中で行う — 実機では本物のキーボードも同じ入力欄につながっていて、
+     * 実行を分けた隙に変換を確定してしまう。
+     */
+    @Test
+    fun 変換中の文字を確定して1文字消しても_最後の編集が書きかけと置いたメモに残る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performClick()
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread {
+            connection.setComposingText("abc", 1)
+            assertEquals(Triple("abc", TextRange(3), TextRange(0, 3)), harness.field.state.edited())
+            connection.commitText("abcd", 1)
+            connection.deleteSurroundingText(1, 0)
+        }
+
+        composeRule.runOnIdle {
+            assertEquals(Triple("abc", TextRange(3), null), harness.field.state.edited())
+            assertEquals("abc", harness.draft.text)
+        }
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **元に戻す・やり直すは、その場で書きかけへ渡る**（→ features/margin_quote.md §5.6）。入力欄に任せると変換の口を通らないので、
+     * キー操作を横取りして行う。キーと確かめを UI スレッドの1回の実行の中で行い、描き直しも観測も待たない。
+     */
+    @Test
+    fun 元に戻す操作とやり直す操作はその場で書きかけへ渡る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+        composeRule.runOnIdle { assertEquals("abc", harness.draft.text) }
+
+        composeRule.runOnUiThread {
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            assertEquals("abcd", harness.field.state.text.toString())
+            assertEquals("abcd", harness.draft.text)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z, shift = true)
+            assertEquals("abc", harness.field.state.text.toString())
+            assertEquals("abc", harness.draft.text)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            pressCtrl(AndroidKeyEvent.KEYCODE_Y)
+            assertEquals("abc", harness.field.state.text.toString())
+            assertEquals("abc", harness.draft.text)
+        }
+    }
+
+    /** **元に戻してすぐ「置く」を押しても、入力欄に見えている文字で送る。** */
+    @Test
+    fun 元に戻してすぐ置いても_入力欄の文字で送る() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+
+        composeRule.runOnUiThread {
+            pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+            harness.submit()
+        }
+
+        composeRule.runOnIdle { assertEquals(listOf(harness.field.state.text.toString()), harness.sent.map { it.raw }) }
+        assertEquals(listOf("abcd"), harness.sent.map { it.raw })
+    }
+
+    /**
+     * **送って結果を待つ間に元に戻すと、前の送信の受理で書きかけを消さない**（→ features/margin_quote.md §5.3「受け取れた」）。
+     * 戻した文字は送ったものと違うので、受理は今の書きかけを消費しない。戻してすぐ受理が届く順と、描き直してから届く順の両方。
+     */
+    @Test
+    fun 送って待つ間に元に戻すと_すぐ届いた受理で書きかけが消えない() = undoWhileSaving(idleBeforeSettle = false)
+
+    @Test
+    fun 送って待つ間に元に戻すと_描き直した後に届いた受理でも書きかけが消えない() = undoWhileSaving(idleBeforeSettle = true)
+
+    private fun undoWhileSaving(idleBeforeSettle: Boolean) {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("abcd")
+        val connection = checkNotNull(composeRule.runOnUiThread { checkNotNull(rootView).onCreateInputConnection(EditorInfo()) })
+        composeRule.runOnUiThread { connection.deleteSurroundingText(1, 0) }
+        composeRule.onNodeWithText("置く").performClick()
+        assertEquals(listOf("abc"), harness.sent.map { it.raw })
+
+        val settle = {
+            assertFalse("戻した書きかけを前の送信が消費した", harness.draft.consumedBy(harness.sent.last()))
+            harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved)
+            assertEquals("abcd", harness.draft.text)
+        }
+        // すぐ届く順は、キーと受理を UI スレッドの1回の実行の中で行う。分けると、その間に Main の待ち行列が進む。
+        if (idleBeforeSettle) {
+            composeRule.runOnUiThread { pressCtrl(AndroidKeyEvent.KEYCODE_Z) }
+            composeRule.waitForIdle()
+            composeRule.runOnUiThread(settle)
+        } else {
+            composeRule.runOnUiThread {
+                pressCtrl(AndroidKeyEvent.KEYCODE_Z)
+                settle()
+            }
+        }
+
+        composeRule.runOnIdle {
+            assertEquals("abcd", harness.draft.text)
+            assertEquals("abcd", harness.field.state.text.toString())
+        }
+        composeRule.onNodeWithText(PLACEHOLDER).assertDoesNotExist()
+    }
+
+    /** **置いて受け取れた文字を、元に戻す操作で入力欄へ呼び戻さない。** 受け取れて空にしたときに元に戻す履歴も消える。 */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun 置いて受け取れた文字を元に戻す操作で呼び戻さない() {
+        val harness = Harness()
+        setContent(harness)
+        input.performTextInput("置いた")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved) }
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+
+        input.performKeyInput { withKeyDown(Key.CtrlLeft) { pressKey(Key.Z) } }
+
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        composeRule.runOnIdle { assertEquals("", harness.draft.text) }
+    }
+
+    /** **受け取れて空になった後に、前と同じ文字を打っても書きかけへ渡る。** 入力欄が持つ値は、描くときに空へ合わせてある。 */
+    @Test
+    fun 受け取れて空になった後に前と同じ文字を打っても置ける() {
+        val harness = Harness()
+        setContent(harness)
+
+        input.performTextInput("同じ")
+        composeRule.onNodeWithText("置く").performClick()
+        composeRule.runOnIdle { harness.settle(harness.sent.last(), SubmissionCheck.Accepted, MemoSaveStatus.Saved) }
+        composeRule.onNodeWithText(PLACEHOLDER).assertExists()
+        input.performTextInput("同じ")
+        composeRule.runOnIdle { assertEquals("同じ", harness.draft.text) }
+        composeRule.onNodeWithText("置く").performClick()
+
+        assertEquals(listOf("同じ", "同じ"), harness.sent.map { it.raw })
+    }
+
+    /** **引用の結果を待つ間は置けず、そのことを引用の欄に出す**（→ features/margin_quote.md §5.3）。届けば置ける。 */
+    @Test
+    fun 引用の結果を待つ間は置けず_その旨を出す() {
+        val harness = Harness()
+        harness.drafts.update(NOTE_A) { it.edited("ひとこと", SectionRef("節B")).quoteRequested(1L) }
+        setContent(harness)
+
+        composeRule.onNodeWithText(DRAFT_QUOTE_PENDING).assertExists()
+        composeRule.onNodeWithText("置く").assertIsNotEnabled()
+
+        composeRule.runOnIdle { harness.drafts.update(NOTE_A) { it.quoteAbandoned(1L) } }
+        composeRule.onNodeWithText(DRAFT_QUOTE_PENDING).assertDoesNotExist()
+        composeRule.onNodeWithText("置く").assertIsEnabled()
+    }
+
+    /** **本文に同じ一節が2か所以上あれば、付ける場で前後の文字つきの候補から選んでもらう**（→ 判断13）。選ばずに閉じても引用は付いたまま。 */
+    @Test
+    fun 付ける場で候補から引用元を選べ_選ばずに閉じても引用は残る() {
+        val harness = Harness()
+        val model = buildNoteSectionModel("## 節A\n\n前の同じ一節\n\n## 節B\n\n同じ一節の後")
+        harness.finder = QuoteCandidateFinder(model, Dispatchers.Default)
+        harness.drafts.update(NOTE_A) {
+            it.quoted(DraftQuote(MemoPassage.Quoted("同じ一節", context = null, truncated = false), choosing = true), SectionRef("節B"))
+        }
+        setContent(harness)
+
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText(quoteChoiceQuestion(2)).fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("同じ一節の後…").performClick()
+        composeRule.runOnIdle { assertEquals(listOf(3 to model), harness.chosen.map { (block, from) -> block to from }) }
+
+        composeRule.onNodeWithText("選ばずに閉じる").performClick()
+        composeRule.onNodeWithText(quoteChoiceQuestion(2)).assertDoesNotExist()
+        composeRule.onNodeWithText("同じ一節").assertExists()
+    }
+
+    /** **特定できない引用は押すと候補を並べ、選んだ段落へ本文を送る。選んだものは覚えない**（→ §5.5・判断13）。 */
+    @Test
+    fun メモの行の特定できない引用を押すと候補が並び_選んだ段落へ飛ぶ() {
+        val harness = Harness()
+        val model = buildNoteSectionModel("## 節B\n\n前の同じ一節\n\n同じ一節の後")
+        val memos = listOf(MarginMemo("特定できないメモ", 1L, "節B", MemoPassage.Quoted("同じ一節", context = null, truncated = false)))
+        harness.state = READY.copy(memos = memos)
+        harness.arranged = arrangeMemos(layoutMemos(memos, model.headingIndex, locateMemos(memos, model.passages, model.headingIndex)), SectionRef("節B"))
+        harness.finder = QuoteCandidateFinder(model, Dispatchers.Default)
+        setContent(harness)
+
+        composeRule.onNodeWithText("同じ一節").performClick()
+        composeRule.waitUntil(5_000) { composeRule.onAllNodesWithText("…前の同じ一節").fetchSemanticsNodes().isNotEmpty() }
+        composeRule.onNodeWithText("…前の同じ一節").performClick()
+
+        composeRule.runOnIdle { assertEquals(1, harness.jumpedBlock) }
+        composeRule.onNodeWithText("…前の同じ一節").assertDoesNotExist()
     }
 
     /** 再会カードの「前回のメモを見る」から来たら、**ほかの節のメモも開いて**メモの並びまで送る。 */
@@ -1061,4 +1496,18 @@ class MarginMemoSheetUiTest {
         const val PREVIOUS_READING_AT = 1_757_635_200_000L
         val READY = MarginMemoState.Ready(memos = emptyList())
     }
+
+    /** Ctrl つきのキーを画面の根から押して離す。UI スレッドで呼ぶ。 */
+    private fun pressCtrl(keyCode: Int, shift: Boolean = false) {
+        val meta = AndroidKeyEvent.META_CTRL_ON or AndroidKeyEvent.META_CTRL_LEFT_ON or
+            if (shift) AndroidKeyEvent.META_SHIFT_ON or AndroidKeyEvent.META_SHIFT_LEFT_ON else 0
+        val view = checkNotNull(rootView)
+        for (action in listOf(AndroidKeyEvent.ACTION_DOWN, AndroidKeyEvent.ACTION_UP)) {
+            view.dispatchKeyEvent(AndroidKeyEvent(0L, 0L, action, keyCode, 0, meta))
+        }
+    }
+
+    /** 入力欄が持つ文字・選択・変換中の範囲。 */
+    private fun TextFieldState.edited() = Triple(text.toString(), selection, composition)
+
 }

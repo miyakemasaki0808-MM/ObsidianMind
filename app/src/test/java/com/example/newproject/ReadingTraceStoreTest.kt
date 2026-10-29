@@ -9,6 +9,7 @@ import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -104,7 +105,7 @@ class ReadingTraceStoreTest {
      * 「エスケープで2倍」を前提にしており、それが成り立つのは
      * **入力時に制御文字を落とす余白メモの本文だけ**である。
      * AI要約や見出し名は正規化を通らないので、制御文字（`\u00XX` で6倍）が入れば
-     * 全欄が上限内のまま128KBを超えうる。ここがその最後の砦になる。
+     * 全欄が上限内のままファイルの上限を超えうる。ここがその最後の砦になる。
      */
     @Test
     fun `encode後に上限を超える痕跡は書かずに失敗を返す`() {
@@ -134,7 +135,9 @@ class ReadingTraceStoreTest {
                 MarginMemo(
                     text = "普通の断片",
                     writtenAtEpochMillis = index.toLong(),
-                    sectionTitle = control.repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES)
+                    sectionTitle = control.repeat(ReadingTraceLimits.MAX_SECTION_TITLE_BYTES),
+                    // 引用は入力時に整えるが、**最後の砦は整え方に頼らない**。上の欄だけでは上限に届かない。
+                    passage = MemoPassage.Quoted(control.repeat(ReadingTraceLimits.MAX_QUOTE_BYTES), context = null, truncated = false)
                 )
             }
         )

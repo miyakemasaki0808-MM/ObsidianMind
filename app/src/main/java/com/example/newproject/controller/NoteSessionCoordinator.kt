@@ -15,9 +15,11 @@ import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MarginMemoDraftStore
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.domain.SummarizeUseCase
@@ -26,6 +28,7 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.DistillRangeEdge
 import com.example.newproject.model.state.DistillRangeEdgeMove
@@ -290,7 +293,9 @@ internal class NoteSessionCoordinator(
         loadMemos = { path, confirmAbsence -> readingTrace.loadMemos(path, confirmAbsence) },
         appendMemo = { path, memo -> readingTrace.appendMemo(path, memo) },
         deleteMemo = { path, memo -> readingTrace.deleteMemo(path, memo) },
-        clock = clock
+        clock = clock,
+        // **受理で今の書きかけを空にできたときだけ**、並べ読みの右を資料へ戻す（→ features/margin_quote.md §5.6）。
+        onDraftConsumed = { sideReading.draftConsumed() }
     )
 
     /**
@@ -744,7 +749,21 @@ internal class NoteSessionCoordinator(
     }
 
     /** 書きかけを変える。[bodySection] は今の本文の節で、書き始めた瞬間だけ書き込み先になる。 */
-    fun editMarginMemo(text: String, bodySection: SectionRef?) = marginMemo.edit(text, bodySection)
+    fun editMarginMemo(text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen? = null) =
+        marginMemo.edit(text, bodySection, seenAtStart)
+
+    /** 選択メニューの「引用して書く」（→ features/margin_quote.md §5.2）。引用元は [passages] で決める。 */
+    fun quoteMarginMemo(selected: String, sourceBlock: Int?, hintBlock: Int?, bodySection: SectionRef?, passages: PassageIndex) =
+        marginMemo.quote(selected, sourceBlock, hintBlock, bodySection, passages)
+
+    /** 付ける場で候補から引用元を選んだ（→ features/margin_quote.md 判断13）。 */
+    fun chooseMarginMemoQuoteSource(quote: MemoPassage.Quoted, block: Int, passages: PassageIndex) =
+        marginMemo.chooseQuoteSource(quote, block, passages)
+
+    fun dismissMarginMemoQuoteChoice() = marginMemo.dismissQuoteChoice()
+
+    /** 引用の ✕。引用だけを外す。 */
+    fun detachMarginMemoQuote() = marginMemo.detachQuote()
 
     /**
      * 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。
@@ -814,4 +833,7 @@ internal class NoteSessionCoordinator(
 
     /** 余白へ戻る・ペインを閉じる・余白のシートを出した。 */
     fun closeSideReading() = sideReading.close()
+
+    /** 並べ読みの間の右の面の出し分け（→ features/margin_quote.md §5.6）。 */
+    fun showSideFace(face: SideFace) = sideReading.showFace(face)
 }

@@ -1,6 +1,7 @@
 package com.example.newproject.model.state
 
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 
 /**
@@ -14,11 +15,30 @@ data class MarginMemoDraft(
     /** 書き込み先。**書き始めた時点の本文の節で、文字がある間は動かない。** null はまだ書き始めていない。 */
     val target: SectionRef? = null,
     /** 受理が確かめられていない送信。**1ノート1件まで**で、入力欄とは別に持ち続ける。 */
-    val pending: MemoSubmission? = null
+    val pending: MemoSubmission? = null,
+    /** 付けた引用（→ features/margin_quote.md §5.3）。**引用だけの書きかけも空ではない。** */
+    val quote: DraftQuote? = null,
+    /** 書き始めた頃に読んでいた位置。書き込み先と同じ瞬間に控え、引用が付いていれば控えない。 */
+    val seen: MemoPassage.Seen? = null,
+    /**
+     * 引用を付ける・引用元を選ぶ要求のうち、結果を待っているものの番号（→ features/margin_quote.md §5.3）。
+     * **頼んだ瞬間に持つ** — 結果は Main の外から遅れて届くので、待つ間も書きかけが変わりつつあることを、受理と置く操作に見せる。
+     * ✕ と、後から頼んだ要求で失効する。
+     */
+    val quoting: Long? = null
 ) {
     /** 何も持っていない。一覧から外してよい。 */
-    val isEmpty: Boolean get() = text.isEmpty() && pending == null
+    val isEmpty: Boolean get() = text.isEmpty() && pending == null && quote == null && quoting == null
+
+    /** 置くときにメモへ載せる手掛かり。**引用が先**で、無ければ控えた位置。 */
+    val passage: MemoPassage? get() = quote?.passage ?: seen
 }
+
+/**
+ * 付けた引用。[cut] は上限で入らなかった部分で、**置く前に見せる**（→ features/margin_quote.md §5.2）。
+ * [choosing] は本文に同じ一節が2か所以上あり、付ける場で引用元を選んでもらっている間（→ 判断13）。選ぶまで前後の文字は控えていない。
+ */
+data class DraftQuote(val passage: MemoPassage.Quoted, val cut: String = "", val choosing: Boolean = false)
 
 /**
  * 保存を頼んだ1回の送信（→ features/margin_pane.md §6.2）。
@@ -31,5 +51,10 @@ data class MemoSubmission(
     val raw: String,
     val memo: MarginMemo,
     /** 1024バイトで切ったか。**受理の後も失わない**（戻った後の照合で受理が分かったときも知らせる）。 */
-    val wasTruncated: Boolean
+    val wasTruncated: Boolean,
+    /**
+     * 送ったときの書き込み先。**今の書きかけと同じ送信かを比べるためだけに持つ**（受理の照合の鍵には入れない）。
+     * 引用の文字が同じでも、引用元の節を替えれば別の書きかけである（同名の見出しの別の順番も別 → features/margin_quote.md §5.3）。
+     */
+    val target: SectionRef? = null
 )

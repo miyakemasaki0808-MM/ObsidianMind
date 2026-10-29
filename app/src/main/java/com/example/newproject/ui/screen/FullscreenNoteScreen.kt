@@ -3,6 +3,7 @@ package com.example.newproject.ui.screen
 import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
@@ -54,12 +55,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import com.example.newproject.domain.isQuotable
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -99,7 +102,11 @@ internal fun FullscreenNoteScreen(
     onDismissMarginMemo: () -> Unit,
     /** このノートの余白メモの書きかけ。通常画面と同じ一組（→ features/margin_pane.md §6.1）。 */
     memoDraft: MarginMemoDraft,
-    onEditMarginMemo: (text: String, bodySection: SectionRef?) -> Unit,
+    onEditMarginMemo: (text: String, bodySection: SectionRef?, seenAtStart: MemoPassage.Seen?) -> Unit,
+    /** 本文の選択メニューの「引用して書く」。[model] は選んだ本文の解析結果（→ features/margin_quote.md §5.2）。 */
+    onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
+    /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     onSubmitMarginMemo: (bodySection: SectionRef?) -> Unit,
     onDeleteMarginMemo: (MarginMemo) -> Unit,
     /** 入力欄で書いているつもりか。通常画面と共有する（戻った先の面へフォーカスを引き継ぐ）。 */
@@ -192,6 +199,16 @@ internal fun FullscreenNoteScreen(
         onMemoFocusIntentChange(false)
         onDismissMarginMemo()
     }
+    // 本文の選択メニューの「引用して書く」（→ features/margin_quote.md §5.1）。全画面では全画面の上のシートを出し、入力欄へフォーカスを送る。
+    val quoteFromBody: ((QuoteSelection) -> Unit)? = sectionModel?.let { model ->
+        { selection ->
+            if (isQuotable(selection.text)) {
+                if (!sheetShown) onOpenMarginMemo()
+                onMemoFocusIntentChange(true)
+                onQuoteMarginMemo(selection, face.bodySection, model)
+            }
+        }
+    }
 
     // 全画面はパネルが画面いっぱいに広がるので、下地も同じ紙の色にする。
     // ここだけ Panel のままだと、縁に現行色の額縁が残る。
@@ -211,7 +228,10 @@ internal fun FullscreenNoteScreen(
                     hasHeadings = sectionModel?.hasHeadings ?: false,
                     onJumpToSection = face.jumpToSection,
                     arranged = face.arranged,
-                    onEdit = { text -> onEditMarginMemo(text, face.bodySection) },
+                    onJumpToBlock = face.jumpToBlock,
+                    quoteCandidates = face.quoteCandidates,
+                    quoteActions = quoteActions,
+                    onEdit = { text -> onEditMarginMemo(text, face.bodySection, face.seenAtStart) },
                     onSubmit = { onSubmitMarginMemo(face.bodySection) },
                     onDelete = onDeleteMarginMemo,
                     asSheet = true,
@@ -235,7 +255,8 @@ internal fun FullscreenNoteScreen(
                     precomputedBlocks = sectionModel?.blocks,
                     imageLoader = imageLoader,
                     imageMeasurements = imageMeasurements,
-                    onLink = openLink
+                    onLink = openLink,
+                    onQuote = quoteFromBody
                 )
                 IconPill(
                     symbol = "✕",

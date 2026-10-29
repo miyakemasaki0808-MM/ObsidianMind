@@ -10,6 +10,8 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import com.example.newproject.model.ReunionKind
 import com.example.newproject.model.READING_TRACE_SCHEMA_VERSION
 import com.example.newproject.model.withVisit
@@ -508,6 +510,190 @@ class ReadingTraceJsonTest {
         assertFailsWithMessage { ReadingTraceJson.encode(trace().copy(memos = over)) }
     }
 
+    // ── 引用と控えた位置（v8 → features/margin_quote.md §6）──────────────────
+
+    @Test
+    fun `引用と控えた位置が往復する`() {
+        val source = trace().copy(
+            memos = listOf(
+                MarginMemo("前後を控えた引用", 100L, "導入", MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし"), truncated = false)),
+                MarginMemo("途中までの引用", 200L, passage = MemoPassage.Quoted("長い一節", QuoteContext("", ""), truncated = true)),
+                MarginMemo("引用元を決められなかった引用", 300L, passage = MemoPassage.Quoted("同じ一節", context = null, truncated = false)),
+                MarginMemo("書き始めた頃の位置", 400L, passage = MemoPassage.Seen("意志の力に頼ると"))
+            )
+        )
+
+        val decoded = ReadingTraceJson.decode(ReadingTraceJson.encode(source))
+
+        assertEquals(source, (decoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    /**
+     * **段落を丸ごと引いた引用（前後が空）と、前後を控えていない引用を、往復の後も区別する。**
+     * 同じ形で保存すると、控えていない引用が候補1件のときに確定してしまう（→ features/margin_quote.md §5.5）。
+     */
+    @Test
+    fun `前後が空の引用と前後を控えていない引用は往復の後も別物`() {
+        val wholeBlock = MemoPassage.Quoted("Q", QuoteContext("", ""), truncated = false)
+        val unresolved = MemoPassage.Quoted("Q", context = null, truncated = false)
+        val source = trace().copy(memos = listOf(MarginMemo("丸ごと", 100L, passage = wholeBlock), MarginMemo("未特定", 200L, passage = unresolved)))
+
+        val encoded = ReadingTraceJson.encode(source)
+        val memos = (ReadingTraceJson.decode(encoded) as ReadingTraceReadResult.Valid).trace.memos
+
+        assertEquals(wholeBlock, memos[0].passage)
+        assertEquals(unresolved, memos[1].passage)
+        val rawMemos = JSONObject(encoded.toString(Charsets.UTF_8)).getJSONArray("memos")
+        assertTrue("前後が空の引用に context が無い", rawMemos.getJSONObject(0).getJSONObject("passage").has("context"))
+        assertTrue("控えていない引用に context が書かれた", !rawMemos.getJSONObject(1).getJSONObject("passage").has("context"))
+    }
+
+    /** 前後の有無を書き換えると、どちらの向きでも破損になる。 */
+    @Test
+    fun `引用の改変は破損扱いになる`() {
+        val source = trace().copy(
+            memos = listOf(MarginMemo("メモ", 100L, passage = MemoPassage.Quoted("Q", context = null, truncated = false)))
+        )
+        val passageOf: (JSONObject) -> JSONObject = { it.getJSONArray("memos").getJSONObject(0).getJSONObject("passage") }
+
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { passageOf(it).put("context", JSONObject().put("before", "").put("after", "")) }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { passageOf(it).put("text", "すり替えた引用") }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { passageOf(it).put("truncated", true) }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { passageOf(it).put("kind", "seen") }))
+    }
+
+    @Test
+    fun `知らない種類の引用は破損扱いになる`() {
+        val source = trace().copy(memos = listOf(MarginMemo("メモ", 100L, passage = MemoPassage.Seen("頭"))))
+
+        assertCorrupt(
+            ReadingTraceJson.decode(
+                mutate(source) { it.getJSONArray("memos").getJSONObject(0).getJSONObject("passage").put("kind", "pinned") }
+            )
+        )
+    }
+
+    @Test
+    fun `引用と控えた位置の上限はutf8バイトで測る`() {
+        fun memoWith(passage: MemoPassage) = trace().copy(memos = listOf(MarginMemo("メモ", 100L, passage = passage)))
+        val quoteOver = "あ".repeat(ReadingTraceLimits.MAX_QUOTE_BYTES / 3 + 1)
+        val contextOver = "あ".repeat(ReadingTraceLimits.MAX_QUOTE_CONTEXT_BYTES / 3 + 1)
+        val seenOver = "あ".repeat(ReadingTraceLimits.MAX_SEEN_BYTES / 3 + 1)
+
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Quoted(quoteOver, null, truncated = false))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Quoted("Q", QuoteContext(contextOver, ""), truncated = false))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Quoted("Q", QuoteContext("", contextOver), truncated = false))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Seen(seenOver))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Quoted("  ", null, truncated = false))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(memoWith(MemoPassage.Seen(" "))) }
+        ReadingTraceJson.encode(memoWith(MemoPassage.Quoted("あ".repeat(ReadingTraceLimits.MAX_QUOTE_BYTES / 3), null, truncated = true)))
+    }
+
+    /** **v7 の痕跡はメモごと読め、引用は無いものとして v8 で書き戻せる。** checksum は v7 の正規形で照合する。 */
+    @Test
+    fun `v7 の痕跡はメモを保ったまま読め、v8 として書ける`() {
+        val source = trace().copy(memos = listOf(MarginMemo("v7 で書いたメモ", 100L, "導入")))
+
+        val loaded = (ReadingTraceJson.decode(encodeAsV7(source)) as? ReadingTraceReadResult.Valid)?.trace
+            ?: error("v7 を読めない")
+
+        assertEquals(source.memos, loaded.memos)
+        assertNull(loaded.memos.single().passage)
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = ReadingTraceJson.decode(ReadingTraceJson.encode(loaded))
+        assertEquals(loaded, (reencoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    /** v7 の正規形に引用は入っていないので、v7 のファイルへ書き足された引用は読まない。 */
+    @Test
+    fun `v7 に書き足された引用は読まない`() {
+        val source = trace().copy(memos = listOf(MarginMemo("メモ", 100L)))
+        val injected = addKeysKeepingChecksum(encodeAsV7(source)) { root ->
+            root.getJSONArray("memos").getJSONObject(0)
+                .put("passage", JSONObject().put("kind", "seen").put("text", "差し込み"))
+        }
+
+        val loaded = (ReadingTraceJson.decode(injected) as ReadingTraceReadResult.Valid).trace
+
+        assertNull(loaded.memos.single().passage)
+    }
+
+    @Test
+    fun `改変された v7 は破損扱いのまま`() {
+        val root = JSONObject(encodeAsV7(trace().copy(memos = listOf(MarginMemo("元の文", 100L)))).toString(Charsets.UTF_8))
+        root.getJSONArray("memos").getJSONObject(0).put("text", "すり替えた文")
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+}
+
+/**
+ * schema v7 のサイドカーを組み立てる（本番の encode は現行版しか書けないため）。
+ * **v7 の正規形をテスト側に写し取っている** — 本番の正規形を呼ぶと、v8 で形を変えたときに一緒に壊れて気付けない。
+ */
+private fun encodeAsV7(trace: ReadingTrace): ByteArray {
+    require(trace.memos.all { it.passage == null }) { "v7 のメモは引用を持たない" }
+    val visits = JSONArray()
+    trace.visits.forEach { v ->
+        visits.put(
+            JSONObject()
+                .put("at", v.atEpochMillis)
+                .put("deepestSection", v.deepestSectionTitle ?: JSONObject.NULL)
+                .put("progressPercent", v.progressPercent)
+        )
+    }
+    val memos = JSONArray()
+    trace.memos.forEach { memo ->
+        memos.put(
+            JSONObject()
+                .put("text", memo.text)
+                .put("writtenAt", memo.writtenAtEpochMillis)
+                .put("section", memo.sectionTitle ?: JSONObject.NULL)
+        )
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(7)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            out.writeNullableForTest(v.deepestSectionTitle)
+        }
+        out.writeNullableForTest(trace.aiSummary)
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+        out.writeInt(trace.totalVisitCount)
+        out.writeNullableForTest(trace.aiSummaryKind?.name)
+        out.writeLong(trace.markedAtEpochMillis ?: -1L)
+        out.writeNullableForTest(trace.markedSummary)
+        out.writeNullableForTest(trace.markedKind?.name)
+        out.writeInt(trace.memos.size)
+        trace.memos.forEach { memo ->
+            out.writeSizedForTest(memo.text)
+            out.writeLong(memo.writtenAtEpochMillis)
+            out.writeNullableForTest(memo.sectionTitle)
+        }
+    }
+    return JSONObject()
+        .put("schemaVersion", 7)
+        .put("vaultRelativePath", trace.vaultRelativePath)
+        .put("noteTitle", trace.noteTitle)
+        .put("documentId", trace.documentId ?: JSONObject.NULL)
+        .put("visits", visits)
+        .put("aiSummary", trace.aiSummary ?: JSONObject.NULL)
+        .put("aiSummaryVisitCount", trace.aiSummaryVisitCount ?: JSONObject.NULL)
+        .put("aiSummaryKind", trace.aiSummaryKind?.name ?: JSONObject.NULL)
+        .put("markedAt", trace.markedAtEpochMillis ?: JSONObject.NULL)
+        .put("markedSummary", trace.markedSummary ?: JSONObject.NULL)
+        .put("markedKind", trace.markedKind?.name ?: JSONObject.NULL)
+        .put("totalVisitCount", trace.totalVisitCount)
+        .put("memos", memos)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
 }
 
 /**

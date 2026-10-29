@@ -9,6 +9,8 @@ import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceBackupLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.QuoteContext
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -46,6 +48,28 @@ class ReadingTraceBackupJsonTest {
         assertEquals("ここが引っかかる", first.memos[0].text)
         assertEquals("導入", first.memos[0].sectionTitle)
         assertEquals("あとで読み直す", first.memos[1].text)
+    }
+
+    /**
+     * **退避と読み戻しでも、段落を丸ごと引いた引用と前後を控えていない引用を区別したまま運ぶ**（→ features/margin_quote.md §6）。
+     * 退避は中身を `ReadingTraceJson` で書くが、束ね直しで欄を落とすと照らし直しが変わる。
+     */
+    @Test
+    fun `引用と控えた位置は退避と読み戻しで保たれる`() {
+        val passages = listOf(
+            MemoPassage.Quoted("Q", QuoteContext("", ""), truncated = false),
+            MemoPassage.Quoted("Q", context = null, truncated = false),
+            MemoPassage.Quoted("この方法は有効である。", QuoteContext("結論として、", "ただし"), truncated = true),
+            MemoPassage.Seen("意志の力に頼ると")
+        )
+        val source = trace("ideas/habit.md").copy(
+            memos = passages.mapIndexed { index, passage -> MarginMemo("メモ$index", 100L + index, passage = passage) }
+        )
+
+        val decoded = ReadingTraceBackupJson.decode(ReadingTraceBackupJson.encode(listOf(source), 1_000L))
+
+        val restored = ((decoded as ReadingTraceBackupReadResult.Valid).entries.single() as ReadingTraceBackupEntry.Valid).trace
+        assertEquals(passages, restored.memos.map { it.passage })
     }
 
     /**
@@ -93,6 +117,9 @@ class ReadingTraceBackupJsonTest {
      * JSONとして解けない `.md` と、解けたが別形式のJSONは、内部の失敗経路が違うだけで
      * 利用者から見れば同じ事象である。2026-08-27 の実機検証（`BACKUP-13`）は、
      * ここが入力形式で二通りに分かれることを突いた。
+     *
+     * **拒否の型だけを見ると通ってしまう。** 非JSONは parse 例外の枝、別形式は形式照合の枝へ入り、
+     * どちらも同じ型で断りながら文言だけが違っていた。だから文言を等値で比べる。
      */
     @Test
     fun `退避ファイルでないものは形式によらず同じ文言で断る`() {

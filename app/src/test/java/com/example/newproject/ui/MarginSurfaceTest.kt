@@ -370,8 +370,20 @@ class MarginSurfaceTest {
     fun `並べ読み中は書きかけだけでは窓の切り替わりでシートへ移さない`() {
         assertFalse(writingForWindowShift(hasDraft = true, focusIntent = false, sideReading = true))
         assertTrue("並べ読みでなければ書きかけで移す", writingForWindowShift(hasDraft = true, focusIntent = false, sideReading = false))
-        assertTrue("入力中なら移す", writingForWindowShift(hasDraft = false, focusIntent = true, sideReading = true))
+        assertTrue("右が書きかけで入力中なら移す", writingForWindowShift(hasDraft = false, focusIntent = true, sideReading = true, draftOnRight = true))
         assertFalse(writingForWindowShift(hasDraft = false, focusIntent = false, sideReading = false))
+    }
+
+    /**
+     * **並べ読み中に右が資料を出していれば、入力中の印が残っていても書いている途中にしない**（→ features/margin_quote.md §5.6）。
+     * 入力欄は資料に替えたときに面ごと外れ、外れたことの知らせは届かない。右が書きかけで入力中なら今どおり移す。
+     */
+    @Test
+    fun `並べ読み中に右が資料なら入力中の印があってもシートへ移さない`() {
+        assertFalse(writingForWindowShift(hasDraft = false, focusIntent = true, sideReading = true, draftOnRight = false))
+        assertFalse(writingForWindowShift(hasDraft = true, focusIntent = true, sideReading = true, draftOnRight = false))
+        assertTrue("右が書きかけで入力中なら移す", writingForWindowShift(hasDraft = true, focusIntent = true, sideReading = true, draftOnRight = true))
+        assertTrue("並べ読みでなければ入力中で移す", writingForWindowShift(hasDraft = false, focusIntent = true, sideReading = false, draftOnRight = false))
     }
 
     // ── 関連の一覧の保存値（→ features/margin_pane.md §11「段5で決めたこと」）──────────

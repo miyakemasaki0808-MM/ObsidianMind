@@ -1,8 +1,13 @@
 package com.example.newproject.ui.screen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,7 +31,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.OutlinedTextField
+import com.example.newproject.model.state.DraftQuote
+import com.example.newproject.model.QuoteContext
+import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.quoteKey
+import com.example.newproject.domain.QuoteCandidate
+import androidx.compose.material3.IconButton
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
@@ -68,12 +80,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.ArrangedMemos
+import com.example.newproject.domain.MemoPlacement
 import com.example.newproject.domain.MemoSectionMatch
 import com.example.newproject.domain.MemoSendAction
 import com.example.newproject.domain.SOFT_MEMO_CHARS
 import com.example.newproject.domain.isMemoOverSoftLimit
 import com.example.newproject.domain.sendAction
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
@@ -274,6 +288,8 @@ internal fun MarginMemoSheetContent(
     onJumpToSection: (SectionRef) -> Unit,
     /** メモを今の見出しと照合して並べたもの（→ [arrangeMemos]）。本文の解析の前は null。 */
     arranged: ArrangedMemos?,
+    /** 本文をそのブロックへ送る。引用した段落と書いた頃の位置へ飛ぶ（→ features/margin_quote.md §5.5）。 */
+    onJumpToBlock: (Int) -> Unit = {},
     onEdit: (String) -> Unit,
     onSubmit: () -> Unit,
     onDelete: (MarginMemo) -> Unit,
@@ -316,7 +332,16 @@ internal fun MarginMemoSheetContent(
     /** このノートの関連（→ [PaneRelatedInputs]）。**ペインだけ**が渡す。null なら出さない。 */
     related: PaneRelatedInputs? = null,
     /** 面のスクロール。机の画面のペインは外で持ち、余白を1画面に広げて戻したときに位置を戻す（→ [RestoreSupportingScroll]）。 */
-    scrollState: ScrollState = rememberScrollState()
+    scrollState: ScrollState = rememberScrollState(),
+    /** 引用の候補を今の本文から探す口（→ [QuoteCandidateFinder]）。本文の解析の前は null で、候補を出さない。 */
+    quoteCandidates: QuoteCandidateFinder? = null,
+    /** 引用の欄の操作。 */
+    quoteActions: DraftQuoteActions = DraftQuoteActions.None,
+    /**
+     * 入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）の置き場。**面の外で持てば、面が外れて組み直されても保つ**（→ [MemoField]）。
+     * null ならこの面の中で持つ。
+     */
+    memoField: MemoField? = null
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -464,9 +489,16 @@ internal fun MarginMemoSheetContent(
             )
 
             Spacer(modifier = Modifier.height(12.dp))
-            OutlinedTextField(
-                value = draft.text,
-                onValueChange = onEdit,
+            if (draft.quote != null || draft.quoting != null) {
+                DraftQuoteField(draft.quote, quoting = draft.quoting != null, hasHeadings, quoteCandidates, quoteActions)
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            MemoInputField(
+                field = memoField ?: remember { MemoField(draft.text) },
+                draftText = draft.text,
+                onEdit = onEdit,
+                // 引用だけでは置けない（→ features/margin_quote.md 判断2）。引用があって言葉が空なら、添えることを促す。
+                placeholder = memoInputPlaceholder(draft),
                 modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
@@ -475,10 +507,7 @@ internal fun MarginMemoSheetContent(
                         previousRowAtFocus =
                             if (focus.isFocused) previousRowAtFocus ?: (previousRow != PreviousReadingRow.Hidden) else null
                         inputFocused = focus.isFocused
-                    },
-                placeholder = { Text("いま思ったこと", color = OnSurfaceFaint) },
-                minLines = 2,
-                maxLines = 6
+                    }
             )
 
             // **合図であって壁ではない。** 超えても切らないし、置けなくもならない。
@@ -562,11 +591,20 @@ internal fun MarginMemoSheetContent(
                     } else {
                         // **静かにするのは、この節のメモが0件のときだけ**（→ features/margin_pane.md §5.2）。
                         arranged.current.forEach { placed ->
-                            MemoRow(memo = placed.memo, match = placed.match, onDelete = { pendingDelete = placed.memo })
+                            MemoRow(
+                                memo = placed.memo,
+                                match = placed.match,
+                                placement = placed.placement,
+                                onJumpToBlock = onJumpToBlock,
+                                onDelete = { pendingDelete = placed.memo },
+                                hasHeadings = hasHeadings,
+                                quoteCandidates = quoteCandidates
+                            )
                         }
                         OtherSectionMemos(
                             arranged = arranged,
                             hasHeadings = hasHeadings,
+                            quoteCandidates = quoteCandidates,
                             expanded = othersExpanded,
                             onToggle = {
                                 othersExpanded = !othersExpanded
@@ -574,6 +612,7 @@ internal fun MarginMemoSheetContent(
                                 if (!othersExpanded) groupTops.clear()
                             },
                             onJumpToSection = onJumpToSection,
+                            onJumpToBlock = onJumpToBlock,
                             onDelete = { pendingDelete = it },
                             onGroupPlaced = { group, top -> groupTops[group] = top }
                         )
@@ -779,9 +818,11 @@ private fun StatusText(state: MarginMemoState) {
 private fun OtherSectionMemos(
     arranged: ArrangedMemos,
     hasHeadings: Boolean,
+    quoteCandidates: QuoteCandidateFinder?,
     expanded: Boolean,
     onToggle: () -> Unit,
     onJumpToSection: (SectionRef) -> Unit,
+    onJumpToBlock: (Int) -> Unit,
     onDelete: (MarginMemo) -> Unit,
     /** 節の組の見出しが並んだ位置（この面の中）。印から来たときの行き先に使う。 */
     onGroupPlaced: (SectionRef, Int) -> Unit
@@ -803,7 +844,7 @@ private fun OtherSectionMemos(
         val section = group.section
         if (section == null) {
             Text(
-                text = "見出しが見つからないメモ",
+                text = if (group.scattered) "場所を一つに絞れないメモ" else "見出しが見つからないメモ",
                 color = OnSurfaceFaint,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
@@ -820,19 +861,53 @@ private fun OtherSectionMemos(
             }
         }
         group.memos.forEach { placed ->
-            MemoRow(memo = placed.memo, match = placed.match, onDelete = { onDelete(placed.memo) })
+            MemoRow(
+                memo = placed.memo,
+                match = placed.match,
+                placement = placed.placement,
+                onJumpToBlock = onJumpToBlock,
+                onDelete = { onDelete(placed.memo) },
+                hasHeadings = hasHeadings,
+                quoteCandidates = quoteCandidates
+            )
         }
     }
 }
 
 @Composable
-private fun MemoRow(memo: MarginMemo, match: MemoSectionMatch?, onDelete: () -> Unit) {
+private fun MemoRow(
+    memo: MarginMemo,
+    match: MemoSectionMatch?,
+    onDelete: () -> Unit,
+    placement: MemoPlacement? = null,
+    onJumpToBlock: (Int) -> Unit = {},
+    hasHeadings: Boolean = true,
+    quoteCandidates: QuoteCandidateFinder? = null
+) {
+    // 確定した段落へは押すと飛ぶ。**特定できない引用は押すと候補を並べ、選んだ段落へ飛ぶ。選んだものは覚えない**（→ features/margin_quote.md §5.5・判断13）。
+    // 見つからない・照らし直しの前は押せない。
+    val located = placement as? MemoPlacement.Located
+    val uncertain = placement is MemoPlacement.Uncertain && quoteCandidates != null
+    var choosing by remember(memo) { mutableStateOf(false) }
     Surface(
         color = PanelChip,
         shape = RoundedCornerShape(8.dp),
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            (memo.passage as? MemoPassage.Quoted)?.let { quote ->
+                when {
+                    located != null -> QuoteLine(quote, onJump = { onJumpToBlock(located.block) })
+                    uncertain -> QuoteLine(quote, onJump = { choosing = !choosing }, jumpLabel = "同じ一節の候補を選ぶ")
+                    else -> QuoteLine(quote, onJump = null)
+                }
+                if (choosing && quoteCandidates != null) {
+                    QuoteCandidateList(quote, quoteCandidates.candidatesFor(quote), hasHeadings) { candidate, _ ->
+                        choosing = false
+                        onJumpToBlock(candidate.block)
+                    }
+                }
+            }
             Text(memo.text, color = OnSurface, fontSize = 14.sp, lineHeight = 20.sp)
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -840,28 +915,171 @@ private fun MemoRow(memo: MarginMemo, match: MemoSectionMatch?, onDelete: () -> 
             ) {
                 // 書いた場所は**紐づけではなく当時の記録**。見出しが消えても解決し直さない。
                 Text(
-                    text = memoCaption(memo, match),
+                    text = memoCaption(memo, match, placement),
                     color = OnSurfaceFaint,
                     fontSize = 11.sp,
                     modifier = Modifier.weight(1f)
                 )
+                // **書いた頃の位置は手掛かりで、書いた対象ではない**（→ features/margin_quote.md 判断5）。語と読み上げを引用と分ける。
+                if (located != null && memo.passage is MemoPassage.Seen) {
+                    TextButton(
+                        onClick = { onJumpToBlock(located.block) },
+                        modifier = Modifier.semantics { contentDescription = "メモを書いた頃に読んでいた位置へ本文を送る" }
+                    ) { Text("書いた頃の位置へ", color = AccentText, fontSize = 12.sp) }
+                }
                 TextButton(onClick = onDelete) { Text("消す", color = OnSurfaceMuted, fontSize = 12.sp) }
             }
         }
     }
 }
 
+/** メモの本文の上に出す引用。途中までの引用は末尾に「…」を付ける。[onJump] が null なら押せない（引用元が確定していない）。 */
+@Composable
+private fun QuoteLine(quote: MemoPassage.Quoted, onJump: (() -> Unit)?, jumpLabel: String = "引用した段落へ本文を送る") {
+    val text = quoteDisplayText(quote)
+    // 縦線は引用の高さに合わせる（複数行の引用でも左に1本通す）。
+    val base = Modifier
+        .fillMaxWidth()
+        .height(IntrinsicSize.Min)
+        .padding(bottom = 6.dp)
+    Row(modifier = if (onJump == null) base else base.clickable(onClickLabel = jumpLabel, onClick = onJump)) {
+        Box(modifier = Modifier.width(2.dp).fillMaxHeight().background(OnSurfaceFaint))
+        Text(
+            text = text,
+            color = OnSurfaceMuted,
+            fontSize = 13.sp,
+            lineHeight = 19.sp,
+            modifier = Modifier.padding(start = 8.dp)
+        )
+    }
+}
+
+/** 引用の見せ方。途中までの引用は末尾に「…」（→ features/margin_quote.md §5.2）。 */
+internal fun quoteDisplayText(quote: MemoPassage.Quoted): String = if (quote.truncated) quote.text + "…" else quote.text
+
 /**
  * メモの添え書き。節ごとに並べたときは節の名前を繰り返さない。
  * **同名の見出しに共通**なら、どの候補にも並んでいることを添える。見つからないメモは、控えた見出し名を
  * 当時の記録として添える（**紐づけではない**ので、今の見出しへ解決し直さない）。照合の前（[match] が null）も同じ。
+ *
+ * **照らし直しの結果（[placement]）が見出しの照合より先**（→ features/margin_quote.md §5.5）。段落が確定すれば節も1つに決まるので日時だけ、
+ * 特定できない引用は似た一節の数を、見つからない引用はそのことを添える。黙って先の方を引用元と言わない。
  */
-internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?): String {
+internal fun memoCaption(memo: MarginMemo, match: MemoSectionMatch?, placement: MemoPlacement? = null): String {
     val stamp = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault())
         .format(Date(memo.writtenAtEpochMillis))
-    return when (match) {
+    val byHeading = when (match) {
         MemoSectionMatch.Opening, is MemoSectionMatch.Unique -> stamp
         is MemoSectionMatch.Shared -> "$stamp ・ 同名の見出しに共通"
         MemoSectionMatch.Missing, null -> memo.sectionTitle?.let { "$stamp ・ $it のあたり" } ?: stamp
+    }
+    return when (placement) {
+        is MemoPlacement.Located -> stamp
+        is MemoPlacement.Uncertain -> "$stamp ・ 引用した場所を特定できません · 似た一節 ${placement.candidateCount} か所"
+        MemoPlacement.Missing -> "$byHeading ・ 引用した一節は本文に見つかりません"
+        null -> byHeading
+    }
+}
+
+/** 引用の欄の操作（→ features/margin_quote.md §5.2・§5.3）。[onChoose] の番号は、候補を探した解析結果 [NoteSectionModel] のブロック。 */
+internal class DraftQuoteActions(
+    val onDetach: () -> Unit,
+    val onChoose: (quote: MemoPassage.Quoted, block: Int, model: NoteSectionModel) -> Unit,
+    val onDismissChoice: () -> Unit
+) {
+    companion object {
+        val None = DraftQuoteActions(onDetach = {}, onChoose = { _, _, _ -> }, onDismissChoice = {})
+    }
+}
+
+/** 入力欄の案内。引用があって言葉が空なら、添えることを促す（引用だけでは置けない → features/margin_quote.md 判断2）。 */
+internal fun memoInputPlaceholder(draft: MarginMemoDraft): String =
+    if (draft.quote != null && draft.text.isEmpty()) "引用にひとこと添えて置く" else "いま思ったこと"
+
+/** 引用の欄の行き先の知らせ。右のノートを並べていても、左のノートのメモになり、まだ保存していないことが分かる。 */
+internal const val DRAFT_QUOTE_DESTINATION = "今のノートの余白へ · まだ置いていません"
+
+/** 引用の結果を待っている間の知らせ。届くまで置けないことを示す（→ features/margin_quote.md §5.3）。 */
+internal const val DRAFT_QUOTE_PENDING = "引用を付けています（付くまで置けません）"
+
+/** 上限で入らなかった部分の知らせ（→ features/margin_quote.md §5.2）。切れる部分は続けて薄く添える。 */
+internal const val DRAFT_QUOTE_CUT_NOTICE = "ここから先は入りません"
+
+/** 付ける場で候補を選んでもらう問い（→ features/margin_quote.md 判断13）。 */
+internal fun quoteChoiceQuestion(count: Int): String = "この一節は本文に $count か所あります。どこから引用しましたか"
+
+/** 候補を見分けるための抜き出し。鍵の前後に控えた文字を添え、ブロックの途中なら「…」で切れ目を示す。 */
+internal fun candidateExcerpt(key: String, context: QuoteContext): String =
+    (if (context.before.isEmpty()) "" else "…" + context.before) + key + (if (context.after.isEmpty()) "" else context.after + "…")
+
+/**
+ * 書きかけに付けた引用（→ features/margin_quote.md §5.2・§5.3）。引用の文字・入らない部分・行き先と未保存の知らせ・✕ を出す。
+ * **引用元を付ける場で選んでいる間は、候補を並べる。** 選ばずに閉じても書く流れは止めない（入力欄は使える）。
+ * [quoting] は引用の結果を待っている間で、その旨を出す（その間は置けない）。✕ は待っている要求も取り下げる。
+ */
+@Composable
+private fun DraftQuoteField(quote: DraftQuote?, quoting: Boolean, hasHeadings: Boolean, finder: QuoteCandidateFinder?, actions: DraftQuoteActions) {
+    Surface(color = PanelChip, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(start = 12.dp, top = 4.dp, bottom = 8.dp)) {
+            Row(verticalAlignment = Alignment.Top) {
+                Column(modifier = Modifier.weight(1f).padding(top = 8.dp)) {
+                    if (quote != null) QuoteLine(quote.passage.copy(truncated = false), onJump = null)
+                    if (quoting) Text(DRAFT_QUOTE_PENDING, color = OnSurfaceFaint, fontSize = 11.sp)
+                    if (quote != null && quote.cut.isNotEmpty()) {
+                        Text(
+                            text = "$DRAFT_QUOTE_CUT_NOTICE：${quote.cut.trim()}",
+                            color = OnSurfaceFaint,
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(
+                    onClick = actions.onDetach,
+                    modifier = Modifier.semantics { contentDescription = "引用を外す" }
+                ) { Text("✕", color = OnSurfaceMuted, fontSize = 14.sp) }
+            }
+            Text(DRAFT_QUOTE_DESTINATION, color = OnSurfaceMuted, fontSize = 11.sp, modifier = Modifier.padding(end = 12.dp))
+            if (quote != null && quote.choosing && finder != null) {
+                QuoteCandidateList(quote.passage, finder.candidatesFor(quote.passage), hasHeadings) { candidate, model ->
+                    actions.onChoose(quote.passage, candidate.block, model)
+                }
+                TextButton(onClick = actions.onDismissChoice) { Text("選ばずに閉じる", color = OnSurfaceMuted, fontSize = 12.sp) }
+            }
+        }
+    }
+}
+
+/**
+ * 同じ一節の候補（→ features/margin_quote.md 判断13）。節の名前と前後の文字で見分けて選ぶ。**候補は削らない** — 多ければこの中でスクロールする。
+ * 探している間は、その旨だけを出す。
+ */
+@Composable
+private fun QuoteCandidateList(
+    quote: MemoPassage.Quoted,
+    found: QuoteCandidates?,
+    hasHeadings: Boolean,
+    onPick: (QuoteCandidate, NoteSectionModel) -> Unit
+) {
+    if (found == null) {
+        Text("候補を探しています", color = OnSurfaceFaint, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+        return
+    }
+    val key = remember(quote) { quoteKey(quote.text) }
+    Text(quoteChoiceQuestion(found.items.size), color = OnSurfaceMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp, end = 12.dp))
+    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp)) {
+        items(found.items.size) { k ->
+            val candidate = found.items[k]
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClickLabel = "この候補を引用元にする") { onPick(candidate, found.model) }
+                    .padding(vertical = 6.dp)
+            ) {
+                Text(sectionLabel(candidate.section, hasHeadings), color = AccentText, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(candidateExcerpt(key, candidate.context), color = OnSurfaceMuted, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
     }
 }

@@ -139,6 +139,8 @@ class ThreadingScanTest {
      * その場で途中経過を確定すると、まだ書いている分だけ少なく報告する。書き手を `join()` してから数える。
      * **この交錯は単一スレッドのテストスケジューラでは作れない**ので、順序は走査で固定し、
      * 件数の一致そのものは `ReadingTraceBackupControllerTest` が見る。
+     * **停止待ちの間の2度目の中止（再入）は、この並びのまま通る**ので走査では捕まらない。
+     * そちらも `ReadingTraceBackupControllerTest` が実スレッドで見る。
      */
     @Test
     fun `退避の中止の結果は書き手を join してから確定する`() {
@@ -310,6 +312,68 @@ class ThreadingScanTest {
                     "domain/RebuttalClaimScanner.kt" to "反証の候補の列挙の中",
                     "ui/markdown/MarkdownRenderer.kt" to "短い本文をその場で描くフォールバック（→ 本文パネルの検査）"
                 )
+            ),
+            HeavyCall(
+                name = "引用と書いた頃の位置を照らし直す材料",
+                call = """\bbuildPassageIndex\(""",
+                dispatcher = "parseDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/markdown/NoteSections.kt" to "節のモデルの中（解析と一緒に作り、解析し直したときだけ作り直す）")
+            ),
+            HeavyCall(
+                name = "書き始めた頃の位置として控えるブロックの索引",
+                call = """\bPassageIndex\(""",
+                dispatcher = "parseDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/MemoPassages.kt" to "照らし直しの材料を作る buildPassageIndex の中（それ自体が節のモデルの中）")
+            ),
+            HeavyCall(
+                name = "引用と書いた頃の位置の照らし直し",
+                call = """\blocateMemos\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
+                name = "余白メモの並べ方（今の節に依らない組・順序・件数）",
+                call = """\blayoutMemos\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
+                name = "引用の候補を本文の全体から探す",
+                call = """\bcandidatesOf\(""",
+                dispatcher = "locateDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf(
+                    "domain/MemoPassages.kt" to "照らし直し（locateMemos）と引用元を決める quoteSourceFor の中",
+                    "domain/QuoteAttachment.kt" to "候補を並べる quoteCandidates の中"
+                )
+            ),
+            HeavyCall(
+                name = "引用元を決める",
+                call = """\bquoteSourceFor\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = emptyMap(),
+                nested = mapOf("domain/QuoteAttachment.kt" to "付ける引用を作る quoteAttachmentFor の中")
+            ),
+            HeavyCall(
+                name = "引用の候補を前後の文字つきで並べる",
+                call = """\bquoteCandidates\(""",
+                dispatcher = "locateDispatcher",
+                offMain = mapOf("ui/screen/MarginFace.kt" to 1)
+            ),
+            HeavyCall(
+                name = "付ける引用を作る",
+                call = """\bquoteAttachmentFor\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = mapOf("controller/MarginMemoController.kt" to 1)
+            ),
+            HeavyCall(
+                name = "選んだ候補で引用元の前後を控える",
+                call = """\bresolveQuoteAt\(""",
+                dispatcher = "quoteDispatcher",
+                offMain = mapOf("controller/MarginMemoController.kt" to 1),
+                nested = mapOf("domain/MemoPassages.kt" to "引用元を決める quoteSourceFor の中")
             ),
             HeavyCall(
                 name = "反証の候補の列挙",

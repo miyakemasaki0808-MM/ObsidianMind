@@ -21,6 +21,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -30,6 +34,8 @@ import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.RelatedNote
+import com.example.newproject.ui.theme.PanelChip
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.note
 import com.example.newproject.ui.markdown.MarkdownNoteContent
@@ -149,5 +155,46 @@ internal fun SideReadingPane(
 
             SideReadingState.Idle -> Unit
         }
+    }
+}
+
+/**
+ * 並べ読みの間に、右の面の上に「書きかけ｜資料」の切替を出すか（→ features/margin_quote.md §5.6）。
+ * **右が書きかけのときは必ず出す** — 書きかけを空にしても、右のノートへ戻る入口を消さない。資料のときは書きかけがあるときだけ。
+ */
+internal fun showsSideFaceSwitch(reading: Boolean, face: SideFace, hasDraft: Boolean): Boolean =
+    reading && (face == SideFace.Draft || hasDraft)
+
+/** 切替の資料の側の語。右のノートの題名を添え、何へ戻るかを分かるようにする。 */
+internal fun sideReferenceLabel(title: String?): String = if (title.isNullOrBlank()) "資料" else "資料（$title）"
+
+/**
+ * 「書きかけ｜資料」の切替（→ features/margin_quote.md §5.6）。押すたびに右の面が替わり、どちらも位置を保つ。
+ * **今どちらを出しているかを読み上げる**（選ばれた方を選択中として示す）。
+ */
+@Composable
+internal fun SideFaceSwitch(face: SideFace, title: String?, onSelect: (SideFace) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SideFaceTab(label = "書きかけ", selected = face == SideFace.Draft, onClick = { onSelect(SideFace.Draft) }, modifier = Modifier)
+        SideFaceTab(label = sideReferenceLabel(title), selected = face == SideFace.Reference, onClick = { onSelect(SideFace.Reference) }, modifier = Modifier.weight(1f, fill = false))
+    }
+}
+
+@Composable
+private fun SideFaceTab(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    Surface(
+        color = if (selected) PanelChip else Color.Transparent,
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier.selectable(selected = selected, role = Role.Tab, onClick = onClick)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) AccentText else OnSurfaceMuted,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+        )
     }
 }

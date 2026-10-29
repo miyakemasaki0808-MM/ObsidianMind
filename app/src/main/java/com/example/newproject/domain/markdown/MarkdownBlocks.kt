@@ -63,6 +63,12 @@ internal data class ListItem(
     val checked: Boolean? = null
 )
 
+/** リストの項目の記号。番号付きは原文の表記のまま。タスクの項目は記号の代わりにチェックボックスを描くので使わない。 */
+internal fun listMarkerText(item: ListItem): String = when (val marker = item.marker) {
+    is ListMarker.Bullet -> "\u2022"
+    is ListMarker.Ordered -> "${marker.number}${marker.delimiter}"
+}
+
 internal sealed class MarkdownBlock {
     data class Heading(val level: Int, val text: String) : MarkdownBlock()
     data class Paragraph(val text: String) : MarkdownBlock()

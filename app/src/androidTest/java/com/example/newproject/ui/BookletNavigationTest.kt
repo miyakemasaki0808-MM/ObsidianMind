@@ -41,6 +41,7 @@ import org.junit.runner.RunWith
  *
  * ここで作るのは本番と同じ形の最小の NavHost で、
  * **ページ位置を束が覚えている**ことだけを往復で観測する。
+ * `MainActivity` のルート定義そのものは通らないので、配線は `BookletRouteContractTest` が見る。
  */
 @RunWith(AndroidJUnit4::class)
 class BookletNavigationTest {
