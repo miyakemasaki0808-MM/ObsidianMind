@@ -713,8 +713,9 @@ internal fun NoteReaderTab(
         )
         // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
-            // 右で眺めている間は、余白へ戻してから送る（メモは余白の面にある）。
-            if (reading) onCloseSideReading()
+            // 並べ読みの間は閉じず、右を書きかけ（余白の面）へ替えて送る。右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
+            // 出せる面がシートなら、シートを開く調停側の口が並べ読みを終える（→ features/desk_foundation.md 判断2）。
+            if (reading) onShowSideFace(SideFace.Draft)
             if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             memoReveal = reveal
         }
@@ -747,10 +748,10 @@ internal fun NoteReaderTab(
         // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
         // 本文だけにしている机の画面は、面が出ていないときと同じに扱い、見に行くときはシートに代えてペインを戻す。
-        // 並べ読みを閉じるのは要約の行を見せる入口だけ（→ closesSideReading）。
+        // 要約の行を見せる入口では、並べ読みを閉じずに右を書きかけ（余白の面）へ替える（→ showsSummaryRow）。
         val openSummary: () -> Unit = {
             val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
-            if (reading && entry.closesSideReading()) onCloseSideReading()
+            if (reading && entry.showsSummaryRow()) onShowSideFace(SideFace.Draft)
             if (entry == SummaryEntry.Sheet) {
                 if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             }

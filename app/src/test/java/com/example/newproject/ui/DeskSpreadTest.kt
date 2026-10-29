@@ -10,7 +10,6 @@ import com.example.newproject.ui.screen.DeskSpreadGesture
 import com.example.newproject.ui.screen.LazyFacePosition
 import com.example.newproject.ui.screen.SpreadScrollMemory
 import com.example.newproject.ui.screen.SummaryEntry
-import com.example.newproject.ui.screen.closesSideReading
 import com.example.newproject.ui.screen.deskFacePlacement
 import com.example.newproject.ui.screen.deskPaneCountsAsFace
 import com.example.newproject.ui.screen.deskSpreadActionsFor
@@ -23,6 +22,7 @@ import com.example.newproject.ui.screen.lazyFaceMoved
 import com.example.newproject.ui.screen.position
 import com.example.newproject.ui.screen.restoresAfterReturn
 import com.example.newproject.ui.screen.shows
+import com.example.newproject.ui.screen.showsSummaryRow
 import com.example.newproject.ui.screen.summaryEntryFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -84,19 +84,19 @@ class DeskSpreadTest {
     }
 
     /**
-     * **本文だけにしている間に、まだ頼んでいない節の要約を頼むと、背景で始めるだけで隠した並べ読みを閉じない。**
-     * 頼んだ節をもう一度押して見に行くときは、ペインを戻して並べ読みを閉じる。2面ではペインに出すので閉じる。
+     * **本文だけにしている間に、まだ頼んでいない節の要約を頼むと、背景で始めるだけで隠した並べ読みの右を替えない。**
+     * 頼んだ節をもう一度押して見に行くときは、ペインを戻して右を書きかけへ替える。2面ではペインに出すので替える。
      */
     @Test
-    fun `本文だけで頼んだ要約は背景で始めるだけで、隠した並べ読みを閉じない`() {
+    fun `本文だけで頼んだ要約は背景で始めるだけで、隠した並べ読みの右を替えない`() {
         fun entryIn(spread: DeskSpread, requested: Boolean) =
             summaryEntryFor(paneVisible = spread.shows(DeskFace.Supporting), sheetVisible = false, requested = requested)
 
         assertEquals(SummaryEntry.Background, entryIn(DeskSpread.MainOnly, requested = false))
-        assertFalse(entryIn(DeskSpread.MainOnly, requested = false).closesSideReading())
-        assertTrue(entryIn(DeskSpread.MainOnly, requested = true).closesSideReading())
+        assertFalse(entryIn(DeskSpread.MainOnly, requested = false).showsSummaryRow())
+        assertTrue(entryIn(DeskSpread.MainOnly, requested = true).showsSummaryRow())
         assertEquals(DeskSpread.Both, deskSpreadShowing(DeskSpread.MainOnly, DeskFace.Supporting))
-        assertTrue(entryIn(DeskSpread.Both, requested = false).closesSideReading())
+        assertTrue(entryIn(DeskSpread.Both, requested = false).showsSummaryRow())
     }
 
     /**

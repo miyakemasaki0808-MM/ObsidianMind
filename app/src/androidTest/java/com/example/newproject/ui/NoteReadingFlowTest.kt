@@ -85,7 +85,10 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.face
+import com.example.newproject.model.state.withFace
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.AiStatusNotice
@@ -1949,6 +1952,111 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
     }
 
+    /**
+     * **右が資料のときに見出しの印を押しても、並べ読みを閉じず、右を書きかけ（余白の面）へ替えてその節のメモまで送る。**
+     * 「書きかけ｜資料」の切替が残り、資料へ替えると同じ右のノートが出る（→ features/margin_quote.md §5.6）。
+     * 閉じていたときは右のノートが消え、並べ読みを開き直すことになった。
+     */
+    @Test
+    fun 並べ読みで右が資料のとき見出しの印を押しても_閉じずに書きかけでメモを見せ_資料へ戻れる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        var closes = 0
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = { closes++ }
+        )
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("印で並べ読みを閉じた", 0, closes)
+        composeRule.runOnIdle { assertEquals(SideFace.Draft, state.sideReading.face) }
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertDoesNotExist()
+
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
+    /**
+     * **右が書きかけのときに要約の入口を押しても、並べ読みを閉じず、書きかけの面のまま要約の行を見せる。**
+     * 要約は面に出す形で1回だけ頼み、資料へ替えると同じ右のノートが出る（→ features/margin_quote.md §5.6）。
+     */
+    @Test
+    fun 並べ読みで右が書きかけのとき要約の入口を押しても_閉じずに書きかけのまま資料へ戻れる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val requests = mutableListOf<Boolean>()
+        var closes = 0
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = { closes++ },
+            onRequestSectionSummary = { _, quietly -> requests += quietly }
+        )
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").assertDoesNotExist()
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Draft)) }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("面に出す形で1回だけ頼んでいない", listOf(false), requests)
+        assertEquals("要約の入口で並べ読みを閉じた", 0, closes)
+        composeRule.runOnIdle { assertEquals(SideFace.Draft, state.sideReading.face) }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
+    /**
+     * 本の形の机で、ペインの関連から [SIDE_NOTE] を右で開いたところまで組む。右の面の出し分けは状態へ書き、
+     * 閉じる操作は [onClose] を呼んでから状態を落とす。
+     */
+    private fun setSideReadingDesk(
+        state: () -> NoteUiState,
+        onState: (NoteUiState) -> Unit,
+        onClose: () -> Unit,
+        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> }
+    ) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    val current = state()
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onRequestSectionSummary = onRequestSectionSummary,
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> onState(state().copy(sideReading = SideReadingState.Ready(note))) },
+                        onCloseSideReading = {
+                            onClose()
+                            onState(state().copy(sideReading = SideReadingState.Idle))
+                        },
+                        onShowSideFace = { face -> onState(state().copy(sideReading = state().sideReading.withFace(face))) }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
     private fun performGripAction(label: String) {
         val actions = composeRule.onNodeWithContentDescription("操作を出す").fetchSemanticsNode()
             .config[SemanticsActions.CustomActions]
@@ -3240,6 +3348,7 @@ class NoteReadingFlowTest {
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
+        onShowSideFace: (SideFace) -> Unit = {},
         onOpenNote: (RelatedNote) -> Unit = {},
         onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady },
         bodyPosition: BodyPosition? = null,
@@ -3292,6 +3401,7 @@ class NoteReadingFlowTest {
             sideReadingBlocks = sideBlocks,
             onOpenSideReading = onOpenSideReading,
             onCloseSideReading = onCloseSideReading,
+            onShowSideFace = onShowSideFace,
             onOpenNote = onOpenNote,
             onResolveNoteLink = { NoteLinkResolution.NotReady },
             onResolveSideNoteLink = onResolveSideNoteLink
