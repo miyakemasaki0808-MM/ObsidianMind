@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.model.BesideNote
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
@@ -78,7 +79,9 @@ class ReadingTraceLimitsTest {
                 ReadingVisit(
                     atEpochMillis = Long.MAX_VALUE - index,
                     deepestSectionTitle = escaping(MAX_SECTION_TITLE_BYTES),
-                    progressPercent = 100
+                    progressPercent = 100,
+                    // 並べた相手は訪問ごとに1件。全訪問に上限いっぱいの相手を置く（→ features/desk_memory.md §6）。
+                    beside = BesideNote(escaping(MAX_RELATIVE_PATH_BYTES), escaping(MAX_NOTE_TITLE_BYTES))
                 )
             },
             aiSummary = escaping(MAX_AI_SUMMARY_BYTES),

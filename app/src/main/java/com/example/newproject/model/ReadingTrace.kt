@@ -21,11 +21,11 @@ internal const val READING_TRACE_FOLDER_NAME = "_ReadingTraces"
  * 正規形は書かれた版で計算するので、片方だけだと既存のファイルが破損扱いになる。
  * 各版で足した欄とその理由は features/reflect_reading_trace.md が持つ。
  */
-internal const val READING_TRACE_SCHEMA_VERSION = 8
+internal const val READING_TRACE_SCHEMA_VERSION = 9
 
 /** 読み込みだけは受け付ける版。decode が現行版へ移行させるので、書き戻しは常に現行版になる。 */
 internal val READING_TRACE_READABLE_SCHEMA_VERSIONS =
-    setOf(1, 2, 3, 4, 5, 6, 7, READING_TRACE_SCHEMA_VERSION)
+    setOf(1, 2, 3, 4, 5, 6, 7, 8, READING_TRACE_SCHEMA_VERSION)
 
 internal object ReadingTraceLimits {
     /** 訪問の保持上限。超えたら古いものから捨てる（世代アーカイブは持たない）。 */
@@ -84,10 +84,10 @@ internal object ReadingTraceLimits {
      * 超えると**正しく保存したファイルを次回読めなくなる**（保存側と
      * 読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
      *
-     * 20件のメモすべてに最大の引用を付けると 128KB に収まらないので 192KB にしてある
-     * （→ features/margin_quote.md §6）。
+     * 20件のメモすべてに最大の引用を付け、30件の訪問すべてに上限いっぱいの並べた相手を置くと
+     * 192KB に収まらないので 256KB にしてある（→ features/desk_memory.md §6）。
      */
-    const val MAX_FILE_BYTES = 192 * 1024
+    const val MAX_FILE_BYTES = 256 * 1024
 }
 
 /**
@@ -101,8 +101,20 @@ internal object ReadingTraceLimits {
 internal data class ReadingVisit(
     val atEpochMillis: Long,
     val deepestSectionTitle: String?,
-    val progressPercent: Int
+    val progressPercent: Int,
+    /** この回に机で右に並べて読んだ相手。並べていない回と v8 以前の訪問は null（→ features/desk_memory.md §6）。 */
+    val beside: BesideNote? = null
 )
+
+/**
+ * 机で今のノートの右に並べて読んだノート（→ features/desk_memory.md）。
+ *
+ * [vaultRelativePath] は開き直すときの鍵で、**切り詰めない**（切った値は別のノートを指しうる）。
+ * [title] は控えたときの名前で、後で改名されても再解決しない（訪問の見出し名と同じ歴史的記録）。
+ * 上限に収まらない相手は候補を作る側で外す — ここの検証で弾くと、同じ保存に載る訪問とメモまで書けなくなる。
+ */
+// 再会カードの状態として画面まで運ばれるため public（`MarginMemo` と同じ理由）。
+data class BesideNote(val vaultRelativePath: String, val title: String)
 
 /**
  * 最後まで読んだか。**再会カードと前回の読書の跡は、この1つの判定を使う**（→ features/margin_pane.md §5.7）。
@@ -343,6 +355,12 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
         require(visit.progressPercent in 0..100) { "到達率が0〜100の範囲外です。" }
         visit.deepestSectionTitle?.let {
             requireWithinBytes(it, ReadingTraceLimits.MAX_SECTION_TITLE_BYTES, "セクション名")
+        }
+        visit.beside?.let { beside ->
+            require(beside.vaultRelativePath.isNotBlank()) { "並べた相手の相対パスが空です。" }
+            requireWithinBytes(beside.vaultRelativePath, ReadingTraceLimits.MAX_RELATIVE_PATH_BYTES, "並べた相手の相対パス")
+            require(beside.title.isNotBlank()) { "並べた相手のタイトルが空です。" }
+            requireWithinBytes(beside.title, ReadingTraceLimits.MAX_NOTE_TITLE_BYTES, "並べた相手のタイトル")
         }
     }
 

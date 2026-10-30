@@ -1,9 +1,9 @@
 # 机の記憶 — 並べた相手を次の再会へ返す
 
-**状態:** 構想。正本の判断は確定し、実装は未着手（→ §7 の実装の区切り）
-**最終検証:** 未検証（実装前のため、実装と突き合わせていない）
-**関連コード:** 未実装。触る見込みは `model/ReadingTrace.kt`（訪問の欄）/ `data/ReadingTraceJson.kt` / `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/NoteReaderTab.kt`
-**関連テスト:** 未実装（→ §10）
+**状態:** 実装中。痕跡の欄（スキーマ v9）と上限だけが入り、並べた時間の集計と再会カードは未実装（→ §7 の実装の区切り）
+**最終検証:** 未検証（§6 の欄と上限だけ実装済み。§5・§7 は実装と突き合わせていない）
+**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）。触る見込みは `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/NoteReaderTab.kt`
+**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest`。集計と再会カードのテストは未実装（→ §10）
 **正本:** この文書（何を「並べた」とみなし、どう残し、再会でどう返すか）。原則と契約は [fold_experience](../system/fold_experience.md)（契約3）、
 痕跡の欄の登録は [reflect_reading_trace](reflect_reading_trace.md) §6、再会カードの枠の規則は [reunion_card](reunion_card.md) が持つ
 
@@ -89,8 +89,9 @@
 
 - **痕跡のスキーマを v8 → v9 に上げる。** `ReadingVisit` に並べた相手（相対パスとタイトル）を任意の欄として足す。
   v1〜v8 は相手無し（null）で読む。checksum の正規形に版の分岐を足す（`READING_TRACE_SCHEMA_VERSION` の約束）。欄の登録は [reflect_reading_trace](reflect_reading_trace.md) §6 へ書く
-- **ファイルの上限:** 訪問30件の全部に上限いっぱいの相手が入ると、今の 192KB を超えうる。
-  区切り1で `ReadingTraceLimitsTest` の実物測定に相手を足し、超えるなら `MAX_FILE_BYTES` を上げる（読み込みと保存が同じ上限を使う）
+- **ファイルの上限は 256KB。** 訪問30件の全部に上限いっぱいの相手（エスケープで2倍に膨らむ文字だけ）を置き、20件のメモに最大の引用を付けた最悪の痕跡は、実シリアライザで **254,483 バイト**になり（2026-10-31）、
+  旧上限の 192KB（196,608 バイト）に収まらないので `MAX_FILE_BYTES` を 256KB（262,144 バイト）へ上げた。読み込みと保存は同じ定数を使う（`ReadingTraceLimitsTest` が固定する）。
+  相手の上限を下げて 192KB に収める案は採らなかった — 収めるには相対パスとタイトルを大きく削る必要があり、深い階層のふつうのノートまで相手にできなくなる
 - **足し算の置き場:** 読んでいる回（`ReadingTraceController` の読書の区間）に持つ。訪問と同じ寿命なので、
   ノート単位の状態を `NoteUiState` に足さず、契約2箇所（`cancelNoteScopedJobs()`・`withNoteScopedReset()`）への新しい登録は要らない。
   右が見えているかは画面の側が知っているので、調停側（`NoteSessionCoordinator`）を通して知らせる
@@ -223,7 +224,6 @@ Rediscover で再会
 ## 11. 既知の制約・未解決事項
 
 - 相対パスから今の Vault のノートを完全一致で引き当てる口が未確認（→ §7）。区切り3で決める
-- ファイルの上限を上げるかは、区切り1の実測で決める（→ §6）
 
 ## 12. 開発経緯
 

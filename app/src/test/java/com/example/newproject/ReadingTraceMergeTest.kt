@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.domain.adoptImportedTrace
 import com.example.newproject.domain.mergeReadingTraces
 import com.example.newproject.domain.ReadingTraceMergeResult
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -155,6 +156,56 @@ class ReadingTraceMergeTest {
         validateReadingTrace(result)
     }
 
+    // ── 並べた相手（退避の読み戻しだけ → features/desk_memory.md §6）──────────
+    //
+    // 相手は訪問の欄なので、**訪問の採用規則がそのまま相手に効く。** 通常のファイル同期は合流せず後勝ちで、
+    // ここの規則は退避ファイルを読み戻すときだけに当たる。
+
+    @Test
+    fun `読み戻しの合流で、採った訪問はそれぞれの相手と一組で残る`() {
+        val local = trace().copy(visits = listOf(visit(100L).copy(beside = A), visit(300L)), totalVisitCount = 2)
+        val imported = trace().copy(visits = listOf(visit(200L).copy(beside = B), visit(400L).copy(beside = C)), totalVisitCount = 2)
+
+        val result = merged(local, imported)
+
+        assertEquals(listOf(100L to A, 200L to B, 300L to null, 400L to C), result.visits.map { it.atEpochMillis to it.beside })
+        validateReadingTrace(result)
+    }
+
+    /** 同じ時刻は同じ閲覧なので端末側を残す。**相手も端末側のもの**で、退避側の相手と組み替えない。 */
+    @Test
+    fun `同じ時刻の訪問は端末側を相手ごと採る`() {
+        val local = trace().copy(visits = listOf(visit(100L).copy(beside = A)), totalVisitCount = 1)
+        val imported = trace().copy(visits = listOf(visit(100L).copy(beside = B)), totalVisitCount = 1)
+        val localWithout = trace().copy(visits = listOf(visit(100L)), totalVisitCount = 1)
+
+        assertEquals(A, merged(local, imported).visits.single().beside)
+        assertNull("端末側に相手が無ければ、退避側の相手を足さない", merged(localWithout, imported).visits.single().beside)
+    }
+
+    @Test
+    fun `保持の上限を超えた古い訪問は相手ごと落ちる`() {
+        val local = trace().copy(visits = (1..16).map { visit(it * 10L).copy(beside = A) }, totalVisitCount = 16)
+        val imported = trace().copy(visits = (17..32).map { visit(it * 10L).copy(beside = B) }, totalVisitCount = 16)
+
+        val result = merged(local, imported)
+
+        assertEquals(ReadingTraceLimits.MAX_VISITS, result.visits.size)
+        assertEquals(listOf(30L to A, 40L to A), result.visits.take(2).map { it.atEpochMillis to it.beside })
+        assertEquals(320L to B, result.visits.last().let { it.atEpochMillis to it.beside })
+    }
+
+    /** v8 の退避は相手を持たない（読んだ時点で null → ReadingTraceJsonTest）。合流しても、その側の訪問に相手は付かない。 */
+    @Test
+    fun `片側が相手の無い旧版でも、その側の訪問は相手無しのまま合流する`() {
+        val local = trace().copy(visits = listOf(visit(100L).copy(beside = A)), totalVisitCount = 1)
+        val importedV8 = trace().copy(visits = listOf(visit(200L), visit(300L)), totalVisitCount = 2)
+
+        val result = merged(local, importedV8)
+
+        assertEquals(listOf(100L to A, 200L to null, 300L to null), result.visits.map { it.atEpochMillis to it.beside })
+    }
+
     // ── AI要約（作り直せるもの）─────────────────────────────────────────
 
     @Test
@@ -288,4 +339,8 @@ private fun memo(text: String, at: Long, section: String? = null) =
     MarginMemo(text = text, writtenAtEpochMillis = at, sectionTitle = section)
 
 private fun visit(at: Long) = ReadingVisit(at, null, 50)
+
+private val A = BesideNote("refs/a.md", "A")
+private val B = BesideNote("refs/b.md", "B")
+private val C = BesideNote("refs/c.md", "C")
 

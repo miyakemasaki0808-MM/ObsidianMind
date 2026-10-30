@@ -6,6 +6,7 @@ import com.example.newproject.data.sha256Hex
 import java.io.ByteArrayOutputStream
 import java.io.DataOutputStream
 import org.json.JSONArray
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -589,9 +590,9 @@ class ReadingTraceJsonTest {
         ReadingTraceJson.encode(memoWith(MemoPassage.Quoted("あ".repeat(ReadingTraceLimits.MAX_QUOTE_BYTES / 3), null, truncated = true)))
     }
 
-    /** **v7 の痕跡はメモごと読め、引用は無いものとして v8 で書き戻せる。** checksum は v7 の正規形で照合する。 */
+    /** **v7 の痕跡はメモごと読め、引用は無いものとして現行版で書き戻せる。** checksum は v7 の正規形で照合する。 */
     @Test
-    fun `v7 の痕跡はメモを保ったまま読め、v8 として書ける`() {
+    fun `v7 の痕跡はメモを保ったまま読め、現行版として書ける`() {
         val source = trace().copy(memos = listOf(MarginMemo("v7 で書いたメモ", 100L, "導入")))
 
         val loaded = (ReadingTraceJson.decode(encodeAsV7(source)) as? ReadingTraceReadResult.Valid)?.trace
@@ -626,6 +627,167 @@ class ReadingTraceJsonTest {
         assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
     }
 
+    // ── 並べた相手（v9 → features/desk_memory.md §6）──────────────────────────
+
+    @Test
+    fun `並べた相手は訪問ごとに往復し、並べていない回は null のまま`() {
+        val source = trace(
+            visits = listOf(
+                visit(at = 100L).copy(beside = BesideNote("refs/並べ読みの相手.md", "並べ読みの相手")),
+                visit(at = 200L),
+                visit(at = 300L).copy(beside = BesideNote("refs/別の相手.md", "別の相手"))
+            )
+        )
+
+        val decoded = (ReadingTraceJson.decode(ReadingTraceJson.encode(source)) as ReadingTraceReadResult.Valid).trace
+
+        assertEquals(source, decoded)
+        assertNull(decoded.visits[1].beside)
+    }
+
+    /** 相手は checksum の対象。差し替え・消去・書き足しのどれも検出する。 */
+    @Test
+    fun `並べた相手の改変は破損扱いになる`() {
+        val source = trace(visits = listOf(visit(at = 100L).copy(beside = BesideNote("a.md", "A")), visit(at = 200L)))
+        val visitOf: (JSONObject, Int) -> JSONObject = { root, index -> root.getJSONArray("visits").getJSONObject(index) }
+
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { visitOf(it, 0).getJSONObject("beside").put("vaultRelativePath", "b.md") }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { visitOf(it, 0).getJSONObject("beside").put("title", "B") }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { visitOf(it, 0).put("beside", JSONObject.NULL) }))
+        assertCorrupt(ReadingTraceJson.decode(mutate(source) { visitOf(it, 1).put("beside", JSONObject().put("vaultRelativePath", "c.md").put("title", "C")) }))
+    }
+
+    /**
+     * **保存済みファイルの検証は緩めない。** 上限を超える相手を候補から外すのは候補を作る側の仕事で（→ features/desk_memory.md 判断9）、
+     * ここは超えた値も空の値も弾く。境は UTF-8 バイトで測る。
+     */
+    @Test
+    fun `並べた相手の上限はutf8バイトで測り、空は弾く`() {
+        fun traceWith(beside: BesideNote) = trace(visits = listOf(visit().copy(beside = beside)))
+        val pathAtLimit = "a".repeat(ReadingTraceLimits.MAX_RELATIVE_PATH_BYTES)
+        val titleAtLimit = "あ".repeat(ReadingTraceLimits.MAX_NOTE_TITLE_BYTES / 3) + "a".repeat(ReadingTraceLimits.MAX_NOTE_TITLE_BYTES % 3)
+
+        ReadingTraceJson.encode(traceWith(BesideNote(pathAtLimit, titleAtLimit)))
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote(pathAtLimit + "a", "t"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", titleAtLimit + "a"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote(" ", "t"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", " "))) }
+    }
+
+    /** **v8 の痕跡は訪問とメモを保ったまま読め、相手は無いものとして現行版で書き戻せる。** checksum は v8 の正規形で照合する。 */
+    @Test
+    fun `v8 の痕跡は訪問と引用つきのメモを保ったまま読め、現行版として書ける`() {
+        val source = trace(visits = listOf(visit(at = 100L), visit(at = 200L))).copy(
+            memos = listOf(MarginMemo("v8 で書いたメモ", 100L, "導入", MemoPassage.Quoted("一節", QuoteContext("前", "後"), truncated = false)))
+        )
+
+        val loaded = (ReadingTraceJson.decode(encodeAsV8(source)) as? ReadingTraceReadResult.Valid)?.trace
+            ?: error("v8 を読めない")
+
+        assertEquals(source.visits, loaded.visits)
+        assertTrue(loaded.visits.all { it.beside == null })
+        assertEquals(source.memos, loaded.memos)
+        assertEquals(READING_TRACE_SCHEMA_VERSION, loaded.schemaVersion)
+        val reencoded = ReadingTraceJson.decode(ReadingTraceJson.encode(loaded))
+        assertEquals(loaded, (reencoded as ReadingTraceReadResult.Valid).trace)
+    }
+
+    /** v8 の正規形に相手は入っていないので、v8 のファイルへ書き足された相手は読まない。 */
+    @Test
+    fun `v8 に書き足された並べた相手は読まない`() {
+        val injected = addKeysKeepingChecksum(encodeAsV8(trace())) { root ->
+            root.getJSONArray("visits").getJSONObject(0)
+                .put("beside", JSONObject().put("vaultRelativePath", "差し込み.md").put("title", "差し込み"))
+        }
+
+        val loaded = (ReadingTraceJson.decode(injected) as ReadingTraceReadResult.Valid).trace
+
+        assertNull(loaded.visits.single().beside)
+    }
+
+    @Test
+    fun `改変された v8 は破損扱いのまま`() {
+        val root = JSONObject(encodeAsV8(trace()).toString(Charsets.UTF_8))
+        root.getJSONArray("visits").getJSONObject(0).put("progressPercent", 99)
+
+        assertCorrupt(ReadingTraceJson.decode(root.toString().toByteArray(Charsets.UTF_8)))
+    }
+
+}
+
+/**
+ * schema v8 のサイドカーを組み立てる（本番の encode は現行版しか書けないため）。
+ * **v8 の正規形をテスト側に写し取っている** — 本番の正規形を呼ぶと、v9 で形を変えたときに一緒に壊れて気付けない。
+ */
+private fun encodeAsV8(trace: ReadingTrace): ByteArray {
+    require(trace.visits.all { it.beside == null }) { "v8 の訪問は並べた相手を持たない" }
+    val root = JSONObject(encodeAsV7(trace.copy(memos = trace.memos.map { it.copy(passage = null) })).toString(Charsets.UTF_8))
+    val memosJson = root.getJSONArray("memos")
+    trace.memos.forEachIndexed { index, memo ->
+        memosJson.getJSONObject(index).put("passage", memo.passage?.toJsonForTest() ?: JSONObject.NULL)
+    }
+    val payload = ByteArrayOutputStream()
+    DataOutputStream(payload).use { out ->
+        out.writeInt(8)
+        out.writeSizedForTest(trace.vaultRelativePath)
+        out.writeSizedForTest(trace.noteTitle)
+        out.writeInt(trace.visits.size)
+        trace.visits.forEach { v ->
+            out.writeLong(v.atEpochMillis)
+            out.writeInt(v.progressPercent)
+            out.writeNullableForTest(v.deepestSectionTitle)
+        }
+        out.writeNullableForTest(trace.aiSummary)
+        out.writeInt(trace.aiSummaryVisitCount ?: -1)
+        out.writeInt(trace.totalVisitCount)
+        out.writeNullableForTest(trace.aiSummaryKind?.name)
+        out.writeLong(trace.markedAtEpochMillis ?: -1L)
+        out.writeNullableForTest(trace.markedSummary)
+        out.writeNullableForTest(trace.markedKind?.name)
+        out.writeInt(trace.memos.size)
+        trace.memos.forEach { memo ->
+            out.writeSizedForTest(memo.text)
+            out.writeLong(memo.writtenAtEpochMillis)
+            out.writeNullableForTest(memo.sectionTitle)
+            out.writePassageForTest(memo.passage)
+        }
+    }
+    return root.put("schemaVersion", 8)
+        .put("checksum", sha256Hex(payload.toByteArray()))
+        .toString(2)
+        .toByteArray(Charsets.UTF_8)
+}
+
+/** v8 の引用と控えた位置の JSON（本番と同じ形）。 */
+private fun MemoPassage.toJsonForTest(): JSONObject = when (this) {
+    is MemoPassage.Quoted -> JSONObject().put("kind", "quoted").put("text", text).put("truncated", truncated).apply {
+        context?.let { put("context", JSONObject().put("before", it.before).put("after", it.after)) }
+    }
+    is MemoPassage.Seen -> JSONObject().put("kind", "seen").put("text", text)
+}
+
+/** v8 の引用と控えた位置の正規形（本番と同じ形）。種類の印を1バイト前置する。 */
+private fun DataOutputStream.writePassageForTest(passage: MemoPassage?) {
+    when (passage) {
+        null -> writeByte(0)
+        is MemoPassage.Quoted -> {
+            writeByte(1)
+            writeSizedForTest(passage.text)
+            val context = passage.context
+            if (context == null) {
+                writeByte(0)
+            } else {
+                writeByte(1)
+                writeSizedForTest(context.before)
+                writeSizedForTest(context.after)
+            }
+            writeBoolean(passage.truncated)
+        }
+        is MemoPassage.Seen -> {
+            writeByte(2)
+            writeSizedForTest(passage.text)
+        }
+    }
 }
 
 /**
