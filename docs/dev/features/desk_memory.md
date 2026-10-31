@@ -2,8 +2,8 @@
 
 **状態:** 実装中。痕跡の欄（スキーマ v9）・並べた時間の集計・訪問への記録までが入り、再会カードは未実装（→ §7 の実装の区切り）
 **最終検証:** 未検証（§5 の名前から並べて開く・§6 の再会カードの状態は未実装で、実装と突き合わせていない）
-**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`。再会カードで触る見込みは `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`。再会カードのテストは未実装（→ §10）
+**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `NoteScanCache.kt`（`relativePathOf`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`。再会カードで触る見込みは `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `Utf8TruncationTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `NoteScanCacheTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`。再会カードのテストは未実装（→ §10）
 **正本:** この文書（何を「並べた」とみなし、どう残し、再会でどう返すか）。原則と契約は [fold_experience](../system/fold_experience.md)（契約3）、
 痕跡の欄の登録は [reflect_reading_trace](reflect_reading_trace.md) §6、再会カードの枠の規則は [reunion_card](reunion_card.md) が持つ
 
@@ -64,6 +64,7 @@
 - **相手にできるもの（候補）:** 保存できる値を持つ右のノートだけ。**保存できない相手は候補から外し、相手無しで訪問とメモを保存する**（→ 判断9）
   - 相対パスは、右で開いたノートの参照から今のノートと同じ口で引く。**引けない・空・1,024 UTF-8 バイトを超える・制御文字を含む相手は候補にしない。** 相対パスは切り詰めも削りもしない — 変えた値は別のノートを指しうる
   - タイトルは制御文字を落としてから 512 UTF-8 バイトで整える（見出し名と同じ整え方 → `composeMemoSectionTitle`）。表示の記録なので、整えても別のノートを指さない。整えた後に空なら相対パスのファイル名を使い、それも空なら候補にしない
+  - **文字（コードポイント）の途中では切らない**（`truncateToUtf8Bytes`）。絵文字を割ると、片割れが保存の往復で `?` に替わり、読み直した末尾の訪問とメモリ上の訪問が食い違って、同じ読書の訪問を差し替えられずに増える
   - 今のノート自身は相手にしない
 - **相手の決め方:** 候補のうち、足し算が30秒以上の相手の**いちばん長いもの1件**。同じ長さなら後から並べたもの。右で辿った先（右のノートの中のリンク）も別の相手として数える
 - **入力と出力:** 入力は並べ読みの状態の移り変わりと単調な時計。出力は訪問1件につき相手1件か無し
@@ -96,7 +97,8 @@
   相手の上限を下げて 192KB に収める案は採らなかった — 収めるには相対パスとタイトルを大きく削る必要があり、深い階層のふつうのノートまで相手にできなくなる
 - **足し算の置き場:** 読んでいる回（`ReadingTraceController` の読書の区間）に `BesideTally` として持つ。訪問と同じ寿命なので、
   ノート単位の状態を `NoteUiState` に足さず、契約2箇所（`cancelNoteScopedJobs()`・`withNoteScopedReset()`）への新しい登録は要らない。
-  右が見えているかは画面の側が知っているので（`besideShownNote`）、窓口が走査済みのキャッシュから相対パスを引いて、調停側（`NoteSessionCoordinator`）を通して知らせる。
+  右が見えているかは画面の側が知っているので（`besideShownNote`）、窓口が相対パスを引いて、調停側（`NoteSessionCoordinator`）を通して知らせる。
+  **相対パスは走査の結果のリンクの索引から引く**（`NoteScanCache.relativePathOf`。I/Oも走査もしない）。走査の一覧は本文の書き換え（蒸留の保存・太字の復元）で空になるが、索引は Vault 切替まで残るので、書き換えの後に右で開いたノートも取りこぼさない。
   時計は調停側の単調な時計（結晶の材料の線と同じ）で、止める理由（背面・冊子）は読書の区間と同じ口から届く。
   **相手は時間で決まるが、書いた後は数えるのが止まっていて、数え直すのは止める理由が解けたとき（訪問を書き直す対象になる）なので、相手だけが替わって書き直しが漏れることは無い**
 - **再会カードの状態:** `ReadingTraceCard` に前回の相手（タイトルと相対パス）の欄を足す。カードと同じくノート単位で、既存のリセットに乗る
@@ -209,7 +211,9 @@ Rediscover で再会
 - **JVMテスト:**
   - 痕跡 v9 の往復・v1〜v8 を相手無しで読む・checksum の版の分岐・相手の欄の上限と弾き方（空・バイト数・制御文字。保存済みファイルの検証は緩めない）。最悪の痕跡を実シリアライザで測って上限に収まること。6倍に膨らむ文字の相手は検証で弾かれ、上限の外の値を残さないこと
   - **候補の境（判断9）:** 相対パス1,024バイトの相手は保存でき、1,025バイトなら相手は外れて今のノートの訪問は保存される。タイトルの512／513バイトの境でも訪問の保存を妨げない（日本語を含め UTF-8 バイトで判定）。
-    制御文字を含む相対パスの相手は外れ、タイトルの制御文字は落ちる。どちらでも今のノートの訪問とメモは保存される
+    制御文字を含む相対パスの相手は外れ、タイトルの制御文字は落ちる。どちらでも今のノートの訪問とメモは保存される。
+    **保存先は書いたバイト列を読み直す**ので、絵文字が上限に掛かるタイトルの相手でも、背面での保存 → 復帰 → 離脱の読書は1訪問のまま（保存を待つ間に戻る順序も同じ）
+  - 本文を書き換えて走査の一覧が空になった後も、相対パスを走査せずに引け、Vault を替えたら引けない（`NoteScanCacheTest`）
     初読のノートでメモを預かった同じ順序でも、保存後に読むと訪問とメモが両方ある。**値の検証が例外を投げるだけのテストで終えず、候補の選択から `recordVisit`・保存・読み直しまで通す**
   - **退避の読み戻しの合流（`mergeReadingTraces`）:** 異なる時刻の訪問を持つ2つの痕跡で、採った各訪問と相手が一組で残る。同じ時刻なら端末側の訪問を相手ごと採る。31件以上では古い訪問が相手ごと落ちる。片側が v8 ならその側の相手は null
   - 足し算（資料⇄書きかけの切替・片側1画面・窓でペインが閉じる・背面・読み込み中と失敗を数えない）と相手の決め方（30秒の境・いちばん長いもの・同じ長さは後のもの・今のノート自身を除く）

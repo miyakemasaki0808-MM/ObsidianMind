@@ -13,6 +13,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -94,6 +95,27 @@ class NoteScanCacheTest {
         assertEquals(emptyList<NoteFile>(), cache.notes)
         cache.get(scan = scan, onPublished = ::record)
         assertEquals("書き換えの後は TTL 内でも走査し直す", 2, scans)
+    }
+
+    /**
+     * **並べた相手の相対パスは、本文を書き換えて一覧が空になった後もリンクの索引から引ける**（→ features/desk_memory.md §5）。
+     * 一覧だけから引くと、書き換えの後に右で開いたノートを取りこぼす。引くのに走査しない。Vault を替えたら引けない。
+     */
+    @Test
+    fun `本文を書き換えた後も相対パスを走査せずに引け、Vaultを替えたら引けない`() = runTest {
+        var scans = 0
+        cache.get(scan = { scans++; listOf(note("A.md", "A-ref"), note("refs/B.md", "B-ref"), note("refs/C.md", "C-ref")) }, onPublished = ::record)
+
+        cache.expireAfterBodyWrite()
+
+        assertEquals(emptyList<NoteFile>(), cache.notes)
+        assertEquals("refs/B.md", cache.relativePathOf(DocumentRef("B-ref")))
+        assertEquals("refs/C.md", cache.relativePathOf(DocumentRef("C-ref")))
+        assertEquals("引くために走査した", 1, scans)
+
+        switchVault()
+
+        assertNull(cache.relativePathOf(DocumentRef("B-ref")))
     }
 
     @Test

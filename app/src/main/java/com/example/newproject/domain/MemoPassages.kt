@@ -4,6 +4,8 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.inlineVisibleText
 import com.example.newproject.domain.markdown.listMarkerText
+import com.example.newproject.model.utf8ByteCount
+import com.example.newproject.model.truncateToUtf8Bytes
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.QuoteContext
@@ -285,18 +287,7 @@ internal fun contextIn(blockText: String, key: String): QuoteContext? {
  * 先頭から UTF-8 のバイト上限まで。**文字（コードポイント）の途中では切らない** — 絵文字のような
  * 2つの char でできた文字を割ると、片割れが1バイトに数えられて上限と保存値がずれる。
  */
-internal fun takeFirstUtf8Bytes(value: String, maximumBytes: Int): String {
-    var end = 0
-    var bytes = 0
-    while (end < value.length) {
-        val codePoint = value.codePointAt(end)
-        val size = utf8Size(codePoint)
-        if (bytes + size > maximumBytes) break
-        bytes += size
-        end += Character.charCount(codePoint)
-    }
-    return value.substring(0, end)
-}
+internal fun takeFirstUtf8Bytes(value: String, maximumBytes: Int): String = truncateToUtf8Bytes(value, maximumBytes)
 
 /** 末尾から UTF-8 のバイト上限まで。文字の途中では切らない。 */
 internal fun takeLastUtf8Bytes(value: String, maximumBytes: Int): String {
@@ -304,19 +295,12 @@ internal fun takeLastUtf8Bytes(value: String, maximumBytes: Int): String {
     var bytes = 0
     while (start > 0) {
         val codePoint = value.codePointBefore(start)
-        val size = utf8Size(codePoint)
+        val size = utf8ByteCount(codePoint)
         if (bytes + size > maximumBytes) break
         bytes += size
         start -= Character.charCount(codePoint)
     }
     return value.substring(start)
-}
-
-private fun utf8Size(codePoint: Int): Int = when {
-    codePoint < 0x80 -> 1
-    codePoint < 0x800 -> 2
-    codePoint < 0x10000 -> 3
-    else -> 4
 }
 
 /**

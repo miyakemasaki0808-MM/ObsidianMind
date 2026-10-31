@@ -1852,6 +1852,58 @@ class ReadingTraceControllerTest {
             assertEquals(title, expected, reread.visits.single().beside)
         }
     }
+
+    /**
+     * **整えた相手は保存して読み直しても同じ値で、同じ読書が2訪問に増えない。** 保存先は書いたバイト列を読み直すので、
+     * タイトルを絵文字の途中で切ると、背面での保存を差し替えられずに訪問が増える。保存を待つ間に戻る順序も同じ結果になる。
+     */
+    @Test
+    fun `絵文字が上限に掛かるタイトルの相手でも、背面と復帰をまたいだ読書は1訪問のまま`() = runTest {
+        listOf(true, false).forEach { saveBeforeResume ->
+            val clock = TestClock()
+            val persistence = FakePersistence().apply { encodeLikeStore = true }
+            val controller = controller(persistence, clock)
+            controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+            controller.appendMemo("ideas/habit.md", memoOf("初読のメモ", at = 5_000L))
+            controller.onBesideShown("refs/a.md", "あ".repeat(170) + "😀")
+            clock.advance(30_000L)
+            controller.pause(ReadingPauseReason.AppBackground)
+            if (saveBeforeResume) advanceUntilIdle()
+            controller.resume(ReadingPauseReason.AppBackground)
+            clock.advance(1_000L)
+            controller.flush()
+            advanceUntilIdle()
+
+            val stored = persistence.stored("ideas/habit.md")!!
+            val label = if (saveBeforeResume) "保存が済んでから戻る" else "保存を待つ間に戻る"
+            assertEquals(label, 1, stored.visits.size)
+            assertEquals(label, 1, stored.totalVisitCount)
+            assertEquals(label, BesideNote("refs/a.md", "あ".repeat(170)), stored.visits.single().beside)
+            assertEquals(label, listOf("初読のメモ"), stored.memos.map { it.text })
+        }
+    }
+
+    /** 同じ切り方は訪問の見出し名にも効く。上限に絵文字が掛かる見出しでも、背面と復帰をまたいだ読書は1訪問のまま。 */
+    @Test
+    fun `絵文字が上限に掛かる見出しでも、背面と復帰をまたいだ読書は1訪問のまま`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence().apply { encodeLikeStore = true }
+        val controller = controller(persistence, clock)
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "あ".repeat(170) + "😀")
+        clock.advance(10_000L)
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(1_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val stored = persistence.stored("ideas/habit.md")!!
+        assertEquals(1, stored.visits.size)
+        assertEquals("あ".repeat(170), stored.visits.single().deepestSectionTitle)
+    }
 }
 
 // --- ヘルパ ---------------------------------------------------------------

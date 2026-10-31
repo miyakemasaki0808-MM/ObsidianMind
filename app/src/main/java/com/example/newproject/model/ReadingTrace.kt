@@ -288,20 +288,32 @@ internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
 )
 
 /**
- * UTF-8バイト上限で切る。マルチバイト文字の途中では切らない。
- * AI要約が上限を超えたときに検証で弾かれて保存できなくなるのを避けるため、
- * 保存前にここで丸める。
+ * 先頭から UTF-8 のバイト上限まで残す。保存の前に丸め、上限を超えた値が検証で弾かれて保存できなくなるのを避ける
+ * （AI要約・メモ・見出し名・並べた相手のタイトル）。
+ *
+ * **文字（コードポイント）の途中では切らない。** 絵文字のような2つの char でできた文字を割ると、片割れが保存の
+ * UTF-8 化で `?` に替わり、保存して読み直した値がメモリ上の値と食い違う。訪問は読み直した末尾と比べて差し替えるので、
+ * 食い違うと同じ読書の訪問が増える（→ features/desk_memory.md §5）。
  */
 internal fun truncateToUtf8Bytes(value: String, maximumBytes: Int): String {
-    if (value.toByteArray(Charsets.UTF_8).size <= maximumBytes) return value
-    // 1文字あたり最大4バイトなので、ここから縮めれば数回で収まる。
-    var end = minOf(value.length, maximumBytes)
-    while (end > 0) {
-        val candidate = value.substring(0, end)
-        if (candidate.toByteArray(Charsets.UTF_8).size <= maximumBytes) return candidate
-        end--
+    var end = 0
+    var bytes = 0
+    while (end < value.length) {
+        val codePoint = value.codePointAt(end)
+        val size = utf8ByteCount(codePoint)
+        if (bytes + size > maximumBytes) break
+        bytes += size
+        end += Character.charCount(codePoint)
     }
-    return ""
+    return value.substring(0, end)
+}
+
+/** 1文字（コードポイント）の UTF-8 のバイト数。 */
+internal fun utf8ByteCount(codePoint: Int): Int = when {
+    codePoint < 0x80 -> 1
+    codePoint < 0x800 -> 2
+    codePoint < 0x10000 -> 3
+    else -> 4
 }
 
 private fun validateMemoPassage(passage: MemoPassage) {

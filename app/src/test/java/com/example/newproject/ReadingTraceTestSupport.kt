@@ -76,8 +76,9 @@ internal class FakePersistence : ReadingTracePersistence {
     var failSave = false
 
     /**
-     * 本物の Store と同じく、書く前に実物のエンコーダ（検証つき）とファイルの上限を通す。
-     * **値のせいで保存全体が止まる経路**（→ features/desk_memory.md 判断9）は、検証しない偽物では見えない。
+     * 本物の Store と同じく、書く前に実物のエンコーダ（検証つき）とファイルの上限を通し、**書いたバイト列を読み直した値を持つ**。
+     * 値のせいで保存全体が止まる経路（→ features/desk_memory.md 判断9）と、保存の往復で値が替わって同じ読書の訪問を
+     * 差し替えられない経路は、検証しない偽物・元の値を返す偽物では見えない。
      */
     var encodeLikeStore = false
 
@@ -154,16 +155,19 @@ internal class FakePersistence : ReadingTracePersistence {
         if (failSave || failSaveOnAttempt == saveAttempts) {
             return ReadingTraceSaveResult.Failure("書き込めませんでした")
         }
-        if (encodeLikeStore) {
+        val stored = if (encodeLikeStore) {
             val bytes = try {
                 ReadingTraceJson.encode(trace)
             } catch (error: IllegalArgumentException) {
                 return ReadingTraceSaveResult.Failure(error.message ?: "検証で弾かれました")
             }
             if (bytes.size > ReadingTraceLimits.MAX_FILE_BYTES) return ReadingTraceSaveResult.Failure("上限を超えます")
+            (ReadingTraceJson.decode(bytes) as? ReadingTraceReadResult.Valid)?.trace ?: error("書いたバイト列を読み直せない")
+        } else {
+            trace
         }
-        saved += trace
-        files[trace.vaultRelativePath] = trace
+        saved += stored
+        files[trace.vaultRelativePath] = stored
         return ReadingTraceSaveResult.Success
     }
 }

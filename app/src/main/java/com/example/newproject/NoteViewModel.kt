@@ -616,11 +616,11 @@ class NoteViewModel internal constructor(
 
     /**
      * 右に資料として見えている並べ読みのノート。見えていなければ null（→ features/desk_memory.md §5）。
-     * 相対パスは走査済みのキャッシュから引き、**I/Oはしない** — 右で開くノートは走査の結果から来るので、キャッシュは温まっている。
-     * 引けなければ候補にならない。
+     * 相対パスは走査の結果のリンクの索引から引き、**I/Oはしない**。走査の一覧（[cachedNotes]）は本文の書き換えで空になるので、
+     * そちらから引くと、書き換えの後に右で開いたノートを取りこぼす。引けなければ候補にならない。
      */
     fun reportBesideShown(note: RelatedNote?) =
-        session.reportBesideShown(note?.let { cachedRelativePath(it.ref) }, note?.title)
+        session.reportBesideShown(note?.let { noteScan.relativePathOf(it.ref) }, note?.title)
 
     /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
     fun showSideFace(face: SideFace) = session.showSideFace(face)

@@ -1,6 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
@@ -47,6 +48,28 @@ class BesideNotesTest {
         assertEquals("相手のノート", composeBesideNote("refs/a.md", " 相手の\u0007ノート\n ")!!.title)
     }
 
+    /**
+     * **文字の途中で切らない。** 絵文字を割ると、保存の往復で片割れが `?` に替わり、同じ読書の訪問を差し替えられずに増える。
+     * ファイル名で補うときも同じ切り方をする。
+     */
+    @Test
+    fun `タイトルは絵文字の途中で切らず、保存の往復で同じ値のまま`() {
+        val cases = mapOf(
+            "あ".repeat(170) + "😀" to "あ".repeat(170),
+            "a".repeat(511) + "😀" to "a".repeat(511),
+            "a".repeat(508) + "😀" to "a".repeat(508) + "😀"
+        )
+
+        cases.forEach { (title, expected) ->
+            val beside = composeBesideNote("refs/a.md", title)!!
+            assertEquals(expected, beside.title)
+            assertEquals(title, beside, roundTrip(beside))
+        }
+        val fromFileName = composeBesideNote("refs/" + "あ".repeat(170) + "😀.md", null)!!
+        assertEquals("あ".repeat(170), fromFileName.title)
+        assertEquals(fromFileName, roundTrip(fromFileName))
+    }
+
     @Test
     fun `タイトルが空ならファイル名を使い、それも空なら外す`() {
         assertEquals("習慣の科学", composeBesideNote("refs/習慣の科学.md", null)?.title)
@@ -68,6 +91,9 @@ class BesideNotesTest {
             ReadingTraceJson.encode(traceWith(beside))
         }
     }
+
+    private fun roundTrip(beside: BesideNote): BesideNote? =
+        (ReadingTraceJson.decode(ReadingTraceJson.encode(traceWith(beside))) as ReadingTraceReadResult.Valid).trace.visits.single().beside
 
     private fun traceWith(beside: BesideNote) = ReadingTrace(
         vaultRelativePath = "ideas/habit.md",
