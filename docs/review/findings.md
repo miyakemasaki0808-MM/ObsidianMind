@@ -35,3 +35,4 @@
 | `2026-11-01-desk-memory-device-cases-review/P3-1` | DESKMEM-10 の知らせの文言が正本と実装で違い、改名する相手の名前も fixture と合わない | `起票` DOC-5 |
 | `2026-11-01-desk-memory-device-fixes-review/P2-1` | ほかの節のメモの開閉を保存値の inputs だけで守っており、画面を離れている間にノートが替わると復元で前のノートの開閉を採る | `統合` FOLD-19 |
 | `2026-11-01-desk-memory-device-fixes-review/P3-1` | DESKMEM-10 の固定の文言から、控えた題名の拡張子 `.md` が抜けている | `統合` DOC-5 |
+| `2026-11-01-desk-memory-device-fixes-rereview/P2-1` | ノートごとに保存の鍵を分けると消費されなかった前の値が残り、A→B→A の復元で古い開閉が戻る | `統合` FOLD-19 |

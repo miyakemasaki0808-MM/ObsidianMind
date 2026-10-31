@@ -88,6 +88,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -631,11 +634,11 @@ internal fun NoteReaderTab(
         val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
         val paneScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<Int>(DeskSpread.SupportingOnly) }
         // ほかの節のメモの開閉も、並べ読みで面が外れて戻ったときに位置ごと保つため外で持つ（→ MarginMemoSheetContent）。
-        // **持ち主（ペインの出し直しとノート）を保存の鍵にも入れる。** inputs は保存されないので、画面を離れている間に
-        // ノートが替わると、戻ったときの復元で前のノートの開閉を採ってしまう。
+        // **持ち主（ペインの出し直しとノート）を値と一緒に保存し、復元のときに照合する**（→ ownedExpansionSaver）。
+        val paneOthersOwner = "$paneVisible:$currentNoteUri"
         val paneOthersExpanded = rememberSaveable(
             paneVisible, currentNoteUri,
-            key = "paneOthersExpanded:$paneVisible:$currentNoteUri"
+            saver = remember(paneOthersOwner) { ownedExpansionSaver(paneOthersOwner) }
         ) { mutableStateOf(false) }
         // 本文と並べ読みの読む位置も、片側を1画面に広げて戻したときに戻す（→ RestoreLazyFacePosition）。
         // 並べ読みは右のノートごとに位置を持つので、覚えも右のノートごとに替える。
@@ -1200,6 +1203,16 @@ internal fun NoteReaderTab(
     }
 
 }
+
+/**
+ * 開閉を持ち主と一組で保存し、復元のときに持ち主が違えば畳んだ値にする。
+ * inputs は保存されないので、画面を離れている間に持ち主が替わっても復元はそれを知らない。
+ * **鍵を持ち主ごとに分けない** — 消費されなかった前の持ち主の値が次の保存へ持ち越され、A→B→A で古い開閉が戻る。
+ */
+private fun ownedExpansionSaver(owner: String): Saver<MutableState<Boolean>, Any> = listSaver(
+    save = { listOf(owner, it.value) },
+    restore = { saved -> mutableStateOf(saved[0] == owner && saved[1] == true) }
+)
 
 @Composable
 private fun toastNotice(): (String) -> Unit {

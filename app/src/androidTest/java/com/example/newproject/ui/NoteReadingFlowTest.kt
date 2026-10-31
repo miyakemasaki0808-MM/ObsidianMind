@@ -2179,8 +2179,9 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **ほかの節のメモを開いたまま画面を離れ、留守の間に今のノートが替わると、戻ったときは畳まれている。**
+     * **ほかの節のメモを開いたまま画面を離れ、留守の間に今のノートが替わると、戻ったときは畳まれている。A→B→A と2往復しても同じ。**
      * 開閉の持ち主を保存値で照合しないと、復元のときに前のノートの開閉を採る（画面が組まれている間の切替では起きない）。
+     * ノートごとに保存の鍵を分けると、消費されなかった A の値が B の保存に持ち越され、A へ戻ったときに古い開閉が戻る。
      */
     @Test
     fun ほかの節のメモを開いたまま画面を離れ_留守中にノートが替わると戻ったとき畳まれている() {
@@ -2189,13 +2190,18 @@ class NoteReadingFlowTest {
         setOtherSectionMemosDesk(note = { note }, shown = { shown })
         expandOtherSectionMemos()
 
-        composeRule.runOnIdle { shown = false }
-        composeRule.waitForIdle()
-        composeRule.runOnIdle { note = otherSectionMemosNote(NOTE_B) }
-        composeRule.waitForIdle()
-        composeRule.runOnIdle { shown = true }
-        composeRule.waitForIdle()
+        fun returnTo(uri: String) {
+            composeRule.runOnIdle { shown = false }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle { note = otherSectionMemosNote(uri) }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle { shown = true }
+            composeRule.waitForIdle()
+        }
+        returnTo(NOTE_B)
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
 
+        returnTo(NOTE_A)
         composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
     }
 
