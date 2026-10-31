@@ -2065,8 +2065,9 @@ class NoteReadingFlowTest {
     // **前提と保ちたい値を実際に用意する** — 開いたペイン・空の書きかけから始めると、ペインを開く処理や戻り先を省いても緑になる。
 
     /**
-     * **同じ相手の読み直しを読み込み中で待たせても、読めた後に始まり（最初の段落が最初に開いたときと同じ位置）へ届く。**
+     * **初めて開いたときも、同じ相手の読み直しを読み込み中で待たせた後も、右のリストがブロック0・オフセット0にある。**
      * 右の位置は相手ごとに覚えているので、開く口を呼ぶだけでは途中に残る。並べ読みは閉じず、今のノートは替わらない。
+     * **始まりは押した結果から独立した基準で見る** — 初回の表示と比べると、毎回同じ誤った位置へ送る誤りを見逃す。
      */
     @Test
     fun 再会カードの相手の名前で右に始まりから開き_途中まで読んで読み直しを待たせても始まりへ戻る() {
@@ -2074,21 +2075,32 @@ class NoteReadingFlowTest {
         val desk = setBesideCardDesk(loadSlowly = true, onOpenNote = { opens++ })
         composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
         desk.finishLoading()
-        val startTop = composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        assertEquals("初めて開いたときに始まりにない", 0f, sideListScrollOffset())
 
         composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
             .performScrollToIndex(KEPT_SIDE_BLOCK)
         composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+        assertTrue("途中まで送れていない", sideListScrollOffset() > 0f)
 
         composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
         composeRule.waitForIdle()
         composeRule.runOnIdle { assertTrue("読み直しを待たせていない", desk.side() is SideReadingState.Loading) }
         desk.finishLoading()
 
-        val top = composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed().fetchSemanticsNode().boundsInRoot.top
-        assertEquals("始まりのオフセットまで戻っていない", startTop, top, 1f)
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        assertEquals("読み直しの後に始まり（ブロック0・オフセット0）へ戻っていない", 0f, sideListScrollOffset())
         composeRule.runOnIdle { assertEquals("今のノートを替えた", 0, opens) }
     }
+
+    /**
+     * 右のリストのスクロールの位置。**0 はブロック0・オフセット0。** Compose 1.7.3 の遅延リストは縦の範囲の値を
+     * 「先頭に見えている項目の番号 × 500 ＋ その項目のオフセット」で出す（`estimatedLazyScrollOffset`。バイナリで確かめた）。
+     * 右のリストは右のノートの段落を持つので、左の本文のリストとは取り違えない。
+     */
+    private fun sideListScrollOffset(): Float =
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(SIDE_MARKER, substring = true)))
+            .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
 
     /** **ペインを閉じていても、名前でペインを開いて机と資料を出す。** 開く処理を省くと、閉じたまま何も起きない。 */
     @Test
@@ -3808,7 +3820,10 @@ class NoteReadingFlowTest {
         const val SIDE_TARGET_BLOCK = 12
         val LONG_SIDE_BODY = (0 until 40).joinToString("\n\n") { "${sideMarkerAt(it)} の本文です。" }
 
-        fun sideMarkerAt(index: Int) = "右の段落$index"
+        fun sideMarkerAt(index: Int) = "$SIDE_MARKER$index"
+
+        /** 右の長い本文の段落に共通する頭。右のリストを見分けるのに使う。 */
+        const val SIDE_MARKER = "右の段落"
 
         /** [LONG_SIDE_BODY] の段落の文全体。番号の前方一致（「右の段落3」と「右の段落30」）で取り違えない。 */
         fun sideParagraph(index: Int) = "${sideMarkerAt(index)} の本文です。"
