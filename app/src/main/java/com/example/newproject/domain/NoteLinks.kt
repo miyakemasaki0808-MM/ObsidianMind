@@ -108,11 +108,22 @@ internal class NoteLinkIndex(private val notes: List<NoteFile>) {
     private val byPath by lazy {
         notes.filter { it.vaultRelativePath.isNotEmpty() }.associateBy { it.vaultRelativePath.lowercase() }
     }
+
+    /**
+     * 表記どおりの相対パスの表。[byPath] は大文字小文字を畳んだキーで1件だけを持つので、`Case.md` と `case.md` が共存すると
+     * 後に走査した方が前の方を上書きする。保存した相対パスで引く口（[atExactPath]）はこちらを使う。
+     */
+    private val byExactPath by lazy {
+        notes.filter { it.vaultRelativePath.isNotEmpty() }.associateBy { it.vaultRelativePath }
+    }
     private val byTitle by lazy { notes.groupBy { it.name.toNormalizedObsidianTitle() } }
 
     fun pathOf(ref: DocumentRef): String? = byRef[ref]?.vaultRelativePath?.takeIf { it.isNotEmpty() }
 
     fun atPath(vaultPath: String): NoteFile? = byPath[vaultPath.lowercase()]
+
+    /** 表記まで一致する相対パスのノート。大文字小文字だけが違うノートは返さない（→ features/desk_memory.md §7）。 */
+    fun atExactPath(vaultPath: String): NoteFile? = byExactPath[vaultPath]
 
     fun named(title: String): List<NoteFile> = byTitle[title.toNormalizedObsidianTitle()].orEmpty()
 

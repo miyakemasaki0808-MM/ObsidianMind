@@ -36,13 +36,12 @@ private fun fileNameOf(path: String): String = path.substringAfterLast('/').remo
  * 控えた相手を、今の Vault のノートとして引く（→ features/desk_memory.md §5「名前から並べて開く」）。押したときだけ呼ぶ。
  *
  * **相対パスの完全一致だけで引く。** 本文のリンクの解決（[resolveNoteLink]）は相対の起点の補完や同名への寄せを持つので使わない —
- * 保存した相手と違うノートを開きうる。索引のパス引きは大文字小文字を区別しないので、引いた後に表記まで一致を確かめる。
- * 改名・移動した相手は見つからない（辿り直さない）。索引がまだ無ければ待ってもらう。
+ * 保存した相手と違うノートを開きうる。大文字小文字を畳む本文のリンクのパス引きも使わない — 大文字小文字だけ違う2ノートが共存すると、
+ * 片方が上書きされて、走査済みで完全一致するノートを見つけられない。改名・移動した相手は見つからない（辿り直さない）。索引がまだ無ければ待ってもらう。
  */
 internal fun resolveBesideNote(beside: BesideNote, index: NoteLinkIndex): NoteLinkResolution {
     if (index.isEmpty) return NoteLinkResolution.NotReady
-    val found = index.atPath(beside.vaultRelativePath)?.takeIf { it.vaultRelativePath == beside.vaultRelativePath }
-        ?: return NoteLinkResolution.Missing(beside.title)
+    val found = index.atExactPath(beside.vaultRelativePath) ?: return NoteLinkResolution.Missing(beside.title)
     return NoteLinkResolution.Open(
         RelatedNote(title = found.name, ref = found.ref, isWikilinked = false, lastModified = found.lastModified),
         heading = null

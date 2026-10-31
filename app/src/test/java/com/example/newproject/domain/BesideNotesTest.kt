@@ -116,6 +116,23 @@ class BesideNotesTest {
         assertEquals(NoteLinkResolution.NotReady, resolveBesideNote(BesideNote("refs/右のノート.md", "B"), NoteLinkIndex.EMPTY))
     }
 
+    /**
+     * **大文字小文字だけ違う2ノートが共存しても、それぞれの保存パスから正しいノートを引く。** 走査の順を逆にしても同じ。
+     * 大文字小文字を畳む表で引くと、後に走査した方が前の方を上書きし、完全一致する前の方を「見つからない」にする。
+     */
+    @Test
+    fun `大文字小文字だけ違う2ノートが共存しても、それぞれの相手を走査の順に依らず引く`() {
+        val upper = NoteFile(name = "Case", ref = DocumentRef("content://upper"), vaultRelativePath = "refs/Case.md")
+        val lower = NoteFile(name = "case", ref = DocumentRef("content://lower"), vaultRelativePath = "refs/case.md")
+
+        listOf(listOf(upper, lower), listOf(lower, upper)).forEach { order ->
+            val index = NoteLinkIndex(order)
+            assertEquals(order.toString(), upper.ref, (resolveBesideNote(BesideNote("refs/Case.md", "Case"), index) as NoteLinkResolution.Open).note.ref)
+            assertEquals(order.toString(), lower.ref, (resolveBesideNote(BesideNote("refs/case.md", "case"), index) as NoteLinkResolution.Open).note.ref)
+            assertEquals(order.toString(), NoteLinkResolution.Missing("CASE"), resolveBesideNote(BesideNote("refs/CASE.md", "CASE"), index))
+        }
+    }
+
     private fun roundTrip(beside: BesideNote): BesideNote? =
         (ReadingTraceJson.decode(ReadingTraceJson.encode(traceWith(beside))) as ReadingTraceReadResult.Valid).trace.visits.single().beside
 
