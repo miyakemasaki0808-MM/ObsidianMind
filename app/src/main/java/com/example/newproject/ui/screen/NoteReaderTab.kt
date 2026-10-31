@@ -240,10 +240,12 @@ internal fun NoteReaderTab(
     /** 本文のリンクを今の走査結果から引く（→ features/note_links.md）。押したときに同期で呼ぶ。 */
     onResolveNoteLink: (NoteLink) -> NoteLinkResolution,
     /** 右のノートの中のリンクを、右のノートを出発点に引く（→ features/desk_foundation.md §5）。押したときに同期で呼ぶ。 */
-    onResolveSideNoteLink: (link: NoteLink, sideNote: DocumentRef) -> NoteLinkResolution
+    onResolveSideNoteLink: (link: NoteLink, sideNote: DocumentRef) -> NoteLinkResolution,
+    /** 押した操作の短い知らせ。既定は Toast で、Compose の木の外に出る。画面テストはここを差し替えて知らせを観測する。 */
+    onNotice: (String) -> Unit = toastNotice()
 ) {
     val context = LocalContext.current
-    val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val showNotice = onNotice
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -1199,6 +1201,12 @@ internal fun NoteReaderTab(
  * **窓の情報が揃う前は判定しない** — 折り目の報告と本文領域の位置が届く前の判定は仮のもので、
  * それを前の窓と比べると、切り替わってもいないのに移してしまう。
  */
+@Composable
+private fun toastNotice(): (String) -> Unit {
+    val context = LocalContext.current
+    return remember(context) { { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() } }
+}
+
 @Composable
 private fun MarginWindowShiftEffect(
     windowKnown: Boolean,

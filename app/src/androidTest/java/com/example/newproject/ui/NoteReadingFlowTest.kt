@@ -2225,13 +2225,16 @@ class NoteReadingFlowTest {
     /** 見つからない相手は知らせるだけで、右も今のノートも替えない。 */
     @Test
     fun 再会カードの相手が見つからなければ知らせて何も替えない() {
-        val desk = setBesideCardDesk(resolve = { NoteLinkResolution.Missing(SIDE_NOTE.title) })
+        val notices = mutableListOf<String>()
+        val desk = setBesideCardDesk(resolve = { NoteLinkResolution.Missing(SIDE_NOTE.title) }, onNotice = { notices += it })
 
         composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
         composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("「${SIDE_NOTE.title}」は見つかりませんでした").assertIsDisplayed()
-        composeRule.runOnIdle { assertEquals(SideReadingState.Idle, desk.side()) }
+        composeRule.runOnIdle {
+            assertEquals(listOf("「${SIDE_NOTE.title}」は見つかりませんでした"), notices)
+            assertEquals(SideReadingState.Idle, desk.side())
+        }
     }
 
     /** **閉じた画面では名前を押せない**（判断3）。行は同じで、今のノートを替える入口を出さない。 */
@@ -2279,7 +2282,8 @@ class NoteReadingFlowTest {
         draft: MarginMemoDraft = MarginMemoDraft(),
         memos: List<MarginMemo> = emptyList(),
         related: Boolean = false,
-        loadSlowly: Boolean = false
+        loadSlowly: Boolean = false,
+        onNotice: (String) -> Unit = {}
     ): BesideDesk {
         var state by mutableStateOf(
             loadedNote(SHORT_TWO_SECTIONS).withMemos(*memos.toTypedArray()).copy(
@@ -2311,7 +2315,8 @@ class NoteReadingFlowTest {
                         onSetMarginPaneOpen = { paneOpen = it },
                         spreadSelected = spread,
                         onSelectSpread = { spread = it },
-                        memoDraft = draft
+                        memoDraft = draft,
+                        onNotice = onNotice
                     )
                 }
             }
@@ -3672,7 +3677,9 @@ class NoteReadingFlowTest {
         // 外殻と組むテストだけが渡す（→ setShellWithBand）。
         onDeskBarShownChange: (Boolean) -> Unit = {},
         railEndDp: Float? = null,
-        memoDraft: MarginMemoDraft = MarginMemoDraft()
+        memoDraft: MarginMemoDraft = MarginMemoDraft(),
+        // 知らせは既定で Toast（Compose の木の外）。知らせを見るテストだけが受け取って数える。
+        onNotice: (String) -> Unit = {}
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -3720,7 +3727,8 @@ class NoteReadingFlowTest {
             onResolveBesideNote = onResolveBesideNote,
             onOpenNote = onOpenNote,
             onResolveNoteLink = { NoteLinkResolution.NotReady },
-            onResolveSideNoteLink = onResolveSideNoteLink
+            onResolveSideNoteLink = onResolveSideNoteLink,
+            onNotice = onNotice
         )
     }
 
