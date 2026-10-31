@@ -65,6 +65,27 @@ class ReadingTraceLimitsTest {
     }
 
     /**
+     * **6倍に膨らむ文字を入れた並べた相手は、検証で弾かれる。** 弾かないと、検証も読み戻しも通るのに
+     * 上限を超え、その訪問とメモの保存が断られる（→ features/desk_memory.md §6）。
+     * 「検証は通るが容量の保証の外」という値を残さないことを、最悪の痕跡の相手だけを差し替えて確かめる。
+     */
+    @Test
+    fun `6倍に膨らむ文字の並べた相手は検証で弾かれ、上限の外の値を残さない`() {
+        val worst = worstCaseTrace()
+        val inflatingTitles = worst.copy(visits = worst.visits.map { it.copy(beside = it.beside!!.copy(title = "a" + "\u0001".repeat(ReadingTraceLimits.MAX_NOTE_TITLE_BYTES - 1))) })
+        val inflatingPaths = worst.copy(visits = worst.visits.map { it.copy(beside = it.beside!!.copy(vaultRelativePath = "\u0001".repeat(ReadingTraceLimits.MAX_RELATIVE_PATH_BYTES))) })
+
+        listOf(inflatingTitles, inflatingPaths).forEach { trace ->
+            try {
+                ReadingTraceJson.encode(trace)
+                throw AssertionError("6倍に膨らむ相手を検証が通した")
+            } catch (expected: IllegalArgumentException) {
+                // 検証で弾かれた。
+            }
+        }
+    }
+
+    /**
      * 全欄を上限まで詰めた痕跡。
      *
      * **印とAI要約は同居しうる**（印は枠に出ていた文をそのまま控えるため）ので、
@@ -81,7 +102,11 @@ class ReadingTraceLimitsTest {
                     deepestSectionTitle = escaping(MAX_SECTION_TITLE_BYTES),
                     progressPercent = 100,
                     // 並べた相手は訪問ごとに1件。全訪問に上限いっぱいの相手を置く（→ features/desk_memory.md §6）。
-                    beside = BesideNote(escaping(MAX_RELATIVE_PATH_BYTES), escaping(MAX_NOTE_TITLE_BYTES))
+                    // 相手は改行も含めて制御文字を許さない（検証で弾く）ので、制御文字でない2倍の文字で詰める。
+                    beside = BesideNote(
+                        escaping(MAX_RELATIVE_PATH_BYTES, ESCAPING_WITHOUT_CONTROL),
+                        escaping(MAX_NOTE_TITLE_BYTES, ESCAPING_WITHOUT_CONTROL)
+                    )
                 )
             },
             aiSummary = escaping(MAX_AI_SUMMARY_BYTES),
@@ -114,10 +139,13 @@ class ReadingTraceLimitsTest {
      * 入力側で制御文字（改行・タブを除く）を落とす契約があるので、
      * **2倍がこのアプリで到達しうる最悪の膨張率**である。
      */
-    private fun escaping(bytes: Int): String =
-        generateSequence(0) { it + 1 }.take(bytes).map { ESCAPING[it % ESCAPING.size] }.joinToString("")
+    private fun escaping(bytes: Int, chars: List<String> = ESCAPING): String =
+        generateSequence(0) { it + 1 }.take(bytes).map { chars[it % chars.size] }.joinToString("")
 
     private companion object {
         private val ESCAPING = listOf("\"", "\\", "\n")
+
+        /** 制御文字を許さない欄（並べた相手）を詰める文字。改行を除いても2倍に膨らむ。 */
+        private val ESCAPING_WITHOUT_CONTROL = listOf("\"", "\\")
     }
 }

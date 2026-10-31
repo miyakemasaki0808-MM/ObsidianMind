@@ -67,7 +67,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 | 対象 | 値 | 定数 |
 |---|---|---|
-| ファイル全体 | 192KB | `MAX_FILE_BYTES` |
+| ファイル全体 | 256KB | `MAX_FILE_BYTES` |
 | 訪問の保持件数 | 30（超過時は古いものから捨てる） | `MAX_VISITS` |
 | 枠の1件・印の内容 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
 | 相対パス | 1,024バイト | `MAX_RELATIVE_PATH_BYTES` |

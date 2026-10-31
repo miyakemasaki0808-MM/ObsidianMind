@@ -674,6 +674,23 @@ class ReadingTraceJsonTest {
         assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", " "))) }
     }
 
+    /**
+     * **制御文字は検証で弾く。** JSON で1文字6バイトへ膨らみ、最悪2倍で測った上限の外に出る（→ features/desk_memory.md §6）。
+     * 改行とタブも制御文字として弾く — 相対パスにもタイトルにも要らない。後半は JSON で 3倍になる C1 制御文字と、空白として扱われる U+001F。
+     */
+    @Test
+    fun `並べた相手の相対パスとタイトルに制御文字があれば弾く`() {
+        fun traceWith(beside: BesideNote) = trace(visits = listOf(visit().copy(beside = beside)))
+
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", "a" + "\u0001".repeat(511)))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("refs/\u0001.md", "t"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", "改行\nあり"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a\tb.md", "t"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a.md", "C1\u0085"))) }
+        assertFailsWithMessage { ReadingTraceJson.encode(traceWith(BesideNote("a\u001F.md", "t"))) }
+        ReadingTraceJson.encode(traceWith(BesideNote("refs/記号 \" \\ —…※.md", "記号 \" \\ —…※")))
+    }
+
     /** **v8 の痕跡は訪問とメモを保ったまま読め、相手は無いものとして現行版で書き戻せる。** checksum は v8 の正規形で照合する。 */
     @Test
     fun `v8 の痕跡は訪問と引用つきのメモを保ったまま読め、現行版として書ける`() {

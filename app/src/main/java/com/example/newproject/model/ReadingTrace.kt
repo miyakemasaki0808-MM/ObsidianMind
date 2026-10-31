@@ -361,6 +361,10 @@ internal fun validateReadingTrace(trace: ReadingTrace) {
             requireWithinBytes(beside.vaultRelativePath, ReadingTraceLimits.MAX_RELATIVE_PATH_BYTES, "並べた相手の相対パス")
             require(beside.title.isNotBlank()) { "並べた相手のタイトルが空です。" }
             requireWithinBytes(beside.title, ReadingTraceLimits.MAX_NOTE_TITLE_BYTES, "並べた相手のタイトル")
+            // **制御文字は JSON で1文字6バイトへ膨らむ。** 許すと最悪2倍で測った上限（ReadingTraceLimitsTest）の外に出る。
+            // 相手は v9 からの欄なので、旧版のファイルを狭めることにはならない（→ features/desk_memory.md §6）。
+            require(beside.vaultRelativePath.none(Char::isISOControl)) { "並べた相手の相対パスに制御文字があります。" }
+            require(beside.title.none(Char::isISOControl)) { "並べた相手のタイトルに制御文字があります。" }
         }
     }
 
