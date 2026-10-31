@@ -1201,6 +1201,12 @@ internal fun NoteReaderTab(
 
 }
 
+@Composable
+private fun toastNotice(): (String) -> Unit {
+    val context = LocalContext.current
+    return remember(context) { { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() } }
+}
+
 /**
  * 窓が切り替わったとき、出ている余白をもう一方へ移す（→ [marginWindowShiftFor]）。
  *
@@ -1209,12 +1215,6 @@ internal fun NoteReaderTab(
  * **窓の情報が揃う前は判定しない** — 折り目の報告と本文領域の位置が届く前の判定は仮のもので、
  * それを前の窓と比べると、切り替わってもいないのに移してしまう。
  */
-@Composable
-private fun toastNotice(): (String) -> Unit {
-    val context = LocalContext.current
-    return remember(context) { { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() } }
-}
-
 @Composable
 private fun MarginWindowShiftEffect(
     windowKnown: Boolean,
