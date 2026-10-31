@@ -31,3 +31,5 @@
 |---|---|---|
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-10-12-observation-device/P2-1` | ランダム・さがす・関連で開いたノートが前のノートの読んでいた位置から始まる | `統合` UI-2 |
+| `2026-11-01-desk-memory-device-cases-review/P2-1` | DESKMEM-13 が端末で作れない512バイトの題名を必須にし、射程外の宣言と重なる | `起票` DOC-4 |
+| `2026-11-01-desk-memory-device-cases-review/P3-1` | DESKMEM-10 の知らせの文言が正本と実装で違い、改名する相手の名前も fixture と合わない | `起票` DOC-5 |
