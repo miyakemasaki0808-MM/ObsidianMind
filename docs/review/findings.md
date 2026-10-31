@@ -33,3 +33,5 @@
 | `2026-10-12-observation-device/P2-1` | ランダム・さがす・関連で開いたノートが前のノートの読んでいた位置から始まる | `統合` UI-2 |
 | `2026-11-01-desk-memory-device-cases-review/P2-1` | DESKMEM-13 が端末で作れない512バイトの題名を必須にし、射程外の宣言と重なる | `起票` DOC-4 |
 | `2026-11-01-desk-memory-device-cases-review/P3-1` | DESKMEM-10 の知らせの文言が正本と実装で違い、改名する相手の名前も fixture と合わない | `起票` DOC-5 |
+| `2026-11-01-desk-memory-device-fixes-review/P2-1` | ほかの節のメモの開閉を保存値の inputs だけで守っており、画面を離れている間にノートが替わると復元で前のノートの開閉を採る | `統合` FOLD-19 |
+| `2026-11-01-desk-memory-device-fixes-review/P3-1` | DESKMEM-10 の固定の文言から、控えた題名の拡張子 `.md` が抜けている | `統合` DOC-5 |
