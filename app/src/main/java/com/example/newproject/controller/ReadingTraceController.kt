@@ -5,6 +5,7 @@ import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.data.ReadingTraceSaveResult
+import com.example.newproject.domain.composeBesideNote
 import com.example.newproject.domain.composeMemoSectionTitle
 import com.example.newproject.domain.previousVisitOf
 import com.example.newproject.model.ReadingTrace
@@ -60,6 +61,8 @@ internal class ReadingTraceController(
      */
     private val currentVaultKey: () -> String?,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** 並べた相手が見えていた時間（[BesideTally]）を測る、単調に進む時計。壁時計は時刻合わせで戻りうるので使わない。 */
+    private val elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000 },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /**
      * サイドカーの read-modify-write を直列化する錠。訪問の追記と要約・印の書き戻しが
@@ -103,7 +106,9 @@ internal class ReadingTraceController(
          * **本文が一度も前景に出ていないのに読書時間が積まれる**。
          * 停止理由が全部消えた時点（[resume]）を最初の区間の開始にする。
          */
-        startedAtMillis: Long?
+        startedAtMillis: Long?,
+        /** この読書で右に並べた相手（→ features/desk_memory.md §5）。止める理由はこの区間と同じ口から届く。 */
+        val beside: BesideTally
     ) {
         var deepestBlockIndex = 0
 
@@ -286,7 +291,8 @@ internal class ReadingTraceController(
                 openedAtMillis = now,
                 // **停止中に始まったセッションは計測しない。** 理由が残っている間は
                 // まだ本文が前景に出ていない。
-                startedAtMillis = now.takeIf { pauseReasons.isEmpty() }
+                startedAtMillis = now.takeIf { pauseReasons.isEmpty() },
+                beside = BesideTally(elapsedMillis).also { if (pauseReasons.isNotEmpty()) it.pause() }
             )
         }
         return id
@@ -370,6 +376,7 @@ internal class ReadingTraceController(
             active.activeMillis += clock() - resumedAt
             active.resumedAtMillis = null
         }
+        active.beside.pause()
         recordVisit()
     }
 
@@ -384,6 +391,7 @@ internal class ReadingTraceController(
         pauseReasons -= reason
         if (pauseReasons.isNotEmpty()) return
         val active = session ?: return
+        active.beside.resume()
         if (active.resumedAtMillis != null) return
         active.resumedAtMillis = clock()
         // 復帰後に離脱すれば最終閲覧日時は更新すべきなので、書き直す対象とする。
@@ -398,6 +406,15 @@ internal class ReadingTraceController(
      * `NoteState` に持たせると「まだ null の瞬間」を画面側が扱うことになる。
      */
     fun currentPath(): String? = session?.vaultRelativePath
+
+    /**
+     * 右に資料として見えているノートが替わった（→ features/desk_memory.md §5）。見えていないなら両方 null。
+     * [vaultRelativePath] は窓口が走査済みのキャッシュから引いた値で、引けなければ null。
+     * **保存できない相手は候補にしない**（[composeBesideNote]）— 数えない相手は、見えていない間と同じに扱う。
+     */
+    fun onBesideShown(vaultRelativePath: String?, title: String?) {
+        session?.beside?.show(composeBesideNote(vaultRelativePath, title))
+    }
 
     /**
      * このノートの余白メモを読む。**ノートを表示した後に1回だけ呼ぶ**（→ features/margin_pane.md §6.3）。
@@ -767,6 +784,7 @@ internal class ReadingTraceController(
     private fun recordVisit() {
         val active = session ?: return
         // 前回の書き込みから何も変わっていなければ、SAF書込を出さない。
+        // 並べた相手の時間は書いた後は止まっていて、数え直すのは [resume] からなので、相手だけが替わることは無い。
         if (!active.dirty) return
         // 相対パスが最後まで分からなかったノート（さがすで _AI補記 配下を開いた等）は記録しない。
         val path = active.vaultRelativePath ?: return
@@ -793,7 +811,8 @@ internal class ReadingTraceController(
                 active.deepestBlockIndex,
                 active.deepestBlockFraction,
                 active.totalBlocks
-            )
+            ),
+            beside = active.beside.leader()?.takeIf { it.vaultRelativePath != path }
         )
         // 起動前に消費済みにして、同じ状態で二重に書き込まないようにする。
         // 書けなかった場合はこの2つを戻し、次の契機で書き直させる（下の Failure 分岐）。

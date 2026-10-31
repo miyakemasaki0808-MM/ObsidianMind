@@ -1,9 +1,9 @@
 # 机の記憶 — 並べた相手を次の再会へ返す
 
-**状態:** 実装中。痕跡の欄（スキーマ v9）と上限だけが入り、並べた時間の集計と再会カードは未実装（→ §7 の実装の区切り）
-**最終検証:** 未検証（§6 の欄と上限だけ実装済み。§5・§7 は実装と突き合わせていない）
-**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）。触る見込みは `controller/ReadingTraceController.kt` / `controller/NoteSessionCoordinator.kt` / `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/NoteReaderTab.kt`
-**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest`。集計と再会カードのテストは未実装（→ §10）
+**状態:** 実装中。痕跡の欄（スキーマ v9）・並べた時間の集計・訪問への記録までが入り、再会カードは未実装（→ §7 の実装の区切り）
+**最終検証:** 未検証（§5 の名前から並べて開く・§6 の再会カードの状態は未実装で、実装と突き合わせていない）
+**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`。再会カードで触る見込みは `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt`
+**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`。再会カードのテストは未実装（→ §10）
 **正本:** この文書（何を「並べた」とみなし、どう残し、再会でどう返すか）。原則と契約は [fold_experience](../system/fold_experience.md)（契約3）、
 痕跡の欄の登録は [reflect_reading_trace](reflect_reading_trace.md) §6、再会カードの枠の規則は [reunion_card](reunion_card.md) が持つ
 
@@ -94,9 +94,11 @@
   **相手の欄は制御文字（改行・タブを含む）を許さず、v9 の検証で弾く。** 制御文字は JSON で1文字6バイトへ膨らみ、許すと全訪問の相手のタイトルだけで最悪2倍の見積もりの外へ出る（実測 315,773 バイト）。
   相手は v9 からの欄なので、旧版のファイルを狭めることにはならない。痕跡の既存の欄にも同じ形の前提の穴があり、課題台帳で別に扱う
   相手の上限を下げて 192KB に収める案は採らなかった — 収めるには相対パスとタイトルを大きく削る必要があり、深い階層のふつうのノートまで相手にできなくなる
-- **足し算の置き場:** 読んでいる回（`ReadingTraceController` の読書の区間）に持つ。訪問と同じ寿命なので、
+- **足し算の置き場:** 読んでいる回（`ReadingTraceController` の読書の区間）に `BesideTally` として持つ。訪問と同じ寿命なので、
   ノート単位の状態を `NoteUiState` に足さず、契約2箇所（`cancelNoteScopedJobs()`・`withNoteScopedReset()`）への新しい登録は要らない。
-  右が見えているかは画面の側が知っているので、調停側（`NoteSessionCoordinator`）を通して知らせる
+  右が見えているかは画面の側が知っているので（`besideShownNote`）、窓口が走査済みのキャッシュから相対パスを引いて、調停側（`NoteSessionCoordinator`）を通して知らせる。
+  時計は調停側の単調な時計（結晶の材料の線と同じ）で、止める理由（背面・冊子）は読書の区間と同じ口から届く。
+  **相手は時間で決まるが、書いた後は数えるのが止まっていて、数え直すのは止める理由が解けたとき（訪問を書き直す対象になる）なので、相手だけが替わって書き直しが漏れることは無い**
 - **再会カードの状態:** `ReadingTraceCard` に前回の相手（タイトルと相対パス）の欄を足す。カードと同じくノート単位で、既存のリセットに乗る
 - **合流は退避の読み戻しだけ。** 別端末で作った退避ファイルを読み戻すとき、訪問の合流（`mergeReadingTraces`）が相手を訪問と一組で扱う。
   採用の規則は訪問と同じで、同じ時刻の訪問は端末側を相手ごと採り、保持の30件を超えた古い訪問は相手ごと落ちる。片側が v8 ならその側の訪問の相手は無い（null）。

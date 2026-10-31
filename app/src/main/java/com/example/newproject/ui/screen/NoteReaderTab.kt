@@ -211,6 +211,8 @@ internal fun NoteReaderTab(
     onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
     /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
     onShowSideFace: (SideFace) -> Unit = {},
+    /** 右に資料として見えている並べ読みのノート。見えなくなれば null（→ features/desk_memory.md §5）。 */
+    onBesideShownChange: (RelatedNote?) -> Unit = {},
     /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
     quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
@@ -703,6 +705,13 @@ internal fun NoteReaderTab(
         }
         // ペインが見えているか。本文だけにしている間は、組んだまま隠れている。
         val paneShown = paneVisible && deskSpread.shows(DeskFace.Supporting)
+        // 並べた相手として見えていた時間を数える（→ features/desk_memory.md §5）。この画面が外れるときも見えなくなったと知らせる。
+        val besideShown = besideShownNote(sideReading, paneShown)
+        val currentOnBesideShownChange by rememberUpdatedState(onBesideShownChange)
+        DisposableEffect(besideShown) {
+            currentOnBesideShownChange(besideShown)
+            onDispose { currentOnBesideShownChange(null) }
+        }
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
         // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
         // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。

@@ -2021,6 +2021,38 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **並べた相手として時間を数えるのは、右に資料として見えている間だけ**（→ features/desk_memory.md §5）。
+     * 書きかけに替える・本文だけにして右を隠すと見えなくなったと知らせ、資料・2面へ戻すとまた知らせる。
+     * **JVMでは書けない** — 画面の効果が状態の変化に合わせて知らせるかは、画面を組んでみないと出ない。
+     */
+    @Test
+    fun 右に資料として見えている間だけ_並べた相手として知らせる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val reports = mutableListOf<RelatedNote?>()
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = {},
+            onBesideShownChange = { reports += it }
+        )
+        composeRule.runOnIdle { assertEquals("右で開いたのに知らせない", SIDE_NOTE, reports.last()) }
+
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Draft)) }
+        composeRule.runOnIdle { assertNull("書きかけを出している間を数えた", reports.last()) }
+
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Reference)) }
+        composeRule.runOnIdle { assertEquals(SIDE_NOTE, reports.last()) }
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.runOnIdle { assertNull("右を隠している間を数えた", reports.last()) }
+    }
+
+    /**
      * 本の形の机で、ペインの関連から [SIDE_NOTE] を右で開いたところまで組む。右の面の出し分けは状態へ書き、
      * 閉じる操作は [onClose] を呼んでから状態を落とす。
      */
@@ -2028,7 +2060,8 @@ class NoteReadingFlowTest {
         state: () -> NoteUiState,
         onState: (NoteUiState) -> Unit,
         onClose: () -> Unit,
-        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> }
+        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onBesideShownChange: (RelatedNote?) -> Unit = {}
     ) {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
@@ -2047,7 +2080,8 @@ class NoteReadingFlowTest {
                             onClose()
                             onState(state().copy(sideReading = SideReadingState.Idle))
                         },
-                        onShowSideFace = { face -> onState(state().copy(sideReading = state().sideReading.withFace(face))) }
+                        onShowSideFace = { face -> onState(state().copy(sideReading = state().sideReading.withFace(face))) },
+                        onBesideShownChange = onBesideShownChange
                     )
                 }
             }
@@ -3349,6 +3383,7 @@ class NoteReadingFlowTest {
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
         onShowSideFace: (SideFace) -> Unit = {},
+        onBesideShownChange: (RelatedNote?) -> Unit = {},
         onOpenNote: (RelatedNote) -> Unit = {},
         onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady },
         bodyPosition: BodyPosition? = null,
@@ -3402,6 +3437,7 @@ class NoteReadingFlowTest {
             onOpenSideReading = onOpenSideReading,
             onCloseSideReading = onCloseSideReading,
             onShowSideFace = onShowSideFace,
+            onBesideShownChange = onBesideShownChange,
             onOpenNote = onOpenNote,
             onResolveNoteLink = { NoteLinkResolution.NotReady },
             onResolveSideNoteLink = onResolveSideNoteLink

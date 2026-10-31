@@ -165,6 +165,13 @@ internal fun SideReadingPane(
 internal fun showsSideFaceSwitch(reading: Boolean, face: SideFace, hasDraft: Boolean): Boolean =
     reading && (face == SideFace.Draft || hasDraft)
 
+/**
+ * 並べた相手として時間を数えるノート（→ features/desk_memory.md §5）。**右に資料として見えているときだけ**で、
+ * 読み込み中・失敗・書きかけを出している間・右の面が隠れている間（[supportingShown] が偽）は null。
+ */
+internal fun besideShownNote(state: SideReadingState, supportingShown: Boolean): RelatedNote? =
+    (state as? SideReadingState.Ready)?.takeIf { supportingShown && it.face == SideFace.Reference }?.note
+
 /** 切替の資料の側の語。右のノートの題名を添え、何へ戻るかを分かるようにする。 */
 internal fun sideReferenceLabel(title: String?): String = if (title.isNullOrBlank()) "資料" else "資料（$title）"
 

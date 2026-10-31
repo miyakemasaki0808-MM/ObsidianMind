@@ -5,8 +5,10 @@ import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.MemoDeleteOutcome
 import com.example.newproject.controller.MemoSaveOutcome
 import com.example.newproject.data.ReadingTraceJson
+import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.domain.composeMemoSectionTitle
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
@@ -1712,6 +1714,144 @@ class ReadingTraceControllerTest {
         )
     }
 
+    // ── 並べた相手（→ features/desk_memory.md §5）─────────────────────────────
+
+    @Test
+    fun `右に資料として30秒並べた相手が訪問に載る`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.onBesideShown("refs/a.md", "A")
+        clock.advance(30_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(BesideNote("refs/a.md", "A"), persistence.saved.single().visits.single().beside)
+    }
+
+    @Test
+    fun `30秒に届かない相手と、見えなくなった後の時間は載せない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.onBesideShown("refs/a.md", "A")
+        clock.advance(29_999L)
+        controller.onBesideShown(null, null)
+        clock.advance(60_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.saved.single().visits.single().beside)
+    }
+
+    /** 背面の間は数えない（読書時間と同じ止め方）。戻ってからの分だけが足される。 */
+    @Test
+    fun `背面の間は並べた時間を数えない`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.onBesideShown("refs/a.md", "A")
+        clock.advance(20_000L)
+        controller.pause(ReadingPauseReason.AppBackground)
+        clock.advance(60_000L)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(5_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertNull(persistence.stored("ideas/habit.md")!!.visits.single().beside)
+    }
+
+    /**
+     * **保存の途中に30秒を越える。** 背面へ回って訪問を書きに出た後、その保存が走る前に戻って並べ続けると、
+     * 離れたときの訪問が同じ1件を差し替えて相手を載せる（訪問を2件にしない・前の保存の結果で相手を落とさない）。
+     */
+    @Test
+    fun `背面の保存が走る前に戻って30秒を越えると、同じ訪問に相手が載る`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.onBesideShown("refs/a.md", "A")
+        clock.advance(20_000L)
+        controller.pause(ReadingPauseReason.AppBackground)
+        controller.resume(ReadingPauseReason.AppBackground)
+        clock.advance(15_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        val visit = persistence.stored("ideas/habit.md")!!.visits.single()
+        assertEquals(BesideNote("refs/a.md", "A"), visit.beside)
+    }
+
+    /** 数えている途中にノートを替えると、前のノートの訪問に載り、次のノートには持ち越さない。 */
+    @Test
+    fun `数えている途中にノートを替えると、相手は前のノートの訪問にだけ載る`() = runTest {
+        val clock = TestClock()
+        val persistence = FakePersistence()
+        val controller = controller(persistence, clock)
+
+        controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        controller.onBesideShown("refs/a.md", "A")
+        clock.advance(35_000L)
+        controller.flush()
+        controller.onNoteOpened("ideas/next.md", "次のノート", "doc-2")
+        controller.onReadingProgress(blockIndex = 3, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+        clock.advance(40_000L)
+        controller.flush()
+        advanceUntilIdle()
+
+        assertEquals(BesideNote("refs/a.md", "A"), persistence.stored("ideas/habit.md")!!.visits.single().beside)
+        assertNull(persistence.stored("ideas/next.md")!!.visits.single().beside)
+    }
+
+    /**
+     * **相手の値のせいで、訪問と預かったメモの保存を止めない**（→ features/desk_memory.md 判断9）。初読のノートでメモを預かり、
+     * 上限を超えた相対パス・上限ちょうどの相対パス・上限を超えたタイトル・制御文字を含む相対パスとタイトルの相手を並べて離れる。
+     * 保存先は本物の Store と同じく検証と上限を通すので、候補を作る規則を外すと訪問ごと保存できずに落ちる。
+     */
+    @Test
+    fun `相手の値が上限や制御文字に当たっても、初読の訪問と預かったメモは保存される`() = runTest {
+        val pathAtLimit = "a".repeat(ReadingTraceLimits.MAX_RELATIVE_PATH_BYTES - 3) + ".md"
+        val titleOver = "あ".repeat(ReadingTraceLimits.MAX_NOTE_TITLE_BYTES / 3) + "abc"
+        val cases = listOf(
+            Triple("a$pathAtLimit", "長いパス", null),
+            Triple(pathAtLimit, "ちょうど", BesideNote(pathAtLimit, "ちょうど")),
+            Triple("refs/a.md", titleOver, BesideNote("refs/a.md", titleOver.dropLast(1))),
+            Triple("refs/\u0001.md", "制御文字のパス", null),
+            Triple("refs/b.md", "制御\u0001文字", BesideNote("refs/b.md", "制御文字"))
+        )
+
+        cases.forEach { (path, title, expected) ->
+            val clock = TestClock()
+            val persistence = FakePersistence().apply { encodeLikeStore = true }
+            val controller = controller(persistence, clock)
+            controller.onNoteOpened("ideas/habit.md", "習慣について", "doc-1")
+            controller.onReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = "導入")
+            assertEquals(MemoSaveOutcome.Held, controller.appendMemo("ideas/habit.md", memoOf("初読のメモ", at = 5_000L)))
+            controller.onBesideShown(path, title)
+            clock.advance(30_000L)
+            controller.flush()
+            advanceUntilIdle()
+
+            val stored = persistence.stored("ideas/habit.md") ?: error("訪問とメモが保存されなかった: $title")
+            val reread = (ReadingTraceJson.decode(ReadingTraceJson.encode(stored)) as ReadingTraceReadResult.Valid).trace
+            assertEquals(title, listOf("初読のメモ"), reread.memos.map { it.text })
+            assertEquals(title, expected, reread.visits.single().beside)
+        }
+    }
 }
 
 // --- ヘルパ ---------------------------------------------------------------
@@ -1729,6 +1869,8 @@ private fun TestScope.controller(
         persistence = persistence,
         currentVaultKey = { vault.key },
         clock = clock::now,
+        // 並べた相手の時間も同じ時計で進める（本番は単調な時計を別に渡す）。
+        elapsedMillis = clock::now,
         ioDispatcher = dispatcher,
         writeMutex = writeMutex
     )

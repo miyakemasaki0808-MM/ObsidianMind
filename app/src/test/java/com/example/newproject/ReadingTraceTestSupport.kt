@@ -1,12 +1,14 @@
 package com.example.newproject
 
 import com.example.newproject.data.ReadingTraceFolderStatus
+import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
 import com.example.newproject.data.ReadingTraceSaveResult
 import com.example.newproject.data.ReadingTraceStore
 import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingTraceLimits
 import com.example.newproject.model.ReadingVisit
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.ReunionKind
@@ -72,6 +74,12 @@ internal class FakePersistence : ReadingTracePersistence {
     /** 置き場を列挙できない状態。**痕跡が無いことを意味しない。** */
     var listable = true
     var failSave = false
+
+    /**
+     * 本物の Store と同じく、書く前に実物のエンコーダ（検証つき）とファイルの上限を通す。
+     * **値のせいで保存全体が止まる経路**（→ features/desk_memory.md 判断9）は、検証しない偽物では見えない。
+     */
+    var encodeLikeStore = false
 
     /** この回数目の保存だけを失敗させる（1始まり）。先行・後続の順序が要る検証用。 */
     var failSaveOnAttempt: Int? = null
@@ -145,6 +153,14 @@ internal class FakePersistence : ReadingTracePersistence {
         savedVaultKeys += vaultKey
         if (failSave || failSaveOnAttempt == saveAttempts) {
             return ReadingTraceSaveResult.Failure("書き込めませんでした")
+        }
+        if (encodeLikeStore) {
+            val bytes = try {
+                ReadingTraceJson.encode(trace)
+            } catch (error: IllegalArgumentException) {
+                return ReadingTraceSaveResult.Failure(error.message ?: "検証で弾かれました")
+            }
+            if (bytes.size > ReadingTraceLimits.MAX_FILE_BYTES) return ReadingTraceSaveResult.Failure("上限を超えます")
         }
         saved += trace
         files[trace.vaultRelativePath] = trace
