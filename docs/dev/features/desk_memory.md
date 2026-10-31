@@ -1,9 +1,9 @@
 # 机の記憶 — 並べた相手を次の再会へ返す
 
-**状態:** 実装中。痕跡の欄（スキーマ v9）・並べた時間の集計・訪問への記録までが入り、再会カードは未実装（→ §7 の実装の区切り）
-**最終検証:** 未検証（§5 の名前から並べて開く・§6 の再会カードの状態は未実装で、実装と突き合わせていない）
-**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `NoteScanCache.kt`（`relativePathOf`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`。再会カードで触る見込みは `model/state/ReadingTraceCard.kt` / `ui/component/ReadingTraceCard.kt`
-**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `Utf8TruncationTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `NoteScanCacheTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`。再会カードのテストは未実装（→ §10）
+**状態:** 実装済み（区切り1〜3）。実機は未確認（→ §10）
+**最終検証:** 2026-10-31 / `ea5df367` の次のコミット（区切り3を足した時点で全節を実装と突き合わせた。実機・instrumentation の実行は未確認）
+**関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `NoteScanCache.kt`（`relativePathOf`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`（`openOnSupporting`・`openBesideFromCard`）/ `domain/BesideNotes.kt`（`resolveBesideNote`）/ `controller/ReunionCardController.kt` / `model/state/ReadingTraceCard.kt`（`lastBeside`）/ `ui/component/ReadingTraceCard.kt`（`reunionBesideLine`）
+**関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `Utf8TruncationTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `NoteScanCacheTest` / `ReunionCardControllerTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`（組み立てだけで端末では未実行）
 **正本:** この文書（何を「並べた」とみなし、どう残し、再会でどう返すか）。原則と契約は [fold_experience](../system/fold_experience.md)（契約3）、
 痕跡の欄の登録は [reflect_reading_trace](reflect_reading_trace.md) §6、再会カードの枠の規則は [reunion_card](reunion_card.md) が持つ
 
@@ -122,9 +122,11 @@ Rediscover で再会
 - **出す条件は純関数に切る。** 名前の行を出すか・名前を押せるか（相手があるか・ペインを出せる窓か・カードを畳んだか）
 - **足し算と相手の決め方は Android 非依存に置き、時計を差し替えて JVM で確かめる**（`NoteReadGate` と同じ形）
 
-> **未確認:** 相対パスから今の Vault のノートを引き当てる口。痕跡は相対パスで引くが、開くには文書の参照が要る。
-> **完全一致で引き、無ければ「見つからない」を返す口にする。** 本文のリンクの解決は相対の起点の補完や同名へのフォールバックを持つので、保存した相手を開く経路には使わない（別のノートを開きうる）。
-> 候補はリンクの索引のパス引き（`NoteLinkIndex.atPath`。大文字小文字を区別しないので、その扱いも含めて確かめる）と、結晶の元ノートを開く探索（`openCrystalSource`）。区切り3で確かめ、ここを書き直す。
+- **相対パスから開く口は完全一致だけで引く**（`resolveBesideNote`）。走査の結果のリンクの索引のパス引き（`NoteLinkIndex.atPath`）で引き、
+  索引は大文字小文字を区別しないので、引いた後に表記まで一致を確かめる。無ければ「見つからない」、索引がまだ無ければ待ってもらう。
+  本文のリンクの解決は相対の起点の補完や同名への寄せを持つので使わない（別のノートを開きうる）。索引は本文の書き換えでも残り、Vault 切替で捨てる。
+  I/Oはしない — 再会カードは引いた経路（Rediscover・冊子）で出るので、索引は温まっている
+- **名前の入口は、本文のリンクから右で開く入口と同じ1つの口（`openOnSupporting`）を通る。** ペインを開く・2面へ戻す・資料として開く・始まりへ送る新しい依頼・戻り先、の4つ（§5）を2つの入口で別々に書かない
 
 ### 実装の区切り
 
@@ -219,7 +221,7 @@ Rediscover で再会
   - 足し算（資料⇄書きかけの切替・片側1画面・窓でペインが閉じる・背面・読み込み中と失敗を数えない）と相手の決め方（30秒の境・いちばん長いもの・同じ長さは後のもの・今のノート自身を除く）
   - **両方向:** 右で数えている途中にノートを替える・訪問の保存中に30秒を越える。走行中の印が残らないこと
   - 名前の行を出す条件と、名前を押せる条件（前回の訪問だけ・押せるのはペインを出せる窓だけ・畳んだら出さない）
-- **instrumentation:** 再会カードに名前の行が出て、ボタンの列は変わらない。閉じた画面では名前を押せない。見つからないときに知らせ、何も替えない。開いた Fold の机で名前を押すと（判断10）
+- **instrumentation**（`NoteReadingFlowTest`）**:** 再会カードに名前の行が出て、ボタンの列は変わらない。閉じた画面では名前を押せない。見つからないときに知らせ、何も替えない。開いた Fold の机で名前を押すと（判断10）
   - 右に相手が**先頭（最初のブロック・オフセット0）から**出る。**相手を途中まで読んだ後に同じ名前をもう一度押しても先頭へ戻る**（相手が一致するだけでは合格にしない）
   - 本文だけを1画面にした状態から押しても右が見え、先頭から始まる。右が書きかけなら資料へ替わる
   - 今のノートと書きかけ（引用・言葉・書き込み先）は変わらない。「← 余白へ戻る」で関連の一覧へ送らない
@@ -232,7 +234,7 @@ Rediscover で再会
 
 ## 11. 既知の制約・未解決事項
 
-- 相対パスから今の Vault のノートを完全一致で引き当てる口が未確認（→ §7）。区切り3で決める
+- 名前の入口の画面側の責務（右を見せる・資料にする・始まりへ送る・戻り先）は instrumentation だけが持ち、端末ではまだ実行していない。JVM は引き当て・カードの状態・行の文字を持つ
 
 ## 12. 開発経緯
 

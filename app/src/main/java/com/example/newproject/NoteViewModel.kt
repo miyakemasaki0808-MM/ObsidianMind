@@ -1,5 +1,7 @@
 package com.example.newproject
 
+import com.example.newproject.domain.resolveBesideNote
+import com.example.newproject.model.BesideNote
 import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.ReadingPauseReason
@@ -621,6 +623,12 @@ class NoteViewModel internal constructor(
      */
     fun reportBesideShown(note: RelatedNote?) =
         session.reportBesideShown(note?.let { noteScan.relativePathOf(it.ref) }, note?.title)
+
+    /**
+     * 再会カードの相手の名前を押した（→ features/desk_memory.md §5）。走査の結果のリンクの索引から完全一致で引き、**I/Oはしない**。
+     * 索引は本文の書き換えでも残り、Vault 切替で捨てる（[NoteScanCache.relativePathOf] と同じ）。
+     */
+    internal fun resolveBesideNote(beside: BesideNote): NoteLinkResolution = resolveBesideNote(beside, noteScan.linkIndex)
 
     /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
     fun showSideFace(face: SideFace) = session.showSideFace(face)

@@ -1,5 +1,14 @@
 package com.example.newproject.ui.component
 
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withStyle
+import com.example.newproject.model.BesideNote
+import com.example.newproject.ui.theme.LinkText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -47,7 +56,9 @@ internal fun ReadingTraceCardPanel(
     nowMillis: Long = System.currentTimeMillis(),
     onDismiss: () -> Unit,
     onOpenMemos: () -> Unit = {},
-    onResume: () -> Unit = {}
+    onResume: () -> Unit = {},
+    /** 前回並べた相手の名前を押したとき。null なら名前は押せない文字のまま（ペインを出せない窓 → features/desk_memory.md 判断3）。 */
+    onOpenBeside: (() -> Unit)? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -68,6 +79,8 @@ internal fun ReadingTraceCardPanel(
                 lineHeight = 19.sp,
                 color = OnSurface
             )
+            // 前回並べた相手（→ features/desk_memory.md §5）。**枠の1件にもボタンの列にも入れない** — 名前に入口を兼ねさせる（判断2）。
+            card.lastBeside?.let { beside -> ReunionBesideLine(reunionBesideLine(beside), onOpenBeside) }
             // 枠は見出しの1文を置き換えず、その下に足す。枠が届く前・失敗した後でも
             // 上の1文だけで意味が通る状態を保つ。
             when (slot) {
@@ -174,3 +187,35 @@ internal fun elapsedLabel(fromMillis: Long, nowMillis: Long): String {
 }
 
 private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+
+/** 再会カードの名前の行（→ features/desk_memory.md §5）。押せるときは名前だけをリンクの見た目にするので、前後を分けて持つ。 */
+internal data class ReunionBesideLineText(val before: String, val title: String, val after: String) {
+    /** 押せる行の読み上げで、押したときに起きること。色と下線だけに頼らない。 */
+    val openLabel: String get() = "『$title』を並べて開く"
+}
+
+internal fun reunionBesideLine(beside: BesideNote): ReunionBesideLineText =
+    ReunionBesideLineText(before = "前回は『", title = beside.title, after = "』と並べて読んでいました")
+
+/** 押せるときは行全体を押せる範囲にし（48dp 以上）、名前を本文のリンクと同じ色と下線で描く。 */
+@Composable
+private fun ReunionBesideLine(line: ReunionBesideLineText, onOpen: (() -> Unit)?) {
+    val text = buildAnnotatedString {
+        append(line.before)
+        if (onOpen != null) {
+            withStyle(SpanStyle(color = LinkText, textDecoration = TextDecoration.Underline)) { append(line.title) }
+        } else {
+            append(line.title)
+        }
+        append(line.after)
+    }
+    val modifier = if (onOpen != null) {
+        Modifier
+            .fillMaxWidth()
+            .minimumInteractiveComponentSize()
+            .clickable(onClickLabel = line.openLabel, role = Role.Button, onClick = onOpen)
+    } else {
+        Modifier.padding(top = 4.dp)
+    }
+    Text(text = text, modifier = modifier, fontSize = 12.sp, lineHeight = 17.sp, color = OnSurfaceFaint)
+}

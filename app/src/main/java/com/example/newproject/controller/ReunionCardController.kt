@@ -320,7 +320,8 @@ internal class ReunionCardController(
             // 読む側（UIの入口）だけ直して既定値 false のまま出荷すると、
             // 行が一度も出ないまま緑になる。
             hasMemos = trace.memos.isNotEmpty(),
-            isSummaryLoading = isSlotLoading
+            isSummaryLoading = isSlotLoading,
+            lastBeside = last.beside
         )
     }
 

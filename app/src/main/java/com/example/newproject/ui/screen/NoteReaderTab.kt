@@ -102,6 +102,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.state.face
 import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.NoteState
@@ -213,6 +214,8 @@ internal fun NoteReaderTab(
     onShowSideFace: (SideFace) -> Unit = {},
     /** 右に資料として見えている並べ読みのノート。見えなくなれば null（→ features/desk_memory.md §5）。 */
     onBesideShownChange: (RelatedNote?) -> Unit = {},
+    /** 再会カードの相手の名前を押したときの引き当て（→ features/desk_memory.md §5）。保存した相対パスの完全一致で引く。 */
+    onResolveBesideNote: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.NotReady },
     /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
     quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
@@ -492,10 +495,11 @@ internal fun NoteReaderTab(
     // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
     //  セクション判定とスクロール継承を壊さない）。
     val visibleTraceCard = uiState.readingTraceCard?.takeIf { hasNote && !it.isDismissed }
-    val traceCard: @Composable (Modifier, onOpenMemos: () -> Unit) -> Unit = { modifier, onOpenMemos ->
+    val traceCard: @Composable (Modifier, onOpenMemos: () -> Unit, onOpenBeside: ((BesideNote) -> Unit)?) -> Unit = { modifier, onOpenMemos, onOpenBeside ->
         if (visibleTraceCard != null) {
             ReadingTraceCardPanel(
                 card = visibleTraceCard,
+                onOpenBeside = visibleTraceCard.lastBeside?.let { beside -> onOpenBeside?.let { open -> { open(beside) } } },
                 // 枠の中身は純関数で決める（→ features/reunion_card.md 判断6）。
                 slot = reunionSlot(visibleTraceCard, uiState.summaryState),
                 modifier = modifier,
@@ -654,17 +658,23 @@ internal fun NoteReaderTab(
                 imageMeasurements?.requestSkippedMeasurement(target)
             }
         }
+        // 左の入口から右で開く（本文のリンク・再会カードの相手の名前）。**右を見える状態にし、資料として開き、押すたびに始まりへ送る**。
+        // ペインを閉じていれば ✎ と同じく開き（端末には残さない）、本文だけにしていれば2面へ戻す。開く口は右の面を資料から始め、
+        // 送る依頼は押すたびに新しくするので、同じノートを途中まで読んでいても始まりへ戻る。「← 余白へ戻る」は開く前の余白の位置へ戻る
+        // （→ features/desk_memory.md 判断10）。
+        val openOnSupporting: (RelatedNote, String?) -> Unit = { note, heading ->
+            if (!marginPaneOpen) onSetMarginPaneOpen(true)
+            if (paneVisible) showDeskFace(DeskFace.Supporting)
+            sideFromLink = true
+            openSide(note)
+            sideLinkStart = SideLinkStart(note.ref.value, heading, ++sideLinkCount)
+        }
         // 本文のリンク（→ features/note_links.md）。開く面は窓で決める（→ noteLinkActionFor）。
         val openLink: (NoteLink) -> Unit = { link ->
             when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = canShowPane)) {
                 is NoteLinkAction.ScrollCurrent -> scrollCurrentTo(action.heading)
                 is NoteLinkAction.Open -> if (action.onSupporting) {
-                    // ペインを閉じていれば ✎ と同じく開き（端末には残さない）、本文だけにしていれば2面へ戻す。
-                    if (!marginPaneOpen) onSetMarginPaneOpen(true)
-                    if (paneVisible) showDeskFace(DeskFace.Supporting)
-                    sideFromLink = true
-                    openSide(action.note)
-                    sideLinkStart = SideLinkStart(action.note.ref.value, action.heading, ++sideLinkCount)
+                    openOnSupporting(action.note, action.heading)
                 } else {
                     onOpenNote(action.note)
                     startNote(PendingNoteStart(action.note.ref.value, block = 0, heading = action.heading))
@@ -695,6 +705,16 @@ internal fun NoteReaderTab(
                     }
                     is SideLinkAction.Notice -> showNotice(action.text)
                 }
+            }
+        }
+        // 再会カードの相手の名前（→ features/desk_memory.md §5）。保存した相対パスの完全一致で引き、右で始まりから開く。
+        // **押せるのはペインを出せる窓だけ**（判断3）。見つからなければ知らせて何も替えない。
+        val openBesideFromCard: ((BesideNote) -> Unit)? = if (!canShowPane) null else { beside ->
+            when (val action = sideLinkActionFor(onResolveBesideNote(beside), currentNoteUri?.let(::DocumentRef))) {
+                is SideLinkAction.OpenSide -> openOnSupporting(action.note, null)
+                is SideLinkAction.ScrollMain -> scrollCurrentTo(action.heading)
+                is SideLinkAction.ScrollSide -> Unit
+                is SideLinkAction.Notice -> showNotice(action.text)
             }
         }
         // 横の払いで仕切りを1段動かす。**帯が出ている間は受けない** — 帯の操作と、本文に触れて帯をしまう操作が先。
@@ -902,7 +922,7 @@ internal fun NoteReaderTab(
                                 // 余りをカードではなく余白へ逃がす。
                                 Spacer(modifier = Modifier.weight(1f))
                             } else {
-                                if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                                if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard, openBesideFromCard)
                                 notePanel(
                                     Modifier
                                         .weight(1f)
@@ -929,7 +949,7 @@ internal fun NoteReaderTab(
                                     .verticalScroll(rememberScrollState())
                             ) {
                                 controls(memoToggle, openSummary, ControlsPlace.SideColumn) {}
-                                traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
+                                traceCard(Modifier.padding(top = 16.dp), openMemosFromCard, openBesideFromCard)
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -967,7 +987,7 @@ internal fun NoteReaderTab(
                                         pageWidth = layout.pageWidthDp.dp,
                                         gutter = layout.gutterDp.dp,
                                         leftPageTop = if (visibleTraceCard != null && !hideControls) {
-                                            { traceCard(Modifier, openMemosFromCard) }
+                                            { traceCard(Modifier, openMemosFromCard, openBesideFromCard) }
                                         } else {
                                             null
                                         },
@@ -1030,7 +1050,7 @@ internal fun NoteReaderTab(
                                             } else {
                                                 // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
                                                 val cardShown = !hideControls && visibleTraceCard != null
-                                                if (cardShown) traceCard(Modifier, openMemosFromCard)
+                                                if (cardShown) traceCard(Modifier, openMemosFromCard, openBesideFromCard)
                                                 notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark, openLink, quoteFromBody, quoteOffers)
                                             }
                                         }

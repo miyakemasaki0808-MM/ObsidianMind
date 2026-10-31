@@ -1,5 +1,6 @@
 package com.example.newproject.model.state
 
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReunionKind
 
 /**
@@ -45,6 +46,11 @@ data class ReadingTraceCard(
      * 番号は到達率を測っているのと同じ並び（`NoteSectionModel.blocks`）で数える。
      */
     val resumeBlockIndex: Int? = null,
+    /**
+     * 前回の訪問で机に並べた相手（→ features/desk_memory.md §5）。**前回の訪問だけ**を見るので、それより前の訪問の相手は返さない。
+     * 枠の1件には入れず、見出しの1文の下の名前の行で返す。
+     */
+    val lastBeside: BesideNote? = null,
     /** 「読んだ」で畳んだ状態。永続化しないので次回 Rediscover では再表示される。 */
     val isDismissed: Boolean = false
 )

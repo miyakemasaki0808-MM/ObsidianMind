@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTraceLimits
+import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.truncateToUtf8Bytes
 
 /**
@@ -30,3 +31,20 @@ private fun composeBesideTitle(raw: String?): String? {
 }
 
 private fun fileNameOf(path: String): String = path.substringAfterLast('/').removeSuffix(".md")
+
+/**
+ * 控えた相手を、今の Vault のノートとして引く（→ features/desk_memory.md §5「名前から並べて開く」）。押したときだけ呼ぶ。
+ *
+ * **相対パスの完全一致だけで引く。** 本文のリンクの解決（[resolveNoteLink]）は相対の起点の補完や同名への寄せを持つので使わない —
+ * 保存した相手と違うノートを開きうる。索引のパス引きは大文字小文字を区別しないので、引いた後に表記まで一致を確かめる。
+ * 改名・移動した相手は見つからない（辿り直さない）。索引がまだ無ければ待ってもらう。
+ */
+internal fun resolveBesideNote(beside: BesideNote, index: NoteLinkIndex): NoteLinkResolution {
+    if (index.isEmpty) return NoteLinkResolution.NotReady
+    val found = index.atPath(beside.vaultRelativePath)?.takeIf { it.vaultRelativePath == beside.vaultRelativePath }
+        ?: return NoteLinkResolution.Missing(beside.title)
+    return NoteLinkResolution.Open(
+        RelatedNote(title = found.name, ref = found.ref, isWikilinked = false, lastModified = found.lastModified),
+        heading = null
+    )
+}

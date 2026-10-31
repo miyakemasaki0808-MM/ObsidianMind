@@ -2,6 +2,8 @@ package com.example.newproject.domain
 
 import com.example.newproject.data.ReadingTraceJson
 import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.model.NoteFile
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.BesideNote
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingTraceLimits
@@ -90,6 +92,28 @@ class BesideNotesTest {
             val beside = composeBesideNote(path, title) ?: error("候補にならなかった: $path")
             ReadingTraceJson.encode(traceWith(beside))
         }
+    }
+
+    /**
+     * **控えた相対パスの完全一致だけで引く**（→ features/desk_memory.md §5）。本文のリンクのような同名への寄せはせず、
+     * 索引のパス引きが大文字小文字を区別しなくても、表記が違えば見つからない。索引がまだ無ければ待ってもらう。
+     */
+    @Test
+    fun `控えた相手は相対パスの完全一致だけで引く`() {
+        val index = NoteLinkIndex(
+            listOf(
+                NoteFile(name = "右のノート", ref = DocumentRef("content://b"), vaultRelativePath = "refs/右のノート.md"),
+                NoteFile(name = "Case", ref = DocumentRef("content://c"), vaultRelativePath = "refs/Case.md")
+            )
+        )
+
+        val found = resolveBesideNote(BesideNote("refs/右のノート.md", "控えた名前"), index) as NoteLinkResolution.Open
+        assertEquals(DocumentRef("content://b"), found.note.ref)
+        assertEquals("右のノート", found.note.title)
+        assertNull(found.heading)
+        assertEquals(NoteLinkResolution.Missing("控えた名前"), resolveBesideNote(BesideNote("右のノート.md", "控えた名前"), index))
+        assertEquals(NoteLinkResolution.Missing("C"), resolveBesideNote(BesideNote("refs/case.md", "C"), index))
+        assertEquals(NoteLinkResolution.NotReady, resolveBesideNote(BesideNote("refs/右のノート.md", "B"), NoteLinkIndex.EMPTY))
     }
 
     private fun roundTrip(beside: BesideNote): BesideNote? =

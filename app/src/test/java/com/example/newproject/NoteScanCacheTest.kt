@@ -1,5 +1,7 @@
 package com.example.newproject
 
+import com.example.newproject.model.BesideNote
+import com.example.newproject.domain.resolveBesideNote
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.scanInlineSyntax
 import com.example.newproject.domain.noteLinkOf
@@ -112,10 +114,12 @@ class NoteScanCacheTest {
         assertEquals("refs/B.md", cache.relativePathOf(DocumentRef("B-ref")))
         assertEquals("refs/C.md", cache.relativePathOf(DocumentRef("C-ref")))
         assertEquals("引くために走査した", 1, scans)
+        assertTrue("書き換えの後に再会カードの相手を引けない", resolveBesideNote(BesideNote("refs/B.md", "B"), cache.linkIndex) is NoteLinkResolution.Open)
 
         switchVault()
 
         assertNull(cache.relativePathOf(DocumentRef("B-ref")))
+        assertEquals(NoteLinkResolution.NotReady, resolveBesideNote(BesideNote("refs/B.md", "B"), cache.linkIndex))
     }
 
     @Test

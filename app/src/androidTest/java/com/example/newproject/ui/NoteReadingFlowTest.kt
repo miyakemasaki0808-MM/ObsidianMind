@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
@@ -77,6 +78,7 @@ import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
@@ -88,6 +90,7 @@ import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.face
+import com.example.newproject.model.state.note
 import com.example.newproject.model.state.withFace
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionChatProblem
@@ -2052,6 +2055,118 @@ class NoteReadingFlowTest {
         composeRule.runOnIdle { assertNull("右を隠している間を数えた", reports.last()) }
     }
 
+    // ── 再会カードの相手の名前（→ features/desk_memory.md §5・判断10）─────────────────────
+
+    /**
+     * **相手の名前で、右に相手を始まりから開く。途中まで読んだ後に同じ名前をもう一度押しても始まりへ戻る。**
+     * 右の位置は相手ごとに覚えているので、開く口を呼ぶだけでは途中に残る。並べ読みは閉じず、今のノートは替わらない。
+     */
+    @Test
+    fun 再会カードの相手の名前で右に始まりから開き_途中まで読んだ後にもう一度押しても始まりへ戻る() {
+        var opens = 0
+        setBesideCardDesk(onOpenNote = { opens++ })
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
+            .performScrollToIndex(KEPT_SIDE_BLOCK)
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertIsDisplayed()
+        composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals("今のノートを替えた", 0, opens) }
+    }
+
+    /**
+     * **本文だけにして右を隠していても、右が書きかけでも、名前で右に資料として相手を出す。** 書きかけは隠れるだけで残る。
+     */
+    @Test
+    fun 本文だけでも右が書きかけでも_再会カードの相手の名前で右に資料として出す() {
+        val state = setBesideCardDesk(initialSide = SideReadingState.Ready(OTHER_NOTE, SideFace.Draft))
+        composeRule.onNode(hasSetTextAction()).assertExists()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        composeRule.runOnIdle {
+            val side = state()
+            assertEquals(SIDE_NOTE, side.note)
+            assertEquals(SideFace.Reference, side.face)
+        }
+    }
+
+    /** 見つからない相手は知らせるだけで、右も今のノートも替えない。 */
+    @Test
+    fun 再会カードの相手が見つからなければ知らせて何も替えない() {
+        val state = setBesideCardDesk(resolve = { NoteLinkResolution.Missing(SIDE_NOTE.title) })
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("「${SIDE_NOTE.title}」は見つかりませんでした").assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals(SideReadingState.Idle, state()) }
+    }
+
+    /** **閉じた画面では名前を押せない**（判断3）。行は同じで、今のノートを替える入口を出さない。 */
+    @Test
+    fun 閉じた画面では再会カードの相手の名前は押せない() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    loadedNote(SHORT_TWO_SECTIONS).copy(readingTraceCard = BESIDE_CARD),
+                    buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                    rememberLazyListState(),
+                    onResolveBesideNote = { NoteLinkResolution.Open(SIDE_NOTE, heading = null) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).assertIsDisplayed().assertHasNoClickAction()
+    }
+
+    /**
+     * 本の形の机に、前回並べた相手を持つ再会カードを出す。右の状態はこの中で持ち、開く・閉じる・面の替えを状態へ書く。
+     * @return 右の状態を読む口。
+     */
+    private fun setBesideCardDesk(
+        initialSide: SideReadingState = SideReadingState.Idle,
+        resolve: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.Open(SIDE_NOTE, heading = null) },
+        onOpenNote: (RelatedNote) -> Unit = {}
+    ): () -> SideReadingState {
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(readingTraceCard = BESIDE_CARD, sideReading = initialSide))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    val current = state
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onCloseSideReading = { state = state.copy(sideReading = SideReadingState.Idle) },
+                        onShowSideFace = { face -> state = state.copy(sideReading = state.sideReading.withFace(face)) },
+                        onResolveBesideNote = resolve,
+                        onOpenNote = onOpenNote
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        return { state.sideReading }
+    }
+
     /**
      * 本の形の机で、ペインの関連から [SIDE_NOTE] を右で開いたところまで組む。右の面の出し分けは状態へ書き、
      * 閉じる操作は [onClose] を呼んでから状態を落とす。
@@ -3384,6 +3499,7 @@ class NoteReadingFlowTest {
         onCloseSideReading: () -> Unit = {},
         onShowSideFace: (SideFace) -> Unit = {},
         onBesideShownChange: (RelatedNote?) -> Unit = {},
+        onResolveBesideNote: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.NotReady },
         onOpenNote: (RelatedNote) -> Unit = {},
         onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady },
         bodyPosition: BodyPosition? = null,
@@ -3438,6 +3554,7 @@ class NoteReadingFlowTest {
             onCloseSideReading = onCloseSideReading,
             onShowSideFace = onShowSideFace,
             onBesideShownChange = onBesideShownChange,
+            onResolveBesideNote = onResolveBesideNote,
             onOpenNote = onOpenNote,
             onResolveNoteLink = { NoteLinkResolution.NotReady },
             onResolveSideNoteLink = onResolveSideNoteLink
@@ -3585,6 +3702,18 @@ class NoteReadingFlowTest {
 
         /** 閉じて開いても保つ右の位置。開いた形の右の面に先頭の段落が入らないところ。 */
         const val KEPT_SIDE_BLOCK = 30
+
+        /** 再会カードの名前の行の、名前より後ろ。名前は入口で違いうるので、行はこちらで探す。 */
+        const val BESIDE_LINE = "と並べて読んでいました"
+
+        /** 前回の訪問で [SIDE_NOTE] を並べた再会カード。 */
+        val BESIDE_CARD = ReadingTraceCard(
+            visitCount = 2,
+            lastVisitAtMillis = 0L,
+            lastSectionTitle = null,
+            lastProgressPercent = 100,
+            lastBeside = BesideNote("side.md", "右のノート")
+        )
 
         /** 片側を1画面に広げて戻す本文の段落の数と、その左右の目印。 */
         const val WRAPPING_COUNT = 32
