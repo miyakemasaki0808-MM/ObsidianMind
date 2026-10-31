@@ -2153,6 +2153,32 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **ほかの節のメモを開いて途中まで送ったまま名前で開き、「← 余白へ戻る」で開いたまま同じメモへ戻る。**
+     * 開閉を余白の面の中で持つと、資料へ替えたときに面ごと外れて畳まれ、短くなった面に送っていた位置が収まらない。
+     */
+    @Test
+    fun ほかの節のメモを開いて送ったまま名前で開き_余白へ戻ると開いたまま同じメモへ戻る() {
+        val memos = (1..BESIDE_MEMOS).map { MarginMemo("ほかの節のメモ$it\n${"続きの行。".repeat(4)}", it * 1_000L, "節B") }
+        setBesideCardDesk(draft = BESIDE_DRAFT, memos = memos, related = true)
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("ほかの節のメモ$BESIDE_KEPT_MEMO", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+        composeRule.onNodeWithText("ほかの節のメモ$BESIDE_KEPT_MEMO", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+        composeRule.onNode(hasSetTextAction() and hasText(BESIDE_DRAFT.text)).assertExists()
+    }
+
+    /**
      * **本文だけにして右を隠していても、右が書きかけでも、名前で右に資料として相手を出す。** 書きかけは隠れるだけで残る。
      */
     @Test
