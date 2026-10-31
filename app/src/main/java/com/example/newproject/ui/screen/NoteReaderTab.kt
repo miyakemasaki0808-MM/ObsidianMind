@@ -631,7 +631,12 @@ internal fun NoteReaderTab(
         val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
         val paneScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<Int>(DeskSpread.SupportingOnly) }
         // ほかの節のメモの開閉も、並べ読みで面が外れて戻ったときに位置ごと保つため外で持つ（→ MarginMemoSheetContent）。
-        val paneOthersExpanded = rememberSaveable(paneVisible, currentNoteUri) { mutableStateOf(false) }
+        // **持ち主（ペインの出し直しとノート）を保存の鍵にも入れる。** inputs は保存されないので、画面を離れている間に
+        // ノートが替わると、戻ったときの復元で前のノートの開閉を採ってしまう。
+        val paneOthersExpanded = rememberSaveable(
+            paneVisible, currentNoteUri,
+            key = "paneOthersExpanded:$paneVisible:$currentNoteUri"
+        ) { mutableStateOf(false) }
         // 本文と並べ読みの読む位置も、片側を1画面に広げて戻したときに戻す（→ RestoreLazyFacePosition）。
         // 並べ読みは右のノートごとに位置を持つので、覚えも右のノートごとに替える。
         val mainScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<LazyFacePosition>(DeskSpread.MainOnly) }

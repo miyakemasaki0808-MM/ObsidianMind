@@ -2179,6 +2179,100 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **ほかの節のメモを開いたまま画面を離れ、留守の間に今のノートが替わると、戻ったときは畳まれている。**
+     * 開閉の持ち主を保存値で照合しないと、復元のときに前のノートの開閉を採る（画面が組まれている間の切替では起きない）。
+     */
+    @Test
+    fun ほかの節のメモを開いたまま画面を離れ_留守中にノートが替わると戻ったとき畳まれている() {
+        var note by mutableStateOf(otherSectionMemosNote(NOTE_A))
+        var shown by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { note }, shown = { shown })
+        expandOtherSectionMemos()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { note = otherSectionMemosNote(NOTE_B) }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /** 対照: **同じノートのまま画面を離れて戻ると、ほかの節のメモは開いたまま**（復元そのものは効いている）。 */
+    @Test
+    fun ほかの節のメモを開いたまま画面を離れ_同じノートへ戻ると開いたまま() {
+        var shown by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { otherSectionMemosNote(NOTE_A) }, shown = { shown })
+        expandOtherSectionMemos()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /** 画面が組まれている間も、今のノートが替わったとき・ペインを閉じて開き直したときは、ほかの節のメモを畳む。 */
+    @Test
+    fun ほかの節のメモはノートを替えたときとペインを開き直したときに畳む() {
+        var note by mutableStateOf(otherSectionMemosNote(NOTE_A))
+        var paneOpen by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { note }, paneOpen = { paneOpen })
+        expandOtherSectionMemos()
+
+        composeRule.runOnIdle { note = otherSectionMemosNote(NOTE_B) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+
+        expandOtherSectionMemos()
+        composeRule.runOnIdle { paneOpen = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { paneOpen = true }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    private fun otherSectionMemosNote(uri: String) = loadedNote(SHORT_TWO_SECTIONS, targetUri = uri)
+        .withMemos(*(1..BESIDE_MEMOS).map { MarginMemo("ほかの節のメモ$it", it * 1_000L, "節B") }.toTypedArray())
+
+    /** 本の形の机に、ほかの節のメモを持つノートを出す。[shown] が false の間は画面を離れ、保存値だけが残る（ナビゲーションの戻り先と同じ）。 */
+    private fun setOtherSectionMemosDesk(
+        note: () -> NoteUiState,
+        shown: () -> Boolean = { true },
+        paneOpen: () -> Boolean = { true }
+    ) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val holder = rememberSaveableStateHolder()
+                // 左端に寄せ、戻った最初のフレームからペインを出す（本番の窓の値は外殻が先に持っている）。
+                // 端末より広い箱がはみ出すと最初のフレームはペインを出さず、開閉が初期化されて復元の穴が見えなくなる。
+                PostureBox(Posture.Book, anchorStart = true) { window ->
+                    if (shown()) {
+                        holder.SaveableStateProvider(NOTE_SCREEN) {
+                            ReaderTab(
+                                note(),
+                                buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                                rememberLazyListState(),
+                                marginPaneOpen = paneOpen(),
+                                window = window
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun expandOtherSectionMemos() {
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /**
      * **本文だけにして右を隠していても、右が書きかけでも、名前で右に資料として相手を出す。** 書きかけは隠れるだけで残る。
      */
     @Test
