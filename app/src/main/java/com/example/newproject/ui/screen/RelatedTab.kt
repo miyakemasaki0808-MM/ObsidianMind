@@ -243,7 +243,7 @@ internal fun RelatedNotesPanel(
 }
 
 @Composable
-internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
+internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit, detail: String? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -260,6 +260,14 @@ internal fun RelatedNoteItem(note: RelatedNote, onClick: () -> Unit) {
                 lineHeight = 18.sp,
                 color = OnSurface
             )
+            detail?.let {
+                Text(
+                    text = it,
+                    fontSize = 11.sp,
+                    color = OnSurfaceMetaBlue,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
             note.lastModified?.let { millis ->
                 Text(
                     text = "更新 ${formatNoteDate(millis)}",

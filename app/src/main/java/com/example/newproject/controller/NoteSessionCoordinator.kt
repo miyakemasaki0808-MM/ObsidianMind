@@ -725,10 +725,11 @@ internal class NoteSessionCoordinator(
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────
 
-    fun loadFolders() = search.loadFolders()
+    fun openExplore(collectNotes: suspend () -> List<NoteFile>) = search.onOpened(collectNotes)
     fun selectSearchFolder(folder: NoteFolder?) = search.selectFolder(folder)
-    fun searchByKeyword(query: String) = search.searchByKeyword(query)
-    fun pickRandomInScope() = search.pickRandomInScope()
+    fun searchTitle(query: String) = search.searchTitle(query)
+    fun searchByKeyword(query: String, collectNotes: suspend () -> List<NoteFile>) =
+        search.searchByKeyword(query, collectNotes)
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 

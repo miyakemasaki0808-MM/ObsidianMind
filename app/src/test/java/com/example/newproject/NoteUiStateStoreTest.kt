@@ -13,6 +13,7 @@ import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.SummaryState
@@ -42,14 +43,16 @@ class NoteUiStateStoreTest {
             folders = listOf(folder),
             selectedFolder = folder,
             foldersError = "列挙失敗",
-            searchState = SearchState.Loading
+            searchState = SearchState.Loading,
+            titleSearch = TitleSearchState.Scanning
         )
         store.searchWriter.update { searchSlice }
         expected = expected.copy(
             folders = searchSlice.folders,
             selectedFolder = searchSlice.selectedFolder,
             foldersError = searchSlice.foldersError,
-            searchState = searchSlice.searchState
+            searchState = searchSlice.searchState,
+            titleSearch = searchSlice.titleSearch
         )
         assertEquals(expected, store.value)
 

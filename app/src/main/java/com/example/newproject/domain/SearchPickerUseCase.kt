@@ -7,6 +7,9 @@ import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PickerCandidateLine
 import com.example.newproject.ai.PromptBuilder
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 sealed class PickerResult {
     data class Success(
@@ -24,12 +27,15 @@ sealed class PickerResult {
 }
 
 /**
- * AIピッカー（さがすタブ）のキーワードモード。
+ * Explore の AI のモード。
  * RelatedNotesUseCase と同じ「候補を絞る → Nano にIDで選ばせる → IDをノートに戻す」骨格。
  * 起点が「現在ノート」ではなく「自然文クエリ」で、絞り込みはプレフィックスではなく
  * キーワード再現率カット（候補が上限を超えるときのみ発火）に差し替えている。
  */
-class SearchPickerUseCase(private val aiClient: AiClient) {
+class SearchPickerUseCase(
+    private val aiClient: AiClient,
+    private val cutDispatcher: CoroutineDispatcher = Dispatchers.Default
+) {
 
     suspend fun pick(query: String, scopeNotes: List<NoteFile>): PickerResult {
         if (scopeNotes.isEmpty()) {
@@ -38,7 +44,8 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
         return try {
             // 候補が上限超のときだけ、取りこぼさない程度に粗く絞る（精度は Nano が担保）。
             val candidates = if (scopeNotes.size > CANDIDATE_LIMIT) {
-                recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { it.name }
+                // 範囲は Vault 全体になりうる。全件の bigram を作るので Main で走らせない。
+                withContext(cutDispatcher) { recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { it.name } }
             } else {
                 scopeNotes
             }
@@ -96,9 +103,6 @@ class SearchPickerUseCase(private val aiClient: AiClient) {
         notes = pickByKeyword(query, candidates, PICK_LIMIT) { it.name }.map { it.toRelatedNote() },
         isAiAssisted = isAiAssisted
     )
-
-    private fun NoteFile.toRelatedNote(): RelatedNote =
-        RelatedNote(title = name, ref = ref, isWikilinked = false, lastModified = lastModified)
 
     companion object {
         private const val CANDIDATE_LIMIT = 40

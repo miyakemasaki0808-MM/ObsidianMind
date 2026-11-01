@@ -14,6 +14,7 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
@@ -58,14 +59,15 @@ data class NoteUiState(
     val readingTraceCard: ReadingTraceCard? = null,
     // 反証の一文。関連ノートの結果から選ぶ。**ノート単位**（→ features/rebuttal_sentence.md §6）。
     val rebuttalSentence: RebuttalSentence? = null,
-    // さがすタブ
+    // Explore（さがすタブ）
     val folders: List<NoteFolder> = emptyList(),
-    val selectedFolder: NoteFolder? = null,   // null = ルート直下スコープ
-    // フォルダ列挙に失敗したときだけ入る。ルート直下スコープは使えるので致命的ではないが、
+    val selectedFolder: NoteFolder? = null,   // null = すべて
+    // フォルダ列挙に失敗したときだけ入る。「すべて」は使えるので致命的ではないが、
     // 黙って chips が出ないと「フォルダが無い」のか「取れなかった」のか区別できない。
     // Vault単位の状態なので、リセットは NoteUiStateStore.resetVaultScoped が持つ。
     val foldersError: String? = null,
     val searchState: SearchState = SearchState.Idle,
+    val titleSearch: TitleSearchState = TitleSearchState.Idle,
     // 当日分のみの閲覧履歴（`NoteHistoryStore` が日付判定を担当）
     val todayHistory: List<HistoryEntry> = emptyList()
 )

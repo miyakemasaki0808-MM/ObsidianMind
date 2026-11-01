@@ -59,7 +59,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 - **置き場には痕跡のほかに結晶のフォルダ `crystals/` がある**（→ [reflect_crystal](reflect_crystal.md) 判断7）。
   索引はフォルダと先頭64文字に満たない名前を載せない（`readingTraceKeyOf`）ので、孤児掃除・退避・読み戻しの下見には現れない
 - **スキーマ:** **v9**。v1〜v8 も読める（書き戻しは常に現行版）。v9 は訪問に机で並べた相手（`beside`）を足した（→ [desk_memory](desk_memory.md) §6）。v8 は余白メモに引用と控えた位置（`passage`）を足した（→ [margin_quote](margin_quote.md) §6）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
-- **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
+- **ノート収集の対象から2箇所で除外する** — `collectNotes` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
 

@@ -3,7 +3,6 @@ package com.example.newproject.data
 import android.content.ContentResolver
 import android.net.Uri
 import com.example.newproject.model.DocumentRef
-import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.VaultScan
 
@@ -80,19 +79,15 @@ sealed interface DocumentVersionLookup {
  * これは [ReadingTraceStore] が既に採っている規約と同じ。
  */
 interface VaultHandle {
-    /** Vault 第一階層のフォルダ（名前昇順・`_ReadingTraces` を除く）。 */
+    /** Vault 第一階層のフォルダ（名前昇順・Vault全体の走査が潜らないフォルダを除く）。 */
     suspend fun listTopLevelFolders(): List<NoteFolder>
-
-    /** 検索スコープ配下の `.md`。[folder] が null ならルート直下のみ（非再帰）。 */
-    suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile>
 
     /**
      * Vault全体の `.md` を**完全性つきで**集める。
      *
      * 痕跡の孤児判定はノートの**不在**を根拠にするため、「見つからなかった」と
      * 「そのフォルダを読めなかった」を必ず区別する必要がある
-     * （→ [VaultScan.unreadableFolderPaths]）。表示系が使う
-     * [collectNotesInScope] と違い、ここでは完全性を捨ててはいけない。
+     * （→ [VaultScan.unreadableFolderPaths]）。ここでは完全性を捨ててはいけない。
      */
     suspend fun collectAllNotes(): VaultScan
 
@@ -148,9 +143,6 @@ private class SafVaultHandle(
 
     override suspend fun listTopLevelFolders(): List<NoteFolder> =
         repository.listTopLevelFolders(contentResolver, vaultUri)
-
-    override suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile> =
-        repository.collectNotesInScope(contentResolver, vaultUri, folder)
 
     override suspend fun collectAllNotes(): VaultScan =
         repository.collectNotes(contentResolver, vaultUri)

@@ -92,7 +92,7 @@
 |---|---|
 | [rediscover.md](features/rediscover.md) | **Rediscover（ランダム表示）。アプリの入口であり心臓** |
 | [note_summary.md](features/note_summary.md) | ノート要約（主軸のAI機能・自動起動） |
-| [ai_picker.md](features/ai_picker.md) | さがすタブ（検索・ランダム・履歴） |
+| [ai_picker.md](features/ai_picker.md) | Explore（タイトル検索・AIピッカー・履歴） |
 | [related_notes_ai.md](features/related_notes_ai.md) | 関連ノートAI推薦 |
 | [section_ai_chat.md](features/section_ai_chat.md) | 部分要約（今読んでいる節の要約シート） |
 | [reflect_distill.md](features/reflect_distill.md) | 蒸留（Distill） |

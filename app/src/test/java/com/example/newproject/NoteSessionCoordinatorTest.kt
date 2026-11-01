@@ -56,6 +56,7 @@ import com.example.newproject.domain.ReunionSlot
 import com.example.newproject.domain.reunionSlot
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.model.state.SideFace
@@ -422,23 +423,17 @@ class NoteSessionCoordinatorTest {
      * 通せるようになったので、番兵をやめて回数で見る。
      */
     @Test
-    fun `Vault切替でSearchの走査キャッシュが破棄される`() = runTest {
+    fun `Vault切替でExploreが開いたときに受け取った一覧を捨てる`() = runTest {
         val env = Env(this)
-        val handle = FakeVaultHandle(notesByFolder = mapOf(null to listOf(noteFile("a.md"))))
-        env.vault.handle = handle
+        env.vault.handle = FakeVaultHandle()
         val coordinator = env.coordinator()
-
-        coordinator.pickRandomInScope()
+        coordinator.openExplore { listOf(noteFile("a.md")) }
         advanceUntilIdle()
-        coordinator.pickRandomInScope()
-        advanceUntilIdle()
-        assertEquals(1, handle.collectCount)
 
         coordinator.onVaultChanged()
-        coordinator.pickRandomInScope()
-        advanceUntilIdle()
+        coordinator.searchTitle("a")
 
-        assertEquals(2, handle.collectCount)
+        assertTrue("旧Vaultの一覧で照らした", coordinator.uiState.value.titleSearch is TitleSearchState.Scanning)
     }
 
     /**
@@ -1089,6 +1084,7 @@ class NoteSessionCoordinatorTest {
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
         searchState = SearchState.Success(emptyList()),
+        titleSearch = TitleSearchState.Scanning,
         todayHistory = listOf(HistoryEntry("旧Vaultの履歴", DocumentRef("content://old/1")))
     )
 

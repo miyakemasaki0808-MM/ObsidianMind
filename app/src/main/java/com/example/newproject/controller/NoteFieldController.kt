@@ -109,7 +109,7 @@ class NoteFieldController(
             // ここが食い違うと、指紋が「実際にAIへ渡したもの」を表さなくなる。
             val title = vaultRelativePath.substringAfterLast('/')
             val inputVersion = noteFieldInputVersion(title, excerpt, hint)
-            // 永続と復元材料の鍵。**作れないことがある**（さがす経由で相対パスが取れない場合）。
+            // 永続と復元材料の鍵。**作れないことがある**（走査に失敗して相対パスが取れない場合）。
             val pathKey = vaultRelativePath.takeIf { it.isNotBlank() }?.let(::noteFieldPathKey)
 
             // **「判定済み」ではなく「現在の入力版の確定」で見る。**
@@ -275,7 +275,7 @@ class NoteFieldController(
         val confirmed = NoteFieldClassification.Confirmed(field, inputVersion)
         state.update { it + (ref to confirmed) }
         // **永続するのは確定だけ**（暫定は走査で作り直せる → 判断14）。
-        // 鍵が作れない経路（さがす経由で相対パスが取れなかった場合）は永続しない —
+        // 鍵が作れない経路（走査に失敗して相対パスが取れなかった場合）は永続しない —
         // 無理に保存すると、次回どのノートの結果か分からなくなる。
         val key = vaultKey() ?: return
         if (pathKey == null) return

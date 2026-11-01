@@ -370,13 +370,13 @@ class MainActivity : ComponentActivity() {
 
                         composable("search") {
                             LaunchedEffect(uiState.vaultSelected) {
-                                if (uiState.vaultSelected) viewModel.loadFolders()
+                                if (uiState.vaultSelected) viewModel.openExplore(contentResolver)
                             }
                             SearchTab(
                                 uiState = uiState,
                                 onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
-                                onSearch = { q -> viewModel.searchByKeyword(q) },
-                                onRandom = { viewModel.pickRandomInScope() },
+                                onSearchTitle = { q -> viewModel.searchTitle(q) },
+                                onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
                                 onOpenNote = { note ->
                                     openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)

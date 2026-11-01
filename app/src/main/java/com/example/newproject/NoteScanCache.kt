@@ -13,8 +13,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+// ノート一覧の有効期間。Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
+internal const val NOTES_CACHE_TTL_MS = 60_000L
+
 /**
- * Vault全体のノート一覧のTTL付きキャッシュ。ランダム表示・冊子・関連ノート・痕跡のパス解決・結晶の一覧が共有する。
+ * Vault全体のノート一覧のTTL付きキャッシュ。ランダム表示・Explore・冊子・関連ノート・痕跡のパス解決・結晶の一覧が共有する。
  *
  * **走査の結果を公開する直前に、Vaultの世代を照合する。** 走査を始めた後にVaultが切り替わっていたら、
  * 結果を捨てて [CancellationException] で呼び出し側を止める。旧Vaultの一覧がキャッシュ・開けるパス・

@@ -3,27 +3,36 @@ package com.example.newproject
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SearchController
+import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.domain.SearchPickerUseCase
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.fakes.FakeAiClient
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * さがすタブのスコープ切替・フォルダ列挙・検索実行・走査キャッシュを固定する。
+ * Explore の範囲の切替・フォルダ列挙・タイトルの照合・AI の検索を固定する。
  *
  * **以前はスコープ切替の後始末しか検証できなかった。** 検索の実行と `loadFolders` の
  * 世代照合は、非nullの `Uri` と `ContentResolver` を要するため素のJVMでは書けず、
  * 実機確認だけが担保だった。`NoteFile` の `DocumentRef` 化（段階1〜6）と
  * [FakeVaultBrowser]（段階7）でどちらも外れたので、ここで押さえる。
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SearchControllerTest {
 
     @Test
@@ -52,7 +61,7 @@ class SearchControllerTest {
     }
 
     @Test
-    fun `ルート直下へ戻しても検索結果は破棄される`() = runTest {
+    fun `「すべて」へ戻しても検索結果は破棄される`() = runTest {
         val state = NoteUiStateStore(
             NoteUiState(
                 selectedFolder = NoteFolder(name = "ideas", documentId = "doc-ideas"),
@@ -150,97 +159,265 @@ class SearchControllerTest {
         assertEquals(null, state.value.foldersError)
     }
 
-    // ── 検索・ランダムの実行 ──────────────────────────────────────────────────
+    // ── タイトル ─────────────────────────────────────────────────────────────
 
     @Test
-    fun `キーワード検索がスコープ内のノートから結果を返す`() = runTest {
+    fun `開いた後に打つと、フォルダを選ばずどの階層のノートも出る`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle(
-            notesByFolder = mapOf(null to listOf(noteFile("習慣.md"), noteFile("読書.md")))
-        )
+        val controller = controller(state, openVault())
 
-        controller(state, FakeVaultBrowser(handle)).searchByKeyword("習慣")
+        controller.onOpened { listOf(notePath("習慣.md"), notePath("ideas/2026/習慣化メモ.md"), notePath("読書.md")) }
+        controller.searchTitle("習慣")
 
-        val result = state.value.searchState as SearchState.Success
-        assertEquals(listOf("習慣.md"), result.results.map { it.title })
+        assertEquals(listOf("習慣.md", "習慣化メモ.md"), titles(state))
     }
 
     @Test
-    fun `空白だけの検索語では走査しない`() = runTest {
+    fun `打っていないなら照らさず、消すと結果も消える`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle()
+        val controller = controller(state, openVault())
+        controller.onOpened { listOf(notePath("習慣.md")) }
 
-        controller(state, FakeVaultBrowser(handle)).searchByKeyword("   ")
+        controller.searchTitle("習慣")
+        controller.searchTitle("")
 
-        assertEquals(0, handle.collectCount)
+        assertTrue(state.value.titleSearch is TitleSearchState.Idle)
+    }
+
+    @Test
+    fun `一覧が届く前に打っても、届いたらその言葉で照らす`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val scan = CompletableDeferred<List<NoteFile>>()
+        val controller = controller(state, openVault())
+
+        controller.onOpened { scan.await() }
+        controller.searchTitle("習慣")
+        assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
+
+        scan.complete(listOf(notePath("習慣.md")))
+
+        assertEquals(listOf("習慣.md"), titles(state))
+    }
+
+    /** 打つたびに引くと、一覧の寿命が切れた時点で打っている途中に全走査が走る。 */
+    @Test
+    fun `打っている間は開いたときの一覧を照らし、走査を頼まない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        var collects = 0
+
+        controller.onOpened { collects++; listOf(notePath("習慣.md")) }
+        listOf("習", "習慣", "習慣化").forEach(controller::searchTitle)
+
+        assertEquals(1, collects)
+    }
+
+    @Test
+    fun `開き直して読み直している間も前の一覧で照らし、届いたら照らし直す`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        controller.onOpened { listOf(notePath("古い習慣.md")) }
+
+        val rescan = CompletableDeferred<List<NoteFile>>()
+        controller.onOpened { rescan.await() }
+        controller.searchTitle("習慣")
+        assertEquals(listOf("古い習慣.md"), titles(state))
+
+        rescan.complete(listOf(notePath("新しい習慣.md")))
+
+        assertEquals(listOf("新しい習慣.md"), titles(state))
+    }
+
+    @Test
+    fun `一覧を読めなければ失敗を出し、読めた一覧があればそれで照らし続ける`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+
+        controller.onOpened { throw IllegalStateException("走査失敗") }
+        controller.searchTitle("習慣")
+        assertEquals("走査失敗", (state.value.titleSearch as TitleSearchState.Error).message)
+
+        controller.onOpened { listOf(notePath("習慣.md")) }
+        controller.searchTitle("習慣")
+        assertEquals(listOf("習慣.md"), titles(state))
+
+        controller.onOpened { throw IllegalStateException("走査失敗") }
+        controller.searchTitle("習慣")
+        assertEquals(listOf("習慣.md"), titles(state))
+    }
+
+    @Test
+    fun `Vault未選択なら打っても何も起きない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, FakeVaultBrowser(handle = null)).searchTitle("習慣")
+
+        assertTrue(state.value.titleSearch is TitleSearchState.Idle)
+    }
+
+    /** 一覧が返った直後に切替が起きると、Job は中断点を過ぎているので `cancel()` では止まらない。 */
+    @Test
+    fun `一覧が返る直前にVaultが変わったら、旧い一覧を照らさない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        var generation = 0L
+        val controller = controller(state, openVault(), vaultGeneration = { generation })
+
+        controller.onOpened {
+            generation++
+            listOf(notePath("旧Vault.md"))
+        }
+        controller.searchTitle("旧")
+
+        assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
+    }
+
+    @Test
+    fun `Vaultを替えた後は前の一覧も打った言葉も残らない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        controller.onOpened { listOf(notePath("旧Vault.md")) }
+        controller.searchTitle("旧")
+
+        controller.onVaultChanged()
+        val scan = CompletableDeferred<List<NoteFile>>()
+        controller.onOpened { scan.await() }
+        scan.complete(listOf(notePath("旧の字を持つ新Vault.md")))
+
+        assertTrue("切替の前の言葉で照らし直した", state.value.titleSearch is TitleSearchState.Idle)
+        controller.searchTitle("旧")
+        assertEquals(listOf("旧の字を持つ新Vault.md"), titles(state))
+    }
+
+    /** 照らしの途中で次の文字を打つと、前の文字の結果を書かない（照合が Main の外で走るため）。 */
+    @Test
+    fun `照らしの途中で打ち直したら、前の言葉の結果を書かない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val controller = controller(state, openVault(), matchDispatcher = dispatcher)
+        controller.onOpened { listOf(notePath("習慣.md"), notePath("読書.md")) }
+
+        controller.searchTitle("習慣")
+        controller.searchTitle("読書")
+        advanceUntilIdle()
+
+        assertEquals(listOf("読書.md"), titles(state))
+    }
+
+    // ── AI ───────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `「すべて」は開いたときの一覧の全体から選ぶ`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        controller.onOpened { listOf(notePath("直下の習慣.md"), notePath("ideas/奥の習慣.md"), notePath("読書.md")) }
+
+        controller.searchByKeyword("習慣", ::noNotes)
+
+        val result = state.value.searchState as SearchState.Success
+        assertEquals(setOf("直下の習慣.md", "奥の習慣.md"), result.results.map { it.title }.toSet())
+    }
+
+    @Test
+    fun `フォルダを選ぶとその中の奥まで選び、名前が前方で重なるフォルダは含めない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        controller.onOpened {
+            listOf(
+                notePath("直下の習慣.md"),
+                notePath("ideas/浅い習慣.md"),
+                notePath("ideas/2026/深い習慣.md"),
+                notePath("ideas2/別の習慣.md")
+            )
+        }
+
+        controller.selectFolder(NoteFolder("ideas", "doc-ideas"))
+        controller.searchByKeyword("習慣", ::noNotes)
+
+        val result = state.value.searchState as SearchState.Success
+        assertEquals(setOf("浅い習慣.md", "深い習慣.md"), result.results.map { it.title }.toSet())
+    }
+
+    @Test
+    fun `一覧がまだなら頼んだときに受け取る`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, openVault()).searchByKeyword("習慣") { listOf(notePath("習慣.md")) }
+
+        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+    }
+
+    @Test
+    fun `空白だけの検索語では一覧を頼まない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        var collects = 0
+
+        controller(state, openVault()).searchByKeyword("   ") { collects++; emptyList() }
+
+        assertEquals(0, collects)
         assertTrue(state.value.searchState is SearchState.Idle)
     }
 
     @Test
-    fun `ランダムはスコープ内から3件までを返す`() = runTest {
+    fun `一覧を読めなければAIの検索もエラーになる`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle(
-            notesByFolder = mapOf(null to (1..5).map { noteFile("note$it.md") })
-        )
 
-        controller(state, FakeVaultBrowser(handle)).pickRandomInScope()
-
-        val result = state.value.searchState as SearchState.Success
-        assertEquals(3, result.results.size)
-    }
-
-    @Test
-    fun `走査が失敗したらエラー状態になる`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle(failure = IllegalStateException("走査失敗"))
-
-        controller(state, FakeVaultBrowser(handle)).pickRandomInScope()
+        controller(state, openVault()).searchByKeyword("習慣") { throw IllegalStateException("走査失敗") }
 
         assertEquals("走査失敗", (state.value.searchState as SearchState.Error).message)
     }
 
-    // ── スコープ走査キャッシュ ────────────────────────────────────────────────
-
+    /** 範囲は頼んだ時点のもの。頼んだ後にチップを替えた結果は、新しい範囲の Idle を上書きしない。 */
     @Test
-    fun `同じスコープの連続操作では走査し直さない`() = runTest {
+    fun `一覧を待つ間に範囲を替えたら、前の範囲の結果を書かない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle(notesByFolder = mapOf(null to listOf(noteFile("a.md"))))
-        val controller = controller(state, FakeVaultBrowser(handle))
+        val scan = CompletableDeferred<List<NoteFile>>()
+        val controller = controller(state, openVault())
 
-        controller.pickRandomInScope()
-        controller.pickRandomInScope()
+        controller.searchByKeyword("習慣") { scan.await() }
+        controller.selectFolder(NoteFolder("ideas", "doc-ideas"))
+        scan.complete(listOf(notePath("習慣.md")))
 
-        assertEquals(1, handle.collectCount)
+        assertTrue(state.value.searchState is SearchState.Idle)
     }
 
-    /**
-     * Vault切替でキャッシュを捨てないと、キーが旧Vaultの documentId のまま残り、
-     * 新Vaultで同じスコープを引いたときに旧Vaultのノートが出る。
-     */
     @Test
-    fun `Vault切替後は走査し直す`() = runTest {
+    fun `Vaultを替えた後のAIの検索は、新しい一覧を頼み直す`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
-        val handle = FakeVaultHandle(notesByFolder = mapOf(null to listOf(noteFile("a.md"))))
-        val controller = controller(state, FakeVaultBrowser(handle))
+        val controller = controller(state, openVault())
+        controller.onOpened { listOf(notePath("旧の習慣.md")) }
 
-        controller.pickRandomInScope()
         controller.onVaultChanged()
-        controller.pickRandomInScope()
+        controller.searchByKeyword("習慣") { listOf(notePath("新の習慣.md")) }
 
-        assertEquals(2, handle.collectCount)
+        assertEquals(listOf("新の習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
     }
+
+    private fun openVault() = FakeVaultBrowser(FakeVaultHandle())
+
+    private fun titles(state: NoteUiStateStore): List<String> =
+        (state.value.titleSearch as TitleSearchState.Matches).matches.map { it.note.title }
+
+    private suspend fun noNotes(): List<NoteFile> = throw AssertionError("開いたときの一覧を使うはず")
+
+    private fun notePath(path: String) = NoteFile(
+        name = path.substringAfterLast('/'),
+        ref = DocumentRef("content://fake/$path"),
+        vaultRelativePath = path
+    )
 
     private fun controller(
         state: NoteUiStateStore,
         vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
         vaultGeneration: () -> Long = { 0L },
-        aiClient: AiClient = FakeAiClient(AiAvailability.Unsupported)
+        aiClient: AiClient = FakeAiClient(AiAvailability.Unsupported),
+        matchDispatcher: CoroutineDispatcher = Dispatchers.Unconfined
     ) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         vault = vault,
         searchPickerUseCase = SearchPickerUseCase(aiClient),
         state = state.searchWriter,
-        vaultGeneration = vaultGeneration
+        vaultGeneration = vaultGeneration,
+        matchDispatcher = matchDispatcher
     )
 
 }

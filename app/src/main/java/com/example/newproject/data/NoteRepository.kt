@@ -90,12 +90,8 @@ class NoteRepository {
         )
     }
 
-    private fun ChildDoc.toNoteFile(vaultUri: Uri): NoteFile =
-        NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId).toDocumentRef(), lastModified)
-
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
     // VAULT_SCAN_EXCLUDED_FOLDERS には潜らない。旧補記や設定フォルダの .md が候補に混ざらないようにする。
-    // ※さがすタブ（collectNotesInScope）は _AI補記 だけは仕様どおり除外しない。
     // 完全性まで返すのは、不在を根拠に何かを消す処理（読書痕跡の孤児判定）が
     // 「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
     // 表示系は VaultScan.notes だけ取ればよい。
@@ -176,7 +172,7 @@ class NoteRepository {
     }
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
-    // _ReadingTraces はユーザーのノートを含まない機能の内部データなので候補に出さない。
+    // Explore の範囲は全体の一覧を場所で絞るので、全体の走査が潜らないフォルダは出しても空になる。
     //
     // 列挙に失敗したら空一覧になる。ここは「フォルダが1つも出ない」という形で
     // ユーザーの目に見える（黙って一部が欠けるのではない）ので、読めた分をそのまま返す。
@@ -184,39 +180,10 @@ class NoteRepository {
         withContext(Dispatchers.IO) {
             queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
                 .items
-                .filter { it.isDirectory && it.name != READING_TRACE_FOLDER_NAME }
+                .filter { it.isDirectory && it.name !in VAULT_SCAN_EXCLUDED_FOLDERS }
                 .map { NoteFolder(it.name, it.documentId) }
                 .sortedBy { it.name }
         }
-
-    // 検索スコープ配下のノートを収集する。
-    //   scope=null      → Vault ルート直下の .md のみ（非再帰）
-    //   scope=NoteFolder → そのフォルダ配下を再帰的に収集（サブフォルダのノートも含む）
-    // さがすタブは _AI補記 も選択対象に含める仕様のため、そちらは除外しない。
-    // 一方 _ReadingTraces は機能の内部データ（.json）でユーザーが読むノートではないため除外する。
-    suspend fun collectNotesInScope(
-        contentResolver: ContentResolver,
-        vaultUri: Uri,
-        scope: NoteFolder?
-    // さがすは読めた分で結果を出す（完全性は使わない）。不在から何かを消すわけではないので、
-    // 部分的に読めなかった場合も「候補が少ない検索結果」に留まる。
-    ): List<NoteFile> = withContext(Dispatchers.IO) {
-        if (scope == null) {
-            queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
-                .items
-                .filter { !it.isDirectory && isMarkdownFile(it.name) }
-                // ルート直下なので相対パスはファイル名そのもの。
-                .map { it.toNoteFile(vaultUri).copy(vaultRelativePath = it.name) }
-        } else {
-            collectNotesRecursive(
-                contentResolver = contentResolver,
-                vaultUri = vaultUri,
-                startId = scope.documentId,
-                startPath = scope.name,
-                excludeFolderNames = setOf(READING_TRACE_FOLDER_NAME)
-            ).notes
-        }
-    }
 
     /**
      * 表示用に読む。[NoteReadLimits.DISPLAY_MAX_BYTES] を超える分は切り詰める。

@@ -231,6 +231,8 @@ class DesignDocStateNameTest {
          * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
          */
         val RETIRED_NAMES = listOf(
+            "collectNotesInScope",
+            "pickRandomInScope",
             "Available",
             "Unavailable",
             "CheckFailed",

@@ -75,7 +75,8 @@ private fun <T> rankByKeyword(
         .sortedByDescending { it.second }
 }
 
-private fun String.normalizedForMatching(): String = lowercase().filterNot { it.isWhitespace() }
+/** 大文字小文字と空白の違いを無視するための形。タイトルの照合と共有する。 */
+internal fun String.normalizedForMatching(): String = lowercase().filterNot { it.isWhitespace() }
 
 private fun String.bigrams(): Set<String> {
     val cleaned = normalizedForMatching()

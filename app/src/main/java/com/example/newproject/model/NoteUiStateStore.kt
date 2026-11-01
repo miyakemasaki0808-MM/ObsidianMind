@@ -14,6 +14,7 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.SummaryState
@@ -56,7 +57,8 @@ data class SearchSlice(
     val folders: List<NoteFolder>,
     val selectedFolder: NoteFolder?,
     val foldersError: String?,
-    val searchState: SearchState
+    val searchState: SearchState,
+    val titleSearch: TitleSearchState
 )
 
 interface SearchStateWriter {
@@ -179,7 +181,7 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     val searchWriter: SearchStateWriter = object : SearchStateWriter {
         override val current: SearchSlice
             get() = mutableState.value.let {
-                SearchSlice(it.folders, it.selectedFolder, it.foldersError, it.searchState)
+                SearchSlice(it.folders, it.selectedFolder, it.foldersError, it.searchState, it.titleSearch)
             }
 
         override fun update(transform: (SearchSlice) -> SearchSlice) {
@@ -189,14 +191,16 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
                         state.folders,
                         state.selectedFolder,
                         state.foldersError,
-                        state.searchState
+                        state.searchState,
+                        state.titleSearch
                     )
                 )
                 state.copy(
                     folders = next.folders,
                     selectedFolder = next.selectedFolder,
                     foldersError = next.foldersError,
-                    searchState = next.searchState
+                    searchState = next.searchState,
+                    titleSearch = next.titleSearch
                 )
             }
         }
@@ -378,6 +382,7 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     selectedFolder = null,
     foldersError = null,
     searchState = SearchState.Idle,
+    titleSearch = TitleSearchState.Idle,
     todayHistory = emptyList(),
     // 旧Vaultの候補を新Vaultの画面へ残さない。Controller 側ではなく状態変換で落とすのは、
     // 「別Vaultのノートを消しませんか」と尋ねる状態を作らないことを構造的に保証するため。
