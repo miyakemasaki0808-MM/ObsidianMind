@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-02 | Explore の差分レビューを記録し、孤児の誤判定・検索の復旧漏れ・キャッシュ寿命の起算点の3件を受け付けた | [レビュー](../review/README.md) |
 | 2026-11-02 | Explore をタイトル｜AI に作り直し、フォルダを選ばず Vault 全体をタイトルで探せるようにして、ランダムを削った | [ai_picker](features/ai_picker.md) |
 | 2026-11-02 | 全体の走査の途中に来た要求を同じ走査へ相乗りさせ、走査が2本走らないようにした | [rediscover](features/rediscover.md) |
 | 2026-11-02 | 全体の走査から `.obsidian` を外し、設計書の除外対象と実装をそろえた | [rediscover](features/rediscover.md) |
