@@ -74,6 +74,8 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 
 - **走査キャッシュ:** Vault 全体の走査は SAF の IPC が重いので、結果を60秒保持する。
   **連打しても走査は1回**で、関連ノートの補填もこのキャッシュを使う。
+  **走査の途中に来た要求は、同じ走査の結果を待つ。** 走査は頼んだ人の Job ではなく ViewModel のスコープで走るので、
+  最初に頼んだ人が取り消されても、相乗りした人へ結果が届く。本文を書き換えた後の要求は、書き換えの前に始まった走査へ相乗りしない。
   **Vault切替で破棄し**（`saveVault()` が `noteScan.clear()` を呼ぶ）、**走査の結果は公開の直前に `vaultGeneration` を照合する**（→ 判断2）
 - **走査が部分的に失敗しても続行する。** 読めた分でランダム表示と関連ノートを続ける
   （止めるほうが体験として悪い）。**完全性を要求するのは、不在を根拠に何かを消す処理だけ**
@@ -188,7 +190,7 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** `NoteRepositoryTest`（走査と除外）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
+- **JVMテスト:** `NoteRepositoryTest` / `VaultPathTraversalTest`（走査と除外）/ `NoteScanCacheTest`（走査の共有・取り消しの両方向・失敗・Vault切替・本文の書き換え）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
 - **JVMテスト:** `ReaderLayoutTest`（どの画面で2列にするか。縦の見た目を変えないことも同じ表で見る）
 - **JVMテスト:** `NoteOpenRouteContractTest`（ノートを開く経路が先頭から開く境界を通ること）
 - **instrumentation:** `GradientHeaderTest`（見出しの霞を右へ広げない口が、右の余白へ霞を出さないこと）

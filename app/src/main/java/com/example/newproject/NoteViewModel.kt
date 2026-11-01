@@ -165,6 +165,7 @@ class NoteViewModel internal constructor(
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
      */
     private val noteScan = NoteScanCache(
+        scope = scope,
         ttlMillis = NOTES_CACHE_TTL_MS,
         vaultGeneration = { session.vaultGeneration }
     )

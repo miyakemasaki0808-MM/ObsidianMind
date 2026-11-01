@@ -10,7 +10,10 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -30,7 +33,13 @@ class NoteScanCacheTest {
 
     private var generation = 0L
     private val published = mutableListOf<List<String>>()
-    private val cache = NoteScanCache(ttlMillis = 60_000L, vaultGeneration = { generation }, clock = { 0L })
+    private val scanParent = Job()
+    private val cache = NoteScanCache(
+        scope = CoroutineScope(Dispatchers.Unconfined + scanParent),
+        ttlMillis = 60_000L,
+        vaultGeneration = { generation },
+        clock = { 0L }
+    )
 
     @Test
     fun `Aの走査を止めたままBへ切り替え、Bの後にAが返っても、キャッシュはBのまま`() = runTest {
@@ -78,6 +87,123 @@ class NoteScanCacheTest {
         assertEquals(1, scans)
         assertEquals(mapOf("a.md" to DocumentRef("a-ref")), cache.knownNotes.value)
         assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `走査の途中に来た要求は同じ走査を待ち、走査は1本で公開も1回で済む`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        var scans = 0
+        val slowScan: suspend () -> List<NoteFile> = { scans++; scanResult.await() }
+
+        val first = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        val second = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+
+        assertEquals(listOf("a.md"), first.await().map { it.vaultRelativePath })
+        assertEquals(listOf("a.md"), second.await().map { it.vaultRelativePath })
+        assertEquals(1, scans)
+        assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `最初に頼んだ人が取り消されても、相乗りした人へ結果が届く`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        val slowScan: suspend () -> List<NoteFile> = { scanResult.await() }
+
+        val first = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        val second = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        first.cancel()
+        runCurrent()
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+
+        assertEquals(listOf("a.md"), second.await().map { it.vaultRelativePath })
+        assertEquals(listOf("a.md"), cache.notes.map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `相乗りした人が取り消されても、最初に頼んだ人へ結果が届く`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        val slowScan: suspend () -> List<NoteFile> = { scanResult.await() }
+
+        val first = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        val second = async { cache.get(scan = slowScan, onPublished = ::record) }
+        runCurrent()
+        second.cancel()
+        runCurrent()
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+
+        assertEquals(listOf("a.md"), first.await().map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `頼んだ全員が取り消されても走査は終わりまで走り、結果を次の要求で使う`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        var scans = 0
+
+        val only = async { cache.get(scan = { scans++; scanResult.await() }, onPublished = ::record) }
+        runCurrent()
+        only.cancel()
+        runCurrent()
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+
+        cache.get(scan = { scans++; emptyList() }, onPublished = ::record)
+        assertEquals(1, scans)
+        assertEquals(listOf("a.md"), cache.notes.map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `走査が失敗したら待っている全員へ届き、走行中の印が残らず、親を巻き添えにしない`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        val failingScan: suspend () -> List<NoteFile> = { scanResult.await() }
+
+        val first = async { runCatching { cache.get(scan = failingScan, onPublished = ::record) } }
+        runCurrent()
+        val second = async { runCatching { cache.get(scan = failingScan, onPublished = ::record) } }
+        runCurrent()
+        scanResult.completeExceptionally(IllegalStateException("走査失敗"))
+
+        assertEquals("走査失敗", first.await().exceptionOrNull()?.message)
+        assertEquals("走査失敗", second.await().exceptionOrNull()?.message)
+        assertTrue("走査の失敗で親が止まった", scanParent.isActive)
+        val next = cache.get(scan = { listOf(note("a.md", "a-ref")) }, onPublished = ::record)
+        assertEquals(listOf("a.md"), next.map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `走査の途中でVaultを替えた後の要求は、旧い走査を共有しない`() = runTest {
+        val scanA = CompletableDeferred<List<NoteFile>>()
+        val pendingA = async { runCatching { cache.get(scan = { scanA.await() }, onPublished = ::record) } }
+        runCurrent()
+
+        switchVault()
+        val fromB = cache.get(scan = { listOf(note("B.md", "B-ref")) }, onPublished = ::record)
+        scanA.complete(listOf(note("A.md", "A-ref")))
+
+        assertEquals(listOf("B.md"), fromB.map { it.vaultRelativePath })
+        assertTrue(pendingA.await().exceptionOrNull() is CancellationException)
+    }
+
+    /** 書き換えより前に読んだ一覧は更新日時が古い。紙の地色は更新日時から決めるので、次の要求へ持ち越さない。 */
+    @Test
+    fun `走査の途中で本文を書き換えたら、次の要求は走査し直し、古い走査が一覧を上書きしない`() = runTest {
+        val beforeWrite = CompletableDeferred<List<NoteFile>>()
+        var scans = 0
+        val pending = async { cache.get(scan = { scans++; beforeWrite.await() }, onPublished = ::record) }
+        runCurrent()
+
+        cache.expireAfterBodyWrite()
+        cache.get(scan = { scans++; listOf(note("新しい.md", "new-ref")) }, onPublished = ::record)
+        beforeWrite.complete(listOf(note("古い.md", "old-ref")))
+
+        assertEquals(2, scans)
+        assertEquals("書き換えより前に頼んだ人には、頼んだ走査の結果を返す", listOf("古い.md"), pending.await().map { it.vaultRelativePath })
+        assertEquals(listOf("新しい.md"), cache.notes.map { it.vaultRelativePath })
+        assertEquals(listOf(listOf("新しい.md")), published)
     }
 
     /**
