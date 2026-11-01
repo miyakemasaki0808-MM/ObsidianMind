@@ -1,7 +1,7 @@
 # 机の記憶 — 並べた相手を次の再会へ返す
 
 **状態:** 実装済み（区切り1〜3）。開いた Fold と閉じた画面で実機確認済み（未確認の範囲 → §10）
-**最終検証:** 2026-11-02 / `f8bf981c`（実機の通し版。結果はレビュー一覧）
+**最終検証:** 2026-11-02 / `eefa11b5`（実機の通し版。結果はレビュー一覧）
 **関連コード:** `model/ReadingTrace.kt`（`BesideNote`・訪問の欄・上限）/ `data/ReadingTraceJson.kt`（v9 と正規形）/ `domain/BesideNotes.kt`（`composeBesideNote`）/ `controller/BesideTally.kt` / `controller/ReadingTraceController.kt`（`onBesideShown`・訪問への記録）/ `controller/NoteSessionCoordinator.kt`（`reportBesideShown`）/ `NoteViewModel.kt`（`reportBesideShown`）/ `NoteScanCache.kt`（`relativePathOf`）/ `ui/screen/SideReadingPane.kt`（`besideShownNote`）/ `ui/screen/NoteReaderTab.kt`（`openOnSupporting`・`openBesideFromCard`）/ `domain/BesideNotes.kt`（`resolveBesideNote`）/ `controller/ReunionCardController.kt` / `model/state/ReadingTraceCard.kt`（`lastBeside`）/ `ui/component/ReadingTraceCard.kt`（`reunionBesideLine`）
 **関連テスト:** `ReadingTraceJsonTest` / `ReadingTraceMergeTest` / `ReadingTraceLimitsTest` / `BesideNotesTest` / `BesideTallyTest` / `Utf8TruncationTest` / `ReadingTraceControllerTest` / `NoteSessionCoordinatorTest` / `NoteScanCacheTest` / `ReunionCardControllerTest` / `SideFaceSwitchTest` / androidTest: `NoteReadingFlowTest`（組み立てだけで端末では未実行）
 **正本:** この文書（何を「並べた」とみなし、どう残し、再会でどう返すか）。原則と契約は [fold_experience](../system/fold_experience.md)（契約3）、
@@ -238,7 +238,7 @@ Rediscover で再会
   - 対照: 名前で開いて途中まで読んだ後、名前を押さずに窓を往復して ✎ で机を開くと、相手の途中の位置を保つ（契約4）
 - **実機確認**（[実機ケース](../../review/device_validation/desk_memory.md)）**:** 机で相手を30秒以上並べて離れ、Rediscover で引き当てて名前の行が出ること・名前を押すと右に出ること・押せると見て分かること。閉じた画面で名前が文字だけで出ること。
   30秒未満で離れたときに出ないこと。スキーマを上げたので [reading_trace_backup](reading_trace_backup.md) を全件
-- **実機で未確認（2026-11-02 の通し版）:** 大文字小文字だけ違う2ノートでの引き当て（今の端末はファイル名が大文字小文字を区別せず置けない）。TalkBack の操作名の案内の音声と、最大文字のときの押下範囲（名前の読み上げとダブルタップ、重ならないことは確認した）
+- **実機で未確認（2026-11-02 の通し版）:** 大文字小文字だけ違う2ノートでの引き当て（今の端末はファイル名が大文字小文字を区別せず置けない。完全一致と走査の順は JVM テストが持つ）。最大文字（倍率2.0）ではペインを出せず行は文字だけなので、押せる範囲は倍率1.1で確かめた
 - **実機で起こせないので自動テストが持つ順序:** 訪問の保存の途中で足し算が30秒を越える順序。別端末で並べた訪問を退避の読み戻しで合流する順序
 - **保証していないこと:** 改名・移動した相手を辿り直すこと（見つからないと知らせるだけ）。30秒が「並べて考えた」の線として妥当か（体感。判断4の見直しの材料）。
   それより前の訪問の相手を返すこと。**通常のファイル同期で、別端末で並べた相手が残ること**（後勝ちで失われうる。合流するのは退避の読み戻しだけ）。上限を超える相対パスの相手を残すこと
