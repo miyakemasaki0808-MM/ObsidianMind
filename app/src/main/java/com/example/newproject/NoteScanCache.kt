@@ -13,7 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-// ノート一覧の有効期間。Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
+// ノート一覧の有効期間。走査を終えてから数える — 始めてから数えると、この時間より長い走査では毎回走り直す。
+// Vault側の編集（Obsidian同期等）は最大でこの時間と走査の時間を足した分だけ反映が遅れる。
 internal const val NOTES_CACHE_TTL_MS = 60_000L
 
 /**
@@ -70,14 +71,12 @@ internal class NoteScanCache(
         scan: suspend () -> List<NoteFile>,
         onPublished: (List<NoteFile>) -> Unit
     ): List<NoteFile> {
-        val now = clock()
-        if (notes.isNotEmpty() && now - loadedAt < ttlMillis) return notes
-        val result = running?.takeUnless { it.isCompleted } ?: startScan(now, scan, onPublished)
+        if (notes.isNotEmpty() && clock() - loadedAt < ttlMillis) return notes
+        val result = running?.takeUnless { it.isCompleted } ?: startScan(scan, onPublished)
         return result.await()
     }
 
     private fun startScan(
-        startedAt: Long,
         scan: suspend () -> List<NoteFile>,
         onPublished: (List<NoteFile>) -> Unit
     ): Deferred<List<NoteFile>> {
@@ -89,21 +88,17 @@ internal class NoteScanCache(
                 throw CancellationException("走査の間に Vault が切り替わったので、結果を捨てました。")
             }
             // 走査の途中で本文を書き換えたなら、この一覧の更新日時は古い。待っている人へ返すだけで残さない。
-            if (writes == bodyWrites) publish(scanned, startedAt, onPublished)
+            if (writes == bodyWrites) publish(scanned, onPublished)
             scanned
         }
         running = result
         return result
     }
 
-    private fun publish(
-        scanned: List<NoteFile>,
-        startedAt: Long,
-        onPublished: (List<NoteFile>) -> Unit
-    ) {
+    private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit) {
         notes = scanned
         linkIndex = NoteLinkIndex(scanned)
-        loadedAt = startedAt
+        loadedAt = clock()
         mutableKnownNotes.value = scanned
             .filter { it.vaultRelativePath.isNotEmpty() }
             .associate { it.vaultRelativePath to it.ref }

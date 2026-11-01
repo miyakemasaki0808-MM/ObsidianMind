@@ -32,13 +32,14 @@ import org.junit.Test
 class NoteScanCacheTest {
 
     private var generation = 0L
+    private var now = 0L
     private val published = mutableListOf<List<String>>()
     private val scanParent = Job()
     private val cache = NoteScanCache(
         scope = CoroutineScope(Dispatchers.Unconfined + scanParent),
         ttlMillis = 60_000L,
         vaultGeneration = { generation },
-        clock = { 0L }
+        clock = { now }
     )
 
     @Test
@@ -87,6 +88,45 @@ class NoteScanCacheTest {
         assertEquals(1, scans)
         assertEquals(mapOf("a.md" to DocumentRef("a-ref")), cache.knownNotes.value)
         assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `一覧の寿命は走査を終えてから数え、60秒未満は使い、60秒で切れる`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        var scans = 0
+        val scan: suspend () -> List<NoteFile> = {
+            scans++
+            if (scans == 1) scanResult.await() else listOf(note("a.md", "a-ref"))
+        }
+        val pending = async { cache.get(scan = scan, onPublished = ::record) }
+        runCurrent()
+        now = 15_000L
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+        pending.await()
+
+        now = 15_000L + 59_999L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals("走査を終えてから60秒未満なのに走り直した", 1, scans)
+
+        now = 15_000L + 60_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals("走査を終えてから60秒で切れていない", 2, scans)
+    }
+
+    @Test
+    fun `60秒より長くかかった走査の結果も、次の要求で使える`() = runTest {
+        val scanResult = CompletableDeferred<List<NoteFile>>()
+        var scans = 0
+        val scan: suspend () -> List<NoteFile> = { scans++; scanResult.await() }
+        val pending = async { cache.get(scan = scan, onPublished = ::record) }
+        runCurrent()
+        now = 90_000L
+        scanResult.complete(listOf(note("a.md", "a-ref")))
+        pending.await()
+
+        cache.get(scan = scan, onPublished = ::record)
+
+        assertEquals(1, scans)
     }
 
     @Test
