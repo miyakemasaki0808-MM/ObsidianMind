@@ -114,7 +114,7 @@
 | [desk_foundation.md](features/desk_foundation.md) | 机の土台 — 右（補助の面）のノートの中のリンクを右のまま辿り、Fold を閉じても並べ読みを保って開き直すと戻す |
 | [note_spread.md](features/note_spread.md) | 本文の見開き — 開いた Fold の本の形で、左のレールの見開きのタブを選ぶと本文を左右2ページに組み、横に払ってめくる |
 | [margin_quote.md](features/margin_quote.md) | 面を越える引用（構想） — 本文の一節を選択メニューか机の札で余白メモへ移し、引用つきのメモにする。引用の無いメモも書いた頃に読んでいた位置を控える |
-| [desk_memory.md](features/desk_memory.md) | 机の記憶（構想） — 机で右に並べて読んだ相手を訪問の痕跡に1件控え、次の再会で名前を添え、開いた Fold ではその名前を押して開き直す |
+| [desk_memory.md](features/desk_memory.md) | 机の記憶 — 机で右に並べて読んだ相手を訪問の痕跡に1件控え、次の再会で名前を添え、開いた Fold ではその名前を押して開き直す |
 | [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
 
 ### 基盤（`system/`）
