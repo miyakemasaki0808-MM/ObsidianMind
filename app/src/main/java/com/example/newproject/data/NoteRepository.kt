@@ -52,6 +52,15 @@ internal val VAULT_SCAN_EXCLUDED_FOLDERS = setOf(
     OBSIDIAN_CONFIG_FOLDER_NAME
 )
 
+/**
+ * 不在を判定する走査が潜らないフォルダ。**`.obsidian` は読むノートから外しているが、ここでは歩く** —
+ * 配下の `.md` を読んだ旧版の痕跡があり、歩かないと元ノートが実在するのに不在に見えて、消せる孤児になる。
+ */
+internal val ABSENCE_SCAN_EXCLUDED_FOLDERS = setOf(
+    ANNOTATION_FOLDER_NAME,
+    READING_TRACE_FOLDER_NAME
+)
+
 class NoteRepository {
 
     // カーソルループと ChildDoc は SafDocuments.kt / VaultPathTraversal.kt へ移した
@@ -90,20 +99,29 @@ class NoteRepository {
         )
     }
 
-    // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
+    // 読むノートとして Vault 全体を収集する（ランダム表示・Explore・関連ノート候補用）。
     // VAULT_SCAN_EXCLUDED_FOLDERS には潜らない。旧補記や設定フォルダの .md が候補に混ざらないようにする。
-    // 完全性まで返すのは、不在を根拠に何かを消す処理（読書痕跡の孤児判定）が
-    // 「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
-    // 表示系は VaultScan.notes だけ取ればよい。
+    // **ここに無いことを、ノートが無いことの根拠にしない**（→ collectNotesForAbsenceCheck）。
     suspend fun collectNotes(contentResolver: ContentResolver, vaultUri: Uri): VaultScan =
-        withContext(Dispatchers.IO) {
-            collectNotesRecursive(
-                contentResolver = contentResolver,
-                vaultUri = vaultUri,
-                startId = DocumentsContract.getTreeDocumentId(vaultUri),
-                excludeFolderNames = VAULT_SCAN_EXCLUDED_FOLDERS
-            )
-        }
+        collectNotesExcluding(contentResolver, vaultUri, VAULT_SCAN_EXCLUDED_FOLDERS)
+
+    // 不在を根拠に何かを消す処理（読書痕跡の孤児判定）のための収集。
+    // 完全性まで返すのは「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
+    suspend fun collectNotesForAbsenceCheck(contentResolver: ContentResolver, vaultUri: Uri): VaultScan =
+        collectNotesExcluding(contentResolver, vaultUri, ABSENCE_SCAN_EXCLUDED_FOLDERS)
+
+    private suspend fun collectNotesExcluding(
+        contentResolver: ContentResolver,
+        vaultUri: Uri,
+        excludeFolderNames: Set<String>
+    ): VaultScan = withContext(Dispatchers.IO) {
+        collectNotesRecursive(
+            contentResolver = contentResolver,
+            vaultUri = vaultUri,
+            startId = DocumentsContract.getTreeDocumentId(vaultUri),
+            excludeFolderNames = excludeFolderNames
+        )
+    }
 
     /**
      * Vault全体の画像を収集する（画像索引用）。

@@ -88,6 +88,9 @@ interface VaultHandle {
      * 痕跡の孤児判定はノートの**不在**を根拠にするため、「見つからなかった」と
      * 「そのフォルダを読めなかった」を必ず区別する必要がある
      * （→ [VaultScan.unreadableFolderPaths]）。ここでは完全性を捨ててはいけない。
+     *
+     * **読むノートの一覧より広く歩く。** `.obsidian` は読むノートから外しているが、配下に元ノートがある
+     * 痕跡を孤児と読まないよう、ここでは歩く（→ features/reflect_reading_trace.md 判断14）。
      */
     suspend fun collectAllNotes(): VaultScan
 
@@ -145,7 +148,7 @@ private class SafVaultHandle(
         repository.listTopLevelFolders(contentResolver, vaultUri)
 
     override suspend fun collectAllNotes(): VaultScan =
-        repository.collectNotes(contentResolver, vaultUri)
+        repository.collectNotesForAbsenceCheck(contentResolver, vaultUri)
 
     override suspend fun collectImages(): VaultImageScan =
         repository.collectImages(contentResolver, vaultUri)

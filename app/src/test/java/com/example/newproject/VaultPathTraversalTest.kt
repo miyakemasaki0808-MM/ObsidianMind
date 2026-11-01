@@ -1,11 +1,17 @@
 package com.example.newproject
 
+import com.example.newproject.data.ABSENCE_SCAN_EXCLUDED_FOLDERS
 import com.example.newproject.data.ChildDoc
 import com.example.newproject.data.SafChildren
 import com.example.newproject.data.VAULT_SCAN_EXCLUDED_FOLDERS
 import com.example.newproject.data.joinVaultPath
 import com.example.newproject.data.traverseMarkdownPaths
 import com.example.newproject.data.traverseVaultFiles
+import com.example.newproject.domain.NotePresence
+import com.example.newproject.domain.assessReadingTraceOrphans
+import com.example.newproject.domain.notePresenceAfterRescan
+import com.example.newproject.model.OrphanAssessment
+import com.example.newproject.model.OrphanTraceInfo
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -83,6 +89,47 @@ class VaultPathTraversalTest {
         ).entries
 
         assertEquals(listOf("ideas/habit.md"), result.map { it.vaultRelativePath })
+    }
+
+    /** 読むノートから外したことが、痕跡の「元ノートが無い」に化けない。洗い出しも削除の直前も同じ。 */
+    @Test
+    fun `読むノートから外した設定フォルダのノートは、不在の判定では見つかるので孤児にならない`() {
+        val tree = FakeTree(
+            mapOf(
+                "root" to listOf(dir("d1", ".obsidian"), dir("d2", "ideas"), dir("d3", "_AI補記")),
+                "d1" to listOf(dir("d4", "plugins")),
+                "d4" to listOf(file("n1", "README.md")),
+                "d2" to listOf(file("n2", "habit.md")),
+                "d3" to listOf(file("n3", "旧補記.md"))
+            )
+        )
+        val hidden = ".obsidian/plugins/README.md"
+        val deleted = "ideas/消えた.md"
+
+        val readable = traverseMarkdownPaths(
+            startId = "root",
+            excludeFolderNames = VAULT_SCAN_EXCLUDED_FOLDERS,
+            listChildren = tree::list
+        ).entries.map { it.vaultRelativePath }
+        val present = traverseMarkdownPaths(
+            startId = "root",
+            excludeFolderNames = ABSENCE_SCAN_EXCLUDED_FOLDERS,
+            listChildren = tree::list
+        ).entries.map { it.vaultRelativePath }
+
+        assertEquals(listOf("ideas/habit.md"), readable)
+        val assessment = assessReadingTraceOrphans(
+            traceKeys = setOf(hidden, deleted, "ideas/habit.md"),
+            noteKeys = present.toSet(),
+            unreadableFolderPaths = emptySet()
+        ) { key -> OrphanTraceInfo(key, key, totalVisitCount = 1, lastVisitAtEpochMillis = null) }
+        assertEquals(
+            "通常のフォルダで消えたノートは孤児のまま",
+            listOf(deleted),
+            (assessment as OrphanAssessment.Assessed).orphans.map { it.vaultRelativePath }
+        )
+        assertEquals(NotePresence.PRESENT, notePresenceAfterRescan(hidden, hidden, present, emptySet()) { it })
+        assertEquals(NotePresence.MISSING, notePresenceAfterRescan(deleted, deleted, present, emptySet()) { it })
     }
 
     @Test
