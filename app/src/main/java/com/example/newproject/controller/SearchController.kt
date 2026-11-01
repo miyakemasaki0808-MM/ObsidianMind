@@ -77,18 +77,23 @@ class SearchController(
         notesJob?.cancel()
         notesJob = scope.launch {
             try {
-                val notes = collectNotes()
-                if (generation != vaultGeneration()) return@launch
-                vaultNotes = notes
-                notesFailure = null
+                receiveNotes(generation, collectNotes())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 if (generation != vaultGeneration()) return@launch
                 notesFailure = e.message ?: "Unknown error"
+                searchTitle(titleQuery)
             }
-            searchTitle(titleQuery)
         }
+    }
+
+    /** 受け取った一覧を両方のモードで使えるようにし、今の言葉で照らし直す。受け取る間に Vault が替わっていたら捨てる。 */
+    private fun receiveNotes(generation: Long, notes: List<NoteFile>) {
+        if (generation != vaultGeneration()) return
+        vaultNotes = notes
+        notesFailure = null
+        searchTitle(titleQuery)
     }
 
     /**
@@ -170,11 +175,12 @@ class SearchController(
         val q = query.trim()
         if (q.isBlank()) return
         val folder = state.current.selectedFolder
+        val generation = vaultGeneration()
         val requestId = startRequest()
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
-                val notes = vaultNotes ?: collectNotes()
+                val notes = vaultNotes ?: collectNotes().also { receiveNotes(generation, it) }
                 val candidates = if (folder == null) notes else notesInFolder(notes, folder)
                 when (val result = searchPickerUseCase.pick(q, candidates)) {
                     is PickerResult.Success ->

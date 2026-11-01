@@ -247,6 +247,40 @@ class SearchControllerTest {
     }
 
     @Test
+    fun `一覧を読めなかった後にAIの検索で読めたら、開き直さずタイトルも復旧し、走査を頼み直さない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, openVault())
+        controller.onOpened { throw IllegalStateException("走査失敗") }
+        controller.searchTitle("習慣")
+        assertTrue(state.value.titleSearch is TitleSearchState.Error)
+
+        var collects = 0
+        controller.searchByKeyword("習慣") { collects++; listOf(notePath("習慣.md"), notePath("習慣化.md")) }
+
+        assertEquals("打ち直さなくても前のエラーが消える", listOf("習慣.md", "習慣化.md"), titles(state))
+        controller.searchTitle("習慣化")
+        controller.searchByKeyword("習慣化") { collects++; emptyList() }
+        assertEquals(listOf("習慣化.md"), titles(state))
+        assertEquals(1, collects)
+    }
+
+    /** 受け取った直後に切替が起きると、Job は中断点を過ぎているので `cancel()` では止まらない。 */
+    @Test
+    fun `AIの検索で受け取る間にVaultが変わったら、旧い一覧をタイトルへ戻さない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        var generation = 0L
+        val controller = controller(state, openVault(), vaultGeneration = { generation })
+
+        controller.searchByKeyword("旧") {
+            generation++
+            listOf(notePath("旧Vault.md"))
+        }
+        controller.searchTitle("旧")
+
+        assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
+    }
+
+    @Test
     fun `Vault未選択なら打っても何も起きない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
 
