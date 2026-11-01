@@ -77,7 +77,7 @@
   | 静かに知らせる目安 | 200字（**壁ではなく合図**） | `SOFT_MEMO_CHARS` |
   | 1ノートの保持件数 | **20件**（**古いものから捨てない** → 判断4） | `MAX_MEMOS` |
   | 書いた場所（見出し名） | 512バイト（訪問と同じ枠を使う） | `MAX_SECTION_TITLE_BYTES` |
-  | 痕跡ファイル全体 | 192KB（メモの引用を足すために128KBから上げた → [margin_quote](margin_quote.md) §6） | `MAX_FILE_BYTES` |
+  | 痕跡ファイル全体 | 256KB（メモの引用で128KBから192KBへ、訪問の並べた相手で256KBへ上げた → [margin_quote](margin_quote.md) §6・[desk_memory](desk_memory.md) §6） | `MAX_FILE_BYTES` |
 
   > **`MAX_FILE_BYTES` との整合は、計算ではなく実シリアライザで測って固定する**
   > （`ReadingTraceLimitsTest` → 判断11）。
@@ -177,7 +177,7 @@ data class MarginMemo(
 
 ### スキーマ版
 
-**v6 → v7（この機能）、v7 → v8（[margin_quote](margin_quote.md)）。** 読めるのは v1〜v8（書き戻しは常に現行版）。
+**v6 → v7（この機能）、v7 → v8（[margin_quote](margin_quote.md)）、v8 → v9（[desk_memory](desk_memory.md)）。** 読めるのは v1〜v9（書き戻しは常に現行版）。v9 は訪問に並べた相手を足しただけで、メモの形は変えていない。
 v8 はメモに `passage`（引用か控えた位置）を足しただけで、v7 のメモは `passage` を null として読む。checksum は v7 の正規形で照合する。
 
 | v7 での扱い | 欄 |

@@ -23,6 +23,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
@@ -77,6 +79,9 @@ import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
+import com.example.newproject.model.QuoteContext
+import com.example.newproject.model.MemoPassage
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.NoteImageFailure
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.ReunionKind
@@ -84,8 +89,13 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.state.RelatedNotesState
+import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.model.state.face
+import com.example.newproject.model.state.note
+import com.example.newproject.model.state.withFace
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.AiStatusNotice
@@ -1949,6 +1959,546 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
     }
 
+    /**
+     * **右が資料のときに見出しの印を押しても、並べ読みを閉じず、右を書きかけ（余白の面）へ替えてその節のメモまで送る。**
+     * 「書きかけ｜資料」の切替が残り、資料へ替えると同じ右のノートが出る（→ features/margin_quote.md §5.6）。
+     * 閉じていたときは右のノートが消え、並べ読みを開き直すことになった。
+     */
+    @Test
+    fun 並べ読みで右が資料のとき見出しの印を押しても_閉じずに書きかけでメモを見せ_資料へ戻れる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        var closes = 0
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = { closes++ }
+        )
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("印で並べ読みを閉じた", 0, closes)
+        composeRule.runOnIdle { assertEquals(SideFace.Draft, state.sideReading.face) }
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertDoesNotExist()
+
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
+    /**
+     * **右が書きかけのときに要約の入口を押しても、並べ読みを閉じず、書きかけの面のまま要約の行を見せる。**
+     * 要約は面に出す形で1回だけ頼み、資料へ替えると同じ右のノートが出る（→ features/margin_quote.md §5.6）。
+     */
+    @Test
+    fun 並べ読みで右が書きかけのとき要約の入口を押しても_閉じずに書きかけのまま資料へ戻れる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val requests = mutableListOf<Boolean>()
+        var closes = 0
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = { closes++ },
+            onRequestSectionSummary = { _, quietly -> requests += quietly }
+        )
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").assertDoesNotExist()
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Draft)) }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.waitForIdle()
+
+        assertEquals("面に出す形で1回だけ頼んでいない", listOf(false), requests)
+        assertEquals("要約の入口で並べ読みを閉じた", 0, closes)
+        composeRule.runOnIdle { assertEquals(SideFace.Draft, state.sideReading.face) }
+        composeRule.onNode(hasSetTextAction()).assertExists()
+
+        composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(SIDE_PARAGRAPH).assertIsDisplayed()
+    }
+
+    /**
+     * **並べた相手として時間を数えるのは、右に資料として見えている間だけ**（→ features/desk_memory.md §5）。
+     * 書きかけに替える・本文だけにして右を隠すと見えなくなったと知らせ、資料・2面へ戻すとまた知らせる。
+     * **JVMでは書けない** — 画面の効果が状態の変化に合わせて知らせるかは、画面を組んでみないと出ない。
+     */
+    @Test
+    fun 右に資料として見えている間だけ_並べた相手として知らせる() {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(relatedNotesState = RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()))
+        )
+        val reports = mutableListOf<RelatedNote?>()
+        setSideReadingDesk(
+            state = { state },
+            onState = { state = it },
+            onClose = {},
+            onBesideShownChange = { reports += it }
+        )
+        composeRule.runOnIdle { assertEquals("右で開いたのに知らせない", SIDE_NOTE, reports.last()) }
+
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Draft)) }
+        composeRule.runOnIdle { assertNull("書きかけを出している間を数えた", reports.last()) }
+
+        composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Reference)) }
+        composeRule.runOnIdle { assertEquals(SIDE_NOTE, reports.last()) }
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.runOnIdle { assertNull("右を隠している間を数えた", reports.last()) }
+    }
+
+    // ── 再会カードの相手の名前（→ features/desk_memory.md §5・判断10）─────────────────────
+    //
+    // 名前の入口の4つの責務（右を見せる・資料にする・押すたびに始まりへ送る・戻り先を保つ）は画面にしか無いので、ここで固定する。
+    // **前提と保ちたい値を実際に用意する** — 開いたペイン・空の書きかけから始めると、ペインを開く処理や戻り先を省いても緑になる。
+
+    /**
+     * **初めて開いたときも、同じ相手の読み直しを読み込み中で待たせた後も、右のリストがブロック0・オフセット0にある。**
+     * 右の位置は相手ごとに覚えているので、開く口を呼ぶだけでは途中に残る。並べ読みは閉じず、今のノートは替わらない。
+     * **始まりは押した結果から独立した基準で見る** — 初回の表示と比べると、毎回同じ誤った位置へ送る誤りを見逃す。
+     */
+    @Test
+    fun 再会カードの相手の名前で右に始まりから開き_途中まで読んで読み直しを待たせても始まりへ戻る() {
+        var opens = 0
+        val desk = setBesideCardDesk(loadSlowly = true, onOpenNote = { opens++ })
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        desk.finishLoading()
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        assertEquals("初めて開いたときに始まりにない", 0f, sideListScrollOffset())
+
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
+            .performScrollToIndex(KEPT_SIDE_BLOCK)
+        composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+        assertTrue("途中まで送れていない", sideListScrollOffset() > 0f)
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertTrue("読み直しを待たせていない", desk.side() is SideReadingState.Loading) }
+        desk.finishLoading()
+
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        assertEquals("読み直しの後に始まり（ブロック0・オフセット0）へ戻っていない", 0f, sideListScrollOffset())
+        composeRule.runOnIdle { assertEquals("今のノートを替えた", 0, opens) }
+    }
+
+    /**
+     * 右のリストのスクロールの位置。**0 はブロック0・オフセット0。** Compose 1.7.3 の遅延リストは縦の範囲の値を
+     * 「先頭に見えている項目の番号 × 500 ＋ その項目のオフセット」で出す（`estimatedLazyScrollOffset`。バイナリで確かめた）。
+     * 右のリストは右のノートの段落を持つので、左の本文のリストとは取り違えない。
+     */
+    private fun sideListScrollOffset(): Float =
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(SIDE_MARKER, substring = true)))
+            .fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+
+    /** **ペインを閉じていても、名前でペインを開いて机と資料を出す。** 開く処理を省くと、閉じたまま何も起きない。 */
+    @Test
+    fun 閉じたペインから再会カードの相手の名前で机と資料が出る() {
+        val desk = setBesideCardDesk(paneOpenAtStart = false)
+        composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertTrue("ペインを開いていない", desk.paneOpen()) }
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+    }
+
+    /** 見開きのタブで読んでいても、名前でペインを開くと机が見開きより先に出て、右に資料が出る。 */
+    @Test
+    fun 見開きのタブから再会カードの相手の名前で机と資料が出る() {
+        val desk = setBesideCardDesk(paneOpenAtStart = false, spreadAtStart = true)
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { assertTrue("ペインを開いていない", desk.paneOpen()) }
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+    }
+
+    /**
+     * **書きかけ（引用・言葉・書き込み先）と余白の位置を保ったまま名前で開き、「← 余白へ戻る」で開く前の位置へ戻る。**
+     * 戻り先を関連の一覧にすると、余白は一覧まで送られて、開く前に見ていたメモが外れる。
+     */
+    @Test
+    fun 書きかけと余白の位置を保ったまま名前で開き_余白へ戻ると開く前の位置へ戻る() {
+        val memos = (1..BESIDE_MEMOS).map { MarginMemo("並べる前のメモ$it\n${"続きの行。".repeat(4)}", it * 1_000L, "節A") }
+        setBesideCardDesk(draft = BESIDE_DRAFT, memos = memos, related = true)
+        composeRule.onNodeWithText("並べる前のメモ$BESIDE_KEPT_MEMO", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("並べる前のメモ$BESIDE_KEPT_MEMO", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+        composeRule.onNode(hasSetTextAction() and hasText(BESIDE_DRAFT.text)).assertExists()
+        composeRule.onNodeWithText(BESIDE_QUOTE, substring = true).assertExists()
+        composeRule.onNodeWithText("「節B」へ書き込み中").assertExists()
+    }
+
+    /**
+     * **ほかの節のメモを開いて途中まで送ったまま名前で開き、「← 余白へ戻る」で開いたまま同じメモへ戻る。**
+     * 開閉を余白の面の中で持つと、資料へ替えたときに面ごと外れて畳まれ、短くなった面に送っていた位置が収まらない。
+     */
+    @Test
+    fun ほかの節のメモを開いて送ったまま名前で開き_余白へ戻ると開いたまま同じメモへ戻る() {
+        val memos = (1..BESIDE_MEMOS).map { MarginMemo("ほかの節のメモ$it\n${"続きの行。".repeat(4)}", it * 1_000L, "節B") }
+        setBesideCardDesk(draft = BESIDE_DRAFT, memos = memos, related = true)
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("ほかの節のメモ$BESIDE_KEPT_MEMO", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription("余白へ戻る").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+        composeRule.onNodeWithText("ほかの節のメモ$BESIDE_KEPT_MEMO", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートの関連 2件").assertIsNotDisplayed()
+        composeRule.onNode(hasSetTextAction() and hasText(BESIDE_DRAFT.text)).assertExists()
+    }
+
+    /**
+     * **ほかの節のメモを開いたまま画面を離れ、留守の間に今のノートが替わると、戻ったときは畳まれている。A→B→A と2往復しても同じ。**
+     * 開閉の持ち主を保存値で照合しないと、復元のときに前のノートの開閉を採る（画面が組まれている間の切替では起きない）。
+     * ノートごとに保存の鍵を分けると、消費されなかった A の値が B の保存に持ち越され、A へ戻ったときに古い開閉が戻る。
+     */
+    @Test
+    fun ほかの節のメモを開いたまま画面を離れ_留守中にノートが替わると戻ったとき畳まれている() {
+        var note by mutableStateOf(otherSectionMemosNote(NOTE_A))
+        var shown by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { note }, shown = { shown })
+        expandOtherSectionMemos()
+
+        fun returnTo(uri: String) {
+            composeRule.runOnIdle { shown = false }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle { note = otherSectionMemosNote(uri) }
+            composeRule.waitForIdle()
+            composeRule.runOnIdle { shown = true }
+            composeRule.waitForIdle()
+        }
+        returnTo(NOTE_B)
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+
+        returnTo(NOTE_A)
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /** 対照: **同じノートのまま画面を離れて戻ると、ほかの節のメモは開いたまま**（復元そのものは効いている）。 */
+    @Test
+    fun ほかの節のメモを開いたまま画面を離れ_同じノートへ戻ると開いたまま() {
+        var shown by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { otherSectionMemosNote(NOTE_A) }, shown = { shown })
+        expandOtherSectionMemos()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { shown = true }
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /** 画面が組まれている間も、今のノートが替わったとき・ペインを閉じて開き直したときは、ほかの節のメモを畳む。 */
+    @Test
+    fun ほかの節のメモはノートを替えたときとペインを開き直したときに畳む() {
+        var note by mutableStateOf(otherSectionMemosNote(NOTE_A))
+        var paneOpen by mutableStateOf(true)
+        setOtherSectionMemosDesk(note = { note }, paneOpen = { paneOpen })
+        expandOtherSectionMemos()
+
+        composeRule.runOnIdle { note = otherSectionMemosNote(NOTE_B) }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+
+        expandOtherSectionMemos()
+        composeRule.runOnIdle { paneOpen = false }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { paneOpen = true }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    private fun otherSectionMemosNote(uri: String) = loadedNote(SHORT_TWO_SECTIONS, targetUri = uri)
+        .withMemos(*(1..BESIDE_MEMOS).map { MarginMemo("ほかの節のメモ$it", it * 1_000L, "節B") }.toTypedArray())
+
+    /** 本の形の机に、ほかの節のメモを持つノートを出す。[shown] が false の間は画面を離れ、保存値だけが残る（ナビゲーションの戻り先と同じ）。 */
+    private fun setOtherSectionMemosDesk(
+        note: () -> NoteUiState,
+        shown: () -> Boolean = { true },
+        paneOpen: () -> Boolean = { true }
+    ) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val holder = rememberSaveableStateHolder()
+                // 左端に寄せ、戻った最初のフレームからペインを出す（本番の窓の値は外殻が先に持っている）。
+                // 端末より広い箱がはみ出すと最初のフレームはペインを出さず、開閉が初期化されて復元の穴が見えなくなる。
+                PostureBox(Posture.Book, anchorStart = true) { window ->
+                    if (shown()) {
+                        holder.SaveableStateProvider(NOTE_SCREEN) {
+                            ReaderTab(
+                                note(),
+                                buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                                rememberLazyListState(),
+                                marginPaneOpen = paneOpen(),
+                                window = window
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
+    private fun expandOtherSectionMemos() {
+        composeRule.onNodeWithText("▸ ほかの節のメモ ${BESIDE_MEMOS}件").performScrollTo().performClick()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("▾ ほかの節のメモ ${BESIDE_MEMOS}件").assertExists()
+    }
+
+    /**
+     * **本文だけにして右を隠していても、右が書きかけでも、名前で右に資料として相手を出す。** 書きかけは隠れるだけで残る。
+     */
+    @Test
+    fun 本文だけでも右が書きかけでも_再会カードの相手の名前で右に資料として出す() {
+        val desk = setBesideCardDesk(initialSide = SideReadingState.Ready(OTHER_NOTE, SideFace.Draft), draft = BESIDE_DRAFT)
+        composeRule.onNode(hasSetTextAction() and hasText(BESIDE_DRAFT.text)).assertExists()
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            swipeRight(startX = 160.dp.toPx(), endX = 360.dp.toPx(), durationMillis = 300)
+        }
+        composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(sideParagraph(0)).assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(SIDE_NOTE, desk.side().note)
+            assertEquals(SideFace.Reference, desk.side().face)
+        }
+    }
+
+    /**
+     * 対照: **名前を押さずに窓を往復して ✎ で机を開くと、右は途中の位置のまま**（契約4）。カードから出した始まりへの依頼は、
+     * 一度送った後は窓の往復で送り直さない。
+     */
+    @Test
+    fun 名前で開いて途中まで読んだ後_窓を往復して机を開くと途中の位置のまま() {
+        var opened by mutableStateOf(true)
+        var paneOpen by mutableStateOf(true)
+        var state by mutableStateOf(loadedNote(SHORT_TWO_SECTIONS).withMemos().copy(readingTraceCard = BESIDE_CARD))
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(if (opened) Posture.Book else Posture.Closed) { window ->
+                    val current = state
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = paneOpen,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> state = state.copy(sideReading = SideReadingState.Ready(note)) },
+                        onShowSideFace = { face -> state = state.copy(sideReading = state.sideReading.withFace(face)) },
+                        onSetMarginPaneOpen = { paneOpen = it },
+                        onResolveBesideNote = { NoteLinkResolution.Open(SIDE_NOTE, heading = null) }
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+        composeRule.onNode(hasScrollToIndexAction() and hasAnyDescendant(hasText(sideMarkerAt(0), substring = true)))
+            .performScrollToIndex(KEPT_SIDE_BLOCK)
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertIsDisplayed()
+
+        composeRule.runOnIdle {
+            opened = false
+            paneOpen = false
+        }
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { opened = true }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithContentDescription("メモの欄を出す").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNodeWithText(sideParagraph(KEPT_SIDE_BLOCK)).assertIsDisplayed()
+        composeRule.onNodeWithText(sideParagraph(0)).assertDoesNotExist()
+    }
+
+    /** 見つからない相手は知らせるだけで、右も今のノートも替えない。 */
+    @Test
+    fun 再会カードの相手が見つからなければ知らせて何も替えない() {
+        val notices = mutableListOf<String>()
+        val desk = setBesideCardDesk(resolve = { NoteLinkResolution.Missing(SIDE_NOTE.title) }, onNotice = { notices += it })
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).performClick()
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            assertEquals(listOf("「${SIDE_NOTE.title}」は見つかりませんでした"), notices)
+            assertEquals(SideReadingState.Idle, desk.side())
+        }
+    }
+
+    /** **閉じた画面では名前を押せない**（判断3）。行は同じで、今のノートを替える入口を出さない。 */
+    @Test
+    fun 閉じた画面では再会カードの相手の名前は押せない() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                ReaderTab(
+                    loadedNote(SHORT_TWO_SECTIONS).copy(readingTraceCard = BESIDE_CARD),
+                    buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                    rememberLazyListState(),
+                    onResolveBesideNote = { NoteLinkResolution.Open(SIDE_NOTE, heading = null) }
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(BESIDE_LINE, substring = true).assertIsDisplayed().assertHasNoClickAction()
+    }
+
+    /** [setBesideCardDesk] が組んだ机。右の状態とペインの開閉を読み、遅らせた読み込みを終える。 */
+    private class BesideDesk(
+        val side: () -> SideReadingState,
+        val paneOpen: () -> Boolean,
+        private val finish: () -> Unit,
+        private val composeRule: androidx.compose.ui.test.junit4.ComposeContentTestRule
+    ) {
+        /** 読み込み中の右を読めた状態へ進める。 */
+        fun finishLoading() {
+            composeRule.waitForIdle()
+            composeRule.runOnIdle { finish() }
+            composeRule.waitForIdle()
+        }
+    }
+
+    /**
+     * 本の形の机に、前回並べた相手を持つ再会カードを出す。**右の状態・ペインの開閉・見開きのタブはこの中で可変に持ち**、
+     * 開く・閉じる・面の替え・ペインの開閉を状態へ書く。[loadSlowly] なら右を開くと読み込み中で止まり、[BesideDesk.finishLoading] で読めた状態へ進む。
+     */
+    private fun setBesideCardDesk(
+        initialSide: SideReadingState = SideReadingState.Idle,
+        resolve: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.Open(SIDE_NOTE, heading = null) },
+        onOpenNote: (RelatedNote) -> Unit = {},
+        paneOpenAtStart: Boolean = true,
+        spreadAtStart: Boolean = false,
+        draft: MarginMemoDraft = MarginMemoDraft(),
+        memos: List<MarginMemo> = emptyList(),
+        related: Boolean = false,
+        loadSlowly: Boolean = false,
+        onNotice: (String) -> Unit = {}
+    ): BesideDesk {
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos(*memos.toTypedArray()).copy(
+                readingTraceCard = BESIDE_CARD,
+                sideReading = initialSide,
+                relatedNotesState = if (related) RelatedNotesState.Success(listOf(SIDE_NOTE, OTHER_NOTE), emptyList()) else RelatedNotesState.Idle
+            )
+        )
+        var paneOpen by mutableStateOf(paneOpenAtStart)
+        var spread by mutableStateOf(spreadAtStart)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    val current = state
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        marginPaneOpen = paneOpen,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(LONG_SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note ->
+                            state = state.copy(sideReading = if (loadSlowly) SideReadingState.Loading(note) else SideReadingState.Ready(note))
+                        },
+                        onCloseSideReading = { state = state.copy(sideReading = SideReadingState.Idle) },
+                        onShowSideFace = { face -> state = state.copy(sideReading = state.sideReading.withFace(face)) },
+                        onResolveBesideNote = resolve,
+                        onOpenNote = onOpenNote,
+                        onSetMarginPaneOpen = { paneOpen = it },
+                        spreadSelected = spread,
+                        onSelectSpread = { spread = it },
+                        memoDraft = draft,
+                        onNotice = onNotice
+                    )
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        return BesideDesk(
+            side = { state.sideReading },
+            paneOpen = { paneOpen },
+            finish = {
+                (state.sideReading as? SideReadingState.Loading)?.let { loading ->
+                    state = state.copy(sideReading = SideReadingState.Ready(loading.note, loading.face))
+                }
+            },
+            composeRule = composeRule
+        )
+    }
+
+    /**
+     * 本の形の机で、ペインの関連から [SIDE_NOTE] を右で開いたところまで組む。右の面の出し分けは状態へ書き、
+     * 閉じる操作は [onClose] を呼んでから状態を落とす。
+     */
+    private fun setSideReadingDesk(
+        state: () -> NoteUiState,
+        onState: (NoteUiState) -> Unit,
+        onClose: () -> Unit,
+        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onBesideShownChange: (RelatedNote?) -> Unit = {}
+    ) {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    val current = state()
+                    ReaderTab(
+                        current,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onRequestSectionSummary = onRequestSectionSummary,
+                        marginPaneOpen = true,
+                        window = window,
+                        sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
+                        onOpenSideReading = { note -> onState(state().copy(sideReading = SideReadingState.Ready(note))) },
+                        onCloseSideReading = {
+                            onClose()
+                            onState(state().copy(sideReading = SideReadingState.Idle))
+                        },
+                        onShowSideFace = { face -> onState(state().copy(sideReading = state().sideReading.withFace(face))) },
+                        onBesideShownChange = onBesideShownChange
+                    )
+                }
+            }
+        }
+        composeRule.onNodeWithText("▸ このノートの関連 2件").performScrollTo().performClick()
+        composeRule.onNodeWithText(SIDE_NOTE.title).performScrollTo().performClick()
+        composeRule.waitForIdle()
+    }
+
     private fun performGripAction(label: String) {
         val actions = composeRule.onNodeWithContentDescription("操作を出す").fetchSemanticsNode()
             .config[SemanticsActions.CustomActions]
@@ -3240,6 +3790,9 @@ class NoteReadingFlowTest {
         sideBlocks: List<MarkdownBlock>? = null,
         onOpenSideReading: (RelatedNote) -> Unit = {},
         onCloseSideReading: () -> Unit = {},
+        onShowSideFace: (SideFace) -> Unit = {},
+        onBesideShownChange: (RelatedNote?) -> Unit = {},
+        onResolveBesideNote: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.NotReady },
         onOpenNote: (RelatedNote) -> Unit = {},
         onResolveSideNoteLink: (NoteLink, DocumentRef) -> NoteLinkResolution = { _, _ -> NoteLinkResolution.NotReady },
         bodyPosition: BodyPosition? = null,
@@ -3249,7 +3802,10 @@ class NoteReadingFlowTest {
         onSelectSpread: (Boolean) -> Unit = {},
         // 外殻と組むテストだけが渡す（→ setShellWithBand）。
         onDeskBarShownChange: (Boolean) -> Unit = {},
-        railEndDp: Float? = null
+        railEndDp: Float? = null,
+        memoDraft: MarginMemoDraft = MarginMemoDraft(),
+        // 知らせは既定で Toast（Compose の木の外）。知らせを見るテストだけが受け取って数える。
+        onNotice: (String) -> Unit = {}
     ) {
         var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
         NoteReaderTab(
@@ -3279,7 +3835,7 @@ class NoteReadingFlowTest {
             onMarginPaneVisibleChange = onMarginPaneVisibleChange,
             onDeskBarShownChange = onDeskBarShownChange,
             railEndDp = railEndDp,
-            memoDraft = MarginMemoDraft(),
+            memoDraft = memoDraft,
             onEditMarginMemo = { _, _, _ -> },
             onQuoteMarginMemo = { _, _, _ -> },
             onSubmitMarginMemo = {},
@@ -3292,9 +3848,13 @@ class NoteReadingFlowTest {
             sideReadingBlocks = sideBlocks,
             onOpenSideReading = onOpenSideReading,
             onCloseSideReading = onCloseSideReading,
+            onShowSideFace = onShowSideFace,
+            onBesideShownChange = onBesideShownChange,
+            onResolveBesideNote = onResolveBesideNote,
             onOpenNote = onOpenNote,
             onResolveNoteLink = { NoteLinkResolution.NotReady },
-            onResolveSideNoteLink = onResolveSideNoteLink
+            onResolveSideNoteLink = onResolveSideNoteLink,
+            onNotice = onNotice
         )
     }
 
@@ -3394,7 +3954,10 @@ class NoteReadingFlowTest {
         const val SIDE_TARGET_BLOCK = 12
         val LONG_SIDE_BODY = (0 until 40).joinToString("\n\n") { "${sideMarkerAt(it)} の本文です。" }
 
-        fun sideMarkerAt(index: Int) = "右の段落$index"
+        fun sideMarkerAt(index: Int) = "$SIDE_MARKER$index"
+
+        /** 右の長い本文の段落に共通する頭。右のリストを見分けるのに使う。 */
+        const val SIDE_MARKER = "右の段落"
 
         /** [LONG_SIDE_BODY] の段落の文全体。番号の前方一致（「右の段落3」と「右の段落30」）で取り違えない。 */
         fun sideParagraph(index: Int) = "${sideMarkerAt(index)} の本文です。"
@@ -3439,6 +4002,30 @@ class NoteReadingFlowTest {
 
         /** 閉じて開いても保つ右の位置。開いた形の右の面に先頭の段落が入らないところ。 */
         const val KEPT_SIDE_BLOCK = 30
+
+        /** 再会カードの名前の行の、名前より後ろ。名前は入口で違いうるので、行はこちらで探す。 */
+        const val BESIDE_LINE = "と並べて読んでいました"
+
+        /** 余白の面を長くするメモの数と、開く前に見ておくメモ（先頭でも関連の一覧でもない位置）。 */
+        const val BESIDE_MEMOS = 12
+        const val BESIDE_KEPT_MEMO = 6
+        const val BESIDE_QUOTE = "引いておいた一節"
+
+        /** 空でない書きかけ。引用・言葉・今の本文の節（節A）と違う書き込み先を持つ。 */
+        val BESIDE_DRAFT = MarginMemoDraft(
+            text = "書きかけの言葉",
+            target = SectionRef("節B"),
+            quote = DraftQuote(MemoPassage.Quoted(BESIDE_QUOTE, QuoteContext("", ""), truncated = false))
+        )
+
+        /** 前回の訪問で [SIDE_NOTE] を並べた再会カード。 */
+        val BESIDE_CARD = ReadingTraceCard(
+            visitCount = 2,
+            lastVisitAtMillis = 0L,
+            lastSectionTitle = null,
+            lastProgressPercent = 100,
+            lastBeside = BesideNote("side.md", "右のノート")
+        )
 
         /** 片側を1画面に広げて戻す本文の段落の数と、その左右の目印。 */
         const val WRAPPING_COUNT = 32

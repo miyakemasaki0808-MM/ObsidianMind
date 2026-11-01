@@ -77,10 +77,11 @@ internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, reques
 }
 
 /**
- * 要約の入口を押したとき、並べ読みを閉じるか。**要約の行を見せる入口だけで閉じる**（→ features/margin_pane.md §5.4）。
- * 背景で始めるだけなら面を替えないので、机の画面で本文だけにして隠している並べ読みと読みかけを残す。
+ * 要約の入口が要約の行を見せに行くか。見せに行くなら、並べ読みの右を書きかけ（余白の面）へ替える。
+ * **並べ読みは閉じない** — 右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
+ * 背景で始めるだけなら面を替えないので、机の画面で本文だけにして隠している並べ読みは資料のまま残す。
  */
-internal fun SummaryEntry.closesSideReading(): Boolean = this != SummaryEntry.Background
+internal fun SummaryEntry.showsSummaryRow(): Boolean = this != SummaryEntry.Background
 
 /**
  * 端末AIが使えない理由をまだ見せていなければ、面を開くか（→ features/margin_pane.md §5.4）。

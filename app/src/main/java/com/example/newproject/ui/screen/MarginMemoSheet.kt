@@ -51,6 +51,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -341,7 +342,12 @@ internal fun MarginMemoSheetContent(
      * 入力欄の編集の状態（文字・カーソルと選択・変換中の範囲）の置き場。**面の外で持てば、面が外れて組み直されても保つ**（→ [MemoField]）。
      * null ならこの面の中で持つ。
      */
-    memoField: MemoField? = null
+    memoField: MemoField? = null,
+    /**
+     * ほかの節のメモを開いているか。**机のペインは外で持つ** — 並べ読みで右を資料へ替えると面ごと外れ、戻ったときに畳まれていると、
+     * 送っていた位置が短くなった面に収まらず失われる（→ features/desk_memory.md 判断10）。
+     */
+    othersExpandedState: MutableState<Boolean> = remember { mutableStateOf(false) }
 ) {
     var pendingDelete by remember { mutableStateOf<MarginMemo?>(null) }
     var inputFocused by remember { mutableStateOf(false) }
@@ -377,7 +383,7 @@ internal fun MarginMemoSheetContent(
     val previousRow = previousReadingRowFor(previousReadingAt, compact, previousRowAtFocus)
     val focusManager = LocalFocusManager.current
     // ほかの節のメモは畳んでおく。件数だけを見せ、開いたときに節ごとに並べる。
-    var othersExpanded by remember { mutableStateOf(false) }
+    var othersExpanded by othersExpandedState
     // メモの並びの始まり（この面の中の位置）。目的のメモまで送るときの行き先。
     var memosTop by remember { mutableIntStateOf(0) }
     // ほかの節の組の始まり（この面の中の位置）。印から来たときの行き先。

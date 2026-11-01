@@ -1,6 +1,6 @@
 # 読書痕跡（ReadingTrace）
 
-**状態:** 実装済み・稼働中。サイドカーは **schema v8**。孤児掃除は手動削除まで（自動化は未着手）
+**状態:** 実装済み・稼働中。サイドカーは **schema v9**。孤児掃除は手動削除まで（自動化は未着手）
 **最終検証:** 2026-10-06 / `6b39f134`
 **関連コード:** `controller/ReadingTraceController.kt` / `controller/ReunionCardController.kt` / `controller/ReadingTraceCleanupController.kt` / `data/ReadingTraceStore.kt` / `data/ReadingTraceJson.kt` / `domain/ReadingTraceOrphans.kt` / `ui/component/ReadingTraceCard.kt` / `ui/screen/ReadingTraceCleanupScreen.kt`
 **関連テスト:** `ReadingTraceControllerTest` / `ReunionCardControllerTest` / `ReadingTraceStoreTest` / `ReadingTraceJsonTest` / `ReadingTraceOrphansTest` / `ReadingTraceCleanupControllerTest` / `ReadingTraceCleanupTextTest` / `ReadingTraceHeadlineTest` / `ReadingTraceLimitsTest` / `ReadingProgressGeometryTest`
@@ -58,7 +58,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 - **1痕跡 = 1ファイル。** ファイル名は `<sha256Hex(vault相対パス)>.json`
 - **置き場には痕跡のほかに結晶のフォルダ `crystals/` がある**（→ [reflect_crystal](reflect_crystal.md) 判断7）。
   索引はフォルダと先頭64文字に満たない名前を載せない（`readingTraceKeyOf`）ので、孤児掃除・退避・読み戻しの下見には現れない
-- **スキーマ:** **v8**。v1〜v7 も読める（書き戻しは常に現行版）。v8 は余白メモに引用と控えた位置（`passage`）を足した（→ [margin_quote](margin_quote.md) §6）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
+- **スキーマ:** **v9**。v1〜v8 も読める（書き戻しは常に現行版）。v9 は訪問に机で並べた相手（`beside`）を足した（→ [desk_memory](desk_memory.md) §6）。v8 は余白メモに引用と控えた位置（`passage`）を足した（→ [margin_quote](margin_quote.md) §6）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
 - **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
@@ -67,7 +67,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 
 | 対象 | 値 | 定数 |
 |---|---|---|
-| ファイル全体 | 192KB | `MAX_FILE_BYTES` |
+| ファイル全体 | 256KB | `MAX_FILE_BYTES` |
 | 訪問の保持件数 | 30（超過時は古いものから捨てる） | `MAX_VISITS` |
 | 枠の1件・印の内容 | 2,048バイト | `MAX_AI_SUMMARY_BYTES` |
 | 相対パス | 1,024バイト | `MAX_RELATIVE_PATH_BYTES` |
@@ -161,7 +161,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 | `markedKind` | 印を付けた時点の種別 |
 <!-- /state-fields -->
 
-`ReadingVisit(atEpochMillis, deepestSectionTitle, progressPercent)`。checksum は保存形式の関心事なので
+`ReadingVisit(atEpochMillis, deepestSectionTitle, progressPercent, beside)`。`beside` は schema v9〜で、その回に机で右に並べた相手（相対パスとタイトル。並べていない回と v8 以前は null → [desk_memory](desk_memory.md)）。checksum は保存形式の関心事なので
 モデルには持たせず、`ReadingTraceJson` が付与・検証する。
 
 > **欄の追加はここが正本。** 上の区切りは

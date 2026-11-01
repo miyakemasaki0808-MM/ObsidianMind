@@ -12,6 +12,7 @@ import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWriteRequest
 import com.example.newproject.data.DistillWriteResult
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.NoteFile
@@ -666,6 +667,37 @@ class NoteSessionCoordinatorTest {
         advanceUntilIdle()
 
         assertEquals(1, env.trace.saved.size)
+    }
+
+    /**
+     * **並べた相手の時間は、調停側の単調な時計で数え、背面の止め方も同じ口から届く**（→ features/desk_memory.md §5）。
+     * 時計を渡し忘れると、仮想時間を進めても実時間でしか数えず、30秒並べても訪問に載らない。
+     */
+    @Test
+    fun `並べた相手は調停側の単調な時計で数え、冊子の間は数えない`() = runTest {
+        val clock = TestClock()
+        val env = Env(this, clock)
+        val coordinator = env.coordinator()
+
+        coordinator.startReadingTrace("習慣について", "ideas/habit.md", "doc-1")
+        coordinator.reportReadingProgress(blockIndex = 1, blockFraction = 1f, totalBlocks = 10, sectionTitle = null)
+        coordinator.reportBesideShown("refs/a.md", "A")
+        clock.advance(20_000L)
+        advanceTimeBy(20_000L)
+        coordinator.pauseReadingTrace(ReadingPauseReason.Booklet)
+        advanceTimeBy(60_000L)
+        coordinator.resumeReadingTrace(ReadingPauseReason.Booklet)
+        coordinator.pauseReadingTrace(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        assertNull("冊子の間を数えた", env.trace.saved.last().visits.single().beside)
+
+        coordinator.resumeReadingTrace(ReadingPauseReason.AppBackground)
+        clock.advance(10_000L)
+        advanceTimeBy(10_000L)
+        coordinator.pauseReadingTrace(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+
+        assertEquals(BesideNote("refs/a.md", "A"), env.trace.saved.last().visits.single().beside)
     }
 
     /**

@@ -70,6 +70,13 @@ internal class NoteScanCache(
         return scanned
     }
 
+    /**
+     * 参照から Vault 相対パスを引く。**I/Oも走査もしない。** 一覧は本文の書き換えで捨てるが、
+     * 名前・パス・参照は変わらないので、残してあるリンクの索引から引く（並べた相手 → features/desk_memory.md §5）。
+     * Vault 切替（[clear]）の後は前の Vault のパスを返さない。
+     */
+    fun relativePathOf(ref: DocumentRef): String? = linkIndex.pathOf(ref)
+
     /** 捨てる。Vault切替で呼ぶ。リンクの索引も捨てる — 前の Vault の参照を返さない。 */
     fun clear() {
         expireAfterBodyWrite()

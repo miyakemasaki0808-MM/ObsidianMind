@@ -88,6 +88,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -102,6 +105,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.state.face
 import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.NoteState
@@ -211,6 +215,10 @@ internal fun NoteReaderTab(
     onQuoteMarginMemo: (selection: QuoteSelection, bodySection: SectionRef?, model: NoteSectionModel) -> Unit,
     /** 並べ読みの間の右の面の出し分け（書きかけ｜資料 → features/margin_quote.md §5.6）。 */
     onShowSideFace: (SideFace) -> Unit = {},
+    /** 右に資料として見えている並べ読みのノート。見えなくなれば null（→ features/desk_memory.md §5）。 */
+    onBesideShownChange: (RelatedNote?) -> Unit = {},
+    /** 再会カードの相手の名前を押したときの引き当て（→ features/desk_memory.md §5）。保存した相対パスの完全一致で引く。 */
+    onResolveBesideNote: (BesideNote) -> NoteLinkResolution = { NoteLinkResolution.NotReady },
     /** 書きかけに付けた引用の欄の操作（✕・付ける場で候補を選ぶ）。 */
     quoteActions: DraftQuoteActions = DraftQuoteActions.None,
     /** 置くボタン。新しく置くか、未確定の送信を確かめるかは書きかけで決まる。 */
@@ -235,10 +243,12 @@ internal fun NoteReaderTab(
     /** 本文のリンクを今の走査結果から引く（→ features/note_links.md）。押したときに同期で呼ぶ。 */
     onResolveNoteLink: (NoteLink) -> NoteLinkResolution,
     /** 右のノートの中のリンクを、右のノートを出発点に引く（→ features/desk_foundation.md §5）。押したときに同期で呼ぶ。 */
-    onResolveSideNoteLink: (link: NoteLink, sideNote: DocumentRef) -> NoteLinkResolution
+    onResolveSideNoteLink: (link: NoteLink, sideNote: DocumentRef) -> NoteLinkResolution,
+    /** 押した操作の短い知らせ。既定は Toast で、Compose の木の外に出る。画面テストはここを差し替えて知らせを観測する。 */
+    onNotice: (String) -> Unit = toastNotice()
 ) {
     val context = LocalContext.current
-    val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    val showNotice = onNotice
 
     LaunchedEffect((uiState.noteState as? NoteState.Error)?.id) {
         if (uiState.noteState is NoteState.Error) {
@@ -490,10 +500,11 @@ internal fun NoteReaderTab(
     // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
     //  セクション判定とスクロール継承を壊さない）。
     val visibleTraceCard = uiState.readingTraceCard?.takeIf { hasNote && !it.isDismissed }
-    val traceCard: @Composable (Modifier, onOpenMemos: () -> Unit) -> Unit = { modifier, onOpenMemos ->
+    val traceCard: @Composable (Modifier, onOpenMemos: () -> Unit, onOpenBeside: ((BesideNote) -> Unit)?) -> Unit = { modifier, onOpenMemos, onOpenBeside ->
         if (visibleTraceCard != null) {
             ReadingTraceCardPanel(
                 card = visibleTraceCard,
+                onOpenBeside = visibleTraceCard.lastBeside?.let { beside -> onOpenBeside?.let { open -> { open(beside) } } },
                 // 枠の中身は純関数で決める（→ features/reunion_card.md 判断6）。
                 slot = reunionSlot(visibleTraceCard, uiState.summaryState),
                 modifier = modifier,
@@ -622,6 +633,13 @@ internal fun NoteReaderTab(
         // ペインを出し直したら先頭から始める（面ごと組み直していたときと同じ）。
         val paneScroll = rememberSaveable(paneVisible, saver = ScrollState.Saver) { ScrollState(0) }
         val paneScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<Int>(DeskSpread.SupportingOnly) }
+        // ほかの節のメモの開閉も、並べ読みで面が外れて戻ったときに位置ごと保つため外で持つ（→ MarginMemoSheetContent）。
+        // **持ち主（ペインの出し直しとノート）を値と一緒に保存し、復元のときに照合する**（→ ownedExpansionSaver）。
+        val paneOthersOwner = "$paneVisible:$currentNoteUri"
+        val paneOthersExpanded = rememberSaveable(
+            paneVisible, currentNoteUri,
+            saver = remember(paneOthersOwner) { ownedExpansionSaver(paneOthersOwner) }
+        ) { mutableStateOf(false) }
         // 本文と並べ読みの読む位置も、片側を1画面に広げて戻したときに戻す（→ RestoreLazyFacePosition）。
         // 並べ読みは右のノートごとに位置を持つので、覚えも右のノートごとに替える。
         val mainScrollMemory = remember(paneVisible, currentNoteUri) { SpreadScrollMemory<LazyFacePosition>(DeskSpread.MainOnly) }
@@ -652,17 +670,23 @@ internal fun NoteReaderTab(
                 imageMeasurements?.requestSkippedMeasurement(target)
             }
         }
+        // 左の入口から右で開く（本文のリンク・再会カードの相手の名前）。**右を見える状態にし、資料として開き、押すたびに始まりへ送る**。
+        // ペインを閉じていれば ✎ と同じく開き（端末には残さない）、本文だけにしていれば2面へ戻す。開く口は右の面を資料から始め、
+        // 送る依頼は押すたびに新しくするので、同じノートを途中まで読んでいても始まりへ戻る。「← 余白へ戻る」は開く前の余白の位置へ戻る
+        // （→ features/desk_memory.md 判断10）。
+        val openOnSupporting: (RelatedNote, String?) -> Unit = { note, heading ->
+            if (!marginPaneOpen) onSetMarginPaneOpen(true)
+            if (paneVisible) showDeskFace(DeskFace.Supporting)
+            sideFromLink = true
+            openSide(note)
+            sideLinkStart = SideLinkStart(note.ref.value, heading, ++sideLinkCount)
+        }
         // 本文のリンク（→ features/note_links.md）。開く面は窓で決める（→ noteLinkActionFor）。
         val openLink: (NoteLink) -> Unit = { link ->
             when (val action = noteLinkActionFor(onResolveNoteLink(link), canShowSupporting = canShowPane)) {
                 is NoteLinkAction.ScrollCurrent -> scrollCurrentTo(action.heading)
                 is NoteLinkAction.Open -> if (action.onSupporting) {
-                    // ペインを閉じていれば ✎ と同じく開き（端末には残さない）、本文だけにしていれば2面へ戻す。
-                    if (!marginPaneOpen) onSetMarginPaneOpen(true)
-                    if (paneVisible) showDeskFace(DeskFace.Supporting)
-                    sideFromLink = true
-                    openSide(action.note)
-                    sideLinkStart = SideLinkStart(action.note.ref.value, action.heading, ++sideLinkCount)
+                    openOnSupporting(action.note, action.heading)
                 } else {
                     onOpenNote(action.note)
                     startNote(PendingNoteStart(action.note.ref.value, block = 0, heading = action.heading))
@@ -695,6 +719,16 @@ internal fun NoteReaderTab(
                 }
             }
         }
+        // 再会カードの相手の名前（→ features/desk_memory.md §5）。保存した相対パスの完全一致で引き、右で始まりから開く。
+        // **押せるのはペインを出せる窓だけ**（判断3）。見つからなければ知らせて何も替えない。
+        val openBesideFromCard: ((BesideNote) -> Unit)? = if (!canShowPane) null else { beside ->
+            when (val action = sideLinkActionFor(onResolveBesideNote(beside), currentNoteUri?.let(::DocumentRef))) {
+                is SideLinkAction.OpenSide -> openOnSupporting(action.note, null)
+                is SideLinkAction.ScrollMain -> scrollCurrentTo(action.heading)
+                is SideLinkAction.ScrollSide -> Unit
+                is SideLinkAction.Notice -> showNotice(action.text)
+            }
+        }
         // 横の払いで仕切りを1段動かす。**帯が出ている間は受けない** — 帯の操作と、本文に触れて帯をしまう操作が先。
         val onSpreadGesture: (DeskSpreadGesture) -> Unit = { gesture -> spreadTo(deskSpreadAfter(deskSpread, gesture)) }
         val currentOnSpreadGesture by rememberUpdatedState(onSpreadGesture)
@@ -703,6 +737,13 @@ internal fun NoteReaderTab(
         }
         // ペインが見えているか。本文だけにしている間は、組んだまま隠れている。
         val paneShown = paneVisible && deskSpread.shows(DeskFace.Supporting)
+        // 並べた相手として見えていた時間を数える（→ features/desk_memory.md §5）。この画面が外れるときも見えなくなったと知らせる。
+        val besideShown = besideShownNote(sideReading, paneShown)
+        val currentOnBesideShownChange by rememberUpdatedState(onBesideShownChange)
+        DisposableEffect(besideShown) {
+            currentOnBesideShownChange(besideShown)
+            onDispose { currentOnBesideShownChange(null) }
+        }
         val memoToggle = marginToggleFor(canShowPane, marginPaneOpen, uiState.isMarginMemoSheetVisible)
         // 書いている間は、本文の列の上の操作を隠して本文に高さを回す（→ features/margin_pane.md §5.5）。
         // キーボードが出ると、残る高さを操作と再会カードが使い切って本文が消える。キーボードを閉じるか置けば戻る。
@@ -713,8 +754,9 @@ internal fun NoteReaderTab(
         )
         // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
-            // 右で眺めている間は、余白へ戻してから送る（メモは余白の面にある）。
-            if (reading) onCloseSideReading()
+            // 並べ読みの間は閉じず、右を書きかけ（余白の面）へ替えて送る。右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
+            // 出せる面がシートなら、シートを開く調停側の口が並べ読みを終える（→ features/desk_foundation.md 判断2）。
+            if (reading) onShowSideFace(SideFace.Draft)
             if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             memoReveal = reveal
         }
@@ -747,10 +789,10 @@ internal fun NoteReaderTab(
         // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
         // 持っている節なら作り直さず、その要約を見せる。
         // 本文だけにしている机の画面は、面が出ていないときと同じに扱い、見に行くときはシートに代えてペインを戻す。
-        // 並べ読みを閉じるのは要約の行を見せる入口だけ（→ closesSideReading）。
+        // 要約の行を見せる入口では、並べ読みを閉じずに右を書きかけ（余白の面）へ替える（→ showsSummaryRow）。
         val openSummary: () -> Unit = {
             val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
-            if (reading && entry.closesSideReading()) onCloseSideReading()
+            if (reading && entry.showsSummaryRow()) onShowSideFace(SideFace.Draft)
             if (entry == SummaryEntry.Sheet) {
                 if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             }
@@ -892,7 +934,7 @@ internal fun NoteReaderTab(
                                 // 余りをカードではなく余白へ逃がす。
                                 Spacer(modifier = Modifier.weight(1f))
                             } else {
-                                if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard)
+                                if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard, openBesideFromCard)
                                 notePanel(
                                     Modifier
                                         .weight(1f)
@@ -919,7 +961,7 @@ internal fun NoteReaderTab(
                                     .verticalScroll(rememberScrollState())
                             ) {
                                 controls(memoToggle, openSummary, ControlsPlace.SideColumn) {}
-                                traceCard(Modifier.padding(top = 16.dp), openMemosFromCard)
+                                traceCard(Modifier.padding(top = 16.dp), openMemosFromCard, openBesideFromCard)
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
@@ -957,7 +999,7 @@ internal fun NoteReaderTab(
                                         pageWidth = layout.pageWidthDp.dp,
                                         gutter = layout.gutterDp.dp,
                                         leftPageTop = if (visibleTraceCard != null && !hideControls) {
-                                            { traceCard(Modifier, openMemosFromCard) }
+                                            { traceCard(Modifier, openMemosFromCard, openBesideFromCard) }
                                         } else {
                                             null
                                         },
@@ -1020,7 +1062,7 @@ internal fun NoteReaderTab(
                                             } else {
                                                 // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
                                                 val cardShown = !hideControls && visibleTraceCard != null
-                                                if (cardShown) traceCard(Modifier, openMemosFromCard)
+                                                if (cardShown) traceCard(Modifier, openMemosFromCard, openBesideFromCard)
                                                 notePanel(Modifier.weight(1f).padding(top = if (cardShown) 8.dp else 0.dp), headingMark, openLink, quoteFromBody, quoteOffers)
                                             }
                                         }
@@ -1102,6 +1144,7 @@ internal fun NoteReaderTab(
                                                 onDelete = onDeleteMarginMemo,
                                                 modifier = Modifier.padding(top = 16.dp),
                                                 scrollState = paneScroll,
+                                                othersExpandedState = paneOthersExpanded,
                                                 focusIntent = memoFocusIntent,
                                                 onFocusIntentChange = onMemoFocusIntentChange,
                                                 active = deskSpread.shows(DeskFace.Supporting),
@@ -1159,6 +1202,22 @@ internal fun NoteReaderTab(
         }
     }
 
+}
+
+/**
+ * 開閉を持ち主と一組で保存し、復元のときに持ち主が違えば畳んだ値にする。
+ * inputs は保存されないので、画面を離れている間に持ち主が替わっても復元はそれを知らない。
+ * **鍵を持ち主ごとに分けない** — 消費されなかった前の持ち主の値が次の保存へ持ち越され、A→B→A で古い開閉が戻る。
+ */
+private fun ownedExpansionSaver(owner: String): Saver<MutableState<Boolean>, Any> = listSaver(
+    save = { listOf(owner, it.value) },
+    restore = { saved -> mutableStateOf(saved[0] == owner && saved[1] == true) }
+)
+
+@Composable
+private fun toastNotice(): (String) -> Unit {
+    val context = LocalContext.current
+    return remember(context) { { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() } }
 }
 
 /**

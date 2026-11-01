@@ -111,7 +111,10 @@ internal class NoteSessionCoordinator(
      * 時間を進められないと検証できない）。
      */
     clock: () -> Long = System::currentTimeMillis,
-    /** 結晶の材料を控える線（[NoteReadGate]）が読んだ時間を測る、単調に進む時計。テストがテストスケジューラの時刻へ差し替える。 */
+    /**
+     * 結晶の材料を控える線（[NoteReadGate]）が読んだ時間と、並べた相手が見えていた時間（[BesideTally]）を測る、単調に進む時計。
+     * テストがテストスケジューラの時刻へ差し替える。
+     */
     elapsedMillis: () -> Long = { System.nanoTime() / 1_000_000 },
     ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     /**
@@ -237,6 +240,7 @@ internal class NoteSessionCoordinator(
         persistence = readingTracePersistence,
         currentVaultKey = currentVaultKey,
         clock = clock,
+        elapsedMillis = elapsedMillis,
         ioDispatcher = ioDispatcher,
         writeMutex = traceWriteMutex
     )
@@ -685,6 +689,13 @@ internal class NoteSessionCoordinator(
         // `currentPath()` は今のセッションしか見ないので、別のノートのメモを読まない。
         readingTrace.currentPath()?.let { marginMemo.onPathBound(it) }
     }
+
+    /**
+     * 右に資料として見えている並べ読みのノート（→ features/desk_memory.md §5）。見えていないなら両方 null。
+     * 時間を足すのは今のノートの読書の区間なので、ノートを替えれば一緒に捨てられる。
+     */
+    fun reportBesideShown(vaultRelativePath: String?, title: String?) =
+        readingTrace.onBesideShown(vaultRelativePath, title)
 
     fun revealReadingTrace(vaultRelativePath: String, content: String) =
         reunionCard.revealTrace(vaultRelativePath, content)

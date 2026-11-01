@@ -12,7 +12,7 @@ import com.example.newproject.ui.screen.MemoRevealStop
 import com.example.newproject.ui.screen.ReaderLayout
 import com.example.newproject.ui.screen.SummaryEntry
 import com.example.newproject.ui.screen.summaryEntryFor
-import com.example.newproject.ui.screen.closesSideReading
+import com.example.newproject.ui.screen.showsSummaryRow
 import com.example.newproject.ui.screen.opensFaceForNotice
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
@@ -147,14 +147,14 @@ class MarginSurfaceTest {
     }
 
     /**
-     * **並べ読みを閉じるのは、要約の行を見せる入口だけ。** 背景で始めるだけなら面を替えないので、
-     * 隠している並べ読みを閉じると、戻したときに読みかけが消えている。
+     * **並べ読みの右を書きかけへ替えるのは、要約の行を見せる入口だけ。** 背景で始めるだけなら面を替えないので、
+     * 隠している並べ読みの右は資料のまま残る。
      */
     @Test
-    fun `並べ読みを閉じるのは要約の行を見せる入口だけ`() {
-        assertTrue(SummaryEntry.Pane.closesSideReading())
-        assertTrue(SummaryEntry.Sheet.closesSideReading())
-        assertFalse(SummaryEntry.Background.closesSideReading())
+    fun `並べ読みの右を書きかけへ替えるのは要約の行を見せる入口だけ`() {
+        assertTrue(SummaryEntry.Pane.showsSummaryRow())
+        assertTrue(SummaryEntry.Sheet.showsSummaryRow())
+        assertFalse(SummaryEntry.Background.showsSummaryRow())
     }
 
     /**

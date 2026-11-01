@@ -13,6 +13,8 @@ import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.fakes.InMemorySummaryCache
 import com.example.newproject.fakes.passDwell
+import com.example.newproject.model.state.ReadingTraceCard
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.REUNION_NONE_TOKEN
@@ -110,6 +112,26 @@ class ReunionCardControllerTest {
         advanceUntilIdle()
 
         assertTrue("メモが無いのに入口が出た", !state.value.readingTraceCard!!.hasMemos)
+    }
+
+    /**
+     * **前回の訪問で並べた相手をカードへ載せる**（→ features/desk_memory.md §5）。供給を忘れると既定値 null のまま出荷され、名前の行が一度も出ない。
+     * 返すのは前回の訪問だけで、それより前の訪問の相手は返さない。
+     */
+    @Test
+    fun `前回の訪問で並べた相手をカードへ載せ、それより前の訪問の相手は返さない`() = runTest {
+        val beside = BesideNote("refs/a.md", "A")
+        fun cardFor(trace: ReadingTrace): ReadingTraceCard? {
+            val persistence = FakePersistence().apply { put(trace) }
+            val state = NoteUiStateStore(NoteUiState())
+            controller(persistence, state = state).revealTrace(PATH, content = "")
+            advanceUntilIdle()
+            return state.value.readingTraceCard
+        }
+        val base = storedTrace(count = 2)
+
+        assertEquals(beside, cardFor(base.copy(visits = base.visits.mapIndexed { i, v -> if (i == 1) v.copy(beside = beside) else v }))!!.lastBeside)
+        assertNull(cardFor(base.copy(visits = base.visits.mapIndexed { i, v -> if (i == 0) v.copy(beside = beside) else v }))!!.lastBeside)
     }
 
     @Test

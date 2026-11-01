@@ -1,5 +1,6 @@
 package com.example.newproject.data
 
+import com.example.newproject.model.BesideNote
 import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.QuoteContext
@@ -44,6 +45,7 @@ internal object ReadingTraceJson {
                     .put(KEY_VISIT_AT, visit.atEpochMillis)
                     .put(KEY_VISIT_SECTION, visit.deepestSectionTitle ?: JSONObject.NULL)
                     .put(KEY_VISIT_PROGRESS, visit.progressPercent)
+                    .put(KEY_VISIT_BESIDE, visit.beside?.toJson() ?: JSONObject.NULL)
             )
         }
         val memos = JSONArray()
@@ -81,16 +83,18 @@ internal object ReadingTraceJson {
         if (bytes.isEmpty()) return ReadingTraceReadResult.Corrupt("痕跡ファイルが空です。")
         return try {
             val root = JSONObject(decodeUtf8Strict(bytes))
+            val version = root.getInt(KEY_SCHEMA_VERSION)
             val visitsJson = root.getJSONArray(KEY_VISITS)
             val visits = (0 until visitsJson.length()).map { index ->
                 val visit = visitsJson.getJSONObject(index)
                 ReadingVisit(
                     atEpochMillis = visit.getLong(KEY_VISIT_AT),
                     deepestSectionTitle = visit.stringOrNull(KEY_VISIT_SECTION),
-                    progressPercent = visit.getInt(KEY_VISIT_PROGRESS)
+                    progressPercent = visit.getInt(KEY_VISIT_PROGRESS),
+                    // v9 で追加。旧版の checksum はこの値を含まないので、書かれていても読まない。
+                    beside = if (version >= 9) visit.besideOrNull() else null
                 )
             }
-            val version = root.getInt(KEY_SCHEMA_VERSION)
             // **ひとことの3欄は v7 で読み捨てるが、checksum のためだけに読む。**
             // v3〜v6 の正規形はこれらを含むので、読まずに照合すると
             // **正しい旧ファイルが全部破損扱いになり、訪問履歴まで失う**
@@ -251,8 +255,34 @@ internal object ReadingTraceJson {
                     if (trace.schemaVersion >= 8) out.writePassage(memo.passage)
                 }
             }
+            // v9 で追加。訪問ごとの並べた相手。**訪問の並びの中ではなく末尾に足す** — 訪問は先頭近くに書くので、
+            // そこへ挟むと旧版の並びが変わり、正しい旧ファイルが破損扱いになる。
+            if (trace.schemaVersion >= 9) {
+                trace.visits.forEach { visit -> out.writeBeside(visit.beside) }
+            }
         }
         return buffer.toByteArray()
+    }
+
+    /** 並べた相手の正規形。無い回は存在フラグ0の1バイトだけを書く。 */
+    private fun DataOutputStream.writeBeside(beside: BesideNote?) {
+        if (beside == null) {
+            writeByte(0)
+        } else {
+            writeByte(1)
+            writeSized(beside.vaultRelativePath)
+            writeSized(beside.title)
+        }
+    }
+
+    private fun BesideNote.toJson(): JSONObject = JSONObject()
+        .put(KEY_BESIDE_PATH, vaultRelativePath)
+        .put(KEY_BESIDE_TITLE, title)
+
+    private fun JSONObject.besideOrNull(): BesideNote? {
+        if (isNull(KEY_VISIT_BESIDE)) return null
+        val beside = getJSONObject(KEY_VISIT_BESIDE)
+        return BesideNote(vaultRelativePath = beside.getString(KEY_BESIDE_PATH), title = beside.getString(KEY_BESIDE_TITLE))
     }
 
     /**
@@ -403,4 +433,7 @@ internal object ReadingTraceJson {
     private const val KEY_VISIT_AT = "at"
     private const val KEY_VISIT_SECTION = "deepestSection"
     private const val KEY_VISIT_PROGRESS = "progressPercent"
+    private const val KEY_VISIT_BESIDE = "beside"
+    private const val KEY_BESIDE_PATH = "vaultRelativePath"
+    private const val KEY_BESIDE_TITLE = "title"
 }
