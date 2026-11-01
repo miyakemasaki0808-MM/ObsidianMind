@@ -2,6 +2,7 @@ package com.example.newproject
 
 import com.example.newproject.data.ChildDoc
 import com.example.newproject.data.SafChildren
+import com.example.newproject.data.VAULT_SCAN_EXCLUDED_FOLDERS
 import com.example.newproject.data.joinVaultPath
 import com.example.newproject.data.traverseMarkdownPaths
 import com.example.newproject.data.traverseVaultFiles
@@ -55,6 +56,33 @@ class VaultPathTraversalTest {
         ).entries
 
         assertEquals(listOf("ideas/keep.md"), result.map { it.vaultRelativePath })
+    }
+
+    @Test
+    fun `Vault全体の走査は機能フォルダと設定フォルダのノートを集めない`() {
+        val tree = FakeTree(
+            mapOf(
+                "root" to listOf(
+                    dir("d1", "_AI補記"),
+                    dir("d2", "_ReadingTraces"),
+                    dir("d3", ".obsidian"),
+                    dir("d4", "ideas")
+                ),
+                "d1" to listOf(file("n1", "旧補記.md")),
+                "d2" to listOf(file("n2", "痕跡.md")),
+                "d3" to listOf(dir("d5", "plugins")),
+                "d4" to listOf(file("n3", "habit.md")),
+                "d5" to listOf(file("n4", "README.md"))
+            )
+        )
+
+        val result = traverseMarkdownPaths(
+            startId = "root",
+            excludeFolderNames = VAULT_SCAN_EXCLUDED_FOLDERS,
+            listChildren = tree::list
+        ).entries
+
+        assertEquals(listOf("ideas/habit.md"), result.map { it.vaultRelativePath })
     }
 
     @Test

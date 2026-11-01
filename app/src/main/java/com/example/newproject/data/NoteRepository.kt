@@ -40,6 +40,18 @@ internal object NoteReadLimits {
 internal fun isMarkdownFile(name: String?): Boolean =
     name?.lowercase()?.endsWith(".md") == true
 
+private const val ANNOTATION_FOLDER_NAME = "_AI補記"
+
+/**
+ * Vault全体の走査が潜らないフォルダ。読むノートも、ノートが参照する画像も置かれない場所である。
+ * `_AI補記` は旧版が書き出した補記で、書き出す経路はもう無いがフォルダが残った Vault がある。
+ */
+internal val VAULT_SCAN_EXCLUDED_FOLDERS = setOf(
+    ANNOTATION_FOLDER_NAME,
+    READING_TRACE_FOLDER_NAME,
+    OBSIDIAN_CONFIG_FOLDER_NAME
+)
+
 class NoteRepository {
 
     // カーソルループと ChildDoc は SafDocuments.kt / VaultPathTraversal.kt へ移した
@@ -82,8 +94,7 @@ class NoteRepository {
         NoteFile(name, DocumentsContract.buildDocumentUriUsingTree(vaultUri, documentId).toDocumentRef(), lastModified)
 
     // Vault全体のノートを収集する（ランダム表示・関連ノート候補用）。
-    // 旧版が書き出した _AI補記 フォルダは除外する。書き出す経路はもう無いが、
-    // フォルダが残った Vault でも旧補記がランダム表示や関連ノートに混ざらないようにする。
+    // VAULT_SCAN_EXCLUDED_FOLDERS には潜らない。旧補記や設定フォルダの .md が候補に混ざらないようにする。
     // ※さがすタブ（collectNotesInScope）は _AI補記 だけは仕様どおり除外しない。
     // 完全性まで返すのは、不在を根拠に何かを消す処理（読書痕跡の孤児判定）が
     // 「読めなかっただけのフォルダ」を「削除された」と誤読しないため。
@@ -94,16 +105,14 @@ class NoteRepository {
                 contentResolver = contentResolver,
                 vaultUri = vaultUri,
                 startId = DocumentsContract.getTreeDocumentId(vaultUri),
-                excludeFolderNames = setOf(ANNOTATION_FOLDER_NAME, READING_TRACE_FOLDER_NAME)
+                excludeFolderNames = VAULT_SCAN_EXCLUDED_FOLDERS
             )
         }
 
     /**
      * Vault全体の画像を収集する（画像索引用）。
      *
-     * 除外するのは機能フォルダ（`_AI補記` / `_ReadingTraces`）と `.obsidian`。
-     * 前2つはアプリが書き出すフォルダ（`_AI補記` は旧版）なのでユーザーのノートが参照する画像は入らず、
-     * `.obsidian` はテーマやプラグインの画像でノートの内容ではない。
+     * 除外は [VAULT_SCAN_EXCLUDED_FOLDERS]。`.obsidian` の画像はテーマやプラグインのものでノートの内容ではない。
      *
      * **完全性まで返すのは、ノート走査と同じ理由ではない。** ここでは
      * 「索引に無い」を「Vaultに無い」と言い切ってよいかの判定に使う
@@ -113,11 +122,7 @@ class NoteRepository {
         withContext(Dispatchers.IO) {
             val scan = traverseVaultFiles(
                 startId = DocumentsContract.getTreeDocumentId(vaultUri),
-                excludeFolderNames = setOf(
-                    ANNOTATION_FOLDER_NAME,
-                    READING_TRACE_FOLDER_NAME,
-                    OBSIDIAN_CONFIG_FOLDER_NAME
-                ),
+                excludeFolderNames = VAULT_SCAN_EXCLUDED_FOLDERS,
                 accept = ::isImageFileName
             ) { documentId -> queryChildren(contentResolver, vaultUri, documentId) }
             VaultImageScan(
@@ -366,7 +371,6 @@ class NoteRepository {
     }
 
     companion object {
-        private const val ANNOTATION_FOLDER_NAME = "_AI補記"
         private val WIKILINK_REGEX = Regex("\\[\\[([^\\]]+)]]")
     }
 }

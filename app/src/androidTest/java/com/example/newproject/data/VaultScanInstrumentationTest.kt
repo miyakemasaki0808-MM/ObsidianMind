@@ -70,6 +70,18 @@ class VaultScanInstrumentationTest {
         assertTrue("読めなかったフォルダは無いはず", scan.unreadableFolderPaths.isEmpty())
     }
 
+    /** 本番の走査が除外の一覧を渡していること。一覧そのものの中身は JVM の走査テストが見る。 */
+    @Test
+    fun 機能フォルダと設定フォルダのノートは集めない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md")
+        FakeVaultDocumentsProvider.putFile("_AI補記/旧補記.md")
+        FakeVaultDocumentsProvider.putFile(".obsidian/plugins/README.md")
+
+        val scan = requireNotNull(browser().current()).collectAllNotes()
+
+        assertEquals(listOf("ideas/habit.md"), scan.notes.map { it.vaultRelativePath })
+    }
+
     /**
      * 読めなかったフォルダは、**空フォルダとしてではなく不完全として**返る。
      *
