@@ -233,6 +233,7 @@ class DesignDocStateNameTest {
         val RETIRED_NAMES = listOf(
             "collectNotesInScope",
             "pickRandomInScope",
+            "deskBarRailInsetDp",
             "Available",
             "Unavailable",
             "CheckFailed",

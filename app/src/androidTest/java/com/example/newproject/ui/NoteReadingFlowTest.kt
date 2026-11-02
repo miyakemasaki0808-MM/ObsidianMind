@@ -1263,7 +1263,7 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithContentDescription("操作をしまう").performTouchInput { swipeUp(startY = bottom, endY = top - 300f) }
         composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
 
-        // 本文に触れる。**帯より下の、左の面の中ほどを押す** — 題名など本文の上のほうは帯の下に隠れ、
+        // 本文に触れる。帯は右の面の上に重なるので、左の面の中ほどを押す。
         // 箱の下端の近くは画面下のバーを避ける余白で、左の面の外になる。
         openDeskBar()
         composeRule.onNodeWithText("別のノートをひらく").assertIsDisplayed()
@@ -1367,12 +1367,12 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * **帯の地は後ろの背景の続きに見える**（→ features/margin_pane.md §5.1）。帯の下端のつまみの段で、帯の右端の内側と、
+     * **帯の地は後ろの背景の続きに見える**（→ features/margin_pane.md §5.1）。帯の下端のつまみの段で、帯の左端の内側と、
      * その外の溝（背景がそのまま見える）の色を比べる。地を帯の大きさで流すと、藍から珊瑚色までの全部が帯の中へ縮まり、ここで大きく食い違う。
-     * 帯の左端は、窓より大きい箱が中央に寄るので窓の外に出ることがあり、比べない。
+     * 帯の右端は、窓より大きい箱が中央に寄るので窓の外に出ることがあり、比べない。
      */
     @Test
-    fun 机の画面の帯の地は_右の溝の背景と継ぎ目なくつながる() {
+    fun 机の画面の帯の地は_左の溝の背景と継ぎ目なくつながる() {
         setDesk()
         openDeskBar()
 
@@ -1380,8 +1380,8 @@ class NoteReadingFlowTest {
         val image = composeRule.onRoot().captureToImage().toPixelMap()
         val step = with(composeRule.density) { 8.dp.toPx() }
         val y = grip.center.y.roundToInt()
-        val inside = image[(grip.right - step).roundToInt(), y]
-        val outside = image[(grip.right + step).roundToInt(), y]
+        val inside = image[(grip.left + step).roundToInt(), y]
+        val outside = image[(grip.left - step).roundToInt(), y]
 
         listOf(inside.red to outside.red, inside.green to outside.green, inside.blue to outside.blue).forEach { (a, b) ->
             assertTrue("帯の内側 $inside と外の背景 $outside の色が違う", abs(a - b) <= SEAM_TOLERANCE)
@@ -1410,6 +1410,67 @@ class NoteReadingFlowTest {
         assertTrue("巻き上がっている途中なのに動いていない: $rising / $shown", rising < shown)
         composeRule.mainClock.advanceTimeBy(500)
         composeRule.onNodeWithText("Rediscover").assertDoesNotExist()
+    }
+
+    // ── つまみと帯の場所（→ system/fold_experience.md §6）───────────────────
+
+    /** **机のつまみと帯は折り目の右の面の上にある。** 帯はつまみと同じ幅で降り、左の面の上を払っても帯は出ない。 */
+    @Test
+    fun 机の画面ではつまみと帯は折り目の右にあり_左の面の上を払っても帯は出ない() {
+        assumeDeskWindow()
+        setDesk()
+        assertGripOnRightOfFold()
+    }
+
+    /** **見開きも同じ場所。** 帯は右ページの上から降り、左ページの上を払っても帯は出ない。 */
+    @Test
+    fun 見開きではつまみと帯は右ページの上にあり_左ページの上を払っても帯は出ない() {
+        assumeDeskWindow()
+        setSpread(SPREAD_BODY)
+        assertGripOnRightOfFold()
+    }
+
+    private fun assertGripOnRightOfFold() {
+        val grip = composeRule.onNodeWithContentDescription("操作を出す").getUnclippedBoundsInRoot()
+        val desk = composeRule.onNodeWithTag(DESK_TAG).getUnclippedBoundsInRoot()
+        val center = deskCenter()
+        assertTrue("つまみが折り目の右に無い（つまみの左端 ${grip.left}・折り目 $center）", grip.left.value > center)
+
+        composeRule.onNodeWithTag(DESK_TAG).performTouchInput {
+            val x = ((center - desk.left.value) / 2f).dp.toPx()
+            val y = (grip.top - desk.top).toPx() + 4.dp.toPx()
+            swipe(start = Offset(x, y), end = Offset(x, y + 200.dp.toPx()), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText("別のノートをひらく").assertDoesNotExist()
+
+        openDeskBar()
+        val bar = composeRule.onNodeWithContentDescription("操作をしまう").getUnclippedBoundsInRoot()
+        assertEquals("帯の左に空きがある", grip.left.value, bar.left.value, 1f)
+        assertEquals("帯とつまみの幅が違う", grip.right.value, bar.right.value, 1f)
+    }
+
+    /**
+     * **片側を1画面にしても、つまみは同じ場所に残る。** 帯を出せて、読み上げの操作で2面へ戻せる。
+     * つまみを本文の面に置くと、余白だけのときに本文と一緒に隠れて、戻る操作でしか2面へ戻れない。
+     */
+    @Test
+    fun 机の画面で片側を1画面にしても_つまみは同じ場所に残り_帯を出せて_読み上げで戻せる() {
+        assumeDeskWindow()
+        setDesk()
+        val left = composeRule.onNodeWithContentDescription("操作を出す").getUnclippedBoundsInRoot().left
+
+        listOf("本文を1画面に", "余白を1画面に").forEach { label ->
+            performGripAction(label)
+            val moved = composeRule.onNodeWithContentDescription("操作を出す").getUnclippedBoundsInRoot().left
+            assertEquals("$label でつまみが動いた", left.value, moved.value, 1f)
+            openDeskBar()
+            composeRule.onNodeWithContentDescription("操作をしまう").performSemanticsAction(SemanticsActions.OnClick)
+            composeRule.waitForIdle()
+            performGripAction("2面に戻す")
+        }
+
+        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
     }
 
     // ── 片側を払って1画面に（→ features/margin_pane.md §5.1）───────────────
@@ -2553,36 +2614,32 @@ class NoteReadingFlowTest {
 
     // ── 重ねて出すレールと帯（→ features/margin_pane.md §5.1）─────────────────────
 
-    /**
-     * **文字の倍率でレールが広がっても、重ねて出したレールが机の帯の左端を隠さない。** 倍率2倍でレールは最小の80dpより広がるので、
-     * 帯の中身は外殻が測ったレールの右端から始める。
-     */
+    /** **文字の倍率でレールが広がっても、重ねて出したレールが机の帯にかからない。** 倍率2倍でレールは約113dpまで広がる。 */
     @Test
-    fun 文字の倍率でレールが広がっても_重ねたレールが机の帯の左端を隠さない() {
+    fun 文字の倍率でレールが広がっても_重ねたレールが机の帯にかからない() {
         assumeDeskWindow()
         setShellWithBand(fontScale = 2f, spread = false)
-        assertBandStartsAtRailEnd(widened = true)
+        assertBandClearOfRail(widened = true)
     }
 
-    /** 見開きも同じ帯。倍率2倍では1行の字数が下限を割って見開きにならないので、見開きに入れる中で大きい倍率（1.6倍）で確かめる。 */
+    /** 見開きも同じ帯。倍率2倍では1行の字数が下限を割って見開きにならないので、見開きに入れる中で大きい倍率で見る。 */
     @Test
-    fun 文字の倍率でレールが広がっても_重ねたレールが見開きの帯の左端を隠さない() {
+    fun 文字の倍率でレールが広がっても_重ねたレールが見開きの帯にかからない() {
         assumeDeskWindow()
         setShellWithBand(fontScale = 1.6f, spread = true)
-        assertBandStartsAtRailEnd(widened = true)
+        assertBandClearOfRail(widened = true)
     }
 
-    /** 倍率1倍ではレールは最小の80dpのままで、帯の中身は今どおりレールの右端から始まる（見た目を変えない）。 */
     @Test
-    fun 倍率1倍では_帯の中身は今どおりレールの右端から始まる() {
+    fun 倍率1倍でも_重ねたレールは帯にかからない() {
         assumeDeskWindow()
         setShellWithBand(fontScale = 1f, spread = false)
-        assertBandStartsAtRailEnd(widened = false)
+        assertBandClearOfRail(widened = false)
     }
 
     /**
-     * 本番の外殻（[AppScaffold]）の中に、机か見開きのノートの画面を組む。外殻は帯が出ている間レールを重ねて出し、
-     * 測ったレールの右端を画面へ渡す（MainActivity と同じ配線）。箱は本番の外殻と同じく窓の左端から置く。
+     * 本番の外殻（[AppScaffold]）の中に、机か見開きのノートの画面を組む。外殻は帯が出ている間レールを重ねて出す。
+     * 箱は本番の外殻と同じく窓の左端から置く。
      */
     @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     private fun setShellWithBand(fontScale: Float, spread: Boolean) {
@@ -2596,7 +2653,6 @@ class NoteReadingFlowTest {
                         val nav = rememberNavController()
                         var paneVisible by remember { mutableStateOf(false) }
                         var barShown by remember { mutableStateOf(false) }
-                        var railEnd by remember { mutableStateOf<Float?>(null) }
                         AppScaffold(
                             windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(960.dp, 720.dp)),
                             navController = nav,
@@ -2604,8 +2660,7 @@ class NoteReadingFlowTest {
                             notePaneVisible = paneVisible,
                             noteBarShown = barShown,
                             spreadTab = spread,
-                            spreadSelected = spread,
-                            onRailEnd = { railEnd = it }
+                            spreadSelected = spread
                         ) { modifier ->
                             NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
                                 composable(AppDestination.Note.route) {
@@ -2617,8 +2672,7 @@ class NoteReadingFlowTest {
                                         window = window,
                                         onMarginPaneVisibleChange = { paneVisible = it },
                                         spreadSelected = spread,
-                                        onDeskBarShownChange = { barShown = it },
-                                        railEndDp = railEnd
+                                        onDeskBarShownChange = { barShown = it }
                                     )
                                 }
                             }
@@ -2631,23 +2685,21 @@ class NoteReadingFlowTest {
     }
 
     /**
-     * 帯を出し、重ねて出したレールの右端と、帯の左端の文字（見出しの「Rediscover」）の左端を比べる。
+     * 帯を出し、重ねて出したレールの右端と、帯の左端（下端のつまみの段）を比べる。
      * [widened] なら、先にレールが最小幅より広いことを確かめる — 広がっていなければ、確かめたいことが起きていない。
      */
-    private fun assertBandStartsAtRailEnd(widened: Boolean) {
+    private fun assertBandClearOfRail(widened: Boolean) {
         openDeskBar()
         composeRule.waitForIdle()
         val rails = composeRule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.SelectableGroup)).fetchSemanticsNodes()
         assertEquals("重ねて出したレールが1本ではない", 1, rails.size)
         val rail = rails.single().boundsInRoot
-        val title = composeRule.onNodeWithText("Rediscover").fetchSemanticsNode().boundsInRoot
+        val band = composeRule.onNodeWithContentDescription("操作をしまう").fetchSemanticsNode().boundsInRoot
         if (widened) {
             val minRail = with(composeRule.density) { 80.dp.toPx() }
             assertTrue("この倍率でレールが最小幅より広がっていない（幅 ${rail.width}px）", rail.width > minRail + 1f)
-            assertTrue("帯の左端がレールの下に入った（レールの右端 ${rail.right}px・帯の文字 ${title.left}px）", title.left >= rail.right - 1f)
-        } else {
-            assertEquals("倍率1倍で帯の中身の位置が変わった", rail.right, title.left, 1f)
         }
+        assertTrue("帯がレールの下に入った（レールの右端 ${rail.right}px・帯の左端 ${band.left}px）", band.left >= rail.right)
     }
 
     // ── 本文の見開き（→ features/note_spread.md）──────────────────────────────
@@ -3802,7 +3854,6 @@ class NoteReadingFlowTest {
         onSelectSpread: (Boolean) -> Unit = {},
         // 外殻と組むテストだけが渡す（→ setShellWithBand）。
         onDeskBarShownChange: (Boolean) -> Unit = {},
-        railEndDp: Float? = null,
         memoDraft: MarginMemoDraft = MarginMemoDraft(),
         // 知らせは既定で Toast（Compose の木の外）。知らせを見るテストだけが受け取って数える。
         onNotice: (String) -> Unit = {}
@@ -3834,7 +3885,6 @@ class NoteReadingFlowTest {
             onSelectSpread = onSelectSpread,
             onMarginPaneVisibleChange = onMarginPaneVisibleChange,
             onDeskBarShownChange = onDeskBarShownChange,
-            railEndDp = railEndDp,
             memoDraft = memoDraft,
             onEditMarginMemo = { _, _, _ -> },
             onQuoteMarginMemo = { _, _, _ -> },
