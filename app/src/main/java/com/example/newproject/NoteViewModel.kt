@@ -166,7 +166,8 @@ class NoteViewModel internal constructor(
     private val noteScan = NoteScanCache(
         scope = scope,
         ttlMillis = NOTES_CACHE_TTL_MS,
-        vaultGeneration = { session.vaultGeneration }
+        vaultGeneration = { session.vaultGeneration },
+        onScanEvent = dependencies.onNoteScanEvent
     )
     private val cachedNotes: List<NoteFile> get() = noteScan.notes
 

@@ -34,12 +34,14 @@ class NoteScanCacheTest {
     private var generation = 0L
     private var now = 0L
     private val published = mutableListOf<List<String>>()
+    private val events = mutableListOf<NoteScanEvent>()
     private val scanParent = Job()
     private val cache = NoteScanCache(
         scope = CoroutineScope(Dispatchers.Unconfined + scanParent),
         ttlMillis = 60_000L,
         vaultGeneration = { generation },
-        clock = { now }
+        clock = { now },
+        onScanEvent = { events += it }
     )
 
     @Test
@@ -111,6 +113,59 @@ class NoteScanCacheTest {
         now = 15_000L + 60_000L
         cache.get(scan = scan, onPublished = ::record)
         assertEquals("走査を終えてから60秒で切れていない", 2, scans)
+    }
+
+    /** 実機ケースが本文の表示を起点にしない理由の1つ。持っている一覧で引いても、走査の完了からの残り時間は増えない。 */
+    @Test
+    fun `持っている一覧を使っても寿命は延びない`() = runTest {
+        var scans = 0
+        val scan: suspend () -> List<NoteFile> = { scans++; listOf(note("a.md", "a-ref")) }
+        cache.get(scan = scan, onPublished = ::record)
+
+        now = 50_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(1, scans)
+
+        now = 60_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(2, scans)
+    }
+
+    /** 実機ケースが読む行。寿命の中と切れた後を区別でき、相乗りと捨てた走査を数え違えない。 */
+    @Test
+    fun `走査の記録は寿命の中では増えず、切れた後に1回増える`() = runTest {
+        val scan: suspend () -> List<NoteFile> = { listOf(note("a.md", "a-ref")) }
+
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(listOf(NoteScanEvent.STARTED, NoteScanEvent.PUBLISHED), events)
+
+        now = 59_999L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(2, events.size)
+
+        now = 60_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(
+            listOf(NoteScanEvent.STARTED, NoteScanEvent.PUBLISHED, NoteScanEvent.STARTED, NoteScanEvent.PUBLISHED),
+            events
+        )
+    }
+
+    @Test
+    fun `相乗りでは走査の記録が増えず、捨てた走査は公開の記録を出さない`() = runTest {
+        val beforeWrite = CompletableDeferred<List<NoteFile>>()
+        val first = async { cache.get(scan = { beforeWrite.await() }, onPublished = ::record) }
+        runCurrent()
+        val shared = async { cache.get(scan = { emptyList() }, onPublished = ::record) }
+        runCurrent()
+        assertEquals("相乗りで走査の行が増えた", listOf(NoteScanEvent.STARTED), events)
+
+        cache.expireAfterBodyWrite()
+        beforeWrite.complete(listOf(note("古い.md", "old-ref")))
+        first.await()
+        shared.await()
+
+        assertEquals("捨てた走査で寿命の起点の行が出た", listOf(NoteScanEvent.STARTED), events)
     }
 
     @Test

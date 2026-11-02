@@ -17,6 +17,15 @@ import kotlinx.coroutines.flow.asStateFlow
 // Vault側の編集（Obsidian同期等）は最大でこの時間と走査の時間を足した分だけ反映が遅れる。
 internal const val NOTES_CACHE_TTL_MS = 60_000L
 
+/** 走査の記録。実機ケースは走査の本数と一覧の寿命をこの記録で判定する（→ review/device_validation/explore.md）。 */
+internal enum class NoteScanEvent {
+    /** 走査を始めた。相乗りとキャッシュの再利用では起きない。 */
+    STARTED,
+
+    /** 一覧を公開した。**寿命の起点。** 捨てた走査では起きない。 */
+    PUBLISHED
+}
+
 /**
  * Vault全体のノート一覧のTTL付きキャッシュ。ランダム表示・Explore・冊子・関連ノート・痕跡のパス解決・結晶の一覧が共有する。
  *
@@ -35,7 +44,8 @@ internal class NoteScanCache(
     scope: CoroutineScope,
     private val ttlMillis: Long,
     private val vaultGeneration: () -> Long,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val onScanEvent: (NoteScanEvent) -> Unit = {}
 ) {
     /** いまのキャッシュ。空ならまだ走査していない。 */
     var notes: List<NoteFile> = emptyList()
@@ -82,6 +92,7 @@ internal class NoteScanCache(
     ): Deferred<List<NoteFile>> {
         val generation = vaultGeneration()
         val writes = bodyWrites
+        onScanEvent(NoteScanEvent.STARTED)
         val result = scanScope.async {
             val scanned = scan()
             if (generation != vaultGeneration()) {
@@ -102,6 +113,7 @@ internal class NoteScanCache(
         mutableKnownNotes.value = scanned
             .filter { it.vaultRelativePath.isNotEmpty() }
             .associate { it.vaultRelativePath to it.ref }
+        onScanEvent(NoteScanEvent.PUBLISHED)
         onPublished(scanned)
     }
 

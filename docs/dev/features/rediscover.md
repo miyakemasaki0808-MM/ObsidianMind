@@ -194,7 +194,7 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** `NoteRepositoryTest` / `VaultPathTraversalTest`（走査と除外）/ `NoteScanCacheTest`（走査の共有・取り消しの両方向・失敗・Vault切替・本文の書き換え）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
+- **JVMテスト:** `NoteRepositoryTest` / `VaultPathTraversalTest`（走査と除外）/ `NoteScanCacheTest`（走査の共有・取り消しの両方向・失敗・Vault切替・本文の書き換え・寿命の起点と境界・走査の記録）/ `NoteSessionCoordinatorTest`（ノート切替の後始末）
 - **JVMテスト:** `ReaderLayoutTest`（どの画面で2列にするか。縦の見た目を変えないことも同じ表で見る）
 - **JVMテスト:** `NoteOpenRouteContractTest`（ノートを開く経路が先頭から開く境界を通ること）
 - **instrumentation:** `GradientHeaderTest`（見出しの霞を右へ広げない口が、右の余白へ霞を出さないこと）
@@ -202,7 +202,7 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
   低い横長の枠で再会カードがあってもノート名と本文が見え、「読んだ」へ届くこと。別のノートを開くと先頭から始まること）
 - **保証していないこと:**
   - **抽選の分布は検証していない。** `notes.random()` に委ねており、偏りのテストは無い
-  - **走査キャッシュのTTL境界は端末で測っていない**（制御時計のテストまで）。60秒は見積もり
+  - **走査キャッシュのTTL境界は端末で狙っていない**（端末は Debug APK の `VigilithNoteScan` の行で前後を見るまで。境界は制御時計のテスト）。60秒は見積もり
   - **1MB超のノートの表示品質**は切り詰め後のもので、末尾が欠ける
 
 ## 11. 既知の制約・未解決事項
