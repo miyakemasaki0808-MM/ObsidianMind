@@ -51,6 +51,16 @@ internal fun marginToggleDescription(toggle: MarginToggle): String = when (toggl
     MarginToggle.HideSheet, MarginToggle.ShowSheet -> "このノートのメモ"
 }
 
+/**
+ * 全画面の ✎ の記号。シートが出ている間は同じ位置で「しまう」向きにする（→ features/note_fullscreen.md 判断5）。
+ * ✕ は全画面を抜ける記号なので使わない。
+ */
+internal fun fullscreenMemoSymbol(sheetShown: Boolean): String = if (sheetShown) "▾" else "✎"
+
+/** 全画面の ✎ の読み上げ名。 */
+internal fun fullscreenMemoDescription(sheetShown: Boolean): String =
+    if (sheetShown) "メモをしまう" else marginToggleDescription(MarginToggle.ShowSheet)
+
 /** 見出しの要約ボタンを押したときに、要約をどの面に出すか（→ features/margin_pane.md §5.4）。 */
 internal enum class SummaryEntry {
     /** 出ているペインに出す。 */

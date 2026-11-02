@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-02 | 全画面の ✎ を画面に付けてシートより手前に描き、押した位置のまましまえるようにした | [note_fullscreen](features/note_fullscreen.md) 判断5 |
 | 2026-11-02 | 操作のつまみと帯を折り目の右の面へ移して机と見開きでそろえ、片側を1画面にしても残るようにした | [fold_experience](system/fold_experience.md) §6 |
 | 2026-11-02 | Explore の実機ケースで走査の記録を読む条件に、新しいプロセスから始める隔離と未判定の線を足した | [explore](../review/device_validation/explore.md) |
 | 2026-11-02 | Explore の一覧受理順序と走査ログを再レビューし、背景走査を混ぜない実機ケースの観測条件を残件として受け付けた | [レビュー](../review/README.md) |

@@ -367,8 +367,8 @@
 
 ## UI-6. 全画面で ✎ を押すと ✎ がシートの上へ持ち上がり、書かずにしまうとき手を動かすことになる
 
-- **状態:** 未着手（2026-11-01 起票。オーナーが実機で使っていて気づいた）。方針はオーナー判断済み（下記）。
-- **現状:** 全画面の ✎（[`FullscreenMemoButton`](../../app/src/main/java/com/example/newproject/ui/screen/FullscreenNoteScreen.kt)）は、本文の領域の右下に付いている。
+- **状態:** 実装済み・別の目と実機待ち（2026-11-02）。方針はオーナー判断済み（下記）。記号は `▾` にした（アプリで既に使っている字）。
+- **直す前の現状:** 全画面の ✎（[`FullscreenMemoButton`](../../app/src/main/java/com/example/newproject/ui/screen/FullscreenNoteScreen.kt)）は、本文の領域の右下に付いている。
   押すと「この部分」のシートが半分の高さで出て、本文はシートが覆う分だけ低く組み直される
   （[`MarginMemoSheetHost`](../../app/src/main/java/com/example/newproject/ui/screen/MarginMemoSheet.kt)。シートの裏の本文を読めたと記録しないため）。✎ も本文の領域と一緒に、シートのすぐ上まで上がる。
   書かずにしまう口は、持ち上がった ✎・シート上端の「閉じる」・下への払い・戻る操作で、どれも出した指の位置から離れている。

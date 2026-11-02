@@ -269,6 +269,7 @@ class NoteReadingFlowTest {
     /**
      * 全画面に置く入口は ✎ だけで、押すと「この部分」のシートが全画面の上に出て書ける。
      * **シートに要約の行を出さない** — 要約は全画面に入る前のおさらい（→ features/note_fullscreen.md）。
+     * **✎ は押した位置に残り、そこを押すとしまう**（判断5）。指で動かした後の位置でも同じ。シートの上端に「閉じる」は無い。
      */
     @Test
     fun 全画面の書く入口はシートを出しそこで書けて要約の行は出ない() {
@@ -307,12 +308,36 @@ class NoteReadingFlowTest {
         }
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
 
+        fun assertTogglesInPlace() {
+            val at = composeRule.onNodeWithContentDescription("このノートのメモ").getUnclippedBoundsInRoot()
+            composeRule.onNodeWithContentDescription("このノートのメモ").performClick()
+            composeRule.waitForIdle()
+            composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
+
+            val hide = composeRule.onNodeWithContentDescription("メモをしまう").getUnclippedBoundsInRoot()
+            assertEquals("シートが出たら ✎ が動いた（左右）", at.left.value, hide.left.value, 1f)
+            assertEquals("シートが出たら ✎ が動いた（上下）", at.top.value, hide.top.value, 1f)
+            composeRule.onNodeWithContentDescription("メモをしまう").performClick()
+            composeRule.waitForIdle()
+
+            composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+            val back = composeRule.onNodeWithContentDescription("このノートのメモ").getUnclippedBoundsInRoot()
+            assertEquals("しまったら ✎ が動いた", at.top.value, back.top.value, 1f)
+        }
+
+        assertTogglesInPlace()
+        assertEquals(1, openCalls)
+
+        composeRule.onNodeWithContentDescription("このノートのメモ").performTouchInput {
+            swipe(start = center, end = center + Offset(-100.dp.toPx(), -200.dp.toPx()), durationMillis = 300)
+        }
+        composeRule.waitForIdle()
+        assertTogglesInPlace()
+
         composeRule.onNodeWithContentDescription("このノートのメモ").performClick()
         composeRule.waitForIdle()
-
-        assertEquals(1, openCalls)
-        composeRule.onNode(hasSetTextAction()).assertIsDisplayed()
         composeRule.onNodeWithText("この節を要約").assertDoesNotExist()
+        composeRule.onNodeWithText("閉じる").assertDoesNotExist()
     }
 
     /**
