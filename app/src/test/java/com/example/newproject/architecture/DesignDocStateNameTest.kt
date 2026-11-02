@@ -277,7 +277,9 @@ class DesignDocStateNameTest {
             "deleteAnnotation",
             "deleteAllAnnotations",
             "isRangeAdjusted",
-            "resetDistillRange"
+            "resetDistillRange",
+            "isSingleCandidateException",
+            "singleCandidateExceptionId"
         )
     }
 }

@@ -146,7 +146,7 @@ class DistillRangeAdjustUiTest {
                 DistillRangeSheetContent(
                     item = candidateItem(),
                     projectedBoldRatio = 0.12,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
@@ -180,7 +180,7 @@ class DistillRangeAdjustUiTest {
                     // どの段とも一致しない範囲。
                     item = candidateItem().copy(currentPreset = null),
                     projectedBoldRatio = 0.12,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = { selected = it },
@@ -195,13 +195,94 @@ class DistillRangeAdjustUiTest {
     }
 
     @Test
+    fun 太字率が目安を超えても警告つきで保存確認へ進める() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                AiTab(
+                    uiState = uiStateWith(candidates(items = listOf(candidateItem()), projectedBoldRatio = 0.42, isWithinBoldLimit = false)),
+                    onStartDistill = {},
+                    onDownloadDistillModel = {},
+                    onToggleDistillCandidate = {},
+                    onOpenDistillRangeSheet = {},
+                    onCloseDistillRangeSheet = {},
+                    onSelectDistillRange = { _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _, _ -> },
+                    onNudgeDistillRangeEdge = { _, _ -> },
+                    onSaveDistill = {},
+                    onRetryDistill = {},
+                    onDismissDistill = {},
+                    onKeepCurrentRecovery = {},
+                    onRestoreOriginal = {},
+                    onExportOriginal = {},
+                    onLoadCrystals = {},
+                    onOpenCrystalList = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("太字が目安の30%を超えます", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("プレビュー").performScrollTo().assertIsEnabled().performClick()
+        composeRule.onNodeWithText("変更後の太字率は 42.0% で", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun 既にある太字だけで目安を超えたノートはチェックすれば保存できると言う() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                AiTab(
+                    uiState = uiStateWith(candidates(items = listOf(candidateItem().copy(isSelected = false)), projectedBoldRatio = 0.42, isWithinBoldLimit = false)),
+                    onStartDistill = {},
+                    onDownloadDistillModel = {},
+                    onToggleDistillCandidate = {},
+                    onOpenDistillRangeSheet = {},
+                    onCloseDistillRangeSheet = {},
+                    onSelectDistillRange = { _, _ -> },
+                    onDragDistillRangeEdge = { _, _, _, _ -> },
+                    onNudgeDistillRangeEdge = { _, _ -> },
+                    onSaveDistill = {},
+                    onRetryDistill = {},
+                    onDismissDistill = {},
+                    onKeepCurrentRecovery = {},
+                    onRestoreOriginal = {},
+                    onExportOriginal = {},
+                    onLoadCrystals = {},
+                    onOpenCrystalList = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("既にある太字だけで", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("プレビュー").performScrollTo().assertIsNotEnabled()
+    }
+
+    @Test
+    fun 調整シートは太字率の警告を出す() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                DistillRangeSheetContent(
+                    item = candidateItem(),
+                    projectedBoldRatio = 0.42,
+                    boldNotice = "! 太字率の警告",
+                    isDeselectedByOverlap = false,
+                    otherDeselectedCount = 0,
+                    onSelectPreset = {},
+                    onDragEdge = { _, _, _ -> },
+                    onNudgeEdge = {}
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("! 太字率の警告").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun 重なり解消はシートの1行と外れたカードの印の両方に出る() {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 DistillRangeSheetContent(
                     item = candidateItem(),
                     projectedBoldRatio = 0.2,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 1,
                     onSelectPreset = {},
@@ -222,7 +303,7 @@ class DistillRangeAdjustUiTest {
                 DistillRangeSheetContent(
                     item = candidateItem().copy(isSelected = false),
                     projectedBoldRatio = 0.2,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = true,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
@@ -287,7 +368,7 @@ class DistillRangeAdjustUiTest {
                 DistillRangeSheetContent(
                     item = candidateItem(),
                     projectedBoldRatio = 0.12,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
@@ -326,7 +407,7 @@ class DistillRangeAdjustUiTest {
                         boldEndInParent = short.length
                     ),
                     projectedBoldRatio = 0.12,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
@@ -366,7 +447,7 @@ class DistillRangeAdjustUiTest {
                         boldEndInParent = 8
                     ),
                     projectedBoldRatio = 0.12,
-                    isWithinBoldLimit = true,
+                    boldNotice = null,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
@@ -406,12 +487,14 @@ class DistillRangeAdjustUiTest {
 
     private fun candidates(
         items: List<DistillCandidateItem>,
-        overlapDeselectedIds: List<String> = emptyList()
+        overlapDeselectedIds: List<String> = emptyList(),
+        projectedBoldRatio: Double = 0.12,
+        isWithinBoldLimit: Boolean = true
     ) = DistillState.Candidates(
         sourceTitle = "対象ノート",
         items = items,
-        projectedBoldRatio = 0.12,
-        isWithinBoldLimit = true,
+        projectedBoldRatio = projectedBoldRatio,
+        isWithinBoldLimit = isWithinBoldLimit,
         overlapDeselectedIds = overlapDeselectedIds
     )
 

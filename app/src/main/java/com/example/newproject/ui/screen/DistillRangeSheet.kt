@@ -94,7 +94,7 @@ private fun DistillRangeEdgeMove.arrow(): String =
 internal fun DistillRangeSheet(
     item: DistillCandidateItem,
     projectedBoldRatio: Double,
-    isWithinBoldLimit: Boolean,
+    boldNotice: String?,
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
@@ -112,7 +112,7 @@ internal fun DistillRangeSheet(
         DistillRangeSheetContent(
             item = item,
             projectedBoldRatio = projectedBoldRatio,
-            isWithinBoldLimit = isWithinBoldLimit,
+            boldNotice = boldNotice,
             isDeselectedByOverlap = isDeselectedByOverlap,
             otherDeselectedCount = otherDeselectedCount,
             onSelectPreset = onSelectPreset,
@@ -130,7 +130,7 @@ internal fun DistillRangeSheet(
 internal fun DistillRangeSheetContent(
     item: DistillCandidateItem,
     projectedBoldRatio: Double,
-    isWithinBoldLimit: Boolean,
+    boldNotice: String?,
     isDeselectedByOverlap: Boolean,
     otherDeselectedCount: Int,
     onSelectPreset: (DistillRangePreset) -> Unit,
@@ -195,8 +195,17 @@ internal fun DistillRangeSheetContent(
         Text(
             "変更後の太字率 %.1f%%".format(projectedBoldRatio * 100.0),
             fontSize = 12.sp,
-            color = if (isWithinBoldLimit) OnSurfaceSubtle else ErrorText
+            color = if (boldNotice == null) OnSurfaceSubtle else ErrorText
         )
+        boldNotice?.let { notice ->
+            Text(
+                text = notice,
+                fontSize = 12.sp,
+                lineHeight = 18.sp,
+                color = ErrorText,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
+            )
+        }
 
         // **告知は状態として残す。** 一時的な通知にすると、見ていない場所の変化を
         // 見ていない間に流すことになる。次に選択集合か確定範囲が変わるまで消えない。
@@ -412,6 +421,17 @@ internal fun overlapNotice(isDeselectedByOverlap: Boolean, otherDeselectedCount:
     isDeselectedByOverlap -> "! この箇所は範囲が重なるため、選択が外れています。"
     otherDeselectedCount > 0 -> "! 重なるため、ほかの${otherDeselectedCount}箇所の選択を外しました。"
     else -> null
+}
+
+/**
+ * 太字率が目安を超えたときの警告。**保存は止めない**（→ reflect_distill 判断21）。
+ *
+ * チェックが1つも無いのに超えているのは、既にある太字だけで目安を超えたノートである。
+ */
+internal fun distillBoldNotice(isWithinBoldLimit: Boolean, selectedCount: Int): String? = when {
+    isWithinBoldLimit -> null
+    selectedCount == 0 -> "! 既にある太字だけで目安の30%を超えています。足したい箇所は自分でチェックできます。"
+    else -> "! 太字が目安の30%を超えます。多すぎると要点が目立ちにくくなりますが、このまま保存できます。"
 }
 
 /**
