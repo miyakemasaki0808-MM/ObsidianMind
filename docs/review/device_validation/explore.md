@@ -18,7 +18,7 @@ Explore のモード・照合の規則・範囲のチップ、Vault 全体の走
 Debug APK は、走査を始めたときに `VigilithNoteScan: started`、一覧を公開したとき（寿命の起点）に `VigilithNoteScan: published` を logcat へ1行ずつ出す（Vault もノートも載らない）。
 
 ```text
-adb -s <serial> shell date '+%m-%d %H:%M:%S.000'
+adb -s <serial> shell "date '+%m-%d %H:%M:%S.000'"
 adb -s <serial> logcat -d -T '<採った時刻>' -s VigilithNoteScan:I
 ```
 

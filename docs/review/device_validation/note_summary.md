@@ -26,7 +26,7 @@ Debug APK は、要約のために生成を呼ぶたびに logcat へ `VigilithS
 失われた保存をその生成が補った後から数えることになる。
 
 ```text
-adb -s <serial> shell date '+%m-%d %H:%M:%S.000'
+adb -s <serial> shell "date '+%m-%d %H:%M:%S.000'"
 adb -s <serial> logcat -d -T '<採った時刻>' -s VigilithSummaryGen:I | grep -c 'VigilithSummaryGen: generate'
 ```
 
