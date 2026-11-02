@@ -14,7 +14,7 @@ internal sealed interface ReaderLayout {
     data object Stacked : ReaderLayout
     data object SideBySide : ReaderLayout
 
-    /** 左に操作と本文、右に余白ペイン。本文の幅と、折り目をまたぐ溝の幅を持つ。 */
+    /** 左に本文、右に余白ペイン。操作は常設せず、右の面の上のつまみで呼ぶ（→ [gripStartDp]）。本文の幅と、折り目をまたぐ溝の幅を持つ。 */
     data class MarginPane(val bodyWidthDp: Float, val gutterDp: Float) : ReaderLayout
 
     /**
