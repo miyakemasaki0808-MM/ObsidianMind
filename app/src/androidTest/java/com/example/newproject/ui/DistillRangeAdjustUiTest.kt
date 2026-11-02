@@ -77,7 +77,6 @@ class DistillRangeAdjustUiTest {
                     onSelectDistillRange = { _, _ -> },
                     onDragDistillRangeEdge = { _, _, _, _ -> },
                     onNudgeDistillRangeEdge = { _, _ -> },
-                    onResetDistillRange = {},
                     onSaveDistill = {},
                     onRetryDistill = {},
                     onDismissDistill = {},
@@ -121,7 +120,6 @@ class DistillRangeAdjustUiTest {
                     onSelectDistillRange = { _, _ -> },
                     onDragDistillRangeEdge = { _, _, _, _ -> },
                     onNudgeDistillRangeEdge = { _, _ -> },
-                    onResetDistillRange = {},
                     onSaveDistill = {},
                     onRetryDistill = {},
                     onDismissDistill = {},
@@ -153,8 +151,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onDragEdge = { _, _, _ -> },
-                    onNudgeEdge = {},
-                    onReset = {}
+                    onNudgeEdge = {}
                 )
             }
         }
@@ -170,38 +167,31 @@ class DistillRangeAdjustUiTest {
         composeRule.onNodeWithText("✓ 意味節").assertIsDisplayed()
         composeRule.onNodeWithText("文全体").assertIsDisplayed()
         composeRule.onNodeWithText("語句").assertDoesNotExist()
-        composeRule.onNodeWithText("最初の範囲に戻す").assertIsNotEnabled()
+        composeRule.onNodeWithText("最初の範囲に戻す").assertDoesNotExist()
     }
 
     @Test
-    fun 調整済みなら最初の範囲へ戻せる() {
-        var resets = 0
+    fun 端を引いた後も段のボタンで選び直せる() {
+        var selected: DistillRangePreset? = null
 
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 DistillRangeSheetContent(
-                    item = candidateItem().copy(
-                        text = PARENT_TEXT,
-                        boldStartInParent = 0,
-                        boldEndInParent = PARENT_TEXT.length,
-                        currentPreset = DistillRangePreset.Sentence,
-                        isRangeAdjusted = true
-                    ),
-                    projectedBoldRatio = 0.31,
-                    isWithinBoldLimit = false,
+                    // どの段とも一致しない範囲。
+                    item = candidateItem().copy(currentPreset = null),
+                    projectedBoldRatio = 0.12,
+                    isWithinBoldLimit = true,
                     isDeselectedByOverlap = false,
                     otherDeselectedCount = 0,
-                    onSelectPreset = {},
+                    onSelectPreset = { selected = it },
                     onDragEdge = { _, _, _ -> },
-                    onNudgeEdge = {},
-                    onReset = { resets++ }
+                    onNudgeEdge = {}
                 )
             }
         }
 
-        composeRule.onNodeWithText("✓ 文全体").assertIsDisplayed()
-        composeRule.onNodeWithText("最初の範囲に戻す").assertIsEnabled().performClick()
-        assertEquals(1, resets)
+        composeRule.onNodeWithText("意味節").performClick()
+        assertEquals(DistillRangePreset.Clause, selected)
     }
 
     @Test
@@ -216,8 +206,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 1,
                     onSelectPreset = {},
                     onDragEdge = { _, _, _ -> },
-                    onNudgeEdge = {},
-                    onReset = {}
+                    onNudgeEdge = {}
                 )
             }
         }
@@ -238,8 +227,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onDragEdge = { _, _, _ -> },
-                    onNudgeEdge = {},
-                    onReset = {}
+                    onNudgeEdge = {}
                 )
             }
         }
@@ -271,7 +259,6 @@ class DistillRangeAdjustUiTest {
                     onSelectDistillRange = { _, _ -> },
                     onDragDistillRangeEdge = { _, _, _, _ -> },
                     onNudgeDistillRangeEdge = { _, _ -> },
-                    onResetDistillRange = {},
                     onSaveDistill = {},
                     onRetryDistill = {},
                     onDismissDistill = {},
@@ -305,8 +292,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onDragEdge = { _, _, _ -> },
-                    onNudgeEdge = { moves += it },
-                    onReset = {}
+                    onNudgeEdge = { moves += it }
                 )
             }
         }
@@ -345,8 +331,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onDragEdge = { edge, offset, _ -> drags += edge to offset },
-                    onNudgeEdge = {},
-                    onReset = {}
+                    onNudgeEdge = {}
                 )
             }
         }
@@ -386,8 +371,7 @@ class DistillRangeAdjustUiTest {
                     otherDeselectedCount = 0,
                     onSelectPreset = {},
                     onDragEdge = { _, offset, _ -> drags += offset },
-                    onNudgeEdge = {},
-                    onReset = {}
+                    onNudgeEdge = {}
                 )
             }
         }

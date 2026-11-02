@@ -403,7 +403,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel.dragDistillRangeEdge(id, edge, offset, from)
                                 },
                                 onNudgeDistillRangeEdge = { id, move -> viewModel.nudgeDistillRangeEdge(id, move) },
-                                onResetDistillRange = { id -> viewModel.resetDistillRange(id) },
                                 onSaveDistill = { viewModel.saveDistillSelection() },
                                 onRetryDistill = { viewModel.retryDistill() },
                                 onDismissDistill = { viewModel.dismissDistillResult() },

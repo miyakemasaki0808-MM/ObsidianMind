@@ -805,7 +805,6 @@ internal class NoteSessionCoordinator(
         distill.dragRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
     fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
         distill.nudgeRangeEdge(id, move)
-    fun resetDistillRange(id: String) = distill.resetRange(id)
     fun saveDistillSelection() = distill.saveSelection()
     fun retryDistill() = distill.retry()
     fun dismissDistillResult() = distill.dismissResult()

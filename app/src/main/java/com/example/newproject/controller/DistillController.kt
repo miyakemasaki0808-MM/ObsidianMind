@@ -73,8 +73,8 @@ internal class DistillController(
         /**
          * 候補ID → 実際に `**` を挿す範囲。**未調整なら提案範囲と同じ。**
          *
-         * **提案範囲（`sentence.range`）を上書きしない。** 上書きすると
-         * 「最初の範囲に戻す」が実装できない。原文offsetを持つのでUI状態へは出さない。
+         * **提案範囲（`sentence.range`）を上書きしない。** 段はここから引くので、上書きすると
+         * 段のボタンで元の範囲へ戻れなくなる。原文offsetを持つのでUI状態へは出さない。
          *
          * **シートを閉じても消えない。** 破棄の契機は候補セッションのキャンセル・再解析・
          * ノート切替・保存完了の4つだけで、閉じることは破棄ではない。
@@ -335,7 +335,7 @@ internal class DistillController(
     /**
      * 調整シートを閉じる。**閉じることが確定。**
      *
-     * 取り消しの口は「最初の範囲に戻す」1つに絞る。口が2つあるとどちらが効いたか読めなくなる。
+     * キャンセルを別に置かない。取り消しは段のボタンが兼ねる。
      */
     fun closeRangeSheet() {
         val current = state.current as? DistillState.Candidates ?: return
@@ -415,16 +415,6 @@ internal class DistillController(
             distillProtectedSpansWithin(active.model, context)
         ) ?: return
         changeConfirmedRange(id, DistillConfirmedRange(context, range))
-    }
-
-    /** 最初の範囲（提案範囲）へ戻す。 */
-    fun resetRange(id: String) {
-        val active = session ?: return
-        val candidate = active.candidatesById[id] ?: return
-        changeConfirmedRange(
-            id,
-            DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
-        )
     }
 
     private fun changeConfirmedRange(id: String, range: DistillConfirmedRange) {
@@ -524,8 +514,7 @@ internal class DistillController(
                 context,
                 confirmed,
                 distillProtectedSpansWithin(active.model, context)
-            ),
-            isRangeAdjusted = confirmed != sentence.range
+            )
         )
     }
 

@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-02 | 太字にする範囲の調整シートから「最初の範囲に戻す」を削り、取り消しは段のボタンが兼ねるようにした | [reflect_distill](features/reflect_distill.md) 判断17 |
 | 2026-11-02 | Explore の AI のモードで、「すべて」のときの注記を赤文字にした | [ai_picker](features/ai_picker.md) 判断1 |
 | 2026-11-02 | 全画面の ✎ を画面に付けてシートより手前に描き、押した位置のまましまえるようにした | [note_fullscreen](features/note_fullscreen.md) 判断5 |
 | 2026-11-02 | 操作のつまみと帯を折り目の右の面へ移して机と見開きでそろえ、片側を1画面にしても残るようにした | [fold_experience](system/fold_experience.md) §6 |

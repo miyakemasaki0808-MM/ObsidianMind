@@ -275,7 +275,9 @@ class DesignDocStateNameTest {
             "listAnnotationFiles",
             "loadAnnotations",
             "deleteAnnotation",
-            "deleteAllAnnotations"
+            "deleteAllAnnotations",
+            "isRangeAdjusted",
+            "resetDistillRange"
         )
     }
 }

@@ -596,7 +596,6 @@ class NoteViewModel internal constructor(
         session.dragDistillRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
     fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
         session.nudgeDistillRangeEdge(id, move)
-    fun resetDistillRange(id: String) = session.resetDistillRange(id)
     fun saveDistillSelection() = session.saveDistillSelection()
     fun retryDistill() = session.retryDistill()
     fun dismissDistillResult() = session.dismissDistillResult()

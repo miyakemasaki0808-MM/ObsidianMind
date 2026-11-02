@@ -720,8 +720,8 @@ class DistillControllerTest {
         val after = state.value.distillState as DistillState.Candidates
         assertEquals("理由は選択集合か確定範囲が変わるまで残る", listOf("S005"), after.overlapDeselectedIds)
         assertEquals(afterWiden.items, after.items)
-        // 最初の範囲へ戻す操作も、既に初期範囲なら告知を消さない。
-        controller.resetRange("S005")
+        // 元の段を選び直す操作も、既にその範囲なら告知を消さない。
+        controller.applyRange("S005", DistillRangePreset.Clause)
         assertEquals(
             listOf("S005"),
             (state.value.distillState as DistillState.Candidates).overlapDeselectedIds
@@ -792,12 +792,12 @@ class DistillControllerTest {
         assertFalse(widened.isWithinBoldLimit)
         assertFalse(widened.canSaveSelection)
 
-        controller.resetRange("S005")
+        controller.applyRange("S005", DistillRangePreset.Clause)
 
         val restored = state.value.distillState as DistillState.Candidates
         assertTrue(restored.isWithinBoldLimit)
         assertTrue(restored.canSaveSelection)
-        assertFalse(restored.items.first { it.id == "S005" }.isRangeAdjusted)
+        assertEquals(DistillRangePreset.Clause, restored.items.first { it.id == "S005" }.currentPreset)
     }
 
     @Test
@@ -820,6 +820,26 @@ class DistillControllerTest {
     }
 
     @Test
+    fun `the preset buttons return a dragged range to where it started`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005"))
+        controller.start()
+        advanceUntilIdle()
+        val initial = (state.value.distillState as DistillState.Candidates).items.single()
+        val startingPreset = requireNotNull(initial.currentPreset)
+
+        controller.dragRangeEdge("S005", DistillRangeEdge.End, offsetInParent = 20, fromOffsetInParent = 31)
+
+        val dragged = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(null, dragged.currentPreset)
+        assertTrue(dragged.text != initial.text)
+
+        controller.applyRange("S005", startingPreset)
+
+        assertEquals(initial, (state.value.distillState as DistillState.Candidates).items.single())
+    }
+
+    @Test
     fun `closing the range sheet keeps the confirmed range`() = runTest {
         val state = stateWithNote(adjustableNote())
         val controller = controller(state, FakeAiClient.returning("S005"))
@@ -835,7 +855,6 @@ class DistillControllerTest {
         val closed = state.value.distillState as DistillState.Candidates
         assertEquals(null, closed.rangeSheetCandidateId)
         val item = closed.items.single()
-        assertTrue(item.isRangeAdjusted)
         assertEquals(DistillRangePreset.Sentence, item.currentPreset)
         assertEquals(item.parentText, item.text)
     }
@@ -878,7 +897,6 @@ class DistillControllerTest {
 
         val adjusted = (state.value.distillState as DistillState.Candidates).items.single()
         assertEquals(null, adjusted.currentPreset)
-        assertTrue(adjusted.isRangeAdjusted)
 
         controller.saveSelection()
         advanceUntilIdle()

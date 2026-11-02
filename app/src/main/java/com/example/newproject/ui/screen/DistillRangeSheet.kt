@@ -86,8 +86,8 @@ private fun DistillRangeEdgeMove.arrow(): String =
 /**
  * 太字にする範囲を調整するシート。
  *
- * **閉じることが確定。** 取り消しの口は「最初の範囲に戻す」1つに絞り、
- * キャンセルボタンを別に置かない（口が2つあるとどちらが効いたか読めなくなる）。
+ * **閉じることが確定。** キャンセルボタンを置かない。候補そのものの範囲は必ずどれかの段に入るので
+ * （→ [presetRangesFor]）、取り消しは段のボタンが兼ねる。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,7 +100,6 @@ internal fun DistillRangeSheet(
     onSelectPreset: (DistillRangePreset) -> Unit,
     onDragEdge: (DistillRangeEdge, Int, Int) -> Unit,
     onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
-    onReset: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -118,8 +117,7 @@ internal fun DistillRangeSheet(
             otherDeselectedCount = otherDeselectedCount,
             onSelectPreset = onSelectPreset,
             onDragEdge = onDragEdge,
-            onNudgeEdge = onNudgeEdge,
-            onReset = onReset
+            onNudgeEdge = onNudgeEdge
         )
     }
 }
@@ -138,7 +136,6 @@ internal fun DistillRangeSheetContent(
     onSelectPreset: (DistillRangePreset) -> Unit,
     onDragEdge: (DistillRangeEdge, Int, Int) -> Unit,
     onNudgeEdge: (DistillRangeEdgeMove) -> Unit,
-    onReset: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -194,14 +191,6 @@ internal fun DistillRangeSheetContent(
 
         EdgeNudgeRow(item = item, onNudgeEdge = onNudgeEdge)
         Spacer(modifier = Modifier.height(4.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(
-                onClick = onReset,
-                enabled = item.isRangeAdjusted,
-                modifier = Modifier.heightIn(min = 48.dp)
-            ) { Text("最初の範囲に戻す") }
-        }
 
         Text(
             "変更後の太字率 %.1f%%".format(projectedBoldRatio * 100.0),

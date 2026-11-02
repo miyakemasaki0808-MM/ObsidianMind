@@ -42,9 +42,7 @@ data class DistillCandidateItem(
     /** いまどの段か。**自由範囲へ動かすとどの段にも一致せず null になる。** */
     val currentPreset: DistillRangePreset? = null,
     /** 微調整で動かせる向き。**押せない矢印を出さないために引く。** */
-    val availableEdgeMoves: Set<DistillRangeEdgeMove> = emptySet(),
-    /** 最初の範囲から動いているか。「最初の範囲に戻す」の可否。 */
-    val isRangeAdjusted: Boolean = false
+    val availableEdgeMoves: Set<DistillRangeEdgeMove> = emptySet()
 )
 
 enum class DistillRecoveryKind { Diverged, Inaccessible, Corrupt }

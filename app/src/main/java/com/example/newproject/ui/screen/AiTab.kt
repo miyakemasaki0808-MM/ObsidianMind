@@ -82,7 +82,6 @@ fun AiTab(
     onSelectDistillRange: (String, DistillRangePreset) -> Unit,
     onDragDistillRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
     onNudgeDistillRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
-    onResetDistillRange: (String) -> Unit,
     onSaveDistill: () -> Unit,
     onRetryDistill: () -> Unit,
     onDismissDistill: () -> Unit,
@@ -122,7 +121,6 @@ fun AiTab(
                 onSelectRange = onSelectDistillRange,
                 onDragRangeEdge = onDragDistillRangeEdge,
                 onNudgeRangeEdge = onNudgeDistillRangeEdge,
-                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -175,7 +173,6 @@ fun AiTab(
                 onSelectRange = onSelectDistillRange,
                 onDragRangeEdge = onDragDistillRangeEdge,
                 onNudgeRangeEdge = onNudgeDistillRangeEdge,
-                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -200,7 +197,6 @@ private fun DistillPanel(
     onSelectRange: (String, DistillRangePreset) -> Unit,
     onDragRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
     onNudgeRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
-    onResetRange: (String) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
@@ -375,7 +371,6 @@ private fun DistillPanel(
             onSelectPreset = { preset -> onSelectRange(item.id, preset) },
             onDragEdge = { edge, offset, from -> onDragRangeEdge(item.id, edge, offset, from) },
             onNudgeEdge = { move -> onNudgeRangeEdge(item.id, move) },
-            onReset = { onResetRange(item.id) },
             onDismiss = onCloseRangeSheet
         )
     }
