@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -334,7 +335,8 @@ private fun ScopeChips(uiState: NoteUiState, onSelectFolder: (NoteFolder?) -> Un
             }
         }
         if (uiState.selectedFolder == null) {
-            ScopeNote("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。")
+            // エラーではないが赤文字で出す（→ ai_picker 判断1）。
+            ScopeNote("タイトルが近い40本から選びます。意味で探したいときはフォルダを選んでください。", color = ErrorText)
         }
         // フォルダ列挙に失敗しても「すべて」では検索できる。操作を止めない注記に留める。
         uiState.foldersError?.let { ScopeNote(it) }
@@ -343,7 +345,7 @@ private fun ScopeChips(uiState: NoteUiState, onSelectFolder: (NoteFolder?) -> Un
 
 /** グラデーション直上に文字を置かない。注記も面を持たせる。 */
 @Composable
-private fun ScopeNote(message: String) {
+private fun ScopeNote(message: String, color: Color = OnSurfaceFaint) {
     Surface(
         color = Panel,
         shape = RoundedCornerShape(8.dp),
@@ -351,7 +353,7 @@ private fun ScopeNote(message: String) {
     ) {
         Text(
             text = message,
-            color = OnSurfaceFaint,
+            color = color,
             fontSize = 12.sp,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         )
