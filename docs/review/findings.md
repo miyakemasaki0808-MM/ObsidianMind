@@ -29,6 +29,8 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-11-02-explore-fixes-rereview/P2-1` | 開き直しで受け取った新しい一覧を、本文保存前のAI検索が古い一覧で上書きする | `統合` SEARCH-1 |
+| `2026-11-02-explore-fixes-rereview/P3-1` | EXPLORE-11 の本文表示後50秒では、走査完了からのTTL内を保証できない | `統合` DOC-1 |
 | `2026-11-02-explore-diff-review/P2-1` | `.obsidian` 内の既存ノートの痕跡が、除外によって削除可能な孤児になる | `統合` DOC-1 |
 | `2026-11-02-explore-diff-review/P2-2` | AI 側の一覧再取得が成功しても、タイトル側に以前の走査エラーが残る | `統合` SEARCH-1 |
 | `2026-11-02-explore-diff-review/P3-1` | EXPLORE-11 の60秒の起算点が、走査開始から数える実装と一致しない | `統合` DOC-1 |
