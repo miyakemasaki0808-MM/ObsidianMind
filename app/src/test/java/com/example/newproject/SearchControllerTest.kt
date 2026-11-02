@@ -264,6 +264,69 @@ class SearchControllerTest {
         assertEquals(1, collects)
     }
 
+    /** 本物のキャッシュで組む。古い走査はキャッシュを上書きしないので、Controller の側が受け取りの順序を守る。 */
+    @Test
+    fun `本文の保存前に頼んだAIの一覧が遅れて届いても、開き直して受け取った新しい一覧を上書きしない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val beforeWrite = CompletableDeferred<List<NoteFile>>()
+        val afterWrite = CompletableDeferred<List<NoteFile>>()
+        val scans = ArrayDeque(listOf(beforeWrite, afterWrite))
+        val cache = NoteScanCache(
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            ttlMillis = 60_000L,
+            vaultGeneration = { 0L },
+            clock = { 0L }
+        )
+        val collectNotes: suspend () -> List<NoteFile> = {
+            cache.get(scan = { scans.removeFirst().await() }, onPublished = {})
+        }
+        val controller = controller(state, openVault())
+
+        controller.onOpened(collectNotes)
+        controller.searchByKeyword("習慣", collectNotes)
+        cache.expireAfterBodyWrite()
+        controller.onOpened(collectNotes)
+        afterWrite.complete(listOf(notePath("新しい習慣.md")))
+        beforeWrite.complete(listOf(notePath("古い習慣.md")))
+
+        assertEquals(listOf("新しい習慣.md"), cache.notes.map { it.name })
+        controller.searchTitle("習慣")
+        assertEquals(listOf("新しい習慣.md"), titles(state))
+        controller.searchByKeyword("習慣", ::noNotes)
+        assertEquals(listOf("新しい習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+    }
+
+    @Test
+    fun `前に頼んだ一覧が先に届いたら一度使い、後から頼んだ一覧が届いたら替える`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val earlier = CompletableDeferred<List<NoteFile>>()
+        val later = CompletableDeferred<List<NoteFile>>()
+        val controller = controller(state, openVault())
+
+        controller.searchByKeyword("習慣") { earlier.await() }
+        controller.onOpened { later.await() }
+        controller.searchTitle("習慣")
+        earlier.complete(listOf(notePath("古い習慣.md")))
+        assertEquals(listOf("古い習慣.md"), titles(state))
+
+        later.complete(listOf(notePath("新しい習慣.md")))
+        assertEquals(listOf("新しい習慣.md"), titles(state))
+    }
+
+    @Test
+    fun `AIの要求を取り消したら、待っていた一覧を受け取らない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val scan = CompletableDeferred<List<NoteFile>>()
+        val controller = controller(state, openVault())
+
+        controller.searchByKeyword("習慣") { scan.await() }
+        controller.selectFolder(NoteFolder("ideas", "doc-ideas"))
+        scan.complete(listOf(notePath("習慣.md")))
+        controller.searchTitle("習慣")
+
+        assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
+    }
+
     /** 受け取った直後に切替が起きると、Job は中断点を過ぎているので `cancel()` では止まらない。 */
     @Test
     fun `AIの検索で受け取る間にVaultが変わったら、旧い一覧をタイトルへ戻さない`() = runTest {

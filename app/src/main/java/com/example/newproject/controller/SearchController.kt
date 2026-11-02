@@ -40,6 +40,11 @@ class SearchController(
     private var notesFailure: String? = null
     private var notesJob: Job? = null
 
+    // 一覧を頼んだ順番。後から頼んだ一覧ほど新しい（本文を書き換えた後の要求は、前の走査へ相乗りしない）ので、
+    // 遅れて届いた前の要求の一覧で、受け取り済みの新しい一覧を上書きしない。
+    private var lastNotesRequest = 0L
+    private var receivedNotesRequest = 0L
+
     private var titleQuery = ""
     private var titleJob: Job? = null
     private var titleRequestId = 0L
@@ -74,10 +79,11 @@ class SearchController(
         loadFolders()
         searchTitle("")
         val generation = vaultGeneration()
+        val notesRequest = ++lastNotesRequest
         notesJob?.cancel()
         notesJob = scope.launch {
             try {
-                receiveNotes(generation, collectNotes())
+                receiveNotes(generation, notesRequest, collectNotes())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -88,9 +94,13 @@ class SearchController(
         }
     }
 
-    /** 受け取った一覧を両方のモードで使えるようにし、今の言葉で照らし直す。受け取る間に Vault が替わっていたら捨てる。 */
-    private fun receiveNotes(generation: Long, notes: List<NoteFile>) {
-        if (generation != vaultGeneration()) return
+    /**
+     * 受け取った一覧を両方のモードで使えるようにし、今の言葉で照らし直す。
+     * 受け取る間に Vault が替わっていたら捨てる。後から頼んだ一覧を受け取り済みなら捨てる。
+     */
+    private fun receiveNotes(generation: Long, notesRequest: Long, notes: List<NoteFile>) {
+        if (generation != vaultGeneration() || notesRequest < receivedNotesRequest) return
+        receivedNotesRequest = notesRequest
         vaultNotes = notes
         notesFailure = null
         searchTitle(titleQuery)
@@ -176,11 +186,12 @@ class SearchController(
         if (q.isBlank()) return
         val folder = state.current.selectedFolder
         val generation = vaultGeneration()
+        val notesRequest = ++lastNotesRequest
         val requestId = startRequest()
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
-                val notes = vaultNotes ?: collectNotes().also { receiveNotes(generation, it) }
+                val notes = vaultNotes ?: collectNotes().also { receiveNotes(generation, notesRequest, it) }
                 val candidates = if (folder == null) notes else notesInFolder(notes, folder)
                 when (val result = searchPickerUseCase.pick(q, candidates)) {
                     is PickerResult.Success ->
