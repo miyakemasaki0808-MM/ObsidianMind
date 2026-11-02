@@ -265,7 +265,7 @@
 
 ## BOLD-5. 太字にする範囲の調整シートで、「最初の範囲に戻す」が段のボタンと同じ働きをする
 
-- **状態:** 実装済み・別の目と実機待ち（2026-11-02）。
+- **状態:** 実装の独立レビュー済み・実機待ち（2026-11-03、`c9a3ead8`）。
 - **直す前の現状:** 調整シート（[`DistillRangeSheet`](../../app/src/main/java/com/example/newproject/ui/screen/DistillRangeSheet.kt)）には、段のボタン（語句・意味節・文全体）と「最初の範囲に戻す」が並ぶ。
   最初の範囲は候補そのものの範囲で、段のボタンには候補そのものの範囲が必ず1つ入る（[`presetRangesFor`](../../app/src/main/java/com/example/newproject/domain/DistillRangeAdjust.kt)）。
   そのため戻した結果は、割れていない文の候補なら「文全体」、句なら「意味節」、語句なら「語句」を押したのと同じになる。端を引いた後も段のボタンは残っている。
