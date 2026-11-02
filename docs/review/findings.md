@@ -29,6 +29,17 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-11-03-explore-antigravity-review/P1-1` | Nano が空や候補外を返すと、キーワード一致の結果が注記なしで出て正本と食い違う | `起票` SEARCH-2 |
+| `2026-11-03-explore-antigravity-review/P2-1` | AI のモードの照合が拡張子まで照らし、`md` や `m` で無関係なノートが出る | `起票` SEARCH-3 |
+| `2026-11-03-explore-antigravity-review/P3-1` | タイトル0件の1行が範囲を戻さず、前に選んだフォルダで探す | `起票` SEARCH-4 |
+| `2026-11-03-explore-antigravity-review/P4-1` | タブを離れても範囲と結果が残り、走行中の検索も止めない | `統合` SEARCH-4 |
+| `2026-11-03-explore-antigravity-review/P5-1` | AI のモードのプロンプトと結果で、同じ名前のノートを見分けられない | `起票` SEARCH-5 |
+| `2026-11-03-explore-antigravity-review/P6-1` | クエリの bigram を候補ごとに作り直す | `起票` SEARCH-8 |
+| `2026-11-03-explore-antigravity-review/P6-2` | AI のモードの入力中もタイトルを照らす | `統合` SEARCH-8 |
+| `2026-11-03-explore-antigravity-review/P7-1` | 範囲に選んだフォルダが外で消えると、チップの選択が消えて0件になる | `起票` SEARCH-6 |
+| `2026-11-03-explore-antigravity-review/P7-2` | 範囲のチップの選択状態を TalkBack が読み上げない | `起票` SEARCH-7 |
+| `2026-11-03-explore-antigravity-review/P7-3` | 空の Vault は一覧を引くたびに走査する | `統合` SEARCH-8 |
+| `2026-11-03-explore-antigravity-review/P8-1` | 実機検証の一時テストが作業ツリーに残り、JVM ゲートが1件落ちる | `統合` VALID-1 |
 | `2026-11-03-desk-controls-distill-review/P3-1` | 余白ペインの並べ方表に操作を左へ置く旧仕様が残り、右上の実装・詳細仕様と食い違う | `統合` FOLD-18 |
 | `2026-11-02-explore-order-log-rereview/P3-1` | 共通の走査ログへ背景要求が混ざり、EXPLORE-12等の本数を誤判定できる | `統合` DOC-1 |
 | `2026-11-02-explore-diff-review/P2-1` | `.obsidian` 内の既存ノートの痕跡が、除外によって削除可能な孤児になる | `統合` DOC-1 |
