@@ -470,6 +470,34 @@ class SectionChatControllerTest {
         assertEquals("要約", summaryOf(state, many.last())?.summary)
     }
 
+    /** **作れる節が無ければ全節を立てない。** 立てると分母0で「全部できた」の ✓ が出る。 */
+    @Test
+    fun `作れる節が無ければ全節を立てない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, FakeAiClient { "要約" }).requestAll(emptyList(), null, quietly = false)
+        advanceUntilIdle()
+
+        assertEquals(SectionChatState(), state.value.sectionChat)
+    }
+
+    /** **頼まれた対象外の節は上限に数えない。** 数えると、面で1節頼むたびに全節の作る数が減る。 */
+    @Test
+    fun `全節の間に頼んだ対象外の節は上限に数えない`() = runTest {
+        val many = (1..SECTION_BATCH_LIMIT + 3).map { SectionRef("節$it") }
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        runCurrent()
+        controller.request(D, "D", "Dの本文")
+        finishGenerations(ai, "要約")
+
+        assertEquals("頼んだ節の分だけ全節の作る数が減った", SECTION_BATCH_LIMIT + 1, ai.generateCalls)
+        assertEquals("要約", summaryOf(state, D)?.summary)
+    }
+
     /** 全部持っていれば押しても生成しない。走行の印も立ったまま残らない。 */
     @Test
     fun `全部の要約を持っていれば、全節を頼んでも生成しない`() = runTest {

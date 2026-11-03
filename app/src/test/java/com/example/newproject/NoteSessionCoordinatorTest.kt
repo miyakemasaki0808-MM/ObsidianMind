@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.NoteDwellGate
 import com.example.newproject.controller.NoteReadGate
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.domain.SectionBatchStatus
 import com.example.newproject.domain.isBatchRunning
@@ -2196,6 +2197,25 @@ class NoteSessionCoordinatorTest {
         assertEquals(listOf(SectionRef("短2")), chat.batch?.targets)
         assertEquals("短2の要約", chat.summaryOf(SectionRef("短2"))?.summary)
         assertEquals(1, env.ai.generateCalls)
+    }
+
+    /** **端末AIが使えない理由は押した時点の今の節に出す。** 面は今の節を映すので、作る節の先頭に出すと見えない。 */
+    @Test
+    fun `端末AIが使えない理由は、作らない短い節でも今の節に出す`() = runTest {
+        val env = Env(this)
+        env.ai.availability = AiAvailability.Unsupported
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 短\n\n短い\n\n# B\n\n${longBody("B本文")}"))
+        advanceUntilIdle()
+
+        coordinator.requestAllSectionSummaries(SectionRef("短"), quietly = true)
+        advanceUntilIdle()
+
+        val chat = coordinator.uiState.value.sectionChat
+        assertTrue(chat.summaryOf(SectionRef("短"))?.summaryProblem is SectionChatProblem.AiStatus)
+        assertTrue(chat.summaryOf(SectionRef("短"))?.noticePending == true)
+        assertNull(chat.summaryOf(SectionRef("B")))
+        assertEquals(0, env.ai.generateCalls)
     }
 
     /** **解析し直している間に頼んでも、前の本文から作らない。** 走行の印も立たない。 */

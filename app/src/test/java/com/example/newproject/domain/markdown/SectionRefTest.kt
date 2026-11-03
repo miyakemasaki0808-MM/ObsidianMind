@@ -109,7 +109,7 @@ class SectionRefTest {
     @Test
     fun `全節の要約の線は空白を除いた字数で測る`() {
         val exactly = "あ".repeat(SECTION_SUMMARY_MIN_OWN_CHARS)
-        val below = "あ".repeat(SECTION_SUMMARY_MIN_OWN_CHARS - 1) + "    "
+        val below = "あ ".repeat(SECTION_SUMMARY_MIN_OWN_CHARS - 1)
 
         assertEquals(listOf(SectionRef("節")), buildNoteSectionModel("# 節\n\n$exactly").summaryTargets)
         assertTrue(buildNoteSectionModel("# 節\n\n$below").summaryTargets.isEmpty())
