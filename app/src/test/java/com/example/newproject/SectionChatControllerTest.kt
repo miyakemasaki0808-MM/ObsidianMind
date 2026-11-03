@@ -979,6 +979,74 @@ class SectionChatControllerTest {
         assertEquals(true, aGenerating)
     }
 
+    /**
+     * **止めた後に古い状態確認が「使えない」を返しても、新しい全節を消さない。** 止め方は2通りある。
+     * 判定は全部の生成を再開してから行う（→ 上のテスト）。
+     */
+    @Test
+    fun `取り消しに従わない状態確認の後着は、新しい全節と列を変えない`() = runTest {
+        val stops: List<Pair<String, (SectionChatController) -> Unit>> = listOf(
+            "全節の停止" to { it.stopAll() },
+            "ノート切替" to { it.cancelAndClear() }
+        )
+        stops.forEach { (name, stop) ->
+            val held = mutableListOf<Continuation<Unit>>()
+            val ai = FakeAiClient().suspendGenerations()
+            ai.availabilityHold = { suspendCoroutine { held += it } }
+            val state = NoteUiStateStore(NoteUiState())
+            val controller = controller(state, ai)
+            controller.requestAll(sources(A, B), source(A), quietly = false)
+            runCurrent()
+
+            stop(controller)
+            ai.availabilityHold = null
+            controller.requestAll(sources(A, B), source(A), quietly = false)
+            runCurrent()
+
+            ai.availability = AiAvailability.NeedsDownload
+            held.single().resume(Unit)
+            advanceUntilIdle()
+            val runningAfterLate = state.value.sectionChat.isBatchRunning
+            val aGeneratingAfterLate = summaryOf(state, A)?.isSummaryLoading
+            ai.availability = AiAvailability.Ready
+
+            finishGenerations(ai, "要約")
+
+            assertTrue("$name: 古い確認で全節を消した", runningAfterLate)
+            assertEquals("$name: 古い確認でAを書き換えた", true, aGeneratingAfterLate)
+            assertEquals("$name: Aができていない", "要約", summaryOf(state, A)?.summary)
+            assertEquals("$name: 列を消した", "要約", summaryOf(state, B)?.summary)
+        }
+    }
+
+    /** **古い生成係が3節目の失敗で列を消さない。** 2節続けて失敗した係の状態確認が、止めた後に投げる順序。 */
+    @Test
+    fun `取り消しに従わない状態確認が止めた後に投げても、新しい列を消さない`() = runTest {
+        val held = mutableListOf<Continuation<Unit>>()
+        var checks = 0
+        val ai = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        ai.availabilityHold = { if (++checks == SECTION_BATCH_FAILURE_LIMIT) suspendCoroutine<Unit> { held += it } }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+
+        controller.stopAll()
+        ai.availabilityHold = null
+        ai.suspendGenerations()
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+
+        ai.availabilityFailure = { IllegalStateException("状態を取れない") }
+        held.single().resume(Unit)
+        advanceUntilIdle()
+        ai.availabilityFailure = null
+
+        finishGenerations(ai, "要約")
+
+        assertEquals("古い係の失敗で列を消した", "要約", summaryOf(state, C)?.summary)
+    }
+
     /** **全節の外の1節は今までどおり。** 背面でも待たず、断られたら失敗として見せる。 */
     @Test
     fun `全節の外の1節は背面でも待たない`() = runTest {

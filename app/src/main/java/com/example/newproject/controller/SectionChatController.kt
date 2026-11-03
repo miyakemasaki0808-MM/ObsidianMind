@@ -202,13 +202,14 @@ class SectionChatController(
             var started: Started? = first
             var failures = 0
             while (started != null) {
-                when (generate(started)) {
+                val outcome = generate(started)
+                // 取り消しに従わない確認や生成が遅れて返っても、新しい生成係の列に触らない。
+                ensureActive()
+                when (outcome) {
                     Outcome.Done -> failures = 0
                     Outcome.Failed -> if (state.current.isBatchRunning && ++failures >= SECTION_BATCH_FAILURE_LIMIT) queue.clear()
                     Outcome.Stop -> queue.clear()
                 }
-                // 取り消しに従わない生成が遅れて返っても、新しい生成係の列に触らない。
-                ensureActive()
                 started = startNext()
             }
             state.update { it.withBatchStopped() }
@@ -247,6 +248,8 @@ class SectionChatController(
             writeFailure(started, e)
             return Outcome.Failed
         }
+        // 取り消しに従わない状態確認が遅れて返っても、新しい全節へ理由を書かない。
+        currentCoroutineContext().ensureActive()
         return when (availability) {
             AiAvailability.Ready -> summarize(started)
             // **`message` だけを取り出さない** — 導線を捨てると一時的な不可でも再試行できず、
