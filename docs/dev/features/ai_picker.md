@@ -1,7 +1,7 @@
 # Explore（タイトル検索・AIピッカー・閲覧履歴）
 
-**状態:** 実装済み・実機待ち（タイトルのモードと AI の範囲は端末で確かめていない）
-**最終検証:** 2026-09-17 / `1433179`（AI の選定の経路まで）
+**状態:** 実装済み・稼働中
+**最終検証:** 2026-11-03 / `6dd72062`（`EXPLORE-01`〜`21`。カバー横の見出しの霞は §11）
 **関連コード:** `controller/SearchController.kt` / `domain/NoteTitleSearch.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `NoteScanCache.kt` / `ui/screen/SearchScreen.kt` / `ui/ExploreBody.kt`
 **関連テスト:** `SearchControllerTest` / `NoteTitleSearchTest` / `ExploreBodyTest` / `NoteScanCacheTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest` / androidTest: `SearchTabTest`
 **正本:** この文書
@@ -275,6 +275,7 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
 | 候補にタイトルしか渡していない | `buildPickerPrompt` はIDとタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
 | 選定精度の指標が無い | 上記「保証していないこと」参照 |
 | 最初のランダム表示と同じ走査を待つ | 大きな Vault ほど最初の1回が長い |
+| カバー画面の横で、見出しの霞がレールの右端から離れる | 切り欠きの余白の分。見た目だけで、各タブ共通とみられる |
 | 開いている間は外部の追加が見えない | 開いたときの一覧を照らすので、開き直すまで反映されない |
 
 ## 12. 開発経緯

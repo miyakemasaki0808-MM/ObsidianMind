@@ -1,7 +1,7 @@
 # 蒸留（Distill）
 
 **状態:** 実装済み・稼働中・実機確認済み
-**最終検証:** 2026-09-20 / `b2bed77`
+**最終検証:** 2026-11-03 / `6dd72062`（太字率の警告と範囲の調整 `DIST-02`・`19`・`21`〜`25`・`32`〜`34`。警告の色は未確認）。それ以外は 2026-09-20 / `b2bed77`
 **関連コード:** `controller/DistillController.kt` / `domain/Distill*.kt` / `data/DistillWriteRepository.kt` / `data/DistillRecoveryStore.kt` / `data/DistillHashing.kt` / `model/DistillModels.kt` / `model/state/DistillRangeEdit.kt` / `ui/screen/DistillRangeSheet.kt`
 **関連テスト:** `DistillControllerTest` / `DistillSourceModelTest` / `DistillTransformerTest` / `DistillResponseParserTest` / `DistillCandidateScoringTest` / `DistillWriteRepositoryTest` / `NoteSnapshotTest` / `NoteByteOrderMarkTest` / `DistillRecoveryStoreTest` / `DistillPromptBuilderTest` / `DistillRangeAdjustTest` / `DistillRangeSnapTest` / `DistillRangeHighlightTest` / `DistillRangeHandleTest` / `DistillRangeNoticeTest` / `DistillProtectedScanTest` / `DistillCandidateUnitCopyTest` / `DistillRangeAdjustUiTest`（androidTest）
 **正本:** この文書

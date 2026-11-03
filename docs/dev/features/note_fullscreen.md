@@ -1,7 +1,7 @@
 # 全画面ノート
 
-**状態:** 実装済み・稼働中・実機確認済み。✎ を押した位置に残す変更（2026-11-02）は実機待ち
-**最終検証:** 2026-10-04 / `9e377cf5`（全画面の ✎ と戻る順のほかは 2026-08-12 / `521768b` から未突合）
+**状態:** 実装済み・稼働中・実機確認済み
+**最終検証:** 2026-11-03 / `6dd72062`（✎ を押した位置に残す変更 `MEMO-13`）。それ以前は 2026-10-04 / `9e377cf5`（全画面の ✎ と戻る順のほかは 2026-08-12 / `521768b` から未突合）
 **関連コード:** `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/NoteStart.kt` / `ui/screen/MarginFace.kt` / `ui/screen/MarginMemoSheet.kt` / `ui/AppScaffold.kt`
 **関連テスト:** `MarginSurfaceTest` / androidTest: `ActivityRecreationTest` / `TabNavigationTest` / `NoteReadingFlowTest`
 **正本:** この文書
