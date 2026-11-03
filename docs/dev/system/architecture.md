@@ -178,7 +178,7 @@ DIライブラリは差し替え対象がこの1グラフだけなので導入�
 （2026-10-02、オーナー判断）。
 
 - **画面の形を決める判定は `ui`。** 並べ方・寸法・幾何・入口の遷移。例: `readerLayoutFor`・`canShowMarginPane`
-- **データや状態の意味を決める判定は `domain`。** 解析・採点・照合・整形。例: `composeMarginMemo`・`DistillResponseParser`・`sectionSummaryStatus`
+- **データや状態の意味を決める判定は `domain`。** 解析・採点・照合・整形。例: `composeMarginMemo`・`DistillResponseParser`・`sectionBatchStatus`
 
 `ui` の純関数も素のJVMでテストできる（`ReaderLayoutTest` など）。テストのしやすさは置き場所を動かす理由にならない。
 

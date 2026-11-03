@@ -2,8 +2,8 @@
 
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-09-18 / `e407dbd`（§7 のほかは 2026-08-15 から未突合）
-**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `domain/SectionSummaryStatus.kt`（部分要約の記号）/ `controller/NoteDwellGate.kt`（自動生成の門番）
-**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `SectionSummaryStatusTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
+**関連コード:** `ai/AiAvailabilityMapping.kt`（分類）/ `domain/AiStatusNotices.kt`（見せ方）/ `ui/component/AiStatusNoticeRow.kt` / `ui/screen/AiTab.kt`（各機能のパネル）/ `domain/SectionBatchStatus.kt`（部分要約の記号）/ `controller/NoteDwellGate.kt`（自動生成の門番）
+**関連テスト:** `AiAvailabilityMappingTest` / `AiStatusNoticesTest` / `AiAvailabilityUsageTest` / `SectionBatchStatusTest` / `NoteDwellGateTest` / `NoteSessionCoordinatorTest` / `RelatedNotesDwellTest`
 **正本:** この文書
 
 **対象領域:** AI生成の待ち時間をどう見せ、結果をどう知らせるか（機能横断）
@@ -27,7 +27,7 @@
 | 機能 | 示す場所 |
 |---|---|
 | ノート要約 | AIタブの要約パネル。生成中・モデルのダウンロードの進捗・理由をパネルの中に出す |
-| 部分要約 | 見出しの右の 💬。記号が面の節の要約の状態で 💬・⏳・✓・! と変わり、理由と再試行は「この部分」の面の要約の行に出す。全画面には出さない |
+| 部分要約 | 見出しの右の 💬。記号がノート全体の状態で 💬・⏳ 3/12・💬 10/12・✓・! と変わり、今の節の要約と理由と再試行は「この部分」の面の要約の行に出す。全画面には出さない |
 | 関連ノート | 関連タブ。端末AIが使えないことやモデルの準備中を、タブの中で出し分ける |
 | 分野判定・結晶・再会カードの選別と前後の要約 | 進捗も失敗も出さない。できた結果だけが面に現れる |
 

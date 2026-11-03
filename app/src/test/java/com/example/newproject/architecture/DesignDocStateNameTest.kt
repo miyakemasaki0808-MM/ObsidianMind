@@ -231,6 +231,12 @@ class DesignDocStateNameTest {
          * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
          */
         val RETIRED_NAMES = listOf(
+            // 部分要約の入口を全節の要約へ替えた（features/section_ai_chat.md 判断7）
+            "SECTION_SUMMARY_LIMIT",
+            "SectionSummaryStatus",
+            "sectionSummaryStatus",
+            "sectionSummaryEntrySymbol",
+            "sectionSummaryEntryDescription",
             "collectNotesInScope",
             "pickRandomInScope",
             "deskBarRailInsetDp",
