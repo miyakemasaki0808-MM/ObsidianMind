@@ -15,6 +15,8 @@ import com.example.newproject.domain.SECTION_BATCH_FAILURE_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_REFUSAL_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_REFUSAL_WAIT_MS
+import com.example.newproject.domain.SectionBatchStatus
+import com.example.newproject.domain.sectionBatchStatus
 import com.example.newproject.domain.isBatchRunning
 import com.example.newproject.domain.isQueued
 import com.example.newproject.domain.summaryOf
@@ -881,6 +883,95 @@ class SectionChatControllerTest {
         assertEquals("要約", summaryOf(state, D)?.summary)
     }
 
+    /**
+     * **全節へ足した節は、失敗したら押し直しで作り直す。** 解析の対象で置き換えると、失敗が残ったまま ✓ になる。
+     * 成功した節は作り直さない。
+     */
+    @Test
+    fun `全節へ足した節が失敗したら、押し直すと作り直し、成功するまで全部できたとしない`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.request(X, "X", "Xの本文")
+        ai.onGenerate = { prompt ->
+            if (prompt.contains("Xの本文")) throw AiTimeoutException("タイムアウト") else "要約"
+        }
+        ai.completeAll("要約")
+        advanceUntilIdle()
+        assertEquals(SectionBatchStatus.Error, sectionBatchStatus(state.value.sectionChat))
+        val calls = ai.generateCalls
+
+        ai.onGenerate = { "Xの要約" }
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("足した節を作り直していない", "Xの要約", summaryOf(state, X)?.summary)
+        assertEquals("成功した節を作り直した", calls + 1, ai.generateCalls)
+        assertEquals(SectionBatchStatus.Ready, sectionBatchStatus(state.value.sectionChat))
+    }
+
+    /** **足した節は止めて押し直しても残る。** 落とすと、分母が減って頼んだ節が作られないまま ✓ になる。 */
+    @Test
+    fun `全節へ足した節は、止めて押し直しても対象に残って作られる`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.request(X, "X", "Xの本文")
+        controller.stopAll()
+        assertEquals(SectionBatchStatus.Partial(0, 3), sectionBatchStatus(state.value.sectionChat))
+
+        ai.onGenerate = { "要約" }
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals(setOf(A, B, X), state.value.sectionChat.batch?.targets?.toSet())
+        assertEquals("要約", summaryOf(state, X)?.summary)
+        assertEquals(SectionBatchStatus.Ready, sectionBatchStatus(state.value.sectionChat))
+    }
+
+    /** 足した節も押し直しでは上限に数える。**足した節が上限を広げない。** */
+    @Test
+    fun `足した節を引き継いでも、押し直しの上限は変わらない`() = runTest {
+        val many = (1..SECTION_BATCH_LIMIT + 3).map { SectionRef("節$it") }
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        runCurrent()
+        controller.request(X, "X", "Xの本文")
+        controller.stopAll()
+        val calls = ai.generateCalls
+
+        ai.onGenerate = { "要約" }
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals(calls + SECTION_BATCH_LIMIT, ai.generateCalls)
+    }
+
+    /** **足した節は本文に結びつく。** ノートを替えるか解析し直したら持ち越さない。 */
+    @Test
+    fun `足した節はノートを替えると持ち越さない`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.request(X, "X", "Xの本文")
+        controller.cancelAndClear()
+
+        ai.onGenerate = { "要約" }
+        controller.requestAll(sources(C), source(C), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals(listOf(C), state.value.sectionChat.batch?.targets)
+        assertNull(summaryOf(state, X))
+    }
+
     /** **切替の後に旧ノートの列が残らない。** 走行の印も残らず、次のノートは最初から作る。 */
     @Test
     fun `ノートを替えると全節を止めて全部捨て、後着も書かず、次のノートは最初から作る`() = runTest {
@@ -1167,7 +1258,8 @@ class SectionChatControllerTest {
         val C = SectionRef("C")
         val D = SectionRef("D")
         val E = SectionRef("E")
-        val BODY_IN_PROMPT = Regex("""[A-E]の本文|節\\d+の本文""")
+        val X = SectionRef("X")
+        val BODY_IN_PROMPT = Regex("""[A-EX]の本文|節\\d+の本文""")
         const val MAX_FINISHED = 40
     }
 }

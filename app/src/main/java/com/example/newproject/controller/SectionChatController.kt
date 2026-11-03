@@ -72,6 +72,9 @@ class SectionChatController(
     // 今回の全節であと何節作るか。
     private var remaining = 0
 
+    // 全節へ足した節（解析の対象でない節への要求）。対象は押すたびに解析から作るので、本文が替わるまでここで引き継ぐ。
+    private val added = LinkedHashMap<SectionRef, SectionSummarySource>()
+
     // 全節を頼んだときの今の節と、面を出さずに頼んだか。端末AIが使えない理由はこの節に出す。
     private var noticeSource: SectionSummarySource? = null
     private var noticeQuietly = false
@@ -110,8 +113,9 @@ class SectionChatController(
         val chat = state.current
         if (targets.isEmpty() || chat.isBatchRunning) return
         val generating = worker?.isActive == true
-        state.update { it.copy(batch = SectionBatch(targets.map { source -> source.section }, isRunning = true)) }
-        targets.filter { chat.summaryOf(it.section).needsBatchGeneration() }
+        val all = targets + added.values.filter { kept -> targets.none { it.section == kept.section } }
+        state.update { it.copy(batch = SectionBatch(all.map { source -> source.section }, isRunning = true)) }
+        all.filter { chat.summaryOf(it.section).needsBatchGeneration() }
             .mapTo(queue) { Pending(it, counted = true) }
         remaining = SECTION_BATCH_LIMIT
         noticeSource = current
@@ -163,6 +167,7 @@ class SectionChatController(
         worker?.cancel()
         worker = null
         queue.clear()
+        added.clear()
         remaining = 0
         noticeSource = null
         noticeQuietly = false
@@ -183,6 +188,7 @@ class SectionChatController(
             val queued = queue.firstOrNull { it.source.section == source.section }
             if (queued != null) queue.remove(queued)
             queue.addFirst(Pending(source, counted = queued?.counted == true))
+            if (state.current.batch?.targets?.contains(source.section) != true) added[source.section] = source
             state.update { it.withQueued(source.section) }
             return
         }
