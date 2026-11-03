@@ -2,6 +2,7 @@ package com.example.newproject.ui
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.SectionSummarySource
 import com.example.newproject.domain.summaryOf
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.NoteUiState
@@ -34,7 +35,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `頼んだ節に留まっていれば、届いた理由で一度だけ面を開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
         assertFalse(opensAt(state, A))
 
@@ -53,7 +54,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `読み進めた先のまだ頼んでいない節では開かず、頼んだ節へ戻ると開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         ai.arrive(AiAvailability.Unsupported)
@@ -73,7 +74,7 @@ class SectionSummaryNoticeTest {
         advanceUntilIdle()
 
         ai.availability = AiAvailability.Unsupported
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         advanceUntilIdle()
 
         assertEquals("Bの要約", state.value.sectionChat.summaryOf(B)?.summary)
@@ -89,7 +90,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `書いている間に届いた理由は見せたことにならず、シートを閉じると同じ節で開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         // ✎ でシートを出して書いている。面は出ているので、届いても開き直さない。
@@ -107,7 +108,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `ノート切替と本文の解析し直しの後は、古い要求の理由を見せない`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         controller.cancelAndClear()
@@ -137,5 +138,6 @@ class SectionSummaryNoticeTest {
     private companion object {
         val A = SectionRef("A")
         val B = SectionRef("B")
+        val SOURCE_A = SectionSummarySource(A, "A", "Aの本文")
     }
 }

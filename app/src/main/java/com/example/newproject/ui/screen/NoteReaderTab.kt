@@ -27,9 +27,14 @@ import com.example.newproject.ui.markdown.SkippedImageMeasurement
 import com.example.newproject.ui.component.ReadingProgressReporter
 import com.example.newproject.ui.component.ReadingTraceCardPanel
 import com.example.newproject.domain.isQuotable
-import com.example.newproject.domain.sectionSummaryEntryDescription
-import com.example.newproject.domain.sectionSummaryEntrySymbol
-import com.example.newproject.domain.sectionSummaryStatus
+import com.example.newproject.domain.isBatchRunning
+import com.example.newproject.domain.isQueued
+import com.example.newproject.domain.sectionBatchEntryCount
+import com.example.newproject.domain.sectionBatchEntryDescription
+import com.example.newproject.domain.sectionBatchEntrySymbol
+import com.example.newproject.domain.sectionBatchNote
+import com.example.newproject.domain.sectionBatchStatus
+import com.example.newproject.domain.showsResultOnPress
 import com.example.newproject.domain.summaryOf
 import android.widget.Toast
 import androidx.compose.animation.core.Animatable
@@ -150,11 +155,13 @@ internal fun NoteReaderTab(
     onRandomNote: () -> Unit,
     /** 10枚を引いて冊子ルートへ入る。**ここでは記録もAIも始まらない**（→ booklet_mode 判断3）。 */
     onOpenBooklet: () -> Unit,
-    /**
-     * その節の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。
-     * 見出しの要約ボタンと面の「この節を要約」が呼ぶ。`quietly` は面を出さずに頼んだか（→ [opensFaceForNotice]）。
-     */
-    onRequestSectionSummary: (section: SectionRef, quietly: Boolean) -> Unit,
+    /** その節の部分要約を頼む（→ features/margin_pane.md §5.8）。持っていれば作り直さない。面の「この節を要約」が呼ぶ。 */
+    onRequestSectionSummary: (SectionRef) -> Unit,
+    /** 全節の要約を頼む（→ features/section_ai_chat.md §5）。見出しの要約ボタンが呼ぶ。`quietly` は面を出さずに頼んだか（→ [opensFaceForNotice]）。 */
+    onRequestAllSectionSummaries: (section: SectionRef, quietly: Boolean) -> Unit,
+    onStopAllSectionSummaries: () -> Unit,
+    /** 面の節が替わった。全節の間は、その節を次に作る。 */
+    onSummaryFaceSectionChange: (SectionRef?) -> Unit,
     /** 面を出さずに頼んだ要約の、端末AIが使えない理由を見せた。要求の番号で伝える。 */
     onAcknowledgeSectionSummaryNotice: (requestId: Long) -> Unit,
     onRetrySectionSummary: (SectionRef) -> Unit,
@@ -271,19 +278,26 @@ internal fun NoteReaderTab(
         }
     }
 
-    // 面の節の要約。**見出しの要約ボタンの記号も面の節で決める**（要約は節ごとに持つ）。
-    val faceSummary = uiState.sectionChat.summaryOf(bodySection)
-    val summaryStatus = sectionSummaryStatus(faceSummary)
+    // 面の節の要約と、全節の要約の状態。**見出しの要約ボタンの記号はノート全体を示す**（要約の行が面の節を示す）。
+    val sectionChat = uiState.sectionChat
+    val faceSummary = sectionChat.summaryOf(bodySection)
+    val batchStatus = sectionBatchStatus(sectionChat)
     // 要約の行。**本文の節が分かるまでは出さない**（どの節の要約かが決まらない）。
     val summaryRow = bodySection?.let { section ->
         SummaryRowInputs(
             summary = faceSummary,
-            onRequest = { onRequestSectionSummary(section, false) },
+            onRequest = { onRequestSectionSummary(section) },
             onRetry = { onRetrySectionSummary(section) },
             onCancel = { onCancelSectionSummary(section) },
-            onNoticeShown = onAcknowledgeSectionSummaryNotice
+            onNoticeShown = onAcknowledgeSectionSummaryNotice,
+            queued = sectionChat.isQueued(section),
+            batchNote = sectionBatchNote(sectionChat),
+            onStopAll = onStopAllSectionSummaries.takeIf { sectionChat.isBatchRunning }
         )
     }
+    // 全節の間、読む位置の節を次に作る。**スクロールが止まって節が替わったときだけ届く。**
+    val currentOnFaceSectionChange by rememberUpdatedState(onSummaryFaceSectionChange)
+    LaunchedEffect(bodySection) { currentOnFaceSectionChange(bodySection) }
     // 面を要約の行まで送る依頼。**押すたびに新しい番号を振る** — 前の依頼が残っていても、次の押下で送り直せるように。
     // 面が送り終えたら（止められても）その番号の依頼を消す。
     var summaryReveal by remember { mutableStateOf<Long?>(null) }
@@ -401,8 +415,9 @@ internal fun NoteReaderTab(
                         // **要約の入口は ✎ と分ける。** ✎ は書く入口、💬 は AI の入口。
                         // 状態は記号で静かに示し、浮く通知は作らない（→ features/section_ai_chat.md）。
                         IconPill(
-                            symbol = sectionSummaryEntrySymbol(summaryStatus),
-                            contentDescription = sectionSummaryEntryDescription(summaryStatus)
+                            symbol = sectionBatchEntrySymbol(batchStatus),
+                            label = sectionBatchEntryCount(batchStatus),
+                            contentDescription = sectionBatchEntryDescription(batchStatus)
                         ) {
                             onSummaryEntry()
                             afterAction()
@@ -774,18 +789,18 @@ internal fun NoteReaderTab(
                 }
             }
         }
-        // 見出しの要約ボタン（→ features/margin_pane.md §5.4）。面が出ていれば、要約を始めてその面の要約の行まで送る。
-        // **面が出ていなければ、まだ頼んでいない節は始めるだけ**で、頼んだ節はシートで見せに行く（→ summaryEntryFor）。
-        // 持っている節なら作り直さず、その要約を見せる。
+        // 見出しの要約ボタン（→ features/margin_pane.md §5.4）。全節を頼み、面が出ていればその面の要約の行まで送る。
+        // **面が出ていなければ、作る押下は始めるだけ**で、生成中と作り終えた後はシートで見せに行く（→ summaryEntryFor）。
+        // 持っている節は作り直さず、走っている間に押しても列を作り直さない（→ SectionChatController.requestAll）。
         // 本文だけにしている机の画面は、面が出ていないときと同じに扱い、見に行くときはシートに代えてペインを戻す。
         // 要約の行を見せる入口では、並べ読みを閉じずに右を書きかけ（余白の面）へ替える（→ showsSummaryRow）。
         val openSummary: () -> Unit = {
-            val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, requested = faceSummary != null)
+            val entry = summaryEntryFor(paneShown, uiState.isMarginMemoSheetVisible, showsResult = batchStatus.showsResultOnPress())
             if (reading && entry.showsSummaryRow()) onShowSideFace(SideFace.Draft)
             if (entry == SummaryEntry.Sheet) {
                 if (paneVisible) showDeskFace(DeskFace.Supporting) else onOpenMarginMemo()
             }
-            bodySection?.let { onRequestSectionSummary(it, entry == SummaryEntry.Background) }
+            bodySection?.let { onRequestAllSectionSummaries(it, entry == SummaryEntry.Background) }
             if (entry != SummaryEntry.Background) summaryReveal = ++summaryRevealCount
         }
         // 面を出さずに頼んだ要約に、端末AIが使えない理由が届いていて、どの面も出ていなければ開く（→ opensFaceForNotice）。

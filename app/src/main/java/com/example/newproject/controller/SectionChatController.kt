@@ -56,7 +56,7 @@ class SectionChatController(
     private val excerptDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
     /** [counted] は全節の上限に数える節か。 */
-    private class Pending(val source: SectionSummarySource, val counted: Boolean, val noticePending: Boolean = false)
+    private class Pending(val source: SectionSummarySource, val counted: Boolean)
 
     private class Started(val source: SectionSummarySource, val requestId: Long)
 
@@ -83,12 +83,10 @@ class SectionChatController(
      * [section] の要約を頼む。**持っていれば作り直さない** — 生成中ならその生成を、できていればその要約を、
      * 出せなかったならその理由を見せる（見せるのは画面）。ただし後で使えるようになる説明は確かめ直す
      * （→ [isShownAsIsOnRequest]）。
-     *
-     * [quietly] は面を出さずに頼んだか。端末AIが使えない理由が届いたら、画面が一度だけ面を開いて見せる（→ [SectionSummary.noticePending]）。
      */
-    fun request(section: SectionRef, sectionTitle: String, sectionText: String, quietly: Boolean = false) {
+    fun request(section: SectionRef, sectionTitle: String, sectionText: String) {
         if (state.current.summaryOf(section)?.isShownAsIsOnRequest() == true) return
-        startOrEnqueue(SectionSummarySource(section, sectionTitle, sectionText), noticePending = quietly)
+        startOrEnqueue(SectionSummarySource(section, sectionTitle, sectionText))
     }
 
     /**
@@ -98,17 +96,15 @@ class SectionChatController(
     fun retry(section: SectionRef) {
         val previous = state.current.summaryOf(section) ?: return
         if (previous.isSummaryLoading || previous.summary != null) return
-        startOrEnqueue(
-            SectionSummarySource(previous.section, previous.sectionTitle, previous.sectionContext),
-            noticePending = false
-        )
+        startOrEnqueue(SectionSummarySource(previous.section, previous.sectionTitle, previous.sectionContext))
     }
 
     /**
      * 全節の要約を頼む。[targets] は作る順に並べる。要約を持っている節は飛ばし、生成中の節は取り消さない。
      * **続きからは、持っていない節を数え直すだけで済む** — 押し直しも同じ入口である。走っている間は何もしない。
      *
-     * [current] は押した時点の今の節。端末AIが使えない理由はここに出す。[quietly] は面を出さずに頼んだか。
+     * [current] は押した時点の今の節。端末AIが使えない理由はここに出す。
+     * [quietly] は面を出さずに頼んだか。理由が届いたら、画面が一度だけ面を開いて見せる（→ [SectionSummary.noticePending]）。
      */
     fun requestAll(targets: List<SectionSummarySource>, current: SectionSummarySource?, quietly: Boolean) {
         val chat = state.current
@@ -183,7 +179,7 @@ class SectionChatController(
         if (reason == ReadingPauseReason.AppBackground) foreground.value = true
     }
 
-    private fun startOrEnqueue(source: SectionSummarySource, noticePending: Boolean) {
+    private fun startOrEnqueue(source: SectionSummarySource) {
         if (state.current.isBatchRunning) {
             val queued = queue.firstOrNull { it.source.section == source.section }
             if (queued != null) queue.remove(queued)
@@ -194,7 +190,7 @@ class SectionChatController(
         // 別の節の生成が走っていれば、ここで止める（その節は withStarted が取り除く）。
         worker?.cancel()
         queue.clear()
-        queue.addFirst(Pending(source, counted = false, noticePending = noticePending))
+        queue.addFirst(Pending(source, counted = false))
         launchWorker()
     }
 
@@ -234,8 +230,7 @@ class SectionChatController(
                     requestId = requestId,
                     sectionTitle = next.source.sectionTitle,
                     sectionContext = next.source.sectionText,
-                    isSummaryLoading = true,
-                    noticePending = next.noticePending
+                    isSummaryLoading = true
                 )
             )
         }

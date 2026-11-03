@@ -5,6 +5,9 @@ import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.NoteDwellGate
 import com.example.newproject.controller.NoteReadGate
 import com.example.newproject.controller.ReadingPauseReason
+import com.example.newproject.domain.SectionBatchStatus
+import com.example.newproject.domain.isBatchRunning
+import com.example.newproject.domain.sectionBatchStatus
 import com.example.newproject.controller.ReadingTraceController
 import com.example.newproject.controller.SearchController
 import com.example.newproject.data.DistillPersistence
@@ -2148,6 +2151,151 @@ class NoteSessionCoordinatorTest {
         assertNull(coordinator.sideReadingBlocks.value)
         assertTrue("シートが出ていない", coordinator.uiState.value.isMarginMemoSheetVisible)
     }
+
+    // ── 全節の要約（本番と同じ入口から）────────────────────────────────
+
+    /** 今の節から順に、**今の本文の解析から**作る。固有の本文が短い節は作らない。 */
+    @Test
+    fun `全節を頼むと今の節から順に作り、短い節は作らない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# A\n\n${longBody("A本文")}\n\n# 短\n\n短い\n\n# B\n\n${longBody("B本文")}"))
+        advanceUntilIdle()
+
+        coordinator.requestAllSectionSummaries(SectionRef("B"), quietly = true)
+        advanceUntilIdle()
+        assertTrue("今の節から始めていない", "B本文" in env.ai.lastPrompt!!)
+
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+        assertTrue("残りの節へ回っていない", "A本文" in env.ai.lastPrompt!!)
+        env.ai.completeAll("Aの要約")
+        advanceUntilIdle()
+
+        val chat = coordinator.uiState.value.sectionChat
+        assertEquals(listOf(SectionRef("B"), SectionRef("A")), chat.batch?.targets)
+        assertEquals("Aの要約", chat.summaryOf(SectionRef("A"))?.summary)
+        assertNull(chat.summaryOf(SectionRef("短")))
+        assertEquals(SectionBatchStatus.Ready, sectionBatchStatus(chat))
+    }
+
+    /** **押しても何も起きない入口にしない。** 全部の節が線より短いノートでは今の節だけを作る。 */
+    @Test
+    fun `作れる節が1つも無いノートでは今の節だけを作る`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# 短1\n\n短い\n\n# 短2\n\nとても短い"))
+        advanceUntilIdle()
+
+        coordinator.requestAllSectionSummaries(SectionRef("短2"), quietly = true)
+        advanceUntilIdle()
+        env.ai.completeAll("短2の要約")
+        advanceUntilIdle()
+
+        val chat = coordinator.uiState.value.sectionChat
+        assertEquals(listOf(SectionRef("短2")), chat.batch?.targets)
+        assertEquals("短2の要約", chat.summaryOf(SectionRef("短2"))?.summary)
+        assertEquals(1, env.ai.generateCalls)
+    }
+
+    /** **解析し直している間に頼んでも、前の本文から作らない。** 走行の印も立たない。 */
+    @Test
+    fun `本文を解析し直している間に全節を頼んでも、前の本文から作らない`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# B\n\n${longBody("OLD_TEXT")}"))
+        advanceUntilIdle()
+
+        coordinator.applyReloadedBody(TARGET_URI, successNote("# B\n\n${longBody("NEW_TEXT")}"))
+        coordinator.requestAllSectionSummaries(SectionRef("B"), quietly = true)
+        advanceUntilIdle()
+        assertEquals(SectionChatState(), coordinator.uiState.value.sectionChat)
+
+        coordinator.requestAllSectionSummaries(SectionRef("B"), quietly = true)
+        advanceUntilIdle()
+        assertTrue("NEW_TEXT" in env.ai.lastPrompt!!)
+        assertFalse(env.ai.prompts.any { "OLD_TEXT" in it })
+        env.ai.completeAll("要約")
+        advanceUntilIdle()
+    }
+
+    /** **切替の3経路（ノート・Vault・蒸留の差し替え）で全節を止めて捨てる。** 後着も書かず、列も進まない。 */
+    @Test
+    fun `ノート切替とVault切替と蒸留の差し替えで全節を止めて捨てる`() = runTest {
+        val stops: List<Pair<String, (NoteSessionCoordinator) -> Unit>> = listOf(
+            "ノート切替" to { it.onNoteChanged() },
+            "Vault切替" to { it.onVaultChanged() },
+            "蒸留の差し替え" to { it.applyReloadedBody(TARGET_URI, successNote("# A\n\n${longBody("新しいA")}")) }
+        )
+        stops.forEach { (name, stop) ->
+            val env = Env(this)
+            val coordinator = env.coordinator()
+            coordinator.setNoteState(successNote("# A\n\n${longBody("A本文")}\n\n# B\n\n${longBody("B本文")}"))
+            advanceUntilIdle()
+            coordinator.requestAllSectionSummaries(SectionRef("A"), quietly = false)
+            advanceUntilIdle()
+            assertTrue("$name: 走っていない", coordinator.uiState.value.sectionChat.isBatchRunning)
+            val calls = env.ai.generateCalls
+
+            stop(coordinator)
+            assertEquals("$name: 状態が残った", SectionChatState(), coordinator.uiState.value.sectionChat)
+
+            env.ai.completeAll("後着")
+            advanceUntilIdle()
+            assertEquals("$name: 後着を書いた", SectionChatState(), coordinator.uiState.value.sectionChat)
+            assertEquals("$name: 列が進んだ", calls, env.ai.generateCalls)
+        }
+    }
+
+    /** **背面の合図は調停側から届く。** 冊子では止めない（AICore は断らない）。 */
+    @Test
+    fun `背面の間は全節が次の節へ進まず、冊子では進む`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# A\n\n${longBody("A本文")}\n\n# B\n\n${longBody("B本文")}\n\n# C\n\n${longBody("C本文")}"))
+        advanceUntilIdle()
+        coordinator.requestAllSectionSummaries(SectionRef("A"), quietly = false)
+        advanceUntilIdle()
+
+        coordinator.pauseReadingTrace(ReadingPauseReason.Booklet)
+        env.ai.completeAll("Aの要約")
+        advanceUntilIdle()
+        assertTrue("冊子で止まった", "B本文" in env.ai.lastPrompt!!)
+
+        coordinator.pauseReadingTrace(ReadingPauseReason.AppBackground)
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+        assertFalse("背面で次の節を始めた", "C本文" in env.ai.lastPrompt!!)
+
+        coordinator.resumeReadingTrace(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        assertTrue("前面へ戻っても再開しない", "C本文" in env.ai.lastPrompt!!)
+        env.ai.completeAll("Cの要約")
+        advanceUntilIdle()
+        coordinator.resumeReadingTrace(ReadingPauseReason.Booklet)
+    }
+
+    @Test
+    fun `全節の口は調停側から届く`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# A\n\n${longBody("A本文")}\n\n# B\n\n${longBody("B本文")}\n\n# C\n\n${longBody("C本文")}"))
+        advanceUntilIdle()
+        coordinator.requestAllSectionSummaries(SectionRef("A"), quietly = false)
+        advanceUntilIdle()
+
+        coordinator.onSummaryFaceSectionChanged(SectionRef("C"))
+        env.ai.completeAll("Aの要約")
+        advanceUntilIdle()
+        assertTrue("読む位置の節を次に作っていない", "C本文" in env.ai.lastPrompt!!)
+
+        coordinator.stopAllSectionSummaries()
+        val chat = coordinator.uiState.value.sectionChat
+        assertFalse(chat.isBatchRunning)
+        assertEquals(SectionBatchStatus.Partial(1, 3), sectionBatchStatus(chat))
+    }
+
+    private fun longBody(mark: String) = mark + "。" + "本文".repeat(60)
 
     /** **両方向の1つ目。** 部分要約の生成中に右で開いても戻っても、生成は止まらない。 */
     @Test

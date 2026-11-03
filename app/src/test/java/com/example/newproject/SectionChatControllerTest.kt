@@ -15,10 +15,8 @@ import com.example.newproject.domain.SECTION_BATCH_FAILURE_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_REFUSAL_LIMIT
 import com.example.newproject.domain.SECTION_BATCH_REFUSAL_WAIT_MS
-import com.example.newproject.domain.SectionSummaryStatus
 import com.example.newproject.domain.isBatchRunning
 import com.example.newproject.domain.isQueued
-import com.example.newproject.domain.sectionSummaryStatus
 import com.example.newproject.domain.summaryOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -352,29 +350,6 @@ class SectionChatControllerTest {
     }
 
     /**
-     * **端末AIが使えないだけなら、派生状態は生成中にならない。** 生成していないのに
-     * 見出しの要約ボタンが「AI生成中」を出し続けないこと。
-     */
-    @Test
-    fun `端末AIが使えないだけなら派生状態はWorkingにならない`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.Unsupported }
-        controller(state, ai).request(B, "B", "Bの本文")
-        advanceUntilIdle()
-
-        assertEquals(SectionSummaryStatus.Idle, sectionSummaryStatus(summaryOf(state, B)))
-    }
-
-    @Test
-    fun `生成が落ちたときだけ派生状態はErrorになる`() = runTest {
-        val state = NoteUiStateStore(NoteUiState())
-        controller(state, FakeAiClient { throw AiTimeoutException("タイムアウト") }).request(B, "B", "Bの本文")
-        advanceUntilIdle()
-
-        assertEquals(SectionSummaryStatus.Error, sectionSummaryStatus(summaryOf(state, B)))
-    }
-
-    /**
      * **部分要約は `Download` の導線を作らない。** ここではモデルDLを始めないので、
      * 押す操作の無い「開始してください」を出さない（→ features/section_ai_chat.md 判断4）。
      */
@@ -402,9 +377,8 @@ class SectionChatControllerTest {
         val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.Unsupported }
         val controller = controller(state, ai)
 
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(sources(A), source(A), quietly = true)
         advanceUntilIdle()
-        // 生成中の別の節は取り除かれるので、A の結果が出てから B を頼む。
         controller.request(B, "B", "Bの本文")
         advanceUntilIdle()
 
@@ -420,12 +394,12 @@ class SectionChatControllerTest {
         val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.NeedsDownload }
         val controller = controller(state, ai)
 
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(sources(A), source(A), quietly = true)
         advanceUntilIdle()
         val first = requireNotNull(summaryOf(state, A))
 
         // 準備待ちの説明は頼み直すと確かめ直す（新しい要求になる）。
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(sources(A), source(A), quietly = true)
         advanceUntilIdle()
         val second = requireNotNull(summaryOf(state, A))
         assertNotEquals(first.requestId, second.requestId)
@@ -445,7 +419,7 @@ class SectionChatControllerTest {
         ai.availability = AiAvailability.NeedsDownload
         val controller = controller(state, ai)
 
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(sources(A), source(A), quietly = true)
         advanceUntilIdle()
         ai.availability = AiAvailability.Ready
         controller.retry(A)

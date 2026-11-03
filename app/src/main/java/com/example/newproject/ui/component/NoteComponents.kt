@@ -7,12 +7,16 @@ import com.example.newproject.ui.screen.FullscreenNoteScreen
 import com.example.newproject.ui.screen.NoteReaderTab
 import com.example.newproject.ui.visibleFractionOfBlock
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
@@ -138,6 +142,8 @@ internal fun IconPill(
     modifier: Modifier = Modifier,
     containerColor: Color = AccentGlass,
     symbolSize: TextUnit = 18.sp,
+    /** 記号に添える短い文字（進み具合など）。**渡すと丸が文字の幅まで伸びる。** 右寄せの並びでは左へ伸び、隣の丸を動かさない。 */
+    label: String? = null,
     /**
      * false のあいだは押せない。**色は変えない** — 40dp の円に減光を足すと
      * 小さい部品に濃い装飾を移す失敗型に当たる（→ ui_design_principles §3）。
@@ -150,7 +156,10 @@ internal fun IconPill(
     val description = contentDescription
     Surface(
         modifier = modifier
-            .size(ICON_PILL_SIZE)
+            .then(
+                if (label == null) Modifier.size(ICON_PILL_SIZE)
+                else Modifier.height(ICON_PILL_SIZE).widthIn(min = ICON_PILL_SIZE)
+            )
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 this.contentDescription = description
@@ -163,7 +172,18 @@ internal fun IconPill(
             modifier = Modifier.clearAndSetSemantics {},
             contentAlignment = Alignment.Center
         ) {
-            Text(symbol, color = OnVibrant, fontSize = symbolSize, fontWeight = FontWeight.Bold)
+            if (label == null) {
+                Text(symbol, color = OnVibrant, fontSize = symbolSize, fontWeight = FontWeight.Bold)
+            } else {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(symbol, color = OnVibrant, fontSize = symbolSize, fontWeight = FontWeight.Bold)
+                    Text(label, color = OnVibrant, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
+            }
         }
     }
 }
