@@ -5,8 +5,39 @@ import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 
-/** 部分要約を持つ節の数（→ features/margin_pane.md §5.8）。4節目を作ると最も古いものから消える。 */
-internal const val SECTION_SUMMARY_LIMIT = 3
+/** 全節の要約が1回に作る節の数（根拠の実測 → system/background_ai_ux.md §6）。超えた節は押し直すと作る。 */
+internal const val SECTION_BATCH_LIMIT = 15
+
+/** AICore に断られてから同じ節をやり直すまで。実測で足りた待ち時間であって、時間窓の長さではない。 */
+internal const val SECTION_BATCH_REFUSAL_WAIT_MS = 10_000L
+
+/** 同じ節で続けて断られたら全節を止める回数。 */
+internal const val SECTION_BATCH_REFUSAL_LIMIT = 3
+
+/** 続けて失敗したら全節を止める節の数。節によらない失敗（タイムアウトなど）を、節の数だけ繰り返さない。 */
+internal const val SECTION_BATCH_FAILURE_LIMIT = 3
+
+/** 全節の要約が走っているか。 */
+internal val SectionChatState.isBatchRunning: Boolean get() = batch?.isRunning == true
+
+/** 全節の生成中で、[section] の番がまだ来ていないか。面はボタンの代わりに「次に作ります」を出す。 */
+internal fun SectionChatState.isQueued(section: SectionRef?): Boolean =
+    section != null && isBatchRunning && summaryOf(section) == null && batch?.targets?.contains(section) == true
+
+/** [section] を全節の列で次に作ることにした。**出せなかった理由を下げ、対象でなかった節は対象へ足す。** */
+internal fun SectionChatState.withQueued(section: SectionRef): SectionChatState =
+    without(section).let { chat ->
+        val running = chat.batch ?: return@let chat
+        if (section in running.targets) chat else chat.copy(batch = running.copy(targets = running.targets + section))
+    }
+
+/** 全節の生成係が止まった。 */
+internal fun SectionChatState.withBatchStopped(): SectionChatState =
+    copy(batch = batch?.copy(isRunning = false))
+
+/** 全節の要約で作り直す節か。持っていない節と、出せなかった節。**生成中の節は最後まで作る。** */
+internal fun SectionSummary?.needsBatchGeneration(): Boolean =
+    this == null || (summary == null && !isSummaryLoading)
 
 /** [section] の要約。持っていなければ null。 */
 internal fun SectionChatState.summaryOf(section: SectionRef?): SectionSummary? =
@@ -36,13 +67,9 @@ internal fun SectionSummary.hasUnshownNotice(): Boolean =
  *
  * - 同じ節の要約は置き換える（作り直し）
  * - **生成中の別の節は取り除く。** 生成は一度に1本で、取り消された節はボタンに戻る
- * - 最近作った [SECTION_SUMMARY_LIMIT] 節分を超えたら、最も古いものから落とす
  */
 internal fun SectionChatState.withStarted(started: SectionSummary): SectionChatState =
-    SectionChatState(
-        (listOf(started) + summaries.filterNot { it.section == started.section || it.isSummaryLoading })
-            .take(SECTION_SUMMARY_LIMIT)
-    )
+    copy(summaries = listOf(started) + summaries.filterNot { it.section == started.section || it.isSummaryLoading })
 
 /** [requestId] の要約だけを書き換える。**取り消された要求の結果は、どこにも書かない。** */
 internal fun SectionChatState.updated(

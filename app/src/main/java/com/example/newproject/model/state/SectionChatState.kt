@@ -41,7 +41,20 @@ data class SectionSummary(
     val noticePending: Boolean = false
 )
 
-/** ノートを開いている間の部分要約。**最近作った順**に持つ（上限は `SECTION_SUMMARY_LIMIT`）。 */
+/**
+ * 全節の要約（→ features/section_ai_chat.md §5）。**進み具合の数は持たない** — [targets] と要約から導き、数と実物をずらさない。
+ */
+data class SectionBatch(
+    /** 全節の要約が作る節。 */
+    val targets: List<SectionRef>,
+    val isRunning: Boolean = false,
+    /** AICore に断られ続けて止まったか。押し直すと続きから作る。 */
+    val stoppedBusy: Boolean = false
+)
+
+/** ノートを開いている間の部分要約。**最近作った順**に持つ。 */
 data class SectionChatState(
-    val summaries: List<SectionSummary> = emptyList()
+    val summaries: List<SectionSummary> = emptyList(),
+    /** 全節の要約。頼んでいなければ null。 */
+    val batch: SectionBatch? = null
 )

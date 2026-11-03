@@ -1,22 +1,33 @@
 package com.example.newproject
 
+import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.SectionSummarySource
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.SectionChatProblem
+import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiTimeoutException
+import com.example.newproject.domain.SECTION_BATCH_FAILURE_LIMIT
+import com.example.newproject.domain.SECTION_BATCH_LIMIT
+import com.example.newproject.domain.SECTION_BATCH_REFUSAL_LIMIT
+import com.example.newproject.domain.SECTION_BATCH_REFUSAL_WAIT_MS
 import com.example.newproject.domain.SectionSummaryStatus
+import com.example.newproject.domain.isBatchRunning
+import com.example.newproject.domain.isQueued
 import com.example.newproject.domain.sectionSummaryStatus
 import com.example.newproject.domain.summaryOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.fakes.FakeAiClient
+import com.google.mlkit.genai.common.GenAiException
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -181,7 +192,7 @@ class SectionChatControllerTest {
     }
 
     @Test
-    fun `4節目を作ると、最も古い要約から消える`() = runTest {
+    fun `作った要約は節の数によらず残る`() = runTest {
         val ai = FakeAiClient { prompt -> "要約:" + prompt.length }
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
@@ -191,7 +202,7 @@ class SectionChatControllerTest {
             advanceUntilIdle()
         }
 
-        assertEquals(listOf(D, C, B), state.value.sectionChat.summaries.map { it.section })
+        assertEquals(listOf(D, C, B, A), state.value.sectionChat.summaries.map { it.section })
         assertTrue(state.value.sectionChat.summaries.all { it.summary != null })
     }
 
@@ -445,6 +456,560 @@ class SectionChatControllerTest {
         advanceUntilIdle()
     }
 
+    // ── 全節の要約 ────────────────────────────────────────────────────
+
+    /** 今の節から順に作り、作った要約は押さずに全部残る。走行の印も残らない。 */
+    @Test
+    fun `全節を頼むと順に作り、全部の要約を持って走行の印を下ろす`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(B, C, A), source(B), quietly = true)
+        assertTrue("頼んだ時点で走行の印が立たない", state.value.sectionChat.isBatchRunning)
+        advanceUntilIdle()
+
+        assertEquals(listOf("Bの本文", "Cの本文", "Aの本文"), ai.bodies())
+        listOf(A, B, C).forEach { assertEquals("要約", summaryOf(state, it)?.summary) }
+        assertFalse("走行の印が残った", state.value.sectionChat.isBatchRunning)
+        assertEquals(listOf(B, C, A), state.value.sectionChat.batch?.targets)
+    }
+
+    /** **上限を超えるノートは止まり、押し直すと持っていない節から作る。** */
+    @Test
+    fun `上限で止まり、押し直すと続きから作る`() = runTest {
+        val many = (1..SECTION_BATCH_LIMIT + 3).map { SectionRef("節$it") }
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        advanceUntilIdle()
+        assertEquals(SECTION_BATCH_LIMIT, ai.generateCalls)
+        assertFalse(state.value.sectionChat.isBatchRunning)
+        assertNull(summaryOf(state, many.last()))
+
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        advanceUntilIdle()
+        assertEquals(many.size, ai.generateCalls)
+        assertEquals("要約", summaryOf(state, many.last())?.summary)
+    }
+
+    /** 全部持っていれば押しても生成しない。走行の印も立ったまま残らない。 */
+    @Test
+    fun `全部の要約を持っていれば、全節を頼んでも生成しない`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals(2, ai.generateCalls)
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    @Test
+    fun `全節の生成中にもう一度頼んでも列を作り直さない`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        assertEquals(1, ai.generateCalls)
+
+        finishGenerations(ai, "要約")
+        assertEquals(2, ai.generateCalls)
+        assertEquals("要約", summaryOf(state, B)?.summary)
+    }
+
+    /** **両方向の1: 全節の生成中に1節を頼む。** 取り消さず次に作り、できたら列の残りへ戻る。 */
+    @Test
+    fun `全節の生成中に1節を頼むと、生成を取り消さず次に作り、列の残りへ戻る`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C, D), source(A), quietly = false)
+        runCurrent()
+        controller.request(D, "D", "Dの本文")
+        runCurrent()
+
+        assertTrue("生成中のAを取り消した", summaryOf(state, A)?.isSummaryLoading == true)
+        assertEquals(1, ai.generateCalls)
+        assertTrue("頼んだ節の番を待っていない", state.value.sectionChat.isQueued(D))
+
+        finishGenerations(ai, "要約")
+
+        assertEquals(listOf("Aの本文", "Dの本文", "Bの本文", "Cの本文"), ai.bodies())
+        listOf(A, B, C, D).forEach { assertEquals("要約", summaryOf(state, it)?.summary) }
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    /** **両方向の2: 1節の生成中に全節を頼む。** 走っている生成を取り消さず、その節を作り直さない。 */
+    @Test
+    fun `1節の生成中に全節を頼むと、その節を取り消さず残りを作る`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.request(B, "B", "Bの本文")
+        runCurrent()
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+
+        assertTrue("生成中のBを取り消した", summaryOf(state, B)?.isSummaryLoading == true)
+        assertEquals(1, ai.generateCalls)
+
+        finishGenerations(ai, "要約")
+
+        assertEquals(listOf("Bの本文", "Aの本文", "Cの本文"), ai.bodies())
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    /** 読む位置へ合わせる。**生成中の節は取り消さない。** */
+    @Test
+    fun `全節の生成中に面の節が替わると、その節を次に作る`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C, D), source(A), quietly = false)
+        runCurrent()
+        controller.prioritize(D)
+        runCurrent()
+        assertTrue(summaryOf(state, A)?.isSummaryLoading == true)
+
+        finishGenerations(ai, "要約")
+
+        assertEquals(listOf("Aの本文", "Dの本文", "Bの本文", "Cの本文"), ai.bodies())
+    }
+
+    /** 上限の先へ読み進めたら、読む位置を先に作る。**作る数は上限のまま。** */
+    @Test
+    fun `上限の先の節へ読み進めると、その節を作って上限で止まる`() = runTest {
+        val many = (1..SECTION_BATCH_LIMIT + 3).map { SectionRef("節$it") }
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(*many.toTypedArray()), source(many.first()), quietly = false)
+        runCurrent()
+        controller.prioritize(many.last())
+        finishGenerations(ai, "要約")
+
+        assertEquals(SECTION_BATCH_LIMIT, ai.generateCalls)
+        assertEquals("要約", summaryOf(state, many.last())?.summary)
+    }
+
+    @Test
+    fun `全節でないときの面の節の変化は何も起こさない`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.prioritize(A)
+        controller.prioritize(null)
+        advanceUntilIdle()
+
+        assertEquals(0, ai.generateCalls)
+        assertEquals(SectionChatState(), state.value.sectionChat)
+    }
+
+    /** 1節の失敗はその節を飛ばすだけ。理由はその節に残り、記号が ! になる。 */
+    @Test
+    fun `1節が失敗しても飛ばして残りを作る`() = runTest {
+        val ai = FakeAiClient { prompt ->
+            if (prompt.contains("Bの本文")) throw AiTimeoutException("タイムアウト") else "要約"
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, A)?.summary)
+        assertEquals(SectionChatProblem.GenerationFailed("タイムアウト"), summaryOf(state, B)?.summaryProblem)
+        assertEquals("要約", summaryOf(state, C)?.summary)
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    /** **節によらない失敗を節の数だけ繰り返さない。** 間に成功を挟めば数え直す。 */
+    @Test
+    fun `失敗が3節続くと全節を止め、成功を挟むと数え直す`() = runTest {
+        val always = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        val allFailed = NoteUiStateStore(NoteUiState())
+        controller(allFailed, always).requestAll(sources(A, B, C, D), source(A), quietly = false)
+        advanceUntilIdle()
+        assertEquals(SECTION_BATCH_FAILURE_LIMIT, always.generateCalls)
+        assertFalse(allFailed.value.sectionChat.isBatchRunning)
+
+        val mixed = FakeAiClient { prompt ->
+            if (prompt.contains("Cの本文")) "要約" else throw AiTimeoutException("タイムアウト")
+        }
+        val interleaved = NoteUiStateStore(NoteUiState())
+        controller(interleaved, mixed).requestAll(sources(A, B, C, D, E), source(A), quietly = false)
+        advanceUntilIdle()
+        assertEquals("成功を挟んだのに数え直していない", 5, mixed.generateCalls)
+    }
+
+    /** 失敗した節は、押し直しで作り直す。 */
+    @Test
+    fun `押し直すと出せなかった節を作り直す`() = runTest {
+        val ai = FakeAiClient { prompt ->
+            if (prompt.contains("Bの本文")) throw AiTimeoutException("タイムアウト") else "要約"
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        ai.onGenerate = { "作り直した要約" }
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, A)?.summary)
+        assertEquals("作り直した要約", summaryOf(state, B)?.summary)
+    }
+
+    /** **BUSY は節の失敗にせず、10秒待って同じ節をやり直す。** 待つ前にやり直さない。 */
+    @Test
+    fun `断られたら待って同じ節をやり直し、通れば続ける`() = runTest {
+        var refusals = 1
+        val ai = FakeAiClient {
+            if (refusals-- > 0) throw GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY)
+            "要約"
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        assertEquals(1, ai.generateCalls)
+        assertTrue("待っている間も生成中のまま", summaryOf(state, A)?.isSummaryLoading == true)
+        assertNull(summaryOf(state, A)?.summaryProblem)
+
+        advanceTimeBy(SECTION_BATCH_REFUSAL_WAIT_MS - 1)
+        runCurrent()
+        assertEquals("待たずにやり直した", 1, ai.generateCalls)
+
+        advanceUntilIdle()
+        assertEquals(3, ai.generateCalls)
+        assertEquals("要約", summaryOf(state, A)?.summary)
+        assertEquals("要約", summaryOf(state, B)?.summary)
+    }
+
+    /** **断られ続けたら全節を止める。** 節を失敗にせず、押し直すとその節から作る。 */
+    @Test
+    fun `断られ続けると全節を止め、節を失敗にせず、押し直すと続きから作る`() = runTest {
+        val ai = FakeAiClient { throw GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY) }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("同じ節を3回より多く試した", SECTION_BATCH_REFUSAL_LIMIT, ai.generateCalls)
+        assertTrue("節を失敗にした", state.value.sectionChat.summaries.isEmpty())
+        val stopped = requireNotNull(state.value.sectionChat.batch)
+        assertFalse(stopped.isRunning)
+        assertTrue(stopped.stoppedBusy)
+
+        ai.onGenerate = { "要約" }
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, A)?.summary)
+        assertEquals("要約", summaryOf(state, C)?.summary)
+        assertFalse("押し直した後も混み合いの印が残った", state.value.sectionChat.batch!!.stoppedBusy)
+    }
+
+    /** 1節だけの要求の BUSY は今までどおり失敗として見せ、再試行に任せる。 */
+    @Test
+    fun `全節の外の1節は断られても待たず失敗として見せる`() = runTest {
+        val ai = FakeAiClient { throw GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY) }
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, ai).request(B, "B", "Bの本文")
+        advanceUntilIdle()
+
+        assertEquals(1, ai.generateCalls)
+        assertTrue(summaryOf(state, B)?.summaryProblem is SectionChatProblem.GenerationFailed)
+    }
+
+    /** **背面の間は次の節を始めない。** 前面へ戻ると続ける。走り始めた生成は止めない。 */
+    @Test
+    fun `背面の間は次の節へ進まず、前面へ戻ると続ける`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.pause(ReadingPauseReason.AppBackground)
+        ai.completeAll("Aの要約")
+        advanceUntilIdle()
+
+        assertEquals("Aの要約", summaryOf(state, A)?.summary)
+        assertEquals("背面で次の節を始めた", 1, ai.generateCalls)
+        assertTrue(state.value.sectionChat.isBatchRunning)
+
+        controller.resume(ReadingPauseReason.AppBackground)
+        runCurrent()
+        assertEquals(2, ai.generateCalls)
+        ai.completeAll("Bの要約")
+        advanceUntilIdle()
+        assertEquals("Bの要約", summaryOf(state, B)?.summary)
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    /** **生成中に背面へ回って断られても、節を失敗にしない。** 実機ではこの拒否が35msで返った。 */
+    @Test
+    fun `背面の拒否が返っても節を失敗にせず、前面へ戻ってから作り直す`() = runTest {
+        var refusals = 1
+        val ai = FakeAiClient {
+            if (refusals-- > 0) throw GenAiException(RuntimeException(), GenAiException.ErrorCode.BACKGROUND_USE_BLOCKED)
+            "要約"
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        controller.resume(ReadingPauseReason.AppBackground)
+        controller.requestAll(sources(A), source(A), quietly = false)
+        runCurrent()
+        controller.pause(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+
+        assertEquals(1, ai.generateCalls)
+        assertNull(summaryOf(state, A)?.summaryProblem)
+
+        controller.resume(ReadingPauseReason.AppBackground)
+        advanceUntilIdle()
+        assertEquals("要約", summaryOf(state, A)?.summary)
+    }
+
+    /** 冊子は前面なので AICore は断らない。全節を止めない。 */
+    @Test
+    fun `冊子が前面でも全節は進む`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.pause(ReadingPauseReason.Booklet)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, B)?.summary)
+    }
+
+    /** **全節を止めると生成中の節はボタンへ戻り、できた要約は残る。** 押し直すと続きから作る。 */
+    @Test
+    fun `全節を止めると列を捨て、生成中の節はボタンへ戻り、後着も書かない`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+        ai.completeAll("Aの要約")
+        runCurrent()
+        assertTrue(summaryOf(state, B)?.isSummaryLoading == true)
+
+        controller.stopAll()
+
+        assertFalse(state.value.sectionChat.isBatchRunning)
+        assertEquals("Aの要約", summaryOf(state, A)?.summary)
+        assertNull("生成中の節がボタンへ戻っていない", summaryOf(state, B))
+        ai.completeAll("後着")
+        advanceUntilIdle()
+        assertNull(summaryOf(state, B))
+        assertEquals("止めた後に列を進めた", 2, ai.generateCalls)
+
+        ai.onGenerate = { "要約" }
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+        assertEquals("要約", summaryOf(state, B)?.summary)
+        assertEquals("要約", summaryOf(state, C)?.summary)
+        assertEquals("Aの要約", summaryOf(state, A)?.summary)
+    }
+
+    /** 全節の間の「生成を中止」は行に出さないが、遅れて届いた押下で全節を止めない。 */
+    @Test
+    fun `全節の生成中は1節の中止が効かない`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.cancel(A)
+        runCurrent()
+
+        assertTrue(summaryOf(state, A)?.isSummaryLoading == true)
+        finishGenerations(ai, "要約")
+        assertEquals("要約", summaryOf(state, B)?.summary)
+    }
+
+    /** 全節の間の再試行も取り消さず次に作る。**止まった全節の後の1節は今までどおり。** */
+    @Test
+    fun `全節の生成中の再試行は取り消さず次に作る`() = runTest {
+        val ai = FakeAiClient { throw AiTimeoutException("タイムアウト") }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.request(D, "D", "Dの本文")
+        advanceUntilIdle()
+
+        ai.suspendGenerations()
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        controller.retry(D)
+        runCurrent()
+        assertTrue(summaryOf(state, A)?.isSummaryLoading == true)
+        assertTrue("再試行の番を待っていない", state.value.sectionChat.isQueued(D))
+
+        finishGenerations(ai, "要約")
+        assertEquals(listOf("Dの本文", "Aの本文", "Dの本文", "Bの本文"), ai.bodies())
+        assertEquals("要約", summaryOf(state, D)?.summary)
+    }
+
+    /** **切替の後に旧ノートの列が残らない。** 走行の印も残らず、次のノートは最初から作る。 */
+    @Test
+    fun `ノートを替えると全節を止めて全部捨て、後着も書かず、次のノートは最初から作る`() = runTest {
+        val ai = FakeAiClient().suspendGenerations()
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+        controller.cancelAndClear()
+        assertEquals(SectionChatState(), state.value.sectionChat)
+
+        ai.completeAll("切替後の結果")
+        advanceUntilIdle()
+        assertEquals(SectionChatState(), state.value.sectionChat)
+        assertEquals("切替後に列を進めた", 1, ai.generateCalls)
+
+        ai.onGenerate = { "新しいノートの要約" }
+        controller.requestAll(sources(D), source(D), quietly = false)
+        advanceUntilIdle()
+        assertEquals("新しいノートの要約", summaryOf(state, D)?.summary)
+        assertNull(summaryOf(state, B))
+    }
+
+    /** **取り消しに従わない生成の後着が、新しい列を進めない。** 古い生成係が列から取り出すと同じ節を2本走らせる。 */
+    @Test
+    fun `取り消しに従わない生成の後着は、新しい全節の列を進めない`() = runTest {
+        val waiting = mutableListOf<Continuation<String>>()
+        val ai = FakeAiClient { suspendCoroutine { waiting += it } }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+        controller.stopAll()
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        runCurrent()
+        assertEquals(2, waiting.size)
+
+        waiting[0].resume("古いAの要約")
+        advanceUntilIdle()
+        assertEquals("古い生成係が列を進めた", 2, waiting.size)
+        assertNull("古いAの結果を書いた", summaryOf(state, A)?.summary)
+
+        waiting[1].resume("今のAの要約")
+        runCurrent()
+        assertEquals("今のAの要約", summaryOf(state, A)?.summary)
+        assertEquals(3, waiting.size)
+        controller.stopAll()
+        waiting[2].resume("後着")
+        advanceUntilIdle()
+    }
+
+    /** **端末AIが使えなければ全節を始めず、押した時点の今の節に理由を出す。** 節の数だけ理由を並べない。 */
+    @Test
+    fun `端末AIが使えないと全節を終え、今の節にだけ理由を出す`() = runTest {
+        val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.Unsupported }
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, ai).requestAll(sources(B, C), source(A), quietly = true)
+        advanceUntilIdle()
+
+        assertEquals(0, ai.generateCalls)
+        assertNull("記号は 💬 のまま", state.value.sectionChat.batch)
+        assertEquals(listOf(A), state.value.sectionChat.summaries.map { it.section })
+        assertTrue(summaryOf(state, A)?.summaryProblem is SectionChatProblem.AiStatus)
+        assertTrue("面を出さずに頼んだ印が無い", summaryOf(state, A)?.noticePending == true)
+    }
+
+    @Test
+    fun `面を出して全節を頼んだ理由は印を持たない`() = runTest {
+        val ai = FakeAiClient { "要約" }.apply { availability = AiAvailability.NeedsDownload }
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, ai).requestAll(sources(A), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertFalse(summaryOf(state, A)?.noticePending == true)
+        assertEquals("面の操作でDLを始めない", 0, ai.downloadCalls)
+    }
+
+    /** **持っている要約を理由で上書きしない。** 途中で使えなくなったら全節を終え、作っていた節に出す。 */
+    @Test
+    fun `途中で使えなくなると全節を終え、持っている要約は上書きしない`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.request(A, "A", "Aの本文")
+        advanceUntilIdle()
+
+        ai.availability = AiAvailability.TemporarilyUnavailable(IllegalStateException("AICore not bound"))
+        controller.requestAll(sources(A, B, C), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, A)?.summary)
+        assertTrue(summaryOf(state, B)?.summaryProblem is SectionChatProblem.AiStatus)
+        assertNull(summaryOf(state, C))
+        assertNull(state.value.sectionChat.batch)
+    }
+
+    /** 走行の印が残らない。状態確認の例外もその節の失敗で終わる。 */
+    @Test
+    fun `状態確認が投げても全節は節を飛ばして終わる`() = runTest {
+        val ai = FakeAiClient { "要約" }.apply { availabilityFailure = { IllegalStateException("状態を取れない") } }
+        val state = NoteUiStateStore(NoteUiState())
+
+        controller(state, ai).requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+
+        assertTrue(summaryOf(state, A)?.summaryProblem is SectionChatProblem.GenerationFailed)
+        assertFalse(state.value.sectionChat.isBatchRunning)
+    }
+
+    private fun source(section: SectionRef) =
+        SectionSummarySource(section, section.title!!, "${section.title}の本文")
+
+    private fun sources(vararg sections: SectionRef) = sections.map(::source)
+
+    /** 生成に渡った本文を順に取り出す。**どの節をどの順で作ったか**を見る。 */
+    private fun FakeAiClient.bodies(): List<String> =
+        prompts.map { prompt -> BODY_IN_PROMPT.find(prompt)!!.value }
+
+    /** 保留中の生成を、列が尽きるまで1本ずつ返す。 */
+    private fun TestScope.finishGenerations(ai: FakeAiClient, result: String) {
+        runCurrent()
+        repeat(MAX_FINISHED) {
+            ai.completeAll(result)
+            runCurrent()
+        }
+        advanceUntilIdle()
+    }
+
     private fun TestScope.controller(state: NoteUiStateStore, ai: FakeAiClient) =
         SectionChatController(this, ai, state.sectionChatWriter, StandardTestDispatcher(testScheduler))
 
@@ -462,5 +1027,8 @@ class SectionChatControllerTest {
         val B = SectionRef("B")
         val C = SectionRef("C")
         val D = SectionRef("D")
+        val E = SectionRef("E")
+        val BODY_IN_PROMPT = Regex("""[A-E]の本文|節\\d+の本文""")
+        const val MAX_FINISHED = 40
     }
 }

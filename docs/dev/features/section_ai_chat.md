@@ -75,11 +75,14 @@
   | 対象 | 値 | 定数 |
   |---|---|---|
   | プロンプトへ渡す節の本文 | **1500文字** | `NoteExcerptLimits.SECTION` |
-  | 持つ節の数 | **3節** | `SECTION_SUMMARY_LIMIT` |
+  | 全節の要約が1回に作る節の数 | **15節** | `SECTION_BATCH_LIMIT` |
   | 出力枠 | 256トークン | `genai-prompt` |
 
 <!-- state-fields: SectionChatState -->
-- **状態 `SectionChatState`:** `summaries`（最近作った順）
+- **状態 `SectionChatState`:** `summaries`（最近作った順）/ `batch`（全節の要約。頼んでいなければ null）
+<!-- /state-fields -->
+<!-- state-fields: SectionBatch -->
+- **全節の要約 `SectionBatch`:** `targets`（作る節）/ `isRunning` / `stoppedBusy`（断られ続けて止まった）
 <!-- /state-fields -->
 <!-- state-fields: SectionSummary -->
 - **1節分 `SectionSummary`:** `section`（見出し名と同名の中での順番）/ `requestId` / `sectionTitle` /
