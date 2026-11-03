@@ -725,10 +725,11 @@ internal class NoteSessionCoordinator(
 
     // ── さがすタブ（実装は SearchController）────────────────────────────────
 
-    fun loadFolders() = search.loadFolders()
+    fun openExplore(collectNotes: suspend () -> List<NoteFile>) = search.onOpened(collectNotes)
     fun selectSearchFolder(folder: NoteFolder?) = search.selectFolder(folder)
-    fun searchByKeyword(query: String) = search.searchByKeyword(query)
-    fun pickRandomInScope() = search.pickRandomInScope()
+    fun searchTitle(query: String) = search.searchTitle(query)
+    fun searchByKeyword(query: String, collectNotes: suspend () -> List<NoteFile>) =
+        search.searchByKeyword(query, collectNotes)
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 
@@ -804,7 +805,6 @@ internal class NoteSessionCoordinator(
         distill.dragRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
     fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
         distill.nudgeRangeEdge(id, move)
-    fun resetDistillRange(id: String) = distill.resetRange(id)
     fun saveDistillSelection() = distill.saveSelection()
     fun retryDistill() = distill.retry()
     fun dismissDistillResult() = distill.dismissResult()

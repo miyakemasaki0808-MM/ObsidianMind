@@ -59,7 +59,7 @@ Vault 内のサイドカー `_ReadingTraces/*.json` に残す。
 - **置き場には痕跡のほかに結晶のフォルダ `crystals/` がある**（→ [reflect_crystal](reflect_crystal.md) 判断7）。
   索引はフォルダと先頭64文字に満たない名前を載せない（`readingTraceKeyOf`）ので、孤児掃除・退避・読み戻しの下見には現れない
 - **スキーマ:** **v9**。v1〜v8 も読める（書き戻しは常に現行版）。v9 は訪問に机で並べた相手（`beside`）を足した（→ [desk_memory](desk_memory.md) §6）。v8 は余白メモに引用と控えた位置（`passage`）を足した（→ [margin_quote](margin_quote.md) §6）。**v3〜v6 のひとことは読み捨てる** → [余白メモ](reflect_margin_memo.md) 判断6
-- **ノート収集の対象から3箇所で除外する** — `collectNotes` / `collectNotesInScope` / `listTopLevelFolders`
+- **ノート収集の対象から2箇所で除外する** — `collectNotes` / `listTopLevelFolders`
 
 ### 上限（`ReadingTraceLimits`）
 
@@ -480,6 +480,10 @@ Gateway が書き込み直前に照合し、不一致なら書かずに捨てる
 **したがって段階0で根拠そのものを直した** — `querySafChildren` が `SafChildren(items, isComplete)` を返し、
 `traverseMarkdownPaths` が失敗したフォルダの**相対パス集合**を返す。全体1フラグにしないのは、
 孤児判定が「読めなかったサブツリー配下だけ候補から外す」と精密に書けるようにするため。
+
+**読むノートから外したことを不在にしない。** `.obsidian` は Rediscover や Explore の候補から外しているが、
+配下の `.md` を読んだ旧版の痕跡が残っている。同じ一覧で判定すると、元ノートが実在するのに消せる孤児になるので、
+孤児判定は `.obsidian` まで歩く別の走査（`collectNotesForAbsenceCheck`）を使う。洗い出しも削除の直前も同じ口を通る。
 
 **既存機能は壊さない。** Rediscover・さがす・関連ノートは**不完全でも見つかった分で動き続ける**。
 完全性フラグを見るのは掃除だけ。**混ぜると、同期が遅いVaultでランダム表示が止まるという別の不具合を作る。**

@@ -382,6 +382,19 @@ class ThreadingScanTest {
                 offMain = mapOf("controller/RebuttalController.kt" to 1)
             ),
             HeavyCall(
+                name = "Explore のタイトルの照合（打つたびに Vault 全体を照らす）",
+                call = """\bmatchNotesByTitle\(""",
+                dispatcher = "matchDispatcher",
+                offMain = mapOf("controller/SearchController.kt" to 1)
+            ),
+            HeavyCall(
+                name = "Explore の AI の候補を粗く絞る（範囲は Vault 全体になりうる）",
+                // 定義は `fun <T> recallCutByKeyword(` の形なので、型引数の閉じを前に持つものは数えない。
+                call = """(?<!> )\brecallCutByKeyword\(""",
+                dispatcher = "cutDispatcher",
+                offMain = mapOf("domain/SearchPickerUseCase.kt" to 1)
+            ),
+            HeavyCall(
                 name = "退避ファイルの組み立てと解析",
                 call = """\bReadingTraceBackupJson\.(?:encode|decode)\(""",
                 dispatcher = "cpuDispatcher",

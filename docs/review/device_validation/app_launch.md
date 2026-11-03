@@ -22,7 +22,7 @@ OPの再生条件を触ったときに使う。**起動経路そのものを触�
   同じ記録は前面・フォーカス・IME の行などにも出るので、`ActivityRecord` の行を数えると1枚でも10前後になる。
 
   ```text
-  adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*MainActivity'
+  adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*com\.vigilith\.ai/.*MainActivity'
   ```
 
 - **`LAUNCH-01` の前に、アプリを完全に終了させる**（タスクを一度捨てる）。

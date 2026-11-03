@@ -29,5 +29,16 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
+| `2026-11-03-fold-desk-device/P3-1` | カバー画面を横にすると、見出しの霞がレールの右端から離れる | `起票` UI-7 |
+| `2026-11-03-explore-antigravity-review/P1-1` | Nano が空や候補外を返すと、キーワード一致の結果が注記なしで出て正本と食い違う | `起票` SEARCH-2 |
+| `2026-11-03-explore-antigravity-review/P2-1` | AI のモードの照合が拡張子まで照らし、`md` や `m` で無関係なノートが出る | `起票` SEARCH-3 |
+| `2026-11-03-explore-antigravity-review/P3-1` | タイトル0件の1行が範囲を戻さず、前に選んだフォルダで探す | `起票` SEARCH-4 |
+| `2026-11-03-explore-antigravity-review/P4-1` | タブを離れても範囲と結果が残り、走行中の検索も止めない | `統合` SEARCH-4 |
+| `2026-11-03-explore-antigravity-review/P5-1` | AI のモードのプロンプトと結果で、同じ名前のノートを見分けられない | `起票` SEARCH-5 |
+| `2026-11-03-explore-antigravity-review/P6-1` | クエリの bigram を候補ごとに作り直す | `起票` SEARCH-8 |
+| `2026-11-03-explore-antigravity-review/P6-2` | AI のモードの入力中もタイトルを照らす | `統合` SEARCH-8 |
+| `2026-11-03-explore-antigravity-review/P7-1` | 範囲に選んだフォルダが外で消えると、チップの選択が消えて0件になる | `起票` SEARCH-6 |
+| `2026-11-03-explore-antigravity-review/P7-2` | 範囲のチップの選択状態を TalkBack が読み上げない | `起票` SEARCH-7 |
+| `2026-11-03-explore-antigravity-review/P7-3` | 空の Vault は一覧を引くたびに走査する | `統合` SEARCH-8 |
 | `2026-07-31-code-quality/P2-5` | releaseは組み立てられるが公開可能な成果物ではない | `起票` REL-1 |
 | `2026-10-12-observation-device/P2-1` | ランダム・さがす・関連で開いたノートが前のノートの読んでいた位置から始まる | `統合` UI-2 |

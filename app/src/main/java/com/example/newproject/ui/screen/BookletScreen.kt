@@ -43,7 +43,6 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -58,6 +57,7 @@ import com.example.newproject.model.state.WeaveBlockedReason
 import com.example.newproject.model.state.WeaveState
 import com.example.newproject.model.state.canWeave
 import com.example.newproject.model.state.showsModeToggle
+import com.example.newproject.ui.component.ModeToggleChip
 import com.example.newproject.model.state.visibleBundle
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
@@ -71,10 +71,8 @@ import com.example.newproject.ui.theme.OnButtonPrimary
 import com.example.newproject.ui.theme.OnButtonSecondary
 import com.example.newproject.ui.theme.noteFieldPaper
 import com.example.newproject.ui.theme.OnSurface
-import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.Panel
-import com.example.newproject.ui.theme.PanelChip
 import com.example.newproject.ui.theme.ReadingGradient
 import kotlinx.coroutines.launch
 
@@ -469,13 +467,13 @@ private fun BookletModeToggle(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            BookletModeChip(
+            ModeToggleChip(
                 label = "引く",
                 selected = state.mode == BookletMode.Draw,
                 enabled = true,
                 modifier = Modifier.weight(1f)
             ) { onModeChange(BookletMode.Draw) }
-            BookletModeChip(
+            ModeToggleChip(
                 label = "${seedTitle}から編む",
                 selected = state.mode == BookletMode.Weave,
                 enabled = state.canWeave,
@@ -490,42 +488,6 @@ private fun BookletModeToggle(
                 modifier = Modifier.padding(top = 6.dp)
             )
         }
-    }
-}
-
-@Composable
-private fun BookletModeChip(
-    label: String,
-    selected: Boolean,
-    enabled: Boolean,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier
-            .height(40.dp)
-            // **選ばれているかを読み上げにも出す。** 色と塗りだけだと、
-            // 見えない利用者にはどちらを見ているのか分からない。
-            .semantics { stateDescription = if (selected) "選択中" else "未選択" },
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) ButtonSecondary else PanelChip,
-            contentColor = if (selected) OnButtonSecondary else OnSurfaceMuted,
-            // 無効時の既定はテーマ由来のαなので、明示して不透明に保つ。
-            disabledContainerColor = PanelChip,
-            disabledContentColor = OnSurfaceFaint
-        ),
-        border = BorderStroke(1.dp, ButtonOutlineOnGradient),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            maxLines = 1,
-            // 長いノート名でもトグルの高さを変えない。名前の頭は残る。
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

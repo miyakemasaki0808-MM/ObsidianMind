@@ -65,6 +65,7 @@
 | 要約カバレッジの基準線 | [summary_coverage.md](summary_coverage.md) | `COVER-01` `COVER-02` |
 | 結晶（初回は通し版） | [reflect_crystal.md](reflect_crystal.md) | `CRYSTAL-01` `CRYSTAL-04` `CRYSTAL-05` |
 | 机の記憶（初回は通し版） | [desk_memory.md](desk_memory.md) | `DESKMEM-01` `DESKMEM-02` `DESKMEM-07` `DESKMEM-09` |
+| Explore（初回は通し版） | [explore.md](explore.md) | `EXPLORE-01` `EXPLORE-03` `EXPLORE-06` `EXPLORE-09` `EXPLORE-11` |
 
 **ネットワーク権限の行は `PERM-01` だけを置く。** 1コマンドで終わり、
 **いま端末に入っているのがどのAPKか**という他の全ケースの前提を確かめられる。

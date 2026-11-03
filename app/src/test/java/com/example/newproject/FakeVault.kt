@@ -35,7 +35,6 @@ class FakeVaultBrowser(var handle: FakeVaultHandle? = FakeVaultHandle()) : Vault
  */
 class FakeVaultHandle(
     var folders: List<NoteFolder> = emptyList(),
-    var notesByFolder: Map<String?, List<NoteFile>> = emptyMap(),
     /** [collectAllNotes] が返すVault全体の走査結果。**完全性ごと差し替えられる。** */
     var vaultScan: VaultScan = VaultScan(emptyList()),
     /** [collectImages] が返す画像走査。**完全性ごと差し替えられる。** */
@@ -59,8 +58,6 @@ class FakeVaultHandle(
     val readSnippetRefs = mutableListOf<DocumentRef>()
 
     var listFoldersCount = 0
-        private set
-    var collectCount = 0
         private set
     var collectAllCount = 0
         private set
@@ -90,13 +87,6 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return imageScan
-    }
-
-    override suspend fun collectNotesInScope(folder: NoteFolder?): List<NoteFile> {
-        collectCount++
-        beforeEachCall()
-        failure?.let { throw it }
-        return notesByFolder[folder?.documentId].orEmpty()
     }
 
     override suspend fun readNoteSnippet(ref: DocumentRef): String? {

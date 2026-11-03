@@ -111,6 +111,8 @@ internal object DistillLimits {
     const val FINAL_SELECTION_LIMIT = 6
     const val MAX_SENTENCE_CHARACTERS = 160
     const val CHUNK_CHARACTER_LIMIT = 1_200
+
+    /** 太字率の目安。**保存は止めない。** 最初のチェックを付ける線と、警告を出す線に使う。 */
     const val MAX_BOLD_RATIO = 0.30
 
     /**

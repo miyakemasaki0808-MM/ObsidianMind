@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
 import com.example.newproject.ui.screen.MarginToggle
+import com.example.newproject.ui.screen.fullscreenMemoDescription
+import com.example.newproject.ui.screen.fullscreenMemoSymbol
 import com.example.newproject.ui.screen.MarginWindowShift
 import com.example.newproject.ui.screen.PreviousReadingRow
 import com.example.newproject.ui.screen.previousReadingLabel
@@ -46,6 +48,15 @@ import java.time.ZoneId
 
 // ✎ と窓の切り替わりで、どの余白を出すか（→ features/margin_pane.md §5.4）。
 class MarginSurfaceTest {
+
+    /** 全画面を抜ける ✕ と同じ記号を使わない。読み上げは押したときに起きることを言う。 */
+    @Test
+    fun `全画面の ✎ はシートが出ている間だけ、しまう記号と読み上げ名になる`() {
+        assertEquals("✎", fullscreenMemoSymbol(sheetShown = false))
+        assertEquals("▾", fullscreenMemoSymbol(sheetShown = true))
+        assertEquals("このノートのメモ", fullscreenMemoDescription(sheetShown = false))
+        assertEquals("メモをしまう", fullscreenMemoDescription(sheetShown = true))
+    }
 
     @Test
     fun `✎ は出ている余白をしまい、出ていなければその窓で出せる面を出す`() {

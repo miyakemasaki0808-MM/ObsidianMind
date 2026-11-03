@@ -104,7 +104,7 @@ internal fun deskSpreadAfter(current: DeskSpread, gesture: DeskSpreadGesture): D
 
 /**
  * 読み上げ（TalkBack）から広げ方を替える操作。名前と行き先の組。読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えない。
- * 補助の面だけのときは、本文の上のつまみが隠れているので、戻る操作で2面へ戻す。
+ * つまみは面の外にあるので、補助の面だけのときも残り、この操作で2面へ戻せる。
  */
 internal fun deskSpreadActionsFor(current: DeskSpread): List<Pair<String, DeskSpread>> = when (current) {
     DeskSpread.Both -> listOf("余白を1画面に" to DeskSpread.SupportingOnly, "本文を1画面に" to DeskSpread.MainOnly)

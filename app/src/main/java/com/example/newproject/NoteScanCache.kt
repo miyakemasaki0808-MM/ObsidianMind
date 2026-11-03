@@ -4,12 +4,30 @@ import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+// ノート一覧の有効期間。走査を終えてから数える — 始めてから数えると、この時間より長い走査では毎回走り直す。
+// Vault側の編集（Obsidian同期等）は最大でこの時間と走査の時間を足した分だけ反映が遅れる。
+internal const val NOTES_CACHE_TTL_MS = 60_000L
+
+/** 走査の記録。実機ケースは走査の本数と一覧の寿命をこの記録で判定する（→ review/device_validation/explore.md）。 */
+internal enum class NoteScanEvent {
+    /** 走査を始めた。相乗りとキャッシュの再利用では起きない。 */
+    STARTED,
+
+    /** 一覧を公開した。**寿命の起点。** 捨てた走査では起きない。 */
+    PUBLISHED
+}
+
 /**
- * Vault全体のノート一覧のTTL付きキャッシュ。ランダム表示・冊子・関連ノート・痕跡のパス解決・結晶の一覧が共有する。
+ * Vault全体のノート一覧のTTL付きキャッシュ。ランダム表示・Explore・冊子・関連ノート・痕跡のパス解決・結晶の一覧が共有する。
  *
  * **走査の結果を公開する直前に、Vaultの世代を照合する。** 走査を始めた後にVaultが切り替わっていたら、
  * 結果を捨てて [CancellationException] で呼び出し側を止める。旧Vaultの一覧がキャッシュ・開けるパス・
@@ -17,12 +35,17 @@ import kotlinx.coroutines.flow.asStateFlow
  * 取り消されない場所から走査を呼んでも、旧い結果は公開しない。`vaultUri` の比較で代用しないのは、
  * A→B→A と選び直したときに同じ値になって旧い走査が素通りするため（→ architecture.md 判断4）。
  *
+ * **走査の途中に来た要求は、同じ走査の結果を待つ。** 走査は [scope] で走らせ、頼んだ人の Job では走らせない —
+ * 最初に頼んだ人が取り消されても、相乗りした人へ結果を届けるため。読み書きは [scope] と同じ Main の上で起きる。
+ *
  * Android の型に触れないので、素のJVMで交錯を組み立てて確かめられる（`NoteScanCacheTest`）。
  */
 internal class NoteScanCache(
+    scope: CoroutineScope,
     private val ttlMillis: Long,
     private val vaultGeneration: () -> Long,
-    private val clock: () -> Long = System::currentTimeMillis
+    private val clock: () -> Long = System::currentTimeMillis,
+    private val onScanEvent: (NoteScanEvent) -> Unit = {}
 ) {
     /** いまのキャッシュ。空ならまだ走査していない。 */
     var notes: List<NoteFile> = emptyList()
@@ -37,6 +60,11 @@ internal class NoteScanCache(
 
     private var loadedAt = 0L
 
+    // 走査の失敗を scope の親へ伝えない。失敗は待っている人が await で受け取る。
+    private val scanScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+    private var running: Deferred<List<NoteFile>>? = null
+    private var bodyWrites = 0L
+
     private val mutableKnownNotes = MutableStateFlow<Map<String, DocumentRef>>(emptyMap())
 
     /**
@@ -46,28 +74,47 @@ internal class NoteScanCache(
     val knownNotes: StateFlow<Map<String, DocumentRef>> = mutableKnownNotes.asStateFlow()
 
     /**
-     * TTL内ならキャッシュを返し、切れていれば [scan] で走査して公開する。
+     * TTL内ならキャッシュを返し、切れていれば [scan] で走査して公開する。走査の途中なら、その結果を待つ。
      * [onPublished] は公開した一覧を受け取る（分野の索引へ載せるため）。**旧Vaultの結果では呼ばない。**
      */
     suspend fun get(
         scan: suspend () -> List<NoteFile>,
         onPublished: (List<NoteFile>) -> Unit
     ): List<NoteFile> {
-        val now = clock()
-        if (notes.isNotEmpty() && now - loadedAt < ttlMillis) return notes
+        if (notes.isNotEmpty() && clock() - loadedAt < ttlMillis) return notes
+        val result = running?.takeUnless { it.isCompleted } ?: startScan(scan, onPublished)
+        return result.await()
+    }
+
+    private fun startScan(
+        scan: suspend () -> List<NoteFile>,
+        onPublished: (List<NoteFile>) -> Unit
+    ): Deferred<List<NoteFile>> {
         val generation = vaultGeneration()
-        val scanned = scan()
-        if (generation != vaultGeneration()) {
-            throw CancellationException("走査の間に Vault が切り替わったので、結果を捨てました。")
+        val writes = bodyWrites
+        onScanEvent(NoteScanEvent.STARTED)
+        val result = scanScope.async {
+            val scanned = scan()
+            if (generation != vaultGeneration()) {
+                throw CancellationException("走査の間に Vault が切り替わったので、結果を捨てました。")
+            }
+            // 走査の途中で本文を書き換えたなら、この一覧の更新日時は古い。待っている人へ返すだけで残さない。
+            if (writes == bodyWrites) publish(scanned, onPublished)
+            scanned
         }
+        running = result
+        return result
+    }
+
+    private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit) {
         notes = scanned
         linkIndex = NoteLinkIndex(scanned)
-        loadedAt = now
+        loadedAt = clock()
         mutableKnownNotes.value = scanned
             .filter { it.vaultRelativePath.isNotEmpty() }
             .associate { it.vaultRelativePath to it.ref }
+        onScanEvent(NoteScanEvent.PUBLISHED)
         onPublished(scanned)
-        return scanned
     }
 
     /**
@@ -84,11 +131,13 @@ internal class NoteScanCache(
     }
 
     /**
-     * 本文を書き換えた後に呼ぶ。一覧は更新日時を持つので捨て、次の [get] で走査し直す。
+     * 本文を書き換えた後に呼ぶ。一覧は更新日時を持つので捨て、次の [get] で走査し直す。走っている走査には相乗りさせない。
      * **リンクの索引は残す。** 書き換えではノートの名前・パス・参照が変わらず、ここで捨てると、
      * 本文を出したまま次の走査が起きるまで別のノートへのリンクを開けない。
      */
     fun expireAfterBodyWrite() {
+        running = null
+        bodyWrites++
         notes = emptyList()
         loadedAt = 0L
         mutableKnownNotes.value = emptyMap()

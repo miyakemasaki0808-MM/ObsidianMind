@@ -70,6 +70,46 @@ class VaultScanInstrumentationTest {
         assertTrue("読めなかったフォルダは無いはず", scan.unreadableFolderPaths.isEmpty())
     }
 
+    /** 本番の走査が除外の一覧を渡していること。一覧そのものの中身は JVM の走査テストが見る。 */
+    @Test
+    fun 読むノートの走査は機能フォルダと設定フォルダのノートを集めない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md")
+        FakeVaultDocumentsProvider.putFile("_AI補記/旧補記.md")
+        FakeVaultDocumentsProvider.putFile(".obsidian/plugins/README.md")
+
+        val scan = NoteRepository().collectNotes(contentResolver, FakeVaultDocumentsProvider.treeUri)
+
+        assertEquals(listOf("ideas/habit.md"), scan.notes.map { it.vaultRelativePath })
+    }
+
+    /** 孤児判定が通る口。設定フォルダの元ノートを不在と読むと、生きた痕跡を消せてしまう。 */
+    @Test
+    fun 不在の判定の走査は設定フォルダのノートも集める() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md")
+        FakeVaultDocumentsProvider.putFile("_AI補記/旧補記.md")
+        FakeVaultDocumentsProvider.putFile(".obsidian/plugins/README.md")
+
+        val scan = requireNotNull(browser().current()).collectAllNotes()
+
+        assertEquals(
+            listOf(".obsidian/plugins/README.md", "ideas/habit.md"),
+            scan.notes.map { it.vaultRelativePath }.sorted()
+        )
+    }
+
+    /** Explore の範囲は全体の一覧を場所で絞るので、全体の走査が潜らないフォルダを選べても空になる。 */
+    @Test
+    fun フォルダの一覧は全体の走査が潜らないフォルダを出さない() = runBlocking<Unit> {
+        FakeVaultDocumentsProvider.putFile("ideas/habit.md")
+        FakeVaultDocumentsProvider.putFile("_AI補記/旧補記.md")
+        FakeVaultDocumentsProvider.putFile(".obsidian/plugins/README.md")
+        FakeVaultDocumentsProvider.putFile("_ReadingTraces/trace.json")
+
+        val folders = requireNotNull(browser().current()).listTopLevelFolders()
+
+        assertEquals(listOf("ideas"), folders.map { it.name })
+    }
+
     /**
      * 読めなかったフォルダは、**空フォルダとしてではなく不完全として**返る。
      *

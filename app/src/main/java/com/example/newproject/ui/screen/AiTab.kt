@@ -82,7 +82,6 @@ fun AiTab(
     onSelectDistillRange: (String, DistillRangePreset) -> Unit,
     onDragDistillRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
     onNudgeDistillRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
-    onResetDistillRange: (String) -> Unit,
     onSaveDistill: () -> Unit,
     onRetryDistill: () -> Unit,
     onDismissDistill: () -> Unit,
@@ -122,7 +121,6 @@ fun AiTab(
                 onSelectRange = onSelectDistillRange,
                 onDragRangeEdge = onDragDistillRangeEdge,
                 onNudgeRangeEdge = onNudgeDistillRangeEdge,
-                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -175,7 +173,6 @@ fun AiTab(
                 onSelectRange = onSelectDistillRange,
                 onDragRangeEdge = onDragDistillRangeEdge,
                 onNudgeRangeEdge = onNudgeDistillRangeEdge,
-                onResetRange = onResetDistillRange,
                 onSave = onSaveDistill,
                 onRetry = onRetryDistill,
                 onDismiss = onDismissDistill,
@@ -200,7 +197,6 @@ private fun DistillPanel(
     onSelectRange: (String, DistillRangePreset) -> Unit,
     onDragRangeEdge: (String, DistillRangeEdge, Int, Int) -> Unit,
     onNudgeRangeEdge: (String, DistillRangeEdgeMove) -> Unit,
-    onResetRange: (String) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
     onDismiss: () -> Unit,
@@ -279,29 +275,10 @@ private fun DistillPanel(
                     Text(
                         "選択 ${state.selectedCount}箇所・変更後の太字率 %.1f%%".format(ratioPercent),
                         fontSize = 12.sp,
-                        color = when {
-                            state.isSingleCandidateException -> AccentText
-                            state.isWithinBoldLimit -> OnSurface
-                            else -> ErrorText
-                        }
+                        color = if (state.isWithinBoldLimit) OnSurface else ErrorText
                     )
-                    when {
-                        state.isSingleCandidateException -> Text(
-                            "短いノートのため、最重要の1箇所だけを上限の例外として選択しています。保存前に太字率を確認してください。",
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp,
-                            color = AccentText
-                        )
-                        !state.isWithinBoldLimit && state.selectedCount == 0 -> Text(
-                            "既存の太字率が累積上限30%に達しているため、これ以上追加できません。",
-                            fontSize = 12.sp,
-                            color = ErrorText
-                        )
-                        !state.isWithinBoldLimit -> Text(
-                            "累積上限30%を超えています。選択を減らしてください。",
-                            fontSize = 12.sp,
-                            color = ErrorText
-                        )
+                    distillBoldNotice(state.isWithinBoldLimit, state.selectedCount)?.let { notice ->
+                        Text(notice, fontSize = 12.sp, lineHeight = 17.sp, color = ErrorText)
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -368,14 +345,13 @@ private fun DistillPanel(
         DistillRangeSheet(
             item = item,
             projectedBoldRatio = candidates.projectedBoldRatio,
-            isWithinBoldLimit = candidates.isWithinBoldLimit,
+            boldNotice = distillBoldNotice(candidates.isWithinBoldLimit, candidates.selectedCount),
             // 開いている候補自身が外された側かどうかで、告知の主語が変わる。
             isDeselectedByOverlap = item.id in candidates.overlapDeselectedIds,
             otherDeselectedCount = candidates.overlapDeselectedIds.count { it != item.id },
             onSelectPreset = { preset -> onSelectRange(item.id, preset) },
             onDragEdge = { edge, offset, from -> onDragRangeEdge(item.id, edge, offset, from) },
             onNudgeEdge = { move -> onNudgeRangeEdge(item.id, move) },
-            onReset = { onResetRange(item.id) },
             onDismiss = onCloseRangeSheet
         )
     }
@@ -392,13 +368,13 @@ private fun DistillPanel(
                     candidates.items.filter { it.isSelected }.forEach { item ->
                         Text(item.text, fontWeight = FontWeight.Bold, fontSize = 13.sp, color = OnSurface)
                     }
-                    if (candidates.isSingleCandidateException) {
+                    if (!candidates.isWithinBoldLimit) {
                         Text(
-                            "短いノートのため、この1箇所で変更後の太字率は %.1f%% になります。通常の累積上限30%%を超えますが、この1箇所だけ保存できます。"
+                            "変更後の太字率は %.1f%% で、目安の30%%を超えます。"
                                 .format(candidates.projectedBoldRatio * 100.0),
                             fontSize = 12.sp,
                             lineHeight = 17.sp,
-                            color = AccentText
+                            color = ErrorText
                         )
                     }
                     Text("元の文字は削除しません。この操作の取り消し機能はありません。", fontSize = 12.sp, color = ErrorText)

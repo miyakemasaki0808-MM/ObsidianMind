@@ -231,6 +231,9 @@ class DesignDocStateNameTest {
          * **型ごとの古さは機械では見つけられない**。そこは読んで直すしかない。
          */
         val RETIRED_NAMES = listOf(
+            "collectNotesInScope",
+            "pickRandomInScope",
+            "deskBarRailInsetDp",
             "Available",
             "Unavailable",
             "CheckFailed",
@@ -272,7 +275,11 @@ class DesignDocStateNameTest {
             "listAnnotationFiles",
             "loadAnnotations",
             "deleteAnnotation",
-            "deleteAllAnnotations"
+            "deleteAllAnnotations",
+            "isRangeAdjusted",
+            "resetDistillRange",
+            "isSingleCandidateException",
+            "singleCandidateExceptionId"
         )
     }
 }

@@ -62,9 +62,8 @@ class DistillControllerTest {
     }
 
     @Test
-    fun `the bold limit exception can be reached by a clause`() = runTest {
-        // 実機レビュー 2026-08-17 P2-1（DIST-02）。例外の説明が「1文」固定だった経路。
-        // 例外は文だけでなく句でも成立するので、文言も単位に依存できない。
+    fun `a short note can start with a clause checked past the bold guide`() = runTest {
+        // 最初のチェックは文だけでなく句にも付くので、文言も単位に依存できない。
         val sentence = "あ".repeat(30) + "、" + "い".repeat(30) + "。"
         val state = stateWithNote(sentence)
         val controller = controller(state, FakeAiClient.returning("S001"))
@@ -73,8 +72,9 @@ class DistillControllerTest {
         advanceUntilIdle()
 
         val candidates = state.value.distillState as DistillState.Candidates
-        assertTrue(candidates.isSingleCandidateException)
+        assertEquals(1, candidates.selectedCount)
         assertFalse(candidates.isWithinBoldLimit)
+        assertTrue(candidates.canSaveSelection)
         // 選ばれているのは文全体ではなく句。
         assertTrue(candidates.items.single().text.length < sentence.length)
     }
@@ -356,7 +356,7 @@ class DistillControllerTest {
     }
 
     @Test
-    fun `short note allows the top sentence as a confirmed limit exception`() = runTest {
+    fun `a short note saves its top sentence past the bold guide as it stands`() = runTest {
         val content = "一つ目の重要な文章です。\n二つ目の重要な文章です。"
         val state = NoteUiStateStore(
             NoteUiState(
@@ -375,7 +375,6 @@ class DistillControllerTest {
 
         val candidates = state.value.distillState as DistillState.Candidates
         assertFalse(candidates.isWithinBoldLimit)
-        assertTrue(candidates.isSingleCandidateException)
         assertTrue(candidates.canSaveSelection)
         controller.saveSelection()
         advanceUntilIdle()
@@ -396,12 +395,39 @@ class DistillControllerTest {
         val candidates = state.value.distillState as DistillState.Candidates
         assertTrue(candidates.selectedCount in 1 until candidates.items.size)
         assertTrue(candidates.isWithinBoldLimit)
-        assertFalse(candidates.isSingleCandidateException)
         assertTrue(candidates.projectedBoldRatio <= 0.30)
     }
 
     @Test
-    fun `only the highest ranked oversized sentence receives the exception`() = runTest {
+    fun `checking more past the bold guide still saves every checked candidate`() = runTest {
+        val state = stateWithNote()
+        val persistence = FakePersistence()
+        val controller = controller(
+            state,
+            FakeAiClient.returning("S001 S002 S003 S004 S005 S006"),
+            persistence
+        )
+        controller.start()
+        advanceUntilIdle()
+        val initial = state.value.distillState as DistillState.Candidates
+        assertTrue(initial.isWithinBoldLimit)
+
+        initial.items.filterNot { it.isSelected }.forEach { controller.toggleCandidate(it.id) }
+
+        val checked = state.value.distillState as DistillState.Candidates
+        assertEquals(checked.items.size, checked.selectedCount)
+        assertFalse(checked.isWithinBoldLimit)
+        assertTrue(checked.canSaveSelection)
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        val written = persistence.lastWrite!!.outputBytes.decodeToString()
+        checked.items.forEach { assertTrue(it.text, written.contains("**${it.text}**")) }
+    }
+
+    @Test
+    fun `only the highest ranked oversized sentence starts checked`() = runTest {
         val content = "一つ目の重要な文章です。\n二つ目の重要な文章です。"
         val state = NoteUiStateStore(
             NoteUiState(
@@ -419,18 +445,20 @@ class DistillControllerTest {
 
         val initial = state.value.distillState as DistillState.Candidates
         assertEquals("S002", initial.items.single { it.isSelected }.id)
-        assertTrue(initial.isSingleCandidateException)
+        assertFalse(initial.isWithinBoldLimit)
 
+        // どの候補でも、自分でチェックすれば保存できる。
         controller.toggleCandidate("S002")
         controller.toggleCandidate("S001")
 
         val changed = state.value.distillState as DistillState.Candidates
-        assertFalse(changed.isSingleCandidateException)
-        assertFalse(changed.canSaveSelection)
+        assertEquals("S001", changed.items.single { it.isSelected }.id)
+        assertFalse(changed.isWithinBoldLimit)
+        assertTrue(changed.canSaveSelection)
     }
 
     @Test
-    fun `existing body bold at the limit does not grant a sentence exception`() = runTest {
+    fun `a note already past the bold guide starts unchecked and saves what the user checks`() = runTest {
         val content = "**既存の重要な太字です。**\n追加候補です。"
         val state = NoteUiStateStore(
             NoteUiState(
@@ -442,15 +470,26 @@ class DistillControllerTest {
                 )
             )
         )
-        val controller = controller(state, FakeAiClient.returning("S001"))
+        val persistence = FakePersistence()
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence)
         controller.start()
         advanceUntilIdle()
 
         val candidates = state.value.distillState as DistillState.Candidates
         assertEquals(0, candidates.selectedCount)
         assertFalse(candidates.isWithinBoldLimit)
-        assertFalse(candidates.isSingleCandidateException)
-        assertFalse(candidates.canSaveSelection)
+        assertFalse("何もチェックしていなければ保存するものが無い", candidates.canSaveSelection)
+
+        controller.toggleCandidate("S001")
+
+        val checked = state.value.distillState as DistillState.Candidates
+        assertFalse(checked.isWithinBoldLimit)
+        assertTrue(checked.canSaveSelection)
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        assertEquals("**既存の重要な太字です。**\n**追加候補です。**", persistence.lastWrite!!.outputBytes.decodeToString())
     }
 
     @Test
@@ -720,8 +759,8 @@ class DistillControllerTest {
         val after = state.value.distillState as DistillState.Candidates
         assertEquals("理由は選択集合か確定範囲が変わるまで残る", listOf("S005"), after.overlapDeselectedIds)
         assertEquals(afterWiden.items, after.items)
-        // 最初の範囲へ戻す操作も、既に初期範囲なら告知を消さない。
-        controller.resetRange("S005")
+        // 元の段を選び直す操作も、既にその範囲なら告知を消さない。
+        controller.applyRange("S005", DistillRangePreset.Clause)
         assertEquals(
             listOf("S005"),
             (state.value.distillState as DistillState.Candidates).overlapDeselectedIds
@@ -779,7 +818,7 @@ class DistillControllerTest {
     }
 
     @Test
-    fun `widening past the cumulative limit blocks saving and narrowing releases it`() = runTest {
+    fun `widening past the bold guide warns without blocking and narrowing clears the warning`() = runTest {
         val state = stateWithNote(adjustableNote())
         val controller = controller(state, FakeAiClient.returning("S001 S003 S005"))
         controller.start()
@@ -790,33 +829,51 @@ class DistillControllerTest {
 
         val widened = state.value.distillState as DistillState.Candidates
         assertFalse(widened.isWithinBoldLimit)
-        assertFalse(widened.canSaveSelection)
+        assertTrue(widened.canSaveSelection)
 
-        controller.resetRange("S005")
+        controller.applyRange("S005", DistillRangePreset.Clause)
 
         val restored = state.value.distillState as DistillState.Candidates
         assertTrue(restored.isWithinBoldLimit)
         assertTrue(restored.canSaveSelection)
-        assertFalse(restored.items.first { it.id == "S005" }.isRangeAdjusted)
+        assertEquals(DistillRangePreset.Clause, restored.items.first { it.id == "S005" }.currentPreset)
     }
 
     @Test
-    fun `narrowing removes the need for the short note exception`() = runTest {
+    fun `narrowing a short note top candidate brings it back under the bold guide`() = runTest {
         val state = stateWithNote(exceptionNote())
         val controller = controller(state, FakeAiClient.returning("S003"))
         controller.start()
         advanceUntilIdle()
         val before = state.value.distillState as DistillState.Candidates
         assertFalse(before.isWithinBoldLimit)
-        assertTrue(before.isSingleCandidateException)
 
-        // 例外の対象IDは固定したまま、判定に使う範囲だけが確定範囲へ差し替わる。
+        // 警告の判定は確定範囲で引き直す。
         controller.applyRange("S003", DistillRangePreset.Term)
 
         val after = state.value.distillState as DistillState.Candidates
         assertTrue(after.isWithinBoldLimit)
-        assertFalse(after.isSingleCandidateException)
         assertEquals("語三", after.items.single().text)
+    }
+
+    @Test
+    fun `the preset buttons return a dragged range to where it started`() = runTest {
+        val state = stateWithNote(adjustableNote())
+        val controller = controller(state, FakeAiClient.returning("S005"))
+        controller.start()
+        advanceUntilIdle()
+        val initial = (state.value.distillState as DistillState.Candidates).items.single()
+        val startingPreset = requireNotNull(initial.currentPreset)
+
+        controller.dragRangeEdge("S005", DistillRangeEdge.End, offsetInParent = 20, fromOffsetInParent = 31)
+
+        val dragged = (state.value.distillState as DistillState.Candidates).items.single()
+        assertEquals(null, dragged.currentPreset)
+        assertTrue(dragged.text != initial.text)
+
+        controller.applyRange("S005", startingPreset)
+
+        assertEquals(initial, (state.value.distillState as DistillState.Candidates).items.single())
     }
 
     @Test
@@ -835,7 +892,6 @@ class DistillControllerTest {
         val closed = state.value.distillState as DistillState.Candidates
         assertEquals(null, closed.rangeSheetCandidateId)
         val item = closed.items.single()
-        assertTrue(item.isRangeAdjusted)
         assertEquals(DistillRangePreset.Sentence, item.currentPreset)
         assertEquals(item.parentText, item.text)
     }
@@ -878,7 +934,6 @@ class DistillControllerTest {
 
         val adjusted = (state.value.distillState as DistillState.Candidates).items.single()
         assertEquals(null, adjusted.currentPreset)
-        assertTrue(adjusted.isRangeAdjusted)
 
         controller.saveSelection()
         advanceUntilIdle()

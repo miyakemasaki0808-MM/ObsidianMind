@@ -56,9 +56,9 @@ fun notePaperTone(lastModified: Long?, vaultLastModified: List<Long?>): NotePape
  *
  * [notePaperTone] との違いは、**材料が2箇所に散っている**こと。
  *
- * 1. **最終更新は [RelatedNote] 自身を優先する。** さがすタブは走査キャッシュを温めないので、
+ * 1. **最終更新は [RelatedNote] 自身を優先する。** 走査キャッシュは切れていることがあるので、
  *    キャッシュだけを見ると「候補は値を持っているのに使わない」ことになる
- *    （`SearchController` / `SearchPickerUseCase` は `lastModified` を設定している）。
+ *    （Explore の結果は `lastModified` を持つ）。
  *    当日履歴から作られた候補だけは値を持たないので、その場合はキャッシュへ落ちる。
  * 2. **キャッシュに対象が居なければ分布へ1件補う。** 割合の分母は一覧の件数なので、
  *    補わないと分母が1件少ないまま数えることになる（→ [notePaperTone] の契約）。

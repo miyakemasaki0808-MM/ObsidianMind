@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.screen.distillBoldNotice
 import com.example.newproject.ui.screen.overlapNotice
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -13,6 +14,28 @@ import org.junit.Test
  * 件数だけを言うと、目の前の候補を「ほか」と呼んで関係を逆に読ませる。
  */
 class DistillRangeNoticeTest {
+
+    @Test
+    fun `太字率が目安に収まっていれば警告を出さない`() {
+        assertNull(distillBoldNotice(isWithinBoldLimit = true, selectedCount = 3))
+        assertNull(distillBoldNotice(isWithinBoldLimit = true, selectedCount = 0))
+    }
+
+    @Test
+    fun `チェックがあって目安を超えるときは保存できると言う`() {
+        val notice = requireNotNull(distillBoldNotice(isWithinBoldLimit = false, selectedCount = 1))
+
+        assertTrue(notice.contains("保存できます"))
+    }
+
+    @Test
+    fun `チェックが無くて目安を超えるのは既にある太字のせいで保存できるとは言わない`() {
+        val notice = requireNotNull(distillBoldNotice(isWithinBoldLimit = false, selectedCount = 0))
+
+        assertTrue(notice.contains("既にある太字"))
+        assertTrue(notice.contains("自分でチェック"))
+        assertTrue(!notice.contains("保存できます"))
+    }
 
     @Test
     fun `解消を起こした候補では相手が外れたことを言う`() {

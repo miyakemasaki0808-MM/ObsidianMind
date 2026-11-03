@@ -4,6 +4,7 @@ import com.example.newproject.ui.screen.ReaderChoice
 import com.example.newproject.ui.screen.ReaderFold
 import com.example.newproject.ui.screen.ReaderFoldInfo
 import com.example.newproject.ui.screen.ReaderLayout
+import com.example.newproject.ui.screen.gripStartDp
 import com.example.newproject.ui.screen.ReaderRegion
 import com.example.newproject.ui.screen.ReaderWindow
 import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
@@ -206,6 +207,19 @@ class ReaderLayoutTest {
     // ── 本文の見開き（→ features/note_spread.md §5「入る条件」）────────────────
 
     private val note = SpreadFit(fontScale = 1f, maxBlockChars = 500)
+
+    /** つまみと帯は折り目の右の面の左端から始まる（→ system/fold_experience.md §6）。幅のある折り目にもかからない。 */
+    @Test
+    fun `つまみと帯の左端は、机でも見開きでも折り目の右にある`() {
+        // 本文領域は窓の20dpから。折り目は本文領域の 400〜430dp と 406〜436dp。
+        val pane = readerLayoutFor(800f, 900f, paneOpen = true, fold = vertical(420f, widthDp = 30f), regionStartDp = 20f)
+        assertTrue((pane as ReaderLayout.MarginPane).gripStartDp >= 430f)
+        val spread = readerLayoutFor(812f, 820f, paneOpen = false, expandedWidth = true, fold = vertical(426f, widthDp = 30f), regionStartDp = 20f, spread = note)
+        assertTrue((spread as ReaderLayout.Spread).gripStartDp >= 436f)
+        // 細い折り目では、溝の分だけ右から始まる（本文領域の折り目は 406dp、溝は 16dp）。
+        val thin = readerLayoutFor(812f, 820f, paneOpen = false, expandedWidth = true, fold = vertical(426f), regionStartDp = 20f, spread = note)
+        assertEquals(414f, (thin as ReaderLayout.Spread).gripStartDp, 0.001f)
+    }
 
     /** 平らに開いた本の形でレールを畳んだ窓。本文領域は窓の20dpから812dp、折り目は窓の426dp。 */
     @Test

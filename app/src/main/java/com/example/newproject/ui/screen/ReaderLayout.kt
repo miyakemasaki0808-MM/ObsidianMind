@@ -14,7 +14,7 @@ internal sealed interface ReaderLayout {
     data object Stacked : ReaderLayout
     data object SideBySide : ReaderLayout
 
-    /** 左に操作と本文、右に余白ペイン。本文の幅と、折り目をまたぐ溝の幅を持つ。 */
+    /** 左に本文、右に余白ペイン。操作は常設せず、右の面の上のつまみで呼ぶ（→ [gripStartDp]）。本文の幅と、折り目をまたぐ溝の幅を持つ。 */
     data class MarginPane(val bodyWidthDp: Float, val gutterDp: Float) : ReaderLayout
 
     /**
@@ -23,6 +23,15 @@ internal sealed interface ReaderLayout {
      */
     data class Spread(val pageStartDp: Float, val pageWidthDp: Float, val gutterDp: Float) : ReaderLayout
 }
+
+/**
+ * つまみと帯の左端（本文領域の座標、dp）。**折り目の右の面の左端で、机と見開きで同じ場所にする**（→ system/fold_experience.md §6）。
+ * 左上は指が届きにくく、帯と一緒に出すレールも左端に重なる。
+ */
+internal val ReaderLayout.MarginPane.gripStartDp: Float get() = bodyWidthDp + gutterDp
+
+/** 見開きのつまみと帯の左端。右ページの左端（→ [ReaderLayout.MarginPane.gripStartDp]）。 */
+internal val ReaderLayout.Spread.gripStartDp: Float get() = pageStartDp + pageWidthDp + gutterDp
 
 /** 見開きに入れるかを決める、本文の側の入力（→ [spreadAllowed]）。[maxBlockChars] は本文のブロックの文字数の最大。 */
 internal data class SpreadFit(val fontScale: Float, val maxBlockChars: Int)

@@ -42,9 +42,7 @@ data class DistillCandidateItem(
     /** いまどの段か。**自由範囲へ動かすとどの段にも一致せず null になる。** */
     val currentPreset: DistillRangePreset? = null,
     /** 微調整で動かせる向き。**押せない矢印を出さないために引く。** */
-    val availableEdgeMoves: Set<DistillRangeEdgeMove> = emptySet(),
-    /** 最初の範囲から動いているか。「最初の範囲に戻す」の可否。 */
-    val isRangeAdjusted: Boolean = false
+    val availableEdgeMoves: Set<DistillRangeEdgeMove> = emptySet()
 )
 
 enum class DistillRecoveryKind { Diverged, Inaccessible, Corrupt }
@@ -66,8 +64,8 @@ sealed class DistillState {
         val sourceTitle: String,
         val items: List<DistillCandidateItem>,
         val projectedBoldRatio: Double,
+        /** 目安の太字率に収まっているか。**保存の可否には使わない**（超えたら警告を出すだけ）。 */
         val isWithinBoldLimit: Boolean,
-        val isSingleCandidateException: Boolean = false,
         /**
          * 開いている調整シートの候補。閉じているときは null。
          *
@@ -86,7 +84,7 @@ sealed class DistillState {
     ) : DistillState() {
         val selectedCount: Int get() = items.count { it.isSelected }
         val canSaveSelection: Boolean
-            get() = selectedCount > 0 && (isWithinBoldLimit || isSingleCandidateException)
+            get() = selectedCount > 0
         val rangeSheetItem: DistillCandidateItem?
             get() = items.firstOrNull { it.id == rangeSheetCandidateId }
     }

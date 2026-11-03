@@ -3,21 +3,25 @@ package com.example.newproject.controller
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.VaultBrowser
-import com.example.newproject.data.VaultHandle
 import com.example.newproject.model.SearchStateWriter
 import com.example.newproject.model.state.SearchState
+import com.example.newproject.model.state.TitleSearchState
 import com.example.newproject.domain.PickerResult
-import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.SearchPickerUseCase
+import com.example.newproject.domain.matchNotesByTitle
+import com.example.newproject.domain.notesInFolder
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * さがすタブ（AIピッカー）を担当する。
- * フォルダ列挙・キーワード検索・スコープ内ランダムと、スコープ単位の走査キャッシュを持つ。
- * folders / selectedFolder / searchState の更新のみを行う。
+ * Explore（さがすタブ）を担当する（→ features/ai_picker.md）。
+ * タイトルのモードは Vault 全体の一覧を照らし、AI のモードは同じ一覧を範囲で絞って Nano に選ばせる。
+ * folders / selectedFolder / searchState / titleSearch の更新のみを行う。
  */
 class SearchController(
     private val scope: CoroutineScope,
@@ -26,21 +30,25 @@ class SearchController(
     private val state: SearchStateWriter,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 検索用の activeRequestId とは寿命が違う（フォルダ列挙は検索要求では無効化しない）。
-    private val vaultGeneration: () -> Long
+    private val vaultGeneration: () -> Long,
+    private val matchDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
-    // スコープ（フォルダ）単位の走査結果キャッシュ。SAFの再帰走査は1フォルダごとに
-    // IPCが発生して重いため、短時間の連続操作（検索→ランダム→検索）で再走査しない。
-    // キーは selectedFolder の documentId（null はルート直下スコープ）。
-    //
-    // 素の mutableMapOf で足りるのは、読み書きが必ず Main 単一スレッドで起きるため。
-    // scope は viewModelScope（Dispatchers.Main.immediate）で、SAF走査の
-    // withContext(Dispatchers.IO) は repository の内側に閉じている。
-    // ここを別ディスパッチャから触る変更を入れる場合は同期が要る。
-    private data class ScopeCacheEntry(val notes: List<NoteFile>, val loadedAt: Long)
-    private val scopeNotesCache = mutableMapOf<String?, ScopeCacheEntry>()
+    // 開いたときに受け取った Vault 全体の一覧。打っている間はこれを照らす。
+    // 打つたびに引くと、一覧の寿命が切れた時点で打っている途中に全走査が走る。
+    // 開き直して読み直している間も前の一覧で照らし、届いたら照らし直す。
+    private var vaultNotes: List<NoteFile>? = null
+    private var notesFailure: String? = null
+    private var notesJob: Job? = null
 
-    // 検索・ランダムは同じ searchState を奪い合うので、Jobは1本で共有する
-    // （検索→ランダムの切替でも前の要求を止めたい）。
+    // 一覧を頼んだ順番。後から頼んだ一覧ほど新しい（本文を書き換えた後の要求は、前の走査へ相乗りしない）ので、
+    // 遅れて届いた前の要求の一覧で、受け取り済みの新しい一覧を上書きしない。
+    private var lastNotesRequest = 0L
+    private var receivedNotesRequest = 0L
+
+    private var titleQuery = ""
+    private var titleJob: Job? = null
+    private var titleRequestId = 0L
+
     private var searchJob: Job? = null
     private var activeRequestId = 0L
 
@@ -49,16 +57,53 @@ class SearchController(
     private var foldersJob: Job? = null
 
     // Vault切替時に NoteViewModel の saveVault() から呼ばれる契約。
-    // 旧Vaultの documentId をキーに持つキャッシュを破棄する。
-    // 走行中の要求も止める。放置すると旧Vaultのノートが、切替後に
-    // Idle へ戻したはずの searchState を上書きして現れる。
+    // 旧Vaultの一覧を捨て、走行中の要求も止める。放置すると旧Vaultのノートが、切替後に
+    // Idle へ戻したはずの状態を上書きして現れる。
     fun onVaultChanged() {
         activeRequestId++
         searchJob?.cancel()
         searchJob = null
         foldersJob?.cancel()
         foldersJob = null
-        scopeNotesCache.clear()
+        notesJob?.cancel()
+        notesJob = null
+        titleRequestId++
+        titleJob?.cancel()
+        titleJob = null
+        vaultNotes = null
+        notesFailure = null
+    }
+
+    /** タブを開いた。フォルダの一覧と、Vault 全体の一覧を受け取る。 */
+    fun onOpened(collectNotes: suspend () -> List<NoteFile>) {
+        loadFolders()
+        searchTitle("")
+        val generation = vaultGeneration()
+        val notesRequest = ++lastNotesRequest
+        notesJob?.cancel()
+        notesJob = scope.launch {
+            try {
+                receiveNotes(generation, notesRequest, collectNotes())
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                if (generation != vaultGeneration()) return@launch
+                notesFailure = e.message ?: "Unknown error"
+                searchTitle(titleQuery)
+            }
+        }
+    }
+
+    /**
+     * 受け取った一覧を両方のモードで使えるようにし、今の言葉で照らし直す。
+     * 受け取る間に Vault が替わっていたら捨てる。後から頼んだ一覧を受け取り済みなら捨てる。
+     */
+    private fun receiveNotes(generation: Long, notesRequest: Long, notes: List<NoteFile>) {
+        if (generation != vaultGeneration() || notesRequest < receivedNotesRequest) return
+        receivedNotesRequest = notesRequest
+        vaultNotes = notes
+        notesFailure = null
+        searchTitle(titleQuery)
     }
 
     /**
@@ -80,7 +125,7 @@ class SearchController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // ルート直下スコープは使えるので致命的ではないが、黙って消すと
+                // 「すべて」は使えるので致命的ではないが、黙って消すと
                 // 「フォルダが無い」と区別できない。chips の下に注記として出す。
                 if (generation != vaultGeneration()) return@launch
                 state.update { current ->
@@ -91,13 +136,38 @@ class SearchController(
     }
 
     /**
-     * 検索スコープ（フォルダ）を切り替える。
+     * タイトルを照らす。打つたびに呼ばれる。一覧がまだなら届いた後に照らし直す（→ [onOpened]）。
+     * 前の一覧も無く読めなかったときだけ失敗を出す。
+     */
+    fun searchTitle(query: String) {
+        vault.current() ?: return
+        val requestId = ++titleRequestId
+        titleJob?.cancel()
+        titleQuery = query
+        if (query.isBlank()) {
+            setTitleIfCurrent(requestId, TitleSearchState.Idle)
+            return
+        }
+        val notes = vaultNotes
+        if (notes == null) {
+            val failure = notesFailure
+            setTitleIfCurrent(requestId, if (failure != null) TitleSearchState.Error(failure) else TitleSearchState.Scanning)
+            return
+        }
+        titleJob = scope.launch {
+            val matches = withContext(matchDispatcher) { matchNotesByTitle(query, notes) }
+            setTitleIfCurrent(requestId, TitleSearchState.Matches(matches))
+        }
+    }
+
+    /**
+     * AI のモードの範囲（フォルダ）を切り替える。
      *
-     * 進行中の検索・ランダムは走査対象のスコープごと変わるため、ここで無効化する。
+     * 進行中の検索は範囲ごと変わるため、ここで無効化する。
      * [startRequest] で採番を進めておくと、走行中の要求が結果を持ち帰っても
      * [setStateIfCurrent] の照合で弾かれる（`cancel()` だけでは足りない理由は同KDoc参照）。
      *
-     * 表示中の結果も前のスコープのものなので `Idle` へ戻す。同じchipの再タップでは
+     * 表示中の結果も前の範囲のものなので `Idle` へ戻す。同じchipの再タップでは
      * 何も起きないようにして、取り違えで結果を失わないようにする。
      */
     fun selectFolder(folder: NoteFolder?) {
@@ -109,18 +179,21 @@ class SearchController(
         }
     }
 
-    // キーワードモード: スコープ収集 → SearchPickerUseCase で3件選定。
-    fun searchByKeyword(query: String) {
-        val handle = vault.current() ?: return
+    /** AI のモード: 範囲で絞って [SearchPickerUseCase] で3件選ぶ。範囲は頼んだ時点のものを使う。 */
+    fun searchByKeyword(query: String, collectNotes: suspend () -> List<NoteFile>) {
+        vault.current() ?: return
         val q = query.trim()
         if (q.isBlank()) return
+        val folder = state.current.selectedFolder
+        val generation = vaultGeneration()
+        val notesRequest = ++lastNotesRequest
         val requestId = startRequest()
         searchJob = scope.launch {
             setStateIfCurrent(requestId, SearchState.Loading)
             try {
-                val folder = state.current.selectedFolder
-                val notes = collectInScopeCached(handle, folder)
-                when (val result = searchPickerUseCase.pick(q, notes)) {
+                val notes = vaultNotes ?: collectNotes().also { receiveNotes(generation, notesRequest, it) }
+                val candidates = if (folder == null) notes else notesInFolder(notes, folder)
+                when (val result = searchPickerUseCase.pick(q, candidates)) {
                     is PickerResult.Success ->
                         setStateIfCurrent(
                             requestId,
@@ -131,27 +204,6 @@ class SearchController(
                 }
             } catch (e: CancellationException) {
                 // 新しい要求に追い越されただけ。エラー表示にはしない。
-                throw e
-            } catch (e: Exception) {
-                setStateIfCurrent(requestId, SearchState.Error(e.message ?: "Unknown error"))
-            }
-        }
-    }
-
-    // ランダムモード: スコープ内からシャッフルして3件（AI不使用）。
-    fun pickRandomInScope() {
-        val handle = vault.current() ?: return
-        val requestId = startRequest()
-        searchJob = scope.launch {
-            setStateIfCurrent(requestId, SearchState.Loading)
-            try {
-                val folder = state.current.selectedFolder
-                val notes = collectInScopeCached(handle, folder)
-                val picked = notes.shuffled().take(3).map {
-                    RelatedNote(title = it.name, ref = it.ref, isWikilinked = false, lastModified = it.lastModified)
-                }
-                setStateIfCurrent(requestId, SearchState.Success(picked))
-            } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 setStateIfCurrent(requestId, SearchState.Error(e.message ?: "Unknown error"))
@@ -178,23 +230,8 @@ class SearchController(
         state.update { current -> current.copy(searchState = next) }
     }
 
-    // さがすタブのスコープ走査をTTL付きで取得する。
-    private suspend fun collectInScopeCached(
-        handle: VaultHandle,
-        folder: NoteFolder?
-    ): List<NoteFile> {
-        val key = folder?.documentId
-        val now = System.currentTimeMillis()
-        scopeNotesCache[key]?.let { entry ->
-            if (now - entry.loadedAt < NOTES_CACHE_TTL_MS) return entry.notes
-        }
-        val notes = handle.collectNotesInScope(folder)
-        scopeNotesCache[key] = ScopeCacheEntry(notes, now)
-        return notes
+    private fun setTitleIfCurrent(requestId: Long, next: TitleSearchState) {
+        if (requestId != titleRequestId) return
+        state.update { current -> current.copy(titleSearch = next) }
     }
 }
-
-// ノート一覧キャッシュの有効期間。NoteViewModel の全体キャッシュと
-// SearchController のスコープキャッシュで共用する。
-// Vault側の編集（Obsidian同期等）は最大この時間だけ反映が遅れる。
-internal const val NOTES_CACHE_TTL_MS = 60_000L

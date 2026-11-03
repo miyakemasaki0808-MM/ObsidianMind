@@ -1,9 +1,16 @@
 package com.example.newproject.ui.screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,7 +56,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
-import com.example.newproject.ui.RailWidth
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnGradientHeaderSubtitle
 import com.example.newproject.ui.theme.Panel
@@ -60,7 +66,8 @@ import kotlin.math.abs
 
 // 開いた Fold で ✎ を押した後の「机の画面」の操作（→ features/margin_pane.md §5.1）。
 // 机の画面では本文とペインを同じ大きさで並べ、見出しと操作の行は出さない。
-// 左の面の上のつまみを下へ払うと、操作の帯が本文の上に重なって出る（指で押しても開かない）。帯の出し入れで本文とペインの大きさは変えない。
+// 折り目の右の面の上のつまみを下へ払うと、操作の帯が面の上に重なって出る（指で押しても開かない）。帯の出し入れで本文とペインの大きさは変えない。
+// つまみと帯は面の外に置く — 片側を1画面にしても、同じ場所に残して2面へ戻す口を隠さない（→ features/margin_pane.md §5.1）。
 
 /** つまみに触れて離したときの扱い。 */
 internal enum class DeskBarGesture {
@@ -111,12 +118,12 @@ internal const val DESK_BAR_HIDE_MILLIS = 200
 
 /**
  * 机の画面で、本文とペインの上に置く余白の高さ。**両方に同じだけ置く** — 片方にだけ置くと上端がずれ、同じ大きさに見えない。
- * 左ではここがつまみになり、払い始められる高さを兼ねる（触れる部品の下限 48dp）。
+ * 折り目の右ではここがつまみになり、払い始められる高さを兼ねる（触れる部品の下限 48dp）。
  */
 internal val DeskStripHeight = 48.dp
 
 /**
- * 左の面の上のつまみ。**下へ払うと帯を出す。指で押しても開かない**（→ features/margin_pane.md §5.1）。
+ * 折り目の右の面の上のつまみ。**下へ払うと帯を出す。指で押しても開かない**（→ features/margin_pane.md §5.1）。
  * 本文の縦のスクロールと取り合わないよう、縦の払いはここでだけ受ける（横の払いは面のどこからでも受ける → [detectDeskSpread]）。
  * **読み上げ（TalkBack）からは「操作を出す」の操作で開く。** 読み上げ中は画面をなぞる操作が読み上げの移動に使われて払えず、
  * これを外すと帯の ✎ にも届かず、机の画面から抜けられない。この操作は読み上げ機能だけが呼び、指で押しても呼ばれない。
@@ -171,16 +178,16 @@ internal fun DeskGripStrip(
  * つまみの上には切り欠きを避ける余白と画面の余白があり、上のほうから引き下ろすと指がそこに置かれる。
  * ここを受けないと、上のほうから引き下ろしても帯が出ない。
  *
- * 本文領域の左上に置き、[reachAbove] だけ上へはみ出させる。余白ペインの中身はシートの器（切り取りをする面）の内側にあるので、
+ * つまみの真上に置き、[reachAbove] だけ上へはみ出させる。余白ペインの中身はシートの器（切り取りをする面）の内側にあるので、
  * **器の外に置かないと、はみ出した分が指を受け取らない。** 帯が出ている間は置かない — 帯の上の操作を横取りする。
  */
 @Composable
-internal fun DeskGripReach(reachAbove: Dp, width: Dp, onShow: () -> Unit, onSpread: (DeskSpreadGesture) -> Unit) {
+internal fun DeskGripReach(reachAbove: Dp, start: Dp, width: Dp, onShow: () -> Unit, onSpread: (DeskSpreadGesture) -> Unit) {
     val currentOnShow by rememberUpdatedState(onShow)
     val currentOnSpread by rememberUpdatedState(onSpread)
     Box(
         modifier = Modifier
-            .offset(y = -reachAbove)
+            .offset(x = start, y = -reachAbove)
             .width(width)
             .height(reachAbove + DeskStripHeight)
             // 面の上に重ねて置くので、ここで払い始めた指は面へ届かない。横の払いもここで受ける。
@@ -243,20 +250,42 @@ internal fun DeskBar(onHide: () -> Unit, backdrop: DeskBackdrop, modifier: Modif
     }
 }
 
+/**
+ * 帯を出している間の層。つまみより手前に重ねる。**帯の外に触れたら帯をしまう**受け口を敷き、帯は [start] から [width] の幅で
+ * 面の上の縁からシャッターのように降りて、しまうときは巻き上がる。縁で切るので、窓の上の余白へははみ出さない。
+ * 受け口は帯と一緒に動かさない — 帯の中に入れると、滑る距離が帯の高さではなく面の高さになる。
+ */
+@Composable
+internal fun BoxScope.DeskBarLayer(
+    shown: Boolean,
+    onHide: () -> Unit,
+    backdrop: DeskBackdrop,
+    start: Dp,
+    width: Dp,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    if (shown) DeskTouchCatcher(onTouch = onHide, modifier = Modifier.matchParentSize())
+    AnimatedVisibility(
+        visible = shown,
+        modifier = Modifier.padding(start = start).clipToBounds(),
+        enter = slideInVertically(
+            initialOffsetY = { -it },
+            animationSpec = tween(DESK_MOTION_MILLIS, easing = FastOutSlowInEasing)
+        ),
+        exit = slideOutVertically(
+            targetOffsetY = { -it },
+            animationSpec = tween(DESK_BAR_HIDE_MILLIS, easing = FastOutLinearInEasing)
+        )
+    ) {
+        DeskBar(onHide = onHide, backdrop = backdrop, modifier = Modifier.width(width), content = content)
+    }
+}
+
 /** 帯の下端に落とす影の高さ。 */
 private val DeskBarElevation = 4.dp
 
 /** 帯の影が落ちる分の、帯の下の余白。 */
 private val DeskBarShadowRoom = 8.dp
-
-/**
- * 帯の中身を右へずらす幅（dp）。**重ねて出したレールが帯の左端を隠さないよう、帯の中身をレールの右端から始める**（→ features/margin_pane.md §5.1）。
- * [railEndDp] は外殻が測ったレールの右端、[regionStartDp] は本文領域の左端で、どちらも窓の座標。
- * レールは最小80dpで、文字の倍率や左の Insets で広がるので、外殻が測った値を使う。外殻の無い組み立て（画面だけのテスト）と測る前は、
- * 窓の左端から最小幅（[RailWidth]）までをレールとみなす。レールを出さない窓（Expanded でない）ではずらさない。
- */
-internal fun deskBarRailInsetDp(expandedWidth: Boolean, railEndDp: Float?, regionStartDp: Float?): Float =
-    if (!expandedWidth) 0f else ((railEndDp ?: RailWidth.value) - (regionStartDp ?: 0f)).coerceAtLeast(0f)
 
 /**
  * 読む画面の地（[ReadingGradient]）を敷いた箱の、窓の中の位置と大きさ。帯の地をこれに合わせて描くと、帯が背景の続きに見える（→ [DeskBar]）。

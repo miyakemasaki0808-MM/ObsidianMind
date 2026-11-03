@@ -155,8 +155,6 @@ class MainActivity : ComponentActivity() {
                 val foldInfo = rememberReaderFold()
                 var readerRegion by remember { mutableStateOf<ReaderRegion?>(null) }
                 val readerWindow = readerWindowFor(readerRegion, expandedWidth, foldInfo)
-                // レールの右端。机と見開きで重ねて出すレールの分だけ、帯の中身をずらすのに使う（→ deskBarRailInsetDp）。
-                var railEndDp by remember { mutableStateOf<Float?>(null) }
                 // **机と見開きは、出せない窓では閉じ、出せる窓へ戻っても開かない**（→ features/fold_experience.md §6 の初期状態）。
                 // ノートの画面が組まれていない間（ほかのタブ）に窓が替わっても効くよう、ここで行う。閉じても並べ読みは終えない。
                 ReaderWindowEffect(readerWindow, ReaderChoice(marginPaneOpen, spreadSelected)) { next ->
@@ -211,8 +209,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.setMarginPaneOpen(tap.choice.paneOpen)
                         viewModel.setSpreadSelected(tap.choice.spreadSelected)
                     },
-                    onReaderRegion = { readerRegion = it },
-                    onRailEnd = { railEndDp = it }
+                    onReaderRegion = { readerRegion = it }
                 ) { modifier ->
                     NavHost(
                         navController = navController,
@@ -265,7 +262,6 @@ class MainActivity : ComponentActivity() {
                                 expandedWidth = expandedWidth,
                                 foldInfo = foldInfo,
                                 readerWindow = readerWindow,
-                                railEndDp = railEndDp,
                                 spreadSelected = spreadSelected,
                                 onSelectSpread = { viewModel.setSpreadSelected(it) },
                                 onMarginPaneVisibleChange = { notePaneVisible = it },
@@ -370,13 +366,13 @@ class MainActivity : ComponentActivity() {
 
                         composable("search") {
                             LaunchedEffect(uiState.vaultSelected) {
-                                if (uiState.vaultSelected) viewModel.loadFolders()
+                                if (uiState.vaultSelected) viewModel.openExplore(contentResolver)
                             }
                             SearchTab(
                                 uiState = uiState,
                                 onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
-                                onSearch = { q -> viewModel.searchByKeyword(q) },
-                                onRandom = { viewModel.pickRandomInScope() },
+                                onSearchTitle = { q -> viewModel.searchTitle(q) },
+                                onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
                                 onOpenNote = { note ->
                                     openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)
@@ -407,7 +403,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel.dragDistillRangeEdge(id, edge, offset, from)
                                 },
                                 onNudgeDistillRangeEdge = { id, move -> viewModel.nudgeDistillRangeEdge(id, move) },
-                                onResetDistillRange = { id -> viewModel.resetDistillRange(id) },
                                 onSaveDistill = { viewModel.saveDistillSelection() },
                                 onRetryDistill = { viewModel.retryDistill() },
                                 onDismissDistill = { viewModel.dismissDistillResult() },

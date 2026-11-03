@@ -2,7 +2,6 @@ package com.example.newproject
 
 import com.example.newproject.domain.resolveBesideNote
 import com.example.newproject.model.BesideNote
-import com.example.newproject.controller.NOTES_CACHE_TTL_MS
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.ReadingPauseReason
 import com.example.newproject.data.NoteImageGateway
@@ -165,8 +164,10 @@ class NoteViewModel internal constructor(
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
      */
     private val noteScan = NoteScanCache(
+        scope = scope,
         ttlMillis = NOTES_CACHE_TTL_MS,
-        vaultGeneration = { session.vaultGeneration }
+        vaultGeneration = { session.vaultGeneration },
+        onScanEvent = dependencies.onNoteScanEvent
     )
     private val cachedNotes: List<NoteFile> get() = noteScan.notes
 
@@ -394,12 +395,11 @@ class NoteViewModel internal constructor(
                 session.setNotePaperTone(notePaperToneForCandidate(note, cachedNotes))
                 session.setNoteState(loaded)
                 session.recordHistory(note.title, note.ref)
-                // 表示を終えてから相対パスを確定させる。さがすタブは collectNotesInScope を
-                // 使い cachedNotes を温めないため、ここで走査しないとセッションごとに
-                // 「さがす経由の最初の1件」が記録から漏れる。
+                // 表示を終えてから相対パスを確定させる。一覧のキャッシュが切れていると、
+                // ここで走査しないとそのノートが記録から漏れる。
                 bindReadingTracePath(contentResolver, note.ref, sessionId)
                 session.fetchSummary(note.title, loaded.content)
-                // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、さがす経由のノートだけ
+                // 相対パスを確定させた**後**に呼ぶ。先に呼ぶと、キャッシュが切れた後に開いたノートだけ
                 // ヒント無しで判定され、同じノートでも入口によって入力版が変わってしまう。
                 session.classifyNoteField(note.ref, loaded.content, cachedRelativePath(note.ref).orEmpty())
                 // 結晶は根拠をパスで持つので、パスが確定しなかったノートでは試さない。
@@ -529,10 +529,19 @@ class NoteViewModel internal constructor(
 
     // ── さがすタブ（実装は SearchController）──────────────────────────────────
 
-    fun loadFolders() = session.loadFolders()
+    /** タブを開いた。Vault 全体の一覧は Rediscover と同じキャッシュから受け取る。 */
+    fun openExplore(contentResolver: ContentResolver) {
+        val uri = vaultLocation.uri ?: return
+        session.openExplore { collectAllNotesCached(contentResolver, uri) }
+    }
+
     fun selectSearchFolder(folder: NoteFolder?) = session.selectSearchFolder(folder)
-    fun searchByKeyword(query: String) = session.searchByKeyword(query)
-    fun pickRandomInScope() = session.pickRandomInScope()
+    fun searchTitle(query: String) = session.searchTitle(query)
+
+    fun searchByKeyword(contentResolver: ContentResolver, query: String) {
+        val uri = vaultLocation.uri ?: return
+        session.searchByKeyword(query) { collectAllNotesCached(contentResolver, uri) }
+    }
 
     /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
     fun assessReadingTraceOrphans() = session.assessReadingTraceOrphans()
@@ -587,7 +596,6 @@ class NoteViewModel internal constructor(
         session.dragDistillRangeEdge(id, edge, offsetInParent, fromOffsetInParent)
     fun nudgeDistillRangeEdge(id: String, move: DistillRangeEdgeMove) =
         session.nudgeDistillRangeEdge(id, move)
-    fun resetDistillRange(id: String) = session.resetDistillRange(id)
     fun saveDistillSelection() = session.saveDistillSelection()
     fun retryDistill() = session.retryDistill()
     fun dismissDistillResult() = session.dismissDistillResult()

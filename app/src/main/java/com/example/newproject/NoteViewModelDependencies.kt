@@ -53,6 +53,8 @@ internal class NoteViewModelDependencies(
     /** 分野の確定の永続。**テストでは注入しない**（保存しなくても機能は動く）。 */
     val noteFieldStore: NoteFieldStore? = null,
     val repository: NoteRepository,
+    /** ノート一覧の走査の記録。**テストでは注入しない。** */
+    val onNoteScanEvent: (NoteScanEvent) -> Unit = {},
     /**
      * さがす・冊子・痕跡の整理が使う Vault スコープの操作。`ContentResolver` と Vault ルートを束ねてあるので、
      * この2つを controller の引数から消せる（＝素のJVMテストで happy path を書ける）。
@@ -104,6 +106,7 @@ internal class NoteViewModelDependencies(
                 history = NoteHistoryStore(prefs),
                 noteFieldStore = SharedNoteFieldStore(prefs),
                 repository = repository,
+                onNoteScanEvent = noteScanLog(application),
                 vaultBrowser = SafVaultBrowser(
                     contentResolver = application.contentResolver,
                     repository = repository,
@@ -145,12 +148,27 @@ internal class NoteViewModelDependencies(
          * 行には本文もタイトルも載せない。
          */
         private fun summaryAiClient(application: Application, aiClient: AiClient): AiClient {
-            val debuggable = (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-            if (!debuggable) return aiClient
+            if (!isDebuggable(application)) return aiClient
             return GenerationRecordingAiClient(aiClient) {
                 Log.i(SUMMARY_GENERATION_LOG_TAG, SUMMARY_GENERATION_LOG_MESSAGE)
             }
         }
+
+        /**
+         * **Debug APK でだけ、走査を始めたときと一覧を公開したときに logcat へ1行出す。**
+         * 実機ケースは走査の本数と一覧の寿命をこの行で判定する（→ review/device_validation/explore.md）。
+         * 行には Vault もノートも載せない。
+         */
+        private fun noteScanLog(application: Application): (NoteScanEvent) -> Unit {
+            if (!isDebuggable(application)) return {}
+            return { event -> Log.i(NOTE_SCAN_LOG_TAG, event.name.lowercase()) }
+        }
+
+        private fun isDebuggable(application: Application): Boolean =
+            (application.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+
+        /** 実機ケース `docs/review/device_validation/explore.md` が読むタグ。 */
+        const val NOTE_SCAN_LOG_TAG = "VigilithNoteScan"
 
         /** 実機ケース `docs/review/device_validation/note_summary.md` が数えるタグと本文。 */
         const val SUMMARY_GENERATION_LOG_TAG = "VigilithSummaryGen"

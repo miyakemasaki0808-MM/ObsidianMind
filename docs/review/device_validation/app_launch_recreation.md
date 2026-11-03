@@ -119,7 +119,7 @@ adb -s <serial> logcat -s Launch05Probe
 
 ```text
 # MainActivity の枚数（1であること）。同じ記録はほかの行にも出るので、タスクの履歴の行だけを数える
-adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*MainActivity'
+adb -s <serial> shell dumpsys activity activities | grep -cE 'Hist[[:space:]]+#[0-9]+:.*com\.vigilith\.ai/.*MainActivity'
 # 前面のActivity（com.vigilith.ai であること）
 adb -s <serial> shell dumpsys activity activities | grep -E 'topResumedActivity'
 ```

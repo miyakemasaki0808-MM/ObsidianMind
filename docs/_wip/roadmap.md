@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI
-**初版:** 2026-07-22（最終更新: 2026-10-24）
+**初版:** 2026-07-22（最終更新: 2026-11-03）
 **基準:** 何がどこまで進んだかは [change_history.md](../dev/change_history.md) が正、未対応の課題は [current_issues.md](current_issues.md) が正。**ここに進捗のスナップショットを書かない**（書いた瞬間から古くなり、実際 ReadingTrace v1 の記述が2週間ずれていた）。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -82,9 +82,16 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 
 ## 🟢 Now — 直近で着手（ループを豊かにし、土台を強くする）
 
-**テーマ: 開いた Fold を、思考を並べて考える机にする。**
+**テーマ: 使っていて気になった所を直し、開いた Fold を、思考を並べて考える机にする。**
 
 > **Now の中の順序は上から。**
+
+### 使用感の手当て（→ [current_issues](current_issues.md)）
+
+- **知識索引の前に入れたのはオーナー判断（2026-11-02）。** 知識索引は検索の入口と補助の面の上に載るので、
+  探す画面の形と机の契約を先に固めて、作り直しを減らす。
+- **束の順（上から）:**
+  4. **全節の要約** — AI-10。節を読み進めるたびに押す手間を減らす。上限は実機の速さで決まるので、測ってから作る
 
 ### Fold の机（→ [fold_experience](../dev/system/fold_experience.md)）
 
@@ -93,14 +100,20 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
   頻度は開いた Fold で読むたびだが、重さは無い（今の並べ読みでも読める）。
 - **段の順（上から）:**
   5. **知識索引** — 補助の面の供給源（バックリンク・全文検索・目次）を端末内のDBで持つ（[feature_ideas](feature_ideas.md) P-3）
-  6. **卓上の形・外画面**（[feature_ideas](feature_ideas.md) N-19 の残り）
+- **PERF-3 の残り（先行走査と受理の線）は知識索引と一緒に見る。** 永続の索引は、走査を待つ時間を減らす案の1つでもあるため（→ [random_scan_options](random_scan_options.md)）。
 - **配布（L-5）はこの順の外にある。** 引き金は配布の意思で、段の進み具合ではない。
 - **段ごとに Fold の実機検証が要る。** 実機で起こせない順序は、各段の正本の §10 で先に宣言する（→ [features/_template](../dev/features/_template.md)）。
 
 ## 🟡 Next — 次に上がる段
 
-**いまは空いている。** Next が要るときは、Later か台帳（[current_issues](current_issues.md)・
+Next へ足すときは、Later か台帳（[current_issues](current_issues.md)・
 [feature_ideas](feature_ideas.md)）から §0.5 の物差しで拾ってここへ置く（→ §更新運用）。
+
+### 段6 卓上の形・外画面（[feature_ideas](feature_ideas.md) N-19 の残り）
+
+- **Now から下げたのはオーナー判断（2026-11-02）。** 卓上の形は読む頻度を確かめてから、外画面の体験は未定で
+  （→ [fold_experience](../dev/system/fold_experience.md) の姿勢の割り当て）、まだ着手できる形になっていない。
+- **FOLD-6 と一緒に決める。** 開いた Fold を横に持ったときの面の出し方は、卓上の形と同じ姿勢の行にある。
 
 ## 🔵 Later — 将来の方向（北極星の解像度を上げる）
 

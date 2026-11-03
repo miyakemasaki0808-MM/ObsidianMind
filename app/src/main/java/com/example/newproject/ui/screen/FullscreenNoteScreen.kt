@@ -19,6 +19,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -195,6 +198,9 @@ internal fun FullscreenNoteScreen(
         }
     }
     val sheetShown = uiState.isMarginMemoSheetVisible && !leaving
+    // ✎ を指で動かした位置。キーボードの間は隠すだけなので、外で持って忘れない。
+    var memoButtonOffset by remember { mutableStateOf(Offset.Zero) }
+    val keyboardShown = WindowInsets.ime.getBottom(LocalDensity.current) > 0
     val dismissSheet: () -> Unit = {
         onMemoFocusIntentChange(false)
         onDismissMarginMemo()
@@ -235,7 +241,7 @@ internal fun FullscreenNoteScreen(
                     onSubmit = { onSubmitMarginMemo(face.bodySection) },
                     onDelete = onDeleteMarginMemo,
                     asSheet = true,
-                    onClose = dismissSheet,
+                    // 上端の「閉じる」は出さない。✎ が同じ位置でしまう口を兼ねる。
                     focusIntent = memoFocusIntent,
                     onFocusIntentChange = onMemoFocusIntentChange,
                     active = sheetShown,
@@ -265,12 +271,19 @@ internal fun FullscreenNoteScreen(
                     // 既定の不透明な下地をそのまま使う。半透明にすると、下のノートパネルが
                     // 透けて記号のコントラストが下地の明るさで変わる（白の「✕」で 2.5 前後）。
                 ) { leaveWith(onExit) }
-                // **全画面に置く入口は書くためのものだけ。** ✎ の規則は通常画面と同じで、出ている面をしまうか、シートを出す。
-                FullscreenMemoButton(
-                    description = marginToggleDescription(MarginToggle.ShowSheet),
-                    onTap = { if (sheetShown) dismissSheet() else onOpenMarginMemo() }
-                )
             }
+        }
+        // **全画面に置く入口は書くためのものだけ。** ✎ の規則は通常画面と同じで、出ている面をしまうか、シートを出す。
+        // 本文の領域ではなく画面に付け、シートより手前に描く — シートが出ても押した位置に残り、指を動かさずにしまえる。
+        // キーボードの間は隠す。真上に浮くと入力欄や「置く」に重なる。
+        if (!keyboardShown) {
+            FullscreenMemoButton(
+                symbol = fullscreenMemoSymbol(sheetShown),
+                description = fullscreenMemoDescription(sheetShown),
+                offset = memoButtonOffset,
+                onDrag = { dragAmount -> memoButtonOffset += dragAmount },
+                onTap = { if (sheetShown) dismissSheet() else onOpenMarginMemo() }
+            )
         }
     }
 }
@@ -281,15 +294,18 @@ internal fun FullscreenNoteScreen(
  */
 @Composable
 private fun BoxScope.FullscreenMemoButton(
+    symbol: String,
     description: String,
+    offset: Offset,
+    onDrag: (Offset) -> Unit,
     onTap: () -> Unit
 ) {
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+    val currentOnDrag by rememberUpdatedState(onDrag)
     val currentOnTap by rememberUpdatedState(onTap)
     Box(
         modifier = Modifier
             .align(Alignment.BottomEnd)
-            .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
+            .offset { IntOffset(offset.x.roundToInt(), offset.y.roundToInt()) }
             .safeDrawingPadding()
             .padding(end = 20.dp, bottom = 20.dp)
             .size(48.dp)
@@ -298,7 +314,7 @@ private fun BoxScope.FullscreenMemoButton(
             .pointerInput(Unit) {
                 detectDragGestures { change, dragAmount ->
                     change.consume()
-                    dragOffset += dragAmount
+                    currentOnDrag(dragAmount)
                 }
             }
             .pointerInput(Unit) {
@@ -312,7 +328,7 @@ private fun BoxScope.FullscreenMemoButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        Text("✎", color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(symbol, color = OnVibrant, fontSize = 20.sp, fontWeight = FontWeight.Bold)
     }
 }
 

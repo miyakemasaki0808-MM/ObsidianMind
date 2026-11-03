@@ -112,6 +112,26 @@ class DistillRangeAdjustTest {
         }
     }
 
+    @Test
+    fun `every candidate keeps its own range among the presets`() {
+        // 調整シートに専用の戻すボタンを置かないのは、これが成り立つから。
+        val content = listOf(
+            "短い文です。",
+            "${clauseOf("前半", 30)}、「設計思想」${"い".repeat(24)}。",
+            "「語一」と「語二」を並べた短い文です。",
+            "${clauseOf("前半", 30)}、${clauseOf("後半", 30)}。"
+        ).joinToString("\n")
+        val model = buildDistillSourceModel(content)
+
+        assertTrue(model.sentences.any { it.isTerm })
+        model.sentences.forEach { sentence ->
+            assertTrue(
+                "候補そのものの範囲が段にありません: ${sentence.range}",
+                presetRangesFor(model, sentence).any { it.range.range == sentence.range }
+            )
+        }
+    }
+
     @Test(expected = IllegalArgumentException::class)
     fun `a confirmed range outside its context cannot be built`() {
         DistillConfirmedRange(

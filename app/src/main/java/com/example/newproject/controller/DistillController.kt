@@ -69,12 +69,11 @@ internal class DistillController(
         val input: AnalysisInput,
         val model: DistillSourceModel,
         val candidatesById: Map<String, DistillCandidate>,
-        val singleCandidateExceptionId: String?,
         /**
          * 候補ID → 実際に `**` を挿す範囲。**未調整なら提案範囲と同じ。**
          *
-         * **提案範囲（`sentence.range`）を上書きしない。** 上書きすると
-         * 「最初の範囲に戻す」が実装できない。原文offsetを持つのでUI状態へは出さない。
+         * **提案範囲（`sentence.range`）を上書きしない。** 段はここから引くので、上書きすると
+         * 段のボタンで元の範囲へ戻れなくなる。原文offsetを持つのでUI状態へは出さない。
          *
          * **シートを閉じても消えない。** 破棄の契機は候補セッションのキャンセル・再解析・
          * ノート切替・保存完了の4つだけで、閉じることは破棄ではない。
@@ -241,17 +240,12 @@ internal class DistillController(
         val byId = prompt.candidates.associateBy { it.id }
         val selectedCandidates = selectedIds.mapNotNull(byId::get)
         val initialSelectionIds = initialSelectionIds(model, selectedCandidates)
-        val exceptionId = initialSelectionIds.singleOrNull()?.takeIf { selectedId ->
-            val range = byId.getValue(selectedId).sentence.range
-            !isWithinDistillBoldLimit(model, listOf(range))
-        }
         val candidatesById = byId.filterKeys(selectedIds::contains)
         session = ActiveSession(
             requestId,
             input,
             model,
             candidatesById,
-            exceptionId,
             confirmedRanges = candidatesById.mapValues { (_, candidate) ->
                 DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
             },
@@ -335,7 +329,7 @@ internal class DistillController(
     /**
      * 調整シートを閉じる。**閉じることが確定。**
      *
-     * 取り消しの口は「最初の範囲に戻す」1つに絞る。口が2つあるとどちらが効いたか読めなくなる。
+     * キャンセルを別に置かない。取り消しは段のボタンが兼ねる。
      */
     fun closeRangeSheet() {
         val current = state.current as? DistillState.Candidates ?: return
@@ -417,16 +411,6 @@ internal class DistillController(
         changeConfirmedRange(id, DistillConfirmedRange(context, range))
     }
 
-    /** 最初の範囲（提案範囲）へ戻す。 */
-    fun resetRange(id: String) {
-        val active = session ?: return
-        val candidate = active.candidatesById[id] ?: return
-        changeConfirmedRange(
-            id,
-            DistillConfirmedRange(candidate.sentence.contextRange, candidate.sentence.range)
-        )
-    }
-
     private fun changeConfirmedRange(id: String, range: DistillConfirmedRange) {
         val active = session ?: return
         val current = state.current as? DistillState.Candidates ?: return
@@ -468,7 +452,7 @@ internal class DistillController(
     /**
      * 候補状態を作り直す。**範囲に由来する表示は毎回ここで引き直す。**
      *
-     * 太字率・短文例外の判定・カードの本文はすべて**確定範囲**から作る。
+     * 太字率・カードの本文はすべて**確定範囲**から作る。
      * 提案範囲を読む箇所がここに1つでも残ると、「表示は広がったが保存は元の範囲」になり、
      * しかも未調整のときは同じ出力になるためテストが緑のまま通る。
      */
@@ -482,19 +466,12 @@ internal class DistillController(
         val decorated = items.map { item -> withConfirmedRange(active, item) }
         val selectedItems = decorated.filter { it.isSelected }
         val ranges = selectedItems.mapNotNull { confirmedRangeOf(active, it.id) }
-        val isWithinLimit = isWithinDistillBoldLimit(active.model, ranges)
-        // **短文例外は対象IDを固定したまま、判定に使う範囲だけを確定範囲へ差し替える。**
-        // 狭めれば例外が要らなくなり、広げれば説明に出す太字率が変わる。
-        val isSingleCandidateException = !isWithinLimit &&
-            active.singleCandidateExceptionId != null &&
-            selectedItems.singleOrNull()?.id == active.singleCandidateExceptionId
         update(
             DistillState.Candidates(
                 sourceTitle = title,
                 items = decorated,
                 projectedBoldRatio = projectedBoldRatio(active.model, ranges),
-                isWithinBoldLimit = isWithinLimit,
-                isSingleCandidateException = isSingleCandidateException,
+                isWithinBoldLimit = isWithinDistillBoldLimit(active.model, ranges),
                 rangeSheetCandidateId = rangeSheetCandidateId,
                 overlapDeselectedIds = overlapDeselectedIds
             )
@@ -524,8 +501,7 @@ internal class DistillController(
                 context,
                 confirmed,
                 distillProtectedSpansWithin(active.model, context)
-            ),
-            isRangeAdjusted = confirmed != sentence.range
+            )
         )
     }
 
@@ -588,7 +564,12 @@ internal class DistillController(
         }
     }
 
-    /** AIの重要度順を保ちつつ、累積上限内へ収まる候補だけを初期選択する。 */
+    /**
+     * 最初に付けるチェック。AIの重要度順を保ち、目安の太字率へ収まる候補だけに付ける。
+     *
+     * **目安を超える太字は利用者が自分でチェックしたときだけ足される。** 保存を止めないので、
+     * これと1回の件数の上限が、蒸留を重ねたときの歯止めになる（→ reflect_distill 判断21）。
+     */
     private fun initialSelectionIds(
         model: DistillSourceModel,
         candidates: List<DistillCandidate>
@@ -604,8 +585,8 @@ internal class DistillController(
         }
         if (selectedIds.isNotEmpty()) return selectedIds
 
-        // 既存太字だけで上限に達している場合は例外追加しない。本文が短く、最重要文を
-        // 1文選ぶだけで上限を越える場合に限って、ユーザー確認付きの例外候補とする。
+        // 既存太字だけで目安に達しているノートには付けない。本文が短く、
+        // どの候補も1件で目安を超えるときだけ、最重要の1箇所に付ける。
         val existingRatio = if (model.eligibleBodyCharacterCount <= 0) 0.0 else {
             model.existingBoldCharacterCount.toDouble() / model.eligibleBodyCharacterCount
         }
