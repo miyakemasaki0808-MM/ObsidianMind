@@ -1,7 +1,7 @@
 # 部分要約（この節の要約・全節の要約）
 
-**状態:** 実装済み・稼働中。節の要約を「この部分」の面に出す。全節の要約は机上ゲートまでで、実機は未確認
-**最終検証:** 2026-10-10 / `fce6745a`（Pixel 10 Pro Fold で面を出さずに始める形・頼んだ節の再押下・ノート全体を実モデルで確認）。全節の要約は未検証
+**状態:** 実装済み・稼働中。節の要約を「この部分」の面に出す。全節の要約は実機で下見まで（2026-11-04、閉じた Fold。判定ではない）
+**最終検証:** 2026-10-10 / `fce6745a`（Pixel 10 Pro Fold で面を出さずに始める形・頼んだ節の再押下・ノート全体を実モデルで確認）。全節の要約は本検証が未了
 **関連コード:** `controller/SectionChatController.kt` / `domain/SectionSummaries.kt` / `domain/SectionBatchStatus.kt` / `ui/screen/SectionSummaryRow.kt` / `ui/screen/MarginMemoSheet.kt` / `controller/NoteSectionController.kt` / `domain/markdown/NoteSections.kt`
 **関連テスト:** `SectionChatControllerTest` / `SectionSummariesTest` / `SectionBatchStatusTest` / `SectionRefTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest`
 **正本:** この文書（置き場所と面の並びは [この部分](margin_pane.md)）
@@ -277,7 +277,7 @@ DLの起点は自動生成される要約側に寄せてある（→ [architectu
   `SectionSummariesTest`（保持の規則・番を待つ節）/ `SectionBatchStatusTest`（状態・記号・読み上げ名・添え書き）/ `SectionRefTest`（要約に渡す本文の範囲・全節の対象と順番）/
   `NoteSessionCoordinatorTest`（ノート切替で後着しない・要約の生成中にメモを置く・メモの保存中に要約を始める。全節: 解析から引く・解析し直している間は作らない・3つの切替で捨てる・背面の合図が届く）/ `ThreadingScanTest`
 - **instrumentation:** `OnDeviceGenerationTest`（節の要約の実生成）/ `NoteReadingFlowTest`（記号と押した結果・面の節が替わると伝える）/ `MarginMemoSheetUiTest`（全節の間の要約の行）
-- **実機確認:** [全節の要約のケース](../../review/device_validation/section_batch.md)。上限の根拠の計測は [background_ai_ux](../system/background_ai_ux.md) §6
+- **実機確認:** [全節の要約のケース](../../review/device_validation/section_batch.md)。上限の根拠の計測は [background_ai_ux](../system/background_ai_ux.md) §6。本検証は未了で、下見の範囲は [レビュー一覧](../../review/README.md)
 - **実機で起こせないので自動テストが持つ順序:**
   - 取り消しに従わない生成と状態確認の後着（`SectionChatControllerTest`）。実クライアントは取り消しに従う
   - 同じ節で BUSY が3回続く順序（`SectionChatControllerTest`）。実測では10秒待ちで毎回通った
