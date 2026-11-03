@@ -877,7 +877,10 @@ class SectionChatControllerTest {
         assertNull(summaryOf(state, B))
     }
 
-    /** **取り消しに従わない生成の後着が、新しい列を進めない。** 古い生成係が列から取り出すと同じ節を2本走らせる。 */
+    /**
+     * **取り消しに従わない生成の後着が、新しい列を進めない。** 古い生成係が列から取り出すと同じ節を2本走らせる。
+     * **判定は全部の生成を再開してから行う。** 途中で落ちると、取り消しに従わない生成が残ってテストが終われない。
+     */
     @Test
     fun `取り消しに従わない生成の後着は、新しい全節の列を進めない`() = runTest {
         val waiting = mutableListOf<Continuation<String>>()
@@ -890,25 +893,30 @@ class SectionChatControllerTest {
         controller.stopAll()
         controller.requestAll(sources(A, B, C), source(A), quietly = false)
         runCurrent()
-        assertEquals(2, waiting.size)
+        val startedBeforeLate = waiting.size
 
         waiting[0].resume("古いAの要約")
         advanceUntilIdle()
-        assertEquals("古い生成係が列を進めた", 2, waiting.size)
-        assertNull("古いAの結果を書いた", summaryOf(state, A)?.summary)
+        val startedAfterLate = waiting.size
+        val aAfterLate = summaryOf(state, A)?.summary
 
         waiting[1].resume("今のAの要約")
         runCurrent()
-        assertEquals("今のAの要約", summaryOf(state, A)?.summary)
-        assertEquals(3, waiting.size)
+        val aAfterCurrent = summaryOf(state, A)?.summary
+        val startedAfterCurrent = waiting.size
         controller.stopAll()
-        waiting[2].resume("後着")
-        advanceUntilIdle()
+        resumeAll(waiting, from = 2)
+
+        assertEquals(2, startedBeforeLate)
+        assertEquals("古い生成係が列を進めた", 2, startedAfterLate)
+        assertNull("古いAの結果を書いた", aAfterLate)
+        assertEquals("今のAの要約", aAfterCurrent)
+        assertEquals(3, startedAfterCurrent)
     }
 
     /**
      * **取り消しに従わない生成が遅れて断られても、新しい全節の状態に触らない。** 3回目の拒否が古い生成係へ届く順序を作る。
-     * 届くと、走っている新しい全節に「混み合いで止まった」が立つ。
+     * 届くと、走っている新しい全節に「混み合いで止まった」が立つ。判定は全部の生成を再開してから行う。
      */
     @Test
     fun `取り消しに従わない生成が遅れて断られても、新しい全節に混み合いを立てない`() = runTest {
@@ -922,22 +930,25 @@ class SectionChatControllerTest {
         val controller = controller(state, ai)
         controller.requestAll(sources(A, B), source(A), quietly = false)
         advanceUntilIdle()
-        assertEquals(1, waiting.size)
+        val startedFirst = waiting.size
 
         controller.stopAll()
         controller.requestAll(sources(A, B), source(A), quietly = false)
         runCurrent()
-        assertEquals(2, waiting.size)
+        val startedSecond = waiting.size
 
-        waiting[0].resumeWithException(GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY))
+        waiting.getOrNull(0)?.resumeWithException(GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY))
         advanceUntilIdle()
-
-        assertFalse("古い拒否で新しい全節に混み合いを立てた", state.value.sectionChat.batch!!.stoppedBusy)
-        assertTrue(summaryOf(state, A)?.isSummaryLoading == true)
+        val stoppedBusy = state.value.sectionChat.batch?.stoppedBusy
+        val aGenerating = summaryOf(state, A)?.isSummaryLoading
 
         controller.stopAll()
-        waiting[1].resume("後着")
-        advanceUntilIdle()
+        resumeAll(waiting, from = 1)
+
+        assertEquals(1, startedFirst)
+        assertEquals(2, startedSecond)
+        assertEquals("古い拒否で新しい全節に混み合いを立てた", false, stoppedBusy)
+        assertEquals(true, aGenerating)
     }
 
     /** **全節の外の1節は今までどおり。** 背面でも待たず、断られたら失敗として見せる。 */
@@ -1022,6 +1033,15 @@ class SectionChatControllerTest {
     /** 生成に渡った本文を順に取り出す。**どの節をどの順で作ったか**を見る。 */
     private fun FakeAiClient.bodies(): List<String> =
         prompts.map { prompt -> BODY_IN_PROMPT.find(prompt)!!.value }
+
+    /** 取り消しに従わない生成を残らず返す。これが残るとテストが終われない。 */
+    private fun TestScope.resumeAll(waiting: List<Continuation<String>>, from: Int) {
+        var next = from
+        while (next < waiting.size) {
+            waiting[next++].resume("後着")
+            advanceUntilIdle()
+        }
+    }
 
     /** 保留中の生成を、列が尽きるまで1本ずつ返す。 */
     private fun TestScope.finishGenerations(ai: FakeAiClient, result: String) {
