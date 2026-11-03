@@ -19,6 +19,8 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.hasNoticeWithSummary
+import com.example.newproject.domain.summaryOf
 import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
@@ -850,8 +852,17 @@ internal class NoteSessionCoordinator(
     /** 面を出さずに頼んだ要求の、端末AIが使えない理由を画面が見せた。 */
     fun acknowledgeSectionSummaryNotice(requestId: Long) = sectionChat.acknowledgeNotice(requestId)
 
-    /** 出せなかった要約を、頼んだときの本文のまま作り直す。 */
-    fun retrySectionSummary(section: SectionRef) = sectionChat.retry(section)
+    /**
+     * 出せなかった要約を、頼んだときの本文のまま作り直す。
+     * **要約に全節の理由を添えている節では全節を頼み直す** — この節には作るものが無い。
+     */
+    fun retrySectionSummary(section: SectionRef) {
+        if (uiState.value.sectionChat.summaryOf(section)?.hasNoticeWithSummary() == true) {
+            requestAllSectionSummaries(section, quietly = false)
+        } else {
+            sectionChat.retry(section)
+        }
+    }
 
     /** 生成を中止する。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
     fun cancelSectionSummary(section: SectionRef) = sectionChat.cancel(section)

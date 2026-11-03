@@ -35,6 +35,17 @@ internal fun SectionChatState.withQueued(section: SectionRef): SectionChatState 
 internal fun SectionChatState.withBatchStopped(): SectionChatState =
     copy(batch = batch?.copy(isRunning = false))
 
+/**
+ * 要約を持ったまま、全節を止めた端末AIの理由を添えているか（→ features/section_ai_chat.md §5）。
+ * この節には作るものが無いので、再試行は全節を頼み直す。
+ */
+internal fun SectionSummary.hasNoticeWithSummary(): Boolean =
+    summary != null && summaryProblem is SectionChatProblem.AiStatus
+
+/** 要約に添えた理由を下げる。全節を頼み直すと確かめ直すので、古い理由を要約の隣に残さない。 */
+internal fun SectionChatState.withoutSummaryNotices(): SectionChatState =
+    copy(summaries = summaries.map { if (it.hasNoticeWithSummary()) it.copy(summaryProblem = null, noticePending = false) else it })
+
 /** 全節の要約で作り直す節か。持っていない節と、出せなかった節。**生成中の節は最後まで作る。** */
 internal fun SectionSummary?.needsBatchGeneration(): Boolean =
     this == null || (summary == null && !isSummaryLoading)

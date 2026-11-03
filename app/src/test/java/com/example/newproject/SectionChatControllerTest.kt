@@ -1180,9 +1180,9 @@ class SectionChatControllerTest {
         assertEquals("面の操作でDLを始めない", 0, ai.downloadCalls)
     }
 
-    /** **持っている要約を理由で上書きしない。** 途中で使えなくなったら全節を終え、作っていた節に出す。 */
+    /** **持っている要約を理由で上書きしない。** 途中で使えなくなったら全節を終え、押した時点の今の節に要約と並べて出す。 */
     @Test
-    fun `途中で使えなくなると全節を終え、持っている要約は上書きしない`() = runTest {
+    fun `途中で使えなくなると全節を終え、持っている要約に理由を添える`() = runTest {
         val ai = FakeAiClient { "要約" }
         val state = NoteUiStateStore(NoteUiState())
         val controller = controller(state, ai)
@@ -1194,7 +1194,8 @@ class SectionChatControllerTest {
         advanceUntilIdle()
 
         assertEquals("要約", summaryOf(state, A)?.summary)
-        assertTrue(summaryOf(state, B)?.summaryProblem is SectionChatProblem.AiStatus)
+        assertTrue(summaryOf(state, A)?.summaryProblem is SectionChatProblem.AiStatus)
+        assertNull("作らなかった節に理由を置いた", summaryOf(state, B))
         assertNull(summaryOf(state, C))
         assertNull(state.value.sectionChat.batch)
     }

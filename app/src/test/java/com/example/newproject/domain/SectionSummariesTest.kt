@@ -39,6 +39,27 @@ class SectionSummariesTest {
         assertEquals(listOf("C", "A"), next.summaries.map { it.section.title })
     }
 
+    /** 要約に添えた理由を見分ける。**要約の無い節の理由は、頼み直すと本文から作り直すので含めない。** */
+    @Test
+    fun `要約に添えた理由だけを見分けて下げる`() {
+        val notice = SectionChatProblem.AiStatus(AiStatusNotice("使えません", AiNoticeAction.None, canTryAgainLater = true))
+        val withSummary = summary("A", 1, text = "要約").copy(summaryProblem = notice, noticePending = true)
+        val withoutSummary = summary("B", 2).copy(summaryProblem = notice, noticePending = true)
+        val failed = summary("C", 3).copy(summaryProblem = SectionChatProblem.GenerationFailed("失敗"))
+
+        assertTrue(withSummary.hasNoticeWithSummary())
+        assertFalse(withoutSummary.hasNoticeWithSummary())
+        assertFalse(failed.hasNoticeWithSummary())
+        assertFalse(summary("D", 4, text = "要約").hasNoticeWithSummary())
+
+        val cleared = SectionChatState(listOf(withSummary, withoutSummary, failed)).withoutSummaryNotices()
+        assertNull(cleared.summaryOf(SectionRef("A"))?.summaryProblem)
+        assertFalse(cleared.summaryOf(SectionRef("A"))?.noticePending == true)
+        assertEquals("要約", cleared.summaryOf(SectionRef("A"))?.summary)
+        assertEquals(notice, cleared.summaryOf(SectionRef("B"))?.summaryProblem)
+        assertEquals(SectionChatProblem.GenerationFailed("失敗"), cleared.summaryOf(SectionRef("C"))?.summaryProblem)
+    }
+
     /** **作った要約はノートを開いている間すべて持つ。** 全節の要約を読み進めて面に出すため。 */
     @Test
     fun `作った要約は数で落とさない`() {

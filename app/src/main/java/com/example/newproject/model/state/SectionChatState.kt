@@ -31,7 +31,7 @@ data class SectionSummary(
     val sectionContext: String,     // LLM に渡す本文（表示はしない）
     val summary: String? = null,
     val isSummaryLoading: Boolean = false,
-    /** 要約が出せなかった理由。要約の欄へ出す。 */
+    /** 要約が出せなかった理由。要約の欄へ出す。**全節を止めた端末AIの理由は [summary] と並んで持つことがある。** */
     val summaryProblem: SectionChatProblem? = null,
     /**
      * **面を出さずに頼み、端末AIが使えない理由をまだ見せていないか**（→ features/margin_pane.md §5.4）。

@@ -104,6 +104,10 @@ internal fun SectionSummaryRow(inputs: SummaryRowInputs, modifier: Modifier = Mo
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
                 )
+                // 全節を止めた理由。今の節の要約は残したまま、押した本人に届ける（→ hasNoticeWithSummary）。
+                (summary.summaryProblem as? SectionChatProblem.AiStatus)?.let { problem ->
+                    AiStatusNoticeRow(notice = problem.notice, onRetry = inputs.onRetry, modifier = Modifier.padding(top = 4.dp))
+                }
             }
 
             summary.summaryProblem != null -> SectionChatProblemRow(summary.summaryProblem, inputs.onRetry)

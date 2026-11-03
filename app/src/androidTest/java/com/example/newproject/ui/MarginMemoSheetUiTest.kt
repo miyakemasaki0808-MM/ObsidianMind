@@ -143,6 +143,7 @@ class MarginMemoSheetUiTest {
     /**
      * **全節の間の要約の行**（→ features/section_ai_chat.md §5）。番を待つ節はボタンの代わりに「次に作ります」を出し、
      * 中止の口は「全節の生成を止める」1つにする。全節の外の1節は今までどおり「生成を中止」を出す。
+     * **全節を止めた理由は、持っている要約と並べて出す**（要約を消さない）。
      */
     @Test
     fun 全節の間の要約の行は_番を待つ節に次に作りますを出し_止める口を1つにする() {
@@ -186,6 +187,25 @@ class MarginMemoSheetUiTest {
         inputs = SummaryRowInputs(summary = null, onRequest = {}, onRetry = {}, onCancel = {}, onNoticeShown = {})
         composeRule.onNodeWithText("この節を要約").assertIsDisplayed()
         composeRule.onNodeWithText("次に作ります").assertDoesNotExist()
+
+        var retries = 0
+        inputs = SummaryRowInputs(
+            summary = SectionSummary(
+                SectionRef("節A"), 1L, "節A", "本文",
+                summary = "節Aの要約",
+                summaryProblem = SectionChatProblem.AiStatus(
+                    AiStatusNotice("いま使えません。", AiNoticeAction.Retry, canTryAgainLater = true)
+                )
+            ),
+            onRequest = {},
+            onRetry = { retries++ },
+            onCancel = {},
+            onNoticeShown = {}
+        )
+        composeRule.onNodeWithText("節Aの要約").assertIsDisplayed()
+        composeRule.onNodeWithText("いま使えません。").assertIsDisplayed()
+        composeRule.onNodeWithText("再試行").performClick()
+        composeRule.runOnIdle { assertEquals(1, retries) }
     }
 
     /**

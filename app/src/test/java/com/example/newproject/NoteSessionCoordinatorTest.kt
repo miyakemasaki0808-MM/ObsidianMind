@@ -2218,6 +2218,39 @@ class NoteSessionCoordinatorTest {
         assertEquals(0, env.ai.generateCalls)
     }
 
+    /** **要約に添えた理由の再試行は全節を頼み直す。** この節には作るものが無く、1節の再試行では何も起きない。 */
+    @Test
+    fun `要約に理由を添えた節の再試行は全節を頼み直す`() = runTest {
+        val env = Env(this)
+        val coordinator = env.coordinator()
+        coordinator.setNoteState(successNote("# A\n\n${longBody("A本文")}\n\n# B\n\n${longBody("B本文")}"))
+        advanceUntilIdle()
+        coordinator.requestSectionSummary(SectionRef("A"))
+        advanceUntilIdle()
+        env.ai.completeAll("Aの要約")
+        advanceUntilIdle()
+
+        env.ai.availability = AiAvailability.TemporarilyUnavailable(IllegalStateException("一時的"))
+        coordinator.requestAllSectionSummaries(SectionRef("A"), quietly = false)
+        advanceUntilIdle()
+        val noticed = requireNotNull(coordinator.uiState.value.sectionChat.summaryOf(SectionRef("A")))
+        assertTrue(noticed.summaryProblem is SectionChatProblem.AiStatus)
+        assertEquals("Aの要約", noticed.summary)
+
+        env.ai.availability = AiAvailability.Ready
+        coordinator.retrySectionSummary(SectionRef("A"))
+        advanceUntilIdle()
+        assertTrue("全節を頼み直していない", coordinator.uiState.value.sectionChat.isBatchRunning)
+        assertTrue("B本文" in env.ai.lastPrompt!!)
+        env.ai.completeAll("Bの要約")
+        advanceUntilIdle()
+
+        val chat = coordinator.uiState.value.sectionChat
+        assertNull("古い理由が残った", chat.summaryOf(SectionRef("A"))?.summaryProblem)
+        assertEquals("Bの要約", chat.summaryOf(SectionRef("B"))?.summary)
+        assertEquals(SectionBatchStatus.Ready, sectionBatchStatus(chat))
+    }
+
     /** **解析し直している間に頼んでも、前の本文から作らない。** 走行の印も立たない。 */
     @Test
     fun `本文を解析し直している間に全節を頼んでも、前の本文から作らない`() = runTest {

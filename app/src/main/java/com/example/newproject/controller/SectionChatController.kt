@@ -24,6 +24,7 @@ import com.example.newproject.domain.updated
 import com.example.newproject.domain.withBatchStopped
 import com.example.newproject.domain.withQueued
 import com.example.newproject.domain.withStarted
+import com.example.newproject.domain.withoutSummaryNotices
 import com.example.newproject.domain.without
 import com.example.newproject.model.NoteExcerptLimits
 import kotlinx.coroutines.CancellationException
@@ -114,7 +115,7 @@ class SectionChatController(
         if (targets.isEmpty() || chat.isBatchRunning) return
         val generating = worker?.isActive == true
         val all = targets + added.values.filter { kept -> targets.none { it.section == kept.section } }
-        state.update { it.copy(batch = SectionBatch(all.map { source -> source.section }, isRunning = true)) }
+        state.update { it.withoutSummaryNotices().copy(batch = SectionBatch(all.map { source -> source.section }, isRunning = true)) }
         all.filter { chat.summaryOf(it.section).needsBatchGeneration() }
             .mapTo(queue) { Pending(it, counted = true) }
         remaining = SECTION_BATCH_LIMIT
@@ -321,21 +322,19 @@ class SectionChatController(
 
     /**
      * 端末AIが使えない理由を書く。**全節の間は全節を終える** — どの節でも同じ答えが返るので、節の数だけ理由を並べない。
-     * 理由は押した時点の今の節に出す。その節の要約をすでに持っていれば、上書きせず作っていた節に出す。
+     * 理由は押した時点の今の節に出す。**その節の要約を持っていれば、要約を残して理由を添える** — ほかの節に置くと、押した本人に届かない。
      */
     private fun writeNotice(started: Started, problem: SectionChatProblem?) {
         if (!state.current.isBatchRunning) {
             updateSummary(started.requestId) { it.copy(isSummaryLoading = false, summaryProblem = problem) }
             return
         }
-        val target = noticeSource?.takeIf { state.current.summaryOf(it.section)?.summary == null } ?: started.source
+        val target = noticeSource ?: started.source
         state.update { chat ->
+            val kept = chat.summaryOf(target.section)?.takeIf { it.summary != null }
             chat.without(started.source.section).copy(batch = null).withStarted(
-                SectionSummary(
-                    section = target.section,
+                (kept ?: SectionSummary(target.section, started.requestId, target.sectionTitle, target.sectionText)).copy(
                     requestId = started.requestId,
-                    sectionTitle = target.sectionTitle,
-                    sectionContext = target.sectionText,
                     summaryProblem = problem,
                     noticePending = noticeQuietly
                 )
