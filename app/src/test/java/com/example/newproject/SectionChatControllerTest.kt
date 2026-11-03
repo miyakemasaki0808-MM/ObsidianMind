@@ -38,6 +38,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
 /** 節ごとの部分要約（→ features/margin_pane.md §5.8）。 */
@@ -903,6 +904,54 @@ class SectionChatControllerTest {
         controller.stopAll()
         waiting[2].resume("後着")
         advanceUntilIdle()
+    }
+
+    /**
+     * **取り消しに従わない生成が遅れて断られても、新しい全節の状態に触らない。** 3回目の拒否が古い生成係へ届く順序を作る。
+     * 届くと、走っている新しい全節に「混み合いで止まった」が立つ。
+     */
+    @Test
+    fun `取り消しに従わない生成が遅れて断られても、新しい全節に混み合いを立てない`() = runTest {
+        val waiting = mutableListOf<Continuation<String>>()
+        var refusals = SECTION_BATCH_REFUSAL_LIMIT - 1
+        val ai = FakeAiClient {
+            if (refusals-- > 0) throw GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY)
+            suspendCoroutine { waiting += it }
+        }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        advanceUntilIdle()
+        assertEquals(1, waiting.size)
+
+        controller.stopAll()
+        controller.requestAll(sources(A, B), source(A), quietly = false)
+        runCurrent()
+        assertEquals(2, waiting.size)
+
+        waiting[0].resumeWithException(GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY))
+        advanceUntilIdle()
+
+        assertFalse("古い拒否で新しい全節に混み合いを立てた", state.value.sectionChat.batch!!.stoppedBusy)
+        assertTrue(summaryOf(state, A)?.isSummaryLoading == true)
+
+        controller.stopAll()
+        waiting[1].resume("後着")
+        advanceUntilIdle()
+    }
+
+    /** **全節の外の1節は今までどおり。** 背面でも待たず、断られたら失敗として見せる。 */
+    @Test
+    fun `全節の外の1節は背面でも待たない`() = runTest {
+        val ai = FakeAiClient { "要約" }
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(state, ai)
+
+        controller.pause(ReadingPauseReason.AppBackground)
+        controller.request(A, "A", "Aの本文")
+        advanceUntilIdle()
+
+        assertEquals("要約", summaryOf(state, A)?.summary)
     }
 
     /** **端末AIが使えなければ全節を始めず、押した時点の今の節に理由を出す。** 節の数だけ理由を並べない。 */

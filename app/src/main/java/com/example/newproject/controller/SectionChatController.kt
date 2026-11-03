@@ -111,7 +111,6 @@ class SectionChatController(
         if (targets.isEmpty() || chat.isBatchRunning) return
         val generating = worker?.isActive == true
         state.update { it.copy(batch = SectionBatch(targets.map { source -> source.section }, isRunning = true)) }
-        queue.clear()
         targets.filter { chat.summaryOf(it.section).needsBatchGeneration() }
             .mapTo(queue) { Pending(it, counted = true) }
         remaining = SECTION_BATCH_LIMIT
@@ -189,7 +188,6 @@ class SectionChatController(
         }
         // 別の節の生成が走っていれば、ここで止める（その節は withStarted が取り除く）。
         worker?.cancel()
-        queue.clear()
         queue.addFirst(Pending(source, counted = false))
         launchWorker()
     }
