@@ -10,6 +10,12 @@ set -u
 
 readonly MAX_ROUNDS=3
 
+# モデルはオーナーの使い分けに合わせて毎回指定する。~/.codex/config.toml の既定はアプリと共有で、
+# 実機検証用（gpt-6.1-sol・中）なので、指定しないとレビューが弱いモデルで走る。
+readonly REVIEW_MODEL="gpt-6-astra"
+readonly FIRST_EFFORT="xhigh"
+readonly RE_REVIEW_EFFORT="high"
+
 usage() {
   echo "使い方: $0 <series> <base>..<head> [観点のファイル]" >&2
   exit 64
@@ -64,6 +70,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 round=$((rounds + 1))
+effort="$RE_REVIEW_EFFORT"
+[ "$round" -eq 1 ] && effort="$FIRST_EFFORT"
 head="$(git rev-parse --short HEAD)"
 branch="$(git branch --show-current)"
 body="docs/review/$(date +%F)-${series}-r${round}.md"
@@ -104,6 +112,8 @@ untracked_before="$(git ls-files --others --exclude-standard | sort)"
 head_before="$(git rev-parse HEAD)"
 start="$(date +%s)"
 codex exec \
+  -m "$REVIEW_MODEL" \
+  -c "model_reasoning_effort=${effort}" \
   -s workspace-write \
   -c 'sandbox_workspace_write.network_access=true' \
   --add-dir "$HOME/.gradle" \
@@ -130,8 +140,8 @@ count() { grep -c -E "^### $1-[0-9]+" "$body" 2>/dev/null || true; }
 p1=0; p2=0; p3=0
 if [ -s "$body" ]; then p1="$(count P1)"; p2="$(count P2)"; p3="$(count P3)"; fi
 
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-  "$(date +%FT%T)" "$series" "$round" "$range" "$seconds" "${tokens:-?}" "$p1" "$p2" "$p3" "$codex_status" \
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$(date +%FT%T)" "$series" "$round" "$range" "$REVIEW_MODEL" "$effort" "$seconds" "${tokens:-?}" "$p1" "$p2" "$p3" "$codex_status" \
   >> "${state_dir}/log.tsv"
 
 if [ -n "$tampered" ] && { [ "$codex_status" -ne 0 ] || [ ! -s "$body" ]; }; then
@@ -149,7 +159,7 @@ new_closed=0
 [ "$p1" -eq 0 ] && [ "$p2" -eq 0 ] && new_closed=1
 printf 'rounds=%s\nclosed=%s\nlast_head=%s\n' "$round" "$new_closed" "$head" > "$state"
 
-echo "review: ${body}（${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件）"
+echo "review: ${body}（${REVIEW_MODEL}・推論 ${effort}・${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件）"
 
 if [ -n "$tampered" ]; then
   echo "review: Codex が追跡しているファイルを変えた。直さずに止まり、オーナーへ渡す:" >&2

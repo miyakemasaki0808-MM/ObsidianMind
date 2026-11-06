@@ -60,6 +60,20 @@ class CodexReviewScriptTest {
     }
 
     @Test
+    fun `1回目は Astra の極高、再レビューは Astra の高で頼む`() {
+        body("### P2-1. 残る\n")
+        assertEquals(0, review().exit)
+        assertEquals(listOf("-m", "gpt-6-astra"), args().windowed(2).first { it[0] == "-m" })
+        assertTrue(args().toString(), "model_reasoning_effort=xhigh" in args())
+        intake()
+
+        assertEquals(0, review().exit)
+
+        assertEquals(listOf("-m", "gpt-6-astra"), args().windowed(2).first { it[0] == "-m" })
+        assertTrue(args().toString(), "model_reasoning_effort=high" in args())
+    }
+
+    @Test
     fun `観点のファイルをプロンプトに入れる`() {
         body("### P3-1. 小さい\n")
         val focus = temporary.newFile("focus.md").apply { writeText("- 観点その1: 取り消しの後着\n") }
@@ -218,6 +232,8 @@ class CodexReviewScriptTest {
 
     private fun prompt(): String = fake.resolve("prompt.md").readText()
 
+    private fun args(): List<String> = fake.resolve("args.txt").readLines()
+
     private fun reviewBodies(): List<File> =
         repo.resolve("docs/review").listFiles { file -> file.name.first().isDigit() }?.toList().orEmpty()
 
@@ -275,6 +291,7 @@ class CodexReviewScriptTest {
             #!/bin/bash
             out=""; prev=""
             for a in "${'$'}@"; do [ "${'$'}prev" = "-o" ] && out="${'$'}a"; prev="${'$'}a"; done
+            printf '%s\n' "${'$'}@" > "${'$'}FAKE_DIR/args.txt"
             cat > "${'$'}FAKE_DIR/prompt.md"
             [ -f "${'$'}FAKE_DIR/touch" ] && echo '// x' >> app/Main.kt
             [ -f "${'$'}FAKE_DIR/fail" ] && exit 1
