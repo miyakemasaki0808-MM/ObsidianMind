@@ -126,6 +126,49 @@ class CommitGateHookTest {
         assertEquals(2, hook(".claude/gate/gate.sh && git add -A && git commit -m x").exit)
         assertEquals(2, hook("cd app && git -C .. commit --amend --no-edit").exit)
         assertEquals(2, hook("git add -A\ngit commit -q -F - <<'EOF'\nx\nEOF").exit)
+        assertEquals(2, hook("bash -c \"git commit -m x\"").exit)
+    }
+
+    @Test
+    fun `git -C で別の worktree をコミットするときは、その worktree の記録と照らす`() {
+        val other = temporary.root.resolve("other wt")
+        git("worktree", "add", "-q", "-b", "other", other.path)
+        other.resolve("app/Main.kt").writeText("fun main() { println(9) }\n")
+        git("-C", other.path, "add", "-A")
+
+        // 呼び出し元は変更が無く、相手の worktree は未検証。空白を含むパスも、相対のパスも解く。
+        assertEquals(2, hook("git -C \"${other.path}\" commit -m x").exit)
+        assertEquals(2, hook("git -C '../other wt' commit -m x").exit)
+
+        // 相手でゲートを通せば、呼び出し元に未検証の変更があっても通る。
+        assertEquals(0, run(listOf(repositoryRoot().resolve(GATE_PATH).path), directory = other).exit)
+        write("app/Main.kt", "fun main() { println(1) }\n")
+        assertEquals(0, hook("git -C \"${other.path}\" commit -m x").exit)
+
+        // 呼び出し元の記録を相手へ流用しない。
+        other.resolve("app/Main.kt").appendText("// more\n")
+        git("-C", other.path, "add", "-A")
+        git("add", "-A")
+        assertGatePasses()
+        assertEquals(0, hook("git commit -m x").exit)
+        assertEquals(2, hook("git -C \"${other.path}\" commit -m x").exit)
+    }
+
+    @Test
+    fun `コミットする worktree を決められない形は、変更が無くても明示して止める`() {
+        listOf(
+            "cd app && git commit -m x",
+            "(cd app; git commit -m x)",
+            "GIT_DIR=.git git commit -m x",
+            "GIT_INDEX_FILE=/tmp/i git commit -m x",
+            "git --git-dir=.git --work-tree=. commit -m x",
+            "git --git-dir .git commit -m x",
+            "git -C \"\$D\" commit -m x",
+        ).forEach { command ->
+            val result = hook(command)
+            assertEquals(command, 2, result.exit)
+            assertTrue("$command: ${result.err}", "決められない" in result.err)
+        }
     }
 
     @Test
@@ -169,6 +212,8 @@ class CommitGateHookTest {
 
         assertEquals(0, hook("git status").exit)
         assertEquals(0, hook("git log --grep commit").exit)
+        assertEquals(0, hook("git -C app log --grep commit").exit)
+        assertEquals(0, hook("cd app && git status").exit)
         assertEquals(0, hook("git commit-tree HEAD^{tree}").exit)
         assertEquals(0, hook("./gradlew testDebugUnitTest").exit)
     }
@@ -232,9 +277,9 @@ class CommitGateHookTest {
             it.writeText(text)
         }
 
-    private fun run(command: List<String>, stdin: String? = null): Result {
+    private fun run(command: List<String>, stdin: String? = null, directory: File = repo): Result {
         val err = temporary.newFile()
-        val builder = ProcessBuilder(command).directory(repo).redirectError(err)
+        val builder = ProcessBuilder(command).directory(directory).redirectError(err)
         builder.environment().apply {
             keys.filter { it.startsWith("GIT_") || it == "CLAUDE_PROJECT_DIR" }.forEach { remove(it) }
             // 端末と同じ UTF-8 で流す。macOS の bash 3.2 は UTF-8 のとき `$after）` の全角文字を変数名の続きと読む。
