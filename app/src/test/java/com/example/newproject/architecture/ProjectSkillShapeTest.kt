@@ -61,6 +61,43 @@ class ProjectSkillShapeTest {
         assertEquals("名指した Skill が無い（実在: ${existing.sorted()}）", emptyList<String>(), missing)
     }
 
+    /**
+     * 受付の検査は、本文のファイル名がレビュー一覧にあるかも見る（`ReviewFindingsLedgerTest`）。
+     * 転記より先に検査を置くと、手順どおりに進めた受付が必ず1件落ちる。
+     */
+    @Test
+    fun `review-intake は一覧へ転記してから検査し、本文を消してから検査し直す`() {
+        val text = skillsRoot().resolve("review-intake/SKILL.md").readText()
+        val steps = numberedSteps(text)
+        fun firstStep(vararg words: String): Int =
+            steps.indexOfFirst { step -> words.all { it in step } }
+                .also { assertTrue("「${words.joinToString("・")}」を含む手順が無い:\n$text", it >= 0) }
+
+        val transcribe = firstStep("README", "転記")
+        val check = firstStep("ReviewFindingsLedgerTest")
+        val delete = firstStep("本文を削除")
+
+        assertTrue("一覧への転記（${transcribe + 1}）が検査（${check + 1}）より後にある", transcribe < check)
+        assertTrue("本文の削除（${delete + 1}）が検査（${check + 1}）より前にある", check < delete)
+        assertTrue("本文を消した後に検査し直していない: ${steps[delete]}", "検査" in steps[delete])
+
+        val description = frontMatter(text)?.get("description").orEmpty()
+        assertTrue(
+            "description の順序が手順と違う: $description",
+            description.indexOf("転記") in 0 until description.indexOf("検査")
+        )
+    }
+
+    /** `1. ` で始まる手順を、続く行と合わせて1つずつ返す。 */
+    private fun numberedSteps(text: String): List<String> =
+        text.lines().fold(mutableListOf<String>()) { steps, line ->
+            when {
+                STEP.containsMatchIn(line) -> steps.add(line)
+                steps.isNotEmpty() && line.startsWith(" ") -> steps[steps.lastIndex] += "\n" + line
+            }
+            steps
+        }
+
     private fun frontMatter(text: String): Map<String, String>? {
         val lines = text.lines()
         if (lines.firstOrNull() != "---") return null
@@ -86,5 +123,6 @@ class ProjectSkillShapeTest {
     private companion object {
         val LINK = Regex("""\]\(([^)\s]+)\)""")
         val NAMED_SKILL = Regex("""Skill `([a-z0-9-]+)`""")
+        val STEP = Regex("""^\d+\. """)
     }
 }
