@@ -379,7 +379,7 @@
 
 ## DOC-6. CLAUDE.md は作業手順を Skill が持つと書くが、プロジェクトに Skill が無い
 
-- **状態:** 判断待ち（2026-11-06 起票）。どちらにも寄せていない。
+- **状態:** 実装済み・別の目のレビュー待ち（2026-11-07）。オーナー判断で Skill へ移す側に決めた。ひと続きの手順だけを移し、完了条件は CLAUDE.md に残す（→ [harness](../dev/harness/README.md) §2）。レビューの往復と評価の実行の Skill は、それぞれの課題で足す。
 - **差分:** [CLAUDE.md](../../CLAUDE.md) の冒頭は、作業手順は原則 Skill（作業標準書）が持つと書く。`.claude/skills` も `~/.claude/skills` も無く、`docs/dev` と `docs/review` にも Skill の記述は無い。実際の手順は CLAUDE.md の「検証と完了条件」と [device_validation](../review/device_validation/README.md) が持つ。
 - **影響:** 手順を探す人が無い置き場を探す。新しい手順をどこに書くかも決まらない。
 - **対応候補:** 文を実態へ直すか、手順を Skill へ移すか。移す場合は `.claude/` が `.gitignore` の対象なので、追跡するには例外が要る。
