@@ -1,11 +1,23 @@
 #!/usr/bin/env bash
 # コミット前のゲート。成功したときだけ、文書を除く作業ツリーのハッシュを通過の記録として残す。
-# 記録は pre_commit_hook.sh が git commit の直前に照らす（→ docs/dev/harness/README.md §1）。
+# 記録は Git の pre-commit（githooks/pre-commit）が、コミットされる内容と照らす（→ docs/dev/harness/README.md §1）。
 # 引数は Gradle へそのまま足す（androidTest を触ったら assembleDebugAndroidTest）。
 set -u
 
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Git の pre-commit を入れる。設定はリポジトリのローカル設定で、worktree の間で共有される。
+# 別の値が入っていれば、オーナーのフックかもしれないので上書きしない。
+hooks_path=".claude/gate/githooks"
+current_hooks="$(git config --get core.hooksPath || true)"
+if [ -z "$current_hooks" ]; then
+  git config core.hooksPath "$hooks_path" || exit 1
+  echo "gate: Git の pre-commit を入れた（core.hooksPath=${hooks_path}）"
+elif [ "$current_hooks" != "$hooks_path" ]; then
+  echo "gate: core.hooksPath が別の値（${current_hooks}）なので、Git の pre-commit を入れられない。オーナーに確かめる" >&2
+  exit 1
+fi
 
 record="$(gate_record_path)" || exit 1
 # 先に消す。失敗・中断・途中のコード変更では記録を残さない。

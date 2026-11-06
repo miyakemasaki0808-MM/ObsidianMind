@@ -84,8 +84,8 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ```
 
 - **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある。
-  **成功したときだけ通過が記録され、Claude の `git commit` はフックがその記録と照らす**（文書だけの変更は止めない → [harness](docs/dev/harness/README.md) §1）。
-  止められたら、ゲートを単独のコマンドで流し直す。ゲートとコミットを `;` や `&&` でつながない
+  **成功したときだけ通過が記録され、Claude の `git commit` は Git の pre-commit が、コミットされるコードをその記録と照らす**（文書だけの変更は止めない → [harness](docs/dev/harness/README.md) §1）。
+  止められたら、ゲートを単独のコマンドで流し直す。ゲートとコミットを `;` や `&&` でつながない。`--no-verify` で飛ばさない
 - `androidTest` を触ったら `.claude/gate/gate.sh assembleDebugAndroidTest`（CIと同じ組み立てタスクを足す）で通す。既定のゲートはこれをコンパイルしない
 - **実機ケースの判定はCodexが行い、組み立てと片付けはClaudeが行う**（区間の割りは [共通手順](docs/review/device_validation/README.md) が持つ）。
   **どちらの担い手も**着手前に共通手順と対象機能のケースを読み、

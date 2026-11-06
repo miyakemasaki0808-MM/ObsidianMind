@@ -5,6 +5,7 @@ import java.util.concurrent.TimeUnit
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
@@ -12,11 +13,11 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 
 /**
- * コミット前のゲートを、Claude Code のフックが `git commit` の直前に照らすこと（→ docs/dev/harness/README.md §1）。
+ * コミット前のゲートを、Git の pre-commit がコミットされる内容で照らすこと（→ docs/dev/harness/README.md §1）。
  *
- * 一時のリポジトリに偽の `gradlew` を置き、本物の `.claude/gate/` のスクリプトをそこで走らせる。
- * 偽の `gradlew` は無視される `build/fail` があると失敗し、`build/touch` があると実行中にコードを書き換える —
- * コードのツリーを変えずに、失敗と実行中の変更を作るため。
+ * 一時のリポジトリへ本物の `.claude/gate/` を写して追跡させ、偽の `gradlew` を置いて、本物の `git commit` を流す。
+ * 偽の `gradlew` は無視される `build/fail` があると失敗し、`build/touch` があると実行中にコードを書き換える。
+ * 照らすのはコマンドの書き方ではないので、別名・関数・`-C`・行継続などの書き方は実際の Bash で流して確かめる。
  */
 class CommitGateHookTest {
 
@@ -34,67 +35,46 @@ class CommitGateHookTest {
         write("app/Main.kt", "fun main() {}\n")
         write("docs/a.md", "# a\n")
         write("README.md", "# r\n")
+        copyGateScripts()
         git("add", "-A")
         git("commit", "-q", "-m", "init")
+        git("config", "core.hooksPath", HOOKS_PATH)
     }
 
+    // --- Git の pre-commit -----------------------------------------------------------
+
     @Test
-    fun `ゲートを通していないコードの変更はコミットが止まり理由が返る`() {
+    fun `ゲートを通していないコードはコミットできず、理由が返る`() {
         write("app/Main.kt", "fun main() { println() }\n")
+        git("add", "-A")
 
-        val result = hook("git commit -m x")
-
-        assertEquals(2, result.exit)
+        val result = assertRefused { commit() }
         assertTrue(result.err, "ゲートの通過記録が無い" in result.err)
         assertTrue(result.err, ".claude/gate/gate.sh" in result.err)
     }
 
     @Test
-    fun `ゲートを通したコードは、索引へ揃えればコミットできる`() {
+    fun `ゲートを通したコードはコミットでき、無視されるファイルは数えない`() {
+        write("app/Main.kt", "fun main() { println() }\n")
+        write("build/out.txt", "x")
+        assertGatePasses()
+        git("add", "-A")
+
+        assertCommitted { commit() }
+    }
+
+    @Test
+    fun `ゲートの後にコードを変えてステージすると止まり、ステージしなければ通る`() {
         write("app/Main.kt", "fun main() { println() }\n")
         assertGatePasses()
-
-        val unstaged = hook("git commit -m x")
-        assertEquals("ステージしていないコードがあるのに通した", 2, unstaged.exit)
-        assertTrue(unstaged.err, "索引" in unstaged.err)
+        git("add", "-A")
+        // ステージした内容はゲートが見たとおりなので、作業ファイルだけの変更はコミットに入らない。
+        write("app/Main.kt", "fun main() { println(1) }\n")
+        assertCommitted { commit() }
 
         git("add", "-A")
-        assertEquals(0, hook("git commit -m x").exit)
-    }
-
-    @Test
-    fun `作業ファイルと違う内容をステージしていると、記録が無くても有っても止まる`() {
-        // 壊れた内容をステージし、作業ファイルだけ HEAD へ戻す。作業ツリーだけを見ると変更が無い。
-        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
-        git("add", "app/Main.kt")
-        write("app/Main.kt", "fun main() {}\n")
-
-        val noRecord = hook("git commit -m x")
-        assertEquals(2, noRecord.exit)
-        assertTrue(noRecord.err, "索引" in noRecord.err)
-
-        // 正常な作業ファイルでゲートを通しても、別の内容の索引は通さない。
-        write("app/Main.kt", "fun main() { println() }\n")
-        assertGatePasses()
-        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
-        git("add", "app/Main.kt")
-        write("app/Main.kt", "fun main() { println() }\n")
-        assertEquals(2, hook("git commit -m x").exit)
-
-        git("add", "app/Main.kt")
-        assertEquals("ゲートを通した内容へ揃えたのに止めた", 0, hook("git commit -m x").exit)
-    }
-
-    @Test
-    fun `ゲートの後にコードを変えると止まる`() {
-        write("app/Main.kt", "fun main() { println() }\n")
-        assertGatePasses()
-        write("app/Main.kt", "fun main() { println(1) }\n")
-
-        val result = hook("git commit -m x")
-
-        assertEquals(2, result.exit)
-        assertTrue(result.err, "ゲートを通した後にコードが変わっている" in result.err)
+        val result = assertRefused { commit() }
+        assertTrue(result.err, "ゲートを通したときの作業ツリーと違う" in result.err)
     }
 
     @Test
@@ -105,7 +85,8 @@ class CommitGateHookTest {
 
         assertTrue(gate().exit != 0)
         assertFalse("失敗したのに通過の記録が残っている", recordFile().exists())
-        assertEquals(2, hook("git commit -m x").exit)
+        git("add", "-A")
+        assertRefused { commit() }
     }
 
     @Test
@@ -115,131 +96,191 @@ class CommitGateHookTest {
 
         assertTrue(gate().exit != 0)
         assertFalse("実行中に変わったコードを通過として記録している", recordFile().exists())
-        assertEquals(2, hook("git commit -m x").exit)
-    }
-
-    @Test
-    fun `ゲートとコミットを1つのコマンドにつないでも止まる`() {
-        write("app/Main.kt", "fun main() { println() }\n")
-
-        assertEquals(2, hook("./gradlew testDebugUnitTest lintDebug; git commit -m x").exit)
-        assertEquals(2, hook(".claude/gate/gate.sh && git add -A && git commit -m x").exit)
-        assertEquals(2, hook("cd app && git -C .. commit --amend --no-edit").exit)
-        assertEquals(2, hook("git add -A\ngit commit -q -F - <<'EOF'\nx\nEOF").exit)
-        assertEquals(2, hook("bash -c \"git commit -m x\"").exit)
-    }
-
-    @Test
-    fun `git -C で別の worktree をコミットするときは、その worktree の記録と照らす`() {
-        val other = temporary.root.resolve("other wt")
-        git("worktree", "add", "-q", "-b", "other", other.path)
-        other.resolve("app/Main.kt").writeText("fun main() { println(9) }\n")
-        git("-C", other.path, "add", "-A")
-
-        // 呼び出し元は変更が無く、相手の worktree は未検証。空白を含むパスも、相対のパスも解く。
-        assertEquals(2, hook("git -C \"${other.path}\" commit -m x").exit)
-        assertEquals(2, hook("git -C '../other wt' commit -m x").exit)
-
-        // 相手でゲートを通せば、呼び出し元に未検証の変更があっても通る。
-        assertEquals(0, run(listOf(repositoryRoot().resolve(GATE_PATH).path), directory = other).exit)
-        write("app/Main.kt", "fun main() { println(1) }\n")
-        assertEquals(0, hook("git -C \"${other.path}\" commit -m x").exit)
-
-        // 呼び出し元の記録を相手へ流用しない。
-        other.resolve("app/Main.kt").appendText("// more\n")
-        git("-C", other.path, "add", "-A")
         git("add", "-A")
-        assertGatePasses()
-        assertEquals(0, hook("git commit -m x").exit)
-        assertEquals(2, hook("git -C \"${other.path}\" commit -m x").exit)
+        assertRefused { commit() }
     }
 
     @Test
-    fun `行末のバックスラッシュで折り返したコミットも、相手の worktree で照らす`() {
-        val other = temporary.root.resolve("other")
-        git("worktree", "add", "-q", "-b", "other", other.path)
-        val wrapped = listOf(
-            "git -C ../other \\\n  commit -qm wrapped1",
-            "git \\\n  -C ../other commit -qm wrapped2",
-        )
+    fun `ゲートとコミットをつないでも、ゲートの結果どおりに通るか止まる`() {
+        write("app/Main.kt", "fun main() { println() }\n")
+        write("build/fail", "")
+        assertRefused { bash("$GATE_PATH; git add -A; git commit -qm x") }
 
-        wrapped.forEachIndexed { i, command ->
-            other.resolve("app/Main.kt").writeText("INVALID KOTLIN $i\n")
-            git("-C", other.path, "add", "-A")
-            assertEquals("未検証なのに通した: $command", 2, hook(command).exit)
-
-            assertEquals(0, run(listOf(repositoryRoot().resolve(GATE_PATH).path), directory = other).exit)
-            assertEquals("検証済みなのに止めた: $command", 0, hook(command).exit)
-
-            // 正規表現の一致ではなく、実際の Bash で有効なコミットの形であること。
-            val result = run(listOf("/bin/bash", "-c", command))
-            assertEquals("Bash で流せない: $command\n${result.err}", 0, result.exit)
-            assertEquals("wrapped${i + 1}", git("-C", other.path, "log", "-1", "--format=%s").trim())
-        }
+        repo.resolve("build/fail").delete()
+        assertCommitted { bash("$GATE_PATH && git add -A && git commit -qm x") }
     }
 
     @Test
-    fun `コミットする worktree を決められない形は、変更が無くても明示して止める`() {
-        listOf(
-            "cd app && git commit -m x",
-            "(cd app; git commit -m x)",
-            "GIT_DIR=.git git commit -m x",
-            "GIT_INDEX_FILE=/tmp/i git commit -m x",
-            "git --git-dir=.git --work-tree=. commit -m x",
-            "git --git-dir .git commit -m x",
-            "git -C \"\$D\" commit -m x",
-        ).forEach { command ->
-            val result = hook(command)
-            assertEquals(command, 2, result.exit)
-            assertTrue("$command: ${result.err}", "決められない" in result.err)
-        }
-    }
-
-    @Test
-    fun `文書だけの変更はゲートなしで止まらない`() {
+    fun `文書だけのコミットは、コードの書きかけが残っていてもゲートなしで通る`() {
         write("docs/a.md", "# a2\n")
         write("docs/new.md", "# new\n")
         write("README.md", "# r2\n")
         write(".claude/skills/x/SKILL.md", "---\nname: x\n---\n")
-
-        assertEquals(0, hook("git commit -m x").exit)
-    }
-
-    @Test
-    fun `ゲートの後に文書を足しても記録は無効にならない`() {
         write("app/Main.kt", "fun main() { println() }\n")
-        assertGatePasses()
-        git("add", "-A")
-        write("docs/a.md", "# a2\n")
-        write("CLAUDE.md", "# c\n")
+        git("add", "docs", "README.md", ".claude/skills")
 
-        assertEquals("ステージしていない文書で止めた", 0, hook("git commit -m x").exit)
+        assertCommitted { commit() }
     }
 
     @Test
-    fun `未追跡のコードのファイルも数え、無視されるファイルは数えない`() {
-        write("build/out.txt", "x")
-        assertEquals("無視されるファイルだけなら止まらない", 0, hook("git commit -m x").exit)
-
-        write("app/New.kt", "class New\n")
-        assertEquals(2, hook("git commit -m x").exit)
-
+    fun `最上位以外の md はコードとして数える`() {
         write("app/docs/nested.md", "# 最上位の docs ではない\n")
-        assertGatePasses()
-        write("app/docs/nested.md", "# 変えた\n")
-        assertEquals("最上位以外の .md はコードとして数える", 2, hook("git commit -m x").exit)
+        git("add", "-A")
+
+        assertRefused { commit() }
     }
 
     @Test
-    fun `コミット以外のコマンドは止めない`() {
-        write("app/Main.kt", "fun main() { println() }\n")
+    fun `ステージした内容がゲートの見た作業ツリーと違えば、記録が無くても有っても止まる`() {
+        // 壊れた内容をステージし、作業ファイルだけ HEAD へ戻す。
+        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
+        git("add", "app/Main.kt")
+        write("app/Main.kt", "fun main() {}\n")
+        assertRefused { commit() }
 
-        assertEquals(0, hook("git status").exit)
-        assertEquals(0, hook("git log --grep commit").exit)
-        assertEquals(0, hook("git -C app log --grep commit").exit)
-        assertEquals(0, hook("cd app && git status").exit)
-        assertEquals(0, hook("git commit-tree HEAD^{tree}").exit)
-        assertEquals(0, hook("./gradlew testDebugUnitTest").exit)
+        // 正常な作業ファイルでゲートを通しても、別の内容の索引は通さない。
+        write("app/Main.kt", "fun main() { println() }\n")
+        assertGatePasses()
+        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
+        git("add", "app/Main.kt")
+        write("app/Main.kt", "fun main() { println() }\n")
+        assertRefused { commit() }
+
+        git("add", "app/Main.kt")
+        assertCommitted { commit() }
+    }
+
+    @Test
+    fun `ゲートが見た変更の一部だけをコミットすると止まる`() {
+        write("app/Main.kt", "fun main() { println() }\n")
+        write("app/New.kt", "class New\n")
+        assertGatePasses()
+
+        git("add", "app/Main.kt")
+        assertRefused { commit() }
+        assertRefused { commit("app/Main.kt") }
+
+        git("add", "-A")
+        assertCommitted { commit() }
+    }
+
+    @Test
+    fun `commit -a の一時の索引も照らす`() {
+        write("app/Main.kt", "fun main() { println() }\n")
+        assertGatePasses()
+
+        assertCommitted { commit("-a") }
+
+        write("app/Main.kt", "fun main() { println(2) }\n")
+        assertRefused { commit("-a") }
+    }
+
+    @Test
+    fun `Claude Code の外のコミットは止めない`() {
+        write("app/Main.kt", "fun main() { println() }\n")
+        git("add", "-A")
+
+        assertCommitted { commit(claude = false) }
+    }
+
+    @Test
+    fun `別の worktree へのコミットは、書き方にかかわらずその worktree の記録と照らす`() {
+        val other = temporary.root.resolve("other")
+        git("worktree", "add", "-q", "-b", "other", other.path)
+        val forms = listOf(
+            "git -C ../other commit -qm x",
+            "git -C ../other \\\n  commit -qm x",
+            "git \\\n  -C ../other commit -qm x",
+            "g() { command git -C ../other \"\$@\"; }; g commit -qm x",
+            "shopt -s expand_aliases\nalias g='git -C ../other'\ng commit -qm x",
+            "git -C ../other -c alias.ci=commit ci -qm x",
+            "'git' -C ../other commit -qm x",
+            "g\\it -C ../other commit -qm x",
+            "\"\$(command -v git)\" -C ../other commit -qm x",
+            "git -C \"../oth\"er commit -qm x",
+        )
+
+        forms.forEachIndexed { i, command ->
+            other.resolve("app/Main.kt").writeText("INVALID KOTLIN $i\n")
+            git("-C", other.path, "add", "-A")
+            // 呼び出し元でゲートを通しても、相手の記録にはならない。
+            write("app/Main.kt", "fun main() { println($i) }\n")
+            assertGatePasses()
+            assertRefused(other) { bash(command) }
+
+            // 同じ書き方が、相手でゲートを通せば実際にコミットになる（書き方の誤りで落ちたのではない）。
+            assertEquals(0, run(listOf(other.resolve(GATE_PATH).path), directory = other).exit)
+            assertCommitted(other) { bash(command) }
+        }
+    }
+
+    @Test
+    fun `単一引用符の中のバックスラッシュと改行は、そのままのパスの worktree で照らす`() {
+        // 変更の無い other を身代わりに置き、実際の対象は「oth＼改行er」という名前の worktree にする。
+        git("worktree", "add", "-q", "-b", "decoy", temporary.root.resolve("other").path)
+        val target = temporary.root.resolve("oth\\\ner")
+        git("worktree", "add", "-q", "-b", "target", target.path)
+        target.resolve("app/Main.kt").writeText("INVALID KOTLIN\n")
+        git("-C", target.path, "add", "-A")
+        val command = "git -C '../oth\\\ner' commit -qm literal"
+
+        assertRefused(target) { bash(command) }
+
+        assertEquals(0, run(listOf(target.resolve(GATE_PATH).path), directory = target).exit)
+        assertCommitted(target) { bash(command) }
+    }
+
+    // --- Claude Code の PreToolUse（フックを飛ばす指定と、フックが入っているか） -------------
+
+    @Test
+    fun `Git のフックが入っていなければ、コミットのコマンドを止める`() {
+        git("config", "--unset", "core.hooksPath")
+
+        val result = guard("git commit -m x")
+
+        assertEquals(2, result.exit)
+        assertTrue(result.err, GATE_PATH in result.err)
+        assertEquals(0, guard("git status").exit)
+    }
+
+    @Test
+    fun `フックを飛ばす指定を含むコミットのコマンドを止める`() {
+        listOf(
+            "git commit --no-verify -m x",
+            "git commit --no-veri -m x",
+            "git commit -n -m x",
+            "git commit -qnm x",
+            "git -c core.hooksPath=/dev/null commit -m x",
+            "git -c core.HooksPath= commit -m x",
+            "git -c alias.ci='commit -n' ci -m x",
+        ).forEach { command ->
+            val result = guard(command)
+            assertEquals(command, 2, result.exit)
+            assertTrue("$command: ${result.err}", "フックを飛ばす" in result.err)
+        }
+        listOf(
+            "git commit -m x",
+            "git commit -qm x",
+            "git commit --amend --no-edit",
+            "git commit -F /tmp/message.txt",
+            "git log --grep commit",
+            "git status",
+        ).forEach { command -> assertEquals(command, 0, guard(command).exit) }
+    }
+
+    // --- 入れ方と登録 -----------------------------------------------------------------
+
+    @Test
+    fun `ゲートは Git のフックを入れ、別の値なら上書きせずに失敗する`() {
+        git("config", "--unset", "core.hooksPath")
+        assertGatePasses()
+        assertEquals(HOOKS_PATH, git("config", "--get", "core.hooksPath").trim())
+
+        git("config", "core.hooksPath", "elsewhere/hooks")
+        val result = gate()
+        assertTrue(result.exit != 0)
+        assertTrue(result.err, "elsewhere/hooks" in result.err)
+        assertEquals("elsewhere/hooks", git("config", "--get", "core.hooksPath").trim())
     }
 
     @Test
@@ -255,8 +296,8 @@ class CommitGateHookTest {
                 (0 until hooks.length()).map { hooks.getJSONObject(it).getString("command") }
             }
 
-        assertTrue("PreToolUse(Bash) にゲートのフックが無い: $commands", commands.any { HOOK_PATH in it })
-        listOf(HOOK_PATH, GATE_PATH).forEach {
+        assertTrue("PreToolUse(Bash) にゲートのフックが無い: $commands", commands.any { GUARD_PATH in it })
+        listOf(GUARD_PATH, GATE_PATH, "$HOOKS_PATH/pre-commit").forEach {
             assertTrue("$it を実行できない", root.resolve(it).canExecute())
         }
     }
@@ -271,20 +312,50 @@ class CommitGateHookTest {
         )
     }
 
-    private fun gate(): Result = run(listOf(repositoryRoot().resolve(GATE_PATH).path))
+    // --- 道具 -------------------------------------------------------------------------
+
+    private fun gate(): Result = run(listOf(repo.resolve(GATE_PATH).path))
 
     private fun assertGatePasses() {
         val result = gate()
         assertEquals("ゲートが通らない: ${result.err}", 0, result.exit)
     }
 
-    private fun hook(command: String): Result {
+    /** Claude Code の Bash と同じく `CLAUDECODE=1` で `git commit` を流す。 */
+    private fun commit(vararg extra: String, claude: Boolean = true): Result =
+        run(listOf("git", "commit", "-q", "-m", "x") + extra, claude = claude)
+
+    private fun bash(command: String): Result = run(listOf("/bin/bash", "-c", command))
+
+    /** [action] がコミットを作り、[worktree] の HEAD が動いたこと。 */
+    private fun assertCommitted(worktree: File = repo, action: () -> Result): Result {
+        val before = head(worktree)
+        val result = action()
+        assertEquals("コミットできない: ${result.err}", 0, result.exit)
+        assertNotEquals("HEAD が動いていない", before, head(worktree))
+        return result
+    }
+
+    /** [action] が理由つきで止まり、[worktree] の HEAD が動いていないこと。 */
+    private fun assertRefused(worktree: File = repo, action: () -> Result): Result {
+        val before = head(worktree)
+        val result = action()
+        assertNotEquals("未検証のコミットが通った", 0, result.exit)
+        assertTrue("止めた理由が返っていない: ${result.err}", "コミット前のゲート" in result.err)
+        assertEquals("止めたのに HEAD が動いた", before, head(worktree))
+        return result
+    }
+
+    private fun head(worktree: File): String =
+        run(listOf("git", "-C", worktree.path, "rev-parse", "HEAD")).out.trim()
+
+    private fun guard(command: String): Result {
         val input = JSONObject()
             .put("tool_name", "Bash")
             .put("tool_input", JSONObject().put("command", command))
             .put("cwd", repo.path)
             .toString()
-        return run(listOf(repositoryRoot().resolve(HOOK_PATH).path), stdin = input)
+        return run(listOf(repo.resolve(GUARD_PATH).path), stdin = input)
     }
 
     private fun recordFile(): File = File(git("rev-parse", "--path-format=absolute", "--git-path", "vigilith-gate-pass").trim())
@@ -301,11 +372,28 @@ class CommitGateHookTest {
             it.writeText(text)
         }
 
-    private fun run(command: List<String>, stdin: String? = null, directory: File = repo): Result {
+    /** 本物の `.claude/gate/` を、実行の可否ごと一時のリポジトリへ写す。 */
+    private fun copyGateScripts() {
+        val source = repositoryRoot().resolve(".claude/gate")
+        source.walkTopDown().filter { it.isFile && it.name != ".DS_Store" }.forEach { file ->
+            val target = repo.resolve(".claude/gate").resolve(file.relativeTo(source).path)
+            target.parentFile?.mkdirs()
+            file.copyTo(target)
+            target.setExecutable(file.canExecute())
+        }
+    }
+
+    private fun run(
+        command: List<String>,
+        stdin: String? = null,
+        directory: File = repo,
+        claude: Boolean = true,
+    ): Result {
         val err = temporary.newFile()
         val builder = ProcessBuilder(command).directory(directory).redirectError(err)
         builder.environment().apply {
-            keys.filter { it.startsWith("GIT_") || it == "CLAUDE_PROJECT_DIR" }.forEach { remove(it) }
+            keys.filter { it.startsWith("GIT_") || it == "CLAUDE_PROJECT_DIR" || it == "CLAUDECODE" }.forEach { remove(it) }
+            if (claude) put("CLAUDECODE", "1")
             // 端末と同じ UTF-8 で流す。macOS の bash 3.2 は UTF-8 のとき `$after）` の全角文字を変数名の続きと読む。
             put("LC_ALL", "C.UTF-8")
             put("GIT_CONFIG_NOSYSTEM", "1")
@@ -333,8 +421,9 @@ class CommitGateHookTest {
     private data class Result(val exit: Int, val out: String, val err: String)
 
     private companion object {
-        const val HOOK_PATH = ".claude/gate/pre_commit_hook.sh"
+        const val GUARD_PATH = ".claude/gate/pre_commit_hook.sh"
         const val GATE_PATH = ".claude/gate/gate.sh"
+        const val HOOKS_PATH = ".claude/gate/githooks"
 
         const val FAKE_GRADLEW =
             "#!/bin/sh\n[ -f build/fail ] && exit 1\n[ -f build/touch ] && echo '// touched' >> app/Main.kt\nexit 0\n"

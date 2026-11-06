@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Git の pre-commit。Claude Code が流したコミット（CLAUDECODE=1）だけ、コミットされるコードをゲートの通過記録と照らす
+# （→ docs/dev/harness/README.md §1）。止めるときは 0 以外で終わり、理由を標準エラーへ書く。
+#
+# 照らすのはコマンドの書き方ではなく、Git がこれから書く索引である。commit -a やパス指定では Git が一時の索引を作り、
+# GIT_INDEX_FILE で渡すので、別名・関数・git -C・行継続のどれを経ても、実際に入る内容とその worktree の記録で照らす。
+# core.hooksPath は相対で入れるので、Git はコミットする worktree の、このファイルを走らせる。
+set -u
+
+[ "${CLAUDECODE:-}" = "1" ] || exit 0
+
+. "$(cd "$(dirname "$0")/.." && pwd)/lib.sh"
+
+committed="$(gate_code_tree index)" || { echo "コミット前のゲート: コミットする索引のハッシュを取れなかったので止めた。" >&2; exit 1; }
+head="$(gate_code_tree HEAD)" || { echo "コミット前のゲート: HEAD のハッシュを取れなかったので止めた。" >&2; exit 1; }
+
+# コードが HEAD のままのコミット（文書だけの変更）は通す。作業ファイルに残ったコードの書きかけはコミットに入らない。
+[ "$committed" = "$head" ] && exit 0
+
+recorded="$(cat "$(gate_record_path)" 2>/dev/null || true)"
+[ "$recorded" = "$committed" ] && exit 0
+
+if [ -z "$recorded" ]; then
+  reason="ゲートの通過記録が無い（まだ流していないか、前回失敗した）。"
+else
+  reason="コミットするコードが、ゲートを通したときの作業ツリーと違う（ゲートの後に変えた・一部だけをステージした・未追跡のコードを残した）。"
+fi
+cat >&2 <<EOF
+コミット前のゲート: このコミットを止めた。${reason}
+対象の worktree: $(git rev-parse --show-toplevel)
+.claude/gate/gate.sh をその worktree で流して成功を確かめ、ゲートが見たとおりに git add してからコミットする（→ docs/dev/harness/README.md §1）。
+EOF
+exit 1

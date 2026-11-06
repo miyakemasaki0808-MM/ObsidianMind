@@ -1,4 +1,4 @@
-# コミット前のゲートの共有部分。gate.sh と pre_commit_hook.sh が読み込む（→ docs/dev/harness/README.md §1）。
+# コミット前のゲートの共有部分。gate.sh と Git の pre-commit（githooks/pre-commit）が読み込む（→ docs/dev/harness/README.md §1）。
 #
 # 「コード」は追跡対象と未追跡（.gitignore の外）のファイルから、文書を除いたもの。
 # 文書は docs/・最上位の *.md・.claude/skills/ で、ゲートの後に足しても記録を無効にしない。
@@ -15,6 +15,7 @@ gate_record_path() {
 # 一時の索引でツリーを組み、文書を抜いて書き出す。$1 が worktree なら作業ツリー、index ならコミットに入る索引、
 # HEAD なら最新のコミット。本物の索引は触らない — 一時の索引に写して使う（写すのは stat の控えを再利用して速くするため）。
 # worktree は写した索引へ作業ツリーを重ねるので、作業ファイルと違うステージの内容は見えない。索引は index で別に取る。
+# --git-path index は GIT_INDEX_FILE に従うので、Git のフックの中では commit -a やパス指定の一時の索引を読む。
 gate_code_tree() {
   local source="$1" tmp real rc=0
   tmp="$(git rev-parse --path-format=absolute --git-path "vigilith-gate-index.$$")" || return 1
