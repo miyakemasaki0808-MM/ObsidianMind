@@ -14,7 +14,8 @@ import org.junit.rules.TemporaryFolder
  * Codex にレビューを頼むスクリプトが、往復の上限と停止の条件を機械的に守ること（→ docs/dev/harness/README.md §3）。
  *
  * 一時のリポジトリで本物のスクリプトを走らせ、`codex` は偽物に差し替える。偽物は受け取ったプロンプトを控え、
- * 置かれた本文を返す。`fail`・`touch`・`leave` の印があると、失敗・追跡ファイルの変更・未追跡の残し物を作る。
+ * 置かれた本文を返す。`fail`・`touch`・`commit`・`leave` の印があると、失敗・追跡ファイルの変更・コミット・
+ * 未追跡の残し物を作る。
  */
 class CodexReviewScriptTest {
 
@@ -144,6 +145,29 @@ class CodexReviewScriptTest {
     }
 
     @Test
+    fun `Codex がコミットして HEAD を動かしても失敗で止まる`() {
+        body("### P2-1. 残る\n")
+        fake.resolve("commit").createNewFile()
+
+        val result = review()
+
+        assertEquals(5, result.exit)
+        assertTrue(result.err, "HEAD が" in result.err)
+    }
+
+    @Test
+    fun `Codex が失敗して追跡ファイルも変えたら変えた方で止まる`() {
+        body("### P2-1. 残る\n")
+        fake.resolve("fail").createNewFile()
+        fake.resolve("touch").createNewFile()
+
+        val result = review()
+
+        assertEquals(5, result.exit)
+        assertTrue(result.err, "app/Main.kt" in result.err)
+    }
+
+    @Test
     fun `Codex が失敗したら回数に数えず本文を残さない`() {
         body("### P2-1. 残る\n")
         fake.resolve("fail").createNewFile()
@@ -252,8 +276,9 @@ class CodexReviewScriptTest {
             out=""; prev=""
             for a in "${'$'}@"; do [ "${'$'}prev" = "-o" ] && out="${'$'}a"; prev="${'$'}a"; done
             cat > "${'$'}FAKE_DIR/prompt.md"
-            [ -f "${'$'}FAKE_DIR/fail" ] && exit 1
             [ -f "${'$'}FAKE_DIR/touch" ] && echo '// x' >> app/Main.kt
+            [ -f "${'$'}FAKE_DIR/fail" ] && exit 1
+            [ -f "${'$'}FAKE_DIR/commit" ] && echo '// c' >> app/Main.kt && git commit -q -am c
             [ -f "${'$'}FAKE_DIR/leave" ] && echo 'class Tmp' > app/Tmp.kt
             cp "${'$'}FAKE_DIR/body.md" "${'$'}out"
             echo "tokens used"

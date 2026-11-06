@@ -101,6 +101,7 @@ prompt="${log_dir}/prompt.md"
 } > "$prompt"
 
 untracked_before="$(git ls-files --others --exclude-standard | sort)"
+head_before="$(git rev-parse HEAD)"
 start="$(date +%s)"
 codex exec \
   -s workspace-write \
@@ -116,7 +117,12 @@ codex_status=$?
 seconds=$(( $(date +%s) - start ))
 tokens="$(grep -A1 '^tokens used' "${log_dir}/codex.log" | tail -1 | tr -d ', ')"
 
-changed_tracked="$(git status --porcelain --untracked-files=no)"
+# Codex が追跡しているファイルを変えたか。コミットや checkout で HEAD が動いた場合も同じに扱う。
+tampered="$(git status --porcelain --untracked-files=no)"
+head_after="$(git rev-parse HEAD)"
+if [ "$head_after" != "$head_before" ]; then
+  tampered="${tampered}${tampered:+$'\n'}HEAD が ${head_before} から ${head_after} へ動いた"
+fi
 untracked_after="$(git ls-files --others --exclude-standard | grep -v -x -F "$body" | sort)"
 leftover="$(comm -13 <(printf '%s\n' "$untracked_before") <(printf '%s\n' "$untracked_after") | sed '/^$/d')"
 
@@ -128,6 +134,11 @@ printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
   "$(date +%FT%T)" "$series" "$round" "$range" "$seconds" "${tokens:-?}" "$p1" "$p2" "$p3" "$codex_status" \
   >> "${state_dir}/log.tsv"
 
+if [ -n "$tampered" ] && { [ "$codex_status" -ne 0 ] || [ ! -s "$body" ]; }; then
+  echo "review: Codex が失敗し、追跡しているファイルも変えた。直さずに止まり、オーナーへ渡す:" >&2
+  echo "$tampered" >&2
+  exit 5
+fi
 if [ "$codex_status" -ne 0 ] || [ ! -s "$body" ]; then
   echo "review: Codex が失敗した（終了コード ${codex_status}）。回数には数えない。ログ: ${log_dir}/codex.log" >&2
   rm -f "$body"
@@ -140,9 +151,9 @@ printf 'rounds=%s\nclosed=%s\nlast_head=%s\n' "$round" "$new_closed" "$head" > "
 
 echo "review: ${body}（${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件）"
 
-if [ -n "$changed_tracked" ]; then
+if [ -n "$tampered" ]; then
   echo "review: Codex が追跡しているファイルを変えた。直さずに止まり、オーナーへ渡す:" >&2
-  echo "$changed_tracked" >&2
+  echo "$tampered" >&2
   exit 5
 fi
 if [ -n "$leftover" ]; then
