@@ -4,7 +4,8 @@
 #
 #   .claude/review/codex_review.sh <series> <base>..<head> [観点のファイル]
 #
-# 同じ series は最大 3 回まで。P1・P2 が0件になった series は閉じる。どちらも、ここで機械的に断る。
+# 同じ series は最大 3 回まで。新しい P1・P2 が0件で、前回までの P1・P2 も §1 で解消と判定された series は閉じる。
+# §1 で同じ指摘が2回続けて残った series も止める。どれも、ここで機械的に断る。
 # Codex が追跡しているファイルを変えたら、本文を残したまま失敗で終わる（Codex は製品コードを変えない）。
 set -u
 
@@ -44,15 +45,27 @@ closed=0
 last_head=""
 # 前回の本文のファイル名（.md を除く）。受付IDの接頭辞になるので、頼み直す日の日付から組み直さない。
 last_body=""
+# 次の回に §1 で判定させる P1・P2 の受付ID（空白区切り）。前回の新しい指摘と、まだ残っている指摘。
+open=""
+# 前回 §1 で未解消か部分解消と判定された受付ID。2回続けば堂々巡りとして止める。
+last_residual=""
+stalled=0
 if [ -f "$state" ]; then
   rounds="$(sed -n 's/^rounds=//p' "$state")"
   closed="$(sed -n 's/^closed=//p' "$state")"
   last_head="$(sed -n 's/^last_head=//p' "$state")"
   last_body="$(sed -n 's/^last_body=//p' "$state")"
+  open="$(sed -n 's/^open=//p' "$state")"
+  last_residual="$(sed -n 's/^residual=//p' "$state")"
+  stalled="$(sed -n 's/^stalled=//p' "$state")"
 fi
 
 if [ "${closed:-0}" = "1" ]; then
   echo "review: ${series} は P1・P2 が0件で閉じている。往復を終えてオーナーへ渡す" >&2
+  exit 3
+fi
+if [ "${stalled:-0}" = "1" ]; then
+  echo "review: ${series} は同じ指摘が2回続けて残った（${last_residual}）。これ以上は頼まず、受け付けた指摘を添えてオーナーへ渡す" >&2
   exit 3
 fi
 if [ "${rounds:-0}" -ge "$MAX_ROUNDS" ]; then
@@ -92,6 +105,13 @@ prompt="${log_dir}/prompt.md"
     echo "  前回の指摘は docs/review/findings.md の受付簿で、ID が \`${last_body}/\` で始まる行と、"
     echo "  そこから引ける docs/_wip/current_issues.md の課題です。"
     echo "  \`${last_head}..${head}\` の修正で、前回の指摘を再現する順序が閉じたかを §1 で判定してください。"
+    if [ -n "$open" ]; then
+      echo "- §1 の表には、次の指摘を1行ずつ必ず置いてください。\`#\` の列に ID をそのまま書き、判定の列には"
+      echo "  \`解消\`・\`部分解消\`・\`未解消\` のどれか1語だけを書きます。この列は機械で数え、読めない行は残りとして扱います。"
+      for id in $open; do
+        echo "  - \`${id}\`"
+      done
+    fi
   fi
   echo
   echo "## 守ること"
@@ -144,8 +164,24 @@ count() { grep -c -E "^### $1-[0-9]+" "$body" 2>/dev/null || true; }
 p1=0; p2=0; p3=0
 if [ -s "$body" ]; then p1="$(count P1)"; p2="$(count P2)"; p3="$(count P3)"; fi
 
-printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-  "$(date +%FT%T)" "$series" "$round" "$range" "$REVIEW_MODEL" "$effort" "$seconds" "${tokens:-?}" "$p1" "$p2" "$p3" "$codex_status" \
+# 前回の指摘の判定を §1 の表から読む（| # | 前回の指摘 | 判定 | 根拠・残り |）。
+# §2 の見出しだけを数えると、未解消の指摘を §2 に再掲しない本文が「0件」になる。読めない行も残りとして数える。
+residual=""
+unreadable=""
+for id in $open; do
+  verdict="$(grep -E "^[|][[:space:]]*\`?${id}\`?[[:space:]]*[|]" "$body" 2>/dev/null | head -1 | awk -F'|' '{print $4}' | sed 's/[[:space:]*`]//g')"
+  case "$verdict" in
+    解消) ;;
+    部分解消|未解消) residual="${residual}${residual:+ }${id}" ;;
+    *) unreadable="${unreadable}${unreadable:+ }${id}" ;;
+  esac
+done
+remaining="$(printf '%s %s' "$residual" "$unreadable" | xargs)"
+left=0
+[ -n "$remaining" ] && left="$(printf '%s\n' $remaining | wc -l | tr -d ' ')"
+
+printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+  "$(date +%FT%T)" "$series" "$round" "$range" "$REVIEW_MODEL" "$effort" "$seconds" "${tokens:-?}" "$p1" "$p2" "$p3" "$left" "$codex_status" \
   >> "${state_dir}/log.tsv"
 
 if [ -n "$tampered" ] && { [ "$codex_status" -ne 0 ] || [ ! -s "$body" ]; }; then
@@ -159,11 +195,24 @@ if [ "$codex_status" -ne 0 ] || [ ! -s "$body" ]; then
   exit 2
 fi
 
+stem="$(basename "$body" .md)"
+new_open="$(grep -o -E '^### P[12]-[0-9]+' "$body" | sed "s|^### |${stem}/|" | xargs)"
+new_open="$(printf '%s %s' "$new_open" "$remaining" | xargs)"
+repeated=""
+for id in $residual; do
+  case " ${last_residual} " in *" ${id} "*) repeated="${repeated}${repeated:+ }${id}" ;; esac
+done
 new_closed=0
-[ "$p1" -eq 0 ] && [ "$p2" -eq 0 ] && new_closed=1
-printf 'rounds=%s\nclosed=%s\nlast_head=%s\nlast_body=%s\n' "$round" "$new_closed" "$head" "$(basename "$body" .md)" > "$state"
+[ "$p1" -eq 0 ] && [ "$p2" -eq 0 ] && [ -z "$remaining" ] && new_closed=1
+new_stalled=0
+[ -n "$repeated" ] && new_stalled=1
+printf 'rounds=%s\nclosed=%s\nlast_head=%s\nlast_body=%s\nopen=%s\nresidual=%s\nstalled=%s\n' \
+  "$round" "$new_closed" "$head" "$stem" "$new_open" "$residual" "$new_stalled" > "$state"
 
-echo "review: ${body}（${REVIEW_MODEL}・推論 ${effort}・${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件）"
+echo "review: ${body}（${REVIEW_MODEL}・推論 ${effort}・${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件・前回の残り ${left}件）"
+if [ -n "$unreadable" ]; then
+  echo "review: 前回の指摘の判定を §1 から読めなかった（${unreadable}）。残りとして数えた。本文の §1 を読んで扱いを決める" >&2
+fi
 
 if [ -n "$tampered" ]; then
   echo "review: Codex が追跡しているファイルを変えた。直さずに止まり、オーナーへ渡す:" >&2
@@ -176,9 +225,11 @@ if [ -n "$leftover" ]; then
 fi
 
 if [ "$new_closed" -eq 1 ]; then
-  echo "review: P1・P2 は0件。受け付けたら往復を終えて、オーナーへ渡す"
+  echo "review: P1・P2 は0件で、前回の指摘も残っていない。受け付けたら往復を終えて、オーナーへ渡す"
+elif [ "$new_stalled" -eq 1 ]; then
+  echo "review: 同じ指摘が2回続けて残った（${repeated}）。堂々巡りなので、受け付けたら直さずにオーナーへ渡す"
 elif [ "$round" -ge "$MAX_ROUNDS" ]; then
-  echo "review: 上限の ${MAX_ROUNDS} 回目で P1・P2 が残った。受け付けたら直さずにオーナーへ渡す"
+  echo "review: 上限の ${MAX_ROUNDS} 回目で P1・P2 か前回の指摘が残った。受け付けたら直さずにオーナーへ渡す"
 else
-  echo "review: P1・P2 が残った。受け付けて直し、次の回を頼む（残り $((MAX_ROUNDS - round)) 回）"
+  echo "review: P1・P2 か前回の指摘が残った。受け付けて直し、次の回を頼む（残り $((MAX_ROUNDS - round)) 回）"
 fi

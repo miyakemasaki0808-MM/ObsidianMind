@@ -126,6 +126,100 @@ class CodexReviewScriptTest {
     }
 
     @Test
+    fun `再レビューで前回の P2 が未解消なら、新しい指摘が無くても閉じず次を頼める`() {
+        body("### P2-1. 残る\n")
+        assertEquals(0, review().exit)
+        val first = stem()
+        intake()
+        fix()
+        body(judged("$first/P2-1" to "未解消"))
+
+        val second = review()
+
+        assertEquals(second.err, 0, second.exit)
+        assertFalse(second.out, "P1・P2 は0件" in second.out)
+        assertTrue(second.out, "前回の残り 1件" in second.out)
+        assertTrue(prompt(), "`$first/P2-1`" in prompt())
+        intake()
+        fix()
+        assertEquals("残りがあるのに次の回を断った", 0, review().exit)
+    }
+
+    @Test
+    fun `部分解消は残りとして数え、解消は数えない`() {
+        body("### P2-1. 直る\n### P2-2. 半分\n")
+        assertEquals(0, review().exit)
+        val first = stem()
+        intake()
+        fix()
+        body(judged("$first/P2-1" to "解消", "$first/P2-2" to "**部分解消**"))
+
+        val second = review()
+
+        assertFalse(second.out, "P1・P2 は0件" in second.out)
+        assertTrue(second.out, "前回の残り 1件" in second.out)
+    }
+
+    @Test
+    fun `前回の指摘がすべて解消し、新しい P1_P2 も無ければ閉じる`() {
+        body("### P1-1. 直る\n")
+        assertEquals(0, review().exit)
+        val first = stem()
+        intake()
+        fix()
+        body(judged("$first/P1-1" to "解消", findings = "### P3-1. 小さい\n"))
+
+        val second = review()
+
+        assertTrue(second.out, "P1・P2 は0件" in second.out)
+        intake()
+        assertEquals(3, review().exit)
+    }
+
+    @Test
+    fun `前回の指摘の判定を読めなければ0件として閉じず、残りとして数える`() {
+        body("### P2-1. 残る\n### P2-2. 残る\n")
+        assertEquals(0, review().exit)
+        val first = stem()
+        intake()
+        fix()
+        // 1件は3値の外の語、1件は行そのものが無い。
+        body(judged("$first/P2-1" to "済み"))
+
+        val second = review()
+
+        assertFalse(second.out, "P1・P2 は0件" in second.out)
+        assertTrue(second.out, "前回の残り 2件" in second.out)
+        assertTrue(second.err, "読めなかった" in second.err && "$first/P2-2" in second.err)
+    }
+
+    @Test
+    fun `同じ指摘が2回続けて残ったら、0件ではなく堂々巡りとして渡し次を断る`() {
+        body("### P2-1. 残る\n")
+        assertEquals(0, review().exit)
+        val first = stem()
+        intake()
+        fix()
+        body(judged("$first/P2-1" to "未解消"))
+        assertEquals(0, review().exit)
+        intake()
+        fix()
+
+        val third = review()
+
+        assertTrue("前回の残りを3回目にも判定させていない:\n${prompt()}", "`$first/P2-1`" in prompt())
+        assertFalse(third.out, "P1・P2 は0件" in third.out)
+        assertTrue(third.out, "2回続けて残った" in third.out && "$first/P2-1" in third.out)
+        // 上限とは別に断ることを確かめるため、回数だけを戻す。
+        intake()
+        val state = stateFile("s")
+        state.writeText(state.readText().replace("rounds=3", "rounds=1"))
+        val fourth = review()
+        assertEquals(3, fourth.exit)
+        assertTrue(fourth.err, "2回続けて残った" in fourth.err)
+    }
+
+    @Test
     fun `前の本文が残っていれば断る`() {
         body("### P2-1. 残る\n")
         assertEquals(0, review().exit)
@@ -265,6 +359,15 @@ class CodexReviewScriptTest {
         File(git("rev-parse", "--path-format=absolute", "--git-path", "vigilith-review").trim()).resolve(series)
 
     private fun body(text: String) = fake.resolve("body.md").writeText("# 総評\n\n$text")
+
+    /** 再レビューの本文。§1 にひな形の表で前回の判定を置き、§2 に新しい指摘を置く。 */
+    private fun judged(vararg rows: Pair<String, String>, findings: String = "指摘なし。\n"): String =
+        "## 1. 前回指摘の判定\n\n| # | 前回の指摘 | 判定 | 根拠・残り |\n|---|---|---|---|\n" +
+            rows.joinToString("") { (id, verdict) -> "| `$id` | 何か | $verdict | 根拠 |\n" } +
+            "\n## 2. 指摘\n\n$findings"
+
+    /** 置かれた本文のファイル名から .md を除いたもの。受付ID の接頭辞になる。 */
+    private fun stem(): String = reviewBodies().single().name.removeSuffix(".md")
 
     private fun prompt(): String = fake.resolve("prompt.md").readText()
 
