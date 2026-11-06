@@ -915,6 +915,26 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
     }
 
+    /**
+     * **印は見る入口なので、残っていた「書いているつもり」で入力欄へフォーカスを戻さない**（→ features/margin_pane.md §5.4）。
+     * 並べ読みで書いて置いた後に右を資料へ替えると、書きかけへ戻ったときのために書いているつもりは残る。
+     * そのまま Fold を閉じて印を押すと、開いたシートが入力欄へフォーカスを戻し、キーボードでメモが畳まれていた。
+     */
+    @Test
+    fun 書いているつもりが残っていても_印は入力欄へフォーカスを戻さずメモを見せる() {
+        setReaderWithSheet(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B")),
+            SHORT_TWO_SECTIONS,
+            memoFocusIntent = true
+        )
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction() and isFocused()).assertDoesNotExist()
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
     @Test
     fun 短い2節のノートでも_ペインで印から行き先の節のメモが見える() {
         val state = loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
@@ -3811,7 +3831,12 @@ class NoteReadingFlowTest {
      * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
      * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
      */
-    private fun setReaderWithSheet(initial: NoteUiState, body: String, listState: LazyListState? = null) {
+    private fun setReaderWithSheet(
+        initial: NoteUiState,
+        body: String,
+        listState: LazyListState? = null,
+        memoFocusIntent: Boolean = false
+    ) {
         var state by mutableStateOf(initial)
         composeRule.setContent {
             AppTheme(darkTheme = false) {
@@ -3821,7 +3846,8 @@ class NoteReadingFlowTest {
                         buildNoteSectionModel(body),
                         listState ?: rememberLazyListState(),
                         onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
-                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) }
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        initialMemoFocusIntent = memoFocusIntent
                     )
                 }
             }
@@ -3958,9 +3984,11 @@ class NoteReadingFlowTest {
         onDeskBarShownChange: (Boolean) -> Unit = {},
         memoDraft: MarginMemoDraft = MarginMemoDraft(),
         // 知らせは既定で Toast（Compose の木の外）。知らせを見るテストだけが受け取って数える。
-        onNotice: (String) -> Unit = {}
+        onNotice: (String) -> Unit = {},
+        // 書いているつもりが前の操作から残っている状態で始めるテストだけが渡す。
+        initialMemoFocusIntent: Boolean = false
     ) {
-        var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+        var memoFocusIntent by rememberSaveable { mutableStateOf(initialMemoFocusIntent) }
         NoteReaderTab(
             uiState = state,
             sectionModel = model,

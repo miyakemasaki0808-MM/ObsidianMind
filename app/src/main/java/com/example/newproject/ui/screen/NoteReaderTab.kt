@@ -757,7 +757,11 @@ internal fun NoteReaderTab(
             writingWithKeyboard = memoFocusIntent && WindowInsets.ime.getBottom(density) > 0
         )
         // 目的のメモまで送る。**出せる面を出す** — ペインが出ていればシートを重ねない（→ features/margin_pane.md §5.4）。
+        // **見る入口なので、書いているつもりを落とす。** 資料へ替えた後などに残っていると、開いた面が入力欄へフォーカスを戻し、
+        // シートではキーボードでメモが畳まれて、行き先のメモが見えない。
         val revealMemos: (MemoReveal) -> Unit = { reveal ->
+            onMemoFocusIntentChange(false)
+            focusManager.clearFocus()
             // 並べ読みの間は閉じず、右を書きかけ（余白の面）へ替えて送る。右のノートは隠して位置ごと保つ（→ features/margin_quote.md §5.6）。
             // 出せる面がシートなら、シートを開く調停側の口が並べ読みを終える（→ features/desk_foundation.md 判断2）。
             if (reading) onShowSideFace(SideFace.Draft)
