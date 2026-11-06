@@ -12,16 +12,23 @@ gate_record_path() {
   git rev-parse --path-format=absolute --git-path vigilith-gate-pass
 }
 
-# 一時の索引でツリーを組み、文書を抜いて書き出す。$1 が worktree なら作業ツリー、HEAD なら最新のコミット。
-# 本物の索引は触らない — 一時の索引に写して使う（写すのは stat の控えを再利用して速くするため）。
+# 一時の索引でツリーを組み、文書を抜いて書き出す。$1 が worktree なら作業ツリー、index ならコミットに入る索引、
+# HEAD なら最新のコミット。本物の索引は触らない — 一時の索引に写して使う（写すのは stat の控えを再利用して速くするため）。
+# worktree は写した索引へ作業ツリーを重ねるので、作業ファイルと違うステージの内容は見えない。索引は index で別に取る。
 gate_code_tree() {
   local source="$1" tmp real rc=0
   tmp="$(git rev-parse --path-format=absolute --git-path "vigilith-gate-index.$$")" || return 1
   rm -f "$tmp"
+  real="$(git rev-parse --path-format=absolute --git-path index)" || return 1
   if [ "$source" = "worktree" ]; then
-    real="$(git rev-parse --path-format=absolute --git-path index)"
     [ -f "$real" ] && cp "$real" "$tmp"
     GIT_INDEX_FILE="$tmp" git add -A -- ':/' || rc=1
+  elif [ "$source" = "index" ]; then
+    if [ -f "$real" ]; then
+      cp "$real" "$tmp" || rc=1
+    else
+      GIT_INDEX_FILE="$tmp" git read-tree --empty || rc=1
+    fi
   elif git rev-parse -q --verify HEAD >/dev/null; then
     GIT_INDEX_FILE="$tmp" git read-tree HEAD || rc=1
   else

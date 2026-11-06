@@ -3,8 +3,8 @@
 # 止めるときは終了コード 2 と標準エラーで理由を Claude へ返す（→ docs/dev/harness/README.md §1）。
 #
 # コマンドを走らせる前に照らすので、ゲートとコミットを ; や && でつないでも止まる。
-# 文書だけの変更は止めない。照らすのはコミットされる差分ではなく作業ツリー全体 —
-# 同じコマンドの中で git add するとフックの時点では何が入るか分からないため、広い側に倒している。
+# 文書だけの変更は止めない。照らすのは作業ツリー全体と索引の両方 — ゲートが見たのは作業ツリーなので、
+# 索引がそれと違えば止める。同じコマンドの中の git add はフックの時点で済んでいないので、それでも止まる。
 set -u
 
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
@@ -31,23 +31,38 @@ done
 git rev-parse --show-toplevel >/dev/null 2>&1 || exit 0
 
 code="$(gate_code_tree worktree)" || { echo "コミット前のゲート: 作業ツリーのハッシュを取れなかったので止めた。" >&2; exit 2; }
+index="$(gate_code_tree index)" || { echo "コミット前のゲート: 索引のハッシュを取れなかったので止めた（衝突の解消中なら、先に git add で解消する）。" >&2; exit 2; }
 head="$(gate_code_tree HEAD)" || { echo "コミット前のゲート: HEAD のハッシュを取れなかったので止めた。" >&2; exit 2; }
 
-# 文書だけの変更（またはコードに変更なし）は通す。
-[ "$code" = "$head" ] && exit 0
+# 文書だけの変更（またはコードに変更なし）は通す。作業ツリーと索引の両方が HEAD と同じコードのとき。
+[ "$code" = "$head" ] && [ "$index" = "$head" ] && exit 0
 
-record="$(gate_record_path)"
-recorded="$(cat "$record" 2>/dev/null || true)"
-[ "$recorded" = "$code" ] && exit 0
-
-if [ -z "$recorded" ]; then
-  reason="ゲートの通過記録が無い（まだ流していないか、前回失敗した）。"
-else
-  reason="ゲートを通した後にコードが変わっている。"
-fi
-cat >&2 <<EOF
+if [ "$code" != "$head" ]; then
+  record="$(gate_record_path)"
+  recorded="$(cat "$record" 2>/dev/null || true)"
+  if [ "$recorded" != "$code" ]; then
+    if [ -z "$recorded" ]; then
+      reason="ゲートの通過記録が無い（まだ流していないか、前回失敗した）。"
+    else
+      reason="ゲートを通した後にコードが変わっている。"
+    fi
+    cat >&2 <<EOF
 コミット前のゲート: このコミットを止めた。${reason}
 .claude/gate/gate.sh を単独のコマンドで流し、成功を確かめてからコミットする。
 ゲートとコミットを ; や && でつながない（→ docs/dev/harness/README.md §1）。
 EOF
-exit 2
+    exit 2
+  fi
+fi
+
+# ゲートが見たのは作業ツリーなので、コミットに入る索引もそれと揃っていなければならない。
+if [ "$index" != "$code" ]; then
+  cat >&2 <<EOF
+コミット前のゲート: このコミットを止めた。索引のコードが作業ツリーと違う
+（ステージしていないコードの変更・未追跡のコードがあるか、作業ファイルと違う内容をステージしている）。
+git add を単独のコマンドで流して索引を作業ツリーへ揃えてから、コミットする。
+コミットに入れないコードの変更は退避する（→ docs/dev/harness/README.md §1）。
+EOF
+  exit 2
+fi
+exit 0

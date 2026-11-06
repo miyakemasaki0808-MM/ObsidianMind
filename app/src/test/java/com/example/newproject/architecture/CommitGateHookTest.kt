@@ -50,11 +50,39 @@ class CommitGateHookTest {
     }
 
     @Test
-    fun `ゲートを通したコードはコミットできる`() {
+    fun `ゲートを通したコードは、索引へ揃えればコミットできる`() {
         write("app/Main.kt", "fun main() { println() }\n")
-
         assertGatePasses()
+
+        val unstaged = hook("git commit -m x")
+        assertEquals("ステージしていないコードがあるのに通した", 2, unstaged.exit)
+        assertTrue(unstaged.err, "索引" in unstaged.err)
+
+        git("add", "-A")
         assertEquals(0, hook("git commit -m x").exit)
+    }
+
+    @Test
+    fun `作業ファイルと違う内容をステージしていると、記録が無くても有っても止まる`() {
+        // 壊れた内容をステージし、作業ファイルだけ HEAD へ戻す。作業ツリーだけを見ると変更が無い。
+        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
+        git("add", "app/Main.kt")
+        write("app/Main.kt", "fun main() {}\n")
+
+        val noRecord = hook("git commit -m x")
+        assertEquals(2, noRecord.exit)
+        assertTrue(noRecord.err, "索引" in noRecord.err)
+
+        // 正常な作業ファイルでゲートを通しても、別の内容の索引は通さない。
+        write("app/Main.kt", "fun main() { println() }\n")
+        assertGatePasses()
+        write("app/Main.kt", "THIS DOES NOT COMPILE\n")
+        git("add", "app/Main.kt")
+        write("app/Main.kt", "fun main() { println() }\n")
+        assertEquals(2, hook("git commit -m x").exit)
+
+        git("add", "app/Main.kt")
+        assertEquals("ゲートを通した内容へ揃えたのに止めた", 0, hook("git commit -m x").exit)
     }
 
     @Test
@@ -114,10 +142,11 @@ class CommitGateHookTest {
     fun `ゲートの後に文書を足しても記録は無効にならない`() {
         write("app/Main.kt", "fun main() { println() }\n")
         assertGatePasses()
+        git("add", "-A")
         write("docs/a.md", "# a2\n")
         write("CLAUDE.md", "# c\n")
 
-        assertEquals(0, hook("git commit -m x").exit)
+        assertEquals("ステージしていない文書で止めた", 0, hook("git commit -m x").exit)
     }
 
     @Test
