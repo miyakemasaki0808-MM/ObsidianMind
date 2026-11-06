@@ -46,6 +46,12 @@ class FakeAiClient(
      */
     var availabilityGate: CompletableDeferred<Unit>? = null
 
+    /**
+     * 渡すと、[checkAvailability] の最初にこれを待つ。**取り消しに従わない状態確認**を作る（`suspendCoroutine` で保留する）。
+     * [availabilityGate] は取り消しで抜けるので、止めた後に状態確認が返る順序を作れない。
+     */
+    var availabilityHold: (suspend () -> Unit)? = null
+
     /** 投げられたプロンプトを順に控える。どの本文で生成が走ったかを見るために要る。 */
     val prompts = mutableListOf<String>()
     val generateCalls: Int get() = prompts.size
@@ -65,6 +71,7 @@ class FakeAiClient(
     private val pending = mutableListOf<CompletableDeferred<String>>()
 
     override suspend fun checkAvailability(): AiAvailability {
+        availabilityHold?.invoke()
         availabilityGate?.await()
         availabilityFailure?.let { throw it() }
         return availability

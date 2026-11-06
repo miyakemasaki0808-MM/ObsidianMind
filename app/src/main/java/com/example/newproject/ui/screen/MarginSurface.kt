@@ -75,14 +75,14 @@ internal enum class SummaryEntry {
 
 /**
  * **出ている面があればそこに出す**（ペインとシートを同時に出さない）。
- * 面が出ていなければ、**まだ頼んでいない節は始めるだけで面を出さない** — 頼むたびに面が読書へ割り込む。
- * [requested] はこの節の要約を持っているか（生成中・完成・失敗・出せない理由のどれか）。持っていれば記号がその状態を示しているので、
- * 押すのは見に行くときであり、シートで見せる。**ペインの開閉は書き換えない** — 一度見るために開くと、次のノートでも頼んでいないペインが出る。
+ * 面が出ていなければ、**作る押下は始めるだけで面を出さない** — 頼むたびに面が読書へ割り込む。
+ * [showsResult] は押すのが見に行く操作か（全節の生成中か作り終えた後 → `showsResultOnPress`）。
+ * 見に行くならシートで見せる。**ペインの開閉は書き換えない** — 一度見るために開くと、次のノートでも頼んでいないペインが出る。
  */
-internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, requested: Boolean): SummaryEntry = when {
+internal fun summaryEntryFor(paneVisible: Boolean, sheetVisible: Boolean, showsResult: Boolean): SummaryEntry = when {
     paneVisible -> SummaryEntry.Pane
     sheetVisible -> SummaryEntry.Sheet
-    requested -> SummaryEntry.Sheet
+    showsResult -> SummaryEntry.Sheet
     else -> SummaryEntry.Background
 }
 

@@ -29,6 +29,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsFocused
@@ -96,6 +97,7 @@ import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.face
 import com.example.newproject.model.state.note
 import com.example.newproject.model.state.withFace
+import com.example.newproject.model.state.SectionBatch
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.AiStatusNotice
@@ -913,6 +915,26 @@ class NoteReadingFlowTest {
         composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
     }
 
+    /**
+     * **印は見る入口なので、残っていた「書いているつもり」で入力欄へフォーカスを戻さない**（→ features/margin_pane.md §5.4）。
+     * 並べ読みで書いて置いた後に右を資料へ替えると、書きかけへ戻ったときのために書いているつもりは残る。
+     * そのまま Fold を閉じて印を押すと、開いたシートが入力欄へフォーカスを戻し、キーボードでメモが畳まれていた。
+     */
+    @Test
+    fun 書いているつもりが残っていても_印は入力欄へフォーカスを戻さずメモを見せる() {
+        setReaderWithSheet(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B")),
+            SHORT_TWO_SECTIONS,
+            memoFocusIntent = true
+        )
+
+        composeRule.onNodeWithContentDescription("この節のメモ 1件").performClick()
+        composeRule.waitForIdle()
+
+        composeRule.onNode(hasSetTextAction() and isFocused()).assertDoesNotExist()
+        composeRule.onNodeWithText("節Bのメモ").assertIsDisplayed()
+    }
+
     @Test
     fun 短い2節のノートでも_ペインで印から行き先の節のメモが見える() {
         val state = loadedNote(SHORT_TWO_SECTIONS).withMemos(MarginMemo("節Bのメモ", 1L, "節B"))
@@ -1035,7 +1057,7 @@ class NoteReadingFlowTest {
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
                         onOpenMarginMemo = { openCalls++ },
-                        onRequestSectionSummary = { section, quietly -> requests += section to quietly },
+                        onRequestAllSectionSummaries = { section, quietly -> requests += section to quietly },
                         marginPaneOpen = false,
                         window = window,
                         spreadSelected = true
@@ -1045,7 +1067,7 @@ class NoteReadingFlowTest {
         }
 
         openDeskBar()
-        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.onNodeWithContentDescription("全節を要約").performClick()
         composeRule.waitForIdle()
         assertEquals("面を出さずに頼んだことを伝えていない", listOf(SectionRef("節A") to true), requests)
         assertEquals("頼んでいない節で面を出した", 0, openCalls)
@@ -1053,14 +1075,88 @@ class NoteReadingFlowTest {
 
         state = state.copy(
             sectionChat = SectionChatState(
-                listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約"))
+                listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約")),
+                SectionBatch(listOf(SectionRef("節A")))
             )
         )
         openDeskBar()
-        composeRule.onNodeWithContentDescription("この節の要約あり。タップで開く").performClick()
+        composeRule.onNodeWithContentDescription("全節の要約あり。タップで開く").performClick()
         composeRule.waitForIdle()
         assertEquals("頼んだ節でシートを出さなかった", 1, openCalls)
         composeRule.onNode(hasSetTextAction()).assertDoesNotExist()
+    }
+
+    /**
+     * **記号はノート全体の状態を示す**（→ features/section_ai_chat.md §5）。生成中は作るものが無いので見に行き、
+     * 部分的に作って止まったら面を出さずに続きを頼む。数は記号に添え、丸の幅が伸びる。
+     */
+    @Test
+    fun 全節の記号は_生成中はシートで見せ_部分的に止まったら面を出さず続きを頼む() {
+        var openCalls = 0
+        val requests = mutableListOf<Boolean>()
+        val targets = listOf(SectionRef("節A"), SectionRef("節B"))
+        var state by mutableStateOf(
+            loadedNote(SHORT_TWO_SECTIONS).withMemos()
+                .copy(sectionChat = SectionChatState(batch = SectionBatch(targets, isRunning = true)))
+        )
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book) { window ->
+                    ReaderTab(
+                        state,
+                        buildNoteSectionModel(SHORT_TWO_SECTIONS),
+                        rememberLazyListState(),
+                        onOpenMarginMemo = { openCalls++ },
+                        onRequestAllSectionSummaries = { _, quietly -> requests += quietly },
+                        marginPaneOpen = false,
+                        window = window,
+                        spreadSelected = true
+                    )
+                }
+            }
+        }
+
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("全節を要約中。2節中0節まで。タップで開く")
+            .assertWidthIsAtLeast(48.dp)
+            .performClick()
+        composeRule.waitForIdle()
+        assertEquals("生成中に押してシートを出さなかった", 1, openCalls)
+
+        state = state.copy(
+            sectionChat = SectionChatState(
+                listOf(SectionSummary(SectionRef("節A"), requestId = 1, sectionTitle = "節A", sectionContext = "", summary = "要約")),
+                SectionBatch(targets)
+            )
+        )
+        openDeskBar()
+        composeRule.onNodeWithContentDescription("全節の要約。2節中1節まで。タップで続きを作る").performClick()
+        composeRule.waitForIdle()
+        assertEquals("続きを頼んだのにシートを出した", 1, openCalls)
+        assertEquals("面を出さずに続きを頼んでいない", listOf(false, true), requests)
+    }
+
+    /** **読み進めて節が替わったら画面が伝える**（全節の間はその節を次に作る）。 */
+    @Test
+    fun 面の節が替わると全節へ伝える() {
+        val changes = mutableListOf<SectionRef?>()
+        val body = (0 until 3).joinToString("\n\n") { section ->
+            "# 節$section\n\n" + (0 until 30).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
+        }
+        val model = buildNoteSectionModel(body)
+        lateinit var listState: LazyListState
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val state = rememberLazyListState()
+                remember { listState = state }
+                ReaderTab(loadedNote(body).withMemos(), model, state, onSummaryFaceSectionChange = { changes += it })
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle { runBlocking { listState.scrollToItem(model.startBlockOf(SectionRef("節1"))!! + 5) } }
+        composeRule.waitForIdle()
+        composeRule.waitUntil(5_000) { changes.lastOrNull() == SectionRef("節1") }
     }
 
     /**
@@ -2012,7 +2108,7 @@ class NoteReadingFlowTest {
                         state,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
-                        onRequestSectionSummary = { _, quietly -> requests += quietly },
+                        onRequestAllSectionSummaries = { _, quietly -> requests += quietly },
                         marginPaneOpen = true,
                         window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { state.sideReading is SideReadingState.Ready },
@@ -2034,7 +2130,7 @@ class NoteReadingFlowTest {
         }
         composeRule.onNodeWithText(SIDE_PARAGRAPH).assertDoesNotExist()
         openDeskBar()
-        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.onNodeWithContentDescription("全節を要約").performClick()
         composeRule.waitForIdle()
 
         assertEquals("面を出さずに1回だけ頼んでいない", listOf(true), requests)
@@ -2093,14 +2189,14 @@ class NoteReadingFlowTest {
             state = { state },
             onState = { state = it },
             onClose = { closes++ },
-            onRequestSectionSummary = { _, quietly -> requests += quietly }
+            onRequestAllSectionSummaries = { _, quietly -> requests += quietly }
         )
         composeRule.onNodeWithText("資料（${SIDE_NOTE.title}）").assertDoesNotExist()
         composeRule.runOnIdle { state = state.copy(sideReading = state.sideReading.withFace(SideFace.Draft)) }
         composeRule.onNode(hasSetTextAction()).assertExists()
 
         openDeskBar()
-        composeRule.onNodeWithContentDescription("この節を要約").performClick()
+        composeRule.onNodeWithContentDescription("全節を要約").performClick()
         composeRule.waitForIdle()
 
         assertEquals("面に出す形で1回だけ頼んでいない", listOf(false), requests)
@@ -2554,7 +2650,7 @@ class NoteReadingFlowTest {
         state: () -> NoteUiState,
         onState: (NoteUiState) -> Unit,
         onClose: () -> Unit,
-        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onRequestAllSectionSummaries: (SectionRef, Boolean) -> Unit = { _, _ -> },
         onBesideShownChange: (RelatedNote?) -> Unit = {}
     ) {
         composeRule.setContent {
@@ -2565,7 +2661,7 @@ class NoteReadingFlowTest {
                         current,
                         buildNoteSectionModel(SHORT_TWO_SECTIONS),
                         rememberLazyListState(),
-                        onRequestSectionSummary = onRequestSectionSummary,
+                        onRequestAllSectionSummaries = onRequestAllSectionSummaries,
                         marginPaneOpen = true,
                         window = window,
                         sideBlocks = buildNoteSectionModel(SIDE_BODY).blocks.takeIf { current.sideReading is SideReadingState.Ready },
@@ -3735,7 +3831,12 @@ class NoteReadingFlowTest {
      * 縦積みの窓で、**閉じたシートから始める**読書画面。入口がシートを出す依頼をすると、本番と同じく状態を開いた側へ替える。
      * 高さは印が本文に見える程度に取る（シートが出る前の本文で押すため）。
      */
-    private fun setReaderWithSheet(initial: NoteUiState, body: String, listState: LazyListState? = null) {
+    private fun setReaderWithSheet(
+        initial: NoteUiState,
+        body: String,
+        listState: LazyListState? = null,
+        memoFocusIntent: Boolean = false
+    ) {
         var state by mutableStateOf(initial)
         composeRule.setContent {
             AppTheme(darkTheme = false) {
@@ -3745,7 +3846,8 @@ class NoteReadingFlowTest {
                         buildNoteSectionModel(body),
                         listState ?: rememberLazyListState(),
                         onOpenMarginMemo = { state = state.copy(isMarginMemoSheetVisible = true) },
-                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) }
+                        onDismissMarginMemo = { state = state.copy(isMarginMemoSheetVisible = false) },
+                        initialMemoFocusIntent = memoFocusIntent
                     )
                 }
             }
@@ -3857,7 +3959,8 @@ class NoteReadingFlowTest {
         onReadingProgress: (Int, Float, Int, String?) -> Unit = { _, _, _, _ -> },
         onOpenMarginMemo: () -> Unit = {},
         onDismissMarginMemo: () -> Unit = {},
-        onRequestSectionSummary: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onRequestAllSectionSummaries: (SectionRef, Boolean) -> Unit = { _, _ -> },
+        onSummaryFaceSectionChange: (SectionRef?) -> Unit = {},
         onRandomNote: () -> Unit = {},
         onAcknowledgeSectionSummaryNotice: (Long) -> Unit = {},
         marginPaneOpen: Boolean = false,
@@ -3881,9 +3984,11 @@ class NoteReadingFlowTest {
         onDeskBarShownChange: (Boolean) -> Unit = {},
         memoDraft: MarginMemoDraft = MarginMemoDraft(),
         // 知らせは既定で Toast（Compose の木の外）。知らせを見るテストだけが受け取って数える。
-        onNotice: (String) -> Unit = {}
+        onNotice: (String) -> Unit = {},
+        // 書いているつもりが前の操作から残っている状態で始めるテストだけが渡す。
+        initialMemoFocusIntent: Boolean = false
     ) {
-        var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
+        var memoFocusIntent by rememberSaveable { mutableStateOf(initialMemoFocusIntent) }
         NoteReaderTab(
             uiState = state,
             sectionModel = model,
@@ -3893,7 +3998,10 @@ class NoteReadingFlowTest {
             bodyPosition = bodyPosition ?: remember(listState) { BodyPosition(listState) },
             onSelectVault = {},
             onRandomNote = onRandomNote,
-            onRequestSectionSummary = onRequestSectionSummary,
+            onRequestSectionSummary = {},
+            onRequestAllSectionSummaries = onRequestAllSectionSummaries,
+            onStopAllSectionSummaries = {},
+            onSummaryFaceSectionChange = onSummaryFaceSectionChange,
             onAcknowledgeSectionSummaryNotice = onAcknowledgeSectionSummaryNotice,
             onRetrySectionSummary = {},
             onCancelSectionSummary = {},

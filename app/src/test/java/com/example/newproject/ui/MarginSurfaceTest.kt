@@ -141,20 +141,20 @@ class MarginSurfaceTest {
     /** 見出しの要約ボタン。**出ている面があればそこに出す**（面を2つにしない）。 */
     @Test
     fun `要約ボタンは出ている面に出す`() {
-        for (requested in listOf(false, true)) {
-            assertEquals(SummaryEntry.Pane, summaryEntryFor(paneVisible = true, sheetVisible = false, requested = requested))
-            assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = true, requested = requested))
+        for (showsResult in listOf(false, true)) {
+            assertEquals(SummaryEntry.Pane, summaryEntryFor(paneVisible = true, sheetVisible = false, showsResult = showsResult))
+            assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = true, showsResult = showsResult))
         }
     }
 
     /**
-     * **面が出ていなければ、まだ頼んでいない節は始めるだけで面を出さない。** 頼んだ節は記号が状態を示しているので、
+     * **面が出ていなければ、作る押下は始めるだけで面を出さない。** 生成中と作り終えた後は作るものが無いので、
      * 押すのは見に行くときで、シートで見せる（ペインの開閉は書き換えない）。
      */
     @Test
-    fun `面が出ていなければ、頼んでいない節は始めるだけで、頼んだ節はシートで見せる`() {
-        assertEquals(SummaryEntry.Background, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = false))
-        assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = false, requested = true))
+    fun `面が出ていなければ、作る押下は始めるだけで、見に行く押下はシートで見せる`() {
+        assertEquals(SummaryEntry.Background, summaryEntryFor(paneVisible = false, sheetVisible = false, showsResult = false))
+        assertEquals(SummaryEntry.Sheet, summaryEntryFor(paneVisible = false, sheetVisible = false, showsResult = true))
     }
 
     /**

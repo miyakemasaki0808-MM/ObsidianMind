@@ -45,6 +45,20 @@ class NoteSectionModel internal constructor(
      */
     internal val passages: PassageIndex = buildPassageIndex(this)
 
+    /**
+     * 全節の要約が作る節（本文順）（→ features/section_ai_chat.md §5）。解析と一緒に作る。
+     * **短さは固有の本文（次の見出しまで）で測る。** 節の本文は配下の見出しを含むので、見出しだけの親も長く見える。
+     */
+    internal val summaryTargets: List<SectionRef> = buildList {
+        if (visibleChars(openingText) >= SECTION_SUMMARY_MIN_OWN_CHARS) add(SectionRef(title = null))
+        headingBlockIndices.forEachIndexed { position, block ->
+            val end = headingBlockIndices.getOrNull(position + 1) ?: blocks.size
+            if (visibleChars(blocksToMarkdown(blocks.subList(block + 1, end))) >= SECTION_SUMMARY_MIN_OWN_CHARS) {
+                add(headingIndex.sections[position])
+            }
+        }
+    }
+
     /** index 以下で最も近い見出しのセクション。見出し前／見出し無しは null。 */
     fun sectionForBlockIndex(index: Int): NoteSection? = headingAt(index)?.let { sections[it] }
 
@@ -75,6 +89,16 @@ class NoteSectionModel internal constructor(
         } else {
             headingIndex.positionOf(ref)?.let { sections[it] }
         }
+
+    /**
+     * [summaryTargets] を、[current] から末尾まで、続けて先頭から [current] の手前まで、の順に並べる。
+     * [current] 自身が対象でなければ、その後ろの最初の対象から始まる。
+     */
+    internal fun summaryTargetsFrom(current: SectionRef): List<SectionRef> {
+        val start = startBlockOf(current) ?: 0
+        val split = summaryTargets.indexOfFirst { (startBlockOf(it) ?: 0) >= start }
+        return if (split <= 0) summaryTargets else summaryTargets.drop(split) + summaryTargets.take(split)
+    }
 
     /** 見出しが1つでもあるか。名前の無い節を「冒頭」と呼ぶか「全体」と呼ぶかが変わる。 */
     val hasHeadings: Boolean get() = sections.isNotEmpty()
@@ -236,6 +260,11 @@ class NoteSectionModel internal constructor(
  * 割合は見えていた高さから来るので、文字数との対応は近似である。
  */
 data class ReadFrontier(val block: Int, val fraction: Float)
+
+/** 全節の要約が作る節の線。固有の本文がこの字数に満たない節では、要約が本文より長くなりやすい（→ features/section_ai_chat.md §5）。 */
+internal const val SECTION_SUMMARY_MIN_OWN_CHARS = 100
+
+private fun visibleChars(text: String): Int = text.count { !it.isWhitespace() }
 
 /**
  * 本文を見出しごとのセクションに分割する。

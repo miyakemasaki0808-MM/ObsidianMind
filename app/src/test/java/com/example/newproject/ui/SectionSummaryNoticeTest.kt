@@ -2,11 +2,13 @@ package com.example.newproject.ui
 
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.SectionChatController
+import com.example.newproject.controller.SectionSummarySource
 import com.example.newproject.domain.summaryOf
 import com.example.newproject.fakes.FakeAiClient
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.SectionRef
+import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.ui.screen.opensFaceForNotice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -17,6 +19,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -34,7 +37,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `頼んだ節に留まっていれば、届いた理由で一度だけ面を開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
         assertFalse(opensAt(state, A))
 
@@ -53,7 +56,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `読み進めた先のまだ頼んでいない節では開かず、頼んだ節へ戻ると開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         ai.arrive(AiAvailability.Unsupported)
@@ -73,12 +76,61 @@ class SectionSummaryNoticeTest {
         advanceUntilIdle()
 
         ai.availability = AiAvailability.Unsupported
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         advanceUntilIdle()
 
         assertEquals("Bの要約", state.value.sectionChat.summaryOf(B)?.summary)
         assertFalse(opensAt(state, B))
         assertTrue(opensAt(state, A))
+    }
+
+    /**
+     * **今の節に要約があっても、押した本人に理由を見せる。** 次の節に置くと、今の節では面が開かず、記号も 💬 に戻るだけで何も起きないように見える。
+     * 要約は消さない。読み進めた先では開かない条件も、見せたら二度と開かない条件も変えない。
+     */
+    @Test
+    fun `今の節に要約があれば、要約を残したまま今の節で理由を見せる`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "Aの要約" }
+        val controller = SectionChatController(this, ai, state.sectionChatWriter, StandardTestDispatcher(testScheduler))
+        controller.request(A, "A", "Aの本文")
+        advanceUntilIdle()
+
+        ai.availability = AiAvailability.Unsupported
+        controller.requestAll(listOf(SOURCE_A, SOURCE_B), SOURCE_A, quietly = true)
+        advanceUntilIdle()
+
+        val summary = requireNotNull(state.value.sectionChat.summaryOf(A))
+        assertEquals("要約を消した", "Aの要約", summary.summary)
+        assertTrue("理由を今の節に置いていない", summary.summaryProblem is SectionChatProblem.AiStatus)
+        assertTrue(opensAt(state, A))
+        assertFalse(opensAt(state, B))
+        assertNull("作らなかった節に理由を置いた", state.value.sectionChat.summaryOf(B))
+
+        controller.acknowledgeNotice(summary.requestId)
+        assertFalse("見せた理由をもう一度開く", opensAt(state, A))
+        assertEquals("Aの要約", state.value.sectionChat.summaryOf(A)?.summary)
+    }
+
+    /** **理由は全節を頼み直すと下げる。** 使えるようになったのに古い理由を要約の隣に残さない。 */
+    @Test
+    fun `全節を頼み直すと要約に添えた理由を下げ、持っている要約は作り直さない`() = runTest {
+        val state = NoteUiStateStore(NoteUiState())
+        val ai = FakeAiClient { "要約" }
+        val controller = SectionChatController(this, ai, state.sectionChatWriter, StandardTestDispatcher(testScheduler))
+        controller.request(A, "A", "Aの本文")
+        advanceUntilIdle()
+        ai.availability = AiAvailability.NeedsDownload
+        controller.requestAll(listOf(SOURCE_A, SOURCE_B), SOURCE_A, quietly = true)
+        advanceUntilIdle()
+
+        ai.availability = AiAvailability.Ready
+        controller.requestAll(listOf(SOURCE_A, SOURCE_B), SOURCE_A, quietly = true)
+        advanceUntilIdle()
+
+        assertNull(state.value.sectionChat.summaryOf(A)?.summaryProblem)
+        assertEquals("要約", state.value.sectionChat.summaryOf(B)?.summary)
+        assertEquals("持っている要約を作り直した", 2, ai.generateCalls)
     }
 
     /**
@@ -89,7 +141,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `書いている間に届いた理由は見せたことにならず、シートを閉じると同じ節で開く`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         // ✎ でシートを出して書いている。面は出ているので、届いても開き直さない。
@@ -107,7 +159,7 @@ class SectionSummaryNoticeTest {
     @Test
     fun `ノート切替と本文の解析し直しの後は、古い要求の理由を見せない`() = runTest {
         val (state, controller, ai) = setUp()
-        controller.request(A, "A", "Aの本文", quietly = true)
+        controller.requestAll(listOf(SOURCE_A), SOURCE_A, quietly = true)
         runCurrent()
 
         controller.cancelAndClear()
@@ -137,5 +189,7 @@ class SectionSummaryNoticeTest {
     private companion object {
         val A = SectionRef("A")
         val B = SectionRef("B")
+        val SOURCE_A = SectionSummarySource(A, "A", "Aの本文")
+        val SOURCE_B = SectionSummarySource(B, "B", "Bの本文")
     }
 }

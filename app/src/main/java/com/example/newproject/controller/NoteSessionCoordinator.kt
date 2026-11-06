@@ -19,6 +19,8 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.domain.hasNoticeWithSummary
+import com.example.newproject.domain.summaryOf
 import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
@@ -707,18 +709,20 @@ internal class NoteSessionCoordinator(
     ) = readingTrace.onReadingProgress(blockIndex, blockFraction, totalBlocks, sectionTitle)
     /**
      * 冊子が前面に来た・アプリが背面へ回った。**読書時間と、自動生成の待ち時間と、結晶の材料の線をすべて止める。**
-     * どれかにだけ伝えると、冊子をめくっている間に開いたノートの生成が始まる。
+     * どれかにだけ伝えると、冊子をめくっている間に開いたノートの生成が始まる。全節の要約は背面でだけ止まる。
      */
     fun pauseReadingTrace(reason: ReadingPauseReason) {
         readingTrace.pause(reason)
         dwell.pause(reason)
         read.pause(reason)
+        sectionChat.pause(reason)
     }
 
     fun resumeReadingTrace(reason: ReadingPauseReason) {
         readingTrace.resume(reason)
         dwell.resume(reason)
         read.resume(reason)
+        sectionChat.resume(reason)
     }
 
     fun dismissReadingTraceCard() = reunionCard.dismissCard()
@@ -819,17 +823,46 @@ internal class NoteSessionCoordinator(
      * **節の本文は今の本文の解析から引く。** 解析の前・解析し直している間・節が今の本文に無いときは何もしない —
      * 蒸留の差し替えの後は解析が届くまで前の解析が描画に残るので、そこから引くと前の本文の要約が残る。
      */
-    fun requestSectionSummary(section: SectionRef, quietly: Boolean = false) {
+    fun requestSectionSummary(section: SectionRef) {
         val note = currentNote() ?: return
         val source = sections.settledModel()?.summarySourceOf(section, note.title) ?: return
-        sectionChat.request(section, source.title, source.text, quietly)
+        sectionChat.request(section, source.title, source.text)
     }
+
+    /**
+     * 全節の要約を頼む（→ features/section_ai_chat.md §5）。[current] から順に作る。押し直しも同じ入口で、続きから作る。
+     * 本文の引き方は [requestSectionSummary] と同じで、解析し直している間は何もしない。
+     * **作れる節が1つも無いノートでは今の節だけを作る** — 押しても何も起きない入口にしない。
+     */
+    fun requestAllSectionSummaries(current: SectionRef, quietly: Boolean) {
+        val note = currentNote() ?: return
+        val model = sections.settledModel() ?: return
+        fun sourceOf(section: SectionRef) = model.summarySourceOf(section, note.title)
+            ?.let { SectionSummarySource(section, it.title, it.text) }
+        val targets = model.summaryTargetsFrom(current).ifEmpty { listOf(current) }
+        sectionChat.requestAll(targets.mapNotNull(::sourceOf), sourceOf(current), quietly)
+    }
+
+    /** 全節の生成を止める。できた要約は残り、押し直すと続きから作る。 */
+    fun stopAllSectionSummaries() = sectionChat.stopAll()
+
+    /** 面の節が替わった。全節の間は、その節を次に作る。 */
+    fun onSummaryFaceSectionChanged(section: SectionRef?) = sectionChat.prioritize(section)
 
     /** 面を出さずに頼んだ要求の、端末AIが使えない理由を画面が見せた。 */
     fun acknowledgeSectionSummaryNotice(requestId: Long) = sectionChat.acknowledgeNotice(requestId)
 
-    /** 出せなかった要約を、頼んだときの本文のまま作り直す。 */
-    fun retrySectionSummary(section: SectionRef) = sectionChat.retry(section)
+    /**
+     * 出せなかった要約を、頼んだときの本文のまま作り直す。
+     * **要約に全節の理由を添えている節では全節を頼み直す** — この節には作るものが無い。
+     */
+    fun retrySectionSummary(section: SectionRef) {
+        if (uiState.value.sectionChat.summaryOf(section)?.hasNoticeWithSummary() == true) {
+            requestAllSectionSummaries(section, quietly = false)
+        } else {
+            sectionChat.retry(section)
+        }
+    }
 
     /** 生成を中止する。**余白メモには触らない** — 置いている途中の保存まで止めてしまう。 */
     fun cancelSectionSummary(section: SectionRef) = sectionChat.cancel(section)

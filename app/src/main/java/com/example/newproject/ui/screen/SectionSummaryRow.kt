@@ -45,24 +45,26 @@ internal class SummaryRowInputs(
     val onRetry: () -> Unit,
     val onCancel: () -> Unit,
     /** 面を出さずに頼んだ要求の理由を、行が見せた。要求の番号で伝える（→ [SectionSummary.noticePending]）。 */
-    val onNoticeShown: (requestId: Long) -> Unit
+    val onNoticeShown: (requestId: Long) -> Unit,
+    /** 全節の生成中で、この節の番を待っているか。ボタンの代わりに「次に作ります」を出す。 */
+    val queued: Boolean = false,
+    /** 全節の進み具合と次の行動。 */
+    val batchNote: String? = null,
+    /** 全節の生成を止める。**走っている間だけ渡す。** 渡している間は1節の「生成を中止」を出さない。 */
+    val onStopAll: (() -> Unit)? = null
 )
 
 /**
  * 面の中の部分要約の行（→ features/margin_pane.md §5.2 の4）。**持っている節ならその要約、無ければ「この節を要約」。**
  *
  * 生成中は「生成を中止」だけを添える。取り消すとボタンに戻る。出せなかったときは理由と再試行を出す。
- * 面を閉じても要約は消えない（最近作った3節分）ので、終了のボタンは置かない。
+ * 面を閉じても要約は消えないので、終了のボタンは置かない。全節の間は、番を待つ節に「次に作ります」を出し、
+ * 中止の口を「全節の生成を止める」1つにする。
  */
 @Composable
-internal fun SectionSummaryRow(
-    summary: SectionSummary?,
-    onRequest: () -> Unit,
-    onRetry: () -> Unit,
-    onCancel: () -> Unit,
-    modifier: Modifier = Modifier,
-    onNoticeShown: (requestId: Long) -> Unit = {}
-) {
+internal fun SectionSummaryRow(inputs: SummaryRowInputs, modifier: Modifier = Modifier) {
+    val summary = inputs.summary
+    val onNoticeShown = inputs.onNoticeShown
     // **見せたことは、理由の行が組まれたときにここで伝える。** 面が出ていても、書いている間に畳まれた行や
     // 並べ読みの間の行は組まれないので、見せていない理由を見せたことにしない（→ features/margin_pane.md §5.4）。
     if (summary != null && summary.hasUnshownNotice()) {
@@ -71,17 +73,26 @@ internal fun SectionSummaryRow(
     }
     Column(modifier = modifier.fillMaxWidth()) {
         when {
+            summary == null && inputs.queued -> Text(
+                "次に作ります",
+                color = OnSurfaceMuted,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(vertical = 4.dp)
+            )
+
             summary == null -> TextButton(
-                onClick = onRequest,
+                onClick = inputs.onRequest,
                 contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
             ) { Text("この節を要約", color = AccentText, fontSize = 13.sp) }
 
             summary.isSummaryLoading -> {
                 SummarySkeleton(modifier = Modifier.padding(top = 8.dp))
-                TextButton(
-                    onClick = onCancel,
-                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
-                ) { Text("生成を中止", color = OnSurfaceMuted, fontSize = 12.sp) }
+                if (inputs.onStopAll == null) {
+                    TextButton(
+                        onClick = inputs.onCancel,
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+                    ) { Text("生成を中止", color = OnSurfaceMuted, fontSize = 12.sp) }
+                }
             }
 
             summary.summary != null -> {
@@ -93,9 +104,22 @@ internal fun SectionSummaryRow(
                     lineHeight = 22.sp,
                     modifier = Modifier.padding(top = 2.dp, bottom = 4.dp)
                 )
+                // 全節を止めた理由。今の節の要約は残したまま、押した本人に届ける（→ hasNoticeWithSummary）。
+                (summary.summaryProblem as? SectionChatProblem.AiStatus)?.let { problem ->
+                    AiStatusNoticeRow(notice = problem.notice, onRetry = inputs.onRetry, modifier = Modifier.padding(top = 4.dp))
+                }
             }
 
-            summary.summaryProblem != null -> SectionChatProblemRow(summary.summaryProblem, onRetry)
+            summary.summaryProblem != null -> SectionChatProblemRow(summary.summaryProblem, inputs.onRetry)
+        }
+        inputs.batchNote?.let { note ->
+            Text(note, color = OnSurfaceMuted, fontSize = 12.sp, lineHeight = 18.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+        inputs.onStopAll?.let { stop ->
+            TextButton(
+                onClick = stop,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp)
+            ) { Text("全節の生成を止める", color = OnSurfaceMuted, fontSize = 12.sp) }
         }
     }
 }

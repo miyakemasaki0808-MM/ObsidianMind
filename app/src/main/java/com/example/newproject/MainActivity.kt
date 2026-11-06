@@ -230,7 +230,10 @@ class MainActivity : ComponentActivity() {
                                         openVault.launch(null)
                                     }
                                 },
-                                onRequestSectionSummary = { section, quietly -> viewModel.requestSectionSummary(section, quietly) },
+                                onRequestSectionSummary = { section -> viewModel.requestSectionSummary(section) },
+                                onRequestAllSectionSummaries = { section, quietly -> viewModel.requestAllSectionSummaries(section, quietly) },
+                                onStopAllSectionSummaries = { viewModel.stopAllSectionSummaries() },
+                                onSummaryFaceSectionChange = { section -> viewModel.onSummaryFaceSectionChanged(section) },
                                 onAcknowledgeSectionSummaryNotice = { requestId -> viewModel.acknowledgeSectionSummaryNotice(requestId) },
                                 onRetrySectionSummary = { section -> viewModel.retrySectionSummary(section) },
                                 onCancelSectionSummary = { section -> viewModel.cancelSectionSummary(section) },

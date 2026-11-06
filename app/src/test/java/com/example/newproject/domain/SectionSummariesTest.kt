@@ -3,16 +3,18 @@ package com.example.newproject.domain
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.AiNoticeAction
 import com.example.newproject.model.state.AiStatusNotice
+import com.example.newproject.model.state.SectionBatch
 import com.example.newproject.model.state.SectionChatProblem
 import com.example.newproject.model.state.SectionChatState
 import com.example.newproject.model.state.SectionSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-/** 部分要約を最近3節分持つ規則（→ features/margin_pane.md §5.8）。 */
+/** 部分要約を持つ規則（→ features/section_ai_chat.md §5）。 */
 class SectionSummariesTest {
 
     private fun summary(title: String, requestId: Long, loading: Boolean = false, text: String? = null) =
@@ -37,14 +39,79 @@ class SectionSummariesTest {
         assertEquals(listOf("C", "A"), next.summaries.map { it.section.title })
     }
 
+    /** 要約に添えた理由を見分ける。**要約の無い節の理由は、頼み直すと本文から作り直すので含めない。** */
     @Test
-    fun `最近作った3節分を超えたら、最も古いものから落とす`() {
-        val state = SectionChatState(listOf(summary("C", 3, text = "C"), summary("B", 2, text = "B"), summary("A", 1, text = "A")))
+    fun `要約に添えた理由だけを見分けて下げる`() {
+        val notice = SectionChatProblem.AiStatus(AiStatusNotice("使えません", AiNoticeAction.None, canTryAgainLater = true))
+        val withSummary = summary("A", 1, text = "要約").copy(summaryProblem = notice, noticePending = true)
+        val withoutSummary = summary("B", 2).copy(summaryProblem = notice, noticePending = true)
+        val failed = summary("C", 3).copy(summaryProblem = SectionChatProblem.GenerationFailed("失敗"))
 
-        val next = state.withStarted(summary("D", 4, loading = true))
+        assertTrue(withSummary.hasNoticeWithSummary())
+        assertFalse(withoutSummary.hasNoticeWithSummary())
+        assertFalse(failed.hasNoticeWithSummary())
+        assertFalse(summary("D", 4, text = "要約").hasNoticeWithSummary())
 
-        assertEquals(SECTION_SUMMARY_LIMIT, next.summaries.size)
-        assertNull(next.summaryOf(SectionRef("A")))
+        val cleared = SectionChatState(listOf(withSummary, withoutSummary, failed)).withoutSummaryNotices()
+        assertNull(cleared.summaryOf(SectionRef("A"))?.summaryProblem)
+        assertFalse(cleared.summaryOf(SectionRef("A"))?.noticePending == true)
+        assertEquals("要約", cleared.summaryOf(SectionRef("A"))?.summary)
+        assertEquals(notice, cleared.summaryOf(SectionRef("B"))?.summaryProblem)
+        assertEquals(SectionChatProblem.GenerationFailed("失敗"), cleared.summaryOf(SectionRef("C"))?.summaryProblem)
+    }
+
+    /** **作った要約はノートを開いている間すべて持つ。** 全節の要約を読み進めて面に出すため。 */
+    @Test
+    fun `作った要約は数で落とさない`() {
+        val many = (1..200).map { summary("節$it", it.toLong(), text = "要約") }
+
+        val next = SectionChatState(many).withStarted(summary("新", 201, loading = true))
+
+        assertEquals(201, next.summaries.size)
+        assertNotNull(next.summaryOf(SectionRef("節1")))
+    }
+
+    @Test
+    fun `始めても全節の状態は残る`() {
+        val batch = SectionBatch(listOf(SectionRef("A")), isRunning = true)
+
+        assertEquals(batch, SectionChatState(batch = batch).withStarted(summary("A", 1, loading = true)).batch)
+    }
+
+    /** 番を待っている節だけが「次に作ります」になる。**短くて対象でない節はボタンのまま。** */
+    @Test
+    fun `全節の間に番を待っているのは、対象で要約をまだ持たない節だけ`() {
+        val (made, waiting, outside) = listOf(SectionRef("済"), SectionRef("待"), SectionRef("外"))
+        val running = SectionChatState(
+            listOf(summary("済", 1, text = "要約")),
+            SectionBatch(listOf(made, waiting), isRunning = true)
+        )
+
+        assertFalse(running.isQueued(made))
+        assertTrue(running.isQueued(waiting))
+        assertFalse(running.isQueued(outside))
+        assertFalse(running.isQueued(null))
+        assertFalse("止まった後はボタンに戻す", running.withBatchStopped().isQueued(waiting))
+    }
+
+    @Test
+    fun `次に作ることにした節は理由を下げ、対象でなければ対象へ足す`() {
+        val failed = summary("A", 1).copy(summaryProblem = SectionChatProblem.GenerationFailed("失敗"))
+        val running = SectionChatState(listOf(failed), SectionBatch(listOf(SectionRef("A")), isRunning = true))
+
+        val again = running.withQueued(SectionRef("A"))
+        assertNull(again.summaryOf(SectionRef("A")))
+        assertEquals(listOf(SectionRef("A")), again.batch?.targets)
+
+        assertEquals(listOf(SectionRef("A"), SectionRef("B")), running.withQueued(SectionRef("B")).batch?.targets)
+    }
+
+    @Test
+    fun `全節で作るのは持っていない節と出せなかった節で、生成中の節は作らない`() {
+        assertTrue((null as SectionSummary?).needsBatchGeneration())
+        assertTrue(summary("A", 1).copy(summaryProblem = SectionChatProblem.GenerationFailed("x")).needsBatchGeneration())
+        assertFalse(summary("A", 1, text = "要約").needsBatchGeneration())
+        assertFalse(summary("A", 1, loading = true).needsBatchGeneration())
     }
 
     /** **後で使えるようになる説明だけは、頼み直すと確かめ直す**（準備待ちには再試行のボタンが無い）。 */

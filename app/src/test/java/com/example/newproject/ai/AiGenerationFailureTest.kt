@@ -28,4 +28,13 @@ class AiGenerationFailureTest {
         )
         assertFalse(isAiCoreBusy(IllegalStateException("BUSY")))
     }
+
+    /** **断られたかどうかだけを見る。** 長期の利用枠は待っても通らないので、節の失敗として数える。 */
+    @Test
+    fun `回数制限と背面の拒否は断られた扱いで、長期の利用枠とほかの例外は違う`() {
+        assertTrue(isAiCoreRefusal(GenAiException(RuntimeException(), GenAiException.ErrorCode.BUSY)))
+        assertTrue(isAiCoreRefusal(GenAiException(RuntimeException(), GenAiException.ErrorCode.BACKGROUND_USE_BLOCKED)))
+        assertFalse(isAiCoreRefusal(GenAiException(RuntimeException(), GenAiException.ErrorCode.PER_APP_BATTERY_USE_QUOTA_EXCEEDED)))
+        assertFalse(isAiCoreRefusal(IllegalStateException("BUSY")))
+    }
 }

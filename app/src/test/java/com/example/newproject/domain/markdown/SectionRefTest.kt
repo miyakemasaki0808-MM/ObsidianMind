@@ -85,4 +85,80 @@ class SectionRefTest {
         assertNull(model.summarySourceOf(SectionRef("消えた見出し"), "ノート"))
         assertNull(buildNoteSectionModel("# 見出し\n\n本文").summarySourceOf(SectionRef(title = null), "ノート"))
     }
+
+    /** **短さは固有の本文で測る。** 節の本文は配下を含むので、見出しだけの親は長く見えても作らない。 */
+    @Test
+    fun `全節の要約は固有の本文が短い節を作らず、見出しだけの親も作らない`() {
+        val model = buildNoteSectionModel(
+            "# 親\n\n## 子1\n\n$LONG\n\n## 子2\n\n短い\n\n## 子3\n\n$LONG"
+        )
+
+        assertEquals(listOf(SectionRef("子1"), SectionRef("子3")), model.summaryTargets)
+    }
+
+    /** **固有の本文を持つ親は作る。** 面に出ている節を要約するので、範囲は1節の要求と同じ配下込みのまま。 */
+    @Test
+    fun `固有の本文を持つ親は全節の要約の対象になる`() {
+        val model = buildNoteSectionModel("# 親\n\n$LONG\n\n## 子\n\n短い")
+
+        assertEquals(listOf(SectionRef("親")), model.summaryTargets)
+        assertTrue(model.summarySourceOf(SectionRef("親"), "題")!!.text.contains("短い"))
+    }
+
+    /** 線の境目。空白は数えない。 */
+    @Test
+    fun `全節の要約の線は空白を除いた字数で測る`() {
+        val exactly = "あ".repeat(SECTION_SUMMARY_MIN_OWN_CHARS)
+        val below = "あ ".repeat(SECTION_SUMMARY_MIN_OWN_CHARS - 1)
+
+        assertEquals(listOf(SectionRef("節")), buildNoteSectionModel("# 節\n\n$exactly").summaryTargets)
+        assertTrue(buildNoteSectionModel("# 節\n\n$below").summaryTargets.isEmpty())
+    }
+
+    @Test
+    fun `見出しより前と見出しの無いノートも全節の要約の対象になる`() {
+        assertEquals(
+            listOf(SectionRef(title = null), SectionRef("節")),
+            buildNoteSectionModel("$LONG\n\n# 節\n\n$LONG").summaryTargets
+        )
+        assertEquals(listOf(SectionRef(title = null)), buildNoteSectionModel(LONG).summaryTargets)
+        assertTrue(buildNoteSectionModel("# 節\n\n短い").summaryTargets.isEmpty())
+    }
+
+    /** 今の節から末尾まで、続けて先頭から今の節の手前まで。 */
+    @Test
+    fun `全節の要約は今の節から順に回る`() {
+        val model = buildNoteSectionModel("# A\n\n$LONG\n\n# B\n\n$LONG\n\n# C\n\n$LONG")
+        val (a, b, c) = listOf(SectionRef("A"), SectionRef("B"), SectionRef("C"))
+
+        assertEquals(listOf(a, b, c), model.summaryTargetsFrom(a))
+        assertEquals(listOf(b, c, a), model.summaryTargetsFrom(b))
+        assertEquals(listOf(c, a, b), model.summaryTargetsFrom(c))
+    }
+
+    /** 今の節が対象でなければ、その後ろの最初の対象から始める。**後ろに無ければ先頭から。** */
+    @Test
+    fun `今の節が対象でなければ後ろの最初の対象から始める`() {
+        val model = buildNoteSectionModel("# A\n\n$LONG\n\n# 短\n\n短い\n\n# B\n\n$LONG\n\n# 末尾\n\n短い")
+        val (a, b) = listOf(SectionRef("A"), SectionRef("B"))
+
+        assertEquals(listOf(b, a), model.summaryTargetsFrom(SectionRef("短")))
+        assertEquals(listOf(a, b), model.summaryTargetsFrom(SectionRef("末尾")))
+    }
+
+    /** 同名の見出しは順番で区別したまま並ぶ。 */
+    @Test
+    fun `同名の見出しも別の節として順に回る`() {
+        val model = buildNoteSectionModel("# 同\n\n$LONG\n\n# 同\n\n$LONG\n\n# 同\n\n$LONG")
+        val second = SectionRef("同", ordinal = 1)
+
+        assertEquals(
+            listOf(second, SectionRef("同", ordinal = 2), SectionRef("同", ordinal = 0)),
+            model.summaryTargetsFrom(second)
+        )
+    }
+
+    private companion object {
+        val LONG = "本文".repeat(SECTION_SUMMARY_MIN_OWN_CHARS)
+    }
 }
