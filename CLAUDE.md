@@ -76,13 +76,16 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ## 検証と完了条件
 
 `java` / `javac` はスタブでJDK未インストール。**Android Studio 同梱のJBRを使う**（`/Applications` 直下ではなく `AIセット` フォルダ配下にあるため `/usr/libexec/java_home` では見つからない）。
+ゲートのスクリプトがJBRを指定して `./gradlew testDebugUnitTest lintDebug --offline` を流す。
 
 ```bash
-export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home" && ./gradlew testDebugUnitTest lintDebug --offline
+.claude/gate/gate.sh
 ```
 
-- **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある
-- `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
+- **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある。
+  **成功したときだけ通過が記録され、Claude の `git commit` はフックがその記録と照らす**（文書だけの変更は止めない → [harness](docs/dev/harness/README.md) §1）。
+  止められたら、ゲートを単独のコマンドで流し直す。ゲートとコミットを `;` や `&&` でつながない
+- `androidTest` を触ったら `.claude/gate/gate.sh assembleDebugAndroidTest`（CIと同じ組み立てタスクを足す）で通す。既定のゲートはこれをコンパイルしない
 - **実機ケースの判定はCodexが行い、組み立てと片付けはClaudeが行う**（区間の割りは [共通手順](docs/review/device_validation/README.md) が持つ）。
   **どちらの担い手も**着手前に共通手順と対象機能のケースを読み、
   一時領域だけで検証し、**元Vaultへは戻さず常設の検証用Vaultで終える**（戻す操作自体が読書痕跡を増やすため）。

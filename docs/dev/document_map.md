@@ -29,6 +29,7 @@
 | **どうやってそこへ至ったか** | [owner/journal/](../owner/journal/) | 当時の記録。古くなってよい |
 | **いまコードがどうなっているか** | [owner/01_source_code_analysis.md](../owner/01_source_code_analysis.md) | 測定日つきスナップショット |
 | **同じ失敗を繰り返さないために** | [lessons.md](lessons.md)（索引）＋ [lessons/](lessons/)（カード） | 累積（**IDは永久の住所**。振り直さない） |
+| **開発の仕組みが何を機械で守っているか** | [harness/](harness/README.md) | 仕組みを変えたときに直す。**現在形で書く** |
 | **外部からの評価と指摘の追跡** | [review/](../review/README.md) | 転記まで最大1本＋未解決の受付簿 |
 | **Codexが実機でどう検証するか** | [review/device_validation/](../review/device_validation/) | 共通手順＋機能別ケース（結果は持たない） |
 | **まだ決まっていないこと** | [_wip/](../_wip/) | **実機検証まで終わったら削除する** |
@@ -49,6 +50,7 @@
 | [change_history.md](change_history.md) | 変更の履歴（新しい順） | **まとまった変更1つにつき1行追記** |
 | [review/](../review/) | 転記までの外部レビュー本文（最大1本・未追跡）、未解決指摘の受付簿、Codex実機検証の恒久手順 | レビュー更新時。機能契約・実機ケースを変更したときは `device_validation/` も同時更新 |
 | [lessons.md](lessons.md) | **教訓の索引**（ID／一文／いつ当てるか／**検査の有無**）。長い教訓は [lessons/](lessons/) にカードとして1件1ファイル。**最大番号は書かない**（L1以降） | 同じ形の失敗を2度したとき。1度目は検査を同時に置けるときだけ（→ [lessons.md](lessons.md) の追加の条件） |
+| [harness/](harness/README.md) | 開発の仕組み（コミット前のゲートなど）の正本 | 仕組みを足す・変えるとき |
 | [09_project_origin.md](../owner/09_project_origin.md) | 2026-04-30 の第一歩の報告書 | 更新しない（起点の記録） |
 
 > **解析書と総評の違い:** 解析書は「事実の網羅」、総評は「ある時点の採点」。
