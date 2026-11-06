@@ -238,6 +238,9 @@ tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.layout.projectDirectory.dir(".claude/skills"))
         .withPropertyName("projectSkills")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.layout.projectDirectory.dir(".claude/review"))
+        .withPropertyName("codexReviewScript")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(
         rootProject.layout.projectDirectory.file(".claude/settings.json"),
         rootProject.layout.projectDirectory.file("CLAUDE.md")
