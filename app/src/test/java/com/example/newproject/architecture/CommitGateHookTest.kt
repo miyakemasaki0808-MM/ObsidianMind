@@ -155,6 +155,30 @@ class CommitGateHookTest {
     }
 
     @Test
+    fun `行末のバックスラッシュで折り返したコミットも、相手の worktree で照らす`() {
+        val other = temporary.root.resolve("other")
+        git("worktree", "add", "-q", "-b", "other", other.path)
+        val wrapped = listOf(
+            "git -C ../other \\\n  commit -qm wrapped1",
+            "git \\\n  -C ../other commit -qm wrapped2",
+        )
+
+        wrapped.forEachIndexed { i, command ->
+            other.resolve("app/Main.kt").writeText("INVALID KOTLIN $i\n")
+            git("-C", other.path, "add", "-A")
+            assertEquals("未検証なのに通した: $command", 2, hook(command).exit)
+
+            assertEquals(0, run(listOf(repositoryRoot().resolve(GATE_PATH).path), directory = other).exit)
+            assertEquals("検証済みなのに止めた: $command", 0, hook(command).exit)
+
+            // 正規表現の一致ではなく、実際の Bash で有効なコミットの形であること。
+            val result = run(listOf("/bin/bash", "-c", command))
+            assertEquals("Bash で流せない: $command\n${result.err}", 0, result.exit)
+            assertEquals("wrapped${i + 1}", git("-C", other.path, "log", "-1", "--format=%s").trim())
+        }
+    }
+
+    @Test
     fun `コミットする worktree を決められない形は、変更が無くても明示して止める`() {
         listOf(
             "cd app && git commit -m x",
