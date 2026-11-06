@@ -42,10 +42,13 @@ state="${state_dir}/${series}"
 rounds=0
 closed=0
 last_head=""
+# 前回の本文のファイル名（.md を除く）。受付IDの接頭辞になるので、頼み直す日の日付から組み直さない。
+last_body=""
 if [ -f "$state" ]; then
   rounds="$(sed -n 's/^rounds=//p' "$state")"
   closed="$(sed -n 's/^closed=//p' "$state")"
   last_head="$(sed -n 's/^last_head=//p' "$state")"
+  last_body="$(sed -n 's/^last_body=//p' "$state")"
 fi
 
 if [ "${closed:-0}" = "1" ]; then
@@ -85,8 +88,9 @@ prompt="${log_dir}/prompt.md"
   echo "- 対象の範囲: \`${range}\`（基準HEAD \`${head}\`、ブランチ \`${branch}\`）"
   echo "- このシリーズ（${series}）の ${round} 回目のレビューです。上限は ${MAX_ROUNDS} 回です。"
   if [ "$round" -gt 1 ] && [ -n "$last_head" ]; then
-    echo "- 前回は \`${last_head}\` までを見ました。前回の指摘は docs/review/findings.md の受付簿で、"
-    echo "  ID が \`${series}-r$((round - 1))/\` で始まる行と、そこから引ける docs/_wip/current_issues.md の課題です。"
+    echo "- 前回は \`${last_head}\` までを見ました。前回の本文 \`${last_body}.md\` は受付を済ませて消してあります。"
+    echo "  前回の指摘は docs/review/findings.md の受付簿で、ID が \`${last_body}/\` で始まる行と、"
+    echo "  そこから引ける docs/_wip/current_issues.md の課題です。"
     echo "  \`${last_head}..${head}\` の修正で、前回の指摘を再現する順序が閉じたかを §1 で判定してください。"
   fi
   echo
@@ -157,7 +161,7 @@ fi
 
 new_closed=0
 [ "$p1" -eq 0 ] && [ "$p2" -eq 0 ] && new_closed=1
-printf 'rounds=%s\nclosed=%s\nlast_head=%s\n' "$round" "$new_closed" "$head" > "$state"
+printf 'rounds=%s\nclosed=%s\nlast_head=%s\nlast_body=%s\n' "$round" "$new_closed" "$head" "$(basename "$body" .md)" > "$state"
 
 echo "review: ${body}（${REVIEW_MODEL}・推論 ${effort}・${seconds}秒・${tokens:-?}トークン・P1 ${p1}件・P2 ${p2}件・P3 ${p3}件）"
 

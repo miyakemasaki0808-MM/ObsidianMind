@@ -200,15 +200,39 @@ class CodexReviewScriptTest {
         body("### P2-1. 残る\n")
         assertEquals(0, review().exit)
         val firstHead = git("rev-parse", "--short", "HEAD").trim()
+        // 受付の Skill は、保存された本文のファイル名全体から受付IDを作る。
+        val ledgerId = reviewBodies().single().name.removeSuffix(".md") + "/P2-1"
         intake()
-        write("app/Main.kt", "fun main() { println(2) }\n")
-        git("commit", "-q", "-am", "fix")
+        fix()
 
         assertEquals(0, review().exit)
 
         val head = git("rev-parse", "--short", "HEAD").trim()
         assertTrue(prompt(), "`$firstHead..$head`" in prompt())
-        assertTrue(prompt(), "`s-r1/`" in prompt())
+        val prefix = LEDGER_PREFIX.find(prompt())?.groupValues?.get(1)
+        assertTrue("前回の受付行を探す接頭辞が無い:\n${prompt()}", prefix != null)
+        assertTrue("「$prefix」で始まる行として $ledgerId を引けない", ledgerId.startsWith(prefix!!))
+    }
+
+    @Test
+    fun `日をまたいでも別のシリーズが並んでも、前回の本文の受付行だけを名指す`() {
+        body("### P2-1. 残る\n")
+        assertEquals(0, reviewOf("t").exit)
+        val other = reviewBodies().single().name.removeSuffix(".md") + "/P2-1"
+        intake()
+        assertEquals(0, review().exit)
+        val today = reviewBodies().single().name.take(10)
+        intake()
+        // 1回目を前の日に頼んだことにする。日付は保存した本文のものを使い、頼み直す日から組み直さない。
+        val state = stateFile("s")
+        state.writeText(state.readText().replace(today, "2000-01-01"))
+        fix()
+
+        assertEquals(0, review().exit)
+
+        val prefix = LEDGER_PREFIX.find(prompt())?.groupValues?.get(1)
+        assertEquals(prompt(), "2000-01-01-s-r1/", prefix)
+        assertFalse("別のシリーズの受付行にも一致する", other.startsWith(prefix!!))
     }
 
     @Test
@@ -222,11 +246,23 @@ class CodexReviewScriptTest {
         assertTrue(result.err, "app/Tmp.kt" in result.err)
     }
 
-    private fun review(vararg extra: String): Result =
-        run(listOf(repositoryRoot().resolve(SCRIPT_PATH).path, "s", "HEAD~1..HEAD") + extra)
+    private fun review(vararg extra: String): Result = reviewOf("s", *extra)
+
+    private fun reviewOf(series: String, vararg extra: String): Result =
+        run(listOf(repositoryRoot().resolve(SCRIPT_PATH).path, series, "HEAD~1..HEAD") + extra)
 
     /** 受付を済ませて本文を消したことにする。 */
     private fun intake() = reviewBodies().forEach { it.delete() }
+
+    /** 指摘を直してコミットしたことにする。 */
+    private fun fix() {
+        val main = repo.resolve("app/Main.kt")
+        main.appendText("// fix\n")
+        git("commit", "-q", "-am", "fix")
+    }
+
+    private fun stateFile(series: String): File =
+        File(git("rev-parse", "--path-format=absolute", "--git-path", "vigilith-review").trim()).resolve(series)
 
     private fun body(text: String) = fake.resolve("body.md").writeText("# 総評\n\n$text")
 
@@ -286,6 +322,9 @@ class CodexReviewScriptTest {
 
     private companion object {
         const val SCRIPT_PATH = ".claude/review/codex_review.sh"
+
+        /** プロンプトが前回の受付行を名指す形（「ID が `…` で始まる行」）。 */
+        val LEDGER_PREFIX = Regex("""ID が `([^`]+)` で始まる行""")
 
         val FAKE_CODEX = """
             #!/bin/bash
