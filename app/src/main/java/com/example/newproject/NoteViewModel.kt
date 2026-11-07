@@ -267,11 +267,11 @@ class NoteViewModel internal constructor(
     private suspend fun collectAllNotesCached(
         contentResolver: ContentResolver,
         vaultUri: Uri
-    ): List<NoteFile> = noteScan.get(
+    ): List<NoteFile> = noteScan.getVault(
         // 走査が部分的に失敗していても、読めた分でランダム表示・関連ノートを続ける
         // （止めるほうが体験として悪い）。完全性を要求するのは、不在を根拠に
         // 何かを消す処理だけ。→ VaultScan のKDoc
-        scan = { repository.collectNotes(contentResolver, vaultUri).notes },
+        scanVault = { repository.collectNotes(contentResolver, vaultUri) },
         // **走査の直後に分野のヒントを載せる**（→ features/note_field_color.md 判断14）。
         // ここが全Vault走査の唯一の通り道なので、冊子・ランダム・関連のどの入口から来ても
         // 索引Aが同じ材料で揃う。

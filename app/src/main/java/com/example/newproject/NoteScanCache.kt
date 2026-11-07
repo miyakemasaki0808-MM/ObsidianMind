@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.VaultScan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
@@ -83,14 +84,24 @@ internal class NoteScanCache(
     suspend fun get(
         scan: suspend () -> List<NoteFile>,
         onPublished: (List<NoteFile>) -> Unit
+    ): List<NoteFile> = getVault(scanVault = { VaultScan(scan()) }, onPublished = onPublished)
+
+    /**
+     * [get] と同じだが、走査が読み切れたか（[VaultScan.isComplete]）も受け取る。
+     * **読めずに空になった一覧には寿命を与えない** — 空の Vault と同じに扱うと、復旧しても寿命の間は空のまま返る。
+     * 一部だけ読めなかった一覧は寿命の中で使う（与えないと、読めないフォルダが残る限り頼むたびに全体を走査し直す）。
+     */
+    suspend fun getVault(
+        scanVault: suspend () -> VaultScan,
+        onPublished: (List<NoteFile>) -> Unit
     ): List<NoteFile> {
         if (hasPublished && clock() - loadedAt < ttlMillis) return notes
-        val result = running?.takeUnless { it.isCompleted } ?: startScan(scan, onPublished)
+        val result = running?.takeUnless { it.isCompleted } ?: startScan(scanVault, onPublished)
         return result.await()
     }
 
     private fun startScan(
-        scan: suspend () -> List<NoteFile>,
+        scan: suspend () -> VaultScan,
         onPublished: (List<NoteFile>) -> Unit
     ): Deferred<List<NoteFile>> {
         val generation = vaultGeneration()
@@ -102,16 +113,18 @@ internal class NoteScanCache(
                 throw CancellationException("走査の間に Vault が切り替わったので、結果を捨てました。")
             }
             // 走査の途中で本文を書き換えたなら、この一覧の更新日時は古い。待っている人へ返すだけで残さない。
-            if (writes == bodyWrites) publish(scanned, onPublished)
-            scanned
+            if (writes == bodyWrites) {
+                publish(scanned.notes, onPublished, keep = scanned.isComplete || scanned.notes.isNotEmpty())
+            }
+            scanned.notes
         }
         running = result
         return result
     }
 
-    private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit) {
+    private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit, keep: Boolean) {
         notes = scanned
-        hasPublished = true
+        hasPublished = keep
         linkIndex = NoteLinkIndex(scanned)
         loadedAt = clock()
         mutableKnownNotes.value = scanned
