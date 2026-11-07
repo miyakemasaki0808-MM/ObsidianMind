@@ -93,6 +93,27 @@ class NoteScanCacheTest {
     }
 
     @Test
+    fun `空の Vault も寿命の中は走査し直さず、切れたら走査し直す`() = runTest {
+        var scans = 0
+        val scan: suspend () -> List<NoteFile> = { scans++; emptyList() }
+
+        repeat(3) { cache.get(scan = scan, onPublished = ::record) }
+        assertEquals("空の一覧を「まだ走査していない」と取り違えている", 1, scans)
+
+        // 本文の書き換えと Vault の切替では、寿命の中でも空でも走査し直す。
+        cache.expireAfterBodyWrite()
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(2, scans)
+        switchVault()
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(3, scans)
+
+        now += 60_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(4, scans)
+    }
+
+    @Test
     fun `一覧の寿命は走査を終えてから数え、60秒未満は使い、60秒で切れる`() = runTest {
         val scanResult = CompletableDeferred<List<NoteFile>>()
         var scans = 0

@@ -257,7 +257,7 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
 
 - **JVMテスト:** `NoteTitleSearchTest`（並び順・正規化・件数・拡張子・同じ名前の場所・フォルダの範囲）/
   `SearchControllerTest`（世代照合・どの階層も出る・打っている間に走査を頼まない・開き直しの間は前の一覧で照らす・失敗からの復旧・一覧の受け取りの順序・範囲・範囲の切替と Vault 切替の交錯）/
-  `ExploreBodyTest`（入力欄の下に何を出すか）/ `NoteScanCacheTest`（走査の共有）/
+  `ExploreBodyTest`（入力欄の下に何を出すか）/ `NoteScanCacheTest`（走査の共有・空の Vault も寿命の中は走査し直さない）/
   `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）/
   `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
   `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）/

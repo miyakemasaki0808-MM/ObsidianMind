@@ -47,9 +47,12 @@ internal class NoteScanCache(
     private val clock: () -> Long = System::currentTimeMillis,
     private val onScanEvent: (NoteScanEvent) -> Unit = {}
 ) {
-    /** いまのキャッシュ。空ならまだ走査していない。 */
+    /** いまのキャッシュ。空の Vault でも空なので、走査したかどうかは [hasPublished] で見る。 */
     var notes: List<NoteFile> = emptyList()
         private set
+
+    /** 寿命の中の一覧を持っているか。[notes] が空かで代用すると、空の Vault では頼むたびに走査し直す。 */
+    private var hasPublished = false
 
     /**
      * 本文のリンクを引くための索引（→ features/note_links.md §6）。[notes] と同じ時点で替わる。
@@ -81,7 +84,7 @@ internal class NoteScanCache(
         scan: suspend () -> List<NoteFile>,
         onPublished: (List<NoteFile>) -> Unit
     ): List<NoteFile> {
-        if (notes.isNotEmpty() && clock() - loadedAt < ttlMillis) return notes
+        if (hasPublished && clock() - loadedAt < ttlMillis) return notes
         val result = running?.takeUnless { it.isCompleted } ?: startScan(scan, onPublished)
         return result.await()
     }
@@ -108,6 +111,7 @@ internal class NoteScanCache(
 
     private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit) {
         notes = scanned
+        hasPublished = true
         linkIndex = NoteLinkIndex(scanned)
         loadedAt = clock()
         mutableKnownNotes.value = scanned
@@ -139,6 +143,7 @@ internal class NoteScanCache(
         running = null
         bodyWrites++
         notes = emptyList()
+        hasPublished = false
         loadedAt = 0L
         mutableKnownNotes.value = emptyMap()
     }
