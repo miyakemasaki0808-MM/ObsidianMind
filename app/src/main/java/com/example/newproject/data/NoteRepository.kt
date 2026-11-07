@@ -351,12 +351,8 @@ class NoteRepository {
         if (keyLine < 0) return emptyList()
 
         val inline = lines[keyLine].substringAfter("$key:").trim()
-        // インライン形式: tags: [a, b, c]。`]` の後ろはコメント。
-        if (inline.startsWith("[")) {
-            return inline.substring(1, inline.lastIndexOf(']').takeIf { it > 0 } ?: inline.length)
-                .split(",")
-                .mapNotNull(::frontmatterListValue)
-        }
+        // インライン形式: tags: [a, b, c]
+        if (inline.startsWith("[")) return parseFlowList(inline)
         // ブロック形式:
         // tags:
         //   - a
@@ -367,18 +363,51 @@ class NoteRepository {
             .mapNotNull { frontmatterListValue(it.trim().removePrefix("-")) }
     }
 
-    // 項目1つの値。`#` で始まれば YAML ではコメント（Obsidian もタグとして読まない）。
-    // 空白に続く ` #` の後ろは行末のコメント。囲みの引用符は外す。
+    // `[a, "b, c", 'd'] # コメント` の項目。一覧を閉じる `]` と区切りの `,` は引用符の外でだけ認める —
+    // 引用符の中の `,` `]` `#` は値の一部で、`]` の後ろはコメントなので見ない。
+    private fun parseFlowList(text: String): List<String> {
+        val items = mutableListOf<String>()
+        val current = StringBuilder()
+        var quote: Char? = null
+        for (c in text.drop(1)) {
+            if (quote != null) {
+                current.append(c)
+                if (c == quote) quote = null
+                continue
+            }
+            when (c) {
+                '"', '\'' -> {
+                    quote = c
+                    current.append(c)
+                }
+                ',' -> {
+                    items += current.toString()
+                    current.clear()
+                }
+                ']' -> {
+                    items += current.toString()
+                    return items.mapNotNull(::frontmatterListValue)
+                }
+                else -> current.append(c)
+            }
+        }
+        items += current.toString()
+        return items.mapNotNull(::frontmatterListValue)
+    }
+
+    // 項目1つの値。引用符で囲んだ値は、閉じる引用符までが値で後ろはコメント（中の `#` は値の一部）。
+    // 囲まない値は、`#` で始まれば YAML ではコメント（Obsidian もタグとして読まない）で、
+    // 空白に続く ` #` の後ろが行末のコメント。`C#` のように空白の無い `#` は値の一部。
     private fun frontmatterListValue(raw: String): String? {
         val value = raw.trim()
-        if (value.isEmpty() || value.startsWith("#")) return null
-        val withoutComment = value.substringBefore(" #").trim()
-        val unquoted = when {
-            withoutComment.length >= 2 && withoutComment.first() == '"' && withoutComment.last() == '"' -> withoutComment.drop(1).dropLast(1)
-            withoutComment.length >= 2 && withoutComment.first() == '\'' && withoutComment.last() == '\'' -> withoutComment.drop(1).dropLast(1)
-            else -> withoutComment
+        if (value.isEmpty()) return null
+        val first = value.first()
+        if (first == '"' || first == '\'') {
+            val end = value.indexOf(first, startIndex = 1)
+            return (if (end > 0) value.substring(1, end) else value.substring(1)).trim().ifBlank { null }
         }
-        return unquoted.trim().ifBlank { null }
+        if (first == '#') return null
+        return value.substringBefore(" #").trim().ifBlank { null }
     }
 
     companion object {

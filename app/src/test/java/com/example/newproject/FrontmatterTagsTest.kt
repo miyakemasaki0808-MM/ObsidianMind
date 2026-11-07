@@ -44,6 +44,29 @@ class FrontmatterTagsTest {
     }
 
     @Test
+    fun `インライン一覧の後ろのコメントにある括弧とカンマに左右されない`() {
+        assertEquals(listOf("読書"), tagsOf("tags: [読書] # 旧: [資料, 下書き]"))
+        assertEquals(listOf("料理"), tagsOf("tags: [料理] # 旧: [資料, 下書き]"))
+    }
+
+    @Test
+    fun `引用符の中の シャープ・カンマ・括弧は値の一部で、外のコメントだけを外す`() {
+        val meta = NoteRepository().parseMeta(
+            "---\naliases:\n  - \"議事録 #1\"\n  - '議事録 #2'\n  - \"議事録 #3\" # 外のコメント\n---\n本文"
+        )
+        assertEquals(listOf("議事録 #1", "議事録 #2", "議事録 #3"), meta.aliases)
+
+        val inline = NoteRepository().parseMeta("---\naliases: [\"議事録 #1\", '議事録, 第2回', \"[下書き]\"]\n---\n本文")
+        assertEquals(listOf("議事録 #1", "議事録, 第2回", "[下書き]"), inline.aliases)
+    }
+
+    @Test
+    fun `値の中のシャープと、引用符で囲んだシャープ始まりは保つ`() {
+        assertEquals(listOf("C#", "#読書"), tagsOf("tags: [C#, \"#読書\"]"))
+        assertEquals(listOf("C#", "#読書"), tagsOf("tags:\n  - C#\n  - \"#読書\"\n  - #メモ"))
+    }
+
+    @Test
     fun `aliases も同じ読み方をする`() {
         val meta = NoteRepository().parseMeta("---\naliases:\n  - \"別名\"\n  # 古い名前\n---\n本文")
 

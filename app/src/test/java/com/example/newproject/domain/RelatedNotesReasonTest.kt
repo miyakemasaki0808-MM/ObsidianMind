@@ -58,6 +58,26 @@ class RelatedNotesReasonTest {
 
         val quoted = "---\ntags: [\"読書\"]\n---\n献立を考える"
         assertEquals(RelatedReason.SharedTag("読書"), reasonFor("---\ntags: [\"読書\"]\n---\n本を読む", quoted))
+
+        // インライン一覧の後ろのコメントに括弧とカンマがあっても、コメントの中の語を共通タグにしない。
+        assertEquals(
+            null,
+            reasonFor("---\ntags: [読書] # 旧: [資料, 下書き]\n---\n本を読む", "---\ntags: [料理] # 旧: [資料, 下書き]\n---\n献立を考える")
+        )
+    }
+
+    // 引用符の中の ` #` まで切ると、別名が欠けたまま候補の文脈（aka）へ渡る。
+    @Test
+    fun `引用符の中にシャープを含む別名を、欠かさず候補の文脈へ渡す`() {
+        val meta = NoteRepository().parseMeta("---\naliases: [\"議事録 #1\"]\n---\n会議の記録")
+        val line = renderCandidatesWithinBudget(
+            listOf(CandidateContext(id = "C01", title = "会議", snippet = "会議の記録", aliases = meta.aliases)),
+            charBudget = 2_000,
+            maxSnippetLen = 150,
+            minSnippetLen = 40
+        ).single()
+
+        assertEquals(true, line.renderForPrompt().contains("aka 議事録 #1"))
     }
 
     private suspend fun kotlinx.coroutines.test.TestScope.reasonFor(current: String, candidate: String): RelatedReason? {
