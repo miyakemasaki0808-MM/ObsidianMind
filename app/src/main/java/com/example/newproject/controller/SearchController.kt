@@ -1,5 +1,6 @@
 package com.example.newproject.controller
 
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.data.VaultBrowser
@@ -22,12 +23,16 @@ import kotlinx.coroutines.withContext
  * Explore（さがすタブ）を担当する（→ features/ai_picker.md）。
  * タイトルのモードは Vault 全体の一覧を照らし、AI のモードは同じ一覧を範囲で絞って Nano に選ばせる。
  * folders / selectedFolder / searchState / titleSearch の更新のみを行う。
+ *
+ * 打った言葉・範囲・結果はタブを離れても残し、Vault 切替でだけ捨てる（→ features/ai_picker.md §6）。
  */
 class SearchController(
     private val scope: CoroutineScope,
     private val vault: VaultBrowser,
     private val searchPickerUseCase: SearchPickerUseCase,
     private val state: SearchStateWriter,
+    /** 打った言葉。実体は ViewModel 側の Compose の状態で、入力欄が直接書く。 */
+    private val query: ExploreQueryStore,
     // Vault切替の世代。NoteViewModel が saveVault() で採番する。
     // 検索用の activeRequestId とは寿命が違う（フォルダ列挙は検索要求では無効化しない）。
     private val vaultGeneration: () -> Long,
@@ -72,12 +77,16 @@ class SearchController(
         titleJob = null
         vaultNotes = null
         notesFailure = null
+        query.clear()
     }
 
-    /** タブを開いた。フォルダの一覧と、Vault 全体の一覧を受け取る。 */
+    /**
+     * タブを開いた。フォルダの一覧と、Vault 全体の一覧を受け取る。
+     * 残っている言葉でタイトルを照らし直す（開くときはいつもタイトルのモード）。範囲と AI の結果には触れない。
+     */
     fun onOpened(collectNotes: suspend () -> List<NoteFile>) {
         loadFolders()
-        searchTitle("")
+        searchTitle(query.text)
         val generation = vaultGeneration()
         val notesRequest = ++lastNotesRequest
         notesJob?.cancel()
@@ -193,6 +202,16 @@ class SearchController(
         state.update { current ->
             current.copy(selectedFolder = folder, searchState = SearchState.Idle)
         }
+    }
+
+    /**
+     * タイトルが0件の1行から、同じ言葉を AI で探す。範囲は「すべて」へ戻してから探す —
+     * タイトルは Vault 全体で0件だったので、前に選んだ狭い範囲で探し直す理由がない。
+     * タイトルのモードにチップは出ないので、戻さないと選んでいた範囲に気づけない。
+     */
+    fun searchWholeVault(query: String, collectNotes: suspend () -> List<NoteFile>) {
+        selectFolder(null)
+        searchByKeyword(query, collectNotes)
     }
 
     /** AI のモード: 範囲で絞って [SearchPickerUseCase] で3件選ぶ。範囲は頼んだ時点のものを使う。 */

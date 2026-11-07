@@ -52,6 +52,7 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.titleBodyFor
 import com.example.newproject.ui.titleMatchLocation
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
@@ -81,18 +82,19 @@ private enum class ExploreMode { Title, Ai }
  * Explore（さがすタブ → features/ai_picker.md）。タイトルから探すか、ことばで Nano に3件選ばせる。
  *
  * タイトルの結果は Vault 全体の件数まで伸びるので、タブ全体を遅延リストで組む。
- * 打った言葉はここが持つ（日本語の変換中に入力が崩れないように状態の外へ置く）。
- * 言葉もモードも、タブを離れると組み立て直されて最初へ戻る。開くたびにタイトルから始めるのはこのため。
+ * 打った言葉は [query]（ViewModel が持つ Compose の状態）に置き、タブを離れても範囲と結果と一緒に残す。
+ * モードだけはここが持ち、タブを離れると最初へ戻る。開くたびにタイトルから始めるのはこのため。
  */
 @Composable
 fun SearchTab(
     uiState: NoteUiState,
+    query: ExploreQueryStore,
     onSelectFolder: (NoteFolder?) -> Unit,
     onSearchTitle: (String) -> Unit,
     onSearch: (String) -> Unit,
+    onSearchWholeVault: (String) -> Unit,
     onOpenNote: (RelatedNote) -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(ExploreMode.Title) }
     val focusManager = LocalFocusManager.current
     val isLoading = uiState.searchState is SearchState.Loading
@@ -127,7 +129,7 @@ fun SearchTab(
                     modifier = Modifier.weight(1f)
                 ) {
                     // AI のモードで打った言葉はまだ照らしていないので、戻ったときに照らす。
-                    if (mode != ExploreMode.Title) onSearchTitle(query)
+                    if (mode != ExploreMode.Title) onSearchTitle(query.text)
                     mode = ExploreMode.Title
                 }
                 ModeToggleChip(
@@ -140,9 +142,9 @@ fun SearchTab(
         // モードを替えても入力欄の位置とフォーカスを保つ。範囲のチップは入力欄の下に置く。
         item(key = "query") {
             OutlinedTextField(
-                value = query,
+                value = query.text,
                 onValueChange = {
-                    query = it
+                    query.set(it)
                     // タイトルは打つたびに Vault 全体を照らす。AI のモードでは結果を出さないので照らさない。
                     if (mode == ExploreMode.Title) onSearchTitle(it)
                 },
@@ -175,20 +177,20 @@ fun SearchTab(
         }
         when (mode) {
             ExploreMode.Title -> titleResults(
-                query = query,
+                query = query.text,
                 uiState = uiState,
                 onOpenNote = onOpenNote,
                 onSearchWithAi = {
                     mode = ExploreMode.Ai
-                    onSearch(query)
+                    onSearchWholeVault(query.text)
                 }
             )
             ExploreMode.Ai -> {
                 item(key = "scope") { ScopeChips(uiState = uiState, onSelectFolder = onSelectFolder) }
                 item(key = "search") {
                     Button(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotBlank() && !isLoading,
+                        onClick = { onSearch(query.text) },
+                        enabled = query.text.isNotBlank() && !isLoading,
                         modifier = Modifier
                             .exploreRowPadding()
                             .fillMaxWidth()

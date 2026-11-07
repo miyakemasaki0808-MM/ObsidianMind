@@ -373,9 +373,11 @@ class MainActivity : ComponentActivity() {
                             }
                             SearchTab(
                                 uiState = uiState,
+                                query = viewModel.exploreQuery,
                                 onSelectFolder = { folder -> viewModel.selectSearchFolder(folder) },
                                 onSearchTitle = { q -> viewModel.searchTitle(q) },
                                 onSearch = { q -> viewModel.searchByKeyword(contentResolver, q) },
+                                onSearchWholeVault = { q -> viewModel.searchWholeVault(contentResolver, q) },
                                 onOpenNote = { note ->
                                     openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
                                     navController.navigateToTab(AppDestination.Note)

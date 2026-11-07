@@ -14,6 +14,7 @@ import com.example.newproject.data.NoteRepository
 import com.example.newproject.data.VaultBrowser
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.model.MarginMemo
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.MarginMemoDraftStore
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
@@ -87,6 +88,11 @@ internal class NoteSessionCoordinator(
      * 既定値を置かない — 配線を落とすと、書きかけがノートの行き来で黙って消えるだけで何も落ちない。
      */
     marginMemoDrafts: MarginMemoDraftStore,
+    /**
+     * Explore の打った言葉の置き場（→ features/ai_picker.md §6）。**実体は ViewModel 側の Compose の状態。**
+     * 既定値を置かない — 配線を落とすと、タブを離れて戻ったときに言葉だけが黙って消えるだけで何も落ちない。
+     */
+    exploreQuery: ExploreQueryStore,
     private val history: HistoryStore,
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
@@ -218,6 +224,7 @@ internal class NoteSessionCoordinator(
         vault = vaultBrowser,
         searchPickerUseCase = searchPickerUseCase,
         state = stateStore.searchWriter,
+        query = exploreQuery,
         vaultGeneration = { vaultGeneration }
     )
     private val distill = DistillController(
@@ -734,6 +741,8 @@ internal class NoteSessionCoordinator(
     fun searchTitle(query: String) = search.searchTitle(query)
     fun searchByKeyword(query: String, collectNotes: suspend () -> List<NoteFile>) =
         search.searchByKeyword(query, collectNotes)
+    fun searchWholeVault(query: String, collectNotes: suspend () -> List<NoteFile>) =
+        search.searchWholeVault(query, collectNotes)
 
     // ── 余白メモ（実装は MarginMemoController）───────────────────────────────
 

@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SearchController
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.domain.SearchPickerUseCase
@@ -440,6 +441,49 @@ class SearchControllerTest {
         assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
     }
 
+    // 範囲と結果はタブを離れても残るので、言葉も残さないと、戻ったときに空の入力欄の下に前の結果が並ぶ。
+    @Test
+    fun `開き直すと残っている言葉でタイトルを照らし、範囲とAIの結果は残す`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val query = InMemoryExploreQuery("習慣")
+        val vault = FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas)))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+        val controller = controller(state, vault, query = query)
+
+        controller.onOpened { listOf(notePath("ideas/習慣の記録.md"), notePath("料理.md")) }
+
+        assertEquals(listOf("習慣の記録.md"), titles(state))
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+        assertEquals("習慣", query.text)
+    }
+
+    @Test
+    fun `Vaultを替えると打った言葉も捨てる`() = runTest {
+        val query = InMemoryExploreQuery("習慣")
+        val controller = controller(NoteUiStateStore(NoteUiState()), openVault(), query = query)
+
+        controller.onVaultChanged()
+
+        assertEquals("", query.text)
+    }
+
+    @Test
+    fun `タイトル0件から探すときは、選んでいた範囲によらず「すべて」で探す`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        // フォルダは残っている（開いたときに範囲が外れるのは、消えたときだけ）。
+        val controller = controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas))))
+        controller.onOpened { listOf(notePath("ideas/料理.md"), notePath("日記/習慣の記録.md")) }
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+
+        controller.searchWholeVault("習慣", ::noNotes)
+
+        assertEquals(null, state.value.selectedFolder)
+        assertEquals(listOf("習慣の記録.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+    }
+
     @Test
     fun `Vaultを替えた後は前の一覧も打った言葉も残らない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
@@ -579,12 +623,14 @@ class SearchControllerTest {
         vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
         vaultGeneration: () -> Long = { 0L },
         aiClient: AiClient = FakeAiClient(AiAvailability.Unsupported),
-        matchDispatcher: CoroutineDispatcher = Dispatchers.Unconfined
+        matchDispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+        query: ExploreQueryStore = InMemoryExploreQuery()
     ) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         vault = vault,
         searchPickerUseCase = SearchPickerUseCase(aiClient),
         state = state.searchWriter,
+        query = query,
         vaultGeneration = vaultGeneration,
         matchDispatcher = matchDispatcher
     )

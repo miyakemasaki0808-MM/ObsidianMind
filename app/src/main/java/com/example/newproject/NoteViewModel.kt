@@ -35,6 +35,7 @@ import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
+import com.example.newproject.ui.screen.ComposeExploreQuery
 import com.example.newproject.ui.screen.ComposeMarginMemoDrafts
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.domain.NoteLink
@@ -92,6 +93,12 @@ class NoteViewModel internal constructor(
      */
     private val marginMemoDrafts = ComposeMarginMemoDrafts()
 
+    /**
+     * Explore の打った言葉。**ViewModel が持つ**ので、タブを離れて戻っても範囲と結果と一緒に残る
+     * （→ features/ai_picker.md §6）。入力欄が直接読み書きし、Vault 切替で捨てる。
+     */
+    internal val exploreQuery = ComposeExploreQuery()
+
     private val session = NoteSessionCoordinator(
         scope = scope,
         persistScope = readingTraceWriteScope,
@@ -106,6 +113,7 @@ class NoteViewModel internal constructor(
         crystalPersistence = dependencies.crystalPersistence,
         crystalMaterials = dependencies.crystalMaterials,
         marginMemoDrafts = marginMemoDrafts,
+        exploreQuery = exploreQuery,
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
@@ -541,6 +549,12 @@ class NoteViewModel internal constructor(
     fun searchByKeyword(contentResolver: ContentResolver, query: String) {
         val uri = vaultLocation.uri ?: return
         session.searchByKeyword(query) { collectAllNotesCached(contentResolver, uri) }
+    }
+
+    /** タイトルが0件の1行から、範囲を「すべて」へ戻して AI で探す。 */
+    fun searchWholeVault(contentResolver: ContentResolver, query: String) {
+        val uri = vaultLocation.uri ?: return
+        session.searchWholeVault(query) { collectAllNotesCached(contentResolver, uri) }
     }
 
     /** 読書痕跡の孤児候補を洗い出す（整理画面を開いたとき）。 */
