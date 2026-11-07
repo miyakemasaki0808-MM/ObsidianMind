@@ -2,8 +2,8 @@
 
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-08-12 / `f3fb353`
-**関連コード:** `domain/RelatedNotesUseCase.kt` / `domain/RelatedCandidate*.kt` / `domain/RelatedContextScoring.kt` / `ui/screen/RelatedTab.kt`
-**関連テスト:** `RelatedCandidateScoringTest` / `RelatedCandidateRankingTest` / `RelatedCandidateOrderingTest` / `RelatedCandidateContextTest` / `RelatedCandidateIdTest` / `RelatedContextScoringTest`
+**関連コード:** `domain/RelatedNotesUseCase.kt` / `domain/RelatedCandidate*.kt` / `domain/RelatedContextScoring.kt` / `ui/RelatedReasonLabel.kt` / `ui/screen/RelatedTab.kt`
+**関連テスト:** `RelatedCandidateScoringTest` / `RelatedCandidateRankingTest` / `RelatedCandidateOrderingTest` / `RelatedCandidateContextTest` / `RelatedCandidateIdTest` / `RelatedContextScoringTest` / `RelatedNotesReasonTest` / `RelatedReasonLabelTest`
 **正本:** この文書
 
 **対象領域:** 開いたノートに近い候補を選び、関連タブへ出すまで
@@ -33,6 +33,7 @@
 |---|---|---|
 | 決定的な関連 | wikilink 済み・採番の近いノートが並ぶ | **ノートを開いたとき**（自動） |
 | 関連ノート推薦 | 関連タブにAIが選んだ候補が並ぶ | **ノートを開いたとき**（自動） |
+| 根拠の1行 | AI推薦の行の題名の下に、近いと見た根拠を1つ、数字を使わずに添える（「タグ #読書 が共通」「書き出しが近い」「題名が近い」） | AI推薦の行に、ある程度効いた根拠があるとき |
 | ノート切替 | タップでそのノートへ移る | 候補のタップ |
 | 並べ読みの候補 | 開いた Fold のペインの「このノートの関連」に同じ候補が並び、押すと右で眺められる。**AI を新しく呼ばない**（→ [余白ペイン](margin_pane.md) §5.9） | 余白ペインが出ているとき |
 
@@ -92,6 +93,17 @@ tieBreak = titleDice
 **件数は変えず並べ替えだけを行う。**
 **タグが無い候補は本文・タイトルへ自然にフォールバックする**ので、
 **タグの無いノートは再ランクが構造的に弱い**（仕様どおり）。
+
+### 根拠の1行（`relatedReason`）
+
+AI推薦の行には、二段目で計算した3つの近さのうち、**重みをかけた寄与がいちばん大きいもの**を1つ添える（`RelatedNote.reason`）。
+読み直しも生成も足さず、再ランクが既に読んだスニペットとタグから取る。
+
+- **共通のタグ**は1つでもあれば候補になり、候補側の書き方（先頭の `#` を除く）で出す
+- **書き出し・題名**は Dice が `MIN_SIMILARITY_FOR_REASON`（0.2、調整前提の初期値）以上のときだけ候補になる。少し重なるだけの題名を「題名が近い」と言わないため
+- 寄与が同じなら、タグ・書き出し・題名の順に選ぶ。どれも候補にならなければ出さない
+- **決定的な関連には付けない。** wikilink は `linked`、採番は題名で関連が見える
+- **出すのは関連タブだけ。** 余白ペインの「このノートの関連」は同じ候補を並べるが、根拠は出さない
 
 ### パラメータ一覧
 
@@ -267,6 +279,14 @@ Phase 1 の当初案は「**フォーカス中セクション**を文脈にし�
 （[section_ai_chat](section_ai_chat.md)）が、**自動起動の関連ノートには同じ手が使えない**。
 「どの時点のセクションで推薦するか」を先に決める必要がある。
 
+### 判断12: 根拠は数字ではなく質で出す
+
+「なぜこのノートが関連なのか」が画面から分からなかった。根拠は二段目で計算済みなのに、`CandidateScore` へ畳んだ後は
+並べ替えにしか使っていなかったので、**畳む前の値を1段だけ上へ通す。** 追加の I/O も生成も要らない。
+
+**数値は出さない**（2026-11-07、オーナー判断）。スコアが見えると、順位への納得と同じだけ不満も生む。
+「タグが共通」のような質的な1行に留め、いちばん効いた1つだけを出す。弱い重なりで断定しないよう、書き出しと題名には下限を置く。
+
 ## 9. 品質要件
 
 - **性能:** SAF は別プロセスなので、並列は**上限付き**で行う（→ §8 の並列読込の判断）
@@ -274,7 +294,8 @@ Phase 1 の当初案は「**フォーカス中セクション**を文脈にし�
 
 ## 10. 検証と受け入れ条件
 
-- **JVMテスト:** スコアリング・ランキング・順序・文脈・ID照合の6本
+- **JVMテスト:** スコアリング・ランキング・順序・文脈・ID照合の6本と、根拠の選び方（`RelatedContextScoringTest`）・AI推薦の行への通し方（`RelatedNotesReasonTest`）・言い方（`RelatedReasonLabelTest`）
+- **実機:** [related_notes](../../review/device_validation/related_notes.md)
 - **保証していないこと:**
   - **推薦精度を測っていない。** 改善の前後を比べる手段が無い
   - **定数はすべて調整前提の初期値**（→ §8「定数は調整前提の初期値として置く」）

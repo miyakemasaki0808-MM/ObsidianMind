@@ -1,5 +1,6 @@
 package com.example.newproject.domain
 
+import com.example.newproject.model.RelatedReason
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -75,6 +76,54 @@ class RelatedContextScoringTest {
         ) { relatedContextScore(current, it.first, it.second, it.third) }
 
         assertEquals("zzz", ranked.first().first)
+    }
+
+    // ── 根拠（→ features/related_notes_ai.md §5）──────────────────────────────────
+
+    @Test
+    fun `共通のタグがいちばん効いていれば、候補側の書き方でタグを根拠にする`() {
+        val current = CurrentNoteSignals(titleBigrams("習慣"), textBigrams("毎朝の読書"), setOf("読書", "ai"))
+
+        val reason = relatedReason(current, "料理の記録", "献立を考える", listOf("#AI", "#読書"))
+
+        assertEquals(RelatedReason.SharedTag("AI"), reason)
+    }
+
+    @Test
+    fun `タグが無ければ、書き出しと題名のうち効いた方を根拠にする`() {
+        val current = CurrentNoteSignals(titleBigrams("習慣化"), textBigrams("毎朝の読書を続ける"), emptySet())
+
+        assertEquals(RelatedReason.SimilarOpening, relatedReason(current, "料理", "毎朝の読書を続けた", emptyList()))
+        assertEquals(RelatedReason.SimilarTitle, relatedReason(current, "習慣化の記録", "献立を考える", emptyList()))
+    }
+
+    @Test
+    fun `同じだけ効いていれば、タグ・書き出し・題名の順に選ぶ`() {
+        val current = CurrentNoteSignals(setOf("ab"), setOf("xy"), setOf("ai"))
+
+        // タグ1.0 と（書き出し0.5＋題名0.5 は別々に数える）。重みつきでタグが最大。
+        assertEquals(RelatedReason.SharedTag("ai"), relatedReason(current, "ab", "xy", listOf("ai")))
+        // 書き出しと題名が同じだけ効いたら書き出し。
+        assertEquals(RelatedReason.SimilarOpening, relatedReason(current, "ab", "xy", emptyList()))
+    }
+
+    @Test
+    fun `タグが共通でも、書き出しのほうが効いていれば書き出しを根拠にする`() {
+        // タグは4つのうち1つだけ共通（Dice 0.25 → 寄与0.25）、書き出しは同じ（Dice 1.0 → 寄与0.5）。
+        val current = CurrentNoteSignals(emptySet(), textBigrams("毎朝の読書"), setOf("a", "b", "c", "d"))
+
+        val reason = relatedReason(current, "料理", "毎朝の読書", listOf("a", "e", "f", "g"))
+
+        assertEquals(RelatedReason.SimilarOpening, reason)
+    }
+
+    @Test
+    fun `弱い重なりしか無ければ根拠を出さない`() {
+        // 事実に反する断定を避ける。少しだけ重なる題名を「題名が近い」と言わない。
+        val current = CurrentNoteSignals(titleBigrams("習慣化について考えたこと"), textBigrams("あいうえおかきくけこ"), emptySet())
+
+        assertEquals(null, relatedReason(current, "習慣", "さしすせそたちつてと", emptyList()))
+        assertEquals(null, relatedReason(current, "料理", "", emptyList()))
     }
 
     companion object {

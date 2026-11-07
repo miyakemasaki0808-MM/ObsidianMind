@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.ui.relatedReasonLabel
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.model.NoteUiState
@@ -228,7 +229,12 @@ internal fun RelatedNotesPanel(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             state.aiNotes.forEachIndexed { index, note ->
-                                RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                                // 近いと見た根拠を1つ、数字を使わずに添える（弱い根拠しか無ければ出さない）。
+                                RelatedNoteItem(
+                                    note = note,
+                                    detail = note.reason?.let(::relatedReasonLabel),
+                                    onClick = { onNoteClick(note) }
+                                )
                                 if (index < state.aiNotes.lastIndex) {
                                     HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
                                 }
