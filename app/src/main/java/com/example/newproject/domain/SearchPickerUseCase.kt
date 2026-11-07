@@ -1,7 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.NoteFile
-import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.TitleMatch
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PickerCandidateLine
@@ -13,7 +13,8 @@ import kotlinx.coroutines.withContext
 
 sealed class PickerResult {
     data class Success(
-        val notes: List<RelatedNote>,
+        /** 結果の行。同じ名前のノートが並ぶときだけ場所を持つ（タイトルのモードと同じ形 → [exploreRows]）。 */
+        val notes: List<TitleMatch>,
         /**
          * 出す結果をAIが選んだか。**理由までは持たない。**
          *
@@ -64,9 +65,13 @@ class SearchPickerUseCase(
                     val idToNote = candidates
                         .mapIndexed { index, note -> pickerCandidateId(index) to note }
                         .toMap()
+                    // 同じ名前の候補にだけ場所を添える。行が同じ文字列だと Nano が見分けられない。
+                    val sameName = candidates.groupingBy { it.name }.eachCount()
                     val prompt = PromptBuilder.buildPickerPrompt(
                         query,
-                        idToNote.map { (id, note) -> PickerCandidateLine(id, note.name) }
+                        idToNote.map { (id, note) ->
+                            PickerCandidateLine(id, note.name, note.folderPath().takeIf { sameName.getValue(note.name) > 1 })
+                        }
                     )
                     val response = aiClient.generate(prompt.text)
                     // **許可集合はプロンプトへ実際に載せたIDだけ。** 予算で落ちた候補を残すと、
@@ -74,12 +79,11 @@ class SearchPickerUseCase(
                     val picked = parseCandidateIds(response, prompt.validIds, PICK_LIMIT, prefix = 'P')
                         .mapNotNull { id -> idToNote[id] }
                         .distinctBy { it.ref }
-                        .map { it.toRelatedNote() }
 
                     // IDが1件も取れなければ（空・候補外・タイトルで返した）、キーワード一致でフォールバックする。
                     // AIは動いたが、出す中身はキーワード一致なので、AIの選択に見せない（注記を出させる）。
                     if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = false)
-                    else PickerResult.Success(picked, isAiAssisted = true)
+                    else PickerResult.Success(exploreRows(picked), isAiAssisted = true)
                 }
             }
         } catch (e: CancellationException) {
@@ -99,7 +103,7 @@ class SearchPickerUseCase(
         candidates: List<NoteFile>,
         isAiAssisted: Boolean
     ): PickerResult = PickerResult.Success(
-        notes = pickByKeyword(query, candidates, PICK_LIMIT) { titleForMatching(it.name) }.map { it.toRelatedNote() },
+        notes = exploreRows(pickByKeyword(query, candidates, PICK_LIMIT) { titleForMatching(it.name) }),
         isAiAssisted = isAiAssisted
     )
 

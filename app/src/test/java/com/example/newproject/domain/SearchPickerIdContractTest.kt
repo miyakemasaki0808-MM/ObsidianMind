@@ -26,7 +26,7 @@ class SearchPickerIdContractTest {
 
         val success = pick(notes, response)
 
-        assertEquals(listOf("候補2", "候補4", "候補1"), success.notes.map { it.title })
+        assertEquals(listOf("候補2", "候補4", "候補1"), success.notes.map { it.note.title })
         assertTrue(success.isAiAssisted)
     }
 
@@ -36,7 +36,7 @@ class SearchPickerIdContractTest {
 
         val success = pick(notes, "P99\nP03\nC01")
 
-        assertEquals(listOf("候補3"), success.notes.map { it.title })
+        assertEquals(listOf("候補3"), success.notes.map { it.note.title })
     }
 
     @Test
@@ -46,7 +46,7 @@ class SearchPickerIdContractTest {
 
         val success = pick(notes, "候補2\n候補4")
 
-        assertEquals(emptyList<String>(), success.notes.map { it.title })
+        assertEquals(emptyList<String>(), success.notes.map { it.note.title })
     }
 
     @Test
@@ -57,7 +57,7 @@ class SearchPickerIdContractTest {
         listOf("", "P99\nC01", "候補2\n候補3").forEach { response ->
             val success = pick(notes, response)
             assertEquals("「$response」", false, success.isAiAssisted)
-            assertEquals("「$response」", listOf("探して見つけたメモ"), success.notes.map { it.title })
+            assertEquals("「$response」", listOf("探して見つけたメモ"), success.notes.map { it.note.title })
         }
         // 1件でも取れれば AI の選択である。
         assertTrue(pick(notes, "P99\nP03").isAiAssisted)
@@ -70,7 +70,7 @@ class SearchPickerIdContractTest {
 
         val success = pick(listOf(first, second), "P02")
 
-        assertEquals(listOf(second.ref), success.notes.map { it.ref })
+        assertEquals(listOf(second.ref), success.notes.map { it.note.ref })
     }
 
     @Test
@@ -81,7 +81,7 @@ class SearchPickerIdContractTest {
 
         assertEquals(
             listOf("「引用」— 注記", "C++ | Kotlin: 比較 [draft]", "P2P通信"),
-            success.notes.map { it.title }
+            success.notes.map { it.note.title }
         )
     }
 
@@ -90,21 +90,21 @@ class SearchPickerIdContractTest {
         // `P2P通信` の先頭 `P2` を `P02` と読むと、モデルが返していない別の候補がAIの選択として出る。
         val notes = listOf(note("P2P通信"), note("料理の献立"), note("音楽理論"))
 
-        assertEquals(emptyList<String>(), pick(notes, "P2P通信").notes.map { it.title })
-        assertEquals(emptyList<String>(), pick(notes, "P01通信").notes.map { it.title })
-        assertEquals(emptyList<String>(), pick(notes, "P012").notes.map { it.title })
-        assertEquals(emptyList<String>(), pick(notes, "P99\nC01").notes.map { it.title })
+        assertEquals(emptyList<String>(), pick(notes, "P2P通信").notes.map { it.note.title })
+        assertEquals(emptyList<String>(), pick(notes, "P01通信").notes.map { it.note.title })
+        assertEquals(emptyList<String>(), pick(notes, "P012").notes.map { it.note.title })
+        assertEquals(emptyList<String>(), pick(notes, "P99\nC01").notes.map { it.note.title })
     }
 
     @Test
     fun `IDに似たタイトルが候補にあっても正常なIDは解決する`() = runBlocking {
         val notes = listOf(note("P2P通信"), note("料理の献立"), note("音楽理論"))
 
-        assertEquals(listOf("P2P通信"), pick(notes, "P01").notes.map { it.title })
-        assertEquals(listOf("P2P通信"), pick(notes, "p1").notes.map { it.title })
+        assertEquals(listOf("P2P通信"), pick(notes, "P01").notes.map { it.note.title })
+        assertEquals(listOf("P2P通信"), pick(notes, "p1").notes.map { it.note.title })
         assertEquals(
             listOf("料理の献立", "音楽理論", "P2P通信"),
-            pick(notes, "1. P02\n- P03 | 音楽理論\n`P01`").notes.map { it.title }
+            pick(notes, "1. P02\n- P03 | 音楽理論\n`P01`").notes.map { it.note.title }
         )
     }
 

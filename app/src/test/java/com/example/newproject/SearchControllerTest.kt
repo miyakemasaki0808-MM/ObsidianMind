@@ -366,7 +366,7 @@ class SearchControllerTest {
         controller.searchTitle("習慣")
         assertEquals(listOf("新しい習慣.md"), titles(state))
         controller.searchByKeyword("習慣", ::noNotes)
-        assertEquals(listOf("新しい習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("新しい習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     @Test
@@ -481,7 +481,7 @@ class SearchControllerTest {
         controller.searchWholeVault("習慣", ::noNotes)
 
         assertEquals(null, state.value.selectedFolder)
-        assertEquals(listOf("習慣の記録.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("習慣の記録.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     @Test
@@ -527,7 +527,7 @@ class SearchControllerTest {
         controller.searchByKeyword("習慣", ::noNotes)
 
         val result = state.value.searchState as SearchState.Success
-        assertEquals(setOf("直下の習慣.md", "奥の習慣.md"), result.results.map { it.title }.toSet())
+        assertEquals(setOf("直下の習慣.md", "奥の習慣.md"), result.results.map { it.note.title }.toSet())
     }
 
     @Test
@@ -547,7 +547,7 @@ class SearchControllerTest {
         controller.searchByKeyword("習慣", ::noNotes)
 
         val result = state.value.searchState as SearchState.Success
-        assertEquals(setOf("浅い習慣.md", "深い習慣.md"), result.results.map { it.title }.toSet())
+        assertEquals(setOf("浅い習慣.md", "深い習慣.md"), result.results.map { it.note.title }.toSet())
     }
 
     @Test
@@ -556,7 +556,7 @@ class SearchControllerTest {
 
         controller(state, openVault()).searchByKeyword("習慣") { listOf(notePath("習慣.md")) }
 
-        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     @Test
@@ -602,7 +602,7 @@ class SearchControllerTest {
         controller.onVaultChanged()
         controller.searchByKeyword("習慣") { listOf(notePath("新の習慣.md")) }
 
-        assertEquals(listOf("新の習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("新の習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     private fun openVault() = FakeVaultBrowser(FakeVaultHandle())

@@ -26,15 +26,25 @@ internal fun matchNotesByTitle(query: String, notes: List<NoteFile>): List<Title
             RankedNote(rank, title, note)
         }
         .sortedWith(compareBy({ it.rank }, { it.title }, { it.note.vaultRelativePath }))
-    val sameName = matched.groupingBy { it.note.name }.eachCount()
-    return matched.map { (_, _, note) ->
+    return exploreRows(matched.map { it.note })
+}
+
+/**
+ * Explore の結果の行。**同じ名前のノートが並ぶときだけ**、フォルダの場所を添える。
+ * タイトルのモードと AI のモードで同じ形にする（→ features/ai_picker.md §5）。Vault の直下は空文字。
+ */
+internal fun exploreRows(notes: List<NoteFile>): List<TitleMatch> {
+    val sameName = notes.groupingBy { it.name }.eachCount()
+    return notes.map { note ->
         TitleMatch(
             note = note.toRelatedNote(),
-            folderPath = note.vaultRelativePath.substringBeforeLast('/', "")
-                .takeIf { sameName.getValue(note.name) > 1 }
+            folderPath = note.folderPath().takeIf { sameName.getValue(note.name) > 1 }
         )
     }
 }
+
+/** ノートのあるフォルダの Vault 相対パス。直下なら空文字。 */
+internal fun NoteFile.folderPath(): String = vaultRelativePath.substringBeforeLast('/', "")
 
 /** [folder] の中のノート（奥まで）。名前の後ろの `/` まで見るので、`ideas2` を `ideas` に含めない。 */
 internal fun notesInFolder(notes: List<NoteFile>, folder: NoteFolder): List<NoteFile> =

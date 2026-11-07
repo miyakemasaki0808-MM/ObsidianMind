@@ -39,7 +39,7 @@ class SearchPickerBudgetTest {
         val success = result as PickerResult.Success
         assertFalse(
             "提示していないノートがAI結果として受理された",
-            success.notes.any { it.ref == notes.last().ref }
+            success.notes.any { it.note.ref == notes.last().ref }
         )
     }
 
@@ -56,7 +56,7 @@ class SearchPickerBudgetTest {
         val prompt = requireNotNull(client.lastPrompt)
         assertTrue(prompt.contains("P01 | " + "Z".repeat(PromptLimits.LABEL_CHARACTERS)))
         assertFalse(prompt.contains("Z".repeat(PromptLimits.LABEL_CHARACTERS + 1)))
-        assertEquals(listOf(long), success.notes.map { it.title })
+        assertEquals(listOf(long), success.notes.map { it.note.title })
     }
 
     private fun note(name: String) = NoteFile(name = name, ref = DocumentRef("doc://$name"))

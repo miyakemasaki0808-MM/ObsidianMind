@@ -20,9 +20,9 @@ class SearchPickerExtensionTest {
         val notes = listOf(note("習慣.md"), note("読書.md"), note("旅行.MD"))
 
         listOf("m", "d", ".", "md", "cmd", ".MD").forEach { query ->
-            assertEquals(query, emptyList<String>(), fallback(query, notes).notes.map { it.title })
+            assertEquals(query, emptyList<String>(), fallback(query, notes).notes.map { it.note.title })
             // Nano が空を返したときのフォールバックも同じ照合を通る。
-            assertEquals(query, emptyList<String>(), pick(query, notes, response = "").notes.map { it.title })
+            assertEquals(query, emptyList<String>(), pick(query, notes, response = "").notes.map { it.note.title })
         }
     }
 
@@ -41,7 +41,7 @@ class SearchPickerExtensionTest {
     fun `拡張子の文字で、名前の近くないノートを同点にしない`() = runBlocking {
         val notes = listOf(note("cm1.md"), note("cmd.md"))
 
-        assertEquals(listOf("cmd.md", "cm1.md"), fallback("cmd", notes).notes.map { it.title })
+        assertEquals(listOf("cmd.md", "cm1.md"), fallback("cmd", notes).notes.map { it.note.title })
     }
 
     private suspend fun fallback(query: String, notes: List<NoteFile>): PickerResult.Success {

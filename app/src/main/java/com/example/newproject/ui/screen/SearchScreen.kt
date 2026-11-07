@@ -457,8 +457,12 @@ private fun SearchResultPanel(
                     if (state.results.isEmpty()) {
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
-                        state.results.forEachIndexed { index, note ->
-                            RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                        state.results.forEachIndexed { index, row ->
+                            RelatedNoteItem(
+                                note = row.note,
+                                detail = titleMatchLocation(row.folderPath),
+                                onClick = { onNoteClick(row.note) }
+                            )
                             if (index < state.results.lastIndex) {
                                 HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
                             }

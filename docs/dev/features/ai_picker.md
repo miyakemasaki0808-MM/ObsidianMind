@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-11-03 / `6dd72062`（`EXPLORE-01`〜`21`。カバー横の見出しの霞は §11）
 **関連コード:** `controller/SearchController.kt` / `domain/NoteTitleSearch.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `NoteScanCache.kt` / `ui/screen/SearchScreen.kt` / `ui/ExploreBody.kt`
-**関連テスト:** `SearchControllerTest` / `NoteTitleSearchTest` / `ExploreBodyTest` / `NoteScanCacheTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest` / `SearchPickerExtensionTest` / androidTest: `SearchTabTest`
+**関連テスト:** `SearchControllerTest` / `NoteTitleSearchTest` / `ExploreBodyTest` / `NoteScanCacheTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest` / `SearchPickerExtensionTest` / `SearchPickerSameNameTest` / androidTest: `SearchTabTest`
 **正本:** この文書
 
 **対象領域:** ノートを見つける導線（タイトルの照合・AI の選定・当日履歴）
@@ -41,7 +41,7 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
 |---|---|---|
 | タイトル｜AI の切り替え | 2つのモードを切り替える。打った言葉は両方で共有する | 開いたときはいつもタイトル |
 | タイトルで探す | 打つたびに Vault 全体のファイル名を照らし、**件数を絞らず**並べる | 文字を打つ |
-| 同じ名前の区別 | 同じ名前のノートにフォルダの場所を添える | 結果に同じ名前がある |
+| 同じ名前の区別 | 同じ名前のノートにフォルダの場所を添える（タイトルと AI の両方のモード） | 結果に同じ名前がある |
 | 今日読んだノート | **当日分だけ**の履歴（最大10件）。タイトルのモードでは打つ前に出す | 常時（タイトルのモードは打つ前） |
 | AI へ移る1行 | タイトルが0件のとき、同じ言葉で AI のモードへ移り、範囲を「すべて」にして探す | タイトルが0件 |
 | ことばでさがす | 自然文を入れると Nano が**3件**選ぶ | ボタンを押す |
@@ -77,6 +77,9 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
 - **照合の規則（タイトル）:** 完全一致 → 前方一致 → 部分一致の順で、同じ段の中はタイトルの順に並べる。
   大文字小文字と空白の違いは無視する。拡張子は照らさない（`md` と打っても全ノートが出ない）。
   同じ名前のノートにはフォルダの場所を添え、Vault の直下は「ルート直下」と書く
+- **同じ名前の区別（両方のモード）:** 結果に同じ名前のノートが並ぶときだけ場所を添える。AI の結果もタイトルと同じ形で出す。
+  AI のプロンプトでは、候補の中で同じ名前の行にだけ場所を添える（行が同じ文字列だと Nano が見分けられない）。
+  提示する候補は場所なしで決めてから、残った予算の中で場所を足す — 先に足すと、その分だけ別の候補が予算から押し出される
 - **範囲の規則（AI）:** 「すべて」は Vault 全体。フォルダを選ぶと、その中の奥までを候補にする。フォルダは第一階層だけ出す。
   開き直したときに選んでいたフォルダが一覧に無ければ（外で消えた）、「すべて」へ戻し、前の範囲の結果と走行中の検索も捨てる。
   フォルダの一覧を読めなかったときは範囲を動かさない
@@ -276,7 +279,8 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
   `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）/
   `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
   `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）/
-  `SearchPickerExtensionTest`（AI のキーワード一致が拡張子を照らさない）
+  `SearchPickerExtensionTest`（AI のキーワード一致が拡張子を照らさない）/
+  `SearchPickerSameNameTest`（AI の結果の同じ名前に場所を添える・プロンプトは同じ名前の候補にだけ場所を添え、予算で落ちる候補を増やさない）
 - **instrumentation:** `SearchTabTest`（開いたときの形・確定キーで AI を走らせない・結果を全部並べる・0件から AI へ移る・AI のモードの入力ではタイトルを照らさず戻したときに照らす・範囲のチップの選択状態を読み上げに出す）/ `VaultScanInstrumentationTest`（実物SAFでの走査と除外）
 - **実機:** [explore](../../review/device_validation/explore.md)。走査の本数と一覧の寿命は Debug APK の `VigilithNoteScan` の行で判定する
 - **保証していないこと:**
@@ -290,7 +294,7 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
 
 | | |
 |---|---|
-| 候補にタイトルしか渡していない | `buildPickerPrompt` はIDとタイトルのみ。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
+| 候補にタイトルしか渡していない | `buildPickerPrompt` はIDとタイトルのみ（同じ名前の候補にだけ場所を添える）。1行要約を添える案が [_wip/feature_ideas.md](../../_wip/feature_ideas.md) にある |
 | 選定精度の指標が無い | 上記「保証していないこと」参照 |
 | 最初のランダム表示と同じ走査を待つ | 大きな Vault ほど最初の1回が長い |
 | カバー画面の横で、見出しの霞がレールの右端から離れる | 切り欠きの余白の分。見た目だけで、各タブ共通とみられる |
