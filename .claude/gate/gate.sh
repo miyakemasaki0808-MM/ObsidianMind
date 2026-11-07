@@ -8,10 +8,24 @@ set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
 # Git の pre-commit を入れる。設定はリポジトリのローカル設定で、worktree の間で共有される。
-# 別の値が入っていれば、オーナーのフックかもしれないので上書きしない。
+# core.hooksPath は探索先の置き換えなので、入れると既定の場所（共有の .git/hooks）のフックはすべて走らなくなる。
+# 既定の場所に有効なフックがあるか、別の値が入っていれば、オーナーのフックかもしれないので入れない。
 hooks_path=".claude/gate/githooks"
 current_hooks="$(git config --get core.hooksPath || true)"
 if [ -z "$current_hooks" ]; then
+  default_hooks="$(git rev-parse --path-format=absolute --git-path hooks)" || exit 1
+  active_hooks=""
+  for hook in "$default_hooks"/*; do
+    [ -f "$hook" ] && [ -x "$hook" ] || continue
+    case "$hook" in
+      *.sample) ;;
+      *) active_hooks="${active_hooks}${active_hooks:+ }$(basename "$hook")" ;;
+    esac
+  done
+  if [ -n "$active_hooks" ]; then
+    echo "gate: 既定のフックの場所（${default_hooks}）に有効なフック（${active_hooks}）がある。入れるとそれが走らなくなるので、Git の pre-commit を入れない。オーナーに確かめる" >&2
+    exit 1
+  fi
   git config core.hooksPath "$hooks_path" || exit 1
   echo "gate: Git の pre-commit を入れた（core.hooksPath=${hooks_path}）"
 elif [ "$current_hooks" != "$hooks_path" ]; then

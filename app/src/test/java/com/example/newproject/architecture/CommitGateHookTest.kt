@@ -284,6 +284,60 @@ class CommitGateHookTest {
     }
 
     @Test
+    fun `既定の場所に有効なフックがあれば、入れずに失敗して元のフックを残す`() {
+        git("config", "--unset", "core.hooksPath")
+        val hooks = File(git("rev-parse", "--path-format=absolute", "--git-path", "hooks").trim())
+        val owner = hooks.resolve("pre-commit").apply {
+            writeText("#!/bin/sh\necho OWNER_CHECK >&2\nexit 1\n")
+            setExecutable(true)
+        }
+
+        val result = gate()
+
+        assertTrue(result.exit != 0)
+        assertTrue(result.err, "pre-commit" in result.err)
+        assertEquals("設定を変えた", "", run(listOf("git", "config", "--get", "core.hooksPath")).out.trim())
+        write("app/Main.kt", "fun main() { println() }\n")
+        git("add", "-A")
+        val before = head(repo)
+        val manual = commit(claude = false)
+        assertTrue("元のフックが走らない: ${manual.err}", manual.exit != 0 && "OWNER_CHECK" in manual.err)
+        assertEquals(before, head(repo))
+
+        // pre-commit が無く、ほかの名前のフックだけでも切り替えない。
+        owner.delete()
+        hooks.resolve("pre-push").apply {
+            writeText("#!/bin/sh\nexit 0\n")
+            setExecutable(true)
+        }
+        assertTrue(gate().exit != 0)
+        assertEquals("", run(listOf("git", "config", "--get", "core.hooksPath")).out.trim())
+
+        // linked worktree から流しても、共有の既定の場所を見る。
+        val other = temporary.root.resolve("other")
+        git("worktree", "add", "-q", "-b", "other", other.path)
+        val fromOther = run(listOf(other.resolve(GATE_PATH).path), directory = other)
+        assertTrue(fromOther.exit != 0)
+        assertTrue(fromOther.err, "pre-push" in fromOther.err)
+        assertEquals("", run(listOf("git", "config", "--get", "core.hooksPath")).out.trim())
+    }
+
+    @Test
+    fun `既定の場所がサンプルと実行できないファイルだけなら入れる`() {
+        git("config", "--unset", "core.hooksPath")
+        val hooks = File(git("rev-parse", "--path-format=absolute", "--git-path", "hooks").trim())
+        hooks.mkdirs()
+        hooks.resolve("pre-commit.sample").apply {
+            writeText("#!/bin/sh\nexit 1\n")
+            setExecutable(true)
+        }
+        hooks.resolve("pre-push").writeText("#!/bin/sh\nexit 1\n")
+
+        assertGatePasses()
+        assertEquals(HOOKS_PATH, git("config", "--get", "core.hooksPath").trim())
+    }
+
+    @Test
     fun `フックは Bash の PreToolUse に登録され、スクリプトは実行できる`() {
         val root = repositoryRoot()
         val settings = JSONObject(root.resolve(".claude/settings.json").readText())
