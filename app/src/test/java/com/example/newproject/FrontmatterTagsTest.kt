@@ -132,6 +132,21 @@ class FrontmatterTagsTest {
     }
 
     @Test
+    fun `引用符なしの null とチルダは YAML では値が無いので、混ざったキーは使わず、引用符つきなら文字列として読む`() {
+        fun aliasesOf(frontmatter: String) = NoteRepository().parseMeta("---\n$frontmatter\n---\n本文").aliases
+
+        for (empty in listOf("null", "Null", "NULL", "~")) {
+            assertEquals(emptyList<String>(), tagsOf("tags: [$empty]"))
+            assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n  - $empty"))
+            assertEquals(emptyList<String>(), aliasesOf("aliases: [$empty]"))
+            assertEquals(emptyList<String>(), aliasesOf("aliases:\n  - safe\n  - $empty"))
+        }
+        assertEquals(listOf("null", "~"), tagsOf("tags: [\"null\", '~']"))
+        assertEquals(listOf("NULL"), aliasesOf("aliases:\n  - \"NULL\""))
+        assertEquals(listOf("nullable", "~x"), tagsOf("tags: [nullable, ~x]"))
+    }
+
+    @Test
     fun `深い続きの行や入れ子の一覧は使わない`() {
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - 読書\n    - 習慣"))
         assertEquals(emptyList<String>(), tagsOf("tags:\n  -\n    - 読書"))

@@ -68,6 +68,9 @@ class RelatedNotesReasonTest {
         assertEquals(null, reasonFor("---\ntags: [read\t# old, fake]\n  ]\n---\n本を読む", "---\ntags: [cook\t# old, fake]\n  ]\n---\n夕食を作る"))
         assertEquals(null, reasonFor("---\ntags: [category: book]\n---\n本を読む", "---\ntags: [category: book]\n---\n夕食を作る"))
         assertEquals(null, reasonFor("---\ndescription: |\n  tags: [ghost]\n---\n本を読む", "---\ntags: [ghost]\n---\n夕食を作る"))
+        // 引用符なしの null とチルダは値が無いことなので、「#null が共通」としない。
+        assertEquals(null, reasonFor("---\ntags: [null]\n---\n本を読む", "---\ntags: [null]\n---\n夕食を作る"))
+        assertEquals(null, reasonFor("---\ntags:\n  - ~\n---\n本を読む", "---\ntags: [~]\n---\n夕食を作る"))
         // 次の行へ続く一覧の中のコメントも、共通タグにしない（読めない一覧は使わない）。
         assertEquals(
             null,
@@ -90,6 +93,19 @@ class RelatedNotesReasonTest {
         ).single()
 
         assertEquals(true, line.renderForPrompt().contains("aka 議事録 #1"))
+    }
+
+    @Test
+    fun `値の無い別名を候補の文脈へ渡さない`() {
+        val meta = NoteRepository().parseMeta("---\naliases: [null]\n---\n会議の記録")
+        val line = renderCandidatesWithinBudget(
+            listOf(CandidateContext(id = "C01", title = "会議", snippet = "会議の記録", aliases = meta.aliases)),
+            charBudget = 2_000,
+            maxSnippetLen = 150,
+            minSnippetLen = 40
+        ).single()
+
+        assertEquals(false, line.renderForPrompt().contains("aka"))
     }
 
     private suspend fun kotlinx.coroutines.test.TestScope.reasonFor(current: String, candidate: String): RelatedReason? {

@@ -442,11 +442,13 @@ class NoteRepository {
         return inner.trim().ifBlank { null }
     }
 
-    // 囲まない値。読めなければ null。YAML の別の構文になる先頭の文字・辞書の形（`a: b`・`a:`）・括弧・行中のコメントを含む語は読まない。
+    // 囲まない値。読めなければ null。YAML の別の構文になる先頭の文字・辞書の形（`a: b`・`a:`）・括弧・行中のコメントを含む語と、
+    // YAML で値が無いことを表す語（`null`・`~`。文字列ではない）は読まない。
     // `C#` や `Alice's` のように語の途中の `#` と引用符は値の一部。
     private fun plainValue(raw: String): String? {
         val value = raw.trim()
         if (value.isEmpty()) return null
+        if (value in YAML_NULLS) return null
         if (value.first() in UNREADABLE_VALUE_START) return null
         if (value == "-" || value.startsWith("- ") || value == "?" || value.startsWith("? ")) return null
         if (": " in value || value.endsWith(":") || " #" in value) return null
@@ -462,5 +464,8 @@ class NoteRepository {
 
         /** 囲まない値の先頭に来ると YAML の別の構文になる文字。 */
         private const val UNREADABLE_VALUE_START = "#[]{},&*!|>%@`"
+
+        /** YAML 1.2 の Core Schema で null になる、囲まない語。 */
+        private val YAML_NULLS = setOf("null", "Null", "NULL", "~")
     }
 }
