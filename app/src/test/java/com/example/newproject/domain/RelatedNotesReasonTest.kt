@@ -71,6 +71,11 @@ class RelatedNotesReasonTest {
         // 引用符なしの null とチルダは値が無いことなので、「#null が共通」としない。
         assertEquals(null, reasonFor("---\ntags: [null]\n---\n本を読む", "---\ntags: [null]\n---\n夕食を作る"))
         assertEquals(null, reasonFor("---\ntags:\n  - ~\n---\n本を読む", "---\ntags: [~]\n---\n夕食を作る"))
+        // 複数行の引用文字列やフロー辞書の中にある行頭の `tags:` は、ルートのタグではない。
+        assertEquals(
+            null,
+            reasonFor("---\ndescription: \"text\ntags: [ghost]\nend\"\n---\n本を読む", "---\nextra: {\ntags: [ghost]\n}\n---\n夕食を作る")
+        )
         // 次の行へ続く一覧の中のコメントも、共通タグにしない（読めない一覧は使わない）。
         assertEquals(
             null,
@@ -96,16 +101,18 @@ class RelatedNotesReasonTest {
     }
 
     @Test
-    fun `値の無い別名を候補の文脈へ渡さない`() {
-        val meta = NoteRepository().parseMeta("---\naliases: [null]\n---\n会議の記録")
-        val line = renderCandidatesWithinBudget(
-            listOf(CandidateContext(id = "C01", title = "会議", snippet = "会議の記録", aliases = meta.aliases)),
-            charBudget = 2_000,
-            maxSnippetLen = 150,
-            minSnippetLen = 40
-        ).single()
+    fun `値の無い別名と、文字列の中の別名を候補の文脈へ渡さない`() {
+        for (frontmatter in listOf("aliases: [null]", "description: \"text\naliases: [ghost]\nend\"")) {
+            val meta = NoteRepository().parseMeta("---\n$frontmatter\n---\n会議の記録")
+            val line = renderCandidatesWithinBudget(
+                listOf(CandidateContext(id = "C01", title = "会議", snippet = "会議の記録", aliases = meta.aliases)),
+                charBudget = 2_000,
+                maxSnippetLen = 150,
+                minSnippetLen = 40
+            ).single()
 
-        assertEquals(false, line.renderForPrompt().contains("aka"))
+            assertEquals(frontmatter, false, line.renderForPrompt().contains("aka"))
+        }
     }
 
     private suspend fun kotlinx.coroutines.test.TestScope.reasonFor(current: String, candidate: String): RelatedReason? {

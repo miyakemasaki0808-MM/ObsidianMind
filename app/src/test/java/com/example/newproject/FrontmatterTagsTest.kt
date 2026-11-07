@@ -172,6 +172,63 @@ class FrontmatterTagsTest {
     }
 
     @Test
+    fun `前の行が開いたまま次の行へ続く文字列や一覧の中にある、行頭のキーは採らない`() {
+        fun aliasesOf(frontmatter: String) = NoteRepository().parseMeta("---\n$frontmatter\n---\n本文").aliases
+
+        assertEquals(emptyList<String>(), tagsOf("description: \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("description: 'text\ntags: [ghost]\nend'"))
+        assertEquals(emptyList<String>(), tagsOf("extra: {\ntags: [ghost]\n}"))
+        assertEquals(emptyList<String>(), tagsOf("extra: [a, # メモ\ntags: [ghost]\n]"))
+        assertEquals(emptyList<String>(), tagsOf("\"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("list:\n  - \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("list:\n  - name: 'text\ntags: [ghost]\nend'"))
+        assertEquals(emptyList<String>(), aliasesOf("description: \"text\naliases: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), aliasesOf("extra: {\naliases: [ghost]\n}"))
+    }
+
+    @Test
+    fun `閉じたかを確かめられない前の行があれば、行頭のキーも使わない`() {
+        // エスケープした引用符・語の途中の引用符・タグや錨の印は、どこで閉じるかをこの読み方では決められない。
+        assertEquals(emptyList<String>(), tagsOf("description: \"a\\\"\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("extra: [it's, 'a]\ntags: [ghost]\n']"))
+        assertEquals(emptyList<String>(), tagsOf("description: !!str \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("Alice's key: \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("list:\n  - Alice's key: \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("description:\t\"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("list:\n  -\t\"text\ntags: [ghost]\nend\""))
+        // `a:'b` は語の途中の引用符なので、`'b, c: '` で閉じたとは読めない（実際は `'x}` から次の行へ続く）。
+        assertEquals(emptyList<String>(), tagsOf("extra: {a:'b, c: 'x}\ntags: [ghost]\n'}"))
+        assertEquals(emptyList<String>(), tagsOf("extra: [a}\ntags: [ghost]\n]"))
+        // 引用符や括弧のキーの後ろで、値が開いたまま続く。
+        assertEquals(emptyList<String>(), tagsOf("list:\n  - \"k\": \"text\ntags: [ghost]\nend\""))
+        assertEquals(emptyList<String>(), tagsOf("list:\n  - [a]: \"text\ntags: [ghost]\nend\""))
+        // ルートが辞書でなければ（ブロックの文字列）、行頭の `tags:` は文字列の中身。
+        assertEquals(emptyList<String>(), tagsOf("|\ntags: [ghost]"))
+    }
+
+    @Test
+    fun `前の行が1行で閉じていれば、その後ろのルートのキーを読む`() {
+        val frontmatter = """
+            # "読書の設定
+            title: 読書メモ
+              # 'メモ
+            description: "引用: [本] # 1"
+            quote: 'it''s'
+            related:
+              - "[[本の記録]]"
+              - name: "著者"
+            css: [wide, "dark, mode"] # 見た目
+            extra: {a: "b", c: [d]}
+            note: |
+              本文
+            tags: [a, b]
+        """.trimIndent()
+
+        assertEquals(listOf("a", "b"), tagsOf(frontmatter))
+        assertEquals(listOf("a", "b"), tagsOf("title: 読書メモ\ntags:\n  - a\n  - b"))
+    }
+
+    @Test
     fun `空行や行頭のコメントで打ち切らず、ブロックの全体を見てから読む`() {
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n\n  - [nested]"))
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n# comment\n  - [nested]"))
@@ -181,9 +238,18 @@ class FrontmatterTagsTest {
 
     @Test
     fun `読めないのは崩れたキーだけで、ほかのキーは読む`() {
-        val meta = NoteRepository().parseMeta("---\ntags: [読書, # 旧]\naliases: [別名]\n---\n本文")
+        val meta = NoteRepository().parseMeta("---\ntags: [読書, category: book]\naliases: [別名]\n---\n本文")
 
         assertEquals(emptyList<String>(), meta.tags)
         assertEquals(listOf("別名"), meta.aliases)
+    }
+
+    @Test
+    fun `崩れたキーが次の行へ開いたままなら、その後ろのキーも使わない`() {
+        // `[読書,` の一覧は閉じずに続くので、後ろの `aliases:` はその一覧の中身になりうる。
+        val meta = NoteRepository().parseMeta("---\ntags: [読書, # 旧]\naliases: [別名]\n---\n本文")
+
+        assertEquals(emptyList<String>(), meta.tags)
+        assertEquals(emptyList<String>(), meta.aliases)
     }
 }

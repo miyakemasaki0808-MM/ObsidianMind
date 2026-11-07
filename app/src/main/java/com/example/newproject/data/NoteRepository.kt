@@ -347,8 +347,8 @@ class NoteRepository {
     // **確実に読める書き方だけを読み、それ以外が1つでも混ざったらキーをまるごと使わない**（空を返す）。
     // 推測して読むと、事実に反するタグや欠けた別名を出す（→ features/related_notes_ai.md §5）。
     //
-    // 読むのは、行頭から始まる `tags:` がちょうど1つあり（入れ子や文字列の中の行はインデントがあるので当たらない）、
-    // 値が次のどちらかのとき。
+    // 読むのは、行頭から始まる `tags:` がちょうど1つあり（入れ子の行はインデントがあるので当たらない）、
+    // それより前の行がすべて1行で閉じていて（→ closesOnItsLine）、値が次のどちらかのとき。
     // - 1行で閉じるインライン一覧 `tags: [a, "b"]`。後ろに空白に続く `#` のコメントを置ける
     // - 同じ深さにインデントした `- a` の並び。空行・コメントの行・値の無い `- #メモ` は飛ばし、次のルートのキーまでを見る
     // 項目の値は、引用符で始まらず YAML の別の構文にならない語か、エスケープを含まない引用符つきの語。
@@ -357,6 +357,7 @@ class NoteRepository {
         val keyLines = lines.indices.filter { lines[it] == "$key:" || lines[it].startsWith("$key: ") }
         if (keyLines.size != 1) return emptyList()
         val keyLine = keyLines.single()
+        if (!lines.take(keyLine).all(::closesOnItsLine)) return emptyList()
         val rest = lines[keyLine].substringAfter("$key:")
         val block = lines.drop(keyLine + 1).takeWhile { it.isBlank() || it.first().isWhitespace() || it.startsWith("#") }
         if ('\t' in rest || block.any { '\t' in it }) return emptyList()
@@ -370,6 +371,74 @@ class NoteRepository {
     }
 
     private fun isBlankOrComment(line: String): Boolean = line.isBlank() || line.trimStart().startsWith("#")
+
+    // 引用符や括弧を開いたまま次の行へ続く行があると、その後ろの行頭の `tags:` も文字列や一覧の中身になる。
+    // 1行で閉じたと確かめられる行だけを認め、閉じたかを決められない形（エスケープ・語の途中の引用符・タグや錨の印・タブ）は
+    // 閉じていないものとして扱う。ルートの行は `キー:` の形に限る（ルートが辞書でなければ、行頭の `tags:` はキーではない）。
+    private fun closesOnItsLine(line: String): Boolean {
+        if (isBlankOrComment(line)) return true
+        if ('\t' in line) return false
+        val atRoot = !line.first().isWhitespace()
+        var node = line.trim()
+        if (!atRoot) while (node == "-" || node.startsWith("- ")) node = node.drop(1).trimStart()
+        val key = PLAIN_KEY.find(node)
+        if (key == null && atRoot) return false
+        if (key != null) node = node.substring(key.range.last + 1).trim()
+        return when {
+            node.isEmpty() -> true
+            node.first() == '"' || node.first() == '\'' -> quotedEnd(node, 0)?.let { isListEnd(node.substring(it + 1)) } ?: false
+            node.first() == '[' || node.first() == '{' -> flowClosesOnItsLine(node)
+            node.first() in "!&?%@`" -> false
+            // 囲まない値に `: ` が残るのは、読めなかったキー（`Alice's key: "…`）の後ろを見ている。
+            else -> node.substringBefore(" #").let { ": " !in it && !it.endsWith(":") }
+        }
+    }
+
+    // `[a, "b"]`・`{a: b}`。引用符は値の先頭（`[` `{` `,` か `: ` の後ろ）でだけ認め、
+    // 語の途中の引用符と一覧の中のコメントがあれば閉じていないものとして扱う。
+    private fun flowClosesOnItsLine(node: String): Boolean {
+        val closers = ArrayDeque<Char>()
+        var index = 0
+        while (index < node.length) {
+            when (val c = node[index]) {
+                '[' -> closers.addLast(']')
+                '{' -> closers.addLast('}')
+                ']', '}' -> {
+                    if (closers.removeLastOrNull() != c) return false
+                    if (closers.isEmpty()) return isListEnd(node.substring(index + 1))
+                }
+                '"', '\'' -> {
+                    val before = node.substring(0, index).trimEnd()
+                    val startsValue = before.last() in "[{," || (before.endsWith(":") && before.length < index)
+                    if (!startsValue) return false
+                    index = quotedEnd(node, index) ?: return false
+                }
+                '#' -> return false
+            }
+            index++
+        }
+        return false
+    }
+
+    // `start` の引用符を閉じる位置。単一引用符の中の `''` は引用符そのもの。二重引用符の中のバックスラッシュは
+    // エスケープで、閉じる位置を決められないので null。
+    private fun quotedEnd(text: String, start: Int): Int? {
+        val quote = text[start]
+        var index = start + 1
+        while (index < text.length) {
+            val c = text[index]
+            if (quote == '"' && c == '\\') return null
+            if (c == quote) {
+                if (quote == '\'' && text.getOrNull(index + 1) == '\'') {
+                    index += 2
+                    continue
+                }
+                return index
+            }
+            index++
+        }
+        return null
+    }
 
     // `[a, "b, c"] # コメント`。引用符は項目の先頭でだけ認め、区切りの `,` と閉じる `]` は引用符の外でだけ認める
     // （引用符の中の `,` `]` `#` は値の一部）。その行で閉じない一覧は読めない。一覧の中のコメントは、項目の値として読めずに落ちる。
@@ -464,6 +533,9 @@ class NoteRepository {
 
         /** 囲まない値の先頭に来ると YAML の別の構文になる文字。 */
         private const val UNREADABLE_VALUE_START = "#[]{},&*!|>%@`"
+
+        /** 囲まないキーの `キー:`。記号で始まらず、引用符・括弧・カンマ・`#`・`:` を含まないものだけ。 */
+        private val PLAIN_KEY = Regex("""^[^\s#"'\[\]{},&*!|>%@`?:-][^#"'\[\]{},:]*:(?= |$)""")
 
         /** YAML 1.2 の Core Schema で null になる、囲まない語。 */
         private val YAML_NULLS = setOf("null", "Null", "NULL", "~")
