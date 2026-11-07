@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -402,6 +404,9 @@ private fun TodayHistoryPanel(
 private fun FolderChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        // 選ばれているかを読み上げにも出す。太字と面の色だけだと、見えない利用者にはどの範囲で探すのか分からない。
+        // 言い方はモードのチップ（ModeToggleChip）と揃える。
+        modifier = Modifier.semantics { stateDescription = if (selected) "選択中" else "未選択" },
         shape = RoundedCornerShape(999.dp),
         // 未選択も不透明にする。透過22%ではグラデーションが透けて、
         // 白文字が 1.82〜4.10 と下地しだいで変わっていた。

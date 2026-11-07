@@ -277,7 +277,7 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
   `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
   `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）/
   `SearchPickerExtensionTest`（AI のキーワード一致が拡張子を照らさない）
-- **instrumentation:** `SearchTabTest`（開いたときの形・確定キーで AI を走らせない・結果を全部並べる・0件から AI へ移る・AI のモードの入力ではタイトルを照らさず戻したときに照らす）/ `VaultScanInstrumentationTest`（実物SAFでの走査と除外）
+- **instrumentation:** `SearchTabTest`（開いたときの形・確定キーで AI を走らせない・結果を全部並べる・0件から AI へ移る・AI のモードの入力ではタイトルを照らさず戻したときに照らす・範囲のチップの選択状態を読み上げに出す）/ `VaultScanInstrumentationTest`（実物SAFでの走査と除外）
 - **実機:** [explore](../../review/device_validation/explore.md)。走査の本数と一覧の寿命は Debug APK の `VigilithNoteScan` の行で判定する
 - **保証していないこと:**
   - **Nano の選定精度を測っていない。** 「狙いのノートが3件に入るか」の指標が無い

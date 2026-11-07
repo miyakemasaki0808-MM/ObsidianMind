@@ -300,7 +300,7 @@
 
 ## SEARCH-7. 範囲のチップの選択状態を TalkBack が読み上げない
 
-- **状態:** 様子見（2026-11-03、オーナー判断。利用者への影響は小さい想定）。コードを読んだだけで、TalkBack では確かめていない。
+- **状態:** 実装済み・別の目のレビュー待ち（2026-11-07）。`SearchTabTest` に足した（端末が無く未実行）。実機は `EXPLORE-18` に範囲のチップを足した。TalkBack を使うので、端末設定を変えてよいかは実機検証の前にオーナーに聞く。
 - **現状:** `FolderChip` は `stateDescription` も `selected` も持たず、太字と面の色だけで選択を示す。`ModeToggleChip` は `stateDescription` を持つ。`EXPLORE-18` が見るのはモードのチップだけ。
 - **受理条件:**
   - 範囲のチップの選択状態が semantics に出ることを `SearchTabTest` が固定する

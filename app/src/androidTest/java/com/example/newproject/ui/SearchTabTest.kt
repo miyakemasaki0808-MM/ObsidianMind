@@ -1,5 +1,8 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -139,6 +142,17 @@ class SearchTabTest {
 
         composeRule.onNodeWithText("タイトル").performClick()
         assertEquals(listOf("読", "読書"), titleQueries)
+    }
+
+    @Test
+    fun 範囲のチップは選択中か未選択かを読み上げに出す() {
+        val folder = NoteFolder("ideas", "doc-ideas")
+        show(NoteUiState(folders = listOf(folder), selectedFolder = folder))
+
+        composeRule.onNodeWithText("AI").performClick()
+
+        composeRule.onNodeWithText("ideas").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "選択中"))
+        composeRule.onNodeWithText("すべて").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "未選択"))
     }
 
     @Test
