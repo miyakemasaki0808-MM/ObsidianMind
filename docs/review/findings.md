@@ -29,7 +29,6 @@
 
 | ID | 指摘 | 処遇 |
 |---|---|---|
-| `2026-11-07-cli-foundation-rereview-4/P2-1` | core.hooksPath が未設定でも既定の `.git/hooks` の有効なフックを確かめずに入れ、既存のフックを黙って無効にする（一覧を読めない置き場の形が残り） | `統合` PROC-5 |
 | `2026-11-06-section-batch-device/P3-1` | QuoteChipUiTest の1本が、閉じた画面の端末でだけ落ちる | `起票` TEST-13 |
 | `2026-11-03-fold-desk-device/P3-1` | カバー画面を横にすると、見出しの霞がレールの右端から離れる | `起票` UI-7 |
 | `2026-11-03-explore-antigravity-review/P1-1` | Nano が空や候補外を返すと、キーワード一致の結果が注記なしで出て正本と食い違う | `起票` SEARCH-2 |
