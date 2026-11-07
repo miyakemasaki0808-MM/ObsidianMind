@@ -338,6 +338,69 @@ class CommitGateHookTest {
     }
 
     @Test
+    fun `既定の場所の一覧を読めなければ、入れずに失敗して元のフックを残す`() {
+        git("config", "--unset", "core.hooksPath")
+        val hooks = File(git("rev-parse", "--path-format=absolute", "--git-path", "hooks").trim())
+        hooks.resolve("pre-commit").apply {
+            writeText("#!/bin/sh\necho OWNER_CHECK >&2\nexit 1\n")
+            setExecutable(true)
+        }
+        write("app/Main.kt", "fun main() { println() }\n")
+        git("add", "-A")
+        val before = head(repo)
+        // 検索の権限だけを残す。Git はフックを名前で直接走らせるので、一覧を読めなくても元のフックは効く。
+        assertEquals(0, run(listOf("chmod", "111", hooks.path)).exit)
+        try {
+            val ownerBefore = commit(claude = false)
+            assertTrue("前提: 元のフックが拒否する: ${ownerBefore.err}", ownerBefore.exit != 0 && "OWNER_CHECK" in ownerBefore.err)
+
+            val result = gate()
+
+            assertTrue(result.exit != 0)
+            assertTrue(result.err, "確かめられない" in result.err)
+            assertEquals("設定を変えた", "", run(listOf("git", "config", "--get", "core.hooksPath")).out.trim())
+            val ownerAfter = commit(claude = false)
+            assertTrue("元のフックが走らない: ${ownerAfter.err}", ownerAfter.exit != 0 && "OWNER_CHECK" in ownerAfter.err)
+            assertEquals(before, head(repo))
+        } finally {
+            run(listOf("chmod", "755", hooks.path))
+        }
+    }
+
+    @Test
+    fun `既定の場所が無い・空・シンボリックリンクでも、中身どおりに判定する`() {
+        // 入れた後の --git-path hooks は core.hooksPath を返すので、外してから既定の場所を求める。
+        git("config", "--unset", "core.hooksPath")
+        val hooks = File(git("rev-parse", "--path-format=absolute", "--git-path", "hooks").trim())
+        fun installs(): Boolean {
+            run(listOf("git", "config", "--unset-all", "core.hooksPath"))
+            val passed = gate().exit == 0
+            return passed && run(listOf("git", "config", "--get", "core.hooksPath")).out.trim() == HOOKS_PATH
+        }
+
+        hooks.deleteRecursively()
+        assertTrue("置き場が無いのに入れない", installs())
+
+        hooks.mkdirs()
+        assertTrue("空の置き場なのに入れない", installs())
+
+        hooks.delete()
+        val elsewhere = temporary.newFolder("linked-hooks")
+        assertEquals(0, run(listOf("ln", "-s", elsewhere.path, hooks.path)).exit)
+        elsewhere.resolve("pre-commit.sample").apply {
+            writeText("#!/bin/sh\nexit 1\n")
+            setExecutable(true)
+        }
+        assertTrue("サンプルだけのリンク先なのに入れない", installs())
+
+        elsewhere.resolve("pre-commit").apply {
+            writeText("#!/bin/sh\nexit 1\n")
+            setExecutable(true)
+        }
+        assertFalse("リンク先の有効なフックを見落とした", installs())
+    }
+
+    @Test
     fun `フックは Bash の PreToolUse に登録され、スクリプトは実行できる`() {
         val root = repositoryRoot()
         val settings = JSONObject(root.resolve(".claude/settings.json").readText())

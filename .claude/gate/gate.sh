@@ -14,6 +14,12 @@ hooks_path=".claude/gate/githooks"
 current_hooks="$(git config --get core.hooksPath || true)"
 if [ -z "$current_hooks" ]; then
   default_hooks="$(git rev-parse --path-format=absolute --git-path hooks)" || exit 1
+  # 一覧を読めない置き場は、列挙が空になっても「フックが無い」とは言えない。Git は名前で直接走らせるので、
+  # 検索の権限だけでも中のフックは効いている。
+  if [ -d "$default_hooks" ] && [ ! -r "$default_hooks" ]; then
+    echo "gate: 既定のフックの場所（${default_hooks}）の中身を確かめられない（一覧を読む権限が無い）。そこにフックがあれば走らなくなるので、Git の pre-commit を入れない。オーナーに確かめる" >&2
+    exit 1
+  fi
   active_hooks=""
   for hook in "$default_hooks"/*; do
     [ -f "$hook" ] && [ -x "$hook" ] || continue
