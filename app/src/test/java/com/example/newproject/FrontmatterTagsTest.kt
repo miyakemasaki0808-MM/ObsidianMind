@@ -7,6 +7,9 @@ import org.junit.Test
 /**
  * frontmatter の `tags` と `aliases` の読み方。**YAML の構文（コメント・引用符）をタグの値に混ぜない。**
  * 混ぜると、関連ノートの根拠に実在しないタグが「共通」と出る（→ features/related_notes_ai.md §5）。
+ *
+ * **確実に読める書き方だけを読み、それ以外が1つでも混ざったらそのキーをまるごと使わない。**
+ * 推測して読むと、事実に反するタグや欠けた別名を出す。使わなければ、根拠が出ないだけで済む。
  */
 class FrontmatterTagsTest {
 
@@ -70,6 +73,52 @@ class FrontmatterTagsTest {
     fun `aliases も同じ読み方をする`() {
         val meta = NoteRepository().parseMeta("---\naliases:\n  - \"別名\"\n  # 古い名前\n---\n本文")
 
+        assertEquals(listOf("別名"), meta.aliases)
+    }
+
+    // ── 読めない形はキーごと使わない ─────────────────────────────────────────
+
+    @Test
+    fun `次の行へ続くインライン一覧は、コメントがあっても無くても使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書, # 旧: 資料, 下書き]\n  習慣]"))
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書,\n  習慣]"))
+    }
+
+    @Test
+    fun `インライン一覧の中のコメントは使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書, # 旧: 資料]"))
+    }
+
+    @Test
+    fun `引用符のエスケープを含む一覧は使わない`() {
+        fun aliasesOf(frontmatter: String) = NoteRepository().parseMeta("---\n$frontmatter\n---\n本文").aliases
+
+        assertEquals(emptyList<String>(), aliasesOf("aliases: [\"a\\\"b\", next]"))
+        assertEquals(emptyList<String>(), aliasesOf("aliases: ['it''s', next]"))
+        assertEquals(emptyList<String>(), aliasesOf("aliases:\n  - \"a\\\"b\" # comment"))
+        assertEquals(emptyList<String>(), aliasesOf("aliases:\n  - 'it''s' # comment"))
+        // 二重引用符の中のバックスラッシュは YAML ではエスケープなので、そのままの文字として読まない。
+        assertEquals(emptyList<String>(), aliasesOf("aliases: [\"C:\\\\Users\"]"))
+    }
+
+    @Test
+    fun `一覧の後ろのコメントでない文字や、入れ子の一覧は使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書] 習慣"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - [読書]"))
+    }
+
+    @Test
+    fun `閉じない括弧や引用符、項目でない行を含む一覧は使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書, 習慣"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - \"読書\n  - 習慣"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - 読書\n  sub: 習慣"))
+    }
+
+    @Test
+    fun `読めないのは崩れたキーだけで、ほかのキーは読む`() {
+        val meta = NoteRepository().parseMeta("---\ntags: [読書, # 旧]\naliases: [別名]\n---\n本文")
+
+        assertEquals(emptyList<String>(), meta.tags)
         assertEquals(listOf("別名"), meta.aliases)
     }
 }
