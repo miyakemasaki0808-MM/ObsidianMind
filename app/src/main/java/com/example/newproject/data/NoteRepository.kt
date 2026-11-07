@@ -15,6 +15,7 @@ import android.content.ContentResolver
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -60,6 +61,19 @@ internal val ABSENCE_SCAN_EXCLUDED_FOLDERS = setOf(
     ANNOTATION_FOLDER_NAME,
     READING_TRACE_FOLDER_NAME
 )
+
+/**
+ * 第一階層の子一覧から、Explore の範囲に出すフォルダを名前の順に取り出す。
+ * **読めなかった一覧（[SafChildren.isComplete] が false）は例外にする。** 空一覧として返すと、
+ * 選んでいた範囲が外で消えたのと見分けられず、範囲と結果を捨ててしまう（→ features/ai_picker.md §5）。
+ */
+internal fun topLevelFoldersOf(children: SafChildren): List<NoteFolder> {
+    if (!children.isComplete) throw IOException("フォルダの一覧を読めませんでした。")
+    return children.items
+        .filter { it.isDirectory && it.name !in VAULT_SCAN_EXCLUDED_FOLDERS }
+        .map { NoteFolder(it.name, it.documentId) }
+        .sortedBy { it.name }
+}
 
 class NoteRepository {
 
@@ -191,16 +205,10 @@ class NoteRepository {
 
     // Vault 第一階層のフォルダのみ列挙する（ドリルダウンなし・名前昇順）。
     // Explore の範囲は全体の一覧を場所で絞るので、全体の走査が潜らないフォルダは出しても空になる。
-    //
-    // 列挙に失敗したら空一覧になる。ここは「フォルダが1つも出ない」という形で
-    // ユーザーの目に見える（黙って一部が欠けるのではない）ので、読めた分をそのまま返す。
+    // 列挙に失敗したら例外にする（→ [topLevelFoldersOf]）。
     suspend fun listTopLevelFolders(contentResolver: ContentResolver, vaultUri: Uri): List<NoteFolder> =
         withContext(Dispatchers.IO) {
-            queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri))
-                .items
-                .filter { it.isDirectory && it.name !in VAULT_SCAN_EXCLUDED_FOLDERS }
-                .map { NoteFolder(it.name, it.documentId) }
-                .sortedBy { it.name }
+            topLevelFoldersOf(queryChildren(contentResolver, vaultUri, DocumentsContract.getTreeDocumentId(vaultUri)))
         }
 
     /**

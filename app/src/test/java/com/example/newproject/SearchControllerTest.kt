@@ -205,6 +205,24 @@ class SearchControllerTest {
     }
 
     @Test
+    fun `探している途中にフォルダの一覧を読めなくても、その検索を止めず結果を受け取る`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val handle = FakeVaultHandle(folders = listOf(ideas))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        val controller = controller(state, FakeVaultBrowser(handle))
+        val pending = CompletableDeferred<List<NoteFile>>()
+        controller.searchByKeyword("習慣") { pending.await() }
+
+        handle.failure = java.io.IOException("フォルダの一覧を読めませんでした。")
+        controller.loadFolders()
+        pending.complete(listOf(notePath("ideas/習慣.md")))
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals("フォルダ一覧を取得できませんでした。", state.value.foldersError)
+        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
+    }
+
+    @Test
     fun `一覧を読む間に別のフォルダへ選び直したら、届いた一覧にあればその選択を保つ`() = runTest {
         val ideas = NoteFolder("ideas", "doc-ideas")
         val notes = NoteFolder("notes", "doc-notes")
