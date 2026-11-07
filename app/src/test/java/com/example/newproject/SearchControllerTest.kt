@@ -145,6 +145,78 @@ class SearchControllerTest {
         assertEquals("フォルダ一覧を取得できませんでした。", state.value.foldersError)
     }
 
+    // 外で消えたフォルダを選んだままだと、どのチップも選ばれていない形で0件になり、「すべて」の注記も出ない。
+    @Test
+    fun `選んでいたフォルダが一覧から消えていたら「すべて」へ戻り、前の結果も消える`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val notes = NoteFolder("notes", "doc-notes")
+        val state = NoteUiStateStore(
+            NoteUiState(folders = listOf(ideas, notes), selectedFolder = ideas, searchState = SearchState.Success(emptyList()))
+        )
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(notes)))).loadFolders()
+
+        assertEquals(null, state.value.selectedFolder)
+        assertTrue(state.value.searchState is SearchState.Idle)
+        assertEquals(listOf("notes"), state.value.folders.map { it.name })
+    }
+
+    @Test
+    fun `選んでいたフォルダが一覧に残っていれば、範囲も結果も保つ`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas, NoteFolder("new", "doc-new"))))).loadFolders()
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+    }
+
+    @Test
+    fun `フォルダの一覧を読めなかったときは範囲を動かさない`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(failure = IllegalStateException("SAF失敗")))).loadFolders()
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+    }
+
+    @Test
+    fun `消えたフォルダで探している途中に一覧が届いたら、その検索の結果を書かない`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val handle = FakeVaultHandle(folders = listOf(ideas))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        val controller = controller(state, FakeVaultBrowser(handle))
+        val pending = CompletableDeferred<List<NoteFile>>()
+        controller.searchByKeyword("習慣") { pending.await() }
+        assertTrue(state.value.searchState is SearchState.Loading)
+
+        handle.folders = emptyList()
+        controller.loadFolders()
+        pending.complete(listOf(notePath("ideas/習慣.md")))
+
+        assertEquals(null, state.value.selectedFolder)
+        assertTrue("読み込み中が残るか、消えた範囲の結果を書いた", state.value.searchState is SearchState.Idle)
+    }
+
+    @Test
+    fun `一覧を読む間に別のフォルダへ選び直したら、届いた一覧にあればその選択を保つ`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val notes = NoteFolder("notes", "doc-notes")
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas, notes), selectedFolder = ideas))
+        lateinit var controller: SearchController
+        val handle = FakeVaultHandle(folders = listOf(notes), beforeEachCall = { controller.selectFolder(notes) })
+        controller = controller(state, FakeVaultBrowser(handle))
+
+        controller.loadFolders()
+
+        assertEquals("doc-notes", state.value.selectedFolder?.documentId)
+    }
+
     @Test
     fun `列挙が失敗しても世代が進んでいたら注記を出さない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())

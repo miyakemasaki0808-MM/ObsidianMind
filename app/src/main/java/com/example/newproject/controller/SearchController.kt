@@ -112,6 +112,10 @@ class SearchController(
      * 起動時の世代を捕まえて `update` の直前に照合する。`onVaultChanged()` の
      * `cancel()` だけに頼ると、SAF走査から戻った直後に切替が起きた場合に
      * 旧Vaultのフォルダが新Vaultの chips として並ぶ。
+     *
+     * 選んでいた範囲が届いた一覧に無ければ（外で消えた）、「すべて」へ戻して前の範囲の結果と検索も捨てる。
+     * 選んだままだと、どのチップも選ばれていない形で0件になり、「すべて」の注記も出ない。
+     * 一覧を読めなかったときは範囲を動かさない。
      */
     fun loadFolders() {
         val handle = vault.current() ?: return
@@ -121,7 +125,19 @@ class SearchController(
             try {
                 val folders = handle.listTopLevelFolders()
                 if (generation != vaultGeneration()) return@launch
-                state.update { current -> current.copy(folders = folders, foldersError = null) }
+                val selected = state.current.selectedFolder
+                val vanished = selected != null && folders.none { it.documentId == selected.documentId }
+                if (vanished) {
+                    startRequest()
+                    searchJob = null
+                }
+                state.update { current ->
+                    if (vanished) {
+                        current.copy(folders = folders, foldersError = null, selectedFolder = null, searchState = SearchState.Idle)
+                    } else {
+                        current.copy(folders = folders, foldersError = null)
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
