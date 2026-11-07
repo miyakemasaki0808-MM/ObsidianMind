@@ -344,23 +344,41 @@ class NoteRepository {
         return NoteMeta(tags = tags, aliases = aliases, wikilinkTitles = wikilinkTitles)
     }
 
+    // YAML の構文（コメント・引用符）を値に混ぜない。混ぜると、関連ノートの根拠に実在しないタグが
+    // 「共通」と出る（→ features/related_notes_ai.md §5）。
     private fun parseFrontmatterList(lines: List<String>, key: String): List<String> {
         val keyLine = lines.indexOfFirst { it.trimStart().startsWith("$key:") }
         if (keyLine < 0) return emptyList()
 
         val inline = lines[keyLine].substringAfter("$key:").trim()
-        // インライン形式: tags: [a, b, c]
+        // インライン形式: tags: [a, b, c]。`]` の後ろはコメント。
         if (inline.startsWith("[")) {
-            return inline.removeSurrounding("[", "]").split(",").map { it.trim() }.filter { it.isNotBlank() }
+            return inline.substring(1, inline.lastIndexOf(']').takeIf { it > 0 } ?: inline.length)
+                .split(",")
+                .mapNotNull(::frontmatterListValue)
         }
         // ブロック形式:
         // tags:
         //   - a
         //   - b
+        // インデントしたコメントの行は、`#` で始まる値として落ちる。
         return lines.drop(keyLine + 1)
             .takeWhile { it.startsWith(" ") || it.startsWith("\t") }
-            .map { it.trim().removePrefix("-").trim() }
-            .filter { it.isNotBlank() }
+            .mapNotNull { frontmatterListValue(it.trim().removePrefix("-")) }
+    }
+
+    // 項目1つの値。`#` で始まれば YAML ではコメント（Obsidian もタグとして読まない）。
+    // 空白に続く ` #` の後ろは行末のコメント。囲みの引用符は外す。
+    private fun frontmatterListValue(raw: String): String? {
+        val value = raw.trim()
+        if (value.isEmpty() || value.startsWith("#")) return null
+        val withoutComment = value.substringBefore(" #").trim()
+        val unquoted = when {
+            withoutComment.length >= 2 && withoutComment.first() == '"' && withoutComment.last() == '"' -> withoutComment.drop(1).dropLast(1)
+            withoutComment.length >= 2 && withoutComment.first() == '\'' && withoutComment.last() == '\'' -> withoutComment.drop(1).dropLast(1)
+            else -> withoutComment
+        }
+        return unquoted.trim().ifBlank { null }
     }
 
     companion object {
