@@ -1,9 +1,7 @@
 package com.example.newproject.ui.component
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,10 +9,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Constraints
@@ -45,7 +43,7 @@ import com.example.newproject.ui.theme.OnGradientHeaderTitle
  * フェードの開始位置が文字へ食い込む**。
  *
  * **[leading]・[trailing] は題名の行にだけ並べ、副題はその下に全幅で通す。** 題名と副題の列の横に並べると、
- * ボタンの幅だけ副題が細い列へ押し込まれて折り返す。
+ * ボタンの幅だけ副題が細い列へ押し込まれて折り返す。題名とボタンが1行に収まらないときだけ、[trailing] を題名の下の行へ回す（→ [HeaderTitleRow]）。
  * 題名の行は丸ボタンの高さ（[ICON_PILL_SIZE]）を最初から持つので、ボタンの有無で見出しの高さは変わらない
  * （→ system/theme_and_ui_refactor.md 判断5）。
  *
@@ -85,20 +83,12 @@ internal fun GradientHeader(
                     bottom = 12.dp
                 )
         ) {
-            Row(
+            HeaderTitleRow(
                 modifier = Modifier.fillMaxWidth().heightIn(min = ICON_PILL_SIZE),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                leading = leading,
+                trailing = trailing
             ) {
-                leading?.invoke()
-                Text(
-                    text = title,
-                    color = OnGradientHeaderTitle,
-                    fontSize = titleSize,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
-                )
-                trailing?.invoke()
+                Text(text = title, color = OnGradientHeaderTitle, fontSize = titleSize, fontWeight = FontWeight.Bold)
             }
             if (subtitle != null) {
                 Text(
@@ -120,6 +110,64 @@ internal fun GradientHeader(
         }
     }
 }
+
+/**
+ * 題名の行。左から [leading]・題名・[trailing] を並べ、題名は残りの幅をもらう。
+ * **題名を1行で置いた幅と [trailing] が収まらないときだけ、[trailing] を題名の下の行の右へ回す**（→ [headerTrailingBesideTitle]）。
+ * 題名の文字は縮めない — 大きい文字を選んだ人に、題名だけ小さく見せない。
+ * 1行目は [modifier] の最低の高さ（丸ボタンの高さ）を持ち、中身はその中で上下の中央に置く。
+ */
+@Composable
+private fun HeaderTitleRow(
+    modifier: Modifier,
+    leading: @Composable (() -> Unit)?,
+    trailing: @Composable (() -> Unit)?,
+    title: @Composable () -> Unit
+) {
+    Layout(contents = listOf(leading ?: {}, title, trailing ?: {}), modifier = modifier) { (leadingSlot, titleSlot, trailingSlot), constraints ->
+        val gap = TITLE_ROW_GAP.roundToPx()
+        val loose = Constraints(maxWidth = constraints.maxWidth)
+        val leadingPlaceable = leadingSlot.firstOrNull()?.measure(loose)
+        val trailingPlaceable = trailingSlot.firstOrNull()?.measure(loose)
+        val titleMeasurable = titleSlot.single()
+        val leadingWidth = leadingPlaceable?.let { it.width + gap } ?: 0
+        val titleOneLine = titleMeasurable.maxIntrinsicWidth(Constraints.Infinity)
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth
+        else leadingWidth + titleOneLine + (trailingPlaceable?.let { it.width + gap } ?: 0)
+        // 題名の行に並べる [trailing] と、下の行へ回す [trailing]。どちらか一方だけが残る。
+        val beside = trailingPlaceable?.takeIf {
+            headerTrailingBesideTitle(rowWidth = width, titleWidth = titleOneLine, leadingWidth = leadingPlaceable?.width, trailingWidth = it.width, gap = gap)
+        }
+        val below = trailingPlaceable?.takeIf { beside == null }
+        val titlePlaceable = titleMeasurable.measure(
+            Constraints.fixedWidth((width - leadingWidth - (beside?.let { it.width + gap } ?: 0)).coerceAtLeast(0))
+        )
+        val firstRow = maxOf(constraints.minHeight, leadingPlaceable?.height ?: 0, titlePlaceable.height, beside?.height ?: 0)
+        val rowGap = STACKED_ROW_GAP.roundToPx()
+        val secondRow = below?.let { rowGap + it.height } ?: 0
+        layout(width, firstRow + secondRow) {
+            leadingPlaceable?.placeRelative(0, (firstRow - leadingPlaceable.height) / 2)
+            titlePlaceable.placeRelative(leadingWidth, (firstRow - titlePlaceable.height) / 2)
+            beside?.placeRelative(width - beside.width, (firstRow - beside.height) / 2)
+            below?.placeRelative(width - below.width, firstRow + rowGap)
+        }
+    }
+}
+
+/**
+ * 見出しの [trailing] を題名の行に並べるか。題名を1行で置いた幅・左の部品・ボタンと、その間の [gap] が [rowWidth] に収まれば並べる。
+ * 収まらなければボタンを題名の下の行へ回し、題名を語の途中で割らない（→ system/theme_and_ui_refactor.md）。
+ */
+internal fun headerTrailingBesideTitle(rowWidth: Int, titleWidth: Int, leadingWidth: Int?, trailingWidth: Int, gap: Int): Boolean {
+    val leading = leadingWidth?.let { it + gap } ?: 0
+    return leading + titleWidth + gap + trailingWidth <= rowWidth
+}
+
+/** 題名の行の部品の間。 */
+private val TITLE_ROW_GAP = 12.dp
+
+/** ボタンを題名の下の行へ回したときの、行の間。 */
+private val STACKED_ROW_GAP = 8.dp
 
 /**
  * 親が与えた左右の余白の外側まで広がる。[end] が偽なら左だけに広がる。
