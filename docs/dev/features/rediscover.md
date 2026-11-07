@@ -83,10 +83,10 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 - **エラー時:** `NoteState.Error` を出す。`CancellationException` は再throwする
 - **空のとき:** `NoteState.Empty`
 - **開いたノートは本文の先頭から始まる。** 本文の一覧の位置（`noteListState`）は Activity で共有され、ノートを替えても戻らないので、
-  ランダム（「別のノートをひらく」）・さがす・関連・結晶の元ノート・冊子から開く経路は [`openNoteFromTop`](../../../app/src/main/java/com/example/newproject/ui/screen/NoteStart.kt) を通して先頭へ戻す。
+  ランダム（「別のノートをひらく」）・さがす・関連・結晶の元ノート・冊子から開く経路と、Vault を選び直した直後に引くノートは [`openNoteFromTop`](../../../app/src/main/java/com/example/newproject/ui/screen/NoteStart.kt) を通して先頭へ戻す。
   例外は位置を持って開く経路で、本文リンクは見出しから（→ [note_links](note_links.md)）、
   並べ読みの「このノートへ移る」は右で読んでいた位置から開く（→ [margin_pane](margin_pane.md) §5.9）。
-  Vault を選び直した直後に引くノートは、この境界を通らない
+  Vault を選ぶ画面の結果は本文の位置の口と同じスコープ（画面の組み立ての中）で受ける。Activity で受けると口に届かず、この境界を通せない
 
 ## 6. 状態とデータ
 

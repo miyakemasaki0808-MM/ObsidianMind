@@ -15,6 +15,7 @@ import com.example.newproject.ui.theme.Indigo
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,16 +68,6 @@ import com.example.newproject.ui.theme.AppTheme
 class MainActivity : ComponentActivity() {
 
     private val viewModel: NoteViewModel by viewModels()
-
-    private val openVault = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri ?: return@registerForActivityResult
-        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        contentResolver.takePersistableUriPermission(uri, flags)
-        viewModel.saveVault(uri)
-        viewModel.loadRandomNote(contentResolver)
-    }
 
     private val exportDistillOriginal = registerForActivityResult(
         ActivityResultContracts.CreateDocument("text/markdown")
@@ -167,6 +158,15 @@ class MainActivity : ComponentActivity() {
                 val noteListState = rememberLazyListState()
                 // 本文の位置を書く口。**本文の位置を書く経路はすべてここを通す**（→ BodyPosition）。
                 val bodyPosition = remember(noteListState) { BodyPosition(noteListState) }
+                // Vault を選ぶ画面の結果。選び直した直後に引くノートも、ほかの経路と同じく先頭から開く（→ features/rediscover.md §5）。
+                // 本文の位置の口を使うので、Activity ではなくこのスコープで受ける。
+                val openVault = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+                    uri ?: return@rememberLauncherForActivityResult
+                    val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                    contentResolver.takePersistableUriPermission(uri, flags)
+                    viewModel.saveVault(uri)
+                    openNoteFromTop(bodyPosition) { viewModel.loadRandomNote(contentResolver) }
+                }
                 // 画像の寸法も同じスコープで持つ。**位置だけ引き継いで寸法を捨てると、
                 // 全画面へ入った瞬間に未計測へ戻り、後続ブロックが可視になって到達率が
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして

@@ -30,6 +30,12 @@ class NoteOpenRouteContractTest {
         assertAllThroughBoundary(route("crystal_list"), listOf("viewModel.openCrystalSource("))
     }
 
+    /** Vault を選ぶ画面から戻ったときに引くノートも、本文の位置の口と同じスコープで境界を通す。 */
+    @Test
+    fun `Vault を選び直した直後に引くノートは先頭から開く`() {
+        assertAllThroughBoundary(vaultPickerResult(), listOf("viewModel.loadRandomNote("))
+    }
+
     /** ノートを開く呼び出しが1つ以上あり、**どれも境界と同じ行にある**こと。 */
     private fun assertAllThroughBoundary(route: Pair<String, String>, calls: List<String>) {
         val (name, body) = route
@@ -52,6 +58,25 @@ class NoteOpenRouteContractTest {
         check(start >= 0) { "MainActivity に $name ルートがありません" }
         val end = source.indexOf("composable(", start + 1).let { if (it < 0) source.length else it }
         return name to LINE_COMMENT.replace(source.substring(start, end), " ")
+    }
+
+    /** `OpenDocumentTree()` の結果を受けるラムダ（`{ uri ->` から対応する `}` まで）。コメントは落とす。 */
+    private fun vaultPickerResult(): Pair<String, String> {
+        val source = LINE_COMMENT.replace(mainActivity().readText(), " ")
+        val contract = source.indexOf("OpenDocumentTree()")
+        check(contract >= 0) { "MainActivity に Vault を選ぶ画面の呼び出しがありません" }
+        val open = source.indexOf("{ uri ->", contract)
+        check(open >= 0) { "Vault を選ぶ画面の結果を受けるラムダが見つかりません" }
+        var depth = 0
+        var index = open
+        while (index < source.length) {
+            when (source[index]) {
+                '{' -> depth++
+                '}' -> if (--depth == 0) break
+            }
+            index++
+        }
+        return "Vault の選択" to source.substring(open, index + 1)
     }
 
     private fun mainActivity(): File =
