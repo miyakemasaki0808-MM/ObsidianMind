@@ -45,5 +45,4 @@ internal fun NoteFile.toRelatedNote(): RelatedNote =
 
 private data class RankedNote(val rank: Int, val title: String, val note: NoteFile)
 
-private fun titleKey(name: String): String =
-    (if (name.endsWith(".md", ignoreCase = true)) name.dropLast(3) else name).normalizedForMatching()
+private fun titleKey(name: String): String = titleForMatching(name).normalizedForMatching()

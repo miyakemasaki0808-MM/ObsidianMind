@@ -45,7 +45,9 @@ class SearchPickerUseCase(
             // 候補が上限超のときだけ、取りこぼさない程度に粗く絞る（精度は Nano が担保）。
             val candidates = if (scopeNotes.size > CANDIDATE_LIMIT) {
                 // 範囲は Vault 全体になりうる。全件の bigram を作るので Main で走らせない。
-                withContext(cutDispatcher) { recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { it.name } }
+                withContext(cutDispatcher) {
+                    recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { titleForMatching(it.name) }
+                }
             } else {
                 scopeNotes
             }
@@ -100,7 +102,7 @@ class SearchPickerUseCase(
         candidates: List<NoteFile>,
         isAiAssisted: Boolean
     ): PickerResult = PickerResult.Success(
-        notes = pickByKeyword(query, candidates, PICK_LIMIT) { it.name }.map { it.toRelatedNote() },
+        notes = pickByKeyword(query, candidates, PICK_LIMIT) { titleForMatching(it.name) }.map { it.toRelatedNote() },
         isAiAssisted = isAiAssisted
     )
 

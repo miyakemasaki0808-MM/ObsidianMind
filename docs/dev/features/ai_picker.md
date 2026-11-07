@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中
 **最終検証:** 2026-11-03 / `6dd72062`（`EXPLORE-01`〜`21`。カバー横の見出しの霞は §11）
 **関連コード:** `controller/SearchController.kt` / `domain/NoteTitleSearch.kt` / `domain/SearchPickerUseCase.kt` / `domain/SearchKeywordMatching.kt` / `domain/RelatedCandidateId.kt` / `data/NoteHistoryStore.kt` / `NoteScanCache.kt` / `ui/screen/SearchScreen.kt` / `ui/ExploreBody.kt`
-**関連テスト:** `SearchControllerTest` / `NoteTitleSearchTest` / `ExploreBodyTest` / `NoteScanCacheTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest` / androidTest: `SearchTabTest`
+**関連テスト:** `SearchControllerTest` / `NoteTitleSearchTest` / `ExploreBodyTest` / `NoteScanCacheTest` / `SearchKeywordMatchingTest` / `SearchPickerIdContractTest` / `SearchPickerBudgetTest` / `SearchPickerExtensionTest` / androidTest: `SearchTabTest`
 **正本:** この文書
 
 **対象領域:** ノートを見つける導線（タイトルの照合・AI の選定・当日履歴）
@@ -76,6 +76,8 @@ Rediscover（純粋ランダム）だけでは**意図を持って探せない**
   大文字小文字と空白の違いは無視する。拡張子は照らさない（`md` と打っても全ノートが出ない）。
   同じ名前のノートにはフォルダの場所を添え、Vault の直下は「ルート直下」と書く
 - **範囲の規則（AI）:** 「すべて」は Vault 全体。フォルダを選ぶと、その中の奥までを候補にする。フォルダは第一階層だけ出す
+- **照合の規則（AI のキーワード一致）:** 候補の粗い絞り込みとフォールバックも、タイトルと同じく拡張子を照らさない。
+  照らすと `m`・`d`・`md` が全ノートに当たり、一致しないノートが出たり、本当に一致するノートが40件から落ちたりする
 - **上限:**
 
   | 対象 | 値 | 定数 |
@@ -258,7 +260,8 @@ AI のモードのチップとボタンがはみ出す。**全体を1本のリ�
   `ExploreBodyTest`（入力欄の下に何を出すか）/ `NoteScanCacheTest`（走査の共有）/
   `SearchKeywordMatchingTest`（bigram の再現率カットとスコア順）/
   `SearchPickerIdContractTest`（装飾されたID・候補外ID・タイトルでの応答・IDに似たタイトル・同名・記号入りタイトル）/
-  `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）
+  `SearchPickerBudgetTest`（予算で落ちた候補の拒否・長いタイトルの切り詰め）/
+  `SearchPickerExtensionTest`（AI のキーワード一致が拡張子を照らさない）
 - **instrumentation:** `SearchTabTest`（開いたときの形・確定キーで AI を走らせない・結果を全部並べる・0件から AI へ移る）/ `VaultScanInstrumentationTest`（実物SAFでの走査と除外）
 - **実機:** [explore](../../review/device_validation/explore.md)。走査の本数と一覧の寿命は Debug APK の `VigilithNoteScan` の行で判定する
 - **保証していないこと:**

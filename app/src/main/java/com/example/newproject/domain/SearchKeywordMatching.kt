@@ -78,6 +78,13 @@ private fun <T> rankByKeyword(
 /** 大文字小文字と空白の違いを無視するための形。タイトルの照合と共有する。 */
 internal fun String.normalizedForMatching(): String = lowercase().filterNot { it.isWhitespace() }
 
+/**
+ * 照らすタイトル。ファイル名から拡張子を除く。照らすと `m`・`d`・`md` が全ノートに当たる。
+ * 走査は大文字の `.MD` も拾うので、大文字小文字を問わず除く。
+ */
+internal fun titleForMatching(fileName: String): String =
+    if (fileName.endsWith(".md", ignoreCase = true)) fileName.dropLast(3) else fileName
+
 private fun String.bigrams(): Set<String> {
     val cleaned = normalizedForMatching()
     if (cleaned.length < 2) return emptySet()
