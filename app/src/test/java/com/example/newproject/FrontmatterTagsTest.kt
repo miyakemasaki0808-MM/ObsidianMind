@@ -105,6 +105,10 @@ class FrontmatterTagsTest {
     fun `一覧の後ろのコメントでない文字や、入れ子の一覧は使わない`() {
         assertEquals(emptyList<String>(), tagsOf("tags: [読書] 習慣"))
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - [読書]"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - - 読書"))
+        assertEquals(emptyList<String>(), tagsOf("tags: [a[b]"))
+        // 1行で閉じた一覧の後ろに続きの行があるのも、読めない形。
+        assertEquals(emptyList<String>(), tagsOf("tags: [読書]\n  習慣]"))
     }
 
     @Test
@@ -112,6 +116,52 @@ class FrontmatterTagsTest {
         assertEquals(emptyList<String>(), tagsOf("tags: [読書, 習慣"))
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - \"読書\n  - 習慣"))
         assertEquals(emptyList<String>(), tagsOf("tags:\n  - 読書\n  sub: 習慣"))
+    }
+
+    @Test
+    fun `タブに続くコメントのある一覧は使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [read\t# old, fake]\n  ]"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - read\t# old"))
+    }
+
+    @Test
+    fun `引用符なしの辞書の項目を含む一覧は使わず、引用符つきなら文字列として読む`() {
+        assertEquals(emptyList<String>(), tagsOf("tags: [safe, category: book]"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n  - category: book"))
+        assertEquals(listOf("category: book"), tagsOf("tags: [\"category: book\"]"))
+    }
+
+    @Test
+    fun `深い続きの行や入れ子の一覧は使わない`() {
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - 読書\n    - 習慣"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  -\n    - 読書"))
+        assertEquals(listOf("読書", "習慣"), tagsOf("tags:\n  - 読書\n  - 習慣\n  - #メモ"))
+    }
+
+    @Test
+    fun `語の途中の引用符は区切りを隠さない`() {
+        val meta = NoteRepository().parseMeta("---\naliases: [Alice's, Bob's]\n---\n本文")
+        assertEquals(listOf("Alice's", "Bob's"), meta.aliases)
+        assertEquals(listOf("a'b", "c'd"), tagsOf("tags: [a'b,c'd]"))
+    }
+
+    @Test
+    fun `ルートのキーだけを読み、文字列の中や入れ子の同名キーは採らない`() {
+        assertEquals(emptyList<String>(), tagsOf("description: |\n  tags: [ghost]"))
+        assertEquals(listOf("real"), tagsOf("extra:\n  tags: [ghost]\ntags: [real]"))
+        assertEquals(emptyList<String>(), tagsOf("tags:[ghost]"))
+        // ルートに同じキーが2つあるのは YAML として壊れている。どちらとも決めない。
+        assertEquals(emptyList<String>(), tagsOf("tags: [a]\ntags: [b]"))
+        val meta = NoteRepository().parseMeta("---\nnote: |\n  aliases: [ghost]\n---\n本文")
+        assertEquals(emptyList<String>(), meta.aliases)
+    }
+
+    @Test
+    fun `空行や行頭のコメントで打ち切らず、ブロックの全体を見てから読む`() {
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n\n  - [nested]"))
+        assertEquals(emptyList<String>(), tagsOf("tags:\n  - safe\n# comment\n  - [nested]"))
+        assertEquals(listOf("safe", "second"), tagsOf("tags:\n  - safe\n\n  - second"))
+        assertEquals(listOf("safe", "second"), tagsOf("tags:\n  - safe\n# comment\n  - second"))
     }
 
     @Test

@@ -64,6 +64,10 @@ class RelatedNotesReasonTest {
             null,
             reasonFor("---\ntags: [読書] # 旧: [資料, 下書き]\n---\n本を読む", "---\ntags: [料理] # 旧: [資料, 下書き]\n---\n献立を考える")
         )
+        // 受け入れる形の外から値を採らない（タブに続くコメント・辞書の項目・文字列の中のキー）。
+        assertEquals(null, reasonFor("---\ntags: [read\t# old, fake]\n  ]\n---\n本を読む", "---\ntags: [cook\t# old, fake]\n  ]\n---\n夕食を作る"))
+        assertEquals(null, reasonFor("---\ntags: [category: book]\n---\n本を読む", "---\ntags: [category: book]\n---\n夕食を作る"))
+        assertEquals(null, reasonFor("---\ndescription: |\n  tags: [ghost]\n---\n本を読む", "---\ntags: [ghost]\n---\n夕食を作る"))
         // 次の行へ続く一覧の中のコメントも、共通タグにしない（読めない一覧は使わない）。
         assertEquals(
             null,

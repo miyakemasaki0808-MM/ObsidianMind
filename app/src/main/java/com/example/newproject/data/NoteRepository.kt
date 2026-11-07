@@ -346,65 +346,77 @@ class NoteRepository {
 
     // **確実に読める書き方だけを読み、それ以外が1つでも混ざったらキーをまるごと使わない**（空を返す）。
     // 推測して読むと、事実に反するタグや欠けた別名を出す（→ features/related_notes_ai.md §5）。
-    // 読む書き方は、1行で閉じるインライン一覧 `[a, "b"]`（後ろに ` # コメント` を置ける）と、インデントした
-    // `- a` の並び（コメントの行と行末の ` #` 以降を置ける）。値は記号で始まらない語か、エスケープを含まない引用符つきの語。
-    // 1語の形（`tags: a`）とインデントの無い `- a` は読まない。
+    //
+    // 読むのは、行頭から始まる `tags:` がちょうど1つあり（入れ子や文字列の中の行はインデントがあるので当たらない）、
+    // 値が次のどちらかのとき。
+    // - 1行で閉じるインライン一覧 `tags: [a, "b"]`。後ろに空白に続く `#` のコメントを置ける
+    // - 同じ深さにインデントした `- a` の並び。空行・コメントの行・値の無い `- #メモ` は飛ばし、次のルートのキーまでを見る
+    // 項目の値は、引用符で始まらず YAML の別の構文にならない語か、エスケープを含まない引用符つきの語。
+    // タブを含む行・1語の形（`tags: a`）・インデントの無い `- a` は読まない。
     private fun parseFrontmatterList(lines: List<String>, key: String): List<String> {
-        val keyLine = lines.indexOfFirst { it.trimStart().startsWith("$key:") }
-        if (keyLine < 0) return emptyList()
-
-        val rest = lines[keyLine].substringAfter("$key:").trim()
+        val keyLines = lines.indices.filter { lines[it] == "$key:" || lines[it].startsWith("$key: ") }
+        if (keyLines.size != 1) return emptyList()
+        val keyLine = keyLines.single()
+        val rest = lines[keyLine].substringAfter("$key:")
+        val block = lines.drop(keyLine + 1).takeWhile { it.isBlank() || it.first().isWhitespace() || it.startsWith("#") }
+        if ('\t' in rest || block.any { '\t' in it }) return emptyList()
+        val value = rest.trim()
         val items = when {
-            rest.startsWith("[") -> flowListItems(rest)
-            rest.isEmpty() || rest.startsWith("#") ->
-                blockListItems(lines.drop(keyLine + 1).takeWhile { it.startsWith(" ") || it.startsWith("\t") })
+            value.startsWith("[") -> flowListItems(value).takeIf { block.all(::isBlankOrComment) }
+            value.isEmpty() || value.startsWith("#") -> blockListItems(block)
             else -> null
         }
         return items ?: emptyList()
     }
 
-    // `[a, "b, c"] # コメント`。区切りの `,` と閉じる `]` は引用符の外でだけ認める（引用符の中の `,` `]` `#` は値の一部）。
-    // その行で閉じない一覧（次の行へ続く・閉じない引用符）は読めない。一覧の中のコメントは、項目の値として読めずに落ちる。
+    private fun isBlankOrComment(line: String): Boolean = line.isBlank() || line.trimStart().startsWith("#")
+
+    // `[a, "b, c"] # コメント`。引用符は項目の先頭でだけ認め、区切りの `,` と閉じる `]` は引用符の外でだけ認める
+    // （引用符の中の `,` `]` `#` は値の一部）。その行で閉じない一覧は読めない。一覧の中のコメントは、項目の値として読めずに落ちる。
     private fun flowListItems(text: String): List<String>? {
+        if (text.drop(1).trimStart().startsWith("]")) {
+            return if (isListEnd(text.substring(text.indexOf(']') + 1))) emptyList() else null
+        }
         val items = mutableListOf<String>()
-        val current = StringBuilder()
-        var quote: Char? = null
-        for (index in 1 until text.length) {
-            val c = text[index]
-            if (quote != null) {
-                current.append(c)
-                if (c == quote) quote = null
-                continue
+        var index = 1
+        while (true) {
+            while (index < text.length && text[index] == ' ') index++
+            if (index >= text.length) return null
+            val first = text[index]
+            if (first == '"' || first == '\'') {
+                val end = text.indexOf(first, startIndex = index + 1)
+                if (end < 0) return null
+                items += quotedValue(text.substring(index, end + 1)) ?: return null
+                index = end + 1
+                while (index < text.length && text[index] == ' ') index++
+            } else {
+                val stop = text.indexOfAny(charArrayOf(',', ']'), startIndex = index)
+                if (stop < 0) return null
+                items += plainValue(text.substring(index, stop)) ?: return null
+                index = stop
             }
-            when (c) {
-                '"', '\'' -> {
-                    quote = c
-                    current.append(c)
-                }
-                ',' -> {
-                    items += current.toString()
-                    current.clear()
-                }
-                ']' -> {
-                    items += current.toString()
-                    val after = text.substring(index + 1)
-                    if (after.isNotBlank() && !TRAILING_COMMENT.matches(after)) return null
-                    if (items.size == 1 && items[0].isBlank()) return emptyList()
-                    return items.map { listValue(it) ?: return null }
-                }
-                else -> current.append(c)
+            if (index >= text.length) return null
+            when (text[index]) {
+                ',' -> index++
+                ']' -> return if (isListEnd(text.substring(index + 1))) items else null
+                else -> return null
             }
         }
-        return null
     }
 
-    // インデントした `- a` の並び。コメントの行と値の無い項目（`- #メモ` は YAML ではコメント）は飛ばす。
-    // 項目でない行（入れ子のキー・続きの行）は読めない。
+    // 一覧を閉じた後ろに置けるのは、空白に続く `#` のコメントだけ。
+    private fun isListEnd(after: String): Boolean = after.isEmpty() || TRAILING_COMMENT.matches(after)
+
+    // 同じ深さにインデントした `- a` の並び。深さの違う行・項目でない行（入れ子のキー・続きの行）は読めない。
     private fun blockListItems(lines: List<String>): List<String>? {
         val items = mutableListOf<String>()
+        var depth: Int? = null
         for (line in lines) {
+            if (isBlankOrComment(line)) continue
+            val indent = line.length - line.trimStart().length
+            if (depth != null && indent != depth) return null
+            depth = indent
             val trimmed = line.trim()
-            if (trimmed.isEmpty() || trimmed.startsWith("#")) continue
             if (trimmed != "-" && !trimmed.startsWith("- ")) return null
             val body = trimmed.removePrefix("-").trim()
             if (body.isEmpty() || body.startsWith("#")) continue
@@ -413,37 +425,39 @@ class NoteRepository {
                 val end = body.indexOf(body.first(), startIndex = 1)
                 if (end < 0) return null
                 val after = body.substring(end + 1)
-                if (after.isNotBlank() && !TRAILING_COMMENT.matches(after)) return null
-                listValue(body.substring(0, end + 1))
+                if (!isListEnd(after)) return null
+                quotedValue(body.substring(0, end + 1))
             } else {
-                listValue(body.substringBefore(" #"))
+                plainValue(body.substringBefore(" #"))
             }
             items += value ?: return null
         }
         return items
     }
 
-    // 値1つ。読めなければ null。引用符で囲んだ語はエスケープを含まず、閉じる引用符で終わる。
-    // 囲まない語は記号で始まらない（`C#` のように途中の `#` は値の一部）。
-    private fun listValue(raw: String): String? {
+    // 引用符で囲んだ値。二重引用符の中のバックスラッシュは YAML のエスケープなので読まない。
+    private fun quotedValue(token: String): String? {
+        val inner = token.substring(1, token.length - 1)
+        if (token.first() == '"' && '\\' in inner) return null
+        return inner.trim().ifBlank { null }
+    }
+
+    // 囲まない値。読めなければ null。YAML の別の構文になる先頭の文字・辞書の形（`a: b`・`a:`）・括弧・行中のコメントを含む語は読まない。
+    // `C#` や `Alice's` のように語の途中の `#` と引用符は値の一部。
+    private fun plainValue(raw: String): String? {
         val value = raw.trim()
         if (value.isEmpty()) return null
-        val first = value.first()
-        if (first == '"' || first == '\'') {
-            val end = value.indexOf(first, startIndex = 1)
-            if (end != value.lastIndex) return null
-            val inner = value.substring(1, end)
-            if (first == '"' && '\\' in inner) return null
-            return inner.trim().ifBlank { null }
-        }
-        if (first in UNREADABLE_VALUE_START || " #" in value) return null
+        if (value.first() in UNREADABLE_VALUE_START) return null
+        if (value == "-" || value.startsWith("- ") || value == "?" || value.startsWith("? ")) return null
+        if (": " in value || value.endsWith(":") || " #" in value) return null
+        if (value.any { it in "[]{}" }) return null
         return value
     }
 
     companion object {
         private val WIKILINK_REGEX = Regex("\\[\\[([^\\]]+)]]")
 
-        /** 一覧や引用符の後ろに置ける行末のコメント（空白に続く `#`）。 */
+        /** 一覧や引用符の後ろに置ける行末のコメント（空白に続く `#`）。タブは読む前に断っている。 */
         private val TRAILING_COMMENT = Regex("\\s+#.*")
 
         /** 囲まない値の先頭に来ると YAML の別の構文になる文字。 */
