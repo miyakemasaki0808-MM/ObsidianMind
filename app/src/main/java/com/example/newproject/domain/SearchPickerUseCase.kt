@@ -15,9 +15,9 @@ sealed class PickerResult {
     data class Success(
         val notes: List<RelatedNote>,
         /**
-         * AIが選定に関与したか。**理由までは持たない。**
+         * 出す結果をAIが選んだか。**理由までは持たない。**
          *
-         * 非対応でも未取得でも取得失敗でも、この画面で起きることは同じ
+         * AIが使えなくても、動いてIDを1件も返さなくても、この画面で起きることは同じ
          * （キーワード一致の結果が出る）で、**ユーザーの次の行動が変わらない**。
          * 理由で割ると、`AiStatusNotice` と重なる2つ目の方言になる。
          */
@@ -76,9 +76,9 @@ class SearchPickerUseCase(
                         .distinctBy { it.ref }
                         .map { it.toRelatedNote() }
 
-                    // Nano が候補外/空を返したら、キーワード一致でフォールバック。
-                    // **AIは動いている**ので、断り書きは出さない。
-                    if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = true)
+                    // IDが1件も取れなければ（空・候補外・タイトルで返した）、キーワード一致でフォールバックする。
+                    // AIは動いたが、出す中身はキーワード一致なので、AIの選択に見せない（注記を出させる）。
+                    if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = false)
                     else PickerResult.Success(picked, isAiAssisted = true)
                 }
             }
@@ -91,11 +91,8 @@ class SearchPickerUseCase(
         }
     }
 
-    // AI が使えない/失敗したときは、キーワード一致の強い順に返す。
-    //
-    // 以前は絞り込み結果の先頭をそのまま返していたため、候補が上限以下だと
-    // 並べ替えを通らず、SAF の列挙順のまま「キーワード一致で表示しています」と
-    // 表示していた（UI文言と実装の不一致）。候補数に関係なくスコア順へ統一し、
+    // AI が使えない、または IDが1件も取れなかったときは、キーワード一致の強い順に返す。
+    // 画面は「キーワード一致で表示しています。」と言うので、候補数に関係なくスコア順に並べ、
     // 一致0件は返さない（0件なら画面は「見つかりませんでした。」になる）。
     private fun fallback(
         query: String,

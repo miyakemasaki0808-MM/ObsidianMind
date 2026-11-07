@@ -50,6 +50,20 @@ class SearchPickerIdContractTest {
     }
 
     @Test
+    fun `IDが1件も取れない応答は、AIを使わなかった結果として注記させる`() = runBlocking {
+        // 中身はキーワード一致なので、AIの選択に見せない（→ features/ai_picker.md 判断3）。
+        val notes = listOf(note("探して見つけたメモ"), note("候補2"), note("候補3"))
+
+        listOf("", "P99\nC01", "候補2\n候補3").forEach { response ->
+            val success = pick(notes, response)
+            assertEquals("「$response」", false, success.isAiAssisted)
+            assertEquals("「$response」", listOf("探して見つけたメモ"), success.notes.map { it.title })
+        }
+        // 1件でも取れれば AI の選択である。
+        assertTrue(pick(notes, "P99\nP03").isAiAssisted)
+    }
+
+    @Test
     fun `同名の別ノートをIDで区別する`() = runBlocking {
         val first = NoteFile(name = "メモ", ref = DocumentRef("doc://a/メモ"))
         val second = NoteFile(name = "メモ", ref = DocumentRef("doc://b/メモ"))

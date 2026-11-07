@@ -9,9 +9,9 @@ sealed class SearchState {
     data class Success(
         val results: List<RelatedNote>,
         /**
-         * AIが選定に関与したか。**関与しなかった理由は持たない。**
+         * 出す結果をAIが選んだか。**選ばなかった理由は持たない。**
          *
-         * 非対応・未取得・DL中・取得失敗のどれでも、この画面で起きることは
+         * 非対応・未取得・DL中・取得失敗、動いてIDを1件も返さなかった、のどれでも、この画面で起きることは
          * 「キーワード一致の結果が出る」で同じであり、ユーザーの次の行動も変わらない。
          */
         val isAiAssisted: Boolean = true
