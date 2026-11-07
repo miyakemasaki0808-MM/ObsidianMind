@@ -13,7 +13,10 @@ import com.example.newproject.ui.screen.ReaderChoice
 import com.example.newproject.ui.screen.ReaderRegion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.safeDrawing
@@ -118,7 +121,7 @@ internal fun readerChoiceAfterRailTap(choice: ReaderChoice, spread: Boolean, fro
  *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
- * バー/レール自身は既定の windowInsets でシステムバーを避ける。
+ * バー/レール自身は既定の windowInsets でシステムバーを避ける。レールを出している間は、左の Insets を外殻が消費する（レールが覆う）。
  */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -162,11 +165,15 @@ internal fun AppScaffold(
         }
     }
     val density = LocalDensity.current
+    val railShown = showsRail(isTabRoute, useRail, currentRoute, notePaneVisible)
+    // レールは左の端を覆う。各タブの `safeDrawingPadding()` が左の切り欠きをレールの右にもう一度空けないよう、外殻で消費する。
+    // レールはシステムバーを自分で避けて最小80dpあるので、左の切り欠きはレールの下に収まる。
+    val railSide = WindowInsets.safeDrawing.only(WindowInsetsSides.Start)
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScaffoldLayout(
-            body = { content(Modifier.fillMaxSize()) },
-            rail = if (showsRail(isTabRoute, useRail, currentRoute, notePaneVisible)) {
+            body = { content(if (railShown) Modifier.fillMaxSize().consumeWindowInsets(railSide) else Modifier.fillMaxSize()) },
+            rail = if (railShown) {
                 { TabRail(items, currentRoute, spreadChosen, selectRailItem) }
             } else null,
             // 帯と同時に、左の縁から滑り込む（→ features/note_spread.md §8 判断3）。しまうのも帯と同じ速さ。
@@ -217,10 +224,12 @@ internal fun AppScaffold(
                 { TabRail(items, currentRoute, spreadChosen) {} }
             } else null,
             // ノートの画面と同じ取り方で本文領域を測る（レールがある状態・キーボードを除く → features/margin_pane.md §5.4）。
+            // レールがある状態の本文と同じく、左の切り欠きはレールが覆う。
             probe = {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .then(if (useRail) Modifier.consumeWindowInsets(railSide) else Modifier)
                         .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
                         .screenContentPadding()
                         .onGloballyPositioned { coordinates ->

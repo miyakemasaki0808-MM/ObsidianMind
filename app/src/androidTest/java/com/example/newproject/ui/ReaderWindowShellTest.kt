@@ -1,5 +1,6 @@
 package com.example.newproject.ui
 
+import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.exclude
@@ -22,7 +23,12 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import kotlin.math.roundToInt
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.DpSize
@@ -153,6 +159,77 @@ class ReaderWindowShellTest {
         }
     }
 
+    /**
+     * **レールを出している間、左の切り欠きはレールが覆う。** 本文と外殻の測る箱は、切り欠きの分を重ねて空けずにレールの右端から始まる
+     * （カバー画面の横で、見出しの霞がレールから離れていた）。レールを畳んだ間（机・見開き）は本文が窓の左端から始まるので、
+     * 切り欠きを避ける（→ features/margin_pane.md §5.4）。切り欠きは、本番の外殻が置かれた View へ Insets を配って作る。
+     */
+    @Test
+    fun 左の切り欠きはレールが覆い_本文と測る箱はレールの右端から始まり_レールを畳めば本文が切り欠きを避ける() {
+        var railHidden by mutableStateOf(false)
+        var probe: ReaderRegion? = null
+        var body: ReaderRegion? = null
+        lateinit var view: View
+        composeRule.setContent {
+            view = LocalView.current
+            val density = LocalDensity.current.density
+            fun LayoutCoordinates.region() = ReaderRegion(
+                widthDp = size.width / density,
+                heightDp = size.height / density,
+                startDp = positionInWindow().x / density
+            )
+            Box(modifier = Modifier.requiredSize(width = 840.dp, height = 900.dp)) {
+                val nav = rememberNavController()
+                AppScaffold(
+                    windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(840.dp, 900.dp)),
+                    navController = nav,
+                    snackbarHostState = remember { SnackbarHostState() },
+                    notePaneVisible = railHidden,
+                    onReaderRegion = { probe = it }
+                ) { modifier ->
+                    NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
+                        composable(AppDestination.Note.route) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
+                                    .screenContentPadding()
+                                    .onGloballyPositioned { body = it.region() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        fun dispatchLeftCutout(dp: Float) {
+            composeRule.runOnUiThread {
+                val px = (dp * view.resources.displayMetrics.density).roundToInt()
+                val insets = WindowInsetsCompat.Builder()
+                    .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(px, 0, 0, 0))
+                    .build()
+                ViewCompat.dispatchApplyWindowInsets(view, insets)
+            }
+            composeRule.waitForIdle()
+        }
+        fun bodyStart() = composeRule.runOnIdle { requireNotNull(body).startDp }
+        fun probeStart() = composeRule.runOnIdle { requireNotNull(probe).startDp }
+
+        dispatchLeftCutout(0f)
+        val bodyWithout = bodyStart()
+        val probeWithout = probeStart()
+        dispatchLeftCutout(CUTOUT_DP)
+        assertEquals("レールの横の本文が、切り欠きの分だけレールから離れた", bodyWithout, bodyStart(), 0.5f)
+        assertEquals("外殻の測る箱が、切り欠きの分だけレールから離れた", probeWithout, probeStart(), 0.5f)
+        assertEquals("外殻の測る箱と本文の左端が食い違う", bodyStart(), probeStart(), 0.5f)
+
+        // レールを畳むと、本文は窓の左端から始まる。
+        composeRule.runOnIdle { railHidden = true }
+        composeRule.waitForIdle()
+        val hiddenWith = bodyStart()
+        dispatchLeftCutout(0f)
+        assertEquals("レールを畳んだ本文が切り欠きを避けない", CUTOUT_DP, hiddenWith - bodyStart(), 0.5f)
+    }
+
     private fun heightRoundTrip(onSearch: Boolean) {
         val shell = setShell(foldKnown = true)
         if (onSearch) {
@@ -211,5 +288,7 @@ class ReaderWindowShellTest {
         /** 横長で480dpを割る高さ。本文領域は左右2列になり、ペインを出せない。 */
         val LOW = 400.dp
         val EXPANDED = WindowSizeClass.calculateFromSize(DpSize(1000.dp, 900.dp))
+        /** 左の切り欠きの深さ。レールの最小幅（80dp）より浅い。 */
+        const val CUTOUT_DP = 40f
     }
 }
