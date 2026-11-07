@@ -114,6 +114,19 @@ class SearchTabTest {
     }
 
     @Test
+    fun AIのモードで打つ間はタイトルを照らさず_タイトルへ戻すと今の言葉で照らす() {
+        show()
+        input().performTextInput("読")
+
+        composeRule.onNodeWithText("AI").performClick()
+        input().performTextInput("書")
+        assertEquals("AI のモードの入力でタイトルを照らした", listOf("読"), titleQueries)
+
+        composeRule.onNodeWithText("タイトル").performClick()
+        assertEquals(listOf("読", "読書"), titleQueries)
+    }
+
+    @Test
     fun AIは何も打っていなければ押せない() {
         show()
 

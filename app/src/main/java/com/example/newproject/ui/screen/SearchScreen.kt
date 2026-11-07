@@ -125,7 +125,11 @@ fun SearchTab(
                     label = "タイトル",
                     selected = mode == ExploreMode.Title,
                     modifier = Modifier.weight(1f)
-                ) { mode = ExploreMode.Title }
+                ) {
+                    // AI のモードで打った言葉はまだ照らしていないので、戻ったときに照らす。
+                    if (mode != ExploreMode.Title) onSearchTitle(query)
+                    mode = ExploreMode.Title
+                }
                 ModeToggleChip(
                     label = "AI",
                     selected = mode == ExploreMode.Ai,
@@ -139,7 +143,8 @@ fun SearchTab(
                 value = query,
                 onValueChange = {
                     query = it
-                    onSearchTitle(it)
+                    // タイトルは打つたびに Vault 全体を照らす。AI のモードでは結果を出さないので照らさない。
+                    if (mode == ExploreMode.Title) onSearchTitle(it)
                 },
                 modifier = Modifier
                     .exploreRowPadding()
