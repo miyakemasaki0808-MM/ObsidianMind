@@ -15,7 +15,8 @@ package com.example.newproject.domain
  *
  * **記号の数ではなく、引用と箇条のまとまり（CommonMark の入れ物）の開閉で追う。** 行ごとに次の順で読む。
  * 1. 開いている入れ物を外から照らす（引用は `>`、箇条は項目の字下げ。空行は箇条にだけ合う）
- * 2. 合わない入れ物は、段落が開いていて、残りが段落を切るまとまり（引用・見出し・区切り線・段落を切れる箇条）を始めないとき（続きの行）だけ残し、それ以外は閉じる
+ * 2. 合わない入れ物は、段落が開いていて、残りが段落を切るまとまり（引用・見出し・区切り線・段落を切れる箇条）も
+ *    合わない箇条の次の項目も始めないとき（続きの行）だけ残し、それ以外は閉じる
  * 3. 残りから新しい引用と箇条を開く。段落の中で開ける箇条は、段落を切れるもの（中身のある記号の箇条か、1で始まる番号）だけ
  * 4. 行の中身が段落を開いたままにするかを記録する（見出し・区切り線・コード・空行は閉じる）
  *
@@ -34,7 +35,8 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
             matched++
         }
         if (matched < open.size) {
-            val continues = paragraphOpen && line.substring(pos).isNotBlank() && !interruptsParagraph(line, pos)
+            val continues = paragraphOpen && line.substring(pos).isNotBlank() &&
+                !interruptsParagraph(line, pos) && !open[matched].startsNextItem(line, pos)
             if (continues) {
                 quoted[index] = open.any { it.quotation }
                 return@forEachIndexed
@@ -52,7 +54,7 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
             }
             val item = listItemAt(line, pos)
             if (item != null && (!paragraphOpen || item.interruptsParagraph)) {
-                open += ListItemContainer(item.width)
+                open += ListItemContainer(item.width, item.kind)
                 pos = item.contentStart
                 paragraphOpen = false
                 continue
@@ -77,15 +79,24 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
 private sealed interface Container {
     val quotation: Boolean
     fun match(line: String, from: Int): Int?
+
+    /** [from] から先が、この入れ物の箇条の次の項目か。次の項目は新しい箇条ではないので、段落を切れる条件を問わない。 */
+    fun startsNextItem(line: String, from: Int): Boolean = false
 }
 
 private class QuoteContainer(override val quotation: Boolean) : Container {
     override fun match(line: String, from: Int): Int? = quoteContentStart(line, from)
 }
 
-/** 箇条の項目。[width] は項目を開いた位置から中身までの幅で、続く行はそれだけ字下げすれば項目の中。空行も項目の中。 */
-private class ListItemContainer(private val width: Int) : Container {
+/**
+ * 箇条の項目。[width] は項目を開いた位置から中身までの幅で、続く行はそれだけ字下げすれば項目の中。空行も項目の中。
+ * [kind] は印の種類（記号そのものか番号の区切り）で、同じ種類の印が同じ箇条の次の項目になる。
+ */
+private class ListItemContainer(private val width: Int, private val kind: Char) : Container {
     override val quotation = false
+
+    override fun startsNextItem(line: String, from: Int): Boolean = listItemAt(line, from)?.kind == kind
+
     override fun match(line: String, from: Int): Int? = when {
         line.substring(from).isBlank() -> line.length
         line.substring(from).takeWhile { it == ' ' }.length >= width -> from + width
@@ -103,8 +114,8 @@ private fun quoteContentStart(line: String, from: Int): Int? {
     return index
 }
 
-/** 箇条の項目の印。[interruptsParagraph] は段落の途中でも新しい項目を始められるか。 */
-private class ListItemStart(val contentStart: Int, val width: Int, val interruptsParagraph: Boolean)
+/** 箇条の項目の印。[interruptsParagraph] は段落の途中でも新しい箇条を始められるか。 */
+private class ListItemStart(val contentStart: Int, val width: Int, val kind: Char, val interruptsParagraph: Boolean)
 
 private fun listItemAt(line: String, from: Int): ListItemStart? {
     val rest = line.substring(from)
@@ -120,6 +131,7 @@ private fun listItemAt(line: String, from: Int): ListItemStart? {
     return ListItemStart(
         contentStart = if (empty) line.length else from + markerEnd + gap,
         width = markerEnd + gap,
+        kind = symbol.last(),
         interruptsParagraph = interrupts
     )
 }

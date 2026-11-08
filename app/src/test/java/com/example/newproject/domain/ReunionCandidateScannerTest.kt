@@ -159,6 +159,19 @@ class ReunionCandidateScannerTest {
         assertTrue(scanReunionCandidates("> 引用の一文です。\n> - 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
     }
 
+    /**
+     * 番号付き箇条の次の項目は、新しい箇条ではないので段落を切れる条件を問わない。前の項目の引用を閉じて、その項目の引用を読み直す。
+     * 新しい箇条を始める `2.` は、今までどおり段落を切れない（→ `段落を切れない行は引用の続きで、切れる行の後ろは引用の外`）。
+     */
+    @Test
+    fun `番号付き箇条の次の項目は前の項目の続きにせず、その項目の引用を読み直す`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 1. 項目です。\n> 2. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("1. > [!note] メモ\n2. > [!quote] 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("1. > [!quote] 引用です。\n2. > [!note] 自分の問いなのか。").questions)
+        // 区切りが違う番号は別の箇条なので、段落を切れる条件に戻る（2では切れず、前の引用の段落の続き）。
+        assertTrue(scanReunionCandidates("1) > 引用の一文です。\n2. これも引用の続きなのか。").questions.isEmpty())
+    }
+
     /** 段落の続きの行は、段落を切るまとまりでない限り引用に残る。箇条の後ろの引用の記号は箇条を切って引用を始める。 */
     @Test
     fun `引用でないまとまりの後ろの引用の記号は、続きの行ではなく新しい引用`() {
