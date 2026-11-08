@@ -33,6 +33,23 @@ import org.junit.Test
  *
  * **詰めるのはエスケープで膨らむ文字。** 日本語で埋めると3バイト文字が
  * そのまま3バイトで出るので、**最悪ケースを測ったことにならない。**
+ *
+ * ## 欄ごとの膨らみ方（実際に入りうる値）
+ *
+ * 引用符・バックスラッシュ・改行・タブは1バイトが2バイトに、改行とタブ以外の制御文字は1バイトが6バイト（`\u00XX`）になる。
+ * どの欄がどちらまで膨らむかは、書く前に制御文字を落とすかで決まる。**欄を足したら、ここに1行足して膨らみ方を決める。**
+ *
+ * | 欄 | 倍率 | なぜ |
+ * |---|---|---|
+ * | 痕跡の相対パス・ノートのタイトル・`documentId` | 6倍 | ノートの名前と SAF の値をそのまま持つ鍵と記録で、制御文字を落とせない |
+ * | 訪問の見出し名・メモの本文と見出し名・引用 | 2倍 | 書く前に改行とタブ以外の制御文字を落とす（`composeMemoSectionTitle`・`composeMarginMemo`・引用の整え方） |
+ * | 引用の前後の文字・書き始めた頃の位置 | 2倍 | 照らし直しの整え方（`normalizeForMatch`）が制御文字を落とす |
+ * | 選別の文（`aiSummary`） | 2倍 | 選んだ文を作るときに落とす（`withoutInflatingControls`） |
+ * | 印の文（`markedSummary`） | 2倍 | 今は書かない（再会カードの判断7で撤去）。旧版が書いた文は引き継ぐだけ |
+ * | 並べた相手の相対パスとタイトル | 2倍 | 検証が制御文字を弾く |
+ *
+ * **旧版が整えずに書いた値（整える前の見出し名・選別の文・印の文）は、ここで測る最悪の外にある。** 読み込みは狭めず、
+ * 再び保存して上限を超えれば保存が断る（ファイルは壊れない → `ReadingTraceStoreTest`）。
  */
 class ReadingTraceLimitsTest {
 
@@ -93,9 +110,10 @@ class ReadingTraceLimitsTest {
      */
     private fun worstCaseTrace(): ReadingTrace = with(ReadingTraceLimits) {
         ReadingTrace(
-            vaultRelativePath = escaping(MAX_RELATIVE_PATH_BYTES),
-            noteTitle = escaping(MAX_NOTE_TITLE_BYTES),
-            documentId = escaping(MAX_DOCUMENT_ID_BYTES),
+            // 鍵と記録は制御文字を落とせないので、6倍に膨らむ文字で詰める。
+            vaultRelativePath = escaping(MAX_RELATIVE_PATH_BYTES, INFLATING_CONTROL),
+            noteTitle = escaping(MAX_NOTE_TITLE_BYTES, INFLATING_CONTROL),
+            documentId = escaping(MAX_DOCUMENT_ID_BYTES, INFLATING_CONTROL),
             visits = List(MAX_VISITS) { index ->
                 ReadingVisit(
                     atEpochMillis = Long.MAX_VALUE - index,
@@ -133,11 +151,9 @@ class ReadingTraceLimitsTest {
     }
 
     /**
-     * JSON化で**2倍に膨らむ**文字だけで [bytes] バイトを埋める。
-     *
+     * [chars] を繰り返して [bytes] バイトを埋める。既定は JSON化で**2倍に膨らむ**文字で、
      * 引用符・バックスラッシュ・改行はいずれも1バイトの入力が2バイトの出力になる。
-     * 入力側で制御文字（改行・タブを除く）を落とす契約があるので、
-     * **2倍がこのアプリで到達しうる最悪の膨張率**である。
+     * 制御文字を落とせない欄は [INFLATING_CONTROL]（6倍）で埋める（→ クラスの表）。
      */
     private fun escaping(bytes: Int, chars: List<String> = ESCAPING): String =
         generateSequence(0) { it + 1 }.take(bytes).map { chars[it % chars.size] }.joinToString("")
@@ -147,5 +163,8 @@ class ReadingTraceLimitsTest {
 
         /** 制御文字を許さない欄（並べた相手）を詰める文字。改行を除いても2倍に膨らむ。 */
         private val ESCAPING_WITHOUT_CONTROL = listOf("\"", "\\")
+
+        /** 制御文字を落とせない欄を詰める文字。1バイトが `\u0001` の6バイトになる。 */
+        private val INFLATING_CONTROL = listOf("\u0001")
     }
 }

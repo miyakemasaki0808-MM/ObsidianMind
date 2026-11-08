@@ -84,10 +84,11 @@ internal object ReadingTraceLimits {
      * 超えると**正しく保存したファイルを次回読めなくなる**（保存側と
      * 読み込み側で上限が食い違う、最も気づきにくい壊れ方）。
      *
-     * 20件のメモすべてに最大の引用を付け、30件の訪問すべてに上限いっぱいの並べた相手を置くと
-     * 192KB に収まらないので 256KB にしてある（→ features/desk_memory.md §6）。
+     * 20件のメモすべてに最大の引用を付け、30件の訪問すべてに上限いっぱいの並べた相手を置き、
+     * 制御文字を落とせない相対パス・タイトル・`documentId` を6倍で数えると 256KB に収まらないので 288KB にしてある
+     * （欄ごとの膨らみ方は `ReadingTraceLimitsTest` の表 → features/reflect_reading_trace.md §5「上限」）。
      */
-    const val MAX_FILE_BYTES = 256 * 1024
+    const val MAX_FILE_BYTES = 288 * 1024
 }
 
 /**
