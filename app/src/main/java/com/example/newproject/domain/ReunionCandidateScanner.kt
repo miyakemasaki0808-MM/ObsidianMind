@@ -76,34 +76,41 @@ internal fun scanReunionCandidates(content: String): ReunionCandidates {
         }
         // **疑問文を先に判定して排他にする。** 「2026年はどうなるか？」は両方に当たるが、
         // 同じ文が2つの種別に並ぶと、AIへ渡す候補が重複して見える。
+        // **引用した問いは書き手の問いにしない** — カードは「前回のあなたはこの問いで止まっていました」と断定する。
+        // 古い前提のカードは誰の言葉かを言わないので、引用からも拾う。
         when {
-            QUESTION_END.containsMatchIn(sentence) ->
-                if (questions.size < REUNION_CANDIDATES_PER_KIND) questions += sentence
-            isStalenessCandidate(sentence) ->
-                if (staleness.size < REUNION_CANDIDATES_PER_KIND) staleness += sentence
+            QUESTION_END.containsMatchIn(sentence.text) ->
+                if (!sentence.quoted && questions.size < REUNION_CANDIDATES_PER_KIND) questions += sentence.text
+            isStalenessCandidate(sentence.text) ->
+                if (staleness.size < REUNION_CANDIDATES_PER_KIND) staleness += sentence.text
         }
     }
     return ReunionCandidates(questions, staleness)
 }
+
+/** 人が読む1文と、それが他人の言葉を引いた行にあるか（→ [quotationLines]）。 */
+private data class ReadableSentence(val text: String, val quoted: Boolean)
 
 /**
  * 本文を「人が読む文」の列にする。
  *
  * **記法とコードを落としてから文へ割る。** コードブロック内の `?` や版番号は
  * 書き手の問いでも前提でもないので、拾うと候補がノイズで埋まる。
+ * **引用かは記法を落とす前に見分ける**（落とすと地の文と区別が付かない）。コードは空行へ替えて、引用の続きを切る。
  */
-private fun readableSentences(content: String): Sequence<String> =
-    withoutFencedCode(stripFrontmatter(content))
-        .lineSequence()
-        .map { it.stripMarkdownMarkers() }
-        .filter { it.isNotBlank() }
-        .flatMap { line -> splitIntoSentences(line).asSequence() }
-        .map { it.trim() }
-        .filter { it.length in MIN_CANDIDATE_CHARS..MAX_CANDIDATE_CHARS }
+private fun readableSentences(content: String): Sequence<ReadableSentence> {
+    val lines = withoutFencedCode(stripFrontmatter(content), keepBlankLines = true).lines()
+    val quoted = quotationLines(lines)
+    return lines.asSequence()
+        .mapIndexed { index, line -> line.stripMarkdownMarkers() to quoted[index] }
+        .filter { (line, _) -> line.isNotBlank() }
+        .flatMap { (line, inQuote) -> splitIntoSentences(line).asSequence().map { ReadableSentence(it.trim(), inQuote) } }
+        .filter { it.text.length in MIN_CANDIDATE_CHARS..MAX_CANDIDATE_CHARS }
         // **終止符で終わる断片だけを文とみなす。** これが無いと、見出し・表のセル・
         // 「最終検証: 2026-08-12」のようなラベル行が候補の大半を占める（実測で73%）。
         // ラベルは古びる前提でも書き手の問いでもないので、文の形をしていることを要求する。
-        .filter { SENTENCE_END.containsMatchIn(it) }
+        .filter { SENTENCE_END.containsMatchIn(it.text) }
+}
 
 /** 文の終わり。ラベルや見出しを候補から外すために要求する。 */
 private val SENTENCE_END = Regex("""[。！？!?]\s*$""")

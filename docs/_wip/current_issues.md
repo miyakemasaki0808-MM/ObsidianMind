@@ -75,6 +75,7 @@
 
 ## AI-6. 引用ブロックの問いを、書き手自身の問いとして拾う
 
+- **状態:** 実装済み・実機待ち（2026-11-08）。オーナー判断で、素の引用と `[!quote]`・`[!cite]` の中の文だけを問いの候補から外した（ほかのコールアウトは拾う）。見分けは記号を落とす前の行で行う（`quotationLines`、正本は reunion_card §5「引用した問いは書き手の問いにしない」）。JVM テストと変異13本で確かめた。実機は `REUNION-14`（Nano が要る）。
 - **現状:** 再会カードの候補列挙は
   [`stripMarkdownMarkers`](../../app/src/main/java/com/example/newproject/domain/MarkdownPlainText.kt) を通してから
   文へ割るが、`LINE_PREFIX` が**行頭の `>` を見出し記号や箇条書き記号と一緒に落とす**。
