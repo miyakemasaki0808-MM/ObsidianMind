@@ -1,8 +1,10 @@
 package com.example.newproject.ui
 
+import android.os.Build
 import android.view.View
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
@@ -25,6 +27,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.graphics.Insets
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -49,6 +52,7 @@ import com.example.newproject.ui.screen.readerWindowFor
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -163,15 +167,20 @@ class ReaderWindowShellTest {
      * **レールを出している間、左の切り欠きはレールが覆う。** 本文と外殻の測る箱は、切り欠きの分を重ねて空けずにレールの右端から始まる
      * （カバー画面の横で、見出しの霞がレールから離れていた）。レールを畳んだ間（机・見開き）は本文が窓の左端から始まるので、
      * 切り欠きを避ける（→ features/margin_pane.md §5.4）。切り欠きは、本番の外殻が置かれた View へ Insets を配って作る。
+     * **配った値が Compose へ届くのは API 30 以上だけ**（それより前の `WindowInsetsCompat.Builder` は切り欠きを作らない）なので、
+     * それより前の端末では適用外として skip し、位置を比べる前に Compose が配った値を読んだことを確かめる。
      */
     @Test
     fun 左の切り欠きはレールが覆い_本文と測る箱はレールの右端から始まり_レールを畳めば本文が切り欠きを避ける() {
+        assumeTrue("切り欠きの注入は API 30 以上でだけ Compose へ届く", Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
         var railHidden by mutableStateOf(false)
+        var observedCutoutPx = -1
         var probe: ReaderRegion? = null
         var body: ReaderRegion? = null
         lateinit var view: View
         composeRule.setContent {
             view = LocalView.current
+            observedCutoutPx = WindowInsets.displayCutout.getLeft(LocalDensity.current, LayoutDirection.Ltr)
             val density = LocalDensity.current.density
             fun LayoutCoordinates.region() = ReaderRegion(
                 widthDp = size.width / density,
@@ -210,6 +219,8 @@ class ReaderWindowShellTest {
                 ViewCompat.dispatchApplyWindowInsets(view, insets)
             }
             composeRule.waitForIdle()
+            val px = (dp * view.resources.displayMetrics.density).roundToInt()
+            composeRule.runOnIdle { assertEquals("配った切り欠きを Compose が読んでいない", px, observedCutoutPx) }
         }
         fun bodyStart() = composeRule.runOnIdle { requireNotNull(body).startDp }
         fun probeStart() = composeRule.runOnIdle { requireNotNull(probe).startDp }
