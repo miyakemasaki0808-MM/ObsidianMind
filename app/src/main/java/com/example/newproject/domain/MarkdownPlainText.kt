@@ -155,7 +155,8 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
                     val callout = if (levels.size + 1 == depth) CALLOUT_TYPE.find(content)?.groupValues?.get(1) else null
                     levels += callout == null || callout.lowercase() in QUOTATION_CALLOUTS
                 }
-                paragraphOpen = content.isNotBlank()
+                // 続きの行を許すのは段落だけ（見出しなどは許さない）。
+                paragraphOpen = content.isNotBlank() && !STARTS_BLOCK.containsMatchIn(content)
             }
             paragraphOpen && line.isNotBlank() && !STARTS_BLOCK.containsMatchIn(line) -> Unit
             else -> {

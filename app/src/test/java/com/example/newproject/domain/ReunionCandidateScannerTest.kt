@@ -117,6 +117,13 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("見出しの問いなのか。"), scanReunionCandidates("> 引用の一文目です。\n## 見出しの問いなのか。").questions)
     }
 
+    /** 記号の無い続きの行を許すのは段落だけ。見出しだけの引用の後ろの地の文は、引用の外の書き手の文。 */
+    @Test
+    fun `見出しだけの引用の直後の地の文は引用の続きにしない`() {
+        assertEquals(listOf("これも引用の続きなのか。"), scanReunionCandidates("> # 引用の見出し\nこれも引用の続きなのか。").questions)
+        assertTrue(scanReunionCandidates("> 引用の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+    }
+
     /** コードブロックを挟めば引用は終わる（コードは落とすが、段落の境目は残す）。 */
     @Test
     fun `コードブロックの後ろの地の文は引用の続きにしない`() {
