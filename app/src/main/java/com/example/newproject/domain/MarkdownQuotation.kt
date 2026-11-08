@@ -174,5 +174,6 @@ private val CALLOUT_TYPE = Regex("""^ {0,3}\[!([^\]\s]+)][+-]?""")
 private val LIST_MARKER = Regex("""^( {0,3})([-*+]|\d{1,9}[.)])(?= |$)""")
 private val ATX_HEADING = Regex("""^ {0,3}#{1,6}(?: |$)""")
 private val THEMATIC_BREAK = Regex("""^ {0,3}([-*_])(?: *\1){2,} *$""")
-private val FENCE_OPEN = Regex("""^ {0,3}(?:`{3,}|~{3,})""")
+/** コードの柵を開く行。バッククォートの柵は後ろにバッククォートを書けない（書いてあればインラインコードを含む段落）。 */
+private val FENCE_OPEN = Regex("""^ {0,3}(?:`{3,}[^`]*$|~{3,})""")
 private val SETEXT_UNDERLINE = Regex("""^ {0,3}(?:=+|-+) *$""")

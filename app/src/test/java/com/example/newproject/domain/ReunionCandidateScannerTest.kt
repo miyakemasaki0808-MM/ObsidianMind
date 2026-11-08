@@ -186,6 +186,14 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n> ```\nこれは地の文なのか。").questions)
     }
 
+    /** バッククォートの柵の情報文字列にバッククォートは書けない。書いてあれば柵ではなくインラインコードで、段落は続く。 */
+    @Test
+    fun `インラインコードの行は柵にせず、引用の段落の続きを引用に残す`() {
+        assertTrue(scanReunionCandidates("> ```code```\nこれも引用の続きなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> ```foo`bar\nこれも引用の続きなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> ```kotlin\n自分の問いなのか。").questions)
+    }
+
     /** 箇条の項目は空行をまたいで続く。項目の字下げの中の引用は、その項目の引用。 */
     @Test
     fun `空行をまたいだ項目の中の引用の問いは拾わない`() {
