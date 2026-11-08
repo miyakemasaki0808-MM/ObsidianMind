@@ -25,6 +25,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
@@ -164,81 +165,131 @@ class ReaderWindowShellTest {
     }
 
     /**
-     * **レールを出している間、左の切り欠きはレールが覆う。** 本文と外殻の測る箱は、切り欠きの分を重ねて空けずにレールの右端から始まる
-     * （カバー画面の横で、見出しの霞がレールから離れていた）。レールを畳んだ間（机・見開き）は本文が窓の左端から始まるので、
-     * 切り欠きを避ける（→ features/margin_pane.md §5.4）。切り欠きは、本番の外殻が置かれた View へ Insets を配って作る。
-     * **配った値が Compose へ届くのは API 30 以上だけ**（それより前の `WindowInsetsCompat.Builder` は切り欠きを作らない）なので、
-     * それより前の端末では適用外として skip し、位置を比べる前に Compose が配った値を読んだことを確かめる。
+     * **レールを出している間、始まりの側の切り欠きはレールが覆う幅まで消費する。** 本文と外殻の測る箱は、窓の始まりから
+     * `max(レールの幅, 切り欠き)` に画面の余白を足した位置で始まる — 浅い切り欠きはレールの右に重ねて空けず（カバー画面の横で、
+     * 見出しの霞がレールから離れていた）、レールより深い切り欠きの残りは本文が避ける（既定のレールはシステムバーしか避けない）。
+     * レールを畳んだ間（机・見開き）は本文が窓の端から始まるので切り欠きを避け、重ねたレールの出入りで本文は動かない
+     * （→ features/margin_pane.md §5.4）。右から左の並びでも、始まりの側（右）で同じになる。
+     *
+     * 切り欠きは、本番の外殻が置かれた View へ Insets を配って作る。**配った値が Compose へ届くのは API 30 以上だけ**
+     * （それより前の `WindowInsetsCompat.Builder` は切り欠きを作らない）なので、それより前の端末では適用外として skip し、
+     * 位置を比べる前に Compose が配った値を読んだことを確かめる。
      */
     @Test
-    fun 左の切り欠きはレールが覆い_本文と測る箱はレールの右端から始まり_レールを畳めば本文が切り欠きを避ける() {
+    fun 始まりの側の切り欠きはレールが覆う幅まで消費し_深い分は本文が避け_レールを畳めば本文が切り欠きを避ける() {
+        cutoutRoundTrip(LayoutDirection.Ltr)
+    }
+
+    @Test
+    fun 右から左の並びでも_切り欠きはレールが覆う幅まで消費する() {
+        cutoutRoundTrip(LayoutDirection.Rtl)
+    }
+
+    private fun cutoutRoundTrip(direction: LayoutDirection) {
         assumeTrue("切り欠きの注入は API 30 以上でだけ Compose へ届く", Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
+        val rtl = direction == LayoutDirection.Rtl
         var railHidden by mutableStateOf(false)
+        var barShown by mutableStateOf(false)
         var observedCutoutPx = -1
+        var boxLeft = 0f
+        var boxRight = 0f
         var probe: ReaderRegion? = null
         var body: ReaderRegion? = null
         lateinit var view: View
         composeRule.setContent {
             view = LocalView.current
-            observedCutoutPx = WindowInsets.displayCutout.getLeft(LocalDensity.current, LayoutDirection.Ltr)
+            val cutout = WindowInsets.displayCutout
+            observedCutoutPx = if (rtl) cutout.getRight(LocalDensity.current, direction) else cutout.getLeft(LocalDensity.current, direction)
             val density = LocalDensity.current.density
             fun LayoutCoordinates.region() = ReaderRegion(
                 widthDp = size.width / density,
                 heightDp = size.height / density,
                 startDp = positionInWindow().x / density
             )
-            Box(modifier = Modifier.requiredSize(width = 840.dp, height = 900.dp)) {
-                val nav = rememberNavController()
-                AppScaffold(
-                    windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(840.dp, 900.dp)),
-                    navController = nav,
-                    snackbarHostState = remember { SnackbarHostState() },
-                    notePaneVisible = railHidden,
-                    onReaderRegion = { probe = it }
-                ) { modifier ->
-                    NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
-                        composable(AppDestination.Note.route) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
-                                    .screenContentPadding()
-                                    .onGloballyPositioned { body = it.region() }
-                            )
+            CompositionLocalProvider(LocalLayoutDirection provides direction) {
+                Box(
+                    modifier = Modifier
+                        .requiredSize(width = 840.dp, height = 900.dp)
+                        .onGloballyPositioned {
+                            boxLeft = it.positionInWindow().x / density
+                            boxRight = boxLeft + it.size.width / density
+                        }
+                ) {
+                    val nav = rememberNavController()
+                    AppScaffold(
+                        windowSizeClass = WindowSizeClass.calculateFromSize(DpSize(840.dp, 900.dp)),
+                        navController = nav,
+                        snackbarHostState = remember { SnackbarHostState() },
+                        notePaneVisible = railHidden,
+                        noteBarShown = barShown,
+                        onReaderRegion = { probe = it }
+                    ) { modifier ->
+                        NavHost(navController = nav, startDestination = AppDestination.Note.route, modifier = modifier) {
+                            composable(AppDestination.Note.route) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
+                                        .screenContentPadding()
+                                        .onGloballyPositioned { body = it.region() }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
-        fun dispatchLeftCutout(dp: Float) {
+        fun dispatchCutout(dp: Float) {
+            val px = (dp * view.resources.displayMetrics.density).roundToInt()
             composeRule.runOnUiThread {
-                val px = (dp * view.resources.displayMetrics.density).roundToInt()
                 val insets = WindowInsetsCompat.Builder()
-                    .setInsets(WindowInsetsCompat.Type.displayCutout(), Insets.of(px, 0, 0, 0))
+                    .setInsets(WindowInsetsCompat.Type.displayCutout(), if (rtl) Insets.of(0, 0, px, 0) else Insets.of(px, 0, 0, 0))
                     .build()
                 ViewCompat.dispatchApplyWindowInsets(view, insets)
             }
             composeRule.waitForIdle()
-            val px = (dp * view.resources.displayMetrics.density).roundToInt()
             composeRule.runOnIdle { assertEquals("配った切り欠きを Compose が読んでいない", px, observedCutoutPx) }
         }
-        fun bodyStart() = composeRule.runOnIdle { requireNotNull(body).startDp }
-        fun probeStart() = composeRule.runOnIdle { requireNotNull(probe).startDp }
+        fun show(hidden: Boolean, bar: Boolean = false) {
+            composeRule.runOnIdle {
+                railHidden = hidden
+                barShown = bar
+            }
+            composeRule.waitForIdle()
+        }
+        // 箱の始まりの側の縁から、本文領域の始まりまでの距離（dp）。
+        fun ReaderRegion.inset() = if (rtl) boxRight - (startDp + widthDp) else startDp - boxLeft
+        fun bodyInset() = composeRule.runOnIdle { requireNotNull(body).inset() }
+        fun probeInset() = composeRule.runOnIdle { requireNotNull(probe).inset() }
 
-        dispatchLeftCutout(0f)
-        val bodyWithout = bodyStart()
-        val probeWithout = probeStart()
-        dispatchLeftCutout(CUTOUT_DP)
-        assertEquals("レールの横の本文が、切り欠きの分だけレールから離れた", bodyWithout, bodyStart(), 0.5f)
-        assertEquals("外殻の測る箱が、切り欠きの分だけレールから離れた", probeWithout, probeStart(), 0.5f)
-        assertEquals("外殻の測る箱と本文の左端が食い違う", bodyStart(), probeStart(), 0.5f)
+        dispatchCutout(0f)
+        val beside = bodyInset()
+        show(hidden = true)
+        val padding = bodyInset()
+        val rail = beside - padding
+        show(hidden = false)
 
-        // レールを畳むと、本文は窓の左端から始まる。
-        composeRule.runOnIdle { railHidden = true }
-        composeRule.waitForIdle()
-        val hiddenWith = bodyStart()
-        dispatchLeftCutout(0f)
-        assertEquals("レールを畳んだ本文が切り欠きを避けない", CUTOUT_DP, hiddenWith - bodyStart(), 0.5f)
+        // 浅い切り欠き（レールの半分）は、レールの下に収まる。
+        dispatchCutout(rail / 2)
+        assertEquals("レールの横の本文が、浅い切り欠きの分だけレールから離れた", beside, bodyInset(), TOLERANCE_DP)
+        assertEquals("外殻の測る箱と本文の始まりが食い違う（浅い切り欠き）", bodyInset(), probeInset(), TOLERANCE_DP)
+
+        // レールより深い切り欠きは、レールを越えた分だけ本文が避ける。
+        val deep = rail + DEEPER_DP
+        dispatchCutout(deep)
+        assertEquals("レールより深い切り欠きへ本文が食い込んだ", beside + DEEPER_DP, bodyInset(), TOLERANCE_DP)
+        assertEquals("外殻の測る箱と本文の始まりが食い違う（深い切り欠き）", bodyInset(), probeInset(), TOLERANCE_DP)
+        val probeWithRail = probeInset()
+
+        // レールを畳むと、本文は窓の端から始まり、切り欠きを避ける。測る箱はレールがある状態のまま。
+        show(hidden = true)
+        assertEquals("レールを畳んだ本文が切り欠きを避けない", padding + deep, bodyInset(), TOLERANCE_DP)
+        assertEquals("レールを畳むと測る箱が替わった", probeWithRail, probeInset(), TOLERANCE_DP)
+        // 重ねたレールの出入りで、本文は動かない。
+        show(hidden = true, bar = true)
+        assertEquals("重ねたレールを出すと本文が動いた", padding + deep, bodyInset(), TOLERANCE_DP)
+        show(hidden = true, bar = false)
+        assertEquals("重ねたレールをしまうと本文が動いた", padding + deep, bodyInset(), TOLERANCE_DP)
     }
 
     private fun heightRoundTrip(onSearch: Boolean) {
@@ -299,7 +350,9 @@ class ReaderWindowShellTest {
         /** 横長で480dpを割る高さ。本文領域は左右2列になり、ペインを出せない。 */
         val LOW = 400.dp
         val EXPANDED = WindowSizeClass.calculateFromSize(DpSize(1000.dp, 900.dp))
-        /** 左の切り欠きの深さ。レールの最小幅（80dp）より浅い。 */
-        const val CUTOUT_DP = 40f
+        /** レールより深い切り欠きが、レールを越える幅。 */
+        const val DEEPER_DP = 40f
+        /** 切り欠きを px へ丸めた分の誤差を許す幅。 */
+        const val TOLERANCE_DP = 1f
     }
 }

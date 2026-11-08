@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-08 | 外殻が消費する切り欠きをレールが覆う幅までに限り、レールより深い切り欠きへ本文が食い込まないようにした | [余白ペイン](features/margin_pane.md) §5.4 |
 | 2026-11-08 | 切り欠きの端末テストを、配った値が Compose へ届く API 30 以上に限り、読んだことを確かめてから位置を比べるようにした | [instrumentation_testing](system/instrumentation_testing.md) 判断11 |
 | 2026-11-08 | 見出しの題名とボタンが1行に収まらないときだけボタンを下の行へ回し、大きい文字で題名が語の途中で割れないようにした | [theme_and_ui_refactor](system/theme_and_ui_refactor.md) 判断5 |
 | 2026-11-08 | Vault を選び直した直後に引くノートも、ほかの経路と同じく本文の先頭から開くようにした | [再発見](features/rediscover.md) §5 |

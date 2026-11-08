@@ -13,10 +13,8 @@ import com.example.newproject.ui.screen.ReaderChoice
 import com.example.newproject.ui.screen.ReaderRegion
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.exclude
-import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.safeDrawing
@@ -38,7 +36,11 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.Layout
@@ -48,6 +50,8 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -121,7 +125,7 @@ internal fun readerChoiceAfterRailTap(choice: ReaderChoice, spread: Boolean, fro
  *
  * Scaffold を使わず手動レイアウトにしているのは、各タブが `safeDrawingPadding()` で
  * インセットを処理するため、Scaffold の contentPadding と二重付与になるのを避ける狙い。
- * バー/レール自身は既定の windowInsets でシステムバーを避ける。レールを出している間は、左の Insets を外殻が消費する（レールが覆う）。
+ * バー/レール自身は既定の windowInsets でシステムバーを避ける。レールを出している間は、レールが覆う幅だけ始まりの側の Insets を外殻が消費する（→ [RailCover]）。
  */
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -166,13 +170,13 @@ internal fun AppScaffold(
     }
     val density = LocalDensity.current
     val railShown = showsRail(isTabRoute, useRail, currentRoute, notePaneVisible)
-    // レールは左の端を覆う。各タブの `safeDrawingPadding()` が左の切り欠きをレールの右にもう一度空けないよう、外殻で消費する。
-    // レールはシステムバーを自分で避けて最小80dpあるので、左の切り欠きはレールの下に収まる。
-    val railSide = WindowInsets.safeDrawing.only(WindowInsetsSides.Start)
+    // レールが覆う幅。各タブの `safeDrawingPadding()` がレールの下の切り欠きをレールの右にもう一度空けないよう、本文と測る箱で消費する（→ RailCover）。
+    val bodyCover = remember { RailCover() }
+    val probeCover = remember { RailCover() }
 
     Box(modifier = Modifier.fillMaxSize()) {
         ScaffoldLayout(
-            body = { content(if (railShown) Modifier.fillMaxSize().consumeWindowInsets(railSide) else Modifier.fillMaxSize()) },
+            body = { content(Modifier.fillMaxSize().consumeWindowInsets(bodyCover)) },
             rail = if (railShown) {
                 { TabRail(items, currentRoute, spreadChosen, selectRailItem) }
             } else null,
@@ -224,12 +228,12 @@ internal fun AppScaffold(
                 { TabRail(items, currentRoute, spreadChosen) {} }
             } else null,
             // ノートの画面と同じ取り方で本文領域を測る（レールがある状態・キーボードを除く → features/margin_pane.md §5.4）。
-            // レールがある状態の本文と同じく、左の切り欠きはレールが覆う。
+            // レールがある状態の本文と同じく、レールが覆う幅だけ切り欠きを消費する。
             probe = {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .then(if (useRail) Modifier.consumeWindowInsets(railSide) else Modifier)
+                        .consumeWindowInsets(probeCover)
                         .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
                         .screenContentPadding()
                         .onGloballyPositioned { coordinates ->
@@ -244,7 +248,9 @@ internal fun AppScaffold(
                             }
                         }
                 )
-            }
+            },
+            bodyCover = bodyCover,
+            probeCover = probeCover
         )
 
         SnackbarHost(
@@ -307,7 +313,9 @@ private fun ScaffoldLayout(
     overlayRail: (@Composable () -> Unit)?,
     bottomBar: (@Composable () -> Unit)?,
     railMeasure: (@Composable () -> Unit)?,
-    probe: @Composable () -> Unit
+    probe: @Composable () -> Unit,
+    bodyCover: RailCover,
+    probeCover: RailCover
 ) {
     Layout(
         content = {
@@ -331,6 +339,8 @@ private fun ScaffoldLayout(
             ?.measure(Constraints(minWidth = width, maxWidth = width, maxHeight = height))
         val railWidth = railPlaceable?.width ?: 0
         val barHeight = barPlaceable?.height ?: 0
+        // 本文を測る前に書く — 本文の中の `safeDrawingPadding()` は測るときにこの幅を読む。
+        bodyCover.width = railWidth
         val contentPlaceable = measurables.first { it.layoutId == SLOT_CONTENT }
             .measure(Constraints.fixed((width - railWidth).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         val overlayPlaceable = measurables.firstOrNull { it.layoutId == SLOT_OVERLAY_RAIL }
@@ -340,6 +350,7 @@ private fun ScaffoldLayout(
             ?: measurables.firstOrNull { it.layoutId == SLOT_RAIL_MEASURE }
                 ?.measure(Constraints(maxWidth = width, minHeight = height, maxHeight = height))?.width
             ?: 0
+        probeCover.width = probeRail
         val probePlaceable = measurables.first { it.layoutId == SLOT_PROBE }
             .measure(Constraints.fixed((width - probeRail).coerceAtLeast(0), (height - barHeight).coerceAtLeast(0)))
         layout(width, height) {
@@ -359,6 +370,22 @@ private const val SLOT_BAR = "bar"
 private const val SLOT_OVERLAY_RAIL = "overlayRail"
 private const val SLOT_PROBE = "probe"
 private const val SLOT_RAIL_MEASURE = "railMeasure"
+
+/**
+ * レールが窓の始まりの側を覆う幅（px）。外殻が測るたびに書き、本文と測る箱はこの幅だけ始まりの側の Insets を消費する
+ * （→ features/margin_pane.md §5.4）。**消費するのはレールが実際に覆う幅まで** — 既定のレールはシステムバーしか避けず、
+ * 切り欠きを含まないので、レールより深い切り欠きの残りは本文が避ける。レールを出していない間は0。
+ * 子の `windowInsetsPadding` は測るときに読むので、外殻は本文と測る箱を測る前に書く。
+ */
+@Stable
+internal class RailCover : WindowInsets {
+    var width by mutableIntStateOf(0)
+
+    override fun getLeft(density: Density, layoutDirection: LayoutDirection) = if (layoutDirection == LayoutDirection.Ltr) width else 0
+    override fun getTop(density: Density) = 0
+    override fun getRight(density: Density, layoutDirection: LayoutDirection) = if (layoutDirection == LayoutDirection.Rtl) width else 0
+    override fun getBottom(density: Density) = 0
+}
 
 /** AIタブの意味は常に✨のまま保つ。 */
 @Composable
