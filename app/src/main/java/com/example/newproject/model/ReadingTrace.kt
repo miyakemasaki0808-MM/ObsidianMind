@@ -288,6 +288,13 @@ internal fun ReadingTrace.withoutLastVisit(): ReadingTrace = copy(
 )
 
 /**
+ * 痕跡へ書く文から、改行とタブを除く制御文字を落とす。制御文字は JSON で1文字6バイト（`\u00XX`）へ膨らみ、
+ * 欄を2倍で数える容量の見積もり（`ReadingTraceLimitsTest`）の外に出る。改行とタブは2倍で収まるので残す。
+ */
+internal fun withoutInflatingControls(value: String): String =
+    value.filter { it == '\n' || it == '\t' || !it.isISOControl() }
+
+/**
  * 先頭から UTF-8 のバイト上限まで残す。保存の前に丸め、上限を超えた値が検証で弾かれて保存できなくなるのを避ける
  * （AI要約・メモ・見出し名・並べた相手のタイトル）。
  *

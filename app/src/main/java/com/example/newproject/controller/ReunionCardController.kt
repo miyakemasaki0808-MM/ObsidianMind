@@ -24,6 +24,7 @@ import com.example.newproject.model.isReadToEnd
 import com.example.newproject.model.isReunionNone
 import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.model.truncateToUtf8Bytes
+import com.example.newproject.model.withoutInflatingControls
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -405,8 +406,9 @@ internal class ReunionCardController(
             .firstOrNull()
             ?: return ReunionOutcome.Unavailable
         val text = lines.first { it.id == picked }.text
+        // 候補は本文の文そのままなので、本文の制御文字を運びうる。カードと痕跡へ同じ文を渡すため、ここで1度だけ落とす。
         return ReunionOutcome.Generated(
-            truncateToUtf8Bytes(text, ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
+            truncateToUtf8Bytes(withoutInflatingControls(text), ReadingTraceLimits.MAX_AI_SUMMARY_BYTES),
             kind
         )
     }

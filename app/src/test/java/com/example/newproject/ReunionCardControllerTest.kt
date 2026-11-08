@@ -710,6 +710,25 @@ class ReunionCardControllerTest {
         assertEquals(QUESTION, state.value.readingTraceCard!!.aiSummary)
     }
 
+    /**
+     * **選んだ文の制御文字は、カードにも痕跡にも残さない。** 候補は本文の文そのままなので、本文の制御文字を運びうる。
+     * 痕跡へ書くと JSON で1文字6バイトへ膨らみ、容量の見積もり（選別の文は2倍）の外に出る（→ ReadingTraceLimitsTest）。
+     * 改行とタブは2倍で収まるので残す。
+     */
+    @Test
+    fun `読了で選んだ問いの制御文字は、カードにも痕跡にも残さない`() = runTest {
+        val persistence = FakePersistence().apply { put(finishedTrace(count = 1)) }
+        val ai = FakeAiClient(onGenerate = { "R01" })
+        val state = NoteUiStateStore(NoteUiState())
+        val controller = controller(persistence, aiClient = ai, state = state)
+
+        controller.revealTrace(PATH, content = "この方式で\u0001本当に\u001F速くなる\tのだろうか。")
+        advanceUntilIdle()
+
+        assertEquals("この方式で本当に速くなる\tのだろうか。", state.value.readingTraceCard!!.aiSummary)
+        assertEquals("この方式で本当に速くなる\tのだろうか。", persistence.saved.last().aiSummary)
+    }
+
     /** 候補が無ければ Nano を呼ばず、痕跡にも書かない。枠はノートの要約になる（画面が要約の状態から読む）。 */
     @Test
     fun `読了で候補が無ければ生成せず、痕跡にも書かない`() = runTest {
