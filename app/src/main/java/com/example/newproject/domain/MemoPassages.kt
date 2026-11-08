@@ -306,9 +306,11 @@ internal fun takeLastUtf8Bytes(value: String, maximumBytes: Int): String {
 /**
  * 照らし直しのための整え方。空白と改行の並びを1つの空白に畳み、制御文字を落とす。
  * 控える前後の文字と位置もこれを通るので、制御文字を含まない（容量の見積もりが保てる）。
+ * 残す制御文字は、畳む区切り（`\s`）に入るものだけ。U+001C〜U+001F は Java では空白だが `\s` に入らないので、
+ * 空白として残すと文字の中に居残る。全角空白などの区切りを `\s` より広げると、既存の控えと照合できなくなる。
  */
 internal fun normalizeForMatch(text: String): String =
-    text.filter { it.isWhitespace() || !it.isISOControl() }
+    text.filter { it in MATCH_SEPARATOR_CONTROLS || !it.isISOControl() }
         .split(WHITESPACE)
         .filter { it.isNotEmpty() }
         .joinToString(" ")
@@ -341,3 +343,6 @@ private fun MarkdownBlock.isReadableText(): Boolean = when (this) {
 }
 
 private val WHITESPACE = Regex("\\s+")
+
+/** [WHITESPACE] が区切りとして畳む制御文字（タブ・改行・垂直タブ・改ページ・復帰）。 */
+private const val MATCH_SEPARATOR_CONTROLS = "\t\n\u000B\u000C\r"
