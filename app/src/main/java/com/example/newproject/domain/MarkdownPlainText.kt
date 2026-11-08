@@ -5,7 +5,8 @@ package com.example.newproject.domain
 //
 // 再会カードの候補列挙（[scanReunionCandidates]）と冊子モードの扉（[selectCoverLine]）が
 // 同じ前処理を要求したので、**前処理だけ**をここへ出した。行の種類の判定（見出し・表の区切り・
-// リンクだけの行・頭の情報の塊・引用の行）も前処理であって選定規則ではないので、ここに置く
+// リンクだけの行・頭の情報の塊）も前処理であって選定規則ではないので、ここに置く
+// （引用の行は、まとまりの開閉を追うので [quotationLines] として別のファイルに置く）
 // （頭の情報の塊は AI の抜粋の冒頭 [buildNoteExcerpt] も使う）。
 // **選定規則は共有しない** — 候補として何を採るかは用途ごとに違い、
 // そこまで束ねると片方の都合でもう片方の見え方が変わる。
@@ -129,53 +130,6 @@ internal val EMPHASIS = Regex("""\*{1,3}|_{2,3}|~~""")
  * [stripMarkdownMarkersKeepingCode] を使う。通さないと「`NoteViewModel` を分割した。」が「 を分割した。」になり、主語が消える。
  */
 internal fun String.unwrapInlineCode(): String = replace(INLINE_CODE_CONTENT) { it.groupValues[1] }
-
-/**
- * 他人の言葉を引いた行か（行ごと）。**記法を落とす前の行で**判定する（落とすと地の文と見分けられない）。
- *
- * 引用とみなすのは、素の引用（`> …`）と、引用・出典のコールアウト（`> [!quote]`・`> [!cite]`）の中の行。
- * ほかのコールアウト（`[!note]`・`[!question]` など）は書き手が書いたものなので引用にしないが、その中に入れ子にした
- * 引用（`> > …`）は引用。コールアウトの種類は、その深さの引用を開いた行でだけ読む。
- * `>` の無い続きの行は、引用の段落が続く限り引用の中にある（CommonMark の続きの行）。
- * 空行・空の `>` の行（段落が閉じる）と、見出し・箇条・コード・表・罫線で始まる行で、続きは終わる。
- */
-internal fun quotationLines(lines: List<String>): BooleanArray {
-    val quoted = BooleanArray(lines.size)
-    // 開いている引用の深さごとに、他人の言葉か。
-    val levels = mutableListOf<Boolean>()
-    var paragraphOpen = false
-    lines.forEachIndexed { index, line ->
-        val marker = QUOTE_MARKERS.find(line)
-        when {
-            marker != null -> {
-                val depth = marker.groupValues[1].count { it == '>' }
-                val content = line.substring(marker.range.last + 1)
-                while (levels.size > depth) levels.removeAt(levels.lastIndex)
-                while (levels.size < depth) {
-                    val callout = if (levels.size + 1 == depth) CALLOUT_TYPE.find(content)?.groupValues?.get(1) else null
-                    levels += callout == null || callout.lowercase() in QUOTATION_CALLOUTS
-                }
-                // 続きの行を許すのは段落だけ（見出しなどは許さない）。
-                paragraphOpen = content.isNotBlank() && !STARTS_BLOCK.containsMatchIn(content)
-            }
-            paragraphOpen && line.isNotBlank() && !STARTS_BLOCK.containsMatchIn(line) -> Unit
-            else -> {
-                levels.clear()
-                paragraphOpen = false
-            }
-        }
-        quoted[index] = levels.any { it }
-    }
-    return quoted
-}
-
-/** 引用の印（箇条の中の引用も含む）。グループ1が `>` の並びで、その数が深さ。 */
-private val QUOTE_MARKERS = Regex("""^\s{0,8}(?:(?:[-*+]|\d+[.)])\s+)?((?:>[ \t]?)+)""")
-private val CALLOUT_TYPE = Regex("""^\s*\[!([^\]\s]+)][+-]?""")
-private val QUOTATION_CALLOUTS = setOf("quote", "cite")
-
-/** 引用の段落の続きにならず、新しいまとまりを始める行。 */
-private val STARTS_BLOCK = Regex("""^\s{0,3}(?:#{1,6}(?:\s|$)|[-*+]\s|\d+[.)]\s|`{3}|~{3}|\||(?:[-*_][ \t]*){3,}$)""")
 
 /** 見出しの行。**記法を落とす前に**判定する（落とすと本文の行と見分けられない）。 */
 internal fun String.isHeadingLine(): Boolean = HEADING_LINE.containsMatchIn(this)
