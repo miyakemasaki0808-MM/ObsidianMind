@@ -35,7 +35,7 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
             matched++
         }
         if (matched < open.size) {
-            val continues = paragraphOpen && line.substring(pos).isNotBlank() &&
+            val continues = paragraphOpen && !line.substring(pos).isMarkdownBlank() &&
                 !interruptsParagraph(line, pos) && !open[matched].startsNextItem(line, pos)
             if (continues) {
                 quoted[index] = open.any { it.quotation }
@@ -63,7 +63,7 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
         }
         val content = line.substring(pos)
         paragraphOpen = when {
-            content.isBlank() || ATX_HEADING.containsMatchIn(content) || THEMATIC_BREAK.matches(content) ||
+            content.isMarkdownBlank() || ATX_HEADING.containsMatchIn(content) || THEMATIC_BREAK.matches(content) ||
                 FENCE_OPEN.containsMatchIn(content) -> false
             // 段落の直後の下線は見出しにする。字下げ4つ以上は段落の中なら続き、外ならコード。
             paragraphOpen && SETEXT_UNDERLINE.matches(content) -> false
@@ -98,7 +98,7 @@ private class ListItemContainer(private val width: Int, private val kind: Char) 
     override fun startsNextItem(line: String, from: Int): Boolean = listItemAt(line, from)?.kind == kind
 
     override fun match(line: String, from: Int): Int? = when {
-        line.substring(from).isBlank() -> line.length
+        line.substring(from).isMarkdownBlank() -> line.length
         line.substring(from).takeWhile { it == ' ' }.length >= width -> from + width
         else -> null
     }
@@ -122,7 +122,7 @@ private fun listItemAt(line: String, from: Int): ListItemStart? {
     val marker = LIST_MARKER.find(rest) ?: return null
     val markerEnd = marker.range.last + 1
     val after = rest.substring(markerEnd)
-    val empty = after.isBlank()
+    val empty = after.isMarkdownBlank()
     // 中身は印の後ろの空白の後ろから。CommonMark は空白5つ以上を1つとして残りを項目の中のコードにするが、
     // そこまで追うと字下げのコードを問いとして拾うので、引用の側へ倒す。
     val gap = if (empty) 1 else after.takeWhile { it == ' ' }.length
@@ -150,6 +150,12 @@ private fun interruptsParagraph(line: String, from: Int): Boolean {
 /** 引用を開いた行の中身が、書き手のコールアウト（引用・出典以外の種類）か。 */
 private fun isWritersCallout(content: String): Boolean =
     CALLOUT_TYPE.find(content)?.groupValues?.get(1)?.lowercase()?.let { it !in QUOTATION_CALLOUTS } ?: false
+
+/**
+ * Markdown の空行か（タブは広げた後）。半角空白だけの行に限る。`isBlank` は全角空白やノーブレークスペースも空白とみなすが、
+ * それらは文字なので、見た目を空けるために置いた行で引用の段落を閉じてはいけない。
+ */
+private fun String.isMarkdownBlank(): Boolean = all { it == ' ' }
 
 /** タブを4つ区切りの空白へ広げる。字下げの幅だけを測るので、中身の文字は替わってよい。 */
 private fun expandTabs(line: String): String {

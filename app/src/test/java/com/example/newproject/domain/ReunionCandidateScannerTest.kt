@@ -194,6 +194,26 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> ```kotlin\n自分の問いなのか。").questions)
     }
 
+    /**
+     * Markdown の空行は半角空白とタブだけの行。全角空白やノーブレークスペースだけの行は文字のある段落の続きなので、引用を閉じない。
+     * 見た目を空けるために置かれることがあり、Kotlin の `isBlank` は空白とみなす。
+     */
+    @Test
+    fun `全角空白やノーブレークスペースだけの行で引用の段落を閉じず、半角空白とタブだけの行で閉じる`() {
+        listOf("\u3000", "\u00A0").forEach { space ->
+            assertTrue(space, scanReunionCandidates("> 引用の一文です。\n> $space\nこれも引用の続きなのか。").questions.isEmpty())
+        }
+        listOf(">", ">   ", ">\t").forEach { line ->
+            assertEquals(line, listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n$line\nこれは地の文なのか。").questions)
+        }
+        // 引用の外の全角空白だけの行も、記号の無い続きの行で、引用を閉じない。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n\u3000\nこれも引用の続きなのか。").questions.isEmpty())
+        // 箇条の項目の中でも同じ。全角空白の行は項目にとっても空行ではない。
+        assertTrue(scanReunionCandidates("- > 引用の一文です。\n  \u3000\nこれも引用の続きなのか。").questions.isEmpty())
+        // 印の後ろが全角空白の項目は、中身のある項目なので段落を切り、引用を閉じる。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n- \u3000\nこれも引用の続きなのか。").questions.isNotEmpty())
+    }
+
     /** 箇条の項目は空行をまたいで続く。項目の字下げの中の引用は、その項目の引用。 */
     @Test
     fun `空行をまたいだ項目の中の引用の問いは拾わない`() {
