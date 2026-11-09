@@ -15,12 +15,15 @@ package com.example.newproject.domain
  *
  * **記号の数ではなく、引用と箇条のまとまり（CommonMark の入れ物）の開閉で追う。** 行ごとに次の順で読む。
  * 1. 開いている入れ物を外から照らす（引用は `>`、箇条は項目の字下げ。空行は箇条にだけ合う）
- * 2. 合わない入れ物は、段落が開いていて、残りが段落を切るまとまり（引用・見出し・区切り線・段落を切れる箇条）も
- *    合わない箇条の次の項目も始めないとき（続きの行）だけ残し、それ以外は閉じる
- * 3. 残りから新しい引用と箇条を開く。段落の中で開ける箇条は、段落を切れるもの（中身のある記号の箇条か、1で始まる番号）だけ
+ * 2. 合わない入れ物は、段落が開いていて、残りが新しいまとまり（引用・見出し・区切り線・箇条）を始めないとき（続きの行）だけ残し、
+ *    それ以外は閉じる。ここでの箇条は番号や中身を問わない（段落を切れる条件が効くのは、段落の入れ物に合った行だけ）
+ * 3. 残りから新しい引用と箇条を開く。段落の中で開ける箇条は、段落を切れるもの（中身のある記号の箇条か、開始番号が1）だけ
  * 4. 行の中身が段落を開いたままにするかを記録する（見出し・区切り線・コード・空行は閉じる）
  *
  * コールアウトの種類は、その引用を開いた行の中身でだけ読む。HTML のまとまりと表は段落として扱う（引用の側へ倒れる）。
+ *
+ * 他人の言葉の引用の直後の、段落を切れない印（`> 引用` の次の `2. 文`）は CommonMark では引用の外だが、
+ * 書き手の問いと断定しないよう、その項目を引用の側へ倒す。同じ箇条の次の項目は倒さない。
  */
 internal fun quotationLines(lines: List<String>): BooleanArray {
     val quoted = BooleanArray(lines.size)
@@ -34,13 +37,17 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
             pos = open[matched].match(line, pos) ?: break
             matched++
         }
+        var itemLeansToQuote = false
         if (matched < open.size) {
+            val item = listItemAt(line, pos)
             val continues = paragraphOpen && !line.substring(pos).isMarkdownBlank() &&
-                !interruptsParagraph(line, pos) && !open[matched].startsNextItem(line, pos)
+                !interruptsParagraph(line, pos) && item == null
             if (continues) {
                 quoted[index] = open.any { it.quotation }
                 return@forEachIndexed
             }
+            itemLeansToQuote = item != null && !item.interruptsParagraph &&
+                !open[matched].startsNextItem(line, pos) && open.any { it.quotation }
             while (open.size > matched) open.removeAt(open.lastIndex)
             paragraphOpen = false
         }
@@ -54,7 +61,7 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
             }
             val item = listItemAt(line, pos)
             if (item != null && (!paragraphOpen || item.interruptsParagraph)) {
-                open += ListItemContainer(item.width, item.kind)
+                open += ListItemContainer(item.width, item.kind, itemLeansToQuote)
                 pos = item.contentStart
                 paragraphOpen = false
                 continue
@@ -92,9 +99,11 @@ private class QuoteContainer(override val quotation: Boolean) : Container {
  * 箇条の項目。[width] は項目を開いた位置から中身までの幅で、続く行はそれだけ字下げすれば項目の中。空行も項目の中。
  * [kind] は印の種類（記号そのものか番号の区切り）で、同じ種類の印が同じ箇条の次の項目になる。
  */
-private class ListItemContainer(private val width: Int, private val kind: Char) : Container {
-    override val quotation = false
-
+private class ListItemContainer(
+    private val width: Int,
+    private val kind: Char,
+    override val quotation: Boolean
+) : Container {
     override fun startsNextItem(line: String, from: Int): Boolean = listItemAt(line, from)?.kind == kind
 
     override fun match(line: String, from: Int): Int? = when {
@@ -114,7 +123,7 @@ private fun quoteContentStart(line: String, from: Int): Int? {
     return index
 }
 
-/** 箇条の項目の印。[interruptsParagraph] は段落の途中でも新しい箇条を始められるか。 */
+/** 箇条の項目の印。[interruptsParagraph] は、段落の入れ物に合った行で段落を切って新しい箇条を始められるか。 */
 private class ListItemStart(val contentStart: Int, val width: Int, val kind: Char, val interruptsParagraph: Boolean)
 
 private fun listItemAt(line: String, from: Int): ListItemStart? {
@@ -137,14 +146,13 @@ private fun listItemAt(line: String, from: Int): ListItemStart? {
 }
 
 /**
- * [from] から先が、段落の途中でも新しいまとまりを始めるか。始めないなら、記号の無い続きの行になる。
+ * [from] から先が、箇条のほかに段落を切るまとまりを始めるか。始めないなら、箇条でない限り記号の無い続きの行になる。
  * コードの柵は見ない — 浅い柵は前処理（`withoutFencedCode`）で空行になり、深い柵の中身を引用の外へ出すとコードを問いとして拾う。
  */
 private fun interruptsParagraph(line: String, from: Int): Boolean {
     val rest = line.substring(from)
     return quoteContentStart(line, from) != null ||
-        ATX_HEADING.containsMatchIn(rest) || THEMATIC_BREAK.matches(rest) ||
-        listItemAt(line, from)?.interruptsParagraph == true
+        ATX_HEADING.containsMatchIn(rest) || THEMATIC_BREAK.matches(rest)
 }
 
 /** 引用を開いた行の中身が、書き手のコールアウト（引用・出典以外の種類）か。 */

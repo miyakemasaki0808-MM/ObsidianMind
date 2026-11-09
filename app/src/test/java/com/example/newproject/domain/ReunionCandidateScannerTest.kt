@@ -153,8 +153,13 @@ class ReunionCandidateScannerTest {
         assertTrue(scanReunionCandidates("> 引用の一文です。\n2. これも引用の続きなのか。").questions.isEmpty())
         assertEquals(listOf("番号の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n1. 番号の問いなのか。").questions)
         assertEquals(listOf("地の文の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n---\n地の文の問いなのか。").questions)
-        // 中身の無い項目は段落を切れないので、記号だけの行も段落の続き。
-        assertTrue(scanReunionCandidates("> 引用の一文です。\n-\nこれも引用の続きなのか。").questions.isEmpty())
+        // 引用の中の段落を、中身の無い項目は切れない。記号だけの行も段落の続きで、次の行も引用の続き。
+        // （`-` だと段落の直後の下線の見出しになるので、下線にならない `+` で確かめる）
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n> +\nこれも引用の続きなのか。").questions.isEmpty())
+        // 記号を外した行の中身の無い項目は前の引用を閉じる。続く段落が無いので、次の地の文は引用の外。
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n-\nこれは地の文なのか。").questions)
+        // 段落を切れない番号は引用の側へ倒す。その項目に続く段落も同じ。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n2. 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
         // 続きの行が入る段落が引用の中の箇条でも、外の引用の中にある。
         assertTrue(scanReunionCandidates("> 引用の一文です。\n> - 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
     }
@@ -179,6 +184,21 @@ class ReunionCandidateScannerTest {
         assertTrue(scanReunionCandidates("> [!note] メモ\n> 0001) > 引用の問いなのか。").questions.isEmpty())
         assertTrue(scanReunionCandidates("地の文の一文です。\n01. > 引用の問いなのか。").questions.isEmpty())
         assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n> 01. > [!note] 自分の問いなのか。").questions)
+    }
+
+    /**
+     * `>` を外した次の行の箇条は、前の引用を閉じて新しい箇条を始める（段落を切れる条件は、段落の入れ物に合った行にだけ効く）。
+     * 前の引用が書き手のコールアウトでも、その行の引用は読み直す。
+     */
+    @Test
+    fun `引用の記号を外した次の行の箇条は新しい箇条で、その中の引用を読む`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n2. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n2. > [!cite] 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 1. 項目です。\n2. > 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n2. > [!note] 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n2. 自分の問いなのか。").questions)
+        // 空の項目も前の引用を閉じるので、次の `>` は書き手のコールアウトの続きではなく新しい引用。
+        assertTrue(scanReunionCandidates("> [!note] メモ\n-\n> 引用の問いなのか。").questions.isEmpty())
     }
 
     /** 段落の続きの行は、段落を切るまとまりでない限り引用に残る。箇条の後ろの引用の記号は箇条を切って引用を始める。 */
