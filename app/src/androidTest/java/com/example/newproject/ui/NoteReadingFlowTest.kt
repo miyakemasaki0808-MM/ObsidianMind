@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,7 +73,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -134,7 +132,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -2686,25 +2683,6 @@ class NoteReadingFlowTest {
             .config[SemanticsActions.CustomActions]
         composeRule.runOnIdle { assertTrue(actions.first { it.label == label }.action()) }
         composeRule.waitForIdle()
-    }
-
-    /**
-     * **実窓がアプリの机を出す幅（Expanded）のときだけ続ける。** 狭い窓では skip する。
-     *
-     * 机は 960dp の箱で組み、窓より大きいと中央に寄せて置かれる。カバー画面のような狭い窓では箱の両端が窓の外へ出て、
-     * 題名の表示確認と端寄りの払いが届かない。アプリも閉じた外画面には机を出さないので、
-     * 机の保証は内側の画面で確かめる（→ docs/dev/system/instrumentation_testing.md 判断11）。
-     * 題名の表示や端寄りの座標に頼るテストだけが呼ぶ。存在の確認へ弱めて通すことはしない。
-     * **見るのは箱が窓に収まるかだけで、折り目は見ない** — 折り目は [PostureBox] でテストが決める（同 判断12）。
-     */
-    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
-    private fun assumeDeskWindow() {
-        val configuration = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
-        val window = DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
-        assumeTrue(
-            "机を出さない幅の窓（${configuration.screenWidthDp}dp）。机の保証は内側の画面で確かめる",
-            WindowSizeClass.calculateFromSize(window).widthSizeClass == WindowWidthSizeClass.Expanded
-        )
     }
 
     /** 机の画面の帯を、つまみを下へ払って出す。 */
