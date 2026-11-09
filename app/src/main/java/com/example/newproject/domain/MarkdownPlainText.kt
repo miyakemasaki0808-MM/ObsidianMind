@@ -80,7 +80,10 @@ private fun fenceMarkerOf(line: String): FenceMarker? {
     if (char != '`' && char != '~') return null
     val length = rest.takeWhile { it == char }.length
     if (length < MIN_FENCE_LENGTH) return null
-    return FenceMarker(char, length, hasTrailingText = rest.drop(length).isNotBlank())
+    val trailing = rest.drop(length)
+    // バッククォートの柵は後ろにバッククォートを書けない。書いてあればインラインコードで始まる段落で、柵として読むと後ろの本文が全部消える。
+    if (char == '`' && '`' in trailing) return null
+    return FenceMarker(char, length, hasTrailingText = trailing.isNotBlank())
 }
 
 private const val MIN_FENCE_LENGTH = 3

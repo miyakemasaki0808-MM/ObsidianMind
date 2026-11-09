@@ -342,6 +342,17 @@ class ReunionCandidateScannerTest {
 
     // --- 記法とノイズ ---------------------------------------------------------
 
+    /** バッククォートの柵は後ろにバッククォートを書けない。書いてあればインラインコードの段落で、後ろの本文を隠さない。チルダの柵は書ける。 */
+    @Test
+    fun `バッククォート3本のインラインコードで始まる行は柵にせず、後ろの本文を候補から消さない`() {
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("```code``` を使った。\nこれは地の文なのか。").questions)
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("```foo`bar\nこれは地の文なのか。").questions)
+        assertEquals(
+            listOf("これは地の文なのか。"),
+            scanReunionCandidates("~~~ a`b\nコードの中の問いなのか。\n~~~\nこれは地の文なのか。").questions
+        )
+    }
+
     @Test
     fun `コードブロックの中は候補にしない`() {
         val candidates = scanReunionCandidates(
