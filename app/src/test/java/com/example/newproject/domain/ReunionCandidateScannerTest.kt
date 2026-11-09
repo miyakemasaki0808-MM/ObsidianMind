@@ -172,6 +172,15 @@ class ReunionCandidateScannerTest {
         assertTrue(scanReunionCandidates("1) > 引用の一文です。\n2. これも引用の続きなのか。").questions.isEmpty())
     }
 
+    /** 開始番号は数値で比べる。0で埋めた1も、段落を切れる新しい箇条を始める。字下げの幅は書かれた表記の長さで測る。 */
+    @Test
+    fun `0で埋めた開始番号1は段落を切り、その中の引用を読む`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 01. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 0001) > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("地の文の一文です。\n01. > 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n> 01. > [!note] 自分の問いなのか。").questions)
+    }
+
     /** 段落の続きの行は、段落を切るまとまりでない限り引用に残る。箇条の後ろの引用の記号は箇条を切って引用を始める。 */
     @Test
     fun `引用でないまとまりの後ろの引用の記号は、続きの行ではなく新しい引用`() {

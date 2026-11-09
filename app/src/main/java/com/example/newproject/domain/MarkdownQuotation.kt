@@ -127,7 +127,7 @@ private fun listItemAt(line: String, from: Int): ListItemStart? {
     // そこまで追うと字下げのコードを問いとして拾うので、引用の側へ倒す。
     val gap = if (empty) 1 else after.takeWhile { it == ' ' }.length
     val symbol = marker.groupValues[2]
-    val interrupts = !empty && (symbol.length == 1 && symbol[0] in BULLETS || symbol.dropLast(1) == "1")
+    val interrupts = !empty && (symbol.length == 1 && symbol[0] in BULLETS || symbol.dropLast(1).toIntOrNull() == 1)
     return ListItemStart(
         contentStart = if (empty) line.length else from + markerEnd + gap,
         width = markerEnd + gap,
