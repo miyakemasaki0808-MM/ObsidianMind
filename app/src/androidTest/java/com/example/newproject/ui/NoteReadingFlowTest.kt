@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -122,6 +123,7 @@ import com.example.newproject.ui.screen.spreadRefusalText
 import com.example.newproject.ui.screen.SpreadRefusal
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlin.math.roundToInt
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
@@ -3116,6 +3118,48 @@ class NoteReadingFlowTest {
     }
 
     /**
+     * **縦の流しで節へ飛ぶアニメーションの途中に見開きへ替わっても、遅れた送りが後の位置を上書きしない**（→ features/note_spread.md §10）。
+     * 見開きを出す配線（`bodyPosition.cancelAnimation()`）を通すので、読書画面ごと組む。見開きは最新の送り先から始まり、めくった位置はそのまま残る。
+     */
+    @Test
+    fun 縦の流しの送りの途中に見開きへ替わると_遅れた送りがめくった位置を上書きしない() {
+        assumeDeskWindow()
+        val body = (0 until 200).joinToString("\n\n") { paragraphText(it) }
+        val model = buildNoteSectionModel(body)
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var spread by mutableStateOf(false)
+        lateinit var scope: CoroutineScope
+        composeRule.setContent {
+            scope = rememberCoroutineScope()
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    ReaderTab(loadedNote(body), model, listState, window = window, bodyPosition = position, spreadSelected = spread)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.mainClock.autoAdvance = false
+        composeRule.runOnUiThread { position.animateTo(scope, 150) }
+        composeRule.mainClock.advanceTimeBy(100)
+        composeRule.runOnIdle {
+            assertTrue("送りが途中でない（前提）: ${listState.firstVisibleItemIndex}", listState.firstVisibleItemIndex < 150)
+            spread = true
+        }
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(paragraphText(150)).assertIsDisplayed()
+
+        turnSpread()
+        val turned = composeRule.runOnIdle { listState.firstVisibleItemIndex }
+        assertTrue("めくれていない: $turned", turned > 150)
+        composeRule.mainClock.advanceTimeBy(DELAYED_SEND_WAIT_MILLIS)
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals("遅れた送りがめくった位置を上書きした", turned, listState.firstVisibleItemIndex) }
+    }
+
+    /**
      * **見開きを離れ、ふだんの画面で読み進めてから見開きへ入ると、読み進めたブロックから始まる**（→ features/note_spread.md §8 判断14）。
      * 見開きの読む位置の保存値は、見開きを組むまで消費されずに残る。読み進めたのは一覧を直接送る操作（口を通らない指のスクロールと同じ）。
      */
@@ -4097,6 +4141,9 @@ class NoteReadingFlowTest {
 
         /** 段落だけを並べた長文。ブロック番号を本文へ入れて可視位置を特定できるようにする。 */
         val LONG_BODY = (0 until 40).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
+
+        /** 打ち切った送りが遅れて届くなら届いているだけの時間。 */
+        const val DELAYED_SEND_WAIT_MILLIS = 1_000L
 
         fun markerAt(index: Int) = "段落$index"
 
