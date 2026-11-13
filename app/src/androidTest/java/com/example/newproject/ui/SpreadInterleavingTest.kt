@@ -270,33 +270,41 @@ class SpreadInterleavingTest {
 
     /**
      * **カードの高さは左ページの組版から引く。** 対照と比べるだけだと、カードの高さを無視する組版は対照にも同じように効くので、
-     * カードを出す前後で左ページの段落と見開きの境目が変わることを独立に確かめる。
+     * カードを出す前後の見開きを独立に確かめる。左ページの段落が減るだけでは足りない — 組版がカードを無視しても、描く側でカードが
+     * 高さを取るので下の段落が切れて減って見える。組み直したときだけ、左から押し出した段落が右ページの先頭へ移り、境目で番号が続く。
      */
     @Test
     fun カードを出すと左ページに入る段落が減り_見開きの境目が変わる() {
         setSpread()
         composeRule.waitForIdle()
-        val leftBefore = leftPageParagraphs()
+        val before = shownPages()
+        assertEquals("カードを出す前から境目で番号が飛んでいる（$before）", before.left.last() + 1, before.right.first())
 
         composeRule.runOnIdle { card = true }
         composeRule.waitForIdle()
-        val leftAfter = leftPageParagraphs()
+        val after = shownPages()
 
-        assertTrue("カードを出しても左ページの段落が減らない（$leftBefore → $leftAfter）", leftAfter.size < leftBefore.size)
-        assertEquals("左ページの先頭が替わった", leftBefore.first(), leftAfter.first())
+        assertTrue("カードを出しても左ページの段落が減らない（$before → $after）", after.left.size < before.left.size)
+        assertEquals("左ページの先頭が替わった", before.left.first(), after.left.first())
+        assertTrue("右ページの先頭が前へ移らない（$before → $after）", after.right.first() < before.right.first())
+        assertEquals("左右の境目で段落の番号が飛んだ（$after）", after.left.last() + 1, after.right.first())
+        val pushed = (after.left.last() + 1)..before.left.last()
+        assertTrue("左ページから押し出した段落 $pushed が右ページに見えない（$after）", pushed.all { it in after.right })
     }
 
-    /** 左ページに見えている段落（ページャの中央より左）。 */
-    private fun leftPageParagraphs(): List<String> {
+    /** 左右のページに見えている段落の番号を、上から順に（ページャの中央で左右を分ける）。 */
+    private fun shownPages(): ShownPages {
         val center = composeRule.onNode(PAGER).fetchSemanticsNode().boundsInRoot.center.x
         val nodes = composeRule.onAllNodesWithText("A段落", substring = true)
-        return (0 until nodes.fetchSemanticsNodes().size)
+        val shown = (0 until nodes.fetchSemanticsNodes().size)
             .map { nodes[it] }
             .filter { it.isDisplayed() }
             .map { it.fetchSemanticsNode() }
-            .filter { it.boundsInRoot.right <= center }
             .sortedBy { it.boundsInRoot.top }
-            .map { it.config[SemanticsProperties.Text].joinToString("") }
+        fun numbers(onLeft: Boolean) = shown
+            .filter { (it.boundsInRoot.right <= center) == onLeft }
+            .map { node -> paragraphNumber(node.config[SemanticsProperties.Text].joinToString("")) }
+        return ShownPages(left = numbers(onLeft = true), right = numbers(onLeft = false))
     }
 
     /** いま見えている段落の文字を、上から順に。 */
@@ -420,6 +428,7 @@ class SpreadInterleavingTest {
 
     private data class Note(val key: String, val model: NoteSectionModel)
     private data class Report(val block: Int, val total: Int)
+    private data class ShownPages(val left: List<Int>, val right: List<Int>)
 
     private companion object {
         const val NOTE_A = "content://vault/a.md"
@@ -441,6 +450,7 @@ class SpreadInterleavingTest {
         val PAGER = SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
 
         fun paragraph(note: String, index: Int) = "${note}段落$index の本文です。"
+        fun paragraphNumber(text: String) = Regex("段落(\\d+) ").find(text)!!.groupValues[1].toInt()
         fun body(note: String, count: Int) = (0 until count).joinToString("\n\n") { paragraph(note, it) }
     }
 }
