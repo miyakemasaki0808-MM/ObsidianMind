@@ -160,6 +160,10 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n-\nこれは地の文なのか。").questions)
         // 段落を切れない番号は引用の側へ倒す。その項目に続く段落も同じ。
         assertTrue(scanReunionCandidates("> 引用の一文です。\n2. 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+        // 倒すのは引用の直後の項目だけ。倒した項目を、空行の後の別の箇条を倒す根拠にしない。
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n2. 番号の項目です。\n\n2) 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n2. 番号の項目です。\n\n2) > [!note] 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n-\n\n2. 自分の問いなのか。").questions)
         // 続きの行が入る段落が引用の中の箇条でも、外の引用の中にある。
         assertTrue(scanReunionCandidates("> 引用の一文です。\n> - 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
     }

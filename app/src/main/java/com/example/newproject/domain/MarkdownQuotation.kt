@@ -23,7 +23,7 @@ package com.example.newproject.domain
  * コールアウトの種類は、その引用を開いた行の中身でだけ読む。HTML のまとまりと表は段落として扱う（引用の側へ倒れる）。
  *
  * 他人の言葉の引用の直後の、段落を切れない印（`> 引用` の次の `2. 文`）は CommonMark では引用の外だが、
- * 書き手の問いと断定しないよう、その項目を引用の側へ倒す。同じ箇条の次の項目は倒さない。
+ * 書き手の問いと断定しないよう、その項目を引用の側へ倒す。同じ箇条の次の項目と、倒した項目の後ろの別の箇条は倒さない。
  */
 internal fun quotationLines(lines: List<String>): BooleanArray {
     val quoted = BooleanArray(lines.size)
@@ -46,8 +46,9 @@ internal fun quotationLines(lines: List<String>): BooleanArray {
                 quoted[index] = open.any { it.quotation }
                 return@forEachIndexed
             }
+            // 倒す根拠は本物の引用だけ。倒した項目を根拠にすると、その項目を離れた別の箇条まで倒れる。
             itemLeansToQuote = item != null && !item.interruptsParagraph &&
-                !open[matched].startsNextItem(line, pos) && open.any { it.quotation }
+                !open[matched].startsNextItem(line, pos) && open.any { it is QuoteContainer && it.quotation }
             while (open.size > matched) open.removeAt(open.lastIndex)
             paragraphOpen = false
         }
