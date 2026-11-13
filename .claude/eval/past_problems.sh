@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # 過去の修正を過去問にして Claude Code に解かせ、その修正で足したテストで合否を出す（→ docs/dev/harness/README.md §4）。
 #
-#   .claude/eval/past_problems.sh check <問題ID...>          問題が成り立つか（親で隠しテストが落ち、修正で通る）。トークンを使わない
-#   .claude/eval/past_problems.sh run <条件> <問題ID...>     解かせて採点する。条件は as-is（親のまま）か no-claude-md（CLAUDE.md を外す）
+#   .claude/eval/past_problems.sh check <問題ID...>          問題が成り立つか（親で既存のテストが通り、隠しテストは親で落ちて修正で通る）。トークンを使わない
+#   .claude/eval/past_problems.sh run <条件> <問題ID...>     解かせて採点する。条件は as-is（親のまま）か no-claude-md（CLAUDE.md を読ませない）
 #
 # 問題は problems.tsv（ID・修正のコミット）と problems/<ID>.md（課題文）。
-# 解かせる場所は、親コミットのファイルだけを書き出した使い捨てのリポジトリ。後の履歴も本体の場所も持たないので、
+# 解かせる場所は、親コミットとその祖先だけを持つ使い捨てのリポジトリ。後の履歴も本体の場所も持たないので、
 # 修正そのものを読んで解くことができない。隠しテストは、解き終えた後にだけ修正のコミットから書き戻す。
 #
 # 環境変数: EVAL_TOKEN_CAP（1回の起動で使うトークンの上限。超えたら次の問題へ進まない。既定 2000000）、
@@ -38,20 +38,23 @@ hidden_tests_of() {
   git -C "$root" diff-tree --no-commit-id --name-only -r --diff-filter=AM "$1" -- app/src/test/
 }
 
-# コミットのファイルだけを、履歴の無い使い捨てのリポジトリへ書き出す。local.properties は追跡外なので写す。
-# 過去問の一覧と課題文（.claude/eval）は、ほかの問題の修正のコミットを名指すので外す。
+# コミットとその祖先だけを持つ使い捨てのリポジトリを作る。後の履歴（修正そのもの）は取り込まない。
+# 履歴を持たせるのは、設計文書が名指すコミットの実在を確かめるテストがあり、履歴が無いと解く前から落ちるため。
+# local.properties は追跡外なので写す。過去問の一覧と課題文（.claude/eval）は、ほかの問題の修正のコミットを名指すので外す。
 snapshot() {
   local commit="$1" dir="$2"
-  mkdir -p "$dir" || return 1
-  git -C "$root" archive "$commit" | tar -x -C "$dir" || return 1
+  git init -q "$dir" || return 1
+  git -C "$dir" fetch -q --no-tags "$root" "$(git -C "$root" rev-parse "$commit")" || return 1
+  git -C "$dir" checkout -q -b eval FETCH_HEAD || return 1
   rm -rf "$dir/.claude/eval"
   cp "${root}/local.properties" "$dir/" || return 1
-  (
-    cd "$dir" &&
-      git init -q &&
-      git add -A &&
-      git -c user.name=eval -c user.email=eval@localhost -c core.hooksPath=/dev/null commit -q -m snapshot
-  ) || return 1
+}
+
+# 解く側が ~/.claude/projects に残す作業の場所ごとの置き場を消す。
+forget_project() {
+  local encoded
+  encoded="$(cd "$1" && pwd -P | sed 's/[^A-Za-z0-9]/-/g')" || return 0
+  [ -n "$encoded" ] && rm -rf "$HOME/.claude/projects/${encoded}"
 }
 
 # 隠しテストを修正のコミットから書き戻し、そのクラスだけを流す。成功なら 0。
@@ -82,6 +85,13 @@ check() {
     [ -n "$fix" ] || { echo "eval: 問題が無い: ${id}" >&2; status=1; continue; }
     work="$(mktemp -d "${TMPDIR:-/tmp}/vigilith-eval.XXXXXX")" || exit 1
     snapshot "${fix}^" "$work/parent" && snapshot "$fix" "$work/fix" || { echo "eval: ${id}: 書き出せない" >&2; status=1; continue; }
+    # 解く側が見る親の世界は、隠しテストを置く前に既存のテストがすべて通っていなければならない。
+    # 落ちていると、解く側は課題と無関係な失敗を追ってトークンを使う。
+    if ! (cd "$work/parent" && JAVA_HOME="$JBR" ./gradlew testDebugUnitTest --offline -q) > "$work/baseline.log" 2>&1; then
+      echo "eval: ${id}: 親で既存のテストが落ちる（${work}/baseline.log）"
+      status=1
+      continue
+    fi
     if run_hidden_tests "$fix" "$work/parent" "$work/parent.log"; then
       echo "eval: ${id}: 親で隠しテストが通る（問題になっていない）"
       status=1
@@ -96,17 +106,20 @@ check() {
   return "$status"
 }
 
-apply_condition() {
+# 条件ごとに解く側へ足す環境変数。CLAUDE.md はファイルを消さずに読ませない（消すと、それを読む文書の検査が解く前から落ちる）。
+condition_env() {
   case "$1" in
-    as-is) ;;
-    no-claude-md) rm -f "$2/CLAUDE.md" ;;
-    *) echo "eval: 知らない条件: $1" >&2; return 1 ;;
+    as-is) echo "EVAL_CONDITION=as-is" ;;
+    no-claude-md) echo "CLAUDE_CODE_DISABLE_CLAUDE_MDS=1" ;;
+    *) return 1 ;;
   esac
 }
 
 solve() {
   local condition="$1"; shift
   local bin id fix work prompt start seconds used=0 tokens pass
+  local extra_env
+  extra_env="$(condition_env "$condition")" || { echo "eval: 知らない条件: ${condition}" >&2; exit 64; }
   bin="$(claude_bin)"
   [ -x "$bin" ] || { echo "eval: claude の実行ファイルが見つからない" >&2; exit 1; }
   if ! env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" "$bin" auth status --json 2>/dev/null | grep -q '"loggedIn": *true'; then
@@ -122,7 +135,7 @@ solve() {
     fix="$(fix_of "$id")"
     [ -n "$fix" ] || { echo "eval: 問題が無い: ${id}" >&2; continue; }
     work="$(mktemp -d "${TMPDIR:-/tmp}/vigilith-eval.XXXXXX")" || exit 1
-    snapshot "${fix}^" "$work/repo" && apply_condition "$condition" "$work/repo" || { echo "eval: ${id}: 書き出せない" >&2; continue; }
+    snapshot "${fix}^" "$work/repo" || { echo "eval: ${id}: 書き出せない" >&2; continue; }
     prompt="$(cat "${eval_dir}/problems/${id}.md")
 
 - 質問はできません。判断が要るときは、最も妥当なほうを選んで進めてください。
@@ -133,7 +146,7 @@ solve() {
     (
       cd "$work/repo" &&
         env -i HOME="$HOME" PATH="$PATH" USER="${USER:-}" LOGNAME="${LOGNAME:-${USER:-}}" TMPDIR="${TMPDIR:-/tmp}" \
-          LANG="${LANG:-ja_JP.UTF-8}" JAVA_HOME="$JBR" \
+          LANG="${LANG:-ja_JP.UTF-8}" JAVA_HOME="$JBR" CLAUDE_CODE_DISABLE_AUTO_MEMORY=1 "$extra_env" \
           timeout "$SOLVE_TIMEOUT" "$bin" -p "$prompt" \
           --model "$MODEL" \
           --output-format json \
@@ -146,6 +159,7 @@ solve() {
     ) > "$work/solve.json" 2> "$work/solve.err"
     local claude_status=$?
     seconds=$(( $(date +%s) - start ))
+    forget_project "$work/repo"
     read -r tokens cost turns < <(python3 - "$work/solve.json" <<'PY'
 import json, sys
 try:
@@ -166,7 +180,15 @@ print(tokens, data.get("total_cost_usd", "?"), data.get("num_turns", "?"))
 PY
 )
     used=$(( used + tokens ))
+    # 何を触ったか（文書の更新・ゲートの実行など、隠しテストでは測れないもの）を後から読めるよう、隠しテストを置く前に残す。
+    local run_dir="${state_dir}/runs/$(date +%Y%m%dT%H%M%S)-${id}-${condition}"
+    mkdir -p "$run_dir" &&
+      git -C "$work/repo" status --short -- . ':(exclude).claude/eval' > "$run_dir/status.txt" &&
+      git -C "$work/repo" add -A -- . ':(exclude).claude/eval' &&
+      git -C "$work/repo" diff --cached > "$run_dir/diff.patch" &&
+      cp "$work/solve.json" "$work/solve.err" "$run_dir/"
     if run_hidden_tests "$fix" "$work/repo" "$work/hidden.log"; then pass=1; else pass=0; fi
+    cp "$work/hidden.log" "$run_dir/" 2>/dev/null
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$(date +%FT%T)" "$id" "$fix" "$condition" "$MODEL" "$pass" "$seconds" "$tokens" "$cost" "$turns" "$claude_status" >> "$results"
     echo "eval: ${id}（${condition}）: $([ "$pass" = 1 ] && echo 合格 || echo 不合格)・${seconds}秒・${tokens}トークン（累計 ${used}）"
     if [ "${EVAL_KEEP:-0}" = 1 ]; then echo "eval: 解いた場所: ${work}"; else rm -rf "$work"; fi
