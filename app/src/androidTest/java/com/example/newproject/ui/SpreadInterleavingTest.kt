@@ -41,6 +41,8 @@ import org.junit.runner.RunWith
 /**
  * **組版の途中に操作を挟んでも、古い組版の結果を表示・読む位置・読書の記録へ出さない**（→ features/note_spread.md §10 の順序の表）。
  * 組版と操作の前後は、測る前に待つ口（`measureGate`）で固定する。時計や実時間に頼ると、端末の速さで途中の形が変わる。
+ * 止め方は2つ — 何も組めていない形は最初のブロックの前で止め（[startHeldBeforeAny]）、途中まで出た形は途中の組版を出させてから止める
+ * （[startHeldAfterFirstSpread]）。途中まで出た形では操作の前に正当な記録が出うるので、記録は操作の後の分だけを見る。
  *
  * JVM では書けない — 確かめるのは、組版のジョブと保存値と一覧の位置が実際の合成の中でどう交わるかである（純関数の規則は `SpreadPaginationTest` が持つ）。
  * 縦の流しの送りの途中に見開きへ替わる順序だけは、読書画面の配線を通すので `NoteReadingFlowTest` が持つ。
@@ -70,15 +72,14 @@ class SpreadInterleavingTest {
     /** 組版Aを始める → 別のノートBを開く → Aが終わる。 */
     @Test
     fun 組版の途中に別のノートを開くと_前のノートの結果を表示にも位置にも記録にも出さない() {
-        hold.holdAt = 40
-        setSpread()
-        awaitHeldComposing()
+        startHeldAfterFirstSpread("A")
 
         val other = buildNoteSectionModel(body("B", 60))
-        composeRule.runOnIdle {
+        val mark = composeRule.runOnIdle {
             hold.holdAt = null
             note = Note(NOTE_B, other)
             position.moveTo(0)
+            reports.size
         }
         hold.open()
         composeRule.waitForIdle()
@@ -87,8 +88,9 @@ class SpreadInterleavingTest {
         composeRule.onAllNodesWithText("A段落", substring = true).assertCountEquals(0)
         composeRule.runOnIdle {
             assertEquals("別のノートの読む位置が先頭でない", 0, listState.firstVisibleItemIndex)
-            assertTrue("読書の記録が届いていない", reports.isNotEmpty())
-            assertTrue("前のノートの記録を送った: $reports", reports.all { it.total == other.blocks.size })
+            val after = reports.drop(mark)
+            assertTrue("読書の記録が届いていない", after.isNotEmpty())
+            assertTrue("前のノートの記録を送った: $after", after.all { it.total == other.blocks.size })
         }
     }
 
@@ -96,9 +98,7 @@ class SpreadInterleavingTest {
     @Test
     fun 組版の途中に同じノートの解析結果が替わると_新しい本文だけを出し_読む位置を範囲へ収める() {
         position.moveTo(150)
-        hold.holdAt = 40
-        setSpread()
-        awaitHeldComposing()
+        startHeldBeforeAny()
 
         val reparsed = buildNoteSectionModel(body("改", 60))
         composeRule.runOnIdle {
@@ -119,25 +119,24 @@ class SpreadInterleavingTest {
     /** 組版を始める → 別の場所へのリンク・続きから読む → 古い読む位置を持つ組版が終わる。 */
     @Test
     fun 組版の途中に外から送ると_送り先の見開きを出し_古い位置の記録を送らない() {
-        hold.holdAt = 40
-        setSpread()
-        awaitHeldComposing()
+        startHeldAfterFirstSpread("A")
 
-        composeRule.runOnIdle { position.moveTo(120) }
+        val mark = composeRule.runOnIdle {
+            position.moveTo(120)
+            reports.size
+        }
         hold.holdAt = null
         hold.open()
         composeRule.waitForIdle()
 
-        assertSentTo(120)
+        assertSentTo(120, mark)
     }
 
     /** 同じ順序で、組版の途中に再会カードを畳んで左ページの高さが変わる。 */
     @Test
     fun 組版の途中に外から送ってカードを畳んでも_送り先の見開きを出す() {
         card = true
-        hold.holdAt = 40
-        setSpread()
-        awaitHeldComposing()
+        startHeldBeforeAny()
 
         composeRule.runOnIdle {
             position.moveTo(120)
@@ -148,7 +147,7 @@ class SpreadInterleavingTest {
         hold.open()
         composeRule.waitForIdle()
 
-        assertSentTo(120)
+        assertSentTo(120, mark = 0)
     }
 
     /** 画像の寸法が届く → 組み直しを始める → めくりが決まる → 組み直しが終わる。 */
@@ -201,11 +200,12 @@ class SpreadInterleavingTest {
      */
     @Test
     fun 組版の途中に見開きを離れると_古い結果が一覧の位置を書かず_記録も送らない() {
-        hold.holdAt = 40
-        setSpread()
-        awaitHeldComposing()
+        startHeldAfterFirstSpread("A")
 
-        composeRule.runOnIdle { shown = false }
+        val mark = composeRule.runOnIdle {
+            shown = false
+            reports.size
+        }
         composeRule.waitForIdle()
         composeRule.runOnIdle { position.moveTo(77) }
         hold.holdAt = null
@@ -214,7 +214,7 @@ class SpreadInterleavingTest {
 
         composeRule.runOnIdle {
             assertEquals("離れた後に古い結果が一覧の位置を書いた", 77, listState.firstVisibleItemIndex)
-            assertTrue("離れた後に古い結果の記録を送った: $reports", reports.isEmpty())
+            assertTrue("離れた後に古い結果の記録を送った: ${reports.drop(mark)}", reports.size == mark)
         }
     }
 
@@ -288,10 +288,28 @@ class SpreadInterleavingTest {
         }
     }
 
-    /** 組版が止まり、まだ何も組めていないことを確かめる。組版の途中に操作を挟めたことの前提。 */
-    private fun awaitHeldComposing() {
+    /**
+     * 最初のブロックを測る前で止めて組み始め、まだ何も組めていないことを確かめる。組版の途中に操作を挟めたことの前提。
+     * 止める位置は組み立てる前に決める（組み立てた後だと、組版の始まりと競り合う）。
+     */
+    private fun startHeldBeforeAny() {
+        hold.holdAt = 0
+        setSpread()
         composeRule.waitUntil(WAIT_MILLIS) { hold.reached > 0 }
         composeRule.onNodeWithText("組んでいます").assertIsDisplayed()
+    }
+
+    /**
+     * 最初の見開きを組める分まで測らせ、途中の組版を出させてから止める。最初の見開きが出ていることを確かめる。
+     * 古い結果が操作の後に残らないことを、見えている結果から確かめられる形にする。
+     */
+    private fun startHeldAfterFirstSpread(note: String) {
+        hold.publishAt = FIRST_SPREAD_BLOCKS
+        hold.holdAt = FIRST_SPREAD_BLOCKS + 1
+        setSpread()
+        composeRule.waitUntil(WAIT_MILLIS) { hold.reached > 0 }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithText(paragraph(note, 0)).assertIsDisplayed()
     }
 
     /** 読み上げの操作で次の見開きへ送り、止まった後の読む位置のブロックを返す。 */
@@ -302,10 +320,12 @@ class SpreadInterleavingTest {
         return composeRule.runOnIdle { listState.firstVisibleItemIndex }
     }
 
-    private fun assertSentTo(block: Int) {
+    /** 送り先の見開きが出て、送った後の記録が送り先より手前を指さない（[mark] より前の記録は送る前の正当なもの）。 */
+    private fun assertSentTo(block: Int, mark: Int) {
         assertSpreadAt(block)
         composeRule.runOnIdle {
-            assertTrue("送り先より手前の記録を送った: $reports", reports.all { it.block >= block })
+            val after = reports.drop(mark)
+            assertTrue("送り先より手前の記録を送った: $after", after.all { it.block >= block })
         }
     }
 
@@ -347,6 +367,9 @@ class SpreadInterleavingTest {
 
         /** 途中を出すブロック。次の見開きへ送れるだけ組めている。 */
         const val PUBLISH_BLOCK = 150
+
+        /** 最初の見開きを組める段落の数（1行の段落40個で3ページになる）。 */
+        const val FIRST_SPREAD_BLOCKS = 40
         const val IMAGE_WIDTH = 1_200
         const val IMAGE_HEIGHT = 1_600
         const val LARGE_FONT = 1.3f
