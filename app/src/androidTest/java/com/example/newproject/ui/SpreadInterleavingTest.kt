@@ -36,6 +36,7 @@ import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,6 +72,15 @@ class SpreadInterleavingTest {
     /** 見開きへ渡す本文の位置の口と、見開きを初めから組み直すための世代（対照を組むときに替える）。 */
     private var spreadPosition by mutableStateOf(position)
     private var generation by mutableStateOf(0)
+
+    /**
+     * 見開きは 800dp の箱で組むので、狭い窓では箱が中央へ寄って左ページが窓の外へ出る。表示の確認と見えている段落の取り出しが
+     * 窓の幅で落ちるので、机を出す幅の窓でだけ流す（→ docs/dev/system/instrumentation_testing.md 判断11）。
+     */
+    @Before
+    fun requireDeskWindow() {
+        assumeDeskWindow()
+    }
 
     /** ブロックの番号から段落の番号を引く数。画像を先頭に置いたノートでは1つずれる。 */
     private var blocksBeforeParagraphs = 0
