@@ -1,0 +1,4 @@
+id	fix	summary
+trace11-match-controls	06532701	照らし直しの整え方に U+001C〜U+001F が残る
+ai5-frontmatter-null	71adebaf	frontmatter の引用符なしの null を文字列として読む
+ai6-zero-padded	82d5ed5b	0で埋めた開始番号1の箇条の中の引用を見落とす

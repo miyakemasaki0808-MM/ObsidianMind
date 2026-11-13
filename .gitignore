@@ -30,6 +30,7 @@ captures/
 !.claude/settings.json
 !.claude/gate/
 !.claude/review/
+!.claude/eval/
 !.claude/skills/
 
 # 実機検証の記録のうち、端末を特定するものと使い捨てのものだけを履歴へ残さない。
