@@ -268,6 +268,37 @@ class SpreadInterleavingTest {
         assertEquals("最後の寸法で初めから組んだ対照と、見えている段落が違う", shownParagraphs(), interleaved)
     }
 
+    /**
+     * **カードの高さは左ページの組版から引く。** 対照と比べるだけだと、カードの高さを無視する組版は対照にも同じように効くので、
+     * カードを出す前後で左ページの段落と見開きの境目が変わることを独立に確かめる。
+     */
+    @Test
+    fun カードを出すと左ページに入る段落が減り_見開きの境目が変わる() {
+        setSpread()
+        composeRule.waitForIdle()
+        val leftBefore = leftPageParagraphs()
+
+        composeRule.runOnIdle { card = true }
+        composeRule.waitForIdle()
+        val leftAfter = leftPageParagraphs()
+
+        assertTrue("カードを出しても左ページの段落が減らない（$leftBefore → $leftAfter）", leftAfter.size < leftBefore.size)
+        assertEquals("左ページの先頭が替わった", leftBefore.first(), leftAfter.first())
+    }
+
+    /** 左ページに見えている段落（ページャの中央より左）。 */
+    private fun leftPageParagraphs(): List<String> {
+        val center = composeRule.onNode(PAGER).fetchSemanticsNode().boundsInRoot.center.x
+        val nodes = composeRule.onAllNodesWithText("A段落", substring = true)
+        return (0 until nodes.fetchSemanticsNodes().size)
+            .map { nodes[it] }
+            .filter { it.isDisplayed() }
+            .map { it.fetchSemanticsNode() }
+            .filter { it.boundsInRoot.right <= center }
+            .sortedBy { it.boundsInRoot.top }
+            .map { it.config[SemanticsProperties.Text].joinToString("") }
+    }
+
     /** いま見えている段落の文字を、上から順に。 */
     private fun shownParagraphs(): List<String> {
         val nodes = composeRule.onAllNodesWithText("A段落", substring = true)
