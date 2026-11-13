@@ -3120,7 +3120,7 @@ class NoteReadingFlowTest {
 
     /**
      * **縦の流しで節へ飛ぶアニメーションの途中に見開きへ替わっても、遅れた送りが後の位置を上書きしない**（→ features/note_spread.md §10）。
-     * 見開きを出す配線（`bodyPosition.cancelAnimation()`）を通すので、読書画面ごと組む。保存値の無い初回は、切り替えたときの一覧の位置から入る。
+     * 見開きを出す配線（`bodyPosition.cancelAnimation()`）を通すので、読書画面ごと組む。保存値の無い初回は、見開きが組まれたときの一覧の位置から入る。
      * 送り先は入った見開きに入らないほど遠くに置く — 打ち切った送りが遅れて届けば、入った位置もめくった位置もそこへ動く。
      */
     @Test
@@ -3145,20 +3145,29 @@ class NoteReadingFlowTest {
         composeRule.mainClock.autoAdvance = false
         composeRule.runOnUiThread { position.animateTo(scope, FAR_SEND) }
         composeRule.mainClock.advanceTimeBy(100)
-        val atSwitch = composeRule.runOnIdle { listState.firstVisibleItemIndex }
-        assertTrue("送りが始まっていない（前提）: $atSwitch", atSwitch > 0)
-        assertTrue("送り先が入る見開きに入りうる（前提）: $atSwitch", atSwitch < FAR_SEND - SPREAD_SPAN_PARAGRAPHS)
-        composeRule.runOnIdle { spread = true }
+        val beforeSwitch = composeRule.runOnUiThread { listState.firstVisibleItemIndex }
+        assertTrue("送りが始まっていない（前提）: $beforeSwitch", beforeSwitch > 0)
+
+        // 見開きが実際に組まれたフレームの位置を取る。切り替えを頼んでから組まれるまでに、一覧はまだ進みうる。
+        composeRule.runOnUiThread { spread = true }
+        var frames = 0
+        while (composeRule.onAllNodes(SPREAD_ENTERED).fetchSemanticsNodes().isEmpty()) {
+            check(++frames <= MAX_ENTRY_FRAMES) { "見開きが組まれない" }
+            composeRule.mainClock.advanceTimeByFrame()
+        }
+        val entered = composeRule.runOnUiThread { listState.firstVisibleItemIndex }
+        assertTrue("送り先が入った見開きに入りうる（前提）: $entered", entered < FAR_SEND - SPREAD_SPAN_PARAGRAPHS)
+
         composeRule.mainClock.advanceTimeBy(DELAYED_SEND_WAIT_MILLIS)
         composeRule.mainClock.autoAdvance = true
         composeRule.waitForIdle()
-        composeRule.runOnIdle { assertEquals("遅れた送りが入った位置を書き替えた", atSwitch, listState.firstVisibleItemIndex) }
-        composeRule.onNodeWithText(paragraphText(atSwitch)).assertIsDisplayed()
+        composeRule.runOnIdle { assertEquals("遅れた送りが入った位置を書き替えた", entered, listState.firstVisibleItemIndex) }
+        composeRule.onNodeWithText(paragraphText(entered)).assertIsDisplayed()
         composeRule.onAllNodesWithText(paragraphText(FAR_SEND)).assertCountEquals(0)
 
         turnSpread()
         val turned = composeRule.runOnIdle { listState.firstVisibleItemIndex }
-        assertTrue("めくれていない: $atSwitch → $turned", turned > atSwitch)
+        assertTrue("めくれていない: $entered → $turned", turned > entered)
         composeRule.mainClock.advanceTimeBy(DELAYED_SEND_WAIT_MILLIS)
         composeRule.waitForIdle()
         composeRule.runOnIdle { assertEquals("遅れた送りがめくった位置を上書きした", turned, listState.firstVisibleItemIndex) }
@@ -4149,6 +4158,12 @@ class NoteReadingFlowTest {
 
         /** 打ち切った送りが遅れて届くなら届いているだけの時間。 */
         const val DELAYED_SEND_WAIT_MILLIS = 1_000L
+
+        /** 見開きが組まれた（組んでいる間の表示か、めくるページャが出た）ことの目印。 */
+        val SPREAD_ENTERED = hasText("組んでいます") or SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+
+        /** 切り替えを頼んでから見開きが組まれるまでに待つフレームの上限。 */
+        const val MAX_ENTRY_FRAMES = 60
 
         /** 縦の流しで送る先。入った見開きに入らないほど遠い。 */
         const val FAR_SEND = 190
