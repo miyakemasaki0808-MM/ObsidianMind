@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
@@ -65,6 +67,10 @@ class SpreadInterleavingTest {
     private var card by mutableStateOf(false)
     private var pageWidth by mutableStateOf(392.dp)
     private var fontScale by mutableStateOf(1f)
+
+    /** 見開きへ渡す本文の位置の口と、見開きを初めから組み直すための世代（対照を組むときに替える）。 */
+    private var spreadPosition by mutableStateOf(position)
+    private var generation by mutableStateOf(0)
 
     /** ブロックの番号から段落の番号を引く数。画像を先頭に置いたノートでは1つずれる。 */
     private var blocksBeforeParagraphs = 0
@@ -218,13 +224,15 @@ class SpreadInterleavingTest {
         }
     }
 
-    /** 文字の倍率・幅・カードの高さを続けて変える。最新の寸法だけで組み、読む位置を保つ。 */
+    /**
+     * 文字の倍率・幅・カードの高さを続けて変える。最新の寸法だけで組み、読む位置を保つ。
+     * 結果は、最後の寸法で初めから組んだ対照と、見えている段落の並びで比べる（カードの高さを無視した組版や、途中の寸法が残った組版は並びがずれる）。
+     */
     @Test
-    fun 幅と文字の倍率とカードを続けて変えても_最新の寸法で組み_読む位置を保つ() {
+    fun 幅と文字の倍率とカードを続けて変えても_最後の寸法で初めから組んだ対照と同じに出す() {
         setSpread()
         composeRule.waitForIdle()
         val turned = sendNextSpread()
-        val heightBefore = paragraphHeight(turned)
 
         hold.holdAt = 40
         var before = hold.reached
@@ -239,12 +247,27 @@ class SpreadInterleavingTest {
         composeRule.waitForIdle()
 
         assertSpreadAt(turned)
-        val heightAfter = paragraphHeight(turned)
-        assertTrue("古い文字の倍率で組んだ段落が残った（$heightBefore → $heightAfter）", heightAfter > heightBefore)
+        val interleaved = shownParagraphs()
+
+        // 対照: 同じ最後の寸法・同じ読む位置で、新しい見開きとして初めから組む。
+        composeRule.runOnIdle {
+            spreadPosition = BodyPosition(LazyListState(turned))
+            generation++
+        }
+        composeRule.waitForIdle()
+        assertEquals("最後の寸法で初めから組んだ対照と、見えている段落が違う", shownParagraphs(), interleaved)
     }
 
-    private fun paragraphHeight(block: Int): Int =
-        composeRule.onNodeWithText(paragraph("A", block - blocksBeforeParagraphs)).fetchSemanticsNode().size.height
+    /** いま見えている段落の文字を、上から順に。 */
+    private fun shownParagraphs(): List<String> {
+        val nodes = composeRule.onAllNodesWithText("A段落", substring = true)
+        return (0 until nodes.fetchSemanticsNodes().size)
+            .map { nodes[it] }
+            .filter { it.isDisplayed() }
+            .map { it.fetchSemanticsNode() }
+            .sortedWith(compareBy({ it.boundsInRoot.left }, { it.boundsInRoot.top }))
+            .map { it.config[SemanticsProperties.Text].joinToString("") }
+    }
 
     private fun setImageNote() {
         note = Note(NOTE_A, buildNoteSectionModel("![](assets/picture.png)\n\n" + body("A", 200)))
@@ -264,12 +287,12 @@ class SpreadInterleavingTest {
             CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
                 AppTheme(darkTheme = false) {
                     Box(modifier = Modifier.requiredSize(width = 800.dp, height = 600.dp)) {
-                        if (shown) {
+                        if (shown) key(generation) {
                             NoteSpread(
                                 noteKey = note.key,
                                 title = "見開き",
                                 sectionModel = note.model,
-                                position = position,
+                                position = spreadPosition,
                                 paperColor = Color.White,
                                 imageLoader = null,
                                 imageMeasurements = measurements,
@@ -330,7 +353,7 @@ class SpreadInterleavingTest {
     }
 
     private fun assertSpreadAt(block: Int) {
-        composeRule.runOnIdle { assertEquals("読む位置が替わった", block, listState.firstVisibleItemIndex) }
+        composeRule.runOnIdle { assertEquals("読む位置が替わった", block, spreadPosition.listState.firstVisibleItemIndex) }
         composeRule.onNodeWithText(paragraph("A", block - blocksBeforeParagraphs)).assertIsDisplayed()
     }
 
