@@ -118,6 +118,7 @@
 | [margin_quote.md](features/margin_quote.md) | 面を越える引用（構想） — 本文の一節を選択メニューか机の札で余白メモへ移し、引用つきのメモにする。引用の無いメモも書いた頃に読んでいた位置を控える |
 | [desk_memory.md](features/desk_memory.md) | 机の記憶 — 机で右に並べて読んだ相手を訪問の痕跡に1件控え、次の再会で名前を添え、開いた Fold ではその名前を押して開き直す |
 | [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
+| [backlinks.md](features/backlinks.md) | このノートへのリンク（構想） — 今のノートへリンクしているノートを、リンクを含む1文つきで余白ペインと関連タブに出す |
 
 ### 基盤（`system/`）
 
@@ -136,6 +137,7 @@
 | [theme_and_ui_refactor.md](system/theme_and_ui_refactor.md) | テーマ基盤とUI構造のリファクタ（R-1〜R-4）と判断1〜8 |
 | [instrumentation_testing.md](system/instrumentation_testing.md) | 実端末を通すテストの段階分け・実物SAFの作り方・実行の運用 |
 | [dependency_policy.md](system/dependency_policy.md) | 依存更新の方針とLint更新系チェックの扱い |
+| [knowledge_index.md](system/knowledge_index.md) | **知識索引（構想）** — Vault から作り直せる派生物を端末内の DB に持つ。DB を正にしない・走査に合わせて直す・今の Vault の分だけ |
 
 ### 重大判断（`decisions/`）
 
@@ -268,4 +270,5 @@
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md)・[desk_memory](features/desk_memory.md)（枠の外の名前の行と、押せる名前） |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・`AndroidManifest.xml` の権限 | [dependency_policy](system/dependency_policy.md) |
+| `data/KnowledgeIndex*.kt`・端末内の DB（Room）・バックリンク | **[knowledge_index](system/knowledge_index.md)（DB に置いてよいもの・寿命）** → [backlinks](features/backlinks.md) |
 | `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](system/saf_boundary_gateway.md) → [architecture](system/architecture.md) |
