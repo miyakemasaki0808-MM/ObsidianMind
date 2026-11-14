@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-11-04。基準は `74887150`
+**作成:** 2026-09-08 / **更新:** 2026-11-14。基準は `b8ee07f3`
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,9 +14,9 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 140本・約26,100行。** `CLAUDE.md`・`README.md` と `docs/` 配下の138本を数えた。
-作業ツリーにはこの他に追跡しないものが2本ある。Fable 5.1 の報告書1本と、実機検証の引き継ぎメモ `progress.md` 1本。レビュー本文は今は無い。
-証跡フォルダには全節の要約の下見で使ったノートの原本があるが、端末へ入れた入力であって文書ではないので数に入れない。
+**追跡対象の Markdown は 145本・約26,600行。** `CLAUDE.md`・`README.md` と `docs/` 配下の143本を数えた。
+作業ツリーにはこの他に追跡しないものが1本ある。Fable 5.1 の報告書である。実機検証の引き継ぎメモとレビュー本文は今は無い。
+`.claude/skills/` の作業手順3本は Markdown だが、`docs/` の外に置く作業標準書なので数に入れず、§2 の表に置き場として載せる。`.claude/eval/problems/` の過去問の課題文は、測定の入力であって文書ではない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
 
 ```
@@ -27,14 +27,15 @@ docs/
 ├── owner/     (17本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (6本)    開発日誌。README＋月別5本
 │   └── Fable5.1_report/   評価報告書の課題一覧。git 管理外の特別枠
-├── dev/       (89本)      判断の正本。ここが古くなると実害が出る
+├── dev/       (93本)      判断の正本。ここが古くなると実害が出る
 │   ├── features/  (28本)  ユーザーから見える機能。README・様式＋仕様26本
 │   ├── system/    (14本)  横断的な基盤。README＋13本
 │   ├── decisions/  (7本)  ADR。README＋6本
-│   └── lessons/   (36本)  教訓68件のうち、カードを持つ36本
+│   ├── lessons/   (36本)  教訓68件のうち、カードを持つ36本
+│   └── harness/    (4本)  開発の仕組みの正本。README＋実験の記録の README と記録2本
 ├── _wip/       (6本)      進行中。リリース時に廃棄する。文書5本と補助スクリプト1本
-└── review/    (26本)      レビューと実機検証
-    └── device_validation/ (23本)  共通手順・簡易版・機能別ケース21本
+└── review/    (27本)      レビューと実機検証
+    └── device_validation/ (24本)  共通手順・簡易版・機能別ケース22本
 ```
 
 **役目を終えた文書は消す。** 廃止した機能の設計書、答えの出た分析、正本ができた後の下書きは、全文を git 履歴に任せて消し、
@@ -50,6 +51,8 @@ docs/
 | `docs/dev/system/` | 横断的な基盤の責務・保証・不変条件 | 実装者 | 同上 |
 | `docs/dev/decisions/` | なぜその判断にしたか。索引 | 実装者 | `AdrShapeTest`。30行以内 |
 | `docs/dev/lessons/` | 次に同じ形の失敗をしないための判断材料 | 実装者 | 一部の教訓のみ → §6 |
+| `docs/dev/harness/` | 開発の仕組みが何をどう機械で守っているか。コミット前のゲート・手順の置き場・レビューの往復・過去問での測定と、試した結果の記録 | 実装者 | `CommitGateHookTest`・`ProjectSkillShapeTest`・`CodexReviewScriptTest` が仕組みそのものを見る |
+| `.claude/skills/` | ひと続きの作業手順。ブランチの取り込み・レビューの受付・レビューの往復 | 実装者 | `ProjectSkillShapeTest` |
 | `docs/_wip/` | いま何が壊れているか。何をどの順でやるか | 実装者 | `WipIssueReferenceTest` |
 | `docs/review/` | 未解決の指摘と、実機検証の手順 | レビュアーとこちら | `ReviewFindingsLedgerTest`・`DeviceValidationDocsTest` |
 
@@ -147,7 +150,7 @@ docs/
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在22件で、中3件・低16件・超低3件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在9件で、中2件・低6件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
 | [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。693行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残る行の内訳は本体の表が持つ |
@@ -155,17 +158,17 @@ docs/
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 
-## 8. `docs/review/` — レビューと実機検証。26本
+## 8. `docs/review/` — レビューと実機検証。27本
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
 | [README](../review/README.md) | レビューの入口と運用。一覧は今の作業のレビューだけを持つ | ✅ |
-| [findings](../review/findings.md) | 未解決指摘の受付簿。現在15件 | ✅ |
+| [findings](../review/findings.md) | 未解決指摘の受付簿。現在3件 | ✅ |
 | [review_template](../review/review_template.md) | レビュー本文の様式 | ✅ |
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない。今は無い | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
-| device_validation の機能別ケース21本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・結晶・要約の入口と机の画面・**さがす・面を越える引用・机の記憶・全節の要約**。結果は持たない | ✅ |
+| device_validation の機能別ケース22本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・結晶・要約の入口と机の画面・さがす・面を越える引用・机の記憶・全節の要約・**関連ノートの根拠**。結果は持たない | ✅ |
 | `device_validation/progress.md` | 実機検証の引き継ぎメモ。検証の間だけ置く | ❌ 未追跡 |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
@@ -209,6 +212,7 @@ docs/
 | `ReviewFindingsLedgerTest` | レビュー指摘が受付簿に無い。処遇が空。本文が2本ある | `review/` |
 | `DeviceValidationDocsTest` | 実機ケースの形が不完全。件数が実数と違う。簡易版が実在しないケースを指す | `review/device_validation/` |
 | `DeviceProbeResidueTest` | 使い捨ての一時テストが残っている | `app/src/androidTest/` |
+| `ProjectSkillShapeTest` | Skill が読み込めない形をしている。Skill の中のリンクが切れている。CLAUDE.md とハーネスの正本が名指す Skill が無い | `.claude/skills/` と `CLAUDE.md` |
 | `SourceCommentShapeTest` | KDocが2つ続いて宙に浮いている。本番コメントに日付やレビューの指摘番号がある | `app/src/` 3ソースセット |
 | `BackupExclusionTest` | 端末に残す置き場がバックアップ除外に載っていない | `res/xml/` とソース |
 | `verify<Variant>ManifestPermissions`（Gradle） | マージ後マニフェストの権限が期待集合と違う | ビルド出力。CI は release も名指しで呼ぶ |
