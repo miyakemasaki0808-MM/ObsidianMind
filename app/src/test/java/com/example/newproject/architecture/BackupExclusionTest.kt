@@ -80,6 +80,7 @@ class BackupExclusionTest {
         val violations = mainSources().flatMap { file ->
             val text = file.readText()
             BACKED_UP_ENTRY_POINTS.filter { it.pattern.containsMatchIn(text) }
+                .filterNot { entry -> EXCLUDED_ENTRY_POINTS[file.name to entry.label]?.containsMatchIn(text) == true }
                 .map { "${file.name}: ${it.label}" }
         }.sorted()
 
@@ -239,6 +240,18 @@ class BackupExclusionTest {
             EntryPoint("openOrCreateDatabase()", Regex("""\bopenOrCreateDatabase\(""")),
             EntryPoint("getExternalFilesDir()", Regex("""\bgetExternalFilesDir\(""")),
             EntryPoint("Room.databaseBuilder()", Regex("""\bdatabaseBuilder\("""))
+        )
+
+        /**
+         * **除外済みとして許可した入口。** 値は、置き場が性質として除外されることを示す、そのファイルの中の印。
+         * 印が消えたら（置き場を既定へ戻したら）許可も外れて落ちる。
+         *
+         * 知識索引の DB は Room の既定（`databases/`、バックアップの対象）ではなく `noBackupFilesDir` に作る
+         * （→ docs/dev/system/knowledge_index.md §9）。
+         */
+        val EXCLUDED_ENTRY_POINTS = mapOf(
+            ("KnowledgeIndexDatabase.kt" to "Room.databaseBuilder()") to
+                Regex("""File\(context\.noBackupFilesDir, FILE_NAME\)\.path""")
         )
     }
 }
