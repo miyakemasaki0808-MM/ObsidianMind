@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.ui.screen.SpreadBlock
 import com.example.newproject.ui.screen.SpreadLine
@@ -147,9 +148,7 @@ internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInput
             val columns = block.headers.size.coerceAtLeast(1)
             val cellWidth = (textWidthPx / columns - px(MarkdownBodyStyle.TableCellPaddingHorizontal.value) * 2).roundToInt()
             val cellPadding = px(MarkdownBodyStyle.TableCellPaddingVertical.value) * 2
-            val texts = listOf(block.headers) + block.rows.map { row ->
-                (if (row.size < block.headers.size) row + List(block.headers.size - row.size) { "" } else row).take(block.headers.size)
-            }
+            val texts = listOf(block.headers) + block.renderedRows()
             var offset = 0
             val rows = mutableListOf<SpreadTableRow>()
             val cells = texts.mapIndexed { rowIndex, row ->

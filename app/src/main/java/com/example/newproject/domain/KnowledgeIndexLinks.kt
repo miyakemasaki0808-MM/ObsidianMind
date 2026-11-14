@@ -6,6 +6,7 @@ import com.example.newproject.domain.markdown.InlineSpanKind
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.inlineVisibleText
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
+import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.scanInlineSyntax
 import java.security.MessageDigest
 
@@ -99,7 +100,8 @@ internal fun extractIndexedLinks(content: String): List<IndexedLink> {
             is MarkdownBlock.Paragraph -> collect(block.text)
             is MarkdownBlock.ListBlock -> block.items.forEach { collect(it.text) }
             is MarkdownBlock.Blockquote -> block.lines.forEach { collect(it) }
-            is MarkdownBlock.Table -> (block.headers + block.rows.flatten()).forEach { collect(it) }
+            // 描かれるセルだけ。見出しの列より多いセルは描画が捨てるので数えない。
+            is MarkdownBlock.Table -> (block.headers + block.renderedRows().flatten()).forEach { collect(it) }
             is MarkdownBlock.CodeBlock, is MarkdownBlock.Image, MarkdownBlock.HorizontalRule -> Unit
         }
     }

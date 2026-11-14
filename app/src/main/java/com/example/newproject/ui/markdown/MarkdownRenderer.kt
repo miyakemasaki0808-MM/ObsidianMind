@@ -43,6 +43,7 @@ import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.sourceText
 import com.example.newproject.ui.theme.LinkText
@@ -212,10 +213,7 @@ internal fun MarkdownBlockquoteLines(lines: List<AnnotatedString>) {
 @Composable
 internal fun MarkdownTable(headers: List<String>, rows: List<List<String>>) {
     val headerTexts = headers.map { rememberInline(it.trim()) }
-    val rowTexts = rows.map { row ->
-        val padded = if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row
-        padded.take(headers.size).map { rememberInline(it.trim()) }
-    }
+    val rowTexts = MarkdownBlock.Table(headers, rows).renderedRows().map { row -> row.map { rememberInline(it.trim()) } }
     MarkdownTableView(listOf(headerTexts), rowTexts)
 }
 

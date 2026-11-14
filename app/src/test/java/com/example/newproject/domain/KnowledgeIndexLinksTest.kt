@@ -50,6 +50,20 @@ class KnowledgeIndexLinksTest {
         assertEquals("深い集中", links[2].heading)
     }
 
+    /** 描画は見出しの列数に合わせて余分なセルを捨てる。描かれないリンクを数えない（押せないのにバックリンクに出さない）。 */
+    @Test
+    fun `表は描かれるセルのリンクだけを取り、見出しの列より多いセルは数えない`() {
+        val content = listOf(
+            "| column | 二列目 |",
+            "|---|---|",
+            "| [[visible]] | [[二列目の先]] | [[hidden]] |",
+            "| [[列が足りない行]] |",
+            "| [[表示名つき\\|表示]] | 本文 |"
+        ).joinToString("\n")
+
+        assertEquals(listOf("visible", "二列目の先", "列が足りない行", "表示名つき"), extractIndexedLinks(content).map { it.target })
+    }
+
     @Test
     fun `1文はリンクを含む文を見える文字で返し、表示名を出して記法の記号を出さない`() {
         val links = extractIndexedLinks("前置きの文です。今日は **[[習慣|よい習慣]]** を続けた。次の文。")

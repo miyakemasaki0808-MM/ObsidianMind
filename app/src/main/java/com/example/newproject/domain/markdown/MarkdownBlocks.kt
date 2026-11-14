@@ -94,6 +94,14 @@ internal sealed class MarkdownBlock {
 }
 
 /**
+ * 描くセル。**行を見出しの列数にそろえる** — 足りない行は空のセルで埋め、余分なセルは捨てる（Obsidian と同じ見え方）。
+ * 本文の表・見開きの表・知識索引がこれを使う。別々に書くと、描かれないセルのリンクを索引が数える（→ lessons L51）。
+ */
+internal fun MarkdownBlock.Table.renderedRows(): List<List<String>> = rows.map { row ->
+    (if (row.size < headers.size) row + List(headers.size - row.size) { "" } else row).take(headers.size)
+}
+
+/**
  * 原文の記法へ戻す。**AI入力への書き戻しと描画の両方がこれを使う。**
  * 2箇所で別々に組み立てると、片方だけ直したときに往復が静かに壊れる。
  */
