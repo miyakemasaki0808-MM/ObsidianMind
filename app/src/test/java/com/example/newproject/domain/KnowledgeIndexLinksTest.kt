@@ -86,13 +86,31 @@ class KnowledgeIndexLinksTest {
         assertEquals("a。b と 習慣 を書いた。", links.single().sentence)
     }
 
+    /** 長い1文は、リンクが入る範囲で切る。末尾だけで切ると、文の後ろにあるリンクそのものが落ちる。 */
     @Test
-    fun `長い1文は末尾を…で切る`() {
+    fun `長い1文はリンクを残して…で切る`() {
         val long = "あ".repeat(300)
         val sentence = extractIndexedLinks("$long[[習慣]]$long。").single().sentence
 
-        assertEquals(KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS, sentence.length)
-        assertTrue(sentence.endsWith("…"))
+        assertTrue(sentence.length <= KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS)
+        assertTrue("リンクが残る: $sentence", "習慣" in sentence)
+        assertTrue(sentence.startsWith("…") && sentence.endsWith("…"))
+    }
+
+    /** 強調の内側の句点も文の切れ目にする。切れ目を使わないと前後の文まで1文になり、160字で切るとリンクのある文が消える。 */
+    @Test
+    fun `複数の文を包む強調の中でも、リンクを含む1文だけを取り出す`() {
+        val inputs = listOf(
+            "**前の文。[[対象]]を読む。後の文。**",
+            "*前の文。[[対象]]を読む。後の文。*",
+            "~~前の文。[[対象]]を読む。後の文。~~",
+            "**前の文。*[[対象]]を読む。*後の文。**",
+            "**${"あ".repeat(200)}。[[対象]]を読む。後の文。**"
+        )
+
+        inputs.forEach { text ->
+            assertEquals(text, "対象を読む。", extractIndexedLinks(text).single().sentence)
+        }
     }
 
     @Test

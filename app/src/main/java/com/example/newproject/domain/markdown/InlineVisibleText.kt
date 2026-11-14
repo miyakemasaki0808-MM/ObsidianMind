@@ -14,10 +14,22 @@ package com.example.newproject.domain.markdown
  *
  * 入力の単位は [scanInlineSyntax] と同じく、表示側が1つの文字列として描く単位に揃える。
  */
-internal fun inlineVisibleText(text: String): String {
+internal fun inlineVisibleText(text: String): String = inlineVisibleLayout(text).text
+
+/**
+ * [inlineVisibleText] と同じ見える文字に、**リンクとコードが見える文字のどこに出たか**を添えたもの。
+ * [atoms] は原文の記法の開始位置（[InlineSpan.start]）から、見える文字の中の範囲への対応で、入れ子の中のリンクも含む。
+ * 見える文字の上で文を切るとき、リンクやコードの内側の句点で切らないために使う（→ docs/dev/system/knowledge_index.md §6）。
+ * **見える文字の作り方は [inlineVisibleText] と同じ1つの処理**で、別に書かない。
+ */
+internal class InlineVisibleLayout(val text: String, val atoms: Map<Int, IntRange>)
+
+internal fun inlineVisibleLayout(text: String): InlineVisibleLayout {
     val scan = scanInlineSyntax(text)
     val escapedBackslashes = scan.escapes.mapTo(HashSet()) { it.start }
-    return buildString { appendVisible(text, scan.spans, 0, text.length, escapedBackslashes) }
+    val atoms = HashMap<Int, IntRange>()
+    val visible = buildString { appendVisible(text, scan.spans, 0, text.length, escapedBackslashes, atoms) }
+    return InlineVisibleLayout(visible, atoms)
 }
 
 /** リンクの見える文字。`[[note|表示名]]` は表示名、`[[note]]` はノート名、`[ラベル](URL)` はラベル。 */
@@ -46,11 +58,13 @@ private fun StringBuilder.appendVisible(
     spans: List<InlineSpan>,
     from: Int,
     to: Int,
-    escapedBackslashes: Set<Int>
+    escapedBackslashes: Set<Int>,
+    atoms: MutableMap<Int, IntRange>
 ) {
     var index = from
     spans.forEach { span ->
         append(plainVisibleText(text, index, span.start, escapedBackslashes))
+        val atomStart = length
         when (span.kind) {
             InlineSpanKind.WikiLink, InlineSpanKind.Link -> append(linkLabel(text, span))
             InlineSpanKind.Code -> append(text, span.contentStart, span.contentEnd)
@@ -58,7 +72,11 @@ private fun StringBuilder.appendVisible(
             InlineSpanKind.Bold,
             InlineSpanKind.Italic,
             InlineSpanKind.Strikethrough ->
-                appendVisible(text, span.children, span.contentStart, span.contentEnd, escapedBackslashes)
+                appendVisible(text, span.children, span.contentStart, span.contentEnd, escapedBackslashes, atoms)
+        }
+        when (span.kind) {
+            InlineSpanKind.WikiLink, InlineSpanKind.Link, InlineSpanKind.Code -> atoms[span.start] = atomStart until length
+            else -> Unit
         }
         index = span.endExclusive
     }

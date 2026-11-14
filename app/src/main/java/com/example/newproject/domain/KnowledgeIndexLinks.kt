@@ -4,7 +4,7 @@ import com.example.newproject.domain.image.normalizeVaultImagePath
 import com.example.newproject.domain.markdown.InlineSpan
 import com.example.newproject.domain.markdown.InlineSpanKind
 import com.example.newproject.domain.markdown.MarkdownBlock
-import com.example.newproject.domain.markdown.inlineVisibleText
+import com.example.newproject.domain.markdown.inlineVisibleLayout
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.scanInlineSyntax
@@ -82,7 +82,7 @@ internal fun extractIndexedLinks(content: String): List<IndexedLink> {
                     heading = link.heading,
                     sectionHeading = section,
                     sectionHeadingOccurrence = occurrence,
-                    sentence = sentenceAround(text, scan.spans, span),
+                    sentence = sentenceAround(text, span),
                     keys = linkKeysOf(link)
                 )
             }
@@ -137,23 +137,39 @@ internal fun contentFingerprint(content: String): String =
         .joinToString("") { "%02x".format(it) }
 
 /**
- * [link] を含む1文を、本文に見える文字で返す。文の切れ目は [splitIntoSentences] に従い、
- * **記法（リンク・コード）の内側で切れる切れ目は使わない** — 切ると記法が割れて、見える文字が変わる。
+ * [link] を含む1文を、本文に見える文字で返す。**文は見える文字の上で切る** — 原文で切ると、複数の文を包む強調の記号が
+ * 切れ目を隠すか、切った断片に記号が残る。切れ目は [splitIntoSentences] に従い、**リンクとコードの内側の切れ目だけは使わない**。
+ * 長い文は、リンクが入る範囲で切る（末尾だけで切ると、文の後ろのリンクが落ちる）。
  */
-private fun sentenceAround(text: String, spans: List<InlineSpan>, link: InlineSpan): String {
+private fun sentenceAround(text: String, link: InlineSpan): String {
+    val layout = inlineVisibleLayout(text)
+    val visible = layout.text
+    val target = layout.atoms[link.start] ?: return clip(visible.trim(), 0 until 0)
     val ends = mutableListOf<Int>()
     var offset = 0
-    splitIntoSentences(text).forEach { piece ->
+    splitIntoSentences(visible).forEach { piece ->
         offset += piece.length
         ends += offset
     }
-    val boundaries = ends.filter { end -> spans.none { it.start < end && end < it.endExclusive } }
-    val start = boundaries.lastOrNull { it <= link.start } ?: 0
-    val end = boundaries.firstOrNull { it > link.start } ?: text.length
-    val sentence = inlineVisibleText(text.substring(start, end.coerceAtMost(text.length))).trim()
-    return if (sentence.length <= KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS) {
-        sentence
-    } else {
-        sentence.take(KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS - 1).trimEnd() + "…"
-    }
+    // 切れ目は句点の直後。句点がリンクやコードの中の文字（最後の文字を含む）なら、その切れ目は使わない。
+    val boundaries = ends.filter { end -> layout.atoms.values.none { it.first < end && end <= it.last + 1 } }
+    val start = boundaries.lastOrNull { it <= target.first } ?: 0
+    val end = boundaries.firstOrNull { it > target.first } ?: visible.length
+    val raw = visible.substring(start, end.coerceAtMost(visible.length))
+    val leading = raw.length - raw.trimStart().length
+    val sentence = raw.trim()
+    val linkInSentence = (target.first - start - leading).coerceAtLeast(0) until (target.last + 1 - start - leading).coerceAtMost(sentence.length)
+    return clip(sentence, linkInSentence)
+}
+
+/** [sentence] を上限の長さに収める。[keep] の範囲（リンク）が入るように窓を取り、切った側に「…」を付ける。 */
+private fun clip(sentence: String, keep: IntRange): String {
+    val max = KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS
+    if (sentence.length <= max) return sentence
+    val window = max - 2
+    val keepLength = if (keep.isEmpty()) 0 else keep.last - keep.first + 1
+    val from = if (keep.isEmpty()) 0 else (keep.first - (window - keepLength).coerceAtLeast(0) / 2)
+        .coerceIn(0, sentence.length - window)
+    val to = from + window
+    return (if (from > 0) "…" else "") + sentence.substring(from, to).trim() + (if (to < sentence.length) "…" else "")
 }
