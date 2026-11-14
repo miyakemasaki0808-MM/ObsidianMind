@@ -219,11 +219,15 @@ private fun labelOf(link: NoteLink): String = when (link) {
  * GitHub 形式のアンカーは記号を落として空白を `-` にする。どちらも残る文字と数字は見出しと同じになる。
  */
 internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String): Int? {
-    val key = headingKey(heading)
+    val key = headingMatchKey(heading)
     if (key.isEmpty()) return null
-    return blocks.indexOfFirst { it is MarkdownBlock.Heading && headingKey(it.text) == key }.takeIf { it >= 0 }
+    return blocks.indexOfFirst { it is MarkdownBlock.Heading && headingMatchKey(it.text) == key }.takeIf { it >= 0 }
 }
 
-private fun headingKey(text: String): String = buildString {
+/**
+ * 見出しの照合の鍵。文字と数字だけを小文字で残す。**同じ見出しかの判定はどこでもこれで行う** —
+ * 知識索引が「同じ見出しのうち何番目か」を数えるのも同じ鍵で、別の規則で数えると開く位置がずれる。
+ */
+internal fun headingMatchKey(text: String): String = buildString {
     text.lowercase().forEach { if (it.isLetterOrDigit()) append(it) }
 }
