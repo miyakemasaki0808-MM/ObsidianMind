@@ -33,12 +33,11 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class KnowledgeIndexControllerTest {
 
-    private class Env(scope: TestScope) {
+    private class Env(scope: TestScope, val store: FakeKnowledgeIndexStore = FakeKnowledgeIndexStore()) {
         var generation = 0L
         var key: String? = VAULT_A
         val handle = FakeVaultHandle()
         val browser = FakeVaultBrowser(handle)
-        val store = FakeKnowledgeIndexStore()
         var scanRequests = 0
         var publishOnRequest: (() -> Unit)? = null
         private var publishes = 0L
@@ -67,6 +66,12 @@ class KnowledgeIndexControllerTest {
         }
 
         fun reads(): List<String> = handle.readBodyRefs.map { it.value.removePrefix("ref:") }
+
+        /** 蒸留が本文を書き終えたときの本番の順: 書いたスレッドで控えを永続し、Main で走査を頼む。 */
+        fun written(path: String) {
+            controller.markRewrittenNow(refOf(path))
+            controller.onNoteBodyWritten()
+        }
     }
 
     @Test
@@ -263,12 +268,12 @@ class KnowledgeIndexControllerTest {
         env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
         val readingA = CompletableDeferred<Unit>()
         env.store.beforeApply = { path -> if (path == "n.md" && env.store.links.getValue("n.md").single().target == "最初") readingA.await() }
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         runCurrent()
 
         // X が A を読み、書く手前で止まっている間に、アプリが B を書く。
         env.body("n.md", "[[B]]")
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         runCurrent()
         readingA.complete(Unit)
         advanceUntilIdle()
@@ -293,7 +298,7 @@ class KnowledgeIndexControllerTest {
 
         env.body("n.md", "[[new]]")
         env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         runCurrent()
         env.store.beforeApply = {}
         held.complete(Unit)
@@ -312,7 +317,7 @@ class KnowledgeIndexControllerTest {
 
         env.body("n.md", "[[new]]")
         env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         advanceUntilIdle()
 
         assertEquals(listOf("new"), env.store.links.getValue("n.md").map { it.target })
@@ -326,7 +331,7 @@ class KnowledgeIndexControllerTest {
         env.publish(listOf(note("n.md", 1L)))
         advanceUntilIdle()
 
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         advanceUntilIdle()
 
         assertEquals(setOf("ref:n.md"), env.store.marks.keys)
@@ -334,7 +339,7 @@ class KnowledgeIndexControllerTest {
 
         env.scanRequests = 0
         env.publishOnRequest = { env.publish(listOf(note("n.md", 1L))) }
-        env.controller.onNoteBodyWritten(refOf("n.md"))
+        env.written("n.md")
         advanceUntilIdle()
         assertEquals("公開されたら頼み直さない", 1, env.scanRequests)
         assertTrue("日時が同じでも読み直して控えを外す", env.store.marks.isEmpty())
@@ -349,7 +354,7 @@ class KnowledgeIndexControllerTest {
 
         env.body("new.md", "[[old]]")
         env.publishOnRequest = { env.publish(listOf(note("old.md", 1L), note("new.md", 1L))) }
-        env.controller.onNoteBodyWritten(refOf("new.md"))
+        env.written("new.md")
         advanceUntilIdle()
 
         assertTrue(env.store.marks.isEmpty())
@@ -377,7 +382,7 @@ class KnowledgeIndexControllerTest {
         )
         advanceUntilIdle()
 
-        env.controller.onNoteBodyWritten(refOf("a.md"))
+        env.written("a.md")
         advanceUntilIdle()
 
         assertEquals(setOf("a.md"), env.store.notes.keys)
@@ -394,6 +399,28 @@ class KnowledgeIndexControllerTest {
         advanceUntilIdle()
         assertTrue("A の参照の控えは B のノートを読み直させない", env.handle.readBodyRefs.isEmpty())
         assertTrue("読み切れた走査に無い参照の控えは外す", env.store.marks.isEmpty())
+    }
+
+    /**
+     * 書いている途中に画面のスコープが破棄されると、走査を頼む側は動かない。控えさえ永続していれば、
+     * 同じ置き場で作り直した Controller が、次に Vault を開いたときに操作を足さずに読み直す。
+     */
+    @Test
+    fun `控えだけが残ったまま作り直しても、次にVaultを開いたときに書き換え後の本文を読む`() = runTest {
+        val first = Env(this)
+        first.body("n.md", "[[old]]")
+        first.publish(listOf(note("n.md", 5L)))
+        advanceUntilIdle()
+        first.controller.markRewrittenNow(refOf("n.md"))
+
+        val second = Env(this, store = first.store)
+        second.body("n.md", "[[new]]")
+        second.publishOnRequest = { second.publish(listOf(note("n.md", 5L))) }
+        second.controller.onVaultOpened()
+        advanceUntilIdle()
+
+        assertEquals(listOf("new"), second.store.links.getValue("n.md").map { it.target })
+        assertTrue(second.store.marks.isEmpty())
     }
 
     @Test
@@ -462,8 +489,8 @@ class KnowledgeIndexControllerTest {
             )
         }
 
-        override suspend fun markRewritten(vaultKey: String, documentRef: String) {
-            if (this.vaultKey != vaultKey) return
+        override fun markRewrittenNow(documentRef: String) {
+            if (vaultKey == null) return
             marks[documentRef] = ++lastWriteNumber
         }
 

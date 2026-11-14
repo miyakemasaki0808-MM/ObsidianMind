@@ -7,6 +7,7 @@ import com.example.newproject.data.DistillRecoveryRecord
 import com.example.newproject.data.DistillRecoveryResolutionResult
 import com.example.newproject.data.DistillWritePhase
 import com.example.newproject.data.DistillWriteRequest
+import com.example.newproject.data.DistillWriteFailureStage
 import com.example.newproject.data.DistillWriteResult
 import com.example.newproject.data.PendingDistillOriginal
 import com.example.newproject.data.sha256Hex
@@ -271,6 +272,22 @@ class DistillControllerTest {
     }
 
     @Test
+    fun `書き込みを始める前の失敗では知らせない`() = runTest {
+        val state = stateWithNote()
+        val written = mutableListOf<String>()
+        val persistence = FakePersistence()
+        persistence.writeResult = { DistillWriteResult.Failure(DistillWriteFailureStage.STAGING, "準備に失敗しました", recoveryRequired = false) }
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence = persistence, written = written)
+        controller.start()
+        advanceUntilIdle()
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        assertTrue(written.isEmpty())
+    }
+
+    @Test
     fun `書き込みが衝突で止まったら知らせない`() = runTest {
         val state = stateWithNote()
         val written = mutableListOf<String>()
@@ -284,6 +301,40 @@ class DistillControllerTest {
         advanceUntilIdle()
 
         assertTrue(written.isEmpty())
+    }
+
+    /** 書き込みの後の検証で失敗しても、本文は変わっているかもしれない。索引が読み直すと控えられるよう知らせる。 */
+    @Test
+    fun `保存が失敗で終わっても、本文が変わった可能性があるので知らせる`() = runTest {
+        val state = stateWithNote()
+        val written = mutableListOf<String>()
+        val persistence = FakePersistence()
+        persistence.writeResult = {
+            DistillWriteResult.Failure(DistillWriteFailureStage.VERIFY, "書いた後の確認に失敗しました", recoveryRequired = true, documentMayHaveChanged = true)
+        }
+        persistence.assessment = DistillRecoveryAssessment.None
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence = persistence, written = written)
+        controller.start()
+        advanceUntilIdle()
+
+        controller.saveSelection()
+        advanceUntilIdle()
+
+        assertEquals(listOf("content://note"), written)
+    }
+
+    @Test
+    fun `復元が書き込みの後の検証で失敗しても知らせる`() = runTest {
+        val state = stateWithNote()
+        val written = mutableListOf<String>()
+        val persistence = FakePersistence()
+        persistence.restoreResult = DistillRecoveryResolutionResult.Failure("復元後の確認に失敗しました", touchedTargetUri = "content://note")
+        val controller = controller(state, FakeAiClient.returning("S001"), persistence = persistence, written = written)
+
+        controller.restoreOriginal()
+        advanceUntilIdle()
+
+        assertEquals(listOf("content://note"), written)
     }
 
     @Test

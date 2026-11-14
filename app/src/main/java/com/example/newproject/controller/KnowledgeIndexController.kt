@@ -81,24 +81,27 @@ internal class KnowledgeIndexController(
     }
 
     /**
-     * アプリが本文を書き終えた（蒸留の保存・保存前の本文への復元）。読み直すと控えてから走査を頼む。
+     * アプリが本文を書き終えた（蒸留の保存・保存前の本文への復元）。**書いたスレッド（I/O）から同期で呼び、控えを永続してから戻る** —
+     * 画面のスコープへ渡すと、書いている途中に ViewModel が破棄されたとき控えが作られない。控えさえ残れば、
+     * 次に Vault を開いたときの突き合わせが読み直す（→ knowledge_index.md §3 の手順4）。
      * **控えは参照そのもので持つ** — 相対パスがその場で引けなくても、索引に無いノートでも控えられる。
      * 参照は Vault ごとに違うので、前の Vault の参照は今の Vault のノートに当たらない。
-     * **頼んだ走査の途中でまた書き換えると、その走査は公開されない**ので、公開が無ければもう一度だけ頼む。
-     * 書き換えが続けば、その書き換えの呼び出しが自分で頼む。
      */
-    fun onNoteBodyWritten(ref: DocumentRef) {
+    fun markRewrittenNow(ref: DocumentRef) {
+        try {
+            store.markRewrittenNow(ref.value)
+        } catch (_: Exception) {
+            // 置き場が使えない。索引が無いだけで、今の動きに戻る。
+        }
+    }
+
+    /**
+     * 控えた後に、Main から走査を頼む。**頼んだ走査の途中でまた書き換えると、その走査は公開されない**ので、
+     * 公開が無ければもう一度だけ頼む。書き換えが続けば、その書き換えの呼び出しが自分で頼む。
+     */
+    fun onNoteBodyWritten() {
         val generation = vaultGeneration()
-        val key = vaultKey() ?: return
         track(scope.launch {
-            try {
-                store.markRewritten(key, ref.value)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                return@launch
-            }
-            if (generation != vaultGeneration()) return@launch
             val before = lastPublishCount
             requestScanQuietly(generation)
             if (lastPublishCount == before && generation == vaultGeneration()) requestScanQuietly(generation)

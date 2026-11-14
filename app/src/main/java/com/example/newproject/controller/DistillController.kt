@@ -536,7 +536,9 @@ internal class DistillController(
                         outputBytes = transformed.toByteArray(Charsets.UTF_8)
                     )
                 ).also { written ->
-                    if (written is DistillWriteResult.Success) onBodyWritten(active.input.targetUri)
+                    val touched = written is DistillWriteResult.Success ||
+                        (written is DistillWriteResult.Failure && written.documentMayHaveChanged)
+                    if (touched) onBodyWritten(active.input.targetUri)
                 }
             }
             if (!isCurrent(requestId)) return@launch
@@ -751,7 +753,12 @@ internal class DistillController(
         scope.launch {
             val restored = withContext(ioDispatcher) {
                 persistence.restoreOriginal().also { result ->
-                    if (result is DistillRecoveryResolutionResult.Restored) onBodyWritten(result.targetUri)
+                    when (result) {
+                        is DistillRecoveryResolutionResult.Restored -> onBodyWritten(result.targetUri)
+                        // 書き込みを始めた後の失敗は、本文が変わっているかもしれない。
+                        is DistillRecoveryResolutionResult.Failure -> result.touchedTargetUri?.let(onBodyWritten)
+                        DistillRecoveryResolutionResult.NoValidRecord -> Unit
+                    }
                 }
             }
             when (val result = restored) {

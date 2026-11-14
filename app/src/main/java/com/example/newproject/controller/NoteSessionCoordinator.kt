@@ -577,14 +577,15 @@ internal class NoteSessionCoordinator(
     }
 
     /**
-     * 蒸留が本文を書き終えた（保存・保存前の本文への復元）。**I/O のスレッドから来るので Main へ移してから**、
-     * 走査の一覧を捨て、知識索引に読み直すと控えさせる（→ docs/dev/system/knowledge_index.md §3 の手順4）。
-     * 画面用の読み直しの成否やノート切替に関わらず届く。
+     * 蒸留が本文を書き終えた（保存・保存前の本文への復元、書き込みを始めた後の失敗を含む）。**I/O のスレッドから来る。**
+     * 知識索引の控えはここで同期で永続する — 画面のスコープが破棄されていても残る。走査の一覧を捨てて走査を頼むのは
+     * Main へ移してから行う（→ docs/dev/system/knowledge_index.md §3 の手順4）。画面用の読み直しの成否やノート切替に関わらず届く。
      */
     private fun onDistillBodyWritten(targetUri: String) {
+        knowledgeIndex?.markRewrittenNow(DocumentRef(targetUri))
         scope.launch {
             expireNoteScan()
-            knowledgeIndex?.onNoteBodyWritten(DocumentRef(targetUri))
+            knowledgeIndex?.onNoteBodyWritten()
         }
     }
 

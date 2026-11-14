@@ -17,8 +17,12 @@ internal interface KnowledgeIndexStore {
     /**
      * アプリが本文を書き換えたと控え、書き換えの番号を進める（§3 の手順4）。**控えは参照そのもので持つ** —
      * 索引に無いノートでも控えられ、初めて読んでいる途中の書き換えを番号の照合で止められる。
+     *
+     * **書いたスレッド（I/O）から同期で呼び、永続してから戻る。** 画面のスコープへ渡すと、書いている途中に ViewModel が
+     * 破棄されたとき控えが作られない。Vault の照合はしない — 参照は Vault ごとに違うので、前の Vault の控えは今の Vault の
+     * ノートに当たらず、読み切れた走査で外れる。索引をまだ開いていなければ何もしない（開けば全部を読む）。Main からは呼ばない。
      */
-    suspend fun markRewritten(vaultKey: String, documentRef: String)
+    fun markRewrittenNow(documentRef: String)
 
     /** もう読むことの無い参照の控えを外す（読み切れた走査に無い参照）。 */
     suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>)

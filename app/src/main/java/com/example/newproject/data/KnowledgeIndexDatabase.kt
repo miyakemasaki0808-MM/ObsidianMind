@@ -171,13 +171,25 @@ internal abstract class KnowledgeIndexDao {
         return fresh
     }
 
-    /** 参照を、読み直すと控える。索引に無い参照でも控える。 */
+    @Query("SELECT * FROM index_meta WHERE id = 0")
+    abstract fun metaNow(): IndexMetaEntity?
+
+    @Upsert
+    abstract fun upsertMetaNow(meta: IndexMetaEntity)
+
+    @Upsert
+    abstract fun upsertMarkNow(mark: RewriteMarkEntity)
+
+    /**
+     * 参照を、読み直すと控える。索引に無い参照でも控える。**同期で書く** — 書いたスレッド（I/O）から呼び、
+     * 永続してから戻る（→ [KnowledgeIndexStore.markRewrittenNow]）。索引をまだ開いていなければ何もしない。
+     */
     @Transaction
-    open suspend fun markRewritten(vaultKey: String, documentRef: String) {
-        val current = meta()?.takeIf { it.vaultKey == vaultKey } ?: return
+    open fun markRewrittenNow(documentRef: String) {
+        val current = metaNow() ?: return
         val number = current.lastWriteNumber + 1
-        upsertMeta(current.copy(lastWriteNumber = number))
-        upsertMark(RewriteMarkEntity(documentRef, number))
+        upsertMetaNow(current.copy(lastWriteNumber = number))
+        upsertMarkNow(RewriteMarkEntity(documentRef, number))
     }
 
     @Transaction

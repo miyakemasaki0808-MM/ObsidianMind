@@ -19,8 +19,8 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
         )
     }
 
-    override suspend fun markRewritten(vaultKey: String, documentRef: String) =
-        dao.markRewritten(vaultKey, documentRef)
+    override fun markRewrittenNow(documentRef: String) =
+        dao.markRewrittenNow(documentRef)
 
     override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) =
         dao.forgetMarks(vaultKey, documentRefs)

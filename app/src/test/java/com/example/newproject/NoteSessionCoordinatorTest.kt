@@ -2458,7 +2458,25 @@ class NoteSessionCoordinatorTest {
         advanceUntilIdle()
 
         assertEquals(1, expired)
-        assertEquals(listOf("vault-a" to "content://other"), store.rewritten)
+        assertEquals(listOf("content://other"), store.rewritten)
+    }
+
+    /** 書いている途中に画面のスコープが破棄されても、書き終えた控えは置き場に残る（走査を頼むのは次に Vault を開いたとき）。 */
+    @Test
+    fun `復元の途中で画面のスコープが破棄されても、書き終えた控えは置き場に残る`() = runTest {
+        val env = Env(this)
+        val uiScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        env.distill.restoreResult = DistillRecoveryResolutionResult.Restored("content://other", "hash")
+        env.distill.duringRestore = { uiScope.cancel() }
+        val store = RecordingKnowledgeIndexStore()
+        var expired = 0
+        val coordinator = env.coordinator(uiScope = uiScope, knowledgeIndexStore = store, expireNoteScan = { expired++ })
+
+        coordinator.restoreDistillOriginal()
+        advanceUntilIdle()
+
+        assertEquals(listOf("content://other"), store.rewritten)
+        assertEquals("破棄されたスコープでは走査を頼まない", 0, expired)
     }
 
     private class Env(
@@ -2585,15 +2603,20 @@ private class FakeHistoryStore : HistoryStore {
         override fun discardPendingRecovery(): Boolean = true
         override fun pendingOriginal(): PendingDistillOriginal? = null
         var restoreResult: DistillRecoveryResolutionResult = DistillRecoveryResolutionResult.NoValidRecord
-        override fun restoreOriginal(): DistillRecoveryResolutionResult = restoreResult
+        /** 復元の I/O の途中で起こすこと（画面のスコープを破棄するなど）。 */
+        var duringRestore: () -> Unit = {}
+        override fun restoreOriginal(): DistillRecoveryResolutionResult {
+            duringRestore()
+            return restoreResult
+        }
     }
 
     /** 知識索引の置き場の代わり。**読み直すと控えた参照**だけを記録する。 */
     private class RecordingKnowledgeIndexStore : KnowledgeIndexStore {
-        val rewritten = mutableListOf<Pair<String, String>>()
+        val rewritten = mutableListOf<String>()
         override suspend fun openVault(vaultKey: String) = KnowledgeIndexSnapshot(emptyMap(), emptyMap(), firstBuildDone = false)
-        override suspend fun markRewritten(vaultKey: String, documentRef: String) {
-            rewritten += vaultKey to documentRef
+        override fun markRewrittenNow(documentRef: String) {
+            rewritten += documentRef
         }
         override suspend fun applyRead(vaultKey: String, note: IndexedNoteRecord, links: List<IndexedLink>, writeNumberAtRead: Long?) = true
         override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) = Unit
