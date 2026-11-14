@@ -14,8 +14,11 @@ internal interface KnowledgeIndexStore {
     /** [vaultKey] の索引を開く。**別の Vault の索引なら全部消して作り直す**（判断3）。 */
     suspend fun openVault(vaultKey: String): KnowledgeIndexSnapshot
 
-    /** アプリが本文を書き換えたと控え、書き換えの番号を進める（§3 の手順4）。 */
-    suspend fun markRewritten(vaultKey: String, relativePath: String)
+    /**
+     * アプリが本文を書き換えたと控え、書き換えの番号を進める（§3 の手順4）。相手は**索引にあるノートの参照**で引く。
+     * 索引に無い参照なら何もしない（次の突き合わせで新しいノートとして読まれる）。
+     */
+    suspend fun markRewritten(vaultKey: String, documentRef: String)
 
     /**
      * 読んだ結果で、そのノートの行とリンクを入れ替える。**[writeNumberAtRead] が今もそのパスの最新のときだけ書き、

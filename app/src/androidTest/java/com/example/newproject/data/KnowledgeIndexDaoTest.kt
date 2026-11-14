@@ -60,9 +60,9 @@ class KnowledgeIndexDaoTest {
         store.openVault(VAULT_A)
         assertTrue(store.applyRead(VAULT_A, record("n.md", fingerprint = "A"), listOf(link("古い")), writeNumberAtRead = null))
 
-        store.markRewritten(VAULT_A, "n.md")
+        store.markRewritten(VAULT_A, "ref:n.md")
         val numberAtRead = store.openVault(VAULT_A).writeNumbers.getValue("n.md")
-        store.markRewritten(VAULT_A, "n.md")
+        store.markRewritten(VAULT_A, "ref:n.md")
 
         assertFalse(
             "古い番号の読み込みは書かない",
@@ -87,9 +87,21 @@ class KnowledgeIndexDaoTest {
         store.openVault(VAULT_B)
 
         assertFalse(store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣")), writeNumberAtRead = null))
-        store.markRewritten(VAULT_A, "a.md")
+        store.markRewritten(VAULT_A, "ref:a.md")
         assertTrue(store.openVault(VAULT_B).notes.isEmpty())
         assertTrue(store.openVault(VAULT_B).writeNumbers.isEmpty())
+    }
+
+    @Test
+    fun 索引に無い参照の書き換えは控えない() = runBlocking<Unit> {
+        store.openVault(VAULT_A)
+        store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣")), writeNumberAtRead = null)
+
+        store.markRewritten(VAULT_A, "ref:無い.md")
+        assertTrue(store.openVault(VAULT_A).writeNumbers.isEmpty())
+
+        store.markRewritten(VAULT_A, "ref:a.md")
+        assertEquals(setOf("a.md"), store.openVault(VAULT_A).writeNumbers.keys)
     }
 
     @Test

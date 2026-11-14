@@ -119,6 +119,7 @@ class NoteViewModel internal constructor(
         noteFieldStore = dependencies.noteFieldStore,
         knowledgeIndexStore = dependencies.knowledgeIndexStore,
         requestNoteScan = ::requestScanForKnowledgeIndex,
+        expireNoteScan = { noteScan.expireAfterBodyWrite() },
         // 関連ノートは ViewModel が持つ走査キャッシュ（cachedNotes）に依存するので、ViewModel 側に置く。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },
@@ -173,7 +174,7 @@ class NoteViewModel internal constructor(
      * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
      */
-    private val noteScan = NoteScanCache(
+    private val noteScan: NoteScanCache = NoteScanCache(
         scope = scope,
         ttlMillis = NOTES_CACHE_TTL_MS,
         vaultGeneration = { session.vaultGeneration },
@@ -793,9 +794,6 @@ class NoteViewModel internal constructor(
             if (expectedHash != null && loaded.originalHash != expectedHash) return false
             if (!session.applyReloadedBody(targetUri, loaded)) return false
             noteScan.expireAfterBodyWrite()
-            // 日時の変化だけに頼らず、知識索引に読み直すと控えさせる（→ knowledge_index.md §3 の手順4）。
-            // 一覧は捨てたがリンクの索引は残るので、相対パスは走査せずに引ける。
-            noteScan.relativePathOf(DocumentRef(targetUri))?.let(session::onNoteBodyWritten)
             relatedNotesUseCase.clearCache()
             true
         } catch (e: CancellationException) {

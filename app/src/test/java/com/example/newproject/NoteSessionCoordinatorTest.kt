@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.domain.IndexedLink
+import com.example.newproject.data.IndexedNoteRecord
+import com.example.newproject.data.KnowledgeIndexSnapshot
+import com.example.newproject.data.KnowledgeIndexStore
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.NoteDwellGate
@@ -2438,6 +2442,25 @@ class NoteSessionCoordinatorTest {
         }
     }
 
+    /**
+     * 蒸留が本文を書き終えたら、画面用の読み直しの成否に関わらず、走査の一覧を捨てて知識索引に読み直すと控えさせる
+     * （→ docs/dev/system/knowledge_index.md §3 の手順4）。表示中でないノートの復元でも届く。
+     */
+    @Test
+    fun `蒸留が本文を書き終えたら、走査の一覧を捨て、知識索引に読み直すと控えさせる`() = runTest {
+        val env = Env(this)
+        env.distill.restoreResult = DistillRecoveryResolutionResult.Restored("content://other", "hash")
+        val store = RecordingKnowledgeIndexStore()
+        var expired = 0
+        val coordinator = env.coordinator(knowledgeIndexStore = store, expireNoteScan = { expired++ })
+
+        coordinator.restoreDistillOriginal()
+        advanceUntilIdle()
+
+        assertEquals(1, expired)
+        assertEquals(listOf("vault-a" to "content://other"), store.rewritten)
+    }
+
     private class Env(
         private val scope: TestScope,
         private val clock: TestClock = TestClock()
@@ -2471,7 +2494,9 @@ class NoteSessionCoordinatorTest {
             // 画面側のスコープ。**痕跡の書き出しだけはこちらに載らない**ことを確かめるときに分ける。
             uiScope: CoroutineScope = scope,
             // 訪問の保存を載せるスコープ。**別のスケジューラにすると、保存を止めたまま照合を待たせられる。**
-            persistScope: CoroutineScope = scope
+            persistScope: CoroutineScope = scope,
+            knowledgeIndexStore: KnowledgeIndexStore? = null,
+            expireNoteScan: () -> Unit = {}
         ) = NoteSessionCoordinator(
             scope = uiScope,
             persistScope = persistScope,
@@ -2494,6 +2519,8 @@ class NoteSessionCoordinatorTest {
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,
+            knowledgeIndexStore = knowledgeIndexStore,
+            expireNoteScan = expireNoteScan,
             onModelReady = { _, _ -> },
             reloadBody = { _, _ -> false },
             cancelHostJobs = cancelHostJobs,
@@ -2557,7 +2584,19 @@ private class FakeHistoryStore : HistoryStore {
         override fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean = true
         override fun discardPendingRecovery(): Boolean = true
         override fun pendingOriginal(): PendingDistillOriginal? = null
-        override fun restoreOriginal(): DistillRecoveryResolutionResult =
-            DistillRecoveryResolutionResult.NoValidRecord
+        var restoreResult: DistillRecoveryResolutionResult = DistillRecoveryResolutionResult.NoValidRecord
+        override fun restoreOriginal(): DistillRecoveryResolutionResult = restoreResult
+    }
+
+    /** 知識索引の置き場の代わり。**読み直すと控えた参照**だけを記録する。 */
+    private class RecordingKnowledgeIndexStore : KnowledgeIndexStore {
+        val rewritten = mutableListOf<Pair<String, String>>()
+        override suspend fun openVault(vaultKey: String) = KnowledgeIndexSnapshot(emptyMap(), emptyMap(), firstBuildDone = false)
+        override suspend fun markRewritten(vaultKey: String, documentRef: String) {
+            rewritten += vaultKey to documentRef
+        }
+        override suspend fun applyRead(vaultKey: String, note: IndexedNoteRecord, links: List<IndexedLink>, writeNumberAtRead: Long?) = true
+        override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) = Unit
+        override suspend fun markFirstBuildDone(vaultKey: String) = Unit
     }
 }

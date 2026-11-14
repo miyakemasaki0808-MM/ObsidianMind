@@ -263,12 +263,12 @@ class KnowledgeIndexControllerTest {
         env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
         val readingA = CompletableDeferred<Unit>()
         env.store.beforeApply = { path -> if (path == "n.md" && env.store.links.getValue("n.md").single().target == "最初") readingA.await() }
-        env.controller.onNoteBodyWritten("n.md")
+        env.controller.onNoteBodyWritten(refOf("n.md"))
         runCurrent()
 
         // X が A を読み、書く手前で止まっている間に、アプリが B を書く。
         env.body("n.md", "[[B]]")
-        env.controller.onNoteBodyWritten("n.md")
+        env.controller.onNoteBodyWritten(refOf("n.md"))
         runCurrent()
         readingA.complete(Unit)
         advanceUntilIdle()
@@ -285,7 +285,7 @@ class KnowledgeIndexControllerTest {
         env.publish(listOf(note("n.md", 1L)))
         advanceUntilIdle()
 
-        env.controller.onNoteBodyWritten("n.md")
+        env.controller.onNoteBodyWritten(refOf("n.md"))
         advanceUntilIdle()
 
         assertEquals(setOf("n.md"), env.store.marks.keys)
@@ -293,10 +293,54 @@ class KnowledgeIndexControllerTest {
 
         env.scanRequests = 0
         env.publishOnRequest = { env.publish(listOf(note("n.md", 1L))) }
-        env.controller.onNoteBodyWritten("n.md")
+        env.controller.onNoteBodyWritten(refOf("n.md"))
         advanceUntilIdle()
         assertEquals("公開されたら頼み直さない", 1, env.scanRequests)
         assertTrue("日時が同じでも読み直して控えを外す", env.store.marks.isEmpty())
+    }
+
+    @Test
+    fun `索引に無いノートの書き換えは控えず走査だけ頼み、新しいノートとして読む`() = runTest {
+        val env = Env(this)
+        env.body("old.md", "本文")
+        env.publish(listOf(note("old.md", 1L)))
+        advanceUntilIdle()
+
+        env.body("new.md", "[[old]]")
+        env.publishOnRequest = { env.publish(listOf(note("old.md", 1L), note("new.md", 1L))) }
+        env.controller.onNoteBodyWritten(refOf("new.md"))
+        advanceUntilIdle()
+
+        assertTrue(env.store.marks.isEmpty())
+        assertEquals(1, env.scanRequests)
+        assertEquals(listOf("old"), env.store.links.getValue("new.md").map { it.target })
+    }
+
+    /** 書き終えた知らせが Vault を替えた後に届いても、前の Vault の参照は今の Vault の索引に当たらない。 */
+    @Test
+    fun `前のVaultの参照の書き換えは、替えた後のVaultの索引に控えない`() = runTest {
+        val env = Env(this)
+        env.body("a.md", "本文")
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+
+        switchVault(env, VAULT_B)
+        env.handle.bodies = { ref -> if (ref == DocumentRef("b-ref:a.md")) "本文" else null }
+        env.controller.onScanPublished(
+            PublishedNoteScan(
+                listOf(NoteFile(name = "a.md", ref = DocumentRef("b-ref:a.md"), lastModified = 1L, vaultRelativePath = "a.md")),
+                NoteScanKind.COMPLETE,
+                publishCount = 100L,
+                vaultGeneration = env.generation
+            )
+        )
+        advanceUntilIdle()
+
+        env.controller.onNoteBodyWritten(refOf("a.md"))
+        advanceUntilIdle()
+
+        assertEquals(setOf("a.md"), env.store.notes.keys)
+        assertTrue("A の参照は B の索引に当たらない", env.store.marks.isEmpty())
     }
 
     @Test
@@ -365,9 +409,9 @@ class KnowledgeIndexControllerTest {
             )
         }
 
-        override suspend fun markRewritten(vaultKey: String, relativePath: String) {
+        override suspend fun markRewritten(vaultKey: String, documentRef: String) {
             if (this.vaultKey != vaultKey) return
-            marks[relativePath] = ++lastWriteNumber
+            notes.values.filter { it.documentRef == documentRef }.forEach { marks[it.relativePath] = ++lastWriteNumber }
         }
 
         override suspend fun applyRead(

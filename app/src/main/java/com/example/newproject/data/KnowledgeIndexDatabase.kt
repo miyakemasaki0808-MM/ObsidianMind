@@ -23,7 +23,7 @@ import java.io.File
  */
 @Database(
     entities = [IndexMetaEntity::class, IndexedNoteEntity::class, IndexedLinkEntity::class, RewriteMarkEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 internal abstract class KnowledgeIndexDatabase : RoomDatabase() {
@@ -53,7 +53,7 @@ internal data class IndexMetaEntity(
     val lastWriteNumber: Long
 )
 
-@Entity(tableName = "indexed_note")
+@Entity(tableName = "indexed_note", indices = [Index("documentRef")])
 internal data class IndexedNoteEntity(
     @PrimaryKey val relativePath: String,
     val documentRef: String,
@@ -115,6 +115,9 @@ internal abstract class KnowledgeIndexDao {
     @Query("SELECT writeNumber FROM rewrite_mark WHERE relativePath = :path")
     abstract suspend fun markOf(path: String): Long?
 
+    @Query("SELECT relativePath FROM indexed_note WHERE documentRef = :documentRef")
+    abstract suspend fun pathsOf(documentRef: String): List<String>
+
     @Query("SELECT * FROM indexed_link WHERE sourcePath = :path ORDER BY ordinal")
     abstract suspend fun linksOf(path: String): List<IndexedLinkEntity>
 
@@ -164,12 +167,15 @@ internal abstract class KnowledgeIndexDao {
         return fresh
     }
 
+    /** 参照で引いたノートを、読み直すと控える。索引に無い参照なら何もしない。 */
     @Transaction
-    open suspend fun markRewritten(vaultKey: String, relativePath: String) {
+    open suspend fun markRewritten(vaultKey: String, documentRef: String) {
         val current = meta()?.takeIf { it.vaultKey == vaultKey } ?: return
-        val number = current.lastWriteNumber + 1
+        val paths = pathsOf(documentRef)
+        if (paths.isEmpty()) return
+        var number = current.lastWriteNumber
+        paths.forEach { path -> upsertMark(RewriteMarkEntity(path, ++number)) }
         upsertMeta(current.copy(lastWriteNumber = number))
-        upsertMark(RewriteMarkEntity(relativePath, number))
     }
 
     @Transaction

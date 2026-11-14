@@ -8,6 +8,7 @@ import com.example.newproject.data.VaultHandle
 import com.example.newproject.domain.contentFingerprint
 import com.example.newproject.domain.extractIndexedLinks
 import com.example.newproject.domain.planReconcile
+import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteScanKind
 import com.example.newproject.model.PublishedNoteScan
@@ -80,16 +81,18 @@ internal class KnowledgeIndexController(
     }
 
     /**
-     * アプリが本文を書き換えた（蒸留の保存・太字の復元）。読み直すと控えてから走査を頼む。
+     * アプリが本文を書き終えた（蒸留の保存・保存前の本文への復元）。読み直すと控えてから走査を頼む。
+     * **控える相手は参照で引く** — 索引にあるノートの参照から相対パスを引くので、相対パスがその場で引けなくても抜けず、
+     * 前の Vault の参照は今の Vault の索引に当たらない。索引に無いノートは、次の突き合わせで新しいノートとして読まれる。
      * **頼んだ走査の途中でまた書き換えると、その走査は公開されない**ので、公開が無ければもう一度だけ頼む。
      * 書き換えが続けば、その書き換えの呼び出しが自分で頼む。
      */
-    fun onNoteBodyWritten(relativePath: String) {
+    fun onNoteBodyWritten(ref: DocumentRef) {
         val generation = vaultGeneration()
         val key = vaultKey() ?: return
         track(scope.launch {
             try {
-                store.markRewritten(key, relativePath)
+                store.markRewritten(key, ref.value)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

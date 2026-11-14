@@ -103,6 +103,8 @@ internal class NoteSessionCoordinator(
     knowledgeIndexStore: KnowledgeIndexStore? = null,
     /** 走査の入れ物へ走査を頼む口（実装は ViewModel）。結果は [onScanPublished] で届く。 */
     requestNoteScan: suspend () -> Unit = {},
+    /** 本文を書き換えた後に走査の一覧を捨てる口（実装は ViewModel の `NoteScanCache.expireAfterBodyWrite`）。 */
+    private val expireNoteScan: () -> Unit = {},
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,
     /** 蒸留保存後の本文読み直し（SAF I/O を伴うため実装は ViewModel）。 */
@@ -255,7 +257,9 @@ internal class NoteSessionCoordinator(
         state = stateStore.distillWriter,
         currentNote = stateStore::currentNote,
         persistence = distillPersistence,
-        reloadBody = reloadBody
+        reloadBody = reloadBody,
+        onBodyWritten = ::onDistillBodyWritten,
+        ioDispatcher = ioDispatcher
     )
     /**
      * 痕跡サイドカーの read-modify-write を直列化する錠。
@@ -572,9 +576,16 @@ internal class NoteSessionCoordinator(
         knowledgeIndex?.onScanPublished(scan)
     }
 
-    /** アプリがノートの本文を書き換えた（蒸留の保存・太字の復元）。知識索引が読み直すと控える。 */
-    fun onNoteBodyWritten(relativePath: String) {
-        knowledgeIndex?.onNoteBodyWritten(relativePath)
+    /**
+     * 蒸留が本文を書き終えた（保存・保存前の本文への復元）。**I/O のスレッドから来るので Main へ移してから**、
+     * 走査の一覧を捨て、知識索引に読み直すと控えさせる（→ docs/dev/system/knowledge_index.md §3 の手順4）。
+     * 画面用の読み直しの成否やノート切替に関わらず届く。
+     */
+    private fun onDistillBodyWritten(targetUri: String) {
+        scope.launch {
+            expireNoteScan()
+            knowledgeIndex?.onNoteBodyWritten(DocumentRef(targetUri))
+        }
     }
 
     // ── ノートのライフサイクル ──────────────────────────────────────────────
