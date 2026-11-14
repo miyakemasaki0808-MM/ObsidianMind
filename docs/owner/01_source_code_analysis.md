@@ -2,7 +2,7 @@
 
 **プロジェクト:** Vigilith AI
 **この文書が答える問い:** いまコードがどうなっているか。構成・状態・データの流れ・検証の状態を、コードを開かずに見渡すための地図である。
-**測定日:** 2026-11-04。基準は `74887150` で、作業ツリーは clean。測った値は §0 に集め、ほかの章には日付を書かない
+**測定日:** 2026-11-14。基準は `b8ee07f3` で、作業ツリーは clean。測った値は §0 に集め、ほかの章には日付を書かない
 
 > **`owner/` の文書に出る規模と検証の数字は、この §0 だけが持つ。** ほかの文書は数字を書き写さず、ここへリンクする。
 
@@ -31,25 +31,25 @@
 
 | 指標 | 値 |
 |---|---:|
-| 本番コードのファイル数 | **215** |
-| 本番コードの行数 | **39,771** |
-| JVMテストのファイル数 | **193** |
-| JVMテストの行数 | **44,944** |
-| JVMテストの件数 | **2,368** |
-| instrumentation のファイル数 | **27** |
-| instrumentation の行数 | **11,559** |
-| instrumentation の件数 | **310** |
+| 本番コードのファイル数 | **220** |
+| 本番コードの行数 | **40,511** |
+| JVMテストのファイル数 | **206** |
+| JVMテストの行数 | **47,350** |
+| JVMテストの件数 | **2,509** |
+| instrumentation のファイル数 | **29** |
+| instrumentation の行数 | **12,394** |
+| instrumentation の件数 | **327** |
 | debug ソースセット | **4ファイル・825行** |
 
 行数は空行とコメントを含む `wc -l` で数え、生成物と Gradle スクリプトは含まない。
-本番39,771行の内訳はコメント11,304行・空行3,038行・本体25,429行で、コメントの比率は28%。
+本番40,511行の内訳はコメント11,508行・空行3,100行・本体25,903行で、コメントの比率は28%。
 テスト件数は行頭の `@Test` を数える。ファイルは `find app/src/main -name "*.kt"` のように置き場ごとに数える。
 
 ### 0.2 検証状態
 
 | | 結果 |
 |---|---|
-| `testDebugUnitTest` | **2,368件すべて成功。** 181クラス、failure 0、skip 0 |
+| `testDebugUnitTest` | **2,509件すべて成功。** 193クラス、failure 0、skip 0 |
 | `lintDebug` | **Error 0 / Warning 0。** 依存更新の催促は hint として出るがゲートに載せない。件数は Lint の最新版情報のキャッシュ次第で揺れる |
 | Kotlin のコンパイル警告 | 0。警告があるとビルドが落ちる設定 |
 | マージ後マニフェストの権限 | 期待する2件と一致する。AICore への接続と、自己定義の受信権限 |
@@ -106,8 +106,8 @@ Vigilith AI は、Obsidian の Vault を読み、AI をすべて端末内の Gem
 | `ai/` | 端末AIへの接続とプロンプト | `AICoreClient`：Gemini Nano・`Mutex`・タイムアウト。`PromptBuilder`：10本のプロンプト。`PromptBudget`：完成プロンプトの上限 |
 | `controller/` | 機能の実装と横断調停。Android API を呼ばない | `NoteSessionCoordinator`：15の Controller の生成・切替の調停・Vault世代・門番。Controller は要約・検索・部分要約・並べ読み・余白メモ・蒸留・読書痕跡・再会カード・痕跡の整理・痕跡の退避・冊子・分野判定・結晶・本文の解析・反証の一文の15本。`NoteDwellGate`：自動生成の3秒の門番。`NoteReadGate`：結晶の材料の30秒の線。`BesideTally`：並べた相手が右に見えていた時間 |
 | `data/` | SAF と端末内の保存 | `NoteRepository`：走査と読み書き。`VaultBrowser`：Vault スコープの操作を `ContentResolver` の裏へ束ねる。`DistillWriteRepository`：蒸留の安全な書き込み。`ReadingTraceStore`：痕跡のサイドカー。`CrystalStore`：結晶のファイル。`FileSummaryCache`：要約の保存 |
-| `domain/` | Android 非依存の純関数 | 採点・抜粋・解析・照合。`markdown/` の `InlineSyntax` がインライン記法の唯一の解釈器で、表示と蒸留が共有する。`NoteSections` が見出し単位の節を作る。`MemoPassages` が引用と控えた位置を本文へ照らし直す |
-| `model/` | 依存グラフの葉。他パッケージも `android.*` も import しない | `NoteUiState`：全UI状態。`NoteUiStateStore`：状態の唯一の所有者・機能別の Writer・リセット契約。`state/` に機能ごとの sealed state |
+| `domain/` | Android 非依存の純関数 | 採点・抜粋・解析・照合。`markdown/` の `InlineSyntax` がインライン記法の唯一の解釈器で、表示と蒸留が共有する。`NoteSections` が見出し単位の節を作る。`MemoPassages` が引用と控えた位置を本文へ照らし直す。`MarkdownQuotation` が引用と箇条の入れ物を追い、引用の中の行を見分ける |
+| `model/` | 依存グラフの葉。他パッケージも `android.*` も import しない | `NoteUiState`：全UI状態。`NoteUiStateStore`：状態の唯一の所有者・機能別の Writer・リセット契約。`state/` に機能ごとの sealed state。`ExploreQueryStore`：さがすで打った言葉の口。日本語の変換を崩さないよう `NoteUiState` の外に置く |
 | `ui/` | Compose の画面 | `AppScaffold`：タブとレール、本文領域とレールの右端を測る外殻。`screen/` に各画面と、本文の位置の口 `BodyPosition`・並べ方の `ReaderLayout`・見開きの `NoteSpread`・`SpreadPagination`・`SpreadTurnGeometry`・机の札の `QuoteChip`。`markdown/` に本文の描画と、描画と計測が共有する書式 `MarkdownBodyStyle`・見開きの計測 `SpreadBlocks`・選択メニューの `QuoteTextToolbar`。`theme/` に配色と形の役割、`vigilith/` に起動OP |
 | `res/xml/` | バックアップ除外 | `backup_rules`・`data_extraction_rules` |
 
@@ -342,21 +342,23 @@ loadRandomNote()
 
 **流れ**: 規則は、本文の wikilink に一致するノートと、ファイル名の採番が同じグループのノートを最大5件拾う。
 AI はタイトルの話題で全 Vault から40候補に絞り、本文で肉付けして並べ直し、一時ID `C01..` を振って予算内へ縮めて渡す。返ったIDを実ノートへ解決し、規則と重複を除いて最大5件を返す。
+AI推薦の行には、並べ直しで計算した近さのうち最も効いた1つを根拠として添える。タグが共通・書き出しが近い・題名が近い、のどれかで、弱い重なりなら添えない。frontmatter のタグと別名は確実に読める書き方だけを読み、読めない形が混ざったキーはまるごと使わない。
 
 - AI が使えない、未準備、失敗、のどれでも規則の結果だけを返す。自動で走る機能なので理由は見せない
-- 開いた Fold のペインの「このノートの関連」も同じ候補を使い、そこから AI を呼ばない
+- 開いた Fold のペインの「このノートの関連」も同じ候補を使い、そこから AI を呼ばない。根拠はペインには出さない
 
 ### 6.5 さがす
 
 タイトルで Vault 全体を探すか、自然文で Nano に3件を選ばせる。開くといつもタイトルのモードで始まる。
 
-- **状態**: `titleSearch`・`folders`・`selectedFolder`・`foldersError`・`searchState`。打った言葉とモードは画面が持つ
+- **状態**: `titleSearch`・`folders`・`selectedFolder`・`foldersError`・`searchState`。打った言葉は ViewModel の `ExploreQueryStore` が持ち、モードだけを画面が持つ
 - **AI**: AI のモードのボタンで1回。タイトルの一覧だけを渡し、本文は渡さない
 - **正本**: [ai_picker](../dev/features/ai_picker.md)
 
 **流れ**: タブを開くと Vault 全体の一覧とフォルダの一覧を受け取り始める。タイトルのモードは打つたびにファイル名を照らし、完全一致・前方一致・部分一致の順に件数を絞らず並べる。同じ名前のノートにはフォルダの場所を添え、0件なら同じ言葉で AI のモードへ移る1行を出す。
-AI のモードは受け取った一覧を範囲で絞り、40件を超えたら文字の重なりで絞ってから Nano が3件を選ぶ。Nano が使えないか候補外を返したら、文字の重なりの順で選んで注記を添える。
+AI のモードは受け取った一覧を範囲で絞り、40件を超えたら拡張子を除いた名前の文字の重なりで絞ってから Nano が3件を選ぶ。同じ名前の候補には、予算の残る限り場所を添えて渡し、結果の行にも場所を出す。Nano が使えないか、候補のIDを1件も返さなかったら、文字の重なりの順で選んで注記を添える。
 
+- 打った言葉・範囲・AI の結果は、タブを離れても残し、Vault を替えたときだけ捨てる。走行中の AI の検索も、タブを離れただけでは止めない。範囲に選んだフォルダが外で消えていたら、開き直したときに「すべて」へ戻す
 - 一覧は頼んだ順番で受け取り、遅れて届いた古い一覧で新しい一覧を上書きしない
 - タイトルの照合と AI の検索はそれぞれジョブ1本と要求の番号を持ち、新しい要求が前を止める
 - `CancellationException` は結果型に畳まずに投げ直す
@@ -458,6 +460,7 @@ Rediscover    同じ痕跡への保存が走っていれば待つ → 見出し�
 - サイドカーは schemaVersion・バイト上限・checksum で検証し、壊れていればカードを出さない
 - 訪問は直近30件を持ち、延べ回数は別に積む。訪問には並べた相手を1件まで載せる → §6.19
 - 1回目の再会から枠を出す。照合が待つのは同じ痕跡への保存だけで、別の痕跡の保存が止まっていても待たない
+- 問いの候補は書き手の文だけで、素の引用と quote・cite のコールアウトの中の文は外す
 - 読書時間は背面と冊子の間を数えない。止める理由は `ReadingPauseReason` の集合で持つ
 - 保存と照合の要求は開いた時点の Vault キーを運び、書く直前に今の Vault と照合する
 
@@ -764,10 +767,10 @@ ML Kit の状態はアプリ内の5状態 `Ready`・`NeedsDownload`・`Downloadi
 
 | 置き場 | ファイル | 件数 | 何を見ているか |
 |---|---:|---:|---|
-| `test/.../` の直下 | 53 | 1,023 | Controller・保存と読込・パーサ |
-| `test/.../domain/` | 55 | 770 | 純関数。採点・抜粋・スコアリング・解析・照合 |
-| `test/.../ui/` | 36 | 396 | 表示ロジックを数値として固定する。色・幾何・派生状態・余白の面と机の画面の判定・見開きの組版とめくり |
-| `test/.../architecture/` | 30 | 102 | コードではなく規約と文書を守る検査 |
+| `test/.../` の直下 | 56 | 1,063 | Controller・保存と読込・パーサ |
+| `test/.../domain/` | 59 | 815 | 純関数。採点・抜粋・スコアリング・解析・照合 |
+| `test/.../ui/` | 39 | 404 | 表示ロジックを数値として固定する。色・幾何・派生状態・余白の面と机の画面の判定・見開きの組版とめくり |
+| `test/.../architecture/` | 33 | 150 | コードではなく規約と文書を守る検査。コミット前のゲート・Skill・レビューの依頼の仕組みもここが見る |
 | `test/.../ai/` | 9 | 38 | プロンプトの組み立てと生成失敗の判定。端末AIは呼ばない |
 | `test/.../testing/` | 5 | 39 | 要約の採点器そのものの検査 |
 | `test/.../fakes/` | 5 | — | 共有のフェイク |
@@ -785,10 +788,10 @@ instrumentation は CI で実行せず、実機で走らせる → [instrumentat
 
 | 領域 | 件数 | 主なクラス | なぜ実機か |
 |---|---:|---|---|
-| UI・Compose の描画と操作 | 259 | `NoteReadingFlowTest`・`MarginMemoSheetUiTest`・`BookletScreenTest`・`QuoteChipUiTest`・`SearchTabTest`・`NoteLinkTapUiTest`・`SpreadReducedMotionTest` ほか | レイアウトの実測・可視判定・押下の配送・画素・アニメーションの倍率 |
+| UI・Compose の描画と操作 | 274 | `NoteReadingFlowTest`・`MarginMemoSheetUiTest`・`BookletScreenTest`・`QuoteChipUiTest`・`SearchTabTest`・`NoteLinkTapUiTest`・`SpreadReducedMotionTest` ほか | レイアウトの実測・可視判定・押下の配送・画素・アニメーションの倍率 |
 | SAF と画像 | 22 | `VaultScanInstrumentationTest`・`NoteImageGatewayInstrumentationTest` | 実物の `ContentResolver`・`DocumentsContract`・`BitmapFactory` |
 | 端末AI | 13 | `OnDeviceGenerationTest`・`PromptTokenBudgetTest`・`SummaryCoverageBaselineTest` | Gemini Nano の実生成とトークン計測 |
-| ライフサイクルとナビゲーション | 16 | `ActivityRecreationTest`・`AppScaffoldStateRestorationTest`・`TabNavigationTest`・`BookletNavigationTest`・`ReaderWindowShellTest` | Activity の作り直し・`NavHost` のバックスタック・外殻が測る窓の値 |
+| ライフサイクルとナビゲーション | 18 | `ActivityRecreationTest`・`AppScaffoldStateRestorationTest`・`TabNavigationTest`・`BookletNavigationTest`・`ReaderWindowShellTest` | Activity の作り直し・`NavHost` のバックスタック・外殻が測る窓の値 |
 
 土台は debug ソースセットの `FakeVaultDocumentsProvider` で、`NoteRepository` と `SafVaultBrowser` を本番のまま動かす。
 `connectedDebugAndroidTest` は対象アプリを消すので実機では使わず、APK を入れて `am instrument` で直接走らせる → [device_validation](../review/device_validation/README.md)。
