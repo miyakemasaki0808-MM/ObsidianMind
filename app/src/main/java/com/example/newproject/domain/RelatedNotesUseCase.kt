@@ -152,21 +152,23 @@ class RelatedNotesUseCase(
                     // 応答からIDを抽出→ノートへ解決。候補は既に決定的枠を除外済みだが、
                     // モデルが既出を混ぜても拾わないよう参照単位でも念のため落とす（防御）。
                     val relatedRefs = relatedNotes.map { it.ref }.toSet()
-                    // 再ランクで読んだ本文スニペットを参照ごとに引けるようにする。
-                    // 捨てずに RelatedNote へ通すのが目的で、読み直しはしない。
-                    val snippetByRef = readCandidates.associate { it.note.ref to it.data.snippet }
+                    // 再ランクで読んだ本文（スニペット・タグ）を参照ごとに引けるようにする。
+                    // 捨てずに RelatedNote へ通すのが目的で、読み直しはしない。根拠も同じ値から取る。
+                    val dataByRef = readCandidates.associate { it.note.ref to it.data }
                     val aiNotes = parseCandidateIds(response, presentedIds, AI_RECOMMENDATION_LIMIT)
                         .mapNotNull { id -> idToNote[id] }
                         .filterNot { it.ref in relatedRefs }
                         .distinctBy { it.ref }
                         .take(AI_RECOMMENDATION_LIMIT)
                         .map { note ->
+                            val data = dataByRef[note.ref]
                             RelatedNote(
                                 title = note.name,
                                 ref = note.ref,
                                 isWikilinked = note.name.toNormalizedObsidianTitle() in wikilinkTitleSet,
                                 lastModified = note.lastModified,
-                                snippet = snippetByRef[note.ref]?.takeIf { it.isNotBlank() }
+                                snippet = data?.snippet?.takeIf { it.isNotBlank() },
+                                reason = data?.let { relatedReason(currentSignals, note.name, it.snippet, it.tags) }
                             )
                         }
 

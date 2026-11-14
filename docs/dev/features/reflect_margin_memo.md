@@ -77,7 +77,7 @@
   | 静かに知らせる目安 | 200字（**壁ではなく合図**） | `SOFT_MEMO_CHARS` |
   | 1ノートの保持件数 | **20件**（**古いものから捨てない** → 判断4） | `MAX_MEMOS` |
   | 書いた場所（見出し名） | 512バイト（訪問と同じ枠を使う） | `MAX_SECTION_TITLE_BYTES` |
-  | 痕跡ファイル全体 | 256KB（メモの引用で128KBから192KBへ、訪問の並べた相手で256KBへ上げた → [margin_quote](margin_quote.md) §6・[desk_memory](desk_memory.md) §6） | `MAX_FILE_BYTES` |
+  | 痕跡ファイル全体 | 288KB（メモの引用で128KBから192KBへ、訪問の並べた相手で256KBへ、制御文字を落とせない欄を6倍で数えて288KBへ上げた → [margin_quote](margin_quote.md) §6・[desk_memory](desk_memory.md) §6・[reflect_reading_trace](reflect_reading_trace.md) §5） | `MAX_FILE_BYTES` |
 
   > **`MAX_FILE_BYTES` との整合は、計算ではなく実シリアライザで測って固定する**
   > （`ReadingTraceLimitsTest` → 判断11）。

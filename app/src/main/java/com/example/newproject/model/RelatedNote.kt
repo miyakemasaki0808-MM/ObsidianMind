@@ -17,5 +17,10 @@ data class RelatedNote(
      * **消さないのは、再ランクが既に読んだ値をそのまま持っているため**で、
      * 新しい読み手を足すなら追加のI/Oが無いこの値から考える。
      */
-    val snippet: String? = null
+    val snippet: String? = null,
+    /**
+     * 近いと見た根拠。**AI推薦の経路でだけ入り**、再ランクが既に計算した値から取るので追加の計算も生成も無い。
+     * 決定的な関連ノートは「linked」や採番で関連が見えるので null。弱い根拠しか無ければ null。
+     */
+    val reason: RelatedReason? = null
 )

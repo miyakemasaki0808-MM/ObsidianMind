@@ -138,8 +138,10 @@ BMP は非圧縮なので寸法から正確にバイト数を決められる。
 
 アプリも閉じた外画面には机を出さない（→ [fold_experience](fold_experience.md) の姿勢の割り当て）。
 **だから机の保証は内側の画面で確かめ、カバー画面では主張しない。**
-題名の表示や端寄りの座標に頼るテストは、実窓の幅が Expanded でなければ `Assume` で skip する。
+題名の表示や端寄りの座標に頼るテストと、机でだけ出す部品（引用の札）のテスト、窓より大きい箱で見開きを組んで表示を確かめるテスト（`SpreadInterleavingTest`）は、実窓の幅が Expanded でなければ `Assume` で skip する（`assumeDeskWindow`）。
 表示の確認を存在の確認へ弱めて通すことはしない。skip は成功と数えない。
+
+**切り欠きなどの Insets を View へ配って作るテストは、API 30 以上に限って `Assume` で skip する。** それより前の `WindowInsetsCompat.Builder` は切り欠きを作らず、配った値が Compose へ届かないので、正しい実装でも落ちる。位置を比べる前に、Compose が配った値を読んだことを確かめる（`ReaderWindowShellTest`）。
 
 ## 判断12: 机の画面のテストは、窓の折り目を自分で決めて渡す
 

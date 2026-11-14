@@ -11,11 +11,11 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
-import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -28,6 +28,7 @@ import androidx.compose.ui.test.assertHasNoClickAction
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -74,7 +75,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkResolution
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -124,6 +124,7 @@ import com.example.newproject.ui.screen.spreadRefusalText
 import com.example.newproject.ui.screen.SpreadRefusal
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlin.math.roundToInt
 import kotlin.math.abs
 import kotlinx.coroutines.runBlocking
@@ -134,7 +135,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.unit.Density
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -2688,25 +2688,6 @@ class NoteReadingFlowTest {
         composeRule.waitForIdle()
     }
 
-    /**
-     * **実窓がアプリの机を出す幅（Expanded）のときだけ続ける。** 狭い窓では skip する。
-     *
-     * 机は 960dp の箱で組み、窓より大きいと中央に寄せて置かれる。カバー画面のような狭い窓では箱の両端が窓の外へ出て、
-     * 題名の表示確認と端寄りの払いが届かない。アプリも閉じた外画面には机を出さないので、
-     * 机の保証は内側の画面で確かめる（→ docs/dev/system/instrumentation_testing.md 判断11）。
-     * 題名の表示や端寄りの座標に頼るテストだけが呼ぶ。存在の確認へ弱めて通すことはしない。
-     * **見るのは箱が窓に収まるかだけで、折り目は見ない** — 折り目は [PostureBox] でテストが決める（同 判断12）。
-     */
-    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
-    private fun assumeDeskWindow() {
-        val configuration = InstrumentationRegistry.getInstrumentation().targetContext.resources.configuration
-        val window = DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
-        assumeTrue(
-            "机を出さない幅の窓（${configuration.screenWidthDp}dp）。机の保証は内側の画面で確かめる",
-            WindowSizeClass.calculateFromSize(window).widthSizeClass == WindowWidthSizeClass.Expanded
-        )
-    }
-
     /** 机の画面の帯を、つまみを下へ払って出す。 */
     private fun openDeskBar() {
         composeRule.onNodeWithContentDescription("操作を出す").performTouchInput { swipeDown(startY = top, endY = bottom + 300f) }
@@ -3135,6 +3116,61 @@ class NoteReadingFlowTest {
         composeRule.runOnIdle { position.moveTo(0) }
         composeRule.runOnIdle { shown = true }
         composeRule.onNodeWithText(TITLE).assertIsDisplayed()
+    }
+
+    /**
+     * **縦の流しで節へ飛ぶアニメーションの途中に見開きへ替わっても、遅れた送りが後の位置を上書きしない**（→ features/note_spread.md §10）。
+     * 見開きを出す配線（`bodyPosition.cancelAnimation()`）を通すので、読書画面ごと組む。保存値の無い初回は、見開きが組まれたときの一覧の位置から入る。
+     * 送り先は入った見開きに入らないほど遠くに置く — 打ち切った送りが遅れて届けば、入った位置もめくった位置もそこへ動く。
+     */
+    @Test
+    fun 縦の流しの送りの途中に見開きへ替わると_遅れた送りが入った位置もめくった位置も上書きしない() {
+        assumeDeskWindow()
+        val body = (0 until 200).joinToString("\n\n") { paragraphText(it) }
+        val model = buildNoteSectionModel(body)
+        val listState = LazyListState()
+        val position = BodyPosition(listState)
+        var spread by mutableStateOf(false)
+        lateinit var scope: CoroutineScope
+        composeRule.setContent {
+            scope = rememberCoroutineScope()
+            AppTheme(darkTheme = false) {
+                PostureBox(Posture.Book, Modifier.testTag(DESK_TAG)) { window ->
+                    ReaderTab(loadedNote(body), model, listState, window = window, bodyPosition = position, spreadSelected = spread)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        composeRule.mainClock.autoAdvance = false
+        composeRule.runOnUiThread { position.animateTo(scope, FAR_SEND) }
+        composeRule.mainClock.advanceTimeBy(100)
+        val beforeSwitch = composeRule.runOnUiThread { listState.firstVisibleItemIndex }
+        assertTrue("送りが始まっていない（前提）: $beforeSwitch", beforeSwitch > 0)
+
+        // 見開きが実際に組まれたフレームの位置を取る。切り替えを頼んでから組まれるまでに、一覧はまだ進みうる。
+        composeRule.runOnUiThread { spread = true }
+        var frames = 0
+        while (composeRule.onAllNodes(SPREAD_ENTERED).fetchSemanticsNodes().isEmpty()) {
+            check(++frames <= MAX_ENTRY_FRAMES) { "見開きが組まれない" }
+            composeRule.mainClock.advanceTimeByFrame()
+        }
+        val entered = composeRule.runOnUiThread { listState.firstVisibleItemIndex }
+        assertTrue("送り先が入った見開きに入りうる（前提）: $entered", entered < FAR_SEND - SPREAD_SPAN_PARAGRAPHS)
+
+        composeRule.mainClock.advanceTimeBy(DELAYED_SEND_WAIT_MILLIS)
+        composeRule.mainClock.autoAdvance = true
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals("遅れた送りが入った位置を書き替えた", entered, listState.firstVisibleItemIndex) }
+        composeRule.onNodeWithText(paragraphText(entered)).assertIsDisplayed()
+        composeRule.onAllNodesWithText(paragraphText(FAR_SEND)).assertCountEquals(0)
+
+        turnSpread()
+        val turned = composeRule.runOnIdle { listState.firstVisibleItemIndex }
+        assertTrue("めくれていない: $entered → $turned", turned > entered)
+        composeRule.mainClock.advanceTimeBy(DELAYED_SEND_WAIT_MILLIS)
+        composeRule.waitForIdle()
+        composeRule.runOnIdle { assertEquals("遅れた送りがめくった位置を上書きした", turned, listState.firstVisibleItemIndex) }
     }
 
     /**
@@ -4119,6 +4155,21 @@ class NoteReadingFlowTest {
 
         /** 段落だけを並べた長文。ブロック番号を本文へ入れて可視位置を特定できるようにする。 */
         val LONG_BODY = (0 until 40).joinToString("\n\n") { "${markerAt(it)} の本文です。" }
+
+        /** 打ち切った送りが遅れて届くなら届いているだけの時間。 */
+        const val DELAYED_SEND_WAIT_MILLIS = 1_000L
+
+        /** 見開きが組まれた（組んでいる間の表示か、めくるページャが出た）ことの目印。 */
+        val SPREAD_ENTERED = hasText("組んでいます") or SemanticsMatcher.keyIsDefined(SemanticsProperties.HorizontalScrollAxisRange)
+
+        /** 切り替えを頼んでから見開きが組まれるまでに待つフレームの上限。 */
+        const val MAX_ENTRY_FRAMES = 60
+
+        /** 縦の流しで送る先。入った見開きに入らないほど遠い。 */
+        const val FAR_SEND = 190
+
+        /** 見開き1つに入る段落の数より多い数。 */
+        const val SPREAD_SPAN_PARAGRAPHS = 40
 
         fun markerAt(index: Int) = "段落$index"
 

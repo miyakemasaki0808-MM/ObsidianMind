@@ -230,6 +230,23 @@ tasks.withType<Test>().configureEach {
     inputs.dir(layout.projectDirectory.dir("src/test/java"))
         .withPropertyName("testSourcesForSourceScanTests")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+    // `CommitGateHookTest` はゲートのスクリプト・フックの登録・CLAUDE.md の手順を、
+    // `ProjectSkillShapeTest` は Skill を読む。docs と同じ理由。
+    inputs.dir(rootProject.layout.projectDirectory.dir(".claude/gate"))
+        .withPropertyName("commitGateScripts")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.layout.projectDirectory.dir(".claude/skills"))
+        .withPropertyName("projectSkills")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.layout.projectDirectory.dir(".claude/review"))
+        .withPropertyName("codexReviewScript")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(
+        rootProject.layout.projectDirectory.file(".claude/settings.json"),
+        rootProject.layout.projectDirectory.file("CLAUDE.md")
+    )
+        .withPropertyName("commitGateRegistration")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 dependencies {

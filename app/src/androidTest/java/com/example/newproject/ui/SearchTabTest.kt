@@ -1,5 +1,8 @@
 package com.example.newproject.ui
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -19,6 +22,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.TitleMatch
 import com.example.newproject.model.state.TitleSearchState
+import com.example.newproject.ui.screen.ComposeExploreQuery
 import com.example.newproject.ui.screen.SearchTab
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
@@ -38,6 +42,8 @@ class SearchTabTest {
 
     private val titleQueries = mutableListOf<String>()
     private val aiQueries = mutableListOf<String>()
+    private val wholeVaultQueries = mutableListOf<String>()
+    private val query = ComposeExploreQuery()
     private val opened = mutableListOf<RelatedNote>()
 
     @Test
@@ -83,14 +89,26 @@ class SearchTabTest {
     }
 
     @Test
-    fun タイトルが0件なら同じことばでAIへ移って探せる() {
-        show(NoteUiState(titleSearch = TitleSearchState.Matches(emptyList())))
+    fun タイトルが0件なら同じことばで_範囲を選んでいてもすべてで探す() {
+        val folder = NoteFolder("ideas", "doc-ideas")
+        show(NoteUiState(folders = listOf(folder), selectedFolder = folder, titleSearch = TitleSearchState.Matches(emptyList())))
         input().performTextInput("習慣")
 
         composeRule.onNodeWithText("🔎 同じことばを AI でさがす").performClick()
 
-        assertEquals(listOf("習慣"), aiQueries)
+        assertEquals(listOf("習慣"), wholeVaultQueries)
+        assertEquals("範囲つきの検索を頼んだ", emptyList<String>(), aiQueries)
         composeRule.onNodeWithText("すべて").assertIsDisplayed()
+    }
+
+    @Test
+    fun タブを離れて戻っても打った言葉が残る() {
+        query.set("習慣")
+
+        show()
+
+        composeRule.onNodeWithText("習慣").assertIsDisplayed()
+        composeRule.onNodeWithText("タイトルの一部").assertDoesNotExist()
     }
 
     @Test
@@ -111,6 +129,30 @@ class SearchTabTest {
 
         composeRule.onNodeWithText("🔎 ことばでさがす").assertIsEnabled().performClick()
         assertEquals(listOf("習慣"), aiQueries)
+    }
+
+    @Test
+    fun AIのモードで打つ間はタイトルを照らさず_タイトルへ戻すと今の言葉で照らす() {
+        show()
+        input().performTextInput("読")
+
+        composeRule.onNodeWithText("AI").performClick()
+        input().performTextInput("書")
+        assertEquals("AI のモードの入力でタイトルを照らした", listOf("読"), titleQueries)
+
+        composeRule.onNodeWithText("タイトル").performClick()
+        assertEquals(listOf("読", "読書"), titleQueries)
+    }
+
+    @Test
+    fun 範囲のチップは選択中か未選択かを読み上げに出す() {
+        val folder = NoteFolder("ideas", "doc-ideas")
+        show(NoteUiState(folders = listOf(folder), selectedFolder = folder))
+
+        composeRule.onNodeWithText("AI").performClick()
+
+        composeRule.onNodeWithText("ideas").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "選択中"))
+        composeRule.onNodeWithText("すべて").assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "未選択"))
     }
 
     @Test
@@ -139,9 +181,11 @@ class SearchTabTest {
             AppTheme(darkTheme = false) {
                 SearchTab(
                     uiState = initial,
+                    query = query,
                     onSelectFolder = {},
                     onSearchTitle = { titleQueries += it },
                     onSearch = { aiQueries += it },
+                    onSearchWholeVault = { wholeVaultQueries += it },
                     onOpenNote = { opened += it }
                 )
             }

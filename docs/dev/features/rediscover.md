@@ -3,7 +3,7 @@
 **状態:** 実装済み・稼働中。**アプリの入口であり心臓**
 **最終検証:** 2026-11-03 / `6dd72062`（走査の除外・共有・寿命の起点。`EXPLORE-06`・`11`〜`13`・`20`・`21`）。それ以外は 2026-10-06 / `6b39f134`
 **関連コード:** `NoteViewModel.loadRandomNote()` / `NoteViewModel.presentDrawnNote()`（冊子と共有）/ `NoteViewModel.collectAllNotesCached()` / `NoteScanCache.kt` / `data/NoteRepository.kt`（走査と読み取り）/ `ui/screen/NoteReaderTab.kt`（ボタン）/ `ui/screen/ReaderLayout.kt`（並べ方）
-**関連テスト:** `NoteRepositoryTest` / `NoteScanCacheTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
+**関連テスト:** `NoteRepositoryTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `NoteSessionCoordinatorTest` / `ReaderLayoutTest` / androidTest: `VaultScanInstrumentationTest` / `NoteReadingFlowTest`
 **正本:** この文書
 
 **対象領域:** Vault からノートを1件無作為に引き、読める状態にするまで
@@ -83,10 +83,10 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 - **エラー時:** `NoteState.Error` を出す。`CancellationException` は再throwする
 - **空のとき:** `NoteState.Empty`
 - **開いたノートは本文の先頭から始まる。** 本文の一覧の位置（`noteListState`）は Activity で共有され、ノートを替えても戻らないので、
-  ランダム（「別のノートをひらく」）・さがす・関連・結晶の元ノート・冊子から開く経路は [`openNoteFromTop`](../../../app/src/main/java/com/example/newproject/ui/screen/NoteStart.kt) を通して先頭へ戻す。
+  ランダム（「別のノートをひらく」）・さがす・関連・結晶の元ノート・冊子から開く経路と、Vault を選び直した直後に引くノートは [`openNoteFromTop`](../../../app/src/main/java/com/example/newproject/ui/screen/NoteStart.kt) を通して先頭へ戻す。
   例外は位置を持って開く経路で、本文リンクは見出しから（→ [note_links](note_links.md)）、
   並べ読みの「このノートへ移る」は右で読んでいた位置から開く（→ [margin_pane](margin_pane.md) §5.9）。
-  Vault を選び直した直後に引くノートは、この境界を通らない
+  Vault を選ぶ画面の結果は本文の位置の口と同じスコープ（画面の組み立ての中）で受ける。Activity で受けると口に届かず、この境界を通せない
 
 ## 6. 状態とデータ
 
@@ -97,7 +97,9 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 
 **走査キャッシュ（`NoteScanCache`）は `NoteViewModel` が持つ。** `NoteUiState` の外にあるが、
 これは表示状態ではなく I/O のキャッシュなので「状態の単一ソース」の例外にはあたらない。
-**破棄の契機は Vault 切替だけ**（ノート切替では捨てない — 次の抽選で使う）。
+**捨てる契機は2つある。** Vault 切替では一覧とリンクの索引を捨てる。本文の書き戻し（蒸留の保存・太字の復元）では
+一覧だけを失効させ、次に頼まれたときに走査し直す。リンクの索引は残す（→ 判断2）。
+ノート切替では捨てない — 次の抽選で使う。
 
 ## 7. システム設計
 
@@ -105,7 +107,7 @@ Vault 全体から `.md` を1件**無作為に**引いて表示する。
 NoteReaderTab（ボタン）
  └─ NoteViewModel.loadRandomNote(contentResolver)
       ├─ session.onNoteChanged()            ← 旧ノートのジョブ停止＋状態リセット
-      ├─ collectAllNotesCached()            ← 60秒TTL・Vault切替で破棄・公開前に世代を照合
+      ├─ collectAllNotesCached()            ← 60秒TTL・Vault切替で破棄・本文の書き戻しで失効・公開前に世代を照合
       │    └─ NoteRepository.collectNotes() ← SAF再帰走査（機能フォルダを除外）
       └─ presentDrawnNote(notes.random())   ← 冊子の「これを読む」と共有
            ├─ loadNoteForDistill()          ← 本文読み取り（1MB上限）
@@ -139,6 +141,11 @@ SAF の再帰走査は1フォルダごとに IPC が発生して重い。**連�
 **Vault切替では即座に捨て、走査の結果は公開の直前に `vaultGeneration` を照合する。**
 捨てるだけでは、切替の前に始まった走査が後から返って、新しいVaultのキャッシュを上書きする。
 走査を呼ぶ処理の多くは切替で取り消されるが、取り消しには頼らない（→ [note_field_color](note_field_color.md) の走査キャッシュの照合）。
+
+**本文を書き戻したら、一覧だけを失効させる。** 一覧は各ノートの更新日時を持つので、書き戻したノートの値が古くなる。
+書き戻しの途中に走っていた走査の結果も古いので、待っている人へ返すだけで残さない。
+**リンクの索引は捨てない。** 書き戻しではノートの名前・パス・参照が変わらず、捨てると次の走査が起きるまで
+本文のリンクから別のノートを開けない（→ [note_links](note_links.md) §6）。どちらを呼ぶかは `NoteScanExpiryWiringTest` が固定する。
 
 ### 判断3: 痕跡セッションと紙の地色は、本文より先に決める
 

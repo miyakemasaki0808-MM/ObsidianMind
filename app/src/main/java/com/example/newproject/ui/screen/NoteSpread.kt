@@ -131,9 +131,12 @@ internal fun NoteSpread(
     leftPageTop: (@Composable () -> Unit)?,
     modifier: Modifier = Modifier,
     /** 選択メニューの「引用して書く」の受け手（→ features/margin_quote.md §5.1）。null の間は項目を出さない。 */
-    onQuote: ((QuoteSelection) -> Unit)? = null
+    onQuote: ((QuoteSelection) -> Unit)? = null,
+    /** 各ブロックを測る前に待つ口。組版の途中に操作を挟む端末テストだけが渡す（→ features/note_spread.md §10）。 */
+    measureGate: suspend (blockIndex: Int) -> Unit = {}
 ) {
     val density = LocalDensity.current
+    val currentMeasureGate by rememberUpdatedState(measureGate)
     val blocks = sectionModel.blocks
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val baseStyle = LocalTextStyle.current
@@ -174,7 +177,8 @@ internal fun NoteSpread(
         )
         val out = ArrayList<MeasuredSpreadBlock>(blocks.size)
         var sliceStart = System.nanoTime()
-        blocks.forEach { block ->
+        blocks.forEachIndexed { index, block ->
+            currentMeasureGate(index)
             out += measureSpreadBlock(block, inputs)
             if (System.nanoTime() - sliceStart > MEASURE_SLICE_NANOS) {
                 measured = SpreadMeasured(out.toList(), complete = false)

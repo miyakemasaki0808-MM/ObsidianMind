@@ -6,6 +6,7 @@ package com.example.newproject.domain
 // 再会カードの候補列挙（[scanReunionCandidates]）と冊子モードの扉（[selectCoverLine]）が
 // 同じ前処理を要求したので、**前処理だけ**をここへ出した。行の種類の判定（見出し・表の区切り・
 // リンクだけの行・頭の情報の塊）も前処理であって選定規則ではないので、ここに置く
+// （引用の行は、まとまりの開閉を追うので [quotationLines] として別のファイルに置く）
 // （頭の情報の塊は AI の抜粋の冒頭 [buildNoteExcerpt] も使う）。
 // **選定規則は共有しない** — 候補として何を採るかは用途ごとに違い、
 // そこまで束ねると片方の都合でもう片方の見え方が変わる。
@@ -79,7 +80,10 @@ private fun fenceMarkerOf(line: String): FenceMarker? {
     if (char != '`' && char != '~') return null
     val length = rest.takeWhile { it == char }.length
     if (length < MIN_FENCE_LENGTH) return null
-    return FenceMarker(char, length, hasTrailingText = rest.drop(length).isNotBlank())
+    val trailing = rest.drop(length)
+    // バッククォートの柵は後ろにバッククォートを書けない。書いてあればインラインコードで始まる段落で、柵として読むと後ろの本文が全部消える。
+    if (char == '`' && '`' in trailing) return null
+    return FenceMarker(char, length, hasTrailingText = trailing.isNotBlank())
 }
 
 private const val MIN_FENCE_LENGTH = 3

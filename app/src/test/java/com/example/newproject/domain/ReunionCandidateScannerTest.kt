@@ -67,6 +67,240 @@ class ReunionCandidateScannerTest {
         assertEquals(listOf("この前提はまだ正しいのか？"), scanReunionCandidates("> [!question] この前提はまだ正しいのか？").questions)
     }
 
+    // --- 引用（→ features/reunion_card.md §5「引用した問いは書き手の問いにしない」） ---------------
+
+    /**
+     * **引用した他人の問いを、書き手の問いにしない。** カードは「前回のあなたはこの問いで止まっていました」と断定するので、
+     * 引用から拾うと事実に反する。記号を落とした後では地の文と区別が付かないので、落とす前に見分ける。
+     */
+    @Test
+    fun `素の引用の問いは拾わず、地の文の問いは拾う`() {
+        val candidates = scanReunionCandidates("> これでいいのか。と彼は言った。\n> 本当にそうなのか。\n\n自分はどうしたいのか。")
+
+        assertEquals(listOf("自分はどうしたいのか。"), candidates.questions)
+    }
+
+    /** 引用と出典のコールアウト（`[!quote]`・`[!cite]`）は引用。大文字小文字と開閉の印によらない。 */
+    @Test
+    fun `引用と出典のコールアウトの問いは、題の行も続きの行も拾わない`() {
+        assertTrue(scanReunionCandidates("> [!quote] 本当にそうなのか。\n> 何のために読むのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!CITE]- 出典\n> 何のために読むのか。").questions.isEmpty())
+    }
+
+    /** ほかのコールアウト（メモ・問いなど）は書き手が書いたものなので、問いとして拾う。 */
+    @Test
+    fun `引用でないコールアウトの問いは拾う`() {
+        assertEquals(listOf("次は何を試すべきか。"), scanReunionCandidates("> [!note] メモ\n> 次は何を試すべきか。").questions)
+        assertEquals(listOf("なぜ続かないのか。"), scanReunionCandidates("> [!question]+ 自分への問い\n> なぜ続かないのか。").questions)
+    }
+
+    /**
+     * コールアウトの中に入れ子にした引用は、外のコールアウトが何であっても引用。
+     * 内側の段落は `>` を1つ省いた行にも続く（CommonMark の続きの行）ので、抜けるのは空の `>` の行で段落を閉じたとき。
+     */
+    @Test
+    fun `書き手のコールアウトの中の入れ子の引用は拾わない`() {
+        val candidates = scanReunionCandidates("> [!note] メモ\n> > 他人の問いなのか。\n>\n> 自分の問いなのか。")
+
+        assertEquals(listOf("自分の問いなのか。"), candidates.questions)
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> > 引用の一文です。\n> これも引用の続きなのか。").questions.isEmpty())
+        // 1行で2段を開くと、外の段は中身が入れ子の引用なので素の引用。中のコールアウトの種類は外の段に移さない。
+        assertTrue(scanReunionCandidates("> > [!note] 入れ子のメモなのか。").questions.isEmpty())
+    }
+
+    /**
+     * `>` の無い続きの行も、段落が続く限り引用の中（Obsidian はそこまでを引用として描く）。
+     * 空行・空の `>` の行・見出しや箇条の行で引用は終わる。
+     */
+    @Test
+    fun `記号の無い続きの行は段落が続く限り引用で、空行や空の記号の行や箇条で終わる`() {
+        assertTrue(scanReunionCandidates("> 引用の一文目です。\nこれも引用の続きなのか。").questions.isEmpty())
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文目です。\n\nこれは地の文なのか。").questions)
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文目です。\n>\nこれは地の文なのか。").questions)
+        assertEquals(listOf("箇条の問いなのか。"), scanReunionCandidates("> 引用の一文目です。\n- 箇条の問いなのか。").questions)
+        assertEquals(listOf("見出しの問いなのか。"), scanReunionCandidates("> 引用の一文目です。\n## 見出しの問いなのか。").questions)
+    }
+
+    /** 引用の記号の数ではなく、引用と箇条のまとまりで段を数える（→ CommonMark の入れ物の規則）。 */
+    @Test
+    fun `記号の間の空白や箇条の中の引用でも、引用の中の問いは拾わない`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n>  > これも引用の続きなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> - > これも引用の続きなのか。").questions.isEmpty())
+    }
+
+    /** タブは4つ区切りの空白として字下げを測る。引用の印の後ろの空白は1つだけが印の一部で、残りは中身の字下げ。 */
+    @Test
+    fun `タブや印の後ろの空白でも、引用のまとまりを取り違えない`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n>\t> 引用の問いなのか。").questions.isEmpty())
+        // 印の後ろの空白4つは、1つが印で残り3つは段落の字下げ。段落なので、記号の無い次の行も引用の続き。
+        assertTrue(scanReunionCandidates(">    引用の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+    }
+
+    /** 箇条の別の項目は、前の項目の引用を引き継がない。種類はその項目で開いた引用ごとに読む。 */
+    @Test
+    fun `箇条の別の項目の引用は、その項目のコールアウトの種類で決まる`() {
+        assertTrue(scanReunionCandidates("- > [!note] メモ\n- > [!quote] これも引用の続きなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("- > [!quote] 引用です。\n- > [!note] 自分の問いなのか。").questions)
+    }
+
+    /**
+     * 段落を途中で切れるものだけが引用の続きを切る。表でない縦棒の行と、1以外で始まる番号の箇条は段落の続き。
+     * 区切り線・1で始まる番号の箇条は段落を切るので、そこから先は引用の外。
+     */
+    @Test
+    fun `段落を切れない行は引用の続きで、切れる行の後ろは引用の外`() {
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n| これも引用の続きなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n2. これも引用の続きなのか。").questions.isEmpty())
+        assertEquals(listOf("番号の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n1. 番号の問いなのか。").questions)
+        assertEquals(listOf("地の文の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n---\n地の文の問いなのか。").questions)
+        // 引用の中の段落を、中身の無い項目は切れない。記号だけの行も段落の続きで、次の行も引用の続き。
+        // （`-` だと段落の直後の下線の見出しになるので、下線にならない `+` で確かめる）
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n> +\nこれも引用の続きなのか。").questions.isEmpty())
+        // 記号を外した行の中身の無い項目は前の引用を閉じる。続く段落が無いので、次の地の文は引用の外。
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n-\nこれは地の文なのか。").questions)
+        // 段落を切れない番号は引用の側へ倒す。その項目に続く段落も同じ。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n2. 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+        // 倒すのは引用の直後の項目だけ。倒した項目を、空行の後の別の箇条を倒す根拠にしない。
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n2. 番号の項目です。\n\n2) 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n2. 番号の項目です。\n\n2) > [!note] 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> 引用の一文です。\n-\n\n2. 自分の問いなのか。").questions)
+        // 続きの行が入る段落が引用の中の箇条でも、外の引用の中にある。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n> - 項目の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+    }
+
+    /**
+     * 番号付き箇条の次の項目は、新しい箇条ではないので段落を切れる条件を問わない。前の項目の引用を閉じて、その項目の引用を読み直す。
+     * 新しい箇条を始める `2.` は、今までどおり段落を切れない（→ `段落を切れない行は引用の続きで、切れる行の後ろは引用の外`）。
+     */
+    @Test
+    fun `番号付き箇条の次の項目は前の項目の続きにせず、その項目の引用を読み直す`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 1. 項目です。\n> 2. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("1. > [!note] メモ\n2. > [!quote] 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("1. > [!quote] 引用です。\n2. > [!note] 自分の問いなのか。").questions)
+        // 区切りが違う番号は別の箇条なので、段落を切れる条件に戻る（2では切れず、前の引用の段落の続き）。
+        assertTrue(scanReunionCandidates("1) > 引用の一文です。\n2. これも引用の続きなのか。").questions.isEmpty())
+    }
+
+    /** 開始番号は数値で比べる。0で埋めた1も、段落を切れる新しい箇条を始める。字下げの幅は書かれた表記の長さで測る。 */
+    @Test
+    fun `0で埋めた開始番号1は段落を切り、その中の引用を読む`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 01. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 0001) > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("地の文の一文です。\n01. > 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n> 01. > [!note] 自分の問いなのか。").questions)
+    }
+
+    /**
+     * `>` を外した次の行の箇条は、前の引用を閉じて新しい箇条を始める（段落を切れる条件は、段落の入れ物に合った行にだけ効く）。
+     * 前の引用が書き手のコールアウトでも、その行の引用は読み直す。
+     */
+    @Test
+    fun `引用の記号を外した次の行の箇条は新しい箇条で、その中の引用を読む`() {
+        assertTrue(scanReunionCandidates("> [!note] メモ\n2. > 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n2. > [!cite] 引用の問いなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> [!note] メモ\n> 1. 項目です。\n2. > 引用の問いなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n2. > [!note] 自分の問いなのか。").questions)
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> [!note] メモ\n2. 自分の問いなのか。").questions)
+        // 空の項目も前の引用を閉じるので、次の `>` は書き手のコールアウトの続きではなく新しい引用。
+        assertTrue(scanReunionCandidates("> [!note] メモ\n-\n> 引用の問いなのか。").questions.isEmpty())
+    }
+
+    /** 段落の続きの行は、段落を切るまとまりでない限り引用に残る。箇条の後ろの引用の記号は箇条を切って引用を始める。 */
+    @Test
+    fun `引用でないまとまりの後ろの引用の記号は、続きの行ではなく新しい引用`() {
+        assertTrue(scanReunionCandidates("- 項目の文です。\n> 引用の問いなのか。").questions.isEmpty())
+    }
+
+    /** 引用の中で段落を閉じる行（下線の見出し・区切り線・コードの柵）の後ろは、記号が無ければ引用の外。 */
+    @Test
+    fun `引用の中で段落を閉じた後ろの地の文は引用の続きにしない`() {
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 見出しの文\n> ===\nこれは地の文なのか。").questions)
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n> ***\nこれは地の文なのか。").questions)
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n> ```\nこれは地の文なのか。").questions)
+    }
+
+    /** バッククォートの柵の情報文字列にバッククォートは書けない。書いてあれば柵ではなくインラインコードで、段落は続く。 */
+    @Test
+    fun `インラインコードの行は柵にせず、引用の段落の続きを引用に残す`() {
+        assertTrue(scanReunionCandidates("> ```code```\nこれも引用の続きなのか。").questions.isEmpty())
+        assertTrue(scanReunionCandidates("> ```foo`bar\nこれも引用の続きなのか。").questions.isEmpty())
+        assertEquals(listOf("自分の問いなのか。"), scanReunionCandidates("> ```kotlin\n自分の問いなのか。").questions)
+    }
+
+    /**
+     * Markdown の空行は半角空白とタブだけの行。全角空白やノーブレークスペースだけの行は文字のある段落の続きなので、引用を閉じない。
+     * 見た目を空けるために置かれることがあり、Kotlin の `isBlank` は空白とみなす。
+     */
+    @Test
+    fun `全角空白やノーブレークスペースだけの行で引用の段落を閉じず、半角空白とタブだけの行で閉じる`() {
+        listOf("\u3000", "\u00A0").forEach { space ->
+            assertTrue(space, scanReunionCandidates("> 引用の一文です。\n> $space\nこれも引用の続きなのか。").questions.isEmpty())
+        }
+        listOf(">", ">   ", ">\t").forEach { line ->
+            assertEquals(line, listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文です。\n$line\nこれは地の文なのか。").questions)
+        }
+        // 引用の外の全角空白だけの行も、記号の無い続きの行で、引用を閉じない。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n\u3000\nこれも引用の続きなのか。").questions.isEmpty())
+        // 箇条の項目の中でも同じ。全角空白の行は項目にとっても空行ではない。
+        assertTrue(scanReunionCandidates("- > 引用の一文です。\n  \u3000\nこれも引用の続きなのか。").questions.isEmpty())
+        // 印の後ろが全角空白の項目は、中身のある項目なので段落を切り、引用を閉じる。
+        assertTrue(scanReunionCandidates("> 引用の一文です。\n- \u3000\nこれも引用の続きなのか。").questions.isNotEmpty())
+    }
+
+    /** 箇条の項目は空行をまたいで続く。項目の字下げの中の引用は、その項目の引用。 */
+    @Test
+    fun `空行をまたいだ項目の中の引用の問いは拾わない`() {
+        assertTrue(scanReunionCandidates("1.  項目です。\n\n    > 引用の問いなのか。").questions.isEmpty())
+    }
+
+    /**
+     * 段落の途中で番号の箇条を始められるのは1からだけ。始められない番号の行は段落の続きなので、
+     * その後ろの字下げ4つの `>` は引用ではなく段落の文字。
+     */
+    @Test
+    fun `段落を切れない番号の行は箇条を始めず、その字下げの中の記号は引用にしない`() {
+        assertEquals(listOf("引用の問いなのか。"), scanReunionCandidates("地の文です。\n2.  項目です。\n    > 引用の問いなのか。").questions)
+    }
+
+    /** 引用の中のコードは段落ではないので、その直後の地の文は引用の続きにならない。 */
+    @Test
+    fun `引用の中の字下げのコードの直後の地の文は引用の続きにしない`() {
+        assertEquals(listOf("地の文の問いなのか。"), scanReunionCandidates(">     code\n地の文の問いなのか。").questions)
+    }
+
+    /** 箇条の中の引用は空行で終わり、同じ項目の続きの段落は書き手の文。 */
+    @Test
+    fun `箇条の中の引用は空行で終わり、項目の続きの段落は拾う`() {
+        assertEquals(listOf("項目の問いなのか。"), scanReunionCandidates("- > 引用の一文です。\n\n  項目の問いなのか。").questions)
+    }
+
+    /** 記号の無い続きの行を許すのは段落だけ。見出しだけの引用の後ろの地の文は、引用の外の書き手の文。 */
+    @Test
+    fun `見出しだけの引用の直後の地の文は引用の続きにしない`() {
+        assertEquals(listOf("これも引用の続きなのか。"), scanReunionCandidates("> # 引用の見出し\nこれも引用の続きなのか。").questions)
+        assertTrue(scanReunionCandidates("> 引用の一文です。\nこれも引用の続きなのか。").questions.isEmpty())
+    }
+
+    /** コードブロックを挟めば引用は終わる（コードは落とすが、段落の境目は残す）。 */
+    @Test
+    fun `コードブロックの後ろの地の文は引用の続きにしない`() {
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("> 引用の一文目です。\n```\ncode\n```\nこれは地の文なのか。").questions)
+    }
+
+    /** 箇条の中に置いた引用も引用。 */
+    @Test
+    fun `箇条の中の引用の問いは拾わない`() {
+        assertTrue(scanReunionCandidates("- > リストの中の引用なのか。").questions.isEmpty())
+    }
+
+    /** 古い前提のカードは誰の言葉かを言わない（「今も有効か確認したい箇所があります」）ので、引用からも拾う。 */
+    @Test
+    fun `引用の中の古びうる記述は拾う`() {
+        val candidates = scanReunionCandidates("> 現在の最新は v2.1.0 である。")
+
+        assertEquals(listOf("現在の最新は v2.1.0 である。"), candidates.stalenessMarks)
+    }
+
     /**
      * **引用の途中で切らない。** 素朴に終止符で割ると「これでいいのか？ と言われた。」が
      * 閉じ括弧の無い断片になり、カードにそのまま出てしまう。
@@ -111,6 +345,17 @@ class ReunionCandidateScannerTest {
     }
 
     // --- 記法とノイズ ---------------------------------------------------------
+
+    /** バッククォートの柵は後ろにバッククォートを書けない。書いてあればインラインコードの段落で、後ろの本文を隠さない。チルダの柵は書ける。 */
+    @Test
+    fun `バッククォート3本のインラインコードで始まる行は柵にせず、後ろの本文を候補から消さない`() {
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("```code``` を使った。\nこれは地の文なのか。").questions)
+        assertEquals(listOf("これは地の文なのか。"), scanReunionCandidates("```foo`bar\nこれは地の文なのか。").questions)
+        assertEquals(
+            listOf("これは地の文なのか。"),
+            scanReunionCandidates("~~~ a`b\nコードの中の問いなのか。\n~~~\nこれは地の文なのか。").questions
+        )
+    }
 
     @Test
     fun `コードブロックの中は候補にしない`() {

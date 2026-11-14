@@ -2490,6 +2490,7 @@ class NoteSessionCoordinatorTest {
             crystalPersistence = crystals,
             crystalMaterials = crystalMaterials,
             marginMemoDrafts = drafts,
+            exploreQuery = InMemoryExploreQuery(),
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,

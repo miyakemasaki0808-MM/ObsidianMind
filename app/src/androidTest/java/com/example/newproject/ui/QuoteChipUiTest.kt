@@ -343,9 +343,11 @@ class QuoteChipUiTest {
      * **本物の選択の容器で文字を選んで本文をスクロールすると、スクロールの後も札が出ない**（→ features/margin_quote.md §5.1）。
      * 選択メニューは動いた選択の位置で出し直されるが、スクロールで消した札はその選択では出し直さない。本文に触れて選び直せば出る。
      * 札の配線は本番と同じ [QuoteChipEffects] と [quoteChipTouch] を使う（札の層と擬似の範囲だけでは、メニューの出し直しを通らない）。
+     * 札は机でだけ出すので、閉じた画面では skip する（閉じた端末では札の表示待ちが切れる → docs/dev/system/instrumentation_testing.md 判断11）。
      */
     @Test
     fun 選んでスクロールした後は札が出ず_選び直せば出る() {
+        assumeDeskWindow()
         val model = buildNoteSectionModel((1..60).joinToString("\n\n") { "段落${it}の文。選んで引用する。" })
         val chip = mutableStateOf<QuoteChip>(QuoteChip.Hidden)
         val offers = QuoteOffers()

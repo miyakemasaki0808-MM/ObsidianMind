@@ -4,7 +4,8 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ネットワーク権限は持たない。ユーザーのVault（Obsidian の `.md` 群）を SAF 経由で読み書きする。
 
 > **この文書の位置づけ = 憲法。** 常時効かせる原則・参照先・禁止事項・完了条件だけを置く。
-> 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、作業手順は原則Skill（作業標準書）が持つ。
+> 背景と判断理由は `docs/dev/features/`・`docs/dev/system/`・`docs/dev/decisions/`（法律）、
+> ひと続きで行う作業手順は `.claude/skills/` の Skill（作業標準書）が持つ。完了条件はここに残す（→ [harness](docs/dev/harness/README.md) §2）。
 > **例外として、端末とリポジトリを一体で扱う実機検証は [device_validation](docs/review/device_validation/README.md) が持つ。**
 > ここに詳細を書き足さない。
 
@@ -76,13 +77,16 @@ Android / Kotlin / Jetpack Compose。AIはオンデバイスの Gemini Nano（ML
 ## 検証と完了条件
 
 `java` / `javac` はスタブでJDK未インストール。**Android Studio 同梱のJBRを使う**（`/Applications` 直下ではなく `AIセット` フォルダ配下にあるため `/usr/libexec/java_home` では見つからない）。
+ゲートのスクリプトがJBRを指定して `./gradlew testDebugUnitTest lintDebug --offline` を流す。
 
 ```bash
-export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Contents/Home" && ./gradlew testDebugUnitTest lintDebug --offline
+.claude/gate/gate.sh
 ```
 
-- **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある
-- `androidTest` を触ったら `assembleDebugAndroidTest`（CIと同じ組み立てタスク）も通す。上記のコマンドはこれをコンパイルしない
+- **コード変更後は必ず上記を通してからコミットする。** 静的レビューだけで通したコードにコンパイルエラーが混入した前例がある。
+  **成功したときだけ通過が記録され、Claude の `git commit` は Git の pre-commit が、コミットされるコードをその記録と照らす**（文書だけの変更は止めない → [harness](docs/dev/harness/README.md) §1）。
+  止められたら、ゲートを単独のコマンドで流し直す。ゲートとコミットを `;` や `&&` でつながない。`--no-verify` で飛ばさない
+- `androidTest` を触ったら `.claude/gate/gate.sh assembleDebugAndroidTest`（CIと同じ組み立てタスクを足す）で通す。既定のゲートはこれをコンパイルしない
 - **実機ケースの判定はCodexが行い、組み立てと片付けはClaudeが行う**（区間の割りは [共通手順](docs/review/device_validation/README.md) が持つ）。
   **どちらの担い手も**着手前に共通手順と対象機能のケースを読み、
   一時領域だけで検証し、**元Vaultへは戻さず常設の検証用Vaultで終える**（戻す操作自体が読書痕跡を増やすため）。
@@ -113,6 +117,7 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 **行番号まで名指しされた指摘の取りこぼしが落ちる。** 置かなければ検査そのものが起動しない
 （2026-08-12〜13 の5巡は、これを怠って16件が受付簿の外にあった）。
 受付簿は未解決事項だけを持つ。修正確認まで済んだ指摘は課題台帳と同時に削除し、完了履歴を残さない。
+受付の順序は Skill `review-intake` が持つ。
 
 **変更を終える前に:**
 
@@ -153,12 +158,13 @@ export JAVA_HOME="/Applications/AIセット/Android Studio.app/Contents/jbr/Cont
 | 担い手 | やる | **やらない** |
 |---|---|---|
 | **オーナー** | 判断・優先順位・実機の体感・GitHub側のブランチ作成とPRマージ・**完了の線を引くこと**（→ [L64](docs/dev/lessons.md#l64-検証の限界をそのまま完了条件にしない)） | 実装・文書の執筆 |
-| **Claude** | 実装・文書・机上ゲート（JVM／Lint／`assembleDebugAndroidTest`）・レビュー指摘への対応・**実機検証の組み立てと片付け**（→ [device_validation](docs/review/device_validation/README.md) の「誰が行うか」） | **自分のdiffを自分でレビューしたことにしない。サブエージェントも起こさない**（下記）／**実機ケースの期待値の決定と合否の判定**／`owner/` の更新（依頼されたときだけ → [owner/README](docs/owner/README.md)） |
-| **Codex** | **別の目のdiffレビュー**・**実機ケースの実行と判定**（→ [device_validation](docs/review/device_validation/README.md)） | 製品コードの変更 |
+| **Claude** | 実装・文書・机上ゲート（JVM／Lint／`assembleDebugAndroidTest`）・**Codex へのレビュー依頼と往復**（Skill `review-loop`）・レビュー指摘への対応・**実機検証の組み立てと片付け**（→ [device_validation](docs/review/device_validation/README.md) の「誰が行うか」） | **自分のdiffを自分でレビューしたことにしない。サブエージェントも起こさない**（下記）／**実機ケースの期待値の決定と合否の判定**／`owner/` の更新（依頼されたときだけ → [owner/README](docs/owner/README.md)） |
+| **Codex** | **別の目のdiffレビュー**（Claude がコマンドで頼む）・**実機ケースの実行と判定**（→ [device_validation](docs/review/device_validation/README.md)） | 製品コードの変更 |
 
 - **修正1件＝1コミット。** コミットメッセージは日本語で「何を・なぜ」。`_wip/` の項目番号ではなく内容で書く（`_wip/` を廃棄すると番号の意味が消え、経緯を辿れなくなる）
 - PR本文も日本語で、修正表＋「見た目・挙動の変更点」＋「実機確認ポイント」を載せる
-- ブランチはユーザーがGitHub側で作成する。「フェッチして」と言われたら、main を ff-only で pull → マージ済み旧ブランチをローカル削除 → 新ブランチを checkout
+- ブランチはユーザーがGitHub側で作成する。「フェッチして」と言われたら Skill `fetch-branch` の手順で移る
 - **修正が効いていることの主張は、修正コードを別の目で読むまで確定させない。** 方針が正しいと、実装が効いていなくても文書とコミットメッセージだけ通ってしまう
 - **「別の目」は、実装したのとは別のモデル／エージェントがdiffをレビューすること。自分の2回目のパスは数えない。** コミット前に通す恒久の工程であって、余裕があるときの安全網ではない — 実績上、見落としを最も確実に捕まえているのはこの工程である（外部レビューで9件・4件・2件。自己パスの検出はゼロではないが同水準ではない）
-- **その担い手はオーナーが回す外部レビューであって、Claude が起こすサブエージェントではない。** 外部レビューは `docs/review/` に本文が残り受付簿の検査にも載るが、**サブエージェントの結果はどこにも残らず、同じ役割を二重に払うことになる。** 修正・変異確認・ゲートまで済ませたら**そこで止め、「別の目を通していないので未確定」と明示して渡す**
+- **その担い手は Codex であって、Claude が起こすサブエージェントではない。** Codex のレビューは `docs/review/` に本文が残り受付簿の検査にも載るが、**サブエージェントの結果はどこにも残らず、同じ役割を二重に払うことになる。**
+- **修正・変異確認・ゲートまで済ませたら、Skill `review-loop` で Codex に頼み、指摘を直して頼み直す。** P1・P2 が0件になるか、同じシリーズで3回に達したら止めてオーナーへ渡す。回数はスクリプトが数えて断る（→ [harness](docs/dev/harness/README.md) §3）。**完了の線はオーナーが引く** — 往復が終わっても「確定」とは書かず、残った指摘と受付を添えて渡す

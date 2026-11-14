@@ -29,6 +29,9 @@ class SearchKeywordMatchingTest {
     fun `1文字クエリは部分一致で拾う`() {
         assertEquals(1, keywordMatchScore("習", "習慣について"))
         assertEquals(0, keywordMatchScore("習", "料理のコツ"))
+        // 1文字の道でも大文字小文字と空白を無視する。
+        assertEquals(1, keywordMatchScore("A", "about ai"))
+        assertEquals(1, keywordMatchScore(" 習 ", "習慣について"))
     }
 
     @Test

@@ -24,8 +24,14 @@ captures/
 *.keystore
 *.jks
 
-# Claude Code
-.claude/
+# Claude Code。手元の設定と worktree は残さず、全員に効かせる設定・ゲート・Skill だけを追跡する
+# （→ docs/dev/harness/README.md）。
+.claude/*
+!.claude/settings.json
+!.claude/gate/
+!.claude/review/
+!.claude/eval/
+!.claude/skills/
 
 # 実機検証の記録のうち、端末を特定するものと使い捨てのものだけを履歴へ残さない。
 # 再利用できる手順とケースは追跡する（docs/review/device_validation/ の残り）。

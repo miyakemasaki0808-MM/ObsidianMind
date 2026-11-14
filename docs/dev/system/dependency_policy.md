@@ -1,7 +1,7 @@
 # 設計思想 — 依存更新の方針（Lintの更新系チェックをどう扱うか）
 
 **状態:** 方針確定・運用中。**更新の実行そのものは未着手**（`genai-prompt` beta4 はソース互換だが動作互換ではないため上げていない）
-**最終検証:** 2026-09-12 / `0b78f8a`
+**最終検証:** 2026-11-07 / `0a96dcdd`
 **関連コード:** `app/build.gradle.kts`（**バージョンカタログは使っていない。依存はここに直書きする**）／`app/src/main/AndroidManifest.xml`
 **関連テスト:** `lintDebug`（`warningsAsErrors`）／`verifyDebugManifestPermissions`・`verifyReleaseManifestPermissions`
 **正本:** この文書
@@ -198,6 +198,13 @@ ADR-0002 は「ネットワーク権限を宣言しない」と書いてクラ�
 > Gradle 9.6.1 → 9.7.1、`navigation-compose` 2.9.8 → 2.10.1、`org.json` 20260719 → 20260814。
 > **この表は 2026-08-01 時点の距離感の記録なので書き換えない**（判断4）。
 > 内訳は `AndroidGradlePluginVersion` 1件・`GradleDependency` 8件・`NewerVersionAvailable` 3件。
+
+> **2026-11-07 にもう一度測った（ネットワークあり・`--rerun-tasks`）。件数は12件のままで、上げたものは無い。**
+> 上流で動いたのは Gradle 9.7.1 → 9.8.2、`navigation-compose` 2.10.1 → 2.10.2、`core-ktx` 1.19.0 → 1.19.1、
+> **`genai-prompt` beta4 → beta5**。beta5 は調べていない。§5 の判断は beta4 のもので、
+> 上げる理由が出たら beta5 の AAR を展開して `maxOutputTokens` の既定値から確かめ直す。
+> Compose BOM の最新は 2026.09.00 で、こちらは 2024.09.03 のまま。
+> **課題の台帳からは外した。** 古いこと自体は問題ではなく状態で、見る契機は判断2の区切り、上げる契機は判断3の末尾が持つ。
 
 **Compose BOM（2024.09.03）は指摘に出てこない。** `platform()` 宣言をLintが更新対象として見ていないためで、
 「最新である」という意味ではない。**BOMだけは棚卸しの自動検出から漏れる**ので、手で確認する必要がある。

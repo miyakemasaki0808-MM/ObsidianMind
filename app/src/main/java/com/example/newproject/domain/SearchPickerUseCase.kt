@@ -1,7 +1,7 @@
 package com.example.newproject.domain
 
 import com.example.newproject.model.NoteFile
-import com.example.newproject.model.RelatedNote
+import com.example.newproject.model.state.TitleMatch
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.ai.PickerCandidateLine
@@ -13,11 +13,12 @@ import kotlinx.coroutines.withContext
 
 sealed class PickerResult {
     data class Success(
-        val notes: List<RelatedNote>,
+        /** 結果の行。同じ名前のノートが並ぶときだけ場所を持つ（タイトルのモードと同じ形 → [exploreRows]）。 */
+        val notes: List<TitleMatch>,
         /**
-         * AIが選定に関与したか。**理由までは持たない。**
+         * 出す結果をAIが選んだか。**理由までは持たない。**
          *
-         * 非対応でも未取得でも取得失敗でも、この画面で起きることは同じ
+         * AIが使えなくても、動いてIDを1件も返さなくても、この画面で起きることは同じ
          * （キーワード一致の結果が出る）で、**ユーザーの次の行動が変わらない**。
          * 理由で割ると、`AiStatusNotice` と重なる2つ目の方言になる。
          */
@@ -45,7 +46,9 @@ class SearchPickerUseCase(
             // 候補が上限超のときだけ、取りこぼさない程度に粗く絞る（精度は Nano が担保）。
             val candidates = if (scopeNotes.size > CANDIDATE_LIMIT) {
                 // 範囲は Vault 全体になりうる。全件の bigram を作るので Main で走らせない。
-                withContext(cutDispatcher) { recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { it.name } }
+                withContext(cutDispatcher) {
+                    recallCutByKeyword(query, scopeNotes, CANDIDATE_LIMIT) { titleForMatching(it.name) }
+                }
             } else {
                 scopeNotes
             }
@@ -62,9 +65,13 @@ class SearchPickerUseCase(
                     val idToNote = candidates
                         .mapIndexed { index, note -> pickerCandidateId(index) to note }
                         .toMap()
+                    // 同じ名前の候補にだけ場所を添える。行が同じ文字列だと Nano が見分けられない。
+                    val sameName = candidates.groupingBy { it.name }.eachCount()
                     val prompt = PromptBuilder.buildPickerPrompt(
                         query,
-                        idToNote.map { (id, note) -> PickerCandidateLine(id, note.name) }
+                        idToNote.map { (id, note) ->
+                            PickerCandidateLine(id, note.name, note.folderPath().takeIf { sameName.getValue(note.name) > 1 })
+                        }
                     )
                     val response = aiClient.generate(prompt.text)
                     // **許可集合はプロンプトへ実際に載せたIDだけ。** 予算で落ちた候補を残すと、
@@ -72,12 +79,11 @@ class SearchPickerUseCase(
                     val picked = parseCandidateIds(response, prompt.validIds, PICK_LIMIT, prefix = 'P')
                         .mapNotNull { id -> idToNote[id] }
                         .distinctBy { it.ref }
-                        .map { it.toRelatedNote() }
 
-                    // Nano が候補外/空を返したら、キーワード一致でフォールバック。
-                    // **AIは動いている**ので、断り書きは出さない。
-                    if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = true)
-                    else PickerResult.Success(picked, isAiAssisted = true)
+                    // IDが1件も取れなければ（空・候補外・タイトルで返した）、キーワード一致でフォールバックする。
+                    // AIは動いたが、出す中身はキーワード一致なので、AIの選択に見せない（注記を出させる）。
+                    if (picked.isEmpty()) fallback(query, candidates, isAiAssisted = false)
+                    else PickerResult.Success(exploreRows(picked), isAiAssisted = true)
                 }
             }
         } catch (e: CancellationException) {
@@ -89,18 +95,15 @@ class SearchPickerUseCase(
         }
     }
 
-    // AI が使えない/失敗したときは、キーワード一致の強い順に返す。
-    //
-    // 以前は絞り込み結果の先頭をそのまま返していたため、候補が上限以下だと
-    // 並べ替えを通らず、SAF の列挙順のまま「キーワード一致で表示しています」と
-    // 表示していた（UI文言と実装の不一致）。候補数に関係なくスコア順へ統一し、
+    // AI が使えない、または IDが1件も取れなかったときは、キーワード一致の強い順に返す。
+    // 画面は「キーワード一致で表示しています。」と言うので、候補数に関係なくスコア順に並べ、
     // 一致0件は返さない（0件なら画面は「見つかりませんでした。」になる）。
     private fun fallback(
         query: String,
         candidates: List<NoteFile>,
         isAiAssisted: Boolean
     ): PickerResult = PickerResult.Success(
-        notes = pickByKeyword(query, candidates, PICK_LIMIT) { it.name }.map { it.toRelatedNote() },
+        notes = exploreRows(pickByKeyword(query, candidates, PICK_LIMIT) { titleForMatching(it.name) }),
         isAiAssisted = isAiAssisted
     )
 

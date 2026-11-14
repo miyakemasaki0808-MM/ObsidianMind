@@ -4,6 +4,7 @@ import com.example.newproject.ai.AiAvailability
 import com.example.newproject.ai.AiClient
 import com.example.newproject.controller.SearchController
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.domain.SearchPickerUseCase
@@ -143,6 +144,96 @@ class SearchControllerTest {
         controller(state, FakeVaultBrowser(handle)).loadFolders()
 
         assertEquals("フォルダ一覧を取得できませんでした。", state.value.foldersError)
+    }
+
+    // 外で消えたフォルダを選んだままだと、どのチップも選ばれていない形で0件になり、「すべて」の注記も出ない。
+    @Test
+    fun `選んでいたフォルダが一覧から消えていたら「すべて」へ戻り、前の結果も消える`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val notes = NoteFolder("notes", "doc-notes")
+        val state = NoteUiStateStore(
+            NoteUiState(folders = listOf(ideas, notes), selectedFolder = ideas, searchState = SearchState.Success(emptyList()))
+        )
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(notes)))).loadFolders()
+
+        assertEquals(null, state.value.selectedFolder)
+        assertTrue(state.value.searchState is SearchState.Idle)
+        assertEquals(listOf("notes"), state.value.folders.map { it.name })
+    }
+
+    @Test
+    fun `選んでいたフォルダが一覧に残っていれば、範囲も結果も保つ`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas, NoteFolder("new", "doc-new"))))).loadFolders()
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+    }
+
+    @Test
+    fun `フォルダの一覧を読めなかったときは範囲を動かさない`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+
+        controller(state, FakeVaultBrowser(FakeVaultHandle(failure = IllegalStateException("SAF失敗")))).loadFolders()
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+    }
+
+    @Test
+    fun `消えたフォルダで探している途中に一覧が届いたら、その検索の結果を書かない`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val handle = FakeVaultHandle(folders = listOf(ideas))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        val controller = controller(state, FakeVaultBrowser(handle))
+        val pending = CompletableDeferred<List<NoteFile>>()
+        controller.searchByKeyword("習慣") { pending.await() }
+        assertTrue(state.value.searchState is SearchState.Loading)
+
+        handle.folders = emptyList()
+        controller.loadFolders()
+        pending.complete(listOf(notePath("ideas/習慣.md")))
+
+        assertEquals(null, state.value.selectedFolder)
+        assertTrue("読み込み中が残るか、消えた範囲の結果を書いた", state.value.searchState is SearchState.Idle)
+    }
+
+    @Test
+    fun `探している途中にフォルダの一覧を読めなくても、その検索を止めず結果を受け取る`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val handle = FakeVaultHandle(folders = listOf(ideas))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        val controller = controller(state, FakeVaultBrowser(handle))
+        val pending = CompletableDeferred<List<NoteFile>>()
+        controller.searchByKeyword("習慣") { pending.await() }
+
+        handle.failure = java.io.IOException("フォルダの一覧を読めませんでした。")
+        controller.loadFolders()
+        pending.complete(listOf(notePath("ideas/習慣.md")))
+
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals("フォルダ一覧を取得できませんでした。", state.value.foldersError)
+        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
+    }
+
+    @Test
+    fun `一覧を読む間に別のフォルダへ選び直したら、届いた一覧にあればその選択を保つ`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val notes = NoteFolder("notes", "doc-notes")
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas, notes), selectedFolder = ideas))
+        lateinit var controller: SearchController
+        val handle = FakeVaultHandle(folders = listOf(notes), beforeEachCall = { controller.selectFolder(notes) })
+        controller = controller(state, FakeVaultBrowser(handle))
+
+        controller.loadFolders()
+
+        assertEquals("doc-notes", state.value.selectedFolder?.documentId)
     }
 
     @Test
@@ -293,7 +384,7 @@ class SearchControllerTest {
         controller.searchTitle("習慣")
         assertEquals(listOf("新しい習慣.md"), titles(state))
         controller.searchByKeyword("習慣", ::noNotes)
-        assertEquals(listOf("新しい習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("新しい習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     @Test
@@ -368,6 +459,49 @@ class SearchControllerTest {
         assertTrue(state.value.titleSearch is TitleSearchState.Scanning)
     }
 
+    // 範囲と結果はタブを離れても残るので、言葉も残さないと、戻ったときに空の入力欄の下に前の結果が並ぶ。
+    @Test
+    fun `開き直すと残っている言葉でタイトルを照らし、範囲とAIの結果は残す`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val result = SearchState.Success(emptyList())
+        val query = InMemoryExploreQuery("習慣")
+        val vault = FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas)))
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas, searchState = result))
+        val controller = controller(state, vault, query = query)
+
+        controller.onOpened { listOf(notePath("ideas/習慣の記録.md"), notePath("料理.md")) }
+
+        assertEquals(listOf("習慣の記録.md"), titles(state))
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+        assertEquals(result, state.value.searchState)
+        assertEquals("習慣", query.text)
+    }
+
+    @Test
+    fun `Vaultを替えると打った言葉も捨てる`() = runTest {
+        val query = InMemoryExploreQuery("習慣")
+        val controller = controller(NoteUiStateStore(NoteUiState()), openVault(), query = query)
+
+        controller.onVaultChanged()
+
+        assertEquals("", query.text)
+    }
+
+    @Test
+    fun `タイトル0件から探すときは、選んでいた範囲によらず「すべて」で探す`() = runTest {
+        val ideas = NoteFolder("ideas", "doc-ideas")
+        val state = NoteUiStateStore(NoteUiState(folders = listOf(ideas), selectedFolder = ideas))
+        // フォルダは残っている（開いたときに範囲が外れるのは、消えたときだけ）。
+        val controller = controller(state, FakeVaultBrowser(FakeVaultHandle(folders = listOf(ideas))))
+        controller.onOpened { listOf(notePath("ideas/料理.md"), notePath("日記/習慣の記録.md")) }
+        assertEquals("doc-ideas", state.value.selectedFolder?.documentId)
+
+        controller.searchWholeVault("習慣", ::noNotes)
+
+        assertEquals(null, state.value.selectedFolder)
+        assertEquals(listOf("習慣の記録.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
+    }
+
     @Test
     fun `Vaultを替えた後は前の一覧も打った言葉も残らない`() = runTest {
         val state = NoteUiStateStore(NoteUiState())
@@ -411,7 +545,7 @@ class SearchControllerTest {
         controller.searchByKeyword("習慣", ::noNotes)
 
         val result = state.value.searchState as SearchState.Success
-        assertEquals(setOf("直下の習慣.md", "奥の習慣.md"), result.results.map { it.title }.toSet())
+        assertEquals(setOf("直下の習慣.md", "奥の習慣.md"), result.results.map { it.note.title }.toSet())
     }
 
     @Test
@@ -431,7 +565,7 @@ class SearchControllerTest {
         controller.searchByKeyword("習慣", ::noNotes)
 
         val result = state.value.searchState as SearchState.Success
-        assertEquals(setOf("浅い習慣.md", "深い習慣.md"), result.results.map { it.title }.toSet())
+        assertEquals(setOf("浅い習慣.md", "深い習慣.md"), result.results.map { it.note.title }.toSet())
     }
 
     @Test
@@ -440,7 +574,7 @@ class SearchControllerTest {
 
         controller(state, openVault()).searchByKeyword("習慣") { listOf(notePath("習慣.md")) }
 
-        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     @Test
@@ -486,7 +620,7 @@ class SearchControllerTest {
         controller.onVaultChanged()
         controller.searchByKeyword("習慣") { listOf(notePath("新の習慣.md")) }
 
-        assertEquals(listOf("新の習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.title })
+        assertEquals(listOf("新の習慣.md"), (state.value.searchState as SearchState.Success).results.map { it.note.title })
     }
 
     private fun openVault() = FakeVaultBrowser(FakeVaultHandle())
@@ -507,12 +641,14 @@ class SearchControllerTest {
         vault: FakeVaultBrowser = FakeVaultBrowser(handle = null),
         vaultGeneration: () -> Long = { 0L },
         aiClient: AiClient = FakeAiClient(AiAvailability.Unsupported),
-        matchDispatcher: CoroutineDispatcher = Dispatchers.Unconfined
+        matchDispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+        query: ExploreQueryStore = InMemoryExploreQuery()
     ) = SearchController(
         scope = CoroutineScope(Dispatchers.Unconfined),
         vault = vault,
         searchPickerUseCase = SearchPickerUseCase(aiClient),
         state = state.searchWriter,
+        query = query,
         vaultGeneration = vaultGeneration,
         matchDispatcher = matchDispatcher
     )

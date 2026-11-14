@@ -8,6 +8,7 @@ import com.example.newproject.domain.noteLinkOf
 import com.example.newproject.domain.resolveNoteLink
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.VaultScan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -90,6 +91,56 @@ class NoteScanCacheTest {
         assertEquals(1, scans)
         assertEquals(mapOf("a.md" to DocumentRef("a-ref")), cache.knownNotes.value)
         assertEquals(1, published.size)
+    }
+
+    @Test
+    fun `空の Vault も寿命の中は走査し直さず、切れたら走査し直す`() = runTest {
+        var scans = 0
+        val scan: suspend () -> List<NoteFile> = { scans++; emptyList() }
+
+        repeat(3) { cache.get(scan = scan, onPublished = ::record) }
+        assertEquals("空の一覧を「まだ走査していない」と取り違えている", 1, scans)
+
+        // 本文の書き換えと Vault の切替では、寿命の中でも空でも走査し直す。
+        cache.expireAfterBodyWrite()
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(2, scans)
+        switchVault()
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(3, scans)
+
+        now += 60_000L
+        cache.get(scan = scan, onPublished = ::record)
+        assertEquals(4, scans)
+    }
+
+    // 空の Vault と、読めずに空になった走査は違う。後者を寿命の中で使うと、復旧しても60秒は空のまま返る。
+    @Test
+    fun `読めずに空になった走査は寿命を持たず、復旧すれば次の要求で走査し直す`() = runTest {
+        var scans = 0
+        var result = VaultScan(emptyList(), unreadableFolderPaths = setOf(""))
+        val scan: suspend () -> VaultScan = { scans++; result }
+
+        assertEquals(emptyList<String>(), cache.getVault(scanVault = scan, onPublished = ::record).map { it.name })
+        result = VaultScan(listOf(note("習慣.md", "habit-ref")))
+        now += 1_000L
+
+        assertEquals(listOf("習慣.md"), cache.getVault(scanVault = scan, onPublished = ::record).map { it.name })
+        assertEquals(2, scans)
+        // 復旧した一覧は寿命の中で使う。
+        cache.getVault(scanVault = scan, onPublished = ::record)
+        assertEquals(2, scans)
+    }
+
+    // 一部のフォルダだけ読めなかった走査まで寿命を持たないと、読めないフォルダが残る限り頼むたびに全体を走査し直す。
+    @Test
+    fun `一部だけ読めなかった走査は、読めた分を寿命の中で使う`() = runTest {
+        var scans = 0
+        val scan: suspend () -> VaultScan = { scans++; VaultScan(listOf(note("a.md", "a-ref")), unreadableFolderPaths = setOf("locked")) }
+
+        repeat(2) { cache.getVault(scanVault = scan, onPublished = ::record) }
+
+        assertEquals(1, scans)
     }
 
     @Test

@@ -31,8 +31,12 @@ data class RelatedCandidateLine(val id: String, val title: String, val detail: S
         if (detail.isNullOrBlank()) "$id | $title" else "$id | $title — $detail"
 }
 
-/** AIピッカーに渡す候補行。ID→ノートの解決は UseCase 側で行う（関連ノートと同じ契約）。 */
-data class PickerCandidateLine(val id: String, val title: String)
+/**
+ * AIピッカーに渡す候補行。ID→ノートの解決は UseCase 側で行う（関連ノートと同じ契約）。
+ * [location] は同じ名前の候補が他にあるときだけ入るフォルダの場所（直下は空文字）。
+ * タイトルしか見えないと、同じ名前の候補を Nano が見分けられない。
+ */
+data class PickerCandidateLine(val id: String, val title: String, val location: String? = null)
 
 /**
  * AIピッカーのプロンプトと、**実際に提示した候補**。
@@ -280,6 +284,7 @@ object PromptBuilder {
     fun buildPickerPrompt(query: String, candidates: List<PickerCandidateLine>): PickerPrompt {
         // 照合キーはIDなので、タイトルは切ってよい（→ system/ai_input_excerpt.md 判断10）。
         // 予算を超える行は**飛ばして先へ進む**（[buildDistillPrompt] と同じ詰め方）。
+        // **提示する候補は場所なしで決める。** 場所を先に足すと、その分だけ別の候補が予算から押し出される。
         val presented = mutableListOf<PickerCandidateLine>()
         val rendered = mutableListOf<String>()
         var used = 0
@@ -291,10 +296,19 @@ object PromptBuilder {
             rendered += line
             used += cost
         }
+        // 同じ名前の候補にだけ、残った予算の中で場所を添える。
+        presented.forEachIndexed { index, candidate ->
+            val location = candidate.location ?: return@forEachIndexed
+            val suffix = " (in ${label(location).ifEmpty { "root" }})"
+            if (used + suffix.length > PromptLimits.PICKER_CANDIDATES_CHARACTERS) return@forEachIndexed
+            rendered[index] += suffix
+            used += suffix.length
+        }
 
         val instructions = """
             You are a note-finding assistant. From the candidate list, pick the 3 notes
-            that best match the user's request. Each candidate is listed as "ID | title".
+            that best match the user's request. Each candidate is listed as "ID | title";
+            notes that share a title also show their folder.
             Return only the IDs of the notes you picked, one ID per line (for example: P01).
             Do not include the title, numbers, bullets, explanations, or any other text.
         """.trimIndent()

@@ -40,6 +40,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.titleBodyFor
 import com.example.newproject.ui.titleMatchLocation
+import com.example.newproject.model.ExploreQueryStore
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NoteUiState
@@ -81,18 +84,19 @@ private enum class ExploreMode { Title, Ai }
  * Explore（さがすタブ → features/ai_picker.md）。タイトルから探すか、ことばで Nano に3件選ばせる。
  *
  * タイトルの結果は Vault 全体の件数まで伸びるので、タブ全体を遅延リストで組む。
- * 打った言葉はここが持つ（日本語の変換中に入力が崩れないように状態の外へ置く）。
- * 言葉もモードも、タブを離れると組み立て直されて最初へ戻る。開くたびにタイトルから始めるのはこのため。
+ * 打った言葉は [query]（ViewModel が持つ Compose の状態）に置き、タブを離れても範囲と結果と一緒に残す。
+ * モードだけはここが持ち、タブを離れると最初へ戻る。開くたびにタイトルから始めるのはこのため。
  */
 @Composable
 fun SearchTab(
     uiState: NoteUiState,
+    query: ExploreQueryStore,
     onSelectFolder: (NoteFolder?) -> Unit,
     onSearchTitle: (String) -> Unit,
     onSearch: (String) -> Unit,
+    onSearchWholeVault: (String) -> Unit,
     onOpenNote: (RelatedNote) -> Unit
 ) {
-    var query by remember { mutableStateOf("") }
     var mode by remember { mutableStateOf(ExploreMode.Title) }
     val focusManager = LocalFocusManager.current
     val isLoading = uiState.searchState is SearchState.Loading
@@ -125,7 +129,11 @@ fun SearchTab(
                     label = "タイトル",
                     selected = mode == ExploreMode.Title,
                     modifier = Modifier.weight(1f)
-                ) { mode = ExploreMode.Title }
+                ) {
+                    // AI のモードで打った言葉はまだ照らしていないので、戻ったときに照らす。
+                    if (mode != ExploreMode.Title) onSearchTitle(query.text)
+                    mode = ExploreMode.Title
+                }
                 ModeToggleChip(
                     label = "AI",
                     selected = mode == ExploreMode.Ai,
@@ -136,10 +144,11 @@ fun SearchTab(
         // モードを替えても入力欄の位置とフォーカスを保つ。範囲のチップは入力欄の下に置く。
         item(key = "query") {
             OutlinedTextField(
-                value = query,
+                value = query.text,
                 onValueChange = {
-                    query = it
-                    onSearchTitle(it)
+                    query.set(it)
+                    // タイトルは打つたびに Vault 全体を照らす。AI のモードでは結果を出さないので照らさない。
+                    if (mode == ExploreMode.Title) onSearchTitle(it)
                 },
                 modifier = Modifier
                     .exploreRowPadding()
@@ -170,20 +179,20 @@ fun SearchTab(
         }
         when (mode) {
             ExploreMode.Title -> titleResults(
-                query = query,
+                query = query.text,
                 uiState = uiState,
                 onOpenNote = onOpenNote,
                 onSearchWithAi = {
                     mode = ExploreMode.Ai
-                    onSearch(query)
+                    onSearchWholeVault(query.text)
                 }
             )
             ExploreMode.Ai -> {
                 item(key = "scope") { ScopeChips(uiState = uiState, onSelectFolder = onSelectFolder) }
                 item(key = "search") {
                     Button(
-                        onClick = { onSearch(query) },
-                        enabled = query.isNotBlank() && !isLoading,
+                        onClick = { onSearch(query.text) },
+                        enabled = query.text.isNotBlank() && !isLoading,
                         modifier = Modifier
                             .exploreRowPadding()
                             .fillMaxWidth()
@@ -395,6 +404,9 @@ private fun TodayHistoryPanel(
 private fun FolderChip(label: String, selected: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
+        // 選ばれているかを読み上げにも出す。太字と面の色だけだと、見えない利用者にはどの範囲で探すのか分からない。
+        // 言い方はモードのチップ（ModeToggleChip）と揃える。
+        modifier = Modifier.semantics { stateDescription = if (selected) "選択中" else "未選択" },
         shape = RoundedCornerShape(999.dp),
         // 未選択も不透明にする。透過22%ではグラデーションが透けて、
         // 白文字が 1.82〜4.10 と下地しだいで変わっていた。
@@ -430,13 +442,13 @@ private fun SearchResultPanel(
                 )
                 is SearchState.Loading -> LoadingRow("さがしています…")
                 is SearchState.Success -> {
-                    // AIが選定に関与しなかったことだけを添える。**理由は書かない** —
-                    // 非対応でも未取得でも取得失敗でも、ここに出ているものは同じだから。
-                    // **0件でも出す。** ここを結果ありの枝に入れていたため、
-                    // 「見つかりませんでした。」だけが出て、AIを使わずに探した事実が消えていた。
+                    // AIが選ばなかったことだけを添える。**理由は書かない** —
+                    // 使えなかったのか、動いてIDを返さなかったのかで、ここに出ているものは変わらないから。
+                    // **0件でも出す。** 結果ありの枝に入れると、「見つかりませんでした。」だけが出て、
+                    // AIを使わずに探した事実が消える。
                     if (!state.isAiAssisted) {
                         Text(
-                            "AIを使えないため、キーワード一致で表示しています。",
+                            "キーワード一致で表示しています。",
                             fontSize = 12.sp,
                             color = OnSurfaceFaint
                         )
@@ -445,8 +457,12 @@ private fun SearchResultPanel(
                     if (state.results.isEmpty()) {
                         Text("見つかりませんでした。", fontSize = 13.sp, color = OnSurfaceFaint)
                     } else {
-                        state.results.forEachIndexed { index, note ->
-                            RelatedNoteItem(note = note, onClick = { onNoteClick(note) })
+                        state.results.forEachIndexed { index, row ->
+                            RelatedNoteItem(
+                                note = row.note,
+                                detail = titleMatchLocation(row.folderPath),
+                                onClick = { onNoteClick(row.note) }
+                            )
                             if (index < state.results.lastIndex) {
                                 HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
                             }

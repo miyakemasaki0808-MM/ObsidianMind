@@ -17,18 +17,23 @@ import com.example.newproject.model.NoteFile
 // ---------------------------------------------------------------------------
 
 /**
- * [query] と [title] の一致度。0 は「1文字も重なっていない」。
- *
- * 1文字クエリは bigram が作れず全件0点になってしまうため、部分一致で見る。
+ * 照らす言葉。正規化と bigram をここで1回だけ作る。並べるときは候補の数だけ採点するので、
+ * 採点のたびに言葉の bigram を作り直さないよう、作ったものを受け取る形にしてある。
  */
-internal fun keywordMatchScore(query: String, title: String): Int {
-    val cleanedQuery = query.normalizedForMatching()
-    if (cleanedQuery.isEmpty()) return 0
-    if (cleanedQuery.length == 1) {
-        return if (title.normalizedForMatching().contains(cleanedQuery)) 1 else 0
+internal class KeywordQuery(query: String) {
+    val normalized: String = query.normalizedForMatching()
+    val bigrams: Set<String> = normalized.bigrams()
+}
+
+/** [query] と [title] の一致度。0 は「1文字も重なっていない」。 */
+internal fun keywordMatchScore(query: String, title: String): Int = keywordMatchScore(KeywordQuery(query), title)
+
+/** 1文字の言葉は bigram が作れず全件0点になってしまうため、部分一致で見る。 */
+internal fun keywordMatchScore(query: KeywordQuery, title: String): Int {
+    if (query.normalized.length == 1) {
+        return if (title.normalizedForMatching().contains(query.normalized)) 1 else 0
     }
-    val queryBigrams = cleanedQuery.bigrams()
-    return title.bigrams().count { it in queryBigrams }
+    return title.bigrams().count { it in query.bigrams }
 }
 
 /**
@@ -59,24 +64,30 @@ internal fun <T> recallCutByKeyword(
 /**
  * スコアを添えて降順に並べる。
  *
- * スコアは事前に1回だけ計算する。sortedByDescending のセレクタは比較のたびに
- * 呼ばれるため、以前は bigram 集合の構築が O(n log n) 回走っていた（P4）。
- * sortedByDescending は安定ソートなので、同点は元の並び順を保つ。
+ * スコアは事前に1回だけ計算する — sortedByDescending のセレクタは比較のたびに呼ばれる。
+ * 言葉の bigram も [KeywordQuery] で1回だけ作る。sortedByDescending は安定ソートなので、同点は元の並び順を保つ。
  */
 private fun <T> rankByKeyword(
     query: String,
     items: List<T>,
     title: (T) -> String
 ): List<Pair<T, Int>> {
-    val cleanedQuery = query.normalizedForMatching()
-    if (cleanedQuery.isEmpty()) return items.map { it to 0 }
+    val key = KeywordQuery(query)
+    if (key.normalized.isEmpty()) return items.map { it to 0 }
     return items
-        .map { item -> item to keywordMatchScore(cleanedQuery, title(item)) }
+        .map { item -> item to keywordMatchScore(key, title(item)) }
         .sortedByDescending { it.second }
 }
 
 /** 大文字小文字と空白の違いを無視するための形。タイトルの照合と共有する。 */
 internal fun String.normalizedForMatching(): String = lowercase().filterNot { it.isWhitespace() }
+
+/**
+ * 照らすタイトル。ファイル名から拡張子を除く。照らすと `m`・`d`・`md` が全ノートに当たる。
+ * 走査は大文字の `.MD` も拾うので、大文字小文字を問わず除く。
+ */
+internal fun titleForMatching(fileName: String): String =
+    if (fileName.endsWith(".md", ignoreCase = true)) fileName.dropLast(3) else fileName
 
 private fun String.bigrams(): Set<String> {
     val cleaned = normalizedForMatching()
