@@ -270,5 +270,5 @@
 | `ui/component/ReadingTraceCard.kt`・再会カードのAI枠 | **[reunion_card](features/reunion_card.md)（枠の排他・種別・優先順位）** → [reflect_reading_trace](features/reflect_reading_trace.md)・[desk_memory](features/desk_memory.md)（枠の外の名前の行と、押せる名前） |
 | `ui/screen/` | [tab_navigation](system/tab_navigation.md) / [note_fullscreen](features/note_fullscreen.md) / [section_ai_chat](features/section_ai_chat.md)。ノート画面の並べ方（`ReaderLayout.kt`・低い横画面の2列）は [rediscover](features/rediscover.md) 判断6 |
 | `app/build.gradle.kts` の依存宣言・`gradle/wrapper`・`AndroidManifest.xml` の権限 | [dependency_policy](system/dependency_policy.md) |
-| `data/KnowledgeIndex*.kt`・端末内の DB（Room）・バックリンク | **[knowledge_index](system/knowledge_index.md)（DB に置いてよいもの・寿命）** → [backlinks](features/backlinks.md) |
+| `data/KnowledgeIndex*.kt`・`data/RoomKnowledgeIndexStore.kt`・`controller/KnowledgeIndexController.kt`・`domain/KnowledgeIndex*.kt`・端末内の DB（Room）・バックリンク | **[knowledge_index](system/knowledge_index.md)（DB に置いてよいもの・寿命）** → [backlinks](features/backlinks.md) |
 | `data/SafDocuments.kt` / `data/VaultBrowser.kt` / `model` の参照型 | [saf_boundary_gateway](system/saf_boundary_gateway.md) → [architecture](system/architecture.md) |

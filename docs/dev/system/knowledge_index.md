@@ -1,9 +1,9 @@
 # 知識索引 — Vault から作り直せる派生物を端末内の DB に持つ
 
-**状態:** 構想。Room と KSP を足したビルドの確認まで済み、索引そのものは未実装
-**最終検証:** 未検証（実装前）
-**関連コード:** `data/KnowledgeIndexDatabase.kt`（空のエンティティ1つ）。走査の共有は `NoteScanCache.kt`、リンクの読み方は `domain/NoteLinks.kt`
-**関連テスト:** 未作成（→ §10）
+**状態:** 区切り1（索引の土台）は実装済みで、画面には出していない。引く側（§5）とランダム表示の先出し（§7）と余白メモ（区切り4）は未実装
+**最終検証:** 2026-11-14 / `754c216e`（§5 の引く側・§7 は未実装で未突合。端末で DB を作ることは未確認）
+**関連コード:** `controller/KnowledgeIndexController.kt` / `data/KnowledgeIndexStore.kt`・`KnowledgeIndexDatabase.kt`・`RoomKnowledgeIndexStore.kt` / `domain/KnowledgeIndexLinks.kt`・`KnowledgeIndexPlan.kt` / `NoteScanCache.kt`（公開の知らせ）/ `controller/NoteSessionCoordinator.kt`・`NoteViewModel.kt`（配線）
+**関連テスト:** `KnowledgeIndexControllerTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
 **正本:** この文書（索引の責務・保証・寿命）。補助の面への出し方は [backlinks](../features/backlinks.md)、ランダム表示は [rediscover](../features/rediscover.md)
 
 **対象領域:** 端末内の DB（Room）、索引の作り方と寿命、走査の結果との関係、ランダム表示の待ち
@@ -110,7 +110,7 @@
 | 索引を作る側 | Vault 単位 | Vault 切替（`vaultGeneration`） | Vault 切替 | **どちらにも載せない。** `onVaultChanged()` だけ |
 | バックリンクを引く側 | ノート単位 | ノート切替（`activeRequestId`） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の両方 |
 
-- **作る側の進み具合（作ったノートの数と全体の数）は Vault 単位の状態。** ノートを開き直しても消さない
+- **作る側の進み具合（作ったノートの数と全体の数）は Vault 単位の状態。** ノートを開き直しても消さない。状態として足すのは区切り2（画面に出すとき）で、今は索引の世代（`indexGeneration`）だけを持つ
 - **引く側の結果は、DB の行と、走査の入れ物にあるリンクの索引（`NoteLinkIndex`）の2つで決まる。** 候補は DB から絞り、解くのは入れ物の索引で行うため。
   そこで、**どちらかが替わったら引き直す。** 索引の世代（DB を直すたびに進む数）と、入れ物の公開の回数（一覧とリンクの索引を替えるたびに進む数）を引く側が見る。
   入れ物は今その回数を外へ出していないので、公開の知らせ（§3）と一緒に、走査の種別をつけて出す
@@ -126,8 +126,8 @@
 
 | 表 | 1行 | 主な欄 |
 |---|---|---|
-| 索引の素性 | 1行だけ | Vault の URI・索引の版・最初の作成を終えたか |
-| ノート | 1ノート | 相対パス（主キー）・documentId・名前・**読んだときの更新日時（空でありうる）**・**読んだ本文の指紋**・読めたか |
+| 索引の素性 | 1行だけ | Vault の URI・最初の作成を終えたか・書き換えの番号の最後の値（Vault を替えても戻さない）。索引の版は DB の版で、上げたら移行を書かずに作り直す |
+| ノート | 1ノート | 相対パス（主キー）・参照・名前・**読んだときの更新日時（空でありうる）**・**読んだ本文の指紋**。読めなかったノートは行を作らず、次の突き合わせで読み直す |
 | 読み直しの控え | 1パス | 相対パス（主キー）・**書き換えの番号**。アプリが本文を書き換えたときに足し、§3 の条件で外す |
 | リンク | 1リンク | 出どころの相対パス・本文の中の順番・記法（名前／パス）・**書かれた行き先**・見出し・**リンクのある節の見出しと、同じ見出しのうち何番目か**・リンクを含む1文 |
 | 余白メモと引用 | 区切り4で決める | — |
@@ -167,16 +167,18 @@
 
 ## 8. 上限・性能・スレッド
 
-> **未確認:** 500本・3,000本で最初の作成にかかる時間と、DB の大きさは測っていない。区切り1の実機で測る。
+> **未確認:** 500本・3,000本で最初の作成にかかる時間と、DB の大きさは測っていない。実機で測る。
 
-- **本文の読み込みは同時に数本まで。** 関連ノートの並列読込と同じく上限を置く（→ [related_notes_ai](../features/related_notes_ai.md) 判断6）
-- **本文の解析は Main の外。** 入力の大きさに比例するので `Dispatchers.Default` で行い、`ThreadingScanTest` の表へ1行足す（→ [architecture](architecture.md) 判断3）
+- **本文の読み込みは同時に4本まで。** 関連ノートの並列読込と同じく上限を置く（→ [related_notes_ai](../features/related_notes_ai.md) 判断6）
+- **本文の解析は Main の外。** 入力の大きさに比例するので `Dispatchers.Default` で行い、`ThreadingScanTest` の表に載せた（→ [architecture](architecture.md) 判断3）
 - DB の読み書きは Room の suspend で、Main を塞がない
-- 1つのノートから取るリンクの数と、1文の長さに上限を置く。値は区切り1で決める
+- **1つのノートから取るリンクは500まで、1文は160字まで**（`KnowledgeIndexLimits`）。超えた1文は末尾を「…」で切る
+- **起動のたびに走査が1回走る。** Vault を開いたときに索引のために走査を頼むため。寿命の中なら、その後のランダム表示・さがすは同じ一覧を使う
 
 ## 9. プライバシーとバックアップ
 
-- **DB は端末の外へ出さない。** ネットワーク権限が無いうえ、端末の自動バックアップからも外す（`backup_rules.xml`・`data_extraction_rules.xml`、`BackupExclusionTest`）。
+- **DB は端末の外へ出さない。** ネットワーク権限が無いうえ、`noBackupFilesDir` に作って端末の自動バックアップに載せない（結晶の材料の控えと同じ）。
+  Room の既定の置き場（バックアップの対象）へ戻すと `BackupExclusionTest` が落ちる。
   リンクを含む1文と、区切り4のメモの本文は利用者の個人的な内容である
 - Vault を替えたら前の Vault の索引を消す（→ §4）
 
@@ -186,7 +188,7 @@
   バックリンクの解き方（同じ名前が複数のときに今のノートへ着くものだけ）、Vault の照合。DB は偽物のインターフェースで差し替える。
   **鍵の取りこぼし:** 相対パス・根からのパス・フォルダつきの `[[…]]` のそれぞれで、`%20`・符号化した日本語・文字としての `%` を含む入力について、
   `resolveNoteLink` が今のノートへ解くリンクを、鍵による絞り込みが落とさないこと（解ける入力の全部を鍵の側にも通す形で書く）
-- **instrumentation:** Room の DAO をメモリ上の DB で確かめる。索引の素性が違えば消して作り直すこと
+- **instrumentation:** `KnowledgeIndexDaoTest` — Room の DAO をメモリ上の DB で確かめる。索引の素性が違えば消して作り直すこと・古い番号の読み込みを書かないこと・旧い Vault の書き込みを受けないこと・変数の上限を超える数を消せること
 - **実機:** 合成 Vault（500・3,000本）で最初の作成の時間と、2回目の起動のランダム表示の時間
 - **実機で起こせないので自動テストが持つ順序:**
   - 索引作りの途中で Vault を替える → 旧い Vault の結果を書かない（両方向。替えた後に旧い本文の読み込みが終わる場合も）
