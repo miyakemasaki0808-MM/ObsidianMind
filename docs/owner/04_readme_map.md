@@ -1,35 +1,35 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-11-04
+**作成:** 2026-09-08 / **更新:** 2026-11-14
 
-**位置づけ:** 13本ある `README.md` がそれぞれ何をしているかを一望する1枚。
+**位置づけ:** 15本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
 本書は入口そのものの構造だけを扱う。`owner/` の他文書と同じく検査に載せない。
 
 ---
 
-## 1. なぜ13本もあるのか
+## 1. なぜ15本もあるのか
 
 **フォルダを1つ作ったら、その入口を1本置く**という運用になっているためである。
 `README.md` は多くのツールと GitHub がフォルダを開いたとき最初に見せるので、
 「このフォルダは何か」を置く場所として決め打ちしてある。
 
-ただし13本すべてが同じ役割ではない。3種類に分かれ、検証の間だけ現れる4種類目がある。
+ただし15本すべてが同じ役割ではない。3種類に分かれ、検証の間だけ現れる4種類目がある。
 
 | 種類 | 本数 | 何をしているか |
 |---|---:|---|
-| **A. 入口・索引** | 8 | そのフォルダの中身へ案内する。内容は持たない |
-| **B. それ自体が正本** | 2 | 入口ではなく運用の規則そのもの。検査が中身を見ている |
+| **A. 入口・索引** | 9 | そのフォルダの中身へ案内する。内容は持たない |
+| **B. それ自体が正本** | 3 | 入口ではなく運用の規則そのもの。検査が中身を見ている |
 | **C. テスト入力の説明** | 3 | 固定コーパスと実機の観測値が何であるかを、隣に置いて読ませる |
 | **D. 追跡しない作業ファイル** | 0 | 検証の間だけ現れる引き継ぎメモ。いまは無い |
 
 
-## 2. 全13本
+## 2. 全15本
 
 **凡例:** 追跡 ✅＝git 管理下、❌＝`.gitignore`。検査＝JVMテストが中身を見ているか。
 
-### A. 入口・索引。8本
+### A. 入口・索引。9本
 
 | 場所 | 見出し | 行数 | 何を案内するか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
@@ -39,6 +39,7 @@
 | [`docs/dev/features/README.md`](../dev/features/README.md) | 機能仕様 | 12 | 様式とヘッダ5行の決まり | ✅ | — |
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 52 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
+| [`docs/dev/harness/experiments/README.md`](../dev/harness/experiments/README.md) | 実験の記録 | 20 | 開発の仕組みを変えて試した記録の置き場。1本に書く6つの見出し | ✅ | — |
 | [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 140 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 54 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
@@ -49,19 +50,21 @@
 `decisions/README.md` の「間接」は、`AdrShapeTest` がエラーメッセージで「様式は `decisions/README.md`」と案内し、
 README 自身は ADR の形の検査から除外している関係を指す。中身は検査していない。
 
-### B. それ自体が正本。2本
+### B. それ自体が正本。3本
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 64 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 82 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
 | [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 304 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
+| [`docs/dev/harness/README.md`](../dev/harness/README.md) | 開発の仕組み（ハーネス） | 242 | コミット前のゲート・手順の置き場・レビューの往復・過去問での測定が、何をどう機械で守っているか。続けるか戻すかを決める試行の記録は `experiments/` が持つ | ✅ | 一部 |
 
-この2本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
+この3本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。
 だから検査も中身を見ている。
 
 - `ReviewFindingsLedgerTest` — レビュー本文が一覧に載っていること。載せずに本文を消すと結果が失われる
 - `DeviceValidationDocsTest` — 権限範囲・実機検証前・実機検証中・実機検証後・記録の5節が存在すること。
   `CLAUDE.md` からこの README へ到達できることも見ている
+- `ProjectSkillShapeTest` — 開発の仕組みの README が名指す Skill が実在すること。仕組みそのものは `CommitGateHookTest`・`CodexReviewScriptTest` が動かして確かめる
 
 分担そのものは `CLAUDE.md` の「作業の進め方」が正本で、`review/README.md` は Codex の手順だけを持つ。
 2箇所に書くと必ず片方が古くなる。
@@ -81,7 +84,7 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 **入口ではなく注意書きである。** 隣にあるファイルをどう読むか、何と混ぜてはいけないかを、
 そのフォルダを開いた人が最初に読むように置いてある。正本は
 [ai_quality_measurement](../dev/system/ai_quality_measurement.md) で、3本ともそこへリンクする。
-README という名前を使ったのは、フォルダを開いたとき最初に見える位置に置くためで、A の8本と動機は同じである。
+README という名前を使ったのは、フォルダを開いたとき最初に見える位置に置くためで、A の9本と動機は同じである。
 
 ### D. 追跡しない作業ファイル。いまは0本
 
@@ -96,6 +99,7 @@ README.md（リポジトリ）
 └── docs/README.md（分類の軸＝「答える問い」）
     ├── owner/README.md ──── journal/README.md
     ├── dev/README.md ────── features/ ・ system/ ・ decisions/ の各README
+    │   ├── harness/README.md ─── experiments/README.md
     │   └── （索引の正本は document_map.md）
     ├── review/README.md ─── device_validation/README.md ─── evidence/…/README.md（管理外）
     └── _wip/（READMEを持たない）
@@ -121,9 +125,9 @@ app/src/androidTest/assets/ai_corpus/README.md ─── references/nano/README.
 分けると今度は「README を開いても機能が分からない」ので、どちらが良いかは読み方次第。
 **保留のまま。** 判断はオーナーに預ける。
 
-### 検査があるのは `review/` 配下の2本だけ
+### 検査があるのは、規則を持つ3本だけ
 
-`owner/` は方針として検査に載せない。`dev/` 側の4本は索引であって規則ではないので、載せる対象が無い。
+`owner/` は方針として検査に載せない。`dev/` 側の索引5本は規則を持たないので、載せる対象が無い。
 C の3本は正本の設計書側が検査を持つ。**規則を持つ README だけが検査を持っている**という形になっていて、これは意図と一致している。
 
 ### README が「入口」以外の意味で増え始めた
