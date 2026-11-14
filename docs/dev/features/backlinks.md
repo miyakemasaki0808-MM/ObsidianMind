@@ -148,6 +148,7 @@
 
 - 余白メモと引用の出し方は決めていない
 - 全文検索を入れるかは、この機能を使ってから決める（→ [knowledge_index](../system/knowledge_index.md) §1）
+- **実装のときに一緒に直す正本:** 余白ペインの並び（[margin_pane](margin_pane.md) §5.2）と右で開く入口（同 §5.9）、並べ読みの入口（[desk_foundation](desk_foundation.md)）、関連タブの並び（[related_notes_ai](related_notes_ai.md)）、見出しへ送る依頼（[note_links](note_links.md) §6）。ランダム表示の先出しで直す正本は [knowledge_index](../system/knowledge_index.md) §7 が持つ
 
 ## 12. 開発経緯
 
