@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI
-**初版:** 2026-07-22（最終更新: 2026-11-03）
+**初版:** 2026-07-22（最終更新: 2026-11-14）
 **基準:** 何がどこまで進んだかは [change_history.md](../dev/change_history.md) が正、未対応の課題は [current_issues.md](current_issues.md) が正。**ここに進捗のスナップショットを書かない**（書いた瞬間から古くなり、実際 ReadingTrace v1 の記述が2週間ずれていた）。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -93,6 +93,10 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
   頻度は開いた Fold で読むたびだが、重さは無い（今の並べ読みでも読める）。
 - **段の順（上から）:**
   5. **知識索引** — 補助の面の供給源（バックリンク・全文検索・目次）を端末内のDBで持つ（[feature_ideas](feature_ideas.md) P-3）
+     - **最初の一手はビルドの確認。** 設計の前に、空のエンティティ1つで Room を足したビルドが、ゲートとマニフェストの権限検査を通るかを確かめる。
+       通らなければ、先に Kotlin を上げる判断になる（2026-11-14、オーナー判断。出どころは Fable 5.2 の評価 → [fable51_triage](fable51_triage.md) F-33）
+     - **余白メモと引用を索引に載せるかを、設計で決める。** 載せると、ほかのノートへ書いた自分の言葉を補助の面へ出せる。
+       載せると決めたわけではなく、載せない場合も理由を正本に書く（同上 → [fable51_triage](fable51_triage.md) F-37）
 - **PERF-3 の残り（先行走査と受理の線）は知識索引と一緒に見る。** 永続の索引は、走査を待つ時間を減らす案の1つでもあるため（→ [random_scan_options](random_scan_options.md)）。
 - **配布（L-5）はこの順の外にある。** 引き金は配布の意思で、段の進み具合ではない。
 - **段ごとに Fold の実機検証が要る。** 実機で起こせない順序は、各段の正本の §10 で先に宣言する（→ [features/_template](../dev/features/_template.md)）。
@@ -121,9 +125,11 @@ Next へ足すときは、Later か台帳（[current_issues](current_issues.md)�
   現在の全体抜粋を置き換えるか補助シグナルにするかも含め、別機能として扱う
   → [related_notes_ai](../dev/features/related_notes_ai.md)
 - **[feature_ideas](feature_ideas.md) A-12（この部分に近いノート）が入ると、未決事項は解ける。** 「この部分」の面を開くと節が決まるため。A-12 は単独で立てると決めた（下の項目）
-- **Next へ上げるときは D-3（要約のカバレッジ検査）が前提になる。** 関連ノートのAI入力を置き換える案なので、
-  **「良くなった」を機械で言える形**が先に要る（→ [feature_ideas](feature_ideas.md) D-3。
-  出どころは Fable 5.1 の評価 → [fable51_triage](fable51_triage.md) F-08）。
+- **Next へ上げるときは、「良くなった」を機械で言える形が前提になる。** 関連ノートのAI入力を置き換える案なので、前後を比べる物差しが先に要る。
+  要約のカバレッジ検査（[feature_ideas](feature_ideas.md) D-3）は実装したが、実機の出力では文の正誤を分けられないと分かった
+  （→ [ai_quality_measurement](../dev/system/ai_quality_measurement.md)）。関連ノートはIDを返す経路なので、語の重なりではなく、
+  **固定の入力で、選んだIDが候補に入るか・該当なしが妥当か・前後で選ぶものがどう変わるかを数える形**にする
+  （2026-11-14、オーナー判断。出どころは Fable の評価 → [fable51_triage](fable51_triage.md) F-08）。
 
 ### A-12. この部分に近いノート（→ [feature_ideas](feature_ideas.md) A-12）
 
