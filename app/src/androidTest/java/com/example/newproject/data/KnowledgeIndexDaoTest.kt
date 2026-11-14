@@ -74,6 +74,11 @@ class KnowledgeIndexDaoTest {
         assertTrue(store.applyRead(VAULT_A, record("n.md", fingerprint = "B"), listOf(link("新しい")), latest))
         assertEquals(listOf("新しい"), database.dao().linksOf("n.md").map { it.target })
         assertTrue("書いたら控えを外す", store.openVault(VAULT_A).writeNumbers.isEmpty())
+        assertFalse(
+            "新しい読み込みが控えを外した後に、古い番号の読み込みが書こうとしても B から戻らない",
+            store.applyRead(VAULT_A, record("n.md", fingerprint = "A"), listOf(link("古い")), numberAtRead)
+        )
+        assertEquals(listOf("新しい"), database.dao().linksOf("n.md").map { it.target })
     }
 
     @Test

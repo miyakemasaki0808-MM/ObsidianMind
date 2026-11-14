@@ -12,6 +12,9 @@ import com.example.newproject.data.CrystalMaterialPersistence
 import com.example.newproject.data.CrystalPersistence
 import com.example.newproject.data.CrystalStore
 import com.example.newproject.data.FileCrystalMaterialStore
+import com.example.newproject.data.KnowledgeIndexDatabase
+import com.example.newproject.data.KnowledgeIndexStore
+import com.example.newproject.data.RoomKnowledgeIndexStore
 import com.example.newproject.data.SafCrystalDocumentGateway
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryStore
@@ -52,6 +55,8 @@ internal class NoteViewModelDependencies(
     val history: HistoryStore,
     /** 分野の確定の永続。**テストでは注入しない**（保存しなくても機能は動く）。 */
     val noteFieldStore: NoteFieldStore? = null,
+    /** 知識索引の置き場（端末内の DB、`noBackupFilesDir`）。**テストでは注入しない**（無ければ索引を作らない）。 */
+    val knowledgeIndexStore: KnowledgeIndexStore? = null,
     val repository: NoteRepository,
     /** ノート一覧の走査の記録。**テストでは注入しない。** */
     val onNoteScanEvent: (NoteScanEvent) -> Unit = {},
@@ -105,6 +110,7 @@ internal class NoteViewModelDependencies(
                 preferences = SharedAppPreferences(prefs),
                 history = NoteHistoryStore(prefs),
                 noteFieldStore = SharedNoteFieldStore(prefs),
+                knowledgeIndexStore = RoomKnowledgeIndexStore { KnowledgeIndexDatabase.open(application) },
                 repository = repository,
                 onNoteScanEvent = noteScanLog(application),
                 vaultBrowser = SafVaultBrowser(

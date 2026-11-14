@@ -20,6 +20,8 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.data.NoteFieldStore
+import com.example.newproject.data.KnowledgeIndexStore
+import com.example.newproject.model.PublishedNoteScan
 import com.example.newproject.domain.hasNoticeWithSummary
 import com.example.newproject.domain.summaryOf
 import com.example.newproject.domain.PassageIndex
@@ -97,6 +99,10 @@ internal class NoteSessionCoordinator(
     private val currentVaultKey: () -> String?,
     /** 分野の確定の永続。**注入しなければ保存しない**（テストと、まだ配線していない経路のため）。 */
     private val noteFieldStore: NoteFieldStore? = null,
+    /** 知識索引の置き場（→ docs/dev/system/knowledge_index.md）。**テストでは注入しない**（無ければ索引を作らない）。 */
+    knowledgeIndexStore: KnowledgeIndexStore? = null,
+    /** 走査の入れ物へ走査を頼む口（実装は ViewModel）。結果は [onScanPublished] で届く。 */
+    requestNoteScan: suspend () -> Unit = {},
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,
     /** 蒸留保存後の本文読み直し（SAF I/O を伴うため実装は ViewModel）。 */
@@ -154,6 +160,22 @@ internal class NoteSessionCoordinator(
      * フォルダ一覧はノート切替では無効化してはいけない）。
      */
     var vaultGeneration = 0L
+
+    /**
+     * 知識索引を作る（**Vault 単位**）。ノート単位の契約2箇所には載せず、Vault 切替の後始末（[onVaultChanged]）だけで止める
+     * （→ docs/dev/system/architecture.md 判断4 の2行目）。置き場が無ければ作らない。
+     */
+    private val knowledgeIndex: KnowledgeIndexController? = knowledgeIndexStore?.let { store ->
+        KnowledgeIndexController(
+            scope = scope,
+            store = store,
+            vault = vaultBrowser,
+            vaultGeneration = { vaultGeneration },
+            vaultKey = currentVaultKey,
+            requestScan = requestNoteScan,
+            parseDispatcher = parseDispatcher
+        )
+    }
 
     /** 冊子の「これを読む」で始めた読込（→ [cancelBookletRead]）。 */
     private var bookletReadJob: Job? = null
@@ -485,6 +507,8 @@ internal class NoteSessionCoordinator(
         // **起動復元からも読む。** 読まないと、保存が効くのは「Vaultを選び直した」経路だけになる
         // （→ features/note_field_color.md 判断17）。入口は [onVaultChanged] とここの2つある（→ lessons.md L14）。
         loadPersistedNoteFields()
+        // 知識索引も入口は2つ（ここと [onVaultChanged]）。後始末がすべて終わってから頼む。
+        knowledgeIndex?.onVaultOpened()
     }
 
     /**
@@ -522,6 +546,7 @@ internal class NoteSessionCoordinator(
         vaultGeneration++
         applyLocation()
         search.onVaultChanged()
+        knowledgeIndex?.onVaultChanged()
         readingTraceCleanup.onVaultChanged()
         readingTraceBackup.onVaultChanged()
         booklet.onVaultChanged()
@@ -538,6 +563,18 @@ internal class NoteSessionCoordinator(
         history.clear()
         stateStore.resetVaultScoped()
         distill.checkRecovery()
+        // **後始末がすべて終わってから**新しい Vault の索引を作り始める（→ knowledge_index.md §3）。
+        knowledgeIndex?.onVaultOpened()
+    }
+
+    /** 走査の入れ物が公開した（→ docs/dev/system/knowledge_index.md §3）。知識索引へ渡す。 */
+    fun onScanPublished(scan: PublishedNoteScan) {
+        knowledgeIndex?.onScanPublished(scan)
+    }
+
+    /** アプリがノートの本文を書き換えた（蒸留の保存・太字の復元）。知識索引が読み直すと控える。 */
+    fun onNoteBodyWritten(relativePath: String) {
+        knowledgeIndex?.onNoteBodyWritten(relativePath)
     }
 
     // ── ノートのライフサイクル ──────────────────────────────────────────────

@@ -315,6 +315,12 @@ class ThreadingScanTest {
                 )
             ),
             HeavyCall(
+                name = "知識索引のリンクの取り出し（1ノートの本文は最大1MB）",
+                call = """\bextractIndexedLinks\(""",
+                dispatcher = "parseDispatcher",
+                offMain = mapOf("controller/KnowledgeIndexController.kt" to 1)
+            ),
+            HeavyCall(
                 name = "引用と書いた頃の位置を照らし直す材料",
                 call = """\bbuildPassageIndex\(""",
                 dispatcher = "parseDispatcher",
