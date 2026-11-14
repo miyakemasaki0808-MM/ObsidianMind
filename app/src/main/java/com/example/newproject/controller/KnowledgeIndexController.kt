@@ -54,10 +54,18 @@ internal class KnowledgeIndexController(
     var indexGeneration = 0L
         private set
 
-    /** Vault の復元・選び直しの後始末がすべて終わってから呼ぶ。走査を頼み、公開されたら索引を作る。 */
+    /**
+     * Vault の復元・選び直しの後始末がすべて終わってから呼ぶ。**索引がどの Vault のものかは走査を待たずに照合する** —
+     * 替えた先の Vault を読めないと走査は読めずに空になり、突き合わせまで進まないので、前の Vault の行が残る（→ knowledge_index.md §4）。
+     * 照合してから走査を頼み、公開されたら索引を作る。
+     */
     fun onVaultOpened() {
         val generation = vaultGeneration()
-        track(scope.launch { requestScanQuietly(generation) })
+        val key = vaultKey()
+        track(scope.launch {
+            if (key != null) openQuietly(key)
+            requestScanQuietly(generation)
+        })
     }
 
     /**
@@ -108,6 +116,16 @@ internal class KnowledgeIndexController(
         requests += job
     }
 
+    private suspend fun openQuietly(key: String) {
+        try {
+            store.openVault(key)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // 置き場が使えない。索引が無いだけで、今の動きに戻る。
+        }
+    }
+
     private suspend fun requestScanQuietly(generation: Long) {
         if (generation != vaultGeneration()) return
         try {
@@ -134,13 +152,15 @@ internal class KnowledgeIndexController(
     }
 
     private suspend fun reconcile(scan: PublishedNoteScan) {
-        if (scan.kind == NoteScanKind.UNREADABLE_EMPTY) return
         val generation = scan.vaultGeneration
         ensureCurrent(generation)
         val key = vaultKey() ?: return
         val handle = vault.current() ?: return
+        // **開いてから読めずに空を見る。** 開くことが Vault の照合で、別の Vault の索引ならここで消える。
+        // 読めずに空の走査で残してよいのは、同じ Vault の行だけ（→ knowledge_index.md §4）。
         val snapshot = store.openVault(key)
         ensureCurrent(generation)
+        if (scan.kind == NoteScanKind.UNREADABLE_EMPTY) return
         val plan = planReconcile(scan.notes, scan.kind, snapshot.notes, snapshot.writeNumbers.keys)
         if (plan.toDelete.isNotEmpty()) store.deleteNotes(key, plan.toDelete)
         val permits = Semaphore(readParallelism)

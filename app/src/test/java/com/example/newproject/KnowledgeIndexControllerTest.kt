@@ -155,6 +155,74 @@ class KnowledgeIndexControllerTest {
         assertTrue(env.store.notes.isEmpty())
     }
 
+    /** 読めずに空の走査で残すのは同じ Vault の行だけ。別の Vault へ替えたら、読めなくても前の Vault の本文の断片を残さない（→ knowledge_index.md §4）。 */
+    @Test
+    fun `切り替えた先のVaultが読めずに空でも前のVaultの索引を残さず、同じVaultなら残し、戻したら作り直す`() = runTest {
+        val env = Env(this)
+        env.body("a.md", "[[b]]")
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+
+        env.publish(emptyList(), NoteScanKind.UNREADABLE_EMPTY)
+        advanceUntilIdle()
+        assertEquals("同じ Vault の読めない走査では残す", setOf("a.md"), env.store.notes.keys)
+
+        switchVault(env, VAULT_B)
+        env.publish(emptyList(), NoteScanKind.UNREADABLE_EMPTY)
+        advanceUntilIdle()
+        assertTrue("前の Vault の行は残さない", env.store.notes.isEmpty())
+        assertTrue(env.store.marks.isEmpty())
+
+        switchVault(env, VAULT_A)
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+        assertEquals(setOf("a.md"), env.store.notes.keys)
+        assertTrue("A を作り直す", env.store.firstBuildDone)
+        assertEquals(2, env.reads().count { it == "a.md" })
+    }
+
+    /** 開いたときの照合を通らずに、別の Vault の読めない公開だけが届いても、突き合わせが先に開いて前の行を消す。 */
+    @Test
+    fun `別のVaultの読めずに空の公開だけが届いても、前のVaultの索引を残さない`() = runTest {
+        val env = Env(this)
+        env.body("a.md", "[[b]]")
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+
+        env.generation++
+        env.key = VAULT_B
+        env.controller.onVaultChanged()
+        env.publish(emptyList(), NoteScanKind.UNREADABLE_EMPTY)
+        advanceUntilIdle()
+
+        assertTrue(env.store.notes.isEmpty())
+        assertEquals(VAULT_B, env.store.vaultKey)
+    }
+
+    /** 替えた先の走査が例外で終わると公開が来ない。開いたときの照合が無いと、前の Vault の行が残り続ける。 */
+    @Test
+    fun `切り替えた先の走査が失敗して公開が来なくても、開いたときに前のVaultの索引を消す`() = runTest {
+        val env = Env(this)
+        env.body("a.md", "[[b]]")
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+
+        env.publishOnRequest = { throw java.io.IOException("Vault を読めない") }
+        switchVault(env, VAULT_B)
+        advanceUntilIdle()
+
+        assertEquals(1, env.scanRequests)
+        assertTrue(env.store.notes.isEmpty())
+        assertEquals(VAULT_B, env.store.vaultKey)
+    }
+
+    private fun switchVault(env: Env, key: String) {
+        env.generation++
+        env.key = key
+        env.controller.onVaultChanged()
+        env.controller.onVaultOpened()
+    }
+
     @Test
     fun `突き合わせの途中に届いた公開は終わってからもう1回走らせ、2本は重ならない`() = runTest {
         val env = Env(this)
