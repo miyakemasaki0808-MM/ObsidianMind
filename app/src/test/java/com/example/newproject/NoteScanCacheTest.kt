@@ -8,6 +8,8 @@ import com.example.newproject.domain.noteLinkOf
 import com.example.newproject.domain.resolveNoteLink
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteScanKind
+import com.example.newproject.model.PublishedNoteScan
 import com.example.newproject.model.VaultScan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -36,13 +38,15 @@ class NoteScanCacheTest {
     private var now = 0L
     private val published = mutableListOf<List<String>>()
     private val events = mutableListOf<NoteScanEvent>()
+    private val publishedScans = mutableListOf<PublishedNoteScan>()
     private val scanParent = Job()
     private val cache = NoteScanCache(
         scope = CoroutineScope(Dispatchers.Unconfined + scanParent),
         ttlMillis = 60_000L,
         vaultGeneration = { generation },
         clock = { now },
-        onScanEvent = { events += it }
+        onScanEvent = { events += it },
+        onPublishedScan = { publishedScans += it }
     )
 
     @Test
@@ -401,6 +405,63 @@ class NoteScanCacheTest {
         switchVault()
 
         assertEquals(NoteLinkResolution.NotReady, linkFromA("[[B]]"))
+    }
+
+    /**
+     * 公開の知らせには種別を載せる（→ docs/dev/system/knowledge_index.md §3）。**読めずに空の結果も公開する**ので、
+     * 種別を見ないと、解く材料が無いのに知識索引やバックリンクが準備完了と見なす。
+     */
+    @Test
+    fun `公開の知らせは、読み切れた・一部を読めた・読めずに空を種別で分け、公開のたびに回数が進む`() = runTest {
+        cache.getVault(scanVault = { VaultScan(listOf(note("a.md", "a-ref"))) }, onPublished = ::record)
+        now += 60_000L
+        cache.getVault(scanVault = { VaultScan(listOf(note("a.md", "a-ref")), setOf("locked")) }, onPublished = ::record)
+        now += 60_000L
+        cache.getVault(scanVault = { VaultScan(emptyList(), setOf("")) }, onPublished = ::record)
+        cache.getVault(scanVault = { VaultScan(emptyList()) }, onPublished = ::record)
+
+        assertEquals(
+            listOf(NoteScanKind.COMPLETE, NoteScanKind.PARTIAL, NoteScanKind.UNREADABLE_EMPTY, NoteScanKind.COMPLETE),
+            publishedScans.map { it.kind }
+        )
+        assertEquals(listOf(1L, 2L, 3L, 4L), publishedScans.map { it.publishCount })
+        assertEquals("読み切った空の Vault は、空と確定できる", emptyList<NoteFile>(), publishedScans.last().notes)
+    }
+
+    @Test
+    fun `読めずに空の走査も公開してリンクの索引を空に替えるが、寿命は与えない`() = runTest {
+        cache.get(scan = { listOf(note("A.md", "A-ref"), note("B.md", "B-ref")) }, onPublished = ::record)
+        now += 60_000L
+        var scans = 0
+        cache.getVault(scanVault = { scans++; VaultScan(emptyList(), setOf("")) }, onPublished = ::record)
+        cache.getVault(scanVault = { scans++; VaultScan(emptyList(), setOf("")) }, onPublished = ::record)
+
+        assertEquals(NoteScanKind.UNREADABLE_EMPTY, publishedScans.last().kind)
+        assertEquals("寿命を与えないので、頼むたびに走査し直す", 2, scans)
+        assertEquals(NoteLinkResolution.NotReady, linkFromA("[[B]]"))
+    }
+
+    @Test
+    fun `捨てた走査は種別の知らせも出さず、知らせの世代は走査を始めたときの世代`() = runTest {
+        val old = CompletableDeferred<List<NoteFile>>()
+        val pending = async { runCatching { cache.get(scan = { old.await() }, onPublished = ::record) } }
+        runCurrent()
+        switchVault()
+        cache.get(scan = { listOf(note("B.md", "B-ref")) }, onPublished = ::record)
+        old.complete(listOf(note("A.md", "A-ref")))
+        runCurrent()
+        pending.await()
+
+        val writing = CompletableDeferred<List<NoteFile>>()
+        now += 60_000L
+        val beforeWrite = async { cache.get(scan = { writing.await() }, onPublished = ::record) }
+        runCurrent()
+        cache.expireAfterBodyWrite()
+        writing.complete(listOf(note("書き換え前.md", "w-ref")))
+        beforeWrite.await()
+
+        assertEquals("公開したのは B の走査だけ", listOf(listOf("B.md")), publishedScans.map { scan -> scan.notes.map { it.vaultRelativePath } })
+        assertEquals(1L, publishedScans.single().vaultGeneration)
     }
 
     private fun linkFromA(text: String): NoteLinkResolution =

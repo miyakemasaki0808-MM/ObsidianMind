@@ -3,6 +3,8 @@ package com.example.newproject
 import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteScanKind
+import com.example.newproject.model.PublishedNoteScan
 import com.example.newproject.model.VaultScan
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -46,7 +48,12 @@ internal class NoteScanCache(
     private val ttlMillis: Long,
     private val vaultGeneration: () -> Long,
     private val clock: () -> Long = System::currentTimeMillis,
-    private val onScanEvent: (NoteScanEvent) -> Unit = {}
+    private val onScanEvent: (NoteScanEvent) -> Unit = {},
+    /**
+     * 公開のたびに、種別と公開の回数をつけて知らせる（→ docs/dev/system/knowledge_index.md §3）。
+     * **読めずに空の結果も公開する**ので、受ける側が [NoteScanKind] で準備完了かを見分ける。
+     */
+    private val onPublishedScan: (PublishedNoteScan) -> Unit = {}
 ) {
     /** いまのキャッシュ。空の Vault でも空なので、走査したかどうかは [hasPublished] で見る。 */
     var notes: List<NoteFile> = emptyList()
@@ -68,6 +75,7 @@ internal class NoteScanCache(
     private val scanScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
     private var running: Deferred<List<NoteFile>>? = null
     private var bodyWrites = 0L
+    private var publishCount = 0L
 
     private val mutableKnownNotes = MutableStateFlow<Map<String, DocumentRef>>(emptyMap())
 
@@ -114,7 +122,7 @@ internal class NoteScanCache(
             }
             // 走査の途中で本文を書き換えたなら、この一覧の更新日時は古い。待っている人へ返すだけで残さない。
             if (writes == bodyWrites) {
-                publish(scanned.notes, onPublished, keep = scanned.isComplete || scanned.notes.isNotEmpty())
+                publish(scanned, onPublished, generation)
             }
             scanned.notes
         }
@@ -122,16 +130,24 @@ internal class NoteScanCache(
         return result
     }
 
-    private fun publish(scanned: List<NoteFile>, onPublished: (List<NoteFile>) -> Unit, keep: Boolean) {
+    private fun publish(scan: VaultScan, onPublished: (List<NoteFile>) -> Unit, generation: Long) {
+        val scanned = scan.notes
+        val kind = when {
+            scan.isComplete -> NoteScanKind.COMPLETE
+            scanned.isNotEmpty() -> NoteScanKind.PARTIAL
+            else -> NoteScanKind.UNREADABLE_EMPTY
+        }
         notes = scanned
-        hasPublished = keep
+        hasPublished = kind != NoteScanKind.UNREADABLE_EMPTY
         linkIndex = NoteLinkIndex(scanned)
         loadedAt = clock()
         mutableKnownNotes.value = scanned
             .filter { it.vaultRelativePath.isNotEmpty() }
             .associate { it.vaultRelativePath to it.ref }
+        publishCount++
         onScanEvent(NoteScanEvent.PUBLISHED)
         onPublished(scanned)
+        onPublishedScan(PublishedNoteScan(scanned, kind, publishCount, generation))
     }
 
     /**
