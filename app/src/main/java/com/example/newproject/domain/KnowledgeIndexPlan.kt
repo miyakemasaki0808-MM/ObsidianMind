@@ -10,7 +10,12 @@ import com.example.newproject.model.NoteScanKind
 /** 索引にあるノートの、突き合わせに要る分。[lastModified] は読んだときの更新日時で、空でありうる。 */
 internal data class IndexedNoteState(val lastModified: Long?, val fingerprint: String)
 
-internal data class ReconcilePlan(val toRead: List<NoteFile>, val toDelete: List<String>) {
+/** [forgetMarks] は、読み切れた走査に無い参照の控え（消えたノート・前の Vault の参照）で、もう読むことが無いので外す。 */
+internal data class ReconcilePlan(
+    val toRead: List<NoteFile>,
+    val toDelete: List<String>,
+    val forgetMarks: List<String> = emptyList()
+) {
     companion object {
         val NONE = ReconcilePlan(emptyList(), emptyList())
     }
@@ -25,7 +30,8 @@ internal data class ReconcilePlan(val toRead: List<NoteFile>, val toDelete: List
  * - 消すのは**読み切れた走査**に無いノートだけ。一部を読めない走査で消すと、一時的に読めないノートの索引を失う
  * - 相対パスを持たないノートは鍵が無いので扱わない
  *
- * [rewritten] はアプリが本文を書き換えたと控えてあるパス。
+ * [rewritten] はアプリが本文を書き換えたと控えてある**参照**。控えは参照で持つ — 索引に無いノートでも控えられ、
+ * 初めて読んでいる途中の書き換えを番号の照合で止められる（→ knowledge_index.md §3 の手順4）。
  */
 internal fun planReconcile(
     notes: List<NoteFile>,
@@ -40,18 +46,19 @@ internal fun planReconcile(
         val previous = indexed[path]
         when {
             previous == null -> true
-            path in rewritten -> true
+            note.ref.value in rewritten -> true
             note.lastModified == null && previous.lastModified == null -> true
             else -> note.lastModified != previous.lastModified
         }
     }
-    val toDelete = if (kind == NoteScanKind.COMPLETE) {
-        val present = scanned.mapTo(HashSet()) { it.vaultRelativePath }
-        indexed.keys.filter { it !in present }.sorted()
-    } else {
-        emptyList()
-    }
-    return ReconcilePlan(toRead, toDelete)
+    if (kind != NoteScanKind.COMPLETE) return ReconcilePlan(toRead, emptyList())
+    val present = scanned.mapTo(HashSet()) { it.vaultRelativePath }
+    val presentRefs = notes.mapTo(HashSet()) { it.ref.value }
+    return ReconcilePlan(
+        toRead = toRead,
+        toDelete = indexed.keys.filter { it !in present }.sorted(),
+        forgetMarks = rewritten.filter { it !in presentRefs }.sorted()
+    )
 }
 
 /**

@@ -50,7 +50,7 @@ class KnowledgeIndexPlanTest {
             notes = listOf(note("written.md", 7L)),
             kind = NoteScanKind.COMPLETE,
             indexed = mapOf("written.md" to indexed(7L)),
-            rewritten = setOf("written.md")
+            rewritten = setOf("ref:written.md")
         )
 
         assertEquals(listOf("written.md"), plan.toRead.map { it.vaultRelativePath })
@@ -74,7 +74,7 @@ class KnowledgeIndexPlanTest {
 
     @Test
     fun `読めずに空の走査では何も読まず何も消さない`() {
-        val plan = planReconcile(emptyList(), NoteScanKind.UNREADABLE_EMPTY, mapOf("a.md" to indexed(1L)), setOf("a.md"))
+        val plan = planReconcile(emptyList(), NoteScanKind.UNREADABLE_EMPTY, mapOf("a.md" to indexed(1L)), setOf("ref:a.md"))
 
         assertEquals(ReconcilePlan.NONE, plan)
     }
@@ -84,6 +84,19 @@ class KnowledgeIndexPlanTest {
         val plan = planReconcile(listOf(note("", 1L)), NoteScanKind.COMPLETE, emptyMap(), emptySet())
 
         assertTrue(plan.toRead.isEmpty())
+    }
+
+    /** 控えは参照で持つ。読み切れた走査に無い参照（消えたノート・前の Vault の参照）の控えは、もう読むことが無いので外す。 */
+    @Test
+    fun `読み切れた走査に無い参照の控えだけを外し、一部を読めない走査では外さない`() {
+        val notes = listOf(note("kept.md", 1L))
+        val rewritten = setOf("ref:kept.md", "ref:gone.md", "other-vault:a.md")
+
+        assertEquals(
+            listOf("other-vault:a.md", "ref:gone.md"),
+            planReconcile(notes, NoteScanKind.COMPLETE, emptyMap(), rewritten).forgetMarks
+        )
+        assertEquals(emptyList<String>(), planReconcile(notes, NoteScanKind.PARTIAL, emptyMap(), rewritten).forgetMarks)
     }
 
     @Test

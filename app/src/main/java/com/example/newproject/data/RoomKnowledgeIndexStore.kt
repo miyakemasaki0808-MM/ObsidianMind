@@ -14,13 +14,16 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
         val meta = dao.openVault(vaultKey)
         return KnowledgeIndexSnapshot(
             notes = dao.noteStates().associate { it.relativePath to IndexedNoteState(it.lastModified, it.fingerprint) },
-            writeNumbers = dao.marks().associate { it.relativePath to it.writeNumber },
+            writeNumbers = dao.marks().associate { it.documentRef to it.writeNumber },
             firstBuildDone = meta.firstBuildDone
         )
     }
 
     override suspend fun markRewritten(vaultKey: String, documentRef: String) =
         dao.markRewritten(vaultKey, documentRef)
+
+    override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) =
+        dao.forgetMarks(vaultKey, documentRefs)
 
     override suspend fun applyRead(
         vaultKey: String,

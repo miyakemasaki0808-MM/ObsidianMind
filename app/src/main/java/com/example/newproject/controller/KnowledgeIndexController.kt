@@ -82,8 +82,8 @@ internal class KnowledgeIndexController(
 
     /**
      * アプリが本文を書き終えた（蒸留の保存・保存前の本文への復元）。読み直すと控えてから走査を頼む。
-     * **控える相手は参照で引く** — 索引にあるノートの参照から相対パスを引くので、相対パスがその場で引けなくても抜けず、
-     * 前の Vault の参照は今の Vault の索引に当たらない。索引に無いノートは、次の突き合わせで新しいノートとして読まれる。
+     * **控えは参照そのもので持つ** — 相対パスがその場で引けなくても、索引に無いノートでも控えられる。
+     * 参照は Vault ごとに違うので、前の Vault の参照は今の Vault のノートに当たらない。
      * **頼んだ走査の途中でまた書き換えると、その走査は公開されない**ので、公開が無ければもう一度だけ頼む。
      * 書き換えが続けば、その書き換えの呼び出しが自分で頼む。
      */
@@ -166,6 +166,7 @@ internal class KnowledgeIndexController(
         if (scan.kind == NoteScanKind.UNREADABLE_EMPTY) return
         val plan = planReconcile(scan.notes, scan.kind, snapshot.notes, snapshot.writeNumbers.keys)
         if (plan.toDelete.isNotEmpty()) store.deleteNotes(key, plan.toDelete)
+        if (plan.forgetMarks.isNotEmpty()) store.forgetMarks(key, plan.forgetMarks)
         val permits = Semaphore(readParallelism)
         coroutineScope {
             plan.toRead.map { note ->
@@ -189,7 +190,8 @@ internal class KnowledgeIndexController(
         generation: Long
     ) {
         val path = note.vaultRelativePath
-        val writeNumberAtRead = snapshot.writeNumbers[path]
+        // 控えは参照で持つ。索引に無いノートでも、初めて読んでいる途中の書き換えをここで止められる。
+        val writeNumberAtRead = snapshot.writeNumbers[note.ref.value]
         val content = try {
             handle.readNoteForIndex(note.ref)
         } catch (e: CancellationException) {

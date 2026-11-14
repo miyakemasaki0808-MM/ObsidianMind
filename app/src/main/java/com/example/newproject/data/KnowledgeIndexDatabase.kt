@@ -23,7 +23,7 @@ import java.io.File
  */
 @Database(
     entities = [IndexMetaEntity::class, IndexedNoteEntity::class, IndexedLinkEntity::class, RewriteMarkEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 internal abstract class KnowledgeIndexDatabase : RoomDatabase() {
@@ -81,10 +81,13 @@ internal data class IndexedLinkEntity(
     val decodedNameKey: String?
 )
 
-/** アプリが本文を書き換えたと控えたパスと、その書き換えの番号（§3 の手順4）。プロセスを越えて残す。 */
+/**
+ * アプリが本文を書き換えたと控えた参照と、その書き換えの番号（§3 の手順4）。プロセスを越えて残す。
+ * **参照で持つ** — 索引に無いノートでも控えられる。参照は Vault ごとに違うので、前の Vault の控えは今の Vault のノートに当たらない。
+ */
 @Entity(tableName = "rewrite_mark")
 internal data class RewriteMarkEntity(
-    @PrimaryKey val relativePath: String,
+    @PrimaryKey val documentRef: String,
     val writeNumber: Long
 )
 
@@ -112,11 +115,8 @@ internal abstract class KnowledgeIndexDao {
     @Query("SELECT * FROM rewrite_mark")
     abstract suspend fun marks(): List<RewriteMarkEntity>
 
-    @Query("SELECT writeNumber FROM rewrite_mark WHERE relativePath = :path")
-    abstract suspend fun markOf(path: String): Long?
-
-    @Query("SELECT relativePath FROM indexed_note WHERE documentRef = :documentRef")
-    abstract suspend fun pathsOf(documentRef: String): List<String>
+    @Query("SELECT writeNumber FROM rewrite_mark WHERE documentRef = :documentRef")
+    abstract suspend fun markOf(documentRef: String): Long?
 
     @Query("SELECT * FROM indexed_link WHERE sourcePath = :path ORDER BY ordinal")
     abstract suspend fun linksOf(path: String): List<IndexedLinkEntity>
@@ -124,8 +124,8 @@ internal abstract class KnowledgeIndexDao {
     @Upsert
     abstract suspend fun upsertMark(mark: RewriteMarkEntity)
 
-    @Query("DELETE FROM rewrite_mark WHERE relativePath = :path")
-    abstract suspend fun deleteMark(path: String)
+    @Query("DELETE FROM rewrite_mark WHERE documentRef = :documentRef")
+    abstract suspend fun deleteMark(documentRef: String)
 
     @Upsert
     abstract suspend fun upsertNote(note: IndexedNoteEntity)
@@ -142,8 +142,12 @@ internal abstract class KnowledgeIndexDao {
     @Query("DELETE FROM indexed_link WHERE sourcePath IN (:paths)")
     abstract suspend fun deleteLinkRows(paths: List<String>)
 
-    @Query("DELETE FROM rewrite_mark WHERE relativePath IN (:paths)")
-    abstract suspend fun deleteMarkRows(paths: List<String>)
+    /** 消すノートの控え。控えは参照で持つので、ノートの行から参照を引いて消す（ノートの行より先に呼ぶ）。 */
+    @Query("DELETE FROM rewrite_mark WHERE documentRef IN (SELECT documentRef FROM indexed_note WHERE relativePath IN (:paths))")
+    abstract suspend fun deleteMarkRowsOfNotes(paths: List<String>)
+
+    @Query("DELETE FROM rewrite_mark WHERE documentRef IN (:documentRefs)")
+    abstract suspend fun deleteMarkRows(documentRefs: List<String>)
 
     @Query("DELETE FROM indexed_note")
     abstract suspend fun clearNotes()
@@ -167,15 +171,19 @@ internal abstract class KnowledgeIndexDao {
         return fresh
     }
 
-    /** 参照で引いたノートを、読み直すと控える。索引に無い参照なら何もしない。 */
+    /** 参照を、読み直すと控える。索引に無い参照でも控える。 */
     @Transaction
     open suspend fun markRewritten(vaultKey: String, documentRef: String) {
         val current = meta()?.takeIf { it.vaultKey == vaultKey } ?: return
-        val paths = pathsOf(documentRef)
-        if (paths.isEmpty()) return
-        var number = current.lastWriteNumber
-        paths.forEach { path -> upsertMark(RewriteMarkEntity(path, ++number)) }
+        val number = current.lastWriteNumber + 1
         upsertMeta(current.copy(lastWriteNumber = number))
+        upsertMark(RewriteMarkEntity(documentRef, number))
+    }
+
+    @Transaction
+    open suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) {
+        if (meta()?.vaultKey != vaultKey) return
+        documentRefs.chunked(DELETE_CHUNK).forEach { deleteMarkRows(it) }
     }
 
     @Transaction
@@ -186,11 +194,11 @@ internal abstract class KnowledgeIndexDao {
         writeNumberAtRead: Long?
     ): Boolean {
         if (meta()?.vaultKey != vaultKey) return false
-        if (!mayApplyIndexedRead(writeNumberAtRead, markOf(note.relativePath))) return false
+        if (!mayApplyIndexedRead(writeNumberAtRead, markOf(note.documentRef))) return false
         upsertNote(note)
         deleteLinksOf(note.relativePath)
         if (links.isNotEmpty()) insertLinks(links)
-        if (writeNumberAtRead != null) deleteMark(note.relativePath)
+        if (writeNumberAtRead != null) deleteMark(note.documentRef)
         return true
     }
 
@@ -199,9 +207,9 @@ internal abstract class KnowledgeIndexDao {
     open suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) {
         if (meta()?.vaultKey != vaultKey) return
         relativePaths.chunked(DELETE_CHUNK).forEach { chunk ->
+            deleteMarkRowsOfNotes(chunk)
             deleteLinkRows(chunk)
             deleteNoteRows(chunk)
-            deleteMarkRows(chunk)
         }
     }
 

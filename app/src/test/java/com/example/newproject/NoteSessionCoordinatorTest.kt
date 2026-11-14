@@ -2597,6 +2597,7 @@ private class FakeHistoryStore : HistoryStore {
         }
         override suspend fun applyRead(vaultKey: String, note: IndexedNoteRecord, links: List<IndexedLink>, writeNumberAtRead: Long?) = true
         override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) = Unit
+        override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) = Unit
         override suspend fun markFirstBuildDone(vaultKey: String) = Unit
     }
 }

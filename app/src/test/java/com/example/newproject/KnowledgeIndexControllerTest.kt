@@ -278,6 +278,47 @@ class KnowledgeIndexControllerTest {
         assertTrue("A の読み込みは書かなかった", env.store.rejectedApplies >= 1)
     }
 
+    /**
+     * 索引に無いノートは、参照から索引の行を引けない。控えを参照そのもので持たないと、初めて読んでいる途中の書き換えで
+     * 古い読み込みが番号の照合（どちらも空）を通り、日時が同じなら以後読み直さない。
+     */
+    @Test
+    fun `索引に無いノートを初めて読んでいる途中に書き換えても、古い本文を残さず新しい本文を書く`() = runTest {
+        val env = Env(this)
+        env.body("n.md", "[[old]]")
+        val held = CompletableDeferred<Unit>()
+        env.store.beforeApply = { path -> if (path == "n.md") held.await() }
+        env.publish(listOf(note("n.md", 5L)))
+        runCurrent()
+
+        env.body("n.md", "[[new]]")
+        env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
+        env.controller.onNoteBodyWritten(refOf("n.md"))
+        runCurrent()
+        env.store.beforeApply = {}
+        held.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(listOf("new"), env.store.links.getValue("n.md").map { it.target })
+        assertTrue("書き終えたら控えは外れる", env.store.marks.isEmpty())
+    }
+
+    @Test
+    fun `索引に無いノートを初めて書いた直後に書き換えても、次の回で新しい本文を書く`() = runTest {
+        val env = Env(this)
+        env.body("n.md", "[[old]]")
+        env.publish(listOf(note("n.md", 5L)))
+        advanceUntilIdle()
+
+        env.body("n.md", "[[new]]")
+        env.publishOnRequest = { env.publish(listOf(note("n.md", 5L))) }
+        env.controller.onNoteBodyWritten(refOf("n.md"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("new"), env.store.links.getValue("n.md").map { it.target })
+        assertTrue(env.store.marks.isEmpty())
+    }
+
     @Test
     fun `本文を書き換えたら控えて走査を頼み、公開が無ければもう一度だけ頼む`() = runTest {
         val env = Env(this)
@@ -288,7 +329,7 @@ class KnowledgeIndexControllerTest {
         env.controller.onNoteBodyWritten(refOf("n.md"))
         advanceUntilIdle()
 
-        assertEquals(setOf("n.md"), env.store.marks.keys)
+        assertEquals(setOf("ref:n.md"), env.store.marks.keys)
         assertEquals("公開されなかったので2回まで", 2, env.scanRequests)
 
         env.scanRequests = 0
@@ -300,7 +341,7 @@ class KnowledgeIndexControllerTest {
     }
 
     @Test
-    fun `索引に無いノートの書き換えは控えず走査だけ頼み、新しいノートとして読む`() = runTest {
+    fun `索引に無いノートの書き換えも参照で控え、新しいノートとして読んで控えを外す`() = runTest {
         val env = Env(this)
         env.body("old.md", "本文")
         env.publish(listOf(note("old.md", 1L)))
@@ -340,7 +381,19 @@ class KnowledgeIndexControllerTest {
         advanceUntilIdle()
 
         assertEquals(setOf("a.md"), env.store.notes.keys)
-        assertTrue("A の参照は B の索引に当たらない", env.store.marks.isEmpty())
+        assertEquals("B の a.md は読み直さない", listOf("b-ref:a.md"), env.reads().filter { it.endsWith("a.md") }.takeLast(1))
+        env.handle.readBodyRefs.clear()
+        env.controller.onScanPublished(
+            PublishedNoteScan(
+                listOf(NoteFile(name = "a.md", ref = DocumentRef("b-ref:a.md"), lastModified = 1L, vaultRelativePath = "a.md")),
+                NoteScanKind.COMPLETE,
+                publishCount = 101L,
+                vaultGeneration = env.generation
+            )
+        )
+        advanceUntilIdle()
+        assertTrue("A の参照の控えは B のノートを読み直させない", env.handle.readBodyRefs.isEmpty())
+        assertTrue("読み切れた走査に無い参照の控えは外す", env.store.marks.isEmpty())
     }
 
     @Test
@@ -411,7 +464,12 @@ class KnowledgeIndexControllerTest {
 
         override suspend fun markRewritten(vaultKey: String, documentRef: String) {
             if (this.vaultKey != vaultKey) return
-            notes.values.filter { it.documentRef == documentRef }.forEach { marks[it.relativePath] = ++lastWriteNumber }
+            marks[documentRef] = ++lastWriteNumber
+        }
+
+        override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) {
+            if (this.vaultKey != vaultKey) return
+            documentRefs.forEach { marks.remove(it) }
         }
 
         override suspend fun applyRead(
@@ -422,20 +480,20 @@ class KnowledgeIndexControllerTest {
         ): Boolean {
             beforeApply(note.relativePath)
             if (this.vaultKey != vaultKey) return false
-            if (!mayApplyIndexedRead(writeNumberAtRead, marks[note.relativePath])) {
+            if (!mayApplyIndexedRead(writeNumberAtRead, marks[note.documentRef])) {
                 rejectedApplies++
                 return false
             }
             applyCount++
             notes[note.relativePath] = note
             this.links[note.relativePath] = links
-            if (writeNumberAtRead != null) marks.remove(note.relativePath)
+            if (writeNumberAtRead != null) marks.remove(note.documentRef)
             return true
         }
 
         override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) {
             if (this.vaultKey != vaultKey) return
-            relativePaths.forEach { notes.remove(it); links.remove(it); marks.remove(it) }
+            relativePaths.forEach { path -> notes.remove(path)?.let { marks.remove(it.documentRef) }; links.remove(path) }
         }
 
         override suspend fun markFirstBuildDone(vaultKey: String) {

@@ -61,7 +61,7 @@ class KnowledgeIndexDaoTest {
         assertTrue(store.applyRead(VAULT_A, record("n.md", fingerprint = "A"), listOf(link("古い")), writeNumberAtRead = null))
 
         store.markRewritten(VAULT_A, "ref:n.md")
-        val numberAtRead = store.openVault(VAULT_A).writeNumbers.getValue("n.md")
+        val numberAtRead = store.openVault(VAULT_A).writeNumbers.getValue("ref:n.md")
         store.markRewritten(VAULT_A, "ref:n.md")
 
         assertFalse(
@@ -70,7 +70,7 @@ class KnowledgeIndexDaoTest {
         )
         assertEquals(listOf("古い"), database.dao().linksOf("n.md").map { it.target })
 
-        val latest = store.openVault(VAULT_A).writeNumbers.getValue("n.md")
+        val latest = store.openVault(VAULT_A).writeNumbers.getValue("ref:n.md")
         assertTrue(store.applyRead(VAULT_A, record("n.md", fingerprint = "B"), listOf(link("新しい")), latest))
         assertEquals(listOf("新しい"), database.dao().linksOf("n.md").map { it.target })
         assertTrue("書いたら控えを外す", store.openVault(VAULT_A).writeNumbers.isEmpty())
@@ -93,15 +93,22 @@ class KnowledgeIndexDaoTest {
     }
 
     @Test
-    fun 索引に無い参照の書き換えは控えない() = runBlocking<Unit> {
+    fun 索引に無い参照も控え初めて書く読み込みを照合で止める() = runBlocking<Unit> {
         store.openVault(VAULT_A)
-        store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣")), writeNumberAtRead = null)
+        store.markRewritten(VAULT_A, "ref:新しい.md")
+        assertEquals(setOf("ref:新しい.md"), store.openVault(VAULT_A).writeNumbers.keys)
 
-        store.markRewritten(VAULT_A, "ref:無い.md")
+        assertFalse(
+            "控える前に読み始めた初めての読み込みは書かない",
+            store.applyRead(VAULT_A, record("新しい.md"), listOf(link("古い")), writeNumberAtRead = null)
+        )
+        val number = store.openVault(VAULT_A).writeNumbers.getValue("ref:新しい.md")
+        assertTrue(store.applyRead(VAULT_A, record("新しい.md"), listOf(link("新しい")), number))
         assertTrue(store.openVault(VAULT_A).writeNumbers.isEmpty())
 
-        store.markRewritten(VAULT_A, "ref:a.md")
-        assertEquals(setOf("a.md"), store.openVault(VAULT_A).writeNumbers.keys)
+        store.markRewritten(VAULT_A, "ref:消える.md")
+        store.forgetMarks(VAULT_A, listOf("ref:消える.md"))
+        assertTrue(store.openVault(VAULT_A).writeNumbers.isEmpty())
     }
 
     @Test

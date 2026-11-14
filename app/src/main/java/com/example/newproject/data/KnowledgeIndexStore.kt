@@ -15,10 +15,13 @@ internal interface KnowledgeIndexStore {
     suspend fun openVault(vaultKey: String): KnowledgeIndexSnapshot
 
     /**
-     * アプリが本文を書き換えたと控え、書き換えの番号を進める（§3 の手順4）。相手は**索引にあるノートの参照**で引く。
-     * 索引に無い参照なら何もしない（次の突き合わせで新しいノートとして読まれる）。
+     * アプリが本文を書き換えたと控え、書き換えの番号を進める（§3 の手順4）。**控えは参照そのもので持つ** —
+     * 索引に無いノートでも控えられ、初めて読んでいる途中の書き換えを番号の照合で止められる。
      */
     suspend fun markRewritten(vaultKey: String, documentRef: String)
+
+    /** もう読むことの無い参照の控えを外す（読み切れた走査に無い参照）。 */
+    suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>)
 
     /**
      * 読んだ結果で、そのノートの行とリンクを入れ替える。**[writeNumberAtRead] が今もそのパスの最新のときだけ書き、
@@ -39,7 +42,7 @@ internal interface KnowledgeIndexStore {
 }
 
 /**
- * 開いた索引の、突き合わせに要る分。[writeNumbers] はアプリが書き換えたと控えてあるパスと、その書き換えの番号。
+ * 開いた索引の、突き合わせに要る分。[writeNumbers] はアプリが書き換えたと控えてある**参照**と、その書き換えの番号。
  */
 internal data class KnowledgeIndexSnapshot(
     val notes: Map<String, IndexedNoteState>,
