@@ -179,11 +179,14 @@ internal class KnowledgeIndexController(
         ensureCurrent(generation)
         // **控えは参照の単位で外す。** 同じ参照のパス（同じ文書を2つのフォルダに見せるプロバイダ）を全部書き終えたときだけ、
         // 番号が始めたときのままなら外す。1つでも書けなかったら残し、次の回で読み直す（→ knowledge_index.md §3 の手順4）。
-        applied.groupBy({ it.first.ref.value }, { it.second })
-            .forEach { (ref, results) ->
-                val number = snapshot.writeNumbers[ref] ?: return@forEach
-                if (results.all { it }) store.clearMark(key, ref, number)
-            }
+        // **外すのは読み切れた走査のときだけ** — 一部を読めない走査では、その回に読んだパスが同じ参照の全部のパスとは限らない。
+        if (scan.kind == NoteScanKind.COMPLETE) {
+            applied.groupBy({ it.first.ref.value }, { it.second })
+                .forEach { (ref, results) ->
+                    val number = snapshot.writeNumbers[ref] ?: return@forEach
+                    if (results.all { it }) store.clearMark(key, ref, number)
+                }
+        }
         if (!snapshot.firstBuildDone) store.markFirstBuildDone(key)
         indexGeneration++
     }

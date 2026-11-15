@@ -399,6 +399,35 @@ class KnowledgeIndexControllerTest {
         assertTrue(env.store.marks.isEmpty())
     }
 
+    /**
+     * 一部を読めない走査では、その回に読んだパスが同じ参照の全部のパスとは限らない。**控えを外すのは読み切れた走査のときだけ。**
+     * 外すと、フォルダが読めるようになって読み切れた走査が来ても、日時が同じなので見えなかったパスを読み直さない。
+     */
+    @Test
+    fun `一部を読めない走査で同じ参照の片方だけを書いても控えを残し、読み切れた走査で両方を書く`() = runTest {
+        listOf("a/n.md" to "b/n.md", "b/n.md" to "a/n.md").forEach { (seen, unseen) ->
+            val env = Env(this)
+            val shared = DocumentRef("ref:shared")
+            fun at(path: String) = NoteFile(name = "n.md", ref = shared, lastModified = 5L, vaultRelativePath = path)
+            env.handle.bodies = { if (it == shared) "[[before]]" else null }
+            env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 1L, env.generation))
+            advanceUntilIdle()
+
+            env.handle.bodies = { if (it == shared) "[[after]]" else null }
+            env.controller.markRewrittenNow(shared)
+            env.controller.onScanPublished(PublishedNoteScan(listOf(at(seen)), NoteScanKind.PARTIAL, 2L, env.generation))
+            advanceUntilIdle()
+            assertEquals("$unseen を書くまで控えは残る", setOf("ref:shared"), env.store.marks.keys)
+            assertEquals(listOf("before"), env.store.links.getValue(unseen).map { it.target })
+
+            env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 3L, env.generation))
+            advanceUntilIdle()
+            assertEquals(listOf("after"), env.store.links.getValue("a/n.md").map { it.target })
+            assertEquals(listOf("after"), env.store.links.getValue("b/n.md").map { it.target })
+            assertTrue(env.store.marks.isEmpty())
+        }
+    }
+
     /** 書き換えたノートがその回だけ読めなかったら、控えを外さない。外すと日時が同じなので、以後読み直さない。 */
     @Test
     fun `控えのあるノートがその回に読めなかったら控えを残し、次の回で読み直す`() = runTest {
