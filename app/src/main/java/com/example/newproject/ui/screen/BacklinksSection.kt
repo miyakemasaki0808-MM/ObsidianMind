@@ -34,12 +34,13 @@ internal sealed interface BacklinksSection {
 
 /**
  * 節の出し方を決める。**数えられないことを最も先に出す** — 走査が読めずに空だったり置き場が壊れていたりすると、
- * 索引の作成も進まないので、進み具合を出し続けると「待てば出る」と誤って伝える。
+ * 索引の作成も進まないので、進み具合を出し続けると「待てば出る」と誤って伝える。作る側が止まったとき（[KnowledgeIndexProgress.Failed]）も、
+ * 照会が成功していても作り終えていない索引の行なので、数えられないと出す。
  * 次に、最初の作成の途中なら進み具合。作り終えていて1件以上あるときだけ行を出す。
  */
 internal fun backlinksSectionFor(state: BacklinksState, progress: KnowledgeIndexProgress): BacklinksSection = when {
     state == BacklinksState.Idle -> BacklinksSection.Hidden
-    state == BacklinksState.Unavailable -> BacklinksSection.Unavailable
+    state == BacklinksState.Unavailable || progress == KnowledgeIndexProgress.Failed -> BacklinksSection.Unavailable
     progress is KnowledgeIndexProgress.Building -> BacklinksSection.Building(progress.indexed, progress.total)
     state is BacklinksState.Ready && state.rows.isNotEmpty() -> BacklinksSection.Rows(state.rows)
     else -> BacklinksSection.Hidden

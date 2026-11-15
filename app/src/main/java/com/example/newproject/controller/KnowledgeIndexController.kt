@@ -59,6 +59,12 @@ internal class KnowledgeIndexController(
     private var lastPublishCount = 0L
 
     /**
+     * 今の Vault で最初の作成を終えたと知っているか。**終えるまでの失敗だけを「作れなかった」にする** —
+     * 作り終えた索引は差分の読み直しが失敗しても引けるので、出来上がりのまま残す。
+     */
+    private var buildDone = false
+
+    /**
      * 今の Vault で最後に受けた公開。Vault を替えたら捨てる。バックリンクを引く側が、
      * 準備完了の公開がもう来たか・最新が読めずに空かを見る（→ knowledge_index.md §5）。
      */
@@ -74,9 +80,17 @@ internal class KnowledgeIndexController(
         val generation = vaultGeneration()
         val key = vaultKey()
         track(scope.launch {
-            val snapshot = key?.let { openQuietly(it) }
-            if (snapshot != null) {
-                setProgress(generation, if (snapshot.firstBuildDone) KnowledgeIndexProgress.Ready else KnowledgeIndexProgress.Building(0, 0))
+            if (key != null) {
+                val snapshot = openQuietly(key)
+                if (snapshot?.firstBuildDone == true && generation == vaultGeneration()) buildDone = true
+                setProgress(
+                    generation,
+                    when {
+                        snapshot == null -> KnowledgeIndexProgress.Failed
+                        snapshot.firstBuildDone -> KnowledgeIndexProgress.Ready
+                        else -> KnowledgeIndexProgress.Building(0, 0)
+                    }
+                )
             }
             requestScanQuietly(generation)
         })
@@ -129,6 +143,7 @@ internal class KnowledgeIndexController(
         worker = null
         pending = null
         latestScan = null
+        buildDone = false
         requests.forEach { it.cancel() }
         requests.clear()
     }
@@ -156,6 +171,8 @@ internal class KnowledgeIndexController(
             throw e
         } catch (_: Exception) {
             // 走査の失敗は、次の契機（Vault を開く・本文の書き換え・ほかの機能の走査）で直る。繰り返し頼まない。
+            // 最初の作成の前なら、公開が来ないまま止まるので「作れなかった」にする。
+            buildFailed(generation)
         }
     }
 
@@ -169,6 +186,7 @@ internal class KnowledgeIndexController(
                 throw e
             } catch (_: Exception) {
                 // 置き場が使えない。索引が無いだけで、今の動きに戻る（→ knowledge_index.md §10 の保証していないこと）。
+                buildFailed(scan.vaultGeneration)
             }
         }
     }
@@ -182,6 +200,7 @@ internal class KnowledgeIndexController(
         // 読めずに空の走査で残してよいのは、同じ Vault の行だけ（→ knowledge_index.md §4）。
         val snapshot = store.openVault(key)
         ensureCurrent(generation)
+        if (snapshot.firstBuildDone) buildDone = true
         if (scan.kind == NoteScanKind.UNREADABLE_EMPTY) return
         val plan = planReconcile(scan.notes, scan.kind, snapshot.notes, snapshot.writeNumbers.keys)
         if (plan.toDelete.isNotEmpty()) store.deleteNotes(key, plan.toDelete)
@@ -212,8 +231,14 @@ internal class KnowledgeIndexController(
         }
         if (!snapshot.firstBuildDone) store.markFirstBuildDone(key)
         ensureCurrent(generation)
+        buildDone = true
         progress.set(KnowledgeIndexProgress.Ready)
         onChanged()
+    }
+
+    /** 最初の作成が止まった。作り終えていれば何もしない。旧い Vault の遅れた失敗は [setProgress] が捨てる。 */
+    private fun buildFailed(generation: Long) {
+        if (!buildDone) setProgress(generation, KnowledgeIndexProgress.Failed)
     }
 
     /** 書く直前に Vault が替わっていないかを見る。替わっていれば、新しい Vault の進み具合を上書きしない。 */

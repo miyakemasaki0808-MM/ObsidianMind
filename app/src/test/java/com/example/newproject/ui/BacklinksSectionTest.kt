@@ -47,6 +47,15 @@ class BacklinksSectionTest {
         assertEquals(BacklinksSection.Unavailable, backlinksSectionFor(BacklinksState.Unavailable, KnowledgeIndexProgress.Ready))
     }
 
+    /** 作る側が止まった（→ knowledge_index.md §5）。照会が成功していても、作り終えていない索引の行は漏れなく数えたものではない。 */
+    @Test
+    fun `索引を作れなかったら、引けた行があっても数えられないと出す`() {
+        val failed = KnowledgeIndexProgress.Failed
+        assertEquals(BacklinksSection.Unavailable, backlinksSectionFor(BacklinksState.Ready(listOf(row)), failed))
+        assertEquals(BacklinksSection.Unavailable, backlinksSectionFor(BacklinksState.Loading, failed))
+        assertEquals(BacklinksSection.Hidden, backlinksSectionFor(BacklinksState.Idle, failed))
+    }
+
     @Test
     fun `進み具合は読む予定の数が分かるまで数を出さず、ほかの箇所は1つ以上のときだけ出す`() {
         assertEquals("索引を作っています（120 / 500）", backlinksProgressText(BacklinksSection.Building(120, 500)))

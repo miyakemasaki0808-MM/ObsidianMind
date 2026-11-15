@@ -46,6 +46,9 @@ class KnowledgeIndexControllerTest {
         val browser = FakeVaultBrowser(handle)
         var scanRequests = 0
         var publishOnRequest: (() -> Unit)? = null
+
+        /** 走査を頼むと投げる例外。null なら頼めて、[publishOnRequest] に従う。 */
+        var scanFailure: Exception? = null
         private var publishes = 0L
 
         /** 公開を受けた・索引を直し終えた知らせの回数。 */
@@ -62,6 +65,7 @@ class KnowledgeIndexControllerTest {
             vaultKey = { key },
             requestScan = {
                 scanRequests++
+                scanFailure?.let { throw it }
                 publishOnRequest?.invoke()
             },
             progress = object : KnowledgeIndexProgressWriter {
@@ -667,6 +671,88 @@ class KnowledgeIndexControllerTest {
         assertEquals(listOf(KnowledgeIndexProgress.Ready), env.progress)
     }
 
+    /**
+     * 最初の作成が止まったら「作れなかった」にする。「作っています」のまま残すと、待てば出ると誤って伝える（→ knowledge_index.md §5）。
+     * 次の正常な作成で通常へ戻る。
+     */
+    @Test
+    fun `最初の作成の書き込みが失敗したら作れなかったにし、次の正常な作成で出来上がりへ戻る`() = runTest {
+        val env = Env(this)
+        env.handle.bodies = { "本文" }
+        env.store.beforeApply = { throw java.io.IOException("置き場が壊れた") }
+
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+        assertEquals(KnowledgeIndexProgress.Failed, env.progress.last())
+
+        env.store.beforeApply = {}
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+        assertEquals(KnowledgeIndexProgress.Ready, env.progress.last())
+    }
+
+    @Test
+    fun `最初の作成の前に走査を頼めなかったら作れなかったにする`() = runTest {
+        val env = Env(this)
+        env.scanFailure = java.io.IOException("走査できない")
+
+        env.controller.onVaultOpened()
+        advanceUntilIdle()
+
+        assertEquals(listOf(KnowledgeIndexProgress.Building(0, 0), KnowledgeIndexProgress.Failed), env.progress)
+    }
+
+    @Test
+    fun `Vaultを開いたときに置き場を開けなければ作れなかったにする`() = runTest {
+        val env = Env(this)
+        env.store.failOpen = true
+
+        env.controller.onVaultOpened()
+        advanceUntilIdle()
+
+        assertEquals(listOf(KnowledgeIndexProgress.Failed), env.progress)
+    }
+
+    /** 作り終えた索引は、差分の読み直しが失敗しても引ける。作れなかったにしない。 */
+    @Test
+    fun `最初の作成を終えた後の失敗では、作れなかったにしない`() = runTest {
+        val env = Env(this)
+        env.handle.bodies = { "本文" }
+        env.publish(listOf(note("a.md", 1L)))
+        advanceUntilIdle()
+        env.progress.clear()
+
+        env.store.beforeApply = { throw java.io.IOException("置き場が壊れた") }
+        env.publish(listOf(note("a.md", 2L)))
+        env.scanFailure = java.io.IOException("走査できない")
+        env.controller.onNoteBodyWritten()
+        advanceUntilIdle()
+
+        assertEquals(emptyList<KnowledgeIndexProgress>(), env.progress.filter { it == KnowledgeIndexProgress.Failed })
+    }
+
+    /** 旧い Vault の作成が遅れて失敗しても、替えた先の Vault に「作れなかった」を出さない。 */
+    @Test
+    fun `Vaultを替えた後に旧いVaultの作成が失敗しても、作れなかったを書かない`() = runTest {
+        val env = Env(this)
+        val held = CompletableDeferred<Unit>()
+        env.store.beforeApply = {
+            withContext(NonCancellable) { held.await() }
+            throw java.io.IOException("後着の失敗")
+        }
+        env.body("a.md", "[[b]]")
+        env.publish(listOf(note("a.md", 1L)))
+        runCurrent()
+
+        env.generation++
+        env.controller.onVaultChanged()
+        env.progress.clear()
+        held.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<KnowledgeIndexProgress>(), env.progress)
+    }
+
     /** 置き場の書き込みは取り消しで止まらないことがある。止まらずに戻っても、替えた先の Vault の進み具合を上書きしない。 */
     @Test
     fun `Vaultを替えた後に旧いVaultの読み込みが取り消しを無視して終わっても、進み具合を書かない`() = runTest {
@@ -699,9 +785,11 @@ class KnowledgeIndexControllerTest {
         var applyCount = 0
         var rejectedApplies = 0
         var beforeApply: suspend (String) -> Unit = {}
+        var failOpen = false
 
         override suspend fun openVault(vaultKey: String): KnowledgeIndexSnapshot {
             openCount++
+            if (failOpen) throw java.io.IOException("置き場を開けない")
             if (this.vaultKey != vaultKey) {
                 notes.clear(); links.clear(); marks.clear()
                 firstBuildDone = false

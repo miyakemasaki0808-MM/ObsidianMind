@@ -42,4 +42,10 @@ sealed interface KnowledgeIndexProgress {
 
     /** 最初の作成を終えた。その後の差分の読み直しは出さない。 */
     data object Ready : KnowledgeIndexProgress
+
+    /**
+     * 最初の作成が止まった（置き場を開けない・書けない・走査を頼めない）。「作っています」のまま残すと待てば出ると誤って伝えるので、
+     * 節は数えられないと出す。次の正常な作成で [Building]・[Ready] へ戻る。作り終えた後の失敗ではここへ来ない。
+     */
+    data object Failed : KnowledgeIndexProgress
 }
