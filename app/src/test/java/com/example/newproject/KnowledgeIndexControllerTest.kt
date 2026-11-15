@@ -324,6 +324,102 @@ class KnowledgeIndexControllerTest {
         assertTrue(env.store.marks.isEmpty())
     }
 
+    /**
+     * 控えは参照の単位で持ち、**外すのも参照の単位**にする。DocumentsProvider は参照を保ったままの名前の変更を認めるので、
+     * 古いパスの行を消すときに控えまで消すと、新しいパスの読み込みが番号の照合で落ちて、旧い行も新しい行も無くなる。
+     */
+    @Test
+    fun `控えのあるノートの名前を参照のまま変えても、その読み切れた走査で新しいパスのリンクが入る`() = runTest {
+        val env = Env(this)
+        env.body("old.md", "[[before]]")
+        env.publish(listOf(note("old.md", 5L)))
+        advanceUntilIdle()
+
+        env.body("old.md", "[[after]]")
+        env.written("old.md")
+        advanceUntilIdle()
+        val renamed = NoteFile(name = "new.md", ref = refOf("old.md"), lastModified = 5L, vaultRelativePath = "new.md")
+        env.controller.onScanPublished(PublishedNoteScan(listOf(renamed), NoteScanKind.COMPLETE, 50L, env.generation))
+        advanceUntilIdle()
+
+        assertEquals(setOf("new.md"), env.store.notes.keys)
+        assertEquals(listOf("after"), env.store.links.getValue("new.md").map { it.target })
+        assertTrue(env.store.marks.isEmpty())
+    }
+
+    /** 同じ文書を2つのフォルダに見せるプロバイダでは、1つの参照に2つのパスがある。先に書いた1件が控えを外すと、もう1件が読み直されない。 */
+    @Test
+    fun `同じ参照の2つのパスを書き換えたら、書く順によらず両方が新しいリンクになる`() = runTest {
+        val env = Env(this)
+        val shared = DocumentRef("ref:shared")
+        fun at(path: String) = NoteFile(name = "n.md", ref = shared, lastModified = 5L, vaultRelativePath = path)
+        env.handle.bodies = { if (it == shared) "[[before]]" else null }
+        env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 1L, env.generation))
+        advanceUntilIdle()
+
+        env.handle.bodies = { if (it == shared) "[[after]]" else null }
+        env.controller.markRewrittenNow(shared)
+        env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 2L, env.generation))
+        advanceUntilIdle()
+
+        assertEquals(listOf("after"), env.store.links.getValue("a/n.md").map { it.target })
+        assertEquals(listOf("after"), env.store.links.getValue("b/n.md").map { it.target })
+        assertTrue("両方を書き終えたら控えを外す", env.store.marks.isEmpty())
+    }
+
+    @Test
+    fun `同じ参照の2つのパスを書いている途中に番号が進んだら、新しい控えを残して次の回で両方を読み直す`() = runTest {
+        val env = Env(this)
+        val shared = DocumentRef("ref:shared")
+        fun at(path: String) = NoteFile(name = "n.md", ref = shared, lastModified = 5L, vaultRelativePath = path)
+        env.handle.bodies = { if (it == shared) "[[before]]" else null }
+        env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 1L, env.generation))
+        advanceUntilIdle()
+
+        env.handle.bodies = { if (it == shared) "[[middle]]" else null }
+        env.controller.markRewrittenNow(shared)
+        var rewrote = false
+        env.store.beforeApply = { path ->
+            if (path == "b/n.md" && !rewrote) {
+                rewrote = true
+                env.handle.bodies = { if (it == shared) "[[after]]" else null }
+                env.controller.markRewrittenNow(shared)
+            }
+        }
+        env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 2L, env.generation))
+        advanceUntilIdle()
+        assertEquals("途中で進んだ番号の控えは残る", setOf("ref:shared"), env.store.marks.keys)
+
+        env.store.beforeApply = {}
+        env.controller.onScanPublished(PublishedNoteScan(listOf(at("a/n.md"), at("b/n.md")), NoteScanKind.COMPLETE, 3L, env.generation))
+        advanceUntilIdle()
+
+        assertEquals(listOf("after"), env.store.links.getValue("a/n.md").map { it.target })
+        assertEquals(listOf("after"), env.store.links.getValue("b/n.md").map { it.target })
+        assertTrue(env.store.marks.isEmpty())
+    }
+
+    /** 書き換えたノートがその回だけ読めなかったら、控えを外さない。外すと日時が同じなので、以後読み直さない。 */
+    @Test
+    fun `控えのあるノートがその回に読めなかったら控えを残し、次の回で読み直す`() = runTest {
+        val env = Env(this)
+        env.body("n.md", "[[before]]")
+        env.publish(listOf(note("n.md", 5L)))
+        advanceUntilIdle()
+
+        env.written("n.md")
+        env.handle.bodies = { null }
+        env.publish(listOf(note("n.md", 5L)))
+        advanceUntilIdle()
+        assertEquals(setOf("ref:n.md"), env.store.marks.keys)
+
+        env.body("n.md", "[[after]]")
+        env.publish(listOf(note("n.md", 5L)))
+        advanceUntilIdle()
+        assertEquals(listOf("after"), env.store.links.getValue("n.md").map { it.target })
+        assertTrue(env.store.marks.isEmpty())
+    }
+
     @Test
     fun `本文を書き換えたら控えて走査を頼み、公開が無ければもう一度だけ頼む`() = runTest {
         val env = Env(this)
@@ -514,13 +610,17 @@ class KnowledgeIndexControllerTest {
             applyCount++
             notes[note.relativePath] = note
             this.links[note.relativePath] = links
-            if (writeNumberAtRead != null) marks.remove(note.documentRef)
             return true
+        }
+
+        override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) {
+            if (this.vaultKey != vaultKey) return
+            if (marks[documentRef] == writeNumber) marks.remove(documentRef)
         }
 
         override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) {
             if (this.vaultKey != vaultKey) return
-            relativePaths.forEach { path -> notes.remove(path)?.let { marks.remove(it.documentRef) }; links.remove(path) }
+            relativePaths.forEach { path -> notes.remove(path); links.remove(path) }
         }
 
         override suspend fun markFirstBuildDone(vaultKey: String) {

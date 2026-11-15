@@ -28,8 +28,8 @@ internal interface KnowledgeIndexStore {
     suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>)
 
     /**
-     * 読んだ結果で、そのノートの行とリンクを入れ替える。**[writeNumberAtRead] が今もそのパスの最新のときだけ書き、
-     * 書いたら控えも同じトランザクションで外す。** 書かなければ false で、控えは残る（§3）。
+     * 読んだ結果で、そのノートの行とリンクを入れ替える。**[writeNumberAtRead] が今もその参照の最新のときだけ書く。**
+     * 書かなければ false。**控えはここでは外さない** — 控えは参照の単位なので、同じ参照のパスを全部書き終えてから [clearMark] で外す（§3）。
      */
     suspend fun applyRead(
         vaultKey: String,
@@ -38,8 +38,11 @@ internal interface KnowledgeIndexStore {
         writeNumberAtRead: Long?
     ): Boolean
 
-    /** ノートの行・リンク・控えを消す。 */
+    /** ノートの行とリンクを消す。**控えは消さない**（参照を保ったまま名前を変えたノートは新しいパスで読み直す）。 */
     suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>)
+
+    /** 控えを外す。番号が [writeNumber] のままのときだけ（途中で書き換えて番号が進んでいたら、新しい控えを残す）。 */
+    suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long)
 
     /** 最初の作成を終えたと控える。 */
     suspend fun markFirstBuildDone(vaultKey: String)

@@ -73,12 +73,30 @@ class KnowledgeIndexDaoTest {
         val latest = store.openVault(VAULT_A).writeNumbers.getValue("ref:n.md")
         assertTrue(store.applyRead(VAULT_A, record("n.md", fingerprint = "B"), listOf(link("新しい")), latest))
         assertEquals(listOf("新しい"), database.dao().linksOf("n.md").map { it.target })
-        assertTrue("書いたら控えを外す", store.openVault(VAULT_A).writeNumbers.isEmpty())
+        assertEquals("書いただけでは控えを外さない", setOf("ref:n.md"), store.openVault(VAULT_A).writeNumbers.keys)
+        store.clearMark(VAULT_A, "ref:n.md", latest)
+        assertTrue("番号が同じなら外す", store.openVault(VAULT_A).writeNumbers.isEmpty())
         assertFalse(
             "新しい読み込みが控えを外した後に、古い番号の読み込みが書こうとしても B から戻らない",
             store.applyRead(VAULT_A, record("n.md", fingerprint = "A"), listOf(link("古い")), numberAtRead)
         )
         assertEquals(listOf("新しい"), database.dao().linksOf("n.md").map { it.target })
+    }
+
+    /** 控えは参照の単位。ノートの行を消しても控えは残り（名前の変更で新しいパスが読み直す）、外すのは番号が同じときだけ。 */
+    @Test
+    fun ノートを消しても控えは残り番号が進んでいれば外さない() = runBlocking<Unit> {
+        store.openVault(VAULT_A)
+        store.applyRead(VAULT_A, record("old.md"), listOf(link("習慣")), writeNumberAtRead = null)
+        store.markRewrittenNow("ref:old.md")
+        val number = store.openVault(VAULT_A).writeNumbers.getValue("ref:old.md")
+
+        store.deleteNotes(VAULT_A, listOf("old.md"))
+        assertEquals(setOf("ref:old.md"), store.openVault(VAULT_A).writeNumbers.keys)
+
+        store.markRewrittenNow("ref:old.md")
+        store.clearMark(VAULT_A, "ref:old.md", number)
+        assertEquals("途中で進んだ番号の控えは残る", setOf("ref:old.md"), store.openVault(VAULT_A).writeNumbers.keys)
     }
 
     @Test
@@ -102,6 +120,7 @@ class KnowledgeIndexDaoTest {
         )
         val number = store.openVault(VAULT_A).writeNumbers.getValue("ref:新しい.md")
         assertTrue(store.applyRead(VAULT_A, record("新しい.md"), listOf(link("新しい")), number))
+        store.clearMark(VAULT_A, "ref:新しい.md", number)
         assertTrue(store.openVault(VAULT_A).writeNumbers.isEmpty())
 
         store.markRewrittenNow("ref:消える.md")

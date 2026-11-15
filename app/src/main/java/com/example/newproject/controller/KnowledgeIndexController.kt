@@ -171,12 +171,19 @@ internal class KnowledgeIndexController(
         if (plan.toDelete.isNotEmpty()) store.deleteNotes(key, plan.toDelete)
         if (plan.forgetMarks.isNotEmpty()) store.forgetMarks(key, plan.forgetMarks)
         val permits = Semaphore(readParallelism)
-        coroutineScope {
+        val applied = coroutineScope {
             plan.toRead.map { note ->
-                async { permits.withPermit { indexNote(handle, key, note, snapshot, generation) } }
+                async { note to permits.withPermit { indexNote(handle, key, note, snapshot, generation) } }
             }.awaitAll()
         }
         ensureCurrent(generation)
+        // **控えは参照の単位で外す。** 同じ参照のパス（同じ文書を2つのフォルダに見せるプロバイダ）を全部書き終えたときだけ、
+        // 番号が始めたときのままなら外す。1つでも書けなかったら残し、次の回で読み直す（→ knowledge_index.md §3 の手順4）。
+        applied.groupBy({ it.first.ref.value }, { it.second })
+            .forEach { (ref, results) ->
+                val number = snapshot.writeNumbers[ref] ?: return@forEach
+                if (results.all { it }) store.clearMark(key, ref, number)
+            }
         if (!snapshot.firstBuildDone) store.markFirstBuildDone(key)
         indexGeneration++
     }
@@ -184,6 +191,7 @@ internal class KnowledgeIndexController(
     /**
      * 1ノートを読み、リンクを取り出して書く。**書き換えの番号は突き合わせを始めたときのもの**を使う —
      * 読み始めより早いので、その間に書き換えがあれば番号が進み、書かずに控えを残して次の回で読み直す。
+     * 書けた（または変わっていないと確かめた）ら true。読めなかった・番号が合わなかったら false で、控えを外さない理由になる。
      */
     private suspend fun indexNote(
         handle: VaultHandle,
@@ -191,7 +199,7 @@ internal class KnowledgeIndexController(
         note: NoteFile,
         snapshot: KnowledgeIndexSnapshot,
         generation: Long
-    ) {
+    ): Boolean {
         val path = note.vaultRelativePath
         // 控えは参照で持つ。索引に無いノートでも、初めて読んでいる途中の書き換えをここで止められる。
         val writeNumberAtRead = snapshot.writeNumbers[note.ref.value]
@@ -201,7 +209,7 @@ internal class KnowledgeIndexController(
             throw e
         } catch (_: Exception) {
             null
-        } ?: return
+        } ?: return false
         // 最大1MBの本文を解析するので Main の外で（→ architecture.md 判断3）。
         val (links, fingerprint) = withContext(parseDispatcher) {
             extractIndexedLinks(content) to contentFingerprint(content)
@@ -209,8 +217,8 @@ internal class KnowledgeIndexController(
         ensureCurrent(generation)
         val previous = snapshot.notes[path]
         val unchanged = previous != null && previous.fingerprint == fingerprint && previous.lastModified == note.lastModified
-        if (writeNumberAtRead == null && unchanged) return
-        store.applyRead(
+        if (writeNumberAtRead == null && unchanged) return true
+        return store.applyRead(
             vaultKey = key,
             note = IndexedNoteRecord(
                 relativePath = path,

@@ -23,7 +23,7 @@ import java.io.File
  */
 @Database(
     entities = [IndexMetaEntity::class, IndexedNoteEntity::class, IndexedLinkEntity::class, RewriteMarkEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 internal abstract class KnowledgeIndexDatabase : RoomDatabase() {
@@ -142,10 +142,6 @@ internal abstract class KnowledgeIndexDao {
     @Query("DELETE FROM indexed_link WHERE sourcePath IN (:paths)")
     abstract suspend fun deleteLinkRows(paths: List<String>)
 
-    /** 消すノートの控え。控えは参照で持つので、ノートの行から参照を引いて消す（ノートの行より先に呼ぶ）。 */
-    @Query("DELETE FROM rewrite_mark WHERE documentRef IN (SELECT documentRef FROM indexed_note WHERE relativePath IN (:paths))")
-    abstract suspend fun deleteMarkRowsOfNotes(paths: List<String>)
-
     @Query("DELETE FROM rewrite_mark WHERE documentRef IN (:documentRefs)")
     abstract suspend fun deleteMarkRows(documentRefs: List<String>)
 
@@ -210,16 +206,27 @@ internal abstract class KnowledgeIndexDao {
         upsertNote(note)
         deleteLinksOf(note.relativePath)
         if (links.isNotEmpty()) insertLinks(links)
-        if (writeNumberAtRead != null) deleteMark(note.documentRef)
         return true
     }
 
-    /** SQLite の変数の上限（古い端末で 999）を超えないよう、まとまりに分けて消す。 */
+    /**
+     * 控えを外す。**番号が [writeNumber] のままのときだけ** — 同じ参照のパスを書いている間に書き換えて番号が進んでいたら、新しい控えを残す。
+     * 控えは参照の単位なので、同じ参照のパスを全部書き終えてから呼ぶ（→ knowledge_index.md §3 の手順4）。
+     */
+    @Transaction
+    open suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) {
+        if (meta()?.vaultKey != vaultKey) return
+        if (markOf(documentRef) == writeNumber) deleteMark(documentRef)
+    }
+
+    /**
+     * SQLite の変数の上限（古い端末で 999）を超えないよう、まとまりに分けて消す。**控えは消さない** — 控えは参照の単位で、
+     * 参照を保ったまま名前を変えたノートは新しいパスで読み直す。読み切れた走査に無い参照の控えは [forgetMarks] が外す。
+     */
     @Transaction
     open suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) {
         if (meta()?.vaultKey != vaultKey) return
         relativePaths.chunked(DELETE_CHUNK).forEach { chunk ->
-            deleteMarkRowsOfNotes(chunk)
             deleteLinkRows(chunk)
             deleteNoteRows(chunk)
         }

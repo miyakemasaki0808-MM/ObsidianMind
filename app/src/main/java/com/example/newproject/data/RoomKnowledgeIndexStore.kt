@@ -46,6 +46,9 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
     override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) =
         dao.deleteNotes(vaultKey, relativePaths)
 
+    override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) =
+        dao.clearMark(vaultKey, documentRef, writeNumber)
+
     override suspend fun markFirstBuildDone(vaultKey: String) =
         dao.markFirstBuildDone(vaultKey)
 }
