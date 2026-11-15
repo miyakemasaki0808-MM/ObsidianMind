@@ -1,9 +1,9 @@
 # 知識索引 — Vault から作り直せる派生物を端末内の DB に持つ
 
-**状態:** 区切り1（索引の土台）は実装済みで、画面には出していない。引く側（§5）とランダム表示の先出し（§7）と余白メモ（区切り4）は未実装
-**最終検証:** 2026-11-15 / `fe7f9d9b`（§5 の引く側・§7 は未実装で未突合。端末で DB を作ることは未確認）
-**関連コード:** `controller/KnowledgeIndexController.kt` / `data/KnowledgeIndexStore.kt`・`KnowledgeIndexDatabase.kt`・`RoomKnowledgeIndexStore.kt` / `domain/KnowledgeIndexLinks.kt`・`KnowledgeIndexPlan.kt`・`domain/markdown/InlineVisibleText.kt`（`inlineVisibleLayout`）・`MarkdownBlocks.kt`（`renderedRows`） / `NoteScanCache.kt`（公開の知らせ）/ `controller/DistillController.kt`・`data/DistillWriteRepository.kt`（書き換えの知らせ）/ `controller/NoteSessionCoordinator.kt`・`NoteViewModel.kt`（配線）
-**関連テスト:** `KnowledgeIndexControllerTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `DistillControllerTest` / `DistillWriteRepositoryTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
+**状態:** 区切り1（索引の土台）と区切り2（引く側とバックリンクの表示 → [backlinks](../features/backlinks.md)）は実装済み。ランダム表示の先出し（§7）と余白メモ（区切り4）は未実装
+**最終検証:** 2026-11-15 / `ed7c9211`（§7 は未実装で未突合。端末で DB を作ること・バックリンクの表示は未確認）
+**関連コード:** `controller/KnowledgeIndexController.kt`・`BacklinksController.kt` / `model/state/BacklinksState.kt`（`KnowledgeIndexProgress`） / `data/KnowledgeIndexStore.kt`・`KnowledgeIndexDatabase.kt`・`RoomKnowledgeIndexStore.kt` / `domain/KnowledgeIndexLinks.kt`・`KnowledgeIndexPlan.kt`・`domain/markdown/InlineVisibleText.kt`（`inlineVisibleLayout`）・`MarkdownBlocks.kt`（`renderedRows`） / `NoteScanCache.kt`（公開の知らせ）/ `controller/DistillController.kt`・`data/DistillWriteRepository.kt`（書き換えの知らせ）/ `controller/NoteSessionCoordinator.kt`・`NoteViewModel.kt`（配線）
+**関連テスト:** `KnowledgeIndexControllerTest` / `BacklinksControllerTest` / `BacklinksTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `DistillControllerTest` / `DistillWriteRepositoryTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
 **正本:** この文書（索引の責務・保証・寿命）。補助の面への出し方は [backlinks](../features/backlinks.md)、ランダム表示は [rediscover](../features/rediscover.md)
 
 **対象領域:** 端末内の DB（Room）、索引の作り方と寿命、走査の結果との関係、ランダム表示の待ち

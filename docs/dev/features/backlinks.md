@@ -1,9 +1,9 @@
 # このノートへのリンク — バックリンクを1文つきで出す
 
-**状態:** 構想。知識索引の区切り2で作る
-**最終検証:** 未検証（実装前）
-**関連コード:** 未作成。索引は `data/KnowledgeIndexDatabase.kt`、リンクの解き方は `domain/NoteLinks.kt`（`resolveNoteLink`）を使う
-**関連テスト:** 未作成（→ §10）
+**状態:** 実装済み（知識索引の区切り2）。端末では未確認
+**最終検証:** 2026-11-15 / `ed7c9211`（JVM のテストと androidTest の組み立てまで。端末での表示と開く位置は未確認）
+**関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkRows`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`） / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
+**関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
 
 ---
@@ -42,17 +42,16 @@
 | 関連タブの節 | 関連の一覧の下に同じ一覧を出す | 関連タブを開いた |
 | 1行の中身 | 題名と、リンクを含む最初の1文。同じノートにほかのリンクもあれば「ほか2箇所」 | — |
 | 押したとき | ペインでは右で開く。関連タブでは今のノートとして開く。どちらもリンクのある節の見出しから | 行を押す |
-| 作っている間 | 「索引を作っています（120 / 500）」 | その Vault の索引の最初の作成が終わっていない |
+| 作っている間 | 件数の代わりに「索引を作っています（120 / 500）」。ペインでは押せない1行、関連タブでは枠の中 | その Vault の索引の最初の作成が終わっていない |
+| 数えられない | 件数を出さない。ペインでは開くと、関連タブでは枠の中に「このノートへのリンクを数えられませんでした」。**作っている途中でもこちらを先に出す** | 走査が読めずに空・置き場が使えない |
 
 ## 4. 現在のユーザーフロー
 
-> **該当なし（構想）:** 実装前なので、作る予定の流れを書く。
-
 1. Vault を開くと、背景で索引を作る（→ [knowledge_index](../system/knowledge_index.md) §3）
 2. ノートを開くと、索引から今のノートへのリンクを引く
-3. 開いた Fold で ✎ から机を開くと、余白ペインに「▸ このノートへのリンク 3」が出る
+3. 開いた Fold で ✎ から机を開くと、余白ペインの「このノートの関連」の上に「▸ このノートへのリンク 3件」が出る
 4. 開くと3行が並ぶ。押すと右で開き、「← 余白へ戻る」で戻る。「このノートへ移る」で主の面へ移る
-5. スマホでは関連タブを開くと、関連の下に同じ一覧がある。押すとそのノートを開く
+5. スマホでは関連タブを開くと、関連と反証の一文の下に同じ一覧が畳まずにある。押すとそのノートを、リンクのある節の見出しから開く
 6. 別のノートに Obsidian でリンクを足すと、次の走査の後に一覧へ増える
 
 ## 5. 機能仕様
@@ -87,9 +86,10 @@
 
 ## 6. 状態とデータ
 
-- **ノート単位の状態（予定）:** バックリンクの状態（作っている・引いている・出せる・読めない）と行の一覧。
-  **`cancelNoteScopedJobs()` と `withNoteScopedReset()` の両方へ登録する**（→ [architecture](../system/architecture.md) 判断4 の1行目）
-- **Vault 単位の状態:** 索引の進み具合。こちらは索引を作る側が持つ（→ [knowledge_index](../system/knowledge_index.md) §5）
+- **ノート単位の状態:** `BacklinksState`（引いていない・引いている・出せる・読めない）と行の一覧。
+  **`cancelNoteScopedJobs()` と `withNoteScopedReset()` の両方へ登録してある**（→ [architecture](../system/architecture.md) 判断4 の1行目）
+- **Vault 単位の状態:** 索引の進み具合（`KnowledgeIndexProgress`）。こちらは索引を作る側が書く（→ [knowledge_index](../system/knowledge_index.md) §5）。
+  節の出し方は2つを合わせて純関数 `backlinksSectionFor` が決める（数えられない → 作っている → 1件以上の行 → 出さない、の順）
 - **畳む・開くは覚えない。** 関連の一覧と同じく、ノートを替えると畳んだ状態に戻る
 - **永続化:** しない。索引は [knowledge_index](../system/knowledge_index.md) が持つ
 
@@ -105,8 +105,11 @@
     → 状態の Writer（その照会がまだ取り消されていないときだけ書く。ノートの切替・索引の直し・公開のたびに前の照会を取り消す → knowledge_index §5）
 ```
 
-- **見出しへ送る依頼に、同じ見出しの番目を任意で足す。** 今の依頼は見出しの文字だけで、開き始めの位置（`NoteStart.kt`）は `headingBlockIndex` で最初に合う見出しを選ぶ。
+- **見出しへ送る依頼は、同じ見出しの番目を任意で持つ**（`PendingNoteStart`・`SideLinkStart` の `headingOccurrence`）。開き始めの位置は `headingBlockIndex` がその番目を選び、無ければ最初の見出しへ戻る。
   バックリンクから開くときだけ番目を渡し、右で開く経路と今のノートとして開く経路の両方で同じ戻り方をする。本文のリンクは番目を渡さないので、今どおり最初の見出しから開く
+- **関連タブから開くときは、ノートの画面がまだ組まれていない。** 本文の位置と同じ `MainActivity` のスコープで `rememberNoteStart` を持ち、解析が届いたら見出しへ送る。
+  経路は先頭から開く境界（`openNoteFromTop`）と対の `openNoteAt` を通し、経路の検査（`NoteOpenRouteContractTest`）が両方を認める
+- **ペインから右で開いたときの入口は「余白の一覧」**（関連の候補と同じ）。「← 余白へ戻る」は一覧の始まりまで面を送る。このノートへのリンクの節があればその見出し、無ければ関連の見出しが行き先
 
 ## 8. 設計判断と代替案
 
@@ -149,7 +152,7 @@
 
 - 余白メモと引用の出し方は決めていない
 - 全文検索を入れるかは、この機能を使ってから決める（→ [knowledge_index](../system/knowledge_index.md) §1）
-- **実装のときに一緒に直す正本:** 余白ペインの並び（[margin_pane](margin_pane.md) §5.2）と右で開く入口（同 §5.9）、並べ読みの入口（[desk_foundation](desk_foundation.md)）、関連タブの並び（[related_notes_ai](related_notes_ai.md)）、見出しへ送る依頼（[note_links](note_links.md) §6）。ランダム表示の先出しで直す正本は [knowledge_index](../system/knowledge_index.md) §7 が持つ
+- 端末では確かめていない（表示・開く位置・読み上げ・大きな Vault での作っている間の表示）。ランダム表示の先出しで直す正本は [knowledge_index](../system/knowledge_index.md) §7 が持つ
 
 ## 12. 開発経緯
 
