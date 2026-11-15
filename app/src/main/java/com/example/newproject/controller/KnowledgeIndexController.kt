@@ -65,6 +65,13 @@ internal class KnowledgeIndexController(
     private var buildDone = false
 
     /**
+     * 今の Vault で、突き合わせか失敗が進み具合を決めたか。**決めた後は、Vault を開いたときの初期値で上書きしない** —
+     * 初期化は置き場を開く途中で待つことがあり、その間にほかの機能の走査の公開で突き合わせが先に終わると、遅れて戻った古い控えが
+     * 出来上がり・作れなかったを「作っています」に戻す。走査の寿命の中では公開が来ないので、そのまま戻らない。
+     */
+    private var progressDecided = false
+
+    /**
      * 今の Vault で最後に受けた公開。Vault を替えたら捨てる。バックリンクを引く側が、
      * 準備完了の公開がもう来たか・最新が読めずに空かを見る（→ knowledge_index.md §5）。
      */
@@ -83,7 +90,7 @@ internal class KnowledgeIndexController(
             if (key != null) {
                 val snapshot = openQuietly(key)
                 if (snapshot?.firstBuildDone == true && generation == vaultGeneration()) buildDone = true
-                setProgress(
+                setInitialProgress(
                     generation,
                     when {
                         snapshot == null -> KnowledgeIndexProgress.Failed
@@ -144,6 +151,7 @@ internal class KnowledgeIndexController(
         pending = null
         latestScan = null
         buildDone = false
+        progressDecided = false
         requests.forEach { it.cancel() }
         requests.clear()
     }
@@ -172,7 +180,8 @@ internal class KnowledgeIndexController(
         } catch (_: Exception) {
             // 走査の失敗は、次の契機（Vault を開く・本文の書き換え・ほかの機能の走査）で直る。繰り返し頼まない。
             // 最初の作成の前なら、公開が来ないまま止まるので「作れなかった」にする。
-            buildFailed(generation)
+            // 突き合わせが走っていれば、その結果に任せる（途中で「作れなかった」を挟まない）。
+            if (worker?.isActive != true) buildFailed(generation)
         }
     }
 
@@ -232,7 +241,7 @@ internal class KnowledgeIndexController(
         if (!snapshot.firstBuildDone) store.markFirstBuildDone(key)
         ensureCurrent(generation)
         buildDone = true
-        progress.set(KnowledgeIndexProgress.Ready)
+        setProgress(generation, KnowledgeIndexProgress.Ready)
         onChanged()
     }
 
@@ -243,7 +252,14 @@ internal class KnowledgeIndexController(
 
     /** 書く直前に Vault が替わっていないかを見る。替わっていれば、新しい Vault の進み具合を上書きしない。 */
     private fun setProgress(generation: Long, value: KnowledgeIndexProgress) {
-        if (generation == vaultGeneration()) progress.set(value)
+        if (generation != vaultGeneration()) return
+        progressDecided = true
+        progress.set(value)
+    }
+
+    /** Vault を開いたときの初期値。突き合わせか失敗が先に決めていれば書かない（→ [progressDecided]）。 */
+    private fun setInitialProgress(generation: Long, value: KnowledgeIndexProgress) {
+        if (generation == vaultGeneration() && !progressDecided) progress.set(value)
     }
 
     /**

@@ -731,6 +731,57 @@ class KnowledgeIndexControllerTest {
         assertEquals(emptyList<KnowledgeIndexProgress>(), env.progress.filter { it == KnowledgeIndexProgress.Failed })
     }
 
+    /**
+     * 同じ Vault を開いたときの初期化が遅れて戻る間に、ほかの機能の走査の公開で突き合わせが先に決まる。
+     * 遅れた初期化は古い控えなので、決まった進み具合を上書きしない（走査の寿命の中では公開が来ず、上書きされたまま戻らない）。
+     */
+    @Test
+    fun `遅れて戻った初期化は、先に決まった出来上がりと作れなかったを上書きしない`() = runTest {
+        data class Case(val label: String, val applyFails: Boolean, val openFails: Boolean, val expected: KnowledgeIndexProgress)
+        listOf(
+            Case("先に作れなかった → 遅れた初期化（未作成）", applyFails = true, openFails = false, expected = KnowledgeIndexProgress.Failed),
+            Case("先に出来上がり → 遅れた初期化（未作成）", applyFails = false, openFails = false, expected = KnowledgeIndexProgress.Ready),
+            Case("先に出来上がり → 遅れた初期化の例外", applyFails = false, openFails = true, expected = KnowledgeIndexProgress.Ready)
+        ).forEach { case ->
+            val env = Env(this)
+            env.handle.bodies = { "本文" }
+            val held = CompletableDeferred<Unit>()
+            env.store.holdNextOpen = held
+            env.store.failHeldOpen = case.openFails
+            env.controller.onVaultOpened()
+            runCurrent()
+
+            if (case.applyFails) env.store.beforeApply = { throw java.io.IOException("置き場が壊れた") }
+            env.publish(listOf(note("a.md", 1L)))
+            advanceUntilIdle()
+            assertEquals(case.label, case.expected, env.progress.last())
+
+            held.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(case.label, case.expected, env.progress.last())
+        }
+    }
+
+    /** 突き合わせが走っている間に走査を頼めなくても、走っている突き合わせの結果に任せる（途中で「作れなかった」を挟まない）。 */
+    @Test
+    fun `突き合わせの途中に走査を頼めなくても作れなかったを挟まず、突き合わせの結果に任せる`() = runTest {
+        val env = Env(this)
+        env.handle.bodies = { "本文" }
+        val held = CompletableDeferred<Unit>()
+        env.store.beforeApply = { held.await() }
+        env.publish(listOf(note("a.md", 1L)))
+        runCurrent()
+
+        env.scanFailure = java.io.IOException("走査できない")
+        env.controller.onNoteBodyWritten()
+        runCurrent()
+        held.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(KnowledgeIndexProgress.Failed in env.progress)
+        assertEquals(KnowledgeIndexProgress.Ready, env.progress.last())
+    }
+
     /** 旧い Vault の作成が遅れて失敗しても、替えた先の Vault に「作れなかった」を出さない。 */
     @Test
     fun `Vaultを替えた後に旧いVaultの作成が失敗しても、作れなかったを書かない`() = runTest {
@@ -787,9 +838,24 @@ class KnowledgeIndexControllerTest {
         var beforeApply: suspend (String) -> Unit = {}
         var failOpen = false
 
+        /** 次の1回の openVault を、控えを作った後に止める。戻すのは止める前の控え（遅れて戻る初期化）。 */
+        var holdNextOpen: CompletableDeferred<Unit>? = null
+        var failHeldOpen = false
+
         override suspend fun openVault(vaultKey: String): KnowledgeIndexSnapshot {
             openCount++
             if (failOpen) throw java.io.IOException("置き場を開けない")
+            holdNextOpen?.let { held ->
+                holdNextOpen = null
+                val stale = KnowledgeIndexSnapshot(
+                    notes = if (this.vaultKey == vaultKey) notes.mapValues { IndexedNoteState(it.value.lastModified, it.value.fingerprint) } else emptyMap(),
+                    writeNumbers = if (this.vaultKey == vaultKey) marks.toMap() else emptyMap(),
+                    firstBuildDone = this.vaultKey == vaultKey && firstBuildDone
+                )
+                held.await()
+                if (failHeldOpen) throw java.io.IOException("遅れた初期化の失敗")
+                return stale
+            }
             if (this.vaultKey != vaultKey) {
                 notes.clear(); links.clear(); marks.clear()
                 firstBuildDone = false
