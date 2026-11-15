@@ -9,18 +9,23 @@ import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
 import com.example.newproject.domain.mayApplyIndexedRead
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.KnowledgeIndexProgressWriter
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteScanKind
 import com.example.newproject.model.PublishedNoteScan
+import com.example.newproject.model.state.KnowledgeIndexProgress
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -43,6 +48,12 @@ class KnowledgeIndexControllerTest {
         var publishOnRequest: (() -> Unit)? = null
         private var publishes = 0L
 
+        /** 公開を受けた・索引を直し終えた知らせの回数。 */
+        var changes = 0
+
+        /** 書かれた進み具合の順。 */
+        val progress = mutableListOf<KnowledgeIndexProgress>()
+
         val controller = KnowledgeIndexController(
             scope = scope,
             store = store,
@@ -53,6 +64,12 @@ class KnowledgeIndexControllerTest {
                 scanRequests++
                 publishOnRequest?.invoke()
             },
+            progress = object : KnowledgeIndexProgressWriter {
+                override fun set(progress: KnowledgeIndexProgress) {
+                    this@Env.progress += progress
+                }
+            },
+            onChanged = { changes++ },
             parseDispatcher = UnconfinedTestDispatcher(scope.testScheduler)
         )
 
@@ -87,7 +104,7 @@ class KnowledgeIndexControllerTest {
         assertEquals(setOf("a.md", "b.md"), env.store.notes.keys)
         assertEquals(listOf("b"), env.store.links.getValue("a.md").map { it.target })
         assertTrue(env.store.firstBuildDone)
-        assertEquals(1L, env.controller.indexGeneration)
+        assertEquals("公開を受けたときと、直し終えたときに知らせる", 2, env.changes)
     }
 
     @Test
@@ -149,12 +166,13 @@ class KnowledgeIndexControllerTest {
         env.body("a.md", "[[b]]")
         env.publish(listOf(note("a.md", 1L)))
         advanceUntilIdle()
-        val generation = env.controller.indexGeneration
+        val changes = env.changes
 
         env.publish(emptyList(), NoteScanKind.UNREADABLE_EMPTY)
         advanceUntilIdle()
         assertEquals(setOf("a.md"), env.store.notes.keys)
-        assertEquals("準備完了と見なさないので索引の世代も進めない", generation, env.controller.indexGeneration)
+        assertEquals("公開を受けた知らせだけで、直し終えた知らせは出さない", changes + 1, env.changes)
+        assertEquals(NoteScanKind.UNREADABLE_EMPTY, env.controller.latestScan?.kind)
 
         env.publish(emptyList(), NoteScanKind.COMPLETE)
         advanceUntilIdle()
@@ -586,6 +604,87 @@ class KnowledgeIndexControllerTest {
         advanceUntilIdle()
 
         assertEquals(0, env.store.openCount)
+        assertEquals(0, env.changes)
+        assertNull(env.controller.latestScan)
+    }
+
+    /** 最新の公開は今の Vault のものだけ。替えた後に、前の Vault の公開を準備完了と見なさない（→ knowledge_index.md §5）。 */
+    @Test
+    fun `公開を受けたら最新の公開として持ち、Vaultを替えたら捨てる`() = runTest {
+        val env = Env(this)
+        env.publish(emptyList())
+        assertEquals(1L, env.controller.latestScan?.publishCount)
+
+        env.generation++
+        env.controller.onVaultChanged()
+
+        assertNull(env.controller.latestScan)
+    }
+
+    // ── 進み具合（→ knowledge_index.md §5） ──────────────────────────────────
+
+    @Test
+    fun `最初の作成の間は読んだ数と全体の数を出して終えたら出来上がりにし、その後の差分では出さない`() = runTest {
+        val env = Env(this)
+        env.handle.bodies = { "本文" }
+
+        env.publish(listOf(note("a.md", 1L), note("b.md", 1L), note("c.md", 1L)))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                KnowledgeIndexProgress.Building(0, 3),
+                KnowledgeIndexProgress.Building(1, 3),
+                KnowledgeIndexProgress.Building(2, 3),
+                KnowledgeIndexProgress.Building(3, 3),
+                KnowledgeIndexProgress.Ready
+            ),
+            env.progress
+        )
+
+        env.progress.clear()
+        env.publish(listOf(note("a.md", 2L), note("b.md", 1L), note("c.md", 1L)))
+        advanceUntilIdle()
+
+        assertEquals(listOf(KnowledgeIndexProgress.Ready), env.progress)
+    }
+
+    @Test
+    fun `Vaultを開いたら、最初の作成を終えていれば出来上がり、まだなら作っている途中と出す`() = runTest {
+        val env = Env(this)
+        env.controller.onVaultOpened()
+        advanceUntilIdle()
+        assertEquals(listOf(KnowledgeIndexProgress.Building(0, 0)), env.progress)
+
+        env.publish(emptyList())
+        advanceUntilIdle()
+        env.progress.clear()
+        env.generation++
+        env.controller.onVaultChanged()
+        env.controller.onVaultOpened()
+        advanceUntilIdle()
+
+        assertEquals(listOf(KnowledgeIndexProgress.Ready), env.progress)
+    }
+
+    /** 置き場の書き込みは取り消しで止まらないことがある。止まらずに戻っても、替えた先の Vault の進み具合を上書きしない。 */
+    @Test
+    fun `Vaultを替えた後に旧いVaultの読み込みが取り消しを無視して終わっても、進み具合を書かない`() = runTest {
+        val env = Env(this)
+        val held = CompletableDeferred<Unit>()
+        env.store.beforeApply = { withContext(NonCancellable) { held.await() } }
+        env.body("a.md", "[[b]]")
+        env.publish(listOf(note("a.md", 1L)))
+        runCurrent()
+
+        env.generation++
+        env.controller.onVaultChanged()
+        env.progress.clear()
+        held.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(emptyList<KnowledgeIndexProgress>(), env.progress)
+        assertEquals("直し終えた知らせも出さない", 1, env.changes)
     }
 
     /** 本番の DAO と同じ規則で書き込みを受ける偽物。[beforeApply] で書く手前に止められる。 */

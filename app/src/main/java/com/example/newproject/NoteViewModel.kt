@@ -120,6 +120,7 @@ class NoteViewModel internal constructor(
         knowledgeIndexStore = dependencies.knowledgeIndexStore,
         requestNoteScan = ::requestScanForKnowledgeIndex,
         expireNoteScan = { noteScan.expireAfterBodyWrite() },
+        noteLinkIndex = { noteScan.linkIndex },
         // 関連ノートは ViewModel が持つ走査キャッシュ（cachedNotes）に依存するので、ViewModel 側に置く。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },

@@ -3,11 +3,13 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
+import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.ReadingTraceCard
@@ -59,6 +61,10 @@ data class NoteUiState(
     val readingTraceCard: ReadingTraceCard? = null,
     // 反証の一文。関連ノートの結果から選ぶ。**ノート単位**（→ features/rebuttal_sentence.md §6）。
     val rebuttalSentence: RebuttalSentence? = null,
+    // 今のノートへのリンク。**ノート単位**（→ features/backlinks.md §6）。
+    val backlinks: BacklinksState = BacklinksState.Idle,
+    // 知識索引の最初の作成の進み具合。**Vault単位**で、ノートを替えても消さない（→ system/knowledge_index.md §5）。
+    val knowledgeIndexProgress: KnowledgeIndexProgress = KnowledgeIndexProgress.Unknown,
     // Explore（さがすタブ）
     val folders: List<NoteFolder> = emptyList(),
     val selectedFolder: NoteFolder? = null,   // null = すべて
@@ -79,6 +85,7 @@ data class NoteUiState(
  * 再会カード（[NoteUiState.readingTraceCard]）も維持する。同じノートのままで、痕跡は
  * vault相対パスをキーにしているため有効なまま（維持しないと Rediscover→蒸留保存で
  * カードだけが消える）。反証の一文（[NoteUiState.rebuttalSentence]）も他ノートの原文なので維持する。
+ * 今のノートへのリンク（[NoteUiState.backlinks]）もほかのノートの本文から引くので維持する。
  */
 internal fun NoteUiState.withDistillBodyReloaded(loaded: NoteState.Success): NoteUiState = copy(
     noteState = loaded,

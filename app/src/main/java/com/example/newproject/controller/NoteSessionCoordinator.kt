@@ -24,6 +24,7 @@ import com.example.newproject.data.KnowledgeIndexStore
 import com.example.newproject.model.PublishedNoteScan
 import com.example.newproject.domain.hasNoticeWithSummary
 import com.example.newproject.domain.summaryOf
+import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.domain.PassageIndex
 import com.example.newproject.domain.indexNoteFieldHints
 import com.example.newproject.domain.SearchPickerUseCase
@@ -105,6 +106,8 @@ internal class NoteSessionCoordinator(
     requestNoteScan: suspend () -> Unit = {},
     /** 本文を書き換えた後に走査の一覧を捨てる口（実装は ViewModel の `NoteScanCache.expireAfterBodyWrite`）。 */
     private val expireNoteScan: () -> Unit = {},
+    /** 走査の入れ物のリンクの索引（実装は ViewModel の `NoteScanCache.linkIndex`）。バックリンクを解くのに使う。 */
+    noteLinkIndex: () -> NoteLinkIndex = { NoteLinkIndex.EMPTY },
     /** モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す（実装は ViewModel）。 */
     onModelReady: (title: String, content: String) -> Unit,
     /** 蒸留保存後の本文読み直し（SAF I/O を伴うため実装は ViewModel）。 */
@@ -175,7 +178,25 @@ internal class NoteSessionCoordinator(
             vaultGeneration = { vaultGeneration },
             vaultKey = currentVaultKey,
             requestScan = requestNoteScan,
+            progress = stateStore.knowledgeIndexProgressWriter,
+            onChanged = { refreshBacklinks() },
             parseDispatcher = parseDispatcher
+        )
+    }
+
+    /**
+     * 今のノートへのリンクを引く（**ノート単位** → docs/dev/features/backlinks.md）。索引を作る側と置き場を共有し、
+     * 置き場が無ければ作らない。ノートを開いたときと、索引か走査の公開が替わったときに引き直す（[refreshBacklinks]）。
+     */
+    private val backlinks: BacklinksController? = knowledgeIndexStore?.let { store ->
+        BacklinksController(
+            scope = scope,
+            store = store,
+            state = stateStore.backlinksWriter,
+            vaultKey = currentVaultKey,
+            latestScan = { knowledgeIndex?.latestScan },
+            linkIndex = noteLinkIndex,
+            resolveDispatcher = parseDispatcher
         )
     }
 
@@ -500,6 +521,7 @@ internal class NoteSessionCoordinator(
         rebuttal.cancelAndClear()
         // 右で眺めていたノートの読み込みも止める。状態は withNoteScopedReset() が落とす。
         sideReading.cancelAndClear()
+        backlinks?.cancelAndClear()
         distill.cancelForNoteChange()
     }
 
@@ -571,9 +593,15 @@ internal class NoteSessionCoordinator(
         knowledgeIndex?.onVaultOpened()
     }
 
-    /** 走査の入れ物が公開した（→ docs/dev/system/knowledge_index.md §3）。知識索引へ渡す。 */
+    /** 走査の入れ物が公開した（→ docs/dev/system/knowledge_index.md §3）。知識索引へ渡す。バックリンクは索引からの知らせで引き直す。 */
     fun onScanPublished(scan: PublishedNoteScan) {
         knowledgeIndex?.onScanPublished(scan)
+    }
+
+    /** 本文を出しているノートへのリンクを引き直す。本文が出る前は何もしない（出たときに [setNoteState] が引く）。 */
+    private fun refreshBacklinks() {
+        val note = stateStore.currentNote() ?: return
+        backlinks?.refresh(DocumentRef(note.targetUri))
     }
 
     /**
@@ -623,6 +651,7 @@ internal class NoteSessionCoordinator(
             dwell.start()
             read.start()
             marginMemo.ensureLoaded(readingTrace.currentPath())
+            refreshBacklinks()
         } else {
             sections.cancelAndClear()
         }

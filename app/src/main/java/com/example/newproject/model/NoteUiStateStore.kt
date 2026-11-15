@@ -3,11 +3,13 @@ package com.example.newproject.model
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.model.NoteFolder
 import com.example.newproject.model.NotePaperTone
+import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.CrystalLogState
 import com.example.newproject.model.state.ReadingTraceBackupState
 import com.example.newproject.model.state.ReadingTraceCleanupState
 import com.example.newproject.model.state.DistillState
+import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.ReadingTraceCard
@@ -91,6 +93,17 @@ interface ReadingTraceStateWriter {
 interface RebuttalStateWriter {
     val current: RebuttalSentence?
     fun update(transform: (RebuttalSentence?) -> RebuttalSentence?)
+}
+
+/** 今のノートへのリンク（ノート単位）。 */
+interface BacklinksStateWriter {
+    val current: BacklinksState
+    fun set(state: BacklinksState)
+}
+
+/** 知識索引の進み具合（Vault単位）。**ノート単位の Writer と分ける**のは寿命が違うから。 */
+interface KnowledgeIndexProgressWriter {
+    fun set(progress: KnowledgeIndexProgress)
 }
 
 interface ReadingTraceCleanupStateWriter {
@@ -241,6 +254,19 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
         }
     }
 
+    val backlinksWriter: BacklinksStateWriter = object : BacklinksStateWriter {
+        override val current: BacklinksState get() = mutableState.value.backlinks
+        override fun set(state: BacklinksState) {
+            mutableState.update { it.copy(backlinks = state) }
+        }
+    }
+
+    val knowledgeIndexProgressWriter: KnowledgeIndexProgressWriter = object : KnowledgeIndexProgressWriter {
+        override fun set(progress: KnowledgeIndexProgress) {
+            mutableState.update { it.copy(knowledgeIndexProgress = progress) }
+        }
+    }
+
     val readingTraceCleanupWriter: ReadingTraceCleanupStateWriter =
         object : ReadingTraceCleanupStateWriter {
             override val current: ReadingTraceCleanupState
@@ -371,6 +397,8 @@ private fun NoteUiState.withNoteScopedReset(): NoteUiState = copy(
     readingTraceCard = null,
     // 残すと、次のノートの関連タブに前のノートと食い違う文が出る。
     rebuttalSentence = null,
+    // 残すと、次のノートのペインに前のノートへのリンクが出る。
+    backlinks = BacklinksState.Idle,
     // **結晶の一覧は落とさない**（Vault単位）。落とすのは絞り込みのパスだけで、
     // 残すと次のノートの✨タブに前のノートの結晶が出る。
     crystalNotePath = null
@@ -398,5 +426,7 @@ private fun NoteUiState.withVaultScopedReset(): NoteUiState = copy(
     // 残すと**別Vaultのノートの色が新しい束に出る**。走査すれば作り直せるので捨ててよい。
     noteFields = emptyMap(),
     // 旧Vaultの結晶を新Vaultの✨タブへ出さない。次に必要になったとき読み直す。
-    crystalLog = CrystalLogState.NotLoaded
+    crystalLog = CrystalLogState.NotLoaded,
+    // 前の Vault の進み具合を残さない。新しい Vault を開いたら作る側が書き直す。
+    knowledgeIndexProgress = KnowledgeIndexProgress.Unknown
 )

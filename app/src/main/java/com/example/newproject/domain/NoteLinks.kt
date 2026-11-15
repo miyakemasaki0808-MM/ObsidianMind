@@ -120,6 +120,8 @@ internal class NoteLinkIndex(private val notes: List<NoteFile>) {
 
     fun pathOf(ref: DocumentRef): String? = byRef[ref]?.vaultRelativePath?.takeIf { it.isNotEmpty() }
 
+    fun noteAt(ref: DocumentRef): NoteFile? = byRef[ref]
+
     fun atPath(vaultPath: String): NoteFile? = byPath[vaultPath.lowercase()]
 
     /** 表記まで一致する相対パスのノート。大文字小文字だけが違うノートは返さない（→ features/desk_memory.md §7）。 */

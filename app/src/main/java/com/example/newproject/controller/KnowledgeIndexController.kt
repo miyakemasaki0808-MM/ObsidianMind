@@ -9,9 +9,11 @@ import com.example.newproject.domain.contentFingerprint
 import com.example.newproject.domain.extractIndexedLinks
 import com.example.newproject.domain.planReconcile
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.KnowledgeIndexProgressWriter
 import com.example.newproject.model.NoteFile
 import com.example.newproject.model.NoteScanKind
 import com.example.newproject.model.PublishedNoteScan
+import com.example.newproject.model.state.KnowledgeIndexProgress
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +37,9 @@ import kotlinx.coroutines.withContext
  *
  * 走査は自分では走らせず、走査の入れ物へ頼む（[requestScan]）。結果は入れ物の公開の知らせ（[onScanPublished]）で届く。
  * 頼む契機は Vault を開いたときと本文を書き換えたときだけで、タイマーでは頼まない。
+ *
+ * **公開を受けたときと索引を直し終えたときに [onChanged] で知らせる。** バックリンクは DB の行と入れ物のリンクの索引の
+ * 2つで決まるので、引く側はこの知らせのたびに引き直す（→ knowledge_index.md §5）。
  */
 internal class KnowledgeIndexController(
     private val scope: CoroutineScope,
@@ -43,6 +48,8 @@ internal class KnowledgeIndexController(
     private val vaultGeneration: () -> Long,
     private val vaultKey: () -> String?,
     private val requestScan: suspend () -> Unit,
+    private val progress: KnowledgeIndexProgressWriter,
+    private val onChanged: () -> Unit,
     private val parseDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val readParallelism: Int = READ_PARALLELISM
 ) {
@@ -51,8 +58,11 @@ internal class KnowledgeIndexController(
     private val requests = mutableListOf<Job>()
     private var lastPublishCount = 0L
 
-    /** 索引を直すたびに進む数。バックリンクを引く側が、引き直す契機に使う（→ knowledge_index.md §5）。 */
-    var indexGeneration = 0L
+    /**
+     * 今の Vault で最後に受けた公開。Vault を替えたら捨てる。バックリンクを引く側が、
+     * 準備完了の公開がもう来たか・最新が読めずに空かを見る（→ knowledge_index.md §5）。
+     */
+    var latestScan: PublishedNoteScan? = null
         private set
 
     /**
@@ -64,7 +74,10 @@ internal class KnowledgeIndexController(
         val generation = vaultGeneration()
         val key = vaultKey()
         track(scope.launch {
-            if (key != null) openQuietly(key)
+            val snapshot = key?.let { openQuietly(it) }
+            if (snapshot != null) {
+                setProgress(generation, if (snapshot.firstBuildDone) KnowledgeIndexProgress.Ready else KnowledgeIndexProgress.Building(0, 0))
+            }
             requestScanQuietly(generation)
         })
     }
@@ -76,8 +89,10 @@ internal class KnowledgeIndexController(
     fun onScanPublished(scan: PublishedNoteScan) {
         if (scan.vaultGeneration != vaultGeneration()) return
         lastPublishCount = scan.publishCount
+        latestScan = scan
         pending = scan
         if (worker?.isActive != true) worker = scope.launch { drain() }
+        onChanged()
     }
 
     /**
@@ -113,6 +128,7 @@ internal class KnowledgeIndexController(
         worker?.cancel()
         worker = null
         pending = null
+        latestScan = null
         requests.forEach { it.cancel() }
         requests.clear()
     }
@@ -122,15 +138,15 @@ internal class KnowledgeIndexController(
         requests += job
     }
 
-    private suspend fun openQuietly(key: String) {
+    private suspend fun openQuietly(key: String): KnowledgeIndexSnapshot? =
         try {
             store.openVault(key)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             // 置き場が使えない。索引が無いだけで、今の動きに戻る。
+            null
         }
-    }
 
     private suspend fun requestScanQuietly(generation: Long) {
         if (generation != vaultGeneration()) return
@@ -170,10 +186,17 @@ internal class KnowledgeIndexController(
         val plan = planReconcile(scan.notes, scan.kind, snapshot.notes, snapshot.writeNumbers.keys)
         if (plan.toDelete.isNotEmpty()) store.deleteNotes(key, plan.toDelete)
         if (plan.forgetMarks.isNotEmpty()) store.forgetMarks(key, plan.forgetMarks)
+        // 進み具合は最初の作成の間だけ出す。その後の差分の読み直しは出さない。
+        val count = if (snapshot.firstBuildDone) null else BuildCount(plan.toRead.size)
+        count?.let { setProgress(generation, KnowledgeIndexProgress.Building(0, it.total)) }
         val permits = Semaphore(readParallelism)
         val applied = coroutineScope {
             plan.toRead.map { note ->
-                async { note to permits.withPermit { indexNote(handle, key, note, snapshot, generation) } }
+                async {
+                    val result = note to permits.withPermit { indexNote(handle, key, note, snapshot, generation) }
+                    count?.next()?.let { setProgress(generation, it) }
+                    result
+                }
             }.awaitAll()
         }
         ensureCurrent(generation)
@@ -188,7 +211,14 @@ internal class KnowledgeIndexController(
                 }
         }
         if (!snapshot.firstBuildDone) store.markFirstBuildDone(key)
-        indexGeneration++
+        ensureCurrent(generation)
+        progress.set(KnowledgeIndexProgress.Ready)
+        onChanged()
+    }
+
+    /** 書く直前に Vault が替わっていないかを見る。替わっていれば、新しい Vault の進み具合を上書きしない。 */
+    private fun setProgress(generation: Long, value: KnowledgeIndexProgress) {
+        if (generation == vaultGeneration()) progress.set(value)
     }
 
     /**
@@ -237,6 +267,20 @@ internal class KnowledgeIndexController(
 
     private fun ensureCurrent(generation: Long) {
         if (generation != vaultGeneration()) throw CancellationException("Vault が切り替わったので、索引の作業を捨てました。")
+    }
+
+    /**
+     * 最初の作成で読み終えた数。**書くのは百分の一ごとと最後だけ** — 3,000本の Vault で読むたびに画面の状態を替えると、
+     * 状態を見ている画面がそのたびに描き直す。
+     */
+    private class BuildCount(val total: Int) {
+        private var done = 0
+        private val step = maxOf(1, total / 100)
+
+        fun next(): KnowledgeIndexProgress? {
+            done++
+            return if (done == total || done % step == 0) KnowledgeIndexProgress.Building(done, total) else null
+        }
     }
 
     private companion object {
