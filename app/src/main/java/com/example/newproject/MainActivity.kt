@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
                 val startNoteFromTab = rememberNoteStart(
                     bodyPosition,
                     (uiState.noteState as? NoteState.Success)?.targetUri,
+                    uiState.noteState is NoteState.Loading,
                     sectionModel,
                     noteImageMeasurements
                 ) { heading ->

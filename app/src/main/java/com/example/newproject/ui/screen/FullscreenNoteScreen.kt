@@ -175,7 +175,7 @@ internal fun FullscreenNoteScreen(
     // 本文のリンク（→ features/note_links.md）。**全画面は面が1つなので、リンク先は今のノートとして開く**（→ noteLinkActionFor）。
     val showNotice: (String) -> Unit = { text -> Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
     val currentNoteUri = (uiState.noteState as? NoteState.Success)?.targetUri
-    val startNote = rememberNoteStart(position, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+    val startNote = rememberNoteStart(position, currentNoteUri, uiState.noteState is NoteState.Loading, sectionModel, imageMeasurements) { heading ->
         showNotice(noteLinkHeadingMissingText(heading, opened = true))
     }
     val coroutineScope = rememberCoroutineScope()

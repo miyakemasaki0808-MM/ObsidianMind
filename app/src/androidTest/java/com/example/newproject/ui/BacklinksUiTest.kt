@@ -206,28 +206,58 @@ class BacklinksUiTest {
         composeRule.onNodeWithText("段落21 の本文です。").assertIsDisplayed()
     }
 
-    /** 今のノートとして開く本文（関連タブから）。開いた直後は解析が無く、届いてから2つ目の「まとめ」へ送る。 */
-    @Test
-    fun 今のノートとして開くと解析が届いてから同じ見出しの2つ目の節へ送る() {
-        var openedUri by mutableStateOf<String?>(null)
-        var model by mutableStateOf<NoteSectionModel?>(null)
-        var start: ((PendingNoteStart) -> Unit)? = null
+    private var openedUri by mutableStateOf<String?>(null)
+    private var noteLoading by mutableStateOf(false)
+    private var model by mutableStateOf<NoteSectionModel?>(null)
+    private var start: ((PendingNoteStart) -> Unit)? = null
+
+    private fun showMainBody() {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 val listState = rememberLazyListState()
                 val position = remember(listState) { BodyPosition(listState) }
-                start = rememberNoteStart(position, openedUri, model, imageMeasurements = null, onHeadingMissing = {})
+                start = rememberNoteStart(position, openedUri, noteLoading, model, imageMeasurements = null, onHeadingMissing = {})
                 Body(listState, model)
             }
         }
+    }
+
+    /** 今のノートとして開く本文（関連タブから）。開いた直後は解析が無く、届いてから2つ目の「まとめ」へ送る。 */
+    @Test
+    fun 今のノートとして開くと解析が届いてから同じ見出しの2つ目の節へ送る() {
+        showMainBody()
 
         composeRule.runOnIdle {
             checkNotNull(start)(PendingNoteStart(SOURCE.ref.value, block = 0, heading = "まとめ", headingOccurrence = 1))
+            noteLoading = true
+        }
+        composeRule.runOnIdle {
+            noteLoading = false
             openedUri = SOURCE.ref.value
         }
         composeRule.runOnIdle { model = buildNoteSectionModel(REPEATED_BODY) }
 
         composeRule.onNodeWithText("段落21 の本文です。").assertIsDisplayed()
+    }
+
+    /** 読み込みに失敗した依頼は捨てる。後で同じノートを先頭から開く経路で開いても、古い見出しへ送らない。 */
+    @Test
+    fun 読み込みに失敗した始まりは_同じノートをほかの経路で開いても効かない() {
+        showMainBody()
+
+        composeRule.runOnIdle {
+            checkNotNull(start)(PendingNoteStart(SOURCE.ref.value, block = 0, heading = "まとめ", headingOccurrence = 1))
+            noteLoading = true
+        }
+        composeRule.runOnIdle { noteLoading = false }
+        composeRule.runOnIdle { noteLoading = true }
+        composeRule.runOnIdle {
+            noteLoading = false
+            openedUri = SOURCE.ref.value
+        }
+        composeRule.runOnIdle { model = buildNoteSectionModel(REPEATED_BODY) }
+
+        composeRule.onNodeWithText("段落1 の本文です。").assertIsDisplayed()
     }
 
     @Composable

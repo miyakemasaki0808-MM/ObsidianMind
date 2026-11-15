@@ -368,7 +368,7 @@ internal fun NoteReaderTab(
         sideLinkStart = SideLinkStart(row.note.ref.value, row.sectionHeading, ++sideLinkCount, row.sectionHeadingOccurrence)
     }
     // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
-    val startNote = rememberNoteStart(bodyPosition, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+    val startNote = rememberNoteStart(bodyPosition, currentNoteUri, uiState.noteState is NoteState.Loading, sectionModel, imageMeasurements) { heading ->
         showNotice(noteLinkHeadingMissingText(heading, opened = true))
     }
     val moveToNote: (RelatedNote, Int) -> Unit = { note, block ->
