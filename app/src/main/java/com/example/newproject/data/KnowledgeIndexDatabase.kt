@@ -97,6 +97,18 @@ internal data class IndexedNoteStateRow(
     val fingerprint: String
 )
 
+/** 名前の鍵で引いたリンク（→ [KnowledgeIndexDao.linksNamed]）。 */
+internal data class BacklinkCandidateRow(
+    val sourcePath: String,
+    val ordinal: Int,
+    val kind: String,
+    val target: String,
+    val heading: String?,
+    val sectionHeading: String?,
+    val sectionHeadingOccurrence: Int,
+    val sentence: String
+)
+
 /**
  * 書き込みはどれも、索引の素性が受け取った Vault と同じときだけ行う。**照合と書き込みを1つのトランザクションに入れる** —
  * 分けると、照合の後に Vault を替えて索引を作り直した間に、旧い Vault の結果が入る。
@@ -120,6 +132,20 @@ internal abstract class KnowledgeIndexDao {
 
     @Query("SELECT * FROM indexed_link WHERE sourcePath = :path ORDER BY ordinal")
     abstract suspend fun linksOf(path: String): List<IndexedLinkEntity>
+
+    /** 名前の鍵（書かれたまま・復号した後のどちらか）が [key] のリンク。行き先はまだ解いていない（→ knowledge_index.md §6）。 */
+    @Query(
+        "SELECT sourcePath, ordinal, kind, target, heading, sectionHeading, sectionHeadingOccurrence, sentence " +
+            "FROM indexed_link WHERE nameKey = :key OR decodedNameKey = :key ORDER BY sourcePath, ordinal"
+    )
+    abstract suspend fun linksNamed(key: String): List<BacklinkCandidateRow>
+
+    /** 索引が [vaultKey] のものなら名前の鍵でリンクを引く。別の Vault の索引なら null。 */
+    @Transaction
+    open suspend fun linksNamedIn(vaultKey: String, key: String): List<BacklinkCandidateRow>? {
+        if (meta()?.vaultKey != vaultKey) return null
+        return linksNamed(key)
+    }
 
     @Upsert
     abstract suspend fun upsertMark(mark: RewriteMarkEntity)

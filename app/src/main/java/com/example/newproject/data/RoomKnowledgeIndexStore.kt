@@ -1,6 +1,8 @@
 package com.example.newproject.data
 
+import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
+import com.example.newproject.domain.IndexedLinkKind
 import com.example.newproject.domain.IndexedNoteState
 
 /**
@@ -51,6 +53,20 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
 
     override suspend fun markFirstBuildDone(vaultKey: String) =
         dao.markFirstBuildDone(vaultKey)
+
+    override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? =
+        dao.linksNamedIn(vaultKey, nameKey)?.map { row ->
+            BacklinkCandidate(
+                sourcePath = row.sourcePath,
+                ordinal = row.ordinal,
+                kind = IndexedLinkKind.valueOf(row.kind),
+                target = row.target,
+                heading = row.heading,
+                sectionHeading = row.sectionHeading,
+                sectionHeadingOccurrence = row.sectionHeadingOccurrence,
+                sentence = row.sentence
+            )
+        }
 }
 
 private fun IndexedLink.toEntity(sourcePath: String) = IndexedLinkEntity(

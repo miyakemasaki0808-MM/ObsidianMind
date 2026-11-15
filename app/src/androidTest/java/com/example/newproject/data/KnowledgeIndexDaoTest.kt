@@ -100,6 +100,17 @@ class KnowledgeIndexDaoTest {
     }
 
     @Test
+    fun 名前の鍵で書かれたままと復号した後のどちらかが合うリンクを引き別のVaultの索引ならnullを返す() = runBlocking<Unit> {
+        store.openVault(VAULT_A)
+        store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣").copy(keys = listOf("my%20note", "my note"))), writeNumberAtRead = null)
+        store.applyRead(VAULT_A, record("b.md"), listOf(link("別").copy(keys = listOf("別"))), writeNumberAtRead = null)
+
+        assertEquals(listOf("a.md"), store.backlinkCandidates(VAULT_A, "my note")!!.map { it.sourcePath })
+        assertEquals(listOf("a.md"), store.backlinkCandidates(VAULT_A, "my%20note")!!.map { it.sourcePath })
+        assertEquals(null, store.backlinkCandidates(VAULT_B, "my note"))
+    }
+
+    @Test
     fun 別のVaultに替えた後は旧いVaultの書き込みを受けない() = runBlocking<Unit> {
         store.openVault(VAULT_A)
         store.openVault(VAULT_B)

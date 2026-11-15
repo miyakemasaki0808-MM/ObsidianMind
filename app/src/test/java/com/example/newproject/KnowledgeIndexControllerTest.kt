@@ -4,6 +4,7 @@ import com.example.newproject.controller.KnowledgeIndexController
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
 import com.example.newproject.data.KnowledgeIndexStore
+import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
 import com.example.newproject.domain.mayApplyIndexedRead
@@ -655,6 +656,8 @@ class KnowledgeIndexControllerTest {
         override suspend fun markFirstBuildDone(vaultKey: String) {
             if (this.vaultKey == vaultKey) firstBuildDone = true
         }
+
+        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? = null
     }
 
     private companion object {

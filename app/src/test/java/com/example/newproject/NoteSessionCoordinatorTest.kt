@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
@@ -2623,5 +2624,6 @@ private class FakeHistoryStore : HistoryStore {
         override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) = Unit
         override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) = Unit
         override suspend fun markFirstBuildDone(vaultKey: String) = Unit
+        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? = null
     }
 }

@@ -1,5 +1,6 @@
 package com.example.newproject.data
 
+import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
 
@@ -46,6 +47,12 @@ internal interface KnowledgeIndexStore {
 
     /** 最初の作成を終えたと控える。 */
     suspend fun markFirstBuildDone(vaultKey: String)
+
+    /**
+     * 名前の鍵が [nameKey] のリンクを引く（→ docs/dev/features/backlinks.md §7）。行き先はまだ解いていない —
+     * 引く側が走査の索引で解き、今のノートへ着くものだけを残す。索引が別の Vault のものなら null。
+     */
+    suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>?
 }
 
 /**
