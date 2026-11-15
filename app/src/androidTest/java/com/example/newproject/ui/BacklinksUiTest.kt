@@ -128,6 +128,44 @@ class BacklinksUiTest {
         }
     }
 
+    // ── 節の開閉とノートの切り替え ─────────────────────────────────────
+
+    /**
+     * ノートの画面が組まれていない間（全画面）に A→B→A と移っても、戻ったときに畳まれている。画面の保存値から戻る順序を含める
+     * （本番はノートの画面が別の経路の間、その保存値を退避して戻す）。番号が同じまま戻ったら開いたまま。
+     */
+    @Test
+    fun ノートの画面が組まれていない間にノートが替わったら_戻ったときに節は畳まれている() {
+        var noteLoadId by mutableStateOf(1L)
+        var shown by mutableStateOf(true)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+                if (shown) holder.SaveableStateProvider("note") { ExpansionProbe(noteLoadId) }
+            }
+        }
+        composeRule.onNodeWithText("畳んでいる").performClick()
+        composeRule.onNodeWithText("開いている").assertIsDisplayed()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+        composeRule.onNodeWithText("開いている").assertIsDisplayed()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { noteLoadId = 2L }
+        composeRule.runOnIdle { noteLoadId = 3L }
+        composeRule.runOnIdle { shown = true }
+        composeRule.onNodeWithText("畳んでいる").assertIsDisplayed()
+    }
+
+    @Composable
+    private fun ExpansionProbe(noteLoadId: Long) {
+        val expansion = com.example.newproject.ui.screen.rememberBacklinksExpansion(noteLoadId)
+        androidx.compose.material3.TextButton(onClick = expansion.toggle) {
+            Text(if (expansion.expanded) "開いている" else "畳んでいる")
+        }
+    }
+
     // ── 関連タブ ──────────────────────────────────────────────────────
 
     @Test

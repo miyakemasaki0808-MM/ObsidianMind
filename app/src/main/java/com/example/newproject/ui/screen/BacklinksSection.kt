@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,12 +51,22 @@ internal fun backlinksSectionFor(state: BacklinksState, progress: KnowledgeIndex
 }
 
 /**
- * ノートが替わった後に、節を開いたままにするノート。**今のノートと違えば捨てる** — 開いたノートを覚えたままだと、
- * A で開いて B へ移り、A へ戻ったときに開いたまま出る（ノートを替えると畳んだ状態に戻る → features/backlinks.md §6）。
- * 同じノートのまま（右で開いて余白へ戻った・画面の作り直し）なら保つ。
+ * 節が開いているか。**開いたときのノートの表示の番号（`NoteUiState.noteLoadId`）が今と同じときだけ** —
+ * ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃す
+ * （ノートを替えると畳んだ状態に戻る → features/backlinks.md §6）。右で開いて余白へ戻る・画面の作り直しでは番号が変わらない。
  */
-internal fun backlinksExpandedAfter(expandedFor: String?, currentNoteUri: String?): String? =
-    expandedFor?.takeIf { it == currentNoteUri }
+internal fun backlinksExpanded(openedAt: Long?, noteLoadId: Long): Boolean = openedAt == noteLoadId
+
+/** ペインの節の開閉。 */
+internal class BacklinksExpansion(val expanded: Boolean, val toggle: () -> Unit)
+
+/** 開いたときのノートの表示の番号を、画面の保存値に置く（→ [backlinksExpanded]）。 */
+@Composable
+internal fun rememberBacklinksExpansion(noteLoadId: Long): BacklinksExpansion {
+    var openedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+    val expanded = backlinksExpanded(openedAt, noteLoadId)
+    return BacklinksExpansion(expanded) { openedAt = if (expanded) null else noteLoadId }
+}
 
 /** 進み具合の1行。読む予定の数がまだ分からない（最初の走査の前）なら数を出さない。 */
 internal fun backlinksProgressText(building: BacklinksSection.Building): String =

@@ -304,7 +304,7 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     }
 
     fun beginNoteLoad() {
-        mutableState.update { it.withNoteScopedReset().copy(noteState = NoteState.Loading) }
+        mutableState.update { it.withNoteScopedReset().copy(noteState = NoteState.Loading, noteLoadId = it.noteLoadId + 1) }
     }
 
     /**

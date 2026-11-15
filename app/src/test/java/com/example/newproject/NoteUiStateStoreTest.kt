@@ -107,4 +107,20 @@ class NoteUiStateStoreTest {
         assertEquals(NotePaperTone.Fresh, emissions.single().notePaperTone)
         collectJob.cancel()
     }
+
+    /** ノートを開くたびに表示の番号を進める。A→B→A でも番号が違うので、画面の一時的な状態（節の開閉）が前の表示のものだと見分けられる。 */
+    @Test
+    fun `ノートの読込を始めるたびに表示の番号が進み、本文の差し替えでは進まない`() {
+        val store = NoteUiStateStore()
+        store.beginNoteLoad()
+        store.setNoteState(NoteState.Success(title = "A", content = "本文", targetUri = "ref:A"))
+        val first = store.value.noteLoadId
+
+        store.applyReloadedBody("ref:A", NoteState.Success(title = "A", content = "太字の本文", targetUri = "ref:A"))
+        assertEquals("蒸留の差し替えは同じ表示", first, store.value.noteLoadId)
+
+        store.beginNoteLoad()
+        store.beginNoteLoad()
+        assertEquals(first + 2, store.value.noteLoadId)
+    }
 }

@@ -7,11 +7,13 @@ import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.ui.screen.BacklinksSection
 import com.example.newproject.ui.screen.backlinkOthersText
-import com.example.newproject.ui.screen.backlinksExpandedAfter
+import com.example.newproject.ui.screen.backlinksExpanded
 import com.example.newproject.ui.screen.backlinksProgressText
 import com.example.newproject.ui.screen.backlinksSectionFor
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 「このノートへのリンク」の節に何を出すか（→ features/backlinks.md §3・§5）。余白ペインと関連タブが同じ判定を使う。 */
@@ -57,13 +59,15 @@ class BacklinksSectionTest {
         assertEquals(BacklinksSection.Hidden, backlinksSectionFor(BacklinksState.Idle, failed))
     }
 
-    /** ノートを替えると畳んだ状態に戻る（→ features/backlinks.md §6）。開いたノートを覚えたままだと、A→B→A で開いたまま戻る。 */
+    /**
+     * ノートを替えると畳んだ状態に戻る（→ features/backlinks.md §6）。**開いたときのノートの表示の番号で比べる** —
+     * ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃す。
+     */
     @Test
-    fun `今のノートが開いたノートと違えば畳み、同じなら開いたままにする`() {
-        assertEquals("同じノートのまま（右で開いて戻った・画面の作り直し）", "ref:A", backlinksExpandedAfter("ref:A", currentNoteUri = "ref:A"))
-        assertNull("B へ移った", backlinksExpandedAfter("ref:A", currentNoteUri = "ref:B"))
-        assertNull("読み込み中", backlinksExpandedAfter("ref:A", currentNoteUri = null))
-        assertNull(backlinksExpandedAfter(null, currentNoteUri = "ref:A"))
+    fun `節は開いたときのノートの表示の番号が今と同じときだけ開いている`() {
+        assertTrue("同じ表示のまま（右で開いて戻った・画面の作り直し）", backlinksExpanded(openedAt = 3L, noteLoadId = 3L))
+        assertFalse("A→B→A で番号が進んだ", backlinksExpanded(openedAt = 3L, noteLoadId = 5L))
+        assertFalse(backlinksExpanded(openedAt = null, noteLoadId = 3L))
     }
 
     @Test

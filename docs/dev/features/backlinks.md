@@ -90,7 +90,9 @@
   **`cancelNoteScopedJobs()` と `withNoteScopedReset()` の両方へ登録してある**（→ [architecture](../system/architecture.md) 判断4 の1行目）
 - **Vault 単位の状態:** 索引の進み具合（`KnowledgeIndexProgress`）。こちらは索引を作る側が書く（→ [knowledge_index](../system/knowledge_index.md) §5）。
   節の出し方は2つを合わせて純関数 `backlinksSectionFor` が決める（数えられない → 作っている → 1件以上の行 → 出さない、の順）
-- **畳む・開くは覚えない。** 関連の一覧と同じく、ノートを替えると畳んだ状態に戻る
+- **畳む・開くは覚えない。** 関連の一覧と同じく、ノートを替えると畳んだ状態に戻る。
+  開いたときの**ノートの表示の番号**（`NoteUiState.noteLoadId`、ノートを開くたびに進む）を画面の保存値に持って比べる。
+  ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃すため
 - **永続化:** しない。索引は [knowledge_index](../system/knowledge_index.md) が持つ
 
 ## 7. システム設計
