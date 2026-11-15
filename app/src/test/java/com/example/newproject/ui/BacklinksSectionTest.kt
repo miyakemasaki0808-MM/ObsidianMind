@@ -7,6 +7,7 @@ import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.ui.screen.BacklinksSection
 import com.example.newproject.ui.screen.backlinkOthersText
+import com.example.newproject.ui.screen.backlinksExpandedAfter
 import com.example.newproject.ui.screen.backlinksProgressText
 import com.example.newproject.ui.screen.backlinksSectionFor
 import org.junit.Assert.assertEquals
@@ -54,6 +55,15 @@ class BacklinksSectionTest {
         assertEquals(BacklinksSection.Unavailable, backlinksSectionFor(BacklinksState.Ready(listOf(row)), failed))
         assertEquals(BacklinksSection.Unavailable, backlinksSectionFor(BacklinksState.Loading, failed))
         assertEquals(BacklinksSection.Hidden, backlinksSectionFor(BacklinksState.Idle, failed))
+    }
+
+    /** ノートを替えると畳んだ状態に戻る（→ features/backlinks.md §6）。開いたノートを覚えたままだと、A→B→A で開いたまま戻る。 */
+    @Test
+    fun `今のノートが開いたノートと違えば畳み、同じなら開いたままにする`() {
+        assertEquals("同じノートのまま（右で開いて戻った・画面の作り直し）", "ref:A", backlinksExpandedAfter("ref:A", currentNoteUri = "ref:A"))
+        assertNull("B へ移った", backlinksExpandedAfter("ref:A", currentNoteUri = "ref:B"))
+        assertNull("読み込み中", backlinksExpandedAfter("ref:A", currentNoteUri = null))
+        assertNull(backlinksExpandedAfter(null, currentNoteUri = "ref:A"))
     }
 
     @Test

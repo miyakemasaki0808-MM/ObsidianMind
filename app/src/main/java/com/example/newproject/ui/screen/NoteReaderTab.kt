@@ -325,8 +325,9 @@ internal fun NoteReaderTab(
         relatedList = paneRelatedListFor(relatedList, currentNoteUri, uiState.relatedNotesState)
     }
     val shownRelated = relatedList?.takeIf { it.owner == currentNoteUri }
-    // ペインの「このノートへのリンク」を開いているノート。**持ち主のノートを値として持つ** — ノートを替えると畳んだ状態に戻る。
+    // ペインの「このノートへのリンク」を開いているノート。**ノートが替わったら捨てる** — 持ち主と比べるだけだと A→B→A で開いたまま戻る。
     var backlinksExpandedFor by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(currentNoteUri) { backlinksExpandedFor = backlinksExpandedAfter(backlinksExpandedFor, currentNoteUri) }
     val backlinksSection = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
     // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
     var relatedReveal by remember { mutableStateOf<Long?>(null) }

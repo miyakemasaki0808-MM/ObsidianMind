@@ -46,6 +46,14 @@ internal fun backlinksSectionFor(state: BacklinksState, progress: KnowledgeIndex
     else -> BacklinksSection.Hidden
 }
 
+/**
+ * ノートが替わった後に、節を開いたままにするノート。**今のノートと違えば捨てる** — 開いたノートを覚えたままだと、
+ * A で開いて B へ移り、A へ戻ったときに開いたまま出る（ノートを替えると畳んだ状態に戻る → features/backlinks.md §6）。
+ * 同じノートのまま（右で開いて余白へ戻った・画面の作り直し）なら保つ。
+ */
+internal fun backlinksExpandedAfter(expandedFor: String?, currentNoteUri: String?): String? =
+    expandedFor?.takeIf { it == currentNoteUri }
+
 /** 進み具合の1行。読む予定の数がまだ分からない（最初の走査の前）なら数を出さない。 */
 internal fun backlinksProgressText(building: BacklinksSection.Building): String =
     if (building.total == 0) "索引を作っています" else "索引を作っています（${building.indexed} / ${building.total}）"
