@@ -231,7 +231,11 @@ internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String, occ
 /**
  * 見出しの照合の鍵。文字と数字だけを小文字で残す。**同じ見出しかの判定はどこでもこれで行う** —
  * 知識索引が「同じ見出しのうち何番目か」を数えるのも同じ鍵で、別の規則で数えると開く位置がずれる。
+ *
+ * **文字と数字が残らない見出し（記号・絵文字だけ）は、空白を除いた記号そのものを鍵にする。** 空にすると開く側が拒み、
+ * 違う記号の見出しどうしが同じ鍵になって番目の数え方も混ざる。空白だけの見出しは空のまま（どれにも当たらない）。
+ * 規則を変えたら知識索引の DB の版を上げる（索引が持つ番目を数え直すため）。
  */
-internal fun headingMatchKey(text: String): String = buildString {
-    text.lowercase().forEach { if (it.isLetterOrDigit()) append(it) }
-}
+internal fun headingMatchKey(text: String): String =
+    buildString { text.lowercase().forEach { if (it.isLetterOrDigit()) append(it) } }
+        .ifEmpty { text.filterNot { it.isWhitespace() } }

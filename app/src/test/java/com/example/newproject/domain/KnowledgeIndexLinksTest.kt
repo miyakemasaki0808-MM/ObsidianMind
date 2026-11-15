@@ -131,6 +131,17 @@ class KnowledgeIndexLinksTest {
         assertEquals("同じ見出しの2つ目", listOf(0, 0, 1), links.map { it.sectionHeadingOccurrence })
     }
 
+    /** 記号だけの見出しは記号ごとに数える。違う記号の見出しを同じ見出しとして数えると、開く側の番目とずれる。 */
+    @Test
+    fun `記号だけの見出しは記号ごとに何番目かを数える`() {
+        val content = listOf("## ★", "一つ目。", "## ☆", "別の節。", "## ★", "二つ目の [[C]]。").joinToString("\n")
+
+        val link = extractIndexedLinks(content).single()
+
+        assertEquals("★", link.sectionHeading)
+        assertEquals(1, link.sectionHeadingOccurrence)
+    }
+
     @Test
     fun `1つのノートから取るリンクの数に上限を置く`() {
         val content = (0 until KnowledgeIndexLimits.MAX_LINKS_PER_NOTE + 20).joinToString("\n\n") { "[[n$it]] を読む。" }

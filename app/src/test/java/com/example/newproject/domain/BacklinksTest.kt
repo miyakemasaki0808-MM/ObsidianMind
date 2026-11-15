@@ -113,6 +113,19 @@ class BacklinksTest {
         assertEquals(headings[1], opened)
     }
 
+    /** 記号だけの見出しでも、索引の番目で開くとリンクのある節へ着く（数える側と探す側が同じ鍵を使う）。 */
+    @Test
+    fun `記号だけの見出しの2つ目にあるリンクも、索引の番目で開くと2つ目の見出しへ着く`() {
+        val body = "冒頭。\n\n## ★\n\n本文。\n\n## ☆\n\n別の節。\n\n## ★\n\nここで [[習慣]] を書いた。\n"
+        val link = extractIndexedLinks(body).single()
+        val blocks = parseMarkdownBlocks(body)
+
+        val opened = headingBlockIndex(blocks, checkNotNull(link.sectionHeading), link.sectionHeadingOccurrence)
+
+        val stars = blocks.indices.filter { (blocks[it] as? MarkdownBlock.Heading)?.text == "★" }
+        assertEquals(stars[1], opened)
+    }
+
     @Test
     fun `パスで書いたリンクも出どころのフォルダから解く`() {
         val source = note("notes/sub/日記.md")
