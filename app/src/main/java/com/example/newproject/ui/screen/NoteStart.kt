@@ -26,6 +26,15 @@ internal fun openNoteFromTop(position: BodyPosition, open: () -> Unit) {
 }
 
 /**
+ * 別のノートを、[start] の位置から開く。**[openNoteFromTop] と対の境界**で、始まりを先頭ではなく見出しに置きたい経路が通る
+ * （関連タブのこのノートへのリンク）。[place] は [rememberNoteStart] が返す口で、解析が届いたら見出しへ送る。
+ */
+internal fun openNoteAt(start: PendingNoteStart, place: (PendingNoteStart) -> Unit, open: () -> Unit) {
+    open()
+    place(start)
+}
+
+/**
  * 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しを持つ。
  * [heading] があれば解析が届いた後にその見出しへ送り、見つからなければ [block] から始める。
  * [headingOccurrence] は同じ見出しのうち何番目か（→ [headingBlockIndex]）で、渡すのはこのノートへのリンクだけ。

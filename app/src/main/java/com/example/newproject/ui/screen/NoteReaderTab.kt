@@ -115,6 +115,7 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
+import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.note
 import com.example.newproject.domain.NoteLink
@@ -324,6 +325,9 @@ internal fun NoteReaderTab(
         relatedList = paneRelatedListFor(relatedList, currentNoteUri, uiState.relatedNotesState)
     }
     val shownRelated = relatedList?.takeIf { it.owner == currentNoteUri }
+    // ペインの「このノートへのリンク」を開いているノート。**持ち主のノートを値として持つ** — ノートを替えると畳んだ状態に戻る。
+    var backlinksExpandedFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val backlinksSection = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
     // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
     var relatedReveal by remember { mutableStateOf<Long?>(null) }
     var relatedRevealCount by remember { mutableLongStateOf(0L) }
@@ -357,6 +361,11 @@ internal fun NoteReaderTab(
     val openSideFromMargin: (RelatedNote) -> Unit = { note ->
         sideFromLink = false
         openSide(note)
+    }
+    // このノートへのリンクの行から右で開く。**入口は余白の一覧**（戻ると一覧まで送る）で、始まりはリンクのある節の見出し。
+    val openBacklinkFromMargin: (BacklinkRow) -> Unit = { row ->
+        openSideFromMargin(row.note)
+        sideLinkStart = SideLinkStart(row.note.ref.value, row.sectionHeading, ++sideLinkCount, row.sectionHeadingOccurrence)
     }
     // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
     val startNote = rememberNoteStart(bodyPosition, currentNoteUri, sectionModel, imageMeasurements) { heading ->
@@ -1129,7 +1138,15 @@ internal fun NoteReaderTab(
                                                     onOpen = openSideFromMargin,
                                                     reveal = relatedReveal,
                                                     onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) },
-                                                    rebuttal = uiState.rebuttalSentence
+                                                    rebuttal = uiState.rebuttalSentence,
+                                                    backlinks = PaneBacklinksInputs(
+                                                        section = backlinksSection,
+                                                        expanded = backlinksExpandedFor != null && backlinksExpandedFor == currentNoteUri,
+                                                        onToggle = {
+                                                            backlinksExpandedFor = if (backlinksExpandedFor == currentNoteUri) null else currentNoteUri
+                                                        },
+                                                        onOpen = openBacklinkFromMargin
+                                                    )
                                                 )
                                             )
                                         }

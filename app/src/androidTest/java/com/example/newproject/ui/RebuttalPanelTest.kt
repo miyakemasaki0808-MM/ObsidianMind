@@ -84,7 +84,8 @@ class RebuttalPanelTest {
                         relatedNotesState = RelatedNotesState.Success(relatedNotes = listOf(OTHER), aiNotes = emptyList()),
                         rebuttalSentence = rebuttal
                     ),
-                    onOpenNote = onOpenNote
+                    onOpenNote = onOpenNote,
+                    onOpenBacklink = {}
                 )
             }
         }

@@ -36,6 +36,7 @@ import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.RebuttalSentence
+import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.ui.theme.OnAccentSurface
 import com.example.newproject.ui.theme.Panel
 import com.example.newproject.ui.theme.AiHeading
@@ -62,7 +63,9 @@ import java.util.Locale
 @Composable
 fun RelatedTab(
     uiState: NoteUiState,
-    onOpenNote: (RelatedNote) -> Unit
+    onOpenNote: (RelatedNote) -> Unit,
+    /** このノートへのリンクの行を、今のノートとしてリンクのある節の見出しから開く（→ features/backlinks.md §3）。 */
+    onOpenBacklink: (BacklinkRow) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -95,6 +98,45 @@ fun RelatedTab(
             uiState.rebuttalSentence?.let { sentence ->
                 Spacer(modifier = Modifier.height(12.dp))
                 RebuttalPanel(sentence = sentence, onOpenSource = onOpenNote)
+            }
+            val backlinks = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
+            if (backlinks != BacklinksSection.Hidden) {
+                Spacer(modifier = Modifier.height(12.dp))
+                BacklinksPanel(section = backlinks, onOpen = onOpenBacklink)
+            }
+        }
+    }
+}
+
+/**
+ * 関連タブの「このノートへのリンク」（→ features/backlinks.md §3）。**畳まずに出す** — タブを開いた人は一覧を読みに来ている。
+ * 関連の一覧とは混ぜず、別の枠に置く。
+ */
+@Composable
+internal fun BacklinksPanel(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = PanelBlue,
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            val count = (section as? BacklinksSection.Rows)?.rows?.size
+            Text(
+                text = "$BACKLINKS_HEADING${count?.let { " ${it}件" }.orEmpty()}",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = AccentText,
+                modifier = Modifier.semantics { heading() }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            when (section) {
+                is BacklinksSection.Rows -> section.rows.forEachIndexed { index, row ->
+                    BacklinkItem(row = row, onClick = { onOpen(row) })
+                    if (index < section.rows.lastIndex) HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
+                }
+                is BacklinksSection.Building -> Text(backlinksProgressText(section), fontSize = 13.sp, color = OnSurfaceMuted)
+                BacklinksSection.Unavailable -> Text(BACKLINKS_UNAVAILABLE_TEXT, fontSize = 13.sp, color = OnSurfaceFaint)
+                BacklinksSection.Hidden -> Unit
             }
         }
     }

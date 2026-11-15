@@ -12,6 +12,7 @@ import org.junit.Test
  * 実際の一覧の位置で見る**ので、ここは配線だけを見る（`MainActivity` のルートは素のJVMから組み立てられない）。
  *
  * ノートタブの本文リンクと「このノートへ移る」は、始まりの位置を `rememberNoteStart` が置くので対象にしない。
+ * 関連タブのこのノートへのリンクは、見出しから始める対の境界（`openNoteAt`）を通る。どちらかを通っていれば始まりの位置が置かれる。
  * 冊子は `BookletRouteContractTest` が見る。
  *
  * 正本は [features/rediscover.md](../../../../../../../../docs/dev/features/rediscover.md) §5。
@@ -36,14 +37,14 @@ class NoteOpenRouteContractTest {
         assertAllThroughBoundary(vaultPickerResult(), listOf("viewModel.loadRandomNote("))
     }
 
-    /** ノートを開く呼び出しが1つ以上あり、**どれも境界と同じ行にある**こと。 */
+    /** ノートを開く呼び出しが1つ以上あり、**どれも境界（先頭から・置いた始まりから）と同じ行にある**こと。 */
     private fun assertAllThroughBoundary(route: Pair<String, String>, calls: List<String>) {
         val (name, body) = route
         val lines = body.lines().filter { line -> calls.any { it in line } }
         assertTrue("$name ルートにノートを開く呼び出しが見つかりません", lines.isNotEmpty())
-        val bare = lines.filterNot { "openNoteFromTop(" in it }
+        val bare = lines.filterNot { "openNoteFromTop(" in it || "openNoteAt(" in it }
         assertTrue(
-            "$name ルートが openNoteFromTop を通さずにノートを開いています:\n${bare.joinToString("\n") { it.trim() }}",
+            "$name ルートが openNoteFromTop・openNoteAt を通さずにノートを開いています:\n${bare.joinToString("\n") { it.trim() }}",
             bare.isEmpty()
         )
     }
