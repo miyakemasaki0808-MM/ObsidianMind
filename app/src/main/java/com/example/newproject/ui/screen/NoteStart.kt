@@ -28,9 +28,15 @@ internal fun openNoteFromTop(position: BodyPosition, open: () -> Unit) {
 /**
  * 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しを持つ。
  * [heading] があれば解析が届いた後にその見出しへ送り、見つからなければ [block] から始める。
+ * [headingOccurrence] は同じ見出しのうち何番目か（→ [headingBlockIndex]）で、渡すのはこのノートへのリンクだけ。
  * **画面の保存値に置く**（Fold の開閉で画面が作り直されても失わない）。
  */
-internal data class PendingNoteStart(val noteUri: String, val block: Int, val heading: String? = null) : Serializable
+internal data class PendingNoteStart(
+    val noteUri: String,
+    val block: Int,
+    val heading: String? = null,
+    val headingOccurrence: Int = 0
+) : Serializable
 
 /**
  * ノートを開くときに始まりの位置を置く口を返す。呼ぶのはノートを開いた直後。
@@ -52,7 +58,7 @@ internal fun rememberNoteStart(
         val start = pending ?: return@LaunchedEffect
         val opened = currentNoteUri ?: return@LaunchedEffect
         if (opened == start.noteUri && sectionModel != null) {
-            val (block, headingMissing) = noteStartBlock(sectionModel.blocks, start.heading, fallback = start.block)
+            val (block, headingMissing) = noteStartBlock(sectionModel.blocks, start.heading, fallback = start.block, start.headingOccurrence)
             if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
             // 読書の記録は最も深い位置しか残さないので、手前で1度報告されても、置き直した位置からの報告で上書きされる。
             if (position.listState.firstVisibleItemIndex != block) position.moveTo(block)
@@ -71,11 +77,11 @@ internal fun rememberNoteStart(
 internal data class NoteStartBlock(val block: Int, val headingMissing: Boolean)
 
 /**
- * 開いたノートを始めるブロック。見出しがあればその見出し、**見出しが無いか見つからなければ [fallback]**
- * （リンクなら先頭、「このノートへ移る」なら右で読んでいたブロック）。
+ * 開いたノートを始めるブロック。見出しがあればその見出し（同じ見出しなら [occurrence] 番目、無ければ最初のもの）、
+ * **見出しが無いか見つからなければ [fallback]**（リンクなら先頭、「このノートへ移る」なら右で読んでいたブロック）。
  */
-internal fun noteStartBlock(blocks: List<MarkdownBlock>, heading: String?, fallback: Int): NoteStartBlock {
-    val found = heading?.let { headingBlockIndex(blocks, it) }
+internal fun noteStartBlock(blocks: List<MarkdownBlock>, heading: String?, fallback: Int, occurrence: Int = 0): NoteStartBlock {
+    val found = heading?.let { headingBlockIndex(blocks, it, occurrence) }
     return NoteStartBlock(block = found ?: fallback, headingMissing = heading != null && found == null)
 }
 
@@ -90,8 +96,13 @@ internal fun currentNoteScrollTarget(blocks: List<MarkdownBlock>?, heading: Stri
 }
 
 /**
- * 本文のリンクから補助の面で開いたノートと、その見出し（→ features/note_links.md §4）。
+ * 補助の面で開いたノートと、その見出し（→ features/note_links.md §4）。本文のリンクと、このノートへのリンクの行から開く。
  * [request] は押すたびに増える番号で、同じリンクを押し直したときにも見出しへ送り直すために使う。
- * 「← 余白へ戻る」は、これが今右にあるノートを指していれば、関連の一覧まで面を送らない。
+ * [headingOccurrence] は同じ見出しのうち何番目かで、渡すのはこのノートへのリンクだけ（→ [PendingNoteStart]）。
  */
-internal data class SideLinkStart(val noteUri: String, val heading: String?, val request: Long) : Serializable
+internal data class SideLinkStart(
+    val noteUri: String,
+    val heading: String?,
+    val request: Long,
+    val headingOccurrence: Int = 0
+) : Serializable

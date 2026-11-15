@@ -253,6 +253,14 @@ class NoteLinksTest {
         assertEquals(4, headingBlockIndex(blocks, "重複"))
     }
 
+    /** このノートへのリンクは、リンクのある節の見出しが何番目かを持つ（→ features/backlinks.md §5）。本文のリンクは渡さない。 */
+    @Test
+    fun `番目を渡せば同じ見出しのその番目を指し、その番目が無ければ最初のものに戻る`() {
+        assertEquals(5, headingBlockIndex(blocks, "重複", occurrence = 1))
+        assertEquals("本文が変わって番目が無い", 4, headingBlockIndex(blocks, "重複", occurrence = 2))
+        assertNull("見出しそのものが無ければ当たらない", headingBlockIndex(blocks, "無い見出し", occurrence = 1))
+    }
+
     @Test
     fun `無い見出しと文字の残らない見出しは当たらない`() {
         assertNull(headingBlockIndex(blocks, "無い見出し"))

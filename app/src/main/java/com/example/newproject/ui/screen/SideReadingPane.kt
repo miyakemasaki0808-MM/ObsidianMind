@@ -92,7 +92,7 @@ internal fun SideReadingPane(
         if (!ready || start.request == handledLinkRequest) return@LaunchedEffect
         currentOnLinkRequestHandled(start.request)
         // **見出しが無くても見つからなくても先頭へ送る。** 同じノートを開き直したときは、位置がノートごとに残っている。
-        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0)
+        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0, start.headingOccurrence)
         listState.scrollToItem(block)
         if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
     }

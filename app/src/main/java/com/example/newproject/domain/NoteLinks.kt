@@ -215,15 +215,17 @@ private fun labelOf(link: NoteLink): String = when (link) {
 }
 
 /**
- * [heading] の見出しのブロック番号。無ければ null。同じ見出しが複数あれば最初のもの。
+ * [heading] の見出しのブロック番号。無ければ null。同じ見出しが複数あれば [occurrence] 番目（0 から）、
+ * その番目が無ければ最初のもの（→ features/backlinks.md §5。本文のリンクは番目を渡さない）。
  *
  * **文字と数字だけを残して比べる**（→ note_links §5）。Obsidian の見出しリンクは見出しをそのまま書き、
  * GitHub 形式のアンカーは記号を落として空白を `-` にする。どちらも残る文字と数字は見出しと同じになる。
  */
-internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String): Int? {
+internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String, occurrence: Int = 0): Int? {
     val key = headingMatchKey(heading)
     if (key.isEmpty()) return null
-    return blocks.indexOfFirst { it is MarkdownBlock.Heading && headingMatchKey(it.text) == key }.takeIf { it >= 0 }
+    val matches = blocks.indices.filter { (blocks[it] as? MarkdownBlock.Heading)?.let { found -> headingMatchKey(found.text) == key } == true }
+    return matches.getOrNull(occurrence) ?: matches.firstOrNull()
 }
 
 /**

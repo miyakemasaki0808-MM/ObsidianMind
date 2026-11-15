@@ -133,6 +133,22 @@ class NoteLinkActionsTest {
         assertEquals(NoteStartBlock(7, headingMissing = false), noteStartBlock(blocks, null, fallback = 7))
     }
 
+    /** このノートへのリンクから開くとき（→ features/backlinks.md §5）。番目が無ければ同じ見出しの最初、見出しも無ければ決めた位置。 */
+    @Test
+    fun `同じ見出しの2つ目から開き、本文が変わって番目が無ければ最初の見出しから開く`() {
+        val repeated = listOf(
+            MarkdownBlock.Paragraph("冒頭"),
+            MarkdownBlock.Heading(2, "まとめ"),
+            MarkdownBlock.Paragraph("一つ目"),
+            MarkdownBlock.Heading(2, "まとめ"),
+            MarkdownBlock.Paragraph("二つ目")
+        )
+        assertEquals(NoteStartBlock(3, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0, occurrence = 1))
+        assertEquals(NoteStartBlock(1, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0, occurrence = 3))
+        assertEquals(NoteStartBlock(0, headingMissing = true), noteStartBlock(repeated, "消えた節", fallback = 0, occurrence = 1))
+        assertEquals("本文のリンクは番目を渡さず、最初の見出しから", NoteStartBlock(1, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0))
+    }
+
     @Test
     fun `見出しが見つからないときと解析が届く前は送らない`() {
         assertNull(currentNoteScrollTarget(blocks, "無い"))

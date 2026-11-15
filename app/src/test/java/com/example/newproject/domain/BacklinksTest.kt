@@ -1,5 +1,7 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
 import org.junit.Assert.assertEquals
@@ -93,6 +95,22 @@ class BacklinksTest {
         )
 
         assertEquals(emptyList<String>(), rows.map { it.note.title })
+    }
+
+    /**
+     * 索引が数えた「同じ見出しのうち何番目か」で開くと、リンクのある節の見出しへ着く。
+     * 数え方（取り出し側）と探し方（開く側）が別の規則になると、開く位置がずれる。
+     */
+    @Test
+    fun `同じ見出しの2つ目にだけあるリンクは、索引の番目で開くと2つ目の見出しへ着く`() {
+        val body = "## まとめ\n\n一つ目。\n\n## まとめ\n\n二つ目で [[習慣]] を書いた。\n"
+        val link = extractIndexedLinks(body).single()
+        val blocks = parseMarkdownBlocks(body)
+
+        val opened = headingBlockIndex(blocks, checkNotNull(link.sectionHeading), link.sectionHeadingOccurrence)
+
+        val headings = blocks.indices.filter { blocks[it] is MarkdownBlock.Heading }
+        assertEquals(headings[1], opened)
     }
 
     @Test
