@@ -1,6 +1,7 @@
 package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
@@ -18,6 +19,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -159,7 +161,7 @@ class SpreadInterleavingTest {
     fun 組版の途中に外から送ってカードを畳んでも_送り先の見開きを畳んだ高さで出す() {
         card = true
         startHeldAfterFirstSpread("A")
-        composeRule.onNodeWithTag(CARD).assertIsDisplayed()
+        composeRule.onNodeWithTag(CARD).assertIsDisplayed().assertHeightIsEqualTo(120.dp)
 
         val mark = composeRule.runOnIdle {
             position.moveTo(120)
@@ -367,7 +369,8 @@ class SpreadInterleavingTest {
                                 onReadingProgress = { block, _, total, _ -> reports += Report(block, total) },
                                 pageWidth = pageWidth,
                                 gutter = 16.dp,
-                                leftPageTop = if (card) ({ Box(modifier = Modifier.height(120.dp).testTag(CARD)) }) else null,
+                                // 中身の無い Box は幅の最小0で測られ、表示の確認で落ちる。本物のカードと同じくページの幅に広げる。
+                                leftPageTop = if (card) ({ Box(modifier = Modifier.fillMaxWidth().height(120.dp).testTag(CARD)) }) else null,
                                 measureGate = hold::gate
                             )
                         }
