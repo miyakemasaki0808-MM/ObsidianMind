@@ -4,6 +4,8 @@ import com.example.newproject.ui.AppScaffold
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.QuoteSelection
+import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.rememberEndSpace
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import com.example.newproject.ui.markdown.SkippedImageMeasurement
@@ -141,6 +143,7 @@ internal fun FullscreenNoteScreen(
         tabListState.firstVisibleItemIndex,
         tabListState.firstVisibleItemScrollOffset
     )
+    val endSpace = rememberCarriedEndSpace(tabPosition, listState)
     // 閉じ始めた。**閉じる遷移の間もこの画面は組まれている**ので、ここからはシートを出さず、フォーカスも取りにいかない。
     // 取りにいくと戻った先の面とフォーカスを奪い合い、外れたことを「書くのをやめた」と読んでしまう。
     var leaving by remember { mutableStateOf(false) }
@@ -155,7 +158,7 @@ internal fun FullscreenNoteScreen(
         // 無反応で全画面を解除できなくなった。非suspendの requestScrollToItem で保留位置を
         // 積むだけにし、書き戻しをベストエフォート化して閉じる導線から切り離す
         // （pop でルートが破棄されてもキャンセルの影響を受けない）。
-        tabPosition.moveTo(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        tabPosition.takeOver(listState, endSpace)
         action()
     }
     // システムバックでもスクロール位置を書き戻してから閉じる。シートが出ている間はシートの側が先に受ける。
@@ -169,7 +172,7 @@ internal fun FullscreenNoteScreen(
 
     // 面の節は全画面の本文についていく。通常画面と同じ規則で作る。
     // 全画面の一覧は全画面だけのもの。口も全画面の中で作る。
-    val position = remember(listState) { BodyPosition(listState) }
+    val position = remember(listState) { BodyPosition(listState, endSpace) }
     val face = rememberMarginFaceInputs(sectionModel, position, uiState.marginMemoState, imageMeasurements)
 
     // 本文のリンク（→ features/note_links.md）。**全画面は面が1つなので、リンク先は今のノートとして開く**（→ noteLinkActionFor）。
@@ -341,3 +344,11 @@ internal fun Context.findActivity(): Activity? {
     }
     return null
 }
+
+/**
+ * 全画面の一覧の末尾の余白。**通常の画面の位置を成り立たせていた余白を引き継ぐ** — 位置だけを引き継ぐと末尾の上限で前の節が戻る。
+ * 窓が違うので、見出しを置いていたなら全画面で置き直す（→ [EndSpace.restore]）。戻るときは [BodyPosition.takeOver] で返す。
+ */
+@Composable
+internal fun rememberCarriedEndSpace(from: BodyPosition, listState: LazyListState): EndSpace =
+    rememberEndSpace(listState) { EndSpace().apply { restore(from.endSpace.snapshot(from.listState)) } }

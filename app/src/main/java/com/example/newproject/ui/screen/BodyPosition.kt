@@ -6,6 +6,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.EndSpaceSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -20,15 +21,18 @@ import kotlin.random.Random
  * - アニメーションで送る口（[animateTo]）の Job は1本だけ持ち、次の書き込みで取り消す。遅れて終わった送りが新しい位置を上書きしない
  * - [port] はこの口を見分ける値。Activity を作り直すと口も作り直され、番号は [FIRST_BODY_REQUEST] から数え直す
  * - 見出しへ送るときは [placeAtTop] を使う。末尾に近い見出しでも上端に置けるよう、[endSpace] に末尾の余白を足す。
- *   余白は次の書き込み（[moveTo]）で消すので、ほかのノートや先頭からの読み直しには残らない
+ *   余白は次の書き込み（[moveTo]）で消すので、ほかのノートや先頭からの読み直しには残らない。
+ *   **[endSpace] は画面の保存値に置いたものを渡す**（→ rememberEndSpace）。別の一覧（全画面）から戻るときは [takeOver] で余白ごと引き継ぐ
  */
 @Stable
-internal class BodyPosition(val listState: LazyListState, val port: Long = Random.nextLong()) {
+internal class BodyPosition(
+    val listState: LazyListState,
+    /** 見出しを上端に置くための本文の末尾の余白。本文の一覧へ渡す（→ [EndSpace]）。 */
+    val endSpace: EndSpace = EndSpace(),
+    val port: Long = Random.nextLong()
+) {
     private val requests = BodyPositionRequests(listState.firstVisibleItemIndex)
     private var animation: Job? = null
-
-    /** 見出しを上端に置くための本文の末尾の余白。本文の一覧へ渡す（→ [EndSpace]）。 */
-    val endSpace = EndSpace()
 
     /** 最後の書き込み。見開きはこの番号が進んだのを見て、外からの送りなら読む位置を替える。 */
     val lastRequest: BodyPositionRequest get() = requests.last
@@ -45,6 +49,18 @@ internal class BodyPosition(val listState: LazyListState, val port: Long = Rando
         moveTo(block)
         endSpace.want(block)
     }
+
+    /** 別の一覧（全画面）で読んでいた位置を、その位置を成り立たせていた余白ごと引き継ぐ（→ [EndSpace.restore]）。 */
+    fun takeOver(block: Int, offset: Int, space: EndSpaceSnapshot) {
+        cancelAnimation()
+        endSpace.restore(space)
+        listState.requestScrollToItem(block, offset)
+        requests.record(block, BodyPositionSource.External)
+    }
+
+    /** [from] の一覧（全画面）の今の位置と、その一覧の余白 [space] を引き継ぐ。 */
+    fun takeOver(from: LazyListState, space: EndSpace) =
+        takeOver(from.firstVisibleItemIndex, from.firstVisibleItemScrollOffset, space.snapshot(from))
 
     /** 縦の流しで、アニメーションで送る。**一覧が組まれていないとき（見開きの間）は [moveTo] を使う** — 初回の配置を待って終わらない。 */
     fun animateTo(scope: CoroutineScope, block: Int) {

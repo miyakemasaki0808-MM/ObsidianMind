@@ -1,6 +1,8 @@
 package com.example.newproject.ui
 
+import com.example.newproject.ui.markdown.EndSpaceSnapshot
 import com.example.newproject.ui.markdown.endSpaceShortfall
+import com.example.newproject.ui.markdown.endSpaceSnapshot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -36,5 +38,46 @@ class EndSpaceTest {
     fun `今の余白で組まれた配置でなければ_まだ決めない`() {
         assertNull(endSpaceShortfall(targetOffset = 180, canScrollForward = false, paddingApplied = false))
         assertNull(endSpaceShortfall(targetOffset = 0, canScrollForward = false, paddingApplied = false))
+    }
+
+    // ── 保存値と全画面へ運ぶ形 ──────────────────────────────────────
+
+    /** 置いている途中なら、一覧がまだ末尾で止まっていても置き直す。 */
+    @Test
+    fun `置いている途中なら置き直す`() {
+        assertEquals(
+            EndSpaceSnapshot(bottomPx = 240, block = 20, replace = true),
+            endSpaceSnapshot(bottomPx = 240, placedBlock = 20, placing = true, firstIndex = 17, firstOffset = 30)
+        )
+    }
+
+    /** 置き終えた後でも、一覧がそのブロックの上端にいれば置き直す（窓が変われば足りない分を足す）。 */
+    @Test
+    fun `そのブロックの上端にいれば置き直す`() {
+        assertEquals(
+            EndSpaceSnapshot(bottomPx = 240, block = 20, replace = true),
+            endSpaceSnapshot(bottomPx = 240, placedBlock = 20, placing = false, firstIndex = 20, firstOffset = 0)
+        )
+    }
+
+    /** 利用者が自分で送った後は、その位置を余白ごと戻すだけで、見出しへ引き戻さない。 */
+    @Test
+    fun `利用者が自分で送った後は余白だけを運ぶ`() {
+        assertEquals(
+            EndSpaceSnapshot(bottomPx = 240, block = 20, replace = false),
+            endSpaceSnapshot(bottomPx = 240, placedBlock = 20, placing = false, firstIndex = 20, firstOffset = 50)
+        )
+        assertEquals(
+            EndSpaceSnapshot(bottomPx = 240, block = 20, replace = false),
+            endSpaceSnapshot(bottomPx = 240, placedBlock = 20, placing = false, firstIndex = 12, firstOffset = 0)
+        )
+    }
+
+    @Test
+    fun `置いたブロックが無ければ置き直さない`() {
+        assertEquals(
+            EndSpaceSnapshot(bottomPx = 0, block = null, replace = false),
+            endSpaceSnapshot(bottomPx = 0, placedBlock = null, placing = false, firstIndex = 0, firstOffset = 0)
+        )
     }
 }

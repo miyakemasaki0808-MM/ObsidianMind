@@ -13,6 +13,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -26,10 +27,12 @@ import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageContent
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.markdown.NoteImageMeasurement
+import com.example.newproject.ui.markdown.rememberEndSpace
 import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.PendingNoteStart
 import com.example.newproject.ui.screen.SideLinkStart
 import com.example.newproject.ui.screen.SideReadingPane
+import com.example.newproject.ui.screen.rememberCarriedEndSpace
 import com.example.newproject.ui.screen.rememberNoteStart
 import com.example.newproject.ui.theme.AppTheme
 import kotlinx.coroutines.CompletableDeferred
@@ -44,7 +47,7 @@ import org.junit.runner.RunWith
 
 /**
  * 末尾に近い見出しを本文の最初の行に置く余白（→ docs/dev/features/note_links.md 判断6）が、
- * 後から決まる画像の寸法・右の送り直しで崩れないこと。
+ * 画面の作り直し・全画面との往復・後から決まる画像の寸法・右の送り直しで崩れないこと。
  */
 @RunWith(AndroidJUnit4::class)
 class EndSpaceUiTest {
@@ -62,9 +65,9 @@ class EndSpaceUiTest {
     @androidx.compose.runtime.Composable
     private fun SidePane(body: String, loader: NoteImageLoader? = null) {
         var handled by rememberSaveable { mutableLongStateOf(0L) }
-        // 本番（NoteReaderTab）と同じく、位置と余白を右のノートごとに持つ。
+        // 本番（NoteReaderTab）と同じく、位置と余白を右のノートごとに画面の保存値へ置く。
         sideList = rememberSaveable(SOURCE.ref.value, saver = LazyListState.Saver) { LazyListState() }
-        sideSpace = remember(SOURCE.ref.value) { EndSpace() }
+        sideSpace = rememberEndSpace(sideList, SOURCE.ref.value)
         scope = rememberCoroutineScope()
         Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
             SideReadingPane(
@@ -102,6 +105,26 @@ class EndSpaceUiTest {
         assertAtTopWithoutSpace(sideList, sideSpace)
     }
 
+    /** 右で見出しを置いた後に利用者が少し戻って読んでいたら、画面を作り直しても、余白で成り立っていたその位置を保つ。 */
+    @Test
+    fun 右で読んでいた位置は画面を作り直しても余白ごと戻る() {
+        sideStart = SideLinkStart(SOURCE.ref.value, "まとめ", request = 1L, headingOccurrence = 1)
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent { AppTheme(darkTheme = false) { SidePane(SHORT_TAIL_BODY) } }
+        assertAtHeading(sideList)
+
+        composeRule.runOnIdle { scope.launch { sideList.scrollBy(-80f) } }
+        composeRule.waitForIdle()
+        val before = composeRule.runOnIdle { sideList.firstVisibleItemIndex to sideList.firstVisibleItemScrollOffset }
+        check(before != (SHORT_TAIL_HEADING to 0)) { "前提: 利用者が見出しから離れている" }
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        composeRule.runOnIdle {
+            assertEquals(before, sideList.firstVisibleItemIndex to sideList.firstVisibleItemScrollOffset)
+        }
+    }
+
     /** 見出しの後ろの画像が測る前は画面の高さを仮に取る。測って本文が縮んでも、右の見出しは上端のまま。 */
     @Test
     fun 右で置いた後に画像の寸法が決まって縮んでも見出しは上端のまま() {
@@ -126,7 +149,9 @@ class EndSpaceUiTest {
     @androidx.compose.runtime.Composable
     private fun MainBody(loader: NoteImageLoader? = null, showBody: Boolean = true) {
         val listState = rememberLazyListState()
-        position = remember(listState) { BodyPosition(listState) }
+        // 本番（MainActivity）と同じく、余白を画面の保存値に置いて位置の口へ渡す。
+        val space = rememberEndSpace(listState)
+        position = remember(listState) { BodyPosition(listState, space) }
         scope = rememberCoroutineScope()
         val model = remember(noteBody) { noteBody?.let(::buildNoteSectionModel) }
         start = rememberNoteStart(position, openedUri, noteLoading = false, model, imageMeasurements = null, onHeadingMissing = {})
@@ -146,6 +171,19 @@ class EndSpaceUiTest {
         composeRule.runOnIdle { checkNotNull(start)(PendingNoteStart(SOURCE.ref.value, block = 0, heading = "まとめ", headingOccurrence = 1)) }
         composeRule.runOnIdle { openedUri = SOURCE.ref.value }
         composeRule.runOnIdle { noteBody = body }
+    }
+
+    /** 今のノートで見出しを置いた後に画面を作り直しても、見出しは上端のまま。 */
+    @Test
+    fun 今のノートで置いた見出しは画面を作り直しても上端のまま() {
+        val restoration = StateRestorationTester(composeRule)
+        restoration.setContent { AppTheme(darkTheme = false) { MainBody() } }
+        openMainAtHeading(SHORT_TAIL_BODY)
+        assertAtHeading(position.listState)
+
+        restoration.emulateSavedInstanceStateRestore()
+
+        assertAtHeading(position.listState)
     }
 
     /** 今のノートで置いた後に画像の寸法が決まって縮んでも、見出しは上端のまま。 */
@@ -181,6 +219,51 @@ class EndSpaceUiTest {
                 list.firstVisibleItemIndex == SHORT_TAIL_HEADING && list.firstVisibleItemScrollOffset == 0
             )
         }
+    }
+
+    // ── 全画面との往復 ──────────────────────────────────────────────
+
+    private var fullscreen by mutableStateOf(false)
+    private lateinit var fullscreenList: LazyListState
+    private lateinit var fullscreenSpace: EndSpace
+
+    /**
+     * 通常→全画面→通常の往復でも見出しは上端のまま。全画面は窓が高いので、運んだ余白だけでは足りず、全画面で置き直す。
+     * 戻るときは全画面の位置と余白を通常へ返す。
+     */
+    @Test
+    fun 全画面との往復でも見出しは上端のまま() {
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                MainBody(showBody = !fullscreen)
+                if (fullscreen) {
+                    // 本番（FullscreenNoteScreen）と同じく、通常の位置から始め、余白を運ぶ。
+                    val tab = position.listState
+                    fullscreenList = rememberLazyListState(tab.firstVisibleItemIndex, tab.firstVisibleItemScrollOffset)
+                    fullscreenSpace = rememberCarriedEndSpace(position, fullscreenList)
+                    Box(modifier = Modifier.requiredSize(width = 400.dp, height = 800.dp)) {
+                        MarkdownNoteContent(
+                            content = "",
+                            listState = fullscreenList,
+                            precomputedBlocks = buildNoteSectionModel(SHORT_TAIL_BODY).blocks,
+                            endSpace = fullscreenSpace
+                        )
+                    }
+                }
+            }
+        }
+        openMainAtHeading(SHORT_TAIL_BODY)
+        assertAtHeading(position.listState)
+
+        composeRule.runOnIdle { fullscreen = true }
+        composeRule.waitForIdle()
+        assertAtHeading(fullscreenList)
+
+        composeRule.runOnIdle {
+            position.takeOver(fullscreenList, fullscreenSpace)
+            fullscreen = false
+        }
+        assertAtHeading(position.listState)
     }
 
     // ── 確かめ方 ──────────────────────────────────────────────────

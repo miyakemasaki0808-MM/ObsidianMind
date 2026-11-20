@@ -2,8 +2,8 @@
 
 **状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった範囲は §10）。末尾に近い見出しも本文の最初の行に置く変更（2026-11-21 → 判断6）は実機未確認
 **最終検証:** 2026-10-10 / `b17fe669`
-**関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/markdown/EndSpace.kt`・`ui/screen/BodyPosition.kt`（`placeAtTop`） / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
-**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `EndSpaceTest` / androidTest: `NoteLinkTapUiTest`・`BacklinksUiTest`（末尾に近い見出し）
+**関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/markdown/EndSpace.kt`・`ui/screen/BodyPosition.kt`（`placeAtTop`・`takeOver`）・`ui/screen/FullscreenNoteScreen.kt`（`rememberCarriedEndSpace`） / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
+**関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `EndSpaceTest` / androidTest: `NoteLinkTapUiTest`・`BacklinksUiTest`・`EndSpaceUiTest`（末尾に近い見出し）
 **正本:** この文書
 
 **関連:** [Markdown解析](../system/markdown_rendering.md)（描画とインライン記法の解釈器）・
@@ -125,8 +125,10 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
   **読み込みが終わったのに本文が無い（失敗した）か、別のノートが開いたら依頼を捨てる**（`noteStartStep`）。残すと、同じノートを後で別の経路から開いたときに古い見出しへ送る
 - **依頼は、同じ見出しのうち何番目かを任意で持つ。** 本文のリンクは渡さないので、今どおり最初の見出しから開く。
   渡すのはこのノートへのリンク（[backlinks](backlinks.md) §5）だけで、その番目が無ければ同じ見出しの最初のもの、それも無ければ冒頭（右で開くときも同じ）
-- **末尾の余白は、本文の位置と同じ持ち主が持つ**（`EndSpace`）。今のノートは `BodyPosition`（全画面は全画面の口）、右の面は右のノートごとに位置と並べて持つ。
-  見出しへ送るとき（`BodyPosition.placeAtTop`・右の面のリンクの始まり）だけ足し、`BodyPosition.moveTo` のほかの書き込みで消す（→ 判断6）
+- **末尾の余白は、本文の位置と同じ持ち主が持ち、位置と一緒に画面の保存値に置く**（`EndSpace`・`rememberEndSpace`）。今のノートは `BodyPosition`（全画面は全画面の口）、右の面は右のノートごとに位置と並べて持つ。
+  見出しへ送るとき（`BodyPosition.placeAtTop`・右の面の `placeBlockAtTop`）だけ足し、ほかの送り（`BodyPosition.moveTo`、右の面の明示の送り）で消す（→ 判断6）。
+  **位置だけが戻ると、末尾の上限で前の節が戻る。** 画面を作り直したら余白も戻し、見出しを置いたままなら置き直す（窓の寸法が変われば足りない分を足す）。
+  全画面へは余白を運び（`rememberCarriedEndSpace`）、戻るときは位置と余白を返す（`BodyPosition.takeOver`）
 
 ## 7. システム設計
 
@@ -187,6 +189,8 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
 本文の一覧は末尾より先へ送れないので、見出しから後ろが画面より短いと、見出しは画面に出ても上に前の節の終わりが見える（2026-11-21 の実機検証で、このノートへのリンクから開いたときに見つかった）。
 **送った見出しが上端に来なかったときだけ、足りない分を本文の末尾に余白として足して送り直す**（オーナー判断で直した）。
 足りない分は、送りが届いて一覧が末尾で止まった配置の、見出しの上端の位置から決める（`endSpaceShortfall`）。
+**置いた後も、利用者が自分で送るまで見張る**（`settleAtTop`）。測る前の画像は画面の高さを仮に取るので、測って本文が縮むと末尾の上限へ戻されるためである。
+利用者が送った後に寸法が決まっても、見出しへは引き戻さない。
 
 代替案は、どのノートにも1画面分の余白を末尾に置く形（エディタの「末尾より先へ送る」）。直し方は単純だが、すべてのノートの終わりに空白が出る。
 読書の記録は末尾の余白を本文の見えない所として扱うので、1画面分の余白を置くと最後の段落を読んだと数えなくなる。採らなかった。
@@ -208,7 +212,9 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
   `NoteScanExpiryWiringTest` — 本文の読み直しが失効だけを呼ぶ
 - **instrumentation:** `NoteLinkTapUiTest` — 押すと開く・長押しでは開かない・リンクの上から縦にスクロールしても開かない。
   補助の面で同じノートのリンクを押し直すと、見出しが無くても見つからなくても先頭へ戻り、作り直しでは読み進めた位置を保つ。
-  `BacklinksUiTest` — 末尾に近い見出しを、右で開くときも今のノートとして開くときも最初の行に置き、ほかの送りで余白を消す。`EndSpaceTest`（JVM）— 足りない分を決める規則
+  `BacklinksUiTest` — 末尾に近い見出しを、右で開くときも今のノートとして開くときも最初の行に置き、ほかの送りで余白を消す。
+  `EndSpaceUiTest` — 右の送り直しで余白を消す・画面の作り直しと全画面との往復で位置を保つ・後から決まる画像の寸法でも上端のまま・利用者が送った後は引き戻さない。
+  `EndSpaceTest`（JVM）— 足りない分を決める規則と、保存値・全画面へ運ぶときに置き直すかの規則
 - **実機確認:** 開いた Fold と閉じた外画面の両方で、目次の表のリンク・相対の `.md`・同じノートの目次を押す。
   リンクの上から長押しして文字を選べるか。スクロールの途中や横の払いで誤って開かないか
 - **保証していないこと:** 走査の後に作ったノートへのリンクは、次の走査まで見つからない。

@@ -6,6 +6,7 @@ import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.DraftQuoteActions
+import com.example.newproject.ui.markdown.rememberEndSpace
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.ui.screen.BodyPosition
@@ -163,7 +164,9 @@ class MainActivity : ComponentActivity() {
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
                 val noteListState = rememberLazyListState()
                 // 本文の位置を書く口。**本文の位置を書く経路はすべてここを通す**（→ BodyPosition）。
-                val bodyPosition = remember(noteListState) { BodyPosition(noteListState) }
+                // 見出しを上端に置くための末尾の余白は、位置と一緒に画面の保存値に置く（→ EndSpace）。
+                val bodyEndSpace = rememberEndSpace(noteListState)
+                val bodyPosition = remember(noteListState) { BodyPosition(noteListState, bodyEndSpace) }
                 // Vault を選ぶ画面の結果。選び直した直後に引くノートも、ほかの経路と同じく先頭から開く（→ features/rediscover.md §5）。
                 // 本文の位置の口を使うので、Activity ではなくこのスコープで受ける。
                 val openVault = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
