@@ -1,9 +1,9 @@
 # 知識索引 — Vault から作り直せる派生物を端末内の DB に持つ
 
 **状態:** 区切り1（索引の土台）と区切り2（引く側とバックリンクの表示 → [backlinks](../features/backlinks.md)）は実装済み。ランダム表示の先出し（§7）と余白メモ（区切り4）は未実装
-**最終検証:** 2026-11-15 / `ed7c9211`（§7 は未実装で未突合。端末で DB を作ること・バックリンクの表示は未確認）
+**最終検証:** 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。DB の置き場・永続・最初の作成の時間と大きさ・バックリンクの表示を確かめた。§7 は未実装で未突合）
 **関連コード:** `controller/KnowledgeIndexController.kt`・`BacklinksController.kt` / `model/state/BacklinksState.kt`（`KnowledgeIndexProgress`） / `data/KnowledgeIndexStore.kt`・`KnowledgeIndexDatabase.kt`・`RoomKnowledgeIndexStore.kt` / `domain/KnowledgeIndexLinks.kt`・`KnowledgeIndexPlan.kt`・`domain/markdown/InlineVisibleText.kt`（`inlineVisibleLayout`）・`MarkdownBlocks.kt`（`renderedRows`） / `NoteScanCache.kt`（公開の知らせ）/ `controller/DistillController.kt`・`data/DistillWriteRepository.kt`（書き換えの知らせ）/ `controller/NoteSessionCoordinator.kt`・`NoteViewModel.kt`（配線）
-**関連テスト:** `KnowledgeIndexControllerTest` / `BacklinksControllerTest` / `BacklinksTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `DistillControllerTest` / `DistillWriteRepositoryTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
+**関連テスト:** `KnowledgeIndexControllerTest` / `BacklinksControllerTest` / `BacklinksTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `DistillControllerTest` / `DistillWriteRepositoryTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（索引の責務・保証・寿命）。補助の面への出し方は [backlinks](../features/backlinks.md)、ランダム表示は [rediscover](../features/rediscover.md)
 
 **対象領域:** 端末内の DB（Room）、索引の作り方と寿命、走査の結果との関係、ランダム表示の待ち
@@ -185,7 +185,10 @@
 
 ## 8. 上限・性能・スレッド
 
-> **未確認:** 500本・3,000本で最初の作成にかかる時間と、DB の大きさは測っていない。実機で測る。
+> **実測（2026-11-21、Pixel 10 Pro Fold、合成 Vault）:** 最初の作成は、フォルダを許可してから500本で約5〜8秒、3,000本で約35〜37秒（1回目は35〜49秒の間）で終わった。
+> DB（`-wal`・`-shm` を含む）は500本で約1.2MB、3,000本で約4.3MB。作っている間もランダム表示と本文を読むことは塞がれなかった。
+> 時間は画面の文字の繰り返し取得で測り、1回の取得に2.1〜2.7秒かかるので、終わった時刻はその幅でしか言えない。
+> 索引を作り終えた後の起動は500本538ms・3,000本520ms（各3回の中央値。索引の前は497ms・483ms）で、差は3回のばらつきと同じくらいだった。
 
 - **本文の読み込みは同時に4本まで。** 関連ノートの並列読込と同じく上限を置く（→ [related_notes_ai](../features/related_notes_ai.md) 判断6）
 - **本文の解析は Main の外。** 入力の大きさに比例するので `Dispatchers.Default` で行い、`ThreadingScanTest` の表に載せた（→ [architecture](architecture.md) 判断3）

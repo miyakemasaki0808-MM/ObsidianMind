@@ -1,9 +1,9 @@
 # このノートへのリンク — バックリンクを1文つきで出す
 
-**状態:** 実装済み（知識索引の区切り2）。端末では未確認
-**最終検証:** 2026-11-15 / `ed7c9211`（JVM のテストと androidTest の組み立てまで。端末での表示と開く位置は未確認）
+**状態:** 実装済み（知識索引の区切り2）。端末で確認済み。末尾に近い見出しから開く位置は未解決（§11）、読み上げは音声で判定していない
+**最終検証:** 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。件数と1文・並び・同じ名前の別のノート・開く位置・開閉・外部で足したリンク・ライトとダーク）
 **関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkRows`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`） / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
-**関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
+**関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
 
 ---
@@ -157,7 +157,10 @@
 
 - 余白メモと引用の出し方は決めていない
 - 全文検索を入れるかは、この機能を使ってから決める（→ [knowledge_index](../system/knowledge_index.md) §1）
-- 端末では確かめていない（表示・開く位置・読み上げ・大きな Vault での作っている間の表示）。ランダム表示の先出しで直す正本は [knowledge_index](../system/knowledge_index.md) §7 が持つ
+- **末尾に近い見出しから開くと、見出しが最初の行にならず、上に前の節の終わりが見える。** 本文の一覧は末尾より先へスクロールできないため。
+  見出しの何番目かは正しく選ばれ、見出しは画面に出る。本文の見出しリンクも同じ送り方である。直すか、見出しが画面に入ればよいとするかは決めていない（2026-11-21 の実機検証で判明）
+- 読み上げは、題名と1文と「ほか N 箇所」が1つの押せる行にまとまることまでを画面の構造で確かめた。音声で聞いた判定はしていない
+- 大きな Vault の最初の作成の時間と DB の大きさは [knowledge_index](../system/knowledge_index.md) §8、ランダム表示の先出しは同 §7 が持つ
 
 ## 12. 開発経緯
 
