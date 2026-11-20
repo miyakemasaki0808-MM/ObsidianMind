@@ -93,4 +93,14 @@ internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, requ
     space.finish(request)
 }
 
+/**
+ * 位置の口を持たない一覧（右の面）で、[block] へ送って上端に置く。**前の余白は送る前に消す** —
+ * 残すと、先頭や見出しの無い送りの後も、前の見出しのための空白が末尾に残る。
+ */
+internal suspend fun placeBlockAtTop(listState: LazyListState, space: EndSpace, block: Int) {
+    space.clear()
+    listState.scrollToItem(block)
+    space.want(block)
+}
+
 private const val SETTLE_ATTEMPTS = 3

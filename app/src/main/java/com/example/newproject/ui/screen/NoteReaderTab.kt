@@ -19,6 +19,7 @@ import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.QuoteOffers
 import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.placeBlockAtTop
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.HeadingAccessoryHeight
 import com.example.newproject.ui.markdown.HeadingAccessoryWidth
@@ -721,7 +722,7 @@ internal fun NoteReaderTab(
                         if (target == null) {
                             action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
                         } else {
-                            coroutineScope.launch { sideListState.scrollToItem(target) }
+                            coroutineScope.launch { placeBlockAtTop(sideListState, sideEndSpace, target) }
                         }
                     }
                     is SideLinkAction.ScrollMain -> {
