@@ -68,6 +68,7 @@
 | 全節の要約（初回は通し版） | [section_batch.md](section_batch.md) | `SBATCH-01` `SBATCH-02` `SBATCH-03` `SBATCH-09` |
 | Explore（初回は通し版） | [explore.md](explore.md) | `EXPLORE-01` `EXPLORE-03` `EXPLORE-06` `EXPLORE-09` `EXPLORE-11` |
 | 関連ノートの根拠（初回は通し版） | [related_notes.md](related_notes.md) | `RELATED-01` `RELATED-03` |
+| 知識索引とバックリンク（初回は通し版） | [knowledge_index.md](knowledge_index.md) | `BACKLINK-01` `BACKLINK-02` `BACKLINK-06` `INDEX-03` |
 
 **ネットワーク権限の行は `PERM-01` だけを置く。** 1コマンドで終わり、
 **いま端末に入っているのがどのAPKか**という他の全ケースの前提を確かめられる。
