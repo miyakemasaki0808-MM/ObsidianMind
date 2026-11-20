@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""大きなVaultの性能比較に使う合成fixture（課題の受理後に削除する）。
+"""大きな Vault の性能を測る合成 fixture（実機ケース knowledge_index.md の INDEX-04〜06）。
 
-2026-10-12 の基準HEAD e0e7c52d の観測で使った生成処理から性能用だけを抽出。
 本数500/1500/3000、seed=20261012+本数。元Vaultの名前・本文は含まない。
-深さ・サイズの分布は下の定数、測定値・測定方法の限界は current_issues.md が持つ。
-Python 3 の標準ライブラリだけを使い、未作成の出力先に生成して旧fixtureのSHA-256と照合する。
+元 Vault の形（504本・フォルダ114・深さとノートの大きさの分布）を本数に比例させ、ノートの無いフォルダも作る。
+深さ・サイズの分布は下の定数、測った値は正本 docs/dev/system/knowledge_index.md §8 が持つ。
+Python 3 の標準ライブラリだけを使い、未作成の出力先に生成して、前に測ったときの fixture の SHA-256 と照合する。
+値を比べるときは、照合が一致した fixture だけを使う。
 
-実行例: python3 docs/_wip/random_scan_fixture.py /tmp/vigilith-scale-comparison
+実行例: python3 -I docs/review/device_validation/scale_vault_fixture.py <未作成の出力先>
 既存の出力先は上書きしない。端末へコピーする操作は含まない。
 """
 import argparse
