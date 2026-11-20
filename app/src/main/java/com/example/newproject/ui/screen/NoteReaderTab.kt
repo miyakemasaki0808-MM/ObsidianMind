@@ -18,6 +18,7 @@ import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.QuoteOffers
+import com.example.newproject.ui.markdown.EndSpace
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.HeadingAccessoryHeight
 import com.example.newproject.ui.markdown.HeadingAccessoryWidth
@@ -343,6 +344,8 @@ internal fun NoteReaderTab(
     // 面に置くと、開き直したときに位置を失い、リンクの見出しへ送り直してしまう（→ features/desk_foundation.md 判断3）。
     // 位置は右のノートごとに先頭から始め、画面の作り直しでは保つ。
     val sideListState = rememberSaveable(sideReading.note?.ref?.value, saver = LazyListState.Saver) { LazyListState() }
+    // 右の本文の末尾の余白（見出しを上端に置くため → EndSpace）。位置と同じく右のノートごとに持つ。
+    val sideEndSpace = remember(sideReading.note?.ref?.value) { EndSpace() }
     var sideLinkHandled by rememberSaveable { mutableLongStateOf(0L) }
     // 右で開く。**書いているつもりは落とす** — 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。
     val openSide: (RelatedNote) -> Unit = { note ->
@@ -569,7 +572,8 @@ internal fun NoteReaderTab(
             headingAccessory = headingMark,
             onLink = onLink,
             onQuote = onQuote,
-            quoteOffers = quoteOffers
+            quoteOffers = quoteOffers,
+            endSpace = bodyPosition.endSpace
         )
     }
 
@@ -679,7 +683,7 @@ internal fun NoteReaderTab(
             if (target == null) {
                 heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
             } else {
-                bodyPosition.moveTo(target)
+                bodyPosition.placeAtTop(target)
                 imageMeasurements?.requestSkippedMeasurement(target)
             }
         }
@@ -1092,6 +1096,7 @@ internal fun NoteReaderTab(
                                                     onMove = moveToNote,
                                                     onRetry = onOpenSideReading,
                                                     listState = sideListState,
+                                                    endSpace = sideEndSpace,
                                                     linkStart = sideLinkStart?.takeIf { it.noteUri == sideReading.note?.ref?.value },
                                                     handledLinkRequest = sideLinkHandled,
                                                     onLinkRequestHandled = { sideLinkHandled = it },

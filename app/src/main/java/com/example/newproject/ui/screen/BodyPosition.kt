@@ -5,6 +5,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.newproject.ui.markdown.EndSpace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -18,19 +19,31 @@ import kotlin.random.Random
  * - 書くたびに要求の番号を進める（[lastRequest]）。同じ値の送りも見開きが見分けられるように
  * - アニメーションで送る口（[animateTo]）の Job は1本だけ持ち、次の書き込みで取り消す。遅れて終わった送りが新しい位置を上書きしない
  * - [port] はこの口を見分ける値。Activity を作り直すと口も作り直され、番号は [FIRST_BODY_REQUEST] から数え直す
+ * - 見出しへ送るときは [placeAtTop] を使う。末尾に近い見出しでも上端に置けるよう、[endSpace] に末尾の余白を足す。
+ *   余白は次の書き込み（[moveTo]）で消すので、ほかのノートや先頭からの読み直しには残らない
  */
 @Stable
 internal class BodyPosition(val listState: LazyListState, val port: Long = Random.nextLong()) {
     private val requests = BodyPositionRequests(listState.firstVisibleItemIndex)
     private var animation: Job? = null
 
+    /** 見出しを上端に置くための本文の末尾の余白。本文の一覧へ渡す（→ [EndSpace]）。 */
+    val endSpace = EndSpace()
+
     /** 最後の書き込み。見開きはこの番号が進んだのを見て、外からの送りなら読む位置を替える。 */
     val lastRequest: BodyPositionRequest get() = requests.last
 
     fun moveTo(block: Int, offset: Int = 0, source: BodyPositionSource = BodyPositionSource.External) {
         cancelAnimation()
+        endSpace.clear()
         listState.requestScrollToItem(block, offset)
         requests.record(block, source)
+    }
+
+    /** [block] を上端に置く。末尾に近くて一覧が届かなければ、本文の一覧が足りない分の余白を足して送り直す。 */
+    fun placeAtTop(block: Int) {
+        moveTo(block)
+        endSpace.want(block)
     }
 
     /** 縦の流しで、アニメーションで送る。**一覧が組まれていないとき（見開きの間）は [moveTo] を使う** — 初回の配置を待って終わらない。 */

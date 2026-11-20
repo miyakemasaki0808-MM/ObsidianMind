@@ -186,7 +186,7 @@ internal fun FullscreenNoteScreen(
                 if (target == null) {
                     action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
                 } else {
-                    position.moveTo(target)
+                    position.placeAtTop(target)
                     imageMeasurements?.requestSkippedMeasurement(target)
                 }
             }
@@ -262,7 +262,8 @@ internal fun FullscreenNoteScreen(
                     imageLoader = imageLoader,
                     imageMeasurements = imageMeasurements,
                     onLink = openLink,
-                    onQuote = quoteFromBody
+                    onQuote = quoteFromBody,
+                    endSpace = position.endSpace
                 )
                 IconPill(
                     symbol = "✕",

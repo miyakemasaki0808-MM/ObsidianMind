@@ -75,7 +75,12 @@ internal fun rememberNoteStart(
                 val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = start.block, start.headingOccurrence)
                 if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
                 // 読書の記録は最も深い位置しか残さないので、手前で1度報告されても、置き直した位置からの報告で上書きされる。
-                if (position.listState.firstVisibleItemIndex != block) position.moveTo(block)
+                // 見出しへ送るときは、末尾に近くても見出しを上端に置く（→ BodyPosition.placeAtTop）。
+                if (start.heading != null && !headingMissing) {
+                    position.placeAtTop(block)
+                } else if (position.listState.firstVisibleItemIndex != block) {
+                    position.moveTo(block)
+                }
                 // 飛び越した画像は描画されないので測られない。測らないと、その先の読書の報告が止まり続ける。
                 imageMeasurements?.requestSkippedMeasurement(block)
                 pending = null

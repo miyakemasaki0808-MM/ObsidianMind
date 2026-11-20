@@ -36,6 +36,8 @@ import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.RelatedNotesState
 import com.example.newproject.model.state.SideReadingState
+import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.screen.BacklinksSection
 import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.MarginMemoSheetContent
@@ -254,6 +256,7 @@ class BacklinksUiTest {
                         onMove = { _, _ -> },
                         onRetry = {},
                         listState = listState,
+                        endSpace = remember { EndSpace() },
                         linkStart = SideLinkStart(SOURCE.ref.value, "まとめ", request = 1L, headingOccurrence = 1),
                         handledLinkRequest = handled,
                         onLinkRequestHandled = { handled = it },
@@ -321,6 +324,92 @@ class BacklinksUiTest {
         composeRule.onNodeWithText("段落1 の本文です。").assertIsDisplayed()
     }
 
+    // ── 末尾に近い見出しも上端に置く ──────────────────────────────────────
+
+    /**
+     * 右で開く面。2つ目の「まとめ」から後ろが画面より短くても、見出しを上端に置く（前の節の終わりを上に出さない）。
+     * 一覧は末尾より先へ送れないので、末尾の余白（EndSpace）を足して送り直す。
+     */
+    @Test
+    fun 右で開くと末尾に近い2つ目の見出しも上端に置く() {
+        var handled by mutableLongStateOf(0L)
+        lateinit var listState: LazyListState
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                listState = rememberSaveable(SOURCE.ref.value, saver = LazyListState.Saver) { LazyListState() }
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
+                    SideReadingPane(
+                        state = SideReadingState.Ready(SOURCE),
+                        blocks = buildNoteSectionModel(SHORT_TAIL_BODY).blocks,
+                        imageLoader = null,
+                        onBack = {},
+                        onMove = { _, _ -> },
+                        onRetry = {},
+                        listState = listState,
+                        endSpace = remember { EndSpace() },
+                        linkStart = SideLinkStart(SOURCE.ref.value, "まとめ", request = 1L, headingOccurrence = 1),
+                        handledLinkRequest = handled,
+                        onLinkRequestHandled = { handled = it },
+                        onHeadingMissing = {},
+                        onLink = null
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithText("段落21 の本文です。").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(SHORT_TAIL_HEADING, listState.firstVisibleItemIndex)
+            assertEquals(0, listState.firstVisibleItemScrollOffset)
+        }
+    }
+
+    /**
+     * 今のノートとして開く本文。末尾に近い2つ目の「まとめ」も上端に置き、ほかの位置へ送ったら末尾の余白を消す
+     * （先頭から開き直したノートの終わりに余白を残さない）。
+     */
+    @Test
+    fun 今のノートとして開くと末尾に近い2つ目の見出しも上端に置き_ほかの送りで余白を消す() {
+        lateinit var position: BodyPosition
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val listState = rememberLazyListState()
+                position = remember(listState) { BodyPosition(listState) }
+                start = rememberNoteStart(position, openedUri, noteLoading, model, imageMeasurements = null, onHeadingMissing = {})
+                Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
+                    MarkdownNoteContent(
+                        content = "",
+                        listState = listState,
+                        precomputedBlocks = model?.blocks.orEmpty(),
+                        endSpace = position.endSpace
+                    )
+                }
+            }
+        }
+
+        composeRule.runOnIdle {
+            checkNotNull(start)(PendingNoteStart(SOURCE.ref.value, block = 0, heading = "まとめ", headingOccurrence = 1))
+            noteLoading = true
+        }
+        composeRule.runOnIdle {
+            noteLoading = false
+            openedUri = SOURCE.ref.value
+        }
+        composeRule.runOnIdle { model = buildNoteSectionModel(SHORT_TAIL_BODY) }
+
+        composeRule.onNodeWithText("段落21 の本文です。").assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(SHORT_TAIL_HEADING, position.listState.firstVisibleItemIndex)
+            assertEquals(0, position.listState.firstVisibleItemScrollOffset)
+        }
+
+        composeRule.runOnIdle { position.moveTo(0) }
+        composeRule.runOnIdle {
+            assertEquals(0, position.endSpace.bottomPx)
+            assertEquals(0, position.listState.layoutInfo.afterContentPadding)
+        }
+    }
+
     @Composable
     private fun Body(listState: LazyListState, model: NoteSectionModel?) {
         val blocks = model?.blocks.orEmpty()
@@ -349,5 +438,11 @@ class BacklinksUiTest {
 
         /** 0 と 20 に同じ見出し「まとめ」を置いた本文。番号はブロックの位置と同じ。 */
         val REPEATED_BODY = (0 until 40).joinToString("\n\n") { if (it % 20 == 0) "## まとめ" else "段落$it の本文です。" }
+
+        /** 2つ目の「まとめ」の位置。 */
+        const val SHORT_TAIL_HEADING = 20
+
+        /** 2つ目の「まとめ」の後ろに2段落しかない本文。見出しから後ろは画面より短い。 */
+        val SHORT_TAIL_BODY = (0 until 23).joinToString("\n\n") { if (it % 20 == 0) "## まとめ" else "段落$it の本文です。" }
     }
 }

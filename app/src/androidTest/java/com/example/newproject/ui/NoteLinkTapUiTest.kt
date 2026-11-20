@@ -30,6 +30,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.EndSpace
 import com.example.newproject.ui.screen.SideLinkStart
 import com.example.newproject.ui.screen.SideReadingPane
 import com.example.newproject.ui.theme.AppTheme
@@ -128,6 +129,7 @@ class NoteLinkTapUiTest {
                 onMove = { _, _ -> },
                 onRetry = {},
                 listState = listState,
+                endSpace = androidx.compose.runtime.remember(sideNote.ref.value) { EndSpace() },
                 linkStart = sideLink,
                 handledLinkRequest = handled,
                 onLinkRequestHandled = { handled = it },

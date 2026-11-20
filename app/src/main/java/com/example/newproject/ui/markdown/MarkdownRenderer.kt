@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -27,6 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.runtime.remember
@@ -36,6 +38,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
@@ -77,7 +80,9 @@ internal fun MarkdownNoteContent(
     // 「引用して書く」の受け手。null の間は項目を出さない。
     onQuote: ((QuoteSelection) -> Unit)? = null,
     // 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ QuoteOffers）。
-    quoteOffers: QuoteOffers? = null
+    quoteOffers: QuoteOffers? = null,
+    // 見出しを上端に置くための末尾の余白（→ EndSpace）。null なら末尾に余白を足さない。
+    endSpace: EndSpace? = null
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -98,6 +103,12 @@ internal fun MarkdownNoteContent(
         QuoteSelection(text, at.source, at.hint)
     }
 
+    val endRequest = endSpace?.wanted
+    if (endSpace != null && endRequest != null) {
+        LaunchedEffect(endSpace, endRequest) { settleAtTop(listState, endSpace, endRequest) }
+    }
+    val endPadding = with(LocalDensity.current) { (endSpace?.bottomPx ?: 0).toDp() }
+
     QuoteSelectionContainer(quotable = quotable, onQuote = onQuote, selectionAt = selectionAt, modifier = modifier, offers = quoteOffers) {
         CompositionLocalProvider(LocalNoteLinkTaps provides linkTaps) {
             // **長押しの見張りは選択の容器の修飾子に付けない。** 付けると押下の途中で見張りが作り直され
@@ -115,6 +126,7 @@ internal fun MarkdownNoteContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onGloballyPositioned { quoteGeometry.listTop = it.positionInRoot().y },
+                    contentPadding = PaddingValues(bottom = endPadding),
                     verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)
                 ) {
                     items(blocks.size) { i ->
