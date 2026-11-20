@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-21 | 知識索引の区切り3（ランダム表示を索引の一覧から先に引く）を入れないと決め、正本から設計を外した | [知識索引](system/knowledge_index.md) §7・§11 |
 | 2026-11-21 | 大きな Vault の最初のランダム表示の待ちの課題を閉じ、合成 Vault の生成手順を実機ケースの置き場へ移した | [知識索引](system/knowledge_index.md) §7・§8・[実機ケース](../review/device_validation/knowledge_index.md) |
 | 2026-11-21 | 知識索引・バックリンクと、カードを畳みながら送るテストを実機で確かめ、確かめ終えた課題を閉じて、末尾に近い見出しの開く位置を起票した | [知識索引](system/knowledge_index.md) §8・[バックリンク](features/backlinks.md) §11 |
 | 2026-11-21 | 知識索引とバックリンクの実機ケースと、見開きのカードを畳みながら送るテストの変異のケースを足し、簡易版のスモーク表に登録した | [実機ケース](../review/device_validation/knowledge_index.md)・[見開き](../review/device_validation/summary_entry_desk.md) |
