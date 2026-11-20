@@ -26,7 +26,7 @@ data class NoteUiState(
     val noteState: NoteState = NoteState.Idle,
     // ノートを開くたびに進む表示の番号（[NoteUiStateStore.beginNoteLoad]）。蒸留の差し替えでは進まず、Vault 切替でも戻さない。
     // 画面の一時的な状態（節の開閉）が、今の表示のものかを見分ける。参照で比べると A→B→A で同じ値に戻る。
-    val noteLoadId: Long = 0L,
+    val noteLoadId: NoteLoadId = NoteLoadId(issuer = 0L, count = 0L),
     // 本文を載せる紙の地色の段階。Vault全体の最終更新の分布から決まるので、
     // 材料（走査キャッシュ）が冷えていれば Fresh のまま＝見た目は現行と変わらない。
     val notePaperTone: NotePaperTone = NotePaperTone.Fresh,

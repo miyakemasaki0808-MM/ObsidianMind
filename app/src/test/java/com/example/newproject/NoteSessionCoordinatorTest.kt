@@ -52,6 +52,7 @@ import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
@@ -151,7 +152,7 @@ class NoteSessionCoordinatorTest {
         "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
         "wikilinkTitles" to setOf("旧リンク"),
         // ノートの表示の番号は戻さない。戻すと、Vault をまたいで同じ番号が出て、前の表示の画面の状態を今のものと取り違える。
-        "noteLoadId" to 7L,
+        "noteLoadId" to NoteLoadId(issuer = 3L, count = 7L),
         // 蒸留は**状態変換ではなくController側が落とす**。
         // 復旧待ち（RecoveryRequired）だけは残す判断があるため
         // DistillController.cancelForNoteChange() が持つ。
@@ -387,7 +388,7 @@ class NoteSessionCoordinatorTest {
                 "vaultSelected" to true,
                 "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
                 "wikilinkTitles" to setOf("旧リンク"),
-                "noteLoadId" to 7L
+                "noteLoadId" to NoteLoadId(issuer = 3L, count = 7L)
             )
         )
         // 旧VaultのURIは新Vaultで開けないので履歴の永続化ごと捨てる
@@ -1106,7 +1107,7 @@ class NoteSessionCoordinatorTest {
         rebuttalSentence = RebuttalSentence(text = "旧ノートと食い違う一文。", source = SIDE_NOTE),
         backlinks = BacklinksState.Ready(emptyList()),
         knowledgeIndexProgress = KnowledgeIndexProgress.Building(1, 2),
-        noteLoadId = 7L,
+        noteLoadId = NoteLoadId(issuer = 3L, count = 7L),
         folders = listOf(NoteFolder(name = "下書き", documentId = "old-folder")),
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",

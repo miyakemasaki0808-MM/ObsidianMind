@@ -15,6 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -25,6 +26,7 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.BacklinkRow
@@ -136,7 +138,7 @@ class BacklinksUiTest {
      */
     @Test
     fun ノートの画面が組まれていない間にノートが替わったら_戻ったときに節は畳まれている() {
-        var noteLoadId by mutableStateOf(1L)
+        var noteLoadId by mutableStateOf(NoteLoadId(issuer = 1L, count = 1L))
         var shown by mutableStateOf(true)
         composeRule.setContent {
             AppTheme(darkTheme = false) {
@@ -152,14 +154,35 @@ class BacklinksUiTest {
         composeRule.onNodeWithText("開いている").assertIsDisplayed()
 
         composeRule.runOnIdle { shown = false }
-        composeRule.runOnIdle { noteLoadId = 2L }
-        composeRule.runOnIdle { noteLoadId = 3L }
+        composeRule.runOnIdle { noteLoadId = noteLoadId.copy(count = 2L) }
+        composeRule.runOnIdle { noteLoadId = noteLoadId.copy(count = 3L) }
         composeRule.runOnIdle { shown = true }
         composeRule.onNodeWithText("畳んでいる").assertIsDisplayed()
     }
 
+    /**
+     * プロセスの作り直しでは、画面の保存値が Bundle を通って戻り、Store は番号を数え直す（発行元の印が替わる）。
+     * 前のプロセスの A で開いた値から戻り、新しいプロセスの B が同じ数の番号でも畳まれている。
+     * 対照として、同じ Store のまま画面だけを作り直したら開いたまま。
+     */
+    @Test
+    fun プロセスを作り直して同じ数の番号のノートを開いても_前のプロセスで開いた節は畳まれている() {
+        val restoration = StateRestorationTester(composeRule)
+        var noteLoadId by mutableStateOf(NoteLoadId(issuer = 1L, count = 1L))
+        restoration.setContent { AppTheme(darkTheme = false) { ExpansionProbe(noteLoadId) } }
+        composeRule.onNodeWithText("畳んでいる").performClick()
+        composeRule.onNodeWithText("開いている").assertIsDisplayed()
+
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithText("開いている").assertIsDisplayed()
+
+        composeRule.runOnIdle { noteLoadId = NoteLoadId(issuer = 2L, count = 1L) }
+        restoration.emulateSavedInstanceStateRestore()
+        composeRule.onNodeWithText("畳んでいる").assertIsDisplayed()
+    }
+
     @Composable
-    private fun ExpansionProbe(noteLoadId: Long) {
+    private fun ExpansionProbe(noteLoadId: NoteLoadId) {
         val expansion = com.example.newproject.ui.screen.rememberBacklinksExpansion(noteLoadId)
         androidx.compose.material3.TextButton(onClick = expansion.toggle) {
             Text(if (expansion.expanded) "開いている" else "畳んでいる")

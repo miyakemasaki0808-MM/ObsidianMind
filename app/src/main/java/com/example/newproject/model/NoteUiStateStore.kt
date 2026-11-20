@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.random.Random
 
 interface SummaryStateWriter {
     val current: SummaryState
@@ -153,7 +154,11 @@ interface CrystalStateWriter {
  * 画面全体の [NoteUiState] を所有し、各 Controller には担当スライスだけを書ける
  * Writer を渡す。Controller が担当外フィールドを更新する経路を型で閉じる。
  */
-internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
+internal class NoteUiStateStore(
+    initialState: NoteUiState = NoteUiState(),
+    /** この Store が発行するノートの表示の番号の印（→ [NoteLoadId.issuer]）。作り直した Store と重ならない値にする。 */
+    private val loadIssuer: Long = Random.nextLong()
+) {
     private val mutableState = MutableStateFlow(initialState)
     val uiState: StateFlow<NoteUiState> = mutableState.asStateFlow()
     val value: NoteUiState get() = mutableState.value
@@ -304,7 +309,12 @@ internal class NoteUiStateStore(initialState: NoteUiState = NoteUiState()) {
     }
 
     fun beginNoteLoad() {
-        mutableState.update { it.withNoteScopedReset().copy(noteState = NoteState.Loading, noteLoadId = it.noteLoadId + 1) }
+        mutableState.update {
+            it.withNoteScopedReset().copy(
+                noteState = NoteState.Loading,
+                noteLoadId = NoteLoadId(issuer = loadIssuer, count = it.noteLoadId.count + 1)
+            )
+        }
     }
 
     /**

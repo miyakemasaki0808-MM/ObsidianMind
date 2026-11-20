@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -121,6 +122,19 @@ class NoteUiStateStoreTest {
 
         store.beginNoteLoad()
         store.beginNoteLoad()
-        assertEquals(first + 2, store.value.noteLoadId)
+        assertEquals(first.copy(count = first.count + 2), store.value.noteLoadId)
+    }
+
+    /**
+     * 番号は発行した Store の印を持つ。プロセスを作り直すと Store も作り直されて数え直すので、
+     * 印が同じだと画面の保存値に残った前のプロセスの番号と一致する（→ features/backlinks.md §6）。
+     */
+    @Test
+    fun `作り直した Store は前の Store と違う印で番号を出す`() {
+        val issued = List(2) { NoteUiStateStore().apply { beginNoteLoad() }.value.noteLoadId }
+
+        assertEquals(issued[0].count, issued[1].count)
+        assertNotEquals(issued[0].issuer, issued[1].issuer)
+        assertEquals("印は与えたものを使う", 9L, NoteUiStateStore(loadIssuer = 9L).apply { beginNoteLoad() }.value.noteLoadId.issuer)
     }
 }

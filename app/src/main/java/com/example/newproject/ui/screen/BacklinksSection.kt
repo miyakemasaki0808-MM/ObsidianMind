@@ -9,12 +9,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
@@ -54,16 +56,23 @@ internal fun backlinksSectionFor(state: BacklinksState, progress: KnowledgeIndex
  * 節が開いているか。**開いたときのノートの表示の番号（`NoteUiState.noteLoadId`）が今と同じときだけ** —
  * ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃す
  * （ノートを替えると畳んだ状態に戻る → features/backlinks.md §6）。右で開いて余白へ戻る・画面の作り直しでは番号が変わらない。
+ * 番号は発行元の印まで比べる（プロセスの作り直しで数え直した番号と一致させない → [NoteLoadId]）。
  */
-internal fun backlinksExpanded(openedAt: Long?, noteLoadId: Long): Boolean = openedAt == noteLoadId
+internal fun backlinksExpanded(openedAt: NoteLoadId?, noteLoadId: NoteLoadId): Boolean = openedAt == noteLoadId
 
 /** ペインの節の開閉。 */
 internal class BacklinksExpansion(val expanded: Boolean, val toggle: () -> Unit)
 
+/** 開いたときの番号の保存値。**発行元の印も残す** — 落とすと、作り直したプロセスの同じ数の番号と一致する。 */
+internal val BacklinksOpenedAtSaver: Saver<NoteLoadId?, LongArray> = Saver(
+    save = { openedAt -> openedAt?.let { longArrayOf(it.issuer, it.count) } },
+    restore = { saved -> NoteLoadId(issuer = saved[0], count = saved[1]) }
+)
+
 /** 開いたときのノートの表示の番号を、画面の保存値に置く（→ [backlinksExpanded]）。 */
 @Composable
-internal fun rememberBacklinksExpansion(noteLoadId: Long): BacklinksExpansion {
-    var openedAt by rememberSaveable { mutableStateOf<Long?>(null) }
+internal fun rememberBacklinksExpansion(noteLoadId: NoteLoadId): BacklinksExpansion {
+    var openedAt by rememberSaveable(stateSaver = BacklinksOpenedAtSaver) { mutableStateOf<NoteLoadId?>(null) }
     val expanded = backlinksExpanded(openedAt, noteLoadId)
     return BacklinksExpansion(expanded) { openedAt = if (expanded) null else noteLoadId }
 }

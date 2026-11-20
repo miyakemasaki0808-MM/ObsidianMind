@@ -1,10 +1,14 @@
 package com.example.newproject.ui
 
+import androidx.compose.runtime.saveable.SaverScope
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.NoteLoadId
+import com.example.newproject.model.NoteUiStateStore
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
+import com.example.newproject.ui.screen.BacklinksOpenedAtSaver
 import com.example.newproject.ui.screen.BacklinksSection
 import com.example.newproject.ui.screen.backlinkOthersText
 import com.example.newproject.ui.screen.backlinksExpanded
@@ -65,9 +69,37 @@ class BacklinksSectionTest {
      */
     @Test
     fun `節は開いたときのノートの表示の番号が今と同じときだけ開いている`() {
-        assertTrue("同じ表示のまま（右で開いて戻った・画面の作り直し）", backlinksExpanded(openedAt = 3L, noteLoadId = 3L))
-        assertFalse("A→B→A で番号が進んだ", backlinksExpanded(openedAt = 3L, noteLoadId = 5L))
-        assertFalse(backlinksExpanded(openedAt = null, noteLoadId = 3L))
+        val third = NoteLoadId(issuer = 11L, count = 3L)
+        assertTrue("同じ表示のまま（右で開いて戻った・画面の作り直し）", backlinksExpanded(openedAt = third, noteLoadId = third))
+        assertFalse("A→B→A で番号が進んだ", backlinksExpanded(openedAt = third, noteLoadId = third.copy(count = 5L)))
+        assertFalse(backlinksExpanded(openedAt = null, noteLoadId = third))
+    }
+
+    /**
+     * プロセスが作り直されると、Store は番号を0から数え直すが、画面の保存値は前のプロセスの番号のまま戻る。
+     * 前のプロセスの A で開いた値は、新しいプロセスの B が同じ数の番号になっても一致しない。
+     */
+    @Test
+    fun `作り直したプロセスで同じ数の番号になっても、前のプロセスで開いた節は開かない`() {
+        val before = NoteUiStateStore(loadIssuer = 1L).apply { beginNoteLoad() }.value.noteLoadId
+        val after = NoteUiStateStore(loadIssuer = 2L)
+
+        after.beginNoteLoad()
+        assertEquals("前のプロセスの最初のノートと同じ数", before.count, after.value.noteLoadId.count)
+        assertFalse(backlinksExpanded(openedAt = before, noteLoadId = after.value.noteLoadId))
+        repeat(5) { after.beginNoteLoad() }
+        assertFalse(backlinksExpanded(openedAt = before, noteLoadId = after.value.noteLoadId))
+    }
+
+    /** 保存値は発行元の印ごと戻る。落とすと、作り直したプロセスの同じ数の番号と一致する。 */
+    @Test
+    fun `開いたときの番号の保存値は発行元の印ごと戻る`() {
+        val opened = NoteLoadId(issuer = -7L, count = 4L)
+        val scope = SaverScope { true }
+        val saved = with(BacklinksOpenedAtSaver) { scope.save(opened) }
+
+        assertEquals(opened, BacklinksOpenedAtSaver.restore(saved!!))
+        assertNull("閉じていれば保存しない", with(BacklinksOpenedAtSaver) { scope.save(null) })
     }
 
     @Test

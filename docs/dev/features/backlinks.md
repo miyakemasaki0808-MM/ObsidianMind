@@ -3,7 +3,7 @@
 **状態:** 実装済み（知識索引の区切り2）。端末では未確認
 **最終検証:** 2026-11-15 / `ed7c9211`（JVM のテストと androidTest の組み立てまで。端末での表示と開く位置は未確認）
 **関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkRows`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`） / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
-**関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
+**関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（組み立てのみ、端末では未実行）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
 
 ---
@@ -92,7 +92,10 @@
   節の出し方は2つを合わせて純関数 `backlinksSectionFor` が決める（数えられない → 作っている → 1件以上の行 → 出さない、の順）
 - **畳む・開くは覚えない。** 関連の一覧と同じく、ノートを替えると畳んだ状態に戻る。
   開いたときの**ノートの表示の番号**（`NoteUiState.noteLoadId`、ノートを開くたびに進む）を画面の保存値に持って比べる。
-  ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃すため
+  ノートの参照で比べると A→B→A で同じ値に戻り、ノートの画面が組まれていない間（全画面）の切り替えを見逃すため。
+  **番号は発行した Store の印（`NoteLoadId.issuer`）ごと比べる。** 画面の保存値はプロセスの作り直しをまたいで戻るが、
+  Store は作り直されて数え直すので、数だけで比べると前のプロセスの A で開いた値が新しいプロセスの B と一致して開く。
+  印は Store を作るたびに乱数で決める（同じ Store のまま画面を作り直したときは同じ印なので、開いたまま）
 - **永続化:** しない。索引は [knowledge_index](../system/knowledge_index.md) が持つ
 
 ## 7. システム設計
