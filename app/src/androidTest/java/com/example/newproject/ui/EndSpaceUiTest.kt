@@ -1,8 +1,10 @@
 package com.example.newproject.ui
 
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -14,23 +16,35 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.NoteImageContent
+import com.example.newproject.ui.markdown.NoteImageLoader
+import com.example.newproject.ui.markdown.NoteImageMeasurement
+import com.example.newproject.ui.screen.BodyPosition
+import com.example.newproject.ui.screen.PendingNoteStart
 import com.example.newproject.ui.screen.SideLinkStart
 import com.example.newproject.ui.screen.SideReadingPane
+import com.example.newproject.ui.screen.rememberNoteStart
 import com.example.newproject.ui.theme.AppTheme
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
  * 末尾に近い見出しを本文の最初の行に置く余白（→ docs/dev/features/note_links.md 判断6）が、
- * 右の送り直しで崩れないこと。
+ * 後から決まる画像の寸法・右の送り直しで崩れないこと。
  */
 @RunWith(AndroidJUnit4::class)
 class EndSpaceUiTest {
@@ -46,7 +60,7 @@ class EndSpaceUiTest {
     private lateinit var scope: CoroutineScope
 
     @androidx.compose.runtime.Composable
-    private fun SidePane(body: String) {
+    private fun SidePane(body: String, loader: NoteImageLoader? = null) {
         var handled by rememberSaveable { mutableLongStateOf(0L) }
         // 本番（NoteReaderTab）と同じく、位置と余白を右のノートごとに持つ。
         sideList = rememberSaveable(SOURCE.ref.value, saver = LazyListState.Saver) { LazyListState() }
@@ -56,7 +70,7 @@ class EndSpaceUiTest {
             SideReadingPane(
                 state = SideReadingState.Ready(SOURCE),
                 blocks = buildNoteSectionModel(body).blocks,
-                imageLoader = null,
+                imageLoader = loader,
                 onBack = {},
                 onMove = { _, _ -> },
                 onRetry = {},
@@ -88,6 +102,87 @@ class EndSpaceUiTest {
         assertAtTopWithoutSpace(sideList, sideSpace)
     }
 
+    /** 見出しの後ろの画像が測る前は画面の高さを仮に取る。測って本文が縮んでも、右の見出しは上端のまま。 */
+    @Test
+    fun 右で置いた後に画像の寸法が決まって縮んでも見出しは上端のまま() {
+        val loader = GateImageLoader()
+        sideStart = SideLinkStart(SOURCE.ref.value, "まとめ", request = 1L, headingOccurrence = 1)
+        composeRule.setContent { AppTheme(darkTheme = false) { SidePane(IMAGE_TAIL_BODY, loader) } }
+        assertAtHeading(sideList)
+
+        loader.settle(width = 800, height = 200)
+
+        assertAtHeading(sideList)
+    }
+
+    // ── 今のノート ──────────────────────────────────────────────────
+
+    private var openedUri by mutableStateOf<String?>(null)
+    private var noteBody by mutableStateOf<String?>(null)
+    private var start: ((PendingNoteStart) -> Unit)? = null
+    private lateinit var position: BodyPosition
+
+    /** 今のノートの位置と余白は、本番どおり本文の画面より外（MainActivity）で持つ。[showBody] が偽なら本文の画面を組まない（全画面の間）。 */
+    @androidx.compose.runtime.Composable
+    private fun MainBody(loader: NoteImageLoader? = null, showBody: Boolean = true) {
+        val listState = rememberLazyListState()
+        position = remember(listState) { BodyPosition(listState) }
+        scope = rememberCoroutineScope()
+        val model = remember(noteBody) { noteBody?.let(::buildNoteSectionModel) }
+        start = rememberNoteStart(position, openedUri, noteLoading = false, model, imageMeasurements = null, onHeadingMissing = {})
+        if (!showBody) return
+        Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
+            MarkdownNoteContent(
+                content = "",
+                listState = listState,
+                precomputedBlocks = model?.blocks.orEmpty(),
+                imageLoader = loader,
+                endSpace = position.endSpace
+            )
+        }
+    }
+
+    private fun openMainAtHeading(body: String) {
+        composeRule.runOnIdle { checkNotNull(start)(PendingNoteStart(SOURCE.ref.value, block = 0, heading = "まとめ", headingOccurrence = 1)) }
+        composeRule.runOnIdle { openedUri = SOURCE.ref.value }
+        composeRule.runOnIdle { noteBody = body }
+    }
+
+    /** 今のノートで置いた後に画像の寸法が決まって縮んでも、見出しは上端のまま。 */
+    @Test
+    fun 今のノートで置いた後に画像の寸法が決まって縮んでも見出しは上端のまま() {
+        val loader = GateImageLoader()
+        composeRule.setContent { AppTheme(darkTheme = false) { MainBody(loader) } }
+        openMainAtHeading(IMAGE_TAIL_BODY)
+        assertAtHeading(position.listState)
+
+        loader.settle(width = 800, height = 200)
+
+        assertAtHeading(position.listState)
+    }
+
+    /** 画像を測る前に利用者が自分で送ったら、測り終えても見出しへ引き戻さない。 */
+    @Test
+    fun 画像を測る前に利用者が送ったら_測り終えても見出しへ戻さない() {
+        val loader = GateImageLoader()
+        composeRule.setContent { AppTheme(darkTheme = false) { MainBody(loader) } }
+        openMainAtHeading(IMAGE_TAIL_BODY)
+        assertAtHeading(position.listState)
+
+        composeRule.runOnIdle { scope.launch { position.listState.scrollBy(-150f) } }
+        composeRule.waitForIdle()
+        loader.settle(width = 800, height = 200)
+        composeRule.waitForIdle()
+
+        composeRule.runOnIdle {
+            val list = position.listState
+            assertFalse(
+                "利用者が離れた後に見出しへ引き戻した",
+                list.firstVisibleItemIndex == SHORT_TAIL_HEADING && list.firstVisibleItemScrollOffset == 0
+            )
+        }
+    }
+
     // ── 確かめ方 ──────────────────────────────────────────────────
 
     private fun assertAtHeading(list: LazyListState) {
@@ -107,6 +202,19 @@ class EndSpaceUiTest {
         }
     }
 
+    /** 寸法を [settle] まで返さない画像。中身は読まない（枠の高さだけを見る）。 */
+    private class GateImageLoader : NoteImageLoader {
+        private val gate = CompletableDeferred<NoteImageMeasurement>()
+
+        fun settle(width: Int, height: Int) {
+            gate.complete(NoteImageMeasurement.Measured(width, height))
+        }
+
+        override suspend fun measure(image: MarkdownBlock.Image): NoteImageMeasurement = gate.await()
+
+        override suspend fun load(image: MarkdownBlock.Image, targetWidthPx: Int): NoteImageContent = awaitCancellation()
+    }
+
     private companion object {
         val SOURCE = RelatedNote(title = "出どころのノート", ref = DocumentRef("content://vault/source.md"), isWikilinked = false)
 
@@ -115,5 +223,14 @@ class EndSpaceUiTest {
 
         /** 2つ目の「まとめ」の後ろに2段落しかない本文。見出しから後ろは画面より短い。 */
         val SHORT_TAIL_BODY = (0 until 23).joinToString("\n\n") { if (it % 20 == 0) "## まとめ" else "段落$it の本文です。" }
+
+        /** 2つ目の「まとめ」の後ろに横長の画像と1段落。画像を測るまでは見出しから後ろが画面より長い。 */
+        val IMAGE_TAIL_BODY = (0 until 23).joinToString("\n\n") {
+            when {
+                it % 20 == 0 -> "## まとめ"
+                it == 21 -> "![](wide.png)"
+                else -> "段落$it の本文です。"
+            }
+        }
     }
 }

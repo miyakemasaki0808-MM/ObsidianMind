@@ -7,8 +7,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.takeWhile
 import kotlin.math.abs
 
 /**
@@ -24,7 +23,7 @@ internal class EndSpace {
     var bottomPx by mutableIntStateOf(0)
         private set
 
-    /** 上端に置きたいブロック。本文の一覧が置き終えたら null に戻す。 */
+    /** 上端に置いておきたいブロック。利用者が自分で送るか、ほかの送りで消えるまで持つ（→ [settleAtTop]）。 */
     var wanted by mutableStateOf<EndSpaceRequest?>(null)
         private set
 
@@ -46,7 +45,7 @@ internal class EndSpace {
         if (wanted == request) bottomPx += px
     }
 
-    /** [request] を置き終えた。 */
+    /** [request] を置き終えた（利用者が自分で送った）。 */
     fun finish(request: EndSpaceRequest) {
         if (wanted == request) wanted = null
     }
@@ -70,28 +69,37 @@ internal fun endSpaceShortfall(targetOffset: Int?, canScrollForward: Boolean, pa
 }
 
 /**
- * [request] のブロックを上端に置く。末尾で止まっていたら、足りない分を [space] に足して送り直す。
- * px と dp の換算で1px残ることがあるので、数回まで繰り返す。
+ * [request] のブロックを上端に置き、**利用者が自分で送るまで置いたままにする。**
+ * 末尾で止まっていたら、足りない分を [space] に足して送り直す。置いた後に後ろの画像の寸法が決まって本文が縮んだときも同じ
+ * （測る前の画像は画面の高さを仮に取るので、測った後に末尾が短くなる）。px と dp の換算で1px残ることがあるので、続けて足すのは数回まで。
  */
 internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, request: EndSpaceRequest) {
-    repeat(SETTLE_ATTEMPTS) {
-        val shortfall = snapshotFlow {
-            val layout = listState.layoutInfo
-            endSpaceShortfall(
+    var grows = 0
+    snapshotFlow {
+        val layout = listState.layoutInfo
+        SettleView(
+            scrolling = listState.isScrollInProgress,
+            shortfall = endSpaceShortfall(
                 targetOffset = layout.visibleItemsInfo.firstOrNull { it.index == request.block }?.offset,
                 canScrollForward = listState.canScrollForward,
                 paddingApplied = abs(layout.afterContentPadding - space.bottomPx) <= 1
             )
-        }.filterNotNull().first()
-        if (shortfall == 0) {
-            space.finish(request)
-            return
+        )
+    }.takeWhile { !it.scrolling }.collect { view ->
+        when (val shortfall = view.shortfall) {
+            null -> Unit
+            0 -> grows = 0
+            else -> if (grows < SETTLE_GROWS) {
+                grows++
+                space.grow(request, shortfall)
+                listState.requestScrollToItem(request.block)
+            }
         }
-        space.grow(request, shortfall)
-        listState.requestScrollToItem(request.block)
     }
     space.finish(request)
 }
+
+private data class SettleView(val scrolling: Boolean, val shortfall: Int?)
 
 /**
  * 位置の口を持たない一覧（右の面）で、[block] へ送って上端に置く。**前の余白は送る前に消す** —
@@ -103,4 +111,4 @@ internal suspend fun placeBlockAtTop(listState: LazyListState, space: EndSpace, 
     space.want(block)
 }
 
-private const val SETTLE_ATTEMPTS = 3
+private const val SETTLE_GROWS = 3
