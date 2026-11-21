@@ -1047,7 +1047,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
         assertTrue("Rebuttal(反証の一文)", state.rebuttalSentence != null)
-        assertTrue("Backlinks(このノートへのリンク)", state.backlinks != BacklinksState.Idle)
+        assertTrue("Backlinks(このノートのバックナンバー)", state.backlinks != BacklinksState.Idle)
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
@@ -2500,14 +2500,14 @@ class NoteSessionCoordinatorTest {
         assertEquals("破棄されたスコープでは走査を頼まない", 0, expired)
     }
 
-    // ── このノートへのリンク（→ docs/dev/features/backlinks.md） ─────────────────
+    // ── このノートのバックナンバー（→ docs/dev/features/backlinks.md） ───────────
 
     /**
      * ノートを開いたら引き、走査の公開を受けたら引き直し、ノートを替えたら落とす。本文が出る前に届いた公開では引かない。
      * 索引の進み具合は Vault を開いたときから出す。
      */
     @Test
-    fun `このノートへのリンクはノートを開いたときと公開を受けたときに引き、ノートを替えたら落とす`() = runTest {
+    fun `バックナンバーはノートを開いたときと公開を受けたときに引き、ノートを替えたら落とす`() = runTest {
         val env = Env(this)
         val store = RecordingKnowledgeIndexStore()
         val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")

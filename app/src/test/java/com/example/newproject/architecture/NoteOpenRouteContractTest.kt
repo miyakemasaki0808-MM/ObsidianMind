@@ -12,7 +12,7 @@ import org.junit.Test
  * 実際の一覧の位置で見る**ので、ここは配線だけを見る（`MainActivity` のルートは素のJVMから組み立てられない）。
  *
  * ノートタブの本文リンクと「このノートへ移る」は、始まりの位置を `rememberNoteStart` が置くので対象にしない。
- * 関連タブのこのノートへのリンクは、見出しから始める対の境界（`openNoteAt`）を通る。どちらかを通っていれば始まりの位置が置かれる。
+ * 関連タブのバックナンバーは、見出しから始める対の境界（`openNoteAt`）を通る。どちらかを通っていれば始まりの位置が置かれる。
  * 冊子は `BookletRouteContractTest` が見る。
  *
  * 正本は [features/rediscover.md](../../../../../../../../docs/dev/features/rediscover.md) §5。

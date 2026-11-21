@@ -181,7 +181,7 @@ class MainActivity : ComponentActivity() {
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
                 // ノートが変われば捨てる。
                 val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
-                // 関連タブの「このノートへのリンク」から開いたノートの始まり（→ features/backlinks.md §3）。
+                // 関連タブの「このノートのバックナンバー」から開いたノートの始まり（→ features/backlinks.md §3）。
                 // 押した時点ではノートの画面が組まれていないので、本文の位置と同じこのスコープで解析を待って見出しへ送る。
                 val noticeContext = LocalContext.current
                 val startNoteFromTab = rememberNoteStart(

@@ -40,7 +40,7 @@ NoteViewModel（Android境界の窓口）
       ├── SideReadingController         ← 並べ読み（関連ノートを右で眺めるだけ。**ノート単位**。今のノートにしない）
       ├── RebuttalController            ← 反証の一文（関連ノートの完了から始まる。**ノート単位**）
       ├── KnowledgeIndexController      ← 知識索引（端末内の DB。走査の公開ごとに突き合わせる。**Vault単位** → [knowledge_index](knowledge_index.md)）
-      ├── BacklinksController           ← このノートへのリンク（索引から引いて解く。**ノート単位**。AI を呼ばない → [backlinks](../features/backlinks.md)）
+      ├── BacklinksController           ← このノートのバックナンバー（索引から引いて解き、痕跡を読んで並べる。**ノート単位**。AI を呼ばない → [backlinks](../features/backlinks.md)）
       └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
@@ -100,7 +100,7 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み・反証の一文・このノートへのリンク | ノート切替（**各Controllerの `activeRequestId`**。並べ読みとこのノートへのリンクはジョブの取り消しと、書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み・反証の一文・バックナンバー | ノート切替（**各Controllerの `activeRequestId`**。並べ読みとバックナンバーはジョブの取り消しと、書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
 | Vault単位 | フォルダ一覧・孤児掃除・痕跡の退避・冊子の束・知識索引の作成 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 

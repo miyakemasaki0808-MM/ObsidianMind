@@ -22,7 +22,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 「このノートへのリンク」の節に何を出すか（→ features/backlinks.md §3・§5）。余白ペインと関連タブが同じ判定を使う。 */
+/** 「このノートのバックナンバー」の節に何を出すか（→ features/backlinks.md §3・§5）。余白ペインと関連タブが同じ判定を使う。 */
 class BacklinksSectionTest {
 
     private val row = BacklinkRow(

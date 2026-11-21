@@ -118,7 +118,7 @@
 | [margin_quote.md](features/margin_quote.md) | 面を越える引用（構想） — 本文の一節を選択メニューか机の札で余白メモへ移し、引用つきのメモにする。引用の無いメモも書いた頃に読んでいた位置を控える |
 | [desk_memory.md](features/desk_memory.md) | 机の記憶 — 机で右に並べて読んだ相手を訪問の痕跡に1件控え、次の再会で名前を添え、開いた Fold ではその名前を押して開き直す |
 | [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
-| [backlinks.md](features/backlinks.md) | このノートへのリンク — 今のノートへリンクしているノートを、リンクを含む1文つきで余白ペインと関連タブに出す |
+| [backlinks.md](features/backlinks.md) | このノートのバックナンバー — 今のノートへリンクしているのに久しく読んでいないノートを、リンクを含む1文つきで余白ペインと関連タブに出す（再会の入口） |
 
 ### 基盤（`system/`）
 

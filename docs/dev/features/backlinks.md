@@ -1,8 +1,8 @@
 # このノートのバックナンバー — 自分が結んだノートとの再会の入口
 
-**状態:** バックリンクを1文つきで全件並べる形は実装済み（知識索引の区切り2）・端末で確認済み。**再会の入口への作り直しは設計済み・未実装**（2026-11-21、オーナー判断）。この文書は作り直した後の形を書き、今の画面との違いは §11 に置く
-**最終検証:** 2026-11-21 / `70b25328`（末尾に近い見出しを最初の行に置く直し）。表示と開閉ほかは 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。件数と1文・並び・同じ名前の別のノート・開く位置・開閉・外部で足したリンク・ライトとダーク）。どちらも作り直す前の形
-**関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkRows`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`）・`KnowledgeIndexLinks.kt` / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt`・`ReadingTraceStore.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
+**状態:** 実装済み（知識索引の区切り2を、2026-11-21 のオーナー判断で再会の入口へ作り直した）。作り直した形は JVM テストと画面のテストまでで、端末では確かめていない（§10 の実機ケース）
+**最終検証:** 作り直す前の形を 2026-11-21 / `70b25328`（末尾に近い見出しを最初の行に置く直し）と `2f165d5c`（Pixel 10 Pro Fold で通し版。開く位置・開閉・外部で足したリンク・ライトとダーク）で確かめた
+**関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkSources`・`backlinkRows`・`sentenceForCurrent`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`）・`KnowledgeIndexLinks.kt` / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt`・`ReadingTraceStore.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`・`backlinkLine`・`BacklinkRowList`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
 **関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `KnowledgeIndexLinksTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
 
@@ -217,11 +217,11 @@
 
 ## 11. 既知の制約・未解決事項
 
-- **再会の入口への作り直しは未実装。** 今の画面は「このノートへのリンク」の名前で、互いのリンクも含めて更新の新しい順に全件を並べ、1行に題名・最大3行の1文・「ほか N 箇所」を出す。
-  余白ペインでは「このノートの関連」の上に置いている。ペインの並びの正本（[margin_pane](margin_pane.md) §5.2）も作り直しと一緒に直す
+- **1行に収まるかは文字数の目安で決める。** 画面の幅は測らず、リンクが文頭から20文字より後ろにあるときだけ、手前を8文字残して前を切る。幅の広い画面では切らなくても入る文を切ることがある
+- **リンクの数が多いノートほど、節が出るまで待つ。** 並べるのに出どころごとの痕跡を読むため。リンクを多く受けるノートで実機で測る
 - **✎ は見出し名で照らす。** 痕跡のメモは同じ見出しのうち何番目かを控えないので、同じ見出しが複数ある出どころでは、別の節に書いたメモでも印が付く
 - **末尾に近い見出しから開いた後に末尾まで読むと、最後の段落の下に余白が見える。** 見出しを最初の行に置くための余白で、先頭から開き直したノートには残らない（→ [note_links](note_links.md) 判断6）
-- 読み上げは、題名と1文と「ほか N 箇所」が1つの押せる行にまとまることまでを画面の構造で確かめた。音声で聞いた判定はしていない
+- 読み上げは、作り直す前の形（題名と1文と「ほか N 箇所」が1つの押せる行にまとまる）までを画面の構造で確かめた。✎ の「余白メモあり」を含め、音声で聞いた判定はしていない
 - 大きな Vault の最初の作成の時間と DB の大きさは [knowledge_index](../system/knowledge_index.md) §8 が持つ
 
 ## 12. 開発経緯

@@ -136,7 +136,7 @@ class NoteLinkActionsTest {
         assertEquals(NoteStartBlock(7, headingMissing = false), noteStartBlock(blocks, null, fallback = 7))
     }
 
-    /** このノートへのリンクから開くとき（→ features/backlinks.md §5）。番目が無ければ同じ見出しの最初、見出しも無ければ決めた位置。 */
+    /** バックナンバーの行から開くとき（→ features/backlinks.md §5）。番目が無ければ同じ見出しの最初、見出しも無ければ決めた位置。 */
     @Test
     fun `同じ見出しの2つ目から開き、本文が変わって番目が無ければ最初の見出しから開く`() {
         val repeated = listOf(
