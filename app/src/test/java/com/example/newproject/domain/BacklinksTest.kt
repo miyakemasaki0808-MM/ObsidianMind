@@ -38,11 +38,33 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             listOf(candidate("other/日記.md", "習慣"), candidate("notes/振り返り.md", "習慣")),
+            emptyList(),
             current.ref,
             index
         )
 
         assertEquals("同じフォルダが先に選ばれるので、other の日記の [[習慣]] は other/習慣 へ着く", listOf("振り返り.md"), rows.map { it.note.title })
+    }
+
+    /**
+     * 互いにリンクしているノートは、本文を読めば行ける（→ features/backlinks.md 判断5）。
+     * 今のノートのリンクも同じ規則で今のノートから解き、**着いた先だけ**を除く。同じ名前の別のノートへ着く本文のリンクでは除かない。
+     */
+    @Test
+    fun `今のノートの本文がリンクしている相手を除き、同じ名前の別のノートへ着く本文のリンクでは除かない`() {
+        val mutual = note("notes/日記.md", lastModified = 3L)
+        val sameNameSource = note("other/振り返り.md", lastModified = 2L)
+        val sameNameTarget = note("notes/振り返り.md")
+        val index = NoteLinkIndex(listOf(current, mutual, sameNameSource, sameNameTarget))
+
+        val rows = backlinkRows(
+            listOf(candidate("notes/日記.md", "習慣"), candidate("other/振り返り.md", "習慣")),
+            listOf(NoteLink.ByPath("日記.md", null), NoteLink.ByName("振り返り", null)),
+            current.ref,
+            index
+        )
+
+        assertEquals("本文の [[振り返り]] は同じフォルダの notes/振り返り へ着く", listOf(sameNameSource.ref), rows.map { it.note.ref })
     }
 
     @Test
@@ -56,6 +78,7 @@ class BacklinksTest {
                 candidate("notes/日記.md", "習慣", ordinal = 0, sentence = "最初に [[習慣]] を書いた。", section = "まとめ", occurrence = 1),
                 candidate("notes/日記.md", "習慣", ordinal = 1, sentence = "二つ目。")
             ),
+            emptyList(),
             current.ref,
             index
         )
@@ -77,6 +100,7 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             listOf("notes/古い.md", "notes/新しいB.md", "notes/日時なし.md", "notes/新しいA.md").map { candidate(it, "習慣") },
+            emptyList(),
             current.ref,
             index
         )
@@ -90,6 +114,7 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             listOf(candidate("locked/見えない.md", "習慣"), candidate("notes/習慣.md", "習慣")),
+            emptyList(),
             current.ref,
             index
         )
@@ -133,6 +158,7 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             listOf(candidate("notes/sub/日記.md", "../習慣.md", kind = IndexedLinkKind.PATH)),
+            emptyList(),
             current.ref,
             index
         )

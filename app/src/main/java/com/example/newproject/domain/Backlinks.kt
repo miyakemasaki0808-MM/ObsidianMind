@@ -27,6 +27,7 @@ internal data class BacklinkCandidate(
 
 /**
  * [candidates] を解き、[current] へ着くリンクだけを出どころごとに1行にまとめる。
+ * [outgoing] は今のノートから出るリンクで、**[current] から同じ規則で解いて着いた先の出どころを除く**（互いのリンク。本文を読めば分かる）。
  *
  * - **出どころは走査の索引（[index]）で引く。** 引けなければ解かずに除く — 出どころの相対パスが分からないまま解くと、
  *   根からの相対で解いて行き先を誤る（一部のフォルダを読めない走査 → knowledge_index.md §5）
@@ -34,11 +35,19 @@ internal data class BacklinkCandidate(
  * - 今のノート自身の中のリンクは除く
  * - 行は本文で最初に出てくるリンクの1文と、ほかの箇所の数。並びは出どころの更新日時が新しい順、同じなら題名の順
  */
-internal fun backlinkRows(candidates: List<BacklinkCandidate>, current: DocumentRef, index: NoteLinkIndex): List<BacklinkRow> =
-    candidates
+internal fun backlinkRows(
+    candidates: List<BacklinkCandidate>,
+    outgoing: List<NoteLink>,
+    current: DocumentRef,
+    index: NoteLinkIndex
+): List<BacklinkRow> {
+    val linkedFromCurrent = outgoing.mapNotNullTo(HashSet()) { link ->
+        (resolveNoteLink(link, current, index) as? NoteLinkResolution.Open)?.note?.ref
+    }
+    return candidates
         .mapNotNull { candidate ->
             val source = index.atExactPath(candidate.sourcePath) ?: return@mapNotNull null
-            if (source.ref == current) return@mapNotNull null
+            if (source.ref == current || source.ref in linkedFromCurrent) return@mapNotNull null
             val resolved = resolveNoteLink(candidate.toNoteLink(), source.ref, index)
             if (resolved is NoteLinkResolution.Open && resolved.note.ref == current) source to candidate else null
         }
@@ -54,3 +63,4 @@ internal fun backlinkRows(candidates: List<BacklinkCandidate>, current: Document
             )
         }
         .sortedWith(compareByDescending<BacklinkRow> { it.note.lastModified ?: Long.MIN_VALUE }.thenBy { it.note.title })
+}

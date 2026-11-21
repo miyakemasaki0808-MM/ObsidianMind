@@ -154,6 +154,13 @@ internal abstract class KnowledgeIndexDao {
         return linksNamed(key)
     }
 
+    /** 索引が [vaultKey] のものなら、[path] のノートから出るリンクを本文の順に引く。別の Vault の索引なら null。 */
+    @Transaction
+    open suspend fun linksFromIn(vaultKey: String, path: String): List<IndexedLinkEntity>? {
+        if (meta()?.vaultKey != vaultKey) return null
+        return linksOf(path)
+    }
+
     @Upsert
     abstract suspend fun upsertMark(mark: RewriteMarkEntity)
 

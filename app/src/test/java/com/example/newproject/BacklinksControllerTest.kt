@@ -7,6 +7,7 @@ import com.example.newproject.data.KnowledgeIndexStore
 import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteFile
@@ -101,6 +102,25 @@ class BacklinksControllerTest {
 
         assertEquals(listOf("日記.md"), env.titles())
         assertEquals("今のノートの名前の鍵で絞る", listOf("習慣"), env.store.keys)
+    }
+
+    /** 互いのリンクは今のノートのパスで索引から引く（→ features/backlinks.md 判断5）。引けない（別の Vault）なら数えられない。 */
+    @Test
+    fun `今のノートのパスで出るリンクを引いてその相手を除き、引けなければ読めないにする`() = runTest {
+        val env = Env(this)
+        env.published()
+        env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
+        env.store.outgoing = listOf(NoteLink.ByName("日記", null))
+
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(listOf("週報.md"), env.titles())
+        assertEquals(listOf("notes/習慣.md"), env.store.fromPaths)
+
+        env.store.outgoing = null
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(BacklinksState.Unavailable, env.backlinks)
     }
 
     @Test
@@ -243,6 +263,14 @@ class BacklinksControllerTest {
         override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? {
             keys += nameKey
             return answer()
+        }
+
+        val fromPaths = mutableListOf<String>()
+        var outgoing: List<NoteLink>? = emptyList()
+
+        override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? {
+            fromPaths += relativePath
+            return outgoing
         }
 
         override suspend fun openVault(vaultKey: String) = KnowledgeIndexSnapshot(emptyMap(), emptyMap(), firstBuildDone = true)

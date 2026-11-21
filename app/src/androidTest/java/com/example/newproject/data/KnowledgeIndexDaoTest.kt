@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
+import com.example.newproject.domain.NoteLink
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -118,6 +119,23 @@ class KnowledgeIndexDaoTest {
 
         val bySource = store.backlinkCandidates(VAULT_A, "習慣")!!.associate { it.sourcePath to it.sentenceLink }
         assertEquals(mapOf("a.md" to 0..1, "b.md" to null), bySource)
+    }
+
+    @Test
+    fun ノートから出るリンクを本文の順に引き別のVaultの索引ならnullを返す() = runBlocking<Unit> {
+        store.openVault(VAULT_A)
+        val links = listOf(
+            link("習慣").copy(ordinal = 1),
+            link("日記.md").copy(ordinal = 0, kind = IndexedLinkKind.PATH, heading = "まとめ")
+        )
+        store.applyRead(VAULT_A, record("a.md"), links, writeNumberAtRead = null)
+
+        assertEquals(
+            listOf(NoteLink.ByPath("日記.md", "まとめ"), NoteLink.ByName("習慣", null)),
+            store.linksFrom(VAULT_A, "a.md")
+        )
+        assertEquals(emptyList<NoteLink>(), store.linksFrom(VAULT_A, "まだ読んでいない.md"))
+        assertEquals(null, store.linksFrom(VAULT_B, "a.md"))
     }
 
     @Test

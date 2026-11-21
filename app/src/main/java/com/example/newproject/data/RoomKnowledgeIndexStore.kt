@@ -4,6 +4,7 @@ import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
 import com.example.newproject.domain.IndexedNoteState
+import com.example.newproject.domain.NoteLink
 
 /**
  * [KnowledgeIndexStore] の本番実装。[database] は最初に使うときに作る — 作るだけなら I/O はしないが、
@@ -67,6 +68,14 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
                 sentence = row.sentence,
                 sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
             )
+        }
+
+    override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? =
+        dao.linksFromIn(vaultKey, relativePath)?.map { row ->
+            when (IndexedLinkKind.valueOf(row.kind)) {
+                IndexedLinkKind.NAME -> NoteLink.ByName(row.target, row.heading)
+                IndexedLinkKind.PATH -> NoteLink.ByPath(row.target, row.heading)
+            }
         }
 }
 

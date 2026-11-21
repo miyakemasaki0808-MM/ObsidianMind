@@ -67,8 +67,11 @@ internal class BacklinksController(
         if (state.current !is BacklinksState.Ready) state.set(BacklinksState.Loading)
         job = scope.launch {
             val rows = try {
-                store.backlinkCandidates(key, noteKeyOf(target.name))
-                    ?.let { candidates -> withContext(resolveDispatcher) { backlinkRows(candidates, current, index) } }
+                store.backlinkCandidates(key, noteKeyOf(target.name))?.let { candidates ->
+                    store.linksFrom(key, target.vaultRelativePath)?.let { outgoing ->
+                        withContext(resolveDispatcher) { backlinkRows(candidates, outgoing, current, index) }
+                    }
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {

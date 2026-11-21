@@ -3,6 +3,7 @@ package com.example.newproject
 import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkIndex
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
@@ -2715,5 +2716,7 @@ private class FakeHistoryStore : HistoryStore {
             beforeCandidates()
             return candidates
         }
+
+        override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? = emptyList()
     }
 }

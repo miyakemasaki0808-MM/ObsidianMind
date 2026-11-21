@@ -7,6 +7,7 @@ import com.example.newproject.data.KnowledgeIndexStore
 import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
+import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.mayApplyIndexedRead
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.KnowledgeIndexProgressWriter
@@ -911,6 +912,7 @@ class KnowledgeIndexControllerTest {
         }
 
         override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? = null
+        override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? = null
     }
 
     private companion object {

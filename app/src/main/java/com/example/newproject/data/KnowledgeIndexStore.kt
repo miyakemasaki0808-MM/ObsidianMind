@@ -3,6 +3,7 @@ package com.example.newproject.data
 import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
+import com.example.newproject.domain.NoteLink
 
 /**
  * 知識索引の置き場（→ docs/dev/system/knowledge_index.md）。**Room を知らない口**で、`controller` はこれだけを触る。
@@ -53,6 +54,12 @@ internal interface KnowledgeIndexStore {
      * 引く側が走査の索引で解き、今のノートへ着くものだけを残す。索引が別の Vault のものなら null。
      */
     suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>?
+
+    /**
+     * [relativePath] のノートから出るリンクを、本文の順に引く（→ docs/dev/features/backlinks.md §5 の互いのリンク）。行き先はまだ解いていない。
+     * 索引が別の Vault のものなら null。索引がそのノートをまだ読んでいなければ空。
+     */
+    suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>?
 }
 
 /**
