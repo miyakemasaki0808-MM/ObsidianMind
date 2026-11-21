@@ -1,5 +1,12 @@
 package com.example.newproject
 
+import com.example.newproject.domain.BacklinkCandidate
+import com.example.newproject.domain.IndexedLink
+import com.example.newproject.domain.IndexedLinkKind
+import com.example.newproject.domain.NoteLinkIndex
+import com.example.newproject.data.IndexedNoteRecord
+import com.example.newproject.data.KnowledgeIndexSnapshot
+import com.example.newproject.data.KnowledgeIndexStore
 import com.example.newproject.ai.AiAvailability
 import com.example.newproject.controller.NoteSessionCoordinator
 import com.example.newproject.controller.NoteDwellGate
@@ -20,6 +27,8 @@ import com.example.newproject.model.BesideNote
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.BookletEntry
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.NoteScanKind
+import com.example.newproject.model.PublishedNoteScan
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.HistoryEntry
 import com.example.newproject.data.HistoryStore
@@ -39,8 +48,11 @@ import com.example.newproject.domain.SummarizeUseCase
 import com.example.newproject.model.state.BookletBundle
 import com.example.newproject.model.state.WeaveState
 import com.example.newproject.model.state.BookletState
+import com.example.newproject.model.state.BacklinksState
+import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.model.state.DistillState
 import com.example.newproject.model.state.NoteState
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.NoteUiState
 import com.example.newproject.model.NotePaperTone
 import com.example.newproject.model.NoteUiStateStore
@@ -139,6 +151,8 @@ class NoteSessionCoordinatorTest {
         // 切替直後に loadRandomNote が走って差し替わるため、ここで落とすと画面が点滅する
         "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
         "wikilinkTitles" to setOf("旧リンク"),
+        // ノートの表示の番号は戻さない。戻すと、Vault をまたいで同じ番号が出て、前の表示の画面の状態を今のものと取り違える。
+        "noteLoadId" to NoteLoadId(issuer = 3L, count = 7L),
         // 蒸留は**状態変換ではなくController側が落とす**。
         // 復旧待ち（RecoveryRequired）だけは残す判断があるため
         // DistillController.cancelForNoteChange() が持つ。
@@ -341,7 +355,11 @@ class NoteSessionCoordinatorTest {
         assertNull(reset.readingTraceCard)
         // 残すと、次のノートの関連タブに前のノートと食い違う文が出る。
         assertNull(reset.rebuttalSentence)
+        // 残すと、次のノートのペインに前のノートへのリンクが出る。
+        assertEquals(BacklinksState.Idle, reset.backlinks)
         assertEquals(NotePaperTone.Fresh, reset.notePaperTone)
+        // 索引の進み具合は Vault 単位。ノートを開き直しただけで「作っています」が消えるのは誤り。
+        assertEquals(KnowledgeIndexProgress.Building(1, 2), reset.knowledgeIndexProgress)
     }
 
     // ── 調停の結線 ─────────────────────────────────────────────────────────
@@ -369,7 +387,8 @@ class NoteSessionCoordinatorTest {
             survivors = mapOf(
                 "vaultSelected" to true,
                 "noteState" to NoteState.Success(title = "旧ノート", content = "本文"),
-                "wikilinkTitles" to setOf("旧リンク")
+                "wikilinkTitles" to setOf("旧リンク"),
+                "noteLoadId" to NoteLoadId(issuer = 3L, count = 7L)
             )
         )
         // 旧VaultのURIは新Vaultで開けないので履歴の永続化ごと捨てる
@@ -408,6 +427,7 @@ class NoteSessionCoordinatorTest {
         assertNull(state.readingTraceCard)
         assertNull(state.rebuttalSentence)
         assertNull(state.crystalNotePath)
+        assertEquals(BacklinksState.Idle, state.backlinks)
         // 窓口が持つノート単位ジョブ（ノート読込・関連ノート）も同じ契約から止まる
         assertEquals(1, hostCancelCount)
 
@@ -1026,6 +1046,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
         assertTrue("Rebuttal(反証の一文)", state.rebuttalSentence != null)
+        assertTrue("Backlinks(このノートへのリンク)", state.backlinks != BacklinksState.Idle)
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
@@ -1084,6 +1105,9 @@ class NoteSessionCoordinatorTest {
             lastProgressPercent = 40
         ),
         rebuttalSentence = RebuttalSentence(text = "旧ノートと食い違う一文。", source = SIDE_NOTE),
+        backlinks = BacklinksState.Ready(emptyList()),
+        knowledgeIndexProgress = KnowledgeIndexProgress.Building(1, 2),
+        noteLoadId = NoteLoadId(issuer = 3L, count = 7L),
         folders = listOf(NoteFolder(name = "下書き", documentId = "old-folder")),
         selectedFolder = NoteFolder(name = "下書き", documentId = "old-folder"),
         foldersError = "列挙できませんでした",
@@ -2438,6 +2462,107 @@ class NoteSessionCoordinatorTest {
         }
     }
 
+    /**
+     * 蒸留が本文を書き終えたら、画面用の読み直しの成否に関わらず、走査の一覧を捨てて知識索引に読み直すと控えさせる
+     * （→ docs/dev/system/knowledge_index.md §3 の手順4）。表示中でないノートの復元でも届く。
+     */
+    @Test
+    fun `蒸留が本文を書き終えたら、走査の一覧を捨て、知識索引に読み直すと控えさせる`() = runTest {
+        val env = Env(this)
+        env.distill.restoreResult = DistillRecoveryResolutionResult.Restored("content://other", "hash")
+        val store = RecordingKnowledgeIndexStore()
+        var expired = 0
+        val coordinator = env.coordinator(knowledgeIndexStore = store, expireNoteScan = { expired++ })
+
+        coordinator.restoreDistillOriginal()
+        advanceUntilIdle()
+
+        assertEquals(1, expired)
+        assertEquals(listOf("content://other"), store.rewritten)
+    }
+
+    /** 書いている途中に画面のスコープが破棄されても、書き終えた控えは置き場に残る（走査を頼むのは次に Vault を開いたとき）。 */
+    @Test
+    fun `復元の途中で画面のスコープが破棄されても、書き終えた控えは置き場に残る`() = runTest {
+        val env = Env(this)
+        val uiScope = CoroutineScope(StandardTestDispatcher(testScheduler) + Job())
+        env.distill.restoreResult = DistillRecoveryResolutionResult.Restored("content://other", "hash")
+        env.distill.duringRestore = { uiScope.cancel() }
+        val store = RecordingKnowledgeIndexStore()
+        var expired = 0
+        val coordinator = env.coordinator(uiScope = uiScope, knowledgeIndexStore = store, expireNoteScan = { expired++ })
+
+        coordinator.restoreDistillOriginal()
+        advanceUntilIdle()
+
+        assertEquals(listOf("content://other"), store.rewritten)
+        assertEquals("破棄されたスコープでは走査を頼まない", 0, expired)
+    }
+
+    // ── このノートへのリンク（→ docs/dev/features/backlinks.md） ─────────────────
+
+    /**
+     * ノートを開いたら引き、走査の公開を受けたら引き直し、ノートを替えたら落とす。本文が出る前に届いた公開では引かない。
+     * 索引の進み具合は Vault を開いたときから出す。
+     */
+    @Test
+    fun `このノートへのリンクはノートを開いたときと公開を受けたときに引き、ノートを替えたら落とす`() = runTest {
+        val env = Env(this)
+        val store = RecordingKnowledgeIndexStore()
+        val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
+        val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
+        store.candidates = listOf(
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "[[習慣]] を読む。")
+        )
+        val coordinator = env.coordinator(knowledgeIndexStore = store, noteLinkIndex = { NoteLinkIndex(listOf(current, source)) })
+
+        coordinator.onVaultRestored()
+        advanceUntilIdle()
+        assertEquals(KnowledgeIndexProgress.Building(0, 0), coordinator.uiState.value.knowledgeIndexProgress)
+
+        coordinator.onNoteChanged()
+        coordinator.onScanPublished(PublishedNoteScan(listOf(current, source), NoteScanKind.COMPLETE, 1L, coordinator.vaultGeneration))
+        advanceUntilIdle()
+        assertEquals("本文が出る前は引かない", BacklinksState.Idle, coordinator.uiState.value.backlinks)
+
+        coordinator.setNoteState(NoteState.Success(title = "習慣", content = "本文", targetUri = current.ref.value))
+        advanceUntilIdle()
+        assertEquals(listOf("日記.md"), (coordinator.uiState.value.backlinks as BacklinksState.Ready).rows.map { it.note.title })
+
+        store.candidates = null
+        coordinator.onScanPublished(PublishedNoteScan(listOf(current, source), NoteScanKind.COMPLETE, 2L, coordinator.vaultGeneration))
+        advanceUntilIdle()
+        assertEquals("公開を受けたら引き直す", BacklinksState.Unavailable, coordinator.uiState.value.backlinks)
+
+        coordinator.onNoteChanged()
+        advanceUntilIdle()
+        assertEquals(BacklinksState.Idle, coordinator.uiState.value.backlinks)
+    }
+
+    /** ノートを替えたら、引いている途中の照会を契約（[NoteSessionCoordinator.cancelNoteScopedJobs]）が止める。次の本文が出る前に前のノートの行を出さない。 */
+    @Test
+    fun `ノートを替えたら引いている途中の照会を止め、次の本文が出る前に前のノートの行を書かない`() = runTest {
+        val env = Env(this)
+        val store = RecordingKnowledgeIndexStore()
+        val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
+        val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
+        store.candidates = listOf(
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "[[習慣]] を読む。")
+        )
+        val held = CompletableDeferred<Unit>()
+        store.beforeCandidates = { held.await() }
+        val coordinator = env.coordinator(knowledgeIndexStore = store, noteLinkIndex = { NoteLinkIndex(listOf(current, source)) })
+        coordinator.onScanPublished(PublishedNoteScan(listOf(current, source), NoteScanKind.COMPLETE, 1L, coordinator.vaultGeneration))
+        coordinator.setNoteState(NoteState.Success(title = "習慣", content = "本文", targetUri = current.ref.value))
+        runCurrent()
+
+        coordinator.onNoteChanged()
+        held.complete(Unit)
+        advanceUntilIdle()
+
+        assertEquals(BacklinksState.Idle, coordinator.uiState.value.backlinks)
+    }
+
     private class Env(
         private val scope: TestScope,
         private val clock: TestClock = TestClock()
@@ -2471,7 +2596,10 @@ class NoteSessionCoordinatorTest {
             // 画面側のスコープ。**痕跡の書き出しだけはこちらに載らない**ことを確かめるときに分ける。
             uiScope: CoroutineScope = scope,
             // 訪問の保存を載せるスコープ。**別のスケジューラにすると、保存を止めたまま照合を待たせられる。**
-            persistScope: CoroutineScope = scope
+            persistScope: CoroutineScope = scope,
+            knowledgeIndexStore: KnowledgeIndexStore? = null,
+            expireNoteScan: () -> Unit = {},
+            noteLinkIndex: () -> NoteLinkIndex = { NoteLinkIndex.EMPTY }
         ) = NoteSessionCoordinator(
             scope = uiScope,
             persistScope = persistScope,
@@ -2494,6 +2622,9 @@ class NoteSessionCoordinatorTest {
             history = history,
             currentVaultKey = { "vault-a" },
             noteFieldStore = noteFields,
+            knowledgeIndexStore = knowledgeIndexStore,
+            expireNoteScan = expireNoteScan,
+            noteLinkIndex = noteLinkIndex,
             onModelReady = { _, _ -> },
             reloadBody = { _, _ -> false },
             cancelHostJobs = cancelHostJobs,
@@ -2557,7 +2688,32 @@ private class FakeHistoryStore : HistoryStore {
         override fun discardResolvedRecovery(assessment: DistillRecoveryAssessment): Boolean = true
         override fun discardPendingRecovery(): Boolean = true
         override fun pendingOriginal(): PendingDistillOriginal? = null
-        override fun restoreOriginal(): DistillRecoveryResolutionResult =
-            DistillRecoveryResolutionResult.NoValidRecord
+        var restoreResult: DistillRecoveryResolutionResult = DistillRecoveryResolutionResult.NoValidRecord
+        /** 復元の I/O の途中で起こすこと（画面のスコープを破棄するなど）。 */
+        var duringRestore: () -> Unit = {}
+        override fun restoreOriginal(): DistillRecoveryResolutionResult {
+            duringRestore()
+            return restoreResult
+        }
+    }
+
+    /** 知識索引の置き場の代わり。**読み直すと控えた参照**を記録し、バックリンクの照会には [candidates] を返す。 */
+    private class RecordingKnowledgeIndexStore : KnowledgeIndexStore {
+        val rewritten = mutableListOf<String>()
+        var candidates: List<BacklinkCandidate>? = null
+        var beforeCandidates: suspend () -> Unit = {}
+        override suspend fun openVault(vaultKey: String) = KnowledgeIndexSnapshot(emptyMap(), emptyMap(), firstBuildDone = false)
+        override fun markRewrittenNow(documentRef: String) {
+            rewritten += documentRef
+        }
+        override suspend fun applyRead(vaultKey: String, note: IndexedNoteRecord, links: List<IndexedLink>, writeNumberAtRead: Long?) = true
+        override suspend fun deleteNotes(vaultKey: String, relativePaths: List<String>) = Unit
+        override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) = Unit
+        override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) = Unit
+        override suspend fun markFirstBuildDone(vaultKey: String) = Unit
+        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? {
+            beforeCandidates()
+            return candidates
+        }
     }
 }

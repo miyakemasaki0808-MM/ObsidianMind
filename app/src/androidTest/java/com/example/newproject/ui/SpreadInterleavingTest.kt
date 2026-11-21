@@ -1,6 +1,7 @@
 package com.example.newproject.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.lazy.LazyListState
@@ -12,15 +13,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -148,22 +152,37 @@ class SpreadInterleavingTest {
         assertSentTo(120, mark)
     }
 
-    /** 同じ順序で、組版の途中に再会カードを畳んで左ページの高さが変わる。 */
+    /**
+     * 同じ順序で、組版の途中に再会カードを畳んで左ページの高さが変わる。**カードを出して高さを測らせてから止める** —
+     * 最初のブロックの前で止めると「組んでいます」のまま操作が終わり、カードを置く処理にも高さを受け取る処理にも届かないので、
+     * 測った高さが畳んだ後の組版に残る不具合を見逃す。結果は、同じ送り先・畳んだ後の寸法で初めから組んだ対照と、左右のページの段落で比べる。
+     */
     @Test
-    fun 組版の途中に外から送ってカードを畳んでも_送り先の見開きを出す() {
+    fun 組版の途中に外から送ってカードを畳んでも_送り先の見開きを畳んだ高さで出す() {
         card = true
-        startHeldBeforeAny()
+        startHeldAfterFirstSpread("A")
+        composeRule.onNodeWithTag(CARD).assertIsDisplayed().assertHeightIsEqualTo(120.dp)
 
-        composeRule.runOnIdle {
+        val mark = composeRule.runOnIdle {
             position.moveTo(120)
             card = false
+            reports.size
         }
         // カードの高さが替わるだけなら組版は止まったまま続く。
         hold.holdAt = null
         hold.open()
         composeRule.waitForIdle()
 
-        assertSentTo(120, mark = 0)
+        assertSentTo(120, mark)
+        val interleaved = shownPages()
+
+        // 対照: 畳んだ後の寸法・同じ送り先で、新しい見開きとして初めから組む。
+        composeRule.runOnIdle {
+            spreadPosition = BodyPosition(LazyListState(120))
+            generation++
+        }
+        composeRule.waitForIdle()
+        assertEquals("畳んだ高さで初めから組んだ対照と、左右のページの段落が違う", shownPages(), interleaved)
     }
 
     /** 画像の寸法が届く → 組み直しを始める → めくりが決まる → 組み直しが終わる。 */
@@ -350,7 +369,8 @@ class SpreadInterleavingTest {
                                 onReadingProgress = { block, _, total, _ -> reports += Report(block, total) },
                                 pageWidth = pageWidth,
                                 gutter = 16.dp,
-                                leftPageTop = if (card) ({ Box(modifier = Modifier.height(120.dp)) }) else null,
+                                // 中身の無い Box は幅の最小0で測られ、表示の確認で落ちる。本物のカードと同じくページの幅に広げる。
+                                leftPageTop = if (card) ({ Box(modifier = Modifier.fillMaxWidth().height(120.dp).testTag(CARD)) }) else null,
                                 measureGate = hold::gate
                             )
                         }
@@ -433,6 +453,7 @@ class SpreadInterleavingTest {
     private companion object {
         const val NOTE_A = "content://vault/a.md"
         const val NOTE_B = "content://vault/b.md"
+        const val CARD = "再会カード"
         const val WAIT_MILLIS = 5_000L
 
         /** 組版は約4msごとに途中を出すので、それより長く過ごす。 */

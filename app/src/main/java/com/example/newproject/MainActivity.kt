@@ -6,13 +6,19 @@ import com.example.newproject.model.state.BookletMode
 import com.example.newproject.model.state.BookletState
 import com.example.newproject.model.state.NoteState
 import com.example.newproject.ui.screen.DraftQuoteActions
+import com.example.newproject.ui.markdown.rememberEndSpace
 import com.example.newproject.ui.screen.BookletScreen
 import com.example.newproject.ui.screen.openFromBooklet
 import com.example.newproject.ui.screen.BodyPosition
 import com.example.newproject.ui.screen.openNoteFromTop
+import com.example.newproject.ui.screen.PendingNoteStart
+import com.example.newproject.ui.screen.openNoteAt
+import com.example.newproject.ui.screen.noteLinkHeadingMissingText
+import com.example.newproject.ui.screen.rememberNoteStart
 import com.example.newproject.model.state.SummaryState
 import com.example.newproject.ui.theme.Indigo
 import android.content.Intent
+import android.widget.Toast
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import com.example.newproject.ui.markdown.NoteImageMeasurements
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -157,7 +164,9 @@ class MainActivity : ComponentActivity() {
                 // 通常表示と全画面表示でスクロール位置を継承するため、listStateを共通スコープで持つ。
                 val noteListState = rememberLazyListState()
                 // 本文の位置を書く口。**本文の位置を書く経路はすべてここを通す**（→ BodyPosition）。
-                val bodyPosition = remember(noteListState) { BodyPosition(noteListState) }
+                // 見出しを上端に置くための末尾の余白は、位置と一緒に画面の保存値に置く（→ EndSpace）。
+                val bodyEndSpace = rememberEndSpace(noteListState)
+                val bodyPosition = remember(noteListState) { BodyPosition(noteListState, bodyEndSpace) }
                 // Vault を選ぶ画面の結果。選び直した直後に引くノートも、ほかの経路と同じく先頭から開く（→ features/rediscover.md §5）。
                 // 本文の位置の口を使うので、Activity ではなくこのスコープで受ける。
                 val openVault = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -172,6 +181,18 @@ class MainActivity : ComponentActivity() {
                 // 水増しされる**（→ NoteImageMeasurements）。sectionModel を鍵にして
                 // ノートが変われば捨てる。
                 val noteImageMeasurements = remember(sectionModel) { NoteImageMeasurements() }
+                // 関連タブの「このノートへのリンク」から開いたノートの始まり（→ features/backlinks.md §3）。
+                // 押した時点ではノートの画面が組まれていないので、本文の位置と同じこのスコープで解析を待って見出しへ送る。
+                val noticeContext = LocalContext.current
+                val startNoteFromTab = rememberNoteStart(
+                    bodyPosition,
+                    (uiState.noteState as? NoteState.Success)?.targetUri,
+                    uiState.noteState is NoteState.Loading,
+                    sectionModel,
+                    noteImageMeasurements
+                ) { heading ->
+                    Toast.makeText(noticeContext, noteLinkHeadingMissingText(heading, opened = true), Toast.LENGTH_SHORT).show()
+                }
                 // 余白メモの入力欄で書いているつもりか。**通常表示と全画面で共有する** — 全画面のシートで書いたまま戻ると、
                 // 戻った先の面へフォーカスを引き継ぐ（→ features/margin_pane.md §5.4）。画面の作り直しもまたいで保つ。
                 var memoFocusIntent by rememberSaveable { mutableStateOf(false) }
@@ -390,6 +411,16 @@ class MainActivity : ComponentActivity() {
                                 uiState = uiState,
                                 onOpenNote = { note ->
                                     openNoteFromTop(bodyPosition) { viewModel.openNote(contentResolver, note) }
+                                    navController.navigateToTab(AppDestination.Note)
+                                },
+                                onOpenBacklink = { row ->
+                                    val start = PendingNoteStart(
+                                        noteUri = row.note.ref.value,
+                                        block = 0,
+                                        heading = row.sectionHeading,
+                                        headingOccurrence = row.sectionHeadingOccurrence
+                                    )
+                                    openNoteAt(start, startNoteFromTab) { viewModel.openNote(contentResolver, row.note) }
                                     navController.navigateToTab(AppDestination.Note)
                                 }
                             )

@@ -2,7 +2,7 @@
 
 **状態:** 実装済み・稼働中。`model` / `domain` / `controller` の3層が Android 非依存としてCIで固定されている
 **最終検証:** 2026-09-12 / `23dce6b`
-**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（15 Controller）
+**関連コード:** `NoteViewModel.kt` / `controller/NoteSessionCoordinator.kt` / `model/NoteUiStateStore.kt` / `controller/`（17 Controller）
 **関連テスト:** `PackageDependencyTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `ThreadingScanTest`
 **正本:** この文書
 
@@ -39,10 +39,12 @@ NoteViewModel（Android境界の窓口）
       ├── NoteFieldController           ← ノートの分野判定（**ジョブはノート単位・結果はVault単位 → 判断4**）
       ├── SideReadingController         ← 並べ読み（関連ノートを右で眺めるだけ。**ノート単位**。今のノートにしない）
       ├── RebuttalController            ← 反証の一文（関連ノートの完了から始まる。**ノート単位**）
+      ├── KnowledgeIndexController      ← 知識索引（端末内の DB。走査の公開ごとに突き合わせる。**Vault単位** → [knowledge_index](knowledge_index.md)）
+      ├── BacklinksController           ← このノートへのリンク（索引から引いて解く。**ノート単位**。AI を呼ばない → [backlinks](../features/backlinks.md)）
       └── CrystalController             ← 結晶（**ジョブはノート単位・一覧はVault単位 → 判断4**）
 ```
 
-分割時点で 906行 → 348行・Controller 4つ。現在は Controller 15個である。
+分割時点で 906行 → 348行・Controller 4つ。現在は Controller 17個である。
 
 **行数は倍になったが、窓口の性質は変わっていない。** 70ある関数のうち**44は1行の委譲**で、
 本体を持つものは **Android 型を受け取るもの**（`Uri`・`ContentResolver`・設定の読み書き）に偏っている。
@@ -70,7 +72,7 @@ NoteViewModel（Android境界の窓口）
 「状態だけ消したが旧ジョブは生きている」という中間状態を作らない。
 
 **Vault単位のControllerはノート単位の契約に登録しない。**
-`ReadingTraceCleanupController`・`ReadingTraceBackupController`・`BookletController`・`SearchController` の一部は
+`ReadingTraceCleanupController`・`ReadingTraceBackupController`・`BookletController`・`KnowledgeIndexController`・`SearchController` の一部は
 無効化の契機がVault切替だけなので、
 どちらの契約にも載せない（ノートを開き直しただけで一覧が消えるのは誤り）。世代も `vaultGeneration` 側を使う。
 **契約2箇所への登録は「ノート単位の状態を足したとき」の定型**であって、すべてのControllerが従うものではない。
@@ -98,8 +100,8 @@ Mainのスコープから呼ぶ純関数は**入力サイズに比例するか�
 
 | 形 | 対象 | ジョブを止める契機（照合） | 結果・状態を捨てる契機 | 契約への登録 |
 |---|---|---|---|---|
-| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み・反証の一文 | ノート切替（**各Controllerの `activeRequestId`**。並べ読みはジョブの取り消しと、失敗を書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
-| Vault単位 | フォルダ一覧・孤児掃除・痕跡の退避・冊子の束 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
+| ノート単位 | 要約・DL・余白メモ・部分要約・蒸留・並べ読み・反証の一文・このノートへのリンク | ノート切替（**各Controllerの `activeRequestId`**。並べ読みとこのノートへのリンクはジョブの取り消しと、書く前の生存確認） | ノート切替 | `cancelNoteScopedJobs()` と `withNoteScopedReset()` の**両方** |
+| Vault単位 | フォルダ一覧・孤児掃除・痕跡の退避・冊子の束・知識索引の作成 | Vault切替（**`NoteSessionCoordinator.vaultGeneration`**） | Vault切替 | **どちらにも載せない**。Vault切替の後始末（`onVaultChanged()`）だけ |
 | ジョブはノート単位・結果はVault単位 | 分野判定・結晶・余白メモの書きかけ | ノート切替（`activeRequestId`）。**Vault切替でも同じ requestId を進めて止める** | **Vault切替だけ** | `cancelNoteScopedJobs()` と `withVaultScopedReset()`。**結果は `withNoteScopedReset()` に載せない** |
 
 **1行目と2行目は混ぜられない。** 痕跡の整理画面はノートと無関係なので、ノートを開き直しただけで候補が消えるのは誤り。

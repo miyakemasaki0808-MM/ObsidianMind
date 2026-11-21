@@ -253,9 +253,38 @@ class NoteLinksTest {
         assertEquals(4, headingBlockIndex(blocks, "重複"))
     }
 
+    /** このノートへのリンクは、リンクのある節の見出しが何番目かを持つ（→ features/backlinks.md §5）。本文のリンクは渡さない。 */
     @Test
-    fun `無い見出しと文字の残らない見出しは当たらない`() {
+    fun `番目を渡せば同じ見出しのその番目を指し、その番目が無ければ最初のものに戻る`() {
+        assertEquals(5, headingBlockIndex(blocks, "重複", occurrence = 1))
+        assertEquals("本文が変わって番目が無い", 4, headingBlockIndex(blocks, "重複", occurrence = 2))
+        assertNull("見出しそのものが無ければ当たらない", headingBlockIndex(blocks, "無い見出し", occurrence = 1))
+    }
+
+    @Test
+    fun `無い見出しと、文字のある見出しの記号だけを書いたリンクは当たらない`() {
         assertNull(headingBlockIndex(blocks, "無い見出し"))
         assertNull(headingBlockIndex(blocks, "🧩"))
+    }
+
+    /**
+     * 文字と数字が残らない見出し（記号・絵文字だけ）も、記号そのもので照合する。鍵を空にすると開く側が拒み、
+     * 違う記号の見出しどうしが同じ鍵になって、索引の番目の数え方も混ざる（→ features/backlinks.md §5）。
+     */
+    @Test
+    fun `記号だけの見出しは記号そのもので当たり、違う記号の見出しとは混ざらない`() {
+        val symbols = listOf(
+            MarkdownBlock.Paragraph("冒頭"),
+            MarkdownBlock.Heading(2, "★"),
+            MarkdownBlock.Heading(2, "☆"),
+            MarkdownBlock.Heading(2, "★"),
+            MarkdownBlock.Heading(2, "🧩 🧩")
+        )
+        assertEquals(1, headingBlockIndex(symbols, "★"))
+        assertEquals("☆ を挟んでも ★ の2つ目", 3, headingBlockIndex(symbols, "★", occurrence = 1))
+        assertEquals(2, headingBlockIndex(symbols, "☆"))
+        assertEquals("空白は照合に入れない", 4, headingBlockIndex(symbols, "🧩🧩"))
+        assertNull("消えた記号の見出し", headingBlockIndex(symbols, "◆", occurrence = 1))
+        assertNull("空白だけの見出しは当たらない", headingBlockIndex(symbols, "  "))
     }
 }

@@ -120,6 +120,8 @@ internal class NoteLinkIndex(private val notes: List<NoteFile>) {
 
     fun pathOf(ref: DocumentRef): String? = byRef[ref]?.vaultRelativePath?.takeIf { it.isNotEmpty() }
 
+    fun noteAt(ref: DocumentRef): NoteFile? = byRef[ref]
+
     fun atPath(vaultPath: String): NoteFile? = byPath[vaultPath.lowercase()]
 
     /** 表記まで一致する相対パスのノート。大文字小文字だけが違うノートは返さない（→ features/desk_memory.md §7）。 */
@@ -213,17 +215,27 @@ private fun labelOf(link: NoteLink): String = when (link) {
 }
 
 /**
- * [heading] の見出しのブロック番号。無ければ null。同じ見出しが複数あれば最初のもの。
+ * [heading] の見出しのブロック番号。無ければ null。同じ見出しが複数あれば [occurrence] 番目（0 から）、
+ * その番目が無ければ最初のもの（→ features/backlinks.md §5。本文のリンクは番目を渡さない）。
  *
  * **文字と数字だけを残して比べる**（→ note_links §5）。Obsidian の見出しリンクは見出しをそのまま書き、
  * GitHub 形式のアンカーは記号を落として空白を `-` にする。どちらも残る文字と数字は見出しと同じになる。
  */
-internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String): Int? {
-    val key = headingKey(heading)
+internal fun headingBlockIndex(blocks: List<MarkdownBlock>, heading: String, occurrence: Int = 0): Int? {
+    val key = headingMatchKey(heading)
     if (key.isEmpty()) return null
-    return blocks.indexOfFirst { it is MarkdownBlock.Heading && headingKey(it.text) == key }.takeIf { it >= 0 }
+    val matches = blocks.indices.filter { (blocks[it] as? MarkdownBlock.Heading)?.let { found -> headingMatchKey(found.text) == key } == true }
+    return matches.getOrNull(occurrence) ?: matches.firstOrNull()
 }
 
-private fun headingKey(text: String): String = buildString {
-    text.lowercase().forEach { if (it.isLetterOrDigit()) append(it) }
-}
+/**
+ * 見出しの照合の鍵。文字と数字だけを小文字で残す。**同じ見出しかの判定はどこでもこれで行う** —
+ * 知識索引が「同じ見出しのうち何番目か」を数えるのも同じ鍵で、別の規則で数えると開く位置がずれる。
+ *
+ * **文字と数字が残らない見出し（記号・絵文字だけ）は、空白を除いた記号そのものを鍵にする。** 空にすると開く側が拒み、
+ * 違う記号の見出しどうしが同じ鍵になって番目の数え方も混ざる。空白だけの見出しは空のまま（どれにも当たらない）。
+ * 規則を変えたら知識索引の DB の版を上げる（索引が持つ番目を数え直すため）。
+ */
+internal fun headingMatchKey(text: String): String =
+    buildString { text.lowercase().forEach { if (it.isLetterOrDigit()) append(it) } }
+        .ifEmpty { text.filterNot { it.isWhitespace() } }

@@ -118,6 +118,14 @@ interface VaultHandle {
     suspend fun readNoteSnippet(ref: DocumentRef): String?
 
     /**
+     * 1件を**表示と同じ上限**（`NoteReadLimits.DISPLAY_MAX_BYTES`）で読む。知識索引が本文のリンクを取り出すのに使う
+     * （→ docs/dev/system/knowledge_index.md §3）。上限を超える分のリンクは本文にも描かれないので数えない。
+     *
+     * **読めなかったら null。** 空の本文へ畳むと、リンクの無いノートとして索引を書き換えてしまう。
+     */
+    suspend fun readNoteForIndex(ref: DocumentRef): String?
+
+    /**
      * 1件の更新日時を引き直す。**走査の代わりに使う。**
      *
      * 走査結果をキャッシュする側は「当たった参照の中身が差し替わっていないか」を
@@ -155,6 +163,9 @@ private class SafVaultHandle(
 
     override suspend fun readNoteSnippet(ref: DocumentRef): String? =
         repository.readNoteSnippetOrNull(contentResolver, ref.toUri())
+
+    override suspend fun readNoteForIndex(ref: DocumentRef): String? =
+        repository.readNoteForIndexOrNull(contentResolver, ref.toUri())
 
     override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup =
         repository.queryDocumentVersion(contentResolver, ref.toUri())

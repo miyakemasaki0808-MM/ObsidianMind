@@ -1,7 +1,7 @@
 # プロダクトロードマップ
 
 **プロジェクト:** Vigilith AI
-**初版:** 2026-07-22（最終更新: 2026-11-03）
+**初版:** 2026-07-22（最終更新: 2026-11-14）
 **基準:** 何がどこまで進んだかは [change_history.md](../dev/change_history.md) が正、未対応の課題は [current_issues.md](current_issues.md) が正。**ここに進捗のスナップショットを書かない**（書いた瞬間から古くなり、実際 ReadingTrace v1 の記述が2週間ずれていた）。旧 TimeCapsule 設計は棄却
 **課題そのもの（何が壊れているか）は [current_issues.md](current_issues.md) が持つ。** 本書は順序だけを決める。
 **形式:** Now / Next / Later（日付を切らず、優先度と成熟度で3段に分ける可変スケジュール）
@@ -92,8 +92,11 @@ current_issuesの優先度・feature_ideasの🎯は「その台帳内での重�
 - **入れたのはオーナー判断（2026-10-04）。** 北極星の拡充と同時に決めた。物差しは通していない —
   頻度は開いた Fold で読むたびだが、重さは無い（今の並べ読みでも読める）。
 - **段の順（上から）:**
-  5. **知識索引** — 補助の面の供給源（バックリンク・全文検索・目次）を端末内のDBで持つ（[feature_ideas](feature_ideas.md) P-3）
-- **PERF-3 の残り（先行走査と受理の線）は知識索引と一緒に見る。** 永続の索引は、走査を待つ時間を減らす案の1つでもあるため（→ [random_scan_options](random_scan_options.md)）。
+  5. **知識索引** — 補助の面の供給源を端末内のDBで持つ（正本 [knowledge_index](../dev/system/knowledge_index.md)・[backlinks](../dev/features/backlinks.md)）。索引は Vault を開いたら背景で作り、次からは変わったノートだけ読む
+     - **補助の面へ最初に出すのはバックリンク。** 今のノートへリンクしているノートを、リンクを含む1文つきで出す（2026-11-14、オーナー判断）
+     - **余白メモと引用も索引に載せる。** 補助の面への出し方は段5の後半で決める（同上 → [fable51_triage](fable51_triage.md) F-37）
+     - **全文検索はバックリンクの後に決める。** 入れるなら、さがすの非ゴール「全文検索をしない」を書き換える（同上）
+- **大きな Vault の最初のランダム表示の待ちは、課題として閉じた（2026-11-21、オーナー判断）。** 索引を入れた後の測り直しで、前の値より短くなった（→ [knowledge_index](../dev/system/knowledge_index.md) §8）。索引の一覧から先に引く区切り3は入れない（同日、オーナー判断）
 - **配布（L-5）はこの順の外にある。** 引き金は配布の意思で、段の進み具合ではない。
 - **段ごとに Fold の実機検証が要る。** 実機で起こせない順序は、各段の正本の §10 で先に宣言する（→ [features/_template](../dev/features/_template.md)）。
 
@@ -121,9 +124,11 @@ Next へ足すときは、Later か台帳（[current_issues](current_issues.md)�
   現在の全体抜粋を置き換えるか補助シグナルにするかも含め、別機能として扱う
   → [related_notes_ai](../dev/features/related_notes_ai.md)
 - **[feature_ideas](feature_ideas.md) A-12（この部分に近いノート）が入ると、未決事項は解ける。** 「この部分」の面を開くと節が決まるため。A-12 は単独で立てると決めた（下の項目）
-- **Next へ上げるときは D-3（要約のカバレッジ検査）が前提になる。** 関連ノートのAI入力を置き換える案なので、
-  **「良くなった」を機械で言える形**が先に要る（→ [feature_ideas](feature_ideas.md) D-3。
-  出どころは Fable 5.1 の評価 → [fable51_triage](fable51_triage.md) F-08）。
+- **Next へ上げるときは、「良くなった」を機械で言える形が前提になる。** 関連ノートのAI入力を置き換える案なので、前後を比べる物差しが先に要る。
+  要約のカバレッジ検査（[feature_ideas](feature_ideas.md) D-3）は実装したが、実機の出力では文の正誤を分けられないと分かった
+  （→ [ai_quality_measurement](../dev/system/ai_quality_measurement.md)）。関連ノートはIDを返す経路なので、語の重なりではなく、
+  **固定の入力で、選んだIDが候補に入るか・該当なしが妥当か・前後で選ぶものがどう変わるかを数える形**にする
+  （2026-11-14、オーナー判断。出どころは Fable の評価 → [fable51_triage](fable51_triage.md) F-08）。
 
 ### A-12. この部分に近いノート（→ [feature_ideas](feature_ideas.md) A-12）
 

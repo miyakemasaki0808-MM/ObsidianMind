@@ -46,6 +46,7 @@ import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.markdown.QuoteOffers
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.EndSpace
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.domain.markdown.NoteSectionModel
 import com.example.newproject.ui.markdown.NoteImageMeasurements
@@ -208,7 +209,9 @@ internal fun NoteContentPanel(
     /** 選択メニューの「引用して書く」の受け手（→ features/margin_quote.md §5.1）。null の間は項目を出さない。 */
     onQuote: ((QuoteSelection) -> Unit)? = null,
     /** 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ [QuoteOffers]）。 */
-    quoteOffers: QuoteOffers? = null
+    quoteOffers: QuoteOffers? = null,
+    /** 見出しを上端に置くための末尾の余白。[listState] の持ち主が同じ寿命で持つ（→ [EndSpace]）。 */
+    endSpace: EndSpace? = null
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -248,7 +251,8 @@ internal fun NoteContentPanel(
                         // 今のノートの本文はいつも置ける本文として組み、案内の文字を出す間は受け手を渡さない。
                         quotable = true,
                         onQuote = if (isNote) onQuote else null,
-                        quoteOffers = if (isNote) quoteOffers else null
+                        quoteOffers = if (isNote) quoteOffers else null,
+                        endSpace = if (isNote) endSpace else null
                     )
                 } else {
                     MarkdownNoteContent(

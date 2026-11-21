@@ -54,6 +54,12 @@ internal class DistillController(
     private val currentNote: () -> NoteState.Success?,
     private val persistence: DistillPersistence,
     private val reloadBody: suspend (targetUri: String, expectedHash: String?) -> Boolean,
+    /**
+     * 本文を書き終えた（保存・保存前の本文への復元）。**I/O のスレッドから、書き込みの完了の直後に呼ぶ** —
+     * 戻った後はノート切替の取り消しで止まりうるうえ、画面用の読み直しの成否と切り離すため（→ docs/dev/system/knowledge_index.md §3 の手順4）。
+     * 受ける側は Main へ移してから状態に触る。
+     */
+    private val onBodyWritten: (targetUri: String) -> Unit = {},
     private val analysisDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
@@ -529,7 +535,11 @@ internal class DistillController(
                         baselineHash = active.input.baselineHash,
                         outputBytes = transformed.toByteArray(Charsets.UTF_8)
                     )
-                )
+                ).also { written ->
+                    val touched = written is DistillWriteResult.Success ||
+                        (written is DistillWriteResult.Failure && written.documentMayHaveChanged)
+                    if (touched) onBodyWritten(active.input.targetUri)
+                }
             }
             if (!isCurrent(requestId)) return@launch
             when (result) {
@@ -741,7 +751,17 @@ internal class DistillController(
     fun restoreOriginal() {
         update(DistillState.Saving("復旧", verifying = true))
         scope.launch {
-            when (val result = withContext(ioDispatcher) { persistence.restoreOriginal() }) {
+            val restored = withContext(ioDispatcher) {
+                persistence.restoreOriginal().also { result ->
+                    when (result) {
+                        is DistillRecoveryResolutionResult.Restored -> onBodyWritten(result.targetUri)
+                        // 書き込みを始めた後の失敗は、本文が変わっているかもしれない。
+                        is DistillRecoveryResolutionResult.Failure -> result.touchedTargetUri?.let(onBodyWritten)
+                        DistillRecoveryResolutionResult.NoValidRecord -> Unit
+                    }
+                }
+            }
+            when (val result = restored) {
                 is DistillRecoveryResolutionResult.Restored -> {
                     reloadBody(result.targetUri, result.originalHash)
                     update(DistillState.RecoveryResolved("保存前の本文へ復元しました。"))

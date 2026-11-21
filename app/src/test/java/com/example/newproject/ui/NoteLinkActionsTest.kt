@@ -6,6 +6,9 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.ui.screen.NoteLinkAction
 import com.example.newproject.ui.screen.NoteStartBlock
+import com.example.newproject.ui.screen.NoteStartStep
+import com.example.newproject.ui.screen.PendingNoteStart
+import com.example.newproject.ui.screen.noteStartStep
 import com.example.newproject.ui.screen.SideLinkAction
 import com.example.newproject.ui.screen.currentNoteScrollTarget
 import com.example.newproject.ui.screen.noteLinkActionFor
@@ -131,6 +134,36 @@ class NoteLinkActionsTest {
         assertEquals(NoteStartBlock(0, headingMissing = false), noteStartBlock(blocks, null, fallback = 0))
         assertEquals(NoteStartBlock(0, headingMissing = true), noteStartBlock(blocks, "無い", fallback = 0))
         assertEquals(NoteStartBlock(7, headingMissing = false), noteStartBlock(blocks, null, fallback = 7))
+    }
+
+    /** このノートへのリンクから開くとき（→ features/backlinks.md §5）。番目が無ければ同じ見出しの最初、見出しも無ければ決めた位置。 */
+    @Test
+    fun `同じ見出しの2つ目から開き、本文が変わって番目が無ければ最初の見出しから開く`() {
+        val repeated = listOf(
+            MarkdownBlock.Paragraph("冒頭"),
+            MarkdownBlock.Heading(2, "まとめ"),
+            MarkdownBlock.Paragraph("一つ目"),
+            MarkdownBlock.Heading(2, "まとめ"),
+            MarkdownBlock.Paragraph("二つ目")
+        )
+        assertEquals(NoteStartBlock(3, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0, occurrence = 1))
+        assertEquals(NoteStartBlock(1, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0, occurrence = 3))
+        assertEquals(NoteStartBlock(0, headingMissing = true), noteStartBlock(repeated, "消えた節", fallback = 0, occurrence = 1))
+        assertEquals("本文のリンクは番目を渡さず、最初の見出しから", NoteStartBlock(1, headingMissing = false), noteStartBlock(repeated, "まとめ", fallback = 0))
+    }
+
+    /**
+     * 置いた始まりをどうするか。**読み込みが終わったのに本文が無ければ捨てる** — 失敗した依頼を残すと、
+     * 同じノートを別の経路（先頭から開く）で開いたときに古い見出しへ送る。
+     */
+    @Test
+    fun `置いた始まりは読み込み中は待ち、本文が出て解析が届いたら置き、失敗や別のノートなら捨てる`() {
+        val start = PendingNoteStart("ref:B", block = 0, heading = "まとめ", headingOccurrence = 1)
+        assertEquals(NoteStartStep.Wait, noteStartStep(start, openedUri = null, noteLoading = true, parsed = false))
+        assertEquals(NoteStartStep.Wait, noteStartStep(start, openedUri = "ref:B", noteLoading = false, parsed = false))
+        assertEquals(NoteStartStep.Place, noteStartStep(start, openedUri = "ref:B", noteLoading = false, parsed = true))
+        assertEquals("読み込みに失敗した", NoteStartStep.Drop, noteStartStep(start, openedUri = null, noteLoading = false, parsed = false))
+        assertEquals("別のノートが開いた", NoteStartStep.Drop, noteStartStep(start, openedUri = "ref:C", noteLoading = false, parsed = true))
     }
 
     @Test

@@ -39,6 +39,8 @@ import com.example.newproject.model.state.SideFace
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.note
 import com.example.newproject.ui.markdown.MarkdownNoteContent
+import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.placeBlockAtTop
 import com.example.newproject.ui.markdown.NoteImageLoader
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonPrimary
@@ -69,6 +71,8 @@ internal fun SideReadingPane(
      * ここに置くと開き直したときに失う（→ features/desk_foundation.md 判断3）。
      */
     listState: LazyListState,
+    /** 右の本文の末尾の余白（見出しを上端に置くため → [EndSpace]）。**[listState] と同じく右のノートごとに呼ぶ側が持つ。** */
+    endSpace: EndSpace,
     /** リンクから開いたなら、その見出し（→ features/note_links.md）。関連の候補から開いたなら null。 */
     linkStart: SideLinkStart?,
     /**
@@ -92,8 +96,9 @@ internal fun SideReadingPane(
         if (!ready || start.request == handledLinkRequest) return@LaunchedEffect
         currentOnLinkRequestHandled(start.request)
         // **見出しが無くても見つからなくても先頭へ送る。** 同じノートを開き直したときは、位置がノートごとに残っている。
-        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0)
-        listState.scrollToItem(block)
+        val (block, headingMissing) = noteStartBlock(blocks, start.heading, fallback = 0, start.headingOccurrence)
+        // 末尾に近い見出しでも上端に置く。前の見出しのための余白は消してから送る（→ placeBlockAtTop）。
+        placeBlockAtTop(listState, endSpace, block)
         if (headingMissing && start.heading != null) currentOnHeadingMissing(start.heading)
     }
     Column(modifier = modifier.fillMaxSize().padding(start = 20.dp, end = 20.dp, top = 16.dp)) {
@@ -149,7 +154,8 @@ internal fun SideReadingPane(
                     precomputedBlocks = blocks,
                     imageLoader = imageLoader,
                     imageMeasurements = null,
-                    onLink = onLink
+                    onLink = onLink,
+                    endSpace = endSpace
                 )
             }
 

@@ -51,11 +51,16 @@ class FakeVaultHandle(
      * 消えたノートは throw させるか、**null（＝ストリームを開けない）**を返させる。
      */
     var snippets: (DocumentRef) -> String? = { "" },
+    /** [readNoteForIndex] が返す本文。**null は開けなかった。** */
+    var bodies: (DocumentRef) -> String? = { null },
     var beforeEachCall: () -> Unit = {}
 ) : VaultHandle {
 
     /** [readNoteSnippet] を呼ばれた参照。**先読みの範囲**（現在ページ±1）の検証に使う。 */
     val readSnippetRefs = mutableListOf<DocumentRef>()
+
+    /** [readNoteForIndex] を呼ばれた参照。知識索引が何を読み直したかの検証に使う。 */
+    val readBodyRefs = mutableListOf<DocumentRef>()
 
     var listFoldersCount = 0
         private set
@@ -94,6 +99,13 @@ class FakeVaultHandle(
         beforeEachCall()
         failure?.let { throw it }
         return snippets(ref)
+    }
+
+    override suspend fun readNoteForIndex(ref: DocumentRef): String? {
+        readBodyRefs += ref
+        beforeEachCall()
+        failure?.let { throw it }
+        return bodies(ref)
     }
 
     override suspend fun documentVersion(ref: DocumentRef): DocumentVersionLookup {

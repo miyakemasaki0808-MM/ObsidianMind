@@ -18,6 +18,8 @@ import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
 import com.example.newproject.ui.markdown.QuoteOffers
+import com.example.newproject.ui.markdown.placeBlockAtTop
+import com.example.newproject.ui.markdown.rememberEndSpace
 import com.example.newproject.ui.markdown.QuoteSelection
 import com.example.newproject.ui.markdown.HeadingAccessoryHeight
 import com.example.newproject.ui.markdown.HeadingAccessoryWidth
@@ -115,6 +117,7 @@ import com.example.newproject.model.MemoPassage
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
+import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.model.state.note
 import com.example.newproject.domain.NoteLink
@@ -324,6 +327,9 @@ internal fun NoteReaderTab(
         relatedList = paneRelatedListFor(relatedList, currentNoteUri, uiState.relatedNotesState)
     }
     val shownRelated = relatedList?.takeIf { it.owner == currentNoteUri }
+    // ペインの「このノートへのリンク」の開閉。ノートの表示の番号で持つ（全画面の間の切り替えも見分ける → backlinksExpanded）。
+    val backlinksExpansion = rememberBacklinksExpansion(uiState.noteLoadId)
+    val backlinksSection = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
     // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
     var relatedReveal by remember { mutableStateOf<Long?>(null) }
     var relatedRevealCount by remember { mutableLongStateOf(0L) }
@@ -339,6 +345,8 @@ internal fun NoteReaderTab(
     // 面に置くと、開き直したときに位置を失い、リンクの見出しへ送り直してしまう（→ features/desk_foundation.md 判断3）。
     // 位置は右のノートごとに先頭から始め、画面の作り直しでは保つ。
     val sideListState = rememberSaveable(sideReading.note?.ref?.value, saver = LazyListState.Saver) { LazyListState() }
+    // 右の本文の末尾の余白（見出しを上端に置くため → EndSpace）。位置と同じく右のノートごとに、画面の保存値に持つ。
+    val sideEndSpace = rememberEndSpace(sideListState, sideReading.note?.ref?.value)
     var sideLinkHandled by rememberSaveable { mutableLongStateOf(0L) }
     // 右で開く。**書いているつもりは落とす** — 入力欄は面ごと隠れるので、戻ったときに頼んでいないキーボードを出さない。
     val openSide: (RelatedNote) -> Unit = { note ->
@@ -358,8 +366,13 @@ internal fun NoteReaderTab(
         sideFromLink = false
         openSide(note)
     }
+    // このノートへのリンクの行から右で開く。**入口は余白の一覧**（戻ると一覧まで送る）で、始まりはリンクのある節の見出し。
+    val openBacklinkFromMargin: (BacklinkRow) -> Unit = { row ->
+        openSideFromMargin(row.note)
+        sideLinkStart = SideLinkStart(row.note.ref.value, row.sectionHeading, ++sideLinkCount, row.sectionHeadingOccurrence)
+    }
     // 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しから（→ rememberNoteStart）。
-    val startNote = rememberNoteStart(bodyPosition, currentNoteUri, sectionModel, imageMeasurements) { heading ->
+    val startNote = rememberNoteStart(bodyPosition, currentNoteUri, uiState.noteState is NoteState.Loading, sectionModel, imageMeasurements) { heading ->
         showNotice(noteLinkHeadingMissingText(heading, opened = true))
     }
     val moveToNote: (RelatedNote, Int) -> Unit = { note, block ->
@@ -560,7 +573,8 @@ internal fun NoteReaderTab(
             headingAccessory = headingMark,
             onLink = onLink,
             onQuote = onQuote,
-            quoteOffers = quoteOffers
+            quoteOffers = quoteOffers,
+            endSpace = bodyPosition.endSpace
         )
     }
 
@@ -670,7 +684,7 @@ internal fun NoteReaderTab(
             if (target == null) {
                 heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
             } else {
-                bodyPosition.moveTo(target)
+                bodyPosition.placeAtTop(target)
                 imageMeasurements?.requestSkippedMeasurement(target)
             }
         }
@@ -708,7 +722,7 @@ internal fun NoteReaderTab(
                         if (target == null) {
                             action.heading?.let { showNotice(noteLinkHeadingMissingText(it, opened = false)) }
                         } else {
-                            coroutineScope.launch { sideListState.scrollToItem(target) }
+                            coroutineScope.launch { placeBlockAtTop(sideListState, sideEndSpace, target) }
                         }
                     }
                     is SideLinkAction.ScrollMain -> {
@@ -1083,6 +1097,7 @@ internal fun NoteReaderTab(
                                                     onMove = moveToNote,
                                                     onRetry = onOpenSideReading,
                                                     listState = sideListState,
+                                                    endSpace = sideEndSpace,
                                                     linkStart = sideLinkStart?.takeIf { it.noteUri == sideReading.note?.ref?.value },
                                                     handledLinkRequest = sideLinkHandled,
                                                     onLinkRequestHandled = { sideLinkHandled = it },
@@ -1129,7 +1144,13 @@ internal fun NoteReaderTab(
                                                     onOpen = openSideFromMargin,
                                                     reveal = relatedReveal,
                                                     onRevealHandled = { handled -> relatedReveal = pendingAfterReveal(relatedReveal, handled) },
-                                                    rebuttal = uiState.rebuttalSentence
+                                                    rebuttal = uiState.rebuttalSentence,
+                                                    backlinks = PaneBacklinksInputs(
+                                                        section = backlinksSection,
+                                                        expanded = backlinksExpansion.expanded,
+                                                        onToggle = backlinksExpansion.toggle,
+                                                        onOpen = openBacklinkFromMargin
+                                                    )
                                                 )
                                             )
                                         }

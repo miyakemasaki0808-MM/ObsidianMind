@@ -99,6 +99,7 @@ grep "Warning:\|Information:" app/build/intermediates/lint_intermediate_text_rep
 | **Kotlin / Coroutines** | `kotlinx-coroutines-android`・`-test` | 単独。本体とtestは同時に揃える | JVMテスト全件＋ノート切替の中断挙動を実機で |
 | **ビルドツール** | Gradle wrapper・AGP | 単独 | ローカルとCIの両方が通ること。**実機確認は不要**（生成物が変わらなければ） |
 | **テスト専用** | `org.json` | 単独。最も安全 | JVMテストのみ |
+| **Room / KSP** | `room-runtime`・`room-compiler`・KSP プラグイン | **Room と KSP は同時に。** KSP は AGP が同梱する Kotlin と組で確かめる。今の組は AGP 9.1.1（Kotlin 2.2.10）・Room 2.8.5・KSP 2.3.13 | ゲート（`--offline`）・権限の検査（debug・release）・`assembleDebugAndroidTest`。索引を使う導線の実機確認 |
 
 **上から順に上げない。** リスクの高いものほど「上げる理由があるとき」だけ動かす。
 バグ修正や必要なAPIが入ったときが理由であって、新版が出たことは理由にならない。

@@ -94,6 +94,7 @@ import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.MarginMemoDraft
 import com.example.newproject.model.state.MarginMemoState
 import com.example.newproject.model.state.MemoSaveStatus
+import com.example.newproject.model.state.BacklinkRow
 import com.example.newproject.model.state.RebuttalSentence
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.ButtonPrimary
@@ -660,7 +661,21 @@ internal class PaneRelatedInputs(
     val reveal: Long? = null,
     val onRevealHandled: (Long) -> Unit = {},
     /** 反証の一文（→ [PaneRebuttal]）。選べていなければ null。 */
-    val rebuttal: RebuttalSentence? = null
+    val rebuttal: RebuttalSentence? = null,
+    /** このノートへのリンク（→ [PaneBacklinksInputs]）。関連の上に出す。 */
+    val backlinks: PaneBacklinksInputs? = null
+)
+
+/**
+ * ペインの「このノートへのリンク」（→ features/backlinks.md §3）。関連と同じく畳んで件数だけを出し、行は右で開く。
+ * 畳む・開くはノートを替えると畳んだ状態に戻る（持ち主は画面）。
+ */
+internal class PaneBacklinksInputs(
+    val section: BacklinksSection,
+    val expanded: Boolean,
+    val onToggle: () -> Unit,
+    /** 行を右で開く。リンクのある節の見出しから始める。 */
+    val onOpen: (BacklinkRow) -> Unit
 )
 
 /**
@@ -669,6 +684,10 @@ internal class PaneRelatedInputs(
  */
 @Composable
 private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit) {
+    // 並べ読みから戻ったときの行き先は、余白の一覧の始まり。このノートへのリンクを出していればその見出し、無ければ関連の見出し。
+    val backlinks = inputs.backlinks?.takeIf { it.section != BacklinksSection.Hidden }
+    val placed = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
+    backlinks?.let { PaneBacklinks(it, modifier = placed) }
     val candidates = inputs.candidates
     if (!candidates.isNullOrEmpty()) {
         Spacer(modifier = Modifier.height(12.dp))
@@ -676,7 +695,7 @@ private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit)
         TextButton(
             onClick = inputs.onToggle,
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-            modifier = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
+            modifier = if (backlinks == null) placed else Modifier
         ) {
             Text(
                 text = "${if (inputs.expanded) "▾" else "▸"} このノートの関連 ${candidates.size}件",
@@ -689,6 +708,46 @@ private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit)
         }
     }
     inputs.rebuttal?.let { PaneRebuttal(it, onOpen = inputs.onOpen) }
+}
+
+/**
+ * このノートへのリンクの節。作っている間は進み具合を1行で出し（押せない）、それ以外は畳んで件数だけ。
+ * 数えられなかったときは件数を出さず、開くとそう書く。[modifier] は見出しの行に付ける。
+ */
+@Composable
+private fun PaneBacklinks(inputs: PaneBacklinksInputs, modifier: Modifier) {
+    Spacer(modifier = Modifier.height(12.dp))
+    HorizontalDivider()
+    when (val section = inputs.section) {
+        is BacklinksSection.Building -> Text(
+            text = "$BACKLINKS_HEADING：${backlinksProgressText(section)}",
+            color = OnSurfaceMuted,
+            fontSize = 13.sp,
+            modifier = modifier.padding(vertical = 12.dp)
+        )
+        BacklinksSection.Unavailable, is BacklinksSection.Rows -> {
+            val count = (section as? BacklinksSection.Rows)?.rows?.size
+            TextButton(
+                onClick = inputs.onToggle,
+                contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
+                modifier = modifier
+            ) {
+                Text(
+                    text = "${if (inputs.expanded) "▾" else "▸"} $BACKLINKS_HEADING${count?.let { " ${it}件" }.orEmpty()}",
+                    color = OnSurfaceMuted,
+                    fontSize = 13.sp
+                )
+            }
+            if (inputs.expanded) {
+                if (section is BacklinksSection.Rows) {
+                    section.rows.forEach { row -> BacklinkItem(row = row, onClick = { inputs.onOpen(row) }) }
+                } else {
+                    Text(text = BACKLINKS_UNAVAILABLE_TEXT, color = OnSurfaceFaint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
+                }
+            }
+        }
+        BacklinksSection.Hidden -> Unit
+    }
 }
 
 /**

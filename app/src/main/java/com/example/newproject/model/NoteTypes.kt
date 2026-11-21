@@ -39,3 +39,31 @@ data class NoteMeta(
     val aliases: List<String> = emptyList(),
     val wikilinkTitles: Set<String> = emptySet()
 )
+
+/**
+ * 走査の入れ物（`NoteScanCache`）が公開した走査の種別。**公開は準備完了を意味しない**（→ docs/dev/system/knowledge_index.md §3）。
+ *
+ * 入れ物は読めずに空の結果にも寿命を与えないだけで、一覧とリンクの索引を空に替えて公開する。
+ * 公開を受ける側が「解く材料がある」と見なしてよいのは [COMPLETE] と [PARTIAL] だけ。
+ */
+enum class NoteScanKind {
+    /** 読み切れた。空の Vault も含む。不在を根拠に消してよい。 */
+    COMPLETE,
+
+    /** 読めないフォルダがあるが、一覧は空でない。不在を根拠に消してはいけない。 */
+    PARTIAL,
+
+    /** 読めないフォルダがあり、一覧も空。準備完了と見なさない。 */
+    UNREADABLE_EMPTY
+}
+
+/**
+ * 公開された走査。[publishCount] は入れ物が公開するたびに進む数で、一覧とリンクの索引が替わったことを知らせる。
+ * [vaultGeneration] は走査を始めたときの Vault の世代（公開の直前に照合済み）。
+ */
+data class PublishedNoteScan(
+    val notes: List<NoteFile>,
+    val kind: NoteScanKind,
+    val publishCount: Long,
+    val vaultGeneration: Long
+)

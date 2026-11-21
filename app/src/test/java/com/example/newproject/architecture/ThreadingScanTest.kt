@@ -310,8 +310,15 @@ class ThreadingScanTest {
                     "domain/markdown/NoteSections.kt" to "節のモデルの中",
                     "domain/NoteExcerptBuilder.kt" to "AI入力の抜粋の中",
                     "domain/RebuttalClaimScanner.kt" to "反証の候補の列挙の中",
+                    "domain/KnowledgeIndexLinks.kt" to "知識索引のリンクの取り出し（extractIndexedLinks）の中",
                     "ui/markdown/MarkdownRenderer.kt" to "短い本文をその場で描くフォールバック（→ 本文パネルの検査）"
                 )
+            ),
+            HeavyCall(
+                name = "知識索引のリンクの取り出し（1ノートの本文は最大1MB）",
+                call = """\bextractIndexedLinks\(""",
+                dispatcher = "parseDispatcher",
+                offMain = mapOf("controller/KnowledgeIndexController.kt" to 1)
             ),
             HeavyCall(
                 name = "引用と書いた頃の位置を照らし直す材料",

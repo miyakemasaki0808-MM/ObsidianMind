@@ -4,6 +4,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.devtools.ksp")
 }
 
 kotlin {
@@ -269,6 +270,8 @@ dependencies {
     implementation("androidx.window:window:1.3.0")
     // AICore (Gemini Nano on-device) — ML Kit GenAI Prompt API
     implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
+    implementation("androidx.room:room-runtime:2.8.5")
+    ksp("androidx.room:room-compiler:2.8.5")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

@@ -242,6 +242,10 @@ class NoteRepository {
     suspend fun readNoteSnippetOrNull(contentResolver: ContentResolver, uri: Uri): String? =
         readBoundedText(contentResolver, uri, NoteReadLimits.SNIPPET_MAX_BYTES)?.text
 
+    /** 知識索引用。表示と同じ上限で読み、**開けなかったら null**（空の本文へ畳まない）。 */
+    suspend fun readNoteForIndexOrNull(contentResolver: ContentResolver, uri: Uri): String? =
+        readBoundedText(contentResolver, uri, NoteReadLimits.DISPLAY_MAX_BYTES)?.text
+
     /**
      * 上限付きでテキストを読む。上限で切ると多バイト文字が割れるため、
      * 復号（[decodeNoteText]）は末尾の不完全なシーケンスを落としてから行う。

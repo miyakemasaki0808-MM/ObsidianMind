@@ -117,6 +117,10 @@ class NoteViewModel internal constructor(
         history = dependencies.history,
         currentVaultKey = { vaultLocation.uri?.toString() },
         noteFieldStore = dependencies.noteFieldStore,
+        knowledgeIndexStore = dependencies.knowledgeIndexStore,
+        requestNoteScan = ::requestScanForKnowledgeIndex,
+        expireNoteScan = { noteScan.expireAfterBodyWrite() },
+        noteLinkIndex = { noteScan.linkIndex },
         // 関連ノートは ViewModel が持つ走査キャッシュ（cachedNotes）に依存するので、ViewModel 側に置く。
         // モデルDL完了で要約が再開されるとき、同じ入力で関連ノートも呼び戻す。
         onModelReady = { title, content -> fetchRelatedNotes(title, content) },
@@ -171,11 +175,13 @@ class NoteViewModel internal constructor(
      * Vault全体の走査キャッシュ。**公開の直前にVaultの世代を照合する**ので、
      * 切替の前に始まった走査が後から返っても、新しいVaultのキャッシュを上書きしない。
      */
-    private val noteScan = NoteScanCache(
+    private val noteScan: NoteScanCache = NoteScanCache(
         scope = scope,
         ttlMillis = NOTES_CACHE_TTL_MS,
         vaultGeneration = { session.vaultGeneration },
-        onScanEvent = dependencies.onNoteScanEvent
+        onScanEvent = dependencies.onNoteScanEvent,
+        // 公開のたびに種別をつけて知識索引へ渡す（→ docs/dev/system/knowledge_index.md §3）。
+        onPublishedScan = { session.onScanPublished(it) }
     )
     private val cachedNotes: List<NoteFile> get() = noteScan.notes
 
@@ -277,6 +283,15 @@ class NoteViewModel internal constructor(
         // 索引Aが同じ材料で揃う。
         onPublished = session::indexNoteFields
     )
+
+    /**
+     * 知識索引が頼む走査（→ docs/dev/system/knowledge_index.md §3）。**結果は入れ物の公開の知らせで索引へ届く**ので、ここでは受け取らない。
+     * 寿命の中なら入れ物は走査し直さない。
+     */
+    private suspend fun requestScanForKnowledgeIndex() {
+        val uri = vaultLocation.uri ?: return
+        collectAllNotesCached(getApplication<Application>().contentResolver, uri)
+    }
 
     fun loadRandomNote(contentResolver: ContentResolver) {
         val uri = vaultLocation.uri ?: return

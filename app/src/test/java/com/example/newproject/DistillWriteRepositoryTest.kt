@@ -354,6 +354,60 @@ class DistillWriteRepositoryTest {
         assertArrayEquals(original, repository.pendingOriginal()!!.bytes)
     }
 
+    /**
+     * 本文を書いた後の検証で失敗しても、本文は変わっている。知識索引が読み直すと控えられるよう、
+     * **書き込みを始めた後の失敗だけ**、本文が変わった可能性を結果に載せる（→ docs/dev/system/knowledge_index.md §3 の手順4）。
+     */
+    @Test
+    fun `restore that fails after starting the write reports the touched note`() {
+        val original = "保存前の本文".toByteArray()
+        recoveryStore.create(
+            recoveryStore.newRecord("content://vault/note", sha256Hex(original), sha256Hex("期待出力".toByteArray()), original)
+        )
+        val gateway = FakeGateway("[[old]]".toByteArray()).apply {
+            readOverride = { _, _ -> throw IOException("read after restore failed") }
+        }
+
+        val afterWrite = repository(gateway).restoreOriginal()
+
+        assertEquals(1, gateway.writeCount)
+        assertEquals("content://vault/note", (afterWrite as DistillRecoveryResolutionResult.Failure).touchedTargetUri)
+
+        val beforeWrite = repository(FakeGateway("現在".toByteArray()).apply {
+            writeOverride = { _, _ -> throw IOException("write failed") }
+        }).restoreOriginal()
+        assertEquals(
+            "書き込みの途中で落ちたものも本文が変わりうる",
+            "content://vault/note",
+            (beforeWrite as DistillRecoveryResolutionResult.Failure).touchedTargetUri
+        )
+    }
+
+    @Test
+    fun `write that fails after the document write reports that the body may have changed`() {
+        val original = "保存前の本文".toByteArray()
+        val output = "保存後の本文".toByteArray()
+        val gateway = FakeGateway(original).apply {
+            readOverride = { count, current -> if (count >= 3) "壊れた".toByteArray() else current }
+        }
+
+        val result = repository(gateway).write(request(original, output))
+
+        assertTrue(result is DistillWriteResult.Failure)
+        assertTrue((result as DistillWriteResult.Failure).documentMayHaveChanged)
+    }
+
+    @Test
+    fun `write that fails before the document write does not report a changed body`() {
+        val original = "保存前の本文".toByteArray()
+        val gateway = FakeGateway("ほかで書き換えた本文".toByteArray())
+
+        val result = repository(gateway).write(request(original, "保存後".toByteArray()))
+
+        assertFalse(result is DistillWriteResult.Failure && result.documentMayHaveChanged)
+        assertEquals(0, gateway.writeCount)
+    }
+
     @Test
     fun `startup cleanup removes only distill cache files`() {
         File(cache, "distill-output-old.tmp").writeText("old")
