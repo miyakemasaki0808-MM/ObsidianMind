@@ -327,7 +327,7 @@ internal fun NoteReaderTab(
         relatedList = paneRelatedListFor(relatedList, currentNoteUri, uiState.relatedNotesState)
     }
     val shownRelated = relatedList?.takeIf { it.owner == currentNoteUri }
-    // ペインの「このノートへのリンク」の開閉。ノートの表示の番号で持つ（全画面の間の切り替えも見分ける → backlinksExpanded）。
+    // ペインの「このノートのバックナンバー」の開閉。ノートの表示の番号で持つ（全画面の間の切り替えも見分ける → backlinksExpanded）。
     val backlinksExpansion = rememberBacklinksExpansion(uiState.noteLoadId)
     val backlinksSection = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
     // 並べ読みから戻ったときに、面をこの一覧まで送る依頼。戻るたびに新しい番号を振る。
@@ -366,7 +366,7 @@ internal fun NoteReaderTab(
         sideFromLink = false
         openSide(note)
     }
-    // このノートへのリンクの行から右で開く。**入口は余白の一覧**（戻ると一覧まで送る）で、始まりはリンクのある節の見出し。
+    // バックナンバーの行から右で開く。**入口は余白の一覧**（戻ると一覧まで送る）で、始まりはリンクのある節の見出し。
     val openBacklinkFromMargin: (BacklinkRow) -> Unit = { row ->
         openSideFromMargin(row.note)
         sideLinkStart = SideLinkStart(row.note.ref.value, row.sectionHeading, ++sideLinkCount, row.sectionHeadingOccurrence)
@@ -1149,7 +1149,8 @@ internal fun NoteReaderTab(
                                                         section = backlinksSection,
                                                         expanded = backlinksExpansion.expanded,
                                                         onToggle = backlinksExpansion.toggle,
-                                                        onOpen = openBacklinkFromMargin
+                                                        onOpen = openBacklinkFromMargin,
+                                                        noteLoadId = uiState.noteLoadId
                                                     )
                                                 )
                                             )

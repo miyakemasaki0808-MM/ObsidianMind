@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.ui.relatedReasonLabel
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.screenContentPadding
@@ -64,7 +65,7 @@ import java.util.Locale
 fun RelatedTab(
     uiState: NoteUiState,
     onOpenNote: (RelatedNote) -> Unit,
-    /** このノートへのリンクの行を、今のノートとしてリンクのある節の見出しから開く（→ features/backlinks.md §3）。 */
+    /** バックナンバーの行を、今のノートとしてリンクのある節の見出しから開く（→ features/backlinks.md §3）。 */
     onOpenBacklink: (BacklinkRow) -> Unit
 ) {
     Column(
@@ -102,18 +103,23 @@ fun RelatedTab(
             val backlinks = backlinksSectionFor(uiState.backlinks, uiState.knowledgeIndexProgress)
             if (backlinks != BacklinksSection.Hidden) {
                 Spacer(modifier = Modifier.height(12.dp))
-                BacklinksPanel(section = backlinks, onOpen = onOpenBacklink)
+                BacklinksPanel(section = backlinks, noteLoadId = uiState.noteLoadId, onOpen = onOpenBacklink)
             }
         }
     }
 }
 
 /**
- * 関連タブの「このノートへのリンク」（→ features/backlinks.md §3）。**畳まずに出す** — タブを開いた人は一覧を読みに来ている。
- * 関連の一覧とは混ぜず、別の枠に置く。
+ * 関連タブの「このノートのバックナンバー」（→ features/backlinks.md §3）。**節は畳まずに出す** — タブを開いた人は一覧を読みに来ている。
+ * 行は3件までで、残りは「ほか N 件」に畳む。関連の一覧とは混ぜず、別の枠に置く。
  */
 @Composable
-internal fun BacklinksPanel(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit, modifier: Modifier = Modifier) {
+internal fun BacklinksPanel(
+    section: BacklinksSection,
+    noteLoadId: NoteLoadId,
+    onOpen: (BacklinkRow) -> Unit,
+    modifier: Modifier = Modifier
+) {
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = PanelBlue,
@@ -130,10 +136,7 @@ internal fun BacklinksPanel(section: BacklinksSection, onOpen: (BacklinkRow) -> 
             )
             Spacer(modifier = Modifier.height(4.dp))
             when (section) {
-                is BacklinksSection.Rows -> section.rows.forEachIndexed { index, row ->
-                    BacklinkItem(row = row, onClick = { onOpen(row) })
-                    if (index < section.rows.lastIndex) HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
-                }
+                is BacklinksSection.Rows -> BacklinkRowList(rows = section.rows, noteLoadId = noteLoadId, divided = true, onOpen = onOpen)
                 is BacklinksSection.Building -> Text(backlinksProgressText(section), fontSize = 13.sp, color = OnSurfaceMuted)
                 BacklinksSection.Unavailable -> Text(BACKLINKS_UNAVAILABLE_TEXT, fontSize = 13.sp, color = OnSurfaceFaint)
                 BacklinksSection.Hidden -> Unit

@@ -85,7 +85,7 @@ class BacklinksTest {
     }
 
     @Test
-    fun `1ノート1行にまとめ、最初の1文とほかの箇所の数を出し、節の見出しと番目を持つ`() {
+    fun `1ノート1行にまとめ、最初の1文と節の見出しと番目を持つ`() {
         val source = note("notes/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
 
@@ -102,7 +102,6 @@ class BacklinksTest {
 
         val row = rows.single()
         assertEquals("最初に [[習慣]] を書いた。", row.sentence)
-        assertEquals(2, row.otherCount)
         assertEquals("まとめ", row.sectionHeading)
         assertEquals(1, row.sectionHeadingOccurrence)
     }

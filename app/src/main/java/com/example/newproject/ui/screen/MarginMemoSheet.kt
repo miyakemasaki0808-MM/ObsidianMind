@@ -31,6 +31,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -662,20 +663,21 @@ internal class PaneRelatedInputs(
     val onRevealHandled: (Long) -> Unit = {},
     /** 反証の一文（→ [PaneRebuttal]）。選べていなければ null。 */
     val rebuttal: RebuttalSentence? = null,
-    /** このノートへのリンク（→ [PaneBacklinksInputs]）。関連の上に出す。 */
+    /** このノートのバックナンバー（→ [PaneBacklinksInputs]）。関連と反証の一文の後に出す。 */
     val backlinks: PaneBacklinksInputs? = null
 )
 
 /**
- * ペインの「このノートへのリンク」（→ features/backlinks.md §3）。関連と同じく畳んで件数だけを出し、行は右で開く。
- * 畳む・開くはノートを替えると畳んだ状態に戻る（持ち主は画面）。
+ * ペインの「このノートのバックナンバー」（→ features/backlinks.md §3）。関連と同じく畳んで件数だけを出し、行は右で開く。
+ * 畳む・開くはノートを替えると畳んだ状態に戻る（持ち主は画面）。開いた後の「ほか N 件」も [noteLoadId] で同じく戻る。
  */
 internal class PaneBacklinksInputs(
     val section: BacklinksSection,
     val expanded: Boolean,
     val onToggle: () -> Unit,
     /** 行を右で開く。リンクのある節の見出しから始める。 */
-    val onOpen: (BacklinkRow) -> Unit
+    val onOpen: (BacklinkRow) -> Unit,
+    val noteLoadId: NoteLoadId
 )
 
 /**
@@ -684,18 +686,19 @@ internal class PaneBacklinksInputs(
  */
 @Composable
 private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit) {
-    // 並べ読みから戻ったときの行き先は、余白の一覧の始まり。このノートへのリンクを出していればその見出し、無ければ関連の見出し。
+    // 並べ読みから戻ったときの行き先は、余白の一覧の始まり。関連を出していればその見出し、無ければバックナンバーの見出し
+    // （並びは関連 → 反証の一文 → バックナンバー → features/backlinks.md 判断8）。
     val backlinks = inputs.backlinks?.takeIf { it.section != BacklinksSection.Hidden }
     val placed = Modifier.onGloballyPositioned { onPlaced(it.positionInParent().y.roundToInt()) }
-    backlinks?.let { PaneBacklinks(it, modifier = placed) }
     val candidates = inputs.candidates
+    val showsRelated = !candidates.isNullOrEmpty()
     if (!candidates.isNullOrEmpty()) {
         Spacer(modifier = Modifier.height(12.dp))
         HorizontalDivider()
         TextButton(
             onClick = inputs.onToggle,
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 4.dp),
-            modifier = if (backlinks == null) placed else Modifier
+            modifier = placed
         ) {
             Text(
                 text = "${if (inputs.expanded) "▾" else "▸"} このノートの関連 ${candidates.size}件",
@@ -708,10 +711,11 @@ private fun PaneRelatedNotes(inputs: PaneRelatedInputs, onPlaced: (Int) -> Unit)
         }
     }
     inputs.rebuttal?.let { PaneRebuttal(it, onOpen = inputs.onOpen) }
+    backlinks?.let { PaneBacklinks(it, modifier = if (showsRelated) Modifier else placed) }
 }
 
 /**
- * このノートへのリンクの節。作っている間は進み具合を1行で出し（押せない）、それ以外は畳んで件数だけ。
+ * このノートのバックナンバーの節。作っている間は進み具合を1行で出し（押せない）、それ以外は畳んで件数だけ。開くと3件と「ほか N 件」。
  * 数えられなかったときは件数を出さず、開くとそう書く。[modifier] は見出しの行に付ける。
  */
 @Composable
@@ -740,7 +744,7 @@ private fun PaneBacklinks(inputs: PaneBacklinksInputs, modifier: Modifier) {
             }
             if (inputs.expanded) {
                 if (section is BacklinksSection.Rows) {
-                    section.rows.forEach { row -> BacklinkItem(row = row, onClick = { inputs.onOpen(row) }) }
+                    BacklinkRowList(rows = section.rows, noteLoadId = inputs.noteLoadId, divided = false, onOpen = inputs.onOpen)
                 } else {
                     Text(text = BACKLINKS_UNAVAILABLE_TEXT, color = OnSurfaceFaint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
                 }

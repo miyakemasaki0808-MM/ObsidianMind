@@ -22,7 +22,7 @@ sealed interface BacklinksState {
 
 /**
  * 1ノート1行（→ backlinks.md §5）。[sentence] は本文で最初に出てくるリンクを含む1文で、今のノートの題名は「このノート」に替えてある。
- * [sentenceLink] はその中でリンクが占める範囲（1行に切り出すときに使う。分からなければ null）。[otherCount] はほかの箇所の数。
+ * [sentenceLink] はその中でリンクが占める範囲（1行に切り出すときに使う。分からなければ null）。
  * 開くときは [sectionHeading] の、同じ見出しのうち [sectionHeadingOccurrence] 番目から。見出しより前なら冒頭から。
  * [hasMemo] は、出どころのそのリンクのある節に自分が余白メモを書いているか（✎）。
  */
@@ -30,7 +30,6 @@ data class BacklinkRow(
     val note: RelatedNote,
     val sentence: String,
     val sentenceLink: IntRange?,
-    val otherCount: Int,
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
     val hasMemo: Boolean

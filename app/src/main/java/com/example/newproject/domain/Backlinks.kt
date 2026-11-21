@@ -29,7 +29,7 @@ internal data class BacklinkCandidate(
 }
 
 /** 今のノートへリンクしている出どころ1つと、本文で最初に出てくるそのリンク（→ [backlinkSources]）。 */
-internal class BacklinkSource(val note: NoteFile, val firstLink: BacklinkCandidate, val otherCount: Int)
+internal class BacklinkSource(val note: NoteFile, val firstLink: BacklinkCandidate)
 
 /**
  * 出どころのノートを、このアプリで最後に読んだ日時と、余白メモを書いた節（痕跡から → backlinks.md §5）。
@@ -75,7 +75,7 @@ internal fun backlinkSources(
             if (resolved is NoteLinkResolution.Open && resolved.note.ref == current) source to candidate else null
         }
         .groupBy({ it.first }, { it.second })
-        .map { (source, links) -> BacklinkSource(source, links.minBy { it.ordinal }, otherCount = links.size - 1) }
+        .map { (source, links) -> BacklinkSource(source, links.minBy { it.ordinal }) }
 }
 
 /** 1文の中の今のノートの題名を言い換える語（→ backlinks.md 判断6）。 */
@@ -118,7 +118,6 @@ internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, S
                 note = source.note.toRelatedNote(),
                 sentence = sentence,
                 sentenceLink = sentenceLink,
-                otherCount = source.otherCount,
                 sectionHeading = link.sectionHeading,
                 sectionHeadingOccurrence = link.sectionHeadingOccurrence,
                 hasMemo = link.sectionHeading?.let { headingMatchKey(it) in reading.memoSectionKeys } == true
