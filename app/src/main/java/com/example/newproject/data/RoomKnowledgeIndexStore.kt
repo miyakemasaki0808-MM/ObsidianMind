@@ -64,7 +64,8 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
                 heading = row.heading,
                 sectionHeading = row.sectionHeading,
                 sectionHeadingOccurrence = row.sectionHeadingOccurrence,
-                sentence = row.sentence
+                sentence = row.sentence,
+                sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
             )
         }
 }
@@ -78,6 +79,12 @@ private fun IndexedLink.toEntity(sourcePath: String) = IndexedLinkEntity(
     sectionHeading = sectionHeading,
     sectionHeadingOccurrence = sectionHeadingOccurrence,
     sentence = sentence,
+    sentenceLinkStart = sentenceLink?.first,
+    sentenceLinkEnd = sentenceLink?.let { it.last + 1 },
     nameKey = keys.firstOrNull().orEmpty(),
     decodedNameKey = keys.getOrNull(1)
 )
+
+/** 1文の中のリンクの範囲を戻す。片方でも欠けていれば null。 */
+private fun sentenceLinkOf(start: Int?, endExclusive: Int?): IntRange? =
+    if (start != null && endExclusive != null && start < endExclusive) start until endExclusive else null

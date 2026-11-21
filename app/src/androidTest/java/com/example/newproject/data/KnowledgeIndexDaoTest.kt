@@ -111,6 +111,16 @@ class KnowledgeIndexDaoTest {
     }
 
     @Test
+    fun 一文の中のリンクの範囲を書いたまま戻し無ければnullで戻す() = runBlocking<Unit> {
+        store.openVault(VAULT_A)
+        store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣")), writeNumberAtRead = null)
+        store.applyRead(VAULT_A, record("b.md"), listOf(link("習慣").copy(sentenceLink = null)), writeNumberAtRead = null)
+
+        val bySource = store.backlinkCandidates(VAULT_A, "習慣")!!.associate { it.sourcePath to it.sentenceLink }
+        assertEquals(mapOf("a.md" to 0..1, "b.md" to null), bySource)
+    }
+
+    @Test
     fun 別のVaultに替えた後は旧いVaultの書き込みを受けない() = runBlocking<Unit> {
         store.openVault(VAULT_A)
         store.openVault(VAULT_B)
@@ -161,6 +171,7 @@ class KnowledgeIndexDaoTest {
         sectionHeading = null,
         sectionHeadingOccurrence = 0,
         sentence = "$target を読む。",
+        sentenceLink = target.indices,
         keys = listOf(target)
     )
 

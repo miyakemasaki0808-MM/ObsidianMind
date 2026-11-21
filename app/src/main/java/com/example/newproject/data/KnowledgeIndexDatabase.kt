@@ -23,7 +23,7 @@ import java.io.File
  */
 @Database(
     entities = [IndexMetaEntity::class, IndexedNoteEntity::class, IndexedLinkEntity::class, RewriteMarkEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 internal abstract class KnowledgeIndexDatabase : RoomDatabase() {
@@ -62,7 +62,10 @@ internal data class IndexedNoteEntity(
     val fingerprint: String
 )
 
-/** 1つのリンク。行き先は書かれたまま持つ。[nameKey]・[decodedNameKey] は候補を絞る名前の鍵（§6）。 */
+/**
+ * 1つのリンク。行き先は書かれたまま持つ。[nameKey]・[decodedNameKey] は候補を絞る名前の鍵（§6）。
+ * [sentenceLinkStart]・[sentenceLinkEnd]（終わりは含まない）は1文の中でリンクが占める範囲で、見つからなければ両方 null。
+ */
 @Entity(
     tableName = "indexed_link",
     primaryKeys = ["sourcePath", "ordinal"],
@@ -77,6 +80,8 @@ internal data class IndexedLinkEntity(
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
     val sentence: String,
+    val sentenceLinkStart: Int?,
+    val sentenceLinkEnd: Int?,
     val nameKey: String,
     val decodedNameKey: String?
 )
@@ -106,7 +111,9 @@ internal data class BacklinkCandidateRow(
     val heading: String?,
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
-    val sentence: String
+    val sentence: String,
+    val sentenceLinkStart: Int?,
+    val sentenceLinkEnd: Int?
 )
 
 /**
@@ -135,7 +142,7 @@ internal abstract class KnowledgeIndexDao {
 
     /** 名前の鍵（書かれたまま・復号した後のどちらか）が [key] のリンク。行き先はまだ解いていない（→ knowledge_index.md §6）。 */
     @Query(
-        "SELECT sourcePath, ordinal, kind, target, heading, sectionHeading, sectionHeadingOccurrence, sentence " +
+        "SELECT sourcePath, ordinal, kind, target, heading, sectionHeading, sectionHeadingOccurrence, sentence, sentenceLinkStart, sentenceLinkEnd " +
             "FROM indexed_link WHERE nameKey = :key OR decodedNameKey = :key ORDER BY sourcePath, ordinal"
     )
     abstract suspend fun linksNamed(key: String): List<BacklinkCandidateRow>

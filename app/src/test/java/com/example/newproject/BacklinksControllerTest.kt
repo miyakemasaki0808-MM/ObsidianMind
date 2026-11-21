@@ -272,7 +272,8 @@ class BacklinksControllerTest {
             heading = null,
             sectionHeading = null,
             sectionHeadingOccurrence = 0,
-            sentence = "[[$target]] を読む。"
+            sentence = "$target を読む。",
+            sentenceLink = target.indices
         )
 
         /** 遅れて届く照会の終わり方。成功・別の Vault（置き場が null を返す）・失敗。 */

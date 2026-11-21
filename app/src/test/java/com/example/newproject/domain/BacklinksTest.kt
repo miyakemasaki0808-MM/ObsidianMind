@@ -25,7 +25,7 @@ class BacklinksTest {
         sentence: String = "$target を読む。",
         section: String? = null,
         occurrence: Int = 0
-    ) = BacklinkCandidate(source, ordinal, kind, target, heading = null, sectionHeading = section, sectionHeadingOccurrence = occurrence, sentence = sentence)
+    ) = BacklinkCandidate(source, ordinal, kind, target, heading = null, sectionHeading = section, sectionHeadingOccurrence = occurrence, sentence = sentence, sentenceLink = null)
 
     private val current = note("notes/習慣.md")
 

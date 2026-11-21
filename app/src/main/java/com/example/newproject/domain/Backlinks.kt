@@ -16,7 +16,8 @@ internal data class BacklinkCandidate(
     val heading: String?,
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
-    val sentence: String
+    val sentence: String,
+    val sentenceLink: IntRange?
 ) {
     fun toNoteLink(): NoteLink = when (kind) {
         IndexedLinkKind.NAME -> NoteLink.ByName(target, heading)
