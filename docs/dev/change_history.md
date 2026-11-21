@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-21 | 段5の知識索引をバックリンクまでで閉じ、全文検索は入れず、余白メモと引用を載せる区切り4は保留にした | [知識索引](system/knowledge_index.md) §1・§2・§11 |
 | 2026-11-21 | 末尾に近い見出しを最初の行に置く直しを実機で確かめ、課題を閉じた | [note_links](features/note_links.md) 判断6・[実機ケース](../review/device_validation/knowledge_index.md) |
 | 2026-11-21 | 全画面に入って窓が広がる間も見出しを上端に置き直し、全画面から戻すときは見出しへ送ってから置くようにした | [note_links](features/note_links.md) 判断6 |
 | 2026-11-21 | 末尾に近い見出しを最初の行に置く直しの実機ケース（UI テスト・作り直しと全画面・余白の後始末・画像）を足した | [実機ケース](../review/device_validation/knowledge_index.md) |
