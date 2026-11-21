@@ -8,6 +8,7 @@ import com.example.newproject.model.NoteFile
 import com.example.newproject.model.ReadingTrace
 import com.example.newproject.model.ReadingVisit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -44,7 +45,7 @@ class BacklinksTest {
 
     /** 痕跡の無い（どれも読んだ記録が無い）ときの行。 */
     private fun rowsOf(candidates: List<BacklinkCandidate>, outgoing: List<NoteLink>, current: DocumentRef, index: NoteLinkIndex) =
-        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap(), "習慣.md")
+        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap())
 
     @Test
     fun `今のノートへ着くリンクだけを残し、同じ名前の別のノートへ着くリンクは除く`() {
@@ -129,7 +130,7 @@ class BacklinksTest {
             "notes/同じ日で古い.md" to read(500L)
         )
 
-        val rows = backlinkRows(sources, readings, "習慣.md")
+        val rows = backlinkRows(sources, readings)
 
         assertEquals(
             listOf("未読で日時なし.md", "未読で古い.md", "未読で新しい.md", "昔読んだ.md", "同じ日で古い.md", "同じ日A.md", "同じ日B.md", "最近読んだ.md"),
@@ -158,8 +159,7 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             sources,
-            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ")),
-            "習慣.md"
+            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ"))
         )
 
         assertEquals(
@@ -168,21 +168,50 @@ class BacklinksTest {
         )
     }
 
-    /** 題名が長いと1行を食うので「このノート」と出す。別名は自分が選んだ言葉なので替えない（→ features/backlinks.md 判断6）。 */
+    /**
+     * 題名が長いと1行を食うので「このノート」と出す。別名は自分が選んだ言葉なので替えない（→ features/backlinks.md 判断6）。
+     * 本文から索引と同じに取り出したリンクで確かめる。題名の正規化で照らすと、正規化で題名に見える別名まで替わる。
+     */
     @Test
-    fun `1文の中の今のノートの題名をこのノートと出し、別名は替えない`() {
-        fun replaced(sentence: String, shown: String, heading: String? = null): Pair<String, String?> {
-            val start = sentence.indexOf(shown)
-            val (text, range) = sentenceForCurrent(sentence, start until start + shown.length, heading, "習慣.md")
-            return text to range?.let { text.substring(it) }
+    fun `別名の無いリンクの名前だけをこのノートと出し、別名と見出しは替えない`() {
+        fun shown(body: String): String {
+            val link = extractIndexedLinks(body).single()
+            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
+            return text + " | " + range?.let { text.substring(it) }
         }
 
-        assertEquals("ここで このノート を使う。" to "このノート", replaced("ここで 習慣 を使う。", "習慣"))
-        assertEquals("このノート を読む。" to "このノート", replaced("notes/習慣 を読む。", "notes/習慣"))
-        assertEquals("このノート#まとめ を読む。" to "このノート#まとめ", replaced("習慣#まとめ を読む。", "習慣#まとめ", heading = "まとめ"))
-        assertEquals("このノート を読む。" to "このノート", replaced("習慣.md を読む。", "習慣.md"))
-        assertEquals("よい習慣 を続けた。" to "よい習慣", replaced("よい習慣 を続けた。", "よい習慣"))
-        assertEquals("範囲が分からなければ替えない", "習慣 を読む。" to null, sentenceForCurrent("習慣 を読む。", null, null, "習慣.md"))
+        assertEquals("このノート を読む。 | このノート", shown("[[習慣]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[[notes/習慣]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[習慣](習慣.md) を読む。"))
+        assertEquals("このノート#まとめ を読む。 | このノート#まとめ", shown("[[習慣#まとめ]] を読む。"))
+        assertEquals("見出しの後ろの空白も残す", "このノート#まとめ  を読む。 | このノート#まとめ ", shown("[[習慣#まとめ ]] を読む。"))
+        listOf(
+            "[[習慣|習慣#ではない]]",
+            "[[習慣|習慣^2]]",
+            "[[習慣|悪い/習慣]]",
+            "[習慣|例外](習慣.md)",
+            "[[習慣|よい習慣]]",
+            "[[習慣|別名]]",
+            "[[習慣#まとめ|習慣#まとめ-別]]",
+            "[あの話](習慣.md)"
+        ).forEach { written ->
+            val body = "$written を読む。"
+            val visible = extractIndexedLinks(body).single().let { it.sentence.substring(checkNotNull(it.sentenceLink)) }
+            assertEquals(written, "$visible を読む。 | $visible", shown(body))
+        }
+    }
+
+    /** 長い見出しは1文の窓で切れている。切れた見出しの表示を残し、範囲もそれを指す。 */
+    @Test
+    fun `窓で切れた長い見出しのリンクも名前だけを替え、切れた見出しを残す`() {
+        val heading = "あ".repeat(200)
+        val link = extractIndexedLinks("[[習慣#$heading]] を読む。").single()
+
+        val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
+
+        val replaced = text.substring(checkNotNull(range))
+        assertTrue(replaced, replaced.startsWith("このノート#あ"))
+        assertTrue(replaced, replaced.drop("このノート#".length).all { it == 'あ' })
     }
 
     @Test
@@ -196,7 +225,7 @@ class BacklinksTest {
             index
         )
 
-        val row = backlinkRows(sources, emptyMap(), "習慣.md").single()
+        val row = backlinkRows(sources, emptyMap()).single()
 
         assertEquals("昨日 このノート を読んだ。", row.sentence)
         assertEquals("このノート", row.sentence.substring(checkNotNull(row.sentenceLink)))

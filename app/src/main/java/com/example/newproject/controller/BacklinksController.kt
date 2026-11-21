@@ -85,7 +85,7 @@ internal class BacklinksController(
                     outgoing == null -> BacklinksState.Loading
                     else -> {
                         val sources = withContext(resolveDispatcher) { backlinkSources(links.candidates, outgoing, current, index) }
-                        BacklinksState.Ready(backlinkRows(sources, readingsOf(sources, key), target.name))
+                        BacklinksState.Ready(backlinkRows(sources, readingsOf(sources, key)))
                     }
                 }
             } catch (e: CancellationException) {

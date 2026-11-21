@@ -82,28 +82,48 @@ internal fun backlinkSources(
 internal const val THIS_NOTE_WORDS = "このノート"
 
 /**
- * リンクの見える文字（[sentence] の [link] の範囲）が今のノートの題名（[currentName]）なら「このノート」へ替え、替えた1文と、替えた後のリンクの範囲を返す。
- * 題名は索引の名前の鍵と同じ正規化（[noteKeyOf]。フォルダと見出しを落として照らす）で照らす。見出しつき（`名前#見出し`）は見出しを残して名前だけを替える。
- * **別名は替えない** — 題名と違う表示名は、そのとき自分が選んだ言葉だから。
+ * リンクの見える文字（[sentence] の [link] の範囲）が**別名の無いリンク**なら、名前の部分を「このノート」へ替え、替えた1文と、替えた後のリンクの範囲を返す。
+ * この行のリンクは今のノートへ着くと解いてあるので、題名を照らし直さない。見える文字が書かれたリンクそのものかで、別名の有無を見分ける。
+ *
+ * - 名前のリンク（`[[名前]]`・`[[名前#見出し]]`）: 見える文字が書かれた名前で始まり、残りが無いか `#` と見出しの表示なら別名が無い。
+ *   名前の部分だけを替え、見出しは書かれたまま残す（長い見出しは1文の窓で切れているので、見出しの先頭と合えばよい）
+ * - パスのリンク（`[文字](パス.md)`）: 見える文字は書いた人の文字なので、パスの末尾の名前と同じときだけ替える
+ * - **別名は替えない** — 題名と違う表示名は、そのとき自分が選んだ言葉だから。題名の正規化で照らすと、
+ *   `習慣#ではない`・`習慣^2`・`悪い/習慣` のような別名まで題名に見えるので、正規化は使わない
  */
-internal fun sentenceForCurrent(sentence: String, link: IntRange?, heading: String?, currentName: String): Pair<String, IntRange?> {
+internal fun sentenceForCurrent(
+    sentence: String,
+    link: IntRange?,
+    kind: IndexedLinkKind,
+    target: String,
+    heading: String?
+): Pair<String, IntRange?> {
     if (link == null || link.isEmpty() || link.last >= sentence.length) return sentence to link
     val shown = sentence.substring(link)
-    if (noteKeyOf(shown) != noteKeyOf(currentName)) return sentence to link
-    val headingSuffix = heading?.let { "#$it" }?.takeIf { shown.endsWith(it) }.orEmpty()
-    val replacement = THIS_NOTE_WORDS + headingSuffix
-    return sentence.replaceRange(link, replacement) to (link.first until link.first + replacement.length)
+    val nameLength = when (kind) {
+        IndexedLinkKind.NAME -> target.length.takeIf { shown.startsWith(target) && isHeadingShown(shown.substring(target.length), heading) }
+        IndexedLinkKind.PATH -> shown.length.takeIf { shown == target || shown == target.substringAfterLast('/').removeSuffix(".md") }
+    } ?: return sentence to link
+    val replaced = sentence.replaceRange(link.first, link.first + nameLength, THIS_NOTE_WORDS)
+    return replaced to (link.first until link.last + 1 - nameLength + THIS_NOTE_WORDS.length)
+}
+
+/** 名前の後ろに残る文字が、書かれた見出しの表示か（何も無いか、`#` と見出しの先頭）。 */
+private fun isHeadingShown(rest: String, heading: String?): Boolean = when {
+    rest.isEmpty() -> true
+    heading == null || !rest.startsWith("#") -> false
+    else -> heading.trim().startsWith(rest.drop(1).trim())
 }
 
 /**
  * 出どころを1行ずつにし、**最後に読んだ日が古い順**に並べる（再会の入口 → backlinks.md 判断3）。
  * [readings] は出どころの相対パスごとの痕跡で、無ければ読んだ記録が無いとして扱う。
- * 1文の中の今のノートの題名は「このノート」と出す（[sentenceForCurrent]）。
+ * 1文の中の、別名の無いリンクの名前は「このノート」と出す（[sentenceForCurrent]）。
  *
  * - 読んだ記録が無い出どころを最も古いとして先に出す。同じなら出どころの更新日時が古い順（日時が無ければ最も古い）、それも同じなら題名の順
  * - ✎ は、最初のリンクのある節と同じ見出しにメモがあるときだけ。リンクが見出しより前なら付けない（→ [SourceReading]）
  */
-internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, SourceReading>, currentName: String): List<BacklinkRow> =
+internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, SourceReading>): List<BacklinkRow> =
     sources
         .map { source -> source to (readings[source.note.vaultRelativePath] ?: SourceReading.UNREAD) }
         .sortedWith(
@@ -113,7 +133,7 @@ internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, S
         )
         .map { (source, reading) ->
             val link = source.firstLink
-            val (sentence, sentenceLink) = sentenceForCurrent(link.sentence, link.sentenceLink, link.heading, currentName)
+            val (sentence, sentenceLink) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
             BacklinkRow(
                 note = source.note.toRelatedNote(),
                 sentence = sentence,
