@@ -221,6 +221,23 @@ class BacklinksTest {
         assertTrue(replaced, replaced.drop("このノート#".length).all { it == 'あ' })
     }
 
+    /**
+     * 長いリンクは頭から窓に入り、窓の頭の空白は落ちる。落ちた空白のぶん名前を縮めないと、名前の後ろの `#` まで替えてしまう。
+     * 頭の空白が1文字でも2文字でも、言い換えた表示は「このノート」と窓に残った `#` 以降で、範囲もその表示を指す。
+     */
+    @Test
+    fun `長いリンクの窓の頭で空白を落としても、見出しの区切りを残して名前だけを替える`() {
+        listOf(1, 2).forEach { spaces ->
+            val link = extractIndexedLinks("前置き [[${" ".repeat(spaces)}習慣#${"あ".repeat(200)}]] を読む。").single()
+            val shownBefore = link.sentence.substring(checkNotNull(link.sentenceLink))
+
+            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
+
+            val headingPart = shownBefore.substring(shownBefore.indexOf('#'))
+            assertEquals("頭の空白 $spaces 文字", "このノート$headingPart", text.substring(checkNotNull(range)))
+        }
+    }
+
     @Test
     fun `行は言い換えた1文と、言い換えた後のリンクの範囲を持つ`() {
         val source = note("notes/日記.md")

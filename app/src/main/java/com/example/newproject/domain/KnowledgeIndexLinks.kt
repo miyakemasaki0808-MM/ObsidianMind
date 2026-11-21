@@ -206,7 +206,8 @@ private fun sentenceAround(text: String, link: InlineSpan, nameLength: Int?): Li
 /**
  * [sentence] を上限の長さに収める。[keep] の範囲（リンク）が入るように窓を取り、切った側に「…」を付ける。
  * 返す範囲は、切った後の文の中でリンクが占める位置（窓からはみ出した分は落とす）。
- * 窓はリンクの頭から取るので、名前の長さは後ろが窓で切れたときだけ窓の中の分まで縮める。
+ * 名前の長さは、**元の文での名前の範囲と、切った後に残る文字の範囲の重なり**にする — 窓の頭の空白を落とすと名前の頭が欠け、
+ * 元の長さのまま替えると名前の後ろ（見出しの `#` など）まで替えてしまう。
  */
 private fun clip(sentence: String, keep: IntRange, nameLength: Int?): LinkSentence {
     val max = KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS
@@ -222,7 +223,8 @@ private fun clip(sentence: String, keep: IntRange, nameLength: Int?): LinkSenten
     val piece = sentence.substring(from, to)
     val body = piece.trim()
     val prefix = if (from > 0) "…" else ""
-    val shift = prefix.length - from - (piece.length - piece.trimStart().length)
+    val bodyStart = from + (piece.length - piece.trimStart().length)
+    val shift = prefix.length - bodyStart
     val link = if (keep.isEmpty()) {
         null
     } else {
@@ -231,6 +233,12 @@ private fun clip(sentence: String, keep: IntRange, nameLength: Int?): LinkSenten
         val last = (keep.last + shift).coerceAtMost(bodyRange.last)
         (first..last).takeUnless { it.isEmpty() }
     }
-    val name = link?.let { nameLength?.coerceAtMost(it.last - it.first + 1) }
+    val name = if (link == null || nameLength == null) {
+        null
+    } else {
+        val first = maxOf(keep.first, bodyStart)
+        val last = minOf(keep.first + nameLength - 1, bodyStart + body.length - 1)
+        (last - first + 1).takeIf { it > 0 }
+    }
     return LinkSentence(prefix + body + (if (to < sentence.length) "…" else ""), link, name)
 }
