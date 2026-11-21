@@ -2513,7 +2513,7 @@ class NoteSessionCoordinatorTest {
         val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
         val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
         store.candidates = listOf(
-            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1)
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1, 2)
         )
         val coordinator = env.coordinator(knowledgeIndexStore = store, noteLinkIndex = { NoteLinkIndex(listOf(current, source)) })
 
@@ -2548,7 +2548,7 @@ class NoteSessionCoordinatorTest {
         val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
         val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
         store.candidates = listOf(
-            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1)
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1, 2)
         )
         val held = CompletableDeferred<Unit>()
         store.beforeCandidates = { held.await() }

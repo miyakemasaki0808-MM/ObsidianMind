@@ -68,7 +68,8 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
                         sectionHeading = row.sectionHeading,
                         sectionHeadingOccurrence = row.sectionHeadingOccurrence,
                         sentence = row.sentence,
-                        sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
+                        sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd),
+                        sentenceNameLength = row.sentenceNameLength
                     )
                 },
                 outgoing = outgoing?.map { row ->
@@ -92,6 +93,7 @@ private fun IndexedLink.toEntity(sourcePath: String) = IndexedLinkEntity(
     sentence = sentence,
     sentenceLinkStart = sentenceLink?.first,
     sentenceLinkEnd = sentenceLink?.let { it.last + 1 },
+    sentenceNameLength = sentenceNameLength,
     nameKey = keys.firstOrNull().orEmpty(),
     decodedNameKey = keys.getOrNull(1)
 )

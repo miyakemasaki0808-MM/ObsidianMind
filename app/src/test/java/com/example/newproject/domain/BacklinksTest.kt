@@ -31,14 +31,16 @@ class BacklinksTest {
         sentence: String = "$target を読む。",
         section: String? = null,
         occurrence: Int = 0,
-        sentenceLink: IntRange? = null
+        sentenceLink: IntRange? = null,
+        sentenceNameLength: Int? = null
     ) = BacklinkCandidate(
         source, ordinal, kind, target,
         heading = null,
         sectionHeading = section,
         sectionHeadingOccurrence = occurrence,
         sentence = sentence,
-        sentenceLink = sentenceLink
+        sentenceLink = sentenceLink,
+        sentenceNameLength = sentenceNameLength
     )
 
     private val current = note("notes/習慣.md")
@@ -176,7 +178,7 @@ class BacklinksTest {
     fun `別名の無いリンクの名前だけをこのノートと出し、別名と見出しは替えない`() {
         fun shown(body: String): String {
             val link = extractIndexedLinks(body).single()
-            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
+            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
             return text + " | " + range?.let { text.substring(it) }
         }
 
@@ -185,6 +187,10 @@ class BacklinksTest {
         assertEquals("このノート を読む。 | このノート", shown("[習慣](習慣.md) を読む。"))
         assertEquals("このノート#まとめ を読む。 | このノート#まとめ", shown("[[習慣#まとめ]] を読む。"))
         assertEquals("見出しの後ろの空白も残す", "このノート#まとめ  を読む。 | このノート#まとめ ", shown("[[習慣#まとめ ]] を読む。"))
+        assertEquals("名前の前後の空白ごと替える", "昨日 このノート を読む。 | このノート", shown("昨日 [[ 習慣 ]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[[習慣.md]] を読む。"))
+        assertEquals("符号化したパスは復号した名前と照らす", "このノート を読む。 | このノート", shown("[my note](my%20note.md) を読む。"))
+        assertEquals("フォルダつきのパスも末尾の名前と照らす", "このノート を読む。 | このノート", shown("[習慣.md](notes/習慣.md) を読む。"))
         listOf(
             "[[習慣|習慣#ではない]]",
             "[[習慣|習慣^2]]",
@@ -193,6 +199,7 @@ class BacklinksTest {
             "[[習慣|よい習慣]]",
             "[[習慣|別名]]",
             "[[習慣#まとめ|習慣#まとめ-別]]",
+            "[[習慣#まとめ|習慣#ま]]",
             "[あの話](習慣.md)"
         ).forEach { written ->
             val body = "$written を読む。"
@@ -207,7 +214,7 @@ class BacklinksTest {
         val heading = "あ".repeat(200)
         val link = extractIndexedLinks("[[習慣#$heading]] を読む。").single()
 
-        val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
+        val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
 
         val replaced = text.substring(checkNotNull(range))
         assertTrue(replaced, replaced.startsWith("このノート#あ"))
@@ -219,7 +226,7 @@ class BacklinksTest {
         val source = note("notes/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
         val sources = backlinkSources(
-            listOf(candidate("notes/日記.md", "習慣", sentence = "昨日 習慣 を読んだ。", sentenceLink = 3..4)),
+            listOf(candidate("notes/日記.md", "習慣", sentence = "昨日 習慣 を読んだ。", sentenceLink = 3..4, sentenceNameLength = 2)),
             emptyList(),
             current.ref,
             index

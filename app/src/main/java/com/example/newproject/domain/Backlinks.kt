@@ -20,7 +20,8 @@ internal data class BacklinkCandidate(
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
     val sentence: String,
-    val sentenceLink: IntRange?
+    val sentenceLink: IntRange?,
+    val sentenceNameLength: Int?
 ) {
     fun toNoteLink(): NoteLink = when (kind) {
         IndexedLinkKind.NAME -> NoteLink.ByName(target, heading)
@@ -82,37 +83,15 @@ internal fun backlinkSources(
 internal const val THIS_NOTE_WORDS = "このノート"
 
 /**
- * リンクの見える文字（[sentence] の [link] の範囲）が**別名の無いリンク**なら、名前の部分を「このノート」へ替え、替えた1文と、替えた後のリンクの範囲を返す。
- * この行のリンクは今のノートへ着くと解いてあるので、題名を照らし直さない。見える文字が書かれたリンクそのものかで、別名の有無を見分ける。
- *
- * - 名前のリンク（`[[名前]]`・`[[名前#見出し]]`）: 見える文字が書かれた名前で始まり、残りが無いか `#` と見出しの表示なら別名が無い。
- *   名前の部分だけを替え、見出しは書かれたまま残す（長い見出しは1文の窓で切れているので、見出しの先頭と合えばよい）
- * - パスのリンク（`[文字](パス.md)`）: 見える文字は書いた人の文字なので、パスの末尾の名前と同じときだけ替える
- * - **別名は替えない** — 題名と違う表示名は、そのとき自分が選んだ言葉だから。題名の正規化で照らすと、
- *   `習慣#ではない`・`習慣^2`・`悪い/習慣` のような別名まで題名に見えるので、正規化は使わない
+ * リンクの範囲（[link]）の先頭から [nameLength] 文字の名前を「このノート」へ替え、替えた1文と、替えた後のリンクの範囲を返す。
+ * 替えてよい長さは本文から取り出すときに記法で決めてある（`KnowledgeIndexLinks` の `sentenceNameLength`）。
+ * 別名（null）は替えない — 題名と違う表示名は、そのとき自分が選んだ言葉だから。見出しは名前の後ろにあるので書かれたまま残る。
  */
-internal fun sentenceForCurrent(
-    sentence: String,
-    link: IntRange?,
-    kind: IndexedLinkKind,
-    target: String,
-    heading: String?
-): Pair<String, IntRange?> {
-    if (link == null || link.isEmpty() || link.last >= sentence.length) return sentence to link
-    val shown = sentence.substring(link)
-    val nameLength = when (kind) {
-        IndexedLinkKind.NAME -> target.length.takeIf { shown.startsWith(target) && isHeadingShown(shown.substring(target.length), heading) }
-        IndexedLinkKind.PATH -> shown.length.takeIf { shown == target || shown == target.substringAfterLast('/').removeSuffix(".md") }
-    } ?: return sentence to link
-    val replaced = sentence.replaceRange(link.first, link.first + nameLength, THIS_NOTE_WORDS)
-    return replaced to (link.first until link.last + 1 - nameLength + THIS_NOTE_WORDS.length)
-}
-
-/** 名前の後ろに残る文字が、書かれた見出しの表示か（何も無いか、`#` と見出しの先頭）。 */
-private fun isHeadingShown(rest: String, heading: String?): Boolean = when {
-    rest.isEmpty() -> true
-    heading == null || !rest.startsWith("#") -> false
-    else -> heading.trim().startsWith(rest.drop(1).trim())
+internal fun sentenceForCurrent(sentence: String, link: IntRange?, nameLength: Int?): Pair<String, IntRange?> {
+    if (link == null || link.isEmpty() || link.last >= sentence.length || nameLength == null || nameLength <= 0) return sentence to link
+    val length = nameLength.coerceAtMost(link.last - link.first + 1)
+    val replaced = sentence.replaceRange(link.first, link.first + length, THIS_NOTE_WORDS)
+    return replaced to (link.first until link.last + 1 - length + THIS_NOTE_WORDS.length)
 }
 
 /**
@@ -133,7 +112,7 @@ internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, S
         )
         .map { (source, reading) ->
             val link = source.firstLink
-            val (sentence, sentenceLink) = sentenceForCurrent(link.sentence, link.sentenceLink, link.kind, link.target, link.heading)
+            val (sentence, sentenceLink) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
             BacklinkRow(
                 note = source.note.toRelatedNote(),
                 sentence = sentence,

@@ -5,6 +5,7 @@ import com.example.newproject.domain.markdown.InlineSpan
 import com.example.newproject.domain.markdown.InlineSpanKind
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.inlineVisibleLayout
+import com.example.newproject.domain.markdown.linkLabel
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.scanInlineSyntax
@@ -35,6 +36,8 @@ internal enum class IndexedLinkKind { NAME, PATH }
  * @property sectionHeadingOccurrence 出どころの中で、同じ見出し（[headingMatchKey] で照合）のうち何番目か（0 から）
  * @property sentenceLink [sentence] の中でリンクの見える文字が占める範囲。1行に切り出すときと、今のノートの題名を言い換えるときに使う。
  *   見える文字の中にリンクが見つからなければ null
+ * @property sentenceNameLength リンクの範囲の先頭から、今のノートの名前として「このノート」へ替えてよい長さ。**取り出すときの記法で決める** —
+ *   別名（`[[名前|表示名]]`・名前と違う `[文字](パス.md)`）なら null。文頭の空白を落として名前の頭が欠けたら残りの長さ、窓で後ろが切れたら窓の中の分まで
  * @property keys 候補を絞る名前の鍵（[linkKeysOf]）
  */
 internal data class IndexedLink(
@@ -46,6 +49,7 @@ internal data class IndexedLink(
     val sectionHeadingOccurrence: Int,
     val sentence: String,
     val sentenceLink: IntRange?,
+    val sentenceNameLength: Int?,
     val keys: List<String>
 ) {
     /** 本文のリンクと同じ規則（[resolveNoteLink]）で解くための形。 */
@@ -78,7 +82,7 @@ internal fun extractIndexedLinks(content: String): List<IndexedLink> {
                     is NoteLink.ByPath -> IndexedLinkKind.PATH to link.path
                     is NoteLink.InNote -> return@forEach
                 }
-                val sentence = sentenceAround(text, span)
+                val sentence = sentenceAround(text, span, replaceableNameLength(text, span, link))
                 links += IndexedLink(
                     ordinal = links.size,
                     kind = kind,
@@ -88,6 +92,7 @@ internal fun extractIndexedLinks(content: String): List<IndexedLink> {
                     sectionHeadingOccurrence = occurrence,
                     sentence = sentence.text,
                     sentenceLink = sentence.link,
+                    sentenceNameLength = sentence.nameLength,
                     keys = linkKeysOf(link)
                 )
             }
@@ -141,18 +146,43 @@ internal fun contentFingerprint(content: String): String =
         .digest(content.toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }
 
-/** リンクを含む1文と、その中でリンクが占める範囲。 */
-private class LinkSentence(val text: String, val link: IntRange?)
+/** リンクを含む1文と、その中でリンクが占める範囲と、範囲の先頭から替えてよい名前の長さ。 */
+private class LinkSentence(val text: String, val link: IntRange?, val nameLength: Int?)
+
+/**
+ * リンクの見える文字のうち、名前として「このノート」へ替えてよい先頭の長さ（→ backlinks.md 判断6）。別名なら null。
+ * **表示から推し量らない** — 窓で切れた表示では、短い別名と切れた見出しを見分けられない。
+ *
+ * - `[[...]]`: `|` があれば別名。無ければ `#` の手前（空白も書かれたまま含める）が名前
+ * - `[文字](パス)`: 文字がパスの末尾の名前（符号化したままと復号した後、`.md` の有無）と同じときだけ、全体が名前
+ */
+private fun replaceableNameLength(text: String, span: InlineSpan, link: NoteLink): Int? {
+    if (span.kind == InlineSpanKind.WikiLink) {
+        val content = text.substring(span.contentStart, span.contentEnd)
+        if ('|' in content) return null
+        return content.substringBefore('#').takeIf { it.isNotBlank() }?.length
+    }
+    val written = when (link) {
+        is NoteLink.ByPath -> link.path
+        is NoteLink.ByName -> link.name
+        is NoteLink.InNote -> return null
+    }
+    val shown = linkLabel(text, span)
+    val names = listOf(written, normalizeVaultImagePath(written))
+        .map { it.substringAfterLast('/') }
+        .flatMap { listOf(it, it.removeSuffix(".md")) }
+    return shown.length.takeIf { shown.isNotEmpty() && shown in names }
+}
 
 /**
  * [link] を含む1文を、本文に見える文字で返す。**文は見える文字の上で切る** — 原文で切ると、複数の文を包む強調の記号が
  * 切れ目を隠すか、切った断片に記号が残る。切れ目は [splitIntoSentences] に従い、**リンクとコードの内側の切れ目だけは使わない**。
  * 長い文は、リンクが入る範囲で切る（末尾だけで切ると、文の後ろのリンクが落ちる）。
  */
-private fun sentenceAround(text: String, link: InlineSpan): LinkSentence {
+private fun sentenceAround(text: String, link: InlineSpan, nameLength: Int?): LinkSentence {
     val layout = inlineVisibleLayout(text)
     val visible = layout.text
-    val target = layout.atoms[link.start] ?: return clip(visible.trim(), IntRange.EMPTY)
+    val target = layout.atoms[link.start] ?: return clip(visible.trim(), IntRange.EMPTY, null)
     val ends = mutableListOf<Int>()
     var offset = 0
     splitIntoSentences(visible).forEach { piece ->
@@ -167,16 +197,23 @@ private fun sentenceAround(text: String, link: InlineSpan): LinkSentence {
     val leading = raw.length - raw.trimStart().length
     val sentence = raw.trim()
     val linkInSentence = (target.first - start - leading).coerceAtLeast(0) until (target.last + 1 - start - leading).coerceAtMost(sentence.length)
-    return clip(sentence, linkInSentence)
+    // 文の前の空白を落としたぶん、リンクの頭（名前の前の空白）が欠けたら、残った名前の長さにする。
+    val headTrimmed = (start + leading - target.first).coerceAtLeast(0)
+    val nameKept = nameLength?.minus(headTrimmed)?.takeIf { it > 0 }
+    return clip(sentence, linkInSentence, nameKept)
 }
 
 /**
  * [sentence] を上限の長さに収める。[keep] の範囲（リンク）が入るように窓を取り、切った側に「…」を付ける。
  * 返す範囲は、切った後の文の中でリンクが占める位置（窓からはみ出した分は落とす）。
+ * 窓はリンクの頭から取るので、名前の長さは後ろが窓で切れたときだけ窓の中の分まで縮める。
  */
-private fun clip(sentence: String, keep: IntRange): LinkSentence {
+private fun clip(sentence: String, keep: IntRange, nameLength: Int?): LinkSentence {
     val max = KnowledgeIndexLimits.MAX_SENTENCE_CHARACTERS
-    if (sentence.length <= max) return LinkSentence(sentence, keep.takeUnless { it.isEmpty() })
+    if (sentence.length <= max) {
+        val link = keep.takeUnless { it.isEmpty() }
+        return LinkSentence(sentence, link, link?.let { nameLength?.coerceAtMost(it.last - it.first + 1) })
+    }
     val window = max - 2
     val keepLength = if (keep.isEmpty()) 0 else keep.last - keep.first + 1
     val from = if (keep.isEmpty()) 0 else (keep.first - (window - keepLength).coerceAtLeast(0) / 2)
@@ -194,5 +231,6 @@ private fun clip(sentence: String, keep: IntRange): LinkSentence {
         val last = (keep.last + shift).coerceAtMost(bodyRange.last)
         (first..last).takeUnless { it.isEmpty() }
     }
-    return LinkSentence(prefix + body + (if (to < sentence.length) "…" else ""), link)
+    val name = link?.let { nameLength?.coerceAtMost(it.last - it.first + 1) }
+    return LinkSentence(prefix + body + (if (to < sentence.length) "…" else ""), link, name)
 }
