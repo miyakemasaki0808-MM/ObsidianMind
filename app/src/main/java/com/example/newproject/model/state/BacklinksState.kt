@@ -23,13 +23,15 @@ sealed interface BacklinksState {
 /**
  * 1ノート1行（→ backlinks.md §5）。[sentence] は本文で最初に出てくるリンクを含む1文、[otherCount] はほかの箇所の数。
  * 開くときは [sectionHeading] の、同じ見出しのうち [sectionHeadingOccurrence] 番目から。見出しより前なら冒頭から。
+ * [hasMemo] は、出どころのそのリンクのある節に自分が余白メモを書いているか（✎）。
  */
 data class BacklinkRow(
     val note: RelatedNote,
     val sentence: String,
     val otherCount: Int,
     val sectionHeading: String?,
-    val sectionHeadingOccurrence: Int
+    val sectionHeadingOccurrence: Int,
+    val hasMemo: Boolean
 )
 
 /** 知識索引の進み具合（→ docs/dev/system/knowledge_index.md §5）。**Vault 単位**で、ノートを替えても消さない。 */

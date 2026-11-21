@@ -1,9 +1,15 @@
 package com.example.newproject.controller
 
 import com.example.newproject.data.KnowledgeIndexStore
+import com.example.newproject.data.ReadingTracePersistence
+import com.example.newproject.data.ReadingTraceReadResult
+import com.example.newproject.domain.BacklinkSource
 import com.example.newproject.domain.NoteLinkIndex
+import com.example.newproject.domain.SourceReading
 import com.example.newproject.domain.backlinkRows
+import com.example.newproject.domain.backlinkSources
 import com.example.newproject.domain.noteKeyOf
+import com.example.newproject.domain.sourceReadingOf
 import com.example.newproject.model.BacklinksStateWriter
 import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.NoteScanKind
@@ -38,7 +44,10 @@ internal class BacklinksController(
     private val latestScan: () -> PublishedNoteScan?,
     /** 解くのに使う走査のリンクの索引。公開と同時に替わる。 */
     private val linkIndex: () -> NoteLinkIndex,
-    private val resolveDispatcher: CoroutineDispatcher = Dispatchers.Default
+    /** 出どころの痕跡（最後に読んだ日と、メモを書いた節）。**読むだけで、痕跡の錠は取らない**（→ [readingsOf]）。 */
+    private val traces: ReadingTracePersistence,
+    private val resolveDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private var job: Job? = null
 
@@ -67,11 +76,12 @@ internal class BacklinksController(
         if (state.current !is BacklinksState.Ready) state.set(BacklinksState.Loading)
         job = scope.launch {
             val rows = try {
-                store.backlinkCandidates(key, noteKeyOf(target.name))?.let { candidates ->
+                val sources = store.backlinkCandidates(key, noteKeyOf(target.name))?.let { candidates ->
                     store.linksFrom(key, target.vaultRelativePath)?.let { outgoing ->
-                        withContext(resolveDispatcher) { backlinkRows(candidates, outgoing, current, index) }
+                        withContext(resolveDispatcher) { backlinkSources(candidates, outgoing, current, index) }
                     }
                 }
+                sources?.let { backlinkRows(it, readingsOf(it, key)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -82,6 +92,27 @@ internal class BacklinksController(
             state.set(rows?.let { BacklinksState.Ready(it) } ?: BacklinksState.Unavailable)
         }
     }
+
+    /**
+     * 出どころごとに痕跡を読む（I/O）。**痕跡の錠は取らない** — 錠は同じファイルの読み書きを守るもので、ここは書かない。
+     * 書き込みの途中を読んで壊れて見えたら読んだ記録が無いとして並べ、次に引き直したときに直る。
+     * 読めない痕跡も同じ扱いで、1本が読めないことで節全体を「数えられない」にしない。
+     */
+    private suspend fun readingsOf(sources: List<BacklinkSource>, vaultKey: String): Map<String, SourceReading> =
+        withContext(ioDispatcher) {
+            sources.associate { source ->
+                ensureActive()
+                val path = source.note.vaultRelativePath
+                val reading = try {
+                    (traces.load(path, vaultKey) as? ReadingTraceReadResult.Valid)?.let { sourceReadingOf(it.trace) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
+                path to (reading ?: SourceReading.UNREAD)
+            }
+        }
 
     /** ノート・Vault切替。状態は `withNoteScopedReset()` が落とす。 */
     fun cancelAndClear() {

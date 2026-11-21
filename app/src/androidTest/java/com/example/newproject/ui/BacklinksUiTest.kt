@@ -433,7 +433,8 @@ class BacklinksUiTest {
             sentence = "二つ目のまとめで習慣を書いた。",
             otherCount = 2,
             sectionHeading = "まとめ",
-            sectionHeadingOccurrence = 1
+            sectionHeadingOccurrence = 1,
+            hasMemo = false
         )
 
         /** 0 と 20 に同じ見出し「まとめ」を置いた本文。番号はブロックの位置と同じ。 */

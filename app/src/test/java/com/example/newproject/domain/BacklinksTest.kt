@@ -3,7 +3,10 @@ package com.example.newproject.domain
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingVisit
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -17,6 +20,8 @@ class BacklinksTest {
     private fun note(path: String, lastModified: Long? = null) =
         NoteFile(name = path.substringAfterLast('/'), ref = DocumentRef("ref:$path"), lastModified = lastModified, vaultRelativePath = path)
 
+    private fun read(at: Long) = SourceReading(lastReadAt = at, memoSectionKeys = emptySet())
+
     private fun candidate(
         source: String,
         target: String,
@@ -29,6 +34,10 @@ class BacklinksTest {
 
     private val current = note("notes/習慣.md")
 
+    /** 痕跡の無い（どれも読んだ記録が無い）ときの行。 */
+    private fun rowsOf(candidates: List<BacklinkCandidate>, outgoing: List<NoteLink>, current: DocumentRef, index: NoteLinkIndex) =
+        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap())
+
     @Test
     fun `今のノートへ着くリンクだけを残し、同じ名前の別のノートへ着くリンクは除く`() {
         val sameName = note("other/習慣.md")
@@ -36,7 +45,7 @@ class BacklinksTest {
         val inNotes = note("notes/振り返り.md", lastModified = 1L)
         val index = NoteLinkIndex(listOf(current, sameName, inOther, inNotes))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("other/日記.md", "習慣"), candidate("notes/振り返り.md", "習慣")),
             emptyList(),
             current.ref,
@@ -57,7 +66,7 @@ class BacklinksTest {
         val sameNameTarget = note("notes/振り返り.md")
         val index = NoteLinkIndex(listOf(current, mutual, sameNameSource, sameNameTarget))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("notes/日記.md", "習慣"), candidate("other/振り返り.md", "習慣")),
             listOf(NoteLink.ByPath("日記.md", null), NoteLink.ByName("振り返り", null)),
             current.ref,
@@ -72,7 +81,7 @@ class BacklinksTest {
         val source = note("notes/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(
                 candidate("notes/日記.md", "習慣", ordinal = 2, sentence = "三つ目。"),
                 candidate("notes/日記.md", "習慣", ordinal = 0, sentence = "最初に [[習慣]] を書いた。", section = "まとめ", occurrence = 1),
@@ -90,29 +99,93 @@ class BacklinksTest {
         assertEquals(1, row.sectionHeadingOccurrence)
     }
 
+    /** 再会の入口なので、忘れかけている相手を上に出す（→ features/backlinks.md 判断3）。 */
     @Test
-    fun `出どころの更新日時が新しい順、同じなら題名の順に並べる`() {
-        val old = note("notes/古い.md", lastModified = 1L)
-        val newA = note("notes/新しいA.md", lastModified = 5L)
-        val newB = note("notes/新しいB.md", lastModified = 5L)
-        val undated = note("notes/日時なし.md")
-        val index = NoteLinkIndex(listOf(current, old, newA, newB, undated))
+    fun `読んだ記録が無い出どころを先に、最後に読んだ日が古い順に並べ、同じなら更新の古い順、それも同じなら題名の順`() {
+        val notes = listOf(
+            note("notes/最近読んだ.md", lastModified = 1L),
+            note("notes/同じ日B.md", lastModified = 3L),
+            note("notes/未読で新しい.md", lastModified = 5L),
+            note("notes/昔読んだ.md", lastModified = 9L),
+            note("notes/同じ日A.md", lastModified = 3L),
+            note("notes/未読で日時なし.md"),
+            note("notes/未読で古い.md", lastModified = 1L),
+            note("notes/同じ日で古い.md", lastModified = 2L)
+        )
+        val index = NoteLinkIndex(listOf(current) + notes)
+        val sources = backlinkSources(notes.map { candidate(it.vaultRelativePath, "習慣") }, emptyList(), current.ref, index)
+        val readings = mapOf(
+            "notes/最近読んだ.md" to read(900L),
+            "notes/昔読んだ.md" to read(100L),
+            "notes/同じ日A.md" to read(500L),
+            "notes/同じ日B.md" to read(500L),
+            "notes/同じ日で古い.md" to read(500L)
+        )
 
-        val rows = backlinkRows(
-            listOf("notes/古い.md", "notes/新しいB.md", "notes/日時なし.md", "notes/新しいA.md").map { candidate(it, "習慣") },
+        val rows = backlinkRows(sources, readings)
+
+        assertEquals(
+            listOf("未読で日時なし.md", "未読で古い.md", "未読で新しい.md", "昔読んだ.md", "同じ日で古い.md", "同じ日A.md", "同じ日B.md", "最近読んだ.md"),
+            rows.map { it.note.title }
+        )
+    }
+
+    /** ✎ は最初のリンクのある節に書いたメモだけ。見出しより前のリンクには付けない（→ features/backlinks.md 判断7）。 */
+    @Test
+    fun `最初のリンクのある節と同じ見出しにメモがあれば印を付け、別の節と見出しより前のリンクには付けない`() {
+        val same = note("notes/同じ節.md")
+        val other = note("notes/別の節.md")
+        val before = note("notes/見出しの前.md")
+        val index = NoteLinkIndex(listOf(current, same, other, before))
+        val sources = backlinkSources(
+            listOf(
+                candidate("notes/同じ節.md", "習慣", section = "まとめ"),
+                candidate("notes/別の節.md", "習慣", section = "まとめ"),
+                candidate("notes/見出しの前.md", "習慣", section = null)
+            ),
             emptyList(),
             current.ref,
             index
         )
+        val memoIn = { section: String -> SourceReading(lastReadAt = 1L, memoSectionKeys = setOf(headingMatchKey(section))) }
 
-        assertEquals(listOf("新しいA.md", "新しいB.md", "古い.md", "日時なし.md"), rows.map { it.note.title })
+        val rows = backlinkRows(
+            sources,
+            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ"))
+        )
+
+        assertEquals(
+            mapOf("同じ節.md" to true, "別の節.md" to false, "見出しの前.md" to false),
+            rows.associate { it.note.title to it.hasMemo }
+        )
+    }
+
+    @Test
+    fun `痕跡からは訪問の最新の日時と、見出しのあるメモの節だけを取る`() {
+        val trace = ReadingTrace(
+            vaultRelativePath = "notes/日記.md",
+            noteTitle = "日記",
+            documentId = null,
+            visits = listOf(3_000L, 1_000L, 2_000L).map { ReadingVisit(it, deepestSectionTitle = null, progressPercent = 50) },
+            memos = listOf(
+                MarginMemo("a", 1L, sectionTitle = "まとめ"),
+                MarginMemo("b", 2L, sectionTitle = null),
+                MarginMemo("c", 3L, sectionTitle = "導入")
+            )
+        )
+
+        assertEquals(
+            SourceReading(lastReadAt = 3_000L, memoSectionKeys = setOf(headingMatchKey("まとめ"), headingMatchKey("導入"))),
+            sourceReadingOf(trace)
+        )
+        assertEquals(null, sourceReadingOf(trace.copy(visits = emptyList(), totalVisitCount = 0)).lastReadAt)
     }
 
     @Test
     fun `出どころが走査の索引に無ければ解かずに除き、今のノート自身のリンクも除く`() {
         val index = NoteLinkIndex(listOf(current))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("locked/見えない.md", "習慣"), candidate("notes/習慣.md", "習慣")),
             emptyList(),
             current.ref,
@@ -156,7 +229,7 @@ class BacklinksTest {
         val source = note("notes/sub/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("notes/sub/日記.md", "../習慣.md", kind = IndexedLinkKind.PATH)),
             emptyList(),
             current.ref,

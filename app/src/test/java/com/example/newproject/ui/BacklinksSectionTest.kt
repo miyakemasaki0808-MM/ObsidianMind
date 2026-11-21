@@ -28,7 +28,8 @@ class BacklinksSectionTest {
         sentence = "[[習慣]] を読む。",
         otherCount = 2,
         sectionHeading = null,
-        sectionHeadingOccurrence = 0
+        sectionHeadingOccurrence = 0,
+        hasMemo = false
     )
 
     @Test

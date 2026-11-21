@@ -196,7 +196,9 @@ internal class NoteSessionCoordinator(
             vaultKey = currentVaultKey,
             latestScan = { knowledgeIndex?.latestScan },
             linkIndex = noteLinkIndex,
-            resolveDispatcher = parseDispatcher
+            traces = readingTracePersistence,
+            resolveDispatcher = parseDispatcher,
+            ioDispatcher = ioDispatcher
         )
     }
 

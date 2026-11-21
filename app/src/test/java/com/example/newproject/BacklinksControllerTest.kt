@@ -40,6 +40,7 @@ class BacklinksControllerTest {
     private class Env(scope: TestScope) {
         val state = NoteUiStateStore()
         val store = FakeStore()
+        val traces = FakePersistence()
         var latest: PublishedNoteScan? = null
         var index = NoteLinkIndex(listOf(CURRENT, OTHER, SOURCE, SOURCE_2))
         var vaultKey: String? = VAULT
@@ -51,7 +52,9 @@ class BacklinksControllerTest {
             vaultKey = { vaultKey },
             latestScan = { latest },
             linkIndex = { index },
-            resolveDispatcher = StandardTestDispatcher(scope.testScheduler)
+            traces = traces,
+            resolveDispatcher = StandardTestDispatcher(scope.testScheduler),
+            ioDispatcher = StandardTestDispatcher(scope.testScheduler)
         )
 
         val backlinks: BacklinksState get() = state.value.backlinks
@@ -121,6 +124,43 @@ class BacklinksControllerTest {
         env.controller.refresh(CURRENT.ref)
         advanceUntilIdle()
         assertEquals(BacklinksState.Unavailable, env.backlinks)
+    }
+
+    /** 再会の入口なので、読んだ記録の無い相手を先に出す（→ features/backlinks.md 判断3）。壊れた痕跡は記録なしとして並べ、節は読めないにしない。 */
+    @Test
+    fun `出どころごとに痕跡を読んで最後に読んだ日の古い順に並べ、壊れた痕跡は読んだ記録が無いとして扱う`() = runTest {
+        val env = Env(this)
+        env.published()
+        env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
+
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals("どちらも記録なし・更新日時も同じなら題名の順", listOf("日記.md", "週報.md"), env.titles())
+
+        env.traces.put(storedTrace(count = 5, path = SOURCE.vaultRelativePath))
+        env.traces.corruptPaths += SOURCE_2.vaultRelativePath
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(listOf("週報.md", "日記.md"), env.titles())
+    }
+
+    /** 痕跡の読み込みは同期の I/O で、取り消しでは止まらない。読み終えた後に旧いノートの結果を書かない。 */
+    @Test
+    fun `痕跡を読んでいる途中でノートを替えたら、旧いノートの結果を書かない`() = runTest {
+        val env = Env(this)
+        env.published()
+        env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
+        var loads = 0
+        env.traces.onLoad = {
+            loads += 1
+            if (loads == 1) env.noteChanged()
+        }
+
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+
+        assertEquals("替えた後は残りの出どころの痕跡を読まない", 1, loads)
+        assertEquals(BacklinksState.Idle, env.backlinks)
     }
 
     @Test
