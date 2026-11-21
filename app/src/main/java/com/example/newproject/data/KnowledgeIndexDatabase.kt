@@ -147,14 +147,18 @@ internal abstract class KnowledgeIndexDao {
     )
     abstract suspend fun linksNamed(key: String): List<BacklinkCandidateRow>
 
+    @Query("SELECT COUNT(*) FROM indexed_note WHERE relativePath = :path")
+    abstract suspend fun noteCountAt(path: String): Int
+
     /**
      * 索引が [vaultKey] のものなら、名前の鍵で引いたリンクと、[path] のノートから出るリンク（本文の順）を**1つのトランザクションで**引く。
      * 別の Vault の索引なら null。2つを別々に引くと、間の突き合わせで違う時点の組み合わせになる（→ backlinks.md 判断5）。
+     * **[path] のノートを索引がまだ読んでいなければ、出るリンクは null**（リンクが無いノートの空と分ける）。
      */
     @Transaction
-    open suspend fun backlinkLinksIn(vaultKey: String, key: String, path: String): Pair<List<BacklinkCandidateRow>, List<IndexedLinkEntity>>? {
+    open suspend fun backlinkLinksIn(vaultKey: String, key: String, path: String): Pair<List<BacklinkCandidateRow>, List<IndexedLinkEntity>?>? {
         if (meta()?.vaultKey != vaultKey) return null
-        return linksNamed(key) to linksOf(path)
+        return linksNamed(key) to (if (noteCountAt(path) > 0) linksOf(path) else null)
     }
 
     @Upsert

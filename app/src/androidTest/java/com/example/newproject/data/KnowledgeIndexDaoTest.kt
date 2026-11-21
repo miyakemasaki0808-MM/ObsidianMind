@@ -122,7 +122,7 @@ class KnowledgeIndexDaoTest {
     }
 
     @Test
-    fun 入るリンクと一組でノートから出るリンクを本文の順に引き別のVaultの索引ならnullを返す() = runBlocking<Unit> {
+    fun 入るリンクと一組でノートから出るリンクを本文の順に引き_読んでいないノートと別のVaultではnullを返す() = runBlocking<Unit> {
         store.openVault(VAULT_A)
         val links = listOf(
             link("習慣").copy(ordinal = 1),
@@ -134,7 +134,9 @@ class KnowledgeIndexDaoTest {
             listOf(NoteLink.ByPath("日記.md", "まとめ"), NoteLink.ByName("習慣", null)),
             store.backlinkLinks(VAULT_A, "習慣", "a.md")?.outgoing
         )
-        assertEquals(emptyList<NoteLink>(), store.backlinkLinks(VAULT_A, "習慣", "まだ読んでいない.md")?.outgoing)
+        assertEquals("読んでいないノートは空と分けて null", null, store.backlinkLinks(VAULT_A, "習慣", "まだ読んでいない.md")?.outgoing)
+        store.applyRead(VAULT_A, record("リンクなし.md"), emptyList(), writeNumberAtRead = null)
+        assertEquals(emptyList<NoteLink>(), store.backlinkLinks(VAULT_A, "習慣", "リンクなし.md")?.outgoing)
         assertEquals(null, store.backlinkLinks(VAULT_B, "習慣", "a.md"))
     }
 

@@ -71,7 +71,7 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
                         sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
                     )
                 },
-                outgoing = outgoing.map { row ->
+                outgoing = outgoing?.map { row ->
                     when (IndexedLinkKind.valueOf(row.kind)) {
                         IndexedLinkKind.NAME -> NoteLink.ByName(row.target, row.heading)
                         IndexedLinkKind.PATH -> NoteLink.ByPath(row.target, row.heading)

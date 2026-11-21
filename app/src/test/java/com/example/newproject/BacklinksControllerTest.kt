@@ -108,6 +108,32 @@ class BacklinksControllerTest {
         assertEquals("今のノートの名前の鍵で絞る", listOf("習慣"), env.store.keys)
     }
 
+    /**
+     * 索引が今のノートをまだ読んでいなければ、本文がリンクしている相手を互いのリンクとして除けない。判定済みの一覧として出さずに待ち、
+     * 読み終えたら除く。読んだうえで出るリンクが無ければ、そのまま出す。
+     */
+    @Test
+    fun `索引が今のノートをまだ読んでいなければ一覧を出さずに待ち、読み終えたら互いのリンクを除く`() = runTest {
+        val env = Env(this)
+        env.published()
+        env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
+        env.store.outgoing = null
+
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(BacklinksState.Loading, env.backlinks)
+
+        env.store.outgoing = listOf(NoteLink.ByName("日記", null))
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(listOf("週報.md"), env.titles())
+
+        env.store.outgoing = emptyList()
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals("読んだうえで出るリンクが無ければ両方出す", listOf("日記.md", "週報.md"), env.titles())
+    }
+
     /** 互いのリンクは今のノートのパスで索引から引く（→ features/backlinks.md 判断5）。 */
     @Test
     fun `今のノートのパスで出るリンクを引いてその相手を除く`() = runTest {
@@ -325,7 +351,7 @@ class BacklinksControllerTest {
         var answer: suspend () -> List<BacklinkCandidate>? = { emptyList() }
 
         val fromPaths = mutableListOf<String>()
-        var outgoing: List<NoteLink> = emptyList()
+        var outgoing: List<NoteLink>? = emptyList()
 
         /** 照会のたびに呼ぶ。読んだ後に索引が書き換わる順序を作る。 */
         var afterRead: () -> Unit = {}

@@ -75,20 +75,27 @@ internal class BacklinksController(
         val target = index.noteAt(current) ?: return state.set(BacklinksState.Ready(emptyList()))
         if (state.current !is BacklinksState.Ready) state.set(BacklinksState.Loading)
         job = scope.launch {
-            val rows = try {
+            val next = try {
                 // 入るリンクと出るリンクは1回の読み取りで一組に引く（別々に引くと、間の突き合わせで違う時点の組み合わせになる）。
-                val sources = store.backlinkLinks(key, noteKeyOf(target.name), target.vaultRelativePath)?.let { links ->
-                    withContext(resolveDispatcher) { backlinkSources(links.candidates, links.outgoing, current, index) }
+                val links = store.backlinkLinks(key, noteKeyOf(target.name), target.vaultRelativePath)
+                val outgoing = links?.outgoing
+                when {
+                    links == null -> BacklinksState.Unavailable
+                    // 索引が今のノートをまだ読んでいない。互いのリンクを判定できないので出さずに待つ（読み終えれば知らせで引き直す）。
+                    outgoing == null -> BacklinksState.Loading
+                    else -> {
+                        val sources = withContext(resolveDispatcher) { backlinkSources(links.candidates, outgoing, current, index) }
+                        BacklinksState.Ready(backlinkRows(sources, readingsOf(sources, key), target.name))
+                    }
                 }
-                sources?.let { backlinkRows(it, readingsOf(it, key), target.name) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 // 置き場が使えない。読書は止めず、節で「数えられませんでした」と出す。
-                null
+                BacklinksState.Unavailable
             }
             ensureActive()
-            state.set(rows?.let { BacklinksState.Ready(it) } ?: BacklinksState.Unavailable)
+            state.set(next)
         }
     }
 
