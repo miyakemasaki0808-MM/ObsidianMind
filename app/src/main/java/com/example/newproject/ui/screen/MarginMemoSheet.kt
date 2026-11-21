@@ -31,7 +31,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import com.example.newproject.model.NoteLoadId
 import com.example.newproject.model.state.DraftQuote
 import com.example.newproject.model.QuoteContext
 import com.example.newproject.domain.markdown.NoteSectionModel
@@ -669,7 +668,8 @@ internal class PaneRelatedInputs(
 
 /**
  * ペインの「このノートのバックナンバー」（→ features/backlinks.md §3）。関連と同じく畳んで件数だけを出し、行は右で開く。
- * 畳む・開くはノートを替えると畳んだ状態に戻る（持ち主は画面）。開いた後の「ほか N 件」も [noteLoadId] で同じく戻る。
+ * 畳む・開くはノートを替えると畳んだ状態に戻る（持ち主は画面）。開いた後の「ほか N 件」の開閉（[more]）も画面が持つ —
+ * 右で開いて戻るとペインの中身が作り直されるので、ここで持つと畳まれる。
  */
 internal class PaneBacklinksInputs(
     val section: BacklinksSection,
@@ -677,7 +677,7 @@ internal class PaneBacklinksInputs(
     val onToggle: () -> Unit,
     /** 行を右で開く。リンクのある節の見出しから始める。 */
     val onOpen: (BacklinkRow) -> Unit,
-    val noteLoadId: NoteLoadId
+    val more: BacklinksExpansion
 )
 
 /**
@@ -744,7 +744,7 @@ private fun PaneBacklinks(inputs: PaneBacklinksInputs, modifier: Modifier) {
             }
             if (inputs.expanded) {
                 if (section is BacklinksSection.Rows) {
-                    BacklinkRowList(rows = section.rows, noteLoadId = inputs.noteLoadId, divided = false, onOpen = inputs.onOpen)
+                    BacklinkRowList(rows = section.rows, more = inputs.more, divided = false, onOpen = inputs.onOpen)
                 } else {
                     Text(text = BACKLINKS_UNAVAILABLE_TEXT, color = OnSurfaceFaint, fontSize = 13.sp, modifier = Modifier.padding(bottom = 8.dp))
                 }

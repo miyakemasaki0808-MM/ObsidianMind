@@ -104,6 +104,25 @@ class BacklinksUiTest {
         composeRule.onNodeWithText("ほか 1 件").assertDoesNotExist()
     }
 
+    /**
+     * 右で開いて戻ると、ペインの中身は作り直される。「ほか N 件」の開閉は画面が持つので、戻っても開いたまま
+     * （一覧の中で持つと畳まれ、押した行が見えなくなる）。
+     */
+    @Test
+    fun ペインの中身を作り直しても_ほかN件を開いたまま戻る() {
+        val rows = (1..4).map { ROW.copy(note = SOURCE.copy(title = "出どころ$it", ref = DocumentRef("content://vault/s$it.md"))) }
+        var shown by mutableStateOf(true)
+        showPane(BacklinksSection.Rows(rows), shown = { shown })
+        composeRule.onNodeWithText("▸ このノートのバックナンバー 4件").performScrollTo().performClick()
+        composeRule.onNodeWithText("ほか 1 件").performScrollTo().performClick()
+        composeRule.onNodeWithText("出どころ4").performScrollTo().assertIsDisplayed()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+
+        composeRule.onNodeWithText("出どころ4").performScrollTo().assertIsDisplayed()
+    }
+
     /** 並びは関連 → 反証の一文 → バックナンバー（→ features/backlinks.md 判断8）。過去への入口なので、読み進める関連より後に置く。 */
     @Test
     fun ペインではバックナンバーを関連の後に置く() {
@@ -130,11 +149,12 @@ class BacklinksUiTest {
         composeRule.onNodeWithText("このノートのバックナンバーを数えられませんでした").performScrollTo().assertIsDisplayed()
     }
 
-    private fun showPane(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit = {}) {
+    private fun showPane(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit = {}, shown: () -> Boolean = { true }) {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 var expanded by remember { mutableStateOf(false) }
-                MarginMemoSheetContent(
+                val more = com.example.newproject.ui.screen.rememberBacklinksExpansion(NoteLoadId(issuer = 1L, count = 1L))
+                if (shown()) MarginMemoSheetContent(
                     state = MarginMemoState.Ready(memos = emptyList()),
                     draft = MarginMemoDraft(),
                     section = null,
@@ -154,7 +174,7 @@ class BacklinksUiTest {
                             expanded = expanded,
                             onToggle = { expanded = !expanded },
                             onOpen = onOpen,
-                            noteLoadId = NoteLoadId(issuer = 1L, count = 1L)
+                            more = more
                         )
                     )
                 )

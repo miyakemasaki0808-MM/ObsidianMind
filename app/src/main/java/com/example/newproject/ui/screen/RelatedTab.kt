@@ -120,6 +120,7 @@ internal fun BacklinksPanel(
     onOpen: (BacklinkRow) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val more = rememberBacklinksExpansion(noteLoadId)
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = PanelBlue,
@@ -136,7 +137,7 @@ internal fun BacklinksPanel(
             )
             Spacer(modifier = Modifier.height(4.dp))
             when (section) {
-                is BacklinksSection.Rows -> BacklinkRowList(rows = section.rows, noteLoadId = noteLoadId, divided = true, onOpen = onOpen)
+                is BacklinksSection.Rows -> BacklinkRowList(rows = section.rows, more = more, divided = true, onOpen = onOpen)
                 is BacklinksSection.Building -> Text(backlinksProgressText(section), fontSize = 13.sp, color = OnSurfaceMuted)
                 BacklinksSection.Unavailable -> Text(BACKLINKS_UNAVAILABLE_TEXT, fontSize = 13.sp, color = OnSurfaceFaint)
                 BacklinksSection.Hidden -> Unit

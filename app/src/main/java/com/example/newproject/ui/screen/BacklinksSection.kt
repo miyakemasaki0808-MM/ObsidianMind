@@ -165,11 +165,11 @@ internal fun BacklinkItem(row: BacklinkRow, onClick: () -> Unit) {
 
 /**
  * 行を3件だけ並べ、残りは「ほか N 件」に畳む。押すと残りを同じ並びで出す。
- * **ノートを替えると畳んだ状態に戻る**（節の開閉と同じく、ノートの表示の番号で比べる → [rememberBacklinksExpansion]）。
+ * [more] は「ほか N 件」の開閉で、**持ち主は呼び出し側**（[rememberBacklinksExpansion] でノートを替えると畳む）。
+ * ここで持つと、ペインで行を右で開いて戻ったときに一覧が作り直されて畳まれ、押した行が見えなくなる。
  */
 @Composable
-internal fun BacklinkRowList(rows: List<BacklinkRow>, noteLoadId: NoteLoadId, divided: Boolean, onOpen: (BacklinkRow) -> Unit) {
-    val more = rememberBacklinksExpansion(noteLoadId)
+internal fun BacklinkRowList(rows: List<BacklinkRow>, more: BacklinksExpansion, divided: Boolean, onOpen: (BacklinkRow) -> Unit) {
     val (shown, rest) = backlinkRowsShown(rows, showAll = more.expanded)
     shown.forEachIndexed { index, row ->
         BacklinkItem(row = row, onClick = { onOpen(row) })
