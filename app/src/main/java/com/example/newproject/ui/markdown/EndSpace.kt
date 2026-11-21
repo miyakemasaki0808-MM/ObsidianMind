@@ -126,13 +126,21 @@ internal fun endSpaceShortfall(targetOffset: Int?, canScrollForward: Boolean, pa
 /**
  * [request] のブロックを上端に置き、**利用者が自分で送るまで置いたままにする。**
  * 末尾で止まっていたら、足りない分を [space] に足して送り直す。置いた後に後ろの画像の寸法が決まって本文が縮んだときも同じ
- * （測る前の画像は画面の高さを仮に取るので、測った後に末尾が短くなる）。px と dp の換算で1px残ることがあるので、続けて足すのは数回まで。
+ * （測る前の画像は画面の高さを仮に取るので、測った後に末尾が短くなる）。
+ *
+ * - **始めにそのブロックへ送る。** 保存値や全画面から戻した依頼では、一覧の位置が見出しから外れていることがある（末尾で止まっていた位置を返された）。
+ *   送らずに待つと、一覧はまだ先へ送れるので「送りが届いていない」と見て待ち続ける
+ * - **窓の高さが変わるたびに足し直せるようにする。** 全画面に入ると、システムバーが隠れる間に窓が何フレームもかけて広がり、そのたびに末尾で止まる。
+ *   px と dp の換算で1px残ることがあるので、同じ窓の高さで続けて足すのは数回まで
  */
 internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, request: EndSpaceRequest) {
+    listState.requestScrollToItem(request.block)
     var grows = 0
+    var viewport: Int? = null
     snapshotFlow {
         val layout = listState.layoutInfo
         SettleView(
+            viewport = layout.viewportSize.height,
             scrolling = listState.isScrollInProgress,
             shortfall = endSpaceShortfall(
                 targetOffset = layout.visibleItemsInfo.firstOrNull { it.index == request.block }?.offset,
@@ -141,6 +149,10 @@ internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, requ
             )
         )
     }.takeWhile { !it.scrolling }.collect { view ->
+        if (view.viewport != viewport) {
+            viewport = view.viewport
+            grows = 0
+        }
         when (val shortfall = view.shortfall) {
             null -> Unit
             0 -> grows = 0
@@ -154,7 +166,7 @@ internal suspend fun settleAtTop(listState: LazyListState, space: EndSpace, requ
     space.finish(request)
 }
 
-private data class SettleView(val scrolling: Boolean, val shortfall: Int?)
+private data class SettleView(val viewport: Int, val scrolling: Boolean, val shortfall: Int?)
 
 /**
  * 位置の口を持たない一覧（右の面）で、[block] へ送って上端に置く。**前の余白は送る前に消す** —

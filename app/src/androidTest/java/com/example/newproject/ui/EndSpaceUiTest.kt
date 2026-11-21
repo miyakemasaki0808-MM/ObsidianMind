@@ -1,5 +1,7 @@
 package com.example.newproject.ui
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.requiredSize
@@ -15,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -23,6 +26,7 @@ import com.example.newproject.model.DocumentRef
 import com.example.newproject.model.RelatedNote
 import com.example.newproject.model.state.SideReadingState
 import com.example.newproject.ui.markdown.EndSpace
+import com.example.newproject.ui.markdown.EndSpaceSnapshot
 import com.example.newproject.ui.markdown.MarkdownNoteContent
 import com.example.newproject.ui.markdown.NoteImageContent
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -147,7 +151,7 @@ class EndSpaceUiTest {
 
     /** 今のノートの位置と余白は、本番どおり本文の画面より外（MainActivity）で持つ。[showBody] が偽なら本文の画面を組まない（全画面の間）。 */
     @androidx.compose.runtime.Composable
-    private fun MainBody(loader: NoteImageLoader? = null, showBody: Boolean = true) {
+    private fun MainBody(loader: NoteImageLoader? = null, showBody: Boolean = true, height: Dp = 600.dp) {
         val listState = rememberLazyListState()
         // 本番（MainActivity）と同じく、余白を画面の保存値に置いて位置の口へ渡す。
         val space = rememberEndSpace(listState)
@@ -156,7 +160,7 @@ class EndSpaceUiTest {
         val model = remember(noteBody) { noteBody?.let(::buildNoteSectionModel) }
         start = rememberNoteStart(position, openedUri, noteLoading = false, model, imageMeasurements = null, onHeadingMissing = {})
         if (!showBody) return
-        Box(modifier = Modifier.requiredSize(width = 400.dp, height = 600.dp)) {
+        Box(modifier = Modifier.requiredSize(width = 400.dp, height = height)) {
             MarkdownNoteContent(
                 content = "",
                 listState = listState,
@@ -219,6 +223,49 @@ class EndSpaceUiTest {
                 list.firstVisibleItemIndex == SHORT_TAIL_HEADING && list.firstVisibleItemScrollOffset == 0
             )
         }
+    }
+
+    /**
+     * 置いた後に窓が何フレームもかけて広がっても（全画面に入ってシステムバーが隠れる間）、見出しは上端のまま。
+     * 広がるたびに末尾で止まるので、窓が変わるたびに足りない分を足し直す。
+     */
+    @Test
+    fun 置いた後に窓が少しずつ広がっても見出しは上端のまま() {
+        var tall by mutableStateOf(false)
+        composeRule.setContent {
+            AppTheme(darkTheme = false) {
+                val height by animateDpAsState(if (tall) 900.dp else 600.dp, animationSpec = tween(durationMillis = 400), label = "窓の高さ")
+                MainBody(height = height)
+            }
+        }
+        openMainAtHeading(SHORT_TAIL_BODY)
+        assertAtHeading(position.listState)
+
+        composeRule.runOnIdle { tall = true }
+
+        assertAtHeading(position.listState)
+    }
+
+    /**
+     * 全画面から戻すとき、置いたままの印があれば、返された位置が見出しから外れていても（全画面の中で末尾で止まっていた）置き直す。
+     * 返された位置のままだと、一覧はまだ先へ送れるので、送りが届くのを待ち続けて見出しへ戻らない。
+     */
+    @Test
+    fun 置いたままの印で戻すと_返された位置が見出しから外れていても置き直す() {
+        composeRule.setContent { AppTheme(darkTheme = false) { MainBody() } }
+        openMainAtHeading(SHORT_TAIL_BODY)
+        assertAtHeading(position.listState)
+        val px = composeRule.runOnIdle { position.endSpace.bottomPx }
+
+        composeRule.runOnIdle {
+            position.takeOver(
+                block = SHORT_TAIL_HEADING - 2,
+                offset = 10,
+                space = EndSpaceSnapshot(bottomPx = px, block = SHORT_TAIL_HEADING, replace = true)
+            )
+        }
+
+        assertAtHeading(position.listState)
     }
 
     // ── 全画面との往復 ──────────────────────────────────────────────
