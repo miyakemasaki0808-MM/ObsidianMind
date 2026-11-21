@@ -29,14 +29,22 @@ class BacklinksTest {
         kind: IndexedLinkKind = IndexedLinkKind.NAME,
         sentence: String = "$target を読む。",
         section: String? = null,
-        occurrence: Int = 0
-    ) = BacklinkCandidate(source, ordinal, kind, target, heading = null, sectionHeading = section, sectionHeadingOccurrence = occurrence, sentence = sentence, sentenceLink = null)
+        occurrence: Int = 0,
+        sentenceLink: IntRange? = null
+    ) = BacklinkCandidate(
+        source, ordinal, kind, target,
+        heading = null,
+        sectionHeading = section,
+        sectionHeadingOccurrence = occurrence,
+        sentence = sentence,
+        sentenceLink = sentenceLink
+    )
 
     private val current = note("notes/習慣.md")
 
     /** 痕跡の無い（どれも読んだ記録が無い）ときの行。 */
     private fun rowsOf(candidates: List<BacklinkCandidate>, outgoing: List<NoteLink>, current: DocumentRef, index: NoteLinkIndex) =
-        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap())
+        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap(), "習慣.md")
 
     @Test
     fun `今のノートへ着くリンクだけを残し、同じ名前の別のノートへ着くリンクは除く`() {
@@ -122,7 +130,7 @@ class BacklinksTest {
             "notes/同じ日で古い.md" to read(500L)
         )
 
-        val rows = backlinkRows(sources, readings)
+        val rows = backlinkRows(sources, readings, "習慣.md")
 
         assertEquals(
             listOf("未読で日時なし.md", "未読で古い.md", "未読で新しい.md", "昔読んだ.md", "同じ日で古い.md", "同じ日A.md", "同じ日B.md", "最近読んだ.md"),
@@ -151,13 +159,48 @@ class BacklinksTest {
 
         val rows = backlinkRows(
             sources,
-            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ"))
+            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ")),
+            "習慣.md"
         )
 
         assertEquals(
             mapOf("同じ節.md" to true, "別の節.md" to false, "見出しの前.md" to false),
             rows.associate { it.note.title to it.hasMemo }
         )
+    }
+
+    /** 題名が長いと1行を食うので「このノート」と出す。別名は自分が選んだ言葉なので替えない（→ features/backlinks.md 判断6）。 */
+    @Test
+    fun `1文の中の今のノートの題名をこのノートと出し、別名は替えない`() {
+        fun replaced(sentence: String, shown: String, heading: String? = null): Pair<String, String?> {
+            val start = sentence.indexOf(shown)
+            val (text, range) = sentenceForCurrent(sentence, start until start + shown.length, heading, "習慣.md")
+            return text to range?.let { text.substring(it) }
+        }
+
+        assertEquals("ここで このノート を使う。" to "このノート", replaced("ここで 習慣 を使う。", "習慣"))
+        assertEquals("このノート を読む。" to "このノート", replaced("notes/習慣 を読む。", "notes/習慣"))
+        assertEquals("このノート#まとめ を読む。" to "このノート#まとめ", replaced("習慣#まとめ を読む。", "習慣#まとめ", heading = "まとめ"))
+        assertEquals("このノート を読む。" to "このノート", replaced("習慣.md を読む。", "習慣.md"))
+        assertEquals("よい習慣 を続けた。" to "よい習慣", replaced("よい習慣 を続けた。", "よい習慣"))
+        assertEquals("範囲が分からなければ替えない", "習慣 を読む。" to null, sentenceForCurrent("習慣 を読む。", null, null, "習慣.md"))
+    }
+
+    @Test
+    fun `行は言い換えた1文と、言い換えた後のリンクの範囲を持つ`() {
+        val source = note("notes/日記.md")
+        val index = NoteLinkIndex(listOf(current, source))
+        val sources = backlinkSources(
+            listOf(candidate("notes/日記.md", "習慣", sentence = "昨日 習慣 を読んだ。", sentenceLink = 3..4)),
+            emptyList(),
+            current.ref,
+            index
+        )
+
+        val row = backlinkRows(sources, emptyMap(), "習慣.md").single()
+
+        assertEquals("昨日 このノート を読んだ。", row.sentence)
+        assertEquals("このノート", row.sentence.substring(checkNotNull(row.sentenceLink)))
     }
 
     @Test

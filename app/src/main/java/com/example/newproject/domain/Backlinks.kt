@@ -78,14 +78,32 @@ internal fun backlinkSources(
         .map { (source, links) -> BacklinkSource(source, links.minBy { it.ordinal }, otherCount = links.size - 1) }
 }
 
+/** 1文の中の今のノートの題名を言い換える語（→ backlinks.md 判断6）。 */
+internal const val THIS_NOTE_WORDS = "このノート"
+
+/**
+ * リンクの見える文字（[sentence] の [link] の範囲）が今のノートの題名（[currentName]）なら「このノート」へ替え、替えた1文と、替えた後のリンクの範囲を返す。
+ * 題名は索引の名前の鍵と同じ正規化（[noteKeyOf]。フォルダと見出しを落として照らす）で照らす。見出しつき（`名前#見出し`）は見出しを残して名前だけを替える。
+ * **別名は替えない** — 題名と違う表示名は、そのとき自分が選んだ言葉だから。
+ */
+internal fun sentenceForCurrent(sentence: String, link: IntRange?, heading: String?, currentName: String): Pair<String, IntRange?> {
+    if (link == null || link.isEmpty() || link.last >= sentence.length) return sentence to link
+    val shown = sentence.substring(link)
+    if (noteKeyOf(shown) != noteKeyOf(currentName)) return sentence to link
+    val headingSuffix = heading?.let { "#$it" }?.takeIf { shown.endsWith(it) }.orEmpty()
+    val replacement = THIS_NOTE_WORDS + headingSuffix
+    return sentence.replaceRange(link, replacement) to (link.first until link.first + replacement.length)
+}
+
 /**
  * 出どころを1行ずつにし、**最後に読んだ日が古い順**に並べる（再会の入口 → backlinks.md 判断3）。
  * [readings] は出どころの相対パスごとの痕跡で、無ければ読んだ記録が無いとして扱う。
+ * 1文の中の今のノートの題名は「このノート」と出す（[sentenceForCurrent]）。
  *
  * - 読んだ記録が無い出どころを最も古いとして先に出す。同じなら出どころの更新日時が古い順（日時が無ければ最も古い）、それも同じなら題名の順
  * - ✎ は、最初のリンクのある節と同じ見出しにメモがあるときだけ。リンクが見出しより前なら付けない（→ [SourceReading]）
  */
-internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, SourceReading>): List<BacklinkRow> =
+internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, SourceReading>, currentName: String): List<BacklinkRow> =
     sources
         .map { source -> source to (readings[source.note.vaultRelativePath] ?: SourceReading.UNREAD) }
         .sortedWith(
@@ -95,9 +113,11 @@ internal fun backlinkRows(sources: List<BacklinkSource>, readings: Map<String, S
         )
         .map { (source, reading) ->
             val link = source.firstLink
+            val (sentence, sentenceLink) = sentenceForCurrent(link.sentence, link.sentenceLink, link.heading, currentName)
             BacklinkRow(
                 note = source.note.toRelatedNote(),
-                sentence = link.sentence,
+                sentence = sentence,
+                sentenceLink = sentenceLink,
                 otherCount = source.otherCount,
                 sectionHeading = link.sectionHeading,
                 sectionHeadingOccurrence = link.sectionHeadingOccurrence,

@@ -431,6 +431,7 @@ class BacklinksUiTest {
         val ROW = BacklinkRow(
             note = SOURCE,
             sentence = "二つ目のまとめで習慣を書いた。",
+            sentenceLink = null,
             otherCount = 2,
             sectionHeading = "まとめ",
             sectionHeadingOccurrence = 1,

@@ -25,7 +25,8 @@ class BacklinksSectionTest {
 
     private val row = BacklinkRow(
         note = RelatedNote(title = "日記.md", ref = DocumentRef("ref:日記"), isWikilinked = false),
-        sentence = "[[習慣]] を読む。",
+        sentence = "このノート を読む。",
+        sentenceLink = 0..4,
         otherCount = 2,
         sectionHeading = null,
         sectionHeadingOccurrence = 0,

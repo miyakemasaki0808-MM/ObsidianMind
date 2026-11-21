@@ -81,7 +81,7 @@ internal class BacklinksController(
                         withContext(resolveDispatcher) { backlinkSources(candidates, outgoing, current, index) }
                     }
                 }
-                sources?.let { backlinkRows(it, readingsOf(it, key)) }
+                sources?.let { backlinkRows(it, readingsOf(it, key), target.name) }
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
