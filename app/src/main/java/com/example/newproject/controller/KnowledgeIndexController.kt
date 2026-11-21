@@ -196,6 +196,9 @@ internal class KnowledgeIndexController(
             } catch (_: Exception) {
                 // 置き場が使えない。索引が無いだけで、今の動きに戻る（→ knowledge_index.md §10 の保証していないこと）。
                 buildFailed(scan.vaultGeneration)
+                // 止まる前に書けたノートがあるかもしれない。今の Vault なら引く側へ知らせる — 知らせないと、
+                // 今のノートが索引に入るのを待つバックナンバーが次の操作まで出ない（→ backlinks.md §5）。
+                if (scan.vaultGeneration == vaultGeneration()) onChanged()
             }
         }
     }
