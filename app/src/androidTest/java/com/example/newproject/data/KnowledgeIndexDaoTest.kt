@@ -106,9 +106,9 @@ class KnowledgeIndexDaoTest {
         store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣").copy(keys = listOf("my%20note", "my note"))), writeNumberAtRead = null)
         store.applyRead(VAULT_A, record("b.md"), listOf(link("別").copy(keys = listOf("別"))), writeNumberAtRead = null)
 
-        assertEquals(listOf("a.md"), store.backlinkCandidates(VAULT_A, "my note")!!.map { it.sourcePath })
-        assertEquals(listOf("a.md"), store.backlinkCandidates(VAULT_A, "my%20note")!!.map { it.sourcePath })
-        assertEquals(null, store.backlinkCandidates(VAULT_B, "my note"))
+        assertEquals(listOf("a.md"), store.backlinkLinks(VAULT_A, "my note", "x.md")!!.candidates.map { it.sourcePath })
+        assertEquals(listOf("a.md"), store.backlinkLinks(VAULT_A, "my%20note", "x.md")!!.candidates.map { it.sourcePath })
+        assertEquals(null, store.backlinkLinks(VAULT_B, "my note", "x.md"))
     }
 
     @Test
@@ -117,12 +117,12 @@ class KnowledgeIndexDaoTest {
         store.applyRead(VAULT_A, record("a.md"), listOf(link("習慣")), writeNumberAtRead = null)
         store.applyRead(VAULT_A, record("b.md"), listOf(link("習慣").copy(sentenceLink = null)), writeNumberAtRead = null)
 
-        val bySource = store.backlinkCandidates(VAULT_A, "習慣")!!.associate { it.sourcePath to it.sentenceLink }
+        val bySource = store.backlinkLinks(VAULT_A, "習慣", "x.md")!!.candidates.associate { it.sourcePath to it.sentenceLink }
         assertEquals(mapOf("a.md" to 0..1, "b.md" to null), bySource)
     }
 
     @Test
-    fun ノートから出るリンクを本文の順に引き別のVaultの索引ならnullを返す() = runBlocking<Unit> {
+    fun 入るリンクと一組でノートから出るリンクを本文の順に引き別のVaultの索引ならnullを返す() = runBlocking<Unit> {
         store.openVault(VAULT_A)
         val links = listOf(
             link("習慣").copy(ordinal = 1),
@@ -132,10 +132,10 @@ class KnowledgeIndexDaoTest {
 
         assertEquals(
             listOf(NoteLink.ByPath("日記.md", "まとめ"), NoteLink.ByName("習慣", null)),
-            store.linksFrom(VAULT_A, "a.md")
+            store.backlinkLinks(VAULT_A, "習慣", "a.md")?.outgoing
         )
-        assertEquals(emptyList<NoteLink>(), store.linksFrom(VAULT_A, "まだ読んでいない.md"))
-        assertEquals(null, store.linksFrom(VAULT_B, "a.md"))
+        assertEquals(emptyList<NoteLink>(), store.backlinkLinks(VAULT_A, "習慣", "まだ読んでいない.md")?.outgoing)
+        assertEquals(null, store.backlinkLinks(VAULT_B, "習慣", "a.md"))
     }
 
     @Test

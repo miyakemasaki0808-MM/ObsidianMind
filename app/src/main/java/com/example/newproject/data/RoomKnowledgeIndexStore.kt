@@ -55,27 +55,29 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
     override suspend fun markFirstBuildDone(vaultKey: String) =
         dao.markFirstBuildDone(vaultKey)
 
-    override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? =
-        dao.linksNamedIn(vaultKey, nameKey)?.map { row ->
-            BacklinkCandidate(
-                sourcePath = row.sourcePath,
-                ordinal = row.ordinal,
-                kind = IndexedLinkKind.valueOf(row.kind),
-                target = row.target,
-                heading = row.heading,
-                sectionHeading = row.sectionHeading,
-                sectionHeadingOccurrence = row.sectionHeadingOccurrence,
-                sentence = row.sentence,
-                sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
+    override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? =
+        dao.backlinkLinksIn(vaultKey, nameKey, relativePath)?.let { (candidates, outgoing) ->
+            BacklinkLinks(
+                candidates = candidates.map { row ->
+                    BacklinkCandidate(
+                        sourcePath = row.sourcePath,
+                        ordinal = row.ordinal,
+                        kind = IndexedLinkKind.valueOf(row.kind),
+                        target = row.target,
+                        heading = row.heading,
+                        sectionHeading = row.sectionHeading,
+                        sectionHeadingOccurrence = row.sectionHeadingOccurrence,
+                        sentence = row.sentence,
+                        sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd)
+                    )
+                },
+                outgoing = outgoing.map { row ->
+                    when (IndexedLinkKind.valueOf(row.kind)) {
+                        IndexedLinkKind.NAME -> NoteLink.ByName(row.target, row.heading)
+                        IndexedLinkKind.PATH -> NoteLink.ByPath(row.target, row.heading)
+                    }
+                }
             )
-        }
-
-    override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? =
-        dao.linksFromIn(vaultKey, relativePath)?.map { row ->
-            when (IndexedLinkKind.valueOf(row.kind)) {
-                IndexedLinkKind.NAME -> NoteLink.ByName(row.target, row.heading)
-                IndexedLinkKind.PATH -> NoteLink.ByPath(row.target, row.heading)
-            }
         }
 }
 

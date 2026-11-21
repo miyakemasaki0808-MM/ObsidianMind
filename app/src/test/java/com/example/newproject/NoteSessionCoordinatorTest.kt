@@ -3,8 +3,8 @@ package com.example.newproject
 import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
-import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.NoteLinkIndex
+import com.example.newproject.data.BacklinkLinks
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
 import com.example.newproject.data.KnowledgeIndexStore
@@ -2712,11 +2712,9 @@ private class FakeHistoryStore : HistoryStore {
         override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) = Unit
         override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) = Unit
         override suspend fun markFirstBuildDone(vaultKey: String) = Unit
-        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? {
+        override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? {
             beforeCandidates()
-            return candidates
+            return candidates?.let { BacklinkLinks(it, outgoing = emptyList()) }
         }
-
-        override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? = emptyList()
     }
 }

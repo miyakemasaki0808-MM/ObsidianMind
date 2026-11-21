@@ -1,6 +1,7 @@
 package com.example.newproject
 
 import com.example.newproject.controller.BacklinksController
+import com.example.newproject.data.BacklinkLinks
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
 import com.example.newproject.data.KnowledgeIndexStore
@@ -107,9 +108,9 @@ class BacklinksControllerTest {
         assertEquals("今のノートの名前の鍵で絞る", listOf("習慣"), env.store.keys)
     }
 
-    /** 互いのリンクは今のノートのパスで索引から引く（→ features/backlinks.md 判断5）。引けない（別の Vault）なら数えられない。 */
+    /** 互いのリンクは今のノートのパスで索引から引く（→ features/backlinks.md 判断5）。 */
     @Test
-    fun `今のノートのパスで出るリンクを引いてその相手を除き、引けなければ読めないにする`() = runTest {
+    fun `今のノートのパスで出るリンクを引いてその相手を除く`() = runTest {
         val env = Env(this)
         env.published()
         env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
@@ -117,13 +118,36 @@ class BacklinksControllerTest {
 
         env.controller.refresh(CURRENT.ref)
         advanceUntilIdle()
+
         assertEquals(listOf("週報.md"), env.titles())
         assertEquals(listOf("notes/習慣.md"), env.store.fromPaths)
+    }
 
-        env.store.outgoing = null
+    /**
+     * 入るリンクと出るリンクは、置き場の1回の読み取りで一組に受け取る。読んだ直後に索引が互いのリンクを両方とも消しても、
+     * 一覧は読んだ時点の索引のとおりで、どの時点にも無い組み合わせ（入るリンクは旧く、出るリンクは新しい）にならない。
+     * 索引が直り終えたときの引き直しで新しい結果になる。
+     */
+    @Test
+    fun `入るリンクと出るリンクを1回の読み取りで一組に受け取り、どの時点にも無い組み合わせを出さない`() = runTest {
+        val env = Env(this)
+        env.published()
+        env.store.answer = { listOf(linkFrom(SOURCE), linkFrom(SOURCE_2)) }
+        env.store.outgoing = listOf(NoteLink.ByName("日記", null))
+        env.store.afterRead = {
+            env.store.answer = { listOf(linkFrom(SOURCE_2)) }
+            env.store.outgoing = emptyList()
+        }
+
         env.controller.refresh(CURRENT.ref)
         advanceUntilIdle()
-        assertEquals(BacklinksState.Unavailable, env.backlinks)
+        assertEquals("読んだ時点の索引では日記は互いのリンク", listOf("週報.md"), env.titles())
+        assertEquals("置き場は1回だけ読む", 1, env.store.keys.size)
+
+        env.store.afterRead = {}
+        env.controller.refresh(CURRENT.ref)
+        advanceUntilIdle()
+        assertEquals(listOf("週報.md"), env.titles())
     }
 
     /** 再会の入口なので、読んだ記録の無い相手を先に出す（→ features/backlinks.md 判断3）。壊れた痕跡は記録なしとして並べ、節は読めないにしない。 */
@@ -300,17 +324,18 @@ class BacklinksControllerTest {
         val keys = mutableListOf<String>()
         var answer: suspend () -> List<BacklinkCandidate>? = { emptyList() }
 
-        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? {
-            keys += nameKey
-            return answer()
-        }
-
         val fromPaths = mutableListOf<String>()
-        var outgoing: List<NoteLink>? = emptyList()
+        var outgoing: List<NoteLink> = emptyList()
 
-        override suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>? {
+        /** 照会のたびに呼ぶ。読んだ後に索引が書き換わる順序を作る。 */
+        var afterRead: () -> Unit = {}
+
+        override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? {
+            keys += nameKey
             fromPaths += relativePath
-            return outgoing
+            val links = answer()?.let { BacklinkLinks(it, outgoing) }
+            afterRead()
+            return links
         }
 
         override suspend fun openVault(vaultKey: String) = KnowledgeIndexSnapshot(emptyMap(), emptyMap(), firstBuildDone = true)

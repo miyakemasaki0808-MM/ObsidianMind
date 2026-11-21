@@ -50,17 +50,16 @@ internal interface KnowledgeIndexStore {
     suspend fun markFirstBuildDone(vaultKey: String)
 
     /**
-     * 名前の鍵が [nameKey] のリンクを引く（→ docs/dev/features/backlinks.md §7）。行き先はまだ解いていない —
-     * 引く側が走査の索引で解き、今のノートへ着くものだけを残す。索引が別の Vault のものなら null。
+     * 名前の鍵が [nameKey] のリンク（今のノートを指しうる）と、[relativePath] の今のノートから出るリンクを、**1つの読み取りで一組に**引く
+     * （→ docs/dev/features/backlinks.md §7・判断5）。行き先はまだ解いていない — 引く側が走査の索引で解く。
+     * **別々に引かない** — 間に索引の突き合わせが入ると、どの時点の索引にも無い組み合わせになり、互いのリンクの相手が出る。
+     * 索引が別の Vault のものなら null。索引がそのノートをまだ読んでいなければ出るリンクは空。
      */
-    suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>?
-
-    /**
-     * [relativePath] のノートから出るリンクを、本文の順に引く（→ docs/dev/features/backlinks.md §5 の互いのリンク）。行き先はまだ解いていない。
-     * 索引が別の Vault のものなら null。索引がそのノートをまだ読んでいなければ空。
-     */
-    suspend fun linksFrom(vaultKey: String, relativePath: String): List<NoteLink>?
+    suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks?
 }
+
+/** 今のノートを指しうるリンクと、今のノートから出るリンクの一組（→ [KnowledgeIndexStore.backlinkLinks]）。 */
+internal data class BacklinkLinks(val candidates: List<BacklinkCandidate>, val outgoing: List<NoteLink>)
 
 /**
  * 開いた索引の、突き合わせに要る分。[writeNumbers] はアプリが書き換えたと控えてある**参照**と、その書き換えの番号。

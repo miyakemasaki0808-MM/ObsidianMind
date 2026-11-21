@@ -76,10 +76,9 @@ internal class BacklinksController(
         if (state.current !is BacklinksState.Ready) state.set(BacklinksState.Loading)
         job = scope.launch {
             val rows = try {
-                val sources = store.backlinkCandidates(key, noteKeyOf(target.name))?.let { candidates ->
-                    store.linksFrom(key, target.vaultRelativePath)?.let { outgoing ->
-                        withContext(resolveDispatcher) { backlinkSources(candidates, outgoing, current, index) }
-                    }
+                // 入るリンクと出るリンクは1回の読み取りで一組に引く（別々に引くと、間の突き合わせで違う時点の組み合わせになる）。
+                val sources = store.backlinkLinks(key, noteKeyOf(target.name), target.vaultRelativePath)?.let { links ->
+                    withContext(resolveDispatcher) { backlinkSources(links.candidates, links.outgoing, current, index) }
                 }
                 sources?.let { backlinkRows(it, readingsOf(it, key), target.name) }
             } catch (e: CancellationException) {

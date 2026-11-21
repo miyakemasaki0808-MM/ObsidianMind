@@ -147,18 +147,14 @@ internal abstract class KnowledgeIndexDao {
     )
     abstract suspend fun linksNamed(key: String): List<BacklinkCandidateRow>
 
-    /** 索引が [vaultKey] のものなら名前の鍵でリンクを引く。別の Vault の索引なら null。 */
+    /**
+     * 索引が [vaultKey] のものなら、名前の鍵で引いたリンクと、[path] のノートから出るリンク（本文の順）を**1つのトランザクションで**引く。
+     * 別の Vault の索引なら null。2つを別々に引くと、間の突き合わせで違う時点の組み合わせになる（→ backlinks.md 判断5）。
+     */
     @Transaction
-    open suspend fun linksNamedIn(vaultKey: String, key: String): List<BacklinkCandidateRow>? {
+    open suspend fun backlinkLinksIn(vaultKey: String, key: String, path: String): Pair<List<BacklinkCandidateRow>, List<IndexedLinkEntity>>? {
         if (meta()?.vaultKey != vaultKey) return null
-        return linksNamed(key)
-    }
-
-    /** 索引が [vaultKey] のものなら、[path] のノートから出るリンクを本文の順に引く。別の Vault の索引なら null。 */
-    @Transaction
-    open suspend fun linksFromIn(vaultKey: String, path: String): List<IndexedLinkEntity>? {
-        if (meta()?.vaultKey != vaultKey) return null
-        return linksOf(path)
+        return linksNamed(key) to linksOf(path)
     }
 
     @Upsert
