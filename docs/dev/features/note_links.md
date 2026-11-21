@@ -1,7 +1,7 @@
 # ノート内のリンクを押して開く
 
-**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった範囲は §10）。末尾に近い見出しも本文の最初の行に置く変更（2026-11-21 → 判断6）は実機未確認
-**最終検証:** 2026-10-10 / `b17fe669`
+**状態:** 実装済み・稼働中・実機確認済み（実機で確かめなかった範囲は §10）。末尾に近い見出しも本文の最初の行に置く変更（→ 判断6）は 2026-11-21 に実機で確認した
+**最終検証:** 2026-11-21 / `70b25328`（末尾に近い見出しを最初の行に置く変更。バックリンクから開く・全画面との往復・回転・先頭からの開き直し・画像）。リンク全体は 2026-10-10 / `b17fe669`
 **関連コード:** `domain/NoteLinks.kt` / `domain/markdown/MarkdownBlocks.kt` / `ui/markdown/InlineMarkdown.kt` / `ui/markdown/NoteLinkTaps.kt` / `ui/markdown/MarkdownRenderer.kt` / `ui/component/NoteComponents.kt` / `ui/screen/NoteLinkActions.kt` / `ui/markdown/EndSpace.kt`・`ui/screen/BodyPosition.kt`（`placeAtTop`・`takeOver`）・`ui/screen/FullscreenNoteScreen.kt`（`rememberCarriedEndSpace`） / `ui/screen/NoteStart.kt` / `ui/screen/NoteReaderTab.kt` / `ui/screen/FullscreenNoteScreen.kt` / `ui/screen/SideReadingPane.kt` / `NoteScanCache.kt` / `NoteViewModel.kt` / `MainActivity.kt`
 **関連テスト:** `NoteLinksTest` / `MarkdownParserTest` / `InlineMarkdownTest` / `NoteLinkActionsTest` / `NoteScanCacheTest` / `NoteScanExpiryWiringTest` / `EndSpaceTest` / androidTest: `NoteLinkTapUiTest`・`BacklinksUiTest`・`EndSpaceUiTest`（末尾に近い見出し）
 **正本:** この文書

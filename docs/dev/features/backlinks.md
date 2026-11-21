@@ -1,7 +1,7 @@
 # このノートへのリンク — バックリンクを1文つきで出す
 
-**状態:** 実装済み（知識索引の区切り2）。端末で確認済み。末尾に近い見出しを最初の行に置く直し（2026-11-21）は端末で未確認、読み上げは音声で判定していない（§11）
-**最終検証:** 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。件数と1文・並び・同じ名前の別のノート・開く位置・開閉・外部で足したリンク・ライトとダーク）
+**状態:** 実装済み（知識索引の区切り2）。端末で確認済み（末尾に近い見出しを最初の行に置く直しを含む）。読み上げは音声で判定していない（§11）
+**最終検証:** 2026-11-21 / `70b25328`（末尾に近い見出しを最初の行に置く直し）。表示と開閉ほかは 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。件数と1文・並び・同じ名前の別のノート・開く位置・開閉・外部で足したリンク・ライトとダーク）
 **関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkRows`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`） / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
 **関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
@@ -159,8 +159,7 @@
 
 - 余白メモと引用の出し方は決めていない
 - 全文検索を入れるかは、この機能を使ってから決める（→ [knowledge_index](../system/knowledge_index.md) §1）
-- **末尾に近い見出しを最初の行に置く直しは、端末ではまだ確かめていない。** 直す前は、見出しの上に前の節の終わりが見えた（2026-11-21 の実機検証）。
-  直した後は、見出しへ送ってから末尾まで読むと、最後の段落の下に余白が見える（→ [note_links](note_links.md) 判断6）
+- **末尾に近い見出しから開いた後に末尾まで読むと、最後の段落の下に余白が見える。** 見出しを最初の行に置くための余白で、先頭から開き直したノートには残らない（→ [note_links](note_links.md) 判断6）
 - 読み上げは、題名と1文と「ほか N 箇所」が1つの押せる行にまとまることまでを画面の構造で確かめた。音声で聞いた判定はしていない
 - 大きな Vault の最初の作成の時間と DB の大きさは [knowledge_index](../system/knowledge_index.md) §8 が持つ
 
