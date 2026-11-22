@@ -479,7 +479,7 @@ class SpreadPaginationTest {
             ),
             quote.lines
         )
-        assertEquals(listOf(0f, 0f, 0f, 0f, 24f, 24f, 0f, 0f), quote.resumePadding)
+        assertEquals(listOf(0f, -8f, 0f, -8f, 24f, 24f, -8f, 0f), quote.startAdjust)
         assertEquals(112, quote.textLength)
         assertEquals(8f, quote.fragmentPadding)
         assertEquals(
@@ -496,11 +496,11 @@ class SpreadPaginationTest {
     @Test
     fun `入れ子の引用の途中から始まる切れ端は、外と内の子の余白を足す`() {
         // 内の引用（上下の余白8）の中に、コード（余白24）が入っている。
-        val inner = SpreadBlock.Lines(List(3) { SpreadLine(10f, it * 5) }, textLength = 15, fragmentPadding = 8f, resumePadding = listOf(0f, 24f, 24f))
+        val inner = SpreadBlock.Lines(List(3) { SpreadLine(10f, it * 5) }, textLength = 15, fragmentPadding = 8f, startAdjust = listOf(0f, 24f, 24f))
 
         val (outer, _) = quoteSpreadBlock(listOf(inner), spacing = 8f, padding = 8f)
 
-        assertEquals(listOf(0f, 32f, 32f), outer.resumePadding)
+        assertEquals(listOf(0f, 32f, 32f), outer.startAdjust)
     }
 
     @Test
@@ -531,12 +531,44 @@ class SpreadPaginationTest {
     /** 子の途中から始まるページは、その子の余白をもう一度描くので、その分だけ早く次のページへ送る。 */
     @Test
     fun `子の途中から始まる切れ端は、子の余白を足してページへ詰める`() {
-        val quote = SpreadBlock.Lines(List(6) { SpreadLine(10f, it * 10) }, textLength = 60, resumePadding = listOf(0f, 0f, 24f, 24f, 24f, 24f))
+        val quote = SpreadBlock.Lines(List(6) { SpreadLine(10f, it * 10) }, textLength = 60, startAdjust = listOf(0f, 0f, 24f, 24f, 24f, 24f))
 
         val pages = paginateSpread(listOf(quote), leftPageHeight = 40f, blockSpacing = 8f)
 
         assertEquals(listOf(0 until 4, 4 until 5, 5 until 6), pages.map { page -> page.slices.single().let { it.unitStart until it.unitEnd } })
         assertEquals(listOf(40f, 34f, 34f), pages.map { it.slices.single().height })
+    }
+
+    /** 子の先頭から始まる切れ端は子の間の余白を描かないので、数えない（入れ子の子の先頭でも同じ）。 */
+    @Test
+    fun `子の先頭から始まる引用の切れ端は、描かれない子の間の余白を数えない`() {
+        val (quote, _) = quoteSpreadBlock(
+            listOf(SpreadBlock.Lines(listOf(SpreadLine(40f, 0)), 4), SpreadBlock.Lines(listOf(SpreadLine(20f, 0)), 4)),
+            spacing = 8f,
+            padding = 8f
+        )
+
+        val pages = paginateSpread(listOf(quote, SpreadBlock.Lines(listOf(SpreadLine(12f, 0)), 4)), leftPageHeight = 48f, blockSpacing = 8f)
+
+        assertEquals(2, pages.size)
+        assertEquals(28f, pages[1].slices.first().height)
+        assertEquals(1, pages[1].slices.last().blockIndex)
+    }
+
+    @Test
+    fun `入れ子の引用の子の先頭から始まる切れ端は、内の引用の余白だけを足す`() {
+        val child = { height: Float -> SpreadBlock.Lines(listOf(SpreadLine(height, 0)), 4) }
+        val (inner, _) = quoteSpreadBlock(listOf(child(10f), child(10f)), spacing = 8f, padding = 8f)
+
+        val (outer, _) = quoteSpreadBlock(listOf(child(30f), inner), spacing = 8f, padding = 8f)
+
+        // 外の単位: 外の1つ目の子・内の1つ目の子（外の子の間と内の上下の余白を含む）・内の2つ目の子（内の子の間を含む）。
+        assertEquals(listOf(30f, 26f, 18f), outer.lines.map { it.height })
+        // 内の引用の頭から: 外の子の間を描かない。内の2つ目の子から: 内の上下の余白を描き、内の子の間を描かない。
+        assertEquals(listOf(0f, -8f, 0f), outer.startAdjust)
+        val pages = paginateSpread(listOf(outer), leftPageHeight = 70f, blockSpacing = 8f)
+        assertEquals(listOf(0 until 2, 2 until 3), pages.map { page -> page.slices.single().let { it.unitStart until it.unitEnd } })
+        assertEquals(8f + 8f + 10f, pages[1].slices.single().height)
     }
 
     // ── 補助 ──────────────────────────────────────────────────────────

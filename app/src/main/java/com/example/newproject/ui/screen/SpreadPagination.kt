@@ -19,8 +19,9 @@ internal sealed interface SpreadBlock {
      * [fragmentPadding] は切れ端ごとに上下へ付く余白の合計（コードの面の内側の余白など）で、ページをまたいで割ると切れ端の数だけ付く。
      * [heading] なら、ページの末尾に見出しだけを残さない。
      * [minHeight] は最初の行を含む切れ端の最低の高さ（見出しの脇の印の枠。文字が低くても枠の高さを取る）。
-     * [resumePadding] は行ごとの、その行から始まる切れ端に足す余白（引用の中のコードや入れ子の引用の途中から始まると、
-     * その子の余白を切れ端ごとにもう一度描く → [quoteSpreadBlock]）。無い行は0。
+     * [startAdjust] は行ごとの、その行から始まる切れ端（ブロックの途中から）の高さに足す量で、負にもなる。
+     * 引用の子の途中から始まれば子の余白（コードの面・入れ子の引用の上下）を足し、子の先頭から始まれば描かれない子の間の余白を引く
+     * （→ [quoteSpreadBlock]）。無い行は0。
      */
     data class Lines(
         val lines: List<SpreadLine>,
@@ -28,7 +29,7 @@ internal sealed interface SpreadBlock {
         val fragmentPadding: Float = 0f,
         val heading: Boolean = false,
         val minHeight: Float = 0f,
-        val resumePadding: List<Float> = emptyList()
+        val startAdjust: List<Float> = emptyList()
     ) : SpreadBlock
 
     /** 割らない画像。ページの高さに収まらなければ、ページの高さまで縮める。 */
@@ -129,12 +130,12 @@ private fun SpreadBlock.fragmentPadding(): Float = (this as? SpreadBlock.Lines)?
 
 /**
  * 単位 [unitStart] から始まる、余白込みで [height] の切れ端が占める高さ。最初の行を含めば最低の高さを下回らない。
- * 途中の行から始まれば、その行の [SpreadBlock.Lines.resumePadding] を足す。
+ * 途中の行から始まれば、その行の [SpreadBlock.Lines.startAdjust] を足す。
  */
 private fun SpreadBlock.fragmentHeight(unitStart: Int, height: Float): Float = when {
     this !is SpreadBlock.Lines -> height
     unitStart == 0 -> max(height, minHeight)
-    else -> height + resumePadding.getOrElse(unitStart) { 0f }
+    else -> height + startAdjust.getOrElse(unitStart) { 0f }
 }
 
 /**
@@ -146,29 +147,35 @@ internal data class QuoteChildLayout(val unitStart: Int, val charStarts: List<In
 /**
  * 引用の子（コールアウトの頭と中のブロック）の寸法を、引用の1つのブロックへ並べる（→ docs/dev/system/markdown_rendering.md §8.3）。
  * 子の単位をそのまま引用の単位にし、子の間の余白 [spacing] と子の余白（コードの面・入れ子の引用の上下）は子の最初の単位に足す。
- * 子の途中から始まる切れ端は、その子の余白をもう一度描くので [SpreadBlock.Lines.resumePadding] に持つ。
+ * 切れ端の頭で描かれ方が変わる分は [SpreadBlock.Lines.startAdjust] に持つ — 子の途中から始まる切れ端は、その子の余白をもう一度描くので足し、
+ * 子の先頭から始まる切れ端は、子の間の余白を描かない（切れ端の中の子どうしの間にだけ置く）ので引く。
  * **子の表の行は割らない**（引用の単位は行で、ページより高い行はページからはみ出す）。
  * 表示文字列は子を順に、間に1文字ぶんの区切りを数えてつなぐ（リストの項目と同じ数え方）。[padding] は引用の上下の余白。
  */
 internal fun quoteSpreadBlock(children: List<SpreadBlock>, spacing: Float, padding: Float): Pair<SpreadBlock.Lines, List<QuoteChildLayout>> {
     val lines = mutableListOf<SpreadLine>()
-    val resume = mutableListOf<Float>()
+    val adjust = mutableListOf<Float>()
     val layouts = mutableListOf<QuoteChildLayout>()
     var offset = 0
     children.forEachIndexed { index, child ->
         val units = child.quoteUnits()
         val childPadding = child.fragmentPadding()
-        val childResume = (child as? SpreadBlock.Lines)?.resumePadding.orEmpty()
+        val childAdjust = (child as? SpreadBlock.Lines)?.startAdjust.orEmpty()
         layouts += QuoteChildLayout(lines.size, units.map { it.charStart }, child.textLength)
         units.forEachIndexed { k, unit ->
-            val extra = if (k == 0) (if (index > 0) spacing else 0f) + childPadding else 0f
+            val gap = if (index > 0) spacing else 0f
+            val extra = if (k == 0) gap + childPadding else 0f
             lines += SpreadLine(unit.height + extra, offset + unit.charStart)
-            resume += if (k == 0) 0f else childPadding + childResume.getOrElse(k) { 0f }
+            adjust += when {
+                k > 0 -> childPadding + childAdjust.getOrElse(k) { 0f }
+                index > 0 -> -spacing
+                else -> 0f
+            }
         }
         offset += child.textLength + 1
     }
     val textLength = if (children.isEmpty()) 0 else offset - 1
-    return SpreadBlock.Lines(lines, textLength, fragmentPadding = padding, resumePadding = resume) to layouts
+    return SpreadBlock.Lines(lines, textLength, fragmentPadding = padding, startAdjust = adjust) to layouts
 }
 
 /** 引用の子の単位。表は行を割らずに1行を1単位にする（→ [quoteSpreadBlock]）。 */
