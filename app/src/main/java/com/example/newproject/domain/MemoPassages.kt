@@ -340,10 +340,15 @@ private fun MarkdownBlock.visibleText(): String = when (this) {
 
 /**
  * 引用の中身に見える文字。コールアウトの頭は題だけ（種類の言葉と記号は選べない）、中の段落は行ごとに描くので行の間に何も挟まない。
+ * 部品を間に何も挟まずにつなぐので、**部品の文字は描くとおりに整えてからつなぐ** — コードは末尾を落として描く（`MarkdownCodeBlock`）。
  */
 private fun QuoteContent.visibleText(): String =
     (callout?.let { inlineVisibleText(it.title) } ?: "") + blocks.joinToString("") { block ->
-        if (block is MarkdownBlock.Paragraph) block.text.lines().joinToString("") { inlineVisibleText(it) } else block.visibleText()
+        when (block) {
+            is MarkdownBlock.Paragraph -> block.text.lines().joinToString("") { inlineVisibleText(it) }
+            is MarkdownBlock.CodeBlock -> block.code.trimEnd()
+            else -> block.visibleText()
+        }
     }
 
 private fun MarkdownBlock.isReadableText(): Boolean = when (this) {

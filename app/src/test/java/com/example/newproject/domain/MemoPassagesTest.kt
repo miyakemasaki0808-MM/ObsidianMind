@@ -368,4 +368,19 @@ class MemoPassagesTest {
         assertTrue(source is QuoteSource.Resolved)
         assertEquals(QuoteContext("演習•一つ目の項目•", ""), (source as QuoteSource.Resolved).context)
     }
+
+    /** 引用の中のコードは末尾を落として描く。照らし直しの文字も落としてから次の部品へつなぐ（末尾の空白と空行、コールアウトの中でも）。 */
+    @Test
+    fun `引用の中のコードは描くとおり末尾を落としてから次の部品へつなぐ`() {
+        listOf(
+            "> ```\n> foo \n> ```\n> bar",
+            "> ```\n> foo\n>\n> ```\n> bar",
+            "> [!note] 題\n> ```\n> foo \n> ```\n> bar"
+        ).forEach { content ->
+            val (index, _) = indexOf(content)
+            val source = quoteSourceFor("foobar", selectedBlock = 0, index)
+
+            assertTrue("$content: $source", source is QuoteSource.Resolved && source.block == 0)
+        }
+    }
 }
