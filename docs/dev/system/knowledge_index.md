@@ -1,7 +1,7 @@
 # 知識索引 — Vault から作り直せる派生物を端末内の DB に持つ
 
 **状態:** 区切り1（索引の土台）と区切り2（引く側とバックリンクの表示 → [backlinks](../features/backlinks.md)）は実装済み。ここで段5を閉じた（2026-11-21、オーナー判断 → §11）。ランダム表示の先出し（区切り3）と全文検索は入れず、余白メモと引用（区切り4）は保留にした
-**最終検証:** 2026-11-21 / `2f165d5c`（Pixel 10 Pro Fold で通し版。DB の置き場・永続・最初の作成の時間と大きさ・バックリンクの表示を確かめた）
+**最終検証:** 2026-11-22 / `2f457fcb`（Pixel 10 Pro Fold で通し版。DB の版7での作り直し・置き場・再起動での使い回し・バックナンバーの表示）。最初の作成の時間と大きさは 2026-11-21 / `2f165d5c`（§8）
 **関連コード:** `controller/KnowledgeIndexController.kt`・`BacklinksController.kt` / `model/state/BacklinksState.kt`（`KnowledgeIndexProgress`） / `data/KnowledgeIndexStore.kt`・`KnowledgeIndexDatabase.kt`・`RoomKnowledgeIndexStore.kt` / `domain/KnowledgeIndexLinks.kt`・`KnowledgeIndexPlan.kt`・`domain/markdown/InlineVisibleText.kt`（`inlineVisibleLayout`）・`MarkdownBlocks.kt`（`renderedRows`） / `NoteScanCache.kt`（公開の知らせ）/ `controller/DistillController.kt`・`data/DistillWriteRepository.kt`（書き換えの知らせ）/ `controller/NoteSessionCoordinator.kt`・`NoteViewModel.kt`（配線）
 **関連テスト:** `KnowledgeIndexControllerTest` / `BacklinksControllerTest` / `BacklinksTest` / `KnowledgeIndexLinksTest` / `KnowledgeIndexPlanTest` / `NoteScanCacheTest` / `DistillControllerTest` / `DistillWriteRepositoryTest` / `NoteSessionCoordinatorTest` / `ThreadingScanTest` / `BackupExclusionTest`。androidTest: `KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（索引の責務・保証・寿命）。補助の面への出し方は [backlinks](../features/backlinks.md)、ランダム表示は [rediscover](../features/rediscover.md)

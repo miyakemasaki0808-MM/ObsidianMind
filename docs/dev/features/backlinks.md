@@ -1,7 +1,7 @@
 # このノートのバックナンバー — 自分が結んだノートとの再会の入口
 
-**状態:** 実装済み（知識索引の区切り2を、2026-11-21 のオーナー判断で再会の入口へ作り直した）。作り直した形は JVM テストと画面のテストまでで、端末では確かめていない（§10 の実機ケース）
-**最終検証:** 作り直す前の形を 2026-11-21 / `70b25328`（末尾に近い見出しを最初の行に置く直し）と `2f165d5c`（Pixel 10 Pro Fold で通し版。開く位置・開閉・外部で足したリンク・ライトとダーク）で確かめた
+**状態:** 実装済み（知識索引の区切り2を、2026-11-21 のオーナー判断で再会の入口へ作り直した）。端末で確認済み（2026-11-22、通し版）。全画面を出入りした後に末尾へ送ると本文が空白になる不具合が残る（§11）
+**最終検証:** 2026-11-22 / `2f457fcb`（Pixel 10 Pro Fold で通し版。3件と「ほか N 件」・1行・✎・互いのリンクの除外・久しく読んでいない順・ペインの並び・開閉・読み上げ・リンクの多いノートで節が出るまでの時間）
 **関連コード:** `controller/BacklinksController.kt` / `domain/Backlinks.kt`（`backlinkSources`・`backlinkRows`・`sentenceForCurrent`）・`NoteLinks.kt`（`resolveNoteLink`・`headingBlockIndex`）・`KnowledgeIndexLinks.kt` / `data/KnowledgeIndexStore.kt`（`backlinkCandidates`）・`KnowledgeIndexDatabase.kt`・`ReadingTraceStore.kt` / `model/state/BacklinksState.kt` / `ui/screen/BacklinksSection.kt`（`backlinksSectionFor`・`backlinkLine`・`BacklinkRowList`）・`MarginMemoSheet.kt`・`RelatedTab.kt`・`NoteReaderTab.kt`・`NoteStart.kt`（`openNoteAt`） / `MainActivity.kt` / `controller/NoteSessionCoordinator.kt`（配線）
 **関連テスト:** `BacklinksTest` / `BacklinksControllerTest` / `BacklinksSectionTest` / `KnowledgeIndexLinksTest` / `NoteLinksTest` / `NoteLinkActionsTest` / `NoteSessionCoordinatorTest` / `NoteUiStateStoreTest` / `NoteOpenRouteContractTest`。androidTest: `BacklinksUiTest`・`KnowledgeIndexDaoTest`（端末で実行済み）
 **正本:** この文書（何を、どこに、どの順で出すか）。索引の作り方と寿命は [knowledge_index](../system/knowledge_index.md)
@@ -226,10 +226,10 @@
 ## 11. 既知の制約・未解決事項
 
 - **1行に収まるかは文字数の目安で決める。** 画面の幅は測らず、リンクが文頭から20文字より後ろにあるときだけ、手前を8文字残して前を切る。幅の広い画面では切らなくても入る文を切ることがある
-- **リンクの数が多いノートほど、節が出るまで待つ。** 並べるのに出どころごとの痕跡を読むため。リンクを多く受けるノートで実機で測る
+- **リンクの数が多いノートほど、節が出るまで待つ。** 並べるのに出どころごとの痕跡を読むため。200本からリンクを受けるノートで、関連タブや机を開いてから節が出るまでカバー画面で中央値 220 ms・Fold で 185 ms だった（2026-11-22 実測。ノートを開いてからの照会の全体は含まない）
+- **全画面を出入りした後に末尾へ送ると、本文の見える範囲が空白だけになる。** 末尾に近い見出しから開いたノートで起き、払い戻せば戻る。全画面で増えた末尾の余白が通常表示へ運ばれていると見られる（→ [note_links](note_links.md) 判断6）。直し方は決めていない
 - **✎ は見出し名で照らす。** 痕跡のメモは同じ見出しのうち何番目かを控えないので、同じ見出しが複数ある出どころでは、別の節に書いたメモでも印が付く
 - **末尾に近い見出しから開いた後に末尾まで読むと、最後の段落の下に余白が見える。** 見出しを最初の行に置くための余白で、先頭から開き直したノートには残らない（→ [note_links](note_links.md) 判断6）
-- 読み上げは、作り直す前の形（題名と1文と「ほか N 箇所」が1つの押せる行にまとまる）までを画面の構造で確かめた。✎ の「余白メモあり」を含め、音声で聞いた判定はしていない
 - 大きな Vault の最初の作成の時間と DB の大きさは [knowledge_index](../system/knowledge_index.md) §8 が持つ
 
 ## 12. 開発経緯
