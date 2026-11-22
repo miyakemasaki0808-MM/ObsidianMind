@@ -2,9 +2,11 @@ package com.example.newproject.ui.screen
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -13,6 +15,8 @@ import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,8 +27,9 @@ import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceMetaBlue
 import com.example.newproject.ui.theme.OnSurfaceMuted
+import com.example.newproject.ui.theme.PanelDivider
 
-/** 「このノートへのリンク」の節に何を出すか（→ docs/dev/features/backlinks.md §3・§5）。余白ペインと関連タブで共有する。 */
+/** 「このノートのバックナンバー」の節に何を出すか（→ docs/dev/features/backlinks.md §3・§5）。余白ペインと関連タブで共有する。 */
 internal sealed interface BacklinksSection {
     /** 出さない。ノートが無い・引いている・0件。 */
     data object Hidden : BacklinksSection
@@ -81,16 +86,41 @@ internal fun rememberBacklinksExpansion(noteLoadId: NoteLoadId): BacklinksExpans
 internal fun backlinksProgressText(building: BacklinksSection.Building): String =
     if (building.total == 0) "索引を作っています" else "索引を作っています（${building.indexed} / ${building.total}）"
 
-/** 同じノートにあるほかのリンクの数。無ければ出さない。 */
-internal fun backlinkOthersText(row: BacklinkRow): String? =
-    row.otherCount.takeIf { it > 0 }?.let { "ほか $it 箇所" }
+internal const val BACKLINKS_HEADING = "このノートのバックナンバー"
+internal const val BACKLINKS_UNAVAILABLE_TEXT = "このノートのバックナンバーを数えられませんでした"
 
-internal const val BACKLINKS_HEADING = "このノートへのリンク"
-internal const val BACKLINKS_UNAVAILABLE_TEXT = "このノートへのリンクを数えられませんでした"
+/** ✎ の読み上げ。 */
+internal const val BACKLINK_MEMO_DESCRIPTION = "余白メモあり"
+
+/** 畳んだときに出す行の数（→ backlinks.md 判断3）。 */
+internal const val BACKLINKS_SHOWN = 3
 
 /**
- * 1ノート1行。題名と、リンクを含む最初の1文と、ほかの箇所の数。**読み上げでは1つの行として読む**
- * （押せる行は子の文を1つにまとめて読む）。
+ * 畳んだときに出す行と、畳んだ残りの数。[showAll] なら全部を出して残りは0。
+ * 並びは引く側が決めた順（久しく読んでいない順）のまま。
+ */
+internal fun backlinkRowsShown(rows: List<BacklinkRow>, showAll: Boolean): Pair<List<BacklinkRow>, Int> =
+    if (showAll || rows.size <= BACKLINKS_SHOWN) rows to 0 else rows.take(BACKLINKS_SHOWN) to rows.size - BACKLINKS_SHOWN
+
+internal fun backlinkMoreText(rest: Int): String = "ほか $rest 件"
+
+/** リンクを1行に入れるために手前に残す文字数と、文頭から出してもリンクが1行に入る目安の文字数。 */
+private const val LEAD_BEFORE_LINK = 8
+private const val LINE_FIT_CHARACTERS = 20
+
+/**
+ * 1文を1行に出す文字列（→ backlinks.md §5 の1文）。**リンクが目安の幅より後ろにあるときだけ**、リンクの手前を少し残して前を「…」で切る。
+ * 幅は測らず文字数の目安で決める。はみ出す後ろは画面が「…」で切る。
+ */
+internal fun backlinkLine(row: BacklinkRow): String {
+    val link = row.sentenceLink ?: return row.sentence
+    if (link.last >= row.sentence.length || link.last < LINE_FIT_CHARACTERS || link.first <= LEAD_BEFORE_LINK) return row.sentence
+    return "…" + row.sentence.substring(link.first - LEAD_BEFORE_LINK).trimStart()
+}
+
+/**
+ * 1ノート1行。題名と、リンクを含む最初の1文を1行ずつ。そこに余白メモを書いていれば題名の後ろに ✎。
+ * **読み上げでは1つの行として読む**（押せる行は子の文を1つにまとめて読む）。✎ は「余白メモあり」と読む。
  */
 @Composable
 internal fun BacklinkItem(row: BacklinkRow, onClick: () -> Unit) {
@@ -101,18 +131,60 @@ internal fun BacklinkItem(row: BacklinkRow, onClick: () -> Unit) {
             .clickable(onClickLabel = "開く", onClick = onClick)
             .padding(vertical = 6.dp)
     ) {
-        Text(text = row.note.title, fontSize = 14.sp, lineHeight = 18.sp, color = OnSurface)
+        Row {
+            Text(
+                text = row.note.title,
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+                color = OnSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (row.hasMemo) {
+                Text(
+                    text = " ✎",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = OnSurfaceMetaBlue,
+                    modifier = Modifier.semantics { contentDescription = BACKLINK_MEMO_DESCRIPTION }
+                )
+            }
+        }
         Text(
-            text = row.sentence,
+            text = backlinkLine(row),
             fontSize = 12.sp,
             lineHeight = 17.sp,
             color = OnSurfaceMuted,
-            maxLines = 3,
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 2.dp)
         )
-        backlinkOthersText(row)?.let {
-            Text(text = it, fontSize = 11.sp, color = OnSurfaceMetaBlue, modifier = Modifier.padding(top = 2.dp))
-        }
+    }
+}
+
+/**
+ * 行を3件だけ並べ、残りは「ほか N 件」に畳む。押すと残りを同じ並びで出す。
+ * [more] は「ほか N 件」の開閉で、**持ち主は呼び出し側**（[rememberBacklinksExpansion] でノートを替えると畳む）。
+ * ここで持つと、ペインで行を右で開いて戻ったときに一覧が作り直されて畳まれ、押した行が見えなくなる。
+ */
+@Composable
+internal fun BacklinkRowList(rows: List<BacklinkRow>, more: BacklinksExpansion, divided: Boolean, onOpen: (BacklinkRow) -> Unit) {
+    val (shown, rest) = backlinkRowsShown(rows, showAll = more.expanded)
+    shown.forEachIndexed { index, row ->
+        BacklinkItem(row = row, onClick = { onOpen(row) })
+        if (divided && (index < shown.lastIndex || rest > 0)) HorizontalDivider(color = PanelDivider, thickness = 0.5.dp)
+    }
+    if (rest > 0) {
+        Text(
+            text = backlinkMoreText(rest),
+            fontSize = 12.sp,
+            color = OnSurfaceMetaBlue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 44.dp)
+                .clickable(onClickLabel = "残りを出す", onClick = more.toggle)
+                .padding(vertical = 12.dp)
+        )
     }
 }

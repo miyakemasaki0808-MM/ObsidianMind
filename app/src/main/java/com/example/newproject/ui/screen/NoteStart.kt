@@ -27,7 +27,7 @@ internal fun openNoteFromTop(position: BodyPosition, open: () -> Unit) {
 
 /**
  * 別のノートを、[start] の位置から開く。**[openNoteFromTop] と対の境界**で、始まりを先頭ではなく見出しに置きたい経路が通る
- * （関連タブのこのノートへのリンク）。[place] は [rememberNoteStart] が返す口で、解析が届いたら見出しへ送る。
+ * （関連タブのバックナンバー）。[place] は [rememberNoteStart] が返す口で、解析が届いたら見出しへ送る。
  */
 internal fun openNoteAt(start: PendingNoteStart, place: (PendingNoteStart) -> Unit, open: () -> Unit) {
     open()
@@ -37,7 +37,7 @@ internal fun openNoteAt(start: PendingNoteStart, place: (PendingNoteStart) -> Un
 /**
  * 開いたノートの始まりの位置。「このノートへ移る」は右で読んでいたブロック、リンクは見出しを持つ。
  * [heading] があれば解析が届いた後にその見出しへ送り、見つからなければ [block] から始める。
- * [headingOccurrence] は同じ見出しのうち何番目か（→ [headingBlockIndex]）で、渡すのはこのノートへのリンクだけ。
+ * [headingOccurrence] は同じ見出しのうち何番目か（→ [headingBlockIndex]）で、渡すのはバックナンバーの行だけ。
  * **画面の保存値に置く**（Fold の開閉で画面が作り直されても失わない）。
  */
 internal data class PendingNoteStart(
@@ -131,9 +131,9 @@ internal fun currentNoteScrollTarget(blocks: List<MarkdownBlock>?, heading: Stri
 }
 
 /**
- * 補助の面で開いたノートと、その見出し（→ features/note_links.md §4）。本文のリンクと、このノートへのリンクの行から開く。
+ * 補助の面で開いたノートと、その見出し（→ features/note_links.md §4）。本文のリンクと、バックナンバーの行から開く。
  * [request] は押すたびに増える番号で、同じリンクを押し直したときにも見出しへ送り直すために使う。
- * [headingOccurrence] は同じ見出しのうち何番目かで、渡すのはこのノートへのリンクだけ（→ [PendingNoteStart]）。
+ * [headingOccurrence] は同じ見出しのうち何番目かで、渡すのはバックナンバーの行だけ（→ [PendingNoteStart]）。
  */
 internal data class SideLinkStart(
     val noteUri: String,

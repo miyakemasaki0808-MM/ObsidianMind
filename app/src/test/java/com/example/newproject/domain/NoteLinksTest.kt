@@ -253,7 +253,7 @@ class NoteLinksTest {
         assertEquals(4, headingBlockIndex(blocks, "重複"))
     }
 
-    /** このノートへのリンクは、リンクのある節の見出しが何番目かを持つ（→ features/backlinks.md §5）。本文のリンクは渡さない。 */
+    /** バックナンバーの行は、リンクのある節の見出しが何番目かを持つ（→ features/backlinks.md §5）。本文のリンクは渡さない。 */
     @Test
     fun `番目を渡せば同じ見出しのその番目を指し、その番目が無ければ最初のものに戻る`() {
         assertEquals(5, headingBlockIndex(blocks, "重複", occurrence = 1))

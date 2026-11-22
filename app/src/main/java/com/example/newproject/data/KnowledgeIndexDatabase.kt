@@ -23,7 +23,7 @@ import java.io.File
  */
 @Database(
     entities = [IndexMetaEntity::class, IndexedNoteEntity::class, IndexedLinkEntity::class, RewriteMarkEntity::class],
-    version = 5,
+    version = 7,
     exportSchema = false
 )
 internal abstract class KnowledgeIndexDatabase : RoomDatabase() {
@@ -62,7 +62,11 @@ internal data class IndexedNoteEntity(
     val fingerprint: String
 )
 
-/** 1つのリンク。行き先は書かれたまま持つ。[nameKey]・[decodedNameKey] は候補を絞る名前の鍵（§6）。 */
+/**
+ * 1つのリンク。行き先は書かれたまま持つ。[nameKey]・[decodedNameKey] は候補を絞る名前の鍵（§6）。
+ * [sentenceLinkStart]・[sentenceLinkEnd]（終わりは含まない）は1文の中でリンクが占める範囲で、見つからなければ両方 null。
+ * [sentenceNameLength] は範囲の先頭から「このノート」へ替えてよい名前の長さで、別名なら null。
+ */
 @Entity(
     tableName = "indexed_link",
     primaryKeys = ["sourcePath", "ordinal"],
@@ -77,6 +81,9 @@ internal data class IndexedLinkEntity(
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
     val sentence: String,
+    val sentenceLinkStart: Int?,
+    val sentenceLinkEnd: Int?,
+    val sentenceNameLength: Int?,
     val nameKey: String,
     val decodedNameKey: String?
 )
@@ -106,7 +113,10 @@ internal data class BacklinkCandidateRow(
     val heading: String?,
     val sectionHeading: String?,
     val sectionHeadingOccurrence: Int,
-    val sentence: String
+    val sentence: String,
+    val sentenceLinkStart: Int?,
+    val sentenceLinkEnd: Int?,
+    val sentenceNameLength: Int?
 )
 
 /**
@@ -135,16 +145,23 @@ internal abstract class KnowledgeIndexDao {
 
     /** 名前の鍵（書かれたまま・復号した後のどちらか）が [key] のリンク。行き先はまだ解いていない（→ knowledge_index.md §6）。 */
     @Query(
-        "SELECT sourcePath, ordinal, kind, target, heading, sectionHeading, sectionHeadingOccurrence, sentence " +
+        "SELECT sourcePath, ordinal, kind, target, heading, sectionHeading, sectionHeadingOccurrence, sentence, sentenceLinkStart, sentenceLinkEnd, sentenceNameLength " +
             "FROM indexed_link WHERE nameKey = :key OR decodedNameKey = :key ORDER BY sourcePath, ordinal"
     )
     abstract suspend fun linksNamed(key: String): List<BacklinkCandidateRow>
 
-    /** 索引が [vaultKey] のものなら名前の鍵でリンクを引く。別の Vault の索引なら null。 */
+    @Query("SELECT COUNT(*) FROM indexed_note WHERE relativePath = :path")
+    abstract suspend fun noteCountAt(path: String): Int
+
+    /**
+     * 索引が [vaultKey] のものなら、名前の鍵で引いたリンクと、[path] のノートから出るリンク（本文の順）を**1つのトランザクションで**引く。
+     * 別の Vault の索引なら null。2つを別々に引くと、間の突き合わせで違う時点の組み合わせになる（→ backlinks.md 判断5）。
+     * **[path] のノートを索引がまだ読んでいなければ、出るリンクは null**（リンクが無いノートの空と分ける）。
+     */
     @Transaction
-    open suspend fun linksNamedIn(vaultKey: String, key: String): List<BacklinkCandidateRow>? {
+    open suspend fun backlinkLinksIn(vaultKey: String, key: String, path: String): Pair<List<BacklinkCandidateRow>, List<IndexedLinkEntity>?>? {
         if (meta()?.vaultKey != vaultKey) return null
-        return linksNamed(key)
+        return linksNamed(key) to (if (noteCountAt(path) > 0) linksOf(path) else null)
     }
 
     @Upsert

@@ -3,8 +3,12 @@ package com.example.newproject.domain
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.model.DocumentRef
+import com.example.newproject.model.MarginMemo
 import com.example.newproject.model.NoteFile
+import com.example.newproject.model.ReadingTrace
+import com.example.newproject.model.ReadingVisit
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -17,6 +21,8 @@ class BacklinksTest {
     private fun note(path: String, lastModified: Long? = null) =
         NoteFile(name = path.substringAfterLast('/'), ref = DocumentRef("ref:$path"), lastModified = lastModified, vaultRelativePath = path)
 
+    private fun read(at: Long) = SourceReading(lastReadAt = at, memoSectionKeys = emptySet())
+
     private fun candidate(
         source: String,
         target: String,
@@ -24,10 +30,24 @@ class BacklinksTest {
         kind: IndexedLinkKind = IndexedLinkKind.NAME,
         sentence: String = "$target を読む。",
         section: String? = null,
-        occurrence: Int = 0
-    ) = BacklinkCandidate(source, ordinal, kind, target, heading = null, sectionHeading = section, sectionHeadingOccurrence = occurrence, sentence = sentence)
+        occurrence: Int = 0,
+        sentenceLink: IntRange? = null,
+        sentenceNameLength: Int? = null
+    ) = BacklinkCandidate(
+        source, ordinal, kind, target,
+        heading = null,
+        sectionHeading = section,
+        sectionHeadingOccurrence = occurrence,
+        sentence = sentence,
+        sentenceLink = sentenceLink,
+        sentenceNameLength = sentenceNameLength
+    )
 
     private val current = note("notes/習慣.md")
+
+    /** 痕跡の無い（どれも読んだ記録が無い）ときの行。 */
+    private fun rowsOf(candidates: List<BacklinkCandidate>, outgoing: List<NoteLink>, current: DocumentRef, index: NoteLinkIndex) =
+        backlinkRows(backlinkSources(candidates, outgoing, current, index), emptyMap())
 
     @Test
     fun `今のノートへ着くリンクだけを残し、同じ名前の別のノートへ着くリンクは除く`() {
@@ -36,8 +56,9 @@ class BacklinksTest {
         val inNotes = note("notes/振り返り.md", lastModified = 1L)
         val index = NoteLinkIndex(listOf(current, sameName, inOther, inNotes))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("other/日記.md", "習慣"), candidate("notes/振り返り.md", "習慣")),
+            emptyList(),
             current.ref,
             index
         )
@@ -45,51 +66,223 @@ class BacklinksTest {
         assertEquals("同じフォルダが先に選ばれるので、other の日記の [[習慣]] は other/習慣 へ着く", listOf("振り返り.md"), rows.map { it.note.title })
     }
 
+    /**
+     * 互いにリンクしているノートは、本文を読めば行ける（→ features/backlinks.md 判断5）。
+     * 今のノートのリンクも同じ規則で今のノートから解き、**着いた先だけ**を除く。同じ名前の別のノートへ着く本文のリンクでは除かない。
+     */
     @Test
-    fun `1ノート1行にまとめ、最初の1文とほかの箇所の数を出し、節の見出しと番目を持つ`() {
+    fun `今のノートの本文がリンクしている相手を除き、同じ名前の別のノートへ着く本文のリンクでは除かない`() {
+        val mutual = note("notes/日記.md", lastModified = 3L)
+        val sameNameSource = note("other/振り返り.md", lastModified = 2L)
+        val sameNameTarget = note("notes/振り返り.md")
+        val index = NoteLinkIndex(listOf(current, mutual, sameNameSource, sameNameTarget))
+
+        val rows = rowsOf(
+            listOf(candidate("notes/日記.md", "習慣"), candidate("other/振り返り.md", "習慣")),
+            listOf(NoteLink.ByPath("日記.md", null), NoteLink.ByName("振り返り", null)),
+            current.ref,
+            index
+        )
+
+        assertEquals("本文の [[振り返り]] は同じフォルダの notes/振り返り へ着く", listOf(sameNameSource.ref), rows.map { it.note.ref })
+    }
+
+    @Test
+    fun `1ノート1行にまとめ、最初の1文と節の見出しと番目を持つ`() {
         val source = note("notes/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(
                 candidate("notes/日記.md", "習慣", ordinal = 2, sentence = "三つ目。"),
                 candidate("notes/日記.md", "習慣", ordinal = 0, sentence = "最初に [[習慣]] を書いた。", section = "まとめ", occurrence = 1),
                 candidate("notes/日記.md", "習慣", ordinal = 1, sentence = "二つ目。")
             ),
+            emptyList(),
             current.ref,
             index
         )
 
         val row = rows.single()
         assertEquals("最初に [[習慣]] を書いた。", row.sentence)
-        assertEquals(2, row.otherCount)
         assertEquals("まとめ", row.sectionHeading)
         assertEquals(1, row.sectionHeadingOccurrence)
     }
 
+    /** 再会の入口なので、忘れかけている相手を上に出す（→ features/backlinks.md 判断3）。 */
     @Test
-    fun `出どころの更新日時が新しい順、同じなら題名の順に並べる`() {
-        val old = note("notes/古い.md", lastModified = 1L)
-        val newA = note("notes/新しいA.md", lastModified = 5L)
-        val newB = note("notes/新しいB.md", lastModified = 5L)
-        val undated = note("notes/日時なし.md")
-        val index = NoteLinkIndex(listOf(current, old, newA, newB, undated))
+    fun `読んだ記録が無い出どころを先に、最後に読んだ日が古い順に並べ、同じなら更新の古い順、それも同じなら題名の順`() {
+        val notes = listOf(
+            note("notes/最近読んだ.md", lastModified = 1L),
+            note("notes/同じ日B.md", lastModified = 3L),
+            note("notes/未読で新しい.md", lastModified = 5L),
+            note("notes/昔読んだ.md", lastModified = 9L),
+            note("notes/同じ日A.md", lastModified = 3L),
+            note("notes/未読で日時なし.md"),
+            note("notes/未読で古い.md", lastModified = 1L),
+            note("notes/同じ日で古い.md", lastModified = 2L)
+        )
+        val index = NoteLinkIndex(listOf(current) + notes)
+        val sources = backlinkSources(notes.map { candidate(it.vaultRelativePath, "習慣") }, emptyList(), current.ref, index)
+        val readings = mapOf(
+            "notes/最近読んだ.md" to read(900L),
+            "notes/昔読んだ.md" to read(100L),
+            "notes/同じ日A.md" to read(500L),
+            "notes/同じ日B.md" to read(500L),
+            "notes/同じ日で古い.md" to read(500L)
+        )
+
+        val rows = backlinkRows(sources, readings)
+
+        assertEquals(
+            listOf("未読で日時なし.md", "未読で古い.md", "未読で新しい.md", "昔読んだ.md", "同じ日で古い.md", "同じ日A.md", "同じ日B.md", "最近読んだ.md"),
+            rows.map { it.note.title }
+        )
+    }
+
+    /** ✎ は最初のリンクのある節に書いたメモだけ。見出しより前のリンクには付けない（→ features/backlinks.md 判断7）。 */
+    @Test
+    fun `最初のリンクのある節と同じ見出しにメモがあれば印を付け、別の節と見出しより前のリンクには付けない`() {
+        val same = note("notes/同じ節.md")
+        val other = note("notes/別の節.md")
+        val before = note("notes/見出しの前.md")
+        val index = NoteLinkIndex(listOf(current, same, other, before))
+        val sources = backlinkSources(
+            listOf(
+                candidate("notes/同じ節.md", "習慣", section = "まとめ"),
+                candidate("notes/別の節.md", "習慣", section = "まとめ"),
+                candidate("notes/見出しの前.md", "習慣", section = null)
+            ),
+            emptyList(),
+            current.ref,
+            index
+        )
+        val memoIn = { section: String -> SourceReading(lastReadAt = 1L, memoSectionKeys = setOf(headingMatchKey(section))) }
 
         val rows = backlinkRows(
-            listOf("notes/古い.md", "notes/新しいB.md", "notes/日時なし.md", "notes/新しいA.md").map { candidate(it, "習慣") },
+            sources,
+            mapOf("notes/同じ節.md" to memoIn("まとめ"), "notes/別の節.md" to memoIn("導入"), "notes/見出しの前.md" to memoIn("まとめ"))
+        )
+
+        assertEquals(
+            mapOf("同じ節.md" to true, "別の節.md" to false, "見出しの前.md" to false),
+            rows.associate { it.note.title to it.hasMemo }
+        )
+    }
+
+    /**
+     * 題名が長いと1行を食うので「このノート」と出す。別名は自分が選んだ言葉なので替えない（→ features/backlinks.md 判断6）。
+     * 本文から索引と同じに取り出したリンクで確かめる。題名の正規化で照らすと、正規化で題名に見える別名まで替わる。
+     */
+    @Test
+    fun `別名の無いリンクの名前だけをこのノートと出し、別名と見出しは替えない`() {
+        fun shown(body: String): String {
+            val link = extractIndexedLinks(body).single()
+            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
+            return text + " | " + range?.let { text.substring(it) }
+        }
+
+        assertEquals("このノート を読む。 | このノート", shown("[[習慣]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[[notes/習慣]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[習慣](習慣.md) を読む。"))
+        assertEquals("このノート#まとめ を読む。 | このノート#まとめ", shown("[[習慣#まとめ]] を読む。"))
+        assertEquals("見出しの後ろの空白も残す", "このノート#まとめ  を読む。 | このノート#まとめ ", shown("[[習慣#まとめ ]] を読む。"))
+        assertEquals("名前の前後の空白ごと替える", "昨日 このノート を読む。 | このノート", shown("昨日 [[ 習慣 ]] を読む。"))
+        assertEquals("このノート を読む。 | このノート", shown("[[習慣.md]] を読む。"))
+        assertEquals("符号化したパスは復号した名前と照らす", "このノート を読む。 | このノート", shown("[my note](my%20note.md) を読む。"))
+        assertEquals("フォルダつきのパスも末尾の名前と照らす", "このノート を読む。 | このノート", shown("[習慣.md](notes/習慣.md) を読む。"))
+        listOf(
+            "[[習慣|習慣#ではない]]",
+            "[[習慣|習慣^2]]",
+            "[[習慣|悪い/習慣]]",
+            "[習慣|例外](習慣.md)",
+            "[[習慣|よい習慣]]",
+            "[[習慣|別名]]",
+            "[[習慣#まとめ|習慣#まとめ-別]]",
+            "[[習慣#まとめ|習慣#ま]]",
+            "[あの話](習慣.md)"
+        ).forEach { written ->
+            val body = "$written を読む。"
+            val visible = extractIndexedLinks(body).single().let { it.sentence.substring(checkNotNull(it.sentenceLink)) }
+            assertEquals(written, "$visible を読む。 | $visible", shown(body))
+        }
+    }
+
+    /** 長い見出しは1文の窓で切れている。切れた見出しの表示を残し、範囲もそれを指す。 */
+    @Test
+    fun `窓で切れた長い見出しのリンクも名前だけを替え、切れた見出しを残す`() {
+        val heading = "あ".repeat(200)
+        val link = extractIndexedLinks("[[習慣#$heading]] を読む。").single()
+
+        val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
+
+        val replaced = text.substring(checkNotNull(range))
+        assertTrue(replaced, replaced.startsWith("このノート#あ"))
+        assertTrue(replaced, replaced.drop("このノート#".length).all { it == 'あ' })
+    }
+
+    /**
+     * 長いリンクは頭から窓に入り、窓の頭の空白は落ちる。落ちた空白のぶん名前を縮めないと、名前の後ろの `#` まで替えてしまう。
+     * 頭の空白が1文字でも2文字でも、言い換えた表示は「このノート」と窓に残った `#` 以降で、範囲もその表示を指す。
+     */
+    @Test
+    fun `長いリンクの窓の頭で空白を落としても、見出しの区切りを残して名前だけを替える`() {
+        listOf(1, 2).forEach { spaces ->
+            val link = extractIndexedLinks("前置き [[${" ".repeat(spaces)}習慣#${"あ".repeat(200)}]] を読む。").single()
+            val shownBefore = link.sentence.substring(checkNotNull(link.sentenceLink))
+
+            val (text, range) = sentenceForCurrent(link.sentence, link.sentenceLink, link.sentenceNameLength)
+
+            val headingPart = shownBefore.substring(shownBefore.indexOf('#'))
+            assertEquals("頭の空白 $spaces 文字", "このノート$headingPart", text.substring(checkNotNull(range)))
+        }
+    }
+
+    @Test
+    fun `行は言い換えた1文と、言い換えた後のリンクの範囲を持つ`() {
+        val source = note("notes/日記.md")
+        val index = NoteLinkIndex(listOf(current, source))
+        val sources = backlinkSources(
+            listOf(candidate("notes/日記.md", "習慣", sentence = "昨日 習慣 を読んだ。", sentenceLink = 3..4, sentenceNameLength = 2)),
+            emptyList(),
             current.ref,
             index
         )
 
-        assertEquals(listOf("新しいA.md", "新しいB.md", "古い.md", "日時なし.md"), rows.map { it.note.title })
+        val row = backlinkRows(sources, emptyMap()).single()
+
+        assertEquals("昨日 このノート を読んだ。", row.sentence)
+        assertEquals("このノート", row.sentence.substring(checkNotNull(row.sentenceLink)))
+    }
+
+    @Test
+    fun `痕跡からは訪問の最新の日時と、見出しのあるメモの節だけを取る`() {
+        val trace = ReadingTrace(
+            vaultRelativePath = "notes/日記.md",
+            noteTitle = "日記",
+            documentId = null,
+            visits = listOf(3_000L, 1_000L, 2_000L).map { ReadingVisit(it, deepestSectionTitle = null, progressPercent = 50) },
+            memos = listOf(
+                MarginMemo("a", 1L, sectionTitle = "まとめ"),
+                MarginMemo("b", 2L, sectionTitle = null),
+                MarginMemo("c", 3L, sectionTitle = "導入")
+            )
+        )
+
+        assertEquals(
+            SourceReading(lastReadAt = 3_000L, memoSectionKeys = setOf(headingMatchKey("まとめ"), headingMatchKey("導入"))),
+            sourceReadingOf(trace)
+        )
+        assertEquals(null, sourceReadingOf(trace.copy(visits = emptyList(), totalVisitCount = 0)).lastReadAt)
     }
 
     @Test
     fun `出どころが走査の索引に無ければ解かずに除き、今のノート自身のリンクも除く`() {
         val index = NoteLinkIndex(listOf(current))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("locked/見えない.md", "習慣"), candidate("notes/習慣.md", "習慣")),
+            emptyList(),
             current.ref,
             index
         )
@@ -131,8 +324,9 @@ class BacklinksTest {
         val source = note("notes/sub/日記.md")
         val index = NoteLinkIndex(listOf(current, source))
 
-        val rows = backlinkRows(
+        val rows = rowsOf(
             listOf(candidate("notes/sub/日記.md", "../習慣.md", kind = IndexedLinkKind.PATH)),
+            emptyList(),
             current.ref,
             index
         )

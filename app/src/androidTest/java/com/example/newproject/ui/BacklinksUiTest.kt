@@ -15,8 +15,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -50,12 +52,13 @@ import com.example.newproject.ui.screen.SideReadingPane
 import com.example.newproject.ui.screen.rememberNoteStart
 import com.example.newproject.ui.theme.AppTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * **このノートへのリンクが余白ペインと関連タブに描かれ、押した先がリンクのある節の見出しから始まることを固定する**
+ * **このノートのバックナンバーが余白ペインと関連タブに描かれ、押した先がリンクのある節の見出しから始まることを固定する**
  * （→ features/backlinks.md §10 の instrumentation）。
  *
  * 何を出すか（行・進み具合・数えられない）と、同じ見出しの何番目へ着くかは JVM 側（`BacklinksSectionTest`・`NoteLinkActionsTest`）が持つ。
@@ -70,42 +73,88 @@ class BacklinksUiTest {
     // ── 余白ペイン ────────────────────────────────────────────────────
 
     @Test
-    fun ペインでは畳んで件数だけを出し_開くと1文とほかの箇所が並び_押すと右で開く() {
+    fun ペインでは畳んで件数だけを出し_開くと1文が並び_押すと右で開く() {
         val opened = mutableListOf<BacklinkRow>()
         showPane(BacklinksSection.Rows(listOf(ROW)), onOpen = { opened += it })
 
-        composeRule.onNodeWithText("▸ このノートへのリンク 1件").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("▸ このノートのバックナンバー 1件").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(ROW.sentence).assertDoesNotExist()
 
-        composeRule.onNodeWithText("▸ このノートへのリンク 1件").performClick()
+        composeRule.onNodeWithText("▸ このノートのバックナンバー 1件").performClick()
         composeRule.onNodeWithText(ROW.sentence).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("ほか 2 箇所").assertIsDisplayed()
         composeRule.onNodeWithText(SOURCE.title).performClick()
 
         composeRule.runOnIdle { assertEquals(listOf(ROW), opened) }
+    }
+
+    /** 3件の下に「ほか N 件」を置き、押すと残りを出す。そこにメモを書いた行には ✎ を付け「余白メモあり」と読む（→ features/backlinks.md §3）。 */
+    @Test
+    fun ペインでは3件の下にほかN件を出し_押すと残りが出て_メモを書いた行に印が付く() {
+        val rows = (1..4).map { ROW.copy(note = SOURCE.copy(title = "出どころ$it", ref = DocumentRef("content://vault/s$it.md")), hasMemo = it == 1) }
+        showPane(BacklinksSection.Rows(rows))
+        composeRule.onNodeWithText("▸ このノートのバックナンバー 4件").performScrollTo().performClick()
+
+        composeRule.onNodeWithText("出どころ3").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("出どころ4").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("余白メモあり").assertExists()
+
+        composeRule.onNodeWithText("ほか 1 件").performScrollTo().performClick()
+
+        composeRule.onNodeWithText("出どころ4").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("ほか 1 件").assertDoesNotExist()
+    }
+
+    /**
+     * 右で開いて戻ると、ペインの中身は作り直される。「ほか N 件」の開閉は画面が持つので、戻っても開いたまま
+     * （一覧の中で持つと畳まれ、押した行が見えなくなる）。
+     */
+    @Test
+    fun ペインの中身を作り直しても_ほかN件を開いたまま戻る() {
+        val rows = (1..4).map { ROW.copy(note = SOURCE.copy(title = "出どころ$it", ref = DocumentRef("content://vault/s$it.md"))) }
+        var shown by mutableStateOf(true)
+        showPane(BacklinksSection.Rows(rows), shown = { shown })
+        composeRule.onNodeWithText("▸ このノートのバックナンバー 4件").performScrollTo().performClick()
+        composeRule.onNodeWithText("ほか 1 件").performScrollTo().performClick()
+        composeRule.onNodeWithText("出どころ4").performScrollTo().assertIsDisplayed()
+
+        composeRule.runOnIdle { shown = false }
+        composeRule.runOnIdle { shown = true }
+
+        composeRule.onNodeWithText("出どころ4").performScrollTo().assertIsDisplayed()
+    }
+
+    /** 並びは関連 → 反証の一文 → バックナンバー（→ features/backlinks.md 判断8）。過去への入口なので、読み進める関連より後に置く。 */
+    @Test
+    fun ペインではバックナンバーを関連の後に置く() {
+        showPane(BacklinksSection.Rows(listOf(ROW)))
+
+        val related = composeRule.onNodeWithText("このノートの関連", substring = true).performScrollTo().getUnclippedBoundsInRoot()
+        val backlinks = composeRule.onNodeWithText("このノートのバックナンバー", substring = true).performScrollTo().getUnclippedBoundsInRoot()
+        assertTrue("関連 ${related.top} がバックナンバー ${backlinks.top} より上", related.top < backlinks.top)
     }
 
     @Test
     fun ペインでは索引を作っている間は件数の代わりに進み具合を出す() {
         showPane(BacklinksSection.Building(120, 500))
 
-        composeRule.onNodeWithText("このノートへのリンク：索引を作っています（120 / 500）").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("このノートのバックナンバー：索引を作っています（120 / 500）").performScrollTo().assertIsDisplayed()
     }
 
     @Test
     fun ペインでは数えられなかったら件数を出さず_開くとそう書く() {
         showPane(BacklinksSection.Unavailable)
 
-        composeRule.onNodeWithText("▸ このノートへのリンク").performScrollTo().performClick()
+        composeRule.onNodeWithText("▸ このノートのバックナンバー").performScrollTo().performClick()
 
-        composeRule.onNodeWithText("このノートへのリンクを数えられませんでした").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("このノートのバックナンバーを数えられませんでした").performScrollTo().assertIsDisplayed()
     }
 
-    private fun showPane(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit = {}) {
+    private fun showPane(section: BacklinksSection, onOpen: (BacklinkRow) -> Unit = {}, shown: () -> Boolean = { true }) {
         composeRule.setContent {
             AppTheme(darkTheme = false) {
                 var expanded by remember { mutableStateOf(false) }
-                MarginMemoSheetContent(
+                val more = com.example.newproject.ui.screen.rememberBacklinksExpansion(NoteLoadId(issuer = 1L, count = 1L))
+                if (shown()) MarginMemoSheetContent(
                     state = MarginMemoState.Ready(memos = emptyList()),
                     draft = MarginMemoDraft(),
                     section = null,
@@ -124,7 +173,8 @@ class BacklinksUiTest {
                             section = section,
                             expanded = expanded,
                             onToggle = { expanded = !expanded },
-                            onOpen = onOpen
+                            onOpen = onOpen,
+                            more = more
                         )
                     )
                 )
@@ -198,7 +248,7 @@ class BacklinksUiTest {
         val opened = mutableListOf<BacklinkRow>()
         showRelatedTab(BacklinksState.Ready(listOf(ROW)), KnowledgeIndexProgress.Ready, onOpenBacklink = { opened += it })
 
-        composeRule.onNodeWithText("このノートへのリンク 1件").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("このノートのバックナンバー 1件").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(ROW.sentence).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText(SOURCE.title).performScrollTo().performClick()
 
@@ -217,7 +267,7 @@ class BacklinksUiTest {
                 )
             }
         }
-        composeRule.onNodeWithText("このノートへのリンク", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithText("このノートのバックナンバー", substring = true).assertDoesNotExist()
 
         progress = KnowledgeIndexProgress.Building(3, 10)
 
@@ -431,9 +481,10 @@ class BacklinksUiTest {
         val ROW = BacklinkRow(
             note = SOURCE,
             sentence = "二つ目のまとめで習慣を書いた。",
-            otherCount = 2,
+            sentenceLink = null,
             sectionHeading = "まとめ",
-            sectionHeadingOccurrence = 1
+            sectionHeadingOccurrence = 1,
+            hasMemo = false
         )
 
         /** 0 と 20 に同じ見出し「まとめ」を置いた本文。番号はブロックの位置と同じ。 */

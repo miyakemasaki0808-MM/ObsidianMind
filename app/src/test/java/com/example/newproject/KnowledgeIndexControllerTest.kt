@@ -1,10 +1,10 @@
 package com.example.newproject
 
 import com.example.newproject.controller.KnowledgeIndexController
+import com.example.newproject.data.BacklinkLinks
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
 import com.example.newproject.data.KnowledgeIndexStore
-import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedNoteState
 import com.example.newproject.domain.mayApplyIndexedRead
@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -802,6 +803,32 @@ class KnowledgeIndexControllerTest {
         advanceUntilIdle()
 
         assertEquals(emptyList<KnowledgeIndexProgress>(), env.progress)
+        assertEquals("旧い Vault の失敗では知らせない（公開を受けた知らせだけ）", 1, env.changes)
+    }
+
+    /**
+     * 突き合わせが途中の書き込みで止まっても、止まる前に書けたノートを引けるよう知らせる。知らせないと、今のノートが索引に入るのを待つ
+     * バックナンバーが、次の操作まで出ない（→ features/backlinks.md §5）。
+     */
+    @Test
+    fun `突き合わせが途中の書き込みで止まっても、止まる前に書けたノートを引けるよう知らせる`() = runTest {
+        val env = Env(this)
+        env.handle.bodies = { "本文" }
+        env.publish(listOf(note("b.md", 1L)))
+        advanceUntilIdle()
+        val before = env.changes
+        env.store.beforeApply = { path ->
+            if (path == "c.md") {
+                while ("a.md" !in env.store.notes) yield()
+                throw java.io.IOException("置き場が壊れた")
+            }
+        }
+
+        env.publish(listOf(note("a.md", 1L), note("b.md", 1L), note("c.md", 1L)))
+        advanceUntilIdle()
+
+        assertTrue("止まる前に a は書けた", "a.md" in env.store.notes)
+        assertEquals("公開を受けた知らせと、止まった後の知らせ", before + 2, env.changes)
     }
 
     /** 置き場の書き込みは取り消しで止まらないことがある。止まらずに戻っても、替えた先の Vault の進み具合を上書きしない。 */
@@ -910,7 +937,7 @@ class KnowledgeIndexControllerTest {
             if (this.vaultKey == vaultKey) firstBuildDone = true
         }
 
-        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? = null
+        override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? = null
     }
 
     private companion object {

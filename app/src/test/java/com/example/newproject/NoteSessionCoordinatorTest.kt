@@ -4,6 +4,7 @@ import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
 import com.example.newproject.domain.NoteLinkIndex
+import com.example.newproject.data.BacklinkLinks
 import com.example.newproject.data.IndexedNoteRecord
 import com.example.newproject.data.KnowledgeIndexSnapshot
 import com.example.newproject.data.KnowledgeIndexStore
@@ -1046,7 +1047,7 @@ class NoteSessionCoordinatorTest {
         assertTrue("Distill", state.distillState !is DistillState.Idle)
         assertTrue("ReadingTrace", state.readingTraceCard != null)
         assertTrue("Rebuttal(反証の一文)", state.rebuttalSentence != null)
-        assertTrue("Backlinks(このノートへのリンク)", state.backlinks != BacklinksState.Idle)
+        assertTrue("Backlinks(このノートのバックナンバー)", state.backlinks != BacklinksState.Idle)
         assertTrue("Search", state.searchState !is SearchState.Idle)
         assertTrue("ReadingTraceCleanup(整理)", state.readingTraceCleanupState !is ReadingTraceCleanupState.Idle)
         assertTrue("ReadingTraceBackup(退避)", state.readingTraceBackupState !is ReadingTraceBackupState.Idle)
@@ -2499,20 +2500,20 @@ class NoteSessionCoordinatorTest {
         assertEquals("破棄されたスコープでは走査を頼まない", 0, expired)
     }
 
-    // ── このノートへのリンク（→ docs/dev/features/backlinks.md） ─────────────────
+    // ── このノートのバックナンバー（→ docs/dev/features/backlinks.md） ───────────
 
     /**
      * ノートを開いたら引き、走査の公開を受けたら引き直し、ノートを替えたら落とす。本文が出る前に届いた公開では引かない。
      * 索引の進み具合は Vault を開いたときから出す。
      */
     @Test
-    fun `このノートへのリンクはノートを開いたときと公開を受けたときに引き、ノートを替えたら落とす`() = runTest {
+    fun `バックナンバーはノートを開いたときと公開を受けたときに引き、ノートを替えたら落とす`() = runTest {
         val env = Env(this)
         val store = RecordingKnowledgeIndexStore()
         val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
         val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
         store.candidates = listOf(
-            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "[[習慣]] を読む。")
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1, 2)
         )
         val coordinator = env.coordinator(knowledgeIndexStore = store, noteLinkIndex = { NoteLinkIndex(listOf(current, source)) })
 
@@ -2547,7 +2548,7 @@ class NoteSessionCoordinatorTest {
         val current = NoteFile(name = "習慣.md", ref = DocumentRef("content://vault/習慣.md"), lastModified = 1L, vaultRelativePath = "習慣.md")
         val source = NoteFile(name = "日記.md", ref = DocumentRef("content://vault/日記.md"), lastModified = 1L, vaultRelativePath = "日記.md")
         store.candidates = listOf(
-            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "[[習慣]] を読む。")
+            BacklinkCandidate("日記.md", 0, IndexedLinkKind.NAME, "習慣", null, null, 0, "習慣 を読む。", 0..1, 2)
         )
         val held = CompletableDeferred<Unit>()
         store.beforeCandidates = { held.await() }
@@ -2711,9 +2712,9 @@ private class FakeHistoryStore : HistoryStore {
         override suspend fun forgetMarks(vaultKey: String, documentRefs: List<String>) = Unit
         override suspend fun clearMark(vaultKey: String, documentRef: String, writeNumber: Long) = Unit
         override suspend fun markFirstBuildDone(vaultKey: String) = Unit
-        override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? {
+        override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? {
             beforeCandidates()
-            return candidates
+            return candidates?.let { BacklinkLinks(it, outgoing = emptyList()) }
         }
     }
 }

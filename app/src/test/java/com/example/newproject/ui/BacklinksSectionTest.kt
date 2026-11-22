@@ -10,7 +10,9 @@ import com.example.newproject.model.state.BacklinksState
 import com.example.newproject.model.state.KnowledgeIndexProgress
 import com.example.newproject.ui.screen.BacklinksOpenedAtSaver
 import com.example.newproject.ui.screen.BacklinksSection
-import com.example.newproject.ui.screen.backlinkOthersText
+import com.example.newproject.ui.screen.backlinkLine
+import com.example.newproject.ui.screen.backlinkMoreText
+import com.example.newproject.ui.screen.backlinkRowsShown
 import com.example.newproject.ui.screen.backlinksExpanded
 import com.example.newproject.ui.screen.backlinksProgressText
 import com.example.newproject.ui.screen.backlinksSectionFor
@@ -20,15 +22,16 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** 「このノートへのリンク」の節に何を出すか（→ features/backlinks.md §3・§5）。余白ペインと関連タブが同じ判定を使う。 */
+/** 「このノートのバックナンバー」の節に何を出すか（→ features/backlinks.md §3・§5）。余白ペインと関連タブが同じ判定を使う。 */
 class BacklinksSectionTest {
 
     private val row = BacklinkRow(
         note = RelatedNote(title = "日記.md", ref = DocumentRef("ref:日記"), isWikilinked = false),
-        sentence = "[[習慣]] を読む。",
-        otherCount = 2,
+        sentence = "このノート を読む。",
+        sentenceLink = 0..4,
         sectionHeading = null,
-        sectionHeadingOccurrence = 0
+        sectionHeadingOccurrence = 0,
+        hasMemo = false
     )
 
     @Test
@@ -103,10 +106,30 @@ class BacklinksSectionTest {
     }
 
     @Test
-    fun `進み具合は読む予定の数が分かるまで数を出さず、ほかの箇所は1つ以上のときだけ出す`() {
+    fun `進み具合は読む予定の数が分かるまで数を出さない`() {
         assertEquals("索引を作っています（120 / 500）", backlinksProgressText(BacklinksSection.Building(120, 500)))
         assertEquals("索引を作っています", backlinksProgressText(BacklinksSection.Building(0, 0)))
-        assertEquals("ほか 2 箇所", backlinkOthersText(row))
-        assertNull(backlinkOthersText(row.copy(otherCount = 0)))
+    }
+
+    /** 全件を並べると、どれが大事か分からず重かった（→ features/backlinks.md 判断3）。並びは引く側が決めた順のまま。 */
+    @Test
+    fun `畳んでいる間は3件と残りの数を出し、開くか3件以下なら全部を出す`() {
+        val rows = (1..5).map { row.copy(note = row.note.copy(title = "n$it.md")) }
+
+        assertEquals(rows.take(3) to 2, backlinkRowsShown(rows, showAll = false))
+        assertEquals(rows to 0, backlinkRowsShown(rows, showAll = true))
+        assertEquals(rows.take(3) to 0, backlinkRowsShown(rows.take(3), showAll = false))
+        assertEquals("ほか 2 件", backlinkMoreText(2))
+    }
+
+    /** 1行に収めると、文の後ろにあるリンクが「…」で切れて見えなくなる。目安より後ろのときだけ、リンクの手前を少し残して前を切る。 */
+    @Test
+    fun `リンクが目安の幅より後ろにあるときだけ、手前を少し残して前を切る`() {
+        val longFront = "あ".repeat(30) + "このノート を読む。"
+        val shortFront = "昨日 このノート を読む。"
+
+        assertEquals("…ああああああああこのノート を読む。", backlinkLine(row.copy(sentence = longFront, sentenceLink = 30..34)))
+        assertEquals(shortFront, backlinkLine(row.copy(sentence = shortFront, sentenceLink = 3..7)))
+        assertEquals("範囲が分からなければそのまま", longFront, backlinkLine(row.copy(sentence = longFront, sentenceLink = null)))
     }
 }

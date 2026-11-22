@@ -97,6 +97,57 @@ class KnowledgeIndexLinksTest {
         assertTrue(sentence.startsWith("…") && sentence.endsWith("…"))
     }
 
+    /** 1行に切り出すときと「このノート」へ言い換えるときに、文の中のリンクの位置を使う（→ features/backlinks.md §6）。 */
+    @Test
+    fun `1文の中でリンクの見える文字が占める範囲を持つ`() {
+        val aliased = extractIndexedLinks("前置き。今日は **[[習慣|よい習慣]]** を続けた。").single()
+        val plain = extractIndexedLinks("  [[習慣]] を続けた。").single()
+
+        assertEquals("よい習慣", aliased.sentence.substring(aliased.sentenceLink!!))
+        assertEquals("習慣", plain.sentence.substring(plain.sentenceLink!!))
+    }
+
+    /** 「このノート」へ替えてよい名前の長さは、取り出すときの記法で決める。別名は null（→ features/backlinks.md 判断6）。 */
+    @Test
+    fun `替えてよい名前の長さを記法で決め、別名には持たせない`() {
+        fun nameOf(body: String): String? = extractIndexedLinks(body).single().let { link ->
+            link.sentenceNameLength?.let { link.sentence.substring(link.sentenceLink!!.first, link.sentenceLink!!.first + it) }
+        }
+
+        assertEquals("習慣", nameOf("前置き [[習慣#まとめ]] を読む。"))
+        assertEquals(" 習慣 ", nameOf("前置き [[ 習慣 ]] を読む。"))
+        assertEquals("文頭の空白を落としたぶんだけ名前を縮める", "習慣 ", nameOf("[[ 習慣 ]] を読む。"))
+        assertEquals("見出しの # まで食わない", "習慣 ", nameOf("[[ 習慣 #まとめ]] を読む。"))
+        assertEquals("my note", nameOf("前置き [my note](my%20note.md) を読む。"))
+        assertEquals("習慣.md", nameOf("前置き [習慣.md](notes/習慣.md) を読む。"))
+        assertEquals(null, nameOf("前置き [[習慣|習慣#ま]] を読む。"))
+        assertEquals(null, nameOf("前置き [あの話](習慣.md) を読む。"))
+    }
+
+    /** 窓はリンクの頭から取るので、窓より長い名前は後ろが切れる。名前の長さは窓の中の分まで。 */
+    @Test
+    fun `窓より長い名前は窓の中の分までを名前の長さにする`() {
+        val huge = "い".repeat(400)
+        val link = extractIndexedLinks("前置き [[$huge]] の話。").single()
+
+        val range = checkNotNull(link.sentenceLink)
+        assertEquals(range.last - range.first + 1, link.sentenceNameLength)
+    }
+
+    /** 前を「…」で切った文でも、範囲は切った後の文の中を指す。窓の外へはみ出したリンクは、窓の中の分だけを指す。 */
+    @Test
+    fun `前を切った長い1文でも、リンクの範囲は切った後の文を指す`() {
+        val long = "あ".repeat(300)
+        val clipped = extractIndexedLinks("$long  [[習慣]]$long。").single()
+        val huge = "い".repeat(400)
+        val overflowing = extractIndexedLinks("前置き [[$huge]] の話。").single()
+
+        assertEquals("習慣", clipped.sentence.substring(clipped.sentenceLink!!))
+        val range = overflowing.sentenceLink!!
+        assertTrue("窓の中: $range", range.first >= 0 && range.last < overflowing.sentence.length)
+        assertTrue(overflowing.sentence.substring(range).all { it == 'い' })
+    }
+
     /** 強調の内側の句点も文の切れ目にする。切れ目を使わないと前後の文まで1文になり、160字で切るとリンクのある文が消える。 */
     @Test
     fun `複数の文を包む強調の中でも、リンクを含む1文だけを取り出す`() {

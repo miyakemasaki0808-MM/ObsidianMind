@@ -1,7 +1,7 @@
 # README の地図
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-11-14
+**作成:** 2026-09-08 / **更新:** 2026-11-22
 
 **位置づけ:** 15本ある `README.md` がそれぞれ何をしているかを一望する1枚。
 「どこに何が書いてあるか」は [document_inventory](03_document_inventory.md) が持ち、
@@ -40,7 +40,7 @@
 | [`docs/dev/system/README.md`](../dev/system/README.md) | 基盤設計 | 13 | 「全機能に効くもの」だけを置く基準 | ✅ | — |
 | [`docs/dev/decisions/README.md`](../dev/decisions/README.md) | 重大判断 | 52 | ADRの様式の正本。30行以内・設計の写しを置かない | ✅ | 間接 |
 | [`docs/dev/harness/experiments/README.md`](../dev/harness/experiments/README.md) | 実験の記録 | 20 | 開発の仕組みを変えて試した記録の置き場。1本に書く6つの見出し | ✅ | — |
-| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 140 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
+| [`docs/owner/README.md`](README.md) | アプリ俯瞰 | 141 | `owner/` の索引（番号＝読む順）＋アプリの機能一覧そのもの | ✅ | — |
 | [`docs/owner/journal/README.md`](journal/README.md) | 開発日誌 | 54 | 月別索引＋「現在状態の正本ではない」警告 | ✅ | — |
 
 `dev/README.md` は自分で「道標にすぎない」と書いている。索引の正本は
@@ -54,8 +54,8 @@ README 自身は ADR の形の検査から除外している関係を指す。�
 
 | 場所 | 見出し | 行数 | 何を持つか | 追跡 | 検査 |
 |---|---|---:|---|:--:|---|
-| [`docs/review/README.md`](../review/README.md) | レビュー | 82 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
-| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 304 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
+| [`docs/review/README.md`](../review/README.md) | レビュー | 66 | レビュー運用の正本＋今の作業のレビュー一覧。本文が消えても結果が追える。別の作業へ移ると前の行を消す | ✅ | **`ReviewFindingsLedgerTest`** |
+| [`docs/review/device_validation/README.md`](../review/device_validation/README.md) | Codex実機検証手順 | 308 | 権限範囲・準備・検証中・後処理・記録・**誰が行うか**。実機作業の唯一の手順書 | ✅ | **`DeviceValidationDocsTest`** |
 | [`docs/dev/harness/README.md`](../dev/harness/README.md) | 開発の仕組み（ハーネス） | 242 | コミット前のゲート・手順の置き場・レビューの往復・過去問での測定が、何をどう機械で守っているか。続けるか戻すかを決める試行の記録は `experiments/` が持つ | ✅ | 一部 |
 
 この3本だけは「開いたら別の場所へ行く」文書ではない。読んでそのとおりに動くための規則である。

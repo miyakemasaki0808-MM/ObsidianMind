@@ -4,6 +4,7 @@ import com.example.newproject.domain.BacklinkCandidate
 import com.example.newproject.domain.IndexedLink
 import com.example.newproject.domain.IndexedLinkKind
 import com.example.newproject.domain.IndexedNoteState
+import com.example.newproject.domain.NoteLink
 
 /**
  * [KnowledgeIndexStore] の本番実装。[database] は最初に使うときに作る — 作るだけなら I/O はしないが、
@@ -54,17 +55,29 @@ internal class RoomKnowledgeIndexStore(database: () -> KnowledgeIndexDatabase) :
     override suspend fun markFirstBuildDone(vaultKey: String) =
         dao.markFirstBuildDone(vaultKey)
 
-    override suspend fun backlinkCandidates(vaultKey: String, nameKey: String): List<BacklinkCandidate>? =
-        dao.linksNamedIn(vaultKey, nameKey)?.map { row ->
-            BacklinkCandidate(
-                sourcePath = row.sourcePath,
-                ordinal = row.ordinal,
-                kind = IndexedLinkKind.valueOf(row.kind),
-                target = row.target,
-                heading = row.heading,
-                sectionHeading = row.sectionHeading,
-                sectionHeadingOccurrence = row.sectionHeadingOccurrence,
-                sentence = row.sentence
+    override suspend fun backlinkLinks(vaultKey: String, nameKey: String, relativePath: String): BacklinkLinks? =
+        dao.backlinkLinksIn(vaultKey, nameKey, relativePath)?.let { (candidates, outgoing) ->
+            BacklinkLinks(
+                candidates = candidates.map { row ->
+                    BacklinkCandidate(
+                        sourcePath = row.sourcePath,
+                        ordinal = row.ordinal,
+                        kind = IndexedLinkKind.valueOf(row.kind),
+                        target = row.target,
+                        heading = row.heading,
+                        sectionHeading = row.sectionHeading,
+                        sectionHeadingOccurrence = row.sectionHeadingOccurrence,
+                        sentence = row.sentence,
+                        sentenceLink = sentenceLinkOf(row.sentenceLinkStart, row.sentenceLinkEnd),
+                        sentenceNameLength = row.sentenceNameLength
+                    )
+                },
+                outgoing = outgoing?.map { row ->
+                    when (IndexedLinkKind.valueOf(row.kind)) {
+                        IndexedLinkKind.NAME -> NoteLink.ByName(row.target, row.heading)
+                        IndexedLinkKind.PATH -> NoteLink.ByPath(row.target, row.heading)
+                    }
+                }
             )
         }
 }
@@ -78,6 +91,13 @@ private fun IndexedLink.toEntity(sourcePath: String) = IndexedLinkEntity(
     sectionHeading = sectionHeading,
     sectionHeadingOccurrence = sectionHeadingOccurrence,
     sentence = sentence,
+    sentenceLinkStart = sentenceLink?.first,
+    sentenceLinkEnd = sentenceLink?.let { it.last + 1 },
+    sentenceNameLength = sentenceNameLength,
     nameKey = keys.firstOrNull().orEmpty(),
     decodedNameKey = keys.getOrNull(1)
 )
+
+/** 1文の中のリンクの範囲を戻す。片方でも欠けていれば null。 */
+private fun sentenceLinkOf(start: Int?, endExclusive: Int?): IntRange? =
+    if (start != null && endExclusive != null && start < endExclusive) start until endExclusive else null
