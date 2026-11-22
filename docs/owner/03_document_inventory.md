@@ -1,7 +1,7 @@
 # 文書一覧
 
 **プロジェクト:** Vigilith AI
-**作成:** 2026-09-08 / **更新:** 2026-11-14。基準は `b8ee07f3`
+**作成:** 2026-09-08 / **更新:** 2026-11-22。基準は `d8bcab11`
 
 **位置づけ:** このリポジトリにどんな文書があり、それぞれ何を答えるかを一望する1枚。
 `owner/` の他文書と同じく、指示があったときに通しで見直す → [README](README.md)。
@@ -14,7 +14,7 @@
 
 ## 1. 全体
 
-**追跡対象の Markdown は 145本・約26,600行。** `CLAUDE.md`・`README.md` と `docs/` 配下の143本を数えた。
+**追跡対象の Markdown は 147本・約27,400行。** `CLAUDE.md`・`README.md` と `docs/` 配下の145本を数えた。
 作業ツリーにはこの他に追跡しないものが1本ある。Fable 5.1 の報告書である。実機検証の引き継ぎメモとレビュー本文は今は無い。
 `.claude/skills/` の作業手順3本は Markdown だが、`docs/` の外に置く作業標準書なので数に入れず、§2 の表に置き場として載せる。`.claude/eval/problems/` の過去問の課題文は、測定の入力であって文書ではない。
 `app/src/androidTest/assets/` の固定コーパス9本と README 3本は、テストの入力であって文書ではないので数に入れない。
@@ -27,15 +27,15 @@ docs/
 ├── owner/     (17本)      オーナーが読む俯瞰。検査に載せない
 │   ├── journal/  (6本)    開発日誌。README＋月別5本
 │   └── Fable5.1_report/   評価報告書の課題一覧。git 管理外の特別枠
-├── dev/       (93本)      判断の正本。ここが古くなると実害が出る
-│   ├── features/  (28本)  ユーザーから見える機能。README・様式＋仕様26本
-│   ├── system/    (14本)  横断的な基盤。README＋13本
+├── dev/       (95本)      判断の正本。ここが古くなると実害が出る
+│   ├── features/  (29本)  ユーザーから見える機能。README・様式＋仕様27本
+│   ├── system/    (15本)  横断的な基盤。README＋14本
 │   ├── decisions/  (7本)  ADR。README＋6本
 │   ├── lessons/   (36本)  教訓68件のうち、カードを持つ36本
 │   └── harness/    (4本)  開発の仕組みの正本。README＋実験の記録の README と記録2本
-├── _wip/       (6本)      進行中。リリース時に廃棄する。文書5本と補助スクリプト1本
-└── review/    (27本)      レビューと実機検証
-    └── device_validation/ (24本)  共通手順・簡易版・機能別ケース22本
+├── _wip/       (4本)      進行中。リリース時に廃棄する
+└── review/    (29本)      レビューと実機検証
+    └── device_validation/ (26本)  共通手順・簡易版・機能別ケース23本と、合成 Vault の生成手順1本
 ```
 
 **役目を終えた文書は消す。** 廃止した機能の設計書、答えの出た分析、正本ができた後の下書きは、全文を git 履歴に任せて消し、
@@ -61,7 +61,7 @@ docs/
 
 ---
 
-## 3. `docs/dev/features/` — 機能仕様。26本＋README＋様式
+## 3. `docs/dev/features/` — 機能仕様。27本＋README＋様式
 
 | 文書 | 機能 | 状態 |
 |---|---|---|
@@ -71,6 +71,7 @@ docs/
 | [note_summary](../dev/features/note_summary.md) | ノート要約 | 稼働中。主軸のAI。**同じ入力の要約は端末に保存する** |
 | [related_notes_ai](../dev/features/related_notes_ai.md) | 関連ノートAI推薦 | 稼働中 |
 | [rebuttal_sentence](../dev/features/rebuttal_sentence.md) | 反証の一文 | 実装済み・稼働中。関連ノートの本文から、今のノートと最も食い違う一文を選んで原文のまま出す。AIは選ぶだけ |
+| [backlinks](../dev/features/backlinks.md) | このノートのバックナンバー | 実装済み・実機検証済み。今のノートへリンクしているのに久しく読んでいないノートを3件、リンクを書いた1文つきで出す再会の入口。互いのリンクを除き、AIを使わない |
 | [ai_picker](../dev/features/ai_picker.md) | さがす | 稼働中。タイトル｜AI の2モード。フォルダを選ばず Vault 全体をタイトルで探し、AI は自然文から3件を選ぶ |
 | [section_ai_chat](../dev/features/section_ai_chat.md) | 部分要約 | 稼働中。見出しの 💬 は全節の要約を今の節から順に1回15節まで作り、面の「この節を要約」は今の節を1本作る。全節の要約は実機の本検証が未了。全画面には置かない |
 | [reflect_margin_memo](../dev/features/reflect_margin_memo.md) | 余白メモ | 実装済み・実機検証済み。ひとことの置き換え。AIを呼ばない唯一のReflect |
@@ -93,7 +94,7 @@ docs/
 | [dark_mode](../dev/features/dark_mode.md) | ダークモード | 稼働中・実機確認済み |
 | [README](../dev/features/README.md) ／ [_template](../dev/features/_template.md) | 索引と様式 | — |
 
-## 4. `docs/dev/system/` — 基盤設計。13本＋README
+## 4. `docs/dev/system/` — 基盤設計。14本＋README
 
 | 文書 | 対象領域 |
 |---|---|
@@ -106,6 +107,7 @@ docs/
 | [ai_input_excerpt](../dev/system/ai_input_excerpt.md) | AI入力の抜粋と予算 |
 | [ai_quality_measurement](../dev/system/ai_quality_measurement.md) | AI出力の採点。要約が原文のどこを落としたか |
 | [saf_boundary_gateway](../dev/system/saf_boundary_gateway.md) | SAF境界の不透明化。`model` を葉に保つ |
+| [knowledge_index](../dev/system/knowledge_index.md) | 知識索引。Vault から作り直せるリンクを端末内の DB に持つ。作り方・走査との突き合わせ・寿命・照会の整合 |
 | [markdown_rendering](../dev/system/markdown_rendering.md) | Markdown解析の準拠先。入力は先頭の BOM を外した本文 |
 | [tab_navigation](../dev/system/tab_navigation.md) | タブ・ナビゲーション |
 | [instrumentation_testing](../dev/system/instrumentation_testing.md) | instrumentation テストの方針 |
@@ -146,19 +148,18 @@ docs/
 > **検査列が空の教訓は、規約ではなく参考である。** このリポジトリで規則が守られたのは
 > 検査に載せたときだけ、というのが実績 → `L29`。両者を同じ強さで扱わない。
 
-## 7. `docs/_wip/` — 進行中。文書5本と補助スクリプト1本・リリース時に廃棄
+## 7. `docs/_wip/` — 進行中。文書4本・リリース時に廃棄
 
 | 文書 | 答える問い |
 |---|---|
-| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在9件で、中2件・低6件・超低1件。順序は書かない |
+| [current_issues](../_wip/current_issues.md) | いま何が壊れている／足りないのか。現在11件で、中4件・低6件・超低1件。順序は書かない |
 | [roadmap](../_wip/roadmap.md) | 何をどの順でやるか。Now／Next／Later |
-| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。693行・使い捨て |
+| [feature_ideas](../_wip/feature_ideas.md) | まだ作っていない機能の候補。657行・使い捨て |
 | [fable51_triage](../_wip/fable51_triage.md) | Fable 5.1 の課題候補29件の処遇。今回限りの特別枠。残る行の内訳は本体の表が持つ |
-| [random_scan_options](../_wip/random_scan_options.md) | 大きな Vault の最初のランダム表示を速くする3案の比較。Codex の分析で、オーナー判断待ち。測り直し用の `random_scan_fixture.py` を伴う。使い捨て |
 
 **恒久文書から `_wip/` の項目IDを参照しない。** 廃棄した瞬間に意味が消えるため。
 
-## 8. `docs/review/` — レビューと実機検証。27本
+## 8. `docs/review/` — レビューと実機検証。29本
 
 | 文書 | 役割 | 追跡 |
 |---|---|---|
@@ -168,7 +169,8 @@ docs/
 | `2026-*.md` | 最新レビュー本文1本だけ。書き換えない。今は無い | ❌ 未追跡 |
 | [device_validation/README](../review/device_validation/README.md) | Codex実機検証の共通手順 | ✅ |
 | [device_validation/quick_check](../review/device_validation/quick_check.md) | 実機検証の簡易版。選抜規則とスモークセット | ✅ |
-| device_validation の機能別ケース22本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・結晶・要約の入口と机の画面・さがす・面を越える引用・机の記憶・全節の要約・**関連ノートの根拠**。結果は持たない | ✅ |
+| device_validation の機能別ケース23本 | 冊子・蒸留・退避・画像・再会・AI状態UX・AI予算・起動・起動の再生成・分野色・ネットワーク権限・要約の基準線・要約の保存・痕跡の孤児削除・余白メモ・結晶・要約の入口と机の画面・さがす・面を越える引用・机の記憶・全節の要約・関連ノートの根拠・**知識索引とバックナンバー**。結果は持たない | ✅ |
+| [device_validation/scale_vault_fixture.py](../review/device_validation/scale_vault_fixture.py) | 500本・3,000本の合成 Vault の生成手順。索引の作成時間とランダム表示を測るときに使う | ✅ |
 | `device_validation/progress.md` | 実機検証の引き継ぎメモ。検証の間だけ置く | ❌ 未追跡 |
 | `device_validation/evidence/` | スクリーンショット・UIダンプ・引き継ぎメモ、再判定に使う fixture の原本 | ❌ 未追跡 |
 
