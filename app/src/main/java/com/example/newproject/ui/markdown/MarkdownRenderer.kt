@@ -5,11 +5,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -35,6 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
@@ -46,6 +51,7 @@ import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.domain.markdown.MarkdownBlock
+import com.example.newproject.domain.markdown.QuoteContent
 import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.sourceText
@@ -145,7 +151,7 @@ internal fun MarkdownNoteContent(
                             is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                             is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
                             is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
-                            is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.lines)
+                            is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.content)
                             is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
                         }
                     }
@@ -194,30 +200,92 @@ internal fun MarkdownHorizontalRule() {
     )
 }
 
+/**
+ * 引用。コールアウトの頭と中のブロックを、縦線の内側に並べる（→ docs/dev/system/markdown_rendering.md §8）。
+ * 中の並べ方は見開きの計測（`measureSpreadBlock`）と同じ寸法で組む。
+ */
 @Composable
-internal fun MarkdownBlockquote(lines: List<String>) {
-    MarkdownBlockquoteLines(lines.map { rememberInline(it) })
+internal fun MarkdownBlockquote(content: QuoteContent) {
+    QuoteFrame {
+        content.callout?.let { MarkdownCalloutHeader(calloutLabelOf(it), rememberInline(it.title), showLabel = true) }
+        content.blocks.forEach { MarkdownQuoteChild(it) }
+    }
 }
 
-/** 引用の行。見開きは割った切れ端の行をこれで描く。 */
+/**
+ * 引用の縦線と、その内側の並び。縦線は内側の高さに合わせて描く（中に表やリストが入っても、内側の高さを測り直さずに済む）。
+ * 見開きは割った切れ端をこれで囲む。
+ */
 @Composable
-internal fun MarkdownBlockquoteLines(lines: List<AnnotatedString>) {
-    // バーの高さはテキスト側に追従させる。以前は行数×固定値で計算しており、
-    // 長い行が画面幅で折り返すとバーがテキストより短くなっていた。
-    Row(
+internal fun QuoteFrame(content: @Composable ColumnScope.() -> Unit) {
+    val barColor = CheckboxOutline
+    Column(
         modifier = Modifier
             .padding(vertical = MarkdownBodyStyle.QuoteVerticalPadding)
-            .height(IntrinsicSize.Min)
-    ) {
-        Box(
-            modifier = Modifier
-                .width(MarkdownBodyStyle.QuoteBarWidth)
-                .fillMaxHeight()
-                .background(CheckboxOutline, RoundedCornerShape(2.dp))
-        )
-        Column(modifier = Modifier.padding(start = MarkdownBodyStyle.QuoteTextStart)) {
-            val style = LocalTextStyle.current.merge(MarkdownBodyStyle.Quote)
-            lines.forEach { line -> Text(text = line, color = OnSurfaceSubtle, style = style) }
+            .drawBehind {
+                drawRoundRect(
+                    color = barColor,
+                    size = Size(MarkdownBodyStyle.QuoteBarWidth.toPx(), size.height),
+                    cornerRadius = CornerRadius(2.dp.toPx())
+                )
+            }
+            .padding(start = MarkdownBodyStyle.QuoteBarWidth + MarkdownBodyStyle.QuoteTextStart),
+        verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing),
+        content = content
+    )
+}
+
+/** 引用の中の1ブロック。段落は行ごとに、リストは引用の文字で描く。 */
+@Composable
+private fun MarkdownQuoteChild(block: MarkdownBlock) {
+    when (block) {
+        is MarkdownBlock.Paragraph      -> MarkdownQuoteLines(block.text.lines().map { rememberInline(it) })
+        is MarkdownBlock.ListBlock      -> MarkdownList(block.items, quoted = true)
+        is MarkdownBlock.Blockquote     -> MarkdownBlockquote(block.content)
+        is MarkdownBlock.Heading        -> MarkdownHeading(block)
+        is MarkdownBlock.Table          -> MarkdownTable(block.headers, block.rows)
+        is MarkdownBlock.CodeBlock      -> MarkdownCodeBlock(block.code)
+        MarkdownBlock.HorizontalRule    -> MarkdownHorizontalRule()
+        // 中身の解析が画像を段落へ替えているので届かない。届いても原文の文字で出す。
+        is MarkdownBlock.Image          -> MarkdownQuoteLines(listOf(rememberInline(block.sourceText())))
+    }
+}
+
+/** 引用の中の行。**1行ずつ別の文字として描く**（照らし直しの文字は行の間に何も挟まない → `MemoPassages`）。見開きは割った切れ端の行をこれで描く。 */
+@Composable
+internal fun MarkdownQuoteLines(lines: List<AnnotatedString>) {
+    val style = LocalTextStyle.current.merge(MarkdownBodyStyle.Quote)
+    Column {
+        lines.forEach { line -> Text(text = line, color = OnSurfaceSubtle, style = style) }
+    }
+}
+
+/**
+ * コールアウトの頭。種類の記号と言葉の後に題を続ける。**記号と言葉は選べない**（ノートに無い文字 → [CalloutLabel]）。
+ * [showLabel] が false なら言葉の幅だけ空ける（見開きで、前のページから続く題の続き）。
+ */
+@Composable
+internal fun MarkdownCalloutHeader(label: CalloutLabel, title: AnnotatedString, showLabel: Boolean) {
+    Row {
+        // 選べない層は配置を持たないので、言葉の文字はこの並びの子のまま題と基線で揃う。
+        val baseline = Modifier.alignByBaseline()
+        DisableSelection {
+            Text(
+                text = "${label.mark} ${label.text}",
+                color = OnSurfaceSubtle,
+                style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutLabelText),
+                modifier = baseline
+                    .then(if (showLabel) Modifier.clearAndSetSemantics { contentDescription = label.text } else Modifier.alpha(0f).clearAndSetSemantics { })
+            )
+        }
+        if (title.isNotEmpty()) {
+            Spacer(modifier = Modifier.width(MarkdownBodyStyle.CalloutLabelGap))
+            Text(
+                text = title,
+                color = OnSurface,
+                style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutTitleText),
+                modifier = Modifier.alignByBaseline().weight(1f)
+            )
         }
     }
 }
@@ -293,17 +361,19 @@ internal fun MarkdownParagraphText(text: AnnotatedString) {
     Text(text = text, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph))
 }
 
+/** [quoted] なら引用の中のリストで、文字を引用の書式と色で描く。 */
 @Composable
-internal fun MarkdownList(items: List<ListItem>) {
-    MarkdownListRows(items.map { MarkdownListRow(it, rememberInline(it.text), showMarker = true) })
+internal fun MarkdownList(items: List<ListItem>, quoted: Boolean = false) {
+    MarkdownListRows(items.map { MarkdownListRow(it, rememberInline(it.text), showMarker = true) }, quoted)
 }
 
 /** リストの1項目の描き方。[showMarker] が false なら記号の幅だけ空ける（見開きで、前のページから続く項目の続き）。 */
 internal data class MarkdownListRow(val item: ListItem, val text: AnnotatedString, val showMarker: Boolean)
 
 @Composable
-internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
-    val style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph)
+internal fun MarkdownListRows(rows: List<MarkdownListRow>, quoted: Boolean = false) {
+    val style = LocalTextStyle.current.merge(listTextStyle(quoted))
+    val textColor = if (quoted) OnSurfaceSubtle else OnSurface
     Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.ListItemSpacing)) {
         rows.forEach { row ->
             val item = row.item
@@ -319,7 +389,7 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
                             // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
                             // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
                             text = listMarkerText(item),
-                            color = OnSurface,
+                            color = textColor,
                             style = style,
                             modifier = markerAlpha
                         )
@@ -338,7 +408,7 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
                 Spacer(modifier = Modifier.width(MarkdownBodyStyle.ListMarkerGap))
                 Text(
                     text = row.text,
-                    color = if (checked == true) OnSurfaceFaint else OnSurface,
+                    color = if (checked == true) OnSurfaceFaint else textColor,
                     style = style,
                     textDecoration = if (checked == true) TextDecoration.LineThrough else TextDecoration.None,
                     modifier = Modifier.weight(1f)
@@ -347,6 +417,9 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>) {
         }
     }
 }
+
+/** リストの文字の書式。引用の中は引用の書式で、見開きの計測も同じものを読む。 */
+internal fun listTextStyle(quoted: Boolean): TextStyle = if (quoted) MarkdownBodyStyle.Quote else MarkdownBodyStyle.Paragraph
 
 @Composable
 internal fun MarkdownCodeBlock(code: String) {

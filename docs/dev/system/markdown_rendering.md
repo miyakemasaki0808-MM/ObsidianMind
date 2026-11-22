@@ -1,9 +1,9 @@
-# 設計思想 — Markdown解析（準拠先・リスト構造）
+# 設計思想 — Markdown解析（準拠先・リスト構造・引用の中）
 
-**状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。ノートへのリンクは押して開ける（実機確認済み）。**埋め込み・数式は未着手**
+**状態:** 実装済み・稼働中。リストの入れ子・番号・タスク混在と画像は実機確認済み。ノートへのリンクは押して開ける（実機確認済み）。引用とコールアウトの中を描く形（§8）は実装済み・実機未確認。**埋め込み・数式は未着手**
 **最終検証:** 2026-09-12 / `825f054`
-**関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
-**関連テスト:** `MarkdownParserTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `ThreadingScanTest`
+**関連コード:** `domain/markdown/MarkdownBlocks.kt` / `domain/markdown/QuoteContent.kt` / `domain/markdown/NoteSections.kt` / `ui/markdown/`
+**関連テスト:** `MarkdownParserTest` / `QuoteContentTest` / `QuoteConsumersUnchangedTest` / `CalloutLabelTest` / `InlineMarkdownTest` / `SurroundingContextTest` / `ThreadingScanTest`
 **正本:** この文書
 
 **対象領域:** `domain/markdown/`（ブロック解析・LLM入力への再構成）と `ui/markdown/`（描画）
@@ -14,7 +14,7 @@
 
 **まずここを明示する。** 本アプリのMarkdownパーサは CommonMark にも Obsidian にも準拠しておらず、
 **準拠を目標にもしていない。** 個別の記法を必要になった順に足してきた結果であり、
-段落の遅延継続・ネストした引用・setext見出しなどは今も未対応である。
+段落の遅延継続・setext見出し・字下げした引用（リストの項目の下の `  >`）などは今も未対応である。
 
 準拠しないことを選んだ理由は2つある。
 
@@ -144,7 +144,73 @@ AI入力にも使われている**ことだった（→ [ai_input_excerpt](ai_in
 | 画像 `![alt](path)` / `![[image.png]]` | **実装済み**（単独行のみ） → [note_image_rendering](../features/note_image_rendering.md) |
 | 表のセルの中の `\|` | **実装済み。** `\|` では列を割らず、セルに `\|` のまま残す。目次の表の `[[ノート\|表示名]]` がリンクとして描かれる（→ [note_links](../features/note_links.md) §5） |
 | 埋め込み `![[note]]`・数式 | 未着手。画像と同じ性質だが、循環参照とレンダラ依存が別問題として付く |
-| 段落の遅延継続・ネスト引用・setext見出し | 未着手。§1のとおり規格適合は目標にしていない |
+| 引用の中の表・リスト・入れ子の引用・コールアウト | **実装済み・実機未確認**（→ §8）。畳み（`+`・`-`）と、両端の `\|` を省いた表は扱わない |
+| 段落の遅延継続・setext見出し・字下げした引用 | 未着手。§1のとおり規格適合は目標にしていない |
 
 **クリック可能リンクだけは他と性質が違う。** `[[wikilink]]` のタップでVault内ノートへ飛べると
 Rediscover→Reflect のループに直接効くため、単なる表示拡張ではない。
+
+## 8. 判断4 — 引用の中は、描く側だけが読み直す
+
+引用は `>` を外した**行の並び**として持ち、1行ずつ文字のまま描いていた。そのため引用やコールアウトの中の表は `|` の並びに、
+箇条は `- ` のままに、コールアウトの頭は `[!quote] 題` の文字のまま出ていた。Obsidian で整えたノートほど記号のまま読まれる。
+
+**原文の行（`Blockquote.lines`）は残し、描くための中身（`content`、[`parseQuoteContent`](../../../app/src/main/java/com/example/newproject/domain/markdown/QuoteContent.kt)）を解析のときに一緒に作る。**
+
+| 読み手 | 読むもの | 変わるか |
+|---|---|---|
+| AI への書き戻し（抜粋・要約）・知識索引のリンク・反証の一文の候補・他人の言葉の判定 | 原文の行 | **変わらない**（`QuoteConsumersUnchangedTest` が出力を固定） |
+| 本文・見開き・並べ読みの描画、引用の照らし直しの文字 | 描くための中身 | 中の表・箇条・入れ子の引用・コールアウトの頭を描く |
+
+- **AI へ渡す文を変えない。** AI の出来は前後を比べる物差しが無い（→ [ai_quality_measurement](ai_quality_measurement.md)）ので、変えると良し悪しを言えない。
+  描く側だけを直し、AI 入力の扱いは物差しができてから別に決める
+- **本文のブロック番号を変えない。** 引用は中に何があっても1ブロックのままなので、読書の記録・続きから読む・見開きの読む位置・余白メモの位置の手掛かりはそのまま
+- **中身は解析のときに作る。** 描く Main で解析しない（→ [lessons L13](../lessons.md#l13-純粋と軽いは別)）。中身は行から決まるので、等しさは行で決まる
+
+### 8.1 中の読み方
+
+- 中は本文と同じ規則でブロックに読む（[`parseBlockLines`](../../../app/src/main/java/com/example/newproject/domain/markdown/MarkdownBlocks.kt)）。**frontmatter は外さない**（`> ---` は区切り線）
+- **段落の行はつながず、1行ずつ描く。** 引用の見え方（行ごとに改行）を保つため。照らし直しの文字も行の間に何も挟まない（`MemoPassages` の `visibleText`）
+- **中の画像は原文の文字のまま描く。** 画像の寸法は本文のブロック番号で共有しているので、引用の中では描けない
+- **入れ子は8段まで中を読む**（`MAX_QUOTE_DEPTH`）。それより深い行は文字のまま。`>` を何千も重ねた行で再帰が尽きないように
+
+### 8.2 コールアウト
+
+1行目が `[!種類]` なら頭として読み、種類・題・中身に分ける。**畳み（`+`・`-`）は読まず、いつも開いて描く** —
+2026-11-22 に Vault の写しを数えると、閉じた状態で始まる `-` は0個だった。
+
+- **種類は、読み手にとっての役割で5つにまとめる。** 大文字と小文字は区別しない
+
+  | 役割 | 記号と言葉 | 種類 |
+  |---|---|---|
+  | 引用 | ❝ 引用 | quote・cite |
+  | まとめ | ≡ まとめ | note・info・summary・abstract・tldr・important |
+  | 問い | ？ 問い | question・faq・help |
+  | 注意 | ⚠ 注意 | warning・caution・attention・danger・error・bug・failure・fail・missing |
+  | 例・ヒント | ☞ 例・ヒント | example・tip・tips・hint・todo・success・check・done |
+
+  **important はまとめ、tips は例・ヒントに置く。** important は Obsidian では tip の別名だが、Vault では「2章まとめ」のような題に使われている。
+  tips は Obsidian の種類に無いが、tip と同じに使われている。**知らない種類は、まとめの記号に書かれたままの種類名を出す**
+- **頭は「記号・言葉・題」の順。見分けの主役は言葉で、記号は飾り**（色に頼らない → [ui_design_principles](ui_design_principles.md) §1 の 1.4.1）。
+  読み上げは言葉だけを読む。記号は言葉と同じ色で塗れる文字に限り、絵文字の形では出さない（⚠ には U+FE0E を付ける）。
+  記号と言葉の対応は [`calloutLabelOf`](../../../app/src/main/java/com/example/newproject/ui/markdown/CalloutLabel.kt)
+- **記号と言葉は選べない。** ノートに無い文字なので、選択のコピーに入ると、引用の照らし直しで元の場所が見つからない（→ [margin_quote](../features/margin_quote.md) §11）
+- **種類を読む正規表現は1つ**（`CalloutHeaderRegex`）。他人の言葉の判定（`quotationLines`）も役割で引用かを決める。
+  記法を落とす `MarkdownPlainText` は種類を読まずに印を消すだけなので、別のまま
+- **形は今の引用のまま**（縦線と、控えめな色の斜体の文字）。題は太字で続ける。種類ごとの色・紙に敷く面・独自のアイコン・引用の斜体は決めていない
+
+### 8.3 見開き
+
+引用は、子（コールアウトの頭と中のブロック）の単位を並べた1ブロックとして組む（[`quoteSpreadBlock`](../../../app/src/main/java/com/example/newproject/ui/screen/SpreadPagination.kt)）。
+
+- 子の間の余白と子の余白（コードの面・入れ子の引用の上下）は、子の最初の単位に足す
+- **子の途中から始まる切れ端は、その子の余白をもう一度描く**ので、その分を行ごとに持ち（`resumePadding`）、ページへ詰めるときに足す
+- **子の表の行は割らない。** ページより高い行は、ページの下へはみ出す（引用の中で1行がページより高い表は、実際のノートでまず無い）
+
+### 8.4 引き受けたこと
+
+- **すでに付けた引用のうち、引用の中から選んだものは、見つからない側に倒れることがある。** 照らし直しの文字が、描く形に合わせて変わった
+  （コールアウトの印が消え、箇条は `•` になり、表はセルをつなぐ）。引用の文字そのものは残り、見つからないことが見える（→ [margin_quote](../features/margin_quote.md) 判断10）
+- **採らなかった案:**
+  - コールアウトを別のブロック型にする — 本文のブロック番号とすべての読み手の分岐が変わり、AI 入力を固定できない
+  - 引用の中の段落を空白でつなぐ — 今の引用の行ごとの見え方が変わり、照らし直しの文字も変わる

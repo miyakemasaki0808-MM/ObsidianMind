@@ -16,6 +16,10 @@ import com.example.newproject.ui.screen.SpreadPage
 import com.example.newproject.ui.screen.SpreadProgress
 import com.example.newproject.ui.screen.SpreadReading
 import com.example.newproject.ui.screen.SpreadTableRow
+import com.example.newproject.ui.screen.quoteSpreadBlock
+import com.example.newproject.ui.screen.quoteChildSlice
+import com.example.newproject.ui.screen.SpreadSlice
+import com.example.newproject.ui.screen.QuoteChildLayout
 import com.example.newproject.ui.screen.anchorAfterReparse
 import com.example.newproject.ui.screen.anchorAfterRequest
 import com.example.newproject.ui.screen.anchorAfterTurn
@@ -450,6 +454,89 @@ class SpreadPaginationTest {
         assertFalse(spreadAllowed(pageTextWidthDp = 360f, pageTextHeightDp = 250f, fontScale = 1.0f, maxBlockChars = 500))
         assertTrue(spreadAllowed(pageTextWidthDp = 360f, pageTextHeightDp = 780f, fontScale = 1.0f, maxBlockChars = SPREAD_MAX_BLOCK_CHARS))
         assertFalse(spreadAllowed(pageTextWidthDp = 360f, pageTextHeightDp = 780f, fontScale = 1.0f, maxBlockChars = SPREAD_MAX_BLOCK_CHARS + 1))
+    }
+
+    // ── 引用の中（→ docs/dev/system/markdown_rendering.md §8）──────────────────
+
+    /**
+     * 引用の子の単位をそのまま引用の単位にする。子の間の余白と子の余白は子の最初の単位に足し、
+     * 子の途中から始まる切れ端に足す余白（子の余白）を持つ。表の行は割らずに1単位にする。
+     */
+    @Test
+    fun `引用は子の単位を並べ、子の間と子の余白を最初の単位に足す`() {
+        val header = SpreadBlock.Lines(listOf(SpreadLine(12f, 0)), textLength = 4)
+        val code = SpreadBlock.Lines(List(3) { SpreadLine(10f, it * 5) }, textLength = 15, fragmentPadding = 24f)
+        val table = SpreadBlock.Table(listOf(tableRow(listOf(2, 1), 10f, 6f, 0), tableRow(listOf(1, 1), 10f, 6f, 30)), textLength = 50)
+
+        val (quote, layouts) = quoteSpreadBlock(listOf(header, lines(2), code, table), spacing = 8f, padding = 8f)
+
+        assertEquals(
+            listOf(
+                SpreadLine(12f, 0),
+                SpreadLine(18f, 5), SpreadLine(10f, 25),
+                SpreadLine(42f, 46), SpreadLine(10f, 51), SpreadLine(10f, 56),
+                SpreadLine(34f, 62), SpreadLine(16f, 92)
+            ),
+            quote.lines
+        )
+        assertEquals(listOf(0f, 0f, 0f, 0f, 24f, 24f, 0f, 0f), quote.resumePadding)
+        assertEquals(112, quote.textLength)
+        assertEquals(8f, quote.fragmentPadding)
+        assertEquals(
+            listOf(
+                QuoteChildLayout(0, listOf(0), 4),
+                QuoteChildLayout(1, listOf(0, 20), 40),
+                QuoteChildLayout(3, listOf(0, 5, 10), 15),
+                QuoteChildLayout(6, listOf(0, 30), 50)
+            ),
+            layouts
+        )
+    }
+
+    @Test
+    fun `入れ子の引用の途中から始まる切れ端は、外と内の子の余白を足す`() {
+        // 内の引用（上下の余白8）の中に、コード（余白24）が入っている。
+        val inner = SpreadBlock.Lines(List(3) { SpreadLine(10f, it * 5) }, textLength = 15, fragmentPadding = 8f, resumePadding = listOf(0f, 24f, 24f))
+
+        val (outer, _) = quoteSpreadBlock(listOf(inner), spacing = 8f, padding = 8f)
+
+        assertEquals(listOf(0f, 32f, 32f), outer.resumePadding)
+    }
+
+    @Test
+    fun `空の引用は単位を持たず、ページに置かない`() {
+        val (quote, layouts) = quoteSpreadBlock(emptyList(), spacing = 8f, padding = 8f)
+
+        assertEquals(0, quote.textLength)
+        assertTrue(layouts.isEmpty())
+        assertEquals(listOf(SpreadPage(listOf(SpreadSlice(1, 0, 1, 0, 20, 10f)))), paginateSpread(listOf(quote, lines(1)), 100f, blockSpacing = 8f))
+    }
+
+    @Test
+    fun `引用の切れ端から、子が出す単位と文字を子の側で数え直す`() {
+        val layouts = listOf(
+            QuoteChildLayout(0, listOf(0), 4),
+            QuoteChildLayout(1, listOf(0, 20), 40),
+            QuoteChildLayout(3, listOf(0, 5, 10), 15),
+            QuoteChildLayout(6, listOf(0, 30), 50)
+        )
+        val slice = SpreadSlice(blockIndex = 2, unitStart = 2, unitEnd = 5, charStart = 25, charEnd = 56, height = 60f)
+
+        assertEquals(
+            listOf(null, SpreadSlice(2, 1, 2, 20, 40, 0f), SpreadSlice(2, 0, 2, 0, 10, 0f), null),
+            layouts.map { quoteChildSlice(slice, it) }
+        )
+    }
+
+    /** 子の途中から始まるページは、その子の余白をもう一度描くので、その分だけ早く次のページへ送る。 */
+    @Test
+    fun `子の途中から始まる切れ端は、子の余白を足してページへ詰める`() {
+        val quote = SpreadBlock.Lines(List(6) { SpreadLine(10f, it * 10) }, textLength = 60, resumePadding = listOf(0f, 0f, 24f, 24f, 24f, 24f))
+
+        val pages = paginateSpread(listOf(quote), leftPageHeight = 40f, blockSpacing = 8f)
+
+        assertEquals(listOf(0 until 4, 4 until 5, 5 until 6), pages.map { page -> page.slices.single().let { it.unitStart until it.unitEnd } })
+        assertEquals(listOf(40f, 34f, 34f), pages.map { it.slices.single().height })
     }
 
     // ── 補助 ──────────────────────────────────────────────────────────

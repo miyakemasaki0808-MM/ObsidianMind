@@ -1,5 +1,9 @@
 package com.example.newproject.domain
 
+import com.example.newproject.domain.markdown.CalloutRole
+import com.example.newproject.domain.markdown.calloutRoleOf
+import com.example.newproject.domain.markdown.calloutTypeOf
+
 // ---------------------------------------------------------------------------
 // 他人の言葉を引いた行を見分ける純関数。**記法を落とす前の行で**判定する（落とすと地の文と見分けられない）。
 // 再会カードは引用した問いを書き手の問いにしない（→ features/reunion_card.md §5「引用した問いは書き手の問いにしない」）。
@@ -158,7 +162,7 @@ private fun interruptsParagraph(line: String, from: Int): Boolean {
 
 /** 引用を開いた行の中身が、書き手のコールアウト（引用・出典以外の種類）か。 */
 private fun isWritersCallout(content: String): Boolean =
-    CALLOUT_TYPE.find(content)?.groupValues?.get(1)?.lowercase()?.let { it !in QUOTATION_CALLOUTS } ?: false
+    calloutTypeOf(content)?.let { calloutRoleOf(it) != CalloutRole.Quote } ?: false
 
 /**
  * Markdown の空行か（タブは広げた後）。半角空白だけの行に限る。`isBlank` は全角空白やノーブレークスペースも空白とみなすが、
@@ -184,8 +188,6 @@ private const val MAX_MARKER_INDENT = 3
 private const val INDENTED_CODE = 4
 private const val TAB_STOP = 4
 private const val BULLETS = "-*+"
-private val QUOTATION_CALLOUTS = setOf("quote", "cite")
-private val CALLOUT_TYPE = Regex("""^ {0,3}\[!([^\]\s]+)][+-]?""")
 private val LIST_MARKER = Regex("""^( {0,3})([-*+]|\d{1,9}[.)])(?= |$)""")
 private val ATX_HEADING = Regex("""^ {0,3}#{1,6}(?: |$)""")
 private val THEMATIC_BREAK = Regex("""^ {0,3}([-*_])(?: *\1){2,} *$""")

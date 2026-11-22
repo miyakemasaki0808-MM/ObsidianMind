@@ -2,6 +2,7 @@ package com.example.newproject.domain
 
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.NoteSectionModel
+import com.example.newproject.domain.markdown.QuoteContent
 import com.example.newproject.domain.markdown.inlineVisibleText
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.model.utf8ByteCount
@@ -327,7 +328,7 @@ private fun MarkdownBlock.visibleText(): String = when (this) {
     is MarkdownBlock.ListBlock -> items.joinToString("") { item ->
         (if (item.checked == null) listMarkerText(item) else "") + inlineVisibleText(item.text)
     }
-    is MarkdownBlock.Blockquote -> lines.joinToString("") { inlineVisibleText(it) }
+    is MarkdownBlock.Blockquote -> content.visibleText()
     is MarkdownBlock.CodeBlock -> code
     is MarkdownBlock.Table -> (listOf(headers) + rows).joinToString("") { row ->
         // 表は見出しの列の数にそろえて描く（足りない列は空、多い列は描かない）。
@@ -336,6 +337,14 @@ private fun MarkdownBlock.visibleText(): String = when (this) {
     is MarkdownBlock.Image -> ""
     MarkdownBlock.HorizontalRule -> ""
 }
+
+/**
+ * 引用の中身に見える文字。コールアウトの頭は題だけ（種類の言葉と記号は選べない）、中の段落は行ごとに描くので行の間に何も挟まない。
+ */
+private fun QuoteContent.visibleText(): String =
+    (callout?.let { inlineVisibleText(it.title) } ?: "") + blocks.joinToString("") { block ->
+        if (block is MarkdownBlock.Paragraph) block.text.lines().joinToString("") { inlineVisibleText(it) } else block.visibleText()
+    }
 
 private fun MarkdownBlock.isReadableText(): Boolean = when (this) {
     is MarkdownBlock.Paragraph, is MarkdownBlock.ListBlock, is MarkdownBlock.Blockquote, is MarkdownBlock.CodeBlock -> true

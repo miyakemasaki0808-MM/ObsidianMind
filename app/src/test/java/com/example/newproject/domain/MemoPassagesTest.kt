@@ -348,4 +348,24 @@ class MemoPassagesTest {
             locatePassage(MemoPassage.Seen("意志の力に頼ると"), "元の見出し", index, headings)
         )
     }
+
+    /**
+     * コールアウトの頭は題だけが選べる（種類の言葉と記号はノートに無い文字）。中のリスト・表・入れ子の引用も、
+     * 描く部品の順に何も挟まずにつなぐ（→ docs/dev/system/markdown_rendering.md §8）。
+     */
+    @Test
+    fun `コールアウトは題と中の部品を描く順に何も挟まずにつなぎ、種類の言葉は入れない`() {
+        val (index, _) = indexOf("> [!NOTE] **まとめ**の題\n> - 項目\n>\n> | a | b |\n> |---|---|\n> | 1 | 2 |\n> > 内の\n> > 行")
+
+        assertEquals("まとめの題•項目ab12内の行", index.texts[0])
+    }
+
+    @Test
+    fun `コールアウトの中の項目から引いた引用はそのブロックで確定する`() {
+        val (index, _) = indexOf("前の段落\n\n> [!tip] 演習\n> - 一つ目の項目\n> - 二つ目の項目")
+        val source = quoteSourceFor("二つ目の項目", selectedBlock = 1, index)
+
+        assertTrue(source is QuoteSource.Resolved)
+        assertEquals(QuoteContext("演習•一つ目の項目•", ""), (source as QuoteSource.Resolved).context)
+    }
 }
