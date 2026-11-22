@@ -20,8 +20,8 @@ internal sealed interface SpreadBlock {
      * [heading] なら、ページの末尾に見出しだけを残さない。
      * [minHeight] は最初の行を含む切れ端の最低の高さ（見出しの脇の印の枠。文字が低くても枠の高さを取る）。
      * [startAdjust] は行ごとの、その行から始まる切れ端（ブロックの途中から）の高さに足す量で、負にもなる。
-     * 引用の子の途中から始まれば子の余白（コードの面・入れ子の引用の上下）を足し、子の先頭から始まれば描かれない子の間の余白を引く
-     * （→ [quoteSpreadBlock]）。無い行は0。
+     * 引用の子の途中から始まれば子の余白（コードの面・入れ子の引用の上下）を足し、子の先頭やリストの項目の先頭から始まれば
+     * 描かれない間の余白を引く（→ [quoteSpreadBlock]・[listSpreadBlock]）。無い行は0。
      */
     data class Lines(
         val lines: List<SpreadLine>,
@@ -136,6 +136,23 @@ private fun SpreadBlock.fragmentHeight(unitStart: Int, height: Float): Float = w
     this !is SpreadBlock.Lines -> height
     unitStart == 0 -> max(height, minHeight)
     else -> height + startAdjust.getOrElse(unitStart) { 0f }
+}
+
+/**
+ * リストの項目の行（[items]、項目ごと）を1つのブロックへ並べる。項目の間の余白 [spacing] は2つ目以降の項目の最初の行に足し、
+ * その行から始まる切れ端では引く — 描画（`MarkdownListRows`）は切れ端の中の項目どうしの間にだけ余白を置く。
+ */
+internal fun listSpreadBlock(items: List<List<SpreadLine>>, spacing: Float, textLength: Int): SpreadBlock.Lines {
+    val lines = mutableListOf<SpreadLine>()
+    val adjust = mutableListOf<Float>()
+    items.forEachIndexed { index, itemLines ->
+        itemLines.forEachIndexed { k, line ->
+            val gap = if (k == 0 && index > 0) spacing else 0f
+            lines += if (gap > 0f) line.copy(height = line.height + gap) else line
+            adjust += if (gap > 0f) -gap else 0f
+        }
+    }
+    return SpreadBlock.Lines(lines, textLength, startAdjust = adjust)
 }
 
 /**

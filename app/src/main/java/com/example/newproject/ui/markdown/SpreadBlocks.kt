@@ -21,6 +21,7 @@ import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.domain.markdown.sourceText
 import com.example.newproject.ui.screen.QuoteChildLayout
+import com.example.newproject.ui.screen.listSpreadBlock
 import com.example.newproject.ui.screen.quoteChildSlice
 import com.example.newproject.ui.screen.quoteSpreadBlock
 import com.example.newproject.ui.screen.SpreadBlock
@@ -136,7 +137,7 @@ private fun measureBlock(
             val gap = px(MarkdownBodyStyle.ListMarkerGap.value)
             val texts = block.items.map { inline(it.text) }
             val offsets = texts.runningFold(0) { offset, text -> offset + text.length + 1 }.dropLast(1)
-            val lines = block.items.flatMapIndexed { index, item ->
+            val itemLines = block.items.mapIndexed { index, item ->
                 val marker = if (item.checked != null) {
                     px(MarkdownBodyStyle.CheckboxSize.value)
                 } else {
@@ -144,10 +145,10 @@ private fun measureBlock(
                 }
                 val indent = px(MarkdownBodyStyle.ListIndentPerDepth.value) * item.depth
                 val width = (widthPx - indent - marker - gap).roundToInt()
-                measure(texts[index], listTextStyle(quoted), width).spreadLines(offsets[index], if (index > 0) spacing else 0f)
+                measure(texts[index], listTextStyle(quoted), width).spreadLines(offsets[index])
             }
             MeasuredSpreadBlock(
-                SpreadBlock.Lines(lines, (offsets.lastOrNull() ?: 0) + (texts.lastOrNull()?.length ?: 0)),
+                listSpreadBlock(itemLines, spacing, (offsets.lastOrNull() ?: 0) + (texts.lastOrNull()?.length ?: 0)),
                 SpreadBlockRender.ListItems(block.items, texts, offsets, quoted)
             )
         }
@@ -260,7 +261,7 @@ private fun measureCalloutTitle(
     MeasuredSpreadBlock(SpreadBlock.Lines(lines, title.length), render)
 }
 
-/** 測った行を、見開きの行（高さと、ブロックの中の頭の位置）にする。[firstExtra] は最初の行に足す高さ（リストの項目の間など）。 */
+/** 測った行を、見開きの行（高さと、ブロックの中の頭の位置）にする。[firstExtra] は最初の行に足す高さ（コールアウトの題を言葉の基線へ揃えてずらした分）。 */
 private fun TextLayoutResult.spreadLines(offset: Int, firstExtra: Float = 0f): List<SpreadLine> =
     (0 until lineCount).map { line ->
         SpreadLine(

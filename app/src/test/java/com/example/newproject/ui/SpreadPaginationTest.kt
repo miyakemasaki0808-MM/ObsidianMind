@@ -17,6 +17,7 @@ import com.example.newproject.ui.screen.SpreadProgress
 import com.example.newproject.ui.screen.SpreadReading
 import com.example.newproject.ui.screen.SpreadTableRow
 import com.example.newproject.ui.screen.quoteSpreadBlock
+import com.example.newproject.ui.screen.listSpreadBlock
 import com.example.newproject.ui.screen.quoteChildSlice
 import com.example.newproject.ui.screen.SpreadSlice
 import com.example.newproject.ui.screen.QuoteChildLayout
@@ -569,6 +570,32 @@ class SpreadPaginationTest {
         val pages = paginateSpread(listOf(outer), leftPageHeight = 70f, blockSpacing = 8f)
         assertEquals(listOf(0 until 2, 2 until 3), pages.map { page -> page.slices.single().let { it.unitStart until it.unitEnd } })
         assertEquals(8f + 8f + 10f, pages[1].slices.single().height)
+    }
+
+    /** リストは項目の間の余白を2つ目以降の項目の最初の行に足し、その行から始まる切れ端では描かれないので引く。 */
+    @Test
+    fun `リストの項目の間の余白は、項目の先頭から始まる切れ端では数えない`() {
+        val list = listSpreadBlock(listOf(listOf(SpreadLine(24f, 0)), listOf(SpreadLine(24f, 5), SpreadLine(24f, 8))), spacing = 4f, textLength = 12)
+
+        assertEquals(listOf(SpreadLine(24f, 0), SpreadLine(28f, 5), SpreadLine(24f, 8)), list.lines)
+        assertEquals(listOf(0f, -4f, 0f), list.startAdjust)
+        // 本文に直に置いたリストも同じ。2項目目から始まるページは項目の文字の高さだけ。
+        val pages = paginateSpread(listOf(list), leftPageHeight = 30f, blockSpacing = 8f)
+        assertEquals(listOf(24f, 24f, 24f), pages.map { it.slices.single().height })
+    }
+
+    @Test
+    fun `引用の中のリストの項目の先頭から始まる切れ端は、項目の間の余白を数えない`() {
+        val list = listSpreadBlock(listOf(listOf(SpreadLine(24f, 0)), listOf(SpreadLine(24f, 5))), spacing = 4f, textLength = 9)
+        val (quote, _) = quoteSpreadBlock(listOf(list), spacing = 8f, padding = 8f)
+
+        val pages = paginateSpread(listOf(quote, SpreadBlock.Lines(listOf(SpreadLine(16f, 0)), 4)), leftPageHeight = 56f, blockSpacing = 8f)
+
+        assertEquals(2, pages.size)
+        assertEquals(32f, pages[1].slices.first().height)
+        // 入れ子の引用の中でも、内の上下の余白を足して項目の間の余白を引く。
+        val (inner, _) = quoteSpreadBlock(listOf(list), spacing = 8f, padding = 8f)
+        assertEquals(listOf(0f, 4f), quoteSpreadBlock(listOf(inner), spacing = 8f, padding = 8f).first.startAdjust)
     }
 
     // ── 補助 ──────────────────────────────────────────────────────────
