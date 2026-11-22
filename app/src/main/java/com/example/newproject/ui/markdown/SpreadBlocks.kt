@@ -229,15 +229,22 @@ private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, wi
 }
 
 /**
- * コールアウトの頭を測る（描く側の [MarkdownCalloutHeader] と同じ並べ方）。言葉と題は基線で揃うので、
- * 高いほうの基線に合わせて題をずらした分を最初の行に、言葉が題より下へ出る分を最後の行に足す。題が無ければ言葉の1行。
+ * コールアウトの頭を測る（描く側の [MarkdownCalloutHeader] と同じ並べ方）。題が無ければ言葉の1行。
+ * 言葉が長ければ題を次の行へ送り（→ [calloutTitleBelow]）、言葉の高さを題の最初の行に足す — 続きの切れ端には言葉を置かない。
+ * 同じ行なら言葉と題は基線で揃うので、高いほうの基線に合わせて題をずらした分を最初の行に、言葉が題より下へ出る分を最後の行に足す。
  */
 private fun measureCalloutHeader(label: CalloutLabel, title: AnnotatedString, inputs: SpreadMeasureInputs, widthPx: Int): MeasuredSpreadBlock =
     with(inputs) {
-        val labelLayout = measure(AnnotatedString("${label.mark} ${label.text}"), MarkdownBodyStyle.CalloutLabelText, widthPx)
+        val labelText = AnnotatedString("${label.mark} ${label.text}")
+        val labelLayout = measure(labelText, MarkdownBodyStyle.CalloutLabelText, widthPx)
         val render = SpreadBlockRender.CalloutHeader(label, title)
         if (title.isEmpty()) {
-            MeasuredSpreadBlock(SpreadBlock.Lines(listOf(SpreadLine(labelLayout.size.height.toFloat(), 0)), 0), render)
+            return@with MeasuredSpreadBlock(SpreadBlock.Lines(listOf(SpreadLine(labelLayout.size.height.toFloat(), 0)), 0), render)
+        }
+        val labelWidth = measurer.measure(labelText, baseStyle.merge(MarkdownBodyStyle.CalloutLabelText), density = density).size.width
+        if (calloutTitleBelow(labelWidth.toFloat(), widthPx.toFloat())) {
+            val titleLayout = measure(title, MarkdownBodyStyle.CalloutTitleText, widthPx)
+            MeasuredSpreadBlock(SpreadBlock.Lines(titleLayout.spreadLines(0, labelLayout.size.height.toFloat()), title.length), render)
         } else {
             measureCalloutTitle(labelLayout, title, render, inputs, widthPx)
         }
@@ -250,7 +257,8 @@ private fun measureCalloutTitle(
     inputs: SpreadMeasureInputs,
     widthPx: Int
 ): MeasuredSpreadBlock = with(inputs) {
-    val titleWidth = (widthPx - labelLayout.size.width - px(MarkdownBodyStyle.CalloutLabelGap.value)).roundToInt()
+    val gapPx = with(density) { MarkdownBodyStyle.CalloutLabelGap.roundToPx() }
+    val titleWidth = (widthPx - labelLayout.size.width - gapPx).coerceAtLeast(1)
     val titleLayout = measure(title, MarkdownBodyStyle.CalloutTitleText, titleWidth)
     val top = maxOf(labelLayout.firstBaseline, titleLayout.firstBaseline)
     val titleShift = top - titleLayout.firstBaseline

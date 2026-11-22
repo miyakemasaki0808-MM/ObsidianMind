@@ -4,8 +4,10 @@ import com.example.newproject.domain.markdown.Callout
 import com.example.newproject.domain.markdown.CalloutRole
 import com.example.newproject.ui.markdown.CalloutLabel
 import com.example.newproject.ui.markdown.calloutLabelOf
+import com.example.newproject.ui.markdown.calloutTitleBelow
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** コールアウトの頭の記号と言葉（→ docs/dev/system/markdown_rendering.md §8）。 */
@@ -18,7 +20,7 @@ class CalloutLabelTest {
                 CalloutLabel("❝", "引用"),
                 CalloutLabel("≡", "まとめ"),
                 CalloutLabel("？", "問い"),
-                CalloutLabel("⚠︎", "注意"),
+                CalloutLabel("⚠\uFE0E", "注意"),
                 CalloutLabel("☞", "例・ヒント")
             ),
             CalloutRole.entries.map { calloutLabelOf(Callout(it.name, it, "")) }
@@ -34,7 +36,16 @@ class CalloutLabelTest {
     @Test
     fun `記号は絵文字の形を指定しない`() {
         CalloutRole.entries.forEach { role ->
-            assertFalse(role.name, '️' in calloutLabelOf(Callout(role.name, role, "")).mark)
+            assertFalse(role.name, '\uFE0F' in calloutLabelOf(Callout(role.name, role, "")).mark)
         }
     }
+
+    /** 言葉が並びの幅の半分までなら題を同じ行に続け、超えたら題を次の行へ送る。題に同じ行の半分より狭い幅を渡さない。 */
+    @Test
+    fun `言葉が並びの幅の半分を超えたら題を次の行へ送る`() {
+        assertFalse(calloutTitleBelow(labelWidth = 150f, rowWidth = 300f))
+        assertTrue(calloutTitleBelow(labelWidth = 150.5f, rowWidth = 300f))
+        assertTrue(calloutTitleBelow(labelWidth = 900f, rowWidth = 300f))
+    }
 }
+

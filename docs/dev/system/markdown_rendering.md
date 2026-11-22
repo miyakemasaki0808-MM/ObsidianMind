@@ -198,6 +198,8 @@ Rediscover→Reflect のループに直接効くため、単なる表示拡張�
 - **記号と言葉は選べない。** ノートに無い文字なので、選択のコピーに入ると、引用の照らし直しで元の場所が見つからない（→ [margin_quote](../features/margin_quote.md) §11）
 - **種類を読む正規表現は1つ**（`CalloutHeaderRegex`）。他人の言葉の判定（`quotationLines`）も役割で引用かを決める。
   記法を落とす `MarkdownPlainText` は種類を読まずに印を消すだけなので、別のまま
+- **言葉が並びの幅の半分を超えたら、題を次の行へ送る**（[`calloutTitleBelow`](../../../app/src/main/java/com/example/newproject/ui/markdown/CalloutLabel.kt)）。
+  知らない種類名は書かれたまま出すので、長いと同じ行に題の幅が残らない。本文の並べ方と見開きの計測が同じ判定を使い、題はいつも正の幅を持つ
 - **形は今の引用のまま**（縦線と、控えめな色の斜体の文字）。題は太字で続ける。種類ごとの色・紙に敷く面・独自のアイコン・引用の斜体は決めていない
 
 ### 8.3 見開き

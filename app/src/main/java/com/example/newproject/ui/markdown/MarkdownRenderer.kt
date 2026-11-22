@@ -40,7 +40,10 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -261,31 +264,59 @@ internal fun MarkdownQuoteLines(lines: List<AnnotatedString>) {
 }
 
 /**
- * コールアウトの頭。種類の記号と言葉の後に題を続ける。**記号と言葉は選べない**（ノートに無い文字 → [CalloutLabel]）。
- * [showLabel] が false なら言葉の幅だけ空ける（見開きで、前のページから続く題の続き）。
+ * コールアウトの頭。種類の記号と言葉の後に題を続け、言葉と題の基線を揃える。**記号と言葉は選べない**（ノートに無い文字 → [CalloutLabel]）。
+ * 言葉が長ければ題を次の行へ送る（→ [calloutTitleBelow]）。題はいつも正の幅を持つ。
+ * [showLabel] が false なら見開きで前のページから続く題の続きで、同じ行なら言葉の幅だけ空け、次の行へ送った形なら言葉を置かない。
+ * 見開きの計測（`measureCalloutHeader`）はこの並べ方と同じ寸法で測る。
  */
 @Composable
 internal fun MarkdownCalloutHeader(label: CalloutLabel, title: AnnotatedString, showLabel: Boolean) {
-    Row {
-        // 選べない層は配置を持たないので、言葉の文字はこの並びの子のまま題と基線で揃う。
-        val baseline = Modifier.alignByBaseline()
-        DisableSelection {
-            Text(
-                text = "${label.mark} ${label.text}",
-                color = OnSurfaceSubtle,
-                style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutLabelText),
-                modifier = baseline
-                    .then(if (showLabel) Modifier.clearAndSetSemantics { contentDescription = label.text } else Modifier.alpha(0f).clearAndSetSemantics { })
-            )
+    val gap = MarkdownBodyStyle.CalloutLabelGap
+    Layout(
+        content = {
+            DisableSelection {
+                Text(
+                    text = "${label.mark} ${label.text}",
+                    color = OnSurfaceSubtle,
+                    style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutLabelText),
+                    modifier = if (showLabel) Modifier.clearAndSetSemantics { contentDescription = label.text } else Modifier.alpha(0f).clearAndSetSemantics { }
+                )
+            }
+            if (title.isNotEmpty()) {
+                Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutTitleText))
+            }
         }
-        if (title.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(MarkdownBodyStyle.CalloutLabelGap))
-            Text(
-                text = title,
-                color = OnSurface,
-                style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutTitleText),
-                modifier = Modifier.alignByBaseline().weight(1f)
-            )
+    ) { measurables, constraints ->
+        val labelMeasurable = measurables[0]
+        val titleMeasurable = measurables.getOrNull(1)
+        val rowWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else Constraints.Infinity
+        if (titleMeasurable == null) {
+            val labelPlaceable = labelMeasurable.measure(Constraints(maxWidth = rowWidth))
+            return@Layout layout(labelPlaceable.width, labelPlaceable.height) { labelPlaceable.place(0, 0) }
+        }
+        val below = constraints.hasBoundedWidth &&
+            calloutTitleBelow(labelMeasurable.maxIntrinsicWidth(Constraints.Infinity).toFloat(), rowWidth.toFloat())
+        if (below) {
+            val labelPlaceable = if (showLabel) labelMeasurable.measure(Constraints(maxWidth = rowWidth)) else null
+            val titlePlaceable = titleMeasurable.measure(Constraints(maxWidth = rowWidth))
+            val labelHeight = labelPlaceable?.height ?: 0
+            layout(rowWidth, labelHeight + titlePlaceable.height) {
+                labelPlaceable?.place(0, 0)
+                titlePlaceable.place(0, labelHeight)
+            }
+        } else {
+            val labelPlaceable = labelMeasurable.measure(Constraints(maxWidth = rowWidth))
+            val gapPx = gap.roundToPx()
+            val titleWidth = if (constraints.hasBoundedWidth) (rowWidth - labelPlaceable.width - gapPx).coerceAtLeast(1) else Constraints.Infinity
+            val titlePlaceable = titleMeasurable.measure(Constraints(maxWidth = titleWidth))
+            val top = maxOf(labelPlaceable[FirstBaseline], titlePlaceable[FirstBaseline])
+            val labelY = top - labelPlaceable[FirstBaseline]
+            val titleY = top - titlePlaceable[FirstBaseline]
+            val width = if (constraints.hasBoundedWidth) rowWidth else labelPlaceable.width + gapPx + titlePlaceable.width
+            layout(width, maxOf(labelY + labelPlaceable.height, titleY + titlePlaceable.height)) {
+                labelPlaceable.place(0, labelY)
+                titlePlaceable.place(labelPlaceable.width + gapPx, titleY)
+            }
         }
     }
 }
