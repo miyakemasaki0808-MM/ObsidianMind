@@ -114,19 +114,33 @@ class CalloutHeaderUiTest {
      * **言葉の幅がちょうど内側の幅の半分になる外の幅（とその前後1画素）でも、描画と計測は同じ並べ方を選ぶ。**
      * 密度 2.53125 では引用の左の余白16dpが40.5pxになり、引いてから丸める計測は描画より1画素広く数えて、境い目で題を送るかが分かれた。
      * 同じ行と2段では高さが言葉の1行ぶん違うので、高さの比べ方で並べ方の食い違いが見える。
+     * 1つのテストで `setContent` は1回しか呼べないので、外の幅ごとにテストを分ける。
      */
     @Test
-    fun 余白が半画素の密度で言葉が内側の半分ちょうどでも_描く並べ方と高さが計測と合う() {
-        val type = "独自".repeat(6)
-        listOf(-1, 0, 1).forEach { shift ->
-            val (slices, drawn) = drawSpread("> [!$type] 確認する題", density = 2.53125f) { _, measurer, style ->
-                val labelWidth = measurer.measure(AnnotatedString("≡ $type"), style.merge(MarkdownBodyStyle.CalloutLabelText)).size.width
-                // 引用の左の余白は描画と同じく40.5pxを41pxへ丸める。内側の幅が言葉の幅のちょうど2倍になる外の幅。
-                labelWidth * 2 + 41 + shift
-            }
+    fun 余白が半画素の密度で内側が言葉の2倍より1画素狭くても_描く並べ方と高さが計測と合う() {
+        assertBoundaryMatches(shift = -1)
+    }
 
-            assertSlicesMatch(slices, drawn, "外の幅を $shift 画素動かした")
+    @Test
+    fun 余白が半画素の密度で内側が言葉のちょうど2倍でも_描く並べ方と高さが計測と合う() {
+        assertBoundaryMatches(shift = 0)
+    }
+
+    @Test
+    fun 余白が半画素の密度で内側が言葉の2倍より1画素広くても_描く並べ方と高さが計測と合う() {
+        assertBoundaryMatches(shift = 1)
+    }
+
+    /** 外の幅を、引用の内側が言葉の幅のちょうど2倍になる幅から [shift] 画素動かして描き、切れ端の高さを計測と比べる。 */
+    private fun assertBoundaryMatches(shift: Int) {
+        val type = "独自".repeat(6)
+        val (slices, drawn) = drawSpread("> [!$type] 確認する題", density = 2.53125f) { _, measurer, style ->
+            val labelWidth = measurer.measure(AnnotatedString("≡ $type"), style.merge(MarkdownBodyStyle.CalloutLabelText)).size.width
+            // 引用の左の余白は描画と同じく40.5pxを41pxへ丸める。
+            labelWidth * 2 + 41 + shift
         }
+
+        assertSlicesMatch(slices, drawn, "外の幅を $shift 画素動かした")
     }
 
     /** 引用の外の幅（[widthPxOf] が密度・文字の計測・書式から決める）で見開きの計測をし、ページ（高さ120dp）へ割って切れ端を1つずつ描く。 */
