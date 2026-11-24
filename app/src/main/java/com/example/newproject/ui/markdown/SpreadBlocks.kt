@@ -154,7 +154,7 @@ private fun measureBlock(
         }
 
         is MarkdownBlock.Blockquote -> {
-            val inner = (widthPx - px(MarkdownBodyStyle.QuoteBarWidth.value) - px(MarkdownBodyStyle.QuoteTextStart.value)).roundToInt()
+            val inner = quoteInnerWidthPx(widthPx, density)
             val children = buildList {
                 block.content.callout?.let { add(measureCalloutHeader(calloutLabelOf(it), inline(it.title), inputs, inner)) }
                 block.content.blocks.forEach { child ->
@@ -216,6 +216,13 @@ private fun measureBlock(
         )
     }
 }
+
+/**
+ * 引用の外の幅 [widthPx] から、中のブロックを並べる幅を出す。**描画（[QuoteFrame] の左の余白）と同じく、余白を先に画素へ丸めてから引く。**
+ * 引いてから丸めると、余白が半画素の密度で1画素広くなり、コールアウトの題を送るか（[calloutTitleBelow]）が描画と分かれる。
+ */
+internal fun quoteInnerWidthPx(widthPx: Int, density: Density): Int =
+    widthPx - with(density) { (MarkdownBodyStyle.QuoteBarWidth + MarkdownBodyStyle.QuoteTextStart).roundToPx() }
 
 /** 引用の中の行を、1行ずつ別の文字として測る（描く側の [MarkdownQuoteLines] と同じ）。 */
 private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, widthPx: Int): MeasuredSpreadBlock = with(inputs) {
