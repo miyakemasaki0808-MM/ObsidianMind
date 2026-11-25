@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-26 | 見開きの境目で見出しの節・箇条・表・引用・コードを割らない割り方を決め、正本に書いた（未実装） | [本文の見開き](features/note_spread.md) 判断15 |
 | 2026-11-25 | 引用とコールアウトの中を描く形を実機で確かめて閉じ、種類ごとの色と面は後の案へ移した | [Markdown解析](system/markdown_rendering.md) §8・[実機ケース](../review/device_validation/callout_quote.md) |
 | 2026-11-22 | 引用とコールアウトの中を表・箇条・入れ子の引用として描き、コールアウトは印を消して種類の言葉と記号と題で示すようにした | [Markdown解析](system/markdown_rendering.md) §8 |
 | 2026-11-22 | バックナンバーへの作り直しを実機で確かめて UI-9 を閉じ、全画面の往復の後に本文が空白になる不具合を起票した | [バックリンク](features/backlinks.md) §11・[実機ケース](../review/device_validation/knowledge_index.md) |
