@@ -6,8 +6,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.text.AnnotatedString
@@ -112,5 +114,29 @@ class QuoteSelectionUiTest {
         assertEquals(model.passages.texts.joinToString(""), normalizeForMatch(quoted.text))
         // 一覧のいちばん上から選んでいるので、始まりは見えている。
         assertEquals(0, quoted.source)
+    }
+
+    /**
+     * **コールアウトは印の文字を出さず、種類の言葉（読み上げは言葉だけ）と題で始まる。** 種類の言葉と記号はノートに無い文字なので
+     * 選択のコピーに入れず、題・中のリスト・表・入れ子の引用は部品の間に何も挟まない（→ docs/dev/system/markdown_rendering.md §8）。
+     */
+    @Test
+    fun コールアウトは種類の言葉を出し_選択のコピーには題と中身だけが入る() {
+        val model = buildNoteSectionModel(
+            "前の段落。\n\n> [!NOTE] **まとめ**の題\n> - 中の項目\n>\n> | 列A | 列B |\n> |---|---|\n> | a1 | a2 |\n> > 内の引用の行"
+        )
+        setBody(model)
+
+        composeRule.onNodeWithContentDescription("まとめ").assertExists()
+        composeRule.onAllNodesWithText("[!NOTE]", substring = true).assertCountEquals(0)
+        composeRule.onNodeWithText("a1").assertExists()
+
+        composeRule.onNodeWithText("前の段落。").performTouchInput { longClick() }
+        press(QuoteTextToolbar.ITEM_SELECT_ALL)
+        press(QuoteTextToolbar.ITEM_QUOTE)
+
+        val quoted = checkNotNull(received)
+        assertEquals(model.passages.texts.joinToString(""), normalizeForMatch(quoted.text))
+        assertTrue("種類の言葉がコピーに入った: ${quoted.text}", "≡" !in quoted.text)
     }
 }

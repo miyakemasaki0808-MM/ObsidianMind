@@ -54,6 +54,11 @@ internal object MarkdownBodyStyle {
     val QuoteTextStart: Dp = 12.dp
     val QuoteVerticalPadding: Dp = 4.dp
 
+    /** コールアウトの頭。種類の記号と言葉（[CalloutLabel]）の後に題を続ける。 */
+    val CalloutLabelText = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, lineBreak = LineBreak.Simple)
+    val CalloutTitleText = TextStyle(fontSize = 16.sp, lineHeight = 24.sp, fontWeight = FontWeight.Bold, lineBreak = LineBreak.Simple)
+    val CalloutLabelGap: Dp = 8.dp
+
     val TableCell = TextStyle(fontSize = 14.sp, lineBreak = LineBreak.Simple)
     val TableHeader = TableCell.copy(fontWeight = FontWeight.Bold)
     val TableCellPaddingHorizontal: Dp = 8.dp

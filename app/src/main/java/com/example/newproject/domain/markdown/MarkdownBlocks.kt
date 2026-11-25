@@ -89,7 +89,15 @@ internal sealed class MarkdownBlock {
     data class ListBlock(val items: List<ListItem>) : MarkdownBlock()
     data class CodeBlock(val code: String) : MarkdownBlock()
     object HorizontalRule : MarkdownBlock()
-    data class Blockquote(val lines: List<String>) : MarkdownBlock()
+    /**
+     * 引用。[lines] は `>` を1つ外した原文の行で、**AI への書き戻し・知識索引・反証の一文の候補はこれを読む**。
+     * [content] は描くための中身（コールアウトの頭と中のブロック）で、描く側（本文・見開き・照らし直しの文字）はこれを読む。
+     * [content] は [lines] から決まり、解析するときに一緒に作る（描く Main で解析しない → lessons L13）。
+     */
+    data class Blockquote(
+        val lines: List<String>,
+        val content: QuoteContent = parseQuoteContent(lines)
+    ) : MarkdownBlock()
     data class Table(val headers: List<String>, val rows: List<List<String>>) : MarkdownBlock()
 }
 
@@ -142,8 +150,17 @@ internal fun parseStandaloneImage(line: String): MarkdownBlock.Image? {
 internal fun parseMarkdownBlocks(
     content: String,
     joinParagraphLines: (List<String>) -> String = { it.joinToString(" ") }
+): List<MarkdownBlock> = parseBlockLines(content.replace("\r\n", "\n").lines().stripFrontmatter(), 0, joinParagraphLines)
+
+/**
+ * 行からブロックを読む。frontmatter は外さない — 引用の中身もこれで読む（→ [parseQuoteContent]）。
+ * [quoteDepth] はこの行が引用の何段目の中か（本文は0）で、中の引用の中身をその次の段として読む。
+ */
+internal fun parseBlockLines(
+    lines: List<String>,
+    quoteDepth: Int,
+    joinParagraphLines: (List<String>) -> String
 ): List<MarkdownBlock> {
-    val lines = content.replace("\r\n", "\n").lines().stripFrontmatter()
     val blocks = mutableListOf<MarkdownBlock>()
     var index = 0
 
@@ -202,7 +219,7 @@ internal fun parseMarkdownBlocks(
                 quoteLines.add(BlockquoteRegex.matchEntire(lines[index])!!.groupValues[1])
                 index++
             }
-            blocks.add(MarkdownBlock.Blockquote(quoteLines))
+            blocks.add(MarkdownBlock.Blockquote(quoteLines, parseQuoteContent(quoteLines, quoteDepth)))
             continue
         }
 
