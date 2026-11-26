@@ -14,10 +14,13 @@ import kotlin.math.min
 internal sealed interface SpreadBlock {
     val textLength: Int
 
+    /** 見開きの境目で割らないまとまりとしての扱い（→ [SpreadKeep]）。本文に直に置いたブロックだけが持ち、引用の子は持たない。 */
+    val keep: SpreadKeep
+
     /**
      * 行の境目で割れるブロック（段落・見出し・リストの項目・引用・コード）。
      * [fragmentPadding] は切れ端ごとに上下へ付く余白の合計（コードの面の内側の余白など）で、ページをまたいで割ると切れ端の数だけ付く。
-     * [heading] なら、ページの末尾に見出しだけを残さない。
+     * [keep] が見出しなら、ページの末尾に見出しだけを残さない。
      * [minHeight] は最初の行を含む切れ端の最低の高さ（見出しの脇の印の枠。文字が低くても枠の高さを取る）。
      * [startAdjust] は行ごとの、その行から始まる切れ端（ブロックの途中から）の高さに足す量で、負にもなる。
      * 引用の子の途中から始まれば子の余白（コードの面・入れ子の引用の上下）を足し、子の先頭やリストの項目の先頭から始まれば
@@ -27,23 +30,60 @@ internal sealed interface SpreadBlock {
         val lines: List<SpreadLine>,
         override val textLength: Int,
         val fragmentPadding: Float = 0f,
-        val heading: Boolean = false,
+        override val keep: SpreadKeep = SpreadKeep.None,
         val minHeight: Float = 0f,
         val startAdjust: List<Float> = emptyList()
-    ) : SpreadBlock
+    ) : SpreadBlock {
+        val heading: Boolean get() = keep is SpreadKeep.Heading
+    }
 
     /** 割らない画像。ページの高さに収まらなければ、ページの高さまで縮める。 */
     data class Image(val height: Float) : SpreadBlock {
         override val textLength: Int get() = 0
+        override val keep: SpreadKeep get() = SpreadKeep.None
     }
 
     /** 割らない水平線。 */
     data class Rule(val height: Float) : SpreadBlock {
         override val textLength: Int get() = 0
+        override val keep: SpreadKeep get() = SpreadKeep.None
     }
 
     /** 表。行の境目で割り、ページより高い行はセルの中の行の境目で割る（→ [splitTableRow]）。 */
-    data class Table(val rows: List<SpreadTableRow>, override val textLength: Int) : SpreadBlock
+    data class Table(
+        val rows: List<SpreadTableRow>,
+        override val textLength: Int,
+        override val keep: SpreadKeep = SpreadKeep.None
+    ) : SpreadBlock
+}
+
+/**
+ * 見開きの境目（右ページから次の左ページ）で割らないまとまり（→ features/note_spread.md §5「見開きの境目」・§8 判断15）。
+ * 左右のページの間では割ってよい — 両方が同時に見えている。
+ */
+internal sealed interface SpreadKeep {
+    /** まとまりにしない（段落・画像・水平線）。見開きの境目で割る。 */
+    data object None : SpreadKeep
+
+    /** ブロック1つで1つのまとまり（箇条・表・引用・コード）。 */
+    data object Whole : SpreadKeep
+
+    /** 見出し。同じか上の階層（[level] 以下）の次の見出しの手前までが、その節のまとまり。 */
+    data class Heading(val level: Int) : SpreadKeep
+}
+
+/** 本文に直に置いたブロックが、見開きの境目でどうまとまるか（→ features/note_spread.md §8 判断15）。 */
+internal fun spreadKeepOf(block: MarkdownBlock): SpreadKeep = when (block) {
+    is MarkdownBlock.Heading -> SpreadKeep.Heading(block.level)
+    is MarkdownBlock.ListBlock, is MarkdownBlock.Table, is MarkdownBlock.Blockquote, is MarkdownBlock.CodeBlock -> SpreadKeep.Whole
+    is MarkdownBlock.Paragraph, is MarkdownBlock.Image, MarkdownBlock.HorizontalRule -> SpreadKeep.None
+}
+
+/** [keep] を持たせたブロック。画像と水平線はいつもまとまりにしない（→ [spreadKeepOf]）ので、そのまま返す。 */
+internal fun SpreadBlock.withKeep(keep: SpreadKeep): SpreadBlock = when (this) {
+    is SpreadBlock.Lines -> copy(keep = keep)
+    is SpreadBlock.Table -> copy(keep = keep)
+    is SpreadBlock.Image, is SpreadBlock.Rule -> this
 }
 
 /** 1行。[charStart] はブロックの表示文字列の中で、この行が始まる位置（UTF-16）。 */
@@ -231,71 +271,220 @@ internal fun quoteChildSlice(slice: SpreadSlice, child: QuoteChildLayout): Sprea
  * - **どのページにも少なくとも1つの単位を置く。** 空のページに収まらない単位でも置いて進めるので、かならず終わる
  * - 見出しは、次のブロックの最初の単位と一緒に収まらなければ次のページへ送る。**空のページでも一緒に収まらなければ、見出しだけで置く**
  * - 画像は低いほうのページの高さまで縮め、表のページより高い行はセルの行で割る（どちらのページに落ちても収まるように）
+ * - **見開きの境目では、まとまり（→ [SpreadKeep]）を割らない。** まとまりの頭で、今の見開きの残りに入らず空の見開きに入るなら、
+ *   次の見開きの左ページの頭から置く。左ページから送れば、右ページは空のページになる（左ページはいつも1つ以上の切れ端を持つ）
+ * - [complete] が偽（本文の途中まで測った）なら、判定に要るブロックが測れていないまとまりの頭で止める（→ [readySpreadCount]）
  */
 internal fun paginateSpread(
     blocks: List<SpreadBlock>,
     leftPageHeight: Float,
     rightPageHeight: Float = leftPageHeight,
     firstPageHeight: Float? = null,
-    blockSpacing: Float
-): List<SpreadPage> {
-    val pages = mutableListOf<SpreadPage>()
-    val current = mutableListOf<SpreadSlice>()
-    var used = 0f
-    fun pageHeight(): Float = when {
-        pages.isEmpty() && firstPageHeight != null -> firstPageHeight
-        pages.size % 2 == 0 -> leftPageHeight
+    blockSpacing: Float,
+    complete: Boolean = true
+): List<SpreadPage> = SpreadComposer(blocks, leftPageHeight, rightPageHeight, firstPageHeight, blockSpacing, complete).compose()
+
+/**
+ * 出してよい見開きの数。測り終えていれば全部（ページが無くても1つ）。
+ * 測り終える前は、最後のページがまだ伸びるか、そこで組むのを止めているので、最後のページを含む見開きを出さない。
+ */
+internal fun readySpreadCount(pages: List<SpreadPage>, complete: Boolean): Int =
+    if (complete) max(spreadCount(pages), 1) else (pages.size - 1).coerceAtLeast(0) / 2
+
+/** 詰めている位置。[page] は開いているページの番号、[used] はそのページで使った高さ、[filled] はそのページに切れ端があるか。 */
+private class SpreadCursor(var page: Int = 0, var used: Float = 0f, var filled: Boolean = false) {
+    fun copy() = SpreadCursor(page, used, filled)
+
+    fun nextPage() {
+        page++
+        used = 0f
+        filled = false
+    }
+}
+
+/** まとまりの頭で見た、空の見開きに入るか。 */
+private sealed interface KeepFit {
+    /** 頭から [end] の手前までのブロックが入る。 */
+    data class Fits(val end: Int) : KeepFit
+
+    /** どの形でも空の見開きに入らない。送らずに割る。 */
+    data object TooLarge : KeepFit
+
+    /** 判定に要るブロックがまだ測れていない。 */
+    data object Unknown : KeepFit
+}
+
+/** 空の見開き（題名の無い2つ目以降）の左ページの番号。入るかを確かめるときに、ここから詰める。 */
+private const val EMPTY_SPREAD_LEFT = 2
+
+private class SpreadComposer(
+    private val blocks: List<SpreadBlock>,
+    private val leftPageHeight: Float,
+    private val rightPageHeight: Float,
+    private val firstPageHeight: Float?,
+    private val blockSpacing: Float,
+    private val complete: Boolean
+) {
+    private val unitsOf = minOf(leftPageHeight, rightPageHeight, firstPageHeight ?: leftPageHeight).let { fit -> blocks.map { it.units(fit) } }
+
+    private fun pageHeight(page: Int): Float = when {
+        page == 0 && firstPageHeight != null -> firstPageHeight
+        page % 2 == 0 -> leftPageHeight
         else -> rightPageHeight
     }
 
-    fun closePage() {
+    fun compose(): List<SpreadPage> {
+        val pages = mutableListOf<SpreadPage>()
+        val current = mutableListOf<SpreadSlice>()
+        val at = SpreadCursor()
+        val close = {
+            pages += SpreadPage(current.toList())
+            current.clear()
+        }
+        for (index in blocks.indices) {
+            if (keepHeadAt(index)) {
+                when (val fit = largestKeep(index)) {
+                    KeepFit.Unknown -> break
+                    KeepFit.TooLarge -> Unit
+                    // 今の見開きが空（本文の頭）なら、送り先も同じ見開きなので何も動かない。
+                    is KeepFit.Fits -> if (!fits(at.copy(), index, fit.end)) {
+                        if (at.filled) {
+                            close()
+                            at.nextPage()
+                        }
+                        while (at.page % 2 == 1) {
+                            pages += SpreadPage(emptyList())
+                            at.nextPage()
+                        }
+                    }
+                }
+            }
+            place(at, index, slice = { current += it }, close = close)
+        }
         if (current.isNotEmpty()) pages += SpreadPage(current.toList())
-        current.clear()
-        used = 0f
+        return pages
     }
 
-    val fit = minOf(leftPageHeight, rightPageHeight, firstPageHeight ?: leftPageHeight)
-    val unitsOf = blocks.map { it.units(fit) }
-    blocks.forEachIndexed { index, block ->
+    /**
+     * まとまりの頭か。**見出しのすぐ後のブロックは見ない** — 見出しの連なりの頭で、見出しと一緒にまとめて判定した。
+     * 続く見出しも、見出しのすぐ後の箇条や表も、ここで単独で送ると見出しだけを見開きの末尾に残す。
+     */
+    private fun keepHeadAt(index: Int): Boolean =
+        blocks[index].keep != SpreadKeep.None && blocks.getOrNull(index - 1)?.keep !is SpreadKeep.Heading
+
+    /**
+     * [start] を頭とするまとまりのうち、空の見開きに入る最も大きいもの。見出しは、節が入らなければ見出しと続くまとまり
+     * （下の階層の節・ブロック）を合わせたものへ縮めて見る。続くのが段落・画像・水平線なら見出しだけを詰める —
+     * その最初の単位は、見出しをページの末尾に残さない規則が詰めるときに一緒に見る。
+     *
+     * 測り終える前に見出しだけで測った分の終わりへ届くのは、どの節も測れた分だけで入らなかったとき — 見出しだけで
+     * 空の見開きを越えたときなので、続きを測らなくても入らないと決まる。
+     */
+    private fun largestKeep(start: Int): KeepFit {
+        var head = start
+        while (true) {
+            if (head >= blocks.size) return fitsEmpty(start, head)
+            when (val keep = blocks[head].keep) {
+                is SpreadKeep.Heading -> when (val section = sectionFit(start, head, keep.level)) {
+                    KeepFit.TooLarge -> head++
+                    else -> return section
+                }
+                SpreadKeep.Whole -> return fitsEmpty(start, head + 1)
+                SpreadKeep.None -> return fitsEmpty(start, head)
+            }
+        }
+    }
+
+    /**
+     * 見出し [head] の節を、連なりの頭 [start] から空の見開きに詰めてみる。節の終わりを探しながら詰めるので、
+     * 測れた分だけで入らなければ、終わりまで測らずに TooLarge と決まる。**節に本文が無ければ TooLarge と同じに扱う** —
+     * 見出しだけをまとまりにすると、見出しを見開きの末尾に残す。
+     */
+    private fun sectionFit(start: Int, head: Int, level: Int): KeepFit {
+        val at = SpreadCursor(page = EMPTY_SPREAD_LEFT)
+        var body = false
+        var index = start
+        while (index < blocks.size) {
+            val keep = blocks[index].keep
+            if (index > head && keep is SpreadKeep.Heading && keep.level <= level) break
+            if (index > head && keep !is SpreadKeep.Heading) body = true
+            if (!place(at, index, lastPage = EMPTY_SPREAD_LEFT + 1)) return KeepFit.TooLarge
+            index++
+        }
+        return when {
+            index == blocks.size && !complete -> KeepFit.Unknown
+            !body -> KeepFit.TooLarge
+            else -> KeepFit.Fits(index)
+        }
+    }
+
+    private fun fitsEmpty(start: Int, end: Int): KeepFit =
+        if (fits(SpreadCursor(page = EMPTY_SPREAD_LEFT), start, end)) KeepFit.Fits(end) else KeepFit.TooLarge
+
+    /** [start] から [end] の手前までを [at] から詰めて、[at] の見開きの中に収まるか。[at] は動く。 */
+    private fun fits(at: SpreadCursor, start: Int, end: Int): Boolean {
+        val lastPage = at.page / 2 * 2 + 1
+        return (start until end).all { index -> place(at, index, lastPage) }
+    }
+
+    /**
+     * ブロック [index] を [at] から詰める。切れ端を [slice] へ渡し、ページを閉じるたびに [close] を呼ぶ。
+     * ページ [lastPage] を越えたら、そこで止めて false を返す（入るかを確かめるときだけ）。
+     */
+    private fun place(
+        at: SpreadCursor,
+        index: Int,
+        lastPage: Int = Int.MAX_VALUE,
+        slice: (SpreadSlice) -> Unit = {},
+        close: () -> Unit = {}
+    ): Boolean {
+        val block = blocks[index]
         val units = unitsOf[index]
-        if (units.isEmpty()) return@forEachIndexed
+        if (units.isEmpty()) return true
         val padding = block.fragmentPadding()
-        if (block is SpreadBlock.Lines && block.heading && current.isNotEmpty()) {
+        fun nextPage(): Boolean {
+            close()
+            at.nextPage()
+            return at.page <= lastPage
+        }
+        if (block is SpreadBlock.Lines && block.heading && at.filled) {
             val next = blocks.getOrNull(index + 1)
             val nextFirst = unitsOf.getOrNull(index + 1)?.firstOrNull()
             val headingHeight = blockSpacing + block.fragmentHeight(0, units.sumOf { it.height.toDouble() }.toFloat() + padding)
             val withNext = headingHeight + (nextFirst?.let { blockSpacing + it.height + (next?.fragmentPadding() ?: 0f) } ?: 0f)
-            if (used + withNext > pageHeight()) closePage()
+            if (at.used + withNext > pageHeight(at.page) && !nextPage()) return false
         }
         var unit = 0
         while (unit < units.size) {
-            val spacing = if (current.isEmpty()) 0f else blockSpacing
+            val spacing = if (at.filled) blockSpacing else 0f
             var end = unit
             var height = padding
-            while (end < units.size && (end == unit && current.isEmpty() || used + spacing + block.fragmentHeight(unit, height + units[end].height) <= pageHeight())) {
+            while (end < units.size && (end == unit && !at.filled || at.used + spacing + block.fragmentHeight(unit, height + units[end].height) <= pageHeight(at.page))) {
                 height += units[end].height
                 end++
             }
             height = block.fragmentHeight(unit, height)
             if (end == unit) {
-                closePage()
+                if (!nextPage()) return false
                 continue
             }
-            current += SpreadSlice(
-                blockIndex = index,
-                unitStart = unit,
-                unitEnd = end,
-                charStart = units[unit].charStart,
-                charEnd = if (end < units.size) units[end].charStart else block.textLength,
-                height = height
+            slice(
+                SpreadSlice(
+                    blockIndex = index,
+                    unitStart = unit,
+                    unitEnd = end,
+                    charStart = units[unit].charStart,
+                    charEnd = if (end < units.size) units[end].charStart else block.textLength,
+                    height = height
+                )
             )
-            used += spacing + height
+            at.used += spacing + height
+            at.filled = true
             unit = end
-            if (unit < units.size) closePage()
+            if (unit < units.size && !nextPage()) return false
         }
+        return true
     }
-    closePage()
-    return pages
 }
 
 /** 見開きの数。2ページで1つ、最後の右ページは空でもよい。 */
@@ -319,11 +508,11 @@ internal fun anchorAfterTurn(pages: List<SpreadPage>, spread: Int): SpreadAnchor
     pages.getOrNull(spread * 2)?.slices?.firstOrNull()?.let { SpreadAnchor(it.blockIndex, it.charStart) }
 
 /**
- * 見開きを出したときに読書の記録へ送る位置。出ている最後の切れ端（右ページが空なら左ページの最後）のブロックと、
+ * 見開きを出したときに読書の記録へ送る位置。出ている最後の切れ端（右ページが無いか空なら左ページの最後）のブロックと、
  * そのブロックの表示文字列をどこまで出したかの割合。文字を持たないブロックは出せば1。
  */
 internal fun spreadProgress(pages: List<SpreadPage>, spread: Int, blocks: List<SpreadBlock>): SpreadProgress? {
-    val last = (pages.getOrNull(spread * 2 + 1) ?: pages.getOrNull(spread * 2))?.slices?.lastOrNull() ?: return null
+    val last = listOfNotNull(pages.getOrNull(spread * 2 + 1), pages.getOrNull(spread * 2)).firstNotNullOfOrNull { it.slices.lastOrNull() } ?: return null
     val length = blocks.getOrNull(last.blockIndex)?.textLength ?: 0
     val fraction = if (length <= 0) 1f else (last.charEnd.toFloat() / length).coerceIn(0f, 1f)
     return SpreadProgress(last.blockIndex, fraction)

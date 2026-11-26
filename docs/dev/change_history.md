@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-26 | 見開きの境目で見出しの節・箇条・表・引用・コードを割らず、次の見開きの頭から置くようにした | [本文の見開き](features/note_spread.md) 判断15 |
 | 2026-11-26 | 読む面をノートの型で組み分ける形と結晶の展示室を決め、書体・行間と動きの3行目をチャネルに割り当てた（未実装） | [佇まいのチャネル](system/bearing_channels.md) §11・[ADR-0005](decisions/ADR-0005-bearing-channel-allocation.md) |
 | 2026-11-26 | 見開きの境目で見出しの節・箇条・表・引用・コードを割らない割り方を決め、正本に書いた（未実装） | [本文の見開き](features/note_spread.md) 判断15 |
 | 2026-11-25 | 引用とコールアウトの中を描く形を実機で確かめて閉じ、種類ごとの色と面は後の案へ移した | [Markdown解析](system/markdown_rendering.md) §8・[実機ケース](../review/device_validation/callout_quote.md) |
