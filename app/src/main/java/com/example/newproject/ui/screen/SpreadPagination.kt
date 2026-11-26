@@ -377,8 +377,8 @@ private class SpreadComposer(
      * （下の階層の節・ブロック）を合わせたものへ縮めて見る。続くのが段落・画像・水平線なら見出しだけを詰める —
      * その最初の単位は、見出しをページの末尾に残さない規則が詰めるときに一緒に見る。
      *
-     * 測り終える前に見出しだけで測った分の終わりへ届くのは、どの節も測れた分だけで入らなかったとき — 見出しだけで
-     * 空の見開きを越えたときなので、続きを測らなくても入らないと決まる。
+     * 見出しだけで本文の終わりへ届くのは、測り終えたときだけ。測り終える前は、連なりの最後の見出しの節が
+     * 測った分の終わりで Unknown を返すので、ここへは来ない。
      */
     private fun largestKeep(start: Int): KeepFit {
         var head = start
@@ -399,22 +399,27 @@ private class SpreadComposer(
      * 見出し [head] の節を、連なりの頭 [start] から空の見開きに詰めてみる。節の終わりを探しながら詰めるので、
      * 測れた分だけで入らなければ、終わりまで測らずに TooLarge と決まる。**節に本文が無ければ TooLarge と同じに扱う** —
      * 見出しだけをまとまりにすると、見出しを見開きの末尾に残す。
+     *
+     * **節の末尾の本文の無い見出しは節に数えない。** 節を閉じる見出しと続けて並ぶので、その連なりの頭で次のまとまりと一緒に判定する。
+     * 数えると、末尾の見出しと次の行が入らないせいで、入る節まで送ってしまう。見出しは本文が続いたところで詰める。
      */
     private fun sectionFit(start: Int, head: Int, level: Int): KeepFit {
         val at = SpreadCursor(page = EMPTY_SPREAD_LEFT)
-        var body = false
+        var end = start
         var index = start
         while (index < blocks.size) {
             val keep = blocks[index].keep
             if (index > head && keep is SpreadKeep.Heading && keep.level <= level) break
-            if (index > head && keep !is SpreadKeep.Heading) body = true
-            if (!place(at, index, lastPage = EMPTY_SPREAD_LEFT + 1)) return KeepFit.TooLarge
+            if (index > head && keep !is SpreadKeep.Heading) {
+                if (!(end..index).all { place(at, it, lastPage = EMPTY_SPREAD_LEFT + 1) }) return KeepFit.TooLarge
+                end = index + 1
+            }
             index++
         }
         return when {
             index == blocks.size && !complete -> KeepFit.Unknown
-            !body -> KeepFit.TooLarge
-            else -> KeepFit.Fits(index)
+            end == start -> KeepFit.TooLarge
+            else -> KeepFit.Fits(end)
         }
     }
 

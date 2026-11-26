@@ -271,6 +271,21 @@ class SpreadPaginationTest {
         assertEquals(listOf(listOf(0), listOf(0), listOf(1, 2, 3, 4, 5, 6), listOf(6), listOf(6)), blocksByPage(pages))
     }
 
+    /**
+     * 節の末尾の本文の無い見出し（3）は、続く見出し（4）と連なりなので、節に数えず次のまとまりと一緒に扱う。
+     * 数えると、見出し3と次の行が今の見開きに入らないせいで、入る節（1・2）まで送って今の見開きに空きを作る。
+     */
+    @Test
+    fun `節の末尾の本文の無い見出しは節に数えず、続くまとまりと一緒に扱う`() {
+        val pages = paginateSpread(
+            listOf(lines(15), heading(level = 1), lines(3), heading(level = 2), heading(level = 1), lines(12)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3, 4, 5), listOf(5)), blocksByPage(pages))
+    }
+
     /** 節（見出し・まとまり・長い段落）は入らない。見出しとまとまりを合わせれば入るので一緒に送り、見出しを見開きの末尾に残さない。 */
     @Test
     fun `節が1見開きに入らなければ、見出しと直後のまとまりを合わせて判定する`() {
