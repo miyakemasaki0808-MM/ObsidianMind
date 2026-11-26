@@ -235,6 +235,10 @@ Nano は Mutex 直列で1回数十秒なので、**前段を非AIにすると生
   - 権限の検査（`verify<Variant>ManifestPermissions` の `expected` と `ci.yml`）、dependency_policy 判断5、
     実機ケース [network_permission](../review/device_validation/network_permission.md) を同時に書き換える。
     **数える検査そのものは残す** — Firebase などの依存が INTERNET 以外の権限を持ち込んだときに気づくため
+  - **ロードマップの北極星と Non-Goals も同時に改める。** 北極星の3つのコア価値の3本目「オンデバイス完結」（全AIは端末内の Nano、クラウド送信ゼロ）と、
+    意図的にやらないことの「クラウドAIへの切り替え/併用」は、どちらも本案と正面から食い違う（→ [roadmap](roadmap.md) §0）。
+    roadmap は北極星を変えるときに「なぜ変えたか」を更新運用の節へ残すと決めているので、新しい ADR と同じ日にそこへ書く。
+    書き換えの向きは、この案の設計思想の Local First, Cloud Optional — 端末の Nano を標準にし、クラウドは呼んだときだけ補う側に置く
 - **機能要件:**
 
   | 番号 | 項目 | 要件 |
