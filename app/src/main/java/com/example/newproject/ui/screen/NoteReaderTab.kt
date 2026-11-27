@@ -17,6 +17,7 @@ import com.example.newproject.ui.component.screenContentPadding
 import com.example.newproject.ui.component.screenHorizontalPadding
 import com.example.newproject.ui.component.IconPill
 import com.example.newproject.ui.component.NoteContentPanel
+import com.example.newproject.ui.markdown.noteFolderLabel
 import com.example.newproject.ui.markdown.QuoteOffers
 import com.example.newproject.ui.markdown.placeBlockAtTop
 import com.example.newproject.ui.markdown.rememberEndSpace
@@ -576,7 +577,10 @@ internal fun NoteReaderTab(
             onLink = onLink,
             onQuote = onQuote,
             quoteOffers = quoteOffers,
-            endSpace = bodyPosition.endSpace
+            endSpace = bodyPosition.endSpace,
+            // 今のノートの相対パスは、結晶の絞り込みと同じくノートを開いて確定した値を読む（ノート単位で消える）。
+            folder = noteFolderLabel(uiState.crystalNotePath),
+            tags = sectionModel?.tags.orEmpty()
         )
     }
 
@@ -1012,6 +1016,7 @@ internal fun NoteReaderTab(
                                     NoteSpread(
                                         noteKey = successState.targetUri,
                                         title = successState.title,
+                                        folder = noteFolderLabel(uiState.crystalNotePath),
                                         sectionModel = sectionModel,
                                         position = bodyPosition,
                                         paperColor = notePaperColor(uiState.notePaperTone),

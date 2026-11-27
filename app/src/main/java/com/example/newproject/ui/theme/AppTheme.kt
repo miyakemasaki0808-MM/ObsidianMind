@@ -124,6 +124,8 @@ internal class AppColorScheme(
     val readingAccent: Color,
     // 読む面のプレートの縁。ライトは影で浮くので縁を持たず（透明）、ダークは影が見えないのでごく細い明るい縁で浮かせる。
     val readingPlateRim: Color,
+    // 読む面の小さな札（題の欄のタグ）の面。
+    val readingChip: Color,
     // 意味色
     val errorText: Color,
     // 塗りとして使うエラー色は文字色と別に持つ。errorText を Badge の containerColor に

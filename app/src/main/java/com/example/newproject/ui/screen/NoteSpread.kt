@@ -59,9 +59,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,6 +72,9 @@ import com.example.newproject.ui.markdown.HeadingAccessoryWidth
 import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.LocalNoteLinkTaps
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
+import com.example.newproject.ui.markdown.noteFolderLabel
+import com.example.newproject.ui.markdown.noteTitleBlockHeightPx
+import com.example.newproject.ui.markdown.NoteTitleBlock
 import com.example.newproject.ui.markdown.MeasuredSpreadBlock
 import com.example.newproject.ui.markdown.NoteImageBlockRef
 import com.example.newproject.ui.markdown.NoteImageLoader
@@ -118,6 +119,8 @@ import kotlin.coroutines.coroutineContext
 internal fun NoteSpread(
     noteKey: String,
     title: String,
+    /** 題の欄のフォルダの道筋（→ [noteFolderLabel]）。タグは [sectionModel] から読む。 */
+    folder: String? = null,
     sectionModel: NoteSectionModel,
     position: BodyPosition,
     paperColor: Color,
@@ -217,9 +220,9 @@ internal fun NoteSpread(
         // 再会カードを測ったか。**測る前の高さ（前に測った値か0）で組んだ見開きは、読書の記録へ送らない。** カードが出入りするたびに測り直す。
         var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
         val leftHeight = pageContentHeight - if (leftPageTop != null) cardHeightPx + with(density) { CardGap.toPx() } else 0f
-        val titleHeight = remember(title, textWidthPx, density, baseStyle) {
-            val layout = measurer.measure(AnnotatedString(title), baseStyle.merge(MarkdownBodyStyle.Title), constraints = Constraints(maxWidth = textWidthPx), density = density)
-            layout.size.height + with(density) { MarkdownBodyStyle.TitleGap.toPx() }
+        val titleHeight = remember(title, folder, sectionModel.tags, textWidthPx, density, baseStyle) {
+            noteTitleBlockHeightPx(measurer, baseStyle, density, textWidthPx, title, folder, sectionModel.tags) +
+                with(density) { MarkdownBodyStyle.TitleGap.toPx() }
         }
         val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.toPx() }
         val fitHeight = minOf(leftHeight, pageContentHeight, leftHeight - titleHeight)
@@ -355,6 +358,8 @@ internal fun NoteSpread(
                         page = pages.getOrNull(spread * 2),
                         showTitle = spread == 0,
                         title = title,
+                        folder = folder,
+                        tags = sectionModel.tags,
                         measured = measured.blocks,
                         fitHeightPx = fitHeight,
                         paperColor = paperColor,
@@ -371,6 +376,8 @@ internal fun NoteSpread(
                     page = pages.getOrNull(spread * 2 + 1),
                     showTitle = false,
                     title = title,
+                    folder = folder,
+                    tags = sectionModel.tags,
                     measured = measured.blocks,
                     fitHeightPx = fitHeight,
                     paperColor = paperColor,
@@ -408,6 +415,8 @@ private fun SpreadPageView(
     page: SpreadPage?,
     showTitle: Boolean,
     title: String,
+    folder: String?,
+    tags: List<String>,
     measured: List<MeasuredSpreadBlock>,
     fitHeightPx: Float,
     paperColor: Color,
@@ -439,7 +448,7 @@ private fun SpreadPageView(
                 ) {
                     Column(modifier = Modifier.padding(PagePadding).widthIn(max = MarkdownBodyStyle.ColumnMaxWidth)) {
                         if (showTitle) {
-                            Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
+                            NoteTitleBlock(title, folder, tags)
                             Spacer(modifier = Modifier.height(MarkdownBodyStyle.TitleGap))
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)) {

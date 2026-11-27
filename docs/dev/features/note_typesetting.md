@@ -1,8 +1,8 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さまで
-**最終検証:** 未検証（区切り1の実装中。§5.1、§5.2、§5.5、§5.9 だけ実装と突き合わせた）
-**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄まで
+**最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.5、§5.9 だけ実装と突き合わせた）
+**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
@@ -148,8 +148,9 @@
 ### 5.3 題の欄（層2）
 
 - **題の上にフォルダの道筋、題の下にタグの札を置き、欄の下に罫を引く。**
-  - 道筋: Vault の中の親フォルダを ` / ` でつないだもの。藍の 11sp・字間を少し空ける。Vault の直下のノートは出さない
-  - タグ: frontmatter の `tags` を、今の frontmatter の読み方（`NoteRepository.parseMeta`）で読み、淡い面の札（11sp）に並べる。本文の中の `#タグ` は拾わない。無ければ札の行を出さない
+  - 道筋: Vault の中の親フォルダを ` / ` でつないだもの。藍の 11sp・字間を少し空ける。Vault の直下のノートと、相対パスが分からないノート（リンクで開いて走査の結果に無いもの）は出さない。
+    相対パスは、結晶の絞り込みと同じく、ノートを開いて確定した今のノートの相対パス（ノート単位で消える）を読む
+  - タグ: frontmatter の `tags` を、関連ノートのタグと同じ読み方（`frontmatterList`。`domain` に置き、ノートの索引と本文の解析が共有する）で本文の解析と一緒に読み、淡い面の札（11sp）に並べる。本文の中の `#タグ` は拾わない。無ければ札の行を出さない
   - 罫: 1dp の淡い線。欄と本文の間はブロックの間より 4dp 広い
 - 道筋とタグは**表示だけ**で押せない
 - 見開きでは最初のページの頭に置く。右の並べ読みは今の題の出し方のまま（題の欄を出さない）

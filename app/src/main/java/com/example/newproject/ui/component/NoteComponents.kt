@@ -41,6 +41,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.example.newproject.ui.theme.ReadingPlateRim
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
+import com.example.newproject.ui.markdown.NoteTitleBlock
+import com.example.newproject.ui.markdown.noteFolderLabel
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -229,7 +231,11 @@ internal fun NoteContentPanel(
      * 場の上に浮かせるか（→ features/note_typesetting.md §5.1）。通常表示は浮かせ、全画面は画面全体が紙なので浮かせない
      * （影と縁を付けると、紙と同じ色の地の上に紙の輪郭だけが見える）。
      */
-    floating: Boolean = true
+    floating: Boolean = true,
+    /** 題の欄のフォルダの道筋（→ [noteFolderLabel]）。null なら出さない。 */
+    folder: String? = null,
+    /** 題の欄のタグ。本文の解析結果から渡す。 */
+    tags: List<String> = emptyList()
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -262,12 +268,16 @@ internal fun NoteContentPanel(
                 // プレースホルダ表示時は内容と一致しないため渡さない。
                 val isNote = uiState.noteState is NoteState.Success
                 val blocksForContent = if (isNote) precomputedBlocks else null
-                Text(
-                    text = noteTitle,
-                    color = OnSurface,
-                    style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title),
-                    modifier = Modifier.padding(horizontal = inset)
-                )
+                if (isNote) {
+                    NoteTitleBlock(noteTitle, folder, tags, modifier = Modifier.padding(horizontal = inset))
+                } else {
+                    Text(
+                        text = noteTitle,
+                        color = OnSurface,
+                        style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title),
+                        modifier = Modifier.padding(horizontal = inset)
+                    )
+                }
                 // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
                 // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
                 // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので

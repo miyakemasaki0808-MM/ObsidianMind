@@ -6,6 +6,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.markdown.MarkdownBlock
 
@@ -36,8 +37,24 @@ internal object MarkdownBodyStyle {
         lineBreak = LineBreak.Simple
     )
 
-    /** 題と本文の間。 */
-    val TitleGap: Dp = 14.dp
+    /** 題の欄の罫と本文の間。ブロックの間より 4dp 広い。 */
+    val TitleGap: Dp = 18.dp
+
+    /** 題の欄のフォルダの道筋。字間を少し空ける（`em` は文字の大きさに比例する）。 */
+    val FolderLabel = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.06.em, lineBreak = LineBreak.Simple)
+
+    /** 題の欄のタグの札の文字。 */
+    val Tag = TextStyle(fontSize = 11.sp, lineHeight = 16.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
+
+    /** 題の欄の中の間（道筋・題・札の行の間）。 */
+    val HeaderGap: Dp = 10.dp
+    val TagGap: Dp = 6.dp
+    val TagPaddingHorizontal: Dp = 9.dp
+    val TagPaddingVertical: Dp = 3.dp
+
+    /** 題の欄の下の罫の上の余白と、罫の太さ。 */
+    val HeaderBottom: Dp = 18.dp
+    val HeaderRule: Dp = 1.dp
 
     val Paragraph = TextStyle(fontSize = 16.sp, lineHeight = 30.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
 

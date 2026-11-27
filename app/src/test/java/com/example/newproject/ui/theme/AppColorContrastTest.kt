@@ -215,7 +215,7 @@ class AppColorContrastTest {
             // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階）＋各パネルの本文
             "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
-            "onSurfaceMuted" -> listOf(panelS, tinted, blue) + paper
+            "onSurfaceMuted" -> listOf(panelS, tinted, blue, "readingChip" to readingChip) + paper // 題の欄のタグの札も
             // Markdown の引用＋DistillCandidateRow
             "onSurfaceSubtle" -> listOf(panelS, tinted, blue, sheet) + paper
             // 打ち消し線・完了タスク（本文）／空状態・注記（PanelBlue）／「この部分」のシート
