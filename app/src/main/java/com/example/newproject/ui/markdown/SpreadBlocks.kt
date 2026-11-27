@@ -14,6 +14,7 @@ import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.ListItem
@@ -101,7 +102,8 @@ internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInput
     measureBlock(block, inputs, inputs.textWidthPx, inputs.headingAccessoryPx, quoted = false, lead = lead)
         .let { it.copy(spread = it.spread.withKeep(spreadKeepOf(block))) }
 
-private fun SpreadMeasureInputs.px(dp: Float): Float = with(density) { dp.dp.toPx() }
+/** 描画の `padding`・`size`・`spacedBy` と同じく、寸法を1つずつ画素へ丸める。dp を足してから丸めない（端数の密度で描画とずれる）。 */
+private fun SpreadMeasureInputs.px(dp: Dp): Float = with(density) { dp.roundToPx().toFloat() }
 
 private fun SpreadMeasureInputs.measure(text: AnnotatedString, style: TextStyle, widthPx: Int): TextLayoutResult =
     measurer.measure(text, baseStyle.merge(style), constraints = Constraints(maxWidth = widthPx.coerceAtLeast(1)), density = density)
@@ -135,26 +137,27 @@ private fun measureBlock(
                     layout.spreadLines(0),
                     text.length,
                     fragmentPadding = MarkdownBodyStyle.headingSpaceAbovePx(block.level, density).toFloat(),
-                    minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight.value) else 0f
+                    minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight) else 0f
                 ),
                 SpreadBlockRender.Heading(block.level, text)
             )
         }
 
         is MarkdownBlock.ListBlock -> {
-            val spacing = px(MarkdownBodyStyle.ListItemSpacing.value)
-            val gap = px(MarkdownBodyStyle.ListMarkerGap.value)
+            val spacing = px(MarkdownBodyStyle.ListItemSpacing)
+            val gap = px(MarkdownBodyStyle.ListMarkerGap)
             val texts = block.items.map { inline(it.text) }
             val offsets = texts.runningFold(0) { offset, text -> offset + text.length + 1 }.dropLast(1)
             val itemLines = block.items.mapIndexed { index, item ->
                 val marker = if (item.checked != null) {
-                    px(MarkdownBodyStyle.CheckboxSize.value)
+                    px(MarkdownBodyStyle.CheckboxSize)
                 } else if (item.marker is ListMarker.Ordered) {
                     orderedBadgeWidthPx(listMarkerText(item), inputs).toFloat()
                 } else {
                     measure(AnnotatedString(listMarkerText(item)), listTextStyle(quoted), widthPx).size.width.toFloat()
                 }
-                val indent = px(MarkdownBodyStyle.ListIndentPerDepth.value) * item.depth
+                // 描画は字下げを1つの `padding(start = 字下げ × 深さ)` で付けるので、掛けてから丸める。
+                val indent = px(MarkdownBodyStyle.ListIndentPerDepth * item.depth)
                 val width = (widthPx - indent - marker - gap).roundToInt()
                 measure(texts[index], listTextStyle(quoted), width).spreadLines(offsets[index])
             }
@@ -181,7 +184,7 @@ private fun measureBlock(
             }
             val (spread, layouts) = quoteSpreadBlock(
                 children.map { it.spread },
-                spacing = px(MarkdownBodyStyle.BlockSpacing.value),
+                spacing = px(MarkdownBodyStyle.BlockSpacing),
                 // 切れ端ごとに、縦線の上下の余白か、面の上下の余白を足す（描画の QuoteOrFaceFrame と同じ）。
                 padding = with(density) { (if (face == null) MarkdownBodyStyle.QuoteVerticalPadding else MarkdownBodyStyle.CalloutPaddingVertical).roundToPx() * 2f }
             )
@@ -232,7 +235,7 @@ private fun measureBlock(
         is MarkdownBlock.Image -> MeasuredSpreadBlock(SpreadBlock.Image(imageHeightPx(block)), SpreadBlockRender.Image(block))
 
         MarkdownBlock.HorizontalRule -> MeasuredSpreadBlock(
-            SpreadBlock.Rule(px(MarkdownBodyStyle.RuleThickness.value + MarkdownBodyStyle.RuleVerticalPadding.value * 2)),
+            SpreadBlock.Rule(px(MarkdownBodyStyle.RuleThickness) + px(MarkdownBodyStyle.RuleVerticalPadding) * 2),
             SpreadBlockRender.Rule
         )
     }

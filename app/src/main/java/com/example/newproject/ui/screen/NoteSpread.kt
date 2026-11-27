@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -147,8 +148,7 @@ internal fun NoteSpread(
     val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = ReadingChip, link = ReadingAccent)
     val currentOnLink by rememberUpdatedState(onLink)
     val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
-    // 本文の列の最大幅は縦の流しと同じ（→ MarkdownBodyStyle.ColumnMaxWidth）。計測と描画が同じ上限から取る。
-    val textWidthPx = with(density) { minOf(pageWidth - PagePadding * 2, MarkdownBodyStyle.ColumnMaxWidth).roundToPx() }
+    val textWidthPx = spreadTextWidthPx(pageWidth, density)
     val accessoryPx = if (headingAccessory != null) with(density) { HeadingAccessoryWidth.roundToPx() } else 0
     val pendingImageHeightDp = LocalConfiguration.current.screenHeightDp
     // 画像の寸法が届くたびに組み直す（読む位置は保つ → 判断11）。寸法は共有の入れ物の観測できる状態から読む。
@@ -216,16 +216,17 @@ internal fun NoteSpread(
     val anchor = reading.anchor
 
     BoxWithConstraints(modifier = modifier) {
-        val pageContentHeight = with(density) { (maxHeight - PagePadding * 2).toPx() }
+        val pageContentHeight = spreadPageContentHeightPx(constraints.maxHeight, density)
         var cardHeightPx by remember(noteKey) { mutableIntStateOf(0) }
         // 再会カードを測ったか。**測る前の高さ（前に測った値か0）で組んだ見開きは、読書の記録へ送らない。** カードが出入りするたびに測り直す。
         var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
-        val leftHeight = pageContentHeight - if (leftPageTop != null) cardHeightPx + with(density) { CardGap.toPx() } else 0f
+        val leftHeight = pageContentHeight - if (leftPageTop != null) (cardHeightPx + with(density) { CardGap.roundToPx() }).toFloat() else 0f
         val titleHeight = remember(title, folder, sectionModel.tags, textWidthPx, density, baseStyle) {
             noteTitleBlockHeightPx(measurer, baseStyle, density, textWidthPx, title, folder, sectionModel.tags) +
-                with(density) { MarkdownBodyStyle.TitleGap.toPx() }
+                with(density) { MarkdownBodyStyle.TitleGap.roundToPx() }
         }
-        val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.toPx() }
+        // 描画の spacedBy は間を画素へ丸めて置く。
+        val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.roundToPx().toFloat() }
         val fitHeight = minOf(leftHeight, pageContentHeight, leftHeight - titleHeight)
         val pages = remember(measured, leftHeight, pageContentHeight, titleHeight, spacingPx) {
             paginateSpread(
@@ -550,6 +551,20 @@ private val ReadingSaver = Saver<SpreadReading?, ArrayList<Any>>(
 
 /** ページの内側の余白（→ [SPREAD_PAGE_PADDING_DP]）。 */
 private val PagePadding = SPREAD_PAGE_PADDING_DP.dp
+
+/**
+ * 幅 [pageWidth] のページに組む本文の列の幅。**描画と同じく、ページの幅・左右の余白・列の上限を1つずつ画素へ丸めてから引く**
+ * （`width`・`padding`・`widthIn` はそれぞれ丸める。足してから丸めると、端数の密度で計測の幅が描画より1画素広くなり、折り返しを取り損ねる）。
+ * 列の上限は縦の流しと同じ（→ MarkdownBodyStyle.ColumnMaxWidth）。
+ */
+internal fun spreadTextWidthPx(pageWidth: Dp, density: Density): Int = with(density) {
+    minOf(pageWidth.roundToPx() - PagePadding.roundToPx() * 2, MarkdownBodyStyle.ColumnMaxWidth.roundToPx())
+}
+
+/** 高さ [maxHeightPx] のページで本文を置ける高さ。上下の余白は描画と同じく片側ずつ画素へ丸めて引く。 */
+internal fun spreadPageContentHeightPx(maxHeightPx: Int, density: Density): Float = with(density) {
+    (maxHeightPx - PagePadding.roundToPx() * 2).toFloat()
+}
 
 /** 再会カードと左ページの間。 */
 private val CardGap = 8.dp
