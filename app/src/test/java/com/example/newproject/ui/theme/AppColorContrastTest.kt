@@ -494,6 +494,21 @@ class AppColorContrastTest {
         }
     }
 
+    /**
+     * コールアウトの面（→ features/note_typesetting.md §5.4）。頭の線画と言葉・題・中身の字が、どの面の上でも読める。
+     * 中身は引用と同じ字の色（onSurfaceSubtle）で描く。
+     */
+    @Test
+    fun `コールアウトの面の上の言葉と題と中身が読める`() {
+        schemes.forEach { (name, c) ->
+            c.calloutFaces.all.forEachIndexed { i, tone ->
+                assertAtLeast(4.5, contrast(tone.title, tone.surface), "$name 面$i の言葉")
+                assertAtLeast(4.5, contrast(c.onSurface, tone.surface), "$name 面$i の題")
+                assertAtLeast(4.5, contrast(c.onSurfaceSubtle, tone.surface), "$name 面$i の中身")
+            }
+        }
+    }
+
     @Test
     fun `淡い場の上でも見出しの文字とボタンの輪郭が読める`() {
         val c = LightAppColors

@@ -30,6 +30,10 @@ import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.ui.markdown.InlineMarkdownColors
 import com.example.newproject.ui.markdown.MarkdownBlockquote
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
+import com.example.newproject.ui.markdown.quoteInnerWidthPx
+import com.example.newproject.ui.markdown.calloutLabelOf
+import com.example.newproject.ui.markdown.calloutLabelWidthPx
+import com.example.newproject.ui.markdown.calloutFaceOf
 import com.example.newproject.ui.markdown.SpreadMeasureInputs
 import com.example.newproject.ui.markdown.SpreadSliceView
 import com.example.newproject.ui.markdown.measureSpreadBlock
@@ -112,7 +116,7 @@ class CalloutHeaderUiTest {
 
     /**
      * **言葉の幅がちょうど内側の幅の半分になる外の幅（とその前後1画素）でも、描画と計測は同じ並べ方を選ぶ。**
-     * 密度 2.53125 では引用の左の余白16dpが40.5pxになり、引いてから丸める計測は描画より1画素広く数えて、境い目で題を送るかが分かれた。
+     * 密度 2.25 では知らない種類のコールアウトの面の左右の余白14dpが片側31.5pxになる。描画は片側ずつ丸めるので、引いてから丸める計測は1画素ずれ、境い目で題を送るかが分かれうる。
      * 同じ行と2段では高さが言葉の1行ぶん違うので、高さの比べ方で並べ方の食い違いが見える。
      * 1つのテストで `setContent` は1回しか呼べないので、外の幅ごとにテストを分ける。
      */
@@ -134,10 +138,13 @@ class CalloutHeaderUiTest {
     /** 外の幅を、引用の内側が言葉の幅のちょうど2倍になる幅から [shift] 画素動かして描き、切れ端の高さを計測と比べる。 */
     private fun assertBoundaryMatches(shift: Int) {
         val type = "独自".repeat(6)
-        val (slices, drawn) = drawSpread("> [!$type] 確認する題", density = 2.53125f) { _, measurer, style ->
-            val labelWidth = measurer.measure(AnnotatedString("≡ $type"), style.merge(MarkdownBodyStyle.CalloutLabelText)).size.width
-            // 引用の左の余白は描画と同じく40.5pxを41pxへ丸める。
-            labelWidth * 2 + 41 + shift
+        val markdown = "> [!$type] 確認する題"
+        val callout = quoteOf(markdown).content.callout!!
+        val (slices, drawn) = drawSpread(markdown, density = 2.25f) { density, measurer, style ->
+            val face = calloutFaceOf(callout)
+            val labelWidth = calloutLabelWidthPx(measurer, style, density, calloutLabelOf(callout), face)
+            // 面の左右の余白は、描画と同じく片側ずつ画素へ丸めた分を引く（quoteInnerWidthPx が持つ）。
+            labelWidth * 2 - quoteInnerWidthPx(0, density, face) + shift
         }
 
         assertSlicesMatch(slices, drawn, "外の幅を $shift 画素動かした")

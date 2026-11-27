@@ -60,10 +60,10 @@ internal sealed interface SpreadBlockRender {
     data class QuoteLines(val lines: List<AnnotatedString>, val offsets: List<Int>) : SpreadBlockRender
 
     /** 引用。子（コールアウトの頭と中のブロック）を測ったものと、子が引用の単位のどこを占めるか（→ [quoteSpreadBlock]）。 */
-    data class Quote(val children: List<Pair<MeasuredSpreadBlock, QuoteChildLayout>>) : SpreadBlockRender
+    data class Quote(val children: List<Pair<MeasuredSpreadBlock, QuoteChildLayout>>, val face: CalloutFace? = null) : SpreadBlockRender
 
     /** コールアウトの頭。位置は題の文字で数える。 */
-    data class CalloutHeader(val label: CalloutLabel, val title: AnnotatedString) : SpreadBlockRender
+    data class CalloutHeader(val label: CalloutLabel, val title: AnnotatedString, val face: CalloutFace? = null) : SpreadBlockRender
     data class Code(val text: AnnotatedString, val language: String?) : SpreadBlockRender
 
     /** 表。最初の行は見出しの行。セルは行ごとの頭の位置（セルの中の位置）を持つ。 */
@@ -162,9 +162,10 @@ private fun measureBlock(
         }
 
         is MarkdownBlock.Blockquote -> {
-            val inner = quoteInnerWidthPx(widthPx, density)
+            val face = calloutFaceOf(block.content.callout)
+            val inner = quoteInnerWidthPx(widthPx, density, face)
             val children = buildList {
-                block.content.callout?.let { add(measureCalloutHeader(calloutLabelOf(it), inline(it.title), inputs, inner)) }
+                block.content.callout?.let { add(measureCalloutHeader(calloutLabelOf(it), inline(it.title), face, inputs, inner)) }
                 block.content.blocks.forEach { child ->
                     add(
                         when (child) {
@@ -178,9 +179,10 @@ private fun measureBlock(
             val (spread, layouts) = quoteSpreadBlock(
                 children.map { it.spread },
                 spacing = px(MarkdownBodyStyle.BlockSpacing.value),
-                padding = px(MarkdownBodyStyle.QuoteVerticalPadding.value) * 2
+                // 切れ端ごとに、縦線の上下の余白か、面の上下の余白を足す（描画の QuoteOrFaceFrame と同じ）。
+                padding = px((if (face == null) MarkdownBodyStyle.QuoteVerticalPadding else MarkdownBodyStyle.CalloutPaddingVertical).value) * 2
             )
-            MeasuredSpreadBlock(spread, SpreadBlockRender.Quote(children.zip(layouts)))
+            MeasuredSpreadBlock(spread, SpreadBlockRender.Quote(children.zip(layouts), face))
         }
 
         is MarkdownBlock.CodeBlock -> {
@@ -238,8 +240,15 @@ private fun measureBlock(
  * 引用の外の幅 [widthPx] から、中のブロックを並べる幅を出す。**描画（[QuoteFrame] の左の余白）と同じく、余白を先に画素へ丸めてから引く。**
  * 引いてから丸めると、余白が半画素の密度で1画素広くなり、コールアウトの題を送るか（[calloutTitleBelow]）が描画と分かれる。
  */
-internal fun quoteInnerWidthPx(widthPx: Int, density: Density): Int =
-    widthPx - with(density) { (MarkdownBodyStyle.QuoteBarWidth + MarkdownBodyStyle.QuoteTextStart).roundToPx() }
+internal fun quoteInnerWidthPx(widthPx: Int, density: Density, face: CalloutFace? = null): Int =
+    widthPx - with(density) {
+        // 面は左右の余白をそれぞれ画素へ丸める（Modifier.padding と同じ）。
+        if (face == null) {
+            (MarkdownBodyStyle.QuoteBarWidth + MarkdownBodyStyle.QuoteTextStart).roundToPx()
+        } else {
+            MarkdownBodyStyle.CalloutPaddingHorizontal.roundToPx() * 2
+        }
+    }
 
 /** 引用の中の行を、1行ずつ別の文字として測る（描く側の [MarkdownQuoteLines] と同じ）。 */
 private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, widthPx: Int): MeasuredSpreadBlock = with(inputs) {
@@ -257,15 +266,27 @@ private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, wi
  * 言葉が長ければ題を次の行へ送り（→ [calloutTitleBelow]）、言葉の高さを題の最初の行に足す — 続きの切れ端には言葉を置かない。
  * 同じ行なら言葉と題は基線で揃うので、高いほうの基線に合わせて題をずらした分を最初の行に、言葉が題より下へ出る分を最後の行に足す。
  */
-private fun measureCalloutHeader(label: CalloutLabel, title: AnnotatedString, inputs: SpreadMeasureInputs, widthPx: Int): MeasuredSpreadBlock =
+private fun measureCalloutHeader(
+    label: CalloutLabel,
+    title: AnnotatedString,
+    face: CalloutFace?,
+    inputs: SpreadMeasureInputs,
+    widthPx: Int
+): MeasuredSpreadBlock =
     with(inputs) {
-        val labelText = AnnotatedString("${label.mark} ${label.text}")
-        val labelLayout = measure(labelText, MarkdownBodyStyle.CalloutLabelText, widthPx)
-        val render = SpreadBlockRender.CalloutHeader(label, title)
+        // 言葉は線画の置き場所込みで測る（描画の MarkdownCalloutHeader と同じ文字と置き場所）。
+        val labelLayout = measurer.measure(
+            calloutLabelText(label, face),
+            baseStyle.merge(MarkdownBodyStyle.CalloutLabelText),
+            constraints = Constraints(maxWidth = widthPx.coerceAtLeast(1)),
+            placeholders = calloutLabelPlaceholders(label, face),
+            density = density
+        )
+        val render = SpreadBlockRender.CalloutHeader(label, title, face)
         if (title.isEmpty()) {
             return@with MeasuredSpreadBlock(SpreadBlock.Lines(listOf(SpreadLine(labelLayout.size.height.toFloat(), 0)), 0), render)
         }
-        val labelWidth = measurer.measure(labelText, baseStyle.merge(MarkdownBodyStyle.CalloutLabelText), density = density).size.width
+        val labelWidth = calloutLabelWidthPx(measurer, baseStyle, density, label, face)
         if (calloutTitleBelow(labelWidth.toFloat(), widthPx.toFloat())) {
             val titleLayout = measure(title, MarkdownBodyStyle.CalloutTitleText, widthPx)
             MeasuredSpreadBlock(SpreadBlock.Lines(titleLayout.spreadLines(0, labelLayout.size.height.toFloat()), title.length), render)
@@ -356,13 +377,13 @@ internal fun SpreadSliceView(
         )
 
         // 子の表は行を割らずに組んだので、割らない高さで引き直す（→ quoteChildSlice）。
-        is SpreadBlockRender.Quote -> QuoteFrame {
+        is SpreadBlockRender.Quote -> QuoteOrFaceFrame(render.face) {
             render.children.forEach { (child, layout) ->
                 quoteChildSlice(slice, layout)?.let { SpreadSliceView(child, it, Float.POSITIVE_INFINITY, imageLoader, imageMeasurements, null) }
             }
         }
 
-        is SpreadBlockRender.CalloutHeader -> MarkdownCalloutHeader(render.label, render.title.cut(range), showLabel = slice.unitStart == 0)
+        is SpreadBlockRender.CalloutHeader -> MarkdownCalloutHeader(render.label, render.title.cut(range), showLabel = slice.unitStart == 0, face = render.face)
 
         is SpreadBlockRender.Code -> MarkdownCodeBlock(render.text.cut(range), render.language)
 

@@ -192,6 +192,12 @@ internal val LightAppColors = AppColorScheme(
     onCodeWindow = Color(0xFFD7DEEA),
     codeWindowLabel = Color(0xFF8E9AB0),
     codeWindowRule = Color(0x14FFFFFF),
+    calloutFaces = CalloutFaceTones(
+        summary = CalloutFaceTone(surface = Color(0xFFEEF1F7), title = Color(0xFF4A5A78)),
+        question = CalloutFaceTone(surface = Color(0xFFF3F1FF), title = Color(0xFF6054DE)),
+        example = CalloutFaceTone(surface = Color(0xFFEAF5F2), title = Color(0xFF0C796C)),
+        caution = CalloutFaceTone(surface = Color(0xFFFBF3E2), title = Color(0xFF8A6414))
+    ),
     errorText = Color(0xFFCC0000),
     errorSurface = Color(0xFFCC0000),
     onErrorSurface = Color.White,      // #CC0000 上で 5.89
@@ -290,6 +296,12 @@ internal val DarkAppColors = AppColorScheme(
     onCodeWindow = Color(0xFFD7DEEA),
     codeWindowLabel = Color(0xFF8E9AB0),
     codeWindowRule = Color(0x14FFFFFF),
+    calloutFaces = CalloutFaceTones(
+        summary = CalloutFaceTone(surface = Color(0xFF18233A), title = Color(0xFFA9BBDD)),
+        question = CalloutFaceTone(surface = Color(0xFF1C2244), title = Color(0xFFA99CFF)),
+        example = CalloutFaceTone(surface = Color(0xFF12302C), title = Color(0xFF5FD0C0)),
+        caution = CalloutFaceTone(surface = Color(0xFF2E2614), title = Color(0xFFE3B85A))
+    ),
     errorText = Color(0xFFFF6B6B),
     // 暗所の赤は明るいので、その上に載る文字は黒。白のままだと 2.78 まで落ちる。
     errorSurface = Color(0xFFFF6B6B),
@@ -393,6 +405,7 @@ internal val CodeWindow: Color @Composable @ReadOnlyComposable get() = current.c
 internal val OnCodeWindow: Color @Composable @ReadOnlyComposable get() = current.onCodeWindow
 internal val CodeWindowLabel: Color @Composable @ReadOnlyComposable get() = current.codeWindowLabel
 internal val CodeWindowRule: Color @Composable @ReadOnlyComposable get() = current.codeWindowRule
+internal val CalloutFaces: CalloutFaceTones @Composable @ReadOnlyComposable get() = current.calloutFaces
 
 // -- 意味色 --
 internal val ErrorText: Color @Composable @ReadOnlyComposable get() = current.errorText

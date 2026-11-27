@@ -68,6 +68,10 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
+import com.example.newproject.ui.theme.CalloutFaces
+import com.example.newproject.ui.theme.CalloutFaceTone
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.foundation.text.InlineTextContent
 import com.example.newproject.ui.theme.CodeNumber
 import com.example.newproject.ui.theme.CodeComment
 import com.example.newproject.ui.theme.CodeString
@@ -235,14 +239,49 @@ internal fun MarkdownHorizontalRule() {
 }
 
 /**
- * 引用。コールアウトの頭と中のブロックを、縦線の内側に並べる（→ docs/dev/system/markdown_rendering.md §8）。
- * 中の並べ方は見開きの計測（`measureSpreadBlock`）と同じ寸法で組む。
+ * 引用。コールアウトの頭と中のブロックを、縦線の内側か、種類ごとの面の内側に並べる（→ docs/dev/system/markdown_rendering.md §8・
+ * features/note_typesetting.md §5.4）。中の並べ方は見開きの計測（`measureSpreadBlock`）と同じ寸法で組む。
  */
 @Composable
 internal fun MarkdownBlockquote(content: QuoteContent) {
-    QuoteFrame {
-        content.callout?.let { MarkdownCalloutHeader(calloutLabelOf(it), rememberInline(it.title), showLabel = true) }
+    val face = calloutFaceOf(content.callout)
+    QuoteOrFaceFrame(face) {
+        content.callout?.let { MarkdownCalloutHeader(calloutLabelOf(it), rememberInline(it.title), showLabel = true, face = face) }
         content.blocks.forEach { MarkdownQuoteChild(it) }
+    }
+}
+
+/** [face] があればコールアウトの面で、無ければ引用の縦線で囲む。見開きは割った切れ端をこれで囲む。 */
+@Composable
+internal fun QuoteOrFaceFrame(face: CalloutFace?, content: @Composable ColumnScope.() -> Unit) {
+    if (face == null) QuoteFrame(content) else CalloutFaceFrame(face, content)
+}
+
+/**
+ * コールアウトの面。紙に薄い面を敷き、枠線は付けない（大きい面に輪郭を足さない → ui_design_principles §3）。
+ * 内側の幅と上下の余白は、見開きの計測（[quoteInnerWidthPx]・`measureSpreadBlock`）が同じ値で引く。
+ */
+@Composable
+internal fun CalloutFaceFrame(face: CalloutFace, content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(calloutFaceTone(face).surface, RoundedCornerShape(MarkdownBodyStyle.CalloutCorner))
+            .padding(horizontal = MarkdownBodyStyle.CalloutPaddingHorizontal, vertical = MarkdownBodyStyle.CalloutPaddingVertical),
+        verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing),
+        content = content
+    )
+}
+
+/** 面の種類の色。 */
+@Composable
+@ReadOnlyComposable
+internal fun calloutFaceTone(face: CalloutFace): CalloutFaceTone = with(CalloutFaces) {
+    when (face) {
+        CalloutFace.Summary -> summary
+        CalloutFace.Question -> question
+        CalloutFace.Example -> example
+        CalloutFace.Caution -> caution
     }
 }
 
@@ -301,14 +340,23 @@ internal fun MarkdownQuoteLines(lines: List<AnnotatedString>) {
  * 見開きの計測（`measureCalloutHeader`）はこの並べ方と同じ寸法で測る。
  */
 @Composable
-internal fun MarkdownCalloutHeader(label: CalloutLabel, title: AnnotatedString, showLabel: Boolean) {
+internal fun MarkdownCalloutHeader(label: CalloutLabel, title: AnnotatedString, showLabel: Boolean, face: CalloutFace?) {
     val gap = MarkdownBodyStyle.CalloutLabelGap
+    // 面を持つ種類は、記号の代わりに線画を言葉と同じ色で置く。言葉の幅は線画の置き場所込みで測る（→ calloutLabelWidthPx）。
+    val labelColor = face?.let { calloutFaceTone(it).title } ?: OnSurfaceSubtle
+    val inlineContent = if (face == null) {
+        emptyMap()
+    } else {
+        val placeholder = calloutLabelPlaceholders(label, face).single().item
+        mapOf(CALLOUT_ICON_ID to InlineTextContent(placeholder) { CalloutIcon(face, labelColor) })
+    }
     Layout(
         content = {
             DisableSelection {
                 Text(
-                    text = "${label.mark} ${label.text}",
-                    color = OnSurfaceSubtle,
+                    text = calloutLabelText(label, face),
+                    color = labelColor,
+                    inlineContent = inlineContent,
                     style = LocalTextStyle.current.merge(MarkdownBodyStyle.CalloutLabelText),
                     modifier = if (showLabel) Modifier.clearAndSetSemantics { contentDescription = label.text } else Modifier.alpha(0f).clearAndSetSemantics { }
                 )

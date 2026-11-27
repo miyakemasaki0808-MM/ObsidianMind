@@ -41,6 +41,23 @@ internal class NotePaperTones(
     }
 }
 
+/** コールアウトの面の1種類。[surface] は紙に敷く薄い面、[title] は頭の線画と言葉の色。 */
+internal class CalloutFaceTone(val surface: Color, val title: Color)
+
+/**
+ * コールアウトの面の色（→ docs/dev/features/note_typesetting.md §5.4）。種類を見分ける主役は頭の言葉で、色は補助。
+ * 色はアプリにある色に寄せる（まとめ＝補足の青灰・問い＝関連ノートの紫・例とヒント＝AI推薦の緑・注意＝冊子の黄土）。
+ */
+internal class CalloutFaceTones(
+    val summary: CalloutFaceTone,
+    val question: CalloutFaceTone,
+    val example: CalloutFaceTone,
+    val caution: CalloutFaceTone
+) {
+    /** 検査が全種類を見るための一覧。 */
+    val all: List<CalloutFaceTone> get() = listOf(summary, question, example, caution)
+}
+
 /**
  * 冊子の紙の地色（分野 → 色）。**色を持つのは一般語彙の6つだけ。**
  *
@@ -131,6 +148,7 @@ internal class AppColorScheme(
     val onCodeWindow: Color,
     val codeWindowLabel: Color,
     val codeWindowRule: Color,
+    val calloutFaces: CalloutFaceTones,
     // 意味色
     val errorText: Color,
     // 塗りとして使うエラー色は文字色と別に持つ。errorText を Badge の containerColor に

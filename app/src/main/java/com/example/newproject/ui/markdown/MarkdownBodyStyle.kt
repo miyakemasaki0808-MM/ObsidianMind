@@ -128,6 +128,12 @@ internal object MarkdownBodyStyle {
     )
     val CalloutLabelGap: Dp = 8.dp
 
+    /** コールアウトの面（→ features/note_typesetting.md §5.4）。線画は文字と同じ倍率で大きくなるよう sp で持つ。 */
+    val CalloutIconSize = 16.sp
+    val CalloutPaddingHorizontal: Dp = 14.dp
+    val CalloutPaddingVertical: Dp = 12.dp
+    val CalloutCorner: Dp = 10.dp
+
     val TableCell = TextStyle(fontSize = 14.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
     val TableHeader = TableCell.copy(fontWeight = FontWeight.Bold)
     val TableCellPaddingHorizontal: Dp = 8.dp
