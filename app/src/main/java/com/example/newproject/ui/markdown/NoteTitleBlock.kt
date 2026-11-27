@@ -107,7 +107,7 @@ internal fun NoteTitleBlock(title: String, folder: String?, tags: List<String>, 
 
 /**
  * [NoteTitleBlock] の高さ（罫の下の [MarkdownBodyStyle.TitleGap] は含めない）。[baseStyle] は描画が重ねる `LocalTextStyle`、
- * [widthPx] は欄の幅。描画と同じ書式と寸法から測る。
+ * [widthPx] は欄の幅。描画と同じ書式と寸法から測り、**余白・間・罫は描画と同じく1つずつ画素へ丸めてから足す**。
  */
 internal fun noteTitleBlockHeightPx(
     measurer: TextMeasurer,
@@ -122,17 +122,17 @@ internal fun noteTitleBlockHeightPx(
     fun heightOf(text: String, style: TextStyle): Float =
         measurer.measure(AnnotatedString(text), baseStyle.merge(style), constraints = constraints, density = density).size.height.toFloat()
     var height = heightOf(title, MarkdownBodyStyle.Title)
-    if (folder != null) height += heightOf(folder, MarkdownBodyStyle.FolderLabel) + MarkdownBodyStyle.HeaderGap.toPx()
+    if (folder != null) height += heightOf(folder, MarkdownBodyStyle.FolderLabel) + MarkdownBodyStyle.HeaderGap.roundToPx()
     if (tags.isNotEmpty()) {
-        val chipPadding = MarkdownBodyStyle.TagPaddingHorizontal.toPx() * 2
         val widths = tags.map { tag ->
-            measurer.measure(AnnotatedString(tagChipText(tag)), baseStyle.merge(MarkdownBodyStyle.Tag), maxLines = 1, density = density)
-                .size.width + chipPadding
+            val textWidth = measurer.measure(AnnotatedString(tagChipText(tag)), baseStyle.merge(MarkdownBodyStyle.Tag), maxLines = 1, density = density)
+                .size.width
+            MarkdownBodyStyle.tagChipWidthPx(textWidth, density).toFloat()
         }
-        val chipHeight = heightOf("#", MarkdownBodyStyle.Tag) + MarkdownBodyStyle.TagPaddingVertical.toPx() * 2
-        val gap = MarkdownBodyStyle.TagGap.toPx()
+        val chipHeight = heightOf("#", MarkdownBodyStyle.Tag) + MarkdownBodyStyle.TagPaddingVertical.roundToPx() * 2
+        val gap = MarkdownBodyStyle.TagGap.roundToPx().toFloat()
         val rows = chipRowCount(widths, gap, widthPx.toFloat())
-        height += MarkdownBodyStyle.HeaderGap.toPx() + rows * chipHeight + (rows - 1) * gap
+        height += MarkdownBodyStyle.HeaderGap.roundToPx() + rows * chipHeight + (rows - 1) * gap
     }
-    height + MarkdownBodyStyle.HeaderBottom.toPx() + MarkdownBodyStyle.HeaderRule.toPx()
+    height + MarkdownBodyStyle.HeaderBottom.roundToPx() + MarkdownBodyStyle.HeaderRule.roundToPx()
 }

@@ -212,7 +212,7 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
 
 /**
  * 見出しの文字。見開きは割った切れ端（[text] の一部）をこれで描く。
- * 文字より上に積む高さ（上の余白・線・線の下の間）は、見開きの計測が [MarkdownBodyStyle.headingSpaceAbove] で同じだけ足す。
+ * 文字より上に積む高さ（上の余白・線・線の下の間）は、見開きの計測が [MarkdownBodyStyle.headingSpaceAbovePx] で同じだけ足す。
  */
 @Composable
 internal fun MarkdownHeadingText(level: Int, text: AnnotatedString, modifier: Modifier = Modifier) {

@@ -2,6 +2,7 @@ package com.example.newproject.ui
 
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.newproject.domain.markdown.MarkdownBlock
@@ -82,17 +83,37 @@ class MarkdownBodyStyleTest {
 
     @Test
     fun `見出しの上の高さは、線を持つ段だけ線と線の下の間を足す`() {
+        val unit = Density(1f)
         (1..6).forEach { level ->
             val extra = if (MarkdownBodyStyle.hasHeadingMark(level)) {
                 MarkdownBodyStyle.HeadingMarkHeight + MarkdownBodyStyle.HeadingMarkGap
             } else {
                 0.dp
             }
-            assertEquals(MarkdownBodyStyle.headingTopPadding(level) + extra, MarkdownBodyStyle.headingSpaceAbove(level))
+            assertEquals((MarkdownBodyStyle.headingTopPadding(level) + extra).value.toInt(), MarkdownBodyStyle.headingSpaceAbovePx(level, unit))
         }
         assertTrue(MarkdownBodyStyle.hasHeadingMark(1))
         assertTrue(MarkdownBodyStyle.hasHeadingMark(2))
         assertFalse(MarkdownBodyStyle.hasHeadingMark(3))
+    }
+
+    /** 片側の余白が端数の画素になる密度。描画は余白を片側ずつ丸めるので、足してから丸めると1画素ずれる。 */
+    private val oddDensity = Density(2.75f)
+
+    @Test
+    fun `見開きの計測の寸法は、描画と同じく部品ごとに画素へ丸めてから足す`() {
+        // 9dp は 24.75px → 描画は片側 25px。足してから丸めると 49.5px で、枠の幅が描画より細くなる。
+        assertEquals(64, MarkdownBodyStyle.tagChipWidthPx(14, oddDensity))
+        // 密度 2.625 では 23.625px → 片側 24px。両側を足してから丸めると 47px になる。
+        assertEquals(62, MarkdownBodyStyle.tagChipWidthPx(14, Density(2.625f)))
+        // 14dp は 38.5px → 描画は片側 39px。
+        assertEquals(1000 - 78, MarkdownBodyStyle.codeInnerWidthPx(1000, oddDensity))
+        // 上下の余白 12dp（33px）×2 と、札 40px・間 10dp（28px）×2・罫 1dp（3px）。
+        assertEquals(66, MarkdownBodyStyle.codeFragmentPaddingPx(null, oddDensity))
+        assertEquals(66 + 40 + 56 + 3, MarkdownBodyStyle.codeFragmentPaddingPx(40, oddDensity))
+        // H2 の上の余白 18dp（50px）＋線 2dp（6px）＋線の下の間 10dp（28px）。
+        assertEquals(84, MarkdownBodyStyle.headingSpaceAbovePx(2, oddDensity))
+        assertEquals(28, MarkdownBodyStyle.headingSpaceAbovePx(3, oddDensity))
     }
 
     @Test

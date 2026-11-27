@@ -4,6 +4,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineBreak
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -21,7 +22,7 @@ import com.example.newproject.domain.markdown.MarkdownBlock
  * **アプリの書式に斜体を使わない。** 日本語の斜体は傾けただけの字になる。書き手が `*…*` で付けた斜体は [inlineMarkdown] が残す。
  */
 internal object MarkdownBodyStyle {
-    /** ブロックの間の余白。余白はこれと [headingSpaceAbove] の2つだけで作る（見開きの割り方がこの2つで高さを測る）。 */
+    /** ブロックの間の余白。余白はこれと [headingSpaceAbovePx] の2つだけで作る（見開きの割り方がこの2つで高さを測る）。 */
     val BlockSpacing: Dp = 14.dp
 
     /** 約物を詰める。題と見出しだけに掛け、本文には掛けない（行ごとに字の並びが不揃いになる）。 */
@@ -94,11 +95,28 @@ internal object MarkdownBodyStyle {
     val HeadingMarkGap: Dp = 10.dp
 
     /**
-     * 見出しの文字より上にある高さ（上の余白と、線とその下の間）。**見開きの計測はこの値を見出しの高さに足す。**
+     * 見出しの文字より上にある高さ（上の余白と、線とその下の間）の画素。**見開きの計測はこの値を見出しの高さに足す。**
      * 描画（[MarkdownHeadingText]）は同じ部品を同じ順に積むので、ここを変えずに描画だけを変えると切れ端の高さが計測とずれる。
+     * **描画と同じく部品を1つずつ画素へ丸めてから足す**（`padding`・`size`・`Spacer` はそれぞれ丸める。足してから丸めると、端数の密度で1画素ずれる）。
      */
-    fun headingSpaceAbove(level: Int): Dp =
-        headingTopPadding(level) + if (hasHeadingMark(level)) HeadingMarkHeight + HeadingMarkGap else 0.dp
+    fun headingSpaceAbovePx(level: Int, density: Density): Int = with(density) {
+        headingTopPadding(level).roundToPx() +
+            if (hasHeadingMark(level)) HeadingMarkHeight.roundToPx() + HeadingMarkGap.roundToPx() else 0
+    }
+
+    /** コードの枠の中の字の幅。描画（左右の `padding`）と同じく片側ずつ画素へ丸めて引く。 */
+    fun codeInnerWidthPx(widthPx: Int, density: Density): Int =
+        widthPx - with(density) { CodePaddingHorizontal.roundToPx() * 2 }
+
+    /** コードの枠の切れ端ごとに足す高さ（上下の余白と、札があれば札・間・罫・間）。各部を画素へ丸めてから足す。 */
+    fun codeFragmentPaddingPx(labelHeightPx: Int?, density: Density): Int = with(density) {
+        CodePaddingVertical.roundToPx() * 2 +
+            (labelHeightPx?.let { it + CodeHeaderGap.roundToPx() * 2 + CodeHeaderRule.roundToPx() } ?: 0)
+    }
+
+    /** タグの札の幅。字の幅に、描画と同じく片側ずつ画素へ丸めた左右の余白を足す。 */
+    fun tagChipWidthPx(textWidthPx: Int, density: Density): Int =
+        textWidthPx + with(density) { TagPaddingHorizontal.roundToPx() * 2 }
 
     /** リストの1段あたりの字下げ。深さは字下げだけで示し、記号は段によらず変えない。 */
     val ListIndentPerDepth: Dp = 16.dp
@@ -191,12 +209,9 @@ internal object MarkdownBodyStyle {
         lineBreak = LineBreak.Simple
     )
 
-    /** 札の下の間・罫・罫の下の間。見開きの計測は札の高さにこれを足す（→ [codeHeaderExtra]）。 */
+    /** 札の下の間・罫・罫の下の間。見開きの計測は札の高さにこれを足す（→ [codeFragmentPaddingPx]）。 */
     val CodeHeaderGap: Dp = 10.dp
     val CodeHeaderRule: Dp = 1.dp
-
-    /** 頭の行の札を除いた高さ（札の下の間・罫・罫の下の間）。 */
-    val codeHeaderExtra: Dp get() = CodeHeaderGap * 2 + CodeHeaderRule
 
     val RuleThickness: Dp = 1.dp
     val RuleVerticalPadding: Dp = 8.dp

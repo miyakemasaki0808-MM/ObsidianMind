@@ -134,7 +134,7 @@ private fun measureBlock(
                 SpreadBlock.Lines(
                     layout.spreadLines(0),
                     text.length,
-                    fragmentPadding = px(MarkdownBodyStyle.headingSpaceAbove(block.level).value),
+                    fragmentPadding = MarkdownBodyStyle.headingSpaceAbovePx(block.level, density).toFloat(),
                     minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight.value) else 0f
                 ),
                 SpreadBlockRender.Heading(block.level, text)
@@ -183,25 +183,23 @@ private fun measureBlock(
                 children.map { it.spread },
                 spacing = px(MarkdownBodyStyle.BlockSpacing.value),
                 // 切れ端ごとに、縦線の上下の余白か、面の上下の余白を足す（描画の QuoteOrFaceFrame と同じ）。
-                padding = px((if (face == null) MarkdownBodyStyle.QuoteVerticalPadding else MarkdownBodyStyle.CalloutPaddingVertical).value) * 2
+                padding = with(density) { (if (face == null) MarkdownBodyStyle.QuoteVerticalPadding else MarkdownBodyStyle.CalloutPaddingVertical).roundToPx() * 2f }
             )
             MeasuredSpreadBlock(spread, SpreadBlockRender.Quote(children.zip(layouts), face))
         }
 
         is MarkdownBlock.CodeBlock -> {
             val text = codeAnnotatedString(block)
-            val paddingH = px(MarkdownBodyStyle.CodePaddingHorizontal.value)
-            val layout = measure(text, MarkdownBodyStyle.Code, (widthPx - paddingH * 2).roundToInt())
+            val layout = measure(text, MarkdownBodyStyle.Code, MarkdownBodyStyle.codeInnerWidthPx(widthPx, density))
             // 切れ端ごとに枠の上下の余白と、札があれば頭の行（札・間・罫・間）を足す。描画（MarkdownCodeBlock）と同じ順の寸法。
-            val header = block.language?.let { language ->
-                measurer.measure(AnnotatedString(language), baseStyle.merge(MarkdownBodyStyle.CodeLabel), maxLines = 1, density = density)
-                    .size.height + px(MarkdownBodyStyle.codeHeaderExtra.value)
-            } ?: 0f
+            val labelHeight = block.language?.let { language ->
+                measurer.measure(AnnotatedString(language), baseStyle.merge(MarkdownBodyStyle.CodeLabel), maxLines = 1, density = density).size.height
+            }
             MeasuredSpreadBlock(
                 SpreadBlock.Lines(
                     layout.spreadLines(0),
                     text.length,
-                    fragmentPadding = px(MarkdownBodyStyle.CodePaddingVertical.value) * 2 + header
+                    fragmentPadding = MarkdownBodyStyle.codeFragmentPaddingPx(labelHeight, density).toFloat()
                 ),
                 SpreadBlockRender.Code(text, block.language)
             )
@@ -209,14 +207,15 @@ private fun measureBlock(
 
         is MarkdownBlock.Table -> {
             val columns = block.headers.size.coerceAtLeast(1)
-            val cellWidth = (widthPx / columns - px(MarkdownBodyStyle.TableCellPaddingHorizontal.value) * 2).roundToInt()
-            val cellPadding = px(MarkdownBodyStyle.TableCellPaddingVertical.value) * 2
+            // セルの余白と行の罫は、描画（`padding`・`HorizontalDivider`）と同じく1つずつ画素へ丸めてから足す。
+            val cellWidth = widthPx / columns - with(density) { MarkdownBodyStyle.TableCellPaddingHorizontal.roundToPx() * 2 }
+            val cellPadding = with(density) { MarkdownBodyStyle.TableCellPaddingVertical.roundToPx() * 2f }
             val texts = listOf(block.headers) + block.renderedRows()
             var offset = 0
             val rows = mutableListOf<SpreadTableRow>()
             val cells = texts.mapIndexed { rowIndex, row ->
                 val style = if (rowIndex == 0) MarkdownBodyStyle.TableHeader else MarkdownBodyStyle.TableCell
-                val divider = px(if (rowIndex == 0) 1f else 0.5f)
+                val divider = with(density) { (if (rowIndex == 0) 1.dp else 0.5.dp).roundToPx().toFloat() }
                 val measured = row.map { cell ->
                     val text = inline(cell.trim())
                     val layout = measure(text, style, cellWidth)
