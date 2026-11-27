@@ -1,9 +1,9 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 構想。3つの区切りで作り、区切り1（プレートと、型に関係ない部品）から着手する
-**最終検証:** 未検証（実装前）
-**関連コード:** 未作成。今の本文の書式は `ui/markdown/MarkdownBodyStyle.kt`、部品の描画は `ui/markdown/MarkdownRenderer.kt`・`ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`、見開きの計測は `ui/markdown/SpreadBlocks.kt`、解析は `domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）、読む面は `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/screen/NoteSpread.kt`、紙の色は `ui/theme/AppTheme.kt`（`notePaperColor`）、末尾の余白は `ui/markdown/EndSpace.kt`
-**関連テスト:** 未作成（→ §10）
+**状態:** 区切り1を実装中。型の判定は作ったが、画面には配線していない
+**最終検証:** 未検証（区切り1の実装中。§5.9 だけ実装と突き合わせた）
+**関連コード:** `model/NoteForm.kt`・`domain/NoteFormJudge.kt`（型の判定）。ほかは未作成で、今の本文の書式は `ui/markdown/MarkdownBodyStyle.kt`、部品の描画は `ui/markdown/MarkdownRenderer.kt`・`ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`、見開きの計測は `ui/markdown/SpreadBlocks.kt`、解析は `domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）、読む面は `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/screen/NoteSpread.kt`、紙の色は `ui/theme/AppTheme.kt`（`notePaperColor`）、末尾の余白は `ui/markdown/EndSpace.kt`
+**関連テスト:** `NoteFormJudgeTest`。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
 **関連:** [ui_design_principles](../system/ui_design_principles.md)（基準と好み）・[note_age_paper](note_age_paper.md)（紙の地色の持ち主）・
@@ -273,12 +273,15 @@
    読めない frontmatter はこの段を飛ばす（失敗にしない）
 2. **見出しの骨格で決める。** 見出しの頭の記号（絵文字・番号）を外した語を、型ごとの語の辞書と完全一致で照らす。
    **一方の型の語に当たる見出しが2つ以上あり、もう一方より多ければ**その型にする
-   - 技術書: 目的・構文・注意点・実践・使い方・レベル・関連知識 など
-   - 読書ノート: 概要・要点・要点メモ・紹介文・コメント・感想 など
-   - 両方の型にまたがる語（「関連」など）は辞書に入れない。辞書の中身は実装で Vault の骨格の実物から決め、JVM テストに載せる
+   - 技術書: 目的・構文・ユースケース・注意点・レベル・関連知識 など
+   - 読書ノート: 概要・紹介文・要点メモ・コメント・感想 など
+   - 両方の型にまたがる語（「関連」「まとめ」など）は辞書に入れない。**辞書の正本はコード**（`NoteFormJudge.kt`）で、Mac の写しの Vault の見出しの実物から取った
+   - 見出しの頭と末尾の、文字でない記号（絵文字・番号・約物・強調の記号）だけを外して照らす。中の記号は残す（「解説・注意点」は1つの語）
 3. **どれにも当たらなければ、コードの枠を持つノートは技術書、持たないノートは標準**
 
-- **入力は解析済みの本文（ブロックの並び）と frontmatter だけ。** AI の結果・痕跡・ファイルの場所を使わない
+- **検算:** Mac の写しの326本に当てると、技術書237本（骨格で101本・コードの枠で136本）・読書ノート30本・標準59本に分かれた。
+  読書のフォルダの30本のうち29本が読書ノートに当たり、残る1本はコードの枠を持つので技術書になった。`cssclasses` を書いたノートは0本（端末の Vault と同じかは確かめていない）
+- **入力は解析済みの本文（ブロックの並び）と frontmatter の `cssclasses` だけ。** AI の結果・痕跡・ファイルの場所を使わない
 - **区切り1ではこの判定を画面に配線しない。** 全ノートを層1・層2で組む。配線は区切り2で、本文の解析と同じジョブで行う（→ §7）
 
 ### 5.10 型に意味のある部品（層3。区切り2・3。モックで合意した形）
