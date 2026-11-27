@@ -22,6 +22,22 @@ class EndSpaceTest {
         assertEquals(0, endSpaceShortfall(targetOffset = -4, canScrollForward = true, paddingApplied = true))
     }
 
+    /** 全画面のような高い窓で足した余白を低い窓へ運んだとき（→ features/note_typesetting.md 判断12）。 */
+    @Test
+    fun `見出しが上端にあり余白が窓で要る分より多ければ_余りを返して減らす`() {
+        // 最後のブロックの下に 300px の隙間があり、余白が 900px ある → 600px 余っている。
+        assertEquals(-600, endSpaceShortfall(targetOffset = 0, canScrollForward = false, paddingApplied = true, freeBelowLast = 300, bottomPx = 900))
+        // 最後のブロックが窓の外なら、余白は要らない。
+        assertEquals(-900, endSpaceShortfall(targetOffset = 0, canScrollForward = true, paddingApplied = true, freeBelowLast = null, bottomPx = 900))
+    }
+
+    @Test
+    fun `余白がちょうど要る分か1px以内の差なら減らさない`() {
+        assertEquals(0, endSpaceShortfall(targetOffset = 0, canScrollForward = false, paddingApplied = true, freeBelowLast = 300, bottomPx = 300))
+        assertEquals(0, endSpaceShortfall(targetOffset = 0, canScrollForward = false, paddingApplied = true, freeBelowLast = 300, bottomPx = 301))
+        assertEquals(0, endSpaceShortfall(targetOffset = 0, canScrollForward = false, paddingApplied = true, freeBelowLast = 300, bottomPx = 0))
+    }
+
     /** まだ先へ送れるのに上端に無いのは、送りが届く前の配置。そこから余白を決めると、足りない分を誤って足す。 */
     @Test
     fun `先へ送れるのに見出しが上端に無ければ_まだ決めない`() {
