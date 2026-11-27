@@ -50,6 +50,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
@@ -93,7 +94,9 @@ internal fun MarkdownNoteContent(
     // 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ QuoteOffers）。
     quoteOffers: QuoteOffers? = null,
     // 見出しを上端に置くための末尾の余白（→ EndSpace）。null なら末尾に余白を足さない。
-    endSpace: EndSpace? = null
+    endSpace: EndSpace? = null,
+    // 本文の列を中央に置く左右の余白（→ MarkdownBodyStyle.columnInset）。一覧は幅いっぱいのまま内側に足す。
+    columnInset: Dp = 0.dp
 ) {
     val blocks = remember(content, precomputedBlocks) {
         precomputedBlocks ?: parseMarkdownBlocks(content)
@@ -137,7 +140,7 @@ internal fun MarkdownNoteContent(
                     modifier = Modifier
                         .fillMaxWidth()
                         .onGloballyPositioned { quoteGeometry.listTop = it.positionInRoot().y },
-                    contentPadding = PaddingValues(bottom = endPadding),
+                    contentPadding = PaddingValues(start = columnInset, end = columnInset, bottom = endPadding),
                     verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)
                 ) {
                     items(blocks.size) { i ->

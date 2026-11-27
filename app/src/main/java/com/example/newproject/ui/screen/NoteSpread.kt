@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -142,7 +143,8 @@ internal fun NoteSpread(
     val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = CodePanel, link = ReadingAccent)
     val currentOnLink by rememberUpdatedState(onLink)
     val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
-    val textWidthPx = with(density) { (pageWidth - PagePadding * 2).roundToPx() }
+    // 本文の列の最大幅は縦の流しと同じ（→ MarkdownBodyStyle.ColumnMaxWidth）。計測と描画が同じ上限から取る。
+    val textWidthPx = with(density) { minOf(pageWidth - PagePadding * 2, MarkdownBodyStyle.ColumnMaxWidth).roundToPx() }
     val accessoryPx = if (headingAccessory != null) with(density) { HeadingAccessoryWidth.roundToPx() } else 0
     val pendingImageHeightDp = LocalConfiguration.current.screenHeightDp
     // 画像の寸法が届くたびに組み直す（読む位置は保つ → 判断11）。寸法は共有の入れ物の観測できる状態から読む。
@@ -435,7 +437,7 @@ private fun SpreadPageView(
                         .fillMaxSize()
                         .onGloballyPositioned { pageTop[0] = it.boundsInRoot().top }
                 ) {
-                    Column(modifier = Modifier.padding(PagePadding)) {
+                    Column(modifier = Modifier.padding(PagePadding).widthIn(max = MarkdownBodyStyle.ColumnMaxWidth)) {
                         if (showTitle) {
                             Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
                             Spacer(modifier = Modifier.height(MarkdownBodyStyle.TitleGap))

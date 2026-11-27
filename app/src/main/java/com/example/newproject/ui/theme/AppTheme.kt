@@ -122,6 +122,8 @@ internal class AppColorScheme(
     // 読む面のアクセント（本文のリンク・見出しの線・箇条の点）。関連ノートの見出しと同じ値だが別の役割で、
     // 片方を動かしたときにもう片方が付いて動かないよう別に持つ（→ docs/dev/features/note_typesetting.md §5.2）。
     val readingAccent: Color,
+    // 読む面のプレートの縁。ライトは影で浮くので縁を持たず（透明）、ダークは影が見えないのでごく細い明るい縁で浮かせる。
+    val readingPlateRim: Color,
     // 意味色
     val errorText: Color,
     // 塗りとして使うエラー色は文字色と別に持つ。errorText を Badge の containerColor に

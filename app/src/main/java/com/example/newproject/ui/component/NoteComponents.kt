@@ -37,6 +37,9 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.BoxWithConstraints
+import com.example.newproject.ui.theme.ReadingPlateRim
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -194,6 +197,14 @@ internal fun IconPill(
 /** [IconPill] の直径。見出しの題名の行はこの高さを最初から持つ（→ [GradientHeader]）。 */
 internal val ICON_PILL_SIZE = 40.dp
 
+/** プレートの中の余白（→ features/note_typesetting.md §5.1）。 */
+private val PLATE_PADDING_TOP = 26.dp
+private val PLATE_PADDING_HORIZONTAL = 22.dp
+private val PLATE_PADDING_BOTTOM = 30.dp
+
+/** プレートを場から浮かせる影。ダークでは影が見えないので、縁（`ReadingPlateRim`）で浮かせる。 */
+private val PLATE_ELEVATION = 4.dp
+
 /** ノート本文パネル（通常表示・全画面で共用）。 */
 @Composable
 internal fun NoteContentPanel(
@@ -213,7 +224,12 @@ internal fun NoteContentPanel(
     /** 選択メニューが出ている間の範囲の書き先。机の札だけが渡す（→ [QuoteOffers]）。 */
     quoteOffers: QuoteOffers? = null,
     /** 見出しを上端に置くための末尾の余白。[listState] の持ち主が同じ寿命で持つ（→ [EndSpace]）。 */
-    endSpace: EndSpace? = null
+    endSpace: EndSpace? = null,
+    /**
+     * 場の上に浮かせるか（→ features/note_typesetting.md §5.1）。通常表示は浮かせ、全画面は画面全体が紙なので浮かせない
+     * （影と縁を付けると、紙と同じ色の地の上に紙の輪郭だけが見える）。
+     */
+    floating: Boolean = true
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -221,53 +237,73 @@ internal fun NoteContentPanel(
         color = notePaperColor(uiState.notePaperTone),
         // **形は「読む面」の役割から引く。** 値を直に書くと、冊子との区別が
         // 「揃えたほうが綺麗」の一言で消える（→ system/bearing_channels.md §6）。
-        shape = ReadingSurfaceShape
+        shape = ReadingSurfaceShape,
+        shadowElevation = if (floating) PLATE_ELEVATION else 0.dp,
+        border = if (floating) BorderStroke(1.dp, ReadingPlateRim) else null
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            val (noteTitle, noteContent) = when (val state = uiState.noteState) {
-                is NoteState.Success -> state.title to state.content
-                is NoteState.Empty   -> "ノート未表示" to "このVaultにMarkdownノートが見つかりませんでした。"
-                is NoteState.Error   -> "ノート未表示" to "Vaultを読み込めませんでした。"
-                else                 -> "ノート未表示" to "Vaultフォルダを選択して「ランダム表示」をタップしてください。"
-            }
-            // precomputedBlocks はノート本文（Success時）のパース結果。
-            // プレースホルダ表示時は内容と一致しないため渡さない。
-            val isNote = uiState.noteState is NoteState.Success
-            val blocksForContent = if (isNote) precomputedBlocks else null
-            Text(text = noteTitle, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
-            // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
-            // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
-            // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので
-            // フォールバックのまま描いてよい。
-            if (!isNote || blocksForContent != null) {
-                if (listState != null) {
-                    MarkdownNoteContent(
-                        content = noteContent,
-                        modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
-                        listState = listState,
-                        precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements,
-                        headingAccessory = if (isNote) headingAccessory else null,
-                        onLink = if (isNote) onLink else null,
-                        // 今のノートの本文はいつも置ける本文として組み、案内の文字を出す間は受け手を渡さない。
-                        quotable = true,
-                        onQuote = if (isNote) onQuote else null,
-                        quoteOffers = if (isNote) quoteOffers else null,
-                        endSpace = if (isNote) endSpace else null
-                    )
-                } else {
-                    MarkdownNoteContent(
-                        content = noteContent,
-                        modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
-                        precomputedBlocks = blocksForContent,
-                        imageLoader = imageLoader,
-                        imageMeasurements = imageMeasurements,
-                        onLink = if (isNote) onLink else null
-                    )
+        BoxWithConstraints {
+            // 本文の列を最大幅で中央に置く。題も同じ余白で本文の頭にそろえる。
+            val inset = MarkdownBodyStyle.columnInset(maxWidth - PLATE_PADDING_HORIZONTAL * 2)
+            Column(
+                modifier = Modifier.padding(
+                    start = PLATE_PADDING_HORIZONTAL,
+                    end = PLATE_PADDING_HORIZONTAL,
+                    top = PLATE_PADDING_TOP,
+                    bottom = PLATE_PADDING_BOTTOM
+                )
+            ) {
+                val (noteTitle, noteContent) = when (val state = uiState.noteState) {
+                    is NoteState.Success -> state.title to state.content
+                    is NoteState.Empty   -> "ノート未表示" to "このVaultにMarkdownノートが見つかりませんでした。"
+                    is NoteState.Error   -> "ノート未表示" to "Vaultを読み込めませんでした。"
+                    else                 -> "ノート未表示" to "Vaultフォルダを選択して「ランダム表示」をタップしてください。"
                 }
-            } else {
-                Spacer(modifier = Modifier.weight(1f))
+                // precomputedBlocks はノート本文（Success時）のパース結果。
+                // プレースホルダ表示時は内容と一致しないため渡さない。
+                val isNote = uiState.noteState is NoteState.Success
+                val blocksForContent = if (isNote) precomputedBlocks else null
+                Text(
+                    text = noteTitle,
+                    color = OnSurface,
+                    style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title),
+                    modifier = Modifier.padding(horizontal = inset)
+                )
+                // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
+                // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
+                // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので
+                // フォールバックのまま描いてよい。
+                if (!isNote || blocksForContent != null) {
+                    if (listState != null) {
+                        MarkdownNoteContent(
+                            content = noteContent,
+                            modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
+                            listState = listState,
+                            precomputedBlocks = blocksForContent,
+                            imageLoader = imageLoader,
+                            imageMeasurements = imageMeasurements,
+                            headingAccessory = if (isNote) headingAccessory else null,
+                            onLink = if (isNote) onLink else null,
+                            // 今のノートの本文はいつも置ける本文として組み、案内の文字を出す間は受け手を渡さない。
+                            quotable = true,
+                            onQuote = if (isNote) onQuote else null,
+                            quoteOffers = if (isNote) quoteOffers else null,
+                            endSpace = if (isNote) endSpace else null,
+                            columnInset = inset
+                        )
+                    } else {
+                        MarkdownNoteContent(
+                            content = noteContent,
+                            modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
+                            precomputedBlocks = blocksForContent,
+                            imageLoader = imageLoader,
+                            imageMeasurements = imageMeasurements,
+                            onLink = if (isNote) onLink else null,
+                            columnInset = inset
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
             }
         }
     }

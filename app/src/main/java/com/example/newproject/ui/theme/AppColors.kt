@@ -165,6 +165,7 @@ internal val LightAppColors = AppColorScheme(
     onVibrantMuted = Color(0xFFEAF7FF),
     linkText = Color(0xFF2563EB),
     readingAccent = Color(0xFF6054DE),
+    readingPlateRim = Color.Transparent,
     errorText = Color(0xFFCC0000),
     errorSurface = Color(0xFFCC0000),
     onErrorSurface = Color.White,      // #CC0000 上で 5.89
@@ -255,6 +256,7 @@ internal val DarkAppColors = AppColorScheme(
     onVibrantMuted = Color(0xFFC6D3E6),
     linkText = Color(0xFF7BA6FF),
     readingAccent = Color(0xFFA79EFF),
+    readingPlateRim = Color(0x0FFFFFFF),
     errorText = Color(0xFFFF6B6B),
     // 暗所の赤は明るいので、その上に載る文字は黒。白のままだと 2.78 まで落ちる。
     errorSurface = Color(0xFFFF6B6B),
@@ -350,6 +352,7 @@ internal val OnVibrant: Color @Composable @ReadOnlyComposable get() = current.on
 internal val OnVibrantMuted: Color @Composable @ReadOnlyComposable get() = current.onVibrantMuted
 internal val LinkText: Color @Composable @ReadOnlyComposable get() = current.linkText
 internal val ReadingAccent: Color @Composable @ReadOnlyComposable get() = current.readingAccent
+internal val ReadingPlateRim: Color @Composable @ReadOnlyComposable get() = current.readingPlateRim
 
 // -- 意味色 --
 internal val ErrorText: Color @Composable @ReadOnlyComposable get() = current.errorText

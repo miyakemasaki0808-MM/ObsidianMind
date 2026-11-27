@@ -94,6 +94,17 @@ class MarkdownBodyStyleTest {
     }
 
     @Test
+    fun `本文の列は最大幅を超える分だけ左右に余白を取り、狭い窓では取らない`() {
+        val max = MarkdownBodyStyle.ColumnMaxWidth
+        assertEquals(0.dp, MarkdownBodyStyle.columnInset(360.dp))
+        assertEquals(0.dp, MarkdownBodyStyle.columnInset(max))
+        assertEquals(82.dp, MarkdownBodyStyle.columnInset(max + 164.dp))
+        // 余白を引いた列の幅は最大幅になる。
+        val wide = 900.dp
+        assertEquals(max, wide - MarkdownBodyStyle.columnInset(wide) * 2)
+    }
+
+    @Test
     fun `リード文は本文の最初のブロックが段落のときだけ`() {
         val paragraph = MarkdownBlock.Paragraph("起きてから家を出るまで")
         assertTrue(isLeadParagraph(0, paragraph))

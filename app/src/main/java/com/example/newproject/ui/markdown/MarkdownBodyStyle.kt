@@ -127,6 +127,18 @@ internal object MarkdownBodyStyle {
 
     val RuleThickness: Dp = 1.dp
     val RuleVerticalPadding: Dp = 8.dp
+
+    /**
+     * 本文の列の最大幅（16sp で約32字）。読みやすい1行は和文で30字台（→ features/note_typesetting.md 判断6）。
+     * 字数ではなく dp で決めるので、文字の倍率を上げた人の1行は広がらない。
+     */
+    val ColumnMaxWidth: Dp = 520.dp
+
+    /**
+     * 幅 [available] の中で、本文の列を中央に置くための左右それぞれの余白。広くなければ 0。
+     * **一覧は幅いっぱいのまま、この余白を内側に足す** — 一覧ごと絞ると、余白の側で払っても本文が送れない。
+     */
+    fun columnInset(available: Dp): Dp = ((available - ColumnMaxWidth) / 2).coerceAtLeast(0.dp)
 }
 
 /**
