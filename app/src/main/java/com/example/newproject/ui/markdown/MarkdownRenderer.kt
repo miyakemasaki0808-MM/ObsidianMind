@@ -68,6 +68,11 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
+import androidx.compose.ui.text.style.TextAlign
+import com.example.newproject.ui.theme.OnCodeWindow
+import com.example.newproject.ui.theme.CodeWindowRule
+import com.example.newproject.ui.theme.CodeWindowLabel
+import com.example.newproject.ui.theme.CodeWindow
 import com.example.newproject.ui.theme.OnSurface
 
 @Composable
@@ -157,7 +162,7 @@ internal fun MarkdownNoteContent(
                             is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text, lead = isLeadParagraph(i, block))
                             is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
                             is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
-                            is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
+                            is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(rememberCodeText(block), block.language)
                             is MarkdownBlock.HorizontalRule -> MarkdownHorizontalRule()
                             is MarkdownBlock.Blockquote    -> MarkdownBlockquote(block.content)
                             is MarkdownBlock.Table         -> MarkdownTable(block.headers, block.rows)
@@ -265,7 +270,7 @@ private fun MarkdownQuoteChild(block: MarkdownBlock) {
         is MarkdownBlock.Blockquote     -> MarkdownBlockquote(block.content)
         is MarkdownBlock.Heading        -> MarkdownHeading(block)
         is MarkdownBlock.Table          -> MarkdownTable(block.headers, block.rows)
-        is MarkdownBlock.CodeBlock      -> MarkdownCodeBlock(block.code)
+        is MarkdownBlock.CodeBlock      -> MarkdownCodeBlock(rememberCodeText(block), block.language)
         MarkdownBlock.HorizontalRule    -> MarkdownHorizontalRule()
         // 中身の解析が画像を段落へ替えているので届かない。届いても原文の文字で出す。
         is MarkdownBlock.Image          -> MarkdownQuoteLines(listOf(rememberInline(block.sourceText())))
@@ -476,21 +481,48 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>, quoted: Boolean = fal
 /** リストの文字の書式。引用の中は引用の書式で、見開きの計測も同じものを読む。 */
 internal fun listTextStyle(quoted: Boolean): TextStyle = if (quoted) MarkdownBodyStyle.Quote else MarkdownBodyStyle.Paragraph
 
+/**
+ * コードの枠（暗い窓）。[language] があれば頭の行の右に札を出す（→ features/note_typesetting.md §5.4）。
+ * 見開きで割れた切れ端もこれで描き、どの切れ端にも札を出す — 見開きの計測は切れ端ごとに同じ頭の高さを足す。
+ * 札は本文ではないので、選択のコピーに入れない。
+ */
 @Composable
-internal fun MarkdownCodeBlock(code: String) {
+internal fun MarkdownCodeBlock(text: AnnotatedString, language: String?) {
     Surface(
-        color = CodePanel,
-        shape = RoundedCornerShape(6.dp),
+        color = CodeWindow,
+        shape = RoundedCornerShape(MarkdownBodyStyle.CodeWindowCorner),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text(
-            text = code.trimEnd(),
-            color = OnSurface,
-            style = LocalTextStyle.current.merge(MarkdownBodyStyle.Code),
-            modifier = Modifier.padding(MarkdownBodyStyle.CodePadding)
-        )
+        Column(
+            modifier = Modifier.padding(
+                horizontal = MarkdownBodyStyle.CodePaddingHorizontal,
+                vertical = MarkdownBodyStyle.CodePaddingVertical
+            )
+        ) {
+            if (language != null) {
+                DisableSelection {
+                    Text(
+                        text = language,
+                        color = CodeWindowLabel,
+                        style = LocalTextStyle.current.merge(MarkdownBodyStyle.CodeLabel),
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                Spacer(modifier = Modifier.height(MarkdownBodyStyle.CodeHeaderGap))
+                HorizontalDivider(thickness = MarkdownBodyStyle.CodeHeaderRule, color = CodeWindowRule)
+                Spacer(modifier = Modifier.height(MarkdownBodyStyle.CodeHeaderGap))
+            }
+            Text(text = text, color = OnCodeWindow, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Code))
+        }
     }
 }
+
+/** コードの枠に描く文字。末尾の空行は描かない（見開きの計測も同じ文字を測る）。 */
+@Composable
+private fun rememberCodeText(block: MarkdownBlock.CodeBlock): AnnotatedString =
+    remember(block.code) { AnnotatedString(block.code.trimEnd()) }
 
 /**
  * 選択の容器の見えている上端と、本文の一覧の上端（どちらも窓の座標）。選択メニューが渡す範囲の矩形と同じ座標で、

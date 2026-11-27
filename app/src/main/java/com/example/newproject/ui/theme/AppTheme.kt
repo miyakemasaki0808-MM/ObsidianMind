@@ -126,6 +126,11 @@ internal class AppColorScheme(
     val readingPlateRim: Color,
     // 読む面の小さな札（題の欄のタグ）の面。
     val readingChip: Color,
+    // コードの枠（暗い窓）と、その上の字・言語の札・頭の罫。窓はテーマに関わらず暗い。
+    val codeWindow: Color,
+    val onCodeWindow: Color,
+    val codeWindowLabel: Color,
+    val codeWindowRule: Color,
     // 意味色
     val errorText: Color,
     // 塗りとして使うエラー色は文字色と別に持つ。errorText を Badge の containerColor に

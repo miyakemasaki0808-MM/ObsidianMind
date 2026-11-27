@@ -181,6 +181,10 @@ internal val LightAppColors = AppColorScheme(
     readingAccent = Color(0xFF6054DE),
     readingPlateRim = Color.Transparent,
     readingChip = Color(0xFFF1F3F6),
+    codeWindow = Color(0xFF0F1626),
+    onCodeWindow = Color(0xFFD7DEEA),
+    codeWindowLabel = Color(0xFF8E9AB0),
+    codeWindowRule = Color(0x14FFFFFF),
     errorText = Color(0xFFCC0000),
     errorSurface = Color(0xFFCC0000),
     onErrorSurface = Color.White,      // #CC0000 上で 5.89
@@ -274,6 +278,11 @@ internal val DarkAppColors = AppColorScheme(
     readingAccent = Color(0xFFA79EFF),
     readingPlateRim = Color(0x0FFFFFFF),
     readingChip = Color(0xFF1B2640),
+    // ダークでは紙より暗い窓にする（紙の上の部品を紙より明るくする順の例外 → note_typesetting 判断14）。
+    codeWindow = Color(0xFF070C18),
+    onCodeWindow = Color(0xFFD7DEEA),
+    codeWindowLabel = Color(0xFF8E9AB0),
+    codeWindowRule = Color(0x14FFFFFF),
     errorText = Color(0xFFFF6B6B),
     // 暗所の赤は明るいので、その上に載る文字は黒。白のままだと 2.78 まで落ちる。
     errorSurface = Color(0xFFFF6B6B),
@@ -373,6 +382,10 @@ internal val LinkText: Color @Composable @ReadOnlyComposable get() = current.lin
 internal val ReadingAccent: Color @Composable @ReadOnlyComposable get() = current.readingAccent
 internal val ReadingPlateRim: Color @Composable @ReadOnlyComposable get() = current.readingPlateRim
 internal val ReadingChip: Color @Composable @ReadOnlyComposable get() = current.readingChip
+internal val CodeWindow: Color @Composable @ReadOnlyComposable get() = current.codeWindow
+internal val OnCodeWindow: Color @Composable @ReadOnlyComposable get() = current.onCodeWindow
+internal val CodeWindowLabel: Color @Composable @ReadOnlyComposable get() = current.codeWindowLabel
+internal val CodeWindowRule: Color @Composable @ReadOnlyComposable get() = current.codeWindowRule
 
 // -- 意味色 --
 internal val ErrorText: Color @Composable @ReadOnlyComposable get() = current.errorText

@@ -479,6 +479,17 @@ class AppColorContrastTest {
         assertEquals("ダークは強さの設定が効かない", DarkAppColors.readingGradientStops, DarkAppColors.readingGroundPaleStops)
     }
 
+    /** コードの枠は、テーマに関わらず暗い窓（→ features/note_typesetting.md 判断14）。字と言語の札は窓の上で読める。 */
+    @Test
+    fun `コードの窓の字と札は窓の上で読める`() {
+        schemes.forEach { (name, c) ->
+            assertAtLeast(4.5, contrast(c.onCodeWindow, c.codeWindow), "$name コードの字")
+            assertAtLeast(4.5, contrast(c.codeWindowLabel, c.codeWindow), "$name 言語の札")
+            assertTrue("$name の窓は暗い", relativeLuminance(c.codeWindow) < 0.02)
+        }
+        assertTrue("ダークの窓は紙より暗い", relativeLuminance(DarkAppColors.codeWindow) < relativeLuminance(DarkAppColors.panel))
+    }
+
     @Test
     fun `淡い場の上でも見出しの文字とボタンの輪郭が読める`() {
         val c = LightAppColors

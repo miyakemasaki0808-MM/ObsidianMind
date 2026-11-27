@@ -64,7 +64,7 @@ internal sealed interface SpreadBlockRender {
 
     /** コールアウトの頭。位置は題の文字で数える。 */
     data class CalloutHeader(val label: CalloutLabel, val title: AnnotatedString) : SpreadBlockRender
-    data class Code(val text: AnnotatedString) : SpreadBlockRender
+    data class Code(val text: AnnotatedString, val language: String?) : SpreadBlockRender
 
     /** 表。最初の行は見出しの行。セルは行ごとの頭の位置（セルの中の位置）を持つ。 */
     data class Table(val rows: List<List<SpreadTableCell>>) : SpreadBlockRender
@@ -185,11 +185,20 @@ private fun measureBlock(
 
         is MarkdownBlock.CodeBlock -> {
             val text = AnnotatedString(block.code.trimEnd())
-            val padding = px(MarkdownBodyStyle.CodePadding.value)
-            val layout = measure(text, MarkdownBodyStyle.Code, (widthPx - padding * 2).roundToInt())
+            val paddingH = px(MarkdownBodyStyle.CodePaddingHorizontal.value)
+            val layout = measure(text, MarkdownBodyStyle.Code, (widthPx - paddingH * 2).roundToInt())
+            // 切れ端ごとに枠の上下の余白と、札があれば頭の行（札・間・罫・間）を足す。描画（MarkdownCodeBlock）と同じ順の寸法。
+            val header = block.language?.let { language ->
+                measurer.measure(AnnotatedString(language), baseStyle.merge(MarkdownBodyStyle.CodeLabel), maxLines = 1, density = density)
+                    .size.height + px(MarkdownBodyStyle.codeHeaderExtra.value)
+            } ?: 0f
             MeasuredSpreadBlock(
-                SpreadBlock.Lines(layout.spreadLines(0), text.length, fragmentPadding = padding * 2),
-                SpreadBlockRender.Code(text)
+                SpreadBlock.Lines(
+                    layout.spreadLines(0),
+                    text.length,
+                    fragmentPadding = px(MarkdownBodyStyle.CodePaddingVertical.value) * 2 + header
+                ),
+                SpreadBlockRender.Code(text, block.language)
             )
         }
 
@@ -355,7 +364,7 @@ internal fun SpreadSliceView(
 
         is SpreadBlockRender.CalloutHeader -> MarkdownCalloutHeader(render.label, render.title.cut(range), showLabel = slice.unitStart == 0)
 
-        is SpreadBlockRender.Code -> MarkdownCodeBlock(render.text.cut(range).text)
+        is SpreadBlockRender.Code -> MarkdownCodeBlock(render.text.cut(range), render.language)
 
         is SpreadBlockRender.Table -> {
             val lines = spreadTableLines(measured.spread as SpreadBlock.Table, render, slice, fitHeightPx)

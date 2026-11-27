@@ -133,14 +133,33 @@ internal object MarkdownBodyStyle {
     val TableCellPaddingHorizontal: Dp = 8.dp
     val TableCellPaddingVertical: Dp = 6.dp
 
+    /** コードの枠の中の字（端末の等幅）。枠はテーマに関わらず暗い窓（→ features/note_typesetting.md 判断14）。 */
     val Code = TextStyle(
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
+        fontSize = 13.sp,
+        lineHeight = 22.sp,
         fontFamily = FontFamily.Monospace,
         letterSpacing = 0.sp,
         lineBreak = LineBreak.Simple
     )
-    val CodePadding: Dp = 12.dp
+    val CodePaddingHorizontal: Dp = 14.dp
+    val CodePaddingVertical: Dp = 12.dp
+    val CodeWindowCorner: Dp = 10.dp
+
+    /** コードの枠の頭の行の言語の札。1行に収め、はみ出す分は切る。 */
+    val CodeLabel = TextStyle(
+        fontSize = 11.sp,
+        lineHeight = 16.sp,
+        fontFamily = FontFamily.Monospace,
+        letterSpacing = 0.sp,
+        lineBreak = LineBreak.Simple
+    )
+
+    /** 札の下の間・罫・罫の下の間。見開きの計測は札の高さにこれを足す（→ [codeHeaderExtra]）。 */
+    val CodeHeaderGap: Dp = 10.dp
+    val CodeHeaderRule: Dp = 1.dp
+
+    /** 頭の行の札を除いた高さ（札の下の間・罫・罫の下の間）。 */
+    val codeHeaderExtra: Dp get() = CodeHeaderGap * 2 + CodeHeaderRule
 
     val RuleThickness: Dp = 1.dp
     val RuleVerticalPadding: Dp = 8.dp
