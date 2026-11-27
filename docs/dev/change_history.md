@@ -17,6 +17,7 @@
 
 | 日付 | 変更内容 | 設計メモ |
 |---|---|---|
+| 2026-11-27 | 見開きで、1見開きに入らない長い節も、今の見開きの残りに入らなければ節の頭を次の見開きから始めるようにした | [本文の見開き](features/note_spread.md) 判断15 |
 | 2026-11-27 | Codex CLI の往復のうち試行の記録に無かった9シリーズを、log.tsv から後追いでまとめた | [実験の記録](harness/experiments/2026-11-27-codex-cli-review-loop-later-series.md) |
 | 2026-11-26 | 見開きの境目で見出しの節・箇条・表・引用・コードを割らず、次の見開きの頭から置くようにした | [本文の見開き](features/note_spread.md) 判断15 |
 | 2026-11-26 | 読む面をノートの型で組み分ける形と結晶の展示室を決め、書体・行間と動きの3行目をチャネルに割り当てた（未実装） | [佇まいのチャネル](system/bearing_channels.md) §11・[ADR-0005](decisions/ADR-0005-bearing-channel-allocation.md) |

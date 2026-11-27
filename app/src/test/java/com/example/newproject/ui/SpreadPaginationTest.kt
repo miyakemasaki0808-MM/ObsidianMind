@@ -74,7 +74,8 @@ class SpreadPaginationTest {
         val pages = paginateSpread(blocks, leftPageHeight = 100f, rightPageHeight = 80f, blockSpacing = 4f)
 
         assertCovered(blocks, pages)
-        assertTrue(pages.all { it.slices.isNotEmpty() })
+        // 右ページは、節を次の見開きへ送ったときだけ空になる（判断15）。左ページはいつも切れ端を持つ。
+        assertTrue(pages.filterIndexed { page, _ -> page % 2 == 0 }.all { it.slices.isNotEmpty() })
     }
 
     @Test
@@ -259,16 +260,24 @@ class SpreadPaginationTest {
         assertEquals(plain, kept)
     }
 
-    /**
-     * 節は下の階層の見出し（3）を含み、同じ階層の次の見出し（5）の手前で終わる。下の階層で切ると今の見開きに入って送らず、
-     * 同じ階層を越えると空の見開きにも入らず送らない。
-     */
+    /** 節は下の階層の見出し（3）を含み、同じ階層の次の見出し（5）の手前で終わる。 */
     @Test
-    fun `見出しの節が今の見開きに入らず空の見開きに入れば、節ごと次の見開きへ送る`() {
-        val blocks = listOf(lines(15), heading(level = 2), lines(2), heading(level = 3), lines(3), heading(level = 2), lines(20))
-        val pages = paginateSpread(blocks, leftPageHeight = 100f, blockSpacing = 0f)
+    fun `見出しの節が今の見開きの残りに入らなければ、節ごと次の見開きへ送る`() {
+        // 同じ階層の次の見出しの手前で閉じるので、節（1〜4）は今の見開きの残りにちょうど入る。次の節（5・6）は入らず送る。
+        val closed = paginateSpread(
+            listOf(lines(15), heading(level = 2), lines(2), heading(level = 3), lines(1), heading(level = 2), lines(5)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2, 3, 4), listOf(5, 6)), blocksByPage(closed))
 
-        assertEquals(listOf(listOf(0), listOf(0), listOf(1, 2, 3, 4, 5, 6), listOf(6), listOf(6)), blocksByPage(pages))
+        // 下の階層の見出しは節の中にある。節（1〜4）ごと送り、下の階層の見出し（3）だけを送らない。
+        val nested = paginateSpread(
+            listOf(lines(15), heading(level = 2), lines(2), heading(level = 3), lines(3), heading(level = 2), lines(5)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+        assertEquals(listOf(listOf(0), listOf(0), listOf(1, 2, 3, 4, 5, 6), listOf(6)), blocksByPage(nested))
     }
 
     /**
@@ -290,30 +299,47 @@ class SpreadPaginationTest {
         assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3)), blocksByPage(atEnd))
     }
 
-    /** 節（見出し・まとまり・長い段落）は入らない。見出しとまとまりを合わせれば入るので一緒に送り、見出しを見開きの末尾に残さない。 */
+    /**
+     * 1見開きに入らない長い節が続く（実機の「まとまり3」と「まとまり4」の形）。2つ目の節は今の見開きの残りに入らないので、
+     * 送っても割れるが、節の頭を次の見開きの頭から始める。節は、見開きの境目をまたぐなら見開きの頭から始まる。
+     */
     @Test
-    fun `節が1見開きに入らなければ、見出しと直後のまとまりを合わせて判定する`() {
-        val pages = paginateSpread(listOf(lines(15), heading(level = 2), whole(6), lines(20)), leftPageHeight = 100f, blockSpacing = 0f)
+    fun `1見開きに入らない長い節も、今の見開きの残りに入らなければ次の見開きの頭から始める`() {
+        val pages = paginateSpread(
+            listOf(heading(level = 2), lines(25), heading(level = 2), lines(25)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
 
-        assertEquals(listOf(0), blocksByPage(pages)[1])
-        assertEquals(listOf(1, 2, 3), blocksByPage(pages)[2])
+        assertEquals(listOf(listOf(0, 1), listOf(1), listOf(1), emptyList(), listOf(2, 3), listOf(3), listOf(3)), blocksByPage(pages))
     }
 
-    /** 見出しとまとまりを合わせると入らない。まとまりだけを送ると見出しが末尾に残るので、送らずに割る。 */
+    /** 見出しの節が今の見開きの残りに入らないので、見出しと箇条を一緒に送る。箇条だけを判定して送ると、見出しが見開きの頭に1つだけ残る。 */
     @Test
-    fun `見出しの直後のまとまりは見出しと一緒に判定し、まとまりだけを送らない`() {
+    fun `見出しのすぐ後のまとまりは見出しと一緒に送り、まとまりだけを送らない`() {
         val pages = paginateSpread(listOf(lines(15), heading(level = 2), whole(20)), leftPageHeight = 100f, blockSpacing = 0f)
 
-        assertEquals(listOf(0, 1, 2), blocksByPage(pages)[1])
-        assertEquals(0 until 4, pages[1].slices.last().run { unitStart until unitEnd })
+        assertEquals(listOf(0), blocksByPage(pages)[1])
+        assertEquals(listOf(1, 2), blocksByPage(pages)[2])
     }
 
     @Test
     fun `続けて並ぶ見出しは連なりの頭でまとめて判定する`() {
-        // 連なりの頭（1）の節は入らず、見出し2つと段落の最初の行なら今の見開きに入る。途中の見出し（2）の節だけなら空の見開きに入るが、
-        // そこで送ると見出し1が末尾に残る。
-        val nested = paginateSpread(listOf(lines(15), heading(level = 1), heading(level = 2), lines(19)), leftPageHeight = 100f, blockSpacing = 0f)
-        assertEquals(listOf(0, 1, 2, 3), blocksByPage(nested)[1])
+        // 連なりの頭（1）の節を送る。途中の見出し（2）でも判定すると、その節も次の見開きの残りに入らないので、見出し1が見開きの頭に1つだけ残る。
+        val nested = paginateSpread(listOf(lines(15), heading(level = 1), heading(level = 2), lines(30)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(0), blocksByPage(nested)[1])
+        assertEquals(listOf(1, 2, 3), blocksByPage(nested)[2])
+
+        // 連なりで最も浅い見出し（階層1）の節で判定する。後ろの階層2の見出し（4）では閉じず、長い段落まで含めて入らないので送る。
+        // 連なりの先頭や末尾の見出しの階層（2）で判定すると、4で閉じて送らない。
+        listOf(listOf(1, 2), listOf(2, 1)).forEach { levels ->
+            val run = paginateSpread(
+                listOf(lines(15)) + levels.map { heading(level = it) } + listOf(lines(2), heading(level = 2), lines(20)),
+                leftPageHeight = 100f,
+                blockSpacing = 0f
+            )
+            assertEquals("連なり$levels", listOf(0), blocksByPage(run)[1])
+        }
 
         // 深い見出しのすぐ後に浅い見出し。深い見出しの節は本文が無いので、浅い見出しの節と合わせて送る。
         val shallower = paginateSpread(listOf(lines(15), heading(level = 3), heading(level = 2), lines(4)), leftPageHeight = 100f, blockSpacing = 0f)
@@ -406,8 +432,8 @@ class SpreadPaginationTest {
 
                     val label = "見出し$count 本文$body 測り終え$complete"
                     assertTrue("$label: 参照 ${counted.reads}", counted.reads <= READS_PER_BLOCK * blocks.size)
-                    // 連なりだけで空の見開きを越えるので送らず、段落のすぐ後から詰める（止めもしない）。
-                    assertEquals(label, listOf(0, 1), pages[0].slices.take(2).map { it.blockIndex })
+                    // 連なりだけで今の見開きの残りを越えるので、続きを測らなくても送ると決まる（止めない）。
+                    assertEquals(label, listOf(listOf(0), emptyList(), listOf(1)), blocksByPage(pages).take(3).map { it.take(1) })
                     if (complete) assertEquals(label, blocks.indices.toList(), pages.flatMap { it.slices }.map { it.blockIndex }.distinct())
                 }
             }
