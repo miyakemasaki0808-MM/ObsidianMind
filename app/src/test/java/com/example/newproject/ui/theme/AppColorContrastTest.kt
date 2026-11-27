@@ -488,6 +488,10 @@ class AppColorContrastTest {
             assertTrue("$name の窓は暗い", relativeLuminance(c.codeWindow) < 0.02)
         }
         assertTrue("ダークの窓は紙より暗い", relativeLuminance(DarkAppColors.codeWindow) < relativeLuminance(DarkAppColors.panel))
+        // 色分けの4色は明暗で値を替えないので、2つの窓の両方で測る。
+        listOf("キーワード" to CodeKeyword, "文字列" to CodeString, "コメント" to CodeComment, "数字" to CodeNumber).forEach { (name, color) ->
+            schemes.forEach { (scheme, c) -> assertAtLeast(4.5, contrast(color, c.codeWindow), "$scheme コードの$name") }
+        }
     }
 
     @Test

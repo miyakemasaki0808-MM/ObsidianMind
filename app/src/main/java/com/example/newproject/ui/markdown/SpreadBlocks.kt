@@ -184,7 +184,7 @@ private fun measureBlock(
         }
 
         is MarkdownBlock.CodeBlock -> {
-            val text = AnnotatedString(block.code.trimEnd())
+            val text = codeAnnotatedString(block)
             val paddingH = px(MarkdownBodyStyle.CodePaddingHorizontal.value)
             val layout = measure(text, MarkdownBodyStyle.Code, (widthPx - paddingH * 2).roundToInt())
             // 切れ端ごとに枠の上下の余白と、札があれば頭の行（札・間・罫・間）を足す。描画（MarkdownCodeBlock）と同じ順の寸法。

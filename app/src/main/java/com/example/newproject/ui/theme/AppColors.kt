@@ -40,6 +40,13 @@ internal val DefaultReadingGround: List<ReadingGroundColor> = listOf(
     ReadingGroundColor(vivid = MutedCoral, pale = Color(0xFFFBE5E8))
 )
 
+// コードの色分けの色。コードの枠はテーマに関わらず暗い窓なので、明暗で値を替えない（→ docs/dev/features/note_typesetting.md §5.4）。
+// どれも2つの窓（ライト・ダーク）の上で 4.5:1 を超える → AppColorContrastTest。
+internal val CodeKeyword = Color(0xFFC3A6FF)
+internal val CodeString = Color(0xFFA6E3A1)
+internal val CodeComment = Color(0xFF7A86A0)
+internal val CodeNumber = Color(0xFFF5A97F)
+
 /** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
 private val LightPanel = Color(0xFFFDFEFF)
 

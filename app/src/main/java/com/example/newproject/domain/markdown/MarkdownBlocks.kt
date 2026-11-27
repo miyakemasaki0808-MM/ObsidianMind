@@ -91,7 +91,10 @@ internal sealed class MarkdownBlock {
      * コードの枠。[language] は開きの ```` ``` ```` の後ろの最初の語（`python` など）で、無ければ null。
      * **言語は描く側だけが使う**（枠の札と色分け → features/note_typesetting.md §5.4）。AI へ渡す文と知識索引には入れない。
      */
-    data class CodeBlock(val code: String, val language: String? = null) : MarkdownBlock()
+    data class CodeBlock(val code: String, val language: String? = null) : MarkdownBlock() {
+        /** 色分けの切れ目（→ [codeTokensOf]）。本文の解析と一緒に Main の外で切る。等しさには入らない（本文と言語から決まる）。 */
+        val tokens: List<CodeToken> = codeTokensOf(language, code)
+    }
     object HorizontalRule : MarkdownBlock()
     /**
      * 引用。[lines] は `>` を1つ外した原文の行で、**AI への書き戻し・知識索引・反証の一文の候補はこれを読む**。

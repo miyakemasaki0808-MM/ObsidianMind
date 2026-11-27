@@ -68,6 +68,14 @@ import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
+import com.example.newproject.ui.theme.CodeNumber
+import com.example.newproject.ui.theme.CodeComment
+import com.example.newproject.ui.theme.CodeString
+import com.example.newproject.ui.theme.CodeKeyword
+import com.example.newproject.domain.markdown.CodeTokenKind
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import com.example.newproject.ui.theme.OnCodeWindow
 import com.example.newproject.ui.theme.CodeWindowRule
@@ -519,10 +527,32 @@ internal fun MarkdownCodeBlock(text: AnnotatedString, language: String?) {
     }
 }
 
-/** コードの枠に描く文字。末尾の空行は描かない（見開きの計測も同じ文字を測る）。 */
+/** コードの枠に描く文字（→ [codeAnnotatedString]）。 */
 @Composable
 private fun rememberCodeText(block: MarkdownBlock.CodeBlock): AnnotatedString =
-    remember(block.code) { AnnotatedString(block.code.trimEnd()) }
+    remember(block) { codeAnnotatedString(block) }
+
+/**
+ * コードの枠に描く文字。末尾の空行は描かず、色分けの切れ目（[MarkdownBlock.CodeBlock.tokens]）に色を付ける。
+ * **縦の流しと見開きの計測・描画が同じ文字を使う**（色は字の幅を変えないので、計測には影響しない）。
+ */
+internal fun codeAnnotatedString(block: MarkdownBlock.CodeBlock): AnnotatedString {
+    val text = block.code.trimEnd()
+    return buildAnnotatedString {
+        append(text)
+        block.tokens.forEach { token ->
+            val end = minOf(token.end, text.length)
+            if (token.start < end) addStyle(SpanStyle(color = codeTokenColor(token.kind)), token.start, end)
+        }
+    }
+}
+
+private fun codeTokenColor(kind: CodeTokenKind): Color = when (kind) {
+    CodeTokenKind.Keyword -> CodeKeyword
+    CodeTokenKind.StringLiteral -> CodeString
+    CodeTokenKind.Comment -> CodeComment
+    CodeTokenKind.Number -> CodeNumber
+}
 
 /**
  * 選択の容器の見えている上端と、本文の一覧の上端（どちらも窓の座標）。選択メニューが渡す範囲の矩形と同じ座標で、

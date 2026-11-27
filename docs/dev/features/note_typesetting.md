@@ -1,8 +1,8 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄まで
-**最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.5、§5.9 だけ実装と突き合わせた）
-**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠まで
+**最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.4 のコードの枠、§5.5、§5.9 だけ実装と突き合わせた）
+**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
@@ -168,6 +168,7 @@
   ファイル名は Markdown のコードの枠に無いので出さない（モックの `Header.kt` は見本）
 - **言語を解析で残す。** 今のコードのブロックは言語の札を捨てている。札は AI へ渡す文と知識索引に入れない（今と同じ）
 - **色分けは Python・Kotlin・シェル（`sh`・`bash`・`zsh`）の3つで、キーワード・文字列・コメント・数字の4種だけ**（→ 判断15）。
+  切れ目はコードのブロックを作るとき（本文の解析と一緒に Main の外）に切って、ブロックに持たせる。シェルの `#` は語の頭でだけコメントにし、一重引用符の中はエスケープしない。閉じていない文字列は行の末尾まで（三重の引用符と Kotlin の囲みのコメントはコードの末尾まで）として扱う。
   ほかの言語と札の無い枠は1色で描く。色はモックの値（キーワード `#C3A6FF`・文字列 `#A6E3A1`・数字 `#F5A97F`）から始め、コメントだけはモックの `#6E7A93` がライトの窓で 4.19 に留まるので `#7A86A0`（4.94）にする。どれも2つの窓の上で 4.5:1 を超える
 - 行番号は付けない（→ 採らなかった案）
 - 横に長い行は今どおり折り返す（見開きの割り方が行で測っている）
