@@ -72,14 +72,35 @@ internal const val TAG_MAX_ROWS = 2
 internal fun tagOverflowText(rest: Int): String = "+$rest"
 
 /**
- * 幅 [widths] の札のうち、[maxRows] 行に収めて並べる数。全部が収まれば全部。収まらなければ、残りの数の札（幅は [overflowWidth]）を
- * 末尾に足しても [maxRows] 行に収まる最大の数（0 もある）。詰め方は [chipRowCount] と同じ。
+ * [count] 個の札（[index] 番目の幅は [widthOf]）のうち、[maxRows] 行に収めて並べる数。全部が収まれば全部。収まらなければ、残りの数の札
+ * （幅は [overflowWidth]）を末尾に足しても [maxRows] 行に収まる最大の数（0 もある）。詰め方は [chipRowCount] と同じ。
+ * **幅は先頭から上限の行が埋まるまでしか問い合わせない。** タグは何件でも読めるので、隠れる札まで測ると件数に比例して画面の処理を占有する。
  */
-internal fun visibleChipCount(widths: List<Float>, gap: Float, available: Float, maxRows: Int, overflowWidth: (rest: Int) -> Float): Int {
-    if (chipRowCount(widths, gap, available) <= maxRows) return widths.size
-    for (count in widths.size - 1 downTo 0) {
-        val shown = widths.take(count) + overflowWidth(widths.size - count)
-        if (chipRowCount(shown, gap, available) <= maxRows) return count
+internal fun visibleChipCount(
+    count: Int,
+    widthOf: (index: Int) -> Float,
+    gap: Float,
+    available: Float,
+    maxRows: Int,
+    overflowWidth: (rest: Int) -> Float
+): Int {
+    val placed = ArrayList<Float>()
+    var rows = 0
+    var used = 0f
+    while (placed.size < count) {
+        val width = widthOf(placed.size)
+        if (rows == 0 || used + gap + width > available) {
+            if (rows == maxRows) break
+            rows++
+            used = width
+        } else {
+            used += gap + width
+        }
+        placed += width
+    }
+    if (placed.size == count) return count
+    for (shown in placed.size downTo 0) {
+        if (chipRowCount(placed.subList(0, shown) + overflowWidth(count - shown), gap, available) <= maxRows) return shown
     }
     return 0
 }
@@ -92,16 +113,19 @@ private fun chipWidthPx(measurer: TextMeasurer, baseStyle: TextStyle, density: D
 
 /**
  * 幅 [widthPx] の欄に並べる札の幅（出すタグと、出し切れなければ残りの数の札）。**描画と見開きの計測が同じこの関数で決める。**
+ * 札は [visibleChipCount] が問い合わせた分だけ測る。
  */
 private fun tagChipWidths(measurer: TextMeasurer, baseStyle: TextStyle, density: Density, widthPx: Int, tags: List<String>): TagChips {
-    val widths = tags.map { chipWidthPx(measurer, baseStyle, density, tagChipText(it)) }
+    val widths = HashMap<Int, Float>()
+    val overflowWidths = HashMap<Int, Float>()
+    fun widthOf(index: Int): Float = widths.getOrPut(index) { chipWidthPx(measurer, baseStyle, density, tagChipText(tags[index])) }
+    fun overflowWidthOf(rest: Int): Float = overflowWidths.getOrPut(rest) { chipWidthPx(measurer, baseStyle, density, tagOverflowText(rest)) }
     val gap = with(density) { MarkdownBodyStyle.TagGap.roundToPx().toFloat() }
-    val count = visibleChipCount(widths, gap, widthPx.toFloat(), TAG_MAX_ROWS) { rest ->
-        chipWidthPx(measurer, baseStyle, density, tagOverflowText(rest))
-    }
+    val count = visibleChipCount(tags.size, ::widthOf, gap, widthPx.toFloat(), TAG_MAX_ROWS, ::overflowWidthOf)
     val rest = tags.size - count
-    val shownWidths = widths.take(count) + if (rest > 0) listOf(chipWidthPx(measurer, baseStyle, density, tagOverflowText(rest))) else emptyList()
-    return TagChips(tags.take(count).map(::tagChipText) + if (rest > 0) listOf(tagOverflowText(rest)) else emptyList(), shownWidths, gap)
+    val texts = tags.take(count).map(::tagChipText) + if (rest > 0) listOf(tagOverflowText(rest)) else emptyList()
+    val shownWidths = (0 until count).map(::widthOf) + if (rest > 0) listOf(overflowWidthOf(rest)) else emptyList()
+    return TagChips(texts, shownWidths, gap)
 }
 
 private class TagChips(val texts: List<String>, val widths: List<Float>, val gap: Float)

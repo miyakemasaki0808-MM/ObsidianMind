@@ -10,6 +10,7 @@ import com.example.newproject.ui.markdown.tagOverflowText
 import com.example.newproject.ui.markdown.visibleChipCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** 題の欄（→ `docs/dev/features/note_typesetting.md` §5.3）。 */
@@ -30,18 +31,48 @@ class NoteTitleBlockTest {
         assertEquals("#習慣", tagChipText("#習慣"))
     }
 
+    /** 幅の一覧 [widths] を [visibleChipCount] に渡す。 */
+    private fun visible(widths: List<Float>, available: Float, overflowWidth: (Int) -> Float = { 20f }): Int =
+        visibleChipCount(widths.size, { widths[it] }, gap = 6f, available = available, maxRows = TAG_MAX_ROWS, overflowWidth = overflowWidth)
+
     @Test
     fun `札は上限の行に収まれば全部出し、収まらなければ残りの数の札と合わせて上限に収める`() {
-        val more: (Int) -> Float = { 20f }
         assertEquals(2, TAG_MAX_ROWS)
         // 2行に収まる4つは全部出す。
-        assertEquals(4, visibleChipCount(List(4) { 40f }, gap = 6f, available = 86f, maxRows = 2, overflowWidth = more))
+        assertEquals(4, visible(List(4) { 40f }, available = 86f))
         // 6つは3行になるので、2行目に残りの数の札（20）を入れて 3つまで（40 40 / 40 20）。
-        assertEquals(3, visibleChipCount(List(6) { 40f }, gap = 6f, available = 86f, maxRows = 2, overflowWidth = more))
+        assertEquals(3, visible(List(6) { 40f }, available = 86f))
         // 1つで幅を超える札ばかりなら、1行目に1つ、2行目に残りの数の札。
-        assertEquals(1, visibleChipCount(List(60) { 500f }, gap = 6f, available = 100f, maxRows = 2, overflowWidth = more))
-        assertEquals(0, visibleChipCount(emptyList(), gap = 6f, available = 100f, maxRows = 2, overflowWidth = more))
+        assertEquals(1, visible(List(60) { 500f }, available = 100f))
+        assertEquals(0, visible(emptyList(), available = 100f))
         assertEquals("+57", tagOverflowText(57))
+    }
+
+    @Test
+    fun `残りの数の桁が増えて札が広がっても、上限の行に収める`() {
+        // 1行に40の札が2つ入る。13件なら4つ出すと残り9、3つ出すと残り10で札が広がる。
+        val byDigits: (Int) -> Float = { rest -> if (rest >= 10) 50f else 20f }
+        assertEquals(3, visible(List(13) { 40f }, available = 100f, overflowWidth = byDigits))
+        // 桁が増えた札が2行目に入らなければ、さらに1つ減らす（40 40 / 40 60 は幅を超える）。
+        val wider: (Int) -> Float = { rest -> if (rest >= 10) 60f else 20f }
+        assertEquals(2, visible(List(13) { 40f }, available = 100f, overflowWidth = wider))
+    }
+
+    @Test
+    fun `タグが何件あっても、幅は上限の行が埋まるまでしか問い合わせない`() {
+        var widthCalls = 0
+        var overflowCalls = 0
+        val shown = visibleChipCount(
+            10_000,
+            { widthCalls++; 500f },
+            gap = 6f,
+            available = 100f,
+            maxRows = TAG_MAX_ROWS,
+            overflowWidth = { overflowCalls++; 20f }
+        )
+        assertEquals(1, shown)
+        assertTrue("幅の問い合わせ $widthCalls 回", widthCalls <= 10)
+        assertTrue("残りの数の札の問い合わせ $overflowCalls 回", overflowCalls <= 10)
     }
 
     @Test
