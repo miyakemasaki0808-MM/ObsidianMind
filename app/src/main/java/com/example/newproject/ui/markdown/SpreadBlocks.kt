@@ -29,6 +29,8 @@ import com.example.newproject.ui.screen.SpreadLine
 import com.example.newproject.ui.screen.SpreadSlice
 import com.example.newproject.ui.screen.SpreadTableRow
 import com.example.newproject.ui.screen.splitTableRow
+import com.example.newproject.ui.screen.spreadKeepOf
+import com.example.newproject.ui.screen.withKeep
 import kotlin.math.roundToInt
 
 // 本文の見開き — ブロックを描画と同じ書式で測り、ページの切れ端を描く（→ features/note_spread.md §5・§8 判断5・判断8）。
@@ -88,9 +90,13 @@ internal class SpreadMeasureInputs(
     val imageHeightPx: (MarkdownBlock.Image) -> Float
 )
 
-/** 1つのブロックを測る。**1回の呼び出しは途中で止められない**ので、巨大なブロックは見開きに入る前に弾く（→ `spreadAllowed`）。 */
+/**
+ * 本文に直に置いた1つのブロックを測る。**1回の呼び出しは途中で止められない**ので、巨大なブロックは見開きに入る前に弾く（→ `spreadAllowed`）。
+ * 見開きの境目で割らないまとまりかを、ここで持たせる（→ [spreadKeepOf]）。引用の子はまとまりを持たない。
+ */
 internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInputs): MeasuredSpreadBlock =
     measureBlock(block, inputs, inputs.textWidthPx, inputs.headingAccessoryPx, quoted = false)
+        .let { it.copy(spread = it.spread.withKeep(spreadKeepOf(block))) }
 
 private fun SpreadMeasureInputs.px(dp: Float): Float = with(density) { dp.dp.toPx() }
 
@@ -125,7 +131,6 @@ private fun measureBlock(
                     layout.spreadLines(0),
                     text.length,
                     fragmentPadding = px(MarkdownBodyStyle.headingTopPadding(block.level).value),
-                    heading = true,
                     minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight.value) else 0f
                 ),
                 SpreadBlockRender.Heading(block.level, text)

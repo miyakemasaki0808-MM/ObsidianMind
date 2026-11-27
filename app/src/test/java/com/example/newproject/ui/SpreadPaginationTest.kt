@@ -10,7 +10,9 @@ import com.example.newproject.ui.screen.FIRST_BODY_REQUEST
 import com.example.newproject.ui.screen.BodyPositionSource
 import com.example.newproject.ui.screen.SPREAD_MAX_BLOCK_CHARS
 import com.example.newproject.ui.screen.SpreadAnchor
+import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.ui.screen.SpreadBlock
+import com.example.newproject.ui.screen.SpreadKeep
 import com.example.newproject.ui.screen.SpreadLine
 import com.example.newproject.ui.screen.SpreadPage
 import com.example.newproject.ui.screen.SpreadProgress
@@ -33,6 +35,10 @@ import com.example.newproject.ui.screen.spreadAllowed
 import com.example.newproject.ui.screen.spreadCount
 import com.example.newproject.ui.screen.spreadIndexOf
 import com.example.newproject.ui.screen.spreadProgress
+import com.example.newproject.ui.screen.readySpreadCount
+import com.example.newproject.ui.screen.spreadKeepOf
+import com.example.newproject.ui.screen.withKeep
+import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -68,7 +74,8 @@ class SpreadPaginationTest {
         val pages = paginateSpread(blocks, leftPageHeight = 100f, rightPageHeight = 80f, blockSpacing = 4f)
 
         assertCovered(blocks, pages)
-        assertTrue(pages.all { it.slices.isNotEmpty() })
+        // 右ページは、節を次の見開きへ送ったときだけ空になる（判断15）。左ページはいつも切れ端を持つ。
+        assertTrue(pages.filterIndexed { page, _ -> page % 2 == 0 }.all { it.slices.isNotEmpty() })
     }
 
     @Test
@@ -83,6 +90,7 @@ class SpreadPaginationTest {
         assertEquals(listOf(listOf(0), listOf(1, 2)), pages.map { page -> page.slices.map { it.blockIndex } })
     }
 
+    /** 見出しと次の行は同じページに入らない。見出しの節は空の見開きに入るので、次の見開きの左ページの頭から見出しだけで置く（判断15）。 */
     @Test
     fun `空のページに次の行と一緒に収まらない見出しは、見出しだけで置く`() {
         val pages = paginateSpread(
@@ -91,7 +99,7 @@ class SpreadPaginationTest {
             blockSpacing = 0f
         )
 
-        assertEquals(listOf(listOf(0), listOf(1), listOf(2)), pages.map { page -> page.slices.map { it.blockIndex } })
+        assertEquals(listOf(listOf(0), emptyList(), listOf(1), listOf(2)), pages.map { page -> page.slices.map { it.blockIndex } })
     }
 
     /** 最初のページはノートの題名の分だけ短い。2枚目からは左右の高さに戻る。 */
@@ -131,7 +139,7 @@ class SpreadPaginationTest {
     /** 見出しの脇の印の枠は、文字より高ければその高さを取る。文字の高さで詰めると、描いたページの下が切れる。 */
     @Test
     fun `印の枠のある見出しは枠の高さで詰める`() {
-        val marked = SpreadBlock.Lines(listOf(SpreadLine(10f, 0)), textLength = 4, fragmentPadding = 2f, heading = true, minHeight = 30f)
+        val marked = SpreadBlock.Lines(listOf(SpreadLine(10f, 0)), textLength = 4, fragmentPadding = 2f, keep = SpreadKeep.Heading(1), minHeight = 30f)
         val blocks = List(6) { listOf(marked, lines(1)) }.flatten()
         val pages = paginateSpread(blocks, leftPageHeight = 100f, blockSpacing = 0f)
 
@@ -187,6 +195,275 @@ class SpreadPaginationTest {
 
         assertCovered(listOf(lines(2), table, lines(2)), pages)
         assertTrue(pages.all { it.slices.isNotEmpty() })
+    }
+
+    // ── 見開きの境目（判断15）──────────────────────────────────────────
+
+    @Test
+    fun `箇条・表・引用・コードは本文に直に置けばまとまりで、段落・画像・水平線はまとまりにしない`() {
+        val model = buildNoteSectionModel(
+            "# 見出し\n\n段落。\n\n- 一つ目\n- 二つ目\n\n| 列A | 列B |\n|---|---|\n| あ | い |\n\n> 引用の行\n\n" +
+                "```\ncode\n```\n\n![[a.png]]\n\n---\n\n### 小見出し"
+        )
+
+        assertEquals(
+            listOf(
+                "Heading" to SpreadKeep.Heading(1),
+                "Paragraph" to SpreadKeep.None,
+                "ListBlock" to SpreadKeep.Whole,
+                "Table" to SpreadKeep.Whole,
+                "Blockquote" to SpreadKeep.Whole,
+                "CodeBlock" to SpreadKeep.Whole,
+                "Image" to SpreadKeep.None,
+                "HorizontalRule" to SpreadKeep.None,
+                "Heading" to SpreadKeep.Heading(3)
+            ),
+            model.blocks.map { it::class.simpleName to spreadKeepOf(it) }
+        )
+        // 測ったブロックへ持たせる。画像と水平線はいつもまとまりにしない。
+        assertEquals(SpreadKeep.Whole, lines(2).withKeep(SpreadKeep.Whole).keep)
+        assertEquals(SpreadKeep.Whole, SpreadBlock.Table(emptyList(), 0).withKeep(SpreadKeep.Whole).keep)
+        assertEquals(SpreadKeep.None, SpreadBlock.Image(10f).withKeep(spreadKeepOf(MarkdownBlock.Image("", "a.png", isEmbed = true))).keep)
+    }
+
+    @Test
+    fun `今の見開きに入らず空の見開きに入るまとまりは、次の見開きの左ページの頭から置く`() {
+        val pages = paginateSpread(listOf(lines(15), whole(8)), leftPageHeight = 100f, blockSpacing = 0f)
+
+        assertEquals(listOf(listOf(0), listOf(0), listOf(1)), blocksByPage(pages))
+        assertEquals(0 until 8, pages[2].slices.single().run { unitStart until unitEnd })
+        // 対照: 段落は見開きの境目で割る。
+        val plain = paginateSpread(listOf(lines(15), lines(8)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0), listOf(0, 1), listOf(1)), blocksByPage(plain))
+    }
+
+    /** 左ページから送ると右ページは空になる。読書の記録は左ページの最後を送り、読む位置の規則は今のまま。 */
+    @Test
+    fun `左ページから送れば右ページは空になり、記録と読む位置は今の規則どおり`() {
+        val blocks = listOf(lines(5), whole(18))
+        val pages = paginateSpread(blocks, leftPageHeight = 100f, blockSpacing = 0f)
+
+        assertEquals(listOf(listOf(0), emptyList(), listOf(1), listOf(1)), blocksByPage(pages))
+        assertEquals(SpreadProgress(0, 1f), spreadProgress(pages, spread = 0, blocks = blocks))
+        assertEquals(SpreadAnchor(1, 0), anchorAfterTurn(pages, spread = 1))
+        assertEquals(1, spreadIndexOf(pages, SpreadAnchor(1)))
+        (0 until spreadCount(pages)).forEach { spread ->
+            assertEquals("見開き$spread", spread, spreadIndexOf(pages, anchorAfterTurn(pages, spread)!!))
+        }
+    }
+
+    @Test
+    fun `空の見開きにも入らないまとまりは送らず、今と同じく割る`() {
+        val kept = paginateSpread(listOf(lines(15), whole(25)), leftPageHeight = 100f, blockSpacing = 0f)
+        val plain = paginateSpread(listOf(lines(15), lines(25)), leftPageHeight = 100f, blockSpacing = 0f)
+
+        assertEquals(plain, kept)
+    }
+
+    /** 節は下の階層の見出し（3）を含み、同じ階層の次の見出し（5）の手前で終わる。 */
+    @Test
+    fun `見出しの節が今の見開きの残りに入らなければ、節ごと次の見開きへ送る`() {
+        // 同じ階層の次の見出しの手前で閉じるので、節（1〜4）は今の見開きの残りにちょうど入る。次の節（5・6）は入らず送る。
+        val closed = paginateSpread(
+            listOf(lines(15), heading(level = 2), lines(2), heading(level = 3), lines(1), heading(level = 2), lines(5)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2, 3, 4), listOf(5, 6)), blocksByPage(closed))
+
+        // 下の階層の見出しは節の中にある。節（1〜4）ごと送り、下の階層の見出し（3）だけを送らない。
+        val nested = paginateSpread(
+            listOf(lines(15), heading(level = 2), lines(2), heading(level = 3), lines(3), heading(level = 2), lines(5)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+        assertEquals(listOf(listOf(0), listOf(0), listOf(1, 2, 3, 4, 5, 6), listOf(6)), blocksByPage(nested))
+    }
+
+    /**
+     * 節の末尾の本文の無い見出し（3）は、続く見出し（4）と連なりなので、節に数えず次のまとまりと一緒に扱う。
+     * 数えると、見出し3と次の行が今の見開きに入らないせいで、入る節（1・2）まで送って今の見開きに空きを作る。
+     */
+    @Test
+    fun `節の末尾の本文の無い見出しは節に数えず、続くまとまりと一緒に扱う`() {
+        val pages = paginateSpread(
+            listOf(lines(15), heading(level = 1), lines(3), heading(level = 2), heading(level = 1), lines(12)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3, 4, 5), listOf(5)), blocksByPage(pages))
+
+        // 本文の終わりで閉じる節も同じ。末尾の見出し（3）だけを次の見開きへ送り、入る節（1・2）は残す。
+        val atEnd = paginateSpread(listOf(lines(15), heading(level = 1), lines(4), heading(level = 2)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3)), blocksByPage(atEnd))
+    }
+
+    /**
+     * 1見開きに入らない長い節が続く（実機の「まとまり3」と「まとまり4」の形）。2つ目の節は今の見開きの残りに入らないので、
+     * 送っても割れるが、節の頭を次の見開きの頭から始める。節は、見開きの境目をまたぐなら見開きの頭から始まる。
+     */
+    @Test
+    fun `1見開きに入らない長い節も、今の見開きの残りに入らなければ次の見開きの頭から始める`() {
+        val pages = paginateSpread(
+            listOf(heading(level = 2), lines(25), heading(level = 2), lines(25)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f
+        )
+
+        assertEquals(listOf(listOf(0, 1), listOf(1), listOf(1), emptyList(), listOf(2, 3), listOf(3), listOf(3)), blocksByPage(pages))
+    }
+
+    /** 見出しの節が今の見開きの残りに入らないので、見出しと箇条を一緒に送る。箇条だけを判定して送ると、見出しが見開きの頭に1つだけ残る。 */
+    @Test
+    fun `見出しのすぐ後のまとまりは見出しと一緒に送り、まとまりだけを送らない`() {
+        val pages = paginateSpread(listOf(lines(15), heading(level = 2), whole(20)), leftPageHeight = 100f, blockSpacing = 0f)
+
+        assertEquals(listOf(0), blocksByPage(pages)[1])
+        assertEquals(listOf(1, 2), blocksByPage(pages)[2])
+    }
+
+    @Test
+    fun `続けて並ぶ見出しは連なりの頭でまとめて判定する`() {
+        // 連なりの頭（1）の節を送る。途中の見出し（2）でも判定すると、その節も次の見開きの残りに入らないので、見出し1が見開きの頭に1つだけ残る。
+        val nested = paginateSpread(listOf(lines(15), heading(level = 1), heading(level = 2), lines(30)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(0), blocksByPage(nested)[1])
+        assertEquals(listOf(1, 2, 3), blocksByPage(nested)[2])
+
+        // 連なりで最も浅い見出し（階層1）の節で判定する。後ろの階層2の見出し（4）では閉じず、長い段落まで含めて入らないので送る。
+        // 連なりの先頭や末尾の見出しの階層（2）で判定すると、4で閉じて送らない。
+        listOf(listOf(1, 2), listOf(2, 1)).forEach { levels ->
+            val run = paginateSpread(
+                listOf(lines(15)) + levels.map { heading(level = it) } + listOf(lines(2), heading(level = 2), lines(20)),
+                leftPageHeight = 100f,
+                blockSpacing = 0f
+            )
+            assertEquals("連なり$levels", listOf(0), blocksByPage(run)[1])
+        }
+
+        // 深い見出しのすぐ後に浅い見出し。深い見出しの節は本文が無いので、浅い見出しの節と合わせて送る。
+        val shallower = paginateSpread(listOf(lines(15), heading(level = 3), heading(level = 2), lines(4)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0), listOf(0), listOf(1, 2, 3)), blocksByPage(shallower))
+    }
+
+    /** 今の見開きの残りは題名の分だけ短い最初のページで数え、送り先の空の見開きは2つ目以降の高さで数える。 */
+    @Test
+    fun `最初の見開きは題名の分だけ短い高さで判定する`() {
+        val blocks = listOf(lines(3), whole(17))
+
+        val titled = paginateSpread(blocks, leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0), emptyList(), listOf(1), listOf(1)), blocksByPage(titled))
+
+        val untitled = paginateSpread(blocks, leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0, 1), listOf(1)), blocksByPage(untitled))
+    }
+
+    @Test
+    fun `測り終える前は、判定に要るブロックが測れていないまとまりの頭で止まり、止まった見開きを出さない`() {
+        // 節の終わりがまだ測れていない。見出しの前で止め、止めたページを含む見開きは出さない。
+        val stopped = paginateSpread(listOf(lines(15), heading(level = 2), lines(3)), leftPageHeight = 100f, blockSpacing = 0f, complete = false)
+        assertEquals(listOf(listOf(0), listOf(0)), blocksByPage(stopped))
+        assertEquals(0, readySpreadCount(stopped, complete = false))
+
+        // 次の見出しまで測れば節の終わりが決まる。
+        val decided = paginateSpread(
+            listOf(lines(15), heading(level = 2), lines(3), heading(level = 2)),
+            leftPageHeight = 100f,
+            blockSpacing = 0f,
+            complete = false
+        )
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2)), blocksByPage(decided))
+
+        // 測れた分だけで空の見開きに入らなければ、終わりまで測らずに決まる。
+        val early = paginateSpread(listOf(lines(15), heading(level = 2), lines(30)), leftPageHeight = 100f, blockSpacing = 0f, complete = false)
+        assertTrue(early.flatMap { it.slices }.any { it.blockIndex == 2 })
+    }
+
+    /** 測っている途中に出した見開きの中身が、測り終えた後で替わらない。送り直すと、読んでいる見開きの中身が後から替わる。 */
+    @Test
+    fun `測り終える前に出した見開きは、測り終えた後も中身が替わらない`() {
+        val random = Random(26)
+        var shownEarly = 0
+        repeat(150) { round ->
+            val blocks = randomKeepBlocks(random)
+            val full = paginateSpread(blocks, leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 4f)
+            (0 until blocks.size).forEach { measured ->
+                val partial = paginateSpread(blocks.take(measured), leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 4f, complete = false)
+                val ready = readySpreadCount(partial, complete = false)
+                if (ready > 0) shownEarly++
+                (0 until ready * 2).forEach { page ->
+                    assertEquals("回$round 測った数$measured ページ$page", full.getOrNull(page), partial.getOrNull(page))
+                }
+            }
+        }
+        assertTrue("途中で出した見開きがある: $shownEarly", shownEarly > 100)
+    }
+
+    @Test
+    fun `まとまりを送っても欠けず重ならずに組み終え、空の見開きに入るまとまりは1つの見開きに収まる`() {
+        val random = Random(15)
+        repeat(300) { round ->
+            val blocks = randomKeepBlocks(random)
+            val pages = paginateSpread(blocks, leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 0f)
+
+            assertCovered(blocks, pages)
+            assertTrue("回$round 左ページが空", pages.filterIndexed { page, _ -> page % 2 == 0 }.all { it.slices.isNotEmpty() })
+            // 20行（空の見開き）以下のまとまりは割れない。見出しのすぐ後のまとまりは見出しと一緒に判定するので除く。
+            blocks.forEachIndexed { index, block ->
+                if (block.keep != SpreadKeep.Whole || (block as SpreadBlock.Lines).lines.size > 20 || blocks[index - 1].keep is SpreadKeep.Heading) return@forEachIndexed
+                val spreads = pages.indices.filter { page -> pages[page].slices.any { it.blockIndex == index } }.map { it / 2 }.distinct()
+                assertEquals("回$round ブロック$index", 1, spreads.size)
+            }
+        }
+    }
+
+    /**
+     * 本文を挟まない見出しが長く続いても、節が入るかの判定は連なりの頭から詰め直さない。手間はブロックの参照の数で固定する
+     * （連なりの頭から詰め直すと、2万で約2億回になる）。
+     */
+    @Test(timeout = 20_000)
+    fun `本文を挟まない見出しが長く続いても、組版の手間はブロックの数に比例する`() {
+        listOf(8_000, 16_000, 20_000).forEach { count ->
+            listOf(true, false).forEach { body ->
+                val blocks = listOf(lines(15)) + List(count) { heading(lineHeight = 32f, level = 2) } + if (body) listOf(lines(3)) else emptyList()
+                listOf(true, false).forEach { complete ->
+                    val counted = CountingBlocks(blocks)
+                    val pages = paginateSpread(counted, leftPageHeight = 600f, firstPageHeight = 540f, blockSpacing = 8f, complete = complete)
+
+                    val label = "見出し$count 本文$body 測り終え$complete"
+                    assertTrue("$label: 参照 ${counted.reads}", counted.reads <= READS_PER_BLOCK * blocks.size)
+                    // 連なりだけで今の見開きの残りを越えるので、続きを測らなくても送ると決まる（止めない）。
+                    assertEquals(label, listOf(listOf(0), emptyList(), listOf(1)), blocksByPage(pages).take(3).map { it.take(1) })
+                    if (complete) assertEquals(label, blocks.indices.toList(), pages.flatMap { it.slices }.map { it.blockIndex }.distinct())
+                }
+            }
+        }
+    }
+
+    /** 箇条や表が続いても、まとまりの頭ではそのブロックだけを空の見開きへ詰めてみる。見開き1つ分を詰めると、1ブロックあたり約70回になる。 */
+    @Test(timeout = 20_000)
+    fun `まとまりが続いても、空の見開きへ詰めてみるのはそのブロックだけ`() {
+        val blocks = List(20_000) { whole(1) }
+        val counted = CountingBlocks(blocks)
+        paginateSpread(counted, leftPageHeight = 600f, firstPageHeight = 540f, blockSpacing = 8f)
+
+        assertTrue("参照 ${counted.reads}", counted.reads <= READS_PER_BLOCK * blocks.size)
+    }
+
+    /** 要素数が最大の入力（→ lessons L52）。見出しとまとまりが2万あっても、判定を重ねずに終わる。 */
+    @Test(timeout = 20_000)
+    fun `まとまりが2万あっても、欠けず重ならずに組み終える`() {
+        val blocks = List(20_000) { index ->
+            when (index % 4) {
+                0 -> heading(level = 1 + index / 4 % 3)
+                1 -> lines(2)
+                2 -> whole(3)
+                else -> lines(1)
+            }
+        }
+        val pages = paginateSpread(blocks, leftPageHeight = 100f, firstPageHeight = 60f, blockSpacing = 4f)
+
+        assertCovered(blocks, pages)
     }
 
     // ── 読む位置 ──────────────────────────────────────────────────────
@@ -603,7 +880,39 @@ class SpreadPaginationTest {
     private fun lines(count: Int, lineHeight: Float = 10f, charsPerLine: Int = 20) =
         SpreadBlock.Lines(List(count) { SpreadLine(lineHeight, it * charsPerLine) }, textLength = count * charsPerLine)
 
-    private fun heading(lineHeight: Float = 10f) = SpreadBlock.Lines(listOf(SpreadLine(lineHeight, 0)), textLength = 4, heading = true)
+    private fun heading(lineHeight: Float = 10f, level: Int = 1) =
+        SpreadBlock.Lines(listOf(SpreadLine(lineHeight, 0)), textLength = 4, keep = SpreadKeep.Heading(level))
+
+    /** 見開きの境目で割らないまとまり（箇条・表・引用・コードの代わり）。 */
+    private fun whole(count: Int) = lines(count).copy(keep = SpreadKeep.Whole)
+
+    /** 組版がブロックを読む回数の上限（1ブロックあたり）。実測は見出しの連なりで6回、まとまりの連なりで7回。 */
+    private val READS_PER_BLOCK = 20L
+
+    /** ブロックを読んだ回数を数える本文。組版の手間を、時間ではなく参照の数で固定する。 */
+    private class CountingBlocks(private val inner: List<SpreadBlock>) : AbstractList<SpreadBlock>() {
+        var reads = 0L
+        override val size: Int get() = inner.size
+        override fun get(index: Int): SpreadBlock {
+            reads++
+            return inner[index]
+        }
+    }
+
+    /** ブロック番号をページごとに並べる（空のページは空の並び）。 */
+    private fun blocksByPage(pages: List<SpreadPage>): List<List<Int>> = pages.map { page -> page.slices.map { it.blockIndex } }
+
+    /** 本文の先頭は段落で、続く見出し・段落・まとまり・画像・水平線を混ぜる。高さは行10・ページ100で数えやすくする。 */
+    private fun randomKeepBlocks(random: Random): List<SpreadBlock> =
+        listOf(lines(1 + random.nextInt(12))) + List(5 + random.nextInt(30)) {
+            when (random.nextInt(6)) {
+                0 -> heading(level = 1 + random.nextInt(3))
+                1, 2 -> lines(1 + random.nextInt(12))
+                3 -> whole(1 + random.nextInt(25))
+                4 -> SpreadBlock.Image(30f + random.nextInt(120))
+                else -> SpreadBlock.Rule(5f)
+            }
+        }
 
     /** セルごとの行数から表の1行を作る。行の位置はセルを左から順につないで数える。 */
     private fun tableRow(lineCounts: List<Int>, lineHeight: Float, padding: Float, firstChar: Int): SpreadTableRow {

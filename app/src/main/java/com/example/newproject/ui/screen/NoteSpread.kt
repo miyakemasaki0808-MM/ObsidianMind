@@ -228,11 +228,12 @@ internal fun NoteSpread(
                 leftPageHeight = leftHeight,
                 rightPageHeight = pageContentHeight,
                 firstPageHeight = leftHeight - titleHeight,
-                blockSpacing = spacingPx
+                blockSpacing = spacingPx,
+                complete = measured.complete
             )
         }
-        // 測り終えるまでは最後のページがまだ伸びるので、両方のページが組み上がった見開きだけを出す。
-        val available = if (measured.complete) maxOf(spreadCount(pages), 1) else (pages.size - 1).coerceAtLeast(0) / 2
+        // 測り終えるまでは、最後のページがまだ伸びるか、まとまりの判定を待って止めている。両方のページが組み上がった見開きだけを出す。
+        val available = readySpreadCount(pages, measured.complete)
         val target = spreadIndexOf(pages, anchor)
         val ready = measured.complete || target < available
 
