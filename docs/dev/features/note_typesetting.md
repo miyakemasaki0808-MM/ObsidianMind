@@ -1,6 +1,6 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠・コールアウトの面まで
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠・コールアウトの面・番号の札・インラインのコードまで
 **最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.4 のコードの枠とコールアウトの面、§5.5、§5.9 だけ実装と突き合わせた）
 **関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
@@ -195,13 +195,14 @@
 
 #### 番号付きの箇条
 
-- **番号を藍の薄い札（22dp 角・角 6dp）に、等幅の藍の字で入れる。** 番号は原文の数字のまま
+- **番号を藍の薄い札（22dp 角・角 6dp）に、等幅の藍の字で入れる。** 番号は原文の表記のまま（「1.」の区切りも残す）。
+  選択のコピーと余白メモの照らし直しが番号の字を読むので、字は変えずに見た目だけを札にする。札の幅は字に合わせて広がる
 - 札は行の高さ（30sp）の中に収まり、行の高さを変えない
 - 番号の無い箇条は藍の点（5.2）、タスクの箇条は今のチェックボックスのまま
 
 #### インラインのコード
 
-- 等幅・12.5sp・淡い面（ライト `#F1F3F6` 上に `#2B2F36`、ダーク `#1B2640` 上に `#D7DEEA`）
+- 等幅・本文の 0.85 倍の大きさ・淡い面（題の欄のタグの札と同じ面。ライト `#F1F3F6`、ダーク `#1B2640`）。字は本文の色
 - **文字の背景として描き、角丸と前後の余白は付けない**（→ 判断16）
 
 #### 引用

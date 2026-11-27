@@ -213,7 +213,7 @@ class AppColorContrastTest {
         )
         return when (token) {
             // 本文Markdown（NoteComponents と FullscreenNoteScreen は**紙の地色**＝全段階）＋各パネルの本文
-            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet) + paper
+            "onSurface" -> listOf(panelS, tinted, blue, chip, row, bubble, code, sheet, "readingChip" to readingChip) + paper // インラインのコードの字
             // Markdown の h5以深＋RelatedTab／AiTab／SearchScreen の状態表示（PanelBlue）
             "onSurfaceMuted" -> listOf(panelS, tinted, blue, "readingChip" to readingChip) + paper // 題の欄のタグの札も
             // Markdown の引用＋DistillCandidateRow
@@ -224,7 +224,7 @@ class AppColorContrastTest {
             "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
             "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
             "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク（本文の外）
-            "readingAccent" -> listOf(panelS, tinted) + paper // 本文のリンク・見出しの線・箇条の点
+            "readingAccent" -> listOf(panelS, tinted, "readingBadge" to readingBadge) + paper // 本文のリンク・見出しの線・箇条の点・番号の札の字
             "errorText" -> listOf(panelS, blue, sheet)
             "dangerAction" -> listOf(panelS, blue)
             else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")

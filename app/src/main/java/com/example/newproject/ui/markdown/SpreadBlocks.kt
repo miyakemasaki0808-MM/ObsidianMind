@@ -15,6 +15,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.ListItem
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.renderedRows
@@ -148,6 +149,8 @@ private fun measureBlock(
             val itemLines = block.items.mapIndexed { index, item ->
                 val marker = if (item.checked != null) {
                     px(MarkdownBodyStyle.CheckboxSize.value)
+                } else if (item.marker is ListMarker.Ordered) {
+                    orderedBadgeWidthPx(listMarkerText(item), inputs).toFloat()
                 } else {
                     measure(AnnotatedString(listMarkerText(item)), listTextStyle(quoted), widthPx).size.width.toFloat()
                 }
@@ -233,6 +236,14 @@ private fun measureBlock(
             SpreadBlock.Rule(px(MarkdownBodyStyle.RuleThickness.value + MarkdownBodyStyle.RuleVerticalPadding.value * 2)),
             SpreadBlockRender.Rule
         )
+    }
+}
+
+/** 番号の札の幅。描画（`OrderedBadge`）と同じく、最小の大きさと「字の幅＋左右の余白（片側ずつ画素へ丸める）」の大きいほう。 */
+private fun orderedBadgeWidthPx(text: String, inputs: SpreadMeasureInputs): Int = with(inputs) {
+    val textWidth = measurer.measure(AnnotatedString(text), baseStyle.merge(MarkdownBodyStyle.OrderedBadgeText), density = density).size.width
+    with(density) {
+        maxOf(MarkdownBodyStyle.OrderedBadgeMinSize.roundToPx(), textWidth + MarkdownBodyStyle.OrderedBadgePaddingHorizontal.roundToPx() * 2)
     }
 }
 

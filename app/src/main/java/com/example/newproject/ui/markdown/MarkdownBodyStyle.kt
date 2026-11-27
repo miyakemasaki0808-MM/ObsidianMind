@@ -106,6 +106,22 @@ internal object MarkdownBodyStyle {
     val ListItemSpacing: Dp = 4.dp
     val CheckboxSize: Dp = 20.dp
 
+    /**
+     * 番号付きの箇条の番号の札（→ features/note_typesetting.md §5.4）。**字は原文の番号のまま**（「1.」）— 選択のコピーと余白メモの照らし直しが
+     * 番号の字を読むので、見た目だけを札にする。札の幅は max([OrderedBadgeMinSize], 字の幅＋左右の余白)。見開きの計測も同じ式で測る。
+     */
+    val OrderedBadgeText = TextStyle(
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        fontFamily = FontFamily.Monospace,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 0.sp,
+        lineBreak = LineBreak.Simple
+    )
+    val OrderedBadgeMinSize: Dp = 22.dp
+    val OrderedBadgePaddingHorizontal: Dp = 5.dp
+    val OrderedBadgeCorner: Dp = 6.dp
+
     val Quote = TextStyle(fontSize = 16.sp, lineHeight = 30.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
     val QuoteBarWidth: Dp = 4.dp
     val QuoteTextStart: Dp = 12.dp

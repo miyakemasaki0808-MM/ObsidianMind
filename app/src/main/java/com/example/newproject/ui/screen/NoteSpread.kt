@@ -94,6 +94,7 @@ import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.CodePanel
 import com.example.newproject.ui.theme.ReadingAccent
+import com.example.newproject.ui.theme.ReadingChip
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
@@ -143,7 +144,7 @@ internal fun NoteSpread(
     val blocks = sectionModel.blocks
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val baseStyle = LocalTextStyle.current
-    val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = CodePanel, link = ReadingAccent)
+    val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = ReadingChip, link = ReadingAccent)
     val currentOnLink by rememberUpdatedState(onLink)
     val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
     // 本文の列の最大幅は縦の流しと同じ（→ MarkdownBodyStyle.ColumnMaxWidth）。計測と描画が同じ上限から取る。

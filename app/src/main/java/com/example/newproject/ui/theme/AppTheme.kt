@@ -143,6 +143,8 @@ internal class AppColorScheme(
     val readingPlateRim: Color,
     // 読む面の小さな札（題の欄のタグ）の面。
     val readingChip: Color,
+    // 番号付きの箇条の番号の札の面。字は読む面のアクセント（藍）。
+    val readingBadge: Color,
     // コードの枠（暗い窓）と、その上の字・言語の札・頭の罫。窓はテーマに関わらず暗い。
     val codeWindow: Color,
     val onCodeWindow: Color,

@@ -1,5 +1,6 @@
 package com.example.newproject.ui.markdown
 
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
@@ -34,7 +35,7 @@ internal data class InlineMarkdownColors(
         /** テーマを持たない文脈（テスト等）用のフォールバック。 */
         val Light = InlineMarkdownColors(
             strikethrough = LightAppColors.onSurfaceFaint,
-            codeBackground = LightAppColors.codePanel,
+            codeBackground = LightAppColors.readingChip,
             link = LightAppColors.linkText
         )
     }
@@ -126,7 +127,9 @@ private fun styleFor(span: InlineSpan, colors: InlineMarkdownColors): SpanStyle 
     InlineSpanKind.Italic -> SpanStyle(fontStyle = FontStyle.Italic)
     InlineSpanKind.Strikethrough ->
         SpanStyle(textDecoration = TextDecoration.LineThrough, color = colors.strikethrough)
-    InlineSpanKind.Code -> SpanStyle(fontFamily = FontFamily.Monospace, background = colors.codeBackground)
+    // インラインのコードは文字の背景で示し、角丸と前後の余白は付けない（字の幅が変わると、見開きが割った段落の組み直しとずれる
+    // → features/note_typesetting.md 判断16）。等幅は和文の本文より大きく見えるので少し小さくする（行の高さは段落の書式が決める）。
+    InlineSpanKind.Code -> SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 0.85.em, background = colors.codeBackground)
     InlineSpanKind.WikiLink, InlineSpanKind.Link ->
         SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)
 }

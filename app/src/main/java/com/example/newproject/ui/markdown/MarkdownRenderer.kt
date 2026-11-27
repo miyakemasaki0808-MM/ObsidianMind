@@ -62,12 +62,16 @@ import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.sourceText
 import com.example.newproject.ui.theme.ReadingAccent
+import com.example.newproject.ui.theme.ReadingChip
 import com.example.newproject.ui.theme.CheckboxOutline
 import com.example.newproject.ui.theme.ContentDivider
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
 import com.example.newproject.ui.theme.OnSurfaceSubtle
 import com.example.newproject.ui.theme.CodePanel
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.foundation.layout.defaultMinSize
+import com.example.newproject.ui.theme.ReadingBadge
 import com.example.newproject.ui.theme.CalloutFaces
 import com.example.newproject.ui.theme.CalloutFaceTone
 import androidx.compose.runtime.ReadOnlyComposable
@@ -193,7 +197,7 @@ private fun rememberInline(text: String): AnnotatedString {
     // 色はテーマ由来なので、非Composableな remember ブロックの外で読んでキーに含める。
     val colors = InlineMarkdownColors(
         strikethrough = OnSurfaceFaint,
-        codeBackground = CodePanel,
+        codeBackground = ReadingChip,
         link = ReadingAccent
     )
     val linkTaps = LocalNoteLinkTaps.current
@@ -500,15 +504,17 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>, quoted: Boolean = fal
                 val markerAlpha = if (row.showMarker) Modifier else Modifier.alpha(0f)
                 if (checked == null) {
                     val marker: @Composable () -> Unit = {
-                        Text(
-                            // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
-                            // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
-                            text = listMarkerText(item),
-                            // 箇条の点は読む面のアクセント。番号は文字なので本文の色のまま。
-                            color = if (item.marker is ListMarker.Bullet && !quoted) ReadingAccent else textColor,
-                            style = style,
-                            modifier = markerAlpha
-                        )
+                        if (item.marker is ListMarker.Ordered) {
+                            OrderedBadge(listMarkerText(item), lineHeight = style.lineHeight, modifier = markerAlpha)
+                        } else {
+                            Text(
+                                text = listMarkerText(item),
+                                // 箇条の点は読む面のアクセント。引用の中は引用の色のまま。
+                                color = if (!quoted) ReadingAccent else textColor,
+                                style = style,
+                                modifier = markerAlpha
+                            )
+                        }
                     }
                     // 前のページから続く項目の見えない記号は、選択のコピーに入れない（照らし直しの文字と揃える → features/margin_quote.md §11）。
                     if (row.showMarker) marker() else DisableSelection(marker)
@@ -531,6 +537,25 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>, quoted: Boolean = fal
                 )
             }
         }
+    }
+}
+
+/**
+ * 番号付きの箇条の番号の札。番号は原文の表記をそのまま出す（自動採番すると `1. 1. 1.` と書かれたノートで原文と食い違う）。
+ * 札は行の高さ [lineHeight] の中で上下の中ほどに置き、行の高さを変えない。幅は見開きの計測（`orderedBadgeWidthPx`）と同じ式で決まる。
+ */
+@Composable
+private fun OrderedBadge(text: String, lineHeight: TextUnit, modifier: Modifier = Modifier) {
+    val top = with(LocalDensity.current) { ((lineHeight.toDp() - MarkdownBodyStyle.OrderedBadgeMinSize) / 2).coerceAtLeast(0.dp) }
+    Box(
+        modifier = modifier
+            .padding(top = top)
+            .defaultMinSize(minWidth = MarkdownBodyStyle.OrderedBadgeMinSize, minHeight = MarkdownBodyStyle.OrderedBadgeMinSize)
+            .background(ReadingBadge, RoundedCornerShape(MarkdownBodyStyle.OrderedBadgeCorner))
+            .padding(horizontal = MarkdownBodyStyle.OrderedBadgePaddingHorizontal),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = text, color = ReadingAccent, style = LocalTextStyle.current.merge(MarkdownBodyStyle.OrderedBadgeText))
     }
 }
 
