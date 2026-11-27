@@ -1,7 +1,7 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠・コールアウトの面・番号の札・インラインのコード・引用・表・ダークの夜の紺・最初の1枚を引く前の場まで
-**最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.4〜§5.7、§5.9 だけ実装と突き合わせた）
+**状態:** 区切り1を実装済み（実機検証の前）。型の判定は作ったが画面には配線していない（区切り2で配線する）
+**最終検証:** 未検証（区切り1の実装を §5 と突き合わせた。実機検証の前）
 **関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
@@ -270,7 +270,8 @@
 見出しから開いたノートで全画面に入って出ると、全画面で足した末尾の余白が通常表示へ運ばれ、末尾へ送ると本文が空白だけになる。
 区切り1で全画面の1行の長さが変わり、2つの窓の高さの差が広がるので、ここで直す。
 
-- **余白の量は運ばない。運ぶのは「どの見出しを上端に置いているか」だけにし、戻った窓で足りない分を測り直す**（→ 判断12）
+- **余白は戻った窓で測り直す**（→ 判断12）。見出しを上端に置いている間、最後のブロックが窓の中にあれば、その下端から窓の下端までの高さが要る余白で、
+  それを超える分を減らす（最後のブロックが窓の外なら余白は要らない）。足りない分を足す今の動きに、余りを減らす向きを足した形で、見出しは上端のまま送り直さない
 - 不変条件: **末尾の余白は、その窓で見出しを上端に置くのに要る分を超えない**
 
 ### 5.9 型の判定（区切り1では作るだけ）
@@ -444,7 +445,8 @@ Material の本文の既定（0.5sp）は欧文のための字間で、和文で
 ### 判断12: 末尾の余白は窓ごとに測り直す
 
 末尾の余白は、見出しを上端に置くのに窓の高さから決まる量である（→ [note_links](note_links.md) 判断6）。
-**量を別の窓へ運ぶと、高い窓で足した余白が低い窓に残り、末尾へ送ると余白だけが見える。** 置いている見出しだけを運び、戻った窓で足りない分を測り直す。
+**量を別の窓へ運ぶと、高い窓で足した余白が低い窓に残り、末尾へ送ると余白だけが見える。** 戻った窓で置き直すとき、足りない分を足すだけでなく、余っている分も減らす。
+運んだ量を捨てて0から足し直す形は採らない — 画面を作り直しただけ（同じ窓）でも一度末尾で止まり、前の節が一瞬見える。
 
 ### 判断13: 型に関係ない部品は、全部の型でそろえる
 

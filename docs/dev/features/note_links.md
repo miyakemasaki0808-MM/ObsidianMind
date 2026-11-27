@@ -127,6 +127,7 @@ Rediscover で引いた1冊から、書いた本人が張ったリンクを辿�
   渡すのはバックナンバーの行（[backlinks](backlinks.md) §5）だけで、その番目が無ければ同じ見出しの最初のもの、それも無ければ冒頭（右で開くときも同じ）
 - **末尾の余白は、本文の位置と同じ持ち主が持ち、位置と一緒に画面の保存値に置く**（`EndSpace`・`rememberEndSpace`）。今のノートは `BodyPosition`（全画面は全画面の口）、右の面は右のノートごとに位置と並べて持つ。
   見出しへ送るとき（`BodyPosition.placeAtTop`・右の面の `placeBlockAtTop`）だけ足し、ほかの送り（`BodyPosition.moveTo`、右の面の明示の送り）で消す（→ 判断6）。
+  置いている間は窓ごとに測り直し、窓で要る分を超えた余白は減らす（全画面から戻ったとき → [note_typesetting](note_typesetting.md) 判断12）。
   **位置だけが戻ると、末尾の上限で前の節が戻る。** 画面を作り直したら余白も戻し、見出しを置いたままなら置き直す（窓の寸法が変われば足りない分を足す）。
   全画面へは余白を運び（`rememberCarriedEndSpace`）、戻るときは位置と余白を返す（`BodyPosition.takeOver`）
 
