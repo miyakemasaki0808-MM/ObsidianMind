@@ -54,6 +54,17 @@ class CodeTokensTest {
     }
 
     @Test
+    fun `シェルのエスケープした区切りと空白、行の継続の後の # は語の途中でコメントにしない`() {
+        val none = emptyList<Pair<String, CodeTokenKind>>()
+        assertEquals(none, cut("sh", "echo a\\;#b"))
+        assertEquals(none, cut("sh", "echo a\\ #b"))
+        // 行末のバックスラッシュは改行ごと消え、次の行の #b は前の語につながる。
+        assertEquals(none, cut("sh", "echo a\\\n#b"))
+        // 行の継続の前が空白なら、次の行の # は語の頭でコメント。
+        assertEquals(listOf("# c" to Comment), cut("sh", "echo a \\\n# c"))
+    }
+
+    @Test
     fun `語の途中の数字とキーワードの一部は切らない`() {
         assertEquals(emptyList<Pair<String, CodeTokenKind>>(), cut("python", "item2 = format_in"))
         assertEquals(listOf("0x1F" to Number, "3.14" to Number), cut("python", "a = 0x1F + 3.14"))

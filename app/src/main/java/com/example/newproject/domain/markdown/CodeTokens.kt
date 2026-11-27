@@ -53,13 +53,20 @@ internal fun codeTokensOf(language: String?, code: String): List<CodeToken> {
         CodeLanguage.Shell -> SHELL_KEYWORDS
     }
     val tokens = mutableListOf<CodeToken>()
+    // シェルで今の位置が語の頭か。直前の生の1字ではなく、エスケープと行の継続を反映した状態で持つ。
+    var shellWordStart = true
     var i = 0
     while (i < code.length) {
         val c = code[i]
+        // シェルは引用符の外でもバックスラッシュが次の1字を文字にする（`\"` は文字列を、`\#` はコメントを始めない）。
+        // 文字にした字は語の一部になる。行末のバックスラッシュは改行ごと消えて前後の語がつながるので、語の頭かどうかを変えない。
+        if (lang == CodeLanguage.Shell && c == '\\') {
+            if (code.getOrNull(i + 1) != '\n') shellWordStart = false
+            i += 2
+            continue
+        }
         when {
-            // シェルは引用符の外でもバックスラッシュが次の1字を文字にする（`\"` は文字列を、`\#` はコメントを始めない）。
-            lang == CodeLanguage.Shell && c == '\\' -> i += 2
-            isLineComment(lang, code, i) -> {
+            isLineComment(lang, code, i, shellWordStart) -> {
                 val end = code.indexOf('\n', i).let { if (it < 0) code.length else it }
                 tokens += CodeToken(i, end, CodeTokenKind.Comment)
                 i = end
@@ -89,6 +96,7 @@ internal fun codeTokensOf(language: String?, code: String): List<CodeToken> {
             }
             else -> i++
         }
+        shellWordStart = code[i - 1].isWhitespace() || code[i - 1] in SHELL_WORD_BREAKS
     }
     return tokens
 }
@@ -98,10 +106,13 @@ private fun isWordChar(c: Char?): Boolean = c != null && (c.isLetterOrDigit() ||
 /** シェルで語を区切る記号。この直後の `#` は新しい語の頭にあたる。 */
 private const val SHELL_WORD_BREAKS = ";&|()<>"
 
-/** 行のコメントの始まりか。シェルの `#` は語の頭（行頭・空白・区切りの記号の後）でだけコメント（`${#a}` や `a#b` は違う）。 */
-private fun isLineComment(lang: CodeLanguage, code: String, i: Int): Boolean = when (lang) {
+/**
+ * 行のコメントの始まりか。シェルの `#` は語の頭（[shellWordStart]: 行頭・空白・区切りの記号の後で、エスケープした字の後ではない）でだけ
+ * コメント（`${#a}` や `a#b` は違う）。
+ */
+private fun isLineComment(lang: CodeLanguage, code: String, i: Int, shellWordStart: Boolean): Boolean = when (lang) {
     CodeLanguage.Python -> code[i] == '#'
-    CodeLanguage.Shell -> code[i] == '#' && (i == 0 || code[i - 1].isWhitespace() || code[i - 1] in SHELL_WORD_BREAKS)
+    CodeLanguage.Shell -> code[i] == '#' && shellWordStart
     CodeLanguage.Kotlin -> code.startsWith("//", i)
 }
 
