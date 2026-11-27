@@ -21,6 +21,12 @@ interface AppPreferences {
      */
     var notePaperAging: Boolean
 
+    /**
+     * 読む画面の背景を鮮やかなグラデーションにするか。**既定オフ**（淡い3色）。
+     * 紙の上の色の面や暗いコードの枠と色が張り合わないよう、既定は淡くする。ダーク時はこの値によらず効かない。
+     */
+    var vividReadingGround: Boolean
+
     /** 選択中Vaultの永続化URI（文字列）。未選択なら null。 */
     var vaultUri: String?
 }
@@ -39,6 +45,12 @@ class SharedAppPreferences(private val prefs: SharedPreferences) : AppPreference
             prefs.edit { putBoolean(KEY_NOTE_PAPER_AGING, value) }
         }
 
+    override var vividReadingGround: Boolean
+        get() = prefs.getBoolean(KEY_VIVID_READING_GROUND, false)
+        set(value) {
+            prefs.edit { putBoolean(KEY_VIVID_READING_GROUND, value) }
+        }
+
     override var vaultUri: String?
         get() = prefs.getString(KEY_VAULT_URI, null)
         set(value) {
@@ -50,5 +62,6 @@ class SharedAppPreferences(private val prefs: SharedPreferences) : AppPreference
         private const val KEY_VAULT_URI = "vault_uri"
         private const val KEY_DARK_THEME = "dark_theme"
         private const val KEY_NOTE_PAPER_AGING = "note_paper_aging"
+        private const val KEY_VIVID_READING_GROUND = "vivid_reading_ground"
     }
 }

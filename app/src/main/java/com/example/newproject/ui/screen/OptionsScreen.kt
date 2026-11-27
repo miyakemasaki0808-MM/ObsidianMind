@@ -42,10 +42,12 @@ fun OptionsScreen(
     vaultSelected: Boolean,
     darkTheme: Boolean,
     notePaperAging: Boolean,
+    vividReadingGround: Boolean,
     onSelectVault: () -> Unit,
     onManageData: () -> Unit,
     onToggleDarkTheme: (Boolean) -> Unit,
-    onToggleNotePaperAging: (Boolean) -> Unit
+    onToggleNotePaperAging: (Boolean) -> Unit,
+    onToggleVividReadingGround: (Boolean) -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -100,6 +102,20 @@ fun OptionsScreen(
             },
             checked = notePaperAging,
             onCheckedChange = onToggleNotePaperAging
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 年代の紙と同じく、ダークでは効かないことを説明文で言い切り、トグルは隠さない。
+        OptionSwitchRow(
+            emoji = "🎨",
+            title = "読む画面の背景を鮮やかにする",
+            subtitle = when {
+                !vividReadingGround -> "淡い3色の背景で表示しています"
+                darkTheme -> "ダークモードの間は背景を変えません"
+                else -> "鮮やかなグラデーションで表示しています"
+            },
+            checked = vividReadingGround,
+            onCheckedChange = onToggleVividReadingGround
         )
     }
 }

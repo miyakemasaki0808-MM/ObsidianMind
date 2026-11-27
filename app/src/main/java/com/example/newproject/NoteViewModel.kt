@@ -165,6 +165,9 @@ class NoteViewModel internal constructor(
     private val mutableNotePaperAging = MutableStateFlow(preferences.notePaperAging)
     val notePaperAging: StateFlow<Boolean> = mutableNotePaperAging.asStateFlow()
 
+    private val mutableVividReadingGround = MutableStateFlow(preferences.vividReadingGround)
+    val vividReadingGround: StateFlow<Boolean> = mutableVividReadingGround.asStateFlow()
+
     private val mutableMarginPaneOpen = MutableStateFlow(false)
     val marginPaneOpen: StateFlow<Boolean> = mutableMarginPaneOpen.asStateFlow()
 
@@ -230,6 +233,13 @@ class NoteViewModel internal constructor(
         if (mutableNotePaperAging.value == enabled) return
         preferences.notePaperAging = enabled
         mutableNotePaperAging.value = enabled
+    }
+
+    /** 読む画面の背景の強さを切り替える。テーマ側の窓口が色へ写すので、開いているノートは読み直さない。 */
+    fun setVividReadingGround(enabled: Boolean) {
+        if (mutableVividReadingGround.value == enabled) return
+        preferences.vividReadingGround = enabled
+        mutableVividReadingGround.value = enabled
     }
 
     /**

@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -443,6 +445,48 @@ class AppColorContrastTest {
                 assertAtLeast(4.5, contrast(c.onVibrant, stop), "ダーク onVibrant（$gradient $stop 上）")
                 assertAtLeast(4.5, contrast(c.onVibrantMuted, stop), "ダーク onVibrantMuted（$gradient $stop 上）")
             }
+        }
+    }
+
+    /**
+     * OKLch の色相（度）。淡い値は鮮やかな値と同じ色相で作る規則なので、規則と同じ色空間で測る
+     * （HSV の色相では、OKLch で8度ずれた値も1度差に見えて見逃す）。
+     */
+    private fun oklchHue(color: Color): Double {
+        fun lin(c: Float): Double = if (c <= 0.04045f) c / 12.92 else ((c + 0.055) / 1.055).pow(2.4)
+        val r = lin(color.red); val g = lin(color.green); val b = lin(color.blue)
+        val l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+        val m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+        val s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+        val a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+        val bb = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
+        return Math.toDegrees(atan2(bb, a)).mod(360.0)
+    }
+
+    /**
+     * 読む画面の場は既定で淡い（→ features/note_typesetting.md 判断17）。淡い値は鮮やかな値の**色相を保ったまま明るくした**もので、
+     * 色相がずれると、背景の3色が別の色の組に見える。
+     */
+    @Test
+    fun `淡い場は鮮やかな場の色相を保ち、明るい`() {
+        DefaultReadingGround.forEach { color ->
+            assertTrue("淡い値 ${color.pale} が鮮やかな値 ${color.vivid} より明るい", relativeLuminance(color.pale) > relativeLuminance(color.vivid))
+            val diff = abs(oklchHue(color.pale) - oklchHue(color.vivid)).let { minOf(it, 360 - it) }
+            assertTrue("淡い値 ${color.pale} の色相が ${"%.1f".format(diff)} 度ずれている", diff < 3.0)
+        }
+        assertEquals(DefaultReadingGround.map { it.vivid }, LightAppColors.readingGradientStops)
+        assertEquals(DefaultReadingGround.map { it.pale }, LightAppColors.readingGroundPaleStops)
+        assertEquals("ダークは強さの設定が効かない", DarkAppColors.readingGradientStops, DarkAppColors.readingGroundPaleStops)
+    }
+
+    @Test
+    fun `淡い場の上でも見出しの文字とボタンの輪郭が読める`() {
+        val c = LightAppColors
+        c.readingGroundPaleStops.forEach { stop ->
+            val effective = blend(c.gradientHeaderScrim, stop, c.gradientHeaderScrim.alpha)
+            assertAtLeast(4.5, contrast(c.onGradientHeaderTitle, effective), "見出しタイトル（淡い場 $stop ＋面）")
+            assertAtLeast(4.5, contrast(c.onGradientHeaderSubtitle, effective), "見出し副題（淡い場 $stop ＋面）")
+            assertAtLeast(3.0, contrast(c.buttonOutlineOnGradient, stop), "ボタンの輪郭線（淡い場 $stop）")
         }
     }
 

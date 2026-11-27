@@ -174,10 +174,13 @@ internal class AppColorScheme(
     // （テストは最も暗い停止色だけを測っていた）。`Brush` から色は取り出せないので、
     // **単一ソースにするには色の側を持つしかない**。
     val appGradientStops: List<Color>,
-    val readingGradientStops: List<Color>
+    val readingGradientStops: List<Color>,
+    // 読む画面の場を淡くしたときの停止色（ライトの既定）。ダークは [readingGradientStops] と同じ。
+    val readingGroundPaleStops: List<Color>
 ) {
     val appGradient: Brush = diagonalGradient(appGradientStops)
     val readingGradient: Brush = diagonalGradient(readingGradientStops)
+    val readingGroundPale: Brush = diagonalGradient(readingGroundPaleStops)
 }
 
 /** 左下から右上へ流す。全画面で向きを揃えるため、向きは [diagonalGradientOver] だけが決める。 */
@@ -206,6 +209,14 @@ internal val LocalAppColors = staticCompositionLocalOf { LightAppColors }
  * ノートを開き直さずに反映させるため。段階は状態に載ったままで、色へ写す係だけが切り替わる。
  */
 private val LocalNotePaperAging = staticCompositionLocalOf { false }
+
+/** 読む画面の場を鮮やかにするか。**[AppTheme] だけが提供する。** 既定は淡い（→ docs/dev/features/note_typesetting.md 判断17）。 */
+private val LocalReadingGroundVivid = staticCompositionLocalOf { false }
+
+/** 読む画面の場を鮮やかにするか。画面は [ReadingGround]・[ReadingGroundStops] を通して読み、これを直接読まない。 */
+@Composable
+@ReadOnlyComposable
+internal fun readingGroundVivid(): Boolean = LocalReadingGroundVivid.current
 
 /**
  * 放置期間の段階を実際の色へ写す唯一の窓口。**画面はこれだけを呼ぶ。**
@@ -237,6 +248,7 @@ internal fun notePaperColor(tone: NotePaperTone): Color {
 internal fun AppTheme(
     darkTheme: Boolean,
     notePaperAging: Boolean = false,
+    vividReadingGround: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colors = if (darkTheme) DarkAppColors else LightAppColors
@@ -260,7 +272,8 @@ internal fun AppTheme(
     // → docs/dev/features/note_age_paper.md 判断5
     CompositionLocalProvider(
         LocalAppColors provides colors,
-        LocalNotePaperAging provides (notePaperAging && !darkTheme)
+        LocalNotePaperAging provides (notePaperAging && !darkTheme),
+        LocalReadingGroundVivid provides vividReadingGround
     ) {
         MaterialTheme(colorScheme = material, content = content)
     }

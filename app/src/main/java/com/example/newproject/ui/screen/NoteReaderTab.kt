@@ -134,7 +134,7 @@ import com.example.newproject.ui.theme.ButtonPrimary
 import com.example.newproject.ui.theme.ButtonSecondary
 import com.example.newproject.ui.theme.OnVibrant
 import com.example.newproject.ui.theme.OnVibrantMuted
-import com.example.newproject.ui.theme.ReadingGradient
+import com.example.newproject.ui.theme.ReadingGround
 
 // ---------------------------------------------------------------------------
 // タブ1: ノート（本文リーダー）
@@ -588,7 +588,7 @@ internal fun NoteReaderTab(
             .fillMaxSize()
             // 机の画面の帯は、この地と同じグラデーションをここに合わせて描く（→ DeskBar）。
             .reportDeskBackdrop(deskBackdrop)
-            .background(ReadingGradient)
+            .background(ReadingGround)
             // **並べ方はキーボードを含めない大きさで決める**（→ readerLayoutFor）。キーボードの分は内側で避ける。
             .windowInsetsPadding(WindowInsets.safeDrawing.exclude(WindowInsets.ime))
             .screenContentPadding()

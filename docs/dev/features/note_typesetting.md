@@ -1,8 +1,8 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さまで
-**最終検証:** 未検証（区切り1の実装中。§5.1 の形・余白・浮き、§5.2、§5.5、§5.9 だけ実装と突き合わせた）
-**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`）。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さまで
+**最終検証:** 未検証（区切り1の実装中。§5.1、§5.2、§5.5、§5.9 だけ実装と突き合わせた）
+**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
@@ -110,10 +110,12 @@
 
 - **通常表示は、読む画面の場（背景のグラデーション）の上にプレートを浮かせる**（→ 判断9）
 - **場は既定で、今の3色を淡くした地にする。** オプションの「読む画面の背景を鮮やかにする」（既定オフ）をオンにすると、今のグラデーションに戻る（2026-11-28、オーナー判断 → 判断17）
-  - 淡い3色は、今の3色（`MutedIndigo`・`MutedAqua`・`MutedCoral`）の色相を保ち、明度を上げて彩度を下げる**規則で作る**（OKLch。冊子の分野色と同じ作り方）。初期値はモックの `#E9E7FA`・`#E3F2F7`・`#F8E9EE`
+  - 淡い3色は、今の3色（`MutedIndigo`・`MutedAqua`・`MutedCoral`）の色相を保ち、OKLch で明度 0.94・彩度 0.025 にそろえる**規則で作る**（冊子の分野色と同じ作り方）。値は `#E8E9FC`・`#DAEFF7`・`#FBE5E8`。
+    モックの手で選んだ値は色相が最大11度ずれていたので使わない。検査は OKLch の色相の差（3度未満）で見る
   - **ライトだけで効く。** ダークは設定によらず夜の紺（→ 5.6）。年代の紙と同じ扱い
   - **場の3色と強さは設定から引く形にする。** 背景の3色を選ぶ機能は、区切り1の後に別の機能として足す（このとき作り直しが要らないように、色の組と強さを分けて持つ）
   - 机の上端の帯は今どおり読む画面の場と同じ色を引くので、強さの切り替えに付いてくる
+  - **起動の画面と冊子の地は今のまま**（低彩度の3色）。設定はノートを読む画面（`ReadingGround`）だけに効く
   - 場は何も表さない（→ [bearing_channels](../system/bearing_channels.md)）。強さを選ばせても、年代・型の見え方は変わらない
 - **全画面は、プレートを浮かせず画面全体を紙にする。** 今の全ブリードのまま、本文の列だけを 5.5 の上限で絞る
 - **見開きの左右のページは、プレートと同じ形と色を引く。** 版面の非対称は扱わない（→ §2）

@@ -26,6 +26,20 @@ internal val MutedIndigo = Color(0xFF6E63E3)
 internal val MutedAqua = Color(0xFF54B5D4)
 internal val MutedCoral = Color(0xFFE28D9F)
 
+/**
+ * 読む画面の場の1色。**色と強さを分けて持つ**ため、強さ（鮮やか／淡い）ごとの値を対で持つ（→ docs/dev/features/note_typesetting.md 判断17）。
+ * 淡い値は、鮮やかな値の色相を保ったまま OKLch で明度 0.94・彩度 0.025 にそろえたもの。実行時に色空間の計算は持ち込まず、規則で作った結果をここへ書く。
+ * **検査は値ではなく関係を見る**（淡い値が鮮やかな値より明るく、色相がずれないこと）→ `AppColorContrastTest`。
+ */
+internal class ReadingGroundColor(val vivid: Color, val pale: Color)
+
+/** ライトの読む画面の場の3色（左下から右上へ流す順）。 */
+internal val DefaultReadingGround: List<ReadingGroundColor> = listOf(
+    ReadingGroundColor(vivid = MutedIndigo, pale = Color(0xFFE8E9FC)),
+    ReadingGroundColor(vivid = MutedAqua, pale = Color(0xFFDAEFF7)),
+    ReadingGroundColor(vivid = MutedCoral, pale = Color(0xFFFBE5E8))
+)
+
 /** ライトのパネル色。見出しのヘイズがこの値から外れないよう、両方でここを引く。 */
 private val LightPanel = Color(0xFFFDFEFF)
 
@@ -217,7 +231,8 @@ internal val LightAppColors = AppColorScheme(
     onGradientHeaderSubtitle = Color(0xFF202124),
     buttonOutlineOnGradient = LogoNavy,
     appGradientStops = listOf(Indigo, Aqua, Coral),
-    readingGradientStops = listOf(MutedIndigo, MutedAqua, MutedCoral)
+    readingGradientStops = DefaultReadingGround.map { it.vivid },
+    readingGroundPaleStops = DefaultReadingGround.map { it.pale }
 )
 
 /**
@@ -302,7 +317,9 @@ internal val DarkAppColors = AppColorScheme(
     // 彩度ではなく明度で沈める（縁だけに残す案は見送り → features/dark_mode.md 判断3）。
     appGradientStops = listOf(Color(0xFF231E4A), Color(0xFF13253A), Color(0xFF33202C)),
     // 「読む」画面はさらに静かに。触る画面との性質の差はダークでも保つ。
-    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
+    readingGradientStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24)),
+    // 場の強さの設定はダークでは効かないので、淡い側も同じ停止色にする。
+    readingGroundPaleStops = listOf(Color(0xFF1C1B33), Color(0xFF151E2C), Color(0xFF261B24))
 )
 
 // ---------------------------------------------------------------------------
@@ -410,7 +427,18 @@ internal val ButtonOutlineOnGradient: Color
 
 // -- 背景 --
 internal val AppGradient: Brush @Composable @ReadOnlyComposable get() = current.appGradient
+
+/** 起動の画面と冊子の地（低彩度の3色）。ノートを読む画面の地は [ReadingGround] で、強さの設定はこちらに効かない。 */
 internal val ReadingGradient: Brush @Composable @ReadOnlyComposable get() = current.readingGradient
 
-/** 読む画面の地（[ReadingGradient]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
-internal val ReadingGradientStops: List<Color> @Composable @ReadOnlyComposable get() = current.readingGradientStops
+/**
+ * ノートを読む画面（本文の紙と机の帯）の地。強さはオプションで選び、既定は淡い（→ [readingGroundVivid]・docs/dev/features/note_typesetting.md 判断17）。
+ * 鮮やかにしたときは [ReadingGradient] と同じ色になる。
+ */
+internal val ReadingGround: Brush
+    @Composable @ReadOnlyComposable get() = if (readingGroundVivid()) current.readingGradient else current.readingGroundPale
+
+/** ノートを読む画面の地（[ReadingGround]）の停止色。地の上に重なる部品を、地の続きとして塗るときに使う（→ [diagonalGradientOver]）。 */
+internal val ReadingGroundStops: List<Color>
+    @Composable @ReadOnlyComposable get() = if (readingGroundVivid()) current.readingGradientStops else current.readingGroundPaleStops
+
