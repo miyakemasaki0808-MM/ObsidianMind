@@ -2,9 +2,12 @@ package com.example.newproject.ui
 
 import com.example.newproject.domain.markdown.buildNoteSectionModel
 import com.example.newproject.domain.markdown.frontmatterLines
+import com.example.newproject.ui.markdown.TAG_MAX_ROWS
 import com.example.newproject.ui.markdown.chipRowCount
 import com.example.newproject.ui.markdown.noteFolderLabel
 import com.example.newproject.ui.markdown.tagChipText
+import com.example.newproject.ui.markdown.tagOverflowText
+import com.example.newproject.ui.markdown.visibleChipCount
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -25,6 +28,20 @@ class NoteTitleBlockTest {
     fun `札の文字は # を付け、原文の # は重ねない`() {
         assertEquals("#習慣", tagChipText("習慣"))
         assertEquals("#習慣", tagChipText("#習慣"))
+    }
+
+    @Test
+    fun `札は上限の行に収まれば全部出し、収まらなければ残りの数の札と合わせて上限に収める`() {
+        val more: (Int) -> Float = { 20f }
+        assertEquals(2, TAG_MAX_ROWS)
+        // 2行に収まる4つは全部出す。
+        assertEquals(4, visibleChipCount(List(4) { 40f }, gap = 6f, available = 86f, maxRows = 2, overflowWidth = more))
+        // 6つは3行になるので、2行目に残りの数の札（20）を入れて 3つまで（40 40 / 40 20）。
+        assertEquals(3, visibleChipCount(List(6) { 40f }, gap = 6f, available = 86f, maxRows = 2, overflowWidth = more))
+        // 1つで幅を超える札ばかりなら、1行目に1つ、2行目に残りの数の札。
+        assertEquals(1, visibleChipCount(List(60) { 500f }, gap = 6f, available = 100f, maxRows = 2, overflowWidth = more))
+        assertEquals(0, visibleChipCount(emptyList(), gap = 6f, available = 100f, maxRows = 2, overflowWidth = more))
+        assertEquals("+57", tagOverflowText(57))
     }
 
     @Test

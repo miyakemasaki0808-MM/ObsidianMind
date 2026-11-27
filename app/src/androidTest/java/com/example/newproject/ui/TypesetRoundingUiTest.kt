@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -57,6 +58,36 @@ class TypesetRoundingUiTest {
     @Test
     fun 札2つがちょうど入る幅では_計測も描画も1行にする() {
         assertTitleBlockMatches(shift = 0)
+    }
+
+    /** タグが紙の高さを使い切るほど多くても、札は上限の行で止まり、計測と描画が同じ高さになる。 */
+    @Test
+    fun 収まらない数のタグでも題の欄は札2行で止まり_計測と描画が合う() {
+        val many = List(60) { "札の文字を長くしたタグ" + it.toString().padStart(2, '0') }
+        var measured = 0f
+        var oneRow = 0f
+        var drawn = -1
+        composeRule.setContent {
+            CompositionLocalProvider(LocalDensity provides Density(density, 1f)) {
+                val current = LocalDensity.current
+                val measurer = rememberTextMeasurer()
+                val style = LocalTextStyle.current
+                val widthPx = with(current) { 360.dp.roundToPx() }
+                measured = remember { noteTitleBlockHeightPx(measurer, style, current, widthPx, "題", null, many) }
+                oneRow = remember { noteTitleBlockHeightPx(measurer, style, current, widthPx, "題", null, many.take(1)) }
+                Box(modifier = Modifier.requiredWidth(with(current) { widthPx.toDp() }).onGloballyPositioned { drawn = it.size.height }) {
+                    NoteTitleBlock(title = "題", folder = null, tags = many)
+                }
+            }
+        }
+        composeRule.waitForIdle()
+        assertEquals(measured, drawn.toFloat(), 3f)
+        // 札の行の1段ぶん（札の行の高さ＋上下の余白＋行の間）。2行なら1行のときよりちょうど1段高い。
+        val rowStep = with(Density(density, 1f)) {
+            MarkdownBodyStyle.Tag.lineHeight.toPx() + MarkdownBodyStyle.TagPaddingVertical.roundToPx() * 2 + MarkdownBodyStyle.TagGap.roundToPx()
+        }
+        assertEquals("札が2行でない: 1行 $oneRow 全部 $measured", rowStep, measured - oneRow, 3f)
+        composeRule.onNodeWithText("+", substring = true).assertExists()
     }
 
     @Test
