@@ -284,6 +284,10 @@ class SpreadPaginationTest {
         )
 
         assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3, 4, 5), listOf(5)), blocksByPage(pages))
+
+        // 本文の終わりで閉じる節も同じ。末尾の見出し（3）だけを次の見開きへ送り、入る節（1・2）は残す。
+        val atEnd = paginateSpread(listOf(lines(15), heading(level = 1), lines(4), heading(level = 2)), leftPageHeight = 100f, blockSpacing = 0f)
+        assertEquals(listOf(listOf(0), listOf(0, 1, 2), listOf(3)), blocksByPage(atEnd))
     }
 
     /** 節（見出し・まとまり・長い段落）は入らない。見出しとまとまりを合わせれば入るので一緒に送り、見出しを見開きの末尾に残さない。 */
@@ -385,6 +389,39 @@ class SpreadPaginationTest {
                 assertEquals("回$round ブロック$index", 1, spreads.size)
             }
         }
+    }
+
+    /**
+     * 本文を挟まない見出しが長く続いても、節が入るかの判定は連なりの頭から詰め直さない。手間はブロックの参照の数で固定する
+     * （連なりの頭から詰め直すと、2万で約2億回になる）。
+     */
+    @Test(timeout = 20_000)
+    fun `本文を挟まない見出しが長く続いても、組版の手間はブロックの数に比例する`() {
+        listOf(8_000, 16_000, 20_000).forEach { count ->
+            listOf(true, false).forEach { body ->
+                val blocks = listOf(lines(15)) + List(count) { heading(lineHeight = 32f, level = 2) } + if (body) listOf(lines(3)) else emptyList()
+                listOf(true, false).forEach { complete ->
+                    val counted = CountingBlocks(blocks)
+                    val pages = paginateSpread(counted, leftPageHeight = 600f, firstPageHeight = 540f, blockSpacing = 8f, complete = complete)
+
+                    val label = "見出し$count 本文$body 測り終え$complete"
+                    assertTrue("$label: 参照 ${counted.reads}", counted.reads <= READS_PER_BLOCK * blocks.size)
+                    // 連なりだけで空の見開きを越えるので送らず、段落のすぐ後から詰める（止めもしない）。
+                    assertEquals(label, listOf(0, 1), pages[0].slices.take(2).map { it.blockIndex })
+                    if (complete) assertEquals(label, blocks.indices.toList(), pages.flatMap { it.slices }.map { it.blockIndex }.distinct())
+                }
+            }
+        }
+    }
+
+    /** 箇条や表が続いても、まとまりの頭ではそのブロックだけを空の見開きへ詰めてみる。見開き1つ分を詰めると、1ブロックあたり約70回になる。 */
+    @Test(timeout = 20_000)
+    fun `まとまりが続いても、空の見開きへ詰めてみるのはそのブロックだけ`() {
+        val blocks = List(20_000) { whole(1) }
+        val counted = CountingBlocks(blocks)
+        paginateSpread(counted, leftPageHeight = 600f, firstPageHeight = 540f, blockSpacing = 8f)
+
+        assertTrue("参照 ${counted.reads}", counted.reads <= READS_PER_BLOCK * blocks.size)
     }
 
     /** 要素数が最大の入力（→ lessons L52）。見出しとまとまりが2万あっても、判定を重ねずに終わる。 */
@@ -822,6 +859,19 @@ class SpreadPaginationTest {
 
     /** 見開きの境目で割らないまとまり（箇条・表・引用・コードの代わり）。 */
     private fun whole(count: Int) = lines(count).copy(keep = SpreadKeep.Whole)
+
+    /** 組版がブロックを読む回数の上限（1ブロックあたり）。実測は見出しの連なりで6回、まとまりの連なりで7回。 */
+    private val READS_PER_BLOCK = 20L
+
+    /** ブロックを読んだ回数を数える本文。組版の手間を、時間ではなく参照の数で固定する。 */
+    private class CountingBlocks(private val inner: List<SpreadBlock>) : AbstractList<SpreadBlock>() {
+        var reads = 0L
+        override val size: Int get() = inner.size
+        override fun get(index: Int): SpreadBlock {
+            reads++
+            return inner[index]
+        }
+    }
 
     /** ブロック番号をページごとに並べる（空のページは空の並び）。 */
     private fun blocksByPage(pages: List<SpreadPage>): List<List<Int>> = pages.map { page -> page.slices.map { it.blockIndex } }

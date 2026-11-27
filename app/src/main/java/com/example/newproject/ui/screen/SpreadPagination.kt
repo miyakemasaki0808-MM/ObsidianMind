@@ -377,54 +377,68 @@ private class SpreadComposer(
      * （下の階層の節・ブロック）を合わせたものへ縮めて見る。続くのが段落・画像・水平線なら見出しだけを詰める —
      * その最初の単位は、見出しをページの末尾に残さない規則が詰めるときに一緒に見る。
      *
-     * 見出しだけで本文の終わりへ届くのは、測り終えたときだけ。測り終える前は、連なりの最後の見出しの節が
-     * 測った分の終わりで Unknown を返すので、ここへは来ない。
+     * どの候補も [start] から始まる同じ並びの頭の部分なので、空の見開きへは1度だけ詰め、入らなくなる最初のブロック（reach）と
+     * 候補の終わりを比べる。**候補ごとに頭から詰め直さない** — 見出しが本文を挟まず長く続くと二乗の手間になる。
      */
     private fun largestKeep(start: Int): KeepFit {
-        var head = start
-        while (true) {
-            if (head >= blocks.size) return fitsEmpty(start, head)
-            when (val keep = blocks[head].keep) {
-                is SpreadKeep.Heading -> when (val section = sectionFit(start, head, keep.level)) {
-                    KeepFit.TooLarge -> head++
-                    else -> return section
-                }
-                SpreadKeep.Whole -> return fitsEmpty(start, head + 1)
-                SpreadKeep.None -> return fitsEmpty(start, head)
-            }
-        }
+        var run = start
+        while (run < blocks.size && blocks[run].keep is SpreadKeep.Heading) run++
+        val reach = emptySpreadReach(start, limit = if (run == start) start + 1 else blocks.size)
+        // 見出しの連なりだけで空の見開きを越えれば、どの候補も入らない（続きを測らなくても決まる）。
+        if (reach < run) return KeepFit.TooLarge
+        if (run == blocks.size) return if (complete) KeepFit.Fits(run) else KeepFit.Unknown
+        sectionKeep(start, run, reach)?.let { return it }
+        val end = if (blocks[run].keep == SpreadKeep.Whole) run + 1 else run
+        return if (end <= reach) KeepFit.Fits(end) else KeepFit.TooLarge
     }
 
     /**
-     * 見出し [head] の節を、連なりの頭 [start] から空の見開きに詰めてみる。節の終わりを探しながら詰めるので、
-     * 測れた分だけで入らなければ、終わりまで測らずに TooLarge と決まる。**節に本文が無ければ TooLarge と同じに扱う** —
-     * 見出しだけをまとまりにすると、見出しを見開きの末尾に残す。
-     *
-     * **節の末尾の本文の無い見出しは節に数えない。** 節を閉じる見出しと続けて並ぶので、その連なりの頭で次のまとまりと一緒に判定する。
-     * 数えると、末尾の見出しと次の行が入らないせいで、入る節まで送ってしまう。見出しは本文が続いたところで詰める。
+     * 空の見開きへ [start] から詰めて、入らなくなる最初のブロック。[limit] の手前まで（測った分の終わりまで）入ればそれを返す。
+     * 見開き1つ分を越えたところで止まる。
      */
-    private fun sectionFit(start: Int, head: Int, level: Int): KeepFit {
+    private fun emptySpreadReach(start: Int, limit: Int): Int {
         val at = SpreadCursor(page = EMPTY_SPREAD_LEFT)
-        var end = start
         var index = start
-        while (index < blocks.size) {
+        while (index < limit && place(at, index, lastPage = EMPTY_SPREAD_LEFT + 1)) index++
+        return index
+    }
+
+    /**
+     * 見出しの連なり [start] until [run] の節のうち、空の見開きに入る最も大きいもの（終わりが [reach] 以下）。入る節が無ければ null。
+     * 連なりの見出しを並びの順に積み、連なりの先を1度だけなめて、見出しが来るたびに同じか深い見出しを上から閉じる。
+     * 後ろに同じか浅い見出しがある見出しの節は、本当は連なりの中で閉じて本文を持たない。積んだ下にあるので上の見出しと同じ時に閉じ、
+     * 閉じた節の終わり（その時の値）を変えない。すべてが閉じるのは連なりで最も浅い見出しの節が閉じた時で、それが最も大きい節になる。
+     *
+     * **節の終わりは最後の本文の直後で、末尾の本文の無い見出しは節に数えない。** 節を閉じる見出しと続けて並ぶので、
+     * その連なりの頭で次のまとまりと一緒に判定する。数えると、末尾の見出しと次の行が入らないせいで、入る節まで送ってしまう。
+     */
+    private fun sectionKeep(start: Int, run: Int, reach: Int): KeepFit? {
+        val levels = (start until run).map { (blocks[it].keep as SpreadKeep.Heading).level }
+        // levels[0 until open] の節がまだ閉じていない。閉じた節は、本文がどれも reach の手前なのでかならず入る。
+        var open = levels.size
+        var fit: Int? = null
+        var lastBody = run
+        var index = run
+        while (open > 0 && index < blocks.size) {
             val keep = blocks[index].keep
-            if (index > head && keep is SpreadKeep.Heading && keep.level <= level) break
-            if (index > head && keep !is SpreadKeep.Heading) {
-                if (!(end..index).all { place(at, it, lastPage = EMPTY_SPREAD_LEFT + 1) }) return KeepFit.TooLarge
-                end = index + 1
+            if (keep is SpreadKeep.Heading) {
+                while (open > 0 && levels[open - 1] >= keep.level) {
+                    open--
+                    fit = lastBody + 1
+                }
+            } else {
+                // まだ閉じていない節は、この入らない本文を含む。
+                if (index >= reach) return fit?.let { KeepFit.Fits(it) }
+                lastBody = index
             }
             index++
         }
         return when {
-            index == blocks.size && !complete -> KeepFit.Unknown
-            end == start -> KeepFit.TooLarge
-            else -> KeepFit.Fits(end)
+            open == 0 -> fit?.let { KeepFit.Fits(it) }
+            complete -> KeepFit.Fits(lastBody + 1)
+            else -> KeepFit.Unknown
         }
     }
-
-    private fun fitsEmpty(start: Int, end: Int): KeepFit =
-        if (fits(SpreadCursor(page = EMPTY_SPREAD_LEFT), start, end)) KeepFit.Fits(end) else KeepFit.TooLarge
 
     /** [start] から [end] の手前までを [at] から詰めて、[at] の見開きの中に収まるか。[at] は動く。 */
     private fun fits(at: SpreadCursor, start: Int, end: Int): Boolean {
