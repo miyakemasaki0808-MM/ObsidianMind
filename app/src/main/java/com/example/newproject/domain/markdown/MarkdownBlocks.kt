@@ -87,7 +87,11 @@ internal sealed class MarkdownBlock {
      */
     data class Image(val alt: String, val target: String, val isEmbed: Boolean) : MarkdownBlock()
     data class ListBlock(val items: List<ListItem>) : MarkdownBlock()
-    data class CodeBlock(val code: String) : MarkdownBlock()
+    /**
+     * コードの枠。[language] は開きの ```` ``` ```` の後ろの最初の語（`python` など）で、無ければ null。
+     * **言語は描く側だけが使う**（枠の札と色分け → features/note_typesetting.md §5.4）。AI へ渡す文と知識索引には入れない。
+     */
+    data class CodeBlock(val code: String, val language: String? = null) : MarkdownBlock()
     object HorizontalRule : MarkdownBlock()
     /**
      * 引用。[lines] は `>` を1つ外した原文の行で、**AI への書き戻し・知識索引・反証の一文の候補はこれを読む**。
@@ -171,6 +175,7 @@ internal fun parseBlockLines(
 
         // コードブロック
         if (line.trimStart().startsWith("```")) {
+            val language = codeFenceLanguage(line)
             val codeLines = mutableListOf<String>()
             index++
             while (index < lines.size && !lines[index].trimStart().startsWith("```")) {
@@ -178,7 +183,7 @@ internal fun parseBlockLines(
                 index++
             }
             if (index < lines.size) index++
-            blocks.add(MarkdownBlock.CodeBlock(codeLines.joinToString("\n")))
+            blocks.add(MarkdownBlock.CodeBlock(codeLines.joinToString("\n"), language))
             continue
         }
 
@@ -388,3 +393,7 @@ private fun List<String>.stripFrontmatter(): List<String> {
     val endIndex = drop(1).indexOfFirst { it.trim() == "---" }
     return if (endIndex >= 0) drop(endIndex + 2) else this
 }
+
+/** コードの枠の開きの行（```` ```python title="a.py" ````）から言語の語を取り出す。札の無い枠は null。 */
+internal fun codeFenceLanguage(openLine: String): String? =
+    openLine.trimStart().trimStart('`').trim().substringBefore(' ').takeIf { it.isNotEmpty() }
