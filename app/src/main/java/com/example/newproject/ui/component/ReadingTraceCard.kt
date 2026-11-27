@@ -1,5 +1,6 @@
 package com.example.newproject.ui.component
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.ui.semantics.Role
@@ -33,7 +34,8 @@ import com.example.newproject.model.state.ReadingTraceCard
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.OnSurface
-import com.example.newproject.ui.theme.PanelBlue
+import com.example.newproject.ui.theme.ReadingCard
+import com.example.newproject.ui.theme.ReadingPlateRim
 
 // ---------------------------------------------------------------------------
 // 「前回のあなた」再会カード。
@@ -60,10 +62,12 @@ internal fun ReadingTraceCardPanel(
     /** 前回並べた相手の名前を押したとき。null なら名前は押せない文字のまま（ペインを出せない窓 → features/desk_memory.md 判断3）。 */
     onOpenBeside: (() -> Unit)? = null
 ) {
+    // 読む画面の場に置く部品。ダークでは夜の紺の紙より1段明るい面と細い縁で、本文の紙と別のものに見せる（→ features/note_typesetting.md §5.6）。
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = PanelBlue,
-        shape = RoundedCornerShape(12.dp)
+        color = ReadingCard,
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, ReadingPlateRim)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
             Text(

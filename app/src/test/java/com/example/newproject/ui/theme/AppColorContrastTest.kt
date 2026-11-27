@@ -288,12 +288,16 @@ class AppColorContrastTest {
         }
     }
 
-    /** ダークでは段階を作らない（判断5）。全段階が `panel` と同値であることを固定する。 */
+    /**
+     * ダークでは段階を作らない（判断5）。全段階が同じ紙の色であることを固定する。
+     * ダークの紙は読む画面の夜の紺で、ほかの画面のパネル（`panel`）とは別の色（→ features/note_typesetting.md §5.6）。
+     */
     @Test
     fun `ダークでは紙の地色に段差を作らない`() {
         with(DarkAppColors) {
-            listOf(notePaper.fresh, notePaper.settling, notePaper.aged, notePaper.weathered)
-                .forEach { assertEquals(panel, it) }
+            listOf(notePaper.settling, notePaper.aged, notePaper.weathered)
+                .forEach { assertEquals(notePaper.fresh, it) }
+            assertNotEquals("読む画面の紙はほかの画面のパネルと別", panel, notePaper.fresh)
         }
     }
 
@@ -476,7 +480,8 @@ class AppColorContrastTest {
         }
         assertEquals(DefaultReadingGround.map { it.vivid }, LightAppColors.readingGradientStops)
         assertEquals(DefaultReadingGround.map { it.pale }, LightAppColors.readingGroundPaleStops)
-        assertEquals("ダークは強さの設定が効かない", DarkAppColors.readingGradientStops, DarkAppColors.readingGroundPaleStops)
+        assertEquals(DefaultReadingGround.map { it.vivid }, LightAppColors.readingGroundVividStops)
+        assertEquals("ダークは強さの設定が効かない", DarkAppColors.readingGroundVividStops, DarkAppColors.readingGroundPaleStops)
     }
 
     /** コードの枠は、テーマに関わらず暗い窓（→ features/note_typesetting.md 判断14）。字と言語の札は窓の上で読める。 */
@@ -507,6 +512,33 @@ class AppColorContrastTest {
                 assertAtLeast(4.5, contrast(c.onSurfaceSubtle, tone.surface), "$name 面$i の中身")
             }
         }
+    }
+
+    /**
+     * ダークの読む画面は夜の紺（→ features/note_typesetting.md §5.6）。場 < 紙 < 紙の上と場に置く部品、の順に明るくする。
+     * コードの窓だけはこの順の外で、紙より暗い（判断14 → `コードの窓の字と札は窓の上で読める`）。
+     */
+    @Test
+    fun `ダークの読む画面は場より紙が、紙より部品が明るい`() {
+        val c = DarkAppColors
+        val paper = relativeLuminance(c.notePaper.fresh)
+        c.readingGroundPaleStops.forEach { assertTrue("場 $it は紙より暗い", relativeLuminance(it) < paper) }
+        val parts = listOf("再会カード" to c.readingCard, "タグの札" to c.readingChip, "番号の札" to c.readingBadge) +
+            c.calloutFaces.all.mapIndexed { i, tone -> "コールアウトの面$i" to tone.surface }
+        parts.forEach { (name, color) -> assertTrue("$name は紙より明るい", relativeLuminance(color) > paper) }
+        assertTrue("起動の画面と冊子の地は変えない", c.readingGradientStops != c.readingGroundPaleStops)
+    }
+
+    @Test
+    fun `ダークの読む画面の場と再会カードの上の文字が読める`() {
+        val c = DarkAppColors
+        c.readingGroundPaleStops.forEach { stop ->
+            assertAtLeast(4.5, contrast(c.onGradientHeaderTitle, stop), "見出しタイトル（夜の紺 $stop）")
+            assertAtLeast(4.5, contrast(c.onGradientHeaderSubtitle, stop), "見出し副題（夜の紺 $stop）")
+            listOf(c.buttonPrimary, c.buttonSecondary).forEach { assertAtLeast(3.0, contrast(it, stop), "ボタンの塗り（夜の紺 $stop）") }
+        }
+        listOf("onSurface" to c.onSurface, "onSurfaceFaint" to c.onSurfaceFaint, "accentText" to c.accentText, "linkText" to c.linkText)
+            .forEach { (name, color) -> assertAtLeast(4.5, contrast(color, c.readingCard), "再会カードの $name") }
     }
 
     @Test

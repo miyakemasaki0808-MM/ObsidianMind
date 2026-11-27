@@ -40,6 +40,9 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.BoxWithConstraints
 import com.example.newproject.ui.theme.ReadingPlateRim
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+import com.example.newproject.ui.theme.ReadingPlateLight
 import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import com.example.newproject.ui.markdown.NoteTitleBlock
 import com.example.newproject.ui.markdown.noteFolderLabel
@@ -204,6 +207,9 @@ private val PLATE_PADDING_TOP = 26.dp
 private val PLATE_PADDING_HORIZONTAL = 22.dp
 private val PLATE_PADDING_BOTTOM = 30.dp
 
+/** 上端の光が消えるまでの深さ。 */
+private val PLATE_LIGHT_DEPTH = 240.dp
+
 /** プレートを場から浮かせる影。ダークでは影が見えないので、縁（`ReadingPlateRim`）で浮かせる。 */
 private val PLATE_ELEVATION = 4.dp
 
@@ -247,7 +253,13 @@ internal fun NoteContentPanel(
         shadowElevation = if (floating) PLATE_ELEVATION else 0.dp,
         border = if (floating) BorderStroke(1.dp, ReadingPlateRim) else null
     ) {
-        BoxWithConstraints {
+        // 紙の上端からごく淡い光を重ねる（ダークだけ。ライトは透明で何も描かない）。光はどのノートでも同じで何も表さない。
+        val plateLight = ReadingPlateLight
+        BoxWithConstraints(
+            modifier = Modifier.drawBehind {
+                drawRect(Brush.verticalGradient(listOf(plateLight, Color.Transparent), endY = PLATE_LIGHT_DEPTH.toPx()))
+            }
+        ) {
             // 本文の列を最大幅で中央に置く。題も同じ余白で本文の頭にそろえる。
             val inset = MarkdownBodyStyle.columnInset(maxWidth - PLATE_PADDING_HORIZONTAL * 2)
             Column(

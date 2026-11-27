@@ -141,6 +141,10 @@ internal class AppColorScheme(
     val readingAccent: Color,
     // 読む面のプレートの縁。ライトは影で浮くので縁を持たず（透明）、ダークは影が見えないのでごく細い明るい縁で浮かせる。
     val readingPlateRim: Color,
+    // プレートの上端に重ねるごく淡い光（何も表さない）。ライトは光を当てない（透明）。
+    val readingPlateLight: Color,
+    // 読む画面の場に置く部品（再会カード）の面。ダークでは紙より1段明るくする。
+    val readingCard: Color,
     // 読む面の小さな札（題の欄のタグ）の面。
     val readingChip: Color,
     // 番号付きの箇条の番号の札の面。字は読む面のアクセント（藍）。
@@ -202,11 +206,14 @@ internal class AppColorScheme(
     // **単一ソースにするには色の側を持つしかない**。
     val appGradientStops: List<Color>,
     val readingGradientStops: List<Color>,
-    // 読む画面の場を淡くしたときの停止色（ライトの既定）。ダークは [readingGradientStops] と同じ。
+    // ノートを読む画面の場の停止色。強さ（鮮やか／淡い）ごとに持つ。ライトの鮮やかは [readingGradientStops] と同じ3色。
+    // ダークは強さによらず夜の紺（→ docs/dev/features/note_typesetting.md §5.6）で、起動の画面と冊子の地（readingGradientStops）とは別。
+    val readingGroundVividStops: List<Color>,
     val readingGroundPaleStops: List<Color>
 ) {
     val appGradient: Brush = diagonalGradient(appGradientStops)
     val readingGradient: Brush = diagonalGradient(readingGradientStops)
+    val readingGroundVivid: Brush = diagonalGradient(readingGroundVividStops)
     val readingGroundPale: Brush = diagonalGradient(readingGroundPaleStops)
 }
 
@@ -255,7 +262,8 @@ internal fun readingGroundVivid(): Boolean = LocalReadingGroundVivid.current
 @ReadOnlyComposable
 internal fun notePaperColor(tone: NotePaperTone): Color {
     val colors = LocalAppColors.current
-    return if (LocalNotePaperAging.current) colors.notePaper.color(tone) else colors.panel
+    // 無効時は最も新しい段階の紙。ライトはパネル色と同じ値で、ダークは読む画面の夜の紺。
+    return if (LocalNotePaperAging.current) colors.notePaper.color(tone) else colors.notePaper.fresh
 }
 
 /**
