@@ -1,9 +1,9 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定は作ったが、画面には配線していない
-**最終検証:** 未検証（区切り1の実装中。§5.9 だけ実装と突き合わせた）
-**関連コード:** `model/NoteForm.kt`・`domain/NoteFormJudge.kt`（型の判定）。ほかは未作成で、今の本文の書式は `ui/markdown/MarkdownBodyStyle.kt`、部品の描画は `ui/markdown/MarkdownRenderer.kt`・`ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`、見開きの計測は `ui/markdown/SpreadBlocks.kt`、解析は `domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）、読む面は `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/screen/NoteSpread.kt`、紙の色は `ui/theme/AppTheme.kt`（`notePaperColor`）、末尾の余白は `ui/markdown/EndSpace.kt`
-**関連テスト:** `NoteFormJudgeTest`。ほかは未作成（→ §10）
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）と紙面の書式まで
+**最終検証:** 未検証（区切り1の実装中。§5.2 と §5.9 だけ実装と突き合わせた）
+**関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`）。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
+**関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
 **正本:** この文書（読む面の紙面の組み方と、ノートの型の決め方）。チャネルの割り当ては [bearing_channels](../system/bearing_channels.md) §11、見開きの割り方は [note_spread](note_spread.md)、Markdown の解析は [markdown_rendering](../system/markdown_rendering.md)
 
 **関連:** [ui_design_principles](../system/ui_design_principles.md)（基準と好み）・[note_age_paper](note_age_paper.md)（紙の地色の持ち主）・

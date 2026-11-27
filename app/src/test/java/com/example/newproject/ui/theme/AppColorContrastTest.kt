@@ -68,6 +68,7 @@ class AppColorContrastTest {
         "relatedHeading" -> relatedHeading
         "aiHeading" -> aiHeading
         "linkText" -> linkText
+        "readingAccent" -> readingAccent
         "errorText" -> errorText
         "dangerAction" -> dangerAction
         else -> error("未知の文字トークン: $name")
@@ -220,7 +221,8 @@ class AppColorContrastTest {
             "onSurfaceMetaBlue" -> listOf(blue)          // RelatedTab の更新日時のみ
             "relatedHeading" -> listOf(blue)             // RelatedTab の見出しのみ
             "aiHeading" -> listOf(blue)                  // RelatedTab の見出しのみ
-            "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク
+            "linkText" -> listOf(panelS, tinted) + paper // Markdown のリンク（本文の外）
+            "readingAccent" -> listOf(panelS, tinted) + paper // 本文のリンク・見出しの線・箇条の点
             "errorText" -> listOf(panelS, blue, sheet)
             "dangerAction" -> listOf(panelS, blue)
             else -> error("面の対応表に $token がない。使用箇所を確認して追加すること")
@@ -301,7 +303,7 @@ class AppColorContrastTest {
     fun `文字トークンは実際に載る面すべてでAA基準を満たす`() {
         val tokens = listOf(
             "onSurface", "onSurfaceMuted", "onSurfaceSubtle", "onSurfaceFaint",
-            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText",
+            "onSurfaceMetaBlue", "relatedHeading", "aiHeading", "linkText", "readingAccent",
             "errorText", "dangerAction"
         )
         schemes.forEach { (schemeName, c) ->
@@ -590,6 +592,7 @@ class AppColorContrastTest {
             "onSurface" to (LightAppColors.onSurface to DarkAppColors.onSurface),
             "onVibrant" to (LightAppColors.onVibrant to DarkAppColors.onVibrant),
             "linkText" to (LightAppColors.linkText to DarkAppColors.linkText),
+            "readingAccent" to (LightAppColors.readingAccent to DarkAppColors.readingAccent),
             "errorText" to (LightAppColors.errorText to DarkAppColors.errorText),
             "buttonPrimary" to (LightAppColors.buttonPrimary to DarkAppColors.buttonPrimary),
             "buttonSecondary" to (LightAppColors.buttonSecondary to DarkAppColors.buttonSecondary),

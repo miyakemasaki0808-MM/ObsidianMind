@@ -59,8 +59,6 @@ import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -85,6 +83,7 @@ import com.example.newproject.ui.markdown.SpreadMeasureInputs
 import com.example.newproject.ui.markdown.SpreadSliceView
 import com.example.newproject.ui.markdown.firstUnmeasuredImageIndex
 import com.example.newproject.ui.markdown.imageBlockRefs
+import com.example.newproject.ui.markdown.isLeadParagraph
 import com.example.newproject.ui.markdown.measureSpreadBlock
 import com.example.newproject.ui.markdown.reservedImageHeightDp
 import com.example.newproject.ui.markdown.watchLinkPresses
@@ -92,7 +91,7 @@ import com.example.newproject.ui.quantizeReadingFraction
 import com.example.newproject.ui.shouldReportReadingProgress
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.CodePanel
-import com.example.newproject.ui.theme.LinkText
+import com.example.newproject.ui.theme.ReadingAccent
 import com.example.newproject.ui.theme.OnSurface
 import com.example.newproject.ui.theme.OnSurfaceFaint
 import com.example.newproject.ui.theme.OnSurfaceMuted
@@ -140,7 +139,7 @@ internal fun NoteSpread(
     val blocks = sectionModel.blocks
     val measurer = rememberTextMeasurer(cacheSize = 0)
     val baseStyle = LocalTextStyle.current
-    val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = CodePanel, link = LinkText)
+    val colors = InlineMarkdownColors(strikethrough = OnSurfaceFaint, codeBackground = CodePanel, link = ReadingAccent)
     val currentOnLink by rememberUpdatedState(onLink)
     val linkTaps = remember(onLink != null) { if (onLink != null) NoteLinkTaps { currentOnLink?.invoke(it) } else null }
     val textWidthPx = with(density) { (pageWidth - PagePadding * 2).roundToPx() }
@@ -179,7 +178,7 @@ internal fun NoteSpread(
         var sliceStart = System.nanoTime()
         blocks.forEachIndexed { index, block ->
             currentMeasureGate(index)
-            out += measureSpreadBlock(block, inputs)
+            out += measureSpreadBlock(block, inputs, lead = isLeadParagraph(index, block))
             if (System.nanoTime() - sliceStart > MEASURE_SLICE_NANOS) {
                 measured = SpreadMeasured(out.toList(), complete = false)
                 withFrameNanos { }
@@ -217,8 +216,8 @@ internal fun NoteSpread(
         var cardMeasured by remember(noteKey, leftPageTop != null) { mutableStateOf(false) }
         val leftHeight = pageContentHeight - if (leftPageTop != null) cardHeightPx + with(density) { CardGap.toPx() } else 0f
         val titleHeight = remember(title, textWidthPx, density, baseStyle) {
-            val layout = measurer.measure(AnnotatedString(title), baseStyle.merge(TitleStyle), constraints = Constraints(maxWidth = textWidthPx), density = density)
-            layout.size.height + with(density) { TitleGap.toPx() }
+            val layout = measurer.measure(AnnotatedString(title), baseStyle.merge(MarkdownBodyStyle.Title), constraints = Constraints(maxWidth = textWidthPx), density = density)
+            layout.size.height + with(density) { MarkdownBodyStyle.TitleGap.toPx() }
         }
         val spacingPx = with(density) { MarkdownBodyStyle.BlockSpacing.toPx() }
         val fitHeight = minOf(leftHeight, pageContentHeight, leftHeight - titleHeight)
@@ -438,8 +437,8 @@ private fun SpreadPageView(
                 ) {
                     Column(modifier = Modifier.padding(PagePadding)) {
                         if (showTitle) {
-                            Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(TitleStyle))
-                            Spacer(modifier = Modifier.height(TitleGap))
+                            Text(text = title, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
+                            Spacer(modifier = Modifier.height(MarkdownBodyStyle.TitleGap))
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(MarkdownBodyStyle.BlockSpacing)) {
                             page?.slices?.forEachIndexed { k, slice ->
@@ -539,10 +538,6 @@ private val ReadingSaver = Saver<SpreadReading?, ArrayList<Any>>(
 
 /** ページの内側の余白（→ [SPREAD_PAGE_PADDING_DP]）。 */
 private val PagePadding = SPREAD_PAGE_PADDING_DP.dp
-
-/** 最初のページの題名。縦の流しの本文の面と同じ書式と、本文との間。 */
-private val TitleStyle = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)
-private val TitleGap = 12.dp
 
 /** 再会カードと左ページの間。 */
 private val CardGap = 8.dp

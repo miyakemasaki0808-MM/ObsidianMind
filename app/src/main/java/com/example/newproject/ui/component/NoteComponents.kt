@@ -36,6 +36,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.LocalTextStyle
+import com.example.newproject.ui.markdown.MarkdownBodyStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -232,7 +234,7 @@ internal fun NoteContentPanel(
             // プレースホルダ表示時は内容と一致しないため渡さない。
             val isNote = uiState.noteState is NoteState.Success
             val blocksForContent = if (isNote) precomputedBlocks else null
-            Text(text = noteTitle, color = OnSurface, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(text = noteTitle, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Title))
             // ノート本文は解析が届くまで描かない。ここを描くと [MarkdownNoteContent] の
             // フォールバックが働き、**最大1MBの本文をMain上で解析し直してしまう**
             // （Main外へ逃がした意味がなくなる）。プレースホルダ文言は数十文字なので
@@ -241,7 +243,7 @@ internal fun NoteContentPanel(
                 if (listState != null) {
                     MarkdownNoteContent(
                         content = noteContent,
-                        modifier = Modifier.padding(top = 12.dp).weight(1f),
+                        modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
                         listState = listState,
                         precomputedBlocks = blocksForContent,
                         imageLoader = imageLoader,
@@ -257,7 +259,7 @@ internal fun NoteContentPanel(
                 } else {
                     MarkdownNoteContent(
                         content = noteContent,
-                        modifier = Modifier.padding(top = 12.dp).weight(1f),
+                        modifier = Modifier.padding(top = MarkdownBodyStyle.TitleGap).weight(1f),
                         precomputedBlocks = blocksForContent,
                         imageLoader = imageLoader,
                         imageMeasurements = imageMeasurements,

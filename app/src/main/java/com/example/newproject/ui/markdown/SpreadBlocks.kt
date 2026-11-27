@@ -41,7 +41,8 @@ internal data class MeasuredSpreadBlock(val spread: SpreadBlock, val render: Spr
 
 /** 切れ端を描くための、ブロックの表示文字列。位置は [SpreadBlock] の行と同じ数え方。 */
 internal sealed interface SpreadBlockRender {
-    data class Paragraph(val text: AnnotatedString) : SpreadBlockRender
+    /** [lead] ならリード文（→ [isLeadParagraph]）。 */
+    data class Paragraph(val text: AnnotatedString, val lead: Boolean = false) : SpreadBlockRender
     data class Heading(val level: Int, val text: AnnotatedString) : SpreadBlockRender
 
     /**
@@ -93,9 +94,10 @@ internal class SpreadMeasureInputs(
 /**
  * 本文に直に置いた1つのブロックを測る。**1回の呼び出しは途中で止められない**ので、巨大なブロックは見開きに入る前に弾く（→ `spreadAllowed`）。
  * 見開きの境目で割らないまとまりかを、ここで持たせる（→ [spreadKeepOf]）。引用の子はまとまりを持たない。
+ * [lead] は本文の何番目のブロックかから決まる（→ [isLeadParagraph]）。描画と同じ判定を呼び手が渡す。
  */
-internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInputs): MeasuredSpreadBlock =
-    measureBlock(block, inputs, inputs.textWidthPx, inputs.headingAccessoryPx, quoted = false)
+internal fun measureSpreadBlock(block: MarkdownBlock, inputs: SpreadMeasureInputs, lead: Boolean = false): MeasuredSpreadBlock =
+    measureBlock(block, inputs, inputs.textWidthPx, inputs.headingAccessoryPx, quoted = false, lead = lead)
         .let { it.copy(spread = it.spread.withKeep(spreadKeepOf(block))) }
 
 private fun SpreadMeasureInputs.px(dp: Float): Float = with(density) { dp.dp.toPx() }
@@ -114,13 +116,14 @@ private fun measureBlock(
     inputs: SpreadMeasureInputs,
     widthPx: Int,
     headingAccessoryPx: Int,
-    quoted: Boolean
+    quoted: Boolean,
+    lead: Boolean = false
 ): MeasuredSpreadBlock = with(inputs) {
     when (block) {
         is MarkdownBlock.Paragraph -> {
             val text = inline(block.text)
-            val layout = measure(text, MarkdownBodyStyle.Paragraph, widthPx)
-            MeasuredSpreadBlock(SpreadBlock.Lines(layout.spreadLines(0), text.length), SpreadBlockRender.Paragraph(text))
+            val layout = measure(text, if (lead) MarkdownBodyStyle.Lead else MarkdownBodyStyle.Paragraph, widthPx)
+            MeasuredSpreadBlock(SpreadBlock.Lines(layout.spreadLines(0), text.length), SpreadBlockRender.Paragraph(text, lead))
         }
 
         is MarkdownBlock.Heading -> {
@@ -130,7 +133,7 @@ private fun measureBlock(
                 SpreadBlock.Lines(
                     layout.spreadLines(0),
                     text.length,
-                    fragmentPadding = px(MarkdownBodyStyle.headingTopPadding(block.level).value),
+                    fragmentPadding = px(MarkdownBodyStyle.headingSpaceAbove(block.level).value),
                     minHeight = if (headingAccessoryPx > 0) px(HeadingAccessoryHeight.value) else 0f
                 ),
                 SpreadBlockRender.Heading(block.level, text)
@@ -305,7 +308,7 @@ internal fun SpreadSliceView(
 ) {
     val range = slice.charStart until slice.charEnd
     when (val render = measured.render) {
-        is SpreadBlockRender.Paragraph -> MarkdownParagraphText(render.text.cut(range))
+        is SpreadBlockRender.Paragraph -> MarkdownParagraphText(render.text.cut(range), render.lead)
 
         is SpreadBlockRender.Heading -> if (headingAccessory == null || slice.charStart > 0) {
             MarkdownHeadingText(render.level, render.text.cut(range))

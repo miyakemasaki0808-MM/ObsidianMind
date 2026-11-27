@@ -629,9 +629,9 @@ internal fun spreadRefusal(pageTextWidthDp: Float, pageTextHeightDp: Float, font
     return if (charsPerLine >= SPREAD_MIN_CHARS_PER_LINE && lines >= SPREAD_MIN_LINES) null else SpreadRefusal.LargeText
 }
 
-/** 本文の段落の文字の大きさと行の高さ（`MarkdownParagraph` と同じ）。 */
+/** 本文の段落の文字の大きさと行の高さ。`MarkdownBodyStyle.Paragraph` と同じ値でなければならない（`MarkdownBodyStyleTest` が見る）。 */
 internal const val SPREAD_BODY_FONT_SP = 16f
-internal const val SPREAD_BODY_LINE_SP = 24f
+internal const val SPREAD_BODY_LINE_SP = 30f
 
 /** 見開きに入る、1行の字数の下限。倍率1.0で約22字、1.3で約17字、1.5で約15字になる幅を想定する。 */
 internal const val SPREAD_MIN_CHARS_PER_LINE = 16f

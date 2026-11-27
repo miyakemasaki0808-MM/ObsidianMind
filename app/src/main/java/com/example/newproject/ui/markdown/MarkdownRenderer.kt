@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -52,13 +53,14 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.example.newproject.domain.NoteLink
 import com.example.newproject.domain.markdown.ListItem
+import com.example.newproject.domain.markdown.ListMarker
 import com.example.newproject.domain.markdown.listMarkerText
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.QuoteContent
 import com.example.newproject.domain.markdown.renderedRows
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.domain.markdown.sourceText
-import com.example.newproject.ui.theme.LinkText
+import com.example.newproject.ui.theme.ReadingAccent
 import com.example.newproject.ui.theme.CheckboxOutline
 import com.example.newproject.ui.theme.ContentDivider
 import com.example.newproject.ui.theme.OnSurfaceFaint
@@ -149,7 +151,7 @@ internal fun MarkdownNoteContent(
                                     DisableSelection { headingAccessory(i) }
                                 }
                             }
-                            is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text)
+                            is MarkdownBlock.Paragraph     -> MarkdownParagraph(block.text, lead = isLeadParagraph(i, block))
                             is MarkdownBlock.Image         -> MarkdownImage(block, imageLoader, imageMeasurements)
                             is MarkdownBlock.ListBlock     -> MarkdownList(block.items)
                             is MarkdownBlock.CodeBlock     -> MarkdownCodeBlock(block.code)
@@ -172,7 +174,7 @@ private fun rememberInline(text: String): AnnotatedString {
     val colors = InlineMarkdownColors(
         strikethrough = OnSurfaceFaint,
         codeBackground = CodePanel,
-        link = LinkText
+        link = ReadingAccent
     )
     val linkTaps = LocalNoteLinkTaps.current
     return remember(text, colors, linkTaps) { inlineMarkdown(text, colors, linkTaps) }
@@ -183,15 +185,28 @@ internal fun MarkdownHeading(block: MarkdownBlock.Heading) {
     MarkdownHeadingText(block.level, rememberInline(block.text))
 }
 
-/** 見出しの文字。見開きは割った切れ端（[text] の一部）をこれで描く。 */
+/**
+ * 見出しの文字。見開きは割った切れ端（[text] の一部）をこれで描く。
+ * 文字より上に積む高さ（上の余白・線・線の下の間）は、見開きの計測が [MarkdownBodyStyle.headingSpaceAbove] で同じだけ足す。
+ */
 @Composable
 internal fun MarkdownHeadingText(level: Int, text: AnnotatedString, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        color = if (level >= 5) OnSurfaceMuted else OnSurface,
-        style = LocalTextStyle.current.merge(MarkdownBodyStyle.heading(level)),
-        modifier = modifier.padding(top = MarkdownBodyStyle.headingTopPadding(level))
-    )
+    Column(modifier = modifier.padding(top = MarkdownBodyStyle.headingTopPadding(level))) {
+        if (MarkdownBodyStyle.hasHeadingMark(level)) {
+            // 線は飾りなので、読み上げと選択のコピーに入れない（Box は文字を持たない）。
+            Box(
+                modifier = Modifier
+                    .size(MarkdownBodyStyle.HeadingMarkWidth, MarkdownBodyStyle.HeadingMarkHeight)
+                    .background(ReadingAccent, RoundedCornerShape(1.dp))
+            )
+            Spacer(modifier = Modifier.height(MarkdownBodyStyle.HeadingMarkGap))
+        }
+        Text(
+            text = text,
+            color = if (level >= 5) OnSurfaceMuted else OnSurface,
+            style = LocalTextStyle.current.merge(MarkdownBodyStyle.heading(level))
+        )
+    }
 }
 
 @Composable
@@ -381,15 +396,20 @@ internal fun MarkdownTableView(headers: List<List<AnnotatedString>>, rows: List<
     }
 }
 
+/** [lead] ならリード文の書式で組む（→ [isLeadParagraph]）。 */
 @Composable
-internal fun MarkdownParagraph(text: String) {
-    MarkdownParagraphText(rememberInline(text))
+internal fun MarkdownParagraph(text: String, lead: Boolean = false) {
+    MarkdownParagraphText(rememberInline(text), lead)
 }
 
 /** 段落の文字。見開きは割った切れ端（[text] の一部）をこれで描く。 */
 @Composable
-internal fun MarkdownParagraphText(text: AnnotatedString) {
-    Text(text = text, color = OnSurface, style = LocalTextStyle.current.merge(MarkdownBodyStyle.Paragraph))
+internal fun MarkdownParagraphText(text: AnnotatedString, lead: Boolean = false) {
+    Text(
+        text = text,
+        color = OnSurface,
+        style = LocalTextStyle.current.merge(if (lead) MarkdownBodyStyle.Lead else MarkdownBodyStyle.Paragraph)
+    )
 }
 
 /** [quoted] なら引用の中のリストで、文字を引用の書式と色で描く。 */
@@ -420,7 +440,8 @@ internal fun MarkdownListRows(rows: List<MarkdownListRow>, quoted: Boolean = fal
                             // 番号付きは原文の表記をそのまま出す。自動採番すると `1. 1. 1.` と
                             // 書かれたノートで表示が原文と食い違う（本アプリは編集器ではない）。
                             text = listMarkerText(item),
-                            color = textColor,
+                            // 箇条の点は読む面のアクセント。番号は文字なので本文の色のまま。
+                            color = if (item.marker is ListMarker.Bullet && !quoted) ReadingAccent else textColor,
                             style = style,
                             modifier = markerAlpha
                         )
