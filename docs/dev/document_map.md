@@ -119,6 +119,7 @@
 | [desk_memory.md](features/desk_memory.md) | 机の記憶 — 机で右に並べて読んだ相手を訪問の痕跡に1件控え、次の再会で名前を添え、開いた Fold ではその名前を押して開き直す |
 | [rebuttal_sentence.md](features/rebuttal_sentence.md) | 反証の一文（関連ノートの本文から、今のノートと食い違う1文をAIが選んで原文のまま出す） |
 | [backlinks.md](features/backlinks.md) | このノートのバックナンバー — 今のノートへリンクしているのに久しく読んでいないノートを、リンクを含む1文つきで余白ペインと関連タブに出す（再会の入口） |
+| [note_typesetting.md](features/note_typesetting.md) | 読む面の組版の型（構想） — 本文をプレートに組み、ノートの型（技術書・読書ノート・標準）で中の組み方を変える。型は本文から表示の前に決める |
 
 ### 基盤（`system/`）
 
@@ -261,7 +262,8 @@
 | `model/` の共有データ型 | [architecture](system/architecture.md) → 該当機能の設計書 |
 | `ui/theme/`・見た目に触る変更全般 | **[ui_design_principles](system/ui_design_principles.md)（先に読む）** → [theme_and_ui_refactor](system/theme_and_ui_refactor.md) → [dark_mode](features/dark_mode.md) |
 | **情報を色・形・動きで伝える変更**（装飾を足す・分類を見せる・演出を足す） | **[bearing_channels](system/bearing_channels.md)（どのチャネルが何を意味するか）** → [ui_design_principles](system/ui_design_principles.md) |
-| `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md) |
+| `ui/theme/` の `panel` 系トークン・読書画面の地色 | [ui_design_principles](system/ui_design_principles.md) → [note_age_paper](features/note_age_paper.md)・[note_typesetting](features/note_typesetting.md) §5.4（ダークの夜の紺） |
+| `ui/markdown/MarkdownBodyStyle.kt`・本文の書式・読む面のプレート・ノートの型 | **[note_typesetting](features/note_typesetting.md)（書式は1か所・型は本文から表示の前に）** → [note_spread](features/note_spread.md) 判断8（描画と計測が同じ書式を読む） |
 | `ui/vigilith/` | [character_vigilith](features/character_vigilith.md) → [opening_animation](features/opening_animation.md)（残っているのは起動OPの動きだけ） |
 | `controller/CrystalController.kt`・`data/Crystal*.kt`・`ui/screen/Crystal*.kt` | [reflect_crystal](features/reflect_crystal.md)（試す条件・生成と保存の寿命・再会カードとの順序） |
 | `controller/RebuttalController.kt`・`domain/Rebuttal*.kt`・`ui/screen/RelatedTab.kt` の反証の枠 | [rebuttal_sentence](features/rebuttal_sentence.md)（候補の列挙と順位付け・関連ノートの完了からの起動・置き場） |
