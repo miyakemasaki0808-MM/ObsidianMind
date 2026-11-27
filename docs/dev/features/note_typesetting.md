@@ -1,6 +1,6 @@
 # 読む面の組版の型 — 本文をプレートに組み、ノートの型で組み分ける
 
-**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠・コールアウトの面・番号の札・インラインのコードまで
+**状態:** 区切り1を実装中。型の判定（画面には配線していない）・紙面の書式・プレートと1行の長さ・場の強さ・題の欄・コードの枠・コールアウトの面・番号の札・インラインのコード・引用・表まで（区切り1の層2を入れ終えた）
 **最終検証:** 未検証（区切り1の実装中。§5.1〜§5.3、§5.4 のコードの枠とコールアウトの面、§5.5、§5.9 だけ実装と突き合わせた）
 **関連コード:** 型の判定は `model/NoteForm.kt`・`domain/NoteFormJudge.kt`、書式は `ui/markdown/MarkdownBodyStyle.kt`（`isLeadParagraph` を含む）・`ui/markdown/MarkdownRenderer.kt`・`ui/markdown/SpreadBlocks.kt`・`ui/screen/NoteSpread.kt`、プレートは `ui/component/NoteComponents.kt`（`NoteContentPanel`）・`ui/theme/AppShapes.kt`、1行の長さは `MarkdownBodyStyle.columnInset`・`ui/screen/ReaderLayout.kt`、色は `ui/theme/AppColors.kt`（`readingAccent`・`readingPlateRim`・`ReadingGround`）、場の強さの設定は `data/AppPreferences.kt`（`vividReadingGround`）・`ui/screen/OptionsScreen.kt`、コールアウトの面は `ui/markdown/CalloutLabel.kt`（`calloutFaceOf`・`CalloutIcon`）・`MarkdownRenderer.kt`（`CalloutFaceFrame`）、コードの枠は `domain/markdown/CodeTokens.kt`（`codeTokensOf`）・`MarkdownBlock.CodeBlock`（`language`・`tokens`）・`MarkdownRenderer.kt`（`MarkdownCodeBlock`・`codeAnnotatedString`）、題の欄は `ui/markdown/NoteTitleBlock.kt`・`domain/markdown/FrontmatterList.kt`（`frontmatterList`）・`NoteSectionModel.tags`。これから触るのは `ui/markdown/InlineMarkdown.kt`・`ui/markdown/CalloutLabel.kt`・`domain/markdown/MarkdownBlocks.kt`（`CodeBlock`）・`ui/screen/NoteReaderTab.kt`・`ui/screen/FullscreenNoteScreen.kt`・`ui/theme/AppTheme.kt`（`notePaperColor`）・`ui/markdown/EndSpace.kt`
 **関連テスト:** `NoteFormJudgeTest`・`MarkdownBodyStyleTest`・`AppColorContrastTest`（藍）。ほかは未作成（→ §10）
@@ -207,13 +207,15 @@
 
 #### 引用
 
-- **頭に藍の大きな引用符（34sp）を置き、本文を 17sp・中太・本文の色で組む。** 縦線と控えめな色はやめる
+- **頭に藍の大きな引用符（34sp）を置き、本文を 17sp・中太・本文の色で組む。** 縦線と控えめな色はやめる。中身は 28dp 字下げする
+- 引用符は字下げの中に描くだけで、並べ方の寸法に入らない。選択のコピーと読み上げにも入らない（文字として置かず描くだけ）。
+  引用の中の箇条は引用の書式（16sp）のまま
 - 複数の段落の引用も同じ形で、引用符は最初の行の頭に1つ。見開きで割れたときは最初の片だけに出す
 - 引用の中の箇条と表（→ [markdown_rendering](../system/markdown_rendering.md) §8）は、引用の字下げの中で同じ部品で描く
 
 #### 表
 
-- 外枠を内側の 1dp の淡い線、角 10dp にし、頭の行を淡い面に控えめな色の太字で組む。セルは 13sp・中の余白 9/12dp
+- 外枠を内側の 1dp の淡い線、角 10dp にし、頭の行を淡い面（タグの札と同じ面）に控えめな色の太字で組む。セルは 13sp・中の余白 9/12dp
 - 列の多い表の扱い（横へ送るか）は今のまま
 
 ### 5.5 1行の長さの上限（層1）

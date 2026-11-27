@@ -51,8 +51,8 @@ class CalloutFaceTest {
     fun `面の内側の幅は左右の余白を片側ずつ丸めて引き、縦線の引用とは別に数える`() {
         // 14dp は密度 2.25 で片側 31.5px。片側ずつ丸めて 32px ずつ引く。
         assertEquals(1000 - 64, quoteInnerWidthPx(1000, Density(2.25f), CalloutFace.Summary))
-        // 縦線の引用は線と間（16dp）をまとめて丸める。
-        assertEquals(1000 - 36, quoteInnerWidthPx(1000, Density(2.25f), null))
+        // 面を敷かない引用は字下げ（28dp）を丸める。
+        assertEquals(1000 - 63, quoteInnerWidthPx(1000, Density(2.25f), null))
         assertEquals(CalloutRole.Summary, calloutOf("> [!note] 題").role)
     }
 }

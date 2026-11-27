@@ -58,7 +58,7 @@ internal sealed interface SpreadBlockRender {
     ) : SpreadBlockRender
 
     /** 引用の中の行（1行ずつ別の文字）。[offsets] は行の文字がブロックの中で始まる位置。 */
-    data class QuoteLines(val lines: List<AnnotatedString>, val offsets: List<Int>) : SpreadBlockRender
+    data class QuoteLines(val lines: List<AnnotatedString>, val offsets: List<Int>, val pull: Boolean = false) : SpreadBlockRender
 
     /** 引用。子（コールアウトの頭と中のブロック）を測ったものと、子が引用の単位のどこを占めるか（→ [quoteSpreadBlock]）。 */
     data class Quote(val children: List<Pair<MeasuredSpreadBlock, QuoteChildLayout>>, val face: CalloutFace? = null) : SpreadBlockRender
@@ -172,8 +172,8 @@ private fun measureBlock(
                 block.content.blocks.forEach { child ->
                     add(
                         when (child) {
-                            is MarkdownBlock.Paragraph -> measureQuoteLines(child.text.lines(), inputs, inner)
-                            is MarkdownBlock.Image -> measureQuoteLines(listOf(child.sourceText()), inputs, inner)
+                            is MarkdownBlock.Paragraph -> measureQuoteLines(child.text.lines(), inputs, inner, pull = face == null)
+                            is MarkdownBlock.Image -> measureQuoteLines(listOf(child.sourceText()), inputs, inner, pull = face == null)
                             else -> measureBlock(child, inputs, inner, headingAccessoryPx = 0, quoted = true)
                         }
                     )
@@ -248,27 +248,27 @@ private fun orderedBadgeWidthPx(text: String, inputs: SpreadMeasureInputs): Int 
 }
 
 /**
- * 引用の外の幅 [widthPx] から、中のブロックを並べる幅を出す。**描画（[QuoteFrame] の左の余白）と同じく、余白を先に画素へ丸めてから引く。**
+ * 引用の外の幅 [widthPx] から、中のブロックを並べる幅を出す。**描画（[QuoteFrame] の字下げ・[CalloutFaceFrame] の左右の余白）と同じく、余白を先に画素へ丸めてから引く。**
  * 引いてから丸めると、余白が半画素の密度で1画素広くなり、コールアウトの題を送るか（[calloutTitleBelow]）が描画と分かれる。
  */
 internal fun quoteInnerWidthPx(widthPx: Int, density: Density, face: CalloutFace? = null): Int =
     widthPx - with(density) {
         // 面は左右の余白をそれぞれ画素へ丸める（Modifier.padding と同じ）。
         if (face == null) {
-            (MarkdownBodyStyle.QuoteBarWidth + MarkdownBodyStyle.QuoteTextStart).roundToPx()
+            MarkdownBodyStyle.QuoteIndent.roundToPx()
         } else {
             MarkdownBodyStyle.CalloutPaddingHorizontal.roundToPx() * 2
         }
     }
 
 /** 引用の中の行を、1行ずつ別の文字として測る（描く側の [MarkdownQuoteLines] と同じ）。 */
-private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, widthPx: Int): MeasuredSpreadBlock = with(inputs) {
+private fun measureQuoteLines(raw: List<String>, inputs: SpreadMeasureInputs, widthPx: Int, pull: Boolean): MeasuredSpreadBlock = with(inputs) {
     val texts = raw.map { inline(it) }
     val offsets = texts.runningFold(0) { offset, text -> offset + text.length + 1 }.dropLast(1)
-    val lines = texts.flatMapIndexed { index, text -> measure(text, MarkdownBodyStyle.Quote, widthPx).spreadLines(offsets[index]) }
+    val lines = texts.flatMapIndexed { index, text -> measure(text, quoteLineStyle(pull), widthPx).spreadLines(offsets[index]) }
     MeasuredSpreadBlock(
         SpreadBlock.Lines(lines, (offsets.lastOrNull() ?: 0) + (texts.lastOrNull()?.length ?: 0)),
-        SpreadBlockRender.QuoteLines(texts, offsets)
+        SpreadBlockRender.QuoteLines(texts, offsets, pull)
     )
 }
 
@@ -384,11 +384,12 @@ internal fun SpreadSliceView(
                 val end = start + render.lines[index].length
                 if (!overlaps(start, end, slice)) return@mapNotNull null
                 render.lines[index].cut(maxOf(slice.charStart, start) - start until minOf(slice.charEnd, end) - start)
-            }
+            },
+            render.pull
         )
 
         // 子の表は行を割らずに組んだので、割らない高さで引き直す（→ quoteChildSlice）。
-        is SpreadBlockRender.Quote -> QuoteOrFaceFrame(render.face) {
+        is SpreadBlockRender.Quote -> QuoteOrFaceFrame(render.face, showMark = slice.charStart == 0) {
             render.children.forEach { (child, layout) ->
                 quoteChildSlice(slice, layout)?.let { SpreadSliceView(child, it, Float.POSITIVE_INFINITY, imageLoader, imageMeasurements, null) }
             }

@@ -122,9 +122,23 @@ internal object MarkdownBodyStyle {
     val OrderedBadgePaddingHorizontal: Dp = 5.dp
     val OrderedBadgeCorner: Dp = 6.dp
 
+    /** コールアウトの中身と、引用の中の箇条の字。 */
     val Quote = TextStyle(fontSize = 16.sp, lineHeight = 30.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
-    val QuoteBarWidth: Dp = 4.dp
-    val QuoteTextStart: Dp = 12.dp
+
+    /** 面を敷かない引用の行。大きな引用符に続けて、本文より少し大きく組む（→ features/note_typesetting.md §5.4）。 */
+    val PullQuote = TextStyle(
+        fontSize = 17.sp,
+        lineHeight = 30.sp,
+        fontWeight = FontWeight.Medium,
+        letterSpacing = 0.sp,
+        lineBreak = LineBreak.Simple
+    )
+
+    /** 引用の頭の大きな引用符。飾りなので並べ方の寸法に入らない（字下げ [QuoteIndent] の中に描く）。 */
+    val QuoteMarkText = TextStyle(fontSize = 34.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.sp)
+
+    /** 引用の中身の字下げ。引用符はこの幅の中に描く。 */
+    val QuoteIndent: Dp = 28.dp
     val QuoteVerticalPadding: Dp = 4.dp
 
     /** コールアウトの頭。種類の記号と言葉（[CalloutLabel]）の後に題を続ける。 */
@@ -150,10 +164,11 @@ internal object MarkdownBodyStyle {
     val CalloutPaddingVertical: Dp = 12.dp
     val CalloutCorner: Dp = 10.dp
 
-    val TableCell = TextStyle(fontSize = 14.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
+    val TableCell = TextStyle(fontSize = 13.sp, letterSpacing = 0.sp, lineBreak = LineBreak.Simple)
     val TableHeader = TableCell.copy(fontWeight = FontWeight.Bold)
-    val TableCellPaddingHorizontal: Dp = 8.dp
-    val TableCellPaddingVertical: Dp = 6.dp
+    val TableCellPaddingHorizontal: Dp = 12.dp
+    val TableCellPaddingVertical: Dp = 9.dp
+    val TableCorner: Dp = 10.dp
 
     /** コードの枠の中の字（端末の等幅）。枠はテーマに関わらず暗い窓（→ features/note_typesetting.md 判断14）。 */
     val Code = TextStyle(

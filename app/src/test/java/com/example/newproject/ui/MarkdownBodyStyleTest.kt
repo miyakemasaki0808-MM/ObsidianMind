@@ -29,6 +29,8 @@ class MarkdownBodyStyleTest {
         "Paragraph" to MarkdownBodyStyle.Paragraph,
         "Lead" to MarkdownBodyStyle.Lead,
         "Quote" to MarkdownBodyStyle.Quote,
+        "PullQuote" to MarkdownBodyStyle.PullQuote,
+        "QuoteMarkText" to MarkdownBodyStyle.QuoteMarkText,
         "CalloutLabelText" to MarkdownBodyStyle.CalloutLabelText,
         "CalloutTitleText" to MarkdownBodyStyle.CalloutTitleText,
         "TableCell" to MarkdownBodyStyle.TableCell,

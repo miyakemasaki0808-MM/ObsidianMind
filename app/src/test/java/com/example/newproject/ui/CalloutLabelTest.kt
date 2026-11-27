@@ -51,13 +51,13 @@ class CalloutLabelTest {
     }
 
     /**
-     * 引用の内側の幅は、描画（左の余白を画素へ丸めてから引く）と同じ順で数える。密度 2.53125 では余白16dpが40.5pxになり、
+     * 引用の内側の幅は、描画（左の字下げを画素へ丸めてから引く）と同じ順で数える。密度 2.125 では字下げ28dpが59.5pxになり、
      * 引いてから丸めると1画素広くなって、半分の境い目で題を送るかが描画と分かれる（→ [calloutTitleBelow]）。
      */
     @Test
-    fun `引用の内側の幅は左の余白を画素へ丸めてから引く`() {
-        assertEquals(799, quoteInnerWidthPx(840, Density(2.53125f)))
-        assertEquals(808, quoteInnerWidthPx(840, Density(2f)))
+    fun `引用の内側の幅は左の字下げを画素へ丸めてから引く`() {
+        assertEquals(780, quoteInnerWidthPx(840, Density(2.125f)))
+        assertEquals(784, quoteInnerWidthPx(840, Density(2f)))
     }
 }
 
