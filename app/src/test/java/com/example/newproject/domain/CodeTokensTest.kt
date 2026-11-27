@@ -44,6 +44,16 @@ class CodeTokensTest {
     }
 
     @Test
+    fun `シェルの # は区切りの記号の後でもコメントで、引用符の外のバックスラッシュは次の字を文字として飛ばす`() {
+        assertEquals(listOf("# comment" to Comment), cut("sh", "echo ok;# comment"))
+        assertEquals(listOf("# 後" to Comment), cut("bash", "a && b|# 後"))
+        // エスケープした引用符は文字列を始めない。
+        assertEquals(listOf("# comment" to Comment), cut("bash", "echo \\\" # comment"))
+        // エスケープした # はコメントを始めない。
+        assertEquals(emptyList<Pair<String, CodeTokenKind>>(), cut("sh", "echo \\# not"))
+    }
+
+    @Test
     fun `語の途中の数字とキーワードの一部は切らない`() {
         assertEquals(emptyList<Pair<String, CodeTokenKind>>(), cut("python", "item2 = format_in"))
         assertEquals(listOf("0x1F" to Number, "3.14" to Number), cut("python", "a = 0x1F + 3.14"))

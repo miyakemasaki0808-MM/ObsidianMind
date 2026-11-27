@@ -57,6 +57,8 @@ internal fun codeTokensOf(language: String?, code: String): List<CodeToken> {
     while (i < code.length) {
         val c = code[i]
         when {
+            // シェルは引用符の外でもバックスラッシュが次の1字を文字にする（`\"` は文字列を、`\#` はコメントを始めない）。
+            lang == CodeLanguage.Shell && c == '\\' -> i += 2
             isLineComment(lang, code, i) -> {
                 val end = code.indexOf('\n', i).let { if (it < 0) code.length else it }
                 tokens += CodeToken(i, end, CodeTokenKind.Comment)
@@ -93,10 +95,13 @@ internal fun codeTokensOf(language: String?, code: String): List<CodeToken> {
 
 private fun isWordChar(c: Char?): Boolean = c != null && (c.isLetterOrDigit() || c == '_')
 
-/** 行のコメントの始まりか。シェルの `#` は語の頭でだけコメント（`${#a}` や `a#b` は違う）。 */
+/** シェルで語を区切る記号。この直後の `#` は新しい語の頭にあたる。 */
+private const val SHELL_WORD_BREAKS = ";&|()<>"
+
+/** 行のコメントの始まりか。シェルの `#` は語の頭（行頭・空白・区切りの記号の後）でだけコメント（`${#a}` や `a#b` は違う）。 */
 private fun isLineComment(lang: CodeLanguage, code: String, i: Int): Boolean = when (lang) {
     CodeLanguage.Python -> code[i] == '#'
-    CodeLanguage.Shell -> code[i] == '#' && (i == 0 || code[i - 1].isWhitespace())
+    CodeLanguage.Shell -> code[i] == '#' && (i == 0 || code[i - 1].isWhitespace() || code[i - 1] in SHELL_WORD_BREAKS)
     CodeLanguage.Kotlin -> code.startsWith("//", i)
 }
 
