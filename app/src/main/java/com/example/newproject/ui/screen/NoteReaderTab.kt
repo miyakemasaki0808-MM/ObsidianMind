@@ -11,6 +11,10 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import com.example.newproject.ui.theme.AccentText
 import com.example.newproject.ui.theme.notePaperColor
+import com.example.newproject.ui.component.SELECT_VAULT_LABEL
+import com.example.newproject.ui.component.DRAW_NOTE_LABEL
+import com.example.newproject.ui.component.emptyPlaceText
+import com.example.newproject.ui.component.EmptyPlacePanel
 import com.example.newproject.ui.component.GradientHeader
 import com.example.newproject.ui.component.bleedScreenPadding
 import com.example.newproject.ui.component.screenContentPadding
@@ -487,34 +491,13 @@ internal fun NoteReaderTab(
             }
         }
     }
-    // ノートが出ていないときの案内。**内容なりの高さに留める** — 本文パネルと同じく `weight(1f)` で伸ばすと、
-    // 中身の無い白が画面の大半を占める。
-    val emptyNote: @Composable () -> Unit = {
-        Surface(
-            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
-            color = Panel,
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Text(
-                    text = "ノート未表示",
-                    color = OnSurface,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = when (uiState.noteState) {
-                        is NoteState.Empty -> "このVaultにMarkdownノートが見つかりませんでした。"
-                        is NoteState.Error -> "Vaultを読み込めませんでした。"
-                        else -> "Vaultフォルダを選択して「別のノートをひらく」をタップしてください。"
-                    },
-                    color = OnSurfaceFaint,
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-            }
-        }
+    // 最初の1枚を引く前の場（→ features/note_typesetting.md §5.7）。**本文の紙と同じ位置・大きさのプレートを伸ばして置く** —
+    // 1枚目を引いたとき、紙面が動かずに中身だけが入れ替わる。案内の文は [emptyPlaceText] の1か所から読む。
+    val emptyNote: @Composable (Modifier) -> Unit = { modifier ->
+        EmptyPlacePanel(
+            text = emptyPlaceText(uiState.noteState, uiState.vaultSelected),
+            modifier = modifier.padding(top = 20.dp)
+        )
     }
     // 「前回のあなた」カード。NoteContentPanel の外側に置くので全画面には出ない
     // （NoteContentPanel は全画面と共用。LazyColumn の index もずらさないので
@@ -958,9 +941,7 @@ internal fun NoteReaderTab(
                             if (!hideControls) controls(memoToggle, openSummary, ControlsPlace.Top) {}
                             if (spreadRefusal != null) SpreadRefusalLine(spreadRefusal)
                             if (!hasNote) {
-                                emptyNote()
-                                // 余りをカードではなく余白へ逃がす。
-                                Spacer(modifier = Modifier.weight(1f))
+                                emptyNote(Modifier.weight(1f))
                             } else {
                                 if (!hideControls) traceCard(Modifier.padding(top = 20.dp), openMemosFromCard, openBesideFromCard)
                                 notePanel(
@@ -994,8 +975,7 @@ internal fun NoteReaderTab(
                             Spacer(modifier = Modifier.width(16.dp))
                             Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
                                 if (!hasNote) {
-                                    emptyNote()
-                                    Spacer(modifier = Modifier.weight(1f))
+                                    emptyNote(Modifier.weight(1f))
                                 } else {
                                     notePanel(Modifier.weight(1f), headingMark, openLink, quoteFromBody, null)
                                 }
@@ -1069,8 +1049,7 @@ internal fun NoteReaderTab(
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             Spacer(modifier = Modifier.height(DeskStripHeight))
                                             if (!hasNote) {
-                                                emptyNote()
-                                                Spacer(modifier = Modifier.weight(1f))
+                                                emptyNote(Modifier.weight(1f))
                                             } else {
                                                 // 再会カードは引いた直後だけ出る。閉じるまで左右の大きさが少しずれるのは受け入れる（一時的なため）。
                                                 val cardShown = !hideControls && visibleTraceCard != null
@@ -1358,7 +1337,7 @@ private fun NoteActionButtons(
                 colors = ButtonDefaults.buttonColors(containerColor = ButtonPrimary, contentColor = OnButtonPrimary),
                 border = outline,
                 shape = RoundedCornerShape(24.dp)
-            ) { Text("Vaultを選択", color = OnButtonPrimary) }
+            ) { Text(SELECT_VAULT_LABEL, color = OnButtonPrimary) }
         }
         Button(
             onClick = onRandomNote,
@@ -1379,7 +1358,7 @@ private fun NoteActionButtons(
             shape = RoundedCornerShape(24.dp)
         ) {
             Text(
-                "別のノートをひらく",
+                DRAW_NOTE_LABEL,
                 color = if (vaultSelected) OnButtonPrimary else OnSurfaceFaint
             )
         }
