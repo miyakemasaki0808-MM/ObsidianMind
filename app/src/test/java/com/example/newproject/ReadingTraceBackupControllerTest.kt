@@ -1,5 +1,9 @@
 package com.example.newproject
 
+import com.example.newproject.model.ReadingTraceBackupLimits
+import com.example.newproject.data.ReadingTraceBackupTooLargeException
+import com.example.newproject.data.ReadingTraceBackupLimit
+import com.example.newproject.controller.backupLimitText
 import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.ReadingTraceBackupController
 import com.example.newproject.data.ReadingTraceBackupJson
@@ -258,6 +262,46 @@ class ReadingTraceBackupControllerTest {
             listOf("端末側の返事"),
             env.persistence.stored("ideas/habit.md")?.memos?.map { it.text }
         )
+    }
+
+    /** 上限を超えたファイルの読み戻しは、一般の読み取りの失敗と分けて言い、上限の数と例外の文を出さず、何も書かない。 */
+    @Test
+    fun `大きすぎる退避ファイルは大きすぎると言い、何も書かない`() = runTest {
+        val env = Env(this)
+
+        env.controller.prepareImport {
+            throw ReadingTraceBackupTooLargeException(ReadingTraceBackupLimit.IMPORT_TOO_LARGE, "ファイルが大きすぎます（上限 8MB）。")
+        }
+        advanceUntilIdle()
+
+        val error = env.state.value as ReadingTraceBackupState.Error
+        assertEquals(backupLimitText(ReadingTraceBackupTooLargeException(ReadingTraceBackupLimit.IMPORT_TOO_LARGE, "")), error.message)
+        assertTrue(error.message, error.message.contains("大きすぎ") && error.message.none { it.isDigit() })
+        assertEquals(0, env.persistence.saveCount)
+    }
+
+    /** 痕跡が多すぎて書き出せないときは、多すぎると言い、何も書き出さない。 */
+    @Test
+    fun `痕跡が多すぎるときは多すぎると言い、書き出さない`() = runTest {
+        val env = Env(this)
+        (0..ReadingTraceBackupLimits.MAX_ENTRIES).forEach { env.persistence.put(trace("n/$it.md")) }
+
+        env.controller.export { bytes -> env.written = bytes }
+        advanceUntilIdle()
+
+        val error = env.state.value as ReadingTraceBackupState.Error
+        assertTrue(error.message, error.message.contains("多すぎ") && error.message.none { it.isDigit() })
+        assertNull("書き出してしまった", env.written)
+    }
+
+    /** 上限超過でない失敗は、上限の文にしない。 */
+    @Test
+    fun `上限の文は上限超過のときだけ`() {
+        assertEquals(null, backupLimitText(java.io.IOException("EACCES")))
+        ReadingTraceBackupLimit.entries.forEach { limit ->
+            val text = backupLimitText(ReadingTraceBackupTooLargeException(limit, "上限 8MB"))!!
+            assertTrue("$limit: $text", text.none { it.isDigit() })
+        }
     }
 
     // 実在しない痕跡は従来どおり新規として受け入れる（畳まない＝何も足せない、ではない）。

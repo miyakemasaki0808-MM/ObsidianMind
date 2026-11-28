@@ -307,7 +307,8 @@ class NoteRepository {
                 // 既定の文言は蒸留のノート向けなので、ここで言い換える。
                 // そのまま流すと「ノートが蒸留の上限を超えています」が退避ファイルの
                 // 読み込みエラーとして出て、原因を取り違える。
-                throw IllegalArgumentException(
+                throw ReadingTraceBackupTooLargeException(
+                    ReadingTraceBackupLimit.IMPORT_TOO_LARGE,
                     "ファイルが大きすぎます（上限 ${maximumBytes / (1024 * 1024)}MB）。"
                 )
             }

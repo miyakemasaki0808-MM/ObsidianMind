@@ -35,7 +35,10 @@ internal sealed interface ReadingTraceBackupReadResult {
     data class Unusable(val reason: String) : ReadingTraceBackupReadResult
 }
 
-internal class ReadingTraceBackupTooLargeException(message: String) : IllegalArgumentException(message)
+/** 退避の上限のどれを超えたか。やり直しても直らないので、画面で一般の失敗と分けて言う（→ features/reading_trace_backup.md §5）。 */
+internal enum class ReadingTraceBackupLimit { TOO_MANY_TRACES, EXPORT_TOO_LARGE, IMPORT_TOO_LARGE }
+
+internal class ReadingTraceBackupTooLargeException(val limit: ReadingTraceBackupLimit, message: String) : IllegalArgumentException(message)
 
 internal object ReadingTraceBackupJson {
 
@@ -54,6 +57,7 @@ internal object ReadingTraceBackupJson {
     fun encode(traces: List<ReadingTrace>, exportedAtEpochMillis: Long): ByteArray {
         if (traces.size > ReadingTraceBackupLimits.MAX_ENTRIES) {
             throw ReadingTraceBackupTooLargeException(
+                ReadingTraceBackupLimit.TOO_MANY_TRACES,
                 "痕跡が多すぎます（${traces.size}件／上限 ${ReadingTraceBackupLimits.MAX_ENTRIES}件）。"
             )
         }
@@ -81,6 +85,7 @@ internal object ReadingTraceBackupJson {
         val bytes = root.toString(2).toByteArray(Charsets.UTF_8)
         if (bytes.size > ReadingTraceBackupLimits.MAX_FILE_BYTES) {
             throw ReadingTraceBackupTooLargeException(
+                ReadingTraceBackupLimit.EXPORT_TOO_LARGE,
                 "退避ファイルが上限（${ReadingTraceBackupLimits.MAX_FILE_BYTES / (1024 * 1024)}MB）を超えます。"
             )
         }

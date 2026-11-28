@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.data.ReadingTraceBackupTooLargeException
+import com.example.newproject.data.ReadingTraceBackupLimit
 import com.example.newproject.domain.FailureScene
 import com.example.newproject.domain.failureText
 import com.example.newproject.data.ReadingTraceBackupEntry
@@ -224,7 +226,7 @@ internal class ReadingTraceBackupController(
         // `state.set` は suspend しないのでキャンセル後も書き込まれてしまう。
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceExport))
+        ReadingTraceBackupState.Error(backupLimitText(error) ?: failureText(error, FailureScene.TraceExport))
     }
 
     private suspend fun exportKeys(
@@ -381,7 +383,7 @@ internal class ReadingTraceBackupController(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceBackupRead))
+        ReadingTraceBackupState.Error(backupLimitText(error) ?: failureText(error, FailureScene.TraceBackupRead))
     }
 
     /**
@@ -709,4 +711,15 @@ internal class ReadingTraceBackupController(
          */
         const val IO_CHUNK_SIZE = 25
     }
+}
+
+/**
+ * 退避の上限を超えたときの文。**やり直しても直らないので、一般の失敗と分けて言う**（→ features/reading_trace_backup.md §5）。
+ * 上限の数は出さない（→ system/ui_copy.md §2 の3）。上限超過でなければ null。
+ */
+internal fun backupLimitText(error: Throwable): String? = when ((error as? ReadingTraceBackupTooLargeException)?.limit) {
+    ReadingTraceBackupLimit.TOO_MANY_TRACES -> "痕跡が多すぎて、書き出せません。"
+    ReadingTraceBackupLimit.EXPORT_TOO_LARGE -> "痕跡が大きすぎて、書き出せません。"
+    ReadingTraceBackupLimit.IMPORT_TOO_LARGE -> "退避ファイルが大きすぎて、読み戻せません。"
+    null -> null
 }
