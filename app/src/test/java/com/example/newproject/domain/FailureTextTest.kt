@@ -41,13 +41,18 @@ class FailureTextTest {
             .filter { it.readText().contains("\"Unknown error\"") }.map { it.name }.toList()
         assertTrue("Unknown error が残っている: $unknown", unknown.isEmpty())
 
-        listOf(
-            "NoteViewModel.kt", "controller/SearchController.kt", "controller/SectionChatController.kt",
-            "domain/SearchPickerUseCase.kt", "domain/SummarizeUseCase.kt", "controller/DistillController.kt",
-            "data/DistillWriteRepository.kt"
-        ).forEach { path ->
-            val source = File(root, path).readText()
-            assertFalse("$path が例外の文を画面の状態へ入れている", Regex("""\.message\s*\?:""").containsMatchIn(source))
+        // 例外の文を状態へ入れる書き方（`e.message ?: …`）を、画面の状態を作る層から落とす。データの層は判定や記録にも使うので見ない。
+        val stateLayers = listOf("controller", "domain").flatMap { dir ->
+            File(root, dir).walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        } + File(root, "NoteViewModel.kt") + File(root, "data/DistillWriteRepository.kt")
+        stateLayers.forEach { file ->
+            assertFalse("${file.name} が例外の文を画面の状態へ入れている", Regex("""\.message\s*\?:""").containsMatchIn(file.readText()))
         }
+        // 文字列の中に例外の文や状態の文を埋め込む書き方（`"…: ${e.message}"`）を落とす。前置きを足すと失敗の文が二重になる。
+        val embedding = Regex(""""[^"\n]*\$\{[A-Za-z.?]*message[^}]*\}""")
+        val embedded = listOf("controller", "domain", "ui").flatMap { dir ->
+            File(root, dir).walkTopDown().filter { it.isFile && it.extension == "kt" }.toList()
+        }.filter { embedding.containsMatchIn(it.readText()) }.map { it.name }
+        assertTrue("文字列に失敗の文を埋め込んでいる: $embedded", embedded.isEmpty())
     }
 }

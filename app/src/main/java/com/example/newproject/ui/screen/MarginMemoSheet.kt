@@ -580,7 +580,7 @@ internal fun MarginMemoSheetContent(
                 )
 
                 is MarginMemoState.Error -> Text(
-                    text = "前のメモを読めませんでした。\n${state.message}",
+                    text = state.message,
                     color = OnSurfaceMuted,
                     fontSize = 12.sp
                 )

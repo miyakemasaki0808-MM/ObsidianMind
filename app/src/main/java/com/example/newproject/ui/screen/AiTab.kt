@@ -557,7 +557,8 @@ internal fun SummaryPanel(summaryState: SummaryState, modifier: Modifier = Modif
                     Text(text = summaryState.summary, fontSize = 14.sp, lineHeight = 22.sp, color = OnSurface)
                 }
                 is SummaryState.Error -> {
-                    Text("要約の取得に失敗しました: ${summaryState.message}", fontSize = 13.sp, color = ErrorText)
+                    // 失敗の文は FailureScene が決める。前置きを足すと「うまく要約できませんでした」と二重になる。
+                    Text(summaryState.message, fontSize = 13.sp, color = ErrorText)
                 }
                 else -> {}
             }

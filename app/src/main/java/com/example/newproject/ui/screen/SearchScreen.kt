@@ -479,8 +479,9 @@ private fun SearchResultPanel(
                         }
                     }
                 }
+                // 失敗の文は FailureScene が決める。前置きを足すと「さがせませんでした」と二重になる。
                 is SearchState.Error -> Text(
-                    "検索に失敗しました: ${state.message}",
+                    state.message,
                     fontSize = 13.sp,
                     color = ErrorText
                 )

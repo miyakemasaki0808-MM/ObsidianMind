@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.domain.markdown.parseMarkdownBlocks
 import com.example.newproject.model.RelatedNote
@@ -71,7 +73,7 @@ internal class SideReadingController(
             } catch (e: Exception) {
                 // 取り消した後の失敗は、閉じた面や選び直した候補を上書きする。取り消されていれば投げ直して何も書かない。
                 ensureActive()
-                state.set(SideReadingState.Failed(note, e.message ?: "読み込めませんでした", state.current.face))
+                state.set(SideReadingState.Failed(note, failureText(e, FailureScene.NoteLoad), state.current.face))
             }
         }
     }

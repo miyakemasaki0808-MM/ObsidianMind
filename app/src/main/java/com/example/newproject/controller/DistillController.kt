@@ -201,7 +201,7 @@ internal class DistillController(
                         analyze(requestId, input)
                     }
                     is DownloadStatus.DownloadFailed -> update(
-                        DistillState.Error("モデルのダウンロードに失敗しました: ${status.e.message}")
+                        DistillState.Error(failureText(status.e, FailureScene.ModelDownload))
                     )
                 }
             }

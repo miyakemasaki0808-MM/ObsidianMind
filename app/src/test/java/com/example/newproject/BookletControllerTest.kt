@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.BOOKLET_SIZE
 import com.example.newproject.controller.BookletController
 import com.example.newproject.model.BookletCover
@@ -84,7 +85,7 @@ class BookletControllerTest {
 
         controller(state).openPlain { throw IllegalStateException("走査失敗") }
 
-        assertEquals("走査失敗", (state.value.bookletState as BookletState.Failed).message)
+        assertEquals(FailureScene.Booklet.text, (state.value.bookletState as BookletState.Failed).message)
     }
 
     @Test
@@ -536,7 +537,7 @@ class BookletControllerTest {
 
         controller.drawAgain { throw IllegalStateException("走査失敗") }
 
-        assertEquals("走査失敗", (state.value.bookletState as BookletState.Open).redrawError)
+        assertEquals(FailureScene.BookletRedraw.text, (state.value.bookletState as BookletState.Open).redrawError)
     }
 
     /** 再試行して成功したら理由は消える。**古い理由が残ると、また失敗したように見える。** */

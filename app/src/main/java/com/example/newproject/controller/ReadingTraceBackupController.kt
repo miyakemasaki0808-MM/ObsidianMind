@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.ReadingTraceBackupEntry
 import com.example.newproject.data.ReadingTraceBackupJson
 import com.example.newproject.data.ReadingTraceBackupReadResult
@@ -222,7 +224,7 @@ internal class ReadingTraceBackupController(
         // `state.set` は suspend しないのでキャンセル後も書き込まれてしまう。
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "読書痕跡を書き出せませんでした。")
+        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceExport))
     }
 
     private suspend fun exportKeys(
@@ -379,7 +381,7 @@ internal class ReadingTraceBackupController(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "退避ファイルを読み取れませんでした。")
+        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceBackupRead))
     }
 
     /**
@@ -531,7 +533,7 @@ internal class ReadingTraceBackupController(
     } catch (error: CancellationException) {
         throw error
     } catch (error: Exception) {
-        ReadingTraceBackupState.Error(error.message ?: "読書痕跡を読み戻せませんでした。")
+        ReadingTraceBackupState.Error(failureText(error, FailureScene.TraceImport))
     }
 
     /** ── 段階2: 書く。1件ずつ錠の中で読み直し、承認された状態のままのものだけ書く。 ── */

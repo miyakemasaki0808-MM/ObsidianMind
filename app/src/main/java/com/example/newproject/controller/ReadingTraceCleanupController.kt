@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.ReadingTraceKeyListing
 import com.example.newproject.data.ReadingTracePersistence
 import com.example.newproject.data.ReadingTraceReadResult
@@ -146,7 +148,7 @@ internal class ReadingTraceCleanupController(
         // `state.set` は suspend しないのでキャンセル後も書き込まれてしまう。
         throw error
     } catch (error: Exception) {
-        ReadingTraceCleanupState.Error(error.message ?: error::class.java.simpleName)
+        ReadingTraceCleanupState.Error(failureText(error, FailureScene.TraceCleanup))
     }
 
     /**

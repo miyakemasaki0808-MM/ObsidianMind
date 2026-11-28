@@ -1,5 +1,6 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
 import com.example.newproject.controller.SideReadingController
 import com.example.newproject.domain.markdown.MarkdownBlock
 import com.example.newproject.model.DocumentRef
@@ -154,7 +155,7 @@ class SideReadingControllerTest {
         env.controller.open(NOTE_B) { throw IllegalStateException("見つかりません") }
         advanceUntilIdle()
 
-        assertEquals(SideReadingState.Failed(NOTE_B, "見つかりません"), env.state)
+        assertEquals(SideReadingState.Failed(NOTE_B, FailureScene.NoteLoad.text), env.state)
         assertNull(env.controller.blocks.value)
 
         env.controller.open(NOTE_B) { "# Bの見出し" }
