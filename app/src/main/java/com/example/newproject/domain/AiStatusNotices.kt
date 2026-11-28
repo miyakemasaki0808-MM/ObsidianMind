@@ -28,8 +28,7 @@ fun aiStatusNotice(
         AiAvailability.Ready -> null
         AiAvailability.NeedsDownload -> if (canStartDownload) {
             AiStatusNotice(
-                message = "${featureLabel}にはGemini Nanoのダウンロードが必要です。" +
-                    "通信量を確認してから開始してください。",
+                message = "${featureLabel}にはGemini Nanoのダウンロードが要ります。ダウンロードで通信します。",
                 action = AiNoticeAction.Download,
                 canTryAgainLater = true
             )
@@ -61,7 +60,7 @@ fun aiStatusNotice(
         // `cause` を文言へ混ぜない — SDKの message は英語か null で、
         // ユーザーの次の行動を1文字も助けない。原因は診断のために型が運ぶだけにする。
         is AiAvailability.TemporarilyUnavailable -> AiStatusNotice(
-            message = "${featureLabel}をいま利用できません。時間をおいて試してください。",
+            message = "${featureLabel}をいま使えません。時間をおくと使えます。",
             action = AiNoticeAction.Retry,
             canTryAgainLater = true
         )

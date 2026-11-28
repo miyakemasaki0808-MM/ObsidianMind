@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.model.SectionChatStateWriter
 import com.example.newproject.model.SectionRef
 import com.example.newproject.model.state.SectionBatch
@@ -315,7 +317,7 @@ class SectionChatController(
         updateSummary(started.requestId) {
             it.copy(
                 isSummaryLoading = false,
-                summaryProblem = SectionChatProblem.GenerationFailed(error.message ?: "Unknown error")
+                summaryProblem = SectionChatProblem.GenerationFailed(failureText(error, FailureScene.SectionSummary))
             )
         }
     }

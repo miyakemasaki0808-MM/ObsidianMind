@@ -231,9 +231,10 @@ private fun LazyListScope.titleResults(
             MessagePanel { LoadingRow("ノートの一覧を読んでいます…") }
         }
         TitleBody.Failed -> item(key = "title-message") {
-            val message = (uiState.titleSearch as? TitleSearchState.Error)?.message.orEmpty()
+            // 失敗の文は FailureScene.NoteList が決める。例外の文を後ろへ足さない。
+            val message = (uiState.titleSearch as? TitleSearchState.Error)?.message ?: "ノートの一覧を読めませんでした。"
             MessagePanel {
-                Text("ノートの一覧を読めませんでした: $message", fontSize = 13.sp, color = ErrorText)
+                Text(message, fontSize = 13.sp, color = ErrorText)
             }
         }
         TitleBody.NoMatch -> item(key = "title-message") {

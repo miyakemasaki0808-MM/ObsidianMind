@@ -1,5 +1,7 @@
 package com.example.newproject.controller
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.data.DistillPersistence
 import com.example.newproject.data.DistillRecoveryAssessment
 import com.example.newproject.data.DistillRecoveryResolutionResult
@@ -161,7 +163,7 @@ internal class DistillController(
                 throw error
             } catch (error: Exception) {
                 ifCurrent(requestId) {
-                    update(DistillState.Error(error.message ?: "蒸留を開始できませんでした。"))
+                    update(DistillState.Error(failureText(error, FailureScene.DistillStart)))
                 }
             }
         }
@@ -207,7 +209,7 @@ internal class DistillController(
             throw error
         } catch (error: Exception) {
             ifCurrent(requestId) {
-                update(DistillState.Error(error.message ?: "モデルをダウンロードできませんでした。"))
+                update(DistillState.Error(failureText(error, FailureScene.ModelDownload)))
             }
         }
     }
@@ -788,12 +790,12 @@ internal class DistillController(
                 val deleted = withContext(ioDispatcher) { persistence.discardPendingRecovery() }
                 update(
                     if (deleted) DistillState.RecoveryResolved("保存前の本文を書き出しました。")
-                    else DistillState.Error("書き出し後に復旧情報を削除できませんでした。", canRetry = false)
+                    else DistillState.Error("書き出した後、保存前の本文を消せませんでした。", canRetry = false)
                 )
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                update(DistillState.Error(error.message ?: "元本文を書き出せませんでした。", canRetry = false))
+                update(DistillState.Error(failureText(error, FailureScene.DistillExport), canRetry = false))
             }
         }
     }

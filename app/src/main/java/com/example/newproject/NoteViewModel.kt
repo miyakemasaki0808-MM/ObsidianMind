@@ -1,5 +1,7 @@
 package com.example.newproject
 
+import com.example.newproject.domain.FailureScene
+import com.example.newproject.domain.failureText
 import com.example.newproject.domain.resolveBesideNote
 import com.example.newproject.model.BesideNote
 import com.example.newproject.controller.NoteSessionCoordinator
@@ -317,7 +319,7 @@ class NoteViewModel internal constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
+                session.setNoteState(NoteState.Error(failureText(e, FailureScene.NoteLoad)))
             }
         }
     }
@@ -346,7 +348,7 @@ class NoteViewModel internal constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
+                session.setNoteState(NoteState.Error(failureText(e, FailureScene.NoteLoad)))
             }
         }
     }
@@ -441,7 +443,7 @@ class NoteViewModel internal constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                session.setNoteState(NoteState.Error(e.message ?: "Unknown error"))
+                session.setNoteState(NoteState.Error(failureText(e, FailureScene.NoteLoad)))
             }
         }
     }
